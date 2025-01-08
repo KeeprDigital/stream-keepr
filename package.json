@@ -1,0 +1,40 @@
+{
+  "name": "stream-keepr",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "packageManager": "pnpm@9.15.3+sha512.1f79bc245a66eb0b07c5d4d83131240774642caaa86ef7d0434ab47c0d16f66b04e21e0c086eb61e62c77efc4d7f7ec071afad3796af64892fae66509173893a",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "check": "nuxt typecheck",
+    "clean": "rm -rf .nuxt node_modules pnpm-lock.yaml",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "@nuxt/image": "1.8.1",
+    "@nuxt/ui-pro": "3.0.0-alpha.10",
+    "@pinia/nuxt": "0.9.0",
+    "@scryfall/api-types": "1.0.0-alpha.4",
+    "@vueuse/core": "^12.3.0",
+    "@vueuse/nuxt": "^12.3.0",
+    "nuxt": "^3.15.1",
+    "pinia": "^2.3.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^3.12.2",
+    "@nuxt/eslint": "^0.7.4",
+    "@prettier/plugin-xml": "^3.4.1",
+    "eslint": "^9.17.0",
+    "eslint-plugin-drizzle": "^0.2.3",
+    "eslint-plugin-format": "^1.0.1",
+    "typescript": "^5.7.2",
+    "vue-tsc": "^2.2.0"
+  }
+}

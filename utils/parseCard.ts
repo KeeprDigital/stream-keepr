@@ -1,0 +1,132 @@
+import type { ScryfallCard } from '@scryfall/api-types'
+import type { CardData } from '~/types/cardData'
+
+export function parseCard(card: ScryfallCard.Any): CardData {
+  const cardData: CardData = {
+    name: card.name,
+    layout: card.layout,
+    imageData: {
+      front: null,
+      back: null,
+    },
+    orientationData: {
+      flipable: false,
+      turnable: false,
+      rotateable: false,
+      defaultRotated: false,
+    },
+  }
+
+  switch (card.layout) {
+    case 'double_faced_token':
+    case 'reversible_card':
+    case 'art_series':
+    case 'modal_dfc':
+      cardData.imageData = {
+        front: card.card_faces[0]?.image_uris ?? null,
+        back: card.card_faces[1]?.image_uris ?? null,
+      }
+      break
+
+    case 'transform':
+      cardData.imageData = {
+        front: card.card_faces[0]?.image_uris ?? null,
+        back: card.card_faces[1]?.image_uris ?? null,
+      }
+
+      if (card.type_line.includes('Battle')) {
+        cardData.orientationData = {
+          flipable: false,
+          turnable: true,
+          rotateable: false,
+          defaultRotated: true,
+        }
+      }
+      else {
+        cardData.orientationData = {
+          flipable: false,
+          turnable: true,
+          rotateable: false,
+          defaultRotated: false,
+        }
+      }
+      break
+
+    case 'flip':
+      cardData.imageData = {
+        front: card.image_uris ?? null,
+        back: null,
+      }
+      cardData.orientationData = {
+        flipable: true,
+        turnable: false,
+        rotateable: false,
+        defaultRotated: false,
+      }
+      break
+
+    case 'split':
+      cardData.imageData = {
+        front: card.image_uris ?? null,
+        back: null,
+      }
+      if (card.keywords?.includes('Aftermath')) {
+        cardData.orientationData = {
+          flipable: false,
+          turnable: false,
+          rotateable: true,
+          defaultRotated: false,
+        }
+      }
+      else {
+        cardData.orientationData = {
+          flipable: false,
+          turnable: false,
+          rotateable: false,
+          defaultRotated: true,
+        }
+      }
+      break
+
+    case 'meld':
+      cardData.imageData = {
+        front: card.image_uris ?? null,
+        back: null,
+      }
+      cardData.orientationData = {
+        flipable: false,
+        turnable: false,
+        rotateable: false,
+        defaultRotated: false,
+      }
+      break
+
+    case 'normal':
+    case 'leveler':
+    case 'class':
+    case 'saga':
+    case 'adventure':
+    case 'mutate':
+    case 'prototype':
+    case 'planar':
+    case 'scheme':
+    case 'vanguard':
+    case 'token':
+    case 'emblem':
+    case 'augment':
+    case 'host':
+      cardData.imageData = {
+        front: card.image_uris ?? null,
+        back: null,
+      }
+      break
+
+    default:
+      cardData.imageData = {
+        front: null,
+        back: null,
+      }
+  }
+
+  return cardData
+}
