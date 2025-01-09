@@ -12,6 +12,15 @@ export const useCardsStore = defineStore('Cards', () => {
   const card = ref<SelectedCard>()
   const selectedFormat = ref<ScryfallFormat | 'all'>('all')
 
+  async function setCardImage() {
+    await $fetch('/api/cardImage', {
+      method: 'POST',
+      body: {
+        card: card.value,
+      },
+    })
+  }
+
   async function selectCard(cardData: CardData) {
     loading.value = true
     const data = await $fetch<ScryfallCard.Any>('https://api.scryfall.com/cards/named', {
@@ -27,9 +36,11 @@ export const useCardsStore = defineStore('Cards', () => {
       flipped: false,
       turnedOver: false,
       rotated: cardData.orientationData.defaultRotated,
+      counterRotated: false,
       meldData: cardData.meldData,
     }
 
+    await setCardImage()
     loading.value = false
   }
 
@@ -50,6 +61,7 @@ export const useCardsStore = defineStore('Cards', () => {
       flipped: false,
       turnedOver: false,
       rotated: false,
+      counterRotated: false,
     }
 
     loading.value = false
@@ -62,14 +74,37 @@ export const useCardsStore = defineStore('Cards', () => {
 
   function clearCard() {
     card.value = undefined
+    setCardImage()
   }
 
   function hideCard() {
     card.value!.hidden = true
+    setCardImage()
   }
 
   function showCard() {
     card.value!.hidden = false
+    setCardImage()
+  }
+
+  function rotateCard() {
+    card.value!.rotated = !card.value!.rotated
+    setCardImage()
+  }
+
+  function counterRotateCard() {
+    card.value!.counterRotated = !card.value!.counterRotated
+    setCardImage()
+  }
+
+  function flipCard() {
+    card.value!.flipped = !card.value!.flipped
+    setCardImage()
+  }
+
+  function turnOverCard() {
+    card.value!.turnedOver = !card.value!.turnedOver
+    setCardImage()
   }
 
   function setSelectedFormat(format: ScryfallFormat | 'all') {
@@ -113,11 +148,16 @@ export const useCardsStore = defineStore('Cards', () => {
 
   return {
     searchFuzzyCardName,
+    setCardImage,
     selectCard,
     selectMeldCardPart,
     clearCard,
     hideCard,
     showCard,
+    rotateCard,
+    counterRotateCard,
+    flipCard,
+    turnOverCard,
     clearSearch,
     setSelectedFormat,
     selectedFormat,
