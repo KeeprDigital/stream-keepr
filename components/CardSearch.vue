@@ -26,15 +26,22 @@ function clearSearch() {
 
 <template>
   <div class="card-search">
-    <UInput
-      v-model="searchTerm"
-      class="input"
-      placeholder="Search Card Name"
-      size="xl"
-      :ui="{ trailing: 'pe-1' }"
-      @update:model-value="search"
-      @keydown="handleKeydown"
-    />
+    <div class="input-container">
+      <UInput
+        v-model="searchTerm"
+        class="input"
+        placeholder="Search Card Name"
+        size="xl"
+        @update:model-value="search"
+        @keydown="handleKeydown"
+      />
+      <UProgress
+        v-if="cardsStore.loading"
+        class="loader"
+        animation="swing"
+        size="sm"
+      />
+    </div>
 
     <UButton
       size="xl"
@@ -67,8 +74,19 @@ function clearSearch() {
   align-items: center;
   gap: 1rem;
 
-  .input {
+  .input-container {
+    overflow: hidden;
+    position: relative;
     flex: 1 1 60%;
+
+    .input {
+      width: 100%;
+    }
+
+    .loader {
+      position: absolute;
+      bottom: 1px;
+    }
   }
 }
 </style>

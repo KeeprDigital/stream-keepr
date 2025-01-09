@@ -6,12 +6,14 @@ import type {
 import type { CardData, SelectedCard } from '~/types/cardData'
 
 export const useCardsStore = defineStore('Cards', () => {
+  const loading = ref(false)
   const cardNames = ref<string[]>([])
   const cardList = ref<CardData[]>([])
   const card = ref<SelectedCard>()
   const selectedFormat = ref<ScryfallFormat | 'all'>('all')
 
   async function selectCard(cardData: CardData) {
+    loading.value = true
     const data = await $fetch<ScryfallCard.Any>('https://api.scryfall.com/cards/named', {
       query: {
         exact: cardData.name,
@@ -27,9 +29,12 @@ export const useCardsStore = defineStore('Cards', () => {
       rotated: cardData.orientationData.defaultRotated,
       meldData: cardData.meldData,
     }
+
+    loading.value = false
   }
 
   async function selectMeldCardPart(cardName: string) {
+    loading.value = true
     const data = await $fetch<ScryfallCard.Any>('https://api.scryfall.com/cards/named', {
       query: {
         exact: cardName,
@@ -46,9 +51,12 @@ export const useCardsStore = defineStore('Cards', () => {
       turnedOver: false,
       rotated: false,
     }
+
+    loading.value = false
   }
 
   function clearSearch() {
+    loading.value = false
     cardList.value = []
   }
 
@@ -69,8 +77,9 @@ export const useCardsStore = defineStore('Cards', () => {
   }
 
   async function searchFuzzyCardName(name: string) {
+    loading.value = true
     if (name.length < 3) {
-      cardList.value = []
+      clearSearch()
       return
     }
 
@@ -83,10 +92,12 @@ export const useCardsStore = defineStore('Cards', () => {
       },
     }).catch(() => {
       cardList.value = []
+      loading.value = false
     })
 
     if (!data) {
       cardList.value = []
+      loading.value = false
       return
     }
 
@@ -97,6 +108,7 @@ export const useCardsStore = defineStore('Cards', () => {
     })
 
     cardList.value = parsedCards
+    loading.value = false
   }
 
   return {
@@ -109,6 +121,7 @@ export const useCardsStore = defineStore('Cards', () => {
     clearSearch,
     setSelectedFormat,
     selectedFormat,
+    loading,
     cardNames,
     card,
     cardList,
