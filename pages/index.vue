@@ -19,7 +19,6 @@
 
 <style scoped>
 .card-search {
-  display: block;
   margin: 0 auto;
   max-width: 1000px;
   margin-bottom: 1.5rem;

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { mtgSets } from '~/data/mtgSets'
+
 const cardsStore = useCardsStore()
 const searchTerm = ref('')
 
@@ -10,39 +12,63 @@ function searchImmediate() {
   cardsStore.searchFuzzyCardName(searchTerm.value)
 }
 
-// Handle enter key
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter') {
     searchImmediate()
   }
 }
+
+function clearSearch() {
+  cardsStore.clearSearch()
+  searchTerm.value = ''
+}
 </script>
 
 <template>
-  <UInput
-    v-model="searchTerm"
-    class="input"
-    placeholder="Search Card Name"
-    size="xl"
-    :ui="{ trailing: 'pe-1' }"
-    @update:model-value="search"
-    @keydown="handleKeydown"
-  >
-    <template v-if="searchTerm?.length" #trailing>
-      <UButton
-        color="neutral"
-        variant="link"
-        size="sm"
-        icon="i-lucide-circle-x"
-        aria-label="Clear input"
-        @click="searchTerm = ''"
-      />
-    </template>
-  </UInput>
+  <div class="card-search">
+    <UInput
+      v-model="searchTerm"
+      class="input"
+      placeholder="Search Card Name"
+      size="xl"
+      :ui="{ trailing: 'pe-1' }"
+      @update:model-value="search"
+      @keydown="handleKeydown"
+    />
+
+    <UButton
+      size="xl"
+      :disabled="!searchTerm?.length"
+      variant="outline"
+      color="neutral"
+      class="clear-button"
+      @click="clearSearch"
+    >
+      Clear
+    </UButton>
+
+    <USelect
+      v-model="cardsStore.selectedFormat"
+      size="xl"
+      :items="mtgSets"
+      class="w-36"
+      :ui="{
+        content: 'max-h-90',
+      }"
+      @update:model-value="searchImmediate"
+    />
+  </div>
 </template>
 
 <style scoped>
-.input {
-  width: 100%;
+.card-search {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+
+  .input {
+    flex: 1 1 60%;
+  }
 }
 </style>

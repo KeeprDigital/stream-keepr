@@ -1,5 +1,6 @@
 import type {
   ScryfallCard,
+  ScryfallFormat,
   ScryfallList,
 } from '@scryfall/api-types'
 import type { CardData, SelectedCard } from '~/types/cardData'
@@ -8,6 +9,7 @@ export const useCardsStore = defineStore('Cards', () => {
   const cardNames = ref<string[]>([])
   const cardList = ref<CardData[]>([])
   const card = ref<SelectedCard>()
+  const selectedFormat = ref<ScryfallFormat | 'all'>('all')
 
   async function selectCard(cardData: CardData) {
     const data = await $fetch<ScryfallCard.Any>('https://api.scryfall.com/cards/named', {
@@ -46,6 +48,10 @@ export const useCardsStore = defineStore('Cards', () => {
     }
   }
 
+  function clearSearch() {
+    cardList.value = []
+  }
+
   function clearCard() {
     card.value = undefined
   }
@@ -58,17 +64,22 @@ export const useCardsStore = defineStore('Cards', () => {
     card.value!.hidden = false
   }
 
+  function setSelectedFormat(format: ScryfallFormat | 'all') {
+    selectedFormat.value = format
+  }
+
   async function searchFuzzyCardName(name: string) {
     if (name.length < 3) {
       cardList.value = []
       return
     }
 
+    const formatQuery = selectedFormat.value === 'all' ? '' : `format:${selectedFormat.value}`
+
     const data = await $fetch<ScryfallList.Cards>('https://api.scryfall.com/cards/search', {
       query: {
-        q: `${name} in:paper game:paper`,
+        q: `${name} in:paper game:paper ${formatQuery}`,
         unique: 'cards',
-        order: 'name',
       },
     }).catch(() => {
       cardList.value = []
@@ -95,6 +106,9 @@ export const useCardsStore = defineStore('Cards', () => {
     clearCard,
     hideCard,
     showCard,
+    clearSearch,
+    setSelectedFormat,
+    selectedFormat,
     cardNames,
     card,
     cardList,
