@@ -13,6 +13,9 @@ const cardsStore = useCardsStore()
       :hoverable="true"
       @click="cardsStore.selectCard(card)"
     />
+    <div class="card-list-item" />
+    <div class="card-list-item" />
+    <div class="card-list-item" />
   </div>
 </template>
 
