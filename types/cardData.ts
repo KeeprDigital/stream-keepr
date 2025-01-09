@@ -10,6 +10,7 @@ export type SelectedCard = {
   hidden: boolean
   flipped: boolean
   rotated: boolean
+  counterRotated: boolean
   turnedOver: boolean
 }
 
@@ -30,6 +31,7 @@ export type CardOrientationData = {
   flipable: boolean
   turnable: boolean
   rotateable: boolean
+  counterRotateable: boolean
   defaultRotated: boolean
 }
 

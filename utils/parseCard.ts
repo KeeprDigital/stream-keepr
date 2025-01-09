@@ -13,6 +13,7 @@ export function parseCard(card: ScryfallCard.Any): CardData {
       flipable: false,
       turnable: false,
       rotateable: false,
+      counterRotateable: false,
       defaultRotated: false,
     },
   }
@@ -30,6 +31,7 @@ export function parseCard(card: ScryfallCard.Any): CardData {
         flipable: false,
         turnable: true,
         rotateable: false,
+        counterRotateable: false,
         defaultRotated: false,
       }
       break
@@ -45,6 +47,7 @@ export function parseCard(card: ScryfallCard.Any): CardData {
           flipable: false,
           turnable: true,
           rotateable: false,
+          counterRotateable: false,
           defaultRotated: true,
         }
       }
@@ -53,6 +56,7 @@ export function parseCard(card: ScryfallCard.Any): CardData {
           flipable: false,
           turnable: true,
           rotateable: false,
+          counterRotateable: false,
           defaultRotated: false,
         }
       }
@@ -67,6 +71,7 @@ export function parseCard(card: ScryfallCard.Any): CardData {
         flipable: true,
         turnable: false,
         rotateable: false,
+        counterRotateable: false,
         defaultRotated: false,
       }
       break
@@ -80,7 +85,8 @@ export function parseCard(card: ScryfallCard.Any): CardData {
         cardData.orientationData = {
           flipable: false,
           turnable: false,
-          rotateable: true,
+          rotateable: false,
+          counterRotateable: true,
           defaultRotated: false,
         }
       }
@@ -89,6 +95,7 @@ export function parseCard(card: ScryfallCard.Any): CardData {
           flipable: false,
           turnable: false,
           rotateable: false,
+          counterRotateable: false,
           defaultRotated: true,
         }
       }
@@ -103,6 +110,7 @@ export function parseCard(card: ScryfallCard.Any): CardData {
         flipable: false,
         turnable: false,
         rotateable: false,
+        counterRotateable: false,
         defaultRotated: false,
       }
 

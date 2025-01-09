@@ -12,6 +12,7 @@ const cardsStore = useCardsStore()
         v-model:flipped="cardsStore.card.flipped"
         v-model:rotated="cardsStore.card.rotated"
         v-model:turned-over="cardsStore.card.turnedOver"
+        v-model:counter-rotated="cardsStore.card.counterRotated"
         class="image"
         :card="cardsStore.card"
         :show-flip-button="false"
@@ -61,7 +62,7 @@ const cardsStore = useCardsStore()
 
         size="xl"
         block
-        @click="cardsStore.card.turnedOver = !cardsStore.card.turnedOver"
+        @click="cardsStore.turnOverCard"
       >
         Turn Over
       </UButton>
@@ -72,7 +73,18 @@ const cardsStore = useCardsStore()
         icon="i-lucide-rotate-cw"
         size="xl"
         block
-        @click="cardsStore.card.rotated = !cardsStore.card.rotated"
+        @click="cardsStore.rotateCard"
+      >
+        Rotate
+      </UButton>
+      <UButton
+        v-if="cardsStore.card.orientationData.counterRotateable"
+        variant="outline"
+        color="info"
+        icon="i-lucide-rotate-ccw"
+        size="xl"
+        block
+        @click="cardsStore.counterRotateCard"
       >
         Rotate
       </UButton>
@@ -86,7 +98,7 @@ const cardsStore = useCardsStore()
         icon="i-lucide-rotate-cw"
         size="xl"
         block
-        @click="cardsStore.card.flipped = !cardsStore.card.flipped"
+        @click="cardsStore.flipCard"
       >
         Flip
       </UButton>

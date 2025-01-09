@@ -11,6 +11,7 @@ const props = defineProps<Props>()
 
 const flipped = defineModel<boolean>('flipped')
 const rotated = defineModel<boolean>('rotated')
+const counterRotated = defineModel<boolean>('counterRotated')
 const turnedOver = defineModel<boolean>('turnedOver')
 
 function toggleTurnedOver() {
@@ -30,6 +31,7 @@ function toggleTurnedOver() {
         'is-flipped': flipped,
         'is-rotated': rotated,
         'is-turned-over': turnedOver,
+        'is-counter-rotated': counterRotated,
       }"
     >
       <div class="face front">
@@ -105,6 +107,11 @@ function toggleTurnedOver() {
 
     &.is-rotated {
       transform: rotate(90deg);
+      transition: transform 0.6s ease-in-out;
+    }
+
+    &.is-counter-rotated {
+      transform: rotate(-90deg);
       transition: transform 0.6s ease-in-out;
     }
 
