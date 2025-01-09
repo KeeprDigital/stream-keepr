@@ -88,7 +88,7 @@ export function parseCard(card: ScryfallCard.Any): CardData {
       }
       break
 
-    case 'meld':
+    case 'meld': {
       cardData.imageData = {
         front: card.image_uris ?? null,
         back: null,
@@ -99,8 +99,25 @@ export function parseCard(card: ScryfallCard.Any): CardData {
         rotateable: false,
         defaultRotated: false,
       }
-      break
 
+      const partOne = card.all_parts?.find(
+        part => part.component === 'meld_part',
+      )
+      const partTwo = card.all_parts?.find(
+        part => part.component === 'meld_part'
+          && part.id !== partOne?.id,
+      )
+      const result = card.all_parts?.find(
+        part => part.component === 'meld_result',
+      )
+
+      cardData.meldData = {
+        meldPartOne: partOne?.name ?? null,
+        meldPartTwo: partTwo?.name ?? null,
+        meldResult: result?.name ?? null,
+      }
+    }
+      break
     case 'normal':
     case 'leveler':
     case 'class':

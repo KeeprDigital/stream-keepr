@@ -6,6 +6,7 @@ export type SelectedCard = {
   scryfallData: ScryfallCard.Any
   imageData: CardImageData
   orientationData: CardOrientationData
+  meldData?: CardMeldData
   hidden: boolean
   flipped: boolean
   rotated: boolean
@@ -17,6 +18,7 @@ export type CardData = {
   layout: ScryfallCardFields.Core.All['layout']
   imageData: CardImageData
   orientationData: CardOrientationData
+  meldData?: CardMeldData
 }
 
 export type CardImageData = {
@@ -29,4 +31,10 @@ export type CardOrientationData = {
   turnable: boolean
   rotateable: boolean
   defaultRotated: boolean
+}
+
+export type CardMeldData = {
+  meldPartOne: string | null
+  meldPartTwo: string | null
+  meldResult: string | null
 }

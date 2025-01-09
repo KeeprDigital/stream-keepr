@@ -18,11 +18,47 @@ const cardsStore = useCardsStore()
       />
     </div>
     <div class="buttons">
+      <UButtonGroup orientation="horizontal">
+        <UButton
+          v-if="cardsStore.card.meldData?.meldPartOne"
+          variant="outline"
+          color="info"
+          size="xl"
+          block
+          :disabled="cardsStore.card.name === cardsStore.card.meldData?.meldPartOne"
+          @click="cardsStore.selectMeldCardPart(cardsStore.card.meldData?.meldPartOne)"
+        >
+          {{ cardsStore.card.meldData?.meldPartOne }}
+        </UButton>
+        <UButton
+          v-if="cardsStore.card.meldData?.meldPartTwo"
+          variant="outline"
+          color="info"
+          size="xl"
+          block
+          :disabled="cardsStore.card.name === cardsStore.card.meldData?.meldPartTwo"
+          @click="cardsStore.selectMeldCardPart(cardsStore.card.meldData?.meldPartTwo)"
+        >
+          {{ cardsStore.card.meldData?.meldPartTwo }}
+        </UButton>
+      </UButtonGroup>
+      <UButton
+        v-if="cardsStore.card.meldData?.meldResult"
+        variant="outline"
+        color="info"
+        size="xl"
+        block
+        icon="i-lucide-flip-horizontal"
+        :disabled="cardsStore.card.name === cardsStore.card.meldData?.meldResult"
+        @click="cardsStore.selectMeldCardPart(cardsStore.card.meldData?.meldResult)"
+      >
+        {{ cardsStore.card.meldData?.meldResult }}
+      </UButton>
       <UButton
         v-if="cardsStore.card.orientationData.turnable"
         variant="outline"
         color="info"
-        icon="i-lucide-flip-horizontal"
+
         size="xl"
         block
         @click="cardsStore.card.turnedOver = !cardsStore.card.turnedOver"

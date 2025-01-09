@@ -16,6 +16,24 @@ export const useCardsStore = defineStore('Cards', () => {
       },
     })
 
+    card.value = {
+      ...cardData,
+      scryfallData: data,
+      hidden: false,
+      flipped: false,
+      turnedOver: false,
+      rotated: cardData.orientationData.defaultRotated,
+      meldData: cardData.meldData,
+    }
+  }
+
+  async function selectMeldCardPart(cardName: string) {
+    const data = await $fetch<ScryfallCard.Any>('https://api.scryfall.com/cards/named', {
+      query: {
+        exact: cardName,
+      },
+    })
+
     const parsedCard = parseCard(data)
 
     card.value = {
@@ -24,7 +42,7 @@ export const useCardsStore = defineStore('Cards', () => {
       hidden: false,
       flipped: false,
       turnedOver: false,
-      rotated: parsedCard.orientationData.defaultRotated,
+      rotated: false,
     }
   }
 
@@ -73,6 +91,7 @@ export const useCardsStore = defineStore('Cards', () => {
   return {
     searchFuzzyCardName,
     selectCard,
+    selectMeldCardPart,
     clearCard,
     hideCard,
     showCard,
