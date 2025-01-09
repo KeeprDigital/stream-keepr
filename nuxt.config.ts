@@ -13,6 +13,14 @@ export default defineNuxtConfig({
       standalone: false,
     },
   },
+  nitro: {
+    storage: {
+      local: {
+        driver: 'fs',
+        base: './.data/db',
+      },
+    },
+  },
   css: ['~/assets/css/main.css'],
   devtools: {
     enabled: true,
