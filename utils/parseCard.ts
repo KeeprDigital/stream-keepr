@@ -26,6 +26,12 @@ export function parseCard(card: ScryfallCard.Any): CardData {
         front: card.card_faces[0]?.image_uris ?? null,
         back: card.card_faces[1]?.image_uris ?? null,
       }
+      cardData.orientationData = {
+        flipable: false,
+        turnable: true,
+        rotateable: false,
+        defaultRotated: false,
+      }
       break
 
     case 'transform':
