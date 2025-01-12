@@ -17,27 +17,27 @@ export default defineEventHandler(async () => {
 
   let image = ''
 
-  if (data.hidden) {
+  if (data.displayData.hidden) {
     return imageConfig
   }
 
-  if (data.flipped) {
+  if (data.displayData.flipped) {
     image = data.imageData.front?.png ?? ''
     imageConfig.flippedImage = image
     return imageConfig
   }
 
-  if (data.turnedOver) {
+  if (data.displayData.turnedOver) {
     image = data.imageData.back?.png ?? ''
   }
   else {
     image = data.imageData.front?.png ?? ''
   }
 
-  if (data.rotated) {
+  if (data.displayData.rotated) {
     imageConfig.rotatedImage = image
   }
-  else if (data.counterRotated) {
+  else if (data.displayData.counterRotated) {
     imageConfig.counterRotatedImage = image
   }
   else {

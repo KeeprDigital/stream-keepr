@@ -7,11 +7,7 @@ export type SelectedCard = {
   imageData: CardImageData
   orientationData: CardOrientationData
   meldData?: CardMeldData
-  hidden: boolean
-  flipped: boolean
-  rotated: boolean
-  counterRotated: boolean
-  turnedOver: boolean
+  displayData: CardDisplayData
 }
 
 export type CardData = {
@@ -40,4 +36,12 @@ export type CardMeldData = {
   meldPartOne: string | null
   meldPartTwo: string | null
   meldResult: string | null
+}
+
+export type CardDisplayData = {
+  hidden: boolean
+  flipped: boolean
+  rotated: boolean
+  counterRotated: boolean
+  turnedOver: boolean
 }

@@ -29,11 +29,13 @@ export const useCardsStore = defineStore('Cards', () => {
     loading.value = true
     card.value = {
       ...cardData,
-      hidden: true,
-      flipped: false,
-      turnedOver: false,
-      rotated: cardData.orientationData.defaultRotated,
-      counterRotated: false,
+      displayData: {
+        hidden: true,
+        flipped: false,
+        turnedOver: false,
+        rotated: cardData.orientationData.defaultRotated,
+        counterRotated: false,
+      },
       meldData: cardData.meldData,
     }
     await searchCardPrints()
@@ -54,11 +56,13 @@ export const useCardsStore = defineStore('Cards', () => {
 
     card.value = {
       ...parsedCard,
-      hidden: true,
-      flipped: false,
-      turnedOver: false,
-      rotated: false,
-      counterRotated: false,
+      displayData: {
+        hidden: true,
+        flipped: false,
+        turnedOver: false,
+        rotated: false,
+        counterRotated: false,
+      },
     }
 
     await searchCardPrints()
@@ -76,32 +80,32 @@ export const useCardsStore = defineStore('Cards', () => {
   }
 
   function hideCard() {
-    card.value!.hidden = true
+    card.value!.displayData.hidden = true
     setCardImage()
   }
 
   function showCard() {
-    card.value!.hidden = false
+    card.value!.displayData.hidden = false
     setCardImage()
   }
 
   function rotateCard() {
-    card.value!.rotated = !card.value!.rotated
+    card.value!.displayData.rotated = !card.value!.displayData.rotated
     setCardImage()
   }
 
   function counterRotateCard() {
-    card.value!.counterRotated = !card.value!.counterRotated
+    card.value!.displayData.counterRotated = !card.value!.displayData.counterRotated
     setCardImage()
   }
 
   function flipCard() {
-    card.value!.flipped = !card.value!.flipped
+    card.value!.displayData.flipped = !card.value!.displayData.flipped
     setCardImage()
   }
 
   function turnOverCard() {
-    card.value!.turnedOver = !card.value!.turnedOver
+    card.value!.displayData.turnedOver = !card.value!.displayData.turnedOver
     setCardImage()
   }
 
@@ -140,7 +144,7 @@ export const useCardsStore = defineStore('Cards', () => {
     loading.value = true
     await $fetch<ScryfallList.Cards>('https://api.scryfall.com/cards/search', {
       query: {
-        q: `${card.value?.name} in:paper game:paper ${formatQuery.value}`,
+        q: `!${card.value?.name} in:paper game:paper ${formatQuery.value}`,
         unique: 'prints',
       },
     }).then((data) => {

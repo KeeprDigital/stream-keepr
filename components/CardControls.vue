@@ -14,12 +14,12 @@ function openPrintList() {
     <h1 class="name">
       {{ cardsStore.card.name }}
     </h1>
-    <div class="image-container" :class="{ hide: cardsStore.card.hidden }">
+    <div class="image-container" :class="{ hide: cardsStore.card.displayData.hidden }">
       <CardImage
-        v-model:flipped="cardsStore.card.flipped"
-        v-model:rotated="cardsStore.card.rotated"
-        v-model:turned-over="cardsStore.card.turnedOver"
-        v-model:counter-rotated="cardsStore.card.counterRotated"
+        v-model:flipped="cardsStore.card.displayData.flipped"
+        v-model:rotated="cardsStore.card.displayData.rotated"
+        v-model:turned-over="cardsStore.card.displayData.turnedOver"
+        v-model:counter-rotated="cardsStore.card.displayData.counterRotated"
         class="image"
         :card="cardsStore.card"
         :show-flip-button="false"
@@ -27,7 +27,7 @@ function openPrintList() {
     </div>
     <div class="buttons">
       <UButton
-        v-if="!cardsStore.card.hidden"
+        v-if="!cardsStore.card.displayData.hidden"
         variant="outline"
         icon="i-lucide-eye-off"
         size="xl"
