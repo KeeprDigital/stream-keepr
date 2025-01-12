@@ -47,6 +47,7 @@ function openPrintList() {
       >
         Show
       </UButton>
+      <USeparator v-if="cardsStore.card.meldData" />
       <UButtonGroup v-if="cardsStore.card.meldData" orientation="horizontal">
         <UButton
           v-if="cardsStore.card.meldData?.meldPartOne"
@@ -71,7 +72,6 @@ function openPrintList() {
           {{ cardsStore.card.meldData?.meldPartTwo }}
         </UButton>
       </UButtonGroup>
-
       <UButton
         v-if="cardsStore.card.meldData?.meldResult"
         variant="outline"
@@ -84,6 +84,7 @@ function openPrintList() {
       >
         {{ cardsStore.card.meldData?.meldResult }}
       </UButton>
+      <USeparator />
       <UButton
         v-if="cardsStore.card.orientationData.turnable"
         variant="outline"
