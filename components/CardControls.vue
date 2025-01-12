@@ -131,6 +131,7 @@ function openPrintList() {
         Show
       </UButton>
       <UButton
+        v-if="cardsStore.cardPrintList.length > 1"
         variant="outline"
         color="info"
         icon="i-lucide-printer"
