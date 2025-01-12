@@ -4,6 +4,7 @@ import type { CardData } from '~/types/cardData'
 export function parseCard(card: ScryfallCard.Any): CardData {
   const cardData: CardData = {
     name: card.name,
+    set: card.set_name,
     layout: card.layout,
     imageData: {
       front: null,

@@ -1,7 +1,8 @@
-import type { ScryfallCard, ScryfallCardFields, ScryfallImageUris } from '@scryfall/api-types'
+import type { ScryfallCardFields, ScryfallImageUris } from '@scryfall/api-types'
 
 export type SelectedCard = {
   name: string
+  set: string
   layout: ScryfallCardFields.Core.All['layout']
   imageData: CardImageData
   orientationData: CardOrientationData
@@ -15,6 +16,7 @@ export type SelectedCard = {
 
 export type CardData = {
   name: string
+  set: string
   layout: ScryfallCardFields.Core.All['layout']
   imageData: CardImageData
   orientationData: CardOrientationData

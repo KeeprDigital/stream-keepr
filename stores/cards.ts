@@ -9,8 +9,13 @@ export const useCardsStore = defineStore('Cards', () => {
   const loading = ref(false)
   const cardNames = ref<string[]>([])
   const cardList = ref<CardData[]>([])
+  const cardPrintList = ref<CardData[]>([])
   const card = ref<SelectedCard>()
   const selectedFormat = ref<ScryfallFormat | 'all'>('all')
+
+  const formatQuery = computed(() => selectedFormat.value === 'all'
+    ? ''
+    : `format:${selectedFormat.value}`)
 
   async function setCardImage() {
     await $fetch('/api/cardImage', {
@@ -22,6 +27,7 @@ export const useCardsStore = defineStore('Cards', () => {
   }
 
   async function selectCard(cardData: CardData) {
+    loading.value = true
     card.value = {
       ...cardData,
       hidden: false,
@@ -31,14 +37,17 @@ export const useCardsStore = defineStore('Cards', () => {
       counterRotated: false,
       meldData: cardData.meldData,
     }
+    await searchCardPrints()
     await setCardImage()
+    loading.value = false
   }
 
   async function selectMeldCardPart(cardName: string) {
     loading.value = true
-    const data = await $fetch<ScryfallCard.Any>('https://api.scryfall.com/cards/named', {
+    const data = await $fetch<ScryfallCard.Any>('https://api.scryfall.com/cards/search', {
       query: {
         exact: cardName,
+        unique: 'prints',
       },
     })
 
@@ -53,6 +62,7 @@ export const useCardsStore = defineStore('Cards', () => {
       counterRotated: false,
     }
 
+    await searchCardPrints()
     loading.value = false
   }
 
@@ -102,37 +112,46 @@ export const useCardsStore = defineStore('Cards', () => {
 
   async function searchFuzzyCardName(name: string) {
     loading.value = true
+
     if (name.length < 3) {
       clearSearch()
       return
     }
 
-    const formatQuery = selectedFormat.value === 'all' ? '' : `format:${selectedFormat.value}`
-
-    const data = await $fetch<ScryfallList.Cards>('https://api.scryfall.com/cards/search', {
+    await $fetch<ScryfallList.Cards>('https://api.scryfall.com/cards/search', {
       query: {
-        q: `${name} in:paper game:paper ${formatQuery}`,
+        q: `${name} in:paper game:paper ${formatQuery.value}`,
         unique: 'cards',
       },
+    }).then((data) => {
+      if (!data) {
+        cardList.value = []
+        return
+      }
+      cardList.value = data.data.map(card => parseCard(card))
     }).catch(() => {
       cardList.value = []
       loading.value = false
-    })
-
-    if (!data) {
-      cardList.value = []
+    }).finally(() => {
       loading.value = false
-      return
-    }
-
-    const parsedCards: CardData[] = []
-
-    data.data.forEach((card) => {
-      parsedCards.push(parseCard(card))
     })
+  }
 
-    cardList.value = parsedCards
-    loading.value = false
+  async function searchCardPrints() {
+    loading.value = true
+    await $fetch<ScryfallList.Cards>('https://api.scryfall.com/cards/search', {
+      query: {
+        q: `${card.value?.name} in:paper game:paper ${formatQuery.value}`,
+        unique: 'prints',
+      },
+    }).then((data) => {
+      cardPrintList.value = data.data.map(card => parseCard(card))
+    }).catch(() => {
+      cardPrintList.value = []
+      loading.value = false
+    }).finally(() => {
+      loading.value = false
+    })
   }
 
   return {
@@ -149,7 +168,9 @@ export const useCardsStore = defineStore('Cards', () => {
     turnOverCard,
     clearSearch,
     setSelectedFormat,
+    searchCardPrints,
     selectedFormat,
+    cardPrintList,
     loading,
     cardNames,
     card,

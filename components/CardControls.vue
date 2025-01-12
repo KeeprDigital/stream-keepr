@@ -1,5 +1,12 @@
 <script lang="ts" setup>
+import { LazyCardPrintList } from '#components'
+
 const cardsStore = useCardsStore()
+const modal = useModal()
+
+function openPrintList() {
+  modal.open(LazyCardPrintList)
+}
 </script>
 
 <template>
@@ -122,6 +129,16 @@ const cardsStore = useCardsStore()
         @click="cardsStore.showCard"
       >
         Show
+      </UButton>
+      <UButton
+        variant="outline"
+        color="info"
+        icon="i-lucide-printer"
+        size="xl"
+        block
+        @click="openPrintList"
+      >
+        Switch Printing
       </UButton>
       <UButton
         variant="outline"
