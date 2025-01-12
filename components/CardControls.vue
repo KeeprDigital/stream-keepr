@@ -47,7 +47,7 @@ function openPrintList() {
       >
         Show
       </UButton>
-      <UButtonGroup orientation="horizontal">
+      <UButtonGroup v-if="cardsStore.card.meldData" orientation="horizontal">
         <UButton
           v-if="cardsStore.card.meldData?.meldPartOne"
           variant="outline"
