@@ -26,6 +26,27 @@ function openPrintList() {
       />
     </div>
     <div class="buttons">
+      <UButton
+        v-if="!cardsStore.card.hidden"
+        variant="outline"
+        icon="i-lucide-eye-off"
+        size="xl"
+        block
+        color="warning"
+        @click="cardsStore.hideCard"
+      >
+        Hide
+      </UButton>
+      <UButton
+        v-else
+        variant="outline"
+        icon="i-lucide-eye"
+        size="xl"
+        block
+        @click="cardsStore.showCard"
+      >
+        Show
+      </UButton>
       <UButtonGroup orientation="horizontal">
         <UButton
           v-if="cardsStore.card.meldData?.meldPartOne"
@@ -50,6 +71,7 @@ function openPrintList() {
           {{ cardsStore.card.meldData?.meldPartTwo }}
         </UButton>
       </UButtonGroup>
+
       <UButton
         v-if="cardsStore.card.meldData?.meldResult"
         variant="outline"
@@ -66,7 +88,7 @@ function openPrintList() {
         v-if="cardsStore.card.orientationData.turnable"
         variant="outline"
         color="info"
-
+        icon="i-lucide-flip-horizontal"
         size="xl"
         block
         @click="cardsStore.turnOverCard"
@@ -110,30 +132,9 @@ function openPrintList() {
         Flip
       </UButton>
       <UButton
-        v-if="!cardsStore.card.hidden"
-        variant="outline"
-        icon="i-lucide-eye-off"
-        size="xl"
-        block
-        color="warning"
-        @click="cardsStore.hideCard"
-      >
-        Hide
-      </UButton>
-      <UButton
-        v-else
-        variant="outline"
-        icon="i-lucide-eye"
-        size="xl"
-        block
-        @click="cardsStore.showCard"
-      >
-        Show
-      </UButton>
-      <UButton
         v-if="cardsStore.cardPrintList.length > 1"
         variant="outline"
-        color="info"
+        color="warning"
         icon="i-lucide-printer"
         size="xl"
         block

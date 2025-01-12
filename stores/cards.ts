@@ -7,7 +7,6 @@ import type { CardData, SelectedCard } from '~/types/cardData'
 
 export const useCardsStore = defineStore('Cards', () => {
   const loading = ref(false)
-  const cardNames = ref<string[]>([])
   const cardList = ref<CardData[]>([])
   const cardPrintList = ref<CardData[]>([])
   const card = ref<SelectedCard>()
@@ -30,7 +29,7 @@ export const useCardsStore = defineStore('Cards', () => {
     loading.value = true
     card.value = {
       ...cardData,
-      hidden: false,
+      hidden: true,
       flipped: false,
       turnedOver: false,
       rotated: cardData.orientationData.defaultRotated,
@@ -44,7 +43,7 @@ export const useCardsStore = defineStore('Cards', () => {
 
   async function selectMeldCardPart(cardName: string) {
     loading.value = true
-    const data = await $fetch<ScryfallCard.Any>('https://api.scryfall.com/cards/search', {
+    const data = await $fetch<ScryfallCard.Any>('https://api.scryfall.com/cards/named', {
       query: {
         exact: cardName,
         unique: 'prints',
@@ -55,7 +54,7 @@ export const useCardsStore = defineStore('Cards', () => {
 
     card.value = {
       ...parsedCard,
-      hidden: false,
+      hidden: true,
       flipped: false,
       turnedOver: false,
       rotated: false,
@@ -172,7 +171,6 @@ export const useCardsStore = defineStore('Cards', () => {
     selectedFormat,
     cardPrintList,
     loading,
-    cardNames,
     card,
     cardList,
   }
