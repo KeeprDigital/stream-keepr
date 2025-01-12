@@ -22,16 +22,8 @@ export const useCardsStore = defineStore('Cards', () => {
   }
 
   async function selectCard(cardData: CardData) {
-    loading.value = true
-    const data = await $fetch<ScryfallCard.Any>('https://api.scryfall.com/cards/named', {
-      query: {
-        exact: cardData.name,
-      },
-    })
-
     card.value = {
       ...cardData,
-      scryfallData: data,
       hidden: false,
       flipped: false,
       turnedOver: false,
@@ -39,9 +31,7 @@ export const useCardsStore = defineStore('Cards', () => {
       counterRotated: false,
       meldData: cardData.meldData,
     }
-
     await setCardImage()
-    loading.value = false
   }
 
   async function selectMeldCardPart(cardName: string) {
@@ -56,7 +46,6 @@ export const useCardsStore = defineStore('Cards', () => {
 
     card.value = {
       ...parsedCard,
-      scryfallData: data,
       hidden: false,
       flipped: false,
       turnedOver: false,

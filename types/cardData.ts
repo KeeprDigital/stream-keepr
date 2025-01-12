@@ -3,7 +3,6 @@ import type { ScryfallCard, ScryfallCardFields, ScryfallImageUris } from '@scryf
 export type SelectedCard = {
   name: string
   layout: ScryfallCardFields.Core.All['layout']
-  scryfallData: ScryfallCard.Any
   imageData: CardImageData
   orientationData: CardOrientationData
   meldData?: CardMeldData
