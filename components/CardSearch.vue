@@ -1,8 +1,14 @@
 <script setup lang="ts">
+import { LazyCardHistory } from '#components'
 import { mtgSets } from '~/data/mtgSets'
 
 const cardsStore = useCardsStore()
 const searchTerm = ref('')
+const modal = useModal()
+
+function openHistory() {
+  modal.open(LazyCardHistory)
+}
 
 const search = useDebounceFn(() => {
   cardsStore.searchFuzzyCardName(searchTerm.value)
@@ -64,6 +70,17 @@ function clearSearch() {
       }"
       @update:model-value="searchImmediate"
     />
+
+    <UButton
+      size="xl"
+      variant="outline"
+      color="neutral"
+      class="history-button"
+      icon="i-lucide-history"
+      @click="openHistory"
+    >
+      History
+    </UButton>
   </div>
 </template>
 

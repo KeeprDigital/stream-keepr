@@ -4,6 +4,7 @@ import type {
   ScryfallList,
 } from '@scryfall/api-types'
 import type { CardData, SelectedCard } from '~/types/cardData'
+import { useStorage } from '@vueuse/core'
 
 export const useCardsStore = defineStore('Cards', () => {
   const loading = ref(false)
@@ -11,6 +12,7 @@ export const useCardsStore = defineStore('Cards', () => {
   const cardPrintList = ref<CardData[]>([])
   const card = ref<SelectedCard>()
   const selectedFormat = ref<ScryfallFormat | 'all'>('all')
+  const history = useStorage<CardData[]>('card-history', [])
 
   const formatQuery = computed(() => selectedFormat.value === 'all'
     ? ''
@@ -40,7 +42,22 @@ export const useCardsStore = defineStore('Cards', () => {
     }
     await searchCardPrints()
     await setCardImage()
+    pushToHistory(cardData)
     loading.value = false
+  }
+
+  function clearHistory() {
+    history.value = []
+  }
+
+  function pushToHistory(cardData: CardData) {
+    if (history.value.find(card => card.name === cardData.name)) {
+      history.value.splice(history.value.indexOf(cardData), 1)
+      history.value.push(cardData)
+    }
+    else {
+      history.value.push(cardData)
+    }
   }
 
   async function selectMeldCardPart(cardName: string) {
@@ -144,7 +161,7 @@ export const useCardsStore = defineStore('Cards', () => {
     loading.value = true
     await $fetch<ScryfallList.Cards>('https://api.scryfall.com/cards/search', {
       query: {
-        q: `!${card.value?.name} in:paper game:paper ${formatQuery.value}`,
+        q: `${card.value?.name} in:paper game:paper`,
         unique: 'prints',
       },
     }).then((data) => {
@@ -171,11 +188,14 @@ export const useCardsStore = defineStore('Cards', () => {
     turnOverCard,
     clearSearch,
     setSelectedFormat,
+    pushToHistory,
+    clearHistory,
     searchCardPrints,
     selectedFormat,
     cardPrintList,
     loading,
     card,
     cardList,
+    history,
   }
 })
