@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@nuxt/image": "1.9.0",
-    "@nuxt/ui-pro": "3.0.0-alpha.10",
+    "@nuxt/ui-pro": "3.0.0-alpha.11",
     "@pinia/nuxt": "0.9.0",
     "@scryfall/api-types": "1.0.0-alpha.4",
     "@vueuse/core": "^12.4.0",
