@@ -19,7 +19,7 @@ export const useCardsStore = defineStore('Cards', () => {
     : `format:${selectedFormat.value}`)
 
   async function setCardImage() {
-    await $fetch('/api/cardImage', {
+    await $fetch('/api/card-image', {
       method: 'POST',
       body: {
         card: card.value,
