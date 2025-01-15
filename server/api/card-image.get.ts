@@ -5,33 +5,33 @@ export default defineEventHandler(async () => {
   const data = await local.getItem<SelectedCard>('cardData')
 
   const imageConfig = {
-    verticalImage: '',
-    rotatedImage: '',
-    counterRotatedImage: '',
-    flippedImage: '',
+    verticalImage: 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png',
+    rotatedImage: 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png',
+    counterRotatedImage: 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png',
+    flippedImage: 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png',
   }
 
   if (!data) {
-    return imageConfig
+    return [imageConfig]
   }
 
-  let image = ''
+  let image = 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png'
 
   if (data.displayData.hidden) {
-    return imageConfig
+    return [imageConfig]
   }
 
   if (data.displayData.flipped) {
-    image = data.imageData.front?.png ?? ''
+    image = data.imageData.front?.png ?? 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png'
     imageConfig.flippedImage = image
-    return imageConfig
+    return [imageConfig]
   }
 
   if (data.displayData.turnedOver) {
-    image = data.imageData.back?.png ?? ''
+    image = data.imageData.back?.png ?? 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png'
   }
   else {
-    image = data.imageData.front?.png ?? ''
+    image = data.imageData.front?.png ?? 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png'
   }
 
   if (data.displayData.rotated) {
@@ -44,5 +44,5 @@ export default defineEventHandler(async () => {
     imageConfig.verticalImage = image
   }
 
-  return imageConfig
+  return [imageConfig]
 })

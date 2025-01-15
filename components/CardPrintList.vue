@@ -29,7 +29,7 @@ function selectCard(card: CardData) {
             :show-turned-over-button="true"
             :card="card"
             :hoverable="true"
-            @click="selectCard(card)"
+            @click="selectCard(card, true)"
           />
           <div class="card-list-item-title">
             {{ card.set }}

@@ -27,12 +27,12 @@ export const useCardsStore = defineStore('Cards', () => {
     })
   }
 
-  async function selectCard(cardData: CardData) {
+  async function selectCard(cardData: CardData, isPrinting: boolean = false) {
     loading.value = true
     card.value = {
       ...cardData,
       displayData: {
-        hidden: true,
+        hidden: !isPrinting,
         flipped: false,
         turnedOver: false,
         rotated: cardData.orientationData.defaultRotated,
@@ -161,7 +161,7 @@ export const useCardsStore = defineStore('Cards', () => {
     loading.value = true
     await $fetch<ScryfallList.Cards>('https://api.scryfall.com/cards/search', {
       query: {
-        q: `${card.value?.name} in:paper game:paper`,
+        q: `!${card.value?.name} in:paper game:paper`,
         unique: 'prints',
       },
     }).then((data) => {
