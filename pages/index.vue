@@ -1,3 +1,8 @@
+<script setup lang="ts">
+const cardsStore = useCardsStore()
+await cardsStore.loadCardImage()
+</script>
+
 <template>
   <UPage
     :ui="{

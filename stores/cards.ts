@@ -18,8 +18,16 @@ export const useCardsStore = defineStore('Cards', () => {
     ? ''
     : `format:${selectedFormat.value}`)
 
+  async function loadCardImage() {
+    await $fetch<SelectedCard>('/api/card/state').then((data) => {
+      if (data) {
+        card.value = data
+      }
+    })
+  }
+
   async function setCardImage() {
-    await $fetch('/api/card-image', {
+    await $fetch('/api/card/state', {
       method: 'POST',
       body: {
         card: card.value,
@@ -191,6 +199,7 @@ export const useCardsStore = defineStore('Cards', () => {
     pushToHistory,
     clearHistory,
     searchCardPrints,
+    loadCardImage,
     selectedFormat,
     cardPrintList,
     loading,
