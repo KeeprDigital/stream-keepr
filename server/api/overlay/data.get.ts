@@ -11,6 +11,7 @@ export default defineEventHandler(async () => {
   const parsed = {
     topPlayer: {
       name: data.topPlayer.name,
+      proNouns: data.topPlayer.proNouns,
       deck: data.topPlayer.deck,
       score: data.topPlayer.position
         ? `${data.topPlayer.score.wins} - ${data.topPlayer.score.losses} ${data.topPlayer.score.draws ? `- ${data.topPlayer.score.draws}` : ''}`
@@ -18,6 +19,7 @@ export default defineEventHandler(async () => {
     },
     bottomPlayer: {
       name: data.bottomPlayer.name,
+      proNouns: data.bottomPlayer.proNouns,
       deck: data.bottomPlayer.deck,
       score: data.bottomPlayer.position
         ? `${data.bottomPlayer.score.wins} - ${data.bottomPlayer.score.losses} ${data.bottomPlayer.score.draws

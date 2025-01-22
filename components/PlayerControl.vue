@@ -22,6 +22,9 @@ const state = defineModel<Player>(
     <UFormField label="Name" name="name">
       <UInput v-model="state.name" class="input" />
     </UFormField>
+    <UFormField label="Pronouns" name="proNouns">
+      <UInput v-model="state.proNouns" class="input" />
+    </UFormField>
     <UFormField label="Deck" name="deck">
       <UInput v-model="state.deck" class="input" />
     </UFormField>

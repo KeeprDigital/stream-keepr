@@ -6,6 +6,7 @@ export const useOverlayStore = defineStore('Overlay', () => {
   const overlayState = ref<OverlayState>({
     topPlayer: {
       name: '',
+      proNouns: '',
       deck: '',
       position: '',
       score: {
@@ -16,6 +17,7 @@ export const useOverlayStore = defineStore('Overlay', () => {
     },
     bottomPlayer: {
       name: '',
+      proNouns: '',
       deck: '',
       position: '',
       score: {

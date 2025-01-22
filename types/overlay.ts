@@ -10,6 +10,7 @@ export type Event = z.output<typeof eventSchema>
 
 export const playerSchema = z.object({
   name: z.string(),
+  proNouns: z.string(),
   deck: z.string(),
   position: z.string(),
   score: z.object({
