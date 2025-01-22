@@ -9,6 +9,11 @@ function selectCard(card: CardData) {
   cardsStore.selectCard(card)
 }
 
+function clearHistory() {
+  cardsStore.clearHistory()
+  modal.close()
+}
+
 const history = computed(() => [...cardsStore.history].reverse())
 </script>
 
@@ -42,6 +47,11 @@ const history = computed(() => [...cardsStore.history].reverse())
         <div class="card-list-item" />
         <div class="card-list-item" />
       </div>
+    </template>
+    <template #footer>
+      <UButton @click="clearHistory">
+        Clear
+      </UButton>
     </template>
   </UModal>
 </template>
