@@ -5,6 +5,7 @@ export const eventSchema = z.object({
   currentRound: z.string().optional(),
   leftTalent: z.string().optional(),
   rightTalent: z.string().optional(),
+  holdingText: z.string().optional(),
 })
 export type Event = z.output<typeof eventSchema>
 
@@ -18,7 +19,6 @@ export const playerSchema = z.object({
     losses: z.number().default(0),
     draws: z.number().default(0),
   }),
-
 })
 
 export type Player = z.output<typeof playerSchema>

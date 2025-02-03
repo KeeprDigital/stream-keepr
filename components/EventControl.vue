@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { type Event, eventSchema } from '~/types/overlay'
+import type { Event } from '~/types/overlay'
+import { eventSchema } from '~/types/overlay'
 
 const state = defineModel<Event>(
   {
@@ -8,6 +9,7 @@ const state = defineModel<Event>(
       currentRound: '',
       leftTallent: '',
       rightTallent: '',
+      holdingText: '',
     },
   },
 )
@@ -29,6 +31,9 @@ const state = defineModel<Event>(
         <UInput v-model="state.rightTalent" class="input" />
       </UFormField>
     </div>
+    <UFormField label="Holding Text" name="holdingText">
+      <UTextarea v-model="state.holdingText" class="input" />
+    </UFormField>
   </UForm>
 </template>
 
