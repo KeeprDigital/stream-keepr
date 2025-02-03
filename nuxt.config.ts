@@ -14,6 +14,9 @@ export default defineNuxtConfig({
     },
   },
   nitro: {
+    experimental: {
+      websocket: true,
+    },
     storage: {
       local: {
         driver: 'fs',
