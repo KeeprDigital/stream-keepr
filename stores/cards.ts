@@ -3,14 +3,21 @@ import type {
   ScryfallFormat,
   ScryfallList,
 } from '@scryfall/api-types'
-import type { CardData, SelectedCard } from '~/types/cardData'
+import type { CardData, CardDisplayData } from '~/types/cardData'
+import type { CardServerMessage } from '~/types/websocket'
 import { useStorage } from '@vueuse/core'
+import { createWebSocketMessage } from '~/types/websocket'
 
 export const useCardsStore = defineStore('Cards', () => {
+  const { data: serverCardData, send } = useWebSocket(`ws://${window.location.host}/api/ws`)
   const loading = ref(false)
+
   const cardList = ref<CardData[]>([])
   const cardPrintList = ref<CardData[]>([])
-  const card = ref<SelectedCard>()
+
+  const card = ref<CardData>()
+  const cardDisplay = ref<CardDisplayData>(initialCardDisplay())
+
   const selectedFormat = ref<ScryfallFormat | 'all'>('all')
   const history = useStorage<CardData[]>('card-history', [])
 
@@ -18,126 +25,19 @@ export const useCardsStore = defineStore('Cards', () => {
     ? ''
     : `format:${selectedFormat.value}`)
 
-  async function loadCardImage() {
-    await $fetch<SelectedCard>('/api/card/state').then((data) => {
-      if (data) {
-        card.value = data
-      }
-    })
-  }
-
-  async function setCardImage() {
-    await $fetch('/api/card/state', {
-      method: 'POST',
-      body: {
-        card: card.value,
-      },
-    })
-  }
-
-  async function selectCard(cardData: CardData, isPrinting: boolean = false) {
-    loading.value = true
-    card.value = {
-      ...cardData,
-      displayData: {
-        hidden: !isPrinting,
-        flipped: false,
-        turnedOver: false,
-        rotated: cardData.orientationData.defaultRotated,
-        counterRotated: false,
-      },
-      meldData: cardData.meldData,
+  watch(serverCardData, async (data) => {
+    if (data) {
+      const parsedData = JSON.parse(data) as CardServerMessage
+      card.value = parsedData.payload.card
+      cardDisplay.value = parsedData.payload.display
+      await searchCardPrints(parsedData.payload.card.name)
     }
-    await searchCardPrints()
-    await setCardImage()
-    pushToHistory(cardData)
-    loading.value = false
-  }
+  })
 
-  function clearHistory() {
-    history.value = []
-  }
-
-  function pushToHistory(cardData: CardData) {
-    if (history.value.find(card => card.name === cardData.name)) {
-      history.value.splice(history.value.indexOf(cardData), 1)
-      history.value.push(cardData)
-    }
-    else {
-      history.value.push(cardData)
-    }
-  }
-
-  async function selectMeldCardPart(cardName: string) {
-    loading.value = true
-    const data = await $fetch<ScryfallCard.Any>('https://api.scryfall.com/cards/named', {
-      query: {
-        exact: cardName,
-        unique: 'prints',
-      },
-    })
-
-    const parsedCard = parseCard(data)
-
-    card.value = {
-      ...parsedCard,
-      displayData: {
-        hidden: true,
-        flipped: false,
-        turnedOver: false,
-        rotated: false,
-        counterRotated: false,
-      },
-    }
-
-    await searchCardPrints()
-    loading.value = false
-  }
-
-  function clearSearch() {
-    loading.value = false
-    cardList.value = []
-  }
-
-  function clearCard() {
-    card.value = undefined
-    setCardImage()
-  }
-
-  function hideCard() {
-    card.value!.displayData.hidden = true
-    setCardImage()
-  }
-
-  function showCard() {
-    card.value!.displayData.hidden = false
-    setCardImage()
-  }
-
-  function rotateCard() {
-    card.value!.displayData.rotated = !card.value!.displayData.rotated
-    setCardImage()
-  }
-
-  function counterRotateCard() {
-    card.value!.displayData.counterRotated = !card.value!.displayData.counterRotated
-    setCardImage()
-  }
-
-  function flipCard() {
-    card.value!.displayData.flipped = !card.value!.displayData.flipped
-    setCardImage()
-  }
-
-  function turnOverCard() {
-    card.value!.displayData.turnedOver = !card.value!.displayData.turnedOver
-    setCardImage()
-  }
-
-  function setSelectedFormat(format: ScryfallFormat | 'all') {
-    selectedFormat.value = format
-  }
-
+  /**
+   * Fuzzy search for a card by name
+   * @param name - The name of the card to search for
+   */
   async function searchFuzzyCardName(name: string) {
     loading.value = true
 
@@ -165,12 +65,17 @@ export const useCardsStore = defineStore('Cards', () => {
     })
   }
 
-  async function searchCardPrints() {
+  /**
+   * Fetch all prints of a card
+   * @param exactName - The exact name of the card to search for
+   */
+  async function searchCardPrints(exactName: string) {
     loading.value = true
     await $fetch<ScryfallList.Cards>('https://api.scryfall.com/cards/search', {
       query: {
-        q: `!${card.value?.name} in:paper game:paper`,
+        q: `${exactName} in:paper game:paper`,
         unique: 'prints',
+        order: 'released',
       },
     }).then((data) => {
       cardPrintList.value = data.data.map(card => parseCard(card))
@@ -180,6 +85,134 @@ export const useCardsStore = defineStore('Cards', () => {
     }).finally(() => {
       loading.value = false
     })
+  }
+
+  async function setCardImage(cardData: CardData) {
+    send(createWebSocketMessage('card', {
+      action: 'set',
+      card: cardData,
+    }))
+  }
+
+  async function selectCard(cardData: CardData, isPrinting: boolean = false) {
+    loading.value = true
+
+    card.value = {
+      ...cardData,
+    }
+
+    cardDisplay.value = {
+      hidden: !isPrinting,
+      flipped: false,
+      turnedOver: false,
+      rotated: cardData.orientationData.defaultRotated,
+      counterRotated: false,
+    }
+
+    await searchCardPrints(cardData.name)
+    await setCardImage(cardData)
+
+    pushToHistory(cardData)
+
+    loading.value = false
+  }
+
+  function pushToHistory(cardData: CardData) {
+    if (history.value.find(card => card.name === cardData.name)) {
+      history.value.splice(history.value.indexOf(cardData), 1)
+      history.value.push(cardData)
+    }
+    else {
+      history.value.push(cardData)
+    }
+  }
+
+  async function selectMeldCardPart(cardName: string) {
+    loading.value = true
+    const data = await $fetch<ScryfallCard.Any>('https://api.scryfall.com/cards/named', {
+      query: {
+        exact: cardName,
+        unique: 'prints',
+      },
+    })
+
+    const parsedCard = parseCard(data)
+
+    card.value = {
+      ...parsedCard,
+    }
+
+    cardDisplay.value = {
+      hidden: true,
+      flipped: false,
+      turnedOver: false,
+      rotated: false,
+      counterRotated: false,
+    }
+    await searchCardPrints(cardName)
+    loading.value = false
+  }
+
+  function clearCard() {
+    card.value = undefined
+    send(createWebSocketMessage('card', {
+      action: 'clear',
+    }))
+  }
+
+  function hideCard() {
+    cardDisplay.value.hidden = true
+    send(createWebSocketMessage('card', {
+      action: 'hide',
+    }))
+  }
+
+  function showCard() {
+    cardDisplay.value.hidden = false
+    send(createWebSocketMessage('card', {
+      action: 'show',
+    }))
+  }
+
+  function rotateCard() {
+    cardDisplay.value.rotated = !cardDisplay.value.rotated
+    send(createWebSocketMessage('card', {
+      action: 'rotate',
+    }))
+  }
+
+  function counterRotateCard() {
+    cardDisplay.value.counterRotated = !cardDisplay.value.counterRotated
+    send(createWebSocketMessage('card', {
+      action: 'counterRotate',
+    }))
+  }
+
+  function flipCard() {
+    cardDisplay.value.flipped = !cardDisplay.value.flipped
+    send(createWebSocketMessage('card', {
+      action: 'flip',
+    }))
+  }
+
+  function turnOverCard() {
+    cardDisplay.value.turnedOver = !cardDisplay.value.turnedOver
+    send(createWebSocketMessage('card', {
+      action: 'turnOver',
+    }))
+  }
+
+  function clearSearch() {
+    loading.value = false
+    cardList.value = []
+  }
+
+  function clearHistory() {
+    history.value = []
+  }
+
+  function setSelectedFormat(format: ScryfallFormat | 'all') {
+    selectedFormat.value = format
   }
 
   return {
@@ -199,9 +232,9 @@ export const useCardsStore = defineStore('Cards', () => {
     pushToHistory,
     clearHistory,
     searchCardPrints,
-    loadCardImage,
     selectedFormat,
     cardPrintList,
+    cardDisplay,
     loading,
     card,
     cardList,

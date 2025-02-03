@@ -1,47 +1,55 @@
-import type { SelectedCard } from '~/types/cardData'
+import type { CardData, CardDisplayData } from '~/types/cardData'
 
-export default defineEventHandler(async () => {
+export default defineEventHandler(async (event) => {
   const local = useStorage('local')
-  const data = await local.getItem<SelectedCard>('cardData')
+  const data = await local.getItem<CardData>('card')
+  const display = await local.getItem<CardDisplayData>('cardDisplay')
+
+  const emptyImage = `${getPublicAssetURL(event)}/Empty.png`
 
   const imageConfig = {
-    verticalImage: 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png',
-    rotatedImage: 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png',
-    counterRotatedImage: 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png',
-    flippedImage: 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png',
+    verticalImage: emptyImage,
+    rotatedImage: emptyImage,
+    counterRotatedImage: emptyImage,
+    flippedImage: emptyImage,
   }
 
-  if (!data) {
+  if (!data || !display) {
     return [imageConfig]
   }
 
-  let image = 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png'
-
-  if (data.displayData.hidden) {
+  if (display.hidden) {
     return [imageConfig]
   }
 
-  if (data.displayData.flipped) {
-    image = data.imageData.front?.png ?? 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png'
-    imageConfig.flippedImage = image
+  if (display.flipped) {
+    if (data.imageData.front?.png) {
+      imageConfig.flippedImage = data.imageData.front.png
+    }
     return [imageConfig]
   }
 
-  if (data.displayData.turnedOver) {
-    image = data.imageData.back?.png ?? 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png'
+  if (display.turnedOver) {
+    if (data.imageData.back?.png) {
+      imageConfig.verticalImage = data.imageData.back.png
+    }
+    return [imageConfig]
+  }
+
+  if (display.rotated) {
+    if (data.imageData.front?.png) {
+      imageConfig.rotatedImage = data.imageData.front.png
+    }
+  }
+  else if (display.counterRotated) {
+    if (data.imageData.back?.png) {
+      imageConfig.counterRotatedImage = data.imageData.back.png
+    }
   }
   else {
-    image = data.imageData.front?.png ?? 'https://upload.wikimedia.org/wikipedia/commons/5/59/Empty.png'
-  }
-
-  if (data.displayData.rotated) {
-    imageConfig.rotatedImage = image
-  }
-  else if (data.displayData.counterRotated) {
-    imageConfig.counterRotatedImage = image
-  }
-  else {
-    imageConfig.verticalImage = image
+    if (data.imageData.front?.png) {
+      imageConfig.verticalImage = data.imageData.front.png
+    }
   }
 
   return [imageConfig]

@@ -1,15 +1,5 @@
 import type { ScryfallCardFields, ScryfallImageUris } from '@scryfall/api-types'
 
-export type SelectedCard = {
-  name: string
-  set: string
-  layout: ScryfallCardFields.Core.All['layout']
-  imageData: CardImageData
-  orientationData: CardOrientationData
-  meldData?: CardMeldData
-  displayData: CardDisplayData
-}
-
 export type CardData = {
   name: string
   set: string
@@ -17,6 +7,14 @@ export type CardData = {
   imageData: CardImageData
   orientationData: CardOrientationData
   meldData?: CardMeldData
+}
+
+export type CardDisplayData = {
+  hidden: boolean
+  flipped: boolean
+  rotated: boolean
+  counterRotated: boolean
+  turnedOver: boolean
 }
 
 export type CardImageData = {
@@ -36,12 +34,4 @@ export type CardMeldData = {
   meldPartOne: string | null
   meldPartTwo: string | null
   meldResult: string | null
-}
-
-export type CardDisplayData = {
-  hidden: boolean
-  flipped: boolean
-  rotated: boolean
-  counterRotated: boolean
-  turnedOver: boolean
 }
