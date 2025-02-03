@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { type Player, playerSchema } from '~/types/overlay'
+import type { Player } from '~/types/overlay'
+import { playerSchema } from '~/types/overlay'
 
 const state = defineModel<Player>(
   {
