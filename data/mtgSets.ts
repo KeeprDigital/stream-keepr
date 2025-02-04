@@ -1,7 +1,7 @@
 import type { ScryfallFormat } from '@scryfall/api-types'
 
 export const mtgSets: {
-  value: ScryfallFormat | 'all'
+  value: ScryfallFormat | 'all' | 'token'
   label: string
 }[] = [
   { value: 'all', label: 'All' },
@@ -12,4 +12,7 @@ export const mtgSets: {
   { value: 'pauper', label: 'Pauper' },
   { value: 'vintage', label: 'Vintage' },
   { value: 'commander', label: 'Commander' },
-]
+  { value: 'token', label: 'Token' },
+] as const
+
+export type MtgSet = (typeof mtgSets)[number]['value']

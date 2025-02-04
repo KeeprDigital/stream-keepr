@@ -3,6 +3,7 @@ import type {
   ScryfallFormat,
   ScryfallList,
 } from '@scryfall/api-types'
+import type { MtgSet } from '~/data/mtgSets'
 import type { CardData, CardDisplayData } from '~/types/cardData'
 import type { CardServerMessage } from '~/types/websocket'
 import { useStorage } from '@vueuse/core'
@@ -18,12 +19,20 @@ export const useCardsStore = defineStore('Cards', () => {
   const card = ref<CardData>()
   const cardDisplay = ref<CardDisplayData>(initialCardDisplay())
 
-  const selectedFormat = ref<ScryfallFormat | 'all'>('all')
+  const selectedFormat = ref<MtgSet>('all')
   const history = useStorage<CardData[]>('card-history', [])
 
-  const formatQuery = computed(() => selectedFormat.value === 'all'
-    ? ''
-    : `format:${selectedFormat.value}`)
+  const formatQuery = computed(() => {
+    if (selectedFormat.value === 'all') {
+      return ''
+    }
+    else if (selectedFormat.value === 'token') {
+      return 'is:token'
+    }
+    else {
+      return `format:${selectedFormat.value}`
+    }
+  })
 
   watch(serverCardData, async (data) => {
     if (data) {
@@ -48,7 +57,7 @@ export const useCardsStore = defineStore('Cards', () => {
 
     await $fetch<ScryfallList.Cards>('https://api.scryfall.com/cards/search', {
       query: {
-        q: `${name} in:paper game:paper ${formatQuery.value}`,
+        q: `${name} game:paper ${formatQuery.value}`,
         unique: 'cards',
       },
     }).then((data) => {
@@ -73,7 +82,7 @@ export const useCardsStore = defineStore('Cards', () => {
     loading.value = true
     await $fetch<ScryfallList.Cards>('https://api.scryfall.com/cards/search', {
       query: {
-        q: `${exactName} in:paper game:paper`,
+        q: `${exactName} game:paper`,
         unique: 'prints',
         order: 'released',
       },
