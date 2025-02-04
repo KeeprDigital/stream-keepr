@@ -5,18 +5,17 @@ import type {
 } from '@scryfall/api-types'
 import type { MtgSet } from '~/data/mtgSets'
 import type { CardData, CardDisplayData } from '~/types/cardData'
-import type { CardServerMessage } from '~/types/websocket'
 import { useStorage } from '@vueuse/core'
-import { createWebSocketMessage } from '~/types/websocket'
 
 export const useCardsStore = defineStore('Cards', () => {
-  const { data: serverCardData, send } = useWebSocket(`ws://${window.location.host}/api/ws`)
+  const { send, incoming } = useWebSocketChannel('card')
+
   const loading = ref(false)
 
   const cardList = ref<CardData[]>([])
   const cardPrintList = ref<CardData[]>([])
 
-  const card = ref<CardData>()
+  const card = ref<CardData | null>(null)
   const cardDisplay = ref<CardDisplayData>(initialCardDisplay())
 
   const selectedFormat = ref<MtgSet>('all')
@@ -34,13 +33,13 @@ export const useCardsStore = defineStore('Cards', () => {
     }
   })
 
-  watch(serverCardData, async (data) => {
+  watch(incoming, (data) => {
     if (data) {
-      const parsedData = JSON.parse(data) as CardServerMessage
-      card.value = parsedData.payload.card
-      cardDisplay.value = parsedData.payload.display
-      await searchCardPrints(parsedData.payload.card.name)
+      card.value = data.card
+      cardDisplay.value = data.display ?? initialCardDisplay()
     }
+  }, {
+    immediate: true,
   })
 
   /**
@@ -97,10 +96,10 @@ export const useCardsStore = defineStore('Cards', () => {
   }
 
   async function setCardImage(cardData: CardData) {
-    send(createWebSocketMessage('card', {
+    send({
       action: 'set',
       card: cardData,
-    }))
+    })
   }
 
   async function selectCard(cardData: CardData, isPrinting: boolean = false) {
@@ -158,57 +157,63 @@ export const useCardsStore = defineStore('Cards', () => {
       rotated: false,
       counterRotated: false,
     }
+
+    send({
+      action: 'set',
+      card: parsedCard,
+    })
+
     await searchCardPrints(cardName)
     loading.value = false
   }
 
   function clearCard() {
-    card.value = undefined
-    send(createWebSocketMessage('card', {
+    card.value = null
+    send({
       action: 'clear',
-    }))
+    })
   }
 
   function hideCard() {
     cardDisplay.value.hidden = true
-    send(createWebSocketMessage('card', {
+    send({
       action: 'hide',
-    }))
+    })
   }
 
   function showCard() {
     cardDisplay.value.hidden = false
-    send(createWebSocketMessage('card', {
+    send({
       action: 'show',
-    }))
+    })
   }
 
   function rotateCard() {
     cardDisplay.value.rotated = !cardDisplay.value.rotated
-    send(createWebSocketMessage('card', {
+    send({
       action: 'rotate',
-    }))
+    })
   }
 
   function counterRotateCard() {
     cardDisplay.value.counterRotated = !cardDisplay.value.counterRotated
-    send(createWebSocketMessage('card', {
+    send({
       action: 'counterRotate',
-    }))
+    })
   }
 
   function flipCard() {
     cardDisplay.value.flipped = !cardDisplay.value.flipped
-    send(createWebSocketMessage('card', {
+    send({
       action: 'flip',
-    }))
+    })
   }
 
   function turnOverCard() {
     cardDisplay.value.turnedOver = !cardDisplay.value.turnedOver
-    send(createWebSocketMessage('card', {
+    send({
       action: 'turnOver',
-    }))
+    })
   }
 
   function clearSearch() {

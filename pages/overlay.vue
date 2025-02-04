@@ -1,14 +1,12 @@
 <script setup lang="ts">
-const overlayStore = useOverlayStore()
-
-await overlayStore.loadState()
+const eventStore = useEventStore()
 
 async function save() {
-  await overlayStore.saveState()
+  await eventStore.save()
 }
 
 function reset() {
-  overlayStore.reset()
+  eventStore.reset()
 }
 </script>
 
@@ -17,7 +15,7 @@ function reset() {
     <UPageBody class="overlay-controls-body">
       <div class="overlay-controls">
         <div class="overlay-controls-players">
-          <UCard>
+          <!-- <UCard>
             <template #header>
               <h3>Top Player</h3>
             </template>
@@ -28,13 +26,13 @@ function reset() {
               <h3>Bottom Player</h3>
             </template>
             <PlayerControl v-model="overlayStore.overlayState.bottomPlayer" />
-          </UCard>
+          </UCard> -->
         </div>
         <UCard>
           <template #header>
             <h3>Event</h3>
           </template>
-          <EventControl v-model="overlayStore.overlayState.event" />
+          <EventControl v-model="eventStore.eventState" />
         </UCard>
       </div>
       <div class="overlay-controls-buttons">

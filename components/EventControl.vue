@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import type { Event } from '~/types/overlay'
-import { eventSchema } from '~/types/overlay'
+import type { EventData } from '~/types/eventData'
 
-const state = defineModel<Event>(
+const state = defineModel<EventData>(
   {
     default: {
       name: '',
@@ -16,7 +15,7 @@ const state = defineModel<Event>(
 </script>
 
 <template>
-  <UForm class="event-controls" :state="state" :schema="eventSchema">
+  <UForm class="event-controls" :state="state">
     <UFormField label="Event Name" name="eventName">
       <UInput v-model="state.name" class="input" />
     </UFormField>

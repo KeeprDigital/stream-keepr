@@ -1,27 +1,6 @@
 import type { CardData, CardDisplayData } from './cardData'
 
-export type MessageType = 'card' | 'serverCard'
-
-export type BaseMessage = {
-  type: MessageType
-  timestamp: number
-  id: string
-}
-
-export type CardServerMessage = {
-  type: 'serverCard'
-  payload: {
-    card: CardData
-    display: CardDisplayData
-  }
-} & BaseMessage
-
-export type CardClientMessage = {
-  type: 'card'
-  payload: CardClientPayload
-} & BaseMessage
-
-export type ClientCardAction =
+type CardClientAction =
   | 'set'
   | 'clear'
   | 'hide'
@@ -30,31 +9,79 @@ export type ClientCardAction =
   | 'counterRotate'
   | 'flip'
   | 'turnOver'
+export type Payload = {
+  card: {
+    outgoing: {
+      action: CardClientAction
+    } & (
+      | {
+        action: Exclude<CardClientAction, 'set'>
+        card?: never
+      }
+      | {
+        action: 'set'
+        card: CardData
+      }
+    )
+    incoming: {
+      display: CardDisplayData | null
+      card: CardData | null
+    }
+  }
+}
 
-export type CardClientPayload = {
-  action: ClientCardAction
-} & (
+export type WebSocketChannel = keyof Payload
+
+export type WebSocketMessage<T extends WebSocketChannel> =
   | {
-    action: Exclude<ClientCardAction, 'set'>
-    card?: never
+    direction: 'out'
+    channel: T
+    payload: Payload[T]['outgoing']
   }
   | {
-    action: 'set'
-    card: CardData
+    direction: 'in'
+    channel: T
+    payload: Payload[T]['incoming']
   }
-)
 
-export type WebSocketMessage =
-  | CardClientMessage
-  | CardServerMessage
-export function createWebSocketMessage<T extends WebSocketMessage>(
-  type: MessageType,
-  payload: T['payload'],
+// type ServerMessage<T extends keyof Payload> = {
+//   channel: T
+//   direction: 'in'
+//   payload: Payload[T]['incoming']
+//   timestamp: string
+//   messageId: string
+// }
+
+// type ClientMessage<T extends keyof Payload> = {
+//   channel: T
+//   direction: 'out'
+//   payload: Payload[T]['outgoing']
+//   timestamp: string
+//   messageId: string
+// }
+
+export function createServerMessage<T extends keyof Payload>(
+  channel: T,
+  payload: Payload[T]['incoming'],
 ) {
   return JSON.stringify({
-    type,
-    timestamp: Date.now(),
-    id: crypto.randomUUID(),
+    channel,
+    direction: 'in',
     payload,
-  } as T)
+    timestamp: new Date().toISOString(),
+    messageId: crypto.randomUUID(),
+  })
+}
+
+export function createClientMessage<T extends keyof Payload>(
+  channel: T,
+  payload: Payload[T]['outgoing'],
+) {
+  return JSON.stringify({
+    channel,
+    direction: 'out',
+    payload,
+    timestamp: new Date().toISOString(),
+    messageId: crypto.randomUUID(),
+  })
 }
