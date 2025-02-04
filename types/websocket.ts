@@ -1,4 +1,5 @@
 import type { CardData, CardDisplayData } from './cardData'
+import type { EventData } from './eventData'
 
 type CardClientAction =
   | 'set'
@@ -9,9 +10,10 @@ type CardClientAction =
   | 'counterRotate'
   | 'flip'
   | 'turnOver'
+
 export type Payload = {
   card: {
-    outgoing: {
+    client: {
       action: CardClientAction
     } & (
       | {
@@ -23,46 +25,37 @@ export type Payload = {
         card: CardData
       }
     )
-    incoming: {
+    server: {
       display: CardDisplayData | null
       card: CardData | null
     }
   }
+  event: {
+    client: {
+      action: 'set'
+      event: EventData
+    }
+    server: {
+      event: EventData
+    }
+  }
 }
 
-export type WebSocketChannel = keyof Payload
-
-export type WebSocketMessage<T extends WebSocketChannel> =
+export type WebSocketMessage<T extends keyof Payload> =
   | {
     direction: 'out'
     channel: T
-    payload: Payload[T]['outgoing']
+    payload: Payload[T]['client']
   }
   | {
     direction: 'in'
     channel: T
-    payload: Payload[T]['incoming']
+    payload: Payload[T]['server']
   }
-
-// type ServerMessage<T extends keyof Payload> = {
-//   channel: T
-//   direction: 'in'
-//   payload: Payload[T]['incoming']
-//   timestamp: string
-//   messageId: string
-// }
-
-// type ClientMessage<T extends keyof Payload> = {
-//   channel: T
-//   direction: 'out'
-//   payload: Payload[T]['outgoing']
-//   timestamp: string
-//   messageId: string
-// }
 
 export function createServerMessage<T extends keyof Payload>(
   channel: T,
-  payload: Payload[T]['incoming'],
+  payload: Payload[T]['server'],
 ) {
   return JSON.stringify({
     channel,
@@ -75,7 +68,7 @@ export function createServerMessage<T extends keyof Payload>(
 
 export function createClientMessage<T extends keyof Payload>(
   channel: T,
-  payload: Payload[T]['outgoing'],
+  payload: Payload[T]['client'],
 ) {
   return JSON.stringify({
     channel,
@@ -84,4 +77,24 @@ export function createClientMessage<T extends keyof Payload>(
     timestamp: new Date().toISOString(),
     messageId: crypto.randomUUID(),
   })
+}
+
+export function isServerCardMessage(message: WebSocketMessage<keyof Payload>):
+  message is WebSocketMessage<'card'> & { payload: Payload['card']['server'] } {
+  return message.channel === 'card' && message.direction === 'in'
+}
+
+export function isClientCardMessage(message: WebSocketMessage<keyof Payload>):
+  message is WebSocketMessage<'card'> & { payload: Payload['card']['client'] } {
+  return message.channel === 'card' && message.direction === 'out'
+}
+
+export function isServerEventMessage(message: WebSocketMessage<keyof Payload>):
+  message is WebSocketMessage<'event'> & { payload: Payload['event']['server'] } {
+  return message.channel === 'event' && message.direction === 'in'
+}
+
+export function isClientEventMessage(message: WebSocketMessage<keyof Payload>):
+  message is WebSocketMessage<'event'> & { payload: Payload['event']['client'] } {
+  return message.channel === 'event' && message.direction === 'out'
 }

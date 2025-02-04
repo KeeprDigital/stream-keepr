@@ -1,7 +1,8 @@
 import type { EventData } from '~/types/eventData'
 
 export const useEventStore = defineStore('Event', () => {
-  // const { send } = useWebSocket(`ws://${window.location.host}/api/ws`)
+  const { send, incoming } = useWebSocketChannel('event')
+  const toast = useToast()
   const loading = ref(false)
 
   const eventState = ref<EventData>({
@@ -14,6 +15,15 @@ export const useEventStore = defineStore('Event', () => {
 
   const { cloned, sync } = useCloned(eventState, { manual: true })
 
+  watch(incoming, (data) => {
+    if (data) {
+      eventState.value = data.event
+      sync()
+    }
+  }, {
+    immediate: true,
+  })
+
   function reset() {
     eventState.value = cloned.value
     sync()
@@ -21,13 +31,16 @@ export const useEventStore = defineStore('Event', () => {
 
   async function save() {
     loading.value = true
-
-    // send(createWebSocketMessage('event', {
-    //   action: 'set',
-    //   event: eventState.value,
-    // }))
+    send({
+      action: 'set',
+      event: eventState.value,
+    })
 
     sync()
+
+    toast.add({
+      title: 'Event Details Updated',
+    })
 
     loading.value = false
   }

@@ -1,6 +1,7 @@
 import type { CardData, CardDisplayData } from '~/types/cardData'
+import type { EventData } from '~/types/eventData'
 import type { Payload, WebSocketMessage } from '~/types/websocket'
-import { createServerMessage } from '~/types/websocket'
+import { createServerMessage, isClientCardMessage, isClientEventMessage } from '~/types/websocket'
 import { initialCardDisplay } from '~/utils/parseCard'
 
 const channel = 'OVERLAY'
@@ -18,6 +19,12 @@ export default defineWebSocketHandler({
       }))
     }
 
+    const event = await local.getItem<EventData>('event')
+    if (event) {
+      peer.send(createServerMessage('event', {
+        event,
+      }))
+    }
     peer.subscribe(channel)
   },
 
@@ -25,7 +32,7 @@ export default defineWebSocketHandler({
     const local = useStorage('local')
     const data = message.json() as WebSocketMessage<keyof Payload>
 
-    if (data.channel === 'card' && data.direction === 'out') {
+    if (isClientCardMessage(data)) {
       switch (data.payload.action) {
         case 'set':
           await local.setItem('card', data.payload.card)
@@ -98,6 +105,13 @@ export default defineWebSocketHandler({
       peer.publish(channel, createServerMessage('card', {
         card,
         display,
+      }))
+    }
+    else if (isClientEventMessage(data)) {
+      await local.setItem('event', data.payload.event)
+
+      peer.publish(channel, createServerMessage('event', {
+        event: data.payload.event,
       }))
     }
   },

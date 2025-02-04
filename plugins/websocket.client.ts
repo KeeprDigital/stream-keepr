@@ -8,7 +8,7 @@ export default defineNuxtPlugin(() => {
 
   const sendMessage = <T extends keyof Payload>(
     channel: T,
-    payload: Payload[T]['outgoing'],
+    payload: Payload[T]['client'],
   ) => {
     send(JSON.stringify({
       channel,
@@ -18,10 +18,14 @@ export default defineNuxtPlugin(() => {
   }
 
   const channels = reactive<Record<keyof Payload, {
-    outgoing: Payload[keyof Payload]['outgoing'] | null
-    incoming: Payload[keyof Payload]['incoming'] | null
+    outgoing: Payload[keyof Payload]['client'] | null
+    incoming: Payload[keyof Payload]['server'] | null
   }>>({
     card: {
+      outgoing: null,
+      incoming: null,
+    },
+    event: {
       outgoing: null,
       incoming: null,
     },
