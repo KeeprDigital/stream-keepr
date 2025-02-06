@@ -1,20 +1,20 @@
 <script lang="ts" setup>
 import type { CardData } from '~/types/cardData'
 
-const cardsStore = useCardsStore()
+const cardStore = useCardStore()
 const modal = useModal()
 
 function selectCard(card: CardData) {
   modal.close()
-  cardsStore.selectCard(card)
+  cardStore.selectCard(card)
 }
 
 function clearHistory() {
-  cardsStore.clearHistory()
+  cardStore.clearHistory()
   modal.close()
 }
 
-const history = computed(() => [...cardsStore.history].reverse())
+const history = computed(() => [...cardStore.history].reverse())
 </script>
 
 <template>

@@ -2,7 +2,7 @@
 import { LazyCardHistory } from '#components'
 import { mtgSets } from '~/data/mtgSets'
 
-const cardsStore = useCardsStore()
+const cardStore = useCardStore()
 const searchTerm = ref('')
 const modal = useModal()
 
@@ -11,11 +11,11 @@ function openHistory() {
 }
 
 const search = useDebounceFn(() => {
-  cardsStore.searchFuzzyCardName(searchTerm.value)
+  cardStore.searchFuzzyCardName(searchTerm.value)
 }, 300)
 
 function searchImmediate() {
-  cardsStore.searchFuzzyCardName(searchTerm.value)
+  cardStore.searchFuzzyCardName(searchTerm.value)
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -25,7 +25,7 @@ function handleKeydown(event: KeyboardEvent) {
 }
 
 function clearSearch() {
-  cardsStore.clearSearch()
+  cardStore.clearSearch()
   searchTerm.value = ''
 }
 </script>
@@ -42,7 +42,7 @@ function clearSearch() {
         @keydown="handleKeydown"
       />
       <UProgress
-        v-if="cardsStore.loading"
+        v-if="cardStore.loading"
         class="loader"
         animation="swing"
         size="sm"
@@ -61,7 +61,7 @@ function clearSearch() {
     </UButton>
 
     <USelect
-      v-model="cardsStore.selectedFormat"
+      v-model="cardStore.selectedFormat"
       size="xl"
       :items="mtgSets"
       class="w-36"

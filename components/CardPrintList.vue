@@ -1,18 +1,18 @@
 <script lang="ts" setup>
 import type { CardData } from '~/types/cardData'
 
-const cardsStore = useCardsStore()
+const cardStore = useCardStore()
 const modal = useModal()
 
 function selectCard(card: CardData) {
   modal.close()
-  cardsStore.selectCard(card)
+  cardStore.selectCard(card)
 }
 </script>
 
 <template>
   <UModal
-    :title="`${cardsStore.card?.name}`"
+    :title="`${cardStore.card?.name}`"
     :ui="{
       content: 'sm:max-w-screen-xl',
     }"
@@ -20,7 +20,7 @@ function selectCard(card: CardData) {
     <template #body>
       <div class="card-list">
         <div
-          v-for="card, index in cardsStore.cardPrintList"
+          v-for="card, index in cardStore.cardPrintList"
           :key="index"
           class="card-list-item"
         >
@@ -29,7 +29,7 @@ function selectCard(card: CardData) {
             :show-turned-over-button="true"
             :card="card"
             :hoverable="true"
-            @click="selectCard(card, true)"
+            @click="selectCard(card)"
           />
           <div class="card-list-item-title">
             {{ card.set }}

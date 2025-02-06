@@ -1,17 +1,17 @@
 <script lang="ts" setup>
-const cardsStore = useCardsStore()
+const cardStore = useCardStore()
 </script>
 
 <template>
   <div class="card-list">
     <CardImage
-      v-for="card in cardsStore.cardList"
+      v-for="card in cardStore.cardList"
       :key="card.name"
       class="card-list-item"
       :show-turned-over-button="true"
       :card="card"
       :hoverable="true"
-      @click="cardsStore.selectCard(card)"
+      @click="cardStore.selectCard(card)"
     />
     <div class="card-list-item" />
     <div class="card-list-item" />

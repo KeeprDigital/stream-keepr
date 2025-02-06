@@ -7,7 +7,7 @@ import type { MtgSet } from '~/data/mtgSets'
 import type { CardData, CardDisplayData } from '~/types/cardData'
 import { useStorage } from '@vueuse/core'
 
-export const useCardsStore = defineStore('Cards', () => {
+export const useCardStore = defineStore('Card', () => {
   const { send, incoming } = useWebSocketChannel('card')
 
   const loading = ref(false)
@@ -37,6 +37,9 @@ export const useCardsStore = defineStore('Cards', () => {
     if (data) {
       card.value = data.card
       cardDisplay.value = data.display ?? initialCardDisplay()
+      if (data.card) {
+        searchCardPrints(data.card.name)
+      }
     }
   }, {
     immediate: true,
