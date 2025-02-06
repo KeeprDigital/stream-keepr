@@ -1,5 +1,4 @@
 import type { Payload, WebSocketMessage } from '~/types/websocket'
-import { useWebSocket } from '@vueuse/core'
 
 export default defineNuxtPlugin(() => {
   const { send, data } = useWebSocket(`ws://${window.location.host}/api/ws`, {
@@ -26,6 +25,10 @@ export default defineNuxtPlugin(() => {
       incoming: null,
     },
     event: {
+      outgoing: null,
+      incoming: null,
+    },
+    player: {
       outgoing: null,
       incoming: null,
     },

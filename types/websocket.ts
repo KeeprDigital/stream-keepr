@@ -1,5 +1,6 @@
 import type { CardData, CardDisplayData } from './cardData'
 import type { EventData } from './eventData'
+import type { PlayersData } from './playerData'
 
 type CardClientAction =
   | 'set'
@@ -37,6 +38,15 @@ export type Payload = {
     }
     server: {
       event: EventData
+    }
+  }
+  player: {
+    client: {
+      action: 'set'
+      players: PlayersData
+    }
+    server: {
+      players: PlayersData
     }
   }
 }
@@ -97,4 +107,14 @@ export function isServerEventMessage(message: WebSocketMessage<keyof Payload>):
 export function isClientEventMessage(message: WebSocketMessage<keyof Payload>):
   message is WebSocketMessage<'event'> & { payload: Payload['event']['client'] } {
   return message.channel === 'event' && message.direction === 'out'
+}
+
+export function isServerPlayerMessage(message: WebSocketMessage<keyof Payload>):
+  message is WebSocketMessage<'player'> & { payload: Payload['player']['server'] } {
+  return message.channel === 'player' && message.direction === 'in'
+}
+
+export function isClientPlayerMessage(message: WebSocketMessage<keyof Payload>):
+  message is WebSocketMessage<'player'> & { payload: Payload['player']['client'] } {
+  return message.channel === 'player' && message.direction === 'out'
 }

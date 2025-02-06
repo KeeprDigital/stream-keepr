@@ -1,3 +1,8 @@
+export type PlayersData = {
+  playerOne: PlayerData
+  playerTwo: PlayerData
+}
+
 export type PlayerData = {
   name: string
   proNouns: string

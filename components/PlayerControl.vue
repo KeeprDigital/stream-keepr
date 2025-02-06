@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import type { Player } from '~/types/overlay'
-import { playerSchema } from '~/types/overlay'
+import type { PlayerData } from '~/types/playerData'
 
-const state = defineModel<Player>(
+const state = defineModel<PlayerData>(
   {
     default: {
       name: '',
@@ -19,7 +18,7 @@ const state = defineModel<Player>(
 </script>
 
 <template>
-  <UForm class="player-control" :state="state" :schema="playerSchema">
+  <UForm class="player-control" :state="state">
     <UFormField label="Name" name="name">
       <UInput v-model="state.name" class="input" />
     </UFormField>
