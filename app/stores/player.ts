@@ -1,5 +1,3 @@
-import type { PlayersData } from '~/types/playerData'
-
 export const usePlayerStore = defineStore('Player', () => {
   const { send, incoming } = useWebSocketChannel('player')
   const toast = useToast()

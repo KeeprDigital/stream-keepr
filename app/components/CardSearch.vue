@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { LazyCardHistory } from '#components'
-import { mtgSets } from '~/data/mtgSets'
+import { mtgSets } from '~~/data/mtgSets'
 
 const cardStore = useCardStore()
 const searchTerm = ref('')
-const modal = useModal()
+const overlay = useOverlay()
+const modal = overlay.create(LazyCardHistory)
 
 function openHistory() {
   modal.open(LazyCardHistory)

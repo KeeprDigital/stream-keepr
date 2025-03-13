@@ -2,7 +2,8 @@
 import { LazyCardPrintList } from '#components'
 
 const cardStore = useCardStore()
-const modal = useModal()
+const overlay = useOverlay()
+const modal = overlay.create(LazyCardPrintList)
 
 function openPrintList() {
   modal.open(LazyCardPrintList)

@@ -23,6 +23,14 @@
     { "rule": "*semi", "severity": "off", "fixable": true }
   ],
 
+  // Enable tailwindcss for css files
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  "editor.quickSuggestions": {
+    "strings": "on"
+  },
+
   // Enable eslint for all supported languages
   "eslint.validate": [
     "javascript",

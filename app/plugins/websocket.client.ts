@@ -1,5 +1,3 @@
-import type { Payload, WebSocketMessage } from '~/types/websocket'
-
 export default defineNuxtPlugin(() => {
   const { send, data } = useWebSocket(`ws://${window.location.host}/api/ws`, {
     autoReconnect: true,

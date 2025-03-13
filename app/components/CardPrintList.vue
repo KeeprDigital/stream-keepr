@@ -1,25 +1,19 @@
 <script lang="ts" setup>
-import type { CardData } from '~/types/cardData'
 
 const cardStore = useCardStore()
-const modal = useModal()
+
+const open = ref(false)
 
 function selectCard(card: CardData) {
-  modal.close()
   cardStore.selectCard(card)
+  open.value = false
 }
-
-function clearHistory() {
-  cardStore.clearHistory()
-  modal.close()
-}
-
-const history = computed(() => [...cardStore.history].reverse())
 </script>
 
 <template>
   <UModal
-    title="History"
+    v-model:open="open"
+    :title="`${cardStore.card?.name}`"
     :ui="{
       content: 'sm:max-w-screen-xl',
     }"
@@ -27,7 +21,7 @@ const history = computed(() => [...cardStore.history].reverse())
     <template #body>
       <div class="card-list">
         <div
-          v-for="card, index in history"
+          v-for="card, index in cardStore.cardPrintList"
           :key="index"
           class="card-list-item"
         >
@@ -39,7 +33,7 @@ const history = computed(() => [...cardStore.history].reverse())
             @click="selectCard(card)"
           />
           <div class="card-list-item-title">
-            {{ card.name }}
+            {{ card.set }}
           </div>
         </div>
         <div class="card-list-item" />
@@ -47,11 +41,6 @@ const history = computed(() => [...cardStore.history].reverse())
         <div class="card-list-item" />
         <div class="card-list-item" />
       </div>
-    </template>
-    <template #footer>
-      <UButton @click="clearHistory">
-        Clear
-      </UButton>
     </template>
   </UModal>
 </template>

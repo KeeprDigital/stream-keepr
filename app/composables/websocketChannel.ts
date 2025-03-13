@@ -1,5 +1,3 @@
-import type { Payload } from '~/types/websocket'
-
 export function useWebSocketChannel<T extends keyof Payload>(channel: T) {
   const { $ws } = useNuxtApp()
   const incoming = computed(() => $ws.channels[channel].incoming as Payload[T]['server'])

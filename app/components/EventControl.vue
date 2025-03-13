@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { EventData } from '~/types/eventData'
 
 const state = defineModel<EventData>(
   {

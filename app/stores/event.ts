@@ -1,5 +1,3 @@
-import type { EventData } from '~/types/eventData'
-
 export const useEventStore = defineStore('Event', () => {
   const { send, incoming } = useWebSocketChannel('event')
   const toast = useToast()

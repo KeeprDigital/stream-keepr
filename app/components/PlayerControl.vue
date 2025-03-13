@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { PlayerData } from '~/types/playerData'
 
 const state = defineModel<PlayerData>(
   {

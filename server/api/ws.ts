@@ -1,10 +1,3 @@
-import type { CardData, CardDisplayData } from '~/types/cardData'
-import type { EventData } from '~/types/eventData'
-import type { PlayersData } from '~/types/playerData'
-import type { Payload, WebSocketMessage } from '~/types/websocket'
-import { createServerMessage, isClientCardMessage, isClientEventMessage, isClientPlayerMessage } from '~/types/websocket'
-import { initialCardDisplay } from '~/utils/parseCard'
-
 const channel = 'OVERLAY'
 
 export default defineWebSocketHandler({
@@ -14,7 +7,7 @@ export default defineWebSocketHandler({
     const display = await local.getItem<CardDisplayData>('cardDisplay')
 
     if (card && display) {
-      peer.send(createServerMessage('card', {
+      peer.send(createServerMessage('card', { 
         card,
         display,
       }))
