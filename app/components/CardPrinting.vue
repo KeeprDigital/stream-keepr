@@ -1,19 +1,20 @@
 <script lang="ts" setup>
+const emit = defineEmits<{
+  (e: 'close'): void
+}>()
 
 const cardStore = useCardStore()
 
-const open = ref(false)
-
 function selectCard(card: CardData) {
   cardStore.selectCard(card)
-  open.value = false
+  emit('close')
 }
 </script>
 
 <template>
   <UModal
-    v-model:open="open"
     :title="`${cardStore.card?.name}`"
+    description="other printings of this card"
     :ui="{
       content: 'sm:max-w-screen-xl',
     }"

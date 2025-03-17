@@ -1,16 +1,17 @@
 <script setup lang="ts">
 type Props = {
   card: CardData
-  showTurnedOverButton?: boolean
+  turnoverable?: boolean
   hoverable?: boolean
 }
 
 const props = defineProps<Props>()
-
 const flipped = defineModel<boolean>('flipped')
 const rotated = defineModel<boolean>('rotated')
 const counterRotated = defineModel<boolean>('counterRotated')
 const turnedOver = defineModel<boolean>('turnedOver')
+
+const loaded = ref(false)
 
 function toggleTurnedOver() {
   turnedOver.value = !turnedOver.value
@@ -19,7 +20,8 @@ function toggleTurnedOver() {
 
 <template>
   <div
-    class="card-list-item" :class="{
+    class="card-list-item"
+    :class="{
       'is-hoverable': props.hoverable,
     }"
   >
@@ -35,24 +37,27 @@ function toggleTurnedOver() {
       <div class="face front">
         <NuxtImg
           class="image"
-          width="245"
-          height="342"
           :src="props.card.imageData.front?.normal"
           loading="lazy"
+          placeholder
+          @load="loaded = true"
         />
       </div>
-      <div class="face back">
+      <div
+        v-if="props.card.imageData.back?.normal"
+        class="face back"
+      >
         <NuxtImg
           class="image"
-          width="245"
-          height="342"
           :src="props.card.imageData.back?.normal"
           loading="lazy"
+          placeholder
+          @load="loaded = true"
         />
       </div>
     </div>
     <button
-      v-if="props.card.imageData.back && props.showTurnedOverButton"
+      v-if="props.card.imageData.back && props.turnoverable && loaded"
       class="turnover-button"
       :class="{ 'is-turned-over': turnedOver }"
       @click.stop="toggleTurnedOver"
@@ -67,16 +72,14 @@ function toggleTurnedOver() {
 
 <style scoped>
 .card-list-item {
+  aspect-ratio: 61/85;
   perspective: 2000px;
   position: relative;
   transition: scale 0.1s ease-in-out;
 
   .card {
     position: relative;
-    width: 100%;
-    height: 100%;
     transform-style: preserve-3d;
-    padding-bottom: 140%;
     transition: transform 0.2s;
 
     .face {

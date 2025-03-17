@@ -1,11 +1,21 @@
 <script setup lang="ts">
 import { LazyCardHistory } from '#components'
-import { mtgSets } from '~~/data/mtgSets'
 
 const cardStore = useCardStore()
 const searchTerm = ref('')
 const overlay = useOverlay()
 const modal = overlay.create(LazyCardHistory)
+
+const searchInput = useTemplateRef('searchInput')
+
+defineShortcuts({
+  '/': () => { searchInput.value?.inputRef?.focus() },
+  'h': () => { openHistory() },
+  'escape': {
+    handler: () => clearSearch(),
+    usingInput: true,
+  },
+})
 
 function openHistory() {
   modal.open(LazyCardHistory)
@@ -35,19 +45,20 @@ function clearSearch() {
   <div class="card-search">
     <div class="input-container">
       <UInput
+        ref="searchInput"
         v-model="searchTerm"
         class="input"
         placeholder="Search Card Name"
         size="xl"
+        trailing
+        :loading="cardStore.loading"
         @update:model-value="search"
         @keydown="handleKeydown"
-      />
-      <UProgress
-        v-if="cardStore.loading"
-        class="loader"
-        animation="swing"
-        size="sm"
-      />
+      >
+        <template v-if="!cardStore.loading" #trailing>
+          <UKbd value="/" />
+        </template>
+      </UInput>
     </div>
 
     <UButton
@@ -73,6 +84,7 @@ function clearSearch() {
     />
 
     <UButton
+      :disabled="!cardStore.history.length"
       size="xl"
       variant="outline"
       color="neutral"
@@ -93,17 +105,10 @@ function clearSearch() {
   gap: 1rem;
 
   .input-container {
-    overflow: hidden;
-    position: relative;
     flex: 1 1 60%;
 
     .input {
       width: 100%;
-    }
-
-    .loader {
-      position: absolute;
-      bottom: 1px;
     }
   }
 }

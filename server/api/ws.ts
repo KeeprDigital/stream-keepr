@@ -7,7 +7,7 @@ export default defineWebSocketHandler({
     const display = await local.getItem<CardDisplayData>('cardDisplay')
 
     if (card && display) {
-      peer.send(createServerMessage('card', { 
+      peer.send(createServerMessage('card', {
         card,
         display,
       }))

@@ -8,20 +8,16 @@
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
-
-        <template #right />
       </UDashboardNavbar>
-
       <UDashboardToolbar class="py-4">
         <CardSearch class="w-full" />
       </UDashboardToolbar>
     </template>
-
     <template #body>
       <CardList />
     </template>
   </UDashboardPanel>
-  <UDashboardPanel id="controls" :default-size="20">
+  <UDashboardPanel id="controls" :default-size="15" :resizable="false">
     <template #body>
       <CardControls />
     </template>

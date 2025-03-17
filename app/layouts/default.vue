@@ -14,9 +14,7 @@ const links = [[{
     <UDashboardSidebar
       v-model:open="open"
       collapsible
-      resizable
       class="bg-(--ui-bg-elevated)/25"
-      :ui="{ footer: 'lg:border-t lg:border-(--ui-border)' }"
     >
       <template #default="{ collapsed }">
         <UNavigationMenu

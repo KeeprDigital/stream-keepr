@@ -1,40 +1,60 @@
 <script lang="ts" setup>
-import { LazyCardPrintList } from '#components'
+import { LazyCardPrinting } from '#components'
 
 const cardStore = useCardStore()
+const {
+  showCard,
+  clearCard,
+  turnOverCard,
+  rotateCard,
+  counterRotateCard,
+  flipCard,
+  hideCard,
+  selectMeldCardPart,
+} = cardStore
+const {
+  card,
+  cardPrintList,
+  cardDisplay,
+} = storeToRefs(cardStore)
+
 const overlay = useOverlay()
-const modal = overlay.create(LazyCardPrintList)
+const modal = overlay.create(LazyCardPrinting)
+
+defineShortcuts({
+  ctrl_s: () => cardDisplay.value.hidden ? showCard() : hideCard(),
+})
 
 function openPrintList() {
-  modal.open(LazyCardPrintList)
+  modal.open(LazyCardPrinting)
 }
 </script>
 
 <template>
-  <div v-if="cardStore.card" class="card-controls">
+  <div v-if="card" class="card-controls">
     <h1 class="name">
-      {{ cardStore.card.name }}
+      {{ card.name }}
     </h1>
-    <div class="image-container" :class="{ hide: cardStore.cardDisplay.hidden }">
+    <div class="image-container" :class="{ hide: cardDisplay.hidden }">
       <CardImage
-        v-model:flipped="cardStore.cardDisplay.flipped"
-        v-model:rotated="cardStore.cardDisplay.rotated"
-        v-model:turned-over="cardStore.cardDisplay.turnedOver"
-        v-model:counter-rotated="cardStore.cardDisplay.counterRotated"
+        v-model:flipped="cardDisplay.flipped"
+        v-model:rotated="cardDisplay.rotated"
+        v-model:turned-over="cardDisplay.turnedOver"
+        v-model:counter-rotated="cardDisplay.counterRotated"
         class="image"
-        :card="cardStore.card"
+        :card="card"
         :show-flip-button="false"
       />
     </div>
     <div class="buttons">
       <UButton
-        v-if="!cardStore.cardDisplay.hidden"
+        v-if="!cardDisplay.hidden"
         variant="outline"
         icon="i-lucide-eye-off"
         size="xl"
         block
         color="warning"
-        @click="cardStore.hideCard"
+        @click="hideCard"
       >
         Hide
       </UButton>
@@ -44,83 +64,83 @@ function openPrintList() {
         icon="i-lucide-eye"
         size="xl"
         block
-        @click="cardStore.showCard"
+        @click="showCard"
       >
         Show
       </UButton>
-      <USeparator v-if="cardStore.card.meldData" />
-      <UButtonGroup v-if="cardStore.card.meldData" orientation="horizontal">
+      <USeparator v-if="card.meldData" />
+      <UButtonGroup v-if="card.meldData" orientation="horizontal">
         <UButton
-          v-if="cardStore.card.meldData?.meldPartOne"
+          v-if="card.meldData?.meldPartOne"
           variant="outline"
           color="info"
           size="xl"
           block
-          :disabled="cardStore.card.name === cardStore.card.meldData?.meldPartOne"
-          @click="cardStore.selectMeldCardPart(cardStore.card.meldData?.meldPartOne)"
+          :disabled="card.name === card.meldData?.meldPartOne"
+          @click="selectMeldCardPart(card.meldData?.meldPartOne)"
         >
-          {{ cardStore.card.meldData?.meldPartOne }}
+          {{ card.meldData?.meldPartOne }}
         </UButton>
         <UButton
-          v-if="cardStore.card.meldData?.meldPartTwo"
+          v-if="card.meldData?.meldPartTwo"
           variant="outline"
           color="info"
           size="xl"
           block
-          :disabled="cardStore.card.name === cardStore.card.meldData?.meldPartTwo"
-          @click="cardStore.selectMeldCardPart(cardStore.card.meldData?.meldPartTwo)"
+          :disabled="card.name === card.meldData?.meldPartTwo"
+          @click="selectMeldCardPart(card.meldData?.meldPartTwo)"
         >
-          {{ cardStore.card.meldData?.meldPartTwo }}
+          {{ card.meldData?.meldPartTwo }}
         </UButton>
       </UButtonGroup>
       <UButton
-        v-if="cardStore.card.meldData?.meldResult"
+        v-if="card.meldData?.meldResult"
         variant="outline"
         color="info"
         size="xl"
         block
         icon="i-lucide-flip-horizontal"
-        :disabled="cardStore.card.name === cardStore.card.meldData?.meldResult"
-        @click="cardStore.selectMeldCardPart(cardStore.card.meldData?.meldResult)"
+        :disabled="card.name === card.meldData?.meldResult"
+        @click="selectMeldCardPart(card.meldData?.meldResult)"
       >
-        {{ cardStore.card.meldData?.meldResult }}
+        {{ card.meldData?.meldResult }}
       </UButton>
       <USeparator />
       <UButton
-        v-if="cardStore.card.orientationData.turnable"
+        v-if="card.orientationData.turnable"
         variant="outline"
         color="info"
         icon="i-lucide-flip-horizontal"
         size="xl"
         block
-        @click="cardStore.turnOverCard"
+        @click="turnOverCard"
       >
         Turn Over
       </UButton>
       <UButton
-        v-if="cardStore.card.orientationData.rotateable"
+        v-if="card.orientationData.rotateable"
         variant="outline"
         color="info"
         icon="i-lucide-rotate-cw"
         size="xl"
         block
-        @click="cardStore.rotateCard"
+        @click="rotateCard"
       >
         Rotate
       </UButton>
       <UButton
-        v-if="cardStore.card.orientationData.counterRotateable"
+        v-if="card.orientationData.counterRotateable"
         variant="outline"
         color="info"
         icon="i-lucide-rotate-ccw"
         size="xl"
         block
-        @click="cardStore.counterRotateCard"
+        @click="counterRotateCard"
       >
         Rotate
       </UButton>
       <UButton
-        v-if="cardStore.card.orientationData.flipable"
+        v-if="card.orientationData.flipable"
         :ui="{
           leadingIcon: 'rotate-90',
         }"
@@ -129,12 +149,12 @@ function openPrintList() {
         icon="i-lucide-rotate-cw"
         size="xl"
         block
-        @click="cardStore.flipCard"
+        @click="flipCard"
       >
         Flip
       </UButton>
       <UButton
-        v-if="cardStore.cardPrintList.length > 1"
+        v-if="cardPrintList.length > 1"
         variant="outline"
         color="warning"
         icon="i-lucide-printer"
@@ -150,7 +170,7 @@ function openPrintList() {
         icon="i-lucide-circle-x"
         size="xl"
         block
-        @click="cardStore.clearCard"
+        @click="clearCard"
       >
         Clear
       </UButton>

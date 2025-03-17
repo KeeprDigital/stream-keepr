@@ -1,17 +1,18 @@
 <script lang="ts" setup>
+const emit = defineEmits<{
+  (e: 'close'): void
+}>()
 
 const cardStore = useCardStore()
 
-const open = ref(false)
-
 function selectCard(card: CardData) {
   cardStore.selectCard(card)
-  open.value = false
+  emit('close')
 }
 
 function clearHistory() {
   cardStore.clearHistory()
-  open.value = false
+  emit('close')
 }
 
 const history = computed(() => [...cardStore.history].reverse())
@@ -19,8 +20,8 @@ const history = computed(() => [...cardStore.history].reverse())
 
 <template>
   <UModal
-    v-model:open="open"
     title="History"
+    description="previously selected cards"
     :ui="{
       content: 'sm:max-w-screen-xl',
     }"
@@ -34,7 +35,7 @@ const history = computed(() => [...cardStore.history].reverse())
         >
           <CardImage
             class="card-list-item-image"
-            :show-turned-over-button="true"
+            :turnoverable="true"
             :card="card"
             :hoverable="true"
             @click="selectCard(card)"
