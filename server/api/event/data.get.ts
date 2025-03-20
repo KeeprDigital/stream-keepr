@@ -1,5 +1,3 @@
-import type { EventData } from '~/types/eventData'
-
 export default defineEventHandler(async () => {
   const local = useStorage('local')
   const event = await local.getItem<EventData>('event')

@@ -1,5 +1,3 @@
-import type { CardData, CardDisplayData } from '~/types/cardData'
-
 export default defineEventHandler(async (event) => {
   const local = useStorage('local')
   const data = await local.getItem<CardData>('card')
@@ -12,14 +10,15 @@ export default defineEventHandler(async (event) => {
     rotatedImage: emptyImage,
     counterRotatedImage: emptyImage,
     flippedImage: emptyImage,
+    points: '',
   }
 
-  if (!data || !display) {
+  if (!data || !display || display.hidden) {
     return [imageConfig]
   }
 
-  if (display.hidden) {
-    return [imageConfig]
+  if (data.points > 0) {
+    imageConfig.points = `${data.points} ${data.points === 1 ? 'point' : 'points'}`
   }
 
   if (display.flipped) {

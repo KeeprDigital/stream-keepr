@@ -32,9 +32,14 @@ function openPrintList() {
 
 <template>
   <div v-if="card" class="card-controls">
-    <h1 class="name">
-      {{ card.name }}
-    </h1>
+    <div class="card-info">
+      <h1 class="name">
+        {{ card.name }}
+      </h1>
+      <p v-if="card.points > 0" class="points">
+        {{ `${card.points} ${card.points === 1 ? 'point' : 'points'}` }}
+      </p>
+    </div>
     <div class="image-container" :class="{ hide: cardDisplay.hidden }">
       <CardImage
         v-model:flipped="cardDisplay.flipped"
@@ -190,6 +195,12 @@ function openPrintList() {
   font-size: 1.5rem;
   font-weight: 500;
   text-align: center;
+}
+
+.points {
+  font-size: 1rem;
+  text-align: center;
+  font-style: italic;
 }
 
 .buttons {

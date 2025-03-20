@@ -16,6 +16,7 @@ export function parseCard(card: ScryfallCard.Any): CardData {
       counterRotateable: false,
       defaultRotated: false,
     },
+    points: pointsList.get(card.name) ?? 0,
   }
 
   switch (card.layout) {
@@ -132,6 +133,7 @@ export function parseCard(card: ScryfallCard.Any): CardData {
       }
     }
       break
+
     case 'normal':
     case 'leveler':
     case 'class':
@@ -158,6 +160,5 @@ export function parseCard(card: ScryfallCard.Any): CardData {
         back: null,
       }
   }
-
   return cardData
 }

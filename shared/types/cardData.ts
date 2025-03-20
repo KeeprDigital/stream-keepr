@@ -7,6 +7,7 @@ export type CardData = {
   imageData: CardImageData
   orientationData: CardOrientationData
   meldData?: CardMeldData
+  points: number
 }
 
 export type CardDisplayData = {
