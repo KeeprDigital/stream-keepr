@@ -1,7 +1,3 @@
-import type { CardData, CardDisplayData } from './cardData'
-import type { EventData } from './eventData'
-import type { PlayersData } from './playerData'
-
 type CardClientAction =
   | 'set'
   | 'clear'
@@ -47,6 +43,15 @@ export type Payload = {
     }
     server: {
       players: PlayersData
+    }
+  }
+  settings: {
+    client: {
+      action: 'set'
+      settings: EventSettingsData
+    }
+    server: {
+      settings: EventSettingsData
     }
   }
 }
@@ -117,4 +122,14 @@ export function isServerPlayerMessage(message: WebSocketMessage<keyof Payload>):
 export function isClientPlayerMessage(message: WebSocketMessage<keyof Payload>):
   message is WebSocketMessage<'player'> & { payload: Payload['player']['client'] } {
   return message.channel === 'player' && message.direction === 'out'
+}
+
+export function isServerSettingsMessage(message: WebSocketMessage<keyof Payload>):
+  message is WebSocketMessage<'settings'> & { payload: Payload['settings']['server'] } {
+  return message.channel === 'settings' && message.direction === 'in'
+}
+
+export function isClientSettingsMessage(message: WebSocketMessage<keyof Payload>):
+  message is WebSocketMessage<'settings'> & { payload: Payload['settings']['client'] } {
+  return message.channel === 'settings' && message.direction === 'out'
 }

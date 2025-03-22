@@ -27,6 +27,13 @@ export default defineWebSocketHandler({
       }))
     }
 
+    const settings = await local.getItem<EventSettingsData>('eventSettings')
+    if (settings) {
+      peer.send(createServerMessage('settings', {
+        settings,
+      }))
+    }
+
     peer.subscribe(channel)
   },
 
@@ -123,8 +130,14 @@ export default defineWebSocketHandler({
         players: data.payload.players,
       }))
     }
-  },
+    else if (isClientSettingsMessage(data)) {
+      await local.setItem('eventSettings', data.payload.settings)
 
+      peer.publish(channel, createServerMessage('settings', {
+        settings: data.payload.settings,
+      }))
+    }
+  },
   close(peer) {
     peer.unsubscribe(channel)
   },
