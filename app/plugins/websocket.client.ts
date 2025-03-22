@@ -30,6 +30,10 @@ export default defineNuxtPlugin(() => {
       outgoing: null,
       incoming: null,
     },
+    settings: {
+      outgoing: null,
+      incoming: null,
+    },
   })
 
   watch(data, (raw) => {
