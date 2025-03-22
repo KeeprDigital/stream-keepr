@@ -7,16 +7,7 @@ const props = defineProps<Props>()
 
 const state = defineModel<PlayerData>(
   {
-    default: {
-      name: '',
-      deck: '',
-      position: '',
-      score: {
-        wins: 0,
-        losses: 0,
-        draws: 0,
-      },
-    },
+    default: defaultPlayerData,
   },
 )
 </script>

@@ -1,8 +1,6 @@
 <script lang="ts" setup>
 const state = defineModel<EventSettingsData>({
-  default: {
-    matchCount: 3,
-  },
+  default: defaultEventSettings,
 })
 </script>
 
