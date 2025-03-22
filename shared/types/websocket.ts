@@ -56,7 +56,9 @@ export type Payload = {
   }
 }
 
-export type WebSocketMessage<T extends keyof Payload> =
+export type WebSocketChannel = keyof Payload
+
+export type WebSocketMessage<T extends WebSocketChannel> =
   | {
     direction: 'out'
     channel: T
@@ -68,7 +70,7 @@ export type WebSocketMessage<T extends keyof Payload> =
     payload: Payload[T]['server']
   }
 
-export function createServerMessage<T extends keyof Payload>(
+export function createServerMessage<T extends WebSocketChannel>(
   channel: T,
   payload: Payload[T]['server'],
 ) {
@@ -81,7 +83,7 @@ export function createServerMessage<T extends keyof Payload>(
   })
 }
 
-export function createClientMessage<T extends keyof Payload>(
+export function createClientMessage<T extends WebSocketChannel>(
   channel: T,
   payload: Payload[T]['client'],
 ) {
@@ -94,42 +96,42 @@ export function createClientMessage<T extends keyof Payload>(
   })
 }
 
-export function isServerCardMessage(message: WebSocketMessage<keyof Payload>):
+export function isServerCardMessage(message: WebSocketMessage<WebSocketChannel>):
   message is WebSocketMessage<'card'> & { payload: Payload['card']['server'] } {
   return message.channel === 'card' && message.direction === 'in'
 }
 
-export function isClientCardMessage(message: WebSocketMessage<keyof Payload>):
+export function isClientCardMessage(message: WebSocketMessage<WebSocketChannel>):
   message is WebSocketMessage<'card'> & { payload: Payload['card']['client'] } {
   return message.channel === 'card' && message.direction === 'out'
 }
 
-export function isServerEventMessage(message: WebSocketMessage<keyof Payload>):
+export function isServerEventMessage(message: WebSocketMessage<WebSocketChannel>):
   message is WebSocketMessage<'event'> & { payload: Payload['event']['server'] } {
   return message.channel === 'event' && message.direction === 'in'
 }
 
-export function isClientEventMessage(message: WebSocketMessage<keyof Payload>):
+export function isClientEventMessage(message: WebSocketMessage<WebSocketChannel>):
   message is WebSocketMessage<'event'> & { payload: Payload['event']['client'] } {
   return message.channel === 'event' && message.direction === 'out'
 }
 
-export function isServerPlayerMessage(message: WebSocketMessage<keyof Payload>):
+export function isServerPlayerMessage(message: WebSocketMessage<WebSocketChannel>):
   message is WebSocketMessage<'player'> & { payload: Payload['player']['server'] } {
   return message.channel === 'player' && message.direction === 'in'
 }
 
-export function isClientPlayerMessage(message: WebSocketMessage<keyof Payload>):
+export function isClientPlayerMessage(message: WebSocketMessage<WebSocketChannel>):
   message is WebSocketMessage<'player'> & { payload: Payload['player']['client'] } {
   return message.channel === 'player' && message.direction === 'out'
 }
 
-export function isServerSettingsMessage(message: WebSocketMessage<keyof Payload>):
+export function isServerSettingsMessage(message: WebSocketMessage<WebSocketChannel>):
   message is WebSocketMessage<'settings'> & { payload: Payload['settings']['server'] } {
   return message.channel === 'settings' && message.direction === 'in'
 }
 
-export function isClientSettingsMessage(message: WebSocketMessage<keyof Payload>):
+export function isClientSettingsMessage(message: WebSocketMessage<WebSocketChannel>):
   message is WebSocketMessage<'settings'> & { payload: Payload['settings']['client'] } {
   return message.channel === 'settings' && message.direction === 'out'
 }

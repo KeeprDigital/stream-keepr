@@ -1,4 +1,4 @@
-export function useWebSocketChannel<T extends keyof Payload>(channel: T) {
+export function useWebSocketChannel<T extends WebSocketChannel>(channel: T) {
   const { $ws } = useNuxtApp()
   const incoming = computed(() => $ws.channels[channel].incoming as Payload[T]['server'])
   const outgoing = computed(() => $ws.channels[channel].outgoing as Payload[T]['client'])
