@@ -3,9 +3,7 @@ export const useSettingsStore = defineStore('Settings', () => {
   const toast = useToast()
   const loading = ref(false)
 
-  const state = ref<EventSettingsData>({
-    matchCount: 3,
-  })
+  const state = ref<EventSettingsData>(defaultEventSettings)
 
   const { cloned, sync } = useCloned(state, { manual: true })
 
