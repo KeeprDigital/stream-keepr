@@ -5,7 +5,22 @@ const links = [[{
   label: 'Home',
   icon: 'i-lucide-house',
   to: '/',
-
+}, {
+  label: 'Card Image',
+  icon: 'i-lucide-book-image',
+  to: '/card',
+}, {
+  label: 'Matches',
+  icon: 'i-lucide-users',
+  to: '/matches',
+}, {
+  label: 'Event',
+  icon: 'i-lucide-calendar',
+  to: '/event',
+}, {
+  label: 'Settings',
+  icon: 'i-lucide-settings',
+  to: '/settings',
 }]]
 </script>
 
