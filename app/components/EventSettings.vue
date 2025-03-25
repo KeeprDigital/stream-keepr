@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-const state = defineModel<EventSettingsData>({
-  default: defaultEventSettings,
+const state = defineModel<ConfigData>({
+  default: defaultConfigData,
 })
 </script>
 

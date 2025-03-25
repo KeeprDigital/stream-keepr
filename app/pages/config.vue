@@ -1,12 +1,12 @@
 <script lang="ts" setup>
-const settings = useSettingsStore()
-const { loading, save } = settings
+const config = useConfigStore()
+const { loading, save } = config
 </script>
 
 <template>
-  <UDashboardPanel id="settings">
+  <UDashboardPanel id="config">
     <template #header>
-      <UDashboardNavbar title="Settings">
+      <UDashboardNavbar title="Config">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
@@ -16,13 +16,13 @@ const { loading, save } = settings
     <template #body>
       <div class="w-full lg:max-w-2xl mx-auto">
         <UPageCard
-          title="Event Settings"
+          title="Event Config"
           variant="naked"
           orientation="horizontal"
           class="mb-4"
         >
           <UButton
-            form="settings"
+            form="config"
             label="Save changes"
             color="neutral"
             type="submit"
@@ -31,7 +31,7 @@ const { loading, save } = settings
             @click="save"
           />
         </UPageCard>
-        <EventSettings :model-value="settings.state" />
+        <EventConfig :model-value="config.state" />
       </div>
     </template>
   </UDashboardPanel>

@@ -18,9 +18,9 @@ const links = [[{
   icon: 'i-lucide-calendar',
   to: '/event',
 }, {
-  label: 'Settings',
+  label: 'Config',
   icon: 'i-lucide-settings',
-  to: '/settings',
+  to: '/config',
 }]]
 </script>
 

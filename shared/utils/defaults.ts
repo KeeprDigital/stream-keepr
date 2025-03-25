@@ -1,4 +1,4 @@
-export const defaultEventSettings: EventSettingsData = {
+export const defaultConfigData: ConfigData = {
   matchCount: 3,
 }
 
