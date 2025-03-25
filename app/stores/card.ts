@@ -6,15 +6,15 @@ import type {
 import { useStorage } from '@vueuse/core'
 
 export const useCardStore = defineStore('Card', () => {
-  const { send, incoming } = useWebSocketChannel('card')
-
+  const storeId = 'card-store'
+  const socketStore = useSocketStore()
+  const { publish } = socketStore
   const loading = ref(false)
 
   const cardList = ref<CardData[]>([])
   const cardPrintList = ref<CardData[]>([])
 
   const card = ref<CardData | null>(null)
-  const cardDisplay = ref<CardDisplayData>(initialCardDisplay())
 
   const selectedFormat = ref<MtgSet>('all')
   const history = useStorage<CardData[]>('card-history', [])
@@ -31,17 +31,25 @@ export const useCardStore = defineStore('Card', () => {
     }
   })
 
-  watch(incoming, (data) => {
-    if (data) {
-      card.value = data.card
-      cardDisplay.value = data.display ?? initialCardDisplay()
-      if (data.card) {
-        searchCardPrints(data.card.name)
-      }
+  function init() {
+    if (!socketStore.isSubscribed('card')) {
+      socketStore.subscribe('card', storeId, handleMessage, handleSubscribed)
     }
-  }, {
-    immediate: true,
-  })
+  }
+
+  function handleMessage(data: CardActionMessage) {
+    if (data.action === 'set') {
+      card.value = data.card
+      searchCardPrints(data.card.name)
+    }
+  }
+
+  function handleSubscribed(data: CardData | null) {
+    if (data) {
+      card.value = data
+      searchCardPrints(data.name)
+    }
+  }
 
   /**
    * Fuzzy search for a card by name
@@ -97,7 +105,7 @@ export const useCardStore = defineStore('Card', () => {
   }
 
   async function setCardImage(cardData: CardData) {
-    send({
+    publish('card', {
       action: 'set',
       card: cardData,
     })
@@ -106,22 +114,23 @@ export const useCardStore = defineStore('Card', () => {
   async function selectCard(cardData: CardData, isPrinting: boolean = false) {
     loading.value = true
 
-    card.value = {
+    const newCardData = {
       ...cardData,
+      displayData: {
+        hidden: !isPrinting,
+        flipped: false,
+        turnedOver: false,
+        rotated: cardData.orientationData.defaultRotated,
+        counterRotated: false,
+      },
     }
 
-    cardDisplay.value = {
-      hidden: !isPrinting,
-      flipped: false,
-      turnedOver: false,
-      rotated: cardData.orientationData.defaultRotated,
-      counterRotated: false,
-    }
+    card.value = newCardData
 
     await searchCardPrints(cardData.name)
-    await setCardImage(cardData)
+    await setCardImage(newCardData)
 
-    pushToHistory(cardData)
+    pushToHistory(newCardData)
 
     loading.value = false
   }
@@ -149,17 +158,16 @@ export const useCardStore = defineStore('Card', () => {
 
     card.value = {
       ...parsedCard,
+      displayData: {
+        hidden: true,
+        flipped: false,
+        turnedOver: false,
+        rotated: false,
+        counterRotated: false,
+      },
     }
 
-    cardDisplay.value = {
-      hidden: true,
-      flipped: false,
-      turnedOver: false,
-      rotated: false,
-      counterRotated: false,
-    }
-
-    send({
+    publish('card', {
       action: 'set',
       card: parsedCard,
     })
@@ -170,49 +178,49 @@ export const useCardStore = defineStore('Card', () => {
 
   function clearCard() {
     card.value = null
-    send({
+    publish('card', {
       action: 'clear',
     })
   }
 
   function hideCard() {
-    cardDisplay.value.hidden = true
-    send({
+    card.value!.displayData.hidden = true
+    publish('card', {
       action: 'hide',
     })
   }
 
   function showCard() {
-    cardDisplay.value.hidden = false
-    send({
+    card.value!.displayData.hidden = false
+    publish('card', {
       action: 'show',
     })
   }
 
   function rotateCard() {
-    cardDisplay.value.rotated = !cardDisplay.value.rotated
-    send({
+    card.value!.displayData.rotated = !card.value!.displayData.rotated
+    publish('card', {
       action: 'rotate',
     })
   }
 
   function counterRotateCard() {
-    cardDisplay.value.counterRotated = !cardDisplay.value.counterRotated
-    send({
+    card.value!.displayData.counterRotated = !card.value!.displayData.counterRotated
+    publish('card', {
       action: 'counterRotate',
     })
   }
 
   function flipCard() {
-    cardDisplay.value.flipped = !cardDisplay.value.flipped
-    send({
+    card.value!.displayData.flipped = !card.value!.displayData.flipped
+    publish('card', {
       action: 'flip',
     })
   }
 
   function turnOverCard() {
-    cardDisplay.value.turnedOver = !cardDisplay.value.turnedOver
-    send({
+    card.value!.displayData.turnedOver = !card.value!.displayData.turnedOver
+    publish('card', {
       action: 'turnOver',
     })
   }
@@ -229,6 +237,8 @@ export const useCardStore = defineStore('Card', () => {
   function setSelectedFormat(format: ScryfallFormat | 'all') {
     selectedFormat.value = format
   }
+
+  init()
 
   return {
     searchFuzzyCardName,
@@ -249,7 +259,6 @@ export const useCardStore = defineStore('Card', () => {
     searchCardPrints,
     selectedFormat,
     cardPrintList,
-    cardDisplay,
     loading,
     card,
     cardList,

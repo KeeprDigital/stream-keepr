@@ -15,14 +15,13 @@ const {
 const {
   card,
   cardPrintList,
-  cardDisplay,
 } = storeToRefs(cardStore)
 
 const overlay = useOverlay()
 const modal = overlay.create(LazyCardPrinting)
 
 defineShortcuts({
-  ctrl_s: () => cardDisplay.value.hidden ? showCard() : hideCard(),
+  ctrl_s: () => card.value?.displayData.hidden ? showCard() : hideCard(),
 })
 
 function openPrintList() {
@@ -40,12 +39,12 @@ function openPrintList() {
         {{ `${card.points} ${card.points === 1 ? 'point' : 'points'}` }}
       </p>
     </div>
-    <div class="image-container" :class="{ hide: cardDisplay.hidden }">
+    <div class="image-container" :class="{ hide: card.displayData.hidden }">
       <CardImage
-        v-model:flipped="cardDisplay.flipped"
-        v-model:rotated="cardDisplay.rotated"
-        v-model:turned-over="cardDisplay.turnedOver"
-        v-model:counter-rotated="cardDisplay.counterRotated"
+        v-model:flipped="card.displayData.flipped"
+        v-model:rotated="card.displayData.rotated"
+        v-model:turned-over="card.displayData.turnedOver"
+        v-model:counter-rotated="card.displayData.counterRotated"
         class="image"
         :card="card"
         :show-flip-button="false"
@@ -53,7 +52,7 @@ function openPrintList() {
     </div>
     <div class="buttons">
       <UButton
-        v-if="!cardDisplay.hidden"
+        v-if="!card.displayData.hidden"
         variant="outline"
         icon="i-lucide-eye-off"
         size="xl"

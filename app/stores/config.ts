@@ -11,14 +11,24 @@ export const useConfigStore = defineStore('Config', () => {
 
   function init() {
     if (!socketStore.isSubscribed('config')) {
-      socketStore.subscribe('config', storeId, handleConfig)
+      socketStore.subscribe('config', storeId, handleConfig, handleSubscribed)
     }
   }
 
-  function handleConfig(data: ConfigData) {
-    state.value = data
+  function handleConfig(data: ConfigActionMessage) {
+    if (data.action === 'set') {
+      state.value = data.config
+    }
     loading.value = false
     sync()
+  }
+
+  function handleSubscribed(data: ConfigData | null) {
+    if (data) {
+      state.value = data
+      loading.value = false
+      sync()
+    }
   }
 
   function reset() {
@@ -31,7 +41,10 @@ export const useConfigStore = defineStore('Config', () => {
 
     sync()
 
-    socketStore.publish('config', state.value)
+    socketStore.publish('config', {
+      action: 'set',
+      config: state.value,
+    })
 
     toast.add({
       title: 'Event Settings Updated',

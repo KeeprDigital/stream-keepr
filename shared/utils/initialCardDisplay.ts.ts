@@ -1,5 +1,3 @@
-import type { CardData, CardDisplayData } from "~~/types/cardData"
-
 export function initialCardDisplay(card?: CardData): CardDisplayData {
   const initialCardDisplay: CardDisplayData = {
     hidden: true,
