@@ -7,7 +7,7 @@ type Client = {
 }
 
 // Store for clients and topics
-const clients = new Map<string, Client>()
+const clients = new Map<string, Client>() // client ID -> client
 const topics = new Map<string, Set<string>>() // topic -> set of client IDs
 
 export default defineWebSocketHandler({
@@ -79,7 +79,7 @@ export default defineWebSocketHandler({
           topics.get(data.topic)!.add(clientId)
           client.topics.add(data.topic)
 
-          // Get the topic handler
+          // Get the topic onSubscribe handler
           const topic = data.topic as Topic
           const handler = topicRegistry[topic]?.onSubscribe
 
@@ -95,6 +95,11 @@ export default defineWebSocketHandler({
             }
             catch (error) {
               console.error(`Error in onSubscribe handler for topic ${topic}:`, error)
+              sendToClient(peer, createMessage(
+                MessageTypes.ERROR,
+                undefined,
+                { message: 'Error in onSubscribe handler', code: 500 },
+              ))
             }
           }
           break
@@ -135,7 +140,7 @@ export default defineWebSocketHandler({
           break
         }
 
-        case MessageTypes.MESSAGE: {
+        case MessageTypes.ACTION: {
           // Validate topic and payload exists
           if (!data.topic || !isValidTopic(data.topic) || !data.payload) {
             sendToClient(peer, createMessage(
@@ -157,19 +162,16 @@ export default defineWebSocketHandler({
           }
 
           // Validate payload using type guard
-          const topic = data.topic as Topic
+          const topic = data.topic
 
           // Now the handler receives the correctly typed payload
-          const handler = topicRegistry[topic]?.onMessage
-          if (handler) {
-            handler(data.payload)
-          }
+          const handler = topicRegistry[topic].onAction
+          const result = await handler(data.payload)
 
           // Publish message to all subscribers of the topic
-          publishToTopic(topic, createMessage(
-            MessageTypes.MESSAGE,
+          publishToTopic(topic, createSyncMessage(
             topic,
-            data.payload,
+            result,
           ))
           break
         }
@@ -244,7 +246,7 @@ function sendToClient(
 // Type-safe function to publish to a topic
 function publishToTopic<T extends Topic>(
   topic: T,
-  message: SocketMessage<TopicMap[T] | null>,
+  message: SocketMessage<TopicData<T> | null>,
 ) {
   const subscriberIds = topics.get(topic)
   if (!subscriberIds)
@@ -263,10 +265,10 @@ function publishToTopic<T extends Topic>(
 // Utility function to publish from other server routes
 export function publishMessage<T extends Topic>(
   topic: T,
-  payload: TopicMap[T],
+  payload: TopicData<T>,
 ) {
-  const message: SocketMessage<TopicMap[T]> = {
-    type: MessageTypes.MESSAGE,
+  const message: SocketMessage<TopicData<T>> = {
+    type: MessageTypes.SYNC,
     topic,
     payload,
   }

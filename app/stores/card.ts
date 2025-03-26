@@ -7,7 +7,7 @@ import { useStorage } from '@vueuse/core'
 
 export const useCardStore = defineStore('Card', () => {
   const storeId = 'card-store'
-  const socketStore = useSocketStore()
+  const socketStore = useSocket()
   const { publish } = socketStore
   const loading = ref(false)
 
@@ -33,14 +33,14 @@ export const useCardStore = defineStore('Card', () => {
 
   function init() {
     if (!socketStore.isSubscribed('card')) {
-      socketStore.subscribe('card', storeId, handleMessage, handleSubscribed)
+      socketStore.subscribe('card', storeId, handleSync, handleSubscribed)
     }
   }
 
-  function handleMessage(data: CardActionMessage) {
-    if (data.action === 'set') {
-      card.value = data.card
-      searchCardPrints(data.card.name)
+  function handleSync(data: CardData | null) {
+    card.value = data
+    if (data) {
+      searchCardPrints(data.name)
     }
   }
 

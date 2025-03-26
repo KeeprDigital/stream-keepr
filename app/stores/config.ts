@@ -1,6 +1,6 @@
 export const useConfigStore = defineStore('Config', () => {
   const storeId = 'config-store'
-  const socketStore = useSocketStore()
+  const socketStore = useSocket()
   const toast = useToast()
 
   const loading = ref(false)
@@ -15,9 +15,9 @@ export const useConfigStore = defineStore('Config', () => {
     }
   }
 
-  function handleConfig(data: ConfigActionMessage) {
-    if (data.action === 'set') {
-      state.value = data.config
+  function handleConfig(data: ConfigData | null) {
+    if (data) {
+      state.value = data
     }
     loading.value = false
     sync()

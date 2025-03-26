@@ -1,4 +1,5 @@
-export const useSocketStore = defineStore('Socket', () => {
+export default defineNuxtPlugin(() => {
+  // State
   const clientId = ref<string | null>(null)
   const lastError = ref<string | null>(null)
 
@@ -50,8 +51,8 @@ export const useSocketStore = defineStore('Socket', () => {
       const message = JSON.parse(newData) as SocketMessage
 
       switch (message.type) {
-        case MessageTypes.MESSAGE:
-          if (message.topic && isValidTopic(message.topic) && message.payload) {
+        case MessageTypes.SYNC:
+          if (message.topic && isValidTopic(message.topic)) {
             // Route message to topic subscribers
             const subscription = topicSubscriptions.get(message.topic)
             if (subscription) {
@@ -115,8 +116,8 @@ export const useSocketStore = defineStore('Socket', () => {
   function subscribe<T extends keyof TopicMap>(
     topic: T,
     componentId: string,
-    messageCallback: (data: TopicMap[T]) => void,
-    subscriptionCallback?: (data: TopicData<T> | null) => void,
+    messageCallback: (data: TopicData<T>) => void,
+    subscriptionCallback?: (data: TopicData<T>) => void,
   ): boolean {
     // Track component subscription
     if (!componentSubscriptions.has(componentId)) {
@@ -234,7 +235,7 @@ export const useSocketStore = defineStore('Socket', () => {
     }
 
     return sendToServer({
-      type: MessageTypes.MESSAGE,
+      type: MessageTypes.ACTION,
       topic: topic as string,
       payload,
     })
@@ -273,11 +274,8 @@ export const useSocketStore = defineStore('Socket', () => {
     }
   }
 
-  onUnmounted(() => {
-    disconnect()
-  })
-
-  return {
+  // Create the websocket service
+  const websocketService = {
     // State
     isConnected,
     clientId,
@@ -299,5 +297,11 @@ export const useSocketStore = defineStore('Socket', () => {
     isSubscribed,
     getSubscriberCount,
     getComponentSubscriptions,
+  }
+
+  return {
+    provide: {
+      socket: websocketService,
+    },
   }
 })

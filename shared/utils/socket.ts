@@ -39,6 +39,23 @@ export function createMessage<
 }
 
 /**
+ * Create a type-safe sync message
+ * @param topic - The topic of the message
+ * @param payload - The payload of the message
+ * @returns The message
+ */
+export function createSyncMessage<K extends Topic>(
+  topic: K,
+  payload?: TopicData<K> | null,
+): SocketMessage<TopicData<K> | null> {
+  return {
+    type: MessageTypes.SYNC,
+    topic,
+    payload,
+  }
+}
+
+/**
  * Create a type-safe subscribed message
  * @param topic - The topic of the message
  * @param payload - The payload of the message
