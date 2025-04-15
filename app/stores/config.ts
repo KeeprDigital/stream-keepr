@@ -1,3 +1,5 @@
+import type { ConfigData } from '~~/shared/schemas/config'
+
 export const useConfigStore = defineStore('Config', () => {
   const storeId = 'config-store'
   const socketStore = useSocket()

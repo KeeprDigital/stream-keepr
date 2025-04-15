@@ -1,3 +1,13 @@
+import type { SocketMessage, Topic, TopicData } from '~~/shared/schemas/socket'
+import { MessageTypes } from '~~/shared/schemas/socket'
+import {
+  createMessage,
+  createSubscribedMesage,
+  createSyncMessage,
+  dispatchTopicAction,
+  isMessageType,
+  isValidTopic,
+} from '~~/shared/utils/socket'
 import { topicRegistry } from '../socket/registry'
 
 type Client = {
@@ -20,7 +30,7 @@ export default defineWebSocketHandler({
     })
 
     sendToClient(peer, createMessage(
-      MessageTypes.CONNECTION,
+      MessageTypes.connection,
       undefined,
       { clientId },
     ))
@@ -33,7 +43,7 @@ export default defineWebSocketHandler({
 
       if (!clientId) {
         sendToClient(peer, createMessage(
-          MessageTypes.ERROR,
+          MessageTypes.error,
           undefined,
           { message: 'Client not found', code: 404 },
         ))
@@ -43,7 +53,7 @@ export default defineWebSocketHandler({
       const client = clients.get(clientId)
       if (!client) {
         sendToClient(peer, createMessage(
-          MessageTypes.ERROR,
+          MessageTypes.error,
           undefined,
           { message: 'Client not registered', code: 403 },
         ))
@@ -53,7 +63,7 @@ export default defineWebSocketHandler({
       // Validate message type
       if (!isMessageType(data.type)) {
         sendToClient(peer, createMessage(
-          MessageTypes.ERROR,
+          MessageTypes.error,
           undefined,
           { message: 'Invalid message type', code: 400 },
         ))
@@ -61,10 +71,10 @@ export default defineWebSocketHandler({
       }
 
       switch (data.type) {
-        case MessageTypes.SUBSCRIBE: {
+        case MessageTypes.subscribe: {
           if (!data.topic || !isValidTopic(data.topic)) {
             sendToClient(peer, createMessage(
-              MessageTypes.ERROR,
+              MessageTypes.error,
               undefined,
               { message: 'Invalid topic', code: 400 },
             ))
@@ -96,7 +106,7 @@ export default defineWebSocketHandler({
             catch (error) {
               console.error(`Error in onSubscribe handler for topic ${topic}:`, error)
               sendToClient(peer, createMessage(
-                MessageTypes.ERROR,
+                MessageTypes.error,
                 undefined,
                 { message: 'Error in onSubscribe handler', code: 500 },
               ))
@@ -105,10 +115,10 @@ export default defineWebSocketHandler({
           break
         }
 
-        case MessageTypes.UNSUBSCRIBE: {
+        case MessageTypes.unsubscribe: {
           if (!data.topic || !isValidTopic(data.topic)) {
             sendToClient(peer, createMessage(
-              MessageTypes.ERROR,
+              MessageTypes.error,
               undefined,
               { message: 'Invalid topic', code: 400 },
             ))
@@ -126,25 +136,25 @@ export default defineWebSocketHandler({
 
           // Confirm unsubscription
           sendToClient(peer, createMessage(
-            MessageTypes.UNSUBSCRIBED,
+            MessageTypes.unsubscribed,
             data.topic,
             { topic: data.topic },
           ))
           break
         }
 
-        case MessageTypes.PING: {
+        case MessageTypes.ping: {
           sendToClient(peer, createMessage(
-            MessageTypes.PONG,
+            MessageTypes.pong,
           ))
           break
         }
 
-        case MessageTypes.ACTION: {
+        case MessageTypes.action: {
           // Validate topic and payload exists
           if (!data.topic || !isValidTopic(data.topic) || !data.payload) {
             sendToClient(peer, createMessage(
-              MessageTypes.ERROR,
+              MessageTypes.error,
               undefined,
               { message: 'Invalid topic or missing payload', code: 400 },
             ))
@@ -154,31 +164,39 @@ export default defineWebSocketHandler({
           // Check if client is subscribed to the topic
           if (!client.topics.has(data.topic)) {
             sendToClient(peer, createMessage(
-              MessageTypes.ERROR,
+              MessageTypes.error,
               undefined,
               { message: 'Not subscribed to topic', code: 403 },
             ))
             return
           }
 
-          // Validate payload using type guard
-          const topic = data.topic
+          const topic = data.topic as Topic
 
-          // Now the handler receives the correctly typed payload
-          const handler = topicRegistry[topic].onAction
-          const result = await handler(data.payload)
+          try {
+            // Use the dispatcher function to handle the action
+            const result = await dispatchTopicAction(topic, data.payload, topicRegistry)
 
-          // Publish message to all subscribers of the topic
-          publishToTopic(topic, createSyncMessage(
-            topic,
-            result,
-          ))
+            // Publish message to all subscribers of the topic
+            publishToTopic(topic, createSyncMessage(
+              topic,
+              result,
+            ))
+          }
+          catch (error) {
+            console.error(`Error handling action for topic ${topic}:`, error)
+            sendToClient(peer, createMessage(
+              MessageTypes.error,
+              undefined,
+              { message: 'Invalid action payload', code: 400 },
+            ))
+          }
           break
         }
 
         default: {
           sendToClient(peer, createMessage(
-            MessageTypes.ERROR,
+            MessageTypes.error,
             undefined,
             { message: 'Unsupported message type', code: 400 },
           ))
@@ -191,7 +209,7 @@ export default defineWebSocketHandler({
 
       // Send error back to client
       sendToClient(peer, createMessage(
-        MessageTypes.ERROR,
+        MessageTypes.error,
         undefined,
         {
           message: 'Failed to process message',
@@ -267,11 +285,7 @@ export function publishMessage<T extends Topic>(
   topic: T,
   payload: TopicData<T>,
 ) {
-  const message: SocketMessage<TopicData<T>> = {
-    type: MessageTypes.SYNC,
-    topic,
-    payload,
-  }
+  const message = createSyncMessage(topic, payload)
   publishToTopic(topic, message)
 }
 

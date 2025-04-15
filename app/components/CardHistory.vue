@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { CardData } from '~~/shared/schemas/card'
+
 const emit = defineEmits<{
   (e: 'close'): void
 }>()

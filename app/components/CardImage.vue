@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { CardData } from '~~/shared/schemas/card'
+
 type Props = {
   card: CardData
   turnoverable?: boolean

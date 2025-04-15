@@ -1,3 +1,6 @@
+import type { CardData } from '~~/shared/schemas/card'
+import type { TopicMap } from '~~/shared/schemas/socket'
+
 export async function cardSubscribeHandler() {
   return await useStorage('local').getItem('card') as CardData | null
 }

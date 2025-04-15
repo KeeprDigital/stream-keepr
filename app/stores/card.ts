@@ -3,6 +3,7 @@ import type {
   ScryfallFormat,
   ScryfallList,
 } from '@scryfall/api-types'
+import type { CardData } from '~~/shared/schemas/card'
 import { useStorage } from '@vueuse/core'
 
 export const useCardStore = defineStore('Card', () => {

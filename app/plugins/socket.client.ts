@@ -1,3 +1,6 @@
+import type { SocketMessage, TopicData, TopicMap } from '~~/shared/schemas/socket'
+import { MessageTypes } from '~~/shared/schemas/socket'
+
 export default defineNuxtPlugin(() => {
   // State
   const clientId = ref<string | null>(null)
@@ -51,7 +54,7 @@ export default defineNuxtPlugin(() => {
       const message = JSON.parse(newData) as SocketMessage
 
       switch (message.type) {
-        case MessageTypes.SYNC:
+        case MessageTypes.sync:
           if (message.topic && isValidTopic(message.topic)) {
             // Route message to topic subscribers
             const subscription = topicSubscriptions.get(message.topic)
@@ -61,7 +64,7 @@ export default defineNuxtPlugin(() => {
           }
           break
 
-        case MessageTypes.SUBSCRIBED:
+        case MessageTypes.subscribed:
           if (message.topic && isValidTopic(message.topic)) {
             const subscription = topicSubscriptions.get(message.topic)
             if (subscription) {
@@ -71,7 +74,7 @@ export default defineNuxtPlugin(() => {
           }
           break
 
-        case MessageTypes.ERROR:
+        case MessageTypes.error:
           if (message.payload && typeof message.payload === 'object' && 'message' in message.payload) {
             lastError.value = message.payload.message as string
             console.error('WebSocket error from server:', message.payload)
@@ -95,7 +98,7 @@ export default defineNuxtPlugin(() => {
 
     topicSubscriptions.forEach((_, topic) => {
       sendToServer({
-        type: MessageTypes.SUBSCRIBE,
+        type: MessageTypes.subscribe,
         topic: topic as string,
       })
     })
@@ -135,7 +138,7 @@ export default defineNuxtPlugin(() => {
       // Send subscription request to server if connected
       if (isConnected.value) {
         sendToServer({
-          type: MessageTypes.SUBSCRIBE,
+          type: MessageTypes.subscribe,
           topic: topic as string,
         })
       }
@@ -195,7 +198,7 @@ export default defineNuxtPlugin(() => {
 
       if (isConnected.value) {
         sendToServer({
-          type: MessageTypes.UNSUBSCRIBE,
+          type: MessageTypes.unsubscribe,
           topic: topic as string,
         })
       }
@@ -235,7 +238,7 @@ export default defineNuxtPlugin(() => {
     }
 
     return sendToServer({
-      type: MessageTypes.ACTION,
+      type: MessageTypes.action,
       topic: topic as string,
       payload,
     })

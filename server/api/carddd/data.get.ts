@@ -1,3 +1,5 @@
+import type { CardData, CardDisplayData } from '~~/shared/schemas/card'
+
 export default defineEventHandler(async (event) => {
   const local = useStorage('local')
   const data = await local.getItem<CardData>('card')

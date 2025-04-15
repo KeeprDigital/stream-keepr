@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { ConfigData } from '~~/shared/schemas/config'
+
 const state = defineModel<ConfigData>({
   default: defaultConfigData,
 })
