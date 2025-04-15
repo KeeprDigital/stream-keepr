@@ -1,3 +1,9 @@
 export type ConfigData = {
-  matchCount: number
+  name: string
+  description: string
+  days: number
+  swissRounds: number
+  cutRounds: number
+  playerCount: number
+  featureMatches: number
 }

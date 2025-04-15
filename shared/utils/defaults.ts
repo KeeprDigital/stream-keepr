@@ -1,5 +1,11 @@
 export const defaultConfigData: ConfigData = {
-  matchCount: 3,
+  name: '',
+  description: '',
+  days: 1,
+  swissRounds: 1,
+  cutRounds: 0,
+  playerCount: 0,
+  featureMatches: 1,
 }
 
 export const defaultPlayerData: PlayerData = {
