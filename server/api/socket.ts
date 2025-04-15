@@ -8,7 +8,7 @@ import {
   isMessageType,
   isValidTopic,
 } from '~~/shared/utils/socket'
-import { topicRegistry } from '../socket/registry'
+import { topicRegistry } from '../topics/registry'
 
 type Client = {
   id: string

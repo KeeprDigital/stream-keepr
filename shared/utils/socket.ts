@@ -1,4 +1,4 @@
-import type { TopicRegistry } from '~~/server/socket/registry'
+import type { TopicRegistry } from '~~/server/topics/registry'
 import type {
   MessageType,
   SocketMessage,
