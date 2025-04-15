@@ -22,7 +22,7 @@ function toggleTurnedOver() {
 
 <template>
   <div
-    class="card-list-item"
+    class="card-image"
     :class="{
       'is-hoverable': props.hoverable,
     }"
@@ -73,7 +73,7 @@ function toggleTurnedOver() {
 </template>
 
 <style scoped>
-.card-list-item {
+.card-image {
   aspect-ratio: 61/85;
   perspective: 2000px;
   position: relative;
@@ -82,7 +82,10 @@ function toggleTurnedOver() {
   .card {
     position: relative;
     transform-style: preserve-3d;
-    transition: transform 0.2s;
+    transition: transform 0.6s ease-in-out;
+    transform-origin: center;
+    width: 100%;
+    height: 100%;
 
     .face {
       position: absolute;
@@ -91,7 +94,6 @@ function toggleTurnedOver() {
 
       &.front {
         transform: rotateY(0deg);
-        transform: rotate(0deg);
       }
 
       &.back {
@@ -100,27 +102,26 @@ function toggleTurnedOver() {
 
       .image {
         border-radius: 4.75% / 4%;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
       }
     }
 
     &.is-flipped {
       transform: rotate(180deg);
-      transition: transform 0.6s ease-in-out;
     }
 
     &.is-rotated {
       transform: rotate(90deg);
-      transition: transform 0.6s ease-in-out;
     }
 
     &.is-counter-rotated {
       transform: rotate(-90deg);
-      transition: transform 0.6s ease-in-out;
     }
 
     &.is-turned-over {
       transform: rotateY(180deg);
-      transition: transform 0.6s ease-in-out;
     }
   }
 

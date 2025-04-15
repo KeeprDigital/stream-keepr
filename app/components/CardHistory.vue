@@ -16,8 +16,6 @@ function clearHistory() {
   cardStore.clearHistory()
   emit('close')
 }
-
-const history = computed(() => [...cardStore.history].reverse())
 </script>
 
 <template>
@@ -31,7 +29,7 @@ const history = computed(() => [...cardStore.history].reverse())
     <template #body>
       <div class="card-list">
         <div
-          v-for="card, index in history"
+          v-for="(card, index) in cardStore.history"
           :key="index"
           class="card-list-item"
         >

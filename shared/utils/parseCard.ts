@@ -1,4 +1,5 @@
 import type { ScryfallCard } from '@scryfall/api-types'
+import type { CardData } from '../schemas/card'
 
 export function parseCard(card: ScryfallCard.Any): CardData {
   const cardData: CardData = {
@@ -8,6 +9,13 @@ export function parseCard(card: ScryfallCard.Any): CardData {
     imageData: {
       front: null,
       back: null,
+    },
+    displayData: {
+      hidden: true,
+      flipped: false,
+      turnedOver: false,
+      rotated: false,
+      counterRotated: false,
     },
     orientationData: {
       flipable: false,

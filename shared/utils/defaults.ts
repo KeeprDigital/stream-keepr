@@ -1,3 +1,5 @@
+import type { ConfigData } from '../schemas/config'
+
 export const defaultConfigData: ConfigData = {
   name: '',
   description: '',

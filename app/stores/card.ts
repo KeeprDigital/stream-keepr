@@ -137,13 +137,14 @@ export const useCardStore = defineStore('Card', () => {
   }
 
   function pushToHistory(cardData: CardData) {
-    if (history.value.find(card => card.name === cardData.name)) {
-      history.value.splice(history.value.indexOf(cardData), 1)
-      history.value.push(cardData)
+    const cardCopy = JSON.parse(JSON.stringify(cardData))
+
+    const existingIndex = history.value.findIndex(card => card.name === cardData.name)
+    if (existingIndex !== -1) {
+      history.value.splice(existingIndex, 1)
     }
-    else {
-      history.value.push(cardData)
-    }
+
+    history.value.unshift(cardCopy)
   }
 
   async function selectMeldCardPart(cardName: string) {
