@@ -1,54 +1,61 @@
-import type { CardData } from '~~/shared/schemas/card'
-import type { TopicMap } from '~~/shared/schemas/socket'
+import type { CardApiCall, CardData } from '~~/shared/schemas/card'
+import type { TopicActions, TopicMap } from '~~/shared/schemas/socket'
 
-export async function cardSubscribeHandler() {
-  return await useStorage('local').getItem('card') as CardData | null
-}
-
-export async function cardMessageHandler(message: TopicMap['card']) {
+async function handleCardAction(
+  action: TopicActions<'card'>,
+  card?: CardData,
+): Promise<CardData | null> {
   const localStorage = useStorage('local')
-
-  if (message.action === 'set') {
-    await localStorage.setItem('card', message.card)
-    return message.card
-  }
-
-  const localCard = await localStorage.getItem<CardData>('card')
-
-  if (!localCard) {
+  if (action === 'clear') {
+    await localStorage.removeItem('card')
     return null
   }
 
-  switch (message.action) {
-    case 'hide':
-      localCard.displayData.hidden = true
-      break
-
-    case 'show':
-      localCard.displayData.hidden = false
-      break
-
-    case 'flip':
-      localCard.displayData.flipped = !localCard.displayData.flipped
-      break
-
-    case 'rotate':
-      localCard.displayData.rotated = !localCard.displayData.rotated
-      break
-
-    case 'counterRotate':
-      localCard.displayData.counterRotated = !localCard.displayData.counterRotated
-      break
-
-    case 'turnOver':
-      localCard.displayData.turnedOver = !localCard.displayData.turnedOver
-      break
-
-    case 'clear':
-      await localStorage.removeItem('card')
-      return null
+  if (!card) {
+    return null
   }
 
-  await localStorage.setItem('card', localCard)
-  return localCard
+  if (action === 'set') {
+    await localStorage.setItem('card', card)
+    return card
+  }
+
+  switch (action) {
+    case 'hide':
+      card.displayData.hidden = true
+      break
+    case 'show':
+      card.displayData.hidden = false
+      break
+    case 'flip':
+      card.displayData.flipped = !card.displayData.flipped
+      break
+    case 'rotate':
+      card.displayData.rotated = !card.displayData.rotated
+      break
+    case 'counterRotate':
+      card.displayData.counterRotated = !card.displayData.counterRotated
+      break
+    case 'turnOver':
+      card.displayData.turnedOver = !card.displayData.turnedOver
+      break
+  }
+  await localStorage.setItem('card', card)
+
+  return card
+}
+
+export async function cardSubscribeHandler(): Promise<CardData | null> {
+  return await useStorage('local').getItem('card') as CardData | null
+}
+
+export async function cardApiCallHandler(request: CardApiCall): Promise<CardData | null> {
+  return await handleCardAction(request.action)
+}
+
+export async function cardMessageHandler(message: TopicMap['card']): Promise<CardData | null> {
+  if (message.action === 'set') {
+    return await handleCardAction(message.action, message.card)
+  }
+  return await handleCardAction(message.action)
 }

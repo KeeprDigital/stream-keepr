@@ -26,8 +26,13 @@ export const configActionMessageSchema = z.discriminatedUnion('action', [
 ])
 export type ConfigActionMessage = z.infer<typeof configActionMessageSchema>
 
-// Direct mapping of config actions to their payload types
-export type ConfigActionPayloadMap = {
-  set: { config: ConfigData }
-  clear: Record<string, never>
-}
+export const configApiCallSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('set'),
+    config: z.object({
+      test: z.string(),
+    }),
+  }),
+  z.object({ action: z.literal('clear') }),
+])
+export type ConfigApiCall = z.infer<typeof configApiCallSchema>

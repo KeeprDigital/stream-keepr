@@ -56,7 +56,6 @@ export const cardClientActionSchema = z.enum([
 ])
 export type CardClientAction = z.infer<typeof cardClientActionSchema>
 
-// Simplified action message schema
 export const cardActionMessageSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('set'),
@@ -72,14 +71,14 @@ export const cardActionMessageSchema = z.discriminatedUnion('action', [
 ])
 export type CardActionMessage = z.infer<typeof cardActionMessageSchema>
 
-// Direct mapping of card actions to their payload types
-export type CardActionPayloadMap = {
-  set: { card: CardData }
-  clear: Record<string, never>
-  hide: Record<string, never>
-  show: Record<string, never>
-  rotate: Record<string, never>
-  counterRotate: Record<string, never>
-  flip: Record<string, never>
-  turnOver: Record<string, never>
-}
+export const cardApiCallSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('set'), card: z.custom<CardData>() }),
+  z.object({ action: z.literal('clear') }),
+  z.object({ action: z.literal('hide') }),
+  z.object({ action: z.literal('show') }),
+  z.object({ action: z.literal('rotate') }),
+  z.object({ action: z.literal('counterRotate') }),
+  z.object({ action: z.literal('flip') }),
+  z.object({ action: z.literal('turnOver') }),
+])
+export type CardApiCall = z.infer<typeof cardApiCallSchema>

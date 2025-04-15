@@ -20,13 +20,10 @@ export function dispatchTopicAction<K extends Topic>(
   payload: unknown,
   registry: TopicRegistry,
 ): Promise<TopicData<K>> {
-  // Validate the payload shape first
   if (!isValidActionMessage(topic, payload)) {
     throw new Error('Invalid action payload')
   }
-
-  // Now we can safely cast and dispatch
-  return registry[topic].onAction(payload as TopicMap[K])
+  return registry[topic].onAction(payload)
 }
 
 /**
@@ -151,29 +148,4 @@ export function createSubscribedMesage<K extends Topic>(
     topic,
     payload,
   }
-}
-
-/**
- * Type-safe function to convert a generic SocketMessage to a TypedSocketMessage
- * This helps with runtime type checking
- */
-export function asTypedMessage(message: SocketMessage): TypedSocketMessage {
-  return message as TypedSocketMessage
-}
-
-/**
- * Get all valid actions for a specific topic by extracting from schemas
- */
-export function getTopicActions<T extends Topic>(topic: T): TopicActions<T>[] {
-  // Extract actions directly from the schemas
-  const schemaMap = {
-    config: configClientActionSchema,
-    card: cardClientActionSchema,
-  }
-
-  // Get the schema for this topic
-  const schema = schemaMap[topic]
-
-  // Extract values from the Zod enum schema
-  return schema._def.values as TopicActions<T>[]
 }
