@@ -1,6 +1,14 @@
 <script lang="ts" setup>
 import type { ConfigData } from '~~/shared/schemas/config'
 
+const props = defineProps<{
+  loading: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'save'): void
+}>()
+
 const state = defineModel<ConfigData>({
   default: defaultConfigData,
 })
@@ -17,6 +25,7 @@ const state = defineModel<ConfigData>({
       >
         <UInput v-model="state.name" class="w-64" />
       </UFormField>
+      <USeparator />
       <UFormField
         name="description"
         label="Event Description"
@@ -62,14 +71,16 @@ const state = defineModel<ConfigData>({
         <UInputNumber v-model="state.playerCount" :min="0" class="w-64" />
       </UFormField>
       <USeparator />
-      <UFormField
-        name="featureMatches"
-        label="Number of feature matches"
-        description="The number of feature matches to control."
-        class="flex max-sm:flex-col justify-between items-start gap-4"
-      >
-        <UInputNumber v-model="state.featureMatches" :min="1" :max="3" class="w-64" />
-      </UFormField>
+      <UButton
+        form="config"
+        label="Save"
+        color="primary"
+        variant="outline"
+        type="submit"
+        class="w-fit lg:ms-auto"
+        :disabled="props.loading"
+        @click="emit('save')"
+      />
     </UPageCard>
   </UForm>
 </template>

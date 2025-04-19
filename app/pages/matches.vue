@@ -1,15 +1,5 @@
 <script setup lang="ts">
-const items = [
-  {
-    label: 'Match 1',
-  },
-  {
-    label: 'Match 2',
-  },
-  {
-    label: 'Match 3',
-  },
-]
+const matchStore = useMatchStore()
 </script>
 
 <template>
@@ -19,18 +9,29 @@ const items = [
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
+        <template #right>
+          <UButton
+            variant="ghost"
+            icon="i-heroicons-plus"
+            color="primary"
+            @click="matchStore.addMatch"
+          >
+            Add Match
+          </UButton>
+        </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <UAccordion :items="items" type="multiple">
-        <template #body="{ item }">
-          <div class="flex flex-row gap-4">
-            <PlayerControl title="Player 1" />
-            <PlayerControl title="Player 2" />
-          </div>
-        </template>
-      </UAccordion>
+      <div class="w-full lg:max-w-2xl mx-auto">
+        <div class="flex flex-col gap-4 mb-4">
+          <MatchControl
+            v-for="match in matchStore.state"
+            :id="match.id"
+            :key="match.id"
+          />
+        </div>
+      </div>
     </template>
   </UDashboardPanel>
 </template>

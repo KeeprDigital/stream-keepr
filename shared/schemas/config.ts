@@ -7,7 +7,6 @@ export const configDataSchema = z.object({
   swissRounds: z.number(),
   cutRounds: z.number(),
   playerCount: z.number(),
-  featureMatches: z.number(),
 })
 export type ConfigData = z.infer<typeof configDataSchema>
 

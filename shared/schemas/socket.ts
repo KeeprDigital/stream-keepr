@@ -1,5 +1,7 @@
-import type { cardActionMessageSchema, CardApiCall, CardClientAction, CardData } from './card'
-import type { configActionMessageSchema, ConfigApiCall, ConfigClientAction, ConfigData } from './config'
+import type { CardActionMessage, CardApiCall, CardClientAction, CardData } from './card'
+import type { ConfigActionMessage, ConfigApiCall, ConfigClientAction, ConfigData } from './config'
+import type { EventActionMessage, EventApiCall, EventClientAction, EventData } from './event'
+import type { MatchActionMessage, MatchApiCall, MatchClientAction, MatchDataList } from './matches'
 import { z } from 'zod'
 
 export const MessageTypesSchema = z.enum([
@@ -21,6 +23,8 @@ export type MessageType = z.infer<typeof MessageTypesSchema>
 export const TopicSchema = z.enum([
   'config',
   'card',
+  'matches',
+  'event',
 ])
 export const Topics = TopicSchema.enum
 export type Topic = z.infer<typeof TopicSchema>
@@ -28,23 +32,31 @@ export type Topic = z.infer<typeof TopicSchema>
 export type TopicDataMap = {
   config: ConfigData | null
   card: CardData | null
+  matches: MatchDataList | null
+  event: EventData | null
 }
 export type TopicData<K extends Topic> = TopicDataMap[K]
 
 export type TopicActionsMap = {
   config: ConfigClientAction
   card: CardClientAction
+  matches: MatchClientAction
+  event: EventClientAction
 }
 export type TopicActions<T extends Topic> = TopicActionsMap[T]
 
 export type TopicMap = {
-  config: z.infer<typeof configActionMessageSchema>
-  card: z.infer<typeof cardActionMessageSchema>
+  config: ConfigActionMessage
+  card: CardActionMessage
+  matches: MatchActionMessage
+  event: EventActionMessage
 }
 
 export type TopicApiCallMap = {
   config: ConfigApiCall
   card: CardApiCall
+  matches: MatchApiCall
+  event: EventApiCall
 }
 
 export type SocketMessage<T = unknown> = {

@@ -40,18 +40,14 @@ export const useConfigStore = defineStore('Config', () => {
 
   async function save() {
     loading.value = true
-
     sync()
-
     socketStore.publish('config', {
       action: 'set',
       config: state.value,
     })
-
     toast.add({
       title: 'Event Settings Updated',
     })
-
     loading.value = false
   }
 

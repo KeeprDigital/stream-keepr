@@ -3,13 +3,13 @@ import type {
   MessageType,
   SocketMessage,
   Topic,
-  TopicActions,
   TopicData,
   TopicMap,
-  TypedSocketMessage,
 } from '../schemas/socket'
 import { cardClientActionSchema } from '../schemas/card'
 import { configClientActionSchema } from '../schemas/config'
+import { eventClientActionSchema } from '../schemas/event'
+import { matchClientActionSchema } from '../schemas/matches'
 import { MessageTypes, Topics } from '../schemas/socket'
 
 /**
@@ -55,16 +55,18 @@ export function isValidActionMessage<K extends Topic>(
     return false
   }
 
-  const action = (payload as any).action
-
-  // Additional validation logic based on topic
   if (topic === 'config') {
-    return ['set', 'clear'].includes(action)
+    return configClientActionSchema.safeParse(payload.action).success
   }
   else if (topic === 'card') {
-    return ['set', 'clear', 'hide', 'show', 'rotate', 'counterRotate', 'flip', 'turnOver'].includes(action)
+    return cardClientActionSchema.safeParse(payload.action).success
   }
-
+  else if (topic === 'matches') {
+    return matchClientActionSchema.safeParse(payload.action).success
+  }
+  else if (topic === 'event') {
+    return eventClientActionSchema.safeParse(payload.action).success
+  }
   return false
 }
 

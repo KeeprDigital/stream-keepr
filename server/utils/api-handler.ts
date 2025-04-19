@@ -1,4 +1,3 @@
-// server/utils/api-handler.ts
 import type { Topic, TopicApiCallMap, TopicData } from '~~/shared/schemas/socket'
 import { publishMessage } from '../api/socket'
 import { topicRegistry } from '../topics/registry'
@@ -15,20 +14,16 @@ export async function processApiCall<T extends Topic>(
   apiCall: TopicApiCallMap[T],
 ): Promise<TopicData<T>> {
   try {
-    // Get the handler for this topic
     const handler = topicRegistry[topic]?.onApiCall
 
     if (!handler) {
       throw new Error(`No API handler registered for topic: ${topic}`)
     }
 
-    // Call the handler with the API call payload
     const result = await handler(apiCall)
 
-    // Publish the result to all subscribers
     publishMessage(topic, result)
 
-    // Return the result for API usage
     return result
   }
   catch (error) {

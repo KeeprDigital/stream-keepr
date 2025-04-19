@@ -1,5 +1,5 @@
-<script lang="ts" setup>
-
+<script setup lang="ts">
+const eventStore = useEventStore()
 </script>
 
 <template>
@@ -14,21 +14,11 @@
 
     <template #body>
       <div class="w-full lg:max-w-2xl mx-auto">
-        <UPageCard
-          title="Event"
-          variant="naked"
-          orientation="horizontal"
-          class="mb-4"
-        >
-          <UButton
-            form="event"
-            label="Save changes"
-            color="neutral"
-            type="submit"
-            class="w-fit lg:ms-auto"
-          />
-        </UPageCard>
-        <EventControl />
+        <EventControl
+          v-model="eventStore.state"
+          :loading="eventStore.loading"
+          @save="eventStore.save"
+        />
       </div>
     </template>
   </UDashboardPanel>

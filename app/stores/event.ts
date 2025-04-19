@@ -1,51 +1,66 @@
+import type { EventData } from '~~/shared/schemas/event'
+import { defaultEventData } from '~~/shared/utils/defaults'
+
 export const useEventStore = defineStore('Event', () => {
-  const { send, incoming } = useWebSocketChannel('event')
+  const storeId = 'event-store'
+  const socketStore = useSocket()
   const toast = useToast()
+
   const loading = ref(false)
 
-  const eventState = ref<EventData>({
-    name: '',
-    currentRound: '',
-    leftTalent: '',
-    rightTalent: '',
-    holdingText: '',
-  })
+  const state = ref<EventData>(defaultEventData)
 
-  const { cloned, sync } = useCloned(eventState, { manual: true })
+  const { cloned, sync } = useCloned(state, { manual: true })
 
-  watch(incoming, (data) => {
-    if (data) {
-      eventState.value = data.event
-      sync()
+  function init() {
+    if (!socketStore.isSubscribed('event')) {
+      socketStore.subscribe('event', storeId, handleEvent, handleSubscribed)
     }
-  }, {
-    immediate: true,
-  })
+  }
 
-  function reset() {
-    eventState.value = cloned.value
+  function handleEvent(data: EventData | null) {
+    if (data) {
+      state.value = data
+    }
+    loading.value = false
     sync()
   }
 
-  async function save() {
+  function handleSubscribed(data: EventData | null) {
+    if (data) {
+      state.value = data
+      loading.value = false
+      sync()
+    }
+  }
+
+  function save() {
     loading.value = true
-    send({
-      action: 'set',
-      event: eventState.value,
-    })
-
     sync()
-
-    toast.add({
-      title: 'Event Details Updated',
+    socketStore.publish('event', {
+      action: 'set',
+      event: state.value,
     })
-
+    toast.add({
+      title: 'Event updated',
+    })
     loading.value = false
   }
 
+  function reset() {
+    state.value = cloned.value
+    sync()
+  }
+
+  onUnmounted(() => {
+    socketStore.unsubscribe('event', storeId)
+  })
+
+  init()
+
   return {
+    state,
     loading,
-    eventState,
     save,
     reset,
   }
