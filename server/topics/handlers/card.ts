@@ -1,12 +1,24 @@
 import type { CardApiCall, CardData } from '~~/shared/schemas/card'
-import type { TopicActions, TopicMap } from '~~/shared/schemas/socket'
+import type { TopicMap } from '~~/shared/schemas/socket'
 
-async function handleCardAction(
-  action: TopicActions<'card'>,
-  card?: CardData,
-): Promise<CardData | null> {
+export async function cardSubscribeHandler(): Promise<CardData | null> {
+  return await useStorage('local').getItem('card') as CardData | null
+}
+
+export async function cardApiCallHandler(_request: CardApiCall): Promise<CardData | null> {
+  // TODO: Implement
+  return null
+}
+
+export async function cardMessageHandler(message: TopicMap['card']): Promise<CardData | null> {
   const localStorage = useStorage('local')
-  if (action === 'clear') {
+  const card = await localStorage.getItem<CardData>('card')
+
+  if (message.action === 'set') {
+    await localStorage.setItem('card', message.card)
+    return message.card
+  }
+  else if (message.action === 'clear') {
     await localStorage.removeItem('card')
     return null
   }
@@ -15,12 +27,7 @@ async function handleCardAction(
     return null
   }
 
-  if (action === 'set') {
-    await localStorage.setItem('card', card)
-    return card
-  }
-
-  switch (action) {
+  switch (message.action) {
     case 'hide':
       card.displayData.hidden = true
       break
@@ -40,22 +47,7 @@ async function handleCardAction(
       card.displayData.turnedOver = !card.displayData.turnedOver
       break
   }
+
   await localStorage.setItem('card', card)
-
   return card
-}
-
-export async function cardSubscribeHandler(): Promise<CardData | null> {
-  return await useStorage('local').getItem('card') as CardData | null
-}
-
-export async function cardApiCallHandler(request: CardApiCall): Promise<CardData | null> {
-  return await handleCardAction(request.action)
-}
-
-export async function cardMessageHandler(message: TopicMap['card']): Promise<CardData | null> {
-  if (message.action === 'set') {
-    return await handleCardAction(message.action, message.card)
-  }
-  return await handleCardAction(message.action)
 }

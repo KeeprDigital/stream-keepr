@@ -176,7 +176,6 @@ export default defineWebSocketHandler({
           try {
             // Use the dispatcher function to handle the action
             const result = await dispatchTopicAction(topic, data.payload, topicRegistry)
-
             // Publish message to all subscribers of the topic
             publishToTopic(topic, createSyncMessage(
               topic,

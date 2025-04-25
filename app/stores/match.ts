@@ -65,10 +65,12 @@ export const useMatchStore = defineStore('Match', () => {
     })
     socketStore.publish('matches', {
       action: 'set',
-      id,
-      tableNumber: match.tableNumber,
-      playerOne: match.playerOne,
-      playerTwo: match.playerTwo,
+      match: {
+        id,
+        tableNumber: match.tableNumber,
+        playerOne: match.playerOne,
+        playerTwo: match.playerTwo,
+      },
     })
 
     loading.value = false

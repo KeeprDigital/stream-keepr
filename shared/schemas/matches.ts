@@ -30,10 +30,7 @@ export const matchActionMessageSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal(matchClientActionSchema.enum.set),
-    id: z.string(),
-    tableNumber: z.string(),
-    playerOne: playerDataSchema,
-    playerTwo: playerDataSchema,
+    match: matchDataSchema,
   }),
 ])
 export type MatchActionMessage = z.infer<typeof matchActionMessageSchema>

@@ -38,9 +38,9 @@ export async function matchHandler(message: TopicMap['matches']) {
       return localMatches
     }
     case 'set': {
-      const index = localMatches.findIndex(match => match.id === message.id)
+      const index = localMatches.findIndex(match => match.id === message.match.id)
       if (index !== -1) {
-        localMatches[index] = message
+        localMatches[index] = message.match
       }
       await localStorage.setItem('matches', localMatches)
       return localMatches
