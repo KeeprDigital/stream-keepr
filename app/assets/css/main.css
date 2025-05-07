@@ -1,2 +1,7 @@
 @import 'tailwindcss' theme(static);
 @import '@nuxt/ui-pro';
+
+body.transparent-body-override,
+body.transparent-body-override #__nuxt {
+  background-color: transparent !important;
+}
