@@ -7,6 +7,8 @@ export const cardDisplayDataSchema = z.object({
   rotated: z.boolean(),
   counterRotated: z.boolean(),
   turnedOver: z.boolean(),
+  timeoutStartTimestamp: z.number().optional(),
+  timeoutDuration: z.number().optional(),
 })
 export type CardDisplayData = z.infer<typeof cardDisplayDataSchema>
 
@@ -63,7 +65,7 @@ export const cardActionMessageSchema = z.discriminatedUnion('action', [
   }),
   z.object({ action: z.literal('clear') }),
   z.object({ action: z.literal('hide') }),
-  z.object({ action: z.literal('show') }),
+  z.object({ action: z.literal('show'), timeOut: z.number().optional() }),
   z.object({ action: z.literal('rotate') }),
   z.object({ action: z.literal('counterRotate') }),
   z.object({ action: z.literal('flip') }),
@@ -75,7 +77,7 @@ export const cardApiCallSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('set'), card: z.custom<CardData>() }),
   z.object({ action: z.literal('clear') }),
   z.object({ action: z.literal('hide') }),
-  z.object({ action: z.literal('show') }),
+  z.object({ action: z.literal('show'), timeOut: z.number().optional() }),
   z.object({ action: z.literal('rotate') }),
   z.object({ action: z.literal('counterRotate') }),
   z.object({ action: z.literal('flip') }),

@@ -4,21 +4,23 @@ import type {
   ScryfallList,
 } from '@scryfall/api-types'
 import type { CardData } from '~~/shared/schemas/card'
-import { useStorage } from '@vueuse/core'
+import { useCountdown, useStorage } from '@vueuse/core'
 
 export const useCardStore = defineStore('Card', () => {
   const storeId = 'card-store'
-  const socketStore = useSocket()
-  const { publish } = socketStore
-  const loading = ref(false)
 
+  const socketStore = useSocket()
+  const history = useStorage<CardData[]>('card-history', [])
+
+  const { publish } = socketStore
+  const { start, reset, remaining, isActive } = useCountdown(0)
+
+  const loading = ref(false)
   const cardList = ref<CardData[]>([])
   const cardPrintList = ref<CardData[]>([])
-
   const card = ref<CardData | null>(null)
-
   const selectedFormat = ref<MtgSet>('all')
-  const history = useStorage<CardData[]>('card-history', [])
+  const selectedTimeoutSeconds = ref(0)
 
   const formatQuery = computed(() => {
     if (selectedFormat.value === 'all') {
@@ -42,6 +44,10 @@ export const useCardStore = defineStore('Card', () => {
     card.value = data
     if (data) {
       searchCardPrints(data.name)
+      updateCountdownFromCardData(data)
+    }
+    else {
+      reset()
     }
   }
 
@@ -49,6 +55,31 @@ export const useCardStore = defineStore('Card', () => {
     if (data) {
       card.value = data
       searchCardPrints(data.name)
+      updateCountdownFromCardData(data)
+    }
+    else {
+      reset()
+    }
+  }
+
+  function updateCountdownFromCardData(cardData: CardData) {
+    if (cardData.displayData.hidden) {
+      reset()
+    }
+    else if (cardData.displayData.timeoutStartTimestamp && cardData.displayData.timeoutDuration) {
+      const elapsedMilliseconds = Date.now() - cardData.displayData.timeoutStartTimestamp
+      const remainingMilliseconds = Math.round((cardData.displayData.timeoutDuration - elapsedMilliseconds) / 1000) * 1000
+      if (remainingMilliseconds > 0) {
+        start(remainingMilliseconds / 1000)
+      }
+      else {
+        if (card.value)
+          card.value.displayData.hidden = true
+        reset()
+      }
+    }
+    else {
+      reset()
     }
   }
 
@@ -58,7 +89,6 @@ export const useCardStore = defineStore('Card', () => {
    */
   async function searchFuzzyCardName(name: string) {
     loading.value = true
-
     if (name.length < 3) {
       clearSearch()
       return
@@ -91,7 +121,7 @@ export const useCardStore = defineStore('Card', () => {
     loading.value = true
     await $fetch<ScryfallList.Cards>('https://api.scryfall.com/cards/search', {
       query: {
-        q: `${exactName} game:paper`,
+        q: `"${exactName}" game:paper`,
         unique: 'prints',
         order: 'released',
       },
@@ -123,6 +153,8 @@ export const useCardStore = defineStore('Card', () => {
         turnedOver: false,
         rotated: cardData.orientationData.defaultRotated,
         counterRotated: false,
+        timeoutStartTimestamp: undefined,
+        timeoutDuration: undefined,
       },
     }
 
@@ -138,7 +170,6 @@ export const useCardStore = defineStore('Card', () => {
 
   function pushToHistory(cardData: CardData) {
     const cardCopy = JSON.parse(JSON.stringify(cardData))
-
     const existingIndex = history.value.findIndex(card => card.name === cardData.name)
     if (existingIndex !== -1) {
       history.value.splice(existingIndex, 1)
@@ -155,7 +186,6 @@ export const useCardStore = defineStore('Card', () => {
         unique: 'prints',
       },
     })
-
     const parsedCard = parseCard(data)
 
     card.value = {
@@ -183,20 +213,29 @@ export const useCardStore = defineStore('Card', () => {
     publish('card', {
       action: 'clear',
     })
+    reset()
   }
 
   function hideCard() {
-    card.value!.displayData.hidden = true
+    if (!card.value)
+      return
     publish('card', {
       action: 'hide',
     })
+    reset()
   }
 
   function showCard() {
-    card.value!.displayData.hidden = false
-    publish('card', {
-      action: 'show',
-    })
+    if (!card.value)
+      return
+
+    const payload: { action: 'show', timeOut?: number } = { action: 'show' }
+
+    if (selectedTimeoutSeconds.value > 0) {
+      payload.timeOut = selectedTimeoutSeconds.value
+    }
+
+    publish('card', payload)
   }
 
   function rotateCard() {
@@ -260,10 +299,13 @@ export const useCardStore = defineStore('Card', () => {
     clearHistory,
     searchCardPrints,
     selectedFormat,
+    selectedTimeoutSeconds,
     cardPrintList,
     loading,
     card,
     cardList,
     history,
+    remaining,
+    isActive,
   }
 })

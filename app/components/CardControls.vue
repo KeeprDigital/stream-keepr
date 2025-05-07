@@ -15,6 +15,8 @@ const {
 const {
   card,
   cardPrintList,
+  remaining,
+  isActive,
 } = storeToRefs(cardStore)
 
 const overlay = useOverlay()
@@ -60,7 +62,7 @@ function openPrintList() {
         color="warning"
         @click="hideCard"
       >
-        Hide
+        {{ isActive ? `Hide (${remaining}s)` : 'Hide' }}
       </UButton>
       <UButton
         v-else
@@ -72,6 +74,13 @@ function openPrintList() {
       >
         Show
       </UButton>
+      <UInputNumber
+        v-model="cardStore.selectedTimeoutSeconds"
+        :min="0"
+        size="xl"
+        :disabled="isActive"
+      />
+
       <USeparator v-if="card.meldData" />
       <UButtonGroup v-if="card.meldData" orientation="horizontal">
         <UButton

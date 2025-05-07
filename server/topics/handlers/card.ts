@@ -1,5 +1,6 @@
 import type { CardApiCall, CardData } from '~~/shared/schemas/card'
 import type { TopicMap } from '~~/shared/schemas/socket'
+import { publishMessage } from '../../api/socket'
 
 export async function cardSubscribeHandler(): Promise<CardData | null> {
   return await useStorage('local').getItem('card') as CardData | null
@@ -12,7 +13,7 @@ export async function cardApiCallHandler(_request: CardApiCall): Promise<CardDat
 
 export async function cardMessageHandler(message: TopicMap['card']): Promise<CardData | null> {
   const localStorage = useStorage('local')
-  const card = await localStorage.getItem<CardData>('card')
+  const cardStateInHandler = await localStorage.getItem<CardData>('card')
 
   if (message.action === 'set') {
     await localStorage.setItem('card', message.card)
@@ -23,31 +24,75 @@ export async function cardMessageHandler(message: TopicMap['card']): Promise<Car
     return null
   }
 
-  if (!card) {
+  if (!cardStateInHandler) {
     return null
   }
 
   switch (message.action) {
     case 'hide':
-      card.displayData.hidden = true
+      if (!cardStateInHandler)
+        return null
+      cardStateInHandler.displayData.hidden = true
+      cardStateInHandler.displayData.timeoutStartTimestamp = undefined
+      cardStateInHandler.displayData.timeoutDuration = undefined
       break
-    case 'show':
-      card.displayData.hidden = false
+    case 'show': {
+      if (!cardStateInHandler)
+        return null
+      cardStateInHandler.displayData.hidden = false
+      const cardNameForTimeout = cardStateInHandler.name
+      const timeoutInSeconds = message.timeOut
+
+      if (timeoutInSeconds && timeoutInSeconds > 0) {
+        cardStateInHandler.displayData.timeoutStartTimestamp = Date.now()
+        cardStateInHandler.displayData.timeoutDuration = timeoutInSeconds * 1000
+
+        setTimeout(async () => {
+          const currentCardInStorage = await localStorage.getItem<CardData>('card')
+          if (currentCardInStorage
+            && currentCardInStorage.name === cardNameForTimeout
+            && !currentCardInStorage.displayData.hidden
+            // Verify that the timeout hasn't been superseded by a new one or cleared
+            && currentCardInStorage.displayData.timeoutStartTimestamp === cardStateInHandler.displayData.timeoutStartTimestamp) {
+            currentCardInStorage.displayData.hidden = true
+            currentCardInStorage.displayData.timeoutStartTimestamp = undefined
+            currentCardInStorage.displayData.timeoutDuration = undefined
+            await localStorage.setItem('card', currentCardInStorage)
+            publishMessage('card', currentCardInStorage)
+          }
+        }, timeoutInSeconds * 1000)
+      }
+      else {
+        // If no timeout or timeout is 0, clear any existing timeout fields
+        cardStateInHandler.displayData.timeoutStartTimestamp = undefined
+        cardStateInHandler.displayData.timeoutDuration = undefined
+      }
       break
+    }
     case 'flip':
-      card.displayData.flipped = !card.displayData.flipped
+      if (!cardStateInHandler)
+        return null
+      cardStateInHandler.displayData.flipped = !cardStateInHandler.displayData.flipped
       break
     case 'rotate':
-      card.displayData.rotated = !card.displayData.rotated
+      if (!cardStateInHandler)
+        return null
+      cardStateInHandler.displayData.rotated = !cardStateInHandler.displayData.rotated
       break
     case 'counterRotate':
-      card.displayData.counterRotated = !card.displayData.counterRotated
+      if (!cardStateInHandler)
+        return null
+      cardStateInHandler.displayData.counterRotated = !cardStateInHandler.displayData.counterRotated
       break
     case 'turnOver':
-      card.displayData.turnedOver = !card.displayData.turnedOver
+      if (!cardStateInHandler)
+        return null
+      cardStateInHandler.displayData.turnedOver = !cardStateInHandler.displayData.turnedOver
       break
   }
 
-  await localStorage.setItem('card', card)
-  return card
+  if (cardStateInHandler) {
+    await localStorage.setItem('card', cardStateInHandler)
+  }
+  return cardStateInHandler
 }
