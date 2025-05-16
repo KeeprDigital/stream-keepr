@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { LazyMtgCardPrinting } from '#components'
 
-const cardStore = useCardStore()
+const cardStore = useMtgCardStore()
 const {
   showCard,
   clearCard,

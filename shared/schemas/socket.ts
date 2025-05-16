@@ -1,7 +1,7 @@
-import type { CardActionMessage, CardApiCall, CardClientAction, CardData } from './card'
 import type { ConfigActionMessage, ConfigApiCall, ConfigClientAction, ConfigData } from './config'
 import type { EventActionMessage, EventApiCall, EventClientAction, EventData } from './event'
 import type { MatchActionMessage, MatchApiCall, MatchClientAction, MatchDataList } from './matches'
+import type { MtgCardActionMessage, MtgCardApiCall, MtgCardClientAction, MtgCardData } from './mtgCard'
 import type { OpCardActionMessage, OpCardApiCall, OpCardClientAction, OpCardData } from './opCard'
 import { z } from 'zod'
 
@@ -23,7 +23,7 @@ export type MessageType = z.infer<typeof MessageTypesSchema>
 
 export const TopicSchema = z.enum([
   'config',
-  'card',
+  'mtgCard',
   'opCard',
   'matches',
   'event',
@@ -33,7 +33,7 @@ export type Topic = z.infer<typeof TopicSchema>
 
 export type TopicDataMap = {
   config: ConfigData | null
-  card: CardData | null
+  mtgCard: MtgCardData | null
   opCard: OpCardData | null
   matches: MatchDataList | null
   event: EventData | null
@@ -42,7 +42,7 @@ export type TopicData<K extends Topic> = TopicDataMap[K]
 
 export type TopicActionsMap = {
   config: ConfigClientAction
-  card: CardClientAction
+  mtgCard: MtgCardClientAction
   opCard: OpCardClientAction
   matches: MatchClientAction
   event: EventClientAction
@@ -51,7 +51,7 @@ export type TopicActions<T extends Topic> = TopicActionsMap[T]
 
 export type TopicMap = {
   config: ConfigActionMessage
-  card: CardActionMessage
+  mtgCard: MtgCardActionMessage
   opCard: OpCardActionMessage
   matches: MatchActionMessage
   event: EventActionMessage
@@ -59,7 +59,7 @@ export type TopicMap = {
 
 export type TopicApiCallMap = {
   config: ConfigApiCall
-  card: CardApiCall
+  mtgCard: MtgCardApiCall
   opCard: OpCardApiCall
   matches: MatchApiCall
   event: EventApiCall

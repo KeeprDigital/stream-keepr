@@ -1,7 +1,7 @@
 import type { ScryfallCardFields, ScryfallImageUris } from '@scryfall/api-types'
 import { z } from 'zod'
 
-export const cardDisplayDataSchema = z.object({
+export const mtgCardDisplayDataSchema = z.object({
   hidden: z.boolean(),
   flipped: z.boolean(),
   rotated: z.boolean(),
@@ -10,43 +10,43 @@ export const cardDisplayDataSchema = z.object({
   timeoutStartTimestamp: z.number().optional(),
   timeoutDuration: z.number().optional(),
 })
-export type CardDisplayData = z.infer<typeof cardDisplayDataSchema>
+export type MtgCardDisplayData = z.infer<typeof mtgCardDisplayDataSchema>
 
-export const cardImageDataSchema = z.object({
+export const mtgCardImageDataSchema = z.object({
   front: z.custom<ScryfallImageUris>().nullable(),
   back: z.custom<ScryfallImageUris>().nullable(),
 })
-export type CardImageData = z.infer<typeof cardImageDataSchema>
+export type MtgCardImageData = z.infer<typeof mtgCardImageDataSchema>
 
-export const cardOrientationDataSchema = z.object({
+export const mtgCardOrientationDataSchema = z.object({
   flipable: z.boolean(),
   turnable: z.boolean(),
   rotateable: z.boolean(),
   counterRotateable: z.boolean(),
   defaultRotated: z.boolean(),
 })
-export type CardOrientationData = z.infer<typeof cardOrientationDataSchema>
+export type MtgCardOrientationData = z.infer<typeof mtgCardOrientationDataSchema>
 
-export const cardMeldDataSchema = z.object({
+export const mtgCardMeldDataSchema = z.object({
   meldPartOne: z.string().nullable(),
   meldPartTwo: z.string().nullable(),
   meldResult: z.string().nullable(),
 })
-export type CardMeldData = z.infer<typeof cardMeldDataSchema>
+export type MtgCardMeldData = z.infer<typeof mtgCardMeldDataSchema>
 
-export const cardDataSchema = z.object({
+export const mtgCardDataSchema = z.object({
   name: z.string(),
   set: z.string(),
   layout: z.custom<ScryfallCardFields.Core.All['layout']>(),
-  imageData: cardImageDataSchema,
-  orientationData: cardOrientationDataSchema,
-  meldData: cardMeldDataSchema.optional(),
+  imageData: mtgCardImageDataSchema,
+  orientationData: mtgCardOrientationDataSchema,
+  meldData: mtgCardMeldDataSchema.optional(),
   points: z.number(),
-  displayData: cardDisplayDataSchema,
+  displayData: mtgCardDisplayDataSchema,
 })
-export type CardData = z.infer<typeof cardDataSchema>
+export type MtgCardData = z.infer<typeof mtgCardDataSchema>
 
-export const cardClientActionSchema = z.enum([
+export const mtgCardClientActionSchema = z.enum([
   'set',
   'clear',
   'hide',
@@ -56,12 +56,12 @@ export const cardClientActionSchema = z.enum([
   'flip',
   'turnOver',
 ])
-export type CardClientAction = z.infer<typeof cardClientActionSchema>
+export type MtgCardClientAction = z.infer<typeof mtgCardClientActionSchema>
 
-export const cardActionMessageSchema = z.discriminatedUnion('action', [
+export const mtgCardActionMessageSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('set'),
-    card: z.custom<CardData>(),
+    card: z.custom<MtgCardData>(),
   }),
   z.object({ action: z.literal('clear') }),
   z.object({ action: z.literal('hide') }),
@@ -71,10 +71,10 @@ export const cardActionMessageSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('flip') }),
   z.object({ action: z.literal('turnOver') }),
 ])
-export type CardActionMessage = z.infer<typeof cardActionMessageSchema>
+export type MtgCardActionMessage = z.infer<typeof mtgCardActionMessageSchema>
 
-export const cardApiCallSchema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('set'), card: z.custom<CardData>() }),
+export const mtgCardApiCallSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('set'), card: z.custom<MtgCardData>() }),
   z.object({ action: z.literal('clear') }),
   z.object({ action: z.literal('hide') }),
   z.object({ action: z.literal('show'), timeOut: z.number().optional() }),
@@ -83,4 +83,4 @@ export const cardApiCallSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('flip') }),
   z.object({ action: z.literal('turnOver') }),
 ])
-export type CardApiCall = z.infer<typeof cardApiCallSchema>
+export type MtgCardApiCall = z.infer<typeof mtgCardApiCallSchema>

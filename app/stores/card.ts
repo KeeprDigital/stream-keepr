@@ -3,22 +3,22 @@ import type {
   ScryfallFormat,
   ScryfallList,
 } from '@scryfall/api-types'
-import type { CardData } from '~~/shared/schemas/card'
+import type { MtgCardData } from '~~/shared/schemas/mtgCard'
 import { useCountdown, useStorage } from '@vueuse/core'
 
-export const useCardStore = defineStore('Card', () => {
-  const storeId = 'card-store'
+export const useMtgCardStore = defineStore('MtgCard', () => {
+  const storeId = 'mtgCard-store'
 
   const socketStore = useSocket()
-  const history = useStorage<CardData[]>('card-history', [])
+  const history = useStorage<MtgCardData[]>('mtgCard-history', [])
 
   const { publish } = socketStore
   const { start, reset, remaining, isActive } = useCountdown(0)
 
   const loading = ref(false)
-  const cardList = ref<CardData[]>([])
-  const cardPrintList = ref<CardData[]>([])
-  const card = ref<CardData | null>(null)
+  const cardList = ref<MtgCardData[]>([])
+  const cardPrintList = ref<MtgCardData[]>([])
+  const card = ref<MtgCardData | null>(null)
   const selectedFormat = ref<MtgSet>('all')
   const selectedTimeoutSeconds = ref(0)
 
@@ -35,12 +35,12 @@ export const useCardStore = defineStore('Card', () => {
   })
 
   function init() {
-    if (!socketStore.isSubscribed('card')) {
-      socketStore.subscribe('card', storeId, handleSync, handleSubscribed)
+    if (!socketStore.isSubscribed('mtgCard')) {
+      socketStore.subscribe('mtgCard', storeId, handleSync, handleSubscribed)
     }
   }
 
-  function handleSync(data: CardData | null) {
+  function handleSync(data: MtgCardData | null) {
     card.value = data
     if (data) {
       searchCardPrints(data.name)
@@ -51,7 +51,7 @@ export const useCardStore = defineStore('Card', () => {
     }
   }
 
-  function handleSubscribed(data: CardData | null) {
+  function handleSubscribed(data: MtgCardData | null) {
     if (data) {
       card.value = data
       searchCardPrints(data.name)
@@ -62,7 +62,7 @@ export const useCardStore = defineStore('Card', () => {
     }
   }
 
-  function updateCountdownFromCardData(cardData: CardData) {
+  function updateCountdownFromCardData(cardData: MtgCardData) {
     if (cardData.displayData.hidden) {
       reset()
     }
@@ -135,14 +135,14 @@ export const useCardStore = defineStore('Card', () => {
     })
   }
 
-  async function setCardImage(cardData: CardData) {
-    publish('card', {
+  async function setCardImage(cardData: MtgCardData) {
+    publish('mtgCard', {
       action: 'set',
       card: cardData,
     })
   }
 
-  async function selectCard(cardData: CardData, isPrinting: boolean = false) {
+  async function selectCard(cardData: MtgCardData, isPrinting: boolean = false) {
     loading.value = true
 
     const newCardData = {
@@ -168,7 +168,7 @@ export const useCardStore = defineStore('Card', () => {
     loading.value = false
   }
 
-  function pushToHistory(cardData: CardData) {
+  function pushToHistory(cardData: MtgCardData) {
     const cardCopy = JSON.parse(JSON.stringify(cardData))
     const existingIndex = history.value.findIndex(card => card.name === cardData.name)
     if (existingIndex !== -1) {
@@ -199,7 +199,7 @@ export const useCardStore = defineStore('Card', () => {
       },
     }
 
-    publish('card', {
+    publish('mtgCard', {
       action: 'set',
       card: parsedCard,
     })
@@ -210,7 +210,7 @@ export const useCardStore = defineStore('Card', () => {
 
   function clearCard() {
     card.value = null
-    publish('card', {
+    publish('mtgCard', {
       action: 'clear',
     })
     reset()
@@ -219,7 +219,7 @@ export const useCardStore = defineStore('Card', () => {
   function hideCard() {
     if (!card.value)
       return
-    publish('card', {
+    publish('mtgCard', {
       action: 'hide',
     })
     reset()
@@ -235,33 +235,33 @@ export const useCardStore = defineStore('Card', () => {
       payload.timeOut = selectedTimeoutSeconds.value
     }
 
-    publish('card', payload)
+    publish('mtgCard', payload)
   }
 
   function rotateCard() {
     card.value!.displayData.rotated = !card.value!.displayData.rotated
-    publish('card', {
+    publish('mtgCard', {
       action: 'rotate',
     })
   }
 
   function counterRotateCard() {
     card.value!.displayData.counterRotated = !card.value!.displayData.counterRotated
-    publish('card', {
+    publish('mtgCard', {
       action: 'counterRotate',
     })
   }
 
   function flipCard() {
     card.value!.displayData.flipped = !card.value!.displayData.flipped
-    publish('card', {
+    publish('mtgCard', {
       action: 'flip',
     })
   }
 
   function turnOverCard() {
     card.value!.displayData.turnedOver = !card.value!.displayData.turnedOver
-    publish('card', {
+    publish('mtgCard', {
       action: 'turnOver',
     })
   }

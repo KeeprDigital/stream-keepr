@@ -1,13 +1,13 @@
 <script lang="ts" setup>
-import type { CardData } from '~~/shared/schemas/card'
+import type { MtgCardData } from '~~/shared/schemas/mtgCard'
 
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-const cardStore = useCardStore()
+const cardStore = useMtgCardStore()
 
-function selectCard(card: CardData) {
+function selectCard(card: MtgCardData) {
   cardStore.selectCard(card)
   emit('close')
 }

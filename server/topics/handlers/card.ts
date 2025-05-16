@@ -1,4 +1,4 @@
-import type { CardApiCall, CardData } from '~~/shared/schemas/card'
+import type { CardApiCall, CardData } from '~~/shared/schemas/mtgCard'
 import type { TopicMap } from '~~/shared/schemas/socket'
 import { publishMessage } from '../../api/socket'
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CardData } from '~~/shared/schemas/card'
+import type { CardData } from '~~/shared/schemas/mtgCard'
 
 type Props = {
   card: CardData

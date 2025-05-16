@@ -1,4 +1,4 @@
-import type { CardData } from '~~/shared/schemas/card'
+import type { CardData } from '~~/shared/schemas/mtgCard'
 
 export default defineEventHandler(async (event) => {
   const local = useStorage('local')

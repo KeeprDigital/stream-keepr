@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { LazyCardHistory } from '#components'
+import { LazyMtgCardHistory } from '#components'
 
-const cardStore = useCardStore()
+const cardStore = useMtgCardStore()
 const searchTerm = ref('')
 const overlay = useOverlay()
-const modal = overlay.create(LazyCardHistory)
+const modal = overlay.create(LazyMtgCardHistory)
 
 const searchInput = useTemplateRef('searchInput')
 
@@ -18,7 +18,7 @@ defineShortcuts({
 })
 
 function openHistory() {
-  modal.open(LazyCardHistory)
+  modal.open(LazyMtgCardHistory)
 }
 
 const search = useDebounceFn(() => {

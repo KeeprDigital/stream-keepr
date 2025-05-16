@@ -6,10 +6,10 @@ import type {
   TopicData,
   TopicMap,
 } from '../schemas/socket'
-import { cardClientActionSchema } from '../schemas/card'
 import { configClientActionSchema } from '../schemas/config'
 import { eventClientActionSchema } from '../schemas/event'
 import { matchClientActionSchema } from '../schemas/matches'
+import { mtgCardClientActionSchema } from '../schemas/mtgCard'
 import { opCardClientActionSchema } from '../schemas/opCard'
 import { MessageTypes, Topics } from '../schemas/socket'
 
@@ -59,8 +59,8 @@ export function isValidActionMessage<K extends Topic>(
   if (topic === 'config') {
     return configClientActionSchema.safeParse(payload.action).success
   }
-  else if (topic === 'card') {
-    return cardClientActionSchema.safeParse(payload.action).success
+  else if (topic === 'mtgCard') {
+    return mtgCardClientActionSchema.safeParse(payload.action).success
   }
   else if (topic === 'matches') {
     return matchClientActionSchema.safeParse(payload.action).success

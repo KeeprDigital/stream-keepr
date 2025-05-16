@@ -8,7 +8,7 @@ useHead({
   },
 })
 
-const cardStore = useCardStore()
+const cardStore = useMtgCardStore()
 const { card } = storeToRefs(cardStore)
 </script>
 

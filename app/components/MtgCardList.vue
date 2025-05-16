@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-const cardStore = useCardStore()
+const cardStore = useMtgCardStore()
 </script>
 
 <template>
