@@ -11,17 +11,12 @@ function selectCard(card: CardData) {
   cardStore.selectCard(card)
   emit('close')
 }
-
-function clearHistory() {
-  cardStore.clearHistory()
-  emit('close')
-}
 </script>
 
 <template>
   <UModal
-    title="History"
-    description="previously selected cards"
+    :title="`${cardStore.card?.name}`"
+    description="other printings of this card"
     :ui="{
       content: 'sm:max-w-screen-xl',
     }"
@@ -29,19 +24,19 @@ function clearHistory() {
     <template #body>
       <div class="card-list">
         <div
-          v-for="(card, index) in cardStore.history"
+          v-for="card, index in cardStore.cardPrintList"
           :key="index"
           class="card-list-item"
         >
           <MtgCardImage
             class="card-list-item-image"
-            :turnoverable="true"
+            :show-turned-over-button="true"
             :card="card"
             :hoverable="true"
             @click="selectCard(card)"
           />
           <div class="card-list-item-title">
-            {{ card.name }}
+            {{ card.set }}
           </div>
         </div>
         <div class="card-list-item" />
@@ -49,11 +44,6 @@ function clearHistory() {
         <div class="card-list-item" />
         <div class="card-list-item" />
       </div>
-    </template>
-    <template #footer>
-      <UButton @click="clearHistory">
-        Clear
-      </UButton>
     </template>
   </UModal>
 </template>

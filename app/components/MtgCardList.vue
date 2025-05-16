@@ -5,14 +5,12 @@ const cardStore = useCardStore()
 <template>
   <div class="card-list-container">
     <div class="card-list">
-      <CardImage
+      <MtgCardImage
         v-for="card in cardStore.cardList"
         :key="card.name"
         class="card-list-item"
-        :turnoverable="true"
         :card="card"
         :hoverable="true"
-        :selectable="true"
         @click="cardStore.selectCard(card)"
       />
     </div>

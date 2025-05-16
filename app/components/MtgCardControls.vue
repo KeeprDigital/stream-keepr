@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { LazyCardPrinting } from '#components'
+import { LazyMtgCardPrinting } from '#components'
 
 const cardStore = useCardStore()
 const {
@@ -20,14 +20,14 @@ const {
 } = storeToRefs(cardStore)
 
 const overlay = useOverlay()
-const modal = overlay.create(LazyCardPrinting)
+const modal = overlay.create(LazyMtgCardPrinting)
 
 defineShortcuts({
   ctrl_s: () => card.value?.displayData.hidden ? showCard() : hideCard(),
 })
 
 function openPrintList() {
-  modal.open(LazyCardPrinting)
+  modal.open(LazyMtgCardPrinting)
 }
 </script>
 
@@ -42,7 +42,7 @@ function openPrintList() {
       </p>
     </div>
     <div class="image-container" :class="{ hide: card.displayData.hidden }">
-      <CardImage
+      <MtgCardImage
         v-model:flipped="card.displayData.flipped"
         v-model:rotated="card.displayData.rotated"
         v-model:turned-over="card.displayData.turnedOver"

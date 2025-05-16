@@ -10,6 +10,7 @@ import { cardClientActionSchema } from '../schemas/card'
 import { configClientActionSchema } from '../schemas/config'
 import { eventClientActionSchema } from '../schemas/event'
 import { matchClientActionSchema } from '../schemas/matches'
+import { opCardClientActionSchema } from '../schemas/opCard'
 import { MessageTypes, Topics } from '../schemas/socket'
 
 /**
@@ -66,6 +67,9 @@ export function isValidActionMessage<K extends Topic>(
   }
   else if (topic === 'event') {
     return eventClientActionSchema.safeParse(payload.action).success
+  }
+  else if (topic === 'opCard') {
+    return opCardClientActionSchema.safeParse(payload.action).success
   }
   return false
 }

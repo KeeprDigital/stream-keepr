@@ -1,22 +1,27 @@
 <script lang="ts" setup>
-import type { CardData } from '~~/shared/schemas/card'
+import type { OpCardData } from '~~/shared/schemas/opCard'
 
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-const cardStore = useCardStore()
+const opCardStore = useOpCardStore()
 
-function selectCard(card: CardData) {
-  cardStore.selectCard(card)
+function selectCard(card: OpCardData) {
+  opCardStore.selectCard(card)
+  emit('close')
+}
+
+function clearHistory() {
+  opCardStore.clearHistory()
   emit('close')
 }
 </script>
 
 <template>
   <UModal
-    :title="`${cardStore.card?.name}`"
-    description="other printings of this card"
+    title="History"
+    description="previously selected cards"
     :ui="{
       content: 'sm:max-w-screen-xl',
     }"
@@ -24,19 +29,18 @@ function selectCard(card: CardData) {
     <template #body>
       <div class="card-list">
         <div
-          v-for="card, index in cardStore.cardPrintList"
+          v-for="(card, index) in opCardStore.history"
           :key="index"
           class="card-list-item"
         >
-          <CardImage
+          <OpCardImage
             class="card-list-item-image"
-            :show-turned-over-button="true"
             :card="card"
             :hoverable="true"
             @click="selectCard(card)"
           />
           <div class="card-list-item-title">
-            {{ card.set }}
+            {{ card.name }}
           </div>
         </div>
         <div class="card-list-item" />
@@ -44,6 +48,11 @@ function selectCard(card: CardData) {
         <div class="card-list-item" />
         <div class="card-list-item" />
       </div>
+    </template>
+    <template #footer>
+      <UButton @click="clearHistory">
+        Clear
+      </UButton>
     </template>
   </UModal>
 </template>

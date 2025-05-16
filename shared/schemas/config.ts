@@ -1,6 +1,10 @@
 import { z } from 'zod'
 
+export const gameSchema = z.enum(['mtg', 'op'])
+export type Game = z.infer<typeof gameSchema>
+
 export const configDataSchema = z.object({
+  game: gameSchema,
   name: z.string(),
   description: z.string(),
   days: z.number(),

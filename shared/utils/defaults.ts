@@ -17,6 +17,7 @@ export const defaultConfigData: ConfigData = {
   swissRounds: 1,
   cutRounds: 0,
   playerCount: 0,
+  game: 'mtg',
 }
 
 export function defaultPlayerData(): PlayerData {

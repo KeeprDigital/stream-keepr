@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { ConfigData } from '~~/shared/schemas/config'
+import { gameOptions } from '~~/shared/utils/games'
 
 const props = defineProps<{
   loading: boolean
@@ -17,6 +18,15 @@ const state = defineModel<ConfigData>({
 <template>
   <UForm :state="state">
     <UPageCard variant="subtle">
+      <UFormField
+        name="game"
+        label="Game"
+        description="The game of the event."
+        class="flex max-sm:flex-col justify-between items-start gap-4"
+      >
+        <USelect v-model="state.game" :items="gameOptions" class="w-64" />
+      </UFormField>
+      <USeparator />
       <UFormField
         name="name"
         label="Event Name"

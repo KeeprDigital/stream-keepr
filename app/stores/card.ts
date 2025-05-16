@@ -104,7 +104,7 @@ export const useCardStore = defineStore('Card', () => {
         cardList.value = []
         return
       }
-      cardList.value = data.data.map(card => parseCard(card))
+      cardList.value = data.data.map(card => parseMtgCard(card))
     }).catch(() => {
       cardList.value = []
       loading.value = false
@@ -126,7 +126,7 @@ export const useCardStore = defineStore('Card', () => {
         order: 'released',
       },
     }).then((data) => {
-      cardPrintList.value = data.data.map(card => parseCard(card))
+      cardPrintList.value = data.data.map(card => parseMtgCard(card))
     }).catch(() => {
       cardPrintList.value = []
       loading.value = false
@@ -186,7 +186,7 @@ export const useCardStore = defineStore('Card', () => {
         unique: 'prints',
       },
     })
-    const parsedCard = parseCard(data)
+    const parsedCard = parseMtgCard(data)
 
     card.value = {
       ...parsedCard,

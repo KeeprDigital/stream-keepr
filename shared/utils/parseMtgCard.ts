@@ -1,7 +1,7 @@
 import type { ScryfallCard } from '@scryfall/api-types'
 import type { CardData } from '../schemas/card'
 
-export function parseCard(card: ScryfallCard.Any): CardData {
+export function parseMtgCard(card: ScryfallCard.Any): CardData {
   const cardData: CardData = {
     name: card.name,
     set: card.set_name,

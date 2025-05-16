@@ -3,6 +3,7 @@ import { cardApiCallHandler, cardMessageHandler, cardSubscribeHandler } from './
 import { configApiCallHandler, configHandler, configSubscribeHandler } from './handlers/config'
 import { eventApiCallHandler, eventHandler, eventSubscribeHandler } from './handlers/event'
 import { matchApiCallHandler, matchHandler, matchSubscribeHandler } from './handlers/matches'
+import { opCardApiCallHandler, opCardMessageHandler, opCardSubscribeHandler } from './handlers/opCard'
 
 export type TopicRegistry = {
   [K in Topic]: {
@@ -25,6 +26,12 @@ export const topicRegistry: TopicRegistry = {
     onAction: cardMessageHandler,
     onSubscribe: cardSubscribeHandler,
     onApiCall: cardApiCallHandler,
+  },
+  opCard: {
+    description: 'OpCard updates',
+    onAction: opCardMessageHandler,
+    onSubscribe: opCardSubscribeHandler,
+    onApiCall: opCardApiCallHandler,
   },
   matches: {
     description: 'Match updates',
