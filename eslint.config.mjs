@@ -14,4 +14,10 @@ export default withNuxt(
       'vue/no-multiple-template-root': 'off',
     },
   }),
+  {
+    files: ['server/**/*.ts'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
 )

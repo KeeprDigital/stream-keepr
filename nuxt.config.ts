@@ -2,11 +2,12 @@ export default defineNuxtConfig({
   ssr: false,
   modules: [
     '@nuxt/eslint',
+    '@nuxt/image',
+    '@nuxt/test-utils/module',
     '@nuxt/ui-pro',
     '@pinia/nuxt',
-    '@vueuse/nuxt',
     '@pinia/nuxt',
-    '@nuxt/image',
+    '@vueuse/nuxt',
   ],
   eslint: {
     config: {
