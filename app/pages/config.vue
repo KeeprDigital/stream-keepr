@@ -15,8 +15,8 @@ const config = useConfigStore()
     <template #body>
       <div class="w-full lg:max-w-2xl mx-auto">
         <EventConfig
-          :model-value="config.state"
-          :loading="config.loading"
+          v-model="config.state"
+          :loading="!config.loaded"
           @save="config.save"
         />
       </div>

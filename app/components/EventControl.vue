@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { EventData } from '~~/shared/schemas/event'
-import { defaultEventData } from '~~/shared/utils/defaults'
 
 const props = defineProps<{
   loading: boolean
@@ -10,13 +9,11 @@ const emit = defineEmits<{
   (e: 'save'): void
 }>()
 
-const state = defineModel<EventData>({
-  default: defaultEventData,
-})
+const state = defineModel<EventData>()
 </script>
 
 <template>
-  <UForm :state="state">
+  <UForm v-if="state" :state="state">
     <UPageCard variant="subtle">
       <UFormField label="Current Round" name="currentRound">
         <UInput v-model="state.currentRound" class="w-full" />
@@ -30,7 +27,7 @@ const state = defineModel<EventData>({
         </UFormField>
       </div>
       <UFormField label="Holding Text" name="holdingText">
-        <UTextarea v-model="state.holdingText" class="w-full" />
+        <UInput v-model="state.holdingText" class="w-full" />
       </UFormField>
       <UButton
         form="config"

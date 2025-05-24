@@ -1,65 +1,54 @@
 import type { ConfigData } from '~~/shared/schemas/config'
 
 export const useConfigStore = defineStore('Config', () => {
-  const storeId = 'config-store'
-  const socketStore = useSocket()
   const toast = useToast()
-
-  const loading = ref(false)
-
+  const loaded = ref(false)
   const state = ref<ConfigData>(defaultConfigData)
+  const initialState = ref<ConfigData>()
 
-  const { cloned, sync } = useCloned(state, { manual: true })
+  const { socket } = useWS({
+    topic: 'config',
+    actions: {
+      connected: (data) => {
+        loaded.value = true
+        state.value = data
+        initialState.value = data
+      },
+      sync: (data) => {
+        state.value = data
+        initialState.value = data
+      },
+    },
+  })
 
-  function init() {
-    if (!socketStore.isSubscribed('config')) {
-      socketStore.subscribe('config', storeId, handleConfig, handleSubscribed)
-    }
-  }
+  const isDirty = computed(() => {
+    return JSON.stringify(state.value) !== JSON.stringify(initialState.value)
+  })
 
-  function handleConfig(data: ConfigData | null) {
-    if (data) {
-      state.value = data
-    }
-    loading.value = false
-    sync()
-  }
+  function save() {
+    if (state.value) {
+      loaded.value = false
+      socket.emit('set', state.value)
+      initialState.value = { ...state.value }
 
-  function handleSubscribed(data: ConfigData | null) {
-    if (data) {
-      state.value = data
-      loading.value = false
-      sync()
+      toast.add({
+        title: 'Event Settings Updated',
+        icon: 'i-heroicons-check-circle',
+        color: 'success',
+      })
     }
   }
 
   function reset() {
-    state.value = cloned.value
-    sync()
+    if (initialState.value) {
+      state.value = { ...initialState.value }
+    }
   }
-
-  async function save() {
-    loading.value = true
-    sync()
-    socketStore.publish('config', {
-      action: 'set',
-      config: state.value,
-    })
-    toast.add({
-      title: 'Event Settings Updated',
-    })
-    loading.value = false
-  }
-
-  onUnmounted(() => {
-    socketStore.unsubscribe('config', storeId)
-  })
-
-  init()
 
   return {
-    loading,
+    loaded,
     state,
+    isDirty,
     save,
     reset,
   }

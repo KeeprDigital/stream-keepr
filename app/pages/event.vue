@@ -16,7 +16,7 @@ const eventStore = useEventStore()
       <div class="w-full lg:max-w-2xl mx-auto">
         <EventControl
           v-model="eventStore.state"
-          :loading="eventStore.loading"
+          :loading="!eventStore.loaded"
           @save="eventStore.save"
         />
       </div>

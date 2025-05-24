@@ -10,13 +10,11 @@ const emit = defineEmits<{
   (e: 'save'): void
 }>()
 
-const state = defineModel<ConfigData>({
-  default: defaultConfigData,
-})
+const state = defineModel<ConfigData>()
 </script>
 
 <template>
-  <UForm :state="state">
+  <UForm v-if="state" :state="state">
     <UPageCard variant="subtle">
       <UFormField
         name="game"

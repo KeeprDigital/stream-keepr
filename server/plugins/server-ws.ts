@@ -33,7 +33,7 @@ export default defineNitroPlugin((nitroApp) => {
 
     socket.on('set', (event) => {
       setStore('event', event)
-      eventNamespace.emit('sync', event)
+      eventNamespace.except(socket.id).emit('sync', event)
     })
   })
 
@@ -53,7 +53,12 @@ export default defineNitroPlugin((nitroApp) => {
     socket.emit('connected', null)
   })
 
-  configNamespace.on('connection', (socket) => {
-    socket.emit('connected', null)
+  configNamespace.on('connection', async (socket) => {
+    socket.emit('connected', await getStore('config') ?? defaultConfigData)
+
+    socket.on('set', (config) => {
+      setStore('config', config)
+      configNamespace.except(socket.id).emit('sync', config)
+    })
   })
 })

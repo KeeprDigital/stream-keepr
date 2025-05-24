@@ -82,6 +82,7 @@ export type MatchClientEvents<T extends Topic = 'matches'> = {
 // Config namespace
 export type ConfigServerEvents<T extends Topic = 'config'> = {
   connected: (config: TopicData<T> | null) => void
+  sync: (config: TopicData<T>) => void
 }
 export type ConfigClientEvents<T extends Topic = 'config'> = {
   set: (config: TopicData<T>) => void
