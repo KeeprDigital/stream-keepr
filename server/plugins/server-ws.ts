@@ -1,0 +1,59 @@
+import { Server as Engine } from 'engine.io'
+import { defineEventHandler } from 'h3'
+import { Server } from 'socket.io'
+
+export default defineNitroPlugin((nitroApp) => {
+  const engine = new Engine()
+
+  nitroApp.router.use('/socket.io/', defineEventHandler({
+    handler(event) {
+      // @ts-expect-error incorrect type from nitro
+      engine.handleRequest(event.node.req, event.node.res)
+      event._handled = true
+    },
+    websocket: {
+      open(peer) {
+        // @ts-expect-error private method and property
+        engine.prepare(peer._internal.nodeReq)
+        // @ts-expect-error private method and property
+        engine.onWebSocket(peer._internal.nodeReq, peer._internal.nodeReq.socket, peer.websocket)
+      },
+    },
+  }))
+
+  const socket = new Server<ClientEvents, ServerEvents, InterServerEvents, SocketData>().bind(engine)
+  const opCardNamespace: NameSpaceServer<'opCard'> = socket.of('/opCard')
+  const mtgCardNamespace: NameSpaceServer<'mtgCard'> = socket.of('/mtgCard')
+  const eventNamespace: NameSpaceServer<'event'> = socket.of('/event')
+  const matchesNamespace: NameSpaceServer<'matches'> = socket.of('/matches')
+  const configNamespace: NameSpaceServer<'config'> = socket.of('/config')
+
+  eventNamespace.on('connection', async (socket) => {
+    socket.emit('connected', await getStore('event') ?? defaultEventData)
+
+    socket.on('set', (event) => {
+      setStore('event', event)
+      eventNamespace.emit('sync', event)
+    })
+  })
+
+  opCardNamespace.on('connection', (socket) => {
+    socket.emit('connected', null)
+  })
+
+  mtgCardNamespace.on('connection', (socket) => {
+    socket.emit('connected', null)
+
+    socket.on('clear', () => {
+      console.log('clear')
+    })
+  })
+
+  matchesNamespace.on('connection', (socket) => {
+    socket.emit('connected', null)
+  })
+
+  configNamespace.on('connection', (socket) => {
+    socket.emit('connected', null)
+  })
+})
