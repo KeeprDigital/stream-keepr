@@ -1,9 +1,7 @@
-import type { ConfigData } from '~~/shared/schemas/config'
-
 export const useConfigStore = defineStore('Config', () => {
   const toast = useToast()
   const loaded = ref(false)
-  const state = ref<ConfigData>(defaultConfigData)
+  const state = ref<ConfigData>()
   const initialState = ref<ConfigData>()
 
   const { socket } = useWS({

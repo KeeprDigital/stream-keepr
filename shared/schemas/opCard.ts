@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from 'zod/v4'
 
 export const opCardDisplayDataSchema = z.object({
   hidden: z.boolean(),
@@ -25,32 +25,4 @@ export const opCardSchema = z.object({
   attribute_name: z.string(),
   displayData: opCardDisplayDataSchema.default({ hidden: true }),
 })
-
 export type OpCardData = z.infer<typeof opCardSchema>
-
-export const opCardClientActionSchema = z.enum([
-  'set',
-  'clear',
-  'hide',
-  'show',
-])
-export type OpCardClientAction = z.infer<typeof opCardClientActionSchema>
-
-export const opCardActionMessageSchema = z.discriminatedUnion('action', [
-  z.object({
-    action: z.literal('set'),
-    card: z.custom<OpCardData>(),
-  }),
-  z.object({ action: z.literal('clear') }),
-  z.object({ action: z.literal('hide') }),
-  z.object({ action: z.literal('show'), timeOut: z.number().optional() }),
-])
-export type OpCardActionMessage = z.infer<typeof opCardActionMessageSchema>
-
-export const opCardApiCallSchema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('set'), card: z.custom<OpCardData>() }),
-  z.object({ action: z.literal('clear') }),
-  z.object({ action: z.literal('hide') }),
-  z.object({ action: z.literal('show'), timeOut: z.number().optional() }),
-])
-export type OpCardApiCall = z.infer<typeof opCardApiCallSchema>

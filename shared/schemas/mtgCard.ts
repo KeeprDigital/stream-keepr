@@ -1,5 +1,5 @@
 import type { ScryfallCardFields, ScryfallImageUris } from '@scryfall/api-types'
-import { z } from 'zod'
+import { z } from 'zod/v4'
 
 export const mtgCardDisplayDataSchema = z.object({
   hidden: z.boolean(),
@@ -45,42 +45,3 @@ export const mtgCardDataSchema = z.object({
   displayData: mtgCardDisplayDataSchema,
 })
 export type MtgCardData = z.infer<typeof mtgCardDataSchema>
-
-export const mtgCardClientActionSchema = z.enum([
-  'set',
-  'clear',
-  'hide',
-  'show',
-  'rotate',
-  'counterRotate',
-  'flip',
-  'turnOver',
-])
-export type MtgCardClientAction = z.infer<typeof mtgCardClientActionSchema>
-
-export const mtgCardActionMessageSchema = z.discriminatedUnion('action', [
-  z.object({
-    action: z.literal('set'),
-    card: z.custom<MtgCardData>(),
-  }),
-  z.object({ action: z.literal('clear') }),
-  z.object({ action: z.literal('hide') }),
-  z.object({ action: z.literal('show'), timeOut: z.number().optional() }),
-  z.object({ action: z.literal('rotate') }),
-  z.object({ action: z.literal('counterRotate') }),
-  z.object({ action: z.literal('flip') }),
-  z.object({ action: z.literal('turnOver') }),
-])
-export type MtgCardActionMessage = z.infer<typeof mtgCardActionMessageSchema>
-
-export const mtgCardApiCallSchema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('set'), card: z.custom<MtgCardData>() }),
-  z.object({ action: z.literal('clear') }),
-  z.object({ action: z.literal('hide') }),
-  z.object({ action: z.literal('show'), timeOut: z.number().optional() }),
-  z.object({ action: z.literal('rotate') }),
-  z.object({ action: z.literal('counterRotate') }),
-  z.object({ action: z.literal('flip') }),
-  z.object({ action: z.literal('turnOver') }),
-])
-export type MtgCardApiCall = z.infer<typeof mtgCardApiCallSchema>
