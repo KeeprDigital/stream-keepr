@@ -11,4 +11,3 @@ export const playerDataSchema = z.object({
     draws: z.number(),
   }),
 })
-export type PlayerData = z.infer<typeof playerDataSchema>

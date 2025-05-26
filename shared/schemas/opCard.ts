@@ -5,7 +5,6 @@ export const opCardDisplayDataSchema = z.object({
   timeoutStartTimestamp: z.number().optional(),
   timeoutDuration: z.number().optional(),
 })
-export type OpCardDisplayData = z.infer<typeof opCardDisplayDataSchema>
 
 export const opCardSchema = z.object({
   id: z.string(),
@@ -25,4 +24,3 @@ export const opCardSchema = z.object({
   attribute_name: z.string(),
   displayData: opCardDisplayDataSchema.default({ hidden: true }),
 })
-export type OpCardData = z.infer<typeof opCardSchema>

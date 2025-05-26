@@ -1,4 +1,4 @@
-import type { MatchDataList } from '~~/shared/schemas/matches'
+import type { MatchDataList } from '~~/shared/schemas/match'
 
 export default defineEventHandler(async () => {
   const local = useStorage('local')

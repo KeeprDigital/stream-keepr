@@ -9,6 +9,3 @@ export const matchDataSchema = z.object({
   playerTwo: playerDataSchema,
 })
 export type MatchData = z.infer<typeof matchDataSchema>
-
-export const matchDataListSchema = z.array(matchDataSchema)
-export type MatchDataList = z.infer<typeof matchDataListSchema>

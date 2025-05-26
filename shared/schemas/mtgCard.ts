@@ -10,13 +10,11 @@ export const mtgCardDisplayDataSchema = z.object({
   timeoutStartTimestamp: z.number().optional(),
   timeoutDuration: z.number().optional(),
 })
-export type MtgCardDisplayData = z.infer<typeof mtgCardDisplayDataSchema>
 
 export const mtgCardImageDataSchema = z.object({
   front: z.custom<ScryfallImageUris>().nullable(),
   back: z.custom<ScryfallImageUris>().nullable(),
 })
-export type MtgCardImageData = z.infer<typeof mtgCardImageDataSchema>
 
 export const mtgCardOrientationDataSchema = z.object({
   flipable: z.boolean(),
@@ -25,14 +23,12 @@ export const mtgCardOrientationDataSchema = z.object({
   counterRotateable: z.boolean(),
   defaultRotated: z.boolean(),
 })
-export type MtgCardOrientationData = z.infer<typeof mtgCardOrientationDataSchema>
 
 export const mtgCardMeldDataSchema = z.object({
   meldPartOne: z.string().nullable(),
   meldPartTwo: z.string().nullable(),
   meldResult: z.string().nullable(),
 })
-export type MtgCardMeldData = z.infer<typeof mtgCardMeldDataSchema>
 
 export const mtgCardDataSchema = z.object({
   name: z.string(),
@@ -44,4 +40,3 @@ export const mtgCardDataSchema = z.object({
   points: z.number(),
   displayData: mtgCardDisplayDataSchema,
 })
-export type MtgCardData = z.infer<typeof mtgCardDataSchema>

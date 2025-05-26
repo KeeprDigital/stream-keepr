@@ -38,19 +38,54 @@ export default defineNitroPlugin((nitroApp) => {
   })
 
   opCardNamespace.on('connection', (socket) => {
-    socket.emit('connected', null)
+    socket.emit('connected', null as any)
   })
 
   mtgCardNamespace.on('connection', (socket) => {
-    socket.emit('connected', null)
+    socket.emit('connected', null as any)
 
     socket.on('clear', () => {
       console.log('clear')
     })
   })
 
-  matchesNamespace.on('connection', (socket) => {
-    socket.emit('connected', null)
+  matchesNamespace.on('connection', async (socket) => {
+    socket.emit('connected', await getStore('matches') ?? [])
+
+    socket.on('add', async (callback) => {
+      const matches = await getStore('matches') ?? []
+      const newMatch = {
+        ...defaultMatchData,
+        id: crypto.randomUUID(),
+      }
+      matches.push(newMatch)
+      setStore('matches', matches)
+      callback(newMatch)
+      matchesNamespace.except(socket.id).emit('sync', matches)
+    })
+
+    socket.on('remove', async (id, callback) => {
+      const matches = await getStore('matches')
+      if (matches) {
+        matches.splice(matches.findIndex(match => match.id === id), 1)
+        setStore('matches', matches)
+        callback(id)
+        matchesNamespace.except(socket.id).emit('sync', matches)
+      }
+    })
+
+    socket.on('set', async (match, callback) => {
+      const matches = await getStore('matches')
+      if (matches) {
+        const index = matches.findIndex(m => m.id === match.id)
+        if (index !== -1) {
+          matches[index] = match
+          setStore('matches', matches)
+          matchesNamespace.except(socket.id).emit('sync', matches)
+        }
+      }
+      callback(match)
+    })
   })
 
   configNamespace.on('connection', async (socket) => {

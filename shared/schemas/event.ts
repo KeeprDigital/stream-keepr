@@ -6,4 +6,3 @@ export const eventDataSchema = z.object({
   rightTalent: z.string(),
   holdingText: z.string(),
 })
-export type EventData = z.infer<typeof eventDataSchema>
