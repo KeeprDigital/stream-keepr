@@ -27,8 +27,11 @@ const matchStore = useMatchStore()
         <div class="flex flex-col gap-4 mb-4">
           <MatchControl
             v-for="match in matchStore.state"
-            :id="match.id"
             :key="match.id"
+            :match="match"
+            @update="matchStore.updateMatch"
+            @save="matchStore.saveMatch"
+            @remove="matchStore.removeMatch"
           />
         </div>
       </div>
