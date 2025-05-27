@@ -1,5 +1,3 @@
-import type { EventData } from '~~/shared/schemas/event'
-
 export const useEventStore = defineStore('Event', () => {
   const toast = useToast()
   const loaded = ref(false)
@@ -8,7 +6,7 @@ export const useEventStore = defineStore('Event', () => {
 
   const { socket } = useWS({
     topic: 'event',
-    actions: {
+    serverEvents: {
       connected: (data) => {
         loaded.value = true
         state.value = data

@@ -6,7 +6,7 @@ export const useConfigStore = defineStore('Config', () => {
 
   const { socket } = useWS({
     topic: 'config',
-    actions: {
+    serverEvents: {
       connected: (data) => {
         loaded.value = true
         state.value = data
