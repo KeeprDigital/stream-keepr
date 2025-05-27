@@ -27,6 +27,10 @@ export type ClientEvents = {}
 export type InterServerEvents = {}
 export type SocketData = {}
 
+export type NamespaceHandler<T extends Topic> = (
+  namespace: NameSpaceServer<T>
+) => void
+
 // Server
 type ServerEventsMap = {
   opCard: OpCardServerEvents
