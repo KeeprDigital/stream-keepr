@@ -1,20 +1,6 @@
 /* eslint-disable ts/no-empty-object-type */
 import type { Namespace } from 'socket.io'
 import type { Socket } from 'socket.io-client'
-import type { z } from 'zod/v4'
-import type { configDataSchema } from '../schemas/config'
-import type { eventDataSchema } from '../schemas/event'
-import type { matchDataSchema } from '../schemas/match'
-import type { mtgCardDataSchema } from '../schemas/mtgCard'
-import type { opCardSchema } from '../schemas/opCard'
-import type { playerDataSchema } from '../schemas/player'
-
-export type PlayerData = z.infer<typeof playerDataSchema>
-export type OpCardData = z.infer<typeof opCardSchema>
-export type MtgCardData = z.infer<typeof mtgCardDataSchema>
-export type MatchData = z.infer<typeof matchDataSchema>
-export type EventData = z.infer<typeof eventDataSchema>
-export type ConfigData = z.infer<typeof configDataSchema>
 
 export const TopicNames = [
   'config',
@@ -56,6 +42,10 @@ type NameSpaceServerMap<T extends Topic> = {
 }
 export type NameSpaceServer<T extends Topic> = NameSpaceServerMap<T>[T]
 
+export type TopicServerEvents<TTopic extends Topic> = {
+  [Event in NameSpaceServerEventName<TTopic>]: NameSpaceServerEvents<TTopic>[Event]
+}
+
 // Client
 type ClientEventsMap = {
   opCard: OpCardClientEvents
@@ -64,11 +54,14 @@ type ClientEventsMap = {
   matches: MatchClientEvents
   config: ConfigClientEvents
 }
-export type NameSpaceClientEvents<T extends Topic> = ClientEventsMap[T]
+export type NameSpaceClientEvents<T extends Topic> = AddAckToActions<ClientEventsMap[T]>
+export type NameSpaceClientEventName<T extends Topic> = keyof NameSpaceClientEvents<T>
 
 type NameSpaceClientMap<T extends Topic> = {
   [K in Topic]: Socket<NameSpaceServerEvents<T>, NameSpaceClientEvents<T>>
 }
 export type NameSpaceClient<T extends Topic> = NameSpaceClientMap<T>[T]
 
-export type TopicActions<TTopic extends Topic> = { [Event in NameSpaceServerEventName<TTopic>]: NameSpaceServerEvents<TTopic>[Event] }
+export type TopicClientEvents<TTopic extends Topic> = {
+  [Event in NameSpaceClientEventName<TTopic>]: NameSpaceClientEvents<TTopic>[Event]
+}
