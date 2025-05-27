@@ -1,4 +1,5 @@
 export const useEventStore = defineStore('Event', () => {
+  const toast = useToast()
   const formData = ref<EventData>()
   const state = shallowRef<EventData>()
 
@@ -27,7 +28,16 @@ export const useEventStore = defineStore('Event', () => {
       optimisticEmit({
         initialState: state.value,
         action: () => state.value = formData.value,
-        onSuccess: () => {},
+        onSuccess: () => {
+          toast.add({
+            title: 'Event saved',
+          })
+        },
+        onError: () => {
+          toast.add({
+            title: 'Error saving event',
+          })
+        },
         rollback: initialState => state.value = initialState,
       }, 'set', formData.value)
     }
