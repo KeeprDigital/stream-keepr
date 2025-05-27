@@ -1,4 +1,5 @@
 /* eslint-disable ts/no-empty-object-type */
+import type { EventNames } from '@socket.io/component-emitter'
 import type { Namespace } from 'socket.io'
 import type { Socket } from 'socket.io-client'
 
@@ -35,7 +36,7 @@ type ServerEventsMap = {
   config: ConfigServerEvents
 }
 export type NameSpaceServerEvents<T extends Topic> = ServerEventsMap[T]
-export type NameSpaceServerEventName<T extends Topic> = keyof NameSpaceServerEvents<T>
+export type NameSpaceServerEventName<T extends Topic> = EventNames<NameSpaceServerEvents<T>>
 
 type NameSpaceServerMap<T extends Topic> = {
   [K in Topic]: Namespace<NameSpaceClientEvents<T>, NameSpaceServerEvents<T>, {}, {}>
@@ -55,7 +56,7 @@ type ClientEventsMap = {
   config: ConfigClientEvents
 }
 export type NameSpaceClientEvents<T extends Topic> = AddAckToActions<ClientEventsMap[T]>
-export type NameSpaceClientEventName<T extends Topic> = keyof NameSpaceClientEvents<T>
+export type NameSpaceClientEventName<T extends Topic> = EventNames<NameSpaceClientEvents<T>>
 
 type NameSpaceClientMap<T extends Topic> = {
   [K in Topic]: Socket<NameSpaceServerEvents<T>, NameSpaceClientEvents<T>>

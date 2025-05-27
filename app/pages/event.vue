@@ -13,11 +13,12 @@ const eventStore = useEventStore()
     </template>
 
     <template #body>
-      <div class="w-full lg:max-w-2xl mx-auto">
+      <div class="w-full xl:max-w-2xl mx-auto">
         <EventControl
-          v-model="eventStore.state"
-          :loading="!eventStore.loaded"
+          v-model="eventStore.formData"
+          :dirty="eventStore.isDirty"
           @save="eventStore.save"
+          @reset="eventStore.reset"
         />
       </div>
     </template>

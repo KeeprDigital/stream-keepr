@@ -1,44 +1,57 @@
 <script setup lang="ts">
-import type { EventData } from '~~/shared/schemas/event'
+type Props = {
+  dirty: boolean
+}
 
-const props = defineProps<{
-  loading: boolean
-}>()
-
-const emit = defineEmits<{
+type Emits = {
   (e: 'save'): void
-}>()
+  (e: 'reset'): void
+}
 
+const props = defineProps<Props>()
+const emit = defineEmits<Emits>()
 const state = defineModel<EventData>()
 </script>
 
 <template>
-  <UForm v-if="state" :state="state">
-    <UPageCard variant="subtle">
+  <UCard variant="subtle">
+    <UForm
+      v-if="state"
+      :state="state"
+      class="w-full flex flex-col gap-4"
+      @submit="emit('save')"
+    >
       <UFormField label="Current Round" name="currentRound">
         <UInput v-model="state.currentRound" class="w-full" />
       </UFormField>
       <div class="flex gap-4">
-        <UFormField class="w-full" label="Left Tallent" name="leftTalent">
+        <UFormField class="w-full" label="Left Talent" name="leftTalent">
           <UInput v-model="state.leftTalent" class="w-full" />
         </UFormField>
-        <UFormField class="w-full" label="Right Tallent" name="rightTalent">
+        <UFormField class="w-full" label="Right Talent" name="rightTalent">
           <UInput v-model="state.rightTalent" class="w-full" />
         </UFormField>
       </div>
       <UFormField label="Holding Text" name="holdingText">
         <UInput v-model="state.holdingText" class="w-full" />
       </UFormField>
-      <UButton
-        form="config"
-        label="Save"
-        color="primary"
-        variant="outline"
-        type="submit"
-        class="w-fit lg:ms-auto"
-        :disabled="props.loading"
-        @click="emit('save')"
-      />
-    </UPageCard>
-  </UForm>
+      <div class="flex justify-between items-center gap-4 mt-4">
+        <UButton
+          label="Reset"
+          color="error"
+          variant="outline"
+          type="button"
+          :disabled="!props.dirty"
+          @click="emit('reset')"
+        />
+        <UButton
+          label="Save"
+          color="primary"
+          variant="outline"
+          type="submit"
+          :disabled="!props.dirty"
+        />
+      </div>
+    </UForm>
+  </UCard>
 </template>

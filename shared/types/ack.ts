@@ -1,6 +1,6 @@
 export type BaseAckResponse = {
   success: boolean
-  timestamp?: string
+  timestamp?: number
 }
 
 export type SuccessAckResponse = {
@@ -19,6 +19,6 @@ export type AckCallback = (response: AckResponse) => void
 
 export type AddAckToActions<T> = {
   [K in keyof T]: T[K] extends (...args: infer A) => infer R
-  ? (...args: [...A, ack?: AckCallback]) => R
+    ? (...args: [...A, ack: AckCallback]) => R
     : T[K]
 }

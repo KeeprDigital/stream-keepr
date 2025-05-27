@@ -1,52 +1,44 @@
 export const useEventStore = defineStore('Event', () => {
-  const toast = useToast()
-  const loaded = ref(false)
-  const state = ref<EventData>()
-  const initialState = ref<EventData>()
+  const formData = ref<EventData>()
+  const state = shallowRef<EventData>()
 
-  const { socket } = useWS({
+  const { optimisticEmit } = useWS({
     topic: 'event',
     serverEvents: {
       connected: (data) => {
-        loaded.value = true
         state.value = data
-        initialState.value = data
       },
       sync: (data) => {
         state.value = data
-        initialState.value = data
       },
     },
   })
 
+  watch(state, (newVal) => {
+    formData.value = structuredClone(toRaw(newVal))
+  })
+
   const isDirty = computed(() => {
-    return JSON.stringify(state.value) !== JSON.stringify(initialState.value)
+    return JSON.stringify(state.value) !== JSON.stringify(formData.value)
   })
 
   function save() {
-    if (state.value) {
-      loaded.value = false
-      socket.emit('set', state.value)
-      initialState.value = { ...state.value }
-
-      toast.add({
-        title: 'Event updated',
-        icon: 'i-heroicons-check-circle',
-        color: 'success',
-      })
-      loaded.value = true
+    if (formData.value) {
+      optimisticEmit({
+        initialState: state.value,
+        action: () => state.value = formData.value,
+        onSuccess: () => {},
+        rollback: initialState => state.value = initialState,
+      }, 'set', formData.value)
     }
   }
 
   function reset() {
-    if (initialState.value) {
-      state.value = { ...initialState.value }
-    }
+    formData.value = structuredClone(state.value)
   }
 
   return {
-    state,
-    loaded,
+    formData,
     isDirty,
     save,
     reset,
