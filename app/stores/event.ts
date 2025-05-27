@@ -6,12 +6,8 @@ export const useEventStore = defineStore('Event', () => {
   const { optimisticEmit } = useWS({
     topic: 'event',
     serverEvents: {
-      connected: (data) => {
-        state.value = data
-      },
-      sync: (data) => {
-        state.value = data
-      },
+      connected: data => state.value = data,
+      sync: data => state.value = data,
     },
   })
 
@@ -31,11 +27,15 @@ export const useEventStore = defineStore('Event', () => {
         onSuccess: () => {
           toast.add({
             title: 'Event saved',
+            icon: 'i-heroicons-check-circle',
+            color: 'success',
           })
         },
         onError: () => {
           toast.add({
             title: 'Error saving event',
+            icon: 'i-heroicons-exclamation-triangle',
+            color: 'error',
           })
         },
         rollback: initialState => state.value = initialState,

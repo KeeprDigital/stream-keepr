@@ -15,9 +15,10 @@ const config = useConfigStore()
     <template #body>
       <div class="w-full lg:max-w-2xl mx-auto">
         <EventConfig
-          v-model="config.state"
-          :loading="!config.loaded"
+          v-model="config.formData"
+          :dirty="config.isDirty"
           @save="config.save"
+          @reset="config.reset"
         />
       </div>
     </template>

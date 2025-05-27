@@ -1,21 +1,25 @@
 <script lang="ts" setup>
-import type { ConfigData } from '~~/shared/schemas/config'
 import { gameOptions } from '~~/shared/utils/games'
 
-const props = defineProps<{
-  loading: boolean
-}>()
-
-const emit = defineEmits<{
+type Emits = {
   (e: 'save'): void
-}>()
+  (e: 'reset'): void
+}
+
+type Props = {
+  dirty: boolean
+}
+
+const props = defineProps<Props>()
+
+const emit = defineEmits<Emits>()
 
 const state = defineModel<ConfigData>()
 </script>
 
 <template>
-  <UForm v-if="state" :state="state">
-    <UPageCard variant="subtle">
+  <UCard variant="subtle">
+    <UForm v-if="state" :state="state" class="w-full flex flex-col gap-4" @submit="emit('save')">
       <UFormField
         name="game"
         label="Game"
@@ -79,16 +83,23 @@ const state = defineModel<ConfigData>()
         <UInputNumber v-model="state.playerCount" :min="0" class="w-64" />
       </UFormField>
       <USeparator />
-      <UButton
-        form="config"
-        label="Save"
-        color="primary"
-        variant="outline"
-        type="submit"
-        class="w-fit lg:ms-auto"
-        :disabled="props.loading"
-        @click="emit('save')"
-      />
-    </UPageCard>
-  </UForm>
+      <div class="flex justify-between items-center gap-4">
+        <UButton
+          label="Reset"
+          color="error"
+          variant="outline"
+          type="button"
+          :disabled="!props.dirty"
+          @click="emit('reset')"
+        />
+        <UButton
+          label="Save"
+          color="primary"
+          variant="outline"
+          type="submit"
+          :disabled="!props.dirty"
+        />
+      </div>
+    </UForm>
+  </UCard>
 </template>

@@ -1,51 +1,54 @@
 export const useConfigStore = defineStore('Config', () => {
   const toast = useToast()
-  const loaded = ref(false)
-  const state = ref<ConfigData>()
-  const initialState = ref<ConfigData>()
+  const formData = ref<ConfigData>()
+  const state = shallowRef<ConfigData>()
 
-  const { socket } = useWS({
+  const { optimisticEmit } = useWS({
     topic: 'config',
     serverEvents: {
-      connected: (data) => {
-        loaded.value = true
-        state.value = data
-        initialState.value = data
-      },
-      sync: (data) => {
-        state.value = data
-        initialState.value = data
-      },
+      connected: data => state.value = data,
+      sync: data => state.value = data,
     },
   })
 
+  watch(state, (newVal) => {
+    formData.value = structuredClone(toRaw(newVal))
+  })
+
   const isDirty = computed(() => {
-    return JSON.stringify(state.value) !== JSON.stringify(initialState.value)
+    return JSON.stringify(state.value) !== JSON.stringify(formData.value)
   })
 
   function save() {
-    if (state.value) {
-      loaded.value = false
-      socket.emit('set', state.value)
-      initialState.value = { ...state.value }
-
-      toast.add({
-        title: 'Event Settings Updated',
-        icon: 'i-heroicons-check-circle',
-        color: 'success',
-      })
+    if (formData.value) {
+      optimisticEmit({
+        initialState: state.value,
+        action: () => state.value = formData.value,
+        onSuccess: () => {
+          toast.add({
+            title: 'Event Settings Updated',
+            icon: 'i-heroicons-check-circle',
+            color: 'success',
+          })
+        },
+        onError: () => {
+          toast.add({
+            title: 'Error saving event settings',
+            icon: 'i-heroicons-exclamation-triangle',
+            color: 'error',
+          })
+        },
+        rollback: initialState => state.value = initialState,
+      }, 'set', formData.value)
     }
   }
 
   function reset() {
-    if (initialState.value) {
-      state.value = { ...initialState.value }
-    }
+    formData.value = structuredClone(state.value)
   }
 
   return {
-    loaded,
-    state,
+    formData,
     isDirty,
     save,
     reset,
