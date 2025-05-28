@@ -2,6 +2,7 @@
 type Props = {
   match: MatchData
   dirty: boolean
+  orientation: 'horizontal' | 'vertical'
 }
 type Emits = {
   (e: 'update', match: MatchData): void
@@ -41,7 +42,7 @@ function updatePlayerTwo(updatedPlayer: PlayerData) {
     <div class="flex flex-row gap-4">
       <div>
         <h2 class="font-bold text-center mb-4">
-          Player 1
+          {{ orientation === 'vertical' ? 'Top Player' : 'Left Player' }}
         </h2>
         <MatchPlayerControl
           :player="localMatch.playerOne"
@@ -53,7 +54,7 @@ function updatePlayerTwo(updatedPlayer: PlayerData) {
       </div>
       <div>
         <h2 class="font-bold text-center mb-4">
-          Player 2
+          {{ orientation === 'vertical' ? 'Bottom Player' : 'Right Player' }}
         </h2>
         <MatchPlayerControl
           :player="localMatch.playerTwo"

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const matchStore = useMatchStore()
+const configStore = useConfigStore()
 </script>
 
 <template>
@@ -30,6 +31,7 @@ const matchStore = useMatchStore()
             :key="match.id"
             :match="match"
             :dirty="matchStore.isDirty(match.id)"
+            :orientation="configStore.matchOrientation"
             @update="matchStore.updateMatch"
             @save="matchStore.saveMatch"
             @remove="matchStore.removeMatch"

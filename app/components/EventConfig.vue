@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import { gameOptions } from '~~/shared/utils/games'
-
 type Emits = {
   (e: 'save'): void
   (e: 'reset'): void
@@ -45,6 +43,15 @@ const state = defineModel<ConfigData>()
         class="flex max-sm:flex-col justify-between items-start gap-4"
       >
         <UInput v-model="state.description" class="w-64" />
+      </UFormField>
+      <USeparator />
+      <UFormField
+        name="matchOrientation"
+        label="Match Orientation"
+        description="The orientation of the matches."
+        class="flex max-sm:flex-col justify-between items-start gap-4"
+      >
+        <USelect v-model="state.matchOrientation" :items="matchOrientationOptions" class="w-64" />
       </UFormField>
       <USeparator />
       <UFormField

@@ -19,6 +19,10 @@ export const useConfigStore = defineStore('Config', () => {
     return JSON.stringify(state.value) !== JSON.stringify(formData.value)
   })
 
+  const matchOrientation = computed(() => {
+    return state.value?.matchOrientation ?? defaultConfigData.matchOrientation
+  })
+
   function save() {
     if (formData.value) {
       optimisticEmit('set', {
@@ -50,6 +54,7 @@ export const useConfigStore = defineStore('Config', () => {
   return {
     formData,
     isDirty,
+    matchOrientation,
     save,
     reset,
   }

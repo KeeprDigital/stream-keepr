@@ -13,6 +13,7 @@ export const defaultConfigData: ConfigData = {
   cutRounds: 0,
   playerCount: 0,
   game: 'mtg',
+  matchOrientation: 'horizontal',
 }
 
 export const defaultPlayerData: PlayerData = {
