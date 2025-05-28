@@ -1,20 +1,23 @@
 <script lang="ts" setup>
 type Props = {
   match: MatchData
+  isDirty: boolean
+  deleteable: boolean
+}
+type Emits = {
+  (e: 'update', match: MatchData): void
+  (e: 'save', id: string): void
+  (e: 'remove', id: string): void
 }
 
 const props = defineProps<Props>()
 
-const emit = defineEmits<{
-  (e: 'update', match: MatchData): void
-  (e: 'save', id: string): void
-  (e: 'remove', id: string): void
-}>()
+const emit = defineEmits<Emits>()
 
-const localMatch = ref<MatchData>({ ...props.match })
+const localMatch = ref<MatchData>(structuredClone(toRaw(props.match)))
 
-watch(() => props.match, (newMatch) => {
-  localMatch.value = { ...newMatch }
+watch(() => props.match, () => {
+  localMatch.value = structuredClone(toRaw(props.match))
 }, { deep: true })
 
 function updatePlayerOne(updatedPlayer: PlayerData) {
@@ -59,8 +62,12 @@ function updatePlayerTwo(updatedPlayer: PlayerData) {
         />
       </div>
     </div>
-    <div class="flex justify-between items-center gap-4 mt-4">
+    <div
+      class="flex justify-between items-center gap-4 mt-4"
+      :class="deleteable ? 'justify-between' : 'justify-end'"
+    >
       <UButton
+        v-if="deleteable"
         icon="i-heroicons-trash"
         color="error"
         variant="ghost"
@@ -69,6 +76,7 @@ function updatePlayerTwo(updatedPlayer: PlayerData) {
       <UButton
         color="primary"
         variant="outline"
+        :disabled="!isDirty"
         @click="emit('save', localMatch.id)"
       >
         Save

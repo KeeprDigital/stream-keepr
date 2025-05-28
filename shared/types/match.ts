@@ -9,15 +9,7 @@ export type MatchesServerEvents = {
 }
 
 export type MatchClientEvents = {
-  set: (
-    match: TopicData<'matches'>[number],
-    callback: (match: TopicData<'matches'>[number]) => void
-  ) => void
-  add: (
-    callback: (match: TopicData<'matches'>[number]) => void
-  ) => void
-  remove: (
-    id: string,
-    callback: (matchId: string) => void
-  ) => void
+  set: (match: TopicData<'matches'>[number]) => void
+  add: () => void
+  remove: (id: string) => void
 }

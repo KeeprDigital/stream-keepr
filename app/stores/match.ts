@@ -1,94 +1,35 @@
-import type { MatchData, MatchDataList } from '~~/shared/schemas/matches'
-
 export const useMatchStore = defineStore('Match', () => {
-  const storeId = 'match-store'
-  const socketStore = useSocket()
   const toast = useToast()
-  const loading = ref(false)
+  const formData = ref<MatchData[]>([])
+  const state = shallowRef<MatchData[]>([])
 
-  const state = ref<MatchDataList>([])
+  const { optimisticEmit } = useWS({
+    topic: 'matches',
+    serverEvents: {
+      connected: data => state.value = data,
+      sync: data => state.value = data,
+    },
+  })
 
-  const { cloned, sync } = useCloned(state, { manual: true })
+  watch(state, (newVal) => {
+    formData.value = structuredClone(toRaw(newVal))
+  })
 
-  function init() {
-    if (!socketStore.isSubscribed('matches')) {
-      socketStore.subscribe('matches', storeId, handleMatch, handleSubscribed)
-    }
-  }
+  // const isDirty = computed(() => {
+  //   return JSON.stringify(state.value) !== JSON.stringify(formData.value)
+  // })
 
-  function handleMatch(data: MatchDataList | null) {
-    if (data) {
-      state.value = data
-    }
-    loading.value = false
-    sync()
-  }
+  function addMatch() {}
 
-  function handleSubscribed(data: MatchDataList | null) {
-    if (data) {
-      state.value = data
-    }
-    loading.value = false
-    sync()
-  }
+  function removeMatch(id: string) {}
 
-  function reset() {
-    state.value = cloned.value
-    sync()
-  }
+  async function saveMatch(id: string) {}
 
-  function addMatch() {
-    socketStore.publish('matches', {
-      action: 'add',
-    })
-    toast.add({
-      title: 'Match Added',
-    })
-  }
-
-  function removeMatch(id: string) {
-    socketStore.publish('matches', {
-      action: 'remove',
-      id,
-    })
-  }
-
-  async function saveMatch(id: string) {
-    loading.value = true
-    sync()
-    const match = state.value.find(match => match.id === id)
-    if (!match) {
-      return
-    }
-    toast.add({
-      title: 'Match Saved',
-    })
-    socketStore.publish('matches', {
-      action: 'set',
-      match: {
-        id,
-        tableNumber: match.tableNumber,
-        playerOne: match.playerOne,
-        playerTwo: match.playerTwo,
-      },
-    })
-
-    loading.value = false
-  }
-
-  function updateMatch(match: MatchData) {
-    const index = state.value.findIndex(m => m.id === match.id)
-    if (index !== -1) {
-      state.value[index] = match
-    }
-  }
-  init()
+  function updateMatch(updatedMatch: MatchData) {}
 
   return {
-    state,
-    loading,
-    init,
-    reset,
+    formData,
+    // isDirty,
     saveMatch,
     addMatch,
     removeMatch,

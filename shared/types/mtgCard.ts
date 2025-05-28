@@ -4,14 +4,14 @@ import type { mtgCardDataSchema } from '../schemas/mtgCard'
 export type MtgCardData = z.infer<typeof mtgCardDataSchema>
 
 export type MtgCardServerEvents = {
-  connected: (card: TopicData<'mtgCard'>) => void
-  sync: (event: TopicData<'mtgCard'>) => void
+  connected: (card: TopicData<'mtgCard'> | null) => void
+  sync: (card: TopicData<'mtgCard'> | null) => void
 }
 
 export type MtgCardClientEvents = {
   set: (card: TopicData<'mtgCard'>) => void
   clear: () => void
-  show: (timeOut?: number) => void
+  show: (timeOut: number) => void
   hide: () => void
   rotate: () => void
   counterRotate: () => void

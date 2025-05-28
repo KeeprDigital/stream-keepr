@@ -3,16 +3,11 @@ import type {
   ScryfallFormat,
   ScryfallList,
 } from '@scryfall/api-types'
-import type { MtgCardData } from '~~/shared/schemas/mtgCard'
 import { useCountdown, useStorage } from '@vueuse/core'
 
 export const useMtgCardStore = defineStore('MtgCard', () => {
-  const storeId = 'mtgCard-store'
-
-  const socketStore = useSocket()
   const history = useStorage<MtgCardData[]>('mtgCard-history', [])
 
-  const { publish } = socketStore
   const { start, reset, remaining, isActive } = useCountdown(0)
 
   const loading = ref(false)
@@ -33,12 +28,6 @@ export const useMtgCardStore = defineStore('MtgCard', () => {
       return `format:${selectedFormat.value}`
     }
   })
-
-  function init() {
-    if (!socketStore.isSubscribed('mtgCard')) {
-      socketStore.subscribe('mtgCard', storeId, handleSync, handleSubscribed)
-    }
-  }
 
   function handleSync(data: MtgCardData | null) {
     card.value = data

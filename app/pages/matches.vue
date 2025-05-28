@@ -26,9 +26,11 @@ const matchStore = useMatchStore()
       <div class="w-full lg:max-w-2xl mx-auto">
         <div class="flex flex-col gap-4 mb-4">
           <MatchControl
-            v-for="match in matchStore.state"
+            v-for="(match, index) in matchStore.formData"
             :key="match.id"
             :match="match"
+            :deleteable="index > 0"
+            :is-dirty="true"
             @update="matchStore.updateMatch"
             @save="matchStore.saveMatch"
             @remove="matchStore.removeMatch"

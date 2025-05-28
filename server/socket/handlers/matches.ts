@@ -1,8 +1,8 @@
 export const matchesHandler: NamespaceHandler<'matches'> = (namespace) => {
   namespace.on('connection', async (socket) => {
-    socket.emit('connected', await getStore('matches') ?? [])
+    socket.emit('connected', await getStore('matches') ?? [defaultMatchData])
 
-    socket.on('add', async (callback) => {
+    socket.on('add', async (ack) => {
       const matches = await getStore('matches') ?? []
       const newMatch = {
         ...defaultMatchData,
@@ -10,31 +10,40 @@ export const matchesHandler: NamespaceHandler<'matches'> = (namespace) => {
       }
       matches.push(newMatch)
       setStore('matches', matches)
-      callback(newMatch)
+      ack({
+        success: true,
+        timestamp: Date.now(),
+      })
       namespace.except(socket.id).emit('sync', matches)
     })
 
-    socket.on('remove', async (id, callback) => {
+    socket.on('remove', async (id, ack) => {
       const matches = await getStore('matches')
       if (matches) {
         matches.splice(matches.findIndex(match => match.id === id), 1)
         setStore('matches', matches)
-        callback(id)
+        ack({
+          success: true,
+          timestamp: Date.now(),
+        })
         namespace.except(socket.id).emit('sync', matches)
       }
     })
 
-    socket.on('set', async (match, callback) => {
+    socket.on('set', async (match, ack) => {
       const matches = await getStore('matches')
       if (matches) {
         const index = matches.findIndex(m => m.id === match.id)
         if (index !== -1) {
           matches[index] = match
           setStore('matches', matches)
+          ack({
+            success: true,
+            timestamp: Date.now(),
+          })
           namespace.except(socket.id).emit('sync', matches)
         }
       }
-      callback(match)
     })
   })
 }
