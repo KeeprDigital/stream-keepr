@@ -2,6 +2,7 @@ export const useMatchStore = defineStore('Match', () => {
   const formData = ref<MatchData[]>([])
   const state = shallowRef<MatchData[]>([])
 
+  const toast = useToast()
   const { optimisticEmit } = useWS({
     topic: 'matches',
     serverEvents: {
@@ -44,6 +45,18 @@ export const useMatchStore = defineStore('Match', () => {
         if (match) {
           match.id = response.matchId
         }
+        toast.add({
+          title: 'Match Added',
+          icon: 'i-heroicons-check-circle',
+          color: 'success',
+        })
+      },
+      onError: () => {
+        toast.add({
+          title: 'Error adding match',
+          icon: 'i-heroicons-exclamation-triangle',
+          color: 'error',
+        })
       },
       rollback: initialState => state.value = initialState,
     })
@@ -53,7 +66,20 @@ export const useMatchStore = defineStore('Match', () => {
     optimisticEmit('remove', {
       initialState: state.value,
       action: () => state.value = formData.value.filter(match => match.id !== id),
-      onSuccess: () => {},
+      onSuccess: () => {
+        toast.add({
+          title: 'Match Removed',
+          icon: 'i-heroicons-check-circle',
+          color: 'success',
+        })
+      },
+      onError: () => {
+        toast.add({
+          title: 'Error removing match',
+          icon: 'i-heroicons-exclamation-triangle',
+          color: 'error',
+        })
+      },
       rollback: initialState => state.value = initialState,
     }, id)
   }
@@ -65,7 +91,20 @@ export const useMatchStore = defineStore('Match', () => {
     optimisticEmit('set', {
       initialState: state.value,
       action: () => state.value = formData.value,
-      onSuccess: () => {},
+      onSuccess: () => {
+        toast.add({
+          title: 'Match Saved',
+          icon: 'i-heroicons-check-circle',
+          color: 'success',
+        })
+      },
+      onError: () => {
+        toast.add({
+          title: 'Error saving match',
+          icon: 'i-heroicons-exclamation-triangle',
+          color: 'error',
+        })
+      },
       rollback: initialState => state.value = initialState,
     }, updatedMatch)
   }
