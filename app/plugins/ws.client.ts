@@ -37,9 +37,20 @@ export default defineNuxtPlugin(() => {
 
   function connectToNamespace<T extends Topic>(topic: T): NameSpaceClient<T> {
     if (namespaces.has(topic)) {
-      return namespaces.get(topic) as NameSpaceClient<T>
+      const existingSocket = namespaces.get(topic) as NameSpaceClient<T>
+      // If socket exists but is disconnected, reconnect it
+      if (!existingSocket.connected) {
+        existingSocket.connect()
+      }
+      return existingSocket
     }
     const nsSocket: NameSpaceClient<T> = io(`/${topic}`)
+
+    // Add connection event handlers for better debugging
+    nsSocket.on('connect_error', (error) => {
+      console.error(`Namespace ${topic} connection error:`, error)
+    })
+
     namespaces.set(topic, nsSocket)
     return nsSocket
   }
@@ -92,9 +103,15 @@ export default defineNuxtPlugin(() => {
       nsSocket.offAny(eventCallback)
     }
 
+    // Only disconnect if no callback is provided AND no other stores are subscribed
     if (!eventCallback) {
-      nsSocket.disconnect()
-      namespaces.delete(topic)
+      const hasOtherSubscriptions = Array.from(storeSubscriptions.values())
+        .some(topics => topics.has(topic))
+
+      if (!hasOtherSubscriptions) {
+        nsSocket.disconnect()
+        namespaces.delete(topic)
+      }
     }
 
     return true

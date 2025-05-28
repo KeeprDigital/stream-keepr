@@ -12,6 +12,7 @@ export type Params<TTopic extends Topic> = {
   actions?: NameSpaceServerEvents<TTopic>
   serverEvents?: NameSpaceServerEvents<TTopic>
   handleMessage?: (event: NameSpaceServerEventName<TTopic>, data: TopicData<TTopic>) => void
+  disconnectOnUnmount?: boolean // Default false - connections persist by default
 }
 
 export function useWS<TTopic extends Topic = never>(params: Params<TTopic>) {
@@ -69,6 +70,11 @@ export function useWS<TTopic extends Topic = never>(params: Params<TTopic>) {
     pendingOperations.value.set(operationId, options as OptimisticOptions<any, any, any>)
 
     async function attemptEmit(): Promise<void> {
+      // Check if socket is still connected before attempting to emit
+      if (!socket.connected) {
+        throw new Error('Socket not connected')
+      }
+
       const socketWithTimeout = socket.timeout(timeout)
 
       try {
@@ -112,10 +118,13 @@ export function useWS<TTopic extends Topic = never>(params: Params<TTopic>) {
     pendingOperations.value.clear()
   }
 
+  // Only disconnect on unmount if explicitly requested
   onUnmounted(() => {
     cancelPendingOperations()
-    socket.disconnect()
-    ws.unsubscribeStore(id)
+    if (params.disconnectOnUnmount) {
+      socket.disconnect()
+      ws.unsubscribeStore(id)
+    }
   })
 
   return {
