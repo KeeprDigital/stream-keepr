@@ -9,12 +9,12 @@ type OptimisticOptions<TState = any> = {
 
 export type Params<TTopic extends Topic> = {
   topic: TTopic
-  actions?: TopicServerEvents<TTopic>
-  serverEvents?: TopicServerEvents<TTopic>
+  actions?: NameSpaceServerEvents<TTopic>
+  serverEvents?: NameSpaceServerEvents<TTopic>
   handleMessage?: (event: NameSpaceServerEventName<TTopic>, data: TopicData<TTopic>) => void
 }
 
-export function useWS<T extends Topic = never>(params: Params<T>) {
+export function useWS<TTopic extends Topic = never>(params: Params<TTopic>) {
   const ws = useNuxtApp().$ws ?? (() => {
     throw new Error('Socket plugin not initialized')
   })()
@@ -27,13 +27,13 @@ export function useWS<T extends Topic = never>(params: Params<T>) {
   const socket = ws.subscribe(
     params.topic,
     id,
-    (event: NameSpaceServerEventName<T>, data: TopicData<T>) => {
+    (event: NameSpaceServerEventName<TTopic>, data: TopicData<TTopic>) => {
       try {
         if (params.handleMessage) {
           params.handleMessage(event, data)
         }
         if (serverEvents && event in serverEvents) {
-          (serverEvents[event] as (data: TopicData<T>) => void)(data)
+          (serverEvents[event] as (data: TopicData<TTopic>) => void)(data)
         }
       }
       catch (error) {
@@ -46,10 +46,14 @@ export function useWS<T extends Topic = never>(params: Params<T>) {
     socket.emit(...args)
   }
 
-  function optimisticEmit<TState>(
+  function optimisticEmit<
+    TState,
+    TEvent extends keyof ClientEventsMap[TTopic],
+  >(
+    event: TEvent,
     options: OptimisticOptions<TState>,
-    ...args: Parameters<typeof socket.emitWithAck>
-  ) {
+    ...args: ClientEventParams<TTopic, TEvent>
+  ): Promise<void> {
     const operationId = crypto.randomUUID()
     const timeout = options.timeout ?? 5000
 
@@ -66,9 +70,8 @@ export function useWS<T extends Topic = never>(params: Params<T>) {
       const socketWithTimeout = socket.timeout(timeout)
 
       try {
-        const response = await socketWithTimeout.emitWithAck(
-          ...(args as Parameters<typeof socketWithTimeout.emitWithAck>),
-        ) as AckResponse
+        // @ts-expect-error - Socket.io's types are complex, but this is safe
+        const response = await socketWithTimeout.emitWithAck(event, ...args) as AckResponse
 
         if (response.success) {
           options.onSuccess?.()
