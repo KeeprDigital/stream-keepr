@@ -13,3 +13,10 @@ export type MatchClientEvents = {
   add: () => void
   remove: (id: string) => void
 }
+
+export type ExtendMatchClientEvents = ExtendAckCallback<
+  MatchClientEvents,
+  {
+    add: { matchId: string }
+  }
+>

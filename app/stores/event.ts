@@ -21,7 +21,7 @@ export const useEventStore = defineStore('Event', () => {
 
   function save() {
     if (formData.value) {
-      optimisticEmit({
+      optimisticEmit('set', {
         initialState: state.value,
         action: () => state.value = formData.value,
         onSuccess: () => {
@@ -39,7 +39,7 @@ export const useEventStore = defineStore('Event', () => {
           })
         },
         rollback: initialState => state.value = initialState,
-      }, 'set', formData.value)
+      }, formData.value)
     }
   }
 

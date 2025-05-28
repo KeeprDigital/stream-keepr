@@ -1,7 +1,7 @@
-type OptimisticOptions<TState = any> = {
+type OptimisticOptions<TState = any, TResponse = AckResponse> = {
   initialState: TState
   action: (initialState: TState) => void
-  onSuccess?: () => void
+  onSuccess?: (response: TResponse) => void
   onError?: (error: ErrorAckResponse, initialState: TState) => void
   rollback: (initialState: TState) => void
   timeout?: number
@@ -22,7 +22,7 @@ export function useWS<TTopic extends Topic = never>(params: Params<TTopic>) {
   const serverEvents = params.serverEvents
   const id = useId()
 
-  const pendingOperations = ref(new Map<string, OptimisticOptions>())
+  const pendingOperations = ref(new Map<string, OptimisticOptions<any, any>>())
 
   const socket = ws.subscribe(
     params.topic,
@@ -49,9 +49,10 @@ export function useWS<TTopic extends Topic = never>(params: Params<TTopic>) {
   function optimisticEmit<
     TState,
     TEvent extends keyof ClientEventsMap[TTopic],
+    TResponse = GetResponseType<TTopic, TEvent>,
   >(
     event: TEvent,
-    options: OptimisticOptions<TState>,
+    options: OptimisticOptions<TState, TResponse>,
     ...args: ClientEventParams<TTopic, TEvent>
   ): Promise<void> {
     const operationId = crypto.randomUUID()
@@ -64,20 +65,20 @@ export function useWS<TTopic extends Topic = never>(params: Params<TTopic>) {
     options.action(options.initialState)
 
     // Store operation for cleanup
-    pendingOperations.value.set(operationId, options)
+    pendingOperations.value.set(operationId, options as OptimisticOptions<any, any>)
 
     async function attemptEmit(): Promise<void> {
       const socketWithTimeout = socket.timeout(timeout)
 
       try {
         // @ts-expect-error - Socket.io's types are complex, but this is safe
-        const response = await socketWithTimeout.emitWithAck(event, ...args) as AckResponse
+        const response = await socketWithTimeout.emitWithAck(event, ...args) as TResponse
 
-        if (response.success) {
-          options.onSuccess?.()
+        if ((response as AckResponse).success) {
+          options.onSuccess?.(response)
         }
         else {
-          throw new Error(response.error || 'Server returned unsuccessful response')
+          throw new Error((response as ErrorAckResponse).error || 'Server returned unsuccessful response')
         }
       }
       catch (error) {

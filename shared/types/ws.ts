@@ -116,11 +116,23 @@ export type ClientEventsMap = {
 }
 
 /**
+ * Maps each topic to its corresponding custom client-side event interface.
+ * Defines what events the client can emit for each topic.
+ * These events have their acknowledgment callbacks specifically typed.
+ */
+export type ExtendedAckClientEventsMap = {
+  matches: ExtendMatchClientEvents
+  // Add other topics with custom responses here as needed
+}
+
+/**
  * Extracts and enhances the client events interface for a specific topic.
- * Automatically adds acknowledgment callbacks to action events.
+ * Uses custom events if defined, otherwise adds acknowledgment callbacks to action events.
  * @template T - The topic to get client events for
  */
-export type NameSpaceClientEvents<T extends Topic> = AddAckToActions<ClientEventsMap[T]>
+export type NameSpaceClientEvents<T extends Topic> = T extends keyof ExtendedAckClientEventsMap
+  ? AddAckToActions<ExtendedAckClientEventsMap[T]>
+  : AddAckToActions<ClientEventsMap[T]>
 
 /**
  * Extracts the event names that can be emitted by the client for a specific topic.
@@ -143,3 +155,80 @@ export type NameSpaceClient<T extends Topic> = Socket<NameSpaceServerEvents<T>, 
  */
 export type ClientEventParams<TTopic extends Topic, E extends keyof ClientEventsMap[TTopic]> =
   ClientEventsMap[TTopic][E] extends (...args: infer P) => any ? P : never
+
+/**
+ * Utility type that extends specified methods in a base event interface to include acknowledgment callbacks.
+ *
+ * This type allows you to selectively transform methods in an event interface to accept an acknowledgment
+ * callback as their parameter, while leaving other methods unchanged. This is particularly useful for
+ * Socket.IO events where certain operations need to provide feedback to the client.
+ *
+ * @template TBase - The base event interface to extend
+ * @template TExtensions - Object mapping method names to their acknowledgment data types.
+ *                         Keys must be valid properties of TBase, values define the data structure
+ *                         that the acknowledgment callback will receive.
+ *
+ * @example
+ * ```typescript
+ * type BaseEvents = {
+ *   getMessage: (id: string) => void
+ *   sendMessage: (content: string) => void
+ *   deleteMessage: (id: string) => void
+ * }
+ *
+ * type ExtendedEvents = ExtendAckCallback<BaseEvents, {
+ *   sendMessage: { messageId: string; timestamp: Date }
+ *   deleteMessage: { success: boolean }
+ * }>
+ *
+ * // Result:
+ * // {
+ * //   getMessage: (id: string) => void
+ * //   sendMessage: (ack: AckCallback<{ messageId: string; timestamp: Date }>) => void
+ * //   deleteMessage: (ack: AckCallback<{ success: boolean }>) => void
+ * // }
+ * ```
+ *
+ * @example Socket.IO usage in this codebase:
+ * ```typescript
+ * type BaseMatchEvents = {
+ *   joinMatch: (matchId: string) => void
+ *   leaveMatch: () => void
+ * }
+ *
+ * type MatchEvents = ExtendAckCallback<BaseMatchEvents, {
+ *   joinMatch: { success: boolean; playerCount: number }
+ * }>
+ *
+ * // Client can now emit with acknowledgment:
+ * socket.emit('joinMatch', (ackData) => {
+ *   console.log(`Join success: ${ackData.success}, Players: ${ackData.playerCount}`)
+ * })
+ * ```
+ *
+ * @see AckCallback - The callback function type used for acknowledgments
+ * @see AddAckToActions - Related type that may use this utility for automatic event enhancement
+ */
+export type ExtendAckCallback<
+  TBase,
+  TExtensions extends Partial<Record<keyof TBase, any>>,
+> = {
+  [K in keyof TBase]: K extends keyof TExtensions
+    ? (ack: AckCallback<TExtensions[K]>) => void
+    : TBase[K]
+}
+
+/**
+ * Extracts the response type for a specific event.
+ * @template TTopic - The topic containing the event
+ * @template TEvent - The specific event name within the topic
+ * @example GetResponseType<'matches', 'add'> // Returns the response type for the add event
+ */
+export type GetResponseType<TTopic extends Topic, TEvent extends keyof ClientEventsMap[TTopic]> =
+  TTopic extends keyof ExtendedAckClientEventsMap
+    ? TEvent extends keyof ExtendedAckClientEventsMap[TTopic]
+      ? ExtendedAckClientEventsMap[TTopic][TEvent] extends (ack: (response: infer R) => void) => void
+        ? R
+        : AckResponse
+      : AckResponse
+    : AckResponse
