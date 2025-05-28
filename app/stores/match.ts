@@ -1,5 +1,4 @@
 export const useMatchStore = defineStore('Match', () => {
-  const toast = useToast()
   const formData = ref<MatchData[]>([])
   const state = shallowRef<MatchData[]>([])
 
@@ -12,24 +11,75 @@ export const useMatchStore = defineStore('Match', () => {
   })
 
   watch(state, (newVal) => {
-    formData.value = structuredClone(toRaw(newVal))
+    formData.value = JSON.parse(JSON.stringify(newVal))
   })
 
-  // const isDirty = computed(() => {
-  //   return JSON.stringify(state.value) !== JSON.stringify(formData.value)
-  // })
+  const isDirty = computed(() => {
+    return (id: string) => {
+      const serverMatch = state.value.find(match => match.id === id)
+      const formMatch = formData.value.find(match => match.id === id)
 
-  function addMatch() {}
+      if (!serverMatch && !formMatch)
+        return false
+      if (!serverMatch || !formMatch)
+        return true
 
-  function removeMatch(id: string) {}
+      return JSON.stringify(serverMatch) !== JSON.stringify(formMatch)
+    }
+  })
 
-  async function saveMatch(id: string) {}
+  function addMatch() {
+    optimisticEmit('add', {
+      initialState: state.value,
+      action: () => {
+        const id = crypto.randomUUID()
+        formData.value.push({
+          ...defaultMatchData,
+          id,
+        })
+        return id
+      },
+      onSuccess: (response, result) => {
+        const match = formData.value.find(match => match.id === result)
+        if (match) {
+          match.id = response.matchId
+        }
+      },
+      rollback: initialState => state.value = initialState,
+    })
+  }
 
-  function updateMatch(updatedMatch: MatchData) {}
+  function removeMatch(id: string) {
+    optimisticEmit('remove', {
+      initialState: state.value,
+      action: () => state.value = formData.value.filter(match => match.id !== id),
+      onSuccess: () => {},
+      rollback: initialState => state.value = initialState,
+    }, id)
+  }
+
+  async function saveMatch(id: string) {
+    const updatedMatch = formData.value.find(match => match.id === id)
+    if (!updatedMatch)
+      return
+    optimisticEmit('set', {
+      initialState: state.value,
+      action: () => state.value = formData.value,
+      onSuccess: () => {},
+      rollback: initialState => state.value = initialState,
+    }, updatedMatch)
+  }
+
+  function updateMatch(updatedMatch: MatchData) {
+    const index = formData.value.findIndex(match => match.id === updatedMatch.id)
+    if (index !== -1) {
+      formData.value[index] = updatedMatch
+    }
+  }
 
   return {
     formData,
-    // isDirty,
+    isDirty,
     saveMatch,
     addMatch,
     removeMatch,

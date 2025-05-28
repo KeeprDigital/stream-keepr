@@ -1,6 +1,6 @@
 export const matchesHandler: NamespaceHandler<'matches'> = (namespace) => {
   namespace.on('connection', async (socket) => {
-    socket.emit('connected', await getStore('matches') ?? [defaultMatchData])
+    socket.emit('connected', await getStore('matches') ?? [])
 
     socket.on('add', async (ack) => {
       const matches = await getStore('matches') ?? []
@@ -13,6 +13,7 @@ export const matchesHandler: NamespaceHandler<'matches'> = (namespace) => {
       ack({
         success: true,
         timestamp: Date.now(),
+        matchId: newMatch.id,
       })
       namespace.except(socket.id).emit('sync', matches)
     })

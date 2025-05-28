@@ -2,7 +2,6 @@
 type Props = {
   match: MatchData
   isDirty: boolean
-  deleteable: boolean
 }
 type Emits = {
   (e: 'update', match: MatchData): void
@@ -14,10 +13,10 @@ const props = defineProps<Props>()
 
 const emit = defineEmits<Emits>()
 
-const localMatch = ref<MatchData>(structuredClone(toRaw(props.match)))
+const localMatch = ref<MatchData>(JSON.parse(JSON.stringify(props.match)))
 
-watch(() => props.match, () => {
-  localMatch.value = structuredClone(toRaw(props.match))
+watch(() => props.match, (newVal) => {
+  localMatch.value = JSON.parse(JSON.stringify(newVal))
 }, { deep: true })
 
 function updatePlayerOne(updatedPlayer: PlayerData) {
@@ -64,10 +63,8 @@ function updatePlayerTwo(updatedPlayer: PlayerData) {
     </div>
     <div
       class="flex justify-between items-center gap-4 mt-4"
-      :class="deleteable ? 'justify-between' : 'justify-end'"
     >
       <UButton
-        v-if="deleteable"
         icon="i-heroicons-trash"
         color="error"
         variant="ghost"

@@ -1,9 +1,9 @@
-type OptimisticOptions<TState = any, TResponse = AckResponse> = {
+type OptimisticOptions<TState = any, TResponse = AckResponse, TActionResult = any> = {
   initialState: TState
-  action: (initialState: TState) => void
-  onSuccess?: (response: TResponse) => void
+  action: (initialState: TState) => TActionResult
+  onSuccess?: (response: ExtractSuccessResponse<TResponse>, actionResult: TActionResult) => void
   onError?: (error: ErrorAckResponse, initialState: TState) => void
-  rollback: (initialState: TState) => void
+  rollback: (initialState: TState, actionResult: TActionResult) => void
   timeout?: number
 }
 
@@ -22,7 +22,7 @@ export function useWS<TTopic extends Topic = never>(params: Params<TTopic>) {
   const serverEvents = params.serverEvents
   const id = useId()
 
-  const pendingOperations = ref(new Map<string, OptimisticOptions<any, any>>())
+  const pendingOperations = ref(new Map<string, OptimisticOptions<any, any, any>>())
 
   const socket = ws.subscribe(
     params.topic,
@@ -48,11 +48,12 @@ export function useWS<TTopic extends Topic = never>(params: Params<TTopic>) {
 
   function optimisticEmit<
     TState,
+    TActionResult,
     TEvent extends keyof ClientEventsMap[TTopic],
     TResponse = GetResponseType<TTopic, TEvent>,
   >(
     event: TEvent,
-    options: OptimisticOptions<TState, TResponse>,
+    options: OptimisticOptions<TState, TResponse, TActionResult>,
     ...args: ClientEventParams<TTopic, TEvent>
   ): Promise<void> {
     const operationId = crypto.randomUUID()
@@ -61,11 +62,11 @@ export function useWS<TTopic extends Topic = never>(params: Params<TTopic>) {
     // Store initial state for potential rollback
     const initialState = JSON.parse(JSON.stringify(options.initialState))
 
-    // Apply optimistic action immediately
-    options.action(options.initialState)
+    // Apply optimistic action immediately and store the result
+    const actionResult = options.action(options.initialState)
 
     // Store operation for cleanup
-    pendingOperations.value.set(operationId, options as OptimisticOptions<any, any>)
+    pendingOperations.value.set(operationId, options as OptimisticOptions<any, any, any>)
 
     async function attemptEmit(): Promise<void> {
       const socketWithTimeout = socket.timeout(timeout)
@@ -75,7 +76,7 @@ export function useWS<TTopic extends Topic = never>(params: Params<TTopic>) {
         const response = await socketWithTimeout.emitWithAck(event, ...args) as TResponse
 
         if ((response as AckResponse).success) {
-          options.onSuccess?.(response)
+          options.onSuccess?.(response as ExtractSuccessResponse<TResponse>, actionResult)
         }
         else {
           throw new Error((response as ErrorAckResponse).error || 'Server returned unsuccessful response')
@@ -94,7 +95,7 @@ export function useWS<TTopic extends Topic = never>(params: Params<TTopic>) {
         }
 
         if (options.rollback) {
-          options.rollback(initialState)
+          options.rollback(initialState, actionResult)
         }
 
         throw error

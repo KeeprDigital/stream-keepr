@@ -38,6 +38,27 @@ export type ErrorAckResponse = BaseAckResponse & {
 export type AckResponse = SuccessAckResponse | ErrorAckResponse
 
 /**
+ * Utility type that extracts only the success response type from a response union.
+ *
+ * For response types that extend AckResponse, this extracts only the success variant,
+ * ensuring that error properties are not accessible in contexts where only success
+ * responses are expected (like onSuccess callbacks).
+ *
+ * @template T - The response type to extract success variant from
+ *
+ * @example
+ * ```typescript
+ * type MyResponse = AckResponse & { userId?: string }
+ * type MySuccessResponse = ExtractSuccessResponse<MyResponse>
+ * // Result: SuccessAckResponse & { userId?: string }
+ * // The 'error', 'code', and 'details' properties are not available
+ * ```
+ */
+export type ExtractSuccessResponse<T> = T extends AckResponse
+  ? Extract<T, { success: true }>
+  : T
+
+/**
  * Callback function type for handling acknowledgment responses.
  * Used in async operations to confirm completion status and handle both
  * success and error cases.
