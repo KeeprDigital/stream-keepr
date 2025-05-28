@@ -1,8 +1,6 @@
-import type { MatchDataList } from '~~/shared/schemas/match'
-
 export default defineEventHandler(async () => {
   const local = useStorage('local')
-  const matchData = await local.getItem<MatchDataList>('matches')
+  const matchData = await local.getItem<MatchData[]>('matches')
 
   if (matchData) {
     matchData.forEach((match) => {

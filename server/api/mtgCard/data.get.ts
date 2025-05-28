@@ -1,8 +1,6 @@
-import type { CardData } from '~~/shared/schemas/mtgCard'
-
 export default defineEventHandler(async (event) => {
   const local = useStorage('local')
-  const cardData = await local.getItem<CardData>('card')
+  const cardData = await local.getItem<MtgCardData>('mtgCard')
 
   const emptyImage = `${getPublicAssetURL(event)}/Empty.png`
 
