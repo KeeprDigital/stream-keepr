@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 type Props = {
   match: MatchData
-  isDirty: boolean
+  dirty: boolean
 }
 type Emits = {
   (e: 'update', match: MatchData): void
@@ -73,7 +73,7 @@ function updatePlayerTwo(updatedPlayer: PlayerData) {
       <UButton
         color="primary"
         variant="outline"
-        :disabled="!isDirty"
+        :disabled="!dirty"
         @click="emit('save', localMatch.id)"
       >
         Save
