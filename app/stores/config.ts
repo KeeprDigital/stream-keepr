@@ -23,6 +23,10 @@ export const useConfigStore = defineStore('Config', () => {
     return state.value?.matchOrientation ?? defaultConfigData.matchOrientation
   })
 
+  const roundOptions = computed(() =>
+    getRoundOptions(formData.value?.swissRounds ?? 0, formData.value?.cutRounds ?? 0),
+  )
+
   function save() {
     if (formData.value) {
       optimisticEmit('set', {
@@ -55,6 +59,7 @@ export const useConfigStore = defineStore('Config', () => {
     formData,
     isDirty,
     matchOrientation,
+    roundOptions,
     save,
     reset,
   }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 type Props = {
+  roundOptions: string[]
   dirty: boolean
 }
 
@@ -22,7 +23,7 @@ const state = defineModel<EventData>()
       @submit="emit('save')"
     >
       <UFormField label="Current Round" name="currentRound">
-        <UInput v-model="state.currentRound" class="w-full" />
+        <USelect v-model="state.currentRound" class="w-full" :items="roundOptions" />
       </UFormField>
       <div class="flex gap-4">
         <UFormField class="w-full" label="Left Talent" name="leftTalent">

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const eventStore = useEventStore()
+const configStore = useConfigStore()
 </script>
 
 <template>
@@ -17,6 +18,7 @@ const eventStore = useEventStore()
         <EventControl
           v-model="eventStore.formData"
           :dirty="eventStore.isDirty"
+          :round-options="configStore.roundOptions"
           @save="eventStore.save"
           @reset="eventStore.reset"
         />
