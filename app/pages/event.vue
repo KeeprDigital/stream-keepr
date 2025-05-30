@@ -4,7 +4,7 @@ const configStore = useConfigStore()
 </script>
 
 <template>
-  <UDashboardPanel id="event">
+  <UDashboardPanel id="event" :ui="{ body: 'lg:py-12' }">
     <template #header>
       <UDashboardNavbar title="Event">
         <template #leading>
@@ -15,7 +15,7 @@ const configStore = useConfigStore()
 
     <template #body>
       <div class="w-full xl:max-w-2xl mx-auto">
-        <EventControl
+        <EventForm
           v-model="eventStore.formData"
           :dirty="eventStore.isDirty"
           :round-options="configStore.roundOptions"

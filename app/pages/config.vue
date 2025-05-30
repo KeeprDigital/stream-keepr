@@ -1,25 +1,43 @@
-<script lang="ts" setup>
-const config = useConfigStore()
+<script setup lang="ts">
+import type { NavigationMenuItem } from '@nuxt/ui'
+
+const links = [[{
+  label: 'General',
+  icon: 'i-lucide-settings',
+  to: '/config',
+  exact: true,
+}, {
+  label: 'Tournament',
+  icon: 'i-lucide-trophy',
+  to: '/config/tournament',
+}, {
+  label: 'Overlay',
+  icon: 'i-lucide-monitor',
+  to: '/config/overlay',
+}, {
+  label: 'Talent',
+  icon: 'i-lucide-users',
+  to: '/config/talent',
+}]] satisfies NavigationMenuItem[][]
 </script>
 
 <template>
-  <UDashboardPanel id="config">
+  <UDashboardPanel id="settings" :ui="{ body: 'lg:py-12' }">
     <template #header>
-      <UDashboardNavbar title="Config">
+      <UDashboardNavbar title="Settings">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
       </UDashboardNavbar>
+
+      <UDashboardToolbar>
+        <UNavigationMenu :items="links" highlight class="-mx-1 flex-1" />
+      </UDashboardToolbar>
     </template>
 
     <template #body>
       <div class="w-full lg:max-w-2xl mx-auto">
-        <EventConfig
-          v-model="config.formData"
-          :dirty="config.isDirty"
-          @save="config.save"
-          @reset="config.reset"
-        />
+        <NuxtPage />
       </div>
     </template>
   </UDashboardPanel>

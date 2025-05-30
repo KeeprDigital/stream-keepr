@@ -6,14 +6,21 @@ export const defaultEventData: EventData = {
 }
 
 export const defaultConfigData: ConfigData = {
-  name: '',
-  description: '',
-  days: 1,
-  swissRounds: 1,
-  cutRounds: 0,
-  playerCount: 0,
-  game: 'mtg',
-  matchOrientation: 'horizontal',
+  tournament: {
+    game: 'mtg',
+    name: '',
+    description: '',
+    days: 1,
+    swissRounds: 1,
+    cutRounds: 0,
+    playerCount: 0,
+  },
+  overlay: {
+    matchOrientation: 'horizontal',
+  },
+  talent: {
+    talents: [],
+  },
 }
 
 export const defaultPlayerData: PlayerData = {

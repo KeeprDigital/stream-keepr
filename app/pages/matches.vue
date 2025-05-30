@@ -4,7 +4,7 @@ const configStore = useConfigStore()
 </script>
 
 <template>
-  <UDashboardPanel id="matches">
+  <UDashboardPanel id="matches" :ui="{ body: 'lg:py-12' }">
     <template #header>
       <UDashboardNavbar title="Matches">
         <template #leading>

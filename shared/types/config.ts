@@ -1,7 +1,10 @@
 import type { z } from 'zod/v4'
-import type { configDataSchema } from '../schemas/config'
+import type { configDataSchema, configOverlaySchema, configTalentSchema, configTournamentSchema } from '../schemas/config'
 
 export type ConfigData = z.infer<typeof configDataSchema>
+export type ConfigTournament = z.infer<typeof configTournamentSchema>
+export type ConfigOverlay = z.infer<typeof configOverlaySchema>
+export type ConfigTalent = z.infer<typeof configTalentSchema>
 
 export type ConfigServerEvents = {
   connected: (config: TopicData<'config'>) => void
