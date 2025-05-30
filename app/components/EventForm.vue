@@ -1,17 +1,23 @@
 <script setup lang="ts">
 type Props = {
   roundOptions: string[]
+  talentOptions: string[]
   dirty: boolean
 }
 
 type Emits = {
   (e: 'save'): void
   (e: 'reset'): void
+  (e: 'createTalent', name: string): void
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 const state = defineModel<EventData>()
+
+function createTalent(name: string) {
+  emit('createTalent', name)
+}
 </script>
 
 <template>
@@ -27,10 +33,24 @@ const state = defineModel<EventData>()
       </UFormField>
       <div class="flex gap-4">
         <UFormField class="w-full" label="Left Talent" name="leftTalent">
-          <UInput v-model="state.leftTalent" class="w-full" />
+          <UInputMenu
+            v-model="state.leftTalent"
+            :items="talentOptions"
+            class="w-full"
+            :create-item="{ when: 'always', position: 'top' }"
+            ignore-filter
+            @create="createTalent"
+          />
         </UFormField>
         <UFormField class="w-full" label="Right Talent" name="rightTalent">
-          <UInput v-model="state.rightTalent" class="w-full" />
+          <UInputMenu
+            v-model="state.rightTalent"
+            :items="talentOptions"
+            class="w-full"
+            :create-item="{ when: 'always', position: 'top' }"
+            ignore-filter
+            @create="createTalent"
+          />
         </UFormField>
       </div>
       <UFormField label="Holding Text" name="holdingText">

@@ -12,6 +12,14 @@ export default withNuxt(
       'ts/consistent-type-definitions': ['error', 'type'],
       'vue/block-order': ['error', { order: ['script', 'template', 'style'] }],
       'vue/no-multiple-template-root': 'off',
+      'vue/max-attributes-per-line': ['error', {
+        singleline: {
+          max: 3,
+        },
+        multiline: {
+          max: 1,
+        },
+      }],
     },
   }),
   {

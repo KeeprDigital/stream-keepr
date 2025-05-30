@@ -19,8 +19,10 @@ const configStore = useConfigStore()
           v-model="eventStore.formData"
           :dirty="eventStore.isDirty"
           :round-options="configStore.roundOptions"
+          :talent-options="configStore.talentOptions"
           @save="eventStore.save"
           @reset="eventStore.reset"
+          @create-talent="configStore.createTalent"
         />
       </div>
     </template>

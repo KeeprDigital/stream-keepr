@@ -59,6 +59,10 @@ export const useConfigStore = defineStore('Config', () => {
     ),
   )
 
+  const talentOptions = computed(() => {
+    return [...(state.value?.talent?.talents?.map(talent => talent.name) ?? []), '<Blank>']
+  })
+
   function saveSection(
     sectionKey: keyof ConfigData,
     formData: ConfigTournament | ConfigOverlay | ConfigTalent,
@@ -147,7 +151,6 @@ export const useConfigStore = defineStore('Config', () => {
     }
   }
 
-  // Individual reset functions
   function resetTournament() {
     if (state.value?.tournament) {
       tournamentFormData.value = structuredClone(state.value.tournament)
@@ -170,6 +173,13 @@ export const useConfigStore = defineStore('Config', () => {
     syncFormData()
   }
 
+  function createTalent(name: string) {
+    if (talentFormData.value) {
+      talentFormData.value.talents.push({ name })
+      saveTalent()
+    }
+  }
+
   return {
     // Form data
     tournamentFormData,
@@ -185,6 +195,7 @@ export const useConfigStore = defineStore('Config', () => {
     // Computed properties
     matchOrientation,
     roundOptions,
+    talentOptions,
 
     // Save functions
     saveTournament,
@@ -197,5 +208,7 @@ export const useConfigStore = defineStore('Config', () => {
     resetOverlay,
     resetTalent,
     resetAll,
+
+    createTalent,
   }
 })

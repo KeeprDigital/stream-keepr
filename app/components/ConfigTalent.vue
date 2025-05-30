@@ -105,12 +105,12 @@ function removeTalent(index: number) {
 function getDropdownItems(index: number): DropdownMenuItem[] {
   return [
     {
-      label: 'Edit member',
+      label: 'Edit Name',
       icon: 'i-lucide-edit',
       onSelect: () => startEditing(index),
     },
     {
-      label: 'Remove member',
+      label: 'Remove',
       icon: 'i-lucide-trash-2',
       color: 'error',
       onSelect: () => removeTalent(index),

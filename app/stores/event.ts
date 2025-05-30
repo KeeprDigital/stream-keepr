@@ -21,6 +21,11 @@ export const useEventStore = defineStore('Event', () => {
 
   function save() {
     if (formData.value) {
+      if (formData.value.leftTalent === '<Blank>')
+        formData.value.leftTalent = ''
+      if (formData.value.rightTalent === '<Blank>')
+        formData.value.rightTalent = ''
+
       optimisticEmit('set', {
         initialState: state.value,
         action: () => state.value = formData.value,
