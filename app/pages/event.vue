@@ -14,7 +14,7 @@ const configStore = useConfigStore()
     </template>
 
     <template #body>
-      <div class="w-full xl:max-w-2xl mx-auto">
+      <div class="w-full lg:max-w-2xl mx-auto">
         <EventForm
           v-model="eventStore.formData"
           :dirty="eventStore.isDirty"

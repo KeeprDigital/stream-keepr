@@ -27,6 +27,24 @@ const state = defineModel<ConfigOverlay>()
         >
           <USelect v-model="state.matchOrientation" :items="matchOrientationOptions" class="w-64" />
         </UFormField>
+        <USeparator />
+        <UFormField
+          name="cardTimeout"
+          label="Card Timeout"
+          description="How long to show the card. 0 = never hide."
+          class="flex max-sm:flex-col justify-between items-start gap-4"
+        >
+          <UInputNumber v-model="state.cardTimeout" :min="0" />
+        </UFormField>
+        <USeparator />
+        <UFormField
+          name="clearPreviewOnShow"
+          label="Clear Preview on Show"
+          description="Whether to clear the preview when the card is shown."
+          class="flex max-sm:flex-col justify-between gap-4 items-center"
+        >
+          <USwitch v-model="state.clearPreviewOnShow" />
+        </UFormField>
       </div>
       <template #footer>
         <div class="flex justify-between items-center gap-4">

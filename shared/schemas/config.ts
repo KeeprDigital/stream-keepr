@@ -12,6 +12,8 @@ export const configTournamentSchema = z.object({
 
 export const configOverlaySchema = z.object({
   matchOrientation: z.enum(['horizontal', 'vertical']),
+  cardTimeout: z.number(),
+  clearPreviewOnShow: z.boolean(),
 })
 
 export const talentSchema = z.object({
