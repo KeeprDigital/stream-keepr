@@ -24,6 +24,7 @@
     "@vueuse/core": "^13.3.0",
     "@vueuse/nuxt": "^13.3.0",
     "better-sqlite3": "^11.10.0",
+    "defu": "^6.1.4",
     "nuxt": "^3.17.4",
     "pinia": "^3.0.2",
     "socket.io": "^4.8.1",
