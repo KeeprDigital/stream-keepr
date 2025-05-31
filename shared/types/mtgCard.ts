@@ -10,11 +10,17 @@ export type MtgCardServerEvents = {
 
 export type MtgCardClientEvents = {
   set: (card: TopicData<'mtgCard'>) => void
+  control: (action: MtgPreviewCardAction) => void
   clear: () => void
-  show: (timeOut: number) => void
-  hide: () => void
-  rotate: () => void
-  counterRotate: () => void
-  flip: () => void
-  turnOver: () => void
 }
+
+export type MtgActiveCardAction =
+  | 'clear'
+
+export type MtgPreviewCardAction =
+  | 'show'
+  | 'clear'
+  | 'rotate'
+  | 'counterRotate'
+  | 'flip'
+  | 'turnOver'

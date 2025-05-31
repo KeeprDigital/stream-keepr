@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import type { MtgCardData } from '~~/shared/schemas/mtgCard'
-
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
@@ -8,7 +6,7 @@ const emit = defineEmits<{
 const cardStore = useMtgCardStore()
 
 function selectCard(card: MtgCardData) {
-  cardStore.selectCard(card)
+  cardStore.selectPreviewCard(card)
   emit('close')
 }
 
@@ -21,7 +19,6 @@ function clearHistory() {
 <template>
   <UModal
     title="History"
-    description="previously selected cards"
     :ui="{
       content: 'sm:max-w-screen-xl',
     }"
@@ -29,7 +26,7 @@ function clearHistory() {
     <template #body>
       <div class="card-list">
         <div
-          v-for="(card, index) in cardStore.history"
+          v-for="(card, index) in cardStore.selectionHistory"
           :key="index"
           class="card-list-item"
         >

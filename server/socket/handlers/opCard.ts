@@ -1,4 +1,12 @@
 export const opCardHandler: NamespaceHandler<'opCard'> = (namespace) => {
+  let activeTimeout: NodeJS.Timeout | null = null
+
+  const clearActiveTimeout = () => {
+    if (activeTimeout) {
+      clearTimeout(activeTimeout)
+      activeTimeout = null
+    }
+  }
   namespace.on('connection', async (socket) => {
     socket.emit('connected', await getStore('opCard'))
 
@@ -8,46 +16,31 @@ export const opCardHandler: NamespaceHandler<'opCard'> = (namespace) => {
         success: true,
         timestamp: Date.now(),
       })
+
+      if (card.displayData.timeoutStartTimestamp && card.displayData.timeoutDuration) {
+        activeTimeout = setTimeout(() => {
+          clearStore('mtgCard')
+          namespace.emit('sync', null)
+          activeTimeout = null
+        }, card.displayData.timeoutDuration * 1000)
+      }
+
       namespace.except(socket.id).emit('sync', card)
     })
 
-    socket.on('hide', async (ack) => {
-      const card = await getStore('opCard')
-      if (card) {
-        setStore('opCard', {
-          ...card,
-          displayData: {
-            ...card.displayData,
-            hidden: true,
-          },
-        })
-        ack({
-          success: true,
-          timestamp: Date.now(),
-        })
-        namespace.except(socket.id).emit('sync', card)
+    socket.on('control', (action, ack) => {
+      switch (action) {
+        case 'clear':
+          clearActiveTimeout()
+          clearStore('opCard')
+          namespace.except(socket.id).emit('sync', null)
+          activeTimeout = null
+          break
       }
-    })
-
-    socket.on('show', async (timeout, ack) => {
-      const card = await getStore('opCard')
-      if (card) {
-        setStore('opCard', {
-          ...card,
-          displayData: {
-            ...card.displayData,
-            hidden: false,
-            timeoutStartTimestamp: Date.now(),
-            timeoutDuration: timeout * 1000,
-          },
-        })
-        // TODO: add timeout
-        ack({
-          success: true,
-          timestamp: Date.now(),
-        })
-        namespace.except(socket.id).emit('sync', card)
-      }
+      ack({
+        success: true,
+        timestamp: Date.now(),
+      })
     })
   })
 }

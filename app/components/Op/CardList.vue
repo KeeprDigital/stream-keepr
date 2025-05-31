@@ -6,13 +6,13 @@ const opCardStore = useOpCardStore()
   <div class="card-list-container">
     <div class="card-list">
       <OpCardImage
-        v-for="card in opCardStore.cardList"
+        v-for="card in opCardStore.searchResults"
         :key="card.id + card.code"
         class="card-list-item"
         :card="card"
         :hoverable="true"
         :selectable="true"
-        @click="opCardStore.selectCard(card)"
+        @click="opCardStore.selectPreviewCard(card)"
       />
     </div>
   </div>

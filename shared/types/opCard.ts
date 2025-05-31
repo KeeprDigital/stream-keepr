@@ -10,7 +10,8 @@ export type OpCardServerEvents = {
 
 export type OpCardClientEvents = {
   set: (card: TopicData<'opCard'>) => void
-  hide: () => void
-  show: (timeout: number) => void
-  clear: () => void
+  control: (action: OpActiveCardAction) => void
 }
+
+export type OpPreviewCardAction = 'show'
+export type OpActiveCardAction = 'clear'

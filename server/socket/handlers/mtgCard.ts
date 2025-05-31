@@ -1,128 +1,49 @@
 export const mtgCardHandler: NamespaceHandler<'mtgCard'> = (namespace) => {
+  let activeTimeout: NodeJS.Timeout | null = null
+
+  const clearActiveTimeout = () => {
+    if (activeTimeout) {
+      clearTimeout(activeTimeout)
+      activeTimeout = null
+    }
+  }
+
   namespace.on('connection', async (socket) => {
     socket.emit('connected', await getStore('mtgCard'))
 
     socket.on('set', (card, ack) => {
+      clearActiveTimeout()
+
       setStore('mtgCard', card)
       ack({
         success: true,
         timestamp: Date.now(),
       })
+
+      if (card.displayData.timeoutStartTimestamp && card.displayData.timeoutDuration) {
+        activeTimeout = setTimeout(() => {
+          clearStore('mtgCard')
+          namespace.emit('sync', null)
+          activeTimeout = null
+        }, card.displayData.timeoutDuration * 1000)
+      }
+
       namespace.except(socket.id).emit('sync', card)
     })
 
-    socket.on('clear', () => {
-      clearStore('mtgCard')
-    })
-
-    socket.on('show', async (timeout, ack) => {
-      const card = await getStore('mtgCard')
-      if (card) {
-        setStore('mtgCard', {
-          ...card,
-          displayData: {
-            ...card.displayData,
-            hidden: false,
-            timeoutStartTimestamp: Date.now(),
-            timeoutDuration: timeout,
-          },
-        })
-        ack({
-          success: true,
-          timestamp: Date.now(),
-        })
-        namespace.except(socket.id).emit('sync', card)
+    socket.on('control', (action, ack) => {
+      switch (action) {
+        case 'clear':
+          clearActiveTimeout()
+          clearStore('mtgCard')
+          namespace.except(socket.id).emit('sync', null)
+          activeTimeout = null
+          break
       }
-    })
-
-    socket.on('hide', async (ack) => {
-      const card = await getStore('mtgCard')
-      if (card) {
-        setStore('mtgCard', {
-          ...card,
-          displayData: {
-            ...card.displayData,
-            hidden: true,
-          },
-        })
-        ack({
-          success: true,
-          timestamp: Date.now(),
-        })
-        namespace.except(socket.id).emit('sync', card)
-      }
-    })
-
-    socket.on('rotate', async (ack) => {
-      const card = await getStore('mtgCard')
-      if (card) {
-        setStore('mtgCard', {
-          ...card,
-          displayData: {
-            ...card.displayData,
-            rotated: true,
-          },
-        })
-        ack({
-          success: true,
-          timestamp: Date.now(),
-        })
-        namespace.except(socket.id).emit('sync', card)
-      }
-    })
-
-    socket.on('counterRotate', async (ack) => {
-      const card = await getStore('mtgCard')
-      if (card) {
-        setStore('mtgCard', {
-          ...card,
-          displayData: {
-            ...card.displayData,
-            counterRotated: true,
-          },
-        })
-        ack({
-          success: true,
-          timestamp: Date.now(),
-        })
-        namespace.except(socket.id).emit('sync', card)
-      }
-    })
-
-    socket.on('flip', async (ack) => {
-      const card = await getStore('mtgCard')
-      if (card) {
-        setStore('mtgCard', {
-          ...card,
-          displayData: {
-            ...card.displayData,
-            flipped: true,
-          },
-        })
-        ack({
-          success: true,
-          timestamp: Date.now(),
-        })
-        namespace.except(socket.id).emit('sync', card)
-      }
-    })
-
-    socket.on('turnOver', async (ack) => {
-      const card = await getStore('mtgCard')
-      if (card) {
-        setStore('mtgCard', {
-          ...card,
-          displayData: {
-            ...card.displayData,
-            turnedOver: true,
-          },
-        })
-        ack({
-          success: true,
-          timestamp: Date.now(),
-        })
-        namespace.except(socket.id).emit('sync', card)
-      }
+      ack({
+        success: true,
+        timestamp: Date.now(),
+      })
     })
   })
 }

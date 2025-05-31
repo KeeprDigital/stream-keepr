@@ -30,8 +30,7 @@ const config = useConfigStore()
     }"
   >
     <template #body>
-      <MtgCardControls v-if="config.tournamentFormData?.game === 'mtg'" />
-      <OpCardControls v-if="config.tournamentFormData?.game === 'op'" />
+      <CardControls :game="config.tournamentFormData.game" />
     </template>
   </UDashboardPanel>
 </template>

@@ -1,22 +1,20 @@
 <script lang="ts" setup>
-import type { MtgCardData } from '~~/shared/schemas/mtgCard'
-
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
 const cardStore = useMtgCardStore()
 
-function selectCard(card: MtgCardData) {
-  cardStore.selectCard(card)
+function selectPreviewCard(card: MtgCardData) {
+  cardStore.selectPreviewCard(card)
   emit('close')
 }
 </script>
 
 <template>
   <UModal
-    :title="`${cardStore.card?.name}`"
-    description="other printings of this card"
+    :title="`${cardStore.previewCard?.name}`"
+    description="Alternative printings"
     :ui="{
       content: 'sm:max-w-screen-xl',
     }"
@@ -24,7 +22,7 @@ function selectCard(card: MtgCardData) {
     <template #body>
       <div class="card-list">
         <div
-          v-for="card, index in cardStore.cardPrintList"
+          v-for="card, index in cardStore.previewCardPrintings"
           :key="index"
           class="card-list-item"
         >
@@ -33,7 +31,7 @@ function selectCard(card: MtgCardData) {
             :show-turned-over-button="true"
             :card="card"
             :hoverable="true"
-            @click="selectCard(card)"
+            @click="selectPreviewCard(card)"
           />
           <div class="card-list-item-title">
             {{ card.set }}

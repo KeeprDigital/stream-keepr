@@ -1,73 +1,64 @@
-import type { OpCardData } from '~~/shared/schemas/opCard'
 import { useCountdown, useStorage } from '@vueuse/core'
 import { opCardSchema } from '~~/shared/schemas/opCard'
 
 export const useOpCardStore = defineStore('OpCard', () => {
-  const storeId = 'op-card-store'
+  const toast = useToast()
+  const configStore = useConfigStore()
+  const timeout = useCountdown(0)
+  const selectionHistory = useStorage<OpCardData[]>('opCard-history', [])
 
-  const { start, reset, remaining, isActive } = useCountdown(0)
+  const previewCard = ref<OpCardData | null>(null)
+  const previewCardPrintings = ref<OpCardData[]>([])
 
-  const socketStore = useSocket()
-  const { publish } = socketStore
+  const activeCard = ref<OpCardData | null>(null)
 
-  const history = useStorage<OpCardData[]>('card-history', [])
-
-  const loading = ref(false)
-  const cardList = ref<OpCardData[]>([])
-  const card = ref<OpCardData | null>(null)
-  const selectedTimeoutSeconds = ref(0)
+  const searching = ref(false)
+  const searchResults = ref<OpCardData[]>([])
   const selectedColour = ref('any')
-  const cost = ref<number | null>(null)
+  const selectedCost = ref<number | null>(null)
 
-  function init() {
-    if (!socketStore.isSubscribed('opCard')) {
-      socketStore.subscribe('opCard', storeId, handleSync, handleSubscribed)
-    }
-  }
+  const { optimisticEmit } = useWS({
+    topic: 'opCard',
+    serverEvents: {
+      connected: (data) => {
+        activeCard.value = data
+        updateTimeout(data)
+      },
+      sync: (data) => {
+        activeCard.value = data
+        updateTimeout(data)
+      },
+    },
+  })
 
-  function handleSync(data: OpCardData | null) {
-    card.value = data
-    if (data) {
-      updateCountdownFromCardData(data)
+  function updateTimeout(cardData: OpCardData | null) {
+    if (!cardData) {
+      timeout.reset()
+      return
     }
-    else {
-      reset()
-    }
-  }
 
-  function handleSubscribed(data: OpCardData | null) {
-    if (data) {
-      card.value = data
-      updateCountdownFromCardData(data)
-    }
-    else {
-      reset()
-    }
-  }
+    const { timeoutStartTimestamp, timeoutDuration } = cardData.displayData
 
-  function updateCountdownFromCardData(cardData: OpCardData) {
-    if (cardData.displayData.hidden) {
-      reset()
+    if (!timeoutStartTimestamp || !timeoutDuration) {
+      timeout.reset()
+      return
     }
-    else if (cardData.displayData.timeoutStartTimestamp && cardData.displayData.timeoutDuration) {
-      const elapsedMilliseconds = Date.now() - cardData.displayData.timeoutStartTimestamp
-      const remainingMilliseconds = Math.round((cardData.displayData.timeoutDuration - elapsedMilliseconds) / 1000) * 1000
-      if (remainingMilliseconds > 0) {
-        start(remainingMilliseconds / 1000)
-      }
-      else {
-        if (card.value && card.value.displayData)
-          card.value.displayData.hidden = true
-        reset()
-      }
+
+    const elapsedMs = Date.now() - timeoutStartTimestamp
+    const remainingMs = (timeoutDuration * 1000) - elapsedMs
+
+    if (remainingMs <= 0) {
+      timeout.reset()
+      return
     }
-    else {
-      reset()
-    }
+
+    const remainingSeconds = Math.round(remainingMs / 1000)
+
+    timeout.start(remainingSeconds)
   }
 
   async function searchFuzzyCardName(name: string) {
-    loading.value = true
+    searching.value = true
     if (name.length < 3) {
       clearSearch()
       return
@@ -76,111 +67,130 @@ export const useOpCardStore = defineStore('OpCard', () => {
     await $fetch<Omit<OpCardData, 'displayData'>[]>('/api/op/card', {
       query: {
         name,
-        cost: cost.value ?? undefined,
+        cost: selectedCost.value ?? undefined,
         color: selectedColour.value === 'any' ? undefined : selectedColour.value,
       },
     }).then((data) => {
       if (!data) {
-        cardList.value = []
+        searchResults.value = []
         return
       }
-      cardList.value = data.map(card => opCardSchema.parse(card))
-    }).catch((error) => {
-      console.error(error)
-      cardList.value = []
+      searchResults.value = data.map(card => opCardSchema.parse(card))
+    }).catch(() => {
+      searchResults.value = []
     }).finally(() => {
-      loading.value = false
+      searching.value = false
     })
   }
 
-  async function setCardImage(cardData: OpCardData) {
-    publish('opCard', {
-      action: 'set',
-      card: cardData,
-    })
-  }
-
-  async function selectCard(cardData: OpCardData) {
-    loading.value = true
-    card.value = cardData
-
-    await setCardImage(cardData)
-
+  async function selectPreviewCard(cardData: OpCardData) {
+    previewCard.value = cardData
+    previewCardPrintings.value = []
     pushToHistory(cardData)
+  }
 
-    loading.value = false
+  function controlPreviewCard(action: OpPreviewCardAction) {
+    if (!previewCard.value)
+      return
+
+    if (action === 'show') {
+      const action = activeCard.value ? 'replaced' : 'set'
+      const cardData = previewCard.value
+      cardData.displayData.timeoutDuration = configStore.overlay.cardTimeout
+      cardData.displayData.timeoutStartTimestamp = Date.now()
+
+      optimisticEmit('set', {
+        initialState: activeCard.value,
+        action: () => {
+          activeCard.value = JSON.parse(JSON.stringify(previewCard.value))
+
+          if (configStore.overlay.clearPreviewOnShow)
+            previewCard.value = null
+
+          updateTimeout(activeCard.value)
+
+          return previewCard.value
+        },
+        onSuccess: () => {
+          toast.add({
+            title: `Card ${action}`,
+            color: 'success',
+          })
+        },
+        onError: () => {
+          toast.add({
+            title: `Card could not be ${action}`,
+            color: 'error',
+          })
+        },
+        rollback: (initialState, previousCard) => {
+          activeCard.value = initialState
+          if (configStore.overlay.clearPreviewOnShow && previousCard)
+            previewCard.value = previousCard
+        },
+      }, cardData)
+    }
+  }
+
+  function controlActiveCard(action: OpActiveCardAction) {
+    switch (action) {
+      case 'clear':
+        optimisticEmit('control', {
+          initialState: activeCard.value,
+          action: () => activeCard.value = null,
+          onSuccess: () => {
+            toast.add({
+              title: 'Card cleared',
+              color: 'success',
+            })
+          },
+          onError: () => {
+            toast.add({
+              title: 'Error',
+              description: 'The card could not be cleared',
+              color: 'error',
+            })
+          },
+          rollback: initialState => activeCard.value = initialState,
+        }, action)
+        break
+    }
   }
 
   function pushToHistory(cardData: OpCardData) {
-    const existingIndex = history.value.findIndex(card => card.id === cardData.id && card.code === cardData.code)
+    const existingIndex = selectionHistory.value.findIndex(card => card.id === cardData.id && card.code === cardData.code)
     if (existingIndex !== -1) {
-      history.value.splice(existingIndex, 1)
+      selectionHistory.value.splice(existingIndex, 1)
     }
     const cardCopy = JSON.parse(JSON.stringify(cardData))
-    history.value.unshift(cardCopy)
-  }
-
-  function clearCard() {
-    card.value = null
-    publish('opCard', {
-      action: 'clear',
-    })
-    reset()
-  }
-
-  function hideCard() {
-    if (!card.value)
-      return
-    publish('opCard', {
-      action: 'hide',
-    })
-    reset()
-  }
-
-  function showCard() {
-    if (!card.value)
-      return
-
-    const payload: { action: 'show', timeOut?: number } = { action: 'show' }
-
-    if (selectedTimeoutSeconds.value > 0) {
-      payload.timeOut = selectedTimeoutSeconds.value
-    }
-
-    publish('opCard', payload)
+    selectionHistory.value.unshift(cardCopy)
   }
 
   function clearSearch() {
-    loading.value = false
-    cardList.value = []
     selectedColour.value = 'any'
-    cost.value = null
+    selectedCost.value = null
   }
 
   function clearHistory() {
-    history.value = []
+    selectionHistory.value = []
   }
-
-  init()
 
   return {
     searchFuzzyCardName,
-    setCardImage,
-    selectCard,
-    clearCard,
-    hideCard,
-    showCard,
+    selectPreviewCard,
     clearSearch,
     pushToHistory,
     clearHistory,
-    selectedTimeoutSeconds,
-    loading,
-    card,
-    cardList,
-    history,
-    remaining,
-    isActive,
+    controlPreviewCard,
+    controlActiveCard,
     selectedColour,
-    cost,
+    selectedCost,
+    previewCard,
+    previewCardPrintings,
+    activeCard,
+    searching,
+    searchResults,
+    timeout,
+    selectionHistory,
   }
 })

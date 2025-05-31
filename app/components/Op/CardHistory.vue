@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import type { OpCardData } from '~~/shared/schemas/opCard'
-
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
@@ -8,7 +6,7 @@ const emit = defineEmits<{
 const opCardStore = useOpCardStore()
 
 function selectCard(card: OpCardData) {
-  opCardStore.selectCard(card)
+  opCardStore.selectPreviewCard(card)
   emit('close')
 }
 
@@ -29,7 +27,7 @@ function clearHistory() {
     <template #body>
       <div class="card-list">
         <div
-          v-for="(card, index) in opCardStore.history"
+          v-for="(card, index) in opCardStore.selectionHistory"
           :key="index"
           class="card-list-item"
         >

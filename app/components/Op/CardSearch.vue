@@ -1,32 +1,21 @@
 <script setup lang="ts">
-import { LazyMtgCardHistory } from '#components'
+import { LazyOpCardHistory } from '#components'
 
-const cardStore = useMtgCardStore()
+const opCardStore = useOpCardStore()
 const searchTerm = ref('')
 const overlay = useOverlay()
-const modal = overlay.create(LazyMtgCardHistory)
-
-const searchInput = useTemplateRef('searchInput')
-
-defineShortcuts({
-  '/': () => { searchInput.value?.inputRef?.focus() },
-  'h': () => { openHistory() },
-  'escape': {
-    handler: () => clearSearch(),
-    usingInput: true,
-  },
-})
+const modal = overlay.create(LazyOpCardHistory)
 
 function openHistory() {
-  modal.open(LazyMtgCardHistory)
+  modal.open()
 }
 
 const search = useDebounceFn(() => {
-  cardStore.searchFuzzyCardName(searchTerm.value)
+  opCardStore.searchFuzzyCardName(searchTerm.value)
 }, 300)
 
 function searchImmediate() {
-  cardStore.searchFuzzyCardName(searchTerm.value)
+  opCardStore.searchFuzzyCardName(searchTerm.value)
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -36,7 +25,7 @@ function handleKeydown(event: KeyboardEvent) {
 }
 
 function clearSearch() {
-  cardStore.clearSearch()
+  opCardStore.clearSearch()
   searchTerm.value = ''
 }
 </script>
@@ -45,21 +34,36 @@ function clearSearch() {
   <div class="card-search">
     <div class="input-container">
       <UInput
-        ref="searchInput"
         v-model="searchTerm"
         class="input"
         placeholder="Search Card Name"
         size="xl"
         trailing
-        :loading="cardStore.loading"
+        :loading="false"
         @update:model-value="search"
         @keydown="handleKeydown"
-      >
-        <template v-if="!cardStore.loading" #trailing>
-          <UKbd value="/" />
-        </template>
-      </UInput>
+      />
     </div>
+
+    <UInput
+      v-model="opCardStore.selectedCost"
+      size="xl"
+      class="w-36"
+      placeholder="Cost"
+      @update:model-value="searchImmediate"
+    />
+
+    <USelect
+      v-model="opCardStore.selectedColour"
+      :items="opColours"
+      size="xl"
+      class="w-36"
+      placeholder="Colour"
+      :ui="{
+        content: 'max-h-90',
+      }"
+      @update:model-value="searchImmediate"
+    />
 
     <UButton
       size="xl"
@@ -72,19 +76,8 @@ function clearSearch() {
       Clear
     </UButton>
 
-    <USelect
-      v-model="cardStore.selectedFormat"
-      size="xl"
-      :items="mtgSets"
-      class="w-36"
-      :ui="{
-        content: 'max-h-90',
-      }"
-      @update:model-value="searchImmediate"
-    />
-
     <UButton
-      :disabled="!cardStore.history.length"
+      :disabled="!opCardStore.selectionHistory.length"
       size="xl"
       variant="outline"
       color="neutral"

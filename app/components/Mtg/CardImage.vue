@@ -1,22 +1,33 @@
 <script setup lang="ts">
-import type { CardData } from '~~/shared/schemas/mtgCard'
-
 type Props = {
-  card: CardData
+  card: MtgCardData
   turnoverable?: boolean
   hoverable?: boolean
+  flipped?: boolean
+  rotated?: boolean
+  counterRotated?: boolean
+  turnedOver?: boolean
+  disableAnimation?: boolean
 }
 
 const props = defineProps<Props>()
-const flipped = defineModel<boolean>('flipped')
-const rotated = defineModel<boolean>('rotated')
-const counterRotated = defineModel<boolean>('counterRotated')
-const turnedOver = defineModel<boolean>('turnedOver')
 
 const loaded = ref(false)
+const previewingBack = ref(false)
+const previewingBackTimeout = ref<NodeJS.Timeout | null>(null)
 
-function toggleTurnedOver() {
-  turnedOver.value = !turnedOver.value
+function previewBack() {
+  if (previewingBack.value && previewingBackTimeout.value) {
+    previewingBack.value = false
+    clearTimeout(previewingBackTimeout.value)
+  }
+  else {
+    previewingBack.value = true
+
+    previewingBackTimeout.value = setTimeout(() => {
+      previewingBack.value = false
+    }, 2000)
+  }
 }
 </script>
 
@@ -32,8 +43,9 @@ function toggleTurnedOver() {
       :class="{
         'is-flipped': flipped,
         'is-rotated': rotated,
-        'is-turned-over': turnedOver,
+        'is-turned-over': turnedOver || previewingBack,
         'is-counter-rotated': counterRotated,
+        'is-disable-animation': disableAnimation,
       }"
     >
       <div class="face front">
@@ -61,10 +73,15 @@ function toggleTurnedOver() {
     <button
       v-if="props.card.imageData.back && props.turnoverable && loaded"
       class="turnover-button"
-      :class="{ 'is-turned-over': turnedOver }"
-      @click.stop="toggleTurnedOver"
+      :class="{ 'is-turned-over': turnedOver || previewingBack }"
+      @click.stop="previewBack"
     >
-      <svg focusable="false" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+      <svg
+        focusable="false"
+        aria-hidden="true"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 1024 1024"
+      >
         <path d="M884.3,357.6c116.8,117.7,151.7,277-362.2,320V496.4L243.2,763.8L522,1031.3V860.8C828.8,839.4,1244.9,604.5,884.3,357.6z" />
         <path d="M557.8,288.2v138.4l230.8-213.4L557.8,0v142.8c-309.2,15.6-792.1,253.6-426.5,503.8C13.6,527.9,30,330.1,557.8,288.2z" />
       </svg>
@@ -86,6 +103,10 @@ function toggleTurnedOver() {
     transform-origin: center;
     width: 100%;
     height: 100%;
+
+    &.is-disable-animation {
+      transition: none;
+    }
 
     .face {
       position: absolute;
@@ -153,10 +174,27 @@ function toggleTurnedOver() {
     z-index: 1000;
     transform: translateZ(0.01px);
 
+    svg {
+      fill: #343242;
+      transition: fill 200ms linear;
+    }
+
     &.is-flipped {
       border-color: #fff;
       background-color: #343242;
-      fill: #fff;
+
+      svg {
+        fill: #fff;
+      }
+    }
+
+    &.is-turned-over {
+      border-color: #fff;
+      background-color: #343242;
+
+      svg {
+        fill: #fff;
+      }
     }
 
     &:hover {

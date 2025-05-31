@@ -15,4 +15,4 @@ export const mtgSets: {
   { value: 'token', label: 'Token' },
 ] as const
 
-export type MtgSet = (typeof mtgSets)[number]['value']
+export type MtgFormat = (typeof mtgSets)[number]['value']

@@ -54,7 +54,6 @@ export const defaultMtgCardData: MtgCardData = {
     back: null,
   },
   displayData: {
-    hidden: true,
     flipped: false,
     turnedOver: false,
     rotated: false,
@@ -67,4 +66,23 @@ export const defaultMtgCardData: MtgCardData = {
     counterRotateable: false,
   },
   points: 0,
+}
+
+export const defaultOpCardData: OpCardData = {
+  id: '',
+  code: '',
+  rarity: '',
+  type: '',
+  name: '',
+  cost: 0,
+  power: null,
+  counter: null,
+  color: '',
+  family: '',
+  ability: '',
+  trigger: '',
+  set_name: '',
+  image_url: '',
+  attribute_name: '',
+  displayData: {},
 }

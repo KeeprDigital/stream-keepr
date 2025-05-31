@@ -12,7 +12,7 @@ export const useEventStore = defineStore('Event', () => {
   })
 
   watch(state, (newVal) => {
-    formData.value = structuredClone(toRaw(newVal))
+    formData.value = JSON.parse(JSON.stringify(newVal))
   })
 
   const isDirty = computed(() => {

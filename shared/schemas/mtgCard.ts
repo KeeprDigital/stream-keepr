@@ -2,7 +2,6 @@ import type { ScryfallCardFields, ScryfallImageUris } from '@scryfall/api-types'
 import { z } from 'zod/v4'
 
 export const mtgCardDisplayDataSchema = z.object({
-  hidden: z.boolean(),
   flipped: z.boolean(),
   rotated: z.boolean(),
   counterRotated: z.boolean(),
@@ -21,7 +20,6 @@ export const mtgCardOrientationDataSchema = z.object({
   turnable: z.boolean(),
   rotateable: z.boolean(),
   counterRotateable: z.boolean(),
-  defaultRotated: z.boolean(),
 })
 
 export const mtgCardMeldDataSchema = z.object({
@@ -34,9 +32,9 @@ export const mtgCardDataSchema = z.object({
   name: z.string(),
   set: z.string(),
   layout: z.custom<ScryfallCardFields.Core.All['layout']>(),
+  points: z.number(),
   imageData: mtgCardImageDataSchema,
   orientationData: mtgCardOrientationDataSchema,
-  meldData: mtgCardMeldDataSchema.optional(),
-  points: z.number(),
   displayData: mtgCardDisplayDataSchema,
+  meldData: mtgCardMeldDataSchema.optional(),
 })

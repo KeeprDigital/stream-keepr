@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import type { OpCardData } from '~~/shared/schemas/opCard'
-
 type Props = {
   card: OpCardData
   hoverable?: boolean

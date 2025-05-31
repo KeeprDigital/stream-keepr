@@ -1,9 +1,9 @@
 export const useConfigStore = defineStore('Config', () => {
   const toast = useToast()
 
-  const tournamentFormData = ref<ConfigTournament>()
-  const overlayFormData = ref<ConfigOverlay>()
-  const talentFormData = ref<ConfigTalent>()
+  const tournamentFormData = ref<ConfigTournament>(defaultConfigData.tournament)
+  const overlayFormData = ref<ConfigOverlay>(defaultConfigData.overlay)
+  const talentFormData = ref<ConfigTalent>(defaultConfigData.talent)
 
   const state = shallowRef<ConfigData>()
 
@@ -23,9 +23,9 @@ export const useConfigStore = defineStore('Config', () => {
 
   function syncFormData() {
     if (state.value) {
-      tournamentFormData.value = structuredClone(toRaw(state.value.tournament))
-      overlayFormData.value = structuredClone(toRaw(state.value.overlay))
-      talentFormData.value = structuredClone(toRaw(state.value.talent))
+      tournamentFormData.value = JSON.parse(JSON.stringify(state.value.tournament))
+      overlayFormData.value = JSON.parse(JSON.stringify(state.value.overlay))
+      talentFormData.value = JSON.parse(JSON.stringify(state.value.talent))
     }
   }
 
@@ -48,8 +48,17 @@ export const useConfigStore = defineStore('Config', () => {
     return isTournamentDirty.value || isOverlayDirty.value || isTalentDirty.value
   })
 
-  const matchOrientation = computed(() => {
-    return state.value?.overlay?.matchOrientation ?? 'horizontal'
+  // Sections of the config
+  const overlay = computed(() => {
+    return state.value?.overlay ?? defaultConfigData.overlay
+  })
+
+  const tournament = computed(() => {
+    return state.value?.tournament ?? defaultConfigData.tournament
+  })
+
+  const talent = computed(() => {
+    return state.value?.talent ?? defaultConfigData.talent
   })
 
   const roundOptions = computed(() =>
@@ -70,7 +79,7 @@ export const useConfigStore = defineStore('Config', () => {
   ) {
     if (state.value && formData) {
       const updatedConfig = {
-        ...structuredClone(state.value),
+        ...JSON.parse(JSON.stringify(state.value)),
         [sectionKey]: formData,
       }
 
@@ -192,8 +201,12 @@ export const useConfigStore = defineStore('Config', () => {
     isOverlayDirty,
     isTalentDirty,
 
+    // Sections of the config
+    overlay,
+    tournament,
+    talent,
+
     // Computed properties
-    matchOrientation,
     roundOptions,
     talentOptions,
 
