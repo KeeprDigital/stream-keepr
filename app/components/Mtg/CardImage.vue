@@ -12,9 +12,70 @@ type Props = {
 
 const props = defineProps<Props>()
 
-const loaded = ref(false)
+const frontLoaded = ref(false)
+const backLoaded = ref(false)
 const previewingBack = ref(false)
 const previewingBackTimeout = ref<NodeJS.Timeout | null>(null)
+const showInitialState = ref(false)
+const initialAnimationDelay = 500
+const previousCardId = ref<string | null>(null)
+const hasHandledInitialAnimation = ref(false)
+
+// Computed to check if any transformation is active
+const hasTransformation = computed(() =>
+  props.flipped || props.rotated || props.counterRotated || props.turnedOver,
+)
+
+// Computed to check if images are ready
+const imagesReady = computed(() => {
+  if (props.card.imageData.back?.normal) {
+    return frontLoaded.value && backLoaded.value
+  }
+  return frontLoaded.value
+})
+
+// Get unique identifier for the card
+const cardId = computed(() => {
+  return `${props.card.id || props.card.name || ''}-${props.card.imageData.front?.normal || ''}`
+})
+
+// Watch for card changes vs display option changes
+watch([cardId, hasTransformation, imagesReady], ([newCardId, hasTransform, ready], [oldCardId]) => {
+  const isNewCard = newCardId !== previousCardId.value
+
+  if (isNewCard) {
+    // New card - reset states
+    frontLoaded.value = false
+    backLoaded.value = false
+    hasHandledInitialAnimation.value = false
+    showInitialState.value = false
+    previousCardId.value = newCardId
+
+    // Handle initial animation when images are ready
+    if (ready && hasTransform && !props.disableAnimation) {
+      hasHandledInitialAnimation.value = true
+      showInitialState.value = true
+      setTimeout(() => {
+        showInitialState.value = false
+      }, initialAnimationDelay)
+    }
+  }
+  else if (ready && !props.disableAnimation) {
+    // Same card, different display options - animate directly
+    showInitialState.value = false
+  }
+}, { immediate: true })
+
+// Handle initial animation when images load for new card
+watch([imagesReady], ([ready]) => {
+  if (ready && hasTransformation.value && !hasHandledInitialAnimation.value && !props.disableAnimation) {
+    hasHandledInitialAnimation.value = true
+    showInitialState.value = true
+    setTimeout(() => {
+      showInitialState.value = false
+    }, initialAnimationDelay)
+  }
+})
 
 function previewBack() {
   if (previewingBack.value && previewingBackTimeout.value) {
@@ -29,6 +90,13 @@ function previewBack() {
     }, 2000)
   }
 }
+
+// Reset states when component unmounts
+onUnmounted(() => {
+  if (previewingBackTimeout.value) {
+    clearTimeout(previewingBackTimeout.value)
+  }
+})
 </script>
 
 <template>
@@ -41,11 +109,12 @@ function previewBack() {
     <div
       class="card"
       :class="{
-        'is-flipped': flipped,
-        'is-rotated': rotated,
-        'is-turned-over': turnedOver || previewingBack,
-        'is-counter-rotated': counterRotated,
+        'is-flipped': flipped && !showInitialState,
+        'is-rotated': rotated && !showInitialState,
+        'is-turned-over': (turnedOver || previewingBack) && !showInitialState,
+        'is-counter-rotated': counterRotated && !showInitialState,
         'is-disable-animation': disableAnimation,
+        'is-showing-initial': showInitialState,
       }"
     >
       <div class="face front">
@@ -54,7 +123,7 @@ function previewBack() {
           :src="props.card.imageData.front?.normal"
           loading="lazy"
           placeholder
-          @load="loaded = true"
+          @load="frontLoaded = true"
         />
       </div>
       <div
@@ -66,12 +135,12 @@ function previewBack() {
           :src="props.card.imageData.back?.normal"
           loading="lazy"
           placeholder
-          @load="loaded = true"
+          @load="backLoaded = true"
         />
       </div>
     </div>
     <button
-      v-if="props.card.imageData.back && props.turnoverable && loaded"
+      v-if="props.card.imageData.back && props.turnoverable && frontLoaded && backLoaded"
       class="turnover-button"
       :class="{ 'is-turned-over': turnedOver || previewingBack }"
       @click.stop="previewBack"
@@ -106,6 +175,10 @@ function previewBack() {
 
     &.is-disable-animation {
       transition: none;
+    }
+
+    &.is-showing-initial {
+      transform: none !important;
     }
 
     .face {

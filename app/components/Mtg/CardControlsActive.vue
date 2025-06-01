@@ -14,8 +14,7 @@ const { activeCard } = storeToRefs(cardStore)
       :rotated="activeCard.displayData.rotated"
       :turned-over="activeCard.displayData.turnedOver"
       :counter-rotated="activeCard.displayData.counterRotated"
-      :disable-animation="true"
-      class="image"
+      :disable-animation="false"
       :card="activeCard"
       :show-flip-button="false"
     />
