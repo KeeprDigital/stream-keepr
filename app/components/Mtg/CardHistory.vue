@@ -32,9 +32,9 @@ function clearHistory() {
         >
           <MtgCardImage
             class="card-list-item-image"
-            :turnoverable="true"
             :card="card"
-            :hoverable="true"
+            :display="card.displayData"
+            display-mode="history"
             @click="selectCard(card)"
           />
           <div class="card-list-item-title">

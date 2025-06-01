@@ -16,3 +16,31 @@ export const mtgSets: {
 ] as const
 
 export type MtgFormat = (typeof mtgSets)[number]['value']
+export type MtgCardDisplayMode = 'preview' | 'output' | 'list' | 'history'
+
+export const mtgCardDisplayModes: Record<MtgCardDisplayMode, {
+  animated: boolean
+  turnoverable: boolean
+  selectable: boolean
+}> = {
+  preview: {
+    animated: true,
+    turnoverable: false,
+    selectable: false,
+  },
+  output: {
+    animated: true,
+    turnoverable: false,
+    selectable: false,
+  },
+  list: {
+    animated: true,
+    turnoverable: true,
+    selectable: true,
+  },
+  history: {
+    animated: false,
+    turnoverable: false,
+    selectable: true,
+  },
+}

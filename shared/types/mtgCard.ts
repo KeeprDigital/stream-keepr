@@ -1,7 +1,8 @@
 import type { z } from 'zod/v4'
-import type { mtgCardDataSchema } from '../schemas/mtgCard'
+import type { mtgCardDataSchema, mtgCardDisplayDataSchema } from '../schemas/mtgCard'
 
 export type MtgCardData = z.infer<typeof mtgCardDataSchema>
+export type MtgCardDisplayData = z.infer<typeof mtgCardDisplayDataSchema>
 
 export type MtgCardServerEvents = {
   connected: (card: TopicData<'mtgCard'> | null) => void

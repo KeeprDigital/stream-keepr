@@ -8,11 +8,11 @@ const cardStore = useMtgCardStore()
       <MtgCardImage
         v-for="card in cardStore.searchResults"
         :key="card.name"
-        class="card-list-item"
         :card="card"
-        :hoverable="true"
-        turnoverable
-        @click="cardStore.selectPreviewCard(card)"
+        :display="card.displayData"
+        class="card-list-item"
+        display-mode="list"
+        @selected="cardStore.selectPreviewCard(card, $event)"
       />
     </div>
   </div>

@@ -49,6 +49,7 @@ export const defaultMtgCardData: MtgCardData = {
   name: '',
   set: '',
   layout: 'normal',
+  points: 0,
   imageData: {
     front: null,
     back: null,
@@ -65,7 +66,6 @@ export const defaultMtgCardData: MtgCardData = {
     rotateable: false,
     counterRotateable: false,
   },
-  points: 0,
 }
 
 export const defaultOpCardData: OpCardData = {

@@ -15,12 +15,9 @@ const { previewCard } = storeToRefs(cardStore)
       </p>
     </div>
     <MtgCardImage
-      :flipped="previewCard.displayData.flipped"
-      :rotated="previewCard.displayData.rotated"
-      :turned-over="previewCard.displayData.turnedOver"
       :card="previewCard"
-      :counter-rotated="previewCard.displayData.counterRotated"
-      :show-flip-button="false"
+      :display="previewCard.displayData"
+      display-mode="preview"
       class="image"
     />
   </div>

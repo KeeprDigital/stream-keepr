@@ -28,9 +28,9 @@ function selectPreviewCard(card: MtgCardData) {
         >
           <MtgCardImage
             class="card-list-item-image"
-            :show-turned-over-button="true"
             :card="card"
-            :hoverable="true"
+            :display="card.displayData"
+            display-mode="list"
             @click="selectPreviewCard(card)"
           />
           <div class="card-list-item-title">

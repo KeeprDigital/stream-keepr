@@ -10,13 +10,9 @@ const { activeCard } = storeToRefs(cardStore)
       {{ activeCard.name }}
     </h2>
     <MtgCardImage
-      :flipped="activeCard.displayData.flipped"
-      :rotated="activeCard.displayData.rotated"
-      :turned-over="activeCard.displayData.turnedOver"
-      :counter-rotated="activeCard.displayData.counterRotated"
-      :disable-animation="false"
       :card="activeCard"
-      :show-flip-button="false"
+      :display="activeCard.displayData"
+      display-mode="output"
     />
     <UButton
       class="mt-4"

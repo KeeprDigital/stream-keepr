@@ -1,13 +1,12 @@
 import type { ScryfallCardFields, ScryfallImageUris } from '@scryfall/api-types'
 import { z } from 'zod/v4'
+import { sharedCardTimeoutDataSchema } from './shared'
 
 export const mtgCardDisplayDataSchema = z.object({
   flipped: z.boolean(),
   rotated: z.boolean(),
   counterRotated: z.boolean(),
   turnedOver: z.boolean(),
-  timeoutStartTimestamp: z.number().optional(),
-  timeoutDuration: z.number().optional(),
 })
 
 export const mtgCardImageDataSchema = z.object({
@@ -29,6 +28,7 @@ export const mtgCardMeldDataSchema = z.object({
 })
 
 export const mtgCardDataSchema = z.object({
+  id: z.string(),
   name: z.string(),
   set: z.string(),
   layout: z.custom<ScryfallCardFields.Core.All['layout']>(),
@@ -37,4 +37,5 @@ export const mtgCardDataSchema = z.object({
   orientationData: mtgCardOrientationDataSchema,
   displayData: mtgCardDisplayDataSchema,
   meldData: mtgCardMeldDataSchema.optional(),
+  timeoutData: sharedCardTimeoutDataSchema.optional(),
 })
