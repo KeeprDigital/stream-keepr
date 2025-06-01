@@ -10,6 +10,7 @@ const { activeCard } = storeToRefs(cardStore)
       {{ activeCard.name }}
     </h2>
     <MtgCardImage
+      :key="activeCard.id"
       :card="activeCard"
       :display="activeCard.displayData"
       display-mode="output"
