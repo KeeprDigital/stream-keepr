@@ -6,7 +6,9 @@ export const configTournamentSchema = z.object({
   description: z.string(),
   days: z.number(),
   swissRounds: z.number(),
+  swissRoundTime: z.number(),
   cutRounds: z.number(),
+  cutRoundTime: z.number(),
   playerCount: z.number(),
 })
 

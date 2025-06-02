@@ -64,6 +64,15 @@ const state = defineModel<ConfigTournament>()
         </UFormField>
         <USeparator />
         <UFormField
+          name="swissRoundTime"
+          label="Swiss round time"
+          description="Round time for swiss rounds. 0 for no time limit."
+          class="flex max-sm:flex-col justify-between items-start gap-4"
+        >
+          <UInputNumber v-model="state.swissRoundTime" :min="0" class="w-64" />
+        </UFormField>
+        <USeparator />
+        <UFormField
           name="cutRounds"
           label="Number of cut rounds"
           description="The number of cut rounds, if any."
@@ -72,6 +81,14 @@ const state = defineModel<ConfigTournament>()
           <UInputNumber v-model="state.cutRounds" :min="0" class="w-64" />
         </UFormField>
         <USeparator />
+        <UFormField
+          name="cutRoundTime"
+          label="Cut round time"
+          description="Round time for cut rounds. 0 for no time limit."
+          class="flex max-sm:flex-col justify-between items-start gap-4"
+        >
+          <UInputNumber v-model="state.cutRoundTime" :min="0" class="w-64" />
+        </UFormField>
         <UFormField
           name="playerCount"
           label="Number of players"

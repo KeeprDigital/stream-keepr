@@ -12,7 +12,9 @@ export const defaultConfigData: ConfigData = {
     description: '',
     days: 1,
     swissRounds: 1,
+    swissRoundTime: 0,
     cutRounds: 0,
+    cutRoundTime: 0,
     playerCount: 0,
   },
   overlay: {
@@ -86,5 +88,4 @@ export const defaultOpCardData: OpCardData = {
   set_name: '',
   image_url: '',
   attribute_name: '',
-  displayData: {},
 }
