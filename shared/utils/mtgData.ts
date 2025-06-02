@@ -22,25 +22,35 @@ export const mtgCardDisplayModes: Record<MtgCardDisplayMode, {
   animated: boolean
   turnoverable: boolean
   selectable: boolean
+  rotatable: boolean
+  counterRotatable: boolean
 }> = {
   preview: {
     animated: true,
     turnoverable: false,
     selectable: false,
+    rotatable: true,
+    counterRotatable: true,
   },
   output: {
     animated: true,
     turnoverable: false,
     selectable: false,
+    rotatable: true,
+    counterRotatable: true,
   },
   list: {
     animated: true,
     turnoverable: true,
     selectable: true,
+    rotatable: false,
+    counterRotatable: false,
   },
   history: {
     animated: false,
     turnoverable: false,
     selectable: true,
+    rotatable: false,
+    counterRotatable: false,
   },
 }

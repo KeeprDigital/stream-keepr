@@ -28,11 +28,14 @@ const canPreviewBack = computed(() => {
     && backLoaded.value
 })
 
-// Scale when horizontal
-const scaleFactor = computed(() => {
-  if (show.value && (props.display.rotated || props.display.counterRotated))
-    return 61 / 85
-  return 1
+const scaleFactor = computed(() => {  
+  if (!show.value)
+    return 1
+
+  const isRotated = props.display.rotated && mode.value.rotatable
+  const isCounterRotated = props.display.counterRotated && mode.value.counterRotatable
+
+  return (isRotated || isCounterRotated) ? 61 / 85 : 1
 })
 
 function selected() {
@@ -67,9 +70,9 @@ onMounted(() => {
         class="card"
         :class="{
           'flipped': show && props.display.flipped,
-          'rotated': show && props.display.rotated,
+          'rotated': show && mode.rotatable && props.display.rotated,
+          'counter-rotated': show && mode.counterRotatable && props.display.counterRotated,
           'turned-over': show && (props.display.turnedOver || previewingBack),
-          'counter-rotated': show && props.display.counterRotated,
           'animated': mode.animated,
         }"
       >

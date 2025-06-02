@@ -129,10 +129,7 @@ function updatePlayerTwo(updatedPlayer: PlayerData) {
           </div>
         </div>
 
-        <span
-          class="col-start-2 font-mono text-center"
-        >35:00</span>
-
+        <MatchControlClock />
         <UDropdownMenu
           arrow
           :items="items"
@@ -150,9 +147,9 @@ function updatePlayerTwo(updatedPlayer: PlayerData) {
         </UDropdownMenu>
       </div>
     </template>
-    <div class="flex flex-row gap-4">
-      <div>
-        <h2 class="font-bold text-center mb-4">
+    <div class="flex flex-row gap-6 -m-6">
+      <div class="p-6 pr-0">
+        <h2 class="text-sm text-center mb-4">
           {{ orientation === 'vertical' ? 'Top Player' : 'Left Player' }}
         </h2>
         <MatchPlayerControl
@@ -163,8 +160,8 @@ function updatePlayerTwo(updatedPlayer: PlayerData) {
       <div>
         <USeparator orientation="vertical" />
       </div>
-      <div>
-        <h2 class="font-bold text-center mb-4">
+      <div class="p-6 pl-0">
+        <h2 class="text-sm text-center mb-4">
           {{ orientation === 'vertical' ? 'Bottom Player' : 'Right Player' }}
         </h2>
         <MatchPlayerControl

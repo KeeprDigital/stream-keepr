@@ -73,6 +73,9 @@ export function parseMtgCard(card: ScryfallCard.Any): MtgCardData {
           front: card.image_uris ?? null,
           back: null,
         },
+        displayData: {
+          rotated: true,
+        },
         orientationData: {
           counterRotateable: card.keywords?.includes('Aftermath'),
         },

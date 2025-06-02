@@ -2,7 +2,7 @@ import { z } from 'zod/v4'
 import { playerDataSchema } from './player'
 
 export const matchDataSchema = z.object({
-  id: z.string().optional(),
+  id: z.string(),
   name: z.string().optional(),
   tableNumber: z.string(),
   playerOne: playerDataSchema,
