@@ -17,7 +17,6 @@ export const useMtgCardStore = defineStore('MtgCard', () => {
   const searchResults = ref<MtgCardData[]>([])
   const selectedSearchFormat = ref<MtgFormat>('all')
 
-
   const { optimisticEmit } = useWS({
     topic: 'mtgCard',
     serverEvents: {
@@ -30,6 +29,11 @@ export const useMtgCardStore = defineStore('MtgCard', () => {
         updateTimeout(data)
       },
     },
+  })
+
+  const cardsMatch = computed(() => {
+    return activeCard.value?.id === previewCard.value?.id
+      && JSON.stringify(activeCard.value?.displayData) === JSON.stringify(previewCard.value?.displayData)
   })
 
   const searchFormatQuery = computed(() => {
@@ -85,11 +89,32 @@ export const useMtgCardStore = defineStore('MtgCard', () => {
     })
   }
 
-  async function selectPreviewCard(cardData: MtgCardData) {
-    previewCard.value = cardData
-    previewCardPrintings.value = []
+  async function selectPreviewCard(cardData: MtgCardData, turnedOver: boolean) {
+    let shouldSearchPrintings = true
+
+    if (cardData.id === previewCard.value?.id) {
+      // Card is the same, check if turned over state is the same
+      if (turnedOver === previewCard.value.displayData.turnedOver) {
+        // Card is identical, no need to update
+        return
+      }
+      else {
+        // Card is identical, but turned over state is different, no need to search printings again
+        shouldSearchPrintings = false
+      }
+    }
+
+    previewCard.value = JSON.parse(JSON.stringify(cardData))
+
+    if (turnedOver && previewCard.value)
+      previewCard.value.displayData.turnedOver = true
+
     pushToHistory(cardData)
-    await searchCardPrints(cardData.name)
+
+    if (shouldSearchPrintings) {
+      previewCardPrintings.value = []
+      await searchCardPrints(cardData.name)
+    }
   }
 
   async function selectMeldCardPart(cardName: string) {
@@ -115,8 +140,11 @@ export const useMtgCardStore = defineStore('MtgCard', () => {
       case 'show' : {
         const action = activeCard.value ? 'replaced' : 'set'
         const cardData = previewCard.value
-        cardData.displayData.timeoutDuration = configStore.overlay.cardTimeout
-        cardData.displayData.timeoutStartTimestamp = Date.now()
+
+        cardData.timeoutData = {
+          timeoutDuration: configStore.overlay.cardTimeout,
+          timeoutStartTimestamp: Date.now(),
+        }
 
         optimisticEmit('set', {
           initialState: activeCard.value,
@@ -166,17 +194,12 @@ export const useMtgCardStore = defineStore('MtgCard', () => {
   }
 
   function updateTimeout(cardData: MtgCardData | null) {
-    if (!cardData) {
+    if (!cardData || !cardData.timeoutData) {
       timeout.reset()
       return
     }
 
-    const { timeoutStartTimestamp, timeoutDuration } = cardData.displayData
-
-    if (!timeoutStartTimestamp || !timeoutDuration) {
-      timeout.reset()
-      return
-    }
+    const { timeoutStartTimestamp, timeoutDuration } = cardData.timeoutData
 
     const elapsedMs = Date.now() - timeoutStartTimestamp
     const remainingMs = (timeoutDuration * 1000) - elapsedMs
@@ -251,5 +274,6 @@ export const useMtgCardStore = defineStore('MtgCard', () => {
     searchResults,
     selectionHistory,
     timeout,
+    cardsMatch,
   }
 })

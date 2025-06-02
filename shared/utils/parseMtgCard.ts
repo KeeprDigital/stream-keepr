@@ -3,6 +3,7 @@ import { defu } from 'defu'
 
 export function parseMtgCard(card: ScryfallCard.Any): MtgCardData {
   const cardData = defu({
+    id: card.id,
     name: card.name,
     set: card.set_name,
     layout: card.layout,

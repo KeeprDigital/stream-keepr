@@ -15,13 +15,11 @@ const { previewCard } = storeToRefs(cardStore)
       </p>
     </div>
     <MtgCardImage
-      :flipped="previewCard.displayData.flipped"
-      :rotated="previewCard.displayData.rotated"
-      :turned-over="previewCard.displayData.turnedOver"
+      :key="previewCard.id"
       :card="previewCard"
-      :counter-rotated="previewCard.displayData.counterRotated"
-      :show-flip-button="false"
-      class="image"
+      :display="previewCard.displayData"
+      display-mode="preview"
+      class="w-full"
     />
   </div>
 </template>
@@ -39,9 +37,5 @@ const { previewCard } = storeToRefs(cardStore)
     text-align: center;
     font-style: italic;
   }
-}
-
-.image {
-  width: 100%;
 }
 </style>

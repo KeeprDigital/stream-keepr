@@ -18,6 +18,7 @@ export const defaultConfigData: ConfigData = {
   overlay: {
     matchOrientation: 'horizontal',
     cardTimeout: 0,
+    cardSize: 300,
     clearPreviewOnShow: false,
   },
   talent: {
@@ -46,9 +47,11 @@ export const defaultMatchData: MatchData = {
 }
 
 export const defaultMtgCardData: MtgCardData = {
+  id: '',
   name: '',
   set: '',
   layout: 'normal',
+  points: 0,
   imageData: {
     front: null,
     back: null,
@@ -65,7 +68,6 @@ export const defaultMtgCardData: MtgCardData = {
     rotateable: false,
     counterRotateable: false,
   },
-  points: 0,
 }
 
 export const defaultOpCardData: OpCardData = {

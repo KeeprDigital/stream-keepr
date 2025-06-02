@@ -11,6 +11,7 @@ const {
   previewCard,
   previewCardPrintings,
   activeCard,
+  cardsMatch,
 } = storeToRefs(cardStore)
 
 const modal = useOverlay().create(LazyMtgCardPrinting)
@@ -32,6 +33,7 @@ function cardAction(action: MtgPreviewCardAction) {
       icon="i-lucide-replace"
       block
       color="warning"
+      :disabled="cardsMatch"
       @click="cardAction('show')"
     >
       Replace

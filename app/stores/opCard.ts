@@ -32,17 +32,12 @@ export const useOpCardStore = defineStore('OpCard', () => {
   })
 
   function updateTimeout(cardData: OpCardData | null) {
-    if (!cardData) {
+    if (!cardData || !cardData.timeoutData) {
       timeout.reset()
       return
     }
 
-    const { timeoutStartTimestamp, timeoutDuration } = cardData.displayData
-
-    if (!timeoutStartTimestamp || !timeoutDuration) {
-      timeout.reset()
-      return
-    }
+    const { timeoutStartTimestamp, timeoutDuration } = cardData.timeoutData
 
     const elapsedMs = Date.now() - timeoutStartTimestamp
     const remainingMs = (timeoutDuration * 1000) - elapsedMs
@@ -96,8 +91,11 @@ export const useOpCardStore = defineStore('OpCard', () => {
     if (action === 'show') {
       const action = activeCard.value ? 'replaced' : 'set'
       const cardData = previewCard.value
-      cardData.displayData.timeoutDuration = configStore.overlay.cardTimeout
-      cardData.displayData.timeoutStartTimestamp = Date.now()
+
+      cardData.timeoutData = {
+        timeoutDuration: configStore.overlay.cardTimeout,
+        timeoutStartTimestamp: Date.now(),
+      }
 
       optimisticEmit('set', {
         initialState: activeCard.value,

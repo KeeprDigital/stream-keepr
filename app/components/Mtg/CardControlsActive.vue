@@ -5,28 +5,37 @@ const { activeCard } = storeToRefs(cardStore)
 </script>
 
 <template>
-  <div v-if="activeCard" class="active-card">
-    <h2 class="text-center font-bold">
-      {{ activeCard.name }}
-    </h2>
-    <MtgCardImage
-      :flipped="activeCard.displayData.flipped"
-      :rotated="activeCard.displayData.rotated"
-      :turned-over="activeCard.displayData.turnedOver"
-      :counter-rotated="activeCard.displayData.counterRotated"
-      :disable-animation="true"
-      class="image"
-      :card="activeCard"
-      :show-flip-button="false"
-    />
-    <UButton
-      class="mt-4"
-      color="warning"
-      variant="outline"
-      block
-      @click="cardStore.controlActiveCard('clear')"
-    >
-      {{ cardStore.timeout.isActive ? `Clear (${cardStore.timeout.remaining}s)` : 'Clear' }}
-    </UButton>
-  </div>
+  <transition mode="out-in" name="cross-fade">
+    <div v-if="activeCard" :key="activeCard.id">
+      <h2 class="text-center font-bold">
+        {{ activeCard.name }}
+      </h2>
+      <MtgCardImage
+        :card="activeCard"
+        :display="activeCard.displayData"
+        display-mode="output"
+      />
+      <UButton
+        class="mt-4"
+        color="warning"
+        variant="outline"
+        block
+        @click="cardStore.controlActiveCard('clear')"
+      >
+        {{ cardStore.timeout.isActive ? `Clear (${cardStore.timeout.remaining}s)` : 'Clear' }}
+      </UButton>
+    </div>
+  </transition>
 </template>
+
+<style scoped>
+.cross-fade-enter-active,
+.cross-fade-leave-active {
+  transition: opacity 0.5s ease;
+}
+
+.cross-fade-enter-from,
+.cross-fade-leave-to {
+  opacity: 0;
+}
+</style>

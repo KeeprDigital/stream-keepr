@@ -38,6 +38,15 @@ const state = defineModel<ConfigOverlay>()
         </UFormField>
         <USeparator />
         <UFormField
+          name="cardSize"
+          label="Card Size"
+          description="The size of the card in pixels."
+          class="flex max-sm:flex-col justify-between items-start gap-4"
+        >
+          <UInputNumber v-model="state.cardSize" :min="100" :max="1000" />
+        </UFormField>
+        <USeparator />
+        <UFormField
           name="clearPreviewOnShow"
           label="Clear Preview on Show"
           description="Whether to clear the preview when the card is shown."

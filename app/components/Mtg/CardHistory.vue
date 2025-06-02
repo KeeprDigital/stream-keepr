@@ -6,7 +6,7 @@ const emit = defineEmits<{
 const cardStore = useMtgCardStore()
 
 function selectCard(card: MtgCardData) {
-  cardStore.selectPreviewCard(card)
+  cardStore.selectPreviewCard(card, card.displayData.turnedOver)
   emit('close')
 }
 
@@ -32,9 +32,9 @@ function clearHistory() {
         >
           <MtgCardImage
             class="card-list-item-image"
-            :turnoverable="true"
             :card="card"
-            :hoverable="true"
+            :display="card.displayData"
+            display-mode="history"
             @click="selectCard(card)"
           />
           <div class="card-list-item-title">
