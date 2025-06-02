@@ -91,14 +91,14 @@ export const useConfigStore = defineStore('Config', () => {
         onSuccess: () => {
           toast.add({
             title: successMessage,
-            icon: 'i-heroicons-check-circle',
+            icon: 'i-lucide-circle-check',
             color: 'success',
           })
         },
         onError: () => {
           toast.add({
             title: `Error saving ${sectionKey} settings`,
-            icon: 'i-heroicons-exclamation-triangle',
+            icon: 'i-lucide-triangle-alert',
             color: 'error',
           })
         },
@@ -141,14 +141,14 @@ export const useConfigStore = defineStore('Config', () => {
         onSuccess: () => {
           toast.add({
             title: 'All Settings Updated',
-            icon: 'i-heroicons-check-circle',
+            icon: 'i-lucide-circle-check',
             color: 'success',
           })
         },
         onError: () => {
           toast.add({
             title: 'Error saving settings',
-            icon: 'i-heroicons-exclamation-triangle',
+            icon: 'i-lucide-triangle-alert',
             color: 'error',
           })
         },

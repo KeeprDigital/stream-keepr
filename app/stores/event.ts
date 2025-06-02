@@ -32,14 +32,14 @@ export const useEventStore = defineStore('Event', () => {
         onSuccess: () => {
           toast.add({
             title: 'Event saved',
-            icon: 'i-heroicons-check-circle',
+            icon: 'i-lucide-circle-check',
             color: 'success',
           })
         },
         onError: () => {
           toast.add({
             title: 'Error saving event',
-            icon: 'i-heroicons-exclamation-triangle',
+            icon: 'i-lucide-triangle-alert',
             color: 'error',
           })
         },

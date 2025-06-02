@@ -13,7 +13,7 @@ const configStore = useConfigStore()
         <template #right>
           <UButton
             variant="ghost"
-            icon="i-heroicons-plus"
+            icon="i-lucide-plus"
             color="primary"
             @click="matchStore.addMatch"
           >

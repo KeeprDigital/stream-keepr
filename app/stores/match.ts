@@ -36,6 +36,7 @@ export const useMatchStore = defineStore('Match', () => {
         const id = crypto.randomUUID()
         formData.value.push({
           ...defaultMatchData,
+          name: `Match ${formData.value.length + 1}`,
           id,
         })
         return id
@@ -47,14 +48,14 @@ export const useMatchStore = defineStore('Match', () => {
         }
         toast.add({
           title: 'Match Added',
-          icon: 'i-heroicons-check-circle',
+          icon: 'i-lucide-circle-check',
           color: 'success',
         })
       },
       onError: () => {
         toast.add({
           title: 'Error adding match',
-          icon: 'i-heroicons-exclamation-triangle',
+          icon: 'i-lucide-triangle-alert',
           color: 'error',
         })
       },
@@ -69,14 +70,14 @@ export const useMatchStore = defineStore('Match', () => {
       onSuccess: () => {
         toast.add({
           title: 'Match Removed',
-          icon: 'i-heroicons-check-circle',
+          icon: 'i-lucide-circle-check',
           color: 'success',
         })
       },
       onError: () => {
         toast.add({
           title: 'Error removing match',
-          icon: 'i-heroicons-exclamation-triangle',
+          icon: 'i-lucide-triangle-alert',
           color: 'error',
         })
       },
@@ -94,14 +95,14 @@ export const useMatchStore = defineStore('Match', () => {
       onSuccess: () => {
         toast.add({
           title: 'Match Saved',
-          icon: 'i-heroicons-check-circle',
+          icon: 'i-lucide-circle-check',
           color: 'success',
         })
       },
       onError: () => {
         toast.add({
           title: 'Error saving match',
-          icon: 'i-heroicons-exclamation-triangle',
+          icon: 'i-lucide-triangle-alert',
           color: 'error',
         })
       },
