@@ -13,6 +13,7 @@ export const configTournamentSchema = z.object({
 export const configOverlaySchema = z.object({
   matchOrientation: z.enum(['horizontal', 'vertical']),
   cardTimeout: z.number(),
+  cardSize: z.number(),
   clearPreviewOnShow: z.boolean(),
 })
 

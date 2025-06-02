@@ -15,10 +15,11 @@ const { previewCard } = storeToRefs(cardStore)
       </p>
     </div>
     <MtgCardImage
+      :key="previewCard.id"
       :card="previewCard"
       :display="previewCard.displayData"
       display-mode="preview"
-      class="image"
+      class="w-full"
     />
   </div>
 </template>
@@ -36,9 +37,5 @@ const { previewCard } = storeToRefs(cardStore)
     text-align: center;
     font-style: italic;
   }
-}
-
-.image {
-  width: 100%;
 }
 </style>

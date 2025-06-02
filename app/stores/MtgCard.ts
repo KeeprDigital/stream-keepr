@@ -31,6 +31,11 @@ export const useMtgCardStore = defineStore('MtgCard', () => {
     },
   })
 
+  const cardsMatch = computed(() => {
+    return activeCard.value?.id === previewCard.value?.id
+      && JSON.stringify(activeCard.value?.displayData) === JSON.stringify(previewCard.value?.displayData)
+  })
+
   const searchFormatQuery = computed(() => {
     switch (selectedSearchFormat.value) {
       case 'all':
@@ -269,5 +274,6 @@ export const useMtgCardStore = defineStore('MtgCard', () => {
     searchResults,
     selectionHistory,
     timeout,
+    cardsMatch,
   }
 })

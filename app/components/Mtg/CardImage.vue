@@ -14,16 +14,11 @@ const emit = defineEmits<{
 const frontLoaded = ref(false)
 const backLoaded = ref(false)
 const previewingBack = ref(false)
-const isReady = ref(false)
-const isTransitioning = ref(false)
+const transitioning = ref(false)
 const show = ref(false)
 
 const mode = computed(() => {
   return mtgCardDisplayModes[props.displayMode]
-})
-
-const transition = computed(() => {
-  return mode.value.transition ? 'cross-fade' : 'none'
 })
 
 const canPreviewBack = computed(() => {
@@ -33,53 +28,48 @@ const canPreviewBack = computed(() => {
     && backLoaded.value
 })
 
-// watch(() => props.card, (newCard) => {
-//   if (newCard === null) {
-//     show.value = false
-//     nextTick(() => {
-//       show.value = true
-//     })
-//   }
-// })
+// Scale when horizontal
+const scaleFactor = computed(() => {
+  if (show.value && (props.display.rotated || props.display.counterRotated))
+    return 61 / 85
+  return 1
+})
 
 function selected() {
-  if (mode.value.selectable && !isTransitioning.value)
+  if (mode.value.selectable && !transitioning.value)
     emit('selected', previewingBack.value)
 }
 
 // Show the card in default state before animating, card id is used as the key
 onMounted(() => {
-  // if (mode.value.transition) {
-  //   show.value = true
-  // }
-
   nextTick(() => {
-    show.value = true
     setTimeout(() => {
-      isReady.value = true
-    }, 500)
+      show.value = true
+    }, 1000)
   })
 })
 </script>
 
 <template>
-  <transition :name="transition" mode="out-in">
+  <div
+    class="warpper"
+    :class="{
+      animated: mode.animated,
+      hoverable: mode.selectable && !transitioning,
+      transitioning,
+    }"
+    @click="selected()"
+  >
     <div
-      v-if="show"
       class="card-image"
-      :class="{
-        'is-hoverable': mode.selectable && !isTransitioning,
-        'is-transitioning': isTransitioning,
-      }"
-      @click="selected()"
     >
       <div
         class="card"
         :class="{
-          'flipped': isReady && props.display.flipped,
-          'rotated': isReady && props.display.rotated,
-          'turned-over': isReady && (props.display.turnedOver || previewingBack),
-          'counter-rotated': isReady && props.display.counterRotated,
+          'flipped': show && props.display.flipped,
+          'rotated': show && props.display.rotated,
+          'turned-over': show && (props.display.turnedOver || previewingBack),
+          'counter-rotated': show && props.display.counterRotated,
           'animated': mode.animated,
         }"
       >
@@ -106,31 +96,41 @@ onMounted(() => {
         </div>
       </div>
       <MtgCardImageTurnover
-        v-if="canPreviewBack && !isTransitioning"
+        v-if="canPreviewBack && !transitioning"
         @preview-back="previewingBack = $event"
       />
     </div>
-  </transition>
+  </div>
 </template>
 
 <style scoped>
-.card-image {
-  aspect-ratio: 61/85;
-  perspective: 2000px;
-  position: relative;
-  transition: scale 0.1s ease-in-out;
+.warpper {
+  scale: v-bind(scaleFactor);
 
-  &.is-hoverable {
+  &.animated {
+    transition: scale 0.6s ease-in-out;
+    .card {
+      transition: transform 0.6s ease-in-out;
+    }
+  }
+
+  &.hoverable {
     cursor: pointer;
-
+    transition: scale 0.1s ease-in-out;
     &:hover {
       scale: 1.02;
     }
   }
 
-  &.is-transitioning {
+  &.transitioning {
     pointer-events: none;
   }
+}
+
+.card-image {
+  aspect-ratio: 61/85;
+  perspective: 2000px;
+  position: relative;
 
   .card {
     position: relative;
@@ -138,27 +138,11 @@ onMounted(() => {
     transform-origin: center;
     width: 100%;
     height: 100%;
-    opacity: 1;
-    transition: opacity 0.15s ease-in-out;
-
-    &.animated {
-      transition:
-        transform 0.6s ease-in-out,
-        opacity 0.15s ease-in-out;
-    }
 
     .face {
       position: absolute;
       inset: 0;
       backface-visibility: hidden;
-
-      &.front {
-        transform: rotateY(0deg);
-      }
-
-      &.back {
-        transform: rotateY(180deg);
-      }
 
       .image {
         border-radius: 4.75% / 4%;
@@ -166,33 +150,27 @@ onMounted(() => {
         height: 100%;
         object-fit: cover;
       }
+
+      &.front {
+        transform: rotateY(0deg);
+      }
+      &.back {
+        transform: rotateY(180deg);
+      }
     }
 
     &.flipped {
       transform: rotate(180deg);
     }
-
     &.rotated {
       transform: rotate(90deg);
     }
-
     &.counter-rotated {
       transform: rotate(-90deg);
     }
-
     &.turned-over {
       transform: rotateY(180deg);
     }
   }
-}
-
-.cross-fade-enter-active,
-.cross-fade-leave-active {
-  transition: opacity 0.5s ease;
-}
-
-.cross-fade-enter-from,
-.cross-fade-leave-to {
-  opacity: 0;
 }
 </style>
