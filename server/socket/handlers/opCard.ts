@@ -17,12 +17,12 @@ export const opCardHandler: NamespaceHandler<'opCard'> = (namespace) => {
         timestamp: Date.now(),
       })
 
-      if (card.displayData.timeoutStartTimestamp && card.displayData.timeoutDuration) {
+      if (card.timeoutData && card.timeoutData.timeoutDuration > 0) {
         activeTimeout = setTimeout(() => {
-          clearStore('mtgCard')
+          clearStore('opCard')
           namespace.emit('sync', null)
           activeTimeout = null
-        }, card.displayData.timeoutDuration * 1000)
+        }, card.timeoutData.timeoutDuration * 1000)
       }
 
       namespace.except(socket.id).emit('sync', card)

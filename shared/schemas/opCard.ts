@@ -1,9 +1,5 @@
 import { z } from 'zod/v4'
-
-export const opCardDisplayDataSchema = z.object({
-  timeoutStartTimestamp: z.number().optional(),
-  timeoutDuration: z.number().optional(),
-})
+import { sharedCardTimeoutDataSchema } from './shared'
 
 export const opCardSchema = z.object({
   id: z.string(),
@@ -21,8 +17,5 @@ export const opCardSchema = z.object({
   set_name: z.string(),
   image_url: z.string(),
   attribute_name: z.string(),
-  displayData: opCardDisplayDataSchema.default({
-    timeoutStartTimestamp: undefined,
-    timeoutDuration: undefined,
-  }),
+  timeoutData: sharedCardTimeoutDataSchema.optional(),
 })

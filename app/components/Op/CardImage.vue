@@ -1,9 +1,12 @@
 <script setup lang="ts">
 type Props = {
   card: OpCardData
-  hoverable?: boolean
+  selectable?: boolean
 }
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  (e: 'selected'): void
+}>()
 const loaded = ref(false)
 </script>
 
@@ -11,8 +14,9 @@ const loaded = ref(false)
   <div
     class="card-image"
     :class="{
-      'is-hoverable': props.hoverable,
+      hoverable: props.selectable,
     }"
+    @click="emit('selected')"
   >
     <NuxtImg
       class="image"
@@ -36,7 +40,7 @@ const loaded = ref(false)
     object-fit: cover;
   }
 
-  &.is-hoverable {
+  &.hoverable {
     cursor: pointer;
 
     &:hover {
