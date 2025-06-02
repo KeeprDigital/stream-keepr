@@ -8,6 +8,7 @@ import type { Socket } from 'socket.io-client'
  * These topics represent different functional areas of the application.
  */
 export const TopicNames = [
+  'time',
   'config',
   'mtgCard',
   'opCard',
@@ -26,6 +27,7 @@ export type Topic = typeof TopicNames[number]
  * This ensures type safety when working with topic-specific data.
  */
 type TopicDataMap = {
+  time: void
   config: ConfigData
   mtgCard: MtgCardData
   opCard: OpCardData
@@ -78,6 +80,7 @@ export type NamespaceHandler<T extends Topic> = (
  * Defines what events the server can emit for each topic.
  */
 type ServerEventsMap = {
+  time: TimeServerEvents
   opCard: OpCardServerEvents
   mtgCard: MtgCardServerEvents
   event: EventServerEvents
@@ -108,6 +111,7 @@ export type NameSpaceServer<T extends Topic> = Namespace<NameSpaceClientEvents<T
  * Defines what events the client can emit for each topic.
  */
 export type ClientEventsMap = {
+  time: TimeClientEvents
   opCard: OpCardClientEvents
   mtgCard: MtgCardClientEvents
   event: EventClientEvents
@@ -126,13 +130,24 @@ export type ExtendedAckClientEventsMap = {
 }
 
 /**
+ * Topics that should NOT have AddAckToActions applied.
+ * Events for these topics will be used as-is without acknowledgment callbacks.
+ */
+export type NoAckTopics = 'time'
+
+/**
  * Extracts and enhances the client events interface for a specific topic.
- * Uses custom events if defined, otherwise adds acknowledgment callbacks to action events.
+ * Priority order:
+ * 1. If topic is in NoAckTopics, use events as-is (no AddAckToActions)
+ * 2. If topic is in ExtendedAckClientEventsMap, use custom events with AddAckToActions
+ * 3. Otherwise, use base events with AddAckToActions
  * @template T - The topic to get client events for
  */
-export type NameSpaceClientEvents<T extends Topic> = T extends keyof ExtendedAckClientEventsMap
-  ? AddAckToActions<ExtendedAckClientEventsMap[T]>
-  : AddAckToActions<ClientEventsMap[T]>
+export type NameSpaceClientEvents<T extends Topic> = T extends NoAckTopics
+  ? ClientEventsMap[T]
+  : T extends keyof ExtendedAckClientEventsMap
+    ? AddAckToActions<ExtendedAckClientEventsMap[T]>
+    : AddAckToActions<ClientEventsMap[T]>
 
 /**
  * Extracts the event names that can be emitted by the client for a specific topic.

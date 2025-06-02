@@ -4,6 +4,7 @@ import { eventHandler } from './handlers/event'
 import { matchesHandler } from './handlers/matches'
 import { mtgCardHandler } from './handlers/mtgCard'
 import { opCardHandler } from './handlers/opCard'
+import { timeHandler } from './handlers/time'
 
 type SocketServer = Server<ClientEvents, ServerEvents, InterServerEvents, SocketData>
 
@@ -14,6 +15,7 @@ export function setupNamespaces(socket: SocketServer) {
     event: socket.of('/event') as NameSpaceServer<'event'>,
     matches: socket.of('/matches') as NameSpaceServer<'matches'>,
     config: socket.of('/config') as NameSpaceServer<'config'>,
+    time: socket.of('/time') as NameSpaceServer<'time'>,
   }
 
   opCardHandler(namespaces.opCard)
@@ -21,6 +23,7 @@ export function setupNamespaces(socket: SocketServer) {
   eventHandler(namespaces.event)
   matchesHandler(namespaces.matches)
   configHandler(namespaces.config)
+  timeHandler(namespaces.time)
 
   return namespaces
 }
