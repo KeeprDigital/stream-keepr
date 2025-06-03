@@ -19,7 +19,7 @@ export type MatchData = z.infer<typeof matchDataSchema>
 export const matchClockActionPayloadSchema = z.discriminatedUnion('action', [
   z.object({
     id: z.string(),
-    action: z.enum(['start', 'stop', 'reset', 'pause', 'resume']),
+    action: z.enum(['start', 'reset', 'pause', 'resume']),
     timestamp: z.number(),
     value: z.number().optional(),
   }),

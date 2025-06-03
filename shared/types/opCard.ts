@@ -1,4 +1,4 @@
-import type { z } from 'zod/v4'
+import type { z } from 'zod'
 import type { opCardSchema } from '../schemas/opCard'
 
 export type OpCardData = z.infer<typeof opCardSchema>
