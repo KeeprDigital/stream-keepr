@@ -1,4 +1,4 @@
-import { z } from 'zod/v4'
+import { z } from 'zod'
 import { sharedCardTimeoutDataSchema } from './shared'
 
 export const opCardSchema = z.object({

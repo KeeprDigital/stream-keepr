@@ -1,5 +1,5 @@
 import type { ScryfallCardFields, ScryfallImageUris } from '@scryfall/api-types'
-import { z } from 'zod/v4'
+import { z } from 'zod'
 import { sharedCardTimeoutDataSchema } from './shared'
 
 export const mtgCardDisplayDataSchema = z.object({
