@@ -7,6 +7,12 @@ export const matchDataSchema = z.object({
   tableNumber: z.string(),
   playerOne: playerDataSchema,
   playerTwo: playerDataSchema,
+  clock: z.object({
+    running: z.boolean(),
+    initialDuration: z.number(),
+    duration: z.number(),
+    startTime: z.number(),
+  }).optional(),
 })
 export type MatchData = z.infer<typeof matchDataSchema>
 
