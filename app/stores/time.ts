@@ -1,13 +1,21 @@
-import { defineStore } from 'pinia'
-
-export const useTimeStore = defineStore('Time', () => {
+export const useTimeStore = defineStore('time', () => {
   const serverOffset = ref(0)
-  const currentTime = ref(new Date())
   const lastSyncTime = ref<Date | null>(null)
   const lastUpdateTime = ref<Date | null>(null)
-  const roundTripTime = ref(0)
-  const syncAccuracy = ref(0)
-  const syncMethod = ref<'precision' | 'broadcast' | 'none'>('none')
+  const isSyncing = ref(false)
+
+  const SERVER_SYNC_INTERVAL = 30000
+  const LOCAL_UPDATE_INTERVAL = 500
+
+  const localTime = useNow({ interval: LOCAL_UPDATE_INTERVAL })
+
+  const currentTime = computed(() => {
+    return new Date(localTime.value.getTime() + serverOffset.value)
+  })
+
+  const isTimeSynced = computed(() => {
+    return lastSyncTime.value !== null
+  })
 
   const { emit } = useWS({
     topic: 'time',
@@ -17,20 +25,11 @@ export const useTimeStore = defineStore('Time', () => {
     },
   })
 
-  function handleTimeUpdate(data: { timestamp: number }) {
-    const clientReceiveTime = Date.now()
-    const broadcastOffset = data.timestamp - clientReceiveTime
+  let syncInterval: NodeJS.Timeout | null = null
 
-    // Light smoothing for broadcasts
-    if (lastUpdateTime.value) {
-      serverOffset.value = (serverOffset.value * 0.9) + (broadcastOffset * 0.1)
-    }
-    else {
-      serverOffset.value = broadcastOffset
-    }
-
-    lastUpdateTime.value = new Date()
-    updateCurrentTime()
+  function performTimeSync() {
+    const clientTimestamp = Date.now()
+    emit('syncRequest', clientTimestamp)
   }
 
   function handleTimeSyncResponse(data: TimeSyncResponse) {
@@ -43,82 +42,65 @@ export const useTimeStore = defineStore('Time', () => {
     const newOffset = estimatedServerTime - clientEndTime
 
     // Use weighted average to smooth out network jitter
+    // Give more weight to sync responses than broadcast updates
     if (lastSyncTime.value) {
-      serverOffset.value = (serverOffset.value * 0.8) + (newOffset * 0.2)
+      serverOffset.value = (serverOffset.value * 0.7) + (newOffset * 0.3)
     }
     else {
       serverOffset.value = newOffset
     }
 
-    roundTripTime.value = roundTrip
-    syncAccuracy.value = Math.abs(networkDelay)
     lastSyncTime.value = new Date()
-    syncMethod.value = 'precision'
-
-    updateCurrentTime()
   }
 
-  function performTimeSync() {
-    const clientTimestamp = Date.now()
-    emit('syncRequest', clientTimestamp)
+  function handleTimeUpdate(data: TimeUpdate) {
+    // Only apply broadcast updates if we've had an initial sync
+    if (!isTimeSynced.value)
+      return
+
+    const clientReceiveTime = Date.now()
+    const broadcastOffset = data.timestamp - clientReceiveTime
+
+    // Use lighter weighting for broadcast updates
+    if (lastUpdateTime.value) {
+      serverOffset.value = (serverOffset.value * 0.95) + (broadcastOffset * 0.05)
+    }
+
+    lastUpdateTime.value = new Date()
   }
 
-  function updateCurrentTime() {
-    currentTime.value = new Date(Date.now() + serverOffset.value)
-  }
+  function startPeriodicSync() {
+    if (isSyncing.value)
+      return
 
-  // Auto-sync every 30 seconds
-  let syncInterval: NodeJS.Timeout
-
-  function startAutoSync() {
+    isSyncing.value = true
+    forceSync()
     syncInterval = setInterval(() => {
       performTimeSync()
-    }, 30000)
+    }, SERVER_SYNC_INTERVAL)
   }
 
-  function stopAutoSync() {
+  function stopPeriodicSync() {
     if (syncInterval) {
       clearInterval(syncInterval)
+      syncInterval = null
     }
+    isSyncing.value = false
   }
 
-  // Computed properties for component use
-  const timeSinceLastUpdate = computed(() => {
-    if (!lastUpdateTime.value)
-      return null
-    return Math.floor((Date.now() - lastUpdateTime.value.getTime()) / 1000)
-  })
+  function forceSync() {
+    performTimeSync()
+  }
 
-  const timeSinceLastSync = computed(() => {
-    if (!lastSyncTime.value)
-      return null
-    return Math.floor((Date.now() - lastSyncTime.value.getTime()) / 1000)
-  })
-
-  const isStale = computed(() => {
-    const updateStale = lastUpdateTime.value
-      ? (Date.now() - lastUpdateTime.value.getTime()) > 120000
-      : true // 2 minutes
-    const syncStale = lastSyncTime.value
-      ? (Date.now() - lastSyncTime.value.getTime()) > 300000
-      : true // 5 minutes
-
-    return updateStale && syncStale
+  onUnmounted(() => {
+    stopPeriodicSync()
   })
 
   return {
-    serverOffset: readonly(serverOffset),
-    currentTime: readonly(currentTime),
-    lastSyncTime: readonly(lastSyncTime),
-    lastUpdateTime: readonly(lastUpdateTime),
-    roundTripTime: readonly(roundTripTime),
-    syncAccuracy: readonly(syncAccuracy),
-    syncMethod: readonly(syncMethod),
-    timeSinceLastUpdate,
-    timeSinceLastSync,
-    isStale,
-    performTimeSync,
-    startAutoSync,
-    stopAutoSync,
+    currentTime,
+    isSyncing,
+    forceSync,
+    startPeriodicSync,
+    stopPeriodicSync,
   }
 })
