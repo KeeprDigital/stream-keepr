@@ -1,4 +1,4 @@
-import type { z } from 'zod'
+import type { z } from 'zod/v4'
 import type { matchClockActionPayloadSchema, matchDataSchema } from '../schemas/match'
 
 export type MatchData = z.infer<typeof matchDataSchema>

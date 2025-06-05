@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from 'zod/v4'
 
 export const configTournamentSchema = z.object({
   game: z.enum(['mtg', 'op']),

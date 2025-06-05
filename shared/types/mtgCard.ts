@@ -1,4 +1,4 @@
-import type { z } from 'zod'
+import  type { z } from 'zod/v4'
 import type { mtgCardDataSchema, mtgCardDisplayDataSchema } from '../schemas/mtgCard'
 
 export type MtgCardData = z.infer<typeof mtgCardDataSchema>

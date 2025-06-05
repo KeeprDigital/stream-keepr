@@ -1,4 +1,4 @@
-import type { z } from 'zod'
+import  type { z } from 'zod/v4'
 import type { eventDataSchema } from '../schemas/event'
 
 export type EventData = z.infer<typeof eventDataSchema>

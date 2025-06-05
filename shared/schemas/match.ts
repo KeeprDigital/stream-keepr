@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from 'zod/v4'
 import { playerDataSchema } from './player'
 
 export const matchDataSchema = z.object({
