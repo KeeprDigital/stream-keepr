@@ -23,7 +23,14 @@ export const useConfigStore = defineStore('Config', () => {
 
   function syncFormData() {
     if (state.value) {
-      tournamentFormData.value = JSON.parse(JSON.stringify(state.value.tournament))
+      tournamentFormData.value = JSON.parse(JSON.stringify(
+        {
+          ...state.value.tournament,
+          swissRoundTime: duration.toMinutes(state.value.tournament.swissRoundTime),
+          cutRoundTime: duration.toMinutes(state.value.tournament.cutRoundTime),
+        },
+      ))
+
       overlayFormData.value = JSON.parse(JSON.stringify(state.value.overlay))
       talentFormData.value = JSON.parse(JSON.stringify(state.value.talent))
     }
@@ -111,13 +118,24 @@ export const useConfigStore = defineStore('Config', () => {
   }
 
   function saveTournament() {
-    if (tournamentFormData.value)
-      saveSection('tournament', tournamentFormData.value, 'Tournament Settings Updated')
+    if (tournamentFormData.value) {
+      const updatedTournament = {
+        ...tournamentFormData.value,
+        swissRoundTime: duration.toMs(tournamentFormData.value.swissRoundTime),
+        cutRoundTime: duration.toMs(tournamentFormData.value.cutRoundTime),
+      }
+      saveSection('tournament', updatedTournament, 'Tournament Settings Updated')
+    }
   }
 
   function saveOverlay() {
-    if (overlayFormData.value)
-      saveSection('overlay', overlayFormData.value, 'Overlay Settings Updated')
+    if (overlayFormData.value) {
+      const updatedOverlay = {
+        ...overlayFormData.value,
+        cardTimeout: duration.toMs(overlayFormData.value.cardTimeout),
+      }
+      saveSection('overlay', updatedOverlay, 'Overlay Settings Updated')
+    }
   }
 
   function saveTalent() {
