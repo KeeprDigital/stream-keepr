@@ -1,5 +1,4 @@
 import type { H3Event } from 'h3'
-import type { OpCardData } from '~~/shared/schemas/opCard'
 import path from 'node:path'
 import process from 'node:process'
 import Database from 'better-sqlite3'

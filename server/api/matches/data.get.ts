@@ -1,6 +1,5 @@
 export default defineEventHandler(async () => {
-  const local = useStorage('local')
-  const matchData = await local.getItem<MatchData[]>('matches')
+  const matchData = await getStore('matches')
 
   if (matchData) {
     matchData.forEach((match) => {
