@@ -39,6 +39,7 @@ export const matchesHandler: NamespaceHandler<'matches'> = (namespace) => {
       const newMatch = {
         ...defaultMatchData,
         id: crypto.randomUUID(),
+        name: `Match ${matches.length + 1}`,
         clock,
       }
       matches.push(newMatch)
@@ -46,6 +47,7 @@ export const matchesHandler: NamespaceHandler<'matches'> = (namespace) => {
       ack({
         success: true,
         matchId: newMatch.id,
+        matchName: newMatch.name,
         clock: newMatch.clock,
       })
       namespace.except(socket.id).emit('sync', matches)
@@ -66,8 +68,10 @@ export const matchesHandler: NamespaceHandler<'matches'> = (namespace) => {
 
     socket.on('set', async (matchData, ack) => {
       const matches = await getStore('matches') ?? []
-      const match = matches.find(m => m.id === matchData.id)
-      if (match) {
+      const matchIndex = matches.findIndex(m => m.id === matchData.id)
+
+      if (matchIndex !== -1) {
+        matches[matchIndex] = matchData
         setStore('matches', matches)
         ack({
           success: true,

@@ -23,6 +23,10 @@ export type MatchClientEvents = {
 export type ExtendMatchClientEvents = ExtendAckCallback<
   MatchClientEvents,
   {
-    add: { matchId: string, clock?: MatchClockData }
+    add: {
+      matchId: string
+      matchName: string
+      clock?: MatchClockData
+    }
   }
 >

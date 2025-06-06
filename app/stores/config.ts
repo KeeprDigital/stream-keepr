@@ -32,7 +32,10 @@ export const useConfigStore = defineStore('Config', () => {
         },
       ))
 
-      overlayFormData.value = JSON.parse(JSON.stringify(state.value.overlay))
+      overlayFormData.value = JSON.parse(JSON.stringify({
+        ...state.value.overlay,
+        cardTimeout: durationUtils.msToMinutes(state.value.overlay.cardTimeout),
+      }))
       talentFormData.value = JSON.parse(JSON.stringify(state.value.talent))
     }
   }
@@ -41,15 +44,31 @@ export const useConfigStore = defineStore('Config', () => {
 
   // Individual dirty state computeds
   const isTournamentDirty = computed(() => {
-    return JSON.stringify(state.value?.tournament) !== JSON.stringify(tournamentFormData.value)
+    if (!state.value?.tournament || !tournamentFormData.value)
+      return false
+    const formDataInMs = {
+      ...tournamentFormData.value,
+      defaultClockDuration: durationUtils.minutesToMs(tournamentFormData.value.defaultClockDuration),
+      swissRoundTime: durationUtils.minutesToMs(tournamentFormData.value.swissRoundTime),
+      cutRoundTime: durationUtils.minutesToMs(tournamentFormData.value.cutRoundTime),
+    }
+    return JSON.stringify(state.value.tournament) !== JSON.stringify(formDataInMs)
   })
 
   const isOverlayDirty = computed(() => {
-    return JSON.stringify(state.value?.overlay) !== JSON.stringify(overlayFormData.value)
+    if (!state.value?.overlay || !overlayFormData.value)
+      return false
+    const formDataInMs = {
+      ...overlayFormData.value,
+      cardTimeout: durationUtils.minutesToMs(overlayFormData.value.cardTimeout),
+    }
+    return JSON.stringify(state.value.overlay) !== JSON.stringify(formDataInMs)
   })
 
   const isTalentDirty = computed(() => {
-    return JSON.stringify(state.value?.talent) !== JSON.stringify(talentFormData.value)
+    if (!state.value?.talent || !talentFormData.value)
+      return false
+    return JSON.stringify(state.value.talent) !== JSON.stringify(talentFormData.value)
   })
 
   const isDirty = computed(() => {

@@ -73,7 +73,7 @@ export const defaultMatchData: MatchData = {
 
 export function createDefaultMatch(params: {
   id: string
-  name: string
+  name?: string
 }): MatchData {
   return {
     ...defaultMatchData,

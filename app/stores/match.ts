@@ -73,7 +73,6 @@ export const useMatchStore = defineStore('Match', () => {
         const id = crypto.randomUUID()
         const match = createDefaultMatch({
           id,
-          name: `Match ${formData.value.length + 1}`,
         })
         formData.value.push(match)
         return id
@@ -82,6 +81,7 @@ export const useMatchStore = defineStore('Match', () => {
         const match = formData.value.find(match => match.id === result)
         if (match) {
           match.id = response.matchId
+          match.name = response.matchName
           match.clock = response.clock
         }
 
