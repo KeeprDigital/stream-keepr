@@ -1,8 +1,10 @@
 <script setup lang="ts">
 type Props = {
   roundOptions: string[]
+  dayOptions: string[]
   talentOptions: string[]
   dirty: boolean
+  eventMode: string
 }
 
 type Emits = {
@@ -28,8 +30,33 @@ function createTalent(name: string) {
   >
     <UCard variant="subtle">
       <div class="w-full flex flex-col gap-4">
+        <UFormField label="Current Day" name="currentDay">
+          <USelect
+            v-if="eventMode === 'tournament'"
+            v-model="state.currentDay"
+            class="w-full"
+            :items="dayOptions"
+          />
+          <UInput
+            v-else
+            v-model="state.currentDay"
+            class="w-full"
+            placeholder="Enter current day/date"
+          />
+        </UFormField>
         <UFormField label="Current Round" name="currentRound">
-          <USelect v-model="state.currentRound" class="w-full" :items="roundOptions" />
+          <USelect
+            v-if="eventMode === 'tournament'"
+            v-model="state.currentRound"
+            class="w-full"
+            :items="roundOptions"
+          />
+          <UInput
+            v-else
+            v-model="state.currentRound"
+            class="w-full"
+            placeholder="Enter current round/phase"
+          />
         </UFormField>
         <div class="flex gap-4">
           <UFormField class="w-full" label="Left Talent" name="leftTalent">

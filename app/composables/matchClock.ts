@@ -1,20 +1,3 @@
-function formatTime(milliseconds: number) {
-  const totalSeconds = Math.floor(milliseconds / 1000)
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-
-  const paddedMinutes = minutes.toString().padStart(2, '0')
-  const paddedSeconds = seconds.toString().padStart(2, '0')
-
-  return {
-    minutes: paddedMinutes,
-    seconds: paddedSeconds,
-    display: `${paddedMinutes}:${paddedSeconds}`,
-    totalSeconds,
-    totalMinutes: minutes,
-  }
-}
-
 export function useMatchClock(matchId: string) {
   const matchStore = useMatchStore()
   const timeStore = useTimeStore()
@@ -23,86 +6,88 @@ export function useMatchClock(matchId: string) {
 
   const match = computed(() => matchStore.getMatch(matchId))
 
-  const currentClockTime = computed(() => {
-    const clock = match.value?.clock
+  const clock = match.value?.clock
+
+  const hasClock = computed(() => !!clock)
+  const isRunning = computed(() => clock?.running ?? false)
+  const clockMode = computed(() => clock?.mode ?? 'countdown')
+  const isExpired = computed(() => {
     if (!clock)
-      return 0
-
-    if (!clock.running)
-      return clock.duration
-
-    const elapsed = timeStore.currentTime.getTime() - clock.startTime
-    return Math.max(0, clock.duration - elapsed)
+      return false
+    return matchClockUtils.isExpired(clock, timeStore.currentTime.getTime())
   })
 
-  const formattedTime = computed(() => formatTime(currentClockTime.value))
+  const currentRemainingTime = computed(() => {
+    if (!clock)
+      return 0
+    return matchClockUtils.getRemainingTime(clock, timeStore.currentTime.getTime())
+  })
 
-  const isRunning = computed(() => match.value?.clock?.running || false)
-  const isExpired = computed(() => currentClockTime.value <= 0 && isRunning.value)
-  const hasExpired = computed(() => currentClockTime.value <= 0)
-  const hasClock = computed(() => !!match.value?.clock)
+  const currentElapsedTime = computed(() => {
+    if (!clock)
+      return 0
+    return matchClockUtils.getCurrentElapsedTime(clock, timeStore.currentTime.getTime())
+  })
+
+  const currentDisplayTime = computed(() => {
+    if (!clock)
+      return 0
+    return clock.mode === 'countup'
+      ? currentElapsedTime.value
+      : currentRemainingTime.value
+  })
+
+  const formattedDisplayTime = computed(() => {
+    if (!clock)
+      return 0
+    return durationUtils.msToParts(currentDisplayTime.value)
+  })
 
   const progress = computed(() => {
-    if (!match.value?.clock)
+    if (!clock || clock.mode === 'countup')
       return 0
-    const initial = match.value.clock.initialDuration
-    const current = currentClockTime.value
-    return Math.max(0, Math.min(100, (current / initial) * 100))
+    const elapsed = currentElapsedTime.value
+    const total = clock.totalDuration
+    return Math.max(0, Math.min(100, (elapsed / total) * 100))
   })
 
   function start() {
-    matchStore.controlClock({
-      id: matchId,
-      action: 'start',
-      timestamp: timeStore.currentTime.getTime(),
-    })
+    matchStore.controlClock({ id: matchId, action: 'start' })
   }
 
   function pause() {
-    matchStore.controlClock({
-      id: matchId,
-      action: 'pause',
-      timestamp: timeStore.currentTime.getTime(),
-    })
+    matchStore.controlClock({ id: matchId, action: 'pause' })
   }
 
   function resume() {
-    matchStore.controlClock({
-      id: matchId,
-      action: 'resume',
-      timestamp: timeStore.currentTime.getTime(),
-    })
+    matchStore.controlClock({ id: matchId, action: 'resume' })
   }
 
   function reset() {
-    matchStore.controlClock({
-      id: matchId,
-      action: 'reset',
-      timestamp: timeStore.currentTime.getTime(),
-    })
+    matchStore.controlClock({ id: matchId, action: 'reset' })
   }
 
-  function setTime(milliseconds: number) {
-    matchStore.controlClock({
-      id: matchId,
-      action: 'set',
-      timestamp: timeStore.currentTime.getTime(),
-      value: milliseconds,
-    })
+  function setDuration(milliseconds: number) {
+    matchStore.controlClock({ id: matchId, action: 'set', value: milliseconds })
   }
 
   function adjustTime(milliseconds: number) {
-    matchStore.controlClock({
-      id: matchId,
-      action: 'adjust',
-      timestamp: timeStore.currentTime.getTime(),
-      value: milliseconds,
-    })
+    matchStore.controlClock({ id: matchId, action: 'adjust', value: milliseconds })
+  }
+
+  function setMode(mode: MatchClockMode) {
+    if (isRunning.value) {
+      return
+    }
+    matchStore.controlClock({ id: matchId, action: 'setMode', mode })
   }
 
   function toggle() {
     if (isRunning.value) {
       pause()
+    }
+    else if (currentElapsedTime.value > 0) {
+      resume()
     }
     else {
       start()
@@ -110,24 +95,19 @@ export function useMatchClock(matchId: string) {
   }
 
   return {
-    // Data
-    match,
-    formattedTime,
-
-    // States
+    currentElapsedTime,
+    currentRemainingTime,
+    currentDisplayTime,
+    clockMode,
     isRunning,
     isExpired,
-    hasExpired,
     hasClock,
     progress,
-
-    // Actions
-    start,
-    pause,
-    resume,
+    formattedDisplayTime,
     reset,
-    setTime,
+    setDuration,
     adjustTime,
+    setMode,
     toggle,
   }
 }

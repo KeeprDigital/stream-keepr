@@ -55,40 +55,85 @@ const state = defineModel<ConfigTournament>()
         </UFormField>
         <USeparator />
         <UFormField
-          name="swissRounds"
-          label="Number of swiss rounds"
-          description="The number of swiss rounds."
+          name="eventMode"
+          label="Event Mode"
+          description="Choose how the event is structured and managed."
           class="flex max-sm:flex-col justify-between items-start gap-4"
         >
-          <UInputNumber v-model="state.swissRounds" :min="1" class="w-64" />
+          <USelect
+            v-model="state.eventMode"
+            :items="[
+              { label: 'Tournament Structure', value: 'tournament' },
+              { label: 'Manual Control', value: 'manual' },
+            ]"
+            class="w-64"
+          />
         </UFormField>
-        <USeparator />
-        <UFormField
-          name="swissRoundTime"
-          label="Swiss round time"
-          description="Round time for swiss rounds. 0 for no time limit."
-          class="flex max-sm:flex-col justify-between items-start gap-4"
-        >
-          <UInputNumber v-model="state.swissRoundTime" :min="0" class="w-64" />
-        </UFormField>
-        <USeparator />
-        <UFormField
-          name="cutRounds"
-          label="Number of cut rounds"
-          description="The number of cut rounds, if any."
-          class="flex max-sm:flex-col justify-between items-start gap-4"
-        >
-          <UInputNumber v-model="state.cutRounds" :min="0" class="w-64" />
-        </UFormField>
-        <USeparator />
-        <UFormField
-          name="cutRoundTime"
-          label="Cut round time"
-          description="Round time for cut rounds. 0 for no time limit."
-          class="flex max-sm:flex-col justify-between items-start gap-4"
-        >
-          <UInputNumber v-model="state.cutRoundTime" :min="0" class="w-64" />
-        </UFormField>
+        <template v-if="state.eventMode === 'manual'">
+          <USeparator />
+          <UFormField
+            name="defaultClockDuration"
+            label="Default Clock Duration"
+            description="Default time for new match clocks (in minutes). 0 for no time limit."
+            class="flex max-sm:flex-col justify-between items-start gap-4"
+          >
+            <UInputNumber v-model="state.defaultClockDuration" :min="0" class="w-64" />
+          </UFormField>
+          <USeparator />
+          <UFormField
+            name="defaultClockMode"
+            label="Default Clock Mode"
+            description="Default counting mode for new match clocks."
+            class="flex max-sm:flex-col justify-between items-start gap-4"
+          >
+            <USelect
+              v-model="state.defaultClockMode"
+              :items="[
+                { label: 'Countdown', value: 'countdown' },
+                { label: 'Count Up', value: 'countup' },
+              ]"
+              class="w-64"
+            />
+          </UFormField>
+        </template>
+        <template v-if="state.eventMode === 'tournament'">
+          <USeparator />
+          <UFormField
+            name="swissRounds"
+            label="Number of swiss rounds"
+            description="The number of swiss rounds."
+            class="flex max-sm:flex-col justify-between items-start gap-4"
+          >
+            <UInputNumber v-model="state.swissRounds" :min="1" class="w-64" />
+          </UFormField>
+          <USeparator />
+          <UFormField
+            name="swissRoundTime"
+            label="Swiss round time"
+            description="Round time for swiss rounds. 0 for no time limit."
+            class="flex max-sm:flex-col justify-between items-start gap-4"
+          >
+            <UInputNumber v-model="state.swissRoundTime" :min="0" class="w-64" />
+          </UFormField>
+          <USeparator />
+          <UFormField
+            name="cutRounds"
+            label="Number of cut rounds"
+            description="The number of cut rounds, if any."
+            class="flex max-sm:flex-col justify-between items-start gap-4"
+          >
+            <UInputNumber v-model="state.cutRounds" :min="0" class="w-64" />
+          </UFormField>
+          <USeparator />
+          <UFormField
+            name="cutRoundTime"
+            label="Cut round time"
+            description="Round time for cut rounds. 0 for no time limit."
+            class="flex max-sm:flex-col justify-between items-start gap-4"
+          >
+            <UInputNumber v-model="state.cutRoundTime" :min="0" class="w-64" />
+          </UFormField>
+        </template>
         <UFormField
           name="playerCount"
           label="Number of players"

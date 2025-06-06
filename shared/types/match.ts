@@ -1,7 +1,12 @@
 import type { z } from 'zod/v4'
-import type { matchClockActionPayloadSchema, matchDataSchema } from '../schemas/match'
+import type { matchClockActionPayloadSchema, matchClockSchema, matchDataSchema } from '../schemas/match'
 
 export type MatchData = z.infer<typeof matchDataSchema>
+export type MatchClockData = z.infer<typeof matchClockSchema>
+export type MatchClockMode = MatchClockData['mode']
+
+export type MatchClockActionPayload = z.infer<typeof matchClockActionPayloadSchema>
+export type MatchClockAction = MatchClockActionPayload['action']
 
 export type MatchesServerEvents = {
   connected: (match: TopicData<'matches'>) => void
@@ -18,9 +23,6 @@ export type MatchClientEvents = {
 export type ExtendMatchClientEvents = ExtendAckCallback<
   MatchClientEvents,
   {
-    add: { matchId: string }
+    add: { matchId: string, clock?: MatchClockData }
   }
 >
-
-export type MatchClockActionPayload = z.infer<typeof matchClockActionPayloadSchema>
-export type MatchClockAction = MatchClockActionPayload['action']

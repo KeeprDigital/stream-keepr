@@ -18,8 +18,10 @@ const configStore = useConfigStore()
         <EventForm
           v-model="eventStore.formData"
           :dirty="eventStore.isDirty"
+          :day-options="configStore.dayOptions"
           :round-options="configStore.roundOptions"
           :talent-options="configStore.talentOptions"
+          :event-mode="configStore.tournament.eventMode"
           @save="eventStore.save"
           @reset="eventStore.reset"
           @create-talent="configStore.createTalent"

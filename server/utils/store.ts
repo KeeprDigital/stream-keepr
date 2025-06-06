@@ -3,7 +3,7 @@ export function getStore<T extends Topic>(store: T) {
   return storage
 }
 
-export function setStore<T extends Topic>(store: T, data: TopicData<T>) {
+export function setStore<T extends Exclude<Topic, 'time'>>(store: T, data: TopicData<T>) {
   useStorage('local').setItem(store, data)
 }
 

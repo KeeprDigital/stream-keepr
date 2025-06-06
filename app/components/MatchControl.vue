@@ -128,8 +128,7 @@ function updatePlayerTwo(updatedPlayer: PlayerData) {
             </div>
           </div>
         </div>
-
-        <MatchControlClock />
+        <MatchControlClock :match-id="localMatch.id" />
         <UDropdownMenu
           arrow
           :items="items"

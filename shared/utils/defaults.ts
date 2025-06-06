@@ -1,4 +1,5 @@
 export const defaultEventData: EventData = {
+  currentDay: '',
   currentRound: '',
   leftTalent: '',
   rightTalent: '',
@@ -11,6 +12,9 @@ export const defaultConfigData: ConfigData = {
     name: '',
     description: '',
     days: 1,
+    eventMode: 'tournament',
+    defaultClockDuration: 3000000, // 50 minutes in milliseconds
+    defaultClockMode: 'countdown',
     swissRounds: 1,
     swissRoundTime: 0,
     cutRounds: 0,
@@ -40,38 +44,6 @@ export const defaultPlayerData: PlayerData = {
   },
 }
 
-export const defaultMatchData: MatchData = {
-  id: '',
-  name: '',
-  playerOne: defaultPlayerData,
-  playerTwo: defaultPlayerData,
-  tableNumber: '',
-}
-
-export const defaultMtgCardData: MtgCardData = {
-  id: '',
-  name: '',
-  set: '',
-  layout: 'normal',
-  points: 0,
-  imageData: {
-    front: null,
-    back: null,
-  },
-  displayData: {
-    flipped: false,
-    turnedOver: false,
-    rotated: false,
-    counterRotated: false,
-  },
-  orientationData: {
-    flipable: false,
-    turnable: false,
-    rotateable: false,
-    counterRotateable: false,
-  },
-}
-
 export const defaultOpCardData: OpCardData = {
   id: '',
   code: '',
@@ -88,4 +60,36 @@ export const defaultOpCardData: OpCardData = {
   set_name: '',
   image_url: '',
   attribute_name: '',
+}
+
+export const defaultMatchData: MatchData = {
+  id: '',
+  name: '',
+  tableNumber: '',
+  playerOne: defaultPlayerData,
+  playerTwo: defaultPlayerData,
+  clock: undefined,
+}
+
+export function createDefaultMatch(params: {
+  id: string
+  name: string
+}): MatchData {
+  return {
+    ...defaultMatchData,
+    playerOne: { ...defaultPlayerData },
+    playerTwo: { ...defaultPlayerData },
+    ...params,
+  }
+}
+
+export function createMatchClock(durationMs: number): MatchClockData {
+  return {
+    totalDuration: durationMs,
+    initialDuration: durationMs,
+    running: false,
+    elapsedTime: 0,
+    startTime: null,
+    mode: 'countdown',
+  }
 }

@@ -2,7 +2,12 @@ export const useMatchStore = defineStore('Match', () => {
   const formData = ref<MatchData[]>([])
   const state = shallowRef<MatchData[]>([])
 
+  const eventStore = useEventStore()
+  const configStore = useConfigStore()
+
   const toast = useToast()
+  const timeStore = useTimeStore()
+
   const { optimisticEmit } = useWS({
     topic: 'matches',
     serverEvents: {
@@ -14,6 +19,34 @@ export const useMatchStore = defineStore('Match', () => {
   watch(state, (newVal) => {
     formData.value = JSON.parse(JSON.stringify(newVal))
   })
+
+  // Watch for changes in event mode, current round, or tournament configuration
+  // and automatically sync match clocks when in tournament structure mode
+  watch(
+    [
+      () => configStore.tournament.eventMode,
+      () => eventStore.formData?.currentRound,
+      () => configStore.tournament.swissRoundTime,
+      () => configStore.tournament.cutRoundTime,
+      () => configStore.tournament.swissRounds,
+      () => configStore.tournament.cutRounds,
+    ],
+    () => {
+      try {
+        syncClocksWithTournamentStructure()
+      }
+      catch (error) {
+        console.error('Failed to sync clocks with tournament structure:', error)
+        toast.add({
+          title: 'Clock sync failed',
+          description: 'Failed to update match clocks for current round',
+          icon: 'i-lucide-triangle-alert',
+          color: 'error',
+        })
+      }
+    },
+    { immediate: true, deep: true },
+  )
 
   const isDirty = computed(() => {
     return (id: string) => {
@@ -29,23 +62,31 @@ export const useMatchStore = defineStore('Match', () => {
     }
   })
 
+  const getMatch = computed(() => {
+    return (id: string) => formData.value.find(match => match.id === id)
+  })
+
   function addMatch() {
     optimisticEmit('add', {
       initialState: state.value,
       action: () => {
         const id = crypto.randomUUID()
-        formData.value.push({
-          ...defaultMatchData,
-          name: `Match ${formData.value.length + 1}`,
+        const match = createDefaultMatch({
           id,
+          name: `Match ${formData.value.length + 1}`,
         })
+        formData.value.push(match)
         return id
       },
       onSuccess: (response, result) => {
         const match = formData.value.find(match => match.id === result)
         if (match) {
           match.id = response.matchId
+          match.clock = response.clock
         }
+
+        state.value = formData.value
+
         toast.add({
           title: 'Match Added',
           icon: 'i-lucide-circle-check',
@@ -117,12 +158,87 @@ export const useMatchStore = defineStore('Match', () => {
     }
   }
 
+  function syncClocksWithTournamentStructure() {
+    // Only sync clocks when in tournament structure mode
+    if (configStore.tournament.eventMode !== 'tournament') {
+      return
+    }
+
+    const currentRound = eventStore.formData?.currentRound
+    if (!currentRound) {
+      return
+    }
+
+    const roundInfo = getCurrentRoundInfo(
+      currentRound,
+      configStore.tournament.swissRoundTime,
+      configStore.tournament.cutRoundTime,
+      configStore.tournament.swissRounds,
+      configStore.tournament.cutRounds,
+    )
+
+    const { duration, mode } = roundInfo
+    let updatedCount = 0
+
+    // Update all non-running clocks to match current round settings
+    formData.value.forEach((match) => {
+      if (match.clock && !match.clock.running) {
+        match.clock.initialDuration = duration
+        match.clock.mode = mode
+        match.clock.totalDuration = mode === 'countup' ? Number.MAX_SAFE_INTEGER : duration
+        match.clock.elapsedTime = 0
+        match.clock.startTime = null
+        updatedCount++
+      }
+    })
+
+    // Only trigger reactivity update if clocks were actually modified
+    if (updatedCount > 0) {
+      formData.value = [...formData.value]
+    }
+  }
+
+  function controlClock(payload: MatchClockActionPayload) {
+    const match = getMatch.value(payload.id)
+    if (!match || !match.clock)
+      return
+
+    const currentTime = timeStore.currentTime.getTime()
+
+    optimisticEmit('clock', {
+      initialState: formData.value,
+      action: () => {
+        updateClockState(match.clock!, payload, currentTime)
+        formData.value = [...formData.value]
+      },
+      onSuccess: () => {
+        // Server successfully processed the clock action
+        // The state is already updated optimistically
+      },
+      onError: () => {
+        toast.add({
+          title: 'Clock action failed',
+          description: 'Failed to synchronize clock action with server',
+          icon: 'i-lucide-triangle-alert',
+          color: 'error',
+        })
+      },
+      rollback: (initialState) => {
+        formData.value = initialState
+      },
+    }, payload)
+  }
+
   return {
+    state: readonly(state),
     formData,
     isDirty,
+    getMatch,
     saveMatch,
     addMatch,
     removeMatch,
     updateMatch,
+    syncClocksWithTournamentStructure,
+    controlClock,
   }
 })

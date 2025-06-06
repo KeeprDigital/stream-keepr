@@ -6,7 +6,7 @@ const emit = defineEmits<{
 const cardStore = useMtgCardStore()
 
 function selectPreviewCard(card: MtgCardData) {
-  cardStore.selectPreviewCard(card)
+  cardStore.selectPreviewCard(card, card.displayData.turnedOver)
   emit('close')
 }
 </script>

@@ -1,32 +1,37 @@
 import { z } from 'zod/v4'
 import { playerDataSchema } from './player'
 
+export const matchClockSchema = z.object({
+  running: z.boolean(),
+  totalDuration: z.number(),
+  elapsedTime: z.number(),
+  startTime: z.number().nullable(),
+  mode: z.enum(['countdown', 'countup']),
+  initialDuration: z.number(),
+})
+
 export const matchDataSchema = z.object({
   id: z.string(),
   name: z.string().optional(),
-  tableNumber: z.string(),
+  tableNumber: z.string().optional(),
   playerOne: playerDataSchema,
   playerTwo: playerDataSchema,
-  clock: z.object({
-    running: z.boolean(),
-    initialDuration: z.number(),
-    duration: z.number(),
-    startTime: z.number(),
-  }).optional(),
+  clock: matchClockSchema.optional(),
 })
-export type MatchData = z.infer<typeof matchDataSchema>
 
 export const matchClockActionPayloadSchema = z.discriminatedUnion('action', [
   z.object({
     id: z.string(),
     action: z.enum(['start', 'reset', 'pause', 'resume']),
-    timestamp: z.number(),
-    value: z.number().optional(),
   }),
   z.object({
     id: z.string(),
     action: z.enum(['set', 'adjust']),
-    timestamp: z.number(),
     value: z.number(),
+  }),
+  z.object({
+    id: z.string(),
+    action: z.enum(['setMode']),
+    mode: z.enum(['countdown', 'countup']),
   }),
 ])

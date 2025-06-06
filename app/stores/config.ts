@@ -26,8 +26,9 @@ export const useConfigStore = defineStore('Config', () => {
       tournamentFormData.value = JSON.parse(JSON.stringify(
         {
           ...state.value.tournament,
-          swissRoundTime: duration.toMinutes(state.value.tournament.swissRoundTime),
-          cutRoundTime: duration.toMinutes(state.value.tournament.cutRoundTime),
+          defaultClockDuration: durationUtils.msToMinutes(state.value.tournament.defaultClockDuration),
+          swissRoundTime: durationUtils.msToMinutes(state.value.tournament.swissRoundTime),
+          cutRoundTime: durationUtils.msToMinutes(state.value.tournament.cutRoundTime),
         },
       ))
 
@@ -75,6 +76,11 @@ export const useConfigStore = defineStore('Config', () => {
     ),
   )
 
+  const dayOptions = computed(() => {
+    const days = tournamentFormData.value?.days ?? 1
+    return Array.from({ length: days }, (_, i) => `Day ${i + 1}`)
+  })
+
   const talentOptions = computed(() => {
     return [...(state.value?.talent?.talents?.map(talent => talent.name) ?? []), '<Blank>']
   })
@@ -121,8 +127,9 @@ export const useConfigStore = defineStore('Config', () => {
     if (tournamentFormData.value) {
       const updatedTournament = {
         ...tournamentFormData.value,
-        swissRoundTime: duration.toMs(tournamentFormData.value.swissRoundTime),
-        cutRoundTime: duration.toMs(tournamentFormData.value.cutRoundTime),
+        defaultClockDuration: durationUtils.minutesToMs(tournamentFormData.value.defaultClockDuration),
+        swissRoundTime: durationUtils.minutesToMs(tournamentFormData.value.swissRoundTime),
+        cutRoundTime: durationUtils.minutesToMs(tournamentFormData.value.cutRoundTime),
       }
       saveSection('tournament', updatedTournament, 'Tournament Settings Updated')
     }
@@ -132,7 +139,7 @@ export const useConfigStore = defineStore('Config', () => {
     if (overlayFormData.value) {
       const updatedOverlay = {
         ...overlayFormData.value,
-        cardTimeout: duration.toMs(overlayFormData.value.cardTimeout),
+        cardTimeout: durationUtils.minutesToMs(overlayFormData.value.cardTimeout),
       }
       saveSection('overlay', updatedOverlay, 'Overlay Settings Updated')
     }
@@ -226,6 +233,7 @@ export const useConfigStore = defineStore('Config', () => {
 
     // Computed properties
     roundOptions,
+    dayOptions,
     talentOptions,
 
     // Save functions
