@@ -6,48 +6,48 @@ export function useMatchClock(matchId: string) {
 
   const match = computed(() => matchStore.getMatch(matchId))
 
-  const clock = match.value?.clock
+  const clock = computed(() => match.value?.clock)
 
-  const hasClock = computed(() => !!clock)
-  const isRunning = computed(() => clock?.running ?? false)
-  const clockMode = computed(() => clock?.mode ?? 'countdown')
+  const hasClock = computed(() => !!clock.value)
+  const isRunning = computed(() => clock.value?.running ?? false)
+  const clockMode = computed(() => clock.value?.mode ?? 'countdown')
   const isExpired = computed(() => {
-    if (!clock)
+    if (!clock.value)
       return false
-    return matchClockUtils.isExpired(clock, timeStore.currentTime.getTime())
+    return matchClockUtils.isExpired(clock.value, timeStore.currentTime.getTime())
   })
 
   const currentRemainingTime = computed(() => {
-    if (!clock)
+    if (!clock.value)
       return 0
-    return matchClockUtils.getRemainingTime(clock, timeStore.currentTime.getTime())
+    return matchClockUtils.getRemainingTime(clock.value, timeStore.currentTime.getTime())
   })
 
   const currentElapsedTime = computed(() => {
-    if (!clock)
+    if (!clock.value)
       return 0
-    return matchClockUtils.getCurrentElapsedTime(clock, timeStore.currentTime.getTime())
+    return matchClockUtils.getCurrentElapsedTime(clock.value, timeStore.currentTime.getTime())
   })
 
   const currentDisplayTime = computed(() => {
-    if (!clock)
+    if (!clock.value)
       return 0
-    return clock.mode === 'countup'
+    return clock.value.mode === 'countup'
       ? currentElapsedTime.value
       : currentRemainingTime.value
   })
 
   const formattedDisplayTime = computed(() => {
-    if (!clock)
+    if (!clock.value)
       return 0
     return durationUtils.msToParts(currentDisplayTime.value)
   })
 
   const progress = computed(() => {
-    if (!clock || clock.mode === 'countup')
+    if (!clock.value || clock.value.mode === 'countup')
       return 0
     const elapsed = currentElapsedTime.value
-    const total = clock.totalDuration
+    const total = clock.value.totalDuration
     return Math.max(0, Math.min(100, (elapsed / total) * 100))
   })
 

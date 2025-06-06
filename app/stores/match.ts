@@ -11,8 +11,13 @@ export const useMatchStore = defineStore('Match', () => {
   const { optimisticEmit } = useWS({
     topic: 'matches',
     serverEvents: {
-      connected: data => state.value = data,
-      sync: data => state.value = data,
+      connected: (data) => {
+        state.value = data
+        formData.value = JSON.parse(JSON.stringify(data))
+      },
+      sync: (data) => {
+        state.value = data
+      },
     },
   })
 
