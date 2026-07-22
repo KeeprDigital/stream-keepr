@@ -5,71 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1781162947462,
-      "tag": "0000_mature_nekra",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1781165930000,
-      "tag": "0001_deck_play_aids",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1781165940000,
-      "tag": "0002_feature_match_overlay_rename",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1784091694378,
-      "tag": "0003_safe_expediter",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1784094077533,
-      "tag": "0004_condemned_malice",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "6",
-      "when": 1784096305031,
-      "tag": "0005_medical_tomas",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "6",
-      "when": 1784101532544,
-      "tag": "0006_supreme_giant_girl",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "6",
-      "when": 1784103265378,
-      "tag": "0007_lame_romulus",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "6",
-      "when": 1784164944475,
-      "tag": "0008_player_deck_archetype_fk",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "6",
-      "when": 1784165406185,
-      "tag": "0009_wise_rage",
+      "when": 1784706067238,
+      "tag": "0000_material_dust",
       "breakpoints": true
     }
   ]

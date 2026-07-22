@@ -32,6 +32,8 @@ CREATE TABLE `cards` (
 	`colors` text,
 	`cmc` real,
 	`mana_cost` text,
+	`deck_counter_types` text DEFAULT '[]' NOT NULL,
+	`deck_tokens` text DEFAULT '[]' NOT NULL,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL
 );
@@ -86,6 +88,9 @@ CREATE TABLE `events` (
 	`last_players_synced_at` integer,
 	`last_decklists_synced_at` integer,
 	`last_sync_error` text,
+	`melee_sync_lease_token` text,
+	`melee_sync_lease_command` text,
+	`melee_sync_lease_expires_at` integer,
 	`display_record_separator` text DEFAULT '-' NOT NULL,
 	`display_hide_zero_draws` integer DEFAULT true NOT NULL,
 	`display_position_format` text DEFAULT 'ordinal' NOT NULL,
@@ -232,6 +237,7 @@ CREATE TABLE `phases` (
 	`sort_order` integer DEFAULT 0 NOT NULL,
 	`external_id` text,
 	`external_source` text,
+	`format_external_id` text,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON UPDATE no action ON DELETE cascade
@@ -241,39 +247,33 @@ CREATE INDEX `phases_event_id_idx` ON `phases` (`event_id`);--> statement-breakp
 CREATE UNIQUE INDEX `phases_external_unique_idx` ON `phases` (`event_id`,`external_id`,`external_source`);--> statement-breakpoint
 CREATE TABLE `player_deck_cards` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-	`player_id` integer NOT NULL,
+	`deck_id` integer NOT NULL,
 	`card_id` integer NOT NULL,
-	`phase_id` integer NOT NULL,
 	`quantity` integer NOT NULL,
 	`compartment` text NOT NULL,
 	`sort_order` integer NOT NULL,
-	FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`deck_id`) REFERENCES `player_decks`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`card_id`) REFERENCES `cards`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `player_deck_cards_player_phase_idx` ON `player_deck_cards` (`player_id`,`phase_id`);--> statement-breakpoint
+CREATE INDEX `player_deck_cards_deck_sort_idx` ON `player_deck_cards` (`deck_id`,`sort_order`);--> statement-breakpoint
 CREATE INDEX `player_deck_cards_card_idx` ON `player_deck_cards` (`card_id`);--> statement-breakpoint
 CREATE TABLE `player_deck_companions` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-	`player_id` integer NOT NULL,
-	`phase_id` integer NOT NULL,
+	`deck_id` integer NOT NULL,
 	`companion_card_id` integer,
 	`source` text NOT NULL,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
-	FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`deck_id`) REFERENCES `player_decks`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`companion_card_id`) REFERENCES `cards`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `player_deck_companions_player_phase_idx` ON `player_deck_companions` (`player_id`,`phase_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `player_deck_companions_deck_idx` ON `player_deck_companions` (`deck_id`);--> statement-breakpoint
 CREATE INDEX `player_deck_companions_card_idx` ON `player_deck_companions` (`companion_card_id`);--> statement-breakpoint
 CREATE TABLE `player_deck_unresolved_cards` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-	`event_id` integer NOT NULL,
-	`player_id` integer NOT NULL,
-	`phase_id` integer NOT NULL,
-	`phase_name` text,
-	`deck_name` text NOT NULL,
+	`deck_id` integer NOT NULL,
 	`entry_type` text NOT NULL,
 	`original_name` text NOT NULL,
 	`normalized_original_name` text NOT NULL,
@@ -285,13 +285,37 @@ CREATE TABLE `player_deck_unresolved_cards` (
 	`card_type` text,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
-	FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`deck_id`) REFERENCES `player_decks`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `player_deck_unresolved_cards_event_idx` ON `player_deck_unresolved_cards` (`event_id`);--> statement-breakpoint
-CREATE INDEX `player_deck_unresolved_cards_player_phase_idx` ON `player_deck_unresolved_cards` (`player_id`,`phase_id`);--> statement-breakpoint
-CREATE INDEX `player_deck_unresolved_cards_lookup_idx` ON `player_deck_unresolved_cards` (`event_id`,`normalized_original_name`,`normalized_set_code`);--> statement-breakpoint
+CREATE INDEX `player_deck_unresolved_cards_deck_idx` ON `player_deck_unresolved_cards` (`deck_id`);--> statement-breakpoint
+CREATE INDEX `player_deck_unresolved_cards_lookup_idx` ON `player_deck_unresolved_cards` (`normalized_original_name`,`normalized_set_code`,`entry_type`);--> statement-breakpoint
+CREATE TABLE `player_decks` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`event_id` integer NOT NULL,
+	`player_id` integer NOT NULL,
+	`external_id` text NOT NULL,
+	`external_source` text NOT NULL,
+	`format_external_id` text NOT NULL,
+	`name` text NOT NULL,
+	`colors` text DEFAULT '' NOT NULL,
+	`sort_order` integer DEFAULT 0 NOT NULL,
+	`is_primary` integer DEFAULT false NOT NULL,
+	`archetype_id` integer,
+	`reviewed_at` integer,
+	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
+	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
+	FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`archetype_id`) REFERENCES `archetypes`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE INDEX `player_decks_event_id_idx` ON `player_decks` (`event_id`);--> statement-breakpoint
+CREATE INDEX `player_decks_player_sort_idx` ON `player_decks` (`player_id`,`sort_order`);--> statement-breakpoint
+CREATE INDEX `player_decks_format_idx` ON `player_decks` (`event_id`,`format_external_id`);--> statement-breakpoint
+CREATE INDEX `player_decks_archetype_idx` ON `player_decks` (`archetype_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `player_decks_external_unique_idx` ON `player_decks` (`event_id`,`external_id`,`external_source`);--> statement-breakpoint
+CREATE UNIQUE INDEX `player_decks_primary_unique_idx` ON `player_decks` (`player_id`) WHERE "player_decks"."is_primary" = 1;--> statement-breakpoint
 CREATE TABLE `player_list_members` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`list_id` integer NOT NULL,
@@ -343,6 +367,9 @@ CREATE TABLE `players` (
 	`pronouns` text,
 	`external_id` text,
 	`external_source` text,
+	`external_status` integer,
+	`is_active` integer DEFAULT true NOT NULL,
+	`last_seen_at` integer,
 	`wins` integer,
 	`losses` integer,
 	`draws` integer,
@@ -358,6 +385,7 @@ CREATE TABLE `players` (
 );
 --> statement-breakpoint
 CREATE INDEX `players_event_id_idx` ON `players` (`event_id`);--> statement-breakpoint
+CREATE INDEX `players_event_active_idx` ON `players` (`event_id`,`is_active`);--> statement-breakpoint
 CREATE UNIQUE INDEX `players_external_unique_idx` ON `players` (`event_id`,`external_id`,`external_source`);--> statement-breakpoint
 CREATE TABLE `rounds` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -387,6 +415,8 @@ CREATE TABLE `screens` (
 	`mode_configs` text,
 	`screen_config` text,
 	`state_version` integer DEFAULT 0 NOT NULL,
+	`active_card` text,
+	`active_card_version` integer DEFAULT 0 NOT NULL,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON UPDATE no action ON DELETE cascade

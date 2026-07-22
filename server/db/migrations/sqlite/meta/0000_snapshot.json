@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f2206179-d84f-4518-972c-fdee7005deae",
+  "id": "e2d9f0d8-2846-46cd-845f-9bb8150e29bf",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "archetype_cards": {
@@ -243,6 +243,22 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "deck_counter_types": {
+          "name": "deck_counter_types",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
+        },
+        "deck_tokens": {
+          "name": "deck_tokens",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
         },
         "created_at": {
           "name": "created_at",
@@ -621,6 +637,27 @@
         "last_sync_error": {
           "name": "last_sync_error",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "melee_sync_lease_token": {
+          "name": "melee_sync_lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "melee_sync_lease_command": {
+          "name": "melee_sync_lease_command",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "melee_sync_lease_expires_at": {
+          "name": "melee_sync_lease_expires_at",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -1759,6 +1796,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "format_external_id": {
+          "name": "format_external_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1823,8 +1867,8 @@
           "notNull": true,
           "autoincrement": true
         },
-        "player_id": {
-          "name": "player_id",
+        "deck_id": {
+          "name": "deck_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -1832,13 +1876,6 @@
         },
         "card_id": {
           "name": "card_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "phase_id": {
-          "name": "phase_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -1867,11 +1904,11 @@
         }
       },
       "indexes": {
-        "player_deck_cards_player_phase_idx": {
-          "name": "player_deck_cards_player_phase_idx",
+        "player_deck_cards_deck_sort_idx": {
+          "name": "player_deck_cards_deck_sort_idx",
           "columns": [
-            "player_id",
-            "phase_id"
+            "deck_id",
+            "sort_order"
           ],
           "isUnique": false
         },
@@ -1884,12 +1921,12 @@
         }
       },
       "foreignKeys": {
-        "player_deck_cards_player_id_players_id_fk": {
-          "name": "player_deck_cards_player_id_players_id_fk",
+        "player_deck_cards_deck_id_player_decks_id_fk": {
+          "name": "player_deck_cards_deck_id_player_decks_id_fk",
           "tableFrom": "player_deck_cards",
-          "tableTo": "players",
+          "tableTo": "player_decks",
           "columnsFrom": [
-            "player_id"
+            "deck_id"
           ],
           "columnsTo": [
             "id"
@@ -1925,15 +1962,8 @@
           "notNull": true,
           "autoincrement": true
         },
-        "player_id": {
-          "name": "player_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "phase_id": {
-          "name": "phase_id",
+        "deck_id": {
+          "name": "deck_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -1971,11 +2001,10 @@
         }
       },
       "indexes": {
-        "player_deck_companions_player_phase_idx": {
-          "name": "player_deck_companions_player_phase_idx",
+        "player_deck_companions_deck_idx": {
+          "name": "player_deck_companions_deck_idx",
           "columns": [
-            "player_id",
-            "phase_id"
+            "deck_id"
           ],
           "isUnique": true
         },
@@ -1988,12 +2017,12 @@
         }
       },
       "foreignKeys": {
-        "player_deck_companions_player_id_players_id_fk": {
-          "name": "player_deck_companions_player_id_players_id_fk",
+        "player_deck_companions_deck_id_player_decks_id_fk": {
+          "name": "player_deck_companions_deck_id_player_decks_id_fk",
           "tableFrom": "player_deck_companions",
-          "tableTo": "players",
+          "tableTo": "player_decks",
           "columnsFrom": [
-            "player_id"
+            "deck_id"
           ],
           "columnsTo": [
             "id"
@@ -2029,37 +2058,9 @@
           "notNull": true,
           "autoincrement": true
         },
-        "event_id": {
-          "name": "event_id",
+        "deck_id": {
+          "name": "deck_id",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "player_id": {
-          "name": "player_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "phase_id": {
-          "name": "phase_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "phase_name": {
-          "name": "phase_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "deck_name": {
-          "name": "deck_name",
-          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -2148,35 +2149,202 @@
         }
       },
       "indexes": {
-        "player_deck_unresolved_cards_event_idx": {
-          "name": "player_deck_unresolved_cards_event_idx",
+        "player_deck_unresolved_cards_deck_idx": {
+          "name": "player_deck_unresolved_cards_deck_idx",
           "columns": [
-            "event_id"
-          ],
-          "isUnique": false
-        },
-        "player_deck_unresolved_cards_player_phase_idx": {
-          "name": "player_deck_unresolved_cards_player_phase_idx",
-          "columns": [
-            "player_id",
-            "phase_id"
+            "deck_id"
           ],
           "isUnique": false
         },
         "player_deck_unresolved_cards_lookup_idx": {
           "name": "player_deck_unresolved_cards_lookup_idx",
           "columns": [
-            "event_id",
             "normalized_original_name",
-            "normalized_set_code"
+            "normalized_set_code",
+            "entry_type"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "player_deck_unresolved_cards_event_id_events_id_fk": {
-          "name": "player_deck_unresolved_cards_event_id_events_id_fk",
+        "player_deck_unresolved_cards_deck_id_player_decks_id_fk": {
+          "name": "player_deck_unresolved_cards_deck_id_player_decks_id_fk",
           "tableFrom": "player_deck_unresolved_cards",
+          "tableTo": "player_decks",
+          "columnsFrom": [
+            "deck_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "player_decks": {
+      "name": "player_decks",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "player_id": {
+          "name": "player_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "external_id": {
+          "name": "external_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "external_source": {
+          "name": "external_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "format_external_id": {
+          "name": "format_external_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "colors": {
+          "name": "colors",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "is_primary": {
+          "name": "is_primary",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "archetype_id": {
+          "name": "archetype_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "player_decks_event_id_idx": {
+          "name": "player_decks_event_id_idx",
+          "columns": [
+            "event_id"
+          ],
+          "isUnique": false
+        },
+        "player_decks_player_sort_idx": {
+          "name": "player_decks_player_sort_idx",
+          "columns": [
+            "player_id",
+            "sort_order"
+          ],
+          "isUnique": false
+        },
+        "player_decks_format_idx": {
+          "name": "player_decks_format_idx",
+          "columns": [
+            "event_id",
+            "format_external_id"
+          ],
+          "isUnique": false
+        },
+        "player_decks_archetype_idx": {
+          "name": "player_decks_archetype_idx",
+          "columns": [
+            "archetype_id"
+          ],
+          "isUnique": false
+        },
+        "player_decks_external_unique_idx": {
+          "name": "player_decks_external_unique_idx",
+          "columns": [
+            "event_id",
+            "external_id",
+            "external_source"
+          ],
+          "isUnique": true
+        },
+        "player_decks_primary_unique_idx": {
+          "name": "player_decks_primary_unique_idx",
+          "columns": [
+            "player_id"
+          ],
+          "isUnique": true,
+          "where": "\"player_decks\".\"is_primary\" = 1"
+        }
+      },
+      "foreignKeys": {
+        "player_decks_event_id_events_id_fk": {
+          "name": "player_decks_event_id_events_id_fk",
+          "tableFrom": "player_decks",
           "tableTo": "events",
           "columnsFrom": [
             "event_id"
@@ -2187,9 +2355,9 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "player_deck_unresolved_cards_player_id_players_id_fk": {
-          "name": "player_deck_unresolved_cards_player_id_players_id_fk",
-          "tableFrom": "player_deck_unresolved_cards",
+        "player_decks_player_id_players_id_fk": {
+          "name": "player_decks_player_id_players_id_fk",
+          "tableFrom": "player_decks",
           "tableTo": "players",
           "columnsFrom": [
             "player_id"
@@ -2198,6 +2366,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "player_decks_archetype_id_archetypes_id_fk": {
+          "name": "player_decks_archetype_id_archetypes_id_fk",
+          "tableFrom": "player_decks",
+          "tableTo": "archetypes",
+          "columnsFrom": [
+            "archetype_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -2576,6 +2757,28 @@
           "notNull": false,
           "autoincrement": false
         },
+        "external_status": {
+          "name": "external_status",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "wins": {
           "name": "wins",
           "type": "integer",
@@ -2654,6 +2857,14 @@
           "name": "players_event_id_idx",
           "columns": [
             "event_id"
+          ],
+          "isUnique": false
+        },
+        "players_event_active_idx": {
+          "name": "players_event_active_idx",
+          "columns": [
+            "event_id",
+            "is_active"
           ],
           "isUnique": false
         },
@@ -2895,6 +3106,21 @@
         },
         "state_version": {
           "name": "state_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "active_card": {
+          "name": "active_card",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "active_card_version": {
+          "name": "active_card_version",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
