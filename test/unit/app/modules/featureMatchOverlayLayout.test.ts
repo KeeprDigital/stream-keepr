@@ -1,0 +1,281 @@
+import type { FeatureMatchLayoutConfig, FeatureMatchLayoutItemConfig, FeatureMatchWidgetGroupItemConfig } from '~~/shared/types/screenConfig';
+import { describe, expect, it } from 'vitest';
+import {
+	addGroupChild,
+	addItem,
+	bringItemToFront,
+	convertGroupArrangement,
+	createGroupChild,
+	createLayoutItem,
+	moveItemOrder,
+	patchFrame,
+	patchGroup,
+	patchGroupChild,
+	patchGroupChildRectFromAnchor,
+	patchGroupChildWidget,
+	patchItem,
+	patchItemRectFromAnchor,
+	removeGroupChild,
+	removeItem,
+	sendItemToBack,
+	setItemOrder,
+} from '~~/app/modules/feature-match-overlay/layout';
+import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+
+function widgetItem(overrides: Partial<Extract<FeatureMatchLayoutItemConfig, { type: 'widget' }>> = {}): FeatureMatchLayoutItemConfig {
+	return {
+		id: 'w1',
+		type: 'widget',
+		label: 'Widget',
+		visible: true,
+		x: 100,
+		y: 50,
+		width: 100,
+		height: 40,
+		widget: { type: 'clock' },
+		...overrides,
+	};
+}
+
+function groupItem(overrides: Partial<FeatureMatchWidgetGroupItemConfig> = {}): FeatureMatchLayoutItemConfig {
+	return {
+		id: 'g1',
+		type: 'widget-group',
+		label: 'Group',
+		visible: true,
+		x: 0,
+		y: 0,
+		width: 500,
+		height: 100,
+		arrangement: { mode: 'row', padding: 10, gap: 8, align: 'stretch', justify: 'start' },
+		children: [
+			{ id: 'c1', label: 'Child', visible: true, widget: { type: 'clock' }, layout: { mode: 'stack', sizing: { mode: 'fixed', size: 120 } } },
+		],
+		...overrides,
+	};
+}
+
+function layoutOf(items: FeatureMatchLayoutItemConfig[]): FeatureMatchLayoutConfig {
+	const base = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+	return { ...base.layout, items };
+}
+
+function group(layout: FeatureMatchLayoutConfig, id = 'g1'): FeatureMatchWidgetGroupItemConfig {
+	return layout.items.find(item => item.id === id) as FeatureMatchWidgetGroupItemConfig;
+}
+
+describe('feature-match-overlay layout writer', () => {
+	describe('id addressing and narrowing', () => {
+		it('patches an item by id, leaving siblings untouched', () => {
+			const layout = layoutOf([widgetItem({ id: 'a' }), widgetItem({ id: 'b' })]);
+
+			const next = patchItem(layout, 'b', { label: 'Renamed' });
+
+			expect(next.items.find(item => item.id === 'b')!.label).toBe('Renamed');
+			expect(next.items.find(item => item.id === 'a')).toBe(layout.items[0]);
+		});
+
+		it('returns the same layout reference for an unknown id', () => {
+			const layout = layoutOf([widgetItem()]);
+
+			expect(patchItem(layout, 'missing', { label: 'x' })).toBe(layout);
+		});
+
+		it('patchGroup is a no-op (same reference) on a non-group item', () => {
+			const layout = layoutOf([widgetItem()]);
+
+			expect(patchGroup(layout, 'w1', { label: 'x' })).toBe(layout);
+		});
+
+		it('patchGroupChildWidget narrows the group and child without casts', () => {
+			const layout = layoutOf([groupItem()]);
+
+			const next = patchGroupChildWidget(layout, 'g1', 'c1', { type: 'clock', showLabel: true } as never);
+
+			expect(group(next).children[0]!.widget).toMatchObject({ type: 'clock', showLabel: true });
+		});
+
+		it('patchGroupChild on a widget item is a no-op', () => {
+			const layout = layoutOf([widgetItem()]);
+
+			expect(patchGroupChild(layout, 'w1', 'c1', { label: 'x' })).toBe(layout);
+		});
+	});
+
+	describe('frame', () => {
+		it('patchFrame merges frame fields without touching items', () => {
+			const layout = layoutOf([widgetItem()]);
+
+			const next = patchFrame(layout, { backgroundColor: '#123456' });
+
+			expect(next.frame.backgroundColor).toBe('#123456');
+			expect(next.items).toBe(layout.items);
+		});
+	});
+
+	describe('membership', () => {
+		it('addItem appends and removeItem removes by id', () => {
+			const layout = layoutOf([widgetItem({ id: 'a' })]);
+
+			const withB = addItem(layout, widgetItem({ id: 'b' }));
+			expect(withB.items.map(item => item.id)).toEqual(['a', 'b']);
+
+			const withoutA = removeItem(withB, 'a');
+			expect(withoutA.items.map(item => item.id)).toEqual(['b']);
+		});
+
+		it('addGroupChild and removeGroupChild address the group by id', () => {
+			const layout = layoutOf([groupItem()]);
+
+			const withChild = addGroupChild(layout, 'g1', { id: 'c2', label: 'New', visible: true, widget: { type: 'text' } as never, layout: { mode: 'stack', sizing: { mode: 'fixed', size: 100 } } });
+			expect(group(withChild).children.map(child => child.id)).toEqual(['c1', 'c2']);
+
+			const withoutFirst = removeGroupChild(withChild, 'g1', 'c1');
+			expect(group(withoutFirst).children.map(child => child.id)).toEqual(['c2']);
+		});
+	});
+
+	describe('anchored geometry', () => {
+		it('keeps the anchored edge fixed when resizing an item', () => {
+			const layout = layoutOf([widgetItem({ anchor: 'top-right' } as never)]);
+
+			const next = patchItemRectFromAnchor(layout, 'w1', 'width', 200);
+
+			// Right edge was at 200; growing to 200 wide moves x to 0.
+			expect(next.items[0]).toMatchObject({ width: 200, x: 0 });
+		});
+
+		it('moves without resizing for position fields', () => {
+			const layout = layoutOf([widgetItem()]);
+
+			const next = patchItemRectFromAnchor(layout, 'w1', 'x', 300);
+
+			expect(next.items[0]).toMatchObject({ x: 300, width: 100 });
+		});
+
+		it('updates canvas child geometry through its anchor', () => {
+			const layout = layoutOf([groupItem({
+				arrangement: { mode: 'canvas', padding: 0 },
+				children: [
+					{ id: 'c1', label: 'Child', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 10, y: 10, width: 100, height: 40 } },
+				],
+			})]);
+
+			const next = patchGroupChildRectFromAnchor(layout, 'g1', 'c1', 'width', 160);
+
+			expect(group(next).children[0]!.layout).toMatchObject({ width: 160, x: 10 });
+		});
+
+		it('is a no-op for stack children', () => {
+			const layout = layoutOf([groupItem()]);
+
+			expect(patchGroupChildRectFromAnchor(layout, 'g1', 'c1', 'width', 160)).toBe(layout);
+		});
+	});
+
+	describe('arrangement conversion', () => {
+		it('converts stack children to canvas rects when switching to canvas', () => {
+			const layout = layoutOf([groupItem()]);
+
+			const next = convertGroupArrangement(layout, 'g1', 'canvas');
+
+			expect(group(next).arrangement).toEqual({ mode: 'canvas', padding: 10 });
+			expect(group(next).children[0]!.layout).toEqual({ mode: 'canvas', x: 0, y: 0, width: 120, height: 80 });
+		});
+
+		it('converts canvas children to fixed stack sizing when switching to row', () => {
+			const layout = layoutOf([groupItem({
+				arrangement: { mode: 'canvas', padding: 4 },
+				children: [
+					{ id: 'c1', label: 'Child', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 20, y: 10, width: 150, height: 60 } },
+				],
+			})]);
+
+			const next = convertGroupArrangement(layout, 'g1', 'row');
+
+			expect(group(next).arrangement).toMatchObject({ mode: 'row', padding: 4, gap: 8, align: 'stretch', justify: 'start' });
+			expect(group(next).children[0]!.layout).toEqual({ mode: 'stack', sizing: { mode: 'fixed', size: 150 }, offsetX: 0, offsetY: 0 });
+		});
+
+		it('leaves children already in the target mode untouched, and non-groups as a no-op', () => {
+			const layout = layoutOf([groupItem(), widgetItem({ id: 'w9' })]);
+			const before = group(layout).children[0];
+
+			const next = convertGroupArrangement(layout, 'g1', 'column');
+			expect(group(next).children[0]).toEqual(before);
+			expect(group(next).arrangement).toMatchObject({ mode: 'column' });
+
+			expect(convertGroupArrangement(layout, 'w9', 'canvas')).toBe(layout);
+		});
+	});
+
+	describe('layer ordering', () => {
+		function threeItems() {
+			return [
+				widgetItem({ id: 'a', zIndex: 10 } as never),
+				widgetItem({ id: 'b', zIndex: 20 } as never),
+				widgetItem({ id: 'c', zIndex: 30 } as never),
+			];
+		}
+
+		it('sends an item behind every other layer', () => {
+			const next = sendItemToBack(layoutOf(threeItems()), 'c');
+			expect(next.items.find(item => item.id === 'c')!.zIndex).toBeLessThan(10);
+		});
+
+		it('brings an item in front of every other layer', () => {
+			const next = bringItemToFront(layoutOf(threeItems()), 'a');
+			expect(next.items.find(item => item.id === 'a')!.zIndex).toBeGreaterThan(30);
+		});
+
+		it('moves an item one step in the stacking order', () => {
+			const next = moveItemOrder(layoutOf(threeItems()), 'a', 1);
+			expect(next.items.find(item => item.id === 'a')!.zIndex).toBeGreaterThan(20);
+		});
+
+		it('sets an explicit order', () => {
+			const next = setItemOrder(layoutOf(threeItems()), 'b', 55);
+			expect(next.items.find(item => item.id === 'b')!.zIndex).toBe(55);
+		});
+	});
+
+	describe('creation', () => {
+		it('creates a Source Item with source defaults and returns its id', () => {
+			const { layout, id } = createLayoutItem(layoutOf([]), 'source');
+
+			const item = layout.items[0]!;
+			expect(item.id).toBe(id);
+			expect(item.type).toBe('source');
+			expect(item).toMatchObject({ frameCutout: true, sourceRole: 'main' });
+		});
+
+		it('creates a Widget Item using the widget definition default config', () => {
+			const { layout, id } = createLayoutItem(layoutOf([]), 'life-widget');
+
+			const item = layout.items[0]!;
+			expect(item.id).toBe(id);
+			expect(item.type).toBe('widget');
+			if (item.type === 'widget') {
+				expect(item.widget).toMatchObject({ type: 'player-life', playerSide: 'player1' });
+				expect(item.label).toBe('Life Widget');
+			}
+		});
+
+		it('creates a Widget Group child matching the group arrangement mode', () => {
+			const { layout, id } = createGroupChild(layoutOf([groupItem()]), 'g1', 'text');
+
+			const child = group(layout).children.at(-1)!;
+			expect(child.id).toBe(id);
+			expect(child.widget.type).toBe('text');
+			expect(child.layout.mode).toBe('stack');
+		});
+
+		it('returns a null id and the same layout when creating a child on a non-group item', () => {
+			const source = layoutOf([widgetItem()]);
+			const { layout, id } = createGroupChild(source, 'w1', 'text');
+
+			expect(id).toBeNull();
+			expect(layout).toBe(source);
+		});
+	});
+});

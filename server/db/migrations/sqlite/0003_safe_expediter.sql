@@ -1,0 +1,1 @@
+ALTER TABLE `phases` ADD `format_external_id` text;

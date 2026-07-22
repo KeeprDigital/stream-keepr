@@ -1,0 +1,21 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "stream-local",
+	"compatibility_date": "2026-07-16",
+	"compatibility_flags": ["nodejs_compat", "no_nodejs_compat_v2"],
+	// Binding-only entries intentionally create local Wrangler resources. They
+	// have no remote IDs, so local development cannot reach staging/production.
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "stream-local",
+			"migrations_table": "_hub_migrations",
+			"migrations_dir": "server/db/migrations/sqlite"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "KV"
+		}
+	]
+}

@@ -1,0 +1,97 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const repository = {
+	getSlot: vi.fn(),
+	listSlots: vi.fn(),
+	createSession: vi.fn(),
+	sendCommand: vi.fn(),
+};
+
+vi.mock('~/composables/repositories/useFeatureMatchStateRepository', () => ({
+	useFeatureMatchStateRepository: () => repository,
+}));
+
+const { useFeatureMatchSessionClient } = await import('~/modules/feature-match-session/client');
+
+function createSession(overrides: Record<string, unknown> = {}) {
+	return {
+		id: 7,
+		slotId: 2,
+		sequence: 4,
+		currentState: { currentGame: 1 },
+		...overrides,
+	};
+}
+
+function commandResult(session = createSession({ sequence: 5 })) {
+	return {
+		currentState: session.currentState,
+		session,
+		sessionId: session.id,
+		sequence: session.sequence,
+	};
+}
+
+describe('feature Match Session client module', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		const session = createSession();
+		repository.getSlot.mockResolvedValue({ id: 2, activeSession: session });
+		repository.createSession.mockResolvedValue(session);
+		repository.sendCommand.mockResolvedValue(commandResult());
+	});
+
+	it('ensures a missing active session through the HTTP adapter', async () => {
+		const createdSession = createSession({ id: 8, sequence: 1 });
+		repository.getSlot.mockResolvedValueOnce({ id: 2, activeSession: null });
+		repository.createSession.mockResolvedValueOnce(createdSession);
+
+		const client = useFeatureMatchSessionClient();
+		const result = await client.ensureSession(1, 2);
+
+		expect(repository.getSlot).toHaveBeenCalledWith(1, 2);
+		expect(repository.createSession).toHaveBeenCalledWith(1, 2);
+		expect(result).toBe(createdSession);
+	});
+
+	it('constructs sequenced clock commands through the HTTP adapter', async () => {
+		const client = useFeatureMatchSessionClient();
+		await client.startClock(1, 2);
+
+		expect(repository.sendCommand).toHaveBeenCalledWith(1, 7, expect.objectContaining({
+			type: 'StartClock',
+			payload: {},
+			baseSequence: 4,
+		}));
+	});
+
+	it('constructs state update commands in the client seam', async () => {
+		const client = useFeatureMatchSessionClient();
+		await client.updateState(1, 2, { firstPlayer: 'player1', activePlayer: 'player1', turnNumber: 1 });
+
+		expect(repository.sendCommand).toHaveBeenCalledWith(1, 7, expect.objectContaining({
+			type: 'SelectFirstPlayer',
+			payload: { player: 'player1' },
+			baseSequence: 4,
+		}));
+	});
+
+	it('orchestrates bulk clock actions from slot sessions', async () => {
+		repository.listSlots.mockResolvedValue([
+			{ id: 2, activeSession: createSession() },
+			{ id: 3, activeSession: null },
+		]);
+		repository.sendCommand.mockResolvedValue(commandResult());
+
+		const client = useFeatureMatchSessionClient();
+		const result = await client.bulkClockAction(1, 'pause');
+
+		expect(repository.sendCommand).toHaveBeenCalledOnce();
+		expect(repository.sendCommand.mock.calls[0]?.[2]).toEqual(expect.objectContaining({
+			type: 'PauseClock',
+			baseSequence: 4,
+		}));
+		expect(result.updates).toHaveLength(1);
+		expect(result.updates[0]).toMatchObject({ featureMatchId: 2, sessionId: 7, sequence: 5 });
+	});
+});

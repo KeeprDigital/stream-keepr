@@ -1,0 +1,230 @@
+import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { defineComponent, reactive } from 'vue';
+
+const mockEventStore = reactive({
+	event: {
+		id: 1,
+		meleeEnabled: true,
+		meleeConfigured: true,
+		liveMatchRefreshEnabled: true,
+		liveMatchRefreshIntervalSeconds: 45,
+		initialSetupCompletedAt: new Date('2026-04-09T10:00:00.000Z') as Date | null,
+		lastEventSyncedAt: new Date('2026-04-09T10:05:00.000Z') as Date | null,
+		lastPlayersSyncedAt: new Date('2026-04-09T10:10:00.000Z') as Date | null,
+		lastDecklistsSyncedAt: new Date('2026-04-09T10:12:00.000Z') as Date | null,
+		lastSyncError: null as string | null,
+	},
+	loadEvent: vi.fn(),
+	setEvent: vi.fn(),
+});
+
+const mockEventRepo = {
+	getMeleeConfig: vi.fn(async () => ({
+		meleeEnabled: true,
+		meleeConfigured: true,
+		meleeEventId: '12345',
+		meleeClientId: 'client-id',
+		liveMatchRefreshEnabled: true,
+		liveMatchRefreshIntervalSeconds: 45,
+	})),
+	updateMeleeConfig: vi.fn(),
+};
+
+const mockToast = { add: vi.fn() };
+const mockOverlay = { create: vi.fn() };
+const mockRefreshAfterMeleeReset = vi.fn();
+
+mockNuxtImport('useEventStore', () => () => mockEventStore);
+mockNuxtImport('useEventRepository', () => () => mockEventRepo);
+mockNuxtImport('useToast', () => () => mockToast);
+mockNuxtImport('useOverlay', () => () => mockOverlay);
+mockNuxtImport('useMeleeDataRefresh', () => () => ({
+	refreshAfterMeleeReset: mockRefreshAfterMeleeReset,
+}));
+
+const UFormStub = defineComponent({
+	emits: ['submit'],
+	template: '<form @submit.prevent="$emit(\'submit\')"><slot /></form>',
+});
+
+const UCardStub = defineComponent({
+	template: '<section><slot name="header" /><slot /><slot name="footer" /></section>',
+});
+
+const UFormFieldStub = defineComponent({
+	template: '<label><slot /></label>',
+});
+
+const UButtonStub = defineComponent({
+	props: {
+		label: { type: String, required: false },
+	},
+	template: '<button type="button"><slot>{{ label }}</slot></button>',
+});
+
+const UInputStub = defineComponent({
+	props: {
+		modelValue: { type: [String, Number], required: false },
+	},
+	emits: ['update:modelValue'],
+	template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)">',
+});
+
+const UInputNumberStub = defineComponent({
+	props: {
+		modelValue: { type: Number, required: false },
+	},
+	emits: ['update:modelValue'],
+	template: '<input type="number" :value="modelValue ?? 0">',
+});
+
+const USwitchStub = defineComponent({
+	props: {
+		modelValue: { type: Boolean, required: false },
+	},
+	emits: ['update:modelValue'],
+	template: '<input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)">',
+});
+
+async function mountComponent() {
+	const componentPath = '../../../../app/components/Event/ConfigMeleeIntegration.vue';
+	const { default: ConfigMeleeIntegration } = await import(componentPath);
+
+	return mount(ConfigMeleeIntegration, {
+		props: {
+			eventId: 1,
+		},
+		global: {
+			stubs: {
+				UForm: UFormStub,
+				UCard: UCardStub,
+				UFormField: UFormFieldStub,
+				UButton: UButtonStub,
+				UInput: UInputStub,
+				UInputNumber: UInputNumberStub,
+				USwitch: USwitchStub,
+				USeparator: true,
+				UIcon: true,
+			},
+		},
+	});
+}
+
+describe('configMeleeIntegration', () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-04-09T10:15:00.000Z'));
+		mockEventStore.event = {
+			id: 1,
+			meleeEnabled: true,
+			meleeConfigured: true,
+			liveMatchRefreshEnabled: true,
+			liveMatchRefreshIntervalSeconds: 45,
+			initialSetupCompletedAt: new Date('2026-04-09T10:00:00.000Z'),
+			lastEventSyncedAt: new Date('2026-04-09T10:05:00.000Z'),
+			lastPlayersSyncedAt: new Date('2026-04-09T10:10:00.000Z'),
+			lastDecklistsSyncedAt: new Date('2026-04-09T10:12:00.000Z'),
+			lastSyncError: null,
+		};
+		mockEventRepo.getMeleeConfig.mockClear();
+		mockEventRepo.updateMeleeConfig.mockReset().mockResolvedValue({ meleeConfigured: true });
+		mockEventStore.loadEvent.mockReset().mockResolvedValue(undefined);
+		mockEventStore.setEvent.mockReset();
+		mockToast.add.mockClear();
+		mockOverlay.create.mockClear();
+		mockRefreshAfterMeleeReset.mockReset().mockResolvedValue(undefined);
+	});
+
+	it('requires destructive confirmation before disabling a loaded integration', async () => {
+		const open = vi.fn().mockReturnValue({ result: Promise.resolve(false) });
+		mockOverlay.create.mockReturnValue({ open });
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await wrapper.find('input[type="checkbox"]').setValue(false);
+		await wrapper.find('form').trigger('submit');
+		await flushPromises();
+
+		expect(open).toHaveBeenCalledWith(expect.objectContaining({
+			title: 'Disable Melee Integration',
+			confirmLabel: 'Disable and Clear Data',
+		}));
+		expect(mockEventRepo.updateMeleeConfig).not.toHaveBeenCalled();
+	});
+
+	it('requires destructive confirmation before changing a loaded Melee event', async () => {
+		const open = vi.fn().mockReturnValue({ result: Promise.resolve(false) });
+		mockOverlay.create.mockReturnValue({ open });
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await wrapper.findAll('input').find(input => input.attributes('type') !== 'checkbox')!.setValue('67890');
+		await wrapper.find('form').trigger('submit');
+		await flushPromises();
+
+		expect(open).toHaveBeenCalledWith(expect.objectContaining({
+			title: 'Change Melee Event',
+			confirmLabel: 'Change Event and Clear Data',
+		}));
+		expect(mockEventRepo.updateMeleeConfig).not.toHaveBeenCalled();
+	});
+
+	it('refreshes all local Melee-derived data after a confirmed destructive change', async () => {
+		const open = vi.fn().mockReturnValue({ result: Promise.resolve(true) });
+		mockOverlay.create.mockReturnValue({ open });
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await wrapper.find('input[type="checkbox"]').setValue(false);
+		await wrapper.find('form').trigger('submit');
+		await flushPromises();
+
+		expect(mockEventRepo.updateMeleeConfig).toHaveBeenCalledWith(1, expect.objectContaining({
+			meleeEnabled: false,
+		}));
+		expect(mockRefreshAfterMeleeReset).toHaveBeenCalledWith(1);
+		expect(mockEventStore.setEvent).toHaveBeenCalledWith({ meleeConfigured: true });
+		expect(mockEventStore.loadEvent).not.toHaveBeenCalled();
+	});
+
+	it('keeps a committed destructive change successful when the local refresh fails', async () => {
+		const open = vi.fn().mockReturnValue({ result: Promise.resolve(true) });
+		mockOverlay.create.mockReturnValue({ open });
+		mockRefreshAfterMeleeReset.mockRejectedValueOnce(new Error('reload failed'));
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await wrapper.find('input[type="checkbox"]').setValue(false);
+		await wrapper.find('form').trigger('submit');
+		await flushPromises();
+
+		expect(mockEventRepo.updateMeleeConfig).toHaveBeenCalledOnce();
+		expect(mockEventStore.setEvent).toHaveBeenCalledWith({ meleeConfigured: true });
+		expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({
+			color: 'warning',
+			description: expect.stringContaining('Reload this page'),
+		}));
+		expect(mockToast.add).not.toHaveBeenCalledWith(expect.objectContaining({ color: 'error' }));
+		warn.mockRestore();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('renders only the Melee integration configuration form', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(mockEventRepo.getMeleeConfig).toHaveBeenCalledWith(1);
+		expect(wrapper.text()).toContain('Reset');
+		expect(wrapper.text()).toContain('Save');
+		expect(wrapper.text()).not.toContain('Melee Sync Summary');
+		expect(wrapper.text()).not.toContain('Open Melee Sync');
+		expect(wrapper.find('.divide-y.divide-default').exists()).toBe(false);
+		expect(wrapper.findAll('section')).toHaveLength(1);
+	});
+});

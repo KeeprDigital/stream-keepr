@@ -1,0 +1,308 @@
+import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMockPlayerList } from '~~/test/helpers/fixtures';
+import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+
+// ── Mock Dependencies ──
+
+const mockRepo = {
+	list: vi.fn(),
+	getById: vi.fn(),
+	create: vi.fn(),
+	update: vi.fn(),
+	remove: vi.fn(),
+	addMembers: vi.fn(),
+	removeMember: vi.fn(),
+	batchRemoveMembers: vi.fn(),
+	reorderMembers: vi.fn(),
+	getMemberIds: vi.fn(),
+};
+
+const mockAbly = createMockRealtime();
+const mockIsSelfOrigin = vi.fn(() => false);
+
+const ablyCallbacks: Record<string, Record<string, (...args: unknown[]) => void>> = {};
+mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
+	ablyCallbacks[storeName] = callbacks;
+});
+
+// Supports onError rollback for tests that verify error recovery
+const mockExecuteAction = vi.fn(async (fn: any, opts?: any) => {
+	try {
+		return await fn();
+	}
+	catch (err) {
+		opts?.onError?.();
+		throw err;
+	}
+});
+
+mockNuxtImport('usePlayerListRepository', () => () => mockRepo);
+mockNuxtImport('useRealtime', () => () => mockAbly);
+mockNuxtImport('useAsyncAction', () => () => ({ executeAction: mockExecuteAction }));
+
+function createSummary(overrides?: Record<string, any>) {
+	return { ...createMockPlayerList(overrides), memberCount: 0, ...overrides };
+}
+
+describe('usePlayerListStore', () => {
+	let store: ReturnType<typeof usePlayerListStore>;
+
+	beforeEach(() => {
+		store = usePlayerListStore();
+		store.$reset();
+		vi.clearAllMocks();
+		mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
+			ablyCallbacks[storeName] = callbacks;
+		});
+		ablyCallbacks.playerList = {
+			'playerList:created': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteCreated(data as any),
+			'playerList:updated': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteUpdated(data as any),
+			'playerList:deleted': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteDeleted(data as any),
+			'playerList:membersChanged': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteMembersChanged(data as any),
+		};
+	});
+
+	// ── Loading ──
+
+	describe('loadByEventId', () => {
+		it('populates lists state and preloads members', async () => {
+			const lists = [
+				createSummary({ id: 1, name: 'List 1' }),
+				createSummary({ id: 2, name: 'List 2' }),
+			];
+			mockRepo.list.mockResolvedValue(lists);
+			mockRepo.getMemberIds.mockResolvedValue([]);
+
+			await store.loadByEventId(1);
+
+			expect(store.lists).toEqual(lists);
+			expect(store.isLoaded).toBe(true);
+			expect(mockRepo.getMemberIds).toHaveBeenCalledTimes(2);
+		});
+	});
+
+	// ── Create ──
+
+	describe('createList', () => {
+		it('adds list to state with memberCount 0', async () => {
+			const created = createMockPlayerList({ id: 3, name: 'New List' });
+			mockRepo.create.mockResolvedValue(created);
+
+			await store.createList(1, { name: 'New List' });
+
+			expect(store.lists).toHaveLength(1);
+			expect(store.lists[0]!.name).toBe('New List');
+			expect(store.lists[0]!.memberCount).toBe(0);
+		});
+	});
+
+	// ── Update (optimistic) ──
+
+	describe('updateList', () => {
+		it('optimistically updates then applies server response', async () => {
+			store.lists = [createSummary({ id: 1, name: 'Old Name' })];
+
+			const serverUpdated = createMockPlayerList({ id: 1, name: 'Server Name' });
+			mockRepo.update.mockResolvedValue(serverUpdated);
+
+			await store.updateList(1, 1, { name: 'New Name' });
+
+			expect(store.lists[0]!.name).toBe('Server Name');
+		});
+	});
+
+	// ── Remove (optimistic) ──
+
+	describe('removeList', () => {
+		it('removes list from state and clears member cache', async () => {
+			store.lists = [createSummary({ id: 1 })];
+			store.membersByListId.set(1, [10, 20]);
+			mockRepo.remove.mockResolvedValue({ success: true });
+
+			await store.removeList(1, 1);
+
+			expect(store.lists).toHaveLength(0);
+			expect(store.membersByListId.has(1)).toBe(false);
+		});
+
+		it('returns null and sets error when list not found', async () => {
+			store.lists = [];
+
+			const result = await store.removeList(1, 999);
+
+			expect(result).toBeNull();
+			expect(store.error).toBe('Player list not found');
+		});
+	});
+
+	// ── Member Management ──
+
+	describe('addMembers', () => {
+		it('optimistically increments member count', async () => {
+			store.lists = [createSummary({ id: 1, memberCount: 2 })];
+			store.membersByListId.set(1, [10, 20]);
+			mockRepo.addMembers.mockResolvedValue({ added: 1, memberCount: 3 });
+
+			await store.addMembers(1, 1, [30]);
+
+			expect(store.lists[0]!.memberCount).toBe(3);
+		});
+
+		it('corrects member count when server added fewer than expected', async () => {
+			store.lists = [createSummary({ id: 1, memberCount: 2 })];
+			mockRepo.addMembers.mockResolvedValue({ added: 1, memberCount: 3 });
+
+			await store.addMembers(1, 1, [30, 40]);
+
+			expect(store.lists[0]!.memberCount).toBe(3);
+		});
+	});
+
+	describe('removeMember', () => {
+		it('optimistically decrements member count', async () => {
+			store.lists = [createSummary({ id: 1, memberCount: 3 })];
+			store.membersByListId.set(1, [10, 20, 30]);
+			mockRepo.removeMember.mockResolvedValue({ success: true, memberCount: 2 });
+
+			await store.removeMember(1, 1, 10);
+
+			expect(store.lists[0]!.memberCount).toBe(2);
+			expect(store.membersByListId.get(1)).toEqual([20, 30]);
+		});
+
+		it('handles list not found (index -1) gracefully', async () => {
+			store.lists = [];
+			store.membersByListId.set(1, [10, 20]);
+			mockRepo.removeMember.mockResolvedValue({ success: true, memberCount: 1 });
+
+			await store.removeMember(1, 1, 10);
+
+			expect(store.membersByListId.get(1)).toEqual([20]);
+		});
+	});
+
+	describe('reorderMembers', () => {
+		it('optimistically updates cached member order', async () => {
+			store.lists = [createSummary({ id: 1, memberCount: 3 })];
+			store.membersByListId.set(1, [10, 20, 30]);
+			mockRepo.reorderMembers.mockResolvedValue({ reordered: 3, memberCount: 3 });
+
+			await store.reorderMembers(1, 1, [30, 20, 10]);
+
+			expect(store.membersByListId.get(1)).toEqual([30, 20, 10]);
+		});
+	});
+
+	// ── Realtime Handlers ──
+
+	describe('realtime handlers', () => {
+		describe('playerList:created', () => {
+			it('adds list from remote message', () => {
+				store.lists = [];
+
+				ablyCallbacks.playerList!['playerList:created']!({ playerList: { id: 10, name: 'Remote List', memberCount: 0 } });
+
+				expect(store.lists).toHaveLength(1);
+			});
+
+			it('skips when isSelfOrigin returns true', () => {
+				mockIsSelfOrigin.mockReturnValueOnce(true);
+				store.lists = [];
+
+				ablyCallbacks.playerList!['playerList:created']!({ playerList: { id: 10, name: 'Remote List', memberCount: 0 } });
+
+				expect(store.lists).toHaveLength(0);
+			});
+		});
+
+		describe('playerList:updated', () => {
+			it('updates existing list from remote message', () => {
+				store.lists = [createSummary({ id: 10, name: 'Old' })];
+
+				ablyCallbacks.playerList!['playerList:updated']!({ playerList: { id: 10, name: 'New' } });
+
+				expect(store.lists[0]!.name).toBe('New');
+			});
+
+			it('skips when isSelfOrigin returns true', () => {
+				store.lists = [createSummary({ id: 10, name: 'Old' })];
+				mockIsSelfOrigin.mockReturnValueOnce(true);
+
+				ablyCallbacks.playerList!['playerList:updated']!({ playerList: { id: 10, name: 'New' } });
+
+				expect(store.lists[0]!.name).toBe('Old');
+			});
+		});
+
+		describe('playerList:deleted', () => {
+			it('removes list and member cache from remote message', () => {
+				store.lists = [createSummary({ id: 10 })];
+				store.membersByListId.set(10, [1, 2]);
+
+				ablyCallbacks.playerList!['playerList:deleted']!({ listId: 10 });
+
+				expect(store.lists).toHaveLength(0);
+				expect(store.membersByListId.has(10)).toBe(false);
+			});
+		});
+
+		describe('playerList:membersChanged', () => {
+			it('sets authoritative count on added action', () => {
+				store.lists = [createSummary({ id: 10, memberCount: 2 })];
+
+				ablyCallbacks.playerList!['playerList:membersChanged']!({ listId: 10, action: 'added', playerIds: [1, 2, 3], memberCount: 8 });
+
+				expect(store.lists[0]!.memberCount).toBe(8);
+			});
+
+			it('invalidates member cache on any change', () => {
+				store.lists = [createSummary({ id: 10 })];
+				store.membersByListId.set(10, [1, 2]);
+
+				ablyCallbacks.playerList!['playerList:membersChanged']!({ listId: 10, action: 'reordered', playerIds: [2, 1], memberCount: 2 });
+
+				expect(store.membersByListId.has(10)).toBe(false);
+			});
+
+			it('skips when isSelfOrigin returns true', () => {
+				store.lists = [createSummary({ id: 10, memberCount: 2 })];
+				mockIsSelfOrigin.mockReturnValueOnce(true);
+
+				ablyCallbacks.playerList!['playerList:membersChanged']!({ listId: 10, action: 'added', playerIds: [1], memberCount: 3 });
+
+				expect(store.lists[0]!.memberCount).toBe(2);
+			});
+		});
+	});
+
+	// ── $reset ──
+
+	describe('$reset', () => {
+		it('clears all state', () => {
+			store.lists = [createSummary()];
+			store.membersByListId.set(1, [10]);
+			store.error = 'some error';
+
+			store.$reset();
+
+			expect(store.lists).toEqual([]);
+			expect(store.membersByListId.size).toBe(0);
+			expect(store.error).toBeNull();
+			expect(store.loading).toBe(false);
+			expect(store.isLoaded).toBe(false);
+		});
+	});
+
+	// ── loadListMembers ──
+
+	describe('loadListMembers', () => {
+		it('fetches and caches member IDs for a list', async () => {
+			mockRepo.getMemberIds.mockResolvedValue([5, 10, 15]);
+
+			await store.loadListMembers(1, 42);
+
+			expect(store.membersByListId.get(42)).toEqual([5, 10, 15]);
+		});
+	});
+});

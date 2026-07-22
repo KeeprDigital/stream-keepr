@@ -1,0 +1,331 @@
+import { $fetch } from '@nuxt/test-utils/e2e';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { $fetchRaw } from './helpers';
+
+describe('feature match slots API', () => {
+	let eventId: number;
+	let matchId: number;
+	let phaseId: number;
+	let roundId: number;
+
+	beforeAll(async () => {
+		const event = await $fetch('/api/events', {
+			method: 'POST',
+			body: { name: 'Integration Feature Matches Event', game: 'mtg', featureMatchOrientation: 'horizontal' },
+		});
+		eventId = event.id;
+
+		const phase = await $fetch(`/api/events/${eventId}/phases`, {
+			method: 'POST',
+			body: { name: 'Swiss' },
+		});
+		phaseId = phase.id;
+
+		const round = await $fetch(`/api/events/${eventId}/rounds`, {
+			method: 'POST',
+			body: { phaseId, name: 'Round 1', roundNumber: 1 },
+		});
+		roundId = round.id;
+	});
+
+	afterAll(async () => {
+		try {
+			await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+		}
+		catch {}
+	});
+
+	it('creates a feature match slot and returns 201', async () => {
+		const res = await $fetchRaw(`/api/events/${eventId}/feature-match-slots`, {
+			method: 'POST',
+			body: {
+				bestOf: 3,
+			},
+		});
+
+		expect(res.status).toBe(201);
+		expect(res._data).toMatchObject({
+			eventId,
+			bestOf: 3,
+			externalId: null,
+			externalSource: 'manual',
+		});
+		expect(res._data.id).toBeTypeOf('number');
+		matchId = res._data.id;
+	});
+
+	it('rejects forged FeatureMatch provenance', async () => {
+		const res = await $fetchRaw(`/api/events/${eventId}/feature-match-slots`, {
+			method: 'POST',
+			body: {
+				bestOf: 3,
+				externalId: 'forged-slot',
+				externalSource: 'melee',
+			},
+		});
+
+		expect(res.status).toBeGreaterThanOrEqual(400);
+		expect(res.status).toBeLessThan(500);
+	});
+
+	it('lists feature match slots for the event', async () => {
+		const data = await $fetch(`/api/events/${eventId}/feature-match-slots`);
+
+		expect(data.featureMatchSlots).toBeInstanceOf(Array);
+		expect(data.total).toBeGreaterThanOrEqual(1);
+
+		// Event creation auto-creates feature match slots; our manually created one should also be here.
+		const found = data.featureMatchSlots.find((m: { id: number }) => m.id === matchId);
+		expect(found).toBeDefined();
+		expect(found.bestOf).toBe(3);
+	});
+
+	it('updates a feature match slot bestOf', async () => {
+		const updated = await $fetch(`/api/events/${eventId}/feature-match-slots/${matchId}/setup`, {
+			method: 'PATCH',
+			body: { bestOf: 5 },
+		});
+
+		expect(updated.id).toBe(matchId);
+		expect(updated.bestOf).toBe(5);
+	});
+
+	it('updates feature match slot with player data', async () => {
+		const updated = await $fetch(`/api/events/${eventId}/feature-match-slots/${matchId}/setup`, {
+			method: 'PATCH',
+			body: {
+				player1Data: { name: 'Alice' },
+				player2Data: { name: 'Bob' },
+			},
+		});
+
+		expect(updated.id).toBe(matchId);
+		expect(updated.player1Data).toMatchObject({ name: 'Alice' });
+		expect(updated.player2Data).toMatchObject({ name: 'Bob' });
+	});
+
+	it('updates only the table number without resubmitting player fields', async () => {
+		const updated = await $fetch(`/api/events/${eventId}/feature-match-slots/${matchId}/setup`, {
+			method: 'PATCH',
+			body: { tableNumber: '12' },
+		});
+
+		expect(updated.id).toBe(matchId);
+		expect(updated.tableNumber).toBe(12);
+		expect(updated.player1Data).toMatchObject({ name: 'Alice' });
+		expect(updated.player2Data).toMatchObject({ name: 'Bob' });
+	});
+
+	it('updates feature match slot with partial player metadata', async () => {
+		const updated = await $fetch(`/api/events/${eventId}/feature-match-slots/${matchId}/setup`, {
+			method: 'PATCH',
+			body: {
+				player1Data: { position: '4' },
+				player2Data: {},
+			},
+		});
+
+		expect(updated.id).toBe(matchId);
+		expect(updated.player1Data).toEqual({ position: 4 });
+		expect(updated.player2Data).toBeNull();
+	});
+
+	it('promotes a Match and returns affected Slots plus the saved Assignment', async () => {
+		const sourceMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: {
+				roundId,
+				tableNumber: 42,
+				player1Data: { name: 'Alice' },
+				player2Data: { name: 'Bob' },
+			},
+		});
+		const targetSlot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
+			method: 'POST',
+			body: { bestOf: 3 },
+		});
+		const duplicateSlot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
+			method: 'POST',
+			body: { bestOf: 3 },
+		});
+
+		await $fetch(`/api/events/${eventId}/feature-match-slots/${duplicateSlot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: sourceMatch.id },
+		});
+
+		const result = await $fetch(`/api/events/${eventId}/feature-match-slots/${targetSlot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: sourceMatch.id },
+		});
+
+		expect(result.promotedSlot).toMatchObject({
+			id: targetSlot.id,
+			matchId: sourceMatch.id,
+			tableNumber: 42,
+			roundName: 'Round 1',
+			player1Data: { name: 'Alice' },
+			player2Data: { name: 'Bob' },
+		});
+		expect(result.clearedSlots).toHaveLength(1);
+		expect(result.clearedSlots[0]).toMatchObject({
+			id: duplicateSlot.id,
+			matchId: null,
+			player1Data: null,
+			player2Data: null,
+		});
+		expect(result.assignment).toMatchObject({
+			eventId,
+			roundId,
+			slotId: targetSlot.id,
+			matchId: sourceMatch.id,
+			note: null,
+		});
+	});
+
+	it('promotes atomically: slot, assignment, and a fresh session land together, and re-promotion stays consistent', async () => {
+		const matchA = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 5, player1Data: { name: 'Carol' }, player2Data: { name: 'Dave' } },
+		});
+		const matchB = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 6, player1Data: { name: 'Erin' }, player2Data: { name: 'Frank' } },
+		});
+		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
+			method: 'POST',
+			body: { bestOf: 3 },
+		});
+
+		// First promotion: match A into the slot.
+		const first = await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: matchA.id },
+		});
+
+		// The slot references the match, a fresh session (sequence 1) exists for it,
+		// and the assignment row exists — all as a single observable outcome.
+		expect(first.promotedSlot).toMatchObject({ id: slot.id, matchId: matchA.id, player1Data: { name: 'Carol' } });
+		expect(first.promotedSlot.activeSession).toMatchObject({ slotId: slot.id, status: 'active', sequence: 1 });
+		expect(first.assignment).toMatchObject({ roundId, slotId: slot.id, matchId: matchA.id });
+		const firstSessionId = first.promotedSlot.activeSession.id;
+
+		// The same invariants hold in durable storage, not just in the response.
+		const afterFirst = await $fetch(`/api/events/${eventId}/feature-match-slots`);
+		const storedA = afterFirst.featureMatchSlots.find((s: { id: number }) => s.id === slot.id);
+		expect(storedA).toMatchObject({ matchId: matchA.id });
+		expect(storedA.activeSession).toMatchObject({ id: firstSessionId, status: 'active', sequence: 1 });
+
+		const assignmentsA = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId } });
+		const rowsForSlotA = assignmentsA.featureMatchAssignments.filter((a: { slotId: number }) => a.slotId === slot.id);
+		expect(rowsForSlotA).toHaveLength(1);
+		expect(rowsForSlotA[0]).toMatchObject({ matchId: matchA.id });
+
+		// Second promotion: match B into the SAME slot reassigns consistently.
+		const second = await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: matchB.id },
+		});
+
+		expect(second.promotedSlot).toMatchObject({ id: slot.id, matchId: matchB.id, player1Data: { name: 'Erin' } });
+		// A brand-new session replaced the previous one.
+		expect(second.promotedSlot.activeSession).toMatchObject({ slotId: slot.id, status: 'active', sequence: 1 });
+		expect(second.promotedSlot.activeSession.id).not.toBe(firstSessionId);
+		expect(second.assignment).toMatchObject({ roundId, slotId: slot.id, matchId: matchB.id });
+
+		// Exactly one assignment for the slot, now pointing at match B.
+		const assignmentsB = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId } });
+		const rowsForSlotB = assignmentsB.featureMatchAssignments.filter((a: { slotId: number }) => a.slotId === slot.id);
+		expect(rowsForSlotB).toHaveLength(1);
+		expect(rowsForSlotB[0]).toMatchObject({ matchId: matchB.id });
+	});
+
+	it('clears empty player metadata to null', async () => {
+		const updated = await $fetch(`/api/events/${eventId}/feature-match-slots/${matchId}/setup`, {
+			method: 'PATCH',
+			body: {
+				player1Data: {
+					name: '',
+					pronouns: '',
+					gameData: { type: 'mtg', deckName: '', deckColors: null },
+				},
+				player2Data: null,
+			},
+		});
+
+		expect(updated.id).toBe(matchId);
+		expect(updated.player1Data).toBeNull();
+		expect(updated.player2Data).toBeNull();
+	});
+
+	it('deletes a feature match slot', async () => {
+		// Create a throwaway match
+		const match = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
+			method: 'POST',
+			body: {},
+		});
+
+		const result = await $fetch(`/api/events/${eventId}/feature-match-slots/${match.id}`, {
+			method: 'DELETE',
+		});
+
+		expect(result).toEqual({ success: true });
+
+		// Verify it's gone
+		const res = await $fetchRaw(`/api/events/${eventId}/feature-match-slots/${match.id}`);
+		expect(res.status).toBe(404);
+	});
+
+	it('auto-creates feature match slots on event creation (default numFeatureMatches=1)', async () => {
+		const event = await $fetch('/api/events', {
+			method: 'POST',
+			body: { name: 'Integration Auto FM Event', game: 'mtg', featureMatchOrientation: 'horizontal' },
+		});
+
+		try {
+			const data = await $fetch(`/api/events/${event.id}/feature-match-slots`);
+			expect(data.featureMatchSlots).toHaveLength(1);
+			expect(data.featureMatchSlots[0].eventId).toBe(event.id);
+			expect(data.featureMatchSlots[0].activeSession).toBeDefined();
+			expect(data.featureMatchSlots[0].activeSession.currentState).toBeDefined();
+			expect(data.featureMatchSlots[0].activeSession.sequence).toBe(1);
+		}
+		finally {
+			await $fetch(`/api/events/${event.id}`, { method: 'DELETE' });
+		}
+	});
+
+	it('syncs feature match slot count when numFeatureMatches is updated', async () => {
+		const event = await $fetch('/api/events', {
+			method: 'POST',
+			body: { name: 'Integration Sync FM Event', game: 'mtg', featureMatchOrientation: 'horizontal' },
+		});
+
+		try {
+			// Default: 1 feature match
+			let data = await $fetch(`/api/events/${event.id}/feature-match-slots`);
+			expect(data.featureMatchSlots).toHaveLength(1);
+
+			// Increase to 3
+			await $fetch(`/api/events/${event.id}`, {
+				method: 'PATCH',
+				body: { numFeatureMatches: 3 },
+			});
+
+			data = await $fetch(`/api/events/${event.id}/feature-match-slots`);
+			expect(data.featureMatchSlots).toHaveLength(3);
+
+			// Decrease to 2
+			await $fetch(`/api/events/${event.id}`, {
+				method: 'PATCH',
+				body: { numFeatureMatches: 2 },
+			});
+
+			data = await $fetch(`/api/events/${event.id}/feature-match-slots`);
+			expect(data.featureMatchSlots).toHaveLength(2);
+		}
+		finally {
+			await $fetch(`/api/events/${event.id}`, { method: 'DELETE' });
+		}
+	});
+});

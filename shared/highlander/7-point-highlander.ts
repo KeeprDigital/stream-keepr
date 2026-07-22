@@ -1,0 +1,111 @@
+import type { PointsSystem } from '../types/enums';
+
+export const SEVEN_POINT_HIGHLANDER_LAST_UPDATED = '2026-03-01';
+
+export interface ResolvedPointListEntry {
+	name: string;
+	oracleId: string;
+	points: number;
+	pointedAs?: 'companion';
+}
+
+export interface ResolvedPointList {
+	system: PointsSystem;
+	label: string;
+	lastUpdated: string;
+	entries: ResolvedPointListEntry[];
+}
+
+export const SEVEN_POINT_HIGHLANDER: ResolvedPointList = {
+	system: '7ph',
+	label: '7 Point Highlander',
+	lastUpdated: SEVEN_POINT_HIGHLANDER_LAST_UPDATED,
+	entries: [
+		{ name: 'Ancestral Recall', oracleId: '550c74d4-1fcb-406a-b02a-639a760a4380', points: 5 },
+		{ name: 'Black Lotus', oracleId: '5089ec1a-f881-4d55-af14-5d996171203b', points: 5 },
+		{ name: 'Mana Crypt', oracleId: '2c63e4e1-89d2-4bc6-a232-94e75c4b1c8a', points: 5 },
+		{ name: 'Time Walk', oracleId: 'd0209d3f-3f7e-4fd5-bce5-10bce6f29c86', points: 5 },
+		{ name: 'Thassa\'s Oracle', oracleId: '1de1b591-a73f-4974-b507-8c63e07a0868', points: 4 },
+		{ name: 'Time Vault', oracleId: '99d4d99d-cf56-45aa-aa39-a250695612f2', points: 4 },
+		{ name: 'Flash', oracleId: '3e057471-e415-4105-9064-8236a0a5047d', points: 3 },
+		{ name: 'Lutri, the Spellchaser', oracleId: '158a6225-a246-4fd6-aa57-0df8067b4383', points: 3, pointedAs: 'companion' },
+		{ name: 'Lurrus of the Dream-Den', oracleId: '3bc757c1-3adb-4321-8832-8e1cc9e687f7', points: 3, pointedAs: 'companion' },
+		{ name: 'Mox Emerald', oracleId: '376ee366-e082-402f-b4db-6592fcfcacd2', points: 3 },
+		{ name: 'Mox Jet', oracleId: '0677f49e-f8bf-4349-af52-2ccde9287c2e', points: 3 },
+		{ name: 'Mox Pearl', oracleId: '824597b8-c89a-47ec-8526-7efc6e24ef0e', points: 3 },
+		{ name: 'Mox Ruby', oracleId: 'ed85fa82-e4fa-434b-92a8-36b6075708d1', points: 3 },
+		{ name: 'Mox Sapphire', oracleId: 'd5ed1233-df87-4b90-8918-13922ec95249', points: 3 },
+		{ name: 'Sol Ring', oracleId: '6ad8011d-3471-4369-9d68-b264cc027487', points: 3 },
+		{ name: 'Underworld Breach', oracleId: '27e0948b-9916-473b-8d8c-a51bdfbc7457', points: 3 },
+		{ name: 'Vampiric Tutor', oracleId: 'ededbdae-d9dc-4206-9335-d7158f2d7700', points: 3 },
+		{ name: 'White Plume Adventurer', oracleId: '51f091a7-9b0b-4362-8e9c-c174752f369b', points: 3 },
+		{ name: 'Channel', oracleId: 'd1b815d1-2848-40d4-a555-66822d1becbc', points: 2 },
+		{ name: 'Demonic Tutor', oracleId: '82004860-e589-4e38-8d61-8c0210e4ea39', points: 2 },
+		{ name: 'Gush', oracleId: '16d8ee99-8ec8-429f-9ba7-818a74b6f910', points: 2 },
+		{ name: 'Imperial Seal', oracleId: '16cd0b90-f70c-4efa-b252-8de8784ef9a3', points: 2 },
+		{ name: 'Mana Vault', oracleId: '736892cb-a34b-4bb9-b56c-e26e3db207a2', points: 2 },
+		{ name: 'Minsc & Boo, Timeless Heroes', oracleId: '3a310554-3f69-4158-bb94-9d6965c7125a', points: 2 },
+		{ name: 'Nadu, Winged Wisdom', oracleId: '0ff11a61-6fe3-4c70-aba8-417023a5e54e', points: 2 },
+		{ name: 'Psychic Frog', oracleId: 'e157ad1e-be35-47f3-92db-01799f8fb6a5', points: 2 },
+		{ name: 'Ragavan, Nimble Pilferer', oracleId: '37108cd4-bbab-4ce3-9ed6-f60e8422e703', points: 2 },
+		{ name: 'Reanimate', oracleId: 'a044474a-cd72-4e9d-bd8d-a08f2de9cdc0', points: 2 },
+		{ name: 'Tamiyo, Inquisitive Student', oracleId: '1ed9e351-0000-4b75-8ecb-d15bd88df68a', points: 2 },
+		{ name: 'Tinker', oracleId: '254878f0-be90-4653-a395-0c41258fceaf', points: 2 },
+		{ name: 'Tolarian Academy', oracleId: 'dba4fd31-8931-42dd-bd86-45479c2abf74', points: 2 },
+		{ name: 'Treasure Cruise', oracleId: '5b6bdf5a-2742-4851-92cd-a857a3852836', points: 2 },
+		{ name: 'Wrenn and Six', oracleId: '108ae90a-50fa-4cfd-b751-d630e41425fe', points: 2 },
+		{ name: 'Abhorrent Oculus', oracleId: 'b1a0e129-27f0-4a09-b00d-497e18777306', points: 1 },
+		{ name: 'Ancient Tomb', oracleId: '23467047-6dba-4498-b783-1ebc4f74b8c2', points: 1 },
+		{ name: 'Balance', oracleId: '17fa98cd-ed8f-483f-9525-7e989a82ebb2', points: 1 },
+		{ name: 'Barrowgoyf', oracleId: '74c0164c-130f-4572-9066-626c77f6e2ff', points: 1 },
+		{ name: 'Bolas\'s Citadel', oracleId: '2bd111bb-ce02-414c-b5b7-e0e037d8d96b', points: 1 },
+		{ name: 'Broadside Bombardiers', oracleId: 'e0c00a74-bdf8-4fee-8042-42c5878e9e3c', points: 1 },
+		{ name: 'Caves of Chaos Adventurer', oracleId: 'e4d2dcbb-9910-482e-9e46-dfed2097509b', points: 1 },
+		{ name: 'Comet, Stellar Pup', oracleId: 'e7c67480-1816-4071-9eab-a1d1b535a344', points: 1 },
+		{ name: 'Crop Rotation', oracleId: '28b46183-c62f-47b1-9fee-3ba148202cab', points: 1 },
+		{ name: 'Deadpool, Trading Card', oracleId: '4b96c22a-0d5b-44fd-b326-5f3ffcc3917b', points: 1 },
+		{ name: 'Deathrite Shaman', oracleId: '22f1a4a4-c423-4d1c-8775-0ed604a9fa51', points: 1 },
+		{ name: 'Demonic Counsel', oracleId: '712e3479-722c-40a1-9b61-d5bdde93042b', points: 1 },
+		{ name: 'Dig Through Time', oracleId: 'f8b17b89-26ce-4208-874a-9e1d66514640', points: 1 },
+		{ name: 'Dreadhorde Arcanist', oracleId: '4c05b382-58ab-4a2d-a81c-408ea273b6b6', points: 1 },
+		{ name: 'Fable of the Mirror-Breaker', oracleId: 'c0957e5e-c71b-439c-931c-9f55d2f76ace', points: 1 },
+		{ name: 'Force of Will', oracleId: '956381ba-6d37-4a8a-846c-bad79222dbee', points: 1 },
+		{ name: 'Forth Eorlingas!', oracleId: '35807c14-4647-482f-9ba1-6d640fd5e8d8', points: 1 },
+		{ name: 'Gamble', oracleId: 'a54f0869-94c8-42af-9080-166efb9486a4', points: 1 },
+		{ name: 'Gifts Ungiven', oracleId: '58aec411-167d-4709-8560-793eaaed62c5', points: 1 },
+		{ name: 'Goblin Recruiter', oracleId: '792e1072-00bf-4f63-b956-5f20cdf09f11', points: 1 },
+		{ name: 'Intuition', oracleId: '3c9faba7-f2d3-4978-be94-020dc8003dc0', points: 1 },
+		{ name: 'Karakas', oracleId: '59119143-c0fa-49dd-adf0-e2fd3029c48b', points: 1 },
+		{ name: 'Library of Alexandria', oracleId: '2111588d-9af5-4a33-989e-b074d83f0463', points: 1 },
+		{ name: 'Mana Drain', oracleId: '74d3277a-38e5-4732-afed-084a56148f20', points: 1 },
+		{ name: 'Mental Misstep', oracleId: '1a0770e6-b093-4439-baff-6889a50ba12e', points: 1 },
+		{ name: 'Merchant Scroll', oracleId: '86cebe2a-95e7-4f22-99cc-e805aeaf347e', points: 1 },
+		{ name: 'Mind Twist', oracleId: '78f9c223-9982-4282-a496-a6f892f0a5bf', points: 1 },
+		{ name: 'Mishra\'s Workshop', oracleId: 'ba284fe6-bb29-455c-8321-9714a0cdc05e', points: 1 },
+		{ name: 'Murktide Regent', oracleId: '7f993ac7-c2cd-413c-a106-2c051a77ebf6', points: 1 },
+		{ name: 'Mystical Tutor', oracleId: 'fb81f95c-70f8-4eb7-8d15-15d0ae23ec03', points: 1 },
+		{ name: 'Nethergoyf', oracleId: '040cbd8a-a9e5-454b-a5ae-9b66bb66b8e9', points: 1 },
+		{ name: 'Oath of Druids', oracleId: 'cf0dcb27-f02e-4065-81dc-75fbbb09ea3f', points: 1 },
+		{ name: 'Oko, Thief of Crowns', oracleId: '60c60923-ff1b-43f7-8768-731499fcffc9', points: 1 },
+		{ name: 'Orcish Bowmasters', oracleId: 'ea5103f5-27e0-4eb1-902c-7f34652d6bf3', points: 1 },
+		{ name: 'Phlage, Titan of Fire\'s Fury', oracleId: '3407eb6e-b74d-4159-a801-d7163937953c', points: 1 },
+		{ name: 'Planar Nexus', oracleId: '26005003-afcb-4c32-a760-be950246ff0f', points: 1 },
+		{ name: 'Profane Tutor', oracleId: '27a1f42c-0b86-4609-9609-1fa9cab7e7c9', points: 1 },
+		{ name: 'Seasoned Dungeoneer', oracleId: '5ea675aa-88d6-4387-a14d-e606fa9c3aec', points: 1 },
+		{ name: 'Sensei\'s Divining Top', oracleId: '13575cf9-65c1-4861-b21e-eb2155e07766', points: 1 },
+		{ name: 'Skullclamp', oracleId: '65986c1b-8e51-4604-b685-d82fa7d1263a', points: 1 },
+		{ name: 'Snapcaster Mage', oracleId: '2bb2eda7-3b38-4c56-870f-c3218a1056f5', points: 1 },
+		{ name: 'Spellseeker', oracleId: '47a785ed-8095-4685-8daa-02c4e2b0ffcd', points: 1 },
+		{ name: 'Strip Mine', oracleId: 'd21a89eb-7c5b-459a-acc7-12b20b13bf79', points: 1 },
+		{ name: 'Tainted Pact', oracleId: '1a85ba2b-ae10-4917-954a-7709b75a9740', points: 1 },
+		{ name: 'Tezzeret, Cruel Captain', oracleId: '0eb11b2d-a397-48da-a0f3-9f0f83f42282', points: 1 },
+		{ name: 'The One Ring', oracleId: '3aa83ed2-f48b-4ce6-a614-2c54ddf50538', points: 1 },
+		{ name: 'Timetwister', oracleId: 'c823e687-6311-4c99-974b-fd77d204141a', points: 1 },
+		{ name: 'True-Name Nemesis', oracleId: '112322ad-8f66-4cd4-98a1-f425d61a69ce', points: 1 },
+		{ name: 'Undermountain Adventurer', oracleId: '2e5e0abd-38a6-46ca-b922-556db52f1332', points: 1 },
+		{ name: 'Uro, Titan of Nature\'s Wrath', oracleId: 'ee302659-59ed-4eef-babe-451b9ccf7f14', points: 1 },
+		{ name: 'Urza\'s Saga', oracleId: '4c6a0c30-b547-4eff-8ff4-0ca25803c076', points: 1 },
+		{ name: 'Wasteland', oracleId: '09a70ae8-3859-4a09-901d-dce063fa3b5f', points: 1 },
+		{ name: 'Wishclaw Talisman', oracleId: '81c70ae7-3c18-4c9b-8505-e4db9e0e6518', points: 1 },
+	],
+};

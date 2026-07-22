@@ -1,0 +1,222 @@
+import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// useStoreHelpers delegates to useAsyncAction — use the real implementation
+// so we test the full optimistic update/rollback flow.
+async function realExecuteAction<T>(action: () => Promise<T>,	options: { errorRef?: Ref<string | null>; onError?: (e: unknown) => void } = {}): Promise<T | null> {
+	const { errorRef, onError } = options;
+	if (errorRef)
+		errorRef.value = null;
+	try {
+		return await action();
+	}
+	catch (e) {
+		if (errorRef)
+			errorRef.value = e instanceof Error ? e.message : 'An error occurred';
+		onError?.(e);
+		return null;
+	}
+}
+
+mockNuxtImport('useAsyncAction', () => () => ({ executeAction: realExecuteAction }));
+
+interface TestItem { id: number; name: string }
+
+function createTestItems(items: TestItem[]): Ref<TestItem[]> {
+	return ref(items.map(i => ({ ...i })));
+}
+
+describe('useStoreHelpers', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	describe('executeAction', () => {
+		it('exposes executeAction from useAsyncAction', () => {
+			const { executeAction } = useStoreHelpers();
+			expect(executeAction).toBeTypeOf('function');
+		});
+	});
+
+	describe('optimisticUpdate', () => {
+		it('applies updates optimistically and returns API result', async () => {
+			const { optimisticUpdate } = useStoreHelpers();
+			const items = createTestItems([{ id: 1, name: 'Original' }]);
+			const apiResult = { id: 1, name: 'FromAPI' };
+			const apiCall = vi.fn().mockResolvedValue(apiResult);
+			const errorRef = ref<string | null>(null);
+
+			const result = await optimisticUpdate({
+				items,
+				id: 1,
+				updates: { name: 'Updated' },
+				apiCall,
+				errorRef,
+				entityLabel: 'Item',
+			});
+
+			expect(result).toEqual(apiResult);
+			expect(items.value[0]!.name).toBe('FromAPI');
+			expect(errorRef.value).toBeNull();
+		});
+
+		it('applies updates immediately before API call resolves', async () => {
+			const { optimisticUpdate } = useStoreHelpers();
+			const items = createTestItems([{ id: 1, name: 'Original' }]);
+			let nameDuringApiCall = '';
+
+			const apiCall = vi.fn().mockImplementation(async () => {
+				nameDuringApiCall = items.value[0]!.name;
+				return { id: 1, name: 'FromAPI' };
+			});
+
+			await optimisticUpdate({
+				items,
+				id: 1,
+				updates: { name: 'Optimistic' },
+				apiCall,
+				errorRef: ref(null),
+				entityLabel: 'Item',
+			});
+
+			expect(nameDuringApiCall).toBe('Optimistic');
+		});
+
+		it('returns null and sets error when item not found', async () => {
+			const { optimisticUpdate } = useStoreHelpers();
+			const items = createTestItems([{ id: 1, name: 'A' }]);
+			const errorRef = ref<string | null>(null);
+
+			const result = await optimisticUpdate({
+				items,
+				id: 999,
+				updates: { name: 'X' },
+				apiCall: vi.fn(),
+				errorRef,
+				entityLabel: 'Player',
+			});
+
+			expect(result).toBeNull();
+			expect(errorRef.value).toBe('Player not found');
+		});
+
+		it('calls onSuccess after successful API call', async () => {
+			const { optimisticUpdate } = useStoreHelpers();
+			const items = createTestItems([{ id: 1, name: 'A' }]);
+			const onSuccess = vi.fn();
+
+			await optimisticUpdate({
+				items,
+				id: 1,
+				updates: { name: 'B' },
+				apiCall: vi.fn().mockResolvedValue({ id: 1, name: 'B' }),
+				errorRef: ref(null),
+				entityLabel: 'Item',
+				onSuccess,
+			});
+
+			expect(onSuccess).toHaveBeenCalledOnce();
+		});
+
+		it('handles update when item is among multiple items', async () => {
+			const { optimisticUpdate } = useStoreHelpers();
+			const items = createTestItems([
+				{ id: 1, name: 'A' },
+				{ id: 2, name: 'B' },
+				{ id: 3, name: 'C' },
+			]);
+			const apiResult = { id: 2, name: 'Updated-B' };
+
+			await optimisticUpdate({
+				items,
+				id: 2,
+				updates: { name: 'Updated-B' },
+				apiCall: vi.fn().mockResolvedValue(apiResult),
+				errorRef: ref(null),
+				entityLabel: 'Item',
+			});
+
+			expect(items.value[0]!.name).toBe('A');
+			expect(items.value[1]!.name).toBe('Updated-B');
+			expect(items.value[2]!.name).toBe('C');
+		});
+	});
+
+	describe('optimisticDelete', () => {
+		it('removes item and returns true on success', async () => {
+			const { optimisticDelete } = useStoreHelpers();
+			const items = createTestItems([
+				{ id: 1, name: 'A' },
+				{ id: 2, name: 'B' },
+			]);
+			const errorRef = ref<string | null>(null);
+
+			const result = await optimisticDelete({
+				items,
+				id: 1,
+				apiCall: vi.fn().mockResolvedValue(undefined),
+				errorRef,
+				entityLabel: 'Item',
+			});
+
+			expect(result).toBe(true);
+			expect(items.value).toHaveLength(1);
+			expect(items.value[0]!.id).toBe(2);
+			expect(errorRef.value).toBeNull();
+		});
+
+		it('removes item immediately before API resolves', async () => {
+			const { optimisticDelete } = useStoreHelpers();
+			const items = createTestItems([{ id: 1, name: 'A' }, { id: 2, name: 'B' }]);
+			let lengthDuringApiCall = 0;
+
+			const apiCall = vi.fn().mockImplementation(async () => {
+				lengthDuringApiCall = items.value.length;
+			});
+
+			await optimisticDelete({
+				items,
+				id: 1,
+				apiCall,
+				errorRef: ref(null),
+				entityLabel: 'Item',
+			});
+
+			expect(lengthDuringApiCall).toBe(1);
+		});
+
+		it('returns null and sets error when item not found', async () => {
+			const { optimisticDelete } = useStoreHelpers();
+			const items = createTestItems([{ id: 1, name: 'A' }]);
+			const errorRef = ref<string | null>(null);
+
+			const result = await optimisticDelete({
+				items,
+				id: 999,
+				apiCall: vi.fn(),
+				errorRef,
+				entityLabel: 'Round',
+			});
+
+			expect(result).toBeNull();
+			expect(errorRef.value).toBe('Round not found');
+		});
+
+		it('calls onSuccess after successful API call', async () => {
+			const { optimisticDelete } = useStoreHelpers();
+			const items = createTestItems([{ id: 1, name: 'A' }]);
+			const onSuccess = vi.fn();
+
+			await optimisticDelete({
+				items,
+				id: 1,
+				apiCall: vi.fn().mockResolvedValue(undefined),
+				errorRef: ref(null),
+				entityLabel: 'Item',
+				onSuccess,
+			});
+
+			expect(onSuccess).toHaveBeenCalledOnce();
+		});
+	});
+});
