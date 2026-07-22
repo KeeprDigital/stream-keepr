@@ -107,8 +107,8 @@ const mockPlayerStore = reactive({
 	$reset: vi.fn(),
 });
 
-const mockFetch = vi.fn();
-vi.stubGlobal('$fetch', mockFetch);
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+mockNuxtImport('$fetch', () => mockFetch);
 
 mockNuxtImport('useRoute', () => () => route);
 mockNuxtImport('useRouter', () => () => mockRouter);

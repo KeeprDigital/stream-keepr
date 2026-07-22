@@ -33,8 +33,8 @@ mockNuxtImport('usePlayerDeckStore', () => () => ({ reviewDeck: mockReviewDeck }
 mockNuxtImport('useToast', () => () => mockToast);
 
 // ── Mock $fetch for key card PATCH ──
-const mockFetch = vi.fn().mockResolvedValue({});
-vi.stubGlobal('$fetch', mockFetch);
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn().mockResolvedValue({}) }));
+mockNuxtImport('$fetch', () => mockFetch);
 
 // ── Helpers ──
 

@@ -2,8 +2,8 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 
-const mockFetch = vi.fn();
-vi.stubGlobal('$fetch', mockFetch);
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+mockNuxtImport('$fetch', () => mockFetch);
 
 const mockApiHeaders = {
 	getHeaders: vi.fn(() => ({ 'x-realtime-connection-id': 'test-connection-id' })),

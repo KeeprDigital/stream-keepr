@@ -16,8 +16,8 @@ mockNuxtImport('useRealtime', () => () => mockAbly);
 
 // ── Mock $fetch ──
 
-const mockFetch = vi.fn();
-vi.stubGlobal('$fetch', mockFetch);
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+mockNuxtImport('$fetch', () => mockFetch);
 
 // ── Helpers ──
 

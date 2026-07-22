@@ -2,12 +2,12 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 
-const mockFetch = vi.fn();
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 const mockApiHeaders = {
 	getHeaders: vi.fn(() => ({ 'x-realtime-connection-id': 'test-connection-id' })),
 };
 
-vi.stubGlobal('$fetch', mockFetch);
+mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('useApiHeaders', () => () => mockApiHeaders);
 
 function createSession(overrides: Record<string, unknown> = {}) {

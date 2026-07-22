@@ -84,9 +84,9 @@ const mockEventStore = reactive({
 // Mutable eventId and interactive for null-eventId and timer tests
 const mockEventId = ref<number | null>(1);
 const mockInteractiveStandings = ref(false);
-const mockFetch = vi.fn();
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 
-vi.stubGlobal('$fetch', mockFetch);
+mockNuxtImport('$fetch', () => mockFetch);
 
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('usePlayerListStore', () => () => mockPlayerListStore);

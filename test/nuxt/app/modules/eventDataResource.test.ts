@@ -10,8 +10,8 @@ const mockApiHeaders = {
 };
 mockNuxtImport('useApiHeaders', () => () => mockApiHeaders);
 
-const mockFetch = vi.fn();
-vi.stubGlobal('$fetch', mockFetch);
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+mockNuxtImport('$fetch', () => mockFetch);
 
 describe('useEventDataResource', () => {
 	beforeEach(() => {

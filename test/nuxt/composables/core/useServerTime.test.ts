@@ -1,7 +1,8 @@
+import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockFetch = vi.fn();
-vi.stubGlobal('$fetch', mockFetch);
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+mockNuxtImport('$fetch', () => mockFetch);
 
 describe('useServerTime', () => {
 	beforeEach(() => {

@@ -15,9 +15,9 @@ const mockPlayerStore = {
 	loadPlayersByEventId: vi.fn(),
 };
 const mockRunRequest = vi.fn(async (action: () => Promise<unknown>) => await action());
-const mockFetch = vi.fn();
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 
-vi.stubGlobal('$fetch', mockFetch);
+mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('useEventRepository', () => () => mockEventRepo);
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('useRequestFeedback', () => () => ({ runRequest: mockRunRequest }));

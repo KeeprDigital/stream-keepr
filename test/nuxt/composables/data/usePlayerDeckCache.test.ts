@@ -1,10 +1,11 @@
 import type { PlayerDeckCardEntry, PlayerDeckCollectionResponse, PlayerDeckResponse } from '~~/shared/types/metagame';
+import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockPlayer } from '~~/test/helpers/fixtures';
 import { clearPlayerDeckCache, usePlayerDeckCache } from '~/composables/data/usePlayerDeckCache';
 
-const mockFetch = vi.fn();
-vi.stubGlobal('$fetch', mockFetch);
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+mockNuxtImport('$fetch', () => mockFetch);
 
 function card(overrides: Partial<PlayerDeckCardEntry> = {}): PlayerDeckCardEntry {
 	return {

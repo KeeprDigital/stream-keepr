@@ -1,44 +1,13 @@
 engineStrict: true
 verifyDepsBeforeRun: error
-minimumReleaseAgeExclude:
-  - '@types/node@25.9.3'
-  - '@antfu/eslint-config@9.1.0'
-  - eslint-plugin-yml@3.5.0
-  - miniflare@4.20260623.0 || 4.20260706.0 || 4.20260710.0
-  - wrangler@4.104.0 || 4.108.0 || 4.111.0
-  - esbuild@0.24.3 || 0.28.1
-  - shell-quote@1.8.4
-  - tar@7.5.16
-  - vite@7.3.5
-  - launch-editor@2.14.1
-  - js-yaml@4.1.2
-  - '@babel/core@7.29.1'
-nodeVersion: 24.18.0
 shamefullyHoist: true
 shellEmulator: true
-trustPolicy: no-downgrade
-overrides:
-  '@tiptap/y-tiptap': 3.0.6
-  chokidar: ^5.0.0
-  devalue: 5.8.1
-  semver: 7.8.0
-# Accepted dev-only audit exception: GHSA-67mh-4wv8-2f99 currently enters at
-# drizzle-kit > @esbuild-kit/esm-loader > @esbuild-kit/core-utils > esbuild.
-# core-utils pins esbuild ~0.18.20; forcing the patched >=0.24.3 across that
-# incompatible range is riskier than the advisory because this CLI path never
-# exposes esbuild's development server. Remove when stable drizzle-kit drops it.
+
+# eslint-disable-next-line pnpm/yaml-enforce-settings
+trustPolicy: off
 patchedDependencies:
   '@scryfall/api-types@1.0.0-alpha.4': patches/@scryfall__api-types@1.0.0-alpha.4.patch
-peerDependencyRules:
-  # Nuxt 4.4 pins Rolldown beta while its own current transitive packages declare
-  # stable-only peers. The remaining combinations are supported by current
-  # tsdown/rolldown-plugin-dts; NuxtHub's manifests predate the widened ranges.
-  allowedVersions:
-    oxc-walker>rolldown: ^1.0.0-beta.57
-    rolldown-plugin-dts>typescript: ^6.0.0
-    rolldown-plugin-dts>vue-tsc: ~3.3.0
-    tsdown>typescript: ^6.0.0
-    unimport>rolldown: ^1.0.0-beta.57
+  vite-plugin-checker@0.14.4: patches/vite-plugin-checker@0.14.4.patch
 allowBuilds:
   '@parcel/watcher': true
   '@tailwindcss/oxide': true
@@ -47,3 +16,7 @@ allowBuilds:
   unrs-resolver: true
   vue-demi: true
   workerd: true
+minimumReleaseAgeExclude:
+  - '@antfu/eslint-config@9.2.0'
+  - miniflare@4.20260721.0
+  - wrangler@4.113.0

@@ -2,7 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 
-const mockFetch = vi.fn();
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 const mockAbly = createMockRealtime();
 
 const mockBase = vi.hoisted(() => ({
@@ -18,7 +18,7 @@ vi.mock('~/modules/event-data/client', async importOriginal => ({
 	useEventDataResource: () => mockBase,
 }));
 
-vi.stubGlobal('$fetch', mockFetch);
+mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('useRealtime', () => () => mockAbly);
 
 describe('useEventRepository', () => {

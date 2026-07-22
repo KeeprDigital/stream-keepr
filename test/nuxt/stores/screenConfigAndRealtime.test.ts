@@ -18,7 +18,7 @@ const mockRepo = {
 
 const mockAbly = createMockRealtime();
 const mockIsSelfOrigin = vi.fn(() => false);
-const mockFetch = vi.fn();
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 
 const ablyCallbacks: Record<string, Record<string, (...args: unknown[]) => void>> = {};
 mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
@@ -41,7 +41,7 @@ mockNuxtImport('useRealtime', () => () => mockAbly);
 mockNuxtImport('useAsyncAction', () => () => ({
 	executeAction: mockExecuteAction,
 }));
-vi.stubGlobal('$fetch', mockFetch);
+mockNuxtImport('$fetch', () => mockFetch);
 
 describe('useScreenStore config and realtime', () => {
 	let store: ReturnType<typeof useScreenStore>;

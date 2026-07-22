@@ -2,9 +2,9 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 
-const mockFetch = vi.fn();
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 
-vi.stubGlobal('$fetch', mockFetch);
+mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('useRealtime', () => () => createMockRealtime());
 
 describe('usePlayerListRepository', () => {

@@ -4,8 +4,8 @@ import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 
 // ── $fetch stub (used by searchFuzzyCardName, searchCardPrints, selectMeldCardPart) ──
 
-const mockFetch = vi.fn().mockResolvedValue({ data: [] });
-vi.stubGlobal('$fetch', mockFetch);
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn().mockResolvedValue({ data: [] }) }));
+mockNuxtImport('$fetch', () => mockFetch);
 
 mockNuxtImport('useServerTime', () => () => ({
 	getServerTime: () => Date.now(),

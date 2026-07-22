@@ -18,8 +18,8 @@ vi.mock('~/modules/event-data/client', async importOriginal => ({
 	useEventDataResource: () => mockRepo,
 }));
 
-const mockFetch = vi.fn();
-vi.stubGlobal('$fetch', mockFetch);
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+mockNuxtImport('$fetch', () => mockFetch);
 
 const mockAbly = createMockRealtime();
 const mockIsSelfOrigin = vi.fn(() => false);
