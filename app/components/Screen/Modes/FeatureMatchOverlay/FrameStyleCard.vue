@@ -7,6 +7,7 @@ import FeatureMatchOverlayControlSection from './ControlSection.vue';
 
 const props = defineProps<{
 	config: FeatureMatchOverlayModeConfig;
+	eventId: number;
 	/** Frame mutation seam from the Feature Match Layout writer. */
 	patchFrame: (updates: Partial<FeatureMatchLayoutFrameConfig>) => void;
 }>();
@@ -50,10 +51,6 @@ const mediaBackground = computed<ScreenMediaBackgroundConfig>(() => ({
 
 function updateFrame(updates: Partial<FeatureMatchLayoutFrameConfig>) {
 	props.patchFrame(updates);
-}
-
-function updateFrameImageUrl(value: string | number) {
-	updateFrame({ backgroundImageUrl: String(value).trim() || undefined });
 }
 
 function updateAnimation(updates: Partial<FeatureMatchOverlayFrameAnimationConfig>) {
@@ -103,13 +100,12 @@ function animationSummary() {
 						@update="updateFrameBackground"
 					/>
 					<div class="grid gap-3 sm:grid-cols-2 sm:items-end">
-						<UFormField label="Image URL" class="sm:col-span-2">
-							<UInput
-								:model-value="config.layout.frame.backgroundImageUrl"
-								placeholder="https://…"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateFrameImageUrl"
+						<UFormField label="Frame image" class="sm:col-span-2">
+							<GraphicsAssetFocusPicker
+								:model-value="config.layout.frame.backgroundImage"
+								:event-id="eventId"
+								field-label="Frame image"
+								@update:model-value="updateFrame({ backgroundImage: $event })"
 							/>
 						</UFormField>
 						<UFormField label="Image fit">

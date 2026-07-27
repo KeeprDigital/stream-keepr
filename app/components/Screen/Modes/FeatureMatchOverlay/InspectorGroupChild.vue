@@ -16,6 +16,7 @@ const props = defineProps<{
 	updateConfig: FeatureMatchOverlayConfigUpdater;
 	screenWidth: number;
 	screenHeight: number;
+	eventId: number;
 	group: FeatureMatchWidgetGroupItemConfig;
 	child: FeatureMatchWidgetGroupChildConfig;
 }>();
@@ -201,6 +202,7 @@ function resetSurfaceStyle() {
 				<FeatureMatchOverlayWidgetEditor
 					:widget="child.widget"
 					:widget-surface-style="resolvedSurfaceStyle"
+					:event-id="eventId"
 					@update="widget => editor.updateGroupChildWidget(group.id, child.id, widget)"
 				/>
 			</div>

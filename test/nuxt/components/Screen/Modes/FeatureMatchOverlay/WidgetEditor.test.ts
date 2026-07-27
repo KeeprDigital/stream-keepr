@@ -59,7 +59,7 @@ async function mountComponent(widget: FeatureMatchWidgetConfig) {
 	const { default: WidgetEditor } = await import(componentPath);
 
 	return mount(WidgetEditor, {
-		props: { widget },
+		props: { widget, eventId: 7 },
 		global: {
 			stubs: {
 				UButton: UButtonStub,
@@ -138,6 +138,7 @@ describe('featureMatchOverlayWidgetEditor', () => {
 					padding: 4,
 					borderWidth: 3,
 				},
+				eventId: 7,
 			},
 			global: {
 				stubs: {

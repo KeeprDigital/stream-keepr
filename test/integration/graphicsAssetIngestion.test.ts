@@ -108,6 +108,21 @@ describe('the bounded PNG ingestion and Library Workspace APIs', () => {
 		expect(Array.from(new Uint8Array(await thumbnail.arrayBuffer()).slice(0, 8)))
 			.toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
 
+		const pinnedContent = await fetch(
+			`/api/graphics-assets/${completed.result!.assetId}/revisions/${completed.result!.revisionId}/content`,
+			{ headers: authorHeaders },
+		);
+		expect(pinnedContent.status).toBe(200);
+		expect(pinnedContent.headers.get('content-type')).toBe('image/png');
+		expect(pinnedContent.headers.get('cache-control')).toBe('private, no-store');
+		expect(new Uint8Array(await pinnedContent.arrayBuffer())).toEqual(transparentPixelPng);
+
+		const missingRevision = await fetch(
+			`/api/graphics-assets/${completed.result!.assetId}/revisions/missing-revision/content`,
+			{ headers: authorHeaders },
+		);
+		expect(missingRevision.status).toBe(404);
+
 		const duplicate = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: authorHeaders,

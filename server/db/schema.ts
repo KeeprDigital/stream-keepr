@@ -570,6 +570,8 @@ export const screens = sqliteTable('screens', {
 	modeConfigs: text('mode_configs', { mode: 'json' }).$type<ModeConfigsMap>(),
 	screenConfig: text('screen_config', { mode: 'json' }).$type<ScreenConfig>(),
 	stateVersion: integer('state_version').notNull().default(0),
+	/** Transaction marker keeping Screen configuration and its Graphic Asset usage index in lockstep. */
+	graphicAssetReferenceVersion: text('graphic_asset_reference_version'),
 	/** Strongly-consistent source of truth; KV is only a derived display cache. */
 	activeCard: text('active_card', { mode: 'json' }).$type<Record<string, unknown> | null>(),
 	activeCardVersion: integer('active_card_version').notNull().default(0),

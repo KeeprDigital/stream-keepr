@@ -181,6 +181,20 @@ export function createInMemoryGraphicsAssetCatalogue(): GraphicsAssetCatalogue {
 				.filter(asset => !normalizedSearch || asset.name.toLocaleLowerCase().includes(normalizedSearch))
 				.map(asset => structuredClone(asset));
 		},
+		async findRevisionContent(input) {
+			const asset = assets.get(input.assetId);
+			if (!asset || asset.revisionId !== input.revisionId)
+				return undefined;
+			return {
+				digest: asset.facts.sha256,
+				byteLength: asset.facts.byteLength,
+				canonicalMime: asset.facts.canonicalMime,
+				lifecycleState: 'active',
+			};
+		},
+		async listGraphicAssetUsage() {
+			return [];
+		},
 		async findThumbnailDigest(assetId: GraphicAssetId) {
 			return thumbnailDigests.get(assetId);
 		},

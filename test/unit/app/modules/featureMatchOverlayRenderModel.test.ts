@@ -370,7 +370,7 @@ describe('feature Match Overlay render model', () => {
 		const base = config();
 		base.layout.items = [
 			{ id: 'text-item', type: 'widget', label: 'Text', visible: true, x: 0, y: 0, width: 320, height: 80, widget: { type: 'text', template: '{name}', playerSide: 'player1' } },
-			{ id: 'image-item', type: 'widget', label: 'Logo', visible: true, x: 0, y: 100, width: 200, height: 100, widget: { type: 'image', url: 'https://example.com/logo.png', fit: 'contain', opacity: 0.9, borderRadius: 8 } },
+			{ id: 'image-item', type: 'widget', label: 'Logo', visible: true, x: 0, y: 100, width: 200, height: 100, widget: { type: 'image', asset: { assetId: 'asset-logo', revisionId: 'revision-logo-7' }, fit: 'contain', opacity: 0.9, borderRadius: 8 } },
 			{ id: 'clock-item', type: 'widget', label: 'Clock', visible: true, x: 0, y: 220, width: 160, height: 60, widget: { type: 'clock' } },
 			{ id: 'life-item', type: 'widget', label: 'Life', visible: true, x: 0, y: 300, width: 120, height: 60, widget: { type: 'player-life', playerSide: 'player1', lifeAnimation: 'pulse', lifeAnimationDurationMs: 400, lifeAnimationAccentColor: '#ff0000' } },
 			{ id: 'wins-item', type: 'widget', label: 'Wins', visible: true, x: 0, y: 380, width: 120, height: 40, widget: { type: 'game-wins', playerSide: 'player1', displayMode: 'boxes', boxWidth: 22, boxHeight: 22 } },
@@ -400,7 +400,7 @@ describe('feature Match Overlay render model', () => {
 		const image = renders.get('image-item')!;
 		expect(image.type).toBe('image');
 		if (image.type === 'image') {
-			expect(image.src).toBe('https://example.com/logo.png');
+			expect(image.src).toBe('/api/graphics-assets/asset-logo/revisions/revision-logo-7/content');
 			expect(image.imageStyle).toMatchObject({ objectFit: 'contain', opacity: 0.9, borderRadius: '8px', width: '200px', height: '100px' });
 		}
 

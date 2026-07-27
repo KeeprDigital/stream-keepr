@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { screenWriteModule } from '~~/server/modules/screen-write';
 import { modeConfigParamsSchema, modeConfigPatchSchemaMap } from '~~/server/schemas/api/screen';
 import { getOriginConnectionId } from '~~/server/utils/ably';
@@ -18,7 +19,9 @@ export default defineEventHandler(async (event) => {
 	const { stateVersion, ...rawConfig } = versionedPatchSchema.parse(rawBody);
 	const body = schema.parse(rawConfig);
 
-	return await screenWriteModule().updateModeConfig({
+	return await screenWriteModule({
+		graphicsAssets: graphicsAssetLibraryForEvent(event),
+	}).updateModeConfig({
 		eventId,
 		screenId,
 		mode,

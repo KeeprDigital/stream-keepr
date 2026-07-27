@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
 	createInMemoryGraphicsAssetCatalogue,
+	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
 import {
 	createInMemoryCanonicalGraphicsObjectStore,
@@ -11,6 +12,7 @@ import {
 import {
 	consumeBoundedByteStream,
 	createBoundedByteStream,
+	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
@@ -35,6 +37,67 @@ function createLibrary(
 }
 
 describe('pNG ingestion through the Graphics Asset Library public module', () => {
+	it('resolves only the pinned revision and distinguishes missing from unavailable content', async () => {
+		const { library, canonical } = createLibrary();
+		const operation = await library.initiatePngIngestion({
+			idempotencyKey: 'pinned-scoreboard-logo',
+			initiatedBy: 'graphics-author-1',
+			name: 'Pinned scoreboard logo',
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+		const completed = await library.uploadPng({
+			operationId: operation.id,
+			initiatedBy: 'graphics-author-1',
+			bytes: createBoundedByteStream(transparentPixelPng, {
+				byteLength: transparentPixelPng.byteLength,
+				maximumByteLength: 16 * 1024 * 1024,
+			}),
+		});
+		const reference = {
+			assetId: completed.result!.assetId,
+			revisionId: completed.result!.revisionId,
+		};
+
+		const available = await library.resolveGraphicAssetRevision(reference);
+		expect(available).toMatchObject({
+			outcome: 'available',
+			byteLength: transparentPixelPng.byteLength,
+			contentType: 'image/png',
+		});
+		if (available.outcome !== 'available')
+			throw new Error('Expected the pinned revision to resolve');
+		await expect(consumeBoundedByteStream({
+			body: available.body,
+			byteLength: available.byteLength,
+			maximumByteLength: available.byteLength,
+		})).resolves.toEqual(transparentPixelPng);
+
+		await expect(library.resolveGraphicAssetRevision({
+			assetId: reference.assetId,
+			revisionId: graphicAssetRevisionId('missing-revision'),
+		})).resolves.toEqual({ outcome: 'missing' });
+		await expect(library.inspectGraphicAssetRevision(reference)).resolves.toEqual({
+			outcome: 'available',
+			lifecycleState: 'active',
+		});
+		await expect(library.inspectGraphicAssetRevision({
+			assetId: reference.assetId,
+			revisionId: graphicAssetRevisionId('missing-revision'),
+		})).resolves.toEqual({ outcome: 'missing' });
+
+		canonical.markUnavailable(
+			graphicsObjectIdentity(`sha256/${completed.report!.facts.sha256}`),
+		);
+		await expect(library.resolveGraphicAssetRevision(reference)).resolves.toEqual({
+			outcome: 'unavailable',
+			retryable: true,
+		});
+		await expect(library.inspectGraphicAssetRevision(reference)).resolves.toEqual({
+			outcome: 'unavailable',
+			retryable: true,
+		});
+	});
+
 	it('durably publishes one validated PNG and discovers it with its exact operation result', async () => {
 		const { library } = createLibrary();
 		const initiation = {

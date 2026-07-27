@@ -17,6 +17,7 @@ import type {
 import type { FeatureMatchOverlayTemplateMetadataInput } from '~/utils/featureMatchOverlayTemplateValues';
 import { resolveFeatureMatchOverlayFontFamily } from '~~/shared/featureMatchOverlayFonts';
 import { getMtgGameData } from '~~/shared/utils/gameData';
+import { graphicAssetRevisionContentPath } from '~~/shared/utils/graphicsAssetReferences';
 import { featureMatchOverlayBorderRadiusCss, featureMatchOverlaySourceCutoutRect, roundedRectPath } from '~/utils/featureMatchOverlayGeometry';
 import { buildFeatureMatchOverlayTemplateMetadataValues } from '~/utils/featureMatchOverlayTemplateValues';
 import { renderFeatureMatchOverlayTemplateLines } from '~/utils/featureMatchOverlayTokens';
@@ -553,7 +554,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 			case 'image':
 				return {
 					type: 'image',
-					src: widget.url,
+					src: widget.asset ? graphicAssetRevisionContentPath(widget.asset) : '',
 					alt: label,
 					imageStyle: imageStyleFor({ x: 0, y: 0, width: rect.width, height: rect.height }, widget),
 				};

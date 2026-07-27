@@ -161,6 +161,7 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 					:update-config="updateConfig"
 					:screen-width="screenWidth"
 					:screen-height="screenHeight"
+					:event-id="eventId"
 				/>
 			</section>
 
@@ -182,6 +183,7 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 					:update-config="updateConfig"
 					:screen-width="screenWidth"
 					:screen-height="screenHeight"
+					:event-id="eventId"
 				/>
 			</section>
 		</div>

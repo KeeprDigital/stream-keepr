@@ -26,8 +26,8 @@ const DEFINITIONS = {
 		type: 'image',
 		label: 'Image',
 		icon: 'i-lucide-image',
-		defaultConfig: () => ({ type: 'image', url: '', fit: 'contain', opacity: 1, borderRadius: 0 }),
-		summary: widget => widget.type === 'image' && widget.url ? 'Image URL set' : 'Image',
+		defaultConfig: () => ({ type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }),
+		summary: widget => widget.type === 'image' && widget.asset ? 'Graphic Asset selected' : 'Image',
 	},
 	'clock': {
 		type: 'clock',

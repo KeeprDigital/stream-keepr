@@ -73,6 +73,7 @@ async function mountComponent(options: Partial<{
 		props: {
 			config: options.config ?? structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG),
 			patchFrame: options.patchFrame ?? vi.fn(),
+			eventId: 7,
 		},
 		global: {
 			stubs: {

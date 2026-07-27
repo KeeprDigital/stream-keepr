@@ -257,6 +257,7 @@ export function createMockScreen(overrides?: Partial<DbScreen>): DbScreen {
 		activeCardVersion: 0,
 		...defaultTimestamps(overrides),
 		...overrides,
+		graphicAssetReferenceVersion: overrides?.graphicAssetReferenceVersion ?? null,
 	};
 }
 

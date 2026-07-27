@@ -13,6 +13,7 @@ import FeatureMatchOverlayBoxStyleFields from './BoxStyleFields.vue';
 const props = defineProps<{
 	widget: FeatureMatchWidgetConfig;
 	widgetSurfaceStyle?: FeatureMatchOverlayBoxStyle;
+	eventId: number;
 }>();
 
 const emit = defineEmits<{
@@ -168,12 +169,12 @@ function updateTokenStyle(token: string, updates: Partial<FeatureMatchOverlayBox
 		</template>
 
 		<div v-else-if="widget.type === 'image'" class="grid gap-3 md:grid-cols-2">
-			<UFormField label="Image URL">
-				<UInput
-					:model-value="widget.url"
-					size="sm"
-					class="w-full"
-					@update:model-value="patch({ url: String($event || '') } as Partial<FeatureMatchWidgetConfig>)"
+			<UFormField label="Image" class="md:col-span-2">
+				<GraphicsAssetFocusPicker
+					:model-value="widget.asset"
+					:event-id="eventId"
+					field-label="Image Graphic Item"
+					@update:model-value="patch({ asset: $event } as Partial<FeatureMatchWidgetConfig>)"
 				/>
 			</UFormField>
 			<UFormField label="Fit">

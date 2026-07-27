@@ -1,7 +1,9 @@
 import type {
 	GraphicAsset,
 	GraphicAssetId,
+	GraphicAssetReferenceStatus,
 	GraphicAssetRevisionId,
+	GraphicAssetUsage,
 	GraphicAssetValidationReport,
 	GraphicsAssetLibraryComponentHealth,
 	GraphicsAssetLibraryHealth,
@@ -76,6 +78,16 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	}) => Promise<GraphicsIngestionOperation>;
 	publishPng: (input: PublishPngCatalogueInput) => Promise<GraphicsIngestionOperation>;
 	listGraphicAssets: (search: string) => Promise<GraphicAsset[]>;
+	findRevisionContent: (input: {
+		assetId: GraphicAssetId;
+		revisionId: GraphicAssetRevisionId;
+	}) => Promise<{
+		digest: string;
+		byteLength: number;
+		canonicalMime: 'image/png';
+		lifecycleState: 'active' | 'retired' | 'trashed';
+	} | undefined>;
+	listGraphicAssetUsage: (assetId: GraphicAssetId) => Promise<GraphicAssetUsage[]>;
 	findThumbnailDigest: (assetId: GraphicAssetId) => Promise<string | undefined>;
 }
 
@@ -107,6 +119,24 @@ export interface GraphicsAssetLibrary {
 		initiatedBy: string;
 	}) => Promise<GraphicsIngestionOperation>;
 	listGraphicAssets: (input: { search?: string }) => Promise<GraphicAsset[]>;
+	listGraphicAssetUsage: (input: { assetId: GraphicAssetId }) => Promise<GraphicAssetUsage[]>;
+	inspectGraphicAssetRevision: (input: {
+		assetId: GraphicAssetId;
+		revisionId: GraphicAssetRevisionId;
+	}) => Promise<GraphicAssetReferenceStatus>;
+	resolveGraphicAssetRevision: (input: {
+		assetId: GraphicAssetId;
+		revisionId: GraphicAssetRevisionId;
+	}) => Promise<
+		| {
+			outcome: 'available';
+			body: ReadableStream<Uint8Array>;
+			byteLength: number;
+			contentType: 'image/png';
+		}
+		| { outcome: 'missing' }
+		| { outcome: 'unavailable'; retryable: true }
+	>;
 	resolveGraphicAssetThumbnail: (input: {
 		assetId: GraphicAssetId;
 	}) => Promise<
@@ -756,6 +786,59 @@ export function createGraphicsAssetLibrary(
 				'Graphic Asset discovery is temporarily unavailable',
 			);
 		},
+		async listGraphicAssetUsage(input) {
+			return await catalogueRequest(
+				() => requireCatalogue().listGraphicAssetUsage(input.assetId),
+				'Graphic Asset usage is temporarily unavailable',
+			);
+		},
+		async inspectGraphicAssetRevision(input) {
+			const content = await catalogueRequest(
+				() => requireCatalogue().findRevisionContent(input),
+				'Graphic Asset Revision lookup is temporarily unavailable',
+			);
+			if (!content)
+				return { outcome: 'missing' };
+			const result = await requireCanonical().readMetadata(
+				graphicsObjectIdentity(`sha256/${content.digest}`),
+			);
+			if (
+				result.outcome !== 'available'
+				|| result.object.byteLength !== content.byteLength
+				|| result.object.contentType !== content.canonicalMime
+			) {
+				return { outcome: 'unavailable', retryable: true };
+			}
+			return {
+				outcome: 'available',
+				lifecycleState: content.lifecycleState,
+			};
+		},
+		async resolveGraphicAssetRevision(input) {
+			const content = await catalogueRequest(
+				() => requireCatalogue().findRevisionContent(input),
+				'Graphic Asset Revision lookup is temporarily unavailable',
+			);
+			if (!content)
+				return { outcome: 'missing' };
+			const result = await requireCanonical().read(
+				graphicsObjectIdentity(`sha256/${content.digest}`),
+			);
+			if (result.outcome !== 'available')
+				return { outcome: 'unavailable', retryable: true };
+			if (
+				result.object.byteLength !== content.byteLength
+				|| result.object.contentType !== content.canonicalMime
+			) {
+				return { outcome: 'unavailable', retryable: true };
+			}
+			return {
+				outcome: 'available',
+				body: result.body,
+				byteLength: result.object.byteLength,
+				contentType: content.canonicalMime,
+			};
+		},
 		async resolveGraphicAssetThumbnail(input) {
 			const digest = await catalogueRequest(
 				() => requireCatalogue().findThumbnailDigest(input.assetId),
@@ -781,7 +864,9 @@ export function createGraphicsAssetLibrary(
 export type {
 	GraphicAsset,
 	GraphicAssetId,
+	GraphicAssetReferenceStatus,
 	GraphicAssetRevisionId,
+	GraphicAssetUsage,
 	GraphicAssetValidationReport,
 	GraphicsAssetLibraryComponentHealth,
 	GraphicsAssetLibraryHealth,
