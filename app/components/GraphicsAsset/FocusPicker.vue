@@ -4,6 +4,7 @@ import type {
 	GraphicAssetReference,
 	GraphicAssetReferenceStatus,
 } from '~~/shared/types/graphicsAsset';
+import { createGuardedSequence } from '~/utils/guardedSequence';
 
 const props = defineProps<{
 	modelValue?: GraphicAssetReference;
@@ -19,7 +20,7 @@ const open = ref(false);
 const search = ref('');
 const thisEventOnly = ref(true);
 const referenceStatus = ref<GraphicAssetReferenceStatus>();
-let referenceStatusRequest = 0;
+const referenceStatusFlights = createGuardedSequence();
 const {
 	data: assets,
 	status,
@@ -38,7 +39,7 @@ const selectedAsset = computed(() => (assets.value ?? []).find(asset =>
 ));
 
 watch(() => props.modelValue, async (reference) => {
-	const request = ++referenceStatusRequest;
+	const flight = referenceStatusFlights.begin();
 	if (!reference) {
 		referenceStatus.value = undefined;
 		return;
@@ -47,11 +48,11 @@ watch(() => props.modelValue, async (reference) => {
 		const status = await $fetch<GraphicAssetReferenceStatus>(
 			`/api/graphics-assets/${encodeURIComponent(reference.assetId)}/revisions/${encodeURIComponent(reference.revisionId)}/status`,
 		);
-		if (request === referenceStatusRequest)
+		if (flight.current)
 			referenceStatus.value = status;
 	}
 	catch {
-		if (request === referenceStatusRequest)
+		if (flight.current)
 			referenceStatus.value = { outcome: 'unavailable', retryable: true };
 	}
 }, { immediate: true });

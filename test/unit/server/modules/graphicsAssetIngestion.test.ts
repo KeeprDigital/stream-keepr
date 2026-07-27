@@ -189,6 +189,71 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 		expect(Array.from(previewBytes.slice(0, 8))).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
 	});
 
+	it('streams staged source bytes into canonical storage without materializing the complete source', async () => {
+		const stagingDelegate = createInMemoryStagingGraphicsObjectStore();
+		const canonicalDelegate = createInMemoryCanonicalGraphicsObjectStore();
+		let stagingReadCount = 0;
+		let canonicalSourceFullyRead = false;
+		let canonicalWriteStartedBeforeSourceFinished = false;
+		const staging = {
+			...stagingDelegate,
+			async read(...input: Parameters<typeof stagingDelegate.read>) {
+				const result = await stagingDelegate.read(...input);
+				stagingReadCount++;
+				if (result.outcome !== 'available' || stagingReadCount !== 3)
+					return result;
+				let offset = 0;
+				return {
+					...result,
+					body: new ReadableStream<Uint8Array>({
+						pull(controller) {
+							if (offset >= transparentPixelPng.byteLength) {
+								canonicalSourceFullyRead = true;
+								controller.close();
+								return;
+							}
+							const end = Math.min(offset + 7, transparentPixelPng.byteLength);
+							controller.enqueue(transparentPixelPng.slice(offset, end));
+							offset = end;
+						},
+					}),
+				};
+			},
+		};
+		const canonical = {
+			...canonicalDelegate,
+			async createImmutable(input: Parameters<typeof canonicalDelegate.createImmutable>[0]) {
+				if (
+					input.bytes.byteLength === transparentPixelPng.byteLength
+					&& input.metadata?.custom?.sha256 === '431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460'
+				) {
+					canonicalWriteStartedBeforeSourceFinished = !canonicalSourceFullyRead;
+				}
+				return await canonicalDelegate.createImmutable(input);
+			},
+		};
+		const { library } = createLibrary(staging, canonical);
+		const operation = await library.initiatePngIngestion({
+			idempotencyKey: 'stream-canonical-source',
+			initiatedBy: 'graphics-author-1',
+			name: 'Streaming source',
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+
+		const completed = await library.uploadPng({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			bytes: createBoundedByteStream(transparentPixelPng, {
+				byteLength: transparentPixelPng.byteLength,
+				maximumByteLength: 16 * 1024 * 1024,
+			}),
+		});
+
+		expect(completed.stage).toBe('completed');
+		expect(canonicalWriteStartedBeforeSourceFinished).toBe(true);
+		expect(canonicalSourceFullyRead).toBe(true);
+	});
+
 	it('records permanent validation failure without publishing catalogue state', async () => {
 		const { library } = createLibrary();
 		const invalidPng = new TextEncoder().encode('not a PNG');

@@ -7,7 +7,7 @@ export function graphicsAuthorIdentity(event: H3Event): string {
 	return identity || 'local-graphics-author';
 }
 
-export function rethrowGraphicsAssetApiError(error: unknown): never {
+export function rethrowGraphicsAssetApiError(error: unknown, event?: H3Event): never {
 	if (error instanceof GraphicsObjectInputError) {
 		throw createError({
 			statusCode: 400,
@@ -23,6 +23,8 @@ export function rethrowGraphicsAssetApiError(error: unknown): never {
 			'ingestion-operation-not-uploadable': 409,
 			'graphics-asset-library-unavailable': 503,
 		} as const)[error.code];
+		if (statusCode === 503 && event)
+			setResponseHeader(event, 'retry-after', 5);
 		throw createError({
 			statusCode,
 			statusMessage: statusCode === 404

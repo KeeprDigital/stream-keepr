@@ -1,4 +1,8 @@
-import type { GraphicAsset } from '~~/shared/types/graphicsAsset';
+import type {
+	GraphicAsset,
+	GraphicAssetId,
+	GraphicAssetRevisionId,
+} from '~~/shared/types/graphicsAsset';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -118,8 +122,8 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		const wrapper = mount(FocusPicker, {
 			props: {
 				modelValue: {
-					assetId: 'missing-asset',
-					revisionId: 'missing-revision',
+					assetId: 'missing-asset' as GraphicAssetId,
+					revisionId: 'missing-revision' as GraphicAssetRevisionId,
 				},
 				eventId: 7,
 				fieldLabel: 'Frame image',
@@ -142,5 +146,51 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 
 		expect(wrapper.text()).toContain('Missing Graphic Asset Reference');
 		expect(wrapper.text()).toContain('Publication-requiring actions are unavailable');
+	});
+
+	it('discards a stale reference-status Flight after the selected revision changes', async () => {
+		let resolveFirst!: (status: { outcome: 'available'; lifecycleState: 'active' }) => void;
+		let resolveSecond!: (status: { outcome: 'missing' }) => void;
+		mockApiFetch
+			.mockReturnValueOnce(new Promise(resolve => (resolveFirst = resolve)))
+			.mockReturnValueOnce(new Promise(resolve => (resolveSecond = resolve)));
+		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
+		const wrapper = mount(FocusPicker, {
+			props: {
+				modelValue: {
+					assetId: 'first-asset' as GraphicAssetId,
+					revisionId: 'first-revision' as GraphicAssetRevisionId,
+				},
+				eventId: 7,
+				fieldLabel: 'Frame image',
+			},
+			global: {
+				stubs: {
+					UModal: passthroughStub,
+					UButton: buttonStub,
+					UInput: passthroughStub,
+					UBadge: passthroughStub,
+					UAlert: defineComponent({
+						props: ['title', 'description'],
+						template: '<div>{{ title }} {{ description }}</div>',
+					}),
+					UIcon: passthroughStub,
+				},
+			},
+		});
+
+		await wrapper.setProps({
+			modelValue: {
+				assetId: 'second-asset' as GraphicAssetId,
+				revisionId: 'second-revision' as GraphicAssetRevisionId,
+			},
+		});
+		resolveSecond({ outcome: 'missing' });
+		await flushPromises();
+		resolveFirst({ outcome: 'available', lifecycleState: 'active' });
+		await flushPromises();
+
+		expect(wrapper.text()).toContain('Missing Graphic Asset Reference');
+		expect(wrapper.text()).not.toContain('Pinned revision first-revision');
 	});
 });

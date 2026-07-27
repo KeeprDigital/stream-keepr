@@ -6,6 +6,7 @@ import { Buffer } from 'node:buffer';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
+import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 import { executeIntegrationD1 } from './integrationD1';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
@@ -22,8 +23,10 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 	let eventId: number;
 	let screenId: number;
 	let operation: GraphicsIngestionOperation;
+	let graphicsAuthorCookie: string;
 
 	beforeAll(async () => {
+		graphicsAuthorCookie = await createGraphicsAuthorSessionCookie();
 		const event = await $fetch('/api/events', {
 			method: 'POST',
 			body: {
@@ -164,6 +167,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		)).resolves.toHaveLength(2);
 		const resolution = await fetch(
 			`/api/graphics-assets/${operation.result!.assetId}/revisions/${operation.result!.revisionId}/content`,
+			{ headers: { cookie: graphicsAuthorCookie } },
 		);
 		expect(resolution.status).toBe(200);
 	});

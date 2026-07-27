@@ -3,6 +3,9 @@ import type {
 	GraphicAssetValidationIssue,
 	GraphicAssetValidationReport,
 } from '~~/shared/types/graphicsAsset';
+import type { BoundedByteStream } from './object-store';
+import { createHash } from 'node:crypto';
+import { createBoundedByteStream } from './object-store';
 
 const PNG_SIGNATURE = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10);
 const MAX_IMAGE_AXIS = 8192;
@@ -28,7 +31,6 @@ interface ParsedPng {
 	colorModel: GraphicAssetImageFacts['colorModel'];
 	hasAlpha: boolean;
 	interlaced: boolean;
-	compressedImageData: Uint8Array;
 	palette?: Uint8Array;
 	transparency?: Uint8Array;
 }
@@ -36,13 +38,6 @@ interface ParsedPng {
 export interface ProcessedPng {
 	report: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>;
 	thumbnail: Uint8Array;
-}
-
-export interface ValidatedPng {
-	report: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>;
-	width: number;
-	height: number;
-	rgba: Uint8Array;
 }
 
 export class PngValidationError extends Error {
@@ -72,102 +67,8 @@ function validationError(
 	throw new PngValidationError([validationIssue(code, message)]);
 }
 
-function isAsciiLetter(byte: number) {
-	return (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122);
-}
-
-function inspectPngChunks(bytes: Uint8Array): GraphicAssetValidationIssue[] {
-	if (!bytesEqual(bytes.slice(0, PNG_SIGNATURE.byteLength), PNG_SIGNATURE)) {
-		return [
-			validationIssue(
-				'invalid-png-signature',
-				'Source bytes do not have the canonical PNG signature.',
-			),
-		];
-	}
-
-	const issues: GraphicAssetValidationIssue[] = [];
-	let offset = PNG_SIGNATURE.byteLength;
-	let foundPalette = false;
-	let foundImageData = false;
-	const profileChunks = new Set<string>();
-
-	while (offset < bytes.byteLength) {
-		if (bytes.byteLength - offset < 12) {
-			issues.push(validationIssue('malformed-png', 'PNG ends inside a chunk header.'));
-			break;
-		}
-
-		const length = readUint32(bytes, offset);
-		const chunkEnd = offset + 12 + length;
-		if (!Number.isSafeInteger(chunkEnd) || chunkEnd > bytes.byteLength) {
-			issues.push(validationIssue(
-				'malformed-png',
-				'PNG chunk length exceeds the available source bytes.',
-			));
-			break;
-		}
-
-		const typeBytes = bytes.slice(offset + 4, offset + 8);
-		const type = textDecoder.decode(typeBytes);
-		const data = bytes.slice(offset + 8, offset + 8 + length);
-		if (!typeBytes.every(isAsciiLetter)) {
-			issues.push(validationIssue(
-				'malformed-png',
-				'PNG chunk types must contain exactly four ASCII letters.',
-			));
-		}
-		if ((typeBytes[2]! & 0x20) !== 0) {
-			issues.push(validationIssue(
-				'malformed-png',
-				`PNG ${type} chunk sets the reserved chunk-type bit.`,
-			));
-		}
-
-		const expectedCrc = readUint32(bytes, offset + 8 + length);
-		if (crc32(concatBytes([typeBytes, data])) !== expectedCrc) {
-			issues.push(validationIssue(
-				'malformed-png',
-				`PNG ${type} chunk has an invalid checksum.`,
-			));
-		}
-
-		if (type === 'PLTE')
-			foundPalette = true;
-		if (type === 'IDAT')
-			foundImageData = true;
-		if (type === 'sRGB' || type === 'gAMA' || type === 'cHRM') {
-			if (
-				profileChunks.has(type)
-				|| foundPalette
-				|| foundImageData
-				|| (type === 'sRGB' && (data.byteLength !== 1 || data[0]! > 3))
-				|| (type === 'gAMA' && (data.byteLength !== 4 || readUint32(data, 0) !== 45_455))
-			) {
-				issues.push(validationIssue(
-					'unsupported-png-profile',
-					`PNG ${type} chunk is duplicated, misplaced, or incompatible with sRGB output.`,
-				));
-			}
-			profileChunks.add(type);
-		}
-		if (type === 'acTL' || type === 'fcTL' || type === 'fdAT') {
-			issues.push(validationIssue(
-				'unsupported-png-animation',
-				'Animated PNG is not supported by the png-v1 compatibility profile.',
-			));
-		}
-		if (type === 'iCCP' || type === 'cICP' || type === 'mDCv' || type === 'cLLi') {
-			issues.push(validationIssue(
-				'unsupported-png-profile',
-				'Embedded colour profiles or HDR metadata are not supported by the png-v1 compatibility profile.',
-			));
-		}
-
-		offset = chunkEnd;
-	}
-
-	return issues;
+function readUint16(bytes: Uint8Array, offset: number): number {
+	return (bytes[offset]! << 8) | bytes[offset + 1]!;
 }
 
 function readUint32(bytes: Uint8Array, offset: number): number {
@@ -199,11 +100,15 @@ const crcTable = (() => {
 	return table;
 })();
 
-function crc32(bytes: Uint8Array): number {
-	let crc = 0xFFFFFFFF;
+function updateCrc32(crc: number, bytes: Uint8Array): number {
+	let updated = crc;
 	for (const byte of bytes)
-		crc = crcTable[(crc ^ byte) & 0xFF]! ^ (crc >>> 8);
-	return (crc ^ 0xFFFFFFFF) >>> 0;
+		updated = crcTable[(updated ^ byte) & 0xFF]! ^ (updated >>> 8);
+	return updated;
+}
+
+function crc32(bytes: Uint8Array): number {
+	return (updateCrc32(0xFFFFFFFF, bytes) ^ 0xFFFFFFFF) >>> 0;
 }
 
 function concatBytes(parts: readonly Uint8Array[]): Uint8Array {
@@ -222,431 +127,536 @@ function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
 		&& left.every((value, index) => value === right[index]);
 }
 
-function parsePng(bytes: Uint8Array): ParsedPng {
-	const chunkIssues = inspectPngChunks(bytes);
-	if (chunkIssues.length > 0)
-		throw new PngValidationError(chunkIssues);
+function isAsciiLetter(byte: number) {
+	return (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122);
+}
 
-	let offset = PNG_SIGNATURE.byteLength;
-	let width: number | undefined;
-	let height: number | undefined;
-	let colorType: ParsedPng['colorType'] | undefined;
-	let colorModel: ParsedPng['colorModel'] | undefined;
-	let hasAlpha = false;
-	let interlaced = false;
-	let palette: Uint8Array | undefined;
-	let transparency: Uint8Array | undefined;
-	let foundTransparency = false;
-	let foundSrgb = false;
-	let foundGamma = false;
-	let foundChromaticities = false;
-	let foundImageData = false;
-	let endedImageData = false;
-	let foundEnd = false;
-	const imageData: Uint8Array[] = [];
+class StreamByteReader {
+	private readonly reader: ReadableStreamDefaultReader<Uint8Array>;
+	private current?: Uint8Array;
+	private offset = 0;
+	private ended = false;
 
-	while (offset < bytes.byteLength) {
-		if (bytes.byteLength - offset < 12)
-			validationError('malformed-png', 'PNG ends inside a chunk header.');
+	constructor(stream: ReadableStream<Uint8Array>) {
+		this.reader = stream.getReader();
+	}
 
-		const length = readUint32(bytes, offset);
-		const chunkEnd = offset + 12 + length;
-		if (!Number.isSafeInteger(chunkEnd) || chunkEnd > bytes.byteLength)
-			validationError('malformed-png', 'PNG chunk length exceeds the available source bytes.');
-
-		const typeBytes = bytes.slice(offset + 4, offset + 8);
-		const type = textDecoder.decode(typeBytes);
-		const data = bytes.slice(offset + 8, offset + 8 + length);
-		const expectedCrc = readUint32(bytes, offset + 8 + length);
-		if (crc32(concatBytes([typeBytes, data])) !== expectedCrc)
-			validationError('malformed-png', `PNG ${type} chunk has an invalid checksum.`);
-
-		if (width === undefined && type !== 'IHDR')
-			validationError('malformed-png', 'PNG header must be the first chunk.');
-		if (foundEnd)
-			validationError('malformed-png', 'PNG contains data after its end chunk.');
-		if (foundImageData && type !== 'IDAT' && type !== 'IEND')
-			endedImageData = true;
-
-		switch (type) {
-			case 'IHDR': {
-				if (width !== undefined || data.byteLength !== 13)
-					validationError('malformed-png', 'PNG must contain one complete 13-byte header.');
-				width = readUint32(data, 0);
-				height = readUint32(data, 4);
-				const bitDepth = data[8];
-				const rawColorType = data[9]!;
-				if (width === 0 || height === 0)
-					validationError('malformed-png', 'PNG dimensions must both be positive.');
-				if (width > MAX_IMAGE_AXIS || height > MAX_IMAGE_AXIS)
-					validationError('image-dimensions-exceeded', `PNG dimensions must not exceed ${MAX_IMAGE_AXIS} pixels per axis.`);
-				if (width * height > MAX_IMAGE_PIXELS)
-					validationError('image-pixels-exceeded', `PNG decoded pixels must not exceed ${MAX_IMAGE_PIXELS}.`);
-				if (bitDepth !== 8 || ![0, 2, 3, 4, 6].includes(rawColorType))
-					validationError('unsupported-png-colour', 'PNG must use supported 8-bit SDR grayscale, indexed, RGB, or RGBA colour.');
-				if (data[10] !== 0 || data[11] !== 0 || (data[12] !== 0 && data[12] !== 1))
-					validationError('unsupported-png-colour', 'PNG must use standard compression, filtering, and a supported interlace method.');
-				interlaced = data[12] === 1;
-				colorType = rawColorType as ParsedPng['colorType'];
-				colorModel = ({
-					0: 'grayscale',
-					2: 'rgb',
-					3: 'indexed',
-					4: 'grayscale-alpha',
-					6: 'rgba',
-				} as const)[colorType];
-				hasAlpha = colorType === 4 || colorType === 6;
-				break;
+	async readAtMost(maximum: number): Promise<Uint8Array | undefined> {
+		while (!this.current || this.offset >= this.current.byteLength) {
+			if (this.ended)
+				return;
+			const { done, value } = await this.reader.read();
+			if (done) {
+				this.ended = true;
+				return;
 			}
-			case 'PLTE':
-				if (palette || foundImageData || data.byteLength === 0 || data.byteLength % 3 !== 0 || data.byteLength > 768)
-					validationError('malformed-png', 'PNG palette is missing, misplaced, or malformed.');
-				palette = data;
-				break;
-			case 'tRNS':
-				if (
-					foundTransparency
-					|| foundImageData
-					|| colorType === 4
-					|| colorType === 6
-					|| (colorType === 3 && !palette)
-				) {
-					validationError('malformed-png', 'PNG transparency facts must precede image data.');
-				}
-				foundTransparency = true;
-				transparency = data;
-				hasAlpha = true;
-				break;
-			case 'sRGB':
-				if (foundSrgb || palette || foundImageData || data.byteLength !== 1 || data[0]! > 3)
-					validationError('unsupported-png-profile', 'PNG sRGB rendering intent is malformed.');
-				foundSrgb = true;
-				break;
-			case 'gAMA':
-				if (foundGamma || palette || foundImageData || data.byteLength !== 4 || readUint32(data, 0) !== 45_455)
-					validationError('unsupported-png-profile', 'PNG gamma must be compatible with sRGB output.');
-				foundGamma = true;
-				break;
-			case 'cHRM': {
-				const srgbChromaticities = [
-					31_270,
-					32_900,
-					64_000,
-					33_000,
-					30_000,
-					60_000,
-					15_000,
-					6_000,
-				];
-				if (
-					foundChromaticities
-					|| palette
-					|| foundImageData
-					|| data.byteLength !== 32
-					|| srgbChromaticities.some((value, index) => readUint32(data, index * 4) !== value)
-				) {
-					validationError('unsupported-png-profile', 'PNG chromaticities must be compatible with sRGB output.');
-				}
-				foundChromaticities = true;
-				break;
-			}
-			case 'IDAT':
-				if (endedImageData)
-					validationError('malformed-png', 'PNG image data chunks must be contiguous.');
-				foundImageData = true;
-				imageData.push(data);
-				break;
-			case 'IEND':
-				if (data.byteLength !== 0 || !foundImageData)
-					validationError('malformed-png', 'PNG end chunk is malformed or precedes image data.');
-				foundEnd = true;
-				break;
-			case 'acTL':
-				validationError('unsupported-png-animation', 'Animated PNG is not supported by the png-v1 compatibility profile.');
-				break;
-			case 'fcTL':
-				validationError('unsupported-png-animation', 'Animated PNG is not supported by the png-v1 compatibility profile.');
-				break;
-			case 'fdAT':
-				validationError('unsupported-png-animation', 'Animated PNG is not supported by the png-v1 compatibility profile.');
-				break;
-			case 'iCCP':
-				validationError('unsupported-png-profile', 'Embedded colour profiles or HDR metadata are not supported by the png-v1 compatibility profile.');
-				break;
-			case 'cICP':
-				validationError('unsupported-png-profile', 'Embedded colour profiles or HDR metadata are not supported by the png-v1 compatibility profile.');
-				break;
-			case 'mDCv':
-				validationError('unsupported-png-profile', 'Embedded colour profiles or HDR metadata are not supported by the png-v1 compatibility profile.');
-				break;
-			case 'cLLi':
-				validationError('unsupported-png-profile', 'Embedded colour profiles or HDR metadata are not supported by the png-v1 compatibility profile.');
-				break;
-			default:
-				if ((typeBytes[0]! & 0x20) === 0)
-					validationError('malformed-png', `PNG contains unsupported critical chunk ${type}.`);
+			if (value.byteLength === 0)
+				continue;
+			this.current = value;
+			this.offset = 0;
 		}
-
-		offset = chunkEnd;
-		if (foundEnd && offset !== bytes.byteLength)
-			validationError('malformed-png', 'PNG contains trailing bytes after its end chunk.');
+		const end = Math.min(this.current.byteLength, this.offset + maximum);
+		const result = this.current.subarray(this.offset, end);
+		this.offset = end;
+		return result;
 	}
 
-	if (width === undefined || height === undefined || colorType === undefined || !colorModel || !foundEnd)
-		validationError('incomplete-png-frame', 'PNG does not contain one complete decodable frame.');
-	if (colorType === 3 && !palette)
-		validationError('malformed-png', 'Indexed PNG is missing its required palette.');
-	if ((colorType === 0 || colorType === 4) && palette)
-		validationError('malformed-png', 'Grayscale PNG must not contain a palette.');
-	if (colorType === 3 && transparency && transparency.byteLength > palette!.byteLength / 3)
-		validationError('malformed-png', 'Indexed PNG transparency exceeds its palette.');
-	if (colorType === 0 && transparency && transparency.byteLength !== 2)
-		validationError('malformed-png', 'Grayscale PNG transparency is malformed.');
-	if (colorType === 2 && transparency && transparency.byteLength !== 6)
-		validationError('malformed-png', 'RGB PNG transparency is malformed.');
-	if ((colorType === 4 || colorType === 6) && transparency)
-		validationError('malformed-png', 'PNG with an alpha channel must not also contain a transparency chunk.');
-
-	return {
-		width,
-		height,
-		colorType,
-		colorModel,
-		hasAlpha,
-		interlaced,
-		compressedImageData: concatBytes(imageData),
-		palette,
-		transparency,
-	};
-}
-
-async function inflate(bytes: Uint8Array, maximumByteLength: number): Promise<Uint8Array> {
-	try {
-		const body = new ReadableStream<Uint8Array>({
-			start(controller) {
-				controller.enqueue(bytes);
-				controller.close();
-			},
-		}).pipeThrough(
-			new DecompressionStream('deflate') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>,
-		);
-		const reader = body.getReader();
-		const chunks: Uint8Array[] = [];
-		let byteLength = 0;
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done)
-				break;
-			byteLength += value.byteLength;
-			if (byteLength > maximumByteLength) {
-				await reader.cancel();
-				validationError(
-					'incomplete-png-frame',
-					'PNG decoded frame exceeds the length allowed by its declared dimensions.',
-				);
-			}
-			chunks.push(value);
+	async readExactly(byteLength: number, message: string): Promise<Uint8Array> {
+		const result = new Uint8Array(byteLength);
+		let offset = 0;
+		while (offset < byteLength) {
+			const part = await this.readAtMost(byteLength - offset);
+			if (!part)
+				validationError('malformed-png', message);
+			result.set(part, offset);
+			offset += part.byteLength;
 		}
-		return concatBytes(chunks);
+		return result;
 	}
-	catch (error) {
-		if (error instanceof PngValidationError)
-			throw error;
-		return validationError('incomplete-png-frame', 'PNG image data cannot be completely decoded.');
+
+	async hasRemainingBytes(): Promise<boolean> {
+		return (await this.readAtMost(1)) !== undefined;
 	}
-}
 
-function paeth(left: number, above: number, upperLeft: number): number {
-	const estimate = left + above - upperLeft;
-	const leftDistance = Math.abs(estimate - left);
-	const aboveDistance = Math.abs(estimate - above);
-	const upperLeftDistance = Math.abs(estimate - upperLeft);
-	if (leftDistance <= aboveDistance && leftDistance <= upperLeftDistance)
-		return left;
-	if (aboveDistance <= upperLeftDistance)
-		return above;
-	return upperLeft;
-}
-
-function unfilterPass(
-	inflated: Uint8Array,
-	inputStart: number,
-	width: number,
-	height: number,
-	channels: number,
-): { decoded: Uint8Array; consumed: number } {
-	const rowByteLength = width * channels;
-	const decoded = new Uint8Array(height * rowByteLength);
-	for (let row = 0; row < height; row++) {
-		const inputOffset = inputStart + row * (rowByteLength + 1);
-		const filter = inflated[inputOffset];
-		if (filter === undefined || filter > 4)
-			validationError('malformed-png', 'PNG uses an invalid scanline filter.');
-
-		const outputOffset = row * rowByteLength;
-		for (let column = 0; column < rowByteLength; column++) {
-			const raw = inflated[inputOffset + 1 + column]!;
-			const left = column >= channels ? decoded[outputOffset + column - channels]! : 0;
-			const above = row > 0 ? decoded[outputOffset + column - rowByteLength]! : 0;
-			const upperLeft = row > 0 && column >= channels
-				? decoded[outputOffset + column - rowByteLength - channels]!
-				: 0;
-			let reconstructed: number;
-			switch (filter) {
-				case 0:
-					reconstructed = raw;
-					break;
-				case 1:
-					reconstructed = raw + left;
-					break;
-				case 2:
-					reconstructed = raw + above;
-					break;
-				case 3:
-					reconstructed = raw + Math.floor((left + above) / 2);
-					break;
-				case 4:
-					reconstructed = raw + paeth(left, above, upperLeft);
-					break;
-				default:
-					reconstructed = raw;
-			}
-			decoded[outputOffset + column] = reconstructed & 0xFF;
-		}
+	async cancel(reason?: unknown): Promise<void> {
+		await this.reader.cancel(reason);
 	}
-	return { decoded, consumed: height * (rowByteLength + 1) };
-}
-
-function passLength(fullLength: number, start: number, step: number): number {
-	return fullLength <= start ? 0 : Math.ceil((fullLength - start) / step);
 }
 
 function channelCount(colorType: ParsedPng['colorType']) {
 	return ({ 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 } as const)[colorType];
 }
 
-function expectedInflatedByteLength(parsed: ParsedPng) {
-	const channels = channelCount(parsed.colorType);
-	if (!parsed.interlaced)
-		return parsed.height * (parsed.width * channels + 1);
-	return ADAM7_PASSES.reduce((total, pass) => {
-		const passWidth = passLength(parsed.width, pass.x, pass.dx);
-		const passHeight = passLength(parsed.height, pass.y, pass.dy);
-		return total + (passWidth === 0 || passHeight === 0
-			? 0
-			: passHeight * (passWidth * channels + 1));
-	}, 0);
+function passLength(fullLength: number, start: number, step: number): number {
+	return fullLength <= start ? 0 : Math.ceil((fullLength - start) / step);
 }
 
-function unfilter(parsed: ParsedPng, inflated: Uint8Array): Uint8Array {
-	const channels = channelCount(parsed.colorType);
-	if (!parsed.interlaced) {
-		const expectedByteLength = parsed.height * (parsed.width * channels + 1);
-		if (inflated.byteLength !== expectedByteLength)
-			validationError('incomplete-png-frame', 'PNG decoded frame length does not match its declared dimensions.');
-		return unfilterPass(inflated, 0, parsed.width, parsed.height, channels).decoded;
-	}
-
-	const decoded = new Uint8Array(parsed.width * parsed.height * channels);
-	let inputOffset = 0;
-	for (const pass of ADAM7_PASSES) {
-		const passWidth = passLength(parsed.width, pass.x, pass.dx);
-		const passHeight = passLength(parsed.height, pass.y, pass.dy);
-		if (passWidth === 0 || passHeight === 0)
-			continue;
-		const unfiltered = unfilterPass(
-			inflated,
-			inputOffset,
-			passWidth,
-			passHeight,
-			channels,
-		);
-		inputOffset += unfiltered.consumed;
-		for (let passY = 0; passY < passHeight; passY++) {
-			for (let passX = 0; passX < passWidth; passX++) {
-				const sourceOffset = (passY * passWidth + passX) * channels;
-				const targetOffset = (
-					(pass.y + passY * pass.dy) * parsed.width
-					+ pass.x
-					+ passX * pass.dx
-				) * channels;
-				decoded.set(
-					unfiltered.decoded.slice(sourceOffset, sourceOffset + channels),
-					targetOffset,
-				);
+function unfilterRow(
+	filter: number,
+	raw: Uint8Array,
+	previous: Uint8Array,
+	channels: number,
+): Uint8Array {
+	if (filter > 4)
+		validationError('malformed-png', 'PNG uses an invalid scanline filter.');
+	const decoded = new Uint8Array(raw.byteLength);
+	for (let column = 0; column < raw.byteLength; column++) {
+		const left = column >= channels ? decoded[column - channels]! : 0;
+		const above = previous[column] ?? 0;
+		const upperLeft = column >= channels ? previous[column - channels] ?? 0 : 0;
+		let predictor: number;
+		switch (filter) {
+			case 0:
+				predictor = 0;
+				break;
+			case 1:
+				predictor = left;
+				break;
+			case 2:
+				predictor = above;
+				break;
+			case 3:
+				predictor = Math.floor((left + above) / 2);
+				break;
+			case 4: {
+				const estimate = left + above - upperLeft;
+				const leftDistance = Math.abs(estimate - left);
+				const aboveDistance = Math.abs(estimate - above);
+				const upperLeftDistance = Math.abs(estimate - upperLeft);
+				predictor = leftDistance <= aboveDistance && leftDistance <= upperLeftDistance
+					? left
+					: aboveDistance <= upperLeftDistance
+						? above
+						: upperLeft;
+				break;
 			}
+			default:
+				predictor = 0;
 		}
+		decoded[column] = (raw[column]! + predictor) & 0xFF;
 	}
-	if (inputOffset !== inflated.byteLength)
-		validationError('incomplete-png-frame', 'PNG decoded interlaced frame length does not match its declared dimensions.');
 	return decoded;
 }
 
-function toRgba(parsed: ParsedPng, decoded: Uint8Array): Uint8Array {
-	const rgba = new Uint8Array(parsed.width * parsed.height * 4);
-	let sourceOffset = 0;
-	for (let pixel = 0; pixel < parsed.width * parsed.height; pixel++) {
-		const targetOffset = pixel * 4;
-		switch (parsed.colorType) {
-			case 0: {
-				const grayscale = decoded[sourceOffset++]!;
-				rgba.set([grayscale, grayscale, grayscale], targetOffset);
-				rgba[targetOffset + 3] = parsed.transparency
-					&& readUint32(Uint8Array.of(0, 0, parsed.transparency[0]!, parsed.transparency[1]!), 0) === grayscale
-					? 0
-					: 255;
-				break;
-			}
-			case 2: {
-				const red = decoded[sourceOffset++]!;
-				const green = decoded[sourceOffset++]!;
-				const blue = decoded[sourceOffset++]!;
-				rgba.set([red, green, blue], targetOffset);
-				rgba[targetOffset + 3] = parsed.transparency
-					&& parsed.transparency[1] === red
-					&& parsed.transparency[3] === green
-					&& parsed.transparency[5] === blue
-					? 0
-					: 255;
-				break;
-			}
-			case 3: {
-				const paletteIndex = decoded[sourceOffset++]!;
-				const paletteOffset = paletteIndex * 3;
-				if (!parsed.palette || paletteOffset + 2 >= parsed.palette.byteLength)
-					validationError('malformed-png', 'PNG pixel references a missing palette entry.');
-				rgba.set(parsed.palette.slice(paletteOffset, paletteOffset + 3), targetOffset);
-				rgba[targetOffset + 3] = parsed.transparency?.[paletteIndex] ?? 255;
-				break;
-			}
-			case 4: {
-				const grayscale = decoded[sourceOffset++]!;
-				rgba.set([grayscale, grayscale, grayscale, decoded[sourceOffset++]!], targetOffset);
-				break;
-			}
-			case 6:
-				rgba.set(decoded.slice(sourceOffset, sourceOffset + 4), targetOffset);
-				sourceOffset += 4;
-				break;
+function writeRgbaPixel(
+	parsed: ParsedPng,
+	row: Uint8Array,
+	sourceOffset: number,
+	target: Uint8Array,
+	targetOffset: number,
+) {
+	switch (parsed.colorType) {
+		case 0: {
+			const grayscale = row[sourceOffset]!;
+			target.set([grayscale, grayscale, grayscale], targetOffset);
+			target[targetOffset + 3] = parsed.transparency
+				&& readUint16(parsed.transparency, 0) === grayscale
+				? 0
+				: 255;
+			break;
 		}
+		case 2: {
+			const red = row[sourceOffset]!;
+			const green = row[sourceOffset + 1]!;
+			const blue = row[sourceOffset + 2]!;
+			target.set([red, green, blue], targetOffset);
+			target[targetOffset + 3] = parsed.transparency
+				&& readUint16(parsed.transparency, 0) === red
+				&& readUint16(parsed.transparency, 2) === green
+				&& readUint16(parsed.transparency, 4) === blue
+				? 0
+				: 255;
+			break;
+		}
+		case 3: {
+			const paletteIndex = row[sourceOffset]!;
+			const paletteOffset = paletteIndex * 3;
+			if (!parsed.palette || paletteOffset + 2 >= parsed.palette.byteLength)
+				validationError('malformed-png', 'PNG pixel references a missing palette entry.');
+			target.set(parsed.palette.subarray(paletteOffset, paletteOffset + 3), targetOffset);
+			target[targetOffset + 3] = parsed.transparency?.[paletteIndex] ?? 255;
+			break;
+		}
+		case 4: {
+			const grayscale = row[sourceOffset]!;
+			target.set([grayscale, grayscale, grayscale, row[sourceOffset + 1]!], targetOffset);
+			break;
+		}
+		case 6:
+			target.set(row.subarray(sourceOffset, sourceOffset + 4), targetOffset);
+			break;
 	}
-	return rgba;
 }
 
-function fittedThumbnail(source: Uint8Array, width: number, height: number) {
-	const scale = Math.min(1, THUMBNAIL_MAX_WIDTH / width, THUMBNAIL_MAX_HEIGHT / height);
-	const thumbnailWidth = Math.max(1, Math.floor(width * scale));
-	const thumbnailHeight = Math.max(1, Math.floor(height * scale));
-	const pixels = new Uint8Array(thumbnailWidth * thumbnailHeight * 4);
-	for (let y = 0; y < thumbnailHeight; y++) {
-		const sourceY = Math.min(height - 1, Math.floor(y / scale));
-		for (let x = 0; x < thumbnailWidth; x++) {
-			const sourceX = Math.min(width - 1, Math.floor(x / scale));
-			const sourceOffset = (sourceY * width + sourceX) * 4;
-			pixels.set(source.slice(sourceOffset, sourceOffset + 4), (y * thumbnailWidth + x) * 4);
+async function decodeThumbnail(
+	parsed: ParsedPng,
+	inflated: ReadableStream<Uint8Array>,
+): Promise<{ width: number; height: number; pixels: Uint8Array }> {
+	const scale = Math.min(
+		1,
+		THUMBNAIL_MAX_WIDTH / parsed.width,
+		THUMBNAIL_MAX_HEIGHT / parsed.height,
+	);
+	const width = Math.max(1, Math.floor(parsed.width * scale));
+	const height = Math.max(1, Math.floor(parsed.height * scale));
+	const pixels = new Uint8Array(width * height * 4);
+	const targetSourceX = Array.from(
+		{ length: width },
+		(_, targetX) => Math.min(parsed.width - 1, Math.floor(targetX / scale)),
+	);
+	const targetYBySource = new Map<number, number>();
+	for (let targetY = 0; targetY < height; targetY++) {
+		targetYBySource.set(
+			Math.min(parsed.height - 1, Math.floor(targetY / scale)),
+			targetY,
+		);
+	}
+
+	const reader = new StreamByteReader(inflated);
+	const channels = channelCount(parsed.colorType);
+	const passes = parsed.interlaced
+		? ADAM7_PASSES
+		: [{ x: 0, y: 0, dx: 1, dy: 1 }] as const;
+
+	try {
+		for (const pass of passes) {
+			const passWidth = passLength(parsed.width, pass.x, pass.dx);
+			const passHeight = passLength(parsed.height, pass.y, pass.dy);
+			if (passWidth === 0 || passHeight === 0)
+				continue;
+			const rowByteLength = passWidth * channels;
+			let previous: Uint8Array<ArrayBufferLike> = new Uint8Array(rowByteLength);
+			for (let passY = 0; passY < passHeight; passY++) {
+				const encoded = await reader.readExactly(
+					rowByteLength + 1,
+					'PNG image data ended before its declared frame was decoded.',
+				);
+				const decoded = unfilterRow(
+					encoded[0]!,
+					encoded.subarray(1),
+					previous,
+					channels,
+				);
+				previous = decoded;
+				const sourceY = pass.y + passY * pass.dy;
+				const targetY = targetYBySource.get(sourceY);
+				if (targetY === undefined)
+					continue;
+				for (let targetX = 0; targetX < width; targetX++) {
+					const sourceX = targetSourceX[targetX]!;
+					if (sourceX < pass.x || (sourceX - pass.x) % pass.dx !== 0)
+						continue;
+					const passX = (sourceX - pass.x) / pass.dx;
+					if (passX >= passWidth)
+						continue;
+					writeRgbaPixel(
+						parsed,
+						decoded,
+						passX * channels,
+						pixels,
+						(targetY * width + targetX) * 4,
+					);
+				}
+			}
+		}
+		if (await reader.hasRemainingBytes()) {
+			await reader.cancel();
+			validationError(
+				'incomplete-png-frame',
+				'PNG decoded frame exceeds the length allowed by its declared dimensions.',
+			);
 		}
 	}
-	return { width: thumbnailWidth, height: thumbnailHeight, pixels };
+	catch (error) {
+		await reader.cancel(error).catch(() => undefined);
+		if (error instanceof PngValidationError)
+			throw error;
+		validationError('incomplete-png-frame', 'PNG image data cannot be completely decoded.');
+	}
+
+	return { width, height, pixels };
+}
+
+function captureChunkData(type: string, length: number): boolean {
+	return (
+		(type === 'IHDR' && length <= 13)
+		|| (type === 'PLTE' && length <= 768)
+		|| (type === 'tRNS' && length <= 768)
+		|| (type === 'sRGB' && length <= 1)
+		|| (type === 'gAMA' && length <= 4)
+		|| (type === 'cHRM' && length <= 32)
+		|| (type === 'IEND' && length === 0)
+	);
+}
+
+async function inspectAndDecodePng(
+	bytes: BoundedByteStream,
+): Promise<{
+	parsed: ParsedPng;
+	thumbnail: { width: number; height: number; pixels: Uint8Array };
+}> {
+	const reader = new StreamByteReader(bytes.body);
+	const signature = await reader.readExactly(
+		PNG_SIGNATURE.byteLength,
+		'PNG ends before its signature is complete.',
+	);
+	if (!bytesEqual(signature, PNG_SIGNATURE)) {
+		validationError(
+			'invalid-png-signature',
+			'Source bytes do not have the canonical PNG signature.',
+		);
+	}
+
+	const issues: GraphicAssetValidationIssue[] = [];
+	const profileChunks = new Set<string>();
+	let parsed: ParsedPng | undefined;
+	let foundPalette = false;
+	let foundImageData = false;
+	let endedImageData = false;
+	let foundEnd = false;
+	let foundTransparency = false;
+	let compressedWriter: WritableStreamDefaultWriter<BufferSource> | undefined;
+	let thumbnailPromise: Promise<{ width: number; height: number; pixels: Uint8Array }> | undefined;
+	let thumbnailError: unknown;
+
+	async function closeImageData() {
+		if (!compressedWriter)
+			return;
+		const writer = compressedWriter;
+		compressedWriter = undefined;
+		await writer.close();
+	}
+
+	try {
+		while (!foundEnd) {
+			const header = await reader.readExactly(8, 'PNG ends inside a chunk header.');
+			const length = readUint32(header, 0);
+			const typeBytes = header.subarray(4);
+			const type = textDecoder.decode(typeBytes);
+			if (!typeBytes.every(isAsciiLetter)) {
+				issues.push(validationIssue(
+					'malformed-png',
+					'PNG chunk types must contain exactly four ASCII letters.',
+				));
+			}
+			if ((typeBytes[2]! & 0x20) !== 0) {
+				issues.push(validationIssue(
+					'malformed-png',
+					`PNG ${type} chunk sets the reserved chunk-type bit.`,
+				));
+			}
+			if (!parsed && type !== 'IHDR')
+				validationError('malformed-png', 'PNG header must be the first chunk.');
+			if (foundImageData && type !== 'IDAT' && type !== 'IEND') {
+				endedImageData = true;
+				await closeImageData();
+			}
+			if (type === 'IDAT' && endedImageData)
+				validationError('malformed-png', 'PNG image data chunks must be contiguous.');
+
+			const captured = captureChunkData(type, length)
+				? new Uint8Array(length)
+				: undefined;
+			let capturedOffset = 0;
+			let remaining = length;
+			let crc = updateCrc32(0xFFFFFFFF, typeBytes);
+
+			if (type === 'IDAT') {
+				if (!parsed)
+					validationError('malformed-png', 'PNG image data precedes its header.');
+				if (parsed.colorType === 3 && !parsed.palette)
+					validationError('malformed-png', 'Indexed PNG is missing its required palette.');
+				if (!foundImageData) {
+					const decompressor = new DecompressionStream('deflate');
+					compressedWriter = decompressor.writable.getWriter();
+					thumbnailPromise = decodeThumbnail(parsed, decompressor.readable)
+						.catch((error) => {
+							thumbnailError = error;
+							throw error;
+						});
+					void thumbnailPromise.catch(() => undefined);
+					foundImageData = true;
+				}
+			}
+
+			while (remaining > 0) {
+				const part = await reader.readAtMost(Math.min(remaining, 64 * 1024));
+				if (!part)
+					validationError('malformed-png', 'PNG chunk length exceeds the available source bytes.');
+				crc = updateCrc32(crc, part);
+				captured?.set(part, capturedOffset);
+				capturedOffset += part.byteLength;
+				remaining -= part.byteLength;
+				if (type === 'IDAT')
+					await compressedWriter!.write(Uint8Array.from(part));
+			}
+			const expectedCrc = readUint32(
+				await reader.readExactly(4, 'PNG ends before a chunk checksum is complete.'),
+				0,
+			);
+			if (((crc ^ 0xFFFFFFFF) >>> 0) !== expectedCrc) {
+				issues.push(validationIssue(
+					'malformed-png',
+					`PNG ${type} chunk has an invalid checksum.`,
+				));
+			}
+
+			const data = captured ?? new Uint8Array();
+			if (type === 'sRGB' || type === 'gAMA' || type === 'cHRM') {
+				const profileInvalid = profileChunks.has(type)
+					|| foundPalette
+					|| foundImageData
+					|| (type === 'sRGB' && (length !== 1 || data[0]! > 3))
+					|| (type === 'gAMA' && (length !== 4 || readUint32(data, 0) !== 45_455))
+					|| (type === 'cHRM' && (
+						length !== 32
+						|| [
+							31_270,
+							32_900,
+							64_000,
+							33_000,
+							30_000,
+							60_000,
+							15_000,
+							6_000,
+						].some((value, index) => readUint32(data, index * 4) !== value)
+					));
+				if (profileInvalid) {
+					issues.push(validationIssue(
+						'unsupported-png-profile',
+						`PNG ${type} chunk is duplicated, misplaced, or incompatible with sRGB output.`,
+					));
+				}
+				profileChunks.add(type);
+			}
+			if (type === 'acTL' || type === 'fcTL' || type === 'fdAT') {
+				issues.push(validationIssue(
+					'unsupported-png-animation',
+					'Animated PNG is not supported by the png-v1 compatibility profile.',
+				));
+			}
+			if (type === 'iCCP' || type === 'cICP' || type === 'mDCv' || type === 'cLLi') {
+				issues.push(validationIssue(
+					'unsupported-png-profile',
+					'Embedded colour profiles or HDR metadata are not supported by the png-v1 compatibility profile.',
+				));
+			}
+
+			switch (type) {
+				case 'IHDR': {
+					if (parsed || length !== 13)
+						validationError('malformed-png', 'PNG must contain one complete 13-byte header.');
+					const width = readUint32(data, 0);
+					const height = readUint32(data, 4);
+					const bitDepth = data[8];
+					const rawColorType = data[9]!;
+					if (width === 0 || height === 0)
+						validationError('malformed-png', 'PNG dimensions must both be positive.');
+					if (width > MAX_IMAGE_AXIS || height > MAX_IMAGE_AXIS)
+						validationError('image-dimensions-exceeded', `PNG dimensions must not exceed ${MAX_IMAGE_AXIS} pixels per axis.`);
+					if (width * height > MAX_IMAGE_PIXELS)
+						validationError('image-pixels-exceeded', `PNG decoded pixels must not exceed ${MAX_IMAGE_PIXELS}.`);
+					if (bitDepth !== 8 || ![0, 2, 3, 4, 6].includes(rawColorType))
+						validationError('unsupported-png-colour', 'PNG must use supported 8-bit SDR grayscale, indexed, RGB, or RGBA colour.');
+					if (data[10] !== 0 || data[11] !== 0 || (data[12] !== 0 && data[12] !== 1))
+						validationError('unsupported-png-colour', 'PNG must use standard compression, filtering, and a supported interlace method.');
+					const colorType = rawColorType as ParsedPng['colorType'];
+					parsed = {
+						width,
+						height,
+						colorType,
+						colorModel: ({
+							0: 'grayscale',
+							2: 'rgb',
+							3: 'indexed',
+							4: 'grayscale-alpha',
+							6: 'rgba',
+						} as const)[colorType],
+						hasAlpha: colorType === 4 || colorType === 6,
+						interlaced: data[12] === 1,
+					};
+					break;
+				}
+				case 'PLTE':
+					if (
+						foundPalette
+						|| foundImageData
+						|| length === 0
+						|| length % 3 !== 0
+						|| length > 768
+					) {
+						validationError('malformed-png', 'PNG palette is missing, misplaced, or malformed.');
+					}
+					foundPalette = true;
+					parsed!.palette = data;
+					break;
+				case 'tRNS':
+					if (
+						foundTransparency
+						|| foundImageData
+						|| parsed!.colorType === 4
+						|| parsed!.colorType === 6
+						|| (parsed!.colorType === 3 && !parsed!.palette)
+					) {
+						validationError('malformed-png', 'PNG transparency facts must precede image data.');
+					}
+					if (
+						(parsed!.colorType === 3 && (
+							length === 0
+							|| length > parsed!.palette!.byteLength / 3
+						))
+						|| (parsed!.colorType === 0 && (
+							length !== 2
+							|| readUint16(data, 0) > 255
+						))
+						|| (parsed!.colorType === 2 && (
+							length !== 6
+							|| readUint16(data, 0) > 255
+							|| readUint16(data, 2) > 255
+							|| readUint16(data, 4) > 255
+						))
+					) {
+						validationError('malformed-png', 'PNG transparency facts are malformed.');
+					}
+					foundTransparency = true;
+					parsed!.transparency = data;
+					parsed!.hasAlpha = true;
+					break;
+				case 'IEND':
+					if (length !== 0 || !foundImageData)
+						validationError('malformed-png', 'PNG end chunk is malformed or precedes image data.');
+					foundEnd = true;
+					await closeImageData();
+					break;
+				default:
+					if (
+						!['IDAT', 'sRGB', 'gAMA', 'cHRM', 'acTL', 'fcTL', 'fdAT', 'iCCP', 'cICP', 'mDCv', 'cLLi'].includes(type)
+						&& (typeBytes[0]! & 0x20) === 0
+					) {
+						issues.push(validationIssue(
+							'malformed-png',
+							`PNG contains unsupported critical chunk ${type}.`,
+						));
+					}
+			}
+		}
+
+		if (await reader.hasRemainingBytes())
+			validationError('malformed-png', 'PNG contains trailing bytes after its end chunk.');
+		if (!parsed || !thumbnailPromise)
+			validationError('incomplete-png-frame', 'PNG does not contain one complete decodable frame.');
+		const thumbnail = await thumbnailPromise;
+		if (issues.length > 0)
+			throw new PngValidationError(issues);
+		return { parsed, thumbnail };
+	}
+	catch (error) {
+		await compressedWriter?.abort(error).catch(() => undefined);
+		await thumbnailPromise?.catch(() => undefined);
+		if (thumbnailError instanceof PngValidationError)
+			throw thumbnailError;
+		throw error;
+	}
 }
 
 function adler32(bytes: Uint8Array): number {
@@ -671,7 +681,7 @@ function uncompressedZlib(bytes: Uint8Array): Uint8Array {
 			(~length) & 0xFF,
 			((~length) >>> 8) & 0xFF,
 		));
-		blocks.push(bytes.slice(offset, offset + length));
+		blocks.push(bytes.subarray(offset, offset + length));
 		if (final)
 			break;
 	}
@@ -695,7 +705,7 @@ function encodeThumbnail(width: number, height: number, rgba: Uint8Array): Uint8
 		const scanlineOffset = row * (1 + width * 4);
 		scanlines[scanlineOffset] = 0;
 		scanlines.set(
-			rgba.slice(row * width * 4, (row + 1) * width * 4),
+			rgba.subarray(row * width * 4, (row + 1) * width * 4),
 			scanlineOffset + 1,
 		);
 	}
@@ -713,57 +723,83 @@ function encodeThumbnail(width: number, height: number, rgba: Uint8Array): Uint8
 	]);
 }
 
-export async function sha256Hex(bytes: Uint8Array): Promise<string> {
-	const digest = await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes));
-	return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+function digestHex(digest: ArrayBuffer): string {
+	return Array.from(
+		new Uint8Array(digest),
+		byte => byte.toString(16).padStart(2, '0'),
+	).join('');
 }
 
-export async function validatePng(
-	bytes: Uint8Array,
-	sourceDigest: string,
-): Promise<ValidatedPng> {
-	const parsed = parsePng(bytes);
-	const decoded = unfilter(
-		parsed,
-		await inflate(parsed.compressedImageData, expectedInflatedByteLength(parsed)),
-	);
-	const rgba = toRgba(parsed, decoded);
-	const facts: GraphicAssetImageFacts = {
-		kind: 'image',
-		canonicalMime: 'image/png',
-		byteLength: bytes.byteLength,
-		sha256: sourceDigest,
-		width: parsed.width,
-		height: parsed.height,
-		pixelCount: parsed.width * parsed.height,
-		bitDepth: 8,
-		colorModel: parsed.colorModel,
-		hasAlpha: parsed.hasAlpha,
+export async function sha256Hex(bytes: Uint8Array): Promise<string> {
+	return digestHex(await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes)));
+}
+
+interface WorkerDigestStream extends WritableStream<Uint8Array> {
+	readonly digest: Promise<ArrayBuffer>;
+}
+
+type WorkerDigestStreamConstructor = new (algorithm: string) => WorkerDigestStream;
+
+export async function sha256HexStream(bytes: BoundedByteStream): Promise<string> {
+	const workerCrypto = crypto as Crypto & {
+		DigestStream?: WorkerDigestStreamConstructor;
 	};
+	if (workerCrypto.DigestStream) {
+		const digestStream = new workerCrypto.DigestStream('SHA-256');
+		await bytes.body.pipeTo(digestStream);
+		return digestHex(await digestStream.digest);
+	}
+
+	const hash = createHash('sha256');
+	const reader = bytes.body.getReader();
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done)
+			break;
+		hash.update(value);
+	}
+	return hash.digest('hex');
+}
+
+export async function processPngStream(
+	bytes: BoundedByteStream,
+	sourceDigest: string,
+): Promise<ProcessedPng> {
+	const { parsed, thumbnail } = await inspectAndDecodePng(bytes);
 	return {
 		report: {
 			outcome: 'accepted',
 			compatibilityProfile: 'png-v1',
 			issues: [],
-			facts,
+			facts: {
+				kind: 'image',
+				canonicalMime: 'image/png',
+				byteLength: bytes.byteLength,
+				sha256: sourceDigest,
+				width: parsed.width,
+				height: parsed.height,
+				pixelCount: parsed.width * parsed.height,
+				bitDepth: 8,
+				colorModel: parsed.colorModel,
+				hasAlpha: parsed.hasAlpha,
+			},
 		},
-		width: parsed.width,
-		height: parsed.height,
-		rgba,
+		thumbnail: encodeThumbnail(
+			thumbnail.width,
+			thumbnail.height,
+			thumbnail.pixels,
+		),
 	};
-}
-
-export function generatePngThumbnail(validated: ValidatedPng): Uint8Array {
-	const thumbnail = fittedThumbnail(validated.rgba, validated.width, validated.height);
-	return encodeThumbnail(thumbnail.width, thumbnail.height, thumbnail.pixels);
 }
 
 export async function processPng(bytes: Uint8Array): Promise<ProcessedPng> {
-	const validated = await validatePng(bytes, await sha256Hex(bytes));
-	return {
-		report: validated.report,
-		thumbnail: generatePngThumbnail(validated),
-	};
+	return await processPngStream(
+		createBoundedByteStream(bytes, {
+			byteLength: bytes.byteLength,
+			maximumByteLength: bytes.byteLength,
+		}),
+		await sha256Hex(bytes),
+	);
 }
 
 export function rejectedPngReport(error: PngValidationError): GraphicAssetValidationReport {

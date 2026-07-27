@@ -5,8 +5,11 @@ import type {
 import { Buffer } from 'node:buffer';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 
-const authorHeaders = { 'x-graphics-author-id': 'integration-graphics-author' };
+const authorHeaders: Record<string, string> = {
+	'x-graphics-author-id': 'integration-graphics-author',
+};
 const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 	'base64',
@@ -16,6 +19,7 @@ describe('the bounded PNG ingestion and Library Workspace APIs', () => {
 	let eventId: number;
 
 	beforeAll(async () => {
+		authorHeaders.cookie = await createGraphicsAuthorSessionCookie();
 		const event = await $fetch('/api/events', {
 			method: 'POST',
 			body: {
@@ -116,6 +120,11 @@ describe('the bounded PNG ingestion and Library Workspace APIs', () => {
 		expect(pinnedContent.headers.get('content-type')).toBe('image/png');
 		expect(pinnedContent.headers.get('cache-control')).toBe('private, no-store');
 		expect(new Uint8Array(await pinnedContent.arrayBuffer())).toEqual(transparentPixelPng);
+
+		const anonymousContent = await fetch(
+			`/api/graphics-assets/${completed.result!.assetId}/revisions/${completed.result!.revisionId}/content`,
+		);
+		expect(anonymousContent.status).toBe(401);
 
 		const missingRevision = await fetch(
 			`/api/graphics-assets/${completed.result!.assetId}/revisions/missing-revision/content`,

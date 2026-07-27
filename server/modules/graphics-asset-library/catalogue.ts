@@ -2,6 +2,7 @@ import type {
 	GraphicAsset,
 	GraphicAssetId,
 	GraphicAssetImageFacts,
+	GraphicAssetRevisionId,
 	GraphicAssetUsage,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
@@ -516,8 +517,8 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			return result.results.map((row): GraphicAssetUsage => ({
 				id: row.id,
 				reference: {
-					assetId: row.asset_id,
-					revisionId: row.revision_id,
+					assetId: row.asset_id as GraphicAssetId,
+					revisionId: row.revision_id as GraphicAssetRevisionId,
 				},
 				owner: {
 					kind: row.owner_kind,

@@ -20,8 +20,8 @@ export type GraphicsIngestionOperationId = string & {
 };
 
 export interface GraphicAssetReference {
-	assetId: string;
-	revisionId: string;
+	assetId: GraphicAssetId;
+	revisionId: GraphicAssetRevisionId;
 }
 
 export interface GraphicAssetUsage {

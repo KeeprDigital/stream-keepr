@@ -9,6 +9,8 @@ const props = defineProps<{
 	screen: Screen;
 	config: FeatureMatchOverlayModeConfig;
 	selectedTarget: FeatureMatchOverlaySelectionTarget;
+	publicationBlocked?: boolean;
+	publicationBlockReason?: string;
 }>();
 
 const emit = defineEmits<{ selectTarget: [target: FeatureMatchOverlaySelectionTarget] }>();
@@ -119,6 +121,8 @@ watch(previewGuides, () => {
 });
 
 async function copyOutputUrl(output: FeatureMatchOverlayOutput) {
+	if (props.publicationBlocked)
+		return;
 	await copyToClipboard(outputUrl(output), {
 		successTitle: 'URL copied',
 		successDescription: `${output.toUpperCase()} output URL copied.`,
@@ -127,6 +131,8 @@ async function copyOutputUrl(output: FeatureMatchOverlayOutput) {
 }
 
 async function downloadOutput(output: FeatureMatchOverlayOutput) {
+	if (props.publicationBlocked)
+		return;
 	const url = `/event/${props.eventId}/screen/${props.screen.slug}?output=${output}&download=1`;
 	toast.add({ title: 'Preparing download', description: `${output.toUpperCase()} PNG will download from a temporary output tab.`, color: 'info' });
 	window.open(url, '_blank', 'noopener,noreferrer');
@@ -172,6 +178,8 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 							color="neutral"
 							icon="i-lucide-link"
 							trailing-icon="i-lucide-chevron-down"
+							:disabled="publicationBlocked"
+							:title="publicationBlockReason"
 						>
 							Outputs
 						</UButton>
@@ -206,6 +214,8 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 											size="sm"
 											variant="soft"
 											icon="i-lucide-copy"
+											:disabled="publicationBlocked"
+											:title="publicationBlockReason"
 											@click="copyOutputUrl(output.value)"
 										>
 											Copy
@@ -213,6 +223,8 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 										<UButton
 											size="sm"
 											icon="i-lucide-download"
+											:disabled="publicationBlocked"
+											:title="publicationBlockReason"
 											@click="downloadOutput(output.value)"
 										>
 											PNG

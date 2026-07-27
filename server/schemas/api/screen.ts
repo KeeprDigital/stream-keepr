@@ -3,6 +3,10 @@ import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { SCREEN_MODE_VALUES, screens } from '~~/server/db/schema';
 import {
+	graphicAssetId,
+	graphicAssetRevisionId,
+} from '~~/server/modules/graphics-asset-library';
+import {
 	CARD_ANIMATION_SPEED_VALUES,
 	DECK_CARD_SIZE_VALUES,
 	DECK_VIEW_MODE_VALUES,
@@ -125,8 +129,8 @@ const safeMediaUrlSchema = z.string().max(2000).refine((value) => {
 	}
 }, 'Media URL must be an HTTP(S) URL or a root-relative path');
 const graphicAssetReferenceSchema = z.object({
-	assetId: z.string().min(1).max(100),
-	revisionId: z.string().min(1).max(100),
+	assetId: z.string().min(1).max(100).transform(graphicAssetId),
+	revisionId: z.string().min(1).max(100).transform(graphicAssetRevisionId),
 }).strict();
 
 const screenMediaBackgroundConfigSchema = z.object({
