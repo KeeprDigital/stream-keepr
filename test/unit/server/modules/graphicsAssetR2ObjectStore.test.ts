@@ -53,8 +53,7 @@ describe('the R2 Graphic Asset object-store adapter', () => {
 		});
 
 		const options = put.mock.calls[0]?.[2] as R2PutOptions;
-		expect(options.onlyIf).toBeInstanceOf(Headers);
-		expect((options.onlyIf as Headers).get('if-none-match')).toBe('*');
+		expect(options.onlyIf).toEqual({ etagDoesNotMatch: '*' });
 		expect(head).toHaveBeenCalledWith(identity);
 		expect(outcome).toEqual({
 			outcome: 'already-exists',

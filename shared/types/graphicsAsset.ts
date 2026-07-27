@@ -14,6 +14,101 @@ export type GraphicsIngestionOperationId = string & {
 	readonly [graphicsIngestionOperationIdBrand]: 'GraphicsIngestionOperationId';
 };
 
+export type GraphicsIngestionStage
+	= | 'created'
+		| 'transferring'
+		| 'hashing'
+		| 'validating'
+		| 'generating-derivatives'
+		| 'awaiting-confirmation'
+		| 'publishing'
+		| 'completed'
+		| 'failed'
+		| 'cancelled';
+
+export interface GraphicAssetImageFacts {
+	kind: 'image';
+	canonicalMime: 'image/png';
+	byteLength: number;
+	sha256: string;
+	width: number;
+	height: number;
+	pixelCount: number;
+	bitDepth: 8;
+	colorModel: 'grayscale' | 'grayscale-alpha' | 'indexed' | 'rgb' | 'rgba';
+	hasAlpha: boolean;
+}
+
+export interface GraphicAssetValidationIssue {
+	severity: 'error';
+	code:
+		| 'invalid-png-signature'
+		| 'malformed-png'
+		| 'unsupported-png-animation'
+		| 'unsupported-png-colour'
+		| 'unsupported-png-profile'
+		| 'image-dimensions-exceeded'
+		| 'image-pixels-exceeded'
+		| 'incomplete-png-frame';
+	message: string;
+}
+
+export type GraphicAssetValidationReport
+	= {
+		outcome: 'accepted';
+		compatibilityProfile: 'png-v1';
+		issues: [];
+		facts: GraphicAssetImageFacts;
+	}
+	| {
+		outcome: 'rejected';
+		compatibilityProfile: 'png-v1';
+		issues: GraphicAssetValidationIssue[];
+	};
+
+export interface GraphicsIngestionFailure {
+	code:
+		| 'ingestion-cancelled'
+		| 'staging-unavailable'
+		| 'canonical-store-unavailable'
+		| 'catalogue-publication-failed'
+		| 'ingestion-processing-failed'
+		| 'validation-failed';
+	retryable: boolean;
+	message: string;
+}
+
+export interface GraphicsIngestionOperation {
+	id: GraphicsIngestionOperationId;
+	idempotencyKey: string;
+	initiatedBy: string;
+	name: string;
+	defaultEventId?: number;
+	declaredByteLength: number;
+	transferredByteLength: number;
+	stage: GraphicsIngestionStage;
+	report?: GraphicAssetValidationReport;
+	result?: {
+		outcome: 'published' | 'reused';
+		assetId: GraphicAssetId;
+		revisionId: GraphicAssetRevisionId;
+	};
+	failure?: GraphicsIngestionFailure;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface GraphicAssetLibraryItem {
+	id: GraphicAssetId;
+	name: string;
+	kind: 'image';
+	revisionId: GraphicAssetRevisionId;
+	revisionNumber: number;
+	facts: GraphicAssetImageFacts;
+	eventIds: number[];
+	operation: GraphicsIngestionOperation;
+}
+
 export type GraphicsAssetLibraryComponentHealth
 	= | { status: 'healthy' }
 		| {

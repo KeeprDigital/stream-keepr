@@ -144,6 +144,7 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	source: text('source', { enum: GRAPHICS_INGESTION_SOURCE_VALUES }).notNull(),
 	stage: text('stage', { enum: GRAPHICS_INGESTION_STAGE_VALUES }).notNull().default('created'),
 	initiatedBy: text('initiated_by').notNull(),
+	proposedName: text('proposed_name').notNull(),
 	defaultEventId: integer('default_event_id').references(() => events.id, { onDelete: 'set null' }),
 	targetAssetId: text('target_asset_id').references(() => graphicAssets.id, { onDelete: 'set null' }),
 	declaredByteLength: integer('declared_byte_length'),
@@ -155,7 +156,7 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	createdAt,
 	updatedAt,
 }, table => [
-	uniqueIndex('graphics_ingestion_operations_idempotency_idx').on(table.idempotencyKey),
+	uniqueIndex('graphics_ingestion_operations_author_idempotency_idx').on(table.initiatedBy, table.idempotencyKey),
 	index('graphics_ingestion_operations_stage_idx').on(table.stage),
 	index('graphics_ingestion_operations_event_idx').on(table.defaultEventId),
 ]);
