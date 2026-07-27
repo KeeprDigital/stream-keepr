@@ -1,16 +1,8 @@
-import { MAX_API_REQUEST_BODY_BYTES } from '~~/server/utils/payloadLimits';
+import { MAX_API_REQUEST_BODY_BYTES, payloadTooLarge } from '~~/server/utils/payloadLimits';
 import { boundedRawMutationPolicy } from '~~/server/utils/rawMutationRoutes';
 import { MUTATION_BODY_METHODS } from '~~/shared/utils/requestBodyLimits';
 
 const PAYLOAD_METHODS = new Set<string>(MUTATION_BODY_METHODS);
-
-function requestPayloadTooLarge(maxBytes: number, label: string): never {
-	throw createError({
-		statusCode: 413,
-		statusMessage: 'Payload Too Large',
-		message: `${label} must not exceed ${maxBytes} bytes`,
-	});
-}
 
 /**
  * Apply one bounded stream to every mutation request before a route calls
@@ -28,7 +20,7 @@ export default defineEventHandler((event) => {
 	const contentLength = getRequestHeader(event, 'content-length');
 	if (contentLength && /^\d+$/.test(contentLength.trim())) {
 		if (Number(contentLength) > maxBytes)
-			requestPayloadTooLarge(maxBytes, label);
+			payloadTooLarge(maxBytes, label);
 	}
 
 	const source = getRequestWebStream(event);
@@ -40,7 +32,7 @@ export default defineEventHandler((event) => {
 		transform(chunk, controller) {
 			totalBytes += chunk.byteLength;
 			if (totalBytes > maxBytes)
-				requestPayloadTooLarge(maxBytes, label);
+				payloadTooLarge(maxBytes, label);
 			controller.enqueue(chunk);
 		},
 	}));
