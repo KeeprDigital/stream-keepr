@@ -76,3 +76,7 @@ export function sameScreenGraphicAssetReferences(
 export function graphicAssetRevisionContentPath(reference: GraphicAssetReference): string {
 	return `/api/graphics-assets/${encodeURIComponent(reference.assetId)}/revisions/${encodeURIComponent(reference.revisionId)}/content`;
 }
+
+export function graphicAssetRevisionStatusPath(reference: GraphicAssetReference): string {
+	return `/api/graphics-assets/${encodeURIComponent(reference.assetId)}/revisions/${encodeURIComponent(reference.revisionId)}/status`;
+}

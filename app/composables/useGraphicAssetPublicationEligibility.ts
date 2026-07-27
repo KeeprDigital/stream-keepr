@@ -1,7 +1,10 @@
 import type { MaybeRefOrGetter } from 'vue';
 import type { GraphicAssetReferenceStatus } from '~~/shared/types/graphicsAsset';
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
-import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
+import {
+	featureMatchOverlayGraphicAssetReferences,
+	graphicAssetRevisionStatusPath,
+} from '~~/shared/utils/graphicsAssetReferences';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
 export type GraphicAssetPublicationEligibility
@@ -15,10 +18,14 @@ export function useGraphicAssetPublicationEligibility(
 ) {
 	const eligibility = ref<GraphicAssetPublicationEligibility>({ outcome: 'checking' });
 	const statusFlights = createGuardedSequence();
+	const refreshRequest = ref(0);
 
 	watch(
-		() => featureMatchOverlayGraphicAssetReferences(toValue(config)),
-		async (references) => {
+		() => ({
+			references: featureMatchOverlayGraphicAssetReferences(toValue(config)),
+			refreshRequest: refreshRequest.value,
+		}),
+		async ({ references }) => {
 			const flight = statusFlights.begin();
 			if (references.length === 0) {
 				eligibility.value = { outcome: 'eligible' };
@@ -29,7 +36,7 @@ export function useGraphicAssetPublicationEligibility(
 			const statuses = await Promise.all(references.map(async item => ({
 				ownerSlot: item.ownerSlot,
 				status: await $fetch<GraphicAssetReferenceStatus>(
-					`/api/graphics-assets/${encodeURIComponent(item.reference.assetId)}/revisions/${encodeURIComponent(item.reference.revisionId)}/status`,
+					graphicAssetRevisionStatusPath(item.reference),
 				).catch((): GraphicAssetReferenceStatus => ({
 					outcome: 'unavailable',
 					retryable: true,
@@ -55,6 +62,10 @@ export function useGraphicAssetPublicationEligibility(
 		{ immediate: true },
 	);
 
+	function retry() {
+		refreshRequest.value += 1;
+	}
+
 	const blocked = computed(() => eligibility.value.outcome !== 'eligible');
 	const reason = computed(() => {
 		switch (eligibility.value.outcome) {
@@ -73,5 +84,6 @@ export function useGraphicAssetPublicationEligibility(
 		eligibility: readonly(eligibility),
 		blocked,
 		reason,
+		retry,
 	};
 }

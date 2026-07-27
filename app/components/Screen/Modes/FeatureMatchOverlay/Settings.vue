@@ -31,6 +31,7 @@ const {
 	eligibility: assetPublicationEligibility,
 	blocked: assetPublicationBlocked,
 	reason: assetPublicationBlockReason,
+	retry: retryAssetPublicationEligibility,
 } = useGraphicAssetPublicationEligibility(config);
 
 defineExpose({ resetConfig, saving: settingsSaving });
@@ -168,6 +169,17 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 						: 'Checking Graphic Asset References'"
 				:description="assetPublicationBlockReason"
 			/>
+			<UButton
+				v-if="assetPublicationEligibility.outcome === 'unavailable'"
+				data-testid="retry-graphic-asset-publication"
+				class="mt-2"
+				color="warning"
+				variant="soft"
+				icon="i-lucide-refresh-cw"
+				@click="retryAssetPublicationEligibility"
+			>
+				Retry Graphic Asset Content
+			</UButton>
 		</section>
 
 		<div class="grid min-h-[calc(100vh-18rem)] items-start gap-4 xl:grid-cols-[minmax(15rem,18rem)_minmax(0,1fr)_minmax(19rem,24rem)] 2xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)_minmax(24rem,30rem)]">

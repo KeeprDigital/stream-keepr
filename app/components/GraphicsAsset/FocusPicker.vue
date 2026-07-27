@@ -4,6 +4,7 @@ import type {
 	GraphicAssetReference,
 	GraphicAssetReferenceStatus,
 } from '~~/shared/types/graphicsAsset';
+import { graphicAssetRevisionStatusPath } from '~~/shared/utils/graphicsAssetReferences';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
 const props = defineProps<{
@@ -46,7 +47,7 @@ watch(() => props.modelValue, async (reference) => {
 	}
 	try {
 		const status = await $fetch<GraphicAssetReferenceStatus>(
-			`/api/graphics-assets/${encodeURIComponent(reference.assetId)}/revisions/${encodeURIComponent(reference.revisionId)}/status`,
+			graphicAssetRevisionStatusPath(reference),
 		);
 		if (flight.current)
 			referenceStatus.value = status;
