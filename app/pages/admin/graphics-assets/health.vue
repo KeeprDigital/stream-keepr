@@ -270,7 +270,7 @@ async function saveCapacityLimits() {
 							/>
 						</UFormField>
 						<UFormField
-							label="Administrator token"
+							label="Graphics Administrator token"
 							description="Required to change installation-wide limits"
 						>
 							<UInput

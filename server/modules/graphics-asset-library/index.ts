@@ -694,7 +694,7 @@ export function createGraphicsAssetLibrary(
 		async getCapacity() {
 			return await catalogueRequest(
 				() => requireCatalogue().getCapacity(),
-				'Graphics Asset Library capacity is temporarily unavailable',
+				'Graphics Asset Library Capacity is temporarily unavailable',
 			);
 		},
 		async updateCapacityLimits(input) {
