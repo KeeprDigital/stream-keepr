@@ -17,5 +17,13 @@
 		{
 			"binding": "KV"
 		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "GRAPHICS_ASSET_STAGING"
+		},
+		{
+			"binding": "GRAPHICS_ASSET_CANONICAL"
+		}
 	]
 }
