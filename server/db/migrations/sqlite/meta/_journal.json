@@ -15,6 +15,13 @@
       "when": 1785127905355,
       "tag": "0001_brainy_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785132284231,
+      "tag": "0002_furry_silverclaw",
+      "breakpoints": true
     }
   ]
 }

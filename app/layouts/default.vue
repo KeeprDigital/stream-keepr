@@ -49,6 +49,14 @@ function graphicsAssetLibraryHealthItem(): NavigationMenuItem {
 	};
 }
 
+function graphicsAssetLibraryItem(): NavigationMenuItem {
+	return {
+		label: 'Graphics Asset Library',
+		icon: 'i-lucide-images',
+		to: '/graphics-assets',
+	};
+}
+
 const navGroups = computed<NavGroup[]>(() => {
 	if (!eventId.value)
 		return [];
@@ -110,7 +118,7 @@ const navGroups = computed<NavGroup[]>(() => {
 		},
 		{
 			label: 'Administration',
-			items: [graphicsAssetLibraryHealthItem()],
+			items: [graphicsAssetLibraryItem(), graphicsAssetLibraryHealthItem()],
 		},
 	];
 });
@@ -120,7 +128,7 @@ const homeLinks = computed<NavigationMenuItem[]>(() => [{
 	label: 'Events',
 	icon: 'i-lucide-calendar',
 	to: '/',
-}, graphicsAssetLibraryHealthItem()]);
+}, graphicsAssetLibraryItem(), graphicsAssetLibraryHealthItem()]);
 </script>
 
 <template>

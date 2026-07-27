@@ -9,6 +9,7 @@ import type {
 	GraphicsStagingObjectStore,
 } from './object-store';
 import {
+	consumeBoundedByteStream,
 	graphicsObjectIdentity,
 	rethrowGraphicsObjectInputError,
 	unavailableObjectStoreOutcome,
@@ -97,15 +98,36 @@ async function createImmutable(
 	input: CreateImmutableGraphicsObjectInput,
 ): Promise<CreateImmutableGraphicsObjectOutcome> {
 	try {
-		const object = await bucket.put(input.identity, input.bytes.body, {
-			onlyIf: new Headers({ 'if-none-match': '*' }),
-			httpMetadata: input.metadata?.contentType
-				? { contentType: input.metadata.contentType }
-				: undefined,
-			customMetadata: input.metadata?.custom
-				? { ...input.metadata.custom }
-				: undefined,
-		});
+		// Production Workers expose FixedLengthStream, preserving a bounded
+		// streaming write and its authoritative length for R2. Nuxt's local
+		// Miniflare binding is a Node-side proxy without that runtime primitive,
+		// so the already-bounded local fallback supplies a fixed-length value.
+		const fixedLength = typeof FixedLengthStream === 'undefined'
+			? undefined
+			: new FixedLengthStream(input.bytes.byteLength);
+		const transfer = fixedLength
+			? input.bytes.body.pipeTo(fixedLength.writable)
+			: undefined;
+		const value = fixedLength
+			? fixedLength.readable
+			: await consumeBoundedByteStream(input.bytes);
+		let object: R2Object | null;
+		try {
+			object = await bucket.put(input.identity, value, {
+				onlyIf: { etagDoesNotMatch: '*' },
+				httpMetadata: input.metadata?.contentType
+					? { contentType: input.metadata.contentType }
+					: undefined,
+				customMetadata: input.metadata?.custom
+					? { ...input.metadata.custom }
+					: undefined,
+			});
+			await transfer;
+		}
+		catch (error) {
+			await transfer?.catch(() => undefined);
+			throw error;
+		}
 		if (object)
 			return { outcome: 'created', object: mapR2Object(object) };
 
