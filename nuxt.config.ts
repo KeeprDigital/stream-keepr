@@ -1,6 +1,7 @@
 import type { MutationBodyMethod } from './shared/utils/requestBodyLimits';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { MAX_PNG_INGESTION_BYTES } from './shared/utils/graphicsAssetCompatibility';
 import { MUTATION_BODY_METHODS } from './shared/utils/requestBodyLimits';
 
 const isIntegration = process.env.STREAM_KEEPR_INTEGRATION === 'true';
@@ -90,18 +91,28 @@ export default defineNuxtConfig({
 					})),
 				]
 			: [],
-		routeRules: isIntegration
-			? {
-					'/api/_test/bounded-raw-mutation': {
-						boundedRawMutations: {
-							POST: {
-								maxBytes: 2097152,
-								label: 'Raw transfer',
+		routeRules: {
+			'/api/graphics-assets/ingestion-operations/**': {
+				boundedRawMutations: {
+					PUT: {
+						maxBytes: MAX_PNG_INGESTION_BYTES,
+						label: 'PNG transfer',
+					},
+				},
+			},
+			...(isIntegration
+				? {
+						'/api/_test/bounded-raw-mutation': {
+							boundedRawMutations: {
+								POST: {
+									maxBytes: 2097152,
+									label: 'Raw transfer',
+								},
 							},
 						},
-					},
-				}
-			: {},
+					}
+				: {}),
+		},
 		cloudflare: {
 			deployConfig: true,
 			nodeCompat: true,
