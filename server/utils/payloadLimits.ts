@@ -4,7 +4,7 @@ const textEncoder = new TextEncoder();
 
 export const MAX_API_REQUEST_BODY_BYTES = 1024 * 1024;
 
-function payloadTooLarge(maxBytes: number, label: string): never {
+export function payloadTooLarge(maxBytes: number, label: string): never {
 	throw createError({
 		statusCode: 413,
 		statusMessage: 'Payload Too Large',
