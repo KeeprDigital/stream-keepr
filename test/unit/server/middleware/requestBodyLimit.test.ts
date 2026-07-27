@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockGetRequestHeader = vi.fn();
 const mockGetRequestWebStream = vi.fn();
+const mockGetRouteRules = vi.fn();
 
 vi.stubGlobal('defineEventHandler', vi.fn(handler => handler));
 vi.stubGlobal('getRequestHeader', mockGetRequestHeader);
 vi.stubGlobal('getRequestWebStream', mockGetRequestWebStream);
+vi.stubGlobal('getRouteRules', mockGetRouteRules);
 vi.stubGlobal('createError', (input: { statusCode: number; statusMessage: string; message: string }) => Object.assign(
 	new Error(input.message),
 	input,
@@ -18,6 +20,7 @@ describe('request body limit middleware', () => {
 		vi.clearAllMocks();
 		mockGetRequestHeader.mockReturnValue(null);
 		mockGetRequestWebStream.mockReturnValue(undefined);
+		mockGetRouteRules.mockReturnValue({});
 	});
 
 	it('rejects a declared oversized request before exposing its body to a route', () => {

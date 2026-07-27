@@ -32,6 +32,21 @@ export function assertJsonPayloadSize(value: unknown, maxBytes: number, label: s
 }
 
 /**
+ * Return the request stream installed by the mutation body-limit middleware.
+ * Raw transfer routes should consume this stream instead of H3's original
+ * Request body, which the limiting transform has already locked.
+ */
+export function getBoundedRequestBodyStream(event: H3Event): ReadableStream<Uint8Array> | undefined {
+	const boundedRequestBody = event._requestBody;
+	return boundedRequestBody
+		&& typeof boundedRequestBody === 'object'
+		&& 'getReader' in boundedRequestBody
+		&& typeof boundedRequestBody.getReader === 'function'
+		? boundedRequestBody as ReadableStream<Uint8Array>
+		: getRequestWebStream(event) as ReadableStream<Uint8Array> | undefined;
+}
+
+/**
  * Read and parse a JSON request while enforcing the limit as bytes arrive.
  * Checking a parsed value is insufficient because H3's readBody() buffers the
  * complete request first, which lets a chunked request exhaust Worker memory
@@ -52,17 +67,7 @@ export async function readJsonPayloadLimited(
 			payloadTooLarge(maxBytes, label);
 	}
 
-	// The global request-body-limit middleware places its bounded transform in
-	// _requestBody. H3's getRequestWebStream() prefers the original web Request
-	// body, which is already locked by that transform, so prefer the bounded
-	// stream explicitly when it is present.
-	const boundedRequestBody = event._requestBody;
-	const stream = boundedRequestBody
-		&& typeof boundedRequestBody === 'object'
-		&& 'getReader' in boundedRequestBody
-		&& typeof boundedRequestBody.getReader === 'function'
-		? boundedRequestBody as ReadableStream<Uint8Array>
-		: getRequestWebStream(event) as ReadableStream<Uint8Array> | undefined;
+	const stream = getBoundedRequestBodyStream(event);
 	if (!stream) {
 		const value = await readBody(event);
 		assertJsonPayloadSize(value, maxBytes, label);

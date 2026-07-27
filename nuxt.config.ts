@@ -1,7 +1,11 @@
+import type { MutationBodyMethod } from './shared/utils/requestBodyLimits';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
+import { MUTATION_BODY_METHODS } from './shared/utils/requestBodyLimits';
 
 const isIntegration = process.env.STREAM_KEEPR_INTEGRATION === 'true';
 const integrationWranglerPersistDir = process.env.STREAM_KEEPR_INTEGRATION_WRANGLER_PERSIST_DIR ?? '.wrangler/state/integration';
+const integrationMutationDrainHandler = fileURLToPath(new URL('./test/integration/fixtures/drain-request-body.ts', import.meta.url));
 const compatibilityDate = '2026-07-16';
 
 const databaseId = '26830437-975a-4378-a135-acfc01ea89ae';
@@ -72,6 +76,32 @@ export default defineNuxtConfig({
 
 	nitro: {
 		preset: 'cloudflare_module',
+		handlers: isIntegration
+			? [
+					{
+						route: '/api/_test/bounded-raw-mutation',
+						method: 'post',
+						handler: integrationMutationDrainHandler,
+					},
+					...MUTATION_BODY_METHODS.map(method => ({
+						route: '/api/_test/ordinary-mutation',
+						method: method.toLowerCase() as Lowercase<MutationBodyMethod>,
+						handler: integrationMutationDrainHandler,
+					})),
+				]
+			: [],
+		routeRules: isIntegration
+			? {
+					'/api/_test/bounded-raw-mutation': {
+						boundedRawMutations: {
+							POST: {
+								maxBytes: 2097152,
+								label: 'Raw transfer',
+							},
+						},
+					},
+				}
+			: {},
 		cloudflare: {
 			deployConfig: true,
 			nodeCompat: true,
