@@ -27,7 +27,7 @@ describe('feature Match Overlay Widget Definitions', () => {
 		expect(featureMatchOverlayWidgetDefinition('text').summary({ type: 'text', template: '{name}' })).toBe('{name}');
 		expect(featureMatchOverlayWidgetDefinition('clock').summary({ type: 'clock' })).toBe('Live clock');
 		expect(featureMatchOverlayWidgetDefinition('player-life').summary({ type: 'player-life', playerSide: 'player2' })).toBe('player2 life');
-		expect(featureMatchOverlayWidgetDefinition('image').summary({ type: 'image', url: '', fit: 'contain', opacity: 1, borderRadius: 0 })).toBe('Image');
+		expect(featureMatchOverlayWidgetDefinition('image').summary({ type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 })).toBe('Image');
 	});
 
 	it('default configs are fresh objects each call', () => {

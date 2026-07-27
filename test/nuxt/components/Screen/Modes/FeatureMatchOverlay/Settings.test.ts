@@ -19,6 +19,7 @@ const mockUpdateScreenConfig = vi.fn((patch: Record<string, unknown>) => {
 		...patch,
 	};
 });
+const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
 
 const mockFeatureMatchStore = {
 	loadFeatureMatchesByEventId: vi.fn().mockResolvedValue(undefined),
@@ -45,6 +46,7 @@ mockNuxtImport('useScreenConfigUpdate', () => () => ({
 	updateScreenConfig: mockUpdateScreenConfig,
 	resetScreenConfig: vi.fn(),
 }));
+mockNuxtImport('$fetch', () => mockApiFetch);
 
 const ScreenSettingsCardStub = defineComponent({
 	props: {
@@ -65,9 +67,11 @@ const PreviewOutputAsideStub = defineComponent({
 	props: {
 		config: { type: Object, required: true },
 		selectedTarget: { type: Object, required: true },
+		publicationBlocked: { type: Boolean, required: false },
+		publicationBlockReason: { type: String, required: false },
 	},
 	emits: ['selectTarget'],
-	template: '<button data-testid="preview-output-aside" :data-selected="JSON.stringify(selectedTarget)" :data-config="JSON.stringify(config)" @click="$emit(\'selectTarget\', { type: \'widget\', itemId: \'top-bar\', childId: \'top-name-record\' })" />',
+	template: '<button data-testid="preview-output-aside" :data-selected="JSON.stringify(selectedTarget)" :data-config="JSON.stringify(config)" :data-publication-blocked="String(publicationBlocked)" :title="publicationBlockReason" @click="$emit(\'selectTarget\', { type: \'widget\', itemId: \'top-bar\', childId: \'top-name-record\' })" />',
 });
 
 const UFormFieldStub = defineComponent({
@@ -138,6 +142,11 @@ describe('featureMatchOverlaySettings', () => {
 		vi.clearAllMocks();
 		mockConfig.value = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		mockScreenConfig.value = { width: 1920, height: 1080 };
+		mockApiFetch.mockReset();
+		mockApiFetch.mockResolvedValue({
+			outcome: 'available',
+			lifecycleState: 'active',
+		});
 	});
 
 	it('updates selected target from the preview component', async () => {
@@ -167,5 +176,21 @@ describe('featureMatchOverlaySettings', () => {
 		await nextTick();
 
 		expect(mockUpdateScreenConfig).toHaveBeenCalledWith({ width: 1280 });
+	});
+
+	it('visibly blocks output actions while an exact Graphic Asset Reference is missing', async () => {
+		mockConfig.value.layout.frame.backgroundImage = {
+			assetId: 'missing-asset',
+			revisionId: 'missing-revision',
+		} as never;
+		mockApiFetch.mockResolvedValue({ outcome: 'missing' });
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(wrapper.find('[data-testid="graphic-asset-publication-block"]').exists()).toBe(true);
+		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-publication-blocked')).toBe('true');
+		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('title'))
+			.toContain('missing');
 	});
 });

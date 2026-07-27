@@ -1,4 +1,5 @@
 import type { CardAnimationSpeed, DeckCardSize, DeckViewMode, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardLayout, StandingsColumnKey, StandingsViewMode, VerticalAlign } from './enums';
+import type { GraphicAssetReference } from './graphicsAsset';
 
 // ─── Screen-level config (applies to all modes) ───────────────────────
 export interface ScreenConfig {
@@ -313,7 +314,7 @@ export interface FeatureMatchOverlayFrameAnimationConfig {
 export interface FeatureMatchOverlayFrameConfig extends FeatureMatchOverlayBorderSides {
 	backgroundColor: string;
 	opacity: number;
-	backgroundImageUrl?: string;
+	backgroundImage?: GraphicAssetReference;
 	backgroundImageFit?: 'cover' | 'contain' | 'fill';
 	mediaBackground?: ScreenMediaBackgroundConfig;
 	gradient?: string;
@@ -353,7 +354,7 @@ export interface FeatureMatchTextWidgetConfig {
 
 export interface FeatureMatchImageWidgetConfig {
 	type: 'image';
-	url: string;
+	asset?: GraphicAssetReference;
 	fit: 'contain' | 'cover' | 'fill';
 	opacity: number;
 	borderRadius: number;
@@ -715,8 +716,8 @@ export const DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG: FeatureMatchOverlayModeConfig
 			{ id: 'player2-game-wins', type: 'widget', label: 'Player 2 Game Wins', visible: true, x: 24, y: 760, width: 340, height: 28, zIndex: 30, widget: { type: 'game-wins', playerSide: 'player2', displayMode: 'boxes', boxOrientation: 'horizontal', boxWidth: 22, boxHeight: 22, boxGap: 6, boxBorderWidth: 2 }, surfaceStyle: { backgroundColor: '#22c55e', backgroundOpacity: 0, borderVisible: true, borderColor: '#ffffff', borderWidth: 2, borderRadius: 999 } },
 			{ id: 'branding', type: 'widget-group', label: 'Event Branding', visible: true, x: 60, y: 360, width: 280, height: 280, zIndex: 30, surfaceStyle: { backgroundOpacity: 0 }, defaultChildSurfaceStyle: { textColor: '#ffffff', fontSize: 24, fontWeight: 700, backgroundOpacity: 0, textAlign: 'center' }, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [
 				{ id: 'branding-text', label: 'Event Name', visible: true, widget: { type: 'text', template: '{eventName}' }, layout: { mode: 'canvas', x: 0, y: 0, width: 280, height: 80 } },
-				{ id: 'branding-image-1', label: 'Image 1', visible: true, widget: { type: 'image', url: '', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 0, y: 96, width: 132, height: 132 } },
-				{ id: 'branding-image-2', label: 'Image 2', visible: true, widget: { type: 'image', url: '', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 148, y: 96, width: 132, height: 132 } },
+				{ id: 'branding-image-1', label: 'Image 1', visible: true, widget: { type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 0, y: 96, width: 132, height: 132 } },
+				{ id: 'branding-image-2', label: 'Image 2', visible: true, widget: { type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 148, y: 96, width: 132, height: 132 } },
 			] },
 		],
 	},

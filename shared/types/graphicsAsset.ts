@@ -19,6 +19,30 @@ export type GraphicsIngestionOperationId = string & {
 	readonly [graphicsIngestionOperationIdBrand]: 'GraphicsIngestionOperationId';
 };
 
+export interface GraphicAssetReference {
+	assetId: GraphicAssetId;
+	revisionId: GraphicAssetRevisionId;
+}
+
+export interface GraphicAssetUsage {
+	id: string;
+	reference: GraphicAssetReference;
+	owner: {
+		kind: string;
+		id: string;
+		slot: string;
+		eventId?: number;
+	};
+}
+
+export type GraphicAssetReferenceStatus
+	= | {
+		outcome: 'available';
+		lifecycleState: 'active' | 'retired' | 'trashed';
+	}
+	| { outcome: 'missing' }
+	| { outcome: 'unavailable'; retryable: true };
+
 export type GraphicsDuplicateContentPolicy = 'reuse' | 'create-separate';
 
 export type GraphicsIngestionStage

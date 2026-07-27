@@ -280,6 +280,62 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
+	it('accepts exact Graphic Asset References for frame and image fields and rejects raw image URLs', () => {
+		const referenced = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		referenced.layout.frame.backgroundImage = {
+			assetId: 'asset-frame',
+			revisionId: 'revision-frame-3',
+		};
+		referenced.layout.items.push({
+			id: 'sponsor-logo',
+			type: 'widget',
+			label: 'Sponsor logo',
+			visible: true,
+			x: 10,
+			y: 10,
+			width: 200,
+			height: 100,
+			widget: {
+				type: 'image',
+				asset: {
+					assetId: 'asset-logo',
+					revisionId: 'revision-logo-7',
+				},
+				fit: 'contain',
+				opacity: 1,
+				borderRadius: 0,
+			},
+		});
+
+		expect(featureMatchOverlayModeConfigSchema.safeParse(referenced).success).toBe(true);
+		expect(featureMatchOverlayModeConfigSchema.safeParse({
+			...referenced,
+			layout: {
+				...referenced.layout,
+				frame: {
+					...referenced.layout.frame,
+					backgroundImageUrl: 'https://example.com/frame.png',
+				},
+			},
+		}).success).toBe(false);
+		expect(featureMatchOverlayModeConfigSchema.safeParse({
+			...referenced,
+			layout: {
+				...referenced.layout,
+				items: [{
+					...referenced.layout.items.at(-1),
+					widget: {
+						type: 'image',
+						url: 'https://example.com/logo.png',
+						fit: 'contain',
+						opacity: 1,
+						borderRadius: 0,
+					},
+				}],
+			},
+		}).success).toBe(false);
+	});
+
 	it('accepts frame video background playback settings', () => {
 		const result = featureMatchOverlayModeConfigSchema.safeParse({
 			...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,

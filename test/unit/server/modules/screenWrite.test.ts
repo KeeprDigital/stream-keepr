@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 
 const mockValidateScreenModeConfigsReferences = vi.fn();
@@ -62,6 +63,27 @@ describe('screenWriteModule', () => {
 	});
 
 	describe('createScreen', () => {
+		it('rejects Graphic Asset References through a generic Screen write that cannot index them', async () => {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.frame.backgroundImage = {
+				assetId: 'asset-1',
+				revisionId: 'revision-1',
+			};
+
+			await expect(screenWriteModule().createScreen({
+				eventId: 1,
+				input: {
+					name: 'Overlay',
+					slug: 'overlay',
+					modeConfigs: { 'feature-match-overlay': config },
+				} as never,
+			})).rejects.toMatchObject({
+				statusCode: 400,
+				message: expect.stringContaining('Feature Match Overlay configuration endpoint'),
+			});
+			expect(mockScreenService.create).not.toHaveBeenCalled();
+		});
+
 		it('validates mode config references before checking the slug', async () => {
 			const input = { slug: 'main', modeConfigs: { card: {} } } as never;
 
@@ -104,6 +126,51 @@ describe('screenWriteModule', () => {
 	});
 
 	describe('updateScreen', () => {
+		it('rejects removing indexed Graphic Asset References through the generic Screen endpoint', async () => {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.frame.backgroundImage = {
+				assetId: 'asset-1',
+				revisionId: 'revision-1',
+			};
+			mockScreenService.findById.mockResolvedValue(createMockScreen({
+				modeConfigs: { 'feature-match-overlay': config },
+			}));
+
+			await expect(screenWriteModule().updateScreen({
+				eventId: 1,
+				screenId: 7,
+				input: { stateVersion: 0, modeConfigs: null } as never,
+			})).rejects.toMatchObject({
+				statusCode: 400,
+				message: expect.stringContaining('Feature Match Overlay configuration endpoint'),
+			});
+
+			expect(mockScreenService.update).not.toHaveBeenCalled();
+		});
+
+		it('allows generic Screen metadata edits that submit unchanged Graphic Asset References', async () => {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.frame.backgroundImage = {
+				assetId: 'asset-1',
+				revisionId: 'revision-1',
+			};
+			mockScreenService.findById.mockResolvedValue(createMockScreen({
+				modeConfigs: { 'feature-match-overlay': config },
+			}));
+
+			await screenWriteModule().updateScreen({
+				eventId: 1,
+				screenId: 7,
+				input: {
+					stateVersion: 0,
+					name: 'Renamed overlay',
+					modeConfigs: { 'feature-match-overlay': config },
+				} as never,
+			});
+
+			expect(mockScreenService.update).toHaveBeenCalled();
+		});
+
 		it('returns 404 when the screen does not exist', async () => {
 			mockScreenService.findById.mockResolvedValue(undefined);
 
@@ -236,6 +303,60 @@ describe('screenWriteModule', () => {
 	});
 
 	describe('updateModeConfig', () => {
+		it('checks newly selected Graphic Asset Revisions through the library before writing', async () => {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.frame.backgroundImage = {
+				assetId: 'asset-1',
+				revisionId: 'revision-1',
+			};
+			const inspectGraphicAssetRevision = vi.fn().mockResolvedValue({
+				outcome: 'available',
+				lifecycleState: 'active',
+			});
+
+			await screenWriteModule({
+				graphicsAssets: { inspectGraphicAssetRevision },
+			}).updateModeConfig({
+				eventId: 1,
+				screenId: 7,
+				mode: 'feature-match-overlay',
+				config: { layout: config.layout },
+			});
+
+			expect(inspectGraphicAssetRevision).toHaveBeenCalledWith({
+				assetId: 'asset-1',
+				revisionId: 'revision-1',
+			});
+			expect(mockScreenService.updateModeConfig).toHaveBeenCalled();
+		});
+
+		it('rejects a newly selected unavailable Graphic Asset Revision before writing', async () => {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.frame.backgroundImage = {
+				assetId: 'asset-1',
+				revisionId: 'revision-1',
+			};
+
+			await expect(screenWriteModule({
+				graphicsAssets: {
+					inspectGraphicAssetRevision: vi.fn().mockResolvedValue({
+						outcome: 'unavailable',
+						retryable: true,
+					}),
+				},
+			}).updateModeConfig({
+				eventId: 1,
+				screenId: 7,
+				mode: 'feature-match-overlay',
+				config: { layout: config.layout },
+			})).rejects.toMatchObject({
+				statusCode: 409,
+				message: expect.stringContaining('layout.frame.backgroundImage'),
+			});
+
+			expect(mockScreenService.updateModeConfig).not.toHaveBeenCalled();
+		});
+
 		it('validates mode config references before writing', async () => {
 			await screenWriteModule().updateModeConfig({
 				eventId: 1,

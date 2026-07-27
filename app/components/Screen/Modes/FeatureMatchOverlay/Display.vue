@@ -2,6 +2,7 @@
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayWidgetRenderDescriptor } from '~/modules/feature-match-overlay/renderModel';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
+import { graphicAssetRevisionContentPath } from '~~/shared/utils/graphicsAssetReferences';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 import { resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
 import { featureMatchOverlaySelectionKey, isFeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
@@ -195,8 +196,8 @@ onBeforeUnmount(() => {
 				:output="resolvedOutput"
 			/>
 			<image
-				v-if="resolvedOutput !== 'key' && config.layout.frame.backgroundImageUrl"
-				:xlink:href="config.layout.frame.backgroundImageUrl"
+				v-if="resolvedOutput !== 'key' && config.layout.frame.backgroundImage"
+				:xlink:href="graphicAssetRevisionContentPath(config.layout.frame.backgroundImage)"
 				x="0"
 				y="0"
 				:width="canvasWidth"

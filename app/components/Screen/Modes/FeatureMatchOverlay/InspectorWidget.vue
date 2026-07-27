@@ -17,6 +17,7 @@ const props = defineProps<{
 	updateConfig: FeatureMatchOverlayConfigUpdater;
 	screenWidth: number;
 	screenHeight: number;
+	eventId: number;
 	item: FeatureMatchWidgetItemConfig;
 }>();
 
@@ -109,6 +110,7 @@ function replaceWidgetType(type: FeatureMatchWidgetConfig['type']) {
 				<FeatureMatchOverlayWidgetEditor
 					:widget="item.widget"
 					:widget-surface-style="item.surfaceStyle"
+					:event-id="eventId"
 					@update="widget => editor.updateItem(item.id, { widget: { ...item.widget, ...widget } as FeatureMatchWidgetConfig })"
 				/>
 			</div>

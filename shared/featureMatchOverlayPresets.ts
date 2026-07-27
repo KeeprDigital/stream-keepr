@@ -194,7 +194,7 @@ neonFeatureMatch.layout.items = [
 		arrangement: { mode: 'canvas', padding: 0 },
 		overflow: 'clip',
 		children: [
-			{ id: 'left-branding-image', label: 'Left Branding Image', visible: false, widget: { type: 'image', url: '', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 40, y: 28, width: 216, height: 112 } },
+			{ id: 'left-branding-image', label: 'Left Branding Image', visible: false, widget: { type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 40, y: 28, width: 216, height: 112 } },
 			{ id: 'left-event-name', label: 'Event Name', visible: true, widget: { type: 'text', template: '{eventName}' }, layout: { mode: 'canvas', x: 24, y: 152, width: 248, height: 56 }, surfaceStyle: { fontSize: 28, fontWeight: 900, textAlign: 'center', lineHeight: 1.05, overflow: 'shrink' } },
 		],
 	},
@@ -214,7 +214,7 @@ neonFeatureMatch.layout.items = [
 		arrangement: { mode: 'canvas', padding: 0 },
 		overflow: 'clip',
 		children: [
-			{ id: 'right-branding-image', label: 'Right Branding Image', visible: false, widget: { type: 'image', url: '', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 42, y: 52, width: 212, height: 158 } },
+			{ id: 'right-branding-image', label: 'Right Branding Image', visible: false, widget: { type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 42, y: 52, width: 212, height: 158 } },
 			{ id: 'right-event-name', label: 'Event Name', visible: true, widget: { type: 'text', template: '{eventName}' }, layout: { mode: 'canvas', x: 24, y: 232, width: 248, height: 56 }, surfaceStyle: { fontSize: 28, fontWeight: 900, textAlign: 'center', lineHeight: 1.05, overflow: 'shrink' } },
 		],
 	},

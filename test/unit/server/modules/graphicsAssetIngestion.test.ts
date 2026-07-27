@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
 	createInMemoryGraphicsAssetCatalogue,
+	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
 import {
 	createInMemoryCanonicalGraphicsObjectStore,
@@ -11,6 +12,7 @@ import {
 import {
 	consumeBoundedByteStream,
 	createBoundedByteStream,
+	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
@@ -35,6 +37,67 @@ function createLibrary(
 }
 
 describe('pNG ingestion through the Graphics Asset Library public module', () => {
+	it('resolves only the pinned revision and distinguishes missing from unavailable content', async () => {
+		const { library, canonical } = createLibrary();
+		const operation = await library.initiatePngIngestion({
+			idempotencyKey: 'pinned-scoreboard-logo',
+			initiatedBy: 'graphics-author-1',
+			name: 'Pinned scoreboard logo',
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+		const completed = await library.uploadPng({
+			operationId: operation.id,
+			initiatedBy: 'graphics-author-1',
+			bytes: createBoundedByteStream(transparentPixelPng, {
+				byteLength: transparentPixelPng.byteLength,
+				maximumByteLength: 16 * 1024 * 1024,
+			}),
+		});
+		const reference = {
+			assetId: completed.result!.assetId,
+			revisionId: completed.result!.revisionId,
+		};
+
+		const available = await library.resolveGraphicAssetRevision(reference);
+		expect(available).toMatchObject({
+			outcome: 'available',
+			byteLength: transparentPixelPng.byteLength,
+			contentType: 'image/png',
+		});
+		if (available.outcome !== 'available')
+			throw new Error('Expected the pinned revision to resolve');
+		await expect(consumeBoundedByteStream({
+			body: available.body,
+			byteLength: available.byteLength,
+			maximumByteLength: available.byteLength,
+		})).resolves.toEqual(transparentPixelPng);
+
+		await expect(library.resolveGraphicAssetRevision({
+			assetId: reference.assetId,
+			revisionId: graphicAssetRevisionId('missing-revision'),
+		})).resolves.toEqual({ outcome: 'missing' });
+		await expect(library.inspectGraphicAssetRevision(reference)).resolves.toEqual({
+			outcome: 'available',
+			lifecycleState: 'active',
+		});
+		await expect(library.inspectGraphicAssetRevision({
+			assetId: reference.assetId,
+			revisionId: graphicAssetRevisionId('missing-revision'),
+		})).resolves.toEqual({ outcome: 'missing' });
+
+		canonical.markUnavailable(
+			graphicsObjectIdentity(`sha256/${completed.report!.facts.sha256}`),
+		);
+		await expect(library.resolveGraphicAssetRevision(reference)).resolves.toEqual({
+			outcome: 'unavailable',
+			retryable: true,
+		});
+		await expect(library.inspectGraphicAssetRevision(reference)).resolves.toEqual({
+			outcome: 'unavailable',
+			retryable: true,
+		});
+	});
+
 	it('durably publishes one validated PNG and discovers it with its exact operation result', async () => {
 		const { library } = createLibrary();
 		const initiation = {
@@ -124,6 +187,71 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 		});
 		expect(preview.contentType).toBe('image/png');
 		expect(Array.from(previewBytes.slice(0, 8))).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+	});
+
+	it('streams staged source bytes into canonical storage without materializing the complete source', async () => {
+		const stagingDelegate = createInMemoryStagingGraphicsObjectStore();
+		const canonicalDelegate = createInMemoryCanonicalGraphicsObjectStore();
+		let stagingReadCount = 0;
+		let canonicalSourceFullyRead = false;
+		let canonicalWriteStartedBeforeSourceFinished = false;
+		const staging = {
+			...stagingDelegate,
+			async read(...input: Parameters<typeof stagingDelegate.read>) {
+				const result = await stagingDelegate.read(...input);
+				stagingReadCount++;
+				if (result.outcome !== 'available' || stagingReadCount !== 3)
+					return result;
+				let offset = 0;
+				return {
+					...result,
+					body: new ReadableStream<Uint8Array>({
+						pull(controller) {
+							if (offset >= transparentPixelPng.byteLength) {
+								canonicalSourceFullyRead = true;
+								controller.close();
+								return;
+							}
+							const end = Math.min(offset + 7, transparentPixelPng.byteLength);
+							controller.enqueue(transparentPixelPng.slice(offset, end));
+							offset = end;
+						},
+					}),
+				};
+			},
+		};
+		const canonical = {
+			...canonicalDelegate,
+			async createImmutable(input: Parameters<typeof canonicalDelegate.createImmutable>[0]) {
+				if (
+					input.bytes.byteLength === transparentPixelPng.byteLength
+					&& input.metadata?.custom?.sha256 === '431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460'
+				) {
+					canonicalWriteStartedBeforeSourceFinished = !canonicalSourceFullyRead;
+				}
+				return await canonicalDelegate.createImmutable(input);
+			},
+		};
+		const { library } = createLibrary(staging, canonical);
+		const operation = await library.initiatePngIngestion({
+			idempotencyKey: 'stream-canonical-source',
+			initiatedBy: 'graphics-author-1',
+			name: 'Streaming source',
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+
+		const completed = await library.uploadPng({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			bytes: createBoundedByteStream(transparentPixelPng, {
+				byteLength: transparentPixelPng.byteLength,
+				maximumByteLength: 16 * 1024 * 1024,
+			}),
+		});
+
+		expect(completed.stage).toBe('completed');
+		expect(canonicalWriteStartedBeforeSourceFinished).toBe(true);
+		expect(canonicalSourceFullyRead).toBe(true);
 	});
 
 	it('records permanent validation failure without publishing catalogue state', async () => {

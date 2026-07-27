@@ -1,13 +1,24 @@
+import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import type { CreateScreenInput, UpdateScreenInput } from '~~/server/schemas/api/screen';
 import type { ScreenResponse } from '~~/shared/api';
 import type { ScreenMode } from '~~/shared/types/enums';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
+import {
+	graphicAssetId,
+	graphicAssetRevisionId,
+} from '~~/server/modules/graphics-asset-library';
 import { cardService } from '~~/server/services/card';
 import { screenService } from '~~/server/services/screen';
 import {
 	validateScreenModeConfigReferences,
 	validateScreenModeConfigsReferences,
 } from '~~/server/utils/routeGuards';
+import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
+import {
+	featureMatchOverlayGraphicAssetReferences,
+	sameGraphicAssetReference,
+	sameScreenGraphicAssetReferences,
+} from '~~/shared/utils/graphicsAssetReferences';
 
 interface CreateScreenParams {
 	eventId: number;
@@ -45,12 +56,51 @@ interface UpdateModeConfigParams {
 	originConnectionId?: string;
 }
 
-export function screenWriteModule() {
+function rejectUnindexedFeatureMatchOverlayReferencesOnCreate(
+	modeConfigs: CreateScreenInput['modeConfigs'] | UpdateScreenInput['modeConfigs'],
+) {
+	const config = modeConfigs?.['feature-match-overlay'];
+	if (config && featureMatchOverlayGraphicAssetReferences(config).length > 0) {
+		throw createError({
+			statusCode: 400,
+			statusMessage: 'Bad Request',
+			message: 'Graphic Asset References must be changed through the Feature Match Overlay configuration endpoint',
+		});
+	}
+}
+
+function rejectChangedFeatureMatchOverlayReferencesOnGenericUpdate(
+	currentModeConfigs: ScreenResponse['modeConfigs'],
+	nextModeConfigs: UpdateScreenInput['modeConfigs'],
+) {
+	if (nextModeConfigs === undefined)
+		return;
+	const currentConfig = currentModeConfigs?.['feature-match-overlay'];
+	const nextConfig = nextModeConfigs?.['feature-match-overlay'];
+	const currentReferences = currentConfig
+		? featureMatchOverlayGraphicAssetReferences(currentConfig)
+		: [];
+	const nextReferences = nextConfig
+		? featureMatchOverlayGraphicAssetReferences(nextConfig)
+		: [];
+	if (!sameScreenGraphicAssetReferences(currentReferences, nextReferences)) {
+		throw createError({
+			statusCode: 400,
+			statusMessage: 'Bad Request',
+			message: 'Graphic Asset References must be changed through the Feature Match Overlay configuration endpoint',
+		});
+	}
+}
+
+export function screenWriteModule(dependencies: {
+	graphicsAssets?: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevision'>;
+} = {}) {
 	const publication = eventDataPublicationModule();
 	const screens = screenService();
 
 	async function createScreen({ eventId, input, originConnectionId }: CreateScreenParams): Promise<ScreenResponse> {
 		await validateScreenModeConfigsReferences(eventId, input.modeConfigs);
+		rejectUnindexedFeatureMatchOverlayReferencesOnCreate(input.modeConfigs);
 
 		const slugExists = await screens.slugExists(eventId, input.slug);
 		if (slugExists) {
@@ -76,6 +126,10 @@ export function screenWriteModule() {
 			throw createError({ statusCode: 404, message: 'Screen not found' });
 
 		await validateScreenModeConfigsReferences(eventId, data.modeConfigs);
+		rejectChangedFeatureMatchOverlayReferencesOnGenericUpdate(
+			existingScreen.modeConfigs,
+			data.modeConfigs,
+		);
 
 		if (data.slug) {
 			const slugExists = await screens.slugExists(eventId, data.slug, screenId);
@@ -142,6 +196,47 @@ export function screenWriteModule() {
 
 	async function updateModeConfig({ eventId, screenId, mode, config, stateVersion, originConnectionId }: UpdateModeConfigParams): Promise<ScreenResponse> {
 		await validateScreenModeConfigReferences(eventId, mode, config);
+		if (mode === 'feature-match-overlay') {
+			const existing = await screens.findById(screenId, eventId);
+			if (!existing)
+				throw createError({ statusCode: 404, message: 'Screen not found' });
+			const currentConfig = existing.modeConfigs?.[mode];
+			const nextConfig = mergeScreenModeConfig(
+				existing.modeConfigs ?? {},
+				mode,
+				config,
+			)[mode]!;
+			const currentReferences = new Map(
+				currentConfig
+					? featureMatchOverlayGraphicAssetReferences(currentConfig)
+							.map(item => [item.ownerSlot, item.reference] as const)
+					: [],
+			);
+			for (const item of featureMatchOverlayGraphicAssetReferences(nextConfig)) {
+				const current = currentReferences.get(item.ownerSlot);
+				if (sameGraphicAssetReference(current, item.reference)) {
+					continue;
+				}
+				if (!dependencies.graphicsAssets) {
+					throw createError({
+						statusCode: 503,
+						statusMessage: 'Service Unavailable',
+						message: 'Graphics Asset Library is unavailable',
+					});
+				}
+				const status = await dependencies.graphicsAssets.inspectGraphicAssetRevision({
+					assetId: graphicAssetId(item.reference.assetId),
+					revisionId: graphicAssetRevisionId(item.reference.revisionId),
+				});
+				if (status.outcome !== 'available' || status.lifecycleState !== 'active') {
+					throw createError({
+						statusCode: 409,
+						statusMessage: 'Conflict',
+						message: `Graphic Asset Reference at ${item.ownerSlot} is not selectable`,
+					});
+				}
+			}
+		}
 
 		const updatedScreen = await screens.updateModeConfig(screenId, eventId, mode, config, stateVersion);
 

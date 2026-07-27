@@ -4,6 +4,10 @@ import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import { and, eq, ne } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { screens } from '~~/server/db/schema';
+import {
+	deleteScreenWithGraphicAssetReferences,
+	updateFeatureMatchOverlayWithGraphicAssetReferences,
+} from '~~/server/modules/screen-graphic-asset-references';
 import { StateConflictError } from '~~/server/utils/errors';
 import { mergeScreenConfig, mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 
@@ -98,17 +102,7 @@ export function screenService() {
 	};
 
 	const remove = async (id: number, eventId: number): Promise<boolean> => {
-		const result = await db
-			.delete(screens)
-			.where(
-				and(
-					eq(screens.id, id),
-					eq(screens.eventId, eventId),
-				),
-			)
-			.returning();
-
-		return result.length > 0;
+		return await deleteScreenWithGraphicAssetReferences(id, eventId);
 	};
 
 	const updateModeConfig = async (
@@ -118,6 +112,15 @@ export function screenService() {
 		partialConfig: Record<string, unknown>,
 		stateVersion?: number,
 	): Promise<DbScreen | undefined> => {
+		if (mode === 'feature-match-overlay') {
+			return await updateFeatureMatchOverlayWithGraphicAssetReferences({
+				id,
+				eventId,
+				partialConfig,
+				stateVersion,
+			});
+		}
+
 		const screen = await findById(id, eventId);
 		if (!screen)
 			return undefined;

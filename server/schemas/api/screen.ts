@@ -3,6 +3,10 @@ import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { SCREEN_MODE_VALUES, screens } from '~~/server/db/schema';
 import {
+	graphicAssetId,
+	graphicAssetRevisionId,
+} from '~~/server/modules/graphics-asset-library';
+import {
 	CARD_ANIMATION_SPEED_VALUES,
 	DECK_CARD_SIZE_VALUES,
 	DECK_VIEW_MODE_VALUES,
@@ -124,7 +128,10 @@ const safeMediaUrlSchema = z.string().max(2000).refine((value) => {
 		return false;
 	}
 }, 'Media URL must be an HTTP(S) URL or a root-relative path');
-const nonEmptySafeMediaUrlSchema = safeMediaUrlSchema.refine(value => value !== '', 'Media URL is required');
+const graphicAssetReferenceSchema = z.object({
+	assetId: z.string().min(1).max(100).transform(graphicAssetId),
+	revisionId: z.string().min(1).max(100).transform(graphicAssetRevisionId),
+}).strict();
 
 const screenMediaBackgroundConfigSchema = z.object({
 	enabled: z.boolean(),
@@ -366,7 +373,7 @@ const featureMatchOverlayFrameAnimationConfigSchema = z.object({
 const featureMatchOverlayFrameConfigSchema = featureMatchOverlayBorderSidesSchema.extend({
 	backgroundColor: cssColorSchema,
 	opacity: opacitySchema,
-	backgroundImageUrl: nonEmptySafeMediaUrlSchema.optional(),
+	backgroundImage: graphicAssetReferenceSchema.optional(),
 	backgroundImageFit: z.enum(['cover', 'contain', 'fill']).optional(),
 	mediaBackground: screenMediaBackgroundConfigSchema.optional(),
 	gradient: z.string().max(1000).optional(),
@@ -393,7 +400,7 @@ const featureMatchTextWidgetConfigSchema = z.object({
 
 const featureMatchImageWidgetConfigSchema = z.object({
 	type: z.literal('image'),
-	url: safeMediaUrlSchema,
+	asset: graphicAssetReferenceSchema.optional(),
 	fit: z.enum(['contain', 'cover', 'fill']),
 	opacity: opacitySchema,
 	borderRadius: nonNegativePixelSchema,

@@ -1,7 +1,9 @@
 import type {
 	GraphicAsset,
 	GraphicAssetId,
+	GraphicAssetReferenceStatus,
 	GraphicAssetRevisionId,
+	GraphicAssetUsage,
 	GraphicAssetValidationReport,
 	GraphicsAssetLibraryComponentHealth,
 	GraphicsAssetLibraryHealth,
@@ -18,16 +20,15 @@ import type {
 } from './object-store';
 import { MAX_PNG_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import {
-	consumeBoundedByteStream,
 	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from './object-store';
 import {
-	generatePngThumbnail,
 	PngValidationError,
+	processPngStream,
 	rejectedPngReport,
 	sha256Hex,
-	validatePng,
+	sha256HexStream,
 } from './png';
 
 export { createInMemoryGraphicsAssetCatalogue } from './in-memory-catalogue';
@@ -76,6 +77,16 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	}) => Promise<GraphicsIngestionOperation>;
 	publishPng: (input: PublishPngCatalogueInput) => Promise<GraphicsIngestionOperation>;
 	listGraphicAssets: (search: string) => Promise<GraphicAsset[]>;
+	findRevisionContent: (input: {
+		assetId: GraphicAssetId;
+		revisionId: GraphicAssetRevisionId;
+	}) => Promise<{
+		digest: string;
+		byteLength: number;
+		canonicalMime: 'image/png';
+		lifecycleState: 'active' | 'retired' | 'trashed';
+	} | undefined>;
+	listGraphicAssetUsage: (assetId: GraphicAssetId) => Promise<GraphicAssetUsage[]>;
 	findThumbnailDigest: (assetId: GraphicAssetId) => Promise<string | undefined>;
 }
 
@@ -107,6 +118,24 @@ export interface GraphicsAssetLibrary {
 		initiatedBy: string;
 	}) => Promise<GraphicsIngestionOperation>;
 	listGraphicAssets: (input: { search?: string }) => Promise<GraphicAsset[]>;
+	listGraphicAssetUsage: (input: { assetId: GraphicAssetId }) => Promise<GraphicAssetUsage[]>;
+	inspectGraphicAssetRevision: (input: {
+		assetId: GraphicAssetId;
+		revisionId: GraphicAssetRevisionId;
+	}) => Promise<GraphicAssetReferenceStatus>;
+	resolveGraphicAssetRevision: (input: {
+		assetId: GraphicAssetId;
+		revisionId: GraphicAssetRevisionId;
+	}) => Promise<
+		| {
+			outcome: 'available';
+			body: ReadableStream<Uint8Array>;
+			byteLength: number;
+			contentType: 'image/png';
+		}
+		| { outcome: 'missing' }
+		| { outcome: 'unavailable'; retryable: true }
+	>;
 	resolveGraphicAssetThumbnail: (input: {
 		assetId: GraphicAssetId;
 	}) => Promise<
@@ -285,18 +314,15 @@ export function createGraphicsAssetLibrary(
 		}
 	}
 
-	async function storeCanonicalBytes(
+	async function storeCanonicalStream(
 		store: GraphicsCanonicalObjectStore,
 		digest: string,
-		bytes: Uint8Array,
+		bytes: BoundedByteStream,
 	) {
 		const identity = graphicsObjectIdentity(`sha256/${digest}`);
 		const result = await store.createImmutable({
 			identity,
-			bytes: createBoundedByteStream(bytes, {
-				byteLength: bytes.byteLength,
-				maximumByteLength: bytes.byteLength,
-			}),
+			bytes,
 			metadata: {
 				contentType: 'image/png',
 				custom: { sha256: digest },
@@ -331,12 +357,12 @@ export function createGraphicsAssetLibrary(
 				},
 			};
 		}
-		const storedBytes = await consumeBoundedByteStream({
+		const storedDigest = await sha256HexStream({
 			body: stored.body,
 			byteLength: stored.object.byteLength,
 			maximumByteLength: bytes.byteLength,
 		});
-		if (await sha256Hex(storedBytes) !== digest) {
+		if (storedDigest !== digest) {
 			return {
 				outcome: 'unavailable' as const,
 				reason: {
@@ -346,6 +372,21 @@ export function createGraphicsAssetLibrary(
 			};
 		}
 		return result;
+	}
+
+	async function storeCanonicalBytes(
+		store: GraphicsCanonicalObjectStore,
+		digest: string,
+		bytes: Uint8Array,
+	) {
+		return await storeCanonicalStream(
+			store,
+			digest,
+			createBoundedByteStream(bytes, {
+				byteLength: bytes.byteLength,
+				maximumByteLength: bytes.byteLength,
+			}),
+		);
 	}
 
 	async function continuePngIngestion(
@@ -400,12 +441,11 @@ export function createGraphicsAssetLibrary(
 					message: 'Staged source bytes are temporarily unavailable.',
 				}, operation.report);
 			}
-			const sourceBytes = await consumeBoundedByteStream({
+			const sourceDigest = await sha256HexStream({
 				body: stagedRead.body,
 				byteLength: stagedRead.object.byteLength,
 				maximumByteLength: MAX_PNG_INGESTION_BYTES,
 			});
-			const sourceDigest = await sha256Hex(sourceBytes);
 			const hashingTerminal = await terminalOperationAtCheckpoint();
 			if (hashingTerminal)
 				return hashingTerminal;
@@ -414,9 +454,21 @@ export function createGraphicsAssetLibrary(
 				changedOperation(operation, { stage: 'validating' }),
 				operation.updatedAt,
 			);
-			let validated: Awaited<ReturnType<typeof validatePng>>;
+			const validationRead = await staging.read(stagingIdentity);
+			if (validationRead.outcome !== 'available') {
+				return await failOperation(catalogue, operation, {
+					code: 'staging-unavailable',
+					retryable: true,
+					message: 'Staged source bytes are temporarily unavailable.',
+				}, operation.report);
+			}
+			let processed: Awaited<ReturnType<typeof processPngStream>>;
 			try {
-				validated = await validatePng(sourceBytes, sourceDigest);
+				processed = await processPngStream({
+					body: validationRead.body,
+					byteLength: validationRead.object.byteLength,
+					maximumByteLength: MAX_PNG_INGESTION_BYTES,
+				}, sourceDigest);
 			}
 			catch (error) {
 				if (!(error instanceof PngValidationError))
@@ -435,7 +487,7 @@ export function createGraphicsAssetLibrary(
 			operation = await catalogue.updateIngestionOperation(
 				changedOperation(operation, {
 					stage: 'generating-derivatives',
-					report: validated.report,
+					report: processed.report,
 				}),
 				operation.updatedAt,
 			);
@@ -443,10 +495,22 @@ export function createGraphicsAssetLibrary(
 			if (derivativeStartTerminal)
 				return derivativeStartTerminal;
 
-			const thumbnail = generatePngThumbnail(validated);
+			const thumbnail = processed.thumbnail;
 			const thumbnailDigest = await sha256Hex(thumbnail);
+			const canonicalSourceRead = await staging.read(stagingIdentity);
+			if (canonicalSourceRead.outcome !== 'available') {
+				return await failOperation(catalogue, operation, {
+					code: 'staging-unavailable',
+					retryable: true,
+					message: 'Staged source bytes are temporarily unavailable.',
+				}, processed.report);
+			}
 			const [sourceWrite, thumbnailWrite] = await Promise.all([
-				storeCanonicalBytes(canonical, validated.report.facts.sha256, sourceBytes),
+				storeCanonicalStream(canonical, processed.report.facts.sha256, {
+					body: canonicalSourceRead.body,
+					byteLength: canonicalSourceRead.object.byteLength,
+					maximumByteLength: MAX_PNG_INGESTION_BYTES,
+				}),
 				storeCanonicalBytes(canonical, thumbnailDigest, thumbnail),
 			]);
 			if (sourceWrite.outcome === 'unavailable' || thumbnailWrite.outcome === 'unavailable') {
@@ -454,7 +518,7 @@ export function createGraphicsAssetLibrary(
 					code: 'canonical-store-unavailable',
 					retryable: true,
 					message: 'Canonical source or thumbnail storage is temporarily unavailable.',
-				}, validated.report);
+				}, processed.report);
 			}
 			const derivativeTerminal = await terminalOperationAtCheckpoint();
 			if (derivativeTerminal)
@@ -469,7 +533,7 @@ export function createGraphicsAssetLibrary(
 				return publicationTerminal;
 
 			const reusable = operation.duplicateContentPolicy === 'reuse'
-				? await catalogue.findReusablePng(validated.report.facts.sha256)
+				? await catalogue.findReusablePng(processed.report.facts.sha256)
 				: undefined;
 			let completed: GraphicsIngestionOperation;
 			if (reusable) {
@@ -483,11 +547,11 @@ export function createGraphicsAssetLibrary(
 				try {
 					completed = await catalogue.publishPng({
 						operation,
-						report: validated.report,
+						report: processed.report,
 						assetId: graphicAssetId(generateIdentity()),
 						revisionId: graphicAssetRevisionId(generateIdentity()),
 						derivativeId: graphicsDerivativeId(generateIdentity()),
-						sourceDigest: validated.report.facts.sha256,
+						sourceDigest: processed.report.facts.sha256,
 						thumbnailDigest,
 						thumbnailByteLength: thumbnail.byteLength,
 						publishedAt: timestamp(),
@@ -497,7 +561,7 @@ export function createGraphicsAssetLibrary(
 					if (operation.duplicateContentPolicy === 'create-separate')
 						throw publicationError;
 					const concurrentlyPublished = await catalogue.findReusablePng(
-						validated.report.facts.sha256,
+						processed.report.facts.sha256,
 					);
 					if (!concurrentlyPublished)
 						throw publicationError;
@@ -756,6 +820,59 @@ export function createGraphicsAssetLibrary(
 				'Graphic Asset discovery is temporarily unavailable',
 			);
 		},
+		async listGraphicAssetUsage(input) {
+			return await catalogueRequest(
+				() => requireCatalogue().listGraphicAssetUsage(input.assetId),
+				'Graphic Asset usage is temporarily unavailable',
+			);
+		},
+		async inspectGraphicAssetRevision(input) {
+			const content = await catalogueRequest(
+				() => requireCatalogue().findRevisionContent(input),
+				'Graphic Asset Revision lookup is temporarily unavailable',
+			);
+			if (!content)
+				return { outcome: 'missing' };
+			const result = await requireCanonical().readMetadata(
+				graphicsObjectIdentity(`sha256/${content.digest}`),
+			);
+			if (
+				result.outcome !== 'available'
+				|| result.object.byteLength !== content.byteLength
+				|| result.object.contentType !== content.canonicalMime
+			) {
+				return { outcome: 'unavailable', retryable: true };
+			}
+			return {
+				outcome: 'available',
+				lifecycleState: content.lifecycleState,
+			};
+		},
+		async resolveGraphicAssetRevision(input) {
+			const content = await catalogueRequest(
+				() => requireCatalogue().findRevisionContent(input),
+				'Graphic Asset Revision lookup is temporarily unavailable',
+			);
+			if (!content)
+				return { outcome: 'missing' };
+			const result = await requireCanonical().read(
+				graphicsObjectIdentity(`sha256/${content.digest}`),
+			);
+			if (result.outcome !== 'available')
+				return { outcome: 'unavailable', retryable: true };
+			if (
+				result.object.byteLength !== content.byteLength
+				|| result.object.contentType !== content.canonicalMime
+			) {
+				return { outcome: 'unavailable', retryable: true };
+			}
+			return {
+				outcome: 'available',
+				body: result.body,
+				byteLength: result.object.byteLength,
+				contentType: content.canonicalMime,
+			};
+		},
 		async resolveGraphicAssetThumbnail(input) {
 			const digest = await catalogueRequest(
 				() => requireCatalogue().findThumbnailDigest(input.assetId),
@@ -781,7 +898,9 @@ export function createGraphicsAssetLibrary(
 export type {
 	GraphicAsset,
 	GraphicAssetId,
+	GraphicAssetReferenceStatus,
 	GraphicAssetRevisionId,
+	GraphicAssetUsage,
 	GraphicAssetValidationReport,
 	GraphicsAssetLibraryComponentHealth,
 	GraphicsAssetLibraryHealth,

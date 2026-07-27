@@ -17,6 +17,7 @@ const props = defineProps<{
 	updateConfig: FeatureMatchOverlayConfigUpdater;
 	screenWidth: number;
 	screenHeight: number;
+	eventId: number;
 	selectedTarget: FeatureMatchOverlaySelectionTarget;
 	variant: 'tree' | 'inspector';
 }>();
@@ -300,6 +301,7 @@ const selectedInspectorHeader = computed(() => {
 						<FeatureMatchOverlayFrameStyleCard
 							:config="config"
 							:patch-frame="patchFrame"
+							:event-id="eventId"
 						/>
 					</FeatureMatchOverlayControlSection>
 				</div>
@@ -310,6 +312,7 @@ const selectedInspectorHeader = computed(() => {
 					:update-config="updateConfig"
 					:screen-width="screenWidth"
 					:screen-height="screenHeight"
+					:event-id="eventId"
 					:group="selection.group"
 					:child="selection.child"
 					@removed="onChildRemoved(selection.group.id)"
@@ -331,6 +334,7 @@ const selectedInspectorHeader = computed(() => {
 					:update-config="updateConfig"
 					:screen-width="screenWidth"
 					:screen-height="screenHeight"
+					:event-id="eventId"
 					:item="selection.item"
 					@removed="selectCanvas"
 				/>

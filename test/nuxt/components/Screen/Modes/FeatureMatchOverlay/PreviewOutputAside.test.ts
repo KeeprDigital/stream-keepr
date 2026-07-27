@@ -16,7 +16,24 @@ const ScreenSettingsCardStub = defineComponent({
 	template: '<section><slot name="actions" :open="true" /><slot /></section>',
 });
 
-async function mountComponent() {
+const UButtonStub = defineComponent({
+	name: 'UButton',
+	props: {
+		disabled: { type: Boolean, required: false },
+		title: { type: String, required: false },
+	},
+	emits: ['click'],
+	template: '<button type="button" :disabled="disabled" :title="title" @click="$emit(\'click\')"><slot /></button>',
+});
+
+const UPopoverStub = defineComponent({
+	template: '<div><slot /><slot name="content" /></div>',
+});
+
+async function mountComponent(props: {
+	publicationBlocked?: boolean;
+	publicationBlockReason?: string;
+} = {}) {
 	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/PreviewOutputAside.vue';
 	const { default: PreviewOutputAside } = await import(componentPath);
 	return mount(PreviewOutputAside, {
@@ -29,6 +46,7 @@ async function mountComponent() {
 			} as Screen,
 			config: structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG),
 			selectedTarget: { type: 'canvas' },
+			...props,
 		},
 		global: {
 			stubs: {
@@ -36,8 +54,8 @@ async function mountComponent() {
 				UFormField: true,
 				USwitch: true,
 				UFieldGroup: true,
-				UButton: true,
-				UPopover: true,
+				UButton: UButtonStub,
+				UPopover: UPopoverStub,
 				UBadge: true,
 				UInput: true,
 			},
@@ -83,5 +101,21 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 		await nextTick();
 
 		expect(wrapper.emitted('selectTarget')).toEqual([[target]]);
+	});
+
+	it('disables output URL and capture actions when Graphic Asset publication is blocked', async () => {
+		const wrapper = await mountComponent({
+			publicationBlocked: true,
+			publicationBlockReason: 'A pinned revision is missing.',
+		});
+		const blockedButtons = wrapper.findAll('button[disabled]');
+
+		expect(blockedButtons.length).toBeGreaterThanOrEqual(3);
+		expect(blockedButtons.every(button => button.attributes('title') === 'A pinned revision is missing.'))
+			.toBe(true);
+		for (const button of blockedButtons)
+			await button.trigger('click');
+		expect(mockCopyToClipboard).not.toHaveBeenCalled();
+		expect(mockToastAdd).not.toHaveBeenCalled();
 	});
 });

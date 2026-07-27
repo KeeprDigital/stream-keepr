@@ -54,9 +54,21 @@ function createQueryTable() {
 	};
 }
 
+export const mockD1Statement = {
+	bind: vi.fn(),
+	first: vi.fn().mockResolvedValue(undefined),
+};
+mockD1Statement.bind.mockReturnValue(mockD1Statement);
+
+export const mockD1Client = {
+	prepare: vi.fn().mockReturnValue(mockD1Statement),
+	batch: vi.fn().mockResolvedValue([]),
+};
+
 // ──────────────── The mock db object ────────────────
 
 export const mockDb = {
+	$client: mockD1Client,
 	// Builder-style operations
 	select: vi.fn(),
 	selectDistinct: vi.fn(),
@@ -112,6 +124,10 @@ export function resetDbMocks() {
 
 	// Reset batch
 	mockDb.batch.mockReset().mockResolvedValue([]);
+	mockD1Client.prepare.mockReset().mockReturnValue(mockD1Statement);
+	mockD1Client.batch.mockReset().mockResolvedValue([]);
+	mockD1Statement.bind.mockReset().mockReturnValue(mockD1Statement);
+	mockD1Statement.first.mockReset().mockResolvedValue(undefined);
 
 	// Recreate chainable builders
 	selectChain = createChainableQuery();

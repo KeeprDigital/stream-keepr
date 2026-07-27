@@ -2,6 +2,8 @@ import type {
 	GraphicAsset,
 	GraphicAssetId,
 	GraphicAssetImageFacts,
+	GraphicAssetRevisionId,
+	GraphicAssetUsage,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 } from '~~/shared/types/graphicsAsset';
@@ -471,6 +473,59 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				facts: JSON.parse(row.technical_facts) as GraphicAssetImageFacts,
 				eventIds: JSON.parse(row.event_ids) as number[],
 				operation: operationFromRow(operationRowFromAsset(row)),
+			}));
+		},
+		async findRevisionContent(input) {
+			const row = await database.prepare(`
+				SELECT c.digest, c.byte_length, c.canonical_mime, a.lifecycle_state
+				FROM graphic_asset_revisions r
+				JOIN graphic_asset_contents c ON c.digest = r.content_digest
+				JOIN graphic_assets a ON a.id = r.asset_id
+				WHERE r.asset_id = ? AND r.id = ?
+			`).bind(input.assetId, input.revisionId).first<{
+				digest: string;
+				byte_length: number;
+				canonical_mime: 'image/png';
+				lifecycle_state: 'active' | 'retired' | 'trashed';
+			}>();
+			return row
+				? {
+						digest: row.digest,
+						byteLength: row.byte_length,
+						canonicalMime: row.canonical_mime,
+						lifecycleState: row.lifecycle_state,
+					}
+				: undefined;
+		},
+		async listGraphicAssetUsage(assetId) {
+			const result = await database.prepare(`
+				SELECT id, asset_id, revision_id, owner_kind, owner_id, owner_slot, event_id
+				FROM graphic_asset_references
+				WHERE asset_id = ?
+				ORDER BY owner_kind, owner_id, owner_slot, id
+			`).bind(assetId).all<{
+				id: string;
+				asset_id: string;
+				revision_id: string;
+				owner_kind: string;
+				owner_id: string;
+				owner_slot: string;
+				event_id: number | null;
+			}>();
+			if (!result.success)
+				throw new Error('Graphic Asset usage lookup failed');
+			return result.results.map((row): GraphicAssetUsage => ({
+				id: row.id,
+				reference: {
+					assetId: row.asset_id as GraphicAssetId,
+					revisionId: row.revision_id as GraphicAssetRevisionId,
+				},
+				owner: {
+					kind: row.owner_kind,
+					id: row.owner_id,
+					slot: row.owner_slot,
+					eventId: row.event_id ?? undefined,
+				},
 			}));
 		},
 		async findThumbnailDigest(assetId) {

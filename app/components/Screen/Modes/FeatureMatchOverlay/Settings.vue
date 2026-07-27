@@ -27,6 +27,11 @@ const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 );
 
 const settingsSaving = computed(() => saving.value || screenConfigSaving.value);
+const {
+	eligibility: assetPublicationEligibility,
+	blocked: assetPublicationBlocked,
+	reason: assetPublicationBlockReason,
+} = useGraphicAssetPublicationEligibility(config);
 
 defineExpose({ resetConfig, saving: settingsSaving });
 
@@ -150,6 +155,19 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 				title="Preset aspect ratio mismatch"
 				description="This preset was designed for 16:9. You can still use it, but geometry may need adjustment."
 			/>
+			<UAlert
+				v-if="assetPublicationBlocked"
+				data-testid="graphic-asset-publication-block"
+				class="mt-3"
+				:color="assetPublicationEligibility.outcome === 'missing' ? 'error' : 'warning'"
+				variant="soft"
+				:title="assetPublicationEligibility.outcome === 'missing'
+					? 'Missing Graphic Asset Reference'
+					: assetPublicationEligibility.outcome === 'unavailable'
+						? 'Unavailable Graphic Asset Content'
+						: 'Checking Graphic Asset References'"
+				:description="assetPublicationBlockReason"
+			/>
 		</section>
 
 		<div class="grid min-h-[calc(100vh-18rem)] items-start gap-4 xl:grid-cols-[minmax(15rem,18rem)_minmax(0,1fr)_minmax(19rem,24rem)] 2xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)_minmax(24rem,30rem)]">
@@ -161,6 +179,7 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 					:update-config="updateConfig"
 					:screen-width="screenWidth"
 					:screen-height="screenHeight"
+					:event-id="eventId"
 				/>
 			</section>
 
@@ -170,6 +189,8 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 					:screen="screen"
 					:config="config"
 					:selected-target="selectedTarget"
+					:publication-blocked="assetPublicationBlocked"
+					:publication-block-reason="assetPublicationBlockReason"
 					@select-target="selectedTarget = $event"
 				/>
 			</section>
@@ -182,6 +203,7 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 					:update-config="updateConfig"
 					:screen-width="screenWidth"
 					:screen-height="screenHeight"
+					:event-id="eventId"
 				/>
 			</section>
 		</div>

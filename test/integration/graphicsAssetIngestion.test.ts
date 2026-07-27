@@ -5,8 +5,11 @@ import type {
 import { Buffer } from 'node:buffer';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 
-const authorHeaders = { 'x-graphics-author-id': 'integration-graphics-author' };
+const authorHeaders: Record<string, string> = {
+	'x-graphics-author-id': 'integration-graphics-author',
+};
 const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 	'base64',
@@ -16,6 +19,7 @@ describe('the bounded PNG ingestion and Library Workspace APIs', () => {
 	let eventId: number;
 
 	beforeAll(async () => {
+		authorHeaders.cookie = await createGraphicsAuthorSessionCookie();
 		const event = await $fetch('/api/events', {
 			method: 'POST',
 			body: {
@@ -107,6 +111,26 @@ describe('the bounded PNG ingestion and Library Workspace APIs', () => {
 		expect(thumbnail.headers.get('content-type')).toBe('image/png');
 		expect(Array.from(new Uint8Array(await thumbnail.arrayBuffer()).slice(0, 8)))
 			.toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+
+		const pinnedContent = await fetch(
+			`/api/graphics-assets/${completed.result!.assetId}/revisions/${completed.result!.revisionId}/content`,
+			{ headers: authorHeaders },
+		);
+		expect(pinnedContent.status).toBe(200);
+		expect(pinnedContent.headers.get('content-type')).toBe('image/png');
+		expect(pinnedContent.headers.get('cache-control')).toBe('private, no-store');
+		expect(new Uint8Array(await pinnedContent.arrayBuffer())).toEqual(transparentPixelPng);
+
+		const anonymousContent = await fetch(
+			`/api/graphics-assets/${completed.result!.assetId}/revisions/${completed.result!.revisionId}/content`,
+		);
+		expect(anonymousContent.status).toBe(401);
+
+		const missingRevision = await fetch(
+			`/api/graphics-assets/${completed.result!.assetId}/revisions/missing-revision/content`,
+			{ headers: authorHeaders },
+		);
+		expect(missingRevision.status).toBe(404);
 
 		const duplicate = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',

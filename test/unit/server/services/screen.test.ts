@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getChain, mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
+import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { getChain, mockD1Client, mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 
 vi.mock('hub:db', () => ({ db: mockDb }));
@@ -96,7 +97,11 @@ describe('screenService', () => {
 
 	describe('remove', () => {
 		it('returns true when deleted', async () => {
-			getChain('delete').returning.mockResolvedValue([createMockScreen()]);
+			mockD1Client.batch.mockResolvedValue([
+				{ meta: { changes: 1 } },
+				{ meta: { changes: 2 } },
+				{ meta: { changes: 1 } },
+			]);
 
 			const result = await screenService().remove(1, 1);
 
@@ -104,7 +109,11 @@ describe('screenService', () => {
 		});
 
 		it('returns false when not found', async () => {
-			getChain('delete').returning.mockResolvedValue([]);
+			mockD1Client.batch.mockResolvedValue([
+				{ meta: { changes: 0 } },
+				{ meta: { changes: 0 } },
+				{ meta: { changes: 0 } },
+			]);
 
 			const result = await screenService().remove(999, 1);
 
@@ -113,6 +122,43 @@ describe('screenService', () => {
 	});
 
 	describe('updateModeConfig', () => {
+		it('guards the Screen update with every exact Graphic Asset Reference precondition', async () => {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.frame.backgroundImage = {
+				assetId: 'asset-1',
+				revisionId: 'revision-1',
+			};
+			const screen = createMockScreen({
+				currentMode: 'feature-match-overlay',
+				modeConfigs: { 'feature-match-overlay': DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG },
+			});
+			const updatedScreen = createMockScreen({
+				currentMode: 'feature-match-overlay',
+				modeConfigs: { 'feature-match-overlay': config },
+				stateVersion: 1,
+			});
+			mockDb.query.screens.findFirst
+				.mockResolvedValueOnce(screen)
+				.mockResolvedValueOnce(updatedScreen);
+			mockD1Client.batch.mockResolvedValue([
+				{ meta: { changes: 1 } },
+				{ meta: { changes: 0 } },
+				{ meta: { changes: 1 } },
+			]);
+
+			const result = await screenService().updateModeConfig(
+				1,
+				1,
+				'feature-match-overlay',
+				{ layout: config.layout },
+			);
+
+			const updateSql = mockD1Client.prepare.mock.calls[0]?.[0] as string;
+			expect(updateSql).toContain('FROM graphic_asset_revisions revision');
+			expect(updateSql).toContain('asset.lifecycle_state = \'active\'');
+			expect(result).toEqual(updatedScreen);
+		});
+
 		it('merges config for given mode', async () => {
 			const screen = createMockScreen({ modeConfigs: { idle: { text: 'Hello' } } as any });
 			mockDb.query.screens.findFirst.mockResolvedValue(screen);
