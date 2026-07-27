@@ -176,6 +176,42 @@ describe('graphics Asset Library capacity', () => {
 		});
 	});
 
+	it('accounts for catalogue metadata and unreachable canonical writes separately', async () => {
+		const catalogue = createInMemoryGraphicsAssetCatalogue();
+		const library = createGraphicsAssetLibrary({
+			catalogue,
+			staging: createInMemoryStagingGraphicsObjectStore(),
+			canonical: createInMemoryCanonicalGraphicsObjectStore(),
+		});
+		const operation = await library.initiatePngIngestion({
+			idempotencyKey: 'unreachable-canonical-write',
+			initiatedBy: 'graphics-author-1',
+			name: 'Unreachable canonical write',
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+		await catalogue.recordCanonicalWrites({
+			operation,
+			contents: [{ digest: 'unreachable-digest', byteLength: 123 }],
+			recordedAt: operation.updatedAt,
+		});
+		await library.cancelPngIngestion({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+		});
+
+		await expect(library.getCapacity()).resolves.toMatchObject({
+			canonical: {
+				usedBytes: 0,
+				breakdown: {
+					metadataBytes: expect.any(Number),
+					providerCacheBytes: 0,
+					unreachableQuarantineBytes: 123,
+				},
+			},
+		});
+		expect((await library.getCapacity()).canonical.breakdown.metadataBytes).toBeGreaterThan(0);
+	});
+
 	it('blocks canonical growth before writing bytes when the hard limit is exhausted', async () => {
 		const canonical = createInMemoryCanonicalGraphicsObjectStore();
 		const library = createGraphicsAssetLibrary({
@@ -201,7 +237,7 @@ describe('graphics Asset Library capacity', () => {
 
 		expect(blocked).toMatchObject({
 			stage: 'failed',
-			capacity: {
+			canonicalCapacityOutcome: {
 				outcome: 'canonical-capacity-blocked',
 				growthBytes: expect.any(Number),
 				availableBytes: 1,
@@ -211,7 +247,7 @@ describe('graphics Asset Library capacity', () => {
 				retryable: true,
 			},
 		});
-		expect(blocked.capacity?.growthBytes).toBeGreaterThan(1);
+		expect(blocked.canonicalCapacityOutcome?.growthBytes).toBeGreaterThan(1);
 		await expect(library.listGraphicAssets({})).resolves.toEqual([]);
 		await expect(library.getCapacity()).resolves.toMatchObject({
 			canonical: {
@@ -250,7 +286,7 @@ describe('graphics Asset Library capacity', () => {
 		};
 
 		const first = await upload('first-canonical-copy');
-		expect(first.capacity).toMatchObject({
+		expect(first.canonicalCapacityOutcome).toMatchObject({
 			outcome: 'canonical-growth-reserved',
 			growthBytes: expect.any(Number),
 		});
@@ -278,7 +314,7 @@ describe('graphics Asset Library capacity', () => {
 		const noGrowth = await upload('second-canonical-copy');
 		expect(noGrowth).toMatchObject({
 			stage: 'completed',
-			capacity: {
+			canonicalCapacityOutcome: {
 				outcome: 'no-canonical-growth',
 				growthBytes: 0,
 				availableBytes: 0,

@@ -70,9 +70,16 @@ const buttonStub = defineComponent({
 	template: '<button @click="$emit(\'click\')"><slot />{{ label }}</button>',
 });
 const inputStub = defineComponent({
-	props: ['modelValue'],
+	props: ['modelValue', 'type'],
 	emits: ['update:modelValue'],
-	template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', Number($event.target.value))">',
+	template: `<input
+		:value="modelValue"
+		:type="type"
+		@input="$emit(
+			'update:modelValue',
+			type === 'number' ? Number($event.target.value) : $event.target.value,
+		)"
+	>`,
 });
 
 async function mountPage() {
@@ -128,10 +135,14 @@ describe('the Graphics Asset Library health page', () => {
 		expect(wrapper.text()).toContain('10.0 GiB');
 		expect(wrapper.text()).toContain('Source content');
 		expect(wrapper.text()).toContain('Derivatives');
+		expect(wrapper.text()).toContain('Metadata');
+		expect(wrapper.text()).toContain('Provider cache');
+		expect(wrapper.text()).toContain('Unreachable quarantine');
 
 		const inputs = wrapper.findAll('input');
 		await inputs[0]!.setValue(120);
 		await inputs[1]!.setValue(12);
+		await inputs[2]!.setValue('admin-token');
 		await wrapper.findAll('button')
 			.find(button => button.text() === 'Save capacity limits')!
 			.trigger('click');
@@ -140,6 +151,9 @@ describe('the Graphics Asset Library health page', () => {
 			'/api/admin/graphics-assets/capacity',
 			{
 				method: 'PUT',
+				headers: {
+					'x-graphics-admin-token': 'admin-token',
+				},
 				body: {
 					canonicalLimitBytes: 120 * 1024 * 1024 * 1024,
 					stagingLimitBytes: 12 * 1024 * 1024 * 1024,

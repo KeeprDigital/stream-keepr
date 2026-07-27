@@ -185,6 +185,23 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	index('graphics_ingestion_operations_event_idx').on(table.defaultEventId),
 ]);
 
+/**
+ * Canonical objects created before atomic catalogue publication. Terminal
+ * failures remain here as unreachable quarantine; successful publication
+ * removes the operation's candidates in the same D1 batch.
+ */
+export const graphicsCanonicalWriteCandidates = sqliteTable('graphics_canonical_write_candidates', {
+	operationId: text('operation_id')
+		.references(() => graphicsIngestionOperations.id, { onDelete: 'cascade' })
+		.notNull(),
+	digest: text('digest').notNull(),
+	byteLength: integer('byte_length').notNull(),
+	createdAt,
+}, table => [
+	primaryKey({ columns: [table.operationId, table.digest] }),
+	index('graphics_canonical_write_candidates_digest_idx').on(table.digest),
+]);
+
 export type DbGraphicAsset = typeof graphicAssets.$inferSelect;
 export type DbGraphicAssetInsert = typeof graphicAssets.$inferInsert;
 export type DbGraphicAssetContent = typeof graphicAssetContents.$inferSelect;
@@ -197,3 +214,4 @@ export type DbGraphicAssetReference = typeof graphicAssetReferences.$inferSelect
 export type DbGraphicAssetReferenceInsert = typeof graphicAssetReferences.$inferInsert;
 export type DbGraphicsIngestionOperation = typeof graphicsIngestionOperations.$inferSelect;
 export type DbGraphicsIngestionOperationInsert = typeof graphicsIngestionOperations.$inferInsert;
+export type DbGraphicsCanonicalWriteCandidate = typeof graphicsCanonicalWriteCandidates.$inferSelect;

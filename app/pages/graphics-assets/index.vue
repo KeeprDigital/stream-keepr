@@ -5,6 +5,7 @@ import type {
 	GraphicsDuplicateContentPolicy,
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
+import { formatByteCount } from '~~/shared/utils/formatByteCount';
 import { MAX_PNG_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 
 definePageMeta({
@@ -119,16 +120,6 @@ function selectedInitiation(): PendingInitiation {
 function clearPersistedOperation() {
 	localStorage.removeItem(operationStorageKey);
 	localStorage.removeItem(initiationStorageKey);
-}
-
-function formatBytes(byteLength: number) {
-	if (byteLength < 1024)
-		return `${byteLength} B`;
-	if (byteLength < 1024 * 1024)
-		return `${(byteLength / 1024).toFixed(1)} KiB`;
-	if (byteLength < 1024 * 1024 * 1024)
-		return `${(byteLength / (1024 * 1024)).toFixed(1)} MiB`;
-	return `${(byteLength / (1024 * 1024 * 1024)).toFixed(1)} GiB`;
 }
 
 const capacityWarning = computed(() => {
@@ -332,15 +323,15 @@ onMounted(async () => {
 							Storage capacity
 						</h2>
 						<p class="mt-2 text-sm text-muted">
-							Canonical {{ formatBytes(capacity.canonical.usedBytes) }} of {{ formatBytes(capacity.canonical.limitBytes) }}
+							Canonical {{ formatByteCount(capacity.canonical.usedBytes) }} of {{ formatByteCount(capacity.canonical.limitBytes) }}
 							<span v-if="capacity.canonical.reservedBytes > 0">
-								· {{ formatBytes(capacity.canonical.reservedBytes) }} reserved
+								· {{ formatByteCount(capacity.canonical.reservedBytes) }} reserved
 							</span>
 						</p>
 						<p class="mt-1 text-sm text-muted">
-							Staging {{ formatBytes(capacity.staging.usedBytes) }} of {{ formatBytes(capacity.staging.limitBytes) }}
+							Staging {{ formatByteCount(capacity.staging.usedBytes) }} of {{ formatByteCount(capacity.staging.limitBytes) }}
 							<span v-if="capacity.staging.reservedBytes > 0">
-								· {{ formatBytes(capacity.staging.reservedBytes) }} reserved
+								· {{ formatByteCount(capacity.staging.reservedBytes) }} reserved
 							</span>
 						</p>
 					</div>
@@ -350,7 +341,7 @@ onMounted(async () => {
 								Source content
 							</dt>
 							<dd class="text-muted">
-								{{ formatBytes(capacity.canonical.breakdown.retainedSourceBytes) }}
+								{{ formatByteCount(capacity.canonical.breakdown.retainedSourceBytes) }}
 							</dd>
 						</div>
 						<div>
@@ -358,7 +349,7 @@ onMounted(async () => {
 								Derivatives
 							</dt>
 							<dd class="text-muted">
-								{{ formatBytes(capacity.canonical.breakdown.retainedDerivativeBytes) }}
+								{{ formatByteCount(capacity.canonical.breakdown.retainedDerivativeBytes) }}
 							</dd>
 						</div>
 					</dl>
@@ -478,17 +469,17 @@ onMounted(async () => {
 						{{ currentOperation.failure.message }}
 					</p>
 					<p
-						v-if="currentOperation.capacity?.outcome === 'no-canonical-growth'"
+						v-if="currentOperation.canonicalCapacityOutcome?.outcome === 'no-canonical-growth'"
 						class="mt-2 text-sm text-success"
 					>
 						No canonical growth — existing source and derivative bytes were reused.
 					</p>
 					<p
-						v-else-if="currentOperation.capacity?.outcome === 'canonical-capacity-blocked'"
+						v-else-if="currentOperation.canonicalCapacityOutcome?.outcome === 'canonical-capacity-blocked'"
 						class="mt-2 text-sm text-error"
 					>
-						Blocked: {{ formatBytes(currentOperation.capacity.growthBytes) }} of canonical growth required with
-						{{ formatBytes(currentOperation.capacity.availableBytes) }} available.
+						Blocked: {{ formatByteCount(currentOperation.canonicalCapacityOutcome.growthBytes) }} of canonical growth required with
+						{{ formatByteCount(currentOperation.canonicalCapacityOutcome.availableBytes) }} available.
 					</p>
 					<ul
 						v-if="currentOperation.report?.outcome === 'rejected'"
@@ -569,7 +560,7 @@ onMounted(async () => {
 										Source
 									</dt>
 									<dd class="text-muted">
-										{{ asset.facts.canonicalMime }} · {{ formatBytes(asset.facts.byteLength) }}
+										{{ asset.facts.canonicalMime }} · {{ formatByteCount(asset.facts.byteLength) }}
 									</dd>
 								</div>
 								<div>

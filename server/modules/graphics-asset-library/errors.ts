@@ -27,3 +27,19 @@ export class GraphicsAssetLibraryError extends Error {
 		this.capacity = options?.capacity;
 	}
 }
+
+export function graphicsCapacityErrorDescriptor(error: unknown) {
+	if (
+		!(error instanceof GraphicsAssetLibraryError)
+		|| (
+			error.code !== 'staging-capacity-exhausted'
+			&& error.code !== 'canonical-capacity-exhausted'
+		)
+	) {
+		return undefined;
+	}
+	return {
+		statusCode: 507,
+		statusMessage: 'Insufficient Storage',
+	} as const;
+}

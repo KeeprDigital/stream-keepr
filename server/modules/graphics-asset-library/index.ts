@@ -5,6 +5,7 @@ import type {
 	GraphicAssetRevisionId,
 	GraphicAssetUsage,
 	GraphicAssetValidationReport,
+	GraphicsAssetCapacityLimits,
 	GraphicsAssetLibraryCapacity,
 	GraphicsAssetLibraryComponentHealth,
 	GraphicsAssetLibraryHealth,
@@ -65,6 +66,11 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		operation: GraphicsIngestionOperation;
 		usedBytes: number;
 	}) => Promise<void>;
+	recordCanonicalWrites: (input: {
+		operation: GraphicsIngestionOperation;
+		contents: readonly { digest: string; byteLength: number }[];
+		recordedAt: string;
+	}) => Promise<void>;
 	reservePngPublication: (input: {
 		operation: GraphicsIngestionOperation;
 		sourceDigest: string;
@@ -76,11 +82,9 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		| { outcome: 'reserved'; operation: GraphicsIngestionOperation }
 		| { outcome: 'blocked'; capacity: GraphicsCapacityExhaustedDetails }
 	>;
-	updateCapacityLimits: (input: {
-		canonicalLimitBytes: number;
-		stagingLimitBytes: number;
-		updatedAt: string;
-	}) => Promise<GraphicsAssetLibraryCapacity>;
+	updateCapacityLimits: (
+		input: GraphicsAssetCapacityLimits & { updatedAt: string },
+	) => Promise<GraphicsAssetLibraryCapacity>;
 	getIngestionOperation: (
 		operationId: GraphicsIngestionOperationId,
 		initiatedBy: string,
@@ -118,10 +122,9 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 export interface GraphicsAssetLibrary {
 	getHealth: () => Promise<GraphicsAssetLibraryHealth>;
 	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
-	updateCapacityLimits: (input: {
-		canonicalLimitBytes: number;
-		stagingLimitBytes: number;
-	}) => Promise<GraphicsAssetLibraryCapacity>;
+	updateCapacityLimits: (
+		input: GraphicsAssetCapacityLimits,
+	) => Promise<GraphicsAssetLibraryCapacity>;
 	initiatePngIngestion: (input: {
 		idempotencyKey: string;
 		initiatedBy: string;
@@ -527,7 +530,7 @@ export function createGraphicsAssetLibrary(
 			if (reservation.outcome === 'blocked') {
 				operation = {
 					...operation,
-					capacity: {
+					canonicalCapacityOutcome: {
 						outcome: 'canonical-capacity-blocked',
 						growthBytes: reservation.capacity.requestedBytes,
 						availableBytes: reservation.capacity.availableBytes,
@@ -556,6 +559,26 @@ export function createGraphicsAssetLibrary(
 				}),
 				storeCanonicalBytes(canonical, thumbnailDigest, thumbnail),
 			]);
+			const createdCanonicalContents = [
+				sourceWrite.outcome === 'created'
+					? {
+							digest: processed.report.facts.sha256,
+							byteLength: processed.report.facts.byteLength,
+						}
+					: undefined,
+				thumbnailWrite.outcome === 'created'
+					? { digest: thumbnailDigest, byteLength: thumbnail.byteLength }
+					: undefined,
+			].filter((content): content is { digest: string; byteLength: number } =>
+				content !== undefined,
+			);
+			if (createdCanonicalContents.length > 0) {
+				await catalogue.recordCanonicalWrites({
+					operation,
+					contents: createdCanonicalContents,
+					recordedAt: timestamp(),
+				});
+			}
 			if (sourceWrite.outcome === 'unavailable' || thumbnailWrite.outcome === 'unavailable') {
 				return await failOperation(catalogue, operation, {
 					code: 'canonical-store-unavailable',

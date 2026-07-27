@@ -4,7 +4,6 @@ import type {
 	GraphicAssetImageFacts,
 	GraphicAssetRevisionId,
 	GraphicAssetUsage,
-	GraphicsAssetLibraryCapacity,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 } from '~~/shared/types/graphicsAsset';
@@ -12,6 +11,7 @@ import type {
 	GraphicsAssetCatalogue,
 	PublishPngCatalogueInput,
 } from '.';
+import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { GraphicsAssetLibraryError } from './errors';
 
 interface OperationRow {
@@ -71,7 +71,7 @@ function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 		declaredByteLength: row.declared_byte_length,
 		transferredByteLength: row.transferred_byte_length,
 		stage: row.stage,
-		capacity: parseJson(row.capacity_outcome),
+		canonicalCapacityOutcome: parseJson(row.capacity_outcome),
 		report: parseJson(row.report),
 		result: parseJson(row.result),
 		failure: parseJson(row.failure),
@@ -173,7 +173,9 @@ function updateOperationStatement(
 		operation.report === undefined ? null : JSON.stringify(operation.report),
 		operation.result === undefined ? null : JSON.stringify(operation.result),
 		operation.failure === undefined ? null : JSON.stringify(operation.failure),
-		operation.capacity === undefined ? null : JSON.stringify(operation.capacity),
+		operation.canonicalCapacityOutcome === undefined
+			? null
+			: JSON.stringify(operation.canonicalCapacityOutcome),
 		new Date(operation.updatedAt).getTime(),
 		operation.stage,
 		operation.stage,
@@ -188,17 +190,6 @@ function updateOperationStatement(
 		operation.initiatedBy,
 		new Date(expectedUpdatedAt).getTime(),
 	);
-}
-
-function capacityPressure(usedBytes: number, limitBytes: number): GraphicsAssetLibraryCapacity['canonical']['pressure'] {
-	const ratio = usedBytes / limitBytes;
-	if (ratio >= 1)
-		return 'full';
-	if (ratio >= 0.95)
-		return 'critical';
-	if (ratio >= 0.8)
-		return 'warning';
-	return 'normal';
 }
 
 export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAssetCatalogue {
@@ -247,7 +238,92 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					COALESCE((
 						SELECT SUM(staging_reserved_byte_length)
 						FROM graphics_ingestion_operations
-					), 0) AS staging_reserved_bytes
+					), 0) AS staging_reserved_bytes,
+					(
+						COALESCE((
+							SELECT SUM(
+								length(CAST(id AS BLOB))
+								+ length(CAST(name AS BLOB))
+								+ length(CAST(kind AS BLOB))
+								+ length(CAST(lifecycle_state AS BLOB))
+							)
+							FROM graphic_assets
+						), 0)
+						+ COALESCE((
+							SELECT SUM(
+								length(CAST(digest AS BLOB))
+								+ length(CAST(canonical_mime AS BLOB))
+								+ length(CAST(availability AS BLOB))
+								+ length(CAST(COALESCE(unavailable_reason_code, '') AS BLOB))
+							)
+							FROM graphic_asset_contents
+						), 0)
+						+ COALESCE((
+							SELECT SUM(
+								length(CAST(id AS BLOB))
+								+ length(CAST(asset_id AS BLOB))
+								+ length(CAST(content_digest AS BLOB))
+								+ length(CAST(compatibility_profile AS BLOB))
+								+ length(CAST(technical_facts AS BLOB))
+							)
+							FROM graphic_asset_revisions
+						), 0)
+						+ COALESCE((
+							SELECT SUM(
+								length(CAST(id AS BLOB))
+								+ length(CAST(source_revision_id AS BLOB))
+								+ length(CAST(kind AS BLOB))
+								+ length(CAST(content_digest AS BLOB))
+							)
+							FROM graphics_derivatives
+						), 0)
+						+ COALESCE((
+							SELECT SUM(
+								length(CAST(id AS BLOB))
+								+ length(CAST(idempotency_key AS BLOB))
+								+ length(CAST(initiated_by AS BLOB))
+								+ length(CAST(proposed_name AS BLOB))
+								+ length(CAST(stage AS BLOB))
+								+ length(CAST(COALESCE(report, '') AS BLOB))
+								+ length(CAST(COALESCE(result, '') AS BLOB))
+								+ length(CAST(COALESCE(failure, '') AS BLOB))
+								+ length(CAST(COALESCE(capacity_outcome, '') AS BLOB))
+							)
+							FROM graphics_ingestion_operations
+						), 0)
+					) AS metadata_bytes,
+					COALESCE((
+						SELECT SUM(quarantine.byte_length)
+						FROM (
+							SELECT candidates.digest, MAX(candidates.byte_length) AS byte_length
+							FROM graphics_canonical_write_candidates candidates
+							JOIN graphics_ingestion_operations operations
+								ON operations.id = candidates.operation_id
+							WHERE (
+								operations.stage = 'cancelled'
+								OR (
+									operations.stage = 'failed'
+									AND json_extract(operations.failure, '$.retryable') = 0
+								)
+							)
+								AND NOT EXISTS (
+									SELECT 1
+									FROM graphic_asset_contents contents
+									WHERE contents.digest = candidates.digest
+										AND (
+											EXISTS (
+												SELECT 1 FROM graphic_asset_revisions revisions
+												WHERE revisions.content_digest = contents.digest
+											)
+											OR EXISTS (
+												SELECT 1 FROM graphics_derivatives derivatives
+												WHERE derivatives.content_digest = contents.digest
+											)
+										)
+								)
+							GROUP BY candidates.digest
+						) quarantine
+					), 0) AS unreachable_quarantine_bytes
 				FROM graphics_capacity_settings settings
 				WHERE settings.id = 1
 			`).first<{
@@ -258,6 +334,8 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				canonical_reserved_bytes: number;
 				staging_used_bytes: number;
 				staging_reserved_bytes: number;
+				metadata_bytes: number;
+				unreachable_quarantine_bytes: number;
 			}>();
 			if (!row)
 				throw new Error('Graphics capacity settings are unavailable');
@@ -271,13 +349,13 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 						0,
 						row.canonical_limit_bytes - usedBytes - row.canonical_reserved_bytes,
 					),
-					pressure: capacityPressure(usedBytes, row.canonical_limit_bytes),
+					pressure: graphicsCanonicalCapacityPressure(usedBytes, row.canonical_limit_bytes),
 					breakdown: {
 						retainedSourceBytes: row.retained_source_bytes,
 						retainedDerivativeBytes: row.retained_derivative_bytes,
-						metadataBytes: 0,
+						metadataBytes: row.metadata_bytes,
 						providerCacheBytes: 0,
-						unreachableQuarantineBytes: 0,
+						unreachableQuarantineBytes: row.unreachable_quarantine_bytes,
 					},
 				},
 				staging: {
@@ -425,6 +503,24 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			).run();
 			if (!result.success || result.meta.changes !== 1)
 				throw new Error('Graphics staging progress could not be recorded');
+		},
+		async recordCanonicalWrites(input) {
+			if (input.contents.length === 0)
+				return;
+			const results = await database.batch(input.contents.map(content =>
+				database.prepare(`
+					INSERT OR IGNORE INTO graphics_canonical_write_candidates (
+						operation_id, digest, byte_length, created_at
+					) VALUES (?, ?, ?, ?)
+				`).bind(
+					input.operation.id,
+					content.digest,
+					content.byteLength,
+					new Date(input.recordedAt).getTime(),
+				),
+			) as [D1PreparedStatement, ...D1PreparedStatement[]]);
+			if (results.some(result => !result.success))
+				throw new Error('Graphics canonical writes could not be recorded');
 		},
 		async reservePngPublication(input) {
 			const proposed = new Map<string, number>([
@@ -617,9 +713,12 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				completed,
 				input.operation.updatedAt,
 			);
+			const clearWriteCandidates = database.prepare(`
+				DELETE FROM graphics_canonical_write_candidates WHERE operation_id = ?
+			`).bind(input.operation.id);
 			const statements: [D1PreparedStatement, ...D1PreparedStatement[]]
 				= input.operation.defaultEventId === undefined
-					? [updateOperation]
+					? [clearWriteCandidates, updateOperation]
 					: [database.prepare(`
 							INSERT OR IGNORE INTO graphic_asset_event_associations (asset_id, event_id, created_at)
 							SELECT ?, ?, ?
@@ -635,7 +734,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 							input.operation.id,
 							input.operation.initiatedBy,
 							new Date(input.operation.updatedAt).getTime(),
-						), updateOperation];
+						), clearWriteCandidates, updateOperation];
 			const results = await database.batch(statements);
 			if (results.some(result => !result.success))
 				throw new Error('Graphic Asset reuse transaction failed');
@@ -747,6 +846,9 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 							input.operation.defaultEventId,
 							new Date(input.publishedAt).getTime(),
 						)]),
+				database.prepare(`
+					DELETE FROM graphics_canonical_write_candidates WHERE operation_id = ?
+				`).bind(input.operation.id),
 				updateOperationStatement(database, completed, input.operation.updatedAt),
 			] as [D1PreparedStatement, ...D1PreparedStatement[]];
 			const results = await database.batch(statements);

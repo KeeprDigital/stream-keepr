@@ -209,6 +209,18 @@ It unifies their composition model without merging their Screen Modes, live cont
 The shared graphics-specific module that ingests, validates, stores, resolves, deduplicates, and lifecycle-manages images, silent videos, fonts, and generated thumbnails used by Broadcast Graphics and Feature Match Overlay.
 Its interface is consumed by both graphics editors and their Template Package workflows; it is not a general application file manager.
 
+**Graphics Asset Library Capacity**:
+The installation-wide storage envelope comprising the Canonical Graphics Quota and Graphics Staging Allowance.
+
+**Canonical Graphics Quota**:
+The limit on deduplicated retained Graphic Asset Content and Graphics Derivative bytes, including retained revision history and Trash.
+
+**Graphics Staging Allowance**:
+The separate limit on provisional bytes reserved or held by incomplete Graphics Ingestion Operations.
+
+**Canonical Capacity Pressure**:
+The normal, warning, critical, or full state derived from use of the Canonical Graphics Quota.
+
 **Graphic Asset**:
 A stable-identity library resource for a validated image, silent video, or font owned by the installation-wide Graphics Asset Library and reusable across Events.
 Events may associate with or reference a Graphic Asset but never own it.

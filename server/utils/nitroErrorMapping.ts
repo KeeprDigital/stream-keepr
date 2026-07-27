@@ -1,4 +1,4 @@
-import { GraphicsAssetLibraryError } from '~~/server/modules/graphics-asset-library/errors';
+import { graphicsCapacityErrorDescriptor } from '~~/server/modules/graphics-asset-library/errors';
 import { StateConflictError } from './errors';
 
 export interface MappableNitroError {
@@ -11,6 +11,7 @@ export interface MappableNitroError {
 
 export function mapPublicNitroError(error: MappableNitroError): void {
 	const cause = error.cause;
+	const graphicsCapacityError = graphicsCapacityErrorDescriptor(cause);
 	let hasMappedPublicServerMessage = false;
 	let mappedOperationalError = false;
 
@@ -20,16 +21,10 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		error.message = cause.message;
 		mappedOperationalError = true;
 	}
-	else if (
-		cause instanceof GraphicsAssetLibraryError
-		&& (
-			cause.code === 'staging-capacity-exhausted'
-			|| cause.code === 'canonical-capacity-exhausted'
-		)
-	) {
-		error.statusCode = 507;
-		error.statusMessage = 'Insufficient Storage';
-		error.message = cause.message;
+	else if (graphicsCapacityError) {
+		error.statusCode = graphicsCapacityError.statusCode;
+		error.statusMessage = graphicsCapacityError.statusMessage;
+		error.message = (cause as Error).message;
 		hasMappedPublicServerMessage = true;
 		mappedOperationalError = true;
 	}

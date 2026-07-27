@@ -141,7 +141,7 @@ export interface GraphicsIngestionOperation {
 	declaredByteLength: number;
 	transferredByteLength: number;
 	stage: GraphicsIngestionStage;
-	capacity?: GraphicsIngestionCapacityOutcome;
+	canonicalCapacityOutcome?: GraphicsIngestionCapacityOutcome;
 	report?: GraphicAssetValidationReport;
 	result?: {
 		outcome: 'published' | 'reused';
@@ -185,6 +185,11 @@ export interface GraphicsAssetLibraryHealth {
 }
 
 export type GraphicsCanonicalCapacityPressure = 'normal' | 'warning' | 'critical' | 'full';
+
+export interface GraphicsAssetCapacityLimits {
+	canonicalLimitBytes: number;
+	stagingLimitBytes: number;
+}
 
 export interface GraphicsAssetLibraryCapacity {
 	canonical: {

@@ -14,22 +14,12 @@ import {
 	DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES,
 	DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
 } from '~~/shared/types/graphicsAsset';
+import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { GraphicsAssetLibraryError } from './errors';
 
 interface InMemoryGraphicsAssetCatalogueOptions {
 	canonicalLimitBytes?: number;
 	stagingLimitBytes?: number;
-}
-
-function capacityPressure(usedBytes: number, limitBytes: number): GraphicsAssetLibraryCapacity['canonical']['pressure'] {
-	const ratio = usedBytes / limitBytes;
-	if (ratio >= 1)
-		return 'full';
-	if (ratio >= 0.95)
-		return 'critical';
-	if (ratio >= 0.8)
-		return 'warning';
-	return 'normal';
 }
 
 export function createInMemoryGraphicsAssetCatalogue(
@@ -46,6 +36,10 @@ export function createInMemoryGraphicsAssetCatalogue(
 	const stagingReservations = new Map<GraphicsIngestionOperationId, number>();
 	const stagingUsage = new Map<GraphicsIngestionOperationId, number>();
 	const canonicalReservations = new Map<GraphicsIngestionOperationId, number>();
+	const canonicalWriteCandidates = new Map<
+		GraphicsIngestionOperationId,
+		Map<string, number>
+	>();
 	let canonicalLimitBytes = options.canonicalLimitBytes ?? DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES;
 	let stagingLimitBytes = options.stagingLimitBytes ?? DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES;
 
@@ -81,19 +75,38 @@ export function createInMemoryGraphicsAssetCatalogue(
 		const canonicalReservedBytes = sum(canonicalReservations.values());
 		const stagingUsedBytes = sum(stagingUsage.values());
 		const stagingReservedBytes = sum(stagingReservations.values());
+		const metadataBytes = operations.size === 0 && assets.size === 0
+			? 0
+			: new TextEncoder().encode(JSON.stringify([
+				...operations.values(),
+				...assets.values(),
+			])).byteLength;
+		const unreachableDigests = new Map<string, number>();
+		for (const [operationId, contents] of canonicalWriteCandidates) {
+			const operation = operations.get(operationId);
+			const isUnreachable = operation?.stage === 'cancelled'
+				|| (operation?.stage === 'failed' && operation.failure?.retryable === false);
+			if (!isUnreachable)
+				continue;
+			for (const [digest, byteLength] of contents) {
+				if (!canonicalContents.has(digest))
+					unreachableDigests.set(digest, byteLength);
+			}
+		}
+		const unreachableQuarantineBytes = sum(unreachableDigests.values());
 		return {
 			canonical: {
 				limitBytes: canonicalLimitBytes,
 				usedBytes,
 				reservedBytes: canonicalReservedBytes,
 				availableBytes: Math.max(0, canonicalLimitBytes - usedBytes - canonicalReservedBytes),
-				pressure: capacityPressure(usedBytes, canonicalLimitBytes),
+				pressure: graphicsCanonicalCapacityPressure(usedBytes, canonicalLimitBytes),
 				breakdown: {
 					retainedSourceBytes,
 					retainedDerivativeBytes,
-					metadataBytes: 0,
+					metadataBytes,
 					providerCacheBytes: 0,
-					unreachableQuarantineBytes: 0,
+					unreachableQuarantineBytes,
 				},
 			},
 			staging: {
@@ -179,6 +192,12 @@ export function createInMemoryGraphicsAssetCatalogue(
 			stagingUsage.set(operation.id, input.usedBytes);
 			stagingReservations.set(operation.id, operation.declaredByteLength - input.usedBytes);
 		},
+		async recordCanonicalWrites(input) {
+			const existing = canonicalWriteCandidates.get(input.operation.id) ?? new Map<string, number>();
+			for (const content of input.contents)
+				existing.set(content.digest, content.byteLength);
+			canonicalWriteCandidates.set(input.operation.id, existing);
+		},
 		async reservePngPublication(input) {
 			const existing = operations.get(input.operation.id);
 			if (
@@ -218,7 +237,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			}
 			const reserved: GraphicsIngestionOperation = {
 				...input.operation,
-				capacity: growthBytes === 0
+				canonicalCapacityOutcome: growthBytes === 0
 					? {
 							outcome: 'no-canonical-growth',
 							growthBytes: 0,
@@ -307,6 +326,8 @@ export function createInMemoryGraphicsAssetCatalogue(
 				updatedAt: input.publishedAt,
 			};
 			operations.set(completed.id, cloneOperation(completed));
+			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
+			canonicalWriteCandidates.delete(completed.id);
 			releaseCapacity(completed.id);
 			const eventIds = input.operation.defaultEventId === undefined
 				? asset.eventIds
@@ -344,6 +365,8 @@ export function createInMemoryGraphicsAssetCatalogue(
 					updatedAt: input.publishedAt,
 				};
 				operations.set(completed.id, cloneOperation(completed));
+				// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
+				canonicalWriteCandidates.delete(completed.id);
 				releaseCapacity(completed.id);
 				assets.set(reusable.id, {
 					...reusable,
@@ -367,6 +390,8 @@ export function createInMemoryGraphicsAssetCatalogue(
 				updatedAt: input.publishedAt,
 			};
 			operations.set(completed.id, cloneOperation(completed));
+			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
+			canonicalWriteCandidates.delete(completed.id);
 			releaseCapacity(completed.id);
 			assets.set(input.assetId, {
 				id: input.assetId,

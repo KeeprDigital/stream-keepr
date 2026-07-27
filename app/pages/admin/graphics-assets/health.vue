@@ -4,6 +4,7 @@ import type {
 	GraphicsAssetLibraryComponentHealth,
 	GraphicsAssetLibraryHealth,
 } from '~~/shared/types/graphicsAsset';
+import { formatByteCount } from '~~/shared/utils/formatByteCount';
 
 definePageMeta({
 	title: 'Graphics Asset Library health',
@@ -23,6 +24,7 @@ const {
 const bytesPerGiB = 1024 * 1024 * 1024;
 const canonicalLimitGiB = ref(100);
 const stagingLimitGiB = ref(10);
+const administratorToken = ref('');
 const capacitySavePending = ref(false);
 const capacitySaveError = ref<string | null>(null);
 const capacitySaveSucceeded = ref(false);
@@ -70,16 +72,6 @@ function refreshHealth() {
 	void refreshCapacity();
 }
 
-function formatBytes(byteLength: number) {
-	if (byteLength < 1024)
-		return `${byteLength} B`;
-	if (byteLength < 1024 * 1024)
-		return `${(byteLength / 1024).toFixed(1)} KiB`;
-	if (byteLength < bytesPerGiB)
-		return `${(byteLength / (1024 * 1024)).toFixed(1)} MiB`;
-	return `${(byteLength / bytesPerGiB).toFixed(1)} GiB`;
-}
-
 async function saveCapacityLimits() {
 	capacitySavePending.value = true;
 	capacitySaveError.value = null;
@@ -89,6 +81,9 @@ async function saveCapacityLimits() {
 			'/api/admin/graphics-assets/capacity',
 			{
 				method: 'PUT',
+				headers: {
+					'x-graphics-admin-token': administratorToken.value,
+				},
 				body: {
 					canonicalLimitBytes: Math.round(canonicalLimitGiB.value * bytesPerGiB),
 					stagingLimitBytes: Math.round(stagingLimitGiB.value * bytesPerGiB),
@@ -197,9 +192,9 @@ async function saveCapacityLimits() {
 								<UBadge :label="capacity.canonical.pressure" variant="soft" />
 							</div>
 							<p class="mt-1 text-sm text-muted">
-								{{ formatBytes(capacity.canonical.usedBytes) }} used ·
-								{{ formatBytes(capacity.canonical.reservedBytes) }} reserved ·
-								{{ formatBytes(capacity.canonical.limitBytes) }} limit
+								{{ formatByteCount(capacity.canonical.usedBytes) }} used ·
+								{{ formatByteCount(capacity.canonical.reservedBytes) }} reserved ·
+								{{ formatByteCount(capacity.canonical.limitBytes) }} limit
 							</p>
 							<dl class="mt-3 grid grid-cols-2 gap-3 text-sm">
 								<div>
@@ -207,7 +202,7 @@ async function saveCapacityLimits() {
 										Source content
 									</dt>
 									<dd class="text-muted">
-										{{ formatBytes(capacity.canonical.breakdown.retainedSourceBytes) }}
+										{{ formatByteCount(capacity.canonical.breakdown.retainedSourceBytes) }}
 									</dd>
 								</div>
 								<div>
@@ -215,7 +210,15 @@ async function saveCapacityLimits() {
 										Derivatives
 									</dt>
 									<dd class="text-muted">
-										{{ formatBytes(capacity.canonical.breakdown.retainedDerivativeBytes) }}
+										{{ formatByteCount(capacity.canonical.breakdown.retainedDerivativeBytes) }}
+									</dd>
+								</div>
+								<div>
+									<dt class="text-xs text-dimmed">
+										Metadata
+									</dt>
+									<dd class="text-muted">
+										{{ formatByteCount(capacity.canonical.breakdown.metadataBytes) }}
 									</dd>
 								</div>
 								<div>
@@ -223,7 +226,7 @@ async function saveCapacityLimits() {
 										Provider cache
 									</dt>
 									<dd class="text-muted">
-										{{ formatBytes(capacity.canonical.breakdown.providerCacheBytes) }}
+										{{ formatByteCount(capacity.canonical.breakdown.providerCacheBytes) }}
 									</dd>
 								</div>
 								<div>
@@ -231,7 +234,7 @@ async function saveCapacityLimits() {
 										Unreachable quarantine
 									</dt>
 									<dd class="text-muted">
-										{{ formatBytes(capacity.canonical.breakdown.unreachableQuarantineBytes) }}
+										{{ formatByteCount(capacity.canonical.breakdown.unreachableQuarantineBytes) }}
 									</dd>
 								</div>
 							</dl>
@@ -242,9 +245,9 @@ async function saveCapacityLimits() {
 								Staging allowance
 							</h3>
 							<p class="mt-1 text-sm text-muted">
-								{{ formatBytes(capacity.staging.usedBytes) }} verified ·
-								{{ formatBytes(capacity.staging.reservedBytes) }} reserved ·
-								{{ formatBytes(capacity.staging.limitBytes) }} limit
+								{{ formatByteCount(capacity.staging.usedBytes) }} verified ·
+								{{ formatByteCount(capacity.staging.reservedBytes) }} reserved ·
+								{{ formatByteCount(capacity.staging.limitBytes) }} limit
 							</p>
 						</div>
 					</div>
@@ -264,6 +267,16 @@ async function saveCapacityLimits() {
 								type="number"
 								:min="1"
 								step="1"
+							/>
+						</UFormField>
+						<UFormField
+							label="Administrator token"
+							description="Required to change installation-wide limits"
+						>
+							<UInput
+								v-model="administratorToken"
+								type="password"
+								autocomplete="current-password"
 							/>
 						</UFormField>
 						<UButton
