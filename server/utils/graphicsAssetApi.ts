@@ -21,6 +21,8 @@ export function rethrowGraphicsAssetApiError(error: unknown, event?: H3Event): n
 			'invalid-ingestion-input': 400,
 			'ingestion-operation-not-found': 404,
 			'ingestion-operation-not-uploadable': 409,
+			'staging-capacity-exhausted': 507,
+			'canonical-capacity-exhausted': 507,
 			'graphics-asset-library-unavailable': 503,
 		} as const)[error.code];
 		if (statusCode === 503 && event)
@@ -31,10 +33,13 @@ export function rethrowGraphicsAssetApiError(error: unknown, event?: H3Event): n
 				? 'Not Found'
 				: statusCode === 409
 					? 'Conflict'
-					: statusCode === 503
-						? 'Service Unavailable'
-						: 'Bad Request',
+					: statusCode === 507
+						? 'Insufficient Storage'
+						: statusCode === 503
+							? 'Service Unavailable'
+							: 'Bad Request',
 			message: error.message,
+			data: error.capacity,
 			cause: error,
 		});
 	}

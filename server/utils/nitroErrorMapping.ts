@@ -1,3 +1,4 @@
+import { GraphicsAssetLibraryError } from '~~/server/modules/graphics-asset-library/errors';
 import { StateConflictError } from './errors';
 
 export interface MappableNitroError {
@@ -17,6 +18,19 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		error.statusCode = 409;
 		error.statusMessage = 'Conflict';
 		error.message = cause.message;
+		mappedOperationalError = true;
+	}
+	else if (
+		cause instanceof GraphicsAssetLibraryError
+		&& (
+			cause.code === 'staging-capacity-exhausted'
+			|| cause.code === 'canonical-capacity-exhausted'
+		)
+	) {
+		error.statusCode = 507;
+		error.statusMessage = 'Insufficient Storage';
+		error.message = cause.message;
+		hasMappedPublicServerMessage = true;
 		mappedOperationalError = true;
 	}
 	else if (cause instanceof Error && cause.message?.includes('UNIQUE constraint failed')) {

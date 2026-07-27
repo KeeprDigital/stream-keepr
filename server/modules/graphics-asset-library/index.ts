@@ -5,6 +5,7 @@ import type {
 	GraphicAssetRevisionId,
 	GraphicAssetUsage,
 	GraphicAssetValidationReport,
+	GraphicsAssetLibraryCapacity,
 	GraphicsAssetLibraryComponentHealth,
 	GraphicsAssetLibraryHealth,
 	GraphicsDerivativeId,
@@ -12,6 +13,7 @@ import type {
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 } from '~~/shared/types/graphicsAsset';
+import type { GraphicsCapacityExhaustedDetails } from './errors';
 import type {
 	BoundedByteStream,
 	GraphicsCanonicalObjectStore,
@@ -19,6 +21,7 @@ import type {
 	GraphicsStagingObjectStore,
 } from './object-store';
 import { MAX_PNG_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { GraphicsAssetLibraryError } from './errors';
 import {
 	createBoundedByteStream,
 	graphicsObjectIdentity,
@@ -31,6 +34,7 @@ import {
 	sha256HexStream,
 } from './png';
 
+export { GraphicsAssetLibraryError } from './errors';
 export { createInMemoryGraphicsAssetCatalogue } from './in-memory-catalogue';
 
 export interface GraphicsAssetCatalogueHealth {
@@ -55,7 +59,28 @@ export interface ReusablePng {
 }
 
 export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
+	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
 	initiatePngIngestion: (operation: GraphicsIngestionOperation) => Promise<GraphicsIngestionOperation>;
+	recordStagedBytes: (input: {
+		operation: GraphicsIngestionOperation;
+		usedBytes: number;
+	}) => Promise<void>;
+	reservePngPublication: (input: {
+		operation: GraphicsIngestionOperation;
+		sourceDigest: string;
+		sourceByteLength: number;
+		thumbnailDigest: string;
+		thumbnailByteLength: number;
+		reservedAt: string;
+	}) => Promise<
+		| { outcome: 'reserved'; operation: GraphicsIngestionOperation }
+		| { outcome: 'blocked'; capacity: GraphicsCapacityExhaustedDetails }
+	>;
+	updateCapacityLimits: (input: {
+		canonicalLimitBytes: number;
+		stagingLimitBytes: number;
+		updatedAt: string;
+	}) => Promise<GraphicsAssetLibraryCapacity>;
 	getIngestionOperation: (
 		operationId: GraphicsIngestionOperationId,
 		initiatedBy: string,
@@ -92,6 +117,11 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 
 export interface GraphicsAssetLibrary {
 	getHealth: () => Promise<GraphicsAssetLibraryHealth>;
+	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
+	updateCapacityLimits: (input: {
+		canonicalLimitBytes: number;
+		stagingLimitBytes: number;
+	}) => Promise<GraphicsAssetLibraryCapacity>;
 	initiatePngIngestion: (input: {
 		idempotencyKey: string;
 		initiatedBy: string;
@@ -156,20 +186,6 @@ interface GraphicsAssetLibraryDependencies {
 	canonical: GraphicsObjectStoreHealth | GraphicsCanonicalObjectStore;
 	now?: () => Date;
 	generateIdentity?: () => string;
-}
-
-export class GraphicsAssetLibraryError extends Error {
-	constructor(
-		message: string,
-		readonly code:
-			| 'invalid-ingestion-input'
-			| 'ingestion-operation-not-found'
-			| 'ingestion-operation-not-uploadable'
-			| 'graphics-asset-library-unavailable',
-		options?: ErrorOptions,
-	) {
-		super(message, options);
-	}
 }
 
 function requiredIdentity<T extends string>(value: string, label: string): T {
@@ -474,11 +490,14 @@ export function createGraphicsAssetLibrary(
 				if (!(error instanceof PngValidationError))
 					throw error;
 				const report = rejectedPngReport(error);
-				return await failOperation(catalogue, operation, {
+				const failed = await failOperation(catalogue, operation, {
 					code: 'validation-failed',
 					retryable: false,
 					message: 'PNG did not satisfy the png-v1 compatibility profile.',
 				}, report);
+					// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+				await staging.delete(stagingIdentity);
+				return failed;
 			}
 			const validationTerminal = await terminalOperationAtCheckpoint();
 			if (validationTerminal)
@@ -497,6 +516,30 @@ export function createGraphicsAssetLibrary(
 
 			const thumbnail = processed.thumbnail;
 			const thumbnailDigest = await sha256Hex(thumbnail);
+			const reservation = await catalogue.reservePngPublication({
+				operation,
+				sourceDigest: processed.report.facts.sha256,
+				sourceByteLength: processed.report.facts.byteLength,
+				thumbnailDigest,
+				thumbnailByteLength: thumbnail.byteLength,
+				reservedAt: changedOperation(operation, {}).updatedAt,
+			});
+			if (reservation.outcome === 'blocked') {
+				operation = {
+					...operation,
+					capacity: {
+						outcome: 'canonical-capacity-blocked',
+						growthBytes: reservation.capacity.requestedBytes,
+						availableBytes: reservation.capacity.availableBytes,
+					},
+				};
+				return await failOperation(catalogue, operation, {
+					code: 'canonical-capacity-exhausted',
+					retryable: true,
+					message: 'Canonical capacity is exhausted; this operation would add new bytes.',
+				}, processed.report);
+			}
+			operation = reservation.operation;
 			const canonicalSourceRead = await staging.read(stagingIdentity);
 			if (canonicalSourceRead.outcome !== 'available') {
 				return await failOperation(catalogue, operation, {
@@ -624,6 +667,32 @@ export function createGraphicsAssetLibrary(
 				catalogue,
 				byteStores: { staging, canonical },
 			};
+		},
+		async getCapacity() {
+			return await catalogueRequest(
+				() => requireCatalogue().getCapacity(),
+				'Graphics Asset Library capacity is temporarily unavailable',
+			);
+		},
+		async updateCapacityLimits(input) {
+			if (
+				!Number.isSafeInteger(input.canonicalLimitBytes)
+				|| input.canonicalLimitBytes <= 0
+				|| !Number.isSafeInteger(input.stagingLimitBytes)
+				|| input.stagingLimitBytes <= 0
+			) {
+				throw new GraphicsAssetLibraryError(
+					'Graphics capacity limits must be positive whole byte counts',
+					'invalid-ingestion-input',
+				);
+			}
+			return await catalogueRequest(
+				() => requireCatalogue().updateCapacityLimits({
+					...input,
+					updatedAt: timestamp(),
+				}),
+				'Graphics capacity limits could not be updated',
+			);
 		},
 		async initiatePngIngestion(input) {
 			if (!input.idempotencyKey.trim() || !input.initiatedBy.trim() || !input.name.trim())
@@ -774,6 +843,13 @@ export function createGraphicsAssetLibrary(
 				await staging.delete(stagingIdentity);
 				return authoritative;
 			}
+			await catalogueRequest(
+				() => catalogue.recordStagedBytes({
+					operation,
+					usedBytes: staged.object.byteLength,
+				}),
+				'Graphics staging progress could not be recorded',
+			);
 			return await continuePngIngestion(operation);
 		},
 		async retryPngIngestion(input) {

@@ -4,6 +4,7 @@ import type {
 	GraphicAssetImageFacts,
 	GraphicAssetRevisionId,
 	GraphicAssetUsage,
+	GraphicsAssetLibraryCapacity,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 } from '~~/shared/types/graphicsAsset';
@@ -11,6 +12,7 @@ import type {
 	GraphicsAssetCatalogue,
 	PublishPngCatalogueInput,
 } from '.';
+import { GraphicsAssetLibraryError } from './errors';
 
 interface OperationRow {
 	id: string;
@@ -22,6 +24,7 @@ interface OperationRow {
 	declared_byte_length: number;
 	transferred_byte_length: number;
 	stage: GraphicsIngestionOperation['stage'];
+	capacity_outcome: string | null;
 	report: string | null;
 	result: string | null;
 	failure: string | null;
@@ -45,6 +48,7 @@ interface AssetRow {
 	declared_byte_length: number;
 	transferred_byte_length: number;
 	stage: GraphicsIngestionOperation['stage'];
+	capacity_outcome: string | null;
 	report: string | null;
 	result: string | null;
 	failure: string | null;
@@ -67,6 +71,7 @@ function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 		declaredByteLength: row.declared_byte_length,
 		transferredByteLength: row.transferred_byte_length,
 		stage: row.stage,
+		capacity: parseJson(row.capacity_outcome),
 		report: parseJson(row.report),
 		result: parseJson(row.result),
 		failure: parseJson(row.failure),
@@ -86,6 +91,7 @@ function operationRowFromAsset(row: AssetRow): OperationRow {
 		declared_byte_length: row.declared_byte_length,
 		transferred_byte_length: row.transferred_byte_length,
 		stage: row.stage,
+		capacity_outcome: row.capacity_outcome,
 		report: row.report,
 		result: row.result,
 		failure: row.failure,
@@ -99,7 +105,7 @@ function operationSelect(where: string) {
 		SELECT id, idempotency_key, initiated_by, proposed_name,
 			duplicate_content_policy, default_event_id,
 			declared_byte_length, transferred_byte_length, stage, report, result,
-			failure, created_at, updated_at
+			capacity_outcome, failure, created_at, updated_at
 		FROM graphics_ingestion_operations
 		WHERE ${where}
 	`;
@@ -139,7 +145,25 @@ function updateOperationStatement(
 	return database.prepare(`
 		UPDATE graphics_ingestion_operations
 		SET stage = ?, transferred_byte_length = ?, report = ?, result = ?,
-			failure = ?, updated_at = ?
+			failure = ?, capacity_outcome = ?, updated_at = ?,
+			staging_reserved_byte_length = CASE
+				WHEN ? IN ('completed', 'cancelled')
+					OR (? = 'failed' AND json_extract(?, '$.retryable') = 0)
+					THEN 0
+				ELSE staging_reserved_byte_length
+			END,
+			staging_used_byte_length = CASE
+				WHEN ? IN ('completed', 'cancelled')
+					OR (? = 'failed' AND json_extract(?, '$.retryable') = 0)
+					THEN 0
+				ELSE staging_used_byte_length
+			END,
+			canonical_reserved_byte_length = CASE
+				WHEN ? IN ('completed', 'cancelled')
+					OR (? = 'failed' AND json_extract(?, '$.retryable') = 0)
+					THEN 0
+				ELSE canonical_reserved_byte_length
+			END
 		WHERE id = ? AND initiated_by = ?
 			AND stage NOT IN ('cancelled', 'completed')
 			AND updated_at = ?
@@ -149,11 +173,32 @@ function updateOperationStatement(
 		operation.report === undefined ? null : JSON.stringify(operation.report),
 		operation.result === undefined ? null : JSON.stringify(operation.result),
 		operation.failure === undefined ? null : JSON.stringify(operation.failure),
+		operation.capacity === undefined ? null : JSON.stringify(operation.capacity),
 		new Date(operation.updatedAt).getTime(),
+		operation.stage,
+		operation.stage,
+		operation.failure === undefined ? null : JSON.stringify(operation.failure),
+		operation.stage,
+		operation.stage,
+		operation.failure === undefined ? null : JSON.stringify(operation.failure),
+		operation.stage,
+		operation.stage,
+		operation.failure === undefined ? null : JSON.stringify(operation.failure),
 		operation.id,
 		operation.initiatedBy,
 		new Date(expectedUpdatedAt).getTime(),
 	);
+}
+
+function capacityPressure(usedBytes: number, limitBytes: number): GraphicsAssetLibraryCapacity['canonical']['pressure'] {
+	const ratio = usedBytes / limitBytes;
+	if (ratio >= 1)
+		return 'full';
+	if (ratio >= 0.95)
+		return 'critical';
+	if (ratio >= 0.8)
+		return 'warning';
+	return 'normal';
 }
 
 export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAssetCatalogue {
@@ -166,14 +211,165 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				throw new Error('Graphics Asset catalogue health query failed');
 			return { outcome: 'healthy' };
 		},
+		async getCapacity() {
+			const row = await database.prepare(`
+				SELECT
+					settings.canonical_limit_bytes,
+					settings.staging_limit_bytes,
+					COALESCE((
+						SELECT SUM(contents.byte_length)
+						FROM graphic_asset_contents contents
+						WHERE EXISTS (
+							SELECT 1 FROM graphic_asset_revisions revisions
+							WHERE revisions.content_digest = contents.digest
+						)
+					), 0) AS retained_source_bytes,
+					COALESCE((
+						SELECT SUM(contents.byte_length)
+						FROM graphic_asset_contents contents
+						WHERE NOT EXISTS (
+							SELECT 1 FROM graphic_asset_revisions revisions
+							WHERE revisions.content_digest = contents.digest
+						)
+							AND EXISTS (
+								SELECT 1 FROM graphics_derivatives derivatives
+								WHERE derivatives.content_digest = contents.digest
+							)
+					), 0) AS retained_derivative_bytes,
+					COALESCE((
+						SELECT SUM(canonical_reserved_byte_length)
+						FROM graphics_ingestion_operations
+					), 0) AS canonical_reserved_bytes,
+					COALESCE((
+						SELECT SUM(staging_used_byte_length)
+						FROM graphics_ingestion_operations
+					), 0) AS staging_used_bytes,
+					COALESCE((
+						SELECT SUM(staging_reserved_byte_length)
+						FROM graphics_ingestion_operations
+					), 0) AS staging_reserved_bytes
+				FROM graphics_capacity_settings settings
+				WHERE settings.id = 1
+			`).first<{
+				canonical_limit_bytes: number;
+				staging_limit_bytes: number;
+				retained_source_bytes: number;
+				retained_derivative_bytes: number;
+				canonical_reserved_bytes: number;
+				staging_used_bytes: number;
+				staging_reserved_bytes: number;
+			}>();
+			if (!row)
+				throw new Error('Graphics capacity settings are unavailable');
+			const usedBytes = row.retained_source_bytes + row.retained_derivative_bytes;
+			return {
+				canonical: {
+					limitBytes: row.canonical_limit_bytes,
+					usedBytes,
+					reservedBytes: row.canonical_reserved_bytes,
+					availableBytes: Math.max(
+						0,
+						row.canonical_limit_bytes - usedBytes - row.canonical_reserved_bytes,
+					),
+					pressure: capacityPressure(usedBytes, row.canonical_limit_bytes),
+					breakdown: {
+						retainedSourceBytes: row.retained_source_bytes,
+						retainedDerivativeBytes: row.retained_derivative_bytes,
+						metadataBytes: 0,
+						providerCacheBytes: 0,
+						unreachableQuarantineBytes: 0,
+					},
+				},
+				staging: {
+					limitBytes: row.staging_limit_bytes,
+					usedBytes: row.staging_used_bytes,
+					reservedBytes: row.staging_reserved_bytes,
+					availableBytes: Math.max(
+						0,
+						row.staging_limit_bytes - row.staging_used_bytes - row.staging_reserved_bytes,
+					),
+				},
+			};
+		},
+		async updateCapacityLimits(input) {
+			const result = await database.prepare(`
+					UPDATE graphics_capacity_settings
+					SET canonical_limit_bytes = ?, staging_limit_bytes = ?, updated_at = ?
+					WHERE id = 1
+							AND ? >= (
+								SELECT COALESCE(SUM(byte_length), 0)
+								FROM graphic_asset_contents
+								WHERE EXISTS (
+									SELECT 1 FROM graphic_asset_revisions
+									WHERE content_digest = graphic_asset_contents.digest
+								)
+									OR EXISTS (
+										SELECT 1 FROM graphics_derivatives
+										WHERE content_digest = graphic_asset_contents.digest
+									)
+							) + (
+							SELECT COALESCE(SUM(canonical_reserved_byte_length), 0)
+							FROM graphics_ingestion_operations
+						)
+						AND ? >= (
+							SELECT COALESCE(SUM(
+								staging_used_byte_length + staging_reserved_byte_length
+							), 0)
+							FROM graphics_ingestion_operations
+						)
+				`).bind(
+				input.canonicalLimitBytes,
+				input.stagingLimitBytes,
+				new Date(input.updatedAt).getTime(),
+				input.canonicalLimitBytes,
+				input.stagingLimitBytes,
+			).run();
+			if (!result.success)
+				throw new Error('Graphics capacity settings update failed');
+			if (result.meta.changes !== 1) {
+				const capacity = await this.getCapacity();
+				const canonicalRequired
+					= capacity.canonical.usedBytes + capacity.canonical.reservedBytes;
+				if (input.canonicalLimitBytes < canonicalRequired) {
+					throw new GraphicsAssetLibraryError(
+						'Canonical capacity cannot be set below current usage and reservations',
+						'canonical-capacity-exhausted',
+					);
+				}
+				throw new GraphicsAssetLibraryError(
+					'Staging capacity cannot be set below current usage and reservations',
+					'staging-capacity-exhausted',
+				);
+			}
+			return await this.getCapacity();
+		},
 		async initiatePngIngestion(operation) {
+			const existing = await firstOperation(
+				database,
+				'initiated_by = ? AND idempotency_key = ?',
+				operation.initiatedBy,
+				operation.idempotencyKey,
+			);
+			if (existing)
+				return existing;
+
 			await database.prepare(`
 				INSERT OR IGNORE INTO graphics_ingestion_operations (
 					id, idempotency_key, source, stage, initiated_by, proposed_name,
 					duplicate_content_policy, default_event_id,
 					declared_byte_length, transferred_byte_length,
+					staging_reserved_byte_length,
 					created_at, updated_at
-				) VALUES (?, ?, 'local-upload', 'created', ?, ?, ?, ?, ?, 0, ?, ?)
+				)
+				SELECT ?, ?, 'local-upload', 'created', ?, ?, ?, ?, ?, 0, ?, ?, ?
+				FROM graphics_capacity_settings settings
+				WHERE settings.id = 1
+					AND (
+						SELECT COALESCE(SUM(
+							staging_reserved_byte_length + staging_used_byte_length
+						), 0)
+						FROM graphics_ingestion_operations
+					) + ? <= settings.staging_limit_bytes
 			`).bind(
 				operation.id,
 				operation.idempotencyKey,
@@ -182,8 +378,10 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				operation.duplicateContentPolicy,
 				operation.defaultEventId ?? null,
 				operation.declaredByteLength,
+				operation.declaredByteLength,
 				new Date(operation.createdAt).getTime(),
 				new Date(operation.updatedAt).getTime(),
+				operation.declaredByteLength,
 			).run();
 			const authoritative = await firstOperation(
 				database,
@@ -191,9 +389,145 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				operation.initiatedBy,
 				operation.idempotencyKey,
 			);
-			if (!authoritative)
-				throw new Error('Graphics Ingestion Operation initiation failed');
+			if (!authoritative) {
+				const capacity = await this.getCapacity();
+				throw new GraphicsAssetLibraryError(
+					'Graphics staging capacity is exhausted',
+					'staging-capacity-exhausted',
+					{
+						capacity: {
+							resource: 'staging',
+							limitBytes: capacity.staging.limitBytes,
+							usedBytes: capacity.staging.usedBytes,
+							reservedBytes: capacity.staging.reservedBytes,
+							requestedBytes: operation.declaredByteLength,
+							availableBytes: capacity.staging.availableBytes,
+						},
+					},
+				);
+			}
 			return authoritative;
+		},
+		async recordStagedBytes(input) {
+			const result = await database.prepare(`
+				UPDATE graphics_ingestion_operations
+				SET staging_used_byte_length = ?,
+					staging_reserved_byte_length = declared_byte_length - ?
+				WHERE id = ? AND initiated_by = ?
+					AND stage NOT IN ('completed', 'cancelled')
+					AND ? BETWEEN 0 AND declared_byte_length
+			`).bind(
+				input.usedBytes,
+				input.usedBytes,
+				input.operation.id,
+				input.operation.initiatedBy,
+				input.usedBytes,
+			).run();
+			if (!result.success || result.meta.changes !== 1)
+				throw new Error('Graphics staging progress could not be recorded');
+		},
+		async reservePngPublication(input) {
+			const proposed = new Map<string, number>([
+				[input.sourceDigest, input.sourceByteLength],
+				[input.thumbnailDigest, input.thumbnailByteLength],
+			]);
+			const existing = await Promise.all(
+				[...proposed].map(async ([digest, byteLength]) => ({
+					digest,
+					byteLength,
+					exists: Boolean(await database.prepare(`
+						SELECT 1 FROM graphic_asset_contents WHERE digest = ?
+					`).bind(digest).first()),
+				})),
+			);
+			const growthBytes = existing
+				.filter(content => !content.exists)
+				.reduce((total, content) => total + content.byteLength, 0);
+			const currentReservation = await database.prepare(`
+				SELECT canonical_reserved_byte_length
+				FROM graphics_ingestion_operations
+				WHERE id = ? AND initiated_by = ?
+			`).bind(
+				input.operation.id,
+				input.operation.initiatedBy,
+			).first<{ canonical_reserved_byte_length: number }>();
+			const ownReservedBytes = currentReservation?.canonical_reserved_byte_length ?? 0;
+			const before = await this.getCapacity();
+			const availableBeforeReservation = before.canonical.availableBytes + ownReservedBytes;
+			const capacityOutcome = growthBytes === 0
+				? {
+						outcome: 'no-canonical-growth' as const,
+						growthBytes: 0 as const,
+						availableBytes: availableBeforeReservation,
+					}
+				: {
+						outcome: 'canonical-growth-reserved' as const,
+						growthBytes,
+						availableBytes: Math.max(0, availableBeforeReservation - growthBytes),
+					};
+			const result = await database.prepare(`
+				UPDATE graphics_ingestion_operations
+				SET canonical_reserved_byte_length = ?,
+					capacity_outcome = ?,
+					updated_at = ?
+				WHERE id = ? AND initiated_by = ? AND updated_at = ?
+					AND stage = 'generating-derivatives'
+					AND ? <= (
+						SELECT canonical_limit_bytes
+						FROM graphics_capacity_settings
+						WHERE id = 1
+					) - (
+						SELECT COALESCE(SUM(byte_length), 0)
+						FROM graphic_asset_contents
+						WHERE EXISTS (
+							SELECT 1 FROM graphic_asset_revisions
+							WHERE content_digest = graphic_asset_contents.digest
+						)
+							OR EXISTS (
+								SELECT 1 FROM graphics_derivatives
+								WHERE content_digest = graphic_asset_contents.digest
+							)
+					) - (
+						SELECT COALESCE(SUM(canonical_reserved_byte_length), 0)
+						FROM graphics_ingestion_operations
+						WHERE id <> ?
+					)
+			`).bind(
+				growthBytes,
+				JSON.stringify(capacityOutcome),
+				new Date(input.reservedAt).getTime(),
+				input.operation.id,
+				input.operation.initiatedBy,
+				new Date(input.operation.updatedAt).getTime(),
+				growthBytes,
+				input.operation.id,
+			).run();
+			if (!result.success)
+				throw new Error('Graphics canonical reservation failed');
+			if (result.meta.changes === 1) {
+				const operation = await firstOperation(
+					database,
+					'id = ? AND initiated_by = ?',
+					input.operation.id,
+					input.operation.initiatedBy,
+				);
+				if (!operation)
+					throw new Error('Graphics canonical reservation was not durable');
+				return { outcome: 'reserved' as const, operation };
+			}
+			const capacity = await this.getCapacity();
+			const availableBytes = capacity.canonical.availableBytes + ownReservedBytes;
+			return {
+				outcome: 'blocked' as const,
+				capacity: {
+					resource: 'canonical' as const,
+					limitBytes: capacity.canonical.limitBytes,
+					usedBytes: capacity.canonical.usedBytes,
+					reservedBytes: capacity.canonical.reservedBytes - ownReservedBytes,
+					requestedBytes: growthBytes,
+					availableBytes,
+				},
+			};
 		},
 		async getIngestionOperation(operationId, initiatedBy) {
 			return await firstOperation(database, 'id = ? AND initiated_by = ?', operationId, initiatedBy);
@@ -439,6 +773,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					o.proposed_name, o.duplicate_content_policy,
 					o.default_event_id, o.declared_byte_length,
 					o.transferred_byte_length, o.stage, o.report, o.result, o.failure,
+					o.capacity_outcome,
 					o.created_at AS operation_created_at,
 					o.updated_at AS operation_updated_at
 				FROM graphic_assets a
