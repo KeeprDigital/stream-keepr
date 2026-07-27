@@ -19,14 +19,14 @@ export function useGraphicAssetPublicationEligibility(
 	const eligibility = ref<GraphicAssetPublicationEligibility>({ outcome: 'checking' });
 	const statusFlights = createGuardedSequence();
 	const {
-		generation: referenceStatusRefreshGeneration,
+		signal: referenceStatusRefreshSignal,
 		requestRefresh,
 	} = useGraphicAssetReferenceStatusRefresh();
 
 	watch(
 		() => ({
 			references: featureMatchOverlayGraphicAssetReferences(toValue(config)),
-			refreshGeneration: referenceStatusRefreshGeneration.value,
+			refreshSignal: referenceStatusRefreshSignal.value,
 		}),
 		async ({ references }) => {
 			const flight = statusFlights.begin();

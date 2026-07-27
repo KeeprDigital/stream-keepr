@@ -23,7 +23,7 @@ const thisEventOnly = ref(true);
 const referenceStatus = ref<GraphicAssetReferenceStatus>();
 const referenceStatusFlights = createGuardedSequence();
 const {
-	generation: referenceStatusRefreshGeneration,
+	signal: referenceStatusRefreshSignal,
 	requestRefresh: retryReferenceStatus,
 } = useGraphicAssetReferenceStatusRefresh();
 const {
@@ -45,7 +45,7 @@ const selectedAsset = computed(() => (assets.value ?? []).find(asset =>
 
 watch(() => ({
 	reference: props.modelValue,
-	refreshGeneration: referenceStatusRefreshGeneration.value,
+	refreshSignal: referenceStatusRefreshSignal.value,
 }), async ({ reference }) => {
 	const flight = referenceStatusFlights.begin();
 	if (!reference) {

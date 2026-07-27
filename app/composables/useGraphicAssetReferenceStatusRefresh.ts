@@ -1,14 +1,14 @@
-const STATUS_REFRESH_GENERATION_KEY = 'graphic-asset-reference-status-refresh-generation';
+const STATUS_REFRESH_SIGNAL_KEY = 'graphic-asset-reference-status-refresh-signal';
 
 export function useGraphicAssetReferenceStatusRefresh() {
-	const generation = useState<number>(STATUS_REFRESH_GENERATION_KEY, () => 0);
+	const signal = useState<boolean>(STATUS_REFRESH_SIGNAL_KEY, () => false);
 
 	function requestRefresh() {
-		generation.value += 1;
+		signal.value = !signal.value;
 	}
 
 	return {
-		generation: readonly(generation),
+		signal: readonly(signal),
 		requestRefresh,
 	};
 }
