@@ -4,9 +4,11 @@ import type {
 	GraphicAssetRevisionId,
 } from '~~/shared/types/graphicsAsset';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { flushPromises, mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+
+enableAutoUnmount(afterEach);
 
 const assets = ref<GraphicAsset[]>([
 	{
@@ -146,6 +148,46 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 
 		expect(wrapper.text()).toContain('Missing Graphic Asset Reference');
 		expect(wrapper.text()).toContain('Publication-requiring actions are unavailable');
+	});
+
+	it('refreshes its exact-revision status when unavailable content is retried', async () => {
+		mockApiFetch.mockResolvedValue({ outcome: 'unavailable', retryable: true });
+		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
+		const wrapper = mount(FocusPicker, {
+			props: {
+				modelValue: {
+					assetId: 'temporarily-unavailable-asset' as GraphicAssetId,
+					revisionId: 'pinned-revision' as GraphicAssetRevisionId,
+				},
+				eventId: 7,
+				fieldLabel: 'Frame image',
+			},
+			global: {
+				stubs: {
+					UModal: passthroughStub,
+					UButton: buttonStub,
+					UInput: passthroughStub,
+					UBadge: passthroughStub,
+					UAlert: defineComponent({
+						props: ['title', 'description'],
+						template: '<div>{{ title }} {{ description }}</div>',
+					}),
+					UIcon: passthroughStub,
+				},
+			},
+		});
+		await flushPromises();
+
+		expect(wrapper.text()).toContain('Unavailable Graphic Asset Content');
+
+		const requestsBeforeRetry = mockApiFetch.mock.calls.length;
+		mockApiFetch.mockResolvedValue({ outcome: 'available', lifecycleState: 'active' });
+		await wrapper.get('[data-testid="retry-graphic-asset-reference-status"]').trigger('click');
+		await flushPromises();
+
+		expect(mockApiFetch).toHaveBeenCalledTimes(requestsBeforeRetry + 1);
+		expect(wrapper.text()).toContain('Pinned revision pinned-revision is available');
+		expect(wrapper.text()).not.toContain('Unavailable Graphic Asset Content');
 	});
 
 	it('discards a stale reference-status Flight after the selected revision changes', async () => {

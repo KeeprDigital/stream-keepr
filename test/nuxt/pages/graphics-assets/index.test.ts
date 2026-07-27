@@ -1,5 +1,6 @@
 import type {
 	GraphicAsset,
+	GraphicsAssetLibraryCapacity,
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
@@ -9,10 +10,12 @@ import { defineComponent, reactive, ref } from 'vue';
 
 const {
 	mockApiFetch,
+	mockCapacityRefresh,
 	mockRefresh,
 	mockTransferFetch,
 } = vi.hoisted(() => ({
 	mockApiFetch: vi.fn(),
+	mockCapacityRefresh: vi.fn(),
 	mockRefresh: vi.fn(),
 	mockTransferFetch: vi.fn(),
 }));
@@ -65,16 +68,38 @@ const assets = ref<GraphicAsset[]>([{
 	eventIds: [7],
 	operation: completedOperation,
 }]);
+const capacity = ref<GraphicsAssetLibraryCapacity>({
+	canonical: {
+		limitBytes: 100,
+		usedBytes: 95,
+		reservedBytes: 0,
+		availableBytes: 5,
+		pressure: 'critical',
+		breakdown: {
+			retainedSourceBytes: 68,
+			retainedDerivativeBytes: 27,
+			metadataBytes: 0,
+			providerCacheBytes: 0,
+			unreachableQuarantineBytes: 0,
+		},
+	},
+	staging: {
+		limitBytes: 20,
+		usedBytes: 10,
+		reservedBytes: 0,
+		availableBytes: 10,
+	},
+});
 
 const eventStore = reactive({ eventId: 7 });
 
 mockNuxtImport('useEventStore', () => () => eventStore);
 mockNuxtImport('$fetch', () => mockApiFetch);
-mockNuxtImport('useFetch', () => () => ({
-	data: assets,
+mockNuxtImport('useFetch', () => (path: string) => ({
+	data: path === '/api/graphics-assets/capacity' ? capacity : assets,
 	status: ref('success'),
 	error: ref(null),
-	refresh: mockRefresh,
+	refresh: path === '/api/graphics-assets/capacity' ? mockCapacityRefresh : mockRefresh,
 }));
 
 const passthroughStub = defineComponent({
@@ -122,6 +147,7 @@ async function mountPage() {
 describe('the Graphics Asset Library Workspace', () => {
 	beforeEach(() => {
 		mockApiFetch.mockReset();
+		mockCapacityRefresh.mockReset();
 		mockRefresh.mockReset();
 		mockTransferFetch.mockReset();
 		vi.stubGlobal('fetch', mockTransferFetch);
@@ -145,6 +171,16 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(wrapper.text()).toContain('revision-1');
 		expect(wrapper.text()).toContain('"outcome":"published"');
 		expect(wrapper.get('img').attributes('src')).toBe('/api/graphics-assets/asset-1/thumbnail');
+	});
+
+	it('shows canonical and staging usage with critical storage pressure', async () => {
+		const wrapper = await mountPage();
+
+		expect(wrapper.text()).toContain('Canonical Capacity Pressure: critical');
+		expect(wrapper.text()).toContain('95 B of 100 B');
+		expect(wrapper.text()).toContain('Staging 10 B of 20 B');
+		expect(wrapper.text()).toContain('Source content 68 B');
+		expect(wrapper.text()).toContain('Derivatives 27 B');
 	});
 
 	it('initiates an Event-associated operation before transferring the selected PNG', async () => {

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type {
+	GraphicsAssetLibraryCapacity,
 	GraphicsAssetLibraryComponentHealth,
 	GraphicsAssetLibraryHealth,
 } from '~~/shared/types/graphicsAsset';
+import { formatByteCount } from '~~/shared/utils/formatByteCount';
 
 definePageMeta({
 	title: 'Graphics Asset Library health',
@@ -14,6 +16,25 @@ const {
 	error,
 	refresh,
 } = useFetch<GraphicsAssetLibraryHealth>('/api/admin/graphics-assets/health');
+const {
+	data: capacity,
+	error: capacityError,
+	refresh: refreshCapacity,
+} = useFetch<GraphicsAssetLibraryCapacity>('/api/admin/graphics-assets/capacity');
+const bytesPerGiB = 1024 * 1024 * 1024;
+const canonicalLimitGiB = ref(100);
+const stagingLimitGiB = ref(10);
+const administratorToken = ref('');
+const capacitySavePending = ref(false);
+const capacitySaveError = ref<string | null>(null);
+const capacitySaveSucceeded = ref(false);
+
+watch(capacity, (value) => {
+	if (!value)
+		return;
+	canonicalLimitGiB.value = value.canonical.limitBytes / bytesPerGiB;
+	stagingLimitGiB.value = value.staging.limitBytes / bytesPerGiB;
+}, { immediate: true });
 
 const results = computed(() => health.value
 	? [
@@ -48,6 +69,37 @@ function healthColor(result: GraphicsAssetLibraryComponentHealth) {
 
 function refreshHealth() {
 	void refresh();
+	void refreshCapacity();
+}
+
+async function saveCapacityLimits() {
+	capacitySavePending.value = true;
+	capacitySaveError.value = null;
+	capacitySaveSucceeded.value = false;
+	try {
+		capacity.value = await $fetch<GraphicsAssetLibraryCapacity>(
+			'/api/admin/graphics-assets/capacity',
+			{
+				method: 'PUT',
+				headers: {
+					'x-graphics-admin-token': administratorToken.value,
+				},
+				body: {
+					canonicalLimitBytes: Math.round(canonicalLimitGiB.value * bytesPerGiB),
+					stagingLimitBytes: Math.round(stagingLimitGiB.value * bytesPerGiB),
+				},
+			},
+		);
+		capacitySaveSucceeded.value = true;
+	}
+	catch (caught) {
+		capacitySaveError.value = caught instanceof Error
+			? caught.message
+			: 'Capacity limits could not be saved.';
+	}
+	finally {
+		capacitySavePending.value = false;
+	}
 }
 </script>
 
@@ -108,6 +160,140 @@ function refreshHealth() {
 					</div>
 				</UCard>
 			</div>
+
+			<UAlert
+				v-if="capacityError"
+				color="error"
+				variant="soft"
+				icon="i-lucide-triangle-alert"
+			>
+				<p>Capacity could not be loaded — {{ capacityError.message }}</p>
+			</UAlert>
+
+			<UCard v-if="capacity">
+				<template #header>
+					<div>
+						<h2 class="font-semibold text-highlighted">
+							Graphics Asset Library Capacity
+						</h2>
+						<p class="mt-1 text-sm text-muted">
+							Canonical retained bytes and in-progress staging are enforced independently.
+						</p>
+					</div>
+				</template>
+
+				<div class="grid gap-6 lg:grid-cols-2">
+					<div class="space-y-4">
+						<div>
+							<div class="flex items-center justify-between gap-4">
+								<h3 class="font-medium text-highlighted">
+									Canonical Graphics Quota
+								</h3>
+								<UBadge :label="capacity.canonical.pressure" variant="soft" />
+							</div>
+							<p class="mt-1 text-sm text-muted">
+								{{ formatByteCount(capacity.canonical.usedBytes) }} used ·
+								{{ formatByteCount(capacity.canonical.reservedBytes) }} reserved ·
+								{{ formatByteCount(capacity.canonical.limitBytes) }} limit
+							</p>
+							<dl class="mt-3 grid grid-cols-2 gap-3 text-sm">
+								<div>
+									<dt class="text-xs text-dimmed">
+										Source content
+									</dt>
+									<dd class="text-muted">
+										{{ formatByteCount(capacity.canonical.breakdown.retainedSourceBytes) }}
+									</dd>
+								</div>
+								<div>
+									<dt class="text-xs text-dimmed">
+										Derivatives
+									</dt>
+									<dd class="text-muted">
+										{{ formatByteCount(capacity.canonical.breakdown.retainedDerivativeBytes) }}
+									</dd>
+								</div>
+								<div>
+									<dt class="text-xs text-dimmed">
+										Metadata
+									</dt>
+									<dd class="text-muted">
+										{{ formatByteCount(capacity.canonical.breakdown.metadataBytes) }}
+									</dd>
+								</div>
+								<div>
+									<dt class="text-xs text-dimmed">
+										Provider cache
+									</dt>
+									<dd class="text-muted">
+										{{ formatByteCount(capacity.canonical.breakdown.providerCacheBytes) }}
+									</dd>
+								</div>
+								<div>
+									<dt class="text-xs text-dimmed">
+										Unreachable quarantine
+									</dt>
+									<dd class="text-muted">
+										{{ formatByteCount(capacity.canonical.breakdown.unreachableQuarantineBytes) }}
+									</dd>
+								</div>
+							</dl>
+						</div>
+
+						<div>
+							<h3 class="font-medium text-highlighted">
+								Graphics Staging Allowance
+							</h3>
+							<p class="mt-1 text-sm text-muted">
+								{{ formatByteCount(capacity.staging.usedBytes) }} verified ·
+								{{ formatByteCount(capacity.staging.reservedBytes) }} reserved ·
+								{{ formatByteCount(capacity.staging.limitBytes) }} limit
+							</p>
+						</div>
+					</div>
+
+					<div class="grid content-start gap-4">
+						<UFormField label="Canonical limit" description="GiB">
+							<UInput
+								v-model.number="canonicalLimitGiB"
+								type="number"
+								:min="1"
+								step="1"
+							/>
+						</UFormField>
+						<UFormField label="Staging limit" description="GiB">
+							<UInput
+								v-model.number="stagingLimitGiB"
+								type="number"
+								:min="1"
+								step="1"
+							/>
+						</UFormField>
+						<UFormField
+							label="Graphics Administrator token"
+							description="Required to change installation-wide limits"
+						>
+							<UInput
+								v-model="administratorToken"
+								type="password"
+								autocomplete="current-password"
+							/>
+						</UFormField>
+						<UButton
+							label="Save capacity limits"
+							icon="i-lucide-save"
+							:loading="capacitySavePending"
+							@click="saveCapacityLimits"
+						/>
+						<p v-if="capacitySaveSucceeded" class="text-sm text-success">
+							Capacity limits saved.
+						</p>
+						<p v-if="capacitySaveError" class="text-sm text-error">
+							{{ capacitySaveError }}
+						</p>
+					</div>
+				</div>
+			</UCard>
 
 			<p v-if="health" class="text-xs text-dimmed">
 				Last checked {{ new Date(health.checkedAt).toLocaleString() }}

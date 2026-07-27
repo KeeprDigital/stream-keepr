@@ -1,9 +1,11 @@
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { flushPromises, mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+
+enableAutoUnmount(afterEach);
 
 const mockConfig = ref(structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG));
 const mockScreenConfig = ref({ width: 1920, height: 1080 });
@@ -94,6 +96,11 @@ const UFieldGroupStub = defineComponent({
 	template: '<div data-testid="field-group"><slot /></div>',
 });
 
+const UButtonStub = defineComponent({
+	emits: ['click'],
+	template: '<button type="button" @click="$emit(\'click\')"><slot /></button>',
+});
+
 async function mountComponent(screen: Partial<Screen> = {}) {
 	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/Settings.vue';
 	const { default: Settings } = await import(componentPath);
@@ -117,7 +124,7 @@ async function mountComponent(screen: Partial<Screen> = {}) {
 				USelect: true,
 				UInputNumber: UInputNumberStub,
 				UFieldGroup: UFieldGroupStub,
-				UButton: true,
+				UButton: UButtonStub,
 				UAlert: true,
 				UModal: true,
 			},
@@ -192,5 +199,30 @@ describe('featureMatchOverlaySettings', () => {
 		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-publication-blocked')).toBe('true');
 		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('title'))
 			.toContain('missing');
+	});
+
+	it('retries unavailable Graphic Asset Content without changing the pinned reference', async () => {
+		mockConfig.value.layout.frame.backgroundImage = {
+			assetId: 'temporarily-unavailable-asset',
+			revisionId: 'pinned-revision',
+		} as never;
+		mockApiFetch.mockResolvedValue({ outcome: 'unavailable', retryable: true });
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-publication-blocked')).toBe('true');
+
+		const requestsBeforeRetry = mockApiFetch.mock.calls.length;
+		mockApiFetch.mockResolvedValue({ outcome: 'available', lifecycleState: 'active' });
+		await wrapper.get('[data-testid="retry-graphic-asset-publication"]').trigger('click');
+		await flushPromises();
+
+		expect(mockApiFetch).toHaveBeenCalledTimes(requestsBeforeRetry + 1);
+		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-publication-blocked')).toBe('false');
+		expect(mockConfig.value.layout.frame.backgroundImage).toEqual({
+			assetId: 'temporarily-unavailable-asset',
+			revisionId: 'pinned-revision',
+		});
 	});
 });

@@ -1,5 +1,9 @@
 import { sql } from 'drizzle-orm';
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+	DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES,
+	DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
+} from '~~/shared/types/graphicsAsset';
 import { events } from '../schema';
 
 export const GRAPHIC_ASSET_KIND_VALUES = ['image', 'silent-video', 'font'] as const;
@@ -29,6 +33,18 @@ const updatedAt = integer('updated_at', { mode: 'timestamp_ms' })
 	.notNull()
 	.default(sql`(unixepoch() * 1000)`)
 	.$onUpdateFn(() => new Date());
+
+/** Installation-wide capacity limits. The singleton row is administrator-managed. */
+export const graphicsCapacitySettings = sqliteTable('graphics_capacity_settings', {
+	id: integer('id').primaryKey().default(1),
+	canonicalLimitBytes: integer('canonical_limit_bytes')
+		.notNull()
+		.default(DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES),
+	stagingLimitBytes: integer('staging_limit_bytes')
+		.notNull()
+		.default(DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES),
+	updatedAt,
+});
 
 /**
  * Installation-wide library identity and author-managed catalogue metadata.
@@ -153,6 +169,10 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	targetAssetId: text('target_asset_id').references(() => graphicAssets.id, { onDelete: 'set null' }),
 	declaredByteLength: integer('declared_byte_length'),
 	transferredByteLength: integer('transferred_byte_length').notNull().default(0),
+	stagingReservedByteLength: integer('staging_reserved_byte_length').notNull().default(0),
+	stagingUsedByteLength: integer('staging_used_byte_length').notNull().default(0),
+	canonicalReservedByteLength: integer('canonical_reserved_byte_length').notNull().default(0),
+	capacityOutcome: text('capacity_outcome', { mode: 'json' }).$type<Record<string, unknown>>(),
 	report: text('report', { mode: 'json' }).$type<Record<string, unknown>>(),
 	result: text('result', { mode: 'json' }).$type<Record<string, unknown>>(),
 	failure: text('failure', { mode: 'json' }).$type<Record<string, unknown>>(),
@@ -163,6 +183,23 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	uniqueIndex('graphics_ingestion_operations_author_idempotency_idx').on(table.initiatedBy, table.idempotencyKey),
 	index('graphics_ingestion_operations_stage_idx').on(table.stage),
 	index('graphics_ingestion_operations_event_idx').on(table.defaultEventId),
+]);
+
+/**
+ * Canonical objects created before atomic catalogue publication. Terminal
+ * failures remain here as unreachable quarantine; successful publication
+ * removes the operation's candidates in the same D1 batch.
+ */
+export const graphicsCanonicalWriteCandidates = sqliteTable('graphics_canonical_write_candidates', {
+	operationId: text('operation_id')
+		.references(() => graphicsIngestionOperations.id, { onDelete: 'cascade' })
+		.notNull(),
+	digest: text('digest').notNull(),
+	byteLength: integer('byte_length').notNull(),
+	createdAt,
+}, table => [
+	primaryKey({ columns: [table.operationId, table.digest] }),
+	index('graphics_canonical_write_candidates_digest_idx').on(table.digest),
 ]);
 
 export type DbGraphicAsset = typeof graphicAssets.$inferSelect;
@@ -177,3 +214,4 @@ export type DbGraphicAssetReference = typeof graphicAssetReferences.$inferSelect
 export type DbGraphicAssetReferenceInsert = typeof graphicAssetReferences.$inferInsert;
 export type DbGraphicsIngestionOperation = typeof graphicsIngestionOperations.$inferSelect;
 export type DbGraphicsIngestionOperationInsert = typeof graphicsIngestionOperations.$inferInsert;
+export type DbGraphicsCanonicalWriteCandidate = typeof graphicsCanonicalWriteCandidates.$inferSelect;

@@ -3,6 +3,9 @@ declare const graphicAssetRevisionIdBrand: unique symbol;
 declare const graphicsDerivativeIdBrand: unique symbol;
 declare const graphicsIngestionOperationIdBrand: unique symbol;
 
+export const DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES = 100 * 1024 * 1024 * 1024;
+export const DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES = 10 * 1024 * 1024 * 1024;
+
 export type GraphicAssetId = string & {
 	readonly [graphicAssetIdBrand]: 'GraphicAssetId';
 };
@@ -101,6 +104,8 @@ export interface GraphicsIngestionFailure {
 	code:
 		| 'ingestion-cancelled'
 		| 'staging-unavailable'
+		| 'staging-capacity-exhausted'
+		| 'canonical-capacity-exhausted'
 		| 'canonical-store-unavailable'
 		| 'catalogue-publication-failed'
 		| 'ingestion-processing-failed'
@@ -108,6 +113,23 @@ export interface GraphicsIngestionFailure {
 	retryable: boolean;
 	message: string;
 }
+
+export type GraphicsIngestionCapacityOutcome
+	= | {
+		outcome: 'canonical-growth-reserved';
+		growthBytes: number;
+		availableBytes: number;
+	}
+	| {
+		outcome: 'no-canonical-growth';
+		growthBytes: 0;
+		availableBytes: number;
+	}
+	| {
+		outcome: 'canonical-capacity-blocked';
+		growthBytes: number;
+		availableBytes: number;
+	};
 
 export interface GraphicsIngestionOperation {
 	id: GraphicsIngestionOperationId;
@@ -119,6 +141,7 @@ export interface GraphicsIngestionOperation {
 	declaredByteLength: number;
 	transferredByteLength: number;
 	stage: GraphicsIngestionStage;
+	canonicalCapacityOutcome?: GraphicsIngestionCapacityOutcome;
 	report?: GraphicAssetValidationReport;
 	result?: {
 		outcome: 'published' | 'reused';
@@ -158,5 +181,35 @@ export interface GraphicsAssetLibraryHealth {
 	byteStores: {
 		staging: GraphicsAssetLibraryComponentHealth;
 		canonical: GraphicsAssetLibraryComponentHealth;
+	};
+}
+
+export type GraphicsCanonicalCapacityPressure = 'normal' | 'warning' | 'critical' | 'full';
+
+export interface GraphicsAssetCapacityLimits {
+	canonicalLimitBytes: number;
+	stagingLimitBytes: number;
+}
+
+export interface GraphicsAssetLibraryCapacity {
+	canonical: {
+		limitBytes: number;
+		usedBytes: number;
+		reservedBytes: number;
+		availableBytes: number;
+		pressure: GraphicsCanonicalCapacityPressure;
+		breakdown: {
+			retainedSourceBytes: number;
+			retainedDerivativeBytes: number;
+			metadataBytes: number;
+			providerCacheBytes: number;
+			unreachableQuarantineBytes: number;
+		};
+	};
+	staging: {
+		limitBytes: number;
+		usedBytes: number;
+		reservedBytes: number;
+		availableBytes: number;
 	};
 }

@@ -4,6 +4,7 @@ import type {
 	GraphicAssetReference,
 	GraphicAssetReferenceStatus,
 } from '~~/shared/types/graphicsAsset';
+import { graphicAssetRevisionStatusPath } from '~~/shared/utils/graphicsAssetReferences';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
 const props = defineProps<{
@@ -22,6 +23,10 @@ const thisEventOnly = ref(true);
 const referenceStatus = ref<GraphicAssetReferenceStatus>();
 const referenceStatusFlights = createGuardedSequence();
 const {
+	signal: referenceStatusRefreshSignal,
+	requestRefresh: retryReferenceStatus,
+} = useGraphicAssetReferenceStatusRefresh();
+const {
 	data: assets,
 	status,
 	error,
@@ -38,7 +43,10 @@ const selectedAsset = computed(() => (assets.value ?? []).find(asset =>
 	&& asset.revisionId === props.modelValue?.revisionId,
 ));
 
-watch(() => props.modelValue, async (reference) => {
+watch(() => ({
+	reference: props.modelValue,
+	refreshSignal: referenceStatusRefreshSignal.value,
+}), async ({ reference }) => {
 	const flight = referenceStatusFlights.begin();
 	if (!reference) {
 		referenceStatus.value = undefined;
@@ -46,7 +54,7 @@ watch(() => props.modelValue, async (reference) => {
 	}
 	try {
 		const status = await $fetch<GraphicAssetReferenceStatus>(
-			`/api/graphics-assets/${encodeURIComponent(reference.assetId)}/revisions/${encodeURIComponent(reference.revisionId)}/status`,
+			graphicAssetRevisionStatusPath(reference),
 		);
 		if (flight.current)
 			referenceStatus.value = status;
@@ -108,6 +116,16 @@ function selectAsset(asset: GraphicAsset) {
 			title="Unavailable Graphic Asset Content"
 			description="This exact revision still exists but its bytes are temporarily unavailable. Retry before a publication-requiring action."
 		/>
+		<UButton
+			v-if="modelValue && referenceStatus?.outcome === 'unavailable'"
+			data-testid="retry-graphic-asset-reference-status"
+			color="warning"
+			variant="soft"
+			icon="i-lucide-refresh-cw"
+			@click="retryReferenceStatus"
+		>
+			Retry Graphic Asset Content
+		</UButton>
 
 		<UModal v-model:open="open">
 			<template #content>
