@@ -4,6 +4,16 @@
 	// bindings to .output/server/wrangler.json. Keep each binding in one source.
 	"compatibility_date": "2026-07-16",
 	"compatibility_flags": ["nodejs_compat", "no_nodejs_compat_v2"],
+	"r2_buckets": [
+		{
+			"binding": "GRAPHICS_ASSET_STAGING",
+			"bucket_name": "stream-graphics-asset-staging"
+		},
+		{
+			"binding": "GRAPHICS_ASSET_CANONICAL",
+			"bucket_name": "stream-graphics-asset-canonical"
+		}
+	],
 	"observability": {
 		"enabled": true,
 		"logs": {

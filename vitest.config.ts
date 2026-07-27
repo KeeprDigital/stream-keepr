@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import { rootAliases, unitCoverageConfig } from './';
+import { rootAliases, unitCoverageConfig } from './vitest.shared';
 
 export default defineConfig({
 	resolve: {
