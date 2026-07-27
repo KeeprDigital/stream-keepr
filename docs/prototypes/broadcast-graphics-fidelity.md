@@ -31,7 +31,7 @@ The existing Feature Match Overlay is a viable foundation, but its capability se
 
 ### Existing base that carries forward
 
-- Canvas-relative geometry, anchors, visibility, and explicit z-order.
+- Canvas-relative geometry, anchors, visibility, and explicit Graphic Layer Order.
 - Positioned text and image items.
 - Text styling, solid and gradient surfaces, opacity, borders, per-corner radius, glow, and overflow control.
 - Canvas groups with row, column, or free placement and clipping.

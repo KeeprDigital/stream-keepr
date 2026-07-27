@@ -49,7 +49,7 @@ const reconstructions: Reconstruction[] = [
 			'5.7 s — names leave, followed by rules and beds',
 		],
 		capabilities: [
-			{ status: 'existing', label: 'Positioned text and box styling', detail: 'Geometry, z-order, text styling, gradients, opacity, and one-sided borders already exist.' },
+			{ status: 'existing', label: 'Positioned text and box styling', detail: 'Geometry, Graphic Layer Order, text styling, gradients, opacity, and one-sided borders already exist.' },
 			{ status: 'critical-gap', label: 'Bounded angular geometry', detail: 'The angled outer ends need a shape or corner-cut preset; arbitrary path drawing is unnecessary.' },
 			{ status: 'critical-gap', label: 'Enter and exit recipes', detail: 'The existing editor has no playout lifecycle animation for a Graphic Item or group.' },
 		],

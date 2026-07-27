@@ -48,6 +48,14 @@ export interface GraphicsMultipartPart {
 	byteLength: number;
 }
 
+export interface GraphicsObjectStoreUnavailable {
+	outcome: 'unavailable';
+	reason: {
+		code: 'object-unavailable' | 'transient-object-store-failure';
+		retryable: true;
+	};
+}
+
 export type BeginGraphicsMultipartOutcome = {
 	outcome: 'started';
 	upload: GraphicsMultipartUpload;
@@ -86,14 +94,6 @@ export interface GraphicsObjectRange {
 	completeLength: number;
 }
 
-export interface GraphicsObjectStoreUnavailable {
-	outcome: 'unavailable';
-	reason: {
-		code: 'object-unavailable' | 'transient-object-store-failure';
-		retryable: true;
-	};
-}
-
 export type ReadGraphicsObjectOutcome
 	= | {
 		outcome: 'available';
@@ -104,11 +104,30 @@ export type ReadGraphicsObjectOutcome
 	| { outcome: 'missing' }
 	| GraphicsObjectStoreUnavailable;
 
-export interface GraphicsObjectStore {
+export interface GraphicsObjectStoreHealth {
 	checkHealth: () => Promise<{ outcome: 'healthy' } | GraphicsObjectStoreUnavailable>;
-	createImmutable: (input: CreateImmutableGraphicsObjectInput) => Promise<CreateImmutableGraphicsObjectOutcome>;
+}
+
+interface GraphicsObjectStoreAccess extends GraphicsObjectStoreHealth {
 	readMetadata: (identity: GraphicsObjectIdentity) => Promise<GraphicsObjectMetadataOutcome>;
 	read: (identity: GraphicsObjectIdentity, range?: { offset: number; length: number }) => Promise<ReadGraphicsObjectOutcome>;
+	delete: (identity: GraphicsObjectIdentity) => Promise<DeleteGraphicsObjectOutcome>;
+}
+
+/**
+ * Canonical content is immutable. Its capability deliberately has no multipart
+ * completion operation, so callers cannot overwrite a digest-owned identity.
+ */
+export interface GraphicsCanonicalObjectStore extends GraphicsObjectStoreAccess {
+	createImmutable: (input: CreateImmutableGraphicsObjectInput) => Promise<CreateImmutableGraphicsObjectOutcome>;
+}
+
+/**
+ * Staging content is operation-owned and may be replaced by a completed,
+ * resumable multipart transfer before validation and canonical publication.
+ */
+export interface GraphicsStagingObjectStore extends GraphicsObjectStoreAccess {
+	createImmutable: (input: CreateImmutableGraphicsObjectInput) => Promise<CreateImmutableGraphicsObjectOutcome>;
 	beginMultipart: (input: Pick<CreateImmutableGraphicsObjectInput, 'identity' | 'metadata'>) => Promise<BeginGraphicsMultipartOutcome>;
 	resumeMultipart: (identity: GraphicsObjectIdentity, uploadId: GraphicsMultipartUploadIdentity) => Promise<ResumeGraphicsMultipartOutcome>;
 	uploadPart: (input: {
@@ -121,39 +140,40 @@ export interface GraphicsObjectStore {
 		parts: readonly GraphicsMultipartPart[];
 	}) => Promise<CompleteGraphicsMultipartOutcome>;
 	abortMultipart: (upload: GraphicsMultipartUpload) => Promise<{ outcome: 'aborted' } | GraphicsObjectStoreUnavailable>;
-	delete: (identity: GraphicsObjectIdentity) => Promise<DeleteGraphicsObjectOutcome>;
 }
 
-export type GraphicsObjectStoreOperation
+export type GraphicsCanonicalObjectStoreOperation
 	= | 'health'
 		| 'create'
 		| 'metadata'
 		| 'read'
+		| 'delete';
+
+export type GraphicsStagingObjectStoreOperation
+	= | GraphicsCanonicalObjectStoreOperation
 		| 'multipart-start'
 		| 'multipart-resume'
 		| 'multipart-upload-part'
 		| 'multipart-complete'
-		| 'multipart-abort'
-		| 'delete';
+		| 'multipart-abort';
 
-export interface InMemoryGraphicsObjectStore extends GraphicsObjectStore {
+export interface InMemoryGraphicsObjectStoreControls<
+	Operation extends GraphicsStagingObjectStoreOperation,
+> {
 	markUnavailable: (identity: GraphicsObjectIdentity) => void;
 	restore: (identity: GraphicsObjectIdentity) => void;
-	injectTransientFailure: (operation: GraphicsObjectStoreOperation, count?: number) => void;
+	injectTransientFailure: (operation: Operation, count?: number) => void;
 }
 
-interface StoredObject {
-	bytes: Uint8Array;
-	metadata: GraphicsObjectMetadata;
-}
+export type InMemoryGraphicsCanonicalObjectStore
+	= GraphicsCanonicalObjectStore
+		& InMemoryGraphicsObjectStoreControls<GraphicsCanonicalObjectStoreOperation>;
 
-interface StoredMultipartUpload {
-	upload: GraphicsMultipartUpload;
-	metadata?: CreateImmutableGraphicsObjectInput['metadata'];
-	parts: Map<number, { bytes: Uint8Array; part: GraphicsMultipartPart }>;
-}
+export type InMemoryGraphicsStagingObjectStore
+	= GraphicsStagingObjectStore
+		& InMemoryGraphicsObjectStoreControls<GraphicsStagingObjectStoreOperation>;
 
-class GraphicsObjectInputError extends Error {}
+export class GraphicsObjectInputError extends Error {}
 
 export function graphicsObjectIdentity(value: string): GraphicsObjectIdentity {
 	if (value.length === 0)
@@ -202,7 +222,7 @@ export function createBoundedByteStream(
 	};
 }
 
-function rethrowGraphicsObjectInputError(error: unknown): void {
+export function rethrowGraphicsObjectInputError(error: unknown): void {
 	let current = error;
 	while (current instanceof Error) {
 		if (current instanceof GraphicsObjectInputError)
@@ -211,7 +231,7 @@ function rethrowGraphicsObjectInputError(error: unknown): void {
 	}
 }
 
-function validateRequestedRange(range: { offset: number; length: number } | undefined): void {
+export function validateRequestedRange(range: { offset: number; length: number } | undefined): void {
 	if (!range)
 		return;
 	if (!Number.isSafeInteger(range.offset) || range.offset < 0)
@@ -220,207 +240,19 @@ function validateRequestedRange(range: { offset: number; length: number } | unde
 		throw new GraphicsObjectInputError('Range length must be a positive safe integer');
 }
 
-function validateMultipartPartNumber(partNumber: number): void {
+export function validateMultipartPartNumber(partNumber: number): void {
 	if (!Number.isSafeInteger(partNumber) || partNumber <= 0)
 		throw new GraphicsObjectInputError('Multipart part number must be a positive safe integer');
 }
 
-function unavailableObjectStoreOutcome(): GraphicsObjectStoreUnavailable {
+export function unavailableObjectStoreOutcome(): GraphicsObjectStoreUnavailable {
 	return {
 		outcome: 'unavailable',
 		reason: { code: 'transient-object-store-failure', retryable: true },
 	};
 }
 
-function mapR2Object(object: R2Object): GraphicsObjectMetadata {
-	return {
-		identity: graphicsObjectIdentity(object.key),
-		byteLength: object.size,
-		contentType: object.httpMetadata?.contentType,
-		customMetadata: { ...object.customMetadata },
-		uploadedAt: object.uploaded,
-	};
-}
-
-/**
- * Production adapter for a private Cloudflare R2 binding.
- *
- * R2 identities, upload IDs, ETags, and conditional APIs terminate here. The
- * Graphics Asset Library and its callers receive only provider-neutral values.
- */
-export function createR2GraphicsObjectStore(bucket: R2Bucket): GraphicsObjectStore {
-	return {
-		async checkHealth() {
-			try {
-				await bucket.head('.stream-keepr-health');
-				return { outcome: 'healthy' };
-			}
-			catch (error) {
-				rethrowGraphicsObjectInputError(error);
-				return unavailableObjectStoreOutcome();
-			}
-		},
-		async createImmutable(input) {
-			try {
-				const object = await bucket.put(input.identity, input.bytes.body, {
-					onlyIf: new Headers({ 'if-none-match': '*' }),
-					httpMetadata: input.metadata?.contentType
-						? { contentType: input.metadata.contentType }
-						: undefined,
-					customMetadata: input.metadata?.custom
-						? { ...input.metadata.custom }
-						: undefined,
-				});
-				if (object)
-					return { outcome: 'created', object: mapR2Object(object) };
-
-				const existing = await bucket.head(input.identity);
-				return existing
-					? { outcome: 'already-exists', object: mapR2Object(existing) }
-					: unavailableObjectStoreOutcome();
-			}
-			catch (error) {
-				rethrowGraphicsObjectInputError(error);
-				return unavailableObjectStoreOutcome();
-			}
-		},
-		async readMetadata(identity) {
-			try {
-				const object = await bucket.head(identity);
-				return object
-					? { outcome: 'available', object: mapR2Object(object) }
-					: { outcome: 'missing' };
-			}
-			catch {
-				return unavailableObjectStoreOutcome();
-			}
-		},
-		async read(identity, requestedRange) {
-			validateRequestedRange(requestedRange);
-			try {
-				const object = await bucket.get(identity, requestedRange ? { range: requestedRange } : undefined);
-				if (!object)
-					return { outcome: 'missing' };
-
-				const offset = object.range && 'offset' in object.range
-					? object.range.offset ?? 0
-					: requestedRange?.offset ?? 0;
-				const length = object.range && 'length' in object.range
-					? object.range.length ?? object.size
-					: requestedRange?.length ?? object.size;
-				return {
-					outcome: 'available',
-					object: mapR2Object(object),
-					body: object.body,
-					range: {
-						offset,
-						length,
-						completeLength: object.size,
-					},
-				};
-			}
-			catch {
-				return unavailableObjectStoreOutcome();
-			}
-		},
-		async beginMultipart(input) {
-			try {
-				const upload = await bucket.createMultipartUpload(input.identity, {
-					httpMetadata: input.metadata?.contentType
-						? { contentType: input.metadata.contentType }
-						: undefined,
-					customMetadata: input.metadata?.custom
-						? { ...input.metadata.custom }
-						: undefined,
-				});
-				return {
-					outcome: 'started',
-					upload: {
-						identity: input.identity,
-						uploadId: upload.uploadId as GraphicsMultipartUploadIdentity,
-					},
-				};
-			}
-			catch {
-				return unavailableObjectStoreOutcome();
-			}
-		},
-		async resumeMultipart(identity, uploadId) {
-			try {
-				const upload = bucket.resumeMultipartUpload(identity, uploadId);
-				return {
-					outcome: 'resumed',
-					upload: {
-						identity,
-						uploadId: upload.uploadId as GraphicsMultipartUploadIdentity,
-					},
-				};
-			}
-			catch {
-				return unavailableObjectStoreOutcome();
-			}
-		},
-		async uploadPart(input) {
-			validateMultipartPartNumber(input.partNumber);
-			try {
-				const upload = bucket.resumeMultipartUpload(input.upload.identity, input.upload.uploadId);
-				const part = await upload.uploadPart(input.partNumber, input.bytes.body);
-				return {
-					outcome: 'uploaded',
-					part: {
-						partNumber: part.partNumber,
-						partIdentity: part.etag as GraphicsMultipartPartIdentity,
-						byteLength: input.bytes.byteLength,
-					},
-				};
-			}
-			catch (error) {
-				rethrowGraphicsObjectInputError(error);
-				return unavailableObjectStoreOutcome();
-			}
-		},
-		async completeMultipart(input) {
-			for (const part of input.parts)
-				validateMultipartPartNumber(part.partNumber);
-			try {
-				const upload = bucket.resumeMultipartUpload(input.upload.identity, input.upload.uploadId);
-				const object = await upload.complete(input.parts.map(part => ({
-					partNumber: part.partNumber,
-					etag: part.partIdentity,
-				})));
-				return { outcome: 'created', object: mapR2Object(object) };
-			}
-			catch {
-				return unavailableObjectStoreOutcome();
-			}
-		},
-		async abortMultipart(uploadIdentity) {
-			try {
-				const upload = bucket.resumeMultipartUpload(uploadIdentity.identity, uploadIdentity.uploadId);
-				await upload.abort();
-				return { outcome: 'aborted' };
-			}
-			catch {
-				return unavailableObjectStoreOutcome();
-			}
-		},
-		async delete(identity) {
-			try {
-				const existing = await bucket.head(identity);
-				if (!existing)
-					return { outcome: 'missing' };
-				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Cloudflare R2 binding, not a Drizzle table.
-				await bucket.delete(identity);
-				return { outcome: 'deleted' };
-			}
-			catch {
-				return unavailableObjectStoreOutcome();
-			}
-		},
-	};
-}
-
-async function consumeBoundedByteStream(bytes: BoundedByteStream): Promise<Uint8Array> {
+export async function consumeBoundedByteStream(bytes: BoundedByteStream): Promise<Uint8Array> {
 	const reader = bytes.body.getReader();
 	const chunks: Uint8Array[] = [];
 	let observedByteLength = 0;
@@ -447,215 +279,11 @@ async function consumeBoundedByteStream(bytes: BoundedByteStream): Promise<Uint8
 	return result;
 }
 
-function readableBytes(bytes: Uint8Array): ReadableStream<Uint8Array> {
+export function readableBytes(bytes: Uint8Array): ReadableStream<Uint8Array> {
 	return new ReadableStream<Uint8Array>({
 		start(controller) {
 			controller.enqueue(bytes);
 			controller.close();
 		},
 	});
-}
-
-export function createInMemoryGraphicsObjectStore(): InMemoryGraphicsObjectStore {
-	const objects = new Map<GraphicsObjectIdentity, StoredObject>();
-	const multipartUploads = new Map<GraphicsMultipartUploadIdentity, StoredMultipartUpload>();
-	const unavailableObjects = new Set<GraphicsObjectIdentity>();
-	const transientFailures = new Map<GraphicsObjectStoreOperation, number>();
-
-	function shouldFailTransiently(operation: GraphicsObjectStoreOperation) {
-		const failuresRemaining = transientFailures.get(operation) ?? 0;
-		if (failuresRemaining === 0)
-			return false;
-		transientFailures.set(operation, failuresRemaining - 1);
-		return true;
-	}
-
-	return {
-		async checkHealth() {
-			return shouldFailTransiently('health')
-				? {
-						outcome: 'unavailable',
-						reason: { code: 'transient-object-store-failure', retryable: true },
-					}
-				: { outcome: 'healthy' };
-		},
-		async createImmutable(input) {
-			if (shouldFailTransiently('create'))
-				return unavailableObjectStoreOutcome();
-			const existing = objects.get(input.identity);
-			if (existing) {
-				return {
-					outcome: 'already-exists',
-					object: existing.metadata,
-				};
-			}
-
-			const bytes = await consumeBoundedByteStream(input.bytes);
-			const metadata: GraphicsObjectMetadata = {
-				identity: input.identity,
-				byteLength: bytes.byteLength,
-				contentType: input.metadata?.contentType,
-				customMetadata: { ...input.metadata?.custom },
-				uploadedAt: new Date(),
-			};
-			objects.set(input.identity, { bytes, metadata });
-			return { outcome: 'created', object: metadata };
-		},
-		async readMetadata(identity) {
-			if (shouldFailTransiently('metadata'))
-				return unavailableObjectStoreOutcome();
-			const object = objects.get(identity);
-			if (!object)
-				return { outcome: 'missing' };
-			if (unavailableObjects.has(identity)) {
-				return {
-					outcome: 'unavailable',
-					reason: { code: 'object-unavailable', retryable: true },
-				};
-			}
-			return { outcome: 'available', object: object.metadata };
-		},
-		async read(identity, requestedRange) {
-			validateRequestedRange(requestedRange);
-			if (shouldFailTransiently('read')) {
-				return {
-					outcome: 'unavailable',
-					reason: { code: 'transient-object-store-failure', retryable: true },
-				};
-			}
-			const stored = objects.get(identity);
-			if (!stored)
-				return { outcome: 'missing' };
-			if (unavailableObjects.has(identity)) {
-				return {
-					outcome: 'unavailable',
-					reason: { code: 'object-unavailable', retryable: true },
-				};
-			}
-
-			const offset = requestedRange?.offset ?? 0;
-			const length = requestedRange?.length ?? stored.bytes.byteLength;
-			if (requestedRange && offset >= stored.bytes.byteLength)
-				throw new GraphicsObjectInputError('Range offset must be within the object');
-			const availableLength = Math.min(length, stored.bytes.byteLength - offset);
-
-			return {
-				outcome: 'available',
-				object: stored.metadata,
-				body: readableBytes(stored.bytes.slice(offset, offset + availableLength)),
-				range: {
-					offset,
-					length: availableLength,
-					completeLength: stored.bytes.byteLength,
-				},
-			};
-		},
-		async beginMultipart(input) {
-			if (shouldFailTransiently('multipart-start'))
-				return unavailableObjectStoreOutcome();
-			const upload: GraphicsMultipartUpload = {
-				identity: input.identity,
-				uploadId: crypto.randomUUID() as GraphicsMultipartUploadIdentity,
-			};
-			multipartUploads.set(upload.uploadId, {
-				upload,
-				metadata: input.metadata,
-				parts: new Map(),
-			});
-			return { outcome: 'started', upload };
-		},
-		async resumeMultipart(identity, uploadId) {
-			if (shouldFailTransiently('multipart-resume'))
-				return unavailableObjectStoreOutcome();
-			const stored = multipartUploads.get(uploadId);
-			return stored?.upload.identity === identity
-				? { outcome: 'resumed', upload: stored.upload }
-				: unavailableObjectStoreOutcome();
-		},
-		async uploadPart(input) {
-			if (shouldFailTransiently('multipart-upload-part'))
-				return unavailableObjectStoreOutcome();
-			const stored = multipartUploads.get(input.upload.uploadId);
-			if (!stored || stored.upload.identity !== input.upload.identity)
-				return unavailableObjectStoreOutcome();
-			validateMultipartPartNumber(input.partNumber);
-
-			const bytes = await consumeBoundedByteStream(input.bytes);
-			const part: GraphicsMultipartPart = {
-				partNumber: input.partNumber,
-				partIdentity: crypto.randomUUID() as GraphicsMultipartPartIdentity,
-				byteLength: bytes.byteLength,
-			};
-			stored.parts.set(input.partNumber, { bytes, part });
-			return { outcome: 'uploaded', part };
-		},
-		async completeMultipart(input) {
-			if (shouldFailTransiently('multipart-complete'))
-				return unavailableObjectStoreOutcome();
-			const storedUpload = multipartUploads.get(input.upload.uploadId);
-			if (!storedUpload || storedUpload.upload.identity !== input.upload.identity)
-				return unavailableObjectStoreOutcome();
-
-			const requestedParts = input.parts.toSorted((left, right) => left.partNumber - right.partNumber);
-			const storedParts = requestedParts.map((part) => {
-				validateMultipartPartNumber(part.partNumber);
-				const storedPart = storedUpload.parts.get(part.partNumber);
-				if (!storedPart || storedPart.part.partIdentity !== part.partIdentity)
-					throw new GraphicsObjectInputError(`Multipart part ${part.partNumber} is missing`);
-				return storedPart;
-			});
-			const byteLength = storedParts.reduce((total, part) => total + part.bytes.byteLength, 0);
-			const bytes = new Uint8Array(byteLength);
-			let offset = 0;
-			for (const part of storedParts) {
-				bytes.set(part.bytes, offset);
-				offset += part.bytes.byteLength;
-			}
-			const metadata: GraphicsObjectMetadata = {
-				identity: input.upload.identity,
-				byteLength,
-				contentType: storedUpload.metadata?.contentType,
-				customMetadata: { ...storedUpload.metadata?.custom },
-				uploadedAt: new Date(),
-			};
-			objects.set(input.upload.identity, { bytes, metadata });
-			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
-			multipartUploads.delete(input.upload.uploadId);
-			return { outcome: 'created', object: metadata };
-		},
-		async abortMultipart(upload) {
-			if (shouldFailTransiently('multipart-abort'))
-				return unavailableObjectStoreOutcome();
-			const stored = multipartUploads.get(upload.uploadId);
-			if (!stored || stored.upload.identity !== upload.identity)
-				return unavailableObjectStoreOutcome();
-			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
-			multipartUploads.delete(upload.uploadId);
-			return { outcome: 'aborted' };
-		},
-		async delete(identity) {
-			if (shouldFailTransiently('delete'))
-				return unavailableObjectStoreOutcome();
-			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Set, not a Drizzle table.
-			unavailableObjects.delete(identity);
-			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
-			return objects.delete(identity)
-				? { outcome: 'deleted' }
-				: { outcome: 'missing' };
-		},
-		markUnavailable(identity) {
-			if (!objects.has(identity))
-				throw new Error('Cannot mark a missing graphics object unavailable');
-			unavailableObjects.add(identity);
-		},
-		restore(identity) {
-			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Set, not a Drizzle table.
-			unavailableObjects.delete(identity);
-		},
-		injectTransientFailure(operation, count = 1) {
-			if (!Number.isSafeInteger(count) || count <= 0)
-				throw new Error('Transient failure count must be a positive safe integer');
-			transientFailures.set(operation, (transientFailures.get(operation) ?? 0) + count);
-		},
-	};
 }

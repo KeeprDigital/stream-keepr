@@ -1,13 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
+	createInMemoryCanonicalGraphicsObjectStore,
+	createInMemoryStagingGraphicsObjectStore,
+} from '~~/server/modules/graphics-asset-library/in-memory-object-store';
+import {
 	createBoundedByteStream,
-	createInMemoryGraphicsObjectStore,
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 
 describe('the Graphic Asset object-store contract', () => {
+	it('does not expose staging multipart capabilities from the canonical adapter', () => {
+		const store = createInMemoryCanonicalGraphicsObjectStore();
+
+		expect('beginMultipart' in store).toBe(false);
+		expect('completeMultipart' in store).toBe(false);
+	});
+
 	it('creates bytes immutably and reports the existing object on a repeated identity', async () => {
-		const store = createInMemoryGraphicsObjectStore();
+		const store = createInMemoryCanonicalGraphicsObjectStore();
 		const identity = graphicsObjectIdentity('canonical/sha256/example');
 
 		const created = await store.createImmutable({
@@ -48,8 +58,39 @@ describe('the Graphic Asset object-store contract', () => {
 		});
 	});
 
+	it('preserves the first immutable object when creates race for one identity', async () => {
+		const store = createInMemoryCanonicalGraphicsObjectStore();
+		const identity = graphicsObjectIdentity('canonical/sha256/concurrent');
+		const firstBytes = new TextEncoder().encode('first');
+		const secondBytes = new TextEncoder().encode('second');
+
+		const [first, second] = await Promise.all([
+			store.createImmutable({
+				identity,
+				bytes: createBoundedByteStream(firstBytes, {
+					byteLength: firstBytes.byteLength,
+					maximumByteLength: firstBytes.byteLength,
+				}),
+			}),
+			store.createImmutable({
+				identity,
+				bytes: createBoundedByteStream(secondBytes, {
+					byteLength: secondBytes.byteLength,
+					maximumByteLength: secondBytes.byteLength,
+				}),
+			}),
+		]);
+
+		expect([first.outcome, second.outcome].toSorted()).toEqual(['already-exists', 'created']);
+		const createdBytes = first.outcome === 'created' ? 'first' : 'second';
+		const read = await store.read(identity);
+		expect(read.outcome).toBe('available');
+		if (read.outcome === 'available')
+			expect(await new Response(read.body).text()).toBe(createdBytes);
+	});
+
 	it('reads metadata and exact byte ranges without conflating a missing object', async () => {
-		const store = createInMemoryGraphicsObjectStore();
+		const store = createInMemoryCanonicalGraphicsObjectStore();
 		const identity = graphicsObjectIdentity('canonical/sha256/ranged');
 		await store.createImmutable({
 			identity,
@@ -82,7 +123,7 @@ describe('the Graphic Asset object-store contract', () => {
 	});
 
 	it('distinguishes unavailable bytes and supports injected transient failures', async () => {
-		const store = createInMemoryGraphicsObjectStore();
+		const store = createInMemoryCanonicalGraphicsObjectStore();
 		const identity = graphicsObjectIdentity('canonical/sha256/unavailable');
 		await store.createImmutable({
 			identity,
@@ -116,7 +157,7 @@ describe('the Graphic Asset object-store contract', () => {
 	});
 
 	it('reports transient store health failures independently of object state', async () => {
-		const store = createInMemoryGraphicsObjectStore();
+		const store = createInMemoryCanonicalGraphicsObjectStore();
 
 		expect(await store.checkHealth()).toEqual({ outcome: 'healthy' });
 		store.injectTransientFailure('health');
@@ -128,7 +169,7 @@ describe('the Graphic Asset object-store contract', () => {
 	});
 
 	it('injects transient failures into mutation operations without committing partial state', async () => {
-		const store = createInMemoryGraphicsObjectStore();
+		const store = createInMemoryCanonicalGraphicsObjectStore();
 		const identity = graphicsObjectIdentity('canonical/sha256/transient-create');
 		store.injectTransientFailure('create');
 
@@ -154,8 +195,8 @@ describe('the Graphic Asset object-store contract', () => {
 	});
 
 	it('rejects bytes outside the declared stream bounds without reserving the identity', async () => {
-		const store = createInMemoryGraphicsObjectStore();
-		const identity = graphicsObjectIdentity('staging/operation/bounded');
+		const store = createInMemoryCanonicalGraphicsObjectStore();
+		const identity = graphicsObjectIdentity('canonical/sha256/bounded');
 
 		expect(() => createBoundedByteStream(new Uint8Array(6), {
 			byteLength: 6,
@@ -180,7 +221,7 @@ describe('the Graphic Asset object-store contract', () => {
 	});
 
 	it('resumes multipart uploads, completes ordered parts, and deletes the result', async () => {
-		const store = createInMemoryGraphicsObjectStore();
+		const store = createInMemoryStagingGraphicsObjectStore();
 		const identity = graphicsObjectIdentity('staging/operation/multipart');
 		const started = await store.beginMultipart({
 			identity,
@@ -235,7 +276,7 @@ describe('the Graphic Asset object-store contract', () => {
 	});
 
 	it('treats multipart completion as a staging write rather than an immutable create', async () => {
-		const store = createInMemoryGraphicsObjectStore();
+		const store = createInMemoryStagingGraphicsObjectStore();
 		const identity = graphicsObjectIdentity('staging/operation/replaced-by-multipart');
 		await store.createImmutable({
 			identity,

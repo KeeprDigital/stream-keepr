@@ -5,7 +5,7 @@ import type {
 	GraphicsAssetLibraryHealth,
 	GraphicsIngestionOperationId,
 } from '~~/shared/types/graphicsAsset';
-import type { GraphicsObjectStore } from './object-store';
+import type { GraphicsObjectStoreHealth } from './object-store';
 
 export type {
 	GraphicAssetId,
@@ -25,8 +25,8 @@ export interface GraphicsAssetLibrary {
 
 interface GraphicsAssetLibraryDependencies {
 	catalogue: GraphicsAssetCatalogue;
-	staging: Pick<GraphicsObjectStore, 'checkHealth'>;
-	canonical: Pick<GraphicsObjectStore, 'checkHealth'>;
+	staging: GraphicsObjectStoreHealth;
+	canonical: GraphicsObjectStoreHealth;
 	now?: () => Date;
 }
 
@@ -62,7 +62,7 @@ async function catalogueHealth(catalogue: GraphicsAssetCatalogue): Promise<Graph
 }
 
 async function byteStoreHealth(
-	store: Pick<GraphicsObjectStore, 'checkHealth'>,
+	store: GraphicsObjectStoreHealth,
 ): Promise<GraphicsAssetLibraryComponentHealth> {
 	try {
 		const outcome = await store.checkHealth();

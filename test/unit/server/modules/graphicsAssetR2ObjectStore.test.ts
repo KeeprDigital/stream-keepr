@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
 	createBoundedByteStream,
-	createR2GraphicsObjectStore,
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
+import {
+	createR2CanonicalGraphicsObjectStore,
+	createR2StagingGraphicsObjectStore,
+} from '~~/server/modules/graphics-asset-library/r2-object-store';
 
 function r2Object(key: string): R2Object {
 	return {
@@ -22,13 +25,20 @@ function r2Object(key: string): R2Object {
 }
 
 describe('the R2 Graphic Asset object-store adapter', () => {
+	it('does not expose multipart completion from the canonical binding adapter', () => {
+		const store = createR2CanonicalGraphicsObjectStore({} as R2Bucket);
+
+		expect('beginMultipart' in store).toBe(false);
+		expect('completeMultipart' in store).toBe(false);
+	});
+
 	it('uses an atomic create-if-absent header and returns existing metadata on conflict', async () => {
 		const identity = graphicsObjectIdentity('canonical/sha256/example');
 		const existing = r2Object(identity);
 		const put = vi.fn().mockResolvedValue(null);
 		const head = vi.fn().mockResolvedValue(existing);
 		const bucket = { put, head } as R2Bucket;
-		const store = createR2GraphicsObjectStore(bucket);
+		const store = createR2CanonicalGraphicsObjectStore(bucket);
 
 		const outcome = await store.createImmutable({
 			identity,
@@ -65,7 +75,7 @@ describe('the R2 Graphic Asset object-store adapter', () => {
 			return r2Object(identity);
 		});
 		const get = vi.fn();
-		const store = createR2GraphicsObjectStore({ put, get } as unknown as R2Bucket);
+		const store = createR2CanonicalGraphicsObjectStore({ put, get } as unknown as R2Bucket);
 
 		await expect(store.createImmutable({
 			identity,
@@ -89,7 +99,7 @@ describe('the R2 Graphic Asset object-store adapter', () => {
 			complete,
 		});
 		const head = vi.fn();
-		const store = createR2GraphicsObjectStore({
+		const store = createR2StagingGraphicsObjectStore({
 			head,
 			resumeMultipartUpload,
 		} as unknown as R2Bucket);

@@ -209,6 +209,58 @@ It unifies their composition model without merging their Screen Modes, live cont
 The shared graphics-specific module that ingests, validates, stores, resolves, deduplicates, and lifecycle-manages images, silent videos, fonts, and generated thumbnails used by Broadcast Graphics and Feature Match Overlay.
 Its interface is consumed by both graphics editors and their Template Package workflows; it is not a general application file manager.
 
+**Graphic Asset**:
+A stable-identity library resource for a validated image, silent video, or font owned by the installation-wide Graphics Asset Library and reusable across Events.
+Events may associate with or reference a Graphic Asset but never own it.
+
+**Retired Graphic Asset**:
+A Graphic Asset hidden from normal discovery and unavailable for new references while every existing pinned Graphic Asset Reference continues to resolve.
+It may be restored to active selection and is not deleted or considered unreferenced merely because it is retired.
+
+**Trashed Graphic Asset**:
+An unreferenced Graphic Asset removed from discovery and protected from new references while its identity, revisions, metadata, origins, and Event associations remain restorable for 30 days.
+It becomes eligible for irreversible purge only after that recovery window and a fresh proof that no Graphic Asset Reference points to any revision.
+
+**Graphic Asset Content**:
+One immutable validated byte payload and its technical media facts, identified by an application-computed SHA-256 digest of its exact stored bytes.
+Its identity excludes filenames, declared media types, and other library metadata.
+
+**Graphic Asset Revision**:
+An immutable content-bearing version of one Graphic Asset, created when that asset's file content changes.
+Changing its library-wide descriptive, organisational, or origin metadata does not create a revision.
+
+**Graphic Asset Reference**:
+A persisted link from one graphics artifact to one exact Graphic Asset identity and revision, identifying the owning artifact and its Event context when applicable.
+An asset revision is in use exactly when at least one Graphic Asset Reference points to it.
+
+**Graphic Asset Origin**:
+The immutable source asset identity, source revision, and content digest attached to the exact local Graphic Asset Revision created when a Template Package installs Graphic Asset content.
+It recognises exact or related later imports without creating a cross-installation identity, ownership, or update link.
+
+**Missing Graphic Asset Reference**:
+A Graphic Asset Reference whose asset identity or pinned revision does not exist.
+It is an integrity failure and never follows another revision or substitutes content automatically.
+
+**Unavailable Graphic Asset Content**:
+The retryable state in which a referenced Graphic Asset and revision exist but their content cannot currently be resolved.
+It never changes or redirects the Graphic Asset Reference.
+
+**Graphic Asset Validation**:
+The strict acceptance process that proves exact source bytes are safe, supported, decodable, and internally consistent without converting, normalising, repairing, or otherwise changing them.
+Unsupported source content is rejected; generated previews remain separate Graphics Derivatives.
+
+**Graphic Asset Compatibility Profile**:
+The versioned contract of accepted source formats, technical bounds, validation rules, and output requirements applied uniformly to every Graphic Asset ingestion path.
+Each accepted Graphic Asset Revision records the profile and verified technical facts under which it was accepted.
+
+**Graphics Ingestion Operation**:
+A durable, reconnectable workflow through which the Graphics Asset Library receives a local upload, approved remote copy, file replacement, or Template Package and either publishes the complete result atomically or publishes nothing.
+Its provisional content is never discoverable or referenceable.
+
+**Graphics Derivative**:
+A generated thumbnail or preview artifact managed by the Graphics Asset Library as a dependant of one source Graphic Asset or graphics Template revision.
+It inherits its source's access and lifecycle and is never a discoverable or selectable Graphic Asset.
+
 **Text Graphic Item**:
 A Graphic Item that renders literal text or a Graphic Text Template.
 
@@ -322,6 +374,10 @@ _Avoid_: Preset when referring to user-owned reusable layouts.
 **Screen Output**:
 A live rendering variant exposed by a Screen Mode Definition, such as overlay, fill, or key.
 _Avoid_: Export mode when referring to live Screen rendering.
+
+**Screen Output Asset Capability**:
+An opaque, long-lived, explicitly revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions currently published by its Screen.
+It never permits Graphics Asset Library discovery, and removing a revision from the published Screen immediately removes that revision from the capability.
 
 **Overlay Output**:
 A Screen Output that renders the final composed colour and opacity over transparency.
@@ -495,6 +551,45 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - Graphics Screen previews provide advisory action-safe guides at a five-percent inset and title-safe guides at a ten-percent inset
 - Preview guides never appear in live **Screen Outputs** or captures and do not clip or constrain authored **Graphic Items**
 - A **Broadcast Graphic Template** initializes a copy of a **Broadcast Graphic** on a **Broadcast Graphics Screen**
+- A **Graphic Asset** belongs to the installation-wide **Graphics Asset Library** and is never owned by an **Event**
+- A **Graphic Asset** has one stable library identity distinct from the identity of its **Graphic Asset Content**
+- Any byte change creates different **Graphic Asset Content**, while identical stored bytes have the same content identity
+- More than one **Graphic Asset** may share the same **Graphic Asset Content** without sharing identity, name, organisational metadata, or **Graphic Asset Origin**
+- A **Graphic Asset** has one or more ordered **Graphic Asset Revisions**
+- Each **Graphic Asset Revision** references exactly one **Graphic Asset Content**
+- Replacing a **Graphic Asset**'s file creates a new **Graphic Asset Revision** rather than mutating existing content or creating an unrelated asset
+- Every persisted graphics reference pins one **Graphic Asset** identity and one exact **Graphic Asset Revision**
+- Selecting a **Graphic Asset** creates a reference to its latest revision, while later revisions require explicit adoption by each referencing graphics artifact
+- A superseded **Graphic Asset Revision** remains resolvable while any **Graphic Asset Reference** pins it
+- A Template Package import maps its packaged asset identity and revision to a local **Graphic Asset** identity and revision
+- **Graphic Asset Origin** records that mapping on the exact imported local revision without making the packaged identity a local identity or live link
+- A later locally created **Graphic Asset Revision** never inherits **Graphic Asset Origin** from an earlier imported revision
+- **Graphic Asset References**, rather than Event associations, **Graphic Asset Origin**, deliveries, or **Graphics Derivatives**, determine which asset revisions are in use
+- Creating, changing, publishing, or transferring a **Graphic Asset Reference** requires its exact revision to resolve successfully
+- A **Missing Graphic Asset Reference** remains persisted and diagnosable until explicitly repaired, while invalidating its owning graphics artifact
+- **Unavailable Graphic Asset Content** causes a retryable failure only for operations that currently require its bytes
+- Every **Graphic Asset Revision** passes **Graphic Asset Validation** under one **Graphic Asset Compatibility Profile** before it becomes referenceable
+- Template Package imports revalidate packaged source bytes under the receiving installation's current **Graphic Asset Compatibility Profile**
+- Every local upload, approved remote copy, file replacement, and Template Package installation runs as one durable, idempotent **Graphics Ingestion Operation**
+- A **Graphics Ingestion Operation** exposes reconnectable stage progress, one complete compatibility report, cancellation before publication, and retry from durable checkpoints
+- Staged bytes, provisional **Graphic Assets**, and provisional graphics Templates are visible only through the initiating operation and never appear in their libraries
+- Approved remote ingestion copies exact bytes once from a public HTTPS source and never creates a hotlink, synchronization link, or authenticated remote dependency
+- An ordinary ingestion that exactly matches existing **Graphic Asset Content** defaults to reusing its **Graphic Asset** without overwriting library metadata, while allowing an explicit separate asset identity
+- A Template Package reuses a local **Graphic Asset Revision** only for an exact source identity, source revision, and content-digest match
+- A related packaged source revision or unrelated matching digest creates a separate local **Graphic Asset** while reusing identical **Graphic Asset Content**
+- The same packaged source identity and revision with a different digest is an integrity conflict that rejects the complete Template Package
+- A Template Package contains only **Graphic Assets** transitively required by its single graphics Template
+- Template Package installation publishes every new asset, origin mapping, rewritten reference, and the graphics Template in one atomic operation
+- Replacing a **Graphic Asset** with its current content is a no-op; deliberately returning to older content creates a new revision backed by the existing **Graphic Asset Content**
+- A **Graphic Asset** may be associated with or referenced from more than one **Event**
+- A **Graphic Asset**'s optional **Event** associations organise discovery and never establish ownership, restrict access, or count as references
+- Deleting an **Event** removes its Graphic Asset associations and references but never deletes or hides the shared **Graphic Assets**
+- The same **Graphic Asset** may be referenced concurrently by Broadcast Graphic Templates, Feature Match Layout Templates, Graphic Style Sets, Screens, and placed graphics across multiple **Events** without creating Event-specific copies
+- A **Graphics Derivative** belongs to exactly one source **Graphic Asset** or graphics Template revision
+- Graphics authors may discover and reference every **Graphic Asset** in the installation-wide **Graphics Asset Library**
+- Graphics artifacts reference a **Graphic Asset** by its stable library identity rather than by filename, URL, object key, or content hash
+- A **Screen Output** may resolve only the **Graphic Assets** referenced by its **Screen** and cannot discover other library contents
+- A **Screen Output Asset Capability** is checked against the Screen's currently published exact **Graphic Asset Revisions** on every resolution request
 - A **Broadcast Graphic Template** declares zero or more **Graphic Inputs**
 - Copying a **Broadcast Graphic Template** into a **Broadcast Graphics Screen** copies each **Graphic Input** default as the placed graphic's initial manual value
 - Copying a **Broadcast Graphic Template** also creates independently editable **Graphic Source Selections** and **Graphic Input Bindings** on the placed **Broadcast Graphic**
