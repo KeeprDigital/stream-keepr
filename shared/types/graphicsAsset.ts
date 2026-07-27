@@ -1,5 +1,6 @@
 declare const graphicAssetIdBrand: unique symbol;
 declare const graphicAssetRevisionIdBrand: unique symbol;
+declare const graphicsDerivativeIdBrand: unique symbol;
 declare const graphicsIngestionOperationIdBrand: unique symbol;
 
 export type GraphicAssetId = string & {
@@ -10,9 +11,15 @@ export type GraphicAssetRevisionId = string & {
 	readonly [graphicAssetRevisionIdBrand]: 'GraphicAssetRevisionId';
 };
 
+export type GraphicsDerivativeId = string & {
+	readonly [graphicsDerivativeIdBrand]: 'GraphicsDerivativeId';
+};
+
 export type GraphicsIngestionOperationId = string & {
 	readonly [graphicsIngestionOperationIdBrand]: 'GraphicsIngestionOperationId';
 };
+
+export type GraphicsDuplicateContentPolicy = 'reuse' | 'create-separate';
 
 export type GraphicsIngestionStage
 	= | 'created'
@@ -84,6 +91,7 @@ export interface GraphicsIngestionOperation {
 	initiatedBy: string;
 	name: string;
 	defaultEventId?: number;
+	duplicateContentPolicy: GraphicsDuplicateContentPolicy;
 	declaredByteLength: number;
 	transferredByteLength: number;
 	stage: GraphicsIngestionStage;
@@ -98,7 +106,7 @@ export interface GraphicsIngestionOperation {
 	updatedAt: string;
 }
 
-export interface GraphicAssetLibraryItem {
+export interface GraphicAsset {
 	id: GraphicAssetId;
 	name: string;
 	kind: 'image';

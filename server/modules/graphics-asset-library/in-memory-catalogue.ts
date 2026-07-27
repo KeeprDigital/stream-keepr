@@ -1,6 +1,6 @@
 import type {
+	GraphicAsset,
 	GraphicAssetId,
-	GraphicAssetLibraryItem,
 	GraphicAssetRevisionId,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
@@ -13,7 +13,7 @@ import type {
 export function createInMemoryGraphicsAssetCatalogue(): GraphicsAssetCatalogue {
 	const operations = new Map<GraphicsIngestionOperationId, GraphicsIngestionOperation>();
 	const operationsByIdentity = new Map<string, GraphicsIngestionOperationId>();
-	const assets = new Map<GraphicAssetId, GraphicAssetLibraryItem>();
+	const assets = new Map<GraphicAssetId, GraphicAsset>();
 	const thumbnailDigests = new Map<GraphicAssetId, string>();
 
 	function cloneOperation(operation: GraphicsIngestionOperation): GraphicsIngestionOperation {
@@ -122,9 +122,9 @@ export function createInMemoryGraphicsAssetCatalogue(): GraphicsAssetCatalogue {
 				throw new Error('Graphics Ingestion Operation is not ready to publish');
 			if (existing.updatedAt !== input.operation.updatedAt)
 				throw new Error('Graphics Ingestion Operation publication lost its claim');
-			const reusable = [...assets.values()].find(
-				asset => asset.facts.sha256 === input.sourceDigest,
-			);
+			const reusable = input.operation.duplicateContentPolicy === 'reuse'
+				? [...assets.values()].find(asset => asset.facts.sha256 === input.sourceDigest)
+				: undefined;
 			if (reusable) {
 				const completed: GraphicsIngestionOperation = {
 					...input.operation,

@@ -22,6 +22,13 @@
       "when": 1785132284231,
       "tag": "0002_furry_silverclaw",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1785140867938,
+      "tag": "0003_bizarre_terrax",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {
-	GraphicAssetLibraryItem,
+	GraphicAsset,
+	GraphicsDuplicateContentPolicy,
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
 import { MAX_PNG_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
@@ -13,23 +14,33 @@ const eventStore = useEventStore();
 const search = ref('');
 const selectedFile = ref<File | null>(null);
 const proposedName = ref('');
+const createSeparateAsset = ref(false);
 const uploadPending = ref(false);
 const uploadError = ref<string | null>(null);
 const currentOperation = ref<GraphicsIngestionOperation | null>(null);
 const operationStorageKey = 'graphics-asset-ingestion-operation';
+const initiationStorageKey = 'graphics-asset-ingestion-initiation';
+
+interface PendingInitiation {
+	idempotencyKey: string;
+	name: string;
+	defaultEventId?: number;
+	duplicateContentPolicy: GraphicsDuplicateContentPolicy;
+	declaredByteLength: number;
+}
 
 const {
 	data: assets,
 	status,
 	error,
 	refresh,
-} = useFetch<GraphicAssetLibraryItem[]>('/api/graphics-assets', {
+} = useFetch<GraphicAsset[]>('/api/graphics-assets', {
 	query: computed(() => ({ search: search.value })),
 	default: () => [],
 });
 
 watch(selectedFile, (file) => {
-	if (file)
+	if (file && !proposedName.value.trim())
 		proposedName.value = file.name;
 });
 
@@ -51,13 +62,58 @@ const canUpload = computed(() =>
 	&& selectionError.value === null
 	&& !uploadPending.value,
 );
-const canRetryOperation = computed(() =>
-	currentOperation.value !== null
-	&& currentOperation.value.stage !== 'created'
-	&& currentOperation.value.stage !== 'completed'
-	&& currentOperation.value.stage !== 'cancelled'
-	&& !(currentOperation.value.stage === 'failed' && !currentOperation.value.failure?.retryable),
-);
+function isRetryableOperation(
+	operation: GraphicsIngestionOperation | null,
+): operation is GraphicsIngestionOperation {
+	return operation !== null
+		&& operation.stage !== 'created'
+		&& operation.stage !== 'completed'
+		&& operation.stage !== 'cancelled'
+		&& !(operation.stage === 'failed' && !operation.failure?.retryable);
+}
+
+const canRetryOperation = computed(() => isRetryableOperation(currentOperation.value));
+
+function readPendingInitiation(): PendingInitiation | null {
+	const stored = localStorage.getItem(initiationStorageKey);
+	if (!stored)
+		return null;
+	try {
+		return JSON.parse(stored) as PendingInitiation;
+	}
+	catch {
+		localStorage.removeItem(initiationStorageKey);
+		return null;
+	}
+}
+
+function selectedInitiation(): PendingInitiation {
+	const name = proposedName.value.trim();
+	const duplicateContentPolicy = createSeparateAsset.value ? 'create-separate' : 'reuse';
+	const pending = readPendingInitiation();
+	if (
+		pending
+		&& pending.name === name
+		&& pending.duplicateContentPolicy === duplicateContentPolicy
+		&& pending.declaredByteLength === selectedFile.value!.size
+	) {
+		return pending;
+	}
+	const initiation: PendingInitiation = {
+		idempotencyKey: crypto.randomUUID(),
+		name,
+		defaultEventId: eventStore.eventId ?? undefined,
+		duplicateContentPolicy,
+		declaredByteLength: selectedFile.value!.size,
+	};
+	localStorage.setItem(initiationStorageKey, JSON.stringify(initiation));
+	return initiation;
+}
+
+function clearPersistedOperation() {
+	localStorage.removeItem(operationStorageKey);
+	localStorage.removeItem(initiationStorageKey);
+}
 
 function formatBytes(byteLength: number) {
 	if (byteLength < 1024)
@@ -111,20 +167,17 @@ async function uploadPng() {
 	uploadPending.value = true;
 	uploadError.value = null;
 	try {
+		const initiation = selectedInitiation();
 		const initiated = await $fetch<GraphicsIngestionOperation>(
 			'/api/graphics-assets/ingestion-operations',
 			{
 				method: 'POST',
-				body: {
-					idempotencyKey: crypto.randomUUID(),
-					name: proposedName.value.trim(),
-					defaultEventId: eventStore.eventId || undefined,
-					declaredByteLength: selectedFile.value.size,
-				},
+				body: initiation,
 			},
 		);
 		currentOperation.value = initiated;
 		localStorage.setItem(operationStorageKey, initiated.id);
+		localStorage.removeItem(initiationStorageKey);
 
 		const response = await observeOperationRequest(
 			initiated.id,
@@ -142,7 +195,7 @@ async function uploadPng() {
 
 		currentOperation.value = await response.json() as GraphicsIngestionOperation;
 		if (currentOperation.value.stage === 'completed') {
-			localStorage.removeItem(operationStorageKey);
+			clearPersistedOperation();
 			selectedFile.value = null;
 			proposedName.value = '';
 			await refresh();
@@ -157,19 +210,14 @@ async function uploadPng() {
 }
 
 async function retryOperation() {
-	if (
-		!currentOperation.value
-		|| currentOperation.value.stage === 'created'
-		|| currentOperation.value.stage === 'completed'
-		|| currentOperation.value.stage === 'cancelled'
-		|| (currentOperation.value.stage === 'failed' && !currentOperation.value.failure?.retryable)
-	) {
+	const operation = currentOperation.value;
+	if (!isRetryableOperation(operation)) {
 		return;
 	}
 	uploadPending.value = true;
 	uploadError.value = null;
 	try {
-		const operationId = currentOperation.value.id;
+		const operationId = operation.id;
 		currentOperation.value = await observeOperationRequest(
 			operationId,
 			$fetch<GraphicsIngestionOperation>(
@@ -178,7 +226,7 @@ async function retryOperation() {
 			),
 		);
 		if (currentOperation.value.stage === 'completed') {
-			localStorage.removeItem(operationStorageKey);
+			clearPersistedOperation();
 			await refresh();
 		}
 	}
@@ -191,16 +239,40 @@ async function retryOperation() {
 }
 
 onMounted(async () => {
+	const pending = readPendingInitiation();
+	if (pending) {
+		proposedName.value = pending.name;
+		createSeparateAsset.value = pending.duplicateContentPolicy === 'create-separate';
+	}
 	const operationId = localStorage.getItem(operationStorageKey);
-	if (!operationId)
+	if (operationId) {
+		try {
+			currentOperation.value = await $fetch<GraphicsIngestionOperation>(
+				`/api/graphics-assets/ingestion-operations/${operationId}`,
+			);
+			if (currentOperation.value.stage === 'completed' || currentOperation.value.stage === 'cancelled')
+				clearPersistedOperation();
+			return;
+		}
+		catch {
+			localStorage.removeItem(operationStorageKey);
+		}
+	}
+
+	if (!pending)
 		return;
 	try {
 		currentOperation.value = await $fetch<GraphicsIngestionOperation>(
-			`/api/graphics-assets/ingestion-operations/${operationId}`,
+			'/api/graphics-assets/ingestion-operations',
+			{ method: 'POST', body: pending },
 		);
+		localStorage.setItem(operationStorageKey, currentOperation.value.id);
+		localStorage.removeItem(initiationStorageKey);
+		if (currentOperation.value.stage === 'completed' || currentOperation.value.stage === 'cancelled')
+			clearPersistedOperation();
 	}
 	catch {
-		localStorage.removeItem(operationStorageKey);
+		// Keep the durable initiation identity so a later reconnect can retry it.
 	}
 });
 </script>
@@ -213,7 +285,7 @@ onMounted(async () => {
 					Graphics Asset Library
 				</h1>
 				<p class="mt-1 text-sm text-muted">
-					Upload, verify, preview, and discover installation-wide graphics resources.
+					Upload, verify, preview, and discover installation-wide Graphic Assets.
 				</p>
 			</div>
 
@@ -259,6 +331,10 @@ onMounted(async () => {
 								class="w-full"
 							/>
 						</UFormField>
+						<label class="flex items-start gap-2 text-sm text-muted">
+							<input v-model="createSeparateAsset" type="checkbox" class="mt-1">
+							<span>Create a separate Graphic Asset even when these exact bytes already exist.</span>
+						</label>
 						<p v-if="eventStore.eventId" class="text-sm text-muted">
 							The upload will be associated with Event {{ eventStore.eventId }}.
 						</p>

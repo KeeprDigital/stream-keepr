@@ -1,10 +1,12 @@
 import type {
+	GraphicAsset,
 	GraphicAssetId,
-	GraphicAssetLibraryItem,
 	GraphicAssetRevisionId,
 	GraphicAssetValidationReport,
 	GraphicsAssetLibraryComponentHealth,
 	GraphicsAssetLibraryHealth,
+	GraphicsDerivativeId,
+	GraphicsDuplicateContentPolicy,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 } from '~~/shared/types/graphicsAsset';
@@ -39,7 +41,7 @@ export interface PublishPngCatalogueInput {
 	report: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>;
 	assetId: GraphicAssetId;
 	revisionId: GraphicAssetRevisionId;
-	derivativeId: string;
+	derivativeId: GraphicsDerivativeId;
 	sourceDigest: string;
 	thumbnailDigest: string;
 	thumbnailByteLength: number;
@@ -73,7 +75,7 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		publishedAt: string;
 	}) => Promise<GraphicsIngestionOperation>;
 	publishPng: (input: PublishPngCatalogueInput) => Promise<GraphicsIngestionOperation>;
-	listGraphicAssets: (search: string) => Promise<GraphicAssetLibraryItem[]>;
+	listGraphicAssets: (search: string) => Promise<GraphicAsset[]>;
 	findThumbnailDigest: (assetId: GraphicAssetId) => Promise<string | undefined>;
 }
 
@@ -84,6 +86,7 @@ export interface GraphicsAssetLibrary {
 		initiatedBy: string;
 		name: string;
 		defaultEventId?: number;
+		duplicateContentPolicy?: GraphicsDuplicateContentPolicy;
 		declaredByteLength: number;
 	}) => Promise<GraphicsIngestionOperation>;
 	getIngestionOperation: (input: {
@@ -103,7 +106,7 @@ export interface GraphicsAssetLibrary {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
 	}) => Promise<GraphicsIngestionOperation>;
-	listGraphicAssets: (input: { search?: string }) => Promise<GraphicAssetLibraryItem[]>;
+	listGraphicAssets: (input: { search?: string }) => Promise<GraphicAsset[]>;
 	resolveGraphicAssetThumbnail: (input: {
 		assetId: GraphicAssetId;
 	}) => Promise<
@@ -152,6 +155,10 @@ export function graphicAssetId(value: string): GraphicAssetId {
 
 export function graphicAssetRevisionId(value: string): GraphicAssetRevisionId {
 	return requiredIdentity<GraphicAssetRevisionId>(value, 'Graphic Asset Revision identity');
+}
+
+export function graphicsDerivativeId(value: string): GraphicsDerivativeId {
+	return requiredIdentity<GraphicsDerivativeId>(value, 'Graphics Derivative identity');
 }
 
 export function graphicsIngestionOperationId(value: string): GraphicsIngestionOperationId {
@@ -461,7 +468,9 @@ export function createGraphicsAssetLibrary(
 			if (publicationTerminal)
 				return publicationTerminal;
 
-			const reusable = await catalogue.findReusablePng(validated.report.facts.sha256);
+			const reusable = operation.duplicateContentPolicy === 'reuse'
+				? await catalogue.findReusablePng(validated.report.facts.sha256)
+				: undefined;
 			let completed: GraphicsIngestionOperation;
 			if (reusable) {
 				completed = await catalogue.reusePng({
@@ -477,7 +486,7 @@ export function createGraphicsAssetLibrary(
 						report: validated.report,
 						assetId: graphicAssetId(generateIdentity()),
 						revisionId: graphicAssetRevisionId(generateIdentity()),
-						derivativeId: generateIdentity(),
+						derivativeId: graphicsDerivativeId(generateIdentity()),
 						sourceDigest: validated.report.facts.sha256,
 						thumbnailDigest,
 						thumbnailByteLength: thumbnail.byteLength,
@@ -485,6 +494,8 @@ export function createGraphicsAssetLibrary(
 					});
 				}
 				catch (publicationError) {
+					if (operation.duplicateContentPolicy === 'create-separate')
+						throw publicationError;
 					const concurrentlyPublished = await catalogue.findReusablePng(
 						validated.report.facts.sha256,
 					);
@@ -574,6 +585,7 @@ export function createGraphicsAssetLibrary(
 				initiatedBy: input.initiatedBy,
 				name: input.name.trim(),
 				defaultEventId: input.defaultEventId,
+				duplicateContentPolicy: input.duplicateContentPolicy ?? 'reuse',
 				declaredByteLength: input.declaredByteLength,
 				transferredByteLength: 0,
 				stage: 'created',
@@ -767,12 +779,14 @@ export function createGraphicsAssetLibrary(
 }
 
 export type {
+	GraphicAsset,
 	GraphicAssetId,
-	GraphicAssetLibraryItem,
 	GraphicAssetRevisionId,
 	GraphicAssetValidationReport,
 	GraphicsAssetLibraryComponentHealth,
 	GraphicsAssetLibraryHealth,
+	GraphicsDerivativeId,
+	GraphicsDuplicateContentPolicy,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 } from '~~/shared/types/graphicsAsset';

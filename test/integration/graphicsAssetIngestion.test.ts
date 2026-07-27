@@ -1,5 +1,5 @@
 import type {
-	GraphicAssetLibraryItem,
+	GraphicAsset,
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
@@ -53,7 +53,7 @@ describe('the bounded PNG ingestion and Library Workspace APIs', () => {
 		});
 		expect(reconnected).toEqual(initiated);
 
-		const undiscoverable = await $fetch<GraphicAssetLibraryItem[]>('/api/graphics-assets', {
+		const undiscoverable = await $fetch<GraphicAsset[]>('/api/graphics-assets', {
 			query: { search: 'integration scoreboard' },
 		});
 		expect(undiscoverable).toEqual([]);
@@ -91,7 +91,7 @@ describe('the bounded PNG ingestion and Library Workspace APIs', () => {
 		);
 		expect(operation).toEqual(completed);
 
-		const assets = await $fetch<GraphicAssetLibraryItem[]>('/api/graphics-assets', {
+		const assets = await $fetch<GraphicAsset[]>('/api/graphics-assets', {
 			query: { search: 'scoreboard' },
 		});
 		expect(assets).toEqual([
@@ -128,7 +128,7 @@ describe('the bounded PNG ingestion and Library Workspace APIs', () => {
 			assetId: completed.result!.assetId,
 			revisionId: completed.result!.revisionId,
 		});
-		await expect($fetch<GraphicAssetLibraryItem[]>('/api/graphics-assets', {
+		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
 			query: { search: 'scoreboard' },
 		})).resolves.toEqual([
 			expect.objectContaining({
@@ -137,6 +137,27 @@ describe('the bounded PNG ingestion and Library Workspace APIs', () => {
 				operation: reused,
 			}),
 		]);
+
+		const separate = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
+			method: 'POST',
+			headers: authorHeaders,
+			body: {
+				idempotencyKey: 'integration-separate-scoreboard-logo',
+				name: 'Separate scoreboard logo',
+				duplicateContentPolicy: 'create-separate',
+				declaredByteLength: transparentPixelPng.byteLength,
+			},
+		});
+		const separateResponse = await fetch(
+			`/api/graphics-assets/ingestion-operations/${separate.id}/content`,
+			{ method: 'PUT', headers: authorHeaders, body: transparentPixelPng },
+		);
+		const separatelyPublished = await separateResponse.json() as GraphicsIngestionOperation;
+		expect(separatelyPublished.result).toMatchObject({ outcome: 'published' });
+		expect(separatelyPublished.result?.assetId).not.toBe(completed.result?.assetId);
+		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			query: { search: 'scoreboard' },
+		})).resolves.toHaveLength(2);
 	});
 
 	it('exposes cancellation and permanent validation failure as structured operations', async () => {

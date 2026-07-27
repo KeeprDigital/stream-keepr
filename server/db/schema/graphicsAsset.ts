@@ -7,6 +7,7 @@ export const GRAPHIC_ASSET_LIFECYCLE_STATE_VALUES = ['active', 'retired', 'trash
 export const GRAPHIC_ASSET_CONTENT_AVAILABILITY_VALUES = ['available', 'unavailable'] as const;
 export const GRAPHICS_DERIVATIVE_KIND_VALUES = ['thumbnail', 'video-poster', 'font-specimen'] as const;
 export const GRAPHICS_INGESTION_SOURCE_VALUES = ['local-upload', 'remote-copy', 'replacement', 'template-package'] as const;
+export const GRAPHICS_DUPLICATE_CONTENT_POLICY_VALUES = ['reuse', 'create-separate'] as const;
 export const GRAPHICS_INGESTION_STAGE_VALUES = [
 	'created',
 	'transferring',
@@ -145,6 +146,9 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	stage: text('stage', { enum: GRAPHICS_INGESTION_STAGE_VALUES }).notNull().default('created'),
 	initiatedBy: text('initiated_by').notNull(),
 	proposedName: text('proposed_name').notNull(),
+	duplicateContentPolicy: text('duplicate_content_policy', {
+		enum: GRAPHICS_DUPLICATE_CONTENT_POLICY_VALUES,
+	}).notNull().default('reuse'),
 	defaultEventId: integer('default_event_id').references(() => events.id, { onDelete: 'set null' }),
 	targetAssetId: text('target_asset_id').references(() => graphicAssets.id, { onDelete: 'set null' }),
 	declaredByteLength: integer('declared_byte_length'),

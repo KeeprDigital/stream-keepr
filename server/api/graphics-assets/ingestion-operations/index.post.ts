@@ -10,6 +10,7 @@ const initiationSchema = z.object({
 	idempotencyKey: z.string().trim().min(1).max(200),
 	name: z.string().trim().min(1).max(200),
 	defaultEventId: z.number().int().positive().optional(),
+	duplicateContentPolicy: z.enum(['reuse', 'create-separate']).optional(),
 	declaredByteLength: z.number().int().positive().max(MAX_PNG_INGESTION_BYTES),
 }).strict();
 

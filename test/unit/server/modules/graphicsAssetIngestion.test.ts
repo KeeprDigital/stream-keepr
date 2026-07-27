@@ -50,6 +50,7 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 
 		expect(operation).toMatchObject({
 			stage: 'created',
+			duplicateContentPolicy: 'reuse',
 			transferredByteLength: 0,
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
@@ -322,6 +323,36 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 				operation: reused,
 			}),
 		]);
+	});
+
+	it('publishes a separate Graphic Asset when duplicate content reuse is explicitly disabled', async () => {
+		const { library } = createLibrary();
+
+		async function ingest(idempotencyKey: string, duplicateContentPolicy: 'reuse' | 'create-separate') {
+			const operation = await library.initiatePngIngestion({
+				idempotencyKey,
+				initiatedBy: 'graphics-author-1',
+				name: idempotencyKey,
+				duplicateContentPolicy,
+				declaredByteLength: transparentPixelPng.byteLength,
+			});
+			return await library.uploadPng({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				bytes: createBoundedByteStream(transparentPixelPng, {
+					byteLength: transparentPixelPng.byteLength,
+					maximumByteLength: 16 * 1024 * 1024,
+				}),
+			});
+		}
+
+		const original = await ingest('original-identity', 'reuse');
+		const separate = await ingest('separate-identity', 'create-separate');
+
+		expect(original.result?.outcome).toBe('published');
+		expect(separate.result?.outcome).toBe('published');
+		expect(separate.result?.assetId).not.toBe(original.result?.assetId);
+		await expect(library.listGraphicAssets({})).resolves.toHaveLength(2);
 	});
 
 	it('does not publish when canonical bytes do not hash to their digest identity', async () => {

@@ -11,6 +11,15 @@ const THUMBNAIL_MAX_WIDTH = 640;
 const THUMBNAIL_MAX_HEIGHT = 360;
 const textDecoder = new TextDecoder('ascii');
 const textEncoder = new TextEncoder();
+const ADAM7_PASSES = [
+	{ x: 0, y: 0, dx: 8, dy: 8 },
+	{ x: 4, y: 0, dx: 8, dy: 8 },
+	{ x: 0, y: 4, dx: 4, dy: 8 },
+	{ x: 2, y: 0, dx: 4, dy: 4 },
+	{ x: 0, y: 2, dx: 2, dy: 4 },
+	{ x: 1, y: 0, dx: 2, dy: 2 },
+	{ x: 0, y: 1, dx: 1, dy: 2 },
+] as const;
 
 interface ParsedPng {
 	width: number;
@@ -37,18 +46,128 @@ export interface ValidatedPng {
 }
 
 export class PngValidationError extends Error {
+	readonly issue: GraphicAssetValidationIssue;
+
 	constructor(
-		readonly issue: GraphicAssetValidationIssue,
+		readonly issues: readonly GraphicAssetValidationIssue[],
 	) {
-		super(issue.message);
+		if (issues.length === 0)
+			throw new Error('PNG validation errors require at least one issue');
+		super(issues.map(issue => issue.message).join(' '));
+		this.issue = issues[0]!;
 	}
+}
+
+function validationIssue(
+	code: GraphicAssetValidationIssue['code'],
+	message: string,
+): GraphicAssetValidationIssue {
+	return { severity: 'error', code, message };
 }
 
 function validationError(
 	code: GraphicAssetValidationIssue['code'],
 	message: string,
 ): never {
-	throw new PngValidationError({ severity: 'error', code, message });
+	throw new PngValidationError([validationIssue(code, message)]);
+}
+
+function isAsciiLetter(byte: number) {
+	return (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122);
+}
+
+function inspectPngChunks(bytes: Uint8Array): GraphicAssetValidationIssue[] {
+	if (!bytesEqual(bytes.slice(0, PNG_SIGNATURE.byteLength), PNG_SIGNATURE)) {
+		return [
+			validationIssue(
+				'invalid-png-signature',
+				'Source bytes do not have the canonical PNG signature.',
+			),
+		];
+	}
+
+	const issues: GraphicAssetValidationIssue[] = [];
+	let offset = PNG_SIGNATURE.byteLength;
+	let foundPalette = false;
+	let foundImageData = false;
+	const profileChunks = new Set<string>();
+
+	while (offset < bytes.byteLength) {
+		if (bytes.byteLength - offset < 12) {
+			issues.push(validationIssue('malformed-png', 'PNG ends inside a chunk header.'));
+			break;
+		}
+
+		const length = readUint32(bytes, offset);
+		const chunkEnd = offset + 12 + length;
+		if (!Number.isSafeInteger(chunkEnd) || chunkEnd > bytes.byteLength) {
+			issues.push(validationIssue(
+				'malformed-png',
+				'PNG chunk length exceeds the available source bytes.',
+			));
+			break;
+		}
+
+		const typeBytes = bytes.slice(offset + 4, offset + 8);
+		const type = textDecoder.decode(typeBytes);
+		const data = bytes.slice(offset + 8, offset + 8 + length);
+		if (!typeBytes.every(isAsciiLetter)) {
+			issues.push(validationIssue(
+				'malformed-png',
+				'PNG chunk types must contain exactly four ASCII letters.',
+			));
+		}
+		if ((typeBytes[2]! & 0x20) !== 0) {
+			issues.push(validationIssue(
+				'malformed-png',
+				`PNG ${type} chunk sets the reserved chunk-type bit.`,
+			));
+		}
+
+		const expectedCrc = readUint32(bytes, offset + 8 + length);
+		if (crc32(concatBytes([typeBytes, data])) !== expectedCrc) {
+			issues.push(validationIssue(
+				'malformed-png',
+				`PNG ${type} chunk has an invalid checksum.`,
+			));
+		}
+
+		if (type === 'PLTE')
+			foundPalette = true;
+		if (type === 'IDAT')
+			foundImageData = true;
+		if (type === 'sRGB' || type === 'gAMA' || type === 'cHRM') {
+			if (
+				profileChunks.has(type)
+				|| foundPalette
+				|| foundImageData
+				|| (type === 'sRGB' && (data.byteLength !== 1 || data[0]! > 3))
+				|| (type === 'gAMA' && (data.byteLength !== 4 || readUint32(data, 0) !== 45_455))
+			) {
+				issues.push(validationIssue(
+					'unsupported-png-profile',
+					`PNG ${type} chunk is duplicated, misplaced, or incompatible with sRGB output.`,
+				));
+			}
+			profileChunks.add(type);
+		}
+		if (type === 'acTL' || type === 'fcTL' || type === 'fdAT') {
+			issues.push(validationIssue(
+				'unsupported-png-animation',
+				'Animated PNG is not supported by the png-v1 compatibility profile.',
+			));
+		}
+		if (type === 'iCCP' || type === 'cICP' || type === 'mDCv' || type === 'cLLi') {
+			issues.push(validationIssue(
+				'unsupported-png-profile',
+				'Embedded colour profiles or HDR metadata are not supported by the png-v1 compatibility profile.',
+			));
+		}
+
+		offset = chunkEnd;
+	}
+
+	return issues;
 }
 
 function readUint32(bytes: Uint8Array, offset: number): number {
@@ -104,8 +223,9 @@ function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
 }
 
 function parsePng(bytes: Uint8Array): ParsedPng {
-	if (!bytesEqual(bytes.slice(0, PNG_SIGNATURE.byteLength), PNG_SIGNATURE))
-		validationError('invalid-png-signature', 'Source bytes do not have the canonical PNG signature.');
+	const chunkIssues = inspectPngChunks(bytes);
+	if (chunkIssues.length > 0)
+		throw new PngValidationError(chunkIssues);
 
 	let offset = PNG_SIGNATURE.byteLength;
 	let width: number | undefined;
@@ -300,7 +420,7 @@ function parsePng(bytes: Uint8Array): ParsedPng {
 	};
 }
 
-async function inflate(bytes: Uint8Array): Promise<Uint8Array> {
+async function inflate(bytes: Uint8Array, maximumByteLength: number): Promise<Uint8Array> {
 	try {
 		const body = new ReadableStream<Uint8Array>({
 			start(controller) {
@@ -310,9 +430,28 @@ async function inflate(bytes: Uint8Array): Promise<Uint8Array> {
 		}).pipeThrough(
 			new DecompressionStream('deflate') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>,
 		);
-		return new Uint8Array(await new Response(body).arrayBuffer());
+		const reader = body.getReader();
+		const chunks: Uint8Array[] = [];
+		let byteLength = 0;
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done)
+				break;
+			byteLength += value.byteLength;
+			if (byteLength > maximumByteLength) {
+				await reader.cancel();
+				validationError(
+					'incomplete-png-frame',
+					'PNG decoded frame exceeds the length allowed by its declared dimensions.',
+				);
+			}
+			chunks.push(value);
+		}
+		return concatBytes(chunks);
 	}
-	catch {
+	catch (error) {
+		if (error instanceof PngValidationError)
+			throw error;
 		return validationError('incomplete-png-frame', 'PNG image data cannot be completely decoded.');
 	}
 }
@@ -382,8 +521,25 @@ function passLength(fullLength: number, start: number, step: number): number {
 	return fullLength <= start ? 0 : Math.ceil((fullLength - start) / step);
 }
 
+function channelCount(colorType: ParsedPng['colorType']) {
+	return ({ 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 } as const)[colorType];
+}
+
+function expectedInflatedByteLength(parsed: ParsedPng) {
+	const channels = channelCount(parsed.colorType);
+	if (!parsed.interlaced)
+		return parsed.height * (parsed.width * channels + 1);
+	return ADAM7_PASSES.reduce((total, pass) => {
+		const passWidth = passLength(parsed.width, pass.x, pass.dx);
+		const passHeight = passLength(parsed.height, pass.y, pass.dy);
+		return total + (passWidth === 0 || passHeight === 0
+			? 0
+			: passHeight * (passWidth * channels + 1));
+	}, 0);
+}
+
 function unfilter(parsed: ParsedPng, inflated: Uint8Array): Uint8Array {
-	const channels = ({ 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 } as const)[parsed.colorType];
+	const channels = channelCount(parsed.colorType);
 	if (!parsed.interlaced) {
 		const expectedByteLength = parsed.height * (parsed.width * channels + 1);
 		if (inflated.byteLength !== expectedByteLength)
@@ -392,17 +548,8 @@ function unfilter(parsed: ParsedPng, inflated: Uint8Array): Uint8Array {
 	}
 
 	const decoded = new Uint8Array(parsed.width * parsed.height * channels);
-	const passes = [
-		{ x: 0, y: 0, dx: 8, dy: 8 },
-		{ x: 4, y: 0, dx: 8, dy: 8 },
-		{ x: 0, y: 4, dx: 4, dy: 8 },
-		{ x: 2, y: 0, dx: 4, dy: 4 },
-		{ x: 0, y: 2, dx: 2, dy: 4 },
-		{ x: 1, y: 0, dx: 2, dy: 2 },
-		{ x: 0, y: 1, dx: 1, dy: 2 },
-	] as const;
 	let inputOffset = 0;
-	for (const pass of passes) {
+	for (const pass of ADAM7_PASSES) {
 		const passWidth = passLength(parsed.width, pass.x, pass.dx);
 		const passHeight = passLength(parsed.height, pass.y, pass.dy);
 		if (passWidth === 0 || passHeight === 0)
@@ -576,7 +723,10 @@ export async function validatePng(
 	sourceDigest: string,
 ): Promise<ValidatedPng> {
 	const parsed = parsePng(bytes);
-	const decoded = unfilter(parsed, await inflate(parsed.compressedImageData));
+	const decoded = unfilter(
+		parsed,
+		await inflate(parsed.compressedImageData, expectedInflatedByteLength(parsed)),
+	);
 	const rgba = toRgba(parsed, decoded);
 	const facts: GraphicAssetImageFacts = {
 		kind: 'image',
@@ -620,6 +770,6 @@ export function rejectedPngReport(error: PngValidationError): GraphicAssetValida
 	return {
 		outcome: 'rejected',
 		compatibilityProfile: 'png-v1',
-		issues: [error.issue],
+		issues: [...error.issues],
 	};
 }

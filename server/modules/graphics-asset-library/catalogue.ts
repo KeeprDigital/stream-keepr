@@ -1,7 +1,7 @@
 import type {
+	GraphicAsset,
 	GraphicAssetId,
 	GraphicAssetImageFacts,
-	GraphicAssetLibraryItem,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 } from '~~/shared/types/graphicsAsset';
@@ -15,6 +15,7 @@ interface OperationRow {
 	idempotency_key: string;
 	initiated_by: string;
 	proposed_name: string;
+	duplicate_content_policy: GraphicsIngestionOperation['duplicateContentPolicy'];
 	default_event_id: number | null;
 	declared_byte_length: number;
 	transferred_byte_length: number;
@@ -37,6 +38,7 @@ interface AssetRow {
 	idempotency_key: string;
 	initiated_by: string;
 	proposed_name: string;
+	duplicate_content_policy: GraphicsIngestionOperation['duplicateContentPolicy'];
 	default_event_id: number | null;
 	declared_byte_length: number;
 	transferred_byte_length: number;
@@ -58,6 +60,7 @@ function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 		idempotencyKey: row.idempotency_key,
 		initiatedBy: row.initiated_by,
 		name: row.proposed_name,
+		duplicateContentPolicy: row.duplicate_content_policy,
 		defaultEventId: row.default_event_id ?? undefined,
 		declaredByteLength: row.declared_byte_length,
 		transferredByteLength: row.transferred_byte_length,
@@ -76,6 +79,7 @@ function operationRowFromAsset(row: AssetRow): OperationRow {
 		idempotency_key: row.idempotency_key,
 		initiated_by: row.initiated_by,
 		proposed_name: row.proposed_name,
+		duplicate_content_policy: row.duplicate_content_policy,
 		default_event_id: row.default_event_id,
 		declared_byte_length: row.declared_byte_length,
 		transferred_byte_length: row.transferred_byte_length,
@@ -90,7 +94,8 @@ function operationRowFromAsset(row: AssetRow): OperationRow {
 
 function operationSelect(where: string) {
 	return `
-		SELECT id, idempotency_key, initiated_by, proposed_name, default_event_id,
+		SELECT id, idempotency_key, initiated_by, proposed_name,
+			duplicate_content_policy, default_event_id,
 			declared_byte_length, transferred_byte_length, stage, report, result,
 			failure, created_at, updated_at
 		FROM graphics_ingestion_operations
@@ -163,14 +168,16 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			await database.prepare(`
 				INSERT OR IGNORE INTO graphics_ingestion_operations (
 					id, idempotency_key, source, stage, initiated_by, proposed_name,
-					default_event_id, declared_byte_length, transferred_byte_length,
+					duplicate_content_policy, default_event_id,
+					declared_byte_length, transferred_byte_length,
 					created_at, updated_at
-				) VALUES (?, ?, 'local-upload', 'created', ?, ?, ?, ?, 0, ?, ?)
+				) VALUES (?, ?, 'local-upload', 'created', ?, ?, ?, ?, ?, 0, ?, ?)
 			`).bind(
 				operation.id,
 				operation.idempotencyKey,
 				operation.initiatedBy,
 				operation.name,
+				operation.duplicateContentPolicy,
 				operation.defaultEventId ?? null,
 				operation.declaredByteLength,
 				new Date(operation.createdAt).getTime(),
@@ -253,7 +260,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			return row
 				? {
 						assetId: row.asset_id as GraphicAssetId,
-						revisionId: row.revision_id as GraphicAssetLibraryItem['revisionId'],
+						revisionId: row.revision_id as GraphicAsset['revisionId'],
 					}
 				: undefined;
 		},
@@ -350,13 +357,16 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 						WHERE id = ? AND initiated_by = ? AND stage = 'publishing'
 							AND updated_at = ?
 					)
-						AND NOT EXISTS (
-							SELECT 1
-							FROM graphic_assets existing_asset
-							JOIN graphic_asset_revisions existing_revision
-								ON existing_revision.asset_id = existing_asset.id
-							WHERE existing_asset.lifecycle_state = 'active'
-								AND existing_revision.content_digest = ?
+						AND (
+							? = 'create-separate'
+							OR NOT EXISTS (
+								SELECT 1
+								FROM graphic_assets existing_asset
+								JOIN graphic_asset_revisions existing_revision
+									ON existing_revision.asset_id = existing_asset.id
+								WHERE existing_asset.lifecycle_state = 'active'
+									AND existing_revision.content_digest = ?
+							)
 						)
 				`).bind(
 					input.assetId,
@@ -366,6 +376,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					input.operation.id,
 					input.operation.initiatedBy,
 					new Date(input.operation.updatedAt).getTime(),
+					input.operation.duplicateContentPolicy,
 					input.sourceDigest,
 				),
 				database.prepare(`
@@ -423,7 +434,8 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 						)
 					), '[]') AS event_ids,
 					o.id AS operation_id, o.idempotency_key, o.initiated_by,
-					o.proposed_name, o.default_event_id, o.declared_byte_length,
+					o.proposed_name, o.duplicate_content_policy,
+					o.default_event_id, o.declared_byte_length,
 					o.transferred_byte_length, o.stage, o.report, o.result, o.failure,
 					o.created_at AS operation_created_at,
 					o.updated_at AS operation_updated_at
@@ -450,11 +462,11 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			`).bind(normalizedSearch).all<AssetRow>();
 			if (!result.success)
 				throw new Error('Graphic Asset discovery failed');
-			return result.results.map((row): GraphicAssetLibraryItem => ({
+			return result.results.map((row): GraphicAsset => ({
 				id: row.id as GraphicAssetId,
 				name: row.name,
 				kind: 'image',
-				revisionId: row.revision_id as GraphicAssetLibraryItem['revisionId'],
+				revisionId: row.revision_id as GraphicAsset['revisionId'],
 				revisionNumber: row.revision_number,
 				facts: JSON.parse(row.technical_facts) as GraphicAssetImageFacts,
 				eventIds: JSON.parse(row.event_ids) as number[],

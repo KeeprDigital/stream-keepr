@@ -1,5 +1,5 @@
 import type {
-	GraphicAssetLibraryItem,
+	GraphicAsset,
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
@@ -23,6 +23,7 @@ const completedOperation: GraphicsIngestionOperation = {
 	initiatedBy: 'local-graphics-author',
 	name: 'Scoreboard logo',
 	defaultEventId: 7,
+	duplicateContentPolicy: 'reuse',
 	declaredByteLength: 68,
 	transferredByteLength: 68,
 	stage: 'completed',
@@ -52,7 +53,7 @@ const completedOperation: GraphicsIngestionOperation = {
 	updatedAt: '2026-07-27T04:00:01.000Z',
 };
 
-const assets = ref<GraphicAssetLibraryItem[]>([{
+const assets = ref<GraphicAsset[]>([{
 	id: 'asset-1' as never,
 	name: 'Scoreboard logo',
 	kind: 'image',
@@ -173,6 +174,7 @@ describe('the Graphics Asset Library Workspace', () => {
 				body: expect.objectContaining({
 					name: 'new-scoreboard.png',
 					defaultEventId: 7,
+					duplicateContentPolicy: 'reuse',
 					declaredByteLength: 68,
 				}),
 			}),
@@ -186,5 +188,98 @@ describe('the Graphics Asset Library Workspace', () => {
 		);
 		expect(mockRefresh).toHaveBeenCalledOnce();
 		expect(wrapper.text()).toContain('Published asset asset-1 revision revision-1');
+	});
+
+	it('reuses the persisted initiation identity when the first response is lost', async () => {
+		const wrapper = await mountPage();
+		const file = new File([new Uint8Array(68)], 'reconnect.png', { type: 'image/png' });
+		const createdOperation = {
+			...completedOperation,
+			stage: 'created' as const,
+			report: undefined,
+			result: undefined,
+			transferredByteLength: 0,
+		};
+		mockApiFetch
+			.mockRejectedValueOnce(new Error('Response connection lost'))
+			.mockResolvedValueOnce(createdOperation);
+		mockTransferFetch.mockResolvedValue(new Response(JSON.stringify(completedOperation), {
+			status: 200,
+			headers: { 'content-type': 'application/json' },
+		}));
+
+		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
+		await flushPromises();
+		await wrapper.get('[data-testid="upload-png"]').trigger('click');
+		await flushPromises();
+
+		const pending = JSON.parse(
+			localStorage.getItem('graphics-asset-ingestion-initiation')!,
+		) as { idempotencyKey: string };
+		expect(pending.idempotencyKey).toBeTruthy();
+
+		await wrapper.get('[data-testid="upload-png"]').trigger('click');
+		await flushPromises();
+
+		const initiationCalls = mockApiFetch.mock.calls
+			.filter(([path]) => path === '/api/graphics-assets/ingestion-operations');
+		expect(initiationCalls).toHaveLength(2);
+		expect(initiationCalls[0]![1].body.idempotencyKey)
+			.toBe(initiationCalls[1]![1].body.idempotencyKey);
+		expect(mockTransferFetch).toHaveBeenCalledOnce();
+	});
+
+	it('reconnects a durable initiation after the page reloads before receiving its response', async () => {
+		const pending = {
+			idempotencyKey: 'persisted-initiation',
+			name: 'Reloaded scoreboard',
+			defaultEventId: 7,
+			duplicateContentPolicy: 'reuse',
+			declaredByteLength: 68,
+		};
+		localStorage.setItem(
+			'graphics-asset-ingestion-initiation',
+			JSON.stringify(pending),
+		);
+		mockApiFetch.mockResolvedValue({
+			...completedOperation,
+			...pending,
+			stage: 'created',
+			report: undefined,
+			result: undefined,
+			transferredByteLength: 0,
+		});
+
+		const wrapper = await mountPage();
+		await flushPromises();
+
+		expect(mockApiFetch).toHaveBeenCalledWith(
+			'/api/graphics-assets/ingestion-operations',
+			{ method: 'POST', body: pending },
+		);
+		expect(wrapper.text()).toContain('created');
+		expect(localStorage.getItem('graphics-asset-ingestion-operation')).toBe('operation-1');
+		expect(localStorage.getItem('graphics-asset-ingestion-initiation')).toBeNull();
+	});
+
+	it('lets an author explicitly request a separate Graphic Asset identity', async () => {
+		const wrapper = await mountPage();
+		const file = new File([new Uint8Array(68)], 'separate.png', { type: 'image/png' });
+		mockApiFetch.mockRejectedValue(new Error('Stop after initiation'));
+
+		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
+		await wrapper.get('input[type="checkbox"]').setValue(true);
+		await flushPromises();
+		await wrapper.get('[data-testid="upload-png"]').trigger('click');
+		await flushPromises();
+
+		expect(mockApiFetch).toHaveBeenCalledWith(
+			'/api/graphics-assets/ingestion-operations',
+			expect.objectContaining({
+				body: expect.objectContaining({
+					duplicateContentPolicy: 'create-separate',
+				}),
+			}),
+		);
 	});
 });
