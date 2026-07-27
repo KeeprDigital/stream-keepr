@@ -1,9 +1,11 @@
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { flushPromises, mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+
+enableAutoUnmount(afterEach);
 
 const mockConfig = ref(structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG));
 const mockScreenConfig = ref({ width: 1920, height: 1080 });

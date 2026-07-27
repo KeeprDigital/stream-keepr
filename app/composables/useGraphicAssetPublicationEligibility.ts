@@ -18,12 +18,15 @@ export function useGraphicAssetPublicationEligibility(
 ) {
 	const eligibility = ref<GraphicAssetPublicationEligibility>({ outcome: 'checking' });
 	const statusFlights = createGuardedSequence();
-	const refreshRequest = ref(0);
+	const {
+		generation: referenceStatusRefreshGeneration,
+		requestRefresh,
+	} = useGraphicAssetReferenceStatusRefresh();
 
 	watch(
 		() => ({
 			references: featureMatchOverlayGraphicAssetReferences(toValue(config)),
-			refreshRequest: refreshRequest.value,
+			refreshGeneration: referenceStatusRefreshGeneration.value,
 		}),
 		async ({ references }) => {
 			const flight = statusFlights.begin();
@@ -63,7 +66,7 @@ export function useGraphicAssetPublicationEligibility(
 	);
 
 	function retry() {
-		refreshRequest.value += 1;
+		requestRefresh();
 	}
 
 	const blocked = computed(() => eligibility.value.outcome !== 'eligible');

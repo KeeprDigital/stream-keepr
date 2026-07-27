@@ -23,6 +23,10 @@ const thisEventOnly = ref(true);
 const referenceStatus = ref<GraphicAssetReferenceStatus>();
 const referenceStatusFlights = createGuardedSequence();
 const {
+	generation: referenceStatusRefreshGeneration,
+	requestRefresh: retryReferenceStatus,
+} = useGraphicAssetReferenceStatusRefresh();
+const {
 	data: assets,
 	status,
 	error,
@@ -39,7 +43,10 @@ const selectedAsset = computed(() => (assets.value ?? []).find(asset =>
 	&& asset.revisionId === props.modelValue?.revisionId,
 ));
 
-watch(() => props.modelValue, async (reference) => {
+watch(() => ({
+	reference: props.modelValue,
+	refreshGeneration: referenceStatusRefreshGeneration.value,
+}), async ({ reference }) => {
 	const flight = referenceStatusFlights.begin();
 	if (!reference) {
 		referenceStatus.value = undefined;
@@ -109,6 +116,16 @@ function selectAsset(asset: GraphicAsset) {
 			title="Unavailable Graphic Asset Content"
 			description="This exact revision still exists but its bytes are temporarily unavailable. Retry before a publication-requiring action."
 		/>
+		<UButton
+			v-if="modelValue && referenceStatus?.outcome === 'unavailable'"
+			data-testid="retry-graphic-asset-reference-status"
+			color="warning"
+			variant="soft"
+			icon="i-lucide-refresh-cw"
+			@click="retryReferenceStatus"
+		>
+			Retry Graphic Asset Content
+		</UButton>
 
 		<UModal v-model:open="open">
 			<template #content>
