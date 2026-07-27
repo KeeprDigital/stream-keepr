@@ -129,9 +129,9 @@ describe('the Graphics Asset Library health page', () => {
 		});
 		const wrapper = await mountPage();
 
-		expect(wrapper.text()).toContain('Canonical quota');
+		expect(wrapper.text()).toContain('Canonical Graphics Quota');
 		expect(wrapper.text()).toContain('100.0 GiB');
-		expect(wrapper.text()).toContain('Staging allowance');
+		expect(wrapper.text()).toContain('Graphics Staging Allowance');
 		expect(wrapper.text()).toContain('10.0 GiB');
 		expect(wrapper.text()).toContain('Source content');
 		expect(wrapper.text()).toContain('Derivatives');

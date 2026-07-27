@@ -221,6 +221,9 @@ The separate limit on provisional bytes reserved or held by incomplete Graphics 
 **Canonical Capacity Pressure**:
 The normal, warning, critical, or full state derived from use of the Canonical Graphics Quota.
 
+**Graphics Administrator**:
+An installation operator authorised to inspect Graphics Asset Library health and change installation-wide Graphics Asset Library Capacity limits.
+
 **Graphic Asset**:
 A stable-identity library resource for a validated image, silent video, or font owned by the installation-wide Graphics Asset Library and reusable across Events.
 Events may associate with or reference a Graphic Asset but never own it.

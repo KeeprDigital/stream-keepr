@@ -176,7 +176,7 @@ describe('the Graphics Asset Library Workspace', () => {
 	it('shows canonical and staging usage with critical storage pressure', async () => {
 		const wrapper = await mountPage();
 
-		expect(wrapper.text()).toContain('Canonical storage critical');
+		expect(wrapper.text()).toContain('Canonical Capacity Pressure: critical');
 		expect(wrapper.text()).toContain('95 B of 100 B');
 		expect(wrapper.text()).toContain('Staging 10 B of 20 B');
 		expect(wrapper.text()).toContain('Source content 68 B');

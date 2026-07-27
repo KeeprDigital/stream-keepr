@@ -241,55 +241,66 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					), 0) AS staging_reserved_bytes,
 					(
 						COALESCE((
-							SELECT SUM(
-								length(CAST(id AS BLOB))
-								+ length(CAST(name AS BLOB))
-								+ length(CAST(kind AS BLOB))
-								+ length(CAST(lifecycle_state AS BLOB))
-							)
+							SELECT SUM(length(CAST(json_array(
+								id, canonical_limit_bytes, staging_limit_bytes, updated_at
+							) AS BLOB)))
+							FROM graphics_capacity_settings
+						), 0)
+						+ COALESCE((
+							SELECT SUM(length(CAST(json_array(
+								id, name, kind, lifecycle_state, created_at, updated_at
+							) AS BLOB)))
 							FROM graphic_assets
 						), 0)
 						+ COALESCE((
-							SELECT SUM(
-								length(CAST(digest AS BLOB))
-								+ length(CAST(canonical_mime AS BLOB))
-								+ length(CAST(availability AS BLOB))
-								+ length(CAST(COALESCE(unavailable_reason_code, '') AS BLOB))
-							)
+							SELECT SUM(length(CAST(json_array(
+								digest, byte_length, canonical_mime, availability,
+								unavailable_reason_code, unavailable_since, created_at
+							) AS BLOB)))
 							FROM graphic_asset_contents
 						), 0)
 						+ COALESCE((
-							SELECT SUM(
-								length(CAST(id AS BLOB))
-								+ length(CAST(asset_id AS BLOB))
-								+ length(CAST(content_digest AS BLOB))
-								+ length(CAST(compatibility_profile AS BLOB))
-								+ length(CAST(technical_facts AS BLOB))
-							)
+							SELECT SUM(length(CAST(json_array(
+								id, asset_id, revision_number, content_digest,
+								compatibility_profile, technical_facts, created_at
+							) AS BLOB)))
 							FROM graphic_asset_revisions
 						), 0)
 						+ COALESCE((
-							SELECT SUM(
-								length(CAST(id AS BLOB))
-								+ length(CAST(source_revision_id AS BLOB))
-								+ length(CAST(kind AS BLOB))
-								+ length(CAST(content_digest AS BLOB))
-							)
+							SELECT SUM(length(CAST(json_array(
+								id, source_revision_id, kind, content_digest, created_at
+							) AS BLOB)))
 							FROM graphics_derivatives
 						), 0)
 						+ COALESCE((
-							SELECT SUM(
-								length(CAST(id AS BLOB))
-								+ length(CAST(idempotency_key AS BLOB))
-								+ length(CAST(initiated_by AS BLOB))
-								+ length(CAST(proposed_name AS BLOB))
-								+ length(CAST(stage AS BLOB))
-								+ length(CAST(COALESCE(report, '') AS BLOB))
-								+ length(CAST(COALESCE(result, '') AS BLOB))
-								+ length(CAST(COALESCE(failure, '') AS BLOB))
-								+ length(CAST(COALESCE(capacity_outcome, '') AS BLOB))
-							)
+							SELECT SUM(length(CAST(json_array(
+								asset_id, event_id, created_at
+							) AS BLOB)))
+							FROM graphic_asset_event_associations
+						), 0)
+						+ COALESCE((
+							SELECT SUM(length(CAST(json_array(
+								id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
+								event_id, created_at, updated_at
+							) AS BLOB)))
+							FROM graphic_asset_references
+						), 0)
+						+ COALESCE((
+							SELECT SUM(length(CAST(json_array(
+								id, idempotency_key, source, stage, initiated_by,
+								proposed_name, duplicate_content_policy, default_event_id,
+								target_asset_id, declared_byte_length, transferred_byte_length,
+								staging_reserved_byte_length, staging_used_byte_length,
+								canonical_reserved_byte_length, capacity_outcome, report, result,
+								failure, cancel_requested_at, created_at, updated_at
+							) AS BLOB)))
 							FROM graphics_ingestion_operations
+						), 0)
+						+ COALESCE((
+							SELECT SUM(length(CAST(json_array(
+								operation_id, digest, byte_length, created_at
+							) AS BLOB)))
+							FROM graphics_canonical_write_candidates
 						), 0)
 					) AS metadata_bytes,
 					COALESCE((
@@ -532,8 +543,20 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					digest,
 					byteLength,
 					exists: Boolean(await database.prepare(`
-						SELECT 1 FROM graphic_asset_contents WHERE digest = ?
-					`).bind(digest).first()),
+							SELECT 1
+							FROM graphic_asset_contents contents
+							WHERE contents.digest = ?
+								AND (
+									EXISTS (
+										SELECT 1 FROM graphic_asset_revisions revisions
+										WHERE revisions.content_digest = contents.digest
+									)
+									OR EXISTS (
+										SELECT 1 FROM graphics_derivatives derivatives
+										WHERE derivatives.content_digest = contents.digest
+									)
+								)
+						`).bind(digest).first()),
 				})),
 			);
 			const growthBytes = existing

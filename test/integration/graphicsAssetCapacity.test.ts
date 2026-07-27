@@ -4,7 +4,7 @@ import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { describe, expect, it } from 'vitest';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 
-describe('graphics Asset Library capacity API', () => {
+describe('the Graphics Asset Library Capacity API', () => {
 	const administratorHeaders = {
 		'x-graphics-admin-token': INTEGRATION_GRAPHICS_ADMIN_TOKEN,
 	};
@@ -114,7 +114,7 @@ describe('graphics Asset Library capacity API', () => {
 		}
 	});
 
-	it('allows a proven no-growth publication through D1 at full canonical quota', async () => {
+	it('allows a proven no-growth publication through D1 at the full Canonical Graphics Quota', async () => {
 		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity');
 		const authorHeaders = { 'x-graphics-author-id': 'capacity-no-growth-author' };
 		const noGrowthBytes = pngWithTextChunks(10);

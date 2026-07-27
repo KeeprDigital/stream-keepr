@@ -23,7 +23,7 @@ export async function requireGraphicsAdministrator(event: H3Event) {
 		throw createError({
 			statusCode: 503,
 			statusMessage: 'Service Unavailable',
-			message: 'Graphics administrator access is not configured',
+			message: 'Graphics Administrator access is not configured',
 		});
 	}
 	const suppliedToken = getRequestHeader(event, 'x-graphics-admin-token')?.trim() ?? '';
@@ -31,7 +31,7 @@ export async function requireGraphicsAdministrator(event: H3Event) {
 		throw createError({
 			statusCode: 403,
 			statusMessage: 'Forbidden',
-			message: 'Graphics administrator authorization is required',
+			message: 'Graphics Administrator authorization is required',
 		});
 	}
 }

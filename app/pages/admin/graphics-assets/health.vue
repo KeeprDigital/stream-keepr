@@ -174,7 +174,7 @@ async function saveCapacityLimits() {
 				<template #header>
 					<div>
 						<h2 class="font-semibold text-highlighted">
-							Installation capacity
+							Graphics Asset Library Capacity
 						</h2>
 						<p class="mt-1 text-sm text-muted">
 							Canonical retained bytes and in-progress staging are enforced independently.
@@ -187,7 +187,7 @@ async function saveCapacityLimits() {
 						<div>
 							<div class="flex items-center justify-between gap-4">
 								<h3 class="font-medium text-highlighted">
-									Canonical quota
+									Canonical Graphics Quota
 								</h3>
 								<UBadge :label="capacity.canonical.pressure" variant="soft" />
 							</div>
@@ -242,7 +242,7 @@ async function saveCapacityLimits() {
 
 						<div>
 							<h3 class="font-medium text-highlighted">
-								Staging allowance
+								Graphics Staging Allowance
 							</h3>
 							<p class="mt-1 text-sm text-muted">
 								{{ formatByteCount(capacity.staging.usedBytes) }} verified ·

@@ -18,7 +18,7 @@ import {
 	DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
 } from '~~/shared/types/graphicsAsset';
 
-describe('graphics Asset Library capacity', () => {
+describe('the Graphics Asset Library Capacity', () => {
 	const transparentPixelPng = Uint8Array.from(Buffer.from(
 		'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 		'base64',
@@ -47,7 +47,7 @@ describe('graphics Asset Library capacity', () => {
 				breakdown: {
 					retainedSourceBytes: 0,
 					retainedDerivativeBytes: 0,
-					metadataBytes: 0,
+					metadataBytes: expect.any(Number),
 					providerCacheBytes: 0,
 					unreachableQuarantineBytes: 0,
 				},
@@ -59,6 +59,7 @@ describe('graphics Asset Library capacity', () => {
 				availableBytes: DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
 			},
 		});
+		expect((await library.getCapacity()).canonical.breakdown.metadataBytes).toBeGreaterThan(0);
 	});
 
 	it('admits concurrent staging work only while worst-case reservations fit', async () => {
@@ -261,7 +262,7 @@ describe('graphics Asset Library capacity', () => {
 		))).resolves.toEqual({ outcome: 'missing' });
 	});
 
-	it('publishes proven no-growth content at full canonical quota', async () => {
+	it('publishes proven no-growth content at the full Canonical Graphics Quota', async () => {
 		const library = createGraphicsAssetLibrary({
 			catalogue: createInMemoryGraphicsAssetCatalogue(),
 			staging: createInMemoryStagingGraphicsObjectStore(),

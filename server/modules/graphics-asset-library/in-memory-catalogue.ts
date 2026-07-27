@@ -75,12 +75,18 @@ export function createInMemoryGraphicsAssetCatalogue(
 		const canonicalReservedBytes = sum(canonicalReservations.values());
 		const stagingUsedBytes = sum(stagingUsage.values());
 		const stagingReservedBytes = sum(stagingReservations.values());
-		const metadataBytes = operations.size === 0 && assets.size === 0
-			? 0
-			: new TextEncoder().encode(JSON.stringify([
+		const metadataBytes = new TextEncoder().encode(JSON.stringify({
+			settings: { canonicalLimitBytes, stagingLimitBytes },
+			operations: [
 				...operations.values(),
-				...assets.values(),
-			])).byteLength;
+			],
+			assets: [...assets.values()],
+			thumbnailDigests: [...thumbnailDigests],
+			canonicalContents: [...canonicalContents],
+			canonicalWriteCandidates: [...canonicalWriteCandidates].map(
+				([operationId, contents]) => [operationId, [...contents]],
+			),
+		})).byteLength;
 		const unreachableDigests = new Map<string, number>();
 		for (const [operationId, contents] of canonicalWriteCandidates) {
 			const operation = operations.get(operationId);

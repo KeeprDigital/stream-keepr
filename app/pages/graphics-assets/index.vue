@@ -127,21 +127,21 @@ const capacityWarning = computed(() => {
 		return null;
 	if (capacity.value.canonical.pressure === 'full') {
 		return {
-			title: 'Canonical storage full',
+			title: 'Canonical Capacity Pressure: full',
 			message: 'Operations that add canonical bytes are blocked. Proven no-growth operations may still complete.',
 			color: 'error' as const,
 		};
 	}
 	if (capacity.value.canonical.pressure === 'critical') {
 		return {
-			title: 'Canonical storage critical',
-			message: 'Canonical usage is at or above 95%. Reclaim space before net-new ingestion is blocked.',
+			title: 'Canonical Capacity Pressure: critical',
+			message: 'Canonical Graphics Quota use is at or above 95%. Reclaim space before net-new ingestion is blocked.',
 			color: 'error' as const,
 		};
 	}
 	return {
-		title: 'Canonical storage warning',
-		message: 'Canonical usage is at or above 80%. Plan cleanup before the hard limit.',
+		title: 'Canonical Capacity Pressure: warning',
+		message: 'Canonical Graphics Quota use is at or above 80%. Plan cleanup before the hard limit.',
 		color: 'warning' as const,
 	};
 });
