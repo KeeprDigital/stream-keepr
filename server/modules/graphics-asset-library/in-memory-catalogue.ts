@@ -8,7 +8,7 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicsAssetCatalogue,
-	PublishImageCatalogueInput,
+	PublishGraphicAssetCatalogueInput,
 } from '.';
 import type { GraphicsImageMultipartState } from './multipart';
 import {
@@ -168,7 +168,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			stagingLimitBytes = input.stagingLimitBytes;
 			return getCapacity();
 		},
-		async initiateImageIngestion(operation) {
+		async initiateGraphicsIngestion(operation) {
 			const identity = operationIdentity(operation.initiatedBy, operation.idempotencyKey);
 			const existingId = operationsByIdentity.get(identity);
 			if (existingId)
@@ -217,7 +217,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 				existing.set(content.digest, content.byteLength);
 			canonicalWriteCandidates.set(input.operation.id, existing);
 		},
-		async reserveImagePublication(input) {
+		async reserveGraphicAssetPublication(input) {
 			const existing = operations.get(input.operation.id);
 			if (
 				!existing
@@ -348,7 +348,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			}
 			return cloneOperation(operation);
 		},
-		async claimImageIngestion(input) {
+		async claimGraphicsIngestion(input) {
 			const existing = operations.get(input.operation.id);
 			if (!existing || existing.initiatedBy !== input.operation.initiatedBy)
 				return undefined;
@@ -365,13 +365,13 @@ export function createInMemoryGraphicsAssetCatalogue(
 			operations.set(claimed.id, cloneOperation(claimed));
 			return cloneOperation(claimed);
 		},
-		async findReusableImage(sourceDigest) {
+		async findReusableGraphicAsset(sourceDigest) {
 			const asset = [...assets.values()].find(candidate => candidate.facts.sha256 === sourceDigest);
 			return asset
 				? { assetId: asset.id, revisionId: asset.revisionId }
 				: undefined;
 		},
-		async reuseImage(input) {
+		async reuseGraphicAsset(input) {
 			const existing = operations.get(input.operation.id);
 			const asset = assets.get(input.reusable.assetId);
 			if (!existing || !asset)
@@ -407,7 +407,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			});
 			return cloneOperation(completed);
 		},
-		async publishImage(input: PublishImageCatalogueInput) {
+		async publishGraphicAsset(input: PublishGraphicAssetCatalogueInput) {
 			const existing = operations.get(input.operation.id);
 			if (!existing)
 				throw new Error('Graphics Ingestion Operation not found');
@@ -464,7 +464,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			assets.set(input.assetId, {
 				id: input.assetId,
 				name: input.operation.name,
-				kind: 'image',
+				kind: input.report.facts.kind,
 				revisionId: input.revisionId,
 				revisionNumber: 1,
 				facts: input.report.facts,
@@ -500,6 +500,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 				digest: asset.facts.sha256,
 				byteLength: asset.facts.byteLength,
 				canonicalMime: asset.facts.canonicalMime,
+				kind: asset.kind,
 				lifecycleState: 'active',
 			};
 		},

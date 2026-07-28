@@ -23,10 +23,10 @@ export default defineEventHandler(async (event) => {
 			throw createError({
 				statusCode: 400,
 				statusMessage: 'Bad Request',
-				message: 'Image transfer body is required',
+				message: 'Graphic Asset transfer body is required',
 			});
 		}
-		return await library.uploadImage({
+		return await library.uploadGraphicAsset({
 			operationId,
 			initiatedBy,
 			declaredMime: declaredContentType,

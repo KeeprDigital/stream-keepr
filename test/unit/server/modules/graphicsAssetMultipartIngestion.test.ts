@@ -89,7 +89,7 @@ async function initiateLargeTransfer(
 	library: ReturnType<typeof createLibrary>,
 	idempotencyKey: string,
 ) {
-	const operation = await library.initiateImageIngestion({
+	const operation = await library.initiateGraphicsIngestion({
 		idempotencyKey,
 		initiatedBy: 'graphics-author-1',
 		name: 'Large transfer',
@@ -106,7 +106,7 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 	it('resumes from verified parts, ignores a duplicate part, and publishes through the normal pipeline', async () => {
 		const bytes = largeValidPng();
 		const library = createLibrary();
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'large-scoreboard-logo',
 			initiatedBy: 'graphics-author-1',
 			name: 'Large scoreboard logo',
@@ -290,11 +290,11 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 			}),
 		})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
 
-		const cancelled = await library.cancelImageIngestion({
+		const cancelled = await library.cancelGraphicsIngestion({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 		});
-		const cancelledAgain = await library.cancelImageIngestion({
+		const cancelledAgain = await library.cancelGraphicsIngestion({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 		});
@@ -309,7 +309,7 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 		const operation = await initiateLargeTransfer(library, 'retry-cancelled-cleanup');
 		staging.injectTransientFailure('multipart-abort');
 
-		const pending = await library.cancelImageIngestion({
+		const pending = await library.cancelGraphicsIngestion({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 		});
@@ -318,7 +318,7 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 			transfer: { cleanupPending: true },
 		});
 
-		const cleaned = await library.cancelImageIngestion({
+		const cleaned = await library.cancelGraphicsIngestion({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 		});

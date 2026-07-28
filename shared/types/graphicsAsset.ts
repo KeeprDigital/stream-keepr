@@ -1,4 +1,7 @@
-import type { STILL_IMAGE_COMPATIBILITY_PROFILE } from '../utils/graphicsAssetCompatibility';
+import type {
+	STATIC_FONT_COMPATIBILITY_PROFILE,
+	STILL_IMAGE_COMPATIBILITY_PROFILE,
+} from '../utils/graphicsAssetCompatibility';
 
 declare const graphicAssetIdBrand: unique symbol;
 declare const graphicAssetRevisionIdBrand: unique symbol;
@@ -49,11 +52,25 @@ export type GraphicAssetReferenceStatus
 	= | {
 		outcome: 'available';
 		lifecycleState: 'active' | 'retired' | 'trashed';
+		kind: 'image' | 'font';
 	}
 	| { outcome: 'missing' }
 	| { outcome: 'unavailable'; retryable: true };
 
 export type GraphicsDuplicateContentPolicy = 'reuse' | 'create-separate';
+
+export interface GraphicAssetFontBrowserChallenge {
+	digest: string;
+	codePoints: number[];
+}
+
+export interface GraphicAssetFontGlyphProof {
+	codePoint: number;
+	exactWithSansDigest: string;
+	exactWithMonoDigest: string;
+	sansFallbackDigest: string;
+	monoFallbackDigest: string;
+}
 
 export type GraphicAssetBrowserDecodeEvidence
 	= | {
@@ -65,6 +82,18 @@ export type GraphicAssetBrowserDecodeEvidence
 	| {
 		outcome: 'rejected';
 		sourceDigest: string;
+	}
+	| {
+		outcome: 'font-loaded';
+		sourceDigest: string;
+		challengeDigest: string;
+		glyphProofs: GraphicAssetFontGlyphProof[];
+	}
+	| {
+		outcome: 'font-rejected';
+		sourceDigest: string;
+		challengeDigest: string;
+		stage: 'load' | 'render';
 	};
 
 export interface GraphicAssetSourceDeclarations {
@@ -103,6 +132,32 @@ export interface GraphicAssetImageFacts {
 	browserDecodable?: true;
 }
 
+export interface GraphicAssetFontFacts {
+	kind: 'font';
+	format: 'woff2' | 'woff' | 'ttf' | 'otf';
+	canonicalMime: 'font/woff2' | 'font/woff' | 'font/ttf' | 'font/otf';
+	byteLength: number;
+	expandedByteLength: number;
+	sha256: string;
+	family: string;
+	subfamily: string;
+	postscriptName: string;
+	weight: number;
+	style: 'normal' | 'italic';
+	glyphCount: number;
+	unicodeCodePoints: number[];
+	unitsPerEm: number;
+	ascent: number;
+	descent: number;
+	lineGap: number;
+	browserChallenge: GraphicAssetFontBrowserChallenge;
+	browserLoadable?: true;
+	representativeGlyphsRendered?: true;
+}
+
+export type GraphicAssetCanonicalMime
+	= GraphicAssetImageFacts['canonicalMime'] | GraphicAssetFontFacts['canonicalMime'];
+
 export interface GraphicAssetValidationIssue {
 	severity: 'error';
 	code:
@@ -129,7 +184,28 @@ export interface GraphicAssetValidationIssue {
 		| 'conflicting-image-extension'
 		| 'conflicting-image-mime'
 		| 'browser-image-decode-failed'
-		| 'browser-image-decode-mismatch';
+		| 'browser-image-decode-mismatch'
+		| 'unsupported-font-format'
+		| 'conflicting-font-extension'
+		| 'conflicting-font-mime'
+		| 'font-source-size-exceeded'
+		| 'font-expanded-size-exceeded'
+		| 'font-collection-not-supported'
+		| 'font-variable-not-supported'
+		| 'font-bitmap-not-supported'
+		| 'font-colour-glyphs-not-supported'
+		| 'font-type1-not-supported'
+		| 'font-svg-not-supported'
+		| 'font-required-table-missing'
+		| 'font-table-invalid'
+		| 'font-checksum-invalid'
+		| 'font-metrics-invalid'
+		| 'font-glyphs-invalid'
+		| 'font-unicode-cmap-required'
+		| 'font-name-invalid'
+		| 'browser-font-load-failed'
+		| 'browser-font-render-failed'
+		| 'browser-font-evidence-mismatch';
 	message: string;
 }
 
@@ -142,8 +218,16 @@ export type GraphicAssetValidationReport
 	}
 	| {
 		outcome: 'rejected';
-		compatibilityProfile: typeof STILL_IMAGE_COMPATIBILITY_PROFILE;
+		compatibilityProfile:
+			| typeof STILL_IMAGE_COMPATIBILITY_PROFILE
+			| typeof STATIC_FONT_COMPATIBILITY_PROFILE;
 		issues: GraphicAssetValidationIssue[];
+	}
+	| {
+		outcome: 'accepted';
+		compatibilityProfile: typeof STATIC_FONT_COMPATIBILITY_PROFILE;
+		issues: [];
+		facts: GraphicAssetFontFacts;
 	};
 
 export interface GraphicsIngestionFailure {
@@ -215,10 +299,10 @@ export interface GraphicsIngestionOperation extends GraphicAssetSourceDeclaratio
 export interface GraphicAsset {
 	id: GraphicAssetId;
 	name: string;
-	kind: 'image';
+	kind: 'image' | 'font';
 	revisionId: GraphicAssetRevisionId;
 	revisionNumber: number;
-	facts: GraphicAssetImageFacts;
+	facts: GraphicAssetImageFacts | GraphicAssetFontFacts;
 	eventIds: number[];
 	operation: GraphicsIngestionOperation;
 }

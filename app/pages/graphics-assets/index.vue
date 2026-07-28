@@ -8,11 +8,14 @@ import type {
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
 import { formatByteCount } from '~~/shared/utils/formatByteCount';
+import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import {
 	GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
 	GRAPHICS_MULTIPART_PART_BYTES,
+	MAX_STATIC_FONT_INGESTION_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
+import { verifyStaticFontBrowserLoad } from '~/utils/verifyStaticFontBrowserLoad';
 import { verifyStillImageBrowserDecode } from '~/utils/verifyStillImageBrowserDecode';
 
 definePageMeta({
@@ -62,16 +65,22 @@ const selectionError = computed(() => {
 	if (!selectedFile.value)
 		return null;
 	const supportedMime = ['image/png', 'image/jpeg', 'image/webp'].includes(selectedFile.value.type);
-	const supportedExtension = /\.(?:png|jpe?g|webp)$/i.test(selectedFile.value.name);
+	const isFont = graphicAssetSourceKind({
+		sourceFileName: selectedFile.value.name,
+		declaredMime: selectedFile.value.type,
+	}) === 'font';
+	const supportedExtension = /\.(?:png|jpe?g|webp|woff2?|ttf|otf)$/i.test(selectedFile.value.name);
 	if (
-		(selectedFile.value.type && !supportedMime)
+		(selectedFile.value.type && !supportedMime && !isFont)
 		|| (!selectedFile.value.type && !supportedExtension)
 	) {
-		return 'Select a PNG, JPEG, or WebP image.';
+		return 'Select a PNG, JPEG, WebP, WOFF2, WOFF, TTF, or OTF source.';
 	}
 	if (selectedFile.value.size === 0)
-		return 'The image file is empty.';
-	if (selectedFile.value.size > MAX_STILL_IMAGE_INGESTION_BYTES)
+		return 'The Graphic Asset source is empty.';
+	if (isFont && selectedFile.value.size > MAX_STATIC_FONT_INGESTION_BYTES)
+		return 'The font file must not exceed 10 MiB.';
+	if (!isFont && selectedFile.value.size > MAX_STILL_IMAGE_INGESTION_BYTES)
 		return 'The image file must not exceed 25 MiB.';
 	return null;
 });
@@ -109,8 +118,10 @@ function readPendingInitiation(): PendingInitiation | null {
 
 function browserEvidenceMatches(
 	left: GraphicAssetBrowserDecodeEvidence | undefined,
-	right: GraphicAssetBrowserDecodeEvidence,
+	right: GraphicAssetBrowserDecodeEvidence | undefined,
 ) {
+	if (!left || !right)
+		return left === right;
 	return left?.outcome === right.outcome
 		&& left.sourceDigest === right.sourceDigest
 		&& (
@@ -121,7 +132,7 @@ function browserEvidenceMatches(
 }
 
 function selectedInitiation(
-	browserDecodeEvidence: GraphicAssetBrowserDecodeEvidence,
+	browserDecodeEvidence?: GraphicAssetBrowserDecodeEvidence,
 ): PendingInitiation {
 	const name = proposedName.value.trim();
 	const duplicateContentPolicy = createSeparateAsset.value ? 'create-separate' : 'reuse';
@@ -318,14 +329,22 @@ async function refreshAfterTerminalOperation() {
 	await refreshCapacity();
 }
 
-async function uploadImage() {
+async function uploadGraphicAsset() {
 	if (!selectedFile.value || !canUpload.value)
 		return;
 
 	uploadPending.value = true;
 	uploadError.value = null;
 	try {
-		const browserDecodeEvidence = await verifyStillImageBrowserDecode(selectedFile.value);
+		const file = selectedFile.value;
+		const leadingBytes = new Uint8Array(await file.slice(0, 64).arrayBuffer());
+		const isFont = graphicAssetSourceKind({
+			sourceFileName: file.name,
+			declaredMime: file.type,
+		}, leadingBytes) === 'font';
+		const browserDecodeEvidence = isFont
+			? undefined
+			: await verifyStillImageBrowserDecode(file);
 		const initiation = selectedInitiation(browserDecodeEvidence);
 		const reusableOperation = currentOperation.value
 			&& !['completed', 'cancelled'].includes(currentOperation.value.stage)
@@ -344,10 +363,10 @@ async function uploadImage() {
 		localStorage.setItem(operationStorageKey, initiated.id);
 		localStorage.removeItem(initiationStorageKey);
 
-		if (selectedFile.value.size > GRAPHICS_MULTIPART_PART_BYTES) {
+		if (file.size > GRAPHICS_MULTIPART_PART_BYTES) {
 			currentOperation.value = await transferMultipartImage(
 				initiated,
-				selectedFile.value,
+				file,
 			);
 		}
 		else {
@@ -357,19 +376,36 @@ async function uploadImage() {
 					`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 					{
 						method: 'PUT',
-						headers: selectedFile.value.type
-							? { 'content-type': selectedFile.value.type }
+						headers: file.type
+							? { 'content-type': file.type }
 							: undefined,
-						body: selectedFile.value,
+						body: file,
 					},
 				),
 			);
-			currentOperation.value = await operationFromResponse(response, 'Image transfer');
+			currentOperation.value = await operationFromResponse(response, 'Graphic Asset transfer');
+			if (
+				currentOperation.value.stage === 'awaiting-confirmation'
+				&& currentOperation.value.report?.outcome === 'accepted'
+				&& currentOperation.value.report.facts.kind === 'font'
+			) {
+				const evidence = await verifyStaticFontBrowserLoad(
+					file,
+					currentOperation.value.report.facts.browserChallenge,
+				);
+				currentOperation.value = await observeOperationRequest(
+					currentOperation.value.id,
+					$fetch<GraphicsIngestionOperation>(
+						`/api/graphics-assets/ingestion-operations/${currentOperation.value.id}/font-browser-evidence`,
+						{ method: 'POST', body: evidence },
+					),
+				);
+			}
 		}
 		await refreshAfterTerminalOperation();
 	}
 	catch (caught) {
-		uploadError.value = caught instanceof Error ? caught.message : 'Image upload failed.';
+		uploadError.value = caught instanceof Error ? caught.message : 'Graphic Asset upload failed.';
 	}
 	finally {
 		uploadPending.value = false;
@@ -406,7 +442,7 @@ async function retryOperation() {
 		await refreshAfterTerminalOperation();
 	}
 	catch (caught) {
-		uploadError.value = caught instanceof Error ? caught.message : 'Image retry failed.';
+		uploadError.value = caught instanceof Error ? caught.message : 'Graphic Asset retry failed.';
 	}
 	finally {
 		uploadPending.value = false;
@@ -576,7 +612,7 @@ onMounted(async () => {
 				<template #header>
 					<div>
 						<h2 class="font-semibold text-highlighted">
-							Upload one image
+							Upload one asset
 						</h2>
 						<p class="mt-1 text-sm text-muted">
 							The source is staged privately, validated unchanged, and published only when its thumbnail and catalogue facts are complete.
@@ -586,17 +622,17 @@ onMounted(async () => {
 
 				<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(16rem,0.7fr)]">
 					<UFormField
-						name="image"
-						label="Image source"
-						description="One complete PNG, JPEG, or WebP image, at most 25 MiB."
+						name="asset"
+						label="Graphic Asset source"
+						description="One supported image (25 MiB) or static font (10 MiB)."
 						required
 					>
 						<UFileUpload
 							v-model="selectedFile"
-							accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+							accept="image/png,image/jpeg,image/webp,font/woff2,font/woff,font/ttf,font/otf,.png,.jpg,.jpeg,.webp,.woff2,.woff,.ttf,.otf"
 							variant="area"
 							icon="i-lucide-image-up"
-							label="Drop a PNG, JPEG, or WebP here"
+							label="Drop an image or static font here"
 							description="The exact source bytes are preserved."
 						/>
 					</UFormField>
@@ -634,7 +670,7 @@ onMounted(async () => {
 							label="Upload and validate"
 							:loading="uploadPending"
 							:disabled="!canUpload"
-							@click="uploadImage"
+							@click="uploadGraphicAsset"
 						/>
 					</div>
 				</div>
@@ -723,6 +759,7 @@ onMounted(async () => {
 					<p
 						v-if="
 							currentOperation.report?.outcome === 'accepted'
+								&& currentOperation.report.facts.kind === 'image'
 								&& currentOperation.report.facts.browserDecodable
 						"
 						class="mt-2 text-sm text-success"
@@ -776,7 +813,7 @@ onMounted(async () => {
 								<UBadge color="success" variant="soft" label="Validated" />
 							</div>
 							<dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-								<div>
+								<div v-if="asset.facts.kind === 'image'">
 									<dt class="text-xs text-dimmed">
 										Dimensions
 									</dt>
@@ -792,7 +829,7 @@ onMounted(async () => {
 										{{ asset.facts.canonicalMime }} · {{ formatByteCount(asset.facts.byteLength) }}
 									</dd>
 								</div>
-								<div>
+								<div v-if="asset.facts.kind === 'image'">
 									<dt class="text-xs text-dimmed">
 										Pixels
 									</dt>
@@ -800,12 +837,28 @@ onMounted(async () => {
 										{{ asset.facts.pixelCount }}
 									</dd>
 								</div>
-								<div>
+								<div v-if="asset.facts.kind === 'image'">
 									<dt class="text-xs text-dimmed">
 										Colour
 									</dt>
 									<dd class="text-muted">
 										8-bit {{ asset.facts.colorModel }} · alpha {{ asset.facts.hasAlpha ? 'yes' : 'no' }}
+									</dd>
+								</div>
+								<div v-if="asset.facts.kind === 'font'">
+									<dt class="text-xs text-dimmed">
+										Verified face
+									</dt>
+									<dd class="text-muted">
+										{{ asset.facts.family }} · {{ asset.facts.weight }} {{ asset.facts.style }}
+									</dd>
+								</div>
+								<div v-if="asset.facts.kind === 'font'">
+									<dt class="text-xs text-dimmed">
+										Coverage
+									</dt>
+									<dd class="text-muted">
+										{{ asset.facts.glyphCount }} glyphs · {{ asset.facts.unicodeCodePoints.length }} Unicode mappings
 									</dd>
 								</div>
 							</dl>

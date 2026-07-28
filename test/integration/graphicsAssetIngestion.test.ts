@@ -4,6 +4,7 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
@@ -742,5 +743,89 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		expect(thumbnail.headers.get('content-type')).toBe('image/png');
 		expect(Array.from(new Uint8Array(await thumbnail.arrayBuffer()).slice(0, 8)))
 			.toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+	});
+
+	it('publishes and privately delivers one exact verified font revision', async () => {
+		const bytes = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
+		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
+			method: 'POST',
+			headers: authorHeaders,
+			body: {
+				idempotencyKey: 'integration-mplantin-font',
+				name: 'Integration MPlantin',
+				sourceFileName: 'mplantin.woff',
+				declaredMime: 'font/woff',
+				declaredByteLength: bytes.byteLength,
+			},
+		});
+		const response = await fetch(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
+			{
+				method: 'PUT',
+				headers: { ...authorHeaders, 'content-type': 'font/woff' },
+				body: bytes,
+			},
+		);
+		expect(response.status).toBe(200);
+		const awaitingEvidence = await response.json() as GraphicsIngestionOperation;
+		expect(awaitingEvidence).toMatchObject({
+			stage: 'awaiting-confirmation',
+			report: {
+				outcome: 'accepted',
+				facts: { kind: 'font' },
+			},
+		});
+		if (awaitingEvidence.report?.outcome !== 'accepted' || awaitingEvidence.report.facts.kind !== 'font')
+			throw new Error('Expected a server-selected font challenge');
+		const exact = '1'.repeat(64);
+		const completed = await $fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/font-browser-evidence`,
+			{
+				method: 'POST',
+				headers: authorHeaders,
+				body: {
+					outcome: 'font-loaded',
+					sourceDigest: createHash('sha256').update(bytes).digest('hex'),
+					challengeDigest: awaitingEvidence.report.facts.browserChallenge.digest,
+					glyphProofs: awaitingEvidence.report.facts.browserChallenge.codePoints.map(codePoint => ({
+						codePoint,
+						exactWithSansDigest: exact,
+						exactWithMonoDigest: exact,
+						sansFallbackDigest: '2'.repeat(64),
+						monoFallbackDigest: '3'.repeat(64),
+					})),
+				},
+			},
+		);
+		expect(completed).toMatchObject({
+			stage: 'completed',
+			report: {
+				outcome: 'accepted',
+				compatibilityProfile: 'static-font-v1',
+				facts: {
+					kind: 'font',
+					format: 'woff',
+					family: 'MPlantin',
+					browserLoadable: true,
+					representativeGlyphsRendered: true,
+				},
+			},
+		});
+
+		const discovered = await $fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
+			query: { search: 'Integration MPlantin' },
+		});
+		expect(discovered).toMatchObject([{
+			kind: 'font',
+			revisionId: completed.result!.revisionId,
+		}]);
+		const content = await fetch(
+			`/api/graphics-assets/${completed.result!.assetId}/revisions/${completed.result!.revisionId}/content`,
+			{ headers: authorHeaders },
+		);
+		expect(content.status).toBe(200);
+		expect(content.headers.get('content-type')).toBe('font/woff');
+		expect(new Uint8Array(await content.arrayBuffer())).toEqual(bytes);
 	});
 });

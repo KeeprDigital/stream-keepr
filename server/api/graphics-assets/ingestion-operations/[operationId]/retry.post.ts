@@ -7,7 +7,7 @@ import {
 
 export default defineEventHandler(async (event) => {
 	try {
-		return await graphicsAssetLibraryForEvent(event).retryImageIngestion({
+		return await graphicsAssetLibraryForEvent(event).retryGraphicsIngestion({
 			operationId: graphicsIngestionOperationId(getRouterParam(event, 'operationId') ?? ''),
 			initiatedBy: graphicsAuthorIdentity(event),
 		});

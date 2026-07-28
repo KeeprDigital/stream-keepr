@@ -1,5 +1,7 @@
 import type {
 	GraphicAsset,
+	GraphicAssetCanonicalMime,
+	GraphicAssetFontFacts,
 	GraphicAssetId,
 	GraphicAssetImageFacts,
 	GraphicAssetRevisionId,
@@ -9,7 +11,7 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicsAssetCatalogue,
-	PublishImageCatalogueInput,
+	PublishGraphicAssetCatalogueInput,
 } from '.';
 import type { GraphicsImageMultipartState } from './multipart';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
@@ -44,6 +46,7 @@ interface OperationRow {
 interface AssetRow {
 	id: string;
 	name: string;
+	kind: GraphicAsset['kind'];
 	revision_id: string;
 	revision_number: number;
 	technical_facts: string;
@@ -473,7 +476,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			}
 			return await this.getCapacity();
 		},
-		async initiateImageIngestion(operation) {
+		async initiateGraphicsIngestion(operation) {
 			const existing = await firstOperation(
 				database,
 				'initiated_by = ? AND idempotency_key = ?',
@@ -580,7 +583,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			if (results.some(result => !result.success))
 				throw new Error('Graphics canonical writes could not be recorded');
 		},
-		async reserveImagePublication(input) {
+		async reserveGraphicAssetPublication(input) {
 			const proposed = new Map<string, number>([
 				[input.sourceDigest, input.sourceByteLength],
 				[input.thumbnailDigest, input.thumbnailByteLength],
@@ -767,7 +770,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			}
 			return authoritative;
 		},
-		async claimImageIngestion(input) {
+		async claimGraphicsIngestion(input) {
 			const result = await database.prepare(`
 				UPDATE graphics_ingestion_operations
 				SET stage = 'hashing', updated_at = ?
@@ -798,7 +801,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				input.operation.initiatedBy,
 			);
 		},
-		async findReusableImage(sourceDigest) {
+		async findReusableGraphicAsset(sourceDigest) {
 			const row = await database.prepare(`
 				SELECT a.id AS asset_id, r.id AS revision_id
 				FROM graphic_assets a
@@ -814,7 +817,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					}
 				: undefined;
 		},
-		async reuseImage(input) {
+		async reuseGraphicAsset(input) {
 			const completed: GraphicsIngestionOperation = {
 				...input.operation,
 				stage: 'completed',
@@ -866,7 +869,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				throw new Error('Graphic Asset reuse was not durable');
 			return authoritative;
 		},
-		async publishImage(input: PublishImageCatalogueInput) {
+		async publishGraphicAsset(input: PublishGraphicAssetCatalogueInput) {
 			await Promise.all([
 				assertContentCompatible(database, {
 					digest: input.sourceDigest,
@@ -909,7 +912,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				`).bind(input.thumbnailDigest, input.thumbnailByteLength, new Date(input.publishedAt).getTime()),
 				database.prepare(`
 					INSERT INTO graphic_assets (id, name, kind, lifecycle_state, created_at, updated_at)
-					SELECT ?, ?, 'image', 'active', ?, ?
+					SELECT ?, ?, ?, 'active', ?, ?
 					WHERE EXISTS (
 						SELECT 1 FROM graphics_ingestion_operations
 						WHERE id = ? AND initiated_by = ? AND stage = 'publishing'
@@ -929,6 +932,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				`).bind(
 					input.assetId,
 					input.operation.name,
+					input.report.facts.kind,
 					new Date(input.publishedAt).getTime(),
 					new Date(input.publishedAt).getTime(),
 					input.operation.id,
@@ -953,10 +957,11 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				database.prepare(`
 					INSERT INTO graphics_derivatives (
 						id, source_revision_id, kind, content_digest, created_at
-					) VALUES (?, ?, 'thumbnail', ?, ?)
+					) VALUES (?, ?, ?, ?, ?)
 				`).bind(
 					input.derivativeId,
 					input.revisionId,
+					input.report.facts.kind === 'font' ? 'font-specimen' : 'thumbnail',
 					input.thumbnailDigest,
 					new Date(input.publishedAt).getTime(),
 				),
@@ -984,7 +989,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			const normalizedSearch = `%${search.trim().toLocaleLowerCase()}%`;
 			const result = await database.prepare(`
 				SELECT
-					a.id, a.name, r.id AS revision_id, r.revision_number,
+					a.id, a.name, a.kind, r.id AS revision_id, r.revision_number,
 					r.technical_facts,
 					COALESCE((
 						SELECT json_group_array(event_id)
@@ -1030,17 +1035,17 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			return result.results.map((row): GraphicAsset => ({
 				id: row.id as GraphicAssetId,
 				name: row.name,
-				kind: 'image',
+				kind: row.kind,
 				revisionId: row.revision_id as GraphicAsset['revisionId'],
 				revisionNumber: row.revision_number,
-				facts: JSON.parse(row.technical_facts) as GraphicAssetImageFacts,
+				facts: JSON.parse(row.technical_facts) as GraphicAssetImageFacts | GraphicAssetFontFacts,
 				eventIds: JSON.parse(row.event_ids) as number[],
 				operation: operationFromRow(operationRowFromAsset(row)),
 			}));
 		},
 		async findRevisionContent(input) {
 			const row = await database.prepare(`
-				SELECT c.digest, c.byte_length, c.canonical_mime, a.lifecycle_state
+				SELECT c.digest, c.byte_length, c.canonical_mime, a.kind, a.lifecycle_state
 				FROM graphic_asset_revisions r
 				JOIN graphic_asset_contents c ON c.digest = r.content_digest
 				JOIN graphic_assets a ON a.id = r.asset_id
@@ -1048,7 +1053,8 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			`).bind(input.assetId, input.revisionId).first<{
 				digest: string;
 				byte_length: number;
-				canonical_mime: 'image/png' | 'image/jpeg' | 'image/webp';
+				canonical_mime: GraphicAssetCanonicalMime;
+				kind: GraphicAsset['kind'];
 				lifecycle_state: 'active' | 'retired' | 'trashed';
 			}>();
 			return row
@@ -1056,6 +1062,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 						digest: row.digest,
 						byteLength: row.byte_length,
 						canonicalMime: row.canonical_mime,
+						kind: row.kind,
 						lifecycleState: row.lifecycle_state,
 					}
 				: undefined;
@@ -1097,7 +1104,8 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				FROM graphics_derivatives d
 				JOIN graphic_asset_revisions r ON r.id = d.source_revision_id
 				JOIN graphic_assets a ON a.id = r.asset_id
-				WHERE a.id = ? AND a.lifecycle_state = 'active' AND d.kind = 'thumbnail'
+				WHERE a.id = ? AND a.lifecycle_state = 'active'
+					AND d.kind IN ('thumbnail', 'font-specimen')
 				ORDER BY r.revision_number DESC
 				LIMIT 1
 			`).bind(assetId).first<{ content_digest: string }>();

@@ -14,6 +14,7 @@ export function useScreenGraphicAssetContentUrls(
 ) {
 	const { assetCapability, isPreview, screen } = useScreenContext();
 	const objectUrls = shallowRef(new Map<string, string>());
+	const contentUrlsSettled = ref(false);
 	const loads = createGuardedSequence();
 
 	function revoke(urls: Map<string, string>) {
@@ -30,9 +31,11 @@ export function useScreenGraphicAssetContentUrls(
 		}),
 		async ({ references: currentReferences, screenId, capability, preview }) => {
 			const flight = loads.begin();
+			contentUrlsSettled.value = false;
 			const previous = objectUrls.value;
 			if (preview || !screenId || !capability || currentReferences.length === 0) {
 				objectUrls.value = new Map();
+				contentUrlsSettled.value = true;
 				revoke(previous);
 				return;
 			}
@@ -47,13 +50,15 @@ export function useScreenGraphicAssetContentUrls(
 						screenOutputGraphicAssetRevisionContentPath(screenId, reference),
 						{ headers: { authorization: `Bearer ${capability}` } },
 					);
+					if (flight.stale)
+						return;
 					if (!response.ok)
 						return;
-					const url = URL.createObjectURL(await response.blob());
+					const blob = await response.blob();
 					if (flight.stale) {
-						URL.revokeObjectURL(url);
 						return;
 					}
+					const url = URL.createObjectURL(blob);
 					resolved.set(key, url);
 				}
 				catch {
@@ -65,6 +70,7 @@ export function useScreenGraphicAssetContentUrls(
 				return;
 			}
 			objectUrls.value = resolved;
+			contentUrlsSettled.value = true;
 			revoke(previous);
 		},
 		{ immediate: true },
@@ -81,5 +87,5 @@ export function useScreenGraphicAssetContentUrls(
 		return objectUrls.value.get(referenceKey(reference)) ?? '';
 	}
 
-	return { contentUrl };
+	return { contentUrl, contentUrlsSettled: readonly(contentUrlsSettled) };
 }

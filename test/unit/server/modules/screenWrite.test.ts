@@ -342,6 +342,7 @@ describe('screenWriteModule', () => {
 			const inspectGraphicAssetRevision = vi.fn().mockResolvedValue({
 				outcome: 'available',
 				lifecycleState: 'active',
+				kind: 'image',
 			});
 
 			await screenWriteModule({

@@ -7,7 +7,7 @@ import {
 
 export default defineEventHandler(async (event) => {
 	try {
-		return await graphicsAssetLibraryForEvent(event).cancelImageIngestion({
+		return await graphicsAssetLibraryForEvent(event).cancelGraphicsIngestion({
 			operationId: graphicsIngestionOperationId(getRouterParam(event, 'operationId') ?? ''),
 			initiatedBy: graphicsAuthorIdentity(event),
 		});

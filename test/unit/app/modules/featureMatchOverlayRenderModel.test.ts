@@ -83,7 +83,7 @@ describe('feature Match Overlay render model', () => {
 		]);
 	});
 
-	it('resolves registered font ids and preserves legacy raw font stacks', () => {
+	it('resolves only registered application font capabilities', () => {
 		const base = config();
 		base.layout.items = [
 			{
@@ -96,26 +96,28 @@ describe('feature Match Overlay render model', () => {
 				width: 320,
 				height: 80,
 				widget: { type: 'clock' },
-				surfaceStyle: { fontFamily: 'saira-condensed' },
+				surfaceStyle: { font: { kind: 'application', fontId: 'saira-condensed' } },
 			},
 			{
-				id: 'legacy-font',
+				id: 'unknown-font',
 				type: 'widget',
-				label: 'Legacy Font',
+				label: 'Unknown Font',
 				visible: true,
 				x: 0,
 				y: 100,
 				width: 320,
 				height: 80,
 				widget: { type: 'clock' },
-				surfaceStyle: { fontFamily: 'Impact, Arial Black, sans-serif' },
+				surfaceStyle: {
+					font: { kind: 'application', fontId: 'Impact, Arial Black, sans-serif' },
+				} as never,
 			},
 		];
 
 		const model = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
 
 		expect(model.widgetItems[0]!.style.fontFamily).toBe('var(--font-saira-condensed)');
-		expect(model.widgetItems[1]!.style.fontFamily).toBe('Impact, Arial Black, sans-serif');
+		expect(model.widgetItems[1]!.style.fontFamily).toBeUndefined();
 	});
 
 	it('resolves game win boxes and key output game-win styles', () => {

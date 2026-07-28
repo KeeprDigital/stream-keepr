@@ -336,6 +336,50 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		}).success).toBe(false);
 	});
 
+	it('accepts application font capabilities and exact font revisions but rejects arbitrary font selectors', () => {
+		const exactFont = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		exactFont.layout.items[0]!.surfaceStyle = {
+			font: {
+				kind: 'asset',
+				reference: {
+					assetId: 'font-asset',
+					revisionId: 'font-revision-4',
+				},
+			},
+		};
+		expect(featureMatchOverlayModeConfigSchema.safeParse(exactFont).success).toBe(true);
+
+		exactFont.layout.items[0]!.surfaceStyle!.font = {
+			kind: 'application',
+			fontId: 'inter',
+		};
+		expect(featureMatchOverlayModeConfigSchema.safeParse(exactFont).success).toBe(true);
+		expect(featureMatchOverlayModeConfigSchema.safeParse({
+			...exactFont,
+			layout: {
+				...exactFont.layout,
+				items: [{
+					...exactFont.layout.items[0],
+					surfaceStyle: {
+						font: { kind: 'css', family: 'Comic Sans MS' },
+					},
+				}],
+			},
+		}).success).toBe(false);
+		expect(featureMatchOverlayModeConfigSchema.safeParse({
+			...exactFont,
+			layout: {
+				...exactFont.layout,
+				items: [{
+					...exactFont.layout.items[0],
+					surfaceStyle: {
+						fontFamily: 'Comic Sans MS',
+					},
+				}],
+			},
+		}).success).toBe(false);
+	});
+
 	it('accepts frame video background playback settings', () => {
 		const result = featureMatchOverlayModeConfigSchema.safeParse({
 			...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,

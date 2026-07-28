@@ -1,3 +1,6 @@
+import type { GraphicAssetReference } from './types/graphicsAsset';
+import type { FeatureMatchOverlayFontSelection } from './types/screenConfig';
+
 export const FEATURE_MATCH_OVERLAY_FONT_IDS = [
 	'saira-condensed',
 	'ibm-plex-sans',
@@ -78,10 +81,17 @@ export function getFeatureMatchOverlayFontDefinition(value: string | null | unde
 	return normalized ? FEATURE_MATCH_OVERLAY_FONT_MAP.get(normalized as FeatureMatchOverlayFontId) : undefined;
 }
 
-export function resolveFeatureMatchOverlayFontFamily(value: string | null | undefined) {
-	const normalized = value?.trim();
-	if (!normalized)
-		return undefined;
+export function graphicAssetFontFaceFamily(reference: GraphicAssetReference) {
+	const identity = `${reference.assetId}-${reference.revisionId}`.replace(/[^\w-]/g, '_');
+	return `stream-keepr-graphic-asset-${identity}`;
+}
 
-	return getFeatureMatchOverlayFontDefinition(normalized)?.cssFamily ?? normalized;
+export function resolveFeatureMatchOverlayFontSelection(
+	selection: FeatureMatchOverlayFontSelection | undefined,
+) {
+	if (!selection)
+		return undefined;
+	if (selection.kind === 'application')
+		return getFeatureMatchOverlayFontDefinition(selection.fontId)?.cssFamily;
+	return `"${graphicAssetFontFaceFamily(selection.reference)}"`;
 }

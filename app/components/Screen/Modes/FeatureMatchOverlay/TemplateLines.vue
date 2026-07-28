@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayBoxStyle, FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
-import { resolveFeatureMatchOverlayFontFamily } from '~~/shared/featureMatchOverlayFonts';
+import { resolveFeatureMatchOverlayFontSelection } from '~~/shared/featureMatchOverlayFonts';
 
 interface FeatureMatchOverlayTemplateSegment {
 	text: string;
@@ -30,7 +30,7 @@ function segmentStyle(segment: FeatureMatchOverlayTemplateSegment) {
 	return {
 		color: style.textColor,
 		fontSize: style.fontSize != null ? `${style.fontSize}px` : undefined,
-		fontFamily: resolveFeatureMatchOverlayFontFamily(style.fontFamily),
+		fontFamily: resolveFeatureMatchOverlayFontSelection(style.font),
 		fontWeight: style.fontWeight,
 		fontStyle: style.fontStyle,
 		textTransform: style.textTransform,

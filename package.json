@@ -50,6 +50,7 @@
 		"drizzle-orm": "0.45.2",
 		"drizzle-zod": "0.8.3",
 		"echarts": "^6.1.0",
+		"fontkitten": "1.0.3",
 		"mana-font": "1.18.0",
 		"nuxt": "4.5.0",
 		"nuxt-echarts": "^1.0.1",

@@ -242,7 +242,11 @@ export function screenWriteModule(dependencies: {
 					assetId: graphicAssetId(item.reference.assetId),
 					revisionId: graphicAssetRevisionId(item.reference.revisionId),
 				});
-				if (status.outcome !== 'available' || status.lifecycleState !== 'active') {
+				if (
+					status.outcome !== 'available'
+					|| status.lifecycleState !== 'active'
+					|| status.kind !== item.kind
+				) {
 					throw createError({
 						statusCode: 409,
 						statusMessage: 'Conflict',

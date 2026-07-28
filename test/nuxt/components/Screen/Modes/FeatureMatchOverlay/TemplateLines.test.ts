@@ -23,7 +23,12 @@ describe('featureMatchOverlayTemplateLines', () => {
 		const wrapper = mount(TemplateLines, {
 			props: {
 				lines: [[
-					{ text: 'Alice', token: 'name', deckColors: false, style: { fontFamily: 'mplantin' } },
+					{
+						text: 'Alice',
+						token: 'name',
+						deckColors: false,
+						style: { font: { kind: 'application', fontId: 'mplantin' } },
+					},
 				]],
 				deckColors: '',
 				output: 'overlay',

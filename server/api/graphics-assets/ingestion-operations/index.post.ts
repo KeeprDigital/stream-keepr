@@ -31,7 +31,7 @@ const initiationSchema = z.object({
 export default defineEventHandler(async (event) => {
 	try {
 		const input = await readValidatedBody(event, initiationSchema.parse);
-		const operation = await graphicsAssetLibraryForEvent(event).initiateImageIngestion({
+		const operation = await graphicsAssetLibraryForEvent(event).initiateGraphicsIngestion({
 			...input,
 			initiatedBy: graphicsAuthorIdentity(event),
 		});

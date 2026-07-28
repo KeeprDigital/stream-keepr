@@ -75,7 +75,7 @@ describe('the Graphics Asset Library Capacity', () => {
 			staging: createInMemoryStagingGraphicsObjectStore(),
 			canonical: createInMemoryCanonicalGraphicsObjectStore(),
 		});
-		const admission = (idempotencyKey: string) => library.initiateImageIngestion({
+		const admission = (idempotencyKey: string) => library.initiateGraphicsIngestion({
 			idempotencyKey,
 			initiatedBy: 'graphics-author-1',
 			name: idempotencyKey,
@@ -115,7 +115,7 @@ describe('the Graphics Asset Library Capacity', () => {
 			},
 		});
 
-		await library.cancelImageIngestion({
+		await library.cancelGraphicsIngestion({
 			operationId: accepted!.value.id,
 			initiatedBy: accepted!.value.initiatedBy,
 		});
@@ -149,14 +149,14 @@ describe('the Graphics Asset Library Capacity', () => {
 			staging: createInMemoryStagingGraphicsObjectStore(),
 			canonical,
 		});
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'verified-staging-progress',
 			initiatedBy: 'graphics-author-1',
 			name: 'Verified staging progress',
 			browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
-		const upload = library.uploadImage({
+		const upload = library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -192,7 +192,7 @@ describe('the Graphics Asset Library Capacity', () => {
 			staging: createInMemoryStagingGraphicsObjectStore(),
 			canonical: createInMemoryCanonicalGraphicsObjectStore(),
 		});
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'unreachable-canonical-write',
 			initiatedBy: 'graphics-author-1',
 			name: 'Unreachable canonical write',
@@ -203,7 +203,7 @@ describe('the Graphics Asset Library Capacity', () => {
 			contents: [{ digest: 'unreachable-digest', byteLength: 123 }],
 			recordedAt: operation.updatedAt,
 		});
-		await library.cancelImageIngestion({
+		await library.cancelGraphicsIngestion({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 		});
@@ -228,7 +228,7 @@ describe('the Graphics Asset Library Capacity', () => {
 			staging: createInMemoryStagingGraphicsObjectStore(),
 			canonical,
 		});
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'blocked-canonical-growth',
 			initiatedBy: 'graphics-author-1',
 			name: 'Blocked canonical growth',
@@ -236,7 +236,7 @@ describe('the Graphics Asset Library Capacity', () => {
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
 
-		const blocked = await library.uploadImage({
+		const blocked = await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -278,7 +278,7 @@ describe('the Graphics Asset Library Capacity', () => {
 			canonical: createInMemoryCanonicalGraphicsObjectStore(),
 		});
 		const upload = async (idempotencyKey: string) => {
-			const operation = await library.initiateImageIngestion({
+			const operation = await library.initiateGraphicsIngestion({
 				idempotencyKey,
 				initiatedBy: 'graphics-author-1',
 				name: idempotencyKey,
@@ -286,7 +286,7 @@ describe('the Graphics Asset Library Capacity', () => {
 				browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 				declaredByteLength: transparentPixelPng.byteLength,
 			});
-			return await library.uploadImage({
+			return await library.uploadGraphicAsset({
 				operationId: operation.id,
 				initiatedBy: operation.initiatedBy,
 				bytes: createBoundedByteStream(transparentPixelPng, {
@@ -347,14 +347,14 @@ describe('the Graphics Asset Library Capacity', () => {
 			staging: createInMemoryStagingGraphicsObjectStore(),
 			canonical: createInMemoryCanonicalGraphicsObjectStore(),
 		});
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'capacity-pressure-source',
 			initiatedBy: 'graphics-author-1',
 			name: 'Capacity pressure source',
 			browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
-		await library.uploadImage({
+		await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -384,7 +384,7 @@ describe('the Graphics Asset Library Capacity', () => {
 			canonical: createInMemoryCanonicalGraphicsObjectStore(),
 		});
 		const upload = async (idempotencyKey: string, bytes: Uint8Array) => {
-			const operation = await library.initiateImageIngestion({
+			const operation = await library.initiateGraphicsIngestion({
 				idempotencyKey,
 				initiatedBy: 'graphics-author-1',
 				name: idempotencyKey,
@@ -392,7 +392,7 @@ describe('the Graphics Asset Library Capacity', () => {
 				browserDecodeEvidence: browserDecodeEvidence(bytes),
 				declaredByteLength: bytes.byteLength,
 			});
-			return await library.uploadImage({
+			return await library.uploadGraphicAsset({
 				operationId: operation.id,
 				initiatedBy: operation.initiatedBy,
 				bytes: createBoundedByteStream(bytes, {
