@@ -11,6 +11,7 @@ vi.mock('~~/server/db/schema', () => ({
 		slug: 'screens.slug',
 		name: 'screens.name',
 		stateVersion: 'screens.stateVersion',
+		assetCapabilityVersion: 'screens.assetCapabilityVersion',
 	},
 }));
 
@@ -74,13 +75,57 @@ describe('screenService', () => {
 	});
 
 	describe('create', () => {
-		it('returns created screen', async () => {
+		it('stores capability authorization material atomically with the created Screen', async () => {
 			const newScreen = createMockScreen({ name: 'New Screen' });
 			getChain('insert').returning.mockResolvedValue([newScreen]);
+			const capability = {
+				assetCapabilitySeed: 'seed-1',
+				assetCapabilityVersion: 1,
+				assetCapabilityDigest: 'digest-1',
+			};
 
-			const result = await screenService().create(1, { name: 'New Screen', slug: 'new-screen' } as any);
+			const result = await screenService().create(
+				1,
+				{ name: 'New Screen', slug: 'new-screen' } as any,
+				capability,
+			);
 
 			expect(result).toEqual(newScreen);
+			expect(getChain('insert').values).toHaveBeenCalledWith({
+				name: 'New Screen',
+				slug: 'new-screen',
+				eventId: 1,
+				...capability,
+			});
+		});
+	});
+
+	describe('replaceAssetCapability', () => {
+		it('rotates only the expected current capability version', async () => {
+			const rotated = createMockScreen({
+				assetCapabilitySeed: 'seed-2',
+				assetCapabilityVersion: 2,
+				assetCapabilityDigest: 'digest-2',
+			});
+			getChain('update').returning.mockResolvedValue([rotated]);
+
+			const result = await screenService().replaceAssetCapability(
+				1,
+				1,
+				{
+					assetCapabilitySeed: 'seed-2',
+					assetCapabilityVersion: 2,
+					assetCapabilityDigest: 'digest-2',
+				},
+				1,
+			);
+
+			expect(result).toEqual(rotated);
+			expect(getChain('update').set).toHaveBeenCalledWith({
+				assetCapabilitySeed: 'seed-2',
+				assetCapabilityVersion: 2,
+				assetCapabilityDigest: 'digest-2',
+			});
 		});
 	});
 

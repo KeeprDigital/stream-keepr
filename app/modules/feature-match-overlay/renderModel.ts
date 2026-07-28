@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'vue';
 import type { PlayerSide } from '~~/shared/types/enums';
+import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
 	FeatureMatchGameWinsWidgetConfig,
 	FeatureMatchLayoutItemConfig,
@@ -60,6 +61,7 @@ export interface FeatureMatchOverlayRenderModelInput {
 	round?: FeatureMatchOverlayTemplateMetadataInput['round'];
 	phase?: FeatureMatchOverlayTemplateMetadataInput['phase'];
 	matchState?: FeatureMatchOverlayMatchStateData | null;
+	graphicAssetContentPath?: (reference: GraphicAssetReference) => string;
 }
 
 export interface FeatureMatchOverlayFrameRenderModel {
@@ -411,6 +413,8 @@ function groupChildDefaultSurfaceStyle(group: FeatureMatchWidgetGroupItemConfig)
 
 export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlayRenderModelInput & { maskId?: string }): FeatureMatchOverlayRenderModel {
 	const { config, output, displayTime } = input;
+	const resolveGraphicAssetContentPath = input.graphicAssetContentPath
+		?? graphicAssetRevisionContentPath;
 	const visibleItems = [...config.layout.items]
 		.filter(item => item.visible)
 		.sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
@@ -554,7 +558,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 			case 'image':
 				return {
 					type: 'image',
-					src: widget.asset ? graphicAssetRevisionContentPath(widget.asset) : '',
+					src: widget.asset ? resolveGraphicAssetContentPath(widget.asset) : '',
 					alt: label,
 					imageStyle: imageStyleFor({ x: 0, y: 0, width: rect.width, height: rect.height }, widget),
 				};

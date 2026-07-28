@@ -572,6 +572,12 @@ export const screens = sqliteTable('screens', {
 	stateVersion: integer('state_version').notNull().default(0),
 	/** Transaction marker keeping Screen configuration and its Graphic Asset usage index in lockstep. */
 	graphicAssetReferenceVersion: text('graphic_asset_reference_version'),
+	/** Internal derivation seed for the Screen Output's revocable asset capability. */
+	assetCapabilitySeed: text('asset_capability_seed').notNull(),
+	/** Rotation counter; changing it invalidates every previously derived capability. */
+	assetCapabilityVersion: integer('asset_capability_version').notNull().default(1),
+	/** One-way lookup identity used to authorize public Screen Output asset requests. */
+	assetCapabilityDigest: text('asset_capability_digest').notNull(),
 	/** Strongly-consistent source of truth; KV is only a derived display cache. */
 	activeCard: text('active_card', { mode: 'json' }).$type<Record<string, unknown> | null>(),
 	activeCardVersion: integer('active_card_version').notNull().default(0),
@@ -580,6 +586,7 @@ export const screens = sqliteTable('screens', {
 }, table => [
 	index('screens_event_id_idx').on(table.eventId),
 	uniqueIndex('screens_slug_idx').on(table.eventId, table.slug),
+	uniqueIndex('screens_asset_capability_digest_idx').on(table.assetCapabilityDigest),
 ]);
 
 /* RELATIONS */

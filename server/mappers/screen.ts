@@ -3,5 +3,12 @@ import type { ScreenResponse } from '~~/shared/api';
 import { mapTimestamps } from '~~/server/utils/mapTimestamps';
 
 export function mapScreenToResponse(screen: DbScreen): ScreenResponse {
-	return mapTimestamps(screen);
+	const {
+		assetCapabilityDigest: _assetCapabilityDigest,
+		assetCapabilitySeed: _assetCapabilitySeed,
+		assetCapabilityVersion: _assetCapabilityVersion,
+		graphicAssetReferenceVersion: _graphicAssetReferenceVersion,
+		...publicScreen
+	} = screen;
+	return mapTimestamps(publicScreen);
 }

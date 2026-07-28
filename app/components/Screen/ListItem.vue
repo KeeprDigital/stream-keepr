@@ -28,8 +28,20 @@ const modeLabel = computed(() => getScreenModeLabel(props.screen.currentMode));
 const modeIcon = computed(() => getScreenModeIcon(props.screen.currentMode));
 const displayType = computed(() => getScreenModeDisplayType(props.screen.currentMode));
 
+async function screenAccessUrl(): Promise<string> {
+	try {
+		const { assetCapability } = await $fetch<{ assetCapability: string }>(
+			`/api/events/${props.eventId}/screens/${props.screen.id}/asset-capability`,
+		);
+		return `${screenUrl.value}#asset-capability=${encodeURIComponent(assetCapability)}`;
+	}
+	catch {
+		return '';
+	}
+}
+
 async function copyUrl() {
-	await copyToClipboard(screenUrl, {
+	await copyToClipboard(await screenAccessUrl(), {
 		successTitle: 'URL Copied',
 		successDescription: 'Screen URL copied to clipboard',
 		errorDescription: 'Failed to copy screen URL to clipboard.',
@@ -37,7 +49,15 @@ async function copyUrl() {
 }
 
 function openInNewTab() {
-	window.open(screenUrl.value, '_blank', 'noopener,noreferrer');
+	const outputWindow = window.open('', '_blank');
+	if (outputWindow)
+		outputWindow.opener = null;
+	void screenAccessUrl().then((url) => {
+		if (url && outputWindow)
+			outputWindow.location.href = url;
+		else
+			outputWindow?.close();
+	});
 }
 
 const modeItems: DropdownMenuItem[][] = [

@@ -2,7 +2,7 @@
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayWidgetRenderDescriptor } from '~/modules/feature-match-overlay/renderModel';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
-import { graphicAssetRevisionContentPath } from '~~/shared/utils/graphicsAssetReferences';
+import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 import { resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
 import { featureMatchOverlaySelectionKey, isFeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
@@ -18,6 +18,12 @@ const canvasHeight = computed(() => screen.value?.screenConfig?.height ?? 1080);
 const frameMaskId = `feature-match-overlay-frame-mask-${useId().replace(/[^\w-]/g, '')}`;
 const frameGlowFilterId = `feature-match-overlay-frame-glow-${useId().replace(/[^\w-]/g, '')}`;
 const { config, match, matchState, sourceMatch, round, phase, event, loading, error } = useFeatureMatchOverlayModeData();
+const graphicAssetReferences = computed(() =>
+	featureMatchOverlayGraphicAssetReferences(config.value).map(item => item.reference),
+);
+const { contentUrl: graphicAssetContentUrl } = useScreenGraphicAssetContentUrls(
+	graphicAssetReferences,
+);
 const { displayTime } = useClockDisplay(() => matchState.value?.clock ?? null);
 const selectedPreviewTarget = ref<FeatureMatchOverlaySelectionTarget>({ type: 'canvas' });
 
@@ -34,6 +40,7 @@ const renderModel = computed(() => resolveFeatureMatchOverlayRenderModel({
 	phase: phase.value,
 	matchState: matchState.value,
 	maskId: frameMaskId,
+	graphicAssetContentPath: graphicAssetContentUrl,
 }));
 
 const canvasStyle = computed(() => renderModel.value.canvasStyle);
@@ -197,7 +204,7 @@ onBeforeUnmount(() => {
 			/>
 			<image
 				v-if="resolvedOutput !== 'key' && config.layout.frame.backgroundImage"
-				:xlink:href="graphicAssetRevisionContentPath(config.layout.frame.backgroundImage)"
+				:xlink:href="graphicAssetContentUrl(config.layout.frame.backgroundImage)"
 				x="0"
 				y="0"
 				:width="canvasWidth"

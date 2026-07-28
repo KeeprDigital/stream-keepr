@@ -1,4 +1,5 @@
 import type { DbScreen, ScreenMode } from '~~/server/db/schema';
+import type { PersistedScreenOutputAssetCapability } from '~~/server/modules/screen-output-assets/manager';
 import type { CreateScreenInput, UpdateScreenInput } from '~~/shared/api';
 import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import { and, eq, ne } from 'drizzle-orm';
@@ -45,12 +46,14 @@ export function screenService() {
 	const create = async (
 		eventId: number,
 		data: CreateScreenInput,
+		capability: PersistedScreenOutputAssetCapability,
 	): Promise<DbScreen> => {
 		const [newScreen] = await db
 			.insert(screens)
 			.values({
 				...data,
 				eventId,
+				...capability,
 			})
 			.returning();
 
@@ -59,6 +62,29 @@ export function screenService() {
 		}
 
 		return newScreen;
+	};
+
+	const replaceAssetCapability = async (
+		id: number,
+		eventId: number,
+		replacement: PersistedScreenOutputAssetCapability,
+		expectedVersion: number,
+	): Promise<DbScreen | undefined> => {
+		const [updated] = await db
+			.update(screens)
+			.set(replacement)
+			.where(and(
+				eq(screens.id, id),
+				eq(screens.eventId, eventId),
+				eq(screens.assetCapabilityVersion, expectedVersion),
+			))
+			.returning();
+		if (updated)
+			return updated;
+		const screen = await findById(id, eventId);
+		if (!screen)
+			return undefined;
+		throw new StateConflictError('Screen Output Asset Capability', id);
 	};
 
 	/**
@@ -170,6 +196,7 @@ export function screenService() {
 		findByEventId,
 		findIdsByEventId,
 		create,
+		replaceAssetCapability,
 		update,
 		updateModeConfig,
 		updateScreenConfig,

@@ -600,6 +600,10 @@ export const createScreenSchema = createInsertSchema(screens)
 		eventId: true,
 		activeCard: true,
 		activeCardVersion: true,
+		graphicAssetReferenceVersion: true,
+		assetCapabilitySeed: true,
+		assetCapabilityVersion: true,
+		assetCapabilityDigest: true,
 	})
 	.extend({
 		slug: screenSlugSchema,
@@ -617,6 +621,10 @@ export const updateScreenSchema = createUpdateSchema(screens)
 		eventId: true,
 		activeCard: true,
 		activeCardVersion: true,
+		graphicAssetReferenceVersion: true,
+		assetCapabilitySeed: true,
+		assetCapabilityVersion: true,
+		assetCapabilityDigest: true,
 	})
 	.extend({
 		slug: screenSlugSchema.optional(),

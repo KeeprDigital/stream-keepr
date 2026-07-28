@@ -77,6 +77,13 @@ export function graphicAssetRevisionContentPath(reference: GraphicAssetReference
 	return `/api/graphics-assets/${encodeURIComponent(reference.assetId)}/revisions/${encodeURIComponent(reference.revisionId)}/content`;
 }
 
+export function screenOutputGraphicAssetRevisionContentPath(
+	screenId: number,
+	reference: GraphicAssetReference,
+): string {
+	return `/api/screen-output/screens/${screenId}/assets/${encodeURIComponent(reference.assetId)}/revisions/${encodeURIComponent(reference.revisionId)}/content`;
+}
+
 export function graphicAssetRevisionStatusPath(reference: GraphicAssetReference): string {
 	return `/api/graphics-assets/${encodeURIComponent(reference.assetId)}/revisions/${encodeURIComponent(reference.revisionId)}/status`;
 }

@@ -142,6 +142,19 @@ pnpm exec wrangler secret put NUXT_ABLY_API_KEY --config .output/server/wrangler
 
 Secrets belong to a specific Worker.
 
+### Screen Output asset capabilities
+
+Screen Outputs use opaque, revocable capabilities to resolve only the exact
+Graphic Asset Revisions in their current published state. Configure a
+deployment-level 32-byte base64 signing key and keep it server-side. Changing
+this key revokes every existing Screen Output asset capability; rotate each
+Screen's asset access afterward before using its output URL again.
+
+```bash
+openssl rand -base64 32
+pnpm exec wrangler secret put NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY --config .output/server/wrangler.json
+```
+
 ### Melee credential encryption
 
 Melee client secrets are stored as AES-256-GCM envelopes in D1. Before saving
