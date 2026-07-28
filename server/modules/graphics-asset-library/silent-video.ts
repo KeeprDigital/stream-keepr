@@ -807,6 +807,8 @@ function inspectWebm(bytes: Uint8Array) {
 	const firstClusterPosition = Math.min(...clusterIndex.keys());
 	if (cueReferences[0]!.clusterPosition !== firstClusterPosition)
 		validationError('video-index-incomplete', 'WebM Cues must index the initial random-access cluster.');
+	if (indexedClusters.size !== clusterIndex.size)
+		validationError('video-index-incomplete', 'WebM Cues must cover every random-access cluster.');
 	return { width, height, durationSeconds, frameCount, hasAlpha };
 }
 

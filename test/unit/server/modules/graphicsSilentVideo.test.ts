@@ -298,4 +298,32 @@ describe('silent-video bounded inspection', () => {
 
 		await expectIssue(processSilentVideo(hdr), 'unsupported-video-profile');
 	});
+
+	it('rejects a later WebM random-access cluster omitted from Cues', async () => {
+		const clusterStart = vp9Webm.findIndex((byte, index) =>
+			byte === 0x1F && vp9Webm[index + 1] === 0x43 && vp9Webm[index + 2] === 0xB6 && vp9Webm[index + 3] === 0x75,
+		);
+		const cuesStart = vp9Webm.findIndex((byte, index) =>
+			byte === 0x1C && vp9Webm[index + 1] === 0x53 && vp9Webm[index + 2] === 0xBB && vp9Webm[index + 3] === 0x6B && index > clusterStart,
+		);
+		expect(cuesStart).toBeGreaterThan(clusterStart);
+		const duplicate = vp9Webm.slice(clusterStart, cuesStart);
+		const clusterTime = duplicate.findIndex((byte, index) => byte === 0xE7 && duplicate[index + 1] === 0x81);
+		duplicate[clusterTime + 2] = 200;
+		const secondBlock = duplicate.findIndex((byte, index) => byte === 0xA3 && duplicate[index + 1] === 0x93);
+		duplicate[secondBlock + 3] = 0;
+		duplicate[secondBlock + 4] = 100;
+		const malformed = concatenate([
+			vp9Webm.slice(0, cuesStart),
+			duplicate,
+			vp9Webm.slice(cuesStart),
+		]);
+		malformed[clusterStart + secondBlock + 3] = 0;
+		malformed[clusterStart + secondBlock + 4] = 100;
+		new DataView(malformed.buffer).setBigUint64(40, (1n << 56n) | BigInt(malformed.byteLength - 48));
+		const duration = malformed.findIndex((byte, index) => byte === 0x44 && malformed[index + 1] === 0x89 && malformed[index + 2] === 0x88);
+		new DataView(malformed.buffer).setFloat64(duration + 3, 2000);
+
+		await expectIssue(processSilentVideo(malformed), 'video-index-incomplete');
+	});
 });

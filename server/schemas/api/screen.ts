@@ -470,7 +470,7 @@ const featureMatchSourceItemConfigSchema = featureMatchLayoutItemBaseSchema.exte
 	frameCutout: z.boolean(),
 }).strict();
 
-const featureMatchMediaGraphicItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
+const featureMatchMediaGraphicItemConfigSchema = featureMatchLayoutItemBaseSchema.omit({ zIndex: true }).extend({
 	type: z.literal('media'),
 	asset: graphicAssetReferenceSchema.optional(),
 	mediaKind: z.enum(['image', 'silent-video']),

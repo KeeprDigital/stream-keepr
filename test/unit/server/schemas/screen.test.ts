@@ -334,6 +334,14 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 			...referenced,
 			layout: {
 				...referenced.layout,
+				items: referenced.layout.items.map(item =>
+					item.id === 'motion-ident' ? { ...item, zIndex: 99 } : item),
+			},
+		}).success).toBe(false);
+		expect(featureMatchOverlayModeConfigSchema.safeParse({
+			...referenced,
+			layout: {
+				...referenced.layout,
 				frame: {
 					...referenced.layout.frame,
 					backgroundImageUrl: 'https://example.com/frame.png',

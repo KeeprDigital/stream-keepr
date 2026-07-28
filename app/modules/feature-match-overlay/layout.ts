@@ -231,17 +231,20 @@ export function convertGroupArrangement(layout: FeatureMatchLayoutConfig, id: st
 
 function layerOrders(layout: FeatureMatchLayoutConfig): number[] {
 	return layout.items
+		.filter(item => item.type !== 'media')
 		.map(item => item.zIndex ?? 0)
 		.sort((a, b) => a - b);
 }
 
 export function setItemOrder(layout: FeatureMatchLayoutConfig, id: string, order: number): FeatureMatchLayoutConfig {
+	if (layout.items.find(item => item.id === id)?.type === 'media')
+		return layout;
 	return patchItem(layout, id, { zIndex: order });
 }
 
 export function moveItemOrder(layout: FeatureMatchLayoutConfig, id: string, direction: -1 | 1): FeatureMatchLayoutConfig {
 	const item = layout.items.find(candidate => candidate.id === id);
-	if (!item)
+	if (!item || item.type === 'media')
 		return layout;
 
 	const orders = layerOrders(layout);

@@ -406,7 +406,7 @@ export interface FeatureMatchWidgetItemConfig extends FeatureMatchLayoutItemBase
 }
 
 /** First-class still-image or silent-video content in a Feature Match Layout. */
-export interface FeatureMatchMediaGraphicItemConfig extends FeatureMatchLayoutItemBase {
+export interface FeatureMatchMediaGraphicItemConfig extends Omit<FeatureMatchLayoutItemBase, 'zIndex'> {
 	type: 'media';
 	asset?: GraphicAssetReference;
 	mediaKind: 'image' | 'silent-video';

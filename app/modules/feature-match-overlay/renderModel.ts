@@ -428,7 +428,11 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		?? graphicAssetRevisionContentPath;
 	const visibleItems = [...config.layout.items]
 		.filter(item => item.visible)
-		.sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+		.sort((a, b) => {
+			const order = (item: FeatureMatchLayoutItemConfig) =>
+				item.type === 'media' ? config.layout.items.indexOf(item) : (item.zIndex ?? 0);
+			return order(a) - order(b);
+		});
 	const sourceItems = visibleItems.filter((item): item is FeatureMatchSourceItemConfig => item.type === 'source');
 	const mediaItems = visibleItems.filter((item): item is FeatureMatchMediaGraphicItemConfig => item.type === 'media');
 	const widgetItems = visibleItems.filter((item): item is FeatureMatchWidgetItemConfig => item.type === 'widget');
@@ -437,7 +441,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 	function itemStyle(item: FeatureMatchLayoutItemConfig): CSSProperties {
 		return {
 			...baseBoxStyle(output, item, item.surfaceStyle),
-			zIndex: item.zIndex,
+			zIndex: item.type === 'media' ? config.layout.items.indexOf(item) : item.zIndex,
 			pointerEvents: 'none',
 		};
 	}

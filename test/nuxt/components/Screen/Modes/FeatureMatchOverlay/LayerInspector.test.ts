@@ -318,7 +318,7 @@ describe('featureMatchOverlayLayerInspector', () => {
 
 		const patch = updateConfig.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig>;
 		const updated = patch.layout?.items.find(item => item.id === 'main-source');
-		expect(updated?.zIndex).toBeGreaterThan(30);
+		expect(updated && 'zIndex' in updated ? updated.zIndex : undefined).toBeGreaterThan(30);
 	});
 
 	it('persists top-level layer anchor selection in the overlay config', async () => {
