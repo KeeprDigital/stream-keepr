@@ -31,8 +31,10 @@ import {
 	GRAPHICS_MULTIPART_MAXIMUM_PART_ATTEMPTS,
 	GRAPHICS_MULTIPART_PART_BYTES,
 	GRAPHICS_MULTIPART_PART_TRANSFER_TIMEOUT_MILLISECONDS,
+	MAX_SILENT_VIDEO_INGESTION_BYTES,
 	MAX_STATIC_FONT_INGESTION_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
+	SILENT_VIDEO_COMPATIBILITY_PROFILE,
 	STATIC_FONT_COMPATIBILITY_PROFILE,
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
 } from '~~/shared/utils/graphicsAssetCompatibility';
@@ -49,6 +51,7 @@ import {
 	sha256Hex,
 	sha256HexStream,
 } from './png';
+import { processSilentVideo } from './silent-video';
 import { processStillImage } from './still-image';
 import {
 	GraphicAssetValidationError,
@@ -167,7 +170,7 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		digest: string;
 		byteLength: number;
 		canonicalMime: GraphicAssetCanonicalMime;
-		kind: 'image' | 'font';
+		kind: 'image' | 'silent-video' | 'font';
 		lifecycleState: 'active' | 'retired' | 'trashed';
 	} | undefined>;
 	listGraphicAssetUsage: (assetId: GraphicAssetId) => Promise<GraphicAssetUsage[]>;
@@ -230,6 +233,12 @@ export interface GraphicsAssetLibrary {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
 		evidence: NonNullable<GraphicAssetSourceDeclarations['browserDecodeEvidence']>;
+	}) => Promise<GraphicsIngestionOperation>;
+	confirmSilentVideoBrowserEvidence: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
+		evidence: NonNullable<GraphicAssetSourceDeclarations['browserDecodeEvidence']>;
+		poster?: BoundedByteStream;
 	}) => Promise<GraphicsIngestionOperation>;
 	listGraphicAssets: (input: { search?: string }) => Promise<GraphicAsset[]>;
 	updateGraphicAsset: (input: {
@@ -410,14 +419,16 @@ export function createGraphicsAssetLibrary(
 		const sourceKind = graphicAssetSourceKind(input);
 		const maximumByteLength = sourceKind === 'font'
 			? MAX_STATIC_FONT_INGESTION_BYTES
-			: MAX_STILL_IMAGE_INGESTION_BYTES;
+			: sourceKind === 'silent-video'
+				? MAX_SILENT_VIDEO_INGESTION_BYTES
+				: MAX_STILL_IMAGE_INGESTION_BYTES;
 		if (
 			!Number.isSafeInteger(input.declaredByteLength)
 			|| input.declaredByteLength <= 0
 			|| input.declaredByteLength > maximumByteLength
 		) {
 			throw new GraphicsAssetLibraryError(
-				`${sourceKind === 'font' ? 'Static font' : 'Still image'} must be between 1 and ${maximumByteLength} bytes`,
+				`${sourceKind === 'font' ? 'Static font' : sourceKind === 'silent-video' ? 'Silent video' : 'Still image'} must be between 1 and ${maximumByteLength} bytes`,
 				'invalid-ingestion-input',
 			);
 		}
@@ -430,6 +441,12 @@ export function createGraphicsAssetLibrary(
 		if (input.browserDecodeEvidence?.outcome === 'font-loaded' || input.browserDecodeEvidence?.outcome === 'font-rejected') {
 			throw new GraphicsAssetLibraryError(
 				'Font browser evidence can only answer the server-selected post-validation challenge',
+				'invalid-ingestion-input',
+			);
+		}
+		if (input.browserDecodeEvidence?.outcome === 'video-played' || input.browserDecodeEvidence?.outcome === 'video-rejected') {
+			throw new GraphicsAssetLibraryError(
+				'Silent video browser evidence can only answer post-inspection playback requirements',
 				'invalid-ingestion-input',
 			);
 		}
@@ -502,11 +519,68 @@ export function createGraphicsAssetLibrary(
 		operation: GraphicsIngestionOperation,
 	): Extract<GraphicAssetValidationReport, { outcome: 'accepted' }> {
 		const evidence = operation.browserDecodeEvidence;
+		if (report.facts.kind === 'silent-video') {
+			if (!evidence || (evidence.outcome !== 'video-played' && evidence.outcome !== 'video-rejected')) {
+				validationError(
+					'browser-video-playback-failed',
+					'Muted inline playback and seeking evidence is required before publication.',
+				);
+			}
+			if (evidence.sourceDigest !== report.facts.sha256) {
+				validationError(
+					'browser-video-evidence-mismatch',
+					'Browser video evidence does not match the staged source bytes.',
+				);
+			}
+			if (evidence.outcome === 'video-rejected') {
+				validationError(
+					evidence.stage === 'transparency'
+						? 'vp9-alpha-chromium-required'
+						: 'browser-video-playback-failed',
+					'The representative target browser could not play and seek the exact silent video.',
+				);
+			}
+			if (
+				evidence.width !== report.facts.width
+				|| evidence.height !== report.facts.height
+				|| Math.abs(evidence.durationSeconds - report.facts.durationSeconds) > 0.05
+				|| Math.abs(evidence.posterTimeSeconds - report.facts.posterTimeSeconds) > 0.001
+			) {
+				validationError(
+					'browser-video-evidence-mismatch',
+					'Browser video dimensions, duration, or poster time conflict with bounded inspection.',
+				);
+			}
+			if (
+				report.facts.hasAlpha
+				&& (
+					evidence.browserFamily !== 'chromium'
+					|| !evidence.transparencyRendered
+				)
+			) {
+				validationError(
+					'vp9-alpha-chromium-required',
+					'VP9 alpha requires proven Chromium transparency playback.',
+				);
+			}
+			return {
+				...report,
+				facts: {
+					...report.facts,
+					browserPlayable: true,
+					...(report.facts.hasAlpha
+						? { chromiumTransparencyPlayback: true as const }
+						: {}),
+				},
+			} as Extract<GraphicAssetValidationReport, { compatibilityProfile: 'silent-video-v1' }>;
+		}
 		if (report.facts.kind === 'font') {
 			if (
 				!evidence
 				|| evidence.outcome === 'decoded'
 				|| evidence.outcome === 'rejected'
+				|| evidence.outcome === 'video-played'
+				|| evidence.outcome === 'video-rejected'
 			) {
 				validationError(
 					'browser-font-load-failed',
@@ -579,7 +653,12 @@ export function createGraphicsAssetLibrary(
 				'Browser-decoded source digest does not match the staged source bytes.',
 			);
 		}
-		if (evidence.outcome === 'font-loaded' || evidence.outcome === 'font-rejected') {
+		if (
+			evidence.outcome === 'font-loaded'
+			|| evidence.outcome === 'font-rejected'
+			|| evidence.outcome === 'video-played'
+			|| evidence.outcome === 'video-rejected'
+		) {
 			validationError(
 				'browser-image-decode-failed',
 				'Image browser decode evidence is required before publication.',
@@ -749,6 +828,7 @@ export function createGraphicsAssetLibrary(
 		const canonical = requireCanonical();
 		let operation = initialOperation;
 		const stagingIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
+		const posterIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/video-poster`);
 
 		async function terminalOperationAtCheckpoint() {
 			const authoritative = await catalogue.getIngestionOperation(
@@ -796,7 +876,9 @@ export function createGraphicsAssetLibrary(
 			await sha256HexStream({
 				body: stagedRead.body,
 				byteLength: stagedRead.object.byteLength,
-				maximumByteLength: MAX_STILL_IMAGE_INGESTION_BYTES,
+				maximumByteLength: graphicAssetSourceKind(operation) === 'silent-video'
+					? MAX_SILENT_VIDEO_INGESTION_BYTES
+					: MAX_STILL_IMAGE_INGESTION_BYTES,
 			});
 			const hashingTerminal = await terminalOperationAtCheckpoint();
 			if (hashingTerminal)
@@ -816,13 +898,19 @@ export function createGraphicsAssetLibrary(
 			}
 			let processed:
 				| Awaited<ReturnType<typeof processStillImage>>
+				| Awaited<ReturnType<typeof processSilentVideo>>
 				| Awaited<ReturnType<typeof processStaticFont>>;
-			let sourceKind: 'image' | 'font' = graphicAssetSourceKind(operation);
+			let sourceKind: 'image' | 'silent-video' | 'font' = graphicAssetSourceKind(operation);
+			let derivative: Uint8Array | undefined;
+			let report: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>;
 			try {
+				const maximumByteLength = sourceKind === 'silent-video'
+					? MAX_SILENT_VIDEO_INGESTION_BYTES
+					: MAX_STILL_IMAGE_INGESTION_BYTES;
 				const validationBytes = await consumeBoundedByteStream({
 					body: validationRead.body,
 					byteLength: validationRead.object.byteLength,
-					maximumByteLength: MAX_STILL_IMAGE_INGESTION_BYTES,
+					maximumByteLength,
 				});
 				sourceKind = graphicAssetSourceKind(operation, validationBytes.subarray(0, 64));
 				processed = sourceKind === 'font'
@@ -830,11 +918,19 @@ export function createGraphicsAssetLibrary(
 							sourceFileName: operation.sourceFileName,
 							declaredMime: operation.declaredMime,
 						})
-					: await processStillImage(validationBytes, {
-							sourceFileName: operation.sourceFileName,
-							declaredMime: operation.declaredMime,
-						});
-				if (processed.report.facts.kind === 'font' && !operation.browserDecodeEvidence) {
+					: sourceKind === 'silent-video'
+						? await processSilentVideo(validationBytes, {
+								sourceFileName: operation.sourceFileName,
+								declaredMime: operation.declaredMime,
+							})
+						: await processStillImage(validationBytes, {
+								sourceFileName: operation.sourceFileName,
+								declaredMime: operation.declaredMime,
+							});
+				if (
+					(processed.report.facts.kind === 'font' || processed.report.facts.kind === 'silent-video')
+					&& !operation.browserDecodeEvidence
+				) {
 					return await catalogue.updateIngestionOperation(
 						changedOperation(operation, {
 							stage: 'awaiting-confirmation',
@@ -843,10 +939,56 @@ export function createGraphicsAssetLibrary(
 						operation.updatedAt,
 					);
 				}
-				processed = {
-					...processed,
-					report: reportWithBrowserDecodeEvidence(processed.report, operation),
-				};
+				report = reportWithBrowserDecodeEvidence(processed.report, operation);
+				if (report.facts.kind === 'silent-video') {
+					const posterRead = await staging.read(posterIdentity);
+					if (posterRead.outcome !== 'available')
+						validationError('browser-video-playback-failed', 'Deterministic video poster evidence is missing.');
+					const posterBytes = await consumeBoundedByteStream({
+						body: posterRead.body,
+						byteLength: posterRead.object.byteLength,
+						maximumByteLength: 2 * 1024 * 1024,
+					});
+					const videoEvidence = operation.browserDecodeEvidence;
+					if (
+						!videoEvidence
+						|| videoEvidence.outcome !== 'video-played'
+						|| await sha256Hex(posterBytes) !== videoEvidence.posterDigest
+					) {
+						validationError(
+							'browser-video-evidence-mismatch',
+							'Video poster bytes do not match the browser playback evidence.',
+						);
+					}
+					const poster = await processStillImage(posterBytes, {
+						sourceFileName: 'poster.png',
+						declaredMime: 'image/png',
+					});
+					if (poster.report.facts.kind !== 'image')
+						throw new Error('Deterministic video poster did not decode as a still image');
+					const scale = Math.min(
+						1,
+						640 / report.facts.width,
+						360 / report.facts.height,
+					);
+					const expectedWidth = Math.max(1, Math.round(report.facts.width * scale));
+					const expectedHeight = Math.max(1, Math.round(report.facts.height * scale));
+					if (
+						poster.report.facts.width !== expectedWidth
+						|| poster.report.facts.height !== expectedHeight
+					) {
+						validationError(
+							'browser-video-evidence-mismatch',
+							'Video poster dimensions do not match the deterministic fit rule.',
+						);
+					}
+					derivative = posterBytes;
+				}
+				else {
+					if (!('thumbnail' in processed))
+						throw new Error('Validated still image or font is missing its deterministic derivative');
+					derivative = processed.thumbnail;
+				}
 			}
 			catch (error) {
 				if (!(error instanceof GraphicAssetValidationError))
@@ -855,7 +997,9 @@ export function createGraphicsAssetLibrary(
 					error,
 					sourceKind === 'font'
 						? STATIC_FONT_COMPATIBILITY_PROFILE
-						: STILL_IMAGE_COMPATIBILITY_PROFILE,
+						: sourceKind === 'silent-video'
+							? SILENT_VIDEO_COMPATIBILITY_PROFILE
+							: STILL_IMAGE_COMPATIBILITY_PROFILE,
 				);
 				const failed = await failOperation(catalogue, operation, {
 					code: 'validation-failed',
@@ -874,11 +1018,11 @@ export function createGraphicsAssetLibrary(
 				const current = await catalogue.findCurrentGraphicAsset(operation.targetAssetId);
 				if (!current)
 					throw new Error('Replacement target Graphic Asset was not found');
-				if (current.sourceDigest === processed.report.facts.sha256) {
+				if (current.sourceDigest === report.facts.sha256) {
 					operation = await catalogue.updateIngestionOperation(
 						changedOperation(operation, {
 							stage: 'publishing',
-							report: processed.report,
+							report,
 						}),
 						operation.updatedAt,
 					);
@@ -896,7 +1040,7 @@ export function createGraphicsAssetLibrary(
 			operation = await catalogue.updateIngestionOperation(
 				changedOperation(operation, {
 					stage: 'generating-derivatives',
-					report: processed.report,
+					report,
 				}),
 				operation.updatedAt,
 			);
@@ -904,12 +1048,12 @@ export function createGraphicsAssetLibrary(
 			if (derivativeStartTerminal)
 				return derivativeStartTerminal;
 
-			const thumbnail = processed.thumbnail;
+			const thumbnail = derivative!;
 			const thumbnailDigest = await sha256Hex(thumbnail);
 			const reservation = await catalogue.reserveGraphicAssetPublication({
 				operation,
-				sourceDigest: processed.report.facts.sha256,
-				sourceByteLength: processed.report.facts.byteLength,
+				sourceDigest: report.facts.sha256,
+				sourceByteLength: report.facts.byteLength,
 				thumbnailDigest,
 				thumbnailByteLength: thumbnail.byteLength,
 				reservedAt: changedOperation(operation, {}).updatedAt,
@@ -927,7 +1071,7 @@ export function createGraphicsAssetLibrary(
 					code: 'canonical-capacity-exhausted',
 					retryable: true,
 					message: 'Canonical capacity is exhausted; this operation would add new bytes.',
-				}, processed.report);
+				}, report);
 			}
 			operation = reservation.operation;
 			const canonicalSourceRead = await staging.read(stagingIdentity);
@@ -936,21 +1080,23 @@ export function createGraphicsAssetLibrary(
 					code: 'staging-unavailable',
 					retryable: true,
 					message: 'Staged source bytes are temporarily unavailable.',
-				}, processed.report);
+				}, report);
 			}
 			const [sourceWrite, thumbnailWrite] = await Promise.all([
-				storeCanonicalStream(canonical, processed.report.facts.sha256, {
+				storeCanonicalStream(canonical, report.facts.sha256, {
 					body: canonicalSourceRead.body,
 					byteLength: canonicalSourceRead.object.byteLength,
-					maximumByteLength: MAX_STILL_IMAGE_INGESTION_BYTES,
-				}, processed.report.facts.canonicalMime),
+					maximumByteLength: sourceKind === 'silent-video'
+						? MAX_SILENT_VIDEO_INGESTION_BYTES
+						: MAX_STILL_IMAGE_INGESTION_BYTES,
+				}, report.facts.canonicalMime),
 				storeCanonicalBytes(canonical, thumbnailDigest, thumbnail),
 			]);
 			const createdCanonicalContents = [
 				sourceWrite.outcome === 'created'
 					? {
-							digest: processed.report.facts.sha256,
-							byteLength: processed.report.facts.byteLength,
+							digest: report.facts.sha256,
+							byteLength: report.facts.byteLength,
 						}
 					: undefined,
 				thumbnailWrite.outcome === 'created'
@@ -971,7 +1117,7 @@ export function createGraphicsAssetLibrary(
 					code: 'canonical-store-unavailable',
 					retryable: true,
 					message: 'Canonical source or thumbnail storage is temporarily unavailable.',
-				}, processed.report);
+				}, report);
 			}
 			const derivativeTerminal = await terminalOperationAtCheckpoint();
 			if (derivativeTerminal)
@@ -986,7 +1132,7 @@ export function createGraphicsAssetLibrary(
 				return publicationTerminal;
 
 			const reusable = !operation.targetAssetId && operation.duplicateContentPolicy === 'reuse'
-				? await catalogue.findReusableGraphicAsset(processed.report.facts.sha256)
+				? await catalogue.findReusableGraphicAsset(report.facts.sha256)
 				: undefined;
 			let completed: GraphicsIngestionOperation;
 			if (reusable) {
@@ -1000,11 +1146,11 @@ export function createGraphicsAssetLibrary(
 				completed = await catalogue.publishGraphicAssetReplacement({
 					operation,
 					targetAssetId: operation.targetAssetId,
-					report: processed.report,
+					report,
 					assetId: operation.targetAssetId,
 					revisionId: graphicAssetRevisionId(generateIdentity()),
 					derivativeId: graphicsDerivativeId(generateIdentity()),
-					sourceDigest: processed.report.facts.sha256,
+					sourceDigest: report.facts.sha256,
 					thumbnailDigest,
 					thumbnailByteLength: thumbnail.byteLength,
 					publishedAt: timestamp(),
@@ -1014,11 +1160,11 @@ export function createGraphicsAssetLibrary(
 				try {
 					completed = await catalogue.publishGraphicAsset({
 						operation,
-						report: processed.report,
+						report,
 						assetId: graphicAssetId(generateIdentity()),
 						revisionId: graphicAssetRevisionId(generateIdentity()),
 						derivativeId: graphicsDerivativeId(generateIdentity()),
-						sourceDigest: processed.report.facts.sha256,
+						sourceDigest: report.facts.sha256,
 						thumbnailDigest,
 						thumbnailByteLength: thumbnail.byteLength,
 						publishedAt: timestamp(),
@@ -1028,7 +1174,7 @@ export function createGraphicsAssetLibrary(
 					if (operation.duplicateContentPolicy === 'create-separate')
 						throw publicationError;
 					const concurrentlyPublished = await catalogue.findReusableGraphicAsset(
-						processed.report.facts.sha256,
+						report.facts.sha256,
 					);
 					if (!concurrentlyPublished)
 						throw publicationError;
@@ -1041,6 +1187,8 @@ export function createGraphicsAssetLibrary(
 			}
 			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
 			await staging.delete(stagingIdentity);
+			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+			await staging.delete(posterIdentity);
 			return completed;
 		}
 		catch {
@@ -1665,6 +1813,73 @@ export function createGraphicsAssetLibrary(
 					operation.updatedAt,
 				),
 				'Font browser challenge evidence could not be recorded',
+			);
+			return await continueGraphicsIngestion(confirmed);
+		},
+		async confirmSilentVideoBrowserEvidence(input) {
+			const catalogue = requireCatalogue();
+			const staging = requireStaging();
+			const operation = await catalogueRequest(
+				() => catalogue.getIngestionOperation(input.operationId, input.initiatedBy),
+				'Graphics ingestion state is temporarily unavailable',
+			);
+			if (
+				!operation
+				|| operation.stage !== 'awaiting-confirmation'
+				|| operation.report?.outcome !== 'accepted'
+				|| operation.report.facts.kind !== 'silent-video'
+			) {
+				throw new GraphicsAssetLibraryError(
+					`Graphics Ingestion Operation cannot confirm video playback from stage ${operation?.stage ?? 'missing'}`,
+					'ingestion-operation-not-uploadable',
+				);
+			}
+			if (input.evidence.outcome !== 'video-played' && input.evidence.outcome !== 'video-rejected') {
+				throw new GraphicsAssetLibraryError(
+					'Silent video browser playback evidence is required',
+					'invalid-ingestion-input',
+				);
+			}
+			if (
+				input.evidence.outcome === 'video-played'
+				&& (
+					!input.poster
+					|| input.poster.byteLength <= 0
+					|| input.poster.byteLength > 2 * 1024 * 1024
+				)
+			) {
+				throw new GraphicsAssetLibraryError(
+					'Silent video poster must not exceed 2 MiB',
+					'invalid-ingestion-input',
+				);
+			}
+			if (input.poster) {
+				const posterIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/video-poster`);
+				const stored = await staging.createImmutable({
+					identity: posterIdentity,
+					bytes: input.poster,
+					metadata: {
+						contentType: 'image/png',
+						custom: { operationId: operation.id },
+					},
+				});
+				if (stored.outcome === 'unavailable') {
+					throw new GraphicsAssetLibraryError(
+						'Silent video poster could not be staged',
+						'graphics-asset-library-unavailable',
+					);
+				}
+			}
+			const confirmed = await catalogueRequest(
+				() => catalogue.updateIngestionOperation(
+					changedOperation(operation, {
+						stage: 'validating',
+						browserDecodeEvidence: input.evidence,
+						failure: undefined,
+					}),
+					operation.updatedAt,
+				),
+				'Silent video browser evidence could not be recorded',
 			);
 			return await continueGraphicsIngestion(confirmed);
 		},

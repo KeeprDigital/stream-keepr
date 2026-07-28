@@ -7,7 +7,7 @@ import {
 	graphicsAuthorIdentity,
 	rethrowGraphicsAssetApiError,
 } from '~~/server/utils/graphicsAssetApi';
-import { MAX_STILL_IMAGE_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { MAX_SILENT_VIDEO_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 
 const replacementSchema = z.object({
 	idempotencyKey: z.string().trim().min(1).max(200),
@@ -25,7 +25,7 @@ const replacementSchema = z.object({
 			sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
 		}).strict(),
 	]).optional(),
-	declaredByteLength: z.number().int().positive().max(MAX_STILL_IMAGE_INGESTION_BYTES),
+	declaredByteLength: z.number().int().positive().max(MAX_SILENT_VIDEO_INGESTION_BYTES),
 }).strict();
 
 export default defineEventHandler(async (event) => {

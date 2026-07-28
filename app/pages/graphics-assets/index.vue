@@ -13,9 +13,11 @@ import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import {
 	GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
 	GRAPHICS_MULTIPART_PART_BYTES,
+	MAX_SILENT_VIDEO_INGESTION_BYTES,
 	MAX_STATIC_FONT_INGESTION_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
+import { verifySilentVideoBrowserPlayback } from '~/utils/verifySilentVideoBrowserPlayback';
 import { verifyStaticFontBrowserLoad } from '~/utils/verifyStaticFontBrowserLoad';
 import { verifyStillImageBrowserDecode } from '~/utils/verifyStillImageBrowserDecode';
 
@@ -76,23 +78,27 @@ watch(selectedFile, (file) => {
 const selectionError = computed(() => {
 	if (!selectedFile.value)
 		return null;
-	const supportedMime = ['image/png', 'image/jpeg', 'image/webp'].includes(selectedFile.value.type);
-	const isFont = graphicAssetSourceKind({
+	const supportedMime = ['image/png', 'image/jpeg', 'image/webp', 'video/mp4', 'video/webm'].includes(selectedFile.value.type);
+	const sourceKind = graphicAssetSourceKind({
 		sourceFileName: selectedFile.value.name,
 		declaredMime: selectedFile.value.type,
-	}) === 'font';
-	const supportedExtension = /\.(?:png|jpe?g|webp|woff2?|ttf|otf)$/i.test(selectedFile.value.name);
+	});
+	const isFont = sourceKind === 'font';
+	const isVideo = sourceKind === 'silent-video';
+	const supportedExtension = /\.(?:png|jpe?g|webp|mp4|webm|woff2?|ttf|otf)$/i.test(selectedFile.value.name);
 	if (
 		(selectedFile.value.type && !supportedMime && !isFont)
 		|| (!selectedFile.value.type && !supportedExtension)
 	) {
-		return 'Select a PNG, JPEG, WebP, WOFF2, WOFF, TTF, or OTF source.';
+		return 'Select a PNG, JPEG, WebP, H.264 MP4, VP9 WebM, WOFF2, WOFF, TTF, or OTF source.';
 	}
 	if (selectedFile.value.size === 0)
 		return 'The Graphic Asset source is empty.';
 	if (isFont && selectedFile.value.size > MAX_STATIC_FONT_INGESTION_BYTES)
 		return 'The font file must not exceed 10 MiB.';
-	if (!isFont && selectedFile.value.size > MAX_STILL_IMAGE_INGESTION_BYTES)
+	if (isVideo && selectedFile.value.size > MAX_SILENT_VIDEO_INGESTION_BYTES)
+		return 'The silent video file must not exceed 250 MiB.';
+	if (!isFont && !isVideo && selectedFile.value.size > MAX_STILL_IMAGE_INGESTION_BYTES)
 		return 'The image file must not exceed 25 MiB.';
 	return null;
 });
@@ -283,18 +289,21 @@ async function transferGraphicAsset(
 	operation: GraphicsIngestionOperation,
 	file: File,
 ) {
-	if (file.size > GRAPHICS_MULTIPART_PART_BYTES)
-		return await transferMultipartImage(operation, file);
-
-	const response = await observeOperationRequest(
-		operation.id,
-		fetch(`/api/graphics-assets/ingestion-operations/${operation.id}/content`, {
-			method: 'PUT',
-			headers: file.type ? { 'content-type': file.type } : undefined,
-			body: file,
-		}),
-	);
-	let completed = await operationFromResponse(response, 'Graphic Asset transfer');
+	let completed: GraphicsIngestionOperation;
+	if (file.size > GRAPHICS_MULTIPART_PART_BYTES) {
+		completed = await transferMultipartImage(operation, file);
+	}
+	else {
+		const response = await observeOperationRequest(
+			operation.id,
+			fetch(`/api/graphics-assets/ingestion-operations/${operation.id}/content`, {
+				method: 'PUT',
+				headers: file.type ? { 'content-type': file.type } : undefined,
+				body: file,
+			}),
+		);
+		completed = await operationFromResponse(response, 'Graphic Asset transfer');
+	}
 	if (
 		completed.stage === 'awaiting-confirmation'
 		&& completed.report?.outcome === 'accepted'
@@ -311,6 +320,31 @@ async function transferGraphicAsset(
 				{ method: 'POST', body: evidence },
 			),
 		);
+	}
+	if (
+		completed.stage === 'awaiting-confirmation'
+		&& completed.report?.outcome === 'accepted'
+		&& completed.report.facts.kind === 'silent-video'
+	) {
+		const { evidence, poster } = await verifySilentVideoBrowserPlayback(
+			file,
+			completed.report.facts,
+		);
+		const encodedEvidence = btoa(
+			String.fromCharCode(...new TextEncoder().encode(JSON.stringify(evidence))),
+		).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+		const response = await observeOperationRequest(
+			completed.id,
+			fetch(`/api/graphics-assets/ingestion-operations/${completed.id}/video-browser-evidence`, {
+				method: 'PUT',
+				headers: {
+					'content-type': 'image/png',
+					'x-stream-keepr-video-evidence': encodedEvidence,
+				},
+				body: poster,
+			}),
+		);
+		completed = await operationFromResponse(response, 'Silent video browser confirmation');
 	}
 	return completed;
 }
@@ -344,11 +378,11 @@ async function replaceAsset(asset: GraphicAsset) {
 	replacementError.value = null;
 	try {
 		const leadingBytes = new Uint8Array(await file.slice(0, 64).arrayBuffer());
-		const isFont = graphicAssetSourceKind({
+		const sourceKind = graphicAssetSourceKind({
 			sourceFileName: file.name,
 			declaredMime: file.type,
-		}, leadingBytes) === 'font';
-		const browserDecodeEvidence = isFont
+		}, leadingBytes);
+		const browserDecodeEvidence = sourceKind === 'font' || sourceKind === 'silent-video'
 			? undefined
 			: await verifyStillImageBrowserDecode(file);
 		const completed = await initiateAndTransferGraphicAsset(
@@ -517,11 +551,11 @@ async function uploadGraphicAsset() {
 	try {
 		const file = selectedFile.value;
 		const leadingBytes = new Uint8Array(await file.slice(0, 64).arrayBuffer());
-		const isFont = graphicAssetSourceKind({
+		const sourceKind = graphicAssetSourceKind({
 			sourceFileName: file.name,
 			declaredMime: file.type,
-		}, leadingBytes) === 'font';
-		const browserDecodeEvidence = isFont
+		}, leadingBytes);
+		const browserDecodeEvidence = sourceKind === 'font' || sourceKind === 'silent-video'
 			? undefined
 			: await verifyStillImageBrowserDecode(file);
 		const initiation = selectedInitiation(browserDecodeEvidence);
@@ -753,7 +787,7 @@ onMounted(async () => {
 							Upload one asset
 						</h2>
 						<p class="mt-1 text-sm text-muted">
-							The source is staged privately, validated unchanged, and published only when its thumbnail and catalogue facts are complete.
+							The source is staged privately, validated unchanged, and published only when its dependent preview and catalogue facts are complete.
 						</p>
 					</div>
 				</template>
@@ -762,15 +796,15 @@ onMounted(async () => {
 					<UFormField
 						name="asset"
 						label="Graphic Asset source"
-						description="One supported image (25 MiB) or static font (10 MiB)."
+						description="One supported image (25 MiB), silent video (250 MiB), or static font (10 MiB)."
 						required
 					>
 						<UFileUpload
 							v-model="selectedFile"
-							accept="image/png,image/jpeg,image/webp,font/woff2,font/woff,font/ttf,font/otf,.png,.jpg,.jpeg,.webp,.woff2,.woff,.ttf,.otf"
+							accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,font/woff2,font/woff,font/ttf,font/otf,.png,.jpg,.jpeg,.webp,.mp4,.webm,.woff2,.woff,.ttf,.otf"
 							variant="area"
 							icon="i-lucide-image-up"
-							label="Drop an image or static font here"
+							label="Drop an image, silent video, or static font here"
 							description="The exact source bytes are preserved."
 						/>
 					</UFormField>
@@ -959,6 +993,25 @@ onMounted(async () => {
 										{{ asset.facts.width }} × {{ asset.facts.height }}
 									</dd>
 								</div>
+								<div v-if="asset.facts.kind === 'silent-video'">
+									<dt class="text-xs text-dimmed">
+										Video
+									</dt>
+									<dd class="text-muted">
+										{{ asset.facts.width }} × {{ asset.facts.height }} · {{ asset.facts.durationSeconds.toFixed(2) }}s · {{ asset.facts.frameRate.toFixed(2) }} fps
+									</dd>
+								</div>
+								<div v-if="asset.facts.kind === 'silent-video'">
+									<dt class="text-xs text-dimmed">
+										Compatibility
+									</dt>
+									<dd class="text-muted">
+										{{ asset.facts.codec.toUpperCase() }} · 8-bit SDR 4:2:0
+										<template v-if="asset.facts.targetCompatibility === 'chromium-transparency'">
+											· VP9 alpha restricted to proven Chromium targets
+										</template>
+									</dd>
+								</div>
 								<div>
 									<dt class="text-xs text-dimmed">
 										Source
@@ -1135,7 +1188,7 @@ onMounted(async () => {
 						>
 							<UFileUpload
 								v-model="replacementFile"
-								accept="image/png,image/jpeg,image/webp,font/woff2,font/woff,font/ttf,font/otf,.png,.jpg,.jpeg,.webp,.woff2,.woff,.ttf,.otf"
+								accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,font/woff2,font/woff,font/ttf,font/otf,.png,.jpg,.jpeg,.webp,.mp4,.webm,.woff2,.woff,.ttf,.otf"
 								variant="area"
 							/>
 						</UFormField>

@@ -3,6 +3,7 @@ import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayWidgetRenderDescriptor } from '~/modules/feature-match-overlay/renderModel';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import { graphicAssetFontFaceFamily } from '~~/shared/featureMatchOverlayFonts';
+import { graphicsVideoTargetForUserAgent } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 import { resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
@@ -29,6 +30,14 @@ const fontAssetReferences = computed(() =>
 		.filter(item => item.kind === 'font')
 		.map(item => item.reference),
 );
+const videoTarget = computed(() => import.meta.client
+	? graphicsVideoTargetForUserAgent(navigator.userAgent)
+	: 'other');
+const videoCompatibilityBlocked = computed(() => videoTarget.value !== 'chromium'
+	&& indexedGraphicAssetReferences.value.some(reference =>
+		reference.kind === 'silent-video'
+		&& reference.videoCompatibility === 'chromium-transparency',
+	));
 const {
 	contentUrl: graphicAssetContentUrl,
 	contentUrlsSettled,
@@ -217,7 +226,7 @@ onBeforeUnmount(() => {
 		class="feature-match-overlay"
 		:class="`feature-match-overlay--${resolvedOutput}`"
 		:style="{ ...canvasStyle, visibility: fontReady ? undefined : 'hidden' }"
-		:data-export-ready="(!loading && !error && fontReady && !fontError).toString()"
+		:data-export-ready="(!loading && !error && fontReady && !fontError && !videoCompatibilityBlocked).toString()"
 		:data-font-ready="fontReady.toString()"
 		:data-font-error="fontError.toString()"
 	>

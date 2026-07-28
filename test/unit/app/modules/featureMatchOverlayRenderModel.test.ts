@@ -459,6 +459,53 @@ describe('feature Match Overlay render model', () => {
 			expect(child.render.displayTime).toBe('09:41');
 	});
 
+	it('renders an exact silent-video revision as muted inline looping media', () => {
+		const base = config();
+		base.layout.items = [{
+			id: 'video-item',
+			type: 'widget',
+			label: 'Motion ident',
+			visible: true,
+			x: 0,
+			y: 0,
+			width: 640,
+			height: 360,
+			widget: {
+				type: 'image',
+				mediaKind: 'silent-video',
+				asset: { assetId: 'video-asset', revisionId: 'video-revision-3' },
+				fit: 'cover',
+				opacity: 0.8,
+				borderRadius: 12,
+				loop: true,
+				playbackRate: 1.25,
+				videoCompatibility: 'all-supported',
+			},
+		}];
+
+		const model = resolveFeatureMatchOverlayRenderModel({
+			config: base,
+			output: 'overlay',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+			displayTime: '',
+		});
+		const render = model.widgetItems[0]!.render;
+
+		expect(render).toMatchObject({
+			type: 'silent-video',
+			src: '/api/graphics-assets/video-asset/revisions/video-revision-3/content',
+			loop: true,
+			playbackRate: 1.25,
+			videoCompatibility: 'all-supported',
+			mediaStyle: {
+				objectFit: 'cover',
+				opacity: 0.8,
+				borderRadius: '12px',
+			},
+		});
+	});
+
 	it('emits pre-layered Widget Group styles: positional shell, backdrop, children, frame', () => {
 		const base = config();
 		base.layout.items = [

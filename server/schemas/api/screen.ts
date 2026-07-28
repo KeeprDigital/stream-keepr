@@ -419,9 +419,13 @@ const featureMatchTextWidgetConfigSchema = z.object({
 const featureMatchImageWidgetConfigSchema = z.object({
 	type: z.literal('image'),
 	asset: graphicAssetReferenceSchema.optional(),
+	mediaKind: z.enum(['image', 'silent-video']).optional(),
 	fit: z.enum(['contain', 'cover', 'fill']),
 	opacity: opacitySchema,
 	borderRadius: nonNegativePixelSchema,
+	loop: z.boolean().optional(),
+	playbackRate: finiteNumberSchema.min(0.25).max(4).optional(),
+	videoCompatibility: z.enum(['all-supported', 'chromium-transparency']).optional(),
 }).strict();
 
 const featureMatchClockWidgetConfigSchema = z.object({

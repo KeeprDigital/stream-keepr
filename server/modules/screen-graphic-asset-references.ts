@@ -91,14 +91,27 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 			SELECT 1
 			FROM graphic_asset_revisions revision
 			JOIN graphic_assets asset ON asset.id = revision.asset_id
-			WHERE revision.id = ? AND revision.asset_id = ?
-				AND (asset.lifecycle_state = 'active' OR ? = 1)
-		)
-	`).join('');
-	const referencePreconditionBindings = indexedReferences.flatMap(({ reference, allowRetired }) => [
+				WHERE revision.id = ? AND revision.asset_id = ?
+					AND (asset.lifecycle_state = 'active' OR ? = 1)
+					AND asset.kind = ?
+					AND (
+						? != 'silent-video'
+						OR json_extract(revision.technical_facts, '$.targetCompatibility') = ?
+					)
+			)
+		`).join('');
+	const referencePreconditionBindings = indexedReferences.flatMap(({
+		reference,
+		allowRetired,
+		kind,
+		videoCompatibility,
+	}) => [
 		reference.revisionId,
 		reference.assetId,
 		allowRetired ? 1 : 0,
+		kind,
+		kind,
+		videoCompatibility ?? null,
 	]);
 	const client = db.$client;
 	const statements: D1PreparedStatement[] = [
@@ -126,7 +139,13 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 						AND graphic_asset_reference_version = ?
 				)
 		`).bind(String(input.id), input.id, input.eventId, referenceVersion),
-		...indexedReferences.map(({ reference, ownerSlot, allowRetired }) => client.prepare(`
+		...indexedReferences.map(({
+			reference,
+			ownerSlot,
+			allowRetired,
+			kind,
+			videoCompatibility,
+		}) => client.prepare(`
 			INSERT INTO graphic_asset_references (
 				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
 				event_id, created_at, updated_at
@@ -134,9 +153,14 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 			SELECT ?, ?, ?, 'screen', ?, ?, ?, ?, ?
 			FROM graphic_asset_revisions revision
 			JOIN graphic_assets asset ON asset.id = revision.asset_id
-			WHERE revision.id = ? AND revision.asset_id = ?
-				AND (asset.lifecycle_state = 'active' OR ? = 1)
-				AND EXISTS (
+				WHERE revision.id = ? AND revision.asset_id = ?
+					AND (asset.lifecycle_state = 'active' OR ? = 1)
+					AND asset.kind = ?
+					AND (
+						? != 'silent-video'
+						OR json_extract(revision.technical_facts, '$.targetCompatibility') = ?
+					)
+					AND EXISTS (
 					SELECT 1 FROM screens
 					WHERE id = ? AND event_id = ?
 						AND graphic_asset_reference_version = ?
@@ -153,6 +177,9 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 			reference.revisionId,
 			reference.assetId,
 			allowRetired ? 1 : 0,
+			kind,
+			kind,
+			videoCompatibility ?? null,
 			input.id,
 			input.eventId,
 			referenceVersion,

@@ -86,6 +86,14 @@ export interface FeatureMatchOverlaySourceItemRenderModel {
 export type FeatureMatchOverlayWidgetRender
 	= | { type: 'text'; lines: ReturnType<typeof renderFeatureMatchOverlayTemplateLines>; deckColors: string }
 		| { type: 'image'; src: string; alt: string; imageStyle: CSSProperties }
+		| {
+			type: 'silent-video';
+			src: string;
+			loop: boolean;
+			playbackRate: number;
+			videoCompatibility: 'all-supported' | 'chromium-transparency';
+			mediaStyle: CSSProperties;
+		}
 		| { type: 'clock'; displayTime: string }
 		| {
 			type: 'player-life';
@@ -556,6 +564,16 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 					deckColors: deckColors(widget.playerSide ?? 'player1'),
 				};
 			case 'image':
+				if (widget.mediaKind === 'silent-video') {
+					return {
+						type: 'silent-video',
+						src: widget.asset ? resolveGraphicAssetContentPath(widget.asset) : '',
+						loop: widget.loop ?? true,
+						playbackRate: widget.playbackRate ?? 1,
+						videoCompatibility: widget.videoCompatibility ?? 'all-supported',
+						mediaStyle: imageStyleFor({ x: 0, y: 0, width: rect.width, height: rect.height }, widget),
+					};
+				}
 				return {
 					type: 'image',
 					src: widget.asset ? resolveGraphicAssetContentPath(widget.asset) : '',

@@ -20,12 +20,20 @@ const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 	'base64',
 ));
+const sixteenPixelPosterPng = Uint8Array.from(Buffer.from(
+	'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAABAAAAAQBPJcTWAAAAHUlEQVR4nGP8x8Dwn4ECwEKJ5lEDRg0YNWAwGQAAkU4CO63xbeIAAAAASUVORK5CYII=',
+	'base64',
+));
 const jpegPixel = Uint8Array.from(Buffer.from(
 	'/9j/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJtAEx7/2Q==',
 	'base64',
 ));
 const webpPixel = Uint8Array.from(Buffer.from(
 	'UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAEAdQlFKUp4CBiOh/AAA=',
+	'base64',
+));
+const vp9Webm = Uint8Array.from(Buffer.from(
+	'GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAIMEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggElTbuMU6uEHFO7a1OsggH27AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjIuMTIuMTAyV0GNTGF2ZjYyLjEyLjEwMkSJiECPQAAAAAAAFlSua8iuAQAAAAAAAD/XgQFzxYhkRqj8GKbqBJyBACK1nIN1bmSIgQCGhVZfVlA5g4EBI+ODhB3NZQDgkLCBELqBEJqBAlWwhFW5gQESVMNnQIBzc6BjwIBnyJpFo4dFTkNPREVSRIeNTGF2ZjYyLjEyLjEwMnNz2mPAi2PFiGRGqPwYpuoEZ8ilRaOHRU5DT0RFUkSHmExhdmM2Mi4yOC4xMDIgbGlidnB4LXZwOWfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAB9DtnXG54EAo6yBAACAgkmDQgAA8AD2ADgkHBhCAAAwcAAASqf/+5CBv///CAg////7iYcAAKOTgQH0AIYAQJKcAElAAAMgAABCQBxTu2uRu4+zgQC3iveBAfGCAavwgQM=',
 	'base64',
 ));
 
@@ -104,14 +112,16 @@ function createLibrary(
 					: transparentPixelPng;
 			return await libraryDelegate.initiateGraphicsIngestion({
 				...input,
-				browserDecodeEvidence: Object.hasOwn(input, 'browserDecodeEvidence')
+				browserDecodeEvidence: input.declaredMime?.startsWith('video/')
 					? input.browserDecodeEvidence
-					: {
-							outcome: 'decoded',
-							sourceDigest: sourceDigest(fixture),
-							width: 1,
-							height: 1,
-						},
+					: Object.hasOwn(input, 'browserDecodeEvidence')
+						? input.browserDecodeEvidence
+						: {
+								outcome: 'decoded',
+								sourceDigest: sourceDigest(fixture),
+								width: 1,
+								height: 1,
+							},
 			});
 		},
 	};
@@ -1287,5 +1297,120 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			stage: 'validating',
 			updatedAt: '2026-07-27T04:01:01.000Z',
 		}, transferring.updatedAt)).rejects.toThrow('lost its claim');
+	});
+});
+
+describe('silent-video ingestion through the Graphics Asset Library public module', () => {
+	it('publishes only after exact browser playback, seek, and deterministic poster evidence', async () => {
+		const { library } = createLibrary();
+		const initiated = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'vp9-video',
+			initiatedBy: 'graphics-author-1',
+			name: 'VP9 Ident',
+			sourceFileName: 'ident.webm',
+			declaredMime: 'video/webm',
+			declaredByteLength: vp9Webm.byteLength,
+		});
+
+		const inspected = await library.uploadGraphicAsset({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+			declaredMime: 'video/webm',
+			bytes: createBoundedByteStream(vp9Webm, {
+				byteLength: vp9Webm.byteLength,
+				maximumByteLength: 250 * 1024 * 1024,
+			}),
+		});
+		expect(inspected).toMatchObject({
+			stage: 'awaiting-confirmation',
+			report: {
+				outcome: 'accepted',
+				facts: {
+					kind: 'silent-video',
+					posterTimeSeconds: 0.1,
+				},
+			},
+		});
+		await expect(library.listGraphicAssets({})).resolves.toEqual([]);
+
+		const completed = await library.confirmSilentVideoBrowserEvidence({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+			evidence: {
+				outcome: 'video-played',
+				sourceDigest: sourceDigest(vp9Webm),
+				width: 16,
+				height: 16,
+				durationSeconds: 1,
+				posterTimeSeconds: 0.1,
+				posterDigest: sourceDigest(sixteenPixelPosterPng),
+				browserFamily: 'chromium',
+				transparencyRendered: false,
+			},
+			poster: createBoundedByteStream(sixteenPixelPosterPng, {
+				byteLength: sixteenPixelPosterPng.byteLength,
+				maximumByteLength: 1024 * 1024,
+			}),
+		});
+
+		expect(completed).toMatchObject({
+			stage: 'completed',
+			report: {
+				outcome: 'accepted',
+				facts: {
+					kind: 'silent-video',
+					browserPlayable: true,
+				},
+			},
+			result: { outcome: 'published' },
+		});
+		await expect(library.resolveGraphicAssetThumbnail({
+			assetId: completed.result!.assetId,
+		})).resolves.toMatchObject({
+			outcome: 'available',
+			contentType: 'image/png',
+		});
+	});
+
+	it('rejects a revision when representative muted playback or seeking fails', async () => {
+		const { library } = createLibrary();
+		const initiated = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'vp9-video-rejected',
+			initiatedBy: 'graphics-author-1',
+			name: 'Unplayable VP9',
+			sourceFileName: 'unplayable.webm',
+			declaredMime: 'video/webm',
+			declaredByteLength: vp9Webm.byteLength,
+		});
+		await library.uploadGraphicAsset({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+			declaredMime: 'video/webm',
+			bytes: createBoundedByteStream(vp9Webm, {
+				byteLength: vp9Webm.byteLength,
+				maximumByteLength: 250 * 1024 * 1024,
+			}),
+		});
+
+		const failed = await library.confirmSilentVideoBrowserEvidence({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+			evidence: {
+				outcome: 'video-rejected',
+				sourceDigest: sourceDigest(vp9Webm),
+				browserFamily: 'chromium',
+				stage: 'seek',
+			},
+		});
+
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			report: {
+				outcome: 'rejected',
+				issues: [{ code: 'browser-video-playback-failed' }],
+			},
+			failure: { code: 'validation-failed', retryable: false },
+		});
+		await expect(library.listGraphicAssets({})).resolves.toEqual([]);
 	});
 });

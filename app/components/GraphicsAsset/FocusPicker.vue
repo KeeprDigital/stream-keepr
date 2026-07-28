@@ -4,6 +4,10 @@ import type {
 	GraphicAssetReference,
 	GraphicAssetReferenceStatus,
 } from '~~/shared/types/graphicsAsset';
+import {
+	graphicAssetTargetCompatibility,
+	graphicsVideoTargetForUserAgent,
+} from '~~/shared/utils/graphicAssetTargetCompatibility';
 import { graphicAssetRevisionStatusPath } from '~~/shared/utils/graphicsAssetReferences';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
@@ -11,13 +15,14 @@ const props = withDefaults(defineProps<{
 	modelValue?: GraphicAssetReference;
 	eventId: number;
 	fieldLabel: string;
-	assetKind?: GraphicAsset['kind'];
+	assetKind?: GraphicAsset['kind'] | GraphicAsset['kind'][];
 }>(), {
 	assetKind: 'image',
 });
 
 const emit = defineEmits<{
 	'update:modelValue': [reference: GraphicAssetReference | undefined];
+	'select': [asset: GraphicAsset];
 }>();
 
 const open = ref(false);
@@ -38,15 +43,27 @@ const {
 	default: () => [],
 });
 
+const acceptedKinds = computed<GraphicAsset['kind'][]>(
+	() => Array.isArray(props.assetKind) ? props.assetKind : [props.assetKind],
+);
 const visibleAssets = computed(() => (assets.value ?? []).filter(asset =>
-	asset.kind === props.assetKind
+	acceptedKinds.value.includes(asset.kind)
 	&& (!thisEventOnly.value || asset.eventIds.includes(props.eventId)),
 ));
 const selectedAsset = computed(() => (assets.value ?? []).find(asset =>
-	asset.kind === props.assetKind
+	acceptedKinds.value.includes(asset.kind)
 	&& asset.id === props.modelValue?.assetId
 	&& asset.revisionId === props.modelValue?.revisionId,
 ));
+const targetBrowser = computed(() =>
+	import.meta.client
+		? graphicsVideoTargetForUserAgent(navigator.userAgent)
+		: 'other',
+);
+
+function assetCompatibility(asset: GraphicAsset) {
+	return graphicAssetTargetCompatibility(asset.facts, targetBrowser.value);
+}
 
 watch(() => ({
 	reference: props.modelValue,
@@ -71,10 +88,13 @@ watch(() => ({
 }, { immediate: true });
 
 function selectAsset(asset: GraphicAsset) {
+	if (assetCompatibility(asset).outcome === 'blocked')
+		return;
 	emit('update:modelValue', {
 		assetId: asset.id,
 		revisionId: asset.revisionId,
 	});
+	emit('select', asset);
 	open.value = false;
 }
 </script>
@@ -218,6 +238,9 @@ function selectAsset(asset: GraphicAsset) {
 									<template v-if="asset.facts.kind === 'image'">
 										· {{ asset.facts.width }} × {{ asset.facts.height }}
 									</template>
+									<template v-else-if="asset.facts.kind === 'silent-video'">
+										· {{ asset.facts.width }} × {{ asset.facts.height }} · {{ asset.facts.durationSeconds.toFixed(2) }}s
+									</template>
 									<template v-else>
 										· {{ asset.facts.family }} {{ asset.facts.subfamily }}
 									</template>
@@ -228,6 +251,14 @@ function selectAsset(asset: GraphicAsset) {
 									</UBadge>
 									<UBadge v-if="asset.facts.kind === 'image' && asset.facts.hasAlpha" size="xs" variant="soft">
 										Alpha
+									</UBadge>
+									<UBadge
+										v-if="asset.facts.kind === 'silent-video' && asset.facts.hasAlpha"
+										size="xs"
+										:color="assetCompatibility(asset).outcome === 'blocked' ? 'error' : 'warning'"
+										variant="soft"
+									>
+										VP9 alpha · Chromium only
 									</UBadge>
 									<UBadge
 										v-if="asset.eventIds.includes(eventId)"
@@ -242,9 +273,10 @@ function selectAsset(asset: GraphicAsset) {
 							<UButton
 								:data-testid="`select-${asset.id}`"
 								class="mt-auto"
+								:disabled="assetCompatibility(asset).outcome === 'blocked'"
 								@click="selectAsset(asset)"
 							>
-								Select revision {{ asset.revisionNumber }}
+								{{ assetCompatibility(asset).outcome === 'blocked' ? 'Blocked for Safari target' : `Select revision ${asset.revisionNumber}` }}
 							</UButton>
 						</article>
 						<p v-if="visibleAssets.length === 0" class="text-sm text-muted sm:col-span-2 lg:col-span-3">

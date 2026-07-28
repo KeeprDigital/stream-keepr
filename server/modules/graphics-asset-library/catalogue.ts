@@ -1019,11 +1019,12 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					INSERT INTO graphics_derivatives (
 						id, source_revision_id, kind, content_digest, created_at
 					)
-					SELECT ?, revision.id, 'thumbnail', ?, ?
+					SELECT ?, revision.id, ?, ?, ?
 					FROM graphic_asset_revisions revision
 					WHERE revision.id = ?
 				`).bind(
 					input.derivativeId,
+					input.report.facts.kind === 'silent-video' ? 'video-poster' : 'thumbnail',
 					input.thumbnailDigest,
 					publishedAt,
 					input.revisionId,
@@ -1201,7 +1202,11 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				`).bind(
 					input.derivativeId,
 					input.revisionId,
-					input.report.facts.kind === 'font' ? 'font-specimen' : 'thumbnail',
+					input.report.facts.kind === 'font'
+						? 'font-specimen'
+						: input.report.facts.kind === 'silent-video'
+							? 'video-poster'
+							: 'thumbnail',
 					input.thumbnailDigest,
 					new Date(input.publishedAt).getTime(),
 				),
@@ -1390,7 +1395,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				JOIN graphic_asset_revisions r ON r.id = d.source_revision_id
 				JOIN graphic_assets a ON a.id = r.asset_id
 				WHERE a.id = ? AND a.lifecycle_state = 'active'
-					AND d.kind IN ('thumbnail', 'font-specimen')
+					AND d.kind IN ('thumbnail', 'video-poster', 'font-specimen')
 				ORDER BY r.revision_number DESC
 				LIMIT 1
 			`).bind(assetId).first<{ content_digest: string }>();

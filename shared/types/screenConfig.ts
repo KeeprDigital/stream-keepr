@@ -364,9 +364,13 @@ export interface FeatureMatchTextWidgetConfig {
 export interface FeatureMatchImageWidgetConfig {
 	type: 'image';
 	asset?: GraphicAssetReference;
+	mediaKind?: 'image' | 'silent-video';
 	fit: 'contain' | 'cover' | 'fill';
 	opacity: number;
 	borderRadius: number;
+	loop?: boolean;
+	playbackRate?: number;
+	videoCompatibility?: 'all-supported' | 'chromium-transparency';
 }
 
 export interface FeatureMatchClockWidgetConfig {

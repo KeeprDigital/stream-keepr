@@ -8,7 +8,8 @@ import type {
 export interface ScreenGraphicAssetReference {
 	reference: GraphicAssetReference;
 	ownerSlot: string;
-	kind: 'image' | 'font';
+	kind: 'image' | 'silent-video' | 'font';
+	videoCompatibility?: 'all-supported' | 'chromium-transparency';
 }
 
 export function sameGraphicAssetReference(
@@ -24,7 +25,12 @@ function widgetReference(
 	ownerSlot: string,
 ): ScreenGraphicAssetReference | undefined {
 	return widget.type === 'image' && widget.asset
-		? { reference: widget.asset, ownerSlot, kind: 'image' }
+		? {
+				reference: widget.asset,
+				ownerSlot,
+				kind: widget.mediaKind ?? 'image',
+				videoCompatibility: widget.videoCompatibility,
+			}
 		: undefined;
 }
 

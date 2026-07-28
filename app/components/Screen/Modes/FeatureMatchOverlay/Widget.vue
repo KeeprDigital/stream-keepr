@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayWidgetRender } from '~/modules/feature-match-overlay/renderModel';
+import { graphicsVideoTargetForUserAgent } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import FeatureMatchOverlayGameWinsWidget from './GameWinsWidget.vue';
 import FeatureMatchOverlayStatusWidget from './StatusWidget.vue';
 import FeatureMatchOverlayTemplateLines from './TemplateLines.vue';
@@ -9,6 +10,18 @@ const props = defineProps<{
 	render: FeatureMatchOverlayWidgetRender;
 	output: FeatureMatchOverlayOutput;
 }>();
+const videoElement = useTemplateRef<HTMLVideoElement>('videoElement');
+const videoTarget = computed(() => import.meta.client
+	? graphicsVideoTargetForUserAgent(navigator.userAgent)
+	: 'other');
+const videoBlocked = computed(() => props.render.type === 'silent-video'
+	&& props.render.videoCompatibility === 'chromium-transparency'
+	&& videoTarget.value !== 'chromium');
+
+watchEffect(() => {
+	if (videoElement.value && props.render.type === 'silent-video')
+		videoElement.value.playbackRate = props.render.playbackRate;
+});
 
 // Template-narrowing does not flow into the closure prop, so resolve here.
 function gameWinBoxStyle(won: boolean) {
@@ -31,6 +44,21 @@ function gameWinBoxStyle(won: boolean) {
 		:alt="render.alt"
 		:style="render.imageStyle"
 	>
+	<video
+		v-else-if="render.type === 'silent-video' && !videoBlocked"
+		ref="videoElement"
+		:src="render.src"
+		:style="render.mediaStyle"
+		:loop="render.loop"
+		autoplay
+		muted
+		playsinline
+		preload="auto"
+	/>
+	<span
+		v-else-if="render.type === 'silent-video'"
+		data-video-compatibility-blocked="vp9-alpha-chromium-required"
+	/>
 	<span v-else-if="render.type === 'clock'">{{ render.displayTime }}</span>
 	<FeatureMatchOverlayStatusWidget
 		v-else-if="render.type === 'player-life'"

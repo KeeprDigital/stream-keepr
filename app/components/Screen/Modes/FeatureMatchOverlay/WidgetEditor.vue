@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import type {
+	GraphicAsset,
+} from '~~/shared/types/graphicsAsset';
+import type {
 	FeatureMatchGameWinsBoxOrientation,
 	FeatureMatchGameWinsDisplayMode,
 	FeatureMatchOverlayBoxStyle,
@@ -62,6 +65,25 @@ function tokenLabel(token: string) {
 
 function patch(updates: Partial<FeatureMatchWidgetConfig>) {
 	emit('update', { ...props.widget, ...updates } as FeatureMatchWidgetConfig);
+}
+
+function selectMediaAsset(asset: GraphicAsset) {
+	if (props.widget.type !== 'image')
+		return;
+	patch({
+		mediaKind: asset.kind === 'silent-video' ? 'silent-video' : 'image',
+		...(asset.facts.kind === 'silent-video'
+			? {
+					videoCompatibility: asset.facts.targetCompatibility,
+					loop: props.widget.loop ?? true,
+					playbackRate: props.widget.playbackRate ?? 1,
+				}
+			: {
+					videoCompatibility: undefined,
+					loop: undefined,
+					playbackRate: undefined,
+				}),
+	});
 }
 
 function appendToken(token: string) {
@@ -169,12 +191,14 @@ function updateTokenStyle(token: string, updates: Partial<FeatureMatchOverlayBox
 		</template>
 
 		<div v-else-if="widget.type === 'image'" class="grid gap-3 md:grid-cols-2">
-			<UFormField label="Image" class="md:col-span-2">
+			<UFormField label="Media" class="md:col-span-2">
 				<GraphicsAssetFocusPicker
 					:model-value="widget.asset"
 					:event-id="eventId"
-					field-label="Image Graphic Item"
+					field-label="Media Graphic Item"
+					:asset-kind="['image', 'silent-video']"
 					@update:model-value="patch({ asset: $event } as Partial<FeatureMatchWidgetConfig>)"
+					@select="selectMediaAsset"
 				/>
 			</UFormField>
 			<UFormField label="Fit">
@@ -207,6 +231,22 @@ function updateTokenStyle(token: string, updates: Partial<FeatureMatchOverlayBox
 					@update:model-value="patch({ borderRadius: Number($event) } as Partial<FeatureMatchWidgetConfig>)"
 				/>
 			</UFormField>
+			<template v-if="widget.mediaKind === 'silent-video'">
+				<UFormField label="Playback rate">
+					<UInputNumber
+						:model-value="widget.playbackRate ?? 1"
+						:min="0.25"
+						:max="4"
+						:step="0.05"
+						@update:model-value="patch({ playbackRate: Number($event) } as Partial<FeatureMatchWidgetConfig>)"
+					/>
+				</UFormField>
+				<ScreenSettingsToggle
+					label="Loop"
+					:model-value="widget.loop ?? true"
+					@update:model-value="patch({ loop: $event } as Partial<FeatureMatchWidgetConfig>)"
+				/>
+			</template>
 		</div>
 
 		<p v-else-if="widget.type === 'clock'" class="text-sm text-muted">

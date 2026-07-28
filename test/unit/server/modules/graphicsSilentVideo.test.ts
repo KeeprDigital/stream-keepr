@@ -1,0 +1,187 @@
+import type { GraphicAssetValidationError } from '~~/server/modules/graphics-asset-library/validation';
+import { Buffer } from 'node:buffer';
+import { describe, expect, it } from 'vitest';
+import { processSilentVideo } from '~~/server/modules/graphics-asset-library/silent-video';
+
+const vp9Webm = Uint8Array.from(Buffer.from(
+	'GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAIMEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggElTbuMU6uEHFO7a1OsggH27AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjIuMTIuMTAyV0GNTGF2ZjYyLjEyLjEwMkSJiECPQAAAAAAAFlSua8iuAQAAAAAAAD/XgQFzxYhkRqj8GKbqBJyBACK1nIN1bmSIgQCGhVZfVlA5g4EBI+ODhB3NZQDgkLCBELqBEJqBAlWwhFW5gQESVMNnQIBzc6BjwIBnyJpFo4dFTkNPREVSRIeNTGF2ZjYyLjEyLjEwMnNz2mPAi2PFiGRGqPwYpuoEZ8ilRaOHRU5DT0RFUkSHmExhdmM2Mi4yOC4xMDIgbGlidnB4LXZwOWfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAB9DtnXG54EAo6yBAACAgkmDQgAA8AD2ADgkHBhCAAAwcAAASqf/+5CBv///CAg////7iYcAAKOTgQH0AIYAQJKcAElAAAMgAABCQBxTu2uRu4+zgQC3iveBAfGCAavwgQM=',
+	'base64',
+));
+const h264Mp4 = Uint8Array.from(Buffer.from(
+	'AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMNbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAA+gAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAjd0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAA+gAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAABAAAAAQAAAAAAHTbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAQABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABfm1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAT5zdGJsAAAAvnN0c2QAAAAAAAAAAQAAAK5hdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAABAAEABIAAAASAAAAAAAAAABFUxhdmM2Mi4yOC4xMDIgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAANGF2Y0MBZAAK/+EAF2dkAAqs2V7ARAAAAwAEAAADABA8SJZYAQAGaOvjyyLA/fj4AAAAABBwYXNwAAAAAQAAAAEAAAAUYnRydAAAAAAAABa4AAAAAAAAABhzdHRzAAAAAAAAAAEAAAACAAAgAAAAABRzdHNzAAAAAAAAAAEAAAABAAAAHHN0c2MAAAAAAAAAAQAAAAEAAAACAAAAAQAAABxzdHN6AAAAAAAAAAAAAAACAAACywAAAAwAAAAUc3RjbwAAAAAAAAABAAADPQAAAGJ1ZHRhAAAAWm1ldGEAAAAAAAAAIWhkbHIAAAAAAAAAAG1kaXJhcHBsAAAAAAAAAAAAAAAALWlsc3QAAAAlqXRvbwAAAB1kYXRhAAAAAQAAAABMYXZmNjIuMTIuMTAyAAAACGZyZWUAAALfbWRhdAAAAq0GBf//qdxF6b3m2Ui3lizYINkj7u94MjY0IC0gY29yZSAxNjUgcjMyMjIgYjM1NjA1YSAtIEguMjY0L01QRUctNCBBVkMgY29kZWMgLSBDb3B5bGVmdCAyMDAzLTIwMjUgLSBodHRwOi8vd3d3LnZpZGVvbGFuLm9yZy94MjY0Lmh0bWwgLSBvcHRpb25zOiBjYWJhYz0xIHJlZj0zIGRlYmxvY2s9MTowOjAgYW5hbHlzZT0weDM6MHgxMTMgbWU9aGV4IHN1Ym1lPTcgcHN5PTEgcHN5X3JkPTEuMDA6MC4wMCBtaXhlZF9yZWY9MSBtZV9yYW5nZT0xNiBjaHJvbWFfbWU9MSB0cmVsbGlzPTEgOHg4ZGN0PTEgY3FtPTAgZGVhZHpvbmU9MjEsMTEgZmFzdF9wc2tpcD0xIGNocm9tYV9xcF9vZmZzZXQ9LTIgdGhyZWFkcz0xIGxvb2thaGVhZF90aHJlYWRzPTEgc2xpY2VkX3RocmVhZHM9MCBucj0wIGRlY2ltYXRlPTEgaW50ZXJsYWNlZD0wIGJsdXJheV9jb21wYXQ9MCBjb25zdHJhaW5lZF9pbnRyYT0wIGJmcmFtZXM9MyBiX3B5cmFtaWQ9MiBiX2FkYXB0PTEgYl9iaWFzPTAgZGlyZWN0PTEgd2VpZ2h0Yj0xIG9wZW5fZ29wPTAgd2VpZ2h0cD0yIGtleWludD0yNTAga2V5aW50X21pbj0yIHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9NDAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAAAFmWIhAAU//7s2n4FNj3X58U0N7WUtoEAAAAIQZohbEEv/uA=',
+	'base64',
+));
+
+function topLevelMp4Boxes(bytes: Uint8Array) {
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const boxes: { type: string; bytes: Uint8Array }[] = [];
+	for (let offset = 0; offset < bytes.byteLength;) {
+		const size = view.getUint32(offset);
+		const type = new TextDecoder().decode(bytes.subarray(offset + 4, offset + 8));
+		boxes.push({ type, bytes: bytes.subarray(offset, offset + size) });
+		offset += size;
+	}
+	return boxes;
+}
+
+function concatenate(parts: readonly Uint8Array[]) {
+	const result = new Uint8Array(parts.reduce((total, part) => total + part.byteLength, 0));
+	let offset = 0;
+	for (const part of parts) {
+		result.set(part, offset);
+		offset += part.byteLength;
+	}
+	return result;
+}
+
+function isoBox(type: string, payload = new Uint8Array()) {
+	const bytes = new Uint8Array(8 + payload.byteLength);
+	const view = new DataView(bytes.buffer);
+	view.setUint32(0, bytes.byteLength);
+	bytes.set(new TextEncoder().encode(type), 4);
+	bytes.set(payload, 8);
+	return bytes;
+}
+
+function replaceAscii(bytes: Uint8Array, from: string, to: string) {
+	const result = bytes.slice();
+	const needle = new TextEncoder().encode(from);
+	const replacement = new TextEncoder().encode(to);
+	expect(replacement.byteLength).toBe(needle.byteLength);
+	let replacements = 0;
+	for (let offset = 0; offset <= result.byteLength - needle.byteLength; offset++) {
+		if (!needle.every((byte, byteIndex) => result[offset + byteIndex] === byte))
+			continue;
+		result.set(replacement, offset);
+		replacements++;
+	}
+	expect(replacements).toBeGreaterThan(0);
+	return result;
+}
+
+function asciiOffset(bytes: Uint8Array, value: string) {
+	const needle = new TextEncoder().encode(value);
+	const offset = bytes.findIndex((_, candidate) =>
+		needle.every((byte, index) => bytes[candidate + index] === byte),
+	);
+	expect(offset).toBeGreaterThanOrEqual(0);
+	return offset;
+}
+
+async function expectIssue(
+	work: Promise<unknown>,
+	code: GraphicAssetValidationError['issue']['code'],
+) {
+	await expect(work).rejects.toMatchObject({
+		issue: { code },
+	});
+}
+
+describe('silent-video bounded inspection', () => {
+	it('accepts a fast-start silent H.264 MP4 with authoritative media facts', async () => {
+		const processed = await processSilentVideo(h264Mp4, {
+			sourceFileName: 'loop.mp4',
+			declaredMime: 'video/mp4',
+		});
+
+		expect(processed.report).toMatchObject({
+			outcome: 'accepted',
+			compatibilityProfile: 'silent-video-v1',
+			facts: {
+				kind: 'silent-video',
+				format: 'mp4',
+				codec: 'h264',
+				canonicalMime: 'video/mp4',
+				width: 16,
+				height: 16,
+				frameCount: 2,
+				bitDepth: 8,
+				colorSpace: 'sdr',
+				chromaSubsampling: '4:2:0',
+				hasAlpha: false,
+				fastStart: true,
+				seekable: true,
+				targetCompatibility: 'all-supported',
+			},
+		});
+		expect(processed.report.facts.durationSeconds).toBeCloseTo(1, 3);
+		expect(processed.report.facts.frameRate).toBeCloseTo(2, 2);
+		expect(processed.report.facts.posterTimeSeconds).toBeCloseTo(0.1, 3);
+	});
+
+	it('accepts a seekable VP9 WebM and selects ten-percent duration for its poster', async () => {
+		const processed = await processSilentVideo(vp9Webm, {
+			sourceFileName: 'ident.webm',
+			declaredMime: 'video/webm',
+		});
+
+		expect(processed.report).toMatchObject({
+			outcome: 'accepted',
+			facts: {
+				format: 'webm',
+				codec: 'vp9',
+				width: 16,
+				height: 16,
+				frameCount: 2,
+				hasAlpha: false,
+				fastStart: null,
+				seekable: true,
+				targetCompatibility: 'all-supported',
+			},
+		});
+		expect(processed.report.facts.durationSeconds).toBeCloseTo(1, 5);
+		expect(processed.report.facts.frameRate).toBeCloseTo(2, 5);
+		expect(processed.report.facts.posterTimeSeconds).toBeCloseTo(0.1, 5);
+	});
+
+	it('rejects MP4 without fast-start ordering', async () => {
+		const boxes = topLevelMp4Boxes(h264Mp4);
+		const reordered = concatenate([
+			...boxes.filter(box => box.type === 'ftyp').map(box => box.bytes),
+			...boxes.filter(box => box.type === 'mdat').map(box => box.bytes),
+			...boxes.filter(box => box.type !== 'ftyp' && box.type !== 'mdat').map(box => box.bytes),
+		]);
+
+		await expectIssue(processSilentVideo(reordered), 'mp4-fast-start-required');
+	});
+
+	it('rejects conflicting declarations and incomplete WebM indexes', async () => {
+		await expectIssue(processSilentVideo(vp9Webm, {
+			sourceFileName: 'wrong.mp4',
+			declaredMime: 'video/webm',
+		}), 'conflicting-video-extension');
+		await expectIssue(
+			processSilentVideo(vp9Webm.subarray(0, vp9Webm.byteLength - 12)),
+			'video-index-incomplete',
+		);
+	});
+
+	it('rejects unsupported codecs even when their containers remain structurally valid', async () => {
+		await expectIssue(
+			processSilentVideo(replaceAscii(h264Mp4, 'avc1', 'mp4v')),
+			'unsupported-video-codec',
+		);
+		await expectIssue(
+			processSilentVideo(replaceAscii(vp9Webm, 'V_VP9', 'V_VP8')),
+			'unsupported-video-codec',
+		);
+	});
+
+	it('classifies undersized nested MP4 structures as malformed video', async () => {
+		const malformed = concatenate([
+			isoBox('ftyp'),
+			isoBox('moov', isoBox('trak', isoBox('tkhd'))),
+			isoBox('mdat'),
+		]);
+
+		await expectIssue(processSilentVideo(malformed), 'malformed-video');
+	});
+
+	it('rejects MP4 sample indexes whose declared bytes exceed media data', async () => {
+		const malformed = h264Mp4.slice();
+		const sampleSizeTable = asciiOffset(malformed, 'stsz') + 4;
+		new DataView(malformed.buffer).setUint32(sampleSizeTable + 12, 0x7FFF_FFFF);
+
+		await expectIssue(processSilentVideo(malformed), 'video-index-incomplete');
+	});
+});
