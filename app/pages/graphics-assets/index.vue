@@ -3,6 +3,7 @@ import type {
 	GraphicAsset,
 	GraphicAssetBrowserDecodeEvidence,
 	GraphicAssetSourceDeclarations,
+	GraphicAssetUsage,
 	GraphicsAssetLibraryCapacity,
 	GraphicsDuplicateContentPolicy,
 	GraphicsIngestionOperation,
@@ -30,6 +31,17 @@ const createSeparateAsset = ref(false);
 const uploadPending = ref(false);
 const uploadError = ref<string | null>(null);
 const currentOperation = ref<GraphicsIngestionOperation | null>(null);
+const usageByAssetId = reactive<Record<string, GraphicAssetUsage[] | undefined>>({});
+const usagePendingAssetId = ref<string | null>(null);
+const editingAssetId = ref<string | null>(null);
+const editedName = ref('');
+const editedEventIds = ref('');
+const metadataPending = ref(false);
+const metadataError = ref<string | null>(null);
+const replacementAssetId = ref<string | null>(null);
+const replacementFile = ref<File | null>(null);
+const replacementPending = ref(false);
+const replacementError = ref<string | null>(null);
 const operationStorageKey = 'graphics-asset-ingestion-operation';
 const initiationStorageKey = 'graphics-asset-ingestion-initiation';
 
@@ -201,6 +213,173 @@ function operationColor(stage: GraphicsIngestionOperation['stage']) {
 	return 'info';
 }
 
+function operationOutcomeLabel(outcome: NonNullable<GraphicsIngestionOperation['result']>['outcome']) {
+	if (outcome === 'published')
+		return 'Published';
+	if (outcome === 'reused')
+		return 'Reused';
+	if (outcome === 'revision-created')
+		return 'Created Graphic Asset Revision';
+	return 'Graphic Asset Content unchanged';
+}
+
+async function inspectUsage(asset: GraphicAsset) {
+	usagePendingAssetId.value = asset.id;
+	try {
+		usageByAssetId[asset.id] = await $fetch<GraphicAssetUsage[]>(
+			`/api/graphics-assets/${asset.id}/usage`,
+		);
+	}
+	finally {
+		usagePendingAssetId.value = null;
+	}
+}
+
+function beginMetadataEdit(asset: GraphicAsset) {
+	editingAssetId.value = asset.id;
+	editedName.value = asset.name;
+	editedEventIds.value = asset.eventIds.join(', ');
+	metadataError.value = null;
+}
+
+async function saveMetadata(asset: GraphicAsset) {
+	const eventIds = editedEventIds.value.trim()
+		? editedEventIds.value.split(',').map(value => Number(value.trim()))
+		: [];
+	if (eventIds.some(value => !Number.isSafeInteger(value) || value <= 0)) {
+		metadataError.value = 'Event associations must be comma-separated positive Event IDs.';
+		return;
+	}
+	metadataPending.value = true;
+	metadataError.value = null;
+	try {
+		await $fetch(`/api/graphics-assets/${asset.id}`, {
+			method: 'PATCH',
+			body: {
+				name: editedName.value,
+				eventIds,
+			},
+		});
+		editingAssetId.value = null;
+		await refresh();
+	}
+	catch (caught) {
+		metadataError.value = caught instanceof Error
+			? caught.message
+			: 'Graphic Asset metadata could not be updated.';
+	}
+	finally {
+		metadataPending.value = false;
+	}
+}
+
+function beginReplacement(asset: GraphicAsset) {
+	replacementAssetId.value = asset.id;
+	replacementFile.value = null;
+	replacementError.value = null;
+}
+
+async function transferGraphicAsset(
+	operation: GraphicsIngestionOperation,
+	file: File,
+) {
+	if (file.size > GRAPHICS_MULTIPART_PART_BYTES)
+		return await transferMultipartImage(operation, file);
+
+	const response = await observeOperationRequest(
+		operation.id,
+		fetch(`/api/graphics-assets/ingestion-operations/${operation.id}/content`, {
+			method: 'PUT',
+			headers: file.type ? { 'content-type': file.type } : undefined,
+			body: file,
+		}),
+	);
+	let completed = await operationFromResponse(response, 'Graphic Asset transfer');
+	if (
+		completed.stage === 'awaiting-confirmation'
+		&& completed.report?.outcome === 'accepted'
+		&& completed.report.facts.kind === 'font'
+	) {
+		const evidence = await verifyStaticFontBrowserLoad(
+			file,
+			completed.report.facts.browserChallenge,
+		);
+		completed = await observeOperationRequest(
+			completed.id,
+			$fetch<GraphicsIngestionOperation>(
+				`/api/graphics-assets/ingestion-operations/${completed.id}/font-browser-evidence`,
+				{ method: 'POST', body: evidence },
+			),
+		);
+	}
+	return completed;
+}
+
+async function initiateAndTransferGraphicAsset(
+	file: File,
+	endpoint: string,
+	body: PendingInitiation | Record<string, unknown>,
+	existingOperation?: GraphicsIngestionOperation,
+) {
+	const initiated = existingOperation ?? await $fetch<GraphicsIngestionOperation>(
+		endpoint,
+		{ method: 'POST', body },
+	);
+	currentOperation.value = initiated;
+	localStorage.setItem(operationStorageKey, initiated.id);
+	localStorage.removeItem(initiationStorageKey);
+
+	const completed = await transferGraphicAsset(initiated, file);
+	currentOperation.value = completed;
+	if (completed.stage === 'completed')
+		clearPersistedOperation();
+	return completed;
+}
+
+async function replaceAsset(asset: GraphicAsset) {
+	const file = replacementFile.value;
+	if (!file || replacementPending.value)
+		return;
+	replacementPending.value = true;
+	replacementError.value = null;
+	try {
+		const leadingBytes = new Uint8Array(await file.slice(0, 64).arrayBuffer());
+		const isFont = graphicAssetSourceKind({
+			sourceFileName: file.name,
+			declaredMime: file.type,
+		}, leadingBytes) === 'font';
+		const browserDecodeEvidence = isFont
+			? undefined
+			: await verifyStillImageBrowserDecode(file);
+		const completed = await initiateAndTransferGraphicAsset(
+			file,
+			`/api/graphics-assets/${asset.id}/replacement-operations`,
+			{
+				idempotencyKey: crypto.randomUUID(),
+				sourceFileName: file.name,
+				declaredMime: file.type || undefined,
+				browserDecodeEvidence,
+				declaredByteLength: file.size,
+			},
+		);
+		if (completed.stage === 'completed') {
+			replacementAssetId.value = null;
+			replacementFile.value = null;
+			await refresh();
+			await refreshCapacity();
+			await inspectUsage(asset);
+		}
+	}
+	catch (caught) {
+		replacementError.value = caught instanceof Error
+			? caught.message
+			: 'Graphic Asset replacement failed.';
+	}
+	finally {
+		replacementPending.value = false;
+	}
+}
+
 async function observeOperationRequest<T>(
 	operationId: string,
 	request: Promise<T>,
@@ -350,58 +529,17 @@ async function uploadGraphicAsset() {
 			&& !['completed', 'cancelled'].includes(currentOperation.value.stage)
 			&& operationMatchesSelectedFile(
 				currentOperation.value,
-				selectedFile.value,
+				file,
 				initiation.name,
 			)
 			? currentOperation.value
 			: undefined;
-		const initiated = reusableOperation ?? await $fetch<GraphicsIngestionOperation>(
+		currentOperation.value = await initiateAndTransferGraphicAsset(
+			file,
 			'/api/graphics-assets/ingestion-operations',
-			{ method: 'POST', body: initiation },
+			initiation,
+			reusableOperation,
 		);
-		currentOperation.value = initiated;
-		localStorage.setItem(operationStorageKey, initiated.id);
-		localStorage.removeItem(initiationStorageKey);
-
-		if (file.size > GRAPHICS_MULTIPART_PART_BYTES) {
-			currentOperation.value = await transferMultipartImage(
-				initiated,
-				file,
-			);
-		}
-		else {
-			const response = await observeOperationRequest(
-				initiated.id,
-				fetch(
-					`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-					{
-						method: 'PUT',
-						headers: file.type
-							? { 'content-type': file.type }
-							: undefined,
-						body: file,
-					},
-				),
-			);
-			currentOperation.value = await operationFromResponse(response, 'Graphic Asset transfer');
-			if (
-				currentOperation.value.stage === 'awaiting-confirmation'
-				&& currentOperation.value.report?.outcome === 'accepted'
-				&& currentOperation.value.report.facts.kind === 'font'
-			) {
-				const evidence = await verifyStaticFontBrowserLoad(
-					file,
-					currentOperation.value.report.facts.browserChallenge,
-				);
-				currentOperation.value = await observeOperationRequest(
-					currentOperation.value.id,
-					$fetch<GraphicsIngestionOperation>(
-						`/api/graphics-assets/ingestion-operations/${currentOperation.value.id}/font-browser-evidence`,
-						{ method: 'POST', body: evidence },
-					),
-				);
-			}
-		}
 		await refreshAfterTerminalOperation();
 	}
 	catch (caught) {
@@ -640,7 +778,7 @@ onMounted(async () => {
 					<div class="flex flex-col gap-4">
 						<UFormField
 							name="name"
-							label="Asset name"
+							label="Graphic Asset name"
 							description="Searchable library name."
 							required
 						>
@@ -652,7 +790,7 @@ onMounted(async () => {
 						</UFormField>
 						<label class="flex items-start gap-2 text-sm text-muted">
 							<input v-model="createSeparateAsset" type="checkbox" class="mt-1">
-							<span>Create a separate Graphic Asset even when these exact bytes already exist.</span>
+							<span>Create a separate Graphic Asset even when this exact Graphic Asset Content already exists.</span>
 						</label>
 						<p v-if="eventStore.eventId" class="text-sm text-muted">
 							The upload will be associated with Event {{ eventStore.eventId }}.
@@ -754,7 +892,7 @@ onMounted(async () => {
 						/>
 					</div>
 					<p v-if="currentOperation.result" class="mt-2 text-sm text-muted">
-						{{ currentOperation.result.outcome === 'published' ? 'Published' : 'Reused' }} asset {{ currentOperation.result.assetId }} revision {{ currentOperation.result.revisionId }}
+						{{ operationOutcomeLabel(currentOperation.result.outcome) }} Graphic Asset {{ currentOperation.result.assetId }} Graphic Asset Revision {{ currentOperation.result.revisionId }}
 					</p>
 					<p
 						v-if="
@@ -877,6 +1015,149 @@ onMounted(async () => {
 									:label="`Event ${eventId}`"
 								/>
 							</div>
+							<div class="mt-4 flex flex-wrap gap-2">
+								<UButton
+									size="sm"
+									color="neutral"
+									variant="outline"
+									label="Inspect exact usage"
+									:loading="usagePendingAssetId === asset.id"
+									@click="inspectUsage(asset)"
+								/>
+								<UButton
+									size="sm"
+									color="neutral"
+									variant="outline"
+									label="Edit metadata"
+									@click="beginMetadataEdit(asset)"
+								/>
+								<UButton
+									size="sm"
+									color="neutral"
+									variant="outline"
+									label="Replace content"
+									@click="beginReplacement(asset)"
+								/>
+							</div>
+						</div>
+					</div>
+
+					<div
+						v-if="usageByAssetId[asset.id]"
+						class="mt-4 border-t border-default pt-4"
+					>
+						<h4 class="text-sm font-semibold text-highlighted">
+							Exact Graphic Asset Revision usage
+						</h4>
+						<p
+							v-if="usageByAssetId[asset.id]!.length === 0"
+							class="mt-2 text-sm text-muted"
+						>
+							No persisted graphics artifact has a Graphic Asset Reference to any Graphic Asset Revision.
+						</p>
+						<ul v-else class="mt-2 space-y-2">
+							<li
+								v-for="usage in usageByAssetId[asset.id]"
+								:key="usage.id"
+								class="rounded-md border border-default p-3 text-sm"
+							>
+								<div class="flex flex-wrap items-center justify-between gap-2">
+									<span class="font-medium text-highlighted">
+										{{ usage.owner.name ?? `${usage.owner.kind} ${usage.owner.id}` }}
+									</span>
+									<UBadge
+										:color="usage.reference.revisionId === asset.revisionId ? 'success' : 'warning'"
+										variant="soft"
+										:label="usage.reference.revisionId === asset.revisionId ? 'Latest Graphic Asset Revision' : 'Pinned older Graphic Asset Revision'"
+									/>
+								</div>
+								<p class="mt-1 text-muted">
+									{{ usage.owner.kind === 'screen' ? 'Screen' : usage.owner.kind }} {{ usage.owner.id }}
+									<span v-if="usage.owner.eventId"> · Event {{ usage.owner.eventId }}</span>
+									· {{ usage.owner.slot }}
+								</p>
+								<p class="mt-1 font-mono text-xs text-dimmed">
+									Graphic Asset Revision {{ usage.reference.revisionId }}
+								</p>
+							</li>
+						</ul>
+					</div>
+
+					<div
+						v-if="editingAssetId === asset.id"
+						class="mt-4 grid gap-3 border-t border-default pt-4"
+					>
+						<UFormField name="asset-name" label="Graphic Asset name">
+							<UInput v-model="editedName" class="w-full" />
+						</UFormField>
+						<UFormField
+							name="event-associations"
+							label="Event associations"
+							description="Comma-separated Event IDs. Associations organise discovery and do not change usage."
+						>
+							<UInput v-model="editedEventIds" class="w-full" />
+						</UFormField>
+						<UAlert
+							v-if="metadataError"
+							color="error"
+							variant="soft"
+							:title="metadataError"
+						/>
+						<div class="flex gap-2">
+							<UButton
+								label="Save metadata"
+								:loading="metadataPending"
+								@click="saveMetadata(asset)"
+							/>
+							<UButton
+								color="neutral"
+								variant="ghost"
+								label="Cancel"
+								@click="editingAssetId = null"
+							/>
+						</div>
+					</div>
+
+					<div
+						v-if="replacementAssetId === asset.id"
+						class="mt-4 grid gap-3 border-t border-default pt-4"
+					>
+						<UAlert
+							color="warning"
+							variant="soft"
+							title="Create an immutable Graphic Asset Revision"
+							description="Existing Graphic Asset References stay pinned until each owning graphics artifact explicitly selects the newer Graphic Asset Revision."
+						/>
+						<UFormField
+							name="replacement-graphic-asset"
+							label="Replacement Graphic Asset source"
+							description="Current Graphic Asset Content is a no-op; older or different Graphic Asset Content creates a new Graphic Asset Revision."
+						>
+							<UFileUpload
+								v-model="replacementFile"
+								accept="image/png,image/jpeg,image/webp,font/woff2,font/woff,font/ttf,font/otf,.png,.jpg,.jpeg,.webp,.woff2,.woff,.ttf,.otf"
+								variant="area"
+							/>
+						</UFormField>
+						<UAlert
+							v-if="replacementError"
+							color="error"
+							variant="soft"
+							:title="replacementError"
+						/>
+						<div class="flex gap-2">
+							<UButton
+								label="Replace with new Graphic Asset Revision"
+								:disabled="!replacementFile"
+								:loading="replacementPending"
+								@click="replaceAsset(asset)"
+							/>
+							<UButton
+								color="neutral"
+								variant="ghost"
+								label="Cancel"
+								@click="replacementAssetId = null"
+							/>
 						</div>
 					</div>
 
@@ -884,7 +1165,7 @@ onMounted(async () => {
 						<div class="grid gap-1 font-mono text-xs text-dimmed">
 							<span>Operation {{ asset.operation.id }}</span>
 							<span>Result {{ JSON.stringify(asset.operation.result) }}</span>
-							<span>Asset {{ asset.id }} · Revision {{ asset.revisionId }}</span>
+							<span>Graphic Asset {{ asset.id }} · Graphic Asset Revision {{ asset.revisionId }}</span>
 						</div>
 					</template>
 				</UCard>
@@ -899,7 +1180,7 @@ onMounted(async () => {
 					No matching Graphic Assets
 				</p>
 				<p class="mt-1 text-sm text-muted">
-					Upload a PNG, JPEG, or WebP image, or change the search.
+					Upload a PNG, JPEG, WebP, WOFF2, WOFF, TTF, or OTF source, or change the search.
 				</p>
 			</div>
 		</div>

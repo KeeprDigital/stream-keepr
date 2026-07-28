@@ -1,5 +1,6 @@
 import type {
 	GraphicAsset,
+	GraphicAssetUsage,
 	GraphicsAssetLibraryCapacity,
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
@@ -225,6 +226,122 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(wrapper.get('img').attributes('src')).toBe('/api/graphics-assets/asset-1/thumbnail');
 	});
 
+	it('inspects each exact Graphic Asset Revision with the owning graphics artifact and Event context', async () => {
+		const usage: GraphicAssetUsage[] = [{
+			id: 'usage-1',
+			reference: {
+				assetId: 'asset-1' as never,
+				revisionId: 'revision-older' as never,
+			},
+			owner: {
+				kind: 'screen',
+				id: '42',
+				name: 'Main Feature Match',
+				slot: 'layout.frame.backgroundImage',
+				eventId: 7,
+			},
+		}];
+		mockApiFetch.mockResolvedValueOnce(usage);
+		const wrapper = await mountPage();
+
+		const inspect = wrapper.findAll('button')
+			.find(button => button.text().includes('Inspect exact usage'));
+		await inspect!.trigger('click');
+		await flushPromises();
+
+		expect(mockApiFetch).toHaveBeenCalledWith('/api/graphics-assets/asset-1/usage');
+		expect(wrapper.text()).toContain('Main Feature Match');
+		expect(wrapper.text()).toContain('Screen 42');
+		expect(wrapper.text()).toContain('Event 7');
+		expect(wrapper.text()).toContain('revision-older');
+		expect(wrapper.text()).toContain('Pinned older Graphic Asset Revision');
+	});
+
+	it('updates Graphic Asset metadata and Event associations without presenting them as Graphic Asset Revision changes', async () => {
+		mockApiFetch.mockResolvedValueOnce(assets.value[0]);
+		const wrapper = await mountPage();
+		const edit = wrapper.findAll('button')
+			.find(button => button.text().includes('Edit metadata'));
+		await edit!.trigger('click');
+		const inputs = wrapper.findAll('input');
+		await inputs.at(-2)!.setValue('Renamed scoreboard logo');
+		await inputs.at(-1)!.setValue('7, 9');
+		const save = wrapper.findAll('button')
+			.find(button => button.text().includes('Save metadata'));
+		await save!.trigger('click');
+		await flushPromises();
+
+		expect(mockApiFetch).toHaveBeenCalledWith('/api/graphics-assets/asset-1', {
+			method: 'PATCH',
+			body: {
+				name: 'Renamed scoreboard logo',
+				eventIds: [7, 9],
+			},
+		});
+		expect(mockRefresh).toHaveBeenCalledOnce();
+	});
+
+	it('starts a Graphics Ingestion Operation and uploads exact Graphic Asset Content for an immutable Graphic Asset Revision', async () => {
+		const replacementFile = new File([jpegPixel], 'replacement.jpg', { type: 'image/jpeg' });
+		const created: GraphicsIngestionOperation = {
+			...completedJpegOperation,
+			targetAssetId: 'asset-1' as never,
+			stage: 'created',
+			transferredByteLength: 0,
+			report: undefined,
+			result: undefined,
+		};
+		const replaced: GraphicsIngestionOperation = {
+			...completedJpegOperation,
+			targetAssetId: 'asset-1' as never,
+			result: {
+				outcome: 'revision-created',
+				assetId: 'asset-1' as never,
+				revisionId: 'revision-2' as never,
+			},
+		};
+		mockApiFetch.mockResolvedValueOnce(created).mockResolvedValueOnce([]);
+		mockTransferFetch.mockResolvedValueOnce(new Response(JSON.stringify(replaced), {
+			status: 200,
+			headers: { 'content-type': 'application/json' },
+		}));
+		const wrapper = await mountPage();
+
+		const replace = wrapper.findAll('button')
+			.find(button => button.text().includes('Replace content'));
+		await replace!.trigger('click');
+		wrapper.findAllComponents(fileUploadStub).at(-1)!.vm.$emit(
+			'update:modelValue',
+			replacementFile,
+		);
+		await flushPromises();
+		const publish = wrapper.findAll('button')
+			.find(button => button.text().includes('Replace with new Graphic Asset Revision'));
+		await publish!.trigger('click');
+		await flushPromises();
+
+		expect(mockApiFetch).toHaveBeenCalledWith(
+			'/api/graphics-assets/asset-1/replacement-operations',
+			expect.objectContaining({
+				method: 'POST',
+				body: expect.objectContaining({
+					sourceFileName: 'replacement.jpg',
+					declaredMime: 'image/jpeg',
+					declaredByteLength: jpegPixel.byteLength,
+				}),
+			}),
+		);
+		expect(mockTransferFetch).toHaveBeenCalledWith(
+			'/api/graphics-assets/ingestion-operations/operation-1/content',
+			expect.objectContaining({
+				method: 'PUT',
+				headers: { 'content-type': 'image/jpeg' },
+				body: replacementFile,
+			}),
+		);
+		expect(mockRefresh).toHaveBeenCalledOnce();
+	});
+
 	it('shows canonical and staging usage with critical storage pressure', async () => {
 		const wrapper = await mountPage();
 
@@ -294,7 +411,9 @@ describe('the Graphics Asset Library Workspace', () => {
 			}),
 		);
 		expect(mockRefresh).toHaveBeenCalledOnce();
-		expect(wrapper.text()).toContain('Published asset asset-1 revision revision-1');
+		expect(wrapper.text()).toContain(
+			'Published Graphic Asset asset-1 Graphic Asset Revision revision-1',
+		);
 		expect(wrapper.text()).toContain('Exact source browser decode verified before publication.');
 	});
 

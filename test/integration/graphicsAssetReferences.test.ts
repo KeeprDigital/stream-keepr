@@ -115,6 +115,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 				owner: {
 					kind: 'screen',
 					id: String(screenId),
+					name: 'Pinned Overlay',
 					slot: 'layout.frame.backgroundImage',
 					eventId,
 				},
@@ -124,6 +125,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 				owner: {
 					kind: 'screen',
 					id: String(screenId),
+					name: 'Pinned Overlay',
 					slot: 'layout.items.sponsor-logo.widget.asset',
 					eventId,
 				},

@@ -228,4 +228,73 @@ describe('static font ingestion through the Graphics Asset Library public module
 			},
 		});
 	});
+
+	it('replaces font Graphic Asset Content with an immutable exact Graphic Asset Revision', async () => {
+		const originalSource = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
+		const replacementSource = new Uint8Array(await readFile('public/fonts/mplantin.ttf'));
+		const assets = library();
+		const initiated = await assets.initiateGraphicsIngestion({
+			idempotencyKey: 'replaceable-font-original',
+			initiatedBy: 'graphics-author-1',
+			name: 'Replaceable MPlantin',
+			sourceFileName: 'mplantin.woff',
+			declaredMime: 'font/woff',
+			declaredByteLength: originalSource.byteLength,
+		});
+		const originalChallenge = await assets.uploadGraphicAsset({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+			declaredMime: 'font/woff',
+			bytes: createBoundedByteStream(originalSource, {
+				byteLength: originalSource.byteLength,
+				maximumByteLength: 10 * 1024 * 1024,
+			}),
+		});
+		const original = await assets.confirmFontBrowserEvidence({
+			operationId: originalChallenge.id,
+			initiatedBy: originalChallenge.initiatedBy,
+			evidence: successfulBrowserEvidence(originalChallenge),
+		});
+
+		const replacement = await assets.initiateGraphicAssetReplacement({
+			assetId: original.result!.assetId,
+			idempotencyKey: 'replaceable-font-ttf',
+			initiatedBy: 'graphics-author-1',
+			sourceFileName: 'mplantin.ttf',
+			declaredMime: 'font/ttf',
+			declaredByteLength: replacementSource.byteLength,
+		});
+		const replacementChallenge = await assets.uploadGraphicAsset({
+			operationId: replacement.id,
+			initiatedBy: replacement.initiatedBy,
+			declaredMime: 'font/ttf',
+			bytes: createBoundedByteStream(replacementSource, {
+				byteLength: replacementSource.byteLength,
+				maximumByteLength: 10 * 1024 * 1024,
+			}),
+		});
+		const completed = await assets.confirmFontBrowserEvidence({
+			operationId: replacementChallenge.id,
+			initiatedBy: replacementChallenge.initiatedBy,
+			evidence: successfulBrowserEvidence(replacementChallenge),
+		});
+
+		expect(completed.result).toMatchObject({
+			outcome: 'revision-created',
+			assetId: original.result?.assetId,
+		});
+		await expect(assets.listGraphicAssets({})).resolves.toMatchObject([{
+			id: original.result?.assetId,
+			kind: 'font',
+			revisionId: completed.result?.revisionId,
+			revisionNumber: 2,
+		}]);
+		await expect(assets.resolveGraphicAssetRevision({
+			assetId: original.result!.assetId,
+			revisionId: original.result!.revisionId,
+		})).resolves.toMatchObject({
+			outcome: 'available',
+			contentType: 'font/woff',
+		});
+	});
 });

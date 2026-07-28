@@ -21,6 +21,7 @@ import {
 	graphicsMultipartCompletedByteLength,
 	graphicsMultipartTransfer,
 } from './multipart';
+import { completedGraphicAssetReplacementOperation } from './operation';
 
 interface InMemoryGraphicsAssetCatalogueOptions {
 	canonicalLimitBytes?: number;
@@ -33,6 +34,12 @@ export function createInMemoryGraphicsAssetCatalogue(
 	const operations = new Map<GraphicsIngestionOperationId, GraphicsIngestionOperation>();
 	const operationsByIdentity = new Map<string, GraphicsIngestionOperationId>();
 	const assets = new Map<GraphicAssetId, GraphicAsset>();
+	const revisions = new Map<GraphicAssetRevisionId, {
+		assetId: GraphicAssetId;
+		revisionNumber: number;
+		facts: GraphicAsset['facts'];
+		thumbnailDigest: string;
+	}>();
 	const thumbnailDigests = new Map<GraphicAssetId, string>();
 	const canonicalContents = new Map<string, {
 		byteLength: number;
@@ -366,9 +373,22 @@ export function createInMemoryGraphicsAssetCatalogue(
 			return cloneOperation(claimed);
 		},
 		async findReusableGraphicAsset(sourceDigest) {
-			const asset = [...assets.values()].find(candidate => candidate.facts.sha256 === sourceDigest);
+			const revision = [...revisions.entries()].find(([, candidate]) =>
+				candidate.facts.sha256 === sourceDigest,
+			);
+			const asset = revision && assets.get(revision[1].assetId);
 			return asset
-				? { assetId: asset.id, revisionId: asset.revisionId }
+				? { assetId: asset.id, revisionId: revision![0] }
+				: undefined;
+		},
+		async findCurrentGraphicAsset(assetId) {
+			const asset = assets.get(assetId);
+			return asset
+				? {
+						assetId,
+						revisionId: asset.revisionId,
+						sourceDigest: asset.facts.sha256,
+					}
 				: undefined;
 		},
 		async reuseGraphicAsset(input) {
@@ -405,6 +425,94 @@ export function createInMemoryGraphicsAssetCatalogue(
 				eventIds,
 				operation: cloneOperation(completed),
 			});
+			return cloneOperation(completed);
+		},
+		async completeGraphicAssetReplacementNoop(input) {
+			const existing = operations.get(input.operation.id);
+			const asset = assets.get(input.current.assetId);
+			if (
+				!existing
+				|| !asset
+				|| existing.stage !== 'publishing'
+				|| existing.updatedAt !== input.operation.updatedAt
+				|| asset.revisionId !== input.current.revisionId
+				|| asset.facts.sha256 !== input.current.sourceDigest
+			) {
+				throw new Error('Graphic Asset replacement no-op lost its claim');
+			}
+			const completed = completedGraphicAssetReplacementOperation({
+				operation: input.operation,
+				outcome: 'replacement-noop',
+				assetId: input.current.assetId,
+				revisionId: input.current.revisionId,
+				completedAt: input.completedAt,
+			});
+			operations.set(completed.id, cloneOperation(completed));
+			releaseCapacity(completed.id);
+			return cloneOperation(completed);
+		},
+		async publishGraphicAssetReplacement(input) {
+			const existing = operations.get(input.operation.id);
+			const asset = assets.get(input.targetAssetId);
+			if (
+				!existing
+				|| !asset
+				|| existing.stage !== 'publishing'
+				|| existing.updatedAt !== input.operation.updatedAt
+			) {
+				throw new Error('Graphic Asset replacement publication lost its claim');
+			}
+			if (asset.facts.sha256 === input.sourceDigest) {
+				const completed = completedGraphicAssetReplacementOperation({
+					operation: input.operation,
+					outcome: 'replacement-noop',
+					assetId: input.targetAssetId,
+					revisionId: asset.revisionId,
+					completedAt: input.publishedAt,
+				});
+				operations.set(completed.id, cloneOperation(completed));
+				// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
+				canonicalWriteCandidates.delete(completed.id);
+				releaseCapacity(completed.id);
+				return cloneOperation(completed);
+			}
+			const revisionNumber = asset.revisionNumber + 1;
+			const completed = completedGraphicAssetReplacementOperation({
+				operation: input.operation,
+				outcome: 'revision-created',
+				assetId: input.targetAssetId,
+				revisionId: input.revisionId,
+				completedAt: input.publishedAt,
+			});
+			operations.set(completed.id, cloneOperation(completed));
+			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
+			canonicalWriteCandidates.delete(completed.id);
+			releaseCapacity(completed.id);
+			revisions.set(input.revisionId, {
+				assetId: input.targetAssetId,
+				revisionNumber,
+				facts: input.report.facts,
+				thumbnailDigest: input.thumbnailDigest,
+			});
+			assets.set(input.targetAssetId, {
+				...asset,
+				kind: input.report.facts.kind,
+				revisionId: input.revisionId,
+				revisionNumber,
+				facts: input.report.facts,
+				operation: cloneOperation(completed),
+			});
+			canonicalContents.set(input.sourceDigest, {
+				byteLength: input.report.facts.byteLength,
+				category: 'source',
+			});
+			if (!canonicalContents.has(input.thumbnailDigest)) {
+				canonicalContents.set(input.thumbnailDigest, {
+					byteLength: input.thumbnailByteLength,
+					category: 'derivative',
+				});
+			}
+			thumbnailDigests.set(input.targetAssetId, input.thumbnailDigest);
 			return cloneOperation(completed);
 		},
 		async publishGraphicAsset(input: PublishGraphicAssetCatalogueInput) {
@@ -473,6 +581,12 @@ export function createInMemoryGraphicsAssetCatalogue(
 					: [input.operation.defaultEventId],
 				operation: cloneOperation(completed),
 			});
+			revisions.set(input.revisionId, {
+				assetId: input.assetId,
+				revisionNumber: 1,
+				facts: input.report.facts,
+				thumbnailDigest: input.thumbnailDigest,
+			});
 			canonicalContents.set(input.sourceDigest, {
 				byteLength: input.report.facts.byteLength,
 				category: 'source',
@@ -486,6 +600,18 @@ export function createInMemoryGraphicsAssetCatalogue(
 			thumbnailDigests.set(input.assetId, input.thumbnailDigest);
 			return cloneOperation(completed);
 		},
+		async updateGraphicAsset(input) {
+			const asset = assets.get(input.assetId);
+			if (!asset)
+				return undefined;
+			const updated = {
+				...asset,
+				name: input.name,
+				eventIds: [...input.eventIds],
+			};
+			assets.set(input.assetId, updated);
+			return structuredClone(updated);
+		},
 		async listGraphicAssets(search) {
 			const normalizedSearch = search.trim().toLocaleLowerCase();
 			return [...assets.values()]
@@ -493,14 +619,14 @@ export function createInMemoryGraphicsAssetCatalogue(
 				.map(asset => structuredClone(asset));
 		},
 		async findRevisionContent(input) {
-			const asset = assets.get(input.assetId);
-			if (!asset || asset.revisionId !== input.revisionId)
+			const revision = revisions.get(input.revisionId);
+			if (!revision || revision.assetId !== input.assetId)
 				return undefined;
 			return {
-				digest: asset.facts.sha256,
-				byteLength: asset.facts.byteLength,
-				canonicalMime: asset.facts.canonicalMime,
-				kind: asset.kind,
+				digest: revision.facts.sha256,
+				byteLength: revision.facts.byteLength,
+				canonicalMime: revision.facts.canonicalMime,
+				kind: revision.facts.kind,
 				lifecycleState: 'active',
 			};
 		},
@@ -508,7 +634,10 @@ export function createInMemoryGraphicsAssetCatalogue(
 			return [];
 		},
 		async findThumbnailDigest(assetId: GraphicAssetId) {
-			return thumbnailDigests.get(assetId);
+			const asset = assets.get(assetId);
+			return asset
+				? revisions.get(asset.revisionId)?.thumbnailDigest
+				: undefined;
 		},
 	};
 }
