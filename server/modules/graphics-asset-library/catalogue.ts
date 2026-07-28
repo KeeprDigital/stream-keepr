@@ -24,6 +24,7 @@ interface OperationRow {
 	browser_decode_evidence: string | null;
 	duplicate_content_policy: GraphicsIngestionOperation['duplicateContentPolicy'];
 	default_event_id: number | null;
+	target_asset_id: string | null;
 	declared_byte_length: number;
 	transferred_byte_length: number;
 	stage: GraphicsIngestionOperation['stage'];
@@ -51,6 +52,7 @@ interface AssetRow {
 	browser_decode_evidence: string | null;
 	duplicate_content_policy: GraphicsIngestionOperation['duplicateContentPolicy'];
 	default_event_id: number | null;
+	target_asset_id: string | null;
 	declared_byte_length: number;
 	transferred_byte_length: number;
 	stage: GraphicsIngestionOperation['stage'];
@@ -77,6 +79,7 @@ function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 		browserDecodeEvidence: parseJson(row.browser_decode_evidence),
 		duplicateContentPolicy: row.duplicate_content_policy,
 		defaultEventId: row.default_event_id ?? undefined,
+		targetAssetId: row.target_asset_id as GraphicAssetId | null ?? undefined,
 		declaredByteLength: row.declared_byte_length,
 		transferredByteLength: row.transferred_byte_length,
 		stage: row.stage,
@@ -100,6 +103,7 @@ function operationRowFromAsset(row: AssetRow): OperationRow {
 		browser_decode_evidence: row.browser_decode_evidence,
 		duplicate_content_policy: row.duplicate_content_policy,
 		default_event_id: row.default_event_id,
+		target_asset_id: row.target_asset_id,
 		declared_byte_length: row.declared_byte_length,
 		transferred_byte_length: row.transferred_byte_length,
 		stage: row.stage,
@@ -116,7 +120,7 @@ function operationSelect(where: string) {
 	return `
 		SELECT id, idempotency_key, initiated_by, proposed_name,
 				source_file_name, declared_mime, browser_decode_evidence,
-			duplicate_content_policy, default_event_id,
+			duplicate_content_policy, default_event_id, target_asset_id,
 			declared_byte_length, transferred_byte_length, stage, report, result,
 			capacity_outcome, failure, created_at, updated_at
 		FROM graphics_ingestion_operations
@@ -467,12 +471,12 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					INSERT OR IGNORE INTO graphics_ingestion_operations (
 						id, idempotency_key, source, stage, initiated_by, proposed_name,
 						source_file_name, declared_mime, browser_decode_evidence,
-					duplicate_content_policy, default_event_id,
+					duplicate_content_policy, default_event_id, target_asset_id,
 					declared_byte_length, transferred_byte_length,
 					staging_reserved_byte_length,
 					created_at, updated_at
 				)
-					SELECT ?, ?, 'local-upload', 'created', ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?
+					SELECT ?, ?, ?, 'created', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?
 				FROM graphics_capacity_settings settings
 				WHERE settings.id = 1
 					AND (
@@ -484,6 +488,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			`).bind(
 				operation.id,
 				operation.idempotencyKey,
+				operation.targetAssetId ? 'replacement' : 'local-upload',
 				operation.initiatedBy,
 				operation.name,
 				operation.sourceFileName ?? null,
@@ -493,6 +498,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					: JSON.stringify(operation.browserDecodeEvidence),
 				operation.duplicateContentPolicy,
 				operation.defaultEventId ?? null,
+				operation.targetAssetId ?? null,
 				operation.declaredByteLength,
 				operation.declaredByteLength,
 				new Date(operation.createdAt).getTime(),
@@ -746,6 +752,27 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					}
 				: undefined;
 		},
+		async findCurrentImage(assetId) {
+			const row = await database.prepare(`
+				SELECT a.id AS asset_id, r.id AS revision_id, r.content_digest
+				FROM graphic_assets a
+				JOIN graphic_asset_revisions r ON r.asset_id = a.id
+				WHERE a.id = ? AND a.lifecycle_state = 'active'
+				ORDER BY r.revision_number DESC
+				LIMIT 1
+			`).bind(assetId).first<{
+				asset_id: string;
+				revision_id: string;
+				content_digest: string;
+			}>();
+			return row
+				? {
+						assetId: row.asset_id as GraphicAssetId,
+						revisionId: row.revision_id as GraphicAssetRevisionId,
+						sourceDigest: row.content_digest,
+					}
+				: undefined;
+		},
 		async reuseImage(input) {
 			const completed: GraphicsIngestionOperation = {
 				...input.operation,
@@ -797,6 +824,124 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			if (!authoritative || authoritative.stage !== 'completed')
 				throw new Error('Graphic Asset reuse was not durable');
 			return authoritative;
+		},
+		async completeImageReplacementNoop(input) {
+			const completed: GraphicsIngestionOperation = {
+				...input.operation,
+				stage: 'completed',
+				failure: undefined,
+				result: {
+					outcome: 'replacement-noop',
+					assetId: input.current.assetId,
+					revisionId: input.current.revisionId,
+				},
+				updatedAt: input.completedAt,
+			};
+			const results = await database.batch([
+				database.prepare(`
+					DELETE FROM graphics_canonical_write_candidates WHERE operation_id = ?
+				`).bind(input.operation.id),
+				updateOperationStatement(database, completed, input.operation.updatedAt),
+			]);
+			if (results.some(result => !result.success) || results[1]?.meta.changes !== 1)
+				throw new Error('Graphic Asset replacement no-op transaction failed');
+			return completed;
+		},
+		async publishImageReplacement(input) {
+			await Promise.all([
+				assertContentCompatible(database, {
+					digest: input.sourceDigest,
+					byteLength: input.report.facts.byteLength,
+					canonicalMime: input.report.facts.canonicalMime,
+				}),
+				assertContentCompatible(database, {
+					digest: input.thumbnailDigest,
+					byteLength: input.thumbnailByteLength,
+					canonicalMime: 'image/png',
+				}),
+			]);
+			const completed: GraphicsIngestionOperation = {
+				...input.operation,
+				stage: 'completed',
+				failure: undefined,
+				result: {
+					outcome: 'revision-created',
+					assetId: input.targetAssetId,
+					revisionId: input.revisionId,
+				},
+				updatedAt: input.publishedAt,
+			};
+			const publishedAt = new Date(input.publishedAt).getTime();
+			const results = await database.batch([
+				database.prepare(`
+					INSERT OR IGNORE INTO graphic_asset_contents (
+						digest, byte_length, canonical_mime, availability, created_at
+					) VALUES (?, ?, ?, 'available', ?)
+				`).bind(
+					input.sourceDigest,
+					input.report.facts.byteLength,
+					input.report.facts.canonicalMime,
+					publishedAt,
+				),
+				database.prepare(`
+					INSERT OR IGNORE INTO graphic_asset_contents (
+						digest, byte_length, canonical_mime, availability, created_at
+					) VALUES (?, ?, 'image/png', 'available', ?)
+				`).bind(input.thumbnailDigest, input.thumbnailByteLength, publishedAt),
+				database.prepare(`
+					INSERT INTO graphic_asset_revisions (
+						id, asset_id, revision_number, content_digest,
+						compatibility_profile, technical_facts, created_at
+					)
+					SELECT ?, target.id, (
+						SELECT COALESCE(MAX(revision_number), 0) + 1
+						FROM graphic_asset_revisions
+						WHERE asset_id = target.id
+					), ?, ?, ?, ?
+					FROM graphic_assets target
+					WHERE target.id = ? AND target.lifecycle_state = 'active'
+						AND EXISTS (
+							SELECT 1 FROM graphics_ingestion_operations
+							WHERE id = ? AND initiated_by = ? AND stage = 'publishing'
+								AND updated_at = ? AND target_asset_id = target.id
+						)
+				`).bind(
+					input.revisionId,
+					input.sourceDigest,
+					input.report.compatibilityProfile,
+					JSON.stringify(input.report.facts),
+					publishedAt,
+					input.targetAssetId,
+					input.operation.id,
+					input.operation.initiatedBy,
+					new Date(input.operation.updatedAt).getTime(),
+				),
+				database.prepare(`
+					INSERT INTO graphics_derivatives (
+						id, source_revision_id, kind, content_digest, created_at
+					) VALUES (?, ?, 'thumbnail', ?, ?)
+				`).bind(
+					input.derivativeId,
+					input.revisionId,
+					input.thumbnailDigest,
+					publishedAt,
+				),
+				database.prepare(`
+					UPDATE graphic_assets SET updated_at = ? WHERE id = ?
+				`).bind(publishedAt, input.targetAssetId),
+				database.prepare(`
+					DELETE FROM graphics_canonical_write_candidates WHERE operation_id = ?
+				`).bind(input.operation.id),
+				updateOperationStatement(database, completed, input.operation.updatedAt),
+			]);
+			if (
+				results.some(result => !result.success)
+				|| results[2]?.meta.changes !== 1
+				|| results[6]?.meta.changes !== 1
+			) {
+				throw new Error('Graphic Asset replacement publication transaction failed');
+			}
+			return completed;
 		},
 		async publishImage(input: PublishImageCatalogueInput) {
 			await Promise.all([
@@ -929,7 +1074,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					), '[]') AS event_ids,
 						o.id AS operation_id, o.idempotency_key, o.initiated_by,
 						o.proposed_name, o.source_file_name, o.declared_mime,
-						o.browser_decode_evidence,
+						o.browser_decode_evidence, o.target_asset_id,
 					o.duplicate_content_policy,
 					o.default_event_id, o.declared_byte_length,
 					o.transferred_byte_length, o.stage, o.report, o.result, o.failure,
@@ -970,6 +1115,38 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				operation: operationFromRow(operationRowFromAsset(row)),
 			}));
 		},
+		async updateGraphicAsset(input) {
+			const updatedAt = new Date(input.updatedAt).getTime();
+			const statements: [D1PreparedStatement, ...D1PreparedStatement[]] = [
+				database.prepare(`
+					UPDATE graphic_assets
+					SET name = ?, updated_at = ?
+					WHERE id = ? AND lifecycle_state = 'active'
+				`).bind(input.name, updatedAt, input.assetId),
+				database.prepare(`
+					DELETE FROM graphic_asset_event_associations
+					WHERE asset_id = ? AND EXISTS (
+						SELECT 1 FROM graphic_assets
+						WHERE id = ? AND updated_at = ?
+					)
+				`).bind(input.assetId, input.assetId, updatedAt),
+				...input.eventIds.map(eventId => database.prepare(`
+					INSERT INTO graphic_asset_event_associations (asset_id, event_id, created_at)
+					SELECT ?, ?, ?
+					WHERE EXISTS (
+						SELECT 1 FROM graphic_assets
+						WHERE id = ? AND updated_at = ?
+					)
+				`).bind(input.assetId, eventId, updatedAt, input.assetId, updatedAt)),
+			];
+			const results = await database.batch(statements);
+			if (results.some(result => !result.success))
+				throw new Error('Graphic Asset metadata transaction failed');
+			if (results[0]?.meta.changes !== 1)
+				return undefined;
+			return (await this.listGraphicAssets(''))
+				.find(asset => asset.id === input.assetId);
+		},
 		async findRevisionContent(input) {
 			const row = await database.prepare(`
 				SELECT c.digest, c.byte_length, c.canonical_mime, a.lifecycle_state
@@ -994,10 +1171,21 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 		},
 		async listGraphicAssetUsage(assetId) {
 			const result = await database.prepare(`
-				SELECT id, asset_id, revision_id, owner_kind, owner_id, owner_slot, event_id
-				FROM graphic_asset_references
-				WHERE asset_id = ?
-				ORDER BY owner_kind, owner_id, owner_slot, id
+				SELECT asset_reference.id, asset_reference.asset_id, asset_reference.revision_id,
+					asset_reference.owner_kind, asset_reference.owner_id,
+					asset_reference.owner_slot, asset_reference.event_id,
+					CASE
+						WHEN asset_reference.owner_kind = 'screen' THEN screens.name
+						ELSE NULL
+					END AS owner_name
+				FROM graphic_asset_references asset_reference
+				LEFT JOIN screens
+					ON asset_reference.owner_kind = 'screen'
+					AND CAST(screens.id AS TEXT) = asset_reference.owner_id
+					AND screens.event_id = asset_reference.event_id
+				WHERE asset_reference.asset_id = ?
+				ORDER BY asset_reference.owner_kind, asset_reference.owner_id,
+					asset_reference.owner_slot, asset_reference.id
 			`).bind(assetId).all<{
 				id: string;
 				asset_id: string;
@@ -1006,6 +1194,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				owner_id: string;
 				owner_slot: string;
 				event_id: number | null;
+				owner_name: string | null;
 			}>();
 			if (!result.success)
 				throw new Error('Graphic Asset usage lookup failed');
@@ -1018,6 +1207,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				owner: {
 					kind: row.owner_kind,
 					id: row.owner_id,
+					name: row.owner_name ?? undefined,
 					slot: row.owner_slot,
 					eventId: row.event_id ?? undefined,
 				},

@@ -35,6 +35,7 @@ export interface GraphicAssetUsage {
 	owner: {
 		kind: string;
 		id: string;
+		name?: string;
 		slot: string;
 		eventId?: number;
 	};
@@ -177,6 +178,7 @@ export interface GraphicsIngestionOperation extends GraphicAssetSourceDeclaratio
 	idempotencyKey: string;
 	initiatedBy: string;
 	name: string;
+	targetAssetId?: GraphicAssetId;
 	defaultEventId?: number;
 	duplicateContentPolicy: GraphicsDuplicateContentPolicy;
 	declaredByteLength: number;
@@ -185,7 +187,7 @@ export interface GraphicsIngestionOperation extends GraphicAssetSourceDeclaratio
 	canonicalCapacityOutcome?: GraphicsIngestionCapacityOutcome;
 	report?: GraphicAssetValidationReport;
 	result?: {
-		outcome: 'published' | 'reused';
+		outcome: 'published' | 'reused' | 'revision-created' | 'replacement-noop';
 		assetId: GraphicAssetId;
 		revisionId: GraphicAssetRevisionId;
 	};

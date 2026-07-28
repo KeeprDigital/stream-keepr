@@ -3,6 +3,7 @@ import type {
 	GraphicAsset,
 	GraphicAssetBrowserDecodeEvidence,
 	GraphicAssetSourceDeclarations,
+	GraphicAssetUsage,
 	GraphicsAssetLibraryCapacity,
 	GraphicsDuplicateContentPolicy,
 	GraphicsIngestionOperation,
@@ -23,6 +24,17 @@ const createSeparateAsset = ref(false);
 const uploadPending = ref(false);
 const uploadError = ref<string | null>(null);
 const currentOperation = ref<GraphicsIngestionOperation | null>(null);
+const usageByAssetId = reactive<Record<string, GraphicAssetUsage[] | undefined>>({});
+const usagePendingAssetId = ref<string | null>(null);
+const editingAssetId = ref<string | null>(null);
+const editedName = ref('');
+const editedEventIds = ref('');
+const metadataPending = ref(false);
+const metadataError = ref<string | null>(null);
+const replacementAssetId = ref<string | null>(null);
+const replacementFile = ref<File | null>(null);
+const replacementPending = ref(false);
+const replacementError = ref<string | null>(null);
 const operationStorageKey = 'graphics-asset-ingestion-operation';
 const initiationStorageKey = 'graphics-asset-ingestion-initiation';
 
@@ -184,6 +196,125 @@ function operationColor(stage: GraphicsIngestionOperation['stage']) {
 	if (stage === 'cancelled')
 		return 'neutral';
 	return 'info';
+}
+
+function operationOutcomeLabel(outcome: NonNullable<GraphicsIngestionOperation['result']>['outcome']) {
+	if (outcome === 'published')
+		return 'Published';
+	if (outcome === 'reused')
+		return 'Reused';
+	if (outcome === 'revision-created')
+		return 'Created revision';
+	return 'Replacement unchanged';
+}
+
+async function inspectUsage(asset: GraphicAsset) {
+	usagePendingAssetId.value = asset.id;
+	try {
+		usageByAssetId[asset.id] = await $fetch<GraphicAssetUsage[]>(
+			`/api/graphics-assets/${asset.id}/usage`,
+		);
+	}
+	finally {
+		usagePendingAssetId.value = null;
+	}
+}
+
+function beginMetadataEdit(asset: GraphicAsset) {
+	editingAssetId.value = asset.id;
+	editedName.value = asset.name;
+	editedEventIds.value = asset.eventIds.join(', ');
+	metadataError.value = null;
+}
+
+async function saveMetadata(asset: GraphicAsset) {
+	const eventIds = editedEventIds.value.trim()
+		? editedEventIds.value.split(',').map(value => Number(value.trim()))
+		: [];
+	if (eventIds.some(value => !Number.isSafeInteger(value) || value <= 0)) {
+		metadataError.value = 'Event associations must be comma-separated positive Event IDs.';
+		return;
+	}
+	metadataPending.value = true;
+	metadataError.value = null;
+	try {
+		await $fetch(`/api/graphics-assets/${asset.id}`, {
+			method: 'PATCH',
+			body: {
+				name: editedName.value,
+				eventIds,
+			},
+		});
+		editingAssetId.value = null;
+		await refresh();
+	}
+	catch (caught) {
+		metadataError.value = caught instanceof Error
+			? caught.message
+			: 'Graphic Asset metadata could not be updated.';
+	}
+	finally {
+		metadataPending.value = false;
+	}
+}
+
+function beginReplacement(asset: GraphicAsset) {
+	replacementAssetId.value = asset.id;
+	replacementFile.value = null;
+	replacementError.value = null;
+}
+
+async function replaceAsset(asset: GraphicAsset) {
+	const file = replacementFile.value;
+	if (!file || replacementPending.value)
+		return;
+	replacementPending.value = true;
+	replacementError.value = null;
+	try {
+		const browserDecodeEvidence = await verifyStillImageBrowserDecode(file);
+		const initiated = await $fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/${asset.id}/replacement-operations`,
+			{
+				method: 'POST',
+				body: {
+					idempotencyKey: crypto.randomUUID(),
+					sourceFileName: file.name,
+					declaredMime: file.type || undefined,
+					browserDecodeEvidence,
+					declaredByteLength: file.size,
+				},
+			},
+		);
+		currentOperation.value = initiated;
+		localStorage.setItem(operationStorageKey, initiated.id);
+		const response = await observeOperationRequest(
+			initiated.id,
+			fetch(`/api/graphics-assets/ingestion-operations/${initiated.id}/content`, {
+				method: 'PUT',
+				headers: file.type ? { 'content-type': file.type } : undefined,
+				body: file,
+			}),
+		);
+		if (!response.ok)
+			throw new Error(`Image replacement failed with status ${response.status}`);
+		currentOperation.value = await response.json() as GraphicsIngestionOperation;
+		if (currentOperation.value.stage === 'completed') {
+			clearPersistedOperation();
+			replacementAssetId.value = null;
+			replacementFile.value = null;
+			await refresh();
+			await refreshCapacity();
+			await inspectUsage(asset);
+		}
+	}
+	catch (caught) {
+		replacementError.value = caught instanceof Error
+			? caught.message
+			: 'Graphic Asset replacement failed.';
+	}
+	finally {
+		replacementPending.value = false;
+	}
 }
 
 async function observeOperationRequest<T>(
@@ -531,7 +662,7 @@ onMounted(async () => {
 						@click="retryOperation"
 					/>
 					<p v-if="currentOperation.result" class="mt-2 text-sm text-muted">
-						{{ currentOperation.result.outcome === 'published' ? 'Published' : 'Reused' }} asset {{ currentOperation.result.assetId }} revision {{ currentOperation.result.revisionId }}
+						{{ operationOutcomeLabel(currentOperation.result.outcome) }} asset {{ currentOperation.result.assetId }} revision {{ currentOperation.result.revisionId }}
 					</p>
 					<p
 						v-if="
@@ -637,6 +768,149 @@ onMounted(async () => {
 									:label="`Event ${eventId}`"
 								/>
 							</div>
+							<div class="mt-4 flex flex-wrap gap-2">
+								<UButton
+									size="sm"
+									color="neutral"
+									variant="outline"
+									label="Inspect exact usage"
+									:loading="usagePendingAssetId === asset.id"
+									@click="inspectUsage(asset)"
+								/>
+								<UButton
+									size="sm"
+									color="neutral"
+									variant="outline"
+									label="Edit metadata"
+									@click="beginMetadataEdit(asset)"
+								/>
+								<UButton
+									size="sm"
+									color="neutral"
+									variant="outline"
+									label="Replace content"
+									@click="beginReplacement(asset)"
+								/>
+							</div>
+						</div>
+					</div>
+
+					<div
+						v-if="usageByAssetId[asset.id]"
+						class="mt-4 border-t border-default pt-4"
+					>
+						<h4 class="text-sm font-semibold text-highlighted">
+							Exact revision usage
+						</h4>
+						<p
+							v-if="usageByAssetId[asset.id]!.length === 0"
+							class="mt-2 text-sm text-muted"
+						>
+							No persisted graphics artifact references any revision.
+						</p>
+						<ul v-else class="mt-2 space-y-2">
+							<li
+								v-for="usage in usageByAssetId[asset.id]"
+								:key="usage.id"
+								class="rounded-md border border-default p-3 text-sm"
+							>
+								<div class="flex flex-wrap items-center justify-between gap-2">
+									<span class="font-medium text-highlighted">
+										{{ usage.owner.name ?? `${usage.owner.kind} ${usage.owner.id}` }}
+									</span>
+									<UBadge
+										:color="usage.reference.revisionId === asset.revisionId ? 'success' : 'warning'"
+										variant="soft"
+										:label="usage.reference.revisionId === asset.revisionId ? 'Latest revision' : 'Pinned older revision'"
+									/>
+								</div>
+								<p class="mt-1 text-muted">
+									{{ usage.owner.kind === 'screen' ? 'Screen' : usage.owner.kind }} {{ usage.owner.id }}
+									<span v-if="usage.owner.eventId"> · Event {{ usage.owner.eventId }}</span>
+									· {{ usage.owner.slot }}
+								</p>
+								<p class="mt-1 font-mono text-xs text-dimmed">
+									Revision {{ usage.reference.revisionId }}
+								</p>
+							</li>
+						</ul>
+					</div>
+
+					<div
+						v-if="editingAssetId === asset.id"
+						class="mt-4 grid gap-3 border-t border-default pt-4"
+					>
+						<UFormField name="asset-name" label="Asset name">
+							<UInput v-model="editedName" class="w-full" />
+						</UFormField>
+						<UFormField
+							name="event-associations"
+							label="Event associations"
+							description="Comma-separated Event IDs. Associations organise discovery and do not change usage."
+						>
+							<UInput v-model="editedEventIds" class="w-full" />
+						</UFormField>
+						<UAlert
+							v-if="metadataError"
+							color="error"
+							variant="soft"
+							:title="metadataError"
+						/>
+						<div class="flex gap-2">
+							<UButton
+								label="Save metadata"
+								:loading="metadataPending"
+								@click="saveMetadata(asset)"
+							/>
+							<UButton
+								color="neutral"
+								variant="ghost"
+								label="Cancel"
+								@click="editingAssetId = null"
+							/>
+						</div>
+					</div>
+
+					<div
+						v-if="replacementAssetId === asset.id"
+						class="mt-4 grid gap-3 border-t border-default pt-4"
+					>
+						<UAlert
+							color="warning"
+							variant="soft"
+							title="Create an immutable revision"
+							description="Existing graphics artifact references stay pinned until each owner explicitly selects the newer revision."
+						/>
+						<UFormField
+							name="replacement-image"
+							label="Replacement image"
+							description="Current bytes are a no-op; older or different bytes create a new revision."
+						>
+							<UFileUpload
+								v-model="replacementFile"
+								accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+								variant="area"
+							/>
+						</UFormField>
+						<UAlert
+							v-if="replacementError"
+							color="error"
+							variant="soft"
+							:title="replacementError"
+						/>
+						<div class="flex gap-2">
+							<UButton
+								label="Replace with new revision"
+								:disabled="!replacementFile"
+								:loading="replacementPending"
+								@click="replaceAsset(asset)"
+							/>
+							<UButton
+								color="neutral"
+								variant="ghost"
+								label="Cancel"
+								@click="replacementAssetId = null"
+							/>
 						</div>
 					</div>
 

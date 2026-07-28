@@ -781,6 +781,130 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		await expect(library.listGraphicAssets({})).resolves.toHaveLength(2);
 	});
 
+	it('replaces content as immutable revisions while current content is a no-op', async () => {
+		const { library } = createLibrary();
+		const originalOperation = await library.initiateImageIngestion({
+			idempotencyKey: 'replacement-original',
+			initiatedBy: 'graphics-author-1',
+			name: 'Replaceable logo',
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+		const original = await library.uploadImage({
+			operationId: originalOperation.id,
+			initiatedBy: originalOperation.initiatedBy,
+			bytes: createBoundedByteStream(transparentPixelPng, {
+				byteLength: transparentPixelPng.byteLength,
+				maximumByteLength: 16 * 1024 * 1024,
+			}),
+		});
+
+		async function replace(
+			idempotencyKey: string,
+			bytes: Uint8Array,
+			declaredMime: 'image/png' | 'image/jpeg',
+		) {
+			const operation = await library.initiateImageReplacement({
+				assetId: original.result!.assetId,
+				idempotencyKey,
+				initiatedBy: 'graphics-author-1',
+				sourceFileName: `replacement.${declaredMime === 'image/png' ? 'png' : 'jpg'}`,
+				declaredMime,
+				browserDecodeEvidence: {
+					outcome: 'decoded',
+					sourceDigest: sourceDigest(bytes),
+					width: 1,
+					height: 1,
+				},
+				declaredByteLength: bytes.byteLength,
+			});
+			return await library.uploadImage({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				declaredMime,
+				bytes: createBoundedByteStream(bytes, {
+					byteLength: bytes.byteLength,
+					maximumByteLength: 16 * 1024 * 1024,
+				}),
+			});
+		}
+
+		const changed = await replace('replacement-jpeg', jpegPixel, 'image/jpeg');
+		expect(changed.result).toMatchObject({
+			outcome: 'revision-created',
+			assetId: original.result?.assetId,
+		});
+		expect(changed.result?.revisionId).not.toBe(original.result?.revisionId);
+
+		const unchanged = await replace('replacement-jpeg-no-op', jpegPixel, 'image/jpeg');
+		expect(unchanged.result).toEqual({
+			outcome: 'replacement-noop',
+			assetId: original.result?.assetId,
+			revisionId: changed.result?.revisionId,
+		});
+
+		const restored = await replace('replacement-original-again', transparentPixelPng, 'image/png');
+		expect(restored.result).toMatchObject({
+			outcome: 'revision-created',
+			assetId: original.result?.assetId,
+		});
+		expect(restored.result?.revisionId).not.toBe(original.result?.revisionId);
+		expect(restored.result?.revisionId).not.toBe(changed.result?.revisionId);
+
+		await expect(library.listGraphicAssets({})).resolves.toEqual([
+			expect.objectContaining({
+				id: original.result?.assetId,
+				name: 'Replaceable logo',
+				revisionId: restored.result?.revisionId,
+				revisionNumber: 3,
+			}),
+		]);
+		await expect(library.resolveGraphicAssetRevision({
+			assetId: original.result!.assetId,
+			revisionId: original.result!.revisionId,
+		})).resolves.toMatchObject({ outcome: 'available', contentType: 'image/png' });
+		await expect(library.resolveGraphicAssetRevision({
+			assetId: original.result!.assetId,
+			revisionId: changed.result!.revisionId,
+		})).resolves.toMatchObject({ outcome: 'available', contentType: 'image/jpeg' });
+	});
+
+	it('updates descriptive metadata and Event associations without creating a revision', async () => {
+		const { library } = createLibrary();
+		const operation = await library.initiateImageIngestion({
+			idempotencyKey: 'metadata-original',
+			initiatedBy: 'graphics-author-1',
+			name: 'Original name',
+			defaultEventId: 7,
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+		const completed = await library.uploadImage({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			bytes: createBoundedByteStream(transparentPixelPng, {
+				byteLength: transparentPixelPng.byteLength,
+				maximumByteLength: 16 * 1024 * 1024,
+			}),
+		});
+
+		const updated = await library.updateGraphicAsset({
+			assetId: completed.result!.assetId,
+			name: 'Renamed logo',
+			eventIds: [9, 11],
+		});
+
+		expect(updated).toMatchObject({
+			id: completed.result?.assetId,
+			name: 'Renamed logo',
+			eventIds: [9, 11],
+			revisionId: completed.result?.revisionId,
+			revisionNumber: 1,
+		});
+		await expect(library.resolveGraphicAssetRevision({
+			assetId: completed.result!.assetId,
+			revisionId: completed.result!.revisionId,
+		})).resolves.toMatchObject({ outcome: 'available' });
+	});
+
 	it('does not publish when canonical bytes do not hash to their digest identity', async () => {
 		const delegate = createInMemoryCanonicalGraphicsObjectStore();
 		const canonical = {

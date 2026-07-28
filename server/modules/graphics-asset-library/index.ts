@@ -108,12 +108,30 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		staleBefore: string;
 	}) => Promise<GraphicsIngestionOperation | undefined>;
 	findReusableImage: (sourceDigest: string) => Promise<ReusableImage | undefined>;
+	findCurrentImage: (assetId: GraphicAssetId) => Promise<
+		| (ReusableImage & { sourceDigest: string })
+		| undefined
+	>;
 	reuseImage: (input: {
 		operation: GraphicsIngestionOperation;
 		reusable: ReusableImage;
 		publishedAt: string;
 	}) => Promise<GraphicsIngestionOperation>;
+	completeImageReplacementNoop: (input: {
+		operation: GraphicsIngestionOperation;
+		current: ReusableImage;
+		completedAt: string;
+	}) => Promise<GraphicsIngestionOperation>;
+	publishImageReplacement: (input: PublishImageCatalogueInput & {
+		targetAssetId: GraphicAssetId;
+	}) => Promise<GraphicsIngestionOperation>;
 	publishImage: (input: PublishImageCatalogueInput) => Promise<GraphicsIngestionOperation>;
+	updateGraphicAsset: (input: {
+		assetId: GraphicAssetId;
+		name: string;
+		eventIds: number[];
+		updatedAt: string;
+	}) => Promise<GraphicAsset | undefined>;
 	listGraphicAssets: (search: string) => Promise<GraphicAsset[]>;
 	findRevisionContent: (input: {
 		assetId: GraphicAssetId;
@@ -142,6 +160,12 @@ export interface GraphicsAssetLibrary {
 		duplicateContentPolicy?: GraphicsDuplicateContentPolicy;
 		declaredByteLength: number;
 	}) => Promise<GraphicsIngestionOperation>;
+	initiateImageReplacement: (input: GraphicAssetSourceDeclarations & {
+		assetId: GraphicAssetId;
+		idempotencyKey: string;
+		initiatedBy: string;
+		declaredByteLength: number;
+	}) => Promise<GraphicsIngestionOperation>;
 	cancelImageIngestion: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
@@ -161,6 +185,11 @@ export interface GraphicsAssetLibrary {
 		initiatedBy: string;
 	}) => Promise<GraphicsIngestionOperation>;
 	listGraphicAssets: (input: { search?: string }) => Promise<GraphicAsset[]>;
+	updateGraphicAsset: (input: {
+		assetId: GraphicAssetId;
+		name: string;
+		eventIds: number[];
+	}) => Promise<GraphicAsset>;
 	listGraphicAssetUsage: (input: { assetId: GraphicAssetId }) => Promise<GraphicAssetUsage[]>;
 	inspectGraphicAssetRevision: (input: {
 		assetId: GraphicAssetId;
@@ -301,6 +330,76 @@ export function createGraphicsAssetLibrary(
 
 	function timestamp() {
 		return now().toISOString();
+	}
+
+	function validateImageIngestionInput(input: GraphicAssetSourceDeclarations & {
+		idempotencyKey: string;
+		initiatedBy: string;
+		declaredByteLength: number;
+		defaultEventId?: number;
+	}) {
+		if (!input.idempotencyKey.trim() || !input.initiatedBy.trim())
+			throw new GraphicsAssetLibraryError('Ingestion identity and author are required', 'invalid-ingestion-input');
+		if (
+			!Number.isSafeInteger(input.declaredByteLength)
+			|| input.declaredByteLength <= 0
+			|| input.declaredByteLength > MAX_STILL_IMAGE_INGESTION_BYTES
+		) {
+			throw new GraphicsAssetLibraryError(`Still image must be between 1 and ${MAX_STILL_IMAGE_INGESTION_BYTES} bytes`, 'invalid-ingestion-input');
+		}
+		if (
+			input.defaultEventId !== undefined
+			&& (!Number.isSafeInteger(input.defaultEventId) || input.defaultEventId <= 0)
+		) {
+			throw new GraphicsAssetLibraryError('Default Event identity must be a positive integer', 'invalid-ingestion-input');
+		}
+		if (
+			input.browserDecodeEvidence
+			&& (
+				!/^[a-f0-9]{64}$/.test(input.browserDecodeEvidence.sourceDigest)
+				|| (
+					input.browserDecodeEvidence.outcome === 'decoded'
+					&& (
+						!Number.isSafeInteger(input.browserDecodeEvidence.width)
+						|| input.browserDecodeEvidence.width <= 0
+						|| !Number.isSafeInteger(input.browserDecodeEvidence.height)
+						|| input.browserDecodeEvidence.height <= 0
+					)
+				)
+			)
+		) {
+			throw new GraphicsAssetLibraryError('Browser decode evidence is malformed', 'invalid-ingestion-input');
+		}
+	}
+
+	async function initiateImageOperation(input: GraphicAssetSourceDeclarations & {
+		idempotencyKey: string;
+		initiatedBy: string;
+		name: string;
+		targetAssetId?: GraphicAssetId;
+		defaultEventId?: number;
+		duplicateContentPolicy: GraphicsDuplicateContentPolicy;
+		declaredByteLength: number;
+	}) {
+		validateImageIngestionInput(input);
+		const createdAt = timestamp();
+		return await catalogueRequest(() => requireCatalogue().initiateImageIngestion({
+			id: graphicsIngestionOperationId(generateIdentity()),
+			idempotencyKey: input.idempotencyKey,
+			initiatedBy: input.initiatedBy,
+			name: input.name.trim(),
+			targetAssetId: input.targetAssetId,
+			sourceFileName: input.sourceFileName?.trim(),
+			declaredMime: input.declaredMime?.trim().toLocaleLowerCase(),
+			browserDecodeEvidence: input.browserDecodeEvidence,
+			defaultEventId: input.defaultEventId,
+			duplicateContentPolicy: input.duplicateContentPolicy,
+			declaredByteLength: input.declaredByteLength,
+			transferredByteLength: 0,
+			stage: 'created',
+			createdAt,
+			updatedAt: createdAt,
+		}), 'Graphics ingestion could not be initiated because the catalogue is unavailable');
 	}
 
 	function changedOperation(
@@ -566,6 +665,29 @@ export function createGraphicsAssetLibrary(
 			if (validationTerminal)
 				return validationTerminal;
 
+			if (operation.targetAssetId) {
+				const current = await catalogue.findCurrentImage(operation.targetAssetId);
+				if (!current)
+					throw new Error('Replacement target Graphic Asset was not found');
+				if (current.sourceDigest === processed.report.facts.sha256) {
+					operation = await catalogue.updateIngestionOperation(
+						changedOperation(operation, {
+							stage: 'publishing',
+							report: processed.report,
+						}),
+						operation.updatedAt,
+					);
+					const completed = await catalogue.completeImageReplacementNoop({
+						operation,
+						current,
+						completedAt: timestamp(),
+					});
+					// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+					await staging.delete(stagingIdentity);
+					return completed;
+				}
+			}
+
 			operation = await catalogue.updateIngestionOperation(
 				changedOperation(operation, {
 					stage: 'generating-derivatives',
@@ -658,7 +780,7 @@ export function createGraphicsAssetLibrary(
 			if (publicationTerminal)
 				return publicationTerminal;
 
-			const reusable = operation.duplicateContentPolicy === 'reuse'
+			const reusable = !operation.targetAssetId && operation.duplicateContentPolicy === 'reuse'
 				? await catalogue.findReusableImage(processed.report.facts.sha256)
 				: undefined;
 			let completed: GraphicsIngestionOperation;
@@ -666,6 +788,20 @@ export function createGraphicsAssetLibrary(
 				completed = await catalogue.reuseImage({
 					operation,
 					reusable,
+					publishedAt: timestamp(),
+				});
+			}
+			else if (operation.targetAssetId) {
+				completed = await catalogue.publishImageReplacement({
+					operation,
+					targetAssetId: operation.targetAssetId,
+					report: processed.report,
+					assetId: operation.targetAssetId,
+					revisionId: graphicAssetRevisionId(generateIdentity()),
+					derivativeId: graphicsDerivativeId(generateIdentity()),
+					sourceDigest: processed.report.facts.sha256,
+					thumbnailDigest,
+					thumbnailByteLength: thumbnail.byteLength,
 					publishedAt: timestamp(),
 				});
 			}
@@ -778,56 +914,21 @@ export function createGraphicsAssetLibrary(
 			);
 		},
 		async initiateImageIngestion(input) {
-			if (!input.idempotencyKey.trim() || !input.initiatedBy.trim() || !input.name.trim())
-				throw new GraphicsAssetLibraryError('Ingestion identity, author, and asset name are required', 'invalid-ingestion-input');
-			if (
-				!Number.isSafeInteger(input.declaredByteLength)
-				|| input.declaredByteLength <= 0
-				|| input.declaredByteLength > MAX_STILL_IMAGE_INGESTION_BYTES
-			) {
-				throw new GraphicsAssetLibraryError(`Still image must be between 1 and ${MAX_STILL_IMAGE_INGESTION_BYTES} bytes`, 'invalid-ingestion-input');
-			}
-			if (
-				input.defaultEventId !== undefined
-				&& (!Number.isSafeInteger(input.defaultEventId) || input.defaultEventId <= 0)
-			) {
-				throw new GraphicsAssetLibraryError('Default Event identity must be a positive integer', 'invalid-ingestion-input');
-			}
-			if (
-				input.browserDecodeEvidence
-				&& (
-					!/^[a-f0-9]{64}$/.test(input.browserDecodeEvidence.sourceDigest)
-					|| (
-						input.browserDecodeEvidence.outcome === 'decoded'
-						&& (
-							!Number.isSafeInteger(input.browserDecodeEvidence.width)
-							|| input.browserDecodeEvidence.width <= 0
-							|| !Number.isSafeInteger(input.browserDecodeEvidence.height)
-							|| input.browserDecodeEvidence.height <= 0
-						)
-					)
-				)
-			) {
-				throw new GraphicsAssetLibraryError('Browser decode evidence is malformed', 'invalid-ingestion-input');
-			}
-
-			const createdAt = timestamp();
-			return await catalogueRequest(() => requireCatalogue().initiateImageIngestion({
-				id: graphicsIngestionOperationId(generateIdentity()),
-				idempotencyKey: input.idempotencyKey,
-				initiatedBy: input.initiatedBy,
-				name: input.name.trim(),
-				sourceFileName: input.sourceFileName?.trim(),
-				declaredMime: input.declaredMime?.trim().toLocaleLowerCase(),
-				browserDecodeEvidence: input.browserDecodeEvidence,
-				defaultEventId: input.defaultEventId,
+			if (!input.name.trim())
+				throw new GraphicsAssetLibraryError('Asset name is required', 'invalid-ingestion-input');
+			return await initiateImageOperation({
+				...input,
+				name: input.name,
 				duplicateContentPolicy: input.duplicateContentPolicy ?? 'reuse',
-				declaredByteLength: input.declaredByteLength,
-				transferredByteLength: 0,
-				stage: 'created',
-				createdAt,
-				updatedAt: createdAt,
-			}), 'Graphics ingestion could not be initiated because the catalogue is unavailable');
+			});
+		},
+		async initiateImageReplacement(input) {
+			return await initiateImageOperation({
+				...input,
+				name: 'Graphic Asset replacement',
+				targetAssetId: input.assetId,
+				duplicateContentPolicy: 'create-separate',
+			});
 		},
 		async getIngestionOperation(input) {
 			const operation = await catalogueRequest(
@@ -1016,6 +1117,35 @@ export function createGraphicsAssetLibrary(
 				() => requireCatalogue().listGraphicAssets(input.search ?? ''),
 				'Graphic Asset discovery is temporarily unavailable',
 			);
+		},
+		async updateGraphicAsset(input) {
+			const name = input.name.trim();
+			if (!name || name.length > 200) {
+				throw new GraphicsAssetLibraryError(
+					'Graphic Asset name must be between 1 and 200 characters',
+					'invalid-ingestion-input',
+				);
+			}
+			if (
+				input.eventIds.some(eventId => !Number.isSafeInteger(eventId) || eventId <= 0)
+			) {
+				throw new GraphicsAssetLibraryError(
+					'Event identities must be positive integers',
+					'invalid-ingestion-input',
+				);
+			}
+			const updated = await catalogueRequest(
+				() => requireCatalogue().updateGraphicAsset({
+					assetId: input.assetId,
+					name,
+					eventIds: [...new Set(input.eventIds)].sort((left, right) => left - right),
+					updatedAt: timestamp(),
+				}),
+				'Graphic Asset metadata could not be updated',
+			);
+			if (!updated)
+				throw new GraphicsAssetLibraryError('Graphic Asset not found', 'ingestion-operation-not-found');
+			return updated;
 		},
 		async listGraphicAssetUsage(input) {
 			return await catalogueRequest(
