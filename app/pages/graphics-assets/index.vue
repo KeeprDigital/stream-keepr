@@ -2,6 +2,7 @@
 import type {
 	GraphicAsset,
 	GraphicAssetBrowserDecodeEvidence,
+	GraphicAssetLifecycleActionOutcome,
 	GraphicAssetSourceDeclarations,
 	GraphicAssetUsage,
 	GraphicsAssetLibraryCapacity,
@@ -42,6 +43,8 @@ const replacementAssetId = ref<string | null>(null);
 const replacementFile = ref<File | null>(null);
 const replacementPending = ref(false);
 const replacementError = ref<string | null>(null);
+const lifecyclePendingAssetId = ref<string | null>(null);
+const lifecycleErrorByAssetId = reactive<Record<string, string | undefined>>({});
 const operationStorageKey = 'graphics-asset-ingestion-operation';
 const initiationStorageKey = 'graphics-asset-ingestion-initiation';
 
@@ -59,7 +62,10 @@ const {
 	error,
 	refresh,
 } = useFetch<GraphicAsset[]>('/api/graphics-assets', {
-	query: computed(() => ({ search: search.value })),
+	query: computed(() => ({
+		search: search.value,
+		lifecycleStates: 'active,retired,trashed',
+	})),
 	default: () => [],
 });
 const {
@@ -232,6 +238,42 @@ async function inspectUsage(asset: GraphicAsset) {
 	}
 	finally {
 		usagePendingAssetId.value = null;
+	}
+}
+
+function replaceVisibleAsset(updated: GraphicAsset) {
+	const index = assets.value.findIndex(asset => asset.id === updated.id);
+	if (index !== -1)
+		assets.value.splice(index, 1, updated);
+}
+
+async function runLifecycleAction(
+	asset: GraphicAsset,
+	action: 'retire' | 'trash' | 'restore',
+) {
+	lifecyclePendingAssetId.value = asset.id;
+	lifecycleErrorByAssetId[asset.id] = undefined;
+	try {
+		const outcome = await $fetch<GraphicAssetLifecycleActionOutcome>(
+			`/api/graphics-assets/${asset.id}/lifecycle-actions`,
+			{ method: 'POST', body: { action } },
+		);
+		if (outcome.outcome === 'in-use') {
+			usageByAssetId[asset.id] = outcome.usage;
+			lifecycleErrorByAssetId[asset.id]
+				= 'This Graphic Asset cannot enter Trash while any Graphic Asset Revision is in use.';
+			return;
+		}
+		replaceVisibleAsset(outcome.asset);
+		await refresh();
+	}
+	catch (caught) {
+		lifecycleErrorByAssetId[asset.id] = caught instanceof Error
+			? caught.message
+			: 'Graphic Asset lifecycle action failed.';
+	}
+	finally {
+		lifecyclePendingAssetId.value = null;
 	}
 }
 
@@ -910,10 +952,10 @@ onMounted(async () => {
 			<div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
 				<div>
 					<h2 class="text-lg font-semibold text-highlighted">
-						Active Graphic Assets
+						Graphic Assets
 					</h2>
 					<p class="text-sm text-muted">
-						Only atomically published assets appear here.
+						Manage active discovery, reversible retirement, and the 30-day Trash recovery window.
 					</p>
 				</div>
 				<UInput
@@ -948,8 +990,22 @@ onMounted(async () => {
 								<h3 class="font-semibold text-highlighted">
 									{{ asset.name }}
 								</h3>
-								<UBadge color="success" variant="soft" label="Validated" />
+								<div class="flex flex-wrap gap-2">
+									<UBadge color="success" variant="soft" label="Validated" />
+									<UBadge
+										:color="asset.lifecycle.state === 'active' ? 'success' : asset.lifecycle.state === 'retired' ? 'warning' : 'error'"
+										variant="soft"
+										:label="asset.lifecycle.state === 'active' ? 'Active' : asset.lifecycle.state === 'retired' ? 'Retired' : 'Trash'"
+									/>
+								</div>
 							</div>
+							<p
+								v-if="asset.lifecycle.state === 'trashed'"
+								class="mt-2 text-sm text-muted"
+							>
+								Previously {{ asset.lifecycle.priorState === 'active' ? 'Active' : 'Retired' }} ·
+								Recoverable until {{ new Date(asset.lifecycle.recoverableUntil).toLocaleString() }}
+							</p>
 							<dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
 								<div v-if="asset.facts.kind === 'image'">
 									<dt class="text-xs text-dimmed">
@@ -1025,6 +1081,7 @@ onMounted(async () => {
 									@click="inspectUsage(asset)"
 								/>
 								<UButton
+									v-if="asset.lifecycle.state === 'active'"
 									size="sm"
 									color="neutral"
 									variant="outline"
@@ -1032,13 +1089,49 @@ onMounted(async () => {
 									@click="beginMetadataEdit(asset)"
 								/>
 								<UButton
+									v-if="asset.lifecycle.state === 'active'"
 									size="sm"
 									color="neutral"
 									variant="outline"
 									label="Replace content"
 									@click="beginReplacement(asset)"
 								/>
+								<UButton
+									v-if="asset.lifecycle.state === 'active'"
+									size="sm"
+									color="warning"
+									variant="soft"
+									label="Retire"
+									:loading="lifecyclePendingAssetId === asset.id"
+									@click="runLifecycleAction(asset, 'retire')"
+								/>
+								<UButton
+									v-if="asset.lifecycle.state === 'active' || asset.lifecycle.state === 'retired'"
+									size="sm"
+									color="error"
+									variant="soft"
+									label="Move to Trash"
+									:loading="lifecyclePendingAssetId === asset.id"
+									@click="runLifecycleAction(asset, 'trash')"
+								/>
+								<UButton
+									v-if="asset.lifecycle.state === 'retired' || asset.lifecycle.state === 'trashed'"
+									size="sm"
+									color="neutral"
+									variant="outline"
+									label="Restore"
+									:loading="lifecyclePendingAssetId === asset.id"
+									@click="runLifecycleAction(asset, 'restore')"
+								/>
 							</div>
+							<UAlert
+								v-if="lifecycleErrorByAssetId[asset.id]"
+								class="mt-3"
+								color="error"
+								variant="soft"
+							>
+								<p>{{ lifecycleErrorByAssetId[asset.id] }}</p>
+							</UAlert>
 						</div>
 					</div>
 

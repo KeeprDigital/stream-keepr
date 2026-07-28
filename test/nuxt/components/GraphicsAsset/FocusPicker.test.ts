@@ -17,6 +17,7 @@ const assets = ref<GraphicAsset[]>([
 		kind: 'image',
 		revisionId: 'revision-event-2' as never,
 		revisionNumber: 2,
+		lifecycle: { state: 'active' },
 		eventIds: [7],
 		facts: {
 			kind: 'image',
@@ -42,6 +43,7 @@ const assets = ref<GraphicAsset[]>([
 		kind: 'image',
 		revisionId: 'revision-shared-1' as never,
 		revisionNumber: 1,
+		lifecycle: { state: 'active' },
 		eventIds: [8],
 		facts: {
 			kind: 'image',

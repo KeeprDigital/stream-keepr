@@ -579,6 +579,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 				eventIds: input.operation.defaultEventId === undefined
 					? []
 					: [input.operation.defaultEventId],
+				lifecycle: { state: 'active' },
 				operation: cloneOperation(completed),
 			});
 			revisions.set(input.revisionId, {
@@ -612,11 +613,68 @@ export function createInMemoryGraphicsAssetCatalogue(
 			assets.set(input.assetId, updated);
 			return structuredClone(updated);
 		},
-		async listGraphicAssets(search) {
+		async listGraphicAssets(search, lifecycleStates) {
 			const normalizedSearch = search.trim().toLocaleLowerCase();
 			return [...assets.values()]
+				.filter(asset => lifecycleStates.includes(asset.lifecycle.state))
 				.filter(asset => !normalizedSearch || asset.name.toLocaleLowerCase().includes(normalizedSearch))
 				.map(asset => structuredClone(asset));
+		},
+		async retireGraphicAsset(input) {
+			const asset = assets.get(input.assetId);
+			if (!asset)
+				return { outcome: 'not-found' };
+			if (asset.lifecycle.state !== 'active')
+				return { outcome: 'not-allowed' };
+			const retired: GraphicAsset = {
+				...asset,
+				lifecycle: { state: 'retired' },
+			};
+			assets.set(input.assetId, retired);
+			return { outcome: 'updated', asset: structuredClone(retired) };
+		},
+		async trashGraphicAsset(input) {
+			const asset = assets.get(input.assetId);
+			if (!asset)
+				return { outcome: 'not-found' };
+			if (asset.lifecycle.state !== 'active' && asset.lifecycle.state !== 'retired')
+				return { outcome: 'not-allowed' };
+			const trashed: GraphicAsset = {
+				...asset,
+				lifecycle: {
+					state: 'trashed',
+					priorState: asset.lifecycle.state,
+					trashedAt: input.trashedAt,
+					recoverableUntil: input.recoverableUntil,
+				},
+			};
+			assets.set(input.assetId, trashed);
+			return { outcome: 'updated', asset: structuredClone(trashed) };
+		},
+		async restoreGraphicAsset(input) {
+			const asset = assets.get(input.assetId);
+			if (!asset)
+				return { outcome: 'not-found' };
+			if (asset.lifecycle.state === 'retired') {
+				const active: GraphicAsset = {
+					...asset,
+					lifecycle: { state: 'active' },
+				};
+				assets.set(input.assetId, active);
+				return { outcome: 'updated', asset: structuredClone(active) };
+			}
+			if (
+				asset.lifecycle.state !== 'trashed'
+				|| asset.lifecycle.recoverableUntil < input.restoredAt
+			) {
+				return { outcome: 'not-allowed' };
+			}
+			const restored: GraphicAsset = {
+				...asset,
+				lifecycle: { state: asset.lifecycle.priorState },
+			};
+			assets.set(input.assetId, restored);
+			return { outcome: 'updated', asset: structuredClone(restored) };
 		},
 		async findRevisionContent(input) {
 			const revision = revisions.get(input.revisionId);
@@ -627,7 +685,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 				byteLength: revision.facts.byteLength,
 				canonicalMime: revision.facts.canonicalMime,
 				kind: revision.facts.kind,
-				lifecycleState: 'active',
+				lifecycleState: assets.get(revision.assetId)?.lifecycle.state ?? 'active',
 			};
 		},
 		async listGraphicAssetUsage() {

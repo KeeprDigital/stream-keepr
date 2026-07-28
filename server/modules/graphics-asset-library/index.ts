@@ -2,6 +2,7 @@ import type {
 	GraphicAsset,
 	GraphicAssetCanonicalMime,
 	GraphicAssetId,
+	GraphicAssetLifecycleActionOutcome,
 	GraphicAssetReferenceStatus,
 	GraphicAssetRevisionId,
 	GraphicAssetSourceDeclarations,
@@ -79,6 +80,19 @@ export interface ReusableGraphicAsset {
 	assetId: GraphicAssetId;
 	revisionId: GraphicAssetRevisionId;
 }
+
+export type GraphicAssetLifecycleState = 'active' | 'retired' | 'trashed';
+
+export type GraphicAssetLifecycleTransition
+	= | {
+		outcome: 'updated';
+		asset: GraphicAsset;
+	}
+	| {
+		outcome: 'in-use';
+		usage: GraphicAssetUsage[];
+	}
+	| { outcome: 'not-found' | 'not-allowed' };
 
 export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
@@ -159,7 +173,23 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		eventIds: number[];
 		updatedAt: string;
 	}) => Promise<GraphicAsset | undefined>;
-	listGraphicAssets: (search: string) => Promise<GraphicAsset[]>;
+	listGraphicAssets: (
+		search: string,
+		lifecycleStates: readonly GraphicAssetLifecycleState[],
+	) => Promise<GraphicAsset[]>;
+	retireGraphicAsset: (input: {
+		assetId: GraphicAssetId;
+		updatedAt: string;
+	}) => Promise<GraphicAssetLifecycleTransition>;
+	trashGraphicAsset: (input: {
+		assetId: GraphicAssetId;
+		trashedAt: string;
+		recoverableUntil: string;
+	}) => Promise<GraphicAssetLifecycleTransition>;
+	restoreGraphicAsset: (input: {
+		assetId: GraphicAssetId;
+		restoredAt: string;
+	}) => Promise<GraphicAssetLifecycleTransition>;
 	findRevisionContent: (input: {
 		assetId: GraphicAssetId;
 		revisionId: GraphicAssetRevisionId;
@@ -231,7 +261,19 @@ export interface GraphicsAssetLibrary {
 		initiatedBy: string;
 		evidence: NonNullable<GraphicAssetSourceDeclarations['browserDecodeEvidence']>;
 	}) => Promise<GraphicsIngestionOperation>;
-	listGraphicAssets: (input: { search?: string }) => Promise<GraphicAsset[]>;
+	listGraphicAssets: (input: {
+		search?: string;
+		lifecycleStates?: readonly GraphicAssetLifecycleState[];
+	}) => Promise<GraphicAsset[]>;
+	retireGraphicAsset: (input: {
+		assetId: GraphicAssetId;
+	}) => Promise<GraphicAssetLifecycleActionOutcome>;
+	trashGraphicAsset: (input: {
+		assetId: GraphicAssetId;
+	}) => Promise<GraphicAssetLifecycleActionOutcome>;
+	restoreGraphicAsset: (input: {
+		assetId: GraphicAssetId;
+	}) => Promise<GraphicAssetLifecycleActionOutcome>;
 	updateGraphicAsset: (input: {
 		assetId: GraphicAssetId;
 		name: string;
@@ -351,6 +393,7 @@ export function createGraphicsAssetLibrary(
 	const generateIdentity = dependencies.generateIdentity ?? (() => crypto.randomUUID());
 	const activeIngestionLeaseMilliseconds
 		= GRAPHICS_MULTIPART_PART_TRANSFER_TIMEOUT_MILLISECONDS + 30_000;
+	const trashRecoveryMilliseconds = 30 * 24 * 60 * 60 * 1000;
 
 	function requireCatalogue(): GraphicsAssetCatalogue {
 		if (!('initiateGraphicsIngestion' in dependencies.catalogue))
@@ -1707,10 +1750,95 @@ export function createGraphicsAssetLibrary(
 			return await continueGraphicsIngestion(claimed);
 		},
 		async listGraphicAssets(input) {
+			const lifecycleStates = input.lifecycleStates ?? ['active'];
+			if (
+				lifecycleStates.length === 0
+				|| lifecycleStates.some(state => !['active', 'retired', 'trashed'].includes(state))
+			) {
+				throw new GraphicsAssetLibraryError(
+					'At least one valid Graphic Asset lifecycle state is required',
+					'invalid-ingestion-input',
+				);
+			}
 			return await catalogueRequest(
-				() => requireCatalogue().listGraphicAssets(input.search ?? ''),
+				() => requireCatalogue().listGraphicAssets(
+					input.search ?? '',
+					[...new Set(lifecycleStates)],
+				),
 				'Graphic Asset discovery is temporarily unavailable',
 			);
+		},
+		async retireGraphicAsset(input) {
+			const transition = await catalogueRequest(
+				() => requireCatalogue().retireGraphicAsset({
+					assetId: input.assetId,
+					updatedAt: timestamp(),
+				}),
+				'Graphic Asset retirement could not be completed',
+			);
+			if (transition.outcome === 'not-found') {
+				throw new GraphicsAssetLibraryError(
+					'Graphic Asset not found',
+					'ingestion-operation-not-found',
+				);
+			}
+			if (transition.outcome !== 'updated') {
+				throw new GraphicsAssetLibraryError(
+					'Only an active Graphic Asset can be retired',
+					'graphic-asset-lifecycle-action-not-allowed',
+				);
+			}
+			return { outcome: 'retired', asset: transition.asset };
+		},
+		async trashGraphicAsset(input) {
+			const trashedAt = now();
+			const transition = await catalogueRequest(
+				() => requireCatalogue().trashGraphicAsset({
+					assetId: input.assetId,
+					trashedAt: trashedAt.toISOString(),
+					recoverableUntil: new Date(
+						trashedAt.getTime() + trashRecoveryMilliseconds,
+					).toISOString(),
+				}),
+				'Graphic Asset Trash transition could not be completed',
+			);
+			if (transition.outcome === 'not-found') {
+				throw new GraphicsAssetLibraryError(
+					'Graphic Asset not found',
+					'ingestion-operation-not-found',
+				);
+			}
+			if (transition.outcome === 'in-use')
+				return transition;
+			if (transition.outcome !== 'updated') {
+				throw new GraphicsAssetLibraryError(
+					'Only an active or Retired Graphic Asset can enter Trash',
+					'graphic-asset-lifecycle-action-not-allowed',
+				);
+			}
+			return { outcome: 'trashed', asset: transition.asset };
+		},
+		async restoreGraphicAsset(input) {
+			const transition = await catalogueRequest(
+				() => requireCatalogue().restoreGraphicAsset({
+					assetId: input.assetId,
+					restoredAt: timestamp(),
+				}),
+				'Graphic Asset restoration could not be completed',
+			);
+			if (transition.outcome === 'not-found') {
+				throw new GraphicsAssetLibraryError(
+					'Graphic Asset not found',
+					'ingestion-operation-not-found',
+				);
+			}
+			if (transition.outcome !== 'updated') {
+				throw new GraphicsAssetLibraryError(
+					'Graphic Asset cannot be restored from its current lifecycle state or its recovery window has ended',
+					'graphic-asset-lifecycle-action-not-allowed',
+				);
+			}
+			return { outcome: 'restored', asset: transition.asset };
 		},
 		async updateGraphicAsset(input) {
 			const name = input.name.trim();

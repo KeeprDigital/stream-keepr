@@ -49,6 +49,27 @@ export interface GraphicAssetUsage {
 	};
 }
 
+export type GraphicAssetLifecycle
+	= | {
+		state: 'active' | 'retired';
+	}
+	| {
+		state: 'trashed';
+		priorState: 'active' | 'retired';
+		trashedAt: string;
+		recoverableUntil: string;
+	};
+
+export type GraphicAssetLifecycleActionOutcome
+	= | {
+		outcome: 'retired' | 'restored' | 'trashed';
+		asset: GraphicAsset;
+	}
+	| {
+		outcome: 'in-use';
+		usage: GraphicAssetUsage[];
+	};
+
 export type GraphicAssetReferenceStatus
 	= | {
 		outcome: 'available';
@@ -306,6 +327,7 @@ export interface GraphicAsset {
 	revisionNumber: number;
 	facts: GraphicAssetImageFacts | GraphicAssetFontFacts;
 	eventIds: number[];
+	lifecycle: GraphicAssetLifecycle;
 	operation: GraphicsIngestionOperation;
 }
 

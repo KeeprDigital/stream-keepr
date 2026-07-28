@@ -49,6 +49,10 @@ interface AssetRow {
 	id: string;
 	name: string;
 	kind: GraphicAsset['kind'];
+	lifecycle_state: 'active' | 'retired' | 'trashed';
+	trash_prior_state: 'active' | 'retired' | null;
+	trashed_at: number | null;
+	trash_recoverable_until: number | null;
 	revision_id: string;
 	revision_number: number;
 	technical_facts: string;
@@ -72,6 +76,17 @@ interface AssetRow {
 	failure: string | null;
 	operation_created_at: number;
 	operation_updated_at: number;
+}
+
+interface UsageRow {
+	id: string;
+	asset_id: string;
+	revision_id: string;
+	owner_kind: string;
+	owner_id: string;
+	owner_slot: string;
+	event_id: number | null;
+	owner_name: string | null;
 }
 
 function parseJson<T>(value: string | null): T | undefined {
@@ -132,6 +147,75 @@ function operationRowFromAsset(row: AssetRow): OperationRow {
 		created_at: row.operation_created_at,
 		updated_at: row.operation_updated_at,
 	};
+}
+
+function lifecycleFromRow(row: AssetRow): GraphicAsset['lifecycle'] {
+	if (row.lifecycle_state !== 'trashed')
+		return { state: row.lifecycle_state };
+	if (
+		!row.trash_prior_state
+		|| row.trashed_at === null
+		|| row.trash_recoverable_until === null
+	) {
+		throw new Error('Trashed Graphic Asset is missing recovery facts');
+	}
+	return {
+		state: 'trashed',
+		priorState: row.trash_prior_state,
+		trashedAt: new Date(row.trashed_at).toISOString(),
+		recoverableUntil: new Date(row.trash_recoverable_until).toISOString(),
+	};
+}
+
+function assetFromRow(row: AssetRow): GraphicAsset {
+	return {
+		id: row.id as GraphicAssetId,
+		name: row.name,
+		kind: row.kind,
+		revisionId: row.revision_id as GraphicAsset['revisionId'],
+		revisionNumber: row.revision_number,
+		facts: JSON.parse(row.technical_facts) as GraphicAssetImageFacts | GraphicAssetFontFacts,
+		eventIds: JSON.parse(row.event_ids) as number[],
+		lifecycle: lifecycleFromRow(row),
+		operation: operationFromRow(operationRowFromAsset(row)),
+	};
+}
+
+function usageFromRow(row: UsageRow): GraphicAssetUsage {
+	return {
+		id: row.id,
+		reference: {
+			assetId: row.asset_id as GraphicAssetId,
+			revisionId: row.revision_id as GraphicAssetRevisionId,
+		},
+		owner: {
+			kind: row.owner_kind,
+			id: row.owner_id,
+			name: row.owner_name ?? undefined,
+			slot: row.owner_slot,
+			eventId: row.event_id ?? undefined,
+		},
+	};
+}
+
+function usageSelect() {
+	return `
+		SELECT asset_reference.id, asset_reference.asset_id, asset_reference.revision_id,
+			asset_reference.owner_kind, asset_reference.owner_id,
+			asset_reference.owner_slot, asset_reference.event_id,
+			CASE
+				WHEN asset_reference.owner_kind = 'screen' THEN screens.name
+				ELSE NULL
+			END AS owner_name
+		FROM graphic_asset_references asset_reference
+		LEFT JOIN screens
+			ON asset_reference.owner_kind = 'screen'
+			AND CAST(screens.id AS TEXT) = asset_reference.owner_id
+			AND screens.event_id = asset_reference.event_id
+		WHERE asset_reference.asset_id = ?
+		ORDER BY asset_reference.owner_kind, asset_reference.owner_id,
+			asset_reference.owner_slot, asset_reference.id
+	`;
 }
 
 function operationSelect(where: string) {
@@ -1225,11 +1309,13 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				throw new Error('Graphic Asset publication transaction failed');
 			return completed;
 		},
-		async listGraphicAssets(search) {
+		async listGraphicAssets(search, lifecycleStates) {
 			const normalizedSearch = `%${search.trim().toLocaleLowerCase()}%`;
 			const result = await database.prepare(`
 				SELECT
-					a.id, a.name, a.kind, r.id AS revision_id, r.revision_number,
+					a.id, a.name, a.kind, a.lifecycle_state, a.trash_prior_state,
+					a.trashed_at, a.trash_recoverable_until,
+					r.id AS revision_id, r.revision_number,
 					r.technical_facts,
 					COALESCE((
 						SELECT json_group_array(event_id)
@@ -1266,22 +1352,111 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 						ORDER BY latest_operation.updated_at DESC, latest_operation.id DESC
 						LIMIT 1
 					)
-				WHERE a.lifecycle_state = 'active'
+				WHERE a.lifecycle_state IN (${lifecycleStates.map(() => '?').join(', ')})
 					AND lower(a.name) LIKE ?
 				ORDER BY lower(a.name), a.id
-			`).bind(normalizedSearch).all<AssetRow>();
+			`).bind(...lifecycleStates, normalizedSearch).all<AssetRow>();
 			if (!result.success)
 				throw new Error('Graphic Asset discovery failed');
-			return result.results.map((row): GraphicAsset => ({
-				id: row.id as GraphicAssetId,
-				name: row.name,
-				kind: row.kind,
-				revisionId: row.revision_id as GraphicAsset['revisionId'],
-				revisionNumber: row.revision_number,
-				facts: JSON.parse(row.technical_facts) as GraphicAssetImageFacts | GraphicAssetFontFacts,
-				eventIds: JSON.parse(row.event_ids) as number[],
-				operation: operationFromRow(operationRowFromAsset(row)),
-			}));
+			return result.results.map(assetFromRow);
+		},
+		async retireGraphicAsset(input) {
+			const result = await database.prepare(`
+				UPDATE graphic_assets
+				SET lifecycle_state = 'retired', trash_prior_state = NULL,
+					trashed_at = NULL, trash_recoverable_until = NULL, updated_at = ?
+				WHERE id = ? AND lifecycle_state = 'active'
+			`).bind(new Date(input.updatedAt).getTime(), input.assetId).run();
+			if (!result.success)
+				throw new Error('Graphic Asset retirement failed');
+			if (result.meta.changes === 1) {
+				const asset = (await this.listGraphicAssets(
+					'',
+					['active', 'retired', 'trashed'],
+				)).find(candidate => candidate.id === input.assetId);
+				if (!asset)
+					throw new Error('Retired Graphic Asset could not be read');
+				return { outcome: 'updated', asset };
+			}
+			const existing = await database.prepare(
+				'SELECT lifecycle_state FROM graphic_assets WHERE id = ?',
+			).bind(input.assetId).first();
+			return { outcome: existing ? 'not-allowed' : 'not-found' };
+		},
+		async trashGraphicAsset(input) {
+			const [transition, usage] = await database.batch([
+				database.prepare(`
+					UPDATE graphic_assets
+					SET trash_prior_state = lifecycle_state, lifecycle_state = 'trashed',
+						trashed_at = ?, trash_recoverable_until = ?, updated_at = ?
+					WHERE id = ? AND lifecycle_state IN ('active', 'retired')
+						AND NOT EXISTS (
+							SELECT 1
+							FROM graphic_asset_references asset_reference
+							WHERE asset_reference.asset_id = graphic_assets.id
+						)
+				`).bind(
+					new Date(input.trashedAt).getTime(),
+					new Date(input.recoverableUntil).getTime(),
+					new Date(input.trashedAt).getTime(),
+					input.assetId,
+				),
+				database.prepare(usageSelect()).bind(input.assetId),
+			]);
+			if (!transition?.success || !usage?.success)
+				throw new Error('Graphic Asset Trash transaction failed');
+			if (transition.meta.changes === 1) {
+				const asset = (await this.listGraphicAssets(
+					'',
+					['active', 'retired', 'trashed'],
+				)).find(candidate => candidate.id === input.assetId);
+				if (!asset)
+					throw new Error('Trashed Graphic Asset could not be read');
+				return { outcome: 'updated', asset };
+			}
+			const currentUsage = (usage.results as unknown as UsageRow[]).map(usageFromRow);
+			if (currentUsage.length > 0)
+				return { outcome: 'in-use', usage: currentUsage };
+			const existing = await database.prepare(
+				'SELECT lifecycle_state FROM graphic_assets WHERE id = ?',
+			).bind(input.assetId).first();
+			return { outcome: existing ? 'not-allowed' : 'not-found' };
+		},
+		async restoreGraphicAsset(input) {
+			const restoredAt = new Date(input.restoredAt).getTime();
+			const result = await database.prepare(`
+				UPDATE graphic_assets
+				SET lifecycle_state = CASE
+						WHEN lifecycle_state = 'retired' THEN 'active'
+						ELSE trash_prior_state
+					END,
+					trash_prior_state = NULL, trashed_at = NULL,
+					trash_recoverable_until = NULL, updated_at = ?
+				WHERE id = ?
+					AND (
+						lifecycle_state = 'retired'
+						OR (
+							lifecycle_state = 'trashed'
+							AND trash_prior_state IN ('active', 'retired')
+							AND trash_recoverable_until >= ?
+						)
+					)
+			`).bind(restoredAt, input.assetId, restoredAt).run();
+			if (!result.success)
+				throw new Error('Graphic Asset restoration failed');
+			if (result.meta.changes === 1) {
+				const asset = (await this.listGraphicAssets(
+					'',
+					['active', 'retired', 'trashed'],
+				)).find(candidate => candidate.id === input.assetId);
+				if (!asset)
+					throw new Error('Restored Graphic Asset could not be read');
+				return { outcome: 'updated', asset };
+			}
+			const existing = await database.prepare(
+				'SELECT lifecycle_state FROM graphic_assets WHERE id = ?',
+			).bind(input.assetId).first();
+			return { outcome: existing ? 'not-allowed' : 'not-found' };
 		},
 		async updateGraphicAsset(input) {
 			const updatedAt = new Date(input.updatedAt).getTime();
@@ -1312,7 +1487,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				throw new Error('Graphic Asset metadata transaction failed');
 			if (results[0]?.meta.changes !== 1)
 				return undefined;
-			return (await this.listGraphicAssets(''))
+			return (await this.listGraphicAssets('', ['active']))
 				.find(asset => asset.id === input.assetId);
 		},
 		async findRevisionContent(input) {
@@ -1340,48 +1515,10 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				: undefined;
 		},
 		async listGraphicAssetUsage(assetId) {
-			const result = await database.prepare(`
-				SELECT asset_reference.id, asset_reference.asset_id, asset_reference.revision_id,
-					asset_reference.owner_kind, asset_reference.owner_id,
-					asset_reference.owner_slot, asset_reference.event_id,
-					CASE
-						WHEN asset_reference.owner_kind = 'screen' THEN screens.name
-						ELSE NULL
-					END AS owner_name
-				FROM graphic_asset_references asset_reference
-				LEFT JOIN screens
-					ON asset_reference.owner_kind = 'screen'
-					AND CAST(screens.id AS TEXT) = asset_reference.owner_id
-					AND screens.event_id = asset_reference.event_id
-				WHERE asset_reference.asset_id = ?
-				ORDER BY asset_reference.owner_kind, asset_reference.owner_id,
-					asset_reference.owner_slot, asset_reference.id
-			`).bind(assetId).all<{
-				id: string;
-				asset_id: string;
-				revision_id: string;
-				owner_kind: string;
-				owner_id: string;
-				owner_slot: string;
-				event_id: number | null;
-				owner_name: string | null;
-			}>();
+			const result = await database.prepare(usageSelect()).bind(assetId).all<UsageRow>();
 			if (!result.success)
 				throw new Error('Graphic Asset usage lookup failed');
-			return result.results.map((row): GraphicAssetUsage => ({
-				id: row.id,
-				reference: {
-					assetId: row.asset_id as GraphicAssetId,
-					revisionId: row.revision_id as GraphicAssetRevisionId,
-				},
-				owner: {
-					kind: row.owner_kind,
-					id: row.owner_id,
-					name: row.owner_name ?? undefined,
-					slot: row.owner_slot,
-					eventId: row.event_id ?? undefined,
-				},
-			}));
+			return result.results.map(usageFromRow);
 		},
 		async findThumbnailDigest(assetId) {
 			const row = await database.prepare(`
@@ -1389,7 +1526,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				FROM graphics_derivatives d
 				JOIN graphic_asset_revisions r ON r.id = d.source_revision_id
 				JOIN graphic_assets a ON a.id = r.asset_id
-				WHERE a.id = ? AND a.lifecycle_state = 'active'
+				WHERE a.id = ?
 					AND d.kind IN ('thumbnail', 'font-specimen')
 				ORDER BY r.revision_number DESC
 				LIMIT 1
