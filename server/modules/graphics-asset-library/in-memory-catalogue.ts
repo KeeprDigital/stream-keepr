@@ -10,12 +10,17 @@ import type {
 	GraphicsAssetCatalogue,
 	PublishImageCatalogueInput,
 } from '.';
+import type { GraphicsImageMultipartState } from './multipart';
 import {
 	DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES,
 	DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
 } from '~~/shared/types/graphicsAsset';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { GraphicsAssetLibraryError } from './errors';
+import {
+	graphicsMultipartCompletedByteLength,
+	graphicsMultipartTransfer,
+} from './multipart';
 
 interface InMemoryGraphicsAssetCatalogueOptions {
 	canonicalLimitBytes?: number;
@@ -40,11 +45,19 @@ export function createInMemoryGraphicsAssetCatalogue(
 		GraphicsIngestionOperationId,
 		Map<string, number>
 	>();
+	const multipartStates = new Map<GraphicsIngestionOperationId, GraphicsImageMultipartState>();
 	let canonicalLimitBytes = options.canonicalLimitBytes ?? DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES;
 	let stagingLimitBytes = options.stagingLimitBytes ?? DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES;
 
 	function cloneOperation(operation: GraphicsIngestionOperation): GraphicsIngestionOperation {
-		return structuredClone(operation);
+		const clone = structuredClone(operation);
+		const multipart = multipartStates.get(operation.id);
+		if (!multipart)
+			return clone;
+		return {
+			...clone,
+			transfer: graphicsMultipartTransfer(operation.declaredByteLength, multipart),
+		};
 	}
 
 	function operationIdentity(initiatedBy: string, idempotencyKey: string) {
@@ -264,6 +277,46 @@ export function createInMemoryGraphicsAssetCatalogue(
 			const operation = operations.get(operationId);
 			return operation?.initiatedBy === initiatedBy ? cloneOperation(operation) : undefined;
 		},
+		async getImageMultipartState(operationId, initiatedBy) {
+			const operation = operations.get(operationId);
+			if (!operation || operation.initiatedBy !== initiatedBy)
+				return undefined;
+			const state = multipartStates.get(operationId);
+			return state ? structuredClone(state) : undefined;
+		},
+		async updateImageMultipartState(input) {
+			const operation = operations.get(input.operationId);
+			const existing = multipartStates.get(input.operationId);
+			if (
+				!operation
+				|| operation.initiatedBy !== input.initiatedBy
+				|| operation.stage === 'cancelled'
+				|| operation.stage === 'completed'
+				|| (existing?.version ?? 0) !== input.expectedVersion
+				|| input.state.version !== input.expectedVersion + 1
+			) {
+				return false;
+			}
+			const completedByteLength = graphicsMultipartCompletedByteLength(input.state);
+			multipartStates.set(input.operationId, structuredClone(input.state));
+			operations.set(input.operationId, {
+				...operation,
+				stage: 'transferring',
+				transferredByteLength: completedByteLength,
+				updatedAt: input.updatedAt,
+			});
+			return true;
+		},
+		async recordImageMultipartCleanupComplete(operationId, initiatedBy) {
+			const operation = operations.get(operationId);
+			const state = multipartStates.get(operationId);
+			if (!operation || operation.initiatedBy !== initiatedBy || operation.stage !== 'cancelled' || !state)
+				return;
+			multipartStates.set(operationId, {
+				...state,
+				cleanupPending: false,
+			});
+		},
 		async updateIngestionOperation(operation, expectedUpdatedAt) {
 			const existing = operations.get(operation.id);
 			if (!existing)
@@ -277,6 +330,15 @@ export function createInMemoryGraphicsAssetCatalogue(
 			if (existing.updatedAt !== expectedUpdatedAt)
 				throw new Error('Graphics Ingestion Operation transition lost its claim');
 			operations.set(operation.id, cloneOperation(operation));
+			if (operation.stage === 'cancelled') {
+				const multipart = multipartStates.get(operation.id);
+				if (multipart) {
+					multipartStates.set(operation.id, {
+						...multipart,
+						cleanupPending: true,
+					});
+				}
+			}
 			if (
 				operation.stage === 'completed'
 				|| operation.stage === 'cancelled'

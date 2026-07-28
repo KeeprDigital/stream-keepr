@@ -2,7 +2,10 @@ import type { MutationBodyMethod } from './shared/utils/requestBodyLimits';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { wasmModulePlugin } from './build/wasmModulePlugin';
-import { MAX_STILL_IMAGE_INGESTION_BYTES } from './shared/utils/graphicsAssetCompatibility';
+import {
+	GRAPHICS_MULTIPART_PART_BYTES,
+	MAX_STILL_IMAGE_INGESTION_BYTES,
+} from './shared/utils/graphicsAssetCompatibility';
 import { MUTATION_BODY_METHODS } from './shared/utils/requestBodyLimits';
 
 const isIntegration = process.env.STREAM_KEEPR_INTEGRATION === 'true';
@@ -98,6 +101,14 @@ export default defineNuxtConfig({
 				]
 			: [],
 		routeRules: {
+			'/api/graphics-assets/ingestion-operations/**/multipart/parts/**': {
+				boundedRawMutations: {
+					PUT: {
+						maxBytes: GRAPHICS_MULTIPART_PART_BYTES,
+						label: 'graphics multipart part',
+					},
+				},
+			},
 			'/api/graphics-assets/ingestion-operations/**': {
 				boundedRawMutations: {
 					PUT: {

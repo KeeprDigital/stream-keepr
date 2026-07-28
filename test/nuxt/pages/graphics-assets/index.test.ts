@@ -8,6 +8,8 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
+import { formatByteCount } from '~~/shared/utils/formatByteCount';
+import { GRAPHICS_MULTIPART_PART_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 
 const {
 	mockApiFetch,
@@ -294,6 +296,153 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(mockRefresh).toHaveBeenCalledOnce();
 		expect(wrapper.text()).toContain('Published asset asset-1 revision revision-1');
 		expect(wrapper.text()).toContain('Exact source browser decode verified before publication.');
+	});
+
+	it('uploads a large image in resumable parts and reports exact transferred bytes', async () => {
+		const wrapper = await mountPage();
+		const bytes = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 1);
+		const file = new File([bytes], 'large-scoreboard.png', { type: 'image/png' });
+		const created: GraphicsIngestionOperation = {
+			...completedOperation,
+			name: 'large-scoreboard.png',
+			sourceFileName: 'large-scoreboard.png',
+			declaredMime: 'image/png',
+			declaredByteLength: bytes.byteLength,
+			transferredByteLength: 0,
+			stage: 'created',
+			report: undefined,
+			result: undefined,
+		};
+		const started: GraphicsIngestionOperation = {
+			...created,
+			stage: 'transferring',
+			transfer: {
+				method: 'multipart',
+				partByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+				maximumConcurrentParts: 3,
+				maximumPartAttempts: 3,
+				partCount: 2,
+				cleanupPending: false,
+				completedParts: [],
+			},
+		};
+		const afterFirst: GraphicsIngestionOperation = {
+			...started,
+			transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+			transfer: {
+				...started.transfer!,
+				completedParts: [{
+					partNumber: 1,
+					partIdentity: 'operation-1:1' as never,
+					byteLength: GRAPHICS_MULTIPART_PART_BYTES,
+				}],
+			},
+		};
+		const ready: GraphicsIngestionOperation = {
+			...started,
+			transferredByteLength: bytes.byteLength,
+			transfer: {
+				...started.transfer!,
+				completedParts: [
+					...afterFirst.transfer!.completedParts,
+					{
+						partNumber: 2,
+						partIdentity: 'operation-1:2' as never,
+						byteLength: 1,
+					},
+				],
+			},
+		};
+		const completed = {
+			...completedOperation,
+			declaredByteLength: bytes.byteLength,
+			transferredByteLength: bytes.byteLength,
+			transfer: ready.transfer,
+		};
+		mockApiFetch.mockImplementation((path: string) => {
+			if (path === '/api/graphics-assets/ingestion-operations')
+				return Promise.resolve(created);
+			if (path.endsWith('/multipart'))
+				return Promise.resolve(started);
+			if (path.endsWith('/multipart/complete'))
+				return Promise.resolve(completed);
+			return Promise.resolve(ready);
+		});
+		mockTransferFetch
+			.mockResolvedValueOnce(new Response(JSON.stringify(afterFirst), { status: 200 }))
+			.mockResolvedValueOnce(new Response(JSON.stringify(ready), { status: 200 }));
+
+		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
+		await flushPromises();
+		await wrapper.get('[data-testid="upload-image"]').trigger('click');
+		await flushPromises();
+
+		expect(mockApiFetch).toHaveBeenCalledWith(
+			'/api/graphics-assets/ingestion-operations/operation-1/multipart',
+			{ method: 'POST' },
+		);
+		expect(mockTransferFetch).toHaveBeenCalledTimes(2);
+		expect(mockTransferFetch.mock.calls.map(([, request]) =>
+			(request.body as Blob).size)).toEqual([GRAPHICS_MULTIPART_PART_BYTES, 1]);
+		expect(mockApiFetch).toHaveBeenCalledWith(
+			'/api/graphics-assets/ingestion-operations/operation-1/multipart/complete',
+			{ method: 'POST' },
+		);
+		expect(wrapper.text()).toContain(
+			`Transferred ${formatByteCount(bytes.byteLength)} of ${formatByteCount(bytes.byteLength)}`,
+		);
+	});
+
+	it('cancels a reconnected multipart operation through its durable identity', async () => {
+		const active: GraphicsIngestionOperation = {
+			...completedOperation,
+			declaredByteLength: GRAPHICS_MULTIPART_PART_BYTES + 1,
+			transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+			stage: 'transferring',
+			report: undefined,
+			result: undefined,
+			transfer: {
+				method: 'multipart',
+				partByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+				maximumConcurrentParts: 3,
+				maximumPartAttempts: 3,
+				partCount: 2,
+				cleanupPending: false,
+				completedParts: [{
+					partNumber: 1,
+					partIdentity: 'operation-1:1' as never,
+					byteLength: GRAPHICS_MULTIPART_PART_BYTES,
+				}],
+			},
+		};
+		const cancelled: GraphicsIngestionOperation = {
+			...active,
+			stage: 'cancelled',
+			transfer: { ...active.transfer!, cleanupPending: false },
+			failure: {
+				code: 'ingestion-cancelled',
+				retryable: false,
+				message: 'Graphics ingestion was cancelled before publication.',
+			},
+		};
+		localStorage.setItem('graphics-asset-ingestion-operation', active.id);
+		mockApiFetch.mockImplementation((_path: string, options?: { method?: string }) =>
+			Promise.resolve(options?.method === 'DELETE' ? cancelled : active));
+
+		const wrapper = await mountPage();
+		await flushPromises();
+		const cancelButton = wrapper.findAll('button')
+			.find(button => button.text().includes('Cancel ingestion'));
+		expect(cancelButton).toBeDefined();
+		await cancelButton!.trigger('click');
+		await flushPromises();
+
+		expect(mockApiFetch).toHaveBeenCalledWith(
+			'/api/graphics-assets/ingestion-operations/operation-1',
+			{ method: 'DELETE' },
+		);
+		expect(wrapper.text()).toContain('cancelled');
+		expect(localStorage.getItem('graphics-asset-ingestion-operation')).toBeNull();
 	});
 
 	it('preserves the server validation report when malformed input cannot be accepted', async () => {

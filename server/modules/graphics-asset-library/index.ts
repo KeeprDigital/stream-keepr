@@ -16,18 +16,26 @@ import type {
 	GraphicsIngestionOperationId,
 } from '~~/shared/types/graphicsAsset';
 import type { GraphicsCapacityExhaustedDetails } from './errors';
+import type { GraphicsImageMultipartState } from './multipart';
 import type {
 	BoundedByteStream,
 	GraphicsCanonicalObjectStore,
+	GraphicsMultipartPartIdentity,
 	GraphicsObjectStoreHealth,
 	GraphicsStagingObjectStore,
 } from './object-store';
 import {
+	GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
+	GRAPHICS_MULTIPART_MAXIMUM_PART_ATTEMPTS,
+	GRAPHICS_MULTIPART_PART_BYTES,
+	GRAPHICS_MULTIPART_PART_TRANSFER_TIMEOUT_MILLISECONDS,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
 } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GraphicsAssetLibraryError } from './errors';
+import { graphicsIngestionPartIdentity } from './multipart';
 import {
+	boundedByteStreamWithDeadline,
 	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from './object-store';
@@ -98,6 +106,21 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		operationId: GraphicsIngestionOperationId,
 		initiatedBy: string,
 	) => Promise<GraphicsIngestionOperation | undefined>;
+	getImageMultipartState: (
+		operationId: GraphicsIngestionOperationId,
+		initiatedBy: string,
+	) => Promise<GraphicsImageMultipartState | undefined>;
+	updateImageMultipartState: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
+		expectedVersion: number;
+		state: GraphicsImageMultipartState;
+		updatedAt: string;
+	}) => Promise<boolean>;
+	recordImageMultipartCleanupComplete: (
+		operationId: GraphicsIngestionOperationId,
+		initiatedBy: string,
+	) => Promise<void>;
 	updateIngestionOperation: (
 		operation: GraphicsIngestionOperation,
 		expectedUpdatedAt: string,
@@ -155,6 +178,20 @@ export interface GraphicsAssetLibrary {
 		initiatedBy: string;
 		declaredMime?: string;
 		bytes: BoundedByteStream;
+	}) => Promise<GraphicsIngestionOperation>;
+	startImageMultipartUpload: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
+	}) => Promise<GraphicsIngestionOperation>;
+	uploadImageMultipartPart: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
+		partNumber: number;
+		bytes: BoundedByteStream;
+	}) => Promise<GraphicsIngestionOperation>;
+	completeImageMultipartUpload: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
 	}) => Promise<GraphicsIngestionOperation>;
 	retryImageIngestion: (input: {
 		operationId: GraphicsIngestionOperationId;
@@ -223,6 +260,18 @@ export function graphicsIngestionOperationId(value: string): GraphicsIngestionOp
 	return requiredIdentity<GraphicsIngestionOperationId>(value, 'Graphics Ingestion Operation identity');
 }
 
+export function graphicsMultipartPartByteLength(
+	declaredByteLength: number,
+	partNumber: number,
+): number {
+	const partCount = Math.ceil(declaredByteLength / GRAPHICS_MULTIPART_PART_BYTES);
+	if (!Number.isSafeInteger(partNumber) || partNumber <= 0 || partNumber > partCount)
+		throw new GraphicsAssetLibraryError('Multipart part number is outside this operation', 'invalid-ingestion-input');
+	return partNumber === partCount
+		? declaredByteLength - GRAPHICS_MULTIPART_PART_BYTES * (partCount - 1)
+		: GRAPHICS_MULTIPART_PART_BYTES;
+}
+
 async function catalogueHealth(catalogue: GraphicsAssetCatalogueHealth): Promise<GraphicsAssetLibraryComponentHealth> {
 	try {
 		await catalogue.checkHealth();
@@ -261,7 +310,8 @@ export function createGraphicsAssetLibrary(
 ): GraphicsAssetLibrary {
 	const now = dependencies.now ?? (() => new Date());
 	const generateIdentity = dependencies.generateIdentity ?? (() => crypto.randomUUID());
-	const activeIngestionLeaseMilliseconds = 30_000;
+	const activeIngestionLeaseMilliseconds
+		= GRAPHICS_MULTIPART_PART_TRANSFER_TIMEOUT_MILLISECONDS + 30_000;
 
 	function requireCatalogue(): GraphicsAssetCatalogue {
 		if (!('initiateImageIngestion' in dependencies.catalogue))
@@ -301,6 +351,13 @@ export function createGraphicsAssetLibrary(
 
 	function timestamp() {
 		return now().toISOString();
+	}
+
+	function timestampAfter(updatedAt: string) {
+		return new Date(Math.max(
+			now().getTime(),
+			new Date(updatedAt).getTime() + 1,
+		)).toISOString();
 	}
 
 	function changedOperation(
@@ -382,6 +439,36 @@ export function createGraphicsAssetLibrary(
 				{ cause: error },
 			);
 		}
+	}
+
+	async function cleanupCancelledMultipart(
+		catalogue: GraphicsAssetCatalogue,
+		operation: GraphicsIngestionOperation,
+	): Promise<GraphicsIngestionOperation> {
+		const multipart = await catalogueRequest(
+			() => catalogue.getImageMultipartState(operation.id, operation.initiatedBy),
+			'Graphics multipart cancellation checkpoint is temporarily unavailable',
+		);
+		if (!multipart?.uploadId || !multipart.cleanupPending)
+			return operation;
+		const staging = requireStaging();
+		const identity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
+		const aborted = await staging.abortMultipart({
+			identity,
+			uploadId: multipart.uploadId,
+		});
+		// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by operation identity.
+		const deleted = await staging.delete(identity);
+		if (aborted.outcome === 'unavailable' || deleted.outcome === 'unavailable')
+			return operation;
+		await catalogueRequest(
+			() => catalogue.recordImageMultipartCleanupComplete(operation.id, operation.initiatedBy),
+			'Graphics multipart cleanup completion could not be recorded',
+		);
+		return await catalogueRequest(
+			() => catalogue.getIngestionOperation(operation.id, operation.initiatedBy),
+			'Graphics ingestion state is temporarily unavailable',
+		) ?? operation;
 	}
 
 	async function storeCanonicalStream(
@@ -846,8 +933,10 @@ export function createGraphicsAssetLibrary(
 			);
 			if (!operation)
 				throw new GraphicsAssetLibraryError('Graphics Ingestion Operation not found', 'ingestion-operation-not-found');
-			if (operation.stage === 'cancelled' || operation.stage === 'completed')
+			if (operation.stage === 'completed')
 				return operation;
+			if (operation.stage === 'cancelled')
+				return await cleanupCancelledMultipart(catalogue, operation);
 			const cancelled = await catalogueRequest(
 				() => catalogue.updateIngestionOperation(
 					changedOperation(operation, {
@@ -862,13 +951,354 @@ export function createGraphicsAssetLibrary(
 				),
 				'Graphics ingestion cancellation could not be recorded',
 			);
-			if ('delete' in dependencies.staging) {
+			const cleaned = await cleanupCancelledMultipart(catalogue, cancelled);
+			if (!cancelled.transfer) {
 				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-				await dependencies.staging.delete(
+				await requireStaging().delete(
 					graphicsObjectIdentity(`ingestion/${operation.id}/source`),
 				);
 			}
-			return cancelled;
+			return cleaned;
+		},
+		async startImageMultipartUpload(input) {
+			const catalogue = requireCatalogue();
+			const staging = requireStaging();
+			const operation = await catalogueRequest(
+				() => catalogue.getIngestionOperation(input.operationId, input.initiatedBy),
+				'Graphics ingestion state is temporarily unavailable',
+			);
+			if (!operation)
+				throw new GraphicsAssetLibraryError('Graphics Ingestion Operation not found', 'ingestion-operation-not-found');
+			if (operation.stage === 'completed' || operation.stage === 'cancelled')
+				return operation;
+			if (operation.declaredByteLength <= GRAPHICS_MULTIPART_PART_BYTES) {
+				throw new GraphicsAssetLibraryError(
+					'Multipart transfer is reserved for inputs larger than 16 MiB',
+					'invalid-ingestion-input',
+				);
+			}
+			if (operation.stage !== 'created' && operation.stage !== 'transferring') {
+				throw new GraphicsAssetLibraryError(
+					`Graphics Ingestion Operation cannot start multipart transfer from stage ${operation.stage}`,
+					'ingestion-operation-not-uploadable',
+				);
+			}
+
+			const existing = await catalogueRequest(
+				() => catalogue.getImageMultipartState(operation.id, operation.initiatedBy),
+				'Graphics multipart checkpoint is temporarily unavailable',
+			);
+			const stagingIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
+			if (existing?.uploadId) {
+				const resumed = await staging.resumeMultipart(stagingIdentity, existing.uploadId);
+				if (resumed.outcome === 'unavailable') {
+					throw new GraphicsAssetLibraryError(
+						'Graphics multipart upload is temporarily unavailable',
+						'graphics-asset-library-unavailable',
+					);
+				}
+				return await this.getIngestionOperation(input);
+			}
+
+			const started = await staging.beginMultipart({
+				identity: stagingIdentity,
+				metadata: {
+					contentType: 'application/octet-stream',
+					custom: { operationId: operation.id },
+				},
+			});
+			if (started.outcome === 'unavailable') {
+				throw new GraphicsAssetLibraryError(
+					'Graphics multipart upload could not be started',
+					'graphics-asset-library-unavailable',
+				);
+			}
+			const initialVersion = existing?.version ?? 0;
+			const state: GraphicsImageMultipartState = {
+				version: initialVersion + 1,
+				uploadId: started.upload.uploadId,
+				cleanupPending: false,
+				parts: existing?.parts ?? [],
+			};
+			const recorded = await catalogueRequest(
+				() => catalogue.updateImageMultipartState({
+					operationId: operation.id,
+					initiatedBy: operation.initiatedBy,
+					expectedVersion: initialVersion,
+					state,
+					updatedAt: timestampAfter(operation.updatedAt),
+				}),
+				'Graphics multipart start checkpoint could not be recorded',
+			);
+			if (!recorded) {
+				await staging.abortMultipart(started.upload);
+				return await this.startImageMultipartUpload(input);
+			}
+			return await this.getIngestionOperation(input);
+		},
+		async uploadImageMultipartPart(input) {
+			const catalogue = requireCatalogue();
+			const staging = requireStaging();
+			let operation = await catalogueRequest(
+				() => catalogue.getIngestionOperation(input.operationId, input.initiatedBy),
+				'Graphics ingestion state is temporarily unavailable',
+			);
+			if (!operation)
+				throw new GraphicsAssetLibraryError('Graphics Ingestion Operation not found', 'ingestion-operation-not-found');
+			if (operation.stage === 'completed' || operation.stage === 'cancelled')
+				return operation;
+			if (operation.stage !== 'transferring' || !operation.transfer) {
+				throw new GraphicsAssetLibraryError(
+					`Graphics Ingestion Operation cannot accept a multipart part from stage ${operation.stage}`,
+					'ingestion-operation-not-uploadable',
+				);
+			}
+			const expectedByteLength = graphicsMultipartPartByteLength(
+				operation.declaredByteLength,
+				input.partNumber,
+			);
+			if (input.bytes.byteLength !== expectedByteLength) {
+				throw new GraphicsAssetLibraryError(
+					`Multipart part ${input.partNumber} must contain exactly ${expectedByteLength} bytes`,
+					'invalid-ingestion-input',
+				);
+			}
+
+			let claimedState: GraphicsImageMultipartState | undefined;
+			for (let claimAttempt = 0; claimAttempt < 8; claimAttempt++) {
+				const state = await catalogueRequest(
+					() => catalogue.getImageMultipartState(operation!.id, operation!.initiatedBy),
+					'Graphics multipart checkpoint is temporarily unavailable',
+				);
+				if (!state?.uploadId)
+					throw new GraphicsAssetLibraryError('Graphics multipart upload has not been started', 'ingestion-operation-not-uploadable');
+				const staleBefore = new Date(
+					now().getTime() - activeIngestionLeaseMilliseconds,
+				).toISOString();
+				const availableParts = state.parts.map(part =>
+					part.status === 'uploading' && part.claimedAt <= staleBefore
+						? { ...part, status: 'failed' as const }
+						: part);
+				const existing = availableParts.find(part => part.partNumber === input.partNumber);
+				if (existing?.status === 'completed')
+					return await this.getIngestionOperation(input);
+				if (existing?.status === 'uploading') {
+					throw new GraphicsAssetLibraryError(
+						`Multipart part ${input.partNumber} is already in flight`,
+						'ingestion-operation-not-uploadable',
+					);
+				}
+				const attempts = (existing?.attempts ?? 0) + 1;
+				if (attempts > GRAPHICS_MULTIPART_MAXIMUM_PART_ATTEMPTS) {
+					throw new GraphicsAssetLibraryError(
+						`Multipart part ${input.partNumber} exhausted its retry allowance`,
+						'ingestion-operation-not-uploadable',
+					);
+				}
+				const inFlight = availableParts.filter(part => part.status === 'uploading').length;
+				if (inFlight >= GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS) {
+					throw new GraphicsAssetLibraryError(
+						'No more than three multipart parts may be in flight',
+						'ingestion-operation-not-uploadable',
+					);
+				}
+				const claimedPart: GraphicsImageMultipartState['parts'][number] = {
+					partNumber: input.partNumber,
+					partIdentity: graphicsIngestionPartIdentity(operation.id, input.partNumber),
+					byteLength: expectedByteLength,
+					status: 'uploading',
+					claimedAt: timestamp(),
+					attempts,
+				};
+				const claimed: GraphicsImageMultipartState = {
+					...state,
+					version: state.version + 1,
+					parts: [
+						...availableParts.filter(part => part.partNumber !== input.partNumber),
+						claimedPart,
+					],
+				};
+				const recorded = await catalogueRequest(
+					() => catalogue.updateImageMultipartState({
+						operationId: operation!.id,
+						initiatedBy: operation!.initiatedBy,
+						expectedVersion: state.version,
+						state: claimed,
+						updatedAt: timestampAfter(operation!.updatedAt),
+					}),
+					'Graphics multipart part claim could not be recorded',
+				);
+				if (recorded) {
+					claimedState = claimed;
+					break;
+				}
+				operation = await this.getIngestionOperation(input);
+				if (operation.stage === 'completed' || operation.stage === 'cancelled')
+					return operation;
+			}
+			if (!claimedState?.uploadId) {
+				throw new GraphicsAssetLibraryError(
+					'Graphics multipart part could not claim a durable transfer slot',
+					'graphics-asset-library-unavailable',
+				);
+			}
+
+			const upload = {
+				identity: graphicsObjectIdentity(`ingestion/${operation.id}/source`),
+				uploadId: claimedState.uploadId,
+			};
+			const uploaded = await staging.uploadPart({
+				upload,
+				partNumber: input.partNumber,
+				bytes: boundedByteStreamWithDeadline(
+					input.bytes,
+					GRAPHICS_MULTIPART_PART_TRANSFER_TIMEOUT_MILLISECONDS,
+				),
+			});
+			if (uploaded.outcome === 'unavailable') {
+				const failedState: GraphicsImageMultipartState = {
+					...claimedState,
+					version: claimedState.version + 1,
+					parts: claimedState.parts.map(part =>
+						part.partNumber === input.partNumber
+							? { ...part, status: 'failed' as const }
+							: part),
+				};
+				await catalogueRequest(
+					() => catalogue.updateImageMultipartState({
+						operationId: operation!.id,
+						initiatedBy: operation!.initiatedBy,
+						expectedVersion: claimedState!.version,
+						state: failedState,
+						updatedAt: timestampAfter(operation!.updatedAt),
+					}),
+					'Graphics multipart retry checkpoint could not be recorded',
+				);
+				throw new GraphicsAssetLibraryError(
+					`Multipart part ${input.partNumber} is temporarily unavailable`,
+					'graphics-asset-library-unavailable',
+				);
+			}
+
+			for (let recordAttempt = 0; recordAttempt < 8; recordAttempt++) {
+				const latest = await catalogueRequest(
+					() => catalogue.getImageMultipartState(operation!.id, operation!.initiatedBy),
+					'Graphics multipart checkpoint is temporarily unavailable',
+				);
+				if (!latest)
+					break;
+				const existing = latest.parts.find(part => part.partNumber === input.partNumber);
+				if (existing?.status === 'completed')
+					return await this.getIngestionOperation(input);
+				const completed: GraphicsImageMultipartState = {
+					...latest,
+					version: latest.version + 1,
+					parts: [
+						...latest.parts.filter(part => part.partNumber !== input.partNumber),
+						{
+							partNumber: input.partNumber,
+							partIdentity: graphicsIngestionPartIdentity(operation.id, input.partNumber),
+							objectStorePartIdentity: uploaded.part.partIdentity,
+							byteLength: uploaded.part.byteLength,
+							status: 'completed',
+							claimedAt: existing?.claimedAt ?? timestamp(),
+							attempts: existing?.attempts ?? 1,
+						},
+					],
+				};
+				const recorded = await catalogueRequest(
+					() => catalogue.updateImageMultipartState({
+						operationId: operation!.id,
+						initiatedBy: operation!.initiatedBy,
+						expectedVersion: latest.version,
+						state: completed,
+						updatedAt: timestampAfter(operation!.updatedAt),
+					}),
+					'Graphics multipart completed part could not be recorded',
+				);
+				if (recorded)
+					return await this.getIngestionOperation(input);
+				operation = await this.getIngestionOperation(input);
+				if (operation.stage === 'completed' || operation.stage === 'cancelled')
+					return operation;
+			}
+			throw new GraphicsAssetLibraryError(
+				'Graphics multipart completed part could not be checkpointed',
+				'graphics-asset-library-unavailable',
+			);
+		},
+		async completeImageMultipartUpload(input) {
+			const catalogue = requireCatalogue();
+			const staging = requireStaging();
+			const operation = await catalogueRequest(
+				() => catalogue.getIngestionOperation(input.operationId, input.initiatedBy),
+				'Graphics ingestion state is temporarily unavailable',
+			);
+			if (!operation)
+				throw new GraphicsAssetLibraryError('Graphics Ingestion Operation not found', 'ingestion-operation-not-found');
+			if (operation.stage === 'completed' || operation.stage === 'cancelled')
+				return operation;
+			if (operation.stage !== 'transferring' || !operation.transfer) {
+				throw new GraphicsAssetLibraryError(
+					`Graphics Ingestion Operation cannot complete multipart transfer from stage ${operation.stage}`,
+					'ingestion-operation-not-uploadable',
+				);
+			}
+			const state = await catalogueRequest(
+				() => catalogue.getImageMultipartState(operation.id, operation.initiatedBy),
+				'Graphics multipart checkpoint is temporarily unavailable',
+			);
+			if (!state?.uploadId)
+				throw new GraphicsAssetLibraryError('Graphics multipart upload has not been started', 'ingestion-operation-not-uploadable');
+			const expectedPartCount = Math.ceil(operation.declaredByteLength / GRAPHICS_MULTIPART_PART_BYTES);
+			const completedParts = state.parts
+				.filter((part): part is typeof part & { objectStorePartIdentity: GraphicsMultipartPartIdentity } =>
+					part.status === 'completed' && part.objectStorePartIdentity !== undefined)
+				.toSorted((left, right) => left.partNumber - right.partNumber);
+			if (
+				completedParts.length !== expectedPartCount
+				|| completedParts.some((part, index) => part.partNumber !== index + 1)
+			) {
+				throw new GraphicsAssetLibraryError(
+					'Graphics multipart upload is missing verified parts',
+					'ingestion-operation-not-uploadable',
+				);
+			}
+			const upload = {
+				identity: graphicsObjectIdentity(`ingestion/${operation.id}/source`),
+				uploadId: state.uploadId,
+			};
+			const completed = await staging.completeMultipart({
+				upload,
+				parts: completedParts.map(part => ({
+					partNumber: part.partNumber,
+					partIdentity: part.objectStorePartIdentity,
+					byteLength: part.byteLength,
+				})),
+			});
+			let stagedByteLength = completed.outcome === 'created'
+				? completed.object.byteLength
+				: undefined;
+			if (stagedByteLength === undefined) {
+				const metadata = await staging.readMetadata(upload.identity);
+				if (metadata.outcome === 'available')
+					stagedByteLength = metadata.object.byteLength;
+			}
+			if (stagedByteLength !== operation.declaredByteLength) {
+				throw new GraphicsAssetLibraryError(
+					'Graphics multipart completion could not be verified',
+					'graphics-asset-library-unavailable',
+				);
+			}
+			await catalogueRequest(
+				() => catalogue.recordStagedBytes({
+					operation,
+					usedBytes: stagedByteLength!,
+				}),
+				'Graphics staging progress could not be recorded',
+			);
+			const authoritative = await this.getIngestionOperation(input);
+			return await continueImageIngestion(authoritative);
 		},
 		async uploadImage(input) {
 			const catalogue = requireCatalogue();
@@ -884,6 +1314,12 @@ export function createGraphicsAssetLibrary(
 			if (operation.stage !== 'created') {
 				throw new GraphicsAssetLibraryError(
 					`Graphics Ingestion Operation cannot upload from stage ${operation.stage}`,
+					'ingestion-operation-not-uploadable',
+				);
+			}
+			if (operation.declaredByteLength > GRAPHICS_MULTIPART_PART_BYTES) {
+				throw new GraphicsAssetLibraryError(
+					'Inputs larger than 16 MiB must use resumable multipart transfer',
 					'ingestion-operation-not-uploadable',
 				);
 			}

@@ -222,6 +222,21 @@ export function createBoundedByteStream(
 	};
 }
 
+export function boundedByteStreamWithDeadline(
+	bytes: BoundedByteStream,
+	timeoutMilliseconds: number,
+): BoundedByteStream {
+	if (!Number.isSafeInteger(timeoutMilliseconds) || timeoutMilliseconds <= 0)
+		throw new GraphicsObjectInputError('Byte stream timeout must be a positive safe integer');
+	return {
+		...bytes,
+		body: bytes.body.pipeThrough(
+			new TransformStream<Uint8Array, Uint8Array>(),
+			{ signal: AbortSignal.timeout(timeoutMilliseconds) },
+		),
+	};
+}
+
 export function rethrowGraphicsObjectInputError(error: unknown): void {
 	let current = error;
 	while (current instanceof Error) {

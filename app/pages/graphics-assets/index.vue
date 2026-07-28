@@ -8,7 +8,11 @@ import type {
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
 import { formatByteCount } from '~~/shared/utils/formatByteCount';
-import { MAX_STILL_IMAGE_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import {
+	GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
+	GRAPHICS_MULTIPART_PART_BYTES,
+	MAX_STILL_IMAGE_INGESTION_BYTES,
+} from '~~/shared/utils/graphicsAssetCompatibility';
 import { verifyStillImageBrowserDecode } from '~/utils/verifyStillImageBrowserDecode';
 
 definePageMeta({
@@ -215,6 +219,105 @@ async function observeOperationRequest<T>(
 	}
 }
 
+function operationMatchesSelectedFile(
+	operation: GraphicsIngestionOperation,
+	file: File,
+	name: string,
+) {
+	return operation.name === name
+		&& operation.declaredByteLength === file.size
+		&& (!operation.sourceFileName || operation.sourceFileName === file.name)
+		&& (!operation.declaredMime || !file.type || operation.declaredMime === file.type);
+}
+
+async function operationFromResponse(response: Response, action: string) {
+	if (!response.ok)
+		throw new Error(`${action} failed with status ${response.status}`);
+	return await response.json() as GraphicsIngestionOperation;
+}
+
+function observeNewerOperation(operation: GraphicsIngestionOperation) {
+	if (
+		!currentOperation.value
+		|| operation.transferredByteLength >= currentOperation.value.transferredByteLength
+	) {
+		currentOperation.value = operation;
+	}
+}
+
+async function transferMultipartImage(
+	operation: GraphicsIngestionOperation,
+	file: File,
+) {
+	let checkpoint = await $fetch<GraphicsIngestionOperation>(
+		`/api/graphics-assets/ingestion-operations/${operation.id}/multipart`,
+		{ method: 'POST' },
+	);
+	currentOperation.value = checkpoint;
+	if (!checkpoint.transfer)
+		throw new Error('Server did not return multipart transfer facts.');
+	const transfer: NonNullable<GraphicsIngestionOperation['transfer']> = checkpoint.transfer;
+	const completedPartNumbers = new Set(transfer.completedParts.map(part => part.partNumber));
+	const pendingPartNumbers = Array.from(
+		{ length: transfer.partCount },
+		(_, index) => index + 1,
+	).filter(partNumber => !completedPartNumbers.has(partNumber));
+	let nextPartIndex = 0;
+
+	async function uploadNextParts() {
+		while (nextPartIndex < pendingPartNumbers.length) {
+			const partNumber = pendingPartNumbers[nextPartIndex++]!;
+			const offset = (partNumber - 1) * transfer.partByteLength;
+			const part = file.slice(offset, Math.min(file.size, offset + transfer.partByteLength));
+			for (let attempt = 1; attempt <= transfer.maximumPartAttempts; attempt++) {
+				try {
+					const response = await fetch(
+						`/api/graphics-assets/ingestion-operations/${operation.id}/multipart/parts/${partNumber}`,
+						{ method: 'PUT', body: part },
+					);
+					checkpoint = await operationFromResponse(
+						response,
+						`Multipart part ${partNumber}`,
+					);
+					observeNewerOperation(checkpoint);
+					break;
+				}
+				catch (caught) {
+					if (attempt === transfer.maximumPartAttempts)
+						throw caught;
+				}
+			}
+		}
+	}
+
+	const workerCount = Math.min(
+		pendingPartNumbers.length,
+		transfer.maximumConcurrentParts,
+		GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
+	);
+	await Promise.all(Array.from({ length: workerCount }, () => uploadNextParts()));
+	currentOperation.value = await $fetch<GraphicsIngestionOperation>(
+		`/api/graphics-assets/ingestion-operations/${operation.id}`,
+	);
+	return await observeOperationRequest(
+		operation.id,
+		$fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/ingestion-operations/${operation.id}/multipart/complete`,
+			{ method: 'POST' },
+		),
+	);
+}
+
+async function refreshAfterTerminalOperation() {
+	if (currentOperation.value?.stage !== 'completed')
+		return;
+	clearPersistedOperation();
+	selectedFile.value = null;
+	proposedName.value = '';
+	await refresh();
+	await refreshCapacity();
+}
+
 async function uploadImage() {
 	if (!selectedFile.value || !canUpload.value)
 		return;
@@ -224,41 +327,46 @@ async function uploadImage() {
 	try {
 		const browserDecodeEvidence = await verifyStillImageBrowserDecode(selectedFile.value);
 		const initiation = selectedInitiation(browserDecodeEvidence);
-		const initiated = await $fetch<GraphicsIngestionOperation>(
+		const reusableOperation = currentOperation.value
+			&& !['completed', 'cancelled'].includes(currentOperation.value.stage)
+			&& operationMatchesSelectedFile(
+				currentOperation.value,
+				selectedFile.value,
+				initiation.name,
+			)
+			? currentOperation.value
+			: undefined;
+		const initiated = reusableOperation ?? await $fetch<GraphicsIngestionOperation>(
 			'/api/graphics-assets/ingestion-operations',
-			{
-				method: 'POST',
-				body: initiation,
-			},
+			{ method: 'POST', body: initiation },
 		);
 		currentOperation.value = initiated;
 		localStorage.setItem(operationStorageKey, initiated.id);
 		localStorage.removeItem(initiationStorageKey);
 
-		const response = await observeOperationRequest(
-			initiated.id,
-			fetch(
-				`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-				{
-					method: 'PUT',
-					headers: selectedFile.value.type
-						? { 'content-type': selectedFile.value.type }
-						: undefined,
-					body: selectedFile.value,
-				},
-			),
-		);
-		if (!response.ok)
-			throw new Error(`Image transfer failed with status ${response.status}`);
-
-		currentOperation.value = await response.json() as GraphicsIngestionOperation;
-		if (currentOperation.value.stage === 'completed') {
-			clearPersistedOperation();
-			selectedFile.value = null;
-			proposedName.value = '';
-			await refresh();
-			await refreshCapacity();
+		if (selectedFile.value.size > GRAPHICS_MULTIPART_PART_BYTES) {
+			currentOperation.value = await transferMultipartImage(
+				initiated,
+				selectedFile.value,
+			);
 		}
+		else {
+			const response = await observeOperationRequest(
+				initiated.id,
+				fetch(
+					`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
+					{
+						method: 'PUT',
+						headers: selectedFile.value.type
+							? { 'content-type': selectedFile.value.type }
+							: undefined,
+						body: selectedFile.value,
+					},
+				),
+			);
+			currentOperation.value = await operationFromResponse(response, 'Image transfer');
+		}
+		await refreshAfterTerminalOperation();
 	}
 	catch (caught) {
 		uploadError.value = caught instanceof Error ? caught.message : 'Image upload failed.';
@@ -277,6 +385,17 @@ async function retryOperation() {
 	uploadError.value = null;
 	try {
 		const operationId = operation.id;
+		if (operation.transfer && operation.stage === 'transferring') {
+			const file = selectedFile.value;
+			if (!file || !operationMatchesSelectedFile(operation, file, operation.name)) {
+				throw new Error(
+					'Reselect the same source file to resume from the verified multipart checkpoint.',
+				);
+			}
+			currentOperation.value = await transferMultipartImage(operation, file);
+			await refreshAfterTerminalOperation();
+			return;
+		}
 		currentOperation.value = await observeOperationRequest(
 			operationId,
 			$fetch<GraphicsIngestionOperation>(
@@ -284,14 +403,38 @@ async function retryOperation() {
 				{ method: 'POST' },
 			),
 		);
-		if (currentOperation.value.stage === 'completed') {
-			clearPersistedOperation();
-			await refresh();
-			await refreshCapacity();
-		}
+		await refreshAfterTerminalOperation();
 	}
 	catch (caught) {
 		uploadError.value = caught instanceof Error ? caught.message : 'Image retry failed.';
+	}
+	finally {
+		uploadPending.value = false;
+	}
+}
+
+async function cancelOperation() {
+	const operation = currentOperation.value;
+	if (
+		!operation
+		|| operation.stage === 'completed'
+		|| (operation.stage === 'cancelled' && !operation.transfer?.cleanupPending)
+	) {
+		return;
+	}
+	uploadPending.value = true;
+	uploadError.value = null;
+	try {
+		currentOperation.value = await $fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/ingestion-operations/${operation.id}`,
+			{ method: 'DELETE' },
+		);
+		if (!currentOperation.value.transfer?.cleanupPending)
+			clearPersistedOperation();
+		await refreshCapacity();
+	}
+	catch (caught) {
+		uploadError.value = caught instanceof Error ? caught.message : 'Cancellation failed.';
 	}
 	finally {
 		uploadPending.value = false;
@@ -310,8 +453,18 @@ onMounted(async () => {
 			currentOperation.value = await $fetch<GraphicsIngestionOperation>(
 				`/api/graphics-assets/ingestion-operations/${operationId}`,
 			);
-			if (currentOperation.value.stage === 'completed' || currentOperation.value.stage === 'cancelled')
+			proposedName.value ||= currentOperation.value.name;
+			createSeparateAsset.value
+				= currentOperation.value.duplicateContentPolicy === 'create-separate';
+			if (
+				currentOperation.value.stage === 'completed'
+				|| (
+					currentOperation.value.stage === 'cancelled'
+					&& !currentOperation.value.transfer?.cleanupPending
+				)
+			) {
 				clearPersistedOperation();
+			}
 			return;
 		}
 		catch {
@@ -328,8 +481,15 @@ onMounted(async () => {
 		);
 		localStorage.setItem(operationStorageKey, currentOperation.value.id);
 		localStorage.removeItem(initiationStorageKey);
-		if (currentOperation.value.stage === 'completed' || currentOperation.value.stage === 'cancelled')
+		if (
+			currentOperation.value.stage === 'completed'
+			|| (
+				currentOperation.value.stage === 'cancelled'
+				&& !currentOperation.value.transfer?.cleanupPending
+			)
+		) {
 			clearPersistedOperation();
+		}
 	}
 	catch {
 		// Keep the durable initiation identity so a later reconnect can retry it.
@@ -498,6 +658,20 @@ onMounted(async () => {
 						/>
 						<span class="font-mono text-xs text-muted">{{ currentOperation.id }}</span>
 					</div>
+					<p class="mt-2 text-sm text-muted">
+						Transferred {{ formatByteCount(currentOperation.transferredByteLength) }} of
+						{{ formatByteCount(currentOperation.declaredByteLength) }} — stage {{ currentOperation.stage }}.
+					</p>
+					<p v-if="currentOperation.transfer" class="mt-1 text-sm text-muted">
+						Verified {{ currentOperation.transfer.completedParts.length }} of
+						{{ currentOperation.transfer.partCount }} parts.
+					</p>
+					<p
+						v-if="currentOperation.transfer?.cleanupPending"
+						class="mt-1 text-sm text-warning"
+					>
+						Staged-byte cleanup is pending and will be retried on cancellation.
+					</p>
 					<p v-if="currentOperation.failure" class="mt-2 text-sm text-error">
 						{{ currentOperation.failure.message }}
 					</p>
@@ -522,14 +696,27 @@ onMounted(async () => {
 							{{ issue.code }} — {{ issue.message }}
 						</li>
 					</ul>
-					<UButton
-						v-if="canRetryOperation"
-						class="mt-3"
-						icon="i-lucide-refresh-cw"
-						:label="currentOperation.stage === 'failed' ? 'Retry from staged bytes' : 'Resume if interrupted'"
-						:loading="uploadPending"
-						@click="retryOperation"
-					/>
+					<div class="mt-3 flex flex-wrap gap-2">
+						<UButton
+							v-if="canRetryOperation"
+							icon="i-lucide-refresh-cw"
+							:label="currentOperation.stage === 'failed' ? 'Retry from staged bytes' : 'Resume if interrupted'"
+							:loading="uploadPending"
+							@click="retryOperation"
+						/>
+						<UButton
+							v-if="
+								(currentOperation.stage !== 'completed' && currentOperation.stage !== 'cancelled')
+									|| currentOperation.transfer?.cleanupPending
+							"
+							color="error"
+							variant="soft"
+							icon="i-lucide-x"
+							:label="currentOperation.stage === 'cancelled' ? 'Retry staged-byte cleanup' : 'Cancel ingestion'"
+							:loading="uploadPending"
+							@click="cancelOperation"
+						/>
+					</div>
 					<p v-if="currentOperation.result" class="mt-2 text-sm text-muted">
 						{{ currentOperation.result.outcome === 'published' ? 'Published' : 'Reused' }} asset {{ currentOperation.result.assetId }} revision {{ currentOperation.result.revisionId }}
 					</p>

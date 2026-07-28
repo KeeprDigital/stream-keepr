@@ -172,6 +172,7 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	targetAssetId: text('target_asset_id').references(() => graphicAssets.id, { onDelete: 'set null' }),
 	declaredByteLength: integer('declared_byte_length'),
 	transferredByteLength: integer('transferred_byte_length').notNull().default(0),
+	multipartState: text('multipart_state', { mode: 'json' }).$type<Record<string, unknown>>(),
 	stagingReservedByteLength: integer('staging_reserved_byte_length').notNull().default(0),
 	stagingUsedByteLength: integer('staging_used_byte_length').notNull().default(0),
 	canonicalReservedByteLength: integer('canonical_reserved_byte_length').notNull().default(0),

@@ -11,8 +11,13 @@ import type {
 	GraphicsAssetCatalogue,
 	PublishImageCatalogueInput,
 } from '.';
+import type { GraphicsImageMultipartState } from './multipart';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { GraphicsAssetLibraryError } from './errors';
+import {
+	graphicsMultipartCompletedByteLength,
+	graphicsMultipartTransfer,
+} from './multipart';
 
 interface OperationRow {
 	id: string;
@@ -26,6 +31,7 @@ interface OperationRow {
 	default_event_id: number | null;
 	declared_byte_length: number;
 	transferred_byte_length: number;
+	multipart_state: string | null;
 	stage: GraphicsIngestionOperation['stage'];
 	capacity_outcome: string | null;
 	report: string | null;
@@ -67,7 +73,8 @@ function parseJson<T>(value: string | null): T | undefined {
 }
 
 function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
-	return {
+	const multipart = parseJson<GraphicsImageMultipartState>(row.multipart_state);
+	const operation: GraphicsIngestionOperation = {
 		id: row.id as GraphicsIngestionOperationId,
 		idempotencyKey: row.idempotency_key,
 		initiatedBy: row.initiated_by,
@@ -87,6 +94,12 @@ function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 		createdAt: new Date(row.created_at).toISOString(),
 		updatedAt: new Date(row.updated_at).toISOString(),
 	};
+	if (!multipart)
+		return operation;
+	return {
+		...operation,
+		transfer: graphicsMultipartTransfer(operation.declaredByteLength, multipart),
+	};
 }
 
 function operationRowFromAsset(row: AssetRow): OperationRow {
@@ -102,6 +115,7 @@ function operationRowFromAsset(row: AssetRow): OperationRow {
 		default_event_id: row.default_event_id,
 		declared_byte_length: row.declared_byte_length,
 		transferred_byte_length: row.transferred_byte_length,
+		multipart_state: null,
 		stage: row.stage,
 		capacity_outcome: row.capacity_outcome,
 		report: row.report,
@@ -117,7 +131,7 @@ function operationSelect(where: string) {
 		SELECT id, idempotency_key, initiated_by, proposed_name,
 				source_file_name, declared_mime, browser_decode_evidence,
 			duplicate_content_policy, default_event_id,
-			declared_byte_length, transferred_byte_length, stage, report, result,
+			declared_byte_length, transferred_byte_length, multipart_state, stage, report, result,
 			capacity_outcome, failure, created_at, updated_at
 		FROM graphics_ingestion_operations
 		WHERE ${where}
@@ -160,6 +174,11 @@ function updateOperationStatement(
 			SET stage = ?, transferred_byte_length = ?, source_file_name = ?,
 				declared_mime = ?, browser_decode_evidence = ?, report = ?, result = ?,
 			failure = ?, capacity_outcome = ?, updated_at = ?,
+			multipart_state = CASE
+				WHEN ? = 'cancelled' AND multipart_state IS NOT NULL
+					THEN json_set(multipart_state, '$.cleanupPending', json('true'))
+				ELSE multipart_state
+			END,
 			staging_reserved_byte_length = CASE
 				WHEN ? IN ('completed', 'cancelled')
 					OR (? = 'failed' AND json_extract(?, '$.retryable') = 0)
@@ -196,6 +215,7 @@ function updateOperationStatement(
 			? null
 			: JSON.stringify(operation.canonicalCapacityOutcome),
 		new Date(operation.updatedAt).getTime(),
+		operation.stage,
 		operation.stage,
 		operation.stage,
 		operation.failure === undefined ? null : JSON.stringify(operation.failure),
@@ -677,6 +697,54 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 		},
 		async getIngestionOperation(operationId, initiatedBy) {
 			return await firstOperation(database, 'id = ? AND initiated_by = ?', operationId, initiatedBy);
+		},
+		async getImageMultipartState(operationId, initiatedBy) {
+			const row = await database.prepare(`
+				SELECT multipart_state
+				FROM graphics_ingestion_operations
+				WHERE id = ? AND initiated_by = ?
+			`).bind(operationId, initiatedBy).first<{ multipart_state: string | null }>();
+			return row?.multipart_state
+				? JSON.parse(row.multipart_state) as GraphicsImageMultipartState
+				: undefined;
+		},
+		async updateImageMultipartState(input) {
+			if (input.state.version !== input.expectedVersion + 1)
+				return false;
+			const completedByteLength = graphicsMultipartCompletedByteLength(input.state);
+			const result = await database.prepare(`
+				UPDATE graphics_ingestion_operations
+				SET multipart_state = ?, stage = 'transferring',
+					transferred_byte_length = ?, updated_at = ?
+				WHERE id = ? AND initiated_by = ?
+					AND stage IN ('created', 'transferring')
+					AND COALESCE(
+						CAST(json_extract(multipart_state, '$.version') AS INTEGER),
+						0
+					) = ?
+			`).bind(
+				JSON.stringify(input.state),
+				completedByteLength,
+				new Date(input.updatedAt).getTime(),
+				input.operationId,
+				input.initiatedBy,
+				input.expectedVersion,
+			).run();
+			return result.success && result.meta.changes === 1;
+		},
+		async recordImageMultipartCleanupComplete(operationId, initiatedBy) {
+			const result = await database.prepare(`
+				UPDATE graphics_ingestion_operations
+				SET multipart_state = json_set(
+					multipart_state,
+					'$.cleanupPending',
+					json('false')
+				)
+				WHERE id = ? AND initiated_by = ? AND stage = 'cancelled'
+					AND multipart_state IS NOT NULL
+			`).bind(operationId, initiatedBy).run();
+			if (!result.success)
+				throw new Error('Graphics multipart cleanup checkpoint could not be recorded');
 		},
 		async updateIngestionOperation(operation, expectedUpdatedAt) {
 			const result = await updateOperationStatement(database, operation, expectedUpdatedAt).run();
