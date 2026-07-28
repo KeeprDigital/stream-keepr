@@ -190,6 +190,30 @@ function h264SpsFacts(nal: Uint8Array) {
 		cropTop = unsignedExpGolomb();
 		cropBottom = unsignedExpGolomb();
 	}
+	let colourDescription: { primaries: number; transfer: number; matrix: number } | undefined;
+	const vuiParametersPresent = bit() === 1;
+	if (vuiParametersPresent) {
+		const aspectRatioInfoPresent = bit() === 1;
+		if (aspectRatioInfoPresent) {
+			const aspectRatioIdc = bits(8);
+			if (aspectRatioIdc === 255)
+				bits(32);
+		}
+		if (bit() === 1)
+			bit(); // overscan_appropriate_flag
+		const videoSignalTypePresent = bit() === 1;
+		if (videoSignalTypePresent) {
+			bits(3); // video_format
+			bit(); // video_full_range_flag
+			if (bit() === 1) {
+				colourDescription = {
+					primaries: bits(8),
+					transfer: bits(8),
+					matrix: bits(8),
+				};
+			}
+		}
+	}
 	const cropUnitX = chromaFormat === 0 ? 1 : 2;
 	const cropUnitY = (chromaFormat === 0 ? 1 : 2) * (frameOnly ? 1 : 2);
 	return {
@@ -197,6 +221,7 @@ function h264SpsFacts(nal: Uint8Array) {
 		bitDepthLuma,
 		bitDepthChroma,
 		chromaFormat,
+		colourDescription,
 		width: widthInMacroblocks * 16 - (cropLeft + cropRight) * cropUnitX,
 		height: heightInMapUnits * 16 * (frameOnly ? 1 : 2) - (cropTop + cropBottom) * cropUnitY,
 	};
@@ -312,6 +337,16 @@ function mp4TrackFacts(bytes: Uint8Array, trak: IsoBox, mediaData: readonly IsoB
 	) {
 		validationError('unsupported-video-profile', 'AVC SPS must prove matching 8-bit 4:2:0 dimensions.');
 	}
+	if (
+		sps.colourDescription
+		&& (
+			![1, 2].includes(sps.colourDescription.primaries)
+			|| ![1, 2].includes(sps.colourDescription.transfer)
+			|| ![1, 2].includes(sps.colourDescription.matrix)
+		)
+	) {
+		validationError('unsupported-video-profile', 'AVC SPS colour signalling is outside 8-bit SDR BT.709.');
+	}
 	const colour = visualChildren.find(box => box.type === 'colr');
 	if (colour) {
 		const colourType = ascii(bytes, colour.dataStart, 4);
@@ -325,6 +360,13 @@ function mp4TrackFacts(bytes: Uint8Array, trak: IsoBox, mediaData: readonly IsoB
 	}
 	const stts = oneBox(sampleBoxes, 'stts');
 	const timingCount = u32(view, stts.dataStart + 4);
+	const maximumFrameCount = MAX_SILENT_VIDEO_DURATION_SECONDS * MAX_SILENT_VIDEO_FRAME_RATE;
+	if (
+		timingCount > maximumFrameCount
+		|| stts.dataStart + 8 + timingCount * 8 !== stts.end
+	) {
+		validationError('malformed-video-timeline', 'MP4 sample timing exceeds bounded inspection.');
+	}
 	let timingOffset = stts.dataStart + 8;
 	let frameCount = 0;
 	let timingDuration = 0;
@@ -335,6 +377,8 @@ function mp4TrackFacts(bytes: Uint8Array, trak: IsoBox, mediaData: readonly IsoB
 			validationError('malformed-video-timeline', 'MP4 sample timing must be complete and monotonic.');
 		if (delta * MAX_SILENT_VIDEO_FRAME_RATE < timescale)
 			validationError('video-frame-rate-exceeded', 'Every MP4 frame interval must remain at or below 60 fps.');
+		if (count > maximumFrameCount - frameCount)
+			validationError('video-frame-rate-exceeded', 'MP4 sample timing exceeds the bounded 120-second, 60-fps profile.');
 		frameCount += count;
 		timingDuration += count * delta;
 	}
@@ -446,7 +490,19 @@ function mp4TrackFacts(bytes: Uint8Array, trak: IsoBox, mediaData: readonly IsoB
 
 function inspectMp4(bytes: Uint8Array) {
 	const top = isoBoxes(bytes);
-	oneBox(top, 'ftyp');
+	const ftyp = oneBox(top, 'ftyp');
+	if (ftyp.end - ftyp.dataStart < 8 || (ftyp.end - ftyp.dataStart - 8) % 4 !== 0)
+		validationError('malformed-video', 'MP4 file-type declaration is malformed.');
+	const mp4Brands = new Set(['isom', 'iso2', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1']);
+	const declaredBrands = [
+		ascii(bytes, ftyp.dataStart, 4),
+		...Array.from(
+			{ length: (ftyp.end - ftyp.dataStart - 8) / 4 },
+			(_, index) => ascii(bytes, ftyp.dataStart + 8 + index * 4, 4),
+		),
+	];
+	if (!declaredBrands.some(brand => mp4Brands.has(brand)))
+		validationError('unsupported-video-format', 'ISO-BMFF file type is not an MP4-compatible brand.');
 	const moov = oneBox(top, 'moov');
 	const firstMdat = top.find(box => box.type === 'mdat');
 	if (!firstMdat || moov.start > firstMdat.start)

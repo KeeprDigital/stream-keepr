@@ -308,28 +308,25 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		});
 		referenced.layout.items.push({
 			id: 'motion-ident',
-			type: 'widget',
+			type: 'media',
 			label: 'Motion ident',
 			visible: true,
 			x: 10,
 			y: 120,
 			width: 200,
 			height: 100,
-			widget: {
-				type: 'media',
-				asset: {
-					assetId: 'asset-video',
-					revisionId: 'revision-video-2',
-				},
-				mediaKind: 'silent-video',
-				fit: 'contain',
-				opacity: 1,
-				borderRadius: 0,
-				loop: true,
-				playbackRate: 1,
-				videoCompatibility: 'chromium-transparency',
-				videoTarget: 'chromium',
+			asset: {
+				assetId: 'asset-video',
+				revisionId: 'revision-video-2',
 			},
+			mediaKind: 'silent-video',
+			fit: 'contain',
+			opacity: 1,
+			borderRadius: 0,
+			loop: true,
+			playbackRate: 1,
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'chromium',
 		});
 
 		expect(featureMatchOverlayModeConfigSchema.safeParse(referenced).success).toBe(true);

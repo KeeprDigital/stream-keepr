@@ -19,7 +19,7 @@ import { updateFeatureMatchOverlayRectFromAnchor } from '~/utils/featureMatchOve
  */
 
 export type FeatureMatchOverlayGeometryField = 'x' | 'y' | 'width' | 'height';
-export type FeatureMatchOverlayLayerKind = 'source' | 'widget-group' | 'text-widget' | 'image-widget' | 'clock-widget' | 'life-widget' | 'wins-widget';
+export type FeatureMatchOverlayLayerKind = 'source' | 'media' | 'widget-group' | 'text-widget' | 'image-widget' | 'clock-widget' | 'life-widget' | 'wins-widget';
 
 function nextId(prefix: string) {
 	return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -271,6 +271,20 @@ export function createLayoutItem(layout: FeatureMatchLayoutConfig, kind: Feature
 
 	if (kind === 'source') {
 		item = { ...base, type: 'source', label: 'New Source', sourceRole: 'main', frameCutout: true, width: 420, height: 240, surfaceStyle: { backgroundColor: '#000000', backgroundOpacity: 0, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8 } };
+	}
+	else if (kind === 'media') {
+		item = {
+			...base,
+			type: 'media',
+			label: 'New Media',
+			width: 420,
+			height: 240,
+			mediaKind: 'image',
+			fit: 'contain',
+			opacity: 1,
+			borderRadius: 0,
+			videoTarget: 'safari',
+		};
 	}
 	else if (kind === 'widget-group') {
 		item = { ...base, type: 'widget-group', label: 'New Group', width: 520, height: 90, surfaceStyle: { backgroundOpacity: 0 }, defaultChildSurfaceStyle: base.surfaceStyle, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [] };

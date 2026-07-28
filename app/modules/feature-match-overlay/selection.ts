@@ -1,5 +1,6 @@
 import type {
 	FeatureMatchLayoutConfig,
+	FeatureMatchMediaGraphicItemConfig,
 	FeatureMatchSourceItemConfig,
 	FeatureMatchWidgetGroupChildConfig,
 	FeatureMatchWidgetGroupItemConfig,
@@ -16,6 +17,7 @@ export type FeatureMatchOverlaySelectionTarget
 export type FeatureMatchOverlaySelection
 	=	| { kind: 'canvas' }
 		| { kind: 'source'; item: FeatureMatchSourceItemConfig }
+		| { kind: 'media'; item: FeatureMatchMediaGraphicItemConfig }
 		| { kind: 'widget'; item: FeatureMatchWidgetItemConfig }
 		| { kind: 'group'; item: FeatureMatchWidgetGroupItemConfig }
 		| { kind: 'child'; group: FeatureMatchWidgetGroupItemConfig; child: FeatureMatchWidgetGroupChildConfig }
@@ -40,6 +42,8 @@ export function resolveFeatureMatchOverlaySelection(layout: FeatureMatchLayoutCo
 	switch (item.type) {
 		case 'source':
 			return { kind: 'source', item };
+		case 'media':
+			return { kind: 'media', item };
 		case 'widget':
 			return { kind: 'widget', item };
 		case 'widget-group':

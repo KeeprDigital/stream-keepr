@@ -1,3 +1,4 @@
+import type { GraphicsVideoTarget } from '../utils/graphicAssetTargetCompatibility';
 import type { CardAnimationSpeed, DeckCardSize, DeckViewMode, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardLayout, StandingsColumnKey, StandingsViewMode, VerticalAlign } from './enums';
 import type { GraphicAssetReference } from './graphicsAsset';
 
@@ -369,19 +370,6 @@ export interface FeatureMatchImageWidgetConfig {
 	borderRadius: number;
 }
 
-export interface FeatureMatchMediaGraphicItemConfig {
-	type: 'media';
-	asset?: GraphicAssetReference;
-	mediaKind: 'image' | 'silent-video';
-	fit: 'contain' | 'cover' | 'fill';
-	opacity: number;
-	borderRadius: number;
-	loop?: boolean;
-	playbackRate?: number;
-	videoCompatibility?: 'all-supported' | 'chromium-transparency';
-	videoTarget?: 'chromium' | 'safari';
-}
-
 export interface FeatureMatchClockWidgetConfig {
 	type: 'clock';
 }
@@ -408,7 +396,6 @@ export interface FeatureMatchGameWinsWidgetConfig {
 export type FeatureMatchWidgetConfig
 	=	| FeatureMatchTextWidgetConfig
 		| FeatureMatchImageWidgetConfig
-		| FeatureMatchMediaGraphicItemConfig
 		| FeatureMatchClockWidgetConfig
 		| FeatureMatchPlayerLifeWidgetConfig
 		| FeatureMatchGameWinsWidgetConfig;
@@ -416,6 +403,20 @@ export type FeatureMatchWidgetConfig
 export interface FeatureMatchWidgetItemConfig extends FeatureMatchLayoutItemBase {
 	type: 'widget';
 	widget: FeatureMatchWidgetConfig;
+}
+
+/** First-class still-image or silent-video content in a Feature Match Layout. */
+export interface FeatureMatchMediaGraphicItemConfig extends FeatureMatchLayoutItemBase {
+	type: 'media';
+	asset?: GraphicAssetReference;
+	mediaKind: 'image' | 'silent-video';
+	fit: 'contain' | 'cover' | 'fill';
+	opacity: number;
+	borderRadius: number;
+	loop?: boolean;
+	playbackRate?: number;
+	videoCompatibility?: 'all-supported' | 'chromium-transparency';
+	videoTarget?: Exclude<GraphicsVideoTarget, 'other'>;
 }
 
 export interface FeatureMatchWidgetGroupArrangementBase {
@@ -483,6 +484,7 @@ export interface FeatureMatchWidgetGroupItemConfig extends FeatureMatchLayoutIte
 
 export type FeatureMatchLayoutItemConfig
 	=	| FeatureMatchSourceItemConfig
+		| FeatureMatchMediaGraphicItemConfig
 		| FeatureMatchWidgetItemConfig
 		| FeatureMatchWidgetGroupItemConfig;
 

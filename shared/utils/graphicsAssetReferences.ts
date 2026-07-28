@@ -4,22 +4,24 @@ import type {
 	FeatureMatchOverlayModeConfig,
 	FeatureMatchWidgetConfig,
 } from '../types/screenConfig';
+import type { GraphicsVideoTarget } from './graphicAssetTargetCompatibility';
 
 export interface ScreenGraphicAssetReference {
 	reference: GraphicAssetReference;
 	ownerSlot: string;
 	kind: 'image' | 'silent-video' | 'font';
 	videoCompatibility?: 'all-supported' | 'chromium-transparency';
-	videoTarget?: 'chromium' | 'safari';
+	videoTarget?: Exclude<GraphicsVideoTarget, 'other'>;
 }
 
 export function screenGraphicAssetReferenceTargetCompatibility(
 	reference: ScreenGraphicAssetReference,
+	actualTarget?: GraphicsVideoTarget,
 ):
 	| { outcome: 'compatible' }
 	| { outcome: 'blocked'; code: 'vp9-alpha-chromium-required' } {
 	return reference.videoCompatibility === 'chromium-transparency'
-		&& reference.videoTarget !== 'chromium'
+		&& (reference.videoTarget !== 'chromium' || (actualTarget !== undefined && actualTarget !== 'chromium'))
 		? { outcome: 'blocked', code: 'vp9-alpha-chromium-required' }
 		: { outcome: 'compatible' };
 }
@@ -43,15 +45,7 @@ function widgetReference(
 			kind: 'image',
 		};
 	}
-	return widget.type === 'media' && widget.asset
-		? {
-				reference: widget.asset,
-				ownerSlot,
-				kind: widget.mediaKind,
-				videoCompatibility: widget.videoCompatibility,
-				videoTarget: widget.videoTarget,
-			}
-		: undefined;
+	return undefined;
 }
 
 function fontReference(
@@ -97,6 +91,15 @@ export function featureMatchOverlayGraphicAssetReferences(
 	}
 	for (const item of config.layout.items) {
 		appendFontReference(references, item.surfaceStyle, `layout.items.${item.id}.surfaceStyle.font`);
+		if (item.type === 'media' && item.asset) {
+			references.push({
+				reference: item.asset,
+				ownerSlot: `layout.items.${item.id}.asset`,
+				kind: item.mediaKind,
+				videoCompatibility: item.videoCompatibility,
+				videoTarget: item.videoTarget,
+			});
+		}
 		if (item.type === 'widget') {
 			const reference = widgetReference(
 				item.widget,
@@ -147,6 +150,8 @@ export function sameScreenGraphicAssetReferences(
 	return left.every((item) => {
 		const other = rightBySlot.get(item.ownerSlot);
 		return item.kind === other?.kind
+			&& item.videoCompatibility === other?.videoCompatibility
+			&& item.videoTarget === other?.videoTarget
 			&& sameGraphicAssetReference(item.reference, other.reference);
 	});
 }

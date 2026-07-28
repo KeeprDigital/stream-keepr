@@ -90,10 +90,6 @@ const GRAPHIC_ASSET_SOURCE_POLICIES = {
 	conflictingMimeCode: Extract<GraphicAssetValidationReport, { outcome: 'rejected' }>['issues'][number]['code'];
 }>;
 
-function graphicAssetSourcePolicy(kind: GraphicAssetSourceKind) {
-	return GRAPHIC_ASSET_SOURCE_POLICIES[kind];
-}
-
 async function processGraphicAssetSource(
 	kind: GraphicAssetSourceKind,
 	bytes: Uint8Array,
@@ -464,7 +460,7 @@ export function createGraphicsAssetLibrary(
 		if (!input.idempotencyKey.trim() || !input.initiatedBy.trim())
 			throw new GraphicsAssetLibraryError('Ingestion identity and author are required', 'invalid-ingestion-input');
 		const sourceKind = graphicAssetSourceKind(input);
-		const policy = graphicAssetSourcePolicy(sourceKind);
+		const policy = GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind];
 		if (
 			!Number.isSafeInteger(input.declaredByteLength)
 			|| input.declaredByteLength <= 0
@@ -919,9 +915,9 @@ export function createGraphicsAssetLibrary(
 			await sha256HexStream({
 				body: stagedRead.body,
 				byteLength: stagedRead.object.byteLength,
-				maximumByteLength: graphicAssetSourcePolicy(
-					graphicAssetSourceKind(operation),
-				).maximumByteLength,
+				maximumByteLength: GRAPHIC_ASSET_SOURCE_POLICIES[
+					graphicAssetSourceKind(operation)
+				].maximumByteLength,
 			});
 			const hashingTerminal = await terminalOperationAtCheckpoint();
 			if (hashingTerminal)
@@ -950,7 +946,7 @@ export function createGraphicsAssetLibrary(
 				const validationBytes = await consumeBoundedByteStream({
 					body: validationRead.body,
 					byteLength: validationRead.object.byteLength,
-					maximumByteLength: graphicAssetSourcePolicy(sourceKind).maximumByteLength,
+					maximumByteLength: GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind].maximumByteLength,
 				});
 				sourceKind = graphicAssetSourceKind(operation, validationBytes.subarray(0, 64));
 				processed = await processGraphicAssetSource(sourceKind, validationBytes, {
@@ -1027,7 +1023,7 @@ export function createGraphicsAssetLibrary(
 					throw error;
 				const report = rejectedValidationReport(
 					error,
-					graphicAssetSourcePolicy(sourceKind).compatibilityProfile,
+					GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind].compatibilityProfile,
 				);
 				const failed = await failOperation(catalogue, operation, {
 					code: 'validation-failed',
@@ -1114,7 +1110,7 @@ export function createGraphicsAssetLibrary(
 				storeCanonicalStream(canonical, report.facts.sha256, {
 					body: canonicalSourceRead.body,
 					byteLength: canonicalSourceRead.object.byteLength,
-					maximumByteLength: graphicAssetSourcePolicy(sourceKind).maximumByteLength,
+					maximumByteLength: GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind].maximumByteLength,
 				}, report.facts.canonicalMime),
 				storeCanonicalBytes(canonical, thumbnailDigest, thumbnail),
 			]);
@@ -1726,7 +1722,7 @@ export function createGraphicsAssetLibrary(
 			const transferMime = input.declaredMime?.trim().toLocaleLowerCase();
 			if (initiatedMime && transferMime && initiatedMime !== transferMime) {
 				const sourceKind = graphicAssetSourceKind(operation);
-				const sourcePolicy = graphicAssetSourcePolicy(sourceKind);
+				const sourcePolicy = GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind];
 				return await failOperation(catalogue, operation, {
 					code: 'validation-failed',
 					retryable: false,

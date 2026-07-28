@@ -424,19 +424,6 @@ const featureMatchImageWidgetConfigSchema = z.object({
 	borderRadius: nonNegativePixelSchema,
 }).strict();
 
-const featureMatchMediaGraphicItemConfigSchema = z.object({
-	type: z.literal('media'),
-	asset: graphicAssetReferenceSchema.optional(),
-	mediaKind: z.enum(['image', 'silent-video']),
-	fit: z.enum(['contain', 'cover', 'fill']),
-	opacity: opacitySchema,
-	borderRadius: nonNegativePixelSchema,
-	loop: z.boolean().optional(),
-	playbackRate: finiteNumberSchema.min(0.25).max(4).optional(),
-	videoCompatibility: z.enum(['all-supported', 'chromium-transparency']).optional(),
-	videoTarget: z.enum(['chromium', 'safari']).optional(),
-}).strict();
-
 const featureMatchClockWidgetConfigSchema = z.object({
 	type: z.literal('clock'),
 }).strict();
@@ -463,7 +450,6 @@ const featureMatchGameWinsWidgetConfigSchema = z.object({
 const featureMatchWidgetConfigSchema = z.discriminatedUnion('type', [
 	featureMatchTextWidgetConfigSchema,
 	featureMatchImageWidgetConfigSchema,
-	featureMatchMediaGraphicItemConfigSchema,
 	featureMatchClockWidgetConfigSchema,
 	featureMatchPlayerLifeWidgetConfigSchema,
 	featureMatchGameWinsWidgetConfigSchema,
@@ -482,6 +468,19 @@ const featureMatchSourceItemConfigSchema = featureMatchLayoutItemBaseSchema.exte
 	type: z.literal('source'),
 	sourceRole: z.string().min(1).max(100).optional(),
 	frameCutout: z.boolean(),
+}).strict();
+
+const featureMatchMediaGraphicItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
+	type: z.literal('media'),
+	asset: graphicAssetReferenceSchema.optional(),
+	mediaKind: z.enum(['image', 'silent-video']),
+	fit: z.enum(['contain', 'cover', 'fill']),
+	opacity: opacitySchema,
+	borderRadius: nonNegativePixelSchema,
+	loop: z.boolean().optional(),
+	playbackRate: finiteNumberSchema.min(0.25).max(4).optional(),
+	videoCompatibility: z.enum(['all-supported', 'chromium-transparency']).optional(),
+	videoTarget: z.enum(['chromium', 'safari']).optional(),
 }).strict();
 
 const featureMatchWidgetItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
@@ -545,6 +544,7 @@ const featureMatchWidgetGroupItemConfigSchema = featureMatchLayoutItemBaseSchema
 
 const featureMatchLayoutItemConfigSchema = z.discriminatedUnion('type', [
 	featureMatchSourceItemConfigSchema,
+	featureMatchMediaGraphicItemConfigSchema,
 	featureMatchWidgetItemConfigSchema,
 	featureMatchWidgetGroupItemConfigSchema,
 ]);

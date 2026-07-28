@@ -184,27 +184,22 @@ describe('featureMatchOverlayWidgetEditor', () => {
 		expect((inputs[3]!.element as HTMLInputElement).value).toBe('3');
 	});
 
-	it('keeps the exact selected reference when media metadata is applied synchronously', async () => {
+	it('keeps the exact selected reference for a legacy image widget', async () => {
 		const wrapper = await mountComponent({
-			type: 'media',
-			mediaKind: 'image',
+			type: 'image',
 			fit: 'contain',
 			opacity: 1,
 			borderRadius: 0,
-			videoTarget: 'chromium',
 		});
 
 		await wrapper.get('[data-testid="select-media"]').trigger('click');
 
 		expect(wrapper.emitted('update')?.at(-1)?.[0]).toMatchObject({
-			type: 'media',
+			type: 'image',
 			asset: {
 				assetId: 'video-asset',
 				revisionId: 'video-revision-4',
 			},
-			mediaKind: 'silent-video',
-			videoCompatibility: 'all-supported',
-			videoTarget: 'chromium',
 		});
 	});
 });

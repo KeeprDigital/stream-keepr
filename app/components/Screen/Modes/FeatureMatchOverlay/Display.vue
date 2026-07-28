@@ -3,13 +3,14 @@ import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayWidgetRenderDescriptor } from '~/modules/feature-match-overlay/renderModel';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import { graphicAssetFontFaceFamily } from '~~/shared/featureMatchOverlayFonts';
-import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
+import { featureMatchOverlayGraphicAssetReferences, screenGraphicAssetReferenceTargetCompatibility } from '~~/shared/utils/graphicsAssetReferences';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 import { resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
 import { featureMatchOverlaySelectionKey, isFeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
+import FeatureMatchOverlayMediaGraphicItem from './MediaGraphicItem.vue';
 import FeatureMatchOverlayWidget from './Widget.vue';
 
 const { outputMode, previewGuides, screen } = useScreenContext();
@@ -33,11 +34,7 @@ const videoTarget = useGraphicsVideoTarget();
 const videoCompatibilityBlocked = computed(() =>
 	indexedGraphicAssetReferences.value.some(reference =>
 		reference.kind === 'silent-video'
-		&& reference.videoCompatibility === 'chromium-transparency'
-		&& (
-			reference.videoTarget !== 'chromium'
-			|| videoTarget.value !== 'chromium'
-		),
+		&& screenGraphicAssetReferenceTargetCompatibility(reference, videoTarget.value).outcome === 'blocked',
 	));
 const {
 	contentUrl: graphicAssetContentUrl,
@@ -134,6 +131,7 @@ const renderModel = computed(() => resolveFeatureMatchOverlayRenderModel({
 
 const canvasStyle = computed(() => renderModel.value.canvasStyle);
 const sourceItems = computed(() => renderModel.value.sourceItems);
+const mediaItems = computed(() => renderModel.value.mediaItems);
 const widgetItems = computed(() => renderModel.value.widgetItems);
 const widgetGroups = computed(() => renderModel.value.widgetGroups);
 const sourceCutouts = computed(() => renderModel.value.sourceCutouts);
@@ -365,6 +363,11 @@ onBeforeUnmount(() => {
 		</svg>
 
 		<div v-for="source in sourceItems" :key="source.item.id" :style="source.style" />
+		<FeatureMatchOverlayMediaGraphicItem
+			v-for="media in mediaItems"
+			:key="media.item.id"
+			:media="media"
+		/>
 
 		<div v-if="showPreviewGuides" class="guide-layer" aria-label="Feature Match Overlay editor selection layer">
 			<button
@@ -402,6 +405,19 @@ onBeforeUnmount(() => {
 				@keydown.space.prevent.stop="selectPreviewTarget({ type: 'layer', itemId: widget.item.id })"
 			>
 				<span>{{ widget.label }}</span>
+			</div>
+			<div
+				v-for="media in mediaItems"
+				:key="`media-guide-${media.item.id}`"
+				class="region-guide region-guide--widget"
+				:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: media.item.id }) }"
+				:style="guideStyle(media.item)"
+				role="button"
+				tabindex="0"
+				:aria-label="`Select ${media.item.label}`"
+				@click.stop="selectPreviewTarget({ type: 'layer', itemId: media.item.id })"
+			>
+				<span>{{ media.item.label }}</span>
 			</div>
 			<div
 				v-for="group in widgetGroups"

@@ -68,6 +68,33 @@ function asciiOffset(bytes: Uint8Array, value: string) {
 	return offset;
 }
 
+function setSpsRbspBits(bytes: Uint8Array, bitOffset: number, bitCount: number, value: number) {
+	const avcConfiguration = asciiOffset(bytes, 'avcC') + 4;
+	const spsStart = avcConfiguration + 8;
+	const spsLength = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint16(avcConfiguration + 6);
+	const physicalOffsets: number[] = [];
+	for (let offset = spsStart + 1; offset < spsStart + spsLength; offset++) {
+		if (
+			offset >= spsStart + 3
+			&& bytes[offset - 2] === 0
+			&& bytes[offset - 1] === 0
+			&& bytes[offset] === 3
+		) {
+			continue;
+		}
+		physicalOffsets.push(offset);
+	}
+	for (let index = 0; index < bitCount; index++) {
+		const targetBit = bitOffset + index;
+		const byteOffset = physicalOffsets[Math.floor(targetBit / 8)]!;
+		const mask = 1 << (7 - (targetBit % 8));
+		if ((value >>> (bitCount - index - 1)) & 1)
+			bytes[byteOffset] |= mask;
+		else
+			bytes[byteOffset] &= ~mask;
+	}
+}
+
 async function expectIssue(
 	work: Promise<unknown>,
 	code: GraphicAssetValidationError['issue']['code'],
@@ -145,6 +172,30 @@ describe('silent-video bounded inspection', () => {
 		await expectIssue(processSilentVideo(reordered), 'mp4-fast-start-required');
 	});
 
+	it('rejects ISO-BMFF files that do not declare an MP4-compatible brand', async () => {
+		const quickTime = h264Mp4.slice();
+		const quickTimeBrand = new TextEncoder().encode('qt  ');
+		for (const offset of [8, 16, 20, 24, 28])
+			quickTime.set(quickTimeBrand, offset);
+
+		await expectIssue(processSilentVideo(quickTime), 'unsupported-video-format');
+	});
+
+	it('rejects HDR transfer characteristics signalled only in the H.264 SPS VUI', async () => {
+		const hdr = h264Mp4.slice();
+		// This fixture's VUI starts at RBSP bit 48. Enable video-signal colour
+		// description and signal BT.709 primaries, PQ transfer, BT.709 matrix.
+		setSpsRbspBits(hdr, 59, 1, 1);
+		setSpsRbspBits(hdr, 60, 3, 5);
+		setSpsRbspBits(hdr, 63, 1, 0);
+		setSpsRbspBits(hdr, 64, 1, 1);
+		setSpsRbspBits(hdr, 65, 8, 1);
+		setSpsRbspBits(hdr, 73, 8, 16);
+		setSpsRbspBits(hdr, 81, 8, 1);
+
+		await expectIssue(processSilentVideo(hdr), 'unsupported-video-profile');
+	});
+
 	it('rejects conflicting declarations and incomplete WebM indexes', async () => {
 		await expectIssue(processSilentVideo(vp9Webm, {
 			sourceFileName: 'wrong.mp4',
@@ -189,6 +240,14 @@ describe('silent-video bounded inspection', () => {
 		const malformed = h264Mp4.slice();
 		const timingTable = asciiOffset(malformed, 'stts') + 4;
 		new DataView(malformed.buffer).setUint32(timingTable + 12, 1);
+
+		await expectIssue(processSilentVideo(malformed), 'video-frame-rate-exceeded');
+	});
+
+	it('rejects an MP4 sample count before it can drive an unbounded allocation', async () => {
+		const malformed = h264Mp4.slice();
+		const timingTable = asciiOffset(malformed, 'stts') + 4;
+		new DataView(malformed.buffer).setUint32(timingTable + 8, 0xFFFF_FFFF);
 
 		await expectIssue(processSilentVideo(malformed), 'video-frame-rate-exceeded');
 	});

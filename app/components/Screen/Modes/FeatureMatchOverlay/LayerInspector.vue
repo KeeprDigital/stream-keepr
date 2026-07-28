@@ -9,6 +9,7 @@ import FeatureMatchOverlayControlSection from './ControlSection.vue';
 import FeatureMatchOverlayFrameStyleCard from './FrameStyleCard.vue';
 import FeatureMatchOverlayInspectorGroup from './InspectorGroup.vue';
 import FeatureMatchOverlayInspectorGroupChild from './InspectorGroupChild.vue';
+import FeatureMatchOverlayInspectorMedia from './InspectorMedia.vue';
 import FeatureMatchOverlayInspectorSource from './InspectorSource.vue';
 import FeatureMatchOverlayInspectorWidget from './InspectorWidget.vue';
 
@@ -33,6 +34,7 @@ const LAYER_KIND_OPTIONS = [
 	{ label: 'Source', value: 'source', icon: 'i-lucide-video' },
 	{ label: 'Text', value: 'text-widget', icon: 'i-lucide-type' },
 	{ label: 'Image', value: 'image-widget', icon: 'i-lucide-image' },
+	{ label: 'Media', value: 'media', icon: 'i-lucide-image-play' },
 	{ label: 'Clock', value: 'clock-widget', icon: 'i-lucide-clock' },
 	{ label: 'Player Life', value: 'life-widget', icon: 'i-lucide-heart-pulse' },
 	{ label: 'Game Wins', value: 'wins-widget', icon: 'i-lucide-trophy' },
@@ -330,6 +332,17 @@ const selectedInspectorHeader = computed(() => {
 
 				<FeatureMatchOverlayInspectorWidget
 					v-else-if="selection.kind === 'widget'"
+					:config="config"
+					:update-config="updateConfig"
+					:screen-width="screenWidth"
+					:screen-height="screenHeight"
+					:event-id="eventId"
+					:item="selection.item"
+					@removed="selectCanvas"
+				/>
+
+				<FeatureMatchOverlayInspectorMedia
+					v-else-if="selection.kind === 'media'"
 					:config="config"
 					:update-config="updateConfig"
 					:screen-width="screenWidth"

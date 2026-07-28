@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import {
 	featureMatchOverlayGraphicAssetReferences,
+	sameScreenGraphicAssetReferences,
 	screenGraphicAssetReferenceTargetCompatibility,
 } from '~~/shared/utils/graphicsAssetReferences';
 
@@ -10,26 +11,23 @@ describe('media Graphic Item exact references', () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		config.layout.items = [{
 			id: 'alpha-ident',
-			type: 'widget',
+			type: 'media',
 			label: 'Alpha ident',
 			visible: true,
 			x: 0,
 			y: 0,
 			width: 640,
 			height: 360,
-			widget: {
-				type: 'media',
-				asset: {
-					assetId: 'video-asset' as never,
-					revisionId: 'video-revision-2' as never,
-				},
-				mediaKind: 'silent-video',
-				fit: 'contain',
-				opacity: 1,
-				borderRadius: 0,
-				videoCompatibility: 'chromium-transparency',
-				videoTarget: 'chromium',
+			asset: {
+				assetId: 'video-asset' as never,
+				revisionId: 'video-revision-2' as never,
 			},
+			mediaKind: 'silent-video',
+			fit: 'contain',
+			opacity: 1,
+			borderRadius: 0,
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'chromium',
 		}];
 
 		expect(featureMatchOverlayGraphicAssetReferences(config)).toEqual([{
@@ -37,7 +35,7 @@ describe('media Graphic Item exact references', () => {
 				assetId: 'video-asset',
 				revisionId: 'video-revision-2',
 			},
-			ownerSlot: 'layout.items.alpha-ident.widget.asset',
+			ownerSlot: 'layout.items.alpha-ident.asset',
 			kind: 'silent-video',
 			videoCompatibility: 'chromium-transparency',
 			videoTarget: 'chromium',
@@ -50,7 +48,7 @@ describe('media Graphic Item exact references', () => {
 				assetId: 'video-asset' as never,
 				revisionId: 'video-revision-2' as never,
 			},
-			ownerSlot: 'layout.items.alpha-ident.widget.asset',
+			ownerSlot: 'layout.items.alpha-ident.asset',
 			kind: 'silent-video',
 			videoCompatibility: 'chromium-transparency',
 		} as const;
@@ -66,5 +64,27 @@ describe('media Graphic Item exact references', () => {
 			...restricted,
 			videoTarget: 'chromium',
 		})).toEqual({ outcome: 'compatible' });
+	});
+
+	it('treats compatibility and output-target relabelling as a reference change', () => {
+		const reference = {
+			reference: {
+				assetId: 'video-asset' as never,
+				revisionId: 'video-revision-2' as never,
+			},
+			ownerSlot: 'layout.items.alpha-ident.asset',
+			kind: 'silent-video',
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'chromium',
+		} as const;
+
+		expect(sameScreenGraphicAssetReferences(
+			[reference],
+			[{ ...reference, videoCompatibility: 'all-supported' }],
+		)).toBe(false);
+		expect(sameScreenGraphicAssetReferences(
+			[reference],
+			[{ ...reference, videoTarget: 'safari' }],
+		)).toBe(false);
 	});
 });

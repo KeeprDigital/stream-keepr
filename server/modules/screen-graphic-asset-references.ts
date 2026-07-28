@@ -11,6 +11,35 @@ import {
 	screenGraphicAssetReferenceTargetCompatibility,
 } from '~~/shared/utils/graphicsAssetReferences';
 
+const GRAPHIC_ASSET_REFERENCE_SQL_PREDICATE = `
+	AND (asset.lifecycle_state = 'active' OR ? = 1)
+	AND asset.kind = ?
+	AND (
+		? != 'silent-video'
+		OR json_extract(revision.technical_facts, '$.targetCompatibility') = ?
+	)
+	AND (
+		COALESCE(?, '') != 'chromium-transparency'
+		OR ? = 'chromium'
+	)
+`;
+
+function graphicAssetReferencePredicateBindings(input: {
+	allowRetired: boolean;
+	kind: 'image' | 'silent-video' | 'font';
+	videoCompatibility?: 'all-supported' | 'chromium-transparency';
+	videoTarget?: 'chromium' | 'safari';
+}) {
+	return [
+		input.allowRetired ? 1 : 0,
+		input.kind,
+		input.kind,
+		input.videoCompatibility ?? null,
+		input.videoCompatibility ?? null,
+		input.videoTarget ?? null,
+	] as const;
+}
+
 async function findScreen(id: number, eventId: number): Promise<DbScreen | undefined> {
 	return await db.query.screens.findFirst({
 		where: and(
@@ -97,16 +126,7 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 			FROM graphic_asset_revisions revision
 			JOIN graphic_assets asset ON asset.id = revision.asset_id
 				WHERE revision.id = ? AND revision.asset_id = ?
-					AND (asset.lifecycle_state = 'active' OR ? = 1)
-					AND asset.kind = ?
-					AND (
-						? != 'silent-video'
-						OR json_extract(revision.technical_facts, '$.targetCompatibility') = ?
-					)
-					AND (
-						COALESCE(?, '') != 'chromium-transparency'
-						OR ? = 'chromium'
-					)
+					${GRAPHIC_ASSET_REFERENCE_SQL_PREDICATE}
 			)
 		`).join('');
 	const referencePreconditionBindings = indexedReferences.flatMap(({
@@ -118,12 +138,12 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 	}) => [
 		reference.revisionId,
 		reference.assetId,
-		allowRetired ? 1 : 0,
-		kind,
-		kind,
-		videoCompatibility ?? null,
-		videoCompatibility ?? null,
-		videoTarget ?? null,
+		...graphicAssetReferencePredicateBindings({
+			allowRetired,
+			kind,
+			videoCompatibility,
+			videoTarget,
+		}),
 	]);
 	const client = db.$client;
 	const statements: D1PreparedStatement[] = [
@@ -167,16 +187,7 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 			FROM graphic_asset_revisions revision
 			JOIN graphic_assets asset ON asset.id = revision.asset_id
 				WHERE revision.id = ? AND revision.asset_id = ?
-					AND (asset.lifecycle_state = 'active' OR ? = 1)
-					AND asset.kind = ?
-					AND (
-						? != 'silent-video'
-						OR json_extract(revision.technical_facts, '$.targetCompatibility') = ?
-					)
-					AND (
-						COALESCE(?, '') != 'chromium-transparency'
-						OR ? = 'chromium'
-					)
+					${GRAPHIC_ASSET_REFERENCE_SQL_PREDICATE}
 					AND EXISTS (
 					SELECT 1 FROM screens
 					WHERE id = ? AND event_id = ?
@@ -193,12 +204,12 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 			now,
 			reference.revisionId,
 			reference.assetId,
-			allowRetired ? 1 : 0,
-			kind,
-			kind,
-			videoCompatibility ?? null,
-			videoCompatibility ?? null,
-			videoTarget ?? null,
+			...graphicAssetReferencePredicateBindings({
+				allowRetired,
+				kind,
+				videoCompatibility,
+				videoTarget,
+			}),
 			input.id,
 			input.eventId,
 			referenceVersion,

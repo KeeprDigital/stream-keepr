@@ -463,25 +463,22 @@ describe('feature Match Overlay render model', () => {
 		const base = config();
 		base.layout.items = [{
 			id: 'video-item',
-			type: 'widget',
+			type: 'media',
 			label: 'Motion ident',
 			visible: true,
 			x: 0,
 			y: 0,
 			width: 640,
 			height: 360,
-			widget: {
-				type: 'media',
-				mediaKind: 'silent-video',
-				asset: { assetId: 'video-asset', revisionId: 'video-revision-3' },
-				fit: 'cover',
-				opacity: 0.8,
-				borderRadius: 12,
-				loop: true,
-				playbackRate: 1.25,
-				videoCompatibility: 'all-supported',
-				videoTarget: 'safari',
-			},
+			mediaKind: 'silent-video',
+			asset: { assetId: 'video-asset', revisionId: 'video-revision-3' },
+			fit: 'cover',
+			opacity: 0.8,
+			borderRadius: 12,
+			loop: true,
+			playbackRate: 1.25,
+			videoCompatibility: 'all-supported',
+			videoTarget: 'safari',
 		}];
 
 		const model = resolveFeatureMatchOverlayRenderModel({
@@ -491,19 +488,16 @@ describe('feature Match Overlay render model', () => {
 			canvasHeight: 1080,
 			displayTime: '',
 		});
-		const render = model.widgetItems[0]!.render;
-
-		expect(render).toMatchObject({
-			type: 'silent-video',
+		expect(model.mediaItems[0]).toMatchObject({
 			src: '/api/graphics-assets/video-asset/revisions/video-revision-3/content',
-			loop: true,
-			playbackRate: 1.25,
-			videoCompatibility: 'all-supported',
-			videoTarget: 'safari',
-			mediaStyle: {
-				objectFit: 'cover',
+			item: {
+				mediaKind: 'silent-video',
+				loop: true,
+				playbackRate: 1.25,
+				videoCompatibility: 'all-supported',
+				videoTarget: 'safari',
 				opacity: 0.8,
-				borderRadius: '12px',
+				borderRadius: 12,
 			},
 		});
 	});

@@ -4,6 +4,7 @@ import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
 	FeatureMatchGameWinsWidgetConfig,
 	FeatureMatchLayoutItemConfig,
+	FeatureMatchMediaGraphicItemConfig,
 	FeatureMatchOverlayBoxStyle,
 	FeatureMatchOverlayModeConfig,
 	FeatureMatchOverlayOutput,
@@ -78,6 +79,12 @@ export interface FeatureMatchOverlaySourceItemRenderModel {
 	cutoutPath: string | null;
 }
 
+export interface FeatureMatchOverlayMediaGraphicItemRenderModel {
+	item: FeatureMatchMediaGraphicItemConfig;
+	style: CSSProperties;
+	src: string;
+}
+
 /**
  * Fully-resolved render content for one Feature Match Overlay Widget. The
  * renderer component dispatches on `type` and needs no access to the render
@@ -86,15 +93,6 @@ export interface FeatureMatchOverlaySourceItemRenderModel {
 export type FeatureMatchOverlayWidgetRender
 	= | { type: 'text'; lines: ReturnType<typeof renderFeatureMatchOverlayTemplateLines>; deckColors: string }
 		| { type: 'image'; src: string; alt: string; imageStyle: CSSProperties }
-		| {
-			type: 'silent-video';
-			src: string;
-			loop: boolean;
-			playbackRate: number;
-			videoCompatibility: 'all-supported' | 'chromium-transparency';
-			videoTarget: 'chromium' | 'safari';
-			mediaStyle: CSSProperties;
-		}
 		| { type: 'clock'; displayTime: string }
 		| {
 			type: 'player-life';
@@ -162,6 +160,7 @@ export interface FeatureMatchOverlayRenderModel {
 	output: FeatureMatchOverlayOutput;
 	canvasStyle: CSSProperties;
 	sourceItems: FeatureMatchOverlaySourceItemRenderModel[];
+	mediaItems: FeatureMatchOverlayMediaGraphicItemRenderModel[];
 	widgetItems: FeatureMatchOverlayWidgetItemRenderModel[];
 	widgetGroups: FeatureMatchOverlayWidgetGroupRenderModel[];
 	sourceCutouts: Array<{ id: string; path: string }>;
@@ -172,7 +171,7 @@ export interface FeatureMatchOverlayRenderModel {
 	widgetStyle: (rect: FeatureMatchOverlayRect, style?: FeatureMatchOverlayBoxStyle) => CSSProperties;
 	imageStyle: (
 		rect: FeatureMatchOverlayRect,
-		widget: Extract<FeatureMatchWidgetConfig, { type: 'image' | 'media' }>,
+		media: { fit: 'contain' | 'cover' | 'fill'; opacity: number; borderRadius: number },
 	) => CSSProperties;
 	borderSideEnabled: (style: { borderTopVisible?: boolean; borderRightVisible?: boolean; borderBottomVisible?: boolean; borderLeftVisible?: boolean }, side: FeatureMatchOverlayBorderSide) => boolean;
 }
@@ -431,6 +430,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		.filter(item => item.visible)
 		.sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
 	const sourceItems = visibleItems.filter((item): item is FeatureMatchSourceItemConfig => item.type === 'source');
+	const mediaItems = visibleItems.filter((item): item is FeatureMatchMediaGraphicItemConfig => item.type === 'media');
 	const widgetItems = visibleItems.filter((item): item is FeatureMatchWidgetItemConfig => item.type === 'widget');
 	const widgetGroups = visibleItems.filter((item): item is FeatureMatchWidgetGroupItemConfig => item.type === 'widget-group');
 
@@ -539,14 +539,14 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 
 	function imageStyleFor(
 		rect: FeatureMatchOverlayRect,
-		widget: Extract<FeatureMatchWidgetConfig, { type: 'image' | 'media' }>,
+		media: { fit: 'contain' | 'cover' | 'fill'; opacity: number; borderRadius: number },
 	): CSSProperties {
 		return {
 			...rectStyle(rect),
 			position: 'absolute',
-			objectFit: widget.fit,
-			opacity: widget.opacity,
-			borderRadius: `${widget.borderRadius}px`,
+			objectFit: media.fit,
+			opacity: media.opacity,
+			borderRadius: `${media.borderRadius}px`,
 		};
 	}
 
@@ -571,24 +571,6 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 					deckColors: deckColors(widget.playerSide ?? 'player1'),
 				};
 			case 'image':
-				return {
-					type: 'image',
-					src: widget.asset ? resolveGraphicAssetContentPath(widget.asset) : '',
-					alt: label,
-					imageStyle: imageStyleFor({ x: 0, y: 0, width: rect.width, height: rect.height }, widget),
-				};
-			case 'media':
-				if (widget.mediaKind === 'silent-video') {
-					return {
-						type: 'silent-video',
-						src: widget.asset ? resolveGraphicAssetContentPath(widget.asset) : '',
-						loop: widget.loop ?? true,
-						playbackRate: widget.playbackRate ?? 1,
-						videoCompatibility: widget.videoCompatibility ?? 'all-supported',
-						videoTarget: widget.videoTarget ?? 'safari',
-						mediaStyle: imageStyleFor({ x: 0, y: 0, width: rect.width, height: rect.height }, widget),
-					};
-				}
 				return {
 					type: 'image',
 					src: widget.asset ? resolveGraphicAssetContentPath(widget.asset) : '',
@@ -687,6 +669,11 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 			background: output === 'overlay' ? 'transparent' : '#000',
 		},
 		sourceItems: renderedSourceItems,
+		mediaItems: mediaItems.map(item => ({
+			item,
+			style: itemStyle(item),
+			src: item.asset ? resolveGraphicAssetContentPath(item.asset) : '',
+		})),
 		widgetItems: widgetItems.map(item => ({
 			id: item.id,
 			label: item.label,

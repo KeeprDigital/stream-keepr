@@ -232,26 +232,23 @@ describe('featureMatchOverlayDisplay', () => {
 	it('blocks a VP9-alpha take outside a proven Chromium target', async () => {
 		mockConfig.value.layout.items = [{
 			id: 'restricted-video',
-			type: 'widget',
+			type: 'media',
 			label: 'Restricted VP9 alpha',
 			visible: true,
 			x: 0,
 			y: 0,
 			width: 640,
 			height: 360,
-			widget: {
-				type: 'media',
-				mediaKind: 'silent-video',
-				asset: {
-					assetId: 'video-asset' as never,
-					revisionId: 'video-revision-1' as never,
-				},
-				fit: 'contain',
-				opacity: 1,
-				borderRadius: 0,
-				videoCompatibility: 'chromium-transparency',
-				videoTarget: 'chromium',
+			mediaKind: 'silent-video',
+			asset: {
+				assetId: 'video-asset' as never,
+				revisionId: 'video-revision-1' as never,
 			},
+			fit: 'contain',
+			opacity: 1,
+			borderRadius: 0,
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'chromium',
 		}];
 
 		const wrapper = await mountComponent();
