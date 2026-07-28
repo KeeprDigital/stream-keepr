@@ -48,6 +48,12 @@ function routeEventId(route: RouteLocationNormalizedLoaded): number {
 	return Number(firstRouteParam(route.params.eventId as string | string[]));
 }
 
+function screenOutputAssetCapability(hash: string): string | null {
+	const value = new URLSearchParams(hash.replace(/^#/, ''))
+		.get('asset-capability');
+	return value && /^[\w-]{20,200}$/.test(value) ? value : null;
+}
+
 export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {}) {
 	const route = options.route ?? useRoute();
 	const eventStore = options.eventStore ?? useEventStore();
@@ -64,6 +70,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	const fitToViewport = computed(() => route.query.fit === '1');
 	const isPreview = computed(() => route.query.preview === '1');
 	const previewGuides = computed(() => isPreview.value && route.query.guides === '1');
+	const assetCapability = computed(() => screenOutputAssetCapability(route.hash ?? ''));
 
 	const isControlScreen = computed(() => {
 		const mode = screenStore.activeScreen?.currentMode;
@@ -84,6 +91,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		fitToViewport,
 		isPreview,
 		previewGuides,
+		assetCapability,
 	};
 
 	watch(isControlScreen, (isControl) => {

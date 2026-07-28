@@ -21,6 +21,9 @@ const mockPublication = {
 	screenUpdated: vi.fn(),
 	screenDeleted: vi.fn(),
 };
+const mockScreenOutputAssetCapabilities = {
+	prepare: vi.fn(),
+};
 
 vi.mock('~~/server/utils/routeGuards', () => ({
 	validateScreenModeConfigsReferences: mockValidateScreenModeConfigsReferences,
@@ -60,6 +63,14 @@ describe('screenWriteModule', () => {
 		mockPublication.screenCreated.mockResolvedValue({ id: 7, slug: 'main' });
 		mockPublication.screenUpdated.mockResolvedValue({ id: 7, slug: 'main' });
 		mockPublication.screenDeleted.mockResolvedValue(undefined);
+		mockScreenOutputAssetCapabilities.prepare.mockResolvedValue({
+			capability: 'opaque-capability',
+			persisted: {
+				assetCapabilitySeed: 'seed-1',
+				assetCapabilityVersion: 1,
+				assetCapabilityDigest: 'digest-1',
+			},
+		});
 	});
 
 	describe('createScreen', () => {
@@ -70,7 +81,9 @@ describe('screenWriteModule', () => {
 				revisionId: 'revision-1',
 			};
 
-			await expect(screenWriteModule().createScreen({
+			await expect(screenWriteModule({
+				screenOutputAssetCapabilities: mockScreenOutputAssetCapabilities,
+			}).createScreen({
 				eventId: 1,
 				input: {
 					name: 'Overlay',
@@ -87,7 +100,9 @@ describe('screenWriteModule', () => {
 		it('validates mode config references before checking the slug', async () => {
 			const input = { slug: 'main', modeConfigs: { card: {} } } as never;
 
-			await screenWriteModule().createScreen({ eventId: 1, input, originConnectionId: 'origin-1' });
+			await screenWriteModule({
+				screenOutputAssetCapabilities: mockScreenOutputAssetCapabilities,
+			}).createScreen({ eventId: 1, input, originConnectionId: 'origin-1' });
 
 			expect(mockValidateScreenModeConfigsReferences).toHaveBeenCalledWith(1, { card: {} });
 			expect(mockValidateScreenModeConfigsReferences.mock.invocationCallOrder[0])
@@ -97,7 +112,9 @@ describe('screenWriteModule', () => {
 		it('rejects a duplicate slug with a 400 before creating', async () => {
 			mockScreenService.slugExists.mockResolvedValue(true);
 
-			await expect(screenWriteModule().createScreen({
+			await expect(screenWriteModule({
+				screenOutputAssetCapabilities: mockScreenOutputAssetCapabilities,
+			}).createScreen({
 				eventId: 1,
 				input: { slug: 'taken' } as never,
 			})).rejects.toMatchObject({
@@ -112,16 +129,29 @@ describe('screenWriteModule', () => {
 		it('creates the screen and publishes the mapped response', async () => {
 			const input = { slug: 'main' } as never;
 
-			const response = await screenWriteModule().createScreen({ eventId: 1, input, originConnectionId: 'origin-1' });
+			const response = await screenWriteModule({
+				screenOutputAssetCapabilities: mockScreenOutputAssetCapabilities,
+			}).createScreen({ eventId: 1, input, originConnectionId: 'origin-1' });
 
 			expect(mockScreenService.slugExists).toHaveBeenCalledWith(1, 'main');
-			expect(mockScreenService.create).toHaveBeenCalledWith(1, input);
+			expect(mockScreenService.create).toHaveBeenCalledWith(
+				1,
+				input,
+				{
+					assetCapabilitySeed: 'seed-1',
+					assetCapabilityVersion: 1,
+					assetCapabilityDigest: 'digest-1',
+				},
+			);
 			expect(mockPublication.screenCreated).toHaveBeenCalledWith({
 				eventId: 1,
 				entity: expect.objectContaining({ id: 7, slug: 'main' }),
 				originConnectionId: 'origin-1',
 			});
-			expect(response).toEqual({ id: 7, slug: 'main' });
+			expect(response).toEqual({
+				id: 7,
+				slug: 'main',
+			});
 		});
 	});
 

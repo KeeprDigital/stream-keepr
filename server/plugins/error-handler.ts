@@ -1,4 +1,5 @@
 import process from 'node:process';
+import { safeErrorLogPath } from '~~/server/utils/errorLogPath';
 import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 
 interface NitroError extends Error {
@@ -29,7 +30,7 @@ export default defineNitroPlugin((nitroApp) => {
 		mapPublicNitroError(error);
 
 		if (!shouldSuppressIntegrationLog(error))
-			console.error(JSON.stringify(errorLogFields(error, event?.path)));
+			console.error(JSON.stringify(errorLogFields(error, safeErrorLogPath(event?.path))));
 	});
 });
 

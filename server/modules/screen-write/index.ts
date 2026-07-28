@@ -1,4 +1,5 @@
 import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
+import type { ScreenOutputAssetCapabilityManager } from '~~/server/modules/screen-output-assets/manager';
 import type { CreateScreenInput, UpdateScreenInput } from '~~/server/schemas/api/screen';
 import type { ScreenResponse } from '~~/shared/api';
 import type { ScreenMode } from '~~/shared/types/enums';
@@ -94,6 +95,7 @@ function rejectChangedFeatureMatchOverlayReferencesOnGenericUpdate(
 
 export function screenWriteModule(dependencies: {
 	graphicsAssets?: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevision'>;
+	screenOutputAssetCapabilities?: Pick<ScreenOutputAssetCapabilityManager, 'prepare'>;
 } = {}) {
 	const publication = eventDataPublicationModule();
 	const screens = screenService();
@@ -101,6 +103,13 @@ export function screenWriteModule(dependencies: {
 	async function createScreen({ eventId, input, originConnectionId }: CreateScreenParams): Promise<ScreenResponse> {
 		await validateScreenModeConfigsReferences(eventId, input.modeConfigs);
 		rejectUnindexedFeatureMatchOverlayReferencesOnCreate(input.modeConfigs);
+		if (!dependencies.screenOutputAssetCapabilities) {
+			throw createError({
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'Screen Output asset capabilities are unavailable',
+			});
+		}
 
 		const slugExists = await screens.slugExists(eventId, input.slug);
 		if (slugExists) {
@@ -110,9 +119,14 @@ export function screenWriteModule(dependencies: {
 			});
 		}
 
-		const newScreen = await screens.create(eventId, input);
+		const preparedCapability = await dependencies.screenOutputAssetCapabilities.prepare();
+		const newScreen = await screens.create(
+			eventId,
+			input,
+			preparedCapability.persisted,
+		);
 
-		return await publication.screenCreated({
+		return publication.screenCreated({
 			eventId,
 			entity: newScreen,
 			originConnectionId,

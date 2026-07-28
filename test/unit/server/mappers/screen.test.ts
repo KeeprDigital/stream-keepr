@@ -58,5 +58,14 @@ describe('screen mapper', () => {
 			expect(result.modeConfigs).toBeNull();
 			expect(result.screenConfig).toBeNull();
 		});
+
+		it('never exposes capability material or internal reference markers', () => {
+			const result = mapScreenToResponse(createMockScreen());
+
+			expect(result).not.toHaveProperty('assetCapabilitySeed');
+			expect(result).not.toHaveProperty('assetCapabilityVersion');
+			expect(result).not.toHaveProperty('assetCapabilityDigest');
+			expect(result).not.toHaveProperty('graphicAssetReferenceVersion');
+		});
 	});
 });

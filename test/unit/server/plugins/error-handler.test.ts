@@ -1,8 +1,21 @@
 import { describe, expect, it } from 'vitest';
+import { safeErrorLogPath } from '~~/server/utils/errorLogPath';
 import { StateConflictError } from '~~/server/utils/errors';
 import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 
 describe('error-handler mapping logic', () => {
+	describe('log path safety', () => {
+		it('redacts Screen Output asset delivery identities and query parameters', () => {
+			expect(safeErrorLogPath(
+				'/api/screen-output/screens/17/assets/asset-secret/revisions/revision-secret/content?debug=1',
+			)).toBe('/api/screen-output/screens/:screenId/assets/:assetId/revisions/:revisionId/content');
+		});
+
+		it('preserves unrelated paths', () => {
+			expect(safeErrorLogPath('/api/events/17')).toBe('/api/events/17');
+		});
+	});
+
 	describe('stateConflictError mapping', () => {
 		it('maps to 409 Conflict', () => {
 			const error = {

@@ -19,13 +19,14 @@ function deferred<T>() {
 	return { promise, resolve, reject };
 }
 
-function createRoute(query: Record<string, unknown> = {}) {
+function createRoute(query: Record<string, unknown> = {}, hash = '') {
 	return reactive({
 		params: {
 			eventId: '42',
 			screenSlug: 'main',
 		},
 		query,
+		hash,
 	}) as any;
 }
 
@@ -179,6 +180,18 @@ describe('useScreenDisplaySession', () => {
 
 		expect(harness.realtimeSession.start).not.toHaveBeenCalled();
 		expect(harness.session.screenContext.isPreview?.value).toBe(true);
+	});
+
+	it('reads the opaque asset capability only from the URL fragment', async () => {
+		const route = createRoute(
+			{ assetCapability: 'query-secret-must-be-ignored' },
+			'#asset-capability=opaque_fragment_capability',
+		);
+		const harness = createHarness({ route });
+		await flushPromises();
+
+		expect(harness.session.screenContext.assetCapability?.value)
+			.toBe('opaque_fragment_capability');
 	});
 
 	it('stops the previous realtime session before loading and starting the new slug', async () => {

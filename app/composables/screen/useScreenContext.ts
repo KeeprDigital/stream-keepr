@@ -23,6 +23,8 @@ export interface ScreenContext {
 	isPreview?: Ref<boolean>;
 	/** Show editor-only guides in embedded previews. */
 	previewGuides?: Ref<boolean>;
+	/** Opaque capability supplied to an unattended Screen Output via its URL fragment. */
+	assetCapability?: Ref<string | null>;
 }
 
 const SCREEN_CONTEXT_KEY: InjectionKey<ScreenContext> = Symbol('screen-context');

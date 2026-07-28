@@ -7,6 +7,7 @@ import { getIntegrationWranglerPersistDir, INTEGRATION_MODE_ENV, INTEGRATION_WRA
 const disableFsWatchImport = fileURLToPath(new URL('./disable-fs-watch.mjs', import.meta.url));
 const nodeOptions = [process.env.NODE_OPTIONS, '--import', disableFsWatchImport].filter(Boolean).join(' ');
 export const INTEGRATION_GRAPHICS_ADMIN_TOKEN = 'integration-graphics-admin-token';
+export const INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
 /**
  * Shared setup options for all integration tests.
@@ -20,6 +21,7 @@ export const integrationSetupOptions = {
 		[INTEGRATION_MODE_ENV]: 'true',
 		[INTEGRATION_WRANGLER_PERSIST_DIR_ENV]: getIntegrationWranglerPersistDir(),
 		NUXT_GRAPHICS_ADMIN_TOKEN: INTEGRATION_GRAPHICS_ADMIN_TOKEN,
+		NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY,
 		NODE_OPTIONS: nodeOptions,
 	},
 	nuxtConfig: {

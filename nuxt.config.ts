@@ -19,6 +19,7 @@ export default defineNuxtConfig({
 	runtimeConfig: {
 		ablyApiKey: '',
 		graphicsAdminToken: '',
+		screenOutputCapabilitySigningKey: '',
 		meleeCredentialEncryptionKey: '',
 		meleeCredentialEncryptionKeyVersion: '',
 		meleeCredentialEncryptionPreviousKeys: '',

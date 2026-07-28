@@ -22,8 +22,10 @@ const eventId = computed(() => event.value?.id ?? 0);
 const screenId = computed(() => Number(route.params.screenId));
 
 const screen = ref<Screen | null>(null);
+const assetCapability = ref<string | null>(null);
 const loading = ref(true);
 const isUpdating = ref(false);
+const capabilityLoads = createGuardedSequence();
 
 const screenModeConfigurationPolicy = computed(() => {
 	const mode = screen.value?.currentMode;
@@ -70,6 +72,8 @@ const {
 // Global reset: resets container config + current mode display settings (preserves bindings)
 const modeControlsRef = ref<{ resetConfig?: () => void; saving?: boolean } | null>(null);
 const showResetConfirm = ref(false);
+const showCapabilityRotationConfirm = ref(false);
+const rotatingCapability = ref(false);
 
 // Centralized saving indicator — true when either container or mode config is saving
 const isSaving = computed(() => screenConfigSaving.value || modeControlsRef.value?.saving === true);
@@ -86,6 +90,9 @@ const screenUrl = computed(() => {
 	const baseUrl = window.location.origin;
 	return `${baseUrl}/event/${eventId.value}/screen/${screen.value.slug}`;
 });
+const screenAccessUrl = computed(() => assetCapability.value
+	? `${screenUrl.value}#asset-capability=${encodeURIComponent(assetCapability.value)}`
+	: screenUrl.value);
 
 const modeOptions = getScreenModeSelectOptions();
 
@@ -113,9 +120,25 @@ async function loadScreen(id: number) {
 				screen.value = data;
 				// Subscribe to presence after screen loads
 				screenStore.subscribeToScreenPresence(id);
+				void loadAssetCapability(id);
 			},
 		},
 	);
+}
+
+async function loadAssetCapability(id: number) {
+	const flight = capabilityLoads.begin();
+	try {
+		const result = await $fetch<{ assetCapability: string }>(
+			`/api/events/${eventId.value}/screens/${id}/asset-capability`,
+		);
+		if (flight.current)
+			assetCapability.value = result.assetCapability;
+	}
+	catch {
+		if (flight.current)
+			assetCapability.value = null;
+	}
 }
 
 watch(screenId, (newId, oldId) => {
@@ -123,11 +146,13 @@ watch(screenId, (newId, oldId) => {
 		screenStore.unsubscribeFromScreenPresence(oldId);
 	if (newId) {
 		screen.value = null;
+		assetCapability.value = null;
 		void loadScreen(newId);
 	}
 }, { immediate: true });
 
 onBeforeUnmount(() => {
+	capabilityLoads.supersede();
 	if (screenId.value) {
 		screenStore.unsubscribeFromScreenPresence(screenId.value);
 	}
@@ -166,11 +191,39 @@ async function setMode(mode: ScreenMode) {
 }
 
 async function copyUrl() {
-	await copyToClipboard(screenUrl, {
+	await copyToClipboard(screenAccessUrl, {
 		successTitle: 'URL Copied',
 		successDescription: 'Screen URL copied to clipboard',
 		errorDescription: 'Failed to copy screen URL to clipboard.',
 	});
+}
+
+async function rotateAssetCapability() {
+	if (!screen.value)
+		return;
+	await runRequest(
+		() => $fetch<{ assetCapability: string }>(
+			`/api/events/${eventId.value}/screens/${screen.value!.id}/asset-capability`,
+			{ method: 'POST' },
+		),
+		{
+			loadingRef: rotatingCapability,
+			success: {
+				title: 'Asset Access Rotated',
+				description: 'Previously copied Screen URLs can no longer resolve Graphic Assets.',
+				color: 'success',
+			},
+			error: {
+				title: 'Rotation Failed',
+				description: 'Screen Output asset access could not be rotated.',
+				color: 'error',
+			},
+			onSuccess: (result) => {
+				assetCapability.value = result.assetCapability;
+				showCapabilityRotationConfirm.value = false;
+			},
+		},
+	);
 }
 
 function screenDimensionFallback(field: 'width' | 'height') {
@@ -185,11 +238,14 @@ function screenOutputUrl(output: FeatureMatchOverlayOutput) {
 	if (!screen.value)
 		return '';
 	const baseUrl = window.location.origin;
-	return `${baseUrl}/event/${eventId.value}/screen/${screen.value.slug}?output=${output}`;
+	const capabilityFragment = assetCapability.value
+		? `#asset-capability=${encodeURIComponent(assetCapability.value)}`
+		: '';
+	return `${baseUrl}/event/${eventId.value}/screen/${screen.value.slug}?output=${output}${capabilityFragment}`;
 }
 
 function openInNewTab() {
-	window.open(screenUrl.value, '_blank', 'noopener,noreferrer');
+	window.open(screenAccessUrl.value, '_blank', 'noopener,noreferrer');
 }
 
 function openOutputInNewTab(output: FeatureMatchOverlayOutput) {
@@ -367,6 +423,41 @@ async function sendCommand(command: ScreenCommand) {
 										@click="sendCommand('debug')"
 									/>
 								</UTooltip>
+
+								<UPopover v-model:open="showCapabilityRotationConfirm">
+									<UTooltip text="Revoke previously copied Screen URLs">
+										<UButton
+											variant="soft"
+											color="warning"
+											icon="i-lucide-key-round"
+											label="Rotate Asset Access"
+											:loading="rotatingCapability"
+										/>
+									</UTooltip>
+									<template #content>
+										<div class="p-3 flex flex-col gap-3 w-72">
+											<p class="text-sm">
+												Rotate this Screen Output's asset access? Previously copied URLs will stop resolving Graphic Assets immediately.
+											</p>
+											<div class="flex justify-end gap-2">
+												<UButton
+													size="xs"
+													variant="ghost"
+													color="neutral"
+													label="Cancel"
+													@click="() => { showCapabilityRotationConfirm = false }"
+												/>
+												<UButton
+													size="xs"
+													color="warning"
+													label="Rotate Access"
+													:loading="rotatingCapability"
+													@click="rotateAssetCapability"
+												/>
+											</div>
+										</div>
+									</template>
+								</UPopover>
 
 								<USeparator orientation="vertical" class="h-6" />
 
