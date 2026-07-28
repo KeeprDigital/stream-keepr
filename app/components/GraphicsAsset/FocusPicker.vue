@@ -213,7 +213,7 @@ function selectAsset(asset: GraphicAsset) {
 								</p>
 								<div class="mt-2 flex flex-wrap gap-1">
 									<UBadge size="xs" variant="soft">
-										PNG compatible
+										{{ asset.facts.format.toUpperCase() }} compatible
 									</UBadge>
 									<UBadge v-if="asset.facts.hasAlpha" size="xs" variant="soft">
 										Alpha

@@ -1,3 +1,5 @@
+import type { STILL_IMAGE_COMPATIBILITY_PROFILE } from '../utils/graphicsAssetCompatibility';
+
 declare const graphicAssetIdBrand: unique symbol;
 declare const graphicAssetRevisionIdBrand: unique symbol;
 declare const graphicsDerivativeIdBrand: unique symbol;
@@ -48,6 +50,24 @@ export type GraphicAssetReferenceStatus
 
 export type GraphicsDuplicateContentPolicy = 'reuse' | 'create-separate';
 
+export type GraphicAssetBrowserDecodeEvidence
+	= | {
+		outcome: 'decoded';
+		sourceDigest: string;
+		width: number;
+		height: number;
+	}
+	| {
+		outcome: 'rejected';
+		sourceDigest: string;
+	};
+
+export interface GraphicAssetSourceDeclarations {
+	sourceFileName?: string;
+	declaredMime?: string;
+	browserDecodeEvidence?: GraphicAssetBrowserDecodeEvidence;
+}
+
 export type GraphicsIngestionStage
 	= | 'created'
 		| 'transferring'
@@ -62,15 +82,20 @@ export type GraphicsIngestionStage
 
 export interface GraphicAssetImageFacts {
 	kind: 'image';
-	canonicalMime: 'image/png';
+	format: 'png' | 'jpeg' | 'webp';
+	canonicalMime: 'image/png' | 'image/jpeg' | 'image/webp';
 	byteLength: number;
 	sha256: string;
 	width: number;
 	height: number;
 	pixelCount: number;
+	frameCount: 1;
 	bitDepth: 8;
+	colorSpace: 'srgb';
 	colorModel: 'grayscale' | 'grayscale-alpha' | 'indexed' | 'rgb' | 'rgba';
 	hasAlpha: boolean;
+	orientation: 'normal';
+	browserDecodable?: true;
 }
 
 export interface GraphicAssetValidationIssue {
@@ -83,20 +108,36 @@ export interface GraphicAssetValidationIssue {
 		| 'unsupported-png-profile'
 		| 'image-dimensions-exceeded'
 		| 'image-pixels-exceeded'
-		| 'incomplete-png-frame';
+		| 'incomplete-png-frame'
+		| 'unsupported-image-format'
+		| 'invalid-jpeg-signature'
+		| 'malformed-jpeg'
+		| 'unsupported-jpeg-colour'
+		| 'unsupported-jpeg-profile'
+		| 'unsupported-image-orientation'
+		| 'incomplete-jpeg-frame'
+		| 'invalid-webp-signature'
+		| 'malformed-webp'
+		| 'unsupported-webp-animation'
+		| 'unsupported-webp-profile'
+		| 'incomplete-webp-frame'
+		| 'conflicting-image-extension'
+		| 'conflicting-image-mime'
+		| 'browser-image-decode-failed'
+		| 'browser-image-decode-mismatch';
 	message: string;
 }
 
 export type GraphicAssetValidationReport
 	= {
 		outcome: 'accepted';
-		compatibilityProfile: 'png-v1';
+		compatibilityProfile: typeof STILL_IMAGE_COMPATIBILITY_PROFILE;
 		issues: [];
 		facts: GraphicAssetImageFacts;
 	}
 	| {
 		outcome: 'rejected';
-		compatibilityProfile: 'png-v1';
+		compatibilityProfile: typeof STILL_IMAGE_COMPATIBILITY_PROFILE;
 		issues: GraphicAssetValidationIssue[];
 	};
 
@@ -131,7 +172,7 @@ export type GraphicsIngestionCapacityOutcome
 		availableBytes: number;
 	};
 
-export interface GraphicsIngestionOperation {
+export interface GraphicsIngestionOperation extends GraphicAssetSourceDeclarations {
 	id: GraphicsIngestionOperationId;
 	idempotencyKey: string;
 	initiatedBy: string;

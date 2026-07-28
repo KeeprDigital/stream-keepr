@@ -584,6 +584,8 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - A **Missing Graphic Asset Reference** remains persisted and diagnosable until explicitly repaired, while invalidating its owning graphics artifact
 - **Unavailable Graphic Asset Content** causes a retryable failure only for operations that currently require its bytes
 - Every **Graphic Asset Revision** passes **Graphic Asset Validation** under one **Graphic Asset Compatibility Profile** before it becomes referenceable
+- The initial `still-image-v1` **Graphic Asset Compatibility Profile** accepts exact single-frame PNG, JPEG, or WebP source bytes up to 25 MiB, 8,192 pixels per axis, and 16,777,216 decoded pixels only when bounded parser evidence and a complete decode agree on an 8-bit SDR sRGB image with normal orientation
+- `still-image-v1` rejects declaration conflicts, animation, embedded colour or orientation profiles, malformed structure, partial decode, and out-of-profile facts, and generates a separate deterministic transparent 8-bit sRGB PNG thumbnail fitted within 640 × 360 without cropping or upscaling
 - Template Package imports revalidate packaged source bytes under the receiving installation's current **Graphic Asset Compatibility Profile**
 - Every local upload, approved remote copy, file replacement, and Template Package installation runs as one durable, idempotent **Graphics Ingestion Operation**
 - A **Graphics Ingestion Operation** exposes reconnectable stage progress, one complete compatibility report, cancellation before publication, and retry from durable checkpoints

@@ -1,6 +1,7 @@
 import type { ScreenResponse } from '~~/shared/api';
 import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
@@ -67,6 +68,12 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 					idempotencyKey: 'screen-output-capability-pixel',
 					name: 'Screen Output capability pixel',
 					defaultEventId: eventId,
+					browserDecodeEvidence: {
+						outcome: 'decoded',
+						sourceDigest: createHash('sha256').update(pixelPng).digest('hex'),
+						width: 1,
+						height: 1,
+					},
 					declaredByteLength: pixelPng.byteLength,
 				},
 			},

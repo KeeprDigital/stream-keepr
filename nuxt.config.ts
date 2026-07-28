@@ -1,7 +1,8 @@
 import type { MutationBodyMethod } from './shared/utils/requestBodyLimits';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { MAX_PNG_INGESTION_BYTES } from './shared/utils/graphicsAssetCompatibility';
+import { wasmModulePlugin } from './build/wasmModulePlugin';
+import { MAX_STILL_IMAGE_INGESTION_BYTES } from './shared/utils/graphicsAssetCompatibility';
 import { MUTATION_BODY_METHODS } from './shared/utils/requestBodyLimits';
 
 const isIntegration = process.env.STREAM_KEEPR_INTEGRATION === 'true';
@@ -79,6 +80,9 @@ export default defineNuxtConfig({
 
 	nitro: {
 		preset: 'cloudflare_module',
+		rollupConfig: {
+			plugins: [wasmModulePlugin('nitro-webassembly-modules')],
+		},
 		handlers: isIntegration
 			? [
 					{
@@ -97,8 +101,8 @@ export default defineNuxtConfig({
 			'/api/graphics-assets/ingestion-operations/**': {
 				boundedRawMutations: {
 					PUT: {
-						maxBytes: MAX_PNG_INGESTION_BYTES,
-						label: 'PNG transfer',
+						maxBytes: MAX_STILL_IMAGE_INGESTION_BYTES,
+						label: 'still-image transfer',
 					},
 				},
 			},

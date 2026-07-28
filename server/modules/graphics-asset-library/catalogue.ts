@@ -9,7 +9,7 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicsAssetCatalogue,
-	PublishPngCatalogueInput,
+	PublishImageCatalogueInput,
 } from '.';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { GraphicsAssetLibraryError } from './errors';
@@ -19,6 +19,9 @@ interface OperationRow {
 	idempotency_key: string;
 	initiated_by: string;
 	proposed_name: string;
+	source_file_name: string | null;
+	declared_mime: string | null;
+	browser_decode_evidence: string | null;
 	duplicate_content_policy: GraphicsIngestionOperation['duplicateContentPolicy'];
 	default_event_id: number | null;
 	declared_byte_length: number;
@@ -43,6 +46,9 @@ interface AssetRow {
 	idempotency_key: string;
 	initiated_by: string;
 	proposed_name: string;
+	source_file_name: string | null;
+	declared_mime: string | null;
+	browser_decode_evidence: string | null;
 	duplicate_content_policy: GraphicsIngestionOperation['duplicateContentPolicy'];
 	default_event_id: number | null;
 	declared_byte_length: number;
@@ -66,6 +72,9 @@ function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 		idempotencyKey: row.idempotency_key,
 		initiatedBy: row.initiated_by,
 		name: row.proposed_name,
+		sourceFileName: row.source_file_name ?? undefined,
+		declaredMime: row.declared_mime ?? undefined,
+		browserDecodeEvidence: parseJson(row.browser_decode_evidence),
 		duplicateContentPolicy: row.duplicate_content_policy,
 		defaultEventId: row.default_event_id ?? undefined,
 		declaredByteLength: row.declared_byte_length,
@@ -86,6 +95,9 @@ function operationRowFromAsset(row: AssetRow): OperationRow {
 		idempotency_key: row.idempotency_key,
 		initiated_by: row.initiated_by,
 		proposed_name: row.proposed_name,
+		source_file_name: row.source_file_name,
+		declared_mime: row.declared_mime,
+		browser_decode_evidence: row.browser_decode_evidence,
 		duplicate_content_policy: row.duplicate_content_policy,
 		default_event_id: row.default_event_id,
 		declared_byte_length: row.declared_byte_length,
@@ -103,6 +115,7 @@ function operationRowFromAsset(row: AssetRow): OperationRow {
 function operationSelect(where: string) {
 	return `
 		SELECT id, idempotency_key, initiated_by, proposed_name,
+				source_file_name, declared_mime, browser_decode_evidence,
 			duplicate_content_policy, default_event_id,
 			declared_byte_length, transferred_byte_length, stage, report, result,
 			capacity_outcome, failure, created_at, updated_at
@@ -144,7 +157,8 @@ function updateOperationStatement(
 ) {
 	return database.prepare(`
 		UPDATE graphics_ingestion_operations
-		SET stage = ?, transferred_byte_length = ?, report = ?, result = ?,
+			SET stage = ?, transferred_byte_length = ?, source_file_name = ?,
+				declared_mime = ?, browser_decode_evidence = ?, report = ?, result = ?,
 			failure = ?, capacity_outcome = ?, updated_at = ?,
 			staging_reserved_byte_length = CASE
 				WHEN ? IN ('completed', 'cancelled')
@@ -170,6 +184,11 @@ function updateOperationStatement(
 	`).bind(
 		operation.stage,
 		operation.transferredByteLength,
+		operation.sourceFileName ?? null,
+		operation.declaredMime ?? null,
+		operation.browserDecodeEvidence === undefined
+			? null
+			: JSON.stringify(operation.browserDecodeEvidence),
 		operation.report === undefined ? null : JSON.stringify(operation.report),
 		operation.result === undefined ? null : JSON.stringify(operation.result),
 		operation.failure === undefined ? null : JSON.stringify(operation.failure),
@@ -287,8 +306,10 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 						), 0)
 						+ COALESCE((
 							SELECT SUM(length(CAST(json_array(
-								id, idempotency_key, source, stage, initiated_by,
-								proposed_name, duplicate_content_policy, default_event_id,
+									id, idempotency_key, source, stage, initiated_by,
+									proposed_name, source_file_name, declared_mime,
+									browser_decode_evidence,
+								duplicate_content_policy, default_event_id,
 								target_asset_id, declared_byte_length, transferred_byte_length,
 								staging_reserved_byte_length, staging_used_byte_length,
 								canonical_reserved_byte_length, capacity_outcome, report, result,
@@ -432,7 +453,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			}
 			return await this.getCapacity();
 		},
-		async initiatePngIngestion(operation) {
+		async initiateImageIngestion(operation) {
 			const existing = await firstOperation(
 				database,
 				'initiated_by = ? AND idempotency_key = ?',
@@ -443,14 +464,15 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				return existing;
 
 			await database.prepare(`
-				INSERT OR IGNORE INTO graphics_ingestion_operations (
-					id, idempotency_key, source, stage, initiated_by, proposed_name,
+					INSERT OR IGNORE INTO graphics_ingestion_operations (
+						id, idempotency_key, source, stage, initiated_by, proposed_name,
+						source_file_name, declared_mime, browser_decode_evidence,
 					duplicate_content_policy, default_event_id,
 					declared_byte_length, transferred_byte_length,
 					staging_reserved_byte_length,
 					created_at, updated_at
 				)
-				SELECT ?, ?, 'local-upload', 'created', ?, ?, ?, ?, ?, 0, ?, ?, ?
+					SELECT ?, ?, 'local-upload', 'created', ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?
 				FROM graphics_capacity_settings settings
 				WHERE settings.id = 1
 					AND (
@@ -464,6 +486,11 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				operation.idempotencyKey,
 				operation.initiatedBy,
 				operation.name,
+				operation.sourceFileName ?? null,
+				operation.declaredMime ?? null,
+				operation.browserDecodeEvidence === undefined
+					? null
+					: JSON.stringify(operation.browserDecodeEvidence),
 				operation.duplicateContentPolicy,
 				operation.defaultEventId ?? null,
 				operation.declaredByteLength,
@@ -533,7 +560,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			if (results.some(result => !result.success))
 				throw new Error('Graphics canonical writes could not be recorded');
 		},
-		async reservePngPublication(input) {
+		async reserveImagePublication(input) {
 			const proposed = new Map<string, number>([
 				[input.sourceDigest, input.sourceByteLength],
 				[input.thumbnailDigest, input.thumbnailByteLength],
@@ -672,7 +699,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			}
 			return authoritative;
 		},
-		async claimPngIngestion(input) {
+		async claimImageIngestion(input) {
 			const result = await database.prepare(`
 				UPDATE graphics_ingestion_operations
 				SET stage = 'hashing', updated_at = ?
@@ -703,7 +730,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				input.operation.initiatedBy,
 			);
 		},
-		async findReusablePng(sourceDigest) {
+		async findReusableImage(sourceDigest) {
 			const row = await database.prepare(`
 				SELECT a.id AS asset_id, r.id AS revision_id
 				FROM graphic_assets a
@@ -719,7 +746,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					}
 				: undefined;
 		},
-		async reusePng(input) {
+		async reuseImage(input) {
 			const completed: GraphicsIngestionOperation = {
 				...input.operation,
 				stage: 'completed',
@@ -771,12 +798,12 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				throw new Error('Graphic Asset reuse was not durable');
 			return authoritative;
 		},
-		async publishPng(input: PublishPngCatalogueInput) {
+		async publishImage(input: PublishImageCatalogueInput) {
 			await Promise.all([
 				assertContentCompatible(database, {
 					digest: input.sourceDigest,
 					byteLength: input.report.facts.byteLength,
-					canonicalMime: 'image/png',
+					canonicalMime: input.report.facts.canonicalMime,
 				}),
 				assertContentCompatible(database, {
 					digest: input.thumbnailDigest,
@@ -800,8 +827,13 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				database.prepare(`
 					INSERT OR IGNORE INTO graphic_asset_contents (
 						digest, byte_length, canonical_mime, availability, created_at
-					) VALUES (?, ?, 'image/png', 'available', ?)
-				`).bind(input.sourceDigest, input.report.facts.byteLength, new Date(input.publishedAt).getTime()),
+					) VALUES (?, ?, ?, 'available', ?)
+				`).bind(
+					input.sourceDigest,
+					input.report.facts.byteLength,
+					input.report.facts.canonicalMime,
+					new Date(input.publishedAt).getTime(),
+				),
 				database.prepare(`
 					INSERT OR IGNORE INTO graphic_asset_contents (
 						digest, byte_length, canonical_mime, availability, created_at
@@ -841,11 +873,12 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					INSERT INTO graphic_asset_revisions (
 						id, asset_id, revision_number, content_digest,
 						compatibility_profile, technical_facts, created_at
-					) VALUES (?, ?, 1, ?, 'png-v1', ?, ?)
+					) VALUES (?, ?, 1, ?, ?, ?, ?)
 				`).bind(
 					input.revisionId,
 					input.assetId,
 					input.sourceDigest,
+					input.report.compatibilityProfile,
 					JSON.stringify(input.report.facts),
 					new Date(input.publishedAt).getTime(),
 				),
@@ -894,8 +927,10 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 							ORDER BY event_id
 						)
 					), '[]') AS event_ids,
-					o.id AS operation_id, o.idempotency_key, o.initiated_by,
-					o.proposed_name, o.duplicate_content_policy,
+						o.id AS operation_id, o.idempotency_key, o.initiated_by,
+						o.proposed_name, o.source_file_name, o.declared_mime,
+						o.browser_decode_evidence,
+					o.duplicate_content_policy,
 					o.default_event_id, o.declared_byte_length,
 					o.transferred_byte_length, o.stage, o.report, o.result, o.failure,
 					o.capacity_outcome,
@@ -945,7 +980,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			`).bind(input.assetId, input.revisionId).first<{
 				digest: string;
 				byte_length: number;
-				canonical_mime: 'image/png';
+				canonical_mime: 'image/png' | 'image/jpeg' | 'image/webp';
 				lifecycle_state: 'active' | 'retired' | 'trashed';
 			}>();
 			return row

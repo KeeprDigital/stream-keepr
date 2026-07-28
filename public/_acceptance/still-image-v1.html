@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>still-image-v1 browser acceptance</title>
+	</head>
+	<body data-result="running">
+		<pre id="result">Running representative browser decoders…</pre>
+		<script type="module">
+			const fixtures = [
+				{
+					label: 'PNG',
+					mime: 'image/png',
+					base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+				},
+				{
+					label: 'JPEG',
+					mime: 'image/jpeg',
+					base64: '/9j/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJtAEx7/2Q==',
+				},
+				{
+					label: 'WebP',
+					mime: 'image/webp',
+					base64: 'UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAEAdQlFKUp4CBiOh/AAA=',
+				},
+			];
+
+			function fixtureBlob(fixture) {
+				const binary = atob(fixture.base64);
+				const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+				return new Blob([bytes], { type: fixture.mime });
+			}
+
+			async function verifyImageElement(blob, label) {
+				const objectUrl = URL.createObjectURL(blob);
+				try {
+					const image = new Image();
+					image.src = objectUrl;
+					await image.decode();
+					if (image.naturalWidth !== 1 || image.naturalHeight !== 1)
+						throw new Error(`${label} HTMLImageElement dimensions were not 1 × 1.`);
+				}
+				finally {
+					URL.revokeObjectURL(objectUrl);
+				}
+			}
+
+			try {
+				for (const fixture of fixtures) {
+					const blob = fixtureBlob(fixture);
+					const bitmap = await createImageBitmap(blob);
+					try {
+						if (bitmap.width !== 1 || bitmap.height !== 1)
+							throw new Error(`${fixture.label} ImageBitmap dimensions were not 1 × 1.`);
+					}
+					finally {
+						bitmap.close();
+					}
+					await verifyImageElement(blob, fixture.label);
+				}
+				document.body.dataset.result = 'passed';
+				document.querySelector('#result').textContent = 'PNG, JPEG, and WebP decoded through ImageBitmap and HTMLImageElement.';
+			}
+			catch (error) {
+				document.body.dataset.result = 'failed';
+				document.querySelector('#result').textContent = error instanceof Error
+					? error.message
+					: String(error);
+			}
+		</script>
+	</body>
+</html>

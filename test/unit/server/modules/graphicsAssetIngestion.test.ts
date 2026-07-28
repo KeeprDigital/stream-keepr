@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
@@ -19,6 +20,66 @@ const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 	'base64',
 ));
+const jpegPixel = Uint8Array.from(Buffer.from(
+	'/9j/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJtAEx7/2Q==',
+	'base64',
+));
+const webpPixel = Uint8Array.from(Buffer.from(
+	'UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAEAdQlFKUp4CBiOh/AAA=',
+	'base64',
+));
+
+function sourceDigest(bytes: Uint8Array) {
+	return createHash('sha256').update(bytes).digest('hex');
+}
+
+function jpegSegment(marker: number, payload: Uint8Array) {
+	const length = payload.byteLength + 2;
+	return Uint8Array.of(0xFF, marker, length >>> 8, length & 0xFF, ...payload);
+}
+
+function jpegWithColourProfile() {
+	const profile = jpegSegment(0xE2, new TextEncoder().encode('ICC_PROFILE\0'));
+	return Uint8Array.of(...jpegPixel.subarray(0, 2), ...profile, ...jpegPixel.subarray(2));
+}
+
+function animatedWebp() {
+	const payload = webpPixel.subarray(12);
+	const riffLength = 4 + 8 + 10 + payload.byteLength;
+	return Uint8Array.of(
+		0x52,
+		0x49,
+		0x46,
+		0x46,
+		riffLength,
+		0,
+		0,
+		0,
+		0x57,
+		0x45,
+		0x42,
+		0x50,
+		0x56,
+		0x50,
+		0x38,
+		0x58,
+		10,
+		0,
+		0,
+		0,
+		0x02,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		...payload,
+	);
+}
 
 function createLibrary(
 	staging = createInMemoryStagingGraphicsObjectStore(),
@@ -26,26 +87,263 @@ function createLibrary(
 	catalogue = createInMemoryGraphicsAssetCatalogue(),
 ) {
 	let nextIdentity = 0;
-	const library = createGraphicsAssetLibrary({
+	const libraryDelegate = createGraphicsAssetLibrary({
 		catalogue,
 		staging,
 		canonical,
 		generateIdentity: () => `identity-${++nextIdentity}`,
 		now: () => new Date('2026-07-27T04:00:00.000Z'),
 	});
+	const library: typeof libraryDelegate = {
+		...libraryDelegate,
+		async initiateImageIngestion(input) {
+			const fixture = input.declaredMime === 'image/jpeg'
+				? jpegPixel
+				: input.declaredMime === 'image/webp'
+					? webpPixel
+					: transparentPixelPng;
+			return await libraryDelegate.initiateImageIngestion({
+				...input,
+				browserDecodeEvidence: Object.hasOwn(input, 'browserDecodeEvidence')
+					? input.browserDecodeEvidence
+					: {
+							outcome: 'decoded',
+							sourceDigest: sourceDigest(fixture),
+							width: 1,
+							height: 1,
+						},
+			});
+		},
+	};
 	return { library, staging, canonical, catalogue };
 }
 
-describe('pNG ingestion through the Graphics Asset Library public module', () => {
+describe('still-image ingestion through the Graphics Asset Library public module', () => {
+	it.each([
+		{
+			label: 'missing browser evidence',
+			browserDecodeEvidence: undefined,
+			code: 'browser-image-decode-failed',
+		},
+		{
+			label: 'browser decode rejection',
+			browserDecodeEvidence: {
+				outcome: 'rejected',
+				sourceDigest: sourceDigest(jpegPixel),
+			} as const,
+			code: 'browser-image-decode-failed',
+		},
+		{
+			label: 'browser evidence mismatch',
+			browserDecodeEvidence: {
+				outcome: 'decoded',
+				sourceDigest: sourceDigest(jpegPixel),
+				width: 2,
+				height: 1,
+			} as const,
+			code: 'browser-image-decode-mismatch',
+		},
+	])('fails publication for $label through the public seam', async ({
+		browserDecodeEvidence,
+		code,
+	}) => {
+		const { library } = createLibrary();
+		const operation = await library.initiateImageIngestion({
+			idempotencyKey: `browser-gate-${code}`,
+			initiatedBy: 'graphics-author-1',
+			name: 'Browser-gated JPEG',
+			sourceFileName: 'browser-gated.jpg',
+			declaredMime: 'image/jpeg',
+			browserDecodeEvidence,
+			declaredByteLength: jpegPixel.byteLength,
+		});
+
+		const failed = await library.uploadImage({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			declaredMime: 'image/jpeg',
+			bytes: createBoundedByteStream(jpegPixel, {
+				byteLength: jpegPixel.byteLength,
+				maximumByteLength: 25 * 1024 * 1024,
+			}),
+		});
+
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			report: {
+				outcome: 'rejected',
+				issues: [{ code }],
+			},
+			failure: { code: 'validation-failed', retryable: false },
+		});
+		await expect(library.listGraphicAssets({})).resolves.toEqual([]);
+	});
+
+	it.each([
+		{
+			format: 'jpeg',
+			mime: 'image/jpeg',
+			fileName: 'scoreboard.jpg',
+			bytes: jpegPixel,
+		},
+		{
+			format: 'webp',
+			mime: 'image/webp',
+			fileName: 'scoreboard.webp',
+			bytes: webpPixel,
+		},
+	] as const)('publishes and resolves exact $format source bytes', async ({
+		format,
+		mime,
+		fileName,
+		bytes,
+	}) => {
+		const { library } = createLibrary();
+		const operation = await library.initiateImageIngestion({
+			idempotencyKey: `upload-${format}`,
+			initiatedBy: 'graphics-author-1',
+			name: `${format} scoreboard`,
+			sourceFileName: fileName,
+			declaredMime: mime,
+			declaredByteLength: bytes.byteLength,
+		});
+
+		const completed = await library.uploadImage({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			declaredMime: mime,
+			bytes: createBoundedByteStream(bytes, {
+				byteLength: bytes.byteLength,
+				maximumByteLength: 25 * 1024 * 1024,
+			}),
+		});
+
+		expect(completed).toMatchObject({
+			stage: 'completed',
+			report: {
+				outcome: 'accepted',
+				compatibilityProfile: 'still-image-v1',
+				facts: {
+					format,
+					canonicalMime: mime,
+					frameCount: 1,
+					orientation: 'normal',
+				},
+			},
+			result: { outcome: 'published' },
+		});
+		const resolved = await library.resolveGraphicAssetRevision({
+			assetId: completed.result!.assetId,
+			revisionId: completed.result!.revisionId,
+		});
+		expect(resolved).toMatchObject({
+			outcome: 'available',
+			contentType: mime,
+			byteLength: bytes.byteLength,
+		});
+		if (resolved.outcome !== 'available')
+			throw new Error('Expected the exact image revision to resolve');
+		await expect(consumeBoundedByteStream({
+			body: resolved.body,
+			byteLength: resolved.byteLength,
+			maximumByteLength: resolved.byteLength,
+		})).resolves.toEqual(bytes);
+	});
+
+	it('rejects conflicting initiation and transfer MIME declarations with a stable report', async () => {
+		const { library } = createLibrary();
+		const operation = await library.initiateImageIngestion({
+			idempotencyKey: 'conflicting-declared-mime',
+			initiatedBy: 'graphics-author-1',
+			name: 'Conflicting declaration',
+			sourceFileName: 'scoreboard.png',
+			declaredMime: 'image/jpeg',
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+
+		const failed = await library.uploadImage({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			declaredMime: 'image/png',
+			bytes: createBoundedByteStream(transparentPixelPng, {
+				byteLength: transparentPixelPng.byteLength,
+				maximumByteLength: 25 * 1024 * 1024,
+			}),
+		});
+
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			transferredByteLength: 0,
+			report: {
+				outcome: 'rejected',
+				compatibilityProfile: 'still-image-v1',
+				issues: [{ code: 'conflicting-image-mime' }],
+			},
+			failure: { code: 'validation-failed', retryable: false },
+		});
+	});
+
+	it.each([
+		{
+			label: 'profiled JPEG',
+			bytes: jpegWithColourProfile(),
+			fileName: 'profiled.jpg',
+			mime: 'image/jpeg',
+			code: 'unsupported-jpeg-profile',
+		},
+		{
+			label: 'animated WebP',
+			bytes: animatedWebp(),
+			fileName: 'animated.webp',
+			mime: 'image/webp',
+			code: 'unsupported-webp-animation',
+		},
+	] as const)('reports a stable public validation result for $label', async ({
+		bytes,
+		fileName,
+		mime,
+		code,
+	}) => {
+		const { library } = createLibrary();
+		const operation = await library.initiateImageIngestion({
+			idempotencyKey: `reject-${code}`,
+			initiatedBy: 'graphics-author-1',
+			name: fileName,
+			sourceFileName: fileName,
+			declaredMime: mime,
+			declaredByteLength: bytes.byteLength,
+		});
+
+		const failed = await library.uploadImage({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			declaredMime: mime,
+			bytes: createBoundedByteStream(bytes, {
+				byteLength: bytes.byteLength,
+				maximumByteLength: 25 * 1024 * 1024,
+			}),
+		});
+
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			report: {
+				outcome: 'rejected',
+				compatibilityProfile: 'still-image-v1',
+				issues: [{ code }],
+			},
+			failure: { code: 'validation-failed', retryable: false },
+		});
+	});
+
 	it('resolves only the pinned revision and distinguishes missing from unavailable content', async () => {
 		const { library, canonical } = createLibrary();
-		const operation = await library.initiatePngIngestion({
+		const operation = await library.initiateImageIngestion({
 			idempotencyKey: 'pinned-scoreboard-logo',
 			initiatedBy: 'graphics-author-1',
 			name: 'Pinned scoreboard logo',
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
-		const completed = await library.uploadPng({
+		const completed = await library.uploadImage({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -108,8 +406,8 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 			declaredByteLength: transparentPixelPng.byteLength,
 		};
 
-		const operation = await library.initiatePngIngestion(initiation);
-		const reconnected = await library.initiatePngIngestion(initiation);
+		const operation = await library.initiateImageIngestion(initiation);
+		const reconnected = await library.initiateImageIngestion(initiation);
 
 		expect(operation).toMatchObject({
 			stage: 'created',
@@ -120,7 +418,7 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 		expect(reconnected).toEqual(operation);
 		await expect(library.listGraphicAssets({ search: '' })).resolves.toEqual([]);
 
-		const completed = await library.uploadPng({
+		const completed = await library.uploadImage({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -134,7 +432,7 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 			transferredByteLength: transparentPixelPng.byteLength,
 			report: {
 				outcome: 'accepted',
-				compatibilityProfile: 'png-v1',
+				compatibilityProfile: 'still-image-v1',
 				issues: [],
 				facts: {
 					kind: 'image',
@@ -233,14 +531,14 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 			},
 		};
 		const { library } = createLibrary(staging, canonical);
-		const operation = await library.initiatePngIngestion({
+		const operation = await library.initiateImageIngestion({
 			idempotencyKey: 'stream-canonical-source',
 			initiatedBy: 'graphics-author-1',
 			name: 'Streaming source',
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
 
-		const completed = await library.uploadPng({
+		const completed = await library.uploadImage({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -257,14 +555,14 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 	it('records permanent validation failure without publishing catalogue state', async () => {
 		const { library } = createLibrary();
 		const invalidPng = new TextEncoder().encode('not a PNG');
-		const operation = await library.initiatePngIngestion({
+		const operation = await library.initiateImageIngestion({
 			idempotencyKey: 'invalid-logo',
 			initiatedBy: 'graphics-author-1',
 			name: 'Invalid logo',
 			declaredByteLength: invalidPng.byteLength,
 		});
 
-		const failed = await library.uploadPng({
+		const failed = await library.uploadImage({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 			bytes: createBoundedByteStream(invalidPng, {
@@ -277,10 +575,10 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 			stage: 'failed',
 			report: {
 				outcome: 'rejected',
-				compatibilityProfile: 'png-v1',
+				compatibilityProfile: 'still-image-v1',
 				issues: [{
 					severity: 'error',
-					code: 'invalid-png-signature',
+					code: 'unsupported-image-format',
 				}],
 			},
 			failure: {
@@ -293,22 +591,22 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 
 	it('cancels idempotently before publication and never accepts later transfer bytes', async () => {
 		const { library } = createLibrary();
-		const operation = await library.initiatePngIngestion({
+		const operation = await library.initiateImageIngestion({
 			idempotencyKey: 'cancelled-logo',
 			initiatedBy: 'graphics-author-1',
 			name: 'Cancelled logo',
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
 
-		const cancelled = await library.cancelPngIngestion({
+		const cancelled = await library.cancelImageIngestion({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 		});
-		const cancelledAgain = await library.cancelPngIngestion({
+		const cancelledAgain = await library.cancelImageIngestion({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 		});
-		const uploadAfterCancellation = await library.uploadPng({
+		const uploadAfterCancellation = await library.uploadImage({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -348,14 +646,14 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 			},
 		};
 		const { library } = createLibrary(staging);
-		const operation = await library.initiatePngIngestion({
+		const operation = await library.initiateImageIngestion({
 			idempotencyKey: 'cancel-during-transfer',
 			initiatedBy: 'graphics-author-1',
 			name: 'Cancelled during transfer',
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
 
-		const upload = library.uploadPng({
+		const upload = library.uploadImage({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -364,7 +662,7 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 			}),
 		});
 		await transferStarted;
-		const cancelled = await library.cancelPngIngestion({
+		const cancelled = await library.cancelImageIngestion({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 		});
@@ -377,7 +675,7 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 
 	it('resumes from staged bytes after a retryable canonical-store failure', async () => {
 		const { library, canonical } = createLibrary();
-		const operation = await library.initiatePngIngestion({
+		const operation = await library.initiateImageIngestion({
 			idempotencyKey: 'retry-logo',
 			initiatedBy: 'graphics-author-1',
 			name: 'Retry logo',
@@ -385,7 +683,7 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 		});
 		canonical.injectTransientFailure('create');
 
-		const failed = await library.uploadPng({
+		const failed = await library.uploadImage({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -402,7 +700,7 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 			},
 		});
 
-		const completed = await library.retryPngIngestion({
+		const completed = await library.retryImageIngestion({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 		});
@@ -417,14 +715,14 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 		const { library } = createLibrary();
 
 		async function ingest(idempotencyKey: string, name: string, defaultEventId: number) {
-			const operation = await library.initiatePngIngestion({
+			const operation = await library.initiateImageIngestion({
 				idempotencyKey,
 				initiatedBy: 'graphics-author-1',
 				name,
 				defaultEventId,
 				declaredByteLength: transparentPixelPng.byteLength,
 			});
-			return await library.uploadPng({
+			return await library.uploadImage({
 				operationId: operation.id,
 				initiatedBy: 'graphics-author-1',
 				bytes: createBoundedByteStream(transparentPixelPng, {
@@ -457,14 +755,14 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 		const { library } = createLibrary();
 
 		async function ingest(idempotencyKey: string, duplicateContentPolicy: 'reuse' | 'create-separate') {
-			const operation = await library.initiatePngIngestion({
+			const operation = await library.initiateImageIngestion({
 				idempotencyKey,
 				initiatedBy: 'graphics-author-1',
 				name: idempotencyKey,
 				duplicateContentPolicy,
 				declaredByteLength: transparentPixelPng.byteLength,
 			});
-			return await library.uploadPng({
+			return await library.uploadImage({
 				operationId: operation.id,
 				initiatedBy: operation.initiatedBy,
 				bytes: createBoundedByteStream(transparentPixelPng, {
@@ -503,14 +801,14 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 			},
 		};
 		const { library } = createLibrary(createInMemoryStagingGraphicsObjectStore(), canonical);
-		const operation = await library.initiatePngIngestion({
+		const operation = await library.initiateImageIngestion({
 			idempotencyKey: 'corrupt-canonical-logo',
 			initiatedBy: 'graphics-author-1',
 			name: 'Corrupt canonical logo',
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
 
-		const failed = await library.uploadPng({
+		const failed = await library.uploadImage({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -538,12 +836,12 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 		});
 		const catalogue = {
 			...delegate,
-			async findReusablePng(sourceDigest: string) {
+			async findReusableImage(sourceDigest: string) {
 				reusableLookups++;
 				if (reusableLookups === 2)
 					releaseLookups();
 				await bothLooking;
-				return await delegate.findReusablePng(sourceDigest);
+				return await delegate.findReusableImage(sourceDigest);
 			},
 		};
 		const { library } = createLibrary(
@@ -552,20 +850,20 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 			catalogue,
 		);
 		const operations = await Promise.all([
-			library.initiatePngIngestion({
+			library.initiateImageIngestion({
 				idempotencyKey: 'concurrent-a',
 				initiatedBy: 'graphics-author-1',
 				name: 'Concurrent A',
 				declaredByteLength: transparentPixelPng.byteLength,
 			}),
-			library.initiatePngIngestion({
+			library.initiateImageIngestion({
 				idempotencyKey: 'concurrent-b',
 				initiatedBy: 'graphics-author-1',
 				name: 'Concurrent B',
 				declaredByteLength: transparentPixelPng.byteLength,
 			}),
 		]);
-		const completed = await Promise.all(operations.map(operation => library.uploadPng({
+		const completed = await Promise.all(operations.map(operation => library.uploadImage({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -592,10 +890,10 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 		});
 		const catalogue = {
 			...delegate,
-			async publishPng(input: Parameters<typeof delegate.publishPng>[0]) {
+			async publishImage(input: Parameters<typeof delegate.publishImage>[0]) {
 				publicationStarted();
 				await released;
-				return await delegate.publishPng(input);
+				return await delegate.publishImage(input);
 			},
 		};
 		const { library } = createLibrary(
@@ -603,13 +901,13 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 			createInMemoryCanonicalGraphicsObjectStore(),
 			catalogue,
 		);
-		const operation = await library.initiatePngIngestion({
+		const operation = await library.initiateImageIngestion({
 			idempotencyKey: 'cancel-before-publication',
 			initiatedBy: 'graphics-author-1',
 			name: 'Cancelled before publication',
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
-		const upload = library.uploadPng({
+		const upload = library.uploadImage({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -618,7 +916,7 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 			}),
 		});
 		await started;
-		const cancelled = await library.cancelPngIngestion({
+		const cancelled = await library.cancelImageIngestion({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 		});
@@ -631,7 +929,7 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 
 	it('fences a displaced processor after a stale operation is claimed', async () => {
 		const { library, catalogue } = createLibrary();
-		const created = await library.initiatePngIngestion({
+		const created = await library.initiateImageIngestion({
 			idempotencyKey: 'fenced-retry',
 			initiatedBy: 'graphics-author-1',
 			name: 'Fenced retry',
@@ -643,7 +941,7 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 			updatedAt: '2026-07-27T04:00:01.000Z',
 		};
 		await catalogue.updateIngestionOperation(transferring, created.updatedAt);
-		const claimed = await catalogue.claimPngIngestion({
+		const claimed = await catalogue.claimImageIngestion({
 			operation: transferring,
 			claimedAt: '2026-07-27T04:01:00.000Z',
 			staleBefore: '2026-07-27T04:00:30.000Z',
