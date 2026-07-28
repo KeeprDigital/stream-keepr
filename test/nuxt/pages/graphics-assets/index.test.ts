@@ -10,11 +10,13 @@ import { defineComponent, reactive, ref } from 'vue';
 
 const {
 	mockApiFetch,
+	mockBrowserDecode,
 	mockCapacityRefresh,
 	mockRefresh,
 	mockTransferFetch,
 } = vi.hoisted(() => ({
 	mockApiFetch: vi.fn(),
+	mockBrowserDecode: vi.fn(),
 	mockCapacityRefresh: vi.fn(),
 	mockRefresh: vi.fn(),
 	mockTransferFetch: vi.fn(),
@@ -32,19 +34,23 @@ const completedOperation: GraphicsIngestionOperation = {
 	stage: 'completed',
 	report: {
 		outcome: 'accepted',
-		compatibilityProfile: 'png-v1',
+		compatibilityProfile: 'still-image-v1',
 		issues: [],
 		facts: {
 			kind: 'image',
+			format: 'png',
 			canonicalMime: 'image/png',
 			byteLength: 68,
 			sha256: '431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460',
 			width: 1,
 			height: 1,
 			pixelCount: 1,
+			frameCount: 1,
 			bitDepth: 8,
+			colorSpace: 'srgb',
 			colorModel: 'grayscale-alpha',
 			hasAlpha: true,
+			orientation: 'normal',
 		},
 	},
 	result: {
@@ -147,9 +153,16 @@ async function mountPage() {
 describe('the Graphics Asset Library Workspace', () => {
 	beforeEach(() => {
 		mockApiFetch.mockReset();
+		mockBrowserDecode.mockReset();
+		mockBrowserDecode.mockResolvedValue({
+			width: 1,
+			height: 1,
+			close: vi.fn(),
+		});
 		mockCapacityRefresh.mockReset();
 		mockRefresh.mockReset();
 		mockTransferFetch.mockReset();
+		vi.stubGlobal('createImageBitmap', mockBrowserDecode);
 		vi.stubGlobal('fetch', mockTransferFetch);
 		localStorage.clear();
 	});
@@ -164,7 +177,7 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(wrapper.text()).toContain('Pixels');
 		expect(wrapper.text()).toContain('8-bit grayscale-alpha');
 		expect(wrapper.text()).toContain('alpha yes');
-		expect(wrapper.text()).toContain('Compatibility png-v1');
+		expect(wrapper.text()).toContain('Compatibility still-image-v1');
 		expect(wrapper.text()).toContain('431ced6916a2a21a');
 		expect(wrapper.text()).toContain('Event 7');
 		expect(wrapper.text()).toContain('operation-1');
@@ -183,9 +196,9 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(wrapper.text()).toContain('Derivatives 27 B');
 	});
 
-	it('initiates an Event-associated operation before transferring the selected PNG', async () => {
+	it('browser-decodes an Event-associated image before initiating and transferring it', async () => {
 		const wrapper = await mountPage();
-		const file = new File([new Uint8Array(68)], 'new-scoreboard.png', { type: 'image/png' });
+		const file = new File([new Uint8Array(68)], 'new-scoreboard.jpg', { type: 'image/jpeg' });
 		mockApiFetch.mockResolvedValue({
 			...completedOperation,
 			stage: 'created',
@@ -200,18 +213,21 @@ describe('the Graphics Asset Library Workspace', () => {
 
 		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
 		await flushPromises();
-		await wrapper.get('[data-testid="upload-png"]').trigger('click');
+		await wrapper.get('[data-testid="upload-image"]').trigger('click');
 		await flushPromises();
 
+		expect(mockBrowserDecode).toHaveBeenCalledWith(file);
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			'/api/graphics-assets/ingestion-operations',
 			expect.objectContaining({
 				method: 'POST',
 				body: expect.objectContaining({
-					name: 'new-scoreboard.png',
+					name: 'new-scoreboard.jpg',
 					defaultEventId: 7,
 					duplicateContentPolicy: 'reuse',
 					declaredByteLength: 68,
+					sourceFileName: 'new-scoreboard.jpg',
+					declaredMime: 'image/jpeg',
 				}),
 			}),
 		);
@@ -219,6 +235,7 @@ describe('the Graphics Asset Library Workspace', () => {
 			'/api/graphics-assets/ingestion-operations/operation-1/content',
 			expect.objectContaining({
 				method: 'PUT',
+				headers: { 'content-type': 'image/jpeg' },
 				body: file,
 			}),
 		);
@@ -246,7 +263,7 @@ describe('the Graphics Asset Library Workspace', () => {
 
 		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
 		await flushPromises();
-		await wrapper.get('[data-testid="upload-png"]').trigger('click');
+		await wrapper.get('[data-testid="upload-image"]').trigger('click');
 		await flushPromises();
 
 		const pending = JSON.parse(
@@ -254,7 +271,7 @@ describe('the Graphics Asset Library Workspace', () => {
 		) as { idempotencyKey: string };
 		expect(pending.idempotencyKey).toBeTruthy();
 
-		await wrapper.get('[data-testid="upload-png"]').trigger('click');
+		await wrapper.get('[data-testid="upload-image"]').trigger('click');
 		await flushPromises();
 
 		const initiationCalls = mockApiFetch.mock.calls
@@ -306,7 +323,7 @@ describe('the Graphics Asset Library Workspace', () => {
 		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
 		await wrapper.get('input[type="checkbox"]').setValue(true);
 		await flushPromises();
-		await wrapper.get('[data-testid="upload-png"]').trigger('click');
+		await wrapper.get('[data-testid="upload-image"]').trigger('click');
 		await flushPromises();
 
 		expect(mockApiFetch).toHaveBeenCalledWith(

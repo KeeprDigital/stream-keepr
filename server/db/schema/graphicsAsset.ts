@@ -162,6 +162,8 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	stage: text('stage', { enum: GRAPHICS_INGESTION_STAGE_VALUES }).notNull().default('created'),
 	initiatedBy: text('initiated_by').notNull(),
 	proposedName: text('proposed_name').notNull(),
+	sourceFileName: text('source_file_name'),
+	declaredMime: text('declared_mime'),
 	duplicateContentPolicy: text('duplicate_content_policy', {
 		enum: GRAPHICS_DUPLICATE_CONTENT_POLICY_VALUES,
 	}).notNull().default('reuse'),

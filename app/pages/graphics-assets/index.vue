@@ -6,7 +6,8 @@ import type {
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
 import { formatByteCount } from '~~/shared/utils/formatByteCount';
-import { MAX_PNG_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { MAX_STILL_IMAGE_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { verifyStillImageBrowserDecode } from '~/utils/verifyStillImageBrowserDecode';
 
 definePageMeta({
 	title: 'Graphics Asset Library',
@@ -29,6 +30,8 @@ interface PendingInitiation {
 	defaultEventId?: number;
 	duplicateContentPolicy: GraphicsDuplicateContentPolicy;
 	declaredByteLength: number;
+	sourceFileName: string;
+	declaredMime?: 'image/png' | 'image/jpeg' | 'image/webp';
 }
 
 const {
@@ -54,12 +57,18 @@ watch(selectedFile, (file) => {
 const selectionError = computed(() => {
 	if (!selectedFile.value)
 		return null;
-	if (selectedFile.value.type !== 'image/png')
-		return 'Select a PNG file.';
+	const supportedMime = ['image/png', 'image/jpeg', 'image/webp'].includes(selectedFile.value.type);
+	const supportedExtension = /\.(?:png|jpe?g|webp)$/i.test(selectedFile.value.name);
+	if (
+		(selectedFile.value.type && !supportedMime)
+		|| (!selectedFile.value.type && !supportedExtension)
+	) {
+		return 'Select a PNG, JPEG, or WebP image.';
+	}
 	if (selectedFile.value.size === 0)
-		return 'The PNG file is empty.';
-	if (selectedFile.value.size > MAX_PNG_INGESTION_BYTES)
-		return 'The PNG file must not exceed 16 MiB.';
+		return 'The image file is empty.';
+	if (selectedFile.value.size > MAX_STILL_IMAGE_INGESTION_BYTES)
+		return 'The image file must not exceed 25 MiB.';
 	return null;
 });
 
@@ -103,6 +112,8 @@ function selectedInitiation(): PendingInitiation {
 		&& pending.name === name
 		&& pending.duplicateContentPolicy === duplicateContentPolicy
 		&& pending.declaredByteLength === selectedFile.value!.size
+		&& pending.sourceFileName === selectedFile.value!.name
+		&& pending.declaredMime === (selectedFile.value!.type || undefined)
 	) {
 		return pending;
 	}
@@ -112,6 +123,8 @@ function selectedInitiation(): PendingInitiation {
 		defaultEventId: eventStore.eventId ?? undefined,
 		duplicateContentPolicy,
 		declaredByteLength: selectedFile.value!.size,
+		sourceFileName: selectedFile.value!.name,
+		declaredMime: selectedFile.value!.type as PendingInitiation['declaredMime'] || undefined,
 	};
 	localStorage.setItem(initiationStorageKey, JSON.stringify(initiation));
 	return initiation;
@@ -185,13 +198,19 @@ async function observeOperationRequest<T>(
 	}
 }
 
-async function uploadPng() {
+async function uploadImage() {
 	if (!selectedFile.value || !canUpload.value)
 		return;
 
 	uploadPending.value = true;
 	uploadError.value = null;
 	try {
+		try {
+			await verifyStillImageBrowserDecode(selectedFile.value);
+		}
+		catch {
+			throw new Error('This browser could not completely decode the selected image.');
+		}
 		const initiation = selectedInitiation();
 		const initiated = await $fetch<GraphicsIngestionOperation>(
 			'/api/graphics-assets/ingestion-operations',
@@ -210,13 +229,15 @@ async function uploadPng() {
 				`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 				{
 					method: 'PUT',
-					headers: { 'content-type': selectedFile.value.type },
+					headers: selectedFile.value.type
+						? { 'content-type': selectedFile.value.type }
+						: undefined,
 					body: selectedFile.value,
 				},
 			),
 		);
 		if (!response.ok)
-			throw new Error(`PNG transfer failed with status ${response.status}`);
+			throw new Error(`Image transfer failed with status ${response.status}`);
 
 		currentOperation.value = await response.json() as GraphicsIngestionOperation;
 		if (currentOperation.value.stage === 'completed') {
@@ -228,7 +249,7 @@ async function uploadPng() {
 		}
 	}
 	catch (caught) {
-		uploadError.value = caught instanceof Error ? caught.message : 'PNG upload failed.';
+		uploadError.value = caught instanceof Error ? caught.message : 'Image upload failed.';
 	}
 	finally {
 		uploadPending.value = false;
@@ -258,7 +279,7 @@ async function retryOperation() {
 		}
 	}
 	catch (caught) {
-		uploadError.value = caught instanceof Error ? caught.message : 'PNG retry failed.';
+		uploadError.value = caught instanceof Error ? caught.message : 'Image retry failed.';
 	}
 	finally {
 		uploadPending.value = false;
@@ -383,7 +404,7 @@ onMounted(async () => {
 				<template #header>
 					<div>
 						<h2 class="font-semibold text-highlighted">
-							Upload one PNG
+							Upload one image
 						</h2>
 						<p class="mt-1 text-sm text-muted">
 							The source is staged privately, validated unchanged, and published only when its thumbnail and catalogue facts are complete.
@@ -393,17 +414,17 @@ onMounted(async () => {
 
 				<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(16rem,0.7fr)]">
 					<UFormField
-						name="png"
-						label="PNG source"
-						description="One complete PNG, at most 16 MiB."
+						name="image"
+						label="Image source"
+						description="One complete PNG, JPEG, or WebP image, at most 25 MiB."
 						required
 					>
 						<UFileUpload
 							v-model="selectedFile"
-							accept="image/png,.png"
+							accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
 							variant="area"
 							icon="i-lucide-image-up"
-							label="Drop a PNG here"
+							label="Drop a PNG, JPEG, or WebP here"
 							description="The exact source bytes are preserved."
 						/>
 					</UFormField>
@@ -436,12 +457,12 @@ onMounted(async () => {
 							:title="selectionError"
 						/>
 						<UButton
-							data-testid="upload-png"
+							data-testid="upload-image"
 							icon="i-lucide-upload"
 							label="Upload and validate"
 							:loading="uploadPending"
 							:disabled="!canUpload"
-							@click="uploadPng"
+							@click="uploadImage"
 						/>
 					</div>
 				</div>
@@ -581,7 +602,7 @@ onMounted(async () => {
 								</div>
 							</dl>
 							<p class="mt-3 text-xs text-dimmed">
-								Compatibility png-v1
+								Compatibility {{ asset.operation.report?.compatibilityProfile ?? 'unknown' }}
 							</p>
 							<p class="mt-3 truncate font-mono text-xs text-dimmed" :title="asset.facts.sha256">
 								SHA-256 {{ asset.facts.sha256 }}
@@ -617,7 +638,7 @@ onMounted(async () => {
 					No matching Graphic Assets
 				</p>
 				<p class="mt-1 text-sm text-muted">
-					Upload a PNG or change the search.
+					Upload a PNG, JPEG, or WebP image, or change the search.
 				</p>
 			</div>
 		</div>

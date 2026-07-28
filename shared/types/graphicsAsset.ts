@@ -62,15 +62,19 @@ export type GraphicsIngestionStage
 
 export interface GraphicAssetImageFacts {
 	kind: 'image';
-	canonicalMime: 'image/png';
+	format: 'png' | 'jpeg' | 'webp';
+	canonicalMime: 'image/png' | 'image/jpeg' | 'image/webp';
 	byteLength: number;
 	sha256: string;
 	width: number;
 	height: number;
 	pixelCount: number;
+	frameCount: 1;
 	bitDepth: 8;
+	colorSpace: 'srgb';
 	colorModel: 'grayscale' | 'grayscale-alpha' | 'indexed' | 'rgb' | 'rgba';
 	hasAlpha: boolean;
+	orientation: 'normal';
 }
 
 export interface GraphicAssetValidationIssue {
@@ -83,20 +87,34 @@ export interface GraphicAssetValidationIssue {
 		| 'unsupported-png-profile'
 		| 'image-dimensions-exceeded'
 		| 'image-pixels-exceeded'
-		| 'incomplete-png-frame';
+		| 'incomplete-png-frame'
+		| 'unsupported-image-format'
+		| 'invalid-jpeg-signature'
+		| 'malformed-jpeg'
+		| 'unsupported-jpeg-colour'
+		| 'unsupported-jpeg-profile'
+		| 'unsupported-image-orientation'
+		| 'incomplete-jpeg-frame'
+		| 'invalid-webp-signature'
+		| 'malformed-webp'
+		| 'unsupported-webp-animation'
+		| 'unsupported-webp-profile'
+		| 'incomplete-webp-frame'
+		| 'conflicting-image-extension'
+		| 'conflicting-image-mime';
 	message: string;
 }
 
 export type GraphicAssetValidationReport
 	= {
 		outcome: 'accepted';
-		compatibilityProfile: 'png-v1';
+		compatibilityProfile: 'still-image-v1';
 		issues: [];
 		facts: GraphicAssetImageFacts;
 	}
 	| {
 		outcome: 'rejected';
-		compatibilityProfile: 'png-v1';
+		compatibilityProfile: 'still-image-v1';
 		issues: GraphicAssetValidationIssue[];
 	};
 
@@ -136,6 +154,8 @@ export interface GraphicsIngestionOperation {
 	idempotencyKey: string;
 	initiatedBy: string;
 	name: string;
+	sourceFileName?: string;
+	declaredMime?: string;
 	defaultEventId?: number;
 	duplicateContentPolicy: GraphicsDuplicateContentPolicy;
 	declaredByteLength: number;

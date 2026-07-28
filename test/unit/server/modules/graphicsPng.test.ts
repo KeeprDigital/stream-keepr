@@ -59,7 +59,7 @@ describe('the settled PNG compatibility profile', () => {
 
 		expect(processed.report).toMatchObject({
 			outcome: 'accepted',
-			compatibilityProfile: 'png-v1',
+			compatibilityProfile: 'still-image-v1',
 			facts: {
 				width: 1,
 				height: 1,

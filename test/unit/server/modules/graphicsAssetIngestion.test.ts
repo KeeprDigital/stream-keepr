@@ -19,6 +19,14 @@ const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 	'base64',
 ));
+const jpegPixel = Uint8Array.from(Buffer.from(
+	'/9j/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJtAEx7/2Q==',
+	'base64',
+));
+const webpPixel = Uint8Array.from(Buffer.from(
+	'UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAEAdQlFKUp4CBiOh/AAA=',
+	'base64',
+));
 
 function createLibrary(
 	staging = createInMemoryStagingGraphicsObjectStore(),
@@ -36,7 +44,111 @@ function createLibrary(
 	return { library, staging, canonical, catalogue };
 }
 
-describe('pNG ingestion through the Graphics Asset Library public module', () => {
+describe('still-image ingestion through the Graphics Asset Library public module', () => {
+	it.each([
+		{
+			format: 'jpeg',
+			mime: 'image/jpeg',
+			fileName: 'scoreboard.jpg',
+			bytes: jpegPixel,
+		},
+		{
+			format: 'webp',
+			mime: 'image/webp',
+			fileName: 'scoreboard.webp',
+			bytes: webpPixel,
+		},
+	] as const)('publishes and resolves exact $format source bytes', async ({
+		format,
+		mime,
+		fileName,
+		bytes,
+	}) => {
+		const { library } = createLibrary();
+		const operation = await library.initiateImageIngestion({
+			idempotencyKey: `upload-${format}`,
+			initiatedBy: 'graphics-author-1',
+			name: `${format} scoreboard`,
+			sourceFileName: fileName,
+			declaredMime: mime,
+			declaredByteLength: bytes.byteLength,
+		});
+
+		const completed = await library.uploadImage({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			declaredMime: mime,
+			bytes: createBoundedByteStream(bytes, {
+				byteLength: bytes.byteLength,
+				maximumByteLength: 25 * 1024 * 1024,
+			}),
+		});
+
+		expect(completed).toMatchObject({
+			stage: 'completed',
+			report: {
+				outcome: 'accepted',
+				compatibilityProfile: 'still-image-v1',
+				facts: {
+					format,
+					canonicalMime: mime,
+					frameCount: 1,
+					orientation: 'normal',
+				},
+			},
+			result: { outcome: 'published' },
+		});
+		const resolved = await library.resolveGraphicAssetRevision({
+			assetId: completed.result!.assetId,
+			revisionId: completed.result!.revisionId,
+		});
+		expect(resolved).toMatchObject({
+			outcome: 'available',
+			contentType: mime,
+			byteLength: bytes.byteLength,
+		});
+		if (resolved.outcome !== 'available')
+			throw new Error('Expected the exact image revision to resolve');
+		await expect(consumeBoundedByteStream({
+			body: resolved.body,
+			byteLength: resolved.byteLength,
+			maximumByteLength: resolved.byteLength,
+		})).resolves.toEqual(bytes);
+	});
+
+	it('rejects conflicting initiation and transfer MIME declarations with a stable report', async () => {
+		const { library } = createLibrary();
+		const operation = await library.initiateImageIngestion({
+			idempotencyKey: 'conflicting-declared-mime',
+			initiatedBy: 'graphics-author-1',
+			name: 'Conflicting declaration',
+			sourceFileName: 'scoreboard.png',
+			declaredMime: 'image/jpeg',
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+
+		const failed = await library.uploadImage({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			declaredMime: 'image/png',
+			bytes: createBoundedByteStream(transparentPixelPng, {
+				byteLength: transparentPixelPng.byteLength,
+				maximumByteLength: 25 * 1024 * 1024,
+			}),
+		});
+
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			transferredByteLength: 0,
+			report: {
+				outcome: 'rejected',
+				compatibilityProfile: 'still-image-v1',
+				issues: [{ code: 'conflicting-image-mime' }],
+			},
+			failure: { code: 'validation-failed', retryable: false },
+		});
+	});
+
 	it('resolves only the pinned revision and distinguishes missing from unavailable content', async () => {
 		const { library, canonical } = createLibrary();
 		const operation = await library.initiatePngIngestion({
@@ -134,7 +246,7 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 			transferredByteLength: transparentPixelPng.byteLength,
 			report: {
 				outcome: 'accepted',
-				compatibilityProfile: 'png-v1',
+				compatibilityProfile: 'still-image-v1',
 				issues: [],
 				facts: {
 					kind: 'image',
@@ -277,10 +389,10 @@ describe('pNG ingestion through the Graphics Asset Library public module', () =>
 			stage: 'failed',
 			report: {
 				outcome: 'rejected',
-				compatibilityProfile: 'png-v1',
+				compatibilityProfile: 'still-image-v1',
 				issues: [{
 					severity: 'error',
-					code: 'invalid-png-signature',
+					code: 'unsupported-image-format',
 				}],
 			},
 			failure: {

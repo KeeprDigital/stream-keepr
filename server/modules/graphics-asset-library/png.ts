@@ -532,13 +532,13 @@ async function inspectAndDecodePng(
 			if (type === 'acTL' || type === 'fcTL' || type === 'fdAT') {
 				issues.push(validationIssue(
 					'unsupported-png-animation',
-					'Animated PNG is not supported by the png-v1 compatibility profile.',
+					'Animated PNG is not supported by the still-image-v1 compatibility profile.',
 				));
 			}
 			if (type === 'iCCP' || type === 'cICP' || type === 'mDCv' || type === 'cLLi') {
 				issues.push(validationIssue(
 					'unsupported-png-profile',
-					'Embedded colour profiles or HDR metadata are not supported by the png-v1 compatibility profile.',
+					'Embedded colour profiles or HDR metadata are not supported by the still-image-v1 compatibility profile.',
 				));
 			}
 
@@ -699,7 +699,7 @@ function pngChunk(type: 'IHDR' | 'sRGB' | 'IDAT' | 'IEND', data: Uint8Array): Ui
 	]);
 }
 
-function encodeThumbnail(width: number, height: number, rgba: Uint8Array): Uint8Array {
+export function encodeThumbnail(width: number, height: number, rgba: Uint8Array): Uint8Array {
 	const scanlines = new Uint8Array(height * (1 + width * 4));
 	for (let row = 0; row < height; row++) {
 		const scanlineOffset = row * (1 + width * 4);
@@ -769,19 +769,23 @@ export async function processPngStream(
 	return {
 		report: {
 			outcome: 'accepted',
-			compatibilityProfile: 'png-v1',
+			compatibilityProfile: 'still-image-v1',
 			issues: [],
 			facts: {
 				kind: 'image',
+				format: 'png',
 				canonicalMime: 'image/png',
 				byteLength: bytes.byteLength,
 				sha256: sourceDigest,
 				width: parsed.width,
 				height: parsed.height,
 				pixelCount: parsed.width * parsed.height,
+				frameCount: 1,
 				bitDepth: 8,
+				colorSpace: 'srgb',
 				colorModel: parsed.colorModel,
 				hasAlpha: parsed.hasAlpha,
+				orientation: 'normal',
 			},
 		},
 		thumbnail: encodeThumbnail(
@@ -805,7 +809,7 @@ export async function processPng(bytes: Uint8Array): Promise<ProcessedPng> {
 export function rejectedPngReport(error: PngValidationError): GraphicAssetValidationReport {
 	return {
 		outcome: 'rejected',
-		compatibilityProfile: 'png-v1',
+		compatibilityProfile: 'still-image-v1',
 		issues: [...error.issues],
 	};
 }

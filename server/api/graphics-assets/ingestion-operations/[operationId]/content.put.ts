@@ -6,7 +6,7 @@ import {
 	rethrowGraphicsAssetApiError,
 } from '~~/server/utils/graphicsAssetApi';
 import { getBoundedRequestBodyStream } from '~~/server/utils/payloadLimits';
-import { MAX_PNG_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { MAX_STILL_IMAGE_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 
 export default defineEventHandler(async (event) => {
 	try {
@@ -18,27 +18,21 @@ export default defineEventHandler(async (event) => {
 			?.split(';', 1)[0]
 			?.trim()
 			.toLocaleLowerCase();
-		if (declaredContentType && declaredContentType !== 'image/png') {
-			throw createError({
-				statusCode: 415,
-				statusMessage: 'Unsupported Media Type',
-				message: 'Declared content type must be image/png',
-			});
-		}
 		const body = getBoundedRequestBodyStream(event);
 		if (!body) {
 			throw createError({
 				statusCode: 400,
 				statusMessage: 'Bad Request',
-				message: 'PNG transfer body is required',
+				message: 'Image transfer body is required',
 			});
 		}
-		return await library.uploadPng({
+		return await library.uploadImage({
 			operationId,
 			initiatedBy,
+			declaredMime: declaredContentType,
 			bytes: createBoundedByteStream(body, {
 				byteLength: operation.declaredByteLength,
-				maximumByteLength: MAX_PNG_INGESTION_BYTES,
+				maximumByteLength: MAX_STILL_IMAGE_INGESTION_BYTES,
 			}),
 		});
 	}

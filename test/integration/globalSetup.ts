@@ -6,8 +6,12 @@ import './disable-fs-watch.mjs';
 
 async function assertIntegrationServerReady() {
 	const response = await fetch('/api/events');
-	if (!response.ok)
-		throw new Error(`Integration server database readiness check failed with status ${response.status}`);
+	if (!response.ok) {
+		const detail = await response.text();
+		throw new Error(
+			`Integration server database readiness check failed with status ${response.status}: ${detail}`,
+		);
+	}
 }
 
 export async function setup() {
