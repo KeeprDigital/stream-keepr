@@ -49,6 +49,8 @@ export interface GraphicAssetUsage {
 	};
 }
 
+export type GraphicAssetLifecycleState = 'active' | 'retired' | 'trashed';
+
 export type GraphicAssetLifecycle
 	= | {
 		state: 'active' | 'retired';
@@ -325,6 +327,11 @@ export interface GraphicAsset {
 	kind: 'image' | 'font';
 	revisionId: GraphicAssetRevisionId;
 	revisionNumber: number;
+	revisions: {
+		id: GraphicAssetRevisionId;
+		revisionNumber: number;
+		facts: GraphicAssetImageFacts | GraphicAssetFontFacts;
+	}[];
 	facts: GraphicAssetImageFacts | GraphicAssetFontFacts;
 	eventIds: number[];
 	lifecycle: GraphicAssetLifecycle;

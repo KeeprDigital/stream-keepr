@@ -55,6 +55,7 @@ interface AssetRow {
 	trash_recoverable_until: number | null;
 	revision_id: string;
 	revision_number: number;
+	revision_history: string;
 	technical_facts: string;
 	event_ids: string;
 	operation_id: string;
@@ -174,6 +175,7 @@ function assetFromRow(row: AssetRow): GraphicAsset {
 		kind: row.kind,
 		revisionId: row.revision_id as GraphicAsset['revisionId'],
 		revisionNumber: row.revision_number,
+		revisions: JSON.parse(row.revision_history) as GraphicAsset['revisions'],
 		facts: JSON.parse(row.technical_facts) as GraphicAssetImageFacts | GraphicAssetFontFacts,
 		eventIds: JSON.parse(row.event_ids) as number[],
 		lifecycle: lifecycleFromRow(row),
@@ -216,6 +218,30 @@ function usageSelect() {
 		ORDER BY asset_reference.owner_kind, asset_reference.owner_id,
 			asset_reference.owner_slot, asset_reference.id
 	`;
+}
+
+async function readLifecycleTransitionAsset(
+	catalogue: Pick<GraphicsAssetCatalogue, 'listGraphicAssets'>,
+	assetId: GraphicAssetId,
+	failureMessage: string,
+) {
+	const asset = (await catalogue.listGraphicAssets(
+		'',
+		['active', 'retired', 'trashed'],
+	)).find(candidate => candidate.id === assetId);
+	if (!asset)
+		throw new Error(failureMessage);
+	return asset;
+}
+
+async function classifyLifecycleTransitionMiss(
+	database: D1Database,
+	assetId: GraphicAssetId,
+): Promise<{ outcome: 'not-allowed' | 'not-found' }> {
+	const existing = await database.prepare(
+		'SELECT lifecycle_state FROM graphic_assets WHERE id = ?',
+	).bind(assetId).first();
+	return { outcome: existing ? 'not-allowed' : 'not-found' };
 }
 
 function operationSelect(where: string) {
@@ -1318,6 +1344,20 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					r.id AS revision_id, r.revision_number,
 					r.technical_facts,
 					COALESCE((
+						SELECT json_group_array(json_object(
+							'id', revision_history.id,
+							'revisionNumber', revision_history.revision_number,
+							'facts', json(revision_history.technical_facts)
+						))
+						FROM (
+							SELECT history.id, history.revision_number,
+								history.technical_facts
+							FROM graphic_asset_revisions history
+							WHERE history.asset_id = a.id
+							ORDER BY history.revision_number
+						) revision_history
+					), '[]') AS revision_history,
+					COALESCE((
 						SELECT json_group_array(event_id)
 						FROM (
 							SELECT event_id
@@ -1370,18 +1410,14 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			if (!result.success)
 				throw new Error('Graphic Asset retirement failed');
 			if (result.meta.changes === 1) {
-				const asset = (await this.listGraphicAssets(
-					'',
-					['active', 'retired', 'trashed'],
-				)).find(candidate => candidate.id === input.assetId);
-				if (!asset)
-					throw new Error('Retired Graphic Asset could not be read');
+				const asset = await readLifecycleTransitionAsset(
+					this,
+					input.assetId,
+					'Retired Graphic Asset could not be read',
+				);
 				return { outcome: 'updated', asset };
 			}
-			const existing = await database.prepare(
-				'SELECT lifecycle_state FROM graphic_assets WHERE id = ?',
-			).bind(input.assetId).first();
-			return { outcome: existing ? 'not-allowed' : 'not-found' };
+			return await classifyLifecycleTransitionMiss(database, input.assetId);
 		},
 		async trashGraphicAsset(input) {
 			const [transition, usage] = await database.batch([
@@ -1406,21 +1442,17 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			if (!transition?.success || !usage?.success)
 				throw new Error('Graphic Asset Trash transaction failed');
 			if (transition.meta.changes === 1) {
-				const asset = (await this.listGraphicAssets(
-					'',
-					['active', 'retired', 'trashed'],
-				)).find(candidate => candidate.id === input.assetId);
-				if (!asset)
-					throw new Error('Trashed Graphic Asset could not be read');
+				const asset = await readLifecycleTransitionAsset(
+					this,
+					input.assetId,
+					'Trashed Graphic Asset could not be read',
+				);
 				return { outcome: 'updated', asset };
 			}
 			const currentUsage = (usage.results as unknown as UsageRow[]).map(usageFromRow);
 			if (currentUsage.length > 0)
 				return { outcome: 'in-use', usage: currentUsage };
-			const existing = await database.prepare(
-				'SELECT lifecycle_state FROM graphic_assets WHERE id = ?',
-			).bind(input.assetId).first();
-			return { outcome: existing ? 'not-allowed' : 'not-found' };
+			return await classifyLifecycleTransitionMiss(database, input.assetId);
 		},
 		async restoreGraphicAsset(input) {
 			const restoredAt = new Date(input.restoredAt).getTime();
@@ -1445,18 +1477,14 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			if (!result.success)
 				throw new Error('Graphic Asset restoration failed');
 			if (result.meta.changes === 1) {
-				const asset = (await this.listGraphicAssets(
-					'',
-					['active', 'retired', 'trashed'],
-				)).find(candidate => candidate.id === input.assetId);
-				if (!asset)
-					throw new Error('Restored Graphic Asset could not be read');
+				const asset = await readLifecycleTransitionAsset(
+					this,
+					input.assetId,
+					'Restored Graphic Asset could not be read',
+				);
 				return { outcome: 'updated', asset };
 			}
-			const existing = await database.prepare(
-				'SELECT lifecycle_state FROM graphic_assets WHERE id = ?',
-			).bind(input.assetId).first();
-			return { outcome: existing ? 'not-allowed' : 'not-found' };
+			return await classifyLifecycleTransitionMiss(database, input.assetId);
 		},
 		async updateGraphicAsset(input) {
 			const updatedAt = new Date(input.updatedAt).getTime();

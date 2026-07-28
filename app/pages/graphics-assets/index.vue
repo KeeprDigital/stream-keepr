@@ -3,6 +3,7 @@ import type {
 	GraphicAsset,
 	GraphicAssetBrowserDecodeEvidence,
 	GraphicAssetLifecycleActionOutcome,
+	GraphicAssetLifecycleState,
 	GraphicAssetSourceDeclarations,
 	GraphicAssetUsage,
 	GraphicsAssetLibraryCapacity,
@@ -26,6 +27,15 @@ definePageMeta({
 
 const eventStore = useEventStore();
 const search = ref('');
+const lifecycleState = ref<GraphicAssetLifecycleState>('active');
+const lifecycleViews: {
+	state: GraphicAssetLifecycleState;
+	label: string;
+}[] = [
+	{ state: 'active', label: 'Active assets' },
+	{ state: 'retired', label: 'Retired assets' },
+	{ state: 'trashed', label: 'Trash' },
+];
 const selectedFile = ref<File | null>(null);
 const proposedName = ref('');
 const createSeparateAsset = ref(false);
@@ -64,7 +74,7 @@ const {
 } = useFetch<GraphicAsset[]>('/api/graphics-assets', {
 	query: computed(() => ({
 		search: search.value,
-		lifecycleStates: 'active,retired,trashed',
+		lifecycleStates: lifecycleState.value,
 	})),
 	default: () => [],
 });
@@ -965,6 +975,17 @@ onMounted(async () => {
 					class="w-full sm:max-w-sm"
 				/>
 			</div>
+			<div class="flex flex-wrap gap-2" aria-label="Graphic Asset lifecycle view">
+				<UButton
+					v-for="view in lifecycleViews"
+					:key="view.state"
+					size="sm"
+					:color="lifecycleState === view.state ? 'primary' : 'neutral'"
+					:variant="lifecycleState === view.state ? 'solid' : 'outline'"
+					:label="view.label"
+					@click="lifecycleState = view.state"
+				/>
+			</div>
 
 			<UAlert
 				v-if="error"
@@ -1056,6 +1077,26 @@ onMounted(async () => {
 									</dd>
 								</div>
 							</dl>
+							<div class="mt-4">
+								<h4 class="text-sm font-semibold text-highlighted">
+									Revision history
+								</h4>
+								<ol class="mt-2 space-y-1 text-xs text-muted">
+									<li
+										v-for="revision in asset.revisions"
+										:key="revision.id"
+										class="flex flex-wrap justify-between gap-2"
+									>
+										<span>
+											Revision {{ revision.revisionNumber }}
+											{{ revision.id === asset.revisionId ? '· Latest' : '' }}
+										</span>
+										<span class="font-mono">
+											{{ revision.id }}
+										</span>
+									</li>
+								</ol>
+							</div>
 							<p class="mt-3 text-xs text-dimmed">
 								Compatibility {{ asset.operation.report?.compatibilityProfile ?? 'unknown' }}
 							</p>

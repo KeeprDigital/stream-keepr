@@ -108,6 +108,13 @@ const assets = ref<GraphicAsset[]>([{
 	kind: 'image',
 	revisionId: 'revision-1' as never,
 	revisionNumber: 1,
+	revisions: [{
+		id: 'revision-1' as never,
+		revisionNumber: 1,
+		facts: completedOperation.report!.outcome === 'accepted'
+			? completedOperation.report!.facts
+			: {} as never,
+	}],
 	lifecycle: { state: 'active' },
 	facts: completedOperation.report!.outcome === 'accepted'
 		? completedOperation.report!.facts
@@ -199,6 +206,13 @@ describe('the Graphics Asset Library Workspace', () => {
 			kind: 'image',
 			revisionId: 'revision-1' as never,
 			revisionNumber: 1,
+			revisions: [{
+				id: 'revision-1' as never,
+				revisionNumber: 1,
+				facts: completedOperation.report!.outcome === 'accepted'
+					? completedOperation.report!.facts
+					: {} as never,
+			}],
 			lifecycle: { state: 'active' },
 			facts: completedOperation.report!.outcome === 'accepted'
 				? completedOperation.report!.facts
@@ -226,6 +240,11 @@ describe('the Graphics Asset Library Workspace', () => {
 
 		expect(wrapper.text()).toContain('Graphics Asset Library');
 		expect(wrapper.text()).toContain('Scoreboard logo');
+		expect(wrapper.text()).toContain('Active assets');
+		expect(wrapper.text()).toContain('Retired assets');
+		expect(wrapper.text()).toContain('Trash');
+		expect(wrapper.text()).toContain('Revision history');
+		expect(wrapper.text()).toContain('Revision 1');
 		expect(wrapper.text()).toContain('1 × 1');
 		expect(wrapper.text()).toContain('image/png');
 		expect(wrapper.text()).toContain('Pixels');
@@ -768,7 +787,7 @@ describe('the Graphics Asset Library Workspace', () => {
 		const wrapper = await mountPage();
 
 		const retire = wrapper.findAll('button')
-			.find(button => button.text().includes('Retire'));
+			.find(button => button.text() === 'Retire');
 		await retire!.trigger('click');
 		await flushPromises();
 		expect(mockApiFetch).toHaveBeenNthCalledWith(
@@ -778,7 +797,7 @@ describe('the Graphics Asset Library Workspace', () => {
 		);
 
 		const trash = wrapper.findAll('button')
-			.find(button => button.text().includes('Move to Trash'));
+			.find(button => button.text() === 'Move to Trash');
 		await trash!.trigger('click');
 		await flushPromises();
 		expect(mockApiFetch).toHaveBeenNthCalledWith(
@@ -807,7 +826,7 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(wrapper.text()).not.toContain('Replace content');
 
 		const restore = wrapper.findAll('button')
-			.find(button => button.text().includes('Restore'));
+			.find(button => button.text() === 'Restore');
 		await restore!.trigger('click');
 		await flushPromises();
 		expect(mockApiFetch).toHaveBeenNthCalledWith(

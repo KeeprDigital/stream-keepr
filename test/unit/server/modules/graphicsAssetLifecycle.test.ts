@@ -1,3 +1,4 @@
+import type { GraphicAssetUsage } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
@@ -16,11 +17,11 @@ const lifecyclePixelPng = Uint8Array.from(Buffer.from(
 	'base64',
 ));
 
-function createLifecycleLibrary() {
+function createLifecycleLibrary(usage: GraphicAssetUsage[] = []) {
 	let currentTime = new Date('2026-07-28T00:00:00.000Z');
 	let nextIdentity = 0;
 	const library = createGraphicsAssetLibrary({
-		catalogue: createInMemoryGraphicsAssetCatalogue(),
+		catalogue: createInMemoryGraphicsAssetCatalogue({ usage }),
 		staging: createInMemoryStagingGraphicsObjectStore(),
 		canonical: createInMemoryCanonicalGraphicsObjectStore(),
 		now: () => currentTime,
@@ -94,5 +95,35 @@ describe('the Graphics Asset Library recovery window', () => {
 				lifecycle: expect.objectContaining({ state: 'trashed' }),
 			}),
 		]);
+	});
+
+	it('keeps the in-memory catalogue lifecycle contract aligned with referenced Trash and active-only changes', async () => {
+		const usage: GraphicAssetUsage[] = [];
+		const { library } = createLifecycleLibrary(usage);
+		const operation = await ingestLifecycleAsset(library);
+		const assetId = operation.result!.assetId;
+		const revisionId = operation.result!.revisionId;
+		usage.push({
+			id: 'lifecycle-usage',
+			reference: { assetId, revisionId },
+			owner: {
+				kind: 'screen',
+				id: '42',
+				slot: 'layout.frame.backgroundImage',
+			},
+		});
+
+		await expect(library.trashGraphicAsset({ assetId })).resolves.toEqual({
+			outcome: 'in-use',
+			usage,
+		});
+		await library.retireGraphicAsset({ assetId });
+		await expect(library.updateGraphicAsset({
+			assetId,
+			name: 'Retired metadata change',
+			eventIds: [],
+		})).rejects.toMatchObject({
+			code: 'ingestion-operation-not-found',
+		});
 	});
 });

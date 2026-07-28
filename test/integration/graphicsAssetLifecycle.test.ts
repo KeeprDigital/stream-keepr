@@ -152,6 +152,16 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 				revisionNumber: 2,
 				eventIds: [eventId],
 				lifecycle: { state: 'retired' },
+				revisions: [
+					{
+						id: reference.revisionId,
+						revisionNumber: 1,
+					},
+					{
+						id: replacement.result!.revisionId,
+						revisionNumber: 2,
+					},
+				],
 			},
 		});
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
@@ -205,6 +215,16 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 				revisionNumber: 2,
 				eventIds: [eventId],
 				lifecycle: { state: 'active' },
+				revisions: [
+					{
+						id: reference.revisionId,
+						revisionNumber: 1,
+					},
+					{
+						id: replacement.result!.revisionId,
+						revisionNumber: 2,
+					},
+				],
 			},
 		});
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {

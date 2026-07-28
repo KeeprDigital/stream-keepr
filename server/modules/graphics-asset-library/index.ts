@@ -3,6 +3,7 @@ import type {
 	GraphicAssetCanonicalMime,
 	GraphicAssetId,
 	GraphicAssetLifecycleActionOutcome,
+	GraphicAssetLifecycleState,
 	GraphicAssetReferenceStatus,
 	GraphicAssetRevisionId,
 	GraphicAssetSourceDeclarations,
@@ -80,8 +81,6 @@ export interface ReusableGraphicAsset {
 	assetId: GraphicAssetId;
 	revisionId: GraphicAssetRevisionId;
 }
-
-export type GraphicAssetLifecycleState = 'active' | 'retired' | 'trashed';
 
 export type GraphicAssetLifecycleTransition
 	= | {
