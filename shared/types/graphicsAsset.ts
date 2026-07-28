@@ -11,6 +11,7 @@ declare const graphicsIngestionPartIdentityBrand: unique symbol;
 
 export const DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES = 100 * 1024 * 1024 * 1024;
 export const DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES = 10 * 1024 * 1024 * 1024;
+export const GRAPHIC_ASSET_LIFECYCLE_ACTIONS = ['retire', 'trash', 'restore'] as const;
 
 export type GraphicAssetId = string & {
 	readonly [graphicAssetIdBrand]: 'GraphicAssetId';
@@ -50,6 +51,7 @@ export interface GraphicAssetUsage {
 }
 
 export type GraphicAssetLifecycleState = 'active' | 'retired' | 'trashed';
+export type GraphicAssetLifecycleAction = typeof GRAPHIC_ASSET_LIFECYCLE_ACTIONS[number];
 
 export type GraphicAssetLifecycle
 	= | {

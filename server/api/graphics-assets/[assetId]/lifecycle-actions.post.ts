@@ -2,9 +2,10 @@ import { z } from 'zod';
 import { graphicAssetId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
+import { GRAPHIC_ASSET_LIFECYCLE_ACTIONS } from '~~/shared/types/graphicsAsset';
 
 const actionSchema = z.object({
-	action: z.enum(['retire', 'trash', 'restore']),
+	action: z.enum(GRAPHIC_ASSET_LIFECYCLE_ACTIONS),
 }).strict();
 
 export default defineEventHandler(async (event) => {

@@ -2,6 +2,7 @@
 import type {
 	GraphicAsset,
 	GraphicAssetBrowserDecodeEvidence,
+	GraphicAssetLifecycleAction,
 	GraphicAssetLifecycleActionOutcome,
 	GraphicAssetLifecycleState,
 	GraphicAssetSourceDeclarations,
@@ -36,6 +37,27 @@ const lifecycleViews: {
 	{ state: 'retired', label: 'Retired assets' },
 	{ state: 'trashed', label: 'Trash' },
 ];
+const lifecyclePresentation = {
+	active: {
+		label: 'Active',
+		badgeColor: 'success',
+		actions: ['retire', 'trash'],
+	},
+	retired: {
+		label: 'Retired',
+		badgeColor: 'warning',
+		actions: ['trash', 'restore'],
+	},
+	trashed: {
+		label: 'Trash',
+		badgeColor: 'error',
+		actions: ['restore'],
+	},
+} as const satisfies Record<GraphicAssetLifecycleState, {
+	label: string;
+	badgeColor: 'success' | 'warning' | 'error';
+	actions: readonly GraphicAssetLifecycleAction[];
+}>;
 const selectedFile = ref<File | null>(null);
 const proposedName = ref('');
 const createSeparateAsset = ref(false);
@@ -259,7 +281,7 @@ function replaceVisibleAsset(updated: GraphicAsset) {
 
 async function runLifecycleAction(
 	asset: GraphicAsset,
-	action: 'retire' | 'trash' | 'restore',
+	action: GraphicAssetLifecycleAction,
 ) {
 	lifecyclePendingAssetId.value = asset.id;
 	lifecycleErrorByAssetId[asset.id] = undefined;
@@ -285,6 +307,11 @@ async function runLifecycleAction(
 	finally {
 		lifecyclePendingAssetId.value = null;
 	}
+}
+
+function lifecycleAllows(asset: GraphicAsset, action: GraphicAssetLifecycleAction) {
+	return (lifecyclePresentation[asset.lifecycle.state].actions as readonly GraphicAssetLifecycleAction[])
+		.includes(action);
 }
 
 function beginMetadataEdit(asset: GraphicAsset) {
@@ -1014,9 +1041,9 @@ onMounted(async () => {
 								<div class="flex flex-wrap gap-2">
 									<UBadge color="success" variant="soft" label="Validated" />
 									<UBadge
-										:color="asset.lifecycle.state === 'active' ? 'success' : asset.lifecycle.state === 'retired' ? 'warning' : 'error'"
+										:color="lifecyclePresentation[asset.lifecycle.state].badgeColor"
 										variant="soft"
-										:label="asset.lifecycle.state === 'active' ? 'Active' : asset.lifecycle.state === 'retired' ? 'Retired' : 'Trash'"
+										:label="lifecyclePresentation[asset.lifecycle.state].label"
 									/>
 								</div>
 							</div>
@@ -1122,7 +1149,7 @@ onMounted(async () => {
 									@click="inspectUsage(asset)"
 								/>
 								<UButton
-									v-if="asset.lifecycle.state === 'active'"
+									v-if="lifecycleAllows(asset, 'retire')"
 									size="sm"
 									color="neutral"
 									variant="outline"
@@ -1147,7 +1174,7 @@ onMounted(async () => {
 									@click="runLifecycleAction(asset, 'retire')"
 								/>
 								<UButton
-									v-if="asset.lifecycle.state === 'active' || asset.lifecycle.state === 'retired'"
+									v-if="lifecycleAllows(asset, 'trash')"
 									size="sm"
 									color="error"
 									variant="soft"
@@ -1156,7 +1183,7 @@ onMounted(async () => {
 									@click="runLifecycleAction(asset, 'trash')"
 								/>
 								<UButton
-									v-if="asset.lifecycle.state === 'retired' || asset.lifecycle.state === 'trashed'"
+									v-if="lifecycleAllows(asset, 'restore')"
 									size="sm"
 									color="neutral"
 									variant="outline"

@@ -1,5 +1,6 @@
 import type {
 	GraphicAsset,
+	GraphicAssetLifecycleAction,
 	GraphicAssetLifecycleActionOutcome,
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
@@ -89,7 +90,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 		).then(response => response.json() as Promise<GraphicsIngestionOperation>);
 	}
 
-	async function lifecycleAction(assetId: string, action: 'retire' | 'trash' | 'restore') {
+	async function lifecycleAction(assetId: string, action: GraphicAssetLifecycleAction) {
 		return await $fetch<GraphicAssetLifecycleActionOutcome>(
 			`/api/graphics-assets/${assetId}/lifecycle-actions`,
 			{ method: 'POST', body: { action } },
