@@ -9,7 +9,7 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicsAssetCatalogue,
-	PublishPngCatalogueInput,
+	PublishImageCatalogueInput,
 } from '.';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { GraphicsAssetLibraryError } from './errors';
@@ -445,7 +445,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			}
 			return await this.getCapacity();
 		},
-		async initiatePngIngestion(operation) {
+		async initiateImageIngestion(operation) {
 			const existing = await firstOperation(
 				database,
 				'initiated_by = ? AND idempotency_key = ?',
@@ -549,7 +549,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			if (results.some(result => !result.success))
 				throw new Error('Graphics canonical writes could not be recorded');
 		},
-		async reservePngPublication(input) {
+		async reserveImagePublication(input) {
 			const proposed = new Map<string, number>([
 				[input.sourceDigest, input.sourceByteLength],
 				[input.thumbnailDigest, input.thumbnailByteLength],
@@ -688,7 +688,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			}
 			return authoritative;
 		},
-		async claimPngIngestion(input) {
+		async claimImageIngestion(input) {
 			const result = await database.prepare(`
 				UPDATE graphics_ingestion_operations
 				SET stage = 'hashing', updated_at = ?
@@ -719,7 +719,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				input.operation.initiatedBy,
 			);
 		},
-		async findReusablePng(sourceDigest) {
+		async findReusableImage(sourceDigest) {
 			const row = await database.prepare(`
 				SELECT a.id AS asset_id, r.id AS revision_id
 				FROM graphic_assets a
@@ -735,7 +735,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					}
 				: undefined;
 		},
-		async reusePng(input) {
+		async reuseImage(input) {
 			const completed: GraphicsIngestionOperation = {
 				...input.operation,
 				stage: 'completed',
@@ -787,7 +787,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				throw new Error('Graphic Asset reuse was not durable');
 			return authoritative;
 		},
-		async publishPng(input: PublishPngCatalogueInput) {
+		async publishImage(input: PublishImageCatalogueInput) {
 			await Promise.all([
 				assertContentCompatible(database, {
 					digest: input.sourceDigest,

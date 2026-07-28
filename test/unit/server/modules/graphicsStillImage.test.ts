@@ -63,6 +63,14 @@ function extendedWebp(flags: number) {
 	);
 }
 
+function jpegFrameDataOffset(bytes: Uint8Array) {
+	for (let index = 0; index < bytes.byteLength - 1; index++) {
+		if (bytes[index] === 0xFF && (bytes[index + 1] === 0xC0 || bytes[index + 1] === 0xC2))
+			return index + 4;
+	}
+	throw new Error('JPEG fixture does not contain a supported frame marker');
+}
+
 describe('the still-image-v1 Graphic Asset Compatibility Profile', () => {
 	it.each([
 		{
@@ -122,6 +130,12 @@ describe('the still-image-v1 Graphic Asset Compatibility Profile', () => {
 		});
 		expect(Array.from(processed.thumbnail.slice(0, 8)))
 			.toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+		await expect(processStillImage(bytes, {
+			sourceFileName,
+			declaredMime,
+		})).resolves.toMatchObject({
+			thumbnail: processed.thumbnail,
+		});
 	});
 
 	it('rejects JPEG orientation metadata that would silently rotate rendering', async () => {
@@ -172,12 +186,112 @@ describe('the still-image-v1 Graphic Asset Compatibility Profile', () => {
 		});
 	});
 
+	it('rejects truncated JPEG EXIF metadata as malformed', async () => {
+		const truncatedExif = insertAfterJpegSignature(
+			jpegPixel,
+			jpegSegment(0xE1, Uint8Array.of(0x45, 0x78, 0x69, 0x66, 0)),
+		);
+
+		await expect(processStillImage(truncatedExif, {
+			sourceFileName: 'truncated-exif.jpg',
+			declaredMime: 'image/jpeg',
+		})).rejects.toMatchObject({
+			issue: { code: 'malformed-jpeg' },
+		});
+	});
+
+	it.each([
+		{
+			label: 'axis',
+			width: 8193,
+			height: 1,
+			code: 'image-dimensions-exceeded',
+		},
+		{
+			label: 'decoded-pixel',
+			width: 4097,
+			height: 4097,
+			code: 'image-pixels-exceeded',
+		},
+	])('rejects JPEG $label limits from bounded frame evidence', async ({
+		width,
+		height,
+		code,
+	}) => {
+		const outOfBounds = Uint8Array.from(jpegPixel);
+		const frameOffset = jpegFrameDataOffset(outOfBounds);
+		outOfBounds[frameOffset + 1] = height >>> 8;
+		outOfBounds[frameOffset + 2] = height & 0xFF;
+		outOfBounds[frameOffset + 3] = width >>> 8;
+		outOfBounds[frameOffset + 4] = width & 0xFF;
+
+		await expect(processStillImage(outOfBounds, {
+			sourceFileName: 'out-of-bounds.jpg',
+			declaredMime: 'image/jpeg',
+		})).rejects.toMatchObject({
+			issue: { code },
+		});
+	});
+
+	it('rejects JPEG bit depths outside the 8-bit SDR profile', async () => {
+		const twelveBit = Uint8Array.from(jpegPixel);
+		twelveBit[jpegFrameDataOffset(twelveBit)] = 12;
+
+		await expect(processStillImage(twelveBit, {
+			sourceFileName: 'twelve-bit.jpg',
+			declaredMime: 'image/jpeg',
+		})).rejects.toMatchObject({
+			issue: { code: 'unsupported-jpeg-colour' },
+		});
+	});
+
+	it('rejects embedded JPEG colour profiles', async () => {
+		const profiled = insertAfterJpegSignature(
+			jpegPixel,
+			jpegSegment(0xE2, new TextEncoder().encode('ICC_PROFILE\0')),
+		);
+
+		await expect(processStillImage(profiled, {
+			sourceFileName: 'profiled.jpg',
+			declaredMime: 'image/jpeg',
+		})).rejects.toMatchObject({
+			issue: { code: 'unsupported-jpeg-profile' },
+		});
+	});
+
 	it('rejects malformed WebP extended-header feature bits', async () => {
 		await expect(processStillImage(extendedWebp(0x01), {
 			sourceFileName: 'reserved.webp',
 			declaredMime: 'image/webp',
 		})).rejects.toMatchObject({
 			issue: { code: 'malformed-webp' },
+		});
+	});
+
+	it('rejects animated WebP feature evidence', async () => {
+		await expect(processStillImage(extendedWebp(0x02), {
+			sourceFileName: 'animated.webp',
+			declaredMime: 'image/webp',
+		})).rejects.toMatchObject({
+			issue: { code: 'unsupported-webp-animation' },
+		});
+	});
+
+	it('reconciles WebP extended alpha evidence with the frame payload', async () => {
+		await expect(processStillImage(extendedWebp(0), {
+			sourceFileName: 'missing-alpha-flag.webp',
+			declaredMime: 'image/webp',
+		})).rejects.toMatchObject({
+			issue: { code: 'malformed-webp' },
+		});
+		await expect(processStillImage(extendedWebp(0x10), {
+			sourceFileName: 'alpha.webp',
+			declaredMime: 'image/webp',
+		})).resolves.toMatchObject({
+			report: {
+				outcome: 'accepted',
+				facts: { colorModel: 'rgba', hasAlpha: true },
+			},
 		});
 	});
 

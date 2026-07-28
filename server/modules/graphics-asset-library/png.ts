@@ -5,13 +5,16 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import type { BoundedByteStream } from './object-store';
 import { createHash } from 'node:crypto';
+import {
+	MAX_STILL_IMAGE_AXIS,
+	MAX_STILL_IMAGE_PIXELS,
+	STILL_IMAGE_COMPATIBILITY_PROFILE,
+	STILL_IMAGE_THUMBNAIL_MAX_HEIGHT,
+	STILL_IMAGE_THUMBNAIL_MAX_WIDTH,
+} from '~~/shared/utils/graphicsAssetCompatibility';
 import { createBoundedByteStream } from './object-store';
 
 const PNG_SIGNATURE = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10);
-const MAX_IMAGE_AXIS = 8192;
-const MAX_IMAGE_PIXELS = 16_777_216;
-const THUMBNAIL_MAX_WIDTH = 640;
-const THUMBNAIL_MAX_HEIGHT = 360;
 const textDecoder = new TextDecoder('ascii');
 const textEncoder = new TextEncoder();
 const ADAM7_PASSES = [
@@ -294,8 +297,8 @@ async function decodeThumbnail(
 ): Promise<{ width: number; height: number; pixels: Uint8Array }> {
 	const scale = Math.min(
 		1,
-		THUMBNAIL_MAX_WIDTH / parsed.width,
-		THUMBNAIL_MAX_HEIGHT / parsed.height,
+		STILL_IMAGE_THUMBNAIL_MAX_WIDTH / parsed.width,
+		STILL_IMAGE_THUMBNAIL_MAX_HEIGHT / parsed.height,
 	);
 	const width = Math.max(1, Math.floor(parsed.width * scale));
 	const height = Math.max(1, Math.floor(parsed.height * scale));
@@ -552,10 +555,10 @@ async function inspectAndDecodePng(
 					const rawColorType = data[9]!;
 					if (width === 0 || height === 0)
 						validationError('malformed-png', 'PNG dimensions must both be positive.');
-					if (width > MAX_IMAGE_AXIS || height > MAX_IMAGE_AXIS)
-						validationError('image-dimensions-exceeded', `PNG dimensions must not exceed ${MAX_IMAGE_AXIS} pixels per axis.`);
-					if (width * height > MAX_IMAGE_PIXELS)
-						validationError('image-pixels-exceeded', `PNG decoded pixels must not exceed ${MAX_IMAGE_PIXELS}.`);
+					if (width > MAX_STILL_IMAGE_AXIS || height > MAX_STILL_IMAGE_AXIS)
+						validationError('image-dimensions-exceeded', `PNG dimensions must not exceed ${MAX_STILL_IMAGE_AXIS} pixels per axis.`);
+					if (width * height > MAX_STILL_IMAGE_PIXELS)
+						validationError('image-pixels-exceeded', `PNG decoded pixels must not exceed ${MAX_STILL_IMAGE_PIXELS}.`);
 					if (bitDepth !== 8 || ![0, 2, 3, 4, 6].includes(rawColorType))
 						validationError('unsupported-png-colour', 'PNG must use supported 8-bit SDR grayscale, indexed, RGB, or RGBA colour.');
 					if (data[10] !== 0 || data[11] !== 0 || (data[12] !== 0 && data[12] !== 1))
@@ -769,7 +772,7 @@ export async function processPngStream(
 	return {
 		report: {
 			outcome: 'accepted',
-			compatibilityProfile: 'still-image-v1',
+			compatibilityProfile: STILL_IMAGE_COMPATIBILITY_PROFILE,
 			issues: [],
 			facts: {
 				kind: 'image',
@@ -809,7 +812,7 @@ export async function processPng(bytes: Uint8Array): Promise<ProcessedPng> {
 export function rejectedPngReport(error: PngValidationError): GraphicAssetValidationReport {
 	return {
 		outcome: 'rejected',
-		compatibilityProfile: 'still-image-v1',
+		compatibilityProfile: STILL_IMAGE_COMPATIBILITY_PROFILE,
 		issues: [...error.issues],
 	};
 }

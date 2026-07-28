@@ -8,7 +8,7 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicsAssetCatalogue,
-	PublishPngCatalogueInput,
+	PublishImageCatalogueInput,
 } from '.';
 import {
 	DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES,
@@ -155,7 +155,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			stagingLimitBytes = input.stagingLimitBytes;
 			return getCapacity();
 		},
-		async initiatePngIngestion(operation) {
+		async initiateImageIngestion(operation) {
 			const identity = operationIdentity(operation.initiatedBy, operation.idempotencyKey);
 			const existingId = operationsByIdentity.get(identity);
 			if (existingId)
@@ -204,7 +204,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 				existing.set(content.digest, content.byteLength);
 			canonicalWriteCandidates.set(input.operation.id, existing);
 		},
-		async reservePngPublication(input) {
+		async reserveImagePublication(input) {
 			const existing = operations.get(input.operation.id);
 			if (
 				!existing
@@ -286,7 +286,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			}
 			return cloneOperation(operation);
 		},
-		async claimPngIngestion(input) {
+		async claimImageIngestion(input) {
 			const existing = operations.get(input.operation.id);
 			if (!existing || existing.initiatedBy !== input.operation.initiatedBy)
 				return undefined;
@@ -303,13 +303,13 @@ export function createInMemoryGraphicsAssetCatalogue(
 			operations.set(claimed.id, cloneOperation(claimed));
 			return cloneOperation(claimed);
 		},
-		async findReusablePng(sourceDigest) {
+		async findReusableImage(sourceDigest) {
 			const asset = [...assets.values()].find(candidate => candidate.facts.sha256 === sourceDigest);
 			return asset
 				? { assetId: asset.id, revisionId: asset.revisionId }
 				: undefined;
 		},
-		async reusePng(input) {
+		async reuseImage(input) {
 			const existing = operations.get(input.operation.id);
 			const asset = assets.get(input.reusable.assetId);
 			if (!existing || !asset)
@@ -345,7 +345,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			});
 			return cloneOperation(completed);
 		},
-		async publishPng(input: PublishPngCatalogueInput) {
+		async publishImage(input: PublishImageCatalogueInput) {
 			const existing = operations.get(input.operation.id);
 			if (!existing)
 				throw new Error('Graphics Ingestion Operation not found');

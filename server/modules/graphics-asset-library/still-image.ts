@@ -1,9 +1,17 @@
 import type {
 	GraphicAssetImageFacts,
+	GraphicAssetSourceDeclarations,
 	GraphicAssetValidationIssue,
 	GraphicAssetValidationReport,
 } from '~~/shared/types/graphicsAsset';
 import type { BoundedByteStream } from './object-store';
+import {
+	MAX_STILL_IMAGE_AXIS,
+	MAX_STILL_IMAGE_PIXELS,
+	STILL_IMAGE_COMPATIBILITY_PROFILE,
+	STILL_IMAGE_THUMBNAIL_MAX_HEIGHT,
+	STILL_IMAGE_THUMBNAIL_MAX_WIDTH,
+} from '~~/shared/utils/graphicsAssetCompatibility';
 import { consumeBoundedByteStream } from './object-store';
 import {
 	encodeThumbnail,
@@ -15,10 +23,6 @@ import {
 } from './png';
 
 const PNG_SIGNATURE = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10);
-const MAX_IMAGE_AXIS = 8192;
-const MAX_IMAGE_PIXELS = 16_777_216;
-const THUMBNAIL_MAX_WIDTH = 640;
-const THUMBNAIL_MAX_HEIGHT = 360;
 const JPEG_START_OF_FRAME_MARKERS = new Set([
 	0xC0,
 	0xC1,
@@ -35,10 +39,7 @@ const JPEG_START_OF_FRAME_MARKERS = new Set([
 	0xCF,
 ]);
 
-export interface StillImageDeclarations {
-	sourceFileName?: string;
-	declaredMime?: string;
-}
+export type StillImageDeclarations = GraphicAssetSourceDeclarations;
 
 export interface ProcessedStillImage {
 	report: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>;
@@ -101,8 +102,17 @@ function jpegExifOrientation(
 	dataOffset: number,
 	dataLength: number,
 ): number | undefined {
-	if (dataLength < 14 || ascii(bytes, dataOffset, 6) !== 'Exif\0\0')
+	const exifSignature = 'Exif\0\0';
+	const availableSignature = ascii(bytes, dataOffset, Math.min(exifSignature.length, dataLength));
+	if (dataLength < exifSignature.length) {
+		if (dataLength > 0 && exifSignature.startsWith(availableSignature))
+			validationError('malformed-jpeg', 'JPEG EXIF signature is truncated.');
 		return;
+	}
+	if (availableSignature !== exifSignature)
+		return;
+	if (dataLength < 14)
+		validationError('malformed-jpeg', 'JPEG EXIF TIFF header is incomplete.');
 	const tiffOffset = dataOffset + 6;
 	const littleEndian = ascii(bytes, tiffOffset, 2) === 'II';
 	if (!littleEndian && ascii(bytes, tiffOffset, 2) !== 'MM')
@@ -150,16 +160,16 @@ function assertDimensions(
 ) {
 	if (width <= 0 || height <= 0)
 		validationError(malformedCode, `${formatLabel} dimensions must both be positive.`);
-	if (width > MAX_IMAGE_AXIS || height > MAX_IMAGE_AXIS) {
+	if (width > MAX_STILL_IMAGE_AXIS || height > MAX_STILL_IMAGE_AXIS) {
 		validationError(
 			'image-dimensions-exceeded',
-			`${formatLabel} dimensions must not exceed ${MAX_IMAGE_AXIS} pixels per axis.`,
+			`${formatLabel} dimensions must not exceed ${MAX_STILL_IMAGE_AXIS} pixels per axis.`,
 		);
 	}
-	if (width * height > MAX_IMAGE_PIXELS) {
+	if (width * height > MAX_STILL_IMAGE_PIXELS) {
 		validationError(
 			'image-pixels-exceeded',
-			`${formatLabel} decoded pixels must not exceed ${MAX_IMAGE_PIXELS}.`,
+			`${formatLabel} decoded pixels must not exceed ${MAX_STILL_IMAGE_PIXELS}.`,
 		);
 	}
 }
@@ -295,7 +305,10 @@ function parseWebp(bytes: Uint8Array) {
 	let height: number | undefined;
 	let hasAlpha = false;
 	let foundImagePayload = false;
+	let foundAlphaChunk = false;
+	let hasExtendedHeader = false;
 	let extendedAlpha = false;
+	let imagePayloadType: 'lossy' | 'lossless' | undefined;
 
 	while (offset < bytes.byteLength) {
 		if (offset + 8 > bytes.byteLength)
@@ -337,6 +350,7 @@ function parseWebp(bytes: Uint8Array) {
 			) {
 				validationError('malformed-webp', 'WebP extended header is malformed or duplicated.');
 			}
+			hasExtendedHeader = true;
 			const flags = bytes[dataOffset]!;
 			if ((flags & 0xC1) !== 0)
 				validationError('malformed-webp', 'WebP extended header sets reserved feature bits.');
@@ -368,10 +382,27 @@ function parseWebp(bytes: Uint8Array) {
 			width = readUint24LittleEndian(bytes, dataOffset + 4) + 1;
 			height = readUint24LittleEndian(bytes, dataOffset + 7) + 1;
 		}
+		else if (type === 'ALPH') {
+			if (
+				!hasExtendedHeader
+				|| !extendedAlpha
+				|| foundAlphaChunk
+				|| foundImagePayload
+				|| length < 1
+			) {
+				validationError('malformed-webp', 'WebP alpha chunk is missing, misplaced, or duplicated.');
+			}
+			const alphaHeader = bytes[dataOffset]!;
+			const preprocessing = (alphaHeader >>> 4) & 0x03;
+			if ((alphaHeader & 0xC3) !== 0 || preprocessing > 1)
+				validationError('unsupported-webp-profile', 'WebP alpha coding is outside still-image-v1.');
+			foundAlphaChunk = true;
+		}
 		else if (type === 'VP8L') {
 			if (foundImagePayload || length < 5 || bytes[dataOffset] !== 0x2F)
 				validationError('malformed-webp', 'WebP lossless frame is malformed or duplicated.');
 			foundImagePayload = true;
+			imagePayloadType = 'lossless';
 			const bits = readUint32LittleEndian(bytes, dataOffset + 1);
 			if ((bits >>> 29) !== 0) {
 				validationError(
@@ -398,6 +429,7 @@ function parseWebp(bytes: Uint8Array) {
 				validationError('malformed-webp', 'WebP lossy frame is malformed or duplicated.');
 			}
 			foundImagePayload = true;
+			imagePayloadType = 'lossy';
 			const payloadWidth = readUint16BigEndian(
 				Uint8Array.of(bytes[dataOffset + 7]!, bytes[dataOffset + 6]!),
 				0,
@@ -418,6 +450,15 @@ function parseWebp(bytes: Uint8Array) {
 
 	if (!foundImagePayload || width === undefined || height === undefined)
 		validationError('incomplete-webp-frame', 'WebP does not contain one complete image frame.');
+	if (
+		(imagePayloadType === 'lossy' && extendedAlpha !== foundAlphaChunk)
+		|| (imagePayloadType === 'lossless' && foundAlphaChunk)
+		|| (hasExtendedHeader && imagePayloadType === 'lossless' && extendedAlpha !== hasAlpha)
+	) {
+		validationError('malformed-webp', 'WebP alpha evidence conflicts with its image payload.');
+	}
+	if (imagePayloadType === 'lossy')
+		hasAlpha = foundAlphaChunk;
 	assertDimensions(width, height, 'WebP', 'malformed-webp');
 	return {
 		width,
@@ -430,8 +471,8 @@ function parseWebp(bytes: Uint8Array) {
 function thumbnailPixels(image: ImageData) {
 	const scale = Math.min(
 		1,
-		THUMBNAIL_MAX_WIDTH / image.width,
-		THUMBNAIL_MAX_HEIGHT / image.height,
+		STILL_IMAGE_THUMBNAIL_MAX_WIDTH / image.width,
+		STILL_IMAGE_THUMBNAIL_MAX_HEIGHT / image.height,
 	);
 	const width = Math.max(1, Math.floor(image.width * scale));
 	const height = Math.max(1, Math.floor(image.height * scale));
@@ -524,7 +565,7 @@ export async function processStillImage(
 	return {
 		report: {
 			outcome: 'accepted',
-			compatibilityProfile: 'still-image-v1',
+			compatibilityProfile: STILL_IMAGE_COMPATIBILITY_PROFILE,
 			issues: [],
 			facts: {
 				kind: 'image',
@@ -591,7 +632,7 @@ export function rejectedStillImageReport(
 		? rejectedPngReport(error)
 		: {
 				outcome: 'rejected',
-				compatibilityProfile: 'still-image-v1',
+				compatibilityProfile: STILL_IMAGE_COMPATIBILITY_PROFILE,
 				issues: [...error.issues],
 			};
 }

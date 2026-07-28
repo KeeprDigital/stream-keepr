@@ -3,6 +3,7 @@ import type {
 	GraphicsAssetLibraryCapacity,
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
+import { Buffer } from 'node:buffer';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -60,6 +61,36 @@ const completedOperation: GraphicsIngestionOperation = {
 	},
 	createdAt: '2026-07-27T04:00:00.000Z',
 	updatedAt: '2026-07-27T04:00:01.000Z',
+};
+const jpegPixel = Uint8Array.from(Buffer.from(
+	'/9j/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJtAEx7/2Q==',
+	'base64',
+));
+const completedJpegOperation: GraphicsIngestionOperation = {
+	...completedOperation,
+	declaredByteLength: jpegPixel.byteLength,
+	transferredByteLength: jpegPixel.byteLength,
+	report: {
+		outcome: 'accepted',
+		compatibilityProfile: 'still-image-v1',
+		issues: [],
+		facts: {
+			kind: 'image',
+			format: 'jpeg',
+			canonicalMime: 'image/jpeg',
+			byteLength: jpegPixel.byteLength,
+			sha256: '58a79b9921ff2dc8485bf82af9974e6e5f589000884ff9a1d3c5a82488032d05',
+			width: 1,
+			height: 1,
+			pixelCount: 1,
+			frameCount: 1,
+			bitDepth: 8,
+			colorSpace: 'srgb',
+			colorModel: 'rgb',
+			hasAlpha: false,
+			orientation: 'normal',
+		},
+	},
 };
 
 const assets = ref<GraphicAsset[]>([{
@@ -196,27 +227,35 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(wrapper.text()).toContain('Derivatives 27 B');
 	});
 
-	it('browser-decodes an Event-associated image before initiating and transferring it', async () => {
+	it('browser-decodes the exact accepted revision after initiating and transferring it', async () => {
 		const wrapper = await mountPage();
-		const file = new File([new Uint8Array(68)], 'new-scoreboard.jpg', { type: 'image/jpeg' });
+		const file = new File([jpegPixel], 'new-scoreboard.jpg', { type: 'image/jpeg' });
 		mockApiFetch.mockResolvedValue({
-			...completedOperation,
+			...completedJpegOperation,
 			stage: 'created',
 			report: undefined,
 			result: undefined,
 			transferredByteLength: 0,
 		});
-		mockTransferFetch.mockResolvedValue(new Response(JSON.stringify(completedOperation), {
-			status: 200,
-			headers: { 'content-type': 'application/json' },
-		}));
+		mockTransferFetch
+			.mockResolvedValueOnce(new Response(JSON.stringify(completedJpegOperation), {
+				status: 200,
+				headers: { 'content-type': 'application/json' },
+			}))
+			.mockResolvedValueOnce(new Response(jpegPixel, {
+				status: 200,
+				headers: { 'content-type': 'image/jpeg' },
+			}));
 
 		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
 		await flushPromises();
 		await wrapper.get('[data-testid="upload-image"]').trigger('click');
 		await flushPromises();
 
-		expect(mockBrowserDecode).toHaveBeenCalledWith(file);
+		expect(mockBrowserDecode).toHaveBeenCalledWith(expect.any(Blob));
+		const browserSource = mockBrowserDecode.mock.calls[0]![0] as Blob;
+		expect(browserSource.type).toBe('image/jpeg');
+		expect(new Uint8Array(await browserSource.arrayBuffer())).toEqual(jpegPixel);
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			'/api/graphics-assets/ingestion-operations',
 			expect.objectContaining({
@@ -225,7 +264,7 @@ describe('the Graphics Asset Library Workspace', () => {
 					name: 'new-scoreboard.jpg',
 					defaultEventId: 7,
 					duplicateContentPolicy: 'reuse',
-					declaredByteLength: 68,
+					declaredByteLength: jpegPixel.byteLength,
 					sourceFileName: 'new-scoreboard.jpg',
 					declaredMime: 'image/jpeg',
 				}),
@@ -239,8 +278,60 @@ describe('the Graphics Asset Library Workspace', () => {
 				body: file,
 			}),
 		);
+		expect(mockTransferFetch).toHaveBeenCalledWith(
+			'/api/graphics-assets/asset-1/revisions/revision-1/content',
+		);
 		expect(mockRefresh).toHaveBeenCalledOnce();
 		expect(wrapper.text()).toContain('Published asset asset-1 revision revision-1');
+		expect(wrapper.text()).toContain('Exact revision browser decode verified.');
+	});
+
+	it('preserves the server validation report when malformed input cannot be accepted', async () => {
+		const wrapper = await mountPage();
+		const malformed = new File([new TextEncoder().encode('not a jpeg')], 'malformed.jpg', {
+			type: 'image/jpeg',
+		});
+		const created = {
+			...completedOperation,
+			declaredByteLength: malformed.size,
+			transferredByteLength: 0,
+			stage: 'created' as const,
+			report: undefined,
+			result: undefined,
+		};
+		const failed: GraphicsIngestionOperation = {
+			...created,
+			transferredByteLength: malformed.size,
+			stage: 'failed',
+			report: {
+				outcome: 'rejected',
+				compatibilityProfile: 'still-image-v1',
+				issues: [{
+					severity: 'error',
+					code: 'unsupported-image-format',
+					message: 'Source bytes are not a supported image.',
+				}],
+			},
+			failure: {
+				code: 'validation-failed',
+				retryable: false,
+				message: 'Image did not satisfy the compatibility profile.',
+			},
+		};
+		mockApiFetch.mockResolvedValue(created);
+		mockTransferFetch.mockResolvedValue(new Response(JSON.stringify(failed), {
+			status: 200,
+			headers: { 'content-type': 'application/json' },
+		}));
+
+		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', malformed);
+		await flushPromises();
+		await wrapper.get('[data-testid="upload-image"]').trigger('click');
+		await flushPromises();
+
+		expect(mockBrowserDecode).not.toHaveBeenCalled();
+		expect(wrapper.text()).toContain('unsupported-image-format');
+		expect(wrapper.text()).toContain('Source bytes are not a supported image.');
 	});
 
 	it('reuses the persisted initiation identity when the first response is lost', async () => {
@@ -279,7 +370,7 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(initiationCalls).toHaveLength(2);
 		expect(initiationCalls[0]![1].body.idempotencyKey)
 			.toBe(initiationCalls[1]![1].body.idempotencyKey);
-		expect(mockTransferFetch).toHaveBeenCalledOnce();
+		expect(mockTransferFetch).toHaveBeenCalledTimes(2);
 	});
 
 	it('reconnects a durable initiation after the page reloads before receiving its response', async () => {

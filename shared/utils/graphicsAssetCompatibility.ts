@@ -1,7 +1,6 @@
 export const STILL_IMAGE_COMPATIBILITY_PROFILE = 'still-image-v1' as const;
 export const MAX_STILL_IMAGE_INGESTION_BYTES = 25 * 1024 * 1024;
-
-/** @deprecated Use the complete still-image compatibility profile. */
-export const PNG_COMPATIBILITY_PROFILE = STILL_IMAGE_COMPATIBILITY_PROFILE;
-/** @deprecated Use the complete still-image ingestion bound. */
-export const MAX_PNG_INGESTION_BYTES = MAX_STILL_IMAGE_INGESTION_BYTES;
+export const MAX_STILL_IMAGE_AXIS = 8192;
+export const MAX_STILL_IMAGE_PIXELS = 16_777_216;
+export const STILL_IMAGE_THUMBNAIL_MAX_WIDTH = 640;
+export const STILL_IMAGE_THUMBNAIL_MAX_HEIGHT = 360;

@@ -1,3 +1,5 @@
+import type { STILL_IMAGE_COMPATIBILITY_PROFILE } from '../utils/graphicsAssetCompatibility';
+
 declare const graphicAssetIdBrand: unique symbol;
 declare const graphicAssetRevisionIdBrand: unique symbol;
 declare const graphicsDerivativeIdBrand: unique symbol;
@@ -47,6 +49,11 @@ export type GraphicAssetReferenceStatus
 	| { outcome: 'unavailable'; retryable: true };
 
 export type GraphicsDuplicateContentPolicy = 'reuse' | 'create-separate';
+
+export interface GraphicAssetSourceDeclarations {
+	sourceFileName?: string;
+	declaredMime?: string;
+}
 
 export type GraphicsIngestionStage
 	= | 'created'
@@ -108,13 +115,13 @@ export interface GraphicAssetValidationIssue {
 export type GraphicAssetValidationReport
 	= {
 		outcome: 'accepted';
-		compatibilityProfile: 'still-image-v1';
+		compatibilityProfile: typeof STILL_IMAGE_COMPATIBILITY_PROFILE;
 		issues: [];
 		facts: GraphicAssetImageFacts;
 	}
 	| {
 		outcome: 'rejected';
-		compatibilityProfile: 'still-image-v1';
+		compatibilityProfile: typeof STILL_IMAGE_COMPATIBILITY_PROFILE;
 		issues: GraphicAssetValidationIssue[];
 	};
 
@@ -149,13 +156,11 @@ export type GraphicsIngestionCapacityOutcome
 		availableBytes: number;
 	};
 
-export interface GraphicsIngestionOperation {
+export interface GraphicsIngestionOperation extends GraphicAssetSourceDeclarations {
 	id: GraphicsIngestionOperationId;
 	idempotencyKey: string;
 	initiatedBy: string;
 	name: string;
-	sourceFileName?: string;
-	declaredMime?: string;
 	defaultEventId?: number;
 	duplicateContentPolicy: GraphicsDuplicateContentPolicy;
 	declaredByteLength: number;

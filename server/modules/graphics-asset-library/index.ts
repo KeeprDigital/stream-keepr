@@ -3,6 +3,7 @@ import type {
 	GraphicAssetId,
 	GraphicAssetReferenceStatus,
 	GraphicAssetRevisionId,
+	GraphicAssetSourceDeclarations,
 	GraphicAssetUsage,
 	GraphicAssetValidationReport,
 	GraphicsAssetCapacityLimits,
@@ -21,7 +22,10 @@ import type {
 	GraphicsObjectStoreHealth,
 	GraphicsStagingObjectStore,
 } from './object-store';
-import { MAX_STILL_IMAGE_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import {
+	MAX_STILL_IMAGE_INGESTION_BYTES,
+	STILL_IMAGE_COMPATIBILITY_PROFILE,
+} from '~~/shared/utils/graphicsAssetCompatibility';
 import { GraphicsAssetLibraryError } from './errors';
 import {
 	createBoundedByteStream,
@@ -45,7 +49,7 @@ export interface GraphicsAssetCatalogueHealth {
 	checkHealth: () => Promise<{ outcome: 'healthy' }>;
 }
 
-export interface PublishPngCatalogueInput {
+export interface PublishImageCatalogueInput {
 	operation: GraphicsIngestionOperation;
 	report: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>;
 	assetId: GraphicAssetId;
@@ -57,14 +61,14 @@ export interface PublishPngCatalogueInput {
 	publishedAt: string;
 }
 
-export interface ReusablePng {
+export interface ReusableImage {
 	assetId: GraphicAssetId;
 	revisionId: GraphicAssetRevisionId;
 }
 
 export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
-	initiatePngIngestion: (operation: GraphicsIngestionOperation) => Promise<GraphicsIngestionOperation>;
+	initiateImageIngestion: (operation: GraphicsIngestionOperation) => Promise<GraphicsIngestionOperation>;
 	recordStagedBytes: (input: {
 		operation: GraphicsIngestionOperation;
 		usedBytes: number;
@@ -74,7 +78,7 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		contents: readonly { digest: string; byteLength: number }[];
 		recordedAt: string;
 	}) => Promise<void>;
-	reservePngPublication: (input: {
+	reserveImagePublication: (input: {
 		operation: GraphicsIngestionOperation;
 		sourceDigest: string;
 		sourceByteLength: number;
@@ -96,18 +100,18 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		operation: GraphicsIngestionOperation,
 		expectedUpdatedAt: string,
 	) => Promise<GraphicsIngestionOperation>;
-	claimPngIngestion: (input: {
+	claimImageIngestion: (input: {
 		operation: GraphicsIngestionOperation;
 		claimedAt: string;
 		staleBefore: string;
 	}) => Promise<GraphicsIngestionOperation | undefined>;
-	findReusablePng: (sourceDigest: string) => Promise<ReusablePng | undefined>;
-	reusePng: (input: {
+	findReusableImage: (sourceDigest: string) => Promise<ReusableImage | undefined>;
+	reuseImage: (input: {
 		operation: GraphicsIngestionOperation;
-		reusable: ReusablePng;
+		reusable: ReusableImage;
 		publishedAt: string;
 	}) => Promise<GraphicsIngestionOperation>;
-	publishPng: (input: PublishPngCatalogueInput) => Promise<GraphicsIngestionOperation>;
+	publishImage: (input: PublishImageCatalogueInput) => Promise<GraphicsIngestionOperation>;
 	listGraphicAssets: (search: string) => Promise<GraphicAsset[]>;
 	findRevisionContent: (input: {
 		assetId: GraphicAssetId;
@@ -128,22 +132,10 @@ export interface GraphicsAssetLibrary {
 	updateCapacityLimits: (
 		input: GraphicsAssetCapacityLimits,
 	) => Promise<GraphicsAssetLibraryCapacity>;
-	initiateImageIngestion: (input: {
+	initiateImageIngestion: (input: GraphicAssetSourceDeclarations & {
 		idempotencyKey: string;
 		initiatedBy: string;
 		name: string;
-		sourceFileName?: string;
-		declaredMime?: string;
-		defaultEventId?: number;
-		duplicateContentPolicy?: GraphicsDuplicateContentPolicy;
-		declaredByteLength: number;
-	}) => Promise<GraphicsIngestionOperation>;
-	initiatePngIngestion: (input: {
-		idempotencyKey: string;
-		initiatedBy: string;
-		name: string;
-		sourceFileName?: string;
-		declaredMime?: string;
 		defaultEventId?: number;
 		duplicateContentPolicy?: GraphicsDuplicateContentPolicy;
 		declaredByteLength: number;
@@ -156,27 +148,13 @@ export interface GraphicsAssetLibrary {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
 	}) => Promise<GraphicsIngestionOperation>;
-	cancelPngIngestion: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-	}) => Promise<GraphicsIngestionOperation>;
 	uploadImage: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
 		declaredMime?: string;
 		bytes: BoundedByteStream;
 	}) => Promise<GraphicsIngestionOperation>;
-	uploadPng: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-		declaredMime?: string;
-		bytes: BoundedByteStream;
-	}) => Promise<GraphicsIngestionOperation>;
 	retryImageIngestion: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-	}) => Promise<GraphicsIngestionOperation>;
-	retryPngIngestion: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
 	}) => Promise<GraphicsIngestionOperation>;
@@ -284,7 +262,7 @@ export function createGraphicsAssetLibrary(
 	const activeIngestionLeaseMilliseconds = 30_000;
 
 	function requireCatalogue(): GraphicsAssetCatalogue {
-		if (!('initiatePngIngestion' in dependencies.catalogue))
+		if (!('initiateImageIngestion' in dependencies.catalogue))
 			throw new GraphicsAssetLibraryError('Graphics Asset catalogue is unavailable', 'graphics-asset-library-unavailable');
 		return dependencies.catalogue;
 	}
@@ -554,7 +532,7 @@ export function createGraphicsAssetLibrary(
 
 			const thumbnail = processed.thumbnail;
 			const thumbnailDigest = await sha256Hex(thumbnail);
-			const reservation = await catalogue.reservePngPublication({
+			const reservation = await catalogue.reserveImagePublication({
 				operation,
 				sourceDigest: processed.report.facts.sha256,
 				sourceByteLength: processed.report.facts.byteLength,
@@ -634,11 +612,11 @@ export function createGraphicsAssetLibrary(
 				return publicationTerminal;
 
 			const reusable = operation.duplicateContentPolicy === 'reuse'
-				? await catalogue.findReusablePng(processed.report.facts.sha256)
+				? await catalogue.findReusableImage(processed.report.facts.sha256)
 				: undefined;
 			let completed: GraphicsIngestionOperation;
 			if (reusable) {
-				completed = await catalogue.reusePng({
+				completed = await catalogue.reuseImage({
 					operation,
 					reusable,
 					publishedAt: timestamp(),
@@ -646,7 +624,7 @@ export function createGraphicsAssetLibrary(
 			}
 			else {
 				try {
-					completed = await catalogue.publishPng({
+					completed = await catalogue.publishImage({
 						operation,
 						report: processed.report,
 						assetId: graphicAssetId(generateIdentity()),
@@ -661,12 +639,12 @@ export function createGraphicsAssetLibrary(
 				catch (publicationError) {
 					if (operation.duplicateContentPolicy === 'create-separate')
 						throw publicationError;
-					const concurrentlyPublished = await catalogue.findReusablePng(
+					const concurrentlyPublished = await catalogue.findReusableImage(
 						processed.report.facts.sha256,
 					);
 					if (!concurrentlyPublished)
 						throw publicationError;
-					completed = await catalogue.reusePng({
+					completed = await catalogue.reuseImage({
 						operation,
 						reusable: concurrentlyPublished,
 						publishedAt: timestamp(),
@@ -752,7 +730,7 @@ export function createGraphicsAssetLibrary(
 				'Graphics capacity limits could not be updated',
 			);
 		},
-		async initiatePngIngestion(input) {
+		async initiateImageIngestion(input) {
 			if (!input.idempotencyKey.trim() || !input.initiatedBy.trim() || !input.name.trim())
 				throw new GraphicsAssetLibraryError('Ingestion identity, author, and asset name are required', 'invalid-ingestion-input');
 			if (
@@ -770,7 +748,7 @@ export function createGraphicsAssetLibrary(
 			}
 
 			const createdAt = timestamp();
-			return await catalogueRequest(() => requireCatalogue().initiatePngIngestion({
+			return await catalogueRequest(() => requireCatalogue().initiateImageIngestion({
 				id: graphicsIngestionOperationId(generateIdentity()),
 				idempotencyKey: input.idempotencyKey,
 				initiatedBy: input.initiatedBy,
@@ -786,9 +764,6 @@ export function createGraphicsAssetLibrary(
 				updatedAt: createdAt,
 			}), 'Graphics ingestion could not be initiated because the catalogue is unavailable');
 		},
-		async initiateImageIngestion(input) {
-			return await this.initiatePngIngestion(input);
-		},
 		async getIngestionOperation(input) {
 			const operation = await catalogueRequest(
 				() => requireCatalogue().getIngestionOperation(input.operationId, input.initiatedBy),
@@ -798,7 +773,7 @@ export function createGraphicsAssetLibrary(
 				throw new GraphicsAssetLibraryError('Graphics Ingestion Operation not found', 'ingestion-operation-not-found');
 			return operation;
 		},
-		async cancelPngIngestion(input) {
+		async cancelImageIngestion(input) {
 			const catalogue = requireCatalogue();
 			const operation = await catalogueRequest(
 				() => catalogue.getIngestionOperation(input.operationId, input.initiatedBy),
@@ -830,10 +805,7 @@ export function createGraphicsAssetLibrary(
 			}
 			return cancelled;
 		},
-		async cancelImageIngestion(input) {
-			return await this.cancelPngIngestion(input);
-		},
-		async uploadPng(input) {
+		async uploadImage(input) {
 			const catalogue = requireCatalogue();
 			const staging = requireStaging();
 			let operation = await catalogueRequest(
@@ -865,7 +837,7 @@ export function createGraphicsAssetLibrary(
 					message: 'Image declarations conflict before validation.',
 				}, {
 					outcome: 'rejected',
-					compatibilityProfile: 'still-image-v1',
+					compatibilityProfile: STILL_IMAGE_COMPATIBILITY_PROFILE,
 					issues: [{
 						severity: 'error',
 						code: 'conflicting-image-mime',
@@ -936,10 +908,7 @@ export function createGraphicsAssetLibrary(
 			);
 			return await continueImageIngestion(operation);
 		},
-		async uploadImage(input) {
-			return await this.uploadPng(input);
-		},
-		async retryPngIngestion(input) {
+		async retryImageIngestion(input) {
 			const catalogue = requireCatalogue();
 			const operation = await catalogueRequest(
 				() => catalogue.getIngestionOperation(input.operationId, input.initiatedBy),
@@ -960,7 +929,7 @@ export function createGraphicsAssetLibrary(
 				new Date(operation.updatedAt).getTime() + 1,
 			)).toISOString();
 			const claimed = await catalogueRequest(
-				() => catalogue.claimPngIngestion({
+				() => catalogue.claimImageIngestion({
 					operation,
 					claimedAt,
 					staleBefore: new Date(
@@ -976,9 +945,6 @@ export function createGraphicsAssetLibrary(
 				);
 			}
 			return await continueImageIngestion(claimed);
-		},
-		async retryImageIngestion(input) {
-			return await this.retryPngIngestion(input);
 		},
 		async listGraphicAssets(input) {
 			return await catalogueRequest(
