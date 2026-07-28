@@ -1,0 +1,1 @@
+ALTER TABLE `graphics_ingestion_operations` ADD `multipart_state` text;

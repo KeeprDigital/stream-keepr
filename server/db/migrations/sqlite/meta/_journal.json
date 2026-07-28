@@ -71,6 +71,13 @@
       "when": 1785207186706,
       "tag": "0009_chemical_jubilee",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1785223132057,
+      "tag": "0010_woozy_abomination",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,7 @@ import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { GRAPHICS_MULTIPART_PART_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 
 const authorHeaders: Record<string, string> = {
@@ -322,6 +323,91 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
 			query: { search: 'scoreboard' },
 		})).resolves.toHaveLength(2);
+	});
+
+	it('resumes a multipart transfer from server-verified parts and tolerates an ambiguous duplicate request', async () => {
+		const bytes = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 1);
+		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
+			method: 'POST',
+			headers: authorHeaders,
+			body: {
+				idempotencyKey: 'integration-resumable-large-image',
+				name: 'Interrupted large image',
+				declaredMime: 'image/png',
+				browserDecodeEvidence: rejectedBrowserDecodeEvidence(bytes),
+				declaredByteLength: bytes.byteLength,
+			},
+		});
+
+		const started = await $fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart`,
+			{ method: 'POST', headers: authorHeaders },
+		);
+		expect(started).toMatchObject({
+			stage: 'transferring',
+			transferredByteLength: 0,
+			transfer: {
+				partByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+				maximumConcurrentParts: 3,
+				maximumPartAttempts: 3,
+				partCount: 2,
+				completedParts: [],
+			},
+		});
+
+		const firstPart = bytes.subarray(0, GRAPHICS_MULTIPART_PART_BYTES);
+		const firstResponse = await fetch(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/parts/1`,
+			{ method: 'PUT', headers: authorHeaders, body: firstPart },
+		);
+		expect(firstResponse.status).toBe(200);
+		const afterFirst = await firstResponse.json() as GraphicsIngestionOperation;
+		expect(afterFirst).toMatchObject({
+			transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+			transfer: {
+				completedParts: [{
+					partNumber: 1,
+					partIdentity: `${initiated.id}:1`,
+					byteLength: GRAPHICS_MULTIPART_PART_BYTES,
+				}],
+			},
+		});
+
+		const reconnected = await $fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}`,
+			{ headers: authorHeaders },
+		);
+		expect(reconnected).toEqual(afterFirst);
+
+		const duplicateResponse = await fetch(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/parts/1`,
+			{ method: 'PUT', headers: authorHeaders, body: firstPart },
+		);
+		expect(duplicateResponse.status).toBe(200);
+		await expect(duplicateResponse.json()).resolves.toEqual(afterFirst);
+
+		const finalResponse = await fetch(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/parts/2`,
+			{ method: 'PUT', headers: authorHeaders, body: bytes.subarray(GRAPHICS_MULTIPART_PART_BYTES) },
+		);
+		expect(finalResponse.status).toBe(200);
+		const ready = await finalResponse.json() as GraphicsIngestionOperation;
+		expect(ready.transferredByteLength).toBe(bytes.byteLength);
+
+		const completionResponse = await fetch(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/complete`,
+			{ method: 'POST', headers: authorHeaders },
+		);
+		expect(completionResponse.status).toBe(200);
+		expect(await completionResponse.json()).toMatchObject({
+			stage: 'failed',
+			transferredByteLength: bytes.byteLength,
+			report: {
+				outcome: 'rejected',
+				issues: [{ code: 'unsupported-image-format' }],
+			},
+			failure: { code: 'validation-failed', retryable: false },
+		});
 	});
 
 	it('exposes cancellation and permanent validation failure as structured operations', async () => {

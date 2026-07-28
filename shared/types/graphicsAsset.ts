@@ -181,6 +181,18 @@ export interface GraphicsIngestionOperation extends GraphicAssetSourceDeclaratio
 	duplicateContentPolicy: GraphicsDuplicateContentPolicy;
 	declaredByteLength: number;
 	transferredByteLength: number;
+	transfer?: {
+		method: 'multipart';
+		partByteLength: number;
+		maximumConcurrentParts: number;
+		maximumPartAttempts: number;
+		partCount: number;
+		completedParts: {
+			partNumber: number;
+			partIdentity: string;
+			byteLength: number;
+		}[];
+	};
 	stage: GraphicsIngestionStage;
 	canonicalCapacityOutcome?: GraphicsIngestionCapacityOutcome;
 	report?: GraphicAssetValidationReport;

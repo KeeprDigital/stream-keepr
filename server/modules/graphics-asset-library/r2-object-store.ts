@@ -202,7 +202,24 @@ export function createR2StagingGraphicsObjectStore(bucket: R2Bucket): GraphicsSt
 			validateMultipartPartNumber(input.partNumber);
 			try {
 				const upload = bucket.resumeMultipartUpload(input.upload.identity, input.upload.uploadId);
-				const part = await upload.uploadPart(input.partNumber, input.bytes.body);
+				const fixedLength = typeof FixedLengthStream === 'undefined'
+					? undefined
+					: new FixedLengthStream(input.bytes.byteLength);
+				const transfer = fixedLength
+					? input.bytes.body.pipeTo(fixedLength.writable)
+					: undefined;
+				const value = fixedLength
+					? fixedLength.readable
+					: await consumeBoundedByteStream(input.bytes);
+				let part: R2UploadedPart;
+				try {
+					part = await upload.uploadPart(input.partNumber, value);
+					await transfer;
+				}
+				catch (error) {
+					await transfer?.catch(() => undefined);
+					throw error;
+				}
 				return {
 					outcome: 'uploaded',
 					part: {

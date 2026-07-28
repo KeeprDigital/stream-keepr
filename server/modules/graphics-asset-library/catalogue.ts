@@ -9,9 +9,15 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicsAssetCatalogue,
+	GraphicsImageMultipartState,
 	PublishImageCatalogueInput,
 } from '.';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
+import {
+	GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
+	GRAPHICS_MULTIPART_MAXIMUM_PART_ATTEMPTS,
+	GRAPHICS_MULTIPART_PART_BYTES,
+} from '~~/shared/utils/graphicsAssetCompatibility';
 import { GraphicsAssetLibraryError } from './errors';
 
 interface OperationRow {
@@ -26,6 +32,7 @@ interface OperationRow {
 	default_event_id: number | null;
 	declared_byte_length: number;
 	transferred_byte_length: number;
+	multipart_state: string | null;
 	stage: GraphicsIngestionOperation['stage'];
 	capacity_outcome: string | null;
 	report: string | null;
@@ -67,7 +74,8 @@ function parseJson<T>(value: string | null): T | undefined {
 }
 
 function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
-	return {
+	const multipart = parseJson<GraphicsImageMultipartState>(row.multipart_state);
+	const operation: GraphicsIngestionOperation = {
 		id: row.id as GraphicsIngestionOperationId,
 		idempotencyKey: row.idempotency_key,
 		initiatedBy: row.initiated_by,
@@ -87,6 +95,26 @@ function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 		createdAt: new Date(row.created_at).toISOString(),
 		updatedAt: new Date(row.updated_at).toISOString(),
 	};
+	if (!multipart)
+		return operation;
+	return {
+		...operation,
+		transfer: {
+			method: 'multipart',
+			partByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+			maximumConcurrentParts: GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
+			maximumPartAttempts: GRAPHICS_MULTIPART_MAXIMUM_PART_ATTEMPTS,
+			partCount: Math.ceil(operation.declaredByteLength / GRAPHICS_MULTIPART_PART_BYTES),
+			completedParts: multipart.parts
+				.filter(part => part.status === 'completed')
+				.map(({ partNumber, partIdentity, byteLength }) => ({
+					partNumber,
+					partIdentity,
+					byteLength,
+				}))
+				.sort((left, right) => left.partNumber - right.partNumber),
+		},
+	};
 }
 
 function operationRowFromAsset(row: AssetRow): OperationRow {
@@ -102,6 +130,7 @@ function operationRowFromAsset(row: AssetRow): OperationRow {
 		default_event_id: row.default_event_id,
 		declared_byte_length: row.declared_byte_length,
 		transferred_byte_length: row.transferred_byte_length,
+		multipart_state: null,
 		stage: row.stage,
 		capacity_outcome: row.capacity_outcome,
 		report: row.report,
@@ -117,7 +146,7 @@ function operationSelect(where: string) {
 		SELECT id, idempotency_key, initiated_by, proposed_name,
 				source_file_name, declared_mime, browser_decode_evidence,
 			duplicate_content_policy, default_event_id,
-			declared_byte_length, transferred_byte_length, stage, report, result,
+			declared_byte_length, transferred_byte_length, multipart_state, stage, report, result,
 			capacity_outcome, failure, created_at, updated_at
 		FROM graphics_ingestion_operations
 		WHERE ${where}
@@ -677,6 +706,42 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 		},
 		async getIngestionOperation(operationId, initiatedBy) {
 			return await firstOperation(database, 'id = ? AND initiated_by = ?', operationId, initiatedBy);
+		},
+		async getImageMultipartState(operationId, initiatedBy) {
+			const row = await database.prepare(`
+				SELECT multipart_state
+				FROM graphics_ingestion_operations
+				WHERE id = ? AND initiated_by = ?
+			`).bind(operationId, initiatedBy).first<{ multipart_state: string | null }>();
+			return row?.multipart_state
+				? JSON.parse(row.multipart_state) as GraphicsImageMultipartState
+				: undefined;
+		},
+		async updateImageMultipartState(input) {
+			if (input.state.version !== input.expectedVersion + 1)
+				return false;
+			const completedByteLength = input.state.parts
+				.filter(part => part.status === 'completed')
+				.reduce((total, part) => total + part.byteLength, 0);
+			const result = await database.prepare(`
+				UPDATE graphics_ingestion_operations
+				SET multipart_state = ?, stage = 'transferring',
+					transferred_byte_length = ?, updated_at = ?
+				WHERE id = ? AND initiated_by = ?
+					AND stage IN ('created', 'transferring')
+					AND COALESCE(
+						CAST(json_extract(multipart_state, '$.version') AS INTEGER),
+						0
+					) = ?
+			`).bind(
+				JSON.stringify(input.state),
+				completedByteLength,
+				new Date(input.updatedAt).getTime(),
+				input.operationId,
+				input.initiatedBy,
+				input.expectedVersion,
+			).run();
+			return result.success && result.meta.changes === 1;
 		},
 		async updateIngestionOperation(operation, expectedUpdatedAt) {
 			const result = await updateOperationStatement(database, operation, expectedUpdatedAt).run();
