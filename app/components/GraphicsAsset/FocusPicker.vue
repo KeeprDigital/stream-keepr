@@ -4,10 +4,8 @@ import type {
 	GraphicAssetReference,
 	GraphicAssetReferenceStatus,
 } from '~~/shared/types/graphicsAsset';
-import {
-	graphicAssetTargetCompatibility,
-	graphicsVideoTargetForUserAgent,
-} from '~~/shared/utils/graphicAssetTargetCompatibility';
+import type { GraphicsVideoTarget } from '~~/shared/utils/graphicAssetTargetCompatibility';
+import { graphicAssetTargetCompatibility } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import { graphicAssetRevisionStatusPath } from '~~/shared/utils/graphicsAssetReferences';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
@@ -16,13 +14,15 @@ const props = withDefaults(defineProps<{
 	eventId: number;
 	fieldLabel: string;
 	assetKind?: GraphicAsset['kind'] | GraphicAsset['kind'][];
+	videoTarget?: GraphicsVideoTarget;
 }>(), {
 	assetKind: 'image',
+	videoTarget: 'other',
 });
 
 const emit = defineEmits<{
 	'update:modelValue': [reference: GraphicAssetReference | undefined];
-	'select': [asset: GraphicAsset];
+	'select': [asset: GraphicAsset, reference: GraphicAssetReference];
 }>();
 
 const open = ref(false);
@@ -55,14 +55,8 @@ const selectedAsset = computed(() => (assets.value ?? []).find(asset =>
 	&& asset.id === props.modelValue?.assetId
 	&& asset.revisionId === props.modelValue?.revisionId,
 ));
-const targetBrowser = computed(() =>
-	import.meta.client
-		? graphicsVideoTargetForUserAgent(navigator.userAgent)
-		: 'other',
-);
-
 function assetCompatibility(asset: GraphicAsset) {
-	return graphicAssetTargetCompatibility(asset.facts, targetBrowser.value);
+	return graphicAssetTargetCompatibility(asset.facts, props.videoTarget);
 }
 
 watch(() => ({
@@ -90,11 +84,12 @@ watch(() => ({
 function selectAsset(asset: GraphicAsset) {
 	if (assetCompatibility(asset).outcome === 'blocked')
 		return;
-	emit('update:modelValue', {
+	const reference = {
 		assetId: asset.id,
 		revisionId: asset.revisionId,
-	});
-	emit('select', asset);
+	};
+	emit('update:modelValue', reference);
+	emit('select', asset, reference);
 	open.value = false;
 }
 </script>

@@ -8,6 +8,7 @@ import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
 	featureMatchOverlayGraphicAssetReferences,
 	sameGraphicAssetReference,
+	screenGraphicAssetReferenceTargetCompatibility,
 } from '~~/shared/utils/graphicsAssetReferences';
 
 async function findScreen(id: number, eventId: number): Promise<DbScreen | undefined> {
@@ -72,6 +73,10 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 	const referenceVersion = crypto.randomUUID();
 	const now = Date.now();
 	const references = featureMatchOverlayGraphicAssetReferences(config);
+	if (references.some(reference =>
+		screenGraphicAssetReferenceTargetCompatibility(reference).outcome === 'blocked')) {
+		throw new StateConflictError('Screen Output target compatibility', input.id);
+	}
 	const previousConfig = screen.modeConfigs?.['feature-match-overlay'];
 	const previousReferences = new Map(
 		previousConfig
@@ -98,6 +103,10 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 						? != 'silent-video'
 						OR json_extract(revision.technical_facts, '$.targetCompatibility') = ?
 					)
+					AND (
+						COALESCE(?, '') != 'chromium-transparency'
+						OR ? = 'chromium'
+					)
 			)
 		`).join('');
 	const referencePreconditionBindings = indexedReferences.flatMap(({
@@ -105,6 +114,7 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 		allowRetired,
 		kind,
 		videoCompatibility,
+		videoTarget,
 	}) => [
 		reference.revisionId,
 		reference.assetId,
@@ -112,6 +122,8 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 		kind,
 		kind,
 		videoCompatibility ?? null,
+		videoCompatibility ?? null,
+		videoTarget ?? null,
 	]);
 	const client = db.$client;
 	const statements: D1PreparedStatement[] = [
@@ -145,6 +157,7 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 			allowRetired,
 			kind,
 			videoCompatibility,
+			videoTarget,
 		}) => client.prepare(`
 			INSERT INTO graphic_asset_references (
 				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
@@ -159,6 +172,10 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 					AND (
 						? != 'silent-video'
 						OR json_extract(revision.technical_facts, '$.targetCompatibility') = ?
+					)
+					AND (
+						COALESCE(?, '') != 'chromium-transparency'
+						OR ? = 'chromium'
 					)
 					AND EXISTS (
 					SELECT 1 FROM screens
@@ -180,6 +197,8 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 			kind,
 			kind,
 			videoCompatibility ?? null,
+			videoCompatibility ?? null,
+			videoTarget ?? null,
 			input.id,
 			input.eventId,
 			referenceVersion,

@@ -184,4 +184,34 @@ describe('silent-video bounded inspection', () => {
 
 		await expectIssue(processSilentVideo(malformed), 'video-index-incomplete');
 	});
+
+	it('rejects individual MP4 frame intervals above 60 fps', async () => {
+		const malformed = h264Mp4.slice();
+		const timingTable = asciiOffset(malformed, 'stts') + 4;
+		new DataView(malformed.buffer).setUint32(timingTable + 12, 1);
+
+		await expectIssue(processSilentVideo(malformed), 'video-frame-rate-exceeded');
+	});
+
+	it('rejects WebM Cues that do not match their cluster timeline', async () => {
+		const malformed = vp9Webm.slice();
+		const cueTime = malformed.findIndex((byte, index) =>
+			byte === 0xB3 && malformed[index + 1] === 0x81,
+		);
+		expect(cueTime).toBeGreaterThanOrEqual(0);
+		malformed[cueTime + 2] = 1;
+
+		await expectIssue(processSilentVideo(malformed), 'video-index-incomplete');
+	});
+
+	it('rejects a WebM media timeline that does not start at zero', async () => {
+		const malformed = vp9Webm.slice();
+		const clusterTime = malformed.findIndex((byte, index) =>
+			byte === 0xE7 && malformed[index + 1] === 0x81,
+		);
+		expect(clusterTime).toBeGreaterThanOrEqual(0);
+		malformed[clusterTime + 2] = 1;
+
+		await expectIssue(processSilentVideo(malformed), 'malformed-video-timeline');
+	});
 });

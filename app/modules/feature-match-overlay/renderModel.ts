@@ -92,6 +92,7 @@ export type FeatureMatchOverlayWidgetRender
 			loop: boolean;
 			playbackRate: number;
 			videoCompatibility: 'all-supported' | 'chromium-transparency';
+			videoTarget: 'chromium' | 'safari';
 			mediaStyle: CSSProperties;
 		}
 		| { type: 'clock'; displayTime: string }
@@ -169,7 +170,10 @@ export interface FeatureMatchOverlayRenderModel {
 	rectStyle: (rect: FeatureMatchOverlayRect) => CSSProperties;
 	itemStyle: (item: FeatureMatchLayoutItemConfig) => CSSProperties;
 	widgetStyle: (rect: FeatureMatchOverlayRect, style?: FeatureMatchOverlayBoxStyle) => CSSProperties;
-	imageStyle: (rect: FeatureMatchOverlayRect, widget: Extract<FeatureMatchWidgetConfig, { type: 'image' }>) => CSSProperties;
+	imageStyle: (
+		rect: FeatureMatchOverlayRect,
+		widget: Extract<FeatureMatchWidgetConfig, { type: 'image' | 'media' }>,
+	) => CSSProperties;
 	borderSideEnabled: (style: { borderTopVisible?: boolean; borderRightVisible?: boolean; borderBottomVisible?: boolean; borderLeftVisible?: boolean }, side: FeatureMatchOverlayBorderSide) => boolean;
 }
 
@@ -533,7 +537,10 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		};
 	}
 
-	function imageStyleFor(rect: FeatureMatchOverlayRect, widget: Extract<FeatureMatchWidgetConfig, { type: 'image' }>): CSSProperties {
+	function imageStyleFor(
+		rect: FeatureMatchOverlayRect,
+		widget: Extract<FeatureMatchWidgetConfig, { type: 'image' | 'media' }>,
+	): CSSProperties {
 		return {
 			...rectStyle(rect),
 			position: 'absolute',
@@ -564,6 +571,13 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 					deckColors: deckColors(widget.playerSide ?? 'player1'),
 				};
 			case 'image':
+				return {
+					type: 'image',
+					src: widget.asset ? resolveGraphicAssetContentPath(widget.asset) : '',
+					alt: label,
+					imageStyle: imageStyleFor({ x: 0, y: 0, width: rect.width, height: rect.height }, widget),
+				};
+			case 'media':
 				if (widget.mediaKind === 'silent-video') {
 					return {
 						type: 'silent-video',
@@ -571,6 +585,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 						loop: widget.loop ?? true,
 						playbackRate: widget.playbackRate ?? 1,
 						videoCompatibility: widget.videoCompatibility ?? 'all-supported',
+						videoTarget: widget.videoTarget ?? 'safari',
 						mediaStyle: imageStyleFor({ x: 0, y: 0, width: rect.width, height: rect.height }, widget),
 					};
 				}

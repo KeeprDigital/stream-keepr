@@ -240,7 +240,7 @@ describe('featureMatchOverlayDisplay', () => {
 			width: 640,
 			height: 360,
 			widget: {
-				type: 'image',
+				type: 'media',
 				mediaKind: 'silent-video',
 				asset: {
 					assetId: 'video-asset' as never,
@@ -250,6 +250,7 @@ describe('featureMatchOverlayDisplay', () => {
 				opacity: 1,
 				borderRadius: 0,
 				videoCompatibility: 'chromium-transparency',
+				videoTarget: 'chromium',
 			},
 		}];
 

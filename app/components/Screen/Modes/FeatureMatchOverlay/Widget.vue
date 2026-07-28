@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayWidgetRender } from '~/modules/feature-match-overlay/renderModel';
-import { graphicsVideoTargetForUserAgent } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import FeatureMatchOverlayGameWinsWidget from './GameWinsWidget.vue';
 import FeatureMatchOverlayStatusWidget from './StatusWidget.vue';
 import FeatureMatchOverlayTemplateLines from './TemplateLines.vue';
@@ -11,12 +10,13 @@ const props = defineProps<{
 	output: FeatureMatchOverlayOutput;
 }>();
 const videoElement = useTemplateRef<HTMLVideoElement>('videoElement');
-const videoTarget = computed(() => import.meta.client
-	? graphicsVideoTargetForUserAgent(navigator.userAgent)
-	: 'other');
+const videoTarget = useGraphicsVideoTarget();
 const videoBlocked = computed(() => props.render.type === 'silent-video'
 	&& props.render.videoCompatibility === 'chromium-transparency'
-	&& videoTarget.value !== 'chromium');
+	&& (
+		props.render.videoTarget !== 'chromium'
+		|| videoTarget.value !== 'chromium'
+	));
 
 watchEffect(() => {
 	if (videoElement.value && props.render.type === 'silent-video')

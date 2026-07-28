@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {
 	GraphicAsset,
+	GraphicAssetReference,
 } from '~~/shared/types/graphicsAsset';
 import type {
 	FeatureMatchGameWinsBoxOrientation,
@@ -36,6 +37,11 @@ const IMAGE_FIT_OPTIONS = [
 	{ label: 'Fill', value: 'fill' },
 ];
 
+const VIDEO_TARGET_OPTIONS = [
+	{ label: 'Safari-compatible', value: 'safari' },
+	{ label: 'Chromium', value: 'chromium' },
+];
+
 const LIFE_ANIMATION_OPTIONS = [
 	{ label: 'None', value: 'none' },
 	{ label: 'Fade', value: 'fade' },
@@ -67,10 +73,11 @@ function patch(updates: Partial<FeatureMatchWidgetConfig>) {
 	emit('update', { ...props.widget, ...updates } as FeatureMatchWidgetConfig);
 }
 
-function selectMediaAsset(asset: GraphicAsset) {
-	if (props.widget.type !== 'image')
+function selectMediaAsset(asset: GraphicAsset, reference: GraphicAssetReference) {
+	if (props.widget.type !== 'media')
 		return;
 	patch({
+		asset: reference,
 		mediaKind: asset.kind === 'silent-video' ? 'silent-video' : 'image',
 		...(asset.facts.kind === 'silent-video'
 			? {
@@ -190,13 +197,23 @@ function updateTokenStyle(token: string, updates: Partial<FeatureMatchOverlayBox
 			/>
 		</template>
 
-		<div v-else-if="widget.type === 'image'" class="grid gap-3 md:grid-cols-2">
-			<UFormField label="Media" class="md:col-span-2">
+		<div v-else-if="widget.type === 'image' || widget.type === 'media'" class="grid gap-3 md:grid-cols-2">
+			<UFormField v-if="widget.type === 'media'" label="Screen output target" class="md:col-span-2">
+				<USelect
+					:model-value="widget.videoTarget ?? 'safari'"
+					:items="VIDEO_TARGET_OPTIONS"
+					value-key="value"
+					class="w-full"
+					@update:model-value="patch({ videoTarget: $event as any } as Partial<FeatureMatchWidgetConfig>)"
+				/>
+			</UFormField>
+			<UFormField :label="widget.type === 'media' ? 'Media' : 'Image'" class="md:col-span-2">
 				<GraphicsAssetFocusPicker
 					:model-value="widget.asset"
 					:event-id="eventId"
-					field-label="Media Graphic Item"
-					:asset-kind="['image', 'silent-video']"
+					:field-label="widget.type === 'media' ? 'Media Graphic Item' : 'Image Graphic Item'"
+					:asset-kind="widget.type === 'media' ? ['image', 'silent-video'] : 'image'"
+					:video-target="widget.type === 'media' ? (widget.videoTarget ?? 'safari') : 'other'"
 					@update:model-value="patch({ asset: $event } as Partial<FeatureMatchWidgetConfig>)"
 					@select="selectMediaAsset"
 				/>
@@ -231,7 +248,7 @@ function updateTokenStyle(token: string, updates: Partial<FeatureMatchOverlayBox
 					@update:model-value="patch({ borderRadius: Number($event) } as Partial<FeatureMatchWidgetConfig>)"
 				/>
 			</UFormField>
-			<template v-if="widget.mediaKind === 'silent-video'">
+			<template v-if="widget.type === 'media' && widget.mediaKind === 'silent-video'">
 				<UFormField label="Playback rate">
 					<UInputNumber
 						:model-value="widget.playbackRate ?? 1"

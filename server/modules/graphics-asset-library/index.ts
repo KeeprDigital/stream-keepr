@@ -1,5 +1,6 @@
 import type {
 	GraphicAsset,
+	GraphicAssetBrowserPlaybackEvidence,
 	GraphicAssetCanonicalMime,
 	GraphicAssetId,
 	GraphicAssetReferenceStatus,
@@ -16,6 +17,7 @@ import type {
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 } from '~~/shared/types/graphicsAsset';
+import type { GraphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import type { GraphicsCapacityExhaustedDetails } from './errors';
 import type { GraphicsImageMultipartState } from './multipart';
 import type {
@@ -61,6 +63,51 @@ import {
 
 export { GraphicsAssetLibraryError } from './errors';
 export { createInMemoryGraphicsAssetCatalogue } from './in-memory-catalogue';
+
+const GRAPHIC_ASSET_SOURCE_POLICIES = {
+	'image': {
+		label: 'Still image',
+		maximumByteLength: MAX_STILL_IMAGE_INGESTION_BYTES,
+		compatibilityProfile: STILL_IMAGE_COMPATIBILITY_PROFILE,
+		conflictingMimeCode: 'conflicting-image-mime',
+	},
+	'silent-video': {
+		label: 'Silent video',
+		maximumByteLength: MAX_SILENT_VIDEO_INGESTION_BYTES,
+		compatibilityProfile: SILENT_VIDEO_COMPATIBILITY_PROFILE,
+		conflictingMimeCode: 'conflicting-video-mime',
+	},
+	'font': {
+		label: 'Static font',
+		maximumByteLength: MAX_STATIC_FONT_INGESTION_BYTES,
+		compatibilityProfile: STATIC_FONT_COMPATIBILITY_PROFILE,
+		conflictingMimeCode: 'conflicting-font-mime',
+	},
+} as const satisfies Record<GraphicAssetSourceKind, {
+	label: string;
+	maximumByteLength: number;
+	compatibilityProfile: GraphicAssetValidationReport['compatibilityProfile'];
+	conflictingMimeCode: Extract<GraphicAssetValidationReport, { outcome: 'rejected' }>['issues'][number]['code'];
+}>;
+
+function graphicAssetSourcePolicy(kind: GraphicAssetSourceKind) {
+	return GRAPHIC_ASSET_SOURCE_POLICIES[kind];
+}
+
+async function processGraphicAssetSource(
+	kind: GraphicAssetSourceKind,
+	bytes: Uint8Array,
+	declarations: Pick<GraphicAssetSourceDeclarations, 'sourceFileName' | 'declaredMime'>,
+) {
+	switch (kind) {
+		case 'font':
+			return await processStaticFont(bytes, declarations);
+		case 'silent-video':
+			return await processSilentVideo(bytes, declarations);
+		case 'image':
+			return await processStillImage(bytes, declarations);
+	}
+}
 
 export interface GraphicsAssetCatalogueHealth {
 	checkHealth: () => Promise<{ outcome: 'healthy' }>;
@@ -237,7 +284,7 @@ export interface GraphicsAssetLibrary {
 	confirmSilentVideoBrowserEvidence: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
-		evidence: NonNullable<GraphicAssetSourceDeclarations['browserDecodeEvidence']>;
+		evidence: GraphicAssetBrowserPlaybackEvidence;
 		poster?: BoundedByteStream;
 	}) => Promise<GraphicsIngestionOperation>;
 	listGraphicAssets: (input: { search?: string }) => Promise<GraphicAsset[]>;
@@ -417,18 +464,14 @@ export function createGraphicsAssetLibrary(
 		if (!input.idempotencyKey.trim() || !input.initiatedBy.trim())
 			throw new GraphicsAssetLibraryError('Ingestion identity and author are required', 'invalid-ingestion-input');
 		const sourceKind = graphicAssetSourceKind(input);
-		const maximumByteLength = sourceKind === 'font'
-			? MAX_STATIC_FONT_INGESTION_BYTES
-			: sourceKind === 'silent-video'
-				? MAX_SILENT_VIDEO_INGESTION_BYTES
-				: MAX_STILL_IMAGE_INGESTION_BYTES;
+		const policy = graphicAssetSourcePolicy(sourceKind);
 		if (
 			!Number.isSafeInteger(input.declaredByteLength)
 			|| input.declaredByteLength <= 0
-			|| input.declaredByteLength > maximumByteLength
+			|| input.declaredByteLength > policy.maximumByteLength
 		) {
 			throw new GraphicsAssetLibraryError(
-				`${sourceKind === 'font' ? 'Static font' : sourceKind === 'silent-video' ? 'Silent video' : 'Still image'} must be between 1 and ${maximumByteLength} bytes`,
+				`${policy.label} must be between 1 and ${policy.maximumByteLength} bytes`,
 				'invalid-ingestion-input',
 			);
 		}
@@ -876,9 +919,9 @@ export function createGraphicsAssetLibrary(
 			await sha256HexStream({
 				body: stagedRead.body,
 				byteLength: stagedRead.object.byteLength,
-				maximumByteLength: graphicAssetSourceKind(operation) === 'silent-video'
-					? MAX_SILENT_VIDEO_INGESTION_BYTES
-					: MAX_STILL_IMAGE_INGESTION_BYTES,
+				maximumByteLength: graphicAssetSourcePolicy(
+					graphicAssetSourceKind(operation),
+				).maximumByteLength,
 			});
 			const hashingTerminal = await terminalOperationAtCheckpoint();
 			if (hashingTerminal)
@@ -900,33 +943,20 @@ export function createGraphicsAssetLibrary(
 				| Awaited<ReturnType<typeof processStillImage>>
 				| Awaited<ReturnType<typeof processSilentVideo>>
 				| Awaited<ReturnType<typeof processStaticFont>>;
-			let sourceKind: 'image' | 'silent-video' | 'font' = graphicAssetSourceKind(operation);
+			let sourceKind: GraphicAssetSourceKind = graphicAssetSourceKind(operation);
 			let derivative: Uint8Array | undefined;
 			let report: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>;
 			try {
-				const maximumByteLength = sourceKind === 'silent-video'
-					? MAX_SILENT_VIDEO_INGESTION_BYTES
-					: MAX_STILL_IMAGE_INGESTION_BYTES;
 				const validationBytes = await consumeBoundedByteStream({
 					body: validationRead.body,
 					byteLength: validationRead.object.byteLength,
-					maximumByteLength,
+					maximumByteLength: graphicAssetSourcePolicy(sourceKind).maximumByteLength,
 				});
 				sourceKind = graphicAssetSourceKind(operation, validationBytes.subarray(0, 64));
-				processed = sourceKind === 'font'
-					? await processStaticFont(validationBytes, {
-							sourceFileName: operation.sourceFileName,
-							declaredMime: operation.declaredMime,
-						})
-					: sourceKind === 'silent-video'
-						? await processSilentVideo(validationBytes, {
-								sourceFileName: operation.sourceFileName,
-								declaredMime: operation.declaredMime,
-							})
-						: await processStillImage(validationBytes, {
-								sourceFileName: operation.sourceFileName,
-								declaredMime: operation.declaredMime,
-							});
+				processed = await processGraphicAssetSource(sourceKind, validationBytes, {
+					sourceFileName: operation.sourceFileName,
+					declaredMime: operation.declaredMime,
+				});
 				if (
 					(processed.report.facts.kind === 'font' || processed.report.facts.kind === 'silent-video')
 					&& !operation.browserDecodeEvidence
@@ -982,7 +1012,9 @@ export function createGraphicsAssetLibrary(
 							'Video poster dimensions do not match the deterministic fit rule.',
 						);
 					}
-					derivative = posterBytes;
+					// Re-encode decoded poster pixels with the server's fixed PNG
+					// encoder so the dependent derivative bytes are canonical.
+					derivative = poster.thumbnail;
 				}
 				else {
 					if (!('thumbnail' in processed))
@@ -995,11 +1027,7 @@ export function createGraphicsAssetLibrary(
 					throw error;
 				const report = rejectedValidationReport(
 					error,
-					sourceKind === 'font'
-						? STATIC_FONT_COMPATIBILITY_PROFILE
-						: sourceKind === 'silent-video'
-							? SILENT_VIDEO_COMPATIBILITY_PROFILE
-							: STILL_IMAGE_COMPATIBILITY_PROFILE,
+					graphicAssetSourcePolicy(sourceKind).compatibilityProfile,
 				);
 				const failed = await failOperation(catalogue, operation, {
 					code: 'validation-failed',
@@ -1086,9 +1114,7 @@ export function createGraphicsAssetLibrary(
 				storeCanonicalStream(canonical, report.facts.sha256, {
 					body: canonicalSourceRead.body,
 					byteLength: canonicalSourceRead.object.byteLength,
-					maximumByteLength: sourceKind === 'silent-video'
-						? MAX_SILENT_VIDEO_INGESTION_BYTES
-						: MAX_STILL_IMAGE_INGESTION_BYTES,
+					maximumByteLength: graphicAssetSourcePolicy(sourceKind).maximumByteLength,
 				}, report.facts.canonicalMime),
 				storeCanonicalBytes(canonical, thumbnailDigest, thumbnail),
 			]);
@@ -1700,18 +1726,17 @@ export function createGraphicsAssetLibrary(
 			const transferMime = input.declaredMime?.trim().toLocaleLowerCase();
 			if (initiatedMime && transferMime && initiatedMime !== transferMime) {
 				const sourceKind = graphicAssetSourceKind(operation);
+				const sourcePolicy = graphicAssetSourcePolicy(sourceKind);
 				return await failOperation(catalogue, operation, {
 					code: 'validation-failed',
 					retryable: false,
 					message: 'Graphic Asset declarations conflict before validation.',
 				}, {
 					outcome: 'rejected',
-					compatibilityProfile: sourceKind === 'font'
-						? STATIC_FONT_COMPATIBILITY_PROFILE
-						: STILL_IMAGE_COMPATIBILITY_PROFILE,
+					compatibilityProfile: sourcePolicy.compatibilityProfile,
 					issues: [{
 						severity: 'error',
-						code: sourceKind === 'font' ? 'conflicting-font-mime' : 'conflicting-image-mime',
+						code: sourcePolicy.conflictingMimeCode,
 						message: `Initiated MIME ${initiatedMime} conflicts with transfer MIME ${transferMime}.`,
 					}],
 				});

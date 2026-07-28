@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type {
 	GraphicAsset,
-	GraphicAssetBrowserDecodeEvidence,
+	GraphicAssetBrowserValidationEvidence,
 	GraphicAssetSourceDeclarations,
 	GraphicAssetUsage,
 	GraphicsAssetLibraryCapacity,
@@ -135,8 +135,8 @@ function readPendingInitiation(): PendingInitiation | null {
 }
 
 function browserEvidenceMatches(
-	left: GraphicAssetBrowserDecodeEvidence | undefined,
-	right: GraphicAssetBrowserDecodeEvidence | undefined,
+	left: GraphicAssetBrowserValidationEvidence | undefined,
+	right: GraphicAssetBrowserValidationEvidence | undefined,
 ) {
 	if (!left || !right)
 		return left === right;
@@ -150,7 +150,7 @@ function browserEvidenceMatches(
 }
 
 function selectedInitiation(
-	browserDecodeEvidence?: GraphicAssetBrowserDecodeEvidence,
+	browserDecodeEvidence?: GraphicAssetBrowserValidationEvidence,
 ): PendingInitiation {
 	const name = proposedName.value.trim();
 	const duplicateContentPolicy = createSeparateAsset.value ? 'create-separate' : 'reuse';

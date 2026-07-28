@@ -29,6 +29,20 @@ const DEFINITIONS = {
 		defaultConfig: () => ({ type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }),
 		summary: widget => widget.type === 'image' && widget.asset ? 'Graphic Asset selected' : 'Image',
 	},
+	'media': {
+		type: 'media',
+		label: 'Media',
+		icon: 'i-lucide-image-play',
+		defaultConfig: () => ({
+			type: 'media',
+			mediaKind: 'image',
+			fit: 'contain',
+			opacity: 1,
+			borderRadius: 0,
+			videoTarget: 'safari',
+		}),
+		summary: widget => widget.type === 'media' && widget.asset ? 'Graphic Asset selected' : 'Media',
+	},
 	'clock': {
 		type: 'clock',
 		label: 'Clock',

@@ -10,6 +10,18 @@ export interface ScreenGraphicAssetReference {
 	ownerSlot: string;
 	kind: 'image' | 'silent-video' | 'font';
 	videoCompatibility?: 'all-supported' | 'chromium-transparency';
+	videoTarget?: 'chromium' | 'safari';
+}
+
+export function screenGraphicAssetReferenceTargetCompatibility(
+	reference: ScreenGraphicAssetReference,
+):
+	| { outcome: 'compatible' }
+	| { outcome: 'blocked'; code: 'vp9-alpha-chromium-required' } {
+	return reference.videoCompatibility === 'chromium-transparency'
+		&& reference.videoTarget !== 'chromium'
+		? { outcome: 'blocked', code: 'vp9-alpha-chromium-required' }
+		: { outcome: 'compatible' };
 }
 
 export function sameGraphicAssetReference(
@@ -24,12 +36,20 @@ function widgetReference(
 	widget: FeatureMatchWidgetConfig,
 	ownerSlot: string,
 ): ScreenGraphicAssetReference | undefined {
-	return widget.type === 'image' && widget.asset
+	if (widget.type === 'image' && widget.asset) {
+		return {
+			reference: widget.asset,
+			ownerSlot,
+			kind: 'image',
+		};
+	}
+	return widget.type === 'media' && widget.asset
 		? {
 				reference: widget.asset,
 				ownerSlot,
-				kind: widget.mediaKind ?? 'image',
+				kind: widget.mediaKind,
 				videoCompatibility: widget.videoCompatibility,
+				videoTarget: widget.videoTarget,
 			}
 		: undefined;
 }

@@ -107,10 +107,13 @@ export function groupLayoutSummary(group: FeatureMatchWidgetGroupItemConfig) {
 	return `${arrangement} • ${group.overflow ?? 'clip'}`;
 }
 
-export const FEATURE_MATCH_OVERLAY_WIDGET_KIND_OPTIONS = [
+export const FEATURE_MATCH_OVERLAY_WIDGET_KIND_OPTIONS: Array<{
+	label: string;
+	value: FeatureMatchWidgetConfig['type'];
+}> = [
 	{ label: 'Text', value: 'text' },
-	{ label: 'Image', value: 'image' },
+	{ label: 'Media', value: 'media' },
 	{ label: 'Clock', value: 'clock' },
 	{ label: 'Player Life', value: 'player-life' },
 	{ label: 'Game Wins', value: 'game-wins' },
-] satisfies Array<{ label: string; value: FeatureMatchWidgetConfig['type'] }>;
+];

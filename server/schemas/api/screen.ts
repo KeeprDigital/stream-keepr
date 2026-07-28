@@ -419,13 +419,22 @@ const featureMatchTextWidgetConfigSchema = z.object({
 const featureMatchImageWidgetConfigSchema = z.object({
 	type: z.literal('image'),
 	asset: graphicAssetReferenceSchema.optional(),
-	mediaKind: z.enum(['image', 'silent-video']).optional(),
+	fit: z.enum(['contain', 'cover', 'fill']),
+	opacity: opacitySchema,
+	borderRadius: nonNegativePixelSchema,
+}).strict();
+
+const featureMatchMediaGraphicItemConfigSchema = z.object({
+	type: z.literal('media'),
+	asset: graphicAssetReferenceSchema.optional(),
+	mediaKind: z.enum(['image', 'silent-video']),
 	fit: z.enum(['contain', 'cover', 'fill']),
 	opacity: opacitySchema,
 	borderRadius: nonNegativePixelSchema,
 	loop: z.boolean().optional(),
 	playbackRate: finiteNumberSchema.min(0.25).max(4).optional(),
 	videoCompatibility: z.enum(['all-supported', 'chromium-transparency']).optional(),
+	videoTarget: z.enum(['chromium', 'safari']).optional(),
 }).strict();
 
 const featureMatchClockWidgetConfigSchema = z.object({
@@ -454,6 +463,7 @@ const featureMatchGameWinsWidgetConfigSchema = z.object({
 const featureMatchWidgetConfigSchema = z.discriminatedUnion('type', [
 	featureMatchTextWidgetConfigSchema,
 	featureMatchImageWidgetConfigSchema,
+	featureMatchMediaGraphicItemConfigSchema,
 	featureMatchClockWidgetConfigSchema,
 	featureMatchPlayerLifeWidgetConfigSchema,
 	featureMatchGameWinsWidgetConfigSchema,

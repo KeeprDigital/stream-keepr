@@ -364,13 +364,22 @@ export interface FeatureMatchTextWidgetConfig {
 export interface FeatureMatchImageWidgetConfig {
 	type: 'image';
 	asset?: GraphicAssetReference;
-	mediaKind?: 'image' | 'silent-video';
+	fit: 'contain' | 'cover' | 'fill';
+	opacity: number;
+	borderRadius: number;
+}
+
+export interface FeatureMatchMediaGraphicItemConfig {
+	type: 'media';
+	asset?: GraphicAssetReference;
+	mediaKind: 'image' | 'silent-video';
 	fit: 'contain' | 'cover' | 'fill';
 	opacity: number;
 	borderRadius: number;
 	loop?: boolean;
 	playbackRate?: number;
 	videoCompatibility?: 'all-supported' | 'chromium-transparency';
+	videoTarget?: 'chromium' | 'safari';
 }
 
 export interface FeatureMatchClockWidgetConfig {
@@ -399,6 +408,7 @@ export interface FeatureMatchGameWinsWidgetConfig {
 export type FeatureMatchWidgetConfig
 	=	| FeatureMatchTextWidgetConfig
 		| FeatureMatchImageWidgetConfig
+		| FeatureMatchMediaGraphicItemConfig
 		| FeatureMatchClockWidgetConfig
 		| FeatureMatchPlayerLifeWidgetConfig
 		| FeatureMatchGameWinsWidgetConfig;

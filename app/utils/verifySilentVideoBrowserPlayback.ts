@@ -1,5 +1,5 @@
 import type {
-	GraphicAssetBrowserDecodeEvidence,
+	GraphicAssetBrowserPlaybackEvidence,
 	GraphicAssetSilentVideoFacts,
 } from '~~/shared/types/graphicsAsset';
 import { graphicsVideoTargetForUserAgent } from '~~/shared/utils/graphicAssetTargetCompatibility';
@@ -48,7 +48,7 @@ export async function verifySilentVideoBrowserPlayback(
 	source: Blob,
 	facts: GraphicAssetSilentVideoFacts,
 ): Promise<{
-	evidence: GraphicAssetBrowserDecodeEvidence;
+	evidence: GraphicAssetBrowserPlaybackEvidence;
 	poster?: Blob;
 }> {
 	const sourceDigest = await sha256(source);
@@ -61,7 +61,7 @@ export async function verifySilentVideoBrowserPlayback(
 	video.preload = 'auto';
 	video.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none';
 	document.body.appendChild(video);
-	let stage: Extract<GraphicAssetBrowserDecodeEvidence, { outcome: 'video-rejected' }>['stage'] = 'metadata';
+	let stage: Extract<GraphicAssetBrowserPlaybackEvidence, { outcome: 'video-rejected' }>['stage'] = 'metadata';
 	try {
 		const metadata = waitForVideoEvent(video, 'loadedmetadata');
 		video.src = objectUrl;

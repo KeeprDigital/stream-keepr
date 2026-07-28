@@ -54,6 +54,32 @@ const UButtonStub = defineComponent({
 	template: '<button data-testid="u-button" type="button" :data-icon="icon" @click="$emit(\'click\', $event)"><slot /></button>',
 });
 
+const GraphicsAssetFocusPickerStub = defineComponent({
+	emits: ['update:modelValue', 'select'],
+	setup(_, { emit }) {
+		const reference = {
+			assetId: 'video-asset',
+			revisionId: 'video-revision-4',
+		};
+		const asset = {
+			id: reference.assetId,
+			revisionId: reference.revisionId,
+			kind: 'silent-video',
+			facts: {
+				kind: 'silent-video',
+				targetCompatibility: 'all-supported',
+			},
+		};
+		return {
+			select: () => {
+				emit('update:modelValue', reference);
+				emit('select', asset, reference);
+			},
+		};
+	},
+	template: '<button data-testid="select-media" type="button" @click="select">Select media</button>',
+});
+
 async function mountComponent(widget: FeatureMatchWidgetConfig) {
 	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/WidgetEditor.vue';
 	const { default: WidgetEditor } = await import(componentPath);
@@ -67,6 +93,7 @@ async function mountComponent(widget: FeatureMatchWidgetConfig) {
 				USelect: USelectStub,
 				UInputNumber: UInputNumberStub,
 				UTextarea: UTextareaStub,
+				GraphicsAssetFocusPicker: GraphicsAssetFocusPickerStub,
 			},
 		},
 	});
@@ -147,6 +174,7 @@ describe('featureMatchOverlayWidgetEditor', () => {
 					USelect: USelectStub,
 					UInputNumber: UInputNumberStub,
 					UTextarea: UTextareaStub,
+					GraphicsAssetFocusPicker: GraphicsAssetFocusPickerStub,
 				},
 			},
 		});
@@ -154,5 +182,29 @@ describe('featureMatchOverlayWidgetEditor', () => {
 		const inputs = wrapper.findAll('[data-testid="u-input-number"]');
 		expect((inputs[2]!.element as HTMLInputElement).value).toBe('4');
 		expect((inputs[3]!.element as HTMLInputElement).value).toBe('3');
+	});
+
+	it('keeps the exact selected reference when media metadata is applied synchronously', async () => {
+		const wrapper = await mountComponent({
+			type: 'media',
+			mediaKind: 'image',
+			fit: 'contain',
+			opacity: 1,
+			borderRadius: 0,
+			videoTarget: 'chromium',
+		});
+
+		await wrapper.get('[data-testid="select-media"]').trigger('click');
+
+		expect(wrapper.emitted('update')?.at(-1)?.[0]).toMatchObject({
+			type: 'media',
+			asset: {
+				assetId: 'video-asset',
+				revisionId: 'video-revision-4',
+			},
+			mediaKind: 'silent-video',
+			videoCompatibility: 'all-supported',
+			videoTarget: 'chromium',
+		});
 	});
 });

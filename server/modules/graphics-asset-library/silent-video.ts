@@ -333,6 +333,8 @@ function mp4TrackFacts(bytes: Uint8Array, trak: IsoBox, mediaData: readonly IsoB
 		const delta = u32(view, timingOffset + 4);
 		if (count === 0 || delta === 0)
 			validationError('malformed-video-timeline', 'MP4 sample timing must be complete and monotonic.');
+		if (delta * MAX_SILENT_VIDEO_FRAME_RATE < timescale)
+			validationError('video-frame-rate-exceeded', 'Every MP4 frame interval must remain at or below 60 fps.');
 		frameCount += count;
 		timingDuration += count * delta;
 	}
@@ -653,20 +655,26 @@ function inspectWebm(bytes: Uint8Array) {
 	const clusters = children.filter(element => element.id === 0x1F43B675);
 	if (clusters.length === 0)
 		validationError('video-index-incomplete', 'WebM requires indexed media clusters.');
+	const cueReferences: Array<{ time: number; clusterPosition: number }> = [];
+	let previousCueTime = -1;
 	for (const cuePoint of cuePoints) {
 		const cueChildren = ebmlChildren(bytes, cuePoint);
-		oneEbml(cueChildren, 0xB3, 'video-index-incomplete');
+		const cueTime = ebmlUnsigned(bytes, oneEbml(cueChildren, 0xB3, 'video-index-incomplete'));
+		if (cueTime <= previousCueTime)
+			validationError('video-index-incomplete', 'WebM Cue times must be strictly increasing.');
 		const positions = oneEbml(cueChildren, 0xB7, 'video-index-incomplete');
 		const positionChildren = ebmlChildren(bytes, positions);
 		if (ebmlUnsigned(bytes, oneEbml(positionChildren, 0xF7, 'video-index-incomplete')) !== trackNumber)
 			validationError('video-index-incomplete', 'WebM Cue references the wrong track.');
 		const clusterPosition = ebmlUnsigned(bytes, oneEbml(positionChildren, 0xF1, 'video-index-incomplete'));
-		if (!clusters.some(cluster => cluster.start - segment.dataStart === clusterPosition))
-			validationError('video-index-incomplete', 'WebM Cue points outside an indexed cluster.');
+		cueReferences.push({ time: cueTime, clusterPosition });
+		previousCueTime = cueTime;
 	}
 	let frameCount = 0;
 	let previousTime = -Infinity;
+	let firstTime: number | undefined;
 	let firstPayload: Uint8Array | undefined;
+	const clusterIndex = new Map<number, { time: number; firstPayload: Uint8Array }>();
 	for (const cluster of clusters) {
 		const clusterChildren = ebmlChildren(bytes, cluster);
 		const clusterTime = ebmlUnsigned(bytes, oneEbml(clusterChildren, 0xE7));
@@ -677,21 +685,59 @@ function inspectWebm(bytes: Uint8Array) {
 				return ebmlChildren(bytes, element).filter(child => child.id === 0xA1);
 			return [];
 		});
+		let clusterFirstPayload: Uint8Array | undefined;
 		for (const block of blocks) {
 			const facts = webmBlockFacts(bytes, block);
 			if (facts.track !== trackNumber)
 				validationError('unsupported-video-tracks', 'WebM block references an undeclared track.');
 			const absoluteTime = clusterTime + facts.relativeTime;
-			if (absoluteTime < previousTime)
-				validationError('malformed-video-timeline', 'WebM frame timing is not monotonic.');
+			if (absoluteTime < 0 || absoluteTime <= previousTime)
+				validationError('malformed-video-timeline', 'WebM frame timing must be positive and strictly monotonic.');
+			if (
+				Number.isFinite(previousTime)
+				&& (absoluteTime - previousTime) * timecodeScale * MAX_SILENT_VIDEO_FRAME_RATE < 1_000_000_000
+			) {
+				validationError('video-frame-rate-exceeded', 'Every WebM frame interval must remain at or below 60 fps.');
+			}
+			firstTime ??= absoluteTime;
 			previousTime = absoluteTime;
 			firstPayload ??= facts.payload;
+			clusterFirstPayload ??= facts.payload;
 			frameCount++;
 		}
+		if (!clusterFirstPayload)
+			validationError('video-index-incomplete', 'WebM cluster contains no complete video frame.');
+		clusterIndex.set(
+			cluster.start - segment.dataStart,
+			{ time: clusterTime, firstPayload: clusterFirstPayload },
+		);
 	}
 	if (frameCount === 0 || !firstPayload)
 		validationError('video-index-incomplete', 'WebM media index contains no complete frames.');
+	if (
+		firstTime !== 0
+		|| previousTime * timecodeScale / 1_000_000_000 > durationSeconds
+	) {
+		validationError('malformed-video-timeline', 'WebM media timeline must start at zero and remain within its declared duration.');
+	}
 	validateVp9KeyFrame(firstPayload);
+	const indexedClusters = new Set<number>();
+	for (const cue of cueReferences) {
+		const indexed = clusterIndex.get(cue.clusterPosition);
+		if (
+			!indexed
+			|| indexed.time !== cue.time
+			|| indexedClusters.has(cue.clusterPosition)
+			|| cue.time * timecodeScale / 1_000_000_000 > durationSeconds
+		) {
+			validationError('video-index-incomplete', 'WebM Cue does not uniquely match its key-frame cluster and timeline.');
+		}
+		validateVp9KeyFrame(indexed.firstPayload);
+		indexedClusters.add(cue.clusterPosition);
+	}
+	const firstClusterPosition = Math.min(...clusterIndex.keys());
+	if (cueReferences[0]!.clusterPosition !== firstClusterPosition)
+		validationError('video-index-incomplete', 'WebM Cues must index the initial random-access cluster.');
 	return { width, height, durationSeconds, frameCount, hasAlpha };
 }
 

@@ -4,7 +4,7 @@ import { FEATURE_MATCH_OVERLAY_WIDGET_TYPES, featureMatchOverlayWidgetDefinition
 describe('feature Match Overlay Widget Definitions', () => {
 	it('defines every widget type exactly once', () => {
 		expect([...FEATURE_MATCH_OVERLAY_WIDGET_TYPES].sort()).toEqual(
-			['clock', 'game-wins', 'image', 'player-life', 'text'].sort(),
+			['clock', 'game-wins', 'image', 'media', 'player-life', 'text'].sort(),
 		);
 	});
 

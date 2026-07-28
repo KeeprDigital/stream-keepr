@@ -96,8 +96,10 @@ export type GraphicAssetBrowserDecodeEvidence
 		sourceDigest: string;
 		challengeDigest: string;
 		stage: 'load' | 'render';
-	}
-	| {
+	};
+
+export type GraphicAssetBrowserPlaybackEvidence
+	= | {
 		outcome: 'video-played';
 		sourceDigest: string;
 		width: number;
@@ -115,10 +117,17 @@ export type GraphicAssetBrowserDecodeEvidence
 		stage: 'metadata' | 'playback' | 'seek' | 'poster' | 'transparency';
 	};
 
+export type GraphicAssetBrowserValidationEvidence
+	= GraphicAssetBrowserDecodeEvidence | GraphicAssetBrowserPlaybackEvidence;
+
 export interface GraphicAssetSourceDeclarations {
 	sourceFileName?: string;
 	declaredMime?: string;
-	browserDecodeEvidence?: GraphicAssetBrowserDecodeEvidence;
+	/**
+	 * Persisted/API compatibility name. Video proof uses the distinct
+	 * GraphicAssetBrowserPlaybackEvidence contract.
+	 */
+	browserDecodeEvidence?: GraphicAssetBrowserValidationEvidence;
 }
 
 export type GraphicsIngestionStage

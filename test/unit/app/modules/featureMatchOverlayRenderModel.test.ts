@@ -471,7 +471,7 @@ describe('feature Match Overlay render model', () => {
 			width: 640,
 			height: 360,
 			widget: {
-				type: 'image',
+				type: 'media',
 				mediaKind: 'silent-video',
 				asset: { assetId: 'video-asset', revisionId: 'video-revision-3' },
 				fit: 'cover',
@@ -480,6 +480,7 @@ describe('feature Match Overlay render model', () => {
 				loop: true,
 				playbackRate: 1.25,
 				videoCompatibility: 'all-supported',
+				videoTarget: 'safari',
 			},
 		}];
 
@@ -498,6 +499,7 @@ describe('feature Match Overlay render model', () => {
 			loop: true,
 			playbackRate: 1.25,
 			videoCompatibility: 'all-supported',
+			videoTarget: 'safari',
 			mediaStyle: {
 				objectFit: 'cover',
 				opacity: 0.8,
