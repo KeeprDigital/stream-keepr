@@ -230,6 +230,16 @@ export interface FeatureMatchOverlayBorderSides {
 	borderLeftVisible?: boolean;
 }
 
+export type FeatureMatchOverlayFontSelection
+	= {
+		kind: 'application';
+		fontId: string;
+	}
+	| {
+		kind: 'asset';
+		reference: GraphicAssetReference;
+	};
+
 export interface FeatureMatchOverlayBoxStyle extends FeatureMatchOverlayBorderSides {
 	backgroundColor?: string;
 	backgroundOpacity?: number;
@@ -245,8 +255,7 @@ export interface FeatureMatchOverlayBoxStyle extends FeatureMatchOverlayBorderSi
 	padding?: number;
 	textColor?: string;
 	fontSize?: number;
-	// Preferred value is a Feature Match Overlay font registry id; raw CSS stacks are preserved for legacy configs.
-	fontFamily?: string;
+	font?: FeatureMatchOverlayFontSelection;
 	fontWeight?: number | string;
 	fontStyle?: 'normal' | 'italic';
 	textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';

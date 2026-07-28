@@ -16,7 +16,7 @@ import type {
 	FeatureMatchWidgetItemConfig,
 } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayTemplateMetadataInput } from '~/utils/featureMatchOverlayTemplateValues';
-import { resolveFeatureMatchOverlayFontFamily } from '~~/shared/featureMatchOverlayFonts';
+import { resolveFeatureMatchOverlayFontSelection } from '~~/shared/featureMatchOverlayFonts';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { graphicAssetRevisionContentPath } from '~~/shared/utils/graphicsAssetReferences';
 import { featureMatchOverlayBorderRadiusCss, featureMatchOverlaySourceCutoutRect, roundedRectPath } from '~/utils/featureMatchOverlayGeometry';
@@ -288,7 +288,7 @@ function baseBoxStyle(output: FeatureMatchOverlayOutput, rect: FeatureMatchOverl
 		boxShadow: cssGlowShadow(output, style),
 		color: output === 'key' ? '#fff' : (style?.textColor ?? '#fff'),
 		fontSize: `${style?.fontSize ?? 24}px`,
-		fontFamily: resolveFeatureMatchOverlayFontFamily(style?.fontFamily),
+		fontFamily: resolveFeatureMatchOverlayFontSelection(style?.font),
 		fontWeight: style?.fontWeight ?? 600,
 		fontStyle: style?.fontStyle ?? 'normal',
 		textTransform: style?.textTransform ?? 'none',

@@ -54,6 +54,9 @@ importers:
       echarts:
         specifier: ^6.1.0
         version: 6.1.0
+      fontkitten:
+        specifier: 1.0.3
+        version: 1.0.3
       mana-font:
         specifier: 1.18.0
         version: 1.18.0

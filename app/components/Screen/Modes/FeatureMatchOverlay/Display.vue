@@ -2,10 +2,12 @@
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayWidgetRenderDescriptor } from '~/modules/feature-match-overlay/renderModel';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
+import { graphicAssetFontFaceFamily } from '~~/shared/featureMatchOverlayFonts';
 import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 import { resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
 import { featureMatchOverlaySelectionKey, isFeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
+import { createGuardedSequence } from '~/utils/guardedSequence';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
 import FeatureMatchOverlayWidget from './Widget.vue';
@@ -18,14 +20,91 @@ const canvasHeight = computed(() => screen.value?.screenConfig?.height ?? 1080);
 const frameMaskId = `feature-match-overlay-frame-mask-${useId().replace(/[^\w-]/g, '')}`;
 const frameGlowFilterId = `feature-match-overlay-frame-glow-${useId().replace(/[^\w-]/g, '')}`;
 const { config, match, matchState, sourceMatch, round, phase, event, loading, error } = useFeatureMatchOverlayModeData();
-const graphicAssetReferences = computed(() =>
-	featureMatchOverlayGraphicAssetReferences(config.value).map(item => item.reference),
+const indexedGraphicAssetReferences = computed(() =>
+	featureMatchOverlayGraphicAssetReferences(config.value),
 );
-const { contentUrl: graphicAssetContentUrl } = useScreenGraphicAssetContentUrls(
+const graphicAssetReferences = computed(() => indexedGraphicAssetReferences.value.map(item => item.reference));
+const fontAssetReferences = computed(() =>
+	indexedGraphicAssetReferences.value
+		.filter(item => item.kind === 'font')
+		.map(item => item.reference),
+);
+const {
+	contentUrl: graphicAssetContentUrl,
+	contentUrlsSettled,
+} = useScreenGraphicAssetContentUrls(
 	graphicAssetReferences,
 );
+const fontAssetSources = computed(() => ({
+	settled: contentUrlsSettled.value,
+	sources: Array.from(new Map(fontAssetReferences.value.map(reference => [
+		graphicAssetFontFaceFamily(reference),
+		{
+			reference,
+			family: graphicAssetFontFaceFamily(reference),
+			url: graphicAssetContentUrl(reference),
+		},
+	])).values()),
+}));
 const { displayTime } = useClockDisplay(() => matchState.value?.clock ?? null);
 const selectedPreviewTarget = ref<FeatureMatchOverlaySelectionTarget>({ type: 'canvas' });
+const fontReady = ref(true);
+const fontError = ref(false);
+let loadedFontFaces: FontFace[] = [];
+const fontLoads = createGuardedSequence();
+
+function discardFontFaces(faces: readonly FontFace[]) {
+	for (const face of faces)
+		document.fonts.delete(face);
+}
+
+watch(fontAssetSources, async ({ settled, sources }) => {
+	const flight = fontLoads.begin();
+	fontReady.value = sources.length === 0;
+	fontError.value = false;
+	if (!import.meta.client)
+		return;
+	discardFontFaces(loadedFontFaces);
+	loadedFontFaces = [];
+	if (sources.length === 0)
+		return;
+	if (!settled)
+		return;
+	const faces: FontFace[] = [];
+	try {
+		for (const { family, url } of sources) {
+			if (!url)
+				throw new Error('Exact font revision content is unavailable.');
+			const face = new FontFace(family, `url("${url.replaceAll('"', '%22')}")`);
+			faces.push(face);
+			document.fonts.add(face);
+			await face.load();
+			if (flight.stale) {
+				discardFontFaces(faces);
+				return;
+			}
+			await document.fonts.load(`48px "${family}"`, 'Aa 012 Player Name');
+			if (flight.stale) {
+				discardFontFaces(faces);
+				return;
+			}
+			if (!document.fonts.check(`48px "${family}"`, 'Aa 012 Player Name'))
+				throw new Error('Exact font revision is not ready.');
+		}
+		await document.fonts.ready;
+		if (flight.stale) {
+			discardFontFaces(faces);
+			return;
+		}
+		loadedFontFaces = faces;
+		fontReady.value = true;
+	}
+	catch {
+		discardFontFaces(faces);
+		if (flight.current)
+			fontError.value = true;
+	}
+}, { immediate: true });
 
 const renderModel = computed(() => resolveFeatureMatchOverlayRenderModel({
 	config: config.value,
@@ -128,6 +207,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
 	window.removeEventListener('message', handleSelectedPreviewTargetMessage);
+	fontLoads.supersede();
+	discardFontFaces(loadedFontFaces);
 });
 </script>
 
@@ -135,8 +216,10 @@ onBeforeUnmount(() => {
 	<div
 		class="feature-match-overlay"
 		:class="`feature-match-overlay--${resolvedOutput}`"
-		:style="canvasStyle"
-		:data-export-ready="(!loading && !error).toString()"
+		:style="{ ...canvasStyle, visibility: fontReady ? undefined : 'hidden' }"
+		:data-export-ready="(!loading && !error && fontReady && !fontError).toString()"
+		:data-font-ready="fontReady.toString()"
+		:data-font-error="fontError.toString()"
 	>
 		<svg
 			class="frame-layer"

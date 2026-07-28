@@ -2,7 +2,11 @@ import type {
 	GraphicAssetValidationIssue,
 	GraphicAssetValidationReport,
 } from '~~/shared/types/graphicsAsset';
-import { STILL_IMAGE_COMPATIBILITY_PROFILE } from '~~/shared/utils/graphicsAssetCompatibility';
+import type {
+	STATIC_FONT_COMPATIBILITY_PROFILE,
+	STILL_IMAGE_COMPATIBILITY_PROFILE,
+} from '~~/shared/utils/graphicsAssetCompatibility';
+import { STILL_IMAGE_COMPATIBILITY_PROFILE as STILL_IMAGE_PROFILE } from '~~/shared/utils/graphicsAssetCompatibility';
 
 export class GraphicAssetValidationError extends Error {
 	readonly issue: GraphicAssetValidationIssue;
@@ -31,10 +35,12 @@ export function validationError(
 
 export function rejectedValidationReport(
 	error: GraphicAssetValidationError,
+	profile: typeof STILL_IMAGE_COMPATIBILITY_PROFILE | typeof STATIC_FONT_COMPATIBILITY_PROFILE
+		= STILL_IMAGE_PROFILE,
 ): GraphicAssetValidationReport {
 	return {
 		outcome: 'rejected',
-		compatibilityProfile: STILL_IMAGE_COMPATIBILITY_PROFILE,
+		compatibilityProfile: profile,
 		issues: [...error.issues],
 	};
 }

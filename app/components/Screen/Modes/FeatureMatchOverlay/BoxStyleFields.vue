@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { FeatureMatchOverlayBoxStyle } from '~~/shared/types/screenConfig';
-import { FEATURE_MATCH_OVERLAY_FONTS, getFeatureMatchOverlayFontDefinition, resolveFeatureMatchOverlayFontFamily } from '~~/shared/featureMatchOverlayFonts';
+import { FEATURE_MATCH_OVERLAY_FONTS, getFeatureMatchOverlayFontDefinition, resolveFeatureMatchOverlayFontSelection } from '~~/shared/featureMatchOverlayFonts';
 import FeatureMatchOverlayBackgroundFields from './BackgroundFields.vue';
 import FeatureMatchOverlayBorderRadiusControl from './BorderRadiusControl.vue';
 import FeatureMatchOverlayBorderSidesControl from './BorderSidesControl.vue';
@@ -27,6 +28,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
 	update: [updates: Partial<FeatureMatchOverlayBoxStyle>];
 }>();
+const eventStore = useEventStore();
 
 const OVERFLOW_OPTIONS = [
 	{ label: 'Clip', value: 'clip' },
@@ -50,29 +52,34 @@ const TEXT_TRANSFORM_OPTIONS = [
 const DEFAULT_FONT_FAMILY_SELECT_VALUE = '__feature-match-overlay-default-font__';
 
 const fontFamilyOptions = computed(() => {
-	const value = styleValue('fontFamily');
-	const options = [
+	return [
 		{ label: 'Default', value: DEFAULT_FONT_FAMILY_SELECT_VALUE },
 		...FEATURE_MATCH_OVERLAY_FONTS.map(font => ({
 			label: font.label,
 			value: font.id,
 		})),
 	];
-
-	if (value && !getFeatureMatchOverlayFontDefinition(value)) {
-		options.push({
-			label: `Custom: ${value}`,
-			value,
-		});
-	}
-
-	return options;
 });
 
-const fontFamilySelectValue = computed(() => styleValue('fontFamily') ?? DEFAULT_FONT_FAMILY_SELECT_VALUE);
+const fontFamilySelectValue = computed(() => {
+	const selection = styleValue('font');
+	if (selection?.kind === 'application')
+		return selection.fontId;
+	return DEFAULT_FONT_FAMILY_SELECT_VALUE;
+});
+
+const fontAssetReference = computed<GraphicAssetReference | undefined>({
+	get: () => {
+		const selection = styleValue('font');
+		return selection?.kind === 'asset' ? selection.reference : undefined;
+	},
+	set: reference => emit('update', {
+		font: reference ? { kind: 'asset', reference } : undefined,
+	}),
+});
 
 const fontPreviewStyle = computed(() => ({
-	fontFamily: resolveFeatureMatchOverlayFontFamily(styleValue('fontFamily')),
+	fontFamily: resolveFeatureMatchOverlayFontSelection(styleValue('font')),
 }));
 
 function styleValue<K extends keyof FeatureMatchOverlayBoxStyle>(key: K, fallback?: FeatureMatchOverlayBoxStyle[K]) {
@@ -96,12 +103,16 @@ function updateBackground(updates: { color?: string; gradient?: string; opacity?
 
 function updateFontFamily(value: unknown) {
 	if (value === DEFAULT_FONT_FAMILY_SELECT_VALUE) {
-		emit('update', { fontFamily: undefined });
+		emit('update', { font: undefined });
 		return;
 	}
 
-	const fontFamily = String(value || '').trim();
-	emit('update', { fontFamily: fontFamily || undefined });
+	const fontId = String(value || '').trim();
+	if (getFeatureMatchOverlayFontDefinition(fontId)) {
+		emit('update', {
+			font: { kind: 'application', fontId },
+		});
+	}
 }
 </script>
 
@@ -143,6 +154,14 @@ function updateFontFamily(value: unknown) {
 						<p class="mt-1 truncate text-xs text-muted" :style="fontPreviewStyle">
 							Aa 012 Player Name
 						</p>
+						<GraphicsAssetFocusPicker
+							v-if="eventStore.eventId"
+							v-model="fontAssetReference"
+							class="mt-2"
+							:event-id="eventStore.eventId"
+							field-label="Choose exact font revision"
+							asset-kind="font"
+						/>
 					</UFormField>
 					<UFormField label="Font Weight">
 						<UInput

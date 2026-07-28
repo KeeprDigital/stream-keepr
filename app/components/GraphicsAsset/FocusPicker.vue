@@ -7,11 +7,14 @@ import type {
 import { graphicAssetRevisionStatusPath } from '~~/shared/utils/graphicsAssetReferences';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	modelValue?: GraphicAssetReference;
 	eventId: number;
 	fieldLabel: string;
-}>();
+	assetKind?: GraphicAsset['kind'];
+}>(), {
+	assetKind: 'image',
+});
 
 const emit = defineEmits<{
 	'update:modelValue': [reference: GraphicAssetReference | undefined];
@@ -36,10 +39,12 @@ const {
 });
 
 const visibleAssets = computed(() => (assets.value ?? []).filter(asset =>
-	!thisEventOnly.value || asset.eventIds.includes(props.eventId),
+	asset.kind === props.assetKind
+	&& (!thisEventOnly.value || asset.eventIds.includes(props.eventId)),
 ));
 const selectedAsset = computed(() => (assets.value ?? []).find(asset =>
-	asset.id === props.modelValue?.assetId
+	asset.kind === props.assetKind
+	&& asset.id === props.modelValue?.assetId
 	&& asset.revisionId === props.modelValue?.revisionId,
 ));
 
@@ -209,13 +214,19 @@ function selectAsset(asset: GraphicAsset) {
 									{{ asset.name }}
 								</h3>
 								<p class="text-xs text-muted">
-									Revision {{ asset.revisionNumber }} · {{ asset.facts.width }} × {{ asset.facts.height }}
+									Revision {{ asset.revisionNumber }}
+									<template v-if="asset.facts.kind === 'image'">
+										· {{ asset.facts.width }} × {{ asset.facts.height }}
+									</template>
+									<template v-else>
+										· {{ asset.facts.family }} {{ asset.facts.subfamily }}
+									</template>
 								</p>
 								<div class="mt-2 flex flex-wrap gap-1">
 									<UBadge size="xs" variant="soft">
 										{{ asset.facts.format.toUpperCase() }} compatible
 									</UBadge>
-									<UBadge v-if="asset.facts.hasAlpha" size="xs" variant="soft">
+									<UBadge v-if="asset.facts.kind === 'image' && asset.facts.hasAlpha" size="xs" variant="soft">
 										Alpha
 									</UBadge>
 									<UBadge

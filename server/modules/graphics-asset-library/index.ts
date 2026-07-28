@@ -1,5 +1,6 @@
 import type {
 	GraphicAsset,
+	GraphicAssetCanonicalMime,
 	GraphicAssetId,
 	GraphicAssetReferenceStatus,
 	GraphicAssetRevisionId,
@@ -22,12 +23,17 @@ import type {
 	GraphicsObjectStoreHealth,
 	GraphicsStagingObjectStore,
 } from './object-store';
+import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import {
+	MAX_STATIC_FONT_INGESTION_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
+	STATIC_FONT_COMPATIBILITY_PROFILE,
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
 } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GraphicsAssetLibraryError } from './errors';
+import { processStaticFont } from './font';
 import {
+	consumeBoundedByteStream,
 	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from './object-store';
@@ -35,9 +41,7 @@ import {
 	sha256Hex,
 	sha256HexStream,
 } from './png';
-import {
-	processStillImageStream,
-} from './still-image';
+import { processStillImage } from './still-image';
 import {
 	GraphicAssetValidationError,
 	rejectedValidationReport,
@@ -51,7 +55,7 @@ export interface GraphicsAssetCatalogueHealth {
 	checkHealth: () => Promise<{ outcome: 'healthy' }>;
 }
 
-export interface PublishImageCatalogueInput {
+export interface PublishGraphicAssetCatalogueInput {
 	operation: GraphicsIngestionOperation;
 	report: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>;
 	assetId: GraphicAssetId;
@@ -63,14 +67,14 @@ export interface PublishImageCatalogueInput {
 	publishedAt: string;
 }
 
-export interface ReusableImage {
+export interface ReusableGraphicAsset {
 	assetId: GraphicAssetId;
 	revisionId: GraphicAssetRevisionId;
 }
 
 export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
-	initiateImageIngestion: (operation: GraphicsIngestionOperation) => Promise<GraphicsIngestionOperation>;
+	initiateGraphicsIngestion: (operation: GraphicsIngestionOperation) => Promise<GraphicsIngestionOperation>;
 	recordStagedBytes: (input: {
 		operation: GraphicsIngestionOperation;
 		usedBytes: number;
@@ -80,7 +84,7 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		contents: readonly { digest: string; byteLength: number }[];
 		recordedAt: string;
 	}) => Promise<void>;
-	reserveImagePublication: (input: {
+	reserveGraphicAssetPublication: (input: {
 		operation: GraphicsIngestionOperation;
 		sourceDigest: string;
 		sourceByteLength: number;
@@ -102,18 +106,18 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		operation: GraphicsIngestionOperation,
 		expectedUpdatedAt: string,
 	) => Promise<GraphicsIngestionOperation>;
-	claimImageIngestion: (input: {
+	claimGraphicsIngestion: (input: {
 		operation: GraphicsIngestionOperation;
 		claimedAt: string;
 		staleBefore: string;
 	}) => Promise<GraphicsIngestionOperation | undefined>;
-	findReusableImage: (sourceDigest: string) => Promise<ReusableImage | undefined>;
-	reuseImage: (input: {
+	findReusableGraphicAsset: (sourceDigest: string) => Promise<ReusableGraphicAsset | undefined>;
+	reuseGraphicAsset: (input: {
 		operation: GraphicsIngestionOperation;
-		reusable: ReusableImage;
+		reusable: ReusableGraphicAsset;
 		publishedAt: string;
 	}) => Promise<GraphicsIngestionOperation>;
-	publishImage: (input: PublishImageCatalogueInput) => Promise<GraphicsIngestionOperation>;
+	publishGraphicAsset: (input: PublishGraphicAssetCatalogueInput) => Promise<GraphicsIngestionOperation>;
 	listGraphicAssets: (search: string) => Promise<GraphicAsset[]>;
 	findRevisionContent: (input: {
 		assetId: GraphicAssetId;
@@ -121,7 +125,8 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	}) => Promise<{
 		digest: string;
 		byteLength: number;
-		canonicalMime: 'image/png' | 'image/jpeg' | 'image/webp';
+		canonicalMime: GraphicAssetCanonicalMime;
+		kind: 'image' | 'font';
 		lifecycleState: 'active' | 'retired' | 'trashed';
 	} | undefined>;
 	listGraphicAssetUsage: (assetId: GraphicAssetId) => Promise<GraphicAssetUsage[]>;
@@ -134,7 +139,7 @@ export interface GraphicsAssetLibrary {
 	updateCapacityLimits: (
 		input: GraphicsAssetCapacityLimits,
 	) => Promise<GraphicsAssetLibraryCapacity>;
-	initiateImageIngestion: (input: GraphicAssetSourceDeclarations & {
+	initiateGraphicsIngestion: (input: GraphicAssetSourceDeclarations & {
 		idempotencyKey: string;
 		initiatedBy: string;
 		name: string;
@@ -142,7 +147,7 @@ export interface GraphicsAssetLibrary {
 		duplicateContentPolicy?: GraphicsDuplicateContentPolicy;
 		declaredByteLength: number;
 	}) => Promise<GraphicsIngestionOperation>;
-	cancelImageIngestion: (input: {
+	cancelGraphicsIngestion: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
 	}) => Promise<GraphicsIngestionOperation>;
@@ -150,15 +155,20 @@ export interface GraphicsAssetLibrary {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
 	}) => Promise<GraphicsIngestionOperation>;
-	uploadImage: (input: {
+	uploadGraphicAsset: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
 		declaredMime?: string;
 		bytes: BoundedByteStream;
 	}) => Promise<GraphicsIngestionOperation>;
-	retryImageIngestion: (input: {
+	retryGraphicsIngestion: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
+	}) => Promise<GraphicsIngestionOperation>;
+	confirmFontBrowserEvidence: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
+		evidence: NonNullable<GraphicAssetSourceDeclarations['browserDecodeEvidence']>;
 	}) => Promise<GraphicsIngestionOperation>;
 	listGraphicAssets: (input: { search?: string }) => Promise<GraphicAsset[]>;
 	listGraphicAssetUsage: (input: { assetId: GraphicAssetId }) => Promise<GraphicAssetUsage[]>;
@@ -174,7 +184,7 @@ export interface GraphicsAssetLibrary {
 			outcome: 'available';
 			body: ReadableStream<Uint8Array>;
 			byteLength: number;
-			contentType: 'image/png' | 'image/jpeg' | 'image/webp';
+			contentType: GraphicAssetCanonicalMime;
 		}
 		| { outcome: 'missing' }
 		| { outcome: 'unavailable'; retryable: true }
@@ -264,7 +274,7 @@ export function createGraphicsAssetLibrary(
 	const activeIngestionLeaseMilliseconds = 30_000;
 
 	function requireCatalogue(): GraphicsAssetCatalogue {
-		if (!('initiateImageIngestion' in dependencies.catalogue))
+		if (!('initiateGraphicsIngestion' in dependencies.catalogue))
 			throw new GraphicsAssetLibraryError('Graphics Asset catalogue is unavailable', 'graphics-asset-library-unavailable');
 		return dependencies.catalogue;
 	}
@@ -323,6 +333,71 @@ export function createGraphicsAssetLibrary(
 		operation: GraphicsIngestionOperation,
 	): Extract<GraphicAssetValidationReport, { outcome: 'accepted' }> {
 		const evidence = operation.browserDecodeEvidence;
+		if (report.facts.kind === 'font') {
+			if (
+				!evidence
+				|| evidence.outcome === 'decoded'
+				|| evidence.outcome === 'rejected'
+			) {
+				validationError(
+					'browser-font-load-failed',
+					'FontFace challenge evidence is required before publication.',
+				);
+			}
+			if (evidence.sourceDigest !== report.facts.sha256) {
+				validationError(
+					'browser-font-evidence-mismatch',
+					'Browser font evidence does not match the staged source bytes.',
+				);
+			}
+			if (evidence.outcome === 'font-rejected') {
+				validationError(
+					evidence.stage === 'load' ? 'browser-font-load-failed' : 'browser-font-render-failed',
+					evidence.stage === 'load'
+						? 'The representative browser could not load the exact font bytes.'
+						: 'The representative browser could not render covered glyphs without fallback.',
+				);
+			}
+			if (evidence.challengeDigest !== report.facts.browserChallenge.digest) {
+				validationError(
+					'browser-font-evidence-mismatch',
+					'Browser font evidence does not match the server-selected glyph challenge.',
+				);
+			}
+			const challenge = report.facts.browserChallenge;
+			// This is a same-origin browser attestation, not cryptographic remote
+			// attestation. Binding every proof to server-inspected coverage and two
+			// distinct fallback rasters prevents accidental fallback in the authoring
+			// client; deployed browser acceptance remains the trusted runtime proof.
+			if (
+				evidence.glyphProofs.length !== challenge.codePoints.length
+				|| evidence.glyphProofs.some((proof, index) => {
+					const digest = /^[a-f0-9]{64}$/;
+					return proof.codePoint !== challenge.codePoints[index]
+						|| !digest.test(proof.exactWithSansDigest)
+						|| !digest.test(proof.exactWithMonoDigest)
+						|| !digest.test(proof.sansFallbackDigest)
+						|| !digest.test(proof.monoFallbackDigest)
+						|| proof.exactWithSansDigest !== proof.exactWithMonoDigest
+						|| proof.sansFallbackDigest === proof.monoFallbackDigest
+						|| proof.exactWithSansDigest === proof.sansFallbackDigest
+						|| proof.exactWithSansDigest === proof.monoFallbackDigest;
+				})
+			) {
+				validationError(
+					'browser-font-render-failed',
+					'Each challenged glyph must render identically through the exact face and differently through independent fallbacks.',
+				);
+			}
+			return {
+				...report,
+				facts: {
+					...report.facts,
+					browserLoadable: true,
+					representativeGlyphsRendered: true,
+				},
+			} as Extract<GraphicAssetValidationReport, { compatibilityProfile: 'static-font-v1' }>;
+		}
 		if (!evidence) {
 			validationError(
 				'browser-image-decode-failed',
@@ -333,6 +408,12 @@ export function createGraphicsAssetLibrary(
 			validationError(
 				'browser-image-decode-mismatch',
 				'Browser-decoded source digest does not match the staged source bytes.',
+			);
+		}
+		if (evidence.outcome === 'font-loaded' || evidence.outcome === 'font-rejected') {
+			validationError(
+				'browser-image-decode-failed',
+				'Image browser decode evidence is required before publication.',
 			);
 		}
 		if (evidence.outcome === 'rejected') {
@@ -356,7 +437,7 @@ export function createGraphicsAssetLibrary(
 				...report.facts,
 				browserDecodable: true,
 			},
-		};
+		} as Extract<GraphicAssetValidationReport, { compatibilityProfile: 'still-image-v1' }>;
 	}
 
 	async function failOperation(
@@ -388,7 +469,7 @@ export function createGraphicsAssetLibrary(
 		store: GraphicsCanonicalObjectStore,
 		digest: string,
 		bytes: BoundedByteStream,
-		contentType: 'image/png' | 'image/jpeg' | 'image/webp',
+		contentType: GraphicAssetCanonicalMime,
 	) {
 		const identity = graphicsObjectIdentity(`sha256/${digest}`);
 		const result = await store.createImmutable({
@@ -461,7 +542,7 @@ export function createGraphicsAssetLibrary(
 		);
 	}
 
-	async function continueImageIngestion(
+	async function continueGraphicsIngestion(
 		initialOperation: GraphicsIngestionOperation,
 	): Promise<GraphicsIngestionOperation> {
 		const catalogue = requireCatalogue();
@@ -513,7 +594,7 @@ export function createGraphicsAssetLibrary(
 					message: 'Staged source bytes are temporarily unavailable.',
 				}, operation.report);
 			}
-			const sourceDigest = await sha256HexStream({
+			await sha256HexStream({
 				body: stagedRead.body,
 				byteLength: stagedRead.object.byteLength,
 				maximumByteLength: MAX_STILL_IMAGE_INGESTION_BYTES,
@@ -534,16 +615,35 @@ export function createGraphicsAssetLibrary(
 					message: 'Staged source bytes are temporarily unavailable.',
 				}, operation.report);
 			}
-			let processed: Awaited<ReturnType<typeof processStillImageStream>>;
+			let processed:
+				| Awaited<ReturnType<typeof processStillImage>>
+				| Awaited<ReturnType<typeof processStaticFont>>;
+			let sourceKind: 'image' | 'font' = graphicAssetSourceKind(operation);
 			try {
-				processed = await processStillImageStream({
+				const validationBytes = await consumeBoundedByteStream({
 					body: validationRead.body,
 					byteLength: validationRead.object.byteLength,
 					maximumByteLength: MAX_STILL_IMAGE_INGESTION_BYTES,
-				}, sourceDigest, {
-					sourceFileName: operation.sourceFileName,
-					declaredMime: operation.declaredMime,
 				});
+				sourceKind = graphicAssetSourceKind(operation, validationBytes.subarray(0, 64));
+				processed = sourceKind === 'font'
+					? await processStaticFont(validationBytes, {
+							sourceFileName: operation.sourceFileName,
+							declaredMime: operation.declaredMime,
+						})
+					: await processStillImage(validationBytes, {
+							sourceFileName: operation.sourceFileName,
+							declaredMime: operation.declaredMime,
+						});
+				if (processed.report.facts.kind === 'font' && !operation.browserDecodeEvidence) {
+					return await catalogue.updateIngestionOperation(
+						changedOperation(operation, {
+							stage: 'awaiting-confirmation',
+							report: processed.report,
+						}),
+						operation.updatedAt,
+					);
+				}
 				processed = {
 					...processed,
 					report: reportWithBrowserDecodeEvidence(processed.report, operation),
@@ -552,11 +652,16 @@ export function createGraphicsAssetLibrary(
 			catch (error) {
 				if (!(error instanceof GraphicAssetValidationError))
 					throw error;
-				const report = rejectedValidationReport(error);
+				const report = rejectedValidationReport(
+					error,
+					sourceKind === 'font'
+						? STATIC_FONT_COMPATIBILITY_PROFILE
+						: STILL_IMAGE_COMPATIBILITY_PROFILE,
+				);
 				const failed = await failOperation(catalogue, operation, {
 					code: 'validation-failed',
 					retryable: false,
-					message: 'Image did not satisfy the still-image-v1 compatibility profile.',
+					message: 'Graphic Asset did not satisfy its compatibility profile.',
 				}, report);
 				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
 				await staging.delete(stagingIdentity);
@@ -579,7 +684,7 @@ export function createGraphicsAssetLibrary(
 
 			const thumbnail = processed.thumbnail;
 			const thumbnailDigest = await sha256Hex(thumbnail);
-			const reservation = await catalogue.reserveImagePublication({
+			const reservation = await catalogue.reserveGraphicAssetPublication({
 				operation,
 				sourceDigest: processed.report.facts.sha256,
 				sourceByteLength: processed.report.facts.byteLength,
@@ -659,11 +764,11 @@ export function createGraphicsAssetLibrary(
 				return publicationTerminal;
 
 			const reusable = operation.duplicateContentPolicy === 'reuse'
-				? await catalogue.findReusableImage(processed.report.facts.sha256)
+				? await catalogue.findReusableGraphicAsset(processed.report.facts.sha256)
 				: undefined;
 			let completed: GraphicsIngestionOperation;
 			if (reusable) {
-				completed = await catalogue.reuseImage({
+				completed = await catalogue.reuseGraphicAsset({
 					operation,
 					reusable,
 					publishedAt: timestamp(),
@@ -671,7 +776,7 @@ export function createGraphicsAssetLibrary(
 			}
 			else {
 				try {
-					completed = await catalogue.publishImage({
+					completed = await catalogue.publishGraphicAsset({
 						operation,
 						report: processed.report,
 						assetId: graphicAssetId(generateIdentity()),
@@ -686,12 +791,12 @@ export function createGraphicsAssetLibrary(
 				catch (publicationError) {
 					if (operation.duplicateContentPolicy === 'create-separate')
 						throw publicationError;
-					const concurrentlyPublished = await catalogue.findReusableImage(
+					const concurrentlyPublished = await catalogue.findReusableGraphicAsset(
 						processed.report.facts.sha256,
 					);
 					if (!concurrentlyPublished)
 						throw publicationError;
-					completed = await catalogue.reuseImage({
+					completed = await catalogue.reuseGraphicAsset({
 						operation,
 						reusable: concurrentlyPublished,
 						publishedAt: timestamp(),
@@ -777,21 +882,34 @@ export function createGraphicsAssetLibrary(
 				'Graphics capacity limits could not be updated',
 			);
 		},
-		async initiateImageIngestion(input) {
+		async initiateGraphicsIngestion(input) {
 			if (!input.idempotencyKey.trim() || !input.initiatedBy.trim() || !input.name.trim())
 				throw new GraphicsAssetLibraryError('Ingestion identity, author, and asset name are required', 'invalid-ingestion-input');
+			const sourceKind = graphicAssetSourceKind(input);
+			const maximumByteLength = sourceKind === 'font'
+				? MAX_STATIC_FONT_INGESTION_BYTES
+				: MAX_STILL_IMAGE_INGESTION_BYTES;
 			if (
 				!Number.isSafeInteger(input.declaredByteLength)
 				|| input.declaredByteLength <= 0
-				|| input.declaredByteLength > MAX_STILL_IMAGE_INGESTION_BYTES
+				|| input.declaredByteLength > maximumByteLength
 			) {
-				throw new GraphicsAssetLibraryError(`Still image must be between 1 and ${MAX_STILL_IMAGE_INGESTION_BYTES} bytes`, 'invalid-ingestion-input');
+				throw new GraphicsAssetLibraryError(
+					`${sourceKind === 'font' ? 'Static font' : 'Still image'} must be between 1 and ${maximumByteLength} bytes`,
+					'invalid-ingestion-input',
+				);
 			}
 			if (
 				input.defaultEventId !== undefined
 				&& (!Number.isSafeInteger(input.defaultEventId) || input.defaultEventId <= 0)
 			) {
 				throw new GraphicsAssetLibraryError('Default Event identity must be a positive integer', 'invalid-ingestion-input');
+			}
+			if (input.browserDecodeEvidence?.outcome === 'font-loaded' || input.browserDecodeEvidence?.outcome === 'font-rejected') {
+				throw new GraphicsAssetLibraryError(
+					'Font browser evidence can only answer the server-selected post-validation challenge',
+					'invalid-ingestion-input',
+				);
 			}
 			if (
 				input.browserDecodeEvidence
@@ -812,7 +930,7 @@ export function createGraphicsAssetLibrary(
 			}
 
 			const createdAt = timestamp();
-			return await catalogueRequest(() => requireCatalogue().initiateImageIngestion({
+			return await catalogueRequest(() => requireCatalogue().initiateGraphicsIngestion({
 				id: graphicsIngestionOperationId(generateIdentity()),
 				idempotencyKey: input.idempotencyKey,
 				initiatedBy: input.initiatedBy,
@@ -838,7 +956,7 @@ export function createGraphicsAssetLibrary(
 				throw new GraphicsAssetLibraryError('Graphics Ingestion Operation not found', 'ingestion-operation-not-found');
 			return operation;
 		},
-		async cancelImageIngestion(input) {
+		async cancelGraphicsIngestion(input) {
 			const catalogue = requireCatalogue();
 			const operation = await catalogueRequest(
 				() => catalogue.getIngestionOperation(input.operationId, input.initiatedBy),
@@ -870,7 +988,7 @@ export function createGraphicsAssetLibrary(
 			}
 			return cancelled;
 		},
-		async uploadImage(input) {
+		async uploadGraphicAsset(input) {
 			const catalogue = requireCatalogue();
 			const staging = requireStaging();
 			let operation = await catalogueRequest(
@@ -889,23 +1007,26 @@ export function createGraphicsAssetLibrary(
 			}
 			if (input.bytes.byteLength !== operation.declaredByteLength) {
 				throw new GraphicsAssetLibraryError(
-					'Transferred image length must match the initiated operation',
+					'Transferred Graphic Asset length must match the initiated operation',
 					'invalid-ingestion-input',
 				);
 			}
 			const initiatedMime = operation.declaredMime?.trim().toLocaleLowerCase();
 			const transferMime = input.declaredMime?.trim().toLocaleLowerCase();
 			if (initiatedMime && transferMime && initiatedMime !== transferMime) {
+				const sourceKind = graphicAssetSourceKind(operation);
 				return await failOperation(catalogue, operation, {
 					code: 'validation-failed',
 					retryable: false,
-					message: 'Image declarations conflict before validation.',
+					message: 'Graphic Asset declarations conflict before validation.',
 				}, {
 					outcome: 'rejected',
-					compatibilityProfile: STILL_IMAGE_COMPATIBILITY_PROFILE,
+					compatibilityProfile: sourceKind === 'font'
+						? STATIC_FONT_COMPATIBILITY_PROFILE
+						: STILL_IMAGE_COMPATIBILITY_PROFILE,
 					issues: [{
 						severity: 'error',
-						code: 'conflicting-image-mime',
+						code: sourceKind === 'font' ? 'conflicting-font-mime' : 'conflicting-image-mime',
 						message: `Initiated MIME ${initiatedMime} conflicts with transfer MIME ${transferMime}.`,
 					}],
 				});
@@ -971,9 +1092,46 @@ export function createGraphicsAssetLibrary(
 				}),
 				'Graphics staging progress could not be recorded',
 			);
-			return await continueImageIngestion(operation);
+			return await continueGraphicsIngestion(operation);
 		},
-		async retryImageIngestion(input) {
+		async confirmFontBrowserEvidence(input) {
+			const catalogue = requireCatalogue();
+			const operation = await catalogueRequest(
+				() => catalogue.getIngestionOperation(input.operationId, input.initiatedBy),
+				'Graphics ingestion state is temporarily unavailable',
+			);
+			if (!operation)
+				throw new GraphicsAssetLibraryError('Graphics Ingestion Operation not found', 'ingestion-operation-not-found');
+			if (
+				operation.stage !== 'awaiting-confirmation'
+				|| operation.report?.outcome !== 'accepted'
+				|| operation.report.facts.kind !== 'font'
+			) {
+				throw new GraphicsAssetLibraryError(
+					`Graphics Ingestion Operation cannot confirm font rendering from stage ${operation.stage}`,
+					'ingestion-operation-not-uploadable',
+				);
+			}
+			if (input.evidence.outcome !== 'font-loaded' && input.evidence.outcome !== 'font-rejected') {
+				throw new GraphicsAssetLibraryError(
+					'Font browser challenge evidence is required',
+					'invalid-ingestion-input',
+				);
+			}
+			const confirmed = await catalogueRequest(
+				() => catalogue.updateIngestionOperation(
+					changedOperation(operation, {
+						stage: 'validating',
+						browserDecodeEvidence: input.evidence,
+						failure: undefined,
+					}),
+					operation.updatedAt,
+				),
+				'Font browser challenge evidence could not be recorded',
+			);
+			return await continueGraphicsIngestion(confirmed);
+		},
+		async retryGraphicsIngestion(input) {
 			const catalogue = requireCatalogue();
 			const operation = await catalogueRequest(
 				() => catalogue.getIngestionOperation(input.operationId, input.initiatedBy),
@@ -994,7 +1152,7 @@ export function createGraphicsAssetLibrary(
 				new Date(operation.updatedAt).getTime() + 1,
 			)).toISOString();
 			const claimed = await catalogueRequest(
-				() => catalogue.claimImageIngestion({
+				() => catalogue.claimGraphicsIngestion({
 					operation,
 					claimedAt,
 					staleBefore: new Date(
@@ -1009,7 +1167,7 @@ export function createGraphicsAssetLibrary(
 					'ingestion-operation-not-uploadable',
 				);
 			}
-			return await continueImageIngestion(claimed);
+			return await continueGraphicsIngestion(claimed);
 		},
 		async listGraphicAssets(input) {
 			return await catalogueRequest(
@@ -1043,6 +1201,7 @@ export function createGraphicsAssetLibrary(
 			return {
 				outcome: 'available',
 				lifecycleState: content.lifecycleState,
+				kind: content.kind,
 			};
 		},
 		async resolveGraphicAssetRevision(input) {

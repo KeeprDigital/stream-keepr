@@ -322,7 +322,25 @@ const featureMatchOverlayBoxStyleSchema = featureMatchOverlayBorderSidesSchema.e
 	padding: nonNegativePixelSchema.optional(),
 	textColor: optionalCssColorSchema,
 	fontSize: finiteNumberSchema.positive().max(300).optional(),
-	fontFamily: z.string().max(200).optional(),
+	font: z.discriminatedUnion('kind', [
+		z.object({
+			kind: z.literal('application'),
+			fontId: z.enum([
+				'saira-condensed',
+				'ibm-plex-sans',
+				'inter',
+				'inconsolata',
+				'mplantin',
+				'system-sans',
+				'system-serif',
+				'system-mono',
+			]),
+		}).strict(),
+		z.object({
+			kind: z.literal('asset'),
+			reference: graphicAssetReferenceSchema,
+		}).strict(),
+	]).optional(),
 	fontWeight: z.union([finiteNumberSchema.min(1).max(1000), z.string().min(1).max(50)]).optional(),
 	fontStyle: z.enum(['normal', 'italic']).optional(),
 	textTransform: z.enum(['none', 'uppercase', 'lowercase', 'capitalize']).optional(),

@@ -96,13 +96,13 @@ function createLibrary(
 	});
 	const library: typeof libraryDelegate = {
 		...libraryDelegate,
-		async initiateImageIngestion(input) {
+		async initiateGraphicsIngestion(input) {
 			const fixture = input.declaredMime === 'image/jpeg'
 				? jpegPixel
 				: input.declaredMime === 'image/webp'
 					? webpPixel
 					: transparentPixelPng;
-			return await libraryDelegate.initiateImageIngestion({
+			return await libraryDelegate.initiateGraphicsIngestion({
 				...input,
 				browserDecodeEvidence: Object.hasOwn(input, 'browserDecodeEvidence')
 					? input.browserDecodeEvidence
@@ -148,7 +148,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		code,
 	}) => {
 		const { library } = createLibrary();
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: `browser-gate-${code}`,
 			initiatedBy: 'graphics-author-1',
 			name: 'Browser-gated JPEG',
@@ -158,7 +158,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			declaredByteLength: jpegPixel.byteLength,
 		});
 
-		const failed = await library.uploadImage({
+		const failed = await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			declaredMime: 'image/jpeg',
@@ -199,7 +199,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		bytes,
 	}) => {
 		const { library } = createLibrary();
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: `upload-${format}`,
 			initiatedBy: 'graphics-author-1',
 			name: `${format} scoreboard`,
@@ -208,7 +208,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			declaredByteLength: bytes.byteLength,
 		});
 
-		const completed = await library.uploadImage({
+		const completed = await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			declaredMime: mime,
@@ -252,7 +252,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 
 	it('rejects conflicting initiation and transfer MIME declarations with a stable report', async () => {
 		const { library } = createLibrary();
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'conflicting-declared-mime',
 			initiatedBy: 'graphics-author-1',
 			name: 'Conflicting declaration',
@@ -261,7 +261,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
 
-		const failed = await library.uploadImage({
+		const failed = await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			declaredMime: 'image/png',
@@ -305,7 +305,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		code,
 	}) => {
 		const { library } = createLibrary();
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: `reject-${code}`,
 			initiatedBy: 'graphics-author-1',
 			name: fileName,
@@ -314,7 +314,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			declaredByteLength: bytes.byteLength,
 		});
 
-		const failed = await library.uploadImage({
+		const failed = await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			declaredMime: mime,
@@ -337,13 +337,13 @@ describe('still-image ingestion through the Graphics Asset Library public module
 
 	it('resolves only the pinned revision and distinguishes missing from unavailable content', async () => {
 		const { library, canonical } = createLibrary();
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'pinned-scoreboard-logo',
 			initiatedBy: 'graphics-author-1',
 			name: 'Pinned scoreboard logo',
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
-		const completed = await library.uploadImage({
+		const completed = await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -377,6 +377,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		await expect(library.inspectGraphicAssetRevision(reference)).resolves.toEqual({
 			outcome: 'available',
 			lifecycleState: 'active',
+			kind: 'image',
 		});
 		await expect(library.inspectGraphicAssetRevision({
 			assetId: reference.assetId,
@@ -406,8 +407,8 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			declaredByteLength: transparentPixelPng.byteLength,
 		};
 
-		const operation = await library.initiateImageIngestion(initiation);
-		const reconnected = await library.initiateImageIngestion(initiation);
+		const operation = await library.initiateGraphicsIngestion(initiation);
+		const reconnected = await library.initiateGraphicsIngestion(initiation);
 
 		expect(operation).toMatchObject({
 			stage: 'created',
@@ -418,7 +419,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		expect(reconnected).toEqual(operation);
 		await expect(library.listGraphicAssets({ search: '' })).resolves.toEqual([]);
 
-		const completed = await library.uploadImage({
+		const completed = await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -531,14 +532,14 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			},
 		};
 		const { library } = createLibrary(staging, canonical);
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'stream-canonical-source',
 			initiatedBy: 'graphics-author-1',
 			name: 'Streaming source',
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
 
-		const completed = await library.uploadImage({
+		const completed = await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -555,14 +556,14 @@ describe('still-image ingestion through the Graphics Asset Library public module
 	it('records permanent validation failure without publishing catalogue state', async () => {
 		const { library } = createLibrary();
 		const invalidPng = new TextEncoder().encode('not a PNG');
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'invalid-logo',
 			initiatedBy: 'graphics-author-1',
 			name: 'Invalid logo',
 			declaredByteLength: invalidPng.byteLength,
 		});
 
-		const failed = await library.uploadImage({
+		const failed = await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 			bytes: createBoundedByteStream(invalidPng, {
@@ -591,22 +592,22 @@ describe('still-image ingestion through the Graphics Asset Library public module
 
 	it('cancels idempotently before publication and never accepts later transfer bytes', async () => {
 		const { library } = createLibrary();
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'cancelled-logo',
 			initiatedBy: 'graphics-author-1',
 			name: 'Cancelled logo',
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
 
-		const cancelled = await library.cancelImageIngestion({
+		const cancelled = await library.cancelGraphicsIngestion({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 		});
-		const cancelledAgain = await library.cancelImageIngestion({
+		const cancelledAgain = await library.cancelGraphicsIngestion({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 		});
-		const uploadAfterCancellation = await library.uploadImage({
+		const uploadAfterCancellation = await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -646,14 +647,14 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			},
 		};
 		const { library } = createLibrary(staging);
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'cancel-during-transfer',
 			initiatedBy: 'graphics-author-1',
 			name: 'Cancelled during transfer',
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
 
-		const upload = library.uploadImage({
+		const upload = library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -662,7 +663,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			}),
 		});
 		await transferStarted;
-		const cancelled = await library.cancelImageIngestion({
+		const cancelled = await library.cancelGraphicsIngestion({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 		});
@@ -675,7 +676,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 
 	it('resumes from staged bytes after a retryable canonical-store failure', async () => {
 		const { library, canonical } = createLibrary();
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'retry-logo',
 			initiatedBy: 'graphics-author-1',
 			name: 'Retry logo',
@@ -683,7 +684,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		});
 		canonical.injectTransientFailure('create');
 
-		const failed = await library.uploadImage({
+		const failed = await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -700,7 +701,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			},
 		});
 
-		const completed = await library.retryImageIngestion({
+		const completed = await library.retryGraphicsIngestion({
 			operationId: operation.id,
 			initiatedBy: 'graphics-author-1',
 		});
@@ -715,14 +716,14 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		const { library } = createLibrary();
 
 		async function ingest(idempotencyKey: string, name: string, defaultEventId: number) {
-			const operation = await library.initiateImageIngestion({
+			const operation = await library.initiateGraphicsIngestion({
 				idempotencyKey,
 				initiatedBy: 'graphics-author-1',
 				name,
 				defaultEventId,
 				declaredByteLength: transparentPixelPng.byteLength,
 			});
-			return await library.uploadImage({
+			return await library.uploadGraphicAsset({
 				operationId: operation.id,
 				initiatedBy: 'graphics-author-1',
 				bytes: createBoundedByteStream(transparentPixelPng, {
@@ -755,14 +756,14 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		const { library } = createLibrary();
 
 		async function ingest(idempotencyKey: string, duplicateContentPolicy: 'reuse' | 'create-separate') {
-			const operation = await library.initiateImageIngestion({
+			const operation = await library.initiateGraphicsIngestion({
 				idempotencyKey,
 				initiatedBy: 'graphics-author-1',
 				name: idempotencyKey,
 				duplicateContentPolicy,
 				declaredByteLength: transparentPixelPng.byteLength,
 			});
-			return await library.uploadImage({
+			return await library.uploadGraphicAsset({
 				operationId: operation.id,
 				initiatedBy: operation.initiatedBy,
 				bytes: createBoundedByteStream(transparentPixelPng, {
@@ -801,14 +802,14 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			},
 		};
 		const { library } = createLibrary(createInMemoryStagingGraphicsObjectStore(), canonical);
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'corrupt-canonical-logo',
 			initiatedBy: 'graphics-author-1',
 			name: 'Corrupt canonical logo',
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
 
-		const failed = await library.uploadImage({
+		const failed = await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -836,12 +837,12 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		});
 		const catalogue = {
 			...delegate,
-			async findReusableImage(sourceDigest: string) {
+			async findReusableGraphicAsset(sourceDigest: string) {
 				reusableLookups++;
 				if (reusableLookups === 2)
 					releaseLookups();
 				await bothLooking;
-				return await delegate.findReusableImage(sourceDigest);
+				return await delegate.findReusableGraphicAsset(sourceDigest);
 			},
 		};
 		const { library } = createLibrary(
@@ -850,20 +851,20 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			catalogue,
 		);
 		const operations = await Promise.all([
-			library.initiateImageIngestion({
+			library.initiateGraphicsIngestion({
 				idempotencyKey: 'concurrent-a',
 				initiatedBy: 'graphics-author-1',
 				name: 'Concurrent A',
 				declaredByteLength: transparentPixelPng.byteLength,
 			}),
-			library.initiateImageIngestion({
+			library.initiateGraphicsIngestion({
 				idempotencyKey: 'concurrent-b',
 				initiatedBy: 'graphics-author-1',
 				name: 'Concurrent B',
 				declaredByteLength: transparentPixelPng.byteLength,
 			}),
 		]);
-		const completed = await Promise.all(operations.map(operation => library.uploadImage({
+		const completed = await Promise.all(operations.map(operation => library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -890,10 +891,10 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		});
 		const catalogue = {
 			...delegate,
-			async publishImage(input: Parameters<typeof delegate.publishImage>[0]) {
+			async publishGraphicAsset(input: Parameters<typeof delegate.publishGraphicAsset>[0]) {
 				publicationStarted();
 				await released;
-				return await delegate.publishImage(input);
+				return await delegate.publishGraphicAsset(input);
 			},
 		};
 		const { library } = createLibrary(
@@ -901,13 +902,13 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			createInMemoryCanonicalGraphicsObjectStore(),
 			catalogue,
 		);
-		const operation = await library.initiateImageIngestion({
+		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'cancel-before-publication',
 			initiatedBy: 'graphics-author-1',
 			name: 'Cancelled before publication',
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
-		const upload = library.uploadImage({
+		const upload = library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			bytes: createBoundedByteStream(transparentPixelPng, {
@@ -916,7 +917,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			}),
 		});
 		await started;
-		const cancelled = await library.cancelImageIngestion({
+		const cancelled = await library.cancelGraphicsIngestion({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 		});
@@ -929,7 +930,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 
 	it('fences a displaced processor after a stale operation is claimed', async () => {
 		const { library, catalogue } = createLibrary();
-		const created = await library.initiateImageIngestion({
+		const created = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'fenced-retry',
 			initiatedBy: 'graphics-author-1',
 			name: 'Fenced retry',
@@ -941,7 +942,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			updatedAt: '2026-07-27T04:00:01.000Z',
 		};
 		await catalogue.updateIngestionOperation(transferring, created.updatedAt);
-		const claimed = await catalogue.claimImageIngestion({
+		const claimed = await catalogue.claimGraphicsIngestion({
 			operation: transferring,
 			claimedAt: '2026-07-27T04:01:00.000Z',
 			staleBefore: '2026-07-27T04:00:30.000Z',

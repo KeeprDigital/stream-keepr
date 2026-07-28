@@ -115,7 +115,7 @@ describe('featureMatchOverlayBoxStyleFields', () => {
 		const wrapper = await mountComponent({
 			includeText: true,
 			includeBackground: false,
-			boxStyle: { fontFamily: 'ibm-plex-sans' },
+			boxStyle: { font: { kind: 'application', fontId: 'ibm-plex-sans' } },
 		});
 
 		expect(wrapper.find('[data-value=""]').exists()).toBe(false);
@@ -124,16 +124,8 @@ describe('featureMatchOverlayBoxStyleFields', () => {
 
 		await wrapper.get('[data-value="saira-condensed"]').trigger('click');
 
-		expect(wrapper.emitted('update')).toContainEqual([{ fontFamily: 'saira-condensed' }]);
-	});
-
-	it('keeps legacy custom font-family values selectable', async () => {
-		const wrapper = await mountComponent({
-			includeText: true,
-			includeBackground: false,
-			boxStyle: { fontFamily: 'Impact, Arial Black, sans-serif' },
-		});
-
-		expect(wrapper.get('[data-value="Impact, Arial Black, sans-serif"]').text()).toBe('Custom: Impact, Arial Black, sans-serif');
+		expect(wrapper.emitted('update')).toContainEqual([{
+			font: { kind: 'application', fontId: 'saira-condensed' },
+		}]);
 	});
 });
