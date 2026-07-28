@@ -164,6 +164,7 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	proposedName: text('proposed_name').notNull(),
 	sourceFileName: text('source_file_name'),
 	declaredMime: text('declared_mime'),
+	browserDecodeEvidence: text('browser_decode_evidence', { mode: 'json' }).$type<Record<string, unknown>>(),
 	duplicateContentPolicy: text('duplicate_content_policy', {
 		enum: GRAPHICS_DUPLICATE_CONTENT_POLICY_VALUES,
 	}).notNull().default('reuse'),

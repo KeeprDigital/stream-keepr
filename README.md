@@ -72,6 +72,19 @@ pnpm build
 pnpm worker:dry-run
 ```
 
+Verify the still-image compatibility profile in an installed Chrome or Chromium:
+
+```bash
+pnpm test:browser:still-images
+```
+
+Run the same representative browser gate against a deployed staging Worker:
+
+```bash
+STREAM_KEEPR_BROWSER_ACCEPTANCE_URL=https://staging.example.workers.dev \
+	pnpm test:browser:still-images:deployed
+```
+
 Deploy production, including pending D1 migrations:
 
 ```bash

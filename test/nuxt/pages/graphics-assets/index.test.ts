@@ -23,6 +23,10 @@ const {
 	mockTransferFetch: vi.fn(),
 }));
 
+vi.mock('../../../../app/utils/verifyStillImageBrowserDecode', () => ({
+	verifyStillImageBrowserDecode: mockBrowserDecode,
+}));
+
 const completedOperation: GraphicsIngestionOperation = {
 	id: 'operation-1' as never,
 	idempotencyKey: 'upload-1',
@@ -52,6 +56,7 @@ const completedOperation: GraphicsIngestionOperation = {
 			colorModel: 'grayscale-alpha',
 			hasAlpha: true,
 			orientation: 'normal',
+			browserDecodable: true,
 		},
 	},
 	result: {
@@ -89,6 +94,7 @@ const completedJpegOperation: GraphicsIngestionOperation = {
 			colorModel: 'rgb',
 			hasAlpha: false,
 			orientation: 'normal',
+			browserDecodable: true,
 		},
 	},
 };
@@ -186,14 +192,14 @@ describe('the Graphics Asset Library Workspace', () => {
 		mockApiFetch.mockReset();
 		mockBrowserDecode.mockReset();
 		mockBrowserDecode.mockResolvedValue({
+			outcome: 'decoded',
+			sourceDigest: '431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460',
 			width: 1,
 			height: 1,
-			close: vi.fn(),
 		});
 		mockCapacityRefresh.mockReset();
 		mockRefresh.mockReset();
 		mockTransferFetch.mockReset();
-		vi.stubGlobal('createImageBitmap', mockBrowserDecode);
 		vi.stubGlobal('fetch', mockTransferFetch);
 		localStorage.clear();
 	});
@@ -227,9 +233,15 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(wrapper.text()).toContain('Derivatives 27 B');
 	});
 
-	it('browser-decodes the exact accepted revision after initiating and transferring it', async () => {
+	it('browser-decodes the exact source before initiating and publishing it', async () => {
 		const wrapper = await mountPage();
 		const file = new File([jpegPixel], 'new-scoreboard.jpg', { type: 'image/jpeg' });
+		mockBrowserDecode.mockResolvedValueOnce({
+			outcome: 'decoded',
+			sourceDigest: '58a79b9921ff2dc8485bf82af9974e6e5f589000884ff9a1d3c5a82488032d05',
+			width: 1,
+			height: 1,
+		});
 		mockApiFetch.mockResolvedValue({
 			...completedJpegOperation,
 			stage: 'created',
@@ -237,15 +249,10 @@ describe('the Graphics Asset Library Workspace', () => {
 			result: undefined,
 			transferredByteLength: 0,
 		});
-		mockTransferFetch
-			.mockResolvedValueOnce(new Response(JSON.stringify(completedJpegOperation), {
-				status: 200,
-				headers: { 'content-type': 'application/json' },
-			}))
-			.mockResolvedValueOnce(new Response(jpegPixel, {
-				status: 200,
-				headers: { 'content-type': 'image/jpeg' },
-			}));
+		mockTransferFetch.mockResolvedValueOnce(new Response(JSON.stringify(completedJpegOperation), {
+			status: 200,
+			headers: { 'content-type': 'application/json' },
+		}));
 
 		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
 		await flushPromises();
@@ -267,6 +274,12 @@ describe('the Graphics Asset Library Workspace', () => {
 					declaredByteLength: jpegPixel.byteLength,
 					sourceFileName: 'new-scoreboard.jpg',
 					declaredMime: 'image/jpeg',
+					browserDecodeEvidence: {
+						outcome: 'decoded',
+						sourceDigest: '58a79b9921ff2dc8485bf82af9974e6e5f589000884ff9a1d3c5a82488032d05',
+						width: 1,
+						height: 1,
+					},
 				}),
 			}),
 		);
@@ -278,18 +291,19 @@ describe('the Graphics Asset Library Workspace', () => {
 				body: file,
 			}),
 		);
-		expect(mockTransferFetch).toHaveBeenCalledWith(
-			'/api/graphics-assets/asset-1/revisions/revision-1/content',
-		);
 		expect(mockRefresh).toHaveBeenCalledOnce();
 		expect(wrapper.text()).toContain('Published asset asset-1 revision revision-1');
-		expect(wrapper.text()).toContain('Exact revision browser decode verified.');
+		expect(wrapper.text()).toContain('Exact source browser decode verified before publication.');
 	});
 
 	it('preserves the server validation report when malformed input cannot be accepted', async () => {
 		const wrapper = await mountPage();
 		const malformed = new File([new TextEncoder().encode('not a jpeg')], 'malformed.jpg', {
 			type: 'image/jpeg',
+		});
+		mockBrowserDecode.mockResolvedValueOnce({
+			outcome: 'rejected',
+			sourceDigest: '084f9658ef9396784017d8d1cb524f494d6009971b3f47d9bd63c01bd5762456',
 		});
 		const created = {
 			...completedOperation,
@@ -329,7 +343,18 @@ describe('the Graphics Asset Library Workspace', () => {
 		await wrapper.get('[data-testid="upload-image"]').trigger('click');
 		await flushPromises();
 
-		expect(mockBrowserDecode).not.toHaveBeenCalled();
+		expect(mockBrowserDecode).toHaveBeenCalledWith(expect.any(Blob));
+		expect(mockApiFetch).toHaveBeenCalledWith(
+			'/api/graphics-assets/ingestion-operations',
+			expect.objectContaining({
+				body: expect.objectContaining({
+					browserDecodeEvidence: expect.objectContaining({
+						outcome: 'rejected',
+						sourceDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+					}),
+				}),
+			}),
+		);
 		expect(wrapper.text()).toContain('unsupported-image-format');
 		expect(wrapper.text()).toContain('Source bytes are not a supported image.');
 	});
@@ -370,7 +395,7 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(initiationCalls).toHaveLength(2);
 		expect(initiationCalls[0]![1].body.idempotencyKey)
 			.toBe(initiationCalls[1]![1].body.idempotencyKey);
-		expect(mockTransferFetch).toHaveBeenCalledTimes(2);
+		expect(mockTransferFetch).toHaveBeenCalledOnce();
 	});
 
 	it('reconnects a durable initiation after the page reloads before receiving its response', async () => {

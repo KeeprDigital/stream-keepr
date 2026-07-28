@@ -10,7 +10,19 @@ const initiationSchema = z.object({
 	idempotencyKey: z.string().trim().min(1).max(200),
 	name: z.string().trim().min(1).max(200),
 	sourceFileName: z.string().trim().min(1).max(255).optional(),
-	declaredMime: z.enum(['image/png', 'image/jpeg', 'image/webp']).optional(),
+	declaredMime: z.string().trim().min(1).max(255).optional(),
+	browserDecodeEvidence: z.discriminatedUnion('outcome', [
+		z.object({
+			outcome: z.literal('decoded'),
+			sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
+			width: z.number().int().positive(),
+			height: z.number().int().positive(),
+		}).strict(),
+		z.object({
+			outcome: z.literal('rejected'),
+			sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
+		}).strict(),
+	]).optional(),
 	defaultEventId: z.number().int().positive().optional(),
 	duplicateContentPolicy: z.enum(['reuse', 'create-separate']).optional(),
 	declaredByteLength: z.number().int().positive().max(MAX_STILL_IMAGE_INGESTION_BYTES),

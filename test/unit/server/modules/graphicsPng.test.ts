@@ -2,10 +2,12 @@ import { Buffer } from 'node:buffer';
 import { deflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import {
-	PngValidationError,
 	processPng,
-	rejectedPngReport,
 } from '~~/server/modules/graphics-asset-library/png';
+import {
+	GraphicAssetValidationError,
+	rejectedValidationReport,
+} from '~~/server/modules/graphics-asset-library/validation';
 
 const crcTable = (() => {
 	const table = new Uint32Array(256);
@@ -104,8 +106,8 @@ describe('the settled PNG compatibility profile', () => {
 			throw new Error('Expected invalid PNG chunk types to be rejected');
 		}
 		catch (error) {
-			expect(error).toBeInstanceOf(PngValidationError);
-			const report = rejectedPngReport(error as PngValidationError);
+			expect(error).toBeInstanceOf(GraphicAssetValidationError);
+			const report = rejectedValidationReport(error as GraphicAssetValidationError);
 			expect(report).toMatchObject({
 				outcome: 'rejected',
 				issues: [

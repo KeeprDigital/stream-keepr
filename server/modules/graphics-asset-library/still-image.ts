@@ -1,7 +1,6 @@
 import type {
 	GraphicAssetImageFacts,
 	GraphicAssetSourceDeclarations,
-	GraphicAssetValidationIssue,
 	GraphicAssetValidationReport,
 } from '~~/shared/types/graphicsAsset';
 import type { BoundedByteStream } from './object-store';
@@ -9,18 +8,16 @@ import {
 	MAX_STILL_IMAGE_AXIS,
 	MAX_STILL_IMAGE_PIXELS,
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
-	STILL_IMAGE_THUMBNAIL_MAX_HEIGHT,
-	STILL_IMAGE_THUMBNAIL_MAX_WIDTH,
 } from '~~/shared/utils/graphicsAssetCompatibility';
 import { consumeBoundedByteStream } from './object-store';
 import {
 	encodeThumbnail,
-	PngValidationError,
 	processPng,
 	processPngStream,
-	rejectedPngReport,
 	sha256Hex,
 } from './png';
+import { resizeRgbaThumbnail } from './thumbnail';
+import { validationError } from './validation';
 
 const PNG_SIGNATURE = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10);
 const JPEG_START_OF_FRAME_MARKERS = new Set([
@@ -44,31 +41,6 @@ export type StillImageDeclarations = GraphicAssetSourceDeclarations;
 export interface ProcessedStillImage {
 	report: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>;
 	thumbnail: Uint8Array;
-}
-
-export class StillImageValidationError extends Error {
-	readonly issue: GraphicAssetValidationIssue;
-
-	constructor(readonly issues: readonly GraphicAssetValidationIssue[]) {
-		if (issues.length === 0)
-			throw new Error('Still-image validation errors require at least one issue');
-		super(issues.map(issue => issue.message).join(' '));
-		this.issue = issues[0]!;
-	}
-}
-
-function validationIssue(
-	code: GraphicAssetValidationIssue['code'],
-	message: string,
-): GraphicAssetValidationIssue {
-	return { severity: 'error', code, message };
-}
-
-function validationError(
-	code: GraphicAssetValidationIssue['code'],
-	message: string,
-): never {
-	throw new StillImageValidationError([validationIssue(code, message)]);
 }
 
 function bytesStartWith(bytes: Uint8Array, signature: Uint8Array) {
@@ -468,26 +440,6 @@ function parseWebp(bytes: Uint8Array) {
 	};
 }
 
-function thumbnailPixels(image: ImageData) {
-	const scale = Math.min(
-		1,
-		STILL_IMAGE_THUMBNAIL_MAX_WIDTH / image.width,
-		STILL_IMAGE_THUMBNAIL_MAX_HEIGHT / image.height,
-	);
-	const width = Math.max(1, Math.floor(image.width * scale));
-	const height = Math.max(1, Math.floor(image.height * scale));
-	const pixels = new Uint8Array(width * height * 4);
-	for (let targetY = 0; targetY < height; targetY++) {
-		const sourceY = Math.min(image.height - 1, Math.floor(targetY / scale));
-		for (let targetX = 0; targetX < width; targetX++) {
-			const sourceX = Math.min(image.width - 1, Math.floor(targetX / scale));
-			const sourceOffset = (sourceY * image.width + sourceX) * 4;
-			pixels.set(image.data.subarray(sourceOffset, sourceOffset + 4), (targetY * width + targetX) * 4);
-		}
-	}
-	return { width, height, pixels };
-}
-
 function validateDeclarations(
 	format: GraphicAssetImageFacts['format'],
 	canonicalMime: GraphicAssetImageFacts['canonicalMime'],
@@ -516,6 +468,31 @@ function validateDeclarations(
 	}
 }
 
+const encodedStillImageFormats = {
+	jpeg: {
+		format: 'jpeg',
+		canonicalMime: 'image/jpeg',
+		label: 'JPEG',
+		incompleteFrameCode: 'incomplete-jpeg-frame',
+		parse: parseJpeg,
+		async decode(input: ArrayBuffer) {
+			const { decodeJpeg } = await import('../../../runtime/graphics-still-image-codecs');
+			return await decodeJpeg(input);
+		},
+	},
+	webp: {
+		format: 'webp',
+		canonicalMime: 'image/webp',
+		label: 'WebP',
+		incompleteFrameCode: 'incomplete-webp-frame',
+		parse: parseWebp,
+		async decode(input: ArrayBuffer) {
+			const { decodeWebp } = await import('../../../runtime/graphics-still-image-codecs');
+			return await decodeWebp(input);
+		},
+	},
+} as const;
+
 export async function processStillImage(
 	bytes: Uint8Array,
 	declarations: StillImageDeclarations = {},
@@ -532,22 +509,20 @@ export async function processStillImage(
 	if (!isJpeg && !isWebp)
 		validationError('unsupported-image-format', 'Source bytes are not a supported PNG, JPEG, or WebP image.');
 
-	const format = isJpeg ? 'jpeg' as const : 'webp' as const;
-	const canonicalMime = isJpeg ? 'image/jpeg' as const : 'image/webp' as const;
-	validateDeclarations(format, canonicalMime, declarations);
-	const parsed = isJpeg ? parseJpeg(bytes) : parseWebp(bytes);
+	const format = isJpeg
+		? encodedStillImageFormats.jpeg
+		: encodedStillImageFormats.webp;
+	validateDeclarations(format.format, format.canonicalMime, declarations);
+	const parsed = format.parse(bytes);
 	let decoded: ImageData;
 	try {
-		const { decodeJpeg, decodeWebp } = await import('../../../runtime/graphics-still-image-codecs');
 		const input = Uint8Array.from(bytes).buffer;
-		decoded = isJpeg
-			? await decodeJpeg(input)
-			: await decodeWebp(input);
+		decoded = await format.decode(input);
 	}
 	catch {
 		validationError(
-			isJpeg ? 'incomplete-jpeg-frame' : 'incomplete-webp-frame',
-			`${isJpeg ? 'JPEG' : 'WebP'} does not contain one complete decodable frame.`,
+			format.incompleteFrameCode,
+			`${format.label} does not contain one complete decodable frame.`,
 		);
 	}
 	if (
@@ -556,12 +531,12 @@ export async function processStillImage(
 		|| decoded.data.byteLength !== parsed.width * parsed.height * 4
 	) {
 		validationError(
-			isJpeg ? 'incomplete-jpeg-frame' : 'incomplete-webp-frame',
-			`${isJpeg ? 'JPEG' : 'WebP'} decoded frame conflicts with its bounded parser evidence.`,
+			format.incompleteFrameCode,
+			`${format.label} decoded frame conflicts with its bounded parser evidence.`,
 		);
 	}
 
-	const thumbnail = thumbnailPixels(decoded);
+	const thumbnail = resizeRgbaThumbnail(decoded);
 	return {
 		report: {
 			outcome: 'accepted',
@@ -569,8 +544,8 @@ export async function processStillImage(
 			issues: [],
 			facts: {
 				kind: 'image',
-				format,
-				canonicalMime,
+				format: format.format,
+				canonicalMime: format.canonicalMime,
 				byteLength: bytes.byteLength,
 				sha256: await sha256Hex(bytes),
 				width: parsed.width,
@@ -623,16 +598,4 @@ export async function processStillImageStream(
 		await consumeBoundedByteStream(processingStream),
 		declarations,
 	);
-}
-
-export function rejectedStillImageReport(
-	error: StillImageValidationError | PngValidationError,
-): GraphicAssetValidationReport {
-	return error instanceof PngValidationError
-		? rejectedPngReport(error)
-		: {
-				outcome: 'rejected',
-				compatibilityProfile: STILL_IMAGE_COMPATIBILITY_PROFILE,
-				issues: [...error.issues],
-			};
 }

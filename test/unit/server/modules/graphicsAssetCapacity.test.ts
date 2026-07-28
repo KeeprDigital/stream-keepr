@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
@@ -29,6 +30,12 @@ describe('the Graphics Asset Library Capacity', () => {
 		...Array.from({ length: count }).fill(textChunk),
 		transparentPixelPng.slice(-12),
 	]));
+	const browserDecodeEvidence = (bytes: Uint8Array) => ({
+		outcome: 'decoded' as const,
+		sourceDigest: createHash('sha256').update(bytes).digest('hex'),
+		width: 1,
+		height: 1,
+	});
 
 	it('reports the installation defaults and separate canonical usage categories', async () => {
 		const library = createGraphicsAssetLibrary({
@@ -146,6 +153,7 @@ describe('the Graphics Asset Library Capacity', () => {
 			idempotencyKey: 'verified-staging-progress',
 			initiatedBy: 'graphics-author-1',
 			name: 'Verified staging progress',
+			browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
 		const upload = library.uploadImage({
@@ -224,6 +232,7 @@ describe('the Graphics Asset Library Capacity', () => {
 			idempotencyKey: 'blocked-canonical-growth',
 			initiatedBy: 'graphics-author-1',
 			name: 'Blocked canonical growth',
+			browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
 
@@ -274,6 +283,7 @@ describe('the Graphics Asset Library Capacity', () => {
 				initiatedBy: 'graphics-author-1',
 				name: idempotencyKey,
 				duplicateContentPolicy: 'create-separate',
+				browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 				declaredByteLength: transparentPixelPng.byteLength,
 			});
 			return await library.uploadImage({
@@ -341,6 +351,7 @@ describe('the Graphics Asset Library Capacity', () => {
 			idempotencyKey: 'capacity-pressure-source',
 			initiatedBy: 'graphics-author-1',
 			name: 'Capacity pressure source',
+			browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
 		await library.uploadImage({
@@ -378,6 +389,7 @@ describe('the Graphics Asset Library Capacity', () => {
 				initiatedBy: 'graphics-author-1',
 				name: idempotencyKey,
 				duplicateContentPolicy: 'create-separate',
+				browserDecodeEvidence: browserDecodeEvidence(bytes),
 				declaredByteLength: bytes.byteLength,
 			});
 			return await library.uploadImage({

@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
@@ -27,6 +28,10 @@ const webpPixel = Uint8Array.from(Buffer.from(
 	'UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAEAdQlFKUp4CBiOh/AAA=',
 	'base64',
 ));
+
+function sourceDigest(bytes: Uint8Array) {
+	return createHash('sha256').update(bytes).digest('hex');
+}
 
 function jpegSegment(marker: number, payload: Uint8Array) {
 	const length = payload.byteLength + 2;
@@ -82,17 +87,98 @@ function createLibrary(
 	catalogue = createInMemoryGraphicsAssetCatalogue(),
 ) {
 	let nextIdentity = 0;
-	const library = createGraphicsAssetLibrary({
+	const libraryDelegate = createGraphicsAssetLibrary({
 		catalogue,
 		staging,
 		canonical,
 		generateIdentity: () => `identity-${++nextIdentity}`,
 		now: () => new Date('2026-07-27T04:00:00.000Z'),
 	});
+	const library: typeof libraryDelegate = {
+		...libraryDelegate,
+		async initiateImageIngestion(input) {
+			const fixture = input.declaredMime === 'image/jpeg'
+				? jpegPixel
+				: input.declaredMime === 'image/webp'
+					? webpPixel
+					: transparentPixelPng;
+			return await libraryDelegate.initiateImageIngestion({
+				...input,
+				browserDecodeEvidence: Object.hasOwn(input, 'browserDecodeEvidence')
+					? input.browserDecodeEvidence
+					: {
+							outcome: 'decoded',
+							sourceDigest: sourceDigest(fixture),
+							width: 1,
+							height: 1,
+						},
+			});
+		},
+	};
 	return { library, staging, canonical, catalogue };
 }
 
 describe('still-image ingestion through the Graphics Asset Library public module', () => {
+	it.each([
+		{
+			label: 'missing browser evidence',
+			browserDecodeEvidence: undefined,
+			code: 'browser-image-decode-failed',
+		},
+		{
+			label: 'browser decode rejection',
+			browserDecodeEvidence: {
+				outcome: 'rejected',
+				sourceDigest: sourceDigest(jpegPixel),
+			} as const,
+			code: 'browser-image-decode-failed',
+		},
+		{
+			label: 'browser evidence mismatch',
+			browserDecodeEvidence: {
+				outcome: 'decoded',
+				sourceDigest: sourceDigest(jpegPixel),
+				width: 2,
+				height: 1,
+			} as const,
+			code: 'browser-image-decode-mismatch',
+		},
+	])('fails publication for $label through the public seam', async ({
+		browserDecodeEvidence,
+		code,
+	}) => {
+		const { library } = createLibrary();
+		const operation = await library.initiateImageIngestion({
+			idempotencyKey: `browser-gate-${code}`,
+			initiatedBy: 'graphics-author-1',
+			name: 'Browser-gated JPEG',
+			sourceFileName: 'browser-gated.jpg',
+			declaredMime: 'image/jpeg',
+			browserDecodeEvidence,
+			declaredByteLength: jpegPixel.byteLength,
+		});
+
+		const failed = await library.uploadImage({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			declaredMime: 'image/jpeg',
+			bytes: createBoundedByteStream(jpegPixel, {
+				byteLength: jpegPixel.byteLength,
+				maximumByteLength: 25 * 1024 * 1024,
+			}),
+		});
+
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			report: {
+				outcome: 'rejected',
+				issues: [{ code }],
+			},
+			failure: { code: 'validation-failed', retryable: false },
+		});
+		await expect(library.listGraphicAssets({})).resolves.toEqual([]);
+	});
+
 	it.each([
 		{
 			format: 'jpeg',

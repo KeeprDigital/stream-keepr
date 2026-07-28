@@ -3,6 +3,7 @@ import type {
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
@@ -51,6 +52,12 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 				idempotencyKey: 'reference-event-logo',
 				name: 'Reference Event logo',
 				defaultEventId: eventId,
+				browserDecodeEvidence: {
+					outcome: 'decoded',
+					sourceDigest: createHash('sha256').update(referencePixelPng).digest('hex'),
+					width: 1,
+					height: 1,
+				},
 				declaredByteLength: referencePixelPng.byteLength,
 			},
 		});

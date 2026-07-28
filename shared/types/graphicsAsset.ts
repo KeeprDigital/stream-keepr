@@ -50,9 +50,22 @@ export type GraphicAssetReferenceStatus
 
 export type GraphicsDuplicateContentPolicy = 'reuse' | 'create-separate';
 
+export type GraphicAssetBrowserDecodeEvidence
+	= | {
+		outcome: 'decoded';
+		sourceDigest: string;
+		width: number;
+		height: number;
+	}
+	| {
+		outcome: 'rejected';
+		sourceDigest: string;
+	};
+
 export interface GraphicAssetSourceDeclarations {
 	sourceFileName?: string;
 	declaredMime?: string;
+	browserDecodeEvidence?: GraphicAssetBrowserDecodeEvidence;
 }
 
 export type GraphicsIngestionStage
@@ -82,6 +95,7 @@ export interface GraphicAssetImageFacts {
 	colorModel: 'grayscale' | 'grayscale-alpha' | 'indexed' | 'rgb' | 'rgba';
 	hasAlpha: boolean;
 	orientation: 'normal';
+	browserDecodable?: true;
 }
 
 export interface GraphicAssetValidationIssue {
@@ -108,7 +122,9 @@ export interface GraphicAssetValidationIssue {
 		| 'unsupported-webp-profile'
 		| 'incomplete-webp-frame'
 		| 'conflicting-image-extension'
-		| 'conflicting-image-mime';
+		| 'conflicting-image-mime'
+		| 'browser-image-decode-failed'
+		| 'browser-image-decode-mismatch';
 	message: string;
 }
 

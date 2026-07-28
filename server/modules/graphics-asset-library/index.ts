@@ -32,15 +32,17 @@ import {
 	graphicsObjectIdentity,
 } from './object-store';
 import {
-	PngValidationError,
 	sha256Hex,
 	sha256HexStream,
 } from './png';
 import {
 	processStillImageStream,
-	rejectedStillImageReport,
-	StillImageValidationError,
 } from './still-image';
+import {
+	GraphicAssetValidationError,
+	rejectedValidationReport,
+	validationError,
+} from './validation';
 
 export { GraphicsAssetLibraryError } from './errors';
 export { createInMemoryGraphicsAssetCatalogue } from './in-memory-catalogue';
@@ -316,6 +318,47 @@ export function createGraphicsAssetLibrary(
 		};
 	}
 
+	function reportWithBrowserDecodeEvidence(
+		report: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>,
+		operation: GraphicsIngestionOperation,
+	): Extract<GraphicAssetValidationReport, { outcome: 'accepted' }> {
+		const evidence = operation.browserDecodeEvidence;
+		if (!evidence) {
+			validationError(
+				'browser-image-decode-failed',
+				'Representative browser decode evidence is required before publication.',
+			);
+		}
+		if (evidence.sourceDigest !== report.facts.sha256) {
+			validationError(
+				'browser-image-decode-mismatch',
+				'Browser-decoded source digest does not match the staged source bytes.',
+			);
+		}
+		if (evidence.outcome === 'rejected') {
+			validationError(
+				'browser-image-decode-failed',
+				'The representative browser could not decode the exact source bytes.',
+			);
+		}
+		if (
+			evidence.width !== report.facts.width
+			|| evidence.height !== report.facts.height
+		) {
+			validationError(
+				'browser-image-decode-mismatch',
+				'Browser-decoded dimensions do not match bounded parser and server decoder evidence.',
+			);
+		}
+		return {
+			...report,
+			facts: {
+				...report.facts,
+				browserDecodable: true,
+			},
+		};
+	}
+
 	async function failOperation(
 		catalogue: GraphicsAssetCatalogue,
 		operation: GraphicsIngestionOperation,
@@ -501,11 +544,15 @@ export function createGraphicsAssetLibrary(
 					sourceFileName: operation.sourceFileName,
 					declaredMime: operation.declaredMime,
 				});
+				processed = {
+					...processed,
+					report: reportWithBrowserDecodeEvidence(processed.report, operation),
+				};
 			}
 			catch (error) {
-				if (!(error instanceof PngValidationError) && !(error instanceof StillImageValidationError))
+				if (!(error instanceof GraphicAssetValidationError))
 					throw error;
-				const report = rejectedStillImageReport(error);
+				const report = rejectedValidationReport(error);
 				const failed = await failOperation(catalogue, operation, {
 					code: 'validation-failed',
 					retryable: false,
@@ -746,6 +793,23 @@ export function createGraphicsAssetLibrary(
 			) {
 				throw new GraphicsAssetLibraryError('Default Event identity must be a positive integer', 'invalid-ingestion-input');
 			}
+			if (
+				input.browserDecodeEvidence
+				&& (
+					!/^[a-f0-9]{64}$/.test(input.browserDecodeEvidence.sourceDigest)
+					|| (
+						input.browserDecodeEvidence.outcome === 'decoded'
+						&& (
+							!Number.isSafeInteger(input.browserDecodeEvidence.width)
+							|| input.browserDecodeEvidence.width <= 0
+							|| !Number.isSafeInteger(input.browserDecodeEvidence.height)
+							|| input.browserDecodeEvidence.height <= 0
+						)
+					)
+				)
+			) {
+				throw new GraphicsAssetLibraryError('Browser decode evidence is malformed', 'invalid-ingestion-input');
+			}
 
 			const createdAt = timestamp();
 			return await catalogueRequest(() => requireCatalogue().initiateImageIngestion({
@@ -755,6 +819,7 @@ export function createGraphicsAssetLibrary(
 				name: input.name.trim(),
 				sourceFileName: input.sourceFileName?.trim(),
 				declaredMime: input.declaredMime?.trim().toLocaleLowerCase(),
+				browserDecodeEvidence: input.browserDecodeEvidence,
 				defaultEventId: input.defaultEventId,
 				duplicateContentPolicy: input.duplicateContentPolicy ?? 'reuse',
 				declaredByteLength: input.declaredByteLength,

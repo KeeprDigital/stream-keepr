@@ -21,6 +21,7 @@ interface OperationRow {
 	proposed_name: string;
 	source_file_name: string | null;
 	declared_mime: string | null;
+	browser_decode_evidence: string | null;
 	duplicate_content_policy: GraphicsIngestionOperation['duplicateContentPolicy'];
 	default_event_id: number | null;
 	declared_byte_length: number;
@@ -47,6 +48,7 @@ interface AssetRow {
 	proposed_name: string;
 	source_file_name: string | null;
 	declared_mime: string | null;
+	browser_decode_evidence: string | null;
 	duplicate_content_policy: GraphicsIngestionOperation['duplicateContentPolicy'];
 	default_event_id: number | null;
 	declared_byte_length: number;
@@ -72,6 +74,7 @@ function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 		name: row.proposed_name,
 		sourceFileName: row.source_file_name ?? undefined,
 		declaredMime: row.declared_mime ?? undefined,
+		browserDecodeEvidence: parseJson(row.browser_decode_evidence),
 		duplicateContentPolicy: row.duplicate_content_policy,
 		defaultEventId: row.default_event_id ?? undefined,
 		declaredByteLength: row.declared_byte_length,
@@ -94,6 +97,7 @@ function operationRowFromAsset(row: AssetRow): OperationRow {
 		proposed_name: row.proposed_name,
 		source_file_name: row.source_file_name,
 		declared_mime: row.declared_mime,
+		browser_decode_evidence: row.browser_decode_evidence,
 		duplicate_content_policy: row.duplicate_content_policy,
 		default_event_id: row.default_event_id,
 		declared_byte_length: row.declared_byte_length,
@@ -111,7 +115,7 @@ function operationRowFromAsset(row: AssetRow): OperationRow {
 function operationSelect(where: string) {
 	return `
 		SELECT id, idempotency_key, initiated_by, proposed_name,
-			source_file_name, declared_mime,
+				source_file_name, declared_mime, browser_decode_evidence,
 			duplicate_content_policy, default_event_id,
 			declared_byte_length, transferred_byte_length, stage, report, result,
 			capacity_outcome, failure, created_at, updated_at
@@ -153,8 +157,8 @@ function updateOperationStatement(
 ) {
 	return database.prepare(`
 		UPDATE graphics_ingestion_operations
-		SET stage = ?, transferred_byte_length = ?, source_file_name = ?,
-			declared_mime = ?, report = ?, result = ?,
+			SET stage = ?, transferred_byte_length = ?, source_file_name = ?,
+				declared_mime = ?, browser_decode_evidence = ?, report = ?, result = ?,
 			failure = ?, capacity_outcome = ?, updated_at = ?,
 			staging_reserved_byte_length = CASE
 				WHEN ? IN ('completed', 'cancelled')
@@ -182,6 +186,9 @@ function updateOperationStatement(
 		operation.transferredByteLength,
 		operation.sourceFileName ?? null,
 		operation.declaredMime ?? null,
+		operation.browserDecodeEvidence === undefined
+			? null
+			: JSON.stringify(operation.browserDecodeEvidence),
 		operation.report === undefined ? null : JSON.stringify(operation.report),
 		operation.result === undefined ? null : JSON.stringify(operation.result),
 		operation.failure === undefined ? null : JSON.stringify(operation.failure),
@@ -299,8 +306,9 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 						), 0)
 						+ COALESCE((
 							SELECT SUM(length(CAST(json_array(
-								id, idempotency_key, source, stage, initiated_by,
-								proposed_name, source_file_name, declared_mime,
+									id, idempotency_key, source, stage, initiated_by,
+									proposed_name, source_file_name, declared_mime,
+									browser_decode_evidence,
 								duplicate_content_policy, default_event_id,
 								target_asset_id, declared_byte_length, transferred_byte_length,
 								staging_reserved_byte_length, staging_used_byte_length,
@@ -456,15 +464,15 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				return existing;
 
 			await database.prepare(`
-				INSERT OR IGNORE INTO graphics_ingestion_operations (
-					id, idempotency_key, source, stage, initiated_by, proposed_name,
-					source_file_name, declared_mime,
+					INSERT OR IGNORE INTO graphics_ingestion_operations (
+						id, idempotency_key, source, stage, initiated_by, proposed_name,
+						source_file_name, declared_mime, browser_decode_evidence,
 					duplicate_content_policy, default_event_id,
 					declared_byte_length, transferred_byte_length,
 					staging_reserved_byte_length,
 					created_at, updated_at
 				)
-				SELECT ?, ?, 'local-upload', 'created', ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?
+					SELECT ?, ?, 'local-upload', 'created', ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?
 				FROM graphics_capacity_settings settings
 				WHERE settings.id = 1
 					AND (
@@ -480,6 +488,9 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				operation.name,
 				operation.sourceFileName ?? null,
 				operation.declaredMime ?? null,
+				operation.browserDecodeEvidence === undefined
+					? null
+					: JSON.stringify(operation.browserDecodeEvidence),
 				operation.duplicateContentPolicy,
 				operation.defaultEventId ?? null,
 				operation.declaredByteLength,
@@ -916,8 +927,9 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 							ORDER BY event_id
 						)
 					), '[]') AS event_ids,
-					o.id AS operation_id, o.idempotency_key, o.initiated_by,
-					o.proposed_name, o.source_file_name, o.declared_mime,
+						o.id AS operation_id, o.idempotency_key, o.initiated_by,
+						o.proposed_name, o.source_file_name, o.declared_mime,
+						o.browser_decode_evidence,
 					o.duplicate_content_policy,
 					o.default_event_id, o.declared_byte_length,
 					o.transferred_byte_length, o.stage, o.report, o.result, o.failure,

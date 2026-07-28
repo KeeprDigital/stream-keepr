@@ -1,5 +1,6 @@
 import type { GraphicsAssetLibraryCapacity, GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { describe, expect, it } from 'vitest';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
@@ -18,6 +19,12 @@ describe('the Graphics Asset Library Capacity API', () => {
 		...Array.from({ length: count }).fill(textChunk),
 		transparentPixelPng.slice(-12),
 	]));
+	const browserDecodeEvidence = (bytes: Uint8Array) => ({
+		outcome: 'decoded' as const,
+		sourceDigest: createHash('sha256').update(bytes).digest('hex'),
+		width: 1,
+		height: 1,
+	});
 
 	it('exposes author-readable capacity while changes remain on the administrator surface', async () => {
 		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity');
@@ -128,6 +135,7 @@ describe('the Graphics Asset Library Capacity API', () => {
 						idempotencyKey,
 						name: idempotencyKey,
 						duplicateContentPolicy: 'create-separate',
+						browserDecodeEvidence: browserDecodeEvidence(noGrowthBytes),
 						declaredByteLength: noGrowthBytes.byteLength,
 					},
 				},
@@ -190,6 +198,7 @@ describe('the Graphics Asset Library Capacity API', () => {
 						idempotencyKey,
 						name: idempotencyKey,
 						duplicateContentPolicy: 'create-separate',
+						browserDecodeEvidence: browserDecodeEvidence(bytes),
 						declaredByteLength: bytes.byteLength,
 					},
 				},

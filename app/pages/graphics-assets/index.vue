@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {
 	GraphicAsset,
+	GraphicAssetBrowserDecodeEvidence,
 	GraphicAssetSourceDeclarations,
 	GraphicsAssetLibraryCapacity,
 	GraphicsDuplicateContentPolicy,
@@ -21,8 +22,6 @@ const proposedName = ref('');
 const createSeparateAsset = ref(false);
 const uploadPending = ref(false);
 const uploadError = ref<string | null>(null);
-const browserVerification = ref<'idle' | 'pending' | 'verified' | 'failed'>('idle');
-const browserVerificationError = ref<string | null>(null);
 const currentOperation = ref<GraphicsIngestionOperation | null>(null);
 const operationStorageKey = 'graphics-asset-ingestion-operation';
 const initiationStorageKey = 'graphics-asset-ingestion-initiation';
@@ -104,7 +103,22 @@ function readPendingInitiation(): PendingInitiation | null {
 	}
 }
 
-function selectedInitiation(): PendingInitiation {
+function browserEvidenceMatches(
+	left: GraphicAssetBrowserDecodeEvidence | undefined,
+	right: GraphicAssetBrowserDecodeEvidence,
+) {
+	return left?.outcome === right.outcome
+		&& left.sourceDigest === right.sourceDigest
+		&& (
+			left.outcome !== 'decoded'
+			|| right.outcome !== 'decoded'
+			|| (left.width === right.width && left.height === right.height)
+		);
+}
+
+function selectedInitiation(
+	browserDecodeEvidence: GraphicAssetBrowserDecodeEvidence,
+): PendingInitiation {
 	const name = proposedName.value.trim();
 	const duplicateContentPolicy = createSeparateAsset.value ? 'create-separate' : 'reuse';
 	const pending = readPendingInitiation();
@@ -115,6 +129,7 @@ function selectedInitiation(): PendingInitiation {
 		&& pending.declaredByteLength === selectedFile.value!.size
 		&& pending.sourceFileName === selectedFile.value!.name
 		&& pending.declaredMime === (selectedFile.value!.type || undefined)
+		&& browserEvidenceMatches(pending.browserDecodeEvidence, browserDecodeEvidence)
 	) {
 		return pending;
 	}
@@ -126,6 +141,7 @@ function selectedInitiation(): PendingInitiation {
 		declaredByteLength: selectedFile.value!.size,
 		sourceFileName: selectedFile.value!.name,
 		declaredMime: selectedFile.value!.type || undefined,
+		browserDecodeEvidence,
 	};
 	localStorage.setItem(initiationStorageKey, JSON.stringify(initiation));
 	return initiation;
@@ -199,44 +215,15 @@ async function observeOperationRequest<T>(
 	}
 }
 
-async function verifyPublishedRevisionInBrowser(operation: GraphicsIngestionOperation) {
-	if (operation.report?.outcome !== 'accepted' || !operation.result)
-		return;
-	browserVerification.value = 'pending';
-	browserVerificationError.value = null;
-	try {
-		const facts = operation.report.facts;
-		const response = await fetch(
-			`/api/graphics-assets/${operation.result.assetId}/revisions/${operation.result.revisionId}/content`,
-		);
-		if (!response.ok)
-			throw new Error(`Exact revision content returned status ${response.status}.`);
-		const source = await response.blob();
-		if (source.size !== facts.byteLength || source.type !== facts.canonicalMime)
-			throw new Error('Exact revision bytes do not match their verified source facts.');
-		const decoded = await verifyStillImageBrowserDecode(source);
-		if (decoded.width !== facts.width || decoded.height !== facts.height)
-			throw new Error('Browser-decoded dimensions do not match the verified revision facts.');
-		browserVerification.value = 'verified';
-	}
-	catch (caught) {
-		browserVerification.value = 'failed';
-		browserVerificationError.value = caught instanceof Error
-			? caught.message
-			: 'Representative browser decoding failed.';
-	}
-}
-
 async function uploadImage() {
 	if (!selectedFile.value || !canUpload.value)
 		return;
 
 	uploadPending.value = true;
 	uploadError.value = null;
-	browserVerification.value = 'idle';
-	browserVerificationError.value = null;
 	try {
-		const initiation = selectedInitiation();
+		const browserDecodeEvidence = await verifyStillImageBrowserDecode(selectedFile.value);
+		const initiation = selectedInitiation(browserDecodeEvidence);
 		const initiated = await $fetch<GraphicsIngestionOperation>(
 			'/api/graphics-assets/ingestion-operations',
 			{
@@ -266,7 +253,6 @@ async function uploadImage() {
 
 		currentOperation.value = await response.json() as GraphicsIngestionOperation;
 		if (currentOperation.value.stage === 'completed') {
-			await verifyPublishedRevisionInBrowser(currentOperation.value);
 			clearPersistedOperation();
 			selectedFile.value = null;
 			proposedName.value = '';
@@ -299,7 +285,6 @@ async function retryOperation() {
 			),
 		);
 		if (currentOperation.value.stage === 'completed') {
-			await verifyPublishedRevisionInBrowser(currentOperation.value);
 			clearPersistedOperation();
 			await refresh();
 			await refreshCapacity();
@@ -548,20 +533,15 @@ onMounted(async () => {
 					<p v-if="currentOperation.result" class="mt-2 text-sm text-muted">
 						{{ currentOperation.result.outcome === 'published' ? 'Published' : 'Reused' }} asset {{ currentOperation.result.assetId }} revision {{ currentOperation.result.revisionId }}
 					</p>
-					<p v-if="browserVerification === 'pending'" class="mt-2 text-sm text-muted">
-						Verifying the exact revision in this browser…
+					<p
+						v-if="
+							currentOperation.report?.outcome === 'accepted'
+								&& currentOperation.report.facts.browserDecodable
+						"
+						class="mt-2 text-sm text-success"
+					>
+						Exact source browser decode verified before publication.
 					</p>
-					<p v-else-if="browserVerification === 'verified'" class="mt-2 text-sm text-success">
-						Exact revision browser decode verified.
-					</p>
-					<UAlert
-						v-else-if="browserVerification === 'failed'"
-						class="mt-3"
-						color="warning"
-						variant="soft"
-						title="Browser compatibility could not be verified"
-						:description="browserVerificationError ?? undefined"
-					/>
 				</div>
 			</UCard>
 

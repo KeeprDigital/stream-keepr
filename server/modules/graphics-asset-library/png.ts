@@ -1,6 +1,5 @@
 import type {
 	GraphicAssetImageFacts,
-	GraphicAssetValidationIssue,
 	GraphicAssetValidationReport,
 } from '~~/shared/types/graphicsAsset';
 import type { BoundedByteStream } from './object-store';
@@ -9,10 +8,14 @@ import {
 	MAX_STILL_IMAGE_AXIS,
 	MAX_STILL_IMAGE_PIXELS,
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
-	STILL_IMAGE_THUMBNAIL_MAX_HEIGHT,
-	STILL_IMAGE_THUMBNAIL_MAX_WIDTH,
 } from '~~/shared/utils/graphicsAssetCompatibility';
 import { createBoundedByteStream } from './object-store';
+import { createThumbnailProjection } from './thumbnail';
+import {
+	GraphicAssetValidationError,
+	validationError,
+	validationIssue,
+} from './validation';
 
 const PNG_SIGNATURE = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10);
 const textDecoder = new TextDecoder('ascii');
@@ -41,33 +44,6 @@ interface ParsedPng {
 export interface ProcessedPng {
 	report: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>;
 	thumbnail: Uint8Array;
-}
-
-export class PngValidationError extends Error {
-	readonly issue: GraphicAssetValidationIssue;
-
-	constructor(
-		readonly issues: readonly GraphicAssetValidationIssue[],
-	) {
-		if (issues.length === 0)
-			throw new Error('PNG validation errors require at least one issue');
-		super(issues.map(issue => issue.message).join(' '));
-		this.issue = issues[0]!;
-	}
-}
-
-function validationIssue(
-	code: GraphicAssetValidationIssue['code'],
-	message: string,
-): GraphicAssetValidationIssue {
-	return { severity: 'error', code, message };
-}
-
-function validationError(
-	code: GraphicAssetValidationIssue['code'],
-	message: string,
-): never {
-	throw new PngValidationError([validationIssue(code, message)]);
 }
 
 function readUint16(bytes: Uint8Array, offset: number): number {
@@ -295,25 +271,8 @@ async function decodeThumbnail(
 	parsed: ParsedPng,
 	inflated: ReadableStream<Uint8Array>,
 ): Promise<{ width: number; height: number; pixels: Uint8Array }> {
-	const scale = Math.min(
-		1,
-		STILL_IMAGE_THUMBNAIL_MAX_WIDTH / parsed.width,
-		STILL_IMAGE_THUMBNAIL_MAX_HEIGHT / parsed.height,
-	);
-	const width = Math.max(1, Math.floor(parsed.width * scale));
-	const height = Math.max(1, Math.floor(parsed.height * scale));
-	const pixels = new Uint8Array(width * height * 4);
-	const targetSourceX = Array.from(
-		{ length: width },
-		(_, targetX) => Math.min(parsed.width - 1, Math.floor(targetX / scale)),
-	);
-	const targetYBySource = new Map<number, number>();
-	for (let targetY = 0; targetY < height; targetY++) {
-		targetYBySource.set(
-			Math.min(parsed.height - 1, Math.floor(targetY / scale)),
-			targetY,
-		);
-	}
+	const projection = createThumbnailProjection(parsed.width, parsed.height);
+	const pixels = new Uint8Array(projection.width * projection.height * 4);
 
 	const reader = new StreamByteReader(inflated);
 	const channels = channelCount(parsed.colorType);
@@ -342,11 +301,11 @@ async function decodeThumbnail(
 				);
 				previous = decoded;
 				const sourceY = pass.y + passY * pass.dy;
-				const targetY = targetYBySource.get(sourceY);
+				const targetY = projection.targetYBySource.get(sourceY);
 				if (targetY === undefined)
 					continue;
-				for (let targetX = 0; targetX < width; targetX++) {
-					const sourceX = targetSourceX[targetX]!;
+				for (let targetX = 0; targetX < projection.width; targetX++) {
+					const sourceX = projection.sourceXByTargetX[targetX]!;
 					if (sourceX < pass.x || (sourceX - pass.x) % pass.dx !== 0)
 						continue;
 					const passX = (sourceX - pass.x) / pass.dx;
@@ -357,7 +316,7 @@ async function decodeThumbnail(
 						decoded,
 						passX * channels,
 						pixels,
-						(targetY * width + targetX) * 4,
+						(targetY * projection.width + targetX) * 4,
 					);
 				}
 			}
@@ -372,12 +331,12 @@ async function decodeThumbnail(
 	}
 	catch (error) {
 		await reader.cancel(error).catch(() => undefined);
-		if (error instanceof PngValidationError)
+		if (error instanceof GraphicAssetValidationError)
 			throw error;
 		validationError('incomplete-png-frame', 'PNG image data cannot be completely decoded.');
 	}
 
-	return { width, height, pixels };
+	return { width: projection.width, height: projection.height, pixels };
 }
 
 function captureChunkData(type: string, length: number): boolean {
@@ -650,13 +609,13 @@ async function inspectAndDecodePng(
 			validationError('incomplete-png-frame', 'PNG does not contain one complete decodable frame.');
 		const thumbnail = await thumbnailPromise;
 		if (issues.length > 0)
-			throw new PngValidationError(issues);
+			throw new GraphicAssetValidationError(issues);
 		return { parsed, thumbnail };
 	}
 	catch (error) {
 		await compressedWriter?.abort(error).catch(() => undefined);
 		await thumbnailPromise?.catch(() => undefined);
-		if (thumbnailError instanceof PngValidationError)
+		if (thumbnailError instanceof GraphicAssetValidationError)
 			throw thumbnailError;
 		throw error;
 	}
@@ -807,12 +766,4 @@ export async function processPng(bytes: Uint8Array): Promise<ProcessedPng> {
 		}),
 		await sha256Hex(bytes),
 	);
-}
-
-export function rejectedPngReport(error: PngValidationError): GraphicAssetValidationReport {
-	return {
-		outcome: 'rejected',
-		compatibilityProfile: STILL_IMAGE_COMPATIBILITY_PROFILE,
-		issues: [...error.issues],
-	};
 }

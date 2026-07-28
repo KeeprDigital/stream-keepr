@@ -3,6 +3,7 @@ import type {
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
@@ -22,6 +23,133 @@ const webpPixel = Uint8Array.from(Buffer.from(
 	'UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAEAdQlFKUp4CBiOh/AAA=',
 	'base64',
 ));
+
+function browserDecodeEvidence(bytes: Uint8Array) {
+	return {
+		outcome: 'decoded' as const,
+		sourceDigest: createHash('sha256').update(bytes).digest('hex'),
+		width: 1,
+		height: 1,
+	};
+}
+
+function rejectedBrowserDecodeEvidence(bytes: Uint8Array) {
+	return {
+		outcome: 'rejected' as const,
+		sourceDigest: createHash('sha256').update(bytes).digest('hex'),
+	};
+}
+
+function jpegSegment(marker: number, payload: Uint8Array) {
+	const length = payload.byteLength + 2;
+	return Uint8Array.of(0xFF, marker, length >>> 8, length & 0xFF, ...payload);
+}
+
+function insertAfterJpegSignature(bytes: Uint8Array, segment: Uint8Array) {
+	return Uint8Array.of(...bytes.subarray(0, 2), ...segment, ...bytes.subarray(2));
+}
+
+function jpegFrameDataOffset(bytes: Uint8Array) {
+	for (let index = 0; index < bytes.byteLength - 1; index++) {
+		if (bytes[index] === 0xFF && (bytes[index + 1] === 0xC0 || bytes[index + 1] === 0xC2))
+			return index + 4;
+	}
+	throw new Error('JPEG fixture does not contain a supported frame marker');
+}
+
+function jpegWithFrameFacts(width: number, height: number, precision = 8) {
+	const bytes = Uint8Array.from(jpegPixel);
+	const offset = jpegFrameDataOffset(bytes);
+	bytes[offset] = precision;
+	bytes[offset + 1] = height >>> 8;
+	bytes[offset + 2] = height & 0xFF;
+	bytes[offset + 3] = width >>> 8;
+	bytes[offset + 4] = width & 0xFF;
+	return bytes;
+}
+
+function jpegWithOrientationSix() {
+	const exif = Uint8Array.of(
+		0x45,
+		0x78,
+		0x69,
+		0x66,
+		0,
+		0,
+		0x49,
+		0x49,
+		0x2A,
+		0,
+		8,
+		0,
+		0,
+		0,
+		1,
+		0,
+		0x12,
+		0x01,
+		3,
+		0,
+		1,
+		0,
+		0,
+		0,
+		6,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+	);
+	return insertAfterJpegSignature(jpegPixel, jpegSegment(0xE1, exif));
+}
+
+function jpegWithColourProfile() {
+	return insertAfterJpegSignature(
+		jpegPixel,
+		jpegSegment(0xE2, new TextEncoder().encode('ICC_PROFILE\0')),
+	);
+}
+
+function animatedWebp() {
+	const payload = webpPixel.subarray(12);
+	const riffLength = 4 + 8 + 10 + payload.byteLength;
+	return Uint8Array.of(
+		0x52,
+		0x49,
+		0x46,
+		0x46,
+		riffLength,
+		0,
+		0,
+		0,
+		0x57,
+		0x45,
+		0x42,
+		0x50,
+		0x56,
+		0x50,
+		0x38,
+		0x58,
+		10,
+		0,
+		0,
+		0,
+		0x02,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		...payload,
+	);
+}
 
 describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 	let eventId: number;
@@ -51,6 +179,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			idempotencyKey: 'integration-scoreboard-logo',
 			name: 'Integration scoreboard logo',
 			defaultEventId: eventId,
+			browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 			declaredByteLength: transparentPixelPng.byteLength,
 		};
 		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
@@ -92,6 +221,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 					sha256: '431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460',
 					width: 1,
 					height: 1,
+					browserDecodable: true,
 				},
 			},
 			result: { outcome: 'published' },
@@ -147,6 +277,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 				idempotencyKey: 'integration-duplicate-scoreboard-logo',
 				name: 'Duplicate upload name',
 				defaultEventId: eventId,
+				browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 				declaredByteLength: transparentPixelPng.byteLength,
 			},
 		});
@@ -177,6 +308,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 				idempotencyKey: 'integration-separate-scoreboard-logo',
 				name: 'Separate scoreboard logo',
 				duplicateContentPolicy: 'create-separate',
+				browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 				declaredByteLength: transparentPixelPng.byteLength,
 			},
 		});
@@ -218,6 +350,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			body: {
 				idempotencyKey: 'integration-invalid-logo',
 				name: 'Invalid integration logo',
+				browserDecodeEvidence: rejectedBrowserDecodeEvidence(invalidBytes),
 				declaredByteLength: invalidBytes.byteLength,
 			},
 		});
@@ -254,6 +387,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			body: {
 				idempotencyKey: 'integration-conflicting-png-mime',
 				name: 'Conflicting MIME',
+				browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 				declaredByteLength: transparentPixelPng.byteLength,
 			},
 		});
@@ -275,6 +409,131 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			},
 			failure: { code: 'validation-failed', retryable: false },
 		});
+	});
+
+	it('records a stable report for a conflicting MIME outside the accepted allowlist', async () => {
+		const operation = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
+			method: 'POST',
+			headers: authorHeaders,
+			body: {
+				idempotencyKey: 'integration-conflicting-unsupported-mime',
+				name: 'Unsupported MIME declaration',
+				sourceFileName: 'declared.png',
+				declaredMime: 'image/gif',
+				browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
+				declaredByteLength: transparentPixelPng.byteLength,
+			},
+		});
+		const response = await fetch(
+			`/api/graphics-assets/ingestion-operations/${operation.id}/content`,
+			{
+				method: 'PUT',
+				headers: { ...authorHeaders, 'content-type': 'image/gif' },
+				body: transparentPixelPng,
+			},
+		);
+
+		expect(response.status).toBe(200);
+		await expect(response.json()).resolves.toMatchObject({
+			stage: 'failed',
+			report: {
+				outcome: 'rejected',
+				issues: [{ code: 'conflicting-image-mime' }],
+			},
+			failure: { code: 'validation-failed', retryable: false },
+		});
+	});
+
+	it.each([
+		{
+			label: 'JPEG orientation',
+			bytes: jpegWithOrientationSix(),
+			fileName: 'rotated.jpg',
+			mime: 'image/jpeg',
+			code: 'unsupported-image-orientation',
+		},
+		{
+			label: 'JPEG colour profile',
+			bytes: jpegWithColourProfile(),
+			fileName: 'profiled.jpg',
+			mime: 'image/jpeg',
+			code: 'unsupported-jpeg-profile',
+		},
+		{
+			label: 'JPEG bit depth',
+			bytes: jpegWithFrameFacts(1, 1, 12),
+			fileName: 'twelve-bit.jpg',
+			mime: 'image/jpeg',
+			code: 'unsupported-jpeg-colour',
+		},
+		{
+			label: 'JPEG axis limit',
+			bytes: jpegWithFrameFacts(8193, 1),
+			fileName: 'wide.jpg',
+			mime: 'image/jpeg',
+			code: 'image-dimensions-exceeded',
+		},
+		{
+			label: 'JPEG pixel limit',
+			bytes: jpegWithFrameFacts(4097, 4097),
+			fileName: 'too-many-pixels.jpg',
+			mime: 'image/jpeg',
+			code: 'image-pixels-exceeded',
+		},
+		{
+			label: 'partial JPEG',
+			bytes: jpegPixel.subarray(0, -1),
+			fileName: 'partial.jpg',
+			mime: 'image/jpeg',
+			code: 'incomplete-jpeg-frame',
+		},
+		{
+			label: 'WebP animation',
+			bytes: animatedWebp(),
+			fileName: 'animated.webp',
+			mime: 'image/webp',
+			code: 'unsupported-webp-animation',
+		},
+	])('rejects $label through the durable public ingestion seam', async ({
+		label,
+		bytes,
+		fileName,
+		mime,
+		code,
+	}) => {
+		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
+			method: 'POST',
+			headers: authorHeaders,
+			body: {
+				idempotencyKey: `integration-profile-rejection-${label}`,
+				name: `Rejected ${label}`,
+				sourceFileName: fileName,
+				declaredMime: mime,
+				browserDecodeEvidence: rejectedBrowserDecodeEvidence(bytes),
+				declaredByteLength: bytes.byteLength,
+			},
+		});
+		const response = await fetch(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
+			{
+				method: 'PUT',
+				headers: { ...authorHeaders, 'content-type': mime },
+				body: bytes,
+			},
+		);
+
+		expect(response.status).toBe(200);
+		await expect(response.json()).resolves.toMatchObject({
+			stage: 'failed',
+			report: {
+				outcome: 'rejected',
+				issues: [{ code }],
+			},
+			failure: { code: 'validation-failed', retryable: false },
+		});
+		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			query: { search: `Rejected ${label}` },
+		})).resolves.toEqual([]);
 	});
 
 	it.each([
@@ -307,6 +566,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 				name: `Integration ${label} image`,
 				sourceFileName: fileName,
 				declaredMime: mime,
+				browserDecodeEvidence: browserDecodeEvidence(bytes),
 				declaredByteLength: bytes.byteLength,
 			},
 		});
@@ -337,6 +597,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 					bitDepth: 8,
 					colorSpace: 'srgb',
 					orientation: 'normal',
+					browserDecodable: true,
 				},
 			},
 		});
