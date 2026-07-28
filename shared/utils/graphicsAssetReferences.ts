@@ -5,6 +5,7 @@ import type {
 	FeatureMatchWidgetConfig,
 } from '../types/screenConfig';
 import type { GraphicsVideoTarget } from './graphicAssetTargetCompatibility';
+import { chromiumTransparencyTargetCompatibility } from './graphicAssetTargetCompatibility';
 
 export interface ScreenGraphicAssetReference {
 	reference: GraphicAssetReference;
@@ -20,10 +21,11 @@ export function screenGraphicAssetReferenceTargetCompatibility(
 ):
 	| { outcome: 'compatible' }
 	| { outcome: 'blocked'; code: 'vp9-alpha-chromium-required' } {
-	return reference.videoCompatibility === 'chromium-transparency'
-		&& (reference.videoTarget !== 'chromium' || (actualTarget !== undefined && actualTarget !== 'chromium'))
-		? { outcome: 'blocked', code: 'vp9-alpha-chromium-required' }
-		: { outcome: 'compatible' };
+	return chromiumTransparencyTargetCompatibility(
+		reference.videoCompatibility === 'chromium-transparency',
+		reference.videoTarget,
+		actualTarget,
+	);
 }
 
 export function sameGraphicAssetReference(

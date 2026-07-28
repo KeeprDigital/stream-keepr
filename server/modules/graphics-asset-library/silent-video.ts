@@ -408,6 +408,8 @@ function mp4TrackFacts(bytes: Uint8Array, trak: IsoBox, mediaData: readonly IsoB
 		validationError('video-index-incomplete', 'MP4 requires complete chunk and random-access indexes.');
 	}
 	const chunkCount = u32(view, chunks.dataStart + 4);
+	if (chunkCount > frameCount)
+		validationError('video-index-incomplete', 'MP4 chunk count exceeds the bounded sample timeline.');
 	const chunkOffsetLength = chunks.type === 'co64' ? 8 : 4;
 	if (chunks.dataStart + 8 + chunkCount * chunkOffsetLength !== chunks.end)
 		validationError('video-index-incomplete', 'MP4 chunk offsets are incomplete.');
@@ -494,20 +496,24 @@ function inspectMp4(bytes: Uint8Array) {
 	if (ftyp.end - ftyp.dataStart < 8 || (ftyp.end - ftyp.dataStart - 8) % 4 !== 0)
 		validationError('malformed-video', 'MP4 file-type declaration is malformed.');
 	const mp4Brands = new Set(['isom', 'iso2', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1']);
-	const declaredBrands = [
-		ascii(bytes, ftyp.dataStart, 4),
-		...Array.from(
-			{ length: (ftyp.end - ftyp.dataStart - 8) / 4 },
-			(_, index) => ascii(bytes, ftyp.dataStart + 8 + index * 4, 4),
-		),
-	];
-	if (!declaredBrands.some(brand => mp4Brands.has(brand)))
+	const majorBrand = ascii(bytes, ftyp.dataStart, 4);
+	if (!mp4Brands.has(majorBrand))
 		validationError('unsupported-video-format', 'ISO-BMFF file type is not an MP4-compatible brand.');
 	const moov = oneBox(top, 'moov');
 	const firstMdat = top.find(box => box.type === 'mdat');
 	if (!firstMdat || moov.start > firstMdat.start)
 		validationError('mp4-fast-start-required', 'MP4 requires fast-start ordering with moov before media data.');
 	const moovChildren = childBoxes(bytes, moov);
+	const mvhd = oneBox(moovChildren, 'mvhd');
+	if (bytes[mvhd.dataStart] !== 0)
+		validationError('unsupported-video-profile', 'Only bounded version-zero MP4 movie headers are supported.');
+	const movieMatrixOffset = mvhd.dataStart + 36;
+	const expectedMovieMatrix = [0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000];
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	for (let index = 0; index < expectedMovieMatrix.length; index++) {
+		if (u32(view, movieMatrixOffset + index * 4) !== expectedMovieMatrix[index])
+			validationError('unsupported-video-transform', 'MP4 movie transforms are not supported.');
+	}
 	const tracks = moovChildren.filter(box => box.type === 'trak');
 	if (tracks.length !== 1)
 		validationError('unsupported-video-tracks', 'Silent video requires exactly one complete video track.');
@@ -703,6 +709,13 @@ function inspectWebm(bytes: Uint8Array) {
 		const bitDepth = colourChildren.find(element => element.id === 0x55B2);
 		if (bitDepth && ebmlUnsigned(bytes, bitDepth) !== 8)
 			validationError('unsupported-video-profile', 'VP9 video must be 8-bit.');
+		for (const [id, label] of [[0x55BB, 'primaries'], [0x55BA, 'transfer'], [0x55B1, 'matrix']] as const) {
+			const element = colourChildren.find(candidate => candidate.id === id);
+			if (element && ![1, 2].includes(ebmlUnsigned(bytes, element)))
+				validationError('unsupported-video-profile', `WebM ${label} signalling is outside 8-bit SDR BT.709.`);
+		}
+		if (colourChildren.some(element => [0x55BC, 0x55BD, 0x55D0].includes(element.id)))
+			validationError('unsupported-video-profile', 'WebM HDR mastering and light-level metadata is not supported.');
 	}
 	const cues = oneEbml(children, 0x1C53BB6B, 'video-index-incomplete');
 	const cuePoints = ebmlChildren(bytes, cues).filter(element => element.id === 0xBB);

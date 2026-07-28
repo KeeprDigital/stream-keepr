@@ -394,7 +394,7 @@ onBeforeUnmount(() => {
 			<div
 				v-for="widget in widgetItems"
 				:key="`widget-guide-${widget.id}`"
-				class="region-guide region-guide--widget"
+				class="region-guide region-guide--media-item"
 				:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: widget.item.id }) }"
 				:style="guideStyle(widget.item)"
 				role="button"

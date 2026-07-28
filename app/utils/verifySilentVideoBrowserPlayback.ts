@@ -28,6 +28,41 @@ function waitForVideoEvent(
 	});
 }
 
+function waitForPresentedVideoFrame(video: HTMLVideoElement, timeoutMilliseconds = 10_000) {
+	return new Promise<void>((resolve, reject) => {
+		const startTime = video.currentTime;
+		let timeout: number | undefined;
+		let settled = false;
+		const controller = new AbortController();
+		const finish = (work: () => void) => {
+			if (settled)
+				return;
+			settled = true;
+			window.clearTimeout(timeout);
+			controller.abort();
+			work();
+		};
+		const advanced = () => {
+			if (video.currentTime > startTime)
+				finish(resolve);
+		};
+		const onTimeUpdate = () => advanced();
+		const onError = () => finish(() => reject(new Error('Video playback failed before presenting a frame.')));
+		video.addEventListener('timeupdate', onTimeUpdate, { signal: controller.signal });
+		video.addEventListener('error', onError, { once: true, signal: controller.signal });
+		if (typeof video.requestVideoFrameCallback === 'function') {
+			video.requestVideoFrameCallback((_now, metadata) => {
+				if (metadata.mediaTime > startTime)
+					finish(resolve);
+			});
+		}
+		timeout = window.setTimeout(
+			() => finish(() => reject(new Error('Video playback did not advance to a presented frame.'))),
+			timeoutMilliseconds,
+		);
+	});
+}
+
 async function sha256(source: Blob) {
 	return Array.from(
 		new Uint8Array(await crypto.subtle.digest('SHA-256', await source.arrayBuffer())),
@@ -77,8 +112,9 @@ export async function verifySilentVideoBrowserPlayback(
 		}
 
 		stage = 'playback';
+		const presentedFrame = waitForPresentedVideoFrame(video);
 		await video.play();
-		await new Promise(resolve => window.setTimeout(resolve, 50));
+		await presentedFrame;
 		video.pause();
 
 		stage = 'seek';

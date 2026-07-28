@@ -9,7 +9,6 @@ import { anchorFeatureMatchOverlayRect } from '~/utils/featureMatchOverlayGeomet
 import FeatureMatchOverlayBoxStyleFields from './BoxStyleFields.vue';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
 import FeatureMatchOverlayGeometryFields from './GeometryFields.vue';
-import FeatureMatchOverlayOrderSection from './OrderSection.vue';
 
 const props = defineProps<{
 	config: FeatureMatchOverlayModeConfig;
@@ -171,13 +170,5 @@ function removeSelf() {
 				@update="updates => editor.updateItemSurfaceStyle(item.id, updates)"
 			/>
 		</FeatureMatchOverlayControlSection>
-
-		<FeatureMatchOverlayOrderSection
-			:z-index="item.zIndex ?? 0"
-			@send-to-back="editor.sendItemToBack(item.id)"
-			@move="delta => editor.moveItemOrder(item.id, delta)"
-			@bring-to-front="editor.bringItemToFront(item.id)"
-			@update-z-index="zIndex => editor.setItemOrder(item.id, zIndex)"
-		/>
 	</div>
 </template>

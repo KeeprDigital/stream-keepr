@@ -1,5 +1,17 @@
 export type GraphicsVideoTarget = 'chromium' | 'safari' | 'other';
 
+export function chromiumTransparencyTargetCompatibility(
+	restricted: boolean,
+	authoredTarget: GraphicsVideoTarget | undefined,
+	actualTarget?: GraphicsVideoTarget,
+):
+	| { outcome: 'compatible' }
+	| { outcome: 'blocked'; code: 'vp9-alpha-chromium-required' } {
+	return restricted && (authoredTarget !== 'chromium' || (actualTarget !== undefined && actualTarget !== 'chromium'))
+		? { outcome: 'blocked', code: 'vp9-alpha-chromium-required' }
+		: { outcome: 'compatible' };
+}
+
 interface TargetCompatibilityFacts {
 	kind: 'image' | 'silent-video' | 'font';
 	hasAlpha?: boolean;
@@ -17,8 +29,7 @@ export function graphicAssetTargetCompatibility(
 		facts.kind === 'silent-video'
 		&& facts.hasAlpha
 		&& (
-			target !== 'chromium'
-			|| facts.targetCompatibility !== 'chromium-transparency'
+			facts.targetCompatibility !== 'chromium-transparency'
 			|| facts.chromiumTransparencyPlayback !== true
 		)
 	) {
@@ -27,7 +38,11 @@ export function graphicAssetTargetCompatibility(
 			code: 'vp9-alpha-chromium-required',
 		};
 	}
-	return { outcome: 'compatible' };
+	return chromiumTransparencyTargetCompatibility(
+		facts.kind === 'silent-video' && facts.hasAlpha === true,
+		target,
+		target,
+	);
 }
 
 export function graphicsVideoTargetForUserAgent(userAgent: string): GraphicsVideoTarget {

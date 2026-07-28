@@ -175,10 +175,17 @@ describe('silent-video bounded inspection', () => {
 	it('rejects ISO-BMFF files that do not declare an MP4-compatible brand', async () => {
 		const quickTime = h264Mp4.slice();
 		const quickTimeBrand = new TextEncoder().encode('qt  ');
-		for (const offset of [8, 16, 20, 24, 28])
-			quickTime.set(quickTimeBrand, offset);
+		quickTime.set(quickTimeBrand, 8);
 
 		await expectIssue(processSilentVideo(quickTime), 'unsupported-video-format');
+	});
+
+	it('rejects a movie-level presentation transform', async () => {
+		const transformed = h264Mp4.slice();
+		const movieHeader = asciiOffset(transformed, 'mvhd') + 4;
+		new DataView(transformed.buffer).setUint32(movieHeader + 36, 0x0000FFFF);
+
+		await expectIssue(processSilentVideo(transformed), 'unsupported-video-transform');
 	});
 
 	it('rejects HDR transfer characteristics signalled only in the H.264 SPS VUI', async () => {
@@ -252,6 +259,14 @@ describe('silent-video bounded inspection', () => {
 		await expectIssue(processSilentVideo(malformed), 'video-frame-rate-exceeded');
 	});
 
+	it('rejects an MP4 chunk count larger than its bounded sample timeline', async () => {
+		const malformed = h264Mp4.slice();
+		const chunkTable = asciiOffset(malformed, 'stco') + 4;
+		new DataView(malformed.buffer).setUint32(chunkTable + 4, 3);
+
+		await expectIssue(processSilentVideo(malformed), 'video-index-incomplete');
+	});
+
 	it('rejects WebM Cues that do not match their cluster timeline', async () => {
 		const malformed = vp9Webm.slice();
 		const cueTime = malformed.findIndex((byte, index) =>
@@ -272,5 +287,15 @@ describe('silent-video bounded inspection', () => {
 		malformed[clusterTime + 2] = 1;
 
 		await expectIssue(processSilentVideo(malformed), 'malformed-video-timeline');
+	});
+
+	it('rejects HDR transfer signalling from the WebM Colour element', async () => {
+		const hdr = vp9Webm.slice();
+		const rangeElement = hdr.findIndex((byte, index) => byte === 0x55 && hdr[index + 1] === 0xB9);
+		expect(rangeElement).toBeGreaterThanOrEqual(0);
+		hdr[rangeElement + 1] = 0xBA;
+		hdr[rangeElement + 3] = 16;
+
+		await expectIssue(processSilentVideo(hdr), 'unsupported-video-profile');
 	});
 });

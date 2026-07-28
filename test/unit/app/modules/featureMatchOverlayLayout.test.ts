@@ -261,6 +261,17 @@ describe('feature-match-overlay layout writer', () => {
 			}
 		});
 
+		it('creates a first-class Media Graphic Item without author-editable z-index', () => {
+			const { layout } = createLayoutItem(layoutOf([]), 'media');
+
+			expect(layout.items[0]).toMatchObject({
+				type: 'media',
+				mediaKind: 'image',
+				fit: 'contain',
+			});
+			expect(layout.items[0]).not.toHaveProperty('zIndex');
+		});
+
 		it('creates a Widget Group child matching the group arrangement mode', () => {
 			const { layout, id } = createGroupChild(layoutOf([groupItem()]), 'g1', 'text');
 

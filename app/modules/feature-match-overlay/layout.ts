@@ -273,8 +273,9 @@ export function createLayoutItem(layout: FeatureMatchLayoutConfig, kind: Feature
 		item = { ...base, type: 'source', label: 'New Source', sourceRole: 'main', frameCutout: true, width: 420, height: 240, surfaceStyle: { backgroundColor: '#000000', backgroundOpacity: 0, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8 } };
 	}
 	else if (kind === 'media') {
+		const { zIndex: _zIndex, ...mediaBase } = base;
 		item = {
-			...base,
+			...mediaBase,
 			type: 'media',
 			label: 'New Media',
 			width: 420,
