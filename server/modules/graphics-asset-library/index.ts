@@ -119,7 +119,7 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	}) => Promise<GraphicsIngestionOperation>;
 	completeImageReplacementNoop: (input: {
 		operation: GraphicsIngestionOperation;
-		current: ReusableImage;
+		current: ReusableImage & { sourceDigest: string };
 		completedAt: string;
 	}) => Promise<GraphicsIngestionOperation>;
 	publishImageReplacement: (input: PublishImageCatalogueInput & {

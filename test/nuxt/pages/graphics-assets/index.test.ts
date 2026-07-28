@@ -224,7 +224,7 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(wrapper.get('img').attributes('src')).toBe('/api/graphics-assets/asset-1/thumbnail');
 	});
 
-	it('inspects usage by exact revision with the owning graphics artifact and Event context', async () => {
+	it('inspects each exact Graphic Asset Revision with the owning graphics artifact and Event context', async () => {
 		const usage: GraphicAssetUsage[] = [{
 			id: 'usage-1',
 			reference: {
@@ -252,10 +252,10 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(wrapper.text()).toContain('Screen 42');
 		expect(wrapper.text()).toContain('Event 7');
 		expect(wrapper.text()).toContain('revision-older');
-		expect(wrapper.text()).toContain('Pinned older revision');
+		expect(wrapper.text()).toContain('Pinned older Graphic Asset Revision');
 	});
 
-	it('updates metadata and Event associations without presenting them as revision changes', async () => {
+	it('updates Graphic Asset metadata and Event associations without presenting them as Graphic Asset Revision changes', async () => {
 		mockApiFetch.mockResolvedValueOnce(assets.value[0]);
 		const wrapper = await mountPage();
 		const edit = wrapper.findAll('button')
@@ -279,7 +279,7 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(mockRefresh).toHaveBeenCalledOnce();
 	});
 
-	it('starts a replacement operation and uploads exact bytes for an immutable revision', async () => {
+	it('starts a Graphics Ingestion Operation and uploads exact Graphic Asset Content for an immutable Graphic Asset Revision', async () => {
 		const replacementFile = new File([jpegPixel], 'replacement.jpg', { type: 'image/jpeg' });
 		const created: GraphicsIngestionOperation = {
 			...completedJpegOperation,
@@ -314,7 +314,7 @@ describe('the Graphics Asset Library Workspace', () => {
 		);
 		await flushPromises();
 		const publish = wrapper.findAll('button')
-			.find(button => button.text().includes('Replace with new revision'));
+			.find(button => button.text().includes('Replace with new Graphic Asset Revision'));
 		await publish!.trigger('click');
 		await flushPromises();
 
@@ -409,7 +409,9 @@ describe('the Graphics Asset Library Workspace', () => {
 			}),
 		);
 		expect(mockRefresh).toHaveBeenCalledOnce();
-		expect(wrapper.text()).toContain('Published asset asset-1 revision revision-1');
+		expect(wrapper.text()).toContain(
+			'Published Graphic Asset asset-1 Graphic Asset Revision revision-1',
+		);
 		expect(wrapper.text()).toContain('Exact source browser decode verified before publication.');
 	});
 

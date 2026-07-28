@@ -17,6 +17,7 @@ import {
 } from '~~/shared/types/graphicsAsset';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { GraphicsAssetLibraryError } from './errors';
+import { completedImageReplacementOperation } from './operation';
 
 interface InMemoryGraphicsAssetCatalogueOptions {
 	canonicalLimitBytes?: number;
@@ -367,24 +368,24 @@ export function createInMemoryGraphicsAssetCatalogue(
 		},
 		async completeImageReplacementNoop(input) {
 			const existing = operations.get(input.operation.id);
+			const asset = assets.get(input.current.assetId);
 			if (
 				!existing
+				|| !asset
 				|| existing.stage !== 'publishing'
 				|| existing.updatedAt !== input.operation.updatedAt
+				|| asset.revisionId !== input.current.revisionId
+				|| asset.facts.sha256 !== input.current.sourceDigest
 			) {
 				throw new Error('Graphic Asset replacement no-op lost its claim');
 			}
-			const completed: GraphicsIngestionOperation = {
-				...input.operation,
-				stage: 'completed',
-				failure: undefined,
-				result: {
-					outcome: 'replacement-noop',
-					assetId: input.current.assetId,
-					revisionId: input.current.revisionId,
-				},
-				updatedAt: input.completedAt,
-			};
+			const completed = completedImageReplacementOperation({
+				operation: input.operation,
+				outcome: 'replacement-noop',
+				assetId: input.current.assetId,
+				revisionId: input.current.revisionId,
+				completedAt: input.completedAt,
+			});
 			operations.set(completed.id, cloneOperation(completed));
 			releaseCapacity(completed.id);
 			return cloneOperation(completed);
@@ -400,18 +401,28 @@ export function createInMemoryGraphicsAssetCatalogue(
 			) {
 				throw new Error('Graphic Asset replacement publication lost its claim');
 			}
-			const revisionNumber = asset.revisionNumber + 1;
-			const completed: GraphicsIngestionOperation = {
-				...input.operation,
-				stage: 'completed',
-				failure: undefined,
-				result: {
-					outcome: 'revision-created',
+			if (asset.facts.sha256 === input.sourceDigest) {
+				const completed = completedImageReplacementOperation({
+					operation: input.operation,
+					outcome: 'replacement-noop',
 					assetId: input.targetAssetId,
-					revisionId: input.revisionId,
-				},
-				updatedAt: input.publishedAt,
-			};
+					revisionId: asset.revisionId,
+					completedAt: input.publishedAt,
+				});
+				operations.set(completed.id, cloneOperation(completed));
+				// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
+				canonicalWriteCandidates.delete(completed.id);
+				releaseCapacity(completed.id);
+				return cloneOperation(completed);
+			}
+			const revisionNumber = asset.revisionNumber + 1;
+			const completed = completedImageReplacementOperation({
+				operation: input.operation,
+				outcome: 'revision-created',
+				assetId: input.targetAssetId,
+				revisionId: input.revisionId,
+				completedAt: input.publishedAt,
+			});
 			operations.set(completed.id, cloneOperation(completed));
 			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
 			canonicalWriteCandidates.delete(completed.id);

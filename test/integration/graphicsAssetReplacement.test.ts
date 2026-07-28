@@ -36,7 +36,7 @@ function decodeEvidence(bytes: Uint8Array) {
 	};
 }
 
-describe('graphic Asset replacement and explicit adoption', () => {
+describe('the Graphic Asset replacement and explicit adoption', () => {
 	let eventId: number;
 	let screenId: number;
 	let authorHeaders: Record<string, string>;
@@ -73,7 +73,7 @@ describe('graphic Asset replacement and explicit adoption', () => {
 		catch {}
 	});
 
-	it('keeps usage pinned until its owning Screen explicitly adopts the newer revision', async () => {
+	it('keeps each Graphic Asset Reference pinned until its owning Screen explicitly adopts a newer Graphic Asset Revision', async () => {
 		const initiated = await $fetch<GraphicsIngestionOperation>(
 			'/api/graphics-assets/ingestion-operations',
 			{
@@ -194,6 +194,57 @@ describe('graphic Asset replacement and explicit adoption', () => {
 			expect.objectContaining({
 				reference: config.layout.frame.backgroundImage,
 				owner: expect.objectContaining({ eventId, id: String(screenId) }),
+			}),
+		]);
+
+		const concurrentOperations = await Promise.all(
+			['replacement-integration-concurrent-a', 'replacement-integration-concurrent-b'].map(
+				async idempotencyKey => await $fetch<GraphicsIngestionOperation>(
+					`/api/graphics-assets/${originalReference.assetId}/replacement-operations`,
+					{
+						method: 'POST',
+						headers: authorHeaders,
+						body: {
+							idempotencyKey,
+							sourceFileName: `${idempotencyKey}.png`,
+							declaredMime: 'image/png',
+							browserDecodeEvidence: decodeEvidence(pngPixel),
+							declaredByteLength: pngPixel.byteLength,
+						},
+					},
+				),
+			),
+		);
+		const concurrentReplacements = await Promise.all(concurrentOperations.map(
+			async operation => await fetch(
+				`/api/graphics-assets/ingestion-operations/${operation.id}/content`,
+				{
+					method: 'PUT',
+					headers: { ...authorHeaders, 'content-type': 'image/png' },
+					body: pngPixel,
+				},
+			).then(response => response.json() as Promise<GraphicsIngestionOperation>),
+		));
+		expect(concurrentReplacements.map(operation => operation.result?.outcome).sort()).toEqual([
+			'replacement-noop',
+			'revision-created',
+		]);
+		expect(new Set(
+			concurrentReplacements.map(operation => operation.result?.revisionId),
+		).size).toBe(1);
+		const [concurrentLatest] = await $fetch<GraphicAsset[]>('/api/graphics-assets', {
+			query: { search: 'Renamed integration logo' },
+		});
+		expect(concurrentLatest).toMatchObject({
+			id: originalReference.assetId,
+			revisionId: concurrentReplacements[0]!.result?.revisionId,
+			revisionNumber: 3,
+		});
+		await expect($fetch<GraphicAssetUsage[]>(
+			`/api/graphics-assets/${originalReference.assetId}/usage`,
+		)).resolves.toEqual([
+			expect.objectContaining({
+				reference: config.layout.frame.backgroundImage,
 			}),
 		]);
 	});

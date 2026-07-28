@@ -204,8 +204,8 @@ function operationOutcomeLabel(outcome: NonNullable<GraphicsIngestionOperation['
 	if (outcome === 'reused')
 		return 'Reused';
 	if (outcome === 'revision-created')
-		return 'Created revision';
-	return 'Replacement unchanged';
+		return 'Created Graphic Asset Revision';
+	return 'Graphic Asset Content unchanged';
 }
 
 async function inspectUsage(asset: GraphicAsset) {
@@ -264,6 +264,37 @@ function beginReplacement(asset: GraphicAsset) {
 	replacementError.value = null;
 }
 
+async function initiateAndTransferImage(
+	file: File,
+	endpoint: string,
+	body: PendingInitiation | Record<string, unknown>,
+) {
+	const initiated = await $fetch<GraphicsIngestionOperation>(endpoint, {
+		method: 'POST',
+		body,
+	});
+	currentOperation.value = initiated;
+	localStorage.setItem(operationStorageKey, initiated.id);
+	localStorage.removeItem(initiationStorageKey);
+
+	const response = await observeOperationRequest(
+		initiated.id,
+		fetch(`/api/graphics-assets/ingestion-operations/${initiated.id}/content`, {
+			method: 'PUT',
+			headers: file.type ? { 'content-type': file.type } : undefined,
+			body: file,
+		}),
+	);
+	if (!response.ok)
+		throw new Error(`Image transfer failed with status ${response.status}`);
+
+	const completed = await response.json() as GraphicsIngestionOperation;
+	currentOperation.value = completed;
+	if (completed.stage === 'completed')
+		clearPersistedOperation();
+	return completed;
+}
+
 async function replaceAsset(asset: GraphicAsset) {
 	const file = replacementFile.value;
 	if (!file || replacementPending.value)
@@ -272,34 +303,18 @@ async function replaceAsset(asset: GraphicAsset) {
 	replacementError.value = null;
 	try {
 		const browserDecodeEvidence = await verifyStillImageBrowserDecode(file);
-		const initiated = await $fetch<GraphicsIngestionOperation>(
+		const completed = await initiateAndTransferImage(
+			file,
 			`/api/graphics-assets/${asset.id}/replacement-operations`,
 			{
-				method: 'POST',
-				body: {
-					idempotencyKey: crypto.randomUUID(),
-					sourceFileName: file.name,
-					declaredMime: file.type || undefined,
-					browserDecodeEvidence,
-					declaredByteLength: file.size,
-				},
+				idempotencyKey: crypto.randomUUID(),
+				sourceFileName: file.name,
+				declaredMime: file.type || undefined,
+				browserDecodeEvidence,
+				declaredByteLength: file.size,
 			},
 		);
-		currentOperation.value = initiated;
-		localStorage.setItem(operationStorageKey, initiated.id);
-		const response = await observeOperationRequest(
-			initiated.id,
-			fetch(`/api/graphics-assets/ingestion-operations/${initiated.id}/content`, {
-				method: 'PUT',
-				headers: file.type ? { 'content-type': file.type } : undefined,
-				body: file,
-			}),
-		);
-		if (!response.ok)
-			throw new Error(`Image replacement failed with status ${response.status}`);
-		currentOperation.value = await response.json() as GraphicsIngestionOperation;
-		if (currentOperation.value.stage === 'completed') {
-			clearPersistedOperation();
+		if (completed.stage === 'completed') {
 			replacementAssetId.value = null;
 			replacementFile.value = null;
 			await refresh();
@@ -355,36 +370,12 @@ async function uploadImage() {
 	try {
 		const browserDecodeEvidence = await verifyStillImageBrowserDecode(selectedFile.value);
 		const initiation = selectedInitiation(browserDecodeEvidence);
-		const initiated = await $fetch<GraphicsIngestionOperation>(
+		const completed = await initiateAndTransferImage(
+			selectedFile.value,
 			'/api/graphics-assets/ingestion-operations',
-			{
-				method: 'POST',
-				body: initiation,
-			},
+			initiation,
 		);
-		currentOperation.value = initiated;
-		localStorage.setItem(operationStorageKey, initiated.id);
-		localStorage.removeItem(initiationStorageKey);
-
-		const response = await observeOperationRequest(
-			initiated.id,
-			fetch(
-				`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-				{
-					method: 'PUT',
-					headers: selectedFile.value.type
-						? { 'content-type': selectedFile.value.type }
-						: undefined,
-					body: selectedFile.value,
-				},
-			),
-		);
-		if (!response.ok)
-			throw new Error(`Image transfer failed with status ${response.status}`);
-
-		currentOperation.value = await response.json() as GraphicsIngestionOperation;
-		if (currentOperation.value.stage === 'completed') {
-			clearPersistedOperation();
+		if (completed.stage === 'completed') {
 			selectedFile.value = null;
 			proposedName.value = '';
 			await refresh();
@@ -575,7 +566,7 @@ onMounted(async () => {
 					<div class="flex flex-col gap-4">
 						<UFormField
 							name="name"
-							label="Asset name"
+							label="Graphic Asset name"
 							description="Searchable library name."
 							required
 						>
@@ -587,7 +578,7 @@ onMounted(async () => {
 						</UFormField>
 						<label class="flex items-start gap-2 text-sm text-muted">
 							<input v-model="createSeparateAsset" type="checkbox" class="mt-1">
-							<span>Create a separate Graphic Asset even when these exact bytes already exist.</span>
+							<span>Create a separate Graphic Asset even when this exact Graphic Asset Content already exists.</span>
 						</label>
 						<p v-if="eventStore.eventId" class="text-sm text-muted">
 							The upload will be associated with Event {{ eventStore.eventId }}.
@@ -662,7 +653,7 @@ onMounted(async () => {
 						@click="retryOperation"
 					/>
 					<p v-if="currentOperation.result" class="mt-2 text-sm text-muted">
-						{{ operationOutcomeLabel(currentOperation.result.outcome) }} asset {{ currentOperation.result.assetId }} revision {{ currentOperation.result.revisionId }}
+						{{ operationOutcomeLabel(currentOperation.result.outcome) }} Graphic Asset {{ currentOperation.result.assetId }} Graphic Asset Revision {{ currentOperation.result.revisionId }}
 					</p>
 					<p
 						v-if="
@@ -800,13 +791,13 @@ onMounted(async () => {
 						class="mt-4 border-t border-default pt-4"
 					>
 						<h4 class="text-sm font-semibold text-highlighted">
-							Exact revision usage
+							Exact Graphic Asset Revision usage
 						</h4>
 						<p
 							v-if="usageByAssetId[asset.id]!.length === 0"
 							class="mt-2 text-sm text-muted"
 						>
-							No persisted graphics artifact references any revision.
+							No persisted graphics artifact has a Graphic Asset Reference to any Graphic Asset Revision.
 						</p>
 						<ul v-else class="mt-2 space-y-2">
 							<li
@@ -821,7 +812,7 @@ onMounted(async () => {
 									<UBadge
 										:color="usage.reference.revisionId === asset.revisionId ? 'success' : 'warning'"
 										variant="soft"
-										:label="usage.reference.revisionId === asset.revisionId ? 'Latest revision' : 'Pinned older revision'"
+										:label="usage.reference.revisionId === asset.revisionId ? 'Latest Graphic Asset Revision' : 'Pinned older Graphic Asset Revision'"
 									/>
 								</div>
 								<p class="mt-1 text-muted">
@@ -830,7 +821,7 @@ onMounted(async () => {
 									· {{ usage.owner.slot }}
 								</p>
 								<p class="mt-1 font-mono text-xs text-dimmed">
-									Revision {{ usage.reference.revisionId }}
+									Graphic Asset Revision {{ usage.reference.revisionId }}
 								</p>
 							</li>
 						</ul>
@@ -840,7 +831,7 @@ onMounted(async () => {
 						v-if="editingAssetId === asset.id"
 						class="mt-4 grid gap-3 border-t border-default pt-4"
 					>
-						<UFormField name="asset-name" label="Asset name">
+						<UFormField name="asset-name" label="Graphic Asset name">
 							<UInput v-model="editedName" class="w-full" />
 						</UFormField>
 						<UFormField
@@ -878,13 +869,13 @@ onMounted(async () => {
 						<UAlert
 							color="warning"
 							variant="soft"
-							title="Create an immutable revision"
-							description="Existing graphics artifact references stay pinned until each owner explicitly selects the newer revision."
+							title="Create an immutable Graphic Asset Revision"
+							description="Existing Graphic Asset References stay pinned until each owning graphics artifact explicitly selects the newer Graphic Asset Revision."
 						/>
 						<UFormField
 							name="replacement-image"
 							label="Replacement image"
-							description="Current bytes are a no-op; older or different bytes create a new revision."
+							description="Current Graphic Asset Content is a no-op; older or different Graphic Asset Content creates a new Graphic Asset Revision."
 						>
 							<UFileUpload
 								v-model="replacementFile"
@@ -900,7 +891,7 @@ onMounted(async () => {
 						/>
 						<div class="flex gap-2">
 							<UButton
-								label="Replace with new revision"
+								label="Replace with new Graphic Asset Revision"
 								:disabled="!replacementFile"
 								:loading="replacementPending"
 								@click="replaceAsset(asset)"
@@ -918,7 +909,7 @@ onMounted(async () => {
 						<div class="grid gap-1 font-mono text-xs text-dimmed">
 							<span>Operation {{ asset.operation.id }}</span>
 							<span>Result {{ JSON.stringify(asset.operation.result) }}</span>
-							<span>Asset {{ asset.id }} · Revision {{ asset.revisionId }}</span>
+							<span>Graphic Asset {{ asset.id }} · Graphic Asset Revision {{ asset.revisionId }}</span>
 						</div>
 					</template>
 				</UCard>

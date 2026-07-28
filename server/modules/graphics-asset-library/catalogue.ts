@@ -13,6 +13,7 @@ import type {
 } from '.';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { GraphicsAssetLibraryError } from './errors';
+import { completedImageReplacementOperation } from './operation';
 
 interface OperationRow {
 	id: string;
@@ -158,6 +159,8 @@ function updateOperationStatement(
 	database: D1Database,
 	operation: GraphicsIngestionOperation,
 	expectedUpdatedAt: string,
+	additionalWhere = '',
+	additionalBindings: unknown[] = [],
 ) {
 	return database.prepare(`
 		UPDATE graphics_ingestion_operations
@@ -185,6 +188,7 @@ function updateOperationStatement(
 		WHERE id = ? AND initiated_by = ?
 			AND stage NOT IN ('cancelled', 'completed')
 			AND updated_at = ?
+			${additionalWhere}
 	`).bind(
 		operation.stage,
 		operation.transferredByteLength,
@@ -212,6 +216,7 @@ function updateOperationStatement(
 		operation.id,
 		operation.initiatedBy,
 		new Date(expectedUpdatedAt).getTime(),
+		...additionalBindings,
 	);
 }
 
@@ -826,26 +831,48 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			return authoritative;
 		},
 		async completeImageReplacementNoop(input) {
-			const completed: GraphicsIngestionOperation = {
-				...input.operation,
-				stage: 'completed',
-				failure: undefined,
-				result: {
-					outcome: 'replacement-noop',
-					assetId: input.current.assetId,
-					revisionId: input.current.revisionId,
-				},
-				updatedAt: input.completedAt,
-			};
+			const completed = completedImageReplacementOperation({
+				operation: input.operation,
+				outcome: 'replacement-noop',
+				assetId: input.current.assetId,
+				revisionId: input.current.revisionId,
+				completedAt: input.completedAt,
+			});
 			const results = await database.batch([
 				database.prepare(`
 					DELETE FROM graphics_canonical_write_candidates WHERE operation_id = ?
 				`).bind(input.operation.id),
-				updateOperationStatement(database, completed, input.operation.updatedAt),
+				updateOperationStatement(
+					database,
+					completed,
+					input.operation.updatedAt,
+					`AND EXISTS (
+						SELECT 1
+						FROM graphic_assets target
+						JOIN graphic_asset_revisions current_revision
+							ON current_revision.asset_id = target.id
+						WHERE target.id = ? AND target.lifecycle_state = 'active'
+							AND current_revision.revision_number = (
+								SELECT MAX(latest.revision_number)
+								FROM graphic_asset_revisions latest
+								WHERE latest.asset_id = target.id
+							)
+							AND current_revision.content_digest = ?
+					)`,
+					[input.current.assetId, input.current.sourceDigest],
+				),
 			]);
 			if (results.some(result => !result.success) || results[1]?.meta.changes !== 1)
 				throw new Error('Graphic Asset replacement no-op transaction failed');
-			return completed;
+			const authoritative = await firstOperation(
+				database,
+				'id = ? AND initiated_by = ?',
+				input.operation.id,
+				input.operation.initiatedBy,
+			);
+			if (!authoritative)
+				throw new Error('Graphic Asset replacement no-op was not durable');
+			return authoritative;
 		},
 		async publishImageReplacement(input) {
 			await Promise.all([
@@ -860,17 +887,6 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					canonicalMime: 'image/png',
 				}),
 			]);
-			const completed: GraphicsIngestionOperation = {
-				...input.operation,
-				stage: 'completed',
-				failure: undefined,
-				result: {
-					outcome: 'revision-created',
-					assetId: input.targetAssetId,
-					revisionId: input.revisionId,
-				},
-				updatedAt: input.publishedAt,
-			};
 			const publishedAt = new Date(input.publishedAt).getTime();
 			const results = await database.batch([
 				database.prepare(`
@@ -900,6 +916,17 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					), ?, ?, ?, ?
 					FROM graphic_assets target
 					WHERE target.id = ? AND target.lifecycle_state = 'active'
+						AND NOT EXISTS (
+							SELECT 1
+							FROM graphic_asset_revisions current_revision
+							WHERE current_revision.asset_id = target.id
+								AND current_revision.revision_number = (
+									SELECT MAX(latest.revision_number)
+									FROM graphic_asset_revisions latest
+									WHERE latest.asset_id = target.id
+								)
+								AND current_revision.content_digest = ?
+						)
 						AND EXISTS (
 							SELECT 1 FROM graphics_ingestion_operations
 							WHERE id = ? AND initiated_by = ? AND stage = 'publishing'
@@ -912,6 +939,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					JSON.stringify(input.report.facts),
 					publishedAt,
 					input.targetAssetId,
+					input.sourceDigest,
 					input.operation.id,
 					input.operation.initiatedBy,
 					new Date(input.operation.updatedAt).getTime(),
@@ -919,29 +947,91 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				database.prepare(`
 					INSERT INTO graphics_derivatives (
 						id, source_revision_id, kind, content_digest, created_at
-					) VALUES (?, ?, 'thumbnail', ?, ?)
+					)
+					SELECT ?, revision.id, 'thumbnail', ?, ?
+					FROM graphic_asset_revisions revision
+					WHERE revision.id = ?
 				`).bind(
 					input.derivativeId,
-					input.revisionId,
 					input.thumbnailDigest,
 					publishedAt,
+					input.revisionId,
 				),
 				database.prepare(`
-					UPDATE graphic_assets SET updated_at = ? WHERE id = ?
-				`).bind(publishedAt, input.targetAssetId),
+					UPDATE graphic_assets SET updated_at = ?
+					WHERE id = ? AND EXISTS (
+						SELECT 1 FROM graphic_asset_revisions WHERE id = ?
+					)
+				`).bind(publishedAt, input.targetAssetId, input.revisionId),
 				database.prepare(`
 					DELETE FROM graphics_canonical_write_candidates WHERE operation_id = ?
 				`).bind(input.operation.id),
-				updateOperationStatement(database, completed, input.operation.updatedAt),
+				database.prepare(`
+					UPDATE graphics_ingestion_operations
+					SET stage = 'completed',
+						result = json_object(
+							'outcome', CASE
+								WHEN EXISTS (
+									SELECT 1 FROM graphic_asset_revisions WHERE id = ?
+								) THEN 'revision-created'
+								ELSE 'replacement-noop'
+							END,
+							'assetId', ?,
+							'revisionId', COALESCE(
+								(
+									SELECT id
+									FROM graphic_asset_revisions
+									WHERE id = ?
+								),
+								(
+									SELECT current_revision.id
+									FROM graphic_asset_revisions current_revision
+									WHERE current_revision.asset_id = ?
+									ORDER BY current_revision.revision_number DESC
+									LIMIT 1
+								)
+							)
+						),
+						failure = NULL,
+						staging_reserved_byte_length = 0,
+						staging_used_byte_length = 0,
+						canonical_reserved_byte_length = 0,
+						updated_at = ?
+					WHERE id = ? AND initiated_by = ?
+						AND stage = 'publishing' AND updated_at = ?
+						AND target_asset_id = ?
+						AND EXISTS (
+							SELECT 1 FROM graphic_assets
+							WHERE id = ? AND lifecycle_state = 'active'
+						)
+				`).bind(
+					input.revisionId,
+					input.targetAssetId,
+					input.revisionId,
+					input.targetAssetId,
+					publishedAt,
+					input.operation.id,
+					input.operation.initiatedBy,
+					new Date(input.operation.updatedAt).getTime(),
+					input.targetAssetId,
+					input.targetAssetId,
+				),
 			]);
 			if (
 				results.some(result => !result.success)
-				|| results[2]?.meta.changes !== 1
 				|| results[6]?.meta.changes !== 1
 			) {
 				throw new Error('Graphic Asset replacement publication transaction failed');
 			}
-			return completed;
+			const authoritative = await firstOperation(
+				database,
+				'id = ? AND initiated_by = ?',
+				input.operation.id,
+				input.operation.initiatedBy,
+			);
+			if (!authoritative)
+				throw new Error('Graphic Asset replacement publication was not durable');
+			return authoritative;
 		},
 		async publishImage(input: PublishImageCatalogueInput) {
 			await Promise.all([

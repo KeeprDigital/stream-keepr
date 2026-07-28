@@ -781,7 +781,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		await expect(library.listGraphicAssets({})).resolves.toHaveLength(2);
 	});
 
-	it('replaces content as immutable revisions while current content is a no-op', async () => {
+	it('replaces Graphic Asset Content as immutable Graphic Asset Revisions while current Graphic Asset Content is a no-op', async () => {
 		const { library } = createLibrary();
 		const originalOperation = await library.initiateImageIngestion({
 			idempotencyKey: 'replacement-original',
@@ -868,7 +868,216 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		})).resolves.toMatchObject({ outcome: 'available', contentType: 'image/jpeg' });
 	});
 
-	it('updates descriptive metadata and Event associations without creating a revision', async () => {
+	it('publishes concurrent identical replacement content as one Graphic Asset Revision', async () => {
+		const delegate = createInMemoryGraphicsAssetCatalogue();
+		let publishingArrivals = 0;
+		let releasePublishing!: () => void;
+		const bothPublishing = new Promise<void>((resolve) => {
+			releasePublishing = resolve;
+		});
+		const catalogue = {
+			...delegate,
+			async publishImageReplacement(
+				input: Parameters<typeof delegate.publishImageReplacement>[0],
+			) {
+				publishingArrivals += 1;
+				if (publishingArrivals === 2)
+					releasePublishing();
+				await bothPublishing;
+				return await delegate.publishImageReplacement(input);
+			},
+		};
+		const { library } = createLibrary(
+			createInMemoryStagingGraphicsObjectStore(),
+			createInMemoryCanonicalGraphicsObjectStore(),
+			catalogue,
+		);
+		const originalOperation = await library.initiateImageIngestion({
+			idempotencyKey: 'concurrent-replacement-original',
+			initiatedBy: 'graphics-author-1',
+			name: 'Concurrently replaced logo',
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+		const original = await library.uploadImage({
+			operationId: originalOperation.id,
+			initiatedBy: originalOperation.initiatedBy,
+			bytes: createBoundedByteStream(transparentPixelPng, {
+				byteLength: transparentPixelPng.byteLength,
+				maximumByteLength: 16 * 1024 * 1024,
+			}),
+		});
+
+		const replacements = await Promise.all(
+			['concurrent-replacement-a', 'concurrent-replacement-b'].map(
+				async idempotencyKey => await library.initiateImageReplacement({
+					assetId: original.result!.assetId,
+					idempotencyKey,
+					initiatedBy: 'graphics-author-1',
+					sourceFileName: `${idempotencyKey}.jpg`,
+					declaredMime: 'image/jpeg',
+					browserDecodeEvidence: {
+						outcome: 'decoded',
+						sourceDigest: sourceDigest(jpegPixel),
+						width: 1,
+						height: 1,
+					},
+					declaredByteLength: jpegPixel.byteLength,
+				}),
+			),
+		);
+		const completed = await Promise.all(replacements.map(
+			async operation => await library.uploadImage({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				declaredMime: 'image/jpeg',
+				bytes: createBoundedByteStream(jpegPixel, {
+					byteLength: jpegPixel.byteLength,
+					maximumByteLength: 16 * 1024 * 1024,
+				}),
+			}),
+		));
+
+		expect(completed.map(operation => operation.result?.outcome).sort()).toEqual([
+			'replacement-noop',
+			'revision-created',
+		]);
+		expect(new Set(completed.map(operation => operation.result?.revisionId)).size).toBe(1);
+		await expect(library.listGraphicAssets({})).resolves.toEqual([
+			expect.objectContaining({
+				id: original.result?.assetId,
+				revisionId: completed[0]!.result?.revisionId,
+				revisionNumber: 2,
+			}),
+		]);
+	});
+
+	it('rejects a stale replacement no-op and creates a Graphic Asset Revision when retried', async () => {
+		const delegate = createInMemoryGraphicsAssetCatalogue();
+		let signalNoopStarted!: () => void;
+		const noopStarted = new Promise<void>((resolve) => {
+			signalNoopStarted = resolve;
+		});
+		let releaseNoop!: () => void;
+		const noopMayComplete = new Promise<void>((resolve) => {
+			releaseNoop = resolve;
+		});
+		let pauseNoop = true;
+		const catalogue = {
+			...delegate,
+			async completeImageReplacementNoop(
+				input: Parameters<typeof delegate.completeImageReplacementNoop>[0],
+			) {
+				if (pauseNoop) {
+					signalNoopStarted();
+					await noopMayComplete;
+				}
+				return await delegate.completeImageReplacementNoop(input);
+			},
+		};
+		const { library } = createLibrary(
+			createInMemoryStagingGraphicsObjectStore(),
+			createInMemoryCanonicalGraphicsObjectStore(),
+			catalogue,
+		);
+		const originalOperation = await library.initiateImageIngestion({
+			idempotencyKey: 'stale-noop-original',
+			initiatedBy: 'graphics-author-1',
+			name: 'Stale no-op logo',
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+		const original = await library.uploadImage({
+			operationId: originalOperation.id,
+			initiatedBy: originalOperation.initiatedBy,
+			bytes: createBoundedByteStream(transparentPixelPng, {
+				byteLength: transparentPixelPng.byteLength,
+				maximumByteLength: 16 * 1024 * 1024,
+			}),
+		});
+
+		async function replacementOperation(
+			idempotencyKey: string,
+			bytes: Uint8Array,
+			declaredMime: 'image/png' | 'image/jpeg',
+		) {
+			return await library.initiateImageReplacement({
+				assetId: original.result!.assetId,
+				idempotencyKey,
+				initiatedBy: 'graphics-author-1',
+				sourceFileName: `${idempotencyKey}.${declaredMime === 'image/png' ? 'png' : 'jpg'}`,
+				declaredMime,
+				browserDecodeEvidence: {
+					outcome: 'decoded',
+					sourceDigest: sourceDigest(bytes),
+					width: 1,
+					height: 1,
+				},
+				declaredByteLength: bytes.byteLength,
+			});
+		}
+
+		const staleNoop = await replacementOperation(
+			'stale-noop-current-content',
+			transparentPixelPng,
+			'image/png',
+		);
+		const staleCompletion = library.uploadImage({
+			operationId: staleNoop.id,
+			initiatedBy: staleNoop.initiatedBy,
+			declaredMime: 'image/png',
+			bytes: createBoundedByteStream(transparentPixelPng, {
+				byteLength: transparentPixelPng.byteLength,
+				maximumByteLength: 16 * 1024 * 1024,
+			}),
+		});
+		await noopStarted;
+
+		const changed = await replacementOperation(
+			'stale-noop-intervening-content',
+			jpegPixel,
+			'image/jpeg',
+		);
+		const changedCompletion = await library.uploadImage({
+			operationId: changed.id,
+			initiatedBy: changed.initiatedBy,
+			declaredMime: 'image/jpeg',
+			bytes: createBoundedByteStream(jpegPixel, {
+				byteLength: jpegPixel.byteLength,
+				maximumByteLength: 16 * 1024 * 1024,
+			}),
+		});
+		expect(changedCompletion.result?.outcome).toBe('revision-created');
+
+		pauseNoop = false;
+		releaseNoop();
+		const failedStaleNoop = await staleCompletion;
+		expect(failedStaleNoop).toMatchObject({
+			stage: 'failed',
+			failure: {
+				code: 'catalogue-publication-failed',
+				retryable: true,
+			},
+		});
+
+		const retried = await library.retryImageIngestion({
+			operationId: staleNoop.id,
+			initiatedBy: staleNoop.initiatedBy,
+		});
+		expect(retried).toMatchObject({
+			stage: 'completed',
+			result: {
+				outcome: 'revision-created',
+				assetId: original.result?.assetId,
+			},
+		});
+		await expect(library.listGraphicAssets({})).resolves.toEqual([
+			expect.objectContaining({
+				revisionId: retried.result?.revisionId,
+				revisionNumber: 3,
+			}),
+		]);
+	});
+
+	it('updates Graphic Asset metadata and Event associations without creating a Graphic Asset Revision', async () => {
 		const { library } = createLibrary();
 		const operation = await library.initiateImageIngestion({
 			idempotencyKey: 'metadata-original',
