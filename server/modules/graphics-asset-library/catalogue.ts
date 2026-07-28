@@ -9,16 +9,15 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicsAssetCatalogue,
-	GraphicsImageMultipartState,
 	PublishImageCatalogueInput,
 } from '.';
+import type { GraphicsImageMultipartState } from './multipart';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
-import {
-	GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
-	GRAPHICS_MULTIPART_MAXIMUM_PART_ATTEMPTS,
-	GRAPHICS_MULTIPART_PART_BYTES,
-} from '~~/shared/utils/graphicsAssetCompatibility';
 import { GraphicsAssetLibraryError } from './errors';
+import {
+	graphicsMultipartCompletedByteLength,
+	graphicsMultipartTransfer,
+} from './multipart';
 
 interface OperationRow {
 	id: string;
@@ -99,21 +98,7 @@ function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 		return operation;
 	return {
 		...operation,
-		transfer: {
-			method: 'multipart',
-			partByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-			maximumConcurrentParts: GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
-			maximumPartAttempts: GRAPHICS_MULTIPART_MAXIMUM_PART_ATTEMPTS,
-			partCount: Math.ceil(operation.declaredByteLength / GRAPHICS_MULTIPART_PART_BYTES),
-			completedParts: multipart.parts
-				.filter(part => part.status === 'completed')
-				.map(({ partNumber, partIdentity, byteLength }) => ({
-					partNumber,
-					partIdentity,
-					byteLength,
-				}))
-				.sort((left, right) => left.partNumber - right.partNumber),
-		},
+		transfer: graphicsMultipartTransfer(operation.declaredByteLength, multipart),
 	};
 }
 
@@ -189,6 +174,11 @@ function updateOperationStatement(
 			SET stage = ?, transferred_byte_length = ?, source_file_name = ?,
 				declared_mime = ?, browser_decode_evidence = ?, report = ?, result = ?,
 			failure = ?, capacity_outcome = ?, updated_at = ?,
+			multipart_state = CASE
+				WHEN ? = 'cancelled' AND multipart_state IS NOT NULL
+					THEN json_set(multipart_state, '$.cleanupPending', json('true'))
+				ELSE multipart_state
+			END,
 			staging_reserved_byte_length = CASE
 				WHEN ? IN ('completed', 'cancelled')
 					OR (? = 'failed' AND json_extract(?, '$.retryable') = 0)
@@ -225,6 +215,7 @@ function updateOperationStatement(
 			? null
 			: JSON.stringify(operation.canonicalCapacityOutcome),
 		new Date(operation.updatedAt).getTime(),
+		operation.stage,
 		operation.stage,
 		operation.stage,
 		operation.failure === undefined ? null : JSON.stringify(operation.failure),
@@ -720,9 +711,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 		async updateImageMultipartState(input) {
 			if (input.state.version !== input.expectedVersion + 1)
 				return false;
-			const completedByteLength = input.state.parts
-				.filter(part => part.status === 'completed')
-				.reduce((total, part) => total + part.byteLength, 0);
+			const completedByteLength = graphicsMultipartCompletedByteLength(input.state);
 			const result = await database.prepare(`
 				UPDATE graphics_ingestion_operations
 				SET multipart_state = ?, stage = 'transferring',
@@ -742,6 +731,20 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				input.expectedVersion,
 			).run();
 			return result.success && result.meta.changes === 1;
+		},
+		async recordImageMultipartCleanupComplete(operationId, initiatedBy) {
+			const result = await database.prepare(`
+				UPDATE graphics_ingestion_operations
+				SET multipart_state = json_set(
+					multipart_state,
+					'$.cleanupPending',
+					json('false')
+				)
+				WHERE id = ? AND initiated_by = ? AND stage = 'cancelled'
+					AND multipart_state IS NOT NULL
+			`).bind(operationId, initiatedBy).run();
+			if (!result.success)
+				throw new Error('Graphics multipart cleanup checkpoint could not be recorded');
 		},
 		async updateIngestionOperation(operation, expectedUpdatedAt) {
 			const result = await updateOperationStatement(database, operation, expectedUpdatedAt).run();

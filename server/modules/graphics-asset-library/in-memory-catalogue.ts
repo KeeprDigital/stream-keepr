@@ -8,20 +8,19 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicsAssetCatalogue,
-	GraphicsImageMultipartState,
 	PublishImageCatalogueInput,
 } from '.';
+import type { GraphicsImageMultipartState } from './multipart';
 import {
 	DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES,
 	DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
 } from '~~/shared/types/graphicsAsset';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
-import {
-	GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
-	GRAPHICS_MULTIPART_MAXIMUM_PART_ATTEMPTS,
-	GRAPHICS_MULTIPART_PART_BYTES,
-} from '~~/shared/utils/graphicsAssetCompatibility';
 import { GraphicsAssetLibraryError } from './errors';
+import {
+	graphicsMultipartCompletedByteLength,
+	graphicsMultipartTransfer,
+} from './multipart';
 
 interface InMemoryGraphicsAssetCatalogueOptions {
 	canonicalLimitBytes?: number;
@@ -57,21 +56,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			return clone;
 		return {
 			...clone,
-			transfer: {
-				method: 'multipart',
-				partByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-				maximumConcurrentParts: GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
-				maximumPartAttempts: GRAPHICS_MULTIPART_MAXIMUM_PART_ATTEMPTS,
-				partCount: Math.ceil(operation.declaredByteLength / GRAPHICS_MULTIPART_PART_BYTES),
-				completedParts: multipart.parts
-					.filter(part => part.status === 'completed')
-					.map(({ partNumber, partIdentity, byteLength }) => ({
-						partNumber,
-						partIdentity,
-						byteLength,
-					}))
-					.sort((left, right) => left.partNumber - right.partNumber),
-			},
+			transfer: graphicsMultipartTransfer(operation.declaredByteLength, multipart),
 		};
 	}
 
@@ -312,9 +297,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			) {
 				return false;
 			}
-			const completedByteLength = input.state.parts
-				.filter(part => part.status === 'completed')
-				.reduce((total, part) => total + part.byteLength, 0);
+			const completedByteLength = graphicsMultipartCompletedByteLength(input.state);
 			multipartStates.set(input.operationId, structuredClone(input.state));
 			operations.set(input.operationId, {
 				...operation,
@@ -323,6 +306,16 @@ export function createInMemoryGraphicsAssetCatalogue(
 				updatedAt: input.updatedAt,
 			});
 			return true;
+		},
+		async recordImageMultipartCleanupComplete(operationId, initiatedBy) {
+			const operation = operations.get(operationId);
+			const state = multipartStates.get(operationId);
+			if (!operation || operation.initiatedBy !== initiatedBy || operation.stage !== 'cancelled' || !state)
+				return;
+			multipartStates.set(operationId, {
+				...state,
+				cleanupPending: false,
+			});
 		},
 		async updateIngestionOperation(operation, expectedUpdatedAt) {
 			const existing = operations.get(operation.id);
@@ -337,6 +330,15 @@ export function createInMemoryGraphicsAssetCatalogue(
 			if (existing.updatedAt !== expectedUpdatedAt)
 				throw new Error('Graphics Ingestion Operation transition lost its claim');
 			operations.set(operation.id, cloneOperation(operation));
+			if (operation.stage === 'cancelled') {
+				const multipart = multipartStates.get(operation.id);
+				if (multipart) {
+					multipartStates.set(operation.id, {
+						...multipart,
+						cleanupPending: true,
+					});
+				}
+			}
 			if (
 				operation.stage === 'completed'
 				|| operation.stage === 'cancelled'

@@ -208,12 +208,12 @@ export function createR2StagingGraphicsObjectStore(bucket: R2Bucket): GraphicsSt
 				const transfer = fixedLength
 					? input.bytes.body.pipeTo(fixedLength.writable)
 					: undefined;
-				const value = fixedLength
+				const partBody = fixedLength
 					? fixedLength.readable
 					: await consumeBoundedByteStream(input.bytes);
 				let part: R2UploadedPart;
 				try {
-					part = await upload.uploadPart(input.partNumber, value);
+					part = await upload.uploadPart(input.partNumber, partBody);
 					await transfer;
 				}
 				catch (error) {

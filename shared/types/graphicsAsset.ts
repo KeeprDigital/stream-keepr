@@ -4,6 +4,7 @@ declare const graphicAssetIdBrand: unique symbol;
 declare const graphicAssetRevisionIdBrand: unique symbol;
 declare const graphicsDerivativeIdBrand: unique symbol;
 declare const graphicsIngestionOperationIdBrand: unique symbol;
+declare const graphicsIngestionPartIdentityBrand: unique symbol;
 
 export const DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES = 100 * 1024 * 1024 * 1024;
 export const DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES = 10 * 1024 * 1024 * 1024;
@@ -22,6 +23,10 @@ export type GraphicsDerivativeId = string & {
 
 export type GraphicsIngestionOperationId = string & {
 	readonly [graphicsIngestionOperationIdBrand]: 'GraphicsIngestionOperationId';
+};
+
+export type GraphicsIngestionPartIdentity = string & {
+	readonly [graphicsIngestionPartIdentityBrand]: 'GraphicsIngestionPartIdentity';
 };
 
 export interface GraphicAssetReference {
@@ -187,9 +192,10 @@ export interface GraphicsIngestionOperation extends GraphicAssetSourceDeclaratio
 		maximumConcurrentParts: number;
 		maximumPartAttempts: number;
 		partCount: number;
+		cleanupPending: boolean;
 		completedParts: {
 			partNumber: number;
-			partIdentity: string;
+			partIdentity: GraphicsIngestionPartIdentity;
 			byteLength: number;
 		}[];
 	};

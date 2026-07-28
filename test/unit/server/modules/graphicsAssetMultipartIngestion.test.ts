@@ -302,4 +302,29 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 		expect(cancelledAgain).toEqual(cancelled);
 		expect(abortCount).toBe(1);
 	});
+
+	it('durably retries staged-byte cleanup when multipart abort is unavailable', async () => {
+		const staging = createInMemoryStagingGraphicsObjectStore();
+		const library = createLibrary(staging);
+		const operation = await initiateLargeTransfer(library, 'retry-cancelled-cleanup');
+		staging.injectTransientFailure('multipart-abort');
+
+		const pending = await library.cancelImageIngestion({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+		});
+		expect(pending).toMatchObject({
+			stage: 'cancelled',
+			transfer: { cleanupPending: true },
+		});
+
+		const cleaned = await library.cancelImageIngestion({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+		});
+		expect(cleaned).toMatchObject({
+			stage: 'cancelled',
+			transfer: { cleanupPending: false },
+		});
+	});
 });

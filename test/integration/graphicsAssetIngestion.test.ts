@@ -361,8 +361,15 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			{ method: 'PUT', headers: authorHeaders, body: firstPart },
 		);
 		expect(firstResponse.status).toBe(200);
-		const afterFirst = await firstResponse.json() as GraphicsIngestionOperation;
-		expect(afterFirst).toMatchObject({
+		// Simulate an ambiguous success: the caller loses the response body and
+		// must recover solely from the server's durable checkpoint.
+		await firstResponse.body?.cancel();
+
+		const reconnected = await $fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}`,
+			{ headers: authorHeaders },
+		);
+		expect(reconnected).toMatchObject({
 			transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
 			transfer: {
 				completedParts: [{
@@ -372,19 +379,18 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 				}],
 			},
 		});
-
-		const reconnected = await $fetch<GraphicsIngestionOperation>(
-			`/api/graphics-assets/ingestion-operations/${initiated.id}`,
-			{ headers: authorHeaders },
+		const resumed = await $fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart`,
+			{ method: 'POST', headers: authorHeaders },
 		);
-		expect(reconnected).toEqual(afterFirst);
+		expect(resumed).toEqual(reconnected);
 
 		const duplicateResponse = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/parts/1`,
 			{ method: 'PUT', headers: authorHeaders, body: firstPart },
 		);
 		expect(duplicateResponse.status).toBe(200);
-		await expect(duplicateResponse.json()).resolves.toEqual(afterFirst);
+		await expect(duplicateResponse.json()).resolves.toEqual(reconnected);
 
 		const finalResponse = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/parts/2`,
@@ -408,6 +414,41 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			},
 			failure: { code: 'validation-failed', retryable: false },
 		});
+	});
+
+	it('cancels active multipart state idempotently without publishing catalogue state', async () => {
+		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
+			method: 'POST',
+			headers: authorHeaders,
+			body: {
+				idempotencyKey: 'integration-cancelled-multipart-image',
+				name: 'Cancelled multipart image',
+				declaredByteLength: GRAPHICS_MULTIPART_PART_BYTES + 1,
+			},
+		});
+		await $fetch(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart`,
+			{ method: 'POST', headers: authorHeaders },
+		);
+
+		const cancelled = await $fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}`,
+			{ method: 'DELETE', headers: authorHeaders },
+		);
+		const cancelledAgain = await $fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}`,
+			{ method: 'DELETE', headers: authorHeaders },
+		);
+		expect(cancelled).toMatchObject({
+			stage: 'cancelled',
+			transferredByteLength: 0,
+			failure: { code: 'ingestion-cancelled', retryable: false },
+			transfer: { cleanupPending: false },
+		});
+		expect(cancelledAgain).toEqual(cancelled);
+		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			query: { search: 'cancelled multipart image' },
+		})).resolves.toEqual([]);
 	});
 
 	it('exposes cancellation and permanent validation failure as structured operations', async () => {
