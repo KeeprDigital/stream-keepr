@@ -544,6 +544,9 @@ export const featureMatchOverlayModeConfigSchema = z.object({
 	}).strict(),
 }).strict() satisfies z.ZodType<FeatureMatchOverlayModeConfig>;
 
+/** Broadcast Graphics owns no mode configuration yet; its canvas lives in the Screen config. */
+export const broadcastGraphicsModeConfigSchema = z.object({}).strict();
+
 export const metagameModeConfigSchema = z.object({
 	viewMode: z.enum(METAGAME_VIEW_MODE_VALUES),
 	scope: z.enum(METAGAME_SCOPE_VALUES),
@@ -574,6 +577,7 @@ export const modeConfigSchemaMap = {
 	'topCut': topCutModeConfigSchema,
 	'feature-match': matchModeConfigSchema,
 	'feature-match-overlay': featureMatchOverlayModeConfigSchema,
+	'broadcast-graphics': broadcastGraphicsModeConfigSchema,
 	'metagame': metagameModeConfigSchema,
 	'player-history': playerHistoryModeConfigSchema,
 } as const;
@@ -586,6 +590,7 @@ export const modeConfigPatchSchemaMap = {
 	'topCut': createModeConfigPatchSchema(topCutModeConfigSchema),
 	'feature-match': createModeConfigPatchSchema(matchModeConfigSchema),
 	'feature-match-overlay': createModeConfigPatchSchema(featureMatchOverlayModeConfigSchema),
+	'broadcast-graphics': createModeConfigPatchSchema(broadcastGraphicsModeConfigSchema),
 	'metagame': createModeConfigPatchSchema(metagameModeConfigSchema),
 	'player-history': createModeConfigPatchSchema(playerHistoryModeConfigSchema),
 } as const;

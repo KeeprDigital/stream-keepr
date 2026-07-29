@@ -205,6 +205,10 @@ A Definition may declare a required host or data context; editors offer it only 
 The Graphic Item, geometry, styling, grouping, animation, definition, and rendering vocabulary used by both Broadcast Graphics and Feature Match Overlay.
 It unifies their composition model without merging their Screen Modes, live context, or template artifacts.
 
+**Host Contract**:
+The declaration a graphics Screen Mode supplies when embedding the shared compositor: its available context kinds, top-level host extras, canvas rules, and write semantics.
+The definition palette, binding catalogue, and editor behaviour follow from it; capability outside the contract stays host-owned.
+
 **Graphics Asset Library**:
 The shared graphics-specific module that ingests, validates, stores, resolves, deduplicates, and lifecycle-manages images, silent videos, fonts, and generated thumbnails used by Broadcast Graphics and Feature Match Overlay.
 Its interface is consumed by both graphics editors and their Template Package workflows; it is not a general application file manager.

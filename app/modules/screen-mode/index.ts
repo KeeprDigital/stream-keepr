@@ -29,6 +29,8 @@ const ScreenModesFeatureMatchDisplay = defineAsyncComponent(() => import('~/comp
 const ScreenModesFeatureMatchSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/FeatureMatch/Settings.vue'));
 const ScreenModesFeatureMatchOverlayDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/FeatureMatchOverlay/Display.vue'));
 const ScreenModesFeatureMatchOverlaySettings = defineAsyncComponent(() => import('~/components/Screen/Modes/FeatureMatchOverlay/Settings.vue'));
+const ScreenModesBroadcastGraphicsDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/BroadcastGraphics/Display.vue'));
+const ScreenModesBroadcastGraphicsSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/BroadcastGraphics/Settings.vue'));
 const ScreenModesMetagameDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Metagame/Display.vue'));
 const ScreenModesMetagameSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/Metagame/Settings.vue'));
 const ScreenModesPlayerHistoryDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/PlayerHistory/Display.vue'));
@@ -67,6 +69,7 @@ export const SCREEN_MODE_RUNTIME = {
 	'topCut': { displayComponent: ScreenModesTopCutDisplay, settingsComponent: ScreenModesTopCutSettings },
 	'feature-match': { displayComponent: ScreenModesFeatureMatchDisplay, settingsComponent: ScreenModesFeatureMatchSettings },
 	'feature-match-overlay': { displayComponent: ScreenModesFeatureMatchOverlayDisplay, settingsComponent: ScreenModesFeatureMatchOverlaySettings },
+	'broadcast-graphics': { displayComponent: ScreenModesBroadcastGraphicsDisplay, settingsComponent: ScreenModesBroadcastGraphicsSettings },
 	'metagame': { displayComponent: ScreenModesMetagameDisplay, settingsComponent: ScreenModesMetagameSettings },
 	'player-history': { displayComponent: ScreenModesPlayerHistoryDisplay, settingsComponent: ScreenModesPlayerHistorySettings },
 } satisfies { [M in ScreenMode]: ScreenModeRuntimeDefinition };
