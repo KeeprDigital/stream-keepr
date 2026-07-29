@@ -412,7 +412,7 @@ describe('feature Match Overlay render model', () => {
 		];
 
 		const model = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
-		const children = model.graphicItemGroups[0]!.children;
+		const children = model.graphicGroups[0]!.children;
 
 		expect(children.map(child => child.id)).toEqual(['fixed', 'content', 'fill']);
 		expect(children[0]!.style).toMatchObject({ left: '10px', width: '100px', height: '80px' });
@@ -451,7 +451,7 @@ describe('feature Match Overlay render model', () => {
 		];
 
 		const model = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
-		const group = model.graphicItemGroups[0]!;
+		const group = model.graphicGroups[0]!;
 		const child = group.children[0]!;
 
 		expect(group.layers.backdrop.background).toBe('#ff0000');
@@ -543,7 +543,7 @@ describe('feature Match Overlay render model', () => {
 		];
 
 		const model = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '09:41' });
-		const child = model.graphicItemGroups[0]!.children[0]!;
+		const child = model.graphicGroups[0]!.children[0]!;
 
 		expect(child.render.type).toBe('clock');
 		if (child.render.type === 'clock')
@@ -656,7 +656,7 @@ describe('feature Match Overlay render model', () => {
 				`/exact/${reference.assetId}/${reference.revisionId}`,
 		});
 
-		const renderedGroup = model.graphicItemGroups[0]!;
+		const renderedGroup = model.graphicGroups[0]!;
 		expect(renderedGroup.layers.shell).toMatchObject({ isolation: 'isolate' });
 		expect(renderedGroup.children.map(child => [child.kind, child.id]))
 			.toEqual([['media', 'back-video'], ['graphic-item', 'front-clock']]);
@@ -710,7 +710,7 @@ describe('feature Match Overlay render model', () => {
 		];
 
 		const model = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
-		const layers = model.graphicItemGroups[0]!.layers;
+		const layers = model.graphicGroups[0]!.layers;
 
 		// Shell: geometry only — visual styling lives on the layers beneath.
 		expect(layers.shell).toMatchObject({ left: '10px', top: '20px', width: '500px', height: '100px', position: 'absolute', overflow: 'visible' });
@@ -757,10 +757,10 @@ describe('feature Match Overlay render model', () => {
 		const overlayModel = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
 		const keyModel = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'key', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
 
-		expect(overlayModel.graphicItemGroups[0]!.layers.backdrop.background).toBe('linear-gradient(red, blue), #123456');
-		expect(overlayModel.graphicItemGroups[0]!.layers.backdrop.opacity).toBe(0.5);
+		expect(overlayModel.graphicGroups[0]!.layers.backdrop.background).toBe('linear-gradient(red, blue), #123456');
+		expect(overlayModel.graphicGroups[0]!.layers.backdrop.opacity).toBe(0.5);
 		// Key output flattens to the alpha matte — no color gradient.
-		expect(String(keyModel.graphicItemGroups[0]!.layers.backdrop.background)).not.toContain('linear-gradient(red, blue)');
+		expect(String(keyModel.graphicGroups[0]!.layers.backdrop.background)).not.toContain('linear-gradient(red, blue)');
 	});
 
 	it('does not inherit Graphic Group appearance as child defaults', () => {
@@ -789,7 +789,7 @@ describe('feature Match Overlay render model', () => {
 		];
 
 		const model = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
-		const child = model.graphicItemGroups[0]!.children[0]!;
+		const child = model.graphicGroups[0]!.children[0]!;
 
 		expect(child.style.background).toBe('transparent');
 		expect(child.style.color).toBe('#fff');

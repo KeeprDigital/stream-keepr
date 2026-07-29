@@ -58,7 +58,7 @@ export interface FeatureMatchGraphicItemDefinition<
 	id: Config['type'];
 	configurationVersion: 1;
 	placement: 'top-level-only' | 'top-level-or-group';
-	layoutKind: 'source' | 'media' | 'graphic-item' | 'group';
+	layoutKind: 'source' | 'media' | 'graphic-item' | 'graphic-group';
 	label: string;
 	icon: string;
 	editorControls: readonly string[];
@@ -300,7 +300,7 @@ const DEFINITIONS = {
 		id: 'graphic-group',
 		configurationVersion: 1,
 		placement: 'top-level-only',
-		layoutKind: 'group',
+		layoutKind: 'graphic-group',
 		label: 'Graphic Group',
 		icon: 'i-lucide-group',
 		editorControls: ['arrangement', 'overflow', 'surface-style', 'child-defaults', 'children'],

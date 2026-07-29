@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
-import type { FeatureMatchOverlayGraphicItemGroupChildRenderModel } from '~/modules/feature-match-overlay/renderModel';
+import type { FeatureMatchOverlayGraphicGroupChildRenderModel } from '~/modules/feature-match-overlay/renderModel';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import { graphicAssetFontFaceFamily } from '~~/shared/featureMatchOverlayFonts';
 import { featureMatchOverlayGraphicAssetReferences, screenGraphicAssetReferenceTargetCompatibility } from '~~/shared/utils/graphicsAssetReferences';
@@ -134,7 +134,7 @@ const layoutItems = computed(() => renderModel.value.layoutItems);
 const sourceItems = computed(() => renderModel.value.sourceItems);
 const mediaItems = computed(() => renderModel.value.mediaItems);
 const graphicItemItems = computed(() => renderModel.value.graphicItemItems);
-const graphicItemGroups = computed(() => renderModel.value.graphicItemGroups);
+const graphicGroups = computed(() => renderModel.value.graphicGroups);
 const sourceCutouts = computed(() => renderModel.value.sourceCutouts);
 const frameImageStyle = computed(() => renderModel.value.frame.imageStyle);
 const frameImagePreserveAspectRatio = computed(() => renderModel.value.frame.imagePreserveAspectRatio);
@@ -166,7 +166,7 @@ function numericStyleValue(value: unknown) {
 	return Number.parseFloat(value) || 0;
 }
 
-function childGuideStyle(group: { x: number; y: number }, child: FeatureMatchOverlayGraphicItemGroupChildRenderModel) {
+function childGuideStyle(group: { x: number; y: number }, child: FeatureMatchOverlayGraphicGroupChildRenderModel) {
 	return {
 		left: `${group.x + numericStyleValue(child.style.left)}px`,
 		top: `${group.y + numericStyleValue(child.style.top)}px`,
@@ -462,7 +462,7 @@ onBeforeUnmount(() => {
 				<span>{{ media.item.label }}</span>
 			</div>
 			<div
-				v-for="group in graphicItemGroups"
+				v-for="group in graphicGroups"
 				:key="`group-guide-${group.item.id}`"
 				class="graphic-item-guide graphic-item-guide--group"
 				:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: group.item.id }) }"
@@ -476,7 +476,7 @@ onBeforeUnmount(() => {
 			>
 				<span>{{ group.item.label }}</span>
 			</div>
-			<template v-for="group in graphicItemGroups" :key="`group-graphicItem-guides-${group.item.id}`">
+			<template v-for="group in graphicGroups" :key="`group-graphicItem-guides-${group.item.id}`">
 				<div
 					v-for="child in group.children"
 					:key="`child-guide-${group.item.id}-${child.id}`"

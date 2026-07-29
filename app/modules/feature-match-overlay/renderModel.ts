@@ -132,7 +132,7 @@ export interface FeatureMatchOverlayGraphicItemItemRenderModel extends FeatureMa
 	item: FeatureMatchSpecificGraphicItemConfig;
 }
 
-export type FeatureMatchOverlayGraphicItemGroupChildRenderModel
+export type FeatureMatchOverlayGraphicGroupChildRenderModel
 	= | ({ kind: 'graphic-item'; child: FeatureMatchGraphicGroupGraphicItemChildConfig } & FeatureMatchOverlayGraphicItemRenderDescriptor)
 		| ({
 			kind: 'media';
@@ -146,17 +146,17 @@ export type FeatureMatchOverlayGraphicItemGroupChildRenderModel
  * positional shell, the background backdrop beneath the children, the
  * clipping children layer, and the border/glow frame on top.
  */
-export interface FeatureMatchOverlayGraphicItemGroupLayers {
+export interface FeatureMatchOverlayGraphicGroupLayers {
 	shell: CSSProperties;
 	backdrop: CSSProperties;
 	children: CSSProperties;
 	frame: CSSProperties;
 }
 
-export interface FeatureMatchOverlayGraphicItemGroupRenderModel {
+export interface FeatureMatchOverlayGraphicGroupRenderModel {
 	item: FeatureMatchGraphicGroupItemConfig;
-	layers: FeatureMatchOverlayGraphicItemGroupLayers;
-	children: FeatureMatchOverlayGraphicItemGroupChildRenderModel[];
+	layers: FeatureMatchOverlayGraphicGroupLayers;
+	children: FeatureMatchOverlayGraphicGroupChildRenderModel[];
 }
 
 export interface FeatureMatchOverlayGraphicItemHelpers {
@@ -177,7 +177,7 @@ export interface FeatureMatchOverlayRenderModel {
 	sourceItems: FeatureMatchOverlaySourceItemRenderModel[];
 	mediaItems: FeatureMatchOverlayMediaGraphicItemRenderModel<FeatureMatchMediaGraphicItemConfig>[];
 	graphicItemItems: FeatureMatchOverlayGraphicItemItemRenderModel[];
-	graphicItemGroups: FeatureMatchOverlayGraphicItemGroupRenderModel[];
+	graphicGroups: FeatureMatchOverlayGraphicGroupRenderModel[];
 	sourceCutouts: Array<{ id: string; path: string }>;
 	frame: FeatureMatchOverlayFrameRenderModel;
 	graphicItems: FeatureMatchOverlayGraphicItemHelpers;
@@ -195,7 +195,7 @@ export type FeatureMatchOverlayLayoutItemRenderModel
 	= | ({ kind: 'source' } & FeatureMatchOverlaySourceItemRenderModel)
 		| ({ kind: 'media' } & FeatureMatchOverlayMediaGraphicItemRenderModel)
 		| ({ kind: 'graphic-item' } & FeatureMatchOverlayGraphicItemItemRenderModel)
-		| ({ kind: 'group'; style: CSSProperties } & FeatureMatchOverlayGraphicItemGroupRenderModel);
+		| ({ kind: 'graphic-group'; style: CSSProperties } & FeatureMatchOverlayGraphicGroupRenderModel);
 
 function rectStyle(rect: FeatureMatchOverlayRect): CSSProperties {
 	return { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` };
@@ -453,7 +453,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		'source': [] as FeatureMatchSourceItemConfig[],
 		'media': [] as FeatureMatchMediaGraphicItemConfig[],
 		'graphic-item': [] as FeatureMatchSpecificGraphicItemConfig[],
-		'group': [] as FeatureMatchGraphicGroupItemConfig[],
+		'graphic-group': [] as FeatureMatchGraphicGroupItemConfig[],
 	};
 	for (const item of visibleItems) {
 		classifiedItems[featureMatchLayoutItemDefinition(item).layoutKind].push(item as never);
@@ -461,7 +461,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 	const sourceItems = classifiedItems.source;
 	const mediaItems = classifiedItems.media;
 	const graphicItemItems = classifiedItems['graphic-item'];
-	const graphicItemGroups = classifiedItems.group;
+	const graphicGroups = classifiedItems['graphic-group'];
 
 	function definitionRendererContext<Result>(
 		handlers: Partial<GraphicItemRendererContext<Result>>,
@@ -669,7 +669,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		);
 	}
 
-	function groupLayers(group: FeatureMatchGraphicGroupItemConfig): FeatureMatchOverlayGraphicItemGroupLayers {
+	function groupLayers(group: FeatureMatchGraphicGroupItemConfig): FeatureMatchOverlayGraphicGroupLayers {
 		const surfaceStyle = group.surfaceStyle;
 		const borderRadius = featureMatchOverlayBorderRadiusCss(surfaceStyle ?? {});
 		const gradient = output !== 'key' ? surfaceStyle?.backgroundGradient?.trim() : undefined;
@@ -743,10 +743,10 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		style: graphicItemStyle(item, item.surfaceStyle),
 		render: graphicItemRender(item.graphicItem, item.surfaceStyle),
 	}));
-	const renderedGraphicItemGroups = graphicItemGroups.map(group =>
+	const renderedGraphicGroups = graphicGroups.map(group =>
 		featureMatchOverlayGraphicItemDefinition('graphic-group').render(
 			group,
-			definitionRendererContext<FeatureMatchOverlayGraphicItemGroupRenderModel>({
+			definitionRendererContext<FeatureMatchOverlayGraphicGroupRenderModel>({
 				graphicGroup: registeredGroup => ({
 					item: group,
 					layers: groupLayers(group),
@@ -785,7 +785,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 	const sourceById = new Map(renderedSourceItems.map(item => [item.item.id, item]));
 	const mediaById = new Map(renderedMediaItems.map(item => [item.item.id, item]));
 	const graphicItemById = new Map(renderedGraphicItemItems.map(item => [item.item.id, item]));
-	const groupById = new Map(renderedGraphicItemGroups.map(item => [item.item.id, item]));
+	const groupById = new Map(renderedGraphicGroups.map(item => [item.item.id, item]));
 	const renderModelByDefinitionKind = {
 		'source': (id: string): FeatureMatchOverlayLayoutItemRenderModel =>
 			({ kind: 'source', ...sourceById.get(id)! }),
@@ -793,9 +793,9 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 			({ kind: 'media', ...mediaById.get(id)! }),
 		'graphic-item': (id: string): FeatureMatchOverlayLayoutItemRenderModel =>
 			({ kind: 'graphic-item', ...graphicItemById.get(id)! }),
-		'group': (id: string): FeatureMatchOverlayLayoutItemRenderModel => {
+		'graphic-group': (id: string): FeatureMatchOverlayLayoutItemRenderModel => {
 			const group = groupById.get(id)!;
-			return { kind: 'group', ...group, style: group.layers.shell };
+			return { kind: 'graphic-group', ...group, style: group.layers.shell };
 		},
 	};
 	const layoutItems = visibleItems.map(item =>
@@ -814,7 +814,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		sourceItems: renderedSourceItems,
 		mediaItems: renderedMediaItems,
 		graphicItemItems: renderedGraphicItemItems,
-		graphicItemGroups: renderedGraphicItemGroups,
+		graphicGroups: renderedGraphicGroups,
 		sourceCutouts: renderedSourceItems
 			.filter(source => source.cutoutPath)
 			.map(source => ({ id: source.item.id, path: source.cutoutPath! })),

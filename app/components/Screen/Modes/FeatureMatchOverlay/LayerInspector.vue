@@ -353,14 +353,14 @@ const selectedInspectorHeader = computed(() => {
 				/>
 
 				<FeatureMatchOverlayInspectorGroup
-					v-else-if="selection.kind === 'group'"
+					v-else-if="selection.kind === 'graphic-group'"
 					:config="config"
 					:update-config="updateConfig"
 					:screen-width="screenWidth"
 					:screen-height="screenHeight"
 					:item="selection.item"
 					@removed="selectCanvas"
-					@child-added="childId => selection.kind === 'group' && onChildAdded(selection.item.id, childId)"
+					@child-added="childId => selection.kind === 'graphic-group' && onChildAdded(selection.item.id, childId)"
 				/>
 			</section>
 		</div>

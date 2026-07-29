@@ -38,7 +38,7 @@ describe('feature-match-overlay selection', () => {
 		it('resolves a layer target to its item kind', () => {
 			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'layer', itemId: 's1' })).toMatchObject({ kind: 'source', item: { id: 's1' } });
 			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'layer', itemId: 'w1' })).toMatchObject({ kind: 'graphic-item', item: { id: 'w1' } });
-			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'layer', itemId: 'g1' })).toMatchObject({ kind: 'group', item: { id: 'g1' } });
+			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'layer', itemId: 'g1' })).toMatchObject({ kind: 'graphic-group', item: { id: 'g1' } });
 		});
 
 		it('resolves a graphicItem target to the group child', () => {

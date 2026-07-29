@@ -20,7 +20,7 @@ export type FeatureMatchOverlaySelection
 		| { kind: 'source'; item: FeatureMatchSourceItemConfig }
 		| { kind: 'media'; item: FeatureMatchMediaGraphicItemConfig }
 		| { kind: 'graphic-item'; item: FeatureMatchSpecificGraphicItemConfig }
-		| { kind: 'group'; item: FeatureMatchGraphicGroupItemConfig }
+		| { kind: 'graphic-group'; item: FeatureMatchGraphicGroupItemConfig }
 		| { kind: 'child'; group: FeatureMatchGraphicGroupItemConfig; child: FeatureMatchGraphicGroupChildConfig }
 		| { kind: 'missing' };
 
@@ -44,7 +44,7 @@ export function resolveFeatureMatchOverlaySelection(layout: FeatureMatchLayoutCo
 		'source': () => ({ kind: 'source' as const, item: item as FeatureMatchSourceItemConfig }),
 		'media': () => ({ kind: 'media' as const, item: item as FeatureMatchMediaGraphicItemConfig }),
 		'graphic-item': () => ({ kind: 'graphic-item' as const, item: item as FeatureMatchSpecificGraphicItemConfig }),
-		'group': () => ({ kind: 'group' as const, item: item as FeatureMatchGraphicGroupItemConfig }),
+		'graphic-group': () => ({ kind: 'graphic-group' as const, item: item as FeatureMatchGraphicGroupItemConfig }),
 	};
 	return selectionByDefinitionKind[featureMatchLayoutItemDefinition(item).layoutKind]();
 }
