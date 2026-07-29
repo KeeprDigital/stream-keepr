@@ -84,8 +84,8 @@ describe('media Graphic Item inspector', () => {
 
 	it('edits a Graphic Group media child through the same exact-reference controls', async () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		const group = config.layout.items.find(item => item.type === 'widget-group');
-		if (group?.type !== 'widget-group')
+		const group = config.layout.items.find(item => item.type === 'graphic-group');
+		if (group?.type !== 'graphic-group')
 			throw new Error('Expected a Graphic Group fixture');
 		const child = {
 			id: 'group-media',
@@ -119,7 +119,7 @@ describe('media Graphic Item inspector', () => {
 					FeatureMatchOverlayGeometryFields: true,
 					FeatureMatchOverlayBoxStyleFields: true,
 					FeatureMatchOverlayOrderSection: true,
-					FeatureMatchOverlayWidgetEditor: true,
+					FeatureMatchOverlayGraphicItemEditor: true,
 					GraphicsAssetFocusPicker: PickerStub,
 					UFormField: SectionStub,
 					UInput: true,

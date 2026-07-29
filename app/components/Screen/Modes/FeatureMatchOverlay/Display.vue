@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
-import type { FeatureMatchOverlayWidgetGroupChildRenderModel } from '~/modules/feature-match-overlay/renderModel';
+import type { FeatureMatchOverlayGraphicItemGroupChildRenderModel } from '~/modules/feature-match-overlay/renderModel';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import { graphicAssetFontFaceFamily } from '~~/shared/featureMatchOverlayFonts';
 import { featureMatchOverlayGraphicAssetReferences, screenGraphicAssetReferenceTargetCompatibility } from '~~/shared/utils/graphicsAssetReferences';
@@ -11,7 +11,7 @@ import { createGuardedSequence } from '~/utils/guardedSequence';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
 import FeatureMatchOverlayMediaGraphicItem from './MediaGraphicItem.vue';
-import FeatureMatchOverlayWidget from './Widget.vue';
+import FeatureMatchOverlayGraphicItem from './Widget.vue';
 
 const { outputMode, previewGuides, screen } = useScreenContext();
 const resolvedOutput = computed<FeatureMatchOverlayOutput>(() => outputMode?.value ?? 'overlay');
@@ -133,8 +133,8 @@ const canvasStyle = computed(() => renderModel.value.canvasStyle);
 const layoutItems = computed(() => renderModel.value.layoutItems);
 const sourceItems = computed(() => renderModel.value.sourceItems);
 const mediaItems = computed(() => renderModel.value.mediaItems);
-const widgetItems = computed(() => renderModel.value.widgetItems);
-const widgetGroups = computed(() => renderModel.value.widgetGroups);
+const graphicItemItems = computed(() => renderModel.value.graphicItemItems);
+const graphicItemGroups = computed(() => renderModel.value.graphicItemGroups);
 const sourceCutouts = computed(() => renderModel.value.sourceCutouts);
 const frameImageStyle = computed(() => renderModel.value.frame.imageStyle);
 const frameImagePreserveAspectRatio = computed(() => renderModel.value.frame.imagePreserveAspectRatio);
@@ -166,7 +166,7 @@ function numericStyleValue(value: unknown) {
 	return Number.parseFloat(value) || 0;
 }
 
-function childGuideStyle(group: { x: number; y: number }, child: FeatureMatchOverlayWidgetGroupChildRenderModel) {
+function childGuideStyle(group: { x: number; y: number }, child: FeatureMatchOverlayGraphicItemGroupChildRenderModel) {
 	return {
 		left: `${group.x + numericStyleValue(child.style.left)}px`,
 		top: `${group.y + numericStyleValue(child.style.top)}px`,
@@ -375,39 +375,39 @@ onBeforeUnmount(() => {
 				:media="layoutItem"
 			/>
 			<div
-				v-else-if="layoutItem.kind === 'widget'"
+				v-else-if="layoutItem.kind === 'graphic-item'"
 				:data-graphic-item-id="layoutItem.item.id"
 				:style="layoutItem.style"
 			>
-				<FeatureMatchOverlayWidget :render="layoutItem.render" :output="resolvedOutput" />
+				<FeatureMatchOverlayGraphicItem :render="layoutItem.render" :output="resolvedOutput" />
 			</div>
 			<div
 				v-else
-				class="feature-match-overlay-widget-group"
+				class="feature-match-overlay-graphic-group"
 				:data-graphic-item-id="layoutItem.item.id"
 				:style="layoutItem.layers.shell"
 			>
-				<div class="feature-match-overlay-widget-group__backdrop" :style="layoutItem.layers.backdrop" aria-hidden="true" />
-				<div class="feature-match-overlay-widget-group__children" :style="layoutItem.layers.children">
+				<div class="feature-match-overlay-graphic-group__backdrop" :style="layoutItem.layers.backdrop" aria-hidden="true" />
+				<div class="feature-match-overlay-graphic-group__children" :style="layoutItem.layers.children">
 					<template
 						v-for="child in layoutItem.children"
 						:key="child.id"
 					>
 						<FeatureMatchOverlayMediaGraphicItem
 							v-if="child.kind === 'media'"
-							class="feature-match-overlay-widget-group__child"
+							class="feature-match-overlay-graphic-group__child"
 							:media="child"
 						/>
 						<div
 							v-else
-							class="feature-match-overlay-widget-group__child"
+							class="feature-match-overlay-graphic-group__child"
 							:style="child.style"
 						>
-							<FeatureMatchOverlayWidget :render="child.render" :output="resolvedOutput" />
+							<FeatureMatchOverlayGraphicItem :render="child.render" :output="resolvedOutput" />
 						</div>
 					</template>
 				</div>
-				<div class="feature-match-overlay-widget-group__frame" :style="layoutItem.layers.frame" aria-hidden="true" />
+				<div class="feature-match-overlay-graphic-group__frame" :style="layoutItem.layers.frame" aria-hidden="true" />
 			</div>
 		</template>
 
@@ -434,19 +434,19 @@ onBeforeUnmount(() => {
 				<span>{{ source.item.label }}</span>
 			</div>
 			<div
-				v-for="widget in widgetItems"
-				:key="`widget-guide-${widget.id}`"
-				class="graphic-item-guide graphic-item-guide--widget"
-				:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: widget.item.id }) }"
-				:style="guideStyle(widget.item)"
+				v-for="graphicItem in graphicItemItems"
+				:key="`graphicItem-guide-${graphicItem.id}`"
+				class="graphic-item-guide graphic-item-guide--graphicItem"
+				:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: graphicItem.item.id }) }"
+				:style="guideStyle(graphicItem.item)"
 				role="button"
 				tabindex="0"
-				:aria-label="`Select ${widget.label}`"
-				@click.stop="selectPreviewTarget({ type: 'layer', itemId: widget.item.id })"
-				@keydown.enter.stop="selectPreviewTarget({ type: 'layer', itemId: widget.item.id })"
-				@keydown.space.prevent.stop="selectPreviewTarget({ type: 'layer', itemId: widget.item.id })"
+				:aria-label="`Select ${graphicItem.label}`"
+				@click.stop="selectPreviewTarget({ type: 'layer', itemId: graphicItem.item.id })"
+				@keydown.enter.stop="selectPreviewTarget({ type: 'layer', itemId: graphicItem.item.id })"
+				@keydown.space.prevent.stop="selectPreviewTarget({ type: 'layer', itemId: graphicItem.item.id })"
 			>
-				<span>{{ widget.label }}</span>
+				<span>{{ graphicItem.label }}</span>
 			</div>
 			<div
 				v-for="media in mediaItems"
@@ -462,7 +462,7 @@ onBeforeUnmount(() => {
 				<span>{{ media.item.label }}</span>
 			</div>
 			<div
-				v-for="group in widgetGroups"
+				v-for="group in graphicItemGroups"
 				:key="`group-guide-${group.item.id}`"
 				class="graphic-item-guide graphic-item-guide--group"
 				:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: group.item.id }) }"
@@ -476,19 +476,19 @@ onBeforeUnmount(() => {
 			>
 				<span>{{ group.item.label }}</span>
 			</div>
-			<template v-for="group in widgetGroups" :key="`group-widget-guides-${group.item.id}`">
+			<template v-for="group in graphicItemGroups" :key="`group-graphicItem-guides-${group.item.id}`">
 				<div
 					v-for="child in group.children"
 					:key="`child-guide-${group.item.id}-${child.id}`"
 					class="graphic-item-guide graphic-item-guide--child"
-					:class="{ 'is-selected': isPreviewTargetSelected({ type: 'widget', itemId: group.item.id, childId: child.id }) }"
+					:class="{ 'is-selected': isPreviewTargetSelected({ type: 'graphic-item', itemId: group.item.id, childId: child.id }) }"
 					:style="childGuideStyle(group.item, child)"
 					role="button"
 					tabindex="0"
 					:aria-label="`Select ${child.label}`"
-					@click.stop="selectPreviewTarget({ type: 'widget', itemId: group.item.id, childId: child.id })"
-					@keydown.enter.stop="selectPreviewTarget({ type: 'widget', itemId: group.item.id, childId: child.id })"
-					@keydown.space.prevent.stop="selectPreviewTarget({ type: 'widget', itemId: group.item.id, childId: child.id })"
+					@click.stop="selectPreviewTarget({ type: 'graphic-item', itemId: group.item.id, childId: child.id })"
+					@keydown.enter.stop="selectPreviewTarget({ type: 'graphic-item', itemId: group.item.id, childId: child.id })"
+					@keydown.space.prevent.stop="selectPreviewTarget({ type: 'graphic-item', itemId: group.item.id, childId: child.id })"
 				>
 					<span>{{ child.label }}</span>
 				</div>
@@ -540,7 +540,7 @@ onBeforeUnmount(() => {
 	border-color: rgba(56, 189, 248, 0.95);
 }
 
-.graphic-item-guide--widget {
+.graphic-item-guide--graphicItem {
 	border-color: rgba(250, 204, 21, 0.95);
 }
 

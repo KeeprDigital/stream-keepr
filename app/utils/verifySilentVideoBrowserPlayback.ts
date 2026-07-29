@@ -63,6 +63,57 @@ function waitForPresentedVideoFrame(video: HTMLVideoElement, timeoutMilliseconds
 	});
 }
 
+export function waitForPostSeekPresentedVideoFrame(
+	video: HTMLVideoElement,
+	expectedTime: number,
+	timeoutMilliseconds = 10_000,
+) {
+	return new Promise<void>((resolve, reject) => {
+		let timeout: number | undefined;
+		let animationFrame: number | undefined;
+		let settled = false;
+		const controller = new AbortController();
+		const finish = (work: () => void) => {
+			if (settled)
+				return;
+			settled = true;
+			window.clearTimeout(timeout);
+			if (animationFrame !== undefined)
+				window.cancelAnimationFrame(animationFrame);
+			controller.abort();
+			work();
+		};
+		const frameReady = (mediaTime = video.currentTime) =>
+			video.readyState >= 2 // HTMLMediaElement.HAVE_CURRENT_DATA
+			&& video.currentTime + 0.001 >= expectedTime
+			&& mediaTime + 0.001 >= expectedTime;
+		const onError = () => finish(() => reject(new Error('Video failed before presenting the post-seek frame.')));
+		video.addEventListener('error', onError, { once: true, signal: controller.signal });
+
+		if (typeof video.requestVideoFrameCallback === 'function') {
+			video.requestVideoFrameCallback((_now, metadata) => {
+				if (frameReady(metadata.mediaTime))
+					finish(resolve);
+			});
+		}
+		else {
+			// A seeked event updates the media timeline before every engine has
+			// painted the corresponding frame. Two animation frames provide a
+			// bounded paint opportunity; readiness and time are still proven.
+			animationFrame = window.requestAnimationFrame(() => {
+				animationFrame = window.requestAnimationFrame(() => {
+					if (frameReady())
+						finish(resolve);
+				});
+			});
+		}
+		timeout = window.setTimeout(
+			() => finish(() => reject(new Error('Video post-seek frame presentation timed out.'))),
+			timeoutMilliseconds,
+		);
+	});
+}
+
 async function sha256(source: Blob) {
 	return Array.from(
 		new Uint8Array(await crypto.subtle.digest('SHA-256', await source.arrayBuffer())),
@@ -121,8 +172,9 @@ export async function verifySilentVideoBrowserPlayback(
 		const seeked = waitForVideoEvent(video, 'seeked');
 		video.currentTime = facts.posterTimeSeconds;
 		await seeked;
-
 		stage = 'poster';
+		await waitForPostSeekPresentedVideoFrame(video, facts.posterTimeSeconds);
+
 		const scale = Math.min(1, 640 / video.videoWidth, 360 / video.videoHeight);
 		const width = Math.max(1, Math.round(video.videoWidth * scale));
 		const height = Math.max(1, Math.round(video.videoHeight * scale));

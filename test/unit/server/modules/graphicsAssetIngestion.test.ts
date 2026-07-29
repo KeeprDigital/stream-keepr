@@ -15,6 +15,7 @@ import {
 	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
+import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -553,8 +554,13 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			async read(...input: Parameters<typeof stagingDelegate.read>) {
 				const result = await stagingDelegate.read(...input);
 				stagingReadCount++;
-				if (result.outcome !== 'available' || stagingReadCount !== 3)
+				if (
+					result.outcome !== 'available'
+					|| input[1] !== undefined
+					|| stagingReadCount !== 4
+				) {
 					return result;
+				}
 				let offset = 0;
 				return {
 					...result,
@@ -1345,6 +1351,128 @@ describe('still-image ingestion through the Graphics Asset Library public module
 });
 
 describe('silent-video ingestion through the Graphics Asset Library public module', () => {
+	it('reserves the poster envelope in the Graphics Staging Allowance', async () => {
+		const blockedCatalogue = createInMemoryGraphicsAssetCatalogue({
+			stagingLimitBytes: vp9Webm.byteLength + MAX_SILENT_VIDEO_POSTER_BYTES - 1,
+		});
+		const { library: blocked } = createLibrary(
+			createInMemoryStagingGraphicsObjectStore(),
+			createInMemoryCanonicalGraphicsObjectStore(),
+			blockedCatalogue,
+		);
+		await expect(blocked.initiateGraphicsIngestion({
+			idempotencyKey: 'vp9-poster-capacity-blocked',
+			initiatedBy: 'graphics-author-1',
+			name: 'VP9 poster capacity',
+			sourceFileName: 'ident.webm',
+			declaredMime: 'video/webm',
+			declaredByteLength: vp9Webm.byteLength,
+		})).rejects.toMatchObject({
+			code: 'staging-capacity-exhausted',
+			capacity: {
+				requestedBytes: vp9Webm.byteLength + MAX_SILENT_VIDEO_POSTER_BYTES,
+			},
+		});
+
+		const { library } = createLibrary();
+		const initiated = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'vp9-poster-capacity-accounted',
+			initiatedBy: 'graphics-author-1',
+			name: 'VP9 poster accounted',
+			sourceFileName: 'ident.webm',
+			declaredMime: 'video/webm',
+			declaredByteLength: vp9Webm.byteLength,
+		});
+		await expect(library.getCapacity()).resolves.toMatchObject({
+			staging: {
+				usedBytes: 0,
+				reservedBytes: vp9Webm.byteLength + MAX_SILENT_VIDEO_POSTER_BYTES,
+			},
+		});
+		await library.uploadGraphicAsset({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+			declaredMime: 'video/webm',
+			bytes: createBoundedByteStream(vp9Webm, {
+				byteLength: vp9Webm.byteLength,
+				maximumByteLength: 250 * 1024 * 1024,
+			}),
+		});
+		await expect(library.getCapacity()).resolves.toMatchObject({
+			staging: {
+				usedBytes: vp9Webm.byteLength,
+				reservedBytes: MAX_SILENT_VIDEO_POSTER_BYTES,
+			},
+		});
+	});
+
+	it('cleans source and poster staging after failed or cancelled confirmation', async () => {
+		const { library, staging } = createLibrary();
+		const initiate = async (key: string) => {
+			const operation = await library.initiateGraphicsIngestion({
+				idempotencyKey: key,
+				initiatedBy: 'graphics-author-1',
+				name: key,
+				sourceFileName: 'ident.webm',
+				declaredMime: 'video/webm',
+				declaredByteLength: vp9Webm.byteLength,
+			});
+			await library.uploadGraphicAsset({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				declaredMime: 'video/webm',
+				bytes: createBoundedByteStream(vp9Webm, {
+					byteLength: vp9Webm.byteLength,
+					maximumByteLength: 250 * 1024 * 1024,
+				}),
+			});
+			return operation;
+		};
+		const failedOperation = await initiate('vp9-invalid-poster-cleanup');
+		const failed = await library.confirmSilentVideoBrowserEvidence({
+			operationId: failedOperation.id,
+			initiatedBy: failedOperation.initiatedBy,
+			evidence: {
+				outcome: 'video-played',
+				sourceDigest: sourceDigest(vp9Webm),
+				width: 16,
+				height: 16,
+				durationSeconds: 1,
+				posterTimeSeconds: 0.1,
+				posterDigest: sourceDigest(transparentPixelPng),
+				browserFamily: 'chromium',
+				transparencyRendered: false,
+			},
+			poster: createBoundedByteStream(transparentPixelPng, {
+				byteLength: transparentPixelPng.byteLength,
+				maximumByteLength: MAX_SILENT_VIDEO_POSTER_BYTES,
+			}),
+		});
+		expect(failed.stage).toBe('failed');
+		await expect(staging.readMetadata(
+			graphicsObjectIdentity(`ingestion/${failedOperation.id}/source`),
+		)).resolves.toMatchObject({ outcome: 'missing' });
+		await expect(staging.readMetadata(
+			graphicsObjectIdentity(`ingestion/${failedOperation.id}/video-poster`),
+		)).resolves.toMatchObject({ outcome: 'missing' });
+
+		const cancelledOperation = await initiate('vp9-cancelled-confirmation-cleanup');
+		const cancelled = await library.cancelGraphicsIngestion({
+			operationId: cancelledOperation.id,
+			initiatedBy: cancelledOperation.initiatedBy,
+		});
+		expect(cancelled.stage).toBe('cancelled');
+		await expect(staging.readMetadata(
+			graphicsObjectIdentity(`ingestion/${cancelledOperation.id}/source`),
+		)).resolves.toMatchObject({ outcome: 'missing' });
+		await expect(staging.readMetadata(
+			graphicsObjectIdentity(`ingestion/${cancelledOperation.id}/video-poster`),
+		)).resolves.toMatchObject({ outcome: 'missing' });
+		await expect(library.getCapacity()).resolves.toMatchObject({
+			staging: { usedBytes: 0, reservedBytes: 0 },
+		});
+	});
+
 	it('publishes only after exact browser playback, seek, and deterministic poster evidence', async () => {
 		const { library } = createLibrary();
 		const initiated = await library.initiateGraphicsIngestion({

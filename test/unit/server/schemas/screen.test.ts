@@ -288,14 +288,14 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		};
 		referenced.layout.items.push({
 			id: 'sponsor-logo',
-			type: 'widget',
+			type: 'graphic-item',
 			label: 'Sponsor logo',
 			visible: true,
 			x: 10,
 			y: 10,
 			width: 200,
 			height: 100,
-			widget: {
+			graphicItem: {
 				type: 'image',
 				asset: {
 					assetId: 'asset-logo',
@@ -384,7 +384,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 				...referenced.layout,
 				items: [{
 					...referenced.layout.items.at(-1),
-					widget: {
+					graphicItem: {
 						type: 'image',
 						url: 'https://example.com/logo.png',
 						fit: 'contain',
@@ -398,9 +398,9 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 
 	it('accepts a silent-video Media Graphic Item as a Graphic Group child', () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		const group = config.layout.items.find(item => item.type === 'widget-group');
-		expect(group?.type).toBe('widget-group');
-		if (group?.type !== 'widget-group')
+		const group = config.layout.items.find(item => item.type === 'graphic-group');
+		expect(group?.type).toBe('graphic-group');
+		if (group?.type !== 'graphic-group')
 			return;
 		group.children = [{
 			id: 'sponsor-loop',
@@ -434,7 +434,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(result.success).toBe(true);
 		if (result.success) {
 			const parsedGroup = result.data.layout.items.find(item => item.id === group.id);
-			expect(parsedGroup?.type === 'widget-group' ? parsedGroup.children[0] : undefined)
+			expect(parsedGroup?.type === 'graphic-group' ? parsedGroup.children[0] : undefined)
 				.toMatchObject({
 					type: 'media',
 					asset: {
@@ -452,13 +452,13 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		}
 	});
 
-	it('preserves legacy stored group-child widget configs while adding the content discriminator', () => {
+	it('preserves legacy stored group-child graphicItem configs while adding the content discriminator', () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		const group = config.layout.items.find(item => item.type === 'widget-group');
-		if (group?.type !== 'widget-group')
+		const group = config.layout.items.find(item => item.type === 'graphic-group');
+		if (group?.type !== 'graphic-group')
 			throw new Error('Expected a Graphic Group fixture');
 		const child = group.children[0]!;
-		const expectedWidget = structuredClone(child.type === 'widget' ? child.widget : undefined);
+		const expectedGraphicItem = structuredClone(child.type === 'graphic-item' ? child.graphicItem : undefined);
 		delete (child as unknown as Record<string, unknown>).type;
 
 		const result = featureMatchOverlayModeConfigSchema.safeParse(config);
@@ -466,20 +466,20 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(result.success).toBe(true);
 		if (result.success) {
 			const parsedGroup = result.data.layout.items.find(item => item.id === group.id);
-			const parsedChild = parsedGroup?.type === 'widget-group' ? parsedGroup.children[0] : undefined;
+			const parsedChild = parsedGroup?.type === 'graphic-group' ? parsedGroup.children[0] : undefined;
 			expect(parsedChild).toMatchObject({
-				type: 'widget',
-				widget: expectedWidget,
+				type: 'graphic-item',
+				graphicItem: expectedGraphicItem,
 			});
 		}
 	});
 
-	it.each(['source', 'widget-group'] as const)(
+	it.each(['source', 'graphic-group'] as const)(
 		'rejects a %s Item as a Graphic Group child',
 		(type) => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-			const group = config.layout.items.find(item => item.type === 'widget-group');
-			if (group?.type !== 'widget-group')
+			const group = config.layout.items.find(item => item.type === 'graphic-group');
+			if (group?.type !== 'graphic-group')
 				throw new Error('Expected a Graphic Group fixture');
 			group.children = [{
 				id: 'invalid-child',
@@ -615,7 +615,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 							glowSize: 8,
 							glowOpacity: 0.8,
 						},
-						defaultChildSurfaceStyle: item.type === 'widget-group'
+						defaultChildSurfaceStyle: item.type === 'graphic-group'
 							? {
 									...(item.defaultChildSurfaceStyle ?? {}),
 									textColor: '#ffffff',
@@ -636,12 +636,12 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 			layout: {
 				...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout,
 				items: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.items.map((item) => {
-					if (item.id !== 'player1-game-wins' || item.type !== 'widget' || item.widget.type !== 'game-wins')
+					if (item.id !== 'player1-game-wins' || item.type !== 'graphic-item' || item.graphicItem.type !== 'game-wins')
 						return item;
 					return {
 						...item,
-						widget: {
-							...item.widget,
+						graphicItem: {
+							...item.graphicItem,
 							displayMode: 'number',
 							boxOrientation: 'vertical',
 							boxGap: 9,
@@ -654,8 +654,8 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 
 		expect(result.success).toBe(true);
 		if (result.success) {
-			const winsWidget = result.data.layout.items.find(item => item.id === 'player1-game-wins');
-			expect(winsWidget?.type === 'widget' && winsWidget.widget.type === 'game-wins' ? winsWidget.widget : null).toMatchObject({
+			const winsGraphicItem = result.data.layout.items.find(item => item.id === 'player1-game-wins');
+			expect(winsGraphicItem?.type === 'graphic-item' && winsGraphicItem.graphicItem.type === 'game-wins' ? winsGraphicItem.graphicItem : null).toMatchObject({
 				displayMode: 'number',
 				boxOrientation: 'vertical',
 				boxGap: 9,
@@ -670,15 +670,15 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 			layout: {
 				...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout,
 				items: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.items.map((item) => {
-					if (item.id !== 'top-bar' || item.type !== 'widget-group')
+					if (item.id !== 'top-bar' || item.type !== 'graphic-group')
 						return item;
 					return {
 						...item,
-						children: item.children.map(child => child.id === 'top-deck' && child.widget.type === 'text'
+						children: item.children.map(child => child.id === 'top-deck' && child.graphicItem.type === 'text'
 							? {
 									...child,
-									widget: {
-										...child.widget,
+									graphicItem: {
+										...child.graphicItem,
 										template: '{deckColors}{spacer}{deck}',
 										spacerWidth: 48,
 									},
@@ -705,7 +705,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 						};
 					}
 
-					if (item.id === 'top-bar' && item.type === 'widget-group') {
+					if (item.id === 'top-bar' && item.type === 'graphic-group') {
 						return {
 							...item,
 							children: item.children.map(child => child.id === 'top-name-record' && child.layout.mode === 'canvas'
@@ -723,7 +723,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		if (result.success) {
 			expect(result.data.layout.items.find(item => item.id === 'main-source')?.anchor).toBe('center');
 			const topBar = result.data.layout.items.find(item => item.id === 'top-bar');
-			const child = topBar?.type === 'widget-group' ? topBar.children.find(item => item.id === 'top-name-record') : undefined;
+			const child = topBar?.type === 'graphic-group' ? topBar.children.find(item => item.id === 'top-name-record') : undefined;
 			expect(child?.layout).toMatchObject({ mode: 'canvas', anchor: 'bottom-right' });
 		}
 	});

@@ -11,7 +11,7 @@ import FeatureMatchOverlayInspectorGroup from './InspectorGroup.vue';
 import FeatureMatchOverlayInspectorGroupChild from './InspectorGroupChild.vue';
 import FeatureMatchOverlayInspectorMedia from './InspectorMedia.vue';
 import FeatureMatchOverlayInspectorSource from './InspectorSource.vue';
-import FeatureMatchOverlayInspectorWidget from './InspectorWidget.vue';
+import FeatureMatchOverlayInspectorGraphicItem from './InspectorWidget.vue';
 
 const props = defineProps<{
 	config: FeatureMatchOverlayModeConfig;
@@ -32,13 +32,13 @@ const treeNodeRefs = ref<Record<string, HTMLElement>>({});
 
 const LAYER_KIND_OPTIONS = [
 	{ label: 'Source', value: 'source', icon: 'i-lucide-video' },
-	{ label: 'Text', value: 'text-widget', icon: 'i-lucide-type' },
-	{ label: 'Image', value: 'image-widget', icon: 'i-lucide-image' },
+	{ label: 'Text', value: 'text-graphic-item', icon: 'i-lucide-type' },
+	{ label: 'Image', value: 'image-graphic-item', icon: 'i-lucide-image' },
 	{ label: 'Media', value: 'media', icon: 'i-lucide-image-play' },
-	{ label: 'Clock', value: 'clock-widget', icon: 'i-lucide-clock' },
-	{ label: 'Player Life', value: 'life-widget', icon: 'i-lucide-heart-pulse' },
-	{ label: 'Game Wins', value: 'wins-widget', icon: 'i-lucide-trophy' },
-	{ label: 'Group', value: 'widget-group', icon: 'i-lucide-group' },
+	{ label: 'Clock', value: 'clock-graphic-item', icon: 'i-lucide-clock' },
+	{ label: 'Player Life', value: 'life-graphic-item', icon: 'i-lucide-heart-pulse' },
+	{ label: 'Game Wins', value: 'wins-graphic-item', icon: 'i-lucide-trophy' },
+	{ label: 'Group', value: 'graphic-group', icon: 'i-lucide-group' },
 ];
 
 const { createLayoutItem, patchFrame } = useFeatureMatchOverlayConfigEditor({
@@ -69,8 +69,8 @@ function selectLayer(itemId: string) {
 	emit('update:selectedTarget', { type: 'layer', itemId });
 }
 
-function selectWidget(itemId: string, childId: string) {
-	emit('update:selectedTarget', { type: 'widget', itemId, childId });
+function selectGraphicItem(itemId: string, childId: string) {
+	emit('update:selectedTarget', { type: 'graphic-item', itemId, childId });
 }
 
 function addLayoutItem(kind: string) {
@@ -80,7 +80,7 @@ function addLayoutItem(kind: string) {
 
 function onChildAdded(groupId: string, childId: string) {
 	expandedGroups.value = { ...expandedGroups.value, [groupId]: true };
-	selectWidget(groupId, childId);
+	selectGraphicItem(groupId, childId);
 }
 
 function onChildRemoved(groupId: string) {
@@ -99,8 +99,8 @@ function layerTreeKey(itemId: string) {
 	return `layer:${itemId}`;
 }
 
-function widgetTreeKey(itemId: string, childId: string) {
-	return `widget:${itemId}:${childId}`;
+function graphicItemTreeKey(itemId: string, childId: string) {
+	return `graphicItem:${itemId}:${childId}`;
 }
 
 function setTreeNodeRef(key: string, element: unknown) {
@@ -159,7 +159,7 @@ const selectedInspectorHeader = computed(() => {
 		icon: 'i-lucide-circle-help',
 		label: 'Selection unavailable',
 		badge: 'Missing',
-		summary: 'Choose another layer or widget',
+		summary: 'Choose another layer or graphicItem',
 		visible: false,
 	};
 });
@@ -215,7 +215,7 @@ const selectedInspectorHeader = computed(() => {
 					<div v-for="item in config.layout.items" :key="item.id" class="space-y-1">
 						<div class="flex gap-1">
 							<button
-								v-if="item.type === 'widget-group'"
+								v-if="item.type === 'graphic-group'"
 								type="button"
 								class="mt-2 size-7 shrink-0 rounded-md hover:bg-muted"
 								:aria-label="isGroupExpanded(item.id) ? 'Collapse group' : 'Expand group'"
@@ -244,16 +244,16 @@ const selectedInspectorHeader = computed(() => {
 							</button>
 						</div>
 
-						<div v-if="item.type === 'widget-group' && isGroupExpanded(item.id)" class="ml-12 space-y-1.5">
+						<div v-if="item.type === 'graphic-group' && isGroupExpanded(item.id)" class="ml-12 space-y-1.5">
 							<button
 								v-for="child in item.children"
 								:key="child.id"
-								:ref="element => setTreeNodeRef(widgetTreeKey(item.id, child.id), element)"
+								:ref="element => setTreeNodeRef(graphicItemTreeKey(item.id, child.id), element)"
 								type="button"
 								class="flex w-full items-start gap-2 rounded-lg border p-2 text-left transition"
-								:class="selectedTarget.type === 'widget' && selectedTarget.childId === child.id ? 'border-primary bg-primary/10' : 'border-default/70 bg-muted/10 hover:bg-muted/30'"
-								data-testid="overlay-tree-widget"
-								@click="selectWidget(item.id, child.id)"
+								:class="selectedTarget.type === 'graphic-item' && selectedTarget.childId === child.id ? 'border-primary bg-primary/10' : 'border-default/70 bg-muted/10 hover:bg-muted/30'"
+								data-testid="overlay-tree-graphicItem"
+								@click="selectGraphicItem(item.id, child.id)"
 							>
 								<UIcon :name="childIcon(child)" class="mt-0.5 size-4 shrink-0 text-muted" />
 								<span class="min-w-0 flex-1">
@@ -330,8 +330,8 @@ const selectedInspectorHeader = computed(() => {
 					@removed="selectCanvas"
 				/>
 
-				<FeatureMatchOverlayInspectorWidget
-					v-else-if="selection.kind === 'widget'"
+				<FeatureMatchOverlayInspectorGraphicItem
+					v-else-if="selection.kind === 'graphic-item'"
 					:config="config"
 					:update-config="updateConfig"
 					:screen-width="screenWidth"

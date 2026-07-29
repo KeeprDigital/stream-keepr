@@ -1,26 +1,26 @@
 import type {
+	FeatureMatchGraphicGroupChildConfig,
+	FeatureMatchGraphicGroupItemConfig,
 	FeatureMatchLayoutConfig,
 	FeatureMatchMediaGraphicItemConfig,
 	FeatureMatchSourceItemConfig,
-	FeatureMatchWidgetGroupChildConfig,
-	FeatureMatchWidgetGroupItemConfig,
-	FeatureMatchWidgetItemConfig,
+	FeatureMatchSpecificGraphicItemConfig,
 } from '~~/shared/types/screenConfig';
 
 /** Selection target shared by the Feature Match Overlay editor surfaces. */
 export type FeatureMatchOverlaySelectionTarget
 	=	| { type: 'canvas' }
 		| { type: 'layer'; itemId: string }
-		| { type: 'widget'; itemId: string; childId: string };
+		| { type: 'graphic-item'; itemId: string; childId: string };
 
 /** A selection target resolved against a Feature Match Layout. */
 export type FeatureMatchOverlaySelection
 	=	| { kind: 'canvas' }
 		| { kind: 'source'; item: FeatureMatchSourceItemConfig }
 		| { kind: 'media'; item: FeatureMatchMediaGraphicItemConfig }
-		| { kind: 'widget'; item: FeatureMatchWidgetItemConfig }
-		| { kind: 'group'; item: FeatureMatchWidgetGroupItemConfig }
-		| { kind: 'child'; group: FeatureMatchWidgetGroupItemConfig; child: FeatureMatchWidgetGroupChildConfig }
+		| { kind: 'graphic-item'; item: FeatureMatchSpecificGraphicItemConfig }
+		| { kind: 'group'; item: FeatureMatchGraphicGroupItemConfig }
+		| { kind: 'child'; group: FeatureMatchGraphicGroupItemConfig; child: FeatureMatchGraphicGroupChildConfig }
 		| { kind: 'missing' };
 
 /** Resolve a selection target to the layout entities it points at, or `missing`. */
@@ -32,8 +32,8 @@ export function resolveFeatureMatchOverlaySelection(layout: FeatureMatchLayoutCo
 	if (!item)
 		return { kind: 'missing' };
 
-	if (target.type === 'widget') {
-		if (item.type !== 'widget-group')
+	if (target.type === 'graphic-item') {
+		if (item.type !== 'graphic-group')
 			return { kind: 'missing' };
 		const child = item.children.find(candidate => candidate.id === target.childId);
 		return child ? { kind: 'child', group: item, child } : { kind: 'missing' };
@@ -44,9 +44,9 @@ export function resolveFeatureMatchOverlaySelection(layout: FeatureMatchLayoutCo
 			return { kind: 'source', item };
 		case 'media':
 			return { kind: 'media', item };
-		case 'widget':
-			return { kind: 'widget', item };
-		case 'widget-group':
+		case 'graphic-item':
+			return { kind: 'graphic-item', item };
+		case 'graphic-group':
 			return { kind: 'group', item };
 	}
 }
@@ -55,8 +55,8 @@ export function resolveFeatureMatchOverlaySelection(layout: FeatureMatchLayoutCo
 export function featureMatchOverlaySelectionKey(target: FeatureMatchOverlaySelectionTarget): string {
 	if (target.type === 'canvas')
 		return 'canvas';
-	if (target.type === 'widget')
-		return `widget:${target.itemId}:${target.childId}`;
+	if (target.type === 'graphic-item')
+		return `graphicItem:${target.itemId}:${target.childId}`;
 	return `layer:${target.itemId}`;
 }
 
@@ -69,7 +69,7 @@ export function isFeatureMatchOverlaySelectionTarget(value: unknown): value is F
 		return true;
 	if (target.type === 'layer')
 		return typeof target.itemId === 'string';
-	if (target.type === 'widget')
+	if (target.type === 'graphic-item')
 		return typeof target.itemId === 'string' && typeof target.childId === 'string';
 	return false;
 }

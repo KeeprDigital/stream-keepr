@@ -13,10 +13,10 @@ function layoutOf(items: FeatureMatchLayoutItemConfig[]): FeatureMatchLayoutConf
 }
 
 const sourceItem: FeatureMatchLayoutItemConfig = { id: 's1', type: 'source', label: 'Source', visible: true, x: 0, y: 0, width: 100, height: 100, sourceRole: 'main', frameCutout: true };
-const widgetItem: FeatureMatchLayoutItemConfig = { id: 'w1', type: 'widget', label: 'Widget', visible: true, x: 0, y: 0, width: 100, height: 40, widget: { type: 'clock' } };
+const graphicItemItem: FeatureMatchLayoutItemConfig = { id: 'w1', type: 'graphic-item', label: 'GraphicItem', visible: true, x: 0, y: 0, width: 100, height: 40, graphicItem: { type: 'clock' } };
 const groupItem: FeatureMatchLayoutItemConfig = {
 	id: 'g1',
-	type: 'widget-group',
+	type: 'graphic-group',
 	label: 'Group',
 	visible: true,
 	x: 0,
@@ -24,12 +24,12 @@ const groupItem: FeatureMatchLayoutItemConfig = {
 	width: 500,
 	height: 100,
 	arrangement: { mode: 'row', padding: 0, gap: 8, align: 'stretch', justify: 'start' },
-	children: [{ id: 'c1', label: 'Child', visible: true, widget: { type: 'clock' }, layout: { mode: 'stack', sizing: { mode: 'fixed', size: 120 } } }],
+	children: [{ id: 'c1', label: 'Child', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'stack', sizing: { mode: 'fixed', size: 120 } } }],
 };
 
 describe('feature-match-overlay selection', () => {
 	describe('resolveFeatureMatchOverlaySelection', () => {
-		const layout = layoutOf([sourceItem, widgetItem, groupItem]);
+		const layout = layoutOf([sourceItem, graphicItemItem, groupItem]);
 
 		it('resolves canvas', () => {
 			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'canvas' })).toEqual({ kind: 'canvas' });
@@ -37,19 +37,19 @@ describe('feature-match-overlay selection', () => {
 
 		it('resolves a layer target to its item kind', () => {
 			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'layer', itemId: 's1' })).toMatchObject({ kind: 'source', item: { id: 's1' } });
-			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'layer', itemId: 'w1' })).toMatchObject({ kind: 'widget', item: { id: 'w1' } });
+			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'layer', itemId: 'w1' })).toMatchObject({ kind: 'graphic-item', item: { id: 'w1' } });
 			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'layer', itemId: 'g1' })).toMatchObject({ kind: 'group', item: { id: 'g1' } });
 		});
 
-		it('resolves a widget target to the group child', () => {
-			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'widget', itemId: 'g1', childId: 'c1' }))
+		it('resolves a graphicItem target to the group child', () => {
+			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'graphic-item', itemId: 'g1', childId: 'c1' }))
 				.toMatchObject({ kind: 'child', group: { id: 'g1' }, child: { id: 'c1' } });
 		});
 
 		it('resolves missing ids to the missing kind', () => {
 			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'layer', itemId: 'nope' })).toEqual({ kind: 'missing' });
-			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'widget', itemId: 'g1', childId: 'nope' })).toEqual({ kind: 'missing' });
-			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'widget', itemId: 'w1', childId: 'c1' })).toEqual({ kind: 'missing' });
+			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'graphic-item', itemId: 'g1', childId: 'nope' })).toEqual({ kind: 'missing' });
+			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'graphic-item', itemId: 'w1', childId: 'c1' })).toEqual({ kind: 'missing' });
 		});
 	});
 
@@ -57,7 +57,7 @@ describe('feature-match-overlay selection', () => {
 		it('produces distinct stable keys per variant', () => {
 			expect(featureMatchOverlaySelectionKey({ type: 'canvas' })).toBe('canvas');
 			expect(featureMatchOverlaySelectionKey({ type: 'layer', itemId: 'a' })).toBe('layer:a');
-			expect(featureMatchOverlaySelectionKey({ type: 'widget', itemId: 'a', childId: 'b' })).toBe('widget:a:b');
+			expect(featureMatchOverlaySelectionKey({ type: 'graphic-item', itemId: 'a', childId: 'b' })).toBe('graphicItem:a:b');
 		});
 	});
 
@@ -65,13 +65,13 @@ describe('feature-match-overlay selection', () => {
 		it('accepts each well-formed variant', () => {
 			expect(isFeatureMatchOverlaySelectionTarget({ type: 'canvas' })).toBe(true);
 			expect(isFeatureMatchOverlaySelectionTarget({ type: 'layer', itemId: 'a' })).toBe(true);
-			expect(isFeatureMatchOverlaySelectionTarget({ type: 'widget', itemId: 'a', childId: 'b' })).toBe(true);
+			expect(isFeatureMatchOverlaySelectionTarget({ type: 'graphic-item', itemId: 'a', childId: 'b' })).toBe(true);
 		});
 
 		it('rejects malformed values', () => {
 			expect(isFeatureMatchOverlaySelectionTarget(null)).toBe(false);
 			expect(isFeatureMatchOverlaySelectionTarget({ type: 'layer' })).toBe(false);
-			expect(isFeatureMatchOverlaySelectionTarget({ type: 'widget', itemId: 'a' })).toBe(false);
+			expect(isFeatureMatchOverlaySelectionTarget({ type: 'graphic-item', itemId: 'a' })).toBe(false);
 			expect(isFeatureMatchOverlaySelectionTarget({ type: 'other' })).toBe(false);
 		});
 	});

@@ -89,8 +89,8 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		revisionId = operation.result!.revisionId;
 
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		const group = config.layout.items.find(item => item.type === 'widget-group');
-		if (group?.type !== 'widget-group')
+		const group = config.layout.items.find(item => item.type === 'graphic-group');
+		if (group?.type !== 'graphic-group')
 			throw new Error('Expected a Graphic Group fixture');
 		group.children.push({
 			id: 'range-delivered-group-media',
@@ -225,7 +225,7 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		expect(authorized.status).toBe(200);
 	});
 
-	it('rejects publishing a Safari-targeted restricted video to the live Screen config', async () => {
+	it('uses live Screen PATCH and User-Agent bootstrap as authoritative restricted-video playout gates', async () => {
 		const baseline = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
@@ -278,6 +278,61 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		const persisted = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
 		expect(persisted.modeConfigs['feature-match-overlay'].layout.items).not.toContainEqual(
 			expect.objectContaining({ id: 'restricted-video' }),
+		);
+
+		restricted.layout.items.at(-1)!.videoTarget = 'chromium';
+		const chromiumPublication = await fetch(
+			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
+			{
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ layout: restricted.layout }),
+			},
+		);
+		expect(chromiumPublication.status).toBe(200);
+
+		const safariBootstrap = await fetch(
+			`/api/screen-output/screens/${screenId}/asset-capability-session`,
+			{
+				method: 'POST',
+				headers: {
+					...Object.fromEntries(authorizedHeaders()),
+					'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/605.1.15 Version/18.5 Safari/605.1.15',
+				},
+			},
+		);
+		expect(safariBootstrap.status).toBe(409);
+		expect(safariBootstrap.headers.get('set-cookie')).toBeNull();
+		await expect(safariBootstrap.json()).resolves.toMatchObject({
+			data: { code: 'vp9-alpha-chromium-required' },
+		});
+
+		const iosChromiumBootstrap = await fetch(
+			`/api/screen-output/screens/${screenId}/asset-capability-session`,
+			{
+				method: 'POST',
+				headers: {
+					...Object.fromEntries(authorizedHeaders()),
+					'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 CriOS/138.0 Mobile/15E148 Safari/604.1',
+				},
+			},
+		);
+		expect(iosChromiumBootstrap.status).toBe(409);
+		expect(iosChromiumBootstrap.headers.get('set-cookie')).toBeNull();
+
+		const chromiumBootstrap = await fetch(
+			`/api/screen-output/screens/${screenId}/asset-capability-session`,
+			{
+				method: 'POST',
+				headers: {
+					...Object.fromEntries(authorizedHeaders()),
+					'user-agent': 'Mozilla/5.0 Chrome/138.0.0.0 Safari/537.36',
+				},
+			},
+		);
+		expect(chromiumBootstrap.status).toBe(204);
+		expect(chromiumBootstrap.headers.get('set-cookie')).toContain(
+			screenOutputAssetCapabilityCookieName(screenId),
 		);
 	});
 

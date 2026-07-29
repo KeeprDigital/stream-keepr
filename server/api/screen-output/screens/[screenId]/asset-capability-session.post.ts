@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createD1ScreenOutputAssetAuthorizer } from '~~/server/modules/screen-output-assets/authorizer';
 import { screenOutputAssetCapabilityDigest } from '~~/server/modules/screen-output-assets/capability';
 import { bearerScreenOutputCapability } from '~~/server/utils/screenOutputCapabilityAuthorization';
+import { graphicsVideoTargetForUserAgent } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import {
 	screenOutputAssetCapabilityCookieName,
 	screenOutputAssetCapabilityCookiePath,
@@ -22,11 +23,17 @@ export default defineEventHandler(async (event) => {
 		});
 	}
 	const { screenId } = await getValidatedRouterParams(event, paramsSchema.parse);
-	let authorization: { outcome: 'authorized' } | { outcome: 'missing' };
+	let authorization:
+		| { outcome: 'authorized' }
+		| { outcome: 'missing' }
+		| { outcome: 'incompatible'; code: 'vp9-alpha-chromium-required' };
 	try {
 		authorization = await createD1ScreenOutputAssetAuthorizer(db.$client).authorizeCapability({
 			screenId,
 			capabilityDigest: await screenOutputAssetCapabilityDigest(capability),
+			actualVideoTarget: graphicsVideoTargetForUserAgent(
+				getRequestHeader(event, 'user-agent') ?? '',
+			),
 		});
 	}
 	catch {
@@ -42,6 +49,14 @@ export default defineEventHandler(async (event) => {
 			statusCode: 404,
 			statusMessage: 'Not Found',
 			message: 'Screen Output asset capability is unavailable',
+		});
+	}
+	if (authorization.outcome === 'incompatible') {
+		throw createError({
+			statusCode: 409,
+			statusMessage: 'Conflict',
+			message: 'This Screen Output contains VP9 alpha video that requires Chromium transparency playback.',
+			data: { code: authorization.code },
 		});
 	}
 	setCookie(event, screenOutputAssetCapabilityCookieName(screenId), capability, {

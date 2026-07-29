@@ -1,4 +1,4 @@
-import type { FeatureMatchLayoutConfig, FeatureMatchLayoutItemConfig, FeatureMatchWidgetGroupItemConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchGraphicGroupItemConfig, FeatureMatchLayoutConfig, FeatureMatchLayoutItemConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import {
 	addGroupChild,
@@ -13,8 +13,8 @@ import {
 	patchFrame,
 	patchGroup,
 	patchGroupChild,
+	patchGroupChildGraphicItem,
 	patchGroupChildRectFromAnchor,
-	patchGroupChildWidget,
 	patchItem,
 	patchItemRectFromAnchor,
 	removeGroupChild,
@@ -28,25 +28,25 @@ import {
 	normalizeFeatureMatchLayout,
 } from '~~/shared/types/screenConfig';
 
-function widgetItem(overrides: Partial<Extract<FeatureMatchLayoutItemConfig, { type: 'widget' }>> = {}): FeatureMatchLayoutItemConfig {
+function graphicItemItem(overrides: Partial<Extract<FeatureMatchLayoutItemConfig, { type: 'graphic-item' }>> = {}): FeatureMatchLayoutItemConfig {
 	return {
 		id: 'w1',
-		type: 'widget',
-		label: 'Widget',
+		type: 'graphic-item',
+		label: 'GraphicItem',
 		visible: true,
 		x: 100,
 		y: 50,
 		width: 100,
 		height: 40,
-		widget: { type: 'clock' },
+		graphicItem: { type: 'clock' },
 		...overrides,
 	};
 }
 
-function groupItem(overrides: Partial<FeatureMatchWidgetGroupItemConfig> = {}): FeatureMatchLayoutItemConfig {
+function groupItem(overrides: Partial<FeatureMatchGraphicGroupItemConfig> = {}): FeatureMatchLayoutItemConfig {
 	return {
 		id: 'g1',
-		type: 'widget-group',
+		type: 'graphic-group',
 		label: 'Group',
 		visible: true,
 		x: 0,
@@ -55,7 +55,7 @@ function groupItem(overrides: Partial<FeatureMatchWidgetGroupItemConfig> = {}): 
 		height: 100,
 		arrangement: { mode: 'row', padding: 10, gap: 8, align: 'stretch', justify: 'start' },
 		children: [
-			{ id: 'c1', label: 'Child', visible: true, widget: { type: 'clock' }, layout: { mode: 'stack', sizing: { mode: 'fixed', size: 120 } } },
+			{ id: 'c1', label: 'Child', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'stack', sizing: { mode: 'fixed', size: 120 } } },
 		],
 		...overrides,
 	};
@@ -66,14 +66,73 @@ function layoutOf(items: FeatureMatchLayoutItemConfig[]): FeatureMatchLayoutConf
 	return { ...base.layout, items };
 }
 
-function group(layout: FeatureMatchLayoutConfig, id = 'g1'): FeatureMatchWidgetGroupItemConfig {
-	return layout.items.find(item => item.id === id) as FeatureMatchWidgetGroupItemConfig;
+function group(layout: FeatureMatchLayoutConfig, id = 'g1'): FeatureMatchGraphicGroupItemConfig {
+	return layout.items.find(item => item.id === id) as FeatureMatchGraphicGroupItemConfig;
 }
 
 describe('feature-match-overlay layout writer', () => {
+	it('migrates persisted legacy Widget shapes only at the normalizer boundary', () => {
+		const legacy = {
+			...layoutOf([]),
+			items: [{
+				id: 'legacy-group',
+				type: 'widget-group',
+				label: 'Legacy group',
+				visible: true,
+				x: 0,
+				y: 0,
+				width: 100,
+				height: 100,
+				arrangement: { mode: 'canvas' },
+				children: [{
+					id: 'legacy-clock',
+					type: 'widget',
+					label: 'Clock',
+					visible: true,
+					widget: { type: 'clock' },
+					layout: { mode: 'canvas', x: 0, y: 0, width: 100, height: 40 },
+				}, {
+					id: 'legacy-image',
+					type: 'widget',
+					label: 'Image',
+					visible: true,
+					widget: {
+						type: 'image',
+						fit: 'contain',
+						opacity: 0.8,
+						borderRadius: 8,
+					},
+					layout: { mode: 'canvas', x: 0, y: 40, width: 100, height: 60 },
+				}],
+			}],
+		} as unknown as FeatureMatchLayoutConfig;
+
+		const normalized = normalizeFeatureMatchLayout(legacy);
+
+		expect(normalized.items).toEqual([
+			expect.objectContaining({
+				type: 'graphic-group',
+				children: [
+					expect.objectContaining({
+						type: 'graphic-item',
+						graphicItem: { type: 'clock' },
+					}),
+					expect.objectContaining({
+						id: 'legacy-image',
+						type: 'media',
+						mediaKind: 'image',
+						focalPosition: { horizontal: 0.5, vertical: 0.5 },
+						opacity: 0.8,
+					}),
+				],
+			}),
+		]);
+		expect(JSON.stringify(normalized)).not.toContain('"widget"');
+	});
+
 	describe('id addressing and narrowing', () => {
 		it('patches an item by id, leaving siblings untouched', () => {
-			const layout = layoutOf([widgetItem({ id: 'a' }), widgetItem({ id: 'b' })]);
+			const layout = layoutOf([graphicItemItem({ id: 'a' }), graphicItemItem({ id: 'b' })]);
 
 			const next = patchItem(layout, 'b', { label: 'Renamed' });
 
@@ -82,27 +141,27 @@ describe('feature-match-overlay layout writer', () => {
 		});
 
 		it('returns the same layout reference for an unknown id', () => {
-			const layout = layoutOf([widgetItem()]);
+			const layout = layoutOf([graphicItemItem()]);
 
 			expect(patchItem(layout, 'missing', { label: 'x' })).toBe(layout);
 		});
 
 		it('patchGroup is a no-op (same reference) on a non-group item', () => {
-			const layout = layoutOf([widgetItem()]);
+			const layout = layoutOf([graphicItemItem()]);
 
 			expect(patchGroup(layout, 'w1', { label: 'x' })).toBe(layout);
 		});
 
-		it('patchGroupChildWidget narrows the group and child without casts', () => {
+		it('patchGroupChildGraphicItem narrows the group and child without casts', () => {
 			const layout = layoutOf([groupItem()]);
 
-			const next = patchGroupChildWidget(layout, 'g1', 'c1', { type: 'clock', showLabel: true } as never);
+			const next = patchGroupChildGraphicItem(layout, 'g1', 'c1', { type: 'clock', showLabel: true } as never);
 
-			expect(group(next).children[0]!.widget).toMatchObject({ type: 'clock', showLabel: true });
+			expect(group(next).children[0]!.graphicItem).toMatchObject({ type: 'clock', showLabel: true });
 		});
 
-		it('patchGroupChild on a widget item is a no-op', () => {
-			const layout = layoutOf([widgetItem()]);
+		it('patchGroupChild on a graphicItem item is a no-op', () => {
+			const layout = layoutOf([graphicItemItem()]);
 
 			expect(patchGroupChild(layout, 'w1', 'c1', { label: 'x' })).toBe(layout);
 		});
@@ -110,7 +169,7 @@ describe('feature-match-overlay layout writer', () => {
 
 	describe('frame', () => {
 		it('patchFrame merges frame fields without touching items', () => {
-			const layout = layoutOf([widgetItem()]);
+			const layout = layoutOf([graphicItemItem()]);
 
 			const next = patchFrame(layout, { backgroundColor: '#123456' });
 
@@ -121,9 +180,9 @@ describe('feature-match-overlay layout writer', () => {
 
 	describe('membership', () => {
 		it('addItem appends and removeItem removes by id', () => {
-			const layout = layoutOf([widgetItem({ id: 'a' })]);
+			const layout = layoutOf([graphicItemItem({ id: 'a' })]);
 
-			const withB = addItem(layout, widgetItem({ id: 'b' }));
+			const withB = addItem(layout, graphicItemItem({ id: 'b' }));
 			expect(withB.items.map(item => item.id)).toEqual(['a', 'b']);
 
 			const withoutA = removeItem(withB, 'a');
@@ -133,7 +192,7 @@ describe('feature-match-overlay layout writer', () => {
 		it('addGroupChild and removeGroupChild address the group by id', () => {
 			const layout = layoutOf([groupItem()]);
 
-			const withChild = addGroupChild(layout, 'g1', { id: 'c2', label: 'New', visible: true, widget: { type: 'text' } as never, layout: { mode: 'stack', sizing: { mode: 'fixed', size: 100 } } });
+			const withChild = addGroupChild(layout, 'g1', { id: 'c2', label: 'New', visible: true, type: 'graphic-item', graphicItem: { type: 'text' } as never, layout: { mode: 'stack', sizing: { mode: 'fixed', size: 100 } } });
 			expect(group(withChild).children.map(child => child.id)).toEqual(['c1', 'c2']);
 
 			const withoutFirst = removeGroupChild(withChild, 'g1', 'c1');
@@ -143,7 +202,7 @@ describe('feature-match-overlay layout writer', () => {
 
 	describe('anchored geometry', () => {
 		it('keeps the anchored edge fixed when resizing an item', () => {
-			const layout = layoutOf([widgetItem({ anchor: 'top-right' } as never)]);
+			const layout = layoutOf([graphicItemItem({ anchor: 'top-right' } as never)]);
 
 			const next = patchItemRectFromAnchor(layout, 'w1', 'width', 200);
 
@@ -152,7 +211,7 @@ describe('feature-match-overlay layout writer', () => {
 		});
 
 		it('moves without resizing for position fields', () => {
-			const layout = layoutOf([widgetItem()]);
+			const layout = layoutOf([graphicItemItem()]);
 
 			const next = patchItemRectFromAnchor(layout, 'w1', 'x', 300);
 
@@ -163,7 +222,7 @@ describe('feature-match-overlay layout writer', () => {
 			const layout = layoutOf([groupItem({
 				arrangement: { mode: 'canvas', padding: 0 },
 				children: [
-					{ id: 'c1', label: 'Child', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 10, y: 10, width: 100, height: 40 } },
+					{ id: 'c1', label: 'Child', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'canvas', x: 10, y: 10, width: 100, height: 40 } },
 				],
 			})]);
 
@@ -193,7 +252,7 @@ describe('feature-match-overlay layout writer', () => {
 			const layout = layoutOf([groupItem({
 				arrangement: { mode: 'canvas', padding: 4 },
 				children: [
-					{ id: 'c1', label: 'Child', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 20, y: 10, width: 150, height: 60 } },
+					{ id: 'c1', label: 'Child', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'canvas', x: 20, y: 10, width: 150, height: 60 } },
 				],
 			})]);
 
@@ -204,7 +263,7 @@ describe('feature-match-overlay layout writer', () => {
 		});
 
 		it('leaves children already in the target mode untouched, and non-groups as a no-op', () => {
-			const layout = layoutOf([groupItem(), widgetItem({ id: 'w9' })]);
+			const layout = layoutOf([groupItem(), graphicItemItem({ id: 'w9' })]);
 			const before = group(layout).children[0];
 
 			const next = convertGroupArrangement(layout, 'g1', 'column');
@@ -218,7 +277,7 @@ describe('feature-match-overlay layout writer', () => {
 	describe('layer ordering', () => {
 		function threeItems() {
 			return [
-				widgetItem({ id: 'a' }),
+				graphicItemItem({ id: 'a' }),
 				{
 					id: 'media',
 					type: 'media',
@@ -233,8 +292,8 @@ describe('feature-match-overlay layout writer', () => {
 					focalPosition: { horizontal: 0.5, vertical: 0.5 },
 					opacity: 1,
 				} as FeatureMatchLayoutItemConfig,
-				widgetItem({ id: 'b' }),
-				widgetItem({ id: 'c' }),
+				graphicItemItem({ id: 'b' }),
+				graphicItemItem({ id: 'c' }),
 			];
 		}
 
@@ -265,9 +324,9 @@ describe('feature-match-overlay layout writer', () => {
 		it('reorders Graphic Group children by sibling list order', () => {
 			const source = layoutOf([groupItem({
 				children: [
-					{ id: 'a', label: 'A', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 0, y: 0, width: 10, height: 10 } },
-					{ id: 'b', label: 'B', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 0, y: 0, width: 10, height: 10 } },
-					{ id: 'c', label: 'C', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 0, y: 0, width: 10, height: 10 } },
+					{ id: 'a', label: 'A', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'canvas', x: 0, y: 0, width: 10, height: 10 } },
+					{ id: 'b', label: 'B', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'canvas', x: 0, y: 0, width: 10, height: 10 } },
+					{ id: 'c', label: 'C', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'canvas', x: 0, y: 0, width: 10, height: 10 } },
 				],
 			})]);
 
@@ -283,7 +342,7 @@ describe('feature-match-overlay layout writer', () => {
 	describe('legacy normalization', () => {
 		it('preserves effective legacy stacking while removing z-index and migrating media presentation', () => {
 			const legacy = layoutOf([
-				widgetItem({ id: 'front', zIndex: 30 } as never),
+				graphicItemItem({ id: 'front', zIndex: 30 } as never),
 				{
 					id: 'media',
 					type: 'media',
@@ -299,7 +358,7 @@ describe('feature-match-overlay layout writer', () => {
 					borderRadius: 12,
 					surfaceStyle: { backgroundColor: '#fff' },
 				} as never,
-				widgetItem({ id: 'middle', zIndex: 10 } as never),
+				graphicItemItem({ id: 'middle', zIndex: 10 } as never),
 			]);
 
 			const normalized = normalizeFeatureMatchLayout(legacy);
@@ -332,15 +391,15 @@ describe('feature-match-overlay layout writer', () => {
 			expect(item).toMatchObject({ frameCutout: true, sourceRole: 'main' });
 		});
 
-		it('creates a Widget Item using the widget definition default config', () => {
-			const { layout, id } = createLayoutItem(layoutOf([]), 'life-widget');
+		it('creates a GraphicItem Item using the graphicItem definition default config', () => {
+			const { layout, id } = createLayoutItem(layoutOf([]), 'life-graphic-item');
 
 			const item = layout.items[0]!;
 			expect(item.id).toBe(id);
-			expect(item.type).toBe('widget');
-			if (item.type === 'widget') {
-				expect(item.widget).toMatchObject({ type: 'player-life', playerSide: 'player1' });
-				expect(item.label).toBe('Life Widget');
+			expect(item.type).toBe('graphic-item');
+			if (item.type === 'graphic-item') {
+				expect(item.graphicItem).toMatchObject({ type: 'player-life', playerSide: 'player1' });
+				expect(item.label).toBe('Life Graphic Item');
 			}
 		});
 
@@ -357,12 +416,12 @@ describe('feature-match-overlay layout writer', () => {
 			expect(layout.items[0]).not.toHaveProperty('surfaceStyle');
 		});
 
-		it('creates a Widget Group child matching the group arrangement mode', () => {
+		it('creates a GraphicItem Group child matching the group arrangement mode', () => {
 			const { layout, id } = createGroupChild(layoutOf([groupItem()]), 'g1', 'text');
 
 			const child = group(layout).children.at(-1)!;
 			expect(child.id).toBe(id);
-			expect(child.type !== 'media' ? child.widget.type : undefined).toBe('text');
+			expect(child.type !== 'media' ? child.graphicItem.type : undefined).toBe('text');
 			expect(child.layout.mode).toBe('stack');
 		});
 
@@ -380,13 +439,13 @@ describe('feature-match-overlay layout writer', () => {
 				opacity: 1,
 				videoTarget: 'safari',
 			});
-			expect(child).not.toHaveProperty('widget');
+			expect(child).not.toHaveProperty('graphic-item');
 			expect(child).not.toHaveProperty('surfaceStyle');
 			expect(child).not.toHaveProperty('zIndex');
 		});
 
 		it('returns a null id and the same layout when creating a child on a non-group item', () => {
-			const source = layoutOf([widgetItem()]);
+			const source = layoutOf([graphicItemItem()]);
 			const { layout, id } = createGroupChild(source, 'w1', 'text');
 
 			expect(id).toBeNull();

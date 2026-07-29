@@ -14,19 +14,19 @@ describe('broadcast layout presets', () => {
 		expect(result.layout.items.find(item => item.id === 'top-bar')?.width).toBe(1872);
 	});
 
-	it('ships presets with Source Items, Widget Groups, and atomic widgets', () => {
+	it('ships presets with Source Items, GraphicItem Groups, and atomic graphicItems', () => {
 		for (const preset of FEATURE_MATCH_OVERLAY_PRESETS) {
 			const items = preset.config.layout.items;
-			const groups = items.filter(item => item.type === 'widget-group');
-			const widgets = [
-				...items.filter(item => item.type === 'widget').map(item => item.widget.type),
+			const groups = items.filter(item => item.type === 'graphic-group');
+			const graphicItems = [
+				...items.filter(item => item.type === 'graphic-item').map(item => item.graphicItem.type),
 				...groups.flatMap(group => group.children.map(child =>
-					child.type === 'media' ? child.mediaKind : child.widget.type)),
+					child.type === 'media' ? child.mediaKind : child.graphicItem.type)),
 			];
 
 			expect(items.some(item => item.type === 'source')).toBe(true);
 			expect(groups.length).toBeGreaterThan(0);
-			expect(widgets).toEqual(expect.arrayContaining(['text', 'image', 'clock', 'player-life', 'game-wins']));
+			expect(graphicItems).toEqual(expect.arrayContaining(['text', 'image', 'clock', 'player-life', 'game-wins']));
 		}
 	});
 

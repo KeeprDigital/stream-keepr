@@ -1,18 +1,18 @@
 <script setup lang="ts">
-import type { FeatureMatchOverlayModeConfig, FeatureMatchWidgetGroupChildConfig, FeatureMatchWidgetGroupItemConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchGraphicGroupChildConfig, FeatureMatchGraphicGroupItemConfig, FeatureMatchGraphicItemDefinitionConfig, FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import type { FeatureMatchGraphicGroupChildKind } from '~/modules/feature-match-overlay/layout';
 import type { FeatureMatchOverlayAnchorValue } from '~/utils/featureMatchOverlayGeometry';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
-import { childAppearanceBadge, childAppearanceSummary, childIcon, childSummary, childTypeLabel, FEATURE_MATCH_OVERLAY_GROUP_CHILD_KIND_OPTIONS, hasStyleOverrides, widgetSummary } from '~/modules/feature-match-overlay/layerSummaries';
-import { featureMatchOverlayWidgetDefinition } from '~/modules/feature-match-overlay/widgetDefinitions';
+import { featureMatchOverlayGraphicItemDefinition } from '~/modules/feature-match-overlay/graphicItemDefinitions';
+import { childAppearanceBadge, childAppearanceSummary, childIcon, childSummary, childTypeLabel, FEATURE_MATCH_OVERLAY_GROUP_CHILD_KIND_OPTIONS, graphicItemSummary, hasStyleOverrides } from '~/modules/feature-match-overlay/layerSummaries';
 import { anchorFeatureMatchOverlayRect } from '~/utils/featureMatchOverlayGeometry';
 import FeatureMatchOverlayBoxStyleFields from './BoxStyleFields.vue';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
 import FeatureMatchOverlayGeometryFields from './GeometryFields.vue';
 import FeatureMatchOverlayMediaFields from './MediaFields.vue';
 import FeatureMatchOverlayOrderSection from './OrderSection.vue';
-import FeatureMatchOverlayWidgetEditor from './WidgetEditor.vue';
+import FeatureMatchOverlayGraphicItemEditor from './WidgetEditor.vue';
 
 const props = defineProps<{
 	config: FeatureMatchOverlayModeConfig;
@@ -20,8 +20,8 @@ const props = defineProps<{
 	screenWidth: number;
 	screenHeight: number;
 	eventId: number;
-	group: FeatureMatchWidgetGroupItemConfig;
-	child: FeatureMatchWidgetGroupChildConfig;
+	group: FeatureMatchGraphicGroupItemConfig;
+	child: FeatureMatchGraphicGroupChildConfig;
 }>();
 
 const emit = defineEmits<{
@@ -64,19 +64,19 @@ function removeSelf() {
 function replaceContentType(type: FeatureMatchGraphicGroupChildKind) {
 	if (type !== 'media' && props.child.type !== 'media') {
 		editor.updateGroupChild(props.group.id, props.child.id, {
-			type: 'widget',
-			widget: featureMatchOverlayWidgetDefinition(type).defaultConfig(),
+			type: 'graphic-item',
+			graphicItem: featureMatchOverlayGraphicItemDefinition(type).defaultConfig(),
 		});
 		return;
 	}
 
 	const base = {
 		id: props.child.id,
-		label: type === 'media' ? 'Media Graphic Item' : `${featureMatchOverlayWidgetDefinition(type).label} Widget`,
+		label: type === 'media' ? 'Media Graphic Item' : `${featureMatchOverlayGraphicItemDefinition(type).label} Graphic Item`,
 		visible: props.child.visible,
 		layout: props.child.layout,
 	};
-	const replacement: FeatureMatchWidgetGroupChildConfig = type === 'media'
+	const replacement: FeatureMatchGraphicGroupChildConfig = type === 'media'
 		? {
 				...base,
 				type,
@@ -88,8 +88,8 @@ function replaceContentType(type: FeatureMatchGraphicGroupChildKind) {
 			}
 		: {
 				...base,
-				type: 'widget',
-				widget: featureMatchOverlayWidgetDefinition(type).defaultConfig(),
+				type: 'graphic-item',
+				graphicItem: featureMatchOverlayGraphicItemDefinition(type).defaultConfig(),
 			};
 	editor.updateGroup(props.group.id, {
 		children: props.group.children.map(child => child.id === props.child.id ? replacement : child),
@@ -107,8 +107,14 @@ function resetSurfaceStyle() {
 	});
 }
 
-function patchMedia(updates: Partial<FeatureMatchWidgetGroupChildConfig>) {
+function patchMedia(updates: Partial<FeatureMatchGraphicGroupChildConfig>) {
 	editor.updateGroupChild(props.group.id, props.child.id, updates);
+}
+
+function patchGraphicItem(updates: FeatureMatchGraphicItemDefinitionConfig) {
+	if (updates.type === 'image')
+		return;
+	editor.updateGroupChildGraphicItem(props.group.id, props.child.id, updates);
 }
 </script>
 
@@ -142,8 +148,8 @@ function patchMedia(updates: Partial<FeatureMatchWidgetGroupChildConfig>) {
 					color="error"
 					variant="soft"
 					icon="i-lucide-trash-2"
-					aria-label="Remove widget"
-					title="Remove widget"
+					aria-label="Remove graphicItem"
+					title="Remove graphicItem"
 					@click="removeSelf"
 				/>
 			</div>
@@ -224,12 +230,12 @@ function patchMedia(updates: Partial<FeatureMatchWidgetGroupChildConfig>) {
 
 		<FeatureMatchOverlayControlSection
 			:title="child.type === 'media' ? 'Graphic Item' : 'Content'"
-			:summary="child.type === 'media' ? childSummary(child) : widgetSummary(child.widget)"
+			:summary="child.type === 'media' ? childSummary(child) : graphicItemSummary(child.graphicItem)"
 		>
 			<div class="space-y-3">
 				<UFormField label="Graphic Item type">
 					<USelect
-						:model-value="child.type === 'media' ? 'media' : child.widget.type"
+						:model-value="child.type === 'media' ? 'media' : child.graphicItem.type"
 						:items="FEATURE_MATCH_OVERLAY_GROUP_CHILD_KIND_OPTIONS"
 						value-key="value"
 						size="sm"
@@ -237,12 +243,12 @@ function patchMedia(updates: Partial<FeatureMatchWidgetGroupChildConfig>) {
 						@update:model-value="replaceContentType($event as FeatureMatchGraphicGroupChildKind)"
 					/>
 				</UFormField>
-				<FeatureMatchOverlayWidgetEditor
+				<FeatureMatchOverlayGraphicItemEditor
 					v-if="child.type !== 'media'"
-					:widget="child.widget"
-					:widget-surface-style="resolvedSurfaceStyle"
+					:graphic-item="child.graphicItem"
+					:graphic-item-surface-style="resolvedSurfaceStyle"
 					:event-id="eventId"
-					@update="widget => editor.updateGroupChildWidget(group.id, child.id, widget)"
+					@update="patchGraphicItem"
 				/>
 			</div>
 		</FeatureMatchOverlayControlSection>
@@ -267,7 +273,7 @@ function patchMedia(updates: Partial<FeatureMatchWidgetGroupChildConfig>) {
 						variant="soft"
 						icon="i-lucide-rotate-ccw"
 						:disabled="!hasStyleOverrides(child.surfaceStyle)"
-						data-testid="reset-widget-appearance"
+						data-testid="reset-graphicItem-appearance"
 						@click="resetSurfaceStyle"
 					>
 						Reset to Defaults

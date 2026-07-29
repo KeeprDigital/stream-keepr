@@ -1,7 +1,11 @@
 import type { GraphicAssetValidationError } from '~~/server/modules/graphics-asset-library/validation';
 import { Buffer } from 'node:buffer';
 import { describe, expect, it } from 'vitest';
-import { processSilentVideo } from '~~/server/modules/graphics-asset-library/silent-video';
+import {
+	processSilentVideo,
+	processSilentVideoFromRandomAccess,
+	SilentVideoInspectionSourceError,
+} from '~~/server/modules/graphics-asset-library/silent-video';
 
 const vp9Webm = Uint8Array.from(Buffer.from(
 	'GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAIMEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggElTbuMU6uEHFO7a1OsggH27AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjIuMTIuMTAyV0GNTGF2ZjYyLjEyLjEwMkSJiECPQAAAAAAAFlSua8iuAQAAAAAAAD/XgQFzxYhkRqj8GKbqBJyBACK1nIN1bmSIgQCGhVZfVlA5g4EBI+ODhB3NZQDgkLCBELqBEJqBAlWwhFW5gQESVMNnQIBzc6BjwIBnyJpFo4dFTkNPREVSRIeNTGF2ZjYyLjEyLjEwMnNz2mPAi2PFiGRGqPwYpuoEZ8ilRaOHRU5DT0RFUkSHmExhdmM2Mi4yOC4xMDIgbGlidnB4LXZwOWfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAB9DtnXG54EAo6yBAACAgkmDQgAA8AD2ADgkHBhCAAAwcAAASqf/+5CBv///CAg////7iYcAAKOTgQH0AIYAQJKcAElAAAMgAABCQBxTu2uRu4+zgQC3iveBAfGCAavwgQM=',
@@ -103,6 +107,20 @@ function asciiOffset(bytes: Uint8Array, value: string) {
 	return offset;
 }
 
+function withVp9Profile(bytes: Uint8Array, profile: 1 | 2) {
+	const result = bytes.slice();
+	const syncCode = result.findIndex((byte, index) =>
+		byte === 0x49 && result[index + 1] === 0x83 && result[index + 2] === 0x42,
+	);
+	expect(syncCode).toBeGreaterThan(0);
+	const uncompressedHeader = syncCode - 1;
+	result[uncompressedHeader] = (
+		result[uncompressedHeader]!
+		& ~0x0C
+	) | (profile << 2);
+	return result;
+}
+
 function setSpsRbspBits(bytes: Uint8Array, bitOffset: number, bitCount: number, value: number) {
 	const avcConfiguration = asciiOffset(bytes, 'avcC') + 4;
 	const spsStart = avcConfiguration + 8;
@@ -140,6 +158,103 @@ async function expectIssue(
 }
 
 describe('silent-video bounded inspection', () => {
+	it('range-inspects a sparse near-limit MP4 without a full-object read', async () => {
+		const freeBoxLength = 240 * 1024 * 1024;
+		const freeHeader = new Uint8Array(16);
+		const headerView = new DataView(freeHeader.buffer);
+		headerView.setUint32(0, 1);
+		freeHeader.set(new TextEncoder().encode('free'), 4);
+		headerView.setBigUint64(8, BigInt(freeBoxLength));
+		const byteLength = h264Mp4.byteLength + freeBoxLength;
+		const reads: Array<{ offset: number; length: number }> = [];
+
+		const processed = await processSilentVideoFromRandomAccess({
+			byteLength,
+			sha256: 'a'.repeat(64),
+			async read(offset, length) {
+				reads.push({ offset, length });
+				const bytes = new Uint8Array(length);
+				for (let index = 0; index < length; index++) {
+					const position = offset + index;
+					if (position < h264Mp4.byteLength)
+						bytes[index] = h264Mp4[position]!;
+					else if (position < h264Mp4.byteLength + freeHeader.byteLength)
+						bytes[index] = freeHeader[position - h264Mp4.byteLength]!;
+				}
+				return { outcome: 'available', bytes, completeLength: byteLength };
+			},
+		}, {
+			sourceFileName: 'sparse.mp4',
+			declaredMime: 'video/mp4',
+		});
+
+		expect(processed.report.facts).toMatchObject({
+			format: 'mp4',
+			byteLength,
+			sha256: 'a'.repeat(64),
+			frameCount: 2,
+		});
+		expect(Math.max(...reads.map(read => read.length))).toBeLessThanOrEqual(256 * 1024);
+		expect(reads.reduce((total, read) => total + read.length, 0)).toBeLessThan(16 * 1024 * 1024);
+		expect(reads).not.toContainEqual({ offset: 0, length: byteLength });
+	});
+
+	it.each(['missing', 'unavailable'] as const)(
+		'preserves an explicit %s random-access source outcome',
+		async (outcome) => {
+			await expect(processSilentVideoFromRandomAccess({
+				byteLength: h264Mp4.byteLength,
+				sha256: 'b'.repeat(64),
+				async read() {
+					return outcome === 'missing'
+						? { outcome }
+						: { outcome, retryable: true };
+				},
+			})).rejects.toEqual(new SilentVideoInspectionSourceError(outcome));
+		},
+	);
+
+	it('walks WebM metadata, cues, clusters, and block prefixes through bounded ranges', async () => {
+		const reads: Array<{ offset: number; length: number }> = [];
+		const processed = await processSilentVideoFromRandomAccess({
+			byteLength: vp9Webm.byteLength,
+			sha256: 'c'.repeat(64),
+			async read(offset, length) {
+				reads.push({ offset, length });
+				return {
+					outcome: 'available',
+					bytes: vp9Webm.slice(offset, offset + length),
+					completeLength: vp9Webm.byteLength,
+				};
+			},
+		}, {
+			sourceFileName: 'bounded.webm',
+			declaredMime: 'video/webm',
+		});
+
+		expect(processed.report.facts).toMatchObject({
+			format: 'webm',
+			frameCount: 2,
+			sha256: 'c'.repeat(64),
+		});
+		expect(Math.max(...reads.map(read => read.length))).toBeLessThanOrEqual(256 * 1024);
+		expect(reads).not.toContainEqual({ offset: 0, length: vp9Webm.byteLength });
+	});
+
+	it('rejects a ranged source whose provider lies about exact object length', async () => {
+		await expect(processSilentVideoFromRandomAccess({
+			byteLength: vp9Webm.byteLength,
+			sha256: 'd'.repeat(64),
+			async read(offset, length) {
+				return {
+					outcome: 'available',
+					bytes: vp9Webm.slice(offset, offset + length),
+					completeLength: vp9Webm.byteLength + 1,
+				};
+			},
+		})).rejects.toEqual(new SilentVideoInspectionSourceError('unavailable'));
+	});
+
 	it('accepts a fast-start silent H.264 MP4 with authoritative media facts', async () => {
 		const processed = await processSilentVideo(h264Mp4, {
 			sourceFileName: 'loop.mp4',
@@ -194,6 +309,22 @@ describe('silent-video bounded inspection', () => {
 		expect(processed.report.facts.durationSeconds).toBeCloseTo(1, 5);
 		expect(processed.report.facts.frameRate).toBeCloseTo(2, 5);
 		expect(processed.report.facts.posterTimeSeconds).toBeCloseTo(0.1, 5);
+	});
+
+	it.each([
+		{
+			profile: 1 as const,
+			reason: 'profile 1 is 8-bit but excludes 4:2:0',
+		},
+		{
+			profile: 2 as const,
+			reason: 'profile 2 is 10/12-bit and its selector cannot signal 8-bit',
+		},
+	])('rejects VP9 profile $profile because $reason', async ({ profile }) => {
+		await expectIssue(
+			processSilentVideo(withVp9Profile(vp9Webm, profile)),
+			'unsupported-video-profile',
+		);
 	});
 
 	it('rejects MP4 without fast-start ordering', async () => {

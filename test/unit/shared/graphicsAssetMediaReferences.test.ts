@@ -44,8 +44,8 @@ describe('media Graphic Item exact references', () => {
 
 	it('indexes an exact silent-video revision from a Graphic Group child', () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		const group = config.layout.items.find(item => item.type === 'widget-group');
-		if (group?.type !== 'widget-group')
+		const group = config.layout.items.find(item => item.type === 'graphic-group');
+		if (group?.type !== 'graphic-group')
 			throw new Error('Expected a Graphic Group fixture');
 		group.children = [{
 			id: 'group-ident',

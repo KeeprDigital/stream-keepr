@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import type { FeatureMatchOverlayModeConfig, FeatureMatchWidgetGroupItemConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchGraphicGroupItemConfig, FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import type { FeatureMatchGraphicGroupChildKind } from '~/modules/feature-match-overlay/layout';
 import type { FeatureMatchOverlayAnchorValue } from '~/utils/featureMatchOverlayGeometry';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
-import { appearanceSummary, FEATURE_MATCH_OVERLAY_GROUP_CHILD_KIND_OPTIONS, groupLayoutSummary, groupWidgetDefaultsSummary, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
+import { appearanceSummary, FEATURE_MATCH_OVERLAY_GROUP_CHILD_KIND_OPTIONS, groupGraphicItemDefaultsSummary, groupLayoutSummary, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
 import { anchorFeatureMatchOverlayRect } from '~/utils/featureMatchOverlayGeometry';
 import FeatureMatchOverlayBoxStyleFields from './BoxStyleFields.vue';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
@@ -16,7 +16,7 @@ const props = defineProps<{
 	updateConfig: FeatureMatchOverlayConfigUpdater;
 	screenWidth: number;
 	screenHeight: number;
-	item: FeatureMatchWidgetGroupItemConfig;
+	item: FeatureMatchGraphicGroupItemConfig;
 }>();
 
 const emit = defineEmits<{
@@ -213,7 +213,7 @@ function addChild(type: FeatureMatchGraphicGroupChildKind) {
 						size="sm"
 						placeholder="Add Graphic Item..."
 						class="w-full"
-						data-testid="overlay-guided-add-widget"
+						data-testid="overlay-guided-add-graphicItem"
 						@update:model-value="addChild($event as FeatureMatchGraphicGroupChildKind)"
 					/>
 				</UFormField>
@@ -223,7 +223,7 @@ function addChild(type: FeatureMatchGraphicGroupChildKind) {
 		<FeatureMatchOverlayControlSection
 			title="Defaults"
 			badge="Inherited"
-			:summary="groupWidgetDefaultsSummary(item)"
+			:summary="groupGraphicItemDefaultsSummary(item)"
 		>
 			<FeatureMatchOverlayBoxStyleFields
 				:box-style="item.defaultChildSurfaceStyle"

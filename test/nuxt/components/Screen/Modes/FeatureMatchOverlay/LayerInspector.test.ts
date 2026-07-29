@@ -87,7 +87,7 @@ const GeometryFieldsStub = defineComponent({
 
 async function mountComponent(overrides: Partial<{
 	config: FeatureMatchOverlayModeConfig;
-	selectedTarget: { type: 'canvas' | 'layer' | 'widget'; itemId?: string; childId?: string };
+	selectedTarget: { type: 'canvas' | 'layer' | 'graphic-item'; itemId?: string; childId?: string };
 	updateConfig: ReturnType<typeof vi.fn>;
 	variant: 'tree' | 'inspector';
 }> = {}) {
@@ -112,7 +112,7 @@ async function mountComponent(overrides: Partial<{
 				FeatureMatchOverlayControlSection: ControlSectionStub,
 				FeatureMatchOverlayFrameStyleCard: defineComponent({ template: '<div data-testid="frame-style-card" />' }),
 				FeatureMatchOverlayGeometryFields: GeometryFieldsStub,
-				FeatureMatchOverlayWidgetEditor: defineComponent({ template: '<div data-testid="widget-editor" />' }),
+				FeatureMatchOverlayGraphicItemEditor: defineComponent({ template: '<div data-testid="graphicItem-editor" />' }),
 				FeatureMatchOverlayMediaFields: defineComponent({ template: '<div data-testid="media-fields" />' }),
 				FeatureMatchOverlayBoxStyleFields: defineComponent({
 					props: {
@@ -147,11 +147,11 @@ describe('featureMatchOverlayLayerInspector', () => {
 
 		expect(wrapper.find('[data-testid="overlay-tree-canvas"]').text()).toContain('Canvas');
 		expect(wrapper.findAll('[data-testid="overlay-tree-layer"]').length).toBeGreaterThan(1);
-		expect(wrapper.findAll('[data-testid="overlay-tree-widget"]').length).toBeGreaterThan(1);
+		expect(wrapper.findAll('[data-testid="overlay-tree-graphicItem"]').length).toBeGreaterThan(1);
 		expect(wrapper.text()).toContain('Canvas, layers, and Graphic Items');
 	});
 
-	it('emits selection updates for top-level layers and nested widgets', async () => {
+	it('emits selection updates for top-level layers and nested graphicItems', async () => {
 		const wrapper = await mountComponent({ variant: 'tree' });
 
 		await wrapper.findAll('[data-testid="overlay-tree-layer"]')[0]!.trigger('click');
@@ -160,26 +160,26 @@ describe('featureMatchOverlayLayerInspector', () => {
 			itemId: 'main-source',
 		});
 
-		await wrapper.findAll('[data-testid="overlay-tree-widget"]')[0]!.trigger('click');
+		await wrapper.findAll('[data-testid="overlay-tree-graphicItem"]')[0]!.trigger('click');
 		expect(wrapper.emitted('update:selectedTarget')?.at(-1)?.[0]).toMatchObject({
-			type: 'widget',
+			type: 'graphic-item',
 			itemId: 'top-bar',
 			childId: 'top-name-record',
 		});
 	});
 
-	it('guided add creates the requested widget type and selects the new layer', async () => {
+	it('guided add creates the requested graphicItem type and selects the new layer', async () => {
 		const updateConfig = vi.fn();
 		const wrapper = await mountComponent({ updateConfig, variant: 'tree' });
 
-		await wrapper.find('[data-testid="overlay-guided-add"] [data-value="life-widget"]').trigger('click');
+		await wrapper.find('[data-testid="overlay-guided-add"] [data-value="life-graphic-item"]').trigger('click');
 
 		const patch = updateConfig.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig>;
 		const added = patch.layout?.items.at(-1);
 		expect(added).toMatchObject({
-			type: 'widget',
-			label: 'Life Widget',
-			widget: { type: 'player-life' },
+			type: 'graphic-item',
+			label: 'Life Graphic Item',
+			graphicItem: { type: 'player-life' },
 		});
 		expect(wrapper.emitted('update:selectedTarget')?.at(-1)?.[0]).toMatchObject({
 			type: 'layer',
@@ -194,11 +194,11 @@ describe('featureMatchOverlayLayerInspector', () => {
 			selectedTarget: { type: 'layer', itemId: 'top-bar' },
 		});
 
-		await wrapper.find('[data-testid="overlay-guided-add-widget"] [data-value="media"]').trigger('click');
+		await wrapper.find('[data-testid="overlay-guided-add-graphicItem"] [data-value="media"]').trigger('click');
 
 		const patch = updateConfig.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig>;
 		const group = patch.layout?.items.find(item => item.id === 'top-bar');
-		const added = group?.type === 'widget-group' ? group.children.at(-1) : undefined;
+		const added = group?.type === 'graphic-group' ? group.children.at(-1) : undefined;
 		expect(added).toMatchObject({
 			type: 'media',
 			label: 'Media Graphic Item',
@@ -208,15 +208,15 @@ describe('featureMatchOverlayLayerInspector', () => {
 			opacity: 1,
 		});
 		expect(wrapper.emitted('update:selectedTarget')?.at(-1)?.[0]).toMatchObject({
-			type: 'widget',
+			type: 'graphic-item',
 			itemId: 'top-bar',
 			childId: added?.id,
 		});
 	});
 
-	it('shows selected widget inspector summaries for group children', async () => {
+	it('shows selected graphicItem inspector summaries for group children', async () => {
 		const wrapper = await mountComponent({
-			selectedTarget: { type: 'widget', itemId: 'top-bar', childId: 'top-name-record' },
+			selectedTarget: { type: 'graphic-item', itemId: 'top-bar', childId: 'top-name-record' },
 		});
 		const sectionTitles = wrapper.findAll('[data-testid="control-section"] h3').map(title => title.text());
 
@@ -227,13 +227,13 @@ describe('featureMatchOverlayLayerInspector', () => {
 		expect(sectionTitles).toContain('Order');
 		expect(wrapper.text()).toContain('Name and Record');
 		expect(wrapper.text()).toContain('{name}');
-		expect(wrapper.find('[data-testid="widget-editor"]').exists()).toBe(true);
+		expect(wrapper.find('[data-testid="graphicItem-editor"]').exists()).toBe(true);
 	});
 
 	it('shows Media Graphic Item summaries and controls for a Graphic Group child', async () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		const group = config.layout.items.find(item => item.id === 'top-bar');
-		if (group?.type !== 'widget-group')
+		if (group?.type !== 'graphic-group')
 			throw new Error('Expected a Graphic Group fixture');
 		group.children = [{
 			id: 'group-media',
@@ -251,19 +251,19 @@ describe('featureMatchOverlayLayerInspector', () => {
 		}];
 		const wrapper = await mountComponent({
 			config,
-			selectedTarget: { type: 'widget', itemId: 'top-bar', childId: 'group-media' },
+			selectedTarget: { type: 'graphic-item', itemId: 'top-bar', childId: 'group-media' },
 		});
 
 		expect(wrapper.text()).toContain('Sponsor loop');
 		expect(wrapper.text()).toContain('Media');
 		expect(wrapper.find('[data-testid="media-fields"]').exists()).toBe(true);
-		expect(wrapper.find('[data-testid="widget-editor"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="graphicItem-editor"]').exists()).toBe(false);
 		expect(wrapper.findAll('[data-testid="control-section"] h3').map(title => title.text()))
 			.not
 			.toContain('Overrides');
 	});
 
-	it('keeps group-scoped controls separate from individual widget controls', async () => {
+	it('keeps group-scoped controls separate from individual graphicItem controls', async () => {
 		const wrapper = await mountComponent({
 			selectedTarget: { type: 'layer', itemId: 'top-bar' },
 		});
@@ -287,7 +287,7 @@ describe('featureMatchOverlayLayerInspector', () => {
 		});
 	});
 
-	it('updates group appearance separately from inherited widget defaults', async () => {
+	it('updates group appearance separately from inherited graphicItem defaults', async () => {
 		const updateConfig = vi.fn();
 		const wrapper = await mountComponent({
 			updateConfig,
@@ -297,19 +297,19 @@ describe('featureMatchOverlayLayerInspector', () => {
 		await wrapper.findAll('[data-testid="box-style-fields"]')[0]!.trigger('click');
 
 		const patch = updateConfig.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig>;
-		const group = patch.layout?.items.find(item => item.id === 'top-bar' && item.type === 'widget-group');
+		const group = patch.layout?.items.find(item => item.id === 'top-bar' && item.type === 'graphic-group');
 		expect(group).toMatchObject({
-			type: 'widget-group',
+			type: 'graphic-group',
 			surfaceStyle: expect.objectContaining({ backgroundGradient: 'linear-gradient(red, blue)' }),
 			defaultChildSurfaceStyle: expect.objectContaining({ fontSize: 30 }),
 		});
 	});
 
-	it('does not create widget defaults from group appearance when defaults are absent', async () => {
+	it('does not create graphicItem defaults from group appearance when defaults are absent', async () => {
 		const updateConfig = vi.fn();
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		config.layout.items = config.layout.items.map((item) => {
-			if (item.id !== 'top-bar' || item.type !== 'widget-group')
+			if (item.id !== 'top-bar' || item.type !== 'graphic-group')
 				return item;
 			const groupWithoutDefaults = { ...item };
 			delete groupWithoutDefaults.defaultChildSurfaceStyle;
@@ -324,15 +324,15 @@ describe('featureMatchOverlayLayerInspector', () => {
 		await wrapper.findAll('[data-testid="box-style-fields"]')[0]!.trigger('click');
 
 		const patch = updateConfig.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig>;
-		const group = patch.layout?.items.find(item => item.id === 'top-bar' && item.type === 'widget-group');
+		const group = patch.layout?.items.find(item => item.id === 'top-bar' && item.type === 'graphic-group');
 		expect(group).toMatchObject({
-			type: 'widget-group',
+			type: 'graphic-group',
 			surfaceStyle: expect.objectContaining({ backgroundGradient: 'linear-gradient(red, blue)' }),
 		});
 		expect(group).not.toHaveProperty('defaultChildSurfaceStyle');
 	});
 
-	it('updates inherited widget defaults separately from group appearance', async () => {
+	it('updates inherited graphicItem defaults separately from group appearance', async () => {
 		const updateConfig = vi.fn();
 		const wrapper = await mountComponent({
 			updateConfig,
@@ -342,26 +342,26 @@ describe('featureMatchOverlayLayerInspector', () => {
 		await wrapper.findAll('[data-testid="box-style-fields"]')[1]!.trigger('click');
 
 		const patch = updateConfig.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig>;
-		const group = patch.layout?.items.find(item => item.id === 'top-bar' && item.type === 'widget-group');
+		const group = patch.layout?.items.find(item => item.id === 'top-bar' && item.type === 'graphic-group');
 		expect(group).toMatchObject({
-			type: 'widget-group',
+			type: 'graphic-group',
 			surfaceStyle: expect.not.objectContaining({ backgroundGradient: 'linear-gradient(red, blue)' }),
 			defaultChildSurfaceStyle: expect.objectContaining({ backgroundGradient: 'linear-gradient(red, blue)' }),
 		});
 	});
 
-	it('can reset a selected group widget back to inherited widget defaults', async () => {
+	it('can reset a selected group graphicItem back to inherited graphicItem defaults', async () => {
 		const updateConfig = vi.fn();
 		const wrapper = await mountComponent({
 			updateConfig,
-			selectedTarget: { type: 'widget', itemId: 'top-bar', childId: 'top-life' },
+			selectedTarget: { type: 'graphic-item', itemId: 'top-bar', childId: 'top-life' },
 		});
 
-		await wrapper.find('[data-testid="reset-widget-appearance"]').trigger('click');
+		await wrapper.find('[data-testid="reset-graphicItem-appearance"]').trigger('click');
 
 		const patch = updateConfig.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig>;
-		const group = patch.layout?.items.find(item => item.id === 'top-bar' && item.type === 'widget-group');
-		const child = group?.type === 'widget-group' ? group.children.find(item => item.id === 'top-life') : undefined;
+		const group = patch.layout?.items.find(item => item.id === 'top-bar' && item.type === 'graphic-group');
+		const child = group?.type === 'graphic-group' ? group.children.find(item => item.id === 'top-life') : undefined;
 		expect(child).toBeDefined();
 		expect(child).not.toHaveProperty('surfaceStyle');
 	});
@@ -401,14 +401,14 @@ describe('featureMatchOverlayLayerInspector', () => {
 		const updateConfig = vi.fn();
 		const wrapper = await mountComponent({
 			updateConfig,
-			selectedTarget: { type: 'widget', itemId: 'top-bar', childId: 'top-name-record' },
+			selectedTarget: { type: 'graphic-item', itemId: 'top-bar', childId: 'top-name-record' },
 		});
 
 		await wrapper.find('[data-testid="geometry-anchor"]').trigger('click');
 
 		const patch = updateConfig.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig>;
-		const group = patch.layout?.items.find(item => item.id === 'top-bar' && item.type === 'widget-group');
-		const child = group?.type === 'widget-group' ? group.children.find(item => item.id === 'top-name-record') : undefined;
+		const group = patch.layout?.items.find(item => item.id === 'top-bar' && item.type === 'graphic-group');
+		const child = group?.type === 'graphic-group' ? group.children.find(item => item.id === 'top-name-record') : undefined;
 		expect(child?.layout).toMatchObject({ mode: 'canvas', anchor: 'bottom-right' });
 	});
 });

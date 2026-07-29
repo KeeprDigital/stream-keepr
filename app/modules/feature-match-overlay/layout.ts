@@ -1,14 +1,15 @@
 import type {
+	FeatureMatchGraphicGroupChildConfig,
+	FeatureMatchGraphicGroupGraphicItemDefinitionConfig,
+	FeatureMatchGraphicGroupItemConfig,
+	FeatureMatchGraphicItemDefinitionConfig,
 	FeatureMatchLayoutConfig,
 	FeatureMatchLayoutFrameConfig,
 	FeatureMatchLayoutItemConfig,
 	FeatureMatchOverlayBoxStyle,
-	FeatureMatchWidgetConfig,
-	FeatureMatchWidgetGroupChildConfig,
-	FeatureMatchWidgetGroupItemConfig,
 } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayAnchorValue } from '~/utils/featureMatchOverlayGeometry';
-import { featureMatchOverlayWidgetDefinition } from '~/modules/feature-match-overlay/widgetDefinitions';
+import { featureMatchOverlayGraphicItemDefinition } from '~/modules/feature-match-overlay/graphicItemDefinitions';
 import { updateFeatureMatchOverlayRectFromAnchor } from '~/utils/featureMatchOverlayGeometry';
 
 /**
@@ -19,38 +20,38 @@ import { updateFeatureMatchOverlayRectFromAnchor } from '~/utils/featureMatchOve
  */
 
 export type FeatureMatchOverlayGeometryField = 'x' | 'y' | 'width' | 'height';
-export type FeatureMatchOverlayLayerKind = 'source' | 'media' | 'widget-group' | 'text-widget' | 'image-widget' | 'clock-widget' | 'life-widget' | 'wins-widget';
-export type FeatureMatchGraphicGroupChildKind = Exclude<FeatureMatchWidgetConfig['type'], 'image'> | 'media';
+export type FeatureMatchOverlayLayerKind = 'source' | 'media' | 'graphic-group' | 'text-graphic-item' | 'image-graphic-item' | 'clock-graphic-item' | 'life-graphic-item' | 'wins-graphic-item';
+export type FeatureMatchGraphicGroupChildKind = Exclude<FeatureMatchGraphicItemDefinitionConfig['type'], 'image'> | 'media';
 
 function nextId(prefix: string) {
 	return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function widgetTypeFromLayerKind(kind: FeatureMatchOverlayLayerKind): FeatureMatchWidgetConfig['type'] {
+function graphicItemTypeFromLayerKind(kind: FeatureMatchOverlayLayerKind): FeatureMatchGraphicItemDefinitionConfig['type'] {
 	switch (kind) {
-		case 'image-widget':
+		case 'image-graphic-item':
 			return 'image';
-		case 'clock-widget':
+		case 'clock-graphic-item':
 			return 'clock';
-		case 'life-widget':
+		case 'life-graphic-item':
 			return 'player-life';
-		case 'wins-widget':
+		case 'wins-graphic-item':
 			return 'game-wins';
-		case 'text-widget':
+		case 'text-graphic-item':
 		default:
 			return 'text';
 	}
 }
 
-function newLayerLabel(type: FeatureMatchWidgetConfig['type']) {
-	return `${featureMatchOverlayWidgetDefinition(type).label} Widget`;
+function newLayerLabel(type: FeatureMatchGraphicItemDefinitionConfig['type']) {
+	return `${featureMatchOverlayGraphicItemDefinition(type).label} Graphic Item`;
 }
 
 function itemAnchorValue(item: FeatureMatchLayoutItemConfig): FeatureMatchOverlayAnchorValue {
 	return item.anchor ?? 'top-left';
 }
 
-function stackArrangement(mode: 'row' | 'column', current: FeatureMatchWidgetGroupItemConfig) {
+function stackArrangement(mode: 'row' | 'column', current: FeatureMatchGraphicGroupItemConfig) {
 	return {
 		mode,
 		padding: current.arrangement.padding ?? 0,
@@ -84,16 +85,16 @@ function mapItem(
 function mapGroup(
 	layout: FeatureMatchLayoutConfig,
 	id: string,
-	updater: (group: FeatureMatchWidgetGroupItemConfig) => FeatureMatchWidgetGroupItemConfig,
+	updater: (group: FeatureMatchGraphicGroupItemConfig) => FeatureMatchGraphicGroupItemConfig,
 ): FeatureMatchLayoutConfig {
-	return mapItem(layout, id, item => item.type === 'widget-group' ? updater(item) : item);
+	return mapItem(layout, id, item => item.type === 'graphic-group' ? updater(item) : item);
 }
 
 function mapGroupChild(
 	layout: FeatureMatchLayoutConfig,
 	groupId: string,
 	childId: string,
-	updater: (child: FeatureMatchWidgetGroupChildConfig, group: FeatureMatchWidgetGroupItemConfig) => FeatureMatchWidgetGroupChildConfig,
+	updater: (child: FeatureMatchGraphicGroupChildConfig, group: FeatureMatchGraphicGroupItemConfig) => FeatureMatchGraphicGroupChildConfig,
 ): FeatureMatchLayoutConfig {
 	return mapGroup(layout, groupId, (group) => {
 		const index = group.children.findIndex(child => child.id === childId);
@@ -145,9 +146,9 @@ export function patchItemRectFromAnchor(layout: FeatureMatchLayoutConfig, id: st
 	});
 }
 
-// ──────────────── Widget Groups ────────────────
+// ──────────────── Graphic Groups ────────────────
 
-export function patchGroup(layout: FeatureMatchLayoutConfig, id: string, updates: Partial<FeatureMatchWidgetGroupItemConfig>): FeatureMatchLayoutConfig {
+export function patchGroup(layout: FeatureMatchLayoutConfig, id: string, updates: Partial<FeatureMatchGraphicGroupItemConfig>): FeatureMatchLayoutConfig {
 	return mapGroup(layout, id, group => ({ ...group, ...updates }));
 }
 
@@ -158,16 +159,16 @@ export function patchGroupDefaultChildSurfaceStyle(layout: FeatureMatchLayoutCon
 	}));
 }
 
-export function patchGroupChild(layout: FeatureMatchLayoutConfig, groupId: string, childId: string, updates: Partial<FeatureMatchWidgetGroupChildConfig>): FeatureMatchLayoutConfig {
-	return mapGroupChild(layout, groupId, childId, child => ({ ...child, ...updates }) as FeatureMatchWidgetGroupChildConfig);
+export function patchGroupChild(layout: FeatureMatchLayoutConfig, groupId: string, childId: string, updates: Partial<FeatureMatchGraphicGroupChildConfig>): FeatureMatchLayoutConfig {
+	return mapGroupChild(layout, groupId, childId, child => ({ ...child, ...updates }) as FeatureMatchGraphicGroupChildConfig);
 }
 
-export function patchGroupChildWidget(layout: FeatureMatchLayoutConfig, groupId: string, childId: string, updates: Partial<FeatureMatchWidgetConfig>): FeatureMatchLayoutConfig {
+export function patchGroupChildGraphicItem(layout: FeatureMatchLayoutConfig, groupId: string, childId: string, updates: Partial<FeatureMatchGraphicGroupGraphicItemDefinitionConfig>): FeatureMatchLayoutConfig {
 	return mapGroupChild(layout, groupId, childId, child => child.type === 'media'
 		? child
 		: {
 				...child,
-				widget: { ...child.widget, ...updates } as FeatureMatchWidgetConfig,
+				graphicItem: { ...child.graphicItem, ...updates } as FeatureMatchGraphicGroupGraphicItemDefinitionConfig,
 			});
 }
 
@@ -177,7 +178,7 @@ export function patchGroupChildSurfaceStyle(layout: FeatureMatchLayoutConfig, gr
 		: { ...child, surfaceStyle: { ...(child.surfaceStyle ?? {}), ...updates } });
 }
 
-export function addGroupChild(layout: FeatureMatchLayoutConfig, groupId: string, child: FeatureMatchWidgetGroupChildConfig): FeatureMatchLayoutConfig {
+export function addGroupChild(layout: FeatureMatchLayoutConfig, groupId: string, child: FeatureMatchGraphicGroupChildConfig): FeatureMatchLayoutConfig {
 	return mapGroup(layout, groupId, group => ({ ...group, children: [...group.children, child] }));
 }
 
@@ -239,7 +240,7 @@ export function bringGroupChildToFront(layout: FeatureMatchLayoutConfig, groupId
 	});
 }
 
-/** Anchored geometry edit for a canvas-positioned Widget Group child. */
+/** Anchored geometry edit for a canvas-positioned Graphic Group child. */
 export function patchGroupChildRectFromAnchor(layout: FeatureMatchLayoutConfig, groupId: string, childId: string, field: FeatureMatchOverlayGeometryField, nextValue: number): FeatureMatchLayoutConfig {
 	return mapGroupChild(layout, groupId, childId, (child) => {
 		if (child.layout.mode !== 'canvas')
@@ -251,7 +252,7 @@ export function patchGroupChildRectFromAnchor(layout: FeatureMatchLayoutConfig, 
 }
 
 /**
- * Convert a Widget Group's arrangement, rewriting each child's layout into
+ * Convert a Graphic Group's arrangement, rewriting each child's layout into
  * the target mode: stack children get staggered canvas rects; canvas
  * children get fixed stack sizing from their main-axis extent. Children
  * already in the target mode are untouched.
@@ -338,24 +339,24 @@ export function createLayoutItem(layout: FeatureMatchLayoutConfig, kind: Feature
 			videoTarget: 'safari',
 		};
 	}
-	else if (kind === 'widget-group') {
-		item = { ...base, type: 'widget-group', label: 'New Group', width: 520, height: 90, surfaceStyle: { backgroundOpacity: 0 }, defaultChildSurfaceStyle: base.surfaceStyle, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [] };
+	else if (kind === 'graphic-group') {
+		item = { ...base, type: 'graphic-group', label: 'New Group', width: 520, height: 90, surfaceStyle: { backgroundOpacity: 0 }, defaultChildSurfaceStyle: base.surfaceStyle, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [] };
 	}
 	else {
-		const widgetType = widgetTypeFromLayerKind(kind);
-		item = { ...base, type: 'widget', label: newLayerLabel(widgetType), widget: featureMatchOverlayWidgetDefinition(widgetType).defaultConfig() };
+		const graphicItemType = graphicItemTypeFromLayerKind(kind);
+		item = { ...base, type: 'graphic-item', label: newLayerLabel(graphicItemType), graphicItem: featureMatchOverlayGraphicItemDefinition(graphicItemType).defaultConfig() };
 	}
 
 	return { layout: addItem(layout, item), id };
 }
 
-/** Create a new child in a Widget Group, matching its arrangement mode. Returns a null id when the item is not a group. */
+/** Create a new child in a Graphic Group, matching its arrangement mode. Returns a null id when the item is not a group. */
 export function createGroupChild(layout: FeatureMatchLayoutConfig, groupId: string, type: FeatureMatchGraphicGroupChildKind): { layout: FeatureMatchLayoutConfig; id: string | null } {
 	const group = layout.items.find(item => item.id === groupId);
-	if (group?.type !== 'widget-group')
+	if (group?.type !== 'graphic-group')
 		return { layout, id: null };
 
-	const id = nextId(type === 'media' ? 'media' : 'widget');
+	const id = nextId(type === 'media' ? 'media' : 'graphic-item');
 	const childLayout = group.arrangement.mode === 'canvas'
 		? { mode: 'canvas' as const, x: 0, y: 0, width: 180, height: 64 }
 		: { mode: 'stack' as const, sizing: { mode: 'fixed' as const, size: 180 } };
@@ -372,9 +373,9 @@ export function createGroupChild(layout: FeatureMatchLayoutConfig, groupId: stri
 					videoTarget: 'safari' as const,
 				}
 			: {
-					type: 'widget' as const,
+					type: 'graphic-item' as const,
 					label: newLayerLabel(type),
-					widget: featureMatchOverlayWidgetDefinition(type).defaultConfig(),
+					graphicItem: featureMatchOverlayGraphicItemDefinition(type).defaultConfig(),
 				}),
 		visible: true,
 		layout: childLayout,

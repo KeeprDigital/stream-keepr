@@ -1,11 +1,11 @@
 import type {
+	FeatureMatchGraphicGroupChildConfig,
+	FeatureMatchGraphicGroupGraphicItemDefinitionConfig,
+	FeatureMatchGraphicGroupItemConfig,
 	FeatureMatchLayoutFrameConfig,
 	FeatureMatchLayoutItemConfig,
 	FeatureMatchOverlayBoxStyle,
 	FeatureMatchOverlayModeConfig,
-	FeatureMatchWidgetConfig,
-	FeatureMatchWidgetGroupChildConfig,
-	FeatureMatchWidgetGroupItemConfig,
 } from '~~/shared/types/screenConfig';
 import type { FeatureMatchGraphicGroupChildKind, FeatureMatchOverlayGeometryField, FeatureMatchOverlayLayerKind } from '~/modules/feature-match-overlay/layout';
 import type { FeatureMatchOverlayGeometryUnit } from '~/utils/featureMatchOverlayGeometry';
@@ -73,7 +73,7 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		submit(layoutWriter.removeItem(layout(), id));
 	}
 
-	function updateGroup(id: string, updates: Partial<FeatureMatchWidgetGroupItemConfig>) {
+	function updateGroup(id: string, updates: Partial<FeatureMatchGraphicGroupItemConfig>) {
 		submit(layoutWriter.patchGroup(layout(), id, updates));
 	}
 
@@ -81,19 +81,19 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		submit(layoutWriter.patchGroupDefaultChildSurfaceStyle(layout(), id, updates));
 	}
 
-	function updateGroupChild(groupId: string, childId: string, updates: Partial<FeatureMatchWidgetGroupChildConfig>) {
+	function updateGroupChild(groupId: string, childId: string, updates: Partial<FeatureMatchGraphicGroupChildConfig>) {
 		submit(layoutWriter.patchGroupChild(layout(), groupId, childId, updates));
 	}
 
-	function updateGroupChildWidget(groupId: string, childId: string, updates: Partial<FeatureMatchWidgetConfig>) {
-		submit(layoutWriter.patchGroupChildWidget(layout(), groupId, childId, updates));
+	function updateGroupChildGraphicItem(groupId: string, childId: string, updates: Partial<FeatureMatchGraphicGroupGraphicItemDefinitionConfig>) {
+		submit(layoutWriter.patchGroupChildGraphicItem(layout(), groupId, childId, updates));
 	}
 
 	function updateGroupChildSurfaceStyle(groupId: string, childId: string, updates: Partial<FeatureMatchOverlayBoxStyle>) {
 		submit(layoutWriter.patchGroupChildSurfaceStyle(layout(), groupId, childId, updates));
 	}
 
-	function addGroupChild(groupId: string, child: FeatureMatchWidgetGroupChildConfig) {
+	function addGroupChild(groupId: string, child: FeatureMatchGraphicGroupChildConfig) {
 		submit(layoutWriter.addGroupChild(layout(), groupId, child));
 	}
 
@@ -106,7 +106,7 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		submit(layoutWriter.patchItemRectFromAnchor(layout(), id, field, geometryValue(value, field, unit)));
 	}
 
-	/** Anchored geometry edit for a canvas-positioned Widget Group child. */
+	/** Anchored geometry edit for a canvas-positioned Graphic Group child. */
 	function updateGroupChildRectFromAnchor(groupId: string, childId: string, field: FeatureMatchOverlayGeometryField, value: string | number, unit: FeatureMatchOverlayGeometryUnit) {
 		submit(layoutWriter.patchGroupChildRectFromAnchor(layout(), groupId, childId, field, geometryValue(value, field, unit)));
 	}
@@ -146,7 +146,7 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		return id;
 	}
 
-	/** Create a new child in a Widget Group, matching its arrangement mode. Returns the child id, or null when the item is not a group. */
+	/** Create a new child in a Graphic Group, matching its arrangement mode. Returns the child id, or null when the item is not a group. */
 	function createGroupChild(groupId: string, type: FeatureMatchGraphicGroupChildKind): string | null {
 		const { layout: next, id } = layoutWriter.createGroupChild(layout(), groupId, type);
 		submit(next);
@@ -164,7 +164,7 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		updateGroup,
 		updateGroupDefaultChildSurfaceStyle,
 		updateGroupChild,
-		updateGroupChildWidget,
+		updateGroupChildGraphicItem,
 		updateGroupChildSurfaceStyle,
 		addGroupChild,
 		removeGroupChild,

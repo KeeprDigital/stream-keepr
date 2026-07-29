@@ -1,17 +1,17 @@
-import type { FeatureMatchOverlayWidgetRender } from '~~/app/modules/feature-match-overlay/renderModel';
+import type { FeatureMatchOverlayGraphicItemRender } from '~~/app/modules/feature-match-overlay/renderModel';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import FeatureMatchOverlayWidget from '~~/app/components/Screen/Modes/FeatureMatchOverlay/Widget.vue';
+import FeatureMatchOverlayGraphicItem from '~~/app/components/Screen/Modes/FeatureMatchOverlay/Widget.vue';
 
-function mountWidget(render: FeatureMatchOverlayWidgetRender) {
-	return mount(FeatureMatchOverlayWidget, {
+function mountGraphicItem(render: FeatureMatchOverlayGraphicItemRender) {
+	return mount(FeatureMatchOverlayGraphicItem, {
 		props: { render, output: 'overlay' },
 	});
 }
 
-describe('featureMatchOverlayWidget', () => {
-	it('renders text widgets through TemplateLines', () => {
-		const wrapper = mountWidget({
+describe('featureMatchOverlayGraphicItem', () => {
+	it('renders text graphicItems through TemplateLines', () => {
+		const wrapper = mountGraphicItem({
 			type: 'text',
 			lines: [[{ text: 'Alice', token: 'name', deckColors: false, style: undefined }]],
 			deckColors: 'R',
@@ -20,8 +20,8 @@ describe('featureMatchOverlayWidget', () => {
 		expect(wrapper.text()).toContain('Alice');
 	});
 
-	it('renders image widgets with resolved src and style', () => {
-		const wrapper = mountWidget({
+	it('renders image graphicItems with resolved src and style', () => {
+		const wrapper = mountGraphicItem({
 			type: 'image',
 			src: 'https://example.com/logo.png',
 			alt: 'Logo',
@@ -33,14 +33,14 @@ describe('featureMatchOverlayWidget', () => {
 		expect(image.attributes('alt')).toBe('Logo');
 	});
 
-	it('renders clock widgets with the resolved display time', () => {
-		const wrapper = mountWidget({ type: 'clock', displayTime: '12:34' });
+	it('renders clock graphicItems with the resolved display time', () => {
+		const wrapper = mountGraphicItem({ type: 'clock', displayTime: '12:34' });
 
 		expect(wrapper.text()).toBe('12:34');
 	});
 
-	it('renders player-life widgets with the resolved life total', () => {
-		const wrapper = mountWidget({
+	it('renders player-life graphicItems with the resolved life total', () => {
+		const wrapper = mountGraphicItem({
 			type: 'player-life',
 			lifeTotal: 17,
 			animation: undefined,
@@ -51,8 +51,8 @@ describe('featureMatchOverlayWidget', () => {
 		expect(wrapper.text()).toContain('17');
 	});
 
-	it('renders game-wins widgets with precomputed box styles', () => {
-		const wrapper = mountWidget({
+	it('renders game-wins graphicItems with precomputed box styles', () => {
+		const wrapper = mountGraphicItem({
 			type: 'game-wins',
 			boxes: [true, false],
 			wins: 1,

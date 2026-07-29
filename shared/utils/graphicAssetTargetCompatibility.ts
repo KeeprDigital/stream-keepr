@@ -46,9 +46,11 @@ export function graphicAssetTargetCompatibility(
 }
 
 export function graphicsVideoTargetForUserAgent(userAgent: string): GraphicsVideoTarget {
+	// Every browser on iOS/iPadOS uses WebKit, including Chromium-branded
+	// CriOS and EdgiOS. Classify the platform before desktop engine tokens.
 	if (/iPhone|iPad|iPod/i.test(userAgent) && /AppleWebKit/i.test(userAgent))
 		return 'safari';
-	if (/(?:Chrome|Chromium|CriOS|Edg)\//i.test(userAgent))
+	if (/(?:Chrome|Chromium|Edg)\//i.test(userAgent))
 		return 'chromium';
 	if (/AppleWebKit/i.test(userAgent))
 		return 'safari';

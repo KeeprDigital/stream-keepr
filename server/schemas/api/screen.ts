@@ -411,7 +411,7 @@ const featureMatchOverlayTokenStyleMapSchema = z
 	.record(z.string().min(1).max(50), featureMatchOverlayBoxStyleSchema)
 	.refine(value => Object.keys(value).length <= 100, 'Too many token style entries');
 
-const featureMatchTextWidgetConfigSchema = z.object({
+const featureMatchTextGraphicItemConfigSchema = z.object({
 	type: z.literal('text'),
 	template: z.string().max(1000),
 	playerSide: z.enum(PLAYER_SIDE_VALUES).optional(),
@@ -419,7 +419,7 @@ const featureMatchTextWidgetConfigSchema = z.object({
 	tokenStyles: featureMatchOverlayTokenStyleMapSchema.optional(),
 }).strict();
 
-const featureMatchImageWidgetConfigSchema = z.object({
+const featureMatchImageGraphicItemConfigSchema = z.object({
 	type: z.literal('image'),
 	asset: graphicAssetReferenceSchema.optional(),
 	fit: z.enum(['contain', 'cover', 'fill']),
@@ -427,11 +427,11 @@ const featureMatchImageWidgetConfigSchema = z.object({
 	borderRadius: nonNegativePixelSchema,
 }).strict();
 
-const featureMatchClockWidgetConfigSchema = z.object({
+const featureMatchClockGraphicItemConfigSchema = z.object({
 	type: z.literal('clock'),
 }).strict();
 
-const featureMatchPlayerLifeWidgetConfigSchema = z.object({
+const featureMatchPlayerLifeGraphicItemConfigSchema = z.object({
 	type: z.literal('player-life'),
 	playerSide: z.enum(PLAYER_SIDE_VALUES),
 	lifeAnimation: featureMatchOverlayPlayerLifeAnimationSchema.optional(),
@@ -439,7 +439,7 @@ const featureMatchPlayerLifeWidgetConfigSchema = z.object({
 	lifeAnimationAccentColor: optionalCssColorSchema,
 }).strict();
 
-const featureMatchGameWinsWidgetConfigSchema = z.object({
+const featureMatchGameWinsGraphicItemConfigSchema = z.object({
 	type: z.literal('game-wins'),
 	playerSide: z.enum(PLAYER_SIDE_VALUES),
 	displayMode: featureMatchGameWinsDisplayModeSchema.optional(),
@@ -450,12 +450,19 @@ const featureMatchGameWinsWidgetConfigSchema = z.object({
 	boxBorderWidth: nonNegativePixelSchema.optional(),
 }).strict();
 
-const featureMatchWidgetConfigSchema = z.discriminatedUnion('type', [
-	featureMatchTextWidgetConfigSchema,
-	featureMatchImageWidgetConfigSchema,
-	featureMatchClockWidgetConfigSchema,
-	featureMatchPlayerLifeWidgetConfigSchema,
-	featureMatchGameWinsWidgetConfigSchema,
+const featureMatchGraphicItemDefinitionConfigSchema = z.discriminatedUnion('type', [
+	featureMatchTextGraphicItemConfigSchema,
+	featureMatchImageGraphicItemConfigSchema,
+	featureMatchClockGraphicItemConfigSchema,
+	featureMatchPlayerLifeGraphicItemConfigSchema,
+	featureMatchGameWinsGraphicItemConfigSchema,
+]);
+
+const featureMatchGraphicGroupGraphicItemDefinitionConfigSchema = z.discriminatedUnion('type', [
+	featureMatchTextGraphicItemConfigSchema,
+	featureMatchClockGraphicItemConfigSchema,
+	featureMatchPlayerLifeGraphicItemConfigSchema,
+	featureMatchGameWinsGraphicItemConfigSchema,
 ]);
 
 const featureMatchLayoutItemBaseSchema = featureMatchOverlayRectSchema.extend({
@@ -514,13 +521,13 @@ const featureMatchMediaGraphicItemConfigSchema = featureMatchLayoutItemBaseSchem
 	featureMatchMediaGraphicItemContentShape,
 ).strict();
 
-const featureMatchWidgetItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
-	type: z.literal('widget'),
-	widget: featureMatchWidgetConfigSchema,
+const featureMatchSpecificGraphicItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
+	type: z.literal('graphic-item'),
+	graphicItem: featureMatchGraphicItemDefinitionConfigSchema,
 	surfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
 }).strict();
 
-const featureMatchWidgetGroupStackChildLayoutSchema = z.object({
+const featureMatchGraphicGroupStackChildLayoutSchema = z.object({
 	mode: z.literal('stack'),
 	sizing: z.object({
 		mode: z.enum(['fixed', 'content', 'fill']),
@@ -534,39 +541,39 @@ const featureMatchWidgetGroupStackChildLayoutSchema = z.object({
 	alignSelf: z.enum(['start', 'center', 'end', 'stretch']).optional(),
 }).strict();
 
-const featureMatchWidgetGroupCanvasChildLayoutSchema = featureMatchOverlayRectSchema.extend({
+const featureMatchGraphicGroupCanvasChildLayoutSchema = featureMatchOverlayRectSchema.extend({
 	mode: z.literal('canvas'),
 	anchor: featureMatchOverlayAnchorValueSchema.optional(),
 }).strict();
 
-const featureMatchWidgetGroupChildBaseShape = {
+const featureMatchGraphicGroupChildBaseShape = {
 	id: z.string().min(1).max(100),
 	label: z.string().min(1).max(100),
 	visible: z.boolean(),
 	layout: z.discriminatedUnion('mode', [
-		featureMatchWidgetGroupStackChildLayoutSchema,
-		featureMatchWidgetGroupCanvasChildLayoutSchema,
+		featureMatchGraphicGroupStackChildLayoutSchema,
+		featureMatchGraphicGroupCanvasChildLayoutSchema,
 	]),
 } as const;
 
-const featureMatchWidgetGroupWidgetChildConfigSchema = z.object({
-	...featureMatchWidgetGroupChildBaseShape,
-	type: z.literal('widget'),
-	widget: featureMatchWidgetConfigSchema,
+const featureMatchGraphicGroupGraphicItemChildConfigSchema = z.object({
+	...featureMatchGraphicGroupChildBaseShape,
+	type: z.literal('graphic-item'),
+	graphicItem: featureMatchGraphicGroupGraphicItemDefinitionConfigSchema,
 	surfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
 }).strict();
 
-const featureMatchWidgetGroupMediaChildConfigSchema = z.object({
-	...featureMatchWidgetGroupChildBaseShape,
+const featureMatchGraphicGroupMediaChildConfigSchema = z.object({
+	...featureMatchGraphicGroupChildBaseShape,
 	...featureMatchMediaGraphicItemContentShape,
 }).strict();
 
-const featureMatchWidgetGroupChildConfigSchema = z.discriminatedUnion('type', [
-	featureMatchWidgetGroupWidgetChildConfigSchema,
-	featureMatchWidgetGroupMediaChildConfigSchema,
+const featureMatchGraphicGroupChildConfigSchema = z.discriminatedUnion('type', [
+	featureMatchGraphicGroupGraphicItemChildConfigSchema,
+	featureMatchGraphicGroupMediaChildConfigSchema,
 ]);
 
-const featureMatchWidgetGroupArrangementSchema = z.discriminatedUnion('mode', [
+const featureMatchGraphicGroupArrangementSchema = z.discriminatedUnion('mode', [
 	z.object({
 		mode: z.enum(['row', 'column']),
 		padding: nonNegativePixelSchema.optional(),
@@ -580,20 +587,20 @@ const featureMatchWidgetGroupArrangementSchema = z.discriminatedUnion('mode', [
 	}).strict(),
 ]);
 
-const featureMatchWidgetGroupItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
-	type: z.literal('widget-group'),
+const featureMatchGraphicGroupItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
+	type: z.literal('graphic-group'),
 	surfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
-	arrangement: featureMatchWidgetGroupArrangementSchema,
+	arrangement: featureMatchGraphicGroupArrangementSchema,
 	defaultChildSurfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
 	overflow: z.enum(['clip', 'visible']).optional(),
-	children: z.array(featureMatchWidgetGroupChildConfigSchema).max(50),
+	children: z.array(featureMatchGraphicGroupChildConfigSchema).max(50),
 }).strict();
 
 const featureMatchLayoutItemConfigSchema = z.discriminatedUnion('type', [
 	featureMatchSourceItemConfigSchema,
 	featureMatchMediaGraphicItemConfigSchema,
-	featureMatchWidgetItemConfigSchema,
-	featureMatchWidgetGroupItemConfigSchema,
+	featureMatchSpecificGraphicItemConfigSchema,
+	featureMatchGraphicGroupItemConfigSchema,
 ]);
 
 export const featureMatchOverlayModeConfigSchema = z.object({

@@ -291,7 +291,7 @@ async function transferGraphicAsset(
 ) {
 	let completed: GraphicsIngestionOperation;
 	if (file.size > GRAPHICS_MULTIPART_PART_BYTES) {
-		completed = await transferMultipartImage(operation, file);
+		completed = await transferMultipartGraphicAsset(operation, file);
 	}
 	else {
 		const response = await observeOperationRequest(
@@ -469,7 +469,7 @@ function observeNewerOperation(operation: GraphicsIngestionOperation) {
 	}
 }
 
-async function transferMultipartImage(
+async function transferMultipartGraphicAsset(
 	operation: GraphicsIngestionOperation,
 	file: File,
 ) {
@@ -600,7 +600,7 @@ async function retryOperation() {
 					'Reselect the same source file to resume from the verified multipart checkpoint.',
 				);
 			}
-			currentOperation.value = await transferMultipartImage(operation, file);
+			currentOperation.value = await transferMultipartGraphicAsset(operation, file);
 			await refreshAfterTerminalOperation();
 			return;
 		}

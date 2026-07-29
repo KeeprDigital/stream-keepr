@@ -2,7 +2,12 @@ import type { CSSProperties } from 'vue';
 import type { PlayerSide } from '~~/shared/types/enums';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
-	FeatureMatchGameWinsWidgetConfig,
+	FeatureMatchGameWinsGraphicItemConfig,
+	FeatureMatchGraphicGroupChildConfig,
+	FeatureMatchGraphicGroupGraphicItemChildConfig,
+	FeatureMatchGraphicGroupItemConfig,
+	FeatureMatchGraphicGroupMediaChildConfig,
+	FeatureMatchGraphicItemDefinitionConfig,
 	FeatureMatchLayoutItemConfig,
 	FeatureMatchMediaGraphicItemConfig,
 	FeatureMatchOverlayBoxStyle,
@@ -11,12 +16,7 @@ import type {
 	FeatureMatchOverlayRect,
 	FeatureMatchOverlayTokenStyleMap,
 	FeatureMatchSourceItemConfig,
-	FeatureMatchWidgetConfig,
-	FeatureMatchWidgetGroupChildConfig,
-	FeatureMatchWidgetGroupItemConfig,
-	FeatureMatchWidgetGroupMediaChildConfig,
-	FeatureMatchWidgetGroupWidgetChildConfig,
-	FeatureMatchWidgetItemConfig,
+	FeatureMatchSpecificGraphicItemConfig,
 } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayTemplateMetadataInput } from '~/utils/featureMatchOverlayTemplateValues';
 import { resolveFeatureMatchOverlayFontSelection } from '~~/shared/featureMatchOverlayFonts';
@@ -84,7 +84,7 @@ export interface FeatureMatchOverlaySourceItemRenderModel {
 }
 
 export interface FeatureMatchOverlayMediaGraphicItemRenderModel<
-	T extends FeatureMatchMediaGraphicItemConfig | FeatureMatchWidgetGroupMediaChildConfig = FeatureMatchMediaGraphicItemConfig | FeatureMatchWidgetGroupMediaChildConfig,
+	T extends FeatureMatchMediaGraphicItemConfig | FeatureMatchGraphicGroupMediaChildConfig = FeatureMatchMediaGraphicItemConfig | FeatureMatchGraphicGroupMediaChildConfig,
 > {
 	item: T;
 	style: CSSProperties;
@@ -93,79 +93,79 @@ export interface FeatureMatchOverlayMediaGraphicItemRenderModel<
 }
 
 /**
- * Fully-resolved render content for one Feature Match Overlay Widget. The
+ * Fully-resolved render content for one Feature Match Overlay GraphicItem. The
  * renderer component dispatches on `type` and needs no access to the render
  * model, match data, or style helpers — everything it draws is here.
  */
-export type FeatureMatchOverlayWidgetRender
+export type FeatureMatchOverlayGraphicItemRender
 	= | { type: 'text'; lines: ReturnType<typeof renderFeatureMatchOverlayTemplateLines>; deckColors: string }
 		| { type: 'image'; src: string; alt: string; imageStyle: CSSProperties }
 		| { type: 'clock'; displayTime: string }
 		| {
 			type: 'player-life';
 			lifeTotal: number | null | undefined;
-			animation: Extract<FeatureMatchWidgetConfig, { type: 'player-life' }>['lifeAnimation'];
-			durationMs: Extract<FeatureMatchWidgetConfig, { type: 'player-life' }>['lifeAnimationDurationMs'];
-			accentColor: Extract<FeatureMatchWidgetConfig, { type: 'player-life' }>['lifeAnimationAccentColor'];
+			animation: Extract<FeatureMatchGraphicItemDefinitionConfig, { type: 'player-life' }>['lifeAnimation'];
+			durationMs: Extract<FeatureMatchGraphicItemDefinitionConfig, { type: 'player-life' }>['lifeAnimationDurationMs'];
+			accentColor: Extract<FeatureMatchGraphicItemDefinitionConfig, { type: 'player-life' }>['lifeAnimationAccentColor'];
 		}
 		| {
 			type: 'game-wins';
 			boxes: boolean[];
 			wins: number;
-			displayMode: NonNullable<FeatureMatchGameWinsWidgetConfig['displayMode']>;
+			displayMode: NonNullable<FeatureMatchGameWinsGraphicItemConfig['displayMode']>;
 			containerStyle: CSSProperties;
 			boxStyles: { won: Record<string, string | number | undefined>; lost: Record<string, string | number | undefined> };
 		};
 
-export interface FeatureMatchOverlayWidgetRenderDescriptor {
+export interface FeatureMatchOverlayGraphicItemRenderDescriptor {
 	id: string;
 	label: string;
-	widget: FeatureMatchWidgetConfig;
+	graphicItem: FeatureMatchGraphicItemDefinitionConfig;
 	style: CSSProperties;
 	surfaceStyle?: FeatureMatchOverlayBoxStyle;
-	render: FeatureMatchOverlayWidgetRender;
+	render: FeatureMatchOverlayGraphicItemRender;
 }
 
-export interface FeatureMatchOverlayWidgetItemRenderModel extends FeatureMatchOverlayWidgetRenderDescriptor {
-	item: FeatureMatchWidgetItemConfig;
+export interface FeatureMatchOverlayGraphicItemItemRenderModel extends FeatureMatchOverlayGraphicItemRenderDescriptor {
+	item: FeatureMatchSpecificGraphicItemConfig;
 }
 
-export type FeatureMatchOverlayWidgetGroupChildRenderModel
-	= | ({ kind: 'widget'; child: FeatureMatchWidgetGroupWidgetChildConfig } & FeatureMatchOverlayWidgetRenderDescriptor)
+export type FeatureMatchOverlayGraphicItemGroupChildRenderModel
+	= | ({ kind: 'graphic-item'; child: FeatureMatchGraphicGroupGraphicItemChildConfig } & FeatureMatchOverlayGraphicItemRenderDescriptor)
 		| ({
 			kind: 'media';
 			id: string;
 			label: string;
-			child: FeatureMatchWidgetGroupMediaChildConfig;
-		} & FeatureMatchOverlayMediaGraphicItemRenderModel<FeatureMatchWidgetGroupMediaChildConfig>);
+			child: FeatureMatchGraphicGroupMediaChildConfig;
+		} & FeatureMatchOverlayMediaGraphicItemRenderModel<FeatureMatchGraphicGroupMediaChildConfig>);
 
 /**
- * The Widget Group's rendering split into its stacked layers: a purely
+ * The Graphic Group's rendering split into its stacked layers: a purely
  * positional shell, the background backdrop beneath the children, the
  * clipping children layer, and the border/glow frame on top.
  */
-export interface FeatureMatchOverlayWidgetGroupLayers {
+export interface FeatureMatchOverlayGraphicItemGroupLayers {
 	shell: CSSProperties;
 	backdrop: CSSProperties;
 	children: CSSProperties;
 	frame: CSSProperties;
 }
 
-export interface FeatureMatchOverlayWidgetGroupRenderModel {
-	item: FeatureMatchWidgetGroupItemConfig;
-	layers: FeatureMatchOverlayWidgetGroupLayers;
-	children: FeatureMatchOverlayWidgetGroupChildRenderModel[];
+export interface FeatureMatchOverlayGraphicItemGroupRenderModel {
+	item: FeatureMatchGraphicGroupItemConfig;
+	layers: FeatureMatchOverlayGraphicItemGroupLayers;
+	children: FeatureMatchOverlayGraphicItemGroupChildRenderModel[];
 }
 
-export interface FeatureMatchOverlayWidgetHelpers {
+export interface FeatureMatchOverlayGraphicItemHelpers {
 	displayTime: string;
 	playerState: (side: PlayerSide) => FeatureMatchOverlayMatchStateData['player1'];
 	deckColors: (side: PlayerSide) => string;
 	renderTemplateLinesForSide: (template: string, side: PlayerSide, tokenStyles?: FeatureMatchOverlayTokenStyleMap, spacerWidth?: number) => ReturnType<typeof renderFeatureMatchOverlayTemplateLines>;
-	gameWinCount: (widget: FeatureMatchGameWinsWidgetConfig) => number;
-	gameWinBoxes: (widget: FeatureMatchGameWinsWidgetConfig) => boolean[];
-	gameWinBoxStyle: (widget: FeatureMatchGameWinsWidgetConfig, style: FeatureMatchOverlayBoxStyle | undefined, won: boolean) => Record<string, string | number | undefined>;
-	gameWinsContainerStyle: (widget: FeatureMatchGameWinsWidgetConfig, style: FeatureMatchOverlayBoxStyle | undefined) => CSSProperties;
+	gameWinCount: (graphicItem: FeatureMatchGameWinsGraphicItemConfig) => number;
+	gameWinBoxes: (graphicItem: FeatureMatchGameWinsGraphicItemConfig) => boolean[];
+	gameWinBoxStyle: (graphicItem: FeatureMatchGameWinsGraphicItemConfig, style: FeatureMatchOverlayBoxStyle | undefined, won: boolean) => Record<string, string | number | undefined>;
+	gameWinsContainerStyle: (graphicItem: FeatureMatchGameWinsGraphicItemConfig, style: FeatureMatchOverlayBoxStyle | undefined) => CSSProperties;
 }
 
 export interface FeatureMatchOverlayRenderModel {
@@ -174,14 +174,14 @@ export interface FeatureMatchOverlayRenderModel {
 	layoutItems: FeatureMatchOverlayLayoutItemRenderModel[];
 	sourceItems: FeatureMatchOverlaySourceItemRenderModel[];
 	mediaItems: FeatureMatchOverlayMediaGraphicItemRenderModel<FeatureMatchMediaGraphicItemConfig>[];
-	widgetItems: FeatureMatchOverlayWidgetItemRenderModel[];
-	widgetGroups: FeatureMatchOverlayWidgetGroupRenderModel[];
+	graphicItemItems: FeatureMatchOverlayGraphicItemItemRenderModel[];
+	graphicItemGroups: FeatureMatchOverlayGraphicItemGroupRenderModel[];
 	sourceCutouts: Array<{ id: string; path: string }>;
 	frame: FeatureMatchOverlayFrameRenderModel;
-	widgets: FeatureMatchOverlayWidgetHelpers;
+	graphicItems: FeatureMatchOverlayGraphicItemHelpers;
 	rectStyle: (rect: FeatureMatchOverlayRect) => CSSProperties;
 	itemStyle: (item: FeatureMatchLayoutItemConfig) => CSSProperties;
-	widgetStyle: (rect: FeatureMatchOverlayRect, style?: FeatureMatchOverlayBoxStyle) => CSSProperties;
+	graphicItemStyle: (rect: FeatureMatchOverlayRect, style?: FeatureMatchOverlayBoxStyle) => CSSProperties;
 	imageStyle: (
 		rect: FeatureMatchOverlayRect,
 		media: { fit: 'contain' | 'cover' | 'fill'; opacity: number; borderRadius: number },
@@ -192,8 +192,8 @@ export interface FeatureMatchOverlayRenderModel {
 export type FeatureMatchOverlayLayoutItemRenderModel
 	= | ({ kind: 'source' } & FeatureMatchOverlaySourceItemRenderModel)
 		| ({ kind: 'media' } & FeatureMatchOverlayMediaGraphicItemRenderModel)
-		| ({ kind: 'widget' } & FeatureMatchOverlayWidgetItemRenderModel)
-		| ({ kind: 'group'; style: CSSProperties } & FeatureMatchOverlayWidgetGroupRenderModel);
+		| ({ kind: 'graphic-item' } & FeatureMatchOverlayGraphicItemItemRenderModel)
+		| ({ kind: 'group'; style: CSSProperties } & FeatureMatchOverlayGraphicItemGroupRenderModel);
 
 function rectStyle(rect: FeatureMatchOverlayRect): CSSProperties {
 	return { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` };
@@ -333,7 +333,7 @@ function clampSize(value: number, min = 0, max?: number) {
 	return Math.max(min, max == null ? value : Math.min(value, max));
 }
 
-function stackChildBaseSize(child: FeatureMatchWidgetGroupChildConfig) {
+function stackChildBaseSize(child: FeatureMatchGraphicGroupChildConfig) {
 	if (child.layout.mode !== 'stack')
 		return 0;
 	const sizing = child.layout.sizing;
@@ -344,7 +344,7 @@ function stackChildBaseSize(child: FeatureMatchWidgetGroupChildConfig) {
 	return sizing.min ?? 0;
 }
 
-function stackChildRects(children: FeatureMatchWidgetGroupChildConfig[], group: FeatureMatchWidgetGroupItemConfig) {
+function stackChildRects(children: FeatureMatchGraphicGroupChildConfig[], group: FeatureMatchGraphicGroupItemConfig) {
 	const padding = group.arrangement.padding ?? 0;
 	const stack = group.arrangement.mode === 'row' || group.arrangement.mode === 'column'
 		? group.arrangement
@@ -419,7 +419,7 @@ function stackChildRects(children: FeatureMatchWidgetGroupChildConfig[], group: 
 	return rects;
 }
 
-function childRect(child: FeatureMatchWidgetGroupChildConfig, index: number, group: FeatureMatchWidgetGroupItemConfig, visibleChildren = group.children): FeatureMatchOverlayRect {
+function childRect(child: FeatureMatchGraphicGroupChildConfig, index: number, group: FeatureMatchGraphicGroupItemConfig, visibleChildren = group.children): FeatureMatchOverlayRect {
 	if (child.layout.mode === 'canvas') {
 		return {
 			x: child.layout.x,
@@ -437,7 +437,7 @@ function childRect(child: FeatureMatchWidgetGroupChildConfig, index: number, gro
 	};
 }
 
-function groupChildDefaultSurfaceStyle(group: FeatureMatchWidgetGroupItemConfig) {
+function groupChildDefaultSurfaceStyle(group: FeatureMatchGraphicGroupItemConfig) {
 	return group.defaultChildSurfaceStyle ?? {};
 }
 
@@ -449,8 +449,8 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 	const visibleItems = config.layout.items.filter(item => item.visible);
 	const sourceItems = visibleItems.filter((item): item is FeatureMatchSourceItemConfig => item.type === 'source');
 	const mediaItems = visibleItems.filter((item): item is FeatureMatchMediaGraphicItemConfig => item.type === 'media');
-	const widgetItems = visibleItems.filter((item): item is FeatureMatchWidgetItemConfig => item.type === 'widget');
-	const widgetGroups = visibleItems.filter((item): item is FeatureMatchWidgetGroupItemConfig => item.type === 'widget-group');
+	const graphicItemItems = visibleItems.filter((item): item is FeatureMatchSpecificGraphicItemConfig => item.type === 'graphic-item');
+	const graphicItemGroups = visibleItems.filter((item): item is FeatureMatchGraphicGroupItemConfig => item.type === 'graphic-group');
 
 	function itemStyle(item: FeatureMatchLayoutItemConfig): CSSProperties {
 		return {
@@ -463,7 +463,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		};
 	}
 
-	function widgetStyle(rect: FeatureMatchOverlayRect, style?: FeatureMatchOverlayBoxStyle): CSSProperties {
+	function graphicItemStyle(rect: FeatureMatchOverlayRect, style?: FeatureMatchOverlayBoxStyle): CSSProperties {
 		return {
 			...baseBoxStyle(output, rect, style),
 			display: 'flex',
@@ -536,22 +536,22 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		return renderFeatureMatchOverlayTemplateLines(template, templateValuesForSide(side, deckColors(side)), tokenStyles, { spacerWidth });
 	}
 
-	function gameWinCount(widget: FeatureMatchGameWinsWidgetConfig) {
-		const wins = playerState(widget.playerSide)?.gameWins ?? 0;
+	function gameWinCount(graphicItem: FeatureMatchGameWinsGraphicItemConfig) {
+		const wins = playerState(graphicItem.playerSide)?.gameWins ?? 0;
 		return Number.isFinite(wins) ? Math.max(0, Math.floor(wins)) : 0;
 	}
 
-	function gameWinBoxes(widget: FeatureMatchGameWinsWidgetConfig) {
-		const wins = gameWinCount(widget);
+	function gameWinBoxes(graphicItem: FeatureMatchGameWinsGraphicItemConfig) {
+		const wins = gameWinCount(graphicItem);
 		const bestOf = input.featureMatch?.activeSession?.sourceSnapshot?.bestOf ?? input.featureMatch?.bestOf ?? 3;
 		return Array.from({ length: Math.ceil(bestOf / 2) }, (_, index) => index < wins);
 	}
 
-	function gameWinBoxStyle(widget: FeatureMatchGameWinsWidgetConfig, style: FeatureMatchOverlayBoxStyle | undefined, won: boolean): Record<string, string | number | undefined> {
-		const borderWidth = widget.boxBorderWidth ?? style?.borderWidth ?? 2;
+	function gameWinBoxStyle(graphicItem: FeatureMatchGameWinsGraphicItemConfig, style: FeatureMatchOverlayBoxStyle | undefined, won: boolean): Record<string, string | number | undefined> {
+		const borderWidth = graphicItem.boxBorderWidth ?? style?.borderWidth ?? 2;
 		return {
-			width: `${widget.boxWidth ?? 22}px`,
-			height: `${widget.boxHeight ?? 22}px`,
+			width: `${graphicItem.boxWidth ?? 22}px`,
+			height: `${graphicItem.boxHeight ?? 22}px`,
 			background: won ? (output === 'key' ? '#fff' : (style?.backgroundColor ?? '#22c55e')) : 'transparent',
 			border: `${borderWidth}px solid ${output === 'key' ? '#fff' : (style?.borderColor ?? style?.textColor ?? '#fff')}`,
 			borderRadius: featureMatchOverlayBorderRadiusCss(style ?? {}),
@@ -571,59 +571,59 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		};
 	}
 
-	function gameWinsContainerStyle(widget: FeatureMatchGameWinsWidgetConfig, style: FeatureMatchOverlayBoxStyle | undefined): CSSProperties {
+	function gameWinsContainerStyle(graphicItem: FeatureMatchGameWinsGraphicItemConfig, style: FeatureMatchOverlayBoxStyle | undefined): CSSProperties {
 		return {
-			'--game-win-gap': `${widget.boxGap ?? style?.padding ?? 6}px`,
-			'--game-win-direction': (widget.boxOrientation ?? 'horizontal') === 'vertical' ? 'column' : 'row',
+			'--game-win-gap': `${graphicItem.boxGap ?? style?.padding ?? 6}px`,
+			'--game-win-direction': (graphicItem.boxOrientation ?? 'horizontal') === 'vertical' ? 'column' : 'row',
 		};
 	}
 
-	function widgetRender(
-		widget: FeatureMatchWidgetConfig,
+	function graphicItemRender(
+		graphicItem: FeatureMatchGraphicItemDefinitionConfig,
 		label: string,
 		rect: FeatureMatchOverlayRect,
 		surfaceStyle: FeatureMatchOverlayBoxStyle | undefined,
-	): FeatureMatchOverlayWidgetRender {
-		switch (widget.type) {
+	): FeatureMatchOverlayGraphicItemRender {
+		switch (graphicItem.type) {
 			case 'text':
 				return {
 					type: 'text',
-					lines: renderTemplateLinesForSide(widget.template, widget.playerSide ?? 'player1', widget.tokenStyles, widget.spacerWidth),
-					deckColors: deckColors(widget.playerSide ?? 'player1'),
+					lines: renderTemplateLinesForSide(graphicItem.template, graphicItem.playerSide ?? 'player1', graphicItem.tokenStyles, graphicItem.spacerWidth),
+					deckColors: deckColors(graphicItem.playerSide ?? 'player1'),
 				};
 			case 'image':
 				return {
 					type: 'image',
-					src: widget.asset ? resolveGraphicAssetContentPath(widget.asset) : '',
+					src: graphicItem.asset ? resolveGraphicAssetContentPath(graphicItem.asset) : '',
 					alt: label,
-					imageStyle: imageStyleFor({ x: 0, y: 0, width: rect.width, height: rect.height }, widget),
+					imageStyle: imageStyleFor({ x: 0, y: 0, width: rect.width, height: rect.height }, graphicItem),
 				};
 			case 'clock':
 				return { type: 'clock', displayTime };
 			case 'player-life':
 				return {
 					type: 'player-life',
-					lifeTotal: playerState(widget.playerSide)?.lifeTotal,
-					animation: widget.lifeAnimation,
-					durationMs: widget.lifeAnimationDurationMs,
-					accentColor: widget.lifeAnimationAccentColor,
+					lifeTotal: playerState(graphicItem.playerSide)?.lifeTotal,
+					animation: graphicItem.lifeAnimation,
+					durationMs: graphicItem.lifeAnimationDurationMs,
+					accentColor: graphicItem.lifeAnimationAccentColor,
 				};
 			case 'game-wins':
 				return {
 					type: 'game-wins',
-					boxes: gameWinBoxes(widget),
-					wins: gameWinCount(widget),
-					displayMode: widget.displayMode ?? 'boxes',
-					containerStyle: gameWinsContainerStyle(widget, surfaceStyle),
+					boxes: gameWinBoxes(graphicItem),
+					wins: gameWinCount(graphicItem),
+					displayMode: graphicItem.displayMode ?? 'boxes',
+					containerStyle: gameWinsContainerStyle(graphicItem, surfaceStyle),
 					boxStyles: {
-						won: gameWinBoxStyle(widget, surfaceStyle, true),
-						lost: gameWinBoxStyle(widget, surfaceStyle, false),
+						won: gameWinBoxStyle(graphicItem, surfaceStyle, true),
+						lost: gameWinBoxStyle(graphicItem, surfaceStyle, false),
 					},
 				};
 		}
 	}
 
-	function mediaRender<T extends FeatureMatchMediaGraphicItemConfig | FeatureMatchWidgetGroupMediaChildConfig>(
+	function mediaRender<T extends FeatureMatchMediaGraphicItemConfig | FeatureMatchGraphicGroupMediaChildConfig>(
 		item: T,
 		rect: FeatureMatchOverlayRect,
 		style: CSSProperties,
@@ -644,7 +644,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		};
 	}
 
-	function groupLayers(group: FeatureMatchWidgetGroupItemConfig): FeatureMatchOverlayWidgetGroupLayers {
+	function groupLayers(group: FeatureMatchGraphicGroupItemConfig): FeatureMatchOverlayGraphicItemGroupLayers {
 		const surfaceStyle = group.surfaceStyle;
 		const borderRadius = featureMatchOverlayBorderRadiusCss(surfaceStyle ?? {});
 		const gradient = output !== 'key' ? surfaceStyle?.backgroundGradient?.trim() : undefined;
@@ -701,16 +701,16 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		cutoutPath: item.frameCutout ? roundedRectPath(featureMatchOverlaySourceCutoutRect(item)) || null : null,
 	}));
 	const renderedMediaItems = mediaItems.map(item => mediaRender(item, item, itemStyle(item)));
-	const renderedWidgetItems = widgetItems.map(item => ({
+	const renderedGraphicItemItems = graphicItemItems.map(item => ({
 		id: item.id,
 		label: item.label,
 		item,
-		widget: item.widget,
+		graphicItem: item.graphicItem,
 		surfaceStyle: item.surfaceStyle,
-		style: widgetStyle(item, item.surfaceStyle),
-		render: widgetRender(item.widget, item.label, item, item.surfaceStyle),
+		style: graphicItemStyle(item, item.surfaceStyle),
+		render: graphicItemRender(item.graphicItem, item.label, item, item.surfaceStyle),
 	}));
-	const renderedWidgetGroups = widgetGroups.map(group => ({
+	const renderedGraphicItemGroups = graphicItemGroups.map(group => ({
 		item: group,
 		layers: groupLayers(group),
 		children: group.children
@@ -730,32 +730,32 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 					};
 				}
 				const surfaceStyle = { ...groupChildDefaultSurfaceStyle(group), ...(child.surfaceStyle ?? {}) };
-				const style = widgetStyle(rect, surfaceStyle);
+				const style = graphicItemStyle(rect, surfaceStyle);
 				return {
-					kind: 'widget' as const,
+					kind: 'graphic-item' as const,
 					id: child.id,
 					label: child.label,
 					child,
-					widget: child.widget,
+					graphicItem: child.graphicItem,
 					surfaceStyle,
 					style,
-					render: widgetRender(child.widget, child.label, rect, surfaceStyle),
+					render: graphicItemRender(child.graphicItem, child.label, rect, surfaceStyle),
 				};
 			}),
 	}));
 	const sourceById = new Map(renderedSourceItems.map(item => [item.item.id, item]));
 	const mediaById = new Map(renderedMediaItems.map(item => [item.item.id, item]));
-	const widgetById = new Map(renderedWidgetItems.map(item => [item.item.id, item]));
-	const groupById = new Map(renderedWidgetGroups.map(item => [item.item.id, item]));
+	const graphicItemById = new Map(renderedGraphicItemItems.map(item => [item.item.id, item]));
+	const groupById = new Map(renderedGraphicItemGroups.map(item => [item.item.id, item]));
 	const layoutItems: FeatureMatchOverlayLayoutItemRenderModel[] = visibleItems.map((item) => {
 		switch (item.type) {
 			case 'source':
 				return { kind: 'source', ...sourceById.get(item.id)! };
 			case 'media':
 				return { kind: 'media', ...mediaById.get(item.id)! };
-			case 'widget':
-				return { kind: 'widget', ...widgetById.get(item.id)! };
-			case 'widget-group': {
+			case 'graphic-item':
+				return { kind: 'graphic-item', ...graphicItemById.get(item.id)! };
+			case 'graphic-group': {
 				const group = groupById.get(item.id)!;
 				return { kind: 'group', ...group, style: group.layers.shell };
 			}
@@ -775,8 +775,8 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		layoutItems,
 		sourceItems: renderedSourceItems,
 		mediaItems: renderedMediaItems,
-		widgetItems: renderedWidgetItems,
-		widgetGroups: renderedWidgetGroups,
+		graphicItemItems: renderedGraphicItemItems,
+		graphicItemGroups: renderedGraphicItemGroups,
 		sourceCutouts: renderedSourceItems
 			.filter(source => source.cutoutPath)
 			.map(source => ({ id: source.item.id, path: source.cutoutPath! })),
@@ -787,7 +787,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 			fill: output === 'key' ? '#fff' : svgFillColor(config.layout.frame.backgroundColor),
 			opacity: config.layout.frame.opacity,
 		},
-		widgets: {
+		graphicItems: {
 			displayTime,
 			playerState,
 			deckColors,
@@ -799,7 +799,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		},
 		rectStyle,
 		itemStyle,
-		widgetStyle,
+		graphicItemStyle,
 		imageStyle: imageStyleFor,
 		borderSideEnabled,
 	};
