@@ -15,6 +15,7 @@ vi.stubGlobal('createError', (opts: any) => {
 	return err;
 });
 
+const { commandFingerprint } = await import('~~/server/modules/live-state');
 const { applyFeatureMatchSessionEvent, featureMatchStateService } = await import('~~/server/services/featureMatchState');
 
 function createSnapshot(overrides: Partial<FeatureMatchSourceSnapshot> = {}): FeatureMatchSourceSnapshot {
@@ -391,7 +392,7 @@ describe('feature match session state service', () => {
 		}));
 	});
 
-	it('creates a session, records the SessionStarted event, and activates the slot', async () => {
+	it('creates a session, discards the closed sessions\' receipts, and activates the slot', async () => {
 		const slot = createSlot({ id: 7, tableNumber: 3 });
 		const inserted = createDbSession({ id: 30, slotId: 7, sequence: 1 });
 		mockDb.query.featureMatches.findFirst.mockResolvedValue(slot);
@@ -408,15 +409,15 @@ describe('feature match session state service', () => {
 			slotId: 7,
 			sequence: 1,
 		}));
-		expect(getChain('insert').select).toHaveBeenCalledOnce();
+		expect(getChain('delete').where).toHaveBeenCalledOnce();
 		expect(mockDb.batch).toHaveBeenCalledOnce();
 		expect(mockDb.batch.mock.calls[0]?.[0]).toHaveLength(4);
 	});
 
 	it('rejects reuse of a command ID for a different command', async () => {
-		mockDb.query.featureMatchSessionEvents.findFirst.mockResolvedValue({
-			type: 'SetLife',
-			payload: { player: 'player1', lifeTotal: 10 },
+		mockDb.query.liveStateCommandReceipts.findFirst.mockResolvedValue({
+			commandType: 'SetLife',
+			fingerprint: commandFingerprint('SetLife', { player: 'player1', lifeTotal: 10 }),
 		});
 
 		await expect(featureMatchStateService().applyCommand(10, 1, {
@@ -432,11 +433,11 @@ describe('feature match session state service', () => {
 		expect(mockDb.query.featureMatchSessions.findFirst).not.toHaveBeenCalled();
 	});
 
-	it('treats a retried clock command as identical despite its persisted timestamp', async () => {
+	it('treats a retried clock command as identical despite the timestamp reduction stamps on it', async () => {
 		const latest = createDbSession();
-		mockDb.query.featureMatchSessionEvents.findFirst.mockResolvedValue({
-			type: 'StartClock',
-			payload: { at: 1234 },
+		mockDb.query.liveStateCommandReceipts.findFirst.mockResolvedValue({
+			commandType: 'StartClock',
+			fingerprint: commandFingerprint('StartClock', {}),
 		});
 		mockDb.query.featureMatchSessions.findFirst.mockResolvedValue(latest);
 

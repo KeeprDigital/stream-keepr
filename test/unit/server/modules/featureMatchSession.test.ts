@@ -63,7 +63,7 @@ describe('feature Match Session server module', () => {
 		const response = await featureMatchSessionModule().createSessionForSlot(2, 1, 'origin-1');
 
 		expect(response).toMatchObject({ id: 10, sequence: 1, sourceSnapshot: snapshot, currentState });
-		expect(mockCreateSessionForSlot).toHaveBeenCalledWith(2, 1, undefined, 'origin-1');
+		expect(mockCreateSessionForSlot).toHaveBeenCalledWith(2, 1);
 		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatchSession:eventApplied', {
 			slotId: 2,
 			sessionId: 10,
@@ -74,7 +74,7 @@ describe('feature Match Session server module', () => {
 		}, 'origin-1');
 	});
 
-	it('applies a command and publishes the resulting event payload at the module seam', async () => {
+	it('applies a command as a published live-state write at the module seam', async () => {
 		const result = {
 			slotId: 2,
 			sessionId: 10,
@@ -84,7 +84,6 @@ describe('feature Match Session server module', () => {
 			currentState: createInitialFeatureMatchState(),
 			session: {},
 		} as FeatureMatchSessionCommandResult;
-		const payload = { slotId: 2, sessionId: 10, sequence: 2, eventType: 'SetLife' };
 		const command = {
 			commandId: 'command-1',
 			type: 'SetLife' as const,
@@ -92,11 +91,12 @@ describe('feature Match Session server module', () => {
 			baseSequence: 1,
 		};
 		mockApplyCommand.mockResolvedValue(result);
-		mockToEventAppliedPayload.mockReturnValue(payload);
 
 		await expect(featureMatchSessionModule().applyCommand(10, 1, command, 'origin-1')).resolves.toBe(result);
 
-		expect(mockApplyCommand).toHaveBeenCalledWith(10, 1, command, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatchSession:eventApplied', payload, 'origin-1');
+		// Publication is the shared live-state module's post-commit phase; the route
+		// seam only asks for it.
+		expect(mockApplyCommand).toHaveBeenCalledWith(10, 1, command, 'origin-1', { publish: true });
+		expect(mockPublishMessage).not.toHaveBeenCalled();
 	});
 });

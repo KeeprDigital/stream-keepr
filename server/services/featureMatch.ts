@@ -5,8 +5,8 @@ import type { ExternalSource } from '~~/shared/types/enums';
 import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { events, featureMatches, featureMatchSessionEvents, featureMatchSessions, matches } from '~~/server/db/schema';
-import { featureMatchStateService } from '~~/server/services/featureMatchState';
+import { events, featureMatches, featureMatchSessions, liveStateCommandReceipts, matches } from '~~/server/db/schema';
+import { FEATURE_MATCH_SESSION_AGGREGATE_KIND, featureMatchStateService } from '~~/server/services/featureMatchState';
 import { chunkJsonRows } from '~~/server/utils/db';
 import { pickManualWritable } from '~~/server/utils/provenance';
 import { createInitialFeatureMatchSessionStateFromSnapshot } from '~~/shared/modules/feature-match-session';
@@ -77,8 +77,6 @@ export async function buildClearImportedMatchDataQueries(
 			slotId: slot.id,
 			sourceSnapshot,
 			currentState,
-			eventPayload: { sourceSnapshot, currentState },
-			commandId: randomCommandId('SessionStarted'),
 		};
 	}));
 	const payloads = chunkJsonRows(sessionRows);
@@ -128,32 +126,23 @@ export async function buildClearImportedMatchDataQueries(
 			)
 		`));
 
-	const insertStartedEventQueries = payloads.map(payload => db
-		.insert(featureMatchSessionEvents)
-		.select(sql`
-			select
-				null,
-				${eventId},
-				cast(json_extract(input.value, '$.slotId') as integer),
-				active_session.id,
-				1,
-				'SessionStarted',
-				json_extract(input.value, '$.eventPayload'),
-				json_extract(input.value, '$.commandId'),
-				null,
-				${resetAtMs}
-			from json_each(${payload}) as input
-			inner join ${featureMatchSessions} as active_session
-				on active_session.event_id = ${eventId}
-					and active_session.slot_id = cast(json_extract(input.value, '$.slotId') as integer)
-					and active_session.status = 'active'
-			where cast(json_extract(input.value, '$.slotId') as integer) in (
-				select ${featureMatches.id}
-				from ${featureMatches}
-				where ${featureMatches.eventId} = ${eventId}
-					and ${featureMatches.externalSource} = 'melee'
-			)
-		`));
+	// The Sessions closed above can never accept another command, so their command
+	// receipts have nothing left to protect against.
+	const forgetClosedSessionReceiptQueries = payloads.map(payload => db
+		.delete(liveStateCommandReceipts)
+		.where(and(
+			eq(liveStateCommandReceipts.aggregateKind, FEATURE_MATCH_SESSION_AGGREGATE_KIND),
+			sql`${liveStateCommandReceipts.aggregateId} in (
+				select ${featureMatchSessions.id}
+				from ${featureMatchSessions}
+				where ${featureMatchSessions.eventId} = ${eventId}
+					and ${featureMatchSessions.status} = 'closed'
+					and ${featureMatchSessions.slotId} in (
+						select cast(json_extract(value, '$.slotId') as integer)
+						from json_each(${payload})
+					)
+			)`,
+		)));
 
 	const clearAndRelinkSlotQueries = payloads.map(payload => db
 		.update(featureMatches)
@@ -191,7 +180,7 @@ export async function buildClearImportedMatchDataQueries(
 		queries: [
 			...closeSessionQueries,
 			...insertSessionQueries,
-			...insertStartedEventQueries,
+			...forgetClosedSessionReceiptQueries,
 			...clearAndRelinkSlotQueries,
 		],
 		clearedSlotCount: importedSlots.length,

@@ -7,8 +7,9 @@ import { publishMessage } from '~~/server/utils/ably';
  * Server-side Feature Match Session workflow module.
  *
  * This module is the external seam for route handlers that need session
- * persistence plus realtime publication. The lower-level state service remains
- * the persistence adapter while the shared Feature Match Session module owns
+ * persistence plus realtime publication. The state service supplies the Feature
+ * Match half of the shared sequenced live-state module — which owns sequencing,
+ * receipts, and publication — while the shared Feature Match Session module owns
  * reducer behaviour.
  */
 export function featureMatchSessionModule() {
@@ -19,7 +20,7 @@ export function featureMatchSessionModule() {
 		eventId: number,
 		originConnectionId?: string,
 	) {
-		const session = await stateService.createSessionForSlot(slotId, eventId, undefined, originConnectionId);
+		const session = await stateService.createSessionForSlot(slotId, eventId);
 		if (!session)
 			return null;
 
@@ -42,9 +43,7 @@ export function featureMatchSessionModule() {
 		command: FeatureMatchSessionCommand,
 		originConnectionId?: string,
 	): Promise<FeatureMatchSessionCommandResult> {
-		const result = await stateService.applyCommand(sessionId, eventId, command, originConnectionId);
-		await publishMessage(eventId, 'featureMatchSession:eventApplied', stateService.toEventAppliedPayload(result), originConnectionId);
-		return result;
+		return await stateService.applyCommand(sessionId, eventId, command, originConnectionId, { publish: true });
 	}
 
 	return {
