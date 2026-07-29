@@ -2,6 +2,25 @@ import type { ScreenOutputAssetAuthorizationInput } from '.';
 
 export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
 	return {
+		async authorizeCapability(input: {
+			screenId: number;
+			capabilityDigest: string;
+		}) {
+			const row = await database.prepare(`
+				SELECT 1 AS authorized
+				FROM screens
+				WHERE id = ?
+					AND asset_capability_digest = ?
+				LIMIT 1
+			`).bind(
+				input.screenId,
+				input.capabilityDigest,
+			).first<{ authorized: number }>();
+			return row
+				? { outcome: 'authorized' as const }
+				: { outcome: 'missing' as const };
+		},
+
 		async authorize(input: ScreenOutputAssetAuthorizationInput) {
 			const row = await database.prepare(`
 				SELECT revision.content_digest AS contentIdentity

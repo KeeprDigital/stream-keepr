@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { screenOutputAssetDeliveryForEvent } from '~~/server/modules/screen-output-assets/runtime';
+import { screenOutputAssetCapabilityCookieName } from '~~/shared/utils/graphicsAssetReferences';
 
 const paramsSchema = z.object({
 	screenId: z.coerce.number().int().positive(),
@@ -12,8 +13,16 @@ function bearerCapability(value: string | undefined): string | undefined {
 	return match?.[1];
 }
 
+function cookieCapability(value: string | undefined): string | undefined {
+	return /^[\w-]{20,200}$/.test(value ?? '') ? value : undefined;
+}
+
 export default defineEventHandler(async (event) => {
-	const capability = bearerCapability(getRequestHeader(event, 'authorization'));
+	const params = await getValidatedRouterParams(event, paramsSchema.parse);
+	const authorization = getRequestHeader(event, 'authorization');
+	const capability = authorization === undefined
+		? cookieCapability(getCookie(event, screenOutputAssetCapabilityCookieName(params.screenId)))
+		: bearerCapability(authorization);
 	if (!capability) {
 		throw createError({
 			statusCode: 404,
@@ -21,7 +30,6 @@ export default defineEventHandler(async (event) => {
 			message: 'Graphic Asset Revision is not available to this Screen Output',
 		});
 	}
-	const params = await getValidatedRouterParams(event, paramsSchema.parse);
 	const requestHeaders = new Headers();
 	for (const [name, value] of Object.entries(getRequestHeaders(event))) {
 		if (value)

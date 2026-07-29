@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
+import { screenOutputAssetCapabilityCookieName } from '../../shared/utils/graphicsAssetReferences';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 
 const pixelPng = Uint8Array.from(Buffer.from(
@@ -133,6 +134,34 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		expect(new Uint8Array(await range.arrayBuffer())).toEqual(pixelPng.slice(8, 16));
 	});
 
+	it('range-delivers the exact revision when native media sends its path-scoped capability cookie', async () => {
+		const session = await fetch(
+			`/api/screen-output/screens/${screenId}/asset-capability-session`,
+			{ method: 'POST', headers: authorizedHeaders() },
+		);
+		expect(session.status).toBe(204);
+		expect(session.headers.get('cache-control')).toBe('private, no-store');
+		expect(await session.text()).toBe('');
+		const setCookie = session.headers.get('set-cookie');
+		expect(setCookie).toContain(
+			`${screenOutputAssetCapabilityCookieName(screenId)}=${capability}`,
+		);
+		expect(setCookie).toContain(`Path=/api/screen-output/screens/${screenId}/`);
+		expect(setCookie).toContain('HttpOnly');
+		expect(setCookie).toContain('SameSite=Strict');
+		const range = await fetch(contentPath(), {
+			headers: {
+				cookie: setCookie!.split(';', 1)[0]!,
+				range: 'bytes=8-15',
+			},
+		});
+
+		expect(range.status).toBe(206);
+		expect(range.headers.get('content-range')).toBe(`bytes 8-15/${pixelPng.byteLength}`);
+		expect(range.headers.get('vary')).toBe('authorization, cookie');
+		expect(new Uint8Array(await range.arrayBuffer())).toEqual(pixelPng.slice(8, 16));
+	});
+
 	it('denies a removed revision immediately even when its immutable bytes were cached', async () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		await $fetch(
@@ -162,6 +191,16 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		expect(rotation.status).toBe(200);
 		capability = ((await rotation.json()) as { assetCapability: string }).assetCapability;
 		expect(capability).not.toBe(previous);
+
+		const staleSession = await fetch(
+			`/api/screen-output/screens/${screenId}/asset-capability-session`,
+			{
+				method: 'POST',
+				headers: { authorization: `Bearer ${previous}` },
+			},
+		);
+		expect(staleSession.status).toBe(404);
+		expect(staleSession.headers.get('set-cookie')).toBeNull();
 
 		const revoked = await fetch(contentPath(), {
 			headers: { authorization: `Bearer ${previous}` },

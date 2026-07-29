@@ -169,6 +169,18 @@ export function screenOutputGraphicAssetRevisionContentPath(
 	return `/api/screen-output/screens/${screenId}/assets/${encodeURIComponent(reference.assetId)}/revisions/${encodeURIComponent(reference.revisionId)}/content`;
 }
 
+export function screenOutputAssetCapabilityCookieName(screenId: number): string {
+	return `screen-output-asset-capability-${screenId}`;
+}
+
+export function screenOutputAssetCapabilityCookiePath(screenId: number): string {
+	return `/api/screen-output/screens/${screenId}/`;
+}
+
+export function screenOutputAssetCapabilitySessionPath(screenId: number): string {
+	return `${screenOutputAssetCapabilityCookiePath(screenId)}asset-capability-session`;
+}
+
 export function graphicAssetRevisionStatusPath(reference: GraphicAssetReference): string {
 	return `/api/graphics-assets/${encodeURIComponent(reference.assetId)}/revisions/${encodeURIComponent(reference.revisionId)}/status`;
 }
