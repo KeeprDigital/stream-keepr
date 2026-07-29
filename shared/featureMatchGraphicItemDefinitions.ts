@@ -29,9 +29,16 @@ export interface GraphicItemSchemaDependencies {
 	lifeAnimation: ZodTypeAny;
 	gameWinsDisplayMode: ZodTypeAny;
 	gameWinsBoxOrientation: ZodTypeAny;
-	source: () => ZodTypeAny;
-	media: () => ZodTypeAny;
-	graphicGroup: () => ZodTypeAny;
+	opacity: ZodTypeAny;
+	nonNegativePixel: ZodTypeAny;
+	boxStyle: ZodTypeAny;
+	graphicAssetReference: ZodTypeAny;
+	shapeGeometry: ZodTypeAny;
+	groupChildLayout: ZodTypeAny;
+	/** Lazily resolves the union of atomic Graphic Item Definition schemas. */
+	graphicItemConfig: () => ZodTypeAny;
+	/** Lazily resolves the media Definition schema for Graphic Group children. */
+	media: () => import('zod').ZodObject;
 	z: typeof import('zod').z;
 }
 
@@ -121,8 +128,13 @@ const DEFINITIONS = {
 		label: 'Source',
 		icon: 'i-lucide-video',
 		editorControls: ['source-role', 'frame-cutout', 'surface-style'],
-		schema: dependencies =>
-			dependencies.source() as ZodType<FeatureMatchSourceItemContentConfig>,
+		schema: ({ z, boxStyle }) => z.object({
+			type: z.literal('source'),
+			configurationVersion: z.literal(1),
+			sourceRole: z.string().min(1).max(100).optional(),
+			frameCutout: z.boolean(),
+			surfaceStyle: boxStyle.optional(),
+		}).strict() as ZodType<FeatureMatchSourceItemContentConfig>,
 		defaultConfig: () => ({
 			type: 'source',
 			configurationVersion: 1,
@@ -245,8 +257,23 @@ const DEFINITIONS = {
 		label: 'Media',
 		icon: 'i-lucide-image-play',
 		editorControls: ['asset', 'media-kind', 'fit', 'focal-position', 'opacity', 'clip-geometry', 'video-playback'],
-		schema: dependencies =>
-			dependencies.media() as ZodType<FeatureMatchMediaGraphicItemContentConfig>,
+		schema: ({ z, graphicAssetReference, opacity, shapeGeometry, finiteNumber }) => z.object({
+			type: z.literal('media'),
+			configurationVersion: z.literal(1),
+			asset: graphicAssetReference.optional(),
+			mediaKind: z.enum(['image', 'silent-video']),
+			fit: z.enum(['contain', 'cover', 'fill']),
+			focalPosition: z.object({
+				horizontal: opacity,
+				vertical: opacity,
+			}).strict(),
+			opacity,
+			clipGeometry: shapeGeometry.optional(),
+			loop: z.boolean().optional(),
+			playbackRate: finiteNumber.min(0.25).max(4).optional(),
+			videoCompatibility: z.enum(['all-supported', 'chromium-transparency']).optional(),
+			videoTarget: z.enum(['chromium', 'safari']).optional(),
+		}).strict() as ZodType<FeatureMatchMediaGraphicItemContentConfig>,
 		defaultConfig: () => ({
 			type: 'media',
 			configurationVersion: 1,
@@ -274,11 +301,49 @@ const DEFINITIONS = {
 		configurationVersion: 1,
 		placement: 'top-level-only',
 		layoutKind: 'group',
-		label: 'Group',
+		label: 'Graphic Group',
 		icon: 'i-lucide-group',
 		editorControls: ['arrangement', 'overflow', 'surface-style', 'child-defaults', 'children'],
-		schema: dependencies =>
-			dependencies.graphicGroup() as ZodType<FeatureMatchGraphicGroupContentConfig>,
+		schema: ({ z, boxStyle, nonNegativePixel, groupChildLayout, graphicItemConfig, media }) => {
+			const childBase = {
+				id: z.string().min(1).max(100),
+				label: z.string().min(1).max(100),
+				visible: z.boolean(),
+				layout: groupChildLayout,
+			} as const;
+			const graphicItemChild = z.object({
+				...childBase,
+				type: z.literal('graphic-item'),
+				graphicItem: z.lazy(graphicItemConfig),
+				surfaceStyle: boxStyle.optional(),
+			}).strict();
+			const mediaChild = z.lazy(() => z.object({
+				...childBase,
+				...media().shape,
+			}).strict());
+			const arrangement = z.discriminatedUnion('mode', [
+				z.object({
+					mode: z.enum(['row', 'column']),
+					padding: nonNegativePixel.optional(),
+					gap: nonNegativePixel,
+					align: z.enum(['start', 'center', 'end', 'stretch']),
+					justify: z.enum(['start', 'center', 'end', 'space-between']),
+				}).strict(),
+				z.object({
+					mode: z.literal('canvas'),
+					padding: nonNegativePixel.optional(),
+				}).strict(),
+			]);
+			return z.object({
+				type: z.literal('graphic-group'),
+				configurationVersion: z.literal(1),
+				surfaceStyle: boxStyle.optional(),
+				arrangement,
+				defaultChildSurfaceStyle: boxStyle.optional(),
+				overflow: z.enum(['clip', 'visible']).optional(),
+				children: z.array(z.union([graphicItemChild, mediaChild])).max(50),
+			}).strict() as unknown as ZodType<FeatureMatchGraphicGroupContentConfig>;
+		},
 		defaultConfig: () => ({
 			type: 'graphic-group',
 			configurationVersion: 1,

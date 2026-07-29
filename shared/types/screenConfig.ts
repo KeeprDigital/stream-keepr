@@ -1,6 +1,6 @@
 import type { GraphicsVideoTarget } from '../utils/graphicAssetTargetCompatibility';
 import type { CardAnimationSpeed, DeckCardSize, DeckViewMode, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardLayout, StandingsColumnKey, StandingsViewMode, VerticalAlign } from './enums';
-import type { MediaGraphicItemConfig, ShapeGeometry } from './graphicItem';
+import type { MediaGraphicItemConfig } from './graphicItem';
 import type { GraphicAssetReference } from './graphicsAsset';
 import { migrateFeatureMatchGraphicItemConfig } from '../featureMatchGraphicItemDefinitions';
 
@@ -210,7 +210,6 @@ export type ScreenMediaBackgroundType = 'video';
 export type ScreenMediaBackgroundFit = 'cover' | 'contain' | 'fill';
 export type FeatureMatchLayoutItemType = 'source' | 'media' | 'graphic-item' | 'graphic-group';
 export type FeatureMatchSourceRole = 'main' | 'player1' | 'player2' | string;
-export type FeatureMatchGraphicItemKind = 'text' | 'image' | 'clock' | 'player-life' | 'game-wins';
 export type FeatureMatchGameWinsDisplayMode = 'boxes' | 'number';
 export type FeatureMatchGameWinsBoxOrientation = 'horizontal' | 'vertical';
 export type FeatureMatchGraphicGroupArrangementMode = 'row' | 'column' | 'canvas';
@@ -533,22 +532,14 @@ function legacyNumber(value: unknown, fallback: number): number {
 	return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-function roundedClipGeometry(radius: number): ShapeGeometry | undefined {
-	if (radius <= 0)
-		return undefined;
-	const corner = () => ({ kind: 'rounded' as const, size: radius });
-	return {
-		topLeft: corner(),
-		topRight: corner(),
-		bottomRight: corner(),
-		bottomLeft: corner(),
-	};
-}
-
 /**
  * Deterministically migrates pre-Graphic-Layer-Order layouts at every read
  * and write boundary. Existing z-index values are projected once into the
- * authoritative sibling list, then removed.
+ * authoritative sibling list, then removed, and Widget-era structural names
+ * become their Graphic Item and Graphic Group equivalents. Graphic Item
+ * configuration migration itself belongs to each Graphic Item Definition.
+ * Legacy image Widget asset values are not converted; they fail closed at the
+ * schema boundary instead of being silently reshaped.
  */
 export function normalizeFeatureMatchLayout(layout: FeatureMatchLayoutConfig): FeatureMatchLayoutConfig {
 	// Layouts can arrive as Vue reactive proxies in the editor. A JSON round-trip
@@ -564,20 +555,6 @@ export function normalizeFeatureMatchLayout(layout: FeatureMatchLayoutConfig): F
 			item.graphicItem = item.widget;
 			delete item.widget;
 		}
-		const legacyTopLevelGraphicItem = record(item.graphicItem);
-		if (item.type === 'graphic-item' && legacyTopLevelGraphicItem?.type === 'image') {
-			item.type = 'media';
-			item.asset = legacyTopLevelGraphicItem.asset;
-			item.mediaKind = 'image';
-			item.fit = legacyTopLevelGraphicItem.fit ?? 'contain';
-			item.focalPosition = { horizontal: 0.5, vertical: 0.5 };
-			item.opacity = legacyTopLevelGraphicItem.opacity ?? 1;
-			item.clipGeometry = roundedClipGeometry(
-				legacyNumber(legacyTopLevelGraphicItem.borderRadius, 0),
-			);
-			delete item.graphicItem;
-			delete item.surfaceStyle;
-		}
 		if (item.type === 'widget-group')
 			item.type = 'graphic-group';
 		if (item.type !== 'graphic-group' || !Array.isArray(item.children))
@@ -589,27 +566,10 @@ export function normalizeFeatureMatchLayout(layout: FeatureMatchLayoutConfig): F
 			}
 			if (child.type === 'widget' || (!child.type && child.graphicItem))
 				child.type = 'graphic-item';
-			const legacyGraphicItem = record(child.graphicItem);
-			if (child.type === 'graphic-item' && legacyGraphicItem?.type === 'image') {
-				child.type = 'media';
-				child.asset = legacyGraphicItem.asset;
-				child.mediaKind = 'image';
-				child.fit = legacyGraphicItem.fit ?? 'contain';
-				child.focalPosition = { horizontal: 0.5, vertical: 0.5 };
-				child.opacity = legacyGraphicItem.opacity ?? 1;
-				child.clipGeometry = roundedClipGeometry(
-					legacyNumber(legacyGraphicItem.borderRadius, 0),
-				);
-				delete child.graphicItem;
-			}
 		}
 	}
 	const source = raw as unknown as FeatureMatchLayoutConfig & {
-		items: Array<FeatureMatchLayoutItemConfig & {
-			zIndex?: number;
-			borderRadius?: number;
-			surfaceStyle?: FeatureMatchOverlayBoxStyle;
-		}>;
+		items: Array<FeatureMatchLayoutItemConfig & { zIndex?: number }>;
 	};
 	const hasLegacyItemOrder = source.items.some(item => typeof record(item)?.zIndex === 'number');
 	const orderedItems = hasLegacyItemOrder
@@ -635,9 +595,6 @@ export function normalizeFeatureMatchLayout(layout: FeatureMatchLayoutConfig): F
 		if (item.type === 'media') {
 			Object.assign(item, migrateFeatureMatchGraphicItemConfig(item));
 			item.focalPosition ??= { horizontal: 0.5, vertical: 0.5 };
-			item.clipGeometry ??= roundedClipGeometry(legacyNumber(record(item)?.borderRadius, 0));
-			delete mutable.borderRadius;
-			delete mutable.surfaceStyle;
 		}
 		if (item.type === 'graphic-group') {
 			Object.assign(item, migrateFeatureMatchGraphicItemConfig(item));
@@ -664,9 +621,6 @@ export function normalizeFeatureMatchLayout(layout: FeatureMatchLayoutConfig): F
 				if (child.type === 'media') {
 					Object.assign(child, migrateFeatureMatchGraphicItemConfig(child));
 					child.focalPosition ??= { horizontal: 0.5, vertical: 0.5 };
-					child.clipGeometry ??= roundedClipGeometry(legacyNumber(record(child)?.borderRadius, 0));
-					delete mutableChild.borderRadius;
-					delete mutableChild.surfaceStyle;
 				}
 				else {
 					child.graphicItem = migrateFeatureMatchGraphicItemConfig(child.graphicItem);

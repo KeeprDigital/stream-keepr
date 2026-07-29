@@ -754,22 +754,23 @@ function validateVp9FrameHeader(payload: Uint8Array, keyFrameRequired = false) {
 	if (bit() !== 0) {
 		if (keyFrameRequired)
 			validationError('video-index-incomplete', 'The first indexed VP9 frame must be a key frame.');
-		return { keyFrame: false };
+		// show_existing_frame always presents a previously decoded frame.
+		return { keyFrame: false, shown: true };
 	}
 	const frameType = bit();
-	bit(); // show_frame
+	const shown = bit() === 1; // show_frame
 	bit(); // error_resilient_mode
 	if (keyFrameRequired && frameType !== 0)
 		validationError('video-index-incomplete', 'The first indexed VP9 frame must be a key frame.');
 	if (frameType !== 0)
-		return { keyFrame: false };
+		return { keyFrame: false, shown };
 	if (bits(8) !== 0x49 || bits(8) !== 0x83 || bits(8) !== 0x42)
 		validationError('video-index-incomplete', 'The first indexed VP9 frame is not a complete key frame.');
 	const colorSpace = bits(3);
 	if (colorSpace > 2)
 		validationError('unsupported-video-profile', 'VP9 video must use SDR BT.709-compatible colour.');
 	bit(); // colour range
-	return { keyFrame: true };
+	return { keyFrame: true, shown };
 }
 
 function validateVp9KeyFrame(payload: Uint8Array) {
@@ -1179,6 +1180,7 @@ async function inspectWebmRandomAccess(
 	if (clusters.length === 0 || clusters.length > MAX_SILENT_VIDEO_DURATION_SECONDS * MAX_SILENT_VIDEO_FRAME_RATE)
 		validationError('video-index-incomplete', 'WebM requires bounded indexed media clusters.');
 	let frameCount = 0;
+	let inspectedConstituentCount = 0;
 	let previousTime = -Infinity;
 	let firstTime: number | undefined;
 	const clusterIndex = new Map<number, { time: number; firstPayload: Uint8Array }>();
@@ -1279,9 +1281,15 @@ async function inspectWebmRandomAccess(
 				if (alphaInspection!.ranges.length !== primary.ranges.length)
 					validationError('video-index-incomplete', 'VP9 colour and alpha superframes must contain the same number of constituent frames.');
 			}
-			if (frameCount + primary.ranges.length > MAX_SILENT_VIDEO_DURATION_SECONDS * MAX_SILENT_VIDEO_FRAME_RATE)
+			// A Block presents exactly one frame: hidden alternate-reference
+			// constituents may precede it inside a superframe but never carry
+			// their own presentation time.
+			if (primary.ranges.length > 2)
+				validationError('video-frame-rate-exceeded', 'A VP9 superframe may hold at most one hidden alternate-reference frame per shown frame.');
+			if (inspectedConstituentCount + primary.ranges.length > MAX_SILENT_VIDEO_DURATION_SECONDS * MAX_SILENT_VIDEO_FRAME_RATE)
 				validationError('video-frame-rate-exceeded', 'WebM frame table exceeds the bounded profile.');
-			frameCount += primary.ranges.length;
+			inspectedConstituentCount += primary.ranges.length;
+			frameCount += 1;
 			let firstPrimaryHeader: Uint8Array | undefined;
 			for (let frameIndex = 0; frameIndex < primary.ranges.length; frameIndex++) {
 				const primaryFrame = await validateVp9FrameRange(
@@ -1291,6 +1299,13 @@ async function inspectWebmRandomAccess(
 					primary.prefix,
 				);
 				firstPrimaryHeader ??= primaryFrame.header;
+				const finalConstituent = frameIndex === primary.ranges.length - 1;
+				if (primaryFrame.facts.shown !== finalConstituent) {
+					validationError(
+						'malformed-video-timeline',
+						'Every VP9 block must present exactly one shown frame after its hidden alternate-reference frames.',
+					);
+				}
 				if (hasAlpha) {
 					const alphaFrame = await validateVp9FrameRange(
 						reader,
@@ -1300,6 +1315,8 @@ async function inspectWebmRandomAccess(
 					);
 					if (alphaFrame.facts.keyFrame !== primaryFrame.facts.keyFrame)
 						validationError('video-index-incomplete', 'VP9 colour and alpha planes must share random-access frame structure.');
+					if (alphaFrame.facts.shown !== primaryFrame.facts.shown)
+						validationError('video-index-incomplete', 'VP9 colour and alpha planes must share show_frame semantics.');
 				}
 			}
 			const absoluteTime = clusterTime + facts.relativeTime;

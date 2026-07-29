@@ -339,17 +339,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 			...referenced,
 			layout: {
 				...referenced.layout,
-				items: referenced.layout.items.map(item =>
-					item.id === 'motion-ident'
-						? {
-								...item,
-								zIndex: 99,
-								focalPosition: undefined,
-								clipGeometry: undefined,
-								borderRadius: 10,
-								surfaceStyle: { backgroundColor: '#fff' },
-							}
-						: { ...item, zIndex: 1 }),
+				items: referenced.layout.items.map(item => ({ ...item, zIndex: 1 })),
 			},
 		});
 		expect(legacy.success).toBe(true);
@@ -357,15 +347,25 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 			expect(legacy.data.layout.items.every(item => !('zIndex' in item))).toBe(true);
 			const media = legacy.data.layout.items.find(item => item.id === 'motion-ident');
 			expect(media).toMatchObject({
-				focalPosition: { horizontal: 0.5, vertical: 0.5 },
-				clipGeometry: {
-					topLeft: { kind: 'rounded', size: 10 },
-					topRight: { kind: 'rounded', size: 10 },
-				},
+				focalPosition: { horizontal: 0.25, vertical: 0.75 },
 			});
-			expect(media).not.toHaveProperty('surfaceStyle');
-			expect(media).not.toHaveProperty('borderRadius');
 		}
+		expect(featureMatchOverlayModeConfigSchema.safeParse({
+			...referenced,
+			layout: {
+				...referenced.layout,
+				items: referenced.layout.items.map(item =>
+					item.id === 'motion-ident'
+						? {
+								...item,
+								focalPosition: undefined,
+								clipGeometry: undefined,
+								borderRadius: 10,
+								surfaceStyle: { backgroundColor: '#fff' },
+							}
+						: item),
+			},
+		}).success).toBe(false);
 		expect(featureMatchOverlayModeConfigSchema.safeParse({
 			...referenced,
 			layout: {

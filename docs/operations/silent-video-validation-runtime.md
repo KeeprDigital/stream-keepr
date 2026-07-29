@@ -38,7 +38,54 @@ its digest and verified playback facts in response headers, including explicit
 headers fail retryably closed. Workflow durable state contains stable
 identifiers and structured facts, never source or poster bytes.
 
-This repository does not yet declare the production Workflow, Container image,
-or service binding. Until deployment supplies that binding, the production
-resolver deliberately returns a retryable `validation-runtime-unavailable`
-failure and cannot publish silent-video revisions.
+## Production runtime
+
+The runtime lives in `workers/silent-video-validator/`, a dedicated private
+Worker named `stream-silent-video-validator`:
+
+- `src/index.ts` exposes the `/validate` service-binding entrypoint. Each
+  validation idempotency key maps to exactly one Workflow instance (the
+  SHA-256 of the key), so repeated calls start or reconnect the same
+  idempotent `silent-video-validation` Workflow. The entrypoint re-verifies
+  the idempotency-key composition and the facts digest before touching any
+  state, polls briefly for completion, and otherwise returns a retryable 503
+  so the ingestion operation retries and reconnects later.
+- The Workflow verifies the staged object at `ingestion/<operation>/source`,
+  streams the exact bytes into the scale-to-zero validation Container, and
+  stores only structured facts durably. The deterministic poster is written to
+  `validation/silent-video/<validation-id>/poster` in the staging bucket and
+  streamed back on the accepted response; durable state never contains binary
+  payloads.
+- `container/` holds the pinned image (digest-pinned Debian bookworm with
+  Chromium and ffmpeg). The Container independently recomputes the source
+  SHA-256 and byte length, verifies container/codec/dimension/duration
+  identity with ffprobe, proves complete decode and the exact inspected frame
+  count with ffmpeg (libvpx-vp9 for VP9 so alpha planes decode), proves muted
+  inline playback, deterministic seeks including the poster time, and
+  VP9-alpha transparency in headless Chromium, and then renders the
+  deterministic transparent PNG poster at the settled fit dimensions. It has
+  no outbound network access.
+
+`workers_dev` and preview URLs are disabled: the Worker is reachable only
+through the `SILENT_VIDEO_PLAYBACK_VALIDATOR` service binding declared in the
+root `wrangler.jsonc`.
+
+## Deployment
+
+Deploy the validator before the first `pnpm deploy` that carries the service
+binding, and again whenever `workers/silent-video-validator/` changes:
+
+1. `pnpm deploy:validator` (requires a running Docker engine to build the
+   pinned Container image; Workflows and Containers must be enabled on the
+   Cloudflare account).
+2. `pnpm deploy` for the stream Worker.
+3. `pnpm test:validator:silent-video:deployed` stages the exact fixture
+   revisions in production R2, runs the deployed Workflow and Container for
+   H.264 MP4, VP9 WebM, and VP9-alpha WebM, verifies acceptance facts and
+   poster digests, and cleans up.
+
+`pnpm test:validator:silent-video` runs the same acceptance locally against
+`wrangler dev` (Docker required), including a deterministic metadata
+rejection. The fixtures and their inspector-derived facts live in
+`scripts/silent-video-validator-fixtures.json` and are pinned to the bounded
+inspector by `test/unit/server/modules/silentVideoValidatorFixtures.test.ts`.

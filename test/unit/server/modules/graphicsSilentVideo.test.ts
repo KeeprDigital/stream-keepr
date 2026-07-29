@@ -134,30 +134,44 @@ function withLaterVp9Profile(bytes: Uint8Array, profile: 1 | 2) {
 	return result;
 }
 
+const VP9_SHOW_FRAME_BIT = 0x02;
+
 function withVp9Superframe(
 	bytes: Uint8Array,
-	options: { laterProfile?: 1 | 2; malformedIndex?: 'marker' | 'size' } = {},
+	options: {
+		laterProfile?: 1 | 2;
+		malformedIndex?: 'marker' | 'size';
+		constituents?: Array<'hidden' | 'shown'>;
+	} = {},
 ) {
+	const constituents = options.constituents ?? ['hidden', 'shown'];
 	const block = bytes.findIndex((byte, index) => byte === 0xA3 && bytes[index + 1] === 0x93);
 	expect(block).toBeGreaterThan(0);
-	const frame = bytes.slice(block + 6, block + 21);
-	const laterFrame = frame.slice();
-	if (options.laterProfile)
-		laterFrame[0] = (laterFrame[0]! & ~0x30) | (options.laterProfile << 4);
-	const marker = 0xC8;
+	const shownKeyFrame = bytes.slice(block + 6, block + 21);
+	expect(shownKeyFrame[0]! & VP9_SHOW_FRAME_BIT).toBe(VP9_SHOW_FRAME_BIT);
+	const frames = constituents.map((visibility, index) => {
+		const frame = shownKeyFrame.slice();
+		if (visibility === 'hidden')
+			frame[0] = frame[0]! & ~VP9_SHOW_FRAME_BIT;
+		if (options.laterProfile && index === constituents.length - 1)
+			frame[0] = (frame[0]! & ~0x30) | (options.laterProfile << 4);
+		return frame;
+	});
+	const marker = 0xC0 | ((frames.length - 1) << 3);
 	const index = Uint8Array.of(
 		options.malformedIndex === 'marker' ? marker ^ 1 : marker,
-		frame.byteLength,
-		options.malformedIndex === 'size' ? laterFrame.byteLength + 1 : laterFrame.byteLength,
+		...frames.map((frame, frameIndex) =>
+			options.malformedIndex === 'size' && frameIndex === frames.length - 1
+				? frame.byteLength + 1
+				: frame.byteLength),
 		marker,
 	);
+	const payload = concatenate([...frames, index]);
 	const replacement = Uint8Array.of(
 		0xA3,
-		0xA6,
+		0x80 | (4 + payload.byteLength),
 		...bytes.slice(block + 2, block + 6),
-		...frame,
-		...laterFrame,
-		...index,
+		...payload,
 	);
 	const result = concatenate([
 		bytes.slice(0, block),
@@ -201,24 +215,6 @@ function withUnsupportedBlockGroupTiming(
 		0x80 | (paddingLength - 2),
 		...new Uint8Array(paddingLength - 2),
 	), block);
-	return result;
-}
-
-function withShortWebmTimeline(bytes: Uint8Array) {
-	const result = bytes.slice();
-	const duration = result.findIndex((byte, index) =>
-		byte === 0x44 && result[index + 1] === 0x89 && result[index + 2] === 0x88,
-	);
-	expect(duration).toBeGreaterThan(0);
-	new DataView(result.buffer).setFloat64(duration + 3, 40);
-	const blocks: number[] = [];
-	for (let offset = 0; offset < result.byteLength - 1; offset++) {
-		if (result[offset] === 0xA3 && (result[offset + 1]! & 0x80) !== 0)
-			blocks.push(offset);
-	}
-	expect(blocks.length).toBeGreaterThanOrEqual(2);
-	result[blocks.at(-1)! + 3] = 0;
-	result[blocks.at(-1)! + 4] = 17;
 	return result;
 }
 
@@ -515,13 +511,13 @@ describe('silent-video bounded inspection', () => {
 		}), 'unsupported-video-profile');
 	});
 
-	it('counts and validates every VP9 superframe constituent', async () => {
+	it('validates every VP9 superframe constituent but counts only shown frames', async () => {
 		const superframed = withVp9Superframe(vp9Webm);
 		const processed = await processSilentVideo(superframed);
 		expect(processed.report.facts).toMatchObject({
 			format: 'webm',
-			frameCount: 3,
-			frameRate: 3,
+			frameCount: 2,
+			frameRate: 2,
 		});
 
 		const unsupportedLater = withVp9Superframe(vp9Webm, { laterProfile: 1 });
@@ -539,9 +535,23 @@ describe('silent-video bounded inspection', () => {
 		}), 'unsupported-video-profile');
 	});
 
-	it('includes every VP9 superframe constituent in the frame-rate limit', async () => {
+	it('rejects a VP9 superframe presenting more than one shown frame per block', async () => {
 		await expectIssue(
-			processSilentVideo(withShortWebmTimeline(withVp9Superframe(vp9Webm))),
+			processSilentVideo(withVp9Superframe(vp9Webm, { constituents: ['shown', 'shown'] })),
+			'malformed-video-timeline',
+		);
+	});
+
+	it('rejects a VP9 superframe whose final constituent is not shown', async () => {
+		await expectIssue(
+			processSilentVideo(withVp9Superframe(vp9Webm, { constituents: ['hidden', 'hidden'] })),
+			'malformed-video-timeline',
+		);
+	});
+
+	it('rejects a VP9 superframe with more than one hidden alternate-reference frame', async () => {
+		await expectIssue(
+			processSilentVideo(withVp9Superframe(vp9Webm, { constituents: ['hidden', 'hidden', 'shown'] })),
 			'video-frame-rate-exceeded',
 		);
 	});

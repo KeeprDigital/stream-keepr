@@ -565,7 +565,12 @@ describe('feature Match Overlay render model', () => {
 			asset: { assetId: 'video-asset', revisionId: 'video-revision-3' },
 			fit: 'cover',
 			opacity: 0.8,
-			borderRadius: 12,
+			clipGeometry: {
+				topLeft: { kind: 'rounded', size: 12 },
+				topRight: { kind: 'rounded', size: 12 },
+				bottomRight: { kind: 'rounded', size: 12 },
+				bottomLeft: { kind: 'rounded', size: 12 },
+			},
 			loop: true,
 			playbackRate: 1.25,
 			videoCompatibility: 'all-supported',

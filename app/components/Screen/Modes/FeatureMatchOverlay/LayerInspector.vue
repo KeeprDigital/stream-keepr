@@ -218,7 +218,7 @@ const selectedInspectorHeader = computed(() => {
 								v-if="item.type === 'graphic-group'"
 								type="button"
 								class="mt-2 size-7 shrink-0 rounded-md hover:bg-muted"
-								:aria-label="isGroupExpanded(item.id) ? 'Collapse group' : 'Expand group'"
+								:aria-label="isGroupExpanded(item.id) ? 'Collapse Graphic Group' : 'Expand Graphic Group'"
 								@click="toggleGroupExpanded(item.id)"
 							>
 								<UIcon name="i-lucide-chevron-right" class="mx-auto size-4 transition-transform" :class="{ 'rotate-90': isGroupExpanded(item.id) }" />

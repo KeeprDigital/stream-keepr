@@ -71,26 +71,10 @@ function group(layout: FeatureMatchLayoutConfig, id = 'g1'): FeatureMatchGraphic
 }
 
 describe('feature-match-overlay layout writer', () => {
-	it('migrates persisted legacy Widget shapes only at the normalizer boundary', () => {
+	it('migrates persisted legacy Widget structure only at the normalizer boundary', () => {
 		const legacy = {
 			...layoutOf([]),
 			items: [{
-				id: 'legacy-top-level-image',
-				type: 'widget',
-				label: 'Top-level image',
-				visible: true,
-				x: 10,
-				y: 20,
-				width: 200,
-				height: 100,
-				widget: {
-					type: 'image',
-					asset: { assetId: 'asset-1', revisionId: 'revision-2' },
-					fit: 'cover',
-					opacity: 0.6,
-					borderRadius: 12,
-				},
-			}, {
 				id: 'legacy-group',
 				type: 'widget-group',
 				label: 'Legacy group',
@@ -107,18 +91,6 @@ describe('feature-match-overlay layout writer', () => {
 					visible: true,
 					widget: { type: 'clock' },
 					layout: { mode: 'canvas', x: 0, y: 0, width: 100, height: 40 },
-				}, {
-					id: 'legacy-image',
-					type: 'widget',
-					label: 'Image',
-					visible: true,
-					widget: {
-						type: 'image',
-						fit: 'contain',
-						opacity: 0.8,
-						borderRadius: 8,
-					},
-					layout: { mode: 'canvas', x: 0, y: 40, width: 100, height: 60 },
 				}],
 			}],
 		} as unknown as FeatureMatchLayoutConfig;
@@ -127,35 +99,41 @@ describe('feature-match-overlay layout writer', () => {
 
 		expect(normalized.items).toEqual([
 			expect.objectContaining({
-				id: 'legacy-top-level-image',
-				type: 'media',
-				asset: { assetId: 'asset-1', revisionId: 'revision-2' },
-				mediaKind: 'image',
-				fit: 'cover',
-				focalPosition: { horizontal: 0.5, vertical: 0.5 },
-				opacity: 0.6,
-				clipGeometry: expect.objectContaining({
-					topLeft: { kind: 'rounded', size: 12 },
-				}),
-			}),
-			expect.objectContaining({
 				type: 'graphic-group',
 				children: [
 					expect.objectContaining({
 						type: 'graphic-item',
 						graphicItem: { type: 'clock', configurationVersion: 1 },
 					}),
-					expect.objectContaining({
-						id: 'legacy-image',
-						type: 'media',
-						mediaKind: 'image',
-						focalPosition: { horizontal: 0.5, vertical: 0.5 },
-						opacity: 0.8,
-					}),
 				],
 			}),
 		]);
 		expect(JSON.stringify(normalized)).not.toContain('"widget"');
+	});
+
+	it('fails closed on legacy image Widget asset values instead of reshaping them', () => {
+		const legacy = {
+			...layoutOf([]),
+			items: [{
+				id: 'legacy-image',
+				type: 'widget',
+				label: 'Image',
+				visible: true,
+				x: 10,
+				y: 20,
+				width: 200,
+				height: 100,
+				widget: {
+					type: 'image',
+					asset: { assetId: 'asset-1', revisionId: 'revision-2' },
+					fit: 'cover',
+					opacity: 0.6,
+					borderRadius: 12,
+				},
+			}],
+		} as unknown as FeatureMatchLayoutConfig;
+
+		expect(() => normalizeFeatureMatchLayout(legacy)).toThrow();
 	});
 
 	it('migrates every legacy missing Definition version without mutating the source layout', () => {
@@ -435,13 +413,13 @@ describe('feature-match-overlay layout writer', () => {
 	});
 
 	describe('legacy normalization', () => {
-		it('preserves effective legacy stacking while removing z-index and migrating media presentation', () => {
+		it('preserves effective legacy stacking while removing z-index', () => {
 			const legacy = layoutOf([
 				graphicItemItem({ id: 'front', zIndex: 30 } as never),
 				{
 					id: 'media',
 					type: 'media',
-					label: 'Legacy Media',
+					label: 'Media',
 					visible: true,
 					x: 0,
 					y: 0,
@@ -450,8 +428,6 @@ describe('feature-match-overlay layout writer', () => {
 					mediaKind: 'image',
 					fit: 'cover',
 					opacity: 1,
-					borderRadius: 12,
-					surfaceStyle: { backgroundColor: '#fff' },
 				} as never,
 				graphicItemItem({ id: 'middle', zIndex: 10 } as never),
 			]);
@@ -460,19 +436,10 @@ describe('feature-match-overlay layout writer', () => {
 
 			expect(normalized.items.map(item => item.id)).toEqual(['media', 'middle', 'front']);
 			expect(normalized.items.every(item => !('zIndex' in item))).toBe(true);
-			const media = normalized.items[0]!;
-			expect(media).toMatchObject({
+			expect(normalized.items[0]).toMatchObject({
 				type: 'media',
 				focalPosition: { horizontal: 0.5, vertical: 0.5 },
-				clipGeometry: {
-					topLeft: { kind: 'rounded', size: 12 },
-					topRight: { kind: 'rounded', size: 12 },
-					bottomRight: { kind: 'rounded', size: 12 },
-					bottomLeft: { kind: 'rounded', size: 12 },
-				},
 			});
-			expect(media).not.toHaveProperty('borderRadius');
-			expect(media).not.toHaveProperty('surfaceStyle');
 		});
 	});
 

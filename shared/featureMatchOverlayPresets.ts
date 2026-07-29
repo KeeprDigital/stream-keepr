@@ -234,7 +234,7 @@ export const FEATURE_MATCH_OVERLAY_PRESETS: FeatureMatchOverlayPreset[] = [
 	{
 		id: 'full-table',
 		label: 'Full Table',
-		description: 'A full-width main match source with separated details and branding widgets.',
+		description: 'A full-width main match source with separated details and branding Graphic Items.',
 		aspectRatio: 16 / 9,
 		config: (({ featureMatchId: _featureMatchId, ...config }) => config)(fullTable),
 	},

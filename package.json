@@ -13,6 +13,7 @@
 		"worker:dry-run": "wrangler deploy --dry-run --config .output/server/wrangler.json --outdir .output/wrangler-dry-run",
 		"deploy": "CLOUDFLARE_ENV=production pnpm build && pnpm worker:dry-run && pnpm db:migrate:remote && wrangler deploy --config .output/server/wrangler.json && pnpm deploy:verify",
 		"deploy:verify": "bash scripts/deploy-verify.sh",
+		"deploy:validator": "wrangler deploy --config workers/silent-video-validator/wrangler.jsonc",
 		"postinstall": "nuxt prepare",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
@@ -33,6 +34,8 @@
 		"test:browser:still-images:deployed": "node scripts/run-still-image-browser-acceptance.mjs --deployed",
 		"test:browser:silent-video": "node scripts/run-silent-video-browser-acceptance.mjs",
 		"test:browser:silent-video:deployed": "node scripts/run-silent-video-browser-acceptance.mjs --deployed",
+		"test:validator:silent-video": "node scripts/run-silent-video-validator-acceptance.mjs",
+		"test:validator:silent-video:deployed": "node scripts/run-silent-video-validator-acceptance.mjs --deployed",
 		"test:e2e": "pnpm test:integration:run",
 		"test:ui": "vitest --ui",
 		"test:coverage": "vitest run --coverage && vitest run --coverage --config vitest.nuxt.config.ts"
@@ -67,6 +70,7 @@
 	},
 	"devDependencies": {
 		"@antfu/eslint-config": "9.2.0",
+		"@cloudflare/containers": "^0.3.7",
 		"@iconify-json/lucide": "1.2.118",
 		"@libsql/client": "0.17.4",
 		"@nuxt/eslint-config": "1.16.0",

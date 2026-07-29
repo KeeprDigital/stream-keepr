@@ -60,7 +60,7 @@ describe('screen mapper', () => {
 			expect(result.screenConfig).toBeNull();
 		});
 
-		it('normalizes legacy Graphic Layer Order and media presentation on reads', () => {
+		it('normalizes legacy Graphic Layer Order on reads', () => {
 			const overlay = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			overlay.layout.items = [
 				{
@@ -80,8 +80,6 @@ describe('screen mapper', () => {
 					mediaKind: 'image',
 					fit: 'cover',
 					opacity: 1,
-					borderRadius: 16,
-					surfaceStyle: { backgroundColor: '#fff' },
 				},
 				{
 					...overlay.layout.items[1]!,
@@ -100,15 +98,7 @@ describe('screen mapper', () => {
 			expect(items[0]).toMatchObject({
 				type: 'media',
 				focalPosition: { horizontal: 0.5, vertical: 0.5 },
-				clipGeometry: {
-					topLeft: { kind: 'rounded', size: 16 },
-					topRight: { kind: 'rounded', size: 16 },
-					bottomRight: { kind: 'rounded', size: 16 },
-					bottomLeft: { kind: 'rounded', size: 16 },
-				},
 			});
-			expect(items[0]).not.toHaveProperty('surfaceStyle');
-			expect(items[0]).not.toHaveProperty('borderRadius');
 		});
 
 		it('never exposes capability material or internal reference markers', () => {
