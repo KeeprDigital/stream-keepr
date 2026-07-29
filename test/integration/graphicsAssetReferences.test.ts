@@ -84,20 +84,18 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		config.layout.frame.backgroundImage = reference;
 		config.layout.items.push({
 			id: 'sponsor-logo',
-			type: 'graphic-item',
+			type: 'media',
 			label: 'Sponsor logo',
 			visible: true,
 			x: 20,
 			y: 20,
 			width: 200,
 			height: 100,
-			graphicItem: {
-				type: 'image',
-				asset: reference,
-				fit: 'contain',
-				opacity: 1,
-				borderRadius: 0,
-			},
+			mediaKind: 'image',
+			asset: reference,
+			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
 		});
 		const group = config.layout.items.find(item => item.type === 'graphic-group');
 		if (group?.type !== 'graphic-group')
@@ -141,7 +139,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 					kind: 'screen',
 					id: String(screenId),
 					name: 'Pinned Overlay',
-					slot: 'layout.items.sponsor-logo.graphicItem.asset',
+					slot: 'layout.items.sponsor-logo.asset',
 					eventId,
 				},
 			}),

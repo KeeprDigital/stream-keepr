@@ -280,7 +280,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
-	it('accepts exact Graphic Asset References for frame and image fields and rejects raw image URLs', () => {
+	it('accepts exact Graphic Asset References for frame and Media fields and rejects raw image URLs', () => {
 		const referenced = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		referenced.layout.frame.backgroundImage = {
 			assetId: 'asset-frame',
@@ -288,23 +288,21 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		};
 		referenced.layout.items.push({
 			id: 'sponsor-logo',
-			type: 'graphic-item',
+			type: 'media',
 			label: 'Sponsor logo',
 			visible: true,
 			x: 10,
 			y: 10,
 			width: 200,
 			height: 100,
-			graphicItem: {
-				type: 'image',
-				asset: {
-					assetId: 'asset-logo',
-					revisionId: 'revision-logo-7',
-				},
-				fit: 'contain',
-				opacity: 1,
-				borderRadius: 0,
+			mediaKind: 'image',
+			asset: {
+				assetId: 'asset-logo',
+				revisionId: 'revision-logo-7',
 			},
+			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
 		});
 		referenced.layout.items.push({
 			id: 'motion-ident',
@@ -384,13 +382,12 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 				...referenced.layout,
 				items: [{
 					...referenced.layout.items.at(-1),
-					graphicItem: {
-						type: 'image',
-						url: 'https://example.com/logo.png',
-						fit: 'contain',
-						opacity: 1,
-						borderRadius: 0,
-					},
+					type: 'media',
+					mediaKind: 'image',
+					url: 'https://example.com/logo.png',
+					fit: 'contain',
+					focalPosition: { horizontal: 0.5, vertical: 0.5 },
+					opacity: 1,
 				}],
 			},
 		}).success).toBe(false);

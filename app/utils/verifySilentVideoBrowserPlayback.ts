@@ -1,5 +1,6 @@
 import type {
 	GraphicAssetBrowserPlaybackEvidence,
+	GraphicAssetSilentVideoBrowserChallenge,
 	GraphicAssetSilentVideoFacts,
 } from '~~/shared/types/graphicsAsset';
 import { graphicsVideoTargetForUserAgent } from '~~/shared/utils/graphicAssetTargetCompatibility';
@@ -83,16 +84,19 @@ export function waitForPostSeekPresentedVideoFrame(
 			controller.abort();
 			work();
 		};
-		const frameReady = (mediaTime = video.currentTime) =>
+		const frameReady = () =>
 			video.readyState >= 2 // HTMLMediaElement.HAVE_CURRENT_DATA
-			&& video.currentTime + 0.001 >= expectedTime
-			&& mediaTime + 0.001 >= expectedTime;
+			&& video.currentTime + 0.001 >= expectedTime;
 		const onError = () => finish(() => reject(new Error('Video failed before presenting the post-seek frame.')));
 		video.addEventListener('error', onError, { once: true, signal: controller.signal });
 
 		if (typeof video.requestVideoFrameCallback === 'function') {
-			video.requestVideoFrameCallback((_now, metadata) => {
-				if (frameReady(metadata.mediaTime))
+			// This callback is registered only after `seeked`, so it proves a
+			// frame was presented from the post-seek decoder state. A frame's
+			// mediaTime is its timestamp, which may legitimately precede an
+			// in-between seek target while that frame covers the target.
+			video.requestVideoFrameCallback(() => {
+				if (frameReady())
 					finish(resolve);
 			});
 		}
@@ -133,6 +137,7 @@ async function pngBlob(canvas: HTMLCanvasElement) {
 export async function verifySilentVideoBrowserPlayback(
 	source: Blob,
 	facts: GraphicAssetSilentVideoFacts,
+	challenge: GraphicAssetSilentVideoBrowserChallenge,
 ): Promise<{
 	evidence: GraphicAssetBrowserPlaybackEvidence;
 	poster?: Blob;
@@ -210,6 +215,9 @@ export async function verifySilentVideoBrowserPlayback(
 		return {
 			evidence: {
 				outcome: 'video-played',
+				challengeId: challenge.challengeId,
+				operationId: challenge.operationId,
+				factsDigest: challenge.factsDigest,
 				sourceDigest,
 				width: video.videoWidth,
 				height: video.videoHeight,
@@ -226,6 +234,9 @@ export async function verifySilentVideoBrowserPlayback(
 		return {
 			evidence: {
 				outcome: 'video-rejected',
+				challengeId: challenge.challengeId,
+				operationId: challenge.operationId,
+				factsDigest: challenge.factsDigest,
 				sourceDigest,
 				browserFamily: family,
 				stage,

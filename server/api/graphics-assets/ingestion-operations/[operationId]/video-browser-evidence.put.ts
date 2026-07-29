@@ -11,6 +11,9 @@ import { getBoundedRequestBodyStream } from '~~/server/utils/payloadLimits';
 const evidenceSchema = z.discriminatedUnion('outcome', [
 	z.object({
 		outcome: z.literal('video-played'),
+		challengeId: z.string().min(16).max(200),
+		operationId: z.string().min(1).max(200).transform(graphicsIngestionOperationId),
+		factsDigest: z.string().regex(/^[a-f0-9]{64}$/),
 		sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
 		width: z.number().int().positive(),
 		height: z.number().int().positive(),
@@ -22,6 +25,9 @@ const evidenceSchema = z.discriminatedUnion('outcome', [
 	}).strict(),
 	z.object({
 		outcome: z.literal('video-rejected'),
+		challengeId: z.string().min(16).max(200),
+		operationId: z.string().min(1).max(200).transform(graphicsIngestionOperationId),
+		factsDigest: z.string().regex(/^[a-f0-9]{64}$/),
 		sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
 		browserFamily: z.enum(['chromium', 'safari', 'other']),
 		stage: z.enum(['metadata', 'playback', 'seek', 'poster', 'transparency']),

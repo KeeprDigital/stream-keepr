@@ -27,12 +27,6 @@ const PLAYER_OPTIONS = [
 	{ label: 'Player 2', value: 'player2' },
 ];
 
-const IMAGE_FIT_OPTIONS = [
-	{ label: 'Contain', value: 'contain' },
-	{ label: 'Cover', value: 'cover' },
-	{ label: 'Fill', value: 'fill' },
-];
-
 const LIFE_ANIMATION_OPTIONS = [
 	{ label: 'None', value: 'none' },
 	{ label: 'Fade', value: 'fade' },
@@ -167,48 +161,6 @@ function updateTokenStyle(token: string, updates: Partial<FeatureMatchOverlayBox
 				@update="updates => updateTokenStyle(selectedToken, updates)"
 			/>
 		</template>
-
-		<div v-else-if="graphicItem.type === 'image'" class="grid gap-3 md:grid-cols-2">
-			<UFormField label="Image" class="md:col-span-2">
-				<GraphicsAssetFocusPicker
-					:model-value="graphicItem.asset"
-					:event-id="eventId"
-					field-label="Image Graphic Item"
-					asset-kind="image"
-					@update:model-value="patch({ asset: $event } as Partial<FeatureMatchGraphicItemDefinitionConfig>)"
-				/>
-			</UFormField>
-			<UFormField label="Fit">
-				<USelect
-					:model-value="graphicItem.fit"
-					:items="IMAGE_FIT_OPTIONS"
-					value-key="value"
-					size="sm"
-					class="w-full"
-					@update:model-value="patch({ fit: $event as any } as Partial<FeatureMatchGraphicItemDefinitionConfig>)"
-				/>
-			</UFormField>
-			<UFormField label="Opacity">
-				<UInputNumber
-					:model-value="graphicItem.opacity"
-					:min="0"
-					:max="1"
-					:step="0.05"
-					size="sm"
-					class="w-full"
-					@update:model-value="patch({ opacity: Number($event) } as Partial<FeatureMatchGraphicItemDefinitionConfig>)"
-				/>
-			</UFormField>
-			<UFormField label="Radius">
-				<UInputNumber
-					:model-value="graphicItem.borderRadius"
-					:min="0"
-					size="sm"
-					class="w-full"
-					@update:model-value="patch({ borderRadius: Number($event) } as Partial<FeatureMatchGraphicItemDefinitionConfig>)"
-				/>
-			</UFormField>
-		</div>
 
 		<p v-else-if="graphicItem.type === 'clock'" class="text-sm text-muted">
 			Clock content comes from the live Feature Match Session. Use the style controls below for typography and framing.

@@ -705,37 +705,21 @@ function ebmlString(bytes: Uint8Array, element: EbmlElement) {
 	return ascii(bytes, element.dataStart, element.end - element.dataStart);
 }
 
-function webmBlockFacts(bytes: Uint8Array, block: EbmlElement) {
-	const track = ebmlVint(bytes, block.dataStart, false);
-	const header = block.dataStart + track.length;
-	if (header + 3 > block.end)
-		validationError('malformed-video-timeline', 'WebM block header is incomplete.');
-	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-	const relativeTime = view.getInt16(header);
-	const flags = bytes[header + 2]!;
-	const lacing = (flags >>> 1) & 0x03;
-	if (lacing !== 0)
-		validationError('unsupported-video-profile', 'Laced WebM video blocks are outside bounded inspection.');
-	return {
-		track: track.value,
-		relativeTime,
-		payload: bytes.subarray(header + 3, block.end),
-	};
-}
-
-function validateVp9KeyFrame(payload: Uint8Array) {
-	if (payload.byteLength < 10)
-		validationError('malformed-video', 'VP9 key frame header is incomplete.');
+function validateVp9FrameHeader(payload: Uint8Array, keyFrameRequired = false) {
+	if (payload.byteLength < 1)
+		validationError('malformed-video', 'VP9 frame header is incomplete.');
 	let bitOffset = 0;
 	const bit = () => {
-		const value = (payload[Math.floor(bitOffset / 8)]! >>> (bitOffset % 8)) & 1;
+		if (bitOffset >= payload.byteLength * 8)
+			validationError('malformed-video', 'VP9 frame header ended before required profile facts.');
+		const value = (payload[Math.floor(bitOffset / 8)]! >>> (7 - (bitOffset % 8))) & 1;
 		bitOffset++;
 		return value;
 	};
 	const bits = (count: number) => {
 		let value = 0;
 		for (let index = 0; index < count; index++)
-			value |= bit() << index;
+			value = value * 2 + bit();
 		return value;
 	};
 	if (bits(2) !== 2)
@@ -749,168 +733,29 @@ function validateVp9KeyFrame(payload: Uint8Array) {
 	// chooses 10 versus 12 bits and can never prove 8-bit content.
 	if (profile !== 0)
 		validationError('unsupported-video-profile', 'VP9 profile 0 is required to prove 8-bit 4:2:0 video.');
-	if (bit() !== 0)
-		validationError('video-index-incomplete', 'The first indexed VP9 frame must be a key frame.');
+	if (bit() !== 0) {
+		if (keyFrameRequired)
+			validationError('video-index-incomplete', 'The first indexed VP9 frame must be a key frame.');
+		return { keyFrame: false };
+	}
 	const frameType = bit();
 	bit(); // show_frame
 	bit(); // error_resilient_mode
-	if (frameType !== 0 || bits(8) !== 0x49 || bits(8) !== 0x83 || bits(8) !== 0x42)
+	if (keyFrameRequired && frameType !== 0)
+		validationError('video-index-incomplete', 'The first indexed VP9 frame must be a key frame.');
+	if (frameType !== 0)
+		return { keyFrame: false };
+	if (bits(8) !== 0x49 || bits(8) !== 0x83 || bits(8) !== 0x42)
 		validationError('video-index-incomplete', 'The first indexed VP9 frame is not a complete key frame.');
 	const colorSpace = bits(3);
 	if (colorSpace > 2)
 		validationError('unsupported-video-profile', 'VP9 video must use SDR BT.709-compatible colour.');
 	bit(); // colour range
+	return { keyFrame: true };
 }
 
-function inspectWebm(bytes: Uint8Array) {
-	const roots = ebmlElements(bytes, 0, bytes.byteLength);
-	const header = oneEbml(roots, 0x1A45DFA3);
-	const docType = ebmlChildren(bytes, header).find(element => element.id === 0x4282);
-	if (!docType || ebmlString(bytes, docType) !== 'webm')
-		validationError('unsupported-video-format', 'EBML source is not a WebM container.');
-	const segment = oneEbml(roots, 0x18538067);
-	const children = ebmlChildren(bytes, segment);
-	if (children.some(element => [0x1941A469, 0x1043A770].includes(element.id)))
-		validationError('unsupported-video-tracks', 'WebM attachments and chapters are not supported.');
-	const info = oneEbml(children, 0x1549A966);
-	const infoChildren = ebmlChildren(bytes, info);
-	const durationElement = oneEbml(infoChildren, 0x4489);
-	const scaleElement = infoChildren.find(element => element.id === 0x2AD7B1);
-	const timecodeScale = scaleElement ? ebmlUnsigned(bytes, scaleElement) : 1_000_000;
-	const durationSeconds = ebmlFloat(bytes, durationElement) * timecodeScale / 1_000_000_000;
-	const tracks = oneEbml(children, 0x1654AE6B);
-	const trackEntries = ebmlChildren(bytes, tracks).filter(element => element.id === 0xAE);
-	if (trackEntries.length !== 1)
-		validationError('unsupported-video-tracks', 'Silent video requires exactly one WebM video track.');
-	const track = ebmlChildren(bytes, trackEntries[0]!);
-	const trackNumber = ebmlUnsigned(bytes, oneEbml(track, 0xD7));
-	if (ebmlUnsigned(bytes, oneEbml(track, 0x83)) !== 1)
-		validationError('unsupported-video-tracks', 'WebM audio, subtitles, and ancillary tracks are not supported.');
-	if (ebmlString(bytes, oneEbml(track, 0x86)) !== 'V_VP9')
-		validationError('unsupported-video-codec', 'WebM video must use VP9.');
-	if (track.some(element => [0x6D80, 0xE2].includes(element.id)))
-		validationError('unsupported-video-encryption', 'Encrypted or operated WebM tracks are not supported.');
-	const video = ebmlChildren(bytes, oneEbml(track, 0xE0));
-	const width = ebmlUnsigned(bytes, oneEbml(video, 0xB0));
-	const height = ebmlUnsigned(bytes, oneEbml(video, 0xBA));
-	const displayWidth = video.find(element => element.id === 0x54B0);
-	const displayHeight = video.find(element => element.id === 0x54BA);
-	const crop = video.some(element => [0x54AA, 0x54BB, 0x54CC, 0x54DD].includes(element.id));
-	if (
-		crop
-		|| (displayWidth && ebmlUnsigned(bytes, displayWidth) !== width)
-		|| (displayHeight && ebmlUnsigned(bytes, displayHeight) !== height)
-	) {
-		validationError('unsupported-video-transform', 'WebM crop and display transforms are not supported.');
-	}
-	const hasAlpha = video.some(element => element.id === 0x53C0 && ebmlUnsigned(bytes, element) === 1);
-	const colour = video.find(element => element.id === 0x55B0);
-	if (colour) {
-		const colourChildren = ebmlChildren(bytes, colour);
-		const bitDepth = colourChildren.find(element => element.id === 0x55B2);
-		if (bitDepth && ebmlUnsigned(bytes, bitDepth) !== 8)
-			validationError('unsupported-video-profile', 'VP9 video must be 8-bit.');
-		for (const [id, label] of [[0x55BB, 'primaries'], [0x55BA, 'transfer'], [0x55B1, 'matrix']] as const) {
-			const element = colourChildren.find(candidate => candidate.id === id);
-			if (element && ![1, 2].includes(ebmlUnsigned(bytes, element)))
-				validationError('unsupported-video-profile', `WebM ${label} signalling is outside 8-bit SDR BT.709.`);
-		}
-		if (colourChildren.some(element => [0x55BC, 0x55BD, 0x55D0].includes(element.id)))
-			validationError('unsupported-video-profile', 'WebM HDR mastering and light-level metadata is not supported.');
-	}
-	const cues = oneEbml(children, 0x1C53BB6B, 'video-index-incomplete');
-	const cuePoints = ebmlChildren(bytes, cues).filter(element => element.id === 0xBB);
-	if (cuePoints.length === 0)
-		validationError('video-index-incomplete', 'WebM requires a non-empty seekable Cues index.');
-	const clusters = children.filter(element => element.id === 0x1F43B675);
-	if (clusters.length === 0)
-		validationError('video-index-incomplete', 'WebM requires indexed media clusters.');
-	const cueReferences: Array<{ time: number; clusterPosition: number }> = [];
-	let previousCueTime = -1;
-	for (const cuePoint of cuePoints) {
-		const cueChildren = ebmlChildren(bytes, cuePoint);
-		const cueTime = ebmlUnsigned(bytes, oneEbml(cueChildren, 0xB3, 'video-index-incomplete'));
-		if (cueTime <= previousCueTime)
-			validationError('video-index-incomplete', 'WebM Cue times must be strictly increasing.');
-		const positions = oneEbml(cueChildren, 0xB7, 'video-index-incomplete');
-		const positionChildren = ebmlChildren(bytes, positions);
-		if (ebmlUnsigned(bytes, oneEbml(positionChildren, 0xF7, 'video-index-incomplete')) !== trackNumber)
-			validationError('video-index-incomplete', 'WebM Cue references the wrong track.');
-		const clusterPosition = ebmlUnsigned(bytes, oneEbml(positionChildren, 0xF1, 'video-index-incomplete'));
-		cueReferences.push({ time: cueTime, clusterPosition });
-		previousCueTime = cueTime;
-	}
-	let frameCount = 0;
-	let previousTime = -Infinity;
-	let firstTime: number | undefined;
-	let firstPayload: Uint8Array | undefined;
-	const clusterIndex = new Map<number, { time: number; firstPayload: Uint8Array }>();
-	for (const cluster of clusters) {
-		const clusterChildren = ebmlChildren(bytes, cluster);
-		const clusterTime = ebmlUnsigned(bytes, oneEbml(clusterChildren, 0xE7));
-		const blocks = clusterChildren.flatMap((element) => {
-			if (element.id === 0xA3)
-				return [element];
-			if (element.id === 0xA0)
-				return ebmlChildren(bytes, element).filter(child => child.id === 0xA1);
-			return [];
-		});
-		let clusterFirstPayload: Uint8Array | undefined;
-		for (const block of blocks) {
-			const facts = webmBlockFacts(bytes, block);
-			if (facts.track !== trackNumber)
-				validationError('unsupported-video-tracks', 'WebM block references an undeclared track.');
-			const absoluteTime = clusterTime + facts.relativeTime;
-			if (absoluteTime < 0 || absoluteTime <= previousTime)
-				validationError('malformed-video-timeline', 'WebM frame timing must be positive and strictly monotonic.');
-			if (
-				Number.isFinite(previousTime)
-				&& (absoluteTime - previousTime) * timecodeScale * MAX_SILENT_VIDEO_FRAME_RATE < 1_000_000_000
-			) {
-				validationError('video-frame-rate-exceeded', 'Every WebM frame interval must remain at or below 60 fps.');
-			}
-			firstTime ??= absoluteTime;
-			previousTime = absoluteTime;
-			firstPayload ??= facts.payload;
-			clusterFirstPayload ??= facts.payload;
-			frameCount++;
-		}
-		if (!clusterFirstPayload)
-			validationError('video-index-incomplete', 'WebM cluster contains no complete video frame.');
-		clusterIndex.set(
-			cluster.start - segment.dataStart,
-			{ time: clusterTime, firstPayload: clusterFirstPayload },
-		);
-	}
-	if (frameCount === 0 || !firstPayload)
-		validationError('video-index-incomplete', 'WebM media index contains no complete frames.');
-	if (
-		firstTime !== 0
-		|| previousTime * timecodeScale / 1_000_000_000 > durationSeconds
-	) {
-		validationError('malformed-video-timeline', 'WebM media timeline must start at zero and remain within its declared duration.');
-	}
-	validateVp9KeyFrame(firstPayload);
-	const indexedClusters = new Set<number>();
-	for (const cue of cueReferences) {
-		const indexed = clusterIndex.get(cue.clusterPosition);
-		if (
-			!indexed
-			|| indexed.time !== cue.time
-			|| indexedClusters.has(cue.clusterPosition)
-			|| cue.time * timecodeScale / 1_000_000_000 > durationSeconds
-		) {
-			validationError('video-index-incomplete', 'WebM Cue does not uniquely match its key-frame cluster and timeline.');
-		}
-		validateVp9KeyFrame(indexed.firstPayload);
-		indexedClusters.add(cue.clusterPosition);
-	}
-	const firstClusterPosition = Math.min(...clusterIndex.keys());
-	if (cueReferences[0]!.clusterPosition !== firstClusterPosition)
-		validationError('video-index-incomplete', 'WebM Cues must index the initial random-access cluster.');
-	if (indexedClusters.size !== clusterIndex.size)
-		validationError('video-index-incomplete', 'WebM Cues must cover every random-access cluster.');
-	return { width, height, durationSeconds, frameCount, hasAlpha };
+function validateVp9KeyFrame(payload: Uint8Array) {
+	validateVp9FrameHeader(payload, true);
 }
 
 function validateFacts(facts: {
@@ -1259,18 +1104,57 @@ async function inspectWebmRandomAccess(
 			timeBytes,
 			localEbmlElement(timeBytes, 0xE7),
 		);
-		const blocks: EbmlElement[] = [];
+		const blocks: Array<{ block: EbmlElement; alphaPayload?: Uint8Array }> = [];
 		for (const element of clusterChildren) {
 			if (element.id === 0xA3) {
-				blocks.push(element);
+				if (hasAlpha)
+					validationError('video-index-incomplete', 'VP9 alpha frames require a validated BlockGroup alpha plane.');
+				blocks.push({ block: element });
 			}
 			else if (element.id === 0xA0) {
 				const blockGroup = await scanEbmlElements(reader, element.dataStart, element.end, 32);
-				blocks.push(...blockGroup.filter(child => child.id === 0xA1));
+				if (blockGroup.some(child => ![0xA1, 0x9B, 0xFB, 0x75A1].includes(child.id)))
+					validationError('unsupported-video-tracks', 'WebM BlockGroup contains unsupported ancillary data.');
+				const block = oneEbml(blockGroup, 0xA1, 'video-index-incomplete');
+				const additions = blockGroup.filter(child => child.id === 0x75A1);
+				if (!hasAlpha && additions.length > 0)
+					validationError('unsupported-video-tracks', 'WebM BlockAdditions are allowed only for a declared VP9 alpha plane.');
+				if (hasAlpha && additions.length !== 1)
+					validationError('video-index-incomplete', 'Every VP9 alpha BlockGroup requires one alpha BlockAdditions element.');
+				let alphaPayload: Uint8Array | undefined;
+				if (additions[0]) {
+					const blockMore = await scanEbmlElements(reader, additions[0].dataStart, additions[0].end, 4);
+					const more = oneEbml(blockMore, 0xA6, 'video-index-incomplete');
+					if (blockMore.length !== 1)
+						validationError('unsupported-video-tracks', 'VP9 alpha BlockAdditions cannot contain ancillary additions.');
+					const moreChildren = await scanEbmlElements(reader, more.dataStart, more.end, 4);
+					if (
+						moreChildren.length !== 2
+						|| moreChildren.some(child => ![0xEE, 0xA5].includes(child.id))
+					) {
+						validationError('video-index-incomplete', 'VP9 alpha BlockMore requires exactly BlockAddID and BlockAdditional.');
+					}
+					const addIdElement = oneEbml(moreChildren, 0xEE, 'video-index-incomplete');
+					const addIdBytes = await readEbmlElementBytes(reader, addIdElement, 16);
+					if (ebmlUnsigned(addIdBytes, localEbmlElement(addIdBytes, 0xEE)) !== 1)
+						validationError('unsupported-video-tracks', 'Only VP9 alpha BlockAddID 1 is supported.');
+					const additional = oneEbml(moreChildren, 0xA5, 'video-index-incomplete');
+					if (additional.end <= additional.dataStart)
+						validationError('video-index-incomplete', 'VP9 alpha BlockAdditional payload is incomplete.');
+					alphaPayload = await reader.readSpan(
+						additional.dataStart,
+						Math.min(32, additional.end - additional.dataStart),
+						32,
+					);
+				}
+				blocks.push({ block, alphaPayload });
+			}
+			else if (element.id !== 0xE7 && ![0xA7, 0xAB, 0x5854].includes(element.id)) {
+				validationError('unsupported-video-tracks', 'WebM cluster contains unsupported ancillary data.');
 			}
 		}
 		let clusterFirstPayload: Uint8Array | undefined;
-		for (const block of blocks) {
+		for (const { block, alphaPayload } of blocks) {
 			if (++frameCount > MAX_SILENT_VIDEO_DURATION_SECONDS * MAX_SILENT_VIDEO_FRAME_RATE)
 				validationError('video-frame-rate-exceeded', 'WebM frame table exceeds the bounded profile.');
 			const prefix = await reader.readSpan(
@@ -1281,6 +1165,14 @@ async function inspectWebmRandomAccess(
 			const facts = webmBlockPrefixFacts(prefix);
 			if (facts.track !== trackNumber)
 				validationError('unsupported-video-tracks', 'WebM block references an undeclared track.');
+			const primaryHeader = validateVp9FrameHeader(facts.payload);
+			if (hasAlpha) {
+				if (!alphaPayload)
+					validationError('video-index-incomplete', 'VP9 alpha frame payload is incomplete.');
+				const alphaHeader = validateVp9FrameHeader(alphaPayload);
+				if (alphaHeader.keyFrame !== primaryHeader.keyFrame)
+					validationError('video-index-incomplete', 'VP9 colour and alpha planes must share random-access frame structure.');
+			}
 			const absoluteTime = clusterTime + facts.relativeTime;
 			if (absoluteTime < 0 || absoluteTime <= previousTime)
 				validationError('malformed-video-timeline', 'WebM frame timing must be positive and strictly monotonic.');
@@ -1334,14 +1226,18 @@ function acceptedSilentVideo(
 		byteLength: number;
 		sha256: string;
 		format: 'mp4' | 'webm';
-		inspected: ReturnType<typeof inspectMp4> | ReturnType<typeof inspectWebm>;
+		inspected: {
+			width: number;
+			height: number;
+			durationSeconds: number;
+			frameCount: number;
+			hasAlpha?: boolean;
+		};
 	},
 ): ProcessedSilentVideo {
 	const frameRate = validateFacts(input.inspected);
 	const isMp4 = input.format === 'mp4';
-	const hasAlpha = isMp4
-		? false
-		: (input.inspected as ReturnType<typeof inspectWebm>).hasAlpha;
+	const hasAlpha = !isMp4 && input.inspected.hasAlpha === true;
 	const facts: GraphicAssetSilentVideoFacts = {
 		kind: 'silent-video',
 		format: input.format,
@@ -1412,28 +1308,16 @@ export async function processSilentVideo(
 	bytes: Uint8Array,
 	declarations: SilentVideoDeclarations = {},
 ): Promise<ProcessedSilentVideo> {
-	if (bytes.byteLength === 0 || bytes.byteLength > MAX_SILENT_VIDEO_INGESTION_BYTES)
-		validationError('video-source-size-exceeded', 'Silent video must be between 1 byte and 250 MiB.');
-	const isMp4 = bytes.byteLength >= 12 && ascii(bytes, 4, 4) === 'ftyp';
-	const isWebm = bytes.byteLength >= 4
-		&& bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3;
-	if (!isMp4 && !isWebm)
-		validationError('unsupported-video-format', 'Only H.264/AVC MP4 and VP9 WebM silent video is supported.');
-	const format = isMp4 ? 'mp4' : 'webm';
-	validateVideoDeclarations(format, declarations);
-	let inspected: ReturnType<typeof inspectMp4> | ReturnType<typeof inspectWebm>;
-	try {
-		inspected = isMp4 ? inspectMp4(bytes) : inspectWebm(bytes);
-	}
-	catch (error) {
-		if (error instanceof RangeError)
-			validationError('malformed-video', 'Video structure ended before its declared bounded metadata.');
-		throw error;
-	}
-	return acceptedSilentVideo({
+	const sha256 = await sha256Hex(bytes);
+	return await processSilentVideoFromRandomAccess({
 		byteLength: bytes.byteLength,
-		sha256: await sha256Hex(bytes),
-		format,
-		inspected,
-	});
+		sha256,
+		async read(offset, length) {
+			return {
+				outcome: 'available',
+				bytes: bytes.slice(offset, offset + length),
+				completeLength: bytes.byteLength,
+			};
+		},
+	}, declarations);
 }

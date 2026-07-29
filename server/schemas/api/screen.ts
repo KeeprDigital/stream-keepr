@@ -6,6 +6,7 @@ import {
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
+import { featureMatchGraphicItemSchemas } from '~~/shared/featureMatchGraphicItemDefinitions';
 import {
 	CARD_ANIMATION_SPEED_VALUES,
 	DECK_CARD_SIZE_VALUES,
@@ -411,59 +412,23 @@ const featureMatchOverlayTokenStyleMapSchema = z
 	.record(z.string().min(1).max(50), featureMatchOverlayBoxStyleSchema)
 	.refine(value => Object.keys(value).length <= 100, 'Too many token style entries');
 
-const featureMatchTextGraphicItemConfigSchema = z.object({
-	type: z.literal('text'),
-	template: z.string().max(1000),
-	playerSide: z.enum(PLAYER_SIDE_VALUES).optional(),
-	spacerWidth: finiteNumberSchema.nonnegative().max(1000).optional(),
-	tokenStyles: featureMatchOverlayTokenStyleMapSchema.optional(),
-}).strict();
-
-const featureMatchImageGraphicItemConfigSchema = z.object({
-	type: z.literal('image'),
-	asset: graphicAssetReferenceSchema.optional(),
-	fit: z.enum(['contain', 'cover', 'fill']),
-	opacity: opacitySchema,
-	borderRadius: nonNegativePixelSchema,
-}).strict();
-
-const featureMatchClockGraphicItemConfigSchema = z.object({
-	type: z.literal('clock'),
-}).strict();
-
-const featureMatchPlayerLifeGraphicItemConfigSchema = z.object({
-	type: z.literal('player-life'),
+const featureMatchGraphicItemSchemasFromDefinitions = featureMatchGraphicItemSchemas({
+	z,
 	playerSide: z.enum(PLAYER_SIDE_VALUES),
-	lifeAnimation: featureMatchOverlayPlayerLifeAnimationSchema.optional(),
-	lifeAnimationDurationMs: finiteNumberSchema.int().min(100).max(3000).optional(),
-	lifeAnimationAccentColor: optionalCssColorSchema,
-}).strict();
+	optionalCssColor: optionalCssColorSchema,
+	finiteNumber: finiteNumberSchema,
+	tokenStyleMap: featureMatchOverlayTokenStyleMapSchema,
+	lifeAnimation: featureMatchOverlayPlayerLifeAnimationSchema,
+	gameWinsDisplayMode: featureMatchGameWinsDisplayModeSchema,
+	gameWinsBoxOrientation: featureMatchGameWinsBoxOrientationSchema,
+});
 
-const featureMatchGameWinsGraphicItemConfigSchema = z.object({
-	type: z.literal('game-wins'),
-	playerSide: z.enum(PLAYER_SIDE_VALUES),
-	displayMode: featureMatchGameWinsDisplayModeSchema.optional(),
-	boxOrientation: featureMatchGameWinsBoxOrientationSchema.optional(),
-	boxWidth: finiteNumberSchema.positive().max(10000).optional(),
-	boxHeight: finiteNumberSchema.positive().max(10000).optional(),
-	boxGap: nonNegativePixelSchema.optional(),
-	boxBorderWidth: nonNegativePixelSchema.optional(),
-}).strict();
+const featureMatchGraphicItemDefinitionConfigSchema = z.union(
+	featureMatchGraphicItemSchemasFromDefinitions,
+);
 
-const featureMatchGraphicItemDefinitionConfigSchema = z.discriminatedUnion('type', [
-	featureMatchTextGraphicItemConfigSchema,
-	featureMatchImageGraphicItemConfigSchema,
-	featureMatchClockGraphicItemConfigSchema,
-	featureMatchPlayerLifeGraphicItemConfigSchema,
-	featureMatchGameWinsGraphicItemConfigSchema,
-]);
-
-const featureMatchGraphicGroupGraphicItemDefinitionConfigSchema = z.discriminatedUnion('type', [
-	featureMatchTextGraphicItemConfigSchema,
-	featureMatchClockGraphicItemConfigSchema,
-	featureMatchPlayerLifeGraphicItemConfigSchema,
-	featureMatchGameWinsGraphicItemConfigSchema,
-]);
+const featureMatchGraphicGroupGraphicItemDefinitionConfigSchema
+	= featureMatchGraphicItemDefinitionConfigSchema;
 
 const featureMatchLayoutItemBaseSchema = featureMatchOverlayRectSchema.extend({
 	id: z.string().min(1).max(100),

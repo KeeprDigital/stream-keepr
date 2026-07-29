@@ -39,6 +39,30 @@ describe('silent-video deterministic poster frame ordering', () => {
 		expect(settled).toBe(true);
 	});
 
+	it('accepts the presented frame that covers a seek target between frame timestamps', async () => {
+		const video = videoFixture();
+		video.currentTime = 0.15;
+		let callback: VideoFrameRequestCallback | undefined;
+		video.requestVideoFrameCallback = vi.fn((next) => {
+			callback = next;
+			return 1;
+		});
+		const waiting = waitForPostSeekPresentedVideoFrame(video, 0.15, 1000);
+
+		callback!(0, {
+			// The frame beginning at 0.10 is the frame displayed at target 0.15.
+			mediaTime: 0.10,
+			presentationTime: 0,
+			expectedDisplayTime: 0,
+			presentedFrames: 2,
+			processingDuration: 0,
+			width: 16,
+			height: 16,
+		});
+
+		await expect(waiting).resolves.toBeUndefined();
+	});
+
 	it('times out deterministically when no post-seek frame is presented', async () => {
 		vi.useFakeTimers();
 		const video = videoFixture();

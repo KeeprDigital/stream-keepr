@@ -326,9 +326,14 @@ async function transferGraphicAsset(
 		&& completed.report?.outcome === 'accepted'
 		&& completed.report.facts.kind === 'silent-video'
 	) {
+		const challenge = await $fetch<import('~~/shared/types/graphicsAsset').GraphicAssetSilentVideoBrowserChallenge>(
+			`/api/graphics-assets/ingestion-operations/${completed.id}/video-browser-challenge`,
+			{ method: 'POST' },
+		);
 		const { evidence, poster } = await verifySilentVideoBrowserPlayback(
 			file,
 			completed.report.facts,
+			challenge,
 		);
 		const encodedEvidence = btoa(
 			String.fromCharCode(...new TextEncoder().encode(JSON.stringify(evidence))),

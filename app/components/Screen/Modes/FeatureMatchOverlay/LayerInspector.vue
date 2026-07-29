@@ -33,7 +33,6 @@ const treeNodeRefs = ref<Record<string, HTMLElement>>({});
 const LAYER_KIND_OPTIONS = [
 	{ label: 'Source', value: 'source', icon: 'i-lucide-video' },
 	{ label: 'Text', value: 'text-graphic-item', icon: 'i-lucide-type' },
-	{ label: 'Image', value: 'image-graphic-item', icon: 'i-lucide-image' },
 	{ label: 'Media', value: 'media', icon: 'i-lucide-image-play' },
 	{ label: 'Clock', value: 'clock-graphic-item', icon: 'i-lucide-clock' },
 	{ label: 'Player Life', value: 'life-graphic-item', icon: 'i-lucide-heart-pulse' },

@@ -75,6 +75,22 @@ describe('feature-match-overlay layout writer', () => {
 		const legacy = {
 			...layoutOf([]),
 			items: [{
+				id: 'legacy-top-level-image',
+				type: 'widget',
+				label: 'Top-level image',
+				visible: true,
+				x: 10,
+				y: 20,
+				width: 200,
+				height: 100,
+				widget: {
+					type: 'image',
+					asset: { assetId: 'asset-1', revisionId: 'revision-2' },
+					fit: 'cover',
+					opacity: 0.6,
+					borderRadius: 12,
+				},
+			}, {
 				id: 'legacy-group',
 				type: 'widget-group',
 				label: 'Legacy group',
@@ -110,6 +126,18 @@ describe('feature-match-overlay layout writer', () => {
 		const normalized = normalizeFeatureMatchLayout(legacy);
 
 		expect(normalized.items).toEqual([
+			expect.objectContaining({
+				id: 'legacy-top-level-image',
+				type: 'media',
+				asset: { assetId: 'asset-1', revisionId: 'revision-2' },
+				mediaKind: 'image',
+				fit: 'cover',
+				focalPosition: { horizontal: 0.5, vertical: 0.5 },
+				opacity: 0.6,
+				clipGeometry: expect.objectContaining({
+					topLeft: { kind: 'rounded', size: 12 },
+				}),
+			}),
 			expect.objectContaining({
 				type: 'graphic-group',
 				children: [

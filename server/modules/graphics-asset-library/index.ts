@@ -5,6 +5,7 @@ import type {
 	GraphicAssetId,
 	GraphicAssetReferenceStatus,
 	GraphicAssetRevisionId,
+	GraphicAssetSilentVideoBrowserChallenge,
 	GraphicAssetSourceDeclarations,
 	GraphicAssetUsage,
 	GraphicAssetValidationReport,
@@ -288,6 +289,10 @@ export interface GraphicsAssetLibrary {
 		evidence: GraphicAssetBrowserPlaybackEvidence;
 		poster?: BoundedByteStream;
 	}) => Promise<GraphicsIngestionOperation>;
+	issueSilentVideoBrowserChallenge: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
+	}) => Promise<GraphicAssetSilentVideoBrowserChallenge>;
 	listGraphicAssets: (input: { search?: string }) => Promise<GraphicAsset[]>;
 	updateGraphicAsset: (input: {
 		assetId: GraphicAssetId;
@@ -501,7 +506,11 @@ export function createGraphicsAssetLibrary(
 				'invalid-ingestion-input',
 			);
 		}
-		if (input.browserDecodeEvidence?.outcome === 'video-played' || input.browserDecodeEvidence?.outcome === 'video-rejected') {
+		if (
+			input.browserDecodeEvidence?.outcome === 'video-played'
+			|| input.browserDecodeEvidence?.outcome === 'video-rejected'
+			|| input.browserDecodeEvidence?.outcome === 'video-challenge'
+		) {
 			throw new GraphicsAssetLibraryError(
 				'Silent video browser evidence can only answer post-inspection playback requirements',
 				'invalid-ingestion-input',
@@ -638,6 +647,7 @@ export function createGraphicsAssetLibrary(
 				|| evidence.outcome === 'rejected'
 				|| evidence.outcome === 'video-played'
 				|| evidence.outcome === 'video-rejected'
+				|| evidence.outcome === 'video-challenge'
 			) {
 				validationError(
 					'browser-font-load-failed',
@@ -715,6 +725,7 @@ export function createGraphicsAssetLibrary(
 			|| evidence.outcome === 'font-rejected'
 			|| evidence.outcome === 'video-played'
 			|| evidence.outcome === 'video-rejected'
+			|| evidence.outcome === 'video-challenge'
 		) {
 			validationError(
 				'browser-image-decode-failed',
@@ -1975,6 +1986,20 @@ export function createGraphicsAssetLibrary(
 						'graphics-asset-library-unavailable',
 					);
 				}
+				const challenge = operation.browserDecodeEvidence;
+				if (
+					challenge?.outcome !== 'video-challenge'
+					|| input.evidence.challengeId !== challenge.challengeId
+					|| input.evidence.operationId !== operation.id
+					|| input.evidence.factsDigest !== challenge.factsDigest
+					|| input.evidence.sourceDigest !== challenge.sourceDigest
+					|| now().getTime() > new Date(challenge.expiresAt).getTime()
+				) {
+					throw new GraphicsAssetLibraryError(
+						'Silent video browser evidence does not answer the active operation-bound challenge',
+						'invalid-ingestion-input',
+					);
+				}
 				await catalogueRequest(
 					() => catalogue.recordStagedBytes({
 						operation,
@@ -1995,6 +2020,49 @@ export function createGraphicsAssetLibrary(
 				'Silent video browser evidence could not be recorded',
 			);
 			return await continueGraphicsIngestion(confirmed);
+		},
+		async issueSilentVideoBrowserChallenge(input) {
+			const catalogue = requireCatalogue();
+			const operation = await catalogueRequest(
+				() => catalogue.getIngestionOperation(input.operationId, input.initiatedBy),
+				'Graphics ingestion state is temporarily unavailable',
+			);
+			if (
+				!operation
+				|| operation.stage !== 'awaiting-confirmation'
+				|| operation.report?.outcome !== 'accepted'
+				|| operation.report.facts.kind !== 'silent-video'
+			) {
+				throw new GraphicsAssetLibraryError(
+					`Graphics Ingestion Operation cannot issue a video challenge from stage ${operation?.stage ?? 'missing'}`,
+					'ingestion-operation-not-uploadable',
+				);
+			}
+			const challenge: GraphicAssetSilentVideoBrowserChallenge & { outcome: 'video-challenge' } = {
+				outcome: 'video-challenge',
+				challengeId: generateIdentity(),
+				operationId: operation.id,
+				sourceDigest: operation.report.facts.sha256,
+				factsDigest: await sha256Hex(new TextEncoder().encode(JSON.stringify(operation.report.facts))),
+				expiresAt: new Date(now().getTime() + 5 * 60_000).toISOString(),
+			};
+			const challenged = await catalogueRequest(
+				() => catalogue.updateIngestionOperation(
+					changedOperation(operation, { browserDecodeEvidence: challenge }),
+					operation.updatedAt,
+				),
+				'Silent video browser challenge could not be recorded',
+			);
+			const recorded = challenged.browserDecodeEvidence;
+			if (recorded?.outcome !== 'video-challenge')
+				throw new GraphicsAssetLibraryError('Silent video browser challenge was not recorded', 'graphics-asset-library-unavailable');
+			return {
+				challengeId: recorded.challengeId,
+				operationId: recorded.operationId,
+				sourceDigest: recorded.sourceDigest,
+				factsDigest: recorded.factsDigest,
+				expiresAt: recorded.expiresAt,
+			};
 		},
 		async retryGraphicsIngestion(input) {
 			const catalogue = requireCatalogue();

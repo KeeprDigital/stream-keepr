@@ -101,6 +101,9 @@ export type GraphicAssetBrowserDecodeEvidence
 export type GraphicAssetBrowserPlaybackEvidence
 	= | {
 		outcome: 'video-played';
+		challengeId: string;
+		operationId: GraphicsIngestionOperationId;
+		factsDigest: string;
 		sourceDigest: string;
 		width: number;
 		height: number;
@@ -112,13 +115,38 @@ export type GraphicAssetBrowserPlaybackEvidence
 	}
 	| {
 		outcome: 'video-rejected';
+		challengeId: string;
+		operationId: GraphicsIngestionOperationId;
+		factsDigest: string;
 		sourceDigest: string;
 		browserFamily: 'chromium' | 'safari' | 'other';
 		stage: 'metadata' | 'playback' | 'seek' | 'poster' | 'transparency';
 	};
 
+/**
+ * A short-lived, single-use browser-observation challenge bound to one
+ * author, Graphics Ingestion Operation, staged source digest, and inspected
+ * fact set. The browser can prove application-flow sequencing and exact-byte
+ * binding; it cannot cryptographically attest that a human-visible browser
+ * engine executed the JavaScript.
+ */
+export interface GraphicAssetSilentVideoBrowserChallenge {
+	challengeId: string;
+	operationId: GraphicsIngestionOperationId;
+	sourceDigest: string;
+	factsDigest: string;
+	expiresAt: string;
+}
+
 export type GraphicAssetBrowserValidationEvidence
-	= GraphicAssetBrowserDecodeEvidence | GraphicAssetBrowserPlaybackEvidence;
+	= GraphicAssetBrowserDecodeEvidence | GraphicAssetBrowserPlaybackEvidence | {
+		outcome: 'video-challenge';
+		challengeId: string;
+		operationId: GraphicsIngestionOperationId;
+		sourceDigest: string;
+		factsDigest: string;
+		expiresAt: string;
+	};
 
 export interface GraphicAssetSourceDeclarations {
 	sourceFileName?: string;

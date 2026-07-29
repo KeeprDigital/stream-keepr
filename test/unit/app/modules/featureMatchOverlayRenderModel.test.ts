@@ -67,6 +67,47 @@ describe('feature Match Overlay render model', () => {
 		expect(model.mediaItems[0]!.contentStyle.clipPath).toContain('polygon(');
 	});
 
+	it('renders image and VP9-alpha Media Graphic Items as grayscale alpha mattes in Key Output', () => {
+		const base = config();
+		base.layout.items = [{
+			id: 'alpha-video',
+			type: 'media',
+			label: 'Alpha video',
+			visible: true,
+			x: 0,
+			y: 0,
+			width: 320,
+			height: 180,
+			mediaKind: 'silent-video',
+			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 0.6,
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'chromium',
+		}];
+
+		const overlay = resolveFeatureMatchOverlayRenderModel({
+			config: base,
+			output: 'overlay',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+			displayTime: '',
+		});
+		const key = resolveFeatureMatchOverlayRenderModel({
+			config: base,
+			output: 'key',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+			displayTime: '',
+		});
+
+		expect(overlay.mediaItems[0]!.contentStyle.filter).toBeUndefined();
+		expect(key.mediaItems[0]!.contentStyle).toMatchObject({
+			filter: 'brightness(0) invert(1)',
+			opacity: 0.6,
+		});
+	});
+
 	it('keeps transparent frame backgrounds from falling back to SVG black', () => {
 		const base = config();
 		base.layout.frame.backgroundColor = '';
@@ -424,7 +465,7 @@ describe('feature Match Overlay render model', () => {
 		const base = config();
 		base.layout.items = [
 			{ id: 'text-item', type: 'graphic-item', label: 'Text', visible: true, x: 0, y: 0, width: 320, height: 80, graphicItem: { type: 'text', template: '{name}', playerSide: 'player1' } },
-			{ id: 'image-item', type: 'graphic-item', label: 'Logo', visible: true, x: 0, y: 100, width: 200, height: 100, graphicItem: { type: 'image', asset: { assetId: 'asset-logo', revisionId: 'revision-logo-7' }, fit: 'contain', opacity: 0.9, borderRadius: 8 } },
+			{ id: 'media-item', type: 'media', label: 'Logo', visible: true, x: 0, y: 100, width: 200, height: 100, mediaKind: 'image', asset: { assetId: 'asset-logo', revisionId: 'revision-logo-7' }, fit: 'contain', focalPosition: { horizontal: 0.5, vertical: 0.5 }, opacity: 0.9 },
 			{ id: 'clock-item', type: 'graphic-item', label: 'Clock', visible: true, x: 0, y: 220, width: 160, height: 60, graphicItem: { type: 'clock' } },
 			{ id: 'life-item', type: 'graphic-item', label: 'Life', visible: true, x: 0, y: 300, width: 120, height: 60, graphicItem: { type: 'player-life', playerSide: 'player1', lifeAnimation: 'pulse', lifeAnimationDurationMs: 400, lifeAnimationAccentColor: '#ff0000' } },
 			{ id: 'wins-item', type: 'graphic-item', label: 'Wins', visible: true, x: 0, y: 380, width: 120, height: 40, graphicItem: { type: 'game-wins', playerSide: 'player1', displayMode: 'boxes', boxWidth: 22, boxHeight: 22 } },
@@ -451,12 +492,10 @@ describe('feature Match Overlay render model', () => {
 			expect(text.deckColors).toBe('R');
 		}
 
-		const image = renders.get('image-item')!;
-		expect(image.type).toBe('image');
-		if (image.type === 'image') {
-			expect(image.src).toBe('/api/graphics-assets/asset-logo/revisions/revision-logo-7/content');
-			expect(image.imageStyle).toMatchObject({ objectFit: 'contain', opacity: 0.9, borderRadius: '8px', width: '200px', height: '100px' });
-		}
+		expect(model.mediaItems[0]).toMatchObject({
+			src: '/api/graphics-assets/asset-logo/revisions/revision-logo-7/content',
+			contentStyle: { objectFit: 'contain', opacity: 0.9 },
+		});
 
 		const clock = renders.get('clock-item')!;
 		expect(clock.type).toBe('clock');

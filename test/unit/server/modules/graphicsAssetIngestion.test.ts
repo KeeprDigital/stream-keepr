@@ -1429,11 +1429,16 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			return operation;
 		};
 		const failedOperation = await initiate('vp9-invalid-poster-cleanup');
+		const failedChallenge = await library.issueSilentVideoBrowserChallenge({
+			operationId: failedOperation.id,
+			initiatedBy: failedOperation.initiatedBy,
+		});
 		const failed = await library.confirmSilentVideoBrowserEvidence({
 			operationId: failedOperation.id,
 			initiatedBy: failedOperation.initiatedBy,
 			evidence: {
 				outcome: 'video-played',
+				...failedChallenge,
 				sourceDigest: sourceDigest(vp9Webm),
 				width: 16,
 				height: 16,
@@ -1504,12 +1509,17 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			},
 		});
 		await expect(library.listGraphicAssets({})).resolves.toEqual([]);
+		const challenge = await library.issueSilentVideoBrowserChallenge({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+		});
 
 		const completed = await library.confirmSilentVideoBrowserEvidence({
 			operationId: initiated.id,
 			initiatedBy: initiated.initiatedBy,
 			evidence: {
 				outcome: 'video-played',
+				...challenge,
 				sourceDigest: sourceDigest(vp9Webm),
 				width: 16,
 				height: 16,
@@ -1544,6 +1554,83 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 		});
 	});
 
+	it('rejects arbitrary, cross-operation, and replayed video browser evidence', async () => {
+		const { library } = createLibrary();
+		const stage = async (key: string) => {
+			const operation = await library.initiateGraphicsIngestion({
+				idempotencyKey: key,
+				initiatedBy: 'graphics-author-1',
+				name: key,
+				sourceFileName: `${key}.webm`,
+				declaredMime: 'video/webm',
+				declaredByteLength: vp9Webm.byteLength,
+			});
+			await library.uploadGraphicAsset({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				declaredMime: 'video/webm',
+				bytes: createBoundedByteStream(vp9Webm, {
+					byteLength: vp9Webm.byteLength,
+					maximumByteLength: 250 * 1024 * 1024,
+				}),
+			});
+			return operation;
+		};
+		const first = await stage('challenge-first');
+		const second = await stage('challenge-second');
+		const firstChallenge = await library.issueSilentVideoBrowserChallenge({
+			operationId: first.id,
+			initiatedBy: first.initiatedBy,
+		});
+		const secondChallenge = await library.issueSilentVideoBrowserChallenge({
+			operationId: second.id,
+			initiatedBy: second.initiatedBy,
+		});
+		const evidence = {
+			outcome: 'video-played' as const,
+			...firstChallenge,
+			width: 16,
+			height: 16,
+			durationSeconds: 1,
+			posterTimeSeconds: 0.1,
+			posterDigest: sourceDigest(sixteenPixelPosterPng),
+			browserFamily: 'chromium' as const,
+			transparencyRendered: false,
+		};
+		const poster = () => createBoundedByteStream(sixteenPixelPosterPng, {
+			byteLength: sixteenPixelPosterPng.byteLength,
+			maximumByteLength: MAX_SILENT_VIDEO_POSTER_BYTES,
+		});
+
+		await expect(library.confirmSilentVideoBrowserEvidence({
+			operationId: second.id,
+			initiatedBy: second.initiatedBy,
+			evidence,
+			poster: poster(),
+		})).rejects.toMatchObject({ code: 'invalid-ingestion-input' });
+		await expect(library.confirmSilentVideoBrowserEvidence({
+			operationId: first.id,
+			initiatedBy: first.initiatedBy,
+			evidence: { ...evidence, challengeId: 'caller-authored-challenge' },
+			poster: poster(),
+		})).rejects.toMatchObject({ code: 'invalid-ingestion-input' });
+
+		await expect(library.confirmSilentVideoBrowserEvidence({
+			operationId: first.id,
+			initiatedBy: first.initiatedBy,
+			evidence,
+			poster: poster(),
+		})).resolves.toMatchObject({ stage: 'completed' });
+		await expect(library.confirmSilentVideoBrowserEvidence({
+			operationId: first.id,
+			initiatedBy: first.initiatedBy,
+			evidence,
+			poster: poster(),
+		})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
+
+		expect(secondChallenge.operationId).toBe(second.id);
+	});
+
 	it('rejects a revision when representative muted playback or seeking fails', async () => {
 		const { library } = createLibrary();
 		const initiated = await library.initiateGraphicsIngestion({
@@ -1563,12 +1650,17 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 				maximumByteLength: 250 * 1024 * 1024,
 			}),
 		});
+		const challenge = await library.issueSilentVideoBrowserChallenge({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+		});
 
 		const failed = await library.confirmSilentVideoBrowserEvidence({
 			operationId: initiated.id,
 			initiatedBy: initiated.initiatedBy,
 			evidence: {
 				outcome: 'video-rejected',
+				...challenge,
 				sourceDigest: sourceDigest(vp9Webm),
 				browserFamily: 'chromium',
 				stage: 'seek',

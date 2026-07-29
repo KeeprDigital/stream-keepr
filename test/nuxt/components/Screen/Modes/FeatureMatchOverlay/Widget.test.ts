@@ -20,19 +20,6 @@ describe('featureMatchOverlayGraphicItem', () => {
 		expect(wrapper.text()).toContain('Alice');
 	});
 
-	it('renders image graphicItems with resolved src and style', () => {
-		const wrapper = mountGraphicItem({
-			type: 'image',
-			src: 'https://example.com/logo.png',
-			alt: 'Logo',
-			imageStyle: { objectFit: 'contain' },
-		});
-
-		const image = wrapper.get('img');
-		expect(image.attributes('src')).toBe('https://example.com/logo.png');
-		expect(image.attributes('alt')).toBe('Logo');
-	});
-
 	it('renders clock graphicItems with the resolved display time', () => {
 		const wrapper = mountGraphicItem({ type: 'clock', displayTime: '12:34' });
 

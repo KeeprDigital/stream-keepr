@@ -112,8 +112,6 @@ function patchMedia(updates: Partial<FeatureMatchGraphicGroupChildConfig>) {
 }
 
 function patchGraphicItem(updates: FeatureMatchGraphicItemDefinitionConfig) {
-	if (updates.type === 'image')
-		return;
 	editor.updateGroupChildGraphicItem(props.group.id, props.child.id, updates);
 }
 </script>

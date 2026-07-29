@@ -5,6 +5,7 @@ import type {
 	FeatureMatchOverlayModeConfig,
 } from '../types/screenConfig';
 import type { GraphicsVideoTarget } from './graphicAssetTargetCompatibility';
+import { discoverFeatureMatchGraphicItemAssetReferences } from '../featureMatchGraphicItemDefinitions';
 import { chromiumTransparencyTargetCompatibility } from './graphicAssetTargetCompatibility';
 
 export interface ScreenGraphicAssetReference {
@@ -36,20 +37,6 @@ export function sameGraphicAssetReference(
 		&& left?.revisionId === right?.revisionId;
 }
 
-function graphicItemReference(
-	graphicItem: FeatureMatchGraphicItemDefinitionConfig,
-	ownerSlot: string,
-): ScreenGraphicAssetReference | undefined {
-	if (graphicItem.type === 'image' && graphicItem.asset) {
-		return {
-			reference: graphicItem.asset,
-			ownerSlot,
-			kind: 'image',
-		};
-	}
-	return undefined;
-}
-
 function fontReference(
 	style: FeatureMatchOverlayBoxStyle | undefined,
 	ownerSlot: string,
@@ -69,15 +56,18 @@ function appendFontReference(
 		references.push(reference);
 }
 
-function appendTokenFontReferences(
+function appendGraphicItemAssetReferences(
 	references: ScreenGraphicAssetReference[],
 	graphicItem: FeatureMatchGraphicItemDefinitionConfig,
 	ownerSlot: string,
 ) {
-	if (graphicItem.type !== 'text')
-		return;
-	for (const [token, style] of Object.entries(graphicItem.tokenStyles ?? {}))
-		appendFontReference(references, style, `${ownerSlot}.tokenStyles.${token}.font`);
+	for (const discovered of discoverFeatureMatchGraphicItemAssetReferences(graphicItem)) {
+		references.push({
+			reference: discovered.reference,
+			ownerSlot: `${ownerSlot}.${discovered.ownerSuffix}`,
+			kind: discovered.kind,
+		});
+	}
 }
 
 export function featureMatchOverlayGraphicAssetReferences(
@@ -104,13 +94,7 @@ export function featureMatchOverlayGraphicAssetReferences(
 			});
 		}
 		if (item.type === 'graphic-item') {
-			const reference = graphicItemReference(
-				item.graphicItem,
-				`layout.items.${item.id}.graphicItem.asset`,
-			);
-			if (reference)
-				references.push(reference);
-			appendTokenFontReferences(references, item.graphicItem, `layout.items.${item.id}.graphicItem`);
+			appendGraphicItemAssetReferences(references, item.graphicItem, `layout.items.${item.id}.graphicItem`);
 		}
 		if (item.type === 'graphic-group') {
 			appendFontReference(
@@ -136,13 +120,7 @@ export function featureMatchOverlayGraphicAssetReferences(
 					child.surfaceStyle,
 					`layout.items.${item.id}.children.${child.id}.surfaceStyle.font`,
 				);
-				const reference = graphicItemReference(
-					child.graphicItem,
-					`layout.items.${item.id}.children.${child.id}.graphicItem.asset`,
-				);
-				if (reference)
-					references.push(reference);
-				appendTokenFontReferences(
+				appendGraphicItemAssetReferences(
 					references,
 					child.graphicItem,
 					`layout.items.${item.id}.children.${child.id}.graphicItem`,

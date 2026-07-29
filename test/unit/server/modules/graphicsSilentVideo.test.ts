@@ -116,8 +116,61 @@ function withVp9Profile(bytes: Uint8Array, profile: 1 | 2) {
 	const uncompressedHeader = syncCode - 1;
 	result[uncompressedHeader] = (
 		result[uncompressedHeader]!
-		& ~0x0C
-	) | (profile << 2);
+		& ~0x30
+	) | (profile << 4);
+	return result;
+}
+
+function withLaterVp9Profile(bytes: Uint8Array, profile: 1 | 2) {
+	const result = bytes.slice();
+	const blocks: number[] = [];
+	for (let offset = 0; offset < result.byteLength - 1; offset++) {
+		if (result[offset] === 0xA3 && result[offset + 1] === 0x93)
+			blocks.push(offset);
+	}
+	expect(blocks.length).toBeGreaterThan(0);
+	const payload = blocks.at(-1)! + 6;
+	result[payload] = (result[payload]! & ~0x30) | (profile << 4);
+	return result;
+}
+
+function withUndeclaredBlockAdditions(bytes: Uint8Array) {
+	const result = bytes.slice();
+	const block = result.findIndex((byte, index) => byte === 0xA3 && result[index + 1] === 0x93);
+	expect(block).toBeGreaterThan(0);
+	result.set(Uint8Array.of(
+		0xA0,
+		0x93,
+		0xA1,
+		0x84,
+		0x81,
+		0x01,
+		0xF4,
+		0x00,
+		0x75,
+		0xA1,
+		0x8A,
+		0xA6,
+		0x88,
+		0xEE,
+		0x81,
+		0x01,
+		0xA5,
+		0x83,
+		0x82,
+		0x00,
+		0x00,
+	), block);
+	return result;
+}
+
+function withDeclaredAlphaWithoutPlanes(bytes: Uint8Array) {
+	const result = bytes.slice();
+	const colour = result.findIndex((byte, index) =>
+		byte === 0x55 && result[index + 1] === 0xB0 && result[index + 2] === 0x84,
+	);
+	expect(colour).toBeGreaterThan(0);
+	result.set(Uint8Array.of(0x53, 0xC0, 0x81, 0x01, 0xEC, 0x81, 0x00), colour);
 	return result;
 }
 
@@ -324,6 +377,33 @@ describe('silent-video bounded inspection', () => {
 		await expectIssue(
 			processSilentVideo(withVp9Profile(vp9Webm, profile)),
 			'unsupported-video-profile',
+		);
+	});
+
+	it('rejects an unsupported VP9 profile introduced only in a later frame', async () => {
+		const malformed = withLaterVp9Profile(vp9Webm, 1);
+		await expectIssue(processSilentVideo(malformed), 'unsupported-video-profile');
+		await expectIssue(processSilentVideoFromRandomAccess({
+			byteLength: malformed.byteLength,
+			sha256: 'e'.repeat(64),
+			async read(offset, length) {
+				return {
+					outcome: 'available',
+					bytes: malformed.slice(offset, offset + length),
+					completeLength: malformed.byteLength,
+				};
+			},
+		}), 'unsupported-video-profile');
+	});
+
+	it('rejects undeclared BlockAdditions and declared alpha with incomplete auxiliary planes', async () => {
+		await expectIssue(
+			processSilentVideo(withUndeclaredBlockAdditions(vp9Webm)),
+			'unsupported-video-tracks',
+		);
+		await expectIssue(
+			processSilentVideo(withDeclaredAlphaWithoutPlanes(vp9Webm)),
+			'video-index-incomplete',
 		);
 	});
 

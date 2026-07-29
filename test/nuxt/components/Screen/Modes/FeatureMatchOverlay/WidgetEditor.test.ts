@@ -183,23 +183,4 @@ describe('featureMatchOverlayGraphicItemEditor', () => {
 		expect((inputs[2]!.element as HTMLInputElement).value).toBe('4');
 		expect((inputs[3]!.element as HTMLInputElement).value).toBe('3');
 	});
-
-	it('keeps the exact selected reference for a legacy image graphicItem', async () => {
-		const wrapper = await mountComponent({
-			type: 'image',
-			fit: 'contain',
-			opacity: 1,
-			borderRadius: 0,
-		});
-
-		await wrapper.get('[data-testid="select-media"]').trigger('click');
-
-		expect(wrapper.emitted('update')?.at(-1)?.[0]).toMatchObject({
-			type: 'image',
-			asset: {
-				assetId: 'video-asset',
-				revisionId: 'video-revision-4',
-			},
-		});
-	});
 });

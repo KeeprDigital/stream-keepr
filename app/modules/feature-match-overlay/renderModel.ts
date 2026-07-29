@@ -23,6 +23,7 @@ import { resolveFeatureMatchOverlayFontSelection } from '~~/shared/featureMatchO
 import { normalizeFeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { graphicAssetRevisionContentPath } from '~~/shared/utils/graphicsAssetReferences';
+import { featureMatchOverlayGraphicItemDefinition } from '~/modules/feature-match-overlay/graphicItemDefinitions';
 import { featureMatchOverlayBorderRadiusCss, featureMatchOverlaySourceCutoutRect, roundedRectPath } from '~/utils/featureMatchOverlayGeometry';
 import { buildFeatureMatchOverlayTemplateMetadataValues } from '~/utils/featureMatchOverlayTemplateValues';
 import { renderFeatureMatchOverlayTemplateLines } from '~/utils/featureMatchOverlayTokens';
@@ -99,7 +100,6 @@ export interface FeatureMatchOverlayMediaGraphicItemRenderModel<
  */
 export type FeatureMatchOverlayGraphicItemRender
 	= | { type: 'text'; lines: ReturnType<typeof renderFeatureMatchOverlayTemplateLines>; deckColors: string }
-		| { type: 'image'; src: string; alt: string; imageStyle: CSSProperties }
 		| { type: 'clock'; displayTime: string }
 		| {
 			type: 'player-life';
@@ -580,47 +580,37 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 
 	function graphicItemRender(
 		graphicItem: FeatureMatchGraphicItemDefinitionConfig,
-		label: string,
-		rect: FeatureMatchOverlayRect,
 		surfaceStyle: FeatureMatchOverlayBoxStyle | undefined,
 	): FeatureMatchOverlayGraphicItemRender {
-		switch (graphicItem.type) {
-			case 'text':
-				return {
+		return featureMatchOverlayGraphicItemDefinition(graphicItem.type).render<FeatureMatchOverlayGraphicItemRender>(
+			graphicItem as never,
+			{
+				text: config => ({
 					type: 'text',
-					lines: renderTemplateLinesForSide(graphicItem.template, graphicItem.playerSide ?? 'player1', graphicItem.tokenStyles, graphicItem.spacerWidth),
-					deckColors: deckColors(graphicItem.playerSide ?? 'player1'),
-				};
-			case 'image':
-				return {
-					type: 'image',
-					src: graphicItem.asset ? resolveGraphicAssetContentPath(graphicItem.asset) : '',
-					alt: label,
-					imageStyle: imageStyleFor({ x: 0, y: 0, width: rect.width, height: rect.height }, graphicItem),
-				};
-			case 'clock':
-				return { type: 'clock', displayTime };
-			case 'player-life':
-				return {
+					lines: renderTemplateLinesForSide(config.template, config.playerSide ?? 'player1', config.tokenStyles, config.spacerWidth),
+					deckColors: deckColors(config.playerSide ?? 'player1'),
+				}),
+				clock: () => ({ type: 'clock', displayTime }),
+				playerLife: config => ({
 					type: 'player-life',
-					lifeTotal: playerState(graphicItem.playerSide)?.lifeTotal,
-					animation: graphicItem.lifeAnimation,
-					durationMs: graphicItem.lifeAnimationDurationMs,
-					accentColor: graphicItem.lifeAnimationAccentColor,
-				};
-			case 'game-wins':
-				return {
+					lifeTotal: playerState(config.playerSide)?.lifeTotal,
+					animation: config.lifeAnimation,
+					durationMs: config.lifeAnimationDurationMs,
+					accentColor: config.lifeAnimationAccentColor,
+				}),
+				gameWins: config => ({
 					type: 'game-wins',
-					boxes: gameWinBoxes(graphicItem),
-					wins: gameWinCount(graphicItem),
-					displayMode: graphicItem.displayMode ?? 'boxes',
-					containerStyle: gameWinsContainerStyle(graphicItem, surfaceStyle),
+					boxes: gameWinBoxes(config),
+					wins: gameWinCount(config),
+					displayMode: config.displayMode ?? 'boxes',
+					containerStyle: gameWinsContainerStyle(config, surfaceStyle),
 					boxStyles: {
-						won: gameWinBoxStyle(graphicItem, surfaceStyle, true),
-						lost: gameWinBoxStyle(graphicItem, surfaceStyle, false),
+						won: gameWinBoxStyle(config, surfaceStyle, true),
+						lost: gameWinBoxStyle(config, surfaceStyle, false),
 					},
-				};
-		}
+				}),
+			},
+		);
 	}
 
 	function mediaRender<T extends FeatureMatchMediaGraphicItemConfig | FeatureMatchGraphicGroupMediaChildConfig>(
@@ -637,6 +627,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 				objectFit: item.fit,
 				objectPosition: `${item.focalPosition.horizontal * 100}% ${item.focalPosition.vertical * 100}%`,
 				opacity: item.opacity,
+				filter: output === 'key' ? 'brightness(0) invert(1)' : undefined,
 				borderRadius: shapeGeometryBorderRadius(item.clipGeometry),
 				clipPath: shapeGeometryClipPath(item.clipGeometry, rect.width, rect.height),
 			},
@@ -708,7 +699,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		graphicItem: item.graphicItem,
 		surfaceStyle: item.surfaceStyle,
 		style: graphicItemStyle(item, item.surfaceStyle),
-		render: graphicItemRender(item.graphicItem, item.label, item, item.surfaceStyle),
+		render: graphicItemRender(item.graphicItem, item.surfaceStyle),
 	}));
 	const renderedGraphicItemGroups = graphicItemGroups.map(group => ({
 		item: group,
@@ -739,7 +730,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 					graphicItem: child.graphicItem,
 					surfaceStyle,
 					style,
-					render: graphicItemRender(child.graphicItem, child.label, rect, surfaceStyle),
+					render: graphicItemRender(child.graphicItem, surfaceStyle),
 				};
 			}),
 	}));

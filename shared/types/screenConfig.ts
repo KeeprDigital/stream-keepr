@@ -362,14 +362,6 @@ export interface FeatureMatchTextGraphicItemConfig {
 	tokenStyles?: FeatureMatchOverlayTokenStyleMap;
 }
 
-export interface FeatureMatchImageGraphicItemConfig {
-	type: 'image';
-	asset?: GraphicAssetReference;
-	fit: 'contain' | 'cover' | 'fill';
-	opacity: number;
-	borderRadius: number;
-}
-
 export interface FeatureMatchClockGraphicItemConfig {
 	type: 'clock';
 }
@@ -395,13 +387,12 @@ export interface FeatureMatchGameWinsGraphicItemConfig {
 
 export type FeatureMatchGraphicItemDefinitionConfig
 	=	| FeatureMatchTextGraphicItemConfig
-		| FeatureMatchImageGraphicItemConfig
 		| FeatureMatchClockGraphicItemConfig
 		| FeatureMatchPlayerLifeGraphicItemConfig
 		| FeatureMatchGameWinsGraphicItemConfig;
 
 export type FeatureMatchGraphicGroupGraphicItemDefinitionConfig
-	= Exclude<FeatureMatchGraphicItemDefinitionConfig, FeatureMatchImageGraphicItemConfig>;
+	= FeatureMatchGraphicItemDefinitionConfig;
 
 export interface FeatureMatchSpecificGraphicItemConfig extends FeatureMatchLayoutItemBase {
 	type: 'graphic-item';
@@ -554,6 +545,20 @@ export function normalizeFeatureMatchLayout(layout: FeatureMatchLayoutConfig): F
 			item.type = 'graphic-item';
 			item.graphicItem = item.widget;
 			delete item.widget;
+		}
+		const legacyTopLevelGraphicItem = record(item.graphicItem);
+		if (item.type === 'graphic-item' && legacyTopLevelGraphicItem?.type === 'image') {
+			item.type = 'media';
+			item.asset = legacyTopLevelGraphicItem.asset;
+			item.mediaKind = 'image';
+			item.fit = legacyTopLevelGraphicItem.fit ?? 'contain';
+			item.focalPosition = { horizontal: 0.5, vertical: 0.5 };
+			item.opacity = legacyTopLevelGraphicItem.opacity ?? 1;
+			item.clipGeometry = roundedClipGeometry(
+				legacyNumber(legacyTopLevelGraphicItem.borderRadius, 0),
+			);
+			delete item.graphicItem;
+			delete item.surfaceStyle;
 		}
 		if (item.type === 'widget-group')
 			item.type = 'graphic-group';

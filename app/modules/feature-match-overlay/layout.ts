@@ -20,8 +20,8 @@ import { updateFeatureMatchOverlayRectFromAnchor } from '~/utils/featureMatchOve
  */
 
 export type FeatureMatchOverlayGeometryField = 'x' | 'y' | 'width' | 'height';
-export type FeatureMatchOverlayLayerKind = 'source' | 'media' | 'graphic-group' | 'text-graphic-item' | 'image-graphic-item' | 'clock-graphic-item' | 'life-graphic-item' | 'wins-graphic-item';
-export type FeatureMatchGraphicGroupChildKind = Exclude<FeatureMatchGraphicItemDefinitionConfig['type'], 'image'> | 'media';
+export type FeatureMatchOverlayLayerKind = 'source' | 'media' | 'graphic-group' | 'text-graphic-item' | 'clock-graphic-item' | 'life-graphic-item' | 'wins-graphic-item';
+export type FeatureMatchGraphicGroupChildKind = FeatureMatchGraphicItemDefinitionConfig['type'] | 'media';
 
 function nextId(prefix: string) {
 	return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -29,8 +29,6 @@ function nextId(prefix: string) {
 
 function graphicItemTypeFromLayerKind(kind: FeatureMatchOverlayLayerKind): FeatureMatchGraphicItemDefinitionConfig['type'] {
 	switch (kind) {
-		case 'image-graphic-item':
-			return 'image';
 		case 'clock-graphic-item':
 			return 'clock';
 		case 'life-graphic-item':

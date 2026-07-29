@@ -25,12 +25,6 @@ function gameWinBoxStyle(won: boolean) {
 		:deck-colors="render.deckColors"
 		:output="output"
 	/>
-	<img
-		v-else-if="render.type === 'image'"
-		:src="render.src"
-		:alt="render.alt"
-		:style="render.imageStyle"
-	>
 	<span v-else-if="render.type === 'clock'">{{ render.displayTime }}</span>
 	<FeatureMatchOverlayStatusGraphicItem
 		v-else-if="render.type === 'player-life'"
