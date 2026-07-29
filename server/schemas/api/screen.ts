@@ -6,7 +6,10 @@ import {
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
-import { featureMatchGraphicItemSchemas } from '~~/shared/featureMatchGraphicItemDefinitions';
+import {
+	featureMatchGraphicItemDefinition,
+	featureMatchGraphicItemSchemas,
+} from '~~/shared/featureMatchGraphicItemDefinitions';
 import {
 	CARD_ANIMATION_SPEED_VALUES,
 	DECK_CARD_SIZE_VALUES,
@@ -412,16 +415,27 @@ const featureMatchOverlayTokenStyleMapSchema = z
 	.record(z.string().min(1).max(50), featureMatchOverlayBoxStyleSchema)
 	.refine(value => Object.keys(value).length <= 100, 'Too many token style entries');
 
-const featureMatchGraphicItemSchemasFromDefinitions = featureMatchGraphicItemSchemas({
-	z,
-	playerSide: z.enum(PLAYER_SIDE_VALUES),
-	optionalCssColor: optionalCssColorSchema,
-	finiteNumber: finiteNumberSchema,
-	tokenStyleMap: featureMatchOverlayTokenStyleMapSchema,
-	lifeAnimation: featureMatchOverlayPlayerLifeAnimationSchema,
-	gameWinsDisplayMode: featureMatchGameWinsDisplayModeSchema,
-	gameWinsBoxOrientation: featureMatchGameWinsBoxOrientationSchema,
-});
+function featureMatchDefinitionSchemaDependencies(
+	media: () => z.ZodTypeAny = () => z.never(),
+	graphicGroup: () => z.ZodTypeAny = () => z.never(),
+) {
+	return {
+		z,
+		playerSide: z.enum(PLAYER_SIDE_VALUES),
+		optionalCssColor: optionalCssColorSchema,
+		finiteNumber: finiteNumberSchema,
+		tokenStyleMap: featureMatchOverlayTokenStyleMapSchema,
+		lifeAnimation: featureMatchOverlayPlayerLifeAnimationSchema,
+		gameWinsDisplayMode: featureMatchGameWinsDisplayModeSchema,
+		gameWinsBoxOrientation: featureMatchGameWinsBoxOrientationSchema,
+		media,
+		graphicGroup,
+	};
+}
+
+const featureMatchGraphicItemSchemasFromDefinitions = featureMatchGraphicItemSchemas(
+	featureMatchDefinitionSchemaDependencies(),
+);
 
 const featureMatchGraphicItemDefinitionConfigSchema = z.union(
 	featureMatchGraphicItemSchemasFromDefinitions,
@@ -467,6 +481,7 @@ const shapeGeometrySchema = z.object({
 
 const featureMatchMediaGraphicItemContentShape = {
 	type: z.literal('media'),
+	configurationVersion: z.literal(1),
 	asset: graphicAssetReferenceSchema.optional(),
 	mediaKind: z.enum(['image', 'silent-video']),
 	fit: z.enum(['contain', 'cover', 'fill']),
@@ -482,15 +497,9 @@ const featureMatchMediaGraphicItemContentShape = {
 	videoTarget: z.enum(['chromium', 'safari']).optional(),
 } as const;
 
-const featureMatchMediaGraphicItemConfigSchema = featureMatchLayoutItemBaseSchema.extend(
+const featureMatchMediaGraphicItemContentConfigSchema = z.object(
 	featureMatchMediaGraphicItemContentShape,
 ).strict();
-
-const featureMatchSpecificGraphicItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
-	type: z.literal('graphic-item'),
-	graphicItem: featureMatchGraphicItemDefinitionConfigSchema,
-	surfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
-}).strict();
 
 const featureMatchGraphicGroupStackChildLayoutSchema = z.object({
 	mode: z.literal('stack'),
@@ -530,7 +539,7 @@ const featureMatchGraphicGroupGraphicItemChildConfigSchema = z.object({
 
 const featureMatchGraphicGroupMediaChildConfigSchema = z.object({
 	...featureMatchGraphicGroupChildBaseShape,
-	...featureMatchMediaGraphicItemContentShape,
+	...featureMatchMediaGraphicItemContentConfigSchema.shape,
 }).strict();
 
 const featureMatchGraphicGroupChildConfigSchema = z.discriminatedUnion('type', [
@@ -552,14 +561,44 @@ const featureMatchGraphicGroupArrangementSchema = z.discriminatedUnion('mode', [
 	}).strict(),
 ]);
 
-const featureMatchGraphicGroupItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
+const featureMatchGraphicGroupContentConfigSchema = z.object({
 	type: z.literal('graphic-group'),
+	configurationVersion: z.literal(1),
 	surfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
 	arrangement: featureMatchGraphicGroupArrangementSchema,
 	defaultChildSurfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
 	overflow: z.enum(['clip', 'visible']).optional(),
 	children: z.array(featureMatchGraphicGroupChildConfigSchema).max(50),
 }).strict();
+
+const registeredFeatureMatchMediaGraphicItemContentConfigSchema
+	= featureMatchGraphicItemDefinition('media').schema(
+		featureMatchDefinitionSchemaDependencies(
+			() => featureMatchMediaGraphicItemContentConfigSchema,
+			() => featureMatchGraphicGroupContentConfigSchema,
+		),
+	) as typeof featureMatchMediaGraphicItemContentConfigSchema;
+const registeredFeatureMatchGraphicGroupContentConfigSchema
+	= featureMatchGraphicItemDefinition('graphic-group').schema(
+		featureMatchDefinitionSchemaDependencies(
+			() => featureMatchMediaGraphicItemContentConfigSchema,
+			() => featureMatchGraphicGroupContentConfigSchema,
+		),
+	) as typeof featureMatchGraphicGroupContentConfigSchema;
+
+const featureMatchMediaGraphicItemConfigSchema = featureMatchLayoutItemBaseSchema.extend(
+	registeredFeatureMatchMediaGraphicItemContentConfigSchema.shape,
+).strict();
+
+const featureMatchSpecificGraphicItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
+	type: z.literal('graphic-item'),
+	graphicItem: featureMatchGraphicItemDefinitionConfigSchema,
+	surfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
+}).strict();
+
+const featureMatchGraphicGroupItemConfigSchema = featureMatchLayoutItemBaseSchema.extend(
+	registeredFeatureMatchGraphicGroupContentConfigSchema.shape,
+).strict();
 
 const featureMatchLayoutItemConfigSchema = z.discriminatedUnion('type', [
 	featureMatchSourceItemConfigSchema,
@@ -580,7 +619,14 @@ export const featureMatchOverlayModeConfigSchema = z.object({
 			) {
 				return value;
 			}
-			return normalizeFeatureMatchLayout(value as FeatureMatchOverlayModeConfig['layout']);
+			try {
+				return normalizeFeatureMatchLayout(value as FeatureMatchOverlayModeConfig['layout']);
+			}
+			catch {
+				// Keep unsupported future-version input intact so the strict
+				// version literals below report an ordinary atomic parse failure.
+				return value;
+			}
 		},
 		z.object({
 			frame: featureMatchOverlayFrameConfigSchema,

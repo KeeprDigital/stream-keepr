@@ -21,7 +21,7 @@ async function mountComponent(props: {
 	});
 }
 
-describe('featureMatchOverlayGameWinsGraphicItem', () => {
+describe('feature Match Overlay Game Wins Graphic Item', () => {
 	it('renders boxes by default', async () => {
 		const wrapper = await mountComponent({ boxes: [true, false, false], wins: 1 });
 

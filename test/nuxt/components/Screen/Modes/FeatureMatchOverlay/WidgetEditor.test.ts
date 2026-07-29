@@ -99,7 +99,7 @@ async function mountComponent(graphicItem: FeatureMatchGraphicItemDefinitionConf
 	});
 }
 
-describe('featureMatchOverlayGraphicItemEditor', () => {
+describe('feature Match Overlay Graphic Item editor', () => {
 	it('adds spacer tokens and edits spacer width for text graphicItems', async () => {
 		const wrapper = await mountComponent({
 			type: 'text',

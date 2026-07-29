@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'vue';
+import type { GraphicItemRendererContext } from '~~/shared/featureMatchGraphicItemDefinitions';
 import type { PlayerSide } from '~~/shared/types/enums';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
@@ -452,6 +453,23 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 	const graphicItemItems = visibleItems.filter((item): item is FeatureMatchSpecificGraphicItemConfig => item.type === 'graphic-item');
 	const graphicItemGroups = visibleItems.filter((item): item is FeatureMatchGraphicGroupItemConfig => item.type === 'graphic-group');
 
+	function definitionRendererContext<Result>(
+		handlers: Partial<GraphicItemRendererContext<Result>>,
+	): GraphicItemRendererContext<Result> {
+		const unsupported = () => {
+			throw new Error('Graphic Item Definition requires a renderer context supplied by its host.');
+		};
+		return {
+			text: unsupported,
+			clock: unsupported,
+			playerLife: unsupported,
+			gameWins: unsupported,
+			media: unsupported,
+			graphicGroup: unsupported,
+			...handlers,
+		};
+	}
+
 	function itemStyle(item: FeatureMatchLayoutItemConfig): CSSProperties {
 		return {
 			...baseBoxStyle(
@@ -584,7 +602,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 	): FeatureMatchOverlayGraphicItemRender {
 		return featureMatchOverlayGraphicItemDefinition(graphicItem.type).render<FeatureMatchOverlayGraphicItemRender>(
 			graphicItem as never,
-			{
+			definitionRendererContext<FeatureMatchOverlayGraphicItemRender>({
 				text: config => ({
 					type: 'text',
 					lines: renderTemplateLinesForSide(config.template, config.playerSide ?? 'player1', config.tokenStyles, config.spacerWidth),
@@ -609,7 +627,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 						lost: gameWinBoxStyle(config, surfaceStyle, false),
 					},
 				}),
-			},
+			}),
 		);
 	}
 
@@ -618,21 +636,26 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		rect: FeatureMatchOverlayRect,
 		style: CSSProperties,
 	): FeatureMatchOverlayMediaGraphicItemRenderModel<T> {
-		return {
+		return featureMatchOverlayGraphicItemDefinition('media').render(
 			item,
-			style,
-			contentStyle: {
-				width: '100%',
-				height: '100%',
-				objectFit: item.fit,
-				objectPosition: `${item.focalPosition.horizontal * 100}% ${item.focalPosition.vertical * 100}%`,
-				opacity: item.opacity,
-				filter: output === 'key' ? 'brightness(0) invert(1)' : undefined,
-				borderRadius: shapeGeometryBorderRadius(item.clipGeometry),
-				clipPath: shapeGeometryClipPath(item.clipGeometry, rect.width, rect.height),
-			},
-			src: item.asset ? resolveGraphicAssetContentPath(item.asset) : '',
-		};
+			definitionRendererContext<FeatureMatchOverlayMediaGraphicItemRenderModel<T>>({
+				media: media => ({
+					item,
+					style,
+					contentStyle: {
+						width: '100%',
+						height: '100%',
+						objectFit: media.fit,
+						objectPosition: `${media.focalPosition.horizontal * 100}% ${media.focalPosition.vertical * 100}%`,
+						opacity: media.opacity,
+						filter: output === 'key' ? 'brightness(0) invert(1)' : undefined,
+						borderRadius: shapeGeometryBorderRadius(media.clipGeometry),
+						clipPath: shapeGeometryClipPath(media.clipGeometry, rect.width, rect.height),
+					},
+					src: media.asset ? resolveGraphicAssetContentPath(media.asset) : '',
+				}),
+			}),
+		);
 	}
 
 	function groupLayers(group: FeatureMatchGraphicGroupItemConfig): FeatureMatchOverlayGraphicItemGroupLayers {
@@ -701,39 +724,45 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		style: graphicItemStyle(item, item.surfaceStyle),
 		render: graphicItemRender(item.graphicItem, item.surfaceStyle),
 	}));
-	const renderedGraphicItemGroups = graphicItemGroups.map(group => ({
-		item: group,
-		layers: groupLayers(group),
-		children: group.children
-			.filter(child => child.visible)
-			.map((child, index, visibleChildren) => {
-				const rect = childRect(child, index, group, visibleChildren);
-				if (child.type === 'media') {
-					return {
-						kind: 'media' as const,
-						id: child.id,
-						label: child.label,
-						child,
-						...mediaRender(child, rect, {
-							...baseBoxStyle(output, rect, undefined),
-							pointerEvents: 'none',
+	const renderedGraphicItemGroups = graphicItemGroups.map(group =>
+		featureMatchOverlayGraphicItemDefinition('graphic-group').render(
+			group,
+			definitionRendererContext<FeatureMatchOverlayGraphicItemGroupRenderModel>({
+				graphicGroup: registeredGroup => ({
+					item: group,
+					layers: groupLayers(group),
+					children: registeredGroup.children
+						.filter(child => child.visible)
+						.map((child, index, visibleChildren) => {
+							const rect = childRect(child, index, group, visibleChildren);
+							if (child.type === 'media') {
+								return {
+									kind: 'media' as const,
+									id: child.id,
+									label: child.label,
+									child,
+									...mediaRender(child, rect, {
+										...baseBoxStyle(output, rect, undefined),
+										pointerEvents: 'none',
+									}),
+								};
+							}
+							const surfaceStyle = { ...groupChildDefaultSurfaceStyle(group), ...(child.surfaceStyle ?? {}) };
+							const style = graphicItemStyle(rect, surfaceStyle);
+							return {
+								kind: 'graphic-item' as const,
+								id: child.id,
+								label: child.label,
+								child,
+								graphicItem: child.graphicItem,
+								surfaceStyle,
+								style,
+								render: graphicItemRender(child.graphicItem, surfaceStyle),
+							};
 						}),
-					};
-				}
-				const surfaceStyle = { ...groupChildDefaultSurfaceStyle(group), ...(child.surfaceStyle ?? {}) };
-				const style = graphicItemStyle(rect, surfaceStyle);
-				return {
-					kind: 'graphic-item' as const,
-					id: child.id,
-					label: child.label,
-					child,
-					graphicItem: child.graphicItem,
-					surfaceStyle,
-					style,
-					render: graphicItemRender(child.graphicItem, surfaceStyle),
-				};
+				}),
 			}),
-	}));
+		));
 	const sourceById = new Map(renderedSourceItems.map(item => [item.item.id, item]));
 	const mediaById = new Map(renderedMediaItems.map(item => [item.item.id, item]));
 	const graphicItemById = new Map(renderedGraphicItemItems.map(item => [item.item.id, item]));

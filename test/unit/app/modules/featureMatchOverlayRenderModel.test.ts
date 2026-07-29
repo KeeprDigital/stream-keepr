@@ -251,7 +251,7 @@ describe('feature Match Overlay render model', () => {
 			{
 				id: 'gradient-graphicItem',
 				type: 'graphic-item',
-				label: 'Gradient GraphicItem',
+				label: 'Gradient Graphic Item',
 				visible: true,
 				x: 0,
 				y: 0,
@@ -267,7 +267,7 @@ describe('feature Match Overlay render model', () => {
 			{
 				id: 'gradient-only-graphicItem',
 				type: 'graphic-item',
-				label: 'Gradient Only GraphicItem',
+				label: 'Gradient Only Graphic Item',
 				visible: true,
 				x: 0,
 				y: 100,
@@ -293,7 +293,7 @@ describe('feature Match Overlay render model', () => {
 			{
 				id: 'transparent-graphicItem',
 				type: 'graphic-item',
-				label: 'Transparent GraphicItem',
+				label: 'Transparent Graphic Item',
 				visible: true,
 				x: 0,
 				y: 0,
@@ -308,7 +308,7 @@ describe('feature Match Overlay render model', () => {
 			{
 				id: 'no-color-graphicItem',
 				type: 'graphic-item',
-				label: 'No Color GraphicItem',
+				label: 'No Color Graphic Item',
 				visible: true,
 				x: 0,
 				y: 100,
@@ -336,7 +336,7 @@ describe('feature Match Overlay render model', () => {
 			{
 				id: 'glow-graphicItem',
 				type: 'graphic-item',
-				label: 'Glow GraphicItem',
+				label: 'Glow Graphic Item',
 				visible: true,
 				x: 0,
 				y: 0,
@@ -364,7 +364,7 @@ describe('feature Match Overlay render model', () => {
 			{
 				id: 'partial-glow-graphicItem',
 				type: 'graphic-item',
-				label: 'Partial Glow GraphicItem',
+				label: 'Partial Glow Graphic Item',
 				visible: true,
 				x: 0,
 				y: 0,
@@ -390,7 +390,7 @@ describe('feature Match Overlay render model', () => {
 		expect(shadow).not.toContain('inset');
 	});
 
-	it('lays out row GraphicItem Group children with fixed, content, and fill sizing', () => {
+	it('lays out row Graphic Group children with fixed, content, and fill sizing', () => {
 		const base = config();
 		base.layout.items = [
 			{
@@ -420,7 +420,7 @@ describe('feature Match Overlay render model', () => {
 		expect(children[2]!.style).toMatchObject({ left: '210px', width: '280px', height: '80px' });
 	});
 
-	it('separates GraphicItem Group container appearance from child graphicItem defaults', () => {
+	it('separates Graphic Group container appearance from child Graphic Item defaults', () => {
 		const base = config();
 		base.layout.items = [
 			{
@@ -523,7 +523,7 @@ describe('feature Match Overlay render model', () => {
 		}
 	});
 
-	it('resolves render descriptors for GraphicItem Group children too', () => {
+	it('resolves render descriptors for Graphic Group children too', () => {
 		const base = config();
 		base.layout.items = [
 			{
@@ -680,7 +680,7 @@ describe('feature Match Overlay render model', () => {
 		expect(media.style).not.toHaveProperty('zIndex');
 	});
 
-	it('emits pre-layered GraphicItem Group styles: positional shell, backdrop, children, frame', () => {
+	it('emits pre-layered Graphic Group styles: positional shell, backdrop, children, frame', () => {
 		const base = config();
 		base.layout.items = [
 			{
@@ -758,7 +758,7 @@ describe('feature Match Overlay render model', () => {
 		expect(String(keyModel.graphicItemGroups[0]!.layers.backdrop.background)).not.toContain('linear-gradient(red, blue)');
 	});
 
-	it('does not inherit GraphicItem Group appearance as child defaults', () => {
+	it('does not inherit Graphic Group appearance as child defaults', () => {
 		const base = config();
 		base.layout.items = [
 			{

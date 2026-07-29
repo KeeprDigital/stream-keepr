@@ -661,6 +661,34 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		}
 	});
 
+	it('persists current Definition versions while parsing legacy layouts', () => {
+		const legacy = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		const group = legacy.layout.items.find((item: Record<string, unknown>) => item.type === 'graphic-group');
+		expect(group).toBeDefined();
+		delete group.configurationVersion;
+		delete group.children[0].graphicItem.configurationVersion;
+
+		const result = featureMatchOverlayModeConfigSchema.safeParse(legacy);
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			const migratedGroup = result.data.layout.items.find(item => item.type === 'graphic-group');
+			expect(migratedGroup?.type === 'graphic-group' ? migratedGroup.configurationVersion : null).toBe(1);
+			expect(migratedGroup?.type === 'graphic-group' && migratedGroup.children[0]?.type === 'graphic-item'
+				? migratedGroup.children[0].graphicItem.configurationVersion
+				: null).toBe(1);
+		}
+	});
+
+	it('rejects unsupported future Definition versions without partially accepting the layout', () => {
+		const future = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		const group = future.layout.items.find((item: Record<string, unknown>) => item.type === 'graphic-group');
+		expect(group).toBeDefined();
+		group.children[0].graphicItem.configurationVersion = 2;
+
+		expect(featureMatchOverlayModeConfigSchema.safeParse(future).success).toBe(false);
+	});
+
 	it('accepts Feature Match Overlay text spacer settings', () => {
 		const result = featureMatchOverlayModeConfigSchema.safeParse({
 			...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,

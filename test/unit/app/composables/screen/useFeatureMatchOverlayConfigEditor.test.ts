@@ -14,7 +14,7 @@ function graphicItemItem(overrides: Partial<Extract<FeatureMatchLayoutItemConfig
 	return {
 		id: 'w1',
 		type: 'graphic-item',
-		label: 'GraphicItem',
+		label: 'Graphic Item',
 		visible: true,
 		x: 100,
 		y: 50,

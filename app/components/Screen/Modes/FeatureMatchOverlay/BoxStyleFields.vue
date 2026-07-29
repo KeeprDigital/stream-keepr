@@ -263,7 +263,7 @@ function updateFontFamily(value: unknown) {
 
 			<section v-if="includeBorder" class="space-y-3 py-4 first:pt-0 last:pb-0">
 				<ScreenSettingsToggle
-					label="GraphicItem border"
+					label="Graphic Item border"
 					:model-value="styleValue('borderVisible', false)"
 					@update:model-value="emit('update', { borderVisible: $event })"
 				/>

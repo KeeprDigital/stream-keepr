@@ -14,7 +14,7 @@ describe('broadcast layout presets', () => {
 		expect(result.layout.items.find(item => item.id === 'top-bar')?.width).toBe(1872);
 	});
 
-	it('ships presets with Source Items, GraphicItem Groups, and atomic graphicItems', () => {
+	it('ships presets with Source Items, Graphic Groups, and atomic Graphic Items', () => {
 		for (const preset of FEATURE_MATCH_OVERLAY_PRESETS) {
 			const items = preset.config.layout.items;
 			const groups = items.filter(item => item.type === 'graphic-group');

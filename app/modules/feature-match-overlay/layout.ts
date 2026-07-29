@@ -326,19 +326,23 @@ export function createLayoutItem(layout: FeatureMatchLayoutConfig, kind: Feature
 		const { surfaceStyle: _surfaceStyle, ...mediaBase } = base;
 		item = {
 			...mediaBase,
+			...featureMatchOverlayGraphicItemDefinition('media').defaultConfig(),
 			type: 'media',
 			label: 'New Media',
 			width: 420,
 			height: 240,
-			mediaKind: 'image',
-			fit: 'contain',
-			focalPosition: { horizontal: 0.5, vertical: 0.5 },
-			opacity: 1,
-			videoTarget: 'safari',
 		};
 	}
 	else if (kind === 'graphic-group') {
-		item = { ...base, type: 'graphic-group', label: 'New Group', width: 520, height: 90, surfaceStyle: { backgroundOpacity: 0 }, defaultChildSurfaceStyle: base.surfaceStyle, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [] };
+		item = {
+			...base,
+			...featureMatchOverlayGraphicItemDefinition('graphic-group').defaultConfig(),
+			type: 'graphic-group',
+			label: 'New Group',
+			width: 520,
+			height: 90,
+			defaultChildSurfaceStyle: base.surfaceStyle,
+		};
 	}
 	else {
 		const graphicItemType = graphicItemTypeFromLayerKind(kind);
@@ -362,13 +366,9 @@ export function createGroupChild(layout: FeatureMatchLayoutConfig, groupId: stri
 		id,
 		...(type === 'media'
 			? {
-					type,
+					...featureMatchOverlayGraphicItemDefinition('media').defaultConfig(),
+					type: 'media' as const,
 					label: 'Media Graphic Item',
-					mediaKind: 'image' as const,
-					fit: 'contain' as const,
-					focalPosition: { horizontal: 0.5, vertical: 0.5 },
-					opacity: 1,
-					videoTarget: 'safari' as const,
 				}
 			: {
 					type: 'graphic-item' as const,

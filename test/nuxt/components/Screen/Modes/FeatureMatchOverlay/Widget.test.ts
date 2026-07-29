@@ -9,7 +9,7 @@ function mountGraphicItem(render: FeatureMatchOverlayGraphicItemRender) {
 	});
 }
 
-describe('featureMatchOverlayGraphicItem', () => {
+describe('feature Match Overlay Graphic Item', () => {
 	it('renders text graphicItems through TemplateLines', () => {
 		const wrapper = mountGraphicItem({
 			type: 'text',

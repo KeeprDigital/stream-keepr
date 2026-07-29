@@ -1,6 +1,6 @@
 import type { GraphicAssetReference } from '../types/graphicsAsset';
 import type {
-	FeatureMatchGraphicItemDefinitionConfig,
+	FeatureMatchGraphicItemDefinitionOwnedConfig,
 	FeatureMatchOverlayBoxStyle,
 	FeatureMatchOverlayModeConfig,
 } from '../types/screenConfig';
@@ -58,7 +58,7 @@ function appendFontReference(
 
 function appendGraphicItemAssetReferences(
 	references: ScreenGraphicAssetReference[],
-	graphicItem: FeatureMatchGraphicItemDefinitionConfig,
+	graphicItem: FeatureMatchGraphicItemDefinitionOwnedConfig,
 	ownerSlot: string,
 ) {
 	for (const discovered of discoverFeatureMatchGraphicItemAssetReferences(graphicItem)) {
@@ -66,6 +66,8 @@ function appendGraphicItemAssetReferences(
 			reference: discovered.reference,
 			ownerSlot: `${ownerSlot}.${discovered.ownerSuffix}`,
 			kind: discovered.kind,
+			videoCompatibility: discovered.videoCompatibility,
+			videoTarget: discovered.videoTarget,
 		});
 	}
 }
@@ -82,50 +84,13 @@ export function featureMatchOverlayGraphicAssetReferences(
 		});
 	}
 	for (const item of config.layout.items) {
-		if (item.type !== 'media')
+		if (item.type === 'source' || item.type === 'graphic-item')
 			appendFontReference(references, item.surfaceStyle, `layout.items.${item.id}.surfaceStyle.font`);
-		if (item.type === 'media' && item.asset) {
-			references.push({
-				reference: item.asset,
-				ownerSlot: `layout.items.${item.id}.asset`,
-				kind: item.mediaKind,
-				videoCompatibility: item.videoCompatibility,
-				videoTarget: item.videoTarget,
-			});
-		}
 		if (item.type === 'graphic-item') {
 			appendGraphicItemAssetReferences(references, item.graphicItem, `layout.items.${item.id}.graphicItem`);
 		}
-		if (item.type === 'graphic-group') {
-			appendFontReference(
-				references,
-				item.defaultChildSurfaceStyle,
-				`layout.items.${item.id}.defaultChildSurfaceStyle.font`,
-			);
-			for (const child of item.children) {
-				if (child.type === 'media') {
-					if (child.asset) {
-						references.push({
-							reference: child.asset,
-							ownerSlot: `layout.items.${item.id}.children.${child.id}.asset`,
-							kind: child.mediaKind,
-							videoCompatibility: child.videoCompatibility,
-							videoTarget: child.videoTarget,
-						});
-					}
-					continue;
-				}
-				appendFontReference(
-					references,
-					child.surfaceStyle,
-					`layout.items.${item.id}.children.${child.id}.surfaceStyle.font`,
-				);
-				appendGraphicItemAssetReferences(
-					references,
-					child.graphicItem,
-					`layout.items.${item.id}.children.${child.id}.graphicItem`,
-				);
-			}
+		else if (item.type === 'media' || item.type === 'graphic-group') {
+			appendGraphicItemAssetReferences(references, item, `layout.items.${item.id}`);
 		}
 	}
 	return references;

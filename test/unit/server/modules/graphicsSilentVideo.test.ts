@@ -134,6 +134,94 @@ function withLaterVp9Profile(bytes: Uint8Array, profile: 1 | 2) {
 	return result;
 }
 
+function withVp9Superframe(
+	bytes: Uint8Array,
+	options: { laterProfile?: 1 | 2; malformedIndex?: 'marker' | 'size' } = {},
+) {
+	const block = bytes.findIndex((byte, index) => byte === 0xA3 && bytes[index + 1] === 0x93);
+	expect(block).toBeGreaterThan(0);
+	const frame = bytes.slice(block + 6, block + 21);
+	const laterFrame = frame.slice();
+	if (options.laterProfile)
+		laterFrame[0] = (laterFrame[0]! & ~0x30) | (options.laterProfile << 4);
+	const marker = 0xC8;
+	const index = Uint8Array.of(
+		options.malformedIndex === 'marker' ? marker ^ 1 : marker,
+		frame.byteLength,
+		options.malformedIndex === 'size' ? laterFrame.byteLength + 1 : laterFrame.byteLength,
+		marker,
+	);
+	const replacement = Uint8Array.of(
+		0xA3,
+		0xA6,
+		...bytes.slice(block + 2, block + 6),
+		...frame,
+		...laterFrame,
+		...index,
+	);
+	const result = concatenate([
+		bytes.slice(0, block),
+		replacement,
+		bytes.slice(block + 21),
+	]);
+	const growth = replacement.byteLength - 21;
+	const cluster = result.findIndex((byte, index_) =>
+		byte === 0x1F && result[index_ + 1] === 0x43 && result[index_ + 2] === 0xB6 && result[index_ + 3] === 0x75,
+	);
+	expect(cluster).toBeGreaterThan(0);
+	result[cluster + 4] = bytes[cluster + 4]! + growth;
+	new DataView(result.buffer).setBigUint64(40, (1n << 56n) | BigInt(result.byteLength - 48));
+	return result;
+}
+
+function withUnsupportedBlockGroupTiming(
+	bytes: Uint8Array,
+	element: 'duration' | 'reference',
+	value: number,
+) {
+	const result = bytes.slice();
+	const block = result.findIndex((byte, index) => byte === 0xA3 && bytes[index + 1] === 0xAC);
+	const compactBlock = result.findIndex((byte, index) => byte === 0xA3 && bytes[index + 1] === 0x93);
+	expect(block).toBeGreaterThan(0);
+	expect(compactBlock).toBeGreaterThan(0);
+	const originalBlockData = result.slice(compactBlock + 2, compactBlock + 21);
+	const timing = element === 'duration'
+		? Uint8Array.of(0x9B, 0x81, value)
+		: Uint8Array.of(0xFB, 0x81, value);
+	const paddingLength = 44 - (2 + originalBlockData.byteLength) - timing.byteLength;
+	expect(paddingLength).toBeGreaterThanOrEqual(2);
+	result.set(Uint8Array.of(
+		0xA0,
+		0xAC,
+		0xA1,
+		0x80 | originalBlockData.byteLength,
+		...originalBlockData,
+		...timing,
+		0xEC,
+		0x80 | (paddingLength - 2),
+		...new Uint8Array(paddingLength - 2),
+	), block);
+	return result;
+}
+
+function withShortWebmTimeline(bytes: Uint8Array) {
+	const result = bytes.slice();
+	const duration = result.findIndex((byte, index) =>
+		byte === 0x44 && result[index + 1] === 0x89 && result[index + 2] === 0x88,
+	);
+	expect(duration).toBeGreaterThan(0);
+	new DataView(result.buffer).setFloat64(duration + 3, 40);
+	const blocks: number[] = [];
+	for (let offset = 0; offset < result.byteLength - 1; offset++) {
+		if (result[offset] === 0xA3 && (result[offset + 1]! & 0x80) !== 0)
+			blocks.push(offset);
+	}
+	expect(blocks.length).toBeGreaterThanOrEqual(2);
+	result[blocks.at(-1)! + 3] = 0;
+	result[blocks.at(-1)! + 4] = 17;
+	return result;
+}
+
 function withUndeclaredBlockAdditions(bytes: Uint8Array) {
 	const result = bytes.slice();
 	const block = result.findIndex((byte, index) => byte === 0xA3 && result[index + 1] === 0x93);
@@ -294,6 +382,37 @@ describe('silent-video bounded inspection', () => {
 		expect(reads).not.toContainEqual({ offset: 0, length: vp9Webm.byteLength });
 	});
 
+	it('range-inspects a sparse near-limit WebM without reading the trailing Void payload', async () => {
+		const byteLength = 249 * 1024 * 1024;
+		const voidHeader = new Uint8Array(9);
+		voidHeader[0] = 0xEC;
+		const voidPayloadLength = byteLength - vp9Webm.byteLength - voidHeader.byteLength;
+		new DataView(voidHeader.buffer).setBigUint64(1, (1n << 56n) | BigInt(voidPayloadLength));
+		const reads: Array<{ offset: number; length: number }> = [];
+
+		const processed = await processSilentVideoFromRandomAccess({
+			byteLength,
+			sha256: 'f'.repeat(64),
+			async read(offset, length) {
+				reads.push({ offset, length });
+				const bytes = new Uint8Array(length);
+				for (let index = 0; index < length; index++) {
+					const position = offset + index;
+					if (position < vp9Webm.byteLength)
+						bytes[index] = vp9Webm[position]!;
+					else if (position < vp9Webm.byteLength + voidHeader.byteLength)
+						bytes[index] = voidHeader[position - vp9Webm.byteLength]!;
+				}
+				return { outcome: 'available', bytes, completeLength: byteLength };
+			},
+		});
+
+		expect(processed.report.facts).toMatchObject({ format: 'webm', frameCount: 2 });
+		expect(Math.max(...reads.map(read => read.length))).toBeLessThanOrEqual(256 * 1024);
+		expect(reads.reduce((total, read) => total + read.length, 0)).toBeLessThan(16 * 1024 * 1024);
+		expect(reads).not.toContainEqual({ offset: 0, length: byteLength });
+	});
+
 	it('rejects a ranged source whose provider lies about exact object length', async () => {
 		await expect(processSilentVideoFromRandomAccess({
 			byteLength: vp9Webm.byteLength,
@@ -394,6 +513,44 @@ describe('silent-video bounded inspection', () => {
 				};
 			},
 		}), 'unsupported-video-profile');
+	});
+
+	it('counts and validates every VP9 superframe constituent', async () => {
+		const superframed = withVp9Superframe(vp9Webm);
+		const processed = await processSilentVideo(superframed);
+		expect(processed.report.facts).toMatchObject({
+			format: 'webm',
+			frameCount: 3,
+			frameRate: 3,
+		});
+
+		const unsupportedLater = withVp9Superframe(vp9Webm, { laterProfile: 1 });
+		await expectIssue(processSilentVideo(unsupportedLater), 'unsupported-video-profile');
+		await expectIssue(processSilentVideoFromRandomAccess({
+			byteLength: unsupportedLater.byteLength,
+			sha256: 'a'.repeat(64),
+			async read(offset, length) {
+				return {
+					outcome: 'available',
+					bytes: unsupportedLater.slice(offset, offset + length),
+					completeLength: unsupportedLater.byteLength,
+				};
+			},
+		}), 'unsupported-video-profile');
+	});
+
+	it('includes every VP9 superframe constituent in the frame-rate limit', async () => {
+		await expectIssue(
+			processSilentVideo(withShortWebmTimeline(withVp9Superframe(vp9Webm))),
+			'video-frame-rate-exceeded',
+		);
+	});
+
+	it.each(['marker', 'size'] as const)('rejects a malformed VP9 superframe $0 index', async (malformedIndex) => {
+		await expectIssue(
+			processSilentVideo(withVp9Superframe(vp9Webm, { malformedIndex })),
+			'malformed-video',
+		);
 	});
 
 	it('rejects undeclared BlockAdditions and declared alpha with incomplete auxiliary planes', async () => {
@@ -550,6 +707,17 @@ describe('silent-video bounded inspection', () => {
 		malformed[clusterTime + 2] = 1;
 
 		await expectIssue(processSilentVideo(malformed), 'malformed-video-timeline');
+	});
+
+	it.each([
+		{ label: 'gap duration', element: 'duration' as const, value: 0x20 },
+		{ label: 'out-of-range duration', element: 'duration' as const, value: 0xFF },
+		{ label: 'overlapping reference', element: 'reference' as const, value: 0 },
+	])('rejects unsupported BlockGroup timing semantics for $label', async ({ element, value }) => {
+		await expectIssue(
+			processSilentVideo(withUnsupportedBlockGroupTiming(vp9Webm, element, value)),
+			'malformed-video-timeline',
+		);
 	});
 
 	it('rejects HDR transfer signalling from the WebM Colour element', async () => {

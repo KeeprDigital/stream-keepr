@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { FEATURE_MATCH_OVERLAY_GRAPHIC_ITEM_TYPES, featureMatchOverlayGraphicItemDefinition } from '~~/app/modules/feature-match-overlay/graphicItemDefinitions';
 
-describe('feature Match Overlay GraphicItem Definitions', () => {
-	it('defines every graphicItem type exactly once', () => {
+describe('feature Match Overlay Graphic Item Definitions', () => {
+	it('defines every Graphic Item kind exactly once', () => {
 		expect([...FEATURE_MATCH_OVERLAY_GRAPHIC_ITEM_TYPES].sort()).toEqual(
-			['clock', 'game-wins', 'player-life', 'text'].sort(),
+			['clock', 'game-wins', 'graphic-group', 'media', 'player-life', 'text'].sort(),
 		);
 	});
 
@@ -21,6 +21,7 @@ describe('feature Match Overlay GraphicItem Definitions', () => {
 			expect(definition.label.length).toBeGreaterThan(0);
 			expect(definition.icon).toMatch(/^i-lucide-/);
 			expect(definition.defaultConfig().type).toBe(type);
+			expect(definition.defaultConfig().configurationVersion).toBe(1);
 		}
 	});
 
@@ -32,8 +33,14 @@ describe('feature Match Overlay GraphicItem Definitions', () => {
 			clock: () => 'clock',
 			playerLife: () => 'life',
 			gameWins: () => 'wins',
+			media: () => 'media',
+			graphicGroup: () => 'group',
 		})).toBe('clock');
 		expect(definition.migrate(config, definition.configurationVersion)).toBe(config);
+		expect(definition.migrate({ type: 'clock' }, undefined)).toEqual({
+			type: 'clock',
+			configurationVersion: 1,
+		});
 		expect(() => definition.migrate(config, 2)).toThrow(
 			'Unsupported Graphic Item configuration version 2.',
 		);
@@ -45,10 +52,18 @@ describe('feature Match Overlay GraphicItem Definitions', () => {
 		expect(featureMatchOverlayGraphicItemDefinition('game-wins').label).toBe('Wins');
 	});
 
-	it('summarizes graphicItem configs', () => {
+	it('summarizes Graphic Item configs', () => {
 		expect(featureMatchOverlayGraphicItemDefinition('text').summary({ type: 'text', template: '{name}' })).toBe('{name}');
 		expect(featureMatchOverlayGraphicItemDefinition('clock').summary({ type: 'clock' })).toBe('Live clock');
 		expect(featureMatchOverlayGraphicItemDefinition('player-life').summary({ type: 'player-life', playerSide: 'player2' })).toBe('player2 life');
+		expect(featureMatchOverlayGraphicItemDefinition('media').summary({
+			...featureMatchOverlayGraphicItemDefinition('media').defaultConfig(),
+			mediaKind: 'silent-video',
+		})).toBe('choose an asset');
+		expect(featureMatchOverlayGraphicItemDefinition('graphic-group').summary({
+			...featureMatchOverlayGraphicItemDefinition('graphic-group').defaultConfig(),
+			children: [],
+		})).toBe('0 Graphic Items');
 	});
 
 	it('default configs are fresh objects each call', () => {

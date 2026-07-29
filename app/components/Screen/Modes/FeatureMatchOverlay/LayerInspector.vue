@@ -3,6 +3,7 @@ import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig
 import type { FeatureMatchOverlayConfigUpdater, FeatureMatchOverlayLayerKind } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
+import { featureMatchOverlayGraphicItemDefinition } from '~/modules/feature-match-overlay/graphicItemDefinitions';
 import { childIcon, childSummary, childTypeLabel, itemSummary, layerIcon, layerTypeLabel } from '~/modules/feature-match-overlay/layerSummaries';
 import { featureMatchOverlaySelectionKey, resolveFeatureMatchOverlaySelection } from '~/modules/feature-match-overlay/selection';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
@@ -32,12 +33,12 @@ const treeNodeRefs = ref<Record<string, HTMLElement>>({});
 
 const LAYER_KIND_OPTIONS = [
 	{ label: 'Source', value: 'source', icon: 'i-lucide-video' },
-	{ label: 'Text', value: 'text-graphic-item', icon: 'i-lucide-type' },
-	{ label: 'Media', value: 'media', icon: 'i-lucide-image-play' },
-	{ label: 'Clock', value: 'clock-graphic-item', icon: 'i-lucide-clock' },
-	{ label: 'Player Life', value: 'life-graphic-item', icon: 'i-lucide-heart-pulse' },
-	{ label: 'Game Wins', value: 'wins-graphic-item', icon: 'i-lucide-trophy' },
-	{ label: 'Group', value: 'graphic-group', icon: 'i-lucide-group' },
+	{ ...featureMatchOverlayGraphicItemDefinition('text'), value: 'text-graphic-item' },
+	{ ...featureMatchOverlayGraphicItemDefinition('media'), value: 'media' },
+	{ ...featureMatchOverlayGraphicItemDefinition('clock'), value: 'clock-graphic-item' },
+	{ ...featureMatchOverlayGraphicItemDefinition('player-life'), label: 'Player Life', value: 'life-graphic-item' },
+	{ ...featureMatchOverlayGraphicItemDefinition('game-wins'), label: 'Game Wins', value: 'wins-graphic-item' },
+	{ ...featureMatchOverlayGraphicItemDefinition('graphic-group'), value: 'graphic-group' },
 ];
 
 const { createLayoutItem, patchFrame } = useFeatureMatchOverlayConfigEditor({

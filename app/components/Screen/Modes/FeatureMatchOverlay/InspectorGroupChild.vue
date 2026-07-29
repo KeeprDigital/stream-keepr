@@ -79,12 +79,8 @@ function replaceContentType(type: FeatureMatchGraphicGroupChildKind) {
 	const replacement: FeatureMatchGraphicGroupChildConfig = type === 'media'
 		? {
 				...base,
-				type,
-				mediaKind: 'image',
-				fit: 'contain',
-				focalPosition: { horizontal: 0.5, vertical: 0.5 },
-				opacity: 1,
-				videoTarget: 'safari',
+				...featureMatchOverlayGraphicItemDefinition('media').defaultConfig(),
+				type: 'media',
 			}
 		: {
 				...base,

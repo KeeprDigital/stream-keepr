@@ -1957,6 +1957,20 @@ export function createGraphicsAssetLibrary(
 					'invalid-ingestion-input',
 				);
 			}
+			const challenge = operation.browserDecodeEvidence;
+			if (
+				challenge?.outcome !== 'video-challenge'
+				|| input.evidence.challengeId !== challenge.challengeId
+				|| input.evidence.operationId !== operation.id
+				|| input.evidence.factsDigest !== challenge.factsDigest
+				|| input.evidence.sourceDigest !== challenge.sourceDigest
+				|| now().getTime() > new Date(challenge.expiresAt).getTime()
+			) {
+				throw new GraphicsAssetLibraryError(
+					'Silent video browser evidence does not answer the active operation-bound challenge',
+					'invalid-ingestion-input',
+				);
+			}
 			if (
 				input.evidence.outcome === 'video-played'
 				&& (
@@ -1984,20 +1998,6 @@ export function createGraphicsAssetLibrary(
 					throw new GraphicsAssetLibraryError(
 						'Silent video poster could not be staged',
 						'graphics-asset-library-unavailable',
-					);
-				}
-				const challenge = operation.browserDecodeEvidence;
-				if (
-					challenge?.outcome !== 'video-challenge'
-					|| input.evidence.challengeId !== challenge.challengeId
-					|| input.evidence.operationId !== operation.id
-					|| input.evidence.factsDigest !== challenge.factsDigest
-					|| input.evidence.sourceDigest !== challenge.sourceDigest
-					|| now().getTime() > new Date(challenge.expiresAt).getTime()
-				) {
-					throw new GraphicsAssetLibraryError(
-						'Silent video browser evidence does not answer the active operation-bound challenge',
-						'invalid-ingestion-input',
 					);
 				}
 				await catalogueRequest(

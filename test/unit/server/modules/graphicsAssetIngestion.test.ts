@@ -94,6 +94,7 @@ function createLibrary(
 	staging = createInMemoryStagingGraphicsObjectStore(),
 	canonical = createInMemoryCanonicalGraphicsObjectStore(),
 	catalogue = createInMemoryGraphicsAssetCatalogue(),
+	now = () => new Date('2026-07-27T04:00:00.000Z'),
 ) {
 	let nextIdentity = 0;
 	const libraryDelegate = createGraphicsAssetLibrary({
@@ -101,7 +102,7 @@ function createLibrary(
 		staging,
 		canonical,
 		generateIdentity: () => `identity-${++nextIdentity}`,
-		now: () => new Date('2026-07-27T04:00:00.000Z'),
+		now,
 	});
 	const library: typeof libraryDelegate = {
 		...libraryDelegate,
@@ -1676,5 +1677,103 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			failure: { code: 'validation-failed', retryable: false },
 		});
 		await expect(library.listGraphicAssets({})).resolves.toEqual([]);
+	});
+
+	it('requires fresh operation-bound single-use challenges for rejected video evidence', async () => {
+		let currentTime = new Date('2026-07-27T04:00:00.000Z');
+		const { library } = createLibrary(
+			undefined,
+			undefined,
+			undefined,
+			() => currentTime,
+		);
+		const stage = async (key: string) => {
+			const operation = await library.initiateGraphicsIngestion({
+				idempotencyKey: key,
+				initiatedBy: 'graphics-author-1',
+				name: key,
+				sourceFileName: `${key}.webm`,
+				declaredMime: 'video/webm',
+				declaredByteLength: vp9Webm.byteLength,
+			});
+			await library.uploadGraphicAsset({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				declaredMime: 'video/webm',
+				bytes: createBoundedByteStream(vp9Webm, {
+					byteLength: vp9Webm.byteLength,
+					maximumByteLength: 250 * 1024 * 1024,
+				}),
+			});
+			return operation;
+		};
+		const first = await stage('rejected-challenge-first');
+		const second = await stage('rejected-challenge-second');
+		const arbitrary = await stage('rejected-challenge-arbitrary');
+		await expect(library.confirmSilentVideoBrowserEvidence({
+			operationId: arbitrary.id,
+			initiatedBy: arbitrary.initiatedBy,
+			evidence: {
+				outcome: 'video-rejected',
+				challengeId: 'caller-authored-challenge',
+				operationId: arbitrary.id,
+				sourceDigest: sourceDigest(vp9Webm),
+				factsDigest: '0'.repeat(64),
+				expiresAt: '2099-01-01T00:00:00.000Z',
+				browserFamily: 'chromium',
+				stage: 'metadata',
+			},
+		})).rejects.toMatchObject({ code: 'invalid-ingestion-input' });
+		const firstChallenge = await library.issueSilentVideoBrowserChallenge({
+			operationId: first.id,
+			initiatedBy: first.initiatedBy,
+		});
+		await expect(library.confirmSilentVideoBrowserEvidence({
+			operationId: second.id,
+			initiatedBy: second.initiatedBy,
+			evidence: {
+				outcome: 'video-rejected',
+				...firstChallenge,
+				browserFamily: 'chromium',
+				stage: 'seek',
+			},
+		})).rejects.toMatchObject({ code: 'invalid-ingestion-input' });
+
+		const secondChallenge = await library.issueSilentVideoBrowserChallenge({
+			operationId: second.id,
+			initiatedBy: second.initiatedBy,
+		});
+		currentTime = new Date('2026-07-27T04:05:00.001Z');
+		await expect(library.confirmSilentVideoBrowserEvidence({
+			operationId: second.id,
+			initiatedBy: second.initiatedBy,
+			evidence: {
+				outcome: 'video-rejected',
+				...secondChallenge,
+				browserFamily: 'chromium',
+				stage: 'seek',
+			},
+		})).rejects.toMatchObject({ code: 'invalid-ingestion-input' });
+
+		const freshChallenge = await library.issueSilentVideoBrowserChallenge({
+			operationId: second.id,
+			initiatedBy: second.initiatedBy,
+		});
+		const validRejection = {
+			outcome: 'video-rejected' as const,
+			...freshChallenge,
+			browserFamily: 'chromium' as const,
+			stage: 'seek' as const,
+		};
+		await expect(library.confirmSilentVideoBrowserEvidence({
+			operationId: second.id,
+			initiatedBy: second.initiatedBy,
+			evidence: validRejection,
+		})).resolves.toMatchObject({ stage: 'failed' });
+		await expect(library.confirmSilentVideoBrowserEvidence({
+			operationId: second.id,
+			initiatedBy: second.initiatedBy,
+			evidence: validRejection,
+		})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
 	});
 });

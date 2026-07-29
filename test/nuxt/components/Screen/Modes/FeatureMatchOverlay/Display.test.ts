@@ -123,7 +123,7 @@ describe('featureMatchOverlayDisplay', () => {
 		});
 	});
 
-	it('renders GraphicItem Group appearance above clipped child graphicItems', async () => {
+	it('renders Graphic Group appearance above clipped child Graphic Items', async () => {
 		const wrapper = await mountComponent();
 		const group = wrapper.get('.feature-match-overlay-graphic-group');
 		const groupElement = group.element as HTMLElement;
@@ -232,7 +232,7 @@ describe('featureMatchOverlayDisplay', () => {
 	it('hides preview and output rendering until every exact font revision is ready', async () => {
 		const firstItem = mockConfig.value.layout.items[0]!;
 		if (firstItem.type !== 'graphic-group')
-			throw new Error('Expected GraphicItem Group test fixture');
+			throw new Error('Expected Graphic Group test fixture');
 		firstItem.surfaceStyle = {
 			font: {
 				kind: 'asset',
@@ -277,7 +277,7 @@ describe('featureMatchOverlayDisplay', () => {
 	it('retries exact font loading when private content URLs finish resolving', async () => {
 		const firstItem = mockConfig.value.layout.items[0]!;
 		if (firstItem.type !== 'graphic-group')
-			throw new Error('Expected GraphicItem Group test fixture');
+			throw new Error('Expected Graphic Group test fixture');
 		firstItem.surfaceStyle = {
 			font: {
 				kind: 'asset',

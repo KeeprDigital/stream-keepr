@@ -13,7 +13,7 @@ function layoutOf(items: FeatureMatchLayoutItemConfig[]): FeatureMatchLayoutConf
 }
 
 const sourceItem: FeatureMatchLayoutItemConfig = { id: 's1', type: 'source', label: 'Source', visible: true, x: 0, y: 0, width: 100, height: 100, sourceRole: 'main', frameCutout: true };
-const graphicItemItem: FeatureMatchLayoutItemConfig = { id: 'w1', type: 'graphic-item', label: 'GraphicItem', visible: true, x: 0, y: 0, width: 100, height: 40, graphicItem: { type: 'clock' } };
+const graphicItemItem: FeatureMatchLayoutItemConfig = { id: 'w1', type: 'graphic-item', label: 'Graphic Item', visible: true, x: 0, y: 0, width: 100, height: 40, graphicItem: { type: 'clock' } };
 const groupItem: FeatureMatchLayoutItemConfig = {
 	id: 'g1',
 	type: 'graphic-group',

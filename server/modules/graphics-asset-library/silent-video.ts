@@ -976,7 +976,83 @@ function webmBlockPrefixFacts(bytes: Uint8Array) {
 	return {
 		track: track.value,
 		relativeTime: view.getInt16(header),
-		payload: bytes.subarray(header + 3),
+		payloadOffset: header + 3,
+	};
+}
+
+interface Vp9FrameRange {
+	start: number;
+	length: number;
+}
+
+async function vp9FrameRanges(
+	reader: ReturnType<typeof boundedRandomAccessReader>,
+	payloadStart: number,
+	payloadLength: number,
+	availablePrefix?: Uint8Array,
+) {
+	if (payloadLength <= 0)
+		validationError('video-index-incomplete', 'VP9 frame payload is incomplete.');
+	const prefix = availablePrefix ?? await reader.readSpan(
+		payloadStart,
+		Math.min(32, payloadLength),
+		32,
+	);
+	const trailing = payloadLength <= prefix.byteLength
+		? prefix[payloadLength - 1]!
+		: (await reader.readExact(payloadStart + payloadLength - 1, 1))[0]!;
+	if ((trailing & 0xE0) !== 0xC0) {
+		return {
+			ranges: [{ start: payloadStart, length: payloadLength }],
+			prefix,
+		};
+	}
+
+	const frameCount = ((trailing >>> 3) & 0x07) + 1;
+	const magnitude = (trailing & 0x07) + 1;
+	const indexLength = 2 + frameCount * magnitude;
+	if (indexLength > payloadLength)
+		validationError('malformed-video', 'VP9 superframe index is truncated.');
+	const index = await reader.readSpan(
+		payloadStart + payloadLength - indexLength,
+		indexLength,
+		34,
+	);
+	if (index[0] !== trailing || index[index.length - 1] !== trailing)
+		validationError('malformed-video', 'VP9 superframe index markers do not match.');
+
+	const ranges: Vp9FrameRange[] = [];
+	let frameOffset = payloadStart;
+	let indexedPayloadLength = 0;
+	for (let frameIndex = 0; frameIndex < frameCount; frameIndex++) {
+		let frameLength = 0;
+		for (let byteIndex = 0; byteIndex < magnitude; byteIndex++)
+			frameLength += index[1 + frameIndex * magnitude + byteIndex]! * 2 ** (byteIndex * 8);
+		if (frameLength <= 0)
+			validationError('malformed-video', 'VP9 superframe index contains an empty constituent frame.');
+		ranges.push({ start: frameOffset, length: frameLength });
+		frameOffset += frameLength;
+		indexedPayloadLength += frameLength;
+	}
+	if (indexedPayloadLength !== payloadLength - indexLength)
+		validationError('malformed-video', 'VP9 superframe index does not cover the exact Block payload.');
+	return { ranges, prefix };
+}
+
+async function validateVp9FrameRange(
+	reader: ReturnType<typeof boundedRandomAccessReader>,
+	frame: Vp9FrameRange,
+	payloadStart: number,
+	prefix: Uint8Array,
+) {
+	const prefixOffset = frame.start - payloadStart;
+	const headerLength = Math.min(32, frame.length);
+	const header = prefixOffset >= 0 && prefixOffset + headerLength <= prefix.byteLength
+		? prefix.subarray(prefixOffset, prefixOffset + headerLength)
+		: await reader.readSpan(frame.start, headerLength, 32);
+	return {
+		header,
+		facts: validateVp9FrameHeader(header),
 	};
 }
 
@@ -1104,7 +1180,7 @@ async function inspectWebmRandomAccess(
 			timeBytes,
 			localEbmlElement(timeBytes, 0xE7),
 		);
-		const blocks: Array<{ block: EbmlElement; alphaPayload?: Uint8Array }> = [];
+		const blocks: Array<{ block: EbmlElement; alpha?: { start: number; length: number } }> = [];
 		for (const element of clusterChildren) {
 			if (element.id === 0xA3) {
 				if (hasAlpha)
@@ -1113,7 +1189,13 @@ async function inspectWebmRandomAccess(
 			}
 			else if (element.id === 0xA0) {
 				const blockGroup = await scanEbmlElements(reader, element.dataStart, element.end, 32);
-				if (blockGroup.some(child => ![0xA1, 0x9B, 0xFB, 0x75A1].includes(child.id)))
+				if (blockGroup.some(child => [0x9B, 0xFA, 0xFB, 0x75A2].includes(child.id))) {
+					validationError(
+						'malformed-video-timeline',
+						'WebM BlockGroup timing and reference elements are unsupported because their timeline semantics are not inspected.',
+					);
+				}
+				if (blockGroup.some(child => ![0xA1, 0x75A1].includes(child.id)))
 					validationError('unsupported-video-tracks', 'WebM BlockGroup contains unsupported ancillary data.');
 				const block = oneEbml(blockGroup, 0xA1, 'video-index-incomplete');
 				const additions = blockGroup.filter(child => child.id === 0x75A1);
@@ -1121,7 +1203,7 @@ async function inspectWebmRandomAccess(
 					validationError('unsupported-video-tracks', 'WebM BlockAdditions are allowed only for a declared VP9 alpha plane.');
 				if (hasAlpha && additions.length !== 1)
 					validationError('video-index-incomplete', 'Every VP9 alpha BlockGroup requires one alpha BlockAdditions element.');
-				let alphaPayload: Uint8Array | undefined;
+				let alpha: { start: number; length: number } | undefined;
 				if (additions[0]) {
 					const blockMore = await scanEbmlElements(reader, additions[0].dataStart, additions[0].end, 4);
 					const more = oneEbml(blockMore, 0xA6, 'video-index-incomplete');
@@ -1141,22 +1223,19 @@ async function inspectWebmRandomAccess(
 					const additional = oneEbml(moreChildren, 0xA5, 'video-index-incomplete');
 					if (additional.end <= additional.dataStart)
 						validationError('video-index-incomplete', 'VP9 alpha BlockAdditional payload is incomplete.');
-					alphaPayload = await reader.readSpan(
-						additional.dataStart,
-						Math.min(32, additional.end - additional.dataStart),
-						32,
-					);
+					alpha = {
+						start: additional.dataStart,
+						length: additional.end - additional.dataStart,
+					};
 				}
-				blocks.push({ block, alphaPayload });
+				blocks.push({ block, alpha });
 			}
 			else if (element.id !== 0xE7 && ![0xA7, 0xAB, 0x5854].includes(element.id)) {
 				validationError('unsupported-video-tracks', 'WebM cluster contains unsupported ancillary data.');
 			}
 		}
 		let clusterFirstPayload: Uint8Array | undefined;
-		for (const { block, alphaPayload } of blocks) {
-			if (++frameCount > MAX_SILENT_VIDEO_DURATION_SECONDS * MAX_SILENT_VIDEO_FRAME_RATE)
-				validationError('video-frame-rate-exceeded', 'WebM frame table exceeds the bounded profile.');
+		for (const { block, alpha } of blocks) {
 			const prefix = await reader.readSpan(
 				block.dataStart,
 				Math.min(32, block.end - block.dataStart),
@@ -1165,13 +1244,44 @@ async function inspectWebmRandomAccess(
 			const facts = webmBlockPrefixFacts(prefix);
 			if (facts.track !== trackNumber)
 				validationError('unsupported-video-tracks', 'WebM block references an undeclared track.');
-			const primaryHeader = validateVp9FrameHeader(facts.payload);
+			const primaryPayloadStart = block.dataStart + facts.payloadOffset;
+			const primary = await vp9FrameRanges(
+				reader,
+				primaryPayloadStart,
+				block.end - block.dataStart - facts.payloadOffset,
+				prefix.subarray(facts.payloadOffset),
+			);
+			const alphaInspection = hasAlpha && alpha
+				? await vp9FrameRanges(reader, alpha.start, alpha.length)
+				: undefined;
 			if (hasAlpha) {
-				if (!alphaPayload)
+				if (!alpha)
 					validationError('video-index-incomplete', 'VP9 alpha frame payload is incomplete.');
-				const alphaHeader = validateVp9FrameHeader(alphaPayload);
-				if (alphaHeader.keyFrame !== primaryHeader.keyFrame)
-					validationError('video-index-incomplete', 'VP9 colour and alpha planes must share random-access frame structure.');
+				if (alphaInspection!.ranges.length !== primary.ranges.length)
+					validationError('video-index-incomplete', 'VP9 colour and alpha superframes must contain the same number of constituent frames.');
+			}
+			if (frameCount + primary.ranges.length > MAX_SILENT_VIDEO_DURATION_SECONDS * MAX_SILENT_VIDEO_FRAME_RATE)
+				validationError('video-frame-rate-exceeded', 'WebM frame table exceeds the bounded profile.');
+			frameCount += primary.ranges.length;
+			let firstPrimaryHeader: Uint8Array | undefined;
+			for (let frameIndex = 0; frameIndex < primary.ranges.length; frameIndex++) {
+				const primaryFrame = await validateVp9FrameRange(
+					reader,
+					primary.ranges[frameIndex]!,
+					primaryPayloadStart,
+					primary.prefix,
+				);
+				firstPrimaryHeader ??= primaryFrame.header;
+				if (hasAlpha) {
+					const alphaFrame = await validateVp9FrameRange(
+						reader,
+						alphaInspection!.ranges[frameIndex]!,
+						alpha!.start,
+						alphaInspection!.prefix,
+					);
+					if (alphaFrame.facts.keyFrame !== primaryFrame.facts.keyFrame)
+						validationError('video-index-incomplete', 'VP9 colour and alpha planes must share random-access frame structure.');
+				}
 			}
 			const absoluteTime = clusterTime + facts.relativeTime;
 			if (absoluteTime < 0 || absoluteTime <= previousTime)
@@ -1184,7 +1294,7 @@ async function inspectWebmRandomAccess(
 			}
 			firstTime ??= absoluteTime;
 			previousTime = absoluteTime;
-			clusterFirstPayload ??= facts.payload.slice();
+			clusterFirstPayload ??= firstPrimaryHeader;
 		}
 		if (!clusterFirstPayload)
 			validationError('video-index-incomplete', 'WebM cluster contains no complete video frame.');

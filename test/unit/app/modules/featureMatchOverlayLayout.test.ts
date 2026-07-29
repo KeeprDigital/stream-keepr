@@ -32,7 +32,7 @@ function graphicItemItem(overrides: Partial<Extract<FeatureMatchLayoutItemConfig
 	return {
 		id: 'w1',
 		type: 'graphic-item',
-		label: 'GraphicItem',
+		label: 'Graphic Item',
 		visible: true,
 		x: 100,
 		y: 50,
@@ -143,7 +143,7 @@ describe('feature-match-overlay layout writer', () => {
 				children: [
 					expect.objectContaining({
 						type: 'graphic-item',
-						graphicItem: { type: 'clock' },
+						graphicItem: { type: 'clock', configurationVersion: 1 },
 					}),
 					expect.objectContaining({
 						id: 'legacy-image',
@@ -156,6 +156,73 @@ describe('feature-match-overlay layout writer', () => {
 			}),
 		]);
 		expect(JSON.stringify(normalized)).not.toContain('"widget"');
+	});
+
+	it('migrates every legacy missing Definition version without mutating the source layout', () => {
+		const legacy = layoutOf([
+			graphicItemItem({
+				graphicItem: { type: 'clock' },
+			}),
+			{
+				id: 'media',
+				type: 'media',
+				label: 'Media',
+				visible: true,
+				x: 0,
+				y: 0,
+				width: 100,
+				height: 100,
+				mediaKind: 'image',
+				fit: 'contain',
+				focalPosition: { horizontal: 0.5, vertical: 0.5 },
+				opacity: 1,
+			},
+			groupItem({
+				children: [{
+					id: 'nested-clock',
+					type: 'graphic-item',
+					label: 'Clock',
+					visible: true,
+					graphicItem: { type: 'clock' },
+					layout: { mode: 'canvas', x: 0, y: 0, width: 100, height: 40 },
+				}, {
+					id: 'nested-media',
+					type: 'media',
+					label: 'Media',
+					visible: true,
+					mediaKind: 'image',
+					fit: 'contain',
+					focalPosition: { horizontal: 0.5, vertical: 0.5 },
+					opacity: 1,
+					layout: { mode: 'canvas', x: 0, y: 40, width: 100, height: 60 },
+				}],
+			}),
+		] as FeatureMatchLayoutItemConfig[]);
+
+		const normalized = normalizeFeatureMatchLayout(legacy);
+
+		expect(normalized.items[0]?.type === 'graphic-item' ? normalized.items[0].graphicItem.configurationVersion : null).toBe(1);
+		expect(normalized.items[1]?.type === 'media' ? normalized.items[1].configurationVersion : null).toBe(1);
+		expect(normalized.items[2]?.type === 'graphic-group' ? normalized.items[2].configurationVersion : null).toBe(1);
+		expect(normalized.items[2]?.type === 'graphic-group'
+			? normalized.items[2].children.map(child => child.type === 'media' ? child.configurationVersion : child.graphicItem.configurationVersion)
+			: []).toEqual([1, 1]);
+		expect(JSON.stringify(legacy)).not.toContain('configurationVersion');
+	});
+
+	it('rejects an unsupported future Definition version atomically', () => {
+		const future = layoutOf([
+			graphicItemItem({
+				graphicItem: { type: 'clock', configurationVersion: 2 } as never,
+			}),
+			groupItem(),
+		]);
+		const original = structuredClone(future);
+
+		expect(() => normalizeFeatureMatchLayout(future)).toThrow(
+			'Unsupported Graphic Item configuration version 2.',
+		);
+		expect(future).toEqual(original);
 	});
 
 	describe('id addressing and narrowing', () => {
@@ -180,7 +247,7 @@ describe('feature-match-overlay layout writer', () => {
 			expect(patchGroup(layout, 'w1', { label: 'x' })).toBe(layout);
 		});
 
-		it('patchGroupChildGraphicItem narrows the group and child without casts', () => {
+		it('patches a Graphic Group child and narrows without casts', () => {
 			const layout = layoutOf([groupItem()]);
 
 			const next = patchGroupChildGraphicItem(layout, 'g1', 'c1', { type: 'clock', showLabel: true } as never);
@@ -419,7 +486,7 @@ describe('feature-match-overlay layout writer', () => {
 			expect(item).toMatchObject({ frameCutout: true, sourceRole: 'main' });
 		});
 
-		it('creates a GraphicItem Item using the graphicItem definition default config', () => {
+		it('creates a Graphic Item using the Graphic Item Definition default config', () => {
 			const { layout, id } = createLayoutItem(layoutOf([]), 'life-graphic-item');
 
 			const item = layout.items[0]!;
@@ -444,7 +511,7 @@ describe('feature-match-overlay layout writer', () => {
 			expect(layout.items[0]).not.toHaveProperty('surfaceStyle');
 		});
 
-		it('creates a GraphicItem Group child matching the group arrangement mode', () => {
+		it('creates a Graphic Group child matching the group arrangement mode', () => {
 			const { layout, id } = createGroupChild(layoutOf([groupItem()]), 'g1', 'text');
 
 			const child = group(layout).children.at(-1)!;

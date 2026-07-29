@@ -5,6 +5,10 @@ import type {
 	FeatureMatchLayoutItemConfig,
 	FeatureMatchOverlayBoxStyle,
 } from '~~/shared/types/screenConfig';
+import {
+	featureMatchGraphicGroupChildGraphicItemConfig,
+	featureMatchLayoutItemGraphicItemConfig,
+} from '~~/shared/featureMatchGraphicItemDefinitions';
 import { featureMatchOverlayGraphicItemDefinition } from '~/modules/feature-match-overlay/graphicItemDefinitions';
 
 /**
@@ -29,21 +33,15 @@ export function graphicItemSummary(graphicItem: FeatureMatchGraphicItemDefinitio
 export function layerIcon(item: FeatureMatchLayoutItemConfig) {
 	if (item.type === 'source')
 		return 'i-lucide-video';
-	if (item.type === 'media')
-		return 'i-lucide-image-play';
-	if (item.type === 'graphic-group')
-		return 'i-lucide-group';
-	return graphicItemIcon(item.graphicItem.type);
+	const config = featureMatchLayoutItemGraphicItemConfig(item);
+	return featureMatchOverlayGraphicItemDefinition(config.type).icon;
 }
 
 export function layerTypeLabel(item: FeatureMatchLayoutItemConfig) {
 	if (item.type === 'source')
 		return 'Source';
-	if (item.type === 'media')
-		return 'Media';
-	if (item.type === 'graphic-group')
-		return 'Group';
-	return graphicItemTypeLabel(item.graphicItem.type);
+	const config = featureMatchLayoutItemGraphicItemConfig(item);
+	return featureMatchOverlayGraphicItemDefinition(config.type).label;
 }
 
 export function rectSummary(rect: { x: number; y: number; width: number; height: number }) {
@@ -53,28 +51,26 @@ export function rectSummary(rect: { x: number; y: number; width: number; height:
 export function itemSummary(item: FeatureMatchLayoutItemConfig) {
 	if (item.type === 'source')
 		return `${rectSummary(item)} • ${item.sourceRole || 'source'}`;
-	if (item.type === 'media')
-		return `${rectSummary(item)} • ${item.asset ? item.mediaKind : 'choose an asset'}`;
-	if (item.type === 'graphic-group')
-		return `${rectSummary(item)} • ${item.children.length} Graphic Items`;
-	return `${rectSummary(item)} • ${graphicItemSummary(item.graphicItem)}`;
+	const config = featureMatchLayoutItemGraphicItemConfig(item);
+	return `${rectSummary(item)} • ${featureMatchOverlayGraphicItemDefinition(config.type).summary(config as never)}`;
 }
 
 export function childSummary(child: FeatureMatchGraphicGroupChildConfig) {
 	const layout = child.layout.mode === 'canvas'
 		? rectSummary(child.layout)
 		: `${child.layout.sizing.mode}${child.layout.sizing.size ? ` ${child.layout.sizing.size}` : ''}`;
-	return `${layout} • ${child.type === 'media'
-		? (child.asset ? child.mediaKind : 'choose an asset')
-		: graphicItemSummary(child.graphicItem)}`;
+	const config = featureMatchGraphicGroupChildGraphicItemConfig(child);
+	return `${layout} • ${featureMatchOverlayGraphicItemDefinition(config.type).summary(config as never)}`;
 }
 
 export function childIcon(child: FeatureMatchGraphicGroupChildConfig) {
-	return child.type === 'media' ? 'i-lucide-image-play' : graphicItemIcon(child.graphicItem.type);
+	const config = featureMatchGraphicGroupChildGraphicItemConfig(child);
+	return featureMatchOverlayGraphicItemDefinition(config.type).icon;
 }
 
 export function childTypeLabel(child: FeatureMatchGraphicGroupChildConfig) {
-	return child.type === 'media' ? 'Media' : graphicItemTypeLabel(child.graphicItem.type);
+	const config = featureMatchGraphicGroupChildGraphicItemConfig(child);
+	return featureMatchOverlayGraphicItemDefinition(config.type).label;
 }
 
 export function styleOverrideCount(style?: FeatureMatchOverlayBoxStyle) {
