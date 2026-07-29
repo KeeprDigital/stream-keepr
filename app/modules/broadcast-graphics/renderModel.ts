@@ -1,8 +1,7 @@
 import type { CSSProperties } from 'vue';
-import type { BroadcastGraphicsModeConfig, ScreenOutput } from '~~/shared/types/screenConfig';
+import type { ScreenOutput } from '~~/shared/types/screenConfig';
 
 export interface BroadcastGraphicsRenderModelInput {
-	config: BroadcastGraphicsModeConfig;
 	output: ScreenOutput;
 }
 
@@ -14,9 +13,13 @@ export interface BroadcastGraphicsRenderModel {
 /**
  * Broadcast Graphics render-model seam.
  *
- * Composition in, one Screen Output render model out. The Overlay Output keeps
- * the composed frame over transparency; the Fill Output and Key Output flatten
- * the same frame over black.
+ * Composition in, one Screen Output render model out. An empty Broadcast
+ * Graphics Screen is transparent in its Overlay Output and black in its Fill
+ * Output and Key Output.
+ *
+ * The Key Output renders the final composed opacity as a grayscale alpha
+ * matte, not the composed colour over black; that derivation arrives with the
+ * compositor, once there is a composed frame to derive it from.
  */
 export function resolveBroadcastGraphicsRenderModel(input: BroadcastGraphicsRenderModelInput): BroadcastGraphicsRenderModel {
 	return {

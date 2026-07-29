@@ -1,6 +1,6 @@
 import type { InjectionKey, Ref } from 'vue';
 import type { ScreenMode } from '~~/shared/types/enums';
-import type { FeatureMatchOverlayOutput, ModeConfigTypeMap } from '~~/shared/types/screenConfig';
+import type { ModeConfigTypeMap, ScreenOutput } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
@@ -13,8 +13,8 @@ export interface ScreenContext {
 	interactive: Ref<boolean>;
 	/** The rendered overlay container element */
 	overlayContainer: Ref<HTMLElement | null>;
-	/** Broadcast output variant requested by the route or preview. */
-	outputMode?: Ref<FeatureMatchOverlayOutput>;
+	/** Screen Output variant requested by the route or preview. */
+	outputMode?: Ref<ScreenOutput>;
 	/** Invalid output query value, shown in debug output only. */
 	outputWarning?: Ref<string | null>;
 	/** Scale fixed-size overlay output to fit the browser viewport for previews. */

@@ -3,8 +3,13 @@ import { parseScreenOutput, SCREEN_OUTPUT_VALUES, screenOutputBackground } from 
 
 describe('screen Output selection', () => {
 	it('accepts an overlay, fill, or key output selection', () => {
-		for (const output of SCREEN_OUTPUT_VALUES)
-			expect(parseScreenOutput(output)).toEqual({ output, warning: null });
+		expect(parseScreenOutput('overlay')).toEqual({ output: 'overlay', warning: null });
+		expect(parseScreenOutput('fill')).toEqual({ output: 'fill', warning: null });
+		expect(parseScreenOutput('key')).toEqual({ output: 'key', warning: null });
+	});
+
+	it('offers exactly the overlay, fill, and key Screen Outputs', () => {
+		expect(SCREEN_OUTPUT_VALUES).toEqual(['overlay', 'fill', 'key']);
 	});
 
 	it('renders the Overlay Output when the selection is omitted', () => {
