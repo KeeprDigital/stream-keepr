@@ -101,6 +101,7 @@ async function mountComponent(overrides: Partial<{
 			updateConfig,
 			screenWidth: 1920,
 			screenHeight: 1080,
+			eventId: 7,
 			selectedTarget: overrides.selectedTarget ?? { type: 'canvas' },
 			variant: overrides.variant ?? 'inspector',
 		},
@@ -195,7 +196,7 @@ describe('featureMatchOverlayLayerInspector', () => {
 		expect(sectionTitles).not.toContain('Bounds');
 		expect(sectionTitles).not.toContain('Arrangement');
 		expect(sectionTitles).not.toContain('Defaults');
-		expect(sectionTitles).not.toContain('Order');
+		expect(sectionTitles).toContain('Order');
 		expect(wrapper.text()).toContain('Name and Record');
 		expect(wrapper.text()).toContain('{name}');
 		expect(wrapper.find('[data-testid="widget-editor"]').exists()).toBe(true);
@@ -317,8 +318,8 @@ describe('featureMatchOverlayLayerInspector', () => {
 		await frontButton!.trigger('click');
 
 		const patch = updateConfig.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig>;
-		const updated = patch.layout?.items.find(item => item.id === 'main-source');
-		expect(updated && 'zIndex' in updated ? updated.zIndex : undefined).toBeGreaterThan(30);
+		expect(patch.layout?.items.at(-1)?.id).toBe('main-source');
+		expect(patch.layout?.items.some(item => 'zIndex' in item)).toBe(false);
 	});
 
 	it('persists top-level layer anchor selection in the overlay config', async () => {

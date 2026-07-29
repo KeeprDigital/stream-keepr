@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { graphicAssetTargetCompatibility } from '~~/shared/utils/graphicAssetTargetCompatibility';
+import {
+	graphicAssetTargetCompatibility,
+	graphicsVideoTargetForUserAgent,
+} from '~~/shared/utils/graphicAssetTargetCompatibility';
 
 describe('silent-video target compatibility', () => {
 	it('blocks VP9 alpha on Safari and permits it only with recorded Chromium proof', () => {
@@ -44,5 +47,14 @@ describe('silent-video target compatibility', () => {
 			hasAlpha: false,
 			targetCompatibility: 'all-supported',
 		}, 'safari').outcome).toBe('compatible');
+	});
+
+	it('classifies every iOS WebKit browser as Safari-targeted', () => {
+		expect(graphicsVideoTargetForUserAgent(
+			'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/138.0.7204.119 Mobile/15E148 Safari/604.1',
+		)).toBe('safari');
+		expect(graphicsVideoTargetForUserAgent(
+			'Mozilla/5.0 (iPad; CPU OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) EdgiOS/138.0 Mobile/15E148 Safari/605.1.15',
+		)).toBe('safari');
 	});
 });

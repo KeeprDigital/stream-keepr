@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
 	createInMemoryGraphicsAssetCatalogue,
@@ -405,6 +405,50 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			outcome: 'unavailable',
 			retryable: true,
 		});
+	});
+
+	it('threads an exact requested byte range to canonical storage', async () => {
+		const canonicalDelegate = createInMemoryCanonicalGraphicsObjectStore();
+		const read = vi.fn(canonicalDelegate.read);
+		const { library } = createLibrary(
+			createInMemoryStagingGraphicsObjectStore(),
+			{ ...canonicalDelegate, read },
+		);
+		const operation = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'range-scoreboard-logo',
+			initiatedBy: 'graphics-author-1',
+			name: 'Range scoreboard logo',
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+		const completed = await library.uploadGraphicAsset({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			bytes: createBoundedByteStream(transparentPixelPng, {
+				byteLength: transparentPixelPng.byteLength,
+				maximumByteLength: 16 * 1024 * 1024,
+			}),
+		});
+		read.mockClear();
+
+		const resolved = await library.resolveGraphicAssetRevision({
+			assetId: completed.result!.assetId,
+			revisionId: completed.result!.revisionId,
+			range: { offset: 24, length: 8 },
+		});
+
+		expect(read).toHaveBeenCalledWith(
+			graphicsObjectIdentity(`sha256/${completed.report!.facts.sha256}`),
+			{ offset: 24, length: 8 },
+		);
+		expect(resolved).toMatchObject({
+			outcome: 'available',
+			byteLength: transparentPixelPng.byteLength,
+		});
+		if (resolved.outcome !== 'available')
+			throw new Error('Expected ranged content to resolve');
+		await expect(
+			new Response(resolved.body).arrayBuffer(),
+		).resolves.toEqual(transparentPixelPng.slice(24, 32).buffer);
 	});
 
 	it('durably publishes one validated PNG and discovers it with its exact operation result', async () => {

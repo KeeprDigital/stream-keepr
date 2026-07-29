@@ -46,6 +46,8 @@ export function graphicAssetTargetCompatibility(
 }
 
 export function graphicsVideoTargetForUserAgent(userAgent: string): GraphicsVideoTarget {
+	if (/iPhone|iPad|iPod/i.test(userAgent) && /AppleWebKit/i.test(userAgent))
+		return 'safari';
 	if (/(?:Chrome|Chromium|CriOS|Edg)\//i.test(userAgent))
 		return 'chromium';
 	if (/AppleWebKit/i.test(userAgent))

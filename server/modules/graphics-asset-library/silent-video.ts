@@ -241,7 +241,12 @@ function validateVideoDeclarations(
 	}
 }
 
-function mp4TrackFacts(bytes: Uint8Array, trak: IsoBox, mediaData: readonly IsoBox[]) {
+function mp4TrackFacts(
+	bytes: Uint8Array,
+	trak: IsoBox,
+	mediaData: readonly IsoBox[],
+	movieTimeline: { timescale: number; durationUnits: number },
+) {
 	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 	const trakChildren = childBoxes(bytes, trak);
 	if (trakChildren.some(box => box.type === 'edts'))
@@ -370,6 +375,7 @@ function mp4TrackFacts(bytes: Uint8Array, trak: IsoBox, mediaData: readonly IsoB
 	let timingOffset = stts.dataStart + 8;
 	let frameCount = 0;
 	let timingDuration = 0;
+	const sampleDurations: number[] = [];
 	for (let index = 0; index < timingCount; index++, timingOffset += 8) {
 		const count = u32(view, timingOffset);
 		const delta = u32(view, timingOffset + 4);
@@ -381,7 +387,62 @@ function mp4TrackFacts(bytes: Uint8Array, trak: IsoBox, mediaData: readonly IsoB
 			validationError('video-frame-rate-exceeded', 'MP4 sample timing exceeds the bounded 120-second, 60-fps profile.');
 		frameCount += count;
 		timingDuration += count * delta;
+		for (let sample = 0; sample < count; sample++)
+			sampleDurations.push(delta);
 	}
+	const compositionOffsets = Array.from({ length: frameCount }).fill(0) as number[];
+	const ctts = sampleBoxes.find(box => box.type === 'ctts');
+	if (ctts) {
+		const version = bytes[ctts.dataStart];
+		if (
+			(version !== 0 && version !== 1)
+			|| (u32(view, ctts.dataStart) & 0x00FF_FFFF) !== 0
+		) {
+			validationError('malformed-video-timeline', 'MP4 composition timing has an unsupported header.');
+		}
+		const compositionEntryCount = u32(view, ctts.dataStart + 4);
+		if (
+			compositionEntryCount > frameCount
+			|| ctts.dataStart + 8 + compositionEntryCount * 8 !== ctts.end
+		) {
+			validationError('malformed-video-timeline', 'MP4 composition timing exceeds bounded inspection.');
+		}
+		let sampleIndex = 0;
+		for (let index = 0; index < compositionEntryCount; index++) {
+			const offset = ctts.dataStart + 8 + index * 8;
+			const count = u32(view, offset);
+			const compositionOffset = version === 0
+				? u32(view, offset + 4)
+				: view.getInt32(offset + 4);
+			if (count === 0 || count > frameCount - sampleIndex)
+				validationError('malformed-video-timeline', 'MP4 composition timing does not cover the sample timeline.');
+			compositionOffsets.fill(
+				compositionOffset,
+				sampleIndex,
+				sampleIndex + count,
+			);
+			sampleIndex += count;
+		}
+		if (sampleIndex !== frameCount)
+			validationError('malformed-video-timeline', 'MP4 composition timing does not cover every timed frame.');
+	}
+	let decodeTime = 0;
+	const presentationIntervals = sampleDurations.map((sampleDuration, index) => {
+		const start = decodeTime + compositionOffsets[index]!;
+		const end = start + sampleDuration;
+		decodeTime += sampleDuration;
+		if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0)
+			validationError('malformed-video-timeline', 'MP4 composition timing exceeds bounded non-negative precision.');
+		return { start, end };
+	}).toSorted((left, right) => left.start - right.start);
+	let presentationEnd = 0;
+	for (const interval of presentationIntervals) {
+		if (interval.start !== presentationEnd)
+			validationError('malformed-video-timeline', 'MP4 composition timing overlaps or leaves a gap in presentation.');
+		presentationEnd = interval.end;
+	}
+	if (presentationEnd !== timingDuration)
+		validationError('malformed-video-timeline', 'MP4 composition duration conflicts with its sample timeline.');
 	const stsz = oneBox(sampleBoxes, 'stsz');
 	const sampleSize = u32(view, stsz.dataStart + 4);
 	const sizedSampleCount = u32(view, stsz.dataStart + 8);
@@ -487,6 +548,13 @@ function mp4TrackFacts(bytes: Uint8Array, trak: IsoBox, mediaData: readonly IsoB
 	const durationSeconds = durationUnits / timescale;
 	if (Math.abs(timingDuration / timescale - durationSeconds) > Math.max(0.05, durationSeconds / frameCount))
 		validationError('malformed-video-timeline', 'MP4 track duration conflicts with its sample timeline.');
+	const movieDurationSeconds = movieTimeline.durationUnits / movieTimeline.timescale;
+	if (
+		Math.abs(movieDurationSeconds - durationSeconds)
+		> Math.max(1 / movieTimeline.timescale, 1 / timescale)
+	) {
+		validationError('malformed-video-timeline', 'MP4 movie duration conflicts with its media timeline.');
+	}
 	return { width, height, durationSeconds, frameCount };
 }
 
@@ -507,9 +575,13 @@ function inspectMp4(bytes: Uint8Array) {
 	const mvhd = oneBox(moovChildren, 'mvhd');
 	if (bytes[mvhd.dataStart] !== 0)
 		validationError('unsupported-video-profile', 'Only bounded version-zero MP4 movie headers are supported.');
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const movieTimescale = u32(view, mvhd.dataStart + 12);
+	const movieDurationUnits = u32(view, mvhd.dataStart + 16);
+	if (movieTimescale === 0 || movieDurationUnits === 0)
+		validationError('malformed-video-timeline', 'MP4 movie duration and timescale must be positive.');
 	const movieMatrixOffset = mvhd.dataStart + 36;
 	const expectedMovieMatrix = [0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000];
-	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 	for (let index = 0; index < expectedMovieMatrix.length; index++) {
 		if (u32(view, movieMatrixOffset + index * 4) !== expectedMovieMatrix[index])
 			validationError('unsupported-video-transform', 'MP4 movie transforms are not supported.');
@@ -519,7 +591,12 @@ function inspectMp4(bytes: Uint8Array) {
 		validationError('unsupported-video-tracks', 'Silent video requires exactly one complete video track.');
 	if (moovChildren.some(box => ['iods', 'meta'].includes(box.type)))
 		validationError('unsupported-video-tracks', 'MP4 ancillary presentation tracks are not supported.');
-	return mp4TrackFacts(bytes, tracks[0]!, top.filter(box => box.type === 'mdat'));
+	return mp4TrackFacts(
+		bytes,
+		tracks[0]!,
+		top.filter(box => box.type === 'mdat'),
+		{ timescale: movieTimescale, durationUnits: movieDurationUnits },
+	);
 }
 
 interface EbmlElement {

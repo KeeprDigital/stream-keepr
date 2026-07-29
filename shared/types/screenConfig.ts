@@ -1,5 +1,6 @@
 import type { GraphicsVideoTarget } from '../utils/graphicAssetTargetCompatibility';
 import type { CardAnimationSpeed, DeckCardSize, DeckViewMode, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardLayout, StandingsColumnKey, StandingsViewMode, VerticalAlign } from './enums';
+import type { MediaGraphicItemConfig, ShapeGeometry } from './graphicItem';
 import type { GraphicAssetReference } from './graphicsAsset';
 
 // ─── Screen-level config (applies to all modes) ───────────────────────
@@ -344,14 +345,13 @@ export interface FeatureMatchLayoutItemBase extends FeatureMatchOverlayRect {
 	label: string;
 	visible: boolean;
 	anchor?: FeatureMatchOverlayAnchorValue;
-	zIndex?: number;
-	surfaceStyle?: FeatureMatchOverlayBoxStyle;
 }
 
 export interface FeatureMatchSourceItemConfig extends FeatureMatchLayoutItemBase {
 	type: 'source';
 	sourceRole?: FeatureMatchSourceRole;
 	frameCutout: boolean;
+	surfaceStyle?: FeatureMatchOverlayBoxStyle;
 }
 
 export interface FeatureMatchTextWidgetConfig {
@@ -403,18 +403,12 @@ export type FeatureMatchWidgetConfig
 export interface FeatureMatchWidgetItemConfig extends FeatureMatchLayoutItemBase {
 	type: 'widget';
 	widget: FeatureMatchWidgetConfig;
+	surfaceStyle?: FeatureMatchOverlayBoxStyle;
 }
 
 /** First-class still-image or silent-video content in a Feature Match Layout. */
-export interface FeatureMatchMediaGraphicItemConfig extends Omit<FeatureMatchLayoutItemBase, 'zIndex'> {
+export interface FeatureMatchMediaGraphicItemConfig extends FeatureMatchLayoutItemBase, MediaGraphicItemConfig {
 	type: 'media';
-	asset?: GraphicAssetReference;
-	mediaKind: 'image' | 'silent-video';
-	fit: 'contain' | 'cover' | 'fill';
-	opacity: number;
-	borderRadius: number;
-	loop?: boolean;
-	playbackRate?: number;
 	videoCompatibility?: 'all-supported' | 'chromium-transparency';
 	videoTarget?: Exclude<GraphicsVideoTarget, 'other'>;
 }
@@ -458,7 +452,6 @@ export interface FeatureMatchWidgetGroupStackChildLayout {
 export interface FeatureMatchWidgetGroupCanvasChildLayout extends FeatureMatchOverlayRect {
 	mode: 'canvas';
 	anchor?: FeatureMatchOverlayAnchorValue;
-	zIndex?: number;
 }
 
 export type FeatureMatchWidgetGroupChildLayout
@@ -476,6 +469,7 @@ export interface FeatureMatchWidgetGroupChildConfig {
 
 export interface FeatureMatchWidgetGroupItemConfig extends FeatureMatchLayoutItemBase {
 	type: 'widget-group';
+	surfaceStyle?: FeatureMatchOverlayBoxStyle;
 	arrangement: FeatureMatchWidgetGroupArrangement;
 	defaultChildSurfaceStyle?: FeatureMatchOverlayBoxStyle;
 	overflow?: FeatureMatchWidgetGroupOverflow;
@@ -491,6 +485,101 @@ export type FeatureMatchLayoutItemConfig
 export interface FeatureMatchLayoutConfig {
 	frame: FeatureMatchLayoutFrameConfig;
 	items: FeatureMatchLayoutItemConfig[];
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+	return typeof value === 'object' && value !== null && !Array.isArray(value)
+		? value as Record<string, unknown>
+		: undefined;
+}
+
+function legacyNumber(value: unknown, fallback: number): number {
+	return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function roundedClipGeometry(radius: number): ShapeGeometry | undefined {
+	if (radius <= 0)
+		return undefined;
+	const corner = () => ({ kind: 'rounded' as const, size: radius });
+	return {
+		topLeft: corner(),
+		topRight: corner(),
+		bottomRight: corner(),
+		bottomLeft: corner(),
+	};
+}
+
+/**
+ * Deterministically migrates pre-Graphic-Layer-Order layouts at every read
+ * and write boundary. Existing z-index values are projected once into the
+ * authoritative sibling list, then removed.
+ */
+export function normalizeFeatureMatchLayout(layout: FeatureMatchLayoutConfig): FeatureMatchLayoutConfig {
+	// Layouts can arrive as Vue reactive proxies in the editor. A JSON round-trip
+	// gives the persistence-shaped copy needed for migration without requiring
+	// callers to unwrap framework-specific values first.
+	const source = JSON.parse(JSON.stringify(layout)) as FeatureMatchLayoutConfig & {
+		items: Array<FeatureMatchLayoutItemConfig & {
+			zIndex?: number;
+			borderRadius?: number;
+			surfaceStyle?: FeatureMatchOverlayBoxStyle;
+		}>;
+	};
+	const hasLegacyItemOrder = source.items.some(item => typeof record(item)?.zIndex === 'number');
+	const orderedItems = hasLegacyItemOrder
+		? source.items
+				.map((item, index) => ({
+					item,
+					index,
+					order: item.type === 'media'
+						? index
+						: legacyNumber(record(item)?.zIndex, 0),
+				}))
+				.toSorted((left, right) => left.order - right.order || left.index - right.index)
+				.map(entry => entry.item)
+		: source.items;
+	const items = orderedItems.map((item) => {
+		const mutable = item as typeof item & Record<string, unknown>;
+		delete mutable.zIndex;
+		if (item.type === 'media') {
+			item.focalPosition ??= { horizontal: 0.5, vertical: 0.5 };
+			item.clipGeometry ??= roundedClipGeometry(legacyNumber(record(item)?.borderRadius, 0));
+			delete mutable.borderRadius;
+			delete mutable.surfaceStyle;
+		}
+		if (item.type === 'widget-group') {
+			const hasLegacyChildOrder = item.children.some((child) => {
+				const childLayout = record(child.layout);
+				return typeof childLayout?.zIndex === 'number';
+			});
+			if (hasLegacyChildOrder) {
+				item.children = item.children
+					.map((child, index) => ({
+						child,
+						index,
+						order: legacyNumber(record(child.layout)?.zIndex, index),
+					}))
+					.toSorted((left, right) => left.order - right.order || left.index - right.index)
+					.map(entry => entry.child);
+			}
+			item.children = item.children.map((child) => {
+				const childLayout = child.layout as typeof child.layout & Record<string, unknown>;
+				delete childLayout.zIndex;
+				return child;
+			});
+		}
+		return item;
+	});
+	return { ...source, items };
+}
+
+export function normalizeFeatureMatchOverlayModeConfig(
+	config: FeatureMatchOverlayModeConfig,
+): FeatureMatchOverlayModeConfig {
+	return {
+		...config,
+		layout: normalizeFeatureMatchLayout(config.layout),
+	};
 }
 
 export type FeatureMatchOverlayTokenStyleMap = Record<string, FeatureMatchOverlayBoxStyle | undefined>;
@@ -722,24 +811,24 @@ export const DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG: FeatureMatchOverlayModeConfig
 			borderWidth: 4,
 		},
 		items: [
-			{ id: 'main-source', type: 'source', label: 'Main Match Source', visible: true, sourceRole: 'main', frameCutout: true, x: 400, y: 90, width: 1500, height: 900, zIndex: 10, surfaceStyle: { backgroundColor: '#000000', backgroundOpacity: 0, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8 } },
-			{ id: 'player1-source', type: 'source', label: 'Player 1 Source', visible: true, sourceRole: 'player1', frameCutout: true, x: 24, y: 16, width: 340, height: 250, zIndex: 10, surfaceStyle: { backgroundColor: '#000000', backgroundOpacity: 0, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8 } },
-			{ id: 'player2-source', type: 'source', label: 'Player 2 Source', visible: true, sourceRole: 'player2', frameCutout: true, x: 24, y: 800, width: 340, height: 250, zIndex: 10, surfaceStyle: { backgroundColor: '#000000', backgroundOpacity: 0, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8 } },
-			{ id: 'top-bar', type: 'widget-group', label: 'Top Player Bar', visible: true, x: 400, y: 8, width: 1500, height: 74, zIndex: 30, surfaceStyle: { backgroundOpacity: 0 }, defaultChildSurfaceStyle: { textColor: '#ffffff', fontSize: 30, fontWeight: 800, backgroundOpacity: 0, overflow: 'ellipsis' }, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [
+			{ id: 'main-source', type: 'source', label: 'Main Match Source', visible: true, sourceRole: 'main', frameCutout: true, x: 400, y: 90, width: 1500, height: 900, surfaceStyle: { backgroundColor: '#000000', backgroundOpacity: 0, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8 } },
+			{ id: 'player1-source', type: 'source', label: 'Player 1 Source', visible: true, sourceRole: 'player1', frameCutout: true, x: 24, y: 16, width: 340, height: 250, surfaceStyle: { backgroundColor: '#000000', backgroundOpacity: 0, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8 } },
+			{ id: 'player2-source', type: 'source', label: 'Player 2 Source', visible: true, sourceRole: 'player2', frameCutout: true, x: 24, y: 800, width: 340, height: 250, surfaceStyle: { backgroundColor: '#000000', backgroundOpacity: 0, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8 } },
+			{ id: 'top-bar', type: 'widget-group', label: 'Top Player Bar', visible: true, x: 400, y: 8, width: 1500, height: 74, surfaceStyle: { backgroundOpacity: 0 }, defaultChildSurfaceStyle: { textColor: '#ffffff', fontSize: 30, fontWeight: 800, backgroundOpacity: 0, overflow: 'ellipsis' }, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [
 				{ id: 'top-name-record', label: 'Name and Record', visible: true, widget: { type: 'text', playerSide: 'player1', template: '{name}\n{record}' }, layout: { mode: 'canvas', x: 0, y: 0, width: 300, height: 74 } },
 				{ id: 'top-life', label: 'Life Total', visible: true, widget: { type: 'player-life', playerSide: 'player1', lifeAnimation: 'glow', lifeAnimationDurationMs: 420, lifeAnimationAccentColor: '#ffffff' }, layout: { mode: 'canvas', x: 700, y: 4, width: 96, height: 66 }, surfaceStyle: { backgroundColor: '#333333', backgroundOpacity: 1, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8, textColor: '#ffffff', fontSize: 42, fontWeight: 800, textAlign: 'center' } },
 				{ id: 'top-deck', label: 'Deck', visible: true, widget: { type: 'text', playerSide: 'player1', template: '{deckColors} {deck}' }, layout: { mode: 'canvas', x: 820, y: 0, width: 500, height: 74 } },
 				{ id: 'top-clock', label: 'Clock', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 1360, y: 0, width: 140, height: 74 }, surfaceStyle: { fontSize: 28, fontWeight: 500, textAlign: 'right' } },
 			] },
-			{ id: 'bottom-bar', type: 'widget-group', label: 'Bottom Player Bar', visible: true, x: 400, y: 1000, width: 1500, height: 74, zIndex: 30, surfaceStyle: { backgroundOpacity: 0 }, defaultChildSurfaceStyle: { textColor: '#ffffff', fontSize: 30, fontWeight: 800, backgroundOpacity: 0, overflow: 'ellipsis' }, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [
+			{ id: 'bottom-bar', type: 'widget-group', label: 'Bottom Player Bar', visible: true, x: 400, y: 1000, width: 1500, height: 74, surfaceStyle: { backgroundOpacity: 0 }, defaultChildSurfaceStyle: { textColor: '#ffffff', fontSize: 30, fontWeight: 800, backgroundOpacity: 0, overflow: 'ellipsis' }, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [
 				{ id: 'bottom-name-record', label: 'Name and Record', visible: true, widget: { type: 'text', playerSide: 'player2', template: '{name}\n{record}' }, layout: { mode: 'canvas', x: 0, y: 0, width: 300, height: 74 } },
 				{ id: 'bottom-life', label: 'Life Total', visible: true, widget: { type: 'player-life', playerSide: 'player2', lifeAnimation: 'glow', lifeAnimationDurationMs: 420, lifeAnimationAccentColor: '#ffffff' }, layout: { mode: 'canvas', x: 700, y: 4, width: 96, height: 66 }, surfaceStyle: { backgroundColor: '#333333', backgroundOpacity: 1, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8, textColor: '#ffffff', fontSize: 42, fontWeight: 800, textAlign: 'center' } },
 				{ id: 'bottom-deck', label: 'Deck', visible: true, widget: { type: 'text', playerSide: 'player2', template: '{deckColors} {deck}' }, layout: { mode: 'canvas', x: 820, y: 0, width: 500, height: 74 } },
 				{ id: 'bottom-details', label: 'Match Details', visible: true, widget: { type: 'text', playerSide: 'player2', template: '{stage}\n{format}' }, layout: { mode: 'canvas', x: 1320, y: 0, width: 180, height: 74 }, surfaceStyle: { fontSize: 28, fontWeight: 700, textAlign: 'right' } },
 			] },
-			{ id: 'player1-game-wins', type: 'widget', label: 'Player 1 Game Wins', visible: true, x: 24, y: 278, width: 340, height: 28, zIndex: 30, widget: { type: 'game-wins', playerSide: 'player1', displayMode: 'boxes', boxOrientation: 'horizontal', boxWidth: 22, boxHeight: 22, boxGap: 6, boxBorderWidth: 2 }, surfaceStyle: { backgroundColor: '#22c55e', backgroundOpacity: 0, borderVisible: true, borderColor: '#ffffff', borderWidth: 2, borderRadius: 999 } },
-			{ id: 'player2-game-wins', type: 'widget', label: 'Player 2 Game Wins', visible: true, x: 24, y: 760, width: 340, height: 28, zIndex: 30, widget: { type: 'game-wins', playerSide: 'player2', displayMode: 'boxes', boxOrientation: 'horizontal', boxWidth: 22, boxHeight: 22, boxGap: 6, boxBorderWidth: 2 }, surfaceStyle: { backgroundColor: '#22c55e', backgroundOpacity: 0, borderVisible: true, borderColor: '#ffffff', borderWidth: 2, borderRadius: 999 } },
-			{ id: 'branding', type: 'widget-group', label: 'Event Branding', visible: true, x: 60, y: 360, width: 280, height: 280, zIndex: 30, surfaceStyle: { backgroundOpacity: 0 }, defaultChildSurfaceStyle: { textColor: '#ffffff', fontSize: 24, fontWeight: 700, backgroundOpacity: 0, textAlign: 'center' }, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [
+			{ id: 'player1-game-wins', type: 'widget', label: 'Player 1 Game Wins', visible: true, x: 24, y: 278, width: 340, height: 28, widget: { type: 'game-wins', playerSide: 'player1', displayMode: 'boxes', boxOrientation: 'horizontal', boxWidth: 22, boxHeight: 22, boxGap: 6, boxBorderWidth: 2 }, surfaceStyle: { backgroundColor: '#22c55e', backgroundOpacity: 0, borderVisible: true, borderColor: '#ffffff', borderWidth: 2, borderRadius: 999 } },
+			{ id: 'player2-game-wins', type: 'widget', label: 'Player 2 Game Wins', visible: true, x: 24, y: 760, width: 340, height: 28, widget: { type: 'game-wins', playerSide: 'player2', displayMode: 'boxes', boxOrientation: 'horizontal', boxWidth: 22, boxHeight: 22, boxGap: 6, boxBorderWidth: 2 }, surfaceStyle: { backgroundColor: '#22c55e', backgroundOpacity: 0, borderVisible: true, borderColor: '#ffffff', borderWidth: 2, borderRadius: 999 } },
+			{ id: 'branding', type: 'widget-group', label: 'Event Branding', visible: true, x: 60, y: 360, width: 280, height: 280, surfaceStyle: { backgroundOpacity: 0 }, defaultChildSurfaceStyle: { textColor: '#ffffff', fontSize: 24, fontWeight: 700, backgroundOpacity: 0, textAlign: 'center' }, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [
 				{ id: 'branding-text', label: 'Event Name', visible: true, widget: { type: 'text', template: '{eventName}' }, layout: { mode: 'canvas', x: 0, y: 0, width: 280, height: 80 } },
 				{ id: 'branding-image-1', label: 'Image 1', visible: true, widget: { type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 0, y: 96, width: 132, height: 132 } },
 				{ id: 'branding-image-2', label: 'Image 2', visible: true, widget: { type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 148, y: 96, width: 132, height: 132 } },
@@ -861,8 +950,11 @@ export function mergeScreenModeConfig<M extends ScreenMode>(
 	partialConfig: Record<string, unknown>,
 ): ModeConfigsMap {
 	const currentModeConfig = currentConfigs[mode] ?? {};
+	const merged = stripNullConfigKeys({ ...currentModeConfig, ...partialConfig });
 	return {
 		...currentConfigs,
-		[mode]: stripNullConfigKeys({ ...currentModeConfig, ...partialConfig }),
+		[mode]: mode === 'feature-match-overlay'
+			? normalizeFeatureMatchOverlayModeConfig(merged as unknown as FeatureMatchOverlayModeConfig)
+			: merged,
 	};
 }

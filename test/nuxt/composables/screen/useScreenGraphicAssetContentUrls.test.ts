@@ -48,14 +48,15 @@ describe('useScreenGraphicAssetContentUrls', () => {
 						mediaKind: 'silent-video',
 						asset: reference,
 						fit: 'cover',
+						focalPosition: { horizontal: 0.5, vertical: 0.5 },
 						opacity: 1,
-						borderRadius: 0,
 						loop: true,
 						playbackRate: 1,
 						videoCompatibility: 'all-supported',
 						videoTarget: 'chromium',
 					},
 					style: {},
+					contentStyle: {},
 					src: contentUrl(reference),
 				}));
 				return () => h(FeatureMatchOverlayMediaGraphicItem, { media: media.value });

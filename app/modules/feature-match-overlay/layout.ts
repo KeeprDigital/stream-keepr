@@ -121,7 +121,10 @@ export function patchItem(layout: FeatureMatchLayoutConfig, id: string, updates:
 }
 
 export function patchItemSurfaceStyle(layout: FeatureMatchLayoutConfig, id: string, updates: Partial<FeatureMatchOverlayBoxStyle>): FeatureMatchLayoutConfig {
-	return mapItem(layout, id, item => ({ ...item, surfaceStyle: { ...(item.surfaceStyle ?? {}), ...updates } }) as FeatureMatchLayoutItemConfig);
+	return mapItem(layout, id, item =>
+		item.type === 'media'
+			? item
+			: { ...item, surfaceStyle: { ...(item.surfaceStyle ?? {}), ...updates } });
 }
 
 export function addItem(layout: FeatureMatchLayoutConfig, item: FeatureMatchLayoutItemConfig): FeatureMatchLayoutConfig {
@@ -180,6 +183,57 @@ export function removeGroupChild(layout: FeatureMatchLayoutConfig, groupId: stri
 	});
 }
 
+function moveArrayEntry<T>(items: readonly T[], currentIndex: number, targetIndex: number): T[] {
+	if (
+		currentIndex < 0
+		|| targetIndex < 0
+		|| targetIndex >= items.length
+		|| currentIndex === targetIndex
+	) {
+		return items as T[];
+	}
+	const next = [...items];
+	const [item] = next.splice(currentIndex, 1);
+	next.splice(targetIndex, 0, item!);
+	return next;
+}
+
+export function moveGroupChildOrder(
+	layout: FeatureMatchLayoutConfig,
+	groupId: string,
+	childId: string,
+	direction: -1 | 1,
+): FeatureMatchLayoutConfig {
+	return mapGroup(layout, groupId, (group) => {
+		const currentIndex = group.children.findIndex(child => child.id === childId);
+		const targetIndex = Math.max(0, Math.min(group.children.length - 1, currentIndex + direction));
+		const children = moveArrayEntry(group.children, currentIndex, targetIndex);
+		return children === group.children ? group : { ...group, children };
+	});
+}
+
+export function sendGroupChildToBack(layout: FeatureMatchLayoutConfig, groupId: string, childId: string): FeatureMatchLayoutConfig {
+	return mapGroup(layout, groupId, (group) => {
+		const children = moveArrayEntry(
+			group.children,
+			group.children.findIndex(child => child.id === childId),
+			0,
+		);
+		return children === group.children ? group : { ...group, children };
+	});
+}
+
+export function bringGroupChildToFront(layout: FeatureMatchLayoutConfig, groupId: string, childId: string): FeatureMatchLayoutConfig {
+	return mapGroup(layout, groupId, (group) => {
+		const children = moveArrayEntry(
+			group.children,
+			group.children.findIndex(child => child.id === childId),
+			group.children.length - 1,
+		);
+		return children === group.children ? group : { ...group, children };
+	});
+}
+
 /** Anchored geometry edit for a canvas-positioned Widget Group child. */
 export function patchGroupChildRectFromAnchor(layout: FeatureMatchLayoutConfig, groupId: string, childId: string, field: FeatureMatchOverlayGeometryField, nextValue: number): FeatureMatchLayoutConfig {
 	return mapGroupChild(layout, groupId, childId, (child) => {
@@ -227,41 +281,30 @@ export function convertGroupArrangement(layout: FeatureMatchLayoutConfig, id: st
 	});
 }
 
-// ──────────────── Stacking order ────────────────
-
-function layerOrders(layout: FeatureMatchLayoutConfig): number[] {
-	return layout.items
-		.filter(item => item.type !== 'media')
-		.map(item => item.zIndex ?? 0)
-		.sort((a, b) => a - b);
-}
+// ──────────────── Graphic Layer Order ────────────────
 
 export function setItemOrder(layout: FeatureMatchLayoutConfig, id: string, order: number): FeatureMatchLayoutConfig {
-	if (layout.items.find(item => item.id === id)?.type === 'media')
+	const currentIndex = layout.items.findIndex(item => item.id === id);
+	if (currentIndex < 0 || layout.items.length === 0)
 		return layout;
-	return patchItem(layout, id, { zIndex: order });
+	const targetIndex = Math.max(0, Math.min(layout.items.length - 1, Math.trunc(order)));
+	const items = moveArrayEntry(layout.items, currentIndex, targetIndex);
+	return items === layout.items ? layout : withItems(layout, items);
 }
 
 export function moveItemOrder(layout: FeatureMatchLayoutConfig, id: string, direction: -1 | 1): FeatureMatchLayoutConfig {
-	const item = layout.items.find(candidate => candidate.id === id);
-	if (!item || item.type === 'media')
+	const currentIndex = layout.items.findIndex(item => item.id === id);
+	if (currentIndex < 0)
 		return layout;
-
-	const orders = layerOrders(layout);
-	const current = item.zIndex ?? 0;
-	const currentIndex = orders.findIndex(order => order >= current);
-	const targetIndex = Math.max(0, Math.min(orders.length - 1, currentIndex + direction));
-	const target = orders[targetIndex] ?? current;
-	const next = target === current ? current + direction : target + direction;
-	return setItemOrder(layout, id, next);
+	return setItemOrder(layout, id, currentIndex + direction);
 }
 
 export function sendItemToBack(layout: FeatureMatchLayoutConfig, id: string): FeatureMatchLayoutConfig {
-	return setItemOrder(layout, id, (layerOrders(layout)[0] ?? 0) - 1);
+	return setItemOrder(layout, id, 0);
 }
 
 export function bringItemToFront(layout: FeatureMatchLayoutConfig, id: string): FeatureMatchLayoutConfig {
-	return setItemOrder(layout, id, (layerOrders(layout).at(-1) ?? 0) + 1);
+	return setItemOrder(layout, id, layout.items.length - 1);
 }
 
 // ──────────────── Creation ────────────────
@@ -269,14 +312,14 @@ export function bringItemToFront(layout: FeatureMatchLayoutConfig, id: string): 
 /** Create a new Layout Item of the given kind. Returns the new layout and the item's id. */
 export function createLayoutItem(layout: FeatureMatchLayoutConfig, kind: FeatureMatchOverlayLayerKind): { layout: FeatureMatchLayoutConfig; id: string } {
 	const id = nextId('layer');
-	const base = { id, label: 'New Layer', visible: true, x: 80, y: 80, width: 280, height: 80, zIndex: 40, surfaceStyle: { textColor: '#ffffff', fontSize: 24, fontWeight: 700, backgroundOpacity: 0 } };
+	const base = { id, label: 'New Layer', visible: true, x: 80, y: 80, width: 280, height: 80, surfaceStyle: { textColor: '#ffffff', fontSize: 24, fontWeight: 700, backgroundOpacity: 0 } };
 	let item: FeatureMatchLayoutItemConfig;
 
 	if (kind === 'source') {
 		item = { ...base, type: 'source', label: 'New Source', sourceRole: 'main', frameCutout: true, width: 420, height: 240, surfaceStyle: { backgroundColor: '#000000', backgroundOpacity: 0, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8 } };
 	}
 	else if (kind === 'media') {
-		const { zIndex: _zIndex, ...mediaBase } = base;
+		const { surfaceStyle: _surfaceStyle, ...mediaBase } = base;
 		item = {
 			...mediaBase,
 			type: 'media',
@@ -285,8 +328,8 @@ export function createLayoutItem(layout: FeatureMatchLayoutConfig, kind: Feature
 			height: 240,
 			mediaKind: 'image',
 			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
 			opacity: 1,
-			borderRadius: 0,
 			videoTarget: 'safari',
 		};
 	}

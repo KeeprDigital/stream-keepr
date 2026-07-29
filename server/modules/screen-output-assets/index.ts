@@ -24,6 +24,15 @@ type ScreenOutputAssetResolution
 	| { outcome: 'missing' }
 	| { outcome: 'unavailable'; retryable: true };
 
+type ScreenOutputAssetInspection
+	= {
+		outcome: 'available';
+		byteLength: number;
+		contentType: string;
+	}
+	| { outcome: 'missing' }
+	| { outcome: 'unavailable'; retryable: true };
+
 interface ScreenOutputAssetCache {
 	match: (request: Request) => Promise<Response | undefined>;
 	put: (request: Request, response: Response) => Promise<void>;
@@ -34,9 +43,14 @@ interface ScreenOutputAssetDeliveryDependencies {
 	authorize: (
 		input: ScreenOutputAssetAuthorizationInput,
 	) => Promise<ScreenOutputAssetAuthorization>;
+	inspect: (input: {
+		assetId: string;
+		revisionId: string;
+	}) => Promise<ScreenOutputAssetInspection>;
 	resolve: (input: {
 		assetId: string;
 		revisionId: string;
+		range?: { offset: number; length: number };
 	}) => Promise<ScreenOutputAssetResolution>;
 	cache?: ScreenOutputAssetCache;
 	defer?: (promise: Promise<unknown>) => void;
@@ -148,32 +162,6 @@ function rangePermitted(ifRange: string | null, etag: string): boolean {
 	return ifRange.trim() === etag;
 }
 
-function sliceByteStream(
-	body: ReadableStream<Uint8Array>,
-	range: ByteRange,
-): ReadableStream<Uint8Array> {
-	let sourceOffset = 0;
-	return body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
-		transform(chunk, controller) {
-			const chunkStart = sourceOffset;
-			const chunkEnd = sourceOffset + chunk.byteLength - 1;
-			sourceOffset += chunk.byteLength;
-			if (chunkEnd < range.start)
-				return;
-			if (chunkStart > range.end) {
-				controller.terminate();
-				return;
-			}
-			const start = Math.max(0, range.start - chunkStart);
-			const end = Math.min(chunk.byteLength, range.end - chunkStart + 1);
-			if (end > start)
-				controller.enqueue(chunk.subarray(start, end));
-			if (chunkEnd >= range.end)
-				controller.terminate();
-		},
-	}));
-}
-
 function immutableHeaders(input: {
 	contentType: string;
 	byteLength: number;
@@ -221,6 +209,92 @@ export function createScreenOutputAssetDelivery(
 				return { outcome: 'delivered', response: publicResponse(cached) };
 		}
 
+		let inspection: ScreenOutputAssetInspection;
+		try {
+			inspection = await dependencies.inspect({
+				assetId: input.assetId,
+				revisionId: input.revisionId,
+			});
+		}
+		catch {
+			return { outcome: 'unavailable', retryable: true };
+		}
+		if (inspection.outcome === 'missing')
+			return { outcome: 'missing' };
+		if (inspection.outcome === 'unavailable')
+			return inspection;
+
+		const headers = immutableHeaders({
+			contentType: inspection.contentType,
+			byteLength: inspection.byteLength,
+			etag,
+		});
+		if (ifNoneMatchMatches(input.headers.get('if-none-match'), etag)) {
+			return {
+				outcome: 'delivered',
+				response: new Response(null, {
+					status: 304,
+					headers: publicHeaders(headers),
+				}),
+			};
+		}
+
+		const requestedRange = rangePermitted(input.headers.get('if-range'), etag)
+			? requestedByteRange(input.headers.get('range'), inspection.byteLength)
+			: undefined;
+		if (requestedRange === 'unsatisfiable') {
+			headers.set('content-range', `bytes */${inspection.byteLength}`);
+			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Web Headers API, not a Drizzle table.
+			headers.delete('content-length');
+			return {
+				outcome: 'delivered',
+				response: new Response(null, {
+					status: 416,
+					headers: publicHeaders(headers),
+				}),
+			};
+		}
+		if (requestedRange) {
+			const rangeLength = requestedRange.end - requestedRange.start + 1;
+			let resolution: ScreenOutputAssetResolution;
+			try {
+				resolution = await dependencies.resolve({
+					assetId: input.assetId,
+					revisionId: input.revisionId,
+					range: { offset: requestedRange.start, length: rangeLength },
+				});
+			}
+			catch {
+				return { outcome: 'unavailable', retryable: true };
+			}
+			if (resolution.outcome === 'missing')
+				return { outcome: 'missing' };
+			if (resolution.outcome === 'unavailable')
+				return resolution;
+			if (
+				resolution.byteLength !== inspection.byteLength
+				|| resolution.contentType !== inspection.contentType
+			) {
+				await resolution.body.cancel();
+				return { outcome: 'unavailable', retryable: true };
+			}
+			headers.set(
+				'content-range',
+				`bytes ${requestedRange.start}-${requestedRange.end}/${inspection.byteLength}`,
+			);
+			headers.set('content-length', String(rangeLength));
+			return {
+				outcome: 'delivered',
+				response: new Response(
+					resolution.body,
+					{
+						status: 206,
+						headers: publicHeaders(headers),
+					},
+				),
+			};
+		}
+
 		let resolution: ScreenOutputAssetResolution;
 		try {
 			resolution = await dependencies.resolve({
@@ -235,58 +309,13 @@ export function createScreenOutputAssetDelivery(
 			return { outcome: 'missing' };
 		if (resolution.outcome === 'unavailable')
 			return resolution;
-
-		const headers = immutableHeaders({
-			contentType: resolution.contentType,
-			byteLength: resolution.byteLength,
-			etag,
-		});
-		if (ifNoneMatchMatches(input.headers.get('if-none-match'), etag)) {
+		if (
+			resolution.byteLength !== inspection.byteLength
+			|| resolution.contentType !== inspection.contentType
+		) {
 			await resolution.body.cancel();
-			return {
-				outcome: 'delivered',
-				response: new Response(null, {
-					status: 304,
-					headers: publicHeaders(headers),
-				}),
-			};
+			return { outcome: 'unavailable', retryable: true };
 		}
-
-		const requestedRange = rangePermitted(input.headers.get('if-range'), etag)
-			? requestedByteRange(input.headers.get('range'), resolution.byteLength)
-			: undefined;
-		if (requestedRange === 'unsatisfiable') {
-			await resolution.body.cancel();
-			headers.set('content-range', `bytes */${resolution.byteLength}`);
-			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Web Headers API, not a Drizzle table.
-			headers.delete('content-length');
-			return {
-				outcome: 'delivered',
-				response: new Response(null, {
-					status: 416,
-					headers: publicHeaders(headers),
-				}),
-			};
-		}
-		if (requestedRange) {
-			const rangeLength = requestedRange.end - requestedRange.start + 1;
-			headers.set(
-				'content-range',
-				`bytes ${requestedRange.start}-${requestedRange.end}/${resolution.byteLength}`,
-			);
-			headers.set('content-length', String(rangeLength));
-			return {
-				outcome: 'delivered',
-				response: new Response(
-					sliceByteStream(resolution.body, requestedRange),
-					{
-						status: 206,
-						headers: publicHeaders(headers),
-					},
-				),
-			};
-		}
-
 		const immutableResponse = new Response(resolution.body, { headers });
 		if (dependencies.cache && dependencies.defer) {
 			dependencies.defer(

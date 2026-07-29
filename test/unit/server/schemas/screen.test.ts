@@ -321,8 +321,15 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 			},
 			mediaKind: 'silent-video',
 			fit: 'contain',
+			focalPosition: { horizontal: 0.25, vertical: 0.75 },
 			opacity: 1,
-			borderRadius: 0,
+			clipGeometry: {
+				topLeft: { kind: 'rounded', size: 8 },
+				topRight: { kind: 'cut', size: 12 },
+				bottomRight: { kind: 'square' },
+				bottomLeft: { kind: 'square' },
+				rightEdgeSlant: 16,
+			},
 			loop: true,
 			playbackRate: 1,
 			videoCompatibility: 'chromium-transparency',
@@ -330,14 +337,37 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		});
 
 		expect(featureMatchOverlayModeConfigSchema.safeParse(referenced).success).toBe(true);
-		expect(featureMatchOverlayModeConfigSchema.safeParse({
+		const legacy = featureMatchOverlayModeConfigSchema.safeParse({
 			...referenced,
 			layout: {
 				...referenced.layout,
 				items: referenced.layout.items.map(item =>
-					item.id === 'motion-ident' ? { ...item, zIndex: 99 } : item),
+					item.id === 'motion-ident'
+						? {
+								...item,
+								zIndex: 99,
+								focalPosition: undefined,
+								clipGeometry: undefined,
+								borderRadius: 10,
+								surfaceStyle: { backgroundColor: '#fff' },
+							}
+						: { ...item, zIndex: 1 }),
 			},
-		}).success).toBe(false);
+		});
+		expect(legacy.success).toBe(true);
+		if (legacy.success) {
+			expect(legacy.data.layout.items.every(item => !('zIndex' in item))).toBe(true);
+			const media = legacy.data.layout.items.find(item => item.id === 'motion-ident');
+			expect(media).toMatchObject({
+				focalPosition: { horizontal: 0.5, vertical: 0.5 },
+				clipGeometry: {
+					topLeft: { kind: 'rounded', size: 10 },
+					topRight: { kind: 'rounded', size: 10 },
+				},
+			});
+			expect(media).not.toHaveProperty('surfaceStyle');
+			expect(media).not.toHaveProperty('borderRadius');
+		}
 		expect(featureMatchOverlayModeConfigSchema.safeParse({
 			...referenced,
 			layout: {

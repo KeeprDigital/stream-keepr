@@ -43,6 +43,41 @@ function isoBox(type: string, payload = new Uint8Array()) {
 	return bytes;
 }
 
+function withMp4CompositionOffsets(
+	bytes: Uint8Array,
+	entries: readonly { sampleCount: number; sampleOffset: number }[],
+) {
+	const payload = new Uint8Array(8 + entries.length * 8);
+	const payloadView = new DataView(payload.buffer);
+	payloadView.setUint32(4, entries.length);
+	entries.forEach((entry, index) => {
+		payloadView.setUint32(8 + index * 8, entry.sampleCount);
+		payloadView.setUint32(12 + index * 8, entry.sampleOffset);
+	});
+	const compositionOffsets = isoBox('ctts', payload);
+	const insertionOffset = asciiOffset(bytes, 'stss') - 4;
+	const result = concatenate([
+		bytes.subarray(0, insertionOffset),
+		compositionOffsets,
+		bytes.subarray(insertionOffset),
+	]);
+	const originalView = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const resultView = new DataView(result.buffer);
+	for (const ancestor of ['stbl', 'minf', 'mdia', 'trak', 'moov']) {
+		const ancestorOffset = asciiOffset(bytes, ancestor) - 4;
+		resultView.setUint32(
+			ancestorOffset,
+			originalView.getUint32(ancestorOffset) + compositionOffsets.byteLength,
+		);
+	}
+	const chunkOffsetEntry = asciiOffset(result, 'stco') + 12;
+	resultView.setUint32(
+		chunkOffsetEntry,
+		resultView.getUint32(chunkOffsetEntry) + compositionOffsets.byteLength,
+	);
+	return result;
+}
+
 function replaceAscii(bytes: Uint8Array, from: string, to: string) {
 	const result = bytes.slice();
 	const needle = new TextEncoder().encode(from);
@@ -249,6 +284,23 @@ describe('silent-video bounded inspection', () => {
 		new DataView(malformed.buffer).setUint32(timingTable + 12, 1);
 
 		await expectIssue(processSilentVideo(malformed), 'video-frame-rate-exceeded');
+	});
+
+	it('rejects MP4 composition offsets that overlap the presentation timeline', async () => {
+		const malformed = withMp4CompositionOffsets(h264Mp4, [
+			{ sampleCount: 1, sampleOffset: 32 },
+			{ sampleCount: 1, sampleOffset: 0 },
+		]);
+
+		await expectIssue(processSilentVideo(malformed), 'malformed-video-timeline');
+	});
+
+	it('rejects movie and media headers whose scaled presentation durations disagree', async () => {
+		const malformed = h264Mp4.slice();
+		const movieHeader = asciiOffset(malformed, 'mvhd') + 4;
+		new DataView(malformed.buffer).setUint32(movieHeader + 12, 2000);
+
+		await expectIssue(processSilentVideo(malformed), 'malformed-video-timeline');
 	});
 
 	it('rejects an MP4 sample count before it can drive an unbounded allocation', async () => {

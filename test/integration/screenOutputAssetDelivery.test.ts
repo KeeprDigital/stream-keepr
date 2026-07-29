@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { screenOutputAssetCapabilityCookieName } from '../../shared/utils/graphicsAssetReferences';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { executeIntegrationD1 } from './integrationD1';
 
 const pixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -208,6 +209,62 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		expect(revoked.status).toBe(404);
 		const authorized = await fetch(contentPath(), { headers: authorizedHeaders() });
 		expect(authorized.status).toBe(200);
+	});
+
+	it('rejects publishing a Safari-targeted restricted video to the live Screen config', async () => {
+		const baseline = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		await $fetch(
+			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
+			{ method: 'PATCH', body: { layout: baseline.layout } },
+		);
+		await executeIntegrationD1(`
+			UPDATE graphic_assets
+			SET kind = 'silent-video'
+			WHERE id = '${assetId}';
+			UPDATE graphic_asset_revisions
+			SET technical_facts = json_set(
+				technical_facts,
+				'$.kind', 'silent-video',
+				'$.targetCompatibility', 'chromium-transparency'
+			)
+			WHERE id = '${revisionId}';
+		`);
+
+		const restricted = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		restricted.layout.items.push({
+			id: 'restricted-video',
+			type: 'media',
+			label: 'Restricted VP9 alpha',
+			visible: true,
+			x: 0,
+			y: 0,
+			width: 640,
+			height: 360,
+			asset: { assetId, revisionId },
+			mediaKind: 'silent-video',
+			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+			loop: true,
+			playbackRate: 1,
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'safari',
+		});
+
+		const publication = await fetch(
+			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
+			{
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ layout: restricted.layout }),
+			},
+		);
+		expect(publication.status).toBe(409);
+
+		const persisted = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
+		expect(persisted.modeConfigs['feature-match-overlay'].layout.items).not.toContainEqual(
+			expect.objectContaining({ id: 'restricted-video' }),
+		);
 	});
 
 	it('deleting the Screen revokes its current capability', async () => {

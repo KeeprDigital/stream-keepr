@@ -32,7 +32,7 @@ watchEffect(() => {
 			muted
 			playsinline
 			preload="auto"
-			:style="{ width: '100%', height: '100%', objectFit: media.item.fit, opacity: media.item.opacity, borderRadius: `${media.item.borderRadius}px` }"
+			:style="media.contentStyle"
 		/>
 		<span
 			v-else-if="media.item.mediaKind === 'silent-video'"
@@ -42,7 +42,7 @@ watchEffect(() => {
 			v-else
 			:src="media.src"
 			:alt="media.item.label"
-			:style="{ width: '100%', height: '100%', objectFit: media.item.fit, opacity: media.item.opacity, borderRadius: `${media.item.borderRadius}px` }"
+			:style="media.contentStyle"
 		>
 	</div>
 </template>

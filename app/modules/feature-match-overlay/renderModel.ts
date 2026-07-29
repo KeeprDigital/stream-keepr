@@ -18,11 +18,13 @@ import type {
 } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayTemplateMetadataInput } from '~/utils/featureMatchOverlayTemplateValues';
 import { resolveFeatureMatchOverlayFontSelection } from '~~/shared/featureMatchOverlayFonts';
+import { normalizeFeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { graphicAssetRevisionContentPath } from '~~/shared/utils/graphicsAssetReferences';
 import { featureMatchOverlayBorderRadiusCss, featureMatchOverlaySourceCutoutRect, roundedRectPath } from '~/utils/featureMatchOverlayGeometry';
 import { buildFeatureMatchOverlayTemplateMetadataValues } from '~/utils/featureMatchOverlayTemplateValues';
 import { renderFeatureMatchOverlayTemplateLines } from '~/utils/featureMatchOverlayTokens';
+import { shapeGeometryBorderRadius, shapeGeometryClipPath } from '~/utils/graphicShapeGeometry';
 
 type FeatureMatchOverlayBorderSide = 'Top' | 'Right' | 'Bottom' | 'Left';
 
@@ -82,6 +84,7 @@ export interface FeatureMatchOverlaySourceItemRenderModel {
 export interface FeatureMatchOverlayMediaGraphicItemRenderModel {
 	item: FeatureMatchMediaGraphicItemConfig;
 	style: CSSProperties;
+	contentStyle: CSSProperties;
 	src: string;
 }
 
@@ -159,6 +162,7 @@ export interface FeatureMatchOverlayWidgetHelpers {
 export interface FeatureMatchOverlayRenderModel {
 	output: FeatureMatchOverlayOutput;
 	canvasStyle: CSSProperties;
+	layoutItems: FeatureMatchOverlayLayoutItemRenderModel[];
 	sourceItems: FeatureMatchOverlaySourceItemRenderModel[];
 	mediaItems: FeatureMatchOverlayMediaGraphicItemRenderModel[];
 	widgetItems: FeatureMatchOverlayWidgetItemRenderModel[];
@@ -175,6 +179,12 @@ export interface FeatureMatchOverlayRenderModel {
 	) => CSSProperties;
 	borderSideEnabled: (style: { borderTopVisible?: boolean; borderRightVisible?: boolean; borderBottomVisible?: boolean; borderLeftVisible?: boolean }, side: FeatureMatchOverlayBorderSide) => boolean;
 }
+
+export type FeatureMatchOverlayLayoutItemRenderModel
+	= | ({ kind: 'source' } & FeatureMatchOverlaySourceItemRenderModel)
+		| ({ kind: 'media' } & FeatureMatchOverlayMediaGraphicItemRenderModel)
+		| ({ kind: 'widget' } & FeatureMatchOverlayWidgetItemRenderModel)
+		| ({ kind: 'group'; style: CSSProperties } & FeatureMatchOverlayWidgetGroupRenderModel);
 
 function rectStyle(rect: FeatureMatchOverlayRect): CSSProperties {
 	return { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` };
@@ -423,16 +433,11 @@ function groupChildDefaultSurfaceStyle(group: FeatureMatchWidgetGroupItemConfig)
 }
 
 export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlayRenderModelInput & { maskId?: string }): FeatureMatchOverlayRenderModel {
-	const { config, output, displayTime } = input;
+	const { output, displayTime } = input;
+	const config = normalizeFeatureMatchOverlayModeConfig(input.config);
 	const resolveGraphicAssetContentPath = input.graphicAssetContentPath
 		?? graphicAssetRevisionContentPath;
-	const visibleItems = [...config.layout.items]
-		.filter(item => item.visible)
-		.sort((a, b) => {
-			const order = (item: FeatureMatchLayoutItemConfig) =>
-				item.type === 'media' ? config.layout.items.indexOf(item) : (item.zIndex ?? 0);
-			return order(a) - order(b);
-		});
+	const visibleItems = config.layout.items.filter(item => item.visible);
 	const sourceItems = visibleItems.filter((item): item is FeatureMatchSourceItemConfig => item.type === 'source');
 	const mediaItems = visibleItems.filter((item): item is FeatureMatchMediaGraphicItemConfig => item.type === 'media');
 	const widgetItems = visibleItems.filter((item): item is FeatureMatchWidgetItemConfig => item.type === 'widget');
@@ -440,8 +445,11 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 
 	function itemStyle(item: FeatureMatchLayoutItemConfig): CSSProperties {
 		return {
-			...baseBoxStyle(output, item, item.surfaceStyle),
-			zIndex: item.type === 'media' ? config.layout.items.indexOf(item) : item.zIndex,
+			...baseBoxStyle(
+				output,
+				item,
+				item.type === 'media' ? undefined : item.surfaceStyle,
+			),
 			pointerEvents: 'none',
 		};
 	}
@@ -618,7 +626,6 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 				...rectStyle(group),
 				position: 'absolute',
 				boxSizing: 'border-box',
-				zIndex: group.zIndex,
 				pointerEvents: 'none',
 				overflow: 'visible',
 			},
@@ -662,6 +669,68 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		style: itemStyle(item),
 		cutoutPath: item.frameCutout ? roundedRectPath(featureMatchOverlaySourceCutoutRect(item)) || null : null,
 	}));
+	const renderedMediaItems = mediaItems.map(item => ({
+		item,
+		style: itemStyle(item),
+		contentStyle: {
+			width: '100%',
+			height: '100%',
+			objectFit: item.fit,
+			objectPosition: `${item.focalPosition.horizontal * 100}% ${item.focalPosition.vertical * 100}%`,
+			opacity: item.opacity,
+			borderRadius: shapeGeometryBorderRadius(item.clipGeometry),
+			clipPath: shapeGeometryClipPath(item.clipGeometry, item.width, item.height),
+		},
+		src: item.asset ? resolveGraphicAssetContentPath(item.asset) : '',
+	}));
+	const renderedWidgetItems = widgetItems.map(item => ({
+		id: item.id,
+		label: item.label,
+		item,
+		widget: item.widget,
+		surfaceStyle: item.surfaceStyle,
+		style: widgetStyle(item, item.surfaceStyle),
+		render: widgetRender(item.widget, item.label, item, item.surfaceStyle),
+	}));
+	const renderedWidgetGroups = widgetGroups.map(group => ({
+		item: group,
+		layers: groupLayers(group),
+		children: group.children
+			.filter(child => child.visible)
+			.map((child, index, visibleChildren) => {
+				const rect = childRect(child, index, group, visibleChildren);
+				const surfaceStyle = { ...groupChildDefaultSurfaceStyle(group), ...(child.surfaceStyle ?? {}) };
+				const style = widgetStyle(rect, surfaceStyle);
+				return {
+					id: child.id,
+					label: child.label,
+					child,
+					widget: child.widget,
+					surfaceStyle,
+					style,
+					render: widgetRender(child.widget, child.label, rect, surfaceStyle),
+				};
+			}),
+	}));
+	const sourceById = new Map(renderedSourceItems.map(item => [item.item.id, item]));
+	const mediaById = new Map(renderedMediaItems.map(item => [item.item.id, item]));
+	const widgetById = new Map(renderedWidgetItems.map(item => [item.item.id, item]));
+	const groupById = new Map(renderedWidgetGroups.map(item => [item.item.id, item]));
+	const layoutItems: FeatureMatchOverlayLayoutItemRenderModel[] = visibleItems.map((item) => {
+		switch (item.type) {
+			case 'source':
+				return { kind: 'source', ...sourceById.get(item.id)! };
+			case 'media':
+				return { kind: 'media', ...mediaById.get(item.id)! };
+			case 'widget':
+				return { kind: 'widget', ...widgetById.get(item.id)! };
+			case 'widget-group': {
+				const group = groupById.get(item.id)!;
+				return { kind: 'group', ...group, style: group.layers.shell };
+			}
+		}
+		throw new Error('Unsupported Feature Match Layout Item kind');
+	});
 
 	return {
 		output,
@@ -672,44 +741,11 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 			overflow: 'hidden',
 			background: output === 'overlay' ? 'transparent' : '#000',
 		},
+		layoutItems,
 		sourceItems: renderedSourceItems,
-		mediaItems: mediaItems.map(item => ({
-			item,
-			style: itemStyle(item),
-			src: item.asset ? resolveGraphicAssetContentPath(item.asset) : '',
-		})),
-		widgetItems: widgetItems.map(item => ({
-			id: item.id,
-			label: item.label,
-			item,
-			widget: item.widget,
-			surfaceStyle: item.surfaceStyle,
-			style: widgetStyle(item, item.surfaceStyle),
-			render: widgetRender(item.widget, item.label, item, item.surfaceStyle),
-		})),
-		widgetGroups: widgetGroups.map(group => ({
-			item: group,
-			layers: groupLayers(group),
-			children: group.children
-				.filter(child => child.visible)
-				.map((child, index, visibleChildren) => {
-					const rect = childRect(child, index, group, visibleChildren);
-					const surfaceStyle = { ...groupChildDefaultSurfaceStyle(group), ...(child.surfaceStyle ?? {}) };
-					const style = widgetStyle(rect, surfaceStyle);
-					return {
-						id: child.id,
-						label: child.label,
-						child,
-						widget: child.widget,
-						surfaceStyle,
-						style: {
-							...style,
-							zIndex: child.layout.mode === 'canvas' ? child.layout.zIndex : undefined,
-						},
-						render: widgetRender(child.widget, child.label, rect, surfaceStyle),
-					};
-				}),
-		})),
+		mediaItems: renderedMediaItems,
+		widgetItems: renderedWidgetItems,
+		widgetGroups: renderedWidgetGroups,
 		sourceCutouts: renderedSourceItems
 			.filter(source => source.cutoutPath)
 			.map(source => ({ id: source.item.id, path: source.cutoutPath! })),

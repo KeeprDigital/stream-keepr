@@ -115,10 +115,6 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		submit(layoutWriter.convertGroupArrangement(layout(), id, mode));
 	}
 
-	function setItemOrder(id: string, order: number) {
-		submit(layoutWriter.setItemOrder(layout(), id, order));
-	}
-
 	function moveItemOrder(id: string, direction: -1 | 1) {
 		submit(layoutWriter.moveItemOrder(layout(), id, direction));
 	}
@@ -129,6 +125,18 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 
 	function bringItemToFront(id: string) {
 		submit(layoutWriter.bringItemToFront(layout(), id));
+	}
+
+	function moveGroupChildOrder(groupId: string, childId: string, direction: -1 | 1) {
+		submit(layoutWriter.moveGroupChildOrder(layout(), groupId, childId, direction));
+	}
+
+	function sendGroupChildToBack(groupId: string, childId: string) {
+		submit(layoutWriter.sendGroupChildToBack(layout(), groupId, childId));
+	}
+
+	function bringGroupChildToFront(groupId: string, childId: string) {
+		submit(layoutWriter.bringGroupChildToFront(layout(), groupId, childId));
 	}
 
 	/** Create a new Layout Item of the given kind. Returns the new item's id. */
@@ -163,10 +171,12 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		updateItemRectFromAnchor,
 		updateGroupChildRectFromAnchor,
 		convertGroupArrangement,
-		setItemOrder,
 		moveItemOrder,
 		sendItemToBack,
 		bringItemToFront,
+		moveGroupChildOrder,
+		sendGroupChildToBack,
+		bringGroupChildToFront,
 		createLayoutItem,
 		createGroupChild,
 	};

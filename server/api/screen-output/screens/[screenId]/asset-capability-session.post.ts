@@ -2,6 +2,7 @@ import { db } from 'hub:db';
 import { z } from 'zod';
 import { createD1ScreenOutputAssetAuthorizer } from '~~/server/modules/screen-output-assets/authorizer';
 import { screenOutputAssetCapabilityDigest } from '~~/server/modules/screen-output-assets/capability';
+import { bearerScreenOutputCapability } from '~~/server/utils/screenOutputCapabilityAuthorization';
 import {
 	screenOutputAssetCapabilityCookieName,
 	screenOutputAssetCapabilityCookiePath,
@@ -11,13 +12,8 @@ const paramsSchema = z.object({
 	screenId: z.coerce.number().int().positive(),
 });
 
-function bearerCapability(value: string | undefined): string | undefined {
-	const match = /^Bearer ([\w-]{20,200})$/.exec(value ?? '');
-	return match?.[1];
-}
-
 export default defineEventHandler(async (event) => {
-	const capability = bearerCapability(getRequestHeader(event, 'authorization'));
+	const capability = bearerScreenOutputCapability(getRequestHeader(event, 'authorization'));
 	if (!capability) {
 		throw createError({
 			statusCode: 404,

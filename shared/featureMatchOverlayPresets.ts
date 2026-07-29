@@ -85,7 +85,6 @@ neonFeatureMatch.layout.items = [
 		y: 164,
 		width: 1328,
 		height: 908,
-		zIndex: 20,
 		surfaceStyle: { backgroundOpacity: 0, borderVisible: true, borderColor: '#ffffff', borderWidth: 4, borderRadius: 0, glowColor: '#ffffff', glowSize: 8, glowOpacity: 0.8 },
 	},
 	{
@@ -99,7 +98,6 @@ neonFeatureMatch.layout.items = [
 		y: 208,
 		width: 296,
 		height: 300,
-		zIndex: 20,
 		surfaceStyle: { backgroundOpacity: 0, borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderLeftVisible: false, borderRadius: 0, glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.75 },
 	},
 	{
@@ -113,7 +111,6 @@ neonFeatureMatch.layout.items = [
 		y: 208,
 		width: 296,
 		height: 300,
-		zIndex: 20,
 		surfaceStyle: { backgroundOpacity: 0, borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderRightVisible: false, borderRadius: 0, glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.75 },
 	},
 	{
@@ -125,7 +122,6 @@ neonFeatureMatch.layout.items = [
 		y: 28,
 		width: 1920,
 		height: 116,
-		zIndex: 40,
 		surfaceStyle: {
 			backgroundOpacity: 1,
 			backgroundGradient: 'linear-gradient(90deg, rgba(184,0,84,0.96) 0%, rgba(74,0,76,0.84) 30%, rgba(7,0,14,0.92) 50%, rgba(72,0,116,0.86) 70%, rgba(127,34,246,0.96) 100%)',
@@ -167,7 +163,6 @@ neonFeatureMatch.layout.items = [
 		y: 28,
 		width: 216,
 		height: 116,
-		zIndex: 50,
 		surfaceStyle: { backgroundColor: '#050008', backgroundOpacity: 0.72, borderVisible: true, borderColor: '#ffffff', borderWidth: 3, glowColor: '#ffffff', glowSize: 10, glowOpacity: 0.9 },
 		defaultChildSurfaceStyle: { textColor: '#ffffff', textAlign: 'center', textTransform: 'uppercase', overflow: 'clip' },
 		arrangement: { mode: 'canvas', padding: 0 },
@@ -177,8 +172,8 @@ neonFeatureMatch.layout.items = [
 			{ id: 'match-clock', label: 'Clock', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 12, y: 62, width: 192, height: 38 }, surfaceStyle: { fontSize: 32, fontWeight: 400, textAlign: 'center', lineHeight: 1 } },
 		],
 	},
-	{ id: 'upper-neon-rail', type: 'widget-group', label: 'Upper Neon Rail', visible: true, x: 0, y: 144, width: 1920, height: 64, zIndex: 15, surfaceStyle: { backgroundOpacity: 0, borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderTopVisible: false, borderLeftVisible: false, borderRightVisible: false, glowColor: '#ffffff', glowSize: 8, glowOpacity: 0.8 }, defaultChildSurfaceStyle: {}, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [] },
-	{ id: 'left-empty-panel', type: 'widget-group', label: 'Left Upper Branding Panel', visible: true, x: 0, y: 508, width: 296, height: 104, zIndex: 18, surfaceStyle: { backgroundOpacity: 1, backgroundGradient: 'linear-gradient(180deg, rgba(10,0,16,0.76), rgba(78,0,67,0.58))', borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderLeftVisible: false, borderRightVisible: true, glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.78 }, defaultChildSurfaceStyle: {}, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [] },
+	{ id: 'upper-neon-rail', type: 'widget-group', label: 'Upper Neon Rail', visible: true, x: 0, y: 144, width: 1920, height: 64, surfaceStyle: { backgroundOpacity: 0, borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderTopVisible: false, borderLeftVisible: false, borderRightVisible: false, glowColor: '#ffffff', glowSize: 8, glowOpacity: 0.8 }, defaultChildSurfaceStyle: {}, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [] },
+	{ id: 'left-empty-panel', type: 'widget-group', label: 'Left Upper Branding Panel', visible: true, x: 0, y: 508, width: 296, height: 104, surfaceStyle: { backgroundOpacity: 1, backgroundGradient: 'linear-gradient(180deg, rgba(10,0,16,0.76), rgba(78,0,67,0.58))', borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderLeftVisible: false, borderRightVisible: true, glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.78 }, defaultChildSurfaceStyle: {}, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [] },
 	{
 		id: 'left-branding',
 		type: 'widget-group',
@@ -188,7 +183,6 @@ neonFeatureMatch.layout.items = [
 		y: 612,
 		width: 296,
 		height: 252,
-		zIndex: 18,
 		surfaceStyle: { backgroundOpacity: 1, backgroundGradient: 'linear-gradient(180deg, rgba(81,0,73,0.72), rgba(9,0,18,0.82))', borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderTopVisible: false, borderLeftVisible: false, borderRightVisible: true, glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.78 },
 		defaultChildSurfaceStyle: { textColor: '#ffffff', fontSize: 30, fontWeight: 900, textAlign: 'center', textTransform: 'uppercase' },
 		arrangement: { mode: 'canvas', padding: 0 },
@@ -198,7 +192,7 @@ neonFeatureMatch.layout.items = [
 			{ id: 'left-event-name', label: 'Event Name', visible: true, widget: { type: 'text', template: '{eventName}' }, layout: { mode: 'canvas', x: 24, y: 152, width: 248, height: 56 }, surfaceStyle: { fontSize: 28, fontWeight: 900, textAlign: 'center', lineHeight: 1.05, overflow: 'shrink' } },
 		],
 	},
-	{ id: 'left-footer-panel', type: 'widget-group', label: 'Left Footer Panel', visible: true, x: 0, y: 864, width: 296, height: 208, zIndex: 18, surfaceStyle: { backgroundOpacity: 1, backgroundGradient: 'linear-gradient(180deg, rgba(9,0,18,0.82), rgba(81,0,73,0.62))', borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderTopVisible: false, borderLeftVisible: false, borderRightVisible: true, glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.78 }, defaultChildSurfaceStyle: {}, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [] },
+	{ id: 'left-footer-panel', type: 'widget-group', label: 'Left Footer Panel', visible: true, x: 0, y: 864, width: 296, height: 208, surfaceStyle: { backgroundOpacity: 1, backgroundGradient: 'linear-gradient(180deg, rgba(9,0,18,0.82), rgba(81,0,73,0.62))', borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderTopVisible: false, borderLeftVisible: false, borderRightVisible: true, glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.78 }, defaultChildSurfaceStyle: {}, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [] },
 	{
 		id: 'right-branding',
 		type: 'widget-group',
@@ -208,7 +202,6 @@ neonFeatureMatch.layout.items = [
 		y: 508,
 		width: 296,
 		height: 356,
-		zIndex: 18,
 		surfaceStyle: { backgroundOpacity: 1, backgroundGradient: 'linear-gradient(180deg, rgba(9,0,18,0.82), rgba(81,0,110,0.72))', borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderLeftVisible: true, borderRightVisible: false, glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.78 },
 		defaultChildSurfaceStyle: { textColor: '#ffffff', fontSize: 30, fontWeight: 900, textAlign: 'center', textTransform: 'uppercase' },
 		arrangement: { mode: 'canvas', padding: 0 },
@@ -218,7 +211,7 @@ neonFeatureMatch.layout.items = [
 			{ id: 'right-event-name', label: 'Event Name', visible: true, widget: { type: 'text', template: '{eventName}' }, layout: { mode: 'canvas', x: 24, y: 232, width: 248, height: 56 }, surfaceStyle: { fontSize: 28, fontWeight: 900, textAlign: 'center', lineHeight: 1.05, overflow: 'shrink' } },
 		],
 	},
-	{ id: 'right-footer-panel', type: 'widget-group', label: 'Right Footer Panel', visible: true, x: 1624, y: 864, width: 296, height: 208, zIndex: 18, surfaceStyle: { backgroundOpacity: 1, backgroundGradient: 'linear-gradient(180deg, rgba(81,0,110,0.62), rgba(9,0,18,0.86))', borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderTopVisible: false, borderLeftVisible: true, borderRightVisible: false, glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.78 }, defaultChildSurfaceStyle: {}, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [] },
+	{ id: 'right-footer-panel', type: 'widget-group', label: 'Right Footer Panel', visible: true, x: 1624, y: 864, width: 296, height: 208, surfaceStyle: { backgroundOpacity: 1, backgroundGradient: 'linear-gradient(180deg, rgba(81,0,110,0.62), rgba(9,0,18,0.86))', borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderTopVisible: false, borderLeftVisible: true, borderRightVisible: false, glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.78 }, defaultChildSurfaceStyle: {}, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [] },
 ];
 
 export const FEATURE_MATCH_OVERLAY_PRESETS: FeatureMatchOverlayPreset[] = [
@@ -232,7 +225,7 @@ export const FEATURE_MATCH_OVERLAY_PRESETS: FeatureMatchOverlayPreset[] = [
 	{
 		id: 'left-stacked-player-cams',
 		label: 'Table with Left Stacked Player Cams',
-		description: 'Main table source with two stacked player source regions in a left rail.',
+		description: 'Main table source with two stacked player source items in a left rail.',
 		aspectRatio: 16 / 9,
 		config: (({ featureMatchId: _featureMatchId, ...config }) => config)(leftStacked),
 	},

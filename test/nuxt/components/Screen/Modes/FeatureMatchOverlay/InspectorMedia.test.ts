@@ -36,8 +36,8 @@ describe('media Graphic Item inspector', () => {
 			height: 360,
 			mediaKind: 'image' as const,
 			fit: 'contain' as const,
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
 			opacity: 1,
-			borderRadius: 0,
 			videoTarget: 'chromium' as const,
 		};
 		config.layout.items = [item];

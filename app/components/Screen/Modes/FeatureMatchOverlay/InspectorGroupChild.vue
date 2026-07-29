@@ -9,6 +9,7 @@ import { anchorFeatureMatchOverlayRect } from '~/utils/featureMatchOverlayGeomet
 import FeatureMatchOverlayBoxStyleFields from './BoxStyleFields.vue';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
 import FeatureMatchOverlayGeometryFields from './GeometryFields.vue';
+import FeatureMatchOverlayOrderSection from './OrderSection.vue';
 import FeatureMatchOverlayWidgetEditor from './WidgetEditor.vue';
 
 const props = defineProps<{
@@ -236,5 +237,11 @@ function resetSurfaceStyle() {
 				/>
 			</div>
 		</FeatureMatchOverlayControlSection>
+
+		<FeatureMatchOverlayOrderSection
+			@send-to-back="editor.sendGroupChildToBack(group.id, child.id)"
+			@move="delta => editor.moveGroupChildOrder(group.id, child.id, delta)"
+			@bring-to-front="editor.bringGroupChildToFront(group.id, child.id)"
+		/>
 	</div>
 </template>

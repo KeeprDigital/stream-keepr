@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
 	addGroupChild,
 	addItem,
+	bringGroupChildToFront,
 	bringItemToFront,
 	convertGroupArrangement,
 	createGroupChild,
 	createLayoutItem,
+	moveGroupChildOrder,
 	moveItemOrder,
 	patchFrame,
 	patchGroup,
@@ -17,10 +19,14 @@ import {
 	patchItemRectFromAnchor,
 	removeGroupChild,
 	removeItem,
+	sendGroupChildToBack,
 	sendItemToBack,
 	setItemOrder,
 } from '~~/app/modules/feature-match-overlay/layout';
-import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import {
+	DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
+	normalizeFeatureMatchLayout,
+} from '~~/shared/types/screenConfig';
 
 function widgetItem(overrides: Partial<Extract<FeatureMatchLayoutItemConfig, { type: 'widget' }>> = {}): FeatureMatchLayoutItemConfig {
 	return {
@@ -212,30 +218,107 @@ describe('feature-match-overlay layout writer', () => {
 	describe('layer ordering', () => {
 		function threeItems() {
 			return [
-				widgetItem({ id: 'a', zIndex: 10 } as never),
-				widgetItem({ id: 'b', zIndex: 20 } as never),
-				widgetItem({ id: 'c', zIndex: 30 } as never),
+				widgetItem({ id: 'a' }),
+				{
+					id: 'media',
+					type: 'media',
+					label: 'Media',
+					visible: true,
+					x: 0,
+					y: 0,
+					width: 100,
+					height: 100,
+					mediaKind: 'image',
+					fit: 'contain',
+					focalPosition: { horizontal: 0.5, vertical: 0.5 },
+					opacity: 1,
+				} as FeatureMatchLayoutItemConfig,
+				widgetItem({ id: 'b' }),
+				widgetItem({ id: 'c' }),
 			];
 		}
 
 		it('sends an item behind every other layer', () => {
 			const next = sendItemToBack(layoutOf(threeItems()), 'c');
-			expect(next.items.find(item => item.id === 'c')!.zIndex).toBeLessThan(10);
+			expect(next.items.map(item => item.id)).toEqual(['c', 'a', 'media', 'b']);
 		});
 
 		it('brings an item in front of every other layer', () => {
 			const next = bringItemToFront(layoutOf(threeItems()), 'a');
-			expect(next.items.find(item => item.id === 'a')!.zIndex).toBeGreaterThan(30);
+			expect(next.items.map(item => item.id)).toEqual(['media', 'b', 'c', 'a']);
 		});
 
-		it('moves an item one step in the stacking order', () => {
+		it('moves every Graphic Item kind one step in sibling list order', () => {
 			const next = moveItemOrder(layoutOf(threeItems()), 'a', 1);
-			expect(next.items.find(item => item.id === 'a')!.zIndex).toBeGreaterThan(20);
+			expect(next.items.map(item => item.id)).toEqual(['media', 'a', 'b', 'c']);
+
+			const movedMedia = moveItemOrder(next, 'media', 1);
+			expect(movedMedia.items.map(item => item.id)).toEqual(['a', 'media', 'b', 'c']);
 		});
 
-		it('sets an explicit order', () => {
-			const next = setItemOrder(layoutOf(threeItems()), 'b', 55);
-			expect(next.items.find(item => item.id === 'b')!.zIndex).toBe(55);
+		it('sets an item list position without persisting z-index', () => {
+			const next = setItemOrder(layoutOf(threeItems()), 'b', 0);
+			expect(next.items.map(item => item.id)).toEqual(['b', 'a', 'media', 'c']);
+			expect(next.items.every(item => !('zIndex' in item))).toBe(true);
+		});
+
+		it('reorders Graphic Group children by sibling list order', () => {
+			const source = layoutOf([groupItem({
+				children: [
+					{ id: 'a', label: 'A', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 0, y: 0, width: 10, height: 10 } },
+					{ id: 'b', label: 'B', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 0, y: 0, width: 10, height: 10 } },
+					{ id: 'c', label: 'C', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 0, y: 0, width: 10, height: 10 } },
+				],
+			})]);
+
+			expect(group(moveGroupChildOrder(source, 'g1', 'a', 1)).children.map(child => child.id))
+				.toEqual(['b', 'a', 'c']);
+			expect(group(sendGroupChildToBack(source, 'g1', 'c')).children.map(child => child.id))
+				.toEqual(['c', 'a', 'b']);
+			expect(group(bringGroupChildToFront(source, 'g1', 'a')).children.map(child => child.id))
+				.toEqual(['b', 'c', 'a']);
+		});
+	});
+
+	describe('legacy normalization', () => {
+		it('preserves effective legacy stacking while removing z-index and migrating media presentation', () => {
+			const legacy = layoutOf([
+				widgetItem({ id: 'front', zIndex: 30 } as never),
+				{
+					id: 'media',
+					type: 'media',
+					label: 'Legacy Media',
+					visible: true,
+					x: 0,
+					y: 0,
+					width: 100,
+					height: 100,
+					mediaKind: 'image',
+					fit: 'cover',
+					opacity: 1,
+					borderRadius: 12,
+					surfaceStyle: { backgroundColor: '#fff' },
+				} as never,
+				widgetItem({ id: 'middle', zIndex: 10 } as never),
+			]);
+
+			const normalized = normalizeFeatureMatchLayout(legacy);
+
+			expect(normalized.items.map(item => item.id)).toEqual(['media', 'middle', 'front']);
+			expect(normalized.items.every(item => !('zIndex' in item))).toBe(true);
+			const media = normalized.items[0]!;
+			expect(media).toMatchObject({
+				type: 'media',
+				focalPosition: { horizontal: 0.5, vertical: 0.5 },
+				clipGeometry: {
+					topLeft: { kind: 'rounded', size: 12 },
+					topRight: { kind: 'rounded', size: 12 },
+					bottomRight: { kind: 'rounded', size: 12 },
+					bottomLeft: { kind: 'rounded', size: 12 },
+				},
+			});
+			expect(media).not.toHaveProperty('borderRadius');
+			expect(media).not.toHaveProperty('surfaceStyle');
 		});
 	});
 
@@ -268,8 +351,10 @@ describe('feature-match-overlay layout writer', () => {
 				type: 'media',
 				mediaKind: 'image',
 				fit: 'contain',
+				focalPosition: { horizontal: 0.5, vertical: 0.5 },
 			});
 			expect(layout.items[0]).not.toHaveProperty('zIndex');
+			expect(layout.items[0]).not.toHaveProperty('surfaceStyle');
 		});
 
 		it('creates a Widget Group child matching the group arrangement mode', () => {

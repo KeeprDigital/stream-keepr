@@ -92,7 +92,8 @@ export function featureMatchOverlayGraphicAssetReferences(
 		});
 	}
 	for (const item of config.layout.items) {
-		appendFontReference(references, item.surfaceStyle, `layout.items.${item.id}.surfaceStyle.font`);
+		if (item.type !== 'media')
+			appendFontReference(references, item.surfaceStyle, `layout.items.${item.id}.surfaceStyle.font`);
 		if (item.type === 'media' && item.asset) {
 			references.push({
 				reference: item.asset,

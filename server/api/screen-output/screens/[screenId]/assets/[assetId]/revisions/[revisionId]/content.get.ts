@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { screenOutputAssetDeliveryForEvent } from '~~/server/modules/screen-output-assets/runtime';
+import { bearerScreenOutputCapability } from '~~/server/utils/screenOutputCapabilityAuthorization';
 import { screenOutputAssetCapabilityCookieName } from '~~/shared/utils/graphicsAssetReferences';
 
 const paramsSchema = z.object({
@@ -7,11 +8,6 @@ const paramsSchema = z.object({
 	assetId: z.string().min(1).max(100),
 	revisionId: z.string().min(1).max(100),
 });
-
-function bearerCapability(value: string | undefined): string | undefined {
-	const match = /^Bearer ([\w-]{20,200})$/.exec(value ?? '');
-	return match?.[1];
-}
 
 function cookieCapability(value: string | undefined): string | undefined {
 	return /^[\w-]{20,200}$/.test(value ?? '') ? value : undefined;
@@ -22,7 +18,7 @@ export default defineEventHandler(async (event) => {
 	const authorization = getRequestHeader(event, 'authorization');
 	const capability = authorization === undefined
 		? cookieCapability(getCookie(event, screenOutputAssetCapabilityCookieName(params.screenId)))
-		: bearerCapability(authorization);
+		: bearerScreenOutputCapability(authorization);
 	if (!capability) {
 		throw createError({
 			statusCode: 404,

@@ -1,14 +1,15 @@
 <script setup lang="ts">
+import type { ShapeGeometry, ShapeGeometryCorner } from '~~/shared/types/graphicItem';
 import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { FeatureMatchMediaGraphicItemConfig, FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import type { FeatureMatchOverlayAnchorValue } from '~/utils/featureMatchOverlayGeometry';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
-import { appearanceSummary, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
+import { rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
 import { anchorFeatureMatchOverlayRect } from '~/utils/featureMatchOverlayGeometry';
-import FeatureMatchOverlayBoxStyleFields from './BoxStyleFields.vue';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
 import FeatureMatchOverlayGeometryFields from './GeometryFields.vue';
+import FeatureMatchOverlayOrderSection from './OrderSection.vue';
 
 const props = defineProps<{
 	config: FeatureMatchOverlayModeConfig;
@@ -36,9 +37,54 @@ const targetOptions = [
 	{ label: 'Safari-compatible', value: 'safari' },
 	{ label: 'Chromium', value: 'chromium' },
 ];
+const cornerKindOptions = [
+	{ label: 'Square', value: 'square' },
+	{ label: 'Rounded', value: 'rounded' },
+	{ label: 'Cut', value: 'cut' },
+];
+const cornerFields = [
+	{ key: 'topLeft', label: 'Top left' },
+	{ key: 'topRight', label: 'Top right' },
+	{ key: 'bottomRight', label: 'Bottom right' },
+	{ key: 'bottomLeft', label: 'Bottom left' },
+] as const;
+function defaultClipGeometry(): ShapeGeometry {
+	return {
+		topLeft: { kind: 'square' },
+		topRight: { kind: 'square' },
+		bottomRight: { kind: 'square' },
+		bottomLeft: { kind: 'square' },
+	};
+}
+const clipGeometry = computed(() => props.item.clipGeometry ?? defaultClipGeometry());
+const focalPosition = computed(() => props.item.focalPosition ?? { horizontal: 0.5, vertical: 0.5 });
 
 function patch(updates: Partial<FeatureMatchMediaGraphicItemConfig>) {
 	editor.updateItem(props.item.id, updates);
+}
+
+function patchClipGeometry(updates: Partial<ShapeGeometry>) {
+	patch({ clipGeometry: { ...clipGeometry.value, ...updates } });
+}
+
+function patchCorner(field: typeof cornerFields[number]['key'], kind: ShapeGeometryCorner['kind']) {
+	const current = clipGeometry.value[field];
+	patchClipGeometry({
+		[field]: kind === 'square'
+			? { kind }
+			: { kind, size: current.kind === 'square' ? 24 : current.size },
+	});
+}
+
+function patchCornerSize(field: typeof cornerFields[number]['key'], size: number) {
+	const current = clipGeometry.value[field];
+	if (current.kind !== 'square')
+		patchClipGeometry({ [field]: { ...current, size } });
+}
+
+function cornerSize(field: typeof cornerFields[number]['key']) {
+	const corner = clipGeometry.value[field];
+	return corner.kind === 'square' ? 0 : corner.size;
 }
 
 function selectAsset(asset: GraphicAsset, reference: GraphicAssetReference) {
@@ -143,8 +189,23 @@ function removeSelf() {
 						@update:model-value="patch({ opacity: Number($event) })"
 					/>
 				</UFormField>
-				<UFormField label="Radius">
-					<UInputNumber :model-value="item.borderRadius" :min="0" @update:model-value="patch({ borderRadius: Number($event) })" />
+				<UFormField label="Horizontal focal position">
+					<UInputNumber
+						:model-value="focalPosition.horizontal"
+						:min="0"
+						:max="1"
+						:step="0.05"
+						@update:model-value="patch({ focalPosition: { ...focalPosition, horizontal: Number($event) } })"
+					/>
+				</UFormField>
+				<UFormField label="Vertical focal position">
+					<UInputNumber
+						:model-value="focalPosition.vertical"
+						:min="0"
+						:max="1"
+						:step="0.05"
+						@update:model-value="patch({ focalPosition: { ...focalPosition, vertical: Number($event) } })"
+					/>
 				</UFormField>
 				<template v-if="item.mediaKind === 'silent-video'">
 					<UFormField label="Playback rate">
@@ -161,14 +222,58 @@ function removeSelf() {
 			</div>
 		</FeatureMatchOverlayControlSection>
 
-		<FeatureMatchOverlayControlSection title="Appearance" :summary="appearanceSummary(item.surfaceStyle)">
-			<FeatureMatchOverlayBoxStyleFields
-				:box-style="item.surfaceStyle"
-				include-border
-				include-padding
-				include-overflow
-				@update="updates => editor.updateItemSurfaceStyle(item.id, updates)"
-			/>
+		<FeatureMatchOverlayControlSection title="Shape Geometry" :summary="item.clipGeometry ? 'Custom clipping' : 'No clipping'">
+			<div class="space-y-3">
+				<div class="flex justify-end">
+					<UButton
+						size="xs"
+						variant="soft"
+						icon="i-lucide-rotate-ccw"
+						:disabled="!item.clipGeometry"
+						@click="patch({ clipGeometry: undefined })"
+					>
+						Clear Shape
+					</UButton>
+				</div>
+				<div class="grid gap-3 md:grid-cols-2">
+					<UFormField v-for="corner in cornerFields" :key="corner.key" :label="corner.label">
+						<div class="grid grid-cols-2 gap-2">
+							<USelect
+								:model-value="clipGeometry[corner.key].kind"
+								:items="cornerKindOptions"
+								value-key="value"
+								@update:model-value="patchCorner(corner.key, $event as ShapeGeometryCorner['kind'])"
+							/>
+							<UInputNumber
+								v-if="clipGeometry[corner.key].kind !== 'square'"
+								:model-value="cornerSize(corner.key)"
+								:min="0"
+								@update:model-value="patchCornerSize(corner.key, Number($event))"
+							/>
+						</div>
+					</UFormField>
+					<UFormField label="Left edge slant">
+						<UInputNumber
+							:model-value="clipGeometry.leftEdgeSlant ?? 0"
+							:min="0"
+							@update:model-value="patchClipGeometry({ leftEdgeSlant: Number($event) })"
+						/>
+					</UFormField>
+					<UFormField label="Right edge slant">
+						<UInputNumber
+							:model-value="clipGeometry.rightEdgeSlant ?? 0"
+							:min="0"
+							@update:model-value="patchClipGeometry({ rightEdgeSlant: Number($event) })"
+						/>
+					</UFormField>
+				</div>
+			</div>
 		</FeatureMatchOverlayControlSection>
+
+		<FeatureMatchOverlayOrderSection
+			@send-to-back="editor.sendItemToBack(item.id)"
+			@move="delta => editor.moveItemOrder(item.id, delta)"
+			@bring-to-front="editor.bringItemToFront(item.id)"
+		/>
 	</div>
 </template>

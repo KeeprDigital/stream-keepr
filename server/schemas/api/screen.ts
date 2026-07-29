@@ -30,7 +30,10 @@ import {
 	STANDINGS_VIEW_MODE_VALUES,
 	VERTICAL_ALIGN_VALUES,
 } from '~~/shared/types/enums';
-import { FEATURE_MATCH_OVERLAY_ANCHOR_VALUES } from '~~/shared/types/screenConfig';
+import {
+	FEATURE_MATCH_OVERLAY_ANCHOR_VALUES,
+	normalizeFeatureMatchLayout,
+} from '~~/shared/types/screenConfig';
 
 const MAX_SCREEN_CONFIG_BYTES = 64 * 1024;
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
@@ -460,23 +463,47 @@ const featureMatchLayoutItemBaseSchema = featureMatchOverlayRectSchema.extend({
 	label: z.string().min(1).max(100),
 	visible: z.boolean(),
 	anchor: featureMatchOverlayAnchorValueSchema.optional(),
-	zIndex: finiteNumberSchema.int().min(-10000).max(10000).optional(),
-	surfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
 }).strict();
 
 const featureMatchSourceItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
 	type: z.literal('source'),
 	sourceRole: z.string().min(1).max(100).optional(),
 	frameCutout: z.boolean(),
+	surfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
 }).strict();
 
-const featureMatchMediaGraphicItemConfigSchema = featureMatchLayoutItemBaseSchema.omit({ zIndex: true }).extend({
+const shapeGeometryCornerSchema = z.discriminatedUnion('kind', [
+	z.object({ kind: z.literal('square') }).strict(),
+	z.object({
+		kind: z.literal('rounded'),
+		size: nonNegativePixelSchema,
+	}).strict(),
+	z.object({
+		kind: z.literal('cut'),
+		size: nonNegativePixelSchema,
+	}).strict(),
+]);
+
+const shapeGeometrySchema = z.object({
+	topLeft: shapeGeometryCornerSchema,
+	topRight: shapeGeometryCornerSchema,
+	bottomRight: shapeGeometryCornerSchema,
+	bottomLeft: shapeGeometryCornerSchema,
+	leftEdgeSlant: nonNegativePixelSchema.optional(),
+	rightEdgeSlant: nonNegativePixelSchema.optional(),
+}).strict();
+
+const featureMatchMediaGraphicItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
 	type: z.literal('media'),
 	asset: graphicAssetReferenceSchema.optional(),
 	mediaKind: z.enum(['image', 'silent-video']),
 	fit: z.enum(['contain', 'cover', 'fill']),
+	focalPosition: z.object({
+		horizontal: opacitySchema,
+		vertical: opacitySchema,
+	}).strict(),
 	opacity: opacitySchema,
-	borderRadius: nonNegativePixelSchema,
+	clipGeometry: shapeGeometrySchema.optional(),
 	loop: z.boolean().optional(),
 	playbackRate: finiteNumberSchema.min(0.25).max(4).optional(),
 	videoCompatibility: z.enum(['all-supported', 'chromium-transparency']).optional(),
@@ -486,6 +513,7 @@ const featureMatchMediaGraphicItemConfigSchema = featureMatchLayoutItemBaseSchem
 const featureMatchWidgetItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
 	type: z.literal('widget'),
 	widget: featureMatchWidgetConfigSchema,
+	surfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
 }).strict();
 
 const featureMatchWidgetGroupStackChildLayoutSchema = z.object({
@@ -505,7 +533,6 @@ const featureMatchWidgetGroupStackChildLayoutSchema = z.object({
 const featureMatchWidgetGroupCanvasChildLayoutSchema = featureMatchOverlayRectSchema.extend({
 	mode: z.literal('canvas'),
 	anchor: featureMatchOverlayAnchorValueSchema.optional(),
-	zIndex: finiteNumberSchema.int().min(-10000).max(10000).optional(),
 }).strict();
 
 const featureMatchWidgetGroupChildConfigSchema = z.object({
@@ -536,6 +563,7 @@ const featureMatchWidgetGroupArrangementSchema = z.discriminatedUnion('mode', [
 
 const featureMatchWidgetGroupItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
 	type: z.literal('widget-group'),
+	surfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
 	arrangement: featureMatchWidgetGroupArrangementSchema,
 	defaultChildSurfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
 	overflow: z.enum(['clip', 'visible']).optional(),
@@ -552,10 +580,22 @@ const featureMatchLayoutItemConfigSchema = z.discriminatedUnion('type', [
 export const featureMatchOverlayModeConfigSchema = z.object({
 	featureMatchId: z.number().int().positive().nullable(),
 	presetId: featureMatchOverlayPresetIdSchema,
-	layout: z.object({
-		frame: featureMatchOverlayFrameConfigSchema,
-		items: z.array(featureMatchLayoutItemConfigSchema).min(1).max(100),
-	}).strict(),
+	layout: z.preprocess(
+		(value) => {
+			if (
+				typeof value !== 'object'
+				|| value === null
+				|| !Array.isArray((value as { items?: unknown }).items)
+			) {
+				return value;
+			}
+			return normalizeFeatureMatchLayout(value as FeatureMatchOverlayModeConfig['layout']);
+		},
+		z.object({
+			frame: featureMatchOverlayFrameConfigSchema,
+			items: z.array(featureMatchLayoutItemConfigSchema).min(1).max(100),
+		}).strict(),
+	),
 }).strict() satisfies z.ZodType<FeatureMatchOverlayModeConfig>;
 
 export const metagameModeConfigSchema = z.object({

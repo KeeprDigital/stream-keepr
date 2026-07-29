@@ -294,9 +294,22 @@ export interface GraphicsAssetLibrary {
 		assetId: GraphicAssetId;
 		revisionId: GraphicAssetRevisionId;
 	}) => Promise<GraphicAssetReferenceStatus>;
+	inspectGraphicAssetRevisionContent: (input: {
+		assetId: GraphicAssetId;
+		revisionId: GraphicAssetRevisionId;
+	}) => Promise<
+		| {
+			outcome: 'available';
+			byteLength: number;
+			contentType: GraphicAssetCanonicalMime;
+		}
+		| { outcome: 'missing' }
+		| { outcome: 'unavailable'; retryable: true }
+	>;
 	resolveGraphicAssetRevision: (input: {
 		assetId: GraphicAssetId;
 		revisionId: GraphicAssetRevisionId;
+		range?: { offset: number; length: number };
 	}) => Promise<
 		| {
 			outcome: 'available';
@@ -2006,6 +2019,29 @@ export function createGraphicsAssetLibrary(
 				kind: content.kind,
 			};
 		},
+		async inspectGraphicAssetRevisionContent(input) {
+			const content = await catalogueRequest(
+				() => requireCatalogue().findRevisionContent(input),
+				'Graphic Asset Revision lookup is temporarily unavailable',
+			);
+			if (!content)
+				return { outcome: 'missing' };
+			const result = await requireCanonical().readMetadata(
+				graphicsObjectIdentity(`sha256/${content.digest}`),
+			);
+			if (
+				result.outcome !== 'available'
+				|| result.object.byteLength !== content.byteLength
+				|| result.object.contentType !== content.canonicalMime
+			) {
+				return { outcome: 'unavailable', retryable: true };
+			}
+			return {
+				outcome: 'available',
+				byteLength: content.byteLength,
+				contentType: content.canonicalMime,
+			};
+		},
 		async resolveGraphicAssetRevision(input) {
 			const content = await catalogueRequest(
 				() => requireCatalogue().findRevisionContent(input),
@@ -2015,12 +2051,21 @@ export function createGraphicsAssetLibrary(
 				return { outcome: 'missing' };
 			const result = await requireCanonical().read(
 				graphicsObjectIdentity(`sha256/${content.digest}`),
+				input.range,
 			);
 			if (result.outcome !== 'available')
 				return { outcome: 'unavailable', retryable: true };
 			if (
 				result.object.byteLength !== content.byteLength
 				|| result.object.contentType !== content.canonicalMime
+				|| result.range.completeLength !== content.byteLength
+				|| (
+					input.range !== undefined
+					&& (
+						result.range.offset !== input.range.offset
+						|| result.range.length !== input.range.length
+					)
+				)
 			) {
 				return { outcome: 'unavailable', retryable: true };
 			}

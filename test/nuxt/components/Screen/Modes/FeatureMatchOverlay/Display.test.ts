@@ -70,7 +70,6 @@ function groupLayerConfig(): FeatureMatchOverlayModeConfig {
 			y: 20,
 			width: 300,
 			height: 80,
-			zIndex: 5,
 			overflow: 'clip',
 			arrangement: { mode: 'canvas', padding: 0 },
 			surfaceStyle: {
@@ -154,8 +153,43 @@ describe('featureMatchOverlayDisplay', () => {
 		expect(frameElement.style.zIndex).toBe('2');
 	});
 
+	it('renders every Graphic Item kind in authoritative back-to-front list order', async () => {
+		const base = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		const source = base.layout.items.find(item => item.type === 'source')!;
+		const widget = base.layout.items.find(item => item.type === 'widget')!;
+		const group = base.layout.items.find(item => item.type === 'widget-group')!;
+		base.layout.items = [
+			{ ...widget, id: 'back-widget' },
+			{
+				id: 'middle-media',
+				type: 'media',
+				label: 'Middle media',
+				visible: true,
+				x: 0,
+				y: 0,
+				width: 100,
+				height: 100,
+				mediaKind: 'image',
+				fit: 'cover',
+				focalPosition: { horizontal: 0.5, vertical: 0.5 },
+				opacity: 1,
+			},
+			{ ...source, id: 'front-source' },
+			{ ...group, id: 'front-group' },
+		];
+		mockConfig.value = base;
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.findAll('[data-graphic-item-id]').map(item => item.attributes('data-graphic-item-id')))
+			.toEqual(['back-widget', 'middle-media', 'front-source', 'front-group']);
+	});
+
 	it('hides preview and output rendering until every exact font revision is ready', async () => {
-		mockConfig.value.layout.items[0]!.surfaceStyle = {
+		const firstItem = mockConfig.value.layout.items[0]!;
+		if (firstItem.type !== 'widget-group')
+			throw new Error('Expected Widget Group test fixture');
+		firstItem.surfaceStyle = {
 			font: {
 				kind: 'asset',
 				reference: {
@@ -197,7 +231,10 @@ describe('featureMatchOverlayDisplay', () => {
 	});
 
 	it('retries exact font loading when private content URLs finish resolving', async () => {
-		mockConfig.value.layout.items[0]!.surfaceStyle = {
+		const firstItem = mockConfig.value.layout.items[0]!;
+		if (firstItem.type !== 'widget-group')
+			throw new Error('Expected Widget Group test fixture');
+		firstItem.surfaceStyle = {
 			font: {
 				kind: 'asset',
 				reference: {
@@ -229,7 +266,7 @@ describe('featureMatchOverlayDisplay', () => {
 		});
 	});
 
-	it('blocks a VP9-alpha take outside a proven Chromium target', async () => {
+	it('marks restricted video output not ready outside a proven Chromium target', async () => {
 		mockConfig.value.layout.items = [{
 			id: 'restricted-video',
 			type: 'media',
@@ -245,8 +282,8 @@ describe('featureMatchOverlayDisplay', () => {
 				revisionId: 'video-revision-1' as never,
 			},
 			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
 			opacity: 1,
-			borderRadius: 0,
 			videoCompatibility: 'chromium-transparency',
 			videoTarget: 'chromium',
 		}];

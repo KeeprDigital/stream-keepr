@@ -15,6 +15,58 @@ describe('feature Match Overlay render model', () => {
 		expect(resolveFeatureMatchOverlayRenderModel({ config: base, output: 'key', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' }).frame.fill).toBe('#fff');
 	});
 
+	it('preserves authoritative sibling list order across every Graphic Item kind', () => {
+		const base = config();
+		const source = base.layout.items.find(item => item.type === 'source')!;
+		const widget = base.layout.items.find(item => item.type === 'widget')!;
+		const group = base.layout.items.find(item => item.type === 'widget-group')!;
+		base.layout.items = [
+			{ ...widget, id: 'back-widget' },
+			{
+				id: 'media',
+				type: 'media',
+				label: 'Media',
+				visible: true,
+				x: 0,
+				y: 0,
+				width: 100,
+				height: 100,
+				mediaKind: 'image',
+				fit: 'cover',
+				focalPosition: { horizontal: 0.25, vertical: 0.75 },
+				opacity: 0.8,
+				clipGeometry: {
+					topLeft: { kind: 'rounded', size: 8 },
+					topRight: { kind: 'cut', size: 12 },
+					bottomRight: { kind: 'square' },
+					bottomLeft: { kind: 'square' },
+					rightEdgeSlant: 16,
+				},
+			},
+			{ ...source, id: 'source' },
+			{ ...group, id: 'front-group' },
+		];
+
+		const model = resolveFeatureMatchOverlayRenderModel({
+			config: base,
+			output: 'overlay',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+			displayTime: '',
+		});
+
+		expect(model.layoutItems.map(item => item.item.id))
+			.toEqual(['back-widget', 'media', 'source', 'front-group']);
+		expect(model.layoutItems.every(item => item.style.zIndex === undefined)).toBe(true);
+		expect(model.mediaItems[0]!.contentStyle).toMatchObject({
+			objectFit: 'cover',
+			objectPosition: '25% 75%',
+			opacity: 0.8,
+			borderRadius: '8px 0px 0px 0px',
+		});
+		expect(model.mediaItems[0]!.contentStyle.clipPath).toContain('polygon(');
+	});
+
 	it('keeps transparent frame backgrounds from falling back to SVG black', () => {
 		const base = config();
 		base.layout.frame.backgroundColor = '';
@@ -26,7 +78,7 @@ describe('feature Match Overlay render model', () => {
 		expect(resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' }).frame.fill).toBe('transparent');
 	});
 
-	it('resolves source cutout paths for visible cutout Source Regions', () => {
+	it('resolves source cutout paths for visible cutout Source Items', () => {
 		const base = config();
 		const source = base.layout.items.find(item => item.type === 'source')!;
 		base.layout.items = [
@@ -497,7 +549,13 @@ describe('feature Match Overlay render model', () => {
 				videoCompatibility: 'all-supported',
 				videoTarget: 'safari',
 				opacity: 0.8,
-				borderRadius: 12,
+				focalPosition: { horizontal: 0.5, vertical: 0.5 },
+				clipGeometry: {
+					topLeft: { kind: 'rounded', size: 12 },
+					topRight: { kind: 'rounded', size: 12 },
+					bottomRight: { kind: 'rounded', size: 12 },
+					bottomLeft: { kind: 'rounded', size: 12 },
+				},
 			},
 		});
 	});
