@@ -1,18 +1,8 @@
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
+import { parseScreenOutput, SCREEN_OUTPUT_VALUES, screenOutputBackground } from '~~/shared/utils/screenOutput';
 
-export const FEATURE_MATCH_OVERLAY_OUTPUTS: FeatureMatchOverlayOutput[] = ['overlay', 'fill', 'key'];
+export const FEATURE_MATCH_OVERLAY_OUTPUTS: FeatureMatchOverlayOutput[] = SCREEN_OUTPUT_VALUES;
 
-export function parseFeatureMatchOverlayOutput(value: unknown): { output: FeatureMatchOverlayOutput; warning: string | null } {
-	const raw = Array.isArray(value) ? value[0] : value;
-	if (raw === undefined || raw === null || raw === '') {
-		return { output: 'overlay', warning: null };
-	}
-	if (raw === 'overlay' || raw === 'fill' || raw === 'key') {
-		return { output: raw, warning: null };
-	}
-	return { output: 'overlay', warning: `Invalid output mode "${String(raw)}"; rendering overlay.` };
-}
+export const parseFeatureMatchOverlayOutput = parseScreenOutput;
 
-export function featureMatchOverlayOutputBackground(output: FeatureMatchOverlayOutput): string | undefined {
-	return output === 'overlay' ? undefined : '#000000';
-}
+export const featureMatchOverlayOutputBackground = screenOutputBackground;

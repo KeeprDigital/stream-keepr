@@ -3,6 +3,8 @@ import type { DisplayType, ScreenMode } from './types/enums';
 import type { FeatureMatchOverlayOutput, ModeConfigTypeMap, ScreenConfig } from './types/screenConfig';
 import { getContainerControls, SCREEN_MODES } from './screenModes';
 import {
+	DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
+	DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH,
 	DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT,
 	DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH,
 	getDefaultConfigForMode,
@@ -89,9 +91,19 @@ const SCREEN_MODE_HOST_OVERRIDES: Partial<Record<ScreenMode, Partial<ScreenModeH
 		useScreenPadding: false,
 		useScreenBackground: false,
 	},
+	'broadcast-graphics': {
+		defaultWidth: DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH,
+		defaultHeight: DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
+		useScreenPadding: false,
+		useScreenBackground: false,
+		useScreenAlignment: false,
+	},
 };
 
-const FEATURE_MATCH_OVERLAY_OUTPUT_OPTIONS: ScreenModeOutputOption[] = [
+/** Screen Modes exposing an Overlay Output, Fill Output, and Key Output. */
+const GRAPHICS_OUTPUT_MODES: ScreenMode[] = ['feature-match-overlay', 'broadcast-graphics'];
+
+const GRAPHICS_SCREEN_OUTPUT_OPTIONS: ScreenModeOutputOption[] = [
 	{ value: 'overlay', label: 'Open overlay output', icon: 'i-lucide-panel-top' },
 	{ value: 'fill', label: 'Open fill output', icon: 'i-lucide-square' },
 	{ value: 'key', label: 'Open key output', icon: 'i-lucide-contrast' },
@@ -106,6 +118,9 @@ const DEFAULT_CONTAINER_CONTROL_PLACEMENT: ScreenModeConfigurationPolicy['contai
 
 const CONTAINER_CONTROL_PLACEMENT_OVERRIDES: Partial<Record<ScreenMode, Partial<ScreenModeConfigurationPolicy['containerControlPlacement']>>> = {
 	'feature-match-overlay': {
+		dimensions: 'mode',
+	},
+	'broadcast-graphics': {
 		dimensions: 'mode',
 	},
 };
@@ -157,7 +172,7 @@ export function getScreenModeConfigurationPolicy(mode: ScreenMode): ScreenModeCo
 		resetScreenConfigDefaults: fixedDimensions
 			? { width: host.defaultWidth, height: host.defaultHeight }
 			: undefined,
-		outputOptions: mode === 'feature-match-overlay' ? FEATURE_MATCH_OVERLAY_OUTPUT_OPTIONS : [],
+		outputOptions: GRAPHICS_OUTPUT_MODES.includes(mode) ? GRAPHICS_SCREEN_OUTPUT_OPTIONS : [],
 	};
 }
 

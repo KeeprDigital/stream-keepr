@@ -26,6 +26,29 @@ describe('screen Mode Definition module', () => {
 		}
 	});
 
+	it('gives Broadcast Graphics a transparent host with a 1920x1080 canvas that fits the viewport uniformly', () => {
+		const definition = getScreenModeDefinition('broadcast-graphics');
+
+		expect(definition.host).toEqual({
+			kind: 'overlay',
+			defaultWidth: 1920,
+			defaultHeight: 1080,
+			useScreenPadding: false,
+			useScreenBackground: false,
+			useScreenAlignment: false,
+			fitToViewport: true,
+			themePolicy: 'none',
+		});
+	});
+
+	it('exposes overlay, fill, and key Screen Outputs for Broadcast Graphics', () => {
+		const policy = getScreenModeConfigurationPolicy('broadcast-graphics');
+
+		expect(policy.outputOptions.map(option => option.value)).toEqual(['overlay', 'fill', 'key']);
+		expect(policy.containerControlPlacement.dimensions).toBe('mode');
+		expect(policy.resetScreenConfigDefaults).toEqual({ width: 1920, height: 1080 });
+	});
+
 	it('keeps Feature Match Overlay fixed dimensions and output options in shared policy', () => {
 		const definition = getScreenModeDefinition('feature-match-overlay');
 		const policy = getScreenModeConfigurationPolicy('feature-match-overlay');

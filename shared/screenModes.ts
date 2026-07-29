@@ -44,6 +44,17 @@ export const SCREEN_MODES: Record<ScreenMode, ScreenModeDefinition> = {
 			background: false,
 		},
 	},
+	'broadcast-graphics': {
+		label: 'Broadcast Graphics',
+		icon: 'i-lucide-layout-template',
+		displayType: 'overlay',
+		description: 'Composed broadcast graphics stack with overlay/fill/key outputs',
+		containerControls: {
+			padding: false,
+			textColors: false,
+			background: false,
+		},
+	},
 	'metagame': { label: 'Metagame', icon: 'i-lucide-pie-chart', displayType: 'overlay', description: 'Metagame breakdown' },
 	'player-history': { label: 'Player History', icon: 'i-lucide-history', displayType: 'overlay', description: 'Player match history' },
 } as const;

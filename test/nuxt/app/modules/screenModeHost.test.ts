@@ -149,6 +149,33 @@ describe('screen mode host definition', () => {
 		expect(host.containerStyle).not.toHaveProperty('background');
 	});
 
+	it('hosts Broadcast Graphics transparently and scales its whole canvas uniformly', () => {
+		const host = resolveScreenModeHost({
+			mode: 'broadcast-graphics',
+			screenConfig: {
+				paddingX: 64,
+				paddingY: 32,
+				background: '#ff00ff',
+				horizontalAlign: 'left',
+				verticalAlign: 'top',
+			},
+			fitToViewport: true,
+			viewportWidth: 960,
+			viewportHeight: 540,
+		});
+
+		expect(host.containerStyle).toMatchObject({
+			width: '1920px',
+			height: '1080px',
+			padding: '0px 0px',
+			transform: 'scale(0.5)',
+			transformOrigin: 'top left',
+		});
+		expect(host.containerStyle).not.toHaveProperty('background');
+		expect(host.containerStyle).not.toHaveProperty('justifyItems');
+		expect(host.containerStyle).not.toHaveProperty('alignItems');
+	});
+
 	it('keeps generic overlay configuration policy fluid and output-free', () => {
 		const policy = getScreenModeConfigurationPolicy('card');
 
