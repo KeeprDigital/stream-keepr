@@ -575,6 +575,45 @@ describe('silent-video bounded inspection', () => {
 		await expectIssue(processSilentVideo(reordered), 'mp4-fast-start-required');
 	});
 
+	it.each(['moof', 'sidx', 'mfra', 'uuid', 'junk'] as const)(
+		'rejects an appended uninspected top-level $0 box',
+		async (type) => {
+			const appended = concatenate([h264Mp4, isoBox(type)]);
+			await expectIssue(processSilentVideo(appended), 'unsupported-video-tracks');
+			await expectIssue(processSilentVideoFromRandomAccess({
+				byteLength: appended.byteLength,
+				sha256: '9'.repeat(64),
+				async read(offset, length) {
+					return {
+						outcome: 'available',
+						bytes: appended.slice(offset, offset + length),
+						completeLength: appended.byteLength,
+					};
+				},
+			}), 'unsupported-video-tracks');
+		},
+	);
+
+	it.each(['ftyp', 'moov'] as const)(
+		'rejects a duplicate top-level $0 box',
+		async (type) => {
+			const duplicate = topLevelMp4Boxes(h264Mp4).find(box => box.type === type)!.bytes;
+			const appended = concatenate([h264Mp4, duplicate]);
+			await expectIssue(processSilentVideo(appended), 'malformed-video');
+			await expectIssue(processSilentVideoFromRandomAccess({
+				byteLength: appended.byteLength,
+				sha256: '8'.repeat(64),
+				async read(offset, length) {
+					return {
+						outcome: 'available',
+						bytes: appended.slice(offset, offset + length),
+						completeLength: appended.byteLength,
+					};
+				},
+			}), 'malformed-video');
+		},
+	);
+
 	it('rejects ISO-BMFF files that do not declare an MP4-compatible brand', async () => {
 		const quickTime = h264Mp4.slice();
 		const quickTimeBrand = new TextEncoder().encode('qt  ');

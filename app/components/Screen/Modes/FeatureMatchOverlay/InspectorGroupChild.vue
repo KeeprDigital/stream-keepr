@@ -142,8 +142,8 @@ function patchGraphicItem(updates: FeatureMatchGraphicItemDefinitionConfig) {
 					color="error"
 					variant="soft"
 					icon="i-lucide-trash-2"
-					aria-label="Remove graphicItem"
-					title="Remove graphicItem"
+					aria-label="Remove Graphic Item"
+					title="Remove Graphic Item"
 					@click="removeSelf"
 				/>
 			</div>

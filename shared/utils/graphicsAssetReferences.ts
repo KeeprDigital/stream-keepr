@@ -84,12 +84,12 @@ export function featureMatchOverlayGraphicAssetReferences(
 		});
 	}
 	for (const item of config.layout.items) {
-		if (item.type === 'source' || item.type === 'graphic-item')
+		if (item.type === 'graphic-item')
 			appendFontReference(references, item.surfaceStyle, `layout.items.${item.id}.surfaceStyle.font`);
 		if (item.type === 'graphic-item') {
 			appendGraphicItemAssetReferences(references, item.graphicItem, `layout.items.${item.id}.graphicItem`);
 		}
-		else if (item.type === 'media' || item.type === 'graphic-group') {
+		else {
 			appendGraphicItemAssetReferences(references, item, `layout.items.${item.id}`);
 		}
 	}

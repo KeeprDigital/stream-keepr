@@ -4,7 +4,7 @@ import { FEATURE_MATCH_OVERLAY_GRAPHIC_ITEM_TYPES, featureMatchOverlayGraphicIte
 describe('feature Match Overlay Graphic Item Definitions', () => {
 	it('defines every Graphic Item kind exactly once', () => {
 		expect([...FEATURE_MATCH_OVERLAY_GRAPHIC_ITEM_TYPES].sort()).toEqual(
-			['clock', 'game-wins', 'graphic-group', 'media', 'player-life', 'text'].sort(),
+			['clock', 'game-wins', 'graphic-group', 'media', 'player-life', 'source', 'text'].sort(),
 		);
 	});
 
@@ -35,6 +35,7 @@ describe('feature Match Overlay Graphic Item Definitions', () => {
 			gameWins: () => 'wins',
 			media: () => 'media',
 			graphicGroup: () => 'group',
+			source: () => 'source',
 		})).toBe('clock');
 		expect(definition.migrate(config, definition.configurationVersion)).toBe(config);
 		expect(definition.migrate({ type: 'clock' }, undefined)).toEqual({
@@ -47,12 +48,17 @@ describe('feature Match Overlay Graphic Item Definitions', () => {
 	});
 
 	it('keeps the established editor labels', () => {
+		expect(featureMatchOverlayGraphicItemDefinition('source').label).toBe('Source');
 		expect(featureMatchOverlayGraphicItemDefinition('text').label).toBe('Text');
 		expect(featureMatchOverlayGraphicItemDefinition('player-life').label).toBe('Life');
 		expect(featureMatchOverlayGraphicItemDefinition('game-wins').label).toBe('Wins');
 	});
 
 	it('summarizes Graphic Item configs', () => {
+		expect(featureMatchOverlayGraphicItemDefinition('source').summary({
+			...featureMatchOverlayGraphicItemDefinition('source').defaultConfig(),
+			sourceRole: 'player1',
+		})).toBe('player1 source');
 		expect(featureMatchOverlayGraphicItemDefinition('text').summary({ type: 'text', template: '{name}' })).toBe('{name}');
 		expect(featureMatchOverlayGraphicItemDefinition('clock').summary({ type: 'clock' })).toBe('Live clock');
 		expect(featureMatchOverlayGraphicItemDefinition('player-life').summary({ type: 'player-life', playerSide: 'player2' })).toBe('player2 life');

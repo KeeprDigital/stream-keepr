@@ -32,7 +32,7 @@ const expandedGroups = ref<Record<string, boolean>>({});
 const treeNodeRefs = ref<Record<string, HTMLElement>>({});
 
 const LAYER_KIND_OPTIONS = [
-	{ label: 'Source', value: 'source', icon: 'i-lucide-video' },
+	{ ...featureMatchOverlayGraphicItemDefinition('source'), value: 'source' },
 	{ ...featureMatchOverlayGraphicItemDefinition('text'), value: 'text-graphic-item' },
 	{ ...featureMatchOverlayGraphicItemDefinition('media'), value: 'media' },
 	{ ...featureMatchOverlayGraphicItemDefinition('clock'), value: 'clock-graphic-item' },
@@ -159,7 +159,7 @@ const selectedInspectorHeader = computed(() => {
 		icon: 'i-lucide-circle-help',
 		label: 'Selection unavailable',
 		badge: 'Missing',
-		summary: 'Choose another layer or graphicItem',
+		summary: 'Choose another layer or Graphic Item',
 		visible: false,
 	};
 });

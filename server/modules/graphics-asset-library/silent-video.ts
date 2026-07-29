@@ -113,6 +113,22 @@ function childBoxes(bytes: Uint8Array, parent: IsoBox) {
 	return isoBoxes(bytes, parent.dataStart, parent.end);
 }
 
+function validateMp4TopLevelStructure(boxes: readonly IsoBox[]) {
+	const harmlessPadding = new Set(['free', 'skip']);
+	const allowed = new Set(['ftyp', 'moov', 'mdat', ...harmlessPadding]);
+	const unsupported = boxes.find(box => !allowed.has(box.type));
+	if (unsupported) {
+		validationError(
+			'unsupported-video-tracks',
+			`MP4 top-level ${unsupported.type} boxes are outside the non-fragmented silent-video profile.`,
+		);
+	}
+	oneBox(boxes, 'ftyp');
+	oneBox(boxes, 'moov');
+	if (!boxes.some(box => box.type === 'mdat'))
+		validationError('video-index-incomplete', 'MP4 requires media data.');
+}
+
 function h264SpsFacts(nal: Uint8Array) {
 	if (nal.byteLength < 4 || (nal[0]! & 0x1F) !== 7)
 		validationError('unsupported-video-profile', 'AVC configuration requires a complete SPS.');
@@ -586,6 +602,8 @@ function inspectMp4(
 	},
 ) {
 	const top = isoBoxes(bytes);
+	if (!sourceLayout)
+		validateMp4TopLevelStructure(top);
 	const ftyp = oneBox(top, 'ftyp');
 	if (ftyp.end - ftyp.dataStart < 8 || (ftyp.end - ftyp.dataStart - 8) % 4 !== 0)
 		validationError('malformed-video', 'MP4 file-type declaration is malformed.');
@@ -891,6 +909,7 @@ async function inspectMp4RandomAccess(
 		});
 		offset += size;
 	}
+	validateMp4TopLevelStructure(boxes);
 	const ftyp = oneBox(boxes, 'ftyp');
 	const moov = oneBox(boxes, 'moov');
 	const mediaData = boxes.filter(box => box.type === 'mdat');

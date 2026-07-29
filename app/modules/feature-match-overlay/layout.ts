@@ -320,7 +320,14 @@ export function createLayoutItem(layout: FeatureMatchLayoutConfig, kind: Feature
 	let item: FeatureMatchLayoutItemConfig;
 
 	if (kind === 'source') {
-		item = { ...base, type: 'source', label: 'New Source', sourceRole: 'main', frameCutout: true, width: 420, height: 240, surfaceStyle: { backgroundColor: '#000000', backgroundOpacity: 0, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8 } };
+		item = {
+			...base,
+			...featureMatchOverlayGraphicItemDefinition('source').defaultConfig(),
+			type: 'source',
+			label: 'New Source',
+			width: 420,
+			height: 240,
+		};
 	}
 	else if (kind === 'media') {
 		const { surfaceStyle: _surfaceStyle, ...mediaBase } = base;

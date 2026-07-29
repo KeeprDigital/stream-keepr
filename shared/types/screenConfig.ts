@@ -348,12 +348,15 @@ export interface FeatureMatchLayoutItemBase extends FeatureMatchOverlayRect {
 	anchor?: FeatureMatchOverlayAnchorValue;
 }
 
-export interface FeatureMatchSourceItemConfig extends FeatureMatchLayoutItemBase {
+export interface FeatureMatchSourceItemContentConfig {
 	type: 'source';
+	configurationVersion?: number;
 	sourceRole?: FeatureMatchSourceRole;
 	frameCutout: boolean;
 	surfaceStyle?: FeatureMatchOverlayBoxStyle;
 }
+
+export interface FeatureMatchSourceItemConfig extends FeatureMatchLayoutItemBase, FeatureMatchSourceItemContentConfig {}
 
 export interface FeatureMatchTextGraphicItemConfig {
 	type: 'text';
@@ -504,7 +507,8 @@ export interface FeatureMatchGraphicGroupContentConfig {
 export interface FeatureMatchGraphicGroupItemConfig extends FeatureMatchLayoutItemBase, FeatureMatchGraphicGroupContentConfig {}
 
 export type FeatureMatchGraphicItemDefinitionOwnedConfig
-	=	| FeatureMatchGraphicItemDefinitionConfig
+	=	| FeatureMatchSourceItemContentConfig
+		| FeatureMatchGraphicItemDefinitionConfig
 		| FeatureMatchMediaGraphicItemContentConfig
 		| FeatureMatchGraphicGroupContentConfig;
 
@@ -623,6 +627,8 @@ export function normalizeFeatureMatchLayout(layout: FeatureMatchLayoutConfig): F
 	const items = orderedItems.map((item) => {
 		const mutable = item as typeof item & Record<string, unknown>;
 		delete mutable.zIndex;
+		if (item.type === 'source')
+			Object.assign(item, migrateFeatureMatchGraphicItemConfig(item));
 		if (item.type === 'graphic-item') {
 			item.graphicItem = migrateFeatureMatchGraphicItemConfig(item.graphicItem);
 		}

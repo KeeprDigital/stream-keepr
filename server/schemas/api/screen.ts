@@ -416,6 +416,7 @@ const featureMatchOverlayTokenStyleMapSchema = z
 	.refine(value => Object.keys(value).length <= 100, 'Too many token style entries');
 
 function featureMatchDefinitionSchemaDependencies(
+	source: () => z.ZodTypeAny = () => z.never(),
 	media: () => z.ZodTypeAny = () => z.never(),
 	graphicGroup: () => z.ZodTypeAny = () => z.never(),
 ) {
@@ -428,6 +429,7 @@ function featureMatchDefinitionSchemaDependencies(
 		lifeAnimation: featureMatchOverlayPlayerLifeAnimationSchema,
 		gameWinsDisplayMode: featureMatchGameWinsDisplayModeSchema,
 		gameWinsBoxOrientation: featureMatchGameWinsBoxOrientationSchema,
+		source,
 		media,
 		graphicGroup,
 	};
@@ -451,8 +453,9 @@ const featureMatchLayoutItemBaseSchema = featureMatchOverlayRectSchema.extend({
 	anchor: featureMatchOverlayAnchorValueSchema.optional(),
 }).strict();
 
-const featureMatchSourceItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
+const featureMatchSourceItemContentConfigSchema = z.object({
 	type: z.literal('source'),
+	configurationVersion: z.literal(1),
 	sourceRole: z.string().min(1).max(100).optional(),
 	frameCutout: z.boolean(),
 	surfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
@@ -574,6 +577,7 @@ const featureMatchGraphicGroupContentConfigSchema = z.object({
 const registeredFeatureMatchMediaGraphicItemContentConfigSchema
 	= featureMatchGraphicItemDefinition('media').schema(
 		featureMatchDefinitionSchemaDependencies(
+			() => featureMatchSourceItemContentConfigSchema,
 			() => featureMatchMediaGraphicItemContentConfigSchema,
 			() => featureMatchGraphicGroupContentConfigSchema,
 		),
@@ -581,10 +585,23 @@ const registeredFeatureMatchMediaGraphicItemContentConfigSchema
 const registeredFeatureMatchGraphicGroupContentConfigSchema
 	= featureMatchGraphicItemDefinition('graphic-group').schema(
 		featureMatchDefinitionSchemaDependencies(
+			() => featureMatchSourceItemContentConfigSchema,
 			() => featureMatchMediaGraphicItemContentConfigSchema,
 			() => featureMatchGraphicGroupContentConfigSchema,
 		),
 	) as typeof featureMatchGraphicGroupContentConfigSchema;
+const registeredFeatureMatchSourceItemContentConfigSchema
+	= featureMatchGraphicItemDefinition('source').schema(
+		featureMatchDefinitionSchemaDependencies(
+			() => featureMatchSourceItemContentConfigSchema,
+			() => featureMatchMediaGraphicItemContentConfigSchema,
+			() => featureMatchGraphicGroupContentConfigSchema,
+		),
+	) as typeof featureMatchSourceItemContentConfigSchema;
+
+const featureMatchSourceItemConfigSchema = featureMatchLayoutItemBaseSchema.extend(
+	registeredFeatureMatchSourceItemContentConfigSchema.shape,
+).strict();
 
 const featureMatchMediaGraphicItemConfigSchema = featureMatchLayoutItemBaseSchema.extend(
 	registeredFeatureMatchMediaGraphicItemContentConfigSchema.shape,

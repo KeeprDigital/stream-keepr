@@ -1,11 +1,9 @@
 import type {
 	GraphicAsset,
-	GraphicAssetBrowserPlaybackEvidence,
 	GraphicAssetCanonicalMime,
 	GraphicAssetId,
 	GraphicAssetReferenceStatus,
 	GraphicAssetRevisionId,
-	GraphicAssetSilentVideoBrowserChallenge,
 	GraphicAssetSourceDeclarations,
 	GraphicAssetUsage,
 	GraphicAssetValidationReport,
@@ -28,6 +26,7 @@ import type {
 	GraphicsObjectStoreHealth,
 	GraphicsStagingObjectStore,
 } from './object-store';
+import type { SilentVideoPlaybackValidator } from './silent-video-playback-validator';
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import {
 	GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
@@ -60,6 +59,10 @@ import {
 	processSilentVideoFromRandomAccess,
 	SilentVideoInspectionSourceError,
 } from './silent-video';
+import {
+	createUnavailableSilentVideoPlaybackValidator,
+	silentVideoPlaybackValidationIssue,
+} from './silent-video-playback-validator';
 import { processStillImage } from './still-image';
 import {
 	GraphicAssetValidationError,
@@ -283,16 +286,6 @@ export interface GraphicsAssetLibrary {
 		initiatedBy: string;
 		evidence: NonNullable<GraphicAssetSourceDeclarations['browserDecodeEvidence']>;
 	}) => Promise<GraphicsIngestionOperation>;
-	confirmSilentVideoBrowserEvidence: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-		evidence: GraphicAssetBrowserPlaybackEvidence;
-		poster?: BoundedByteStream;
-	}) => Promise<GraphicsIngestionOperation>;
-	issueSilentVideoBrowserChallenge: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-	}) => Promise<GraphicAssetSilentVideoBrowserChallenge>;
 	listGraphicAssets: (input: { search?: string }) => Promise<GraphicAsset[]>;
 	updateGraphicAsset: (input: {
 		assetId: GraphicAssetId;
@@ -348,6 +341,7 @@ interface GraphicsAssetLibraryDependencies {
 	catalogue: GraphicsAssetCatalogueHealth | GraphicsAssetCatalogue;
 	staging: GraphicsObjectStoreHealth | GraphicsStagingObjectStore;
 	canonical: GraphicsObjectStoreHealth | GraphicsCanonicalObjectStore;
+	silentVideoPlaybackValidator?: SilentVideoPlaybackValidator;
 	now?: () => Date;
 	generateIdentity?: () => string;
 }
@@ -424,6 +418,8 @@ export function createGraphicsAssetLibrary(
 ): GraphicsAssetLibrary {
 	const now = dependencies.now ?? (() => new Date());
 	const generateIdentity = dependencies.generateIdentity ?? (() => crypto.randomUUID());
+	const silentVideoPlaybackValidator = dependencies.silentVideoPlaybackValidator
+		?? createUnavailableSilentVideoPlaybackValidator();
 	const activeIngestionLeaseMilliseconds
 		= GRAPHICS_MULTIPART_PART_TRANSFER_TIMEOUT_MILLISECONDS + 30_000;
 
@@ -507,16 +503,6 @@ export function createGraphicsAssetLibrary(
 			);
 		}
 		if (
-			input.browserDecodeEvidence?.outcome === 'video-played'
-			|| input.browserDecodeEvidence?.outcome === 'video-rejected'
-			|| input.browserDecodeEvidence?.outcome === 'video-challenge'
-		) {
-			throw new GraphicsAssetLibraryError(
-				'Silent video browser evidence can only answer post-inspection playback requirements',
-				'invalid-ingestion-input',
-			);
-		}
-		if (
 			input.browserDecodeEvidence
 			&& (
 				!/^[a-f0-9]{64}$/.test(input.browserDecodeEvidence.sourceDigest)
@@ -580,74 +566,141 @@ export function createGraphicsAssetLibrary(
 		};
 	}
 
+	class SilentVideoValidationRuntimeError extends Error {}
+
+	async function reportWithTrustedSilentVideoValidation(
+		report: Extract<GraphicAssetValidationReport, {
+			outcome: 'accepted';
+			compatibilityProfile: 'silent-video-v1';
+		}>,
+		operation: GraphicsIngestionOperation,
+	) {
+		const factsDigest = await sha256Hex(
+			new TextEncoder().encode(JSON.stringify(report.facts)),
+		);
+		const idempotencyKey = [
+			'silent-video-playback-v1',
+			operation.id,
+			report.facts.sha256,
+			factsDigest,
+		].join(':');
+		const validationInput = {
+			operationId: operation.id,
+			idempotencyKey,
+			sourceDigest: report.facts.sha256,
+			sourceByteLength: report.facts.byteLength,
+			sourceContentType: report.facts.canonicalMime,
+			factsDigest,
+			inspectedFacts: report.facts,
+		} as const;
+		let validation;
+		try {
+			validation = await silentVideoPlaybackValidator.validate(validationInput);
+		}
+		catch {
+			throw new SilentVideoValidationRuntimeError(
+				'Silent-video validation runtime failed while executing the bound operation',
+			);
+		}
+		if (validation.outcome === 'unavailable')
+			throw new SilentVideoValidationRuntimeError('Silent-video validation runtime is unavailable');
+		if (
+			validation.operationId !== operation.id
+			|| validation.idempotencyKey !== idempotencyKey
+			|| validation.sourceDigest !== report.facts.sha256
+			|| validation.factsDigest !== factsDigest
+		) {
+			throw new SilentVideoValidationRuntimeError(
+				'Silent-video validation result was not bound to the exact operation, source, and inspected facts',
+			);
+		}
+		const validationIssue = silentVideoPlaybackValidationIssue(validationInput, validation);
+		if (validationIssue) {
+			validationError(
+				validationIssue,
+				'Pinned native validation could not decode, play, and seek the exact silent video.',
+			);
+		}
+		if (validation.outcome === 'rejected')
+			throw new SilentVideoValidationRuntimeError('Rejected validation did not produce an issue');
+		if (
+			validation.mutedInlinePlayback !== true
+			|| validation.seeked !== true
+			|| validation.width !== report.facts.width
+			|| validation.height !== report.facts.height
+			|| Math.abs(validation.durationSeconds - report.facts.durationSeconds) > 0.05
+			|| Math.abs(validation.posterTimeSeconds - report.facts.posterTimeSeconds) > 0.001
+		) {
+			throw new SilentVideoValidationRuntimeError(
+				'Silent-video validation facts conflict with bounded inspection',
+			);
+		}
+		if (
+			validation.poster.byteLength <= 0
+			|| validation.poster.byteLength > MAX_SILENT_VIDEO_POSTER_BYTES
+			|| !/^[a-f0-9]{64}$/.test(validation.posterDigest)
+		) {
+			throw new SilentVideoValidationRuntimeError(
+				'Silent-video validation returned an invalid deterministic poster envelope',
+			);
+		}
+		let poster;
+		try {
+			const posterBytes = await consumeBoundedByteStream(validation.poster);
+			if (await sha256Hex(posterBytes) !== validation.posterDigest) {
+				throw new SilentVideoValidationRuntimeError(
+					'Silent-video validation poster digest does not match its exact bytes',
+				);
+			}
+			poster = await processStillImage(posterBytes, {
+				sourceFileName: 'poster.png',
+				declaredMime: 'image/png',
+			});
+		}
+		catch (error) {
+			if (error instanceof SilentVideoValidationRuntimeError)
+				throw error;
+			throw new SilentVideoValidationRuntimeError(
+				'Silent-video validation returned a poster that could not be verified',
+			);
+		}
+		const scale = Math.min(1, 640 / report.facts.width, 360 / report.facts.height);
+		const expectedWidth = Math.max(1, Math.round(report.facts.width * scale));
+		const expectedHeight = Math.max(1, Math.round(report.facts.height * scale));
+		if (
+			poster.report.facts.kind !== 'image'
+			|| poster.report.facts.width !== expectedWidth
+			|| poster.report.facts.height !== expectedHeight
+		) {
+			throw new SilentVideoValidationRuntimeError(
+				'Silent-video validation poster violates the deterministic fit rule',
+			);
+		}
+		return {
+			report: {
+				...report,
+				facts: {
+					...report.facts,
+					browserPlayable: true as const,
+					...(report.facts.hasAlpha
+						? { chromiumTransparencyPlayback: true as const }
+						: {}),
+				},
+			},
+			derivative: poster.thumbnail,
+		};
+	}
+
 	function reportWithBrowserDecodeEvidence(
 		report: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>,
 		operation: GraphicsIngestionOperation,
 	): Extract<GraphicAssetValidationReport, { outcome: 'accepted' }> {
 		const evidence = operation.browserDecodeEvidence;
-		if (report.facts.kind === 'silent-video') {
-			if (!evidence || (evidence.outcome !== 'video-played' && evidence.outcome !== 'video-rejected')) {
-				validationError(
-					'browser-video-playback-failed',
-					'Muted inline playback and seeking evidence is required before publication.',
-				);
-			}
-			if (evidence.sourceDigest !== report.facts.sha256) {
-				validationError(
-					'browser-video-evidence-mismatch',
-					'Browser video evidence does not match the staged source bytes.',
-				);
-			}
-			if (evidence.outcome === 'video-rejected') {
-				validationError(
-					evidence.stage === 'transparency'
-						? 'vp9-alpha-chromium-required'
-						: 'browser-video-playback-failed',
-					'The representative target browser could not play and seek the exact silent video.',
-				);
-			}
-			if (
-				evidence.width !== report.facts.width
-				|| evidence.height !== report.facts.height
-				|| Math.abs(evidence.durationSeconds - report.facts.durationSeconds) > 0.05
-				|| Math.abs(evidence.posterTimeSeconds - report.facts.posterTimeSeconds) > 0.001
-			) {
-				validationError(
-					'browser-video-evidence-mismatch',
-					'Browser video dimensions, duration, or poster time conflict with bounded inspection.',
-				);
-			}
-			if (
-				report.facts.hasAlpha
-				&& (
-					evidence.browserFamily !== 'chromium'
-					|| !evidence.transparencyRendered
-				)
-			) {
-				validationError(
-					'vp9-alpha-chromium-required',
-					'VP9 alpha requires proven Chromium transparency playback.',
-				);
-			}
-			return {
-				...report,
-				facts: {
-					...report.facts,
-					browserPlayable: true,
-					...(report.facts.hasAlpha
-						? { chromiumTransparencyPlayback: true as const }
-						: {}),
-				},
-			} as Extract<GraphicAssetValidationReport, { compatibilityProfile: 'silent-video-v1' }>;
-		}
 		if (report.facts.kind === 'font') {
 			if (
 				!evidence
 				|| evidence.outcome === 'decoded'
 				|| evidence.outcome === 'rejected'
-				|| evidence.outcome === 'video-played'
-				|| evidence.outcome === 'video-rejected'
-				|| evidence.outcome === 'video-challenge'
 			) {
 				validationError(
 					'browser-font-load-failed',
@@ -723,9 +776,6 @@ export function createGraphicsAssetLibrary(
 		if (
 			evidence.outcome === 'font-loaded'
 			|| evidence.outcome === 'font-rejected'
-			|| evidence.outcome === 'video-played'
-			|| evidence.outcome === 'video-rejected'
-			|| evidence.outcome === 'video-challenge'
 		) {
 			validationError(
 				'browser-image-decode-failed',
@@ -1039,7 +1089,7 @@ export function createGraphicsAssetLibrary(
 					});
 				}
 				if (
-					(processed.report.facts.kind === 'font' || processed.report.facts.kind === 'silent-video')
+					processed.report.facts.kind === 'font'
 					&& !operation.browserDecodeEvidence
 				) {
 					return await catalogue.updateIngestionOperation(
@@ -1050,54 +1100,19 @@ export function createGraphicsAssetLibrary(
 						operation.updatedAt,
 					);
 				}
-				report = reportWithBrowserDecodeEvidence(processed.report, operation);
-				if (report.facts.kind === 'silent-video') {
-					const posterRead = await staging.read(posterIdentity);
-					if (posterRead.outcome !== 'available')
-						validationError('browser-video-playback-failed', 'Deterministic video poster evidence is missing.');
-					const posterBytes = await consumeBoundedByteStream({
-						body: posterRead.body,
-						byteLength: posterRead.object.byteLength,
-						maximumByteLength: 2 * 1024 * 1024,
-					});
-					const videoEvidence = operation.browserDecodeEvidence;
-					if (
-						!videoEvidence
-						|| videoEvidence.outcome !== 'video-played'
-						|| await sha256Hex(posterBytes) !== videoEvidence.posterDigest
-					) {
-						validationError(
-							'browser-video-evidence-mismatch',
-							'Video poster bytes do not match the browser playback evidence.',
-						);
-					}
-					const poster = await processStillImage(posterBytes, {
-						sourceFileName: 'poster.png',
-						declaredMime: 'image/png',
-					});
-					if (poster.report.facts.kind !== 'image')
-						throw new Error('Deterministic video poster did not decode as a still image');
-					const scale = Math.min(
-						1,
-						640 / report.facts.width,
-						360 / report.facts.height,
+				if (processed.report.facts.kind === 'silent-video') {
+					const trusted = await reportWithTrustedSilentVideoValidation(
+						processed.report as Extract<GraphicAssetValidationReport, {
+							outcome: 'accepted';
+							compatibilityProfile: 'silent-video-v1';
+						}>,
+						operation,
 					);
-					const expectedWidth = Math.max(1, Math.round(report.facts.width * scale));
-					const expectedHeight = Math.max(1, Math.round(report.facts.height * scale));
-					if (
-						poster.report.facts.width !== expectedWidth
-						|| poster.report.facts.height !== expectedHeight
-					) {
-						validationError(
-							'browser-video-evidence-mismatch',
-							'Video poster dimensions do not match the deterministic fit rule.',
-						);
-					}
-					// Re-encode decoded poster pixels with the server's fixed PNG
-					// encoder so the dependent derivative bytes are canonical.
-					derivative = poster.thumbnail;
+					report = trusted.report;
+					derivative = trusted.derivative;
 				}
 				else {
+					report = reportWithBrowserDecodeEvidence(processed.report, operation);
 					if (!('thumbnail' in processed))
 						throw new Error('Validated still image or font is missing its deterministic derivative');
 					derivative = processed.thumbnail;
@@ -1111,6 +1126,13 @@ export function createGraphicsAssetLibrary(
 						message: error.outcome === 'missing'
 							? 'Staged source bytes are missing.'
 							: 'Staged source bytes are temporarily unavailable.',
+					}, operation.report);
+				}
+				if (error instanceof SilentVideoValidationRuntimeError) {
+					return await failOperation(catalogue, operation, {
+						code: 'validation-runtime-unavailable',
+						retryable: true,
+						message: 'Trusted silent-video playback validation is temporarily unavailable.',
 					}, operation.report);
 				}
 				if (!(error instanceof GraphicAssetValidationError))
@@ -1932,137 +1954,6 @@ export function createGraphicsAssetLibrary(
 				'Font browser challenge evidence could not be recorded',
 			);
 			return await continueGraphicsIngestion(confirmed);
-		},
-		async confirmSilentVideoBrowserEvidence(input) {
-			const catalogue = requireCatalogue();
-			const staging = requireStaging();
-			const operation = await catalogueRequest(
-				() => catalogue.getIngestionOperation(input.operationId, input.initiatedBy),
-				'Graphics ingestion state is temporarily unavailable',
-			);
-			if (
-				!operation
-				|| operation.stage !== 'awaiting-confirmation'
-				|| operation.report?.outcome !== 'accepted'
-				|| operation.report.facts.kind !== 'silent-video'
-			) {
-				throw new GraphicsAssetLibraryError(
-					`Graphics Ingestion Operation cannot confirm video playback from stage ${operation?.stage ?? 'missing'}`,
-					'ingestion-operation-not-uploadable',
-				);
-			}
-			if (input.evidence.outcome !== 'video-played' && input.evidence.outcome !== 'video-rejected') {
-				throw new GraphicsAssetLibraryError(
-					'Silent video browser playback evidence is required',
-					'invalid-ingestion-input',
-				);
-			}
-			const challenge = operation.browserDecodeEvidence;
-			if (
-				challenge?.outcome !== 'video-challenge'
-				|| input.evidence.challengeId !== challenge.challengeId
-				|| input.evidence.operationId !== operation.id
-				|| input.evidence.factsDigest !== challenge.factsDigest
-				|| input.evidence.sourceDigest !== challenge.sourceDigest
-				|| now().getTime() > new Date(challenge.expiresAt).getTime()
-			) {
-				throw new GraphicsAssetLibraryError(
-					'Silent video browser evidence does not answer the active operation-bound challenge',
-					'invalid-ingestion-input',
-				);
-			}
-			if (
-				input.evidence.outcome === 'video-played'
-				&& (
-					!input.poster
-					|| input.poster.byteLength <= 0
-					|| input.poster.byteLength > MAX_SILENT_VIDEO_POSTER_BYTES
-				)
-			) {
-				throw new GraphicsAssetLibraryError(
-					'Silent video poster must not exceed 2 MiB',
-					'invalid-ingestion-input',
-				);
-			}
-			if (input.poster) {
-				const posterIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/video-poster`);
-				const stored = await staging.createImmutable({
-					identity: posterIdentity,
-					bytes: input.poster,
-					metadata: {
-						contentType: 'image/png',
-						custom: { operationId: operation.id },
-					},
-				});
-				if (stored.outcome === 'unavailable') {
-					throw new GraphicsAssetLibraryError(
-						'Silent video poster could not be staged',
-						'graphics-asset-library-unavailable',
-					);
-				}
-				await catalogueRequest(
-					() => catalogue.recordStagedBytes({
-						operation,
-						usedBytes: operation.declaredByteLength + stored.object.byteLength,
-					}),
-					'Video poster staging capacity could not be recorded',
-				);
-			}
-			const confirmed = await catalogueRequest(
-				() => catalogue.updateIngestionOperation(
-					changedOperation(operation, {
-						stage: 'validating',
-						browserDecodeEvidence: input.evidence,
-						failure: undefined,
-					}),
-					operation.updatedAt,
-				),
-				'Silent video browser evidence could not be recorded',
-			);
-			return await continueGraphicsIngestion(confirmed);
-		},
-		async issueSilentVideoBrowserChallenge(input) {
-			const catalogue = requireCatalogue();
-			const operation = await catalogueRequest(
-				() => catalogue.getIngestionOperation(input.operationId, input.initiatedBy),
-				'Graphics ingestion state is temporarily unavailable',
-			);
-			if (
-				!operation
-				|| operation.stage !== 'awaiting-confirmation'
-				|| operation.report?.outcome !== 'accepted'
-				|| operation.report.facts.kind !== 'silent-video'
-			) {
-				throw new GraphicsAssetLibraryError(
-					`Graphics Ingestion Operation cannot issue a video challenge from stage ${operation?.stage ?? 'missing'}`,
-					'ingestion-operation-not-uploadable',
-				);
-			}
-			const challenge: GraphicAssetSilentVideoBrowserChallenge & { outcome: 'video-challenge' } = {
-				outcome: 'video-challenge',
-				challengeId: generateIdentity(),
-				operationId: operation.id,
-				sourceDigest: operation.report.facts.sha256,
-				factsDigest: await sha256Hex(new TextEncoder().encode(JSON.stringify(operation.report.facts))),
-				expiresAt: new Date(now().getTime() + 5 * 60_000).toISOString(),
-			};
-			const challenged = await catalogueRequest(
-				() => catalogue.updateIngestionOperation(
-					changedOperation(operation, { browserDecodeEvidence: challenge }),
-					operation.updatedAt,
-				),
-				'Silent video browser challenge could not be recorded',
-			);
-			const recorded = challenged.browserDecodeEvidence;
-			if (recorded?.outcome !== 'video-challenge')
-				throw new GraphicsAssetLibraryError('Silent video browser challenge was not recorded', 'graphics-asset-library-unavailable');
-			return {
-				challengeId: recorded.challengeId,
-				operationId: recorded.operationId,
-				sourceDigest: recorded.sourceDigest,
-				factsDigest: recorded.factsDigest,
-				expiresAt: recorded.expiresAt,
-			};
 		},
 		async retryGraphicsIngestion(input) {
 			const catalogue = requireCatalogue();

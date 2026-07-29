@@ -20,6 +20,7 @@ import type {
 	FeatureMatchSpecificGraphicItemConfig,
 } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayTemplateMetadataInput } from '~/utils/featureMatchOverlayTemplateValues';
+import { featureMatchLayoutItemDefinition } from '~~/shared/featureMatchGraphicItemDefinitions';
 import { resolveFeatureMatchOverlayFontSelection } from '~~/shared/featureMatchOverlayFonts';
 import { normalizeFeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
@@ -448,10 +449,19 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 	const resolveGraphicAssetContentPath = input.graphicAssetContentPath
 		?? graphicAssetRevisionContentPath;
 	const visibleItems = config.layout.items.filter(item => item.visible);
-	const sourceItems = visibleItems.filter((item): item is FeatureMatchSourceItemConfig => item.type === 'source');
-	const mediaItems = visibleItems.filter((item): item is FeatureMatchMediaGraphicItemConfig => item.type === 'media');
-	const graphicItemItems = visibleItems.filter((item): item is FeatureMatchSpecificGraphicItemConfig => item.type === 'graphic-item');
-	const graphicItemGroups = visibleItems.filter((item): item is FeatureMatchGraphicGroupItemConfig => item.type === 'graphic-group');
+	const classifiedItems = {
+		'source': [] as FeatureMatchSourceItemConfig[],
+		'media': [] as FeatureMatchMediaGraphicItemConfig[],
+		'graphic-item': [] as FeatureMatchSpecificGraphicItemConfig[],
+		'group': [] as FeatureMatchGraphicGroupItemConfig[],
+	};
+	for (const item of visibleItems) {
+		classifiedItems[featureMatchLayoutItemDefinition(item).layoutKind].push(item as never);
+	}
+	const sourceItems = classifiedItems.source;
+	const mediaItems = classifiedItems.media;
+	const graphicItemItems = classifiedItems['graphic-item'];
+	const graphicItemGroups = classifiedItems.group;
 
 	function definitionRendererContext<Result>(
 		handlers: Partial<GraphicItemRendererContext<Result>>,
@@ -466,6 +476,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 			gameWins: unsupported,
 			media: unsupported,
 			graphicGroup: unsupported,
+			source: unsupported,
 			...handlers,
 		};
 	}
@@ -709,11 +720,19 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		};
 	}
 
-	const renderedSourceItems = sourceItems.map(item => ({
-		item,
-		style: itemStyle(item),
-		cutoutPath: item.frameCutout ? roundedRectPath(featureMatchOverlaySourceCutoutRect(item)) || null : null,
-	}));
+	const renderedSourceItems = sourceItems.map(item =>
+		featureMatchOverlayGraphicItemDefinition('source').render(
+			item,
+			definitionRendererContext<FeatureMatchOverlaySourceItemRenderModel>({
+				source: source => ({
+					item,
+					style: itemStyle(item),
+					cutoutPath: source.frameCutout
+						? roundedRectPath(featureMatchOverlaySourceCutoutRect(item)) || null
+						: null,
+				}),
+			}),
+		));
 	const renderedMediaItems = mediaItems.map(item => mediaRender(item, item, itemStyle(item)));
 	const renderedGraphicItemItems = graphicItemItems.map(item => ({
 		id: item.id,
@@ -767,21 +786,20 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 	const mediaById = new Map(renderedMediaItems.map(item => [item.item.id, item]));
 	const graphicItemById = new Map(renderedGraphicItemItems.map(item => [item.item.id, item]));
 	const groupById = new Map(renderedGraphicItemGroups.map(item => [item.item.id, item]));
-	const layoutItems: FeatureMatchOverlayLayoutItemRenderModel[] = visibleItems.map((item) => {
-		switch (item.type) {
-			case 'source':
-				return { kind: 'source', ...sourceById.get(item.id)! };
-			case 'media':
-				return { kind: 'media', ...mediaById.get(item.id)! };
-			case 'graphic-item':
-				return { kind: 'graphic-item', ...graphicItemById.get(item.id)! };
-			case 'graphic-group': {
-				const group = groupById.get(item.id)!;
-				return { kind: 'group', ...group, style: group.layers.shell };
-			}
-		}
-		throw new Error('Unsupported Feature Match Layout Item kind');
-	});
+	const renderModelByDefinitionKind = {
+		'source': (id: string): FeatureMatchOverlayLayoutItemRenderModel =>
+			({ kind: 'source', ...sourceById.get(id)! }),
+		'media': (id: string): FeatureMatchOverlayLayoutItemRenderModel =>
+			({ kind: 'media', ...mediaById.get(id)! }),
+		'graphic-item': (id: string): FeatureMatchOverlayLayoutItemRenderModel =>
+			({ kind: 'graphic-item', ...graphicItemById.get(id)! }),
+		'group': (id: string): FeatureMatchOverlayLayoutItemRenderModel => {
+			const group = groupById.get(id)!;
+			return { kind: 'group', ...group, style: group.layers.shell };
+		},
+	};
+	const layoutItems = visibleItems.map(item =>
+		renderModelByDefinitionKind[featureMatchLayoutItemDefinition(item).layoutKind](item.id));
 
 	return {
 		output,

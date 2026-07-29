@@ -6,6 +6,7 @@ import type {
 	FeatureMatchSourceItemConfig,
 	FeatureMatchSpecificGraphicItemConfig,
 } from '~~/shared/types/screenConfig';
+import { featureMatchLayoutItemDefinition } from '~~/shared/featureMatchGraphicItemDefinitions';
 
 /** Selection target shared by the Feature Match Overlay editor surfaces. */
 export type FeatureMatchOverlaySelectionTarget
@@ -39,16 +40,13 @@ export function resolveFeatureMatchOverlaySelection(layout: FeatureMatchLayoutCo
 		return child ? { kind: 'child', group: item, child } : { kind: 'missing' };
 	}
 
-	switch (item.type) {
-		case 'source':
-			return { kind: 'source', item };
-		case 'media':
-			return { kind: 'media', item };
-		case 'graphic-item':
-			return { kind: 'graphic-item', item };
-		case 'graphic-group':
-			return { kind: 'group', item };
-	}
+	const selectionByDefinitionKind = {
+		'source': () => ({ kind: 'source' as const, item: item as FeatureMatchSourceItemConfig }),
+		'media': () => ({ kind: 'media' as const, item: item as FeatureMatchMediaGraphicItemConfig }),
+		'graphic-item': () => ({ kind: 'graphic-item' as const, item: item as FeatureMatchSpecificGraphicItemConfig }),
+		'group': () => ({ kind: 'group' as const, item: item as FeatureMatchGraphicGroupItemConfig }),
+	};
+	return selectionByDefinitionKind[featureMatchLayoutItemDefinition(item).layoutKind]();
 }
 
 /** Stable identity key for a selection target (tree nodes, comparisons). */

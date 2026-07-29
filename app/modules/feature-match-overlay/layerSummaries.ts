@@ -31,15 +31,11 @@ export function graphicItemSummary(graphicItem: FeatureMatchGraphicItemDefinitio
 }
 
 export function layerIcon(item: FeatureMatchLayoutItemConfig) {
-	if (item.type === 'source')
-		return 'i-lucide-video';
 	const config = featureMatchLayoutItemGraphicItemConfig(item);
 	return featureMatchOverlayGraphicItemDefinition(config.type).icon;
 }
 
 export function layerTypeLabel(item: FeatureMatchLayoutItemConfig) {
-	if (item.type === 'source')
-		return 'Source';
 	const config = featureMatchLayoutItemGraphicItemConfig(item);
 	return featureMatchOverlayGraphicItemDefinition(config.type).label;
 }
@@ -49,8 +45,6 @@ export function rectSummary(rect: { x: number; y: number; width: number; height:
 }
 
 export function itemSummary(item: FeatureMatchLayoutItemConfig) {
-	if (item.type === 'source')
-		return `${rectSummary(item)} • ${item.sourceRole || 'source'}`;
 	const config = featureMatchLayoutItemGraphicItemConfig(item);
 	return `${rectSummary(item)} • ${featureMatchOverlayGraphicItemDefinition(config.type).summary(config as never)}`;
 }

@@ -663,8 +663,11 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 
 	it('persists current Definition versions while parsing legacy layouts', () => {
 		const legacy = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		const source = legacy.layout.items.find((item: Record<string, unknown>) => item.type === 'source');
 		const group = legacy.layout.items.find((item: Record<string, unknown>) => item.type === 'graphic-group');
+		expect(source).toBeDefined();
 		expect(group).toBeDefined();
+		delete source.configurationVersion;
 		delete group.configurationVersion;
 		delete group.children[0].graphicItem.configurationVersion;
 
@@ -672,7 +675,9 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 
 		expect(result.success).toBe(true);
 		if (result.success) {
+			const migratedSource = result.data.layout.items.find(item => item.type === 'source');
 			const migratedGroup = result.data.layout.items.find(item => item.type === 'graphic-group');
+			expect(migratedSource?.type === 'source' ? migratedSource.configurationVersion : null).toBe(1);
 			expect(migratedGroup?.type === 'graphic-group' ? migratedGroup.configurationVersion : null).toBe(1);
 			expect(migratedGroup?.type === 'graphic-group' && migratedGroup.children[0]?.type === 'graphic-item'
 				? migratedGroup.children[0].graphicItem.configurationVersion
@@ -682,9 +687,11 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 
 	it('rejects unsupported future Definition versions without partially accepting the layout', () => {
 		const future = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		const source = future.layout.items.find((item: Record<string, unknown>) => item.type === 'source');
 		const group = future.layout.items.find((item: Record<string, unknown>) => item.type === 'graphic-group');
+		expect(source).toBeDefined();
 		expect(group).toBeDefined();
-		group.children[0].graphicItem.configurationVersion = 2;
+		source.configurationVersion = 2;
 
 		expect(featureMatchOverlayModeConfigSchema.safeParse(future).success).toBe(false);
 	});

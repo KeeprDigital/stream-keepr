@@ -17,7 +17,6 @@ import {
 	MAX_STATIC_FONT_INGESTION_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
-import { verifySilentVideoBrowserPlayback } from '~/utils/verifySilentVideoBrowserPlayback';
 import { verifyStaticFontBrowserLoad } from '~/utils/verifyStaticFontBrowserLoad';
 import { verifyStillImageBrowserDecode } from '~/utils/verifyStillImageBrowserDecode';
 
@@ -320,36 +319,6 @@ async function transferGraphicAsset(
 				{ method: 'POST', body: evidence },
 			),
 		);
-	}
-	if (
-		completed.stage === 'awaiting-confirmation'
-		&& completed.report?.outcome === 'accepted'
-		&& completed.report.facts.kind === 'silent-video'
-	) {
-		const challenge = await $fetch<import('~~/shared/types/graphicsAsset').GraphicAssetSilentVideoBrowserChallenge>(
-			`/api/graphics-assets/ingestion-operations/${completed.id}/video-browser-challenge`,
-			{ method: 'POST' },
-		);
-		const { evidence, poster } = await verifySilentVideoBrowserPlayback(
-			file,
-			completed.report.facts,
-			challenge,
-		);
-		const encodedEvidence = btoa(
-			String.fromCharCode(...new TextEncoder().encode(JSON.stringify(evidence))),
-		).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
-		const response = await observeOperationRequest(
-			completed.id,
-			fetch(`/api/graphics-assets/ingestion-operations/${completed.id}/video-browser-evidence`, {
-				method: 'PUT',
-				headers: {
-					'content-type': 'image/png',
-					'x-stream-keepr-video-evidence': encodedEvidence,
-				},
-				body: poster,
-			}),
-		);
-		completed = await operationFromResponse(response, 'Silent video browser confirmation');
 	}
 	return completed;
 }

@@ -7,6 +7,10 @@ import {
 	createR2CanonicalGraphicsObjectStore,
 	createR2StagingGraphicsObjectStore,
 } from './r2-object-store';
+import {
+	createSilentVideoPlaybackServiceBindingValidator,
+	createUnavailableSilentVideoPlaybackValidator,
+} from './silent-video-playback-validator';
 
 const unavailableObjectStore: GraphicsObjectStoreHealth = {
 	async checkHealth() {
@@ -34,9 +38,19 @@ function canonicalObjectStore(binding: R2Bucket | undefined): GraphicsObjectStor
 
 export function graphicsAssetLibraryForEvent(event: H3Event) {
 	const bindings = event.context.cloudflare?.env;
+	const validationBinding = (
+		bindings as typeof bindings & {
+			SILENT_VIDEO_PLAYBACK_VALIDATOR?: {
+				fetch: (request: Request) => Promise<Response>;
+			};
+		} | undefined
+	)?.SILENT_VIDEO_PLAYBACK_VALIDATOR;
 	return createGraphicsAssetLibrary({
 		catalogue: createD1GraphicsAssetCatalogue(db.$client),
 		staging: stagingObjectStore(bindings?.GRAPHICS_ASSET_STAGING),
 		canonical: canonicalObjectStore(bindings?.GRAPHICS_ASSET_CANONICAL),
+		silentVideoPlaybackValidator: validationBinding
+			? createSilentVideoPlaybackServiceBindingValidator(validationBinding)
+			: createUnavailableSilentVideoPlaybackValidator(),
 	});
 }

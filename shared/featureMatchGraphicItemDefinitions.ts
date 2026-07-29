@@ -8,6 +8,7 @@ import type {
 	FeatureMatchLayoutItemConfig,
 	FeatureMatchMediaGraphicItemContentConfig,
 	FeatureMatchOverlayBoxStyle,
+	FeatureMatchSourceItemContentConfig,
 } from './types/screenConfig';
 
 export type FeatureMatchGraphicItemType = FeatureMatchGraphicItemDefinitionOwnedConfig['type'];
@@ -28,6 +29,7 @@ export interface GraphicItemSchemaDependencies {
 	lifeAnimation: ZodTypeAny;
 	gameWinsDisplayMode: ZodTypeAny;
 	gameWinsBoxOrientation: ZodTypeAny;
+	source: () => ZodTypeAny;
 	media: () => ZodTypeAny;
 	graphicGroup: () => ZodTypeAny;
 	z: typeof import('zod').z;
@@ -40,6 +42,7 @@ export interface GraphicItemRendererContext<Result> {
 	gameWins: (config: Extract<FeatureMatchGraphicItemDefinitionConfig, { type: 'game-wins' }>) => Result;
 	media: (config: FeatureMatchMediaGraphicItemContentConfig) => Result;
 	graphicGroup: (config: FeatureMatchGraphicGroupContentConfig) => Result;
+	source: (config: FeatureMatchSourceItemContentConfig) => Result;
 }
 
 export interface FeatureMatchGraphicItemDefinition<
@@ -47,6 +50,8 @@ export interface FeatureMatchGraphicItemDefinition<
 > {
 	id: Config['type'];
 	configurationVersion: 1;
+	placement: 'top-level-only' | 'top-level-or-group';
+	layoutKind: 'source' | 'media' | 'graphic-item' | 'group';
 	label: string;
 	icon: string;
 	editorControls: readonly string[];
@@ -108,9 +113,40 @@ function discoverGraphicGroupAssetReferences(
 }
 
 const DEFINITIONS = {
+	'source': {
+		id: 'source',
+		configurationVersion: 1,
+		placement: 'top-level-only',
+		layoutKind: 'source',
+		label: 'Source',
+		icon: 'i-lucide-video',
+		editorControls: ['source-role', 'frame-cutout', 'surface-style'],
+		schema: dependencies =>
+			dependencies.source() as ZodType<FeatureMatchSourceItemContentConfig>,
+		defaultConfig: () => ({
+			type: 'source',
+			configurationVersion: 1,
+			sourceRole: 'main',
+			frameCutout: true,
+			surfaceStyle: {
+				backgroundColor: '#000000',
+				backgroundOpacity: 0,
+				borderVisible: true,
+				borderColor: '#0077a3',
+				borderWidth: 4,
+				borderRadius: 8,
+			},
+		}),
+		render: (config, context) => context.source(config),
+		migrate: currentVersion,
+		discoverAssetReferences: config => fontReference(config.surfaceStyle, 'surfaceStyle.font'),
+		summary: config => `${config.sourceRole || 'source'} source`,
+	},
 	'text': {
 		id: 'text',
 		configurationVersion: 1,
+		placement: 'top-level-or-group',
+		layoutKind: 'graphic-item',
 		label: 'Text',
 		icon: 'i-lucide-type',
 		editorControls: ['template', 'player-side', 'spacer-width', 'token-typography'],
@@ -139,6 +175,8 @@ const DEFINITIONS = {
 	'clock': {
 		id: 'clock',
 		configurationVersion: 1,
+		placement: 'top-level-or-group',
+		layoutKind: 'graphic-item',
 		label: 'Clock',
 		icon: 'i-lucide-clock',
 		editorControls: [],
@@ -155,6 +193,8 @@ const DEFINITIONS = {
 	'player-life': {
 		id: 'player-life',
 		configurationVersion: 1,
+		placement: 'top-level-or-group',
+		layoutKind: 'graphic-item',
 		label: 'Life',
 		icon: 'i-lucide-heart-pulse',
 		editorControls: ['player-side', 'life-animation'],
@@ -175,6 +215,8 @@ const DEFINITIONS = {
 	'game-wins': {
 		id: 'game-wins',
 		configurationVersion: 1,
+		placement: 'top-level-or-group',
+		layoutKind: 'graphic-item',
 		label: 'Wins',
 		icon: 'i-lucide-trophy',
 		editorControls: ['player-side', 'display-mode', 'box-geometry'],
@@ -198,6 +240,8 @@ const DEFINITIONS = {
 	'media': {
 		id: 'media',
 		configurationVersion: 1,
+		placement: 'top-level-or-group',
+		layoutKind: 'media',
 		label: 'Media',
 		icon: 'i-lucide-image-play',
 		editorControls: ['asset', 'media-kind', 'fit', 'focal-position', 'opacity', 'clip-geometry', 'video-playback'],
@@ -228,6 +272,8 @@ const DEFINITIONS = {
 	'graphic-group': {
 		id: 'graphic-group',
 		configurationVersion: 1,
+		placement: 'top-level-only',
+		layoutKind: 'group',
 		label: 'Group',
 		icon: 'i-lucide-group',
 		editorControls: ['arrangement', 'overflow', 'surface-style', 'child-defaults', 'children'],
@@ -280,14 +326,22 @@ export function migrateFeatureMatchGraphicItemConfig<
 }
 
 export function featureMatchLayoutItemGraphicItemConfig(
-	item: Exclude<FeatureMatchLayoutItemConfig, { type: 'source' }>,
+	item: FeatureMatchLayoutItemConfig,
 ): FeatureMatchGraphicItemDefinitionOwnedConfig {
 	return item.type === 'graphic-item' ? item.graphicItem : item;
 }
 
+export function featureMatchLayoutItemDefinition(item: FeatureMatchLayoutItemConfig) {
+	const config = featureMatchLayoutItemGraphicItemConfig(item);
+	return featureMatchGraphicItemDefinition(config.type);
+}
+
 export function featureMatchGraphicGroupChildGraphicItemConfig(
 	child: FeatureMatchGraphicGroupChildConfig,
-): Exclude<FeatureMatchGraphicItemDefinitionOwnedConfig, FeatureMatchGraphicGroupContentConfig> {
+): Exclude<
+	FeatureMatchGraphicItemDefinitionOwnedConfig,
+	FeatureMatchSourceItemContentConfig | FeatureMatchGraphicGroupContentConfig
+> {
 	return child.type === 'graphic-item' ? child.graphicItem : child;
 }
 
