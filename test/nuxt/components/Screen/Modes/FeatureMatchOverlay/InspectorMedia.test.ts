@@ -81,4 +81,68 @@ describe('media Graphic Item inspector', () => {
 			videoTarget: 'chromium',
 		});
 	});
+
+	it('edits a Graphic Group media child through the same exact-reference controls', async () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		const group = config.layout.items.find(item => item.type === 'widget-group');
+		if (group?.type !== 'widget-group')
+			throw new Error('Expected a Graphic Group fixture');
+		const child = {
+			id: 'group-media',
+			type: 'media' as const,
+			label: 'Group media',
+			visible: true,
+			layout: { mode: 'canvas' as const, x: 0, y: 0, width: 320, height: 180 },
+			mediaKind: 'image' as const,
+			fit: 'contain' as const,
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+			videoTarget: 'chromium' as const,
+		};
+		group.children = [child];
+		const updateConfig = vi.fn();
+		const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/InspectorGroupChild.vue';
+		const { default: InspectorGroupChild } = await import(componentPath);
+		const wrapper = mount(InspectorGroupChild, {
+			props: {
+				config,
+				updateConfig,
+				screenWidth: 1920,
+				screenHeight: 1080,
+				eventId: 7,
+				group,
+				child,
+			},
+			global: {
+				stubs: {
+					FeatureMatchOverlayControlSection: SectionStub,
+					FeatureMatchOverlayGeometryFields: true,
+					FeatureMatchOverlayBoxStyleFields: true,
+					FeatureMatchOverlayOrderSection: true,
+					FeatureMatchOverlayWidgetEditor: true,
+					GraphicsAssetFocusPicker: PickerStub,
+					UFormField: SectionStub,
+					UInput: true,
+					UInputNumber: true,
+					USelect: true,
+					UButton: true,
+					UIcon: true,
+					ScreenSettingsToggle: true,
+				},
+			},
+		});
+
+		await wrapper.get('[data-testid="select-media"]').trigger('click');
+
+		const submittedGroup = updateConfig.mock.calls.at(-1)?.[0].layout.items
+			.find((item: { id: string }) => item.id === group.id);
+		expect(submittedGroup.children[0]).toMatchObject({
+			id: 'group-media',
+			type: 'media',
+			asset: { assetId: 'video-asset', revisionId: 'video-revision-4' },
+			mediaKind: 'silent-video',
+			videoCompatibility: 'all-supported',
+			videoTarget: 'chromium',
+		});
+	});
 });

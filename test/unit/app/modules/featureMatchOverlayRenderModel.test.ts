@@ -560,6 +560,87 @@ describe('feature Match Overlay render model', () => {
 		});
 	});
 
+	it('renders a silent-video Media Graphic Item inside its Graphic Group stacking context', () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		const group = config.layout.items.find(item => item.type === 'widget-group');
+		if (group?.type !== 'widget-group')
+			throw new Error('Expected a Graphic Group fixture');
+		group.children = [
+			{
+				id: 'back-video',
+				type: 'media',
+				label: 'Background loop',
+				visible: true,
+				layout: { mode: 'canvas', x: 10, y: 8, width: 240, height: 120 },
+				asset: {
+					assetId: 'group-video-asset' as never,
+					revisionId: 'group-video-revision-9' as never,
+				},
+				mediaKind: 'silent-video',
+				fit: 'cover',
+				focalPosition: { horizontal: 0.2, vertical: 0.75 },
+				opacity: 0.65,
+				clipGeometry: {
+					topLeft: { kind: 'rounded', size: 12 },
+					topRight: { kind: 'square' },
+					bottomRight: { kind: 'cut', size: 10 },
+					bottomLeft: { kind: 'square' },
+				},
+				loop: false,
+				playbackRate: 1.25,
+				videoCompatibility: 'chromium-transparency',
+				videoTarget: 'chromium',
+			},
+			{
+				id: 'front-clock',
+				type: 'widget',
+				label: 'Clock',
+				visible: true,
+				widget: { type: 'clock' },
+				layout: { mode: 'canvas', x: 20, y: 16, width: 100, height: 40 },
+			},
+		];
+		config.layout.items = [group];
+
+		const model = resolveFeatureMatchOverlayRenderModel({
+			config,
+			output: 'overlay',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+			displayTime: '12:34',
+			graphicAssetContentPath: reference =>
+				`/exact/${reference.assetId}/${reference.revisionId}`,
+		});
+
+		const renderedGroup = model.widgetGroups[0]!;
+		expect(renderedGroup.layers.shell).toMatchObject({ isolation: 'isolate' });
+		expect(renderedGroup.children.map(child => [child.kind, child.id]))
+			.toEqual([['media', 'back-video'], ['widget', 'front-clock']]);
+		const media = renderedGroup.children[0]!;
+		expect(media.kind === 'media' ? media : undefined).toMatchObject({
+			src: '/exact/group-video-asset/group-video-revision-9',
+			item: {
+				mediaKind: 'silent-video',
+				loop: false,
+				playbackRate: 1.25,
+				videoCompatibility: 'chromium-transparency',
+				videoTarget: 'chromium',
+			},
+			style: {
+				left: '10px',
+				top: '8px',
+				width: '240px',
+				height: '120px',
+			},
+			contentStyle: {
+				objectFit: 'cover',
+				objectPosition: '20% 75%',
+				opacity: 0.65,
+			},
+		});
+		expect(media.style).not.toHaveProperty('zIndex');
+	});
+
 	it('emits pre-layered Widget Group styles: positional shell, backdrop, children, frame', () => {
 		const base = config();
 		base.layout.items = [

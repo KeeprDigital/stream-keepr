@@ -7,7 +7,7 @@ import type {
 	FeatureMatchWidgetGroupChildConfig,
 	FeatureMatchWidgetGroupItemConfig,
 } from '~~/shared/types/screenConfig';
-import type { FeatureMatchOverlayGeometryField, FeatureMatchOverlayLayerKind } from '~/modules/feature-match-overlay/layout';
+import type { FeatureMatchGraphicGroupChildKind, FeatureMatchOverlayGeometryField, FeatureMatchOverlayLayerKind } from '~/modules/feature-match-overlay/layout';
 import type { FeatureMatchOverlayGeometryUnit } from '~/utils/featureMatchOverlayGeometry';
 import * as layoutWriter from '~/modules/feature-match-overlay/layout';
 import { parseGeometryInput } from '~/utils/featureMatchOverlayGeometry';
@@ -147,7 +147,7 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 	}
 
 	/** Create a new child in a Widget Group, matching its arrangement mode. Returns the child id, or null when the item is not a group. */
-	function createGroupChild(groupId: string, type: FeatureMatchWidgetConfig['type']): string | null {
+	function createGroupChild(groupId: string, type: FeatureMatchGraphicGroupChildKind): string | null {
 		const { layout: next, id } = layoutWriter.createGroupChild(layout(), groupId, type);
 		submit(next);
 		return id;

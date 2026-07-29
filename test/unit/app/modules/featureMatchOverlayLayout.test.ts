@@ -362,8 +362,27 @@ describe('feature-match-overlay layout writer', () => {
 
 			const child = group(layout).children.at(-1)!;
 			expect(child.id).toBe(id);
-			expect(child.widget.type).toBe('text');
+			expect(child.type !== 'media' ? child.widget.type : undefined).toBe('text');
 			expect(child.layout.mode).toBe('stack');
+		});
+
+		it('creates a Media Graphic Item child from the shared media defaults', () => {
+			const { layout, id } = createGroupChild(layoutOf([groupItem()]), 'g1', 'media' as never);
+
+			const child = group(layout).children.at(-1)!;
+			expect(child).toMatchObject({
+				id,
+				type: 'media',
+				label: 'Media Graphic Item',
+				mediaKind: 'image',
+				fit: 'contain',
+				focalPosition: { horizontal: 0.5, vertical: 0.5 },
+				opacity: 1,
+				videoTarget: 'safari',
+			});
+			expect(child).not.toHaveProperty('widget');
+			expect(child).not.toHaveProperty('surfaceStyle');
+			expect(child).not.toHaveProperty('zIndex');
 		});
 
 		it('returns a null id and the same layout when creating a child on a non-group item', () => {

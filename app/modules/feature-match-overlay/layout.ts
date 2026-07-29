@@ -20,6 +20,7 @@ import { updateFeatureMatchOverlayRectFromAnchor } from '~/utils/featureMatchOve
 
 export type FeatureMatchOverlayGeometryField = 'x' | 'y' | 'width' | 'height';
 export type FeatureMatchOverlayLayerKind = 'source' | 'media' | 'widget-group' | 'text-widget' | 'image-widget' | 'clock-widget' | 'life-widget' | 'wins-widget';
+export type FeatureMatchGraphicGroupChildKind = Exclude<FeatureMatchWidgetConfig['type'], 'image'> | 'media';
 
 function nextId(prefix: string) {
 	return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -158,18 +159,22 @@ export function patchGroupDefaultChildSurfaceStyle(layout: FeatureMatchLayoutCon
 }
 
 export function patchGroupChild(layout: FeatureMatchLayoutConfig, groupId: string, childId: string, updates: Partial<FeatureMatchWidgetGroupChildConfig>): FeatureMatchLayoutConfig {
-	return mapGroupChild(layout, groupId, childId, child => ({ ...child, ...updates }));
+	return mapGroupChild(layout, groupId, childId, child => ({ ...child, ...updates }) as FeatureMatchWidgetGroupChildConfig);
 }
 
 export function patchGroupChildWidget(layout: FeatureMatchLayoutConfig, groupId: string, childId: string, updates: Partial<FeatureMatchWidgetConfig>): FeatureMatchLayoutConfig {
-	return mapGroupChild(layout, groupId, childId, child => ({
-		...child,
-		widget: { ...child.widget, ...updates } as FeatureMatchWidgetConfig,
-	}));
+	return mapGroupChild(layout, groupId, childId, child => child.type === 'media'
+		? child
+		: {
+				...child,
+				widget: { ...child.widget, ...updates } as FeatureMatchWidgetConfig,
+			});
 }
 
 export function patchGroupChildSurfaceStyle(layout: FeatureMatchLayoutConfig, groupId: string, childId: string, updates: Partial<FeatureMatchOverlayBoxStyle>): FeatureMatchLayoutConfig {
-	return mapGroupChild(layout, groupId, childId, child => ({ ...child, surfaceStyle: { ...(child.surfaceStyle ?? {}), ...updates } }));
+	return mapGroupChild(layout, groupId, childId, child => child.type === 'media'
+		? child
+		: { ...child, surfaceStyle: { ...(child.surfaceStyle ?? {}), ...updates } });
 }
 
 export function addGroupChild(layout: FeatureMatchLayoutConfig, groupId: string, child: FeatureMatchWidgetGroupChildConfig): FeatureMatchLayoutConfig {
@@ -345,20 +350,34 @@ export function createLayoutItem(layout: FeatureMatchLayoutConfig, kind: Feature
 }
 
 /** Create a new child in a Widget Group, matching its arrangement mode. Returns a null id when the item is not a group. */
-export function createGroupChild(layout: FeatureMatchLayoutConfig, groupId: string, type: FeatureMatchWidgetConfig['type']): { layout: FeatureMatchLayoutConfig; id: string | null } {
+export function createGroupChild(layout: FeatureMatchLayoutConfig, groupId: string, type: FeatureMatchGraphicGroupChildKind): { layout: FeatureMatchLayoutConfig; id: string | null } {
 	const group = layout.items.find(item => item.id === groupId);
 	if (group?.type !== 'widget-group')
 		return { layout, id: null };
 
-	const id = nextId('widget');
+	const id = nextId(type === 'media' ? 'media' : 'widget');
+	const childLayout = group.arrangement.mode === 'canvas'
+		? { mode: 'canvas' as const, x: 0, y: 0, width: 180, height: 64 }
+		: { mode: 'stack' as const, sizing: { mode: 'fixed' as const, size: 180 } };
 	const next = addGroupChild(layout, groupId, {
 		id,
-		label: newLayerLabel(type),
+		...(type === 'media'
+			? {
+					type,
+					label: 'Media Graphic Item',
+					mediaKind: 'image' as const,
+					fit: 'contain' as const,
+					focalPosition: { horizontal: 0.5, vertical: 0.5 },
+					opacity: 1,
+					videoTarget: 'safari' as const,
+				}
+			: {
+					type: 'widget' as const,
+					label: newLayerLabel(type),
+					widget: featureMatchOverlayWidgetDefinition(type).defaultConfig(),
+				}),
 		visible: true,
-		widget: featureMatchOverlayWidgetDefinition(type).defaultConfig(),
-		layout: group.arrangement.mode === 'canvas'
-			? { mode: 'canvas', x: 0, y: 0, width: 180, height: 64 }
-			: { mode: 'stack', sizing: { mode: 'fixed', size: 180 } },
+		layout: childLayout,
 	});
 	return { layout: next, id };
 }

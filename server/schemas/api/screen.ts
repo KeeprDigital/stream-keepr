@@ -493,7 +493,7 @@ const shapeGeometrySchema = z.object({
 	rightEdgeSlant: nonNegativePixelSchema.optional(),
 }).strict();
 
-const featureMatchMediaGraphicItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
+const featureMatchMediaGraphicItemContentShape = {
 	type: z.literal('media'),
 	asset: graphicAssetReferenceSchema.optional(),
 	mediaKind: z.enum(['image', 'silent-video']),
@@ -508,7 +508,11 @@ const featureMatchMediaGraphicItemConfigSchema = featureMatchLayoutItemBaseSchem
 	playbackRate: finiteNumberSchema.min(0.25).max(4).optional(),
 	videoCompatibility: z.enum(['all-supported', 'chromium-transparency']).optional(),
 	videoTarget: z.enum(['chromium', 'safari']).optional(),
-}).strict();
+} as const;
+
+const featureMatchMediaGraphicItemConfigSchema = featureMatchLayoutItemBaseSchema.extend(
+	featureMatchMediaGraphicItemContentShape,
+).strict();
 
 const featureMatchWidgetItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
 	type: z.literal('widget'),
@@ -535,17 +539,32 @@ const featureMatchWidgetGroupCanvasChildLayoutSchema = featureMatchOverlayRectSc
 	anchor: featureMatchOverlayAnchorValueSchema.optional(),
 }).strict();
 
-const featureMatchWidgetGroupChildConfigSchema = z.object({
+const featureMatchWidgetGroupChildBaseShape = {
 	id: z.string().min(1).max(100),
 	label: z.string().min(1).max(100),
 	visible: z.boolean(),
-	widget: featureMatchWidgetConfigSchema,
 	layout: z.discriminatedUnion('mode', [
 		featureMatchWidgetGroupStackChildLayoutSchema,
 		featureMatchWidgetGroupCanvasChildLayoutSchema,
 	]),
+} as const;
+
+const featureMatchWidgetGroupWidgetChildConfigSchema = z.object({
+	...featureMatchWidgetGroupChildBaseShape,
+	type: z.literal('widget'),
+	widget: featureMatchWidgetConfigSchema,
 	surfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
 }).strict();
+
+const featureMatchWidgetGroupMediaChildConfigSchema = z.object({
+	...featureMatchWidgetGroupChildBaseShape,
+	...featureMatchMediaGraphicItemContentShape,
+}).strict();
+
+const featureMatchWidgetGroupChildConfigSchema = z.discriminatedUnion('type', [
+	featureMatchWidgetGroupWidgetChildConfigSchema,
+	featureMatchWidgetGroupMediaChildConfigSchema,
+]);
 
 const featureMatchWidgetGroupArrangementSchema = z.discriminatedUnion('mode', [
 	z.object({

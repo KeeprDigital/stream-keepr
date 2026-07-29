@@ -144,14 +144,14 @@ neonFeatureMatch.layout.items = [
 		arrangement: { mode: 'canvas', padding: 0 },
 		overflow: 'clip',
 		children: [
-			{ id: 'p1-wins', label: 'Player 1 Wins', visible: true, widget: { type: 'game-wins', playerSide: 'player1', displayMode: 'boxes', boxOrientation: 'horizontal', boxWidth: 22, boxHeight: 22, boxGap: 4, boxBorderWidth: 3 }, layout: { mode: 'canvas', x: 48, y: 46, width: 36, height: 30 }, surfaceStyle: { backgroundColor: '#ffffff', backgroundOpacity: 0, borderColor: '#ffffff', borderRadius: 0 } },
-			{ id: 'p1-life', label: 'Player 1 Life', visible: true, widget: { type: 'player-life', playerSide: 'player1', lifeAnimation: 'glow', lifeAnimationDurationMs: 420, lifeAnimationAccentColor: '#ffffff' }, layout: { mode: 'canvas', x: 88, y: 28, width: 60, height: 60 }, surfaceStyle: { backgroundColor: '#7c0f5b', backgroundOpacity: 0.72, borderVisible: true, borderColor: '#ffffff', borderWidth: 4, borderRadius: 0, textColor: '#ffffff', fontSize: 32, fontWeight: 900, textAlign: 'center', glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.75 } },
-			{ id: 'p1-name', label: 'Player 1 Name', visible: true, widget: { type: 'text', playerSide: 'player1', template: '{name}' }, layout: { mode: 'canvas', x: 162, y: 24, width: 590, height: 44 }, surfaceStyle: { fontSize: 34, fontWeight: 900, lineHeight: 1, overflow: 'ellipsis' } },
-			{ id: 'p1-record-deck', label: 'Player 1 Record and Deck', visible: true, widget: { type: 'text', playerSide: 'player1', template: '{record}     {deck}' }, layout: { mode: 'canvas', x: 164, y: 68, width: 620, height: 32 }, surfaceStyle: { fontSize: 22, fontWeight: 500, lineHeight: 1, overflow: 'ellipsis' } },
-			{ id: 'p2-name', label: 'Player 2 Name', visible: true, widget: { type: 'text', playerSide: 'player2', template: '{name}' }, layout: { mode: 'canvas', x: 1168, y: 24, width: 590, height: 44 }, surfaceStyle: { fontSize: 34, fontWeight: 900, lineHeight: 1, textAlign: 'right', overflow: 'ellipsis' } },
-			{ id: 'p2-record-deck', label: 'Player 2 Record and Deck', visible: true, widget: { type: 'text', playerSide: 'player2', template: '{deck}     {record}' }, layout: { mode: 'canvas', x: 1136, y: 68, width: 620, height: 32 }, surfaceStyle: { fontSize: 22, fontWeight: 500, lineHeight: 1, textAlign: 'right', overflow: 'ellipsis' } },
-			{ id: 'p2-life', label: 'Player 2 Life', visible: true, widget: { type: 'player-life', playerSide: 'player2', lifeAnimation: 'glow', lifeAnimationDurationMs: 420, lifeAnimationAccentColor: '#ffffff' }, layout: { mode: 'canvas', x: 1772, y: 28, width: 60, height: 60 }, surfaceStyle: { backgroundColor: '#53128c', backgroundOpacity: 0.72, borderVisible: true, borderColor: '#ffffff', borderWidth: 4, borderRadius: 0, textColor: '#ffffff', fontSize: 32, fontWeight: 900, textAlign: 'center', glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.75 } },
-			{ id: 'p2-wins', label: 'Player 2 Wins', visible: true, widget: { type: 'game-wins', playerSide: 'player2', displayMode: 'boxes', boxOrientation: 'horizontal', boxWidth: 22, boxHeight: 22, boxGap: 4, boxBorderWidth: 3 }, layout: { mode: 'canvas', x: 1838, y: 46, width: 36, height: 30 }, surfaceStyle: { backgroundColor: '#ffffff', backgroundOpacity: 0, borderColor: '#ffffff', borderRadius: 0 } },
+			{ id: 'p1-wins', label: 'Player 1 Wins', visible: true, type: 'widget', widget: { type: 'game-wins', playerSide: 'player1', displayMode: 'boxes', boxOrientation: 'horizontal', boxWidth: 22, boxHeight: 22, boxGap: 4, boxBorderWidth: 3 }, layout: { mode: 'canvas', x: 48, y: 46, width: 36, height: 30 }, surfaceStyle: { backgroundColor: '#ffffff', backgroundOpacity: 0, borderColor: '#ffffff', borderRadius: 0 } },
+			{ id: 'p1-life', label: 'Player 1 Life', visible: true, type: 'widget', widget: { type: 'player-life', playerSide: 'player1', lifeAnimation: 'glow', lifeAnimationDurationMs: 420, lifeAnimationAccentColor: '#ffffff' }, layout: { mode: 'canvas', x: 88, y: 28, width: 60, height: 60 }, surfaceStyle: { backgroundColor: '#7c0f5b', backgroundOpacity: 0.72, borderVisible: true, borderColor: '#ffffff', borderWidth: 4, borderRadius: 0, textColor: '#ffffff', fontSize: 32, fontWeight: 900, textAlign: 'center', glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.75 } },
+			{ id: 'p1-name', label: 'Player 1 Name', visible: true, type: 'widget', widget: { type: 'text', playerSide: 'player1', template: '{name}' }, layout: { mode: 'canvas', x: 162, y: 24, width: 590, height: 44 }, surfaceStyle: { fontSize: 34, fontWeight: 900, lineHeight: 1, overflow: 'ellipsis' } },
+			{ id: 'p1-record-deck', label: 'Player 1 Record and Deck', visible: true, type: 'widget', widget: { type: 'text', playerSide: 'player1', template: '{record}     {deck}' }, layout: { mode: 'canvas', x: 164, y: 68, width: 620, height: 32 }, surfaceStyle: { fontSize: 22, fontWeight: 500, lineHeight: 1, overflow: 'ellipsis' } },
+			{ id: 'p2-name', label: 'Player 2 Name', visible: true, type: 'widget', widget: { type: 'text', playerSide: 'player2', template: '{name}' }, layout: { mode: 'canvas', x: 1168, y: 24, width: 590, height: 44 }, surfaceStyle: { fontSize: 34, fontWeight: 900, lineHeight: 1, textAlign: 'right', overflow: 'ellipsis' } },
+			{ id: 'p2-record-deck', label: 'Player 2 Record and Deck', visible: true, type: 'widget', widget: { type: 'text', playerSide: 'player2', template: '{deck}     {record}' }, layout: { mode: 'canvas', x: 1136, y: 68, width: 620, height: 32 }, surfaceStyle: { fontSize: 22, fontWeight: 500, lineHeight: 1, textAlign: 'right', overflow: 'ellipsis' } },
+			{ id: 'p2-life', label: 'Player 2 Life', visible: true, type: 'widget', widget: { type: 'player-life', playerSide: 'player2', lifeAnimation: 'glow', lifeAnimationDurationMs: 420, lifeAnimationAccentColor: '#ffffff' }, layout: { mode: 'canvas', x: 1772, y: 28, width: 60, height: 60 }, surfaceStyle: { backgroundColor: '#53128c', backgroundOpacity: 0.72, borderVisible: true, borderColor: '#ffffff', borderWidth: 4, borderRadius: 0, textColor: '#ffffff', fontSize: 32, fontWeight: 900, textAlign: 'center', glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.75 } },
+			{ id: 'p2-wins', label: 'Player 2 Wins', visible: true, type: 'widget', widget: { type: 'game-wins', playerSide: 'player2', displayMode: 'boxes', boxOrientation: 'horizontal', boxWidth: 22, boxHeight: 22, boxGap: 4, boxBorderWidth: 3 }, layout: { mode: 'canvas', x: 1838, y: 46, width: 36, height: 30 }, surfaceStyle: { backgroundColor: '#ffffff', backgroundOpacity: 0, borderColor: '#ffffff', borderRadius: 0 } },
 		],
 	},
 	{
@@ -168,8 +168,8 @@ neonFeatureMatch.layout.items = [
 		arrangement: { mode: 'canvas', padding: 0 },
 		overflow: 'clip',
 		children: [
-			{ id: 'round-label', label: 'Round', visible: true, widget: { type: 'text', template: '{round}' }, layout: { mode: 'canvas', x: 12, y: 20, width: 192, height: 34 }, surfaceStyle: { fontSize: 26, fontWeight: 900, textAlign: 'center', lineHeight: 1 } },
-			{ id: 'match-clock', label: 'Clock', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 12, y: 62, width: 192, height: 38 }, surfaceStyle: { fontSize: 32, fontWeight: 400, textAlign: 'center', lineHeight: 1 } },
+			{ id: 'round-label', label: 'Round', visible: true, type: 'widget', widget: { type: 'text', template: '{round}' }, layout: { mode: 'canvas', x: 12, y: 20, width: 192, height: 34 }, surfaceStyle: { fontSize: 26, fontWeight: 900, textAlign: 'center', lineHeight: 1 } },
+			{ id: 'match-clock', label: 'Clock', visible: true, type: 'widget', widget: { type: 'clock' }, layout: { mode: 'canvas', x: 12, y: 62, width: 192, height: 38 }, surfaceStyle: { fontSize: 32, fontWeight: 400, textAlign: 'center', lineHeight: 1 } },
 		],
 	},
 	{ id: 'upper-neon-rail', type: 'widget-group', label: 'Upper Neon Rail', visible: true, x: 0, y: 144, width: 1920, height: 64, surfaceStyle: { backgroundOpacity: 0, borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderTopVisible: false, borderLeftVisible: false, borderRightVisible: false, glowColor: '#ffffff', glowSize: 8, glowOpacity: 0.8 }, defaultChildSurfaceStyle: {}, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [] },
@@ -188,8 +188,8 @@ neonFeatureMatch.layout.items = [
 		arrangement: { mode: 'canvas', padding: 0 },
 		overflow: 'clip',
 		children: [
-			{ id: 'left-branding-image', label: 'Left Branding Image', visible: false, widget: { type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 40, y: 28, width: 216, height: 112 } },
-			{ id: 'left-event-name', label: 'Event Name', visible: true, widget: { type: 'text', template: '{eventName}' }, layout: { mode: 'canvas', x: 24, y: 152, width: 248, height: 56 }, surfaceStyle: { fontSize: 28, fontWeight: 900, textAlign: 'center', lineHeight: 1.05, overflow: 'shrink' } },
+			{ id: 'left-branding-image', label: 'Left Branding Image', visible: false, type: 'widget', widget: { type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 40, y: 28, width: 216, height: 112 } },
+			{ id: 'left-event-name', label: 'Event Name', visible: true, type: 'widget', widget: { type: 'text', template: '{eventName}' }, layout: { mode: 'canvas', x: 24, y: 152, width: 248, height: 56 }, surfaceStyle: { fontSize: 28, fontWeight: 900, textAlign: 'center', lineHeight: 1.05, overflow: 'shrink' } },
 		],
 	},
 	{ id: 'left-footer-panel', type: 'widget-group', label: 'Left Footer Panel', visible: true, x: 0, y: 864, width: 296, height: 208, surfaceStyle: { backgroundOpacity: 1, backgroundGradient: 'linear-gradient(180deg, rgba(9,0,18,0.82), rgba(81,0,73,0.62))', borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderTopVisible: false, borderLeftVisible: false, borderRightVisible: true, glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.78 }, defaultChildSurfaceStyle: {}, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [] },
@@ -207,12 +207,28 @@ neonFeatureMatch.layout.items = [
 		arrangement: { mode: 'canvas', padding: 0 },
 		overflow: 'clip',
 		children: [
-			{ id: 'right-branding-image', label: 'Right Branding Image', visible: false, widget: { type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 42, y: 52, width: 212, height: 158 } },
-			{ id: 'right-event-name', label: 'Event Name', visible: true, widget: { type: 'text', template: '{eventName}' }, layout: { mode: 'canvas', x: 24, y: 232, width: 248, height: 56 }, surfaceStyle: { fontSize: 28, fontWeight: 900, textAlign: 'center', lineHeight: 1.05, overflow: 'shrink' } },
+			{ id: 'right-branding-image', label: 'Right Branding Image', visible: false, type: 'widget', widget: { type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 42, y: 52, width: 212, height: 158 } },
+			{ id: 'right-event-name', label: 'Event Name', visible: true, type: 'widget', widget: { type: 'text', template: '{eventName}' }, layout: { mode: 'canvas', x: 24, y: 232, width: 248, height: 56 }, surfaceStyle: { fontSize: 28, fontWeight: 900, textAlign: 'center', lineHeight: 1.05, overflow: 'shrink' } },
 		],
 	},
 	{ id: 'right-footer-panel', type: 'widget-group', label: 'Right Footer Panel', visible: true, x: 1624, y: 864, width: 296, height: 208, surfaceStyle: { backgroundOpacity: 1, backgroundGradient: 'linear-gradient(180deg, rgba(81,0,110,0.62), rgba(9,0,18,0.86))', borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderTopVisible: false, borderLeftVisible: true, borderRightVisible: false, glowColor: '#ffffff', glowSize: 7, glowOpacity: 0.78 }, defaultChildSurfaceStyle: {}, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [] },
 ];
+const neonFeatureMatchLayerOrder = [
+	'upper-neon-rail',
+	'left-empty-panel',
+	'left-branding',
+	'left-footer-panel',
+	'right-branding',
+	'right-footer-panel',
+	'main-source',
+	'player1-source',
+	'player2-source',
+	'top-player-bar',
+	'round-clock',
+] as const;
+neonFeatureMatch.layout.items = neonFeatureMatchLayerOrder.map(id =>
+	neonFeatureMatch.layout.items.find(item => item.id === id)!,
+);
 
 export const FEATURE_MATCH_OVERLAY_PRESETS: FeatureMatchOverlayPreset[] = [
 	{

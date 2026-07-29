@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
-import type { FeatureMatchOverlayWidgetRenderDescriptor } from '~/modules/feature-match-overlay/renderModel';
+import type { FeatureMatchOverlayWidgetGroupChildRenderModel } from '~/modules/feature-match-overlay/renderModel';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import { graphicAssetFontFaceFamily } from '~~/shared/featureMatchOverlayFonts';
 import { featureMatchOverlayGraphicAssetReferences, screenGraphicAssetReferenceTargetCompatibility } from '~~/shared/utils/graphicsAssetReferences';
@@ -166,7 +166,7 @@ function numericStyleValue(value: unknown) {
 	return Number.parseFloat(value) || 0;
 }
 
-function childGuideStyle(group: { x: number; y: number }, child: FeatureMatchOverlayWidgetRenderDescriptor) {
+function childGuideStyle(group: { x: number; y: number }, child: FeatureMatchOverlayWidgetGroupChildRenderModel) {
 	return {
 		left: `${group.x + numericStyleValue(child.style.left)}px`,
 		top: `${group.y + numericStyleValue(child.style.top)}px`,
@@ -389,14 +389,23 @@ onBeforeUnmount(() => {
 			>
 				<div class="feature-match-overlay-widget-group__backdrop" :style="layoutItem.layers.backdrop" aria-hidden="true" />
 				<div class="feature-match-overlay-widget-group__children" :style="layoutItem.layers.children">
-					<div
+					<template
 						v-for="child in layoutItem.children"
 						:key="child.id"
-						class="feature-match-overlay-widget-group__child"
-						:style="child.style"
 					>
-						<FeatureMatchOverlayWidget :render="child.render" :output="resolvedOutput" />
-					</div>
+						<FeatureMatchOverlayMediaGraphicItem
+							v-if="child.kind === 'media'"
+							class="feature-match-overlay-widget-group__child"
+							:media="child"
+						/>
+						<div
+							v-else
+							class="feature-match-overlay-widget-group__child"
+							:style="child.style"
+						>
+							<FeatureMatchOverlayWidget :render="child.render" :output="resolvedOutput" />
+						</div>
+					</template>
 				</div>
 				<div class="feature-match-overlay-widget-group__frame" :style="layoutItem.layers.frame" aria-hidden="true" />
 			</div>

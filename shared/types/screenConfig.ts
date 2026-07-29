@@ -207,7 +207,7 @@ export const FEATURE_MATCH_OVERLAY_ANCHOR_VALUES = [
 export type FeatureMatchOverlayAnchorValue = typeof FEATURE_MATCH_OVERLAY_ANCHOR_VALUES[number];
 export type ScreenMediaBackgroundType = 'video';
 export type ScreenMediaBackgroundFit = 'cover' | 'contain' | 'fill';
-export type FeatureMatchLayoutItemType = 'source' | 'widget' | 'widget-group';
+export type FeatureMatchLayoutItemType = 'source' | 'media' | 'widget' | 'widget-group';
 export type FeatureMatchSourceRole = 'main' | 'player1' | 'player2' | string;
 export type FeatureMatchWidgetType = 'text' | 'image' | 'clock' | 'player-life' | 'game-wins';
 export type FeatureMatchGameWinsDisplayMode = 'boxes' | 'number';
@@ -406,12 +406,19 @@ export interface FeatureMatchWidgetItemConfig extends FeatureMatchLayoutItemBase
 	surfaceStyle?: FeatureMatchOverlayBoxStyle;
 }
 
-/** First-class still-image or silent-video content in a Feature Match Layout. */
-export interface FeatureMatchMediaGraphicItemConfig extends FeatureMatchLayoutItemBase, MediaGraphicItemConfig {
+/**
+ * Feature Match context placement facts composed with the Shared Graphics
+ * Foundation Media Graphic Item contract. Top-level items and Graphic Group
+ * children use this exact same content seam.
+ */
+export interface FeatureMatchMediaGraphicItemContentConfig extends MediaGraphicItemConfig {
 	type: 'media';
 	videoCompatibility?: 'all-supported' | 'chromium-transparency';
 	videoTarget?: Exclude<GraphicsVideoTarget, 'other'>;
 }
+
+/** First-class still-image or silent-video content in a Feature Match Layout. */
+export interface FeatureMatchMediaGraphicItemConfig extends FeatureMatchLayoutItemBase, FeatureMatchMediaGraphicItemContentConfig {}
 
 export interface FeatureMatchWidgetGroupArrangementBase {
 	mode: FeatureMatchWidgetGroupArrangementMode;
@@ -458,14 +465,31 @@ export type FeatureMatchWidgetGroupChildLayout
 	=	| FeatureMatchWidgetGroupStackChildLayout
 		| FeatureMatchWidgetGroupCanvasChildLayout;
 
-export interface FeatureMatchWidgetGroupChildConfig {
+export interface FeatureMatchWidgetGroupChildBaseConfig {
 	id: string;
 	label: string;
 	visible: boolean;
-	widget: FeatureMatchWidgetConfig;
 	layout: FeatureMatchWidgetGroupChildLayout;
+}
+
+export interface FeatureMatchWidgetGroupWidgetChildContentConfig {
+	type: 'widget';
+	widget: FeatureMatchWidgetConfig;
 	surfaceStyle?: FeatureMatchOverlayBoxStyle;
 }
+
+export type FeatureMatchWidgetGroupChildContentConfig
+	=	| FeatureMatchWidgetGroupWidgetChildContentConfig
+		| FeatureMatchMediaGraphicItemContentConfig;
+
+export type FeatureMatchWidgetGroupChildConfig
+	= FeatureMatchWidgetGroupChildBaseConfig & FeatureMatchWidgetGroupChildContentConfig;
+
+export type FeatureMatchWidgetGroupWidgetChildConfig
+	= FeatureMatchWidgetGroupChildBaseConfig & FeatureMatchWidgetGroupWidgetChildContentConfig;
+
+export type FeatureMatchWidgetGroupMediaChildConfig
+	= FeatureMatchWidgetGroupChildBaseConfig & FeatureMatchMediaGraphicItemContentConfig;
 
 export interface FeatureMatchWidgetGroupItemConfig extends FeatureMatchLayoutItemBase {
 	type: 'widget-group';
@@ -563,8 +587,17 @@ export function normalizeFeatureMatchLayout(layout: FeatureMatchLayoutConfig): F
 					.map(entry => entry.child);
 			}
 			item.children = item.children.map((child) => {
+				const mutableChild = child as unknown as Record<string, unknown>;
 				const childLayout = child.layout as typeof child.layout & Record<string, unknown>;
 				delete childLayout.zIndex;
+				if (!mutableChild.type && mutableChild.widget)
+					mutableChild.type = 'widget';
+				if (child.type === 'media') {
+					child.focalPosition ??= { horizontal: 0.5, vertical: 0.5 };
+					child.clipGeometry ??= roundedClipGeometry(legacyNumber(record(child)?.borderRadius, 0));
+					delete mutableChild.borderRadius;
+					delete mutableChild.surfaceStyle;
+				}
 				return child;
 			});
 		}
@@ -815,23 +848,23 @@ export const DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG: FeatureMatchOverlayModeConfig
 			{ id: 'player1-source', type: 'source', label: 'Player 1 Source', visible: true, sourceRole: 'player1', frameCutout: true, x: 24, y: 16, width: 340, height: 250, surfaceStyle: { backgroundColor: '#000000', backgroundOpacity: 0, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8 } },
 			{ id: 'player2-source', type: 'source', label: 'Player 2 Source', visible: true, sourceRole: 'player2', frameCutout: true, x: 24, y: 800, width: 340, height: 250, surfaceStyle: { backgroundColor: '#000000', backgroundOpacity: 0, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8 } },
 			{ id: 'top-bar', type: 'widget-group', label: 'Top Player Bar', visible: true, x: 400, y: 8, width: 1500, height: 74, surfaceStyle: { backgroundOpacity: 0 }, defaultChildSurfaceStyle: { textColor: '#ffffff', fontSize: 30, fontWeight: 800, backgroundOpacity: 0, overflow: 'ellipsis' }, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [
-				{ id: 'top-name-record', label: 'Name and Record', visible: true, widget: { type: 'text', playerSide: 'player1', template: '{name}\n{record}' }, layout: { mode: 'canvas', x: 0, y: 0, width: 300, height: 74 } },
-				{ id: 'top-life', label: 'Life Total', visible: true, widget: { type: 'player-life', playerSide: 'player1', lifeAnimation: 'glow', lifeAnimationDurationMs: 420, lifeAnimationAccentColor: '#ffffff' }, layout: { mode: 'canvas', x: 700, y: 4, width: 96, height: 66 }, surfaceStyle: { backgroundColor: '#333333', backgroundOpacity: 1, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8, textColor: '#ffffff', fontSize: 42, fontWeight: 800, textAlign: 'center' } },
-				{ id: 'top-deck', label: 'Deck', visible: true, widget: { type: 'text', playerSide: 'player1', template: '{deckColors} {deck}' }, layout: { mode: 'canvas', x: 820, y: 0, width: 500, height: 74 } },
-				{ id: 'top-clock', label: 'Clock', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 1360, y: 0, width: 140, height: 74 }, surfaceStyle: { fontSize: 28, fontWeight: 500, textAlign: 'right' } },
+				{ id: 'top-name-record', label: 'Name and Record', visible: true, type: 'widget', widget: { type: 'text', playerSide: 'player1', template: '{name}\n{record}' }, layout: { mode: 'canvas', x: 0, y: 0, width: 300, height: 74 } },
+				{ id: 'top-life', label: 'Life Total', visible: true, type: 'widget', widget: { type: 'player-life', playerSide: 'player1', lifeAnimation: 'glow', lifeAnimationDurationMs: 420, lifeAnimationAccentColor: '#ffffff' }, layout: { mode: 'canvas', x: 700, y: 4, width: 96, height: 66 }, surfaceStyle: { backgroundColor: '#333333', backgroundOpacity: 1, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8, textColor: '#ffffff', fontSize: 42, fontWeight: 800, textAlign: 'center' } },
+				{ id: 'top-deck', label: 'Deck', visible: true, type: 'widget', widget: { type: 'text', playerSide: 'player1', template: '{deckColors} {deck}' }, layout: { mode: 'canvas', x: 820, y: 0, width: 500, height: 74 } },
+				{ id: 'top-clock', label: 'Clock', visible: true, type: 'widget', widget: { type: 'clock' }, layout: { mode: 'canvas', x: 1360, y: 0, width: 140, height: 74 }, surfaceStyle: { fontSize: 28, fontWeight: 500, textAlign: 'right' } },
 			] },
 			{ id: 'bottom-bar', type: 'widget-group', label: 'Bottom Player Bar', visible: true, x: 400, y: 1000, width: 1500, height: 74, surfaceStyle: { backgroundOpacity: 0 }, defaultChildSurfaceStyle: { textColor: '#ffffff', fontSize: 30, fontWeight: 800, backgroundOpacity: 0, overflow: 'ellipsis' }, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [
-				{ id: 'bottom-name-record', label: 'Name and Record', visible: true, widget: { type: 'text', playerSide: 'player2', template: '{name}\n{record}' }, layout: { mode: 'canvas', x: 0, y: 0, width: 300, height: 74 } },
-				{ id: 'bottom-life', label: 'Life Total', visible: true, widget: { type: 'player-life', playerSide: 'player2', lifeAnimation: 'glow', lifeAnimationDurationMs: 420, lifeAnimationAccentColor: '#ffffff' }, layout: { mode: 'canvas', x: 700, y: 4, width: 96, height: 66 }, surfaceStyle: { backgroundColor: '#333333', backgroundOpacity: 1, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8, textColor: '#ffffff', fontSize: 42, fontWeight: 800, textAlign: 'center' } },
-				{ id: 'bottom-deck', label: 'Deck', visible: true, widget: { type: 'text', playerSide: 'player2', template: '{deckColors} {deck}' }, layout: { mode: 'canvas', x: 820, y: 0, width: 500, height: 74 } },
-				{ id: 'bottom-details', label: 'Match Details', visible: true, widget: { type: 'text', playerSide: 'player2', template: '{stage}\n{format}' }, layout: { mode: 'canvas', x: 1320, y: 0, width: 180, height: 74 }, surfaceStyle: { fontSize: 28, fontWeight: 700, textAlign: 'right' } },
+				{ id: 'bottom-name-record', label: 'Name and Record', visible: true, type: 'widget', widget: { type: 'text', playerSide: 'player2', template: '{name}\n{record}' }, layout: { mode: 'canvas', x: 0, y: 0, width: 300, height: 74 } },
+				{ id: 'bottom-life', label: 'Life Total', visible: true, type: 'widget', widget: { type: 'player-life', playerSide: 'player2', lifeAnimation: 'glow', lifeAnimationDurationMs: 420, lifeAnimationAccentColor: '#ffffff' }, layout: { mode: 'canvas', x: 700, y: 4, width: 96, height: 66 }, surfaceStyle: { backgroundColor: '#333333', backgroundOpacity: 1, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8, textColor: '#ffffff', fontSize: 42, fontWeight: 800, textAlign: 'center' } },
+				{ id: 'bottom-deck', label: 'Deck', visible: true, type: 'widget', widget: { type: 'text', playerSide: 'player2', template: '{deckColors} {deck}' }, layout: { mode: 'canvas', x: 820, y: 0, width: 500, height: 74 } },
+				{ id: 'bottom-details', label: 'Match Details', visible: true, type: 'widget', widget: { type: 'text', playerSide: 'player2', template: '{stage}\n{format}' }, layout: { mode: 'canvas', x: 1320, y: 0, width: 180, height: 74 }, surfaceStyle: { fontSize: 28, fontWeight: 700, textAlign: 'right' } },
 			] },
 			{ id: 'player1-game-wins', type: 'widget', label: 'Player 1 Game Wins', visible: true, x: 24, y: 278, width: 340, height: 28, widget: { type: 'game-wins', playerSide: 'player1', displayMode: 'boxes', boxOrientation: 'horizontal', boxWidth: 22, boxHeight: 22, boxGap: 6, boxBorderWidth: 2 }, surfaceStyle: { backgroundColor: '#22c55e', backgroundOpacity: 0, borderVisible: true, borderColor: '#ffffff', borderWidth: 2, borderRadius: 999 } },
 			{ id: 'player2-game-wins', type: 'widget', label: 'Player 2 Game Wins', visible: true, x: 24, y: 760, width: 340, height: 28, widget: { type: 'game-wins', playerSide: 'player2', displayMode: 'boxes', boxOrientation: 'horizontal', boxWidth: 22, boxHeight: 22, boxGap: 6, boxBorderWidth: 2 }, surfaceStyle: { backgroundColor: '#22c55e', backgroundOpacity: 0, borderVisible: true, borderColor: '#ffffff', borderWidth: 2, borderRadius: 999 } },
 			{ id: 'branding', type: 'widget-group', label: 'Event Branding', visible: true, x: 60, y: 360, width: 280, height: 280, surfaceStyle: { backgroundOpacity: 0 }, defaultChildSurfaceStyle: { textColor: '#ffffff', fontSize: 24, fontWeight: 700, backgroundOpacity: 0, textAlign: 'center' }, arrangement: { mode: 'canvas', padding: 0 }, overflow: 'clip', children: [
-				{ id: 'branding-text', label: 'Event Name', visible: true, widget: { type: 'text', template: '{eventName}' }, layout: { mode: 'canvas', x: 0, y: 0, width: 280, height: 80 } },
-				{ id: 'branding-image-1', label: 'Image 1', visible: true, widget: { type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 0, y: 96, width: 132, height: 132 } },
-				{ id: 'branding-image-2', label: 'Image 2', visible: true, widget: { type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 148, y: 96, width: 132, height: 132 } },
+				{ id: 'branding-text', label: 'Event Name', visible: true, type: 'widget', widget: { type: 'text', template: '{eventName}' }, layout: { mode: 'canvas', x: 0, y: 0, width: 280, height: 80 } },
+				{ id: 'branding-image-1', label: 'Image 1', visible: true, type: 'widget', widget: { type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 0, y: 96, width: 132, height: 132 } },
+				{ id: 'branding-image-2', label: 'Image 2', visible: true, type: 'widget', widget: { type: 'image', fit: 'contain', opacity: 1, borderRadius: 0 }, layout: { mode: 'canvas', x: 148, y: 96, width: 132, height: 132 } },
 			] },
 		],
 	},

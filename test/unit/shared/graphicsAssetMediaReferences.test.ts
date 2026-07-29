@@ -42,6 +42,43 @@ describe('media Graphic Item exact references', () => {
 		}]);
 	});
 
+	it('indexes an exact silent-video revision from a Graphic Group child', () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		const group = config.layout.items.find(item => item.type === 'widget-group');
+		if (group?.type !== 'widget-group')
+			throw new Error('Expected a Graphic Group fixture');
+		group.children = [{
+			id: 'group-ident',
+			type: 'media',
+			label: 'Group ident',
+			visible: true,
+			layout: { mode: 'canvas', x: 0, y: 0, width: 320, height: 180 },
+			asset: {
+				assetId: 'group-video-asset' as never,
+				revisionId: 'group-video-revision-7' as never,
+			},
+			mediaKind: 'silent-video',
+			fit: 'cover',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+			loop: true,
+			playbackRate: 1,
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'chromium',
+		}];
+
+		expect(featureMatchOverlayGraphicAssetReferences(config)).toEqual([{
+			reference: {
+				assetId: 'group-video-asset',
+				revisionId: 'group-video-revision-7',
+			},
+			ownerSlot: `layout.items.${group.id}.children.group-ident.asset`,
+			kind: 'silent-video',
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'chromium',
+		}]);
+	});
+
 	it('blocks a restricted reference unless the authored Screen output target is Chromium', () => {
 		const restricted = {
 			reference: {

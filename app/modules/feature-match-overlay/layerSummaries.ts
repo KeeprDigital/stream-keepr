@@ -56,7 +56,7 @@ export function itemSummary(item: FeatureMatchLayoutItemConfig) {
 	if (item.type === 'media')
 		return `${rectSummary(item)} • ${item.asset ? item.mediaKind : 'choose an asset'}`;
 	if (item.type === 'widget-group')
-		return `${rectSummary(item)} • ${item.children.length} widgets`;
+		return `${rectSummary(item)} • ${item.children.length} Graphic Items`;
 	return `${rectSummary(item)} • ${widgetSummary(item.widget)}`;
 }
 
@@ -64,7 +64,17 @@ export function childSummary(child: FeatureMatchWidgetGroupChildConfig) {
 	const layout = child.layout.mode === 'canvas'
 		? rectSummary(child.layout)
 		: `${child.layout.sizing.mode}${child.layout.sizing.size ? ` ${child.layout.sizing.size}` : ''}`;
-	return `${layout} • ${widgetSummary(child.widget)}`;
+	return `${layout} • ${child.type === 'media'
+		? (child.asset ? child.mediaKind : 'choose an asset')
+		: widgetSummary(child.widget)}`;
+}
+
+export function childIcon(child: FeatureMatchWidgetGroupChildConfig) {
+	return child.type === 'media' ? 'i-lucide-image-play' : widgetIcon(child.widget.type);
+}
+
+export function childTypeLabel(child: FeatureMatchWidgetGroupChildConfig) {
+	return child.type === 'media' ? 'Media' : widgetTypeLabel(child.widget.type);
 }
 
 export function styleOverrideCount(style?: FeatureMatchOverlayBoxStyle) {
@@ -93,14 +103,19 @@ export function appearanceSummary(style?: FeatureMatchOverlayBoxStyle) {
 }
 
 export function groupWidgetDefaultsSummary(group: FeatureMatchWidgetGroupItemConfig) {
-	return `${appearanceSummary(group.defaultChildSurfaceStyle)} • ${group.children.length} widgets inherit`;
+	const widgetCount = group.children.filter(child => child.type !== 'media').length;
+	return `${appearanceSummary(group.defaultChildSurfaceStyle)} • ${widgetCount} widgets inherit`;
 }
 
 export function childAppearanceBadge(child: FeatureMatchWidgetGroupChildConfig) {
+	if (child.type === 'media')
+		return 'Media treatment';
 	return hasStyleOverrides(child.surfaceStyle) ? 'Overrides defaults' : 'Inherits defaults';
 }
 
 export function childAppearanceSummary(child: FeatureMatchWidgetGroupChildConfig) {
+	if (child.type === 'media')
+		return 'Media treatment does not inherit widget appearance';
 	if (!hasStyleOverrides(child.surfaceStyle))
 		return 'Using widget defaults';
 	return `${styleOverrideCount(child.surfaceStyle)} overrides over widget defaults`;
@@ -121,4 +136,9 @@ export const FEATURE_MATCH_OVERLAY_WIDGET_KIND_OPTIONS: Array<{
 	{ label: 'Clock', value: 'clock' },
 	{ label: 'Player Life', value: 'player-life' },
 	{ label: 'Game Wins', value: 'game-wins' },
+];
+
+export const FEATURE_MATCH_OVERLAY_GROUP_CHILD_KIND_OPTIONS = [
+	...FEATURE_MATCH_OVERLAY_WIDGET_KIND_OPTIONS,
+	{ label: 'Media', value: 'media' as const },
 ];

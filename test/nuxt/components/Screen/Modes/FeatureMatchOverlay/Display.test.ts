@@ -90,6 +90,7 @@ function groupLayerConfig(): FeatureMatchOverlayModeConfig {
 			children: [
 				{
 					id: 'full-child',
+					type: 'widget',
 					label: 'Full Child',
 					visible: true,
 					widget: { type: 'clock' },
@@ -183,6 +184,49 @@ describe('featureMatchOverlayDisplay', () => {
 
 		expect(wrapper.findAll('[data-graphic-item-id]').map(item => item.attributes('data-graphic-item-id')))
 			.toEqual(['back-widget', 'middle-media', 'front-source', 'front-group']);
+	});
+
+	it('renders an exact silent-video Media Graphic Item inside its Graphic Group', async () => {
+		const config = groupLayerConfig();
+		const group = config.layout.items[0];
+		if (group?.type !== 'widget-group')
+			throw new Error('Expected a Graphic Group fixture');
+		group.children = [{
+			id: 'sponsor-loop',
+			type: 'media',
+			label: 'Sponsor loop',
+			visible: true,
+			layout: { mode: 'canvas', x: 10, y: 8, width: 240, height: 120 },
+			asset: {
+				assetId: 'sponsor-video-asset' as never,
+				revisionId: 'sponsor-video-revision-5' as never,
+			},
+			mediaKind: 'silent-video',
+			fit: 'cover',
+			focalPosition: { horizontal: 0.35, vertical: 0.6 },
+			opacity: 0.8,
+			loop: false,
+			playbackRate: 1.25,
+			videoCompatibility: 'all-supported',
+			videoTarget: 'safari',
+		}];
+		mockConfig.value = config;
+
+		const wrapper = await mountComponent();
+
+		const childLayer = wrapper.get('.feature-match-overlay-widget-group__children');
+		const video = childLayer.get('video');
+		expect(video.attributes('src')).toBe(
+			'/private-assets/sponsor-video-asset/sponsor-video-revision-5',
+		);
+		expect(video.attributes()).toMatchObject({
+			autoplay: '',
+			muted: '',
+			playsinline: '',
+			preload: 'auto',
+		});
+		expect((video.element as HTMLVideoElement).loop).toBe(false);
+		expect((video.element as HTMLVideoElement).playbackRate).toBe(1.25);
 	});
 
 	it('hides preview and output rendering until every exact font revision is ready', async () => {
@@ -291,5 +335,35 @@ describe('featureMatchOverlayDisplay', () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.get('.feature-match-overlay').attributes('data-export-ready')).toBe('false');
+	});
+
+	it('applies the same VP9 compatibility gate to a Graphic Group media child', async () => {
+		const config = groupLayerConfig();
+		const group = config.layout.items[0];
+		if (group?.type !== 'widget-group')
+			throw new Error('Expected a Graphic Group fixture');
+		group.children = [{
+			id: 'restricted-group-video',
+			type: 'media',
+			label: 'Restricted group VP9 alpha',
+			visible: true,
+			layout: { mode: 'canvas', x: 0, y: 0, width: 640, height: 360 },
+			asset: {
+				assetId: 'group-video-asset' as never,
+				revisionId: 'group-video-revision-1' as never,
+			},
+			mediaKind: 'silent-video',
+			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'chromium',
+		}];
+		mockConfig.value = config;
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.get('.feature-match-overlay').attributes('data-export-ready')).toBe('false');
+		expect(wrapper.find('[data-video-compatibility-blocked="vp9-alpha-chromium-required"]').exists()).toBe(true);
 	});
 });

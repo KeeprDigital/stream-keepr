@@ -14,6 +14,8 @@ import type {
 	FeatureMatchWidgetConfig,
 	FeatureMatchWidgetGroupChildConfig,
 	FeatureMatchWidgetGroupItemConfig,
+	FeatureMatchWidgetGroupMediaChildConfig,
+	FeatureMatchWidgetGroupWidgetChildConfig,
 	FeatureMatchWidgetItemConfig,
 } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayTemplateMetadataInput } from '~/utils/featureMatchOverlayTemplateValues';
@@ -81,8 +83,10 @@ export interface FeatureMatchOverlaySourceItemRenderModel {
 	cutoutPath: string | null;
 }
 
-export interface FeatureMatchOverlayMediaGraphicItemRenderModel {
-	item: FeatureMatchMediaGraphicItemConfig;
+export interface FeatureMatchOverlayMediaGraphicItemRenderModel<
+	T extends FeatureMatchMediaGraphicItemConfig | FeatureMatchWidgetGroupMediaChildConfig = FeatureMatchMediaGraphicItemConfig | FeatureMatchWidgetGroupMediaChildConfig,
+> {
+	item: T;
 	style: CSSProperties;
 	contentStyle: CSSProperties;
 	src: string;
@@ -126,9 +130,14 @@ export interface FeatureMatchOverlayWidgetItemRenderModel extends FeatureMatchOv
 	item: FeatureMatchWidgetItemConfig;
 }
 
-export interface FeatureMatchOverlayWidgetGroupChildRenderModel extends FeatureMatchOverlayWidgetRenderDescriptor {
-	child: FeatureMatchWidgetGroupChildConfig;
-}
+export type FeatureMatchOverlayWidgetGroupChildRenderModel
+	= | ({ kind: 'widget'; child: FeatureMatchWidgetGroupWidgetChildConfig } & FeatureMatchOverlayWidgetRenderDescriptor)
+		| ({
+			kind: 'media';
+			id: string;
+			label: string;
+			child: FeatureMatchWidgetGroupMediaChildConfig;
+		} & FeatureMatchOverlayMediaGraphicItemRenderModel<FeatureMatchWidgetGroupMediaChildConfig>);
 
 /**
  * The Widget Group's rendering split into its stacked layers: a purely
@@ -164,7 +173,7 @@ export interface FeatureMatchOverlayRenderModel {
 	canvasStyle: CSSProperties;
 	layoutItems: FeatureMatchOverlayLayoutItemRenderModel[];
 	sourceItems: FeatureMatchOverlaySourceItemRenderModel[];
-	mediaItems: FeatureMatchOverlayMediaGraphicItemRenderModel[];
+	mediaItems: FeatureMatchOverlayMediaGraphicItemRenderModel<FeatureMatchMediaGraphicItemConfig>[];
 	widgetItems: FeatureMatchOverlayWidgetItemRenderModel[];
 	widgetGroups: FeatureMatchOverlayWidgetGroupRenderModel[];
 	sourceCutouts: Array<{ id: string; path: string }>;
@@ -614,6 +623,27 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		}
 	}
 
+	function mediaRender<T extends FeatureMatchMediaGraphicItemConfig | FeatureMatchWidgetGroupMediaChildConfig>(
+		item: T,
+		rect: FeatureMatchOverlayRect,
+		style: CSSProperties,
+	): FeatureMatchOverlayMediaGraphicItemRenderModel<T> {
+		return {
+			item,
+			style,
+			contentStyle: {
+				width: '100%',
+				height: '100%',
+				objectFit: item.fit,
+				objectPosition: `${item.focalPosition.horizontal * 100}% ${item.focalPosition.vertical * 100}%`,
+				opacity: item.opacity,
+				borderRadius: shapeGeometryBorderRadius(item.clipGeometry),
+				clipPath: shapeGeometryClipPath(item.clipGeometry, rect.width, rect.height),
+			},
+			src: item.asset ? resolveGraphicAssetContentPath(item.asset) : '',
+		};
+	}
+
 	function groupLayers(group: FeatureMatchWidgetGroupItemConfig): FeatureMatchOverlayWidgetGroupLayers {
 		const surfaceStyle = group.surfaceStyle;
 		const borderRadius = featureMatchOverlayBorderRadiusCss(surfaceStyle ?? {});
@@ -628,6 +658,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 				boxSizing: 'border-box',
 				pointerEvents: 'none',
 				overflow: 'visible',
+				isolation: 'isolate',
 			},
 			backdrop: {
 				position: 'absolute',
@@ -669,20 +700,7 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 		style: itemStyle(item),
 		cutoutPath: item.frameCutout ? roundedRectPath(featureMatchOverlaySourceCutoutRect(item)) || null : null,
 	}));
-	const renderedMediaItems = mediaItems.map(item => ({
-		item,
-		style: itemStyle(item),
-		contentStyle: {
-			width: '100%',
-			height: '100%',
-			objectFit: item.fit,
-			objectPosition: `${item.focalPosition.horizontal * 100}% ${item.focalPosition.vertical * 100}%`,
-			opacity: item.opacity,
-			borderRadius: shapeGeometryBorderRadius(item.clipGeometry),
-			clipPath: shapeGeometryClipPath(item.clipGeometry, item.width, item.height),
-		},
-		src: item.asset ? resolveGraphicAssetContentPath(item.asset) : '',
-	}));
+	const renderedMediaItems = mediaItems.map(item => mediaRender(item, item, itemStyle(item)));
 	const renderedWidgetItems = widgetItems.map(item => ({
 		id: item.id,
 		label: item.label,
@@ -699,9 +717,22 @@ export function resolveFeatureMatchOverlayRenderModel(input: FeatureMatchOverlay
 			.filter(child => child.visible)
 			.map((child, index, visibleChildren) => {
 				const rect = childRect(child, index, group, visibleChildren);
+				if (child.type === 'media') {
+					return {
+						kind: 'media' as const,
+						id: child.id,
+						label: child.label,
+						child,
+						...mediaRender(child, rect, {
+							...baseBoxStyle(output, rect, undefined),
+							pointerEvents: 'none',
+						}),
+					};
+				}
 				const surfaceStyle = { ...groupChildDefaultSurfaceStyle(group), ...(child.surfaceStyle ?? {}) };
 				const style = widgetStyle(rect, surfaceStyle);
 				return {
+					kind: 'widget' as const,
 					id: child.id,
 					label: child.label,
 					child,

@@ -3,7 +3,7 @@ import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig
 import type { FeatureMatchOverlayConfigUpdater, FeatureMatchOverlayLayerKind } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
-import { childSummary, itemSummary, layerIcon, layerTypeLabel, widgetIcon, widgetTypeLabel } from '~/modules/feature-match-overlay/layerSummaries';
+import { childIcon, childSummary, childTypeLabel, itemSummary, layerIcon, layerTypeLabel } from '~/modules/feature-match-overlay/layerSummaries';
 import { featureMatchOverlaySelectionKey, resolveFeatureMatchOverlaySelection } from '~/modules/feature-match-overlay/selection';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
 import FeatureMatchOverlayFrameStyleCard from './FrameStyleCard.vue';
@@ -137,9 +137,9 @@ const selectedInspectorHeader = computed(() => {
 
 	if (current.kind === 'child') {
 		return {
-			icon: widgetIcon(current.child.widget.type),
+			icon: childIcon(current.child),
 			label: current.child.label,
-			badge: widgetTypeLabel(current.child.widget.type),
+			badge: childTypeLabel(current.child),
 			summary: `${current.group.label} • ${childSummary(current.child)}`,
 			visible: current.child.visible !== false,
 		};
@@ -176,7 +176,7 @@ const selectedInspectorHeader = computed(() => {
 								Scene
 							</p>
 							<p class="text-xs text-muted">
-								Canvas, layers, and widgets
+								Canvas, layers, and Graphic Items
 							</p>
 						</div>
 						<UBadge variant="soft">
@@ -255,11 +255,11 @@ const selectedInspectorHeader = computed(() => {
 								data-testid="overlay-tree-widget"
 								@click="selectWidget(item.id, child.id)"
 							>
-								<UIcon :name="widgetIcon(child.widget.type)" class="mt-0.5 size-4 shrink-0 text-muted" />
+								<UIcon :name="childIcon(child)" class="mt-0.5 size-4 shrink-0 text-muted" />
 								<span class="min-w-0 flex-1">
 									<span class="flex items-center gap-2">
 										<span class="truncate text-sm font-medium">{{ child.label }}</span>
-										<UBadge size="xs" variant="soft">{{ widgetTypeLabel(child.widget.type) }}</UBadge>
+										<UBadge size="xs" variant="soft">{{ childTypeLabel(child) }}</UBadge>
 									</span>
 									<span class="mt-0.5 block truncate text-xs text-muted">{{ childSummary(child) }}</span>
 								</span>

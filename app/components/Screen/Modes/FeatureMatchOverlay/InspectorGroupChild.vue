@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import type { FeatureMatchOverlayModeConfig, FeatureMatchWidgetConfig, FeatureMatchWidgetGroupChildConfig, FeatureMatchWidgetGroupItemConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayModeConfig, FeatureMatchWidgetGroupChildConfig, FeatureMatchWidgetGroupItemConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
+import type { FeatureMatchGraphicGroupChildKind } from '~/modules/feature-match-overlay/layout';
 import type { FeatureMatchOverlayAnchorValue } from '~/utils/featureMatchOverlayGeometry';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
-import { childAppearanceBadge, childAppearanceSummary, childSummary, FEATURE_MATCH_OVERLAY_WIDGET_KIND_OPTIONS, hasStyleOverrides, widgetIcon, widgetSummary, widgetTypeLabel } from '~/modules/feature-match-overlay/layerSummaries';
+import { childAppearanceBadge, childAppearanceSummary, childIcon, childSummary, childTypeLabel, FEATURE_MATCH_OVERLAY_GROUP_CHILD_KIND_OPTIONS, hasStyleOverrides, widgetSummary } from '~/modules/feature-match-overlay/layerSummaries';
 import { featureMatchOverlayWidgetDefinition } from '~/modules/feature-match-overlay/widgetDefinitions';
 import { anchorFeatureMatchOverlayRect } from '~/utils/featureMatchOverlayGeometry';
 import FeatureMatchOverlayBoxStyleFields from './BoxStyleFields.vue';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
 import FeatureMatchOverlayGeometryFields from './GeometryFields.vue';
+import FeatureMatchOverlayMediaFields from './MediaFields.vue';
 import FeatureMatchOverlayOrderSection from './OrderSection.vue';
 import FeatureMatchOverlayWidgetEditor from './WidgetEditor.vue';
 
@@ -51,7 +53,7 @@ const childAnchorValue = computed<FeatureMatchOverlayAnchorValue>(() =>
 
 const resolvedSurfaceStyle = computed(() => ({
 	...(props.group.defaultChildSurfaceStyle ?? {}),
-	...(props.child.surfaceStyle ?? {}),
+	...(props.child.type === 'media' ? {} : props.child.surfaceStyle ?? {}),
 }));
 
 function removeSelf() {
@@ -59,32 +61,67 @@ function removeSelf() {
 	emit('removed');
 }
 
-function replaceWidgetType(type: FeatureMatchWidgetConfig['type']) {
-	editor.updateGroupChild(props.group.id, props.child.id, { widget: featureMatchOverlayWidgetDefinition(type).defaultConfig() });
+function replaceContentType(type: FeatureMatchGraphicGroupChildKind) {
+	if (type !== 'media' && props.child.type !== 'media') {
+		editor.updateGroupChild(props.group.id, props.child.id, {
+			type: 'widget',
+			widget: featureMatchOverlayWidgetDefinition(type).defaultConfig(),
+		});
+		return;
+	}
+
+	const base = {
+		id: props.child.id,
+		label: type === 'media' ? 'Media Graphic Item' : `${featureMatchOverlayWidgetDefinition(type).label} Widget`,
+		visible: props.child.visible,
+		layout: props.child.layout,
+	};
+	const replacement: FeatureMatchWidgetGroupChildConfig = type === 'media'
+		? {
+				...base,
+				type,
+				mediaKind: 'image',
+				fit: 'contain',
+				focalPosition: { horizontal: 0.5, vertical: 0.5 },
+				opacity: 1,
+				videoTarget: 'safari',
+			}
+		: {
+				...base,
+				type: 'widget',
+				widget: featureMatchOverlayWidgetDefinition(type).defaultConfig(),
+			};
+	editor.updateGroup(props.group.id, {
+		children: props.group.children.map(child => child.id === props.child.id ? replacement : child),
+	});
 }
 
 function resetSurfaceStyle() {
 	editor.updateGroup(props.group.id, {
 		children: props.group.children.map((child) => {
-			if (child.id !== props.child.id)
+			if (child.id !== props.child.id || child.type === 'media')
 				return child;
 			const { surfaceStyle: _surfaceStyle, ...childWithoutSurfaceStyle } = child;
 			return childWithoutSurfaceStyle;
 		}),
 	});
 }
+
+function patchMedia(updates: Partial<FeatureMatchWidgetGroupChildConfig>) {
+	editor.updateGroupChild(props.group.id, props.child.id, updates);
+}
 </script>
 
 <template>
 	<div class="min-w-0">
 		<div class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-muted">
-			<UIcon :name="widgetIcon(child.widget.type)" class="size-3.5" />
-			<span>Widget</span>
+			<UIcon :name="childIcon(child)" class="size-3.5" />
+			<span>Graphic Item</span>
 		</div>
 
 		<FeatureMatchOverlayControlSection
 			title="Details"
-			:badge="widgetTypeLabel(child.widget.type)"
+			:badge="childTypeLabel(child)"
 			:summary="child.label"
 		>
 			<div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
@@ -186,21 +223,22 @@ function resetSurfaceStyle() {
 		</FeatureMatchOverlayControlSection>
 
 		<FeatureMatchOverlayControlSection
-			title="Content"
-			:summary="widgetSummary(child.widget)"
+			:title="child.type === 'media' ? 'Graphic Item' : 'Content'"
+			:summary="child.type === 'media' ? childSummary(child) : widgetSummary(child.widget)"
 		>
 			<div class="space-y-3">
-				<UFormField label="Widget type">
+				<UFormField label="Graphic Item type">
 					<USelect
-						:model-value="child.widget.type"
-						:items="FEATURE_MATCH_OVERLAY_WIDGET_KIND_OPTIONS"
+						:model-value="child.type === 'media' ? 'media' : child.widget.type"
+						:items="FEATURE_MATCH_OVERLAY_GROUP_CHILD_KIND_OPTIONS"
 						value-key="value"
 						size="sm"
 						class="w-full"
-						@update:model-value="replaceWidgetType($event as FeatureMatchWidgetConfig['type'])"
+						@update:model-value="replaceContentType($event as FeatureMatchGraphicGroupChildKind)"
 					/>
 				</UFormField>
 				<FeatureMatchOverlayWidgetEditor
+					v-if="child.type !== 'media'"
 					:widget="child.widget"
 					:widget-surface-style="resolvedSurfaceStyle"
 					:event-id="eventId"
@@ -209,7 +247,15 @@ function resetSurfaceStyle() {
 			</div>
 		</FeatureMatchOverlayControlSection>
 
+		<FeatureMatchOverlayMediaFields
+			v-if="child.type === 'media'"
+			:media="child"
+			:event-id="eventId"
+			@update="patchMedia"
+		/>
+
 		<FeatureMatchOverlayControlSection
+			v-if="child.type !== 'media'"
 			title="Overrides"
 			:badge="childAppearanceBadge(child)"
 			:summary="childAppearanceSummary(child)"

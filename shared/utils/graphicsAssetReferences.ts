@@ -119,6 +119,18 @@ export function featureMatchOverlayGraphicAssetReferences(
 				`layout.items.${item.id}.defaultChildSurfaceStyle.font`,
 			);
 			for (const child of item.children) {
+				if (child.type === 'media') {
+					if (child.asset) {
+						references.push({
+							reference: child.asset,
+							ownerSlot: `layout.items.${item.id}.children.${child.id}.asset`,
+							kind: child.mediaKind,
+							videoCompatibility: child.videoCompatibility,
+							videoTarget: child.videoTarget,
+						});
+					}
+					continue;
+				}
 				appendFontReference(
 					references,
 					child.surfaceStyle,

@@ -396,6 +396,103 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		}).success).toBe(false);
 	});
 
+	it('accepts a silent-video Media Graphic Item as a Graphic Group child', () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		const group = config.layout.items.find(item => item.type === 'widget-group');
+		expect(group?.type).toBe('widget-group');
+		if (group?.type !== 'widget-group')
+			return;
+		group.children = [{
+			id: 'sponsor-loop',
+			type: 'media',
+			label: 'Sponsor loop',
+			visible: true,
+			layout: { mode: 'canvas', x: 12, y: 8, width: 240, height: 120 },
+			asset: {
+				assetId: 'asset-sponsor-video',
+				revisionId: 'revision-sponsor-video-4',
+			},
+			mediaKind: 'silent-video',
+			fit: 'cover',
+			focalPosition: { horizontal: 0.25, vertical: 0.8 },
+			opacity: 0.7,
+			clipGeometry: {
+				topLeft: { kind: 'rounded', size: 8 },
+				topRight: { kind: 'cut', size: 12 },
+				bottomRight: { kind: 'square' },
+				bottomLeft: { kind: 'square' },
+				leftEdgeSlant: 6,
+			},
+			loop: false,
+			playbackRate: 1.5,
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'chromium',
+		} as never];
+
+		const result = featureMatchOverlayModeConfigSchema.safeParse(config);
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			const parsedGroup = result.data.layout.items.find(item => item.id === group.id);
+			expect(parsedGroup?.type === 'widget-group' ? parsedGroup.children[0] : undefined)
+				.toMatchObject({
+					type: 'media',
+					asset: {
+						assetId: 'asset-sponsor-video',
+						revisionId: 'revision-sponsor-video-4',
+					},
+					mediaKind: 'silent-video',
+					focalPosition: { horizontal: 0.25, vertical: 0.8 },
+					opacity: 0.7,
+					loop: false,
+					playbackRate: 1.5,
+					videoCompatibility: 'chromium-transparency',
+					videoTarget: 'chromium',
+				});
+		}
+	});
+
+	it('preserves legacy stored group-child widget configs while adding the content discriminator', () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		const group = config.layout.items.find(item => item.type === 'widget-group');
+		if (group?.type !== 'widget-group')
+			throw new Error('Expected a Graphic Group fixture');
+		const child = group.children[0]!;
+		const expectedWidget = structuredClone(child.type === 'widget' ? child.widget : undefined);
+		delete (child as unknown as Record<string, unknown>).type;
+
+		const result = featureMatchOverlayModeConfigSchema.safeParse(config);
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			const parsedGroup = result.data.layout.items.find(item => item.id === group.id);
+			const parsedChild = parsedGroup?.type === 'widget-group' ? parsedGroup.children[0] : undefined;
+			expect(parsedChild).toMatchObject({
+				type: 'widget',
+				widget: expectedWidget,
+			});
+		}
+	});
+
+	it.each(['source', 'widget-group'] as const)(
+		'rejects a %s Item as a Graphic Group child',
+		(type) => {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			const group = config.layout.items.find(item => item.type === 'widget-group');
+			if (group?.type !== 'widget-group')
+				throw new Error('Expected a Graphic Group fixture');
+			group.children = [{
+				id: 'invalid-child',
+				type,
+				label: 'Invalid child',
+				visible: true,
+				layout: { mode: 'canvas', x: 0, y: 0, width: 100, height: 100 },
+			} as never];
+
+			expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(false);
+		},
+	);
+
 	it('accepts application font capabilities and exact font revisions but rejects arbitrary font selectors', () => {
 		const exactFont = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		exactFont.layout.items[0]!.surfaceStyle = {

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { FeatureMatchOverlayModeConfig, FeatureMatchWidgetConfig, FeatureMatchWidgetGroupItemConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayModeConfig, FeatureMatchWidgetGroupItemConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
+import type { FeatureMatchGraphicGroupChildKind } from '~/modules/feature-match-overlay/layout';
 import type { FeatureMatchOverlayAnchorValue } from '~/utils/featureMatchOverlayGeometry';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
-import { appearanceSummary, FEATURE_MATCH_OVERLAY_WIDGET_KIND_OPTIONS, groupLayoutSummary, groupWidgetDefaultsSummary, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
+import { appearanceSummary, FEATURE_MATCH_OVERLAY_GROUP_CHILD_KIND_OPTIONS, groupLayoutSummary, groupWidgetDefaultsSummary, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
 import { anchorFeatureMatchOverlayRect } from '~/utils/featureMatchOverlayGeometry';
 import FeatureMatchOverlayBoxStyleFields from './BoxStyleFields.vue';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
@@ -57,7 +58,7 @@ function removeSelf() {
 	emit('removed');
 }
 
-function addChild(type: FeatureMatchWidgetConfig['type']) {
+function addChild(type: FeatureMatchGraphicGroupChildKind) {
 	const childId = editor.createGroupChild(props.item.id, type);
 	if (childId)
 		emit('childAdded', childId);
@@ -137,7 +138,7 @@ function addChild(type: FeatureMatchWidgetConfig['type']) {
 
 		<div class="pt-2 mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-muted">
 			<UIcon name="i-lucide-layout-template" class="size-3.5" />
-			<span>Widgets</span>
+			<span>Graphic Items</span>
 		</div>
 
 		<FeatureMatchOverlayControlSection
@@ -205,15 +206,15 @@ function addChild(type: FeatureMatchWidgetConfig['type']) {
 						/>
 					</UFormField>
 				</div>
-				<UFormField label="Add widget">
+				<UFormField label="Add Graphic Item">
 					<USelect
-						:items="FEATURE_MATCH_OVERLAY_WIDGET_KIND_OPTIONS"
+						:items="FEATURE_MATCH_OVERLAY_GROUP_CHILD_KIND_OPTIONS"
 						value-key="value"
 						size="sm"
-						placeholder="Add widget..."
+						placeholder="Add Graphic Item..."
 						class="w-full"
 						data-testid="overlay-guided-add-widget"
-						@update:model-value="addChild($event as FeatureMatchWidgetConfig['type'])"
+						@update:model-value="addChild($event as FeatureMatchGraphicGroupChildKind)"
 					/>
 				</UFormField>
 			</div>

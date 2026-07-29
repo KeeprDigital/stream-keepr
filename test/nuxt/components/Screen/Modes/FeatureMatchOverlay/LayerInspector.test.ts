@@ -113,6 +113,7 @@ async function mountComponent(overrides: Partial<{
 				FeatureMatchOverlayFrameStyleCard: defineComponent({ template: '<div data-testid="frame-style-card" />' }),
 				FeatureMatchOverlayGeometryFields: GeometryFieldsStub,
 				FeatureMatchOverlayWidgetEditor: defineComponent({ template: '<div data-testid="widget-editor" />' }),
+				FeatureMatchOverlayMediaFields: defineComponent({ template: '<div data-testid="media-fields" />' }),
 				FeatureMatchOverlayBoxStyleFields: defineComponent({
 					props: {
 						boxStyle: { type: Object, required: false },
@@ -141,13 +142,13 @@ describe('featureMatchOverlayLayerInspector', () => {
 		vi.clearAllMocks();
 	});
 
-	it('renders the scene tree with canvas, layers, and nested group widgets', async () => {
+	it('renders the scene tree with canvas, layers, and nested Graphic Items', async () => {
 		const wrapper = await mountComponent({ variant: 'tree' });
 
 		expect(wrapper.find('[data-testid="overlay-tree-canvas"]').text()).toContain('Canvas');
 		expect(wrapper.findAll('[data-testid="overlay-tree-layer"]').length).toBeGreaterThan(1);
 		expect(wrapper.findAll('[data-testid="overlay-tree-widget"]').length).toBeGreaterThan(1);
-		expect(wrapper.text()).toContain('Canvas, layers, and widgets');
+		expect(wrapper.text()).toContain('Canvas, layers, and Graphic Items');
 	});
 
 	it('emits selection updates for top-level layers and nested widgets', async () => {
@@ -186,6 +187,33 @@ describe('featureMatchOverlayLayerInspector', () => {
 		});
 	});
 
+	it('adds a Media Graphic Item inside a selected Graphic Group', async () => {
+		const updateConfig = vi.fn();
+		const wrapper = await mountComponent({
+			updateConfig,
+			selectedTarget: { type: 'layer', itemId: 'top-bar' },
+		});
+
+		await wrapper.find('[data-testid="overlay-guided-add-widget"] [data-value="media"]').trigger('click');
+
+		const patch = updateConfig.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig>;
+		const group = patch.layout?.items.find(item => item.id === 'top-bar');
+		const added = group?.type === 'widget-group' ? group.children.at(-1) : undefined;
+		expect(added).toMatchObject({
+			type: 'media',
+			label: 'Media Graphic Item',
+			mediaKind: 'image',
+			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+		});
+		expect(wrapper.emitted('update:selectedTarget')?.at(-1)?.[0]).toMatchObject({
+			type: 'widget',
+			itemId: 'top-bar',
+			childId: added?.id,
+		});
+	});
+
 	it('shows selected widget inspector summaries for group children', async () => {
 		const wrapper = await mountComponent({
 			selectedTarget: { type: 'widget', itemId: 'top-bar', childId: 'top-name-record' },
@@ -200,6 +228,39 @@ describe('featureMatchOverlayLayerInspector', () => {
 		expect(wrapper.text()).toContain('Name and Record');
 		expect(wrapper.text()).toContain('{name}');
 		expect(wrapper.find('[data-testid="widget-editor"]').exists()).toBe(true);
+	});
+
+	it('shows Media Graphic Item summaries and controls for a Graphic Group child', async () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		const group = config.layout.items.find(item => item.id === 'top-bar');
+		if (group?.type !== 'widget-group')
+			throw new Error('Expected a Graphic Group fixture');
+		group.children = [{
+			id: 'group-media',
+			type: 'media',
+			label: 'Sponsor loop',
+			visible: true,
+			layout: { mode: 'canvas', x: 0, y: 0, width: 240, height: 120 },
+			mediaKind: 'silent-video',
+			fit: 'cover',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+			loop: true,
+			playbackRate: 1,
+			videoTarget: 'safari',
+		}];
+		const wrapper = await mountComponent({
+			config,
+			selectedTarget: { type: 'widget', itemId: 'top-bar', childId: 'group-media' },
+		});
+
+		expect(wrapper.text()).toContain('Sponsor loop');
+		expect(wrapper.text()).toContain('Media');
+		expect(wrapper.find('[data-testid="media-fields"]').exists()).toBe(true);
+		expect(wrapper.find('[data-testid="widget-editor"]').exists()).toBe(false);
+		expect(wrapper.findAll('[data-testid="control-section"] h3').map(title => title.text()))
+			.not
+			.toContain('Overrides');
 	});
 
 	it('keeps group-scoped controls separate from individual widget controls', async () => {

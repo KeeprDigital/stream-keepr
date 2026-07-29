@@ -89,7 +89,21 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		revisionId = operation.result!.revisionId;
 
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame.backgroundImage = { assetId, revisionId };
+		const group = config.layout.items.find(item => item.type === 'widget-group');
+		if (group?.type !== 'widget-group')
+			throw new Error('Expected a Graphic Group fixture');
+		group.children.push({
+			id: 'range-delivered-group-media',
+			type: 'media',
+			label: 'Range-delivered group media',
+			visible: true,
+			layout: { mode: 'canvas', x: 0, y: 0, width: 160, height: 90 },
+			asset: { assetId, revisionId },
+			mediaKind: 'image',
+			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+		});
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
 			{ method: 'PATCH', body: { layout: config.layout } },
