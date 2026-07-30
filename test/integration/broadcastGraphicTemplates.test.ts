@@ -116,7 +116,7 @@ function mediaItem(id: string, asset?: { assetId: string; revisionId: string }) 
 	};
 }
 
-function groupItem(id: string, children: unknown[]) {
+function groupItem(id: string, children: unknown[], animation?: unknown) {
 	return {
 		type: 'group' as const,
 		id,
@@ -135,6 +135,7 @@ function groupItem(id: string, children: unknown[]) {
 		clip: true,
 		geometry: SQUARE_GEOMETRY,
 		children,
+		...(animation ? { animation } : {}),
 	};
 }
 
@@ -251,8 +252,22 @@ describe('broadcast Graphic Template library', () => {
 			items: [
 				shapeItem('backing'),
 				textItem('headline', 'Now playing: {player}'),
-				groupItem('badges', [mediaItem('bug', asset), shapeItem('rule', { width: 4, height: 80 })]),
+				groupItem(
+					'badges',
+					[mediaItem('bug', asset), shapeItem('rule', { width: 4, height: 80 })],
+					{
+						enter: { duration: 300, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+						stagger: { enter: { order: 'reverse-list', step: 50, itemIds: ['bug', 'rule'] } },
+					},
+				),
 			],
+			// Graphic Animation on both containers, each staggering its own direct items.
+			// A stale stagger id is ignored at projection rather than rejected, so a
+			// placement that failed to rewrite these would silently lose the choreography.
+			animation: {
+				enter: { duration: 400, easing: 'ease-out', delay: 0, fade: { opacity: 0 } },
+				stagger: { enter: { order: 'list', step: 80, itemIds: ['headline', 'backing'] } },
+			},
 			inputs: [{
 				type: 'text',
 				key: 'player',
@@ -369,6 +384,32 @@ describe('broadcast Graphic Template library', () => {
 		expect(itemIds).not.toContain('bug');
 		// A second copy in the same Screen is named distinctly rather than duplicated.
 		expect(stack.map(graphic => graphic.name)).toEqual(['Lower third', 'Lower third (2)']);
+	});
+
+	it('rewrites every staggered Graphic Item id onto the placed copy', async () => {
+		const [placed] = await authoredStack(otherEventId, otherScreenId);
+
+		const graphicStagger = placed!.animation!.stagger!.enter!;
+		const [backing, headline] = placed!.items.map(item => item.id);
+		// The authored subset named headline before backing, and that order is the
+		// choreography — it is carried, not recomputed from list order.
+		expect(graphicStagger.itemIds).toEqual([headline, backing]);
+		expect(graphicStagger.step).toBe(80);
+
+		const group = placed!.items.find(item => item.type === 'group');
+		if (group?.type !== 'group')
+			throw new Error('expected the placed copy to carry the Graphic Group');
+		expect(group.animation!.stagger!.enter!.itemIds)
+			.toEqual(group.children.map(child => child.id));
+
+		// No authored id survives anywhere, which is what a stale stagger would be:
+		// silently ignored, every staggered item animating together at offset zero.
+		const staggered = [
+			...graphicStagger.itemIds,
+			...group.animation!.stagger!.enter!.itemIds,
+		];
+		for (const authored of ['backing', 'headline', 'badges', 'bug', 'rule'])
+			expect(staggered).not.toContain(authored);
 	});
 
 	it('carries each Graphic Input default as the placed copy\'s own initial manual value', async () => {

@@ -1,4 +1,9 @@
-import type { BroadcastGraphicConfig, GraphicGroupItemConfig, MediaGraphicItemConfig } from '~~/shared/types/graphics';
+import type {
+	BroadcastGraphicConfig,
+	GraphicAnimationStagger,
+	GraphicGroupItemConfig,
+	MediaGraphicItemConfig,
+} from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import {
 	addGraphicGroupChild,
@@ -150,6 +155,90 @@ describe('placeBroadcastGraphicTemplate', () => {
 
 		expect(document.items).toHaveLength(2);
 		expect(groupOf(document).children[0]!.label).not.toBe('edited');
+	});
+
+	it('carries the whole-graphic and per-item Graphic Animation of the template', () => {
+		const document = composed();
+		document.animation = { enter: { duration: 400, easing: 'ease-out', delay: 0, fade: { opacity: 0 } } };
+		document.items[1]!.animation = {
+			enter: { duration: 300, easing: 'linear', delay: 100, fade: { opacity: 0 } },
+		};
+		const template = { id: 'template-1', name: 'Lower third', document };
+
+		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+
+		expect(placed.animation).toEqual(document.animation);
+		expect(placed.items[1]!.animation).toEqual(document.items[1]!.animation);
+	});
+
+	it('rewrites a Broadcast Graphic\'s staggered subset onto the placed copy\'s own Graphic Item ids', () => {
+		const document = composed();
+		// The stagger names the two top-level items, deliberately in reverse of their
+		// list order, so the assertion proves order is carried rather than recomputed.
+		document.animation = {
+			enter: { duration: 400, easing: 'ease-out', delay: 0, fade: { opacity: 0 } },
+			stagger: { enter: { order: 'list', step: 80, itemIds: ['headline', 'cluster'] } },
+			exit: { duration: 200, easing: 'ease-in', delay: 0, fade: { opacity: 0 } },
+		};
+		document.animation.stagger!.exit = { order: 'reverse-list', step: 60, itemIds: ['cluster'] };
+		const template = { id: 'template-1', name: 'Lower third', document };
+
+		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+
+		const [cluster, headline] = placed.items.map(item => item.id);
+		const enter = placed.animation!.stagger!.enter as GraphicAnimationStagger;
+		expect(enter.itemIds).toEqual([headline, cluster]);
+		expect(enter.step).toBe(80);
+		expect(placed.animation!.stagger!.exit!.itemIds).toEqual([cluster]);
+		// A choreography that still named the authored ids would be silently ignored at
+		// projection, so every staggered item would animate together at offset zero.
+		expect(enter.itemIds).not.toContain('headline');
+		expect(enter.itemIds).not.toContain('cluster');
+	});
+
+	it('rewrites a Graphic Group\'s own staggered subset onto its copied children', () => {
+		const document = composed();
+		const group = groupOf(document);
+		group.animation = {
+			enter: { duration: 300, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+			stagger: { enter: { order: 'reverse-list', step: 50, itemIds: ['child'] } },
+		};
+		const template = { id: 'template-1', name: 'Lower third', document };
+
+		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+
+		const placedGroup = groupOf(placed);
+		expect(placedGroup.animation!.stagger!.enter!.itemIds)
+			.toEqual([placedGroup.children[0]!.id]);
+		expect(placedGroup.animation!.stagger!.enter!.itemIds).not.toContain('child');
+		expect(placedGroup.animation!.stagger!.enter!.order).toBe('reverse-list');
+	});
+
+	it('drops a staggered id that names no Graphic Item of the template', () => {
+		const document = composed();
+		document.animation = {
+			enter: { duration: 400, easing: 'ease-out', delay: 0, fade: { opacity: 0 } },
+			stagger: { enter: { order: 'list', step: 80, itemIds: ['headline', 'deleted-long-ago'] } },
+		};
+		const template = { id: 'template-1', name: 'Lower third', document };
+
+		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+
+		// An id that named nothing was already ignored at projection; carrying it into
+		// the copy would preserve a reference to an item that never existed there.
+		expect(placed.animation!.stagger!.enter!.itemIds).toEqual([placed.items[1]!.id]);
+	});
+
+	it('leaves no empty Graphic Animation behind when every staggered id was stale', () => {
+		const document = composed();
+		document.animation = {
+			stagger: { enter: { order: 'list', step: 80, itemIds: ['deleted-long-ago'] } },
+		};
+		const template = { id: 'template-1', name: 'Lower third', document };
+
+		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+
+		expect(placed.animation).toBeUndefined();
 	});
 
 	it('places two copies of one template with no Graphic Item id in common', () => {
