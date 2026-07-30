@@ -18,6 +18,7 @@ import {
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+import { collectStream } from '~~/test/helpers/storedZipArchive';
 
 const pixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -445,6 +446,81 @@ describe('scheduled Graphics Asset Library retention', () => {
 				initiatedBy: operation.initiatedBy,
 			})).resolves.toMatchObject({ stage: 'awaiting-confirmation' });
 
+			context.advanceTo(new Date(stagedAt + 7 * DAY).toISOString());
+			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
+				expiredIncompleteTransfers: 0,
+				expiredCompletedInput: 1,
+			});
+		});
+
+		it('gives a staged Template Package awaiting installation the seven-day promise', async () => {
+			// A Template Package stages a complete input exactly like an upload, and
+			// then rests while it waits to be installed. If that resting stage were
+			// not recognised as holding staged input, the package would either be
+			// expired against the 24-hour incomplete-transfer guarantee or never
+			// reclaimed at all — and its author was promised seven days.
+			const context = createRetentionLibrary();
+			const backdrop = await ingestAsset(context, {
+				idempotencyKey: 'package-source',
+				name: 'Backdrop',
+			});
+			const exported = await context.library.exportTemplatePackage({
+				packageKind: 'skgraphic',
+				template: {
+					identity: 'template-1',
+					name: 'Lower third',
+					document: {
+						backdrop: {
+							assetId: backdrop.result!.assetId,
+							revisionId: backdrop.result!.revisionId,
+						},
+					},
+				},
+				assets: [{
+					slot: 'backdrop',
+					reference: {
+						assetId: backdrop.result!.assetId,
+						revisionId: backdrop.result!.revisionId,
+					},
+				}],
+			});
+			if (exported.outcome !== 'exported')
+				throw new Error('Expected the fixture package to export');
+			const archive = await collectStream(exported.package.open());
+
+			const operation = await context.library.initiateTemplatePackagePreflight({
+				idempotencyKey: 'package-retention',
+				initiatedBy: 'retention-author',
+				sourceFileName: 'lower-third.skgraphic',
+				declaredByteLength: archive.byteLength,
+			});
+			const staged = await context.library.uploadGraphicAsset({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				bytes: createBoundedByteStream(archive, {
+					byteLength: archive.byteLength,
+					maximumByteLength: archive.byteLength,
+				}),
+			});
+			expect(staged).toMatchObject({ stage: 'awaiting-installation' });
+			const stagedAt = new Date(staged.updatedAt).getTime();
+
+			await expect(context.library.getRetentionOverview()).resolves.toMatchObject({
+				stagedInput: [
+					expect.objectContaining({
+						operationId: operation.id,
+						transferComplete: true,
+						expiresAt: new Date(stagedAt + 7 * DAY).toISOString(),
+					}),
+				],
+			});
+
+			// A day is not enough to reclaim it, seven days is.
+			context.advanceTo(new Date(stagedAt + DAY + 1).toISOString());
+			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
+				expiredIncompleteTransfers: 0,
+				expiredCompletedInput: 0,
+			});
 			context.advanceTo(new Date(stagedAt + 7 * DAY).toISOString());
 			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
 				expiredIncompleteTransfers: 0,

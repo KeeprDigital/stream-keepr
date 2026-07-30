@@ -320,7 +320,11 @@ export function broadcastGraphicsStateService() {
 				return applyBroadcastGraphicsCommand(
 					recoveredBroadcastGraphicsLiveState(session.currentState),
 					command,
-					{ inputs: declarations },
+					// The server's clock is the authoritative effective start time of the
+					// phase this command begins. It is read here, at acceptance, rather than
+					// sent by a client: every output projects animation from this instant, so
+					// it has to come from the one place that decides the authoritative order.
+					{ inputs: declarations, acceptedAt: Date.now() },
 				);
 			}
 			catch (error) {

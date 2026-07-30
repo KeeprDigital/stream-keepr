@@ -1,5 +1,6 @@
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicAnimationPhase } from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from './selection';
+import { GRAPHIC_ANIMATION_PHASE_VALUES } from '~~/shared/types/graphics';
 import { isGraphicsSelectionTarget } from './selection';
 
 /**
@@ -14,6 +15,39 @@ import { isGraphicsSelectionTarget } from './selection';
 export const GRAPHICS_PREVIEW_STATE_MESSAGE = 'graphics-compositor:preview-state';
 export const GRAPHICS_PREVIEW_SELECT_MESSAGE = 'graphics-compositor:select';
 
+/** How much of a lifecycle one Graphic Animation Preview run plays. */
+export const GRAPHICS_PREVIEW_ANIMATION_SCOPE_VALUES = ['phase', 'lifecycle'] as const;
+
+export type GraphicsPreviewAnimationScope = typeof GRAPHICS_PREVIEW_ANIMATION_SCOPE_VALUES[number];
+
+/**
+ * One Graphic Animation Preview run, as an instruction rather than a stream of
+ * frames.
+ *
+ * The editor says *what* to play and the preview frame runs its own clock over the
+ * working composition it already holds, which is the same relationship a live
+ * Screen Output has with an authoritative effective start time. That is what makes
+ * the preview deterministic: one elapsed time produces one frame, through exactly
+ * the projection a live output uses, with no live state and no session involved.
+ *
+ * There is no playhead and no scrubbing: `run` is a token the editor changes to
+ * start a run over, and playback is otherwise described entirely by its scope,
+ * speed, and whether it loops.
+ */
+export interface GraphicsPreviewAnimationPlan {
+	/** The Broadcast Graphic being previewed. Every other graphic stays at rest. */
+	graphicId: string;
+	scope: GraphicsPreviewAnimationScope;
+	/** The single phase a `phase` run plays, and where a `lifecycle` run starts. */
+	phase: GraphicAnimationPhase;
+	/** Changing this restarts the run. It is not a time and carries no schedule. */
+	run: number;
+	/** Playback rate multiplier. */
+	speed: number;
+	/** Restart the run when it completes rather than holding its final phase. */
+	loop: boolean;
+}
+
 export interface GraphicsPreviewState {
 	/** The working stack of Broadcast Graphics, unsaved edits included. */
 	graphics: BroadcastGraphicConfig[];
@@ -23,6 +57,48 @@ export interface GraphicsPreviewState {
 	 * Broadcast Graphic and Graphic Item are under authoring.
 	 */
 	selectedTarget: GraphicsSelectionTarget;
+	/**
+	 * The current Graphic Animation Preview run, if the author has started one.
+	 * Absent composes every Broadcast Graphic at its Graphic Resting State, which is
+	 * what an author laying a composition out wants to see.
+	 */
+	animation?: GraphicsPreviewAnimationPlan | null;
+}
+
+/**
+ * A preview plan, or null if this is not one.
+ *
+ * Validated field by field rather than trusted: it arrives over `postMessage`, and
+ * the sender check above proves only where a message came from, not what is in it.
+ * A malformed plan is dropped so the preview holds its Graphic Resting State
+ * instead of running an unbounded or reversed clock.
+ */
+export function readGraphicsPreviewAnimationPlan(value: unknown): GraphicsPreviewAnimationPlan | null {
+	if (typeof value !== 'object' || value === null)
+		return null;
+
+	const plan = value as Record<string, unknown>;
+	if (typeof plan.graphicId !== 'string' || plan.graphicId.length === 0)
+		return null;
+	if (plan.scope !== 'phase' && plan.scope !== 'lifecycle')
+		return null;
+	if (!GRAPHIC_ANIMATION_PHASE_VALUES.includes(plan.phase as GraphicAnimationPhase))
+		return null;
+	if (typeof plan.run !== 'number' || !Number.isFinite(plan.run))
+		return null;
+	if (typeof plan.speed !== 'number' || !Number.isFinite(plan.speed) || plan.speed <= 0)
+		return null;
+	if (typeof plan.loop !== 'boolean')
+		return null;
+
+	return {
+		graphicId: plan.graphicId,
+		scope: plan.scope,
+		phase: plan.phase as GraphicAnimationPhase,
+		run: plan.run,
+		speed: plan.speed,
+		loop: plan.loop,
+	};
 }
 
 interface MessageEnvelope {
@@ -57,10 +133,33 @@ export function isGraphicsPreviewStateMessage(
 		return false;
 
 	const state = data.state as Record<string, unknown> | undefined;
-	return typeof state === 'object'
-		&& state !== null
-		&& Array.isArray(state.graphics)
-		&& isGraphicsSelectionTarget(state.selectedTarget);
+	if (typeof state !== 'object' || state === null)
+		return false;
+	if (!Array.isArray(state.graphics) || !isGraphicsSelectionTarget(state.selectedTarget))
+		return false;
+
+	return true;
+}
+
+/**
+ * The preview state a validated message carries, with its run normalised.
+ *
+ * Separate from the guard above because a predicate that also rewrites its input is
+ * a hidden contract: every caller then depends on a side effect its name does not
+ * mention. The guard answers whether the message is one of ours; this answers what
+ * it says.
+ *
+ * An absent or malformed run is not a malformed state message — the working
+ * composition still has to reach the preview, holding its Graphic Resting State —
+ * so it normalises to null rather than rejecting the whole push.
+ */
+export function readGraphicsPreviewState(state: GraphicsPreviewState): GraphicsPreviewState {
+	return {
+		...state,
+		animation: state.animation === undefined || state.animation === null
+			? null
+			: readGraphicsPreviewAnimationPlan(state.animation),
+	};
 }
 
 export function isGraphicsPreviewSelectMessage(

@@ -1,7 +1,7 @@
 import type { BroadcastGraphicConfig, GraphicInputValue } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
-import type { GraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
+import type { GraphicsAnimationProjection, GraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { resolveGraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 
@@ -17,6 +17,12 @@ export interface BroadcastGraphicsRenderModelInput {
 	 * until an operator takes a graphic.
 	 */
 	onAirGraphicIds?: readonly string[];
+	/**
+	 * Which lifecycle phase each Broadcast Graphic is in, and how long it has been
+	 * there. An omitted map composes every graphic at its Graphic Resting State,
+	 * which is what a settled Screen and a recovered Live Session both resolve to.
+	 */
+	animation?: Readonly<Record<string, GraphicsAnimationProjection>>;
 	/**
 	 * The accepted on-air Graphic Input values a Graphic Text Template renders,
 	 * keyed by Broadcast Graphic id. Omitted renders declared defaults, which is what
@@ -59,6 +65,7 @@ export function resolveBroadcastGraphicsRenderModel(
 		canvasHeight: input.canvasHeight,
 		graphics: input.graphics,
 		visibleGraphicIds: input.onAirGraphicIds ?? [],
+		animation: input.animation,
 		inputValues: input.inputValues,
 		itemGuides: input.itemGuides,
 		safeAreaGuides: input.safeAreaGuides,

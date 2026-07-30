@@ -93,6 +93,7 @@ import {
 	SHAPE_CORNER_TREATMENT_VALUES,
 } from '~~/shared/types/graphics';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
+import GraphicsCompositorAnimation from './Animation.vue';
 
 /**
  * Property controls for the current selection: the Broadcast Graphic, or one
@@ -1513,5 +1514,12 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 				</template>
 			</div>
 		</template>
+
+		<GraphicsCompositorAnimation
+			:graphics="graphics"
+			:selected-target="selectedTarget"
+			:writable="writable"
+			@update:graphics="emit('update:graphics', $event)"
+		/>
 	</fieldset>
 </template>

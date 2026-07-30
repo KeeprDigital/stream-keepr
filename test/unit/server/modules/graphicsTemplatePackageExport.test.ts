@@ -671,6 +671,97 @@ describe('the Template Package export contract', () => {
 		expect(declared).toEqual(['group', 'shape', 'text']);
 	});
 
+	it('embeds the assets Media Graphic Items pin, including inside a Graphic Group', async () => {
+		// Media Graphic Items are the Shared Graphics Foundation's asset-bearing
+		// vocabulary. A Broadcast Graphic Template that places one must package the
+		// exact revision it pins, or the package installs a Template with a
+		// dangling field — and a group's children pin them just as its top level does.
+		const { library } = createExportLibrary();
+		const backdrop = await ingestImage(library, 'Backdrop', transparentPixelPng);
+		const insert = await ingestImage(library, 'Insert', webpPixel, 'image/webp');
+
+		const graphic = {
+			id: 'media-lower-third',
+			name: 'Media lower third',
+			items: [
+				{
+					id: 'backdrop',
+					type: 'media' as const,
+					label: 'Backdrop',
+					visible: true,
+					anchor: 'top-left' as const,
+					x: 0,
+					y: 0,
+					width: 1920,
+					height: 1080,
+					asset: backdrop,
+					mediaKind: 'image' as const,
+					fit: 'cover' as const,
+					focalPosition: { x: 0.5, y: 0.5 },
+					opacity: 1,
+				},
+				{
+					id: 'stack',
+					type: 'group' as const,
+					label: 'Stack',
+					visible: true,
+					anchor: 'top-left' as const,
+					x: 0,
+					y: 0,
+					width: 800,
+					height: 200,
+					arrangement: 'column' as const,
+					padding: 0,
+					gap: 8,
+					align: 'start' as const,
+					justify: 'start' as const,
+					clip: false,
+					geometry: { cornerRadius: 0 },
+					children: [{
+						id: 'nested-insert',
+						type: 'media' as const,
+						label: 'Insert',
+						visible: true,
+						anchor: 'top-left' as const,
+						x: 0,
+						y: 0,
+						width: 400,
+						height: 200,
+						asset: insert,
+						mediaKind: 'image' as const,
+						fit: 'contain' as const,
+						focalPosition: { x: 0.5, y: 0.5 },
+						opacity: 1,
+					}],
+				},
+			],
+		};
+
+		const requirements = broadcastGraphicTemplatePackageRequirements(
+			graphic as unknown as Parameters<typeof broadcastGraphicTemplatePackageRequirements>[0],
+		);
+		expect(requirements.assets.map(asset => asset.reference)).toEqual([backdrop, insert]);
+
+		const result = await library.exportTemplatePackage({
+			packageKind: 'skgraphic',
+			template: { identity: graphic.id, name: graphic.name, document: graphic },
+			assets: requirements.assets,
+			capabilities: requirements.capabilities,
+		});
+
+		expect(result.outcome).toBe('exported');
+		if (result.outcome !== 'exported')
+			return;
+		const archive = readStoredZipArchive(await collectStream(result.package.open()));
+		const manifest = archive.json<TemplatePackageManifest>('manifest.json');
+		expect(manifest.packagedAssets).toHaveLength(2);
+		expect(manifest.packagedAssets.map(packaged => packaged.origin.sourceRevisionId).sort())
+			.toEqual([backdrop.revisionId, insert.revisionId].sort());
+		// The slots name the exact items an author would go and repair.
+		expect(manifest.packagedAssets.flatMap(packaged => packaged.requiredBy).sort())
+			.toEqual(['items.backdrop.asset', 'items.stack.children.nested-insert.asset']);
+	});
+
 	it('keeps authored display copy that mentions a URL exportable', async () => {
 		const { library } = createExportLibrary();
 

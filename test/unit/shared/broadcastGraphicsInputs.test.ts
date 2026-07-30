@@ -141,7 +141,7 @@ describe('broadcastGraphicsInputs', () => {
 		let state = setInput(createInitialBroadcastGraphicsLiveState(), 'title', 'Champion', [NAME, REQUIRED_TITLE]);
 		state = take(state, [NAME, REQUIRED_TITLE]);
 
-		expect(state.playout[GRAPHIC]).toEqual({ onAir: true });
+		expect(state.playout[GRAPHIC]).toMatchObject({ onAir: true, cut: false });
 		expect(acceptedGraphicInputValues(state, GRAPHIC, [REQUIRED_TITLE])).toEqual({ title: 'Champion' });
 	});
 
