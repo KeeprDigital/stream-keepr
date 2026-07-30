@@ -14,7 +14,7 @@ CREATE TABLE `graphic_asset_tombstones` (
 	`purged_at` integer NOT NULL,
 	`purge_reason` text NOT NULL,
 	`revision_count` integer NOT NULL,
-	`checked_reference_count` integer NOT NULL,
+	`reference_count` integer NOT NULL,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL
 );
 --> statement-breakpoint
@@ -42,8 +42,10 @@ CREATE TABLE `graphics_content_quarantine` (
 	`origin` text NOT NULL,
 	`quarantined_at` integer NOT NULL,
 	`delete_after` integer NOT NULL,
+	`deleting_since` integer,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `graphics_content_quarantine_digest_idx` ON `graphics_content_quarantine` (`digest`);--> statement-breakpoint
-CREATE INDEX `graphics_content_quarantine_delete_after_idx` ON `graphics_content_quarantine` (`delete_after`);
+CREATE INDEX `graphics_content_quarantine_delete_after_idx` ON `graphics_content_quarantine` (`delete_after`);--> statement-breakpoint
+ALTER TABLE `graphics_ingestion_operations` ADD `transfer_completed_at` integer;

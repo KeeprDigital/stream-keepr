@@ -97,6 +97,11 @@ export async function createSqliteD1Harness(): Promise<SqliteD1Harness> {
 	const directory = mkdtempSync(join(tmpdir(), 'stream-keepr-d1-'));
 	const client = createClient({ url: `file:${join(directory, 'catalogue.sqlite')}` });
 	await client.execute('PRAGMA foreign_keys = ON');
+	// Cascade and RESTRICT behaviour is load-bearing for the reachability and
+	// race proofs these tests make, so never let them run without it.
+	const [foreignKeys] = (await client.execute('PRAGMA foreign_keys')).rows;
+	if (Number(foreignKeys?.foreign_keys) !== 1)
+		throw new Error('SQLite foreign key enforcement could not be enabled');
 
 	const migrations = readdirSync(migrationsDirectory)
 		.filter(entry => entry.endsWith('.sql'))

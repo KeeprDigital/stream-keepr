@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3a2d638c-7994-4bf6-910b-9f7874b4161b",
+  "id": "654e714a-e0a6-464d-a606-fb119adc13b4",
   "prevId": "d0d98bfe-7d1c-4cf9-85b7-955c13b5289d",
   "tables": {
     "archetype_cards": {
@@ -1865,8 +1865,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "checked_reference_count": {
-          "name": "checked_reference_count",
+        "reference_count": {
+          "name": "reference_count",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -2245,6 +2245,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "deleting_since": {
+          "name": "deleting_since",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -2523,6 +2530,13 @@
         "failure": {
           "name": "failure",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "transfer_completed_at": {
+          "name": "transfer_completed_at",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

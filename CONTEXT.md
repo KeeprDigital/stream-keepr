@@ -288,6 +288,30 @@ Its provisional content is never discoverable or referenceable.
 A generated thumbnail or preview artifact managed by the Graphics Asset Library as a dependant of one source Graphic Asset or graphics Template revision.
 It inherits its source's access and lifecycle and is never a discoverable or selectable Graphic Asset.
 
+**Graphics Retention Sweep**:
+The scheduled pass in which the Graphics Asset Library reclaims only state it has just proven unreachable past its complete recovery guarantee.
+It expires staged input, maintains Revision Pruning deadlines, purges eligible Trash, and collects unreachable Graphic Asset Content; a missed or delayed sweep only ever retains state for longer.
+
+**Revision Pruning**:
+The removal of a superseded Graphic Asset Revision that no Graphic Asset Reference reaches, 90 days after it became unreferenced.
+An asset's latest revision and every referenced revision are never pruned, a new reference cancels pruning, and Trash freezes the remaining time so restoration resumes rather than restarts it.
+
+**Graphic Asset Tombstone**:
+The durable proof that a Graphic Asset identity was purged, recording when, why, how many revisions the reference proof covered, and that it found no references.
+It outlives the catalogue state it replaces so asynchronous byte deletion cannot resurrect the asset and re-ingestion can never reuse the purged local identity.
+
+**Early Purge**:
+An explicitly confirmed Graphics Administrator action that purges an unreferenced Trashed Graphic Asset before its 30-day recovery window elapses.
+It performs the same fresh reference proof, tombstone, and atomic removal as scheduled purge, and is the only way to reclaim Trash early; storage pressure never shortens the window on its own.
+
+**Content Quarantine**:
+The holding state for Graphic Asset Content whose final reachability has disappeared, kept for seven days and rechecked against the catalogue before any byte is deleted.
+Content that a retained revision or Graphics Derivative reaches again is released instead of deleted.
+
+**Evidence Ledger**:
+The chronological administrator-facing record of automated Graphics Asset Library lifecycle decisions, retained for one year after the cleanup it explains.
+It identifies subjects by opaque domain identity and never carries object keys, content digests, filenames, capability secrets, or deleted bytes.
+
 **Text Graphic Item**:
 A Graphic Item that renders literal text or a Graphic Text Template.
 
@@ -588,6 +612,11 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - Every persisted graphics reference pins one **Graphic Asset** identity and one exact **Graphic Asset Revision**
 - Selecting a **Graphic Asset** creates a reference to its latest revision, while later revisions require explicit adoption by each referencing graphics artifact
 - A superseded **Graphic Asset Revision** remains resolvable while any **Graphic Asset Reference** pins it
+- A **Graphics Retention Sweep** reclaims **Graphic Asset Revisions** through **Revision Pruning**, **Trashed Graphic Assets** through purge, and **Graphic Asset Content** through **Content Quarantine**
+- A **Graphic Asset Tombstone** replaces the restorable state of exactly one purged **Graphic Asset** and permanently retires that local identity
+- **Graphic Asset Content** stays reachable while any retained **Graphic Asset Revision** or **Graphics Derivative** points at it, and enters **Content Quarantine** only once that final reachability disappears
+- A **Graphics Derivative** is reclaimed with its source **Graphic Asset Revision** and never keeps that revision's **Graphic Asset Content** reachable on its own
+- Every automated **Graphics Retention Sweep** decision and every **Early Purge** records one entry in the **Evidence Ledger**
 - A Template Package import maps its packaged asset identity and revision to a local **Graphic Asset** identity and revision
 - **Graphic Asset Origin** records that mapping on the exact imported local revision without making the packaged identity a local identity or live link
 - A later locally created **Graphic Asset Revision** never inherits **Graphic Asset Origin** from an earlier imported revision

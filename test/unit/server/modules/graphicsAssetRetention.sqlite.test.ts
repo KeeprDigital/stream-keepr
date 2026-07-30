@@ -282,6 +282,59 @@ describe('scheduled Graphics Asset Library retention', () => {
 			});
 		});
 
+		it('gives a transfer that failed before completing the 24-hour window', async () => {
+			const context = createRetentionLibrary();
+			context.staging.injectTransientFailure('create', 2);
+			const operation = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'mid-transfer-failure',
+				initiatedBy: 'retention-author',
+				name: 'Interrupted transfer',
+				sourceFileName: 'logo.png',
+				declaredMime: 'image/png',
+				browserDecodeEvidence: decodeEvidence(pixelPng),
+				declaredByteLength: pixelPng.byteLength,
+			});
+			const failed = await context.library.uploadGraphicAsset({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				declaredMime: 'image/png',
+				bytes: createBoundedByteStream(pixelPng, {
+					byteLength: pixelPng.byteLength,
+					maximumByteLength: pixelPng.byteLength,
+				}),
+			});
+			// The transfer never completed, so this is an incomplete transfer even
+			// though its stage is now 'failed'.
+			expect(failed).toMatchObject({
+				stage: 'failed',
+				failure: { code: 'staging-unavailable', retryable: true },
+			});
+
+			const overview = await context.library.getRetentionOverview();
+			expect(overview.stagedInput).toEqual([
+				expect.objectContaining({
+					operationId: operation.id,
+					transferComplete: false,
+					expiresAt: new Date(
+						new Date(failed.updatedAt).getTime() + DAY,
+					).toISOString(),
+				}),
+			]);
+
+			const lastCheckpoint = new Date(failed.updatedAt).getTime();
+			context.advanceTo(new Date(lastCheckpoint + DAY - 1).toISOString());
+			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
+				expiredIncompleteTransfers: 0,
+				expiredCompletedInput: 0,
+			});
+
+			context.advanceTo(new Date(lastCheckpoint + DAY).toISOString());
+			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
+				expiredIncompleteTransfers: 1,
+				expiredCompletedInput: 0,
+			});
+		});
+
 		it('cancels expiry when a durable checkpoint advanced since observation', async () => {
 			const context = createRetentionLibrary();
 			const resumed = await context.library.initiateGraphicsIngestion({
@@ -619,7 +672,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 					outcome: 'graphic-asset-purged',
 					reason: 'trash-window-elapsed',
 					detail: expect.objectContaining({
-						checkedReferenceCount: 0,
+						referenceCount: 0,
 						revisionCount: 1,
 					}),
 				}),
@@ -654,7 +707,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 					subject: { kind: 'graphic-asset', id: assetId },
 					outcome: 'graphic-asset-retained',
 					reason: 'reference-proof-found-usage',
-					detail: expect.objectContaining({ checkedReferenceCount: 1 }),
+					detail: expect.objectContaining({ referenceCount: 1 }),
 				}),
 			]);
 		});
@@ -684,7 +737,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 				assetId,
 				purgedAt: context.now().toISOString(),
 				revisionCount: 1,
-				checkedReferenceCount: 0,
+				referenceCount: 0,
 				reason: 'early-purge',
 			});
 			await expect(context.library.listGraphicAssets({
@@ -867,6 +920,41 @@ describe('scheduled Graphics Asset Library retention', () => {
 				.toContain(digestOf(pixelPng));
 		});
 
+		it('keeps quarantined content re-listable when the byte store is unavailable', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'quarantine-byte-store-unavailable',
+				name: 'Stubborn bytes',
+			});
+			const sourceObject = graphicsObjectIdentity(`sha256/${digestOf(pixelPng)}`);
+			await purgeNow(context, published.result!.assetId);
+			expect((await context.library.runGraphicsRetention()).content.quarantined).toBe(2);
+
+			context.advance(7 * DAY);
+			context.canonical.injectTransientFailure('delete', 2);
+			const interrupted = await context.library.runGraphicsRetention();
+			expect(interrupted.content.deleted).toBe(0);
+			expect(interrupted.content.bytesReclaimed).toBe(0);
+			await expect(context.canonical.readMetadata(sourceObject))
+				.resolves
+				.toMatchObject({ outcome: 'available' });
+
+			// The catalogue must still know about the bytes, so the next sweep
+			// reclaims them rather than leaving an object nothing can find.
+			const overview = await context.library.getRetentionOverview();
+			expect(overview.quarantinedContent).toHaveLength(2);
+
+			const recovered = await context.library.runGraphicsRetention();
+			expect(recovered.content.deleted).toBe(2);
+			expect(recovered.content.bytesReclaimed).toBeGreaterThan(0);
+			await expect(context.canonical.readMetadata(sourceObject))
+				.resolves
+				.toEqual({ outcome: 'missing' });
+			await expect(context.library.getRetentionOverview())
+				.resolves
+				.toMatchObject({ quarantinedContent: [] });
+		});
+
 		it('rechecks reachability and spares content a new revision reaches again', async () => {
 			const context = createRetentionLibrary();
 			const published = await ingestAsset(context, {
@@ -1011,7 +1099,6 @@ describe('scheduled Graphics Asset Library retention', () => {
 					state: 'trashed',
 					recoverableUntil: new Date(trashedAt + 30 * DAY).toISOString(),
 				},
-				purgeAfter: new Date(trashedAt + 30 * DAY).toISOString(),
 			});
 			expect(frozen.revisions[0]!.retention).toEqual({
 				policy: 'pruning-frozen',
@@ -1138,7 +1225,6 @@ describe('scheduled Graphics Asset Library retention', () => {
 					name: 'Discarded logo',
 					trashedAt: new Date(trashedAt).toISOString(),
 					recoverableUntil: new Date(trashedAt + 30 * DAY).toISOString(),
-					purgeAfter: new Date(trashedAt + 30 * DAY).toISOString(),
 					referenceCount: 0,
 					revisionCount: 1,
 				},

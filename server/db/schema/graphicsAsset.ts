@@ -4,6 +4,7 @@ import {
 	DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES,
 	DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
 } from '~~/shared/types/graphicsAsset';
+import { GRAPHICS_RETENTION_EVIDENCE_CATEGORIES } from '~~/shared/utils/graphicsAssetRetention';
 import { events } from '../schema';
 
 export const GRAPHIC_ASSET_KIND_VALUES = ['image', 'silent-video', 'font'] as const;
@@ -194,6 +195,13 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	report: text('report', { mode: 'json' }).$type<Record<string, unknown>>(),
 	result: text('result', { mode: 'json' }).$type<Record<string, unknown>>(),
 	failure: text('failure', { mode: 'json' }).$type<Record<string, unknown>>(),
+	/**
+	 * When the complete input became durably staged. This is the authoritative
+	 * transfer-completed fact: a stage alone cannot answer it, because `failed`
+	 * is reachable both mid-transfer and long after the transfer finished, and
+	 * the two cases carry different retention guarantees.
+	 */
+	transferCompletedAt: integer('transfer_completed_at', { mode: 'timestamp_ms' }),
 	cancelRequestedAt: integer('cancel_requested_at', { mode: 'timestamp_ms' }),
 	createdAt,
 	updatedAt,
@@ -248,8 +256,10 @@ export const graphicAssetTombstones = sqliteTable('graphic_asset_tombstones', {
 	assetId: text('asset_id').primaryKey(),
 	purgedAt: integer('purged_at', { mode: 'timestamp_ms' }).notNull(),
 	purgeReason: text('purge_reason', { enum: GRAPHIC_ASSET_PURGE_REASON_VALUES }).notNull(),
+	/** How many revisions the reference proof covered. */
 	revisionCount: integer('revision_count').notNull(),
-	checkedReferenceCount: integer('checked_reference_count').notNull(),
+	/** How many references that proof found. Purge only commits when this is 0. */
+	referenceCount: integer('reference_count').notNull(),
 	createdAt,
 });
 
@@ -265,6 +275,12 @@ export const graphicsContentQuarantine = sqliteTable('graphics_content_quarantin
 	origin: text('origin', { enum: GRAPHICS_CONTENT_QUARANTINE_ORIGIN_VALUES }).notNull(),
 	quarantinedAt: integer('quarantined_at', { mode: 'timestamp_ms' }).notNull(),
 	deleteAfter: integer('delete_after', { mode: 'timestamp_ms' }).notNull(),
+	/**
+	 * When a sweep claimed this content for byte deletion. The row outlives the
+	 * byte deletion it authorises so an unavailable byte store cannot strand an
+	 * object with no catalogue trace; a stale claim is reclaimable.
+	 */
+	deletingSince: integer('deleting_since', { mode: 'timestamp_ms' }),
 	createdAt,
 }, table => [
 	uniqueIndex('graphics_content_quarantine_digest_idx').on(table.digest),
@@ -279,7 +295,7 @@ export const graphicsContentQuarantine = sqliteTable('graphics_content_quarantin
 export const graphicsAssetEvidence = sqliteTable('graphics_asset_evidence', {
 	id: text('id').primaryKey(),
 	recordedAt: integer('recorded_at', { mode: 'timestamp_ms' }).notNull(),
-	category: text('category').notNull(),
+	category: text('category', { enum: GRAPHICS_RETENTION_EVIDENCE_CATEGORIES }).notNull(),
 	actor: text('actor').notNull(),
 	subjectKind: text('subject_kind', {
 		enum: GRAPHICS_ASSET_EVIDENCE_SUBJECT_KIND_VALUES,

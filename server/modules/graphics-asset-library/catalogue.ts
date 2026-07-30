@@ -706,11 +706,15 @@ export function createD1GraphicsAssetCatalogue(
 			return authoritative;
 		},
 		async recordStagedBytes(input) {
+			// This is the one point at which a complete input is durably staged,
+			// for both single-shot and multipart transfer, so it is where the
+			// transfer-completed fact is recorded.
 			const result = await database.prepare(`
 				UPDATE graphics_ingestion_operations
 				SET staging_used_byte_length = ?,
 					staging_reserved_byte_length =
-						staging_reserved_byte_length + staging_used_byte_length - ?
+						staging_reserved_byte_length + staging_used_byte_length - ?,
+					transfer_completed_at = COALESCE(transfer_completed_at, ?)
 				WHERE id = ? AND initiated_by = ?
 					AND stage NOT IN ('completed', 'cancelled')
 					AND ? BETWEEN 0
@@ -718,6 +722,7 @@ export function createD1GraphicsAssetCatalogue(
 			`).bind(
 				input.usedBytes,
 				input.usedBytes,
+				new Date(input.recordedAt).getTime(),
 				input.operation.id,
 				input.operation.initiatedBy,
 				input.usedBytes,

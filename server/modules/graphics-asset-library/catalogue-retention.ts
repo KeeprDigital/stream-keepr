@@ -21,16 +21,33 @@ import type {
 } from './retention';
 import { GRAPHICS_RETENTION_GUARANTEES } from '~~/shared/utils/graphicsAssetRetention';
 
-/** Stages whose staged input is still an incomplete transfer. */
-const INCOMPLETE_TRANSFER_STAGES = ['created', 'transferring'] as const;
-/** Stages holding completed staged input awaiting confirmation, work, or retry. */
-const COMPLETED_INPUT_STAGES = [
+/** Stages that still hold staged input and may therefore expire. */
+const RETAINED_INPUT_STAGES = [
+	'created',
+	'transferring',
 	'hashing',
 	'validating',
 	'generating-derivatives',
 	'awaiting-confirmation',
 	'publishing',
 ] as const;
+
+/**
+ * Whether an operation's transfer had completed, which decides between the
+ * 24-hour incomplete-transfer guarantee and the seven-day completed-input one.
+ *
+ * Stage alone cannot answer this: `failed` is reachable both mid-transfer and
+ * after the input was durably staged, and those carry different guarantees.
+ * The durable transfer-completed fact is the only correct source.
+ */
+const TRANSFER_COMPLETE_SQL
+	= 'CASE WHEN transfer_completed_at IS NOT NULL THEN 1 ELSE 0 END';
+
+/** Operations still holding staged input: working stages, or a retryable failure. */
+const RETAINS_STAGED_INPUT_SQL = `(
+	stage IN (${RETAINED_INPUT_STAGES.map(stage => `'${stage}'`).join(', ')})
+	OR (stage = 'failed' AND json_extract(failure, '$.retryable') = 1)
+)`;
 
 /**
  * Content is reachable only through a retained revision or a derivative of one.
@@ -157,29 +174,18 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			const result = await database.prepare(`
 				SELECT id, initiated_by, stage, updated_at,
 					staging_used_byte_length + staging_reserved_byte_length AS staging_bytes,
-					CASE WHEN stage IN (${INCOMPLETE_TRANSFER_STAGES.map(() => '?').join(', ')})
-						THEN 0 ELSE 1
-					END AS transfer_complete
+					${TRANSFER_COMPLETE_SQL} AS transfer_complete
 				FROM graphics_ingestion_operations
-				WHERE (
-						stage IN (${INCOMPLETE_TRANSFER_STAGES.map(() => '?').join(', ')})
-						AND updated_at <= ?
-					)
-					OR (
-						(
-							stage IN (${COMPLETED_INPUT_STAGES.map(() => '?').join(', ')})
-							OR (stage = 'failed' AND json_extract(failure, '$.retryable') = 1)
-						)
-						AND updated_at <= ?
-					)
+				WHERE ${RETAINS_STAGED_INPUT_SQL}
+					AND updated_at <= CASE
+						WHEN transfer_completed_at IS NOT NULL THEN ?
+						ELSE ?
+					END
 				ORDER BY updated_at, id
 				LIMIT ?
 			`).bind(
-				...INCOMPLETE_TRANSFER_STAGES,
-				...INCOMPLETE_TRANSFER_STAGES,
-				new Date(input.incompleteTransferBefore).getTime(),
-				...COMPLETED_INPUT_STAGES,
 				new Date(input.completedInputBefore).getTime(),
+				new Date(input.incompleteTransferBefore).getTime(),
 				input.limit,
 			).all<{
 				id: string;
@@ -483,7 +489,7 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				database.prepare(`
 					INSERT OR IGNORE INTO graphic_asset_tombstones (
 						asset_id, purged_at, purge_reason, revision_count,
-						checked_reference_count, created_at
+						reference_count, created_at
 					)
 					SELECT asset.id, ?, ?, (
 						SELECT COUNT(*) FROM graphic_asset_revisions revision
@@ -529,13 +535,13 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				return {
 					outcome: 'blocked',
 					revisionCount: current.revision_count,
-					checkedReferenceCount: current.reference_count,
+					referenceCount: current.reference_count,
 				};
 			}
 			return {
 				outcome: 'purged',
 				revisionCount: current.revision_count,
-				checkedReferenceCount: 0,
+				referenceCount: 0,
 			};
 		},
 		async reconcileContentQuarantine(input) {
@@ -593,7 +599,7 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				throw new Error('Unreachable Graphic Asset Content could not be reconciled');
 
 			const quarantined = candidates.results.map((row): QuarantinedContent => ({
-				id: crypto.randomUUID(),
+				id: input.generateIdentity(),
 				digest: row.digest,
 				byteLength: row.byte_length,
 				origin: row.origin,
@@ -663,15 +669,44 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			}));
 		},
 		async claimQuarantinedContentDeletion(input) {
-			// Removing the quarantine row is the claim, and its predicate is the
-			// recheck. The catalogue rows only follow once that claim succeeded.
-			const [claim, ...rest] = await database.batch([
+			// The claim marks the row; it does not remove it. The durable record must
+			// outlive the byte deletion it authorises, otherwise an unavailable byte
+			// store would strand an object no later sweep could find. A claim older
+			// than its lease is reclaimable.
+			const result = await database.prepare(`
+				UPDATE graphics_content_quarantine
+				SET deleting_since = ?
+				WHERE id = ? AND delete_after <= ?
+					AND (deleting_since IS NULL OR deleting_since <= ?)
+					AND ${unreachableDigest('digest')}
+					AND NOT ${claimedByPendingOperation('graphics_content_quarantine.digest')}
+			`).bind(
+				new Date(input.claimedAt).getTime(),
+				input.id,
+				new Date(input.deletableBefore).getTime(),
+				new Date(input.staleClaimsBefore).getTime(),
+			).run();
+			if (!result.success)
+				throw new Error('Quarantined Graphic Asset Content could not be claimed for deletion');
+			return result.meta.changes === 1;
+		},
+		async releaseQuarantinedContentClaim(input) {
+			const result = await database.prepare(`
+				UPDATE graphics_content_quarantine SET deleting_since = NULL WHERE id = ?
+			`).bind(input.id).run();
+			if (!result.success)
+				throw new Error('Quarantined Graphic Asset Content claim could not be released');
+		},
+		async completeQuarantinedContentDeletion(input) {
+			// Only once the bytes are gone does the catalogue trace go too. Each
+			// statement re-proves unreachability, so a digest that became reachable
+			// during deletion keeps its catalogue state.
+			const results = await database.batch([
 				database.prepare(`
 					DELETE FROM graphics_content_quarantine
-					WHERE id = ? AND delete_after <= ?
+					WHERE id = ? AND deleting_since IS NOT NULL
 						AND ${unreachableDigest('digest')}
-						AND NOT ${claimedByPendingOperation('graphics_content_quarantine.digest')}
-				`).bind(input.id, new Date(input.deletableBefore).getTime()),
+				`).bind(input.id),
 				database.prepare(`
 					DELETE FROM graphic_asset_contents
 					WHERE digest = ?
@@ -694,9 +729,8 @@ export function createD1GraphicsAssetRetentionCatalogue(
 						)
 				`).bind(input.digest),
 			]);
-			if (!claim?.success || rest.some(result => !result.success))
-				throw new Error('Quarantined Graphic Asset Content could not be claimed for deletion');
-			return claim.meta.changes === 1;
+			if (results.some(result => !result.success))
+				throw new Error('Quarantined Graphic Asset Content deletion could not be completed');
 		},
 		async countContentReachability(input) {
 			const row = await database.prepare(`
@@ -788,7 +822,6 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				name: row.name,
 				trashedAt: new Date(row.trashed_at).toISOString(),
 				recoverableUntil: new Date(row.trash_recoverable_until).toISOString(),
-				purgeAfter: new Date(row.trash_recoverable_until).toISOString(),
 				referenceCount: row.reference_count,
 				revisionCount: row.revision_count,
 			}));
@@ -797,23 +830,12 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			const result = await database.prepare(`
 				SELECT id, initiated_by, stage, updated_at,
 					staging_used_byte_length + staging_reserved_byte_length AS staging_bytes,
-					CASE WHEN stage IN (${INCOMPLETE_TRANSFER_STAGES.map(() => '?').join(', ')})
-						THEN 0 ELSE 1
-					END AS transfer_complete
+					${TRANSFER_COMPLETE_SQL} AS transfer_complete
 				FROM graphics_ingestion_operations
-				WHERE stage IN (${[
-					...INCOMPLETE_TRANSFER_STAGES,
-					...COMPLETED_INPUT_STAGES,
-				].map(() => '?').join(', ')})
-					OR (stage = 'failed' AND json_extract(failure, '$.retryable') = 1)
+				WHERE ${RETAINS_STAGED_INPUT_SQL}
 				ORDER BY updated_at, id
 				LIMIT ?
-			`).bind(
-				...INCOMPLETE_TRANSFER_STAGES,
-				...INCOMPLETE_TRANSFER_STAGES,
-				...COMPLETED_INPUT_STAGES,
-				input.limit,
-			).all<{
+			`).bind(input.limit).all<{
 				id: string;
 				initiated_by: string;
 				stage: GraphicsIngestionStage;

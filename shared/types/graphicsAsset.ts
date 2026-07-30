@@ -465,7 +465,8 @@ export interface GraphicsAssetEvidenceEntry {
 	reason: string;
 	correlationId: string;
 	detail: {
-		checkedReferenceCount?: number;
+		/** References the proof found. Zero is the proof that reclamation was safe. */
+		referenceCount?: number;
 		revisionCount?: number;
 		bytesFreed?: number;
 		bytesReserved?: number;
@@ -520,8 +521,8 @@ export interface GraphicsTrashDeadline {
 	assetId: GraphicAssetId;
 	name: string;
 	trashedAt: string;
+	/** Restoration is possible until this instant; final purge happens at it. */
 	recoverableUntil: string;
-	purgeAfter: string;
 	referenceCount: number;
 	revisionCount: number;
 }
@@ -540,7 +541,6 @@ export interface GraphicsRevisionPruningDeadline {
 export interface GraphicAssetRetentionView {
 	assetId: GraphicAssetId;
 	lifecycle: GraphicAssetLifecycle;
-	purgeAfter?: string;
 	revisions: GraphicsRevisionPruningDeadline[];
 }
 
@@ -580,7 +580,8 @@ export type GraphicAssetPurgeOutcome
 		assetId: GraphicAssetId;
 		purgedAt: string;
 		revisionCount: number;
-		checkedReferenceCount: number;
+		/** References the fresh proof found across every revision; always 0 when purged. */
+		referenceCount: number;
 		reason: 'trash-window-elapsed' | 'early-purge';
 	}
 	| {

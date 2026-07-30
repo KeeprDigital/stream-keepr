@@ -170,7 +170,6 @@ describe('the Graphics Asset Library retention API', () => {
 		);
 		if (trashed.lifecycle.state !== 'trashed')
 			throw new Error('Graphic Asset should be Trashed');
-		expect(trashed.purgeAfter).toBe(trashed.lifecycle.recoverableUntil);
 		expect(
 			new Date(trashed.lifecycle.recoverableUntil).getTime()
 				- new Date(trashed.lifecycle.trashedAt).getTime(),
@@ -186,7 +185,7 @@ describe('the Graphics Asset Library retention API', () => {
 		expect(overview.trashedAssets).toEqual(expect.arrayContaining([
 			expect.objectContaining({
 				assetId,
-				purgeAfter: trashed.lifecycle.recoverableUntil,
+				recoverableUntil: trashed.lifecycle.recoverableUntil,
 				referenceCount: 0,
 			}),
 		]));
@@ -250,7 +249,7 @@ describe('the Graphics Asset Library retention API', () => {
 			outcome: 'purged',
 			assetId,
 			revisionCount: 1,
-			checkedReferenceCount: 0,
+			referenceCount: 0,
 			reason: 'early-purge',
 		});
 

@@ -31,6 +31,13 @@ import { stagedIngestionObjectIdentities } from './operation';
 /** How many candidates one scheduled sweep processes per retention stage. */
 export const GRAPHICS_RETENTION_STAGE_BATCH = 200;
 
+/**
+ * How long one sweep's claim on quarantined content stays exclusive. A sweep
+ * that dies between claiming and confirming leaves the row claimed; after this
+ * lease a later sweep may reclaim it and retry the byte deletion.
+ */
+export const GRAPHICS_CONTENT_DELETION_CLAIM_LEASE_MILLISECONDS = 60 * 60 * 1000;
+
 export interface StagedInputExpiryCandidate {
 	operationId: GraphicsIngestionOperationId;
 	initiatedBy: string;
@@ -83,8 +90,8 @@ export interface QuarantinedContent {
 }
 
 export type PurgeGraphicAssetOutcome
-	= | { outcome: 'purged'; revisionCount: number; checkedReferenceCount: 0 }
-		| { outcome: 'blocked'; revisionCount: number; checkedReferenceCount: number }
+	= | { outcome: 'purged'; revisionCount: number; referenceCount: 0 }
+		| { outcome: 'blocked'; revisionCount: number; referenceCount: number }
 		| { outcome: 'not-trashed' }
 		| { outcome: 'not-found' };
 
@@ -151,6 +158,7 @@ export interface GraphicsAssetRetentionCatalogue {
 	 * quarantined content a retained revision or derivative reaches again.
 	 */
 	reconcileContentQuarantine: (input: {
+		generateIdentity: () => string;
 		quarantinedAt: string;
 		deleteAfter: string;
 		limit: number;
@@ -164,13 +172,23 @@ export interface GraphicsAssetRetentionCatalogue {
 	}) => Promise<QuarantinedContent[]>;
 	/**
 	 * Rechecks D1 and, only when the content is still unreachable, claims it for
-	 * byte deletion by removing its quarantine and catalogue rows atomically.
+	 * byte deletion. The quarantine row survives the claim so an unavailable byte
+	 * store can never strand an object without a catalogue trace.
 	 */
 	claimQuarantinedContentDeletion: (input: {
 		id: string;
 		digest: string;
 		deletableBefore: string;
+		claimedAt: string;
+		staleClaimsBefore: string;
 	}) => Promise<boolean>;
+	/** Returns a claimed row to the queue without deleting anything. */
+	releaseQuarantinedContentClaim: (input: { id: string }) => Promise<void>;
+	/** Removes the catalogue trace once the bytes are confirmed gone. */
+	completeQuarantinedContentDeletion: (input: {
+		id: string;
+		digest: string;
+	}) => Promise<void>;
 	/** Counts the revisions and derivatives that currently reach one content. */
 	countContentReachability: (input: { digest: string }) => Promise<number>;
 	/** Records content that became reachable again while its bytes were being deleted. */
@@ -204,6 +222,7 @@ export interface GraphicsAssetRetentionCatalogue {
 
 interface GraphicsRetentionDependencies {
 	catalogue: GraphicsAssetRetentionCatalogue & {
+		getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
 		getGraphicAssetMultipartState: (
 			operationId: GraphicsIngestionOperationId,
 			initiatedBy: string,
@@ -275,7 +294,24 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 		return released;
 	}
 
-	async function expireStagedInput(correlationId: string) {
+	/**
+	 * The canonical quota state observed when this sweep started. Evidence for
+	 * an action that frees or reserves bytes records it so an incident stays
+	 * explainable without re-deriving capacity later.
+	 */
+	async function observeQuotaState(): Promise<GraphicsAssetEvidenceEntry['detail']> {
+		const capacity = await catalogue.getCapacity();
+		return {
+			canonicalUsedBytes: capacity.canonical.usedBytes,
+			canonicalLimitBytes: capacity.canonical.limitBytes,
+			canonicalPressure: capacity.canonical.pressure,
+		};
+	}
+
+	async function expireStagedInput(
+		correlationId: string,
+		quotaState: GraphicsAssetEvidenceEntry['detail'],
+	) {
 		const startedAt = timestamp();
 		const candidates = await catalogue.listStagedInputExpiryCandidates({
 			incompleteTransferBefore: graphicsRetentionDeadline(
@@ -318,6 +354,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 					? 'completed-input-retention-elapsed'
 					: 'incomplete-transfer-without-verified-progress',
 				detail: {
+					...quotaState,
 					bytesFreed: candidate.stagingBytes,
 					deadline: graphicsRetentionDeadline(
 						candidate.observedUpdatedAt,
@@ -352,7 +389,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				subject: { kind: 'graphic-asset-revision', id: revision.revisionId },
 				outcome: 'revision-retained',
 				reason: revision.reason,
-				detail: { checkedReferenceCount: revision.referenceCount },
+				detail: { referenceCount: revision.referenceCount },
 			}));
 		}
 
@@ -378,7 +415,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 					? 'trash-freezes-revision-pruning'
 					: 'unreferenced-superseded-revision',
 				detail: {
-					checkedReferenceCount: 0,
+					referenceCount: 0,
 					deadline: revision.pruneAfter,
 					remainingMilliseconds: GRAPHICS_RETENTION_GUARANTEES.supersededRevisionMilliseconds,
 				},
@@ -404,7 +441,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				outcome: 'revision-pruned',
 				reason: 'unreferenced-superseded-retention-elapsed',
 				detail: {
-					checkedReferenceCount: 0,
+					referenceCount: 0,
 					deadline: revision.pruneAfter,
 				},
 			}));
@@ -426,10 +463,14 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 	 * its bytes are being deleted, the conflict is recorded and the content is
 	 * marked unavailable rather than silently losing a reachable identity.
 	 */
-	async function collectUnreachableContent(correlationId: string) {
+	async function collectUnreachableContent(
+		correlationId: string,
+		quotaState: GraphicsAssetEvidenceEntry['detail'],
+	) {
 		const records: GraphicsAssetEvidenceEntry[] = [];
 		const quarantinedAt = timestamp();
 		const reconciled = await catalogue.reconcileContentQuarantine({
+			generateIdentity,
 			quarantinedAt,
 			deleteAfter: graphicsRetentionDeadline(
 				quarantinedAt,
@@ -477,6 +518,11 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				id: content.id,
 				digest: content.digest,
 				deletableBefore: deletedAt,
+				claimedAt: deletedAt,
+				staleClaimsBefore: graphicsRetentionDeadline(
+					deletedAt,
+					-GRAPHICS_CONTENT_DELETION_CLAIM_LEASE_MILLISECONDS,
+				),
 			});
 			if (!claimed)
 				continue;
@@ -484,8 +530,12 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			const removal = await dependencies.canonical.delete(
 				graphicsObjectIdentity(`sha256/${content.digest}`),
 			);
-			if (removal.outcome === 'unavailable')
+			if (removal.outcome === 'unavailable') {
+				// The quarantine row still holds the only record of these bytes, so
+				// hand it back for the next sweep instead of losing track of them.
+				await catalogue.releaseQuarantinedContentClaim({ id: content.id });
 				continue;
+			}
 			const reachableAgain = await catalogue.countContentReachability({
 				digest: content.digest,
 			});
@@ -495,6 +545,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 					reasonCode: 'quarantine-deletion-conflict',
 					since: deletedAt,
 				});
+				await catalogue.releaseQuarantinedContentClaim({ id: content.id });
 				records.push(evidence({
 					recordedAt: deletedAt,
 					correlationId,
@@ -502,10 +553,14 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 					subject: { kind: 'graphic-asset-content', id: content.id },
 					outcome: 'content-unavailable',
 					reason: 'became-reachable-during-deletion',
-					detail: { checkedReferenceCount: reachableAgain },
+					detail: { referenceCount: reachableAgain, ...quotaState },
 				}));
 				continue;
 			}
+			await catalogue.completeQuarantinedContentDeletion({
+				id: content.id,
+				digest: content.digest,
+			});
 			deleted++;
 			bytesReclaimed += content.byteLength;
 			records.push(evidence({
@@ -518,6 +573,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				detail: {
 					bytesFreed: content.byteLength,
 					deadline: content.deleteAfter,
+					...quotaState,
 				},
 			}));
 		}
@@ -552,7 +608,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			reason: purged ? input.reason : 'reference-proof-found-usage',
 			detail: input.outcome.outcome === 'purged' || input.outcome.outcome === 'blocked'
 				? {
-						checkedReferenceCount: input.outcome.checkedReferenceCount,
+						referenceCount: input.outcome.referenceCount,
 						revisionCount: input.outcome.revisionCount,
 					}
 				: {},
@@ -669,9 +725,6 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			return {
 				assetId,
 				lifecycle,
-				...(lifecycle.state === 'trashed'
-					? { purgeAfter: lifecycle.recoverableUntil }
-					: {}),
 				revisions: await catalogue.listRevisionRetention({
 					assetId,
 					limit: OVERVIEW_LIMIT,
@@ -706,17 +759,18 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 						outcome: 'purged' as const,
 						purgedAt,
 						revisionCount: outcome.revisionCount,
-						checkedReferenceCount: outcome.checkedReferenceCount,
+						referenceCount: outcome.referenceCount,
 					}
 				: outcome;
 		},
 		async run(): Promise<GraphicsRetentionSweepResult> {
 			const correlationId = generateIdentity();
 			const startedAt = timestamp();
-			const staged = await expireStagedInput(correlationId);
+			const quotaState = await observeQuotaState();
+			const staged = await expireStagedInput(correlationId, quotaState);
 			const trash = await purgeElapsedTrash(correlationId);
 			const revisions = await pruneRevisions(correlationId);
-			const content = await collectUnreachableContent(correlationId);
+			const content = await collectUnreachableContent(correlationId, quotaState);
 			const records = [
 				...staged.records,
 				...trash.records,

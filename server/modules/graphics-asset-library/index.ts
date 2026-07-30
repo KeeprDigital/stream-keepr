@@ -163,6 +163,7 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	recordStagedBytes: (input: {
 		operation: GraphicsIngestionOperation;
 		usedBytes: number;
+		recordedAt: string;
 	}) => Promise<void>;
 	recordCanonicalWrites: (input: {
 		operation: GraphicsIngestionOperation;
@@ -1928,6 +1929,7 @@ export function createGraphicsAssetLibrary(
 				() => catalogue.recordStagedBytes({
 					operation,
 					usedBytes: stagedByteLength!,
+					recordedAt: timestamp(),
 				}),
 				'Graphics staging progress could not be recorded',
 			);
@@ -2040,6 +2042,7 @@ export function createGraphicsAssetLibrary(
 				() => catalogue.recordStagedBytes({
 					operation,
 					usedBytes: staged.object.byteLength,
+					recordedAt: timestamp(),
 				}),
 				'Graphics staging progress could not be recorded',
 			);
@@ -2393,7 +2396,7 @@ export function createGraphicsAssetLibrary(
 				assetId: input.assetId,
 				purgedAt: outcome.purgedAt,
 				revisionCount: outcome.revisionCount,
-				checkedReferenceCount: outcome.checkedReferenceCount,
+				referenceCount: outcome.referenceCount,
 				reason: 'early-purge',
 			};
 		},
