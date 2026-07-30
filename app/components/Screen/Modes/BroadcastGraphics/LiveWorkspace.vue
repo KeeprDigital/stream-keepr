@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicPlayoutState } from '~~/shared/types/graphics';
 import type { Screen } from '~/types';
 import { screenOutputPath } from '~~/shared/utils/screenOutput';
 
@@ -81,16 +81,72 @@ const {
 	retry: retryAssetContent,
 } = useBroadcastGraphicsAssetEligibility(() => props.graphics);
 
+/*
+ * Live Control projects the same lifecycle phase from the same authoritative effective
+ * start times as every Screen Output, on the same authoritative clock, so an operator
+ * reading the stack and a capture browser rendering it can never disagree about what a
+ * graphic is doing.
+ *
+ * The clock advances while anything is in flight and stops when everything is settled,
+ * because a settled phase cannot change and an operator's browser has better things to
+ * do sixty times a second.
+ */
+const now = ref(sessionStore.serverNow());
+let frame: number | null = null;
+
+function stopClock() {
+	if (frame !== null && import.meta.client)
+		cancelAnimationFrame(frame);
+	frame = null;
+}
+
+function advance() {
+	now.value = sessionStore.serverNow();
+	if (Object.keys(sessionStore.animationProjection(props.screen.id, props.graphics, now.value)).length === 0) {
+		stopClock();
+		return;
+	}
+	frame = requestAnimationFrame(advance);
+}
+
+watch(
+	() => {
+		const session = sessionStore.sessions.get(props.screen.id);
+		return session ? `${session.id}:${session.sequence}` : null;
+	},
+	() => {
+		if (!import.meta.client)
+			return;
+		now.value = sessionStore.serverNow();
+		if (frame === null)
+			frame = requestAnimationFrame(advance);
+	},
+	{ immediate: true },
+);
+
+onBeforeUnmount(stopClock);
+
+const PLAYOUT_STATE_LABELS: Record<GraphicPlayoutState, string> = {
+	'off': 'Off',
+	'waiting': 'Waiting',
+	'entering': 'Entering',
+	'on-air': 'On air',
+	'updating': 'Updating',
+	'exiting': 'Exiting',
+};
+
 const entries = computed(() => [...props.graphics].reverse().map(graphic => ({
 	graphic,
-	playoutState: sessionStore.playoutState(props.screen.id, graphic.id),
+	playoutState: sessionStore.playoutState(props.screen.id, graphic.id, graphic, now.value),
 	// Scoped per graphic: an action on one must never freeze another's controls.
 	pending: sessionStore.isPending(props.screen.id, graphic.id),
 	assetBlockedReason: takeBlockedReason(graphic.id),
 	assetRetryable: assetContentRetryable(graphic.id),
 })));
 
-const onAirCount = computed(() => sessionStore.onAirGraphicIds(props.screen.id, props.graphics).length);
+const onAirCount = computed(() =>
+	sessionStore.onAirGraphicIds(props.screen.id, props.graphics, now.value).length,
+);
 
 /**
  * The Broadcast Graphic whose Live Control is shown. An operator working a stack
@@ -179,13 +235,18 @@ watch(
 							<span class="block truncate text-sm font-medium">{{ entry.graphic.name }}</span>
 							<span class="mt-0.5 block truncate text-xs text-muted">{{ entry.graphic.items.length }} items</span>
 						</span>
+						<!--
+							An operator has to be able to tell a graphic that is on program from
+							one that is on its way there or away, so every lifecycle phase reads as
+							itself. Anything not off is on program, so anything not off is red.
+						-->
 						<UBadge
 							size="xs"
-							:color="entry.playoutState === 'on-air' ? 'error' : 'neutral'"
+							:color="entry.playoutState === 'off' ? 'neutral' : 'error'"
 							variant="soft"
 							class="shrink-0"
 						>
-							{{ entry.playoutState === 'on-air' ? 'On air' : 'Off' }}
+							{{ PLAYOUT_STATE_LABELS[entry.playoutState] }}
 						</UBadge>
 					</button>
 

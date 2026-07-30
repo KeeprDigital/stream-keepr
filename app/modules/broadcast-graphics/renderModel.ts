@@ -29,6 +29,14 @@ export interface BroadcastGraphicsRenderModelInput {
 	 * an editor preview with no Live Session shows.
 	 */
 	inputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
+	/**
+	 * The rendering each updating Broadcast Graphic is transitioning away from.
+	 *
+	 * Needed alongside `inputValues` because an update cross-transitions two
+	 * renderings, and both have to come from the authoritative snapshot for an output
+	 * that joins mid-update to draw the transition rather than cut.
+	 */
+	outgoingInputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
 	/** Editor-only item guides and selection highlighting. */
 	itemGuides?: boolean;
 	/** Editor-only advisory action-safe and title-safe guides. */
@@ -67,6 +75,7 @@ export function resolveBroadcastGraphicsRenderModel(
 		visibleGraphicIds: input.onAirGraphicIds ?? [],
 		animation: input.animation,
 		inputValues: input.inputValues,
+		outgoingInputValues: input.outgoingInputValues,
 		itemGuides: input.itemGuides,
 		safeAreaGuides: input.safeAreaGuides,
 		selectedTarget: input.selectedTarget,

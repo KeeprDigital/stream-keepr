@@ -1,7 +1,10 @@
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbBroadcastGraphicsLiveSession } from '~~/server/db/schema';
 import type { SequencedLiveStateExecuteOptions } from '~~/server/modules/live-state';
-import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
+import type {
+	BroadcastGraphicPhaseDurations,
+	BroadcastGraphicsLiveState,
+} from '~~/shared/modules/broadcast-graphics-live-session';
 import type {
 	BroadcastGraphicsCommand,
 	BroadcastGraphicsCommandAppliedPayload,
@@ -42,6 +45,19 @@ export const BROADCAST_GRAPHICS_LIVE_SESSION_AGGREGATE_KIND = 'broadcastGraphics
 interface BroadcastGraphicsLiveSessionRef {
 	sessionId: number;
 	eventId: number;
+}
+
+/**
+ * What reduction needs to know about the addressed Broadcast Graphic.
+ *
+ * Both halves are authored Screen configuration the reducer refuses to read for
+ * itself: its declared Graphic Inputs, and how long its lifecycle phases last. They
+ * travel together because they are resolved together, from the same placed graphic,
+ * by the module that already had to find it.
+ */
+export interface BroadcastGraphicsReductionConfig {
+	inputs: readonly GraphicInputDeclaration[];
+	durations: BroadcastGraphicPhaseDurations;
 }
 
 export function broadcastGraphicsStateService() {
@@ -172,7 +188,7 @@ export function broadcastGraphicsStateService() {
 	 * be storing a copy that can go stale. Closing over them for the one command
 	 * that needs them keeps the authored config authoritative.
 	 */
-	const liveStateFor = (declarations: readonly GraphicInputDeclaration[]) => createSequencedLiveState<
+	const liveStateFor = (reduction: BroadcastGraphicsReductionConfig) => createSequencedLiveState<
 		BroadcastGraphicsLiveSessionRef,
 		DbBroadcastGraphicsLiveSession,
 		BroadcastGraphicsCommand,
@@ -232,7 +248,13 @@ export function broadcastGraphicsStateService() {
 					// phase this command begins. It is read here, at acceptance, rather than
 					// sent by a client: every output projects animation from this instant, so
 					// it has to come from the one place that decides the authoritative order.
-					{ inputs: declarations, acceptedAt: Date.now() },
+					//
+					// The addressed graphic's phase durations travel with it, because two of
+					// the reducer's decisions are about a schedule rather than a target — was
+					// the phase this intent interrupts still running, and when is a coalesced
+					// update due — and both have to be settled once, here, rather than by
+					// each output against its own clock.
+					{ ...reduction, acceptedAt: Date.now() },
 				);
 			}
 			catch (error) {
@@ -293,12 +315,11 @@ export function broadcastGraphicsStateService() {
 		sessionId: number,
 		eventId: number,
 		command: BroadcastGraphicsCommand,
-		/** The addressed Broadcast Graphic's declared Graphic Inputs. */
-		declarations: readonly GraphicInputDeclaration[],
+		reduction: BroadcastGraphicsReductionConfig,
 		originConnectionId?: string,
 		options: Omit<SequencedLiveStateExecuteOptions, 'originConnectionId'> = {},
 	): Promise<BroadcastGraphicsCommandResult> => {
-		return await liveStateFor(declarations)
+		return await liveStateFor(reduction)
 			.execute({ sessionId, eventId }, command, { ...options, originConnectionId });
 	};
 

@@ -1,5 +1,6 @@
 import type {
 	BroadcastGraphicInputsState,
+	BroadcastGraphicPhaseTiming,
 	BroadcastGraphicsLiveState,
 	GraphicInputTrace,
 } from '~~/shared/modules/broadcast-graphics-live-session';
@@ -10,6 +11,7 @@ import type {
 } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type {
 	BroadcastGraphicConfig,
+	GraphicAnimationPhase,
 	GraphicInputValue,
 	GraphicPlayoutState,
 } from '~~/shared/types/graphics';
@@ -17,7 +19,10 @@ import type { MessageData } from '~/types/realtime';
 import {
 	acceptedGraphicInputValues,
 	broadcastGraphicInputsState,
+	broadcastGraphicPhaseProjection,
+	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
+	broadcastGraphicRenderedInputs,
 	createInitialBroadcastGraphicsLiveState,
 	graphicInputTraces,
 	onAirBroadcastGraphicIds,
@@ -42,6 +47,22 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	const sessions = ref<Map<number, BroadcastGraphicsLiveSessionResponse>>(new Map());
 	const loading = ref(false);
 	const error = ref<string | null>(null);
+	/**
+	 * How far this browser's clock is from the authoritative one, in milliseconds.
+	 *
+	 * Every effective start time in a snapshot was stamped by the server's clock, and
+	 * an output must not subtract two clocks it does not own. Without this correction a
+	 * browser a minute behind the server would believe an exiting Broadcast Graphic was
+	 * still exiting for that whole minute — and since an exiting graphic is on program,
+	 * a graphic the operator has taken off would stay on air on that output. Phases last
+	 * at most twenty seconds; an un-synchronised clock is routinely minutes out.
+	 *
+	 * One number, re-established on every authoritative read, so it corrects rather than
+	 * accumulates. `CONTEXT.md` promises no hardware genlock between output browsers, so
+	 * a bounded offset between them is acceptable; an unbounded one that changes which
+	 * phase an output believes it is in is not.
+	 */
+	const clockOffset = ref(0);
 	/** Playout actions awaiting their authoritative answer, keyed per Broadcast Graphic. */
 	const pending = ref<Set<string>>(new Set());
 
@@ -70,24 +91,146 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		return sessions.value.get(screenId)?.currentState ?? createInitialBroadcastGraphicsLiveState();
 	}
 
-	/** The Graphic Playout State of one placed Broadcast Graphic. */
-	function playoutState(screenId: number, graphicId: string): GraphicPlayoutState {
-		return broadcastGraphicPlayoutState(liveState(screenId), graphicId);
+	/**
+	 * Now, on the clock that stamped the effective start times being read.
+	 *
+	 * The only instant any playout projection in this client is allowed to use.
+	 */
+	function serverNow(): number {
+		return Date.now() + clockOffset.value;
 	}
 
-	/** Which Broadcast Graphics compose into the Screen's frame, in authored stack order. */
+	/** Everything one Broadcast Graphic's phases are projected against, at `now`. */
+	function timingFor(
+		graphic: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
+		now: number,
+	): BroadcastGraphicPhaseTiming {
+		return broadcastGraphicPhaseTiming(graphic, now);
+	}
+
+	/**
+	 * The Graphic Playout State of one placed Broadcast Graphic.
+	 *
+	 * With a graphic and an instant it reports entering, updating, and exiting as well
+	 * as the settled states; with neither it reports only the settled ones, which is
+	 * what a caller that is not animating anything wants.
+	 */
+	function playoutState(
+		screenId: number,
+		graphicId: string,
+		graphic?: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
+		now?: number,
+	): GraphicPlayoutState {
+		return broadcastGraphicPlayoutState(
+			liveState(screenId),
+			graphicId,
+			graphic ? timingFor(graphic, now ?? serverNow()) : undefined,
+		);
+	}
+
+	/**
+	 * Which Broadcast Graphics compose into the Screen's frame, in authored stack order.
+	 *
+	 * Each graphic is timed against its own authored durations, because an exiting
+	 * graphic stays on program until *its* exit completes.
+	 */
 	function onAirGraphicIds(
 		screenId: number,
-		graphics: readonly Pick<BroadcastGraphicConfig, 'id'>[],
+		graphics: readonly BroadcastGraphicConfig[],
+		now?: number,
 	): string[] {
-		return onAirBroadcastGraphicIds(liveState(screenId), graphics);
+		const instant = now ?? serverNow();
+		return onAirBroadcastGraphicIds(
+			liveState(screenId),
+			graphics,
+			graphic => timingFor(graphic as BroadcastGraphicConfig, instant),
+		);
+	}
+
+	/**
+	 * The lifecycle phase and elapsed time each on-air Broadcast Graphic renders.
+	 *
+	 * Keyed by Broadcast Graphic id, in exactly the shape the compositor takes, so every
+	 * output and the Program monitor resolve one frame from one authoritative instant.
+	 */
+	function animationProjection(
+		screenId: number,
+		graphics: readonly BroadcastGraphicConfig[],
+		now?: number,
+	): Record<string, { phase: GraphicAnimationPhase; elapsed: number }> {
+		const state = liveState(screenId);
+		const instant = now ?? serverNow();
+		const projections: Record<string, { phase: GraphicAnimationPhase; elapsed: number }> = {};
+
+		for (const graphic of graphics) {
+			const projection = broadcastGraphicPhaseProjection(state, graphic.id, timingFor(graphic, instant));
+			if (projection)
+				projections[graphic.id] = projection;
+		}
+
+		return projections;
+	}
+
+	/**
+	 * The rendering each Broadcast Graphic draws now, and the one an update is leaving.
+	 *
+	 * Not simply the accepted values: while an acceptance is coalescing behind an
+	 * entrance, program still shows what the graphic entered with.
+	 */
+	function renderedInputValues(
+		screenId: number,
+		graphics: readonly BroadcastGraphicConfig[],
+		now?: number,
+	): {
+		current: Record<string, Record<string, GraphicInputValue>>;
+		outgoing: Record<string, Record<string, GraphicInputValue>>;
+	} {
+		const state = liveState(screenId);
+		const instant = now ?? serverNow();
+		const current: Record<string, Record<string, GraphicInputValue>> = {};
+		const outgoing: Record<string, Record<string, GraphicInputValue>> = {};
+
+		for (const graphic of graphics) {
+			const rendered = broadcastGraphicRenderedInputs(
+				state,
+				graphic.id,
+				graphic.inputs ?? [],
+				timingFor(graphic, instant),
+			);
+			current[graphic.id] = rendered.current;
+			if (rendered.outgoing)
+				outgoing[graphic.id] = rendered.outgoing;
+		}
+
+		return { current, outgoing };
+	}
+
+	/**
+	 * Re-establish the offset from one authoritative read.
+	 *
+	 * The request midpoint is the client instant the server's stamp is compared against,
+	 * so the residual error is half a round trip rather than a whole one — and it is
+	 * re-measured rather than averaged, because a correction that accumulates history
+	 * would carry a bad sample forward into every frame after it.
+	 */
+	function trackServerClock(session: BroadcastGraphicsLiveSessionResponse, sentAt: number, receivedAt: number) {
+		if (typeof session.serverTime !== 'number')
+			return;
+		clockOffset.value = session.serverTime - ((sentAt + receivedAt) / 2);
 	}
 
 	function cacheSession(session: BroadcastGraphicsLiveSessionResponse) {
 		sessions.value.set(session.screenId, session);
 	}
 
-	function cacheCommandResult(result: BroadcastGraphicsCommandResult): BroadcastGraphicsLiveSessionResponse {
+	function cacheCommandResult(
+		result: BroadcastGraphicsCommandResult,
+		sentAt: number,
+	): BroadcastGraphicsLiveSessionResponse {
+		// A command's answer is an authoritative read like any other, and it is the one
+		// that lands immediately after an operator pressed Take — the moment the offset
+		// most needs to be right.
+		trackServerClock(result.session, sentAt, Date.now());
 		cacheSession(result.session);
 		return result.session;
 	}
@@ -95,7 +238,9 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	async function loadSession(eventId: number, screenId: number): Promise<BroadcastGraphicsLiveSessionResponse | null> {
 		return await executeAction(
 			async () => {
+				const sentAt = Date.now();
 				const session = await repository.getSession(eventId, screenId);
+				trackServerClock(session, sentAt, Date.now());
 				cacheSession(session);
 				return session;
 			},
@@ -129,7 +274,11 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 					const session = sessions.value.get(screenId) ?? await repository.getSession(eventId, screenId);
 
 					try {
-						return cacheCommandResult(await repository.sendCommand(eventId, screenId, session.id, command));
+						const sentAt = Date.now();
+						return cacheCommandResult(
+							await repository.sendCommand(eventId, screenId, session.id, command),
+							sentAt,
+						);
 					}
 					catch (failure) {
 						// A conflict is what an epoch this client no longer shares looks
@@ -143,8 +292,10 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 
 						const current = await repository.getSession(eventId, screenId);
 						cacheSession(current);
+						const retriedAt = Date.now();
 						return cacheCommandResult(
 							await repository.sendCommand(eventId, screenId, current.id, command),
+							retriedAt,
 						);
 					}
 				},
@@ -271,6 +422,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	function $reset() {
 		sessions.value.clear();
 		pending.value.clear();
+		clockOffset.value = 0;
 		loading.value = false;
 		error.value = null;
 	}
@@ -279,8 +431,12 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		sessions,
 		loading,
 		error,
+		clockOffset,
+		serverNow,
 		playoutState,
 		onAirGraphicIds,
+		animationProjection,
+		renderedInputValues,
 		isPending,
 		inputsState,
 		inputTraces,

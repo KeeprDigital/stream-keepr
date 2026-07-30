@@ -31,19 +31,39 @@ const hasGuideLayer = computed(() =>
 		:class="`graphics-compositor-canvas--${render.output}`"
 		:style="render.canvasStyle"
 	>
-		<div
-			v-for="graphic in render.graphics"
-			:key="graphic.id"
-			class="graphics-compositor-canvas__graphic"
-			:data-broadcast-graphic="graphic.id"
-			:style="graphic.style"
-		>
-			<GraphicsCompositorItem
-				v-for="item in graphic.items"
-				:key="item.id"
-				:render="item"
-			/>
-		</div>
+		<template v-for="graphic in render.graphics" :key="graphic.id">
+			<!--
+				The rendering an update phase is leaving, drawn under the one arriving so
+				new content is in front of old as a wipe boundary passes over it. It is a
+				sibling wrapper rather than a layer inside the graphic's own, because the
+				two renderings carry different whole-graphic motion.
+			-->
+			<div
+				v-if="graphic.outgoing"
+				class="graphics-compositor-canvas__graphic"
+				:data-broadcast-graphic-outgoing="graphic.id"
+				:style="graphic.outgoing.style"
+				aria-hidden="true"
+			>
+				<GraphicsCompositorItem
+					v-for="item in graphic.outgoing.items"
+					:key="item.id"
+					:render="item"
+				/>
+			</div>
+
+			<div
+				class="graphics-compositor-canvas__graphic"
+				:data-broadcast-graphic="graphic.id"
+				:style="graphic.style"
+			>
+				<GraphicsCompositorItem
+					v-for="item in graphic.items"
+					:key="item.id"
+					:render="item"
+				/>
+			</div>
+		</template>
 
 		<div v-if="hasGuideLayer" class="guide-layer" aria-label="Graphics compositor guide layer">
 			<button

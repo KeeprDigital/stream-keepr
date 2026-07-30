@@ -3,6 +3,7 @@ import type {
 	BroadcastGraphicConfig,
 	GraphicGroupChildConfig,
 	GraphicGroupItemConfig,
+	GraphicInputDeclaration,
 	GraphicSurfaceStyle,
 	MediaGraphicItemConfig,
 	ShapeGraphicItemConfig,
@@ -237,6 +238,13 @@ const NON_PAINTING_KEYS = new Set([
 	'top',
 	'transform',
 	'transformOrigin',
+	// An update phase's outgoing copy keeps the boxes of the owners that are *not*
+	// cross-transitioning, so both copies lay out identically, and hides them so the
+	// content they share with the incoming copy is still painted exactly once.
+	// `visibility` removes paint rather than adding any, so it can only ever lower an
+	// element's contribution to the matte — the safe direction, and the only one of the
+	// two that could not break the identity.
+	'visibility',
 	'WebkitBoxOrient',
 	'WebkitLineClamp',
 	'whiteSpace',
@@ -1544,6 +1552,187 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 	function model(graphics: BroadcastGraphicConfig[], animation?: Record<string, { phase: 'enter' | 'on-screen' | 'update' | 'exit'; elapsed: number }>, output: 'overlay' | 'fill' | 'key' = 'overlay') {
 		return resolveGraphicsCompositionRenderModel({ output, graphics, animation, ...CANVAS });
 	}
+
+	describe('an update phase draws both renderings', () => {
+		const HEADLINE: GraphicInputDeclaration = {
+			key: 'headline',
+			label: 'Headline',
+			required: false,
+			updatePolicy: 'staged',
+			type: 'text',
+			default: '',
+			maxLength: 80,
+		};
+
+		const CROSS_FADE = { ...LINEAR, fade: { opacity: 0 } };
+
+		function updating(
+			graphics: BroadcastGraphicConfig[],
+			elapsed = 200,
+			output: 'overlay' | 'fill' | 'key' = 'overlay',
+		) {
+			return resolveGraphicsCompositionRenderModel({
+				output,
+				graphics,
+				animation: { a: { phase: 'update', elapsed } },
+				inputValues: { a: { headline: 'AFTER' } },
+				outgoingInputValues: { a: { headline: 'BEFORE' } },
+				...CANVAS,
+			});
+		}
+
+		function headlineGraphic(items: BroadcastGraphicConfig['items'], animation?: BroadcastGraphicConfig['animation']) {
+			return { ...graphic('a', items), inputs: [HEADLINE], animation };
+		}
+
+		it('renders the old text alongside the new one, each on its own half of the recipe', () => {
+			const model = updating([headlineGraphic([
+				text('headline', { text: '{headline}', animation: { update: CROSS_FADE } }),
+			])]);
+			const composed = model.graphics[0]!;
+
+			expect(composed.items[0]?.text).toBe('AFTER');
+			expect(composed.outgoing?.items[0]?.text).toBe('BEFORE');
+			// Halfway through a cross-fade, each rendering is half present.
+			expect(composed.items[0]?.style.opacity).toBe(0.5);
+			expect(composed.outgoing?.items[0]?.style.opacity).toBe(0.5);
+		});
+
+		it('draws no outgoing rendering outside an update phase', () => {
+			const items = [text('headline', { text: '{headline}', animation: { update: CROSS_FADE, enter: CROSS_FADE } })];
+
+			for (const phase of ['enter', 'exit', 'on-screen'] as const) {
+				const model = resolveGraphicsCompositionRenderModel({
+					output: 'overlay',
+					graphics: [headlineGraphic(items)],
+					animation: { a: { phase, elapsed: 200 } },
+					inputValues: { a: { headline: 'AFTER' } },
+					outgoingInputValues: { a: { headline: 'BEFORE' } },
+					...CANVAS,
+				});
+
+				expect(model.graphics[0]?.outgoing).toBeUndefined();
+			}
+		});
+
+		it('draws no outgoing rendering when no rendered content changed', () => {
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [headlineGraphic([text('headline', { text: '{headline}', animation: { update: CROSS_FADE } })])],
+				animation: { a: { phase: 'update', elapsed: 200 } },
+				inputValues: { a: { headline: 'SAME' } },
+				outgoingInputValues: { a: { headline: 'SAME' } },
+				...CANVAS,
+			});
+
+			expect(model.graphics[0]?.outgoing).toBeUndefined();
+		});
+
+		it('draws no outgoing rendering for an item that has no update recipe, so it cuts', () => {
+			const model = updating([headlineGraphic([text('headline', { text: '{headline}' })])]);
+
+			expect(model.graphics[0]?.outgoing).toBeUndefined();
+			expect(model.graphics[0]?.items[0]?.text).toBe('AFTER');
+		});
+
+		it('paints unchanged content exactly once, so a translucent panel cannot brighten', () => {
+			// The regression this guards: drawing the whole graphic again would composite
+			// a three-quarter-opaque panel with itself, and a panel that is meant to hold
+			// still would visibly lift for the length of every update.
+			const model = updating([headlineGraphic([
+				shape('panel', { surfaceStyle: surfaceStyle({ fillOpacity: 0.75 }) }),
+				text('headline', { text: '{headline}', animation: { update: CROSS_FADE } }),
+			])]);
+			const outgoing = model.graphics[0]!.outgoing!;
+
+			// The panel keeps its box, so both copies lay out identically, and paints nothing.
+			expect(outgoing.items[0]?.style.visibility).toBe('hidden');
+			expect(outgoing.items[0]?.surface).toBeUndefined();
+			expect(outgoing.items[1]?.text).toBe('BEFORE');
+		});
+
+		it('cross-transitions the whole graphic when the whole graphic authored an update', () => {
+			// A whole-graphic update recipe is the case where drawing everything twice is
+			// what the author asked for, so unchanged items are drawn in both copies.
+			const model = updating([headlineGraphic(
+				[
+					shape('panel', { surfaceStyle: surfaceStyle({ fillOpacity: 0.75 }) }),
+					text('headline', { text: '{headline}' }),
+				],
+				{ update: CROSS_FADE },
+			)]);
+			const composed = model.graphics[0]!;
+
+			expect(composed.style?.opacity).toBe(0.5);
+			expect(composed.outgoing?.style?.opacity).toBe(0.5);
+			expect(composed.outgoing?.items[0]?.surface).toBeDefined();
+			expect(composed.outgoing?.items[0]?.style.visibility).toBeUndefined();
+			expect(composed.outgoing?.items[1]?.text).toBe('BEFORE');
+		});
+
+		it('keeps a row Graphic Group child in the same box in both copies', () => {
+			const model = updating([headlineGraphic([
+				group('cluster', [
+					shape('badge'),
+					text('headline', { text: '{headline}', animation: { update: CROSS_FADE } }),
+				]),
+			])]);
+			const composed = model.graphics[0]!;
+			const outgoing = composed.outgoing!;
+
+			// The group survives so its flex layout is unchanged, but stops painting its
+			// own surface — the incoming copy is already painting it.
+			expect(outgoing.items[0]?.children?.map(child => child.id)).toEqual(['badge', 'headline']);
+			expect(outgoing.items[0]?.children?.[0]?.style.flex).toBe(composed.items[0]?.children?.[0]?.style.flex);
+			expect(outgoing.items[0]?.children?.[1]?.text).toBe('BEFORE');
+		});
+
+		it('keeps the Key Output a true alpha matte through a cross-transition', () => {
+			for (const elapsed of [0, 100, 200, 399, 400]) {
+				const model = updating([headlineGraphic([
+					shape('panel', { surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }) }),
+					text('headline', {
+						text: '{headline}',
+						surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }),
+						animation: { update: { ...LINEAR, fade: { opacity: 0 }, reveal: { edge: 'left' }, slide: { direction: 'east', distanceMode: 'fixed', distance: 40 } } },
+					}),
+				])], elapsed, 'key');
+				const composed = model.graphics[0]!;
+
+				expect(() => graphicPaints(composed)).not.toThrow();
+				expect(() => graphicPaints({ id: `${composed.id}-outgoing`, ...composed.outgoing! })).not.toThrow();
+			}
+		});
+
+		it('accumulates the outgoing rendering into the matte by the same identity as the incoming one', () => {
+			// The second rendering is a second painted element, so the question is whether
+			// it paints white at its own alpha like everything else. Two half-opaque
+			// surfaces union to 1 - (1 - 0.5)(1 - 0.5) = 0.75, independent of this module
+			// — and the outgoing copy has to reach that number rather than, say, keeping an
+			// authored colour that would leave the Key Output brighter or darker than the
+			// alpha it is supposed to be reporting. The fade factor is deliberately outside
+			// this arithmetic: element `opacity` multiplies through both outputs equally,
+			// which is why the harness treats it as a factor on paint rather than as paint.
+			const model = updating([headlineGraphic(
+				[
+					shape('panel', { surfaceStyle: surfaceStyle({ fill: { type: 'solid', color: '#123456' }, fillOpacity: 0.5 }) }),
+					text('headline', { text: '{headline}' }),
+				],
+				{ update: CROSS_FADE },
+			)], 200, 'key');
+			const composed = model.graphics[0]!;
+
+			// The panel, drawn once by each copy because the whole graphic is what is
+			// cross-transitioning. A Text Graphic Item paints its glyphs at full alpha, so
+			// it is left out of the arithmetic rather than dominating it.
+			const luminance = compositeKeyLuminance(model.canvasStyle.background, [
+				...itemPaints(composed.outgoing!.items[0]!),
+				...itemPaints(composed.items[0]!),
+			]);
+
+			expect(luminance).toBeCloseTo(0.75, 3);
+		});
+	});
 
 	it('renders the Graphic Resting State when nothing is being projected', () => {
 		// The unanimated Screen, the settled on-air graphic, and the recovered Live

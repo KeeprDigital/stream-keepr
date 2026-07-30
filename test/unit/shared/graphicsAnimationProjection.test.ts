@@ -72,6 +72,70 @@ describe('graphicAnimationExcursion', () => {
 	});
 });
 
+describe('an update cross-transitions the old and the new rendering', () => {
+	it('cross-fades: the old rendering leaves as the new one arrives', () => {
+		const fade: GraphicAnimationRecipe = { ...LINEAR, fade: { opacity: 0 } };
+
+		// At the start the new rendering is invisible and the old one is fully present;
+		// halfway both are half present; at the end they have swapped exactly.
+		expect(project(fade, 'update', 0)).toMatchObject({ opacity: 0, outgoing: { opacity: 1 } });
+		expect(project(fade, 'update', 200)).toMatchObject({ opacity: 0.5, outgoing: { opacity: 0.5 } });
+		expect(project(fade, 'update', 400)).toMatchObject({ opacity: 1, outgoing: { opacity: 0 } });
+	});
+
+	it('slides: old content leaves in the authored direction and new content enters from the opposite side', () => {
+		const slide: GraphicAnimationRecipe = {
+			...LINEAR,
+			slide: { direction: 'east', distanceMode: 'fixed', distance: 100 },
+		};
+
+		// Both renderings travel east. The old one starts at rest and ends 100 to the
+		// east; the new one starts 100 to the *west* and arrives at rest.
+		expect(project(slide, 'update', 0)).toMatchObject({
+			translate: { x: -100, y: 0 },
+			outgoing: { translate: { x: 0, y: 0 } },
+		});
+		expect(project(slide, 'update', 200)).toMatchObject({
+			translate: { x: -50, y: 0 },
+			outgoing: { translate: { x: 50, y: 0 } },
+		});
+		expect(project(slide, 'update', 400)).toMatchObject({
+			translate: { x: 0, y: 0 },
+			outgoing: { translate: { x: 100, y: 0 } },
+		});
+	});
+
+	it('reveals: one boundary travels, with new content behind it and old content ahead', () => {
+		const reveal: GraphicAnimationRecipe = { ...LINEAR, reveal: { edge: 'left' } };
+
+		// One boundary, read from both sides: a quarter of the way across, the new
+		// rendering shows its leftmost quarter and the old shows the other three
+		// quarters from the right, so together they cover the bounds exactly once.
+		expect(project(reveal, 'update', 100)).toMatchObject({
+			reveal: { edge: 'left', visible: 0.25 },
+			outgoing: { reveal: { edge: 'right', visible: 0.75 } },
+		});
+		expect(project(reveal, 'update', 300)).toMatchObject({
+			reveal: { edge: 'left', visible: 0.75 },
+			outgoing: { reveal: { edge: 'right', visible: 0.25 } },
+		});
+	});
+
+	it('leaves no outgoing rendering in any other phase', () => {
+		const fade: GraphicAnimationRecipe = { ...LINEAR, fade: { opacity: 0 } };
+
+		for (const phase of ['enter', 'exit'] as const)
+			expect(project(fade, phase, 200).outgoing).toBeUndefined();
+	});
+
+	it('scales: the old rendering leaves the resting size as the new one reaches it', () => {
+		const scale: GraphicAnimationRecipe = { ...LINEAR, scale: { factor: 0.5, origin: 'center' } };
+
+		expect(project(scale, 'update', 0)).toMatchObject({ scale: 0.5, outgoing: { scale: 1 } });
+		expect(project(scale, 'update', 400)).toMatchObject({ scale: 1, outgoing: { scale: 0.5 } });
+	});
+});
+
 describe('on-screen cycling', () => {
 	const cycle: GraphicOnScreenAnimationRecipe = {
 		duration: 1000,

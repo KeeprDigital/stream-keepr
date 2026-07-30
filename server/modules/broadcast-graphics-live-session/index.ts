@@ -13,6 +13,7 @@ import {
 } from '~~/server/modules/graphics-asset-library';
 import { broadcastGraphicsStateService } from '~~/server/services/broadcastGraphicsState';
 import { screenService } from '~~/server/services/screen';
+import { broadcastGraphicPhaseDurations } from '~~/shared/modules/graphics';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 
@@ -171,7 +172,11 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 			sessionId,
 			eventId,
 			command,
-			graphic.inputs ?? [],
+			// Resolved from the placed graphic this module already had to find: what it
+			// declares, and how long its lifecycle phases last. Both are authored Screen
+			// configuration, which is exactly why the reducer is handed them rather than
+			// reaching for them.
+			{ inputs: graphic.inputs ?? [], durations: broadcastGraphicPhaseDurations(graphic) },
 			originConnectionId,
 			{ publish: true },
 		);

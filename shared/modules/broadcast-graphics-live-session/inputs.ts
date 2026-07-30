@@ -43,14 +43,37 @@ import {
  * the same one.
  */
 
+/** One rendering: the Graphic Input values a Broadcast Graphic draws itself from. */
+export type GraphicInputValues = Record<string, GraphicInputValue>;
+
 /** The Graphic Input values of one placed Broadcast Graphic. */
 export interface BroadcastGraphicInputsState {
 	/** Server-accepted edits, shared between sessions immediately. */
-	working: Record<string, GraphicInputValue>;
+	working: GraphicInputValues;
 	/** What an on-air Broadcast Graphic renders. */
-	accepted: Record<string, GraphicInputValue>;
+	accepted: GraphicInputValues;
 	/** How many times the staged set has been accepted, for the sequence guard. */
 	acceptedRevision: number;
+	/**
+	 * The rendering the active update phase cross-transitions *away* from.
+	 *
+	 * An update animation shows two renderings passing each other, so the outgoing
+	 * one has to be in the authoritative snapshot rather than remembered by whichever
+	 * client happened to be watching — otherwise an output that joins mid-update has
+	 * nothing to transition from and would cut instead of catching up.
+	 *
+	 * Reachable only through `playout.updateStartedAt`: with no update phase in
+	 * flight this is inert, which is why nothing has to clear it.
+	 */
+	updateFrom?: GraphicInputValues;
+	/**
+	 * The rendering the one pending update cross-transitions away from, when a
+	 * second acceptance arrived while an update was still running.
+	 *
+	 * At most one, never a queue: a third acceptance replaces this pending update's
+	 * target rather than lengthening the chain.
+	 */
+	pendingUpdateFrom?: GraphicInputValues;
 }
 
 export function createInitialBroadcastGraphicInputsState(): BroadcastGraphicInputsState {
@@ -112,17 +135,47 @@ export function broadcastGraphicInputsState(
 		working: stored.working ?? {},
 		accepted: stored.accepted ?? {},
 		acceptedRevision: stored.acceptedRevision ?? 0,
+		...(stored.updateFrom ? { updateFrom: stored.updateFrom } : {}),
+		...(stored.pendingUpdateFrom ? { pendingUpdateFrom: stored.pendingUpdateFrom } : {}),
 	};
 }
 
 function resolveValues(
-	stored: Record<string, GraphicInputValue>,
+	stored: GraphicInputValues,
 	declarations: readonly GraphicInputDeclaration[],
-): Record<string, GraphicInputValue> {
+): GraphicInputValues {
 	return Object.fromEntries(declarations.map(declaration => [
 		declaration.key,
 		declaration.key in stored ? stored[declaration.key]! : declaration.default,
 	]));
+}
+
+/**
+ * One stored rendering, filled out against the current declarations.
+ *
+ * Exported because an update phase renders two of them and the phase projection is
+ * what decides which two, rather than only the accepted set.
+ */
+export function resolveGraphicInputValues(
+	stored: GraphicInputValues,
+	declarations: readonly GraphicInputDeclaration[],
+): GraphicInputValues {
+	return resolveValues(stored, declarations);
+}
+
+/**
+ * Whether two renderings are the same rendering.
+ *
+ * Compared over the union of both key sets, so a key that acceptance dropped
+ * counts as a change rather than being passed over.
+ */
+export function sameGraphicInputValues(left: GraphicInputValues, right: GraphicInputValues): boolean {
+	const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+	for (const key of keys) {
+		if (!sameGraphicInputValue(left[key] ?? null, right[key] ?? null))
+			return false;
+	}
+	return true;
 }
 
 /**

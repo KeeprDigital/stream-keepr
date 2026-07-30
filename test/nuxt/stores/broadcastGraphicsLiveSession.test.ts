@@ -1,4 +1,5 @@
 import type { BroadcastGraphicsLiveSessionResponse } from '~~/shared/types/broadcastGraphicsLiveSession';
+import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { MessageData } from '~/types/realtime';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -52,8 +53,14 @@ function session(overrides: Partial<BroadcastGraphicsLiveSessionResponse> = {}):
 		endedAt: null,
 		createdAt: new Date(0),
 		updatedAt: new Date(0),
+		serverTime: Date.now(),
 		...overrides,
 	};
+}
+
+/** A placed Broadcast Graphic with no authored animation: every phase immediate. */
+function graphic(id: string, animation?: BroadcastGraphicConfig['animation']): BroadcastGraphicConfig {
+	return { id, name: id, items: [], animation };
 }
 
 function notification(
@@ -90,12 +97,12 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
 		expect(store.playoutState(SCREEN_ID, 'bug')).toBe('off');
-		expect(store.onAirGraphicIds(SCREEN_ID, [{ id: 'bug' }, { id: 'slate' }])).toEqual(['slate']);
+		expect(store.onAirGraphicIds(SCREEN_ID, [graphic('bug'), graphic('slate')])).toEqual(['slate']);
 	});
 
 	it('reports every Broadcast Graphic off before any snapshot has loaded', () => {
 		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('off');
-		expect(store.onAirGraphicIds(SCREEN_ID, [{ id: 'slate' }])).toEqual([]);
+		expect(store.onAirGraphicIds(SCREEN_ID, [graphic('slate')])).toEqual([]);
 	});
 
 	it('sends a Take naming the loaded epoch, and keeps the returned snapshot', async () => {
@@ -416,5 +423,89 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		expect(retried.commandId).toBe(first.commandId);
 		expect(retried.payload).toEqual(first.payload);
 		expect(first.payload.basedOnAcceptedRevision).toBe(4);
+	});
+});
+
+describe('the authoritative clock a Screen Output projects on', () => {
+	let store: ReturnType<typeof useBroadcastGraphicsLiveSessionStore>;
+
+	/** A one-second enter, so a phase boundary is something a test can stand either side of. */
+	const FADE_IN = {
+		enter: { duration: 1000, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } },
+	};
+
+	beforeEach(() => {
+		store = useBroadcastGraphicsLiveSessionStore();
+		store.$reset();
+		vi.clearAllMocks();
+		vi.useRealTimers();
+	});
+
+	it('projects on the clock that stamped the timestamps, not on this browser\'s', async () => {
+		// A browser two minutes behind the server. Without the correction it would read a
+		// graphic taken a moment ago as having been taken two minutes in its own future,
+		// pin it at full excursion for the whole of the skew, and then play its entrance
+		// from zero — the replay the no-replay invariant forbids, arriving through the
+		// clock rather than through the stored field.
+		const serverNow = Date.now() + 120_000;
+		mockRepository.getSession.mockResolvedValue(session({
+			serverTime: serverNow,
+			currentState: {
+				playout: { slate: { onAir: true, effectiveStartedAt: serverNow - 400, cut: false } },
+				inputs: {},
+			},
+		}));
+
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		const projection = store.animationProjection(SCREEN_ID, [graphic('slate', FADE_IN)]);
+
+		expect(store.clockOffset).toBeGreaterThan(119_000);
+		expect(projection.slate?.phase).toBe('enter');
+		expect(projection.slate?.elapsed).toBeGreaterThanOrEqual(400);
+		expect(projection.slate?.elapsed).toBeLessThan(1000);
+	});
+
+	it('keeps an Out Broadcast Graphic on program for exactly its exit, on that same clock', async () => {
+		const serverNow = Date.now() - 90_000;
+		mockRepository.getSession.mockResolvedValue(session({
+			serverTime: serverNow,
+			currentState: {
+				playout: { slate: { onAir: false, effectiveStartedAt: serverNow - 200, cut: false } },
+				inputs: {},
+			},
+		}));
+		const graphics = [graphic('slate', { exit: { duration: 1000, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } } })];
+
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+
+		// Still exiting, so still on program — and it leaves 1000ms after Out, rather
+		// than in ninety seconds when this browser's clock catches up.
+		expect(store.playoutState(SCREEN_ID, 'slate', graphics[0])).toBe('exiting');
+		expect(store.onAirGraphicIds(SCREEN_ID, graphics)).toEqual(['slate']);
+		expect(store.onAirGraphicIds(SCREEN_ID, graphics, store.serverNow() + 1200)).toEqual([]);
+	});
+
+	it('has no phase to project for a Broadcast Graphic that authored no animation', async () => {
+		mockRepository.getSession.mockResolvedValue(session({
+			currentState: {
+				playout: { slate: { onAir: true, effectiveStartedAt: Date.now(), cut: false } },
+				inputs: {},
+			},
+		}));
+
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+
+		expect(store.animationProjection(SCREEN_ID, [graphic('slate')])).toEqual({});
+		expect(store.playoutState(SCREEN_ID, 'slate', graphic('slate'))).toBe('on-air');
+	});
+
+	it('forgets the offset on reset, so a fresh Screen re-establishes its own', async () => {
+		mockRepository.getSession.mockResolvedValue(session({ serverTime: Date.now() + 60_000 }));
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		expect(store.clockOffset).toBeGreaterThan(0);
+
+		store.$reset();
+
+		expect(store.clockOffset).toBe(0);
 	});
 });

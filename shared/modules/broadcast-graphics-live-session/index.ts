@@ -9,6 +9,7 @@ export type {
 	BroadcastGraphicInputsState,
 	GraphicInputStatus,
 	GraphicInputTrace,
+	GraphicInputValues,
 	GraphicInputValueTrace,
 } from './inputs';
 export {
@@ -19,11 +20,14 @@ export {
 	GRAPHIC_INPUT_STATUS_VALUES,
 	graphicInputTraces,
 	isDeclaredGraphicInput,
+	resolveGraphicInputValues,
 	sameGraphicInputValue,
+	sameGraphicInputValues,
 	unavailableRequiredGraphicInputs,
 	workingGraphicInputValues,
 } from './inputs';
 export type {
+	BroadcastGraphicPhaseDurations,
 	BroadcastGraphicPhaseTiming,
 	BroadcastGraphicPlayout,
 	BroadcastGraphicsCommandInput,
@@ -39,7 +43,9 @@ export {
 	applyBroadcastGraphicsCommand,
 	BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES,
 	broadcastGraphicPhaseProjection,
+	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
+	broadcastGraphicRenderedInputs,
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,
 } from './playout';

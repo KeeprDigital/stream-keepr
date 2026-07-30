@@ -24,6 +24,21 @@ export interface BroadcastGraphicsLiveSessionResponse {
 	endedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
+	/**
+	 * The authoritative clock, as epoch milliseconds at the instant this snapshot was
+	 * produced.
+	 *
+	 * Every effective start time in `currentState` is stamped with this same clock, and
+	 * an output must not subtract two clocks it does not own: a browser whose own clock
+	 * is minutes out — routine without NTP — would otherwise disagree with the
+	 * authoritative side about which lifecycle phase it is in, and phases last at most
+	 * twenty seconds. Reading this alongside the snapshot lets a client establish one
+	 * bounded offset and project animation on the clock that wrote the timestamps.
+	 *
+	 * The remaining error is half the round trip, which is bounded and does not
+	 * accumulate, and application-level output alignment promises no more than that.
+	 */
+	serverTime: number;
 }
 
 /**

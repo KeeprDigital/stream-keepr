@@ -49,7 +49,17 @@ const traces = computed<GraphicInputTrace[]>(() =>
 	sessionStore.inputTraces(props.screen.id, props.graphic),
 );
 
-const isOnAir = computed(() => props.playoutState !== 'off' && props.playoutState !== 'waiting');
+/**
+ * Whether Update Graphic has somewhere to land.
+ *
+ * Entering, on-air, and updating — and deliberately not exiting. A graphic on its way
+ * off air is going, so accepting a staged set for it would put values on program that
+ * nobody would see arrive; editing it instead changes the working values its next Take
+ * accepts, which is the same rule as editing an off graphic.
+ */
+const isOnAir = computed(() =>
+	props.playoutState === 'entering' || props.playoutState === 'on-air' || props.playoutState === 'updating',
+);
 
 /** Update Graphic has something to accept exactly when an edit is not yet on air. */
 const hasStagedChanges = computed(() => traces.value.some(trace => trace.pending));
@@ -136,7 +146,8 @@ watch(() => props.graphic.id, () => {
 
 		<div v-else class="space-y-3" data-testid="live-control">
 			<p v-if="!isOnAir" class="text-xs text-muted" data-testid="live-control-off-note">
-				This Broadcast Graphic is off. Edits change the working values its next Take accepts.
+				{{ playoutState === 'exiting' ? 'This Broadcast Graphic is leaving air.' : 'This Broadcast Graphic is off.' }}
+				Edits change the working values its next Take accepts.
 			</p>
 
 			<UAlert

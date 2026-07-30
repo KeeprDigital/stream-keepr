@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'vue';
-import type { GraphicAnimationValues, ShapeGeometrySize } from '~~/shared/modules/graphics';
+import type { GraphicAnimationOwnerValues, GraphicAnimationValues, ShapeGeometrySize } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
 	GraphicAnchorPoint,
@@ -174,6 +174,16 @@ export interface GraphicsCompositionRenderModelInput {
 	 * declared defaults, which is what a placed Broadcast Graphic starts from.
 	 */
 	inputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
+	/**
+	 * The rendering an update phase is transitioning *away* from, keyed by Broadcast
+	 * Graphic id.
+	 *
+	 * Present only while a Broadcast Graphic is updating, and only from a Live Session
+	 * that has both renderings — which is what lets an output joining mid-update draw
+	 * the transition rather than cut to the new values. An entry for a graphic that is
+	 * not in an update phase is ignored.
+	 */
+	outgoingInputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
 	/** Editor-only selection and item guides. */
 	itemGuides?: boolean;
 	/** Editor-only advisory action-safe and title-safe guides. */
@@ -315,12 +325,32 @@ export interface GraphicsAnimationProjection {
 	elapsed: number;
 }
 
+/**
+ * The rendering an update phase is leaving behind, drawn beside the one arriving.
+ *
+ * A second copy of the same item tree rather than a second set of styles on the
+ * first, because the two renderings differ in *content*: an update cross-transitions
+ * old and new text passing each other, and one element cannot hold two strings.
+ *
+ * The tree is structurally identical to `items`, which is load-bearing for a row or
+ * column Graphic Group: both copies lay out the same boxes in the same order, so the
+ * outgoing content sits exactly where the incoming content will. Owners that are not
+ * part of the cross-transition keep their box and paint nothing at all, so unchanged
+ * content is still drawn exactly once and cannot double its own alpha.
+ */
+export interface BroadcastGraphicOutgoingRenderDescriptor {
+	style?: CSSProperties;
+	items: GraphicItemRenderDescriptor[];
+}
+
 export interface BroadcastGraphicRenderDescriptor {
 	id: string;
 	name: string;
 	/** Whole-graphic Graphic Animation, composed over every item it contains. */
 	style?: CSSProperties;
 	items: GraphicItemRenderDescriptor[];
+	/** Present only while an update phase has an old rendering still on screen. */
+	outgoing?: BroadcastGraphicOutgoingRenderDescriptor;
 }
 
 export type GraphicsSafeAreaGuideId = 'action-safe' | 'title-safe';
@@ -516,7 +546,7 @@ const REVEAL_MASK_DIRECTION: Record<GraphicRevealEdge, string> = {
  * alpha because only the alpha is read, and because a Key Output must never carry
  * a colour that is not white.
  */
-function revealMask(values: GraphicAnimationValues): string | undefined {
+function revealMask(values: GraphicAnimationOwnerValues): string | undefined {
 	const reveal = values.reveal;
 	if (!reveal)
 		return undefined;
@@ -542,7 +572,7 @@ function revealMask(values: GraphicAnimationValues): string | undefined {
  * composition produces exactly the styles it produced before animation existed.
  */
 function motionStyle(
-	values: GraphicAnimationValues,
+	values: GraphicAnimationOwnerValues,
 	size: { width: number; height: number },
 	rotation: number,
 	anchor: GraphicAnchorPoint | undefined,
@@ -576,7 +606,7 @@ function motionStyle(
 	};
 }
 
-const RESTING: GraphicAnimationValues = {};
+const RESTING: GraphicAnimationOwnerValues = {};
 
 /**
  * How many whole lines of text fit inside authored bounds. An `ellipsis` or
@@ -650,7 +680,7 @@ const GROUP_JUSTIFICATION: Record<GraphicGroupItemConfig['justify'], string> = {
 function canvasPlacement(
 	item: GraphicItemConfig,
 	offset: { x: number; y: number },
-	motion: GraphicAnimationValues,
+	motion: GraphicAnimationOwnerValues,
 ): CSSProperties {
 	return {
 		...rectStyle({ ...item, x: item.x + offset.x, y: item.y + offset.y }),
@@ -668,7 +698,7 @@ function canvasPlacement(
 function stackedPlacement(
 	group: GraphicGroupItemConfig,
 	child: GraphicGroupChildConfig,
-	motion: GraphicAnimationValues,
+	motion: GraphicAnimationOwnerValues,
 ): CSSProperties {
 	const isRow = group.arrangement === 'row';
 	const mainExtent = isRow ? child.width : child.height;
@@ -937,7 +967,7 @@ function childDescriptor(
 	child: GraphicGroupChildConfig,
 	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
 	inputs: GraphicTextTemplateContext,
-	motion: GraphicAnimationValues,
+	motion: GraphicAnimationOwnerValues,
 ): GraphicItemRenderDescriptor {
 	const placement = group.arrangement === 'canvas'
 		? canvasPlacement(child, { x: Math.max(0, group.padding), y: Math.max(0, group.padding) }, motion)
@@ -1047,7 +1077,7 @@ interface GraphicsItemAnimationContext {
 		owner: GraphicItemConfig | GraphicGroupChildConfig,
 		staggerOffset: number,
 		parent: { width: number; height: number },
-	) => GraphicAnimationValues;
+	) => GraphicAnimationOwnerValues;
 }
 
 /**
@@ -1062,7 +1092,9 @@ function graphicAnimationContext(
 	graphic: BroadcastGraphicConfig,
 	projection: GraphicsAnimationProjection | undefined,
 	canvas: { width: number; height: number },
-): { graphicMotion: GraphicAnimationValues; itemContext: (item: GraphicItemConfig) => GraphicsItemAnimationContext } {
+	/** Which rendering this context animates: the one arriving, or the one leaving. */
+	half: 'incoming' | 'outgoing' = 'incoming',
+): { graphicMotion: GraphicAnimationOwnerValues; itemContext: (item: GraphicItemConfig) => GraphicsItemAnimationContext } {
 	if (!projection) {
 		const resting: GraphicsItemAnimationContext = {
 			phase: 'enter',
@@ -1077,18 +1109,24 @@ function graphicAnimationContext(
 	const topLevelIds = graphic.items.map(item => item.id);
 	const graphicStagger = graphic.animation?.stagger?.[phase];
 
+	// The two halves of a cross-transition are one projection read from both ends, so
+	// selecting a half is all this does — it never projects the outgoing rendering
+	// separately, and the two can therefore never fall out of step.
+	const halfOf = (values: GraphicAnimationValues): GraphicAnimationOwnerValues =>
+		half === 'outgoing' ? values.outgoing ?? RESTING : values;
+
 	const motionOf: GraphicsItemAnimationContext['motionOf'] = (owner, staggerOffset, parent) =>
-		resolveGraphicAnimationValues({
+		halfOf(resolveGraphicAnimationValues({
 			recipe: owner.animation?.[phase],
 			phase,
 			elapsed,
 			staggerOffset,
 			rect: owner,
 			parent,
-		});
+		}));
 
 	return {
-		graphicMotion: resolveGraphicAnimationValues({
+		graphicMotion: halfOf(resolveGraphicAnimationValues({
 			recipe: graphic.animation?.[phase],
 			phase,
 			elapsed,
@@ -1096,13 +1134,142 @@ function graphicAnimationContext(
 			// its parent are both the Screen canvas.
 			rect: { x: 0, y: 0, ...canvas },
 			parent: canvas,
-		}),
+		})),
 		itemContext: item => ({
 			phase,
 			staggerOffset: graphicAnimationStaggerOffset(graphicStagger, topLevelIds, item.id),
 			parent: canvas,
 			motionOf,
 		}),
+	};
+}
+
+/**
+ * What one owner renders from the current Graphic Input values, as a string that
+ * changes exactly when its rendered content does.
+ *
+ * Only a Graphic Text Template reads Graphic Input values today, so only a Text
+ * Graphic Item's content can change under a graphic that is already on air — and a
+ * Graphic Group's content is its children's. A Shape or Media Graphic Item renders
+ * the same thing whatever the values are, which is why an update animation is not
+ * offered to it here: an update recipe runs when *that owner's* rendered content
+ * changes, and its content did not.
+ */
+function renderedContent(
+	owner: GraphicItemConfig | GraphicGroupChildConfig,
+	declarations: readonly GraphicInputDeclaration[],
+	values: Readonly<Record<string, GraphicInputValue>>,
+): string {
+	if (owner.type === 'text')
+		return renderGraphicTextTemplate(owner.text, declarations, values).map(segment => segment.text).join('');
+	if (owner.type === 'group')
+		return owner.children.map(child => renderedContent(child, declarations, values)).join(' ');
+	return '';
+}
+
+/**
+ * Which owners cross-transition, and which merely contain one that does.
+ *
+ * The two sets exist to stop unchanged content being painted twice. Drawing the whole
+ * graphic again would double every element's contribution to the composed frame, and
+ * for anything less than fully opaque that is visible: two copies of a
+ * three-quarter-opaque panel composite to fifteen sixteenths, so a panel that is
+ * supposed to hold still would brighten for the length of every update.
+ *
+ * A whole-graphic update recipe is the case where drawing everything twice is exactly
+ * what the author asked for — the whole old graphic leaves as the whole new one
+ * arrives, unchanged parts included, and the cross-fade dip through the middle is the
+ * effect rather than a defect. Otherwise only the owners whose own content changed
+ * cross-transition, and everything else keeps its box in the outgoing copy so the
+ * layout matches, while painting nothing.
+ */
+interface GraphicsUpdateCrossTransition {
+	/** Owners drawn in full in both copies, each half of the recipe applied to one. */
+	crossing: Set<string>;
+	/** Owners kept in the outgoing copy only because something inside them crosses. */
+	containing: Set<string>;
+}
+
+function updateCrossTransition(
+	graphic: BroadcastGraphicConfig,
+	declarations: readonly GraphicInputDeclaration[],
+	current: Readonly<Record<string, GraphicInputValue>>,
+	outgoing: Readonly<Record<string, GraphicInputValue>>,
+): GraphicsUpdateCrossTransition | null {
+	const changed = (owner: GraphicItemConfig | GraphicGroupChildConfig): boolean =>
+		renderedContent(owner, declarations, current) !== renderedContent(owner, declarations, outgoing);
+
+	if (!graphic.items.some(item => changed(item)))
+		return null;
+
+	// A Broadcast Graphic's update recipe runs when any of its rendered content
+	// changes, and it moves the whole composed graphic — so every owner is part of it.
+	if (graphic.animation?.update) {
+		const crossing = new Set<string>();
+		for (const item of graphic.items) {
+			crossing.add(item.id);
+			if (item.type === 'group')
+				item.children.forEach(child => crossing.add(child.id));
+		}
+		return { crossing, containing: new Set() };
+	}
+
+	const crossing = new Set<string>();
+	const containing = new Set<string>();
+
+	for (const item of graphic.items) {
+		if (item.animation?.update && changed(item)) {
+			crossing.add(item.id);
+			if (item.type === 'group')
+				item.children.forEach(child => crossing.add(child.id));
+			continue;
+		}
+
+		if (item.type !== 'group')
+			continue;
+
+		const crossingChildren = item.children.filter(child => child.animation?.update && changed(child));
+		if (crossingChildren.length === 0)
+			continue;
+
+		containing.add(item.id);
+		crossingChildren.forEach(child => crossing.add(child.id));
+	}
+
+	return crossing.size === 0 ? null : { crossing, containing };
+}
+
+/**
+ * One item of the outgoing copy, reduced to what it is allowed to paint.
+ *
+ * An owner that crosses is left exactly as built. One that only contains a crosser
+ * keeps its box and its children but loses its own Graphic Surface Style, because that
+ * surface is already being painted by the incoming copy and painting it again is the
+ * double-alpha this exists to prevent. Anything else keeps only its box, so a row or
+ * column Graphic Group lays both copies out identically.
+ */
+function outgoingItem(
+	item: GraphicItemRenderDescriptor,
+	crossTransition: GraphicsUpdateCrossTransition,
+): GraphicItemRenderDescriptor {
+	if (crossTransition.crossing.has(item.id))
+		return item;
+
+	if (crossTransition.containing.has(item.id)) {
+		return {
+			id: item.id,
+			label: item.label,
+			kind: item.kind,
+			style: { ...item.style, filter: undefined },
+			children: item.children?.map(child => outgoingItem(child, crossTransition)),
+		};
+	}
+
+	return {
+		id: item.id,
+		label: item.label,
+		kind: item.kind,
+		style: { ...item.style, filter: undefined, visibility: 'hidden' },
 	};
 }
 
@@ -1179,12 +1346,46 @@ export function resolveGraphicsCompositionRenderModel(
 				values: resolvedInputValues(declarations, input.inputValues?.[graphic.id]),
 			};
 			const canvas = { width: input.canvasWidth, height: input.canvasHeight };
-			const { graphicMotion, itemContext } = graphicAnimationContext(
-				graphic,
-				input.animation?.[graphic.id],
-				canvas,
-			);
+			const projection = input.animation?.[graphic.id];
+			const { graphicMotion, itemContext } = graphicAnimationContext(graphic, projection, canvas);
 			const style = motionStyle(graphicMotion, canvas, 0, 'top-left');
+
+			const buildItems = (
+				values: GraphicTextTemplateContext,
+				context: (item: GraphicItemConfig) => GraphicsItemAnimationContext,
+			) => graphic.items
+				.filter(item => item.visible)
+				.map(item => itemDescriptor(
+					input.output,
+					graphic.id,
+					item,
+					input.graphicAssetContentUrl,
+					values,
+					context(item),
+				));
+
+			// The outgoing rendering exists only inside an update phase, and only when the
+			// Live Session supplied the rendering being left behind. Anything else — an
+			// editor preview, a settled graphic, an entrance — has one rendering.
+			const outgoingValues = projection?.phase === 'update'
+				? input.outgoingInputValues?.[graphic.id]
+				: undefined;
+			const crossTransition = outgoingValues
+				? updateCrossTransition(graphic, declarations, inputs.values, resolvedInputValues(declarations, outgoingValues))
+				: null;
+
+			let outgoing: BroadcastGraphicOutgoingRenderDescriptor | undefined;
+			if (outgoingValues && crossTransition) {
+				const half = graphicAnimationContext(graphic, projection, canvas, 'outgoing');
+				const outgoingStyle = motionStyle(half.graphicMotion, canvas, 0, 'top-left');
+				outgoing = {
+					...(Object.keys(outgoingStyle).length === 0 ? {} : { style: outgoingStyle }),
+					items: buildItems(
+						{ declarations, values: resolvedInputValues(declarations, outgoingValues) },
+						half.itemContext,
+					).map(item => outgoingItem(item, crossTransition)),
+				};
+			}
 
 			return {
 				id: graphic.id,
@@ -1192,16 +1393,8 @@ export function resolveGraphicsCompositionRenderModel(
 				// Omitted entirely at rest, so an unanimated Broadcast Graphic keeps the
 				// descriptor it had before animation existed.
 				...(Object.keys(style).length === 0 ? {} : { style }),
-				items: graphic.items
-					.filter(item => item.visible)
-					.map(item => itemDescriptor(
-						input.output,
-						graphic.id,
-						item,
-						input.graphicAssetContentUrl,
-						inputs,
-						itemContext(item),
-					)),
+				items: buildItems(inputs, itemContext),
+				...(outgoing === undefined ? {} : { outgoing }),
 			};
 		}),
 		safeAreaGuides: input.safeAreaGuides

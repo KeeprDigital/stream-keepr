@@ -38,6 +38,17 @@ export function useBroadcastGraphicsModeData() {
 	);
 
 	/**
+	 * The one instant every live projection below is read at, on the authoritative
+	 * clock rather than this browser's.
+	 *
+	 * Declared here because what is on program, which values are showing, and where the
+	 * motion is are all answers to the same question — "at *when*?" — and reading two of
+	 * them at two instants is how an output composites a frame that never existed. The
+	 * clock that advances it sits further down, beside the preview clock it parallels.
+	 */
+	const liveNow = ref(Date.now());
+
+	/**
 	 * An editor preview composes the whole authored stack, exactly as an on-air
 	 * Screen would, so the authored Graphic Layer Order and any reordering of it
 	 * are visible while authoring. A live output composes only what playout has
@@ -48,31 +59,98 @@ export function useBroadcastGraphicsModeData() {
 			return previewState.value.graphics.map(graphic => graphic.id);
 
 		const screenId = screen.value?.id;
-		return screenId ? sessionStore.onAirGraphicIds(screenId, graphics.value) : [];
+		// Timed, because an exiting Broadcast Graphic is still on program: it leaves the
+		// frame when its exit phase completes, not when Out is accepted.
+		return screenId ? sessionStore.onAirGraphicIds(screenId, graphics.value, liveNow.value) : [];
 	});
 
 	/**
-	 * The accepted on-air Graphic Input values each composed Broadcast Graphic
-	 * renders.
+	 * The rendering each composed Broadcast Graphic draws, and the one an update phase
+	 * is leaving behind.
 	 *
 	 * A preview has no Live Session, so it contributes nothing here and the
 	 * compositor falls back to each graphic's declared defaults — the design as
-	 * authored. A live output contributes what its Live Session has accepted, so
-	 * program shows accepted values and never a working edit.
+	 * authored. A live output contributes what its Live Session says is on screen at
+	 * this instant, which is not always the accepted set: an acceptance coalescing
+	 * behind an entrance has been accepted without yet being shown.
 	 */
-	const inputValues = computed<Record<string, Record<string, GraphicInputValue>>>(() => {
+	const renderedInputs = computed(() => {
 		const screenId = screen.value?.id;
 		if (previewState.value || !screenId)
-			return {};
+			return { current: {} as Record<string, Record<string, GraphicInputValue>>, outgoing: {} };
 
-		return Object.fromEntries(graphics.value.map(graphic => [
-			graphic.id,
-			sessionStore.acceptedInputValues(screenId, graphic),
-		]));
+		return sessionStore.renderedInputValues(screenId, graphics.value, liveNow.value);
 	});
+
+	const inputValues = computed<Record<string, Record<string, GraphicInputValue>>>(() => renderedInputs.value.current);
+	const outgoingInputValues = computed(() => renderedInputs.value.outgoing);
 
 	const selectedTarget = computed<GraphicsSelectionTarget>(() =>
 		previewState.value?.selectedTarget ?? { type: 'canvas' },
+	);
+
+	/*
+	 * The live playout clock.
+	 *
+	 * One reactive instant, on the authoritative clock rather than this browser's, and
+	 * every frame of live animation is a pure projection of it. Nothing accumulates
+	 * between frames — no playhead, no tween state — which is what makes a late-loading
+	 * or reconnected output catch up to the current phase rather than replay it, and what
+	 * makes two outputs agree without talking to each other.
+	 *
+	 * It runs only while something is actually moving. An on-screen Graphic Animation
+	 * Recipe may cycle indefinitely, so "moving" cannot mean "a finite phase is
+	 * running"; it means the Live Session has a projection to offer at all, which
+	 * settles to nothing when every graphic is off or resting.
+	 */
+	let liveFrame: number | null = null;
+
+	/** Whether the Live Session still has a phase to project at the current instant. */
+	function hasLiveMotion(): boolean {
+		const screenId = screen.value?.id;
+		if (previewState.value || !screenId)
+			return false;
+
+		return Object.keys(sessionStore.animationProjection(screenId, graphics.value, liveNow.value)).length > 0;
+	}
+
+	function stopLiveClock() {
+		if (liveFrame !== null && import.meta.client)
+			cancelAnimationFrame(liveFrame);
+		liveFrame = null;
+	}
+
+	function advanceLiveClock() {
+		liveNow.value = sessionStore.serverNow();
+		// Settled means settled: a broadcast machine must not be asked to wake up sixty
+		// times a second to redraw a frame that cannot change. Leaving the instant where
+		// it stopped is safe precisely because everything is at rest there — the same
+		// saturation that lets a stale start time be read literally.
+		if (!hasLiveMotion()) {
+			stopLiveClock();
+			return;
+		}
+		liveFrame = requestAnimationFrame(advanceLiveClock);
+	}
+
+	function startLiveClock() {
+		if (!import.meta.client || previewState.value)
+			return;
+		liveNow.value = sessionStore.serverNow();
+		if (liveFrame === null)
+			liveFrame = requestAnimationFrame(advanceLiveClock);
+	}
+
+	// Every accepted command reaches this client as a new snapshot, and a new snapshot is
+	// the only thing that can start a phase — so that is what restarts the clock.
+	watch(
+		() => {
+			const screenId = screen.value?.id;
+			const session = screenId ? sessionStore.sessions.get(screenId) : undefined;
+			return session ? `${session.id}:${session.sequence}` : null;
+		},
+		() => startLiveClock(),
+		{ immediate: true },
 	);
 
 	/*
@@ -108,10 +186,20 @@ export function useBroadcastGraphicsModeData() {
 
 	const animationProjection = computed<Record<string, GraphicsAnimationProjection>>(() => {
 		const plan = previewPlan.value;
-		if (!plan)
+		if (plan) {
+			const position = graphicAnimationTimelineAt(previewTimeline.value, previewElapsed.value);
+			return position ? { [plan.graphicId]: position } : {};
+		}
+
+		const screenId = screen.value?.id;
+		if (previewState.value || !screenId)
 			return {};
-		const position = graphicAnimationTimelineAt(previewTimeline.value, previewElapsed.value);
-		return position ? { [plan.graphicId]: position } : {};
+
+		// Live playout: every phase derived from the Live Session's own authoritative
+		// effective start times, read on the authoritative clock. Nothing here is
+		// accumulated between frames, so an output that opens late, reloads, or
+		// reconnects catches up to the current phase instead of replaying it.
+		return sessionStore.animationProjection(screenId, graphics.value, liveNow.value);
 	});
 
 	let frame: number | null = null;
@@ -197,7 +285,16 @@ export function useBroadcastGraphicsModeData() {
 	onBeforeUnmount(() => {
 		window.removeEventListener('message', handlePreviewStateMessage);
 		stopPreviewClock();
+		stopLiveClock();
 	});
 
-	return { animationProjection, graphics, onAirGraphicIds, inputValues, selectedTarget, publishSelection };
+	return {
+		animationProjection,
+		graphics,
+		onAirGraphicIds,
+		inputValues,
+		outgoingInputValues,
+		selectedTarget,
+		publishSelection,
+	};
 }
