@@ -5,7 +5,7 @@ import type {
 	BroadcastGraphicsLiveSessionResponse,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type { ScreenMode } from '~~/shared/types/enums';
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicInputDeclaration } from '~~/shared/types/graphics';
 import { $fetch } from '@nuxt/test-utils/e2e';
 
 const SQUARE_CORNER = { treatment: 'square', size: 0 } as const;
@@ -15,6 +15,81 @@ let nextCommandId = 0;
 export function playoutCommandId(prefix: string): string {
 	nextCommandId += 1;
 	return `${prefix}:integration:${nextCommandId}`;
+}
+
+/**
+ * A Broadcast Graphic that declares typed Graphic Inputs and renders them.
+ *
+ * Its Text Graphic Item holds a Graphic Text Template, so the declarations, the
+ * placeholders, and the Graphic Placeholder Style all travel through the same
+ * write an editor would make. Written out longhand because the integration project
+ * resolves no `~~` alias: only type imports cross this boundary.
+ */
+export function integrationBroadcastGraphicWithInputs(
+	id: string,
+	inputs: GraphicInputDeclaration[],
+): BroadcastGraphicConfig {
+	return {
+		id,
+		name: `Graphic ${id}`,
+		inputs,
+		items: [{
+			id: `${id}-text`,
+			label: 'Name',
+			type: 'text',
+			visible: true,
+			anchor: 'top-left',
+			x: 0,
+			y: 0,
+			width: 600,
+			height: 120,
+			text: '{name} — {title}',
+			typography: {
+				fontId: 'inter',
+				fontSize: 48,
+				fontWeight: 700,
+				fontStyle: 'normal',
+				textTransform: 'none',
+				letterSpacing: 0,
+				lineHeight: 1.2,
+				textAlign: 'left',
+				color: '#ffffff',
+			},
+			overflowPolicy: 'ellipsis',
+			minFontSize: 24,
+			placeholderStyles: { title: { fontWeight: 300 } },
+		}],
+	};
+}
+
+/** A text Graphic Input, staged and optional unless stated otherwise. */
+export function integrationTextInput(
+	key: string,
+	overrides: Partial<Extract<GraphicInputDeclaration, { type: 'text' }>> = {},
+): GraphicInputDeclaration {
+	return {
+		type: 'text',
+		key,
+		label: key,
+		required: false,
+		updatePolicy: 'staged',
+		default: '',
+		maxLength: 20,
+		...overrides,
+	};
+}
+
+export async function setBroadcastGraphicInput(
+	harness: { send: (command: BroadcastGraphicsCommand) => Promise<BroadcastGraphicsCommandResult> },
+	graphicId: string,
+	inputKey: string,
+	value: unknown,
+): Promise<BroadcastGraphicsCommandResult> {
+	return await harness.send({
+		commandId: playoutCommandId(`set-${inputKey}`),
+		type: 'Set Input',
+		payload: { graphicId, inputKey, value },
+	} as BroadcastGraphicsCommand);
 }
 
 /** A minimal but renderable Broadcast Graphic: one opaque Shape Graphic Item. */
@@ -97,16 +172,42 @@ export async function sendBroadcastGraphicsCommand(
 	);
 }
 
-export async function createPlayoutHarness(
-	eventId: number,
-	slug: string,
-	graphicIds: string[],
-): Promise<{
+export interface PlayoutHarness {
 	screen: ScreenResponse;
 	session: () => BroadcastGraphicsLiveSessionResponse;
 	reload: () => Promise<BroadcastGraphicsLiveSessionResponse>;
 	send: (command: BroadcastGraphicsCommand) => Promise<BroadcastGraphicsCommandResult>;
-}> {
+}
+
+/** A harness over a Screen whose Broadcast Graphics are supplied in full. */
+export async function createGraphicsHarness(
+	eventId: number,
+	slug: string,
+	graphics: BroadcastGraphicConfig[],
+): Promise<PlayoutHarness> {
+	const screen = await createBroadcastGraphicsScreen(eventId, slug, graphics);
+	let current = await getBroadcastGraphicsLiveSession(eventId, screen.id);
+
+	return {
+		screen,
+		session: () => current,
+		reload: async () => {
+			current = await getBroadcastGraphicsLiveSession(eventId, screen.id);
+			return current;
+		},
+		send: async (command) => {
+			const result = await sendBroadcastGraphicsCommand(eventId, screen.id, current.id, command);
+			current = result.session;
+			return result;
+		},
+	};
+}
+
+export async function createPlayoutHarness(
+	eventId: number,
+	slug: string,
+	graphicIds: string[],
+): Promise<PlayoutHarness> {
 	const screen = await createBroadcastGraphicsScreen(eventId, slug, graphicIds.map(integrationBroadcastGraphic));
 	let current = await getBroadcastGraphicsLiveSession(eventId, screen.id);
 

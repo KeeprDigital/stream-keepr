@@ -9,6 +9,7 @@ import {
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
+import { parseModeConfigPatchResult } from '~~/server/schemas/api/screen';
 import { cardService } from '~~/server/services/card';
 import { screenService } from '~~/server/services/screen';
 import {
@@ -17,9 +18,11 @@ import {
 } from '~~/server/utils/routeGuards';
 import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
-	featureMatchOverlayGraphicAssetReferences,
+	GRAPHIC_ASSET_REFERENCING_SCREEN_MODES,
+	isGraphicAssetReferencingScreenMode,
 	sameGraphicAssetReference,
 	sameScreenGraphicAssetReferences,
+	screenModeGraphicAssetReferences,
 } from '~~/shared/utils/graphicsAssetReferences';
 
 interface CreateScreenParams {
@@ -58,39 +61,47 @@ interface UpdateModeConfigParams {
 	originConnectionId?: string;
 }
 
-function rejectUnindexedFeatureMatchOverlayReferencesOnCreate(
+const MODE_CONFIG_ENDPOINT_REQUIRED
+	= 'Graphic Asset References must be changed through the Screen Mode configuration endpoint';
+
+/**
+ * A generic Screen write indexes nothing, so it may not introduce a reference.
+ *
+ * Only the per-mode configuration endpoint writes a configuration and its
+ * Graphic Asset Reference index together. A reference arriving through a generic
+ * create or update would be published by the Screen without being indexed, and a
+ * Screen Output would then be asked for a revision its capability never covered.
+ */
+function rejectUnindexedGraphicAssetReferencesOnCreate(
 	modeConfigs: CreateScreenInput['modeConfigs'] | UpdateScreenInput['modeConfigs'],
 ) {
-	const config = modeConfigs?.['feature-match-overlay'];
-	if (config && featureMatchOverlayGraphicAssetReferences(config).length > 0) {
-		throw createError({
-			statusCode: 400,
-			statusMessage: 'Bad Request',
-			message: 'Graphic Asset References must be changed through the Feature Match Overlay configuration endpoint',
-		});
+	for (const mode of GRAPHIC_ASSET_REFERENCING_SCREEN_MODES) {
+		if (screenModeGraphicAssetReferences(mode, modeConfigs).length > 0) {
+			throw createError({
+				statusCode: 400,
+				statusMessage: 'Bad Request',
+				message: MODE_CONFIG_ENDPOINT_REQUIRED,
+			});
+		}
 	}
 }
 
-function rejectChangedFeatureMatchOverlayReferencesOnGenericUpdate(
+function rejectChangedGraphicAssetReferencesOnGenericUpdate(
 	currentModeConfigs: ScreenResponse['modeConfigs'],
 	nextModeConfigs: UpdateScreenInput['modeConfigs'],
 ) {
 	if (nextModeConfigs === undefined)
 		return;
-	const currentConfig = currentModeConfigs?.['feature-match-overlay'];
-	const nextConfig = nextModeConfigs?.['feature-match-overlay'];
-	const currentReferences = currentConfig
-		? featureMatchOverlayGraphicAssetReferences(currentConfig)
-		: [];
-	const nextReferences = nextConfig
-		? featureMatchOverlayGraphicAssetReferences(nextConfig)
-		: [];
-	if (!sameScreenGraphicAssetReferences(currentReferences, nextReferences)) {
-		throw createError({
-			statusCode: 400,
-			statusMessage: 'Bad Request',
-			message: 'Graphic Asset References must be changed through the Feature Match Overlay configuration endpoint',
-		});
+	for (const mode of GRAPHIC_ASSET_REFERENCING_SCREEN_MODES) {
+		const currentReferences = screenModeGraphicAssetReferences(mode, currentModeConfigs);
+		const nextReferences = screenModeGraphicAssetReferences(mode, nextModeConfigs);
+		if (!sameScreenGraphicAssetReferences(currentReferences, nextReferences)) {
+			throw createError({
+				statusCode: 400,
+				statusMessage: 'Bad Request',
+				message: MODE_CONFIG_ENDPOINT_REQUIRED,
+			});
+		}
 	}
 }
 
@@ -103,7 +114,7 @@ export function screenWriteModule(dependencies: {
 
 	async function createScreen({ eventId, input, originConnectionId }: CreateScreenParams): Promise<ScreenResponse> {
 		await validateScreenModeConfigsReferences(eventId, input.modeConfigs);
-		rejectUnindexedFeatureMatchOverlayReferencesOnCreate(input.modeConfigs);
+		rejectUnindexedGraphicAssetReferencesOnCreate(input.modeConfigs);
 		if (!dependencies.screenOutputAssetCapabilities) {
 			throw createError({
 				statusCode: 503,
@@ -141,7 +152,7 @@ export function screenWriteModule(dependencies: {
 			throw createError({ statusCode: 404, message: 'Screen not found' });
 
 		await validateScreenModeConfigsReferences(eventId, data.modeConfigs);
-		rejectChangedFeatureMatchOverlayReferencesOnGenericUpdate(
+		rejectChangedGraphicAssetReferencesOnGenericUpdate(
 			existingScreen.modeConfigs,
 			data.modeConfigs,
 		);
@@ -228,23 +239,36 @@ export function screenWriteModule(dependencies: {
 
 	async function updateModeConfig({ eventId, screenId, mode, config, stateVersion, originConnectionId }: UpdateModeConfigParams): Promise<ScreenResponse> {
 		await validateScreenModeConfigReferences(eventId, mode, config);
-		if (mode === 'feature-match-overlay') {
-			const existing = await screens.findById(screenId, eventId);
-			if (!existing)
-				throw createError({ statusCode: 404, message: 'Screen not found' });
-			const currentConfig = existing.modeConfigs?.[mode];
-			const nextConfig = mergeScreenModeConfig(
-				existing.modeConfigs ?? {},
-				mode,
-				config,
-			)[mode]!;
+
+		const existing = await screens.findById(screenId, eventId);
+		if (!existing)
+			throw createError({ statusCode: 404, message: 'Screen not found' });
+
+		/*
+		 * Every whole-object rule the mode configuration has to satisfy is checked
+		 * here, against the configuration this patch would produce.
+		 *
+		 * A patch is a fragment, so the patch schema can only enforce field bounds;
+		 * rules about the whole configuration — today the byte total shared across all
+		 * ten Screen Modes — are properties of the merged result. Checking them at this
+		 * one point is what makes them hold identically whether a Screen was configured
+		 * in a single write or built up one patch at a time, and it means a rule added
+		 * to `modeConfigSchemaMap` in future is enforced on the editors' write path
+		 * without anyone having to remember to wire it up. See #85.
+		 */
+		parseModeConfigPatchResult(existing.modeConfigs, mode, config);
+
+		if (isGraphicAssetReferencingScreenMode(mode)) {
+			const nextConfigs = mergeScreenModeConfig(existing.modeConfigs ?? {}, mode, config);
 			const currentReferences = new Map(
-				currentConfig
-					? featureMatchOverlayGraphicAssetReferences(currentConfig)
-							.map(item => [item.ownerSlot, item.reference] as const)
-					: [],
+				screenModeGraphicAssetReferences(mode, existing.modeConfigs)
+					.map(item => [item.ownerSlot, item.reference] as const),
 			);
-			for (const item of featureMatchOverlayGraphicAssetReferences(nextConfig)) {
+			// A newly chosen revision must be one an author could legitimately select
+			// right now. An unchanged one is deliberately not re-checked: a pinned
+			// revision keeps resolving after its asset is retired, so re-checking it
+			// would make every later edit of an unrelated property fail.
+			for (const item of screenModeGraphicAssetReferences(mode, nextConfigs)) {
 				const current = currentReferences.get(item.ownerSlot);
 				if (sameGraphicAssetReference(current, item.reference)) {
 					continue;

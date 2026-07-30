@@ -1,5 +1,11 @@
+import type { GraphicFocalPosition } from '../../types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
+	GraphicAnimationPhase,
+	GraphicAnimationRecipe,
+	GraphicAnimationStagger,
+	GraphicContainerAnimation,
+	GraphicFadeChannel,
 	GraphicFill,
 	GraphicFillKind,
 	GraphicFillStop,
@@ -7,19 +13,32 @@ import type {
 	GraphicGroupChildConfig,
 	GraphicGroupChildSizing,
 	GraphicGroupItemConfig,
+	GraphicInputChoiceOption,
+	GraphicInputDeclaration,
+	GraphicInputType,
 	GraphicItemConfig,
 	GraphicItemKind,
+	GraphicOnScreenAnimationRecipe,
 	GraphicOutline,
+	GraphicPlaceholderStyle,
+	GraphicRevealChannel,
+	GraphicScaleChannel,
+	GraphicSlideChannel,
 	GraphicSurfaceStyle,
 	GraphicTypography,
+	MediaGraphicItemConfig,
 	ShapeCorner,
 	ShapeCornerKey,
 	ShapeGeometry,
 	TextGraphicItemConfig,
 } from '../../types/graphics';
+import type { GraphicAssetReference } from '../../types/graphicsAsset';
 import type { ShapeGeometryPresetId } from './shapeGeometry';
+import { GRAPHIC_ANIMATION_PHASE_VALUES, GRAPHIC_INPUT_KEY_PATTERN, MAX_GRAPHIC_INPUT_KEY_LENGTH } from '../../types/graphics';
+import { createDefaultGraphicAnimationRecipe, getGraphicAnimationPreset } from './animation';
+import { createDefaultGraphicInputDeclaration } from './inputs';
 import { createDefaultGraphicSurfaceStyle, getGraphicItemDefinition, graphicItemKindLabel } from './itemDefinitions';
-import { getShapeGeometryPreset } from './shapeGeometry';
+import { getShapeGeometryPreset, squareShapeGeometry } from './shapeGeometry';
 
 /**
  * Authoring operations for a Screen's back-to-front stack of Broadcast
@@ -121,6 +140,156 @@ export function replaceBroadcastGraphic(
 	graphic: BroadcastGraphicConfig,
 ): BroadcastGraphicConfig[] {
 	return graphics.map(entry => entry.id === graphic.id ? graphic : entry);
+}
+
+/* ────────────────────────────────────────────────
+ * Graphic Inputs
+ * ──────────────────────────────────────────────── */
+
+/**
+ * A stable Graphic Input key derived from a label, made unique among the ones this
+ * Broadcast Graphic already declares.
+ *
+ * The key is generated once and never changes afterwards, which is what makes it
+ * stable: a `{inputKey}` placeholder, a Graphic Input Binding, a Graphic
+ * Placeholder Style, and every accepted value in a running Live Session all name
+ * it. Renaming is what the freely editable label is for.
+ */
+export function graphicInputKeyFromLabel(label: string, taken: readonly string[]): string {
+	const slug = label
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-+|-+$/g, '')
+		.slice(0, MAX_GRAPHIC_INPUT_KEY_LENGTH);
+	const base = GRAPHIC_INPUT_KEY_PATTERN.test(slug) ? slug : 'input';
+	const used = new Set(taken);
+	if (!used.has(base))
+		return base;
+
+	let suffix = 2;
+	while (used.has(`${base}-${suffix}`))
+		suffix += 1;
+	return `${base}-${suffix}`;
+}
+
+export function addGraphicInput(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	type: GraphicInputType,
+): BroadcastGraphicConfig[] {
+	return graphics.map((graphic) => {
+		if (graphic.id !== graphicId)
+			return graphic;
+
+		const inputs = graphic.inputs ?? [];
+		const label = nextSequentialName('Input', inputs.map(input => input.label));
+		const declaration = createDefaultGraphicInputDeclaration(type, {
+			key: graphicInputKeyFromLabel(label, inputs.map(input => input.key)),
+			label,
+		});
+
+		return { ...graphic, inputs: [...inputs, declaration] };
+	});
+}
+
+/**
+ * Merge into one Graphic Input declaration.
+ *
+ * The key is not patchable: a declaration's own type decides which other
+ * properties it has, and both are what a placeholder, a binding, and every
+ * accepted value already name.
+ */
+export function patchGraphicInput(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	key: string,
+	patch: Partial<Omit<GraphicInputDeclaration, 'key' | 'type'>>,
+): BroadcastGraphicConfig[] {
+	return graphics.map(graphic => graphic.id === graphicId
+		? {
+				...graphic,
+				inputs: (graphic.inputs ?? []).map(input =>
+					input.key === key ? { ...input, ...patch } as GraphicInputDeclaration : input,
+				),
+			}
+		: graphic);
+}
+
+/**
+ * Stop declaring one Graphic Input, and drop what referenced it.
+ *
+ * Its Graphic Input Binding and every Graphic Placeholder Style naming it go with
+ * it, because both address it by key and neither means anything once nothing
+ * declares that key. A `{inputKey}` placeholder left in a Graphic Text Template is
+ * deliberately not rewritten: it is the author's own text, and it simply renders
+ * nothing until they declare that key again or edit it away.
+ */
+export function deleteGraphicInput(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	key: string,
+): BroadcastGraphicConfig[] {
+	return graphics.map((graphic) => {
+		if (graphic.id !== graphicId)
+			return graphic;
+
+		return {
+			...graphic,
+			inputs: (graphic.inputs ?? []).filter(input => input.key !== key),
+			bindings: graphic.bindings?.filter(binding => binding.inputKey !== key),
+			items: graphic.items.map(item => stripPlaceholderStyle(item, key)),
+		};
+	});
+}
+
+function stripPlaceholderStyle<T extends GraphicItemConfig>(item: T, key: string): T {
+	if (item.type === 'group')
+		return { ...item, children: item.children.map(child => stripPlaceholderStyle(child, key)) };
+	if (item.type !== 'text' || !item.placeholderStyles || !(key in item.placeholderStyles))
+		return item;
+
+	const { [key]: _removed, ...kept } = item.placeholderStyles;
+	return { ...item, placeholderStyles: Object.keys(kept).length > 0 ? kept : undefined };
+}
+
+/** Replace a choice Graphic Input's option list. */
+export function setGraphicInputChoiceOptions(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	key: string,
+	options: GraphicInputChoiceOption[],
+): BroadcastGraphicConfig[] {
+	return graphics.map(graphic => graphic.id === graphicId
+		? {
+				...graphic,
+				inputs: (graphic.inputs ?? []).map(input =>
+					input.key === key && input.type === 'choice' ? { ...input, options } : input,
+				),
+			}
+		: graphic);
+}
+
+/**
+ * Merge into one `{inputKey}` placeholder's Graphic Placeholder Style, or remove
+ * it so the placeholder renders in the item's base typography again.
+ */
+export function patchGraphicPlaceholderStyle(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	inputKey: string,
+	patch: Partial<GraphicPlaceholderStyle> | null,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['text'], (item) => {
+		if (patch === null)
+			return stripPlaceholderStyle(item, inputKey);
+
+		return {
+			placeholderStyles: {
+				...item.placeholderStyles,
+				[inputKey]: { ...item.placeholderStyles?.[inputKey], ...patch },
+			},
+		};
+	});
 }
 
 /* ────────────────────────────────────────────────
@@ -235,7 +404,14 @@ export function moveGraphicItem(
 	};
 }
 
-/** Delete one Graphic Item, and with a Graphic Group its children. */
+/**
+ * Delete one Graphic Item, and with a Graphic Group its children.
+ *
+ * The deleted id also leaves its container's staggered subsets. A stagger that
+ * still named a deleted item would project correctly — an unknown id is ignored —
+ * but it would linger in the stored configuration and reappear the moment an
+ * author created a new item that happened to reuse the id.
+ */
 export function deleteGraphicItem(graphic: BroadcastGraphicConfig, itemId: string): BroadcastGraphicConfig {
 	const location = findGraphicItem(graphic, itemId);
 	if (location?.group) {
@@ -243,10 +419,15 @@ export function deleteGraphicItem(graphic: BroadcastGraphicConfig, itemId: strin
 		return replaceGraphicItem(graphic, {
 			...group,
 			children: group.children.filter(child => child.id !== itemId),
+			animation: withoutStaggeredItem(group.animation, itemId),
 		});
 	}
 
-	return { ...graphic, items: graphic.items.filter(item => item.id !== itemId) };
+	return {
+		...graphic,
+		items: graphic.items.filter(item => item.id !== itemId),
+		animation: withoutStaggeredItem(graphic.animation, itemId),
+	};
 }
 
 /* ────────────────────────────────────────────────
@@ -307,11 +488,35 @@ function patchGraphicItemGroup<K extends GraphicItemKind>(
 	return patchGraphicItem(graphic, itemId, merge(item as Extract<GraphicItemConfig, { type: K }>));
 }
 
-/** The kinds that own a Shape Geometry: a Shape Graphic Item and a Graphic Group. */
-const GEOMETRY_KINDS = ['shape', 'group'] as const;
+/**
+ * The kinds that own a Shape Geometry: a Shape Graphic Item and a Graphic Group
+ * draw one, and a Media Graphic Item clips to one.
+ */
+const GEOMETRY_KINDS = ['shape', 'group', 'media'] as const;
 
-/** The kinds that may carry a Graphic Surface Style. */
+/** The kinds that may carry a Graphic Surface Style. A Media Graphic Item paints an asset, not a surface. */
 const SURFACE_KINDS = ['text', 'shape', 'group'] as const;
+
+type GeometryOwner = Extract<GraphicItemConfig, { type: typeof GEOMETRY_KINDS[number] }>;
+
+/**
+ * Where one item keeps the Shape Geometry a geometry edit means, and what it
+ * currently holds.
+ *
+ * A Shape Graphic Item and a Graphic Group always have a `geometry`. A Media
+ * Graphic Item's `clipGeometry` is optional, and absent means it clips to nothing
+ * but its own bounds — so a geometry edit aimed at one that is not clipping
+ * resolves to nothing and becomes a no-op, rather than switching clipping on as a
+ * side effect of nudging a corner. `setMediaClipGeometry` is the one control that
+ * decides whether a media item clips at all.
+ */
+function ownedShapeGeometry(
+	item: GeometryOwner,
+): { field: 'geometry' | 'clipGeometry'; geometry: ShapeGeometry } | null {
+	if (item.type === 'media')
+		return item.clipGeometry ? { field: 'clipGeometry', geometry: item.clipGeometry } : null;
+	return { field: 'geometry', geometry: item.geometry };
+}
 
 /** Merge into a Shape Geometry, preserving every other field. */
 export function patchShapeGeometry(
@@ -319,9 +524,10 @@ export function patchShapeGeometry(
 	itemId: string,
 	patch: Partial<ShapeGeometry>,
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, GEOMETRY_KINDS, item => ({
-		geometry: { ...item.geometry, ...patch },
-	}));
+	return patchGraphicItemGroup(graphic, itemId, GEOMETRY_KINDS, (item) => {
+		const owned = ownedShapeGeometry(item);
+		return owned ? { [owned.field]: { ...owned.geometry, ...patch } } : {};
+	});
 }
 
 /** Merge into one independently configured corner of a Shape Geometry. */
@@ -331,9 +537,14 @@ export function patchShapeCorner(
 	corner: ShapeCornerKey,
 	patch: Partial<ShapeCorner>,
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, GEOMETRY_KINDS, item => ({
-		geometry: { ...item.geometry, [corner]: { ...item.geometry[corner], ...patch } },
-	}));
+	return patchGraphicItemGroup(graphic, itemId, GEOMETRY_KINDS, (item) => {
+		const owned = ownedShapeGeometry(item);
+		if (!owned)
+			return {};
+		return {
+			[owned.field]: { ...owned.geometry, [corner]: { ...owned.geometry[corner], ...patch } },
+		};
+	});
 }
 
 /**
@@ -347,11 +558,96 @@ export function applyShapeGeometryPreset(
 	presetId: ShapeGeometryPresetId,
 ): BroadcastGraphicConfig {
 	return patchGraphicItemGroup(graphic, itemId, GEOMETRY_KINDS, (item) => {
+		const owned = ownedShapeGeometry(item);
+		if (!owned)
+			return {};
 		const result = getShapeGeometryPreset(presetId).apply({ width: item.width, height: item.height });
 		return result.height === undefined
-			? { geometry: result.geometry }
-			: { geometry: result.geometry, height: result.height };
+			? { [owned.field]: result.geometry }
+			: { [owned.field]: result.geometry, height: result.height };
 	});
+}
+
+/**
+ * Turn a Media Graphic Item's optional Shape Geometry clipping on or off.
+ *
+ * Switching it off drops the authored clip rather than flattening it to a
+ * rectangle, so the item goes back to clipping to its own bounds and nothing
+ * persists a shape the author cannot see.
+ */
+export function setMediaClipGeometry(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	clipping: boolean,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['media'], item => ({
+		clipGeometry: clipping ? (item.clipGeometry ?? squareShapeGeometry()) : undefined,
+	}));
+}
+
+/** Replace top-level properties of a Media Graphic Item, with its own type checked. */
+export function patchMediaGraphicItem(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	patch: Partial<Omit<MediaGraphicItemConfig, 'type' | 'id'>>,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['media'], () => patch);
+}
+
+/** Merge into a Media Graphic Item's focal position, preserving the other axis. */
+export function patchMediaFocalPosition(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	patch: Partial<GraphicFocalPosition>,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['media'], item => ({
+		focalPosition: { ...item.focalPosition, ...patch },
+	}));
+}
+
+/**
+ * Pin one exact Graphic Asset identity and revision on a Media Graphic Item.
+ *
+ * The asset's own kind decides the item's media kind, and a silent video also
+ * records the revision's target compatibility, which the reference index checks.
+ * Playback rate and looping survive a switch to an image and back: they are the
+ * author's settings, not the asset's.
+ */
+export function selectMediaGraphicItemAsset(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	selection: {
+		asset: GraphicAssetReference;
+		mediaKind: GraphicMediaKind;
+		videoCompatibility?: 'all-supported' | 'chromium-transparency';
+	},
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['media'], () => ({
+		asset: selection.asset,
+		mediaKind: selection.mediaKind,
+		videoCompatibility: selection.mediaKind === 'silent-video' ? selection.videoCompatibility : undefined,
+	}));
+}
+
+/**
+ * Unpin a Media Graphic Item's Graphic Asset, leaving an item that occupies its
+ * bounds and paints nothing.
+ *
+ * The media kind returns to image along with the asset's own facts. Leaving it on
+ * silent-video would keep offering playback-rate and looping controls on an item
+ * that reads "No Graphic Asset" — controls for an asset that is no longer there.
+ * The authored playback values themselves survive, because they are the author's
+ * rather than the asset's.
+ */
+export function clearMediaGraphicItemAsset(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['media'], () => ({
+		asset: undefined,
+		mediaKind: 'image',
+		videoCompatibility: undefined,
+	}));
 }
 
 /**
@@ -581,7 +877,355 @@ export function patchGraphicGroupChildSizing(
 	if (!findGraphicItem(graphic, itemId)?.group)
 		return graphic;
 
-	return patchGraphicItemGroup(graphic, itemId, ['text', 'shape'], item => ({
+	return patchGraphicItemGroup(graphic, itemId, ['text', 'shape', 'media'], item => ({
 		sizing: { mode: 'fixed', size: item.width, weight: 1, ...item.sizing, ...patch },
 	}));
+}
+
+/* ────────────────────────────────────────────────
+ * Graphic Animation
+ * ──────────────────────────────────────────────── */
+
+/**
+ * A newly authored Broadcast Graphic or Graphic Item has no Graphic Animation
+ * Recipes at all, so enabling a phase is what creates one and disabling it is
+ * what removes it. These helpers keep that true in both directions: an animation
+ * whose last recipe and stagger are gone is dropped entirely rather than left as
+ * an empty object, so "has no recipes until its template author enables them"
+ * stays a property of the stored shape rather than of how it is read.
+ *
+ * Every one of them is the same nested merge as the style and geometry helpers
+ * above: editing one field of a channel never drops the channel's siblings, and
+ * editing one channel never drops the recipe's other channels.
+ */
+
+/**
+ * The recipe shape one lifecycle phase carries.
+ *
+ * Only the phase that cycles has a pause and a repetition, so a caller naming a
+ * literal phase cannot aim those at a phase that would refuse them — the wire schema
+ * rejects them there anyway, and a type that permits authoring something a write
+ * refuses is a type that lets the editor build a control nobody can save. A caller
+ * iterating every phase still compiles, because the conditional stays deferred until
+ * the phase is known.
+ */
+export type GraphicAnimationRecipeFor<P extends GraphicAnimationPhase>
+	= P extends 'on-screen' ? GraphicOnScreenAnimationRecipe : GraphicAnimationRecipe;
+
+/** The channel a merge addresses. Each recipe holds at most one of each. */
+export type GraphicAnimationChannelKey = 'fade' | 'slide' | 'scale' | 'reveal';
+
+const GRAPHIC_ANIMATION_CHANNEL_DEFAULTS: {
+	fade: GraphicFadeChannel;
+	slide: GraphicSlideChannel;
+	scale: GraphicScaleChannel;
+	reveal: GraphicRevealChannel;
+} = {
+	fade: { opacity: 0 },
+	slide: { direction: 'north', distanceMode: 'fixed', distance: 100 },
+	scale: { factor: 0.8, origin: 'center' },
+	reveal: { edge: 'left' },
+};
+
+/**
+ * An animation with no recipes and no staggers left is no animation at all.
+ *
+ * The keys are deleted rather than set to undefined: this shape is persisted as
+ * JSON, and an `undefined` value survives as a present key in every in-memory
+ * comparison the editor and its tests make even though it vanishes on the wire.
+ */
+function pruneGraphicAnimation<T extends GraphicContainerAnimation>(animation: T): T | undefined {
+	const next = { ...animation };
+	const hasRecipe = GRAPHIC_ANIMATION_PHASE_VALUES.some(phase => next[phase] !== undefined);
+	const stagger = next.stagger;
+	const hasStagger = stagger !== undefined
+		&& GRAPHIC_ANIMATION_PHASE_VALUES.some(phase => stagger[phase] !== undefined);
+
+	if (!hasStagger)
+		delete next.stagger;
+	if (!hasRecipe && !hasStagger)
+		return undefined;
+	return next;
+}
+
+/**
+ * Enable or disable one lifecycle phase's recipe. Enabling with no recipe of its
+ * own initialises the phase's editable default; passing null removes it.
+ */
+function setAnimationRecipe(
+	animation: GraphicContainerAnimation | undefined,
+	phase: GraphicAnimationPhase,
+	recipe: GraphicAnimationRecipe | GraphicOnScreenAnimationRecipe | null,
+): GraphicContainerAnimation | undefined {
+	const next: GraphicContainerAnimation = { ...animation };
+	if (recipe === null)
+		delete next[phase];
+	else
+		next[phase] = recipe as never;
+
+	return pruneGraphicAnimation(next);
+}
+
+/** Merge into one phase's recipe, initialising the phase's default if it has none. */
+function mergeAnimationRecipe(
+	animation: GraphicContainerAnimation | undefined,
+	phase: GraphicAnimationPhase,
+	patch: Partial<GraphicOnScreenAnimationRecipe>,
+): GraphicContainerAnimation | undefined {
+	const current = animation?.[phase] ?? createDefaultGraphicAnimationRecipe(phase);
+	return setAnimationRecipe(animation, phase, { ...current, ...patch } as GraphicAnimationRecipe);
+}
+
+/** Merge into one channel of one phase's recipe, or remove that channel. */
+function mergeAnimationChannel<K extends GraphicAnimationChannelKey>(
+	animation: GraphicContainerAnimation | undefined,
+	phase: GraphicAnimationPhase,
+	channel: K,
+	patch: Partial<typeof GRAPHIC_ANIMATION_CHANNEL_DEFAULTS[K]> | null,
+): GraphicContainerAnimation | undefined {
+	const current = animation?.[phase] ?? createDefaultGraphicAnimationRecipe(phase);
+	const next = { ...current } as GraphicAnimationRecipe & Record<K, unknown>;
+
+	if (patch === null)
+		delete next[channel];
+	else
+		next[channel] = { ...GRAPHIC_ANIMATION_CHANNEL_DEFAULTS[channel], ...current[channel], ...patch };
+
+	return setAnimationRecipe(animation, phase, next);
+}
+
+/** Merge into one phase's stagger, or remove it. Only a container carries one. */
+function mergeAnimationStagger(
+	animation: GraphicContainerAnimation | undefined,
+	phase: GraphicAnimationPhase,
+	patch: Partial<GraphicAnimationStagger> | null,
+): GraphicContainerAnimation | undefined {
+	const stagger = { ...animation?.stagger };
+	if (patch === null) {
+		delete stagger[phase];
+	}
+	else {
+		stagger[phase] = {
+			order: 'list',
+			step: 100,
+			itemIds: [],
+			...stagger[phase],
+			...patch,
+		};
+	}
+
+	return pruneGraphicAnimation({ ...animation, stagger });
+}
+
+/** Drop one Graphic Item id from every stagger subset of one container. */
+function withoutStaggeredItem(
+	animation: GraphicContainerAnimation | undefined,
+	itemId: string,
+): GraphicContainerAnimation | undefined {
+	if (!animation?.stagger)
+		return animation;
+
+	const stagger: NonNullable<GraphicContainerAnimation['stagger']> = {};
+	for (const phase of GRAPHIC_ANIMATION_PHASE_VALUES) {
+		const entry = animation.stagger[phase];
+		if (!entry)
+			continue;
+		const itemIds = entry.itemIds.filter(id => id !== itemId);
+		// A stagger emptied by a deletion is dropped rather than kept as an order
+		// over nothing: the author selected a subset, they did not ask for an empty
+		// one. An author who clears the subset by hand keeps their step and order,
+		// because that is a choice rather than a consequence.
+		if (itemIds.length === 0)
+			continue;
+		stagger[phase] = { ...entry, itemIds };
+	}
+
+	return pruneGraphicAnimation({ ...animation, stagger });
+}
+
+/** The kinds that may own a Graphic Animation: every Graphic Item kind. */
+const ANIMATION_KINDS = ['text', 'shape', 'group'] as const;
+
+/** Only a Graphic Group has direct Graphic Items of its own to stagger. */
+const STAGGER_KINDS = ['group'] as const;
+
+export function setGraphicItemAnimationRecipe(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	phase: GraphicAnimationPhase,
+	recipe: GraphicAnimationRecipe | GraphicOnScreenAnimationRecipe | null,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ANIMATION_KINDS, item => ({
+		animation: setAnimationRecipe(item.animation, phase, recipe),
+	}));
+}
+
+/** Enable one lifecycle phase with its editable default recipe. */
+export function enableGraphicItemAnimationPhase(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	phase: GraphicAnimationPhase,
+): BroadcastGraphicConfig {
+	return setGraphicItemAnimationRecipe(graphic, itemId, phase, createDefaultGraphicAnimationRecipe(phase));
+}
+
+/**
+ * Merge into one phase's recipe.
+ *
+ * The patch type is keyed on the phase, so `pause` and `repeat` can only be aimed at
+ * the phase that cycles. The wire schema rejects them elsewhere anyway — every
+ * recipe object is strict — but a type that permits authoring something a write
+ * refuses is a type that lets the editor build a control nobody can save.
+ */
+export function patchGraphicItemAnimationRecipe<P extends GraphicAnimationPhase>(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	phase: P,
+	patch: Partial<GraphicAnimationRecipeFor<P>>,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ANIMATION_KINDS, item => ({
+		animation: mergeAnimationRecipe(item.animation, phase, patch),
+	}));
+}
+
+export function patchGraphicItemAnimationChannel<K extends GraphicAnimationChannelKey>(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	phase: GraphicAnimationPhase,
+	channel: K,
+	patch: Partial<typeof GRAPHIC_ANIMATION_CHANNEL_DEFAULTS[K]> | null,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ANIMATION_KINDS, item => ({
+		animation: mergeAnimationChannel(item.animation, phase, channel, patch),
+	}));
+}
+
+/**
+ * Initialise one phase's recipe from an animation preset. The preset writes an
+ * ordinary editable recipe and nothing records which preset produced it.
+ */
+export function applyGraphicItemAnimationPreset(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	phase: GraphicAnimationPhase,
+	presetId: string,
+): BroadcastGraphicConfig {
+	const preset = getGraphicAnimationPreset(presetId);
+	if (!preset)
+		return graphic;
+	return setGraphicItemAnimationRecipe(graphic, itemId, phase, preset.create());
+}
+
+/** Merge into a Graphic Group's stagger of its own direct Graphic Items. */
+export function patchGraphicItemAnimationStagger(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	phase: GraphicAnimationPhase,
+	patch: Partial<GraphicAnimationStagger> | null,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, STAGGER_KINDS, item => ({
+		animation: mergeAnimationStagger(item.animation, phase, patch),
+	}));
+}
+
+/** Add or remove one direct Graphic Item from a Graphic Group's staggered subset. */
+export function toggleGraphicItemStaggerMember(
+	graphic: BroadcastGraphicConfig,
+	groupId: string,
+	phase: GraphicAnimationPhase,
+	memberId: string,
+	selected: boolean,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, groupId, STAGGER_KINDS, (item) => {
+		const current = item.animation?.stagger?.[phase]?.itemIds ?? [];
+		const itemIds = selected
+			? (current.includes(memberId) ? current : [...current, memberId])
+			: current.filter(id => id !== memberId);
+		return { animation: mergeAnimationStagger(item.animation, phase, { itemIds }) };
+	});
+}
+
+/* Whole-graphic animation, over the Screen's stack. */
+
+export function setBroadcastGraphicAnimationRecipe(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	phase: GraphicAnimationPhase,
+	recipe: GraphicAnimationRecipe | GraphicOnScreenAnimationRecipe | null,
+): BroadcastGraphicConfig[] {
+	return graphics.map(entry => entry.id === graphicId
+		? { ...entry, animation: setAnimationRecipe(entry.animation, phase, recipe) }
+		: entry);
+}
+
+export function enableBroadcastGraphicAnimationPhase(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	phase: GraphicAnimationPhase,
+): BroadcastGraphicConfig[] {
+	return setBroadcastGraphicAnimationRecipe(graphics, graphicId, phase, createDefaultGraphicAnimationRecipe(phase));
+}
+
+export function patchBroadcastGraphicAnimationRecipe<P extends GraphicAnimationPhase>(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	phase: P,
+	patch: Partial<GraphicAnimationRecipeFor<P>>,
+): BroadcastGraphicConfig[] {
+	return graphics.map(entry => entry.id === graphicId
+		? { ...entry, animation: mergeAnimationRecipe(entry.animation, phase, patch) }
+		: entry);
+}
+
+export function patchBroadcastGraphicAnimationChannel<K extends GraphicAnimationChannelKey>(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	phase: GraphicAnimationPhase,
+	channel: K,
+	patch: Partial<typeof GRAPHIC_ANIMATION_CHANNEL_DEFAULTS[K]> | null,
+): BroadcastGraphicConfig[] {
+	return graphics.map(entry => entry.id === graphicId
+		? { ...entry, animation: mergeAnimationChannel(entry.animation, phase, channel, patch) }
+		: entry);
+}
+
+export function applyBroadcastGraphicAnimationPreset(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	phase: GraphicAnimationPhase,
+	presetId: string,
+): BroadcastGraphicConfig[] {
+	const preset = getGraphicAnimationPreset(presetId);
+	if (!preset)
+		return [...graphics];
+	return setBroadcastGraphicAnimationRecipe(graphics, graphicId, phase, preset.create());
+}
+
+export function patchBroadcastGraphicAnimationStagger(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	phase: GraphicAnimationPhase,
+	patch: Partial<GraphicAnimationStagger> | null,
+): BroadcastGraphicConfig[] {
+	return graphics.map(entry => entry.id === graphicId
+		? { ...entry, animation: mergeAnimationStagger(entry.animation, phase, patch) }
+		: entry);
+}
+
+export function toggleBroadcastGraphicStaggerMember(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	phase: GraphicAnimationPhase,
+	memberId: string,
+	selected: boolean,
+): BroadcastGraphicConfig[] {
+	return graphics.map((entry) => {
+		if (entry.id !== graphicId)
+			return entry;
+		const current = entry.animation?.stagger?.[phase]?.itemIds ?? [];
+		const itemIds = selected
+			? (current.includes(memberId) ? current : [...current, memberId])
+			: current.filter(id => id !== memberId);
+		return { ...entry, animation: mergeAnimationStagger(entry.animation, phase, { itemIds }) };
+	});
 }

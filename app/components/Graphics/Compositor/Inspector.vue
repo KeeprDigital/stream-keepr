@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ShapeGeometryPresetId } from '~~/shared/modules/graphics';
+import type { GraphicFocalPosition, MediaGraphicItemFit } from '~~/shared/types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
 	GRAPHIC_FILL_KIND_VALUES,
@@ -9,28 +10,39 @@ import type {
 	GraphicGlow,
 	GraphicGroupChildSizing,
 	GraphicGroupItemConfig,
+	GraphicInputChoiceOption,
+	GraphicInputDeclaration,
+	GraphicInputType,
 	GraphicItemConfig,
 	GraphicOutline,
+	GraphicPlaceholderStyle,
 	GraphicSurfaceStyle,
 	GraphicTypography,
+	MediaGraphicItemConfig,
+	OnAirUpdatePolicy,
 	ShapeCorner,
 	ShapeCornerKey,
 	ShapeGeometry,
 	TEXT_OVERFLOW_POLICY_VALUES,
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
+import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
+	addGraphicInput,
 	anchoredGraphicPosition,
 	applyShapeGeometryPreset,
 	changeGraphicGradientStopCount,
 	clearGraphicSurfaceStyle,
+	clearMediaGraphicItemAsset,
+	deleteGraphicInput,
 	displayGraphicGeometryValue,
 	GRAPHIC_ANCHOR_POINTS,
 	GRAPHIC_FONT_OPTIONS,
 	graphicItemIcon,
 	graphicItemKindLabel,
 	graphicItemSummary,
+	graphicTextTemplateInputKeys,
 	moveGraphicRectToAnchoredPosition,
 	parseGraphicGeometryValue,
 	patchBroadcastGraphic,
@@ -40,34 +52,48 @@ import {
 	patchGraphicGroup,
 	patchGraphicGroupChildSizing,
 	patchGraphicGroupDefaultChildSurfaceStyle,
+	patchGraphicInput,
 	patchGraphicItem,
 	patchGraphicOutline,
+	patchGraphicPlaceholderStyle,
 	patchGraphicSolidFill,
 	patchGraphicSurfaceStyle,
 	patchGraphicTypography,
+	patchMediaFocalPosition,
+	patchMediaGraphicItem,
 	patchShapeCorner,
 	patchShapeGeometry,
 	patchTextGraphicItem,
 	replaceBroadcastGraphic,
 	resizeGraphicRectFromAnchor,
+	selectMediaGraphicItemAsset,
 	setGraphicFillKind,
+	setGraphicInputChoiceOptions,
+	setMediaClipGeometry,
 	SHAPE_GEOMETRY_PRESETS,
 } from '~~/shared/modules/graphics';
+import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
 	GRAPHIC_FONT_STYLE_VALUES,
 	GRAPHIC_GEOMETRY_UNIT_VALUES,
 	GRAPHIC_GROUP_ALIGN_VALUES,
 	GRAPHIC_GROUP_ARRANGEMENT_VALUES,
 	GRAPHIC_GROUP_JUSTIFY_VALUES,
+	GRAPHIC_INPUT_TYPE_VALUES,
 	GRAPHIC_TEXT_ALIGN_VALUES,
 	GRAPHIC_TEXT_TRANSFORM_VALUES,
 	MAX_GRAPHIC_FILL_STOPS,
+	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
+	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
+	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_TEXT_LENGTH,
 	MIN_GRAPHIC_FILL_STOPS,
+	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	SHAPE_CORNER_KEYS,
 	SHAPE_CORNER_TREATMENT_VALUES,
 } from '~~/shared/types/graphics';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
+import GraphicsCompositorAnimation from './Animation.vue';
 
 /**
  * Property controls for the current selection: the Broadcast Graphic, or one
@@ -88,6 +114,8 @@ const props = defineProps<{
 	selectedTarget: GraphicsSelectionTarget;
 	canvasWidth: number;
 	canvasHeight: number;
+	/** The Event whose Graphic Asset associations organise the asset picker's discovery. */
+	eventId: number;
 	/**
 	 * Whether this session may author the selection. A session observing an artifact
 	 * another session's Graphics Authoring Lease covers reads every property and
@@ -125,6 +153,7 @@ const FILL_KIND_OPTIONS = [
 	{ label: 'Linear gradient', value: 'linear-gradient' },
 ] satisfies Array<{ label: string; value: typeof GRAPHIC_FILL_KIND_VALUES[number] }>;
 const CORNER_TREATMENT_OPTIONS = SHAPE_CORNER_TREATMENT_VALUES.map(value => ({ label: value, value }));
+const MEDIA_FIT_OPTIONS = MEDIA_GRAPHIC_ITEM_FIT_VALUES.map(value => ({ label: value, value }));
 const GEOMETRY_PRESET_OPTIONS = SHAPE_GEOMETRY_PRESETS.map(preset => ({
 	label: preset.label,
 	value: preset.id,
@@ -187,14 +216,25 @@ const parentGroup = computed<GraphicGroupItemConfig | null>(() =>
 const selectedTextItem = computed<TextGraphicItemConfig | null>(() =>
 	selectedItem.value?.type === 'text' ? selectedItem.value : null,
 );
+const selectedMediaItem = computed<MediaGraphicItemConfig | null>(() =>
+	selectedItem.value?.type === 'media' ? selectedItem.value : null,
+);
 const selectedGroup = computed<GraphicGroupItemConfig | null>(() =>
 	selectedItem.value?.type === 'group' ? selectedItem.value : null,
 );
-/** A Shape Graphic Item and a Graphic Group both own a Shape Geometry. */
+/**
+ * The Shape Geometry the geometry controls edit.
+ *
+ * A Shape Graphic Item and a Graphic Group draw one and always have one. A Media
+ * Graphic Item clips to one only while clipping is switched on, so the same
+ * controls appear for it exactly when there is a clip to shape.
+ */
 const selectedGeometry = computed<ShapeGeometry | null>(() => {
 	const item = selectedItem.value;
 	if (item?.type === 'shape' || item?.type === 'group')
 		return item.geometry;
+	if (item?.type === 'media')
+		return item.clipGeometry ?? null;
 	return null;
 });
 
@@ -210,8 +250,16 @@ const isStackedChild = computed(() =>
  * Only an item's own Graphic Surface Style is editable here. A Graphic Group
  * child with none of its own inherits the group's local style default, which is
  * edited on the group itself.
+ *
+ * A Media Graphic Item never has one: fill, outline, and glow belong to the kinds
+ * that paint a surface, and it paints an asset.
  */
-const ownSurfaceStyle = computed<GraphicSurfaceStyle | null>(() => selectedItem.value?.surfaceStyle ?? null);
+const ownSurfaceStyle = computed<GraphicSurfaceStyle | null>(() => {
+	const item = selectedItem.value;
+	if (!item || item.type === 'media')
+		return null;
+	return item.surfaceStyle ?? null;
+});
 
 /** A Graphic Geometry Unit projects against the containing canvas — a Graphic Group for its children. */
 function axisTotal(axis: 'x' | 'y') {
@@ -347,11 +395,151 @@ function updateTextItem(patch: Partial<Omit<TextGraphicItemConfig, 'type' | 'id'
 	applyToSelectedGraphic((graphic, itemId) => patchTextGraphicItem(graphic, itemId, patch));
 }
 
+function updateMediaItem(patch: Partial<Omit<MediaGraphicItemConfig, 'type' | 'id'>>) {
+	applyToSelectedGraphic((graphic, itemId) => patchMediaGraphicItem(graphic, itemId, patch));
+}
+
+function updateFocalPosition(patch: Partial<GraphicFocalPosition>) {
+	applyToSelectedGraphic((graphic, itemId) => patchMediaFocalPosition(graphic, itemId, patch));
+}
+
+function updateMediaClipping(clipping: boolean) {
+	applyToSelectedGraphic((graphic, itemId) => setMediaClipGeometry(graphic, itemId, clipping));
+}
+
+/**
+ * Pin one exact Graphic Asset identity and revision. The asset's own kind decides
+ * the item's media kind, and a silent video also records the revision's target
+ * compatibility, so the reference index has the fact it checks against.
+ */
+function selectMediaAsset(asset: GraphicAsset, reference: GraphicAssetReference) {
+	applyToSelectedGraphic((graphic, itemId) => selectMediaGraphicItemAsset(graphic, itemId, {
+		asset: reference,
+		mediaKind: asset.kind === 'silent-video' ? 'silent-video' : 'image',
+		videoCompatibility: asset.facts.kind === 'silent-video' ? asset.facts.targetCompatibility : undefined,
+	}));
+}
+
+function clearMediaAsset() {
+	applyToSelectedGraphic((graphic, itemId) => clearMediaGraphicItemAsset(graphic, itemId));
+}
+
 function updateGraphicName(value: string) {
 	const current = selection.value;
 	if (!canAuthor.value || current.kind !== 'graphic')
 		return;
 	emit('update:graphics', patchBroadcastGraphic(props.graphics, current.graphic.id, { name: value }));
+}
+
+/* ────────────────────────────────────────────────
+ * Graphic Inputs
+ * ──────────────────────────────────────────────── */
+
+/**
+ * The typed Graphic Inputs the selected Broadcast Graphic declares.
+ *
+ * They belong to the graphic rather than to any one Graphic Item, because a
+ * `{inputKey}` placeholder in any of its Text Graphic Items may name the same
+ * input — so this panel appears with the Broadcast Graphic selected.
+ */
+const selectedGraphicInputs = computed<GraphicInputDeclaration[]>(() =>
+	selection.value.kind === 'graphic' ? selection.value.graphic.inputs ?? [] : [],
+);
+
+const INPUT_TYPE_OPTIONS = GRAPHIC_INPUT_TYPE_VALUES.map(value => ({ label: value, value }));
+const UPDATE_POLICY_OPTIONS = [
+	{ label: 'Staged', value: 'staged' },
+	{ label: 'Live', value: 'live' },
+] satisfies Array<{ label: string; value: OnAirUpdatePolicy }>;
+
+function applyToGraphicInputs(
+	merge: (graphics: readonly BroadcastGraphicConfig[], graphicId: string) => BroadcastGraphicConfig[],
+) {
+	const current = selection.value;
+	if (!canAuthor.value || current.kind !== 'graphic')
+		return;
+	emit('update:graphics', merge(props.graphics, current.graphic.id));
+}
+
+const newInputType = ref<GraphicInputType>('text');
+
+/** A Graphic Input key written the way a Graphic Text Template names it. */
+function placeholderToken(key: string): string {
+	return `{${key}}`;
+}
+
+function addInput() {
+	applyToGraphicInputs((graphics, graphicId) => addGraphicInput(graphics, graphicId, newInputType.value));
+}
+
+function updateInput(key: string, patch: Partial<Omit<GraphicInputDeclaration, 'key' | 'type'>>) {
+	applyToGraphicInputs((graphics, graphicId) => patchGraphicInput(graphics, graphicId, key, patch));
+}
+
+function removeInput(key: string) {
+	applyToGraphicInputs((graphics, graphicId) => deleteGraphicInput(graphics, graphicId, key));
+}
+
+function updateChoiceOptions(key: string, options: GraphicInputChoiceOption[]) {
+	applyToGraphicInputs((graphics, graphicId) => setGraphicInputChoiceOptions(graphics, graphicId, key, options));
+}
+
+/**
+ * A choice Graphic Input's options as one line per option, `value=label`.
+ *
+ * A bounded list of short pairs is exactly what a textarea is good at, and it
+ * keeps the option list one control rather than a nested editor inside a property
+ * panel.
+ */
+function choiceOptionsText(input: GraphicInputDeclaration): string {
+	return input.type === 'choice'
+		? input.options.map(option => `${option.value}=${option.label}`).join('\n')
+		: '';
+}
+
+function parseChoiceOptions(key: string, value: string) {
+	const options = value
+		.split('\n')
+		.map(line => line.trim())
+		.filter(line => line.length > 0)
+		.map((line) => {
+			const [optionValue, ...rest] = line.split('=');
+			const trimmed = (optionValue ?? '').trim();
+			return { value: trimmed, label: rest.join('=').trim() || trimmed };
+		})
+		.filter(option => option.value.length > 0);
+
+	updateChoiceOptions(key, options.slice(0, MAX_GRAPHIC_INPUT_CHOICE_OPTIONS));
+}
+
+/* ────────────────────────────────────────────────
+ * Graphic Placeholder Styles
+ * ──────────────────────────────────────────────── */
+
+/**
+ * The `{inputKey}` placeholders of the selected Text Graphic Item that name a
+ * declared Graphic Input.
+ *
+ * Only declared ones: styling a placeholder nothing declares would be styling
+ * something that renders nothing.
+ */
+const styleablePlaceholders = computed(() => {
+	const current = selection.value;
+	if (current.kind !== 'item' || current.item.type !== 'text')
+		return [];
+
+	const declared = new Set((current.graphic.inputs ?? []).map(input => input.key));
+	return graphicTextTemplateInputKeys(current.item.text).filter(key => declared.has(key));
+});
+
+function placeholderStyleFor(inputKey: string): GraphicPlaceholderStyle {
+	return selectedTextItem.value?.placeholderStyles?.[inputKey] ?? {};
+}
+
+function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlaceholderStyle> | null) {
+	applyToSelectedGraphic((graphic, itemId) =>
+		patchGraphicPlaceholderStyle(graphic, itemId, inputKey, patch),
+	);
 }
 </script>
 
@@ -390,6 +578,147 @@ function updateGraphicName(value: string) {
 				@update:model-value="updateGraphicName(String($event))"
 			/>
 		</UFormField>
+
+		<!--
+			Graphic Inputs belong to the Broadcast Graphic, not to one Graphic Item: any
+			of its Text Graphic Items may name the same `{inputKey}`.
+		-->
+		<template v-if="selection.kind === 'graphic'">
+			<div class="flex items-end gap-2">
+				<UFormField label="Graphic Inputs" size="sm" class="flex-1">
+					<USelect
+						:model-value="newInputType"
+						:items="INPUT_TYPE_OPTIONS"
+						class="w-full"
+						size="sm"
+						data-testid="graphic-input-type"
+						@update:model-value="newInputType = $event"
+					/>
+				</UFormField>
+				<UButton
+					size="sm"
+					variant="soft"
+					icon="i-lucide-plus"
+					data-testid="graphic-input-add"
+					@click="addInput()"
+				>
+					Declare
+				</UButton>
+			</div>
+
+			<div
+				v-for="input in selectedGraphicInputs"
+				:key="input.key"
+				class="space-y-2 rounded-lg border border-default/70 p-2"
+				:data-graphic-input-declaration="input.key"
+			>
+				<div class="flex items-center gap-2">
+					<UInput
+						:model-value="input.label"
+						class="min-w-0 flex-1"
+						size="sm"
+						:maxlength="MAX_GRAPHIC_INPUT_LABEL_LENGTH"
+						data-testid="graphic-input-label"
+						@update:model-value="updateInput(input.key, { label: String($event) })"
+					/>
+					<UBadge size="xs" variant="soft">
+						{{ input.type }}
+					</UBadge>
+					<UButton
+						size="xs"
+						variant="ghost"
+						color="error"
+						icon="i-lucide-trash-2"
+						aria-label="Stop declaring this Graphic Input"
+						data-testid="graphic-input-delete"
+						@click="removeInput(input.key)"
+					/>
+				</div>
+
+				<!--
+					The key is generated once and never edited: a placeholder, a binding, a
+					Graphic Placeholder Style, and every accepted value in a running Live
+					Session all name it. The label is what an author renames.
+				-->
+				<p class="font-mono text-xs text-muted" data-testid="graphic-input-key">
+					{{ placeholderToken(input.key) }}
+				</p>
+
+				<div class="grid grid-cols-2 gap-2">
+					<UFormField label="Required" size="xs">
+						<USwitch
+							:model-value="input.required"
+							size="sm"
+							data-testid="graphic-input-required"
+							@update:model-value="updateInput(input.key, { required: Boolean($event) })"
+						/>
+					</UFormField>
+					<UFormField label="On-air Update Policy" size="xs">
+						<USelect
+							:model-value="input.updatePolicy"
+							:items="UPDATE_POLICY_OPTIONS"
+							class="w-full"
+							size="sm"
+							data-testid="graphic-input-policy"
+							@update:model-value="updateInput(input.key, { updatePolicy: $event })"
+						/>
+					</UFormField>
+				</div>
+
+				<UFormField v-if="input.type === 'text'" label="Default" size="xs">
+					<UInput
+						:model-value="input.default"
+						class="w-full"
+						size="sm"
+						:maxlength="input.maxLength"
+						data-testid="graphic-input-default"
+						@update:model-value="updateInput(input.key, { default: String($event) })"
+					/>
+				</UFormField>
+				<UFormField v-else-if="input.type === 'number'" label="Default" size="xs">
+					<UInputNumber
+						:model-value="input.default ?? undefined"
+						class="w-full"
+						size="sm"
+						data-testid="graphic-input-default"
+						@update:model-value="updateInput(input.key, { default: $event ?? null })"
+					/>
+				</UFormField>
+				<UFormField v-else-if="input.type === 'toggle'" label="Default" size="xs">
+					<USwitch
+						:model-value="input.default"
+						size="sm"
+						data-testid="graphic-input-default"
+						@update:model-value="updateInput(input.key, { default: Boolean($event) })"
+					/>
+				</UFormField>
+				<UFormField v-else-if="input.type === 'color'" label="Default" size="xs">
+					<UInput
+						type="color"
+						:model-value="input.default ?? '#000000'"
+						size="sm"
+						data-testid="graphic-input-default"
+						@update:model-value="updateInput(input.key, { default: String($event) })"
+					/>
+				</UFormField>
+
+				<UFormField
+					v-if="input.type === 'choice'"
+					label="Options"
+					size="xs"
+					:help="`One per line, as value=label. Up to ${MAX_GRAPHIC_INPUT_CHOICE_OPTIONS}.`"
+				>
+					<UTextarea
+						:model-value="choiceOptionsText(input)"
+						class="w-full"
+						size="sm"
+						:rows="3"
+						data-testid="graphic-input-options"
+						@update:model-value="parseChoiceOptions(input.key, String($event))"
+					/>
+				</UFormField>
+			</div>
+		</template>
 
 		<template v-if="selectedItem">
 			<UFormField label="Label" size="sm">
@@ -749,6 +1078,181 @@ function updateGraphicName(value: string) {
 					@update:model-value="updateTextItem({ minFontSize: $event ?? 1 })"
 				/>
 			</UFormField>
+
+			<!--
+				One optional typography override per `{inputKey}` this Graphic Text Template
+				names. Literal text always uses the base typography above, and only
+				placeholders naming a declared Graphic Input can be styled — styling one
+				that nothing declares would style something that renders nothing.
+			-->
+			<div
+				v-for="inputKey in styleablePlaceholders"
+				:key="inputKey"
+				class="space-y-2 rounded-lg border border-default/70 p-2"
+				:data-graphic-placeholder-style="inputKey"
+			>
+				<div class="flex items-center gap-2">
+					<span class="min-w-0 flex-1 truncate font-mono text-xs">{{ placeholderToken(inputKey) }}</span>
+					<UButton
+						size="xs"
+						variant="ghost"
+						color="neutral"
+						data-testid="graphic-placeholder-style-clear"
+						@click="updatePlaceholderStyle(inputKey, null)"
+					>
+						Use base
+					</UButton>
+				</div>
+				<div class="grid grid-cols-2 gap-2">
+					<UFormField label="Size" size="xs">
+						<UInputNumber
+							:model-value="placeholderStyleFor(inputKey).fontSize"
+							:min="1"
+							size="sm"
+							class="w-full"
+							data-testid="graphic-placeholder-style-size"
+							@update:model-value="updatePlaceholderStyle(inputKey, { fontSize: $event ?? undefined })"
+						/>
+					</UFormField>
+					<UFormField label="Weight" size="xs">
+						<UInputNumber
+							:model-value="placeholderStyleFor(inputKey).fontWeight"
+							:min="100"
+							:max="900"
+							:step="100"
+							size="sm"
+							class="w-full"
+							data-testid="graphic-placeholder-style-weight"
+							@update:model-value="updatePlaceholderStyle(inputKey, { fontWeight: $event ?? undefined })"
+						/>
+					</UFormField>
+					<UFormField label="Colour" size="xs" class="col-span-2">
+						<UIColorPicker
+							:model-value="placeholderStyleFor(inputKey).color ?? selectedTextItem.typography.color"
+							data-testid="graphic-placeholder-style-color"
+							@update:model-value="updatePlaceholderStyle(inputKey, { color: $event?.toString() || undefined })"
+						/>
+					</UFormField>
+				</div>
+			</div>
+		</template>
+
+		<template v-if="selectedMediaItem">
+			<div class="rounded-lg border border-default/70 p-3 space-y-2">
+				<p class="text-xs font-semibold text-muted">
+					Media
+				</p>
+
+				<!--
+					The picker pins one exact Graphic Asset identity and revision, and
+					reports a Missing Graphic Asset Reference or Unavailable Graphic Asset
+					Content against this exact item so an author repairs the item that
+					pinned it. A Broadcast Graphics Screen Output is consumed as a
+					Chromium browser source, which is what makes VP9 alpha selectable.
+				-->
+				<UFormField label="Graphic Asset" size="sm">
+					<GraphicsAssetFocusPicker
+						:model-value="selectedMediaItem.asset"
+						:event-id="eventId"
+						field-label="Media Graphic Item"
+						:asset-kind="['image', 'silent-video']"
+						video-target="chromium"
+						@update:model-value="$event ? undefined : clearMediaAsset()"
+						@select="selectMediaAsset"
+					/>
+				</UFormField>
+
+				<div class="grid grid-cols-2 gap-2">
+					<UFormField label="Fit" size="sm">
+						<USelect
+							:model-value="selectedMediaItem.fit"
+							:items="MEDIA_FIT_OPTIONS"
+							value-key="value"
+							class="w-full"
+							data-testid="media-fit"
+							@update:model-value="updateMediaItem({ fit: $event as MediaGraphicItemFit })"
+						/>
+					</UFormField>
+					<UFormField label="Opacity" size="sm">
+						<UInputNumber
+							:model-value="selectedMediaItem.opacity"
+							:min="0"
+							:max="1"
+							:step="0.05"
+							size="sm"
+							class="w-full"
+							data-testid="media-opacity"
+							aria-label="Media opacity"
+							@update:model-value="updateMediaItem({ opacity: $event ?? 1 })"
+						/>
+					</UFormField>
+					<UFormField label="Focal X" size="sm">
+						<UInputNumber
+							:model-value="selectedMediaItem.focalPosition.horizontal"
+							:min="0"
+							:max="1"
+							:step="0.05"
+							size="sm"
+							class="w-full"
+							data-testid="media-focal-horizontal"
+							aria-label="Horizontal focal position"
+							@update:model-value="updateFocalPosition({ horizontal: $event ?? 0.5 })"
+						/>
+					</UFormField>
+					<UFormField label="Focal Y" size="sm">
+						<UInputNumber
+							:model-value="selectedMediaItem.focalPosition.vertical"
+							:min="0"
+							:max="1"
+							:step="0.05"
+							size="sm"
+							class="w-full"
+							data-testid="media-focal-vertical"
+							aria-label="Vertical focal position"
+							@update:model-value="updateFocalPosition({ vertical: $event ?? 0.5 })"
+						/>
+					</UFormField>
+				</div>
+
+				<!--
+					Playback belongs to a silent video, so an image item is offered
+					neither control even though it stores both — switching an item back to
+					a video restores the playback its author already set up.
+				-->
+				<template v-if="selectedMediaItem.mediaKind === 'silent-video'">
+					<UFormField label="Playback rate" size="sm">
+						<UInputNumber
+							:model-value="selectedMediaItem.playbackRate"
+							:min="MIN_GRAPHIC_MEDIA_PLAYBACK_RATE"
+							:max="MAX_GRAPHIC_MEDIA_PLAYBACK_RATE"
+							:step="0.05"
+							size="sm"
+							class="w-full"
+							data-testid="media-playback-rate"
+							aria-label="Playback rate"
+							@update:model-value="updateMediaItem({ playbackRate: $event ?? 1 })"
+						/>
+					</UFormField>
+					<UFormField label="Loop" size="sm">
+						<USwitch
+							:model-value="selectedMediaItem.loop"
+							data-testid="media-loop"
+							@update:model-value="updateMediaItem({ loop: $event })"
+						/>
+					</UFormField>
+					<p class="text-xs text-muted">
+						Video is silent, and starts from its beginning when its Broadcast Graphic enters.
+					</p>
+				</template>
+
+				<UFormField label="Clip to Shape Geometry" size="sm">
+					<USwitch
+						:model-value="selectedMediaItem.clipGeometry !== undefined"
+						data-testid="media-clip-enabled"
+						@update:model-value="updateMediaClipping($event)"
+					/>
+				</UFormField>
+			</div>
 		</template>
 
 		<template v-if="selectedGeometry">
@@ -819,7 +1323,8 @@ function updateGraphicName(value: string) {
 			</div>
 		</template>
 
-		<template v-if="selectedItem">
+		<!-- A Media Graphic Item paints an asset rather than a surface, so it is offered none. -->
+		<template v-if="selectedItem && selectedItem.type !== 'media'">
 			<div class="rounded-lg border border-default/70 p-3 space-y-2">
 				<p class="text-xs font-semibold text-muted">
 					Graphic Surface Style
@@ -1009,5 +1514,12 @@ function updateGraphicName(value: string) {
 				</template>
 			</div>
 		</template>
+
+		<GraphicsCompositorAnimation
+			:graphics="graphics"
+			:selected-target="selectedTarget"
+			:writable="writable"
+			@update:graphics="emit('update:graphics', $event)"
+		/>
 	</fieldset>
 </template>

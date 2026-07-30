@@ -1,6 +1,6 @@
 import type { GraphicsVideoTarget } from '../utils/graphicAssetTargetCompatibility';
 import type { CardAnimationSpeed, DeckCardSize, DeckViewMode, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardLayout, StandingsColumnKey, StandingsViewMode, VerticalAlign } from './enums';
-import type { MediaGraphicItemConfig } from './graphicItem';
+import type { FeatureMatchMediaPresentationConfig } from './graphicItem';
 import type { BroadcastGraphicConfig } from './graphics';
 import type { GraphicAssetReference } from './graphicsAsset';
 import { migrateFeatureMatchGraphicItemConfig } from '../featureMatchGraphicItemDefinitions';
@@ -411,11 +411,11 @@ export interface FeatureMatchSpecificGraphicItemConfig extends FeatureMatchLayou
 }
 
 /**
- * Feature Match context placement facts composed with the Shared Graphics
- * Foundation Media Graphic Item contract. Top-level items and Graphic Group
- * children use this exact same content seam.
+ * Feature Match context placement facts composed with Feature Match Overlay's
+ * own media presentation contract. Top-level items and Graphic Group children
+ * use this exact same content seam.
  */
-export interface FeatureMatchMediaGraphicItemContentConfig extends MediaGraphicItemConfig {
+export interface FeatureMatchMediaGraphicItemContentConfig extends FeatureMatchMediaPresentationConfig {
 	type: 'media';
 	configurationVersion?: number;
 	videoCompatibility?: 'all-supported' | 'chromium-transparency';

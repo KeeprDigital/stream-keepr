@@ -8,7 +8,8 @@ import { screenOutputPath } from '~~/shared/utils/screenOutput';
  * Screen configuration page opens on.
  *
  * Its Program monitor is the authoritative Overlay Output itself, not a preview,
- * so it carries no editor guides. Its stack lists every placed Broadcast Graphic
+ * so it carries no editor guides — and, being a real output, it needs a Screen
+ * Output Asset Capability to resolve its media at all. Its stack lists every placed Broadcast Graphic
  * with the Graphic Playout State the Broadcast Graphics Live Session says it has,
  * and Take and Out state the operator's latest intent for one graphic.
  *
@@ -18,8 +19,14 @@ import { screenOutputPath } from '~~/shared/utils/screenOutput';
  * the same target without running the corresponding Graphic Animation phase,
  * which is indistinguishable from the plain action until animation exists.
  *
- * Generated Live Control per placed graphic — source pickers and typed input
- * fields — arrives with the Graphic Input work.
+ * Take is the one action a broken Graphic Asset Reference withholds. Out stays
+ * available in every state, because a graphic already on air whose media has just
+ * gone missing is exactly the graphic an operator most needs to remove.
+ *
+ * Generated Live Control for the selected Broadcast Graphic sits alongside the
+ * stack: typed fields for its declared Graphic Inputs, the value trace behind each
+ * of them, and Update Graphic while it is on air. Graphic Source Selection pickers
+ * arrive with Event Data binding.
  */
 const props = defineProps<{
 	eventId: number;
@@ -34,11 +41,23 @@ const emit = defineEmits<{ select: [graphicId: string] }>();
 
 const sessionStore = useBroadcastGraphicsLiveSessionStore();
 
+/**
+ * The Program monitor is the authoritative Overlay Output itself, so it resolves
+ * media exactly as a capture browser does — through a Screen Output Asset
+ * Capability. Without one it would show every graphic except its media, which is
+ * the one thing a monitor must not do quietly.
+ */
+const { assetCapability } = useScreenOutputAssetCapability(
+	() => props.eventId,
+	() => props.screen.id,
+);
+
 const programUrl = computed(() => screenOutputPath({
 	eventId: props.eventId,
 	screenSlug: props.screen.slug,
 	output: 'overlay',
 	fitToViewport: true,
+	assetCapability: assetCapability.value,
 }));
 const programAspectStyle = computed(() => ({
 	aspectRatio: `${props.canvasWidth} / ${props.canvasHeight}`,
@@ -51,14 +70,35 @@ const programAspectStyle = computed(() => ({
  * Authored order is back to front, so the list is reversed for display only;
  * nothing about composition order changes.
  */
+/**
+ * A Missing Graphic Asset Reference invalidates the Broadcast Graphic that owns
+ * it, so that graphic cannot be taken on air — and the reason is stated against
+ * the graphic rather than hidden behind a disabled button.
+ */
+const {
+	takeBlockedReason,
+	retryable: assetContentRetryable,
+	retry: retryAssetContent,
+} = useBroadcastGraphicsAssetEligibility(() => props.graphics);
+
 const entries = computed(() => [...props.graphics].reverse().map(graphic => ({
 	graphic,
 	playoutState: sessionStore.playoutState(props.screen.id, graphic.id),
 	// Scoped per graphic: an action on one must never freeze another's controls.
 	pending: sessionStore.isPending(props.screen.id, graphic.id),
+	assetBlockedReason: takeBlockedReason(graphic.id),
+	assetRetryable: assetContentRetryable(graphic.id),
 })));
 
 const onAirCount = computed(() => sessionStore.onAirGraphicIds(props.screen.id, props.graphics).length);
+
+/**
+ * The Broadcast Graphic whose Live Control is shown. An operator working a stack
+ * controls one graphic at a time, and the stack list is where they choose it.
+ */
+const selectedEntry = computed(() =>
+	entries.value.find(entry => entry.graphic.id === props.selectedGraphicId) ?? null,
+);
 
 function take(graphicId: string, cut: boolean) {
 	void sessionStore.take(props.eventId, props.screen.id, graphicId, cut);
@@ -149,13 +189,41 @@ watch(
 						</UBadge>
 					</button>
 
+					<!--
+						Diagnosable, not merely blocked: the alert names the owner slot the
+						author has to repair, and offers a retry only for content that could
+						come back.
+					-->
+					<UAlert
+						v-if="entry.assetBlockedReason"
+						class="mt-2"
+						:data-testid="`playout-asset-blocked-${entry.graphic.id}`"
+						:color="entry.assetRetryable ? 'warning' : 'error'"
+						variant="soft"
+						icon="i-lucide-image-off"
+						:title="entry.assetRetryable ? 'Unavailable Graphic Asset Content' : 'Missing Graphic Asset Reference'"
+						:description="entry.assetBlockedReason"
+					/>
+					<UButton
+						v-if="entry.assetRetryable"
+						class="mt-2"
+						size="xs"
+						color="warning"
+						variant="soft"
+						icon="i-lucide-refresh-cw"
+						data-testid="playout-retry-asset-content"
+						@click="retryAssetContent"
+					>
+						Retry Graphic Asset Content
+					</UButton>
+
 					<div class="mt-2 flex gap-1.5">
 						<UFieldGroup size="xs" class="flex-1">
 							<UButton
 								color="primary"
 								variant="subtle"
 								class="flex-1 justify-center"
-								:disabled="entry.pending"
+								:disabled="entry.pending || entry.assetBlockedReason !== undefined"
 								data-testid="playout-take"
 								@click="take(entry.graphic.id, false)"
 							>
@@ -165,7 +233,7 @@ watch(
 								color="primary"
 								variant="outline"
 								aria-label="Cut Take"
-								:disabled="entry.pending"
+								:disabled="entry.pending || entry.assetBlockedReason !== undefined"
 								title="Take without its enter animation"
 								data-testid="playout-cut-take"
 								@click="take(entry.graphic.id, true)"
@@ -201,5 +269,14 @@ watch(
 				</div>
 			</div>
 		</ScreenSettingsCard>
+
+		<ScreenModesBroadcastGraphicsLiveControl
+			v-if="selectedEntry"
+			:event-id="eventId"
+			:screen="screen"
+			:graphic="selectedEntry.graphic"
+			:playout-state="selectedEntry.playoutState"
+			:pending="selectedEntry.pending"
+		/>
 	</div>
 </template>
