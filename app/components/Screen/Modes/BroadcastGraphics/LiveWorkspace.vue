@@ -32,7 +32,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{ select: [graphicId: string] }>();
 
-const sessionStore = useBroadcastGraphicsSessionStore();
+const sessionStore = useBroadcastGraphicsLiveSessionStore();
 
 const programUrl = computed(() => screenOutputPath({
 	eventId: props.eventId,
@@ -54,6 +54,8 @@ const programAspectStyle = computed(() => ({
 const entries = computed(() => [...props.graphics].reverse().map(graphic => ({
 	graphic,
 	playoutState: sessionStore.playoutState(props.screen.id, graphic.id),
+	// Scoped per graphic: an action on one must never freeze another's controls.
+	pending: sessionStore.isPending(props.screen.id, graphic.id),
 })));
 
 const onAirCount = computed(() => sessionStore.onAirGraphicIds(props.screen.id, props.graphics).length);
@@ -104,6 +106,20 @@ watch(
 					{{ onAirCount }} of {{ graphics.length }} on air
 				</p>
 
+				<!--
+					A rejected playout action must never be invisible: the operator has to
+					know that what they asked for is not what program is showing.
+				-->
+				<UAlert
+					v-if="sessionStore.error"
+					data-testid="playout-error"
+					color="error"
+					variant="soft"
+					icon="i-lucide-triangle-alert"
+					title="Playout action failed"
+					:description="sessionStore.error"
+				/>
+
 				<div
 					v-for="entry in entries"
 					:key="entry.graphic.id"
@@ -139,6 +155,7 @@ watch(
 								color="primary"
 								variant="subtle"
 								class="flex-1 justify-center"
+								:disabled="entry.pending"
 								data-testid="playout-take"
 								@click="take(entry.graphic.id, false)"
 							>
@@ -148,6 +165,7 @@ watch(
 								color="primary"
 								variant="outline"
 								aria-label="Cut Take"
+								:disabled="entry.pending"
 								title="Take without its enter animation"
 								data-testid="playout-cut-take"
 								@click="take(entry.graphic.id, true)"
@@ -161,6 +179,7 @@ watch(
 								color="neutral"
 								variant="subtle"
 								class="flex-1 justify-center"
+								:disabled="entry.pending"
 								data-testid="playout-out"
 								@click="out(entry.graphic.id, false)"
 							>
@@ -170,6 +189,7 @@ watch(
 								color="neutral"
 								variant="outline"
 								aria-label="Cut Out"
+								:disabled="entry.pending"
 								title="Out without its exit animation"
 								data-testid="playout-cut-out"
 								@click="out(entry.graphic.id, true)"

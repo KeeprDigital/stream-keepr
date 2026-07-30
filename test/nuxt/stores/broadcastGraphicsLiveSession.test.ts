@@ -1,4 +1,4 @@
-import type { BroadcastGraphicsSessionResponse } from '~~/shared/types/broadcastGraphicsSession';
+import type { BroadcastGraphicsLiveSessionResponse } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type { MessageData } from '~/types/realtime';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,18 +8,40 @@ const mockRepository = {
 	sendCommand: vi.fn(),
 };
 
-vi.mock('~/composables/repositories/useBroadcastGraphicsSessionRepository', () => ({
-	useBroadcastGraphicsSessionRepository: () => mockRepository,
+vi.mock('~/composables/repositories/useBroadcastGraphicsLiveSessionRepository', () => ({
+	useBroadcastGraphicsLiveSessionRepository: () => mockRepository,
 }));
 
+// Mirrors the real composable: failures land in the caller's error ref rather
+// than propagating, so the store's own error handling is what these tests see.
 mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: vi.fn(async (action: () => Promise<unknown>) => await action()),
+	executeAction: vi.fn(async (
+		action: () => Promise<unknown>,
+		options?: { loadingRef?: { value: boolean }; errorRef?: { value: string | null } },
+	) => {
+		if (options?.loadingRef)
+			options.loadingRef.value = true;
+		if (options?.errorRef)
+			options.errorRef.value = null;
+		try {
+			return await action();
+		}
+		catch (e: unknown) {
+			if (options?.errorRef)
+				options.errorRef.value = e instanceof Error ? e.message : (e as { message?: string })?.message ?? 'An error occurred';
+			return null;
+		}
+		finally {
+			if (options?.loadingRef)
+				options.loadingRef.value = false;
+		}
+	}),
 }));
 
 const EVENT_ID = 12;
 const SCREEN_ID = 3;
 
-function session(overrides: Partial<BroadcastGraphicsSessionResponse> = {}): BroadcastGraphicsSessionResponse {
+function session(overrides: Partial<BroadcastGraphicsLiveSessionResponse> = {}): BroadcastGraphicsLiveSessionResponse {
 	return {
 		id: 55,
 		eventId: EVENT_ID,
@@ -35,8 +57,8 @@ function session(overrides: Partial<BroadcastGraphicsSessionResponse> = {}): Bro
 }
 
 function notification(
-	overrides: Partial<MessageData<'broadcastGraphicsSession:commandApplied'>> = {},
-): MessageData<'broadcastGraphicsSession:commandApplied'> {
+	overrides: Partial<MessageData<'broadcastGraphicsLiveSession:commandApplied'>> = {},
+): MessageData<'broadcastGraphicsLiveSession:commandApplied'> {
 	return {
 		eventId: EVENT_ID,
 		timestamp: 1_000,
@@ -46,14 +68,14 @@ function notification(
 		commandType: 'Take',
 		currentState: { playout: { slate: { onAir: true } } },
 		...overrides,
-	} as MessageData<'broadcastGraphicsSession:commandApplied'>;
+	} as MessageData<'broadcastGraphicsLiveSession:commandApplied'>;
 }
 
-describe('broadcastGraphicsSessionStore', () => {
-	let store: ReturnType<typeof useBroadcastGraphicsSessionStore>;
+describe('broadcastGraphicsLiveSessionStore', () => {
+	let store: ReturnType<typeof useBroadcastGraphicsLiveSessionStore>;
 
 	beforeEach(() => {
-		store = useBroadcastGraphicsSessionStore();
+		store = useBroadcastGraphicsLiveSessionStore();
 		store.$reset();
 		vi.clearAllMocks();
 		mockRepository.getSession.mockResolvedValue(session());
@@ -131,6 +153,92 @@ describe('broadcastGraphicsSessionStore', () => {
 
 		const [first, second] = mockRepository.sendCommand.mock.calls.map(call => call[3].commandId);
 		expect(first).not.toBe(second);
+	});
+
+	it('reloads and retries once when the epoch it cached has already ended', async () => {
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		vi.clearAllMocks();
+
+		// The Screen left and re-entered Broadcast Graphics mode out of band, so the
+		// epoch this client holds is gone.
+		mockRepository.sendCommand
+			.mockRejectedValueOnce({ statusCode: 409, message: 'Broadcast graphics live session has ended' })
+			.mockResolvedValueOnce({
+				screenId: SCREEN_ID,
+				sessionId: 56,
+				sequence: 2,
+				commandType: 'Take',
+				currentState: { playout: { slate: { onAir: true } } },
+				session: session({ id: 56, sequence: 2, currentState: { playout: { slate: { onAir: true } } } }),
+			});
+		mockRepository.getSession.mockResolvedValue(session({ id: 56, sequence: 1 }));
+
+		await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+		expect(mockRepository.getSession).toHaveBeenCalledOnce();
+		expect(mockRepository.sendCommand.mock.calls.map(call => call[2])).toEqual([55, 56]);
+		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
+		expect(store.error).toBeNull();
+	});
+
+	it('surfaces the failure when the retry against the current epoch also fails', async () => {
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		vi.clearAllMocks();
+		mockRepository.sendCommand.mockRejectedValue({ statusCode: 409, message: 'Screen is not in Broadcast Graphics mode' });
+		mockRepository.getSession.mockResolvedValue(session({ id: 56 }));
+
+		await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+		expect(mockRepository.sendCommand).toHaveBeenCalledTimes(2);
+		expect(store.error).toMatch(/Broadcast Graphics mode/);
+		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('off');
+	});
+
+	it('does not retry a failure that is not a conflict', async () => {
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		vi.clearAllMocks();
+		mockRepository.sendCommand.mockRejectedValue({ statusCode: 500, message: 'Internal Server Error' });
+
+		await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+		expect(mockRepository.sendCommand).toHaveBeenCalledOnce();
+		expect(mockRepository.getSession).not.toHaveBeenCalled();
+		expect(store.error).toBe('Internal Server Error');
+	});
+
+	it('reports a Broadcast Graphic as pending only while its own action is in flight', async () => {
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		let release: (value: unknown) => void = () => {};
+		mockRepository.sendCommand.mockImplementation(() => new Promise((resolve) => {
+			release = resolve;
+		}));
+
+		const inFlight = store.take(EVENT_ID, SCREEN_ID, 'slate');
+		await Promise.resolve();
+
+		expect(store.isPending(SCREEN_ID, 'slate')).toBe(true);
+		expect(store.isPending(SCREEN_ID, 'bug')).toBe(false);
+
+		release({
+			screenId: SCREEN_ID,
+			sessionId: 55,
+			sequence: 2,
+			commandType: 'Take',
+			currentState: { playout: { slate: { onAir: true } } },
+			session: session({ sequence: 2, currentState: { playout: { slate: { onAir: true } } } }),
+		});
+		await inFlight;
+
+		expect(store.isPending(SCREEN_ID, 'slate')).toBe(false);
+	});
+
+	it('clears the pending marker even when the action fails', async () => {
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		mockRepository.sendCommand.mockRejectedValue({ statusCode: 500, message: 'boom' });
+
+		await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+		expect(store.isPending(SCREEN_ID, 'slate')).toBe(false);
 	});
 
 	it('follows a notification that continues the sequence it already holds', async () => {

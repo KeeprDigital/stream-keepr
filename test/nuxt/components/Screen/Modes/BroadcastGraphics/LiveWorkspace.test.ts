@@ -1,4 +1,4 @@
-import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-session';
+import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
@@ -9,7 +9,7 @@ import {
 	broadcastGraphicPlayoutState,
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,
-} from '~~/shared/modules/broadcast-graphics-session';
+} from '~~/shared/modules/broadcast-graphics-live-session';
 
 enableAutoUnmount(afterEach);
 
@@ -17,11 +17,17 @@ const mockLiveState = ref<BroadcastGraphicsLiveState>(createInitialBroadcastGrap
 const mockLoadSession = vi.fn();
 const mockTake = vi.fn();
 const mockOut = vi.fn();
+const mockPendingGraphicIds = ref<string[]>([]);
+const mockError = ref<string | null>(null);
 
-mockNuxtImport('useBroadcastGraphicsSessionStore', () => () => ({
+mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	loadSession: mockLoadSession,
 	take: mockTake,
 	out: mockOut,
+	get error() {
+		return mockError.value;
+	},
+	isPending: (_screenId: number, graphicId: string) => mockPendingGraphicIds.value.includes(graphicId),
 	playoutState: (_screenId: number, graphicId: string) =>
 		broadcastGraphicPlayoutState(mockLiveState.value, graphicId),
 	onAirGraphicIds: (_screenId: number, graphics: readonly { id: string }[]) =>
@@ -87,6 +93,8 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockLiveState.value = createInitialBroadcastGraphicsLiveState();
+		mockPendingGraphicIds.value = [];
+		mockError.value = null;
 	});
 
 	it('loads the authoritative playout snapshot for the Screen', async () => {
@@ -153,6 +161,32 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 
 		expect(wrapper.get('[data-testid="empty-state"]').text()).toContain('No Broadcast Graphics');
 		expect(wrapper.find('[data-playout-entry]').exists()).toBe(false);
+	});
+
+	it('disables a Broadcast Graphic’s own actions while its action is in flight, and no others', async () => {
+		mockPendingGraphicIds.value = ['slate'];
+
+		const wrapper = await mountComponent();
+
+		const slate = entryFor(wrapper, 'slate');
+		expect(slate.get('[data-testid="playout-take"]').attributes('disabled')).toBeDefined();
+		expect(slate.get('[data-testid="playout-out"]').attributes('disabled')).toBeDefined();
+		expect(slate.get('[data-testid="playout-cut-take"]').attributes('disabled')).toBeDefined();
+		expect(entryFor(wrapper, 'lower-third').get('[data-testid="playout-take"]').attributes('disabled')).toBeUndefined();
+	});
+
+	it('surfaces a failed playout action instead of failing silently on air', async () => {
+		mockError.value = 'Broadcast graphics live session has ended';
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.get('[data-testid="playout-error"]').text()).toContain('live session has ended');
+	});
+
+	it('shows no error banner while playout is healthy', async () => {
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-testid="playout-error"]').exists()).toBe(false);
 	});
 
 	it('selects a Broadcast Graphic without changing what is on air', async () => {
