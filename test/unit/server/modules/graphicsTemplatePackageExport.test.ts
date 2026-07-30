@@ -16,8 +16,13 @@ import {
 	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
+import {
+	DEFAULT_GRAPHIC_SURFACE_STYLE,
+	DEFAULT_GRAPHIC_TYPOGRAPHY,
+} from '~~/shared/modules/graphics/itemDefinitions';
 import { TEMPLATE_PACKAGE_KINDS } from '~~/shared/types/templatePackage';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
 import { collectStream, readStoredZipArchive } from '../../../helpers/storedZipArchive';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
@@ -588,6 +593,82 @@ describe('the Template Package export contract', () => {
 		]);
 		expect(result.report.observed.packagedRevisionCount).toBe(101);
 		expect(result.report.limits.maximumPackagedRevisionCount).toBe(100);
+	});
+
+	it('declares the Definitions of Graphic Items nested inside a Graphic Group', async () => {
+		const { library } = createExportLibrary();
+		const graphic = {
+			id: 'stacked-lower-third',
+			name: 'Stacked lower third',
+			items: [{
+				id: 'stack',
+				type: 'group' as const,
+				label: 'Stack',
+				visible: true,
+				anchor: 'top-left' as const,
+				x: 0,
+				y: 0,
+				width: 800,
+				height: 200,
+				arrangement: 'column' as const,
+				padding: 0,
+				gap: 8,
+				align: 'start' as const,
+				justify: 'start' as const,
+				clip: false,
+				geometry: { cornerRadius: 0 },
+				children: [
+					{
+						id: 'nested-headline',
+						type: 'text' as const,
+						label: 'Headline',
+						visible: true,
+						anchor: 'top-left' as const,
+						x: 0,
+						y: 0,
+						width: 800,
+						height: 100,
+						text: 'Semifinal',
+						overflowPolicy: 'ellipsis' as const,
+						minFontSize: 24,
+						typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY },
+					},
+					{
+						id: 'nested-rule',
+						type: 'shape' as const,
+						label: 'Rule',
+						visible: true,
+						anchor: 'top-left' as const,
+						x: 0,
+						y: 108,
+						width: 800,
+						height: 4,
+						geometry: { cornerRadius: 0 },
+						surfaceStyle: { ...DEFAULT_GRAPHIC_SURFACE_STYLE },
+					},
+				],
+			}],
+		};
+
+		const requirements = broadcastGraphicTemplatePackageRequirements(
+			graphic as unknown as Parameters<typeof broadcastGraphicTemplatePackageRequirements>[0],
+		);
+		const result = await library.exportTemplatePackage({
+			packageKind: 'skgraphic',
+			template: { identity: graphic.id, name: graphic.name, document: graphic },
+			assets: requirements.assets,
+			capabilities: requirements.capabilities,
+		});
+
+		expect(result.outcome).toBe('exported');
+		if (result.outcome !== 'exported')
+			return;
+		const declared = result.package.manifest.applicationCapabilities
+			.filter(capability => capability.capability === 'graphic-item-definition')
+			.map(capability => capability.identity)
+			.sort();
+		// The group itself plus both of its children, not the group alone.
+		expect(declared).toEqual(['group', 'shape', 'text']);
 	});
 
 	it('keeps authored display copy that mentions a URL exportable', async () => {

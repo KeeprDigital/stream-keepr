@@ -1,4 +1,4 @@
-import type { BroadcastGraphicConfig } from '../types/graphics';
+import type { BroadcastGraphicConfig, GraphicItemConfig } from '../types/graphics';
 import type {
 	FeatureMatchGraphicGroupContentConfig,
 	FeatureMatchLayoutItemConfig,
@@ -63,19 +63,33 @@ function appendApplicationFontCapabilities(
 	}
 }
 
+function appendBroadcastGraphicItemCapabilities(
+	capabilities: TemplatePackageCapabilityRequirement[],
+	item: GraphicItemConfig,
+	slot: string,
+): void {
+	capabilities.push({
+		slot: `${slot}.type`,
+		capability: 'graphic-item-definition',
+		identity: getGraphicItemDefinition(item.type).kind,
+		configurationVersion: 1,
+	});
+	if (item.type !== 'group')
+		return;
+	// A Graphic Group's children are Graphic Items in their own right, so their
+	// Definitions have to be declared too or a receiver could accept a package
+	// holding a kind it cannot render.
+	for (const child of item.children)
+		appendBroadcastGraphicItemCapabilities(capabilities, child, `${slot}.children.${child.id}`);
+}
+
 /** A Broadcast Graphic Template's payload is one authored Broadcast Graphic. */
 export function broadcastGraphicTemplatePackageRequirements(
 	graphic: BroadcastGraphicConfig,
 ): TemplatePackageRequirements {
 	const capabilities: TemplatePackageCapabilityRequirement[] = [];
-	for (const item of graphic.items) {
-		capabilities.push({
-			slot: `items.${item.id}.type`,
-			capability: 'graphic-item-definition',
-			identity: getGraphicItemDefinition(item.type).kind,
-			configurationVersion: 1,
-		});
-	}
+	for (const item of graphic.items)
+		appendBroadcastGraphicItemCapabilities(capabilities, item, `items.${item.id}`);
 	appendApplicationFontCapabilities(capabilities, graphic.items, 'items');
 	// The Shared Graphics Foundation vocabulary carries no Graphic Asset
 	// Reference yet; Media Graphic Items add them without changing this contract.
