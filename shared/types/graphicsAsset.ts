@@ -20,6 +20,7 @@ declare const graphicAssetRevisionIdBrand: unique symbol;
 declare const graphicsDerivativeIdBrand: unique symbol;
 declare const graphicsIngestionOperationIdBrand: unique symbol;
 declare const graphicsIngestionPartIdentityBrand: unique symbol;
+declare const installedGraphicsTemplateIdBrand: unique symbol;
 
 export const DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES = 100 * 1024 * 1024 * 1024;
 export const DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES = 10 * 1024 * 1024 * 1024;
@@ -43,6 +44,10 @@ export type GraphicsIngestionOperationId = string & {
 
 export type GraphicsIngestionPartIdentity = string & {
 	readonly [graphicsIngestionPartIdentityBrand]: 'GraphicsIngestionPartIdentity';
+};
+
+export type InstalledGraphicsTemplateId = string & {
+	readonly [installedGraphicsTemplateIdBrand]: 'InstalledGraphicsTemplateId';
 };
 
 export interface GraphicAssetReference {
@@ -359,9 +364,70 @@ export interface GraphicsIngestionFailure {
 		| 'catalogue-publication-failed'
 		| 'ingestion-processing-failed'
 		| 'validation-failed'
+		| 'template-package-mapping-unavailable'
 		| 'remote-source-rejected';
 	retryable: boolean;
 	message: string;
+}
+
+/**
+ * What one packaged identity actually became locally.
+ *
+ * The compatibility profile is the installed revision's own, not the packaged
+ * bytes': an exact-origin reuse keeps whatever the local revision already
+ * earned, so a caller reading this learns the truth about the revision its
+ * Template now pins rather than what the sender happened to ship.
+ */
+export interface InstalledTemplatePackageAsset {
+	packagedId: string;
+	/** Whether this identity created a local Graphic Asset or reused one. */
+	outcome: 'created' | 'reused';
+	basis: 'exact-origin' | 'related-origin-revision' | 'shared-content-digest' | 'new-content';
+	assetId: GraphicAssetId;
+	revisionId: GraphicAssetRevisionId;
+	name: string;
+	kind: 'image' | 'silent-video' | 'font';
+	compatibilityProfile: string;
+}
+
+/** What one complete Template Package installation published. */
+export interface TemplatePackageInstallationResult {
+	templateId: InstalledGraphicsTemplateId;
+	templateKind: InstalledGraphicsTemplateKind;
+	templateName: string;
+	/** Every packaged identity, whichever way it resolved locally. */
+	assets: InstalledTemplatePackageAsset[];
+}
+
+export const INSTALLED_GRAPHICS_TEMPLATE_KINDS = [
+	'broadcast-graphic',
+	'feature-match-layout',
+] as const;
+
+export type InstalledGraphicsTemplateKind = typeof INSTALLED_GRAPHICS_TEMPLATE_KINDS[number];
+
+/**
+ * One graphics Template a Template Package installed into this installation.
+ *
+ * Its document is an independent local copy whose Graphic Asset References are
+ * already rewritten to exact local identities and revisions, so it is valid the
+ * instant it becomes visible. It records the source Template identity as
+ * provenance only: there is no link back to the installation that exported it.
+ */
+export interface InstalledGraphicsTemplate {
+	id: InstalledGraphicsTemplateId;
+	kind: InstalledGraphicsTemplateKind;
+	name: string;
+	revisionNumber: number;
+	document: unknown;
+	sourceTemplateIdentity: string;
+	installedByOperationId: GraphicsIngestionOperationId;
+	eventId?: number;
+	references: {
+		ownerSlot: string;
+		reference: GraphicAssetReference;
+	}[];
+	installedAt: string;
 }
 
 export type GraphicsIngestionCapacityOutcome
@@ -420,6 +486,16 @@ export interface GraphicsIngestionOperation extends GraphicAssetSourceDeclaratio
 		assetId: GraphicAssetId;
 		revisionId: GraphicAssetRevisionId;
 	};
+	/**
+	 * The terminal result of one Template Package installation, present only on a
+	 * `template-package` operation that published one.
+	 *
+	 * A package's result is meaningful only as the complete set it published
+	 * together — one Template and every local revision its rewritten references
+	 * pin — so it is recorded beside the single-revision result the other
+	 * ingestion paths produce rather than pretending to be one.
+	 */
+	templatePackageInstallation?: TemplatePackageInstallationResult;
 	failure?: GraphicsIngestionFailure;
 	createdAt: string;
 	updatedAt: string;

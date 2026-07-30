@@ -46,6 +46,8 @@ const ERROR_REMEDIATION = {
 	'incompatible-graphic-asset-content': 'Packaged content does not satisfy this installation\'s current Graphic Asset Compatibility Profile. Ask the sender to replace the asset with supported content.',
 	'derivative-generation-failed': 'A preview could not be produced for packaged content, so the asset cannot be installed. Ask the sender to replace the asset.',
 	'immutable-origin-digest-conflict': 'This package claims an origin that already exists here with different content. Provenance is immutable, so the complete package is rejected. Obtain the package again from its original source.',
+	'duplicate-packaged-origin': 'Two packaged assets claim the same source identity and revision, so neither can be mapped to one local revision. Ask the sender to export the Template again rather than repacking it by hand.',
+	'graphic-asset-origin-not-referenceable': 'This package reuses a Graphic Asset that is currently Retired or in Trash, and neither can take a new reference. Restore the asset, then retry the installation.',
 	'canonical-capacity-blocked': 'Installing this package would exceed the canonical storage quota. Free canonical storage or raise the quota, then retry.',
 } as const satisfies Record<TemplatePackagePreflightErrorCode, string>;
 
@@ -59,12 +61,15 @@ const WARNING_REMEDIATION = {
 } as const satisfies Record<TemplatePackagePreflightWarningCode, string>;
 
 /**
- * Only a locally exhausted quota can succeed on a later attempt. Everything the
- * package itself got wrong fails the same way however many times it is retried,
- * so it terminates permanently rather than inviting a pointless retry.
+ * Only a condition this installation can change can succeed on a later attempt.
+ * Everything the package itself got wrong fails the same way however many times
+ * it is retried, so it terminates permanently rather than inviting a pointless
+ * retry — while an exhausted quota or an asset an author can restore leaves the
+ * operation resumable from its staged bytes.
  */
 const RETRYABLE_ERROR_CODES = new Set<TemplatePackagePreflightIssueCode>([
 	'canonical-capacity-blocked',
+	'graphic-asset-origin-not-referenceable',
 ]);
 
 const WARNING_CODES = new Set<TemplatePackagePreflightIssueCode>(

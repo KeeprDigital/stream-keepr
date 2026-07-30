@@ -1,4 +1,7 @@
-import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
+import type {
+	GraphicAssetLifecycleState,
+	GraphicAssetReference,
+} from '~~/shared/types/graphicsAsset';
 import type {
 	TemplatePackageAsset,
 	TemplatePackageCapabilityKind,
@@ -23,6 +26,7 @@ import {
 	templatePackageContentEntry,
 } from '~~/shared/types/templatePackage';
 import { inspectTemplatePackageCapabilities } from './template-package';
+import { packagedOriginKey } from './template-package-installation';
 import { templatePackagePreflightIssue } from './template-package-preflight-issues';
 
 /**
@@ -248,6 +252,7 @@ export function readTemplatePackageManifest(value: unknown): ReadTemplatePackage
 
 	const assets: TemplatePackageAsset[] = [];
 	const packagedIds = new Set<string>();
+	const declaredOrigins = new Set<string>();
 	for (const [index, candidate] of (packagedAssets as unknown[]).entries()) {
 		const read = readPackagedAsset(candidate, index);
 		if ('issues' in read) {
@@ -261,6 +266,20 @@ export function readTemplatePackageManifest(value: unknown): ReadTemplatePackage
 			));
 			continue;
 		}
+		// One source revision is one local revision. Two packaged identities
+		// claiming the same provenance cannot both map: a Template field naming
+		// that origin has two candidate mappings and no way to choose, and the
+		// origin row itself can only record one of them. Neither is a partial
+		// installation worth attempting, so the package is refused.
+		const originKey = packagedOriginKey(read.asset.origin);
+		if (declaredOrigins.has(originKey)) {
+			issues.push(templatePackagePreflightIssue('duplicate-packaged-origin', {
+				subject: read.asset.packagedId,
+				message: `"${read.asset.name}" claims a source identity and revision another packaged asset already claims`,
+			}));
+			continue;
+		}
+		declaredOrigins.add(originKey);
 		packagedIds.add(read.asset.packagedId);
 		assets.push(read.asset);
 	}
@@ -431,6 +450,12 @@ export interface LocalOriginMatch {
 	/** That revision's content digest, which must equal the packaged digest. */
 	digest: string;
 	name: string;
+	/**
+	 * Whether that revision's Graphic Asset can still take a reference. Only an
+	 * active asset can, and a proposal that reused a Retired or Trashed one would
+	 * be refused at the last possible moment instead of here.
+	 */
+	lifecycleState: GraphicAssetLifecycleState;
 }
 
 export interface TemplatePackageMappingInput {
@@ -489,6 +514,19 @@ export function templatePackageMappingProposal(
 	}
 
 	if (input.originMatch) {
+		// A Retired asset takes no new references and a Trashed one takes none
+		// either, so a proposal to reuse either could never be installed. Saying so
+		// here is the difference between an author restoring the asset and retrying,
+		// and an author watching every attempt fail at the final transaction with
+		// nothing to act on. It stays retryable because restoring is the fix.
+		if (input.originMatch.lifecycleState !== 'active') {
+			issues.push(templatePackagePreflightIssue('graphic-asset-origin-not-referenceable', {
+				subject: asset.packagedId,
+				message: `"${input.originMatch.name}" is ${
+					input.originMatch.lifecycleState === 'retired' ? 'Retired' : 'in Trash'
+				} here, so this package cannot reference the revision it reuses`,
+			}));
+		}
 		if (input.originMatch.digest !== asset.origin.digest) {
 			issues.push(templatePackagePreflightIssue('immutable-origin-digest-conflict', {
 				subject: asset.packagedId,
