@@ -165,6 +165,31 @@ export function isGraphicAssetReferencingScreenMode(mode: string): mode is Graph
 	return (GRAPHIC_ASSET_REFERENCING_SCREEN_MODES as readonly string[]).includes(mode);
 }
 
+/**
+ * The owner-slot namespace each referencing Screen Mode writes into.
+ *
+ * One Screen may hold a configuration for every mode at once, so its reference
+ * index holds every mode's references at once too. The owner slot is what keeps
+ * them apart: each mode's slots are rooted at the top-level configuration field
+ * its references are discovered from, so the prefix identifies which mode
+ * published a row without a column to store it.
+ *
+ * That makes this map load-bearing rather than descriptive. A write scopes its
+ * delete to its own prefix so it cannot clear another mode's rows, and a Screen
+ * Output resolves only the prefix belonging to the Screen's current mode. A slot
+ * that escaped its prefix would silently break both, which is why
+ * `broadcastGraphicsAssetReferences.test.ts` asserts every discovered slot
+ * against it.
+ */
+export const GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES = {
+	'feature-match-overlay': 'layout.',
+	'broadcast-graphics': 'graphics.',
+} as const satisfies Record<GraphicAssetReferencingScreenMode, string>;
+
+export function graphicAssetReferenceSlotPrefix(mode: GraphicAssetReferencingScreenMode): string {
+	return GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES[mode];
+}
+
 export interface GraphicAssetReferencingScreenModeConfigs {
 	'feature-match-overlay'?: FeatureMatchOverlayModeConfig;
 	'broadcast-graphics'?: BroadcastGraphicsModeConfig;
@@ -177,17 +202,28 @@ export interface GraphicAssetReferencingScreenModeConfigs {
  * create-path rejection, and the publication-eligibility check all need the same
  * answer, and a mode added to the list above must reach every one of them or a
  * Screen Output would resolve content nothing indexed.
+ *
+ * Exhaustive by construction: a mode added to the list without a branch here
+ * fails to compile rather than quietly reading another mode's configuration.
  */
 export function screenModeGraphicAssetReferences(
 	mode: GraphicAssetReferencingScreenMode,
 	modeConfigs: GraphicAssetReferencingScreenModeConfigs | null | undefined,
 ): ScreenGraphicAssetReference[] {
-	if (mode === 'feature-match-overlay') {
-		const config = modeConfigs?.['feature-match-overlay'];
-		return config ? featureMatchOverlayGraphicAssetReferences(config) : [];
+	switch (mode) {
+		case 'feature-match-overlay': {
+			const config = modeConfigs?.['feature-match-overlay'];
+			return config ? featureMatchOverlayGraphicAssetReferences(config) : [];
+		}
+		case 'broadcast-graphics': {
+			const config = modeConfigs?.['broadcast-graphics'];
+			return config ? broadcastGraphicsGraphicAssetReferences(config) : [];
+		}
+		default: {
+			const unreachable: never = mode;
+			return unreachable;
+		}
 	}
-	const config = modeConfigs?.['broadcast-graphics'];
-	return config ? broadcastGraphicsGraphicAssetReferences(config) : [];
 }
 
 export function sameScreenGraphicAssetReferences(

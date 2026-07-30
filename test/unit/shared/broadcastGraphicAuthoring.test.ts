@@ -501,6 +501,22 @@ describe('broadcastGraphicAuthoring', () => {
 			expect(media(asVideo)).toMatchObject({ playbackRate: 0.5, loop: false });
 		});
 
+		it('returns the media kind to image when the asset is unpinned', () => {
+			// Leaving it on silent-video would keep offering playback controls on an item
+			// that reads "No Graphic Asset" — controls for an asset that is not there.
+			const video = selectMediaGraphicItemAsset(
+				patchMediaGraphicItem(withMedia(), 'logo', { playbackRate: 0.5, loop: false }),
+				'logo',
+				{ asset: REFERENCE, mediaKind: 'silent-video', videoCompatibility: 'all-supported' },
+			);
+
+			const cleared = clearMediaGraphicItemAsset(video, 'logo');
+
+			expect(media(cleared).mediaKind).toBe('image');
+			// The author's own playback settings survive, because they are not the asset's.
+			expect(media(cleared)).toMatchObject({ playbackRate: 0.5, loop: false });
+		});
+
 		it('unpins an asset without disturbing the presentation of the item', () => {
 			const pinned = selectMediaGraphicItemAsset(
 				patchMediaGraphicItem(withMedia(), 'logo', { fit: 'contain' }),

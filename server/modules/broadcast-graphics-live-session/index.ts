@@ -1,13 +1,19 @@
 import type { DbScreen } from '~~/server/db/schema';
+import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import type {
 	BroadcastGraphicsCommand,
 	BroadcastGraphicsCommandResult,
 	BroadcastGraphicsLiveSessionResponse,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
 import { mapBroadcastGraphicsLiveSessionToResponse } from '~~/server/mappers/broadcastGraphicsLiveSession';
+import {
+	graphicAssetId,
+	graphicAssetRevisionId,
+} from '~~/server/modules/graphics-asset-library';
 import { broadcastGraphicsStateService } from '~~/server/services/broadcastGraphicsState';
 import { screenService } from '~~/server/services/screen';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 
 interface ApplyCommandParams {
 	eventId: number;
@@ -29,7 +35,9 @@ interface ApplyCommandParams {
  * port, because the port's aggregate is exactly the row its projection writes
  * back — the Screen is a second entity the sequenced aggregate does not contain.
  */
-export function broadcastGraphicsLiveSessionModule() {
+export function broadcastGraphicsLiveSessionModule(dependencies: {
+	graphicsAssets?: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevision'>;
+} = {}) {
 	const state = broadcastGraphicsStateService();
 	const screens = screenService();
 
@@ -53,11 +61,64 @@ export function broadcastGraphicsLiveSessionModule() {
 		return screen;
 	};
 
-	function authoredGraphicIds(screen: DbScreen): Set<string> {
-		const config = screen.modeConfigs?.['broadcast-graphics']
+	function authoredStack(screen: DbScreen) {
+		return screen.modeConfigs?.['broadcast-graphics']
 			?? getDefaultConfigForMode('broadcast-graphics');
-		return new Set(config.graphics.map(graphic => graphic.id));
 	}
+
+	function authoredGraphicIds(screen: DbScreen): Set<string> {
+		return new Set(authoredStack(screen).graphics.map(graphic => graphic.id));
+	}
+
+	/**
+	 * A Missing Graphic Asset Reference invalidates the Broadcast Graphic that owns
+	 * it, so that graphic cannot be taken on air.
+	 *
+	 * Enforced here rather than in the reducer, and rather than only in Live
+	 * Control. The reducer's aggregate is exactly the row its projection writes
+	 * back, and this question needs two more entities — the Screen's authored stack
+	 * and the Graphics Asset Library — so it belongs in the module that already
+	 * resolves the Screen before handing the command on. A disabled button is not
+	 * the invariant: a second operator on stale data, a replayed command, or a
+	 * direct API call all reach this path.
+	 *
+	 * Only Take is gated. Out needs none of the asset's bytes, and blocking it would
+	 * trap on air the very graphic an operator most needs to remove. A retired asset
+	 * is not a failure either: its pinned revisions keep resolving by design.
+	 */
+	const requireResolvableGraphicAssets = async (screen: DbScreen, graphicId: string): Promise<void> => {
+		const graphic = authoredStack(screen).graphics.find(entry => entry.id === graphicId);
+		if (!graphic)
+			return;
+
+		const references = broadcastGraphicsGraphicAssetReferences({ graphics: [graphic] });
+		if (references.length === 0)
+			return;
+
+		if (!dependencies.graphicsAssets) {
+			throw createError({
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'Graphics Asset Library is unavailable',
+			});
+		}
+
+		for (const item of references) {
+			const status = await dependencies.graphicsAssets.inspectGraphicAssetRevision({
+				assetId: graphicAssetId(item.reference.assetId),
+				revisionId: graphicAssetRevisionId(item.reference.revisionId),
+			});
+			if (status.outcome === 'available')
+				continue;
+			throw createError({
+				statusCode: 409,
+				statusMessage: 'Conflict',
+				message: status.outcome === 'missing'
+					? `Graphic Asset Reference at ${item.ownerSlot} is missing, so this Broadcast Graphic cannot be taken on air`
+					: `Graphic Asset Content at ${item.ownerSlot} is temporarily unavailable, so this Broadcast Graphic cannot be taken on air`,
+			});
+		}
+	};
 
 	/**
 	 * The authoritative snapshot, opening the Screen's epoch if it has none.
@@ -90,6 +151,9 @@ export function broadcastGraphicsLiveSessionModule() {
 				message: 'Broadcast Graphic not found on this Screen',
 			});
 		}
+
+		if (command.type === 'Take')
+			await requireResolvableGraphicAssets(screen, command.payload.graphicId);
 
 		const session = await state.findSessionById(sessionId, eventId);
 		if (!session || session.screenId !== screenId) {

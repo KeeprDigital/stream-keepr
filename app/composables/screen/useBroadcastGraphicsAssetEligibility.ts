@@ -1,6 +1,7 @@
 import type { MaybeRefOrGetter } from 'vue';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { GraphicAssetReference, GraphicAssetReferenceStatus } from '~~/shared/types/graphicsAsset';
+import { flattenGraphicItems } from '~~/shared/modules/graphics';
 import {
 	broadcastGraphicsGraphicAssetReferences,
 	graphicAssetRevisionStatusPath,
@@ -28,8 +29,8 @@ import { createGuardedSequence } from '~/utils/guardedSequence';
 export type BroadcastGraphicAssetEligibility
 	= | { outcome: 'eligible' }
 		| { outcome: 'checking' }
-		| { outcome: 'missing'; ownerSlots: string[] }
-		| { outcome: 'unavailable'; ownerSlots: string[] };
+		| { outcome: 'missing'; items: string[] }
+		| { outcome: 'unavailable'; items: string[] };
 
 function referenceKey(reference: GraphicAssetReference): string {
 	return `${reference.assetId}\0${reference.revisionId}`;
@@ -49,11 +50,28 @@ export function useBroadcastGraphicsAssetEligibility(
 	 * Each graphic's own references, discovered by the same function that builds the
 	 * Screen's reference index — so what is checked here is exactly what the Screen
 	 * publishes, named by exactly the owner slots the index uses.
+	 *
+	 * Each reference also carries the authored label of the Graphic Item that pinned
+	 * it, because an operator alert has to name something they can find on the canvas.
+	 * The owner slot stays the identity used everywhere else; the label is only how it
+	 * is read out.
 	 */
-	const referencesByGraphic = computed(() => toValue(graphics).map(graphic => ({
-		graphicId: graphic.id,
-		references: broadcastGraphicsGraphicAssetReferences({ graphics: [graphic] }),
-	})));
+	const referencesByGraphic = computed(() => toValue(graphics).map((graphic) => {
+		const labels = new Map(
+			flattenGraphicItems(graphic).map(item => [item.id, item.label] as const),
+		);
+
+		return {
+			graphicId: graphic.id,
+			references: broadcastGraphicsGraphicAssetReferences({ graphics: [graphic] }).map(item => ({
+				...item,
+				// A slot is `graphics.<graphicId>.items.…<itemId>.asset`, so the item is
+				// the segment before the field. Falls back to the slot itself, because a
+				// diagnosis with an awkward name still beats no diagnosis.
+				itemLabel: labels.get(item.ownerSlot.split('.').at(-2) ?? '') ?? item.ownerSlot,
+			})),
+		};
+	}));
 
 	watch(
 		() => ({
@@ -65,13 +83,19 @@ export function useBroadcastGraphicsAssetEligibility(
 
 			// A graphic with no assets is settled without a request, so an unrelated
 			// graphic never waits on someone else's network round trip.
+			//
+			// A graphic that already has a verdict keeps it while the new one is in
+			// flight, rather than falling back to `checking`. Any edit anywhere in the
+			// Screen's stack re-runs this watch, and `checking` does not block Take — so
+			// resetting would hand the operator an enabled Take on a graphic already
+			// known to be broken, every time somebody touched an unrelated graphic.
+			const previous = eligibility.value;
 			const pending = byGraphic.filter(entry => entry.references.length > 0);
-			eligibility.value = new Map(byGraphic.map(entry => [
-				entry.graphicId,
-				entry.references.length === 0
-					? { outcome: 'eligible' as const }
-					: { outcome: 'checking' as const },
-			]));
+			eligibility.value = new Map(byGraphic.map((entry): [string, BroadcastGraphicAssetEligibility] => {
+				if (entry.references.length === 0)
+					return [entry.graphicId, { outcome: 'eligible' }];
+				return [entry.graphicId, previous.get(entry.graphicId) ?? { outcome: 'checking' }];
+			}));
 			if (pending.length === 0)
 				return;
 
@@ -90,18 +114,18 @@ export function useBroadcastGraphicsAssetEligibility(
 				return;
 
 			eligibility.value = new Map(byGraphic.map((entry): [string, BroadcastGraphicAssetEligibility] => {
-				const slotsWith = (outcome: 'missing' | 'unavailable') => entry.references
+				const itemsWith = (outcome: 'missing' | 'unavailable') => entry.references
 					.filter(item => statuses.get(referenceKey(item.reference))?.outcome === outcome)
-					.map(item => item.ownerSlot);
+					.map(item => item.itemLabel);
 
 				// Missing wins over unavailable: repairing an integrity failure is the
 				// action to take, and retrying would not help it.
-				const missing = slotsWith('missing');
+				const missing = itemsWith('missing');
 				if (missing.length > 0)
-					return [entry.graphicId, { outcome: 'missing', ownerSlots: missing }];
-				const unavailable = slotsWith('unavailable');
+					return [entry.graphicId, { outcome: 'missing', items: missing }];
+				const unavailable = itemsWith('unavailable');
 				if (unavailable.length > 0)
-					return [entry.graphicId, { outcome: 'unavailable', ownerSlots: unavailable }];
+					return [entry.graphicId, { outcome: 'unavailable', items: unavailable }];
 				return [entry.graphicId, { outcome: 'eligible' }];
 			}));
 		},
@@ -131,11 +155,11 @@ export function useBroadcastGraphicsAssetEligibility(
 	function takeBlockedReason(graphicId: string): string | undefined {
 		const current = graphicEligibility(graphicId);
 		if (current.outcome === 'missing') {
-			return `A Graphic Asset Reference is missing at ${current.ownerSlots.join(', ')}. `
+			return `The Graphic Asset for ${current.items.join(', ')} is missing. `
 				+ 'Repair or replace it in the Edit workspace before taking this graphic on air.';
 		}
 		if (current.outcome === 'unavailable') {
-			return `Graphic Asset Content is temporarily unavailable at ${current.ownerSlots.join(', ')}. `
+			return `Graphic Asset Content for ${current.items.join(', ')} is temporarily unavailable. `
 				+ 'Retry before taking this graphic on air.';
 		}
 		return undefined;

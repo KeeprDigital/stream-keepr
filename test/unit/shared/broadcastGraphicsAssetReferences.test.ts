@@ -6,6 +6,7 @@ import { squareShapeGeometry } from '~~/shared/modules/graphics';
 import {
 	broadcastGraphicsGraphicAssetReferences,
 	GRAPHIC_ASSET_REFERENCING_SCREEN_MODES,
+	graphicAssetReferenceSlotPrefix,
 	isGraphicAssetReferencingScreenMode,
 	sameScreenGraphicAssetReferences,
 	screenModeGraphicAssetReferences,
@@ -180,13 +181,69 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 		expect(screenModeGraphicAssetReferences('broadcast-graphics', undefined)).toEqual([]);
 	});
 
-	it('names every Screen Mode that publishes references, and no other', () => {
-		// A mode missing from this list writes its configuration without indexing it,
-		// and its Screen Outputs would then be asked for revisions no capability covers.
-		expect([...GRAPHIC_ASSET_REFERENCING_SCREEN_MODES])
-			.toEqual(['feature-match-overlay', 'broadcast-graphics']);
-		expect(isGraphicAssetReferencingScreenMode('broadcast-graphics')).toBe(true);
-		expect(isGraphicAssetReferencingScreenMode('feature-match-overlay')).toBe(true);
-		expect(isGraphicAssetReferencingScreenMode('idle')).toBe(false);
+	it('roots every discovered owner slot in its own mode’s namespace', () => {
+		// The reference index has no mode column: the owner-slot prefix is what tells
+		// one mode's rows from another's, so a write can scope its delete to its own
+		// rows and an output can resolve only its own mode's references. A slot that
+		// escaped its prefix would break both silently, which is what this pins.
+		const references = broadcastGraphicsGraphicAssetReferences(config([{
+			id: 'lower-third',
+			name: 'Lower Third',
+			items: [
+				media('logo'),
+				{
+					type: 'group',
+					id: 'cluster',
+					label: 'cluster',
+					visible: true,
+					anchor: 'top-left',
+					x: 0,
+					y: 0,
+					width: 400,
+					height: 200,
+					arrangement: 'row',
+					padding: 0,
+					gap: 0,
+					align: 'stretch',
+					justify: 'start',
+					clip: false,
+					geometry: squareShapeGeometry(),
+					children: [media('badge', { asset: reference('asset-2', 'revision-2') })],
+				},
+			],
+		}]));
+
+		expect(references).not.toHaveLength(0);
+		for (const item of references)
+			expect(item.ownerSlot.startsWith(graphicAssetReferenceSlotPrefix('broadcast-graphics'))).toBe(true);
+	});
+
+	it('gives each referencing Screen Mode a distinct, non-overlapping slot namespace', () => {
+		// Two modes sharing a prefix — or one being a prefix of the other — would make
+		// the delete scope and the output scope ambiguous.
+		const prefixes = GRAPHIC_ASSET_REFERENCING_SCREEN_MODES.map(graphicAssetReferenceSlotPrefix);
+
+		expect(new Set(prefixes).size).toBe(prefixes.length);
+		for (const one of prefixes) {
+			for (const other of prefixes) {
+				if (one !== other)
+					expect(one.startsWith(other)).toBe(false);
+			}
+		}
+	});
+
+	it('recognises exactly the modes that publish references, and equips each one', () => {
+		// A mode missing from the list writes its configuration without indexing it,
+		// and its Screen Outputs would then be asked for revisions no capability
+		// covers. A mode on the list that is missing a slot prefix is worse: its
+		// writes would be scoped by an undefined prefix. So every listed mode has to
+		// be recognised and equipped, and an unlisted one recognised as neither.
+		for (const mode of GRAPHIC_ASSET_REFERENCING_SCREEN_MODES) {
+			expect(isGraphicAssetReferencingScreenMode(mode)).toBe(true);
+			expect(graphicAssetReferenceSlotPrefix(mode)).toMatch(/^[a-z]+\.$/);
+		}
+
+		for (const mode of ['idle', 'card', 'deck', 'metagame', 'feature-match'])
+			expect(isGraphicAssetReferencingScreenMode(mode)).toBe(false);
 	});
 });

@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'vue';
+import type { ShapeGeometrySize } from '~~/shared/modules/graphics';
 import type { MediaGraphicItemKind } from '~~/shared/types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
@@ -93,8 +94,12 @@ import { graphicsSelectionGraphicId, graphicsSelectionKey } from './selection';
  * existing. This is the only filter the Key Output applies to a media element,
  * and it composites plain source-over like every other white paint.
  *
- * Getting this wrong is invisible in the Overlay Output and wrong on air, which
- * is why it is named, exported, and asserted rather than inlined.
+ * Getting this wrong is invisible in the Overlay Output and wrong on air, which is
+ * why it is named rather than inlined at the one place it is used. The Key Output
+ * guard in `graphicsRenderModel.test.ts` deliberately re-declares the same string
+ * instead of importing this one, so that it states the requirement independently of
+ * the module it guards — a model that changed the conversion would still have to
+ * satisfy the guard's own copy.
  */
 export const KEY_MEDIA_ALPHA_TO_WHITE = 'brightness(0) invert(1)';
 
@@ -584,14 +589,46 @@ function textDescriptor(
  * overflows the box it fills and nothing may paint outside an item's authored
  * bounds. A rectangular clip needs no path for the same reason a Graphic Group's
  * does not.
+ *
+ * A `path()` clip is in user units, so it is only correct against the box it was
+ * measured from. `size` is that box when the model knows it, and absent when the
+ * browser's own layout decides it — a weighted-fill child, or one its Graphic Group
+ * stretches. In that case the item clips to its rectangle instead of applying a
+ * path measured against the wrong box: an ignored shape is visible to its author,
+ * while a misapplied one looks deliberate and is not.
  */
-function mediaClip(item: MediaGraphicItemConfig): CSSProperties {
-	if (!item.clipGeometry || isRectangularShapeGeometry(item.clipGeometry))
+function mediaClip(item: MediaGraphicItemConfig, size: ShapeGeometrySize | undefined): CSSProperties {
+	if (!item.clipGeometry || isRectangularShapeGeometry(item.clipGeometry) || !size)
 		return { overflow: 'hidden' };
 	return {
 		overflow: 'hidden',
-		clipPath: `path('${shapeGeometryPath(item, item.clipGeometry)}')`,
+		clipPath: `path('${shapeGeometryPath(size, item.clipGeometry)}')`,
 	};
+}
+
+/**
+ * The box a Graphic Group child really occupies, when that is knowable without
+ * laying anything out.
+ *
+ * A canvas child keeps its authored rectangle. A row or column child keeps it only
+ * while both axes are pinned: fixed main-axis sizing gives the main extent, and a
+ * group that is not stretching leaves the cross extent authored. Anything else is
+ * the browser's to decide.
+ */
+function stackedChildClipSize(
+	group: GraphicGroupItemConfig,
+	child: GraphicGroupChildConfig,
+): ShapeGeometrySize | undefined {
+	if (group.arrangement === 'canvas')
+		return child;
+	if (group.align === 'stretch')
+		return undefined;
+	const sizing = child.sizing ?? { mode: 'fixed' as const, size: 0, weight: 1 };
+	if (sizing.mode !== 'fixed')
+		return undefined;
+	return group.arrangement === 'row'
+		? { width: Math.max(0, sizing.size), height: child.height }
+		: { width: child.width, height: Math.max(0, sizing.size) };
 }
 
 /**
@@ -630,12 +667,13 @@ function mediaItemDescriptor(
 	item: MediaGraphicItemConfig,
 	placement: CSSProperties,
 	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
+	clipSize: ShapeGeometrySize | undefined,
 ): GraphicItemRenderDescriptor {
 	return {
 		id: item.id,
 		label: item.label,
 		kind: 'media',
-		style: { ...placement, ...mediaClip(item) },
+		style: { ...placement, ...mediaClip(item, clipSize) },
 		media: mediaDescriptor(output, item, resolveContentUrl),
 	};
 }
@@ -656,7 +694,7 @@ function childDescriptor(
 	// its Graphic Group's local style default either: there is nothing on it for
 	// that default to fill in.
 	if (child.type === 'media')
-		return mediaItemDescriptor(output, child, placement, resolveContentUrl);
+		return mediaItemDescriptor(output, child, placement, resolveContentUrl, stackedChildClipSize(group, child));
 
 	const surfaceStyle = resolveChildSurfaceStyle(group, child);
 
@@ -684,8 +722,9 @@ function itemDescriptor(
 	if (item.type === 'text')
 		return textDescriptor(output, scope, item, placement, item.surfaceStyle);
 
+	// A top-level Graphic Item always occupies its authored rectangle.
 	if (item.type === 'media')
-		return mediaItemDescriptor(output, item, placement, resolveContentUrl);
+		return mediaItemDescriptor(output, item, placement, resolveContentUrl, item);
 
 	if (item.type === 'shape') {
 		return {

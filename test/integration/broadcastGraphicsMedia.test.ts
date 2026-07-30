@@ -8,7 +8,9 @@ import { Buffer } from 'node:buffer';
 import { createHash, randomUUID } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { executeIntegrationD1 } from './integrationD1';
 
 /**
  * Media Graphic Items on a Broadcast Graphics Screen, through the real API.
@@ -268,6 +270,77 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		await expect(usageOf(logo)).resolves.toHaveLength(1);
 	});
 
+	it('keeps each mode’s references indexed when the other mode is written', async () => {
+		// A Screen holds a configuration for every mode at once, so its reference index
+		// holds every mode's references at once. Writing one mode must not clear the
+		// other's rows: the failure is silent, because the revisions still exist and
+		// only the output's authorizer would notice they are no longer published.
+		const overlayScreen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: {
+				name: 'Both Modes',
+				slug: 'both-modes',
+				currentMode: 'feature-match-overlay',
+			},
+		});
+
+		// The shipped default, so the layout satisfies its own schema: this test is
+		// about which references survive a write, not about authoring a valid layout.
+		const layout = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG).layout;
+		layout.frame.backgroundImage = logo as never;
+		const overlayConfig = await $fetch<ScreenResponse>(
+			`/api/events/${eventId}/screens/${overlayScreen.id}/config/feature-match-overlay`,
+			{
+				method: 'PATCH',
+				body: { layout },
+				headers: { cookie: graphicsAuthorCookie },
+			},
+		);
+		expect(overlayConfig.modeConfigs!['feature-match-overlay']!.layout.frame.backgroundImage).toEqual(logo);
+
+		function slotsFor(screen: ScreenResponse, usage: GraphicAssetUsage[]) {
+			return usage.filter(item => item.owner.id === String(screen.id)).map(item => item.owner.slot).sort();
+		}
+
+		await expect(usageOf(logo).then(usage => slotsFor(overlayScreen, usage)))
+			.resolves
+			.toEqual(['layout.frame.backgroundImage']);
+
+		// Now write the other mode's configuration on the same Screen.
+		await $fetch(`/api/events/${eventId}/screens/${overlayScreen.id}/config/broadcast-graphics`, {
+			method: 'PATCH',
+			body: {
+				graphics: [{ id: 'bug', name: 'Bug', items: [mediaItem('badge', { asset: badge })] }],
+			},
+			headers: { cookie: graphicsAuthorCookie },
+		});
+
+		// Both survive, each under its own mode's owner-slot namespace.
+		await expect(usageOf(logo).then(usage => slotsFor(overlayScreen, usage)))
+			.resolves
+			.toEqual(['layout.frame.backgroundImage']);
+		await expect(usageOf(badge).then(usage => slotsFor(overlayScreen, usage)))
+			.resolves
+			.toEqual(['graphics.bug.items.badge.asset']);
+
+		// And a Screen resolves only its current mode's references: it is in Feature
+		// Match Overlay mode, so the Broadcast Graphics reference is not on this output.
+		const { assetCapability } = await $fetch<{ assetCapability: string }>(
+			`/api/events/${eventId}/screens/${overlayScreen.id}/asset-capability`,
+			{ headers: { cookie: graphicsAuthorCookie } },
+		);
+		function outputContent(reference: Reference) {
+			return fetch(
+				`/api/screen-output/screens/${overlayScreen.id}/assets/${reference.assetId}/revisions/${reference.revisionId}/content`,
+				{ headers: { authorization: `Bearer ${assetCapability}` } },
+			);
+		}
+		await expect(outputContent(logo).then(response => response.status)).resolves.toBe(200);
+		await expect(outputContent(badge).then(response => response.status)).resolves.toBe(404);
+
+		await $fetch(`/api/events/${eventId}/screens/${overlayScreen.id}`, { method: 'DELETE' });
+	});
+
 	it('rejects a reference introduced through a generic Screen write, which indexes nothing', async () => {
 		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
 
@@ -321,6 +394,79 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		// them: what the Screen publishes and what its capability covers are one thing.
 		await expect(usageOf(logo)).resolves.toEqual([]);
 		await expect(usageOf(badge)).resolves.toEqual([]);
+	});
+
+	it('refuses to take a Broadcast Graphic whose Graphic Asset content cannot resolve', async () => {
+		// The command seam, not the button: a second operator on stale data, a replayed
+		// command, or a direct API call all arrive here. A reference that cannot resolve
+		// invalidates the graphic that owns it, so Take is refused — while Out stays
+		// available, because it needs none of the asset's bytes.
+		const takeable = await ingestImage(eventId, 'broadcast-graphics-media-takeable', taggedPng);
+		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Playout Gate', slug: 'playout-gate', currentMode: 'broadcast-graphics' },
+		});
+
+		await $fetch(`/api/events/${eventId}/screens/${screen.id}/config/broadcast-graphics`, {
+			method: 'PATCH',
+			body: {
+				graphics: [
+					{ id: 'sound', name: 'Sound', items: [mediaItem('logo', { asset: takeable })] },
+					{ id: 'clean', name: 'Clean', items: [] },
+				],
+			},
+			headers: { cookie: graphicsAuthorCookie },
+		});
+
+		const session = await $fetch<{ id: number }>(
+			`/api/events/${eventId}/screens/${screen.id}/broadcast-graphics/live-session`,
+		);
+		function command(type: 'Take' | 'Out', graphicId: string, commandId: string) {
+			return $fetch(
+				`/api/events/${eventId}/screens/${screen.id}/broadcast-graphics/live-sessions/${session.id}/commands`,
+				{ method: 'POST', body: { commandId, type, payload: { graphicId } } },
+			);
+		}
+
+		// While the revision resolves, Take is admitted.
+		await expect(command('Take', 'sound', `gate-ok-${runId}`)).resolves.toBeTruthy();
+
+		// Now make the pinned revision's content unresolvable, which is the reachable
+		// failure: a foreign key keeps a referenced revision row alive, so what an
+		// operator actually meets is the bytes going out of reach rather than the row
+		// disappearing. A content row whose bytes were never stored, pinned by the
+		// revision, is exactly that state.
+		// Graphic Asset Content is identified by the SHA-256 of its exact stored bytes,
+		// so the digest to restore is one the test already knows.
+		const originalDigest = createHash('sha256').update(taggedPng).digest('hex');
+		const strandedDigest = `stranded-${runId}`;
+		await executeIntegrationD1(`
+			INSERT INTO graphic_asset_contents (digest, byte_length, canonical_mime, availability, created_at)
+			VALUES ('${strandedDigest}', 1, 'image/png', 'available', 0)
+		`);
+		await executeIntegrationD1(`
+			UPDATE graphic_asset_revisions
+			SET content_digest = '${strandedDigest}'
+			WHERE id = '${takeable.revisionId}'
+		`);
+
+		await expect(command('Take', 'sound', `gate-blocked-${runId}`))
+			.rejects
+			.toMatchObject({ statusCode: 409 });
+		// Out is never withheld: the graphic an operator most needs to remove is the one
+		// already on air whose media has just gone missing.
+		await expect(command('Out', 'sound', `gate-out-${runId}`)).resolves.toBeTruthy();
+		// And a graphic that pins nothing is unaffected by its neighbour's failure.
+		await expect(command('Take', 'clean', `gate-clean-${runId}`)).resolves.toBeTruthy();
+
+		// Put the revision back on its real content, so this fixture leaves the library
+		// in a state the ordinary code paths can still reason about.
+		await executeIntegrationD1(`
+			UPDATE graphic_asset_revisions
+			SET content_digest = '${originalDigest}'
+			WHERE id = '${takeable.revisionId}'
+		`);
+		await expect(command('Take', 'sound', `gate-restored-${runId}`)).resolves.toBeTruthy();
 	});
 
 	it('persists silent-video playback controls and Shape Geometry clipping unchanged', async () => {

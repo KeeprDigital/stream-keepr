@@ -454,6 +454,12 @@ export function selectMediaGraphicItemAsset(
 /**
  * Unpin a Media Graphic Item's Graphic Asset, leaving an item that occupies its
  * bounds and paints nothing.
+ *
+ * The media kind returns to image along with the asset's own facts. Leaving it on
+ * silent-video would keep offering playback-rate and looping controls on an item
+ * that reads "No Graphic Asset" — controls for an asset that is no longer there.
+ * The authored playback values themselves survive, because they are the author's
+ * rather than the asset's.
  */
 export function clearMediaGraphicItemAsset(
 	graphic: BroadcastGraphicConfig,
@@ -461,6 +467,7 @@ export function clearMediaGraphicItemAsset(
 ): BroadcastGraphicConfig {
 	return patchGraphicItemGroup(graphic, itemId, ['media'], () => ({
 		asset: undefined,
+		mediaKind: 'image',
 		videoCompatibility: undefined,
 	}));
 }

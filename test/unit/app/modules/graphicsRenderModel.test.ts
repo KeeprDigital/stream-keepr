@@ -828,7 +828,16 @@ describe('graphicsCompositionRenderModel', () => {
 				loop: false,
 				videoCompatibility: 'chromium-transparency',
 			});
-			expect(model.graphics[0]?.items[0]?.media).not.toHaveProperty('currentTime');
+			// Nothing in the descriptor expresses where playback should start, because
+			// nothing needs to: the element is created when the graphic enters.
+			expect(Object.keys(model.graphics[0]!.items[0]!.media!).sort()).toEqual([
+				'loop',
+				'mediaKind',
+				'playbackRate',
+				'src',
+				'style',
+				'videoCompatibility',
+			]);
 		});
 
 		it('clips to an optional Shape Geometry, and to its own rectangle without one', () => {
@@ -861,6 +870,46 @@ describe('graphicsCompositionRenderModel', () => {
 				.toBe(`path('M 0 0 L 540 0 L 600 120 L 0 120 Z')`);
 			expect(rectangular.graphics[0]?.items[0]?.style.clipPath).toBeUndefined();
 			expect(unclipped.graphics[0]?.items[0]?.style.clipPath).toBeUndefined();
+		});
+
+		it('clips a Graphic Group child against the box it really occupies, or not at all', () => {
+			// A `path()` clip is in user units, so it is only right against the box it
+			// was measured from. A fixed-size child in a non-stretching group has a
+			// known box; a weighted-fill or stretched child's box is the browser's, and
+			// a path measured against the authored rectangle would clip the wrong shape
+			// while looking deliberate.
+			const angled = { ...squareShapeGeometry(), rightSlant: 30 };
+
+			function childStyle(overrides: Parameters<typeof group>[2], childOverrides = {}) {
+				const model = resolveGraphicsCompositionRenderModel({
+					output: 'overlay',
+					graphics: [graphic('a', [group('cluster', [
+						media('badge', { width: 200, height: 100, clipGeometry: angled, ...childOverrides }),
+					], overrides)])],
+					graphicAssetContentUrl: contentUrl,
+					...CANVAS,
+				});
+				return model.graphics[0]!.items[0]!.children![0]!.style;
+			}
+
+			// Fixed main axis, group not stretching: the box is known, so the clip applies.
+			expect(childStyle({ align: 'center' }, { sizing: { mode: 'fixed', size: 160, weight: 1 } }).clipPath)
+				.toBe(`path('M 0 0 L 130 0 L 160 100 L 0 100 Z')`);
+			// Weighted fill: the main extent is the browser's.
+			expect(childStyle({ align: 'center' }, { sizing: { mode: 'fill', size: 0, weight: 1 } }).clipPath)
+				.toBeUndefined();
+			// Stretching: the cross extent is the browser's.
+			expect(childStyle({ align: 'stretch' }, { sizing: { mode: 'fixed', size: 160, weight: 1 } }).clipPath)
+				.toBeUndefined();
+			// A canvas child keeps its authored rectangle either way.
+			expect(childStyle({ arrangement: 'canvas' }).clipPath)
+				.toBe(`path('M 0 0 L 170 0 L 200 100 L 0 100 Z')`);
+			// Whichever way, the item never paints outside its own bounds.
+			for (const style of [
+				childStyle({ align: 'center' }, { sizing: { mode: 'fill', size: 0, weight: 1 } }),
+				childStyle({ align: 'stretch' }),
+			])
+				expect(style.overflow).toBe('hidden');
 		});
 
 		it('places a Media Graphic Item inside a Graphic Group like any other child', () => {

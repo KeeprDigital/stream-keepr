@@ -6,6 +6,7 @@ import { screens } from '~~/server/db/schema';
 import { StateConflictError } from '~~/server/utils/errors';
 import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
+	graphicAssetReferenceSlotPrefix,
 	sameGraphicAssetReference,
 	screenGraphicAssetReferenceTargetCompatibility,
 	screenModeGraphicAssetReferences,
@@ -170,15 +171,26 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 			expectedVersion,
 			...referencePreconditionBindings,
 		),
+		// Scoped to this mode's own owner-slot namespace. A Screen may hold a
+		// configuration for every mode at once, so an unscoped delete would clear
+		// another mode's rows and leave its outputs unable to resolve content the
+		// Screen still publishes — silently, because the revisions still exist.
 		client.prepare(`
 			DELETE FROM graphic_asset_references
 			WHERE owner_kind = 'screen' AND owner_id = ?
+				AND owner_slot LIKE ?
 				AND EXISTS (
 					SELECT 1 FROM screens
 					WHERE id = ? AND event_id = ?
 						AND graphic_asset_reference_version = ?
 				)
-		`).bind(String(input.id), input.id, input.eventId, referenceVersion),
+		`).bind(
+			String(input.id),
+			`${graphicAssetReferenceSlotPrefix(input.mode)}%`,
+			input.id,
+			input.eventId,
+			referenceVersion,
+		),
 		...indexedReferences.map(({
 			reference,
 			ownerSlot,

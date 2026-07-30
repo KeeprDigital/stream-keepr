@@ -33,9 +33,15 @@ const media = computed(() => props.render.media);
 const actualVideoTarget = useGraphicsVideoTarget();
 
 /**
- * A VP9-alpha silent video only plays in Chromium. Rather than a blank rectangle,
- * an output that cannot play one says so, so the reason is diagnosable from the
- * output itself.
+ * A VP9-alpha silent video only plays in Chromium, so elsewhere the element is
+ * withheld and a marked placeholder takes its place.
+ *
+ * The marker is a data attribute with no visible text: it is readable by a test or
+ * a developer inspecting the DOM, not by an operator looking at the output. It is
+ * also close to unreachable on a live output, because the capability session is
+ * refused outright when the Screen publishes a chromium-transparency revision to a
+ * non-Chromium target, so no media resolves at all. Reporting this to an operator
+ * is tracked separately.
  */
 const videoBlocked = computed(() => media.value?.videoCompatibility === 'chromium-transparency'
 	&& actualVideoTarget.value !== 'chromium');
@@ -192,10 +198,18 @@ watch(
 				v-else-if="media.mediaKind === 'silent-video'"
 				data-video-compatibility-blocked="vp9-alpha-chromium-required"
 			/>
+			<!--
+				Empty alt, deliberately. A Media Graphic Item is decorative — it carries
+				no meaning a caption would convey — and a broken image draws its alt text
+				inside the element's box, which in the Key Output would paint the authored
+				label straight into the alpha matte in whatever colour it inherited. The
+				render-model guard cannot catch that: it inspects the model, and this is a
+				DOM failure mode.
+			-->
 			<img
 				v-else
 				:src="media.src"
-				:alt="render.label"
+				alt=""
 				:style="media.style"
 			>
 		</template>

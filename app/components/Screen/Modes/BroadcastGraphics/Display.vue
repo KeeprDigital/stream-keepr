@@ -20,6 +20,11 @@ const canvasHeight = computed(() => screen?.value?.screenConfig?.height ?? canva
  * Deliberately derived from the whole authored stack rather than from what is on
  * air: the capability covers what the Screen publishes, and a graphic taken on air
  * must not have to wait for a fresh capability exchange before its media appears.
+ *
+ * Rebuilt freely on any stack change. `useScreenGraphicAssetContentUrls` keys its
+ * resolution on the *set* of revisions rather than on this array's identity, so an
+ * edit that pins nothing new does not re-resolve — which is what keeps an on-air
+ * video from being torn down and restarted mid-air.
  */
 const graphicAssetReferences = computed(() =>
 	broadcastGraphicsGraphicAssetReferences({ graphics: [...graphics.value] }).map(item => item.reference),

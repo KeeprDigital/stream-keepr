@@ -18,14 +18,34 @@ export function useScreenGraphicAssetContentUrls(
 	const contentUrlsSettled = ref(false);
 	const loads = createGuardedSequence();
 
+	/**
+	 * What a re-resolve actually depends on, as one comparable value.
+	 *
+	 * Deliberately a string rather than an object. A getter returning a fresh object
+	 * fires this watch whenever any dependency changes *identity*, and several of
+	 * them are replaced wholesale by ordinary updates — a Screen object rebuilt from
+	 * a realtime message, or a references array rebuilt because some unrelated
+	 * Graphic Item moved. Re-resolving clears the URL map before refetching, which
+	 * empties every media `src` and tears down every image and video element. On a
+	 * live output that restarts an on-air video from zero, so this has to fire only
+	 * when the answer would really differ.
+	 */
+	const resolutionKey = computed(() => [
+		screen.value?.id ?? '',
+		assetCapability?.value ?? '',
+		isPreview?.value === true ? 'preview' : 'live',
+		// Sorted and de-duplicated: which revisions are resolvable is a set, so
+		// reordering a stack, or two items pinning one revision, is not a change.
+		...Array.from(new Set(toValue(references).map(referenceKey))).sort(),
+	].join(''));
+
 	watch(
-		() => ({
-			references: toValue(references),
-			screenId: screen.value?.id,
-			capability: assetCapability?.value,
-			preview: isPreview?.value === true,
-		}),
-		async ({ references: currentReferences, screenId, capability, preview }) => {
+		resolutionKey,
+		async () => {
+			const currentReferences = toValue(references);
+			const screenId = screen.value?.id;
+			const capability = assetCapability?.value;
+			const preview = isPreview?.value === true;
 			const flight = loads.begin();
 			contentUrlsSettled.value = false;
 			contentUrls.value = new Map();

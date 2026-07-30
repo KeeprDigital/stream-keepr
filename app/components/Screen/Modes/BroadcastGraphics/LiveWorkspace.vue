@@ -8,7 +8,8 @@ import { screenOutputPath } from '~~/shared/utils/screenOutput';
  * Screen configuration page opens on.
  *
  * Its Program monitor is the authoritative Overlay Output itself, not a preview,
- * so it carries no editor guides. Its stack lists every placed Broadcast Graphic
+ * so it carries no editor guides — and, being a real output, it needs a Screen
+ * Output Asset Capability to resolve its media at all. Its stack lists every placed Broadcast Graphic
  * with the Graphic Playout State the Broadcast Graphics Live Session says it has,
  * and Take and Out state the operator's latest intent for one graphic.
  *
@@ -38,11 +39,23 @@ const emit = defineEmits<{ select: [graphicId: string] }>();
 
 const sessionStore = useBroadcastGraphicsLiveSessionStore();
 
+/**
+ * The Program monitor is the authoritative Overlay Output itself, so it resolves
+ * media exactly as a capture browser does — through a Screen Output Asset
+ * Capability. Without one it would show every graphic except its media, which is
+ * the one thing a monitor must not do quietly.
+ */
+const { assetCapability } = useScreenOutputAssetCapability(
+	() => props.eventId,
+	() => props.screen.id,
+);
+
 const programUrl = computed(() => screenOutputPath({
 	eventId: props.eventId,
 	screenSlug: props.screen.slug,
 	output: 'overlay',
 	fitToViewport: true,
+	assetCapability: assetCapability.value,
 }));
 const programAspectStyle = computed(() => ({
 	aspectRatio: `${props.canvasWidth} / ${props.canvasHeight}`,

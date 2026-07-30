@@ -41,6 +41,8 @@ const mockReferenceStatus = ref<GraphicAssetReferenceStatus>({
 	lifecycleState: 'active',
 	kind: 'image',
 });
+/** What the Screen Output Asset Capability endpoint issues, if anything. */
+const mockCapabilityResponse = ref<string | null>('program-capability');
 const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
 
 mockNuxtImport('$fetch', () => mockApiFetch);
@@ -113,7 +115,15 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		mockPendingGraphicIds.value = [];
 		mockError.value = null;
 		mockReferenceStatus.value = { outcome: 'available', lifecycleState: 'active', kind: 'image' };
-		mockApiFetch.mockImplementation(async () => mockReferenceStatus.value);
+		mockCapabilityResponse.value = 'program-capability';
+		mockApiFetch.mockImplementation(async (path: string) => {
+			if (String(path).endsWith('/asset-capability')) {
+				if (!mockCapabilityResponse.value)
+					throw new Error('no capability');
+				return { assetCapability: mockCapabilityResponse.value };
+			}
+			return mockReferenceStatus.value;
+		});
 	});
 
 	it('loads the authoritative playout snapshot for the Screen', async () => {
@@ -217,6 +227,26 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		expect(mockTake).not.toHaveBeenCalled();
 	});
 
+	it('gives the Program monitor a capability, so it can resolve media at all', async () => {
+		// The monitor is a real Screen Output, not a preview: without a capability in
+		// its URL it renders every graphic except its media, silently.
+		const wrapper = await mountComponent();
+
+		const src = wrapper.get('[data-testid="program-monitor"]').attributes('src')!;
+		expect(src).toContain('output=overlay');
+		expect(src).toContain(`#asset-capability=${encodeURIComponent('program-capability')}`);
+	});
+
+	it('leaves the capability out of the monitor URL until one is issued', async () => {
+		// Never a placeholder or a guess: an absent capability resolves no media, which
+		// is the property the capability exists to guarantee.
+		mockCapabilityResponse.value = null;
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.get('[data-testid="program-monitor"]').attributes('src')).not.toContain('asset-capability');
+	});
+
 	describe('graphic asset references', () => {
 		const withMedia: BroadcastGraphicConfig = {
 			id: 'slate',
@@ -249,8 +279,10 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 			const entry = entryFor(wrapper, 'slate');
 			expect(entry.get('[data-testid="playout-take"]').attributes('disabled')).toBeDefined();
 			expect(entry.get('[data-testid="playout-cut-take"]').attributes('disabled')).toBeDefined();
+			// Named by the Graphic Item's authored label, which is what an operator can
+			// find on the canvas — not by the internal owner slot.
 			expect(wrapper.get('[data-testid="playout-asset-blocked-slate"]').text())
-				.toContain('graphics.slate.items.logo.asset');
+				.toContain('Sponsor');
 			// Only the owning graphic is invalidated; the rest of the stack still operates.
 			expect(entryFor(wrapper, 'lower-third').get('[data-testid="playout-take"]').attributes('disabled'))
 				.toBeUndefined();
@@ -294,10 +326,34 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 				.toBeUndefined();
 		});
 
+		it('keeps a known-broken graphic blocked while a re-check is in flight', async () => {
+			// Any edit anywhere in the stack re-runs the check. Falling back to a
+			// not-yet-known state would re-enable Take on a graphic already known to be
+			// broken — every time somebody touched an unrelated graphic.
+			mockReferenceStatus.value = { outcome: 'missing' };
+			const wrapper = await mountComponent([lowerThird, withMedia]);
+			expect(entryFor(wrapper, 'slate').get('[data-testid="playout-take"]').attributes('disabled'))
+				.toBeDefined();
+
+			// A new stack array with the same pinned revision, as an unrelated edit yields.
+			await wrapper.setProps({
+				graphics: [{ ...lowerThird, name: 'Renamed' }, { ...withMedia }],
+			});
+
+			expect(entryFor(wrapper, 'slate').get('[data-testid="playout-take"]').attributes('disabled'))
+				.toBeDefined();
+			expect(wrapper.find('[data-testid="playout-asset-blocked-slate"]').exists()).toBe(true);
+		});
+
 		it('never asks about a Broadcast Graphic that pins no assets at all', async () => {
 			const wrapper = await mountComponent([lowerThird]);
 
-			expect(mockApiFetch).not.toHaveBeenCalled();
+			// The monitor still asks for its capability; what must not happen is a
+			// revision-status request for a graphic that pins nothing.
+			const statusRequests = mockApiFetch.mock.calls
+				.map(([path]) => String(path))
+				.filter(path => path.includes('/revisions/'));
+			expect(statusRequests).toEqual([]);
 			expect(entryFor(wrapper, 'lower-third').get('[data-testid="playout-take"]').attributes('disabled'))
 				.toBeUndefined();
 		});

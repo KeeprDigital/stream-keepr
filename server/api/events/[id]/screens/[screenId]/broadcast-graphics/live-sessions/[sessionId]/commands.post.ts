@@ -1,4 +1,5 @@
 import { broadcastGraphicsLiveSessionModule } from '~~/server/modules/broadcast-graphics-live-session';
+import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import {
 	broadcastGraphicsCommandSchema,
 	broadcastGraphicsLiveSessionParamsSchema,
@@ -19,7 +20,11 @@ export default defineEventHandler(async (event) => {
 	);
 	const command = await readValidatedBody(event, broadcastGraphicsCommandSchema.parse);
 
-	return await broadcastGraphicsLiveSessionModule().applyCommand({
+	// The library is injected because Take is admitted against it: a Broadcast
+	// Graphic whose pinned revision no longer resolves cannot go on air.
+	return await broadcastGraphicsLiveSessionModule({
+		graphicsAssets: graphicsAssetLibraryForEvent(event),
+	}).applyCommand({
 		eventId: id,
 		screenId,
 		sessionId,

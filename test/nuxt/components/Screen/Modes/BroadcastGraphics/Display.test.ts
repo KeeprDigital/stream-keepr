@@ -372,9 +372,12 @@ describe('broadcastGraphicsDisplay', () => {
 			expect(image.attributes('style')).toContain('object-position: 25% 75%');
 			expect(image.attributes('style')).toContain('opacity: 0.5');
 			expect(wrapper.get('[data-graphic-item-kind="media"]').attributes('style')).toContain('left: 40px');
+			// Empty alt: a broken image draws its alt text inside its own box, which in
+			// the Key Output would paint the authored label into the alpha matte.
+			expect(image.attributes('alt')).toBe('');
 		});
 
-		it('renders a silent video that loops, muted, and from its beginning', async () => {
+		it('renders a silent video muted and autoplaying at its authored playback rate', async () => {
 			mockIsPreview.value = true;
 
 			const wrapper = await mountComponent();
@@ -385,10 +388,53 @@ describe('broadcastGraphicsDisplay', () => {
 			// silent video and the element is muted regardless.
 			expect(video.attributes('muted')).toBeDefined();
 			expect(video.attributes('autoplay')).toBeDefined();
-			expect(video.attributes('loop')).toBeUndefined();
-			// No seek, no start offset: a fresh element begins at zero.
-			expect(video.attributes()).not.toHaveProperty('currenttime');
+			// Playback rate is a property with no attribute, so it has to be set.
 			expect((video.element as HTMLVideoElement).playbackRate).toBe(2);
+			// Playback begins at zero because the element is new, not because anything
+			// seeks it there.
+			expect((video.element as HTMLVideoElement).currentTime).toBe(0);
+		});
+
+		it('honours the authored looping choice', async () => {
+			mockIsPreview.value = true;
+
+			const wrapper = await mountComponent();
+			await pushPreviewState([withMedia({ id: 'a', mediaKind: 'silent-video', loop: true })]);
+			expect(wrapper.get('[data-graphic-item-kind="media"] video').attributes('loop')).toBeDefined();
+
+			await pushPreviewState([withMedia({ id: 'b', mediaKind: 'silent-video', loop: false })]);
+			expect(wrapper.get('[data-graphic-item-kind="media"] video').attributes('loop')).toBeUndefined();
+		});
+
+		it('keeps an on-air video mounted when an unrelated part of the stack is edited', async () => {
+			// Resolving content clears the URL map before refetching, which unmounts every
+			// media element. A stack edit that changes no revision must not do that: it
+			// would restart an on-air video from zero.
+			mockAssetCapability.value = 'capability-token';
+			mockScreen.value = screenWithStack([withMedia()]);
+			mockOnAirGraphicIds.value = ['lower-third'];
+
+			const wrapper = await mountComponent();
+			await flushPromises();
+			await nextTick();
+			const before = wrapper.get('[data-graphic-item-kind="media"] img').attributes('src');
+			expect(before).not.toBe('');
+
+			// Same pinned revision, different authored geometry.
+			mockScreen.value = screenWithStack([{
+				id: 'lower-third',
+				name: 'Lower Third',
+				items: [{ ...logo, x: 99 }],
+			}]);
+			await flushPromises();
+			await nextTick();
+
+			// Re-resolving is what unmounts a media element: it clears the URL map before
+			// refetching, so `src` empties and the `<video>` is torn down and rebuilt. No
+			// second capability exchange means no such window ever opened.
+			expect(capabilitySessionRequests).toHaveLength(1);
+			expect(wrapper.get('[data-graphic-item-kind="media"] img').attributes('src')).toBe(before);
+			expect(wrapper.get('[data-graphic-item-kind="media"]').attributes('style')).toContain('left: 99px');
 		});
 
 		it('paints media as its alpha in white in the Key Output', async () => {
