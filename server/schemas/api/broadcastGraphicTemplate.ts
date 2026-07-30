@@ -55,16 +55,22 @@ export const saveBroadcastGraphicTemplateSchema = z.object({
  * template revision is a single-shot write — rename, describe, replace the document
  * — so the control it needs is compare-and-swap, not a lease: two authors who both
  * open the library and rename the same entry must not silently overwrite each other,
- * and the second one should be told to look again. Omitting it accepts the write
- * unconditionally, for a caller that has no revision to state.
+ * and the second one is told to look again.
+ *
+ * It is **required**, and that is the whole point. An omissible precondition is an
+ * inert one: every caller that forgets it gets an unguarded write, and the guard
+ * survives only for as long as everyone remembers. Placement's Screen `stateVersion`
+ * was exactly that shape — absent meant unchecked — and it stayed inert with a test
+ * pinning it that way. A caller with no revision to state has not read the template
+ * it is revising, which is the case this refuses.
  */
 export const updateBroadcastGraphicTemplateSchema = z.object({
 	name: templateNameSchema.optional(),
 	description: templateDescriptionSchema.nullable().optional(),
 	document: broadcastGraphicConfigSchema.optional(),
-	revision: z.number().int().positive().optional(),
+	revision: z.number().int().positive(),
 }).strict().refine(
-	patch => Object.keys(patch).length > 0,
+	patch => Object.keys(patch).length > 1,
 	'A template revision must change something',
 );
 
@@ -73,8 +79,13 @@ export const placeBroadcastGraphicTemplateSchema = z.object({
 	/**
 	 * The Screen state version the author was looking at, so a placement built on a
 	 * stale stack is refused rather than silently discarding a concurrent change.
+	 *
+	 * Required for the same reason the template `revision` is. A placement is a
+	 * read-modify-write of the Screen's whole authored stack, and the Screen write path
+	 * treats an absent version as "do not check" — so an optional field here would be a
+	 * documented protection that any caller could skip by saying nothing.
 	 */
-	stateVersion: z.number().int().nonnegative().optional(),
+	stateVersion: z.number().int().nonnegative(),
 }).strict();
 
 export type SaveBroadcastGraphicTemplateInput = z.infer<typeof saveBroadcastGraphicTemplateSchema>;

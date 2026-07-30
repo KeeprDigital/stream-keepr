@@ -38,8 +38,8 @@ export interface BroadcastGraphicTemplatePatch {
 	name?: string;
 	description?: string | null;
 	document?: BroadcastGraphicConfig;
-	/** The revision the writer believes is current; the write is refused otherwise. */
-	revision?: number;
+	/** The revision the writer read. The write is refused unless it is still current. */
+	revision: number;
 }
 
 /** A revision the writer did not expect: someone else revised the template first. */
@@ -166,10 +166,11 @@ export function broadcastGraphicTemplateService() {
 	 * document change, because a library entry is what an author browses and its
 	 * revision is what a Template Package's provenance names.
 	 *
-	 * A stated `revision` makes the write compare-and-swap: it is applied only while
-	 * the stored revision is still the one the writer read. The condition lives in the
-	 * `UPDATE` itself rather than in a read-then-write, so two writers arriving at the
-	 * same instant are ordered by the database and exactly one of them wins.
+	 * The write is compare-and-swap: it applies only while the stored revision is still
+	 * the one the writer read. The condition lives in the `UPDATE` itself rather than in
+	 * a read-then-write, so two writers arriving at the same instant are ordered by the
+	 * database and exactly one of them wins. There is no unconditional path — a caller
+	 * that cannot state the revision it read has not read the template.
 	 */
 	const update = async (
 		id: string,
@@ -189,8 +190,7 @@ export function broadcastGraphicTemplateService() {
 				UPDATE broadcast_graphic_templates
 				SET name = ?, description = ?, document = ?, revision = revision + 1,
 					graphic_asset_reference_version = ?, updated_at = ?
-				WHERE id = ?
-					${patch.revision === undefined ? '' : 'AND revision = ?'}
+				WHERE id = ? AND revision = ?
 			`).bind(
 				patch.name ?? existing.name,
 				patch.description === undefined ? existing.description : patch.description,
@@ -198,7 +198,7 @@ export function broadcastGraphicTemplateService() {
 				referenceVersion,
 				now,
 				id,
-				...(patch.revision === undefined ? [] : [patch.revision]),
+				patch.revision,
 			),
 			...referenceStatements(client, id, document, referenceVersion, now),
 		]);

@@ -49,8 +49,8 @@ export function useBroadcastGraphicTemplateRepository() {
 	};
 
 	/**
-	 * `revision` is the revision the caller read, and the write is refused if the
-	 * template has moved on since — compare-and-swap rather than last-write-wins.
+	 * `revision` is the revision the caller read, and it is required: the write is
+	 * refused if the template has moved on since, rather than last-write-wins.
 	 */
 	const update = async (
 		templateId: string,
@@ -58,7 +58,7 @@ export function useBroadcastGraphicTemplateRepository() {
 			name?: string;
 			description?: string | null;
 			document?: BroadcastGraphicConfig;
-			revision?: number;
+			revision: number;
 		},
 	): Promise<BroadcastGraphicTemplateResponse> => {
 		return await $fetch<BroadcastGraphicTemplateResponse>(`${library}/${templateId}`, {
@@ -80,7 +80,8 @@ export function useBroadcastGraphicTemplateRepository() {
 		eventId: number;
 		screenId: number;
 		templateId: string;
-		stateVersion?: number;
+		/** The Screen version the placement was built against; required by the route. */
+		stateVersion: number;
 	}): Promise<{ screen: ScreenResponse; graphic: BroadcastGraphicConfig }> => {
 		return await $fetch<{ screen: ScreenResponse; graphic: BroadcastGraphicConfig }>(
 			`/api/events/${input.eventId}/screens/${input.screenId}/broadcast-graphics/placements`,

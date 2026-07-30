@@ -258,6 +258,32 @@ describe('broadcast Graphic Template library', () => {
 		return `/api/events/${eventId}/screens/${screenId}/broadcast-graphics/placements`;
 	}
 
+	/** The Screen version a placement must state, read the way the editor reads it. */
+	async function screenStateVersion(eventId: number, screenId: number): Promise<number> {
+		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
+		return screen.stateVersion;
+	}
+
+	/** Place a template, stating the Screen version the caller has just read. */
+	async function place(
+		eventId: number,
+		screenId: number,
+		body: { templateId: string },
+		cookie?: string,
+	) {
+		return await request(placementPath(eventId, screenId), {
+			method: 'POST',
+			cookie,
+			body: { ...body, stateVersion: await screenStateVersion(eventId, screenId) },
+		});
+	}
+
+	/** The revision a template write must state, read the way the library reads it. */
+	async function templateRevision(id: string): Promise<number> {
+		const current = await request(`${TEMPLATES_PATH}/${id}`, { cookie: authorCookie });
+		return (current.data as BroadcastGraphicTemplateResponse).revision;
+	}
+
 	beforeAll(async () => {
 		authorCookie = await createGraphicsAuthorSessionCookie();
 		secondAuthorCookie = await createGraphicsAuthorSessionCookie();
@@ -378,11 +404,7 @@ describe('broadcast Graphic Template library', () => {
 	});
 
 	it('places a template on a Screen in a different Event as a new Broadcast Graphic', async () => {
-		const placed = await request(placementPath(otherEventId, otherScreenId), {
-			method: 'POST',
-			cookie: authorCookie,
-			body: { templateId },
-		});
+		const placed = await place(otherEventId, otherScreenId, { templateId }, authorCookie);
 
 		expect(placed.status).toBe(201);
 		const graphic = placed.data.graphic as BroadcastGraphicConfig;
@@ -394,11 +416,7 @@ describe('broadcast Graphic Template library', () => {
 	});
 
 	it('regenerates every Graphic Item id so two copies coexist in one Screen document', async () => {
-		const second = await request(placementPath(otherEventId, otherScreenId), {
-			method: 'POST',
-			cookie: authorCookie,
-			body: { templateId },
-		});
+		const second = await place(otherEventId, otherScreenId, { templateId }, authorCookie);
 
 		expect(second.status).toBe(201);
 		const stack = await authoredStack(otherEventId, otherScreenId);
@@ -515,7 +533,11 @@ describe('broadcast Graphic Template library', () => {
 		const revised = await request(`${TEMPLATES_PATH}/${templateId}`, {
 			method: 'PATCH',
 			cookie: authorCookie,
-			body: { name: 'Lower third v2', document: { ...document, items: document.items.slice(0, 1) } },
+			body: {
+				name: 'Lower third v2',
+				document: { ...document, items: document.items.slice(0, 1) },
+				revision: await templateRevision(templateId),
+			},
 		});
 		expect(revised.status).toBe(200);
 		expect((revised.data as BroadcastGraphicTemplateResponse).revision).toBe(2);
@@ -538,17 +560,18 @@ describe('broadcast Graphic Template library', () => {
 		expect(observing.data.outcome).toBe('observe');
 		expect(observing.data.lease.writable).toBe(false);
 
+		const revision = await templateRevision(templateId);
 		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
 			method: 'PATCH',
 			cookie: secondAuthorCookie,
-			body: { description: 'Taken from under the holder' },
+			body: { description: 'Taken from under the holder', revision },
 		});
 		expect(refused.status).toBe(409);
 
 		const accepted = await request(`${TEMPLATES_PATH}/${templateId}`, {
 			method: 'PATCH',
 			cookie: authorCookie,
-			body: { description: 'Revised by the holder' },
+			body: { description: 'Revised by the holder', revision },
 		});
 		expect(accepted.status).toBe(200);
 		expect((accepted.data as BroadcastGraphicTemplateResponse).revision).toBe(3);
@@ -560,7 +583,10 @@ describe('broadcast Graphic Template library', () => {
 		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
 			method: 'PATCH',
 			cookie: authorCookie,
-			body: { document: { id: 'x', name: 'x', items: [{ type: 'text', id: 'a' }] } },
+			body: {
+				document: { id: 'x', name: 'x', items: [{ type: 'text', id: 'a' }] },
+				revision: await templateRevision(templateId),
+			},
 		});
 
 		expect(refused.status).toBe(400);
@@ -573,18 +599,17 @@ describe('broadcast Graphic Template library', () => {
 		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
 			method: 'PATCH',
 			cookie: authorCookie,
-			body: { document: { ...document, items: [document.items[0]!, document.items[0]!] } },
+			body: {
+				document: { ...document, items: [document.items[0]!, document.items[0]!] },
+				revision: await templateRevision(templateId),
+			},
 		});
 
 		expect(refused.status).toBe(400);
 	});
 
 	it('reports placing a template that does not exist as not found', async () => {
-		const missing = await request(placementPath(otherEventId, otherScreenId), {
-			method: 'POST',
-			cookie: authorCookie,
-			body: { templateId: randomUUID() },
-		});
+		const missing = await place(otherEventId, otherScreenId, { templateId: randomUUID() }, authorCookie);
 
 		expect(missing.status).toBe(404);
 	});
@@ -595,11 +620,7 @@ describe('broadcast Graphic Template library', () => {
 			body: { name: 'Idle', slug: 'template-idle-screen', currentMode: 'idle' },
 		});
 
-		const refused = await request(placementPath(otherEventId, idle.id), {
-			method: 'POST',
-			cookie: authorCookie,
-			body: { templateId },
-		});
+		const refused = await place(otherEventId, idle.id, { templateId }, authorCookie);
 
 		expect(refused.status).toBe(409);
 	});
@@ -609,19 +630,14 @@ describe('broadcast Graphic Template library', () => {
 		expect((await request(screenLease, { method: 'POST', body: {}, cookie: authorCookie })).data.outcome)
 			.toBe('grant');
 
-		const refused = await request(placementPath(otherEventId, otherScreenId), {
-			method: 'POST',
-			cookie: secondAuthorCookie,
-			body: { templateId },
-		});
+		const refused = await place(otherEventId, otherScreenId, { templateId }, secondAuthorCookie);
 		expect(refused.status).toBe(409);
 
 		expect((await request(screenLease, { method: 'DELETE', cookie: authorCookie })).status).toBe(200);
 	});
 
 	it('refuses a revision built on a stale one, naming the revision that exists', async () => {
-		const current = await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie });
-		const stale = (current.data as BroadcastGraphicTemplateResponse).revision;
+		const stale = await templateRevision(templateId);
 
 		const accepted = await request(`${TEMPLATES_PATH}/${templateId}`, {
 			method: 'PATCH',
@@ -641,6 +657,47 @@ describe('broadcast Graphic Template library', () => {
 		expect(refused.data.message).toContain(`revision ${stale + 1}`);
 		const after = await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie });
 		expect((after.data as BroadcastGraphicTemplateResponse).description).toBe('First writer wins');
+	});
+
+	it('refuses a revision that states no revision at all', async () => {
+		// An omissible precondition is an inert one: if saying nothing meant "do not
+		// check", every caller that forgot would get an unguarded last-write-wins.
+		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
+			method: 'PATCH',
+			cookie: authorCookie,
+			body: { description: 'Stated no revision' },
+		});
+
+		expect(refused.status).toBe(400);
+	});
+
+	it('refuses a placement that states no Screen version at all', async () => {
+		const refused = await request(placementPath(otherEventId, otherScreenId), {
+			method: 'POST',
+			cookie: authorCookie,
+			body: { templateId },
+		});
+
+		expect(refused.status).toBe(400);
+	});
+
+	it('refuses a placement built on a stale Screen version', async () => {
+		const stale = await screenStateVersion(otherEventId, otherScreenId);
+		// Another author reorders the stack in the meantime.
+		const stack = await authoredStack(otherEventId, otherScreenId);
+		expect((await patchStack(otherEventId, otherScreenId, [...stack].reverse())).status).toBe(200);
+
+		const refused = await request(placementPath(otherEventId, otherScreenId), {
+			method: 'POST',
+			cookie: authorCookie,
+			body: { templateId, stateVersion: stale },
+		});
+
+		// Without the guard this would have written the whole stack back from a copy
+		// taken before the reorder, silently undoing it.
+		expect(refused.status).toBe(409);
+		expect((await authoredStack(otherEventId, otherScreenId)).map(entry => entry.name))
+			.toEqual([...stack].reverse().map(entry => entry.name));
 	});
 
 	it('reports a lease on a template that does not exist as not found', async () => {
@@ -735,11 +792,7 @@ describe('broadcast Graphic Template library', () => {
 			body: { action: 'retire' },
 		});
 
-		const refused = await request(placementPath(otherEventId, otherScreenId), {
-			method: 'POST',
-			cookie: authorCookie,
-			body: { templateId: retiringTemplateId },
-		});
+		const refused = await place(otherEventId, otherScreenId, { templateId: retiringTemplateId }, authorCookie);
 
 		// The Screen's write path refuses a reference that is not selectable now. What
 		// matters here is that the operator can act on the refusal: it names the design
