@@ -10,7 +10,10 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
 import { formatByteCount } from '~~/shared/utils/formatByteCount';
-import { GRAPHICS_MULTIPART_PART_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import {
+	GRAPHICS_MULTIPART_PART_BYTES,
+	MAX_STILL_IMAGE_INGESTION_BYTES,
+} from '~~/shared/utils/graphicsAssetCompatibility';
 
 const {
 	mockApiFetch,
@@ -33,6 +36,7 @@ vi.mock('../../../../app/utils/verifyStillImageBrowserDecode', () => ({
 const completedOperation: GraphicsIngestionOperation = {
 	id: 'operation-1' as never,
 	idempotencyKey: 'upload-1',
+	source: 'local-upload',
 	initiatedBy: 'local-graphics-author',
 	name: 'Scoreboard logo',
 	defaultEventId: 7,
@@ -834,5 +838,209 @@ describe('the Graphics Asset Library Workspace', () => {
 			'/api/graphics-assets/asset-1/lifecycle-actions',
 			{ method: 'POST', body: { action: 'restore' } },
 		);
+	});
+
+	it('copies an approved HTTPS source, confirms the staged bytes, and never stores the URL', async () => {
+		const created: GraphicsIngestionOperation = {
+			...completedOperation,
+			id: 'operation-remote' as never,
+			idempotencyKey: 'remote-1',
+			source: 'remote-copy',
+			name: 'Remote scoreboard logo',
+			stage: 'created',
+			declaredByteLength: MAX_STILL_IMAGE_INGESTION_BYTES,
+			transferredByteLength: 0,
+			report: undefined,
+			result: undefined,
+		};
+		const awaitingConfirmation: GraphicsIngestionOperation = {
+			...completedOperation,
+			id: 'operation-remote' as never,
+			idempotencyKey: 'remote-1',
+			source: 'remote-copy',
+			name: 'Remote scoreboard logo',
+			stage: 'awaiting-confirmation',
+			result: undefined,
+		};
+		const published: GraphicsIngestionOperation = {
+			...awaitingConfirmation,
+			stage: 'completed',
+			result: {
+				outcome: 'published',
+				assetId: 'asset-remote' as never,
+				revisionId: 'revision-remote' as never,
+			},
+		};
+		mockApiFetch
+			.mockResolvedValueOnce(created)
+			.mockResolvedValueOnce(awaitingConfirmation)
+			.mockResolvedValueOnce(published);
+		mockTransferFetch.mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3]), {
+			status: 200,
+			headers: { 'content-type': 'application/octet-stream' },
+		}));
+		const wrapper = await mountPage();
+
+		await wrapper.get('[data-testid="remote-source-url"]').setValue(
+			'https://cdn.example.com/scoreboard.png?signature=super-secret#fragment',
+		);
+		await wrapper.get('[data-testid="remote-source-name"]').setValue('Remote scoreboard logo');
+		await wrapper.get('[data-testid="copy-remote-source"]').trigger('click');
+		await flushPromises();
+
+		expect(mockApiFetch).toHaveBeenNthCalledWith(
+			1,
+			'/api/graphics-assets/ingestion-operations',
+			{
+				method: 'POST',
+				body: {
+					idempotencyKey: expect.any(String),
+					name: 'Remote scoreboard logo',
+					source: 'remote-copy',
+					sourceFileName: 'scoreboard.png',
+					defaultEventId: 7,
+					duplicateContentPolicy: 'reuse',
+				},
+			},
+		);
+		expect(mockApiFetch).toHaveBeenNthCalledWith(
+			2,
+			'/api/graphics-assets/ingestion-operations/operation-remote/remote-copy',
+			{
+				method: 'POST',
+				body: {
+					sourceUrl: 'https://cdn.example.com/scoreboard.png?signature=super-secret#fragment',
+				},
+			},
+		);
+		expect(mockTransferFetch).toHaveBeenCalledWith(
+			'/api/graphics-assets/ingestion-operations/operation-remote/staged-source',
+		);
+		expect(mockApiFetch).toHaveBeenNthCalledWith(
+			3,
+			'/api/graphics-assets/ingestion-operations/operation-remote/browser-evidence',
+			{
+				method: 'POST',
+				body: {
+					outcome: 'decoded',
+					sourceDigest: '431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460',
+					width: 1,
+					height: 1,
+				},
+			},
+		);
+		expect(wrapper.text()).toContain('Published');
+		expect(mockRefresh).toHaveBeenCalled();
+		expect(localStorage.getItem('graphics-asset-ingestion-operation')).toBeNull();
+		expect(JSON.stringify(localStorage)).not.toContain('super-secret');
+		expect(JSON.stringify(localStorage)).not.toContain('fragment');
+	});
+
+	it('reports a rejected remote destination with its stable code and blocks nothing else', async () => {
+		const rejected: GraphicsIngestionOperation = {
+			...completedOperation,
+			id: 'operation-remote-rejected' as never,
+			source: 'remote-copy',
+			stage: 'failed',
+			transferredByteLength: 0,
+			failure: {
+				code: 'remote-source-rejected',
+				retryable: false,
+				message: 'The approved remote Graphic Asset source was rejected before any byte was copied.',
+			},
+			report: {
+				outcome: 'rejected',
+				compatibilityProfile: 'still-image-v1',
+				issues: [{
+					severity: 'error',
+					code: 'remote-source-destination-not-public',
+					message: 'https://cdn.example.com does not name a public internet destination.',
+				}],
+			},
+			result: undefined,
+		};
+		mockApiFetch
+			.mockResolvedValueOnce({ ...rejected, stage: 'created', failure: undefined, report: undefined })
+			.mockResolvedValueOnce(rejected);
+		const wrapper = await mountPage();
+
+		await wrapper.get('[data-testid="remote-source-url"]').setValue(
+			'https://cdn.example.com/scoreboard.png',
+		);
+		await wrapper.get('[data-testid="remote-source-name"]').setValue('Rejected remote source');
+		await wrapper.get('[data-testid="copy-remote-source"]').trigger('click');
+		await flushPromises();
+
+		expect(wrapper.text()).toContain('remote-source-destination-not-public');
+		expect(wrapper.text()).toContain('Approved remote copy');
+		expect(wrapper.text()).toContain('failed');
+		expect(wrapper.findAll('button').some(button =>
+			button.text().includes('Retry from staged bytes')
+			|| button.text().includes('Resume if interrupted'),
+		)).toBe(false);
+	});
+
+	it('refuses a plaintext or credential-bearing remote source before contacting it', async () => {
+		const wrapper = await mountPage();
+
+		await wrapper.get('[data-testid="remote-source-name"]').setValue('Invalid remote source');
+		await wrapper.get('[data-testid="remote-source-url"]').setValue(
+			'http://cdn.example.com/scoreboard.png',
+		);
+		await flushPromises();
+		expect(wrapper.html()).toContain('Only public HTTPS sources may be copied into the library.');
+		expect(wrapper.get('[data-testid="copy-remote-source"]').attributes('disabled'))
+			.toBeDefined();
+
+		await wrapper.get('[data-testid="remote-source-url"]').setValue(
+			'https://user:secret@cdn.example.com/scoreboard.png',
+		);
+		await flushPromises();
+		expect(wrapper.html()).toContain('An approved remote source must not carry embedded credentials.');
+		expect(wrapper.get('[data-testid="copy-remote-source"]').attributes('disabled'))
+			.toBeDefined();
+		expect(mockApiFetch).not.toHaveBeenCalled();
+	});
+
+	it('confirms a reconnected remote copy from its staged bytes without the original URL', async () => {
+		const awaitingConfirmation: GraphicsIngestionOperation = {
+			...completedOperation,
+			id: 'operation-reconnected' as never,
+			source: 'remote-copy',
+			name: 'Reconnected remote copy',
+			stage: 'awaiting-confirmation',
+			result: undefined,
+		};
+		localStorage.setItem('graphics-asset-ingestion-operation', 'operation-reconnected');
+		mockApiFetch
+			.mockResolvedValueOnce(awaitingConfirmation)
+			.mockResolvedValueOnce({
+				...awaitingConfirmation,
+				stage: 'completed',
+				result: {
+					outcome: 'published',
+					assetId: 'asset-reconnected' as never,
+					revisionId: 'revision-reconnected' as never,
+				},
+			});
+		mockTransferFetch.mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3]), {
+			status: 200,
+			headers: { 'content-type': 'application/octet-stream' },
+		}));
+		const wrapper = await mountPage();
+		await flushPromises();
+
+		expect(wrapper.text()).toContain('Confirm the exact staged bytes in this browser');
+		await wrapper.get('[data-testid="confirm-staged-source"]').trigger('click');
+		await flushPromises();
+
+		expect(mockTransferFetch).toHaveBeenCalledWith(
+			'/api/graphics-assets/ingestion-operations/operation-reconnected/staged-source',
+		);
+		expect(mockApiFetch).toHaveBeenLastCalledWith(
+			'/api/graphics-assets/ingestion-operations/operation-reconnected/browser-evidence',
+			{ method: 'POST', body: expect.objectContaining({ outcome: 'decoded' }) },
+		);
+		expect(wrapper.text()).toContain('Published');
 	});
 });

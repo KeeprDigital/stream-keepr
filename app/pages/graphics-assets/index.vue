@@ -62,6 +62,11 @@ const lifecyclePresentation = {
 const selectedFile = ref<File | null>(null);
 const proposedName = ref('');
 const createSeparateAsset = ref(false);
+const remoteSourceUrl = ref('');
+const remoteProposedName = ref('');
+const remoteCreateSeparateAsset = ref(false);
+const remoteCopyPending = ref(false);
+const remoteCopyError = ref<string | null>(null);
 const uploadPending = ref(false);
 const uploadError = ref<string | null>(null);
 const currentOperation = ref<GraphicsIngestionOperation | null>(null);
@@ -146,11 +151,72 @@ const canUpload = computed(() =>
 	&& selectionError.value === null
 	&& !uploadPending.value,
 );
+
+/**
+ * Only the path is read from an approved remote URL. Its query parameters and
+ * fragment are secrets: they are sent once with the copy request and are never
+ * stored, displayed, or used to name the Graphic Asset.
+ */
+const remoteSourcePath = computed(() => {
+	try {
+		return new URL(remoteSourceUrl.value.trim());
+	}
+	catch {
+		return null;
+	}
+});
+
+const remoteSourceFileName = computed(() => {
+	const fileName = remoteSourcePath.value?.pathname.split('/').at(-1);
+	return fileName && /\.[a-z0-9]{2,5}$/i.test(fileName)
+		? decodeURIComponent(fileName).slice(0, 255)
+		: undefined;
+});
+
+const remoteSelectionError = computed(() => {
+	if (!remoteSourceUrl.value.trim())
+		return null;
+	const url = remoteSourcePath.value;
+	if (!url)
+		return 'Enter an absolute public HTTPS URL.';
+	if (url.protocol !== 'https:')
+		return 'Only public HTTPS sources may be copied into the library.';
+	if (url.username || url.password)
+		return 'An approved remote source must not carry embedded credentials.';
+	return null;
+});
+
+const canCopyRemoteSource = computed(() =>
+	remoteSourcePath.value !== null
+	&& remoteSelectionError.value === null
+	&& remoteProposedName.value.trim().length > 0
+	&& !remoteCopyPending.value,
+);
+
+const awaitingStagedConfirmation = computed(() =>
+	currentOperation.value?.stage === 'awaiting-confirmation'
+	&& currentOperation.value.source === 'remote-copy',
+);
+/**
+ * An approved remote copy whose bytes never reached staging is retried by
+ * re-sending the URL, so it remains retryable from `created` as well.
+ */
+function needsRemoteSourceRetry(operation: GraphicsIngestionOperation) {
+	return operation.source === 'remote-copy'
+		&& operation.transferredByteLength === 0
+		&& operation.stage !== 'completed'
+		&& operation.stage !== 'cancelled'
+		&& !(operation.stage === 'failed' && !operation.failure?.retryable);
+}
+
 function isRetryableOperation(
 	operation: GraphicsIngestionOperation | null,
 ): operation is GraphicsIngestionOperation {
-	return operation !== null
-		&& operation.stage !== 'created'
+	if (operation === null)
+		return false;
+	if (needsRemoteSourceRetry(operation))
+		return true;
+	return operation.stage !== 'created'
 		&& operation.stage !== 'completed'
 		&& operation.stage !== 'cancelled'
 		&& !(operation.stage === 'failed' && !operation.failure?.retryable);
@@ -637,6 +703,118 @@ async function uploadGraphicAsset() {
 	}
 }
 
+/**
+ * An approved remote copy has no client-side source file, so browser decode and
+ * font evidence are produced from the exact staged bytes instead.
+ */
+async function confirmStagedGraphicAssetSource(operation: GraphicsIngestionOperation) {
+	if (
+		operation.stage !== 'awaiting-confirmation'
+		|| operation.report?.outcome !== 'accepted'
+		|| operation.source !== 'remote-copy'
+	) {
+		return operation;
+	}
+	const response = await fetch(
+		`/api/graphics-assets/ingestion-operations/${operation.id}/staged-source`,
+	);
+	if (!response.ok) {
+		throw new Error(
+			`The staged Graphic Asset source could not be read for confirmation (status ${response.status}).`,
+		);
+	}
+	const staged = await response.blob();
+	const evidence = operation.report.facts.kind === 'font'
+		? await verifyStaticFontBrowserLoad(staged, operation.report.facts.browserChallenge)
+		: await verifyStillImageBrowserDecode(staged);
+	return await observeOperationRequest(
+		operation.id,
+		$fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/ingestion-operations/${operation.id}/browser-evidence`,
+			{ method: 'POST', body: evidence },
+		),
+	);
+}
+
+async function sendRemoteSourceCopy(
+	operation: GraphicsIngestionOperation,
+	sourceUrl: string,
+) {
+	const copied = await observeOperationRequest(
+		operation.id,
+		$fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/ingestion-operations/${operation.id}/remote-copy`,
+			{ method: 'POST', body: { sourceUrl } },
+		),
+	);
+	return await confirmStagedGraphicAssetSource(copied);
+}
+
+async function copyRemoteGraphicAssetSource() {
+	if (!canCopyRemoteSource.value)
+		return;
+	remoteCopyPending.value = true;
+	remoteCopyError.value = null;
+	try {
+		const sourceUrl = remoteSourceUrl.value.trim();
+		const initiated = await $fetch<GraphicsIngestionOperation>(
+			'/api/graphics-assets/ingestion-operations',
+			{
+				method: 'POST',
+				body: {
+					idempotencyKey: crypto.randomUUID(),
+					name: remoteProposedName.value.trim(),
+					source: 'remote-copy',
+					sourceFileName: remoteSourceFileName.value,
+					defaultEventId: eventStore.eventId ?? undefined,
+					duplicateContentPolicy: remoteCreateSeparateAsset.value
+						? 'create-separate'
+						: 'reuse',
+				},
+			},
+		);
+		currentOperation.value = initiated;
+		// Only the durable operation identity is persisted. The URL is deliberately
+		// not stored anywhere, so a retry after reconnect asks for it again.
+		localStorage.setItem(operationStorageKey, initiated.id);
+		localStorage.removeItem(initiationStorageKey);
+		currentOperation.value = await sendRemoteSourceCopy(initiated, sourceUrl);
+		if (currentOperation.value.stage === 'completed') {
+			remoteSourceUrl.value = '';
+			remoteProposedName.value = '';
+		}
+		await refreshAfterTerminalOperation();
+	}
+	catch (caught) {
+		remoteCopyError.value = caught instanceof Error
+			? caught.message
+			: 'The approved remote Graphic Asset copy failed.';
+	}
+	finally {
+		remoteCopyPending.value = false;
+	}
+}
+
+async function confirmStagedSource() {
+	const operation = currentOperation.value;
+	if (!operation || !awaitingStagedConfirmation.value)
+		return;
+	remoteCopyPending.value = true;
+	remoteCopyError.value = null;
+	try {
+		currentOperation.value = await confirmStagedGraphicAssetSource(operation);
+		await refreshAfterTerminalOperation();
+	}
+	catch (caught) {
+		remoteCopyError.value = caught instanceof Error
+			? caught.message
+			: 'The staged Graphic Asset source could not be confirmed.';
+	}
+	finally {
+		remoteCopyPending.value = false;
+	}
+}
+
 async function retryOperation() {
 	const operation = currentOperation.value;
 	if (!isRetryableOperation(operation)) {
@@ -646,6 +824,17 @@ async function retryOperation() {
 	uploadError.value = null;
 	try {
 		const operationId = operation.id;
+		if (needsRemoteSourceRetry(operation)) {
+			const sourceUrl = remoteSourceUrl.value.trim();
+			if (!sourceUrl || remoteSelectionError.value) {
+				throw new Error(
+					'Re-enter the approved HTTPS URL to retry this copy. The URL is never stored.',
+				);
+			}
+			currentOperation.value = await sendRemoteSourceCopy(operation, sourceUrl);
+			await refreshAfterTerminalOperation();
+			return;
+		}
 		if (operation.transfer && operation.stage === 'transferring') {
 			const file = selectedFile.value;
 			if (!file || !operationMatchesSelectedFile(operation, file, operation.name)) {
@@ -714,9 +903,17 @@ onMounted(async () => {
 			currentOperation.value = await $fetch<GraphicsIngestionOperation>(
 				`/api/graphics-assets/ingestion-operations/${operationId}`,
 			);
-			proposedName.value ||= currentOperation.value.name;
-			createSeparateAsset.value
-				= currentOperation.value.duplicateContentPolicy === 'create-separate';
+			const restoredRemoteCopy = currentOperation.value.source === 'remote-copy';
+			if (restoredRemoteCopy) {
+				remoteProposedName.value ||= currentOperation.value.name;
+				remoteCreateSeparateAsset.value
+					= currentOperation.value.duplicateContentPolicy === 'create-separate';
+			}
+			else {
+				proposedName.value ||= currentOperation.value.name;
+				createSeparateAsset.value
+					= currentOperation.value.duplicateContentPolicy === 'create-separate';
+			}
 			if (
 				currentOperation.value.stage === 'completed'
 				|| (
@@ -837,10 +1034,10 @@ onMounted(async () => {
 				<template #header>
 					<div>
 						<h2 class="font-semibold text-highlighted">
-							Upload one asset
+							Add one asset
 						</h2>
 						<p class="mt-1 text-sm text-muted">
-							The source is staged privately, validated unchanged, and published only when its dependent preview and catalogue facts are complete.
+							Upload a local file or copy an approved public HTTPS source. Either way the source is staged privately, validated unchanged, and published only when its dependent preview and catalogue facts are complete.
 						</p>
 					</div>
 				</template>
@@ -910,12 +1107,86 @@ onMounted(async () => {
 					:description="uploadError"
 				/>
 
+				<div class="mt-6 border-t border-default pt-4">
+					<h3 class="font-semibold text-highlighted">
+						Copy an approved HTTPS source
+					</h3>
+					<p class="mt-1 text-sm text-muted">
+						A one-time bounded copy of a public HTTPS resource. Only public HTTPS destinations are followed, at most three redirects, and the copy leaves no hotlink or dependency on the remote host. Query parameters and fragments are treated as secrets: they are sent once and never stored, so a later retry asks for the URL again.
+					</p>
+					<div class="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(16rem,0.7fr)]">
+						<UFormField
+							name="remoteSourceUrl"
+							label="Public HTTPS source URL"
+							description="The remote file name, media type, length, and digest are treated as untrusted hints."
+							required
+						>
+							<UInput
+								v-model="remoteSourceUrl"
+								data-testid="remote-source-url"
+								placeholder="https://cdn.example.com/scoreboard.png"
+								class="w-full"
+							/>
+						</UFormField>
+						<div class="flex flex-col gap-4">
+							<UFormField
+								name="remoteName"
+								label="Graphic Asset name"
+								description="Searchable library name."
+								required
+							>
+								<UInput
+									v-model="remoteProposedName"
+									data-testid="remote-source-name"
+									placeholder="Remote scoreboard logo"
+									class="w-full"
+								/>
+							</UFormField>
+							<label class="flex items-start gap-2 text-sm text-muted">
+								<input v-model="remoteCreateSeparateAsset" type="checkbox" class="mt-1">
+								<span>Create a separate Graphic Asset even when this exact Graphic Asset Content already exists.</span>
+							</label>
+							<UAlert
+								v-if="remoteSelectionError"
+								color="error"
+								variant="soft"
+								icon="i-lucide-triangle-alert"
+								:title="remoteSelectionError"
+							/>
+							<UButton
+								data-testid="copy-remote-source"
+								icon="i-lucide-link"
+								label="Copy and validate"
+								:loading="remoteCopyPending"
+								:disabled="!canCopyRemoteSource"
+								@click="copyRemoteGraphicAssetSource"
+							/>
+						</div>
+					</div>
+					<UAlert
+						v-if="remoteCopyError"
+						class="mt-4"
+						color="error"
+						variant="soft"
+						icon="i-lucide-circle-x"
+						title="Approved remote copy failed"
+						:description="remoteCopyError"
+					/>
+				</div>
+
 				<div v-if="currentOperation" class="mt-4 rounded-lg border border-default bg-elevated/25 p-4">
 					<div class="flex flex-wrap items-center gap-2">
 						<UBadge
 							:color="operationColor(currentOperation.stage)"
 							variant="soft"
 							:label="currentOperation.stage"
+						/>
+						<UBadge
+							variant="soft"
+							color="neutral"
+							:label="currentOperation.source === 'remote-copy'
+								? 'Approved remote copy'
+								: 'Local upload'"
 						/>
 						<span class="font-mono text-xs text-muted">{{ currentOperation.id }}</span>
 					</div>
@@ -957,7 +1228,18 @@ onMounted(async () => {
 							{{ issue.code }} — {{ issue.message }}
 						</li>
 					</ul>
+					<p v-if="awaitingStagedConfirmation" class="mt-2 text-sm text-muted">
+						Confirm the exact staged bytes in this browser to finish the copy.
+					</p>
 					<div class="mt-3 flex flex-wrap gap-2">
+						<UButton
+							v-if="awaitingStagedConfirmation"
+							data-testid="confirm-staged-source"
+							icon="i-lucide-badge-check"
+							label="Confirm staged source"
+							:loading="remoteCopyPending"
+							@click="confirmStagedSource"
+						/>
 						<UButton
 							v-if="canRetryOperation"
 							icon="i-lucide-refresh-cw"

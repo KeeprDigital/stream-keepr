@@ -7,6 +7,8 @@ import {
 	createR2CanonicalGraphicsObjectStore,
 	createR2StagingGraphicsObjectStore,
 } from './r2-object-store';
+import { createGraphicsRemoteSourceFetcher } from './remote-source';
+import { createDnsOverHttpsRemoteHostResolver } from './remote-source-resolver';
 import {
 	createSilentVideoPlaybackServiceBindingValidator,
 	createUnavailableSilentVideoPlaybackValidator,
@@ -36,15 +38,18 @@ function canonicalObjectStore(binding: R2Bucket | undefined): GraphicsObjectStor
 		: unavailableObjectStore;
 }
 
-export function graphicsAssetLibraryForEvent(event: H3Event) {
-	const bindings = event.context.cloudflare?.env;
-	const validationBinding = (
-		bindings as typeof bindings & {
-			SILENT_VIDEO_PLAYBACK_VALIDATOR?: {
-				fetch: (request: Request) => Promise<Response>;
-			};
-		} | undefined
-	)?.SILENT_VIDEO_PLAYBACK_VALIDATOR;
+type GraphicsBindings = Partial<Env> & {
+	SILENT_VIDEO_PLAYBACK_VALIDATOR?: {
+		fetch: (request: Request) => Promise<Response>;
+	};
+};
+
+/**
+ * Builds the library from Worker bindings directly. Scheduled triggers have no
+ * request, so they cannot go through the request-scoped factory.
+ */
+export function graphicsAssetLibraryForBindings(bindings: GraphicsBindings | undefined) {
+	const validationBinding = bindings?.SILENT_VIDEO_PLAYBACK_VALIDATOR;
 	return createGraphicsAssetLibrary({
 		catalogue: createD1GraphicsAssetCatalogue(db.$client),
 		staging: stagingObjectStore(bindings?.GRAPHICS_ASSET_STAGING),
@@ -52,5 +57,14 @@ export function graphicsAssetLibraryForEvent(event: H3Event) {
 		silentVideoPlaybackValidator: validationBinding
 			? createSilentVideoPlaybackServiceBindingValidator(validationBinding)
 			: createUnavailableSilentVideoPlaybackValidator(),
+		remoteSource: createGraphicsRemoteSourceFetcher({
+			resolver: createDnsOverHttpsRemoteHostResolver(),
+		}),
 	});
+}
+
+export function graphicsAssetLibraryForEvent(event: H3Event) {
+	return graphicsAssetLibraryForBindings(
+		event.context.cloudflare?.env as GraphicsBindings | undefined,
+	);
 }

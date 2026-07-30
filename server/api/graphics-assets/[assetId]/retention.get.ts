@@ -1,0 +1,18 @@
+import { graphicAssetId } from '~~/server/modules/graphics-asset-library';
+import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
+import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
+
+/**
+ * The Library Workspace view of one Graphic Asset's exact recovery and cleanup
+ * deadlines.
+ */
+export default defineEventHandler(async (event) => {
+	try {
+		return await graphicsAssetLibraryForEvent(event).inspectGraphicAssetRetention({
+			assetId: graphicAssetId(getRouterParam(event, 'assetId') ?? ''),
+		});
+	}
+	catch (error) {
+		return rethrowGraphicsAssetApiError(error, event);
+	}
+});

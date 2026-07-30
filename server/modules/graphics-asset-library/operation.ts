@@ -2,7 +2,20 @@ import type {
 	GraphicAssetId,
 	GraphicAssetRevisionId,
 	GraphicsIngestionOperation,
+	GraphicsIngestionOperationId,
 } from '~~/shared/types/graphicsAsset';
+import { graphicsObjectIdentity } from './object-store';
+
+/**
+ * Every staging object one Graphics Ingestion Operation may own. Cancellation,
+ * terminal failure, and staged-input expiry all reclaim the same complete set.
+ */
+export function stagedIngestionObjectIdentities(operationId: GraphicsIngestionOperationId) {
+	return [
+		graphicsObjectIdentity(`ingestion/${operationId}/source`),
+		graphicsObjectIdentity(`ingestion/${operationId}/video-poster`),
+	];
+}
 
 export function completedGraphicAssetReplacementOperation(input: {
 	operation: GraphicsIngestionOperation;
