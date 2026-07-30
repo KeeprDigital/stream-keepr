@@ -1,10 +1,12 @@
 import type {
+	GraphicFill,
 	GraphicItemConfig,
 	GraphicItemKind,
 	GraphicSurfaceStyle,
 	GraphicTypography,
 } from '../../types/graphics';
 import type { GraphicsContextKind, GraphicsHostContract } from './hostContract';
+import { shapeGeometrySummary, squareShapeGeometry } from './shapeGeometry';
 
 /**
  * Graphic Item Definitions: the application-owned contract for each Graphic
@@ -45,10 +47,17 @@ export const DEFAULT_GRAPHIC_TYPOGRAPHY: GraphicTypography = {
 	color: '#ffffff',
 };
 
+export const DEFAULT_GRAPHIC_FILL: GraphicFill = { type: 'solid', color: '#0077a3' };
+
 export const DEFAULT_GRAPHIC_SURFACE_STYLE: GraphicSurfaceStyle = {
-	fill: '#0077a3',
+	fill: { ...DEFAULT_GRAPHIC_FILL },
 	fillOpacity: 1,
 };
+
+/** A fresh copy, so no two items share one nested style object. */
+export function createDefaultGraphicSurfaceStyle(): GraphicSurfaceStyle {
+	return { fill: { type: 'solid', color: '#0077a3' }, fillOpacity: 1 };
+}
 
 /** A newly placed item occupies a predictable share of the host canvas. */
 function defaultRect(options: GraphicItemDefaultsOptions) {
@@ -58,6 +67,15 @@ function defaultRect(options: GraphicItemDefaultsOptions) {
 		width: Math.round(options.canvasWidth * 0.4),
 		height: Math.round(options.canvasHeight * 0.1),
 	};
+}
+
+/** A Graphic Fill in one phrase, for the authoring tree's item summaries. */
+export function graphicFillSummary(fill: GraphicFill): string {
+	return fill.type === 'solid' ? fill.color : `gradient • ${fill.stops.length} stops`;
+}
+
+function surfaceSummary(style: GraphicSurfaceStyle | undefined): string {
+	return style ? graphicFillSummary(style.fill) : 'inherited style';
 }
 
 const DEFINITIONS = {
@@ -90,17 +108,44 @@ const DEFINITIONS = {
 			visible: true,
 			anchor: 'top-left',
 			...defaultRect(options),
-			geometry: { cornerRadius: 0 },
-			surfaceStyle: { ...DEFAULT_GRAPHIC_SURFACE_STYLE },
+			geometry: squareShapeGeometry(),
+			surfaceStyle: createDefaultGraphicSurfaceStyle(),
 		}),
 		summary: item => item.type === 'shape'
-			? `${item.surfaceStyle.fill}${item.geometry.cornerRadius > 0 ? ` • radius ${item.geometry.cornerRadius}` : ''}`
+			? `${surfaceSummary(item.surfaceStyle)} • ${shapeGeometrySummary(item.geometry)}`
 			: 'Shape',
+	},
+	group: {
+		kind: 'group',
+		label: 'Group',
+		icon: 'i-lucide-group',
+		createDefault: options => ({
+			type: 'group',
+			id: options.id,
+			label: options.label,
+			visible: true,
+			anchor: 'top-left',
+			...defaultRect(options),
+			arrangement: 'row',
+			padding: 0,
+			gap: 16,
+			align: 'stretch',
+			justify: 'start',
+			clip: false,
+			geometry: squareShapeGeometry(),
+			children: [],
+		}),
+		summary: item => item.type === 'group'
+			? `${item.arrangement} • ${item.children.length} items`
+			: 'Group',
 	},
 } satisfies Record<GraphicItemKind, GraphicItemDefinition>;
 
 /** Definition palette order is the shared vocabulary's own order. */
 export const GRAPHIC_ITEM_KINDS = Object.keys(DEFINITIONS) as readonly GraphicItemKind[];
+
+/** The kinds a Graphic Group may contain: every base kind except another group. */
+export const GRAPHIC_GROUP_CHILD_KINDS = GRAPHIC_ITEM_KINDS.filter(kind => kind !== 'group');
 
 export function getGraphicItemDefinition(kind: GraphicItemKind): GraphicItemDefinition {
 	return DEFINITIONS[kind];
@@ -119,6 +164,13 @@ export function graphicItemDefinitionsForHost(contract: GraphicsHostContract): r
 	return GRAPHIC_ITEM_KINDS
 		.map(getGraphicItemDefinition)
 		.filter(definition => isGraphicItemDefinitionAvailable(definition, contract));
+}
+
+/** The Definitions a Graphic Group may offer: never another Graphic Group. */
+export function graphicGroupChildDefinitionsForHost(
+	contract: GraphicsHostContract,
+): readonly GraphicItemDefinition[] {
+	return graphicItemDefinitionsForHost(contract).filter(definition => definition.kind !== 'group');
 }
 
 export function graphicItemSummary(item: GraphicItemConfig): string {
