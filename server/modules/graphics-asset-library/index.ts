@@ -4,12 +4,15 @@ import type {
 	GraphicAssetId,
 	GraphicAssetLifecycleActionOutcome,
 	GraphicAssetLifecycleState,
+	GraphicAssetPurgeOutcome,
 	GraphicAssetReferenceStatus,
+	GraphicAssetRetentionView,
 	GraphicAssetRevisionId,
 	GraphicAssetSourceDeclarations,
 	GraphicAssetUsage,
 	GraphicAssetValidationReport,
 	GraphicsAssetCapacityLimits,
+	GraphicsAssetEvidenceEntry,
 	GraphicsAssetLibraryCapacity,
 	GraphicsAssetLibraryComponentHealth,
 	GraphicsAssetLibraryHealth,
@@ -18,6 +21,9 @@ import type {
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 	GraphicsIngestionSource,
+	GraphicsRetentionEvidenceCategory,
+	GraphicsRetentionOverview,
+	GraphicsRetentionSweepResult,
 } from '~~/shared/types/graphicsAsset';
 import type { GraphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import type { GraphicsCapacityExhaustedDetails } from './errors';
@@ -32,6 +38,7 @@ import type {
 	GraphicsStagingObjectStore,
 } from './object-store';
 import type { GraphicsRemoteSourceFetcher } from './remote-source';
+import type { GraphicsAssetRetentionCatalogue } from './retention';
 import type { SilentVideoPlaybackValidator } from './silent-video-playback-validator';
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import {
@@ -47,6 +54,7 @@ import {
 	STATIC_FONT_COMPATIBILITY_PROFILE,
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
 } from '~~/shared/utils/graphicsAssetCompatibility';
+import { GRAPHICS_RETENTION_ACTOR } from '~~/shared/utils/graphicsAssetRetention';
 import { GraphicsAssetLibraryError } from './errors';
 import { processStaticFont } from './font';
 import { graphicsIngestionPartIdentity } from './multipart';
@@ -61,6 +69,7 @@ import {
 	sha256Hex,
 	sha256HexStream,
 } from './png';
+import { createGraphicsRetention } from './retention';
 import {
 	processSilentVideo,
 	processSilentVideoFromRandomAccess,
@@ -159,6 +168,7 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	recordStagedBytes: (input: {
 		operation: GraphicsIngestionOperation;
 		usedBytes: number;
+		recordedAt: string;
 	}) => Promise<void>;
 	/**
 	 * An approved remote copy reserves the worst-case staging envelope before
@@ -440,6 +450,31 @@ export interface GraphicsAssetLibrary {
 		| { outcome: 'missing' }
 		| { outcome: 'unavailable'; retryable: true }
 	>;
+	/**
+	 * Runs one scheduled retention pass. Every stage reclaims only state it has
+	 * just proven unreachable past its complete recovery guarantee, and records
+	 * durable Evidence for what it did.
+	 */
+	runGraphicsRetention: () => Promise<GraphicsRetentionSweepResult>;
+	/**
+	 * The administrator's explicitly confirmed early purge of unreferenced
+	 * Trash. It proves usage afresh and never shortens any other guarantee.
+	 */
+	purgeTrashedGraphicAsset: (input: {
+		assetId: GraphicAssetId;
+		actor: string;
+		confirmation: 'purge-now';
+	}) => Promise<GraphicAssetPurgeOutcome>;
+	listGraphicsAssetEvidence: (input?: {
+		limit?: number;
+		categories?: readonly GraphicsRetentionEvidenceCategory[];
+	}) => Promise<GraphicsAssetEvidenceEntry[]>;
+	/** Every exact recovery and cleanup deadline the installation is holding. */
+	getRetentionOverview: () => Promise<GraphicsRetentionOverview>;
+	/** One Graphic Asset's recovery window and per-revision retention. */
+	inspectGraphicAssetRetention: (input: {
+		assetId: GraphicAssetId;
+	}) => Promise<GraphicAssetRetentionView>;
 }
 
 interface GraphicsAssetLibraryDependencies {
@@ -546,6 +581,57 @@ export function createGraphicsAssetLibrary(
 		if (!('createImmutable' in dependencies.canonical))
 			throw new GraphicsAssetLibraryError('Graphics Asset canonical byte store is unavailable', 'graphics-asset-library-unavailable');
 		return dependencies.canonical;
+	}
+
+	/**
+	 * The scheduled retention path needs transactional catalogue proofs that an
+	 * ordinary in-memory catalogue double cannot provide.
+	 */
+	function findRetention() {
+		const catalogue = requireCatalogue();
+		if (!('listStagedInputExpiryCandidates' in catalogue))
+			return undefined;
+		return createGraphicsRetention({
+			catalogue: catalogue as GraphicsAssetCatalogue & GraphicsAssetRetentionCatalogue,
+			staging: requireStaging(),
+			canonical: requireCanonical(),
+			now,
+			generateIdentity,
+		});
+	}
+
+	function requireRetention() {
+		const retention = findRetention();
+		if (!retention) {
+			throw new GraphicsAssetLibraryError(
+				'Graphics Asset retention is unavailable for this catalogue',
+				'graphics-asset-library-unavailable',
+			);
+		}
+		return retention;
+	}
+
+	/**
+	 * Trash and restore change revision pruning deadlines inside their own
+	 * transaction; this records the resulting Evidence. It never fails the
+	 * lifecycle transition that already committed.
+	 */
+	async function recordPruningTransition(
+		assetId: GraphicAssetId,
+		transition: 'frozen' | 'resumed',
+	) {
+		try {
+			await findRetention()?.recordPruningTransition({
+				assetId,
+				transition,
+				actor: GRAPHICS_RETENTION_ACTOR,
+				recordedAt: timestamp(),
+			});
+		}
+		catch {
+			// The transition is already durable; Evidence for it is best-effort and
+			// the next sweep re-observes the deadline either way.
+		}
 	}
 
 	async function catalogueRequest<T>(
@@ -2103,6 +2189,7 @@ export function createGraphicsAssetLibrary(
 				() => catalogue.recordStagedBytes({
 					operation,
 					usedBytes: stagedByteLength!,
+					recordedAt: timestamp(),
 				}),
 				'Graphics staging progress could not be recorded',
 			);
@@ -2215,6 +2302,7 @@ export function createGraphicsAssetLibrary(
 				() => catalogue.recordStagedBytes({
 					operation,
 					usedBytes: staged.object.byteLength,
+					recordedAt: timestamp(),
 				}),
 				'Graphics staging progress could not be recorded',
 			);
@@ -2540,6 +2628,7 @@ export function createGraphicsAssetLibrary(
 					'graphic-asset-lifecycle-action-not-allowed',
 				);
 			}
+			await recordPruningTransition(input.assetId, 'frozen');
 			return { outcome: 'trashed', asset: transition.asset };
 		},
 		async restoreGraphicAsset(input) {
@@ -2562,6 +2651,7 @@ export function createGraphicsAssetLibrary(
 					'graphic-asset-lifecycle-action-not-allowed',
 				);
 			}
+			await recordPruningTransition(input.assetId, 'resumed');
 			return { outcome: 'restored', asset: transition.asset };
 		},
 		async updateGraphicAsset(input) {
@@ -2697,6 +2787,80 @@ export function createGraphicsAssetLibrary(
 				byteLength: result.object.byteLength,
 				contentType: 'image/png',
 			};
+		},
+		async runGraphicsRetention() {
+			return await catalogueRequest(
+				() => requireRetention().run(),
+				'Graphics Asset retention could not complete because the catalogue is unavailable',
+			);
+		},
+		async purgeTrashedGraphicAsset(input) {
+			if (input.confirmation !== 'purge-now' || !input.actor.trim()) {
+				throw new GraphicsAssetLibraryError(
+					'Early purge requires an explicit confirmation and an administrator identity',
+					'invalid-ingestion-input',
+				);
+			}
+			const outcome = await catalogueRequest(
+				() => requireRetention().purge({
+					assetId: input.assetId,
+					actor: input.actor.trim(),
+				}),
+				'Graphic Asset purge could not be completed',
+			);
+			if (outcome.outcome === 'not-found') {
+				throw new GraphicsAssetLibraryError(
+					'Graphic Asset not found',
+					'ingestion-operation-not-found',
+				);
+			}
+			if (outcome.outcome === 'not-trashed') {
+				throw new GraphicsAssetLibraryError(
+					'Only a Trashed Graphic Asset can be purged',
+					'graphic-asset-lifecycle-action-not-allowed',
+				);
+			}
+			if (outcome.outcome === 'blocked') {
+				return {
+					outcome: 'in-use',
+					usage: await catalogueRequest(
+						() => requireCatalogue().listGraphicAssetUsage(input.assetId),
+						'Graphic Asset usage is temporarily unavailable',
+					),
+				};
+			}
+			return {
+				outcome: 'purged',
+				assetId: input.assetId,
+				purgedAt: outcome.purgedAt,
+				revisionCount: outcome.revisionCount,
+				referenceCount: outcome.referenceCount,
+				reason: 'early-purge',
+			};
+		},
+		async listGraphicsAssetEvidence(input = {}) {
+			return await catalogueRequest(
+				() => requireRetention().listEvidence(input),
+				'Graphics Asset Evidence is temporarily unavailable',
+			);
+		},
+		async getRetentionOverview() {
+			return await catalogueRequest(
+				async () => {
+					const retention = requireRetention();
+					return await retention.overview(await requireCatalogue().getCapacity());
+				},
+				'Graphics Asset retention deadlines are temporarily unavailable',
+			);
+		},
+		async inspectGraphicAssetRetention(input) {
+			const view = await catalogueRequest(
+				() => requireRetention().inspect(input.assetId),
+				'Graphic Asset retention deadlines are temporarily unavailable',
+			);
+			if (!view)
+				throw new GraphicsAssetLibraryError('Graphic Asset not found', 'ingestion-operation-not-found');
+			return view;
 		},
 	};
 }
