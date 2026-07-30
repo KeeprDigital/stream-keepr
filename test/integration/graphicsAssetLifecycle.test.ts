@@ -1,0 +1,436 @@
+import type {
+	GraphicAsset,
+	GraphicAssetLifecycleAction,
+	GraphicAssetLifecycleActionOutcome,
+	GraphicsIngestionOperation,
+} from '~~/shared/types/graphicsAsset';
+import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
+import { $fetch, fetch } from '@nuxt/test-utils/e2e';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
+import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+
+const lifecyclePixelPng = Uint8Array.from(Buffer.from(
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+	'base64',
+));
+const emptyTextChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85);
+const lifecycleReplacementPng = Uint8Array.of(
+	...lifecyclePixelPng.slice(0, -12),
+	...emptyTextChunk,
+	...lifecyclePixelPng.slice(-12),
+);
+
+function decodeEvidence(bytes = lifecyclePixelPng) {
+	return {
+		outcome: 'decoded' as const,
+		sourceDigest: createHash('sha256').update(bytes).digest('hex'),
+		width: 1,
+		height: 1,
+	};
+}
+
+describe('the recoverable Graphic Asset lifecycle', () => {
+	let eventId: number;
+	let screenId: number;
+	let authorHeaders: Record<string, string>;
+
+	beforeAll(async () => {
+		authorHeaders = {
+			'cookie': await createGraphicsAuthorSessionCookie(),
+			'x-graphics-author-id': 'lifecycle-integration-author',
+		};
+		const event = await $fetch('/api/events', {
+			method: 'POST',
+			body: {
+				name: 'Graphic Asset Lifecycle Event',
+				game: 'mtg',
+				featureMatchOrientation: 'horizontal',
+			},
+		});
+		eventId = event.id;
+		const screen = await $fetch(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: {
+				name: 'Lifecycle overlay',
+				slug: `lifecycle-overlay-${eventId}`,
+				currentMode: 'feature-match-overlay',
+			},
+		});
+		screenId = screen.id;
+	});
+
+	afterAll(async () => {
+		try {
+			await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+		}
+		catch {}
+	});
+
+	async function ingest(name: string, idempotencyKey: string) {
+		const initiated = await $fetch<GraphicsIngestionOperation>(
+			'/api/graphics-assets/ingestion-operations',
+			{
+				method: 'POST',
+				headers: authorHeaders,
+				body: {
+					idempotencyKey,
+					name,
+					defaultEventId: eventId,
+					duplicateContentPolicy: 'create-separate',
+					browserDecodeEvidence: decodeEvidence(),
+					declaredByteLength: lifecyclePixelPng.byteLength,
+				},
+			},
+		);
+		return await fetch(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
+			{ method: 'PUT', headers: authorHeaders, body: lifecyclePixelPng },
+		).then(response => response.json() as Promise<GraphicsIngestionOperation>);
+	}
+
+	async function lifecycleAction(assetId: string, action: GraphicAssetLifecycleAction) {
+		return await $fetch<GraphicAssetLifecycleActionOutcome>(
+			`/api/graphics-assets/${assetId}/lifecycle-actions`,
+			{ method: 'POST', body: { action } },
+		);
+	}
+
+	async function replace(assetId: string, idempotencyKey: string) {
+		const initiated = await $fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/${assetId}/replacement-operations`,
+			{
+				method: 'POST',
+				headers: authorHeaders,
+				body: {
+					idempotencyKey,
+					sourceFileName: 'replacement.png',
+					declaredMime: 'image/png',
+					browserDecodeEvidence: decodeEvidence(lifecycleReplacementPng),
+					declaredByteLength: lifecycleReplacementPng.byteLength,
+				},
+			},
+		);
+		return await fetch(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
+			{
+				method: 'PUT',
+				headers: { ...authorHeaders, 'content-type': 'image/png' },
+				body: lifecycleReplacementPng,
+			},
+		).then(response => response.json() as Promise<GraphicsIngestionOperation>);
+	}
+
+	it('retires and restores without changing identity, revision history, metadata, associations, or exact-reference delivery', async () => {
+		const operation = await ingest('Retirable lifecycle logo', 'lifecycle-retire');
+		const reference = {
+			assetId: operation.result!.assetId,
+			revisionId: operation.result!.revisionId,
+		};
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		config.layout.frame.backgroundImage = reference;
+		await $fetch(
+			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
+			{ method: 'PATCH', body: { layout: config.layout } },
+		);
+		const replacement = await replace(reference.assetId, 'lifecycle-retire-replacement');
+		await $fetch(`/api/graphics-assets/${reference.assetId}`, {
+			method: 'PATCH',
+			body: {
+				name: 'Renamed retirable lifecycle logo',
+				eventIds: [eventId],
+			},
+		});
+
+		const retired = await lifecycleAction(reference.assetId, 'retire');
+		expect(retired).toMatchObject({
+			outcome: 'retired',
+			asset: {
+				id: reference.assetId,
+				name: 'Renamed retirable lifecycle logo',
+				revisionId: replacement.result!.revisionId,
+				revisionNumber: 2,
+				eventIds: [eventId],
+				lifecycle: { state: 'retired' },
+				revisions: [
+					{
+						id: reference.revisionId,
+						revisionNumber: 1,
+					},
+					{
+						id: replacement.result!.revisionId,
+						revisionNumber: 2,
+					},
+				],
+			},
+		});
+		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			query: { search: 'Renamed retirable lifecycle logo' },
+		})).resolves.toEqual([]);
+		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			query: { search: 'Renamed retirable lifecycle logo', lifecycleStates: 'retired' },
+		})).resolves.toEqual([
+			expect.objectContaining({
+				id: reference.assetId,
+				revisionId: replacement.result!.revisionId,
+				revisionNumber: 2,
+				lifecycle: { state: 'retired' },
+			}),
+		]);
+
+		const delivered = await fetch(
+			`/api/graphics-assets/${reference.assetId}/revisions/${reference.revisionId}/content`,
+			{ headers: authorHeaders },
+		);
+		expect(delivered.status).toBe(200);
+		expect(new Uint8Array(await delivered.arrayBuffer())).toEqual(lifecyclePixelPng);
+		const latestDelivered = await fetch(
+			`/api/graphics-assets/${reference.assetId}/revisions/${replacement.result!.revisionId}/content`,
+			{ headers: authorHeaders },
+		);
+		expect(latestDelivered.status).toBe(200);
+		expect(new Uint8Array(await latestDelivered.arrayBuffer()))
+			.toEqual(lifecycleReplacementPng);
+
+		const secondScreen = await $fetch(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: {
+				name: 'Retired selection rejection',
+				slug: `retired-selection-${eventId}`,
+				currentMode: 'feature-match-overlay',
+			},
+		});
+		await expect($fetch(
+			`/api/events/${eventId}/screens/${secondScreen.id}/config/feature-match-overlay`,
+			{ method: 'PATCH', body: { layout: config.layout } },
+		)).rejects.toMatchObject({ statusCode: 409 });
+
+		const restored = await lifecycleAction(reference.assetId, 'restore');
+		expect(restored).toMatchObject({
+			outcome: 'restored',
+			asset: {
+				id: reference.assetId,
+				name: 'Renamed retirable lifecycle logo',
+				revisionId: replacement.result!.revisionId,
+				revisionNumber: 2,
+				eventIds: [eventId],
+				lifecycle: { state: 'active' },
+				revisions: [
+					{
+						id: reference.revisionId,
+						revisionNumber: 1,
+					},
+					{
+						id: replacement.result!.revisionId,
+						revisionNumber: 2,
+					},
+				],
+			},
+		});
+		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			query: { search: 'Renamed retirable lifecycle logo' },
+		})).resolves.toEqual([
+			expect.objectContaining({
+				id: reference.assetId,
+				revisionId: replacement.result!.revisionId,
+				revisionNumber: 2,
+				lifecycle: { state: 'active' },
+			}),
+		]);
+	});
+
+	it('moves only explicitly requested unreferenced assets to Trash and restores their prior state', async () => {
+		const operation = await ingest('Recoverable lifecycle logo', 'lifecycle-trash');
+		const assetId = operation.result!.assetId;
+		const revisionId = operation.result!.revisionId;
+
+		await lifecycleAction(assetId, 'retire');
+		const trashed = await lifecycleAction(assetId, 'trash');
+		expect(trashed).toMatchObject({
+			outcome: 'trashed',
+			asset: {
+				id: assetId,
+				name: 'Recoverable lifecycle logo',
+				revisionId,
+				revisionNumber: 1,
+				eventIds: [eventId],
+				lifecycle: {
+					state: 'trashed',
+					priorState: 'retired',
+				},
+			},
+		});
+		if (trashed.outcome !== 'trashed')
+			throw new Error('Expected explicit Trash request to succeed');
+		expect(
+			new Date(trashed.asset.lifecycle.state === 'trashed'
+				? trashed.asset.lifecycle.recoverableUntil
+				: '').getTime()
+			- new Date(trashed.asset.lifecycle.state === 'trashed'
+				? trashed.asset.lifecycle.trashedAt
+				: '').getTime(),
+		).toBe(30 * 24 * 60 * 60 * 1000);
+
+		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			query: { search: 'Recoverable lifecycle logo' },
+		})).resolves.toEqual([]);
+		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			query: { search: 'Recoverable lifecycle logo', lifecycleStates: 'trashed' },
+		})).resolves.toEqual([
+			expect.objectContaining({
+				id: assetId,
+				name: 'Recoverable lifecycle logo',
+				revisionId,
+				revisionNumber: 1,
+				eventIds: [eventId],
+				lifecycle: expect.objectContaining({
+					state: 'trashed',
+					priorState: 'retired',
+				}),
+			}),
+		]);
+
+		const restored = await lifecycleAction(assetId, 'restore');
+		expect(restored).toMatchObject({
+			outcome: 'restored',
+			asset: {
+				id: assetId,
+				name: 'Recoverable lifecycle logo',
+				revisionId,
+				revisionNumber: 1,
+				eventIds: [eventId],
+				lifecycle: { state: 'retired' },
+			},
+		});
+		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			query: { search: 'Recoverable lifecycle logo' },
+		})).resolves.toEqual([]);
+
+		const active = await lifecycleAction(assetId, 'restore');
+		expect(active).toMatchObject({
+			outcome: 'restored',
+			asset: {
+				id: assetId,
+				revisionId,
+				lifecycle: { state: 'active' },
+			},
+		});
+	});
+
+	it('returns the complete current usage summary instead of moving a referenced asset to Trash', async () => {
+		const operation = await ingest('Referenced lifecycle logo', 'lifecycle-in-use');
+		const reference = {
+			assetId: operation.result!.assetId,
+			revisionId: operation.result!.revisionId,
+		};
+		const secondScreen = await $fetch(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: {
+				name: 'Second lifecycle usage',
+				slug: `second-lifecycle-usage-${eventId}`,
+				currentMode: 'feature-match-overlay',
+			},
+		});
+		const thirdScreen = await $fetch(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: {
+				name: 'Third lifecycle usage',
+				slug: `third-lifecycle-usage-${eventId}`,
+				currentMode: 'feature-match-overlay',
+			},
+		});
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		config.layout.frame.backgroundImage = reference;
+		await Promise.all([secondScreen.id, thirdScreen.id].map(async id => await $fetch(
+			`/api/events/${eventId}/screens/${id}/config/feature-match-overlay`,
+			{ method: 'PATCH', body: { layout: config.layout } },
+		)));
+
+		const blocked = await lifecycleAction(reference.assetId, 'trash');
+		expect(blocked).toEqual({
+			outcome: 'in-use',
+			usage: [
+				expect.objectContaining({
+					reference,
+					owner: expect.objectContaining({
+						kind: 'screen',
+						id: String(secondScreen.id),
+						eventId,
+					}),
+				}),
+				expect.objectContaining({
+					reference,
+					owner: expect.objectContaining({
+						kind: 'screen',
+						id: String(thirdScreen.id),
+						eventId,
+					}),
+				}),
+			],
+		});
+		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			query: { search: 'Referenced lifecycle logo' },
+		})).resolves.toEqual([
+			expect.objectContaining({
+				id: reference.assetId,
+				lifecycle: { state: 'active' },
+			}),
+		]);
+	});
+
+	it('commits either a new exact reference or Trash, never both', async () => {
+		const operation = await ingest('Racing lifecycle logo', 'lifecycle-race');
+		const reference = {
+			assetId: operation.result!.assetId,
+			revisionId: operation.result!.revisionId,
+		};
+		const racingScreen = await $fetch(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: {
+				name: 'Lifecycle race',
+				slug: `lifecycle-race-${eventId}`,
+				currentMode: 'feature-match-overlay',
+			},
+		});
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		config.layout.frame.backgroundImage = reference;
+
+		const [referenceResult, trashResult] = await Promise.allSettled([
+			$fetch(
+				`/api/events/${eventId}/screens/${racingScreen.id}/config/feature-match-overlay`,
+				{ method: 'PATCH', body: { layout: config.layout } },
+			),
+			lifecycleAction(reference.assetId, 'trash'),
+		]);
+		const [asset] = await $fetch<GraphicAsset[]>('/api/graphics-assets', {
+			query: {
+				search: 'Racing lifecycle logo',
+				lifecycleStates: 'active,trashed',
+			},
+		});
+		const usage = await $fetch(
+			`/api/graphics-assets/${reference.assetId}/usage`,
+		);
+
+		if (asset!.lifecycle.state === 'trashed') {
+			expect(referenceResult.status).toBe('rejected');
+			expect(trashResult).toMatchObject({
+				status: 'fulfilled',
+				value: { outcome: 'trashed' },
+			});
+			expect(usage).toEqual([]);
+		}
+		else {
+			expect(referenceResult.status).toBe('fulfilled');
+			expect(trashResult).toMatchObject({
+				status: 'fulfilled',
+				value: {
+					outcome: 'in-use',
+					usage: [expect.objectContaining({ reference })],
+				},
+			});
+			expect(usage).toEqual([expect.objectContaining({ reference })]);
+		}
+	});
+});

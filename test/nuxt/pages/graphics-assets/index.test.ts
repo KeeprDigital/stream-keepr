@@ -108,6 +108,14 @@ const assets = ref<GraphicAsset[]>([{
 	kind: 'image',
 	revisionId: 'revision-1' as never,
 	revisionNumber: 1,
+	revisions: [{
+		id: 'revision-1' as never,
+		revisionNumber: 1,
+		facts: completedOperation.report!.outcome === 'accepted'
+			? completedOperation.report!.facts
+			: {} as never,
+	}],
+	lifecycle: { state: 'active' },
 	facts: completedOperation.report!.outcome === 'accepted'
 		? completedOperation.report!.facts
 		: {} as never,
@@ -192,6 +200,26 @@ async function mountPage() {
 
 describe('the Graphics Asset Library Workspace', () => {
 	beforeEach(() => {
+		assets.value = [{
+			id: 'asset-1' as never,
+			name: 'Scoreboard logo',
+			kind: 'image',
+			revisionId: 'revision-1' as never,
+			revisionNumber: 1,
+			revisions: [{
+				id: 'revision-1' as never,
+				revisionNumber: 1,
+				facts: completedOperation.report!.outcome === 'accepted'
+					? completedOperation.report!.facts
+					: {} as never,
+			}],
+			lifecycle: { state: 'active' },
+			facts: completedOperation.report!.outcome === 'accepted'
+				? completedOperation.report!.facts
+				: {} as never,
+			eventIds: [7],
+			operation: completedOperation,
+		}];
 		mockApiFetch.mockReset();
 		mockBrowserDecode.mockReset();
 		mockBrowserDecode.mockResolvedValue({
@@ -212,6 +240,11 @@ describe('the Graphics Asset Library Workspace', () => {
 
 		expect(wrapper.text()).toContain('Graphics Asset Library');
 		expect(wrapper.text()).toContain('Scoreboard logo');
+		expect(wrapper.text()).toContain('Active assets');
+		expect(wrapper.text()).toContain('Retired assets');
+		expect(wrapper.text()).toContain('Trash');
+		expect(wrapper.text()).toContain('Revision history');
+		expect(wrapper.text()).toContain('Revision 1');
 		expect(wrapper.text()).toContain('1 × 1');
 		expect(wrapper.text()).toContain('image/png');
 		expect(wrapper.text()).toContain('Pixels');
@@ -717,6 +750,89 @@ describe('the Graphics Asset Library Workspace', () => {
 					duplicateContentPolicy: 'create-separate',
 				}),
 			}),
+		);
+	});
+
+	it('exposes reversible retirement and Trash actions with blocked usage and recovery facts', async () => {
+		const usage: GraphicAssetUsage[] = [{
+			id: 'usage-lifecycle',
+			reference: {
+				assetId: 'asset-1' as never,
+				revisionId: 'revision-1' as never,
+			},
+			owner: {
+				kind: 'screen',
+				id: '42',
+				name: 'Main output',
+				slot: 'layout.frame.backgroundImage',
+				eventId: 7,
+			},
+		}];
+		mockApiFetch
+			.mockResolvedValueOnce({
+				outcome: 'retired',
+				asset: {
+					...assets.value[0]!,
+					lifecycle: { state: 'retired' },
+				},
+			})
+			.mockResolvedValueOnce({ outcome: 'in-use', usage });
+		mockApiFetch.mockResolvedValueOnce({
+			outcome: 'restored',
+			asset: {
+				...assets.value[0]!,
+				lifecycle: { state: 'retired' },
+			},
+		});
+		const wrapper = await mountPage();
+
+		const retire = wrapper.findAll('button')
+			.find(button => button.text() === 'Retire');
+		await retire!.trigger('click');
+		await flushPromises();
+		expect(mockApiFetch).toHaveBeenNthCalledWith(
+			1,
+			'/api/graphics-assets/asset-1/lifecycle-actions',
+			{ method: 'POST', body: { action: 'retire' } },
+		);
+
+		const trash = wrapper.findAll('button')
+			.find(button => button.text() === 'Move to Trash');
+		await trash!.trigger('click');
+		await flushPromises();
+		expect(mockApiFetch).toHaveBeenNthCalledWith(
+			2,
+			'/api/graphics-assets/asset-1/lifecycle-actions',
+			{ method: 'POST', body: { action: 'trash' } },
+		);
+		expect(wrapper.text()).toContain('Main output');
+		expect(wrapper.text()).toContain('cannot enter Trash');
+
+		assets.value = [{
+			...assets.value[0]!,
+			lifecycle: {
+				state: 'trashed',
+				priorState: 'retired',
+				trashedAt: '2026-07-28T00:00:00.000Z',
+				recoverableUntil: '2026-08-27T00:00:00.000Z',
+			},
+		}];
+		await flushPromises();
+		expect(wrapper.text()).toContain('Trash');
+		expect(wrapper.text()).toContain('Previously Retired');
+		expect(wrapper.text()).toContain('Recoverable until');
+		expect(wrapper.text()).toContain('Restore');
+		expect(wrapper.text()).not.toContain('Edit metadata');
+		expect(wrapper.text()).not.toContain('Replace content');
+
+		const restore = wrapper.findAll('button')
+			.find(button => button.text() === 'Restore');
+		await restore!.trigger('click');
+		await flushPromises();
+		expect(mockApiFetch).toHaveBeenNthCalledWith(
+			3,
+			'/api/graphics-assets/asset-1/lifecycle-actions',
+			{ method: 'POST', body: { action: 'restore' } },
 		);
 	});
 });

@@ -73,9 +73,14 @@ export async function screenOutputAssetDeliveryForEvent(event: H3Event) {
 	return createScreenOutputAssetDelivery({
 		signingKey: signingKey(event),
 		authorize: createD1ScreenOutputAssetAuthorizer(db.$client).authorize,
-		resolve: async ({ assetId, revisionId }) => await library.resolveGraphicAssetRevision({
+		inspect: async ({ assetId, revisionId }) => await library.inspectGraphicAssetRevisionContent({
 			assetId: graphicAssetId(assetId),
 			revisionId: graphicAssetRevisionId(revisionId),
+		}),
+		resolve: async ({ assetId, revisionId, range }) => await library.resolveGraphicAssetRevision({
+			assetId: graphicAssetId(assetId),
+			revisionId: graphicAssetRevisionId(revisionId),
+			range,
 		}),
 		cache,
 		defer: executionContext

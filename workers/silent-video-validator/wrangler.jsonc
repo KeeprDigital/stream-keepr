@@ -1,0 +1,55 @@
+{
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	"name": "stream-silent-video-validator",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-07-16",
+	"compatibility_flags": ["nodejs_compat", "no_nodejs_compat_v2"],
+	// Private service: reachable only through the SILENT_VIDEO_PLAYBACK_VALIDATOR
+	// service binding on the stream Worker. No public URL is ever exposed.
+	"workers_dev": false,
+	"preview_urls": false,
+	"r2_buckets": [
+		{
+			"binding": "GRAPHICS_ASSET_STAGING",
+			"bucket_name": "stream-graphics-asset-staging"
+		}
+	],
+	"workflows": [
+		{
+			"name": "silent-video-validation",
+			"binding": "SILENT_VIDEO_VALIDATION_WORKFLOW",
+			"class_name": "SilentVideoValidationWorkflow"
+		}
+	],
+	"containers": [
+		{
+			"class_name": "SilentVideoValidationContainer",
+			"image": "./container/Dockerfile",
+			"instance_type": "standard-3",
+			"max_instances": 4
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "SILENT_VIDEO_VALIDATION_CONTAINER",
+				"class_name": "SilentVideoValidationContainer"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": ["SilentVideoValidationContainer"]
+		}
+	],
+	"observability": {
+		"enabled": true,
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"invocation_logs": true,
+			"persist": true
+		}
+	}
+}

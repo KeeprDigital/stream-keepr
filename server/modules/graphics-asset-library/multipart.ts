@@ -12,7 +12,7 @@ import {
 	GRAPHICS_MULTIPART_PART_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
 
-export interface GraphicsImageMultipartState {
+export interface GraphicsAssetMultipartState {
 	version: number;
 	uploadId?: GraphicsMultipartUploadIdentity;
 	cleanupPending: boolean;
@@ -35,7 +35,7 @@ export function graphicsIngestionPartIdentity(
 }
 
 export function graphicsMultipartCompletedByteLength(
-	state: GraphicsImageMultipartState,
+	state: GraphicsAssetMultipartState,
 ): number {
 	return state.parts
 		.filter(part => part.status === 'completed')
@@ -44,7 +44,7 @@ export function graphicsMultipartCompletedByteLength(
 
 export function graphicsMultipartTransfer(
 	declaredByteLength: number,
-	state: GraphicsImageMultipartState,
+	state: GraphicsAssetMultipartState,
 ): NonNullable<GraphicsIngestionOperation['transfer']> {
 	return {
 		method: 'multipart',

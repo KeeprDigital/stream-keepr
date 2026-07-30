@@ -15,6 +15,99 @@ describe('feature Match Overlay render model', () => {
 		expect(resolveFeatureMatchOverlayRenderModel({ config: base, output: 'key', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' }).frame.fill).toBe('#fff');
 	});
 
+	it('preserves authoritative sibling list order across every Graphic Item kind', () => {
+		const base = config();
+		const source = base.layout.items.find(item => item.type === 'source')!;
+		const graphicItem = base.layout.items.find(item => item.type === 'graphic-item')!;
+		const group = base.layout.items.find(item => item.type === 'graphic-group')!;
+		base.layout.items = [
+			{ ...graphicItem, id: 'back-graphicItem' },
+			{
+				id: 'media',
+				type: 'media',
+				label: 'Media',
+				visible: true,
+				x: 0,
+				y: 0,
+				width: 100,
+				height: 100,
+				mediaKind: 'image',
+				fit: 'cover',
+				focalPosition: { horizontal: 0.25, vertical: 0.75 },
+				opacity: 0.8,
+				clipGeometry: {
+					topLeft: { kind: 'rounded', size: 8 },
+					topRight: { kind: 'cut', size: 12 },
+					bottomRight: { kind: 'square' },
+					bottomLeft: { kind: 'square' },
+					rightEdgeSlant: 16,
+				},
+			},
+			{ ...source, id: 'source' },
+			{ ...group, id: 'front-group' },
+		];
+
+		const model = resolveFeatureMatchOverlayRenderModel({
+			config: base,
+			output: 'overlay',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+			displayTime: '',
+		});
+
+		expect(model.layoutItems.map(item => item.item.id))
+			.toEqual(['back-graphicItem', 'media', 'source', 'front-group']);
+		expect(model.layoutItems.every(item => item.style.zIndex === undefined)).toBe(true);
+		expect(model.mediaItems[0]!.contentStyle).toMatchObject({
+			objectFit: 'cover',
+			objectPosition: '25% 75%',
+			opacity: 0.8,
+			borderRadius: '8px 0px 0px 0px',
+		});
+		expect(model.mediaItems[0]!.contentStyle.clipPath).toContain('polygon(');
+	});
+
+	it('renders image and VP9-alpha Media Graphic Items as grayscale alpha mattes in Key Output', () => {
+		const base = config();
+		base.layout.items = [{
+			id: 'alpha-video',
+			type: 'media',
+			label: 'Alpha video',
+			visible: true,
+			x: 0,
+			y: 0,
+			width: 320,
+			height: 180,
+			mediaKind: 'silent-video',
+			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 0.6,
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'chromium',
+		}];
+
+		const overlay = resolveFeatureMatchOverlayRenderModel({
+			config: base,
+			output: 'overlay',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+			displayTime: '',
+		});
+		const key = resolveFeatureMatchOverlayRenderModel({
+			config: base,
+			output: 'key',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+			displayTime: '',
+		});
+
+		expect(overlay.mediaItems[0]!.contentStyle.filter).toBeUndefined();
+		expect(key.mediaItems[0]!.contentStyle).toMatchObject({
+			filter: 'brightness(0) invert(1)',
+			opacity: 0.6,
+		});
+	});
+
 	it('keeps transparent frame backgrounds from falling back to SVG black', () => {
 		const base = config();
 		base.layout.frame.backgroundColor = '';
@@ -26,7 +119,7 @@ describe('feature Match Overlay render model', () => {
 		expect(resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' }).frame.fill).toBe('transparent');
 	});
 
-	it('resolves source cutout paths for visible cutout Source Regions', () => {
+	it('resolves source cutout paths for visible cutout Source Items', () => {
 		const base = config();
 		const source = base.layout.items.find(item => item.type === 'source')!;
 		base.layout.items = [
@@ -56,10 +149,10 @@ describe('feature Match Overlay render model', () => {
 			},
 		});
 
-		const lines = model.widgets.renderTemplateLinesForSide('{name} {record} {deck}', 'player1');
+		const lines = model.graphicItems.renderTemplateLinesForSide('{name} {record} {deck}', 'player1');
 
 		expect(lines.map(line => line.map(segment => segment.text).join('')).join('\n')).toContain('Alice 3/1 Burn');
-		expect(model.widgets.deckColors('player1')).toBe('R');
+		expect(model.graphicItems.deckColors('player1')).toBe('R');
 	});
 
 	it('passes spacer width through Template Slot rendering', () => {
@@ -76,7 +169,7 @@ describe('feature Match Overlay render model', () => {
 			},
 		});
 
-		expect(model.widgets.renderTemplateLinesForSide('{name}{spacer}{record}', 'player1', undefined, 48)[0]).toEqual([
+		expect(model.graphicItems.renderTemplateLinesForSide('{name}{spacer}{record}', 'player1', undefined, 48)[0]).toEqual([
 			{ text: 'Alice', token: 'name', deckColors: false, style: undefined },
 			{ text: '', deckColors: false, spacer: true, spacerWidth: '48px', token: undefined, style: undefined },
 			{ text: '3-1', token: 'record', deckColors: false, style: undefined },
@@ -88,26 +181,26 @@ describe('feature Match Overlay render model', () => {
 		base.layout.items = [
 			{
 				id: 'registered-font',
-				type: 'widget',
+				type: 'graphic-item',
 				label: 'Registered Font',
 				visible: true,
 				x: 0,
 				y: 0,
 				width: 320,
 				height: 80,
-				widget: { type: 'clock' },
+				graphicItem: { type: 'clock' },
 				surfaceStyle: { font: { kind: 'application', fontId: 'saira-condensed' } },
 			},
 			{
 				id: 'unknown-font',
-				type: 'widget',
+				type: 'graphic-item',
 				label: 'Unknown Font',
 				visible: true,
 				x: 0,
 				y: 100,
 				width: 320,
 				height: 80,
-				widget: { type: 'clock' },
+				graphicItem: { type: 'clock' },
 				surfaceStyle: {
 					font: { kind: 'application', fontId: 'Impact, Arial Black, sans-serif' },
 				} as never,
@@ -116,14 +209,14 @@ describe('feature Match Overlay render model', () => {
 
 		const model = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
 
-		expect(model.widgetItems[0]!.style.fontFamily).toBe('var(--font-saira-condensed)');
-		expect(model.widgetItems[1]!.style.fontFamily).toBeUndefined();
+		expect(model.graphicItemItems[0]!.style.fontFamily).toBe('var(--font-saira-condensed)');
+		expect(model.graphicItemItems[1]!.style.fontFamily).toBeUndefined();
 	});
 
 	it('resolves game win boxes and key output game-win styles', () => {
 		const base = config();
-		const widget = { type: 'game-wins' as const, playerSide: 'player1' as const, displayMode: 'boxes' as const, boxOrientation: 'vertical' as const, boxWidth: 22, boxHeight: 22, boxGap: 8, boxBorderWidth: 5 };
-		const legacyWidget = { type: 'game-wins' as const, playerSide: 'player1' as const, displayMode: 'boxes' as const, boxOrientation: 'vertical' as const, boxWidth: 22, boxHeight: 22 };
+		const graphicItem = { type: 'game-wins' as const, playerSide: 'player1' as const, displayMode: 'boxes' as const, boxOrientation: 'vertical' as const, boxWidth: 22, boxHeight: 22, boxGap: 8, boxBorderWidth: 5 };
+		const legacyGraphicItem = { type: 'game-wins' as const, playerSide: 'player1' as const, displayMode: 'boxes' as const, boxOrientation: 'vertical' as const, boxWidth: 22, boxHeight: 22 };
 		const model = resolveFeatureMatchOverlayRenderModel({
 			config: base,
 			output: 'key',
@@ -134,37 +227,37 @@ describe('feature Match Overlay render model', () => {
 			matchState: { player1: { gameWins: 2 } },
 		});
 
-		expect(model.widgets.gameWinCount(widget)).toBe(2);
-		expect(model.widgets.gameWinBoxes(widget)).toEqual([true, true, false]);
-		expect(model.widgets.gameWinsContainerStyle(widget, { padding: 4 })).toMatchObject({
+		expect(model.graphicItems.gameWinCount(graphicItem)).toBe(2);
+		expect(model.graphicItems.gameWinBoxes(graphicItem)).toEqual([true, true, false]);
+		expect(model.graphicItems.gameWinsContainerStyle(graphicItem, { padding: 4 })).toMatchObject({
 			'--game-win-gap': '8px',
 			'--game-win-direction': 'column',
 		});
-		expect(model.widgets.gameWinBoxStyle(widget, { borderWidth: 2 }, true)).toMatchObject({
+		expect(model.graphicItems.gameWinBoxStyle(graphicItem, { borderWidth: 2 }, true)).toMatchObject({
 			background: '#fff',
 			border: expect.stringContaining('5px solid #fff'),
 		});
-		expect(model.widgets.gameWinsContainerStyle(legacyWidget, { padding: 4 })).toMatchObject({
+		expect(model.graphicItems.gameWinsContainerStyle(legacyGraphicItem, { padding: 4 })).toMatchObject({
 			'--game-win-gap': '4px',
 		});
-		expect(model.widgets.gameWinBoxStyle(legacyWidget, { borderWidth: 2 }, true)).toMatchObject({
+		expect(model.graphicItems.gameWinBoxStyle(legacyGraphicItem, { borderWidth: 2 }, true)).toMatchObject({
 			border: expect.stringContaining('2px solid #fff'),
 		});
 	});
 
-	it('composes widget gradient backgrounds over configured base colors', () => {
+	it('composes graphicItem gradient backgrounds over configured base colors', () => {
 		const base = config();
 		base.layout.items = [
 			{
-				id: 'gradient-widget',
-				type: 'widget',
-				label: 'Gradient Widget',
+				id: 'gradient-graphicItem',
+				type: 'graphic-item',
+				label: 'Gradient Graphic Item',
 				visible: true,
 				x: 0,
 				y: 0,
 				width: 320,
 				height: 80,
-				widget: { type: 'clock' },
+				graphicItem: { type: 'clock' },
 				surfaceStyle: {
 					backgroundColor: '#123456',
 					backgroundOpacity: 0.5,
@@ -172,15 +265,15 @@ describe('feature Match Overlay render model', () => {
 				},
 			},
 			{
-				id: 'gradient-only-widget',
-				type: 'widget',
-				label: 'Gradient Only Widget',
+				id: 'gradient-only-graphicItem',
+				type: 'graphic-item',
+				label: 'Gradient Only Graphic Item',
 				visible: true,
 				x: 0,
 				y: 100,
 				width: 320,
 				height: 80,
-				widget: { type: 'clock' },
+				graphicItem: { type: 'clock' },
 				surfaceStyle: {
 					backgroundOpacity: 1,
 					backgroundGradient: 'linear-gradient(green, yellow)',
@@ -190,38 +283,38 @@ describe('feature Match Overlay render model', () => {
 
 		const model = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
 
-		expect(model.widgetItems[0]!.style.background).toBe('linear-gradient(red, blue), rgba(18, 52, 86, 0.5)');
-		expect(model.widgetItems[1]!.style.background).toBe('linear-gradient(green, yellow)');
+		expect(model.graphicItemItems[0]!.style.background).toBe('linear-gradient(red, blue), rgba(18, 52, 86, 0.5)');
+		expect(model.graphicItemItems[1]!.style.background).toBe('linear-gradient(green, yellow)');
 	});
 
-	it('keeps transparent widget backgrounds transparent when opacity is enabled', () => {
+	it('keeps transparent graphicItem backgrounds transparent when opacity is enabled', () => {
 		const base = config();
 		base.layout.items = [
 			{
-				id: 'transparent-widget',
-				type: 'widget',
-				label: 'Transparent Widget',
+				id: 'transparent-graphicItem',
+				type: 'graphic-item',
+				label: 'Transparent Graphic Item',
 				visible: true,
 				x: 0,
 				y: 0,
 				width: 320,
 				height: 80,
-				widget: { type: 'clock' },
+				graphicItem: { type: 'clock' },
 				surfaceStyle: {
 					backgroundColor: 'transparent',
 					backgroundOpacity: 1,
 				},
 			},
 			{
-				id: 'no-color-widget',
-				type: 'widget',
-				label: 'No Color Widget',
+				id: 'no-color-graphicItem',
+				type: 'graphic-item',
+				label: 'No Color Graphic Item',
 				visible: true,
 				x: 0,
 				y: 100,
 				width: 320,
 				height: 80,
-				widget: { type: 'clock' },
+				graphicItem: { type: 'clock' },
 				surfaceStyle: {
 					backgroundOpacity: 1,
 				},
@@ -231,25 +324,25 @@ describe('feature Match Overlay render model', () => {
 		const overlayModel = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
 		const keyModel = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'key', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
 
-		expect(overlayModel.widgetItems[0]!.style.background).toBe('transparent');
-		expect(overlayModel.widgetItems[1]!.style.background).toBe('transparent');
-		expect(keyModel.widgetItems[0]!.style.background).toBe('transparent');
-		expect(keyModel.widgetItems[1]!.style.background).toBe('transparent');
+		expect(overlayModel.graphicItemItems[0]!.style.background).toBe('transparent');
+		expect(overlayModel.graphicItemItems[1]!.style.background).toBe('transparent');
+		expect(keyModel.graphicItemItems[0]!.style.background).toBe('transparent');
+		expect(keyModel.graphicItemItems[1]!.style.background).toBe('transparent');
 	});
 
 	it('omits glow when a styled item border is disabled', () => {
 		const base = config();
 		base.layout.items = [
 			{
-				id: 'glow-widget',
-				type: 'widget',
-				label: 'Glow Widget',
+				id: 'glow-graphicItem',
+				type: 'graphic-item',
+				label: 'Glow Graphic Item',
 				visible: true,
 				x: 0,
 				y: 0,
 				width: 320,
 				height: 80,
-				widget: { type: 'clock' },
+				graphicItem: { type: 'clock' },
 				surfaceStyle: {
 					borderVisible: false,
 					borderColor: '#ffffff',
@@ -262,22 +355,22 @@ describe('feature Match Overlay render model', () => {
 
 		const model = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
 
-		expect(model.widgetItems[0]!.style.boxShadow).toBeUndefined();
+		expect(model.graphicItemItems[0]!.style.boxShadow).toBeUndefined();
 	});
 
 	it('applies glow only to visible item border sides', () => {
 		const base = config();
 		base.layout.items = [
 			{
-				id: 'partial-glow-widget',
-				type: 'widget',
-				label: 'Partial Glow Widget',
+				id: 'partial-glow-graphicItem',
+				type: 'graphic-item',
+				label: 'Partial Glow Graphic Item',
 				visible: true,
 				x: 0,
 				y: 0,
 				width: 320,
 				height: 80,
-				widget: { type: 'clock' },
+				graphicItem: { type: 'clock' },
 				surfaceStyle: {
 					borderVisible: true,
 					borderColor: '#ffffff',
@@ -290,19 +383,19 @@ describe('feature Match Overlay render model', () => {
 		];
 
 		const model = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
-		const shadow = String(model.widgetItems[0]!.style.boxShadow);
+		const shadow = String(model.graphicItemItems[0]!.style.boxShadow);
 
 		expect(shadow).toBe('0 -8px 8px -8px #ffffff, 8px 0 8px -8px #ffffff, 0 8px 8px -8px #ffffff');
 		expect(shadow).not.toContain('-8px 0');
 		expect(shadow).not.toContain('inset');
 	});
 
-	it('lays out row Widget Group children with fixed, content, and fill sizing', () => {
+	it('lays out row Graphic Group children with fixed, content, and fill sizing', () => {
 		const base = config();
 		base.layout.items = [
 			{
 				id: 'row-group',
-				type: 'widget-group',
+				type: 'graphic-group',
 				label: 'Row Group',
 				visible: true,
 				x: 0,
@@ -311,15 +404,15 @@ describe('feature Match Overlay render model', () => {
 				height: 100,
 				arrangement: { mode: 'row', padding: 10, gap: 10, align: 'stretch', justify: 'start' },
 				children: [
-					{ id: 'fixed', label: 'Fixed', visible: true, widget: { type: 'clock' }, layout: { mode: 'stack', sizing: { mode: 'fixed', size: 100 } } },
-					{ id: 'content', label: 'Content', visible: true, widget: { type: 'clock' }, layout: { mode: 'stack', sizing: { mode: 'content', size: 80 } } },
-					{ id: 'fill', label: 'Fill', visible: true, widget: { type: 'clock' }, layout: { mode: 'stack', sizing: { mode: 'fill', weight: 1, min: 50 } } },
+					{ id: 'fixed', label: 'Fixed', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'stack', sizing: { mode: 'fixed', size: 100 } } },
+					{ id: 'content', label: 'Content', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'stack', sizing: { mode: 'content', size: 80 } } },
+					{ id: 'fill', label: 'Fill', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'stack', sizing: { mode: 'fill', weight: 1, min: 50 } } },
 				],
 			},
 		];
 
 		const model = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
-		const children = model.widgetGroups[0]!.children;
+		const children = model.graphicGroups[0]!.children;
 
 		expect(children.map(child => child.id)).toEqual(['fixed', 'content', 'fill']);
 		expect(children[0]!.style).toMatchObject({ left: '10px', width: '100px', height: '80px' });
@@ -327,12 +420,12 @@ describe('feature Match Overlay render model', () => {
 		expect(children[2]!.style).toMatchObject({ left: '210px', width: '280px', height: '80px' });
 	});
 
-	it('separates Widget Group container appearance from child widget defaults', () => {
+	it('separates Graphic Group container appearance from child Graphic Item defaults', () => {
 		const base = config();
 		base.layout.items = [
 			{
 				id: 'styled-group',
-				type: 'widget-group',
+				type: 'graphic-group',
 				label: 'Styled Group',
 				visible: true,
 				x: 0,
@@ -352,13 +445,13 @@ describe('feature Match Overlay render model', () => {
 				},
 				arrangement: { mode: 'canvas', padding: 0 },
 				children: [
-					{ id: 'child', label: 'Child', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 10, y: 10, width: 100, height: 40 } },
+					{ id: 'child', label: 'Child', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'canvas', x: 10, y: 10, width: 100, height: 40 } },
 				],
 			},
 		];
 
 		const model = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
-		const group = model.widgetGroups[0]!;
+		const group = model.graphicGroups[0]!;
 		const child = group.children[0]!;
 
 		expect(group.layers.backdrop.background).toBe('#ff0000');
@@ -368,14 +461,14 @@ describe('feature Match Overlay render model', () => {
 		expect(child.style.fontSize).toBe('32px');
 	});
 
-	it('resolves widget render descriptors so the renderer needs no model access', () => {
+	it('resolves graphicItem render descriptors so the renderer needs no model access', () => {
 		const base = config();
 		base.layout.items = [
-			{ id: 'text-item', type: 'widget', label: 'Text', visible: true, x: 0, y: 0, width: 320, height: 80, widget: { type: 'text', template: '{name}', playerSide: 'player1' } },
-			{ id: 'image-item', type: 'widget', label: 'Logo', visible: true, x: 0, y: 100, width: 200, height: 100, widget: { type: 'image', asset: { assetId: 'asset-logo', revisionId: 'revision-logo-7' }, fit: 'contain', opacity: 0.9, borderRadius: 8 } },
-			{ id: 'clock-item', type: 'widget', label: 'Clock', visible: true, x: 0, y: 220, width: 160, height: 60, widget: { type: 'clock' } },
-			{ id: 'life-item', type: 'widget', label: 'Life', visible: true, x: 0, y: 300, width: 120, height: 60, widget: { type: 'player-life', playerSide: 'player1', lifeAnimation: 'pulse', lifeAnimationDurationMs: 400, lifeAnimationAccentColor: '#ff0000' } },
-			{ id: 'wins-item', type: 'widget', label: 'Wins', visible: true, x: 0, y: 380, width: 120, height: 40, widget: { type: 'game-wins', playerSide: 'player1', displayMode: 'boxes', boxWidth: 22, boxHeight: 22 } },
+			{ id: 'text-item', type: 'graphic-item', label: 'Text', visible: true, x: 0, y: 0, width: 320, height: 80, graphicItem: { type: 'text', template: '{name}', playerSide: 'player1' } },
+			{ id: 'media-item', type: 'media', label: 'Logo', visible: true, x: 0, y: 100, width: 200, height: 100, mediaKind: 'image', asset: { assetId: 'asset-logo', revisionId: 'revision-logo-7' }, fit: 'contain', focalPosition: { horizontal: 0.5, vertical: 0.5 }, opacity: 0.9 },
+			{ id: 'clock-item', type: 'graphic-item', label: 'Clock', visible: true, x: 0, y: 220, width: 160, height: 60, graphicItem: { type: 'clock' } },
+			{ id: 'life-item', type: 'graphic-item', label: 'Life', visible: true, x: 0, y: 300, width: 120, height: 60, graphicItem: { type: 'player-life', playerSide: 'player1', lifeAnimation: 'pulse', lifeAnimationDurationMs: 400, lifeAnimationAccentColor: '#ff0000' } },
+			{ id: 'wins-item', type: 'graphic-item', label: 'Wins', visible: true, x: 0, y: 380, width: 120, height: 40, graphicItem: { type: 'game-wins', playerSide: 'player1', displayMode: 'boxes', boxWidth: 22, boxHeight: 22 } },
 		];
 
 		const model = resolveFeatureMatchOverlayRenderModel({
@@ -390,7 +483,7 @@ describe('feature Match Overlay render model', () => {
 			},
 			matchState: { player1: { lifeTotal: 17, gameWins: 2 } },
 		});
-		const renders = new Map(model.widgetItems.map(item => [item.id, item.render]));
+		const renders = new Map(model.graphicItemItems.map(item => [item.id, item.render]));
 
 		const text = renders.get('text-item')!;
 		expect(text.type).toBe('text');
@@ -399,12 +492,10 @@ describe('feature Match Overlay render model', () => {
 			expect(text.deckColors).toBe('R');
 		}
 
-		const image = renders.get('image-item')!;
-		expect(image.type).toBe('image');
-		if (image.type === 'image') {
-			expect(image.src).toBe('/api/graphics-assets/asset-logo/revisions/revision-logo-7/content');
-			expect(image.imageStyle).toMatchObject({ objectFit: 'contain', opacity: 0.9, borderRadius: '8px', width: '200px', height: '100px' });
-		}
+		expect(model.mediaItems[0]).toMatchObject({
+			src: '/api/graphics-assets/asset-logo/revisions/revision-logo-7/content',
+			contentStyle: { objectFit: 'contain', opacity: 0.9 },
+		});
 
 		const clock = renders.get('clock-item')!;
 		expect(clock.type).toBe('clock');
@@ -432,12 +523,12 @@ describe('feature Match Overlay render model', () => {
 		}
 	});
 
-	it('resolves render descriptors for Widget Group children too', () => {
+	it('resolves render descriptors for Graphic Group children too', () => {
 		const base = config();
 		base.layout.items = [
 			{
 				id: 'group',
-				type: 'widget-group',
+				type: 'graphic-group',
 				label: 'Group',
 				visible: true,
 				x: 0,
@@ -446,25 +537,160 @@ describe('feature Match Overlay render model', () => {
 				height: 100,
 				arrangement: { mode: 'canvas', padding: 0 },
 				children: [
-					{ id: 'child-clock', label: 'Clock', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 0, y: 0, width: 100, height: 40 } },
+					{ id: 'child-clock', label: 'Clock', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'canvas', x: 0, y: 0, width: 100, height: 40 } },
 				],
 			},
 		];
 
 		const model = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '09:41' });
-		const child = model.widgetGroups[0]!.children[0]!;
+		const child = model.graphicGroups[0]!.children[0]!;
 
 		expect(child.render.type).toBe('clock');
 		if (child.render.type === 'clock')
 			expect(child.render.displayTime).toBe('09:41');
 	});
 
-	it('emits pre-layered Widget Group styles: positional shell, backdrop, children, frame', () => {
+	it('renders an exact silent-video revision as muted inline looping media', () => {
+		const base = config();
+		base.layout.items = [{
+			id: 'video-item',
+			type: 'media',
+			label: 'Motion ident',
+			visible: true,
+			x: 0,
+			y: 0,
+			width: 640,
+			height: 360,
+			mediaKind: 'silent-video',
+			asset: { assetId: 'video-asset', revisionId: 'video-revision-3' },
+			fit: 'cover',
+			opacity: 0.8,
+			clipGeometry: {
+				topLeft: { kind: 'rounded', size: 12 },
+				topRight: { kind: 'rounded', size: 12 },
+				bottomRight: { kind: 'rounded', size: 12 },
+				bottomLeft: { kind: 'rounded', size: 12 },
+			},
+			loop: true,
+			playbackRate: 1.25,
+			videoCompatibility: 'all-supported',
+			videoTarget: 'safari',
+		}];
+
+		const model = resolveFeatureMatchOverlayRenderModel({
+			config: base,
+			output: 'overlay',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+			displayTime: '',
+		});
+		expect(model.mediaItems[0]).toMatchObject({
+			src: '/api/graphics-assets/video-asset/revisions/video-revision-3/content',
+			item: {
+				mediaKind: 'silent-video',
+				loop: true,
+				playbackRate: 1.25,
+				videoCompatibility: 'all-supported',
+				videoTarget: 'safari',
+				opacity: 0.8,
+				focalPosition: { horizontal: 0.5, vertical: 0.5 },
+				clipGeometry: {
+					topLeft: { kind: 'rounded', size: 12 },
+					topRight: { kind: 'rounded', size: 12 },
+					bottomRight: { kind: 'rounded', size: 12 },
+					bottomLeft: { kind: 'rounded', size: 12 },
+				},
+			},
+		});
+	});
+
+	it('renders a silent-video Media Graphic Item inside its Graphic Group stacking context', () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		const group = config.layout.items.find(item => item.type === 'graphic-group');
+		if (group?.type !== 'graphic-group')
+			throw new Error('Expected a Graphic Group fixture');
+		group.children = [
+			{
+				id: 'back-video',
+				type: 'media',
+				label: 'Background loop',
+				visible: true,
+				layout: { mode: 'canvas', x: 10, y: 8, width: 240, height: 120 },
+				asset: {
+					assetId: 'group-video-asset' as never,
+					revisionId: 'group-video-revision-9' as never,
+				},
+				mediaKind: 'silent-video',
+				fit: 'cover',
+				focalPosition: { horizontal: 0.2, vertical: 0.75 },
+				opacity: 0.65,
+				clipGeometry: {
+					topLeft: { kind: 'rounded', size: 12 },
+					topRight: { kind: 'square' },
+					bottomRight: { kind: 'cut', size: 10 },
+					bottomLeft: { kind: 'square' },
+				},
+				loop: false,
+				playbackRate: 1.25,
+				videoCompatibility: 'chromium-transparency',
+				videoTarget: 'chromium',
+			},
+			{
+				id: 'front-clock',
+				type: 'graphic-item',
+				label: 'Clock',
+				visible: true,
+				graphicItem: { type: 'clock' },
+				layout: { mode: 'canvas', x: 20, y: 16, width: 100, height: 40 },
+			},
+		];
+		config.layout.items = [group];
+
+		const model = resolveFeatureMatchOverlayRenderModel({
+			config,
+			output: 'overlay',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+			displayTime: '12:34',
+			graphicAssetContentPath: reference =>
+				`/exact/${reference.assetId}/${reference.revisionId}`,
+		});
+
+		const renderedGroup = model.graphicGroups[0]!;
+		expect(renderedGroup.layers.shell).toMatchObject({ isolation: 'isolate' });
+		expect(renderedGroup.children.map(child => [child.kind, child.id]))
+			.toEqual([['media', 'back-video'], ['graphic-item', 'front-clock']]);
+		const media = renderedGroup.children[0]!;
+		expect(media.kind === 'media' ? media : undefined).toMatchObject({
+			src: '/exact/group-video-asset/group-video-revision-9',
+			item: {
+				mediaKind: 'silent-video',
+				loop: false,
+				playbackRate: 1.25,
+				videoCompatibility: 'chromium-transparency',
+				videoTarget: 'chromium',
+			},
+			style: {
+				left: '10px',
+				top: '8px',
+				width: '240px',
+				height: '120px',
+			},
+			contentStyle: {
+				objectFit: 'cover',
+				objectPosition: '20% 75%',
+				opacity: 0.65,
+			},
+		});
+		expect(media.style).not.toHaveProperty('zIndex');
+	});
+
+	it('emits pre-layered Graphic Group styles: positional shell, backdrop, children, frame', () => {
 		const base = config();
 		base.layout.items = [
 			{
 				id: 'layered-group',
-				type: 'widget-group',
+				type: 'graphic-group',
 				label: 'Layered Group',
 				visible: true,
 				x: 10,
@@ -484,7 +710,7 @@ describe('feature Match Overlay render model', () => {
 		];
 
 		const model = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
-		const layers = model.widgetGroups[0]!.layers;
+		const layers = model.graphicGroups[0]!.layers;
 
 		// Shell: geometry only — visual styling lives on the layers beneath.
 		expect(layers.shell).toMatchObject({ left: '10px', top: '20px', width: '500px', height: '100px', position: 'absolute', overflow: 'visible' });
@@ -511,7 +737,7 @@ describe('feature Match Overlay render model', () => {
 		base.layout.items = [
 			{
 				id: 'gradient-group',
-				type: 'widget-group',
+				type: 'graphic-group',
 				label: 'Gradient Group',
 				visible: true,
 				x: 0,
@@ -531,18 +757,18 @@ describe('feature Match Overlay render model', () => {
 		const overlayModel = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
 		const keyModel = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'key', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
 
-		expect(overlayModel.widgetGroups[0]!.layers.backdrop.background).toBe('linear-gradient(red, blue), #123456');
-		expect(overlayModel.widgetGroups[0]!.layers.backdrop.opacity).toBe(0.5);
+		expect(overlayModel.graphicGroups[0]!.layers.backdrop.background).toBe('linear-gradient(red, blue), #123456');
+		expect(overlayModel.graphicGroups[0]!.layers.backdrop.opacity).toBe(0.5);
 		// Key output flattens to the alpha matte — no color gradient.
-		expect(String(keyModel.widgetGroups[0]!.layers.backdrop.background)).not.toContain('linear-gradient(red, blue)');
+		expect(String(keyModel.graphicGroups[0]!.layers.backdrop.background)).not.toContain('linear-gradient(red, blue)');
 	});
 
-	it('does not inherit Widget Group appearance as child defaults', () => {
+	it('does not inherit Graphic Group appearance as child defaults', () => {
 		const base = config();
 		base.layout.items = [
 			{
 				id: 'group-only-appearance',
-				type: 'widget-group',
+				type: 'graphic-group',
 				label: 'Group Only Appearance',
 				visible: true,
 				x: 0,
@@ -557,13 +783,13 @@ describe('feature Match Overlay render model', () => {
 				},
 				arrangement: { mode: 'canvas', padding: 0 },
 				children: [
-					{ id: 'child', label: 'Child', visible: true, widget: { type: 'clock' }, layout: { mode: 'canvas', x: 10, y: 10, width: 100, height: 40 } },
+					{ id: 'child', label: 'Child', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'canvas', x: 10, y: 10, width: 100, height: 40 } },
 				],
 			},
 		];
 
 		const model = resolveFeatureMatchOverlayRenderModel({ config: base, output: 'overlay', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' });
-		const child = model.widgetGroups[0]!.children[0]!;
+		const child = model.graphicGroups[0]!.children[0]!;
 
 		expect(child.style.background).toBe('transparent');
 		expect(child.style.color).toBe('#fff');

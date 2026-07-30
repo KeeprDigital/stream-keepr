@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type {
 	GraphicAsset,
-	GraphicAssetBrowserDecodeEvidence,
+	GraphicAssetBrowserValidationEvidence,
+	GraphicAssetLifecycleAction,
+	GraphicAssetLifecycleActionOutcome,
+	GraphicAssetLifecycleState,
 	GraphicAssetSourceDeclarations,
 	GraphicAssetUsage,
 	GraphicsAssetLibraryCapacity,
@@ -13,6 +16,7 @@ import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import {
 	GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
 	GRAPHICS_MULTIPART_PART_BYTES,
+	MAX_SILENT_VIDEO_INGESTION_BYTES,
 	MAX_STATIC_FONT_INGESTION_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
@@ -25,6 +29,36 @@ definePageMeta({
 
 const eventStore = useEventStore();
 const search = ref('');
+const lifecycleState = ref<GraphicAssetLifecycleState>('active');
+const lifecycleViews: {
+	state: GraphicAssetLifecycleState;
+	label: string;
+}[] = [
+	{ state: 'active', label: 'Active assets' },
+	{ state: 'retired', label: 'Retired assets' },
+	{ state: 'trashed', label: 'Trash' },
+];
+const lifecyclePresentation = {
+	active: {
+		label: 'Active',
+		badgeColor: 'success',
+		actions: ['retire', 'trash'],
+	},
+	retired: {
+		label: 'Retired',
+		badgeColor: 'warning',
+		actions: ['trash', 'restore'],
+	},
+	trashed: {
+		label: 'Trash',
+		badgeColor: 'error',
+		actions: ['restore'],
+	},
+} as const satisfies Record<GraphicAssetLifecycleState, {
+	label: string;
+	badgeColor: 'success' | 'warning' | 'error';
+	actions: readonly GraphicAssetLifecycleAction[];
+}>;
 const selectedFile = ref<File | null>(null);
 const proposedName = ref('');
 const createSeparateAsset = ref(false);
@@ -42,6 +76,8 @@ const replacementAssetId = ref<string | null>(null);
 const replacementFile = ref<File | null>(null);
 const replacementPending = ref(false);
 const replacementError = ref<string | null>(null);
+const lifecyclePendingAssetId = ref<string | null>(null);
+const lifecycleErrorByAssetId = reactive<Record<string, string | undefined>>({});
 const operationStorageKey = 'graphics-asset-ingestion-operation';
 const initiationStorageKey = 'graphics-asset-ingestion-initiation';
 
@@ -59,7 +95,10 @@ const {
 	error,
 	refresh,
 } = useFetch<GraphicAsset[]>('/api/graphics-assets', {
-	query: computed(() => ({ search: search.value })),
+	query: computed(() => ({
+		search: search.value,
+		lifecycleStates: lifecycleState.value,
+	})),
 	default: () => [],
 });
 const {
@@ -76,23 +115,27 @@ watch(selectedFile, (file) => {
 const selectionError = computed(() => {
 	if (!selectedFile.value)
 		return null;
-	const supportedMime = ['image/png', 'image/jpeg', 'image/webp'].includes(selectedFile.value.type);
-	const isFont = graphicAssetSourceKind({
+	const supportedMime = ['image/png', 'image/jpeg', 'image/webp', 'video/mp4', 'video/webm'].includes(selectedFile.value.type);
+	const sourceKind = graphicAssetSourceKind({
 		sourceFileName: selectedFile.value.name,
 		declaredMime: selectedFile.value.type,
-	}) === 'font';
-	const supportedExtension = /\.(?:png|jpe?g|webp|woff2?|ttf|otf)$/i.test(selectedFile.value.name);
+	});
+	const isFont = sourceKind === 'font';
+	const isVideo = sourceKind === 'silent-video';
+	const supportedExtension = /\.(?:png|jpe?g|webp|mp4|webm|woff2?|ttf|otf)$/i.test(selectedFile.value.name);
 	if (
 		(selectedFile.value.type && !supportedMime && !isFont)
 		|| (!selectedFile.value.type && !supportedExtension)
 	) {
-		return 'Select a PNG, JPEG, WebP, WOFF2, WOFF, TTF, or OTF source.';
+		return 'Select a PNG, JPEG, WebP, H.264 MP4, VP9 WebM, WOFF2, WOFF, TTF, or OTF source.';
 	}
 	if (selectedFile.value.size === 0)
 		return 'The Graphic Asset source is empty.';
 	if (isFont && selectedFile.value.size > MAX_STATIC_FONT_INGESTION_BYTES)
 		return 'The font file must not exceed 10 MiB.';
-	if (!isFont && selectedFile.value.size > MAX_STILL_IMAGE_INGESTION_BYTES)
+	if (isVideo && selectedFile.value.size > MAX_SILENT_VIDEO_INGESTION_BYTES)
+		return 'The silent video file must not exceed 250 MiB.';
+	if (!isFont && !isVideo && selectedFile.value.size > MAX_STILL_IMAGE_INGESTION_BYTES)
 		return 'The image file must not exceed 25 MiB.';
 	return null;
 });
@@ -129,8 +172,8 @@ function readPendingInitiation(): PendingInitiation | null {
 }
 
 function browserEvidenceMatches(
-	left: GraphicAssetBrowserDecodeEvidence | undefined,
-	right: GraphicAssetBrowserDecodeEvidence | undefined,
+	left: GraphicAssetBrowserValidationEvidence | undefined,
+	right: GraphicAssetBrowserValidationEvidence | undefined,
 ) {
 	if (!left || !right)
 		return left === right;
@@ -144,7 +187,7 @@ function browserEvidenceMatches(
 }
 
 function selectedInitiation(
-	browserDecodeEvidence?: GraphicAssetBrowserDecodeEvidence,
+	browserDecodeEvidence?: GraphicAssetBrowserValidationEvidence,
 ): PendingInitiation {
 	const name = proposedName.value.trim();
 	const duplicateContentPolicy = createSeparateAsset.value ? 'create-separate' : 'reuse';
@@ -235,6 +278,47 @@ async function inspectUsage(asset: GraphicAsset) {
 	}
 }
 
+function replaceVisibleAsset(updated: GraphicAsset) {
+	const index = assets.value.findIndex(asset => asset.id === updated.id);
+	if (index !== -1)
+		assets.value.splice(index, 1, updated);
+}
+
+async function runLifecycleAction(
+	asset: GraphicAsset,
+	action: GraphicAssetLifecycleAction,
+) {
+	lifecyclePendingAssetId.value = asset.id;
+	lifecycleErrorByAssetId[asset.id] = undefined;
+	try {
+		const outcome = await $fetch<GraphicAssetLifecycleActionOutcome>(
+			`/api/graphics-assets/${asset.id}/lifecycle-actions`,
+			{ method: 'POST', body: { action } },
+		);
+		if (outcome.outcome === 'in-use') {
+			usageByAssetId[asset.id] = outcome.usage;
+			lifecycleErrorByAssetId[asset.id]
+				= 'This Graphic Asset cannot enter Trash while any Graphic Asset Revision is in use.';
+			return;
+		}
+		replaceVisibleAsset(outcome.asset);
+		await refresh();
+	}
+	catch (caught) {
+		lifecycleErrorByAssetId[asset.id] = caught instanceof Error
+			? caught.message
+			: 'Graphic Asset lifecycle action failed.';
+	}
+	finally {
+		lifecyclePendingAssetId.value = null;
+	}
+}
+
+function lifecycleAllows(asset: GraphicAsset, action: GraphicAssetLifecycleAction) {
+	return (lifecyclePresentation[asset.lifecycle.state].actions as readonly GraphicAssetLifecycleAction[])
+		.includes(action);
+}
+
 function beginMetadataEdit(asset: GraphicAsset) {
 	editingAssetId.value = asset.id;
 	editedName.value = asset.name;
@@ -283,18 +367,21 @@ async function transferGraphicAsset(
 	operation: GraphicsIngestionOperation,
 	file: File,
 ) {
-	if (file.size > GRAPHICS_MULTIPART_PART_BYTES)
-		return await transferMultipartImage(operation, file);
-
-	const response = await observeOperationRequest(
-		operation.id,
-		fetch(`/api/graphics-assets/ingestion-operations/${operation.id}/content`, {
-			method: 'PUT',
-			headers: file.type ? { 'content-type': file.type } : undefined,
-			body: file,
-		}),
-	);
-	let completed = await operationFromResponse(response, 'Graphic Asset transfer');
+	let completed: GraphicsIngestionOperation;
+	if (file.size > GRAPHICS_MULTIPART_PART_BYTES) {
+		completed = await transferMultipartGraphicAsset(operation, file);
+	}
+	else {
+		const response = await observeOperationRequest(
+			operation.id,
+			fetch(`/api/graphics-assets/ingestion-operations/${operation.id}/content`, {
+				method: 'PUT',
+				headers: file.type ? { 'content-type': file.type } : undefined,
+				body: file,
+			}),
+		);
+		completed = await operationFromResponse(response, 'Graphic Asset transfer');
+	}
 	if (
 		completed.stage === 'awaiting-confirmation'
 		&& completed.report?.outcome === 'accepted'
@@ -344,11 +431,11 @@ async function replaceAsset(asset: GraphicAsset) {
 	replacementError.value = null;
 	try {
 		const leadingBytes = new Uint8Array(await file.slice(0, 64).arrayBuffer());
-		const isFont = graphicAssetSourceKind({
+		const sourceKind = graphicAssetSourceKind({
 			sourceFileName: file.name,
 			declaredMime: file.type,
-		}, leadingBytes) === 'font';
-		const browserDecodeEvidence = isFont
+		}, leadingBytes);
+		const browserDecodeEvidence = sourceKind === 'font' || sourceKind === 'silent-video'
 			? undefined
 			: await verifyStillImageBrowserDecode(file);
 		const completed = await initiateAndTransferGraphicAsset(
@@ -435,7 +522,7 @@ function observeNewerOperation(operation: GraphicsIngestionOperation) {
 	}
 }
 
-async function transferMultipartImage(
+async function transferMultipartGraphicAsset(
 	operation: GraphicsIngestionOperation,
 	file: File,
 ) {
@@ -517,11 +604,11 @@ async function uploadGraphicAsset() {
 	try {
 		const file = selectedFile.value;
 		const leadingBytes = new Uint8Array(await file.slice(0, 64).arrayBuffer());
-		const isFont = graphicAssetSourceKind({
+		const sourceKind = graphicAssetSourceKind({
 			sourceFileName: file.name,
 			declaredMime: file.type,
-		}, leadingBytes) === 'font';
-		const browserDecodeEvidence = isFont
+		}, leadingBytes);
+		const browserDecodeEvidence = sourceKind === 'font' || sourceKind === 'silent-video'
 			? undefined
 			: await verifyStillImageBrowserDecode(file);
 		const initiation = selectedInitiation(browserDecodeEvidence);
@@ -566,7 +653,7 @@ async function retryOperation() {
 					'Reselect the same source file to resume from the verified multipart checkpoint.',
 				);
 			}
-			currentOperation.value = await transferMultipartImage(operation, file);
+			currentOperation.value = await transferMultipartGraphicAsset(operation, file);
 			await refreshAfterTerminalOperation();
 			return;
 		}
@@ -753,7 +840,7 @@ onMounted(async () => {
 							Upload one asset
 						</h2>
 						<p class="mt-1 text-sm text-muted">
-							The source is staged privately, validated unchanged, and published only when its thumbnail and catalogue facts are complete.
+							The source is staged privately, validated unchanged, and published only when its dependent preview and catalogue facts are complete.
 						</p>
 					</div>
 				</template>
@@ -762,15 +849,15 @@ onMounted(async () => {
 					<UFormField
 						name="asset"
 						label="Graphic Asset source"
-						description="One supported image (25 MiB) or static font (10 MiB)."
+						description="One supported image (25 MiB), silent video (250 MiB), or static font (10 MiB)."
 						required
 					>
 						<UFileUpload
 							v-model="selectedFile"
-							accept="image/png,image/jpeg,image/webp,font/woff2,font/woff,font/ttf,font/otf,.png,.jpg,.jpeg,.webp,.woff2,.woff,.ttf,.otf"
+							accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,font/woff2,font/woff,font/ttf,font/otf,.png,.jpg,.jpeg,.webp,.mp4,.webm,.woff2,.woff,.ttf,.otf"
 							variant="area"
 							icon="i-lucide-image-up"
-							label="Drop an image or static font here"
+							label="Drop an image, silent video, or static font here"
 							description="The exact source bytes are preserved."
 						/>
 					</UFormField>
@@ -910,10 +997,10 @@ onMounted(async () => {
 			<div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
 				<div>
 					<h2 class="text-lg font-semibold text-highlighted">
-						Active Graphic Assets
+						Graphic Assets
 					</h2>
 					<p class="text-sm text-muted">
-						Only atomically published assets appear here.
+						Manage active discovery, reversible retirement, and the 30-day Trash recovery window.
 					</p>
 				</div>
 				<UInput
@@ -921,6 +1008,17 @@ onMounted(async () => {
 					icon="i-lucide-search"
 					placeholder="Search assets"
 					class="w-full sm:max-w-sm"
+				/>
+			</div>
+			<div class="flex flex-wrap gap-2" aria-label="Graphic Asset lifecycle view">
+				<UButton
+					v-for="view in lifecycleViews"
+					:key="view.state"
+					size="sm"
+					:color="lifecycleState === view.state ? 'primary' : 'neutral'"
+					:variant="lifecycleState === view.state ? 'solid' : 'outline'"
+					:label="view.label"
+					@click="lifecycleState = view.state"
 				/>
 			</div>
 
@@ -948,8 +1046,22 @@ onMounted(async () => {
 								<h3 class="font-semibold text-highlighted">
 									{{ asset.name }}
 								</h3>
-								<UBadge color="success" variant="soft" label="Validated" />
+								<div class="flex flex-wrap gap-2">
+									<UBadge color="success" variant="soft" label="Validated" />
+									<UBadge
+										:color="lifecyclePresentation[asset.lifecycle.state].badgeColor"
+										variant="soft"
+										:label="lifecyclePresentation[asset.lifecycle.state].label"
+									/>
+								</div>
 							</div>
+							<p
+								v-if="asset.lifecycle.state === 'trashed'"
+								class="mt-2 text-sm text-muted"
+							>
+								Previously {{ asset.lifecycle.priorState === 'active' ? 'Active' : 'Retired' }} ·
+								Recoverable until {{ new Date(asset.lifecycle.recoverableUntil).toLocaleString() }}
+							</p>
 							<dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
 								<div v-if="asset.facts.kind === 'image'">
 									<dt class="text-xs text-dimmed">
@@ -957,6 +1069,25 @@ onMounted(async () => {
 									</dt>
 									<dd class="text-muted">
 										{{ asset.facts.width }} × {{ asset.facts.height }}
+									</dd>
+								</div>
+								<div v-if="asset.facts.kind === 'silent-video'">
+									<dt class="text-xs text-dimmed">
+										Video
+									</dt>
+									<dd class="text-muted">
+										{{ asset.facts.width }} × {{ asset.facts.height }} · {{ asset.facts.durationSeconds.toFixed(2) }}s · {{ asset.facts.frameRate.toFixed(2) }} fps
+									</dd>
+								</div>
+								<div v-if="asset.facts.kind === 'silent-video'">
+									<dt class="text-xs text-dimmed">
+										Compatibility
+									</dt>
+									<dd class="text-muted">
+										{{ asset.facts.codec.toUpperCase() }} · 8-bit SDR 4:2:0
+										<template v-if="asset.facts.targetCompatibility === 'chromium-transparency'">
+											· VP9 alpha restricted to proven Chromium targets
+										</template>
 									</dd>
 								</div>
 								<div>
@@ -1000,6 +1131,26 @@ onMounted(async () => {
 									</dd>
 								</div>
 							</dl>
+							<div class="mt-4">
+								<h4 class="text-sm font-semibold text-highlighted">
+									Revision history
+								</h4>
+								<ol class="mt-2 space-y-1 text-xs text-muted">
+									<li
+										v-for="revision in asset.revisions"
+										:key="revision.id"
+										class="flex flex-wrap justify-between gap-2"
+									>
+										<span>
+											Revision {{ revision.revisionNumber }}
+											{{ revision.id === asset.revisionId ? '· Latest' : '' }}
+										</span>
+										<span class="font-mono">
+											{{ revision.id }}
+										</span>
+									</li>
+								</ol>
+							</div>
 							<p class="mt-3 text-xs text-dimmed">
 								Compatibility {{ asset.operation.report?.compatibilityProfile ?? 'unknown' }}
 							</p>
@@ -1025,6 +1176,7 @@ onMounted(async () => {
 									@click="inspectUsage(asset)"
 								/>
 								<UButton
+									v-if="lifecycleAllows(asset, 'retire')"
 									size="sm"
 									color="neutral"
 									variant="outline"
@@ -1032,13 +1184,49 @@ onMounted(async () => {
 									@click="beginMetadataEdit(asset)"
 								/>
 								<UButton
+									v-if="asset.lifecycle.state === 'active'"
 									size="sm"
 									color="neutral"
 									variant="outline"
 									label="Replace content"
 									@click="beginReplacement(asset)"
 								/>
+								<UButton
+									v-if="asset.lifecycle.state === 'active'"
+									size="sm"
+									color="warning"
+									variant="soft"
+									label="Retire"
+									:loading="lifecyclePendingAssetId === asset.id"
+									@click="runLifecycleAction(asset, 'retire')"
+								/>
+								<UButton
+									v-if="lifecycleAllows(asset, 'trash')"
+									size="sm"
+									color="error"
+									variant="soft"
+									label="Move to Trash"
+									:loading="lifecyclePendingAssetId === asset.id"
+									@click="runLifecycleAction(asset, 'trash')"
+								/>
+								<UButton
+									v-if="lifecycleAllows(asset, 'restore')"
+									size="sm"
+									color="neutral"
+									variant="outline"
+									label="Restore"
+									:loading="lifecyclePendingAssetId === asset.id"
+									@click="runLifecycleAction(asset, 'restore')"
+								/>
 							</div>
+							<UAlert
+								v-if="lifecycleErrorByAssetId[asset.id]"
+								class="mt-3"
+								color="error"
+								variant="soft"
+							>
+								<p>{{ lifecycleErrorByAssetId[asset.id] }}</p>
+							</UAlert>
 						</div>
 					</div>
 
@@ -1135,7 +1323,7 @@ onMounted(async () => {
 						>
 							<UFileUpload
 								v-model="replacementFile"
-								accept="image/png,image/jpeg,image/webp,font/woff2,font/woff,font/ttf,font/otf,.png,.jpg,.jpeg,.webp,.woff2,.woff,.ttf,.otf"
+								accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,font/woff2,font/woff,font/ttf,font/otf,.png,.jpg,.jpeg,.webp,.mp4,.webm,.woff2,.woff,.ttf,.otf"
 								variant="area"
 							/>
 						</UFormField>

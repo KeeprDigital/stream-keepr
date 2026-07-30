@@ -258,7 +258,9 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		);
 		expect(pinnedContent.status).toBe(200);
 		expect(pinnedContent.headers.get('content-type')).toBe('image/png');
-		expect(pinnedContent.headers.get('cache-control')).toBe('private, no-store');
+		expect(pinnedContent.headers.get('cache-control')).toBe('private, max-age=0, must-revalidate');
+		expect(pinnedContent.headers.get('accept-ranges')).toBe('bytes');
+		expect(pinnedContent.headers.get('etag')).toBeTruthy();
 		expect(new Uint8Array(await pinnedContent.arrayBuffer())).toEqual(transparentPixelPng);
 
 		const anonymousContent = await fetch(

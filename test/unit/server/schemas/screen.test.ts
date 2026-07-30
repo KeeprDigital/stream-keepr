@@ -280,7 +280,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
-	it('accepts exact Graphic Asset References for frame and image fields and rejects raw image URLs', () => {
+	it('accepts exact Graphic Asset References for frame and Media fields and rejects raw image URLs', () => {
 		const referenced = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		referenced.layout.frame.backgroundImage = {
 			assetId: 'asset-frame',
@@ -288,26 +288,84 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		};
 		referenced.layout.items.push({
 			id: 'sponsor-logo',
-			type: 'widget',
+			type: 'media',
 			label: 'Sponsor logo',
 			visible: true,
 			x: 10,
 			y: 10,
 			width: 200,
 			height: 100,
-			widget: {
-				type: 'image',
-				asset: {
-					assetId: 'asset-logo',
-					revisionId: 'revision-logo-7',
-				},
-				fit: 'contain',
-				opacity: 1,
-				borderRadius: 0,
+			mediaKind: 'image',
+			asset: {
+				assetId: 'asset-logo',
+				revisionId: 'revision-logo-7',
 			},
+			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+		});
+		referenced.layout.items.push({
+			id: 'motion-ident',
+			type: 'media',
+			label: 'Motion ident',
+			visible: true,
+			x: 10,
+			y: 120,
+			width: 200,
+			height: 100,
+			asset: {
+				assetId: 'asset-video',
+				revisionId: 'revision-video-2',
+			},
+			mediaKind: 'silent-video',
+			fit: 'contain',
+			focalPosition: { horizontal: 0.25, vertical: 0.75 },
+			opacity: 1,
+			clipGeometry: {
+				topLeft: { kind: 'rounded', size: 8 },
+				topRight: { kind: 'cut', size: 12 },
+				bottomRight: { kind: 'square' },
+				bottomLeft: { kind: 'square' },
+				rightEdgeSlant: 16,
+			},
+			loop: true,
+			playbackRate: 1,
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'chromium',
 		});
 
 		expect(featureMatchOverlayModeConfigSchema.safeParse(referenced).success).toBe(true);
+		const legacy = featureMatchOverlayModeConfigSchema.safeParse({
+			...referenced,
+			layout: {
+				...referenced.layout,
+				items: referenced.layout.items.map(item => ({ ...item, zIndex: 1 })),
+			},
+		});
+		expect(legacy.success).toBe(true);
+		if (legacy.success) {
+			expect(legacy.data.layout.items.every(item => !('zIndex' in item))).toBe(true);
+			const media = legacy.data.layout.items.find(item => item.id === 'motion-ident');
+			expect(media).toMatchObject({
+				focalPosition: { horizontal: 0.25, vertical: 0.75 },
+			});
+		}
+		expect(featureMatchOverlayModeConfigSchema.safeParse({
+			...referenced,
+			layout: {
+				...referenced.layout,
+				items: referenced.layout.items.map(item =>
+					item.id === 'motion-ident'
+						? {
+								...item,
+								focalPosition: undefined,
+								clipGeometry: undefined,
+								borderRadius: 10,
+								surfaceStyle: { backgroundColor: '#fff' },
+							}
+						: item),
+			},
+		}).success).toBe(false);
 		expect(featureMatchOverlayModeConfigSchema.safeParse({
 			...referenced,
 			layout: {
@@ -324,17 +382,113 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 				...referenced.layout,
 				items: [{
 					...referenced.layout.items.at(-1),
-					widget: {
-						type: 'image',
-						url: 'https://example.com/logo.png',
-						fit: 'contain',
-						opacity: 1,
-						borderRadius: 0,
-					},
+					type: 'media',
+					mediaKind: 'image',
+					url: 'https://example.com/logo.png',
+					fit: 'contain',
+					focalPosition: { horizontal: 0.5, vertical: 0.5 },
+					opacity: 1,
 				}],
 			},
 		}).success).toBe(false);
 	});
+
+	it('accepts a silent-video Media Graphic Item as a Graphic Group child', () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		const group = config.layout.items.find(item => item.type === 'graphic-group');
+		expect(group?.type).toBe('graphic-group');
+		if (group?.type !== 'graphic-group')
+			return;
+		group.children = [{
+			id: 'sponsor-loop',
+			type: 'media',
+			label: 'Sponsor loop',
+			visible: true,
+			layout: { mode: 'canvas', x: 12, y: 8, width: 240, height: 120 },
+			asset: {
+				assetId: 'asset-sponsor-video',
+				revisionId: 'revision-sponsor-video-4',
+			},
+			mediaKind: 'silent-video',
+			fit: 'cover',
+			focalPosition: { horizontal: 0.25, vertical: 0.8 },
+			opacity: 0.7,
+			clipGeometry: {
+				topLeft: { kind: 'rounded', size: 8 },
+				topRight: { kind: 'cut', size: 12 },
+				bottomRight: { kind: 'square' },
+				bottomLeft: { kind: 'square' },
+				leftEdgeSlant: 6,
+			},
+			loop: false,
+			playbackRate: 1.5,
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'chromium',
+		} as never];
+
+		const result = featureMatchOverlayModeConfigSchema.safeParse(config);
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			const parsedGroup = result.data.layout.items.find(item => item.id === group.id);
+			expect(parsedGroup?.type === 'graphic-group' ? parsedGroup.children[0] : undefined)
+				.toMatchObject({
+					type: 'media',
+					asset: {
+						assetId: 'asset-sponsor-video',
+						revisionId: 'revision-sponsor-video-4',
+					},
+					mediaKind: 'silent-video',
+					focalPosition: { horizontal: 0.25, vertical: 0.8 },
+					opacity: 0.7,
+					loop: false,
+					playbackRate: 1.5,
+					videoCompatibility: 'chromium-transparency',
+					videoTarget: 'chromium',
+				});
+		}
+	});
+
+	it('preserves legacy stored group-child graphicItem configs while adding the content discriminator', () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		const group = config.layout.items.find(item => item.type === 'graphic-group');
+		if (group?.type !== 'graphic-group')
+			throw new Error('Expected a Graphic Group fixture');
+		const child = group.children[0]!;
+		const expectedGraphicItem = structuredClone(child.type === 'graphic-item' ? child.graphicItem : undefined);
+		delete (child as unknown as Record<string, unknown>).type;
+
+		const result = featureMatchOverlayModeConfigSchema.safeParse(config);
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			const parsedGroup = result.data.layout.items.find(item => item.id === group.id);
+			const parsedChild = parsedGroup?.type === 'graphic-group' ? parsedGroup.children[0] : undefined;
+			expect(parsedChild).toMatchObject({
+				type: 'graphic-item',
+				graphicItem: expectedGraphicItem,
+			});
+		}
+	});
+
+	it.each(['source', 'graphic-group'] as const)(
+		'rejects a %s Item as a Graphic Group child',
+		(type) => {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			const group = config.layout.items.find(item => item.type === 'graphic-group');
+			if (group?.type !== 'graphic-group')
+				throw new Error('Expected a Graphic Group fixture');
+			group.children = [{
+				id: 'invalid-child',
+				type,
+				label: 'Invalid child',
+				visible: true,
+				layout: { mode: 'canvas', x: 0, y: 0, width: 100, height: 100 },
+			} as never];
+
+			expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(false);
+		},
+	);
 
 	it('accepts application font capabilities and exact font revisions but rejects arbitrary font selectors', () => {
 		const exactFont = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
@@ -458,7 +612,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 							glowSize: 8,
 							glowOpacity: 0.8,
 						},
-						defaultChildSurfaceStyle: item.type === 'widget-group'
+						defaultChildSurfaceStyle: item.type === 'graphic-group'
 							? {
 									...(item.defaultChildSurfaceStyle ?? {}),
 									textColor: '#ffffff',
@@ -479,12 +633,12 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 			layout: {
 				...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout,
 				items: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.items.map((item) => {
-					if (item.id !== 'player1-game-wins' || item.type !== 'widget' || item.widget.type !== 'game-wins')
+					if (item.id !== 'player1-game-wins' || item.type !== 'graphic-item' || item.graphicItem.type !== 'game-wins')
 						return item;
 					return {
 						...item,
-						widget: {
-							...item.widget,
+						graphicItem: {
+							...item.graphicItem,
 							displayMode: 'number',
 							boxOrientation: 'vertical',
 							boxGap: 9,
@@ -497,8 +651,8 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 
 		expect(result.success).toBe(true);
 		if (result.success) {
-			const winsWidget = result.data.layout.items.find(item => item.id === 'player1-game-wins');
-			expect(winsWidget?.type === 'widget' && winsWidget.widget.type === 'game-wins' ? winsWidget.widget : null).toMatchObject({
+			const winsGraphicItem = result.data.layout.items.find(item => item.id === 'player1-game-wins');
+			expect(winsGraphicItem?.type === 'graphic-item' && winsGraphicItem.graphicItem.type === 'game-wins' ? winsGraphicItem.graphicItem : null).toMatchObject({
 				displayMode: 'number',
 				boxOrientation: 'vertical',
 				boxGap: 9,
@@ -507,21 +661,56 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		}
 	});
 
+	it('persists current Definition versions while parsing legacy layouts', () => {
+		const legacy = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		const source = legacy.layout.items.find((item: Record<string, unknown>) => item.type === 'source');
+		const group = legacy.layout.items.find((item: Record<string, unknown>) => item.type === 'graphic-group');
+		expect(source).toBeDefined();
+		expect(group).toBeDefined();
+		delete source.configurationVersion;
+		delete group.configurationVersion;
+		delete group.children[0].graphicItem.configurationVersion;
+
+		const result = featureMatchOverlayModeConfigSchema.safeParse(legacy);
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			const migratedSource = result.data.layout.items.find(item => item.type === 'source');
+			const migratedGroup = result.data.layout.items.find(item => item.type === 'graphic-group');
+			expect(migratedSource?.type === 'source' ? migratedSource.configurationVersion : null).toBe(1);
+			expect(migratedGroup?.type === 'graphic-group' ? migratedGroup.configurationVersion : null).toBe(1);
+			expect(migratedGroup?.type === 'graphic-group' && migratedGroup.children[0]?.type === 'graphic-item'
+				? migratedGroup.children[0].graphicItem.configurationVersion
+				: null).toBe(1);
+		}
+	});
+
+	it('rejects unsupported future Definition versions without partially accepting the layout', () => {
+		const future = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		const source = future.layout.items.find((item: Record<string, unknown>) => item.type === 'source');
+		const group = future.layout.items.find((item: Record<string, unknown>) => item.type === 'graphic-group');
+		expect(source).toBeDefined();
+		expect(group).toBeDefined();
+		source.configurationVersion = 2;
+
+		expect(featureMatchOverlayModeConfigSchema.safeParse(future).success).toBe(false);
+	});
+
 	it('accepts Feature Match Overlay text spacer settings', () => {
 		const result = featureMatchOverlayModeConfigSchema.safeParse({
 			...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
 			layout: {
 				...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout,
 				items: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.items.map((item) => {
-					if (item.id !== 'top-bar' || item.type !== 'widget-group')
+					if (item.id !== 'top-bar' || item.type !== 'graphic-group')
 						return item;
 					return {
 						...item,
-						children: item.children.map(child => child.id === 'top-deck' && child.widget.type === 'text'
+						children: item.children.map(child => child.id === 'top-deck' && child.graphicItem.type === 'text'
 							? {
 									...child,
-									widget: {
-										...child.widget,
+									graphicItem: {
+										...child.graphicItem,
 										template: '{deckColors}{spacer}{deck}',
 										spacerWidth: 48,
 									},
@@ -548,7 +737,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 						};
 					}
 
-					if (item.id === 'top-bar' && item.type === 'widget-group') {
+					if (item.id === 'top-bar' && item.type === 'graphic-group') {
 						return {
 							...item,
 							children: item.children.map(child => child.id === 'top-name-record' && child.layout.mode === 'canvas'
@@ -566,7 +755,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		if (result.success) {
 			expect(result.data.layout.items.find(item => item.id === 'main-source')?.anchor).toBe('center');
 			const topBar = result.data.layout.items.find(item => item.id === 'top-bar');
-			const child = topBar?.type === 'widget-group' ? topBar.children.find(item => item.id === 'top-name-record') : undefined;
+			const child = topBar?.type === 'graphic-group' ? topBar.children.find(item => item.id === 'top-name-record') : undefined;
 			expect(child?.layout).toMatchObject({ mode: 'canvas', anchor: 'bottom-right' });
 		}
 	});

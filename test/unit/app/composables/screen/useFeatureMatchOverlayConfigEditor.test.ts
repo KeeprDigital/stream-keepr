@@ -10,17 +10,17 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
 // through updateConfig, no-ops submit nothing, and geometry input parsing
 // uses the screen dimensions.
 
-function widgetItem(overrides: Partial<Extract<FeatureMatchLayoutItemConfig, { type: 'widget' }>> = {}): FeatureMatchLayoutItemConfig {
+function graphicItemItem(overrides: Partial<Extract<FeatureMatchLayoutItemConfig, { type: 'graphic-item' }>> = {}): FeatureMatchLayoutItemConfig {
 	return {
 		id: 'w1',
-		type: 'widget',
-		label: 'Widget',
+		type: 'graphic-item',
+		label: 'Graphic Item',
 		visible: true,
 		x: 100,
 		y: 50,
 		width: 100,
 		height: 40,
-		widget: { type: 'clock' },
+		graphicItem: { type: 'clock' },
 		...overrides,
 	};
 }
@@ -42,7 +42,7 @@ function createEditor(items: FeatureMatchLayoutItemConfig[]) {
 
 describe('useFeatureMatchOverlayConfigEditor', () => {
 	it('submits the whole updated layout for an id-addressed item patch', () => {
-		const { config, updateConfig, editor } = createEditor([widgetItem()]);
+		const { config, updateConfig, editor } = createEditor([graphicItemItem()]);
 
 		editor.updateItem('w1', { label: 'Renamed' });
 
@@ -52,7 +52,7 @@ describe('useFeatureMatchOverlayConfigEditor', () => {
 	});
 
 	it('submits nothing when the mutation cannot apply', () => {
-		const { updateConfig, editor } = createEditor([widgetItem()]);
+		const { updateConfig, editor } = createEditor([graphicItemItem()]);
 
 		editor.updateItem('missing', { label: 'x' });
 		editor.updateGroup('w1', { label: 'x' });
@@ -71,7 +71,7 @@ describe('useFeatureMatchOverlayConfigEditor', () => {
 	});
 
 	it('parses percentage geometry input against the screen dimensions', () => {
-		const { config, editor } = createEditor([widgetItem()]);
+		const { config, editor } = createEditor([graphicItemItem()]);
 
 		editor.updateItemRectFromAnchor('w1', 'width', '50', '%');
 

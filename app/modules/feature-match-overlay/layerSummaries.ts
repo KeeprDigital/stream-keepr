@@ -1,45 +1,43 @@
 import type {
+	FeatureMatchGraphicGroupChildConfig,
+	FeatureMatchGraphicGroupItemConfig,
+	FeatureMatchGraphicItemDefinitionConfig,
 	FeatureMatchLayoutItemConfig,
 	FeatureMatchOverlayBoxStyle,
-	FeatureMatchWidgetConfig,
-	FeatureMatchWidgetGroupChildConfig,
-	FeatureMatchWidgetGroupItemConfig,
 } from '~~/shared/types/screenConfig';
-import { featureMatchOverlayWidgetDefinition } from '~/modules/feature-match-overlay/widgetDefinitions';
+import {
+	featureMatchGraphicGroupChildGraphicItemConfig,
+	featureMatchLayoutItemGraphicItemConfig,
+} from '~~/shared/featureMatchGraphicItemDefinitions';
+import { featureMatchOverlayGraphicItemDefinition } from '~/modules/feature-match-overlay/graphicItemDefinitions';
 
 /**
  * Presentation summaries for Feature Match Layout Items in the editor: icons,
  * type labels, and one-line descriptions shared by the layer tree and the
- * per-kind inspectors. Widget-type specifics come from the Widget
+ * per-kind inspectors. Graphic Item specifics come from the Graphic Item
  * Definitions; these helpers add the item/group/child level.
  */
 
-export function widgetIcon(type: FeatureMatchWidgetConfig['type']) {
-	return featureMatchOverlayWidgetDefinition(type).icon;
+export function graphicItemIcon(type: FeatureMatchGraphicItemDefinitionConfig['type']) {
+	return featureMatchOverlayGraphicItemDefinition(type).icon;
 }
 
-export function widgetTypeLabel(type: FeatureMatchWidgetConfig['type']) {
-	return featureMatchOverlayWidgetDefinition(type).label;
+export function graphicItemTypeLabel(type: FeatureMatchGraphicItemDefinitionConfig['type']) {
+	return featureMatchOverlayGraphicItemDefinition(type).label;
 }
 
-export function widgetSummary(widget: FeatureMatchWidgetConfig) {
-	return featureMatchOverlayWidgetDefinition(widget.type).summary(widget);
+export function graphicItemSummary(graphicItem: FeatureMatchGraphicItemDefinitionConfig) {
+	return featureMatchOverlayGraphicItemDefinition(graphicItem.type).summary(graphicItem);
 }
 
 export function layerIcon(item: FeatureMatchLayoutItemConfig) {
-	if (item.type === 'source')
-		return 'i-lucide-video';
-	if (item.type === 'widget-group')
-		return 'i-lucide-group';
-	return widgetIcon(item.widget.type);
+	const config = featureMatchLayoutItemGraphicItemConfig(item);
+	return featureMatchOverlayGraphicItemDefinition(config.type).icon;
 }
 
 export function layerTypeLabel(item: FeatureMatchLayoutItemConfig) {
-	if (item.type === 'source')
-		return 'Source';
-	if (item.type === 'widget-group')
-		return 'Group';
-	return widgetTypeLabel(item.widget.type);
+	const config = featureMatchLayoutItemGraphicItemConfig(item);
+	return featureMatchOverlayGraphicItemDefinition(config.type).label;
 }
 
 export function rectSummary(rect: { x: number; y: number; width: number; height: number }) {
@@ -47,18 +45,26 @@ export function rectSummary(rect: { x: number; y: number; width: number; height:
 }
 
 export function itemSummary(item: FeatureMatchLayoutItemConfig) {
-	if (item.type === 'source')
-		return `${rectSummary(item)} • ${item.sourceRole || 'source'}`;
-	if (item.type === 'widget-group')
-		return `${rectSummary(item)} • ${item.children.length} widgets`;
-	return `${rectSummary(item)} • ${widgetSummary(item.widget)}`;
+	const config = featureMatchLayoutItemGraphicItemConfig(item);
+	return `${rectSummary(item)} • ${featureMatchOverlayGraphicItemDefinition(config.type).summary(config as never)}`;
 }
 
-export function childSummary(child: FeatureMatchWidgetGroupChildConfig) {
+export function childSummary(child: FeatureMatchGraphicGroupChildConfig) {
 	const layout = child.layout.mode === 'canvas'
 		? rectSummary(child.layout)
 		: `${child.layout.sizing.mode}${child.layout.sizing.size ? ` ${child.layout.sizing.size}` : ''}`;
-	return `${layout} • ${widgetSummary(child.widget)}`;
+	const config = featureMatchGraphicGroupChildGraphicItemConfig(child);
+	return `${layout} • ${featureMatchOverlayGraphicItemDefinition(config.type).summary(config as never)}`;
+}
+
+export function childIcon(child: FeatureMatchGraphicGroupChildConfig) {
+	const config = featureMatchGraphicGroupChildGraphicItemConfig(child);
+	return featureMatchOverlayGraphicItemDefinition(config.type).icon;
+}
+
+export function childTypeLabel(child: FeatureMatchGraphicGroupChildConfig) {
+	const config = featureMatchGraphicGroupChildGraphicItemConfig(child);
+	return featureMatchOverlayGraphicItemDefinition(config.type).label;
 }
 
 export function styleOverrideCount(style?: FeatureMatchOverlayBoxStyle) {
@@ -86,31 +92,43 @@ export function appearanceSummary(style?: FeatureMatchOverlayBoxStyle) {
 	return parts.length ? parts.join(' • ') : 'Defaults';
 }
 
-export function groupWidgetDefaultsSummary(group: FeatureMatchWidgetGroupItemConfig) {
-	return `${appearanceSummary(group.defaultChildSurfaceStyle)} • ${group.children.length} widgets inherit`;
+export function groupGraphicItemDefaultsSummary(group: FeatureMatchGraphicGroupItemConfig) {
+	const graphicItemCount = group.children.filter(child => child.type !== 'media').length;
+	return `${appearanceSummary(group.defaultChildSurfaceStyle)} • ${graphicItemCount} Graphic Items inherit`;
 }
 
-export function childAppearanceBadge(child: FeatureMatchWidgetGroupChildConfig) {
+export function childAppearanceBadge(child: FeatureMatchGraphicGroupChildConfig) {
+	if (child.type === 'media')
+		return 'Media treatment';
 	return hasStyleOverrides(child.surfaceStyle) ? 'Overrides defaults' : 'Inherits defaults';
 }
 
-export function childAppearanceSummary(child: FeatureMatchWidgetGroupChildConfig) {
+export function childAppearanceSummary(child: FeatureMatchGraphicGroupChildConfig) {
+	if (child.type === 'media')
+		return 'Media treatment does not inherit Graphic Item appearance';
 	if (!hasStyleOverrides(child.surfaceStyle))
-		return 'Using widget defaults';
-	return `${styleOverrideCount(child.surfaceStyle)} overrides over widget defaults`;
+		return 'Using Graphic Item defaults';
+	return `${styleOverrideCount(child.surfaceStyle)} overrides over Graphic Item defaults`;
 }
 
-export function groupLayoutSummary(group: FeatureMatchWidgetGroupItemConfig) {
+export function groupLayoutSummary(group: FeatureMatchGraphicGroupItemConfig) {
 	const arrangement = group.arrangement.mode === 'canvas'
 		? 'Canvas'
 		: `${group.arrangement.mode}, gap ${group.arrangement.gap}`;
 	return `${arrangement} • ${group.overflow ?? 'clip'}`;
 }
 
-export const FEATURE_MATCH_OVERLAY_WIDGET_KIND_OPTIONS = [
+export const FEATURE_MATCH_OVERLAY_GRAPHIC_ITEM_KIND_OPTIONS: Array<{
+	label: string;
+	value: FeatureMatchGraphicItemDefinitionConfig['type'];
+}> = [
 	{ label: 'Text', value: 'text' },
-	{ label: 'Image', value: 'image' },
 	{ label: 'Clock', value: 'clock' },
 	{ label: 'Player Life', value: 'player-life' },
 	{ label: 'Game Wins', value: 'game-wins' },
-] satisfies Array<{ label: string; value: FeatureMatchWidgetConfig['type'] }>;
+];
+
+export const FEATURE_MATCH_OVERLAY_GROUP_CHILD_KIND_OPTIONS = [
+	...FEATURE_MATCH_OVERLAY_GRAPHIC_ITEM_KIND_OPTIONS,
+	{ label: 'Media', value: 'media' as const },
+];
