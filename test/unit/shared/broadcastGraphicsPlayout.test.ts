@@ -764,7 +764,9 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		// and an exit, composed — and both `broadcastGraphicPhaseProjection` and the
 		// compositor answer with exactly one phase per Broadcast Graphic. Widening that to a
 		// set of concurrent phases is the change, and it is the same change the on-screen
-		// half of interruption reversal needs, so both wait for whoever makes it.
+		// half of interruption reversal needs, so both wait for whoever makes it. Tracked on
+		// #110, where the hard part is recorded: two reveals cannot compose in one
+		// `maskImage`, so concurrency is a representation question rather than a lift.
 		let state = settledOnAir('first');
 		state = edit(state, 'second', T0 + 2000);
 		state = accept(state, T0 + 2000);

@@ -737,6 +737,9 @@ function stackedPlacement(
 			: { width: `${child.width}px` };
 
 	return {
+		// Load-bearing, and not only for this element's own children: a cross-transitioning
+		// child positions both of its renderings `inset: 0` against this box, so removing
+		// this as unused would send them out to fill the canvas instead of the child.
 		position: 'relative',
 		boxSizing: 'border-box',
 		flex: sizing.mode === 'fill'
@@ -1024,6 +1027,12 @@ function childDescriptor(
  * The pair fills the owner's own box, so this is the placement with every trace of
  * motion and paint removed: motion belongs to each half, and the box is only there to
  * put both halves where the one item goes.
+ *
+ * It requires the placement it is given to establish a positioning context, because each
+ * half is `position: absolute; inset: 0` against it. Every placement does — a top-level
+ * or canvas-group item is `absolute` and a row or column child is `relative` — and
+ * `.graphics-compositor-item` sets no `position` of its own, so there is no fallback if
+ * one ever stopped. Both halves would escape to the canvas rather than fail visibly.
  */
 function crossTransitionBox(placement: CSSProperties): CSSProperties {
 	const { transform, transformOrigin, opacity, maskImage, filter, ...box } = placement;
@@ -1070,6 +1079,30 @@ function itemDescriptor(
 	const half = (values: GraphicAnimationOwnerValues) =>
 		crossTransitionHalf(values, item, item.rotation ?? 0, item.anchor);
 
+	/**
+	 * The context each half hands to its own children.
+	 *
+	 * `crossing` is dropped, so only the outermost qualifying owner pairs. A Graphic
+	 * Group's rendered content is its children's, so a changed child makes its group
+	 * changed too and both qualify — and pairing the child again inside each half would
+	 * draw it four times, with both copies inside the outgoing half resolving from the
+	 * outgoing values. The gate is dropped here rather than in `updateCrossTransition`
+	 * because that set does double duty: it also decides which owners an update recipe
+	 * may animate, and a child's own recipe is meant to compose with its group's exactly
+	 * as an item's composes with a whole-graphic one. Narrowing the set would silence the
+	 * child's motion along with its pairing.
+	 *
+	 * `motionOf` is swapped for the half's own, which is the part that is easy to miss:
+	 * without it the children of the rendering being *replaced* would animate on the
+	 * arriving rendering's schedule.
+	 */
+	const halfContext = (motionOf: GraphicsItemAnimationContext['motionOf']): GraphicsItemAnimationContext => ({
+		phase: context.phase,
+		staggerOffset: context.staggerOffset,
+		parent: context.parent,
+		motionOf,
+	});
+
 	return {
 		id: item.id,
 		label: item.label,
@@ -1082,7 +1115,7 @@ function itemDescriptor(
 				item,
 				resolveContentUrl,
 				context.outgoing!.inputs,
-				context,
+				halfContext(context.outgoing!.motionOf),
 				half(context.outgoing!.motionOf(item, context.staggerOffset, context.parent)),
 			),
 			incoming: paintedItemDescriptor(
@@ -1091,7 +1124,7 @@ function itemDescriptor(
 				item,
 				resolveContentUrl,
 				inputs,
-				context,
+				halfContext(context.motionOf),
 				half(motion),
 			),
 		},

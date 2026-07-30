@@ -817,10 +817,15 @@ export function resolveGraphicAnimationValues(input: GraphicAnimationProjectionI
  * and those describe an owner at rest as surely as an empty projection does.
  */
 export function isGraphicRestingProjection(values: GraphicAnimationOwnerValues): boolean {
+	// Exact equality on every channel, including the reveal. A back easing overshoots in
+	// the middle of its travel but `graphicAnimationEasedProgress` snaps both ends, so a
+	// settled owner has an excursion of exactly zero and every channel lands on exactly
+	// its resting value. Tolerating a range on one channel and not the others would have
+	// been an asymmetry with no cause behind it.
 	return (values.opacity === undefined || values.opacity === 1)
 		&& (values.translate === undefined || (values.translate.x === 0 && values.translate.y === 0))
 		&& (values.scale === undefined || values.scale === 1)
-		&& (values.reveal === undefined || values.reveal.visible >= 1);
+		&& (values.reveal === undefined || values.reveal.visible === 1);
 }
 
 /* ────────────────────────────────────────────────

@@ -116,10 +116,18 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * unknown clock because the two failures are not equally bad. Projecting unsynced can
 	 * pin a graphic at full excursion for the length of the skew and then play its
 	 * entrance from zero the moment the sync lands — the replay the no-replay invariant
-	 * forbids, arriving through the clock. Holding the resting state instead costs an
-	 * entrance that pops on rather than animating, for the length of one sync (three
-	 * samples fifty milliseconds apart) after a load. A missed entrance is a blemish; a
-	 * replayed one mid-show is a fault.
+	 * forbids, arriving through the clock. It can also jump *backwards*: a settled graphic
+	 * read on a clock that is ahead of the authoritative one, then corrected, re-enters a
+	 * phase it had already finished. Holding the resting state instead costs an entrance
+	 * that pops on rather than animating, for the length of one sync (three samples fifty
+	 * milliseconds apart) after a load. A missed entrance is a blemish; a replayed or
+	 * rewound one mid-show is a fault.
+	 *
+	 * Note that `isSynced` means "has synced at least once", not "is currently in sync" —
+	 * `lastSyncedAt` is not consulted, so a browser whose clock drifts after a successful
+	 * sync reads as synced until the next one. That is the case the magnitude bound inside
+	 * the shared projection covers, and the reason it is kept rather than treated as
+	 * redundant once the offset exists.
 	 */
 	function timingFor(
 		graphic: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,

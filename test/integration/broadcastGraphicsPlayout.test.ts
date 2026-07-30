@@ -340,7 +340,9 @@ describe('broadcast graphics live playout animation', () => {
 		// clock it had no way to correct for.
 		const startedAt = taken.currentState.playout.a!.effectiveStartedAt;
 		expect(clock.serverTime).toBeGreaterThanOrEqual(startedAt);
-		expect(clock.serverTime - startedAt).toBeLessThan(60_000);
+		// Seconds, not a minute. The envelope has to be tight enough that two clocks a
+		// phase-duration apart would fail it, and a phase lasts at most twenty seconds.
+		expect(clock.serverTime - startedAt).toBeLessThan(5_000);
 	});
 
 	it('reverses an entrance that Out interrupted, bounded by the entrance itself', async () => {
