@@ -41,6 +41,16 @@ export {
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,
 } from './playout';
+export type {
+	BroadcastGraphicsRecoveryFault,
+	BroadcastGraphicsRecoveryFaultReason,
+} from './recovery';
+export {
+	BROADCAST_GRAPHICS_RECOVERY_FAULT_REASONS,
+	broadcastGraphicsRecoveryFault,
+	carriedForwardBroadcastGraphicsLiveState,
+	recoveredBroadcastGraphicsLiveState,
+} from './recovery';
 export type { BroadcastGraphicsRejectionCode } from './rejection';
 export {
 	BROADCAST_GRAPHICS_REJECTION_CODES,

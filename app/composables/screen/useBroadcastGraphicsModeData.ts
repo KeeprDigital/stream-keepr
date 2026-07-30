@@ -86,14 +86,15 @@ export function useBroadcastGraphicsModeData() {
 
 	// A preview has no Live Session of its own: it renders the working stack, so
 	// asking for playout would open an epoch the author never took anything on.
-	watch(
-		() => [eventId.value, screen.value?.id, isPreview?.value ?? false] as const,
-		([evtId, screenId, preview]) => {
-			if (preview || !evtId || !screenId)
-				return;
-			void sessionStore.loadSession(evtId, screenId);
-		},
-		{ immediate: true },
+	//
+	// A live output loads the authoritative snapshot and reloads it whenever it has
+	// been out of touch, which is what lets a late-loading or reconnected output
+	// catch up to the current authoritative state rather than replaying how it got
+	// there. It never clears on a disconnection: program holds its last accepted
+	// rendering.
+	useBroadcastGraphicsLiveSessionSync(
+		() => (isPreview?.value ? undefined : eventId.value ?? undefined),
+		() => (isPreview?.value ? undefined : screen.value?.id),
 	);
 
 	onMounted(() => {

@@ -10,6 +10,15 @@
 export const BROADCAST_GRAPHICS_REJECTION_CODES = [
 	/** Update Graphic named an acceptance a newer one has superseded. */
 	'stale-input-acceptance',
+	/**
+	 * A Set Input named a value another operator has already replaced.
+	 *
+	 * Field-scoped, and deliberately a different refusal from a stale acceptance:
+	 * this one is about one Graphic Input's working value being overtaken, so it can
+	 * be reported against that one field and recovered by refreshing it, while a
+	 * stale acceptance is about the whole staged set going on air.
+	 */
+	'stale-input-edit',
 	/** A required Graphic Input has no available value, so Take cannot proceed. */
 	'required-input-unavailable',
 	/** Update Graphic is offered only while a Broadcast Graphic is on air. */

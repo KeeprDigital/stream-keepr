@@ -1,0 +1,142 @@
+import type { BroadcastGraphicsLiveState } from './playout';
+import { createInitialBroadcastGraphicsLiveState } from './playout';
+
+/**
+ * What a reader does with durable live state it cannot trust.
+ *
+ * The Broadcast Graphics Live Session's state is one JSON column that survives
+ * reloads, disconnections, and restarts, so every read of it is a read of
+ * something written by another process — possibly a different build, possibly a
+ * partial write. The settled rule is that missing, corrupt, or incompatible
+ * durable live state renders every Broadcast Graphic transparent on every output
+ * and shows Live Control a recovery fault that only an explicit Take clears.
+ *
+ * ## Why it recovers to nothing rather than to what it could read
+ *
+ * Salvaging the readable half is the dangerous option: program would show
+ * whichever graphics happened to survive parsing, at values nobody accepted, and
+ * an operator would have no way to tell that from a show running normally.
+ * Answering "nothing is on air, and here is why" is the only answer that is
+ * always safe on air and always legible to the operator.
+ *
+ * ## Why it tolerates fields it does not know
+ *
+ * The state grows: Graphic Channels add a sibling to `playout`, animation adds
+ * fields inside each playout record. A validator that refused anything
+ * unrecognised would turn every one of those additions into a recovery fault on
+ * every reader that had not been updated yet — a self-inflicted outage. So this
+ * judges exactly the fields it reads and passes the rest through untouched.
+ */
+
+/**
+ * Why durable live state could not be trusted.
+ *
+ * - `missing` — there is no state at all where there should be one.
+ * - `corrupt` — the state is there but is not the shape of live state.
+ * - `incompatible` — the shape is right but a value inside it is of a type this
+ *   build cannot interpret, which is what a state written under a different
+ *   vocabulary looks like from here.
+ */
+export const BROADCAST_GRAPHICS_RECOVERY_FAULT_REASONS = ['missing', 'corrupt', 'incompatible'] as const;
+
+export type BroadcastGraphicsRecoveryFaultReason = typeof BROADCAST_GRAPHICS_RECOVERY_FAULT_REASONS[number];
+
+/** A recovery fault, with enough detail to be diagnosable rather than merely fatal. */
+export interface BroadcastGraphicsRecoveryFault {
+	reason: BroadcastGraphicsRecoveryFaultReason;
+	/** What could not be read, named so an operator can report it. */
+	detail: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function fault(reason: BroadcastGraphicsRecoveryFaultReason, detail: string): BroadcastGraphicsRecoveryFault {
+	return { reason, detail };
+}
+
+function playoutFault(playout: unknown): BroadcastGraphicsRecoveryFault | null {
+	if (playout === undefined || playout === null)
+		return null;
+	if (!isRecord(playout))
+		return fault('corrupt', 'the playout map is not a set of Broadcast Graphic records');
+
+	for (const [graphicId, record] of Object.entries(playout)) {
+		if (!isRecord(record))
+			return fault('corrupt', `the playout record for ${graphicId} is not a record`);
+		if ('onAir' in record && typeof record.onAir !== 'boolean')
+			return fault('incompatible', `the on-air intent for ${graphicId} is not a true or false value`);
+	}
+
+	return null;
+}
+
+function inputsFault(inputs: unknown): BroadcastGraphicsRecoveryFault | null {
+	if (inputs === undefined || inputs === null)
+		return null;
+	if (!isRecord(inputs))
+		return fault('corrupt', 'the Graphic Input map is not a set of Broadcast Graphic records');
+
+	for (const [graphicId, record] of Object.entries(inputs)) {
+		if (!isRecord(record))
+			return fault('corrupt', `the Graphic Input record for ${graphicId} is not a record`);
+		for (const slot of ['working', 'accepted'] as const) {
+			if (slot in record && !isRecord(record[slot]))
+				return fault('corrupt', `the ${slot} Graphic Input values for ${graphicId} are not a set of values`);
+		}
+		if ('acceptedRevision' in record && !Number.isFinite(record.acceptedRevision))
+			return fault('incompatible', `the Graphic Input acceptance revision for ${graphicId} is not a number`);
+	}
+
+	return null;
+}
+
+/**
+ * Judge one durable live state, or report why it cannot be trusted.
+ *
+ * Answering `null` is the claim that every field this build reads is present in a
+ * shape it can read — not that the state is exhaustively understood.
+ */
+export function broadcastGraphicsRecoveryFault(raw: unknown): BroadcastGraphicsRecoveryFault | null {
+	if (raw === undefined || raw === null)
+		return fault('missing', 'this Broadcast Graphics Live Session has no durable live state');
+	if (!isRecord(raw))
+		return fault('corrupt', 'the durable live state is not a live state record');
+
+	return playoutFault(raw.playout) ?? inputsFault(raw.inputs);
+}
+
+/**
+ * The live state a reader should act on.
+ *
+ * Trustworthy state is returned as it is, extra fields and all. Anything else
+ * becomes a fresh state — nothing on air, no accepted values — which is what
+ * makes every output transparent while the fault stands.
+ */
+export function recoveredBroadcastGraphicsLiveState(raw: unknown): BroadcastGraphicsLiveState {
+	if (broadcastGraphicsRecoveryFault(raw) !== null)
+		return createInitialBroadcastGraphicsLiveState();
+
+	const state = raw as Partial<BroadcastGraphicsLiveState>;
+	return { ...state, playout: state.playout ?? {}, inputs: state.inputs ?? {} } as BroadcastGraphicsLiveState;
+}
+
+/**
+ * The state the next Broadcast Graphics Live Session opens with, given the one
+ * that just ended.
+ *
+ * Playout never crosses an epoch boundary: ending a session turns every Broadcast
+ * Graphic off, and a stale on-air intent surviving into a later show is exactly
+ * what epochs exist to prevent. Prepared Graphic Input values are the opposite
+ * case — they are not an intent to show anything, they are the work an operator
+ * did to be ready, and losing them to a mode change means retyping a show's
+ * lower thirds mid-show.
+ *
+ * State that cannot be trusted carries nothing forward: the same reasoning that
+ * refuses to salvage half a playout map refuses to salvage half an input map.
+ */
+export function carriedForwardBroadcastGraphicsLiveState(raw: unknown): BroadcastGraphicsLiveState {
+	const recovered = recoveredBroadcastGraphicsLiveState(raw);
+	return { ...createInitialBroadcastGraphicsLiveState(), inputs: recovered.inputs };
+}

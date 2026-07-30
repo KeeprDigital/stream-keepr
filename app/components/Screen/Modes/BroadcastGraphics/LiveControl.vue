@@ -38,6 +38,14 @@ const props = defineProps<{
 	playoutState: GraphicPlayoutState;
 	/** Whether this Broadcast Graphic has an action in flight. */
 	pending?: boolean;
+	/**
+	 * Whether this browser is out of touch with the authoritative order.
+	 *
+	 * Every control is withheld while it is, and nothing is queued: an edit made
+	 * offline would arrive claiming a value it could not possibly have checked, which
+	 * is exactly the silent overwrite the field-scoped conflict rule exists to stop.
+	 */
+	disconnected?: boolean;
 }>();
 
 const sessionStore = useBroadcastGraphicsLiveSessionStore();
@@ -77,12 +85,30 @@ function editDraft(key: string, value: GraphicInputValue) {
  *
  * The server accepts working values, so this is what makes an edit visible to
  * every other session immediately rather than when its author chooses to share it.
+ *
+ * The edit carries the value this operator was editing away from — the value shown
+ * in the field's own trace, which is what they were looking at. That is its Field
+ * Ownership claim, and it is what lets the server merge this edit with a colleague's
+ * edit to a different Graphic Input while refusing to let it silently overwrite a
+ * colleague's edit to this one.
  */
 function commit(key: string, value?: GraphicInputValue) {
 	const next = value === undefined ? drafts.value[key] : value;
 	if (next === undefined)
 		return;
-	void sessionStore.setInput(props.eventId, props.screen.id, props.graphic.id, key, next);
+
+	const trace = traces.value.find(entry => entry.declaration.key === key);
+	if (!trace || props.disconnected)
+		return;
+
+	void sessionStore.setInput(
+		props.eventId,
+		props.screen.id,
+		props.graphic.id,
+		key,
+		next,
+		trace.working.value,
+	);
 }
 
 function commitNow(key: string, value: GraphicInputValue) {
@@ -116,13 +142,45 @@ const STATUS_LABELS: Record<GraphicInputTrace['status'], string> = {
 	bound: 'Bound',
 	pending: 'Pending',
 	unavailable: 'Unavailable',
+	stale: 'Refreshed',
 };
+
+/**
+ * The Graphic Inputs whose last edit from this session was refused because another
+ * operator had already changed them.
+ *
+ * Named to the operator as what happened rather than as a status word: their edit
+ * did not land, the field now shows the value that did, and the fix is to look and
+ * decide again rather than to retry blindly.
+ */
+const refreshedInputs = computed(() => traces.value.filter(trace => trace.status === 'stale'));
 
 // A new selection starts from the authoritative working values rather than from
 // whatever the previously selected graphic had typed into it.
 watch(() => props.graphic.id, () => {
 	drafts.value = {};
 });
+
+/**
+ * A refused edit gives its field back to the authoritative value.
+ *
+ * Without this the operator would keep looking at the text they typed while the
+ * trace beneath it reported something else — the field would claim to hold an edit
+ * that was refused, which is the silent overwrite this whole mechanism exists to
+ * make impossible, reproduced in the browser.
+ */
+watch(
+	() => refreshedInputs.value.map(trace => trace.declaration.key),
+	(keys) => {
+		if (keys.length === 0)
+			return;
+
+		const refreshed = { ...drafts.value };
+		for (const key of keys)
+			delete refreshed[key];
+		drafts.value = refreshed;
+	},
+);
 </script>
 
 <template>
@@ -138,6 +196,20 @@ watch(() => props.graphic.id, () => {
 			<p v-if="!isOnAir" class="text-xs text-muted" data-testid="live-control-off-note">
 				This Broadcast Graphic is off. Edits change the working values its next Take accepts.
 			</p>
+
+			<!--
+				A refused edit, named. Silently accepting the refresh would leave the
+				operator believing their correction is on its way to air.
+			-->
+			<UAlert
+				v-if="refreshedInputs.length > 0"
+				data-testid="live-control-refreshed"
+				color="warning"
+				variant="soft"
+				icon="i-lucide-users"
+				title="Another operator got there first"
+				:description="`${refreshedInputs.map(trace => trace.declaration.label).join(', ')} changed while you were editing, so your change was not applied. These fields now show the accepted value.`"
+			/>
 
 			<UAlert
 				v-if="blockingInputs.length > 0"
@@ -169,7 +241,7 @@ watch(() => props.graphic.id, () => {
 					<UBadge
 						size="xs"
 						variant="soft"
-						:color="trace.status === 'unavailable' ? 'error' : trace.status === 'pending' ? 'warning' : 'neutral'"
+						:color="trace.status === 'unavailable' ? 'error' : (trace.status === 'pending' || trace.status === 'stale') ? 'warning' : 'neutral'"
 						data-testid="live-control-status"
 					>
 						{{ STATUS_LABELS[trace.status] }}
@@ -181,6 +253,7 @@ watch(() => props.graphic.id, () => {
 					:model-value="String(draftValue(trace) ?? '')"
 					class="w-full"
 					size="sm"
+					:disabled="disconnected"
 					:data-testid="`live-control-field-${trace.declaration.key}`"
 					@update:model-value="editDraft(trace.declaration.key, String($event))"
 					@blur="commit(trace.declaration.key)"
@@ -191,6 +264,7 @@ watch(() => props.graphic.id, () => {
 					:model-value="typeof draftValue(trace) === 'number' ? Number(draftValue(trace)) : undefined"
 					class="w-full"
 					size="sm"
+					:disabled="disconnected"
 					:data-testid="`live-control-field-${trace.declaration.key}`"
 					@update:model-value="commitNow(trace.declaration.key, $event ?? null)"
 				/>
@@ -198,6 +272,7 @@ watch(() => props.graphic.id, () => {
 					v-else-if="trace.declaration.type === 'toggle'"
 					:model-value="draftValue(trace) === true"
 					size="sm"
+					:disabled="disconnected"
 					:data-testid="`live-control-field-${trace.declaration.key}`"
 					@update:model-value="commitNow(trace.declaration.key, Boolean($event))"
 				/>
@@ -207,6 +282,7 @@ watch(() => props.graphic.id, () => {
 					:items="choiceOptions(trace)"
 					class="w-full"
 					size="sm"
+					:disabled="disconnected"
 					:data-testid="`live-control-field-${trace.declaration.key}`"
 					@update:model-value="commitNow(trace.declaration.key, String($event))"
 				/>
@@ -215,6 +291,7 @@ watch(() => props.graphic.id, () => {
 					type="color"
 					:model-value="String(draftValue(trace) ?? '#000000')"
 					size="sm"
+					:disabled="disconnected"
 					:data-testid="`live-control-field-${trace.declaration.key}`"
 					@update:model-value="commitNow(trace.declaration.key, String($event))"
 				/>
@@ -233,6 +310,7 @@ watch(() => props.graphic.id, () => {
 						size="xs"
 						variant="ghost"
 						color="neutral"
+						:disabled="disconnected"
 						:data-testid="`live-control-clear-${trace.declaration.key}`"
 						@click="commitNow(trace.declaration.key, null)"
 					>
@@ -281,7 +359,7 @@ watch(() => props.graphic.id, () => {
 					color="primary"
 					variant="subtle"
 					class="flex-1 justify-center"
-					:disabled="pending || !hasStagedChanges"
+					:disabled="disconnected || pending || !hasStagedChanges"
 					data-testid="live-control-update"
 					@click="update(false)"
 				>
@@ -292,7 +370,7 @@ watch(() => props.graphic.id, () => {
 					variant="outline"
 					aria-label="Cut Update"
 					title="Accept the staged Graphic Inputs and show them immediately"
-					:disabled="pending || !hasStagedChanges"
+					:disabled="disconnected || pending || !hasStagedChanges"
 					data-testid="live-control-cut-update"
 					@click="update(true)"
 				>

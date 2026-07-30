@@ -2,6 +2,7 @@ import type {
 	BroadcastGraphicsCommandInput,
 	BroadcastGraphicsCommandType,
 	BroadcastGraphicsLiveState,
+	BroadcastGraphicsRecoveryFault,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 
 /**
@@ -19,7 +20,19 @@ export interface BroadcastGraphicsLiveSessionResponse {
 	eventId: number;
 	screenId: number;
 	status: BroadcastGraphicsLiveSessionStatus;
+	/**
+	 * The live state every reader acts on.
+	 *
+	 * Already recovered: durable state that could not be trusted is reported through
+	 * `recoveryFault` and replaced here by a state with nothing on air, so no client
+	 * can accidentally render half of an unreadable session.
+	 */
 	currentState: BroadcastGraphicsLiveState;
+	/**
+	 * Why the durable live state behind this snapshot could not be trusted, when it
+	 * could not. Present until an explicit playout action writes a state that can be.
+	 */
+	recoveryFault: BroadcastGraphicsRecoveryFault | null;
 	sequence: number;
 	endedAt: Date | null;
 	createdAt: Date;
@@ -52,4 +65,30 @@ export interface BroadcastGraphicsCommandAppliedPayload {
 
 export interface BroadcastGraphicsCommandResult extends BroadcastGraphicsCommandAppliedPayload {
 	session: BroadcastGraphicsLiveSessionResponse;
+}
+
+/**
+ * The realtime notification that a Screen's playout epoch has been replaced.
+ *
+ * Deliberately carries no state at all. A client cannot apply an epoch change —
+ * whatever it holds belongs to a session that has ended, and the snapshot is the
+ * only thing that can say which epoch is current and what it starts from. So this
+ * says only "stop trusting what you have", which is what every reload path this
+ * notification triggers already knows how to answer.
+ *
+ * It is published for a mode change, a Screen delete, and an explicit live-state
+ * reset alike: from a Live Control's or a Screen Output's point of view those are
+ * the same event, and the difference between them is not something a client acts
+ * on differently.
+ */
+export interface BroadcastGraphicsEpochEndedPayload {
+	screenId: number;
+	/**
+	 * The epoch that ended, or null when the Screen had none open.
+	 *
+	 * Diagnostic rather than load-bearing: an epoch ending invalidates whatever a
+	 * client holds for that Screen whichever epoch it was, so no client decides
+	 * anything from this.
+	 */
+	sessionId: number | null;
 }

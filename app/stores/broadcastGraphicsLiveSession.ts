@@ -1,6 +1,8 @@
 import type {
 	BroadcastGraphicInputsState,
 	BroadcastGraphicsLiveState,
+	BroadcastGraphicsRecoveryFault,
+	BroadcastGraphicsRejectionCode,
 	GraphicInputTrace,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import type {
@@ -16,6 +18,7 @@ import type {
 import type { MessageData } from '~/types/realtime';
 import {
 	acceptedGraphicInputValues,
+	BROADCAST_GRAPHICS_REJECTION_CODES,
 	broadcastGraphicInputsState,
 	broadcastGraphicPlayoutState,
 	createInitialBroadcastGraphicsLiveState,
@@ -44,9 +47,22 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	const error = ref<string | null>(null);
 	/** Playout actions awaiting their authoritative answer, keyed per Broadcast Graphic. */
 	const pending = ref<Set<string>>(new Set());
+	/**
+	 * The Graphic Inputs whose last edit from this session lost a field-scoped
+	 * conflict, and have therefore been refreshed from the authoritative snapshot.
+	 *
+	 * Local to this operator's session, never live state: whose edit was refused is a
+	 * fact about this client, and marking the field in a colleague's Live Control —
+	 * where their edit is the one that won — would be exactly backwards.
+	 */
+	const staleInputs = ref<Set<string>>(new Set());
 
 	function playoutKey(screenId: number, graphicId: string): string {
 		return `${screenId}:${graphicId}`;
+	}
+
+	function inputKeyOf(screenId: number, graphicId: string, inputKey: string): string {
+		return `${screenId}:${graphicId}:${inputKey}`;
 	}
 
 	/**
@@ -64,6 +80,16 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			return false;
 		const status = 'statusCode' in failure ? failure.statusCode : ('status' in failure ? failure.status : undefined);
 		return status === 409;
+	}
+
+	/** The domain refusal code a rejected command carried, when it carried one. */
+	function rejectionCode(failure: unknown): BroadcastGraphicsRejectionCode | undefined {
+		if (typeof failure !== 'object' || failure === null || !('data' in failure))
+			return undefined;
+		const data = (failure as { data?: { code?: string } }).data;
+		return BROADCAST_GRAPHICS_REJECTION_CODES.includes(data?.code as BroadcastGraphicsRejectionCode)
+			? data!.code as BroadcastGraphicsRejectionCode
+			: undefined;
 	}
 
 	function liveState(screenId: number): BroadcastGraphicsLiveState {
@@ -119,6 +145,8 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		screenId: number,
 		graphicId: string,
 		command: BroadcastGraphicsCommand,
+		/** What to do about a domain refusal before it is surfaced to the operator. */
+		onRejection?: (code: BroadcastGraphicsRejectionCode) => void | Promise<void>,
 	): Promise<BroadcastGraphicsLiveSessionResponse | null> {
 		const pendingKey = playoutKey(screenId, graphicId);
 		pending.value.add(pendingKey);
@@ -132,7 +160,18 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 						return cacheCommandResult(await repository.sendCommand(eventId, screenId, session.id, command));
 					}
 					catch (failure) {
-						// A conflict is what an epoch this client no longer shares looks
+						// A domain refusal is the server saying this command is wrong about the
+						// show — a stale acceptance, an overtaken field, a required value that
+						// is missing. Restating it would only be refused again, and for a
+						// field-scoped conflict that second delivery would arrive after the
+						// refresh and race it. So these are handled and surfaced, never retried.
+						const code = rejectionCode(failure);
+						if (code) {
+							await onRejection?.(code);
+							throw failure;
+						}
+
+						// A bare conflict is what an epoch this client no longer shares looks
 						// like: the Screen may have left and re-entered Broadcast Graphics
 						// mode in another tab, ending the epoch under us. Without this the
 						// operator's every Take would 409 until they reloaded the page —
@@ -184,7 +223,67 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * value, the working value, and the accepted on-air value, kept apart.
 	 */
 	function inputTraces(screenId: number, graphic: BroadcastGraphicConfig): GraphicInputTrace[] {
-		return graphicInputTraces(liveState(screenId), graphic.id, graphic);
+		return graphicInputTraces(
+			liveState(screenId),
+			graphic.id,
+			graphic,
+			{},
+			(graphic.inputs ?? [])
+				.map(declaration => declaration.key)
+				.filter(key => staleInputs.value.has(inputKeyOf(screenId, graphic.id, key))),
+		);
+	}
+
+	/**
+	 * Why this Screen's durable live state could not be trusted, when it could not.
+	 *
+	 * A recovery fault is not an action failure, so it deliberately does not travel
+	 * in `error`: the command an operator just issued may have succeeded perfectly
+	 * while the session it landed in is still the one that had to be recovered. Live
+	 * Control has to be able to say both things at once.
+	 */
+	function recoveryFault(screenId: number): BroadcastGraphicsRecoveryFault | null {
+		return sessions.value.get(screenId)?.recoveryFault ?? null;
+	}
+
+	/**
+	 * Reset this Screen's live state: every Broadcast Graphic off, and a new epoch.
+	 *
+	 * The way back from a recovery fault, and the only action that deliberately
+	 * discards prepared Graphic Input values — so the stale-field markers this
+	 * session was holding go with them.
+	 */
+	async function resetLiveState(eventId: number, screenId: number) {
+		return await executeAction(
+			async () => {
+				const session = await repository.resetSession(eventId, screenId);
+				cacheSession(session);
+				staleInputs.value.clear();
+				return session;
+			},
+			{ loadingRef: loading, errorRef: error },
+		);
+	}
+
+	/**
+	 * A Screen's playout epoch has been replaced.
+	 *
+	 * Nothing here is applied: everything this client holds for that Screen belongs
+	 * to the epoch that ended, so the snapshot is the only thing that can say what
+	 * the show looks like now. A client holding nothing for the Screen has nothing to
+	 * correct and deliberately does not open an epoch just to hear about one ending.
+	 */
+	async function applyEpochEnded(data: MessageData<'broadcastGraphicsLiveSession:epochEnded'>) {
+		if (!sessions.value.has(data.screenId))
+			return;
+
+		// Dropped before the reload rather than after it. The ended epoch's state may
+		// have graphics on air, and if the reload fails — the Screen has left Broadcast
+		// Graphics mode, which is one of the ways an epoch ends — keeping it cached
+		// would leave every output rendering a show that is over.
+		sessions.value.delete(data.screenId);
+		staleInputs.value.clear();
+		await loadSession(data.eventId, data.screenId);
 	}
 
 	/**
@@ -213,12 +312,41 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		graphicId: string,
 		inputKey: string,
 		value: GraphicInputValue,
+		/**
+		 * The value this operator was editing away from: the Field Ownership claim.
+		 *
+		 * Required rather than derived here, because the honest claim is the value the
+		 * operator was actually shown — which is the working value *resolved against the
+		 * declaration's default*, and the declarations live with the caller. Deriving it
+		 * from stored values alone would send no claim at all for an input nobody has
+		 * edited yet, and that is precisely the case a second operator's first edit
+		 * falls into: it would silently overwrite the first operator's.
+		 */
+		basedOnValue: GraphicInputValue,
 	) {
-		return deliverCommand(eventId, screenId, graphicId, {
-			commandId: randomCommandId('Set Input'),
-			type: 'Set Input',
-			payload: { graphicId, inputKey, value },
-		});
+		staleInputs.value.delete(inputKeyOf(screenId, graphicId, inputKey));
+
+		return deliverCommand(
+			eventId,
+			screenId,
+			graphicId,
+			{
+				commandId: randomCommandId('Set Input'),
+				type: 'Set Input',
+				payload: { graphicId, inputKey, value, basedOn: { value: basedOnValue } },
+			},
+			async (code) => {
+				if (code !== 'stale-input-edit')
+					return;
+
+				// Rejected and refreshed, which is the whole point: the operator gets the
+				// value that actually landed rather than having silently overwritten it,
+				// and the field is marked so the refresh does not read as their own edit
+				// being accepted.
+				staleInputs.value.add(inputKeyOf(screenId, graphicId, inputKey));
+				await loadSession(eventId, screenId);
+			},
+		);
 	}
 
 	/**
@@ -271,6 +399,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	function $reset() {
 		sessions.value.clear();
 		pending.value.clear();
+		staleInputs.value.clear();
 		loading.value = false;
 		error.value = null;
 	}
@@ -285,12 +414,15 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		inputsState,
 		inputTraces,
 		acceptedInputValues,
+		recoveryFault,
 		loadSession,
 		take,
 		out,
 		setInput,
 		updateGraphic,
+		resetLiveState,
 		applyRemoteCommand,
+		applyEpochEnded,
 		$reset,
 	};
 });

@@ -281,7 +281,14 @@ describe('screenWriteModule', () => {
 			// update can never orphan a running show's live state.
 			expect(mockScreenService.update.mock.invocationCallOrder[0])
 				.toBeLessThan(mockBroadcastGraphicsLiveSessions.endSessionsForScreen.mock.invocationCallOrder[0]!);
-			expect(mockBroadcastGraphicsLiveSessions.endSessionsForScreen).toHaveBeenCalledWith(7, 1);
+			// Announced, because the Screen is still there with Live Controls and Screen
+			// Outputs watching it: without the notification each would keep rendering the
+			// ended show's graphics until something else made it reload.
+			expect(mockBroadcastGraphicsLiveSessions.endSessionsForScreen).toHaveBeenCalledWith(
+				7,
+				1,
+				{ notify: true, originConnectionId: undefined },
+			);
 		});
 
 		it('leaves the Live Session running while the Screen stays in Broadcast Graphics mode', async () => {
@@ -332,6 +339,9 @@ describe('screenWriteModule', () => {
 			// opposite order from a mode change.
 			expect(mockBroadcastGraphicsLiveSessions.endSessionsForScreen.mock.invocationCallOrder[0]!)
 				.toBeLessThan(mockScreenService.remove.mock.invocationCallOrder[0]!);
+			// Unannounced, unlike a mode change: these clients are about to be told the
+			// Screen itself is gone, and pointing them at a snapshot route that will now
+			// refuse them would surface a spurious failure on the way out.
 			expect(mockBroadcastGraphicsLiveSessions.endSessionsForScreen).toHaveBeenCalledWith(7, 1);
 		});
 

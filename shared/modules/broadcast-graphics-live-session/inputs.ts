@@ -66,15 +66,17 @@ export interface GraphicInputValueTrace {
 /**
  * What Live Control shows about one Graphic Input's value.
  *
- * The settled vocabulary is bound, overridden, pending, unavailable, and stale;
- * only these four are reachable. `overridden` belongs to a Graphic Input Override,
- * which masks a binding that keeps resolving underneath it — there is nothing to
- * mask until Graphic Input Bindings resolve against Event Data. `stale` belongs to
- * field-scoped multi-operator conflict handling. Each becomes reachable with the
- * capability that produces it, and shipping a status no code path can produce would
- * be a state an operator could never be shown.
+ * The settled vocabulary is bound, overridden, pending, unavailable, and stale.
+ * `overridden` belongs to a Graphic Input Override, which masks a binding that keeps
+ * resolving underneath it — there is nothing to mask until Graphic Input Bindings
+ * resolve against Event Data, so it is still unreachable. `stale` is reachable now:
+ * it is what an operator whose edit lost a field-scoped conflict is shown, and
+ * without it a refreshed field would be indistinguishable from their own edit having
+ * been accepted. Each status becomes reachable with the capability that produces it,
+ * and shipping one no code path can produce would be a state an operator could never
+ * be shown.
  */
-export const GRAPHIC_INPUT_STATUS_VALUES = ['manual', 'bound', 'pending', 'unavailable'] as const;
+export const GRAPHIC_INPUT_STATUS_VALUES = ['manual', 'bound', 'pending', 'unavailable', 'stale'] as const;
 
 export type GraphicInputStatus = typeof GRAPHIC_INPUT_STATUS_VALUES[number];
 
@@ -205,6 +207,15 @@ export function graphicInputTraces(
 	},
 	/** The latest bound values, once something resolves Graphic Input Bindings. */
 	boundValues: Readonly<Record<string, GraphicInputValue>> = {},
+	/**
+	 * The Graphic Inputs whose last edit from this session lost a field-scoped
+	 * conflict.
+	 *
+	 * Client-side knowledge, not live state: whether *this* operator's edit was the
+	 * one refused is a fact about this session, and a second operator looking at the
+	 * same authoritative snapshot must not see their colleague's field marked stale.
+	 */
+	staleInputKeys: readonly string[] = [],
 ): GraphicInputTrace[] {
 	const declarations = graphic.inputs ?? [];
 	const stored = broadcastGraphicInputsState(state, graphicId);
@@ -236,13 +247,18 @@ export function graphicInputTraces(
 			working: workingTrace,
 			accepted: acceptedTrace,
 			pending,
-			status: !workingTrace.availability.available
-				? 'unavailable'
-				: pending
-					? 'pending'
-					: binding
-						? 'bound'
-						: 'manual',
+			// Stale outranks every other status: the field has just been refreshed out
+			// from under the operator, and telling them the value is merely `bound` or
+			// `manual` would read as their own edit having been accepted.
+			status: staleInputKeys.includes(declaration.key)
+				? 'stale'
+				: !workingTrace.availability.available
+						? 'unavailable'
+						: pending
+							? 'pending'
+							: binding
+								? 'bound'
+								: 'manual',
 			blocksTake: declaration.required
 				&& !graphicInputAvailability(
 					declaration,
