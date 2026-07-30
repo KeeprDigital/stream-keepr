@@ -459,7 +459,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		it('holds its last known state rather than blanking the stack', async () => {
 			// Live Control shows the same thing a disconnected output shows: what was last
 			// accepted. A dropped websocket is not news about what is on air.
-			mockLiveState.value = { playout: { slate: { onAir: true } }, inputs: {} };
+			mockLiveState.value = { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} };
 			const wrapper = await mountComponent();
 
 			mockConnectionState.value = 'disconnected';

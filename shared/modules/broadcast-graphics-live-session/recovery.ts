@@ -68,6 +68,18 @@ function playoutFault(playout: unknown): BroadcastGraphicsRecoveryFault | null {
 			return fault('corrupt', `the playout record for ${graphicId} is not a record`);
 		if ('onAir' in record && typeof record.onAir !== 'boolean')
 			return fault('incompatible', `the on-air intent for ${graphicId} is not a true or false value`);
+		if ('cut' in record && typeof record.cut !== 'boolean')
+			return fault('incompatible', `the Cut modifier for ${graphicId} is not a true or false value`);
+		// A start time that is not a number at all, which is a different thing from a
+		// start time that is merely old. Animation deliberately trusts an old one
+		// literally — the projection is monotone and saturating, so a start time from
+		// before a crash has already passed its phase duration and settles at the
+		// Graphic Resting State — and this must not second-guess that. But a
+		// non-numeric value does not settle: it makes elapsed time NaN, and every
+		// phase comparison against NaN is false, so an output would resolve a phase
+		// nobody can predict. Refusing that is refusing corruption, not staleness.
+		if ('effectiveStartedAt' in record && !Number.isFinite(record.effectiveStartedAt))
+			return fault('incompatible', `the animation start time for ${graphicId} is not a number`);
 	}
 
 	return null;

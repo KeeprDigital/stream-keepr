@@ -39,13 +39,33 @@ describe('broadcastGraphicsRecovery', () => {
 			expect(recoveredBroadcastGraphicsLiveState({})).toEqual(createInitialBroadcastGraphicsLiveState());
 		});
 
+		it('trusts a real persisted record produced by the reducer itself', () => {
+			// Built by the reducer and round-tripped as JSON, which is exactly what a
+			// reload, a restart, or a second process reads. Asserting against a
+			// hand-written fixture would keep passing after the persisted shape moved on
+			// — the fixture would still describe a record nothing produces — so the
+			// record under test is the real one.
+			const persisted = JSON.parse(JSON.stringify(applyBroadcastGraphicsCommand(
+				createInitialBroadcastGraphicsLiveState(),
+				{ type: 'Take', payload: { graphicId: 'slate' } },
+				{ inputs: [], acceptedAt: 1_700_000_000_000 },
+			)));
+
+			expect(broadcastGraphicsRecoveryFault(persisted)).toBeNull();
+			expect(recoveredBroadcastGraphicsLiveState(persisted)).toEqual(persisted);
+			// And it really does carry the animation timing this validator must not judge.
+			expect(Object.keys(persisted.playout.slate).toSorted())
+				.toEqual(['cut', 'effectiveStartedAt', 'onAir']);
+			expect(onAirBroadcastGraphicIds(persisted, [{ id: 'slate' }])).toEqual(['slate']);
+		});
+
 		it('passes through fields it does not interpret rather than calling them a fault', () => {
-			// Later playout vocabulary — channels, animation timing — adds siblings to
-			// this state. A reader that refused anything it did not recognise would turn
-			// every such addition into a recovery fault on every older reader, so the
-			// validator judges only what it reads.
+			// Later playout vocabulary — Graphic Channels — adds siblings this build has
+			// never seen. A reader that refused anything unrecognised would turn every
+			// such addition into a recovery fault on every reader that had not caught up,
+			// so the validator judges only what it reads.
 			const state = {
-				playout: { slate: { onAir: true, effectiveStartedAt: 1_700_000_000_000 } },
+				playout: { slate: { onAir: true, effectiveStartedAt: 1_700_000_000_000, cut: false } },
 				inputs: {},
 				channels: { lower: 'slate' },
 			};
@@ -110,6 +130,17 @@ describe('broadcastGraphicsRecovery', () => {
 				playout: {},
 				inputs: { slate: { working: {}, accepted: {}, acceptedRevision: '4' } },
 			}],
+			['a Cut modifier that is not a boolean', {
+				playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: 'yes' } },
+				inputs: {},
+			}],
+			// Not a number at all, which is corruption rather than staleness: an old start
+			// time settles at the Graphic Resting State by itself, while a non-numeric one
+			// makes every phase comparison NaN-false and resolves a phase nobody predicted.
+			['an animation start time that is not a number', {
+				playout: { slate: { onAir: true, effectiveStartedAt: 'soon', cut: false } },
+				inputs: {},
+			}],
 		])('reports %s as incompatible', (_label, raw) => {
 			expect(broadcastGraphicsRecoveryFault(raw)?.reason).toBe('incompatible');
 		});
@@ -118,6 +149,19 @@ describe('broadcastGraphicsRecovery', () => {
 			const recovered = recoveredBroadcastGraphicsLiveState({ playout: { slate: { onAir: 'yes' } }, inputs: {} });
 
 			expect(onAirBroadcastGraphicIds(recovered, [{ id: 'slate' }])).toEqual([]);
+		});
+
+		it('trusts a long-stale animation start time rather than calling it a fault', () => {
+			// The complement of the rule above, and the one that matters more: animation
+			// requires an old start time to be read literally, because the projection is
+			// monotone and saturating and therefore settles it at the Graphic Resting
+			// State by itself. Faulting it here would blank a show that is running
+			// correctly — which is the opposite of what recovery is for.
+			const ancient = { playout: { slate: { onAir: true, effectiveStartedAt: 1, cut: false } }, inputs: {} };
+
+			expect(broadcastGraphicsRecoveryFault(ancient)).toBeNull();
+			expect(onAirBroadcastGraphicIds(recoveredBroadcastGraphicsLiveState(ancient), [{ id: 'slate' }]))
+				.toEqual(['slate']);
 		});
 	});
 
@@ -173,7 +217,7 @@ describe('broadcastGraphicsRecovery', () => {
 			expect(() => applyBroadcastGraphicsCommand(
 				next,
 				{ type: 'Take', payload: { graphicId: 'slate' } },
-				{ inputs: [required] },
+				{ inputs: [required], acceptedAt: 1_700_000_000_000 },
 			)).toThrow(expect.objectContaining({ code: 'required-input-unavailable' }));
 		});
 

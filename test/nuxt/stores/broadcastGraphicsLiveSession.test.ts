@@ -563,7 +563,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			vi.clearAllMocks();
 			mockRepository.getSession.mockResolvedValue(session({
 				sequence: 2,
-				currentState: { playout: { slate: { onAir: true } }, inputs: {} },
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 				recoveryFault: null,
 			}));
 
@@ -590,7 +590,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 	describe('an epoch that has been replaced', () => {
 		it('discards what it holds and reloads the authoritative snapshot', async () => {
 			mockRepository.getSession.mockResolvedValue(session({
-				currentState: { playout: { slate: { onAir: true } }, inputs: {} },
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 			}));
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
@@ -608,7 +608,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			// after which the snapshot route refuses this client. Keeping the ended
 			// epoch's state would leave every output rendering a show that is over.
 			mockRepository.getSession.mockResolvedValue(session({
-				currentState: { playout: { slate: { onAir: true } }, inputs: {} },
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 			}));
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			mockRepository.getSession.mockRejectedValue({ statusCode: 409, message: 'Screen is not in Broadcast Graphics mode' });
@@ -674,7 +674,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 	describe('resetting live state', () => {
 		it('caches the fresh epoch the reset opened', async () => {
 			mockRepository.getSession.mockResolvedValue(session({
-				currentState: { playout: { slate: { onAir: true } }, inputs: {} },
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 			}));
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			mockRepository.resetSession.mockResolvedValue(session({ id: 57, sequence: 1 }));

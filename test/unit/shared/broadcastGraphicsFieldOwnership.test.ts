@@ -45,6 +45,15 @@ const TITLE: GraphicInputDeclaration = {
 const DECLARATIONS = [NAME, TITLE];
 const GRAPHIC = 'lower-third';
 
+/**
+ * A fixed authoritative clock, so nothing here depends on wall time.
+ *
+ * Set Input never reads it — it writes no playout record — but the reduction
+ * context requires it, and supplying a real one keeps these cases honest if a
+ * later reducer starts stamping input acceptance the way playout is stamped.
+ */
+const T0 = 1_700_000_000_000;
+
 function setInput(
 	state: BroadcastGraphicsLiveState,
 	inputKey: string,
@@ -54,7 +63,7 @@ function setInput(
 	return applyBroadcastGraphicsCommand(
 		state,
 		{ type: 'Set Input', payload: { graphicId: GRAPHIC, inputKey, value, basedOn } } as BroadcastGraphicsCommandInput,
-		{ inputs: DECLARATIONS },
+		{ inputs: DECLARATIONS, acceptedAt: T0 },
 	);
 }
 
@@ -147,7 +156,7 @@ describe('broadcastGraphicsFieldOwnership', () => {
 		const state = applyBroadcastGraphicsCommand(
 			createInitialBroadcastGraphicsLiveState(),
 			{ type: 'Set Input', payload: { graphicId: GRAPHIC, inputKey: 'badge', value: pinned } } as BroadcastGraphicsCommandInput,
-			{ inputs: [media] },
+			{ inputs: [media], acceptedAt: T0 },
 		);
 
 		// A structurally equal reference is the same claim even though it is a
@@ -163,7 +172,7 @@ describe('broadcastGraphicsFieldOwnership', () => {
 					basedOn: { value: { assetId: 'asset-1', revisionId: 'rev-1' } },
 				},
 			} as BroadcastGraphicsCommandInput,
-			{ inputs: [media] },
+			{ inputs: [media], acceptedAt: T0 },
 		)).not.toThrow();
 	});
 
@@ -174,7 +183,7 @@ describe('broadcastGraphicsFieldOwnership', () => {
 			const [name, title] = graphicInputTraces(
 				state,
 				GRAPHIC,
-				{ inputs: DECLARATIONS },
+				{ inputs: DECLARATIONS, acceptedAt: T0 },
 				{},
 				['name'],
 			);
@@ -197,7 +206,7 @@ describe('broadcastGraphicsFieldOwnership', () => {
 			const traces = graphicInputTraces(
 				createInitialBroadcastGraphicsLiveState(),
 				GRAPHIC,
-				{ inputs: DECLARATIONS },
+				{ inputs: DECLARATIONS, acceptedAt: T0 },
 			);
 
 			expect(traces.every(trace => trace.status !== 'superseded')).toBe(true);

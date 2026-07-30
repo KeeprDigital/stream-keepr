@@ -330,7 +330,7 @@ describe('broadcastGraphicsLiveControl', () => {
 
 		it('withholds Update Graphic even with a staged set waiting', async () => {
 			mockLiveState.value = {
-				playout: { 'lower-third': { onAir: true } },
+				playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
 				inputs: { 'lower-third': { working: { name: 'Ava Reed' }, accepted: { name: 'Unnamed' }, acceptedRevision: 1 } },
 			};
 
