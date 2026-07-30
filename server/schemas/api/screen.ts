@@ -930,12 +930,12 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * worse. 110 is about fifteen lower thirds plus a slate and a bug, comfortably
  * more than the fidelity prototype's acceptance evidence requires.
  *
- * The remaining ~108 KiB is shared with every other mode's configuration, so a
- * Screen carrying both a maximal Broadcast Graphics stack and a maximal Feature
- * Match Overlay layout can still reach the byte limit. That is a property of one
- * budget shared across modes and predates this cap. Note the direction: shared
- * headroom *shrank* from the ~112 KiB the 200-item cap left, because this cap fell
- * by less than Graphic Inputs added.
+ * This comment deliberately states no cross-mode headroom figure. The budget is
+ * shared with every other Screen Mode, so what remains is a property of the whole
+ * `modeConfigs` map rather than of this cap, and reconstructing it per ticket is
+ * how two tickets came to quote different baselines for the same pre-existing
+ * Graphic Item. One owned measurement of the merged worst case reports it instead;
+ * the figures above describe only this mode's own contribution to it.
  */
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 110;
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 413_241;
