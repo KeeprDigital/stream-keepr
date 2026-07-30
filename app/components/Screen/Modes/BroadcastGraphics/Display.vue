@@ -8,6 +8,7 @@ import { resolveBroadcastGraphicsRenderModel } from '~/modules/broadcast-graphic
 
 const { outputMode, previewGuides, previewSafeAreas, screen } = useScreenContext();
 const {
+	animationProjection,
 	graphics,
 	onAirGraphicIds,
 	inputValues,
@@ -47,6 +48,7 @@ const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	canvasHeight: canvasHeight.value,
 	graphics: graphics.value,
 	onAirGraphicIds: onAirGraphicIds.value,
+	animation: animationProjection.value,
 	inputValues: inputValues.value,
 	// An author sees unset Graphic Inputs as their authored defaults; a live output
 	// shows nothing for them rather than putting placeholder text on program.

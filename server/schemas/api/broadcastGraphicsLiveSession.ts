@@ -69,10 +69,19 @@ const updatePayloadSchema = z.object({
 
 const inputKeySchema = z.string().min(1).max(MAX_GRAPHIC_INPUT_KEY_LENGTH).regex(GRAPHIC_INPUT_KEY_PATTERN);
 
+/**
+ * One working-value edit, optionally stating the value it believes it replaces.
+ *
+ * The claim is wrapped in an object rather than sent as a bare optional value
+ * because `null` is a legitimate Graphic Input value: only a wrapper can tell
+ * "I claim the field was empty" apart from "I claim nothing", and the difference
+ * decides whether a second operator's edit is refused or silently overwritten.
+ */
 const setInputPayloadSchema = z.object({
 	graphicId: graphicIdSchema,
 	inputKey: inputKeySchema,
 	value: graphicInputValueSchema,
+	basedOn: z.object({ value: graphicInputValueSchema }).strict().optional(),
 }).strict();
 
 /**

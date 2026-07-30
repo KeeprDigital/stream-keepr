@@ -29,6 +29,7 @@ export {
 	workingGraphicInputValues,
 } from './inputs';
 export type {
+	BroadcastGraphicPhaseTiming,
 	BroadcastGraphicPlayout,
 	BroadcastGraphicsCommandInput,
 	BroadcastGraphicsCommandPayload,
@@ -45,10 +46,21 @@ export type {
 export {
 	applyBroadcastGraphicsCommand,
 	BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES,
+	broadcastGraphicPhaseProjection,
 	broadcastGraphicPlayoutState,
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,
 } from './playout';
+export type {
+	BroadcastGraphicsRecoveryFault,
+	BroadcastGraphicsRecoveryFaultReason,
+} from './recovery';
+export {
+	BROADCAST_GRAPHICS_RECOVERY_FAULT_REASONS,
+	broadcastGraphicsRecoveryFault,
+	carriedForwardBroadcastGraphicsLiveState,
+	recoveredBroadcastGraphicsLiveState,
+} from './recovery';
 export type { BroadcastGraphicsRejectionCode } from './rejection';
 export {
 	BROADCAST_GRAPHICS_REJECTION_CODES,

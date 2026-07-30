@@ -1,4 +1,7 @@
-import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
+import type {
+	BroadcastGraphicsLiveState,
+	BroadcastGraphicsRecoveryFault,
+} from '~~/shared/modules/broadcast-graphics-live-session';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { GraphicAssetReferenceStatus } from '~~/shared/types/graphicsAsset';
 import type { Screen } from '~/types';
@@ -22,6 +25,33 @@ const mockTake = vi.fn();
 const mockOut = vi.fn();
 const mockPendingGraphicIds = ref<string[]>([]);
 const mockError = ref<string | null>(null);
+const mockRecoveryFault = ref<BroadcastGraphicsRecoveryFault | null>(null);
+const mockResetLiveState = vi.fn();
+
+/** What the realtime transport reports; the workspace derives disconnection from it. */
+const mockConnectionState = ref<'connected' | 'disconnected' | 'suspended' | 'connecting'>('connected');
+
+mockNuxtImport('tryUseRealtime', () => () => ({
+	get connectionState() {
+		return mockConnectionState.value;
+	},
+	get isConnected() {
+		return mockConnectionState.value === 'connected';
+	},
+}));
+
+/** Answers the reset confirmation; `null` stands for the operator cancelling. */
+const mockConfirmResult = ref<boolean>(true);
+const mockConfirmOpen = vi.fn();
+
+mockNuxtImport('useOverlay', () => () => ({
+	create: () => ({
+		open: (...args: unknown[]) => {
+			mockConfirmOpen(...args);
+			return { result: Promise.resolve(mockConfirmResult.value) };
+		},
+	}),
+}));
 
 mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	loadSession: mockLoadSession,
@@ -43,6 +73,8 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	setOverride: vi.fn(),
 	selectSource: vi.fn(),
 	updateGraphic: vi.fn(),
+	resetLiveState: mockResetLiveState,
+	recoveryFault: () => mockRecoveryFault.value,
 }));
 
 // Live Control resolves its displayed bound values from Event Data; this workspace
@@ -134,6 +166,9 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		mockLiveState.value = createInitialBroadcastGraphicsLiveState();
 		mockPendingGraphicIds.value = [];
 		mockError.value = null;
+		mockRecoveryFault.value = null;
+		mockConnectionState.value = 'connected';
+		mockConfirmResult.value = true;
 		mockReferenceStatus.value = { outcome: 'available', lifecycleState: 'active', kind: 'image' };
 		mockCapabilityResponse.value = 'program-capability';
 		mockApiFetch.mockImplementation(async (path: string) => {
@@ -153,7 +188,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('lists every placed Broadcast Graphic with its Graphic Playout State', async () => {
-		mockLiveState.value = { playout: { slate: { onAir: true } }, inputs: {} };
+		mockLiveState.value = { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} };
 
 		const wrapper = await mountComponent();
 
@@ -170,7 +205,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('takes a Broadcast Graphic off air', async () => {
-		mockLiveState.value = { playout: { slate: { onAir: true } }, inputs: {} };
+		mockLiveState.value = { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} };
 		const wrapper = await mountComponent();
 
 		await entryFor(wrapper, 'slate').get('[data-testid="playout-out"]').trigger('click');
@@ -189,7 +224,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('keeps both actions available so a repeat converges on the operator’s latest intent', async () => {
-		mockLiveState.value = { playout: { slate: { onAir: true } }, inputs: {} };
+		mockLiveState.value = { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} };
 		const wrapper = await mountComponent();
 		const entry = entryFor(wrapper, 'slate');
 
@@ -198,7 +233,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('reports how many Broadcast Graphics are on air', async () => {
-		mockLiveState.value = { playout: { 'slate': { onAir: true }, 'lower-third': { onAir: true } }, inputs: {} };
+		mockLiveState.value = { playout: { 'slate': { onAir: true, effectiveStartedAt: 0, cut: false }, 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} };
 
 		const wrapper = await mountComponent();
 
@@ -319,7 +354,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 
 		it('keeps Out available on an invalidated Broadcast Graphic, so it can leave air', async () => {
 			mockReferenceStatus.value = { outcome: 'missing' };
-			mockLiveState.value = { playout: { slate: { onAir: true } }, inputs: {} };
+			mockLiveState.value = { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} };
 
 			const wrapper = await mountComponent([lowerThird, withMedia]);
 
@@ -385,6 +420,137 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 			expect(statusRequests).toEqual([]);
 			expect(entryFor(wrapper, 'lower-third').get('[data-testid="playout-take"]').attributes('disabled'))
 				.toBeUndefined();
+		});
+	});
+	describe('a disconnected Live Control', () => {
+		it('says so, rather than looking like a Live Control that is up to date', async () => {
+			mockConnectionState.value = 'disconnected';
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.get('[data-testid="playout-disconnected"]').text()).toContain('Disconnected');
+		});
+
+		it('withholds every playout action, so nothing is formed offline to be replayed later', async () => {
+			mockConnectionState.value = 'disconnected';
+
+			const wrapper = await mountComponent();
+
+			const entry = entryFor(wrapper, 'slate');
+			for (const action of ['playout-take', 'playout-cut-take', 'playout-out', 'playout-cut-out'])
+				expect(entry.get(`[data-testid="${action}"]`).attributes('disabled')).toBeDefined();
+		});
+
+		it('queues nothing: a click while disconnected sends no command then and none on reconnection', async () => {
+			mockConnectionState.value = 'disconnected';
+			const wrapper = await mountComponent();
+
+			await entryFor(wrapper, 'slate').get('[data-testid="playout-take"]').trigger('click');
+			expect(mockTake).not.toHaveBeenCalled();
+
+			mockConnectionState.value = 'connected';
+			await flushPromises();
+
+			// A playout intent states what should be on air *now*. Replaying one formed
+			// during an outage would put a graphic on program the operator decided about
+			// minutes ago and has since watched not happen.
+			expect(mockTake).not.toHaveBeenCalled();
+		});
+
+		it('reloads the authoritative snapshot on reconnection, because nothing arrives late', async () => {
+			mockConnectionState.value = 'disconnected';
+			await mountComponent();
+			mockLoadSession.mockClear();
+
+			mockConnectionState.value = 'connected';
+			await flushPromises();
+
+			expect(mockLoadSession).toHaveBeenCalledWith(7, 3);
+		});
+
+		it('holds its last known state rather than blanking the stack', async () => {
+			// Live Control shows the same thing a disconnected output shows: what was last
+			// accepted. A dropped websocket is not news about what is on air.
+			mockLiveState.value = { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} };
+			const wrapper = await mountComponent();
+
+			mockConnectionState.value = 'disconnected';
+			await flushPromises();
+
+			expect(entryFor(wrapper, 'slate').attributes('data-playout-state')).toBe('on-air');
+		});
+
+		it('shows no disconnection while the first connection is still being made', async () => {
+			mockConnectionState.value = 'connecting';
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.find('[data-testid="playout-disconnected"]').exists()).toBe(false);
+		});
+	});
+
+	describe('durable live state that could not be recovered', () => {
+		it('states the fault prominently and says what puts a graphic back on air', async () => {
+			mockRecoveryFault.value = { reason: 'corrupt', detail: 'the playout record for slate is not a record' };
+
+			const wrapper = await mountComponent();
+
+			const fault = wrapper.get('[data-testid="playout-recovery-fault"]');
+			expect(fault.text()).toContain('the playout record for slate is not a record');
+			expect(fault.text()).toMatch(/transparent/i);
+			// The recovery action, named: an operator will not guess that a Take is what
+			// clears this.
+			expect(fault.text()).toMatch(/Take/);
+		});
+
+		it('leaves Take available, because Take is the recovery', async () => {
+			mockRecoveryFault.value = { reason: 'missing', detail: 'no durable live state' };
+
+			const wrapper = await mountComponent();
+
+			expect(entryFor(wrapper, 'slate').get('[data-testid="playout-take"]').attributes('disabled'))
+				.toBeUndefined();
+		});
+
+		it('shows no fault while live state reads normally', async () => {
+			const wrapper = await mountComponent();
+
+			expect(wrapper.find('[data-testid="playout-recovery-fault"]').exists()).toBe(false);
+		});
+	});
+
+	describe('resetting live state', () => {
+		it('resets only after the operator confirms', async () => {
+			const wrapper = await mountComponent();
+
+			await wrapper.get('[data-testid="playout-reset-live-state"]').trigger('click');
+			await flushPromises();
+
+			expect(mockResetLiveState).toHaveBeenCalledWith(7, 3);
+		});
+
+		it('does nothing when the operator cancels', async () => {
+			mockConfirmResult.value = false;
+			const wrapper = await mountComponent();
+
+			await wrapper.get('[data-testid="playout-reset-live-state"]').trigger('click');
+			await flushPromises();
+
+			expect(mockResetLiveState).not.toHaveBeenCalled();
+		});
+
+		it('warns that prepared Graphic Input values go with it', async () => {
+			// The one action that discards staged work, so the confirmation has to say so
+			// — a mode change deliberately preserves it, and an operator will expect the
+			// same here unless told otherwise.
+			const wrapper = await mountComponent();
+
+			await wrapper.get('[data-testid="playout-reset-live-state"]').trigger('click');
+			await flushPromises();
+
+			expect(mockConfirmOpen).toHaveBeenCalledWith(expect.objectContaining({
+				description: expect.stringMatching(/Graphic Input values are discarded/),
+			}));
 		});
 	});
 });

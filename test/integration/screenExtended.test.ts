@@ -323,10 +323,13 @@ describe('screens extended API', () => {
 				rightSlant: 0,
 			},
 		});
+		// Over the whole-Screen cap without exceeding the per-graphic one. The cap's
+		// own value is asserted as a literal because the integration project shares no
+		// value imports with the schema module.
 		const graphics = Array.from({ length: 6 }, (_, graphic) => ({
 			id: `graphic-${graphic}`,
 			name: `Graphic ${graphic}`,
-			items: Array.from({ length: 40 }, (_, index) => item(`item-${graphic}-${index}`)),
+			items: Array.from({ length: 20 }, (_, index) => item(`item-${graphic}-${index}`)),
 		}));
 
 		// Assert which limit fired, and that it reaches the operator. A bare rejection

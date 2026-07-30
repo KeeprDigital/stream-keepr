@@ -11,6 +11,10 @@ import GraphicsCompositorItem from './Item.vue';
  *
  * Advisory guides appear only when the render model carries them, which only an
  * editor preview ever asks for.
+ *
+ * Each Broadcast Graphic already had its own wrapper so its items could not escape
+ * its stacking context; whole-graphic Graphic Animation rides on that same wrapper,
+ * which is what makes a graphic fade compose multiplicatively with its items' own.
  */
 const props = defineProps<{ render: GraphicsCompositionRenderModel }>();
 
@@ -32,6 +36,7 @@ const hasGuideLayer = computed(() =>
 			:key="graphic.id"
 			class="graphics-compositor-canvas__graphic"
 			:data-broadcast-graphic="graphic.id"
+			:style="graphic.style"
 		>
 			<GraphicsCompositorItem
 				v-for="item in graphic.items"

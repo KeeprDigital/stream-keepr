@@ -61,6 +61,9 @@ function context(
 		inputs: [NAME],
 		sources: [PLAYER_SOURCE],
 		bindings: [NAME_BINDING],
+		// A fixed acceptance instant: none of these tests is about animation timing, but
+		// the reducer needs one to stamp the phase it begins.
+		acceptedAt: 1_700_000_000_000,
 		resolveBindings: (selections) => {
 			const name = PLAYERS[selections.player ?? -1];
 			return name === undefined ? {} : { name };
@@ -87,6 +90,32 @@ function take(state: BroadcastGraphicsLiveState, ctx?: BroadcastGraphicsReductio
 
 function setOverride(state: BroadcastGraphicsLiveState, value: GraphicInputValue, ctx?: BroadcastGraphicsReductionContext) {
 	return reduce(state, { type: 'Set Override', payload: { graphicId: GRAPHIC, inputKey: 'name', value } }, ctx);
+}
+
+function setOverrideClaiming(
+	state: BroadcastGraphicsLiveState,
+	value: GraphicInputValue,
+	basedOn: GraphicInputValue,
+	ctx?: BroadcastGraphicsReductionContext,
+) {
+	return reduce(
+		state,
+		{ type: 'Set Override', payload: { graphicId: GRAPHIC, inputKey: 'name', value, basedOn: { value: basedOn } } },
+		ctx,
+	);
+}
+
+function setInputClaiming(
+	state: BroadcastGraphicsLiveState,
+	value: GraphicInputValue,
+	basedOn: GraphicInputValue,
+	ctx?: BroadcastGraphicsReductionContext,
+) {
+	return reduce(
+		state,
+		{ type: 'Set Input', payload: { graphicId: GRAPHIC, inputKey: 'name', value, basedOn: { value: basedOn } } },
+		ctx,
+	);
 }
 
 function updateGraphic(state: BroadcastGraphicsLiveState, basedOnAcceptedRevision: number, ctx?: BroadcastGraphicsReductionContext) {
@@ -329,6 +358,63 @@ describe('re-resolving after an Event Data change', () => {
 		state = reduce(state, { type: 'Resolve Bindings', payload: { graphicId: GRAPHIC } }, renamed());
 
 		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({ name: 'Ava "Riptide" Reed' });
+	});
+});
+
+describe('field Ownership over the values a binding sits above', () => {
+	it('judges a claim against the resolved bound value an operator was shown', () => {
+		const state = selectPlayer(createInitialBroadcastGraphicsLiveState(), 1);
+
+		// The operator read 'Ava Reed' in the field, which is the binding's value and not
+		// the working value underneath it. A claim naming what they saw is accepted.
+		const accepted = setOverrideClaiming(state, 'Ava "Riptide" Reed', 'Ava Reed');
+
+		expect(broadcastGraphicInputsState(accepted, GRAPHIC).overrides)
+			.toEqual({ name: 'Ava "Riptide" Reed' });
+
+		// A claim naming the working value beneath the binding — which is what the old
+		// rule compared against, and which no operator was ever shown — is refused.
+		const failure = rejection(() => setOverrideClaiming(state, 'Ava "Riptide" Reed', 'Unnamed'));
+
+		expect(failure.code).toBe('stale-input-edit');
+	});
+
+	it('refuses a second operator\'s override of a field already overridden', () => {
+		let state = selectPlayer(createInitialBroadcastGraphicsLiveState(), 1);
+		state = setOverrideClaiming(state, 'Ava "Riptide" Reed', 'Ava Reed');
+
+		// A colleague still looking at the resolved value makes the claim they were shown.
+		// It lost the race, and is told so rather than silently winning it.
+		const failure = rejection(() => setOverrideClaiming(state, 'A. Reed', 'Ava Reed', context()));
+
+		expect(failure.code).toBe('stale-input-edit');
+		expect(broadcastGraphicInputsState(state, GRAPHIC).overrides)
+			.toEqual({ name: 'Ava "Riptide" Reed' });
+	});
+
+	it('never refuses a clear, which removes a mask rather than replacing a value', () => {
+		let state = selectPlayer(createInitialBroadcastGraphicsLiveState(), 1);
+		state = setOverrideClaiming(state, 'Ava "Riptide" Reed', 'Ava Reed');
+		// The selection moves under the override, so no claim anyone could make about the
+		// shown value still holds — and clearing must work anyway.
+		state = selectPlayer(state, 2);
+
+		const cleared = setOverride(state, null);
+
+		expect(broadcastGraphicInputsState(cleared, GRAPHIC).overrides).toEqual({});
+	});
+
+	it('judges an unbound input\'s claim against its working value, as it always did', () => {
+		const unbound = context({ bindings: [] });
+		const state = createInitialBroadcastGraphicsLiveState();
+
+		// Unedited, so the shown value is the declared default — the case a second
+		// operator's first edit falls into.
+		const accepted = setInputClaiming(state, 'Ava Reed', 'Unnamed', unbound);
+
+		expect(broadcastGraphicInputsState(accepted, GRAPHIC).working).toEqual({ name: 'Ava Reed' });
+		expect(rejection(() => setInputClaiming(accepted, 'Someone else', 'Unnamed', unbound)).code)
+			.toBe('stale-input-edit');
 	});
 });
 

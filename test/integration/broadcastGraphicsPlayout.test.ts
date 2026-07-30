@@ -51,7 +51,7 @@ describe('broadcast graphics playout command API', () => {
 			type: 'Take',
 			payload: { graphicId: 'a' },
 		});
-		expect(taken.currentState.playout.a).toEqual({ onAir: true });
+		expect(taken.currentState.playout.a).toMatchObject({ onAir: true, cut: false });
 		expect(taken.sequence).toBe(2);
 
 		const outed = await harness.send({
@@ -59,7 +59,7 @@ describe('broadcast graphics playout command API', () => {
 			type: 'Out',
 			payload: { graphicId: 'a' },
 		});
-		expect(outed.currentState.playout.a).toEqual({ onAir: false });
+		expect(outed.currentState.playout.a).toMatchObject({ onAir: false, cut: false });
 		expect(outed.sequence).toBe(3);
 	});
 
@@ -75,7 +75,12 @@ describe('broadcast graphics playout command API', () => {
 
 		expect(reloaded.id).toBe(taken.sessionId);
 		expect(reloaded.sequence).toBe(taken.sequence);
-		expect(reloaded.currentState.playout.a).toEqual({ onAir: true });
+		// Byte-for-byte the same record, effective animation start time included.
+		// Recovery neither clears nor refreshes it: the whole reason it is safe to
+		// persist is that reading it literally already resolves to the Graphic Resting
+		// State by the time anyone reads it, so a reload that "helpfully" reset it is
+		// precisely what would replay an entrance on program.
+		expect(reloaded.currentState.playout.a).toEqual(taken.currentState.playout.a);
 	});
 
 	it('suppresses a duplicate delivery of the same command instead of applying it twice', async () => {
@@ -90,7 +95,9 @@ describe('broadcast graphics playout command API', () => {
 		const replay = await sendBroadcastGraphicsCommand(eventId, harness.screen.id, harness.session().id, command);
 
 		expect(replay.sequence).toBe(first.sequence);
-		expect(replay.currentState.playout.a).toEqual({ onAir: true });
+		// Including the effective animation start time: a retried Take must not restart
+		// an entrance that is already running on program.
+		expect(replay.currentState.playout.a).toEqual(first.currentState.playout.a);
 	});
 
 	it('rejects a command id reused for different content', async () => {
@@ -129,7 +136,7 @@ describe('broadcast graphics playout command API', () => {
 		expect(second.currentState).toEqual(first.currentState);
 	});
 
-	it('reaches the same target state for a Cut action while animation does not exist', async () => {
+	it('reaches the same target state for a Cut action, and records that it was Cut', async () => {
 		const harness = await createPlayoutHarness(eventId, 'playout-cut', ['a']);
 
 		const cutTake = await harness.send({
@@ -137,14 +144,14 @@ describe('broadcast graphics playout command API', () => {
 			type: 'Take',
 			payload: { graphicId: 'a', cut: true },
 		});
-		expect(cutTake.currentState.playout.a).toEqual({ onAir: true });
+		expect(cutTake.currentState.playout.a).toMatchObject({ onAir: true, cut: true });
 
 		const cutOut = await harness.send({
 			commandId: playoutCommandId('cut-out'),
 			type: 'Out',
 			payload: { graphicId: 'a', cut: true },
 		});
-		expect(cutOut.currentState.playout.a).toEqual({ onAir: false });
+		expect(cutOut.currentState.playout.a).toMatchObject({ onAir: false, cut: true });
 	});
 
 	it('keeps concurrent Broadcast Graphics on air independently', async () => {
@@ -153,10 +160,51 @@ describe('broadcast graphics playout command API', () => {
 		await harness.send({ commandId: playoutCommandId('take-front'), type: 'Take', payload: { graphicId: 'front' } });
 		const result = await harness.send({ commandId: playoutCommandId('take-back'), type: 'Take', payload: { graphicId: 'back' } });
 
-		expect(result.currentState.playout).toEqual({
+		expect(result.currentState.playout).toMatchObject({
 			front: { onAir: true },
 			back: { onAir: true },
 		});
+	});
+
+	it('records one authoritative effective animation start time, and never a phase', async () => {
+		// The command API is where the durable shape becomes observable, so this is
+		// where the no-replay invariant is worth stating: what a Take writes down is
+		// the operator's intent, the instant it was accepted, and whether it was Cut.
+		// Nothing writes down a lifecycle phase, so a restart has no phase to resume.
+		const harness = await createPlayoutHarness(eventId, 'playout-start-time', ['a']);
+		const before = Date.now();
+
+		const taken = await harness.send({
+			commandId: playoutCommandId('start-time-take'),
+			type: 'Take',
+			payload: { graphicId: 'a' },
+		});
+		const record = taken.currentState.playout.a!;
+
+		expect(Object.keys(record).toSorted()).toEqual(['cut', 'effectiveStartedAt', 'onAir']);
+		// The server's own clock, not a client's: every output projects animation from
+		// this instant, so it comes from the one place that orders commands.
+		expect(record.effectiveStartedAt).toBeGreaterThanOrEqual(before);
+		expect(record.effectiveStartedAt).toBeLessThanOrEqual(Date.now());
+	});
+
+	it('starts a new effective animation start time when the intent actually changes', async () => {
+		const harness = await createPlayoutHarness(eventId, 'playout-restart', ['a']);
+
+		const taken = await harness.send({
+			commandId: playoutCommandId('restart-take'),
+			type: 'Take',
+			payload: { graphicId: 'a' },
+		});
+		const outed = await harness.send({
+			commandId: playoutCommandId('restart-out'),
+			type: 'Out',
+			payload: { graphicId: 'a' },
+		});
+
+		expect(outed.currentState.playout.a!.effectiveStartedAt)
+			.toBeGreaterThanOrEqual(taken.currentState.playout.a!.effectiveStartedAt);
+		expect(outed.currentState.playout.a!.onAir).toBe(false);
 	});
 
 	it('rejects a playout action for a Broadcast Graphic the Screen does not place', async () => {

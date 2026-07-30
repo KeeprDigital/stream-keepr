@@ -1,3 +1,4 @@
+export * from './animation';
 export * from './authoring';
 export * from './bindingCatalog';
 export * from './bindingResolution';

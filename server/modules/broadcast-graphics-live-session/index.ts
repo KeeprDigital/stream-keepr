@@ -15,6 +15,7 @@ import {
 import { broadcastGraphicsStateService } from '~~/server/services/broadcastGraphicsState';
 import { graphicBindingDataService } from '~~/server/services/graphicBindingData';
 import { screenService } from '~~/server/services/screen';
+import { publishMessage } from '~~/server/utils/ably';
 import {
 	broadcastGraphicSourceSelections,
 } from '~~/shared/modules/broadcast-graphics-live-session';
@@ -182,6 +183,78 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		return mapBroadcastGraphicsLiveSessionToResponse(session);
 	};
 
+	/**
+	 * Announce that a Screen's playout epoch has been replaced.
+	 *
+	 * Its own notification rather than a variant of `commandApplied`, because it is
+	 * not a command and nothing about it can be applied: every client holding state
+	 * for this Screen is holding state from a session that has ended, and the only
+	 * correct response is to reload.
+	 *
+	 * The case that needs it is an explicit reset, which changes nothing about the
+	 * Screen and so publishes no other message — without this, every peer would sit on
+	 * the ended epoch still rendering the graphics the reset was meant to clear. A mode
+	 * change is already covered by `screen:updated`, and publishes this as well only so
+	 * the stale epoch is dropped deterministically.
+	 */
+	const publishEpochEnded = async (
+		eventId: number,
+		screenId: number,
+		sessionId: number | null,
+		originConnectionId?: string,
+	): Promise<void> => {
+		await publishMessage(
+			eventId,
+			'broadcastGraphicsLiveSession:epochEnded',
+			{ screenId, sessionId },
+			originConnectionId,
+		);
+	};
+
+	/**
+	 * End the Screen's epoch, announcing it when the caller wants clients to notice.
+	 *
+	 * A mode change and a reset both leave the Screen in place with live clients
+	 * watching it, so both announce. Deleting the Screen does not: those clients are
+	 * about to be told the Screen itself is gone, and pointing them at a snapshot
+	 * route that will now refuse them would surface a spurious failure on the way
+	 * out — which is why this is a caller's choice rather than something ending an
+	 * epoch always does.
+	 */
+	const endSessionsForScreen = async (
+		screenId: number,
+		eventId: number,
+		options: { notify?: boolean; originConnectionId?: string } = {},
+	): Promise<void> => {
+		const ended = await state.endSessionsForScreen(screenId, eventId);
+		if (options.notify)
+			await publishEpochEnded(eventId, screenId, ended?.id ?? null, options.originConnectionId);
+	};
+
+	/**
+	 * Reset the Screen's live state: every Broadcast Graphic off, a new epoch, and
+	 * nothing carried forward.
+	 *
+	 * The operator's escape hatch, and the recovery action for a Live Session whose
+	 * durable state cannot be read at all. It is deliberately the same epoch
+	 * advance as a mode change, so the guarantee that a command from an ended epoch
+	 * can never affect a later show covers it for free.
+	 */
+	const resetLiveState = async ({
+		eventId,
+		screenId,
+		originConnectionId,
+	}: {
+		eventId: number;
+		screenId: number;
+		originConnectionId?: string;
+	}): Promise<BroadcastGraphicsLiveSessionResponse> => {
+		await requireBroadcastGraphicsScreen(eventId, screenId);
+		const { ended, opened } = await state.resetSessionForScreen(screenId, eventId);
+		await publishEpochEnded(eventId, screenId, ended?.id ?? null, originConnectionId);
+		return mapBroadcastGraphicsLiveSessionToResponse(opened);
+	};
+
 	const applyCommand = async ({
 		eventId,
 		screenId,
@@ -223,6 +296,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	return {
 		loadSession,
 		applyCommand,
-		endSessionsForScreen: state.endSessionsForScreen,
+		resetLiveState,
+		endSessionsForScreen,
 	};
 }

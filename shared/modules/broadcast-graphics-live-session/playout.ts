@@ -1,6 +1,7 @@
 import type { GraphicSourceSelectionsState } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
+	GraphicAnimationPhase,
 	GraphicInputBinding,
 	GraphicInputDeclaration,
 	GraphicInputValue,
@@ -12,6 +13,7 @@ import type {
 	NormalizedBroadcastGraphicInputsState,
 } from './inputs';
 import {
+	findGraphicInputDeclaration,
 	graphicInputAvailability,
 	isOperatorSelectedGraphicSource,
 } from '~~/shared/modules/graphics';
@@ -22,6 +24,7 @@ import {
 	createInitialBroadcastGraphicInputsState,
 	effectiveGraphicInputValue,
 	isDeclaredGraphicInput,
+	sameGraphicInputValue,
 	unavailableRequiredGraphicInputs,
 } from './inputs';
 import { BroadcastGraphicsCommandRejection } from './rejection';
@@ -45,14 +48,36 @@ import { BroadcastGraphicsCommandRejection } from './rejection';
  *
  * ## Why recovery cannot replay animation
  *
- * The state below stores the accepted *intent* and nothing else — no lifecycle
- * phase, no phase start time. A Graphic Playout State is derived from that
- * intent on every read, so a reload, disconnect, or server restart can only
- * ever resolve a target-on-air Broadcast Graphic to settled on air at its
- * Graphic Resting State. There is no stored phase for recovery to resume.
- * Graphic Animation adds the entering, updating, and exiting states by deriving
- * them from an authoritative effective start time, which is likewise computed
- * rather than persisted mid-flight.
+ * This state stores one timestamp per Broadcast Graphic: the authoritative
+ * effective start time of the lifecycle phase its latest accepted intent began.
+ * That is the field the no-replay invariant used to hold *by accident* — there
+ * was nothing to resume — and it is now held on purpose, by three properties
+ * that are each asserted as a test rather than promised in prose:
+ *
+ * 1. **No phase is persisted.** A Graphic Playout State is derived on every read
+ *    from the stored intent, the stored start time, and the caller's `now`.
+ *    Nothing writes down "entering", so nothing can be resumed as "entering".
+ *
+ * 2. **Projection saturates rather than wrapping.** Phase progress is monotone in
+ *    elapsed time and clamps at completion. A restart, a reload, or a
+ *    late-loading output can only ever make elapsed time *larger*, so it can only
+ *    resolve a phase further forward — never back to its beginning. A start time
+ *    from before a crash is therefore self-healing: by the time anyone reads it,
+ *    it is already past its phase duration and settles at the Graphic Resting
+ *    State. Recovery does not need to detect staleness or clear the field,
+ *    because trusting the field literally is what produces the correct answer.
+ *
+ * 3. **An idempotent repeat does not refresh the start time.** A repeat of the
+ *    intent already accepted leaves the record untouched, so a retried command
+ *    cannot restart an entrance on program. This is where "duplicate delivery of
+ *    the same action has no additional effect" stops being only about the target
+ *    state and starts being about the animation too.
+ *
+ * The alternative shapes were both rejected for the same reason: persisting a
+ * phase* makes recovery resume it, and persisting a start time that recovery
+ * resets* makes recovery replay from it. Persisting one authoritative instant and
+ * deriving everything from it is the only shape where the correct behaviour is the
+ * behaviour you get by doing nothing special.
  *
  * ## Why Event Data reaches reduction as a function
  *
@@ -70,6 +95,19 @@ import { BroadcastGraphicsCommandRejection } from './rejection';
 export interface BroadcastGraphicPlayout {
 	/** Whether the operator's latest accepted intent puts this graphic on air. */
 	onAir: boolean;
+	/**
+	 * The one authoritative effective start time of the lifecycle phase this intent
+	 * began, as epoch milliseconds. Every output and Live Control projects the same
+	 * phase from it; nobody acknowledges it, and nothing resets it on recovery.
+	 */
+	effectiveStartedAt: number;
+	/**
+	 * Whether this intent was reached with the Cut execution modifier, and so
+	 * without running its corresponding Graphic Animation phase. It is a fact about
+	 * what the operator asked for rather than about the animation, which is why it
+	 * belongs beside the intent it modifies.
+	 */
+	cut: boolean;
 }
 
 /**
@@ -144,6 +182,23 @@ export interface BroadcastGraphicsSetInputPayload {
 	graphicId: string;
 	inputKey: string;
 	value: GraphicInputValue;
+	/**
+	 * The value this edit believes it replaces: its Field Ownership claim.
+	 *
+	 * Field Ownership is the set of fields one action may write, derived from the
+	 * change it predicts — and a Set Input predicts exactly one Graphic Input going
+	 * from one value to another. Stating the value it started from is what makes
+	 * two operators on one Broadcast Graphic safe without locking either out: an
+	 * edit whose claim still holds is applied, and one whose claim has been
+	 * overtaken is refused so the operator can see what landed instead rather than
+	 * silently erasing a colleague's correction seconds before it goes on air.
+	 *
+	 * Wrapped in an object rather than left as a bare optional value because `null`
+	 * is itself a legitimate Graphic Input value: the wrapper distinguishes
+	 * "I claim the value was empty" from "I claim nothing". An edit that claims
+	 * nothing is not making a Field Ownership claim and is applied unconditionally.
+	 */
+	basedOn?: { value: GraphicInputValue };
 }
 
 /**
@@ -157,6 +212,12 @@ export interface BroadcastGraphicsSetOverridePayload {
 	graphicId: string;
 	inputKey: string;
 	value: GraphicInputValue;
+	/**
+	 * The value this override believes it replaces: its Field Ownership claim, in
+	 * exactly the shape a working edit's is. An override is field-scoped for the same
+	 * reason and is refused on the same terms.
+	 */
+	basedOn?: { value: GraphicInputValue };
 }
 
 /**
@@ -222,10 +283,51 @@ export interface BroadcastGraphicsReductionContext {
 	 * correctly means.
 	 */
 	resolveBindings?: (selections: GraphicSourceSelectionsState) => Record<string, GraphicInputValue>;
+	/**
+	 * The authoritative instant this command was accepted at.
+	 *
+	 * Supplied by the caller rather than read from a clock here, because this
+	 * reducer runs on the server and in every client and only one of them is
+	 * authoritative. The server passes its own clock when it accepts the command; a
+	 * client replaying the same command onto a snapshot passes what it was given.
+	 */
+	acceptedAt: number;
 }
 
 export function createInitialBroadcastGraphicsLiveState(): BroadcastGraphicsLiveState {
 	return { playout: {}, inputs: {}, sources: {} };
+}
+
+/**
+ * The playout record one accepted intent produces, or the current one unchanged.
+ *
+ * Whether to write is asymmetric, and deliberately so. A repeat of an intent
+ * already reached must not refresh the effective start time, or a duplicate
+ * delivery would restart a phase that is already running on program. But Cut has
+ * to be able to settle a phase that *is* running, even though it reaches the same
+ * on-air target — so Cut arriving over a non-Cut intent is a real change.
+ *
+ * The six cases, which the tests enumerate:
+ *
+ * - repeat plain Take while on air — no-op, no phase restart
+ * - Cut Take while entering — writes, settling the entrance immediately
+ * - plain Take after Cut Take — no-op; the graphic is already settled on air, and
+ *   writing would send a settled graphic back to `entering` and replay its
+ *   entrance on program
+ * - plain Out after Cut Out — no-op; writing would make an already-off graphic
+ *   `exiting`, putting it back on program to play an exit it already skipped
+ * - Cut Out while exiting — writes, settling the exit immediately
+ * - Cut Take after Cut Take — no-op, because the Cut is already reflected
+ */
+function nextPlayout(
+	current: BroadcastGraphicPlayout | undefined,
+	intent: { onAir: boolean; cut: boolean },
+	acceptedAt: number,
+): BroadcastGraphicPlayout {
+	if (current && current.onAir === intent.onAir && !(intent.cut && !current.cut))
+		return current;
+
+	return { onAir: intent.onAir, effectiveStartedAt: acceptedAt, cut: intent.cut };
 }
 
 function withInputs(
@@ -292,6 +394,47 @@ function acceptLivePolicyValues(
 }
 
 /**
+ * Refuse an edit whose Field Ownership claim no longer describes what its operator
+ * was shown.
+ *
+ * The claim is compared against the *effective* value — override, then a resolving
+ * binding, then the working value resolved against the declared default — because
+ * that is the value Live Control puts in the field. An unedited unbound input
+ * therefore reads as its declared default rather than as absence, which is the case a
+ * second operator's first edit falls into: without it, that edit would carry no
+ * comparable claim and silently overwrite the first operator's.
+ *
+ * A command with no claim is accepted unconditionally, which is what a caller with no
+ * displayed value to speak for — a server-side replay, a test — correctly means.
+ */
+function requireClaimMatchesShownValue(
+	state: BroadcastGraphicsLiveState,
+	graphicId: string,
+	inputKey: string,
+	basedOn: { value: GraphicInputValue } | undefined,
+	context: BroadcastGraphicsReductionContext,
+): void {
+	if (!basedOn)
+		return;
+
+	const declaration = findGraphicInputDeclaration(context.inputs, inputKey)!;
+	const shown = effectiveGraphicInputValue(
+		declaration,
+		broadcastGraphicInputsState(state, graphicId),
+		context.bindings,
+		boundValuesFor(state, graphicId, context),
+	);
+
+	if (!sameGraphicInputValue(basedOn.value, shown.value)) {
+		throw new BroadcastGraphicsCommandRejection(
+			'stale-input-edit',
+			`Another operator has already changed ${declaration.label} on this Broadcast Graphic`,
+			[inputKey],
+		);
+	}
+}
+
+/**
  * Take: state that this Broadcast Graphic is the operator's latest desired on-air
  * intent, and accept the values it should enter with.
  *
@@ -306,7 +449,14 @@ function reduceTake(
 	payload: BroadcastGraphicsPlayoutPayload,
 	context: BroadcastGraphicsReductionContext,
 ): BroadcastGraphicsLiveState {
-	const playout = { ...state.playout, [payload.graphicId]: { onAir: true } };
+	const playout = {
+		...state.playout,
+		[payload.graphicId]: nextPlayout(
+			state.playout[payload.graphicId],
+			{ onAir: true, cut: payload.cut === true },
+			context.acceptedAt,
+		),
+	};
 	if (state.playout[payload.graphicId]?.onAir)
 		return { ...state, playout };
 
@@ -397,6 +547,16 @@ function reduceSetInput(
 	}
 
 	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
+	// The Field Ownership claim, checked against the one field this edit owns.
+	//
+	// Compared against what the operator was *shown*, which is the effective value —
+	// an override first, then a resolving binding, then the working value resolved
+	// against the declared default. That last case is the one the working value alone
+	// used to cover, and it is still what an unbound Graphic Input shows, which is the
+	// only kind Live Control writes here. Comparing against `working` would now make
+	// the claim describe something the operator never saw for a bound input.
+	requireClaimMatchesShownValue(state, payload.graphicId, payload.inputKey, payload.basedOn, context);
+
 	const edited: NormalizedBroadcastGraphicInputsState = {
 		...inputs,
 		working: { ...inputs.working, [payload.inputKey]: payload.value },
@@ -435,6 +595,13 @@ function reduceSetOverride(
 			[payload.inputKey],
 		);
 	}
+
+	// An override is field-scoped in exactly the way a working edit is, so it carries
+	// the same Field Ownership claim and is refused on the same terms. Without it, the
+	// one command an operator uses to correct a bound value would be the single hole in
+	// that discipline: two operators masking the same input would silently clobber each
+	// other while every other edit path refused to.
+	requireClaimMatchesShownValue(state, payload.graphicId, payload.inputKey, payload.basedOn, context);
 
 	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
 	const overrides = { ...inputs.overrides };
@@ -577,7 +744,14 @@ export function applyBroadcastGraphicsCommand(
 		case 'Out':
 			return {
 				...normalized,
-				playout: { ...normalized.playout, [command.payload.graphicId]: { onAir: false } },
+				playout: {
+					...normalized.playout,
+					[command.payload.graphicId]: nextPlayout(
+						normalized.playout[command.payload.graphicId],
+						{ onAir: false, cut: command.payload.cut === true },
+						context.acceptedAt,
+					),
+				},
 			};
 		case 'Update Graphic':
 			return reduceUpdateGraphic(normalized, command.payload, context);
@@ -596,17 +770,85 @@ export function applyBroadcastGraphicsCommand(
 export { createInitialBroadcastGraphicInputsState };
 
 /**
+ * How long each finite lifecycle phase of one Broadcast Graphic lasts, and the
+ * instant to project it at.
+ *
+ * Durations are supplied rather than looked up because they come from Screen
+ * configuration, which this module deliberately does not read: the same reducer
+ * has to work against a snapshot with no composition in hand.
+ */
+export interface BroadcastGraphicPhaseTiming {
+	now: number;
+	/** The finite duration of each phase, in milliseconds. Absent phases last zero. */
+	durations?: Partial<Record<GraphicAnimationPhase, number>>;
+}
+
+function phaseDuration(timing: BroadcastGraphicPhaseTiming, phase: GraphicAnimationPhase): number {
+	return Math.max(0, timing.durations?.[phase] ?? 0);
+}
+
+/**
  * The operator-visible lifecycle status of one placed Broadcast Graphic.
  *
- * Only off and on-air are reachable until Graphic Animation exists; waiting,
- * entering, updating, and exiting arrive with the animation and Graphic Channel
- * vocabulary that produces them.
+ * Without timing this reports only the settled states — off and on-air — which is
+ * what a caller that does not care about animation wants and what recovery
+ * resolves to by definition. With timing it additionally reports entering and
+ * exiting, derived from the authoritative effective start time and clamped by the
+ * phase's own duration, so a graphic whose phase has elapsed is settled rather
+ * than mid-flight however long ago that phase started.
+ *
+ * Waiting and updating arrive with the Graphic Channel handoff and the update
+ * phase that produce them.
  */
 export function broadcastGraphicPlayoutState(
 	state: BroadcastGraphicsLiveState,
 	graphicId: string,
+	timing?: BroadcastGraphicPhaseTiming,
 ): GraphicPlayoutState {
-	return state.playout[graphicId]?.onAir ? 'on-air' : 'off';
+	const playout = state.playout[graphicId];
+	if (!playout)
+		return 'off';
+
+	const settled = playout.onAir ? 'on-air' : 'off';
+	// Cut reaches its target immediately, so there is no phase to be inside of.
+	if (!timing || playout.cut)
+		return settled;
+
+	const phase = playout.onAir ? 'enter' : 'exit';
+	const duration = phaseDuration(timing, phase);
+	if (duration <= 0)
+		return settled;
+
+	const elapsed = timing.now - playout.effectiveStartedAt;
+	if (elapsed >= duration)
+		return settled;
+
+	return playout.onAir ? 'entering' : 'exiting';
+}
+
+/**
+ * The lifecycle phase and elapsed time one Broadcast Graphic's Screen Output
+ * should render, or null while it is settled or off.
+ *
+ * This is the seam a Screen Output and the Program monitor project animation
+ * through: one phase and one elapsed time, both derived, so a late-loading or
+ * reconnected output catches up to the current authoritative phase instead of
+ * replaying it from the beginning.
+ */
+export function broadcastGraphicPhaseProjection(
+	state: BroadcastGraphicsLiveState,
+	graphicId: string,
+	timing: BroadcastGraphicPhaseTiming,
+): { phase: GraphicAnimationPhase; elapsed: number } | null {
+	const status = broadcastGraphicPlayoutState(state, graphicId, timing);
+	if (status !== 'entering' && status !== 'exiting')
+		return null;
+
+	const playout = state.playout[graphicId]!;
+	return {
+		phase: status === 'entering' ? 'enter' : 'exit',
+		elapsed: Math.max(0, timing.now - playout.effectiveStartedAt),
+	};
 }
 
 /**
@@ -616,12 +858,20 @@ export function broadcastGraphicPlayoutState(
  * Derived from the authored stack rather than from the live state's own key
  * order, so Take timing cannot reorder the composition and live state left
  * behind by a since-deleted Broadcast Graphic cannot render.
+ *
+ * An exiting Broadcast Graphic is still on program, so it composes: a graphic
+ * leaves the frame when its exit phase completes, not when Out is accepted.
  */
 export function onAirBroadcastGraphicIds(
 	state: BroadcastGraphicsLiveState,
 	graphics: readonly Pick<BroadcastGraphicConfig, 'id'>[],
+	timing?: BroadcastGraphicPhaseTiming,
 ): string[] {
 	return graphics
-		.filter(graphic => broadcastGraphicPlayoutState(state, graphic.id) === 'on-air')
+		.filter((graphic) => {
+			const status = broadcastGraphicPlayoutState(state, graphic.id, timing);
+			// A waiting graphic is absent from every program output; off is off.
+			return status !== 'off' && status !== 'waiting';
+		})
 		.map(graphic => graphic.id);
 }

@@ -176,8 +176,17 @@ export function screenWriteModule(dependencies: {
 		// A Broadcast Graphics Live Session is the Screen's playout epoch, so
 		// leaving the mode ends it. Ending after the mode change commits means a
 		// failed update can never orphan a running show's live state.
+		//
+		// Announced, though not out of necessity: `screen:updated` already reaches
+		// every client including Screen Outputs, and an output renders by the Screen's
+		// current mode, so it stops composing graphics without being told about the
+		// epoch. The notification makes each peer drop the ended epoch's cached state
+		// deterministically rather than as a side effect of a component remount.
 		if (existingScreen.currentMode === 'broadcast-graphics' && updatedScreen.currentMode !== 'broadcast-graphics') {
-			await broadcastGraphicsLiveSessionModule().endSessionsForScreen(screenId, eventId);
+			await broadcastGraphicsLiveSessionModule().endSessionsForScreen(screenId, eventId, {
+				notify: true,
+				originConnectionId,
+			});
 		}
 
 		return await publication.screenUpdated({

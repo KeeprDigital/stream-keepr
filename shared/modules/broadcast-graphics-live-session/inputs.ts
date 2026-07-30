@@ -100,8 +100,8 @@ export type GraphicInputValueSource = typeof GRAPHIC_INPUT_VALUE_SOURCE_VALUES[n
 /**
  * What Live Control shows about one Graphic Input's value.
  *
- * The settled vocabulary is bound, overridden, pending, unavailable, and stale, and
- * every one of them is now reachable:
+ * The settled vocabulary is bound, overridden, pending, unavailable, superseded, and
+ * stale, and every one of them is now reachable:
  *
  * - `manual` — no binding, showing what an operator typed or the declared default;
  * - `bound` — a Graphic Input Binding is resolving it and program agrees;
@@ -110,10 +110,12 @@ export type GraphicInputValueSource = typeof GRAPHIC_INPUT_VALUE_SOURCE_VALUES[n
  * - `pending` — the value that would go on air differs from the one that is;
  * - `unavailable` — nothing that could go on air: an unresolved binding, or a value
  *   violating its declared type or constraints;
+ * - `superseded` — this operator's last edit lost a field-scoped race and the field
+ *   has been refreshed to the value that won;
  * - `stale` — on air, and holding a last accepted value that its Graphic Input
- *   Binding no longer provides. Distinct from `unavailable` because program is *not*
- *   empty: the rule is that the last accepted rendering stays until the operator
- *   updates or overrides it, and an operator needs to know they are looking at it.
+ *   Binding no longer provides. Program is not empty: the last accepted rendering
+ *   stays until the operator updates or overrides it, and they need to know they are
+ *   looking at it.
  *
  * `stale` is reported for any bound input in that position rather than only a
  * required one. Requiredness decides what blocks a Take; it does not change whether
@@ -121,6 +123,25 @@ export type GraphicInputValueSource = typeof GRAPHIC_INPUT_VALUE_SOURCE_VALUES[n
  * an operator's own unusable edit, or an unusable override, is not a source that
  * moved on — it is a value to fix, and calling it stale would point at the wrong
  * cause.
+ *
+ * ## Why `superseded` and `stale` are separate slots
+ *
+ * The spec says "stale" twice and means two different things by it. As a value-trace
+ * status it means an on-air value whose source no longer provides it — program has
+ * outlived its binding — and that meaning keeps the word. `superseded` is the other
+ * one: this operator's last edit lost a field-scoped race, so the field has been
+ * refreshed to the value that won.
+ *
+ * They need separate slots because **one input can be in both states at the same
+ * instant** — on air, its binding dropped, and its last edit refused — and the
+ * remedies are opposite: one says "your source moved on", the other says "look
+ * again, someone beat you". Collapsing them would make the more urgent of the two
+ * unsayable. `superseded` also reads against the Flight and Guarded Sequence
+ * vocabulary, where superseding is already what a newer piece of work does to an
+ * older one.
+ *
+ * The rejection code `stale-input-edit` deliberately keeps its own name: it is in a
+ * different namespace and describes the *command's* fate rather than the value's.
  */
 export const GRAPHIC_INPUT_STATUS_VALUES = [
 	'manual',
@@ -128,6 +149,7 @@ export const GRAPHIC_INPUT_STATUS_VALUES = [
 	'overridden',
 	'pending',
 	'unavailable',
+	'superseded',
 	'stale',
 ] as const;
 
@@ -343,8 +365,26 @@ export function graphicInputTraces(
 	},
 	/** The latest values this graphic's Graphic Input Bindings resolve. */
 	boundValues: Readonly<Record<string, GraphicInputValue>> = {},
-	/** Whether this Broadcast Graphic is on a program output, which is what makes a held value stale. */
-	options: { onAir?: boolean } = {},
+	/**
+	 * What Live Control knows that the authoritative snapshot does not.
+	 *
+	 * Both entries are per-session rather than per-aggregate, which is why they arrive
+	 * here rather than living in the Broadcast Graphics Live Session.
+	 */
+	options: {
+		/** Whether this Broadcast Graphic is on a program output, which is what makes a held value stale. */
+		onAir?: boolean;
+		/**
+		 * The Graphic Inputs whose last edit from this session lost a field-scoped
+		 * conflict.
+		 *
+		 * Client-side knowledge, not live state: whether *this* operator's edit was the
+		 * one refused is a fact about this session, and a second operator looking at the
+		 * same authoritative snapshot must not see their colleague's field — the one that
+		 * won — marked as superseded.
+		 */
+		supersededInputKeys?: readonly string[];
+	} = {},
 ): GraphicInputTrace[] {
 	const declarations = graphic.inputs ?? [];
 	const stored = broadcastGraphicInputsState(state, graphicId);
@@ -401,17 +441,25 @@ export function graphicInputTraces(
 			effective: effectiveTrace,
 			accepted: acceptedTrace,
 			pending,
-			status: stale
-				? 'stale'
-				: !effectiveTrace.availability.available
-						? 'unavailable'
-						: effective.source === 'override' && binding
-							? 'overridden'
-							: pending
-								? 'pending'
-								: binding
-									? 'bound'
-									: 'manual',
+			// Superseded outranks every other status, including stale: the field has just
+			// been refreshed out from under the operator, and telling them the value is
+			// merely `bound` or `manual` would read as their own edit having been
+			// accepted. An input can be superseded *and* stale at once — the remedies
+			// differ, but "look again, someone beat you" is the one that has to be said
+			// first, because it is the one the operator can act on immediately.
+			status: (options.supersededInputKeys ?? []).includes(key)
+				? 'superseded'
+				: stale
+					? 'stale'
+					: !effectiveTrace.availability.available
+							? 'unavailable'
+							: effective.source === 'override' && binding
+								? 'overridden'
+								: pending
+									? 'pending'
+									: binding
+										? 'bound'
+										: 'manual',
 			blocksTake: declaration.required
 				&& !graphicInputAvailability(declaration, acceptance[key]).available,
 		};

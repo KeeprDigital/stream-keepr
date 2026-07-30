@@ -189,7 +189,7 @@ describe('broadcast graphics Event Data binding API', () => {
 		expect(res._data?.message).toMatch(/must have a value/i);
 
 		const stillOff = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
-		expect(stillOff.currentState.playout[GRAPHIC]).toEqual({ onAir: false });
+		expect(stillOff.currentState.playout[GRAPHIC]).toMatchObject({ onAir: false });
 	});
 
 	it('refuses an override on a Graphic Input with no binding to mask', async () => {
