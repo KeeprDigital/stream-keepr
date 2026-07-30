@@ -1,0 +1,34 @@
+import { graphicsAssetLibraryForBindings } from '~~/server/modules/graphics-asset-library/runtime';
+
+interface ScheduledPayload {
+	controller?: { cron?: string };
+	env?: Parameters<typeof graphicsAssetLibraryForBindings>[0];
+}
+
+/**
+ * Runs the Graphics Asset Library retention path on the Worker's scheduled
+ * trigger. NuxtHub exposes no public scheduled-trigger interface at
+ * `@nuxthub/core` 0.10.8, so this uses the Cloudflare scheduled capability
+ * directly under the approved exception in #28. Every deadline it enforces is
+ * evaluated inside the library, so a missed or delayed run only ever retains
+ * state for longer.
+ */
+export default defineNitroPlugin((nitroApp) => {
+	nitroApp.hooks.hook('cloudflare:scheduled' as 'close', async (payload: unknown) => {
+		const { controller, env } = (payload ?? {}) as ScheduledPayload;
+		try {
+			// Everything a successful sweep decided is already in the durable
+			// Evidence ledger, so only failures need a log line.
+			await graphicsAssetLibraryForBindings(env).runGraphicsRetention();
+		}
+		catch (error) {
+			// A failed sweep must never take down the Worker: the next scheduled
+			// run retries from durable catalogue state.
+			console.error(JSON.stringify({
+				message: 'graphics_retention_sweep_failed',
+				cron: controller?.cron ?? null,
+				errorName: error instanceof Error ? error.name : null,
+			}));
+		}
+	});
+});

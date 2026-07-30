@@ -1,0 +1,1188 @@
+import type {
+	GraphicAssetId,
+	GraphicAssetRevisionId,
+	GraphicsIngestionOperation,
+} from '~~/shared/types/graphicsAsset';
+import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createGraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
+import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
+import {
+	createInMemoryCanonicalGraphicsObjectStore,
+	createInMemoryStagingGraphicsObjectStore,
+} from '~~/server/modules/graphics-asset-library/in-memory-object-store';
+import {
+	createBoundedByteStream,
+	graphicsObjectIdentity,
+} from '~~/server/modules/graphics-asset-library/object-store';
+import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+
+const pixelPng = Uint8Array.from(Buffer.from(
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+	'base64',
+));
+const emptyTextChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85);
+const replacementPng = Uint8Array.of(
+	...pixelPng.slice(0, -12),
+	...emptyTextChunk,
+	...pixelPng.slice(-12),
+);
+
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+
+function digestOf(bytes: Uint8Array) {
+	return createHash('sha256').update(bytes).digest('hex');
+}
+
+function decodeEvidence(bytes: Uint8Array) {
+	return {
+		outcome: 'decoded' as const,
+		sourceDigest: digestOf(bytes),
+		width: 1,
+		height: 1,
+	};
+}
+
+let harness: SqliteD1Harness;
+
+function createRetentionLibrary() {
+	let currentTime = new Date('2026-07-28T00:00:00.000Z');
+	let nextIdentity = 0;
+	const staging = createInMemoryStagingGraphicsObjectStore();
+	const canonical = createInMemoryCanonicalGraphicsObjectStore();
+	const library = createGraphicsAssetLibrary({
+		catalogue: createD1GraphicsAssetCatalogue(harness.database),
+		staging,
+		canonical,
+		now: () => currentTime,
+		generateIdentity: () => `retention-${++nextIdentity}`,
+	});
+	return {
+		library,
+		staging,
+		canonical,
+		now: () => currentTime,
+		advance(milliseconds: number) {
+			currentTime = new Date(currentTime.getTime() + milliseconds);
+		},
+		advanceTo(instant: string) {
+			currentTime = new Date(instant);
+		},
+	};
+}
+
+type RetentionLibrary = ReturnType<typeof createRetentionLibrary>;
+
+async function ingestAsset(
+	context: RetentionLibrary,
+	options: { idempotencyKey: string; name: string; bytes?: Uint8Array },
+): Promise<GraphicsIngestionOperation> {
+	const bytes = options.bytes ?? pixelPng;
+	const operation = await context.library.initiateGraphicsIngestion({
+		idempotencyKey: options.idempotencyKey,
+		initiatedBy: 'retention-author',
+		name: options.name,
+		sourceFileName: 'logo.png',
+		declaredMime: 'image/png',
+		browserDecodeEvidence: decodeEvidence(bytes),
+		declaredByteLength: bytes.byteLength,
+		duplicateContentPolicy: 'create-separate',
+	});
+	context.advance(1000);
+	return await context.library.uploadGraphicAsset({
+		operationId: operation.id,
+		initiatedBy: operation.initiatedBy,
+		declaredMime: 'image/png',
+		bytes: createBoundedByteStream(bytes, {
+			byteLength: bytes.byteLength,
+			maximumByteLength: bytes.byteLength,
+		}),
+	});
+}
+
+async function replaceAsset(
+	context: RetentionLibrary,
+	input: { assetId: GraphicAssetId; idempotencyKey: string; bytes: Uint8Array },
+): Promise<GraphicsIngestionOperation> {
+	const operation = await context.library.initiateGraphicAssetReplacement({
+		assetId: input.assetId,
+		idempotencyKey: input.idempotencyKey,
+		initiatedBy: 'retention-author',
+		sourceFileName: 'logo.png',
+		declaredMime: 'image/png',
+		browserDecodeEvidence: decodeEvidence(input.bytes),
+		declaredByteLength: input.bytes.byteLength,
+	});
+	context.advance(1000);
+	return await context.library.uploadGraphicAsset({
+		operationId: operation.id,
+		initiatedBy: operation.initiatedBy,
+		declaredMime: 'image/png',
+		bytes: createBoundedByteStream(input.bytes, {
+			byteLength: input.bytes.byteLength,
+			maximumByteLength: input.bytes.byteLength,
+		}),
+	});
+}
+
+/**
+ * Persisted references are owned by graphics artifacts, not by the library, so
+ * tests arrange them exactly as the Screen reference writer does and then
+ * observe the consequences through the library interface.
+ */
+async function addReference(input: {
+	referenceId: string;
+	assetId: GraphicAssetId;
+	revisionId: GraphicAssetRevisionId;
+	ownerSlot?: string;
+}) {
+	await harness.client.execute({
+		sql: `
+			INSERT INTO graphic_asset_references (
+				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
+				event_id, created_at, updated_at
+			) VALUES (?, ?, ?, 'screen', '1', ?, NULL, 0, 0)
+		`,
+		args: [
+			input.referenceId,
+			input.assetId,
+			input.revisionId,
+			input.ownerSlot ?? 'layout.frame.backgroundImage',
+		],
+	});
+}
+
+async function removeReference(referenceId: string) {
+	await harness.client.execute({
+		sql: 'DELETE FROM graphic_asset_references WHERE id = ?',
+		args: [referenceId],
+	});
+}
+
+beforeEach(async () => {
+	harness = await createSqliteD1Harness();
+});
+
+afterEach(async () => await harness.close());
+
+describe('scheduled Graphics Asset Library retention', () => {
+	describe('staged input expiry', () => {
+		it('expires an incomplete transfer after 24 hours without verified progress', async () => {
+			const context = createRetentionLibrary();
+			const abandoned = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'abandoned-transfer',
+				initiatedBy: 'retention-author',
+				name: 'Abandoned transfer',
+				sourceFileName: 'logo.png',
+				declaredMime: 'image/png',
+				declaredByteLength: pixelPng.byteLength,
+			});
+
+			context.advance(DAY - 1);
+			await context.library.runGraphicsRetention();
+			await expect(context.library.getIngestionOperation({
+				operationId: abandoned.id,
+				initiatedBy: abandoned.initiatedBy,
+			})).resolves.toMatchObject({ stage: 'created' });
+
+			context.advance(1);
+			const swept = await context.library.runGraphicsRetention();
+			expect(swept.stagedInput).toEqual({
+				expiredIncompleteTransfers: 1,
+				expiredCompletedInput: 0,
+			});
+			const expired = await context.library.getIngestionOperation({
+				operationId: abandoned.id,
+				initiatedBy: abandoned.initiatedBy,
+			});
+			expect(expired).toMatchObject({
+				stage: 'failed',
+				failure: { code: 'staged-input-expired', retryable: false },
+			});
+		});
+
+		it('requires a new operation once staged input has expired', async () => {
+			const context = createRetentionLibrary();
+			const abandoned = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'expired-needs-new-operation',
+				initiatedBy: 'retention-author',
+				name: 'Expired transfer',
+				sourceFileName: 'logo.png',
+				declaredMime: 'image/png',
+				declaredByteLength: pixelPng.byteLength,
+			});
+			context.advance(DAY + 1);
+			await context.library.runGraphicsRetention();
+
+			await expect(context.library.retryGraphicsIngestion({
+				operationId: abandoned.id,
+				initiatedBy: abandoned.initiatedBy,
+			})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
+			await expect(context.library.uploadGraphicAsset({
+				operationId: abandoned.id,
+				initiatedBy: abandoned.initiatedBy,
+				declaredMime: 'image/png',
+				bytes: createBoundedByteStream(pixelPng, {
+					byteLength: pixelPng.byteLength,
+					maximumByteLength: pixelPng.byteLength,
+				}),
+			})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
+		});
+
+		it('retains completed input awaiting retry for seven days', async () => {
+			const context = createRetentionLibrary();
+			context.canonical.injectTransientFailure('create', 2);
+			const operation = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'retryable-completed-input',
+				initiatedBy: 'retention-author',
+				name: 'Interrupted publication',
+				sourceFileName: 'logo.png',
+				declaredMime: 'image/png',
+				browserDecodeEvidence: decodeEvidence(pixelPng),
+				declaredByteLength: pixelPng.byteLength,
+			});
+			const failed = await context.library.uploadGraphicAsset({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				declaredMime: 'image/png',
+				bytes: createBoundedByteStream(pixelPng, {
+					byteLength: pixelPng.byteLength,
+					maximumByteLength: pixelPng.byteLength,
+				}),
+			});
+			expect(failed).toMatchObject({
+				stage: 'failed',
+				failure: { retryable: true },
+			});
+
+			const lastCheckpoint = new Date(failed.updatedAt).getTime();
+			context.advanceTo(new Date(lastCheckpoint + 7 * DAY - 1).toISOString());
+			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
+				expiredIncompleteTransfers: 0,
+				expiredCompletedInput: 0,
+			});
+			await expect(context.library.getIngestionOperation({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+			})).resolves.toMatchObject({ failure: { retryable: true } });
+
+			context.advanceTo(new Date(lastCheckpoint + 7 * DAY).toISOString());
+			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
+				expiredIncompleteTransfers: 0,
+				expiredCompletedInput: 1,
+			});
+			await expect(context.library.getIngestionOperation({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+			})).resolves.toMatchObject({
+				failure: { code: 'staged-input-expired', retryable: false },
+			});
+		});
+
+		it('cancels expiry when a durable checkpoint advanced since observation', async () => {
+			const context = createRetentionLibrary();
+			const resumed = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'progress-cancels-expiry',
+				initiatedBy: 'retention-author',
+				name: 'Resumed transfer',
+				sourceFileName: 'logo.png',
+				declaredMime: 'image/png',
+				browserDecodeEvidence: decodeEvidence(pixelPng),
+				declaredByteLength: pixelPng.byteLength,
+			});
+			context.advance(DAY + 1);
+			await context.library.uploadGraphicAsset({
+				operationId: resumed.id,
+				initiatedBy: resumed.initiatedBy,
+				declaredMime: 'image/png',
+				bytes: createBoundedByteStream(pixelPng, {
+					byteLength: pixelPng.byteLength,
+					maximumByteLength: pixelPng.byteLength,
+				}),
+			});
+
+			const swept = await context.library.runGraphicsRetention();
+			expect(swept.stagedInput.expiredIncompleteTransfers).toBe(0);
+			await expect(context.library.getIngestionOperation({
+				operationId: resumed.id,
+				initiatedBy: resumed.initiatedBy,
+			})).resolves.toMatchObject({ stage: 'completed' });
+		});
+
+		it('records Evidence for each expiry without exposing object keys or filenames', async () => {
+			const context = createRetentionLibrary();
+			const abandoned = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'expiry-evidence',
+				initiatedBy: 'retention-author',
+				name: 'Abandoned transfer',
+				sourceFileName: 'secret-artwork.png',
+				declaredMime: 'image/png',
+				declaredByteLength: pixelPng.byteLength,
+			});
+			context.advance(DAY + 1);
+			const swept = await context.library.runGraphicsRetention();
+			expect(swept.evidence.recorded).toBe(1);
+
+			const ledger = await context.library.listGraphicsAssetEvidence();
+			expect(ledger).toEqual([
+				expect.objectContaining({
+					category: 'staged-input-expired',
+					actor: 'graphics-retention-policy',
+					subject: {
+						kind: 'graphics-ingestion-operation',
+						id: abandoned.id,
+					},
+					outcome: 'staged-input-expired',
+					reason: 'incomplete-transfer-without-verified-progress',
+					correlationId: swept.correlationId,
+					recordedAt: context.now().toISOString(),
+					expiresAt: new Date(
+						context.now().getTime() + 365 * DAY,
+					).toISOString(),
+					detail: expect.objectContaining({
+						bytesFreed: pixelPng.byteLength,
+						deadline: new Date(
+							new Date(abandoned.createdAt).getTime() + DAY,
+						).toISOString(),
+					}),
+				}),
+			]);
+			expect(JSON.stringify(ledger)).not.toContain('secret-artwork');
+			expect(JSON.stringify(ledger)).not.toContain('ingestion/');
+			expect(JSON.stringify(ledger)).not.toContain(digestOf(pixelPng));
+		});
+
+		it('expires Evidence one year after it was recorded', async () => {
+			const context = createRetentionLibrary();
+			await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'evidence-expiry',
+				initiatedBy: 'retention-author',
+				name: 'Abandoned transfer',
+				declaredMime: 'image/png',
+				declaredByteLength: pixelPng.byteLength,
+			});
+			context.advance(DAY + 1);
+			await context.library.runGraphicsRetention();
+			expect(await context.library.listGraphicsAssetEvidence()).toHaveLength(1);
+
+			context.advance(365 * DAY - 1);
+			await context.library.runGraphicsRetention();
+			expect(await context.library.listGraphicsAssetEvidence()).toHaveLength(1);
+
+			context.advance(1);
+			const swept = await context.library.runGraphicsRetention();
+			expect(swept.evidence.expired).toBe(1);
+			expect(await context.library.listGraphicsAssetEvidence()).toEqual([]);
+		});
+
+		it('releases the staging reservation and staged bytes it expired', async () => {
+			const context = createRetentionLibrary();
+			const abandoned = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'expiry-releases-capacity',
+				initiatedBy: 'retention-author',
+				name: 'Abandoned transfer',
+				sourceFileName: 'logo.png',
+				declaredMime: 'image/png',
+				declaredByteLength: pixelPng.byteLength,
+			});
+			expect((await context.library.getCapacity()).staging.reservedBytes)
+				.toBe(pixelPng.byteLength);
+
+			context.advance(DAY + 1);
+			await context.library.runGraphicsRetention();
+
+			const capacity = await context.library.getCapacity();
+			expect(capacity.staging.reservedBytes).toBe(0);
+			expect(capacity.staging.usedBytes).toBe(0);
+			await expect(context.staging.readMetadata(
+				graphicsObjectIdentity(`ingestion/${abandoned.id}/source`),
+			)).resolves.toMatchObject({ outcome: 'missing' });
+		});
+	});
+
+	describe('revision pruning', () => {
+		it('keeps the latest revision while its Graphic Asset exists', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'latest-revision-retained',
+				name: 'Only revision',
+			});
+			const { assetId, revisionId } = published.result!;
+
+			context.advance(200 * DAY);
+			const swept = await context.library.runGraphicsRetention();
+			expect(swept.revisions).toEqual({
+				pruningScheduled: 0,
+				pruningCancelled: 0,
+				pruned: 0,
+			});
+			await expect(context.library.inspectGraphicAssetRevision({
+				assetId,
+				revisionId,
+			})).resolves.toMatchObject({ outcome: 'available' });
+		});
+
+		it('retains a referenced superseded revision without a time limit', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'referenced-superseded',
+				name: 'Referenced history',
+			});
+			const { assetId, revisionId: firstRevisionId } = published.result!;
+			await addReference({
+				referenceId: 'reference-pinned-first',
+				assetId,
+				revisionId: firstRevisionId,
+			});
+			await replaceAsset(context, {
+				assetId,
+				idempotencyKey: 'referenced-superseded-replacement',
+				bytes: replacementPng,
+			});
+
+			context.advance(200 * DAY);
+			const swept = await context.library.runGraphicsRetention();
+			expect(swept.revisions.pruningScheduled).toBe(0);
+			expect(swept.revisions.pruned).toBe(0);
+			await expect(context.library.inspectGraphicAssetRevision({
+				assetId,
+				revisionId: firstRevisionId,
+			})).resolves.toMatchObject({ outcome: 'available' });
+		});
+
+		it('prunes an unreferenced superseded revision 90 days after its last reference disappears', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'superseded-pruning',
+				name: 'Pruned history',
+			});
+			const { assetId, revisionId: firstRevisionId } = published.result!;
+			await addReference({
+				referenceId: 'reference-before-pruning',
+				assetId,
+				revisionId: firstRevisionId,
+			});
+			await replaceAsset(context, {
+				assetId,
+				idempotencyKey: 'superseded-pruning-replacement',
+				bytes: replacementPng,
+			});
+			expect((await context.library.runGraphicsRetention()).revisions.pruningScheduled).toBe(0);
+
+			await removeReference('reference-before-pruning');
+			const unreferencedAt = context.now().getTime();
+			expect((await context.library.runGraphicsRetention()).revisions).toEqual({
+				pruningScheduled: 1,
+				pruningCancelled: 0,
+				pruned: 0,
+			});
+
+			context.advanceTo(new Date(unreferencedAt + 90 * DAY - 1).toISOString());
+			expect((await context.library.runGraphicsRetention()).revisions.pruned).toBe(0);
+			await expect(context.library.inspectGraphicAssetRevision({
+				assetId,
+				revisionId: firstRevisionId,
+			})).resolves.toMatchObject({ outcome: 'available' });
+
+			context.advanceTo(new Date(unreferencedAt + 90 * DAY).toISOString());
+			expect((await context.library.runGraphicsRetention()).revisions.pruned).toBe(1);
+			await expect(context.library.inspectGraphicAssetRevision({
+				assetId,
+				revisionId: firstRevisionId,
+			})).resolves.toEqual({ outcome: 'missing' });
+			const [asset] = await context.library.listGraphicAssets({});
+			expect(asset!.revisions.map(revision => revision.id))
+				.not
+				.toContain(firstRevisionId);
+		});
+
+		it('cancels pruning when a new reference pins the superseded revision', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'pruning-cancelled',
+				name: 'Rescued history',
+			});
+			const { assetId, revisionId: firstRevisionId } = published.result!;
+			await replaceAsset(context, {
+				assetId,
+				idempotencyKey: 'pruning-cancelled-replacement',
+				bytes: replacementPng,
+			});
+			await expect(context.library.inspectGraphicAssetRetention({ assetId }))
+				.resolves
+				.toMatchObject({
+					revisions: [
+						expect.objectContaining({
+							revisionId: firstRevisionId,
+							retention: expect.objectContaining({ policy: 'unreferenced-superseded' }),
+						}),
+						expect.anything(),
+					],
+				});
+
+			await addReference({
+				referenceId: 'reference-cancels-pruning',
+				assetId,
+				revisionId: firstRevisionId,
+			});
+			expect((await context.library.runGraphicsRetention()).revisions).toEqual({
+				pruningScheduled: 0,
+				pruningCancelled: 1,
+				pruned: 0,
+			});
+
+			context.advance(200 * DAY);
+			expect((await context.library.runGraphicsRetention()).revisions.pruned).toBe(0);
+			await expect(context.library.inspectGraphicAssetRevision({
+				assetId,
+				revisionId: firstRevisionId,
+			})).resolves.toMatchObject({ outcome: 'available' });
+		});
+
+		it('freezes pruning in Trash and resumes the remaining recovery time on restoration', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'pruning-frozen',
+				name: 'Frozen history',
+			});
+			const { assetId, revisionId: firstRevisionId } = published.result!;
+			await replaceAsset(context, {
+				assetId,
+				idempotencyKey: 'pruning-frozen-replacement',
+				bytes: replacementPng,
+			});
+			const scheduledAt = context.now().getTime();
+
+			context.advanceTo(new Date(scheduledAt + 89 * DAY).toISOString());
+			await context.library.trashGraphicAsset({ assetId });
+
+			// The 90-day deadline passes while the asset is Trashed; pruning is frozen.
+			context.advanceTo(new Date(scheduledAt + 109 * DAY).toISOString());
+			expect((await context.library.runGraphicsRetention()).revisions.pruned).toBe(0);
+			await expect(context.library.inspectGraphicAssetRevision({
+				assetId,
+				revisionId: firstRevisionId,
+			})).resolves.toMatchObject({ outcome: 'available' });
+
+			await context.library.restoreGraphicAsset({ assetId });
+			const restoredAt = context.now().getTime();
+
+			context.advanceTo(new Date(restoredAt + DAY - 1).toISOString());
+			expect((await context.library.runGraphicsRetention()).revisions.pruned).toBe(0);
+
+			context.advanceTo(new Date(restoredAt + DAY).toISOString());
+			expect((await context.library.runGraphicsRetention()).revisions.pruned).toBe(1);
+			await expect(context.library.inspectGraphicAssetRevision({
+				assetId,
+				revisionId: firstRevisionId,
+			})).resolves.toEqual({ outcome: 'missing' });
+		});
+	});
+
+	describe('final purge', () => {
+		it('purges Trash after 30 days, recording a tombstone and Evidence', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'scheduled-purge',
+				name: 'Discarded logo',
+			});
+			const { assetId } = published.result!;
+			await context.library.trashGraphicAsset({ assetId });
+			const trashedAt = context.now().getTime();
+
+			context.advanceTo(new Date(trashedAt + 30 * DAY - 1).toISOString());
+			expect((await context.library.runGraphicsRetention()).trash.purged).toBe(0);
+			await expect(context.library.listGraphicAssets({
+				lifecycleStates: ['trashed'],
+			})).resolves.toHaveLength(1);
+
+			context.advanceTo(new Date(trashedAt + 30 * DAY).toISOString());
+			const swept = await context.library.runGraphicsRetention();
+			expect(swept.trash).toEqual({ purged: 1, blockedByReferences: 0 });
+			await expect(context.library.listGraphicAssets({
+				lifecycleStates: ['active', 'retired', 'trashed'],
+			})).resolves.toEqual([]);
+			await expect(context.library.restoreGraphicAsset({ assetId }))
+				.rejects
+				.toMatchObject({ code: 'ingestion-operation-not-found' });
+
+			const purgeEvidence = await context.library.listGraphicsAssetEvidence({
+				categories: ['graphic-asset-purged'],
+			});
+			expect(purgeEvidence).toEqual([
+				expect.objectContaining({
+					category: 'graphic-asset-purged',
+					subject: { kind: 'graphic-asset', id: assetId },
+					outcome: 'graphic-asset-purged',
+					reason: 'trash-window-elapsed',
+					detail: expect.objectContaining({
+						checkedReferenceCount: 0,
+						revisionCount: 1,
+					}),
+				}),
+			]);
+		});
+
+		it('refuses to purge when a fresh reference proof finds usage', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'purge-blocked',
+				name: 'Contested logo',
+			});
+			const { assetId, revisionId } = published.result!;
+			await context.library.trashGraphicAsset({ assetId });
+			const trashedAt = context.now().getTime();
+			await addReference({
+				referenceId: 'reference-races-purge',
+				assetId,
+				revisionId,
+			});
+
+			context.advanceTo(new Date(trashedAt + 30 * DAY).toISOString());
+			const swept = await context.library.runGraphicsRetention();
+			expect(swept.trash).toEqual({ purged: 0, blockedByReferences: 1 });
+			await expect(context.library.listGraphicAssets({
+				lifecycleStates: ['trashed'],
+			})).resolves.toHaveLength(1);
+			await expect(context.library.listGraphicsAssetEvidence({
+				categories: ['graphic-asset-purge-blocked'],
+			})).resolves.toEqual([
+				expect.objectContaining({
+					subject: { kind: 'graphic-asset', id: assetId },
+					outcome: 'graphic-asset-retained',
+					reason: 'reference-proof-found-usage',
+					detail: expect.objectContaining({ checkedReferenceCount: 1 }),
+				}),
+			]);
+		});
+
+		it('lets a confirmed administrator purge unreferenced Trash early', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'early-purge',
+				name: 'Reclaimed logo',
+			});
+			const { assetId } = published.result!;
+			await context.library.trashGraphicAsset({ assetId });
+
+			await expect(context.library.purgeTrashedGraphicAsset({
+				assetId,
+				actor: 'installation-administrator',
+				confirmation: 'not-a-confirmation' as 'purge-now',
+			})).rejects.toMatchObject({ code: 'invalid-ingestion-input' });
+
+			context.advance(DAY);
+			await expect(context.library.purgeTrashedGraphicAsset({
+				assetId,
+				actor: 'installation-administrator',
+				confirmation: 'purge-now',
+			})).resolves.toEqual({
+				outcome: 'purged',
+				assetId,
+				purgedAt: context.now().toISOString(),
+				revisionCount: 1,
+				checkedReferenceCount: 0,
+				reason: 'early-purge',
+			});
+			await expect(context.library.listGraphicAssets({
+				lifecycleStates: ['active', 'retired', 'trashed'],
+			})).resolves.toEqual([]);
+			await expect(context.library.listGraphicsAssetEvidence({
+				categories: ['graphic-asset-purged'],
+			})).resolves.toEqual([
+				expect.objectContaining({
+					actor: 'installation-administrator',
+					reason: 'early-purge',
+				}),
+			]);
+		});
+
+		it('reports usage instead of purging a referenced Trashed Graphic Asset early', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'early-purge-blocked',
+				name: 'Contested logo',
+			});
+			const { assetId, revisionId } = published.result!;
+			await context.library.trashGraphicAsset({ assetId });
+			await addReference({ referenceId: 'reference-blocks-early-purge', assetId, revisionId });
+
+			await expect(context.library.purgeTrashedGraphicAsset({
+				assetId,
+				actor: 'installation-administrator',
+				confirmation: 'purge-now',
+			})).resolves.toMatchObject({
+				outcome: 'in-use',
+				usage: [expect.objectContaining({ reference: { assetId, revisionId } })],
+			});
+			await expect(context.library.listGraphicAssets({
+				lifecycleStates: ['trashed'],
+			})).resolves.toHaveLength(1);
+		});
+
+		it('refuses to purge a Graphic Asset that is not in Trash', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'purge-active',
+				name: 'Active logo',
+			});
+			await expect(context.library.purgeTrashedGraphicAsset({
+				assetId: published.result!.assetId,
+				actor: 'installation-administrator',
+				confirmation: 'purge-now',
+			})).rejects.toMatchObject({
+				code: 'graphic-asset-lifecycle-action-not-allowed',
+			});
+		});
+
+		it('never lets re-ingestion reuse a purged local identity', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'tombstoned-identity',
+				name: 'Purged logo',
+			});
+			const { assetId } = published.result!;
+			await context.library.trashGraphicAsset({ assetId });
+			await context.library.purgeTrashedGraphicAsset({
+				assetId,
+				actor: 'installation-administrator',
+				confirmation: 'purge-now',
+			});
+
+			const reusedIdentity = createGraphicsAssetLibrary({
+				catalogue: createD1GraphicsAssetCatalogue(harness.database),
+				staging: createInMemoryStagingGraphicsObjectStore(),
+				canonical: createInMemoryCanonicalGraphicsObjectStore(),
+				now: context.now,
+				generateIdentity: () => assetId,
+			});
+			const operation = await reusedIdentity.initiateGraphicsIngestion({
+				idempotencyKey: 'tombstoned-identity-reingestion',
+				initiatedBy: 'retention-author',
+				name: 'Re-ingested logo',
+				sourceFileName: 'logo.png',
+				declaredMime: 'image/png',
+				browserDecodeEvidence: decodeEvidence(pixelPng),
+				declaredByteLength: pixelPng.byteLength,
+				duplicateContentPolicy: 'create-separate',
+			});
+			const attempted = await reusedIdentity.uploadGraphicAsset({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				declaredMime: 'image/png',
+				bytes: createBoundedByteStream(pixelPng, {
+					byteLength: pixelPng.byteLength,
+					maximumByteLength: pixelPng.byteLength,
+				}),
+			});
+			expect(attempted.stage).toBe('failed');
+			expect(attempted.result).toBeUndefined();
+			await expect(reusedIdentity.listGraphicAssets({
+				lifecycleStates: ['active', 'retired', 'trashed'],
+			})).resolves.toEqual([]);
+		});
+	});
+
+	describe('shared content garbage collection', () => {
+		async function purgeNow(context: RetentionLibrary, assetId: GraphicAssetId) {
+			await context.library.trashGraphicAsset({ assetId });
+			await context.library.purgeTrashedGraphicAsset({
+				assetId,
+				actor: 'installation-administrator',
+				confirmation: 'purge-now',
+			});
+		}
+
+		it('keeps shared content while any retained revision reaches it', async () => {
+			const context = createRetentionLibrary();
+			const first = await ingestAsset(context, {
+				idempotencyKey: 'shared-content-first',
+				name: 'Shared bytes one',
+			});
+			const second = await ingestAsset(context, {
+				idempotencyKey: 'shared-content-second',
+				name: 'Shared bytes two',
+			});
+			const sourceObject = graphicsObjectIdentity(`sha256/${digestOf(pixelPng)}`);
+
+			await purgeNow(context, first.result!.assetId);
+			expect((await context.library.runGraphicsRetention()).content.quarantined).toBe(0);
+			await expect(context.library.inspectGraphicAssetRevisionContent({
+				assetId: second.result!.assetId,
+				revisionId: second.result!.revisionId,
+			})).resolves.toMatchObject({ outcome: 'available' });
+
+			await purgeNow(context, second.result!.assetId);
+			const quarantining = await context.library.runGraphicsRetention();
+			expect(quarantining.content).toEqual({
+				quarantined: 2,
+				quarantineReleased: 0,
+				deleted: 0,
+				bytesReclaimed: 0,
+			});
+			await expect(context.canonical.readMetadata(sourceObject))
+				.resolves
+				.toMatchObject({ outcome: 'available' });
+		});
+
+		it('deletes quarantined content only after the seven-day recheck window', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'quarantine-window',
+				name: 'Discarded bytes',
+			});
+			const sourceObject = graphicsObjectIdentity(`sha256/${digestOf(pixelPng)}`);
+			await purgeNow(context, published.result!.assetId);
+			expect((await context.library.runGraphicsRetention()).content.quarantined).toBe(2);
+			const quarantinedAt = context.now().getTime();
+
+			context.advanceTo(new Date(quarantinedAt + 7 * DAY - 1).toISOString());
+			expect((await context.library.runGraphicsRetention()).content.deleted).toBe(0);
+			await expect(context.canonical.readMetadata(sourceObject))
+				.resolves
+				.toMatchObject({ outcome: 'available' });
+
+			context.advanceTo(new Date(quarantinedAt + 7 * DAY).toISOString());
+			const swept = await context.library.runGraphicsRetention();
+			expect(swept.content.deleted).toBe(2);
+			expect(swept.content.bytesReclaimed).toBeGreaterThan(pixelPng.byteLength);
+			await expect(context.canonical.readMetadata(sourceObject))
+				.resolves
+				.toEqual({ outcome: 'missing' });
+			await expect(context.library.listGraphicsAssetEvidence({
+				categories: ['content-deleted'],
+			})).resolves.toEqual([
+				expect.objectContaining({
+					subject: expect.objectContaining({ kind: 'graphic-asset-content' }),
+					outcome: 'content-deleted',
+					reason: 'unreachable-after-quarantine-recheck',
+				}),
+				expect.objectContaining({ outcome: 'content-deleted' }),
+			]);
+			expect(JSON.stringify(await context.library.listGraphicsAssetEvidence()))
+				.not
+				.toContain(digestOf(pixelPng));
+		});
+
+		it('rechecks reachability and spares content a new revision reaches again', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'quarantine-recheck',
+				name: 'Recovered bytes',
+			});
+			const sourceObject = graphicsObjectIdentity(`sha256/${digestOf(pixelPng)}`);
+			await purgeNow(context, published.result!.assetId);
+			expect((await context.library.runGraphicsRetention()).content.quarantined).toBe(2);
+
+			context.advance(DAY);
+			const reingested = await ingestAsset(context, {
+				idempotencyKey: 'quarantine-recheck-reingestion',
+				name: 'Recovered bytes again',
+			});
+
+			context.advance(30 * DAY);
+			const swept = await context.library.runGraphicsRetention();
+			expect(swept.content.deleted).toBe(0);
+			await expect(context.canonical.readMetadata(sourceObject))
+				.resolves
+				.toMatchObject({ outcome: 'available' });
+			await expect(context.library.inspectGraphicAssetRevisionContent({
+				assetId: reingested.result!.assetId,
+				revisionId: reingested.result!.revisionId,
+			})).resolves.toMatchObject({ outcome: 'available' });
+		});
+
+		it('reclaims a pruned revision derivative without touching the retained revision', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'derivative-follows-source',
+				name: 'Replaced logo',
+			});
+			const { assetId, revisionId: firstRevisionId } = published.result!;
+			const replaced = await replaceAsset(context, {
+				assetId,
+				idempotencyKey: 'derivative-follows-source-replacement',
+				bytes: replacementPng,
+			});
+			const firstSourceObject = graphicsObjectIdentity(`sha256/${digestOf(pixelPng)}`);
+			const currentSourceObject = graphicsObjectIdentity(
+				`sha256/${digestOf(replacementPng)}`,
+			);
+
+			context.advance(90 * DAY);
+			const pruning = await context.library.runGraphicsRetention();
+			expect(pruning.revisions.pruned).toBe(1);
+			// Both revisions render the same 1x1 thumbnail, so only the superseded
+			// source bytes lose their final reachability; the shared derivative
+			// content stays alive through the retained revision's derivative.
+			expect(pruning.content.quarantined).toBe(1);
+
+			context.advance(7 * DAY);
+			const swept = await context.library.runGraphicsRetention();
+			expect(swept.content.deleted).toBe(1);
+			await expect(context.canonical.readMetadata(firstSourceObject))
+				.resolves
+				.toEqual({ outcome: 'missing' });
+			await expect(context.canonical.readMetadata(currentSourceObject))
+				.resolves
+				.toMatchObject({ outcome: 'available' });
+			await expect(context.library.inspectGraphicAssetRevisionContent({
+				assetId,
+				revisionId: replaced.result!.revisionId,
+			})).resolves.toMatchObject({ outcome: 'available' });
+			await expect(context.library.resolveGraphicAssetThumbnail({ assetId }))
+				.resolves
+				.toMatchObject({ outcome: 'available' });
+			await expect(context.library.inspectGraphicAssetRevision({
+				assetId,
+				revisionId: firstRevisionId,
+			})).resolves.toEqual({ outcome: 'missing' });
+		});
+	});
+
+	describe('deadline visibility', () => {
+		it('states why every revision is retained and when its retention ends', async () => {
+			const context = createRetentionLibrary();
+			const pinned = await ingestAsset(context, {
+				idempotencyKey: 'retention-view-pinned',
+				name: 'Pinned history',
+			});
+			await addReference({
+				referenceId: 'reference-retention-view',
+				assetId: pinned.result!.assetId,
+				revisionId: pinned.result!.revisionId,
+			});
+			const pinnedReplacement = await replaceAsset(context, {
+				assetId: pinned.result!.assetId,
+				idempotencyKey: 'retention-view-pinned-replacement',
+				bytes: replacementPng,
+			});
+			await expect(context.library.inspectGraphicAssetRetention({
+				assetId: pinned.result!.assetId,
+			})).resolves.toEqual({
+				assetId: pinned.result!.assetId,
+				lifecycle: { state: 'active' },
+				revisions: [
+					{
+						assetId: pinned.result!.assetId,
+						revisionId: pinned.result!.revisionId,
+						revisionNumber: 1,
+						retention: { policy: 'referenced', referenceCount: 1 },
+					},
+					{
+						assetId: pinned.result!.assetId,
+						revisionId: pinnedReplacement.result!.revisionId,
+						revisionNumber: 2,
+						retention: { policy: 'latest-revision' },
+					},
+				],
+			});
+		});
+
+		it('freezes and resumes the exposed revision deadline with Trash', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'retention-view-frozen',
+				name: 'Frozen history',
+			});
+			const { assetId, revisionId: firstRevisionId } = published.result!;
+			await replaceAsset(context, {
+				assetId,
+				idempotencyKey: 'retention-view-frozen-replacement',
+				bytes: replacementPng,
+			});
+			const supersededAt = context.now().getTime();
+			const view = await context.library.inspectGraphicAssetRetention({ assetId });
+			expect(view.revisions[0]!.retention).toEqual({
+				policy: 'unreferenced-superseded',
+				unreferencedSince: new Date(supersededAt).toISOString(),
+				pruneAfter: new Date(supersededAt + 90 * DAY).toISOString(),
+			});
+
+			context.advance(10 * DAY);
+			await context.library.trashGraphicAsset({ assetId });
+			const trashedAt = context.now().getTime();
+			const frozen = await context.library.inspectGraphicAssetRetention({ assetId });
+			expect(frozen).toMatchObject({
+				lifecycle: {
+					state: 'trashed',
+					recoverableUntil: new Date(trashedAt + 30 * DAY).toISOString(),
+				},
+				purgeAfter: new Date(trashedAt + 30 * DAY).toISOString(),
+			});
+			expect(frozen.revisions[0]!.retention).toEqual({
+				policy: 'pruning-frozen',
+				unreferencedSince: new Date(supersededAt).toISOString(),
+				frozenAt: new Date(trashedAt).toISOString(),
+				remainingMilliseconds: 80 * DAY,
+			});
+
+			context.advance(5 * DAY);
+			await context.library.restoreGraphicAsset({ assetId });
+			const restoredAt = context.now().getTime();
+			await expect(context.library.inspectGraphicAssetRetention({ assetId }))
+				.resolves
+				.toMatchObject({
+					revisions: [
+						expect.objectContaining({
+							revisionId: firstRevisionId,
+							retention: {
+								policy: 'unreferenced-superseded',
+								unreferencedSince: new Date(supersededAt).toISOString(),
+								pruneAfter: new Date(restoredAt + 80 * DAY).toISOString(),
+							},
+						}),
+						expect.objectContaining({ retention: { policy: 'latest-revision' } }),
+					],
+				});
+		});
+
+		it('records Evidence when Trash freezes and restoration resumes pruning', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'retention-transition-evidence',
+				name: 'Frozen history',
+			});
+			const { assetId, revisionId: firstRevisionId } = published.result!;
+			await replaceAsset(context, {
+				assetId,
+				idempotencyKey: 'retention-transition-evidence-replacement',
+				bytes: replacementPng,
+			});
+			const supersededAt = context.now().getTime();
+
+			context.advance(20 * DAY);
+			await context.library.trashGraphicAsset({ assetId });
+			await expect(context.library.listGraphicsAssetEvidence({
+				categories: ['revision-pruning-frozen'],
+			})).resolves.toEqual([
+				expect.objectContaining({
+					subject: { kind: 'graphic-asset-revision', id: firstRevisionId },
+					outcome: 'revision-pruning-frozen',
+					reason: 'trash-freezes-revision-pruning',
+					detail: { remainingMilliseconds: 70 * DAY },
+				}),
+			]);
+
+			context.advance(DAY);
+			await context.library.restoreGraphicAsset({ assetId });
+			await expect(context.library.listGraphicsAssetEvidence({
+				categories: ['revision-pruning-resumed'],
+			})).resolves.toEqual([
+				expect.objectContaining({
+					subject: { kind: 'graphic-asset-revision', id: firstRevisionId },
+					outcome: 'revision-pruning-resumed',
+					reason: 'restoration-resumes-remaining-recovery-time',
+					detail: {
+						deadline: new Date(
+							supersededAt + 21 * DAY + 70 * DAY,
+						).toISOString(),
+					},
+				}),
+			]);
+		});
+
+		it('reports every operational deadline in one retention overview', async () => {
+			const context = createRetentionLibrary();
+			const abandoned = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'overview-abandoned',
+				initiatedBy: 'retention-author',
+				name: 'Abandoned transfer',
+				declaredMime: 'image/png',
+				declaredByteLength: pixelPng.byteLength,
+			});
+			const startedAt = context.now().getTime();
+			const superseded = await ingestAsset(context, {
+				idempotencyKey: 'overview-superseded',
+				name: 'Replaced logo',
+			});
+			await replaceAsset(context, {
+				assetId: superseded.result!.assetId,
+				idempotencyKey: 'overview-superseded-replacement',
+				bytes: replacementPng,
+			});
+			const supersededAt = context.now().getTime();
+			const discarded = await ingestAsset(context, {
+				idempotencyKey: 'overview-discarded',
+				name: 'Discarded logo',
+				bytes: replacementPng,
+			});
+			await context.library.trashGraphicAsset({ assetId: discarded.result!.assetId });
+			const trashedAt = context.now().getTime();
+
+			const overview = await context.library.getRetentionOverview();
+			expect(overview.checkedAt).toBe(context.now().toISOString());
+			expect(overview.guarantees).toEqual({
+				incompleteTransferMilliseconds: DAY,
+				completedInputMilliseconds: 7 * DAY,
+				trashRecoveryMilliseconds: 30 * DAY,
+				supersededRevisionMilliseconds: 90 * DAY,
+				orphanContentQuarantineMilliseconds: 7 * DAY,
+				evidenceMilliseconds: 365 * DAY,
+			});
+			expect(overview.guaranteesShortenedUnderPressure).toBe(false);
+			expect(overview.stagedInput).toEqual([
+				expect.objectContaining({
+					operationId: abandoned.id,
+					stage: 'created',
+					transferComplete: false,
+					expiresAt: new Date(startedAt + DAY).toISOString(),
+				}),
+			]);
+			expect(overview.trashedAssets).toEqual([
+				{
+					assetId: discarded.result!.assetId,
+					name: 'Discarded logo',
+					trashedAt: new Date(trashedAt).toISOString(),
+					recoverableUntil: new Date(trashedAt + 30 * DAY).toISOString(),
+					purgeAfter: new Date(trashedAt + 30 * DAY).toISOString(),
+					referenceCount: 0,
+					revisionCount: 1,
+				},
+			]);
+			expect(overview.prunableRevisions).toEqual([
+				expect.objectContaining({
+					revisionId: superseded.result!.revisionId,
+					retention: {
+						policy: 'unreferenced-superseded',
+						unreferencedSince: new Date(supersededAt).toISOString(),
+						pruneAfter: new Date(supersededAt + 90 * DAY).toISOString(),
+					},
+				}),
+			]);
+		});
+
+		it('does not shorten any guarantee when canonical capacity is full', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'pressure-does-not-shorten',
+				name: 'Discarded logo',
+			});
+			await replaceAsset(context, {
+				assetId: published.result!.assetId,
+				idempotencyKey: 'pressure-does-not-shorten-replacement',
+				bytes: replacementPng,
+			});
+			await context.library.trashGraphicAsset({ assetId: published.result!.assetId });
+			const relaxed = await context.library.getRetentionOverview();
+			expect(relaxed.storagePressure).toBe('normal');
+
+			const capacity = await context.library.getCapacity();
+			await context.library.updateCapacityLimits({
+				canonicalLimitBytes: capacity.canonical.usedBytes,
+				stagingLimitBytes: capacity.staging.limitBytes,
+			});
+
+			const pressured = await context.library.getRetentionOverview();
+			expect(pressured.storagePressure).toBe('full');
+			expect(pressured.guaranteesShortenedUnderPressure).toBe(false);
+			expect(pressured.guarantees).toEqual(relaxed.guarantees);
+			expect(pressured.trashedAssets).toEqual(relaxed.trashedAssets);
+			expect(pressured.prunableRevisions).toEqual(relaxed.prunableRevisions);
+			expect((await context.library.runGraphicsRetention()).trash.purged).toBe(0);
+		});
+	});
+});
