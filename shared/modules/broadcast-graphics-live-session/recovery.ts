@@ -1,4 +1,5 @@
 import type { BroadcastGraphicsLiveState } from './playout';
+import { createInitialBroadcastGraphicInputsState } from './inputs';
 import { createInitialBroadcastGraphicsLiveState } from './playout';
 
 /**
@@ -128,15 +129,39 @@ export function recoveredBroadcastGraphicsLiveState(raw: unknown): BroadcastGrap
  *
  * Playout never crosses an epoch boundary: ending a session turns every Broadcast
  * Graphic off, and a stale on-air intent surviving into a later show is exactly
- * what epochs exist to prevent. Prepared Graphic Input values are the opposite
- * case — they are not an intent to show anything, they are the work an operator
- * did to be ready, and losing them to a mode change means retyping a show's
- * lower thirds mid-show.
+ * what epochs exist to prevent. Prepared *working* values are the opposite case —
+ * they are not an intent to show anything, they are the work an operator did to be
+ * ready, and losing them to a mode change means retyping a show's lower thirds
+ * mid-show.
+ *
+ * ## Why accepted values do not cross the boundary
+ *
+ * An accepted value is by definition what an on-air Broadcast Graphic *is
+ * rendering*, and nothing is on air in a new epoch — so there is no rendering for
+ * it to be the last accepted state of. Carrying it would not merely be redundant,
+ * it would be unsound: acceptance falls back to the previously accepted value when
+ * a working value is unavailable, and the Take gate measures requiredness against
+ * what acceptance would produce. A required Graphic Input whose carried working
+ * value is unavailable would therefore pass the gate on the strength of an
+ * acceptance from a show that is over, and go on air showing the old epoch's value
+ * — against the settled rule that a required unavailable Graphic Input prevents a
+ * Take. Within one epoch that same fallback is correct, because there the last
+ * accepted value really is what program is showing.
+ *
+ * The acceptance revision goes with it: it counts acceptances, and the new epoch
+ * has had none.
  *
  * State that cannot be trusted carries nothing forward: the same reasoning that
  * refuses to salvage half a playout map refuses to salvage half an input map.
  */
 export function carriedForwardBroadcastGraphicsLiveState(raw: unknown): BroadcastGraphicsLiveState {
 	const recovered = recoveredBroadcastGraphicsLiveState(raw);
-	return { ...createInitialBroadcastGraphicsLiveState(), inputs: recovered.inputs };
+	const inputs = Object.fromEntries(
+		Object.entries(recovered.inputs).map(([graphicId, stored]) => [graphicId, {
+			...createInitialBroadcastGraphicInputsState(),
+			working: stored.working ?? {},
+		}]),
+	);
+
+	return { ...createInitialBroadcastGraphicsLiveState(), inputs };
 }

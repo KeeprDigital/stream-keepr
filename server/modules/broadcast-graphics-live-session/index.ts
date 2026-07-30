@@ -146,9 +146,13 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	 * Its own notification rather than a variant of `commandApplied`, because it is
 	 * not a command and nothing about it can be applied: every client holding state
 	 * for this Screen is holding state from a session that has ended, and the only
-	 * correct response is to reload. Without it, a Screen taken out of Broadcast
-	 * Graphics mode in one tab would leave every output rendering the graphics of a
-	 * show that is over until something else happened to make it reload.
+	 * correct response is to reload.
+	 *
+	 * The case that needs it is an explicit reset, which changes nothing about the
+	 * Screen and so publishes no other message — without this, every peer would sit on
+	 * the ended epoch still rendering the graphics the reset was meant to clear. A mode
+	 * change is already covered by `screen:updated`, and publishes this as well only so
+	 * the stale epoch is dropped deterministically.
 	 */
 	const publishEpochEnded = async (
 		eventId: number,
@@ -171,7 +175,8 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	 * watching it, so both announce. Deleting the Screen does not: those clients are
 	 * about to be told the Screen itself is gone, and pointing them at a snapshot
 	 * route that will now refuse them would surface a spurious failure on the way
-	 * out.
+	 * out — which is why this is a caller's choice rather than something ending an
+	 * epoch always does.
 	 */
 	const endSessionsForScreen = async (
 		screenId: number,

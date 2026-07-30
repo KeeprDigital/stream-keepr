@@ -72,7 +72,11 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 			expect(next.currentState.inputs.a?.working).toEqual({ name: 'Ava Reed' });
 		});
 
-		it('carries the accepted values forward too, so the next Take is not a blank rendering', async () => {
+		it('carries no accepted value across the boundary, and the next Take accepts the working one', async () => {
+			// Nothing is on air in the new epoch, so there is no rendering for an accepted
+			// value to be the last accepted state of — and keeping it would let acceptance's
+			// unavailable-value fallback speak for a show that is over. The next Take does
+			// not need it: acceptance reads the carried working value.
 			const harness = await createGraphicsHarness(eventId, 'hardening-mode-change-accepted', [
 				integrationBroadcastGraphicWithInputs('a', [integrationTextInput('name')]),
 			]);
@@ -84,7 +88,52 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 			await setScreenMode(eventId, harness.screen.id, 'broadcast-graphics');
 
 			const next = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
-			expect(next.currentState.inputs.a?.accepted).toEqual({ name: 'Ava Reed' });
+			expect(next.currentState.inputs.a?.accepted).toEqual({});
+			expect(next.currentState.inputs.a?.acceptedRevision).toBe(0);
+
+			const taken = await sendBroadcastGraphicsCommand(eventId, harness.screen.id, next.id, {
+				commandId: playoutCommandId('post-mode-change-take'),
+				type: 'Take',
+				payload: { graphicId: 'a' },
+			});
+			expect(taken.currentState.inputs.a?.accepted).toEqual({ name: 'Ava Reed' });
+		});
+
+		it('blocks a Take a carried-forward acceptance would otherwise have let through', async () => {
+			// The reason accepted values do not cross the boundary, asserted end to end: a
+			// required Graphic Input whose working value is unavailable must stop the Take,
+			// and it would not if the previous epoch's acceptance were still standing in
+			// for it.
+			const harness = await createGraphicsHarness(eventId, 'hardening-required-across-epoch', [
+				integrationBroadcastGraphicWithInputs('a', [
+					integrationTextInput('name', { required: true, maxLength: 10 }),
+				]),
+			]);
+
+			await setBroadcastGraphicInput(harness, 'a', 'name', 'Ava Reed');
+			await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: 'a' } });
+			// Now unavailable: longer than the declaration allows, so never acceptable.
+			await setBroadcastGraphicInput(harness, 'a', 'name', 'A'.repeat(50));
+
+			await setScreenMode(eventId, harness.screen.id, 'idle');
+			await setScreenMode(eventId, harness.screen.id, 'broadcast-graphics');
+			const next = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
+
+			const rejected = await $fetchRaw(
+				`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${next.id}/commands`,
+				{
+					method: 'POST',
+					body: {
+						commandId: playoutCommandId('blocked-take'),
+						type: 'Take',
+						payload: { graphicId: 'a' },
+					},
+					ignoreResponseError: true,
+				},
+			);
+
+			expect(rejected.status).toBe(409);
+			expect(rejected._data?.data?.code).toBe('required-input-unavailable');
 		});
 
 		it('opens a fresh epoch with nothing at all for a Screen that never had one', async () => {

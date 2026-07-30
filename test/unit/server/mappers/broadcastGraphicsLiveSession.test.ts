@@ -1,6 +1,9 @@
 import type { DbBroadcastGraphicsLiveSession } from '~~/server/db/schema';
 import { describe, expect, it } from 'vitest';
-import { mapBroadcastGraphicsLiveSessionToResponse } from '~~/server/mappers/broadcastGraphicsLiveSession';
+import {
+	mapBroadcastGraphicsCommandResult,
+	mapBroadcastGraphicsLiveSessionToResponse,
+} from '~~/server/mappers/broadcastGraphicsLiveSession';
 
 /**
  * Every read of a Broadcast Graphics Live Session passes through this mapper — the
@@ -65,5 +68,31 @@ describe('mapBroadcastGraphicsLiveSessionToResponse', () => {
 		expect(mapped.id).toBe(12);
 		expect(mapped.sequence).toBe(4);
 		expect(mapped.status).toBe('active');
+	});
+});
+
+describe('mapBroadcastGraphicsCommandResult', () => {
+	it('answers with the same recovered state on both halves of the result', () => {
+		// `currentState` is what a peer applies in place off the realtime notification;
+		// `session` is what the caller caches. Deriving them separately lets a peer be
+		// handed a recovered snapshot alongside the raw unreadable state and apply the
+		// latter as authoritative — so this is the invariant, not an implementation
+		// detail: whatever a reader is told is on air must be one answer.
+		const result = mapBroadcastGraphicsCommandResult(row({ playout: { slate: 'yes' }, inputs: {} }), 'Take');
+
+		expect(result.currentState).toEqual(result.session.currentState);
+		expect(result.currentState).toEqual({ playout: {}, inputs: {} });
+		expect(result.session.recoveryFault?.reason).toBe('corrupt');
+	});
+
+	it('carries the epoch identity, sequence, and command the caller needs to correlate it', () => {
+		const result = mapBroadcastGraphicsCommandResult(
+			row({ playout: { slate: { onAir: true } }, inputs: {} }),
+			'Out',
+		);
+
+		expect(result).toMatchObject({ screenId: 7, sessionId: 12, sequence: 4, commandType: 'Out' });
+		expect(result.currentState.playout.slate).toEqual({ onAir: true });
+		expect(result.session.recoveryFault).toBeNull();
 	});
 });

@@ -1,5 +1,7 @@
+import type { GraphicInputDeclaration } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import {
+	applyBroadcastGraphicsCommand,
 	broadcastGraphicsRecoveryFault,
 	carriedForwardBroadcastGraphicsLiveState,
 	createInitialBroadcastGraphicsLiveState,
@@ -120,21 +122,59 @@ describe('broadcastGraphicsRecovery', () => {
 	});
 
 	describe('what survives ending one epoch and opening the next', () => {
+		const ended = {
+			playout: { slate: { onAir: true }, bug: { onAir: true } },
+			inputs: { slate: { working: { name: 'Ava' }, accepted: { name: 'Ava' }, acceptedRevision: 3 } },
+		};
+
 		it('carries prepared working values forward while turning every graphic off', () => {
 			// A Screen leaving and re-entering Broadcast Graphics mode ends one epoch and
 			// opens another. Nothing may still be on air across that boundary, but the
 			// values an operator prepared for the next take are not a playout intent and
 			// are exactly what they would otherwise have to retype mid-show.
-			const ended = {
-				playout: { slate: { onAir: true }, bug: { onAir: true } },
-				inputs: { slate: { working: { name: 'Ava' }, accepted: { name: 'Ava' }, acceptedRevision: 3 } },
-			};
-
 			const next = carriedForwardBroadcastGraphicsLiveState(ended);
 
 			expect(next.playout).toEqual({});
-			expect(next.inputs).toEqual(ended.inputs);
+			expect(next.inputs.slate?.working).toEqual({ name: 'Ava' });
 			expect(onAirBroadcastGraphicIds(next, [{ id: 'slate' }, { id: 'bug' }])).toEqual([]);
+		});
+
+		it('carries no accepted value or acceptance revision into the new epoch', () => {
+			// An accepted value is what an on-air graphic *is rendering*, and nothing is on
+			// air here — so there is no rendering for it to be the last accepted state of.
+			// It is also unsound to keep: acceptance falls back to the previously accepted
+			// value when a working value is unavailable, and the Take gate measures
+			// requiredness against what acceptance would produce, so a carried acceptance
+			// would let a required unavailable input reach air on the strength of a show
+			// that is over.
+			const next = carriedForwardBroadcastGraphicsLiveState(ended);
+
+			expect(next.inputs.slate?.accepted).toEqual({});
+			expect(next.inputs.slate?.acceptedRevision).toBe(0);
+		});
+
+		it('still blocks Take on a required Graphic Input whose carried working value is unavailable', () => {
+			const required: GraphicInputDeclaration = {
+				type: 'text',
+				key: 'name',
+				label: 'Name',
+				required: true,
+				updatePolicy: 'staged',
+				default: '',
+				maxLength: 10,
+			};
+			const next = carriedForwardBroadcastGraphicsLiveState({
+				playout: { slate: { onAir: true } },
+				inputs: { slate: { working: { name: 'A'.repeat(50) }, accepted: { name: 'Ava' }, acceptedRevision: 2 } },
+			});
+
+			// The settled rule, asserted through the gate itself rather than through the
+			// shape: a required unavailable Graphic Input prevents a Take.
+			expect(() => applyBroadcastGraphicsCommand(
+				next,
+				{ type: 'Take', payload: { graphicId: 'slate' } },
+				{ inputs: [required] },
+			)).toThrow(expect.objectContaining({ code: 'required-input-unavailable' }));
 		});
 
 		it('carries nothing forward from state it cannot trust', () => {

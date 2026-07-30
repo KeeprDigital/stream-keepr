@@ -281,9 +281,10 @@ describe('screenWriteModule', () => {
 			// update can never orphan a running show's live state.
 			expect(mockScreenService.update.mock.invocationCallOrder[0])
 				.toBeLessThan(mockBroadcastGraphicsLiveSessions.endSessionsForScreen.mock.invocationCallOrder[0]!);
-			// Announced, because the Screen is still there with Live Controls and Screen
-			// Outputs watching it: without the notification each would keep rendering the
-			// ended show's graphics until something else made it reload.
+			// Announced. Not because outputs would otherwise keep rendering the ended
+			// show — `screen:updated` already reaches them and they render by the
+			// Screen's current mode — but so that each peer drops the ended epoch's
+			// cached state deterministically rather than on a component remount.
 			expect(mockBroadcastGraphicsLiveSessions.endSessionsForScreen).toHaveBeenCalledWith(
 				7,
 				1,

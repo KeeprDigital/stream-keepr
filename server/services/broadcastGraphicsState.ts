@@ -11,7 +11,7 @@ import type { GraphicInputDeclaration } from '~~/shared/types/graphics';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { broadcastGraphicsLiveSessions } from '~~/server/db/schema';
-import { mapBroadcastGraphicsLiveSessionToResponse } from '~~/server/mappers/broadcastGraphicsLiveSession';
+import { mapBroadcastGraphicsCommandResult } from '~~/server/mappers/broadcastGraphicsLiveSession';
 import { createSequencedLiveState, forgetAggregateReceipts } from '~~/server/modules/live-state';
 import { publishMessage } from '~~/server/utils/ably';
 import {
@@ -360,18 +360,12 @@ export function broadcastGraphicsStateService() {
 
 		// One mapped snapshot feeds both the result and the notification derived from
 		// it, so a client cannot be handed a recovered `session` alongside a raw
-		// `currentState` that disagrees with it.
-		toResult: (session, commandType) => {
-			const mapped = mapBroadcastGraphicsLiveSessionToResponse(session);
-			return {
-				screenId: session.screenId,
-				sessionId: session.id,
-				sequence: session.sequence,
-				commandType: commandType as BroadcastGraphicsCommandResult['commandType'],
-				currentState: mapped.currentState,
-				session: mapped,
-			};
-		},
+		// `currentState` that disagrees with it. The invariant lives with the mapper
+		// that owns recovery, and is pinned there.
+		toResult: (session, commandType) => mapBroadcastGraphicsCommandResult(
+			session,
+			commandType as BroadcastGraphicsCommandResult['commandType'],
+		),
 
 		publish: async (result, originConnectionId) => {
 			await publishMessage(

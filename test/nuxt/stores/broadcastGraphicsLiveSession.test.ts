@@ -548,6 +548,43 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		it('reports no fault for a Screen it has never loaded', () => {
 			expect(store.recoveryFault(SCREEN_ID)).toBeNull();
 		});
+
+		it('reloads rather than applying a notification in place while it holds a fault', async () => {
+			// A colleague's Take is what recovers the session, and it recovers it for
+			// everyone — the server reduces onto recovered state and writes clean. The
+			// notification carries only state, so applying it in place would advance the
+			// sequence while leaving this client's fault asserted: it would keep showing
+			// "nothing is on air, take something" over a live show. Only the snapshot
+			// carries both facts, so only the snapshot can resolve it.
+			mockRepository.getSession.mockResolvedValue(session({
+				recoveryFault: { reason: 'corrupt', detail: 'the playout record for slate is not a record' },
+			}));
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+			mockRepository.getSession.mockResolvedValue(session({
+				sequence: 2,
+				currentState: { playout: { slate: { onAir: true } }, inputs: {} },
+				recoveryFault: null,
+			}));
+
+			await store.applyRemoteCommand(notification({ sequence: 2 }));
+
+			expect(mockRepository.getSession).toHaveBeenCalledWith(EVENT_ID, SCREEN_ID);
+			expect(store.recoveryFault(SCREEN_ID)).toBeNull();
+			expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
+		});
+
+		it('still applies a contiguous notification in place when it holds no fault', async () => {
+			// The fault reload must not become a reload on every notification: the
+			// incremental path is what keeps a healthy show off the snapshot route.
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+
+			await store.applyRemoteCommand(notification());
+
+			expect(mockRepository.getSession).not.toHaveBeenCalled();
+			expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
+		});
 	});
 
 	describe('an epoch that has been replaced', () => {
@@ -585,6 +622,52 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			await store.applyEpochEnded({ eventId: EVENT_ID, timestamp: 1_000, screenId: SCREEN_ID, sessionId: 55 } as never);
 
 			expect(mockRepository.getSession).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('refused-edit markers', () => {
+		const graphic = {
+			id: 'slate',
+			name: 'Slate',
+			items: [],
+			inputs: [{
+				type: 'text' as const,
+				key: 'name',
+				label: 'Name',
+				required: false,
+				updatePolicy: 'staged' as const,
+				default: 'Unnamed',
+				maxLength: 20,
+			}],
+		};
+		const OTHER_SCREEN_ID = 4;
+
+		it('are forgotten for the Screen whose epoch ended, and only that Screen', async () => {
+			// An operator working two Screens must not have one Screen's epoch change wipe
+			// what the other is still telling them about a refused edit.
+			mockRepository.getSession.mockImplementation(async (_eventId: number, screenId: number) =>
+				session({ id: screenId === SCREEN_ID ? 55 : 66, screenId }));
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			await store.loadSession(EVENT_ID, OTHER_SCREEN_ID);
+			mockRepository.sendCommand.mockRejectedValue({
+				statusCode: 409,
+				message: 'Another operator has already changed Name on this Broadcast Graphic',
+				data: { code: 'stale-input-edit', inputKeys: ['name'] },
+			});
+			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
+			await store.setInput(EVENT_ID, OTHER_SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
+			expect(store.inputTraces(SCREEN_ID, graphic)[0]!.status).toBe('stale');
+			expect(store.inputTraces(OTHER_SCREEN_ID, graphic)[0]!.status).toBe('stale');
+
+			await store.applyEpochEnded({
+				eventId: EVENT_ID,
+				timestamp: 1_000,
+				screenId: SCREEN_ID,
+				sessionId: 55,
+			} as never);
+
+			expect(store.inputTraces(SCREEN_ID, graphic)[0]!.status).not.toBe('stale');
+			expect(store.inputTraces(OTHER_SCREEN_ID, graphic)[0]!.status).toBe('stale');
 		});
 	});
 

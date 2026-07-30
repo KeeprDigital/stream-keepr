@@ -76,10 +76,21 @@ export interface BroadcastGraphicsCommandResult extends BroadcastGraphicsCommand
  * says only "stop trusting what you have", which is what every reload path this
  * notification triggers already knows how to answer.
  *
- * It is published for a mode change, a Screen delete, and an explicit live-state
- * reset alike: from a Live Control's or a Screen Output's point of view those are
- * the same event, and the difference between them is not something a client acts
- * on differently.
+ * ## Which epoch endings publish it, and why
+ *
+ * An explicit live-state reset is the case that *needs* it: the Screen is unchanged,
+ * so no other message is published, and without this every peer would sit on the
+ * ended epoch — still rendering the graphics the reset was meant to clear.
+ *
+ * A mode change publishes it too, but as belt and braces rather than necessity:
+ * `screen:updated` already reaches every client, including Screen Outputs, and an
+ * output renders by the Screen's current mode, so it stops composing graphics on its
+ * own. This makes the cached epoch go deterministically rather than as a
+ * side effect of a component remount.
+ *
+ * A Screen delete deliberately publishes nothing. Those clients are about to be told
+ * the Screen itself is gone, and pointing them at a snapshot route that will now
+ * refuse them would surface a spurious failure on the way out.
  */
 export interface BroadcastGraphicsEpochEndedPayload {
 	screenId: number;

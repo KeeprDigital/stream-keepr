@@ -66,6 +66,21 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	}
 
 	/**
+	 * Forget this Screen's refused-edit markers, and only this Screen's.
+	 *
+	 * A marker says "your last edit to this field lost a race", which stops being true
+	 * once the epoch holding the winning value is gone. That is a fact about one
+	 * Screen: an operator working two Screens must not have one Screen's reset wipe
+	 * what the other is telling them.
+	 */
+	function forgetStaleInputs(screenId: number) {
+		for (const key of [...staleInputs.value]) {
+			if (key.startsWith(`${screenId}:`))
+				staleInputs.value.delete(key);
+		}
+	}
+
+	/**
 	 * Whether this Broadcast Graphic has an action in flight.
 	 *
 	 * Scoped per graphic rather than per Screen: taking one graphic must never
@@ -258,7 +273,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			async () => {
 				const session = await repository.resetSession(eventId, screenId);
 				cacheSession(session);
-				staleInputs.value.clear();
+				forgetStaleInputs(screenId);
 				return session;
 			},
 			{ loadingRef: loading, errorRef: error },
@@ -282,7 +297,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		// Graphics mode, which is one of the ways an epoch ends — keeping it cached
 		// would leave every output rendering a show that is over.
 		sessions.value.delete(data.screenId);
-		staleInputs.value.clear();
+		forgetStaleInputs(data.screenId);
 		await loadSession(data.eventId, data.screenId);
 	}
 
@@ -376,6 +391,20 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		// Nothing loaded, or a different epoch entirely: the snapshot is the only
 		// thing that can say which epoch this client should be following.
 		if (!known || known.id !== data.sessionId) {
+			await loadSession(data.eventId, data.screenId);
+			return;
+		}
+
+		// While a recovery fault is held, no notification may be applied in place.
+		// The fault is a property of the durable state, and a notification carries
+		// only the state — so patching incrementally would advance the sequence while
+		// leaving the fault asserted forever. That is the worst possible reading for
+		// an operator: the colleague's Take has recovered the session and put graphics
+		// on air, and this client would still be showing "nothing is on air, take
+		// something" over a live show. The snapshot carries both facts together, so
+		// reloading is the only answer that keeps them consistent. It costs one fetch
+		// per client per incident, because the first accepted command clears the fault.
+		if (known.recoveryFault) {
 			await loadSession(data.eventId, data.screenId);
 			return;
 		}
