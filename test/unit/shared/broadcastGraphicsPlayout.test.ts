@@ -2,7 +2,7 @@ import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-gra
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import {
-	applyBroadcastGraphicsPlayoutCommand,
+	applyBroadcastGraphicsCommand,
 	broadcastGraphicPlayoutState,
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,
@@ -12,12 +12,15 @@ function graphic(id: string): BroadcastGraphicConfig {
 	return { id, name: id, items: [] };
 }
 
+/** A Broadcast Graphic declaring no Graphic Inputs: playout alone. */
+const NO_INPUTS = { inputs: [] };
+
 function take(state: BroadcastGraphicsLiveState, graphicId: string, cut = false): BroadcastGraphicsLiveState {
-	return applyBroadcastGraphicsPlayoutCommand(state, 'Take', { graphicId, cut });
+	return applyBroadcastGraphicsCommand(state, { type: 'Take', payload: { graphicId, cut } }, NO_INPUTS);
 }
 
 function out(state: BroadcastGraphicsLiveState, graphicId: string, cut = false): BroadcastGraphicsLiveState {
-	return applyBroadcastGraphicsPlayoutCommand(state, 'Out', { graphicId, cut });
+	return applyBroadcastGraphicsCommand(state, { type: 'Out', payload: { graphicId, cut } }, NO_INPUTS);
 }
 
 describe('broadcastGraphicsPlayout', () => {
@@ -118,7 +121,12 @@ describe('broadcastGraphicsPlayout', () => {
 		// so it is asserted as one: adding a field here (a phase, an effective start
 		// time) must fail this test and force a conscious decision about whether
 		// recovery would replay it.
-		expect(Object.keys(persisted).toSorted()).toEqual(['playout']);
+		//
+		// Accepted Graphic Input values are stored, and are the deliberate exception:
+		// they are the values a recovered graphic renders at its resting state, not a
+		// record of how it got there, so nothing about them is replayable.
+		expect(Object.keys(persisted).toSorted()).toEqual(['inputs', 'playout']);
 		expect(Object.keys(persisted.playout.slate!).toSorted()).toEqual(['onAir']);
+		expect(Object.keys(persisted.inputs.slate!).toSorted()).toEqual(['accepted', 'acceptedRevision', 'working']);
 	});
 });

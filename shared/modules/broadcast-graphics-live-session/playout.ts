@@ -1,4 +1,19 @@
-import type { BroadcastGraphicConfig, GraphicPlayoutState } from '~~/shared/types/graphics';
+import type {
+	BroadcastGraphicConfig,
+	GraphicInputDeclaration,
+	GraphicInputValue,
+	GraphicPlayoutState,
+} from '~~/shared/types/graphics';
+import type { BroadcastGraphicInputsState } from './inputs';
+import { findGraphicInputDeclaration, graphicInputAvailability } from '~~/shared/modules/graphics';
+import {
+	acceptGraphicInputValues,
+	broadcastGraphicInputsState,
+	createInitialBroadcastGraphicInputsState,
+	isDeclaredGraphicInput,
+	unavailableRequiredGraphicInputs,
+} from './inputs';
+import { BroadcastGraphicsCommandRejection } from './rejection';
 
 /**
  * Broadcast Graphics playout reduction.
@@ -44,10 +59,17 @@ export interface BroadcastGraphicPlayout {
  */
 export interface BroadcastGraphicsLiveState {
 	playout: Record<string, BroadcastGraphicPlayout>;
+	/** Working and accepted Graphic Input values, per placed Broadcast Graphic. */
+	inputs: Record<string, BroadcastGraphicInputsState>;
 }
 
-/** The playout actions a Broadcast Graphics Live Session accepts. */
-export const BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES = ['Take', 'Out'] as const;
+/** The actions a Broadcast Graphics Live Session accepts. */
+export const BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES = [
+	'Take',
+	'Out',
+	'Update Graphic',
+	'Set Input',
+] as const;
 
 export type BroadcastGraphicsCommandType = typeof BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES[number];
 
@@ -63,23 +85,212 @@ export interface BroadcastGraphicsPlayoutPayload {
 	cut?: boolean;
 }
 
-export function createInitialBroadcastGraphicsLiveState(): BroadcastGraphicsLiveState {
-	return { playout: {} };
+/**
+ * One atomic acceptance of a Broadcast Graphic's staged Graphic Inputs.
+ *
+ * `basedOnAcceptedRevision` is the sequence guard: the acceptance names the one
+ * it supersedes, so an operator whose Live Control has fallen behind another
+ * operator's acceptance is refused rather than silently overwriting it. Cut
+ * Update is this same intent with the modifier set, never a second intent — which
+ * is also why a retry of it keeps its own command id.
+ */
+export interface BroadcastGraphicsUpdatePayload extends BroadcastGraphicsPlayoutPayload {
+	basedOnAcceptedRevision: number;
 }
 
-export function applyBroadcastGraphicsPlayoutCommand(
+/**
+ * One edit to a declared Graphic Input's working value.
+ *
+ * The value is stored as the operator entered it, even when it violates the
+ * declaration: it is reported unavailable rather than coerced, so Live Control can
+ * show what was entered and why it cannot go on air. Acceptance is what refuses
+ * to put an unavailable value on air, not this write.
+ */
+export interface BroadcastGraphicsSetInputPayload {
+	graphicId: string;
+	inputKey: string;
+	value: GraphicInputValue;
+}
+
+export type BroadcastGraphicsCommandPayload
+	= | BroadcastGraphicsPlayoutPayload
+		| BroadcastGraphicsUpdatePayload
+		| BroadcastGraphicsSetInputPayload;
+
+/** One command as the reducer reads it: what kind of intent, and its content. */
+export type BroadcastGraphicsCommandInput
+	= | { type: 'Take' | 'Out'; payload: BroadcastGraphicsPlayoutPayload }
+		| { type: 'Update Graphic'; payload: BroadcastGraphicsUpdatePayload }
+		| { type: 'Set Input'; payload: BroadcastGraphicsSetInputPayload };
+
+/**
+ * What the reducer needs to know about the Broadcast Graphic a command addresses.
+ *
+ * Only its declared Graphic Inputs: acceptance has to know each input's type,
+ * constraints, requiredness, and On-air Update Policy, and none of that belongs
+ * in live state, because it is authored configuration that an author may change
+ * under a running show.
+ */
+export interface BroadcastGraphicsReductionContext {
+	inputs: readonly GraphicInputDeclaration[];
+}
+
+export function createInitialBroadcastGraphicsLiveState(): BroadcastGraphicsLiveState {
+	return { playout: {}, inputs: {} };
+}
+
+function withInputs(
 	state: BroadcastGraphicsLiveState,
-	type: BroadcastGraphicsCommandType,
-	payload: BroadcastGraphicsPlayoutPayload,
+	graphicId: string,
+	inputs: BroadcastGraphicInputsState,
 ): BroadcastGraphicsLiveState {
+	return { ...state, inputs: { ...state.inputs, [graphicId]: inputs } };
+}
+
+/**
+ * Take: state that this Broadcast Graphic is the operator's latest desired on-air
+ * intent, and accept the values it should enter with.
+ *
+ * A graphic already on air only has its intent restated. Accepting the working
+ * set again would make a second press a backdoor Update Graphic, and partial edits
+ * would reach program without anyone confirming them — so Take accepts only on the
+ * way on air, which is exactly the rule that editing an off graphic changes the
+ * working values its *next* Take accepts.
+ */
+function reduceTake(
+	state: BroadcastGraphicsLiveState,
+	payload: BroadcastGraphicsPlayoutPayload,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicsLiveState {
+	const playout = { ...state.playout, [payload.graphicId]: { onAir: true } };
+	if (state.playout[payload.graphicId]?.onAir)
+		return { ...state, playout };
+
+	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
+	const blocked = unavailableRequiredGraphicInputs(inputs, context.inputs);
+	if (blocked.length > 0) {
+		throw new BroadcastGraphicsCommandRejection(
+			'required-input-unavailable',
+			`${blocked.map(declaration => declaration.label).join(', ')} must have a value before this Broadcast Graphic can go on air`,
+			blocked.map(declaration => declaration.key),
+		);
+	}
+
 	return {
-		...state,
-		playout: {
-			...state.playout,
-			[payload.graphicId]: { onAir: type === 'Take' },
-		},
+		...withInputs(state, payload.graphicId, {
+			...inputs,
+			accepted: acceptGraphicInputValues(inputs, context.inputs),
+			acceptedRevision: inputs.acceptedRevision + 1,
+		}),
+		playout,
 	};
 }
+
+/**
+ * Update Graphic: one atomic acceptance of the complete staged set.
+ *
+ * A required Graphic Input that has become unavailable does not block it. The
+ * graphic is already on air, and the settled rule is that its last accepted value
+ * stays visible until the operator updates or overrides it — which acceptance
+ * achieves by passing over the unavailable value rather than by refusing.
+ */
+function reduceUpdateGraphic(
+	state: BroadcastGraphicsLiveState,
+	payload: BroadcastGraphicsUpdatePayload,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicsLiveState {
+	if (!state.playout[payload.graphicId]?.onAir) {
+		throw new BroadcastGraphicsCommandRejection(
+			'update-unavailable',
+			'Update Graphic is available only while a Broadcast Graphic is on air',
+		);
+	}
+
+	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
+	if (payload.basedOnAcceptedRevision !== inputs.acceptedRevision) {
+		throw new BroadcastGraphicsCommandRejection(
+			'stale-input-acceptance',
+			'Another operator has already accepted a newer Graphic Input set for this Broadcast Graphic',
+		);
+	}
+
+	return withInputs(state, payload.graphicId, {
+		...inputs,
+		accepted: acceptGraphicInputValues(inputs, context.inputs),
+		acceptedRevision: inputs.acceptedRevision + 1,
+	});
+}
+
+/**
+ * Set Input: change one working value, and — under a live On-air Update Policy on
+ * an on-air graphic — accept that one field with it.
+ *
+ * A live acceptance deliberately leaves `acceptedRevision` alone. It accepts its
+ * own field and nothing else, so counting it would make ordinary live edits
+ * invalidate a staged Update Graphic another operator is preparing on the same
+ * graphic's other inputs.
+ */
+function reduceSetInput(
+	state: BroadcastGraphicsLiveState,
+	payload: BroadcastGraphicsSetInputPayload,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicsLiveState {
+	if (!isDeclaredGraphicInput(context.inputs, payload.inputKey)) {
+		throw new BroadcastGraphicsCommandRejection(
+			'unknown-input',
+			`This Broadcast Graphic declares no Graphic Input named ${payload.inputKey}`,
+			[payload.inputKey],
+		);
+	}
+
+	const declaration = findGraphicInputDeclaration(context.inputs, payload.inputKey)!;
+	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
+	const acceptsImmediately = declaration.updatePolicy === 'live'
+		&& state.playout[payload.graphicId]?.onAir === true
+		&& graphicInputAvailability(declaration, payload.value).available;
+
+	return withInputs(state, payload.graphicId, {
+		...inputs,
+		working: { ...inputs.working, [payload.inputKey]: payload.value },
+		accepted: acceptsImmediately
+			? { ...inputs.accepted, [payload.inputKey]: payload.value }
+			: inputs.accepted,
+	});
+}
+
+/**
+ * Reduce one accepted command onto the Live Session's state.
+ *
+ * Playout intents are assignments, which is what makes them idempotent by
+ * construction. Graphic Input acceptance is not: accepting a staged set twice is a
+ * genuine double-apply, so the Command Receipt that recognises a repeated delivery
+ * and the acceptance revision that refuses a stale one are both load-bearing here
+ * in a way they never were for Take and Out alone.
+ */
+export function applyBroadcastGraphicsCommand(
+	state: BroadcastGraphicsLiveState,
+	command: BroadcastGraphicsCommandInput,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicsLiveState {
+	const normalized: BroadcastGraphicsLiveState = { playout: state.playout ?? {}, inputs: state.inputs ?? {} };
+
+	switch (command.type) {
+		case 'Take':
+			return reduceTake(normalized, command.payload, context);
+		case 'Out':
+			return {
+				...normalized,
+				playout: { ...normalized.playout, [command.payload.graphicId]: { onAir: false } },
+			};
+		case 'Update Graphic':
+			return reduceUpdateGraphic(normalized, command.payload, context);
+		case 'Set Input':
+			return reduceSetInput(normalized, command.payload, context);
+	}
+}
+
+/** The Graphic Input state a fresh placed Broadcast Graphic starts from. */
+export { createInitialBroadcastGraphicInputsState };
 
 /**
  * The operator-visible lifecycle status of one placed Broadcast Graphic.

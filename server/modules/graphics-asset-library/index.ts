@@ -25,6 +25,14 @@ import type {
 	GraphicsRetentionOverview,
 	GraphicsRetentionSweepResult,
 } from '~~/shared/types/graphicsAsset';
+import type {
+	TemplatePackageAssetRequirement,
+	TemplatePackageCapabilityRequirement,
+	TemplatePackageExportIssue,
+	TemplatePackageExportReport,
+	TemplatePackageKind,
+	TemplatePackageManifest,
+} from '~~/shared/types/templatePackage';
 import type { GraphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import type { GraphicsCapacityExhaustedDetails } from './errors';
 import type { GraphicsAssetMultipartState } from './multipart';
@@ -40,6 +48,14 @@ import type {
 import type { GraphicsRemoteSourceFetcher } from './remote-source';
 import type { GraphicsAssetRetentionCatalogue } from './retention';
 import type { SilentVideoPlaybackValidator } from './silent-video-playback-validator';
+import type { ResolvedPackagedRevision } from './template-package';
+import {
+	TEMPLATE_PACKAGE_ARTIFACTS,
+	TEMPLATE_PACKAGE_LIMITS,
+	TEMPLATE_PACKAGE_MANIFEST_ENTRY,
+	TEMPLATE_PACKAGE_TEMPLATE_ENTRY,
+	templatePackageFileName,
+} from '~~/shared/types/templatePackage';
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import {
 	GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
@@ -64,6 +80,7 @@ import {
 	createBoundedByteStream,
 	graphicsObjectIdentity,
 	GraphicsObjectInputError,
+	readableBytes,
 } from './object-store';
 import {
 	sha256Hex,
@@ -81,10 +98,19 @@ import {
 } from './silent-video-playback-validator';
 import { processStillImage } from './still-image';
 import {
+	groupTemplatePackageRequirements,
+	inspectTemplateDocument,
+	inspectTemplatePackageCapabilities,
+	planTemplatePackage,
+	templatePackageExportIssue,
+	undeclaredReferenceIssues,
+} from './template-package';
+import {
 	GraphicAssetValidationError,
 	rejectedValidationReport,
 	validationError,
 } from './validation';
+import { createStoredZipArchive, storedZipArchiveByteLength } from './zip-archive';
 
 export { GraphicsAssetLibraryError } from './errors';
 export { createInMemoryGraphicsAssetCatalogue } from './in-memory-catalogue';
@@ -279,6 +305,11 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		canonicalMime: GraphicAssetCanonicalMime;
 		kind: 'image' | 'silent-video' | 'font';
 		lifecycleState: 'active' | 'retired' | 'trashed';
+		/** The catalogue metadata snapshot a Template Package carries as provenance. */
+		name: string;
+		revisionNumber: number;
+		compatibilityProfile: string;
+		facts: GraphicAsset['facts'];
 	} | undefined>;
 	listGraphicAssetUsage: (assetId: GraphicAssetId) => Promise<GraphicAssetUsage[]>;
 	findThumbnailDigest: (assetId: GraphicAssetId) => Promise<string | undefined>;
@@ -452,6 +483,14 @@ export interface GraphicsAssetLibrary {
 		| { outcome: 'unavailable'; retryable: true }
 	>;
 	/**
+	 * The single contract both Template Package exporters use. Each workflow
+	 * supplies its own Template payload and the requirements its own vocabulary
+	 * discovered; the library decides what a package may contain, resolves every
+	 * exact revision, and streams the envelope. Callers learn nothing about
+	 * digests-as-keys, buckets, or any storage provider.
+	 */
+	exportTemplatePackage: (input: TemplatePackageExportRequest) => Promise<TemplatePackageExportOutcome>;
+	/**
 	 * Runs one scheduled retention pass. Every stage reclaims only state it has
 	 * just proven unreachable past its complete recovery guarantee, and records
 	 * durable Evidence for what it did.
@@ -477,6 +516,34 @@ export interface GraphicsAssetLibrary {
 		assetId: GraphicAssetId;
 	}) => Promise<GraphicAssetRetentionView>;
 }
+
+export interface TemplatePackageExportRequest {
+	packageKind: TemplatePackageKind;
+	/** Exactly one Template. Its document is opaque data the library validates but never interprets. */
+	template: {
+		identity: string;
+		name: string;
+		document: unknown;
+	};
+	/** Every exact revision the Template transitively requires, by Template slot. */
+	assets: readonly TemplatePackageAssetRequirement[];
+	/** Application-owned capabilities to declare rather than duplicate. */
+	capabilities?: readonly TemplatePackageCapabilityRequirement[];
+}
+
+export interface TemplatePackageEnvelope {
+	packageKind: TemplatePackageKind;
+	fileName: string;
+	mediaType: string;
+	manifest: TemplatePackageManifest;
+	/** Exact, known before the first byte streams, so a route may publish it. */
+	archiveByteLength: number;
+	open: () => ReadableStream<Uint8Array>;
+}
+
+export type TemplatePackageExportOutcome
+	= | { outcome: 'exported'; package: TemplatePackageEnvelope }
+		| { outcome: 'rejected'; report: TemplatePackageExportReport };
 
 interface GraphicsAssetLibraryDependencies {
 	catalogue: GraphicsAssetCatalogueHealth | GraphicsAssetCatalogue;
@@ -655,6 +722,56 @@ export function createGraphicsAssetLibrary(
 
 	function timestamp() {
 		return now().toISOString();
+	}
+
+	type CanonicalContentFacts = Pick<
+		NonNullable<Awaited<ReturnType<GraphicsAssetCatalogue['findRevisionContent']>>>,
+		'digest' | 'byteLength' | 'canonicalMime'
+	>;
+
+	/**
+	 * Canonical bytes are only usable when the store agrees with the catalogue
+	 * about their length and canonical media type. Any disagreement is treated as
+	 * unavailable rather than served, so no caller ever receives content that
+	 * does not match its recorded facts.
+	 */
+	async function readCanonicalContent(
+		content: CanonicalContentFacts,
+		range?: { offset: number; length: number },
+	): Promise<
+		| { outcome: 'available'; body: ReadableStream<Uint8Array>; byteLength: number }
+		| { outcome: 'unavailable'; retryable: true }
+	> {
+		const result = await requireCanonical().read(
+			graphicsObjectIdentity(`sha256/${content.digest}`),
+			range,
+		);
+		if (
+			result.outcome !== 'available'
+			|| result.object.byteLength !== content.byteLength
+			|| result.object.contentType !== content.canonicalMime
+			|| result.range.completeLength !== content.byteLength
+			|| (
+				range !== undefined
+				&& (result.range.offset !== range.offset || result.range.length !== range.length)
+			)
+		) {
+			return { outcome: 'unavailable', retryable: true };
+		}
+		return {
+			outcome: 'available',
+			body: result.body,
+			byteLength: result.object.byteLength,
+		};
+	}
+
+	async function canonicalContentAvailable(content: CanonicalContentFacts): Promise<boolean> {
+		const result = await requireCanonical().readMetadata(
+			graphicsObjectIdentity(`sha256/${content.digest}`),
+		);
+		return result.outcome === 'available'
+			&& result.object.byteLength === content.byteLength
+			&& result.object.contentType === content.canonicalMime;
 	}
 
 	function timestampAfter(updatedAt: string) {
@@ -2706,16 +2823,8 @@ export function createGraphicsAssetLibrary(
 			);
 			if (!content)
 				return { outcome: 'missing' };
-			const result = await requireCanonical().readMetadata(
-				graphicsObjectIdentity(`sha256/${content.digest}`),
-			);
-			if (
-				result.outcome !== 'available'
-				|| result.object.byteLength !== content.byteLength
-				|| result.object.contentType !== content.canonicalMime
-			) {
+			if (!await canonicalContentAvailable(content))
 				return { outcome: 'unavailable', retryable: true };
-			}
 			return {
 				outcome: 'available',
 				lifecycleState: content.lifecycleState,
@@ -2729,16 +2838,8 @@ export function createGraphicsAssetLibrary(
 			);
 			if (!content)
 				return { outcome: 'missing' };
-			const result = await requireCanonical().readMetadata(
-				graphicsObjectIdentity(`sha256/${content.digest}`),
-			);
-			if (
-				result.outcome !== 'available'
-				|| result.object.byteLength !== content.byteLength
-				|| result.object.contentType !== content.canonicalMime
-			) {
+			if (!await canonicalContentAvailable(content))
 				return { outcome: 'unavailable', retryable: true };
-			}
 			return {
 				outcome: 'available',
 				byteLength: content.byteLength,
@@ -2752,30 +2853,13 @@ export function createGraphicsAssetLibrary(
 			);
 			if (!content)
 				return { outcome: 'missing' };
-			const result = await requireCanonical().read(
-				graphicsObjectIdentity(`sha256/${content.digest}`),
-				input.range,
-			);
+			const result = await readCanonicalContent(content, input.range);
 			if (result.outcome !== 'available')
 				return { outcome: 'unavailable', retryable: true };
-			if (
-				result.object.byteLength !== content.byteLength
-				|| result.object.contentType !== content.canonicalMime
-				|| result.range.completeLength !== content.byteLength
-				|| (
-					input.range !== undefined
-					&& (
-						result.range.offset !== input.range.offset
-						|| result.range.length !== input.range.length
-					)
-				)
-			) {
-				return { outcome: 'unavailable', retryable: true };
-			}
 			return {
 				outcome: 'available',
 				body: result.body,
-				byteLength: result.object.byteLength,
+				byteLength: result.byteLength,
 				contentType: content.canonicalMime,
 			};
 		},
@@ -2796,6 +2880,148 @@ export function createGraphicsAssetLibrary(
 				body: result.body,
 				byteLength: result.object.byteLength,
 				contentType: 'image/png',
+			};
+		},
+		async exportTemplatePackage(input) {
+			const checkedAt = timestamp();
+			const identity = input.template.identity.trim();
+			const name = input.template.name.trim();
+			if (!identity || !name || name.length > 200) {
+				throw new GraphicsAssetLibraryError(
+					'A Template Package requires one Template identity and a name of 1 to 200 characters',
+					'invalid-ingestion-input',
+				);
+			}
+
+			const document = inspectTemplateDocument(input.template.document);
+			const requirements = groupTemplatePackageRequirements(input.assets);
+			const capabilities = inspectTemplatePackageCapabilities(input.capabilities ?? []);
+			const issues: TemplatePackageExportIssue[] = [
+				...document.issues,
+				...undeclaredReferenceIssues(document.references, input.assets),
+				...requirements.issues,
+				...capabilities.issues,
+			];
+
+			// Every requirement resolves before anything is packaged, so one report
+			// carries all blocking problems together rather than the first one found.
+			const revisions: ResolvedPackagedRevision[] = [];
+			for (const requirement of requirements.grouped) {
+				const content = await catalogueRequest(
+					() => requireCatalogue().findRevisionContent(requirement.reference),
+					'Graphic Asset Revision lookup is temporarily unavailable',
+				);
+				if (!content) {
+					issues.push(templatePackageExportIssue('missing-graphic-asset-reference', {
+						slot: requirement.slots[0],
+						message: 'The Template requires a Graphic Asset Revision that does not exist',
+					}));
+					continue;
+				}
+				if (requirement.expectedKind && requirement.expectedKind !== content.kind) {
+					issues.push(templatePackageExportIssue('unexpected-graphic-asset-kind', {
+						slot: requirement.slots[0],
+						message: `The Template slot requires a ${requirement.expectedKind} but its revision is a ${content.kind}`,
+					}));
+					continue;
+				}
+				if (!await canonicalContentAvailable(content)) {
+					issues.push(templatePackageExportIssue('unavailable-graphic-asset-content', {
+						slot: requirement.slots[0],
+						message: 'The exact Graphic Asset Revision exists but its content is unavailable',
+					}));
+					continue;
+				}
+				revisions.push({
+					reference: requirement.reference,
+					name: content.name,
+					kind: content.kind,
+					revisionNumber: content.revisionNumber,
+					digest: content.digest,
+					byteLength: content.byteLength,
+					canonicalMime: content.canonicalMime,
+					facts: content.facts,
+					compatibilityProfile: content.compatibilityProfile,
+					requiredBy: requirement.slots,
+				});
+			}
+
+			function rejected(
+				reportIssues: readonly TemplatePackageExportIssue[],
+				observed: TemplatePackageExportReport['observed'],
+			): TemplatePackageExportOutcome {
+				return {
+					outcome: 'rejected',
+					report: {
+						packageKind: input.packageKind,
+						templateIdentity: identity,
+						checkedAt,
+						issues: [...reportIssues].sort((left, right) =>
+							(left.slot ?? '').localeCompare(right.slot ?? '')
+							|| left.code.localeCompare(right.code),
+						),
+						limits: TEMPLATE_PACKAGE_LIMITS,
+						observed,
+					},
+				};
+			}
+
+			// The envelope is measured even when a requirement already failed, so one
+			// report carries resolution and limit problems together rather than
+			// making an author fix a reference only to discover the package was
+			// always too large. Totals cover the revisions that did resolve, so a
+			// limit reported here is always real; an unresolvable revision's bytes
+			// simply cannot be counted, which can only understate a violation.
+			const plan = planTemplatePackage({
+				packageKind: input.packageKind,
+				template: { identity, name, document: input.template.document },
+				revisions,
+				capabilities: capabilities.declarations,
+				createdAt: checkedAt,
+				archiveByteLength: storedZipArchiveByteLength,
+			});
+			// Limits are measured before a byte is written, so a package that would
+			// exceed the envelope never produces a partial archive.
+			if (issues.length > 0 || plan.issues.length > 0)
+				return rejected([...issues, ...plan.issues], plan.totals);
+
+			return {
+				outcome: 'exported',
+				package: {
+					packageKind: input.packageKind,
+					fileName: templatePackageFileName(input.packageKind, name),
+					mediaType: TEMPLATE_PACKAGE_ARTIFACTS[input.packageKind].mediaType,
+					manifest: plan.manifest,
+					archiveByteLength: plan.totals.archiveByteLength,
+					open: () => createStoredZipArchive([
+						{
+							name: TEMPLATE_PACKAGE_MANIFEST_ENTRY,
+							byteLength: plan.manifestBytes.byteLength,
+							open: async () => readableBytes(plan.manifestBytes),
+						},
+						{
+							name: TEMPLATE_PACKAGE_TEMPLATE_ENTRY,
+							byteLength: plan.templateBytes.byteLength,
+							open: async () => readableBytes(plan.templateBytes),
+						},
+						...plan.contents.map(content => ({
+							name: content.entry,
+							byteLength: content.byteLength,
+							// Bytes are fetched only when the archive reaches this entry, so
+							// no complete asset is ever held in Worker memory.
+							open: async () => {
+								const result = await readCanonicalContent(content);
+								if (result.outcome !== 'available') {
+									throw new GraphicsAssetLibraryError(
+										'Graphic Asset content became unavailable while the Template Package was streaming',
+										'graphics-asset-library-unavailable',
+									);
+								}
+								return result.body;
+							},
+						})),
+					]),
+				},
 			};
 		},
 		async runGraphicsRetention() {

@@ -1687,7 +1687,9 @@ export function createD1GraphicsAssetCatalogue(
 		},
 		async findRevisionContent(input) {
 			const row = await database.prepare(`
-				SELECT c.digest, c.byte_length, c.canonical_mime, a.kind, a.lifecycle_state
+				SELECT
+					c.digest, c.byte_length, c.canonical_mime, a.kind, a.lifecycle_state,
+					a.name, r.revision_number, r.compatibility_profile, r.technical_facts
 				FROM graphic_asset_revisions r
 				JOIN graphic_asset_contents c ON c.digest = r.content_digest
 				JOIN graphic_assets a ON a.id = r.asset_id
@@ -1698,6 +1700,10 @@ export function createD1GraphicsAssetCatalogue(
 				canonical_mime: GraphicAssetCanonicalMime;
 				kind: GraphicAsset['kind'];
 				lifecycle_state: 'active' | 'retired' | 'trashed';
+				name: string;
+				revision_number: number;
+				compatibility_profile: string;
+				technical_facts: string;
 			}>();
 			return row
 				? {
@@ -1706,6 +1712,10 @@ export function createD1GraphicsAssetCatalogue(
 						canonicalMime: row.canonical_mime,
 						kind: row.kind,
 						lifecycleState: row.lifecycle_state,
+						name: row.name,
+						revisionNumber: row.revision_number,
+						compatibilityProfile: row.compatibility_profile,
+						facts: JSON.parse(row.technical_facts) as GraphicAsset['facts'],
 					}
 				: undefined;
 		},

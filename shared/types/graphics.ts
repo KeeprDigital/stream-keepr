@@ -1,4 +1,5 @@
 import type { FeatureMatchOverlayFontId } from '../featureMatchOverlayFonts';
+import type { GraphicAssetReference } from './graphicsAsset';
 
 /**
  * Shared Graphics Foundation vocabulary.
@@ -7,9 +8,10 @@ import type { FeatureMatchOverlayFontId } from '../featureMatchOverlayFonts';
  * Feature Match Overlay both speak. It now carries the full static vocabulary
  * the compositor interprets: Text Graphic Items, Shape Graphic Items, Graphic
  * Groups, per-corner Shape Geometry with bounded edge slants, Graphic Surface
- * Style with solid and linear-gradient Graphic Fill, outline and glow, and
- * Graphic Rotation. Media Graphic Items, Graphic Inputs, and Graphic Animation
- * join the same vocabulary later without changing this shape.
+ * Style with solid and linear-gradient Graphic Fill, outline and glow, Graphic
+ * Rotation, and the typed Graphic Inputs a Text Graphic Item renders through a
+ * Graphic Text Template. Media Graphic Items and Graphic Animation join the
+ * same vocabulary later without changing this shape.
  */
 
 /** One of nine points on a canvas-positioned Graphic Item. */
@@ -106,13 +108,26 @@ export interface GraphicFillStop {
 }
 
 /**
- * The bound on a Text Graphic Item's own text. It holds a name, a title, or a
- * Graphic Text Template with `{inputKey}` placeholders, and its Text Overflow
- * Policy already assumes the rendered result fits authored bounds.
+ * The bound on a Text Graphic Item's own stored text — the Graphic Text Template
+ * an author writes, not the string it renders.
  *
  * It lives here rather than in the wire schema so the editor can bound its own
  * control, and an operator is stopped in the field instead of losing a whole
  * write to a validation error.
+ *
+ * ## The stored bound is not the rendered bound
+ *
+ * `{inputKey}` placeholders expand at render time, so a template well inside this
+ * cap can render a much longer string. Two separate mechanisms bound the result,
+ * and neither is this constant:
+ *
+ * - Every text Graphic Input declares its own `maxLength`, capped by this same
+ *   constant. A longer value is unavailable rather than truncated, so it is never
+ *   accepted on air and never reaches the compositor.
+ * - Whatever length does render, the Text Graphic Item's Text Overflow Policy is
+ *   what keeps it inside authored bounds: clip, ellipsis, or shrink to the
+ *   author's minimum font size and then ellipsis. That policy has always applied
+ *   to the *rendered* string, which is exactly what expansion produces.
  */
 export const MAX_GRAPHIC_TEXT_LENGTH = 1000;
 
@@ -192,6 +207,191 @@ export interface ShapeGeometry {
 }
 
 /* ────────────────────────────────────────────────
+ * Graphic Inputs
+ * ──────────────────────────────────────────────── */
+
+/** The declared type of a Graphic Input. */
+export const GRAPHIC_INPUT_TYPE_VALUES = ['text', 'number', 'toggle', 'choice', 'color', 'media'] as const;
+
+export type GraphicInputType = typeof GRAPHIC_INPUT_TYPE_VALUES[number];
+
+/**
+ * Whether a Graphic Input change is staged for operator confirmation or applied
+ * immediately to an on-air Broadcast Graphic. A newly declared Graphic Input is
+ * staged.
+ */
+export const ON_AIR_UPDATE_POLICY_VALUES = ['staged', 'live'] as const;
+
+export type OnAirUpdatePolicy = typeof ON_AIR_UPDATE_POLICY_VALUES[number];
+
+export const DEFAULT_ON_AIR_UPDATE_POLICY: OnAirUpdatePolicy = 'staged';
+
+/**
+ * The grammar of a stable Graphic Input key.
+ *
+ * One pattern serves the declaration and the Graphic Text Template parser, so a
+ * `{placeholder}` can never name something the declaration could not have been
+ * called.
+ */
+export const GRAPHIC_INPUT_KEY_PATTERN = /^[a-z][\w-]*$/i;
+
+export const MAX_GRAPHIC_INPUT_KEY_LENGTH = 40;
+export const MAX_GRAPHIC_INPUT_LABEL_LENGTH = 60;
+
+/**
+ * How many options a choice Graphic Input may offer, and how long each option's
+ * stored value and label may be.
+ *
+ * A choice input generates one picker in Live Control, so a long list is already
+ * the wrong control for an operator working a live show. These bounds are also
+ * where a choice input stops dominating the Screen's byte budget: a maximal one is
+ * the most expensive declaration there is.
+ */
+export const MAX_GRAPHIC_INPUT_CHOICE_OPTIONS = 12;
+export const MAX_GRAPHIC_INPUT_CHOICE_LENGTH = 40;
+
+/** One selectable option of a choice Graphic Input. */
+export interface GraphicInputChoiceOption {
+	/** The stored value. Stable, so renaming the label never invalidates a value. */
+	value: string;
+	/** What an operator reads, and what a Graphic Text Template renders. */
+	label: string;
+}
+
+interface GraphicInputDeclarationBase {
+	/** The stable key a `{inputKey}` placeholder and a Graphic Input Binding name. */
+	key: string;
+	label: string;
+	/** A required Graphic Input must resolve an available value before Take. */
+	required: boolean;
+	updatePolicy: OnAirUpdatePolicy;
+}
+
+/**
+ * The bound on an accepted text Graphic Input value.
+ *
+ * A value longer than its declared `maxLength` is unavailable rather than
+ * truncated, so an over-long value never reaches the compositor at all.
+ */
+export interface TextGraphicInputDeclaration extends GraphicInputDeclarationBase {
+	type: 'text';
+	default: string;
+	maxLength: number;
+}
+
+export interface NumberGraphicInputDeclaration extends GraphicInputDeclarationBase {
+	type: 'number';
+	default: number | null;
+	min?: number;
+	max?: number;
+	integer: boolean;
+}
+
+export interface ToggleGraphicInputDeclaration extends GraphicInputDeclarationBase {
+	type: 'toggle';
+	default: boolean;
+}
+
+export interface ChoiceGraphicInputDeclaration extends GraphicInputDeclarationBase {
+	type: 'choice';
+	default: string | null;
+	options: GraphicInputChoiceOption[];
+}
+
+export interface ColorGraphicInputDeclaration extends GraphicInputDeclarationBase {
+	type: 'color';
+	default: string | null;
+}
+
+/**
+ * A media Graphic Input names a Graphics Asset Library revision rather than a
+ * URL, exactly as an authored asset reference does. Which Graphic Items can
+ * render one is the Media Graphic Item's business, not this declaration's.
+ */
+export interface MediaGraphicInputDeclaration extends GraphicInputDeclarationBase {
+	type: 'media';
+	default: GraphicAssetReference | null;
+	mediaKind: GraphicMediaKind;
+}
+
+export type GraphicInputDeclaration
+	= | TextGraphicInputDeclaration
+		| NumberGraphicInputDeclaration
+		| ToggleGraphicInputDeclaration
+		| ChoiceGraphicInputDeclaration
+		| ColorGraphicInputDeclaration
+		| MediaGraphicInputDeclaration;
+
+/**
+ * One Graphic Input's value, in the shape its declared type takes.
+ *
+ * A value that violates its declared type or constraints is still storable: it
+ * is reported unavailable rather than coerced, clamped, truncated, or
+ * substituted, which means Live Control can show the operator exactly what they
+ * entered and why it cannot go on air.
+ */
+export type GraphicInputValue = string | number | boolean | GraphicAssetReference | null;
+
+/**
+ * The media a Media Graphic Item can render, and therefore what a media Graphic
+ * Input may resolve to. Named rather than inlined because the Media Graphic Item
+ * vocabulary needs the identical set.
+ */
+export const GRAPHIC_MEDIA_KIND_VALUES = ['image', 'silent-video'] as const;
+
+export type GraphicMediaKind = typeof GRAPHIC_MEDIA_KIND_VALUES[number];
+
+/** The single-entity Event Data kinds a Graphic Source Selection may select. */
+export const GRAPHIC_SOURCE_SELECTION_KIND_VALUES = [
+	'event',
+	'player',
+	'talent',
+	'phase',
+	'round',
+	'match',
+	'feature-match-slot',
+	'archetype',
+] as const;
+
+export type GraphicSourceSelectionKind = typeof GRAPHIC_SOURCE_SELECTION_KIND_VALUES[number];
+
+/** A named, single-entity Event Data selection owned by a placed Broadcast Graphic. */
+export interface GraphicSourceSelectionDeclaration {
+	key: string;
+	label: string;
+	kind: GraphicSourceSelectionKind;
+}
+
+/**
+ * An Event-specific, type-compatible mapping from a Graphic Input to one
+ * broadcast-facing field on a Graphic Source Selection.
+ *
+ * The shape is declared here so Live Control can distinguish a bound input from
+ * a manual one. Resolving `fieldId` against the curated field catalogue and
+ * current Event Data is not yet implemented, so a bound input currently has no
+ * latest bound value.
+ */
+export interface GraphicInputBinding {
+	inputKey: string;
+	sourceKey: string;
+	fieldId: string;
+}
+
+/**
+ * An optional typography-only override for one `{inputKey}` placeholder of a
+ * Text Graphic Item.
+ *
+ * Line height and text alignment are deliberately absent: they lay out the
+ * item's whole text block rather than one run inside it, so they stay with the
+ * item's base typography. Literal text always uses that base typography, and a
+ * placeholder style adds no fills, outlines, or other surface styling.
+ */
+export type GraphicPlaceholderStyle = Partial<Pick<
+	GraphicTypography,
+	'fontId' | 'fontSize' | 'fontWeight' | 'fontStyle' | 'textTransform' | 'letterSpacing' | 'color'
+>>;
+
+/* ────────────────────────────────────────────────
  * Graphic Items
  * ──────────────────────────────────────────────── */
 
@@ -224,12 +424,21 @@ interface GraphicItemConfigBase extends GraphicRect {
 
 export interface TextGraphicItemConfig extends GraphicItemConfigBase {
 	type: 'text';
-	/** Literal text. Graphic Text Template placeholders arrive with Graphic Inputs. */
+	/**
+	 * A Graphic Text Template: literal text combined with `{inputKey}`
+	 * placeholders for this Broadcast Graphic's Graphic Inputs. A string with no
+	 * placeholder is simply literal text.
+	 */
 	text: string;
 	typography: GraphicTypography;
 	overflowPolicy: TextOverflowPolicy;
 	/** The author-set floor a `shrink` Text Overflow Policy shrinks to before ellipsis. */
 	minFontSize: number;
+	/**
+	 * Graphic Placeholder Styles, keyed by the `{inputKey}` each one styles. A key
+	 * the template does not reference styles nothing.
+	 */
+	placeholderStyles?: Record<string, GraphicPlaceholderStyle>;
 	/**
 	 * Absent means the item paints no surface of its own, and inherits its Graphic
 	 * Group's local style default when it has one.
@@ -295,4 +504,13 @@ export interface BroadcastGraphicConfig {
 	name: string;
 	/** Graphic Layer Order: the back-to-front list order of this graphic's direct Graphic Items. */
 	items: GraphicItemConfig[];
+	/**
+	 * The typed Graphic Inputs this Broadcast Graphic declares. Absent declares
+	 * none, so a graphic that exposes no operator values carries no key at all.
+	 */
+	inputs?: GraphicInputDeclaration[];
+	/** The single-entity Event Data selections this placed graphic's bindings read. */
+	sources?: GraphicSourceSelectionDeclaration[];
+	/** Graphic Input Bindings, at most one per Graphic Input. */
+	bindings?: GraphicInputBinding[];
 }

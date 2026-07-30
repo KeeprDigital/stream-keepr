@@ -18,13 +18,24 @@ import {
 } from '~~/shared/types/graphicsAsset';
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
-import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import {
+	MAX_SILENT_VIDEO_POSTER_BYTES,
+	SILENT_VIDEO_COMPATIBILITY_PROFILE,
+	STATIC_FONT_COMPATIBILITY_PROFILE,
+	STILL_IMAGE_COMPATIBILITY_PROFILE,
+} from '~~/shared/utils/graphicsAssetCompatibility';
 import { GraphicsAssetLibraryError } from './errors';
 import {
 	graphicsMultipartCompletedByteLength,
 	graphicsMultipartTransfer,
 } from './multipart';
 import { completedGraphicAssetReplacementOperation } from './operation';
+
+const COMPATIBILITY_PROFILES = {
+	'image': STILL_IMAGE_COMPATIBILITY_PROFILE,
+	'silent-video': SILENT_VIDEO_COMPATIBILITY_PROFILE,
+	'font': STATIC_FONT_COMPATIBILITY_PROFILE,
+} as const satisfies Record<GraphicAsset['kind'], string>;
 
 function stagingReservationBytes(operation: GraphicsIngestionOperation) {
 	return operation.declaredByteLength
@@ -745,12 +756,17 @@ export function createInMemoryGraphicsAssetCatalogue(
 			const revision = revisions.get(input.revisionId);
 			if (!revision || revision.assetId !== input.assetId)
 				return undefined;
+			const asset = assets.get(revision.assetId);
 			return {
 				digest: revision.facts.sha256,
 				byteLength: revision.facts.byteLength,
 				canonicalMime: revision.facts.canonicalMime,
 				kind: revision.facts.kind,
-				lifecycleState: assets.get(revision.assetId)?.lifecycle.state ?? 'active',
+				lifecycleState: asset?.lifecycle.state ?? 'active',
+				name: asset?.name ?? '',
+				revisionNumber: revision.revisionNumber,
+				compatibilityProfile: COMPATIBILITY_PROFILES[revision.facts.kind],
+				facts: structuredClone(revision.facts),
 			};
 		},
 		async listGraphicAssetUsage(assetId) {

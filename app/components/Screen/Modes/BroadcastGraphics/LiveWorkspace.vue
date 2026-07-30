@@ -18,8 +18,10 @@ import { screenOutputPath } from '~~/shared/utils/screenOutput';
  * the same target without running the corresponding Graphic Animation phase,
  * which is indistinguishable from the plain action until animation exists.
  *
- * Generated Live Control per placed graphic — source pickers and typed input
- * fields — arrives with the Graphic Input work.
+ * Generated Live Control for the selected Broadcast Graphic sits alongside the
+ * stack: typed fields for its declared Graphic Inputs, the value trace behind each
+ * of them, and Update Graphic while it is on air. Graphic Source Selection pickers
+ * arrive with Event Data binding.
  */
 const props = defineProps<{
 	eventId: number;
@@ -59,6 +61,14 @@ const entries = computed(() => [...props.graphics].reverse().map(graphic => ({
 })));
 
 const onAirCount = computed(() => sessionStore.onAirGraphicIds(props.screen.id, props.graphics).length);
+
+/**
+ * The Broadcast Graphic whose Live Control is shown. An operator working a stack
+ * controls one graphic at a time, and the stack list is where they choose it.
+ */
+const selectedEntry = computed(() =>
+	entries.value.find(entry => entry.graphic.id === props.selectedGraphicId) ?? null,
+);
 
 function take(graphicId: string, cut: boolean) {
 	void sessionStore.take(props.eventId, props.screen.id, graphicId, cut);
@@ -201,5 +211,14 @@ watch(
 				</div>
 			</div>
 		</ScreenSettingsCard>
+
+		<ScreenModesBroadcastGraphicsLiveControl
+			v-if="selectedEntry"
+			:event-id="eventId"
+			:screen="screen"
+			:graphic="selectedEntry.graphic"
+			:playout-state="selectedEntry.playoutState"
+			:pending="selectedEntry.pending"
+		/>
 	</div>
 </template>

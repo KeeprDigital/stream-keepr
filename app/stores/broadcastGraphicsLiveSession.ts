@@ -1,16 +1,25 @@
 import type {
-	BroadcastGraphicsCommandType,
+	BroadcastGraphicInputsState,
 	BroadcastGraphicsLiveState,
+	GraphicInputTrace,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import type {
+	BroadcastGraphicsCommand,
 	BroadcastGraphicsCommandResult,
 	BroadcastGraphicsLiveSessionResponse,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
-import type { BroadcastGraphicConfig, GraphicPlayoutState } from '~~/shared/types/graphics';
+import type {
+	BroadcastGraphicConfig,
+	GraphicInputValue,
+	GraphicPlayoutState,
+} from '~~/shared/types/graphics';
 import type { MessageData } from '~/types/realtime';
 import {
+	acceptedGraphicInputValues,
+	broadcastGraphicInputsState,
 	broadcastGraphicPlayoutState,
 	createInitialBroadcastGraphicsLiveState,
+	graphicInputTraces,
 	onAirBroadcastGraphicIds,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { randomCommandId } from '~~/shared/utils/uuid';
@@ -94,18 +103,23 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		);
 	}
 
-	async function sendCommand(
+	/**
+	 * Deliver one already-built command.
+	 *
+	 * The command arrives built, and that is load-bearing: this function may deliver
+	 * it twice, and both deliveries have to be the same command. Building it here —
+	 * inside the retry — would give the restatement a fresh command id, and the
+	 * receipt that exists to recognise a repeated delivery could no longer see that
+	 * it was one. For Take and Out that would be invisible, because applying either
+	 * twice is indistinguishable from applying it once. For Update Graphic it would
+	 * accept a staged Graphic Input set twice.
+	 */
+	async function deliverCommand(
 		eventId: number,
 		screenId: number,
-		type: BroadcastGraphicsCommandType,
 		graphicId: string,
-		cut: boolean,
+		command: BroadcastGraphicsCommand,
 	): Promise<BroadcastGraphicsLiveSessionResponse | null> {
-		const command = {
-			commandId: randomCommandId(type),
-			type,
-			payload: { graphicId, cut },
-		};
 		const pendingKey = playoutKey(screenId, graphicId);
 		pending.value.add(pendingKey);
 
@@ -142,14 +156,90 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		}
 	}
 
+	function playoutCommand(
+		type: 'Take' | 'Out',
+		graphicId: string,
+		cut: boolean,
+	): BroadcastGraphicsCommand {
+		return { commandId: randomCommandId(type), type, payload: { graphicId, cut } };
+	}
+
 	/** Take a Broadcast Graphic on air; `cut` skips its enter animation once one exists. */
 	function take(eventId: number, screenId: number, graphicId: string, cut = false) {
-		return sendCommand(eventId, screenId, 'Take', graphicId, cut);
+		return deliverCommand(eventId, screenId, graphicId, playoutCommand('Take', graphicId, cut));
 	}
 
 	/** Take a Broadcast Graphic off air; `cut` skips its exit animation once one exists. */
 	function out(eventId: number, screenId: number, graphicId: string, cut = false) {
-		return sendCommand(eventId, screenId, 'Out', graphicId, cut);
+		return deliverCommand(eventId, screenId, graphicId, playoutCommand('Out', graphicId, cut));
+	}
+
+	/** The Graphic Input state of one placed Broadcast Graphic, from the loaded snapshot. */
+	function inputsState(screenId: number, graphicId: string): BroadcastGraphicInputsState {
+		return broadcastGraphicInputsState(liveState(screenId), graphicId);
+	}
+
+	/**
+	 * What Live Control shows for each declared Graphic Input: the latest bound
+	 * value, the working value, and the accepted on-air value, kept apart.
+	 */
+	function inputTraces(screenId: number, graphic: BroadcastGraphicConfig): GraphicInputTrace[] {
+		return graphicInputTraces(liveState(screenId), graphic.id, graphic);
+	}
+
+	/**
+	 * The Graphic Input values an on-air Broadcast Graphic renders.
+	 *
+	 * Accepted values only. A Screen Output composing this graphic reads exactly
+	 * these, so a staged edit can never appear on air by way of the compositor.
+	 */
+	function acceptedInputValues(
+		screenId: number,
+		graphic: BroadcastGraphicConfig,
+	): Record<string, GraphicInputValue> {
+		return acceptedGraphicInputValues(liveState(screenId), graphic.id, graphic.inputs ?? []);
+	}
+
+	/**
+	 * Edit one Graphic Input's working value.
+	 *
+	 * The server accepts the working value, so a second operator's Live Control sees
+	 * it immediately. Whether it also reaches air now is the input's On-air Update
+	 * Policy, decided authoritatively rather than here.
+	 */
+	function setInput(
+		eventId: number,
+		screenId: number,
+		graphicId: string,
+		inputKey: string,
+		value: GraphicInputValue,
+	) {
+		return deliverCommand(eventId, screenId, graphicId, {
+			commandId: randomCommandId('Set Input'),
+			type: 'Set Input',
+			payload: { graphicId, inputKey, value },
+		});
+	}
+
+	/**
+	 * Accept this Broadcast Graphic's complete staged Graphic Input set.
+	 *
+	 * The acceptance revision is read once, here, and travels with the command: a
+	 * restatement must name the same acceptance it originally superseded, or the
+	 * sequence guard would be re-based onto whatever landed in the meantime and stop
+	 * protecting the colleague it exists to protect. Cut Update is this same intent
+	 * with the modifier set, which is why it shares the path and the command id.
+	 */
+	function updateGraphic(eventId: number, screenId: number, graphicId: string, cut = false) {
+		return deliverCommand(eventId, screenId, graphicId, {
+			commandId: randomCommandId('Update Graphic'),
+			type: 'Update Graphic',
+			payload: {
+				graphicId,
+				cut,
+				basedOnAcceptedRevision: inputsState(screenId, graphicId).acceptedRevision,
+			},
+		});
 	}
 
 	async function applyRemoteCommand(data: MessageData<'broadcastGraphicsLiveSession:commandApplied'>) {
@@ -192,9 +282,14 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		playoutState,
 		onAirGraphicIds,
 		isPending,
+		inputsState,
+		inputTraces,
+		acceptedInputValues,
 		loadSession,
 		take,
 		out,
+		setInput,
+		updateGraphic,
 		applyRemoteCommand,
 		$reset,
 	};
