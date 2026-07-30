@@ -85,6 +85,17 @@ export interface GraphicFillStop {
 	opacity: number;
 }
 
+/**
+ * The bound on a Text Graphic Item's own text. It holds a name, a title, or a
+ * Graphic Text Template with `{inputKey}` placeholders, and its Text Overflow
+ * Policy already assumes the rendered result fits authored bounds.
+ *
+ * It lives here rather than in the wire schema so the editor can bound its own
+ * control, and an operator is stopped in the field instead of losing a whole
+ * write to a validation error.
+ */
+export const MAX_GRAPHIC_TEXT_LENGTH = 1000;
+
 export const MIN_GRAPHIC_FILL_STOPS = 2;
 export const MAX_GRAPHIC_FILL_STOPS = 4;
 

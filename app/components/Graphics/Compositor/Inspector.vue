@@ -62,6 +62,7 @@ import {
 	GRAPHIC_TEXT_ALIGN_VALUES,
 	GRAPHIC_TEXT_TRANSFORM_VALUES,
 	MAX_GRAPHIC_FILL_STOPS,
+	MAX_GRAPHIC_TEXT_LENGTH,
 	MIN_GRAPHIC_FILL_STOPS,
 	SHAPE_CORNER_KEYS,
 	SHAPE_CORNER_TREATMENT_VALUES,
@@ -610,6 +611,7 @@ function updateGraphicName(value: string) {
 				<UTextarea
 					:model-value="selectedTextItem.text"
 					:rows="3"
+					:maxlength="MAX_GRAPHIC_TEXT_LENGTH"
 					class="w-full"
 					data-testid="graphic-item-text"
 					@update:model-value="updateTextItem({ text: String($event) })"

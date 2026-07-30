@@ -56,7 +56,7 @@ export const DEFAULT_GRAPHIC_SURFACE_STYLE: GraphicSurfaceStyle = {
 
 /** A fresh copy, so no two items share one nested style object. */
 export function createDefaultGraphicSurfaceStyle(): GraphicSurfaceStyle {
-	return { fill: { type: 'solid', color: '#0077a3' }, fillOpacity: 1 };
+	return { ...DEFAULT_GRAPHIC_SURFACE_STYLE, fill: { ...DEFAULT_GRAPHIC_FILL } };
 }
 
 /** A newly placed item occupies a predictable share of the host canvas. */

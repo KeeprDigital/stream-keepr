@@ -40,6 +40,7 @@ import {
 	GRAPHIC_TEXT_ALIGN_VALUES,
 	GRAPHIC_TEXT_TRANSFORM_VALUES,
 	MAX_GRAPHIC_FILL_STOPS,
+	MAX_GRAPHIC_TEXT_LENGTH,
 	MIN_GRAPHIC_FILL_STOPS,
 	SHAPE_CORNER_TREATMENT_VALUES,
 	TEXT_OVERFLOW_POLICY_VALUES,
@@ -577,15 +578,6 @@ const graphicTypographySchema = z.object({
 	color: cssColorSchema,
 }).strict();
 
-/**
- * A Text Graphic Item renders a name, title, or Graphic Text Template rather
- * than prose, and its own Text Overflow Policy already assumes the text fits
- * authored bounds. Bounding the string keeps the worst-case serialized item
- * small enough that a named Graphic Item cap is reached before the
- * mode-configuration byte limit.
- */
-export const MAX_GRAPHIC_TEXT_LENGTH = 300;
-
 const graphicFillStopSchema = z.object({
 	color: cssColorSchema,
 	position: opacitySchema,
@@ -719,12 +711,25 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * The whole-Screen Graphic Item budget.
  *
  * The per-graphic and per-Screen caps bound each list independently, but their
- * product does not fit the mode-configuration byte limit once the full style
- * vocabulary is authored — see `docs/feature-match-overlay-capability-parity.md`
- * for the measurement. This cap binds the product, and it is deliberately a
- * named cap so an operator reads which limit they reached rather than a byte
- * count. Graphic Group children count: they are Graphic Items and they cost
- * bytes.
+ * product does not come close to fitting `MAX_MODE_CONFIGS_BYTES`. Measured
+ * against this schema's own maxima, the most expensive Graphic Item a Graphic
+ * Group can hold serializes to 2,004 bytes (a 1,000-character Text Graphic Item
+ * with a four-stop gradient, an outline, a glow, rotation, and main-axis sizing),
+ * a Graphic Group shell to 1,510, and a Broadcast Graphic shell to 166. Without
+ * a total cap, 50 Broadcast Graphics x 100 Graphic Groups x 50 children is
+ * 255,000 Graphic Items and about 485 MiB against a 512 KiB budget shared by
+ * every Screen Mode.
+ *
+ * This cap binds the product: 200 x 2,004 + 50 x 166 is about 400 KiB, or 78% of
+ * that budget, and realistic authoring measures around 119 KiB. It is
+ * deliberately a named cap so an operator reads which limit they reached rather
+ * than a byte count. Graphic Group children count towards it — they are Graphic
+ * Items and they cost bytes.
+ *
+ * The remaining ~112 KiB is shared with every other mode's configuration, so a
+ * Screen carrying both a maximal Broadcast Graphics stack and a maximal Feature
+ * Match Overlay layout can still reach the byte limit. That is a property of one
+ * budget shared across modes and predates this cap.
  */
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 200;
 
@@ -735,15 +740,33 @@ function countGraphicItems(items: readonly { type: string; children?: readonly u
 	);
 }
 
+function graphicItemIds(items: readonly { id: string; type: string; children?: readonly { id: string }[] }[]) {
+	return items.flatMap(item => [
+		item.id,
+		...(item.type === 'group' ? (item.children ?? []).map(child => child.id) : []),
+	]);
+}
+
 const broadcastGraphicConfigSchema = z.object({
 	id: z.string().min(1).max(100),
 	name: z.string().min(1).max(100),
 	// Named caps: these are reached before the mode-configuration byte limit, so
 	// the operator learns which cap they hit rather than reading a byte count.
-	items: z.array(graphicItemConfigSchema).max(
-		MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
-		`A Broadcast Graphic must not contain more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC} Graphic Items`,
-	),
+	items: z.array(graphicItemConfigSchema)
+		.max(
+			MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
+			`A Broadcast Graphic must not contain more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC} Graphic Items`,
+		)
+		// Graphic Item ids are unique within one Broadcast Graphic, including a
+		// Graphic Group's children. Every authoring operation addresses an item by
+		// id alone and resolves it against both levels, so a duplicate would edit,
+		// move, or delete the wrong item. The check belongs on this field rather
+		// than on the object: the mode-configuration patch schema rebuilds each
+		// mode from its field schemas and drops object-level refinements.
+		.refine(
+			items => new Set(graphicItemIds(items)).size === graphicItemIds(items).length,
+			'Graphic Item ids must be unique within one Broadcast Graphic',
+		),
 }).strict();
 
 /**

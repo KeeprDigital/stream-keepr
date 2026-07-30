@@ -39,7 +39,7 @@ function graphic(id: string, items: BroadcastGraphicConfig['items'] = []): Broad
 /** A Broadcast Graphic holding one Graphic Group with one shape child. */
 function withGroup() {
 	const built = addGraphicItem(graphic('a'), { kind: 'group', id: 'cluster', ...CANVAS }).graphic;
-	return addGraphicGroupChild(built, { kind: 'shape', groupId: 'cluster', id: 'child', ...CANVAS }).graphic;
+	return addGraphicGroupChild(built, { kind: 'shape', groupId: 'cluster', id: 'child' }).graphic;
 }
 
 function group(built: BroadcastGraphicConfig): GraphicGroupItemConfig {
@@ -297,6 +297,14 @@ describe('broadcastGraphicAuthoring', () => {
 		});
 	});
 
+	it('refuses main-axis sizing on a top-level Graphic Item, which no group sizes', () => {
+		const built = addGraphicItem(graphic('a'), { kind: 'shape', id: 'bar', ...CANVAS }).graphic;
+
+		// The wire schema rejects sizing on a top-level item, so authoring one would
+		// build a config no write would accept.
+		expect(patchGraphicGroupChildSizing(built, 'bar', { mode: 'fill' })).toEqual(built);
+	});
+
 	describe('graphic groups', () => {
 		it('adds a child to a Graphic Group in its own Graphic Layer Order', () => {
 			const built = addGraphicGroupChild(withGroup(), {
@@ -313,7 +321,7 @@ describe('broadcastGraphicAuthoring', () => {
 		it('sizes a new child against its Graphic Group rather than the Screen canvas', () => {
 			const built = patchGraphicItem(withGroup(), 'cluster', { width: 500, height: 200 });
 
-			const added = addGraphicGroupChild(built, { kind: 'shape', groupId: 'cluster', id: 'inner', ...CANVAS }).graphic;
+			const added = addGraphicGroupChild(built, { kind: 'shape', groupId: 'cluster', id: 'inner' }).graphic;
 			const child = group(added).children.find(entry => entry.id === 'inner');
 
 			expect(child).toMatchObject({ width: 200, height: 20 });
@@ -333,7 +341,7 @@ describe('broadcastGraphicAuthoring', () => {
 		it('refuses to add a child to something that is not a Graphic Group', () => {
 			const built = addGraphicItem(graphic('a'), { kind: 'shape', id: 'bar', ...CANVAS }).graphic;
 
-			expect(addGraphicGroupChild(built, { kind: 'text', groupId: 'bar', id: 'x', ...CANVAS }).graphic).toEqual(built);
+			expect(addGraphicGroupChild(built, { kind: 'text', groupId: 'bar', id: 'x' }).graphic).toEqual(built);
 		});
 
 		it('finds and flattens a Graphic Group child by id alone', () => {

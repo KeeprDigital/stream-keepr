@@ -2,7 +2,6 @@ import type { ShapeGeometry } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import {
 	getShapeGeometryPreset,
-	GRAPHIC_RULE_PRESET_HEIGHT,
 	isRectangularShapeGeometry,
 	SHAPE_GEOMETRY_PRESET_IDS,
 	shapeGeometryPath,
@@ -100,7 +99,7 @@ describe('shapeGeometry', () => {
 
 	it('initialises a rule as a thin rectangle and a corner cut as cut corners', () => {
 		expect(getShapeGeometryPreset('rule').apply(SIZE)).toMatchObject({
-			height: GRAPHIC_RULE_PRESET_HEIGHT,
+			height: 4,
 			geometry: { leftSlant: 0, rightSlant: 0 },
 		});
 		expect(getShapeGeometryPreset('corner-cut').apply(SIZE).geometry).toMatchObject({

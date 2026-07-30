@@ -257,13 +257,17 @@ function gradientAxis(angle: number) {
  * every stop colour to white in the Key Output, which is exactly the case the
  * matte identity allows: white at a varying alpha.
  */
-function fillDescriptor(output: ScreenOutput, style: GraphicSurfaceStyle, id: string): GraphicFillDescriptor {
+function fillDescriptor(
+	output: ScreenOutput,
+	style: GraphicSurfaceStyle,
+	scope: string,
+): GraphicFillDescriptor {
 	const opacity = clampOpacity(style.fillOpacity);
 
 	if (style.fill.type === 'solid')
 		return { color: paintColour(output, style.fill.color), opacity };
 
-	const gradientId = `graphic-fill-${id}`;
+	const gradientId = `graphic-fill-${scope}`;
 	return {
 		color: `url(#${gradientId})`,
 		opacity,
@@ -280,13 +284,22 @@ function fillDescriptor(output: ScreenOutput, style: GraphicSurfaceStyle, id: st
 }
 
 /**
+ * SVG `url(#id)` resolution is document-scoped, and every Broadcast Graphic on a
+ * Screen composes into one document, so an element id has to be unique across the
+ * whole composition rather than within one Broadcast Graphic.
+ */
+function elementScope(graphicId: string, itemId: string): string {
+	return `${graphicId}-${itemId}`;
+}
+
+/**
  * One painted surface. The outline is an inner stroke of the same path: drawn at
  * twice its authored width and clipped to the path, so it hugs every corner
  * treatment and edge slant and never leaves the item's authored bounds.
  */
 function surfaceDescriptor(
 	output: ScreenOutput,
-	id: string,
+	scope: string,
 	size: { width: number; height: number },
 	geometry: ShapeGeometry,
 	style: GraphicSurfaceStyle | undefined,
@@ -298,7 +311,7 @@ function surfaceDescriptor(
 		? {
 				color: paintColour(output, style.outline.color),
 				width: style.outline.width,
-				clipId: `graphic-outline-${id}`,
+				clipId: `graphic-outline-${scope}`,
 			}
 		: undefined;
 
@@ -306,7 +319,7 @@ function surfaceDescriptor(
 		width: Math.max(0, size.width),
 		height: Math.max(0, size.height),
 		path: shapeGeometryPath(size, geometry),
-		fill: fillDescriptor(output, style, id),
+		fill: fillDescriptor(output, style, scope),
 		outline,
 	};
 }
@@ -481,6 +494,7 @@ function resolveChildSurfaceStyle(
 
 function textDescriptor(
 	output: ScreenOutput,
+	scope: string,
 	item: TextGraphicItemConfig,
 	placement: CSSProperties,
 	surfaceStyle: GraphicSurfaceStyle | undefined,
@@ -490,7 +504,7 @@ function textDescriptor(
 		label: item.label,
 		kind: 'text',
 		style: { ...placement, ...textBoxStyle(), filter: glowFilter(output, surfaceStyle) },
-		surface: surfaceDescriptor(output, item.id, item, squareShapeGeometry(), surfaceStyle),
+		surface: surfaceDescriptor(output, scope, item, squareShapeGeometry(), surfaceStyle),
 		textStyle: graphicTextStyle(output, item),
 		text: item.text,
 		shrink: item.overflowPolicy === 'shrink'
@@ -501,6 +515,7 @@ function textDescriptor(
 
 function childDescriptor(
 	output: ScreenOutput,
+	graphicId: string,
 	group: GraphicGroupItemConfig,
 	child: GraphicGroupChildConfig,
 ): GraphicItemRenderDescriptor {
@@ -508,24 +523,30 @@ function childDescriptor(
 		? canvasPlacement(child, { x: Math.max(0, group.padding), y: Math.max(0, group.padding) })
 		: stackedPlacement(group, child);
 	const surfaceStyle = resolveChildSurfaceStyle(group, child);
+	const scope = elementScope(graphicId, child.id);
 
 	if (child.type === 'text')
-		return textDescriptor(output, child, placement, surfaceStyle);
+		return textDescriptor(output, scope, child, placement, surfaceStyle);
 
 	return {
 		id: child.id,
 		label: child.label,
 		kind: 'shape',
 		style: { ...placement, filter: glowFilter(output, surfaceStyle) },
-		surface: surfaceDescriptor(output, child.id, child, child.geometry, surfaceStyle),
+		surface: surfaceDescriptor(output, scope, child, child.geometry, surfaceStyle),
 	};
 }
 
-function itemDescriptor(output: ScreenOutput, item: GraphicItemConfig): GraphicItemRenderDescriptor {
+function itemDescriptor(
+	output: ScreenOutput,
+	graphicId: string,
+	item: GraphicItemConfig,
+): GraphicItemRenderDescriptor {
 	const placement = canvasPlacement(item, { x: 0, y: 0 });
+	const scope = elementScope(graphicId, item.id);
 
 	if (item.type === 'text')
-		return textDescriptor(output, item, placement, item.surfaceStyle);
+		return textDescriptor(output, scope, item, placement, item.surfaceStyle);
 
 	if (item.type === 'shape') {
 		return {
@@ -533,7 +554,7 @@ function itemDescriptor(output: ScreenOutput, item: GraphicItemConfig): GraphicI
 			label: item.label,
 			kind: 'shape',
 			style: { ...placement, filter: glowFilter(output, item.surfaceStyle) },
-			surface: surfaceDescriptor(output, item.id, item, item.geometry, item.surfaceStyle),
+			surface: surfaceDescriptor(output, scope, item, item.geometry, item.surfaceStyle),
 		};
 	}
 
@@ -547,10 +568,10 @@ function itemDescriptor(output: ScreenOutput, item: GraphicItemConfig): GraphicI
 			...groupClip(item),
 			filter: glowFilter(output, item.surfaceStyle),
 		},
-		surface: surfaceDescriptor(output, item.id, item, item.geometry, item.surfaceStyle),
+		surface: surfaceDescriptor(output, scope, item, item.geometry, item.surfaceStyle),
 		children: item.children
 			.filter(child => child.visible)
-			.map(child => childDescriptor(output, item, child)),
+			.map(child => childDescriptor(output, graphicId, item, child)),
 	};
 }
 
@@ -625,7 +646,7 @@ export function resolveGraphicsCompositionRenderModel(
 			name: graphic.name,
 			items: graphic.items
 				.filter(item => item.visible)
-				.map(item => itemDescriptor(input.output, item)),
+				.map(item => itemDescriptor(input.output, graphic.id, item)),
 		})),
 		safeAreaGuides: input.safeAreaGuides
 			? [

@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'vue';
 import type {
 	BroadcastGraphicConfig,
 	GraphicGroupChildConfig,
@@ -6,7 +7,10 @@ import type {
 	ShapeGraphicItemConfig,
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
-import type { GraphicItemRenderDescriptor } from '~/modules/graphics/renderModel';
+import type {
+	GraphicItemRenderDescriptor,
+	GraphicSurfaceRenderDescriptor,
+} from '~/modules/graphics/renderModel';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
 import { resolveGraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
@@ -122,35 +126,106 @@ interface KeyPaint {
 	opacity: number;
 }
 
-/**
- * Every colour one Graphic Item paints, in paint order. Walking the descriptor
- * rather than naming fields keeps the matte guard honest as the vocabulary
- * grows: a new painted colour has to appear here to stay unnoticed.
- */
-function itemPaints(item: GraphicItemRenderDescriptor): KeyPaint[] {
-	const paints: KeyPaint[] = [];
-	const glow = /drop-shadow\([^)]*?(#[\da-f]{6,8}|color-mix\([^)]*\))\)/i.exec(String(item.style.filter ?? ''));
-	if (glow)
-		paints.push({ color: glow[1]!, opacity: 1 });
+const WHITE = /^#ffffff(?:[\da-f]{2})?$/i;
 
-	const surface = item.surface;
-	if (surface) {
-		const gradient = surface.fill.gradient;
-		if (gradient) {
-			for (const stop of gradient.stops)
-				paints.push({ color: stop.color, opacity: stop.opacity * surface.fill.opacity });
+/** The one filter the Key Output may carry: a white glow, and nothing else. */
+const WHITE_GLOW = /^drop-shadow\(0 0 [\d.]+px (#ffffff[\da-f]{2})\)$/i;
+
+/**
+ * Anything that could be a colour, in any CSS form an authored value might reach.
+ * Deliberately broad: a false positive fails loudly, which is the safe direction,
+ * while a missed form would let colour into the matte unnoticed.
+ */
+const COLOUR_TOKEN = /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)\([^)]*\)|\b(?:red|green|blue|black|cyan|magenta|yellow|orange|purple|pink|brown|gray|grey|silver|gold|teal|navy|olive|lime|aqua|fuchsia|maroon|rebeccapurple|currentcolor)\b/gi;
+
+/**
+ * The one style key allowed to carry a colour. Every other key carrying one is an
+ * unrecognised paint and fails, which is what keeps this guard closed as the
+ * vocabulary grows: #63 painted through `style.background`, so a later addition
+ * reaching for a new property is not hypothetical.
+ */
+const RECOGNISED_COLOUR_KEYS = new Set(['color']);
+
+/**
+ * Every colour one style object paints, and proof that it paints nothing else.
+ *
+ * Inverted on purpose. "Any colour I find must be white" passes whenever the
+ * search misses a colour; this asserts instead that no unrecognised paint may
+ * exist — an unknown key carrying a colour, or a filter that is not exactly one
+ * white drop-shadow, throws rather than being quietly skipped.
+ */
+function stylePaints(style: CSSProperties, path: string): KeyPaint[] {
+	const paints: KeyPaint[] = [];
+
+	for (const [key, value] of Object.entries(style)) {
+		if (value === undefined || value === null)
+			continue;
+
+		const text = String(value);
+
+		if (key === 'filter') {
+			const glow = WHITE_GLOW.exec(text);
+			if (!glow)
+				throw new Error(`${path}.filter must be exactly one white drop-shadow, got: ${text}`);
+			paints.push({ color: glow[1]!, opacity: 1 });
+			continue;
 		}
-		else {
-			paints.push({ color: surface.fill.color, opacity: surface.fill.opacity });
+
+		const tokens = text.match(COLOUR_TOKEN) ?? [];
+		if (tokens.length === 0)
+			continue;
+		if (!RECOGNISED_COLOUR_KEYS.has(key))
+			throw new Error(`${path}.${key} is an unrecognised paint in the Key Output: ${text}`);
+
+		for (const token of tokens) {
+			if (!WHITE.test(token))
+				throw new Error(`${path}.${key} must paint white, got: ${token}`);
+			paints.push({ color: token, opacity: 1 });
 		}
-		if (surface.outline)
-			paints.push({ color: surface.outline.color, opacity: 1 });
 	}
 
-	if (item.textStyle?.color)
-		paints.push({ color: String(item.textStyle.color), opacity: 1 });
+	return paints;
+}
 
-	return [...paints, ...(item.children ?? []).flatMap(itemPaints)];
+function surfacePaints(surface: GraphicSurfaceRenderDescriptor, path: string): KeyPaint[] {
+	const paints: KeyPaint[] = [];
+	const gradient = surface.fill.gradient;
+
+	if (gradient) {
+		for (const stop of gradient.stops) {
+			if (!WHITE.test(stop.color))
+				throw new Error(`${path} gradient stop must paint white, got: ${stop.color}`);
+			paints.push({ color: stop.color, opacity: stop.opacity * surface.fill.opacity });
+		}
+	}
+	else {
+		if (!WHITE.test(surface.fill.color))
+			throw new Error(`${path} fill must paint white, got: ${surface.fill.color}`);
+		paints.push({ color: surface.fill.color, opacity: surface.fill.opacity });
+	}
+
+	if (surface.outline) {
+		if (!WHITE.test(surface.outline.color))
+			throw new Error(`${path} outline must paint white, got: ${surface.outline.color}`);
+		paints.push({ color: surface.outline.color, opacity: 1 });
+	}
+
+	return paints;
+}
+
+/**
+ * Every colour one Graphic Item paints, in paint order, proving as it goes that
+ * the item paints nothing the matte identity does not allow.
+ */
+function itemPaints(item: GraphicItemRenderDescriptor, prefix = ''): KeyPaint[] {
+	const path = `${prefix}${item.id}`;
+
+	return [
+		...stylePaints(item.style, path),
+		...(item.textStyle ? stylePaints(item.textStyle, `${path}.textStyle`) : []),
+		...(item.surface ? surfacePaints(item.surface, path) : []),
+		...(item.children ?? []).flatMap(child => itemPaints(child, `${path}>`)),
+	];
 }
 
 const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
@@ -256,10 +331,10 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 
 		const fill = model.graphics[0]?.items[0]?.surface?.fill;
-		expect(fill?.color).toBe('url(#graphic-fill-bed)');
+		expect(fill?.color).toBe('url(#graphic-fill-a-bed)');
 		// Ninety degrees points right, so the axis runs across the surface.
 		expect(fill?.gradient).toMatchObject({
-			id: 'graphic-fill-bed',
+			id: 'graphic-fill-a-bed',
 			x1: '0',
 			y1: '0.5',
 			x2: '1',
@@ -281,7 +356,7 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 
 		const surface = model.graphics[0]?.items[0]?.surface;
-		expect(surface?.outline).toEqual({ color: '#00d9ff', width: 3, clipId: 'graphic-outline-bar' });
+		expect(surface?.outline).toEqual({ color: '#00d9ff', width: 3, clipId: 'graphic-outline-a-bar' });
 		expect(surface?.path).toBe(model.graphics[0]?.items[0]?.surface?.path);
 	});
 
@@ -513,6 +588,42 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 	});
 
+	it('scopes gradient and clip element ids to the whole composition', () => {
+		// Concurrent Broadcast Graphics composite into one document, and SVG
+		// `url(#id)` resolution is document-scoped, so two items sharing an id across
+		// graphics would paint the first one's gradient and clip to its path.
+		const styled = {
+			fill: {
+				type: 'linear-gradient' as const,
+				angle: 90,
+				stops: [
+					{ color: '#000000', position: 0, opacity: 1 },
+					{ color: '#ffffff', position: 1, opacity: 1 },
+				],
+			},
+			fillOpacity: 1,
+			outline: { color: '#00d9ff', width: 2 },
+		};
+
+		const model = resolveGraphicsCompositionRenderModel({
+			output: 'overlay',
+			graphics: [
+				graphic('bug', [shape('bed', { surfaceStyle: styled })]),
+				graphic('lower-third', [group('cluster', [shape('bed', { surfaceStyle: styled })])]),
+			],
+			...CANVAS,
+		});
+
+		const [first, second] = model.graphics;
+		const child = second!.items[0]!.children![0]!;
+
+		expect(first!.items[0]!.surface?.fill.gradient?.id).toBe('graphic-fill-bug-bed');
+		expect(child.surface?.fill.gradient?.id).toBe('graphic-fill-lower-third-bed');
+		expect(first!.items[0]!.surface?.outline?.clipId).toBe('graphic-outline-bug-bed');
+		expect(child.surface?.outline?.clipId).toBe('graphic-outline-lower-third-bed');
+		expect(child.surface?.fill.color).toBe('url(#graphic-fill-lower-third-bed)');
+	});
+
 	describe('key output', () => {
 		it('derives the Key Output as a grayscale alpha matte of the composed opacity', () => {
 			const model = resolveGraphicsCompositionRenderModel({
@@ -539,7 +650,7 @@ describe('graphicsCompositionRenderModel', () => {
 
 			const luminance = compositeKeyLuminance(
 				model.canvasStyle.background,
-				model.graphics[0]!.items.flatMap(itemPaints),
+				model.graphics[0]!.items.flatMap(item => itemPaints(item)),
 			);
 
 			// 8-bit alpha quantisation puts 0.5 at 128/255, so compare to 2 decimals.
@@ -559,7 +670,7 @@ describe('graphicsCompositionRenderModel', () => {
 			const expectedUnion = 1 - alphas.reduce((remaining, alpha) => remaining * (1 - alpha), 1);
 			const luminance = compositeKeyLuminance(
 				model.canvasStyle.background,
-				model.graphics[0]!.items.flatMap(itemPaints),
+				model.graphics[0]!.items.flatMap(item => itemPaints(item)),
 			);
 
 			expect(luminance).toBeCloseTo(expectedUnion, 2);
@@ -614,6 +725,48 @@ describe('graphicsCompositionRenderModel', () => {
 			expect(key.graphics[0]?.items[0]?.style.filter).toBe('drop-shadow(0 0 20px #ffffff80)');
 		});
 
+		it('fails closed: rejects any paint the matte identity does not allow', () => {
+			// The guard above is only worth having if it cannot be satisfied by a
+			// colour it failed to recognise. Every one of these is a way colour could
+			// reach a Key Output — an authored colour in a form the schema accepts, a
+			// second shadow in a filter chain, or a paint on a property nothing here
+			// knows about — and each one has to throw rather than be skipped.
+			const white = (style: CSSProperties): GraphicItemRenderDescriptor => ({
+				id: 'probe',
+				label: 'probe',
+				kind: 'shape',
+				style,
+			});
+
+			for (const filter of [
+				'drop-shadow(0 0 24px rgba(255, 0, 0, 0.5))',
+				'drop-shadow(0 0 24px red)',
+				'drop-shadow(0 0 24px oklch(0.7 0.2 20))',
+				'drop-shadow(0 0 24px color-mix(in srgb, #ff0000 50%, transparent))',
+				'drop-shadow(0 0 24px #0077a3)',
+				'drop-shadow(0 0 24px #ffffff80) drop-shadow(0 0 8px #ff0000)',
+				'blur(4px)',
+			])
+				expect(() => itemPaints(white({ filter }))).toThrow(/drop-shadow/);
+
+			expect(() => itemPaints(white({ background: '#ff0000' })))
+				.toThrow(/unrecognised paint/);
+			expect(() => itemPaints(white({ boxShadow: '0 0 8px rgba(255,0,0,0.5)' })))
+				.toThrow(/unrecognised paint/);
+			expect(() => itemPaints(white({ color: '#ff0000' })))
+				.toThrow(/must paint white/);
+
+			// A hidden colour inside a Graphic Group child is found too.
+			expect(() => itemPaints({
+				...white({}),
+				children: [white({ background: 'red' })],
+			})).toThrow(/unrecognised paint/);
+
+			// And the shapes the model really does emit still pass.
+			expect(() => itemPaints(white({ filter: 'drop-shadow(0 0 20px #ffffff80)' }))).not.toThrow();
+			expect(() => itemPaints(white({ clipPath: `path('M 0 0 L 10 0 L 10 10 Z')` }))).not.toThrow();
+		});
+
 		it('paints nothing but greyscale in the Key Output across the whole vocabulary', () => {
 			// Hostile by design: every colour any part of the vocabulary paints has to
 			// resolve to white, or the Key Output stops being an alpha matte.
@@ -647,8 +800,11 @@ describe('graphicsCompositionRenderModel', () => {
 				...CANVAS,
 			});
 
-			const paints = model.graphics[0]!.items.flatMap(itemPaints);
-			expect(paints.length).toBeGreaterThan(10);
+			// Exactly what the three items paint: a glow, three gradient stops and an
+			// outline each, plus one text colour each for the two text items, and the
+			// group's own surface on top of its two children.
+			const paints = model.graphics[0]!.items.flatMap(item => itemPaints(item));
+			expect(paints).toHaveLength(27);
 			for (const paint of paints)
 				expect(keyChannels(paint.color).luminance).toBe(1);
 		});

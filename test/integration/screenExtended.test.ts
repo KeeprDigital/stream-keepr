@@ -329,10 +329,18 @@ describe('screens extended API', () => {
 			items: Array.from({ length: 40 }, (_, index) => item(`item-${graphic}-${index}`)),
 		}));
 
-		await expect($fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
+		// Assert which limit fired, and that it reaches the operator. A bare rejection
+		// would be satisfied by any 400, including the opaque byte-limit failure this
+		// cap exists to prevent, and the named message travels in the response body
+		// rather than in the thrown error's own message.
+		const failure = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
 			method: 'PATCH',
 			body: { graphics },
-		})).rejects.toThrow();
+		}).then(() => null).catch((error: { data?: { statusCode?: number; message?: string } }) => error);
+
+		expect(failure?.data?.statusCode).toBe(400);
+		expect(failure?.data?.message)
+			.toContain('A Broadcast Graphics Screen must not carry more than 200 Graphic Items in total');
 	});
 
 	it('refuses to delete the authored Broadcast Graphics stack with a null patch', async () => {

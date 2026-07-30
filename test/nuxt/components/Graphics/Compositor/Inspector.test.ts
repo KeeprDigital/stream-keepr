@@ -8,6 +8,7 @@ import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
+import { MAX_GRAPHIC_TEXT_LENGTH } from '~~/shared/types/graphics';
 
 enableAutoUnmount(afterEach);
 
@@ -280,6 +281,18 @@ describe('graphicsCompositorInspector', () => {
 
 		expect(wrapper.text()).toContain('Selection unavailable');
 		expect(wrapper.find('[data-testid="graphic-item-label"]').exists()).toBe(false);
+	});
+
+	it('bounds the text control so an operator is stopped in the field', async () => {
+		// Without this the only bound is the wire schema, and an over-long text
+		// costs the operator a whole write to an opaque validation error.
+		const wrapper = await mountComponent({
+			graphics: stack([textItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+		});
+
+		expect(wrapper.get('[data-testid="graphic-item-text"]').attributes('maxlength'))
+			.toBe(String(MAX_GRAPHIC_TEXT_LENGTH));
 	});
 
 	it('offers Graphic Rotation for a canvas-positioned item and stores its degrees', async () => {

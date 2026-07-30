@@ -178,8 +178,9 @@ export function addGraphicItem(
 	};
 }
 
-export interface AddGraphicGroupChildOptions extends AddGraphicItemOptions {
+export interface AddGraphicGroupChildOptions {
 	kind: Exclude<GraphicItemKind, 'group'>;
+	id: string;
 	groupId: string;
 }
 
@@ -566,12 +567,20 @@ export function patchGraphicGroup(
 	return patchGraphicItemGroup(graphic, itemId, ['group'], () => patch);
 }
 
-/** Merge into a Graphic Group child's main-axis sizing, preserving every other field. */
+/**
+ * Merge into a Graphic Group child's main-axis sizing, preserving every other
+ * field. Only a child carries sizing — the wire schema rejects it on a top-level
+ * Graphic Item, which has no group to be sized inside — so an edit aimed at one
+ * is a no-op rather than authoring something a write would refuse.
+ */
 export function patchGraphicGroupChildSizing(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
 	patch: Partial<GraphicGroupChildSizing>,
 ): BroadcastGraphicConfig {
+	if (!findGraphicItem(graphic, itemId)?.group)
+		return graphic;
+
 	return patchGraphicItemGroup(graphic, itemId, ['text', 'shape'], item => ({
 		sizing: { mode: 'fixed', size: item.width, weight: 1, ...item.sizing, ...patch },
 	}));

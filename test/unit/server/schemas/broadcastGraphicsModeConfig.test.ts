@@ -5,10 +5,10 @@ import {
 	MAX_GRAPHIC_GROUP_CHILDREN,
 	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
 	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN,
-	MAX_GRAPHIC_TEXT_LENGTH,
 	modeConfigPatchSchemaMap,
 	modeConfigsMapSchema,
 } from '~~/server/schemas/api/screen';
+import { MAX_GRAPHIC_TEXT_LENGTH } from '~~/shared/types/graphics';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
 const SQUARE = { treatment: 'square' as const, size: 0 };
@@ -46,6 +46,30 @@ function graphic(id: string, itemCount = 0) {
 	};
 }
 
+const WORST_CORNER = { treatment: 'rounded' as const, size: 9999.5 };
+const WORST_GEOMETRY = {
+	topLeft: WORST_CORNER,
+	topRight: WORST_CORNER,
+	bottomRight: WORST_CORNER,
+	bottomLeft: WORST_CORNER,
+	leftSlant: -9999.5,
+	rightSlant: 9999.5,
+};
+const WORST_SURFACE_STYLE = {
+	fill: {
+		type: 'linear-gradient' as const,
+		angle: -359.99,
+		stops: Array.from({ length: 4 }, (_, index) => ({
+			color: '#0077a3',
+			position: index / 3,
+			opacity: 0.85,
+		})),
+	},
+	fillOpacity: 0.85,
+	outline: { color: '#ffffff', width: 12.5 },
+	glow: { color: '#00d9ff', size: 48.5, opacity: 0.75 },
+};
+
 /** The most expensive Graphic Item the schema accepts, used for the byte budget. */
 function worstCaseItem(id: string) {
 	return {
@@ -60,6 +84,7 @@ function worstCaseItem(id: string) {
 		width: 9999.5,
 		height: 9999.5,
 		text: 'T'.repeat(MAX_GRAPHIC_TEXT_LENGTH),
+		sizing: { mode: 'fill' as const, size: 9999.5, weight: 99.5 },
 		typography: {
 			fontId: 'inter' as const,
 			fontSize: 599.5,
@@ -73,20 +98,7 @@ function worstCaseItem(id: string) {
 		},
 		overflowPolicy: 'shrink' as const,
 		minFontSize: 24.5,
-		surfaceStyle: {
-			fill: {
-				type: 'linear-gradient' as const,
-				angle: -359.99,
-				stops: Array.from({ length: 4 }, (_, index) => ({
-					color: '#0077a3',
-					position: index / 3,
-					opacity: 0.85,
-				})),
-			},
-			fillOpacity: 0.85,
-			outline: { color: '#ffffff', width: 12.5 },
-			glow: { color: '#00d9ff', size: 48.5, opacity: 0.75 },
-		},
+		surfaceStyle: WORST_SURFACE_STYLE,
 	};
 }
 
@@ -179,20 +191,47 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 
 	it('keeps a worst-case authored Screen inside the mode-configuration byte limit', () => {
 		// The named Graphic Item cap has to bind before the byte limit, or an
-		// operator reads an opaque byte count instead of the limit they reached.
-		const perGraphic = 4;
+		// operator reads an opaque byte count instead of the limit they reached. The
+		// most expensive Graphic Item the schema accepts is a Graphic Group child, so
+		// this fills the cap with those.
+		const perGroup = 4;
 		const graphics = Array.from(
-			{ length: MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN / perGraphic },
+			{ length: MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN / (perGroup + 1) },
 			(_, index) => ({
 				id: `graphic-${index}`,
 				name: 'N'.repeat(100),
-				items: Array.from({ length: perGraphic }, (_, item) => worstCaseItem(`graphic-${index}-${item}`)),
+				items: [{
+					type: 'group' as const,
+					id: `group-${index}`,
+					label: 'L'.repeat(100),
+					visible: true,
+					anchor: 'bottom-right' as const,
+					rotation: -359.99,
+					x: -9999.5,
+					y: -9999.5,
+					width: 9999.5,
+					height: 9999.5,
+					arrangement: 'column' as const,
+					padding: 9999.5,
+					gap: 9999.5,
+					align: 'stretch' as const,
+					justify: 'space-between' as const,
+					clip: true,
+					geometry: WORST_GEOMETRY,
+					surfaceStyle: WORST_SURFACE_STYLE,
+					defaultChildSurfaceStyle: WORST_SURFACE_STYLE,
+					children: Array.from({ length: perGroup }, (_, item) => worstCaseItem(`item-${index}-${item}`)),
+				}],
 			}),
 		);
 
 		const config = { graphics };
+		const bytes = new TextEncoder().encode(JSON.stringify(config)).byteLength;
+
 		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(true);
 		expect(modeConfigsMapSchema.safeParse({ 'broadcast-graphics': config }).success).toBe(true);
+		// The figure the cap is justified by, so the schema's own arithmetic is checked.
+		expect(bytes).toBeLessThan(410 * 1024);
 	});
 
 	it('applies the whole-Screen Graphic Item cap on the patch path the editor writes through', () => {
@@ -322,6 +361,84 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		});
 
 		expect(result.success).toBe(true);
+	});
+
+	it('bounds a Text Graphic Item to the shared text length, and no further', () => {
+		const withText = (length: number) => broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [{
+				id: 'a',
+				name: 'A',
+				items: [{
+					type: 'text',
+					id: 'name',
+					label: 'Text 1',
+					visible: true,
+					anchor: 'top-left',
+					x: 0,
+					y: 0,
+					width: 10,
+					height: 10,
+					text: 'T'.repeat(length),
+					typography: {
+						fontId: 'inter',
+						fontSize: 64,
+						fontWeight: 700,
+						fontStyle: 'normal',
+						textTransform: 'none',
+						letterSpacing: 0,
+						lineHeight: 1.15,
+						textAlign: 'left',
+						color: '#ffffff',
+					},
+					overflowPolicy: 'ellipsis',
+					minFontSize: 24,
+				}],
+			}],
+		}).success;
+
+		expect(MAX_GRAPHIC_TEXT_LENGTH).toBe(1000);
+		expect(withText(MAX_GRAPHIC_TEXT_LENGTH)).toBe(true);
+		expect(withText(MAX_GRAPHIC_TEXT_LENGTH + 1)).toBe(false);
+	});
+
+	it('rejects duplicate Graphic Item ids, at either level of one Broadcast Graphic', () => {
+		// Every authoring operation addresses an item by id alone and resolves it
+		// against the top-level list and each group's children, so a duplicate would
+		// edit, move, or delete the wrong item.
+		const group = (children: ReturnType<typeof shapeItem>[]) => ({
+			type: 'group' as const,
+			id: 'cluster',
+			label: 'Block',
+			visible: true,
+			anchor: 'top-left' as const,
+			x: 0,
+			y: 0,
+			width: 100,
+			height: 100,
+			arrangement: 'row' as const,
+			padding: 0,
+			gap: 0,
+			align: 'stretch' as const,
+			justify: 'start' as const,
+			clip: false,
+			geometry: GEOMETRY,
+			children,
+		});
+		const parse = (items: unknown[]) => broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [{ id: 'a', name: 'A', items }],
+		});
+
+		expect(parse([shapeItem('bar'), shapeItem('bar')]).success).toBe(false);
+		expect(parse([shapeItem('bar'), group([shapeItem('bar')])]).success).toBe(false);
+		expect(parse([group([shapeItem('one'), shapeItem('one')])]).success).toBe(false);
+		expect(parse([shapeItem('bar'), group([shapeItem('one')])]).success).toBe(true);
+		// Two Broadcast Graphics may each hold an item of the same id.
+		expect(broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [
+				{ id: 'a', name: 'A', items: [shapeItem('bar')] },
+				{ id: 'b', name: 'B', items: [shapeItem('bar')] },
+			],
+		}).success).toBe(true);
 	});
 
 	it('rejects main-axis sizing on a top-level Graphic Item, which no group sizes', () => {

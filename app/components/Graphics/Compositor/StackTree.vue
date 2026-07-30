@@ -136,12 +136,12 @@ function addChild(kind: GraphicItemKind) {
 	if (!graphic || !group || kind === 'group')
 		return;
 
+	// A child is sized against its Graphic Group, not the Screen canvas, so this
+	// deliberately passes no canvas dimensions.
 	const { graphic: updated, itemId } = addGraphicGroupChild(graphic, {
 		kind,
 		groupId: group.id,
 		id: randomUuid(),
-		canvasWidth: props.canvasWidth,
-		canvasHeight: props.canvasHeight,
 	});
 	emit('update:graphics', replaceBroadcastGraphic(props.graphics, updated));
 	emit('update:selectedTarget', { type: 'item', graphicId: graphic.id, itemId });
