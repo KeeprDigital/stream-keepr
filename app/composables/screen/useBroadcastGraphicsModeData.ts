@@ -9,15 +9,20 @@ import {
 /**
  * What a Broadcast Graphics Screen Output renders.
  *
- * A live output composes the Screen's persisted stack; playout decides which of
- * those graphics are on air, so until Take and Out exist no graphic is on air
- * and the Screen renders empty. An embedded editor preview instead composes the
- * working stack the editor pushes in, showing the one Broadcast Graphic being
- * authored.
+ * A live output composes the Screen's persisted stack, and its Broadcast
+ * Graphics Live Session decides which of them are on air. The session snapshot
+ * is loaded authoritatively rather than accumulated from realtime messages, so
+ * an output that loads late, reloads, or reconnects catches up to the current
+ * authoritative state instead of replaying how it got there.
+ *
+ * An embedded editor preview instead composes the working stack the editor
+ * pushes in, showing the Broadcast Graphic being authored without touching live
+ * Screen state.
  */
 export function useBroadcastGraphicsModeData() {
-	const { isPreview } = useScreenContext();
+	const { eventId, isPreview, screen } = useScreenContext();
 	const storedConfig = useScreenModeConfig('broadcast-graphics');
+	const sessionStore = useBroadcastGraphicsSessionStore();
 	const previewState = ref<GraphicsPreviewState | null>(null);
 
 	const graphics = computed<readonly BroadcastGraphicConfig[]>(() =>
@@ -28,11 +33,15 @@ export function useBroadcastGraphicsModeData() {
 	 * An editor preview composes the whole authored stack, exactly as an on-air
 	 * Screen would, so the authored Graphic Layer Order and any reordering of it
 	 * are visible while authoring. A live output composes only what playout has
-	 * taken on air, which is nothing until Take and Out exist.
+	 * taken on air, always in the Screen's authored stack order.
 	 */
-	const onAirGraphicIds = computed<readonly string[]>(() =>
-		previewState.value ? previewState.value.graphics.map(graphic => graphic.id) : [],
-	);
+	const onAirGraphicIds = computed<readonly string[]>(() => {
+		if (previewState.value)
+			return previewState.value.graphics.map(graphic => graphic.id);
+
+		const screenId = screen.value?.id;
+		return screenId ? sessionStore.onAirGraphicIds(screenId, graphics.value) : [];
+	});
 
 	const selectedTarget = computed<GraphicsSelectionTarget>(() =>
 		previewState.value?.selectedTarget ?? { type: 'canvas' },
@@ -54,6 +63,18 @@ export function useBroadcastGraphicsModeData() {
 
 		window.parent?.postMessage({ type: GRAPHICS_PREVIEW_SELECT_MESSAGE, target }, window.location.origin);
 	}
+
+	// A preview has no Live Session of its own: it renders the working stack, so
+	// asking for playout would open an epoch the author never took anything on.
+	watch(
+		() => [eventId.value, screen.value?.id, isPreview?.value ?? false] as const,
+		([evtId, screenId, preview]) => {
+			if (preview || !evtId || !screenId)
+				return;
+			void sessionStore.loadSession(evtId, screenId);
+		},
+		{ immediate: true },
+	);
 
 	onMounted(() => {
 		window.addEventListener('message', handlePreviewStateMessage);

@@ -1,4 +1,5 @@
 import type { AcceptRealtimeMessage } from './types';
+import { createBroadcastGraphicsRealtimeHandlers } from './broadcastGraphicsHandlers';
 import { createEventTalentRealtimeHandlers } from './eventTalentHandlers';
 import { createFeatureMatchRealtimeHandlers } from './featureMatchHandlers';
 import { createMeleeRealtimeHandlers } from './meleeHandlers';
@@ -27,6 +28,7 @@ export function createEventRealtimeHandlers(options: EventRealtimeSessionHandler
 		...createTournamentStructureRealtimeHandlers(options),
 		...createFeatureMatchRealtimeHandlers(options),
 		...createScreenCardRealtimeHandlers(options),
+		...createBroadcastGraphicsRealtimeHandlers(options),
 		...createMeleeRealtimeHandlers(options),
 	};
 }
