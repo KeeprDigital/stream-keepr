@@ -1336,8 +1336,8 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 				}),
 			]),
 			animation: {
-				'enter': { duration: 400, easing: 'linear' as const, delay: 0, fade: { opacity: 0 }, scale: { factor: 0.5, origin: 'center' as const } },
-				'stagger': { enter: { order: 'list' as const, step: 50, itemIds: ['bar', 'cluster'] } },
+				enter: { duration: 400, easing: 'linear' as const, delay: 0, fade: { opacity: 0 }, scale: { factor: 0.5, origin: 'center' as const } },
+				stagger: { enter: { order: 'list' as const, step: 50, itemIds: ['bar', 'cluster'] } },
 			},
 		};
 
@@ -1386,7 +1386,8 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 				expect(() => itemPaints(probe({ maskImage }))).toThrow(/maskImage must be exactly one white wipe/);
 
 			expect(() => itemPaints(probe({ maskImage: 'linear-gradient(to top, #ffffff 0 12.5%, #ffffff00 12.5%)' })))
-				.not.toThrow();
+				.not
+				.toThrow();
 		});
 
 		it('fails closed on an animation property nothing here has vetted', () => {

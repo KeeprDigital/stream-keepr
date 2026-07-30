@@ -6,7 +6,9 @@ import type {
 } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import {
+	broadcastGraphicAnimationTimeline,
 	broadcastGraphicHasPhaseAnimation,
+	broadcastGraphicOnScreenRunMs,
 	broadcastGraphicPhaseDurationMs,
 	createDefaultGraphicAnimationRecipe,
 	getGraphicAnimationPreset,
@@ -17,6 +19,8 @@ import {
 	graphicAnimationPresetsForPhase,
 	graphicAnimationRecipeEndMs,
 	graphicAnimationStaggerOffset,
+	graphicAnimationTimelineAt,
+	graphicAnimationTimelineDurationMs,
 	graphicOnScreenCycleMs,
 	resolveGraphicAnimationOrigin,
 	resolveGraphicSlideDirection,
@@ -321,5 +325,87 @@ describe('graphic animation presets', () => {
 
 		expect(created.repeat).toBe('indefinite');
 		expect(created.pause).toBeGreaterThanOrEqual(0);
+	});
+});
+
+describe('lifecycle timelines', () => {
+	const enter = recipe({ duration: 400 });
+	const exit = recipe({ duration: 300 });
+	const cycle = { duration: 1000, easing: 'linear' as const, delay: 0, pause: 500, repeat: 3 };
+
+	it('runs each phase where the previous one ended', () => {
+		const composition = graphic([], { 'enter': enter, 'on-screen': cycle, 'exit': exit });
+		const timeline = broadcastGraphicAnimationTimeline(composition, GRAPHIC_ANIMATION_PHASE_VALUES);
+
+		expect(timeline).toEqual([
+			{ phase: 'enter', start: 0, duration: 400 },
+			{ phase: 'on-screen', start: 400, duration: 4500 },
+			{ phase: 'update', start: 4900, duration: 0 },
+			{ phase: 'exit', start: 4900, duration: 300 },
+		]);
+		expect(graphicAnimationTimelineDurationMs(timeline)).toBe(5200);
+	});
+
+	it('keeps an unauthored phase in the timeline at zero length', () => {
+		const timeline = broadcastGraphicAnimationTimeline(graphic([]), GRAPHIC_ANIMATION_PHASE_VALUES);
+
+		expect(timeline.map(segment => segment.duration)).toEqual([0, 0, 0, 0]);
+		expect(graphicAnimationTimelineDurationMs(timeline)).toBe(0);
+	});
+
+	it('bounds an indefinite on-screen recipe so a lifecycle run can reach its exit', () => {
+		const indefinite = graphic([], {
+			'on-screen': { duration: 1000, easing: 'linear', delay: 0, pause: 0, repeat: 'indefinite' },
+		});
+
+		// Two bounded cycles: enough to show cycling repeats without accumulating.
+		expect(broadcastGraphicOnScreenRunMs(indefinite)).toBe(2000);
+		// And it still never gates the on-air Graphic Playout State.
+		expect(broadcastGraphicPhaseDurationMs(indefinite, 'on-screen')).toBe(0);
+	});
+
+	it('runs a finite on-screen recipe to its own end', () => {
+		expect(broadcastGraphicOnScreenRunMs(graphic([], { 'on-screen': cycle }))).toBe(4500);
+	});
+
+	it('takes the longest on-screen recipe among the graphic and its items', () => {
+		const composition = graphic([
+			shape('a', { animation: { 'on-screen': { ...cycle, repeat: 1 } } }),
+			shape('b', { animation: { 'on-screen': { ...cycle, repeat: 5 } } }),
+		]);
+
+		expect(broadcastGraphicOnScreenRunMs(composition)).toBe(7500);
+	});
+
+	it('locates an elapsed time as one phase and one elapsed time inside it', () => {
+		const timeline = broadcastGraphicAnimationTimeline(
+			graphic([], { enter, exit }),
+			['enter', 'exit'],
+		);
+
+		expect(graphicAnimationTimelineAt(timeline, 0)).toEqual({ phase: 'enter', elapsed: 0 });
+		expect(graphicAnimationTimelineAt(timeline, 399)).toEqual({ phase: 'enter', elapsed: 399 });
+		expect(graphicAnimationTimelineAt(timeline, 400)).toEqual({ phase: 'exit', elapsed: 0 });
+		expect(graphicAnimationTimelineAt(timeline, 600)).toEqual({ phase: 'exit', elapsed: 200 });
+	});
+
+	it('holds the final phase past the end of the timeline rather than snapping back', () => {
+		const timeline = broadcastGraphicAnimationTimeline(
+			graphic([], { enter, exit }),
+			['enter', 'exit'],
+		);
+
+		expect(graphicAnimationTimelineAt(timeline, 9999)).toEqual({ phase: 'exit', elapsed: 9599 });
+	});
+
+	it('has no phase to be in with an empty timeline', () => {
+		expect(graphicAnimationTimelineAt([], 100)).toBeNull();
+	});
+
+	it('never reports a negative elapsed time', () => {
+		const timeline = broadcastGraphicAnimationTimeline(graphic([], { enter }), ['enter']);
+
+		expect(graphicAnimationTimelineAt(timeline, -500)).toEqual({ phase: 'enter', elapsed: 0 });
+		expect(graphicAnimationTimelineAt(timeline, Number.NaN)).toEqual({ phase: 'enter', elapsed: 0 });
 	});
 });

@@ -710,3 +710,128 @@ export function isGraphicRestingProjection(values: GraphicAnimationValues): bool
 		&& values.scale === undefined
 		&& values.reveal === undefined;
 }
+
+/* ────────────────────────────────────────────────
+ * Lifecycle timelines
+ * ──────────────────────────────────────────────── */
+
+/**
+ * How many cycles a bounded run gives an indefinite on-screen recipe.
+ *
+ * An indefinite recipe never finishes, and a full-lifecycle Graphic Animation
+ * Preview has to reach the exit phase, so the on-screen segment is bounded here
+ * rather than by asking the author to change their recipe. Two cycles is enough to
+ * show that cycling repeats without accumulating motion.
+ */
+export const GRAPHIC_ANIMATION_BOUNDED_ONSCREEN_CYCLES = 2;
+
+export interface GraphicAnimationTimelineSegment {
+	phase: GraphicAnimationPhase;
+	/** Offset of this segment from the start of the timeline. */
+	start: number;
+	/** How long this segment runs. */
+	duration: number;
+}
+
+/**
+ * How long a bounded on-screen segment runs for one Broadcast Graphic.
+ *
+ * The longest on-screen recipe among the graphic and its items decides it: a
+ * finite repetition runs to its own end, and an indefinite one is bounded. This is
+ * a *preview and choreography* length only — it never gates the on-air Graphic
+ * Playout State, which is why `broadcastGraphicPhaseDurationMs` reports zero for
+ * the same phase.
+ */
+export function broadcastGraphicOnScreenRunMs(
+	graphic: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
+	boundedCycles = GRAPHIC_ANIMATION_BOUNDED_ONSCREEN_CYCLES,
+): number {
+	const owners: (GraphicAnimation | undefined)[] = [
+		graphic.animation,
+		...graphic.items.flatMap(item => item.type === 'group'
+			? [item.animation, ...item.children.map(child => child.animation)]
+			: [item.animation]),
+	];
+
+	let longest = 0;
+	for (const animation of owners) {
+		const recipe = animation?.['on-screen'];
+		if (!recipe)
+			continue;
+		const cycles = recipe.repeat === GRAPHIC_ANIMATION_REPEAT_INDEFINITE
+			? Math.max(1, boundedCycles)
+			: Math.max(1, recipe.repeat);
+		longest = Math.max(longest, Math.max(0, recipe.delay) + (cycles * graphicOnScreenCycleMs(recipe)));
+	}
+
+	return longest;
+}
+
+/** The length of one phase in a run: finite phases from their recipes, on-screen bounded. */
+export function broadcastGraphicPhaseRunMs(
+	graphic: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
+	phase: GraphicAnimationPhase,
+): number {
+	return phase === 'on-screen'
+		? broadcastGraphicOnScreenRunMs(graphic)
+		: broadcastGraphicPhaseDurationMs(graphic, phase);
+}
+
+/**
+ * One run of the given phases, back to back.
+ *
+ * Each phase starts where the previous one ended, which is what makes a full
+ * lifecycle read the way an operator will see it: enter completes, then on-screen
+ * cycling begins, then exit. Within a phase, every recipe still measures its own
+ * delay from that phase's single start.
+ *
+ * A phase with nothing authored is kept at zero length rather than dropped, so a
+ * caller stepping through phases sees the same list whatever is authored.
+ */
+export function broadcastGraphicAnimationTimeline(
+	graphic: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
+	phases: readonly GraphicAnimationPhase[],
+): GraphicAnimationTimelineSegment[] {
+	let start = 0;
+	return phases.map((phase) => {
+		const duration = broadcastGraphicPhaseRunMs(graphic, phase);
+		const segment = { phase, start, duration };
+		start += duration;
+		return segment;
+	});
+}
+
+export function graphicAnimationTimelineDurationMs(
+	segments: readonly GraphicAnimationTimelineSegment[],
+): number {
+	return segments.reduce((total, segment) => total + segment.duration, 0);
+}
+
+/**
+ * Where one elapsed time falls in a timeline, as a phase and an elapsed time
+ * within it.
+ *
+ * Past the end of the timeline this returns the final phase saturated, not null:
+ * the caller decides whether to stop, loop, or hold, and holding must show the
+ * last phase settled rather than snapping back to the Graphic Resting State of the
+ * first. An empty timeline has no phase to be in, which is the only null.
+ */
+export function graphicAnimationTimelineAt(
+	segments: readonly GraphicAnimationTimelineSegment[],
+	elapsed: number,
+): { phase: GraphicAnimationPhase; elapsed: number } | null {
+	if (segments.length === 0)
+		return null;
+
+	const position = Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0;
+	let consumed = 0;
+
+	for (const segment of segments) {
+		if (position < consumed + segment.duration)
+			return { phase: segment.phase, elapsed: position - consumed };
+		consumed += segment.duration;
+	}
+
+	const last = segments[segments.length - 1]!;
+	return { phase: last.phase, elapsed: position - (consumed - last.duration) };
+}

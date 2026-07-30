@@ -45,8 +45,8 @@ import type { BroadcastGraphicConfig, GraphicAnimationPhase, GraphicPlayoutState
  *    only about the target state and starts being about the animation too.
  *
  * The alternative shapes were both rejected for the same reason: persisting a
- * *phase* makes recovery resume it, and persisting a start time that recovery
- * *resets* makes recovery replay from it. Persisting one authoritative instant and
+ * phase* makes recovery resume it, and persisting a start time that recovery
+ * resets* makes recovery replay from it. Persisting one authoritative instant and
  * deriving everything from it is the only shape where the correct behaviour is the
  * behaviour you get by doing nothing special.
  *

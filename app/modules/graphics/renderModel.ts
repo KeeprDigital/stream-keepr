@@ -21,8 +21,8 @@ import {
 	isRectangularShapeGeometry,
 	resolveGraphicAnchorPoint,
 	resolveGraphicAnimationOrigin,
-	resolveGraphicFontFamily,
 	resolveGraphicAnimationValues,
+	resolveGraphicFontFamily,
 	shapeGeometryPath,
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';

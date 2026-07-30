@@ -85,7 +85,7 @@ async function mountComponent() {
 	return mount(Display);
 }
 
-function pushPreviewState(graphics: BroadcastGraphicConfig[] = [lowerThird]) {
+function pushPreviewState(graphics: BroadcastGraphicConfig[] = [lowerThird], animation?: unknown) {
 	window.dispatchEvent(new MessageEvent('message', {
 		origin: window.location.origin,
 		source: window,
@@ -94,10 +94,44 @@ function pushPreviewState(graphics: BroadcastGraphicConfig[] = [lowerThird]) {
 			state: {
 				graphics,
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+				animation,
 			},
 		},
 	}));
 	return nextTick();
+}
+
+/** A Broadcast Graphic whose bar fades and slides in over four seconds. */
+const animatedLowerThird: BroadcastGraphicConfig = {
+	...lowerThird,
+	items: [{
+		...bar,
+		animation: {
+			enter: {
+				duration: 4000,
+				easing: 'linear',
+				delay: 0,
+				fade: { opacity: 0 },
+				slide: { direction: 'south', distanceMode: 'fixed', distance: 120 },
+			},
+		},
+	}],
+};
+
+function previewPlan(overrides: Record<string, unknown> = {}) {
+	return {
+		graphicId: 'lower-third',
+		scope: 'phase',
+		phase: 'enter',
+		run: 1,
+		speed: 1,
+		loop: false,
+		...overrides,
+	};
+}
+
+function itemStyle(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+	return wrapper.get('[data-graphic-item-kind="shape"]').attributes('style') ?? '';
 }
 
 describe('broadcastGraphicsDisplay', () => {
@@ -360,5 +394,117 @@ describe('broadcastGraphicsDisplay', () => {
 		// The browser expands the flex shorthand, so a weighted-fill child grows.
 		expect(group.get('[data-graphic-item-kind="shape"]').attributes('style')).toContain('flex-grow: 1');
 		expect(group.get('[data-graphic-item-kind="shape"]').attributes('style')).toContain('flex-basis: 0px');
+	});
+});
+
+describe('graphicAnimationPreview in a Screen Output frame', () => {
+	beforeEach(() => {
+		mockOutputMode.value = 'overlay';
+		mockOutputModeProvided.value = true;
+		mockIsPreview.value = true;
+		mockPreviewGuides.value = false;
+		mockPreviewSafeAreas.value = false;
+		mockScreen.value = screenWithStack();
+		mockOnAirGraphicIds.value = [];
+		mockLoadSession.value = () => {};
+	});
+
+	it('composes at the Graphic Resting State with no preview run', async () => {
+		const wrapper = await mountComponent();
+		await pushPreviewState([animatedLowerThird]);
+
+		// An author laying a composition out sees the authored result, not frame zero
+		// of an entrance.
+		expect(itemStyle(wrapper)).not.toContain('opacity');
+		expect(itemStyle(wrapper)).not.toContain('transform');
+	});
+
+	it('starts a run at the beginning of the phase it was asked for', async () => {
+		const wrapper = await mountComponent();
+		await pushPreviewState([animatedLowerThird], previewPlan());
+
+		// The enter phase begins fully faded out and a full slide away from rest.
+		expect(itemStyle(wrapper)).toContain('opacity: 0');
+		expect(itemStyle(wrapper)).toContain('translate(0px, 120px)');
+	});
+
+	it('settles back at the Graphic Resting State when the run is stopped', async () => {
+		const wrapper = await mountComponent();
+		await pushPreviewState([animatedLowerThird], previewPlan());
+		await pushPreviewState([animatedLowerThird], null);
+
+		expect(itemStyle(wrapper)).not.toContain('opacity');
+		expect(itemStyle(wrapper)).not.toContain('transform');
+	});
+
+	it('runs an exit phase from the Graphic Resting State outwards', async () => {
+		const exiting: BroadcastGraphicConfig = {
+			...lowerThird,
+			items: [{
+				...bar,
+				animation: {
+					exit: { duration: 4000, easing: 'linear', delay: 0, reveal: { edge: 'right' } },
+				},
+			}],
+		};
+
+		const wrapper = await mountComponent();
+		await pushPreviewState([exiting], previewPlan({ phase: 'exit' }));
+
+		// A wipe at the start of an exit is still fully open.
+		expect(itemStyle(wrapper)).not.toContain('mask-image');
+	});
+
+	it('leaves every other Broadcast Graphic at its Graphic Resting State', async () => {
+		const other: BroadcastGraphicConfig = { ...animatedLowerThird, id: 'bug', name: 'Bug' };
+
+		const wrapper = await mountComponent();
+		await pushPreviewState([other, animatedLowerThird], previewPlan());
+
+		const styles = wrapper.findAll('[data-graphic-item-kind="shape"]')
+			.map(node => node.attributes('style') ?? '');
+
+		expect(styles[0]).not.toContain('opacity: 0');
+		expect(styles[1]).toContain('opacity: 0');
+	});
+
+	it('ignores a malformed preview run rather than animating unpredictably', async () => {
+		const wrapper = await mountComponent();
+		await pushPreviewState([animatedLowerThird], previewPlan({ speed: -3 }));
+
+		expect(itemStyle(wrapper)).not.toContain('opacity: 0');
+	});
+
+	it('ignores a preview run naming a Broadcast Graphic that is not in the composition', async () => {
+		const wrapper = await mountComponent();
+		await pushPreviewState([animatedLowerThird], previewPlan({ graphicId: 'deleted' }));
+
+		expect(itemStyle(wrapper)).not.toContain('opacity: 0');
+	});
+
+	it('never animates a live Screen Output from a pushed preview run', async () => {
+		// Preview gating, on the output side: a live Screen Output ignores the whole
+		// state message, so a preview run cannot reach program by being posted at it.
+		mockIsPreview.value = false;
+		mockScreen.value = screenWithStack([animatedLowerThird]);
+		mockOnAirGraphicIds.value = ['lower-third'];
+
+		const wrapper = await mountComponent();
+		await pushPreviewState([animatedLowerThird], previewPlan());
+
+		expect(itemStyle(wrapper)).not.toContain('opacity: 0');
+		expect(itemStyle(wrapper)).not.toContain('transform');
+	});
+
+	it('never opens a Live Session for a preview run', async () => {
+		const loads: Array<[number, number]> = [];
+		mockLoadSession.value = (eventId, screenId) => {
+			loads.push([eventId, screenId]);
+		};
+
+		await mountComponent();
+		await pushPreviewState([animatedLowerThird], previewPlan());
+
+		expect(loads).toEqual([]);
 	});
 });

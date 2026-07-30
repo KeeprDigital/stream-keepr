@@ -552,7 +552,7 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 	});
 });
 
-describe('Graphic Animation bounds', () => {
+describe('graphic Animation bounds', () => {
 	function withItemAnimation(animation: unknown) {
 		return broadcastGraphicsModeConfigSchema.safeParse({
 			graphics: [{ id: 'a', name: 'A', items: [shapeItem('bar', { animation })] }],
