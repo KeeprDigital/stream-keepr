@@ -1,4 +1,5 @@
-import type { BroadcastGraphicConfig, GraphicItemConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicGroupItemConfig, GraphicItemConfig } from '~~/shared/types/graphics';
+import { findGraphicItem } from '~~/shared/modules/graphics';
 
 /** The selection target shared by every surface of the graphics compositor. */
 export type GraphicsSelectionTarget
@@ -6,11 +7,17 @@ export type GraphicsSelectionTarget
 		| { type: 'graphic'; graphicId: string }
 		| { type: 'item'; graphicId: string; itemId: string };
 
-/** A selection target resolved against a Screen's stack of Broadcast Graphics. */
+/**
+ * A selection target resolved against a Screen's stack of Broadcast Graphics.
+ *
+ * A Graphic Group child resolves as an ordinary item selection carrying the
+ * Graphic Group it belongs to, because Graphic Item ids are unique within one
+ * Broadcast Graphic and Graphic Groups do not nest.
+ */
 export type GraphicsSelection
 	=	| { kind: 'canvas' }
 		| { kind: 'graphic'; graphic: BroadcastGraphicConfig }
-		| { kind: 'item'; graphic: BroadcastGraphicConfig; item: GraphicItemConfig }
+		| { kind: 'item'; graphic: BroadcastGraphicConfig; item: GraphicItemConfig; group?: GraphicGroupItemConfig }
 		| { kind: 'missing' };
 
 export function resolveGraphicsSelection(
@@ -27,8 +34,8 @@ export function resolveGraphicsSelection(
 	if (target.type === 'graphic')
 		return { kind: 'graphic', graphic };
 
-	const item = graphic.items.find(candidate => candidate.id === target.itemId);
-	return item ? { kind: 'item', graphic, item } : { kind: 'missing' };
+	const location = findGraphicItem(graphic, target.itemId);
+	return location ? { kind: 'item', graphic, item: location.item, group: location.group } : { kind: 'missing' };
 }
 
 /** Stable identity key for a selection target (tree nodes, comparisons). */

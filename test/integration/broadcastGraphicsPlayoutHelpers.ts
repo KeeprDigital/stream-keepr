@@ -8,6 +8,8 @@ import type { ScreenMode } from '~~/shared/types/enums';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { $fetch } from '@nuxt/test-utils/e2e';
 
+const SQUARE_CORNER = { treatment: 'square', size: 0 } as const;
+
 let nextCommandId = 0;
 
 export function playoutCommandId(prefix: string): string {
@@ -30,8 +32,17 @@ export function integrationBroadcastGraphic(id: string): BroadcastGraphicConfig 
 			y: 0,
 			width: 400,
 			height: 200,
-			geometry: { cornerRadius: 0 },
-			surfaceStyle: { fill: '#101014', fillOpacity: 1 },
+			// Written out rather than built from the shared factory: the integration
+			// project resolves no `~~` alias, so only type imports cross this boundary.
+			geometry: {
+				topLeft: SQUARE_CORNER,
+				topRight: SQUARE_CORNER,
+				bottomRight: SQUARE_CORNER,
+				bottomLeft: SQUARE_CORNER,
+				leftSlant: 0,
+				rightSlant: 0,
+			},
+			surfaceStyle: { fill: { type: 'solid', color: '#101014' }, fillOpacity: 1 },
 		}],
 	};
 }

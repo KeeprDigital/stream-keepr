@@ -1,6 +1,6 @@
-import type { ShapeGeometry, ShapeGeometryCorner } from '~~/shared/types/graphicItem';
+import type { MediaClipShapeGeometry, MediaClipShapeGeometryCorner } from '~~/shared/types/graphicItem';
 
-function cornerSize(corner: ShapeGeometryCorner, kind: 'rounded' | 'cut'): number {
+function cornerSize(corner: MediaClipShapeGeometryCorner, kind: 'rounded' | 'cut'): number {
 	return corner.kind === kind ? Math.max(0, corner.size) : 0;
 }
 
@@ -8,7 +8,7 @@ function bounded(value: number | undefined, maximum: number): number {
 	return Math.min(maximum, Math.max(0, value ?? 0));
 }
 
-export function shapeGeometryBorderRadius(geometry: ShapeGeometry | undefined): string | undefined {
+export function shapeGeometryBorderRadius(geometry: MediaClipShapeGeometry | undefined): string | undefined {
 	if (!geometry)
 		return;
 	return [
@@ -20,7 +20,7 @@ export function shapeGeometryBorderRadius(geometry: ShapeGeometry | undefined): 
 }
 
 export function shapeGeometryClipPath(
-	geometry: ShapeGeometry | undefined,
+	geometry: MediaClipShapeGeometry | undefined,
 	width: number,
 	height: number,
 ): string | undefined {

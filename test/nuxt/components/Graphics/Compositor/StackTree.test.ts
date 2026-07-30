@@ -3,7 +3,7 @@ import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
-import { BROADCAST_GRAPHICS_HOST_CONTRACT } from '~~/shared/modules/graphics';
+import { BROADCAST_GRAPHICS_HOST_CONTRACT, squareShapeGeometry } from '~~/shared/modules/graphics';
 
 enableAutoUnmount(afterEach);
 
@@ -113,7 +113,7 @@ describe('graphicsCompositorStackTree', () => {
 		});
 
 		const palette = wrapper.getComponent({ name: 'USelect' });
-		expect((palette.props('items') as Array<{ value: string }>).map(item => item.value)).toEqual(['text', 'shape']);
+		expect((palette.props('items') as Array<{ value: string }>).map(item => item.value)).toEqual(['text', 'shape', 'group']);
 	});
 
 	it('places a Graphic Item at the front of the Graphic Layer Order and selects it', async () => {
@@ -155,8 +155,8 @@ describe('graphicsCompositorStackTree', () => {
 					y: 0,
 					width: 10,
 					height: 10,
-					geometry: { cornerRadius: 0 },
-					surfaceStyle: { fill: '#ffffff', fillOpacity: 1 },
+					geometry: squareShapeGeometry(),
+					surfaceStyle: { fill: { type: 'solid', color: '#ffffff' }, fillOpacity: 1 },
 				}],
 			}],
 			selectedGraphicId: 'a',
@@ -167,5 +167,102 @@ describe('graphicsCompositorStackTree', () => {
 
 		expect(emittedGraphics(wrapper)[0]?.items).toEqual([]);
 		expect(emittedTarget(wrapper)).toEqual({ type: 'graphic', graphicId: 'a' });
+	});
+
+	it('nests the children of a Graphic Group under it as one layer', async () => {
+		const wrapper = await mountComponent({
+			graphics: [{
+				id: 'a',
+				name: 'A',
+				items: [{
+					type: 'group',
+					id: 'cluster',
+					label: 'Name block',
+					visible: true,
+					anchor: 'top-left',
+					x: 0,
+					y: 0,
+					width: 400,
+					height: 100,
+					arrangement: 'row',
+					padding: 0,
+					gap: 8,
+					align: 'stretch',
+					justify: 'start',
+					clip: false,
+					geometry: squareShapeGeometry(),
+					children: [{
+						type: 'shape',
+						id: 'child',
+						label: 'Shape 1',
+						visible: true,
+						anchor: 'top-left',
+						x: 0,
+						y: 0,
+						width: 10,
+						height: 10,
+						geometry: squareShapeGeometry(),
+						surfaceStyle: { fill: { type: 'solid', color: '#ffffff' }, fillOpacity: 1 },
+					}],
+				}],
+			}],
+			selectedGraphicId: 'a',
+			selectedTarget: { type: 'item', graphicId: 'a', itemId: 'cluster' },
+		});
+
+		const rows = wrapper.findAll('[data-graphic-item-depth]');
+		expect(rows.map(row => row.attributes('data-graphic-item-depth'))).toEqual(['0', '1']);
+		expect(rows[1]!.text()).toContain('Shape 1');
+	});
+
+	it('offers a Graphic Group child palette that never offers another Graphic Group', async () => {
+		const wrapper = await mountComponent({
+			graphics: [{
+				id: 'a',
+				name: 'A',
+				items: [{
+					type: 'group',
+					id: 'cluster',
+					label: 'Name block',
+					visible: true,
+					anchor: 'top-left',
+					x: 0,
+					y: 0,
+					width: 400,
+					height: 100,
+					arrangement: 'row',
+					padding: 0,
+					gap: 8,
+					align: 'stretch',
+					justify: 'start',
+					clip: false,
+					geometry: squareShapeGeometry(),
+					children: [],
+				}],
+			}],
+			selectedGraphicId: 'a',
+			selectedTarget: { type: 'item', graphicId: 'a', itemId: 'cluster' },
+		});
+
+		const palettes = wrapper.findAllComponents({ name: 'USelect' });
+		const childPalette = palettes[palettes.length - 1]!;
+		expect((childPalette.props('items') as Array<{ value: string }>).map(item => item.value))
+			.toEqual(['text', 'shape']);
+
+		childPalette.vm.$emit('update:modelValue', 'text');
+		await nextTick();
+
+		const graphics = emittedGraphics(wrapper);
+		const group = graphics[0]!.items[0]!;
+		expect(group.type === 'group' && group.children.map(child => child.label)).toEqual(['Text 1']);
+	});
+
+	it('shows no Graphic Group child palette while no group is in the selection', async () => {
+		const wrapper = await mountComponent({
+			graphics: [{ id: 'a', name: 'A', items: [] }],
+			selectedGraphicId: 'a',
+		});
+
+		expect(wrapper.find('[data-testid="graphic-group-child-palette"]').exists()).toBe(false);
 	});
 });
