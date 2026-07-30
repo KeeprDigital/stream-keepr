@@ -21,7 +21,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  */
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
 
-/** The most expensive Graphic Item the schema accepts, near enough. */
+/**
+ * The most expensive Graphic Item the current vocabulary accepts: a maximal Graphic
+ * Text Template, a four-stop gradient, an outline, a glow, and the four Graphic
+ * Placeholder Styles a Text Graphic Item may define.
+ */
 function fatGraphicItem(id: string) {
 	return {
 		type: 'text' as const,
@@ -62,17 +66,65 @@ function fatGraphicItem(id: string) {
 			outline: { color: '#ffffff', width: 12.5 },
 			glow: { color: '#00d9ff', size: 48.5, opacity: 0.75 },
 		},
+		placeholderStyles: Object.fromEntries(
+			Array.from({ length: 4 }, (_, index) => [
+				`placeholder${index}`,
+				{
+					fontId: 'inter' as const,
+					fontSize: 599.5,
+					fontWeight: 900,
+					fontStyle: 'italic' as const,
+					textTransform: 'uppercase' as const,
+					letterSpacing: -19.5,
+					color: '#0077a3',
+				},
+			]),
+		),
 	};
 }
 
-/** A Broadcast Graphics stack at the whole-Screen Graphic Item cap. */
-function fatGraphicsStack(totalItems: number, graphics: number) {
-	const perGraphic = totalItems / graphics;
-	return Array.from({ length: graphics }, (_, g) => ({
-		id: `graphic-${g}`,
-		name: 'N'.repeat(100),
-		items: Array.from({ length: perGraphic }, (_, i) => fatGraphicItem(`item-${g}-${i}`)),
-	}));
+/**
+ * A Graphic Input declaration at its own maxima. Inputs carry the other large axis
+ * of the whole-Screen budget, and are capped per Screen rather than per graphic.
+ */
+function fatGraphicInput(key: string) {
+	return {
+		key,
+		label: 'L'.repeat(60),
+		required: true,
+		updatePolicy: 'staged' as const,
+		type: 'text' as const,
+		default: 'D'.repeat(1000),
+		maxLength: 1000,
+	};
+}
+
+/**
+ * A Broadcast Graphics stack built to the current named caps rather than to a byte
+ * figure, so it stays the pathological case as the vocabulary changes: the Graphic
+ * Item axis and the whole-Screen Graphic Input budget are both filled to their limits.
+ */
+function fatGraphicsStack(totalItems: number, graphics: number, totalInputs = 0) {
+	const perGraphic = Math.ceil(totalItems / graphics);
+	const perGraphicInputs = Math.ceil(totalInputs / graphics);
+	let items = 0;
+	let inputs = 0;
+
+	return Array.from({ length: graphics }, (_, g) => {
+		const take = Math.max(0, Math.min(perGraphic, totalItems - items));
+		const takeInputs = Math.max(0, Math.min(perGraphicInputs, totalInputs - inputs));
+		items += take;
+		inputs += takeInputs;
+
+		return {
+			id: `graphic-${g}`,
+			name: 'N'.repeat(100),
+			items: Array.from({ length: take }, (_, i) => fatGraphicItem(`item-${g}-${i}`)),
+			...(takeInputs > 0
+				? { inputs: Array.from({ length: takeInputs }, (_, i) => fatGraphicInput(`g${g}input${i}`)) }
+				: {}),
+		};
+	});
 }
 
 /**
@@ -161,7 +213,7 @@ describe('mode configuration byte total', () => {
 		// The full-config path has always enforced this. It is asserted here so the
 		// PATCH-path test below is a statement about parity rather than about bytes.
 		const modeConfigs = {
-			'broadcast-graphics': { graphics: fatGraphicsStack(200, 50) },
+			'broadcast-graphics': { graphics: fatGraphicsStack(110, 50, 60) },
 			'feature-match-overlay': { featureMatchId: null, presetId: 'full-table', layout: fatOverlayLayout() },
 		};
 
@@ -183,7 +235,7 @@ describe('mode configuration byte total', () => {
 
 		const first = await patchConfig(
 			`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`,
-			{ graphics: fatGraphicsStack(200, 50) },
+			{ graphics: fatGraphicsStack(110, 50, 60) },
 		);
 		expect(first.ok).toBe(true);
 
@@ -208,7 +260,7 @@ describe('mode configuration byte total', () => {
 
 		const first = await patchConfig(
 			`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`,
-			{ graphics: fatGraphicsStack(20, 5) },
+			{ graphics: fatGraphicsStack(20, 5, 6) },
 		);
 		const second = await patchConfig(
 			`/api/events/${eventId}/screens/${screenId}/config/metagame`,

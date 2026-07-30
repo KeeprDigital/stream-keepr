@@ -19,6 +19,11 @@ import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
  */
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
 
+/**
+ * The most expensive Graphic Item the current vocabulary accepts: a maximal Graphic
+ * Text Template, a four-stop gradient, an outline, a glow, and the four Graphic
+ * Placeholder Styles a Text Graphic Item may define.
+ */
 function fatGraphicItem(id: string) {
 	return {
 		type: 'text' as const,
@@ -26,48 +31,98 @@ function fatGraphicItem(id: string) {
 		label: 'L'.repeat(100),
 		visible: true,
 		anchor: 'bottom-right' as const,
-		x: 0,
-		y: 0,
-		width: 100,
-		height: 100,
+		rotation: -359.99,
+		x: -9999.5,
+		y: -9999.5,
+		width: 9999.5,
+		height: 9999.5,
 		text: 'T'.repeat(1000),
 		typography: {
 			fontId: 'inter' as const,
-			fontSize: 64,
-			fontWeight: 700,
-			fontStyle: 'normal' as const,
-			textTransform: 'none' as const,
-			letterSpacing: 0,
+			fontSize: 599.5,
+			fontWeight: 900,
+			fontStyle: 'italic' as const,
+			textTransform: 'uppercase' as const,
+			letterSpacing: -19.5,
 			lineHeight: 1.15,
-			textAlign: 'left' as const,
-			color: '#ffffff',
+			textAlign: 'center' as const,
+			color: '#0077a3',
 		},
-		overflowPolicy: 'ellipsis' as const,
-		minFontSize: 24,
+		overflowPolicy: 'shrink' as const,
+		minFontSize: 24.5,
 		surfaceStyle: {
 			fill: {
 				type: 'linear-gradient' as const,
-				angle: 90,
+				angle: -359.99,
 				stops: Array.from({ length: 4 }, (_, index) => ({
 					color: '#0077a3',
 					position: index / 3,
 					opacity: 0.85,
 				})),
 			},
-			fillOpacity: 1,
-			outline: { color: '#ffffff', width: 4 },
-			glow: { color: '#00d9ff', size: 24, opacity: 0.8 },
+			fillOpacity: 0.85,
+			outline: { color: '#ffffff', width: 12.5 },
+			glow: { color: '#00d9ff', size: 48.5, opacity: 0.75 },
 		},
+		placeholderStyles: Object.fromEntries(
+			Array.from({ length: 4 }, (_, index) => [
+				`placeholder${index}`,
+				{
+					fontId: 'inter' as const,
+					fontSize: 599.5,
+					fontWeight: 900,
+					fontStyle: 'italic' as const,
+					textTransform: 'uppercase' as const,
+					letterSpacing: -19.5,
+					color: '#0077a3',
+				},
+			]),
+		),
 	};
 }
 
-function graphicsStack(totalItems: number, graphics: number) {
-	const perGraphic = totalItems / graphics;
-	return Array.from({ length: graphics }, (_, g) => ({
-		id: `graphic-${g}`,
-		name: 'N'.repeat(100),
-		items: Array.from({ length: perGraphic }, (_, i) => fatGraphicItem(`item-${g}-${i}`)),
-	}));
+/**
+ * A Graphic Input declaration at its own maxima. Inputs carry the other large axis
+ * of the whole-Screen budget, and are capped per Screen rather than per graphic.
+ */
+function fatGraphicInput(key: string) {
+	return {
+		key,
+		label: 'L'.repeat(60),
+		required: true,
+		updatePolicy: 'staged' as const,
+		type: 'text' as const,
+		default: 'D'.repeat(1000),
+		maxLength: 1000,
+	};
+}
+
+/**
+ * A Broadcast Graphics stack built to the current named caps rather than to a byte
+ * figure, so it stays the pathological case as the vocabulary changes: the Graphic
+ * Item axis and the whole-Screen Graphic Input budget are both filled to their limits.
+ */
+function graphicsStack(totalItems: number, graphics: number, totalInputs = 0) {
+	const perGraphic = Math.ceil(totalItems / graphics);
+	const perGraphicInputs = Math.ceil(totalInputs / graphics);
+	let items = 0;
+	let inputs = 0;
+
+	return Array.from({ length: graphics }, (_, g) => {
+		const take = Math.max(0, Math.min(perGraphic, totalItems - items));
+		const takeInputs = Math.max(0, Math.min(perGraphicInputs, totalInputs - inputs));
+		items += take;
+		inputs += takeInputs;
+
+		return {
+			id: `graphic-${g}`,
+			name: 'N'.repeat(100),
+			items: Array.from({ length: take }, (_, i) => fatGraphicItem(`item-${g}-${i}`)),
+			...(takeInputs > 0
+				? { inputs: Array.from({ length: takeInputs }, (_, i) => fatGraphicInput(`g${g}input${i}`)) }
+				: {}),
+		};
+	});
 }
 
 /** A ~129 KiB Feature Match Overlay layout whose every field is within its own bound. */
@@ -118,17 +173,22 @@ describe('parseModeConfigPatchResult', () => {
 	it('refuses a patch whose merged result exceeds the mode configuration byte total', () => {
 		// Neither write is unreasonable on its own; the accumulated configuration is
 		// what breaches the limit, which is why only the merged result can catch it.
-		const stored = { 'broadcast-graphics': { graphics: graphicsStack(200, 50) } };
+		const stored = { 'broadcast-graphics': { graphics: graphicsStack(110, 50, 60) } };
 		const layout = fatOverlayLayout();
 
 		// Both halves measured, so it stays visible that neither alone is the problem
 		// and that the fixtures still straddle the limit if a vocabulary grows.
-		// Measured, with a narrow margin. Their sum is 546,263 bytes against a 524,288
-		// limit — a 4% overshoot, so a vocabulary change that shifted either figure
-		// materially would move the pair off the limit and be caught here rather than
-		// quietly making this test prove nothing.
-		expect(bytes(stored)).toBeGreaterThan(374_000);
-		expect(bytes(stored)).toBeLessThan(384_000);
+		// Both halves measured, so it stays visible that neither alone is the problem.
+		//
+		// Worth knowing if this fails: with both modes built to their named caps, the
+		// largest reachable two-mode configuration is 528,346 bytes against a 524,288
+		// limit — it clears the total by 0.8%. The caps and the budget are now almost
+		// exactly tuned to each other, so a vocabulary change that made either half
+		// cheaper would drop the pathological case *under* the limit and leave nothing
+		// for this test to catch. It fails here rather than passing vacuously, which is
+		// the whole point of measuring instead of asserting a round envelope.
+		expect(bytes(stored)).toBeGreaterThan(356_000);
+		expect(bytes(stored)).toBeLessThan(366_000);
 		expect(bytes({ layout })).toBeGreaterThan(165_000);
 		expect(bytes({ layout })).toBeLessThan(170_000);
 		expect(bytes(stored) + bytes({ layout })).toBeGreaterThan(MAX_MODE_CONFIGS_BYTES);
@@ -138,7 +198,7 @@ describe('parseModeConfigPatchResult', () => {
 	});
 
 	it('names the limit, so an operator reads what they reached', () => {
-		const stored = { 'broadcast-graphics': { graphics: graphicsStack(200, 50) } };
+		const stored = { 'broadcast-graphics': { graphics: graphicsStack(110, 50, 60) } };
 
 		expect(() => parseModeConfigPatchResult(stored, 'feature-match-overlay', { layout: fatOverlayLayout() }))
 			.toThrow(new RegExp(`must not exceed ${MAX_MODE_CONFIGS_BYTES} bytes`));
@@ -149,7 +209,7 @@ describe('parseModeConfigPatchResult', () => {
 		// one payload, both paths, same answer. Before #85 was fixed the second of
 		// these accepted what the first refused.
 		const oversized = {
-			'broadcast-graphics': { graphics: graphicsStack(200, 50) },
+			'broadcast-graphics': { graphics: graphicsStack(110, 50, 60) },
 			'feature-match-overlay': {
 				featureMatchId: null,
 				presetId: 'full-table' as const,
@@ -170,15 +230,15 @@ describe('parseModeConfigPatchResult', () => {
 		const merged = parseModeConfigPatchResult(
 			{ metagame: getDefaultConfigForMode('metagame') },
 			'broadcast-graphics',
-			{ graphics: graphicsStack(20, 5) },
+			{ graphics: graphicsStack(20, 5, 6) },
 		);
 
 		// A measured figure with a stated margin, not a round envelope. A loose
 		// assertion here is exactly what let two tickets each believe they had
 		// measured the shared budget: anything under a generous ceiling passed, so a
 		// vocabulary that grew the per-item cost never showed up.
-		expect(bytes(merged)).toBeGreaterThan(38_000);
-		expect(bytes(merged)).toBeLessThan(40_000);
+		expect(bytes(merged)).toBeGreaterThan(58_000);
+		expect(bytes(merged)).toBeLessThan(62_000);
 		expect(merged['broadcast-graphics']).toBeDefined();
 		// Other modes are carried through untouched.
 		expect(merged.metagame).toEqual(getDefaultConfigForMode('metagame'));
