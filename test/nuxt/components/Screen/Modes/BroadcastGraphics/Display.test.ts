@@ -1,3 +1,4 @@
+import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { BroadcastGraphicConfig, ShapeGraphicItemConfig } from '~~/shared/types/graphics';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
@@ -5,8 +6,12 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
-import { onAirBroadcastGraphicIds } from '~~/shared/modules/broadcast-graphics-live-session';
-import { squareShapeGeometry } from '~~/shared/modules/graphics';
+import {
+	acceptedGraphicInputValues,
+	createInitialBroadcastGraphicsLiveState,
+	onAirBroadcastGraphicIds,
+} from '~~/shared/modules/broadcast-graphics-live-session';
+import { DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
 import { GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
 
 enableAutoUnmount(afterEach);
@@ -50,6 +55,7 @@ const bar: ShapeGraphicItemConfig = {
 
 /** The authoritative playout snapshot a live Screen Output would have loaded. */
 const mockOnAirGraphicIds = ref<string[]>([]);
+const mockAcceptedInputs = ref<BroadcastGraphicsLiveState>(createInitialBroadcastGraphicsLiveState());
 const mockLoadSession = ref<(eventId: number, screenId: number) => void>(() => {});
 
 mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
@@ -57,16 +63,50 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	// filter, so this test cannot pass on a filter the Screen Output does not use.
 	onAirGraphicIds: (_screenId: number, graphics: readonly { id: string }[]) =>
 		onAirBroadcastGraphicIds(
-			{ playout: Object.fromEntries(mockOnAirGraphicIds.value.map(id => [id, { onAir: true, effectiveStartedAt: 0, cut: false }])) },
+			{ playout: Object.fromEntries(mockOnAirGraphicIds.value.map(id => [id, { onAir: true, effectiveStartedAt: 0, cut: false }])), inputs: {} },
 			graphics,
 		),
 	loadSession: (eventId: number, screenId: number) => mockLoadSession.value(eventId, screenId),
+	// Likewise the accepted Graphic Input values a Graphic Text Template renders:
+	// the real selector, so a Screen Output can never be shown a working value.
+	acceptedInputValues: (_screenId: number, graphic: BroadcastGraphicConfig) =>
+		acceptedGraphicInputValues(mockAcceptedInputs.value, graphic.id, graphic.inputs ?? []),
 }));
 
 const lowerThird: BroadcastGraphicConfig = {
 	id: 'lower-third',
 	name: 'Lower Third',
 	items: [bar],
+};
+
+/** A Broadcast Graphic whose Text Graphic Item renders a Graphic Text Template. */
+const templated: BroadcastGraphicConfig = {
+	id: 'templated',
+	name: 'Name line',
+	inputs: [{
+		type: 'text',
+		key: 'name',
+		label: 'Name',
+		required: false,
+		updatePolicy: 'staged',
+		default: 'Unnamed',
+		maxLength: 20,
+	}],
+	items: [{
+		type: 'text',
+		id: 'name-line',
+		label: 'Name line',
+		visible: true,
+		anchor: 'top-left',
+		x: 0,
+		y: 0,
+		width: 600,
+		height: 120,
+		text: 'Live: {name}',
+		typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY },
+		overflowPolicy: 'ellipsis',
+		minFontSize: 24,
+	}],
 };
 
 function screenWithStack(graphics: BroadcastGraphicConfig[] = []): Screen {
@@ -394,6 +434,22 @@ describe('broadcastGraphicsDisplay', () => {
 		// The browser expands the flex shorthand, so a weighted-fill child grows.
 		expect(group.get('[data-graphic-item-kind="shape"]').attributes('style')).toContain('flex-grow: 1');
 		expect(group.get('[data-graphic-item-kind="shape"]').attributes('style')).toContain('flex-basis: 0px');
+	});
+
+	it('renders a Graphic Text Template from accepted values, never from a working edit', async () => {
+		// A working edit is what an operator is still typing. Program shows only what
+		// an acceptance put on air, so the Screen Output must never see the other one.
+		mockScreen.value = screenWithStack([templated]);
+		mockOnAirGraphicIds.value = ['templated'];
+		mockAcceptedInputs.value = {
+			playout: { templated: { onAir: true, effectiveStartedAt: 0, cut: false } },
+			inputs: { templated: { working: { name: 'Half typed' }, accepted: { name: 'Ava Reed' }, acceptedRevision: 1 } },
+		};
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.text()).toContain('Live: Ava Reed');
+		expect(wrapper.text()).not.toContain('Half typed');
 	});
 });
 

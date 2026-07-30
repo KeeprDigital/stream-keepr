@@ -6,8 +6,11 @@ import type {
 	GraphicAnimationPhase,
 	GraphicGroupChildConfig,
 	GraphicGroupItemConfig,
+	GraphicInputDeclaration,
+	GraphicInputValue,
 	GraphicItemConfig,
 	GraphicItemKind,
+	GraphicPlaceholderStyle,
 	GraphicRect,
 	GraphicRevealEdge,
 	GraphicSurfaceStyle,
@@ -19,6 +22,7 @@ import type { GraphicsSelectionTarget } from './selection';
 import {
 	graphicAnimationStaggerOffset,
 	isRectangularShapeGeometry,
+	renderGraphicTextTemplate,
 	resolveGraphicAnchorPoint,
 	resolveGraphicAnimationOrigin,
 	resolveGraphicAnimationValues,
@@ -135,6 +139,16 @@ export interface GraphicsCompositionRenderModelInput {
 	 * on-air graphic, and a recovered session all resolve to.
 	 */
 	animation?: Readonly<Record<string, GraphicsAnimationProjection>>;
+	/**
+	 * The accepted on-air Graphic Input values a Graphic Text Template renders,
+	 * keyed by Broadcast Graphic id.
+	 *
+	 * Accepted values only: a Screen Output renders what an acceptance put on air,
+	 * never a working value someone is still editing. A graphic with no entry — an
+	 * editor preview, which has no Live Session to accept anything — renders its
+	 * declared defaults, which is what a placed Broadcast Graphic starts from.
+	 */
+	inputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
 	/** Editor-only selection and item guides. */
 	itemGuides?: boolean;
 	/** Editor-only advisory action-safe and title-safe guides. */
@@ -179,6 +193,20 @@ export interface GraphicOutlineDescriptor {
 	clipId: string;
 }
 
+/**
+ * One run of a rendered Graphic Text Template.
+ *
+ * A run from a `{inputKey}` placeholder carries the typography its Graphic
+ * Placeholder Style resolves — and only the properties that style overrides, so a
+ * run inherits the item's base typography for everything else. Literal runs carry
+ * no style at all, which is the same statement made structurally.
+ */
+export interface GraphicTextRenderSegment {
+	text: string;
+	inputKey?: string;
+	style?: CSSProperties;
+}
+
 /** One painted Graphic Surface Style: a Shape Geometry path, a fill, an outline. */
 export interface GraphicSurfaceRenderDescriptor {
 	width: number;
@@ -198,8 +226,13 @@ export interface GraphicItemRenderDescriptor {
 	surface?: GraphicSurfaceRenderDescriptor;
 	/** Typography and Text Overflow Policy clamping. Present for Text Graphic Items. */
 	textStyle?: CSSProperties;
-	/** Present for Text Graphic Items. */
+	/** The Graphic Text Template's fully rendered text. Present for Text Graphic Items. */
 	text?: string;
+	/**
+	 * The same rendered text split into runs, so each `{inputKey}` run can carry its
+	 * own Graphic Placeholder Style. Concatenating the runs always reproduces `text`.
+	 */
+	textSegments?: GraphicTextRenderSegment[];
 	shrink?: GraphicTextShrinkBounds;
 	/** Present for Graphic Groups: the group's direct children, back to front. */
 	children?: GraphicItemRenderDescriptor[];
@@ -645,13 +678,73 @@ function resolveChildSurfaceStyle(
 	return child.surfaceStyle ?? group.defaultChildSurfaceStyle;
 }
 
+/**
+ * A Graphic Placeholder Style as CSS, carrying only what it overrides.
+ *
+ * Only the overridden properties are emitted so a run inherits everything else
+ * from the item's own text style, which is what keeps a placeholder style a
+ * typography override rather than a second typography.
+ */
+function placeholderStyle(
+	output: ScreenOutput,
+	style: GraphicPlaceholderStyle | undefined,
+): CSSProperties | undefined {
+	if (!style || Object.keys(style).length === 0)
+		return undefined;
+
+	const resolved: CSSProperties = {};
+	if (style.fontId !== undefined)
+		resolved.fontFamily = resolveGraphicFontFamily(style.fontId);
+	if (style.fontSize !== undefined)
+		resolved.fontSize = `${style.fontSize}px`;
+	if (style.fontWeight !== undefined)
+		resolved.fontWeight = style.fontWeight;
+	if (style.fontStyle !== undefined)
+		resolved.fontStyle = style.fontStyle;
+	if (style.textTransform !== undefined)
+		resolved.textTransform = style.textTransform;
+	if (style.letterSpacing !== undefined)
+		resolved.letterSpacing = `${style.letterSpacing}px`;
+	if (style.color !== undefined)
+		resolved.color = paintColour(output, style.color);
+
+	return Object.keys(resolved).length > 0 ? resolved : undefined;
+}
+
+/**
+ * The values this Broadcast Graphic's Graphic Text Templates render.
+ *
+ * Declared defaults first, then whatever acceptance has put on air. That layering
+ * is what makes an editor preview show the design as authored while a live output
+ * shows the show as taken, from one code path.
+ */
+function resolvedInputValues(
+	declarations: readonly GraphicInputDeclaration[],
+	accepted: Readonly<Record<string, GraphicInputValue>> | undefined,
+): Record<string, GraphicInputValue> {
+	const values: Record<string, GraphicInputValue> = {};
+	for (const declaration of declarations)
+		values[declaration.key] = declaration.default;
+	return { ...values, ...accepted };
+}
+
 function textDescriptor(
 	output: ScreenOutput,
 	scope: string,
 	item: TextGraphicItemConfig,
 	placement: CSSProperties,
 	surfaceStyle: GraphicSurfaceStyle | undefined,
+	inputs: GraphicTextTemplateContext,
 ): GraphicItemRenderDescriptor {
+	const segments = renderGraphicTextTemplate(item.text, inputs.declarations, inputs.values)
+		.map(segment => ({
+			text: segment.text,
+			inputKey: segment.inputKey,
+			style: segment.inputKey === undefined
+				? undefined
+				: placeholderStyle(output, item.placeholderStyles?.[segment.inputKey]),
+		}));
+
 	return {
 		id: item.id,
 		label: item.label,
@@ -659,11 +752,18 @@ function textDescriptor(
 		style: { ...placement, ...textBoxStyle(), filter: glowFilter(output, surfaceStyle) },
 		surface: surfaceDescriptor(output, scope, item, squareShapeGeometry(), surfaceStyle),
 		textStyle: graphicTextStyle(output, item),
-		text: item.text,
+		text: segments.map(segment => segment.text).join(''),
+		textSegments: segments,
 		shrink: item.overflowPolicy === 'shrink'
 			? { minFontSize: item.minFontSize, maxFontSize: item.typography.fontSize }
 			: undefined,
 	};
+}
+
+/** What one Broadcast Graphic's Graphic Text Templates resolve their placeholders from. */
+interface GraphicTextTemplateContext {
+	declarations: readonly GraphicInputDeclaration[];
+	values: Readonly<Record<string, GraphicInputValue>>;
 }
 
 function childDescriptor(
@@ -671,6 +771,7 @@ function childDescriptor(
 	graphicId: string,
 	group: GraphicGroupItemConfig,
 	child: GraphicGroupChildConfig,
+	inputs: GraphicTextTemplateContext,
 	motion: GraphicAnimationValues,
 ): GraphicItemRenderDescriptor {
 	const placement = group.arrangement === 'canvas'
@@ -680,7 +781,7 @@ function childDescriptor(
 	const scope = elementScope(graphicId, child.id);
 
 	if (child.type === 'text')
-		return textDescriptor(output, scope, child, placement, surfaceStyle);
+		return textDescriptor(output, scope, child, placement, surfaceStyle, inputs);
 
 	return {
 		id: child.id,
@@ -695,6 +796,7 @@ function itemDescriptor(
 	output: ScreenOutput,
 	graphicId: string,
 	item: GraphicItemConfig,
+	inputs: GraphicTextTemplateContext,
 	context: GraphicsItemAnimationContext,
 ): GraphicItemRenderDescriptor {
 	const motion = context.motionOf(item, context.staggerOffset, context.parent);
@@ -702,7 +804,7 @@ function itemDescriptor(
 	const scope = elementScope(graphicId, item.id);
 
 	if (item.type === 'text')
-		return textDescriptor(output, scope, item, placement, item.surfaceStyle);
+		return textDescriptor(output, scope, item, placement, item.surfaceStyle, inputs);
 
 	if (item.type === 'shape') {
 		return {
@@ -732,6 +834,7 @@ function itemDescriptor(
 				graphicId,
 				item,
 				child,
+				inputs,
 				// A child's own delay is offset by its group's stagger, on top of
 				// whatever offset the group itself received: both are measured from the
 				// one shared phase start. A `clear-parent` slide clears the group, not
@@ -892,6 +995,11 @@ export function resolveGraphicsCompositionRenderModel(
 			background: screenOutputCanvasBackground(input.output),
 		},
 		graphics: composed.map((graphic) => {
+			const declarations = graphic.inputs ?? [];
+			const inputs: GraphicTextTemplateContext = {
+				declarations,
+				values: resolvedInputValues(declarations, input.inputValues?.[graphic.id]),
+			};
 			const canvas = { width: input.canvasWidth, height: input.canvasHeight };
 			const { graphicMotion, itemContext } = graphicAnimationContext(
 				graphic,
@@ -908,7 +1016,7 @@ export function resolveGraphicsCompositionRenderModel(
 				...(Object.keys(style).length === 0 ? {} : { style }),
 				items: graphic.items
 					.filter(item => item.visible)
-					.map(item => itemDescriptor(input.output, graphic.id, item, itemContext(item))),
+					.map(item => itemDescriptor(input.output, graphic.id, item, inputs, itemContext(item))),
 			};
 		}),
 		safeAreaGuides: input.safeAreaGuides

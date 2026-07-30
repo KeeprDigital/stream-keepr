@@ -47,7 +47,7 @@ function session(overrides: Partial<BroadcastGraphicsLiveSessionResponse> = {}):
 		eventId: EVENT_ID,
 		screenId: SCREEN_ID,
 		status: 'active',
-		currentState: { playout: {} },
+		currentState: { playout: {}, inputs: {} },
 		sequence: 1,
 		endedAt: null,
 		createdAt: new Date(0),
@@ -66,7 +66,7 @@ function notification(
 		sessionId: 55,
 		sequence: 2,
 		commandType: 'Take',
-		currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } },
+		currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 		...overrides,
 	} as MessageData<'broadcastGraphicsLiveSession:commandApplied'>;
 }
@@ -83,7 +83,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 	it('derives Graphic Playout State and the on-air stack from the loaded snapshot', async () => {
 		mockRepository.getSession.mockResolvedValue(session({
-			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false }, bug: { onAir: false, effectiveStartedAt: 0, cut: false } } },
+			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false }, bug: { onAir: false, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 		}));
 
 		await store.loadSession(EVENT_ID, SCREEN_ID);
@@ -105,8 +105,8 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			sessionId: 55,
 			sequence: 2,
 			commandType: 'Take',
-			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } },
-			session: session({ sequence: 2, currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } } }),
+			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			session: session({ sequence: 2, currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} } }),
 		});
 
 		await store.take(EVENT_ID, SCREEN_ID, 'slate');
@@ -125,7 +125,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			sessionId: 55,
 			sequence: 2,
 			commandType: 'Out',
-			currentState: { playout: {} },
+			currentState: { playout: {}, inputs: {} },
 			session: session({ sequence: 2 }),
 		});
 
@@ -144,7 +144,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			sessionId: 55,
 			sequence: 2,
 			commandType: 'Take',
-			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } },
+			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 			session: session({ sequence: 2 }),
 		});
 
@@ -167,7 +167,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				sessionId: 56,
 				sequence: 2,
 				commandType: 'Take',
-				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } },
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 				session: session({ id: 56, sequence: 2 }),
 			});
 		mockRepository.getSession.mockResolvedValue(session({ id: 56, sequence: 1 }));
@@ -196,8 +196,8 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				sessionId: 56,
 				sequence: 2,
 				commandType: 'Take',
-				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } },
-				session: session({ id: 56, sequence: 2, currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } } }),
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+				session: session({ id: 56, sequence: 2, currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} } }),
 			});
 		mockRepository.getSession.mockResolvedValue(session({ id: 56, sequence: 1 }));
 
@@ -252,8 +252,8 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			sessionId: 55,
 			sequence: 2,
 			commandType: 'Take',
-			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } },
-			session: session({ sequence: 2, currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } } }),
+			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			session: session({ sequence: 2, currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} } }),
 		});
 		await inFlight;
 
@@ -286,7 +286,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 		await store.applyRemoteCommand(notification({
 			sequence: 2,
-			currentState: { playout: { slate: { onAir: false, effectiveStartedAt: 0, cut: false } } },
+			currentState: { playout: { slate: { onAir: false, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 		}));
 
 		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
@@ -297,7 +297,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		vi.clearAllMocks();
 		mockRepository.getSession.mockResolvedValue(session({
 			sequence: 9,
-			currentState: { playout: { bug: { onAir: true, effectiveStartedAt: 0, cut: false } } },
+			currentState: { playout: { bug: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 		}));
 
 		// A disconnect swallowed sequences 2 through 8: the notification is not
@@ -324,5 +324,97 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		await store.applyRemoteCommand(notification());
 
 		expect(mockRepository.getSession).toHaveBeenCalledWith(EVENT_ID, SCREEN_ID);
+	});
+
+	it('edits one Graphic Input as its own command, so the server can share the working value', async () => {
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		mockRepository.sendCommand.mockResolvedValue({
+			screenId: SCREEN_ID,
+			sessionId: 55,
+			sequence: 2,
+			commandType: 'Set Input',
+			currentState: { playout: {}, inputs: {} },
+			session: session({ sequence: 2 }),
+		});
+
+		await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed');
+
+		expect(mockRepository.sendCommand).toHaveBeenCalledWith(EVENT_ID, SCREEN_ID, 55, expect.objectContaining({
+			type: 'Set Input',
+			payload: { graphicId: 'slate', inputKey: 'name', value: 'Ava Reed' },
+		}));
+	});
+
+	it('names the acceptance it supersedes when it accepts a staged Graphic Input set', async () => {
+		mockRepository.getSession.mockResolvedValue(session({
+			currentState: {
+				playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } },
+				inputs: { slate: { working: { name: 'Ava Reed' }, accepted: { name: 'Unnamed' }, acceptedRevision: 4 } },
+			},
+		}));
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		const accepted = {
+			playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } },
+			inputs: { slate: { working: { name: 'Ava Reed' }, accepted: { name: 'Ava Reed' }, acceptedRevision: 5 } },
+		};
+		mockRepository.sendCommand.mockResolvedValue({
+			screenId: SCREEN_ID,
+			sessionId: 55,
+			sequence: 2,
+			commandType: 'Update Graphic',
+			currentState: accepted,
+			session: session({ sequence: 2, currentState: accepted }),
+		});
+
+		await store.updateGraphic(EVENT_ID, SCREEN_ID, 'slate');
+		await store.updateGraphic(EVENT_ID, SCREEN_ID, 'slate', true);
+
+		// Two presses are two intents, and each supersedes the acceptance current when
+		// it was pressed — the second one names the acceptance the first produced.
+		expect(mockRepository.sendCommand.mock.calls.map(call => call[3].payload)).toEqual([
+			{ graphicId: 'slate', cut: false, basedOnAcceptedRevision: 4 },
+			{ graphicId: 'slate', cut: true, basedOnAcceptedRevision: 5 },
+		]);
+	});
+
+	it('restates one Update Graphic unchanged — same command id, same acceptance revision', async () => {
+		mockRepository.getSession.mockResolvedValue(session({
+			currentState: {
+				playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } },
+				inputs: { slate: { working: { name: 'Ava Reed' }, accepted: {}, acceptedRevision: 4 } },
+			},
+		}));
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		vi.clearAllMocks();
+		mockRepository.sendCommand
+			.mockRejectedValueOnce({ statusCode: 409, message: 'Broadcast graphics live session has ended' })
+			.mockResolvedValueOnce({
+				screenId: SCREEN_ID,
+				sessionId: 56,
+				sequence: 2,
+				commandType: 'Update Graphic',
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+				session: session({ id: 56, sequence: 2 }),
+			});
+		// The reload the retry goes through reports a *different* acceptance revision.
+		mockRepository.getSession.mockResolvedValue(session({
+			id: 56,
+			currentState: {
+				playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } },
+				inputs: { slate: { working: {}, accepted: {}, acceptedRevision: 9 } },
+			},
+		}));
+
+		await store.updateGraphic(EVENT_ID, SCREEN_ID, 'slate');
+
+		// One press is one intent, however many times it has to be delivered. Both the
+		// command id and the acceptance it supersedes are part of that intent: a fresh
+		// id would defeat the receipt that recognises the repeat, and re-reading the
+		// revision inside the retry would re-base the sequence guard onto whatever
+		// landed in the meantime and stop it protecting the colleague it exists for.
+		const [first, retried] = mockRepository.sendCommand.mock.calls.map(call => call[3]);
+		expect(retried.commandId).toBe(first.commandId);
+		expect(retried.payload).toEqual(first.payload);
+		expect(first.payload.basedOnAcceptedRevision).toBe(4);
 	});
 });

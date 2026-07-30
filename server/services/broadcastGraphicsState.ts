@@ -7,6 +7,7 @@ import type {
 	BroadcastGraphicsCommandAppliedPayload,
 	BroadcastGraphicsCommandResult,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
+import type { GraphicInputDeclaration } from '~~/shared/types/graphics';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { broadcastGraphicsLiveSessions } from '~~/server/db/schema';
@@ -14,9 +15,25 @@ import { mapBroadcastGraphicsLiveSessionToResponse } from '~~/server/mappers/bro
 import { createSequencedLiveState, forgetAggregateReceipts } from '~~/server/modules/live-state';
 import { publishMessage } from '~~/server/utils/ably';
 import {
-	applyBroadcastGraphicsPlayoutCommand,
+	applyBroadcastGraphicsCommand,
+	BroadcastGraphicsCommandRejection,
 	createInitialBroadcastGraphicsLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
+
+/**
+ * How a domain refusal reaches the operator.
+ *
+ * A stale acceptance, an Update Graphic on a graphic that is off, and a required
+ * Graphic Input with no available value are all refusals about the current state
+ * of the show, so they are conflicts. Naming a Graphic Input the Broadcast Graphic
+ * does not declare addresses something that is not there.
+ */
+const REJECTION_STATUS: Record<BroadcastGraphicsCommandRejection['code'], number> = {
+	'stale-input-acceptance': 409,
+	'required-input-unavailable': 409,
+	'update-unavailable': 409,
+	'unknown-input': 404,
+};
 
 /** Namespaces Broadcast Graphics Live Session receipts in the shared receipt store. */
 export const BROADCAST_GRAPHICS_LIVE_SESSION_AGGREGATE_KIND = 'broadcastGraphicsLiveSession';
@@ -144,10 +161,18 @@ export function broadcastGraphicsStateService() {
 
 	/**
 	 * The Broadcast Graphics half of the shared sequenced live-state module: what
-	 * its playout commands mean and how its projection is stored. Sequencing,
-	 * receipts, duplicate suppression, and conflict protection are the module's.
+	 * its commands mean and how its projection is stored. Sequencing, receipts,
+	 * duplicate suppression, and conflict protection are the module's.
+	 *
+	 * It is built per command because reduction needs the addressed Broadcast
+	 * Graphic's declared Graphic Inputs, and the port's reduction sees only the
+	 * sequenced aggregate and the command. Declarations are authored Screen
+	 * configuration — an author may change them under a running show — so
+	 * denormalizing them into live state to bring them within the port's reach would
+	 * be storing a copy that can go stale. Closing over them for the one command
+	 * that needs them keeps the authored config authoritative.
 	 */
-	const liveState = createSequencedLiveState<
+	const liveStateFor = (declarations: readonly GraphicInputDeclaration[]) => createSequencedLiveState<
 		BroadcastGraphicsLiveSessionRef,
 		DbBroadcastGraphicsLiveSession,
 		BroadcastGraphicsCommand,
@@ -179,25 +204,48 @@ export function broadcastGraphicsStateService() {
 		},
 
 		/**
-		 * Every playout command is safe to re-reduce onto a newer state: each owns
-		 * exactly one Broadcast Graphic's on-air intent, so a writer that got in
-		 * first with a different graphic — or with an older intent for the same one —
-		 * does not invalidate this one.
+		 * Every command here is safe to re-reduce onto a newer state: each owns one
+		 * Broadcast Graphic's on-air intent or one of its Graphic Inputs, so a writer
+		 * that got in first with a different graphic — or with an older intent for the
+		 * same one — does not invalidate this one.
+		 *
+		 * Update Graphic is mergeable for the same reason, and its own guard is what
+		 * makes that safe: re-reducing it onto the newer state re-checks the acceptance
+		 * revision, so a merge retry cannot slip a stale acceptance past the guard the
+		 * first attempt satisfied. Answering `false` here instead would turn an
+		 * unrelated Take on another graphic into a spurious conflict for the operator
+		 * accepting inputs.
 		 */
 		isMergeable: () => true,
 
 		/**
-		 * The server's clock is the authoritative effective start time of the phase
-		 * this command begins. It is read here, at acceptance, rather than sent by a
-		 * client: every output projects animation from this instant, so it has to come
-		 * from the one place that decides the authoritative order.
+		 * A domain refusal is raised from the shared reducer, which is deliberately
+		 * ignorant of HTTP; this is the one place that maps it. Reduction happens
+		 * before the compare-and-swap write, so a refusal never leaves a receipt.
 		 */
-		reduce: (session, command) => applyBroadcastGraphicsPlayoutCommand(
-			session.currentState,
-			command.type,
-			command.payload,
-			{ acceptedAt: Date.now() },
-		),
+		reduce: (session, command) => {
+			try {
+				return applyBroadcastGraphicsCommand(
+					session.currentState,
+					command,
+					// The server's clock is the authoritative effective start time of the
+					// phase this command begins. It is read here, at acceptance, rather than
+					// sent by a client: every output projects animation from this instant, so
+					// it has to come from the one place that decides the authoritative order.
+					{ inputs: declarations, acceptedAt: Date.now() },
+				);
+			}
+			catch (error) {
+				if (error instanceof BroadcastGraphicsCommandRejection) {
+					throw createError({
+						statusCode: REJECTION_STATUS[error.code],
+						message: error.message,
+						data: { code: error.code, inputKeys: error.inputKeys },
+					});
+				}
+				throw error;
+			}
+		},
 
 		casGuard: session => sql`
 			from ${broadcastGraphicsLiveSessions}
@@ -245,10 +293,13 @@ export function broadcastGraphicsStateService() {
 		sessionId: number,
 		eventId: number,
 		command: BroadcastGraphicsCommand,
+		/** The addressed Broadcast Graphic's declared Graphic Inputs. */
+		declarations: readonly GraphicInputDeclaration[],
 		originConnectionId?: string,
 		options: Omit<SequencedLiveStateExecuteOptions, 'originConnectionId'> = {},
 	): Promise<BroadcastGraphicsCommandResult> => {
-		return await liveState.execute({ sessionId, eventId }, command, { ...options, originConnectionId });
+		return await liveStateFor(declarations)
+			.execute({ sessionId, eventId }, command, { ...options, originConnectionId });
 	};
 
 	return {

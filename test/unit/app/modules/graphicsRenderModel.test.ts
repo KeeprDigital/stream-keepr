@@ -298,6 +298,18 @@ function itemPaints(item: GraphicItemRenderDescriptor, prefix = ''): KeyPaint[] 
 	return [
 		...stylePaints(item.style, path),
 		...(item.textStyle ? stylePaints(item.textStyle, `${path}.textStyle`) : []),
+		// A Graphic Placeholder Style paints one run of a rendered Graphic Text
+		// Template, so it is a painting surface like any other and has to be walked.
+		// Leaving it out would let a placeholder style that later gained a background
+		// or a text stroke reach the matte unnoticed, and would keep a segment's own
+		// alpha out of the union arithmetic below.
+		...(item.textSegments ?? []).flatMap((segment, index) =>
+			segment.style ? stylePaints(segment.style, `${path}.textSegments[${index}]`) : []),
+		// A Graphic Placeholder Style paints one run of a rendered Graphic Text
+		// Template, so it is a painting surface like any other and has to be walked.
+		// Leaving it out would let a placeholder style that later gained a background
+		// or a text stroke reach the matte unnoticed, and would keep a segment's own
+		// alpha out of the union arithmetic below.
 		...(item.surface ? surfacePaints(item.surface, path) : []),
 		...(item.children ?? []).flatMap(child => itemPaints(child, `${path}>`)),
 	];
@@ -757,6 +769,55 @@ describe('graphicsCompositionRenderModel', () => {
 			);
 
 			expect(luminance).toBeCloseTo(expectedUnion, 2);
+		});
+
+		it('paints a Graphic Placeholder Style in the Key Output as white, and counts its run in the matte', () => {
+			// A placeholder style is a painting surface of its own, so it has to obey the
+			// matte identity like any other. This composes one so the guard above walks a
+			// styled run rather than an empty list — an authored colour here must resolve
+			// to white, and the run's own alpha must reach the union arithmetic.
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'key',
+				graphics: [{
+					id: 'a',
+					name: 'a',
+					inputs: [{
+						type: 'text',
+						key: 'name',
+						label: 'Name',
+						required: false,
+						updatePolicy: 'staged',
+						default: 'Ava Reed',
+						maxLength: 40,
+					}],
+					items: [text('line', {
+						text: 'Live: {name}',
+						placeholderStyles: { name: { color: '#ff0000', fontWeight: 300 } },
+					})],
+				}],
+				...CANVAS,
+			});
+
+			const segments = model.graphics[0]!.items[0]!.textSegments!;
+			const styled = segments.find(segment => segment.inputKey === 'name');
+
+			expect(styled?.text).toBe('Ava Reed');
+			expect(styled?.style?.color).toBe('#ffffff');
+			// Non-vacuous: the guard is walking a run that really carries a style.
+			expect(itemPaints(model.graphics[0]!.items[0]!).length).toBeGreaterThan(0);
+			expect(() => itemPaints(model.graphics[0]!.items[0]!)).not.toThrow();
+		});
+
+		it('refuses a Graphic Placeholder Style that would paint its own colour into the Key Output', () => {
+			// The guard's whole purpose: a placeholder style that gained a background or a
+			// text stroke would otherwise reach the matte unnoticed.
+			expect(() => itemPaints({
+				id: 'line',
+				label: 'line',
+				kind: 'text',
+				style: { color: '#ffffff' },
+				textSegments: [{ text: 'Ava Reed', inputKey: 'name', style: { background: '#ff0000' } }],
+			})).toThrow(/textSegments\[0\]/);
 		});
 
 		it('paints a gradient in the Key Output as white at each stop opacity', () => {

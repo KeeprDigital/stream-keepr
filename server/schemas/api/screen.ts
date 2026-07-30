@@ -45,9 +45,12 @@ import {
 	GRAPHIC_GROUP_ALIGN_VALUES,
 	GRAPHIC_GROUP_ARRANGEMENT_VALUES,
 	GRAPHIC_GROUP_JUSTIFY_VALUES,
+	GRAPHIC_INPUT_KEY_PATTERN,
+	GRAPHIC_MEDIA_KIND_VALUES,
 	GRAPHIC_REVEAL_EDGE_VALUES,
 	GRAPHIC_SLIDE_DIRECTION_VALUES,
 	GRAPHIC_SLIDE_DISTANCE_MODE_VALUES,
+	GRAPHIC_SOURCE_SELECTION_KIND_VALUES,
 	GRAPHIC_TEXT_ALIGN_VALUES,
 	GRAPHIC_TEXT_TRANSFORM_VALUES,
 	MAX_GRAPHIC_ANIMATION_DELAY_MS,
@@ -57,11 +60,16 @@ import {
 	MAX_GRAPHIC_ANIMATION_SCALE,
 	MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS,
 	MAX_GRAPHIC_FILL_STOPS,
+	MAX_GRAPHIC_INPUT_CHOICE_LENGTH,
+	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
+	MAX_GRAPHIC_INPUT_KEY_LENGTH,
+	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
 	MAX_GRAPHIC_SLIDE_DISTANCE_PX,
 	MAX_GRAPHIC_TEXT_LENGTH,
 	MIN_GRAPHIC_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_ANIMATION_REPEAT,
 	MIN_GRAPHIC_FILL_STOPS,
+	ON_AIR_UPDATE_POLICY_VALUES,
 	SHAPE_CORNER_TREATMENT_VALUES,
 	TEXT_OVERFLOW_POLICY_VALUES,
 } from '~~/shared/types/graphics';
@@ -746,6 +754,106 @@ const graphicContainerAnimationSchema = z.object({
 	}).strict().optional(),
 }).strict();
 
+/* ────────────────────────────────────────────────
+ * Graphic Inputs
+ * ──────────────────────────────────────────────── */
+
+/**
+ * How many Graphic Placeholder Styles one Text Graphic Item may define.
+ *
+ * A placeholder style is a full typography override, so it is the most expensive
+ * thing a Text Graphic Item can grow. Four is enough for the designs the fidelity
+ * prototype needs — a name, a surname, a score, a suffix — and keeps a maximal
+ * Text Graphic Item within the whole-Screen byte budget below.
+ */
+export const MAX_GRAPHIC_PLACEHOLDER_STYLES_PER_TEXT_ITEM = 4;
+
+export const MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC = 24;
+export const MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC = 8;
+
+/**
+ * The whole-Screen Graphic Input, Graphic Input Binding, and Graphic Source
+ * Selection budgets, for the same reason the Graphic Item one exists: the
+ * per-graphic caps and the per-Screen Broadcast Graphic cap bound each list
+ * independently, and their product does not fit the mode-configuration byte limit.
+ * A choice Graphic Input with a full option list is the expensive case, at about
+ * 1,274 bytes against a Graphic Item's 2,682.
+ */
+export const MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN = 60;
+export const MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN = 40;
+
+const graphicInputKeySchema = z.string()
+	.min(1)
+	.max(MAX_GRAPHIC_INPUT_KEY_LENGTH)
+	.regex(GRAPHIC_INPUT_KEY_PATTERN, 'A Graphic Input key must start with a letter and contain only letters, digits, underscores, and hyphens');
+
+const graphicInputLabelSchema = z.string().min(1).max(MAX_GRAPHIC_INPUT_LABEL_LENGTH);
+
+const graphicInputDeclarationBaseShape = {
+	key: graphicInputKeySchema,
+	label: graphicInputLabelSchema,
+	required: z.boolean(),
+	updatePolicy: z.enum(ON_AIR_UPDATE_POLICY_VALUES),
+};
+
+const graphicInputDeclarationSchema = z.discriminatedUnion('type', [
+	z.object({
+		...graphicInputDeclarationBaseShape,
+		type: z.literal('text'),
+		default: z.string().max(MAX_GRAPHIC_TEXT_LENGTH),
+		// A declared bound never exceeds the bound on a Text Graphic Item's own
+		// stored template: a value no template could hold is not a useful value.
+		maxLength: z.number().int().min(1).max(MAX_GRAPHIC_TEXT_LENGTH),
+	}).strict(),
+	z.object({
+		...graphicInputDeclarationBaseShape,
+		type: z.literal('number'),
+		default: finiteNumberSchema.nullable(),
+		min: finiteNumberSchema.optional(),
+		max: finiteNumberSchema.optional(),
+		integer: z.boolean(),
+	}).strict(),
+	z.object({
+		...graphicInputDeclarationBaseShape,
+		type: z.literal('toggle'),
+		default: z.boolean(),
+	}).strict(),
+	z.object({
+		...graphicInputDeclarationBaseShape,
+		type: z.literal('choice'),
+		default: z.string().max(MAX_GRAPHIC_INPUT_CHOICE_LENGTH).nullable(),
+		options: z.array(z.object({
+			value: z.string().min(1).max(MAX_GRAPHIC_INPUT_CHOICE_LENGTH),
+			label: z.string().min(1).max(MAX_GRAPHIC_INPUT_CHOICE_LENGTH),
+		}).strict()).max(MAX_GRAPHIC_INPUT_CHOICE_OPTIONS),
+	}).strict(),
+	z.object({
+		...graphicInputDeclarationBaseShape,
+		type: z.literal('color'),
+		default: cssColorSchema.nullable(),
+	}).strict(),
+	z.object({
+		...graphicInputDeclarationBaseShape,
+		type: z.literal('media'),
+		// A media Graphic Input's default is a pinned Graphics Asset Library
+		// revision, exactly as an authored asset reference is.
+		default: graphicAssetReferenceSchema.nullable(),
+		mediaKind: z.enum(GRAPHIC_MEDIA_KIND_VALUES),
+	}).strict(),
+]);
+
+const graphicSourceSelectionSchema = z.object({
+	key: graphicInputKeySchema,
+	label: graphicInputLabelSchema,
+	kind: z.enum(GRAPHIC_SOURCE_SELECTION_KIND_VALUES),
+}).strict();
+
+const graphicInputBindingSchema = z.object({
+	inputKey: graphicInputKeySchema,
+	sourceKey: graphicInputKeySchema,
+	fieldId: z.string().min(1).max(100),
+}).strict();
+
 const graphicItemBaseShape = {
 	id: z.string().min(1).max(100),
 	label: z.string().min(1).max(100),
@@ -759,6 +867,22 @@ const graphicItemBaseShape = {
 	animation: graphicAnimationSchema.optional(),
 };
 
+/**
+ * A Graphic Placeholder Style is a typography-only override for one `{inputKey}`,
+ * so every property is optional and only the ones an author changed are stored.
+ * Line height and text alignment are absent: they lay out the whole text block
+ * rather than one run inside it.
+ */
+const graphicPlaceholderStyleSchema = z.object({
+	fontId: z.enum(GRAPHIC_FONT_IDS).optional(),
+	fontSize: finiteNumberSchema.positive().max(600).optional(),
+	fontWeight: z.number().int().min(100).max(900).optional(),
+	fontStyle: z.enum(GRAPHIC_FONT_STYLE_VALUES).optional(),
+	textTransform: z.enum(GRAPHIC_TEXT_TRANSFORM_VALUES).optional(),
+	letterSpacing: finiteNumberSchema.min(-100).max(100).optional(),
+	color: cssColorSchema.optional(),
+}).strict();
+
 const textGraphicItemShape = {
 	...graphicItemBaseShape,
 	type: z.literal('text'),
@@ -767,6 +891,13 @@ const textGraphicItemShape = {
 	overflowPolicy: z.enum(TEXT_OVERFLOW_POLICY_VALUES),
 	minFontSize: finiteNumberSchema.positive().max(600),
 	surfaceStyle: graphicSurfaceStyleSchema.optional(),
+	placeholderStyles: z.record(
+		graphicInputKeySchema,
+		graphicPlaceholderStyleSchema,
+	).refine(
+		styles => Object.keys(styles).length <= MAX_GRAPHIC_PLACEHOLDER_STYLES_PER_TEXT_ITEM,
+		`A Text Graphic Item must not define more than ${MAX_GRAPHIC_PLACEHOLDER_STYLES_PER_TEXT_ITEM} Graphic Placeholder Styles`,
+	).optional(),
 };
 
 const shapeGraphicItemShape = {
@@ -844,34 +975,103 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * 255,000 Graphic Items and about 485 MiB against a 512 KiB budget shared by
  * every Screen Mode.
  *
- * Graphic Animation is the largest single addition to that arithmetic, because
- * every Broadcast Graphic and every Graphic Item may own one recipe per lifecycle
- * phase. Measured against this schema's own maxima, animating all four phases with
- * a fade, slide, scale, and reveal channel each takes the worst-case Graphic Item
- * from 2,015 bytes to 3,054, and a Broadcast Graphic shell from 230 to 2,345 —
- * a shell pays most because it also carries a four-phase stagger naming its
- * direct items, and an id costs 102 bytes per appearance at the 100-character cap.
+ * This cap binds the product. It came down from 200 when Graphic Inputs arrived,
+ * because they add two costs to the same budget: a Text Graphic Item may now carry
+ * Graphic Placeholder Styles, which takes the most expensive Graphic Item from
+ * 2,004 bytes to 2,682 (2,727 as a Graphic Group child), and each Broadcast
+ * Graphic declares Graphic Inputs, bindings, and Graphic Source Selections of its
+ * own. Measured against this schema's own maxima, the worst authored Screen every
+ * cap together still admits is 110 maximal Graphic Items at about 2,700 bytes
+ * each, 60 maximal choice Graphic Inputs at about 1,300, 60 Graphic Input
+ * Bindings, 40 Graphic Source Selections, and 50 Broadcast Graphic shells:
+ * `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES` measured
+ * against the schema itself.
  *
- * The worst case now spends its Graphic Item budget across as many Broadcast
- * Graphics as the Screen allows, because maximising animated shells costs more
- * than concentrating items in fewer graphics. At this cap that measures 372,654
- * bytes — 364 KiB, or 71% of the budget — pinned by a test, against 329,914 bytes
- * for the same items gathered into Graphic Groups. Realistic authoring, where few
- * items animate and none carry every channel, stays far below both.
+ * **That figure no longer fits the budget.** It was 79% when Graphic Inputs set
+ * this cap; Graphic Animation has taken it to 527,531 bytes against a 524,288
+ * limit — 100.6%. So the named caps no longer bind before the byte total in the
+ * worst case, and an author who filled every cap at once would read a byte count
+ * rather than the limit they reached. See the animation section below.
  *
- * Halving this cap from 200 is the price of animation, and it is deliberately
- * paid here rather than by narrowing the animation vocabulary: an author who
- * reaches it reads a named limit instead of a byte count. One Broadcast Graphic
- * may still fill the whole Screen's budget, so this cap and the per-graphic one
- * coincide. Graphic Group children count towards it — they are Graphic Items and
- * they cost bytes.
+ * It is deliberately a named cap so an operator reads which limit they reached
+ * rather than a byte count. Graphic Group children count towards it — they are
+ * Graphic Items and they cost bytes.
  *
- * The remaining ~148 KiB is shared with every other mode's configuration, so a
- * Screen carrying both a maximal Broadcast Graphics stack and a maximal Feature
- * Match Overlay layout can still reach the byte limit. That is a property of one
- * budget shared across modes and predates this cap.
+ * ## That 79% is a bound, not a forecast
+ *
+ * Read without its construction the figure suggests the budget is nearly full. It
+ * is not. It describes a Screen where all 110 Graphic Items are simultaneously
+ * Text Graphic Items carrying a 1,000-character template, a 100-character label,
+ * four maximal Graphic Placeholder Styles, a four-stop gradient, an outline and a
+ * glow, alongside 60 maximal choice Graphic Inputs — a configuration nobody will
+ * author. Realistic authoring measures around 119 KiB, roughly 23% of the budget.
+ * The number proves the caps cannot be combined into an oversized write; it does
+ * not predict what a Screen will hold.
+ *
+ * ## Which limit binds first
+ *
+ * For a realistic large graphics package it is not this cap but
+ * `MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN`: fifteen lower thirds at four
+ * Graphic Inputs each is exactly 60. Anyone finding a package too small to author
+ * should move that number before this one.
+ *
+ * ## Why it is 110 and not more
+ *
+ * Two open defects gate raising it, and neither is about storage arithmetic:
+ *
+ * - The whole-`modeConfigs` byte total was an object-level refinement discarded
+ *   when the per-mode patch schema is rebuilt from its field schemas, so it was not
+ *   enforced on the path the editors write through. That is fixed: the merged
+ *   configuration a patch would produce is now validated before it is written, so
+ *   the total refuses an oversized write wherever it comes from, and per-field caps
+ *   no longer have to carry weight they were never meant to.
+ * - Realtime still publishes whole live state and whole mode configs, so a larger
+ *   cap would buy storable configuration that cannot be notified — capacity with
+ *   no way to reach a client.
+ *
+ * With both fixed, this cap can be generous, because the worst case is then
+ * allowed not to fit: an author who approaches the total gets told which limit
+ * they reached and removes something, and every other author never sees it.
+ * Until then, reducing is the only direction that does not make the second defect
+ * worse. 110 is about fifteen lower thirds plus a slate and a bug, comfortably
+ * more than the fidelity prototype's acceptance evidence requires.
+ *
+ *
+ * ## What Graphic Animation adds
+ *
+ * Every Broadcast Graphic and every Graphic Item may own one Graphic Animation
+ * Recipe per lifecycle phase, which is the largest single addition to this
+ * arithmetic so far. Measured against this schema's own maxima: animating all four
+ * phases with a fade, slide, scale, and reveal channel each costs a Graphic Item
+ * 1,039 bytes, and a Broadcast Graphic shell 2,115 — a shell pays more because it
+ * also carries a four-phase stagger naming its direct items, and an id costs 102
+ * bytes per appearance at the 100-character cap.
+ *
+ * The cap is deliberately left where Graphic Inputs set it, even though the worst
+ * case now exceeds the budget. Animation's cost is recorded rather than used to
+ * re-derive a number, because two tickets already cut this same constant
+ * independently — each measuring correctly and each blind to the other — and
+ * re-deriving it a third time from one vocabulary's own arithmetic would repeat
+ * exactly that mistake. A test asserts the overshoot rather than hiding it.
+ *
+ * Two things make asserting it the right response rather than a deferral. The
+ * whole-`modeConfigs` byte total is now enforced on the editors' write path, so the
+ * overshoot is refused legibly instead of being written and truncated later; and the
+ * shape it would be refused in — an author filling all 110 Graphic Items with
+ * maximal templates, four Placeholder Styles, every animation channel on all four
+ * phases, plus 60 maximal Graphic Inputs — is not one anyone will author. Realistic
+ * authoring is a fraction of the budget. What is lost is the *named cap binds
+ * first* property, and restoring it is a cap decision that one owned measurement
+ * should make.
+ * This comment deliberately states no cross-mode headroom figure. The budget is
+ * shared with every other Screen Mode, so what remains is a property of the whole
+ * `modeConfigs` map rather than of this cap, and reconstructing it per ticket is
+ * how two tickets came to quote different baselines for the same pre-existing
+ * Graphic Item. One owned measurement of the merged worst case reports it instead;
+ * the figures above describe only this mode's own contribution to it.
  */
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 100;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 110;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 527_531;
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
 	return items.reduce(
@@ -907,6 +1107,44 @@ const broadcastGraphicConfigSchema = z.object({
 			items => new Set(graphicItemIds(items)).size === graphicItemIds(items).length,
 			'Graphic Item ids must be unique within one Broadcast Graphic',
 		),
+	// Every cap and uniqueness rule sits on its own array field for the same reason
+	// the Graphic Item ones do: an object-level refinement never reaches the patch
+	// path the editors write through.
+	inputs: z.array(graphicInputDeclarationSchema)
+		.max(
+			MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC,
+			`A Broadcast Graphic must not declare more than ${MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC} Graphic Inputs`,
+		)
+		// A `{inputKey}` placeholder, a Graphic Input Binding, and a Live Control
+		// edit all address an input by key alone, so a duplicate key would render,
+		// bind, and edit whichever one happened to be found first.
+		.refine(
+			inputs => new Set(inputs.map(input => input.key)).size === inputs.length,
+			'Graphic Input keys must be unique within one Broadcast Graphic',
+		)
+		.optional(),
+	sources: z.array(graphicSourceSelectionSchema)
+		.max(
+			MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
+			`A Broadcast Graphic must not declare more than ${MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC} Graphic Source Selections`,
+		)
+		.refine(
+			sources => new Set(sources.map(source => source.key)).size === sources.length,
+			'Graphic Source Selection keys must be unique within one Broadcast Graphic',
+		)
+		.optional(),
+	bindings: z.array(graphicInputBindingSchema)
+		.max(
+			MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC,
+			`A Broadcast Graphic must not declare more than ${MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC} Graphic Input Bindings`,
+		)
+		// A Graphic Input Binding maps one Graphic Input to one field, so a second
+		// binding for the same input would leave which one resolves undecided.
+		.refine(
+			bindings => new Set(bindings.map(binding => binding.inputKey)).size === bindings.length,
+			'A Graphic Input may have at most one Graphic Input Binding',
+		)
+		.optional(),
 	animation: graphicContainerAnimationSchema.optional(),
 }).strict();
 
@@ -927,6 +1165,24 @@ export const broadcastGraphicsModeConfigSchema = z.object({
 			graphics => graphics.reduce((total, graphic) => total + countGraphicItems(graphic.items), 0)
 				<= MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN,
 			`A Broadcast Graphics Screen must not carry more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Items in total`,
+		)
+		.refine(
+			graphics => graphics.reduce((total, graphic) => total + (graphic.inputs?.length ?? 0), 0)
+				<= MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN,
+			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Inputs in total`,
+		)
+		// Bindings are budgeted with the inputs they map, and Graphic Source
+		// Selections with them: all three are per-graphic lists whose product with the
+		// Broadcast Graphic cap would otherwise be unbounded.
+		.refine(
+			graphics => graphics.reduce((total, graphic) => total + (graphic.bindings?.length ?? 0), 0)
+				<= MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN,
+			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Input Bindings in total`,
+		)
+		.refine(
+			graphics => graphics.reduce((total, graphic) => total + (graphic.sources?.length ?? 0), 0)
+				<= MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
+			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Source Selections in total`,
 		),
 }).strict() satisfies z.ZodType<BroadcastGraphicsModeConfig>;
 

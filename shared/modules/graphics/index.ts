@@ -2,6 +2,8 @@ export * from './animation';
 export * from './authoring';
 export * from './geometry';
 export * from './hostContract';
+export * from './inputs';
 export * from './itemDefinitions';
 export * from './shapeGeometry';
+export * from './textTemplate';
 export * from './typography';

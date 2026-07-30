@@ -4,6 +4,7 @@ import {
 	DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES,
 	DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
 } from '~~/shared/types/graphicsAsset';
+import { GRAPHICS_RETENTION_EVIDENCE_CATEGORIES } from '~~/shared/utils/graphicsAssetRetention';
 import { events } from '../schema';
 
 export const GRAPHIC_ASSET_KIND_VALUES = ['image', 'silent-video', 'font'] as const;
@@ -12,6 +13,17 @@ export const GRAPHIC_ASSET_CONTENT_AVAILABILITY_VALUES = ['available', 'unavaila
 export const GRAPHICS_DERIVATIVE_KIND_VALUES = ['thumbnail', 'video-poster', 'font-specimen'] as const;
 export const GRAPHICS_INGESTION_SOURCE_VALUES = ['local-upload', 'remote-copy', 'replacement', 'template-package'] as const;
 export const GRAPHICS_DUPLICATE_CONTENT_POLICY_VALUES = ['reuse', 'create-separate'] as const;
+export const GRAPHIC_ASSET_PURGE_REASON_VALUES = ['trash-window-elapsed', 'early-purge'] as const;
+export const GRAPHICS_CONTENT_QUARANTINE_ORIGIN_VALUES = [
+	'orphaned-content',
+	'abandoned-canonical-write',
+] as const;
+export const GRAPHICS_ASSET_EVIDENCE_SUBJECT_KIND_VALUES = [
+	'graphics-ingestion-operation',
+	'graphic-asset',
+	'graphic-asset-revision',
+	'graphic-asset-content',
+] as const;
 export const GRAPHICS_INGESTION_STAGE_VALUES = [
 	'created',
 	'transferring',
@@ -183,6 +195,13 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	report: text('report', { mode: 'json' }).$type<Record<string, unknown>>(),
 	result: text('result', { mode: 'json' }).$type<Record<string, unknown>>(),
 	failure: text('failure', { mode: 'json' }).$type<Record<string, unknown>>(),
+	/**
+	 * When the complete input became durably staged. This is the authoritative
+	 * transfer-completed fact: a stage alone cannot answer it, because `failed`
+	 * is reachable both mid-transfer and long after the transfer finished, and
+	 * the two cases carry different retention guarantees.
+	 */
+	transferCompletedAt: integer('transfer_completed_at', { mode: 'timestamp_ms' }),
 	cancelRequestedAt: integer('cancel_requested_at', { mode: 'timestamp_ms' }),
 	createdAt,
 	updatedAt,
@@ -209,6 +228,90 @@ export const graphicsCanonicalWriteCandidates = sqliteTable('graphics_canonical_
 	index('graphics_canonical_write_candidates_digest_idx').on(table.digest),
 ]);
 
+/**
+ * Pruning state for a superseded, unreferenced Graphic Asset Revision. A row
+ * exists only while the revision is a pruning candidate; a new reference
+ * removes it and cancels pruning. Trash freezes the remaining recovery time so
+ * restoration resumes it rather than restarting the guarantee.
+ */
+export const graphicAssetRevisionRetention = sqliteTable('graphic_asset_revision_retention', {
+	revisionId: text('revision_id')
+		.primaryKey()
+		.references(() => graphicAssetRevisions.id, { onDelete: 'cascade' }),
+	unreferencedSince: integer('unreferenced_since', { mode: 'timestamp_ms' }).notNull(),
+	pruneAfter: integer('prune_after', { mode: 'timestamp_ms' }).notNull(),
+	frozenAt: integer('frozen_at', { mode: 'timestamp_ms' }),
+	frozenRemainingMilliseconds: integer('frozen_remaining_milliseconds'),
+	createdAt,
+}, table => [
+	index('graphic_asset_revision_retention_prune_idx').on(table.pruneAfter),
+]);
+
+/**
+ * Proof that a Graphic Asset identity was purged. Tombstones outlive the
+ * catalogue state they replace so asynchronous byte deletion cannot resurrect
+ * the asset and re-ingestion cannot reuse the purged local identity.
+ */
+export const graphicAssetTombstones = sqliteTable('graphic_asset_tombstones', {
+	assetId: text('asset_id').primaryKey(),
+	purgedAt: integer('purged_at', { mode: 'timestamp_ms' }).notNull(),
+	purgeReason: text('purge_reason', { enum: GRAPHIC_ASSET_PURGE_REASON_VALUES }).notNull(),
+	/** How many revisions the reference proof covered. */
+	revisionCount: integer('revision_count').notNull(),
+	/** How many references that proof found. Purge only commits when this is 0. */
+	referenceCount: integer('reference_count').notNull(),
+	createdAt,
+});
+
+/**
+ * Content whose final reachability has disappeared. Quarantine holds the bytes
+ * for a complete recheck window; only a fresh D1 proof of unreachability may
+ * release them for deletion.
+ */
+export const graphicsContentQuarantine = sqliteTable('graphics_content_quarantine', {
+	id: text('id').primaryKey(),
+	digest: text('digest').notNull(),
+	byteLength: integer('byte_length').notNull(),
+	origin: text('origin', { enum: GRAPHICS_CONTENT_QUARANTINE_ORIGIN_VALUES }).notNull(),
+	quarantinedAt: integer('quarantined_at', { mode: 'timestamp_ms' }).notNull(),
+	deleteAfter: integer('delete_after', { mode: 'timestamp_ms' }).notNull(),
+	/**
+	 * When a sweep claimed this content for byte deletion. The row outlives the
+	 * byte deletion it authorises so an unavailable byte store cannot strand an
+	 * object with no catalogue trace; a stale claim is reclaimable.
+	 */
+	deletingSince: integer('deleting_since', { mode: 'timestamp_ms' }),
+	createdAt,
+}, table => [
+	uniqueIndex('graphics_content_quarantine_digest_idx').on(table.digest),
+	index('graphics_content_quarantine_delete_after_idx').on(table.deleteAfter),
+]);
+
+/**
+ * Chronological administrator-facing Evidence for automated lifecycle work.
+ * Subjects are domain identities; no object key, filename, digest, capability
+ * secret, or deleted byte ever enters this ledger.
+ */
+export const graphicsAssetEvidence = sqliteTable('graphics_asset_evidence', {
+	id: text('id').primaryKey(),
+	recordedAt: integer('recorded_at', { mode: 'timestamp_ms' }).notNull(),
+	category: text('category', { enum: GRAPHICS_RETENTION_EVIDENCE_CATEGORIES }).notNull(),
+	actor: text('actor').notNull(),
+	subjectKind: text('subject_kind', {
+		enum: GRAPHICS_ASSET_EVIDENCE_SUBJECT_KIND_VALUES,
+	}).notNull(),
+	subjectId: text('subject_id').notNull(),
+	outcome: text('outcome').notNull(),
+	reason: text('reason').notNull(),
+	correlationId: text('correlation_id').notNull(),
+	detail: text('detail', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+	expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+}, table => [
+	index('graphics_asset_evidence_recorded_idx').on(table.recordedAt),
+	index('graphics_asset_evidence_expires_idx').on(table.expiresAt),
+	index('graphics_asset_evidence_subject_idx').on(table.subjectKind, table.subjectId),
+]);
+
 export type DbGraphicAsset = typeof graphicAssets.$inferSelect;
 export type DbGraphicAssetInsert = typeof graphicAssets.$inferInsert;
 export type DbGraphicAssetContent = typeof graphicAssetContents.$inferSelect;
@@ -222,3 +325,7 @@ export type DbGraphicAssetReferenceInsert = typeof graphicAssetReferences.$infer
 export type DbGraphicsIngestionOperation = typeof graphicsIngestionOperations.$inferSelect;
 export type DbGraphicsIngestionOperationInsert = typeof graphicsIngestionOperations.$inferInsert;
 export type DbGraphicsCanonicalWriteCandidate = typeof graphicsCanonicalWriteCandidates.$inferSelect;
+export type DbGraphicAssetRevisionRetention = typeof graphicAssetRevisionRetention.$inferSelect;
+export type DbGraphicAssetTombstone = typeof graphicAssetTombstones.$inferSelect;
+export type DbGraphicsContentQuarantine = typeof graphicsContentQuarantine.$inferSelect;
+export type DbGraphicsAssetEvidence = typeof graphicsAssetEvidence.$inferSelect;

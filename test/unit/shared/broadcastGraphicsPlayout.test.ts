@@ -2,7 +2,7 @@ import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-gra
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import {
-	applyBroadcastGraphicsPlayoutCommand,
+	applyBroadcastGraphicsCommand,
 	broadcastGraphicPhaseProjection,
 	broadcastGraphicPlayoutState,
 	createInitialBroadcastGraphicsLiveState,
@@ -16,13 +16,20 @@ function graphic(id: string): BroadcastGraphicConfig {
 	return { id, name: id, items: [] };
 }
 
+/** A Broadcast Graphic declaring no Graphic Inputs: playout alone. */
+const NO_INPUTS = { inputs: [] };
+
 function take(
 	state: BroadcastGraphicsLiveState,
 	graphicId: string,
 	cut = false,
 	acceptedAt = T0,
 ): BroadcastGraphicsLiveState {
-	return applyBroadcastGraphicsPlayoutCommand(state, 'Take', { graphicId, cut }, { acceptedAt });
+	return applyBroadcastGraphicsCommand(
+		state,
+		{ type: 'Take', payload: { graphicId, cut } },
+		{ ...NO_INPUTS, acceptedAt },
+	);
 }
 
 function out(
@@ -31,7 +38,11 @@ function out(
 	cut = false,
 	acceptedAt = T0,
 ): BroadcastGraphicsLiveState {
-	return applyBroadcastGraphicsPlayoutCommand(state, 'Out', { graphicId, cut }, { acceptedAt });
+	return applyBroadcastGraphicsCommand(
+		state,
+		{ type: 'Out', payload: { graphicId, cut } },
+		{ ...NO_INPUTS, acceptedAt },
+	);
 }
 
 /** A one-second enter and a half-second exit, which is a plausible authored pair. */
@@ -143,7 +154,11 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		// and persisting a start time that recovery *reset* would make recovery replay
 		// from it. If a later ticket needs a third field here, it should have to argue
 		// the same case again.
-		expect(Object.keys(persisted).toSorted()).toEqual(['playout']);
+		// Accepted Graphic Input values are stored beside playout, and are the
+		// deliberate exception: they are the values a recovered graphic renders at its
+		// resting state, not a record of how it got there, so nothing about them is
+		// replayable either.
+		expect(Object.keys(persisted).toSorted()).toEqual(['inputs', 'playout']);
 		expect(Object.keys(persisted.playout.slate!).toSorted()).toEqual(['cut', 'effectiveStartedAt', 'onAir']);
 		expect(persisted.playout.slate).toEqual({ onAir: true, effectiveStartedAt: T0, cut: false });
 	});
@@ -195,7 +210,11 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		const first = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 		const duplicate = take(first, 'slate', false, T0 + 300);
 
-		expect(duplicate).toBe(first);
+		// The *record* is the same object, which is the property that matters: the
+		// reducer rebuilds the state wrapper on every command, but leaving the playout
+		// record untouched is what keeps the effective start time from being refreshed.
+		expect(duplicate.playout.slate).toBe(first.playout.slate);
+		expect(duplicate.playout.slate!.effectiveStartedAt).toBe(T0);
 		expect(broadcastGraphicPhaseProjection(duplicate, 'slate', at(T0 + 600)))
 			.toEqual({ phase: 'enter', elapsed: 600 });
 	});

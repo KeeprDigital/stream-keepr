@@ -1,6 +1,7 @@
 import type {
 	BroadcastGraphicConfig,
 	GraphicGroupItemConfig,
+	GraphicInputDeclaration,
 	GraphicItemConfig,
 } from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
@@ -172,6 +173,23 @@ function itemOf(graphics: BroadcastGraphicConfig[], index = 0) {
 function childOf(graphics: BroadcastGraphicConfig[], index = 0) {
 	const group = graphics[0]?.items[0];
 	return group?.type === 'group' ? group.children[index] : undefined;
+}
+
+function textInput(key: string): GraphicInputDeclaration {
+	return {
+		type: 'text',
+		key,
+		label: key,
+		required: false,
+		updatePolicy: 'staged',
+		default: '',
+		maxLength: MAX_GRAPHIC_TEXT_LENGTH,
+	};
+}
+
+function numberFieldByTestId(wrapper: Awaited<ReturnType<typeof mountComponent>>, testId: string) {
+	return wrapper.findAllComponents({ name: 'UInputNumber' })
+		.find(input => input.attributes('data-testid') === testId);
 }
 
 describe('graphicsCompositorInspector', () => {
@@ -540,6 +558,110 @@ describe('graphicsCompositorInspector', () => {
 		});
 
 		wrapper.getComponent(UInputStub).vm.$emit('update:modelValue', 'Renamed');
+		await nextTick();
+
+		expect(wrapper.emitted('update:graphics')).toBeUndefined();
+	});
+
+	it('declares a typed Graphic Input on the selected Broadcast Graphic', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		selectField(wrapper, 'graphic-input-type')?.vm.$emit('update:modelValue', 'number');
+		await nextTick();
+		wrapper.findAllComponents(UButtonStub)
+			.find(button => button.attributes('data-testid') === 'graphic-input-add')
+			?.vm
+			.$emit('click');
+		await nextTick();
+
+		const declared = emittedGraphics(wrapper)[0]!.inputs!;
+		expect(declared).toHaveLength(1);
+		// Optional and staged, so an author opts into blocking Take and into immediate
+		// on-air application rather than discovering either.
+		expect(declared[0]).toMatchObject({ type: 'number', required: false, updatePolicy: 'staged' });
+	});
+
+	it('edits a declared Graphic Input’s label, requiredness, and On-air Update Policy', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]).map(graphic => ({ ...graphic, inputs: [textInput('name')] })),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		switchField(wrapper, 'graphic-input-required')?.vm.$emit('update:modelValue', true);
+		selectField(wrapper, 'graphic-input-policy')?.vm.$emit('update:modelValue', 'live');
+		await nextTick();
+
+		expect(emittedGraphics(wrapper, 0)[0]!.inputs![0]).toMatchObject({ key: 'name', required: true });
+		expect(emittedGraphics(wrapper, 1)[0]!.inputs![0]).toMatchObject({ key: 'name', updatePolicy: 'live' });
+	});
+
+	it('shows the stable key a Graphic Text Template would name, and offers no way to edit it', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]).map(graphic => ({ ...graphic, inputs: [textInput('name')] })),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		expect(wrapper.get('[data-testid="graphic-input-key"]').text()).toBe('{name}');
+		expect(wrapper.get('[data-testid="graphic-input-key"]').element.tagName).toBe('P');
+	});
+
+	it('offers a Graphic Placeholder Style for each declared input its template names', async () => {
+		const wrapper = await mountComponent({
+			graphics: [{
+				id: 'lower-third',
+				name: 'Lower Third',
+				inputs: [textInput('name')],
+				items: [{ ...textItem, text: '{name} — {undeclared}' }],
+			}],
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+		});
+
+		expect(wrapper.findAll('[data-graphic-placeholder-style]').map(entry =>
+			entry.attributes('data-graphic-placeholder-style'),
+		)).toEqual(['name']);
+	});
+
+	it('overrides one placeholder’s typography and returns it to the item’s base', async () => {
+		const wrapper = await mountComponent({
+			graphics: [{
+				id: 'lower-third',
+				name: 'Lower Third',
+				inputs: [textInput('name')],
+				items: [{ ...textItem, text: '{name}', placeholderStyles: { name: { fontWeight: 300 } } }],
+			}],
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+		});
+
+		numberFieldByTestId(wrapper, 'graphic-placeholder-style-size')?.vm.$emit('update:modelValue', 24);
+		await nextTick();
+		wrapper.findAllComponents(UButtonStub)
+			.find(button => button.attributes('data-testid') === 'graphic-placeholder-style-clear')
+			?.vm
+			.$emit('click');
+		await nextTick();
+
+		const styled = itemOf(emittedGraphics(wrapper, 0));
+		expect(styled?.type === 'text' ? styled.placeholderStyles : undefined)
+			.toEqual({ name: { fontWeight: 300, fontSize: 24 } });
+
+		const cleared = itemOf(emittedGraphics(wrapper, 1));
+		expect(cleared?.type === 'text' ? cleared.placeholderStyles : undefined).toBeUndefined();
+	});
+
+	it('refuses a read-only observer’s Graphic Input declaration', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+			writable: false,
+		});
+
+		wrapper.findAllComponents(UButtonStub)
+			.find(button => button.attributes('data-testid') === 'graphic-input-add')
+			?.vm
+			.$emit('click');
 		await nextTick();
 
 		expect(wrapper.emitted('update:graphics')).toBeUndefined();

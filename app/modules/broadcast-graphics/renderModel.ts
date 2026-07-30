@@ -1,4 +1,4 @@
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicInputValue } from '~~/shared/types/graphics';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { GraphicsAnimationProjection, GraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
@@ -22,6 +22,12 @@ export interface BroadcastGraphicsRenderModelInput {
 	 * which is what a settled Screen and a recovered Live Session both resolve to.
 	 */
 	animation?: Readonly<Record<string, GraphicsAnimationProjection>>;
+	/**
+	 * The accepted on-air Graphic Input values a Graphic Text Template renders,
+	 * keyed by Broadcast Graphic id. Omitted renders declared defaults, which is what
+	 * an editor preview with no Live Session shows.
+	 */
+	inputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
 	/** Editor-only item guides and selection highlighting. */
 	itemGuides?: boolean;
 	/** Editor-only advisory action-safe and title-safe guides. */
@@ -52,6 +58,7 @@ export function resolveBroadcastGraphicsRenderModel(
 		graphics: input.graphics,
 		visibleGraphicIds: input.onAirGraphicIds ?? [],
 		animation: input.animation,
+		inputValues: input.inputValues,
 		itemGuides: input.itemGuides,
 		safeAreaGuides: input.safeAreaGuides,
 		selectedTarget: input.selectedTarget,

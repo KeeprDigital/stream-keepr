@@ -4,6 +4,7 @@ import type {
 	BroadcastGraphicsCommandResult,
 	BroadcastGraphicsLiveSessionResponse,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
+import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { mapBroadcastGraphicsLiveSessionToResponse } from '~~/server/mappers/broadcastGraphicsLiveSession';
 import { broadcastGraphicsStateService } from '~~/server/services/broadcastGraphicsState';
 import { screenService } from '~~/server/services/screen';
@@ -53,10 +54,19 @@ export function broadcastGraphicsLiveSessionModule() {
 		return screen;
 	};
 
-	function authoredGraphicIds(screen: DbScreen): Set<string> {
+	/**
+	 * The placed Broadcast Graphic a command addresses, from the Screen's authored
+	 * stack.
+	 *
+	 * Both admission and reduction need it: whether the Screen places the graphic at
+	 * all, and which Graphic Inputs it declares. Both are questions about authored
+	 * configuration rather than live state, which is why they are answered here
+	 * rather than inside the live-state port.
+	 */
+	function findAuthoredGraphic(screen: DbScreen, graphicId: string): BroadcastGraphicConfig | undefined {
 		const config = screen.modeConfigs?.['broadcast-graphics']
 			?? getDefaultConfigForMode('broadcast-graphics');
-		return new Set(config.graphics.map(graphic => graphic.id));
+		return config.graphics.find(graphic => graphic.id === graphicId);
 	}
 
 	/**
@@ -83,8 +93,9 @@ export function broadcastGraphicsLiveSessionModule() {
 		originConnectionId,
 	}: ApplyCommandParams): Promise<BroadcastGraphicsCommandResult> => {
 		const screen = await requireBroadcastGraphicsScreen(eventId, screenId);
+		const graphic = findAuthoredGraphic(screen, command.payload.graphicId);
 
-		if (!authoredGraphicIds(screen).has(command.payload.graphicId)) {
+		if (!graphic) {
 			throw createError({
 				statusCode: 404,
 				message: 'Broadcast Graphic not found on this Screen',
@@ -99,7 +110,14 @@ export function broadcastGraphicsLiveSessionModule() {
 			});
 		}
 
-		return await state.applyCommand(sessionId, eventId, command, originConnectionId, { publish: true });
+		return await state.applyCommand(
+			sessionId,
+			eventId,
+			command,
+			graphic.inputs ?? [],
+			originConnectionId,
+			{ publish: true },
+		);
 	};
 
 	return {

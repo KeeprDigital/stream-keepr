@@ -1,4 +1,20 @@
-import type { BroadcastGraphicConfig, GraphicAnimationPhase, GraphicPlayoutState } from '~~/shared/types/graphics';
+import type {
+	BroadcastGraphicConfig,
+	GraphicAnimationPhase,
+	GraphicInputDeclaration,
+	GraphicInputValue,
+	GraphicPlayoutState,
+} from '~~/shared/types/graphics';
+import type { BroadcastGraphicInputsState } from './inputs';
+import { findGraphicInputDeclaration, graphicInputAvailability } from '~~/shared/modules/graphics';
+import {
+	acceptGraphicInputValues,
+	broadcastGraphicInputsState,
+	createInitialBroadcastGraphicInputsState,
+	isDeclaredGraphicInput,
+	unavailableRequiredGraphicInputs,
+} from './inputs';
+import { BroadcastGraphicsCommandRejection } from './rejection';
 
 /**
  * Broadcast Graphics playout reduction.
@@ -19,7 +35,7 @@ import type { BroadcastGraphicConfig, GraphicAnimationPhase, GraphicPlayoutState
  *
  * ## Why recovery cannot replay animation
  *
- * This state now stores one timestamp per Broadcast Graphic: the authoritative
+ * This state stores one timestamp per Broadcast Graphic: the authoritative
  * effective start time of the lifecycle phase its latest accepted intent began.
  * That is the field the no-replay invariant used to hold *by accident* — there
  * was nothing to resume — and it is now held on purpose, by three properties
@@ -38,23 +54,17 @@ import type { BroadcastGraphicConfig, GraphicAnimationPhase, GraphicPlayoutState
  *    State. Recovery does not need to detect staleness or clear the field,
  *    because trusting the field literally is what produces the correct answer.
  *
- * 3. **An idempotent repeat does not refresh the start time.** A duplicate Take
- *    delivered while a graphic is already entering leaves the record untouched,
- *    so a retried command cannot restart an entrance on program. This is where
- *    "duplicate delivery of the same action has no additional effect" stops being
- *    only about the target state and starts being about the animation too.
+ * 3. **An idempotent repeat does not refresh the start time.** A repeat of the
+ *    intent already accepted leaves the record untouched, so a retried command
+ *    cannot restart an entrance on program. This is where "duplicate delivery of
+ *    the same action has no additional effect" stops being only about the target
+ *    state and starts being about the animation too.
  *
  * The alternative shapes were both rejected for the same reason: persisting a
  * phase* makes recovery resume it, and persisting a start time that recovery
  * resets* makes recovery replay from it. Persisting one authoritative instant and
  * deriving everything from it is the only shape where the correct behaviour is the
  * behaviour you get by doing nothing special.
- *
- * `cut` is persisted beside it because Cut is a property of the accepted command,
- * not of the animation: it records that this intent was reached without running
- * its corresponding phase. It is a fact about what an operator asked for, which is
- * exactly the kind of thing this state is for, and it is likewise self-healing —
- * a Cut graphic is settled from the instant it is accepted.
  */
 
 /** The latest accepted playout intent for one placed Broadcast Graphic. */
@@ -69,7 +79,9 @@ export interface BroadcastGraphicPlayout {
 	effectiveStartedAt: number;
 	/**
 	 * Whether this intent was reached with the Cut execution modifier, and so
-	 * without running its corresponding Graphic Animation phase.
+	 * without running its corresponding Graphic Animation phase. It is a fact about
+	 * what the operator asked for rather than about the animation, which is why it
+	 * belongs beside the intent it modifies.
 	 */
 	cut: boolean;
 }
@@ -83,10 +95,17 @@ export interface BroadcastGraphicPlayout {
  */
 export interface BroadcastGraphicsLiveState {
 	playout: Record<string, BroadcastGraphicPlayout>;
+	/** Working and accepted Graphic Input values, per placed Broadcast Graphic. */
+	inputs: Record<string, BroadcastGraphicInputsState>;
 }
 
-/** The playout actions a Broadcast Graphics Live Session accepts. */
-export const BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES = ['Take', 'Out'] as const;
+/** The actions a Broadcast Graphics Live Session accepts. */
+export const BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES = [
+	'Take',
+	'Out',
+	'Update Graphic',
+	'Set Input',
+] as const;
 
 export type BroadcastGraphicsCommandType = typeof BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES[number];
 
@@ -94,56 +113,275 @@ export interface BroadcastGraphicsPlayoutPayload {
 	graphicId: string;
 	/**
 	 * The Cut execution modifier: reach the action's target without running its
-	 * Graphic Animation phase. It never changes the target itself, so a Cut action
-	 * reaches the same on-air intent as its plain counterpart and differs only in
-	 * whether the corresponding phase runs.
+	 * Graphic Animation phase. It never changes the target itself, so while
+	 * animation does not exist a Cut action is indistinguishable from its plain
+	 * counterpart — it is still accepted in the authoritative order so that
+	 * operators, clients, and receipts record the intent they actually issued.
 	 */
 	cut?: boolean;
 }
 
 /**
- * The authoritative instant a command was accepted at.
+ * One atomic acceptance of a Broadcast Graphic's staged Graphic Inputs.
  *
- * Supplied by the caller rather than read from a clock here, because this reducer
- * runs on the server and in every client and only one of them is authoritative.
- * The server passes its own clock when it accepts the command; a client replaying
- * the same command onto a snapshot passes the same value it was given.
+ * `basedOnAcceptedRevision` is the sequence guard: the acceptance names the one
+ * it supersedes, so an operator whose Live Control has fallen behind another
+ * operator's acceptance is refused rather than silently overwriting it. Cut
+ * Update is this same intent with the modifier set, never a second intent — which
+ * is also why a retry of it keeps its own command id.
  */
-export interface BroadcastGraphicsPlayoutContext {
+export interface BroadcastGraphicsUpdatePayload extends BroadcastGraphicsPlayoutPayload {
+	basedOnAcceptedRevision: number;
+}
+
+/**
+ * One edit to a declared Graphic Input's working value.
+ *
+ * The value is stored as the operator entered it, even when it violates the
+ * declaration: it is reported unavailable rather than coerced, so Live Control can
+ * show what was entered and why it cannot go on air. Acceptance is what refuses
+ * to put an unavailable value on air, not this write.
+ */
+export interface BroadcastGraphicsSetInputPayload {
+	graphicId: string;
+	inputKey: string;
+	value: GraphicInputValue;
+}
+
+export type BroadcastGraphicsCommandPayload
+	= | BroadcastGraphicsPlayoutPayload
+		| BroadcastGraphicsUpdatePayload
+		| BroadcastGraphicsSetInputPayload;
+
+/** One command as the reducer reads it: what kind of intent, and its content. */
+export type BroadcastGraphicsCommandInput
+	= | { type: 'Take' | 'Out'; payload: BroadcastGraphicsPlayoutPayload }
+		| { type: 'Update Graphic'; payload: BroadcastGraphicsUpdatePayload }
+		| { type: 'Set Input'; payload: BroadcastGraphicsSetInputPayload };
+
+/**
+ * What the reducer needs to know about the Broadcast Graphic a command addresses.
+ *
+ * Only its declared Graphic Inputs: acceptance has to know each input's type,
+ * constraints, requiredness, and On-air Update Policy, and none of that belongs
+ * in live state, because it is authored configuration that an author may change
+ * under a running show.
+ */
+export interface BroadcastGraphicsReductionContext {
+	inputs: readonly GraphicInputDeclaration[];
+	/**
+	 * The authoritative instant this command was accepted at.
+	 *
+	 * Supplied by the caller rather than read from a clock here, because this
+	 * reducer runs on the server and in every client and only one of them is
+	 * authoritative. The server passes its own clock when it accepts the command; a
+	 * client replaying the same command onto a snapshot passes what it was given.
+	 */
 	acceptedAt: number;
 }
 
 export function createInitialBroadcastGraphicsLiveState(): BroadcastGraphicsLiveState {
-	return { playout: {} };
+	return { playout: {}, inputs: {} };
 }
 
-export function applyBroadcastGraphicsPlayoutCommand(
-	state: BroadcastGraphicsLiveState,
-	type: BroadcastGraphicsCommandType,
-	payload: BroadcastGraphicsPlayoutPayload,
-	context: BroadcastGraphicsPlayoutContext,
-): BroadcastGraphicsLiveState {
-	const next: BroadcastGraphicPlayout = {
-		onAir: type === 'Take',
-		effectiveStartedAt: context.acceptedAt,
-		cut: payload.cut === true,
-	};
-	const current = state.playout[payload.graphicId];
+/**
+ * The playout record one accepted intent produces, or the current one unchanged.
+ *
+ * Whether to write is asymmetric, and deliberately so. A repeat of an intent
+ * already reached must not refresh the effective start time, or a duplicate
+ * delivery would restart a phase that is already running on program. But Cut has
+ * to be able to settle a phase that *is* running, even though it reaches the same
+ * on-air target — so Cut arriving over a non-Cut intent is a real change.
+ *
+ * The six cases, which the tests enumerate:
+ *
+ * - repeat plain Take while on air — no-op, no phase restart
+ * - Cut Take while entering — writes, settling the entrance immediately
+ * - plain Take after Cut Take — no-op; the graphic is already settled on air, and
+ *   writing would send a settled graphic back to `entering` and replay its
+ *   entrance on program
+ * - plain Out after Cut Out — no-op; writing would make an already-off graphic
+ *   `exiting`, putting it back on program to play an exit it already skipped
+ * - Cut Out while exiting — writes, settling the exit immediately
+ * - Cut Take after Cut Take — no-op, because the Cut is already reflected
+ */
+function nextPlayout(
+	current: BroadcastGraphicPlayout | undefined,
+	intent: { onAir: boolean; cut: boolean },
+	acceptedAt: number,
+): BroadcastGraphicPlayout {
+	if (current && current.onAir === intent.onAir && !(intent.cut && !current.cut))
+		return current;
 
-	// Idempotent in the strongest sense the vocabulary allows: a repeat of the
-	// intent already accepted changes nothing at all, so a duplicated or retried
-	// command cannot restart a phase that is already running on program.
-	if (current && current.onAir === next.onAir && current.cut === next.cut)
-		return state;
+	return { onAir: intent.onAir, effectiveStartedAt: acceptedAt, cut: intent.cut };
+}
+
+function withInputs(
+	state: BroadcastGraphicsLiveState,
+	graphicId: string,
+	inputs: BroadcastGraphicInputsState,
+): BroadcastGraphicsLiveState {
+	return { ...state, inputs: { ...state.inputs, [graphicId]: inputs } };
+}
+
+/**
+ * Take: state that this Broadcast Graphic is the operator's latest desired on-air
+ * intent, and accept the values it should enter with.
+ *
+ * A graphic already on air only has its intent restated. Accepting the working
+ * set again would make a second press a backdoor Update Graphic, and partial edits
+ * would reach program without anyone confirming them — so Take accepts only on the
+ * way on air, which is exactly the rule that editing an off graphic changes the
+ * working values its *next* Take accepts.
+ */
+function reduceTake(
+	state: BroadcastGraphicsLiveState,
+	payload: BroadcastGraphicsPlayoutPayload,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicsLiveState {
+	const playout = {
+		...state.playout,
+		[payload.graphicId]: nextPlayout(
+			state.playout[payload.graphicId],
+			{ onAir: true, cut: payload.cut === true },
+			context.acceptedAt,
+		),
+	};
+	if (state.playout[payload.graphicId]?.onAir)
+		return { ...state, playout };
+
+	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
+	const blocked = unavailableRequiredGraphicInputs(inputs, context.inputs);
+	if (blocked.length > 0) {
+		throw new BroadcastGraphicsCommandRejection(
+			'required-input-unavailable',
+			`${blocked.map(declaration => declaration.label).join(', ')} must have a value before this Broadcast Graphic can go on air`,
+			blocked.map(declaration => declaration.key),
+		);
+	}
 
 	return {
-		...state,
-		playout: {
-			...state.playout,
-			[payload.graphicId]: next,
-		},
+		...withInputs(state, payload.graphicId, {
+			...inputs,
+			accepted: acceptGraphicInputValues(inputs, context.inputs),
+			acceptedRevision: inputs.acceptedRevision + 1,
+		}),
+		playout,
 	};
 }
+
+/**
+ * Update Graphic: one atomic acceptance of the complete staged set.
+ *
+ * A required Graphic Input that has become unavailable does not block it. The
+ * graphic is already on air, and the settled rule is that its last accepted value
+ * stays visible until the operator updates or overrides it — which acceptance
+ * achieves by passing over the unavailable value rather than by refusing.
+ */
+function reduceUpdateGraphic(
+	state: BroadcastGraphicsLiveState,
+	payload: BroadcastGraphicsUpdatePayload,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicsLiveState {
+	if (!state.playout[payload.graphicId]?.onAir) {
+		throw new BroadcastGraphicsCommandRejection(
+			'update-unavailable',
+			'Update Graphic is available only while a Broadcast Graphic is on air',
+		);
+	}
+
+	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
+	if (payload.basedOnAcceptedRevision !== inputs.acceptedRevision) {
+		throw new BroadcastGraphicsCommandRejection(
+			'stale-input-acceptance',
+			'Another operator has already accepted a newer Graphic Input set for this Broadcast Graphic',
+		);
+	}
+
+	return withInputs(state, payload.graphicId, {
+		...inputs,
+		accepted: acceptGraphicInputValues(inputs, context.inputs),
+		acceptedRevision: inputs.acceptedRevision + 1,
+	});
+}
+
+/**
+ * Set Input: change one working value, and — under a live On-air Update Policy on
+ * an on-air graphic — accept that one field with it.
+ *
+ * A live acceptance deliberately leaves `acceptedRevision` alone. It accepts its
+ * own field and nothing else, so counting it would make ordinary live edits
+ * invalidate a staged Update Graphic another operator is preparing on the same
+ * graphic's other inputs.
+ */
+function reduceSetInput(
+	state: BroadcastGraphicsLiveState,
+	payload: BroadcastGraphicsSetInputPayload,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicsLiveState {
+	if (!isDeclaredGraphicInput(context.inputs, payload.inputKey)) {
+		throw new BroadcastGraphicsCommandRejection(
+			'unknown-input',
+			`This Broadcast Graphic declares no Graphic Input named ${payload.inputKey}`,
+			[payload.inputKey],
+		);
+	}
+
+	const declaration = findGraphicInputDeclaration(context.inputs, payload.inputKey)!;
+	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
+	const acceptsImmediately = declaration.updatePolicy === 'live'
+		&& state.playout[payload.graphicId]?.onAir === true
+		&& graphicInputAvailability(declaration, payload.value).available;
+
+	return withInputs(state, payload.graphicId, {
+		...inputs,
+		working: { ...inputs.working, [payload.inputKey]: payload.value },
+		accepted: acceptsImmediately
+			? { ...inputs.accepted, [payload.inputKey]: payload.value }
+			: inputs.accepted,
+	});
+}
+
+/**
+ * Reduce one accepted command onto the Live Session's state.
+ *
+ * Playout intents are assignments, which is what makes them idempotent by
+ * construction. Graphic Input acceptance is not: accepting a staged set twice is a
+ * genuine double-apply, so the Command Receipt that recognises a repeated delivery
+ * and the acceptance revision that refuses a stale one are both load-bearing here
+ * in a way they never were for Take and Out alone.
+ */
+export function applyBroadcastGraphicsCommand(
+	state: BroadcastGraphicsLiveState,
+	command: BroadcastGraphicsCommandInput,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicsLiveState {
+	const normalized: BroadcastGraphicsLiveState = { playout: state.playout ?? {}, inputs: state.inputs ?? {} };
+
+	switch (command.type) {
+		case 'Take':
+			return reduceTake(normalized, command.payload, context);
+		case 'Out':
+			return {
+				...normalized,
+				playout: {
+					...normalized.playout,
+					[command.payload.graphicId]: nextPlayout(
+						normalized.playout[command.payload.graphicId],
+						{ onAir: false, cut: command.payload.cut === true },
+						context.acceptedAt,
+					),
+				},
+			};
+		case 'Update Graphic':
+			return reduceUpdateGraphic(normalized, command.payload, context);
+		case 'Set Input':
+			return reduceSetInput(normalized, command.payload, context);
+	}
+}
+
+/** The Graphic Input state a fresh placed Broadcast Graphic starts from. */
+export { createInitialBroadcastGraphicInputsState };
 
 /**
  * How long each finite lifecycle phase of one Broadcast Graphic lasts, and the
@@ -173,8 +411,8 @@ function phaseDuration(timing: BroadcastGraphicPhaseTiming, phase: GraphicAnimat
  * phase's own duration, so a graphic whose phase has elapsed is settled rather
  * than mid-flight however long ago that phase started.
  *
- * Waiting and updating arrive with the Graphic Channel handoff and Graphic Input
- * acceptance that produce them.
+ * Waiting and updating arrive with the Graphic Channel handoff and the update
+ * phase that produce them.
  */
 export function broadcastGraphicPlayoutState(
 	state: BroadcastGraphicsLiveState,

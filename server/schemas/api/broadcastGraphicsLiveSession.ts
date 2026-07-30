@@ -1,6 +1,13 @@
 import type { BroadcastGraphicsCommand } from '~~/shared/types/broadcastGraphicsLiveSession';
 import { z } from 'zod';
-import { BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES } from '~~/shared/modules/broadcast-graphics-live-session';
+import {
+	graphicAssetId,
+	graphicAssetRevisionId,
+} from '~~/server/modules/graphics-asset-library';
+import {
+	GRAPHIC_INPUT_KEY_PATTERN,
+	MAX_GRAPHIC_INPUT_KEY_LENGTH,
+} from '~~/shared/types/graphics';
 import { screenParamsSchema } from './screen';
 
 /** A playout route names the epoch as well as the Screen that owns it. */
@@ -8,18 +15,87 @@ export const broadcastGraphicsLiveSessionParamsSchema = screenParamsSchema.exten
 	sessionId: z.coerce.number().int().positive(),
 });
 
+const graphicIdSchema = z.string().min(1).max(100);
+
+/**
+ * The ceiling on one Graphic Input value on the wire.
+ *
+ * Deliberately larger than the longest value any text Graphic Input may declare:
+ * a value that exceeds its declaration's own bound has to be storable so Live
+ * Control can show it as unavailable, which is what "unavailable rather than
+ * truncated" means in practice. This is only the bound that keeps a command from
+ * being unboundedly large.
+ */
+export const MAX_GRAPHIC_INPUT_VALUE_LENGTH = 2000;
+
+/**
+ * One Graphic Input value, in whichever shape its declared type takes. The wire
+ * schema accepts any of them and the reducer judges the value against the
+ * declaration, because which type is correct is authored configuration rather
+ * than something the route knows.
+ */
+const graphicInputValueSchema = z.union([
+	z.null(),
+	z.boolean(),
+	z.number().finite(),
+	z.string().max(MAX_GRAPHIC_INPUT_VALUE_LENGTH),
+	z.object({
+		assetId: z.string().min(1).max(100).transform(graphicAssetId),
+		revisionId: z.string().min(1).max(100).transform(graphicAssetRevisionId),
+	}).strict(),
+]);
+
 /**
  * One playout action. Cut is a modifier on the action rather than an action of
  * its own, and there is no base sequence: a target-state intent stays valid
  * however far the session has advanced.
  */
-export const broadcastGraphicsCommandSchema = z.object({
-	commandId: z.string().min(1).max(100),
-	type: z.enum(BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES),
-	payload: z.object({
-		graphicId: z.string().min(1).max(100),
-		cut: z.boolean().optional(),
+const playoutPayloadSchema = z.object({
+	graphicId: graphicIdSchema,
+	cut: z.boolean().optional(),
+}).strict();
+
+/**
+ * Update Graphic is the one action that is not target state, so it carries the
+ * acceptance revision it supersedes. That is the sequence guard: an acceptance
+ * built against a superseded one is refused rather than silently overwriting a
+ * colleague's.
+ */
+const updatePayloadSchema = z.object({
+	graphicId: graphicIdSchema,
+	cut: z.boolean().optional(),
+	basedOnAcceptedRevision: z.number().int().nonnegative(),
+}).strict();
+
+const setInputPayloadSchema = z.object({
+	graphicId: graphicIdSchema,
+	inputKey: z.string().min(1).max(MAX_GRAPHIC_INPUT_KEY_LENGTH).regex(GRAPHIC_INPUT_KEY_PATTERN),
+	value: graphicInputValueSchema,
+}).strict();
+
+const commandIdSchema = z.string().min(1).max(100);
+
+export const broadcastGraphicsCommandSchema = z.discriminatedUnion('type', [
+	z.object({
+		commandId: commandIdSchema,
+		type: z.literal('Take'),
+		payload: playoutPayloadSchema,
 	}).strict(),
-}).strict() satisfies z.ZodType<BroadcastGraphicsCommand>;
+	z.object({
+		commandId: commandIdSchema,
+		type: z.literal('Out'),
+		payload: playoutPayloadSchema,
+	}).strict(),
+	z.object({
+		commandId: commandIdSchema,
+		type: z.literal('Update Graphic'),
+		payload: updatePayloadSchema,
+	}).strict(),
+	z.object({
+		commandId: commandIdSchema,
+		type: z.literal('Set Input'),
+		payload: setInputPayloadSchema,
+	}).strict(),
+]) satisfies z.ZodType<BroadcastGraphicsCommand>;
 
 export type BroadcastGraphicsLiveSessionParams = z.infer<typeof broadcastGraphicsLiveSessionParamsSchema>;
