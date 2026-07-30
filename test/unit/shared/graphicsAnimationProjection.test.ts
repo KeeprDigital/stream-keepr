@@ -7,6 +7,7 @@ import {
 	isGraphicRestingProjection,
 	resolveGraphicAnimationValues,
 } from '~~/shared/modules/graphics';
+import { GRAPHIC_ANIMATION_EASING_VALUES } from '~~/shared/types/graphics';
 
 const RECT = { x: 200, y: 100, width: 400, height: 80 };
 const CANVAS = { width: 1920, height: 1080 };
@@ -257,5 +258,51 @@ describe('a settled phase is indistinguishable from the Graphic Resting State', 
 
 		expect(project(cycles, 'on-screen', 800)).toEqual({});
 		expect(project(cycles, 'on-screen', 86_400_000)).toEqual({});
+	});
+});
+
+describe('on-screen easing', () => {
+	// An author picks an easing, the editor persists it, and the schema validates it,
+	// so it has to be applied. CONTEXT.md states that a recipe's channels run with
+	// shared timing *and easing*, with no exception for the phase that cycles.
+	const easeIn: GraphicOnScreenAnimationRecipe = {
+		duration: 1000,
+		easing: 'ease-in',
+		delay: 0,
+		pause: 0,
+		repeat: 'indefinite',
+	};
+
+	function excursion(recipe: GraphicOnScreenAnimationRecipe, elapsed: number) {
+		return graphicAnimationExcursion({ recipe, phase: 'on-screen', elapsed, rect: RECT, parent: CANVAS });
+	}
+
+	it('eases the outbound leg of a cycle rather than travelling it linearly', () => {
+		// A quarter through the cycle is half way out. `ease-in` at half is 0.25, so a
+		// linear triangle would report 0.5 — twice the excursion the author asked for.
+		expect(excursion(easeIn, 250)).toBeCloseTo(0.25, 10);
+		expect(excursion({ ...easeIn, easing: 'linear' }, 250)).toBeCloseTo(0.5, 10);
+	});
+
+	it('eases the returning leg symmetrically', () => {
+		// Three quarters through is half way back, so it matches the outbound quarter.
+		expect(excursion(easeIn, 750)).toBeCloseTo(0.25, 10);
+	});
+
+	it('still reaches the full excursion at the turn and rest at each end', () => {
+		for (const easing of GRAPHIC_ANIMATION_EASING_VALUES) {
+			const recipe = { ...easeIn, easing };
+			expect(excursion(recipe, 0)).toBeCloseTo(0, 10);
+			expect(excursion(recipe, 500)).toBeCloseTo(1, 10);
+			expect(excursion(recipe, 1000)).toBeCloseTo(0, 10);
+		}
+	});
+
+	it('applies the same easing every author can choose, not just some', () => {
+		// The bug this guards was invisible because every on-screen fixture used
+		// `linear`: the easing was read, validated and stored, and then discarded.
+		const eased = GRAPHIC_ANIMATION_EASING_VALUES.map(easing => excursion({ ...easeIn, easing }, 250));
+
+		expect(new Set(eased.map(value => Math.round(value * 1000))).size).toBeGreaterThan(1);
 	});
 });

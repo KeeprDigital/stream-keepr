@@ -781,6 +781,19 @@ export function patchGraphicGroupChildSizing(
  * editing one channel never drops the recipe's other channels.
  */
 
+/**
+ * The recipe shape one lifecycle phase carries.
+ *
+ * Only the phase that cycles has a pause and a repetition, so a caller naming a
+ * literal phase cannot aim those at a phase that would refuse them — the wire schema
+ * rejects them there anyway, and a type that permits authoring something a write
+ * refuses is a type that lets the editor build a control nobody can save. A caller
+ * iterating every phase still compiles, because the conditional stays deferred until
+ * the phase is known.
+ */
+export type GraphicAnimationRecipeFor<P extends GraphicAnimationPhase>
+	= P extends 'on-screen' ? GraphicOnScreenAnimationRecipe : GraphicAnimationRecipe;
+
 /** The channel a merge addresses. Each recipe holds at most one of each. */
 export type GraphicAnimationChannelKey = 'fade' | 'slide' | 'scale' | 'reveal';
 
@@ -938,11 +951,19 @@ export function enableGraphicItemAnimationPhase(
 	return setGraphicItemAnimationRecipe(graphic, itemId, phase, createDefaultGraphicAnimationRecipe(phase));
 }
 
-export function patchGraphicItemAnimationRecipe(
+/**
+ * Merge into one phase's recipe.
+ *
+ * The patch type is keyed on the phase, so `pause` and `repeat` can only be aimed at
+ * the phase that cycles. The wire schema rejects them elsewhere anyway — every
+ * recipe object is strict — but a type that permits authoring something a write
+ * refuses is a type that lets the editor build a control nobody can save.
+ */
+export function patchGraphicItemAnimationRecipe<P extends GraphicAnimationPhase>(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
-	phase: GraphicAnimationPhase,
-	patch: Partial<GraphicOnScreenAnimationRecipe>,
+	phase: P,
+	patch: Partial<GraphicAnimationRecipeFor<P>>,
 ): BroadcastGraphicConfig {
 	return patchGraphicItemGroup(graphic, itemId, ANIMATION_KINDS, item => ({
 		animation: mergeAnimationRecipe(item.animation, phase, patch),
@@ -1027,11 +1048,11 @@ export function enableBroadcastGraphicAnimationPhase(
 	return setBroadcastGraphicAnimationRecipe(graphics, graphicId, phase, createDefaultGraphicAnimationRecipe(phase));
 }
 
-export function patchBroadcastGraphicAnimationRecipe(
+export function patchBroadcastGraphicAnimationRecipe<P extends GraphicAnimationPhase>(
 	graphics: readonly BroadcastGraphicConfig[],
 	graphicId: string,
-	phase: GraphicAnimationPhase,
-	patch: Partial<GraphicOnScreenAnimationRecipe>,
+	phase: P,
+	patch: Partial<GraphicAnimationRecipeFor<P>>,
 ): BroadcastGraphicConfig[] {
 	return graphics.map(entry => entry.id === graphicId
 		? { ...entry, animation: mergeAnimationRecipe(entry.animation, phase, patch) }

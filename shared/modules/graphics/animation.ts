@@ -616,9 +616,13 @@ function onScreenExcursion(recipe: GraphicOnScreenAnimationRecipe, elapsed: numb
 	if (withinCycle >= duration)
 		return 0;
 
-	// Out and back: the first half travels to the excursion, the second returns.
+	// Out and back: the first half travels to the excursion, the second returns, and
+	// each leg carries the recipe's own easing. Easing the legs rather than the whole
+	// cycle is what keeps the turn at exactly the full excursion and both ends exactly
+	// at rest — easing a triangle as one curve would land the turn short.
 	const travel = withinCycle / duration;
-	return travel <= 0.5 ? travel * 2 : (1 - travel) * 2;
+	const leg = travel <= 0.5 ? travel * 2 : (1 - travel) * 2;
+	return graphicAnimationEasedProgress(recipe.easing, leg);
 }
 
 /**
@@ -635,6 +639,8 @@ export function graphicAnimationExcursion(input: GraphicAnimationProjectionInput
 	if (!recipe)
 		return 0;
 
+	// On-screen cycles rather than travelling once, so it eases each leg of its own
+	// out-and-back inside `onScreenExcursion` instead of easing a single progress.
 	if (input.phase === 'on-screen')
 		return onScreenExcursion(recipe as GraphicOnScreenAnimationRecipe, input.elapsed, input.staggerOffset ?? 0);
 
@@ -643,6 +649,23 @@ export function graphicAnimationExcursion(input: GraphicAnimationProjectionInput
 		graphicAnimationLinearProgress(recipe, input.elapsed, input.staggerOffset ?? 0),
 	);
 
+	// Enter and update both travel *from* the excursion to rest, so they share this
+	// branch. That makes update the incoming half of a cross-transition and nothing
+	// more, which is a deliberate partial implementation:
+	//
+	// CONTEXT.md requires an update to cross-transition the old and new renderings
+	// concurrently — old content leaving in the slide's direction while new content
+	// enters from the opposite side, one reveal boundary travelling with new content
+	// behind it and old ahead. None of that is expressible here, because
+	// `GraphicAnimationValues` is one excursion scalar per owner: it describes where a
+	// single rendering is, not two renderings passing each other. There is also no
+	// old-versus-new content to cross-fade until Graphic Inputs supply values that
+	// change under a graphic that is already on air.
+	//
+	// So whoever implements the outgoing half has to *widen* this projection rather
+	// than only wire it up — most likely two projected states per owner, or an
+	// explicit outgoing/incoming pair — and that is a change to this module's shape,
+	// not an addition beside it.
 	return input.phase === 'exit' ? eased : 1 - eased;
 }
 

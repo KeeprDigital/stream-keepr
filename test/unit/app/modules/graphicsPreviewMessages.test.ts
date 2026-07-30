@@ -5,6 +5,7 @@ import {
 	isGraphicsPreviewSelectMessage,
 	isGraphicsPreviewStateMessage,
 	readGraphicsPreviewAnimationPlan,
+	readGraphicsPreviewState,
 } from '~/modules/graphics/previewMessages';
 
 const editorWindow = { name: 'editor' };
@@ -140,7 +141,8 @@ describe('readGraphicsPreviewAnimationPlan', () => {
 			};
 
 			expect(isGraphicsPreviewStateMessage(message, expectedFromEditor)).toBe(true);
-			expect(message.data.state.animation).toBeNull();
+			// The guard does not rewrite the message; the reader normalises it.
+			expect(readGraphicsPreviewState(message.data.state as never).animation).toBeNull();
 		}
 	});
 
@@ -155,6 +157,6 @@ describe('readGraphicsPreviewAnimationPlan', () => {
 		};
 
 		expect(isGraphicsPreviewStateMessage(message, expectedFromEditor)).toBe(true);
-		expect(message.data.state.animation).toEqual(plan);
+		expect(readGraphicsPreviewState(message.data.state as never).animation).toEqual(plan);
 	});
 });

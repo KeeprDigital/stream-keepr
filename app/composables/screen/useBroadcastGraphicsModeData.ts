@@ -11,6 +11,7 @@ import { GRAPHIC_ANIMATION_PHASE_VALUES } from '~~/shared/types/graphics';
 import {
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
 	isGraphicsPreviewStateMessage,
+	readGraphicsPreviewState,
 } from '~/modules/graphics/previewMessages';
 
 /**
@@ -166,7 +167,7 @@ export function useBroadcastGraphicsModeData() {
 		if (!isGraphicsPreviewStateMessage(message, { origin: window.location.origin, source: window.parent }))
 			return;
 
-		previewState.value = message.data.state;
+		previewState.value = readGraphicsPreviewState(message.data.state);
 	}
 
 	/** Report a canvas selection back to the editor that embedded this preview. */

@@ -227,6 +227,51 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 			.toEqual({ phase: 'exit', elapsed: 200 });
 	});
 
+	it('never replays an entrance when a plain Take follows a Cut Take', () => {
+		// Cut Take settles the graphic on air immediately. A plain Take after it reaches
+		// the same target, so it must change nothing — writing a fresh effective start
+		// time would send a settled graphic back to `entering` and replay its entrance
+		// on program, which is the failure an operator would see as a mid-show glitch.
+		const cut = take(createInitialBroadcastGraphicsLiveState(), 'slate', true, T0);
+		const plain = take(cut, 'slate', false, T0 + 5000);
+
+		expect(plain.playout.slate).toBe(cut.playout.slate);
+		expect(broadcastGraphicPlayoutState(plain, 'slate', at(T0 + 5000))).toBe('on-air');
+		expect(broadcastGraphicPhaseProjection(plain, 'slate', at(T0 + 5000))).toBeNull();
+	});
+
+	it('never replays an exit when a plain Out follows a Cut Out', () => {
+		// The same rule off air, where the consequence is worse: a fresh record would
+		// make an already-off graphic `exiting`, which puts it back into the composed
+		// frame to play an exit it already skipped.
+		let state = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
+		const cut = out(state, 'slate', true, T0 + 1000);
+		state = out(cut, 'slate', false, T0 + 5000);
+
+		expect(state.playout.slate).toBe(cut.playout.slate);
+		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 5000))).toBe('off');
+		expect(onAirBroadcastGraphicIds(state, [graphic('slate')], at(T0 + 5000))).toEqual([]);
+	});
+
+	it('still lets Cut settle a phase that is already running', () => {
+		// The asymmetry the rule turns on: Cut arriving over a non-Cut intent is a real
+		// change even though it reaches the same target, because it has to cut the
+		// running phase short. Only the reverse direction is a no-op.
+		const entering = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
+		expect(broadcastGraphicPlayoutState(entering, 'slate', at(T0 + 200))).toBe('entering');
+
+		const settled = take(entering, 'slate', true, T0 + 200);
+		expect(settled.playout.slate).not.toBe(entering.playout.slate);
+		expect(broadcastGraphicPlayoutState(settled, 'slate', at(T0 + 200))).toBe('on-air');
+	});
+
+	it('is idempotent under a repeated Cut Take', () => {
+		const once = take(createInitialBroadcastGraphicsLiveState(), 'slate', true, T0);
+		const twice = take(once, 'slate', true, T0 + 300);
+
+		expect(twice.playout.slate).toBe(once.playout.slate);
+	});
+
 	it('starts a new phase when the same intent arrives with a different Cut', () => {
 		// Cut is part of the accepted intent, so a Cut Take after a plain one is a
 		// different intent and settles the graphic immediately.

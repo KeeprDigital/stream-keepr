@@ -138,12 +138,28 @@ export function isGraphicsPreviewStateMessage(
 	if (!Array.isArray(state.graphics) || !isGraphicsSelectionTarget(state.selectedTarget))
 		return false;
 
-	// An absent or malformed plan is not a malformed state message: the working
-	// composition still has to reach the preview, at its Graphic Resting State.
-	state.animation = state.animation === undefined || state.animation === null
-		? null
-		: readGraphicsPreviewAnimationPlan(state.animation);
 	return true;
+}
+
+/**
+ * The preview state a validated message carries, with its run normalised.
+ *
+ * Separate from the guard above because a predicate that also rewrites its input is
+ * a hidden contract: every caller then depends on a side effect its name does not
+ * mention. The guard answers whether the message is one of ours; this answers what
+ * it says.
+ *
+ * An absent or malformed run is not a malformed state message — the working
+ * composition still has to reach the preview, holding its Graphic Resting State —
+ * so it normalises to null rather than rejecting the whole push.
+ */
+export function readGraphicsPreviewState(state: GraphicsPreviewState): GraphicsPreviewState {
+	return {
+		...state,
+		animation: state.animation === undefined || state.animation === null
+			? null
+			: readGraphicsPreviewAnimationPlan(state.animation),
+	};
 }
 
 export function isGraphicsPreviewSelectMessage(
