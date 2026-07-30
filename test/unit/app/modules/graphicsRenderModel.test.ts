@@ -176,6 +176,14 @@ const NON_PAINTING_KEYS = new Set([
 	'margin',
 	'minHeight',
 	'minWidth',
+	// Graphic Animation, each one added only after asking whether it paints.
+	// `opacity` scales an element's own alpha, which the matte identity is already
+	// stated over — it multiplies through exactly as a Graphic Group's opacity
+	// does, so it is a factor on existing paint rather than paint of its own.
+	// `transform` and `transformOrigin` relocate what is painted without changing
+	// it. `mask-image` is handled separately below: it carries colour tokens, so
+	// treating it as merely non-painting would let a colour through unchecked.
+	'opacity',
 	'overflow',
 	'overflowWrap',
 	'padding',
@@ -191,6 +199,18 @@ const NON_PAINTING_KEYS = new Set([
 	'whiteSpace',
 	'width',
 ]);
+
+/**
+ * The one mask the Key Output may carry: a hard-edged wipe in white at full and
+ * zero alpha, and nothing else.
+ *
+ * A mask multiplies the element's alpha rather than adding paint, so it is not
+ * pushed as a paint — but it is still required to be written in white, because a
+ * mask that ever did paint must fail the same check as everything else, and
+ * because an authored colour appearing here would mean a reveal had been
+ * implemented as something other than a stencil.
+ */
+const WHITE_WIPE_MASK = /^linear-gradient\(to (?:right|left|bottom|top), #ffffff 0 [\d.]+%, #ffffff00 [\d.]+%\)$/i;
 
 /**
  * Every colour one style object paints, and proof that it paints nothing else.
@@ -214,6 +234,12 @@ function stylePaints(style: CSSProperties, path: string): KeyPaint[] {
 			if (!glow)
 				throw new Error(`${path}.filter must be exactly one white drop-shadow, got: ${text}`);
 			paints.push({ color: glow[1]!, opacity: 1 });
+			continue;
+		}
+
+		if (key === 'maskImage') {
+			if (!WHITE_WIPE_MASK.test(text))
+				throw new Error(`${path}.maskImage must be exactly one white wipe, got: ${text}`);
 			continue;
 		}
 
@@ -274,6 +300,14 @@ function itemPaints(item: GraphicItemRenderDescriptor, prefix = ''): KeyPaint[] 
 		...(item.textStyle ? stylePaints(item.textStyle, `${path}.textStyle`) : []),
 		...(item.surface ? surfacePaints(item.surface, path) : []),
 		...(item.children ?? []).flatMap(child => itemPaints(child, `${path}>`)),
+	];
+}
+
+/** Every colour one composed Broadcast Graphic paints, its own wrapper included. */
+function graphicPaints(graphic: { id: string; style?: CSSProperties; items: GraphicItemRenderDescriptor[] }): KeyPaint[] {
+	return [
+		...(graphic.style ? stylePaints(graphic.style, `${graphic.id}.style`) : []),
+		...graphic.items.flatMap(item => itemPaints(item, `${graphic.id}>`)),
 	];
 }
 
@@ -1010,5 +1044,367 @@ describe('graphicsCompositionRenderModel', () => {
 			['logo', false, false],
 			['bar', true, false],
 		]);
+	});
+});
+
+describe('graphicsCompositionRenderModel Graphic Animation', () => {
+	const LINEAR = { duration: 400, easing: 'linear' as const, delay: 0 };
+
+	function model(graphics: BroadcastGraphicConfig[], animation?: Record<string, { phase: 'enter' | 'on-screen' | 'update' | 'exit'; elapsed: number }>, output: 'overlay' | 'fill' | 'key' = 'overlay') {
+		return resolveGraphicsCompositionRenderModel({ output, graphics, animation, ...CANVAS });
+	}
+
+	it('renders the Graphic Resting State when nothing is being projected', () => {
+		// The unanimated Screen, the settled on-air graphic, and the recovered Live
+		// Session all reach the model as an absent projection, and all three have to
+		// produce exactly the descriptors that existed before animation did.
+		const graphics = [graphic('a', [shape('bar'), group('cluster', [text('name')])])];
+
+		expect(model(graphics)).toEqual(model(graphics, {}));
+		expect(model(graphics).graphics[0]?.style).toBeUndefined();
+		expect(model(graphics).graphics[0]?.items[0]?.style.transform).toBeUndefined();
+		expect(model(graphics).graphics[0]?.items[0]?.style.opacity).toBeUndefined();
+	});
+
+	it('rests a Broadcast Graphic that is not in the projection while another animates', () => {
+		const graphics = [
+			graphic('animating', [shape('bar', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } })]),
+			graphic('settled', [shape('bug', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } })]),
+		];
+
+		const resolved = model(graphics, { animating: { phase: 'enter', elapsed: 0 } });
+
+		expect(resolved.graphics[0]?.items[0]?.style.opacity).toBe(0);
+		expect(resolved.graphics[1]?.items[0]?.style.opacity).toBeUndefined();
+	});
+
+	it('carries a whole-graphic recipe on the graphic own wrapper, so item fades compose multiplicatively', () => {
+		const graphics = [{
+			...graphic('a', [shape('bar', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } })]),
+			animation: { enter: { ...LINEAR, fade: { opacity: 0 } } },
+		}];
+
+		const resolved = model(graphics, { a: { phase: 'enter', elapsed: 200 } });
+
+		// Each is half way, and they nest, so the composed result is 0.25 without
+		// either of them having to know the other exists.
+		expect(resolved.graphics[0]?.style?.opacity).toBe(0.5);
+		expect(resolved.graphics[0]?.items[0]?.style.opacity).toBe(0.5);
+	});
+
+	it('slides an item in canvas pixels from its Graphic Resting State position', () => {
+		const graphics = [graphic('a', [shape('bar', {
+			animation: { enter: { ...LINEAR, slide: { direction: 'north', distanceMode: 'fixed', distance: 100 } } },
+		})])];
+
+		const start = model(graphics, { a: { phase: 'enter', elapsed: 0 } }).graphics[0]?.items[0];
+		const settled = model(graphics, { a: { phase: 'enter', elapsed: 400 } }).graphics[0]?.items[0];
+
+		expect(start?.style.transform).toBe('translate(0px, -100px)');
+		// The resting position is unchanged: motion is a transform, never a rewrite
+		// of the authored rectangle.
+		expect(start?.style.left).toBe('10px');
+		expect(start?.style.top).toBe('20px');
+		expect(settled?.style.transform).toBeUndefined();
+	});
+
+	it('scales about its Graphic Animation Origin while rotating about its Graphic Anchor Point', () => {
+		const graphics = [graphic('a', [shape('bar', {
+			anchor: 'top-left',
+			rotation: 30,
+			animation: { enter: { ...LINEAR, scale: { factor: 0.5, origin: 'center' } } },
+		})])];
+
+		const item = model(graphics, { a: { phase: 'enter', elapsed: 0 } }).graphics[0]?.items[0];
+
+		// One transform, one origin: the rotation is about the anchor, and the scale
+		// reaches the centre origin by translating (1-s)(O-A) inside that rotation.
+		expect(item?.style.transform).toBe('rotate(30deg) translate(75px, 25px) scale(0.5)');
+		expect(item?.style.transformOrigin).toBe('0% 0%');
+	});
+
+	it('applies a slide outside the authored rotation and a scale inside it', () => {
+		const graphics = [graphic('a', [shape('bar', {
+			rotation: 45,
+			animation: {
+				enter: {
+					...LINEAR,
+					slide: { direction: 'east', distanceMode: 'fixed', distance: 60 },
+					scale: { factor: 0, origin: 'top-left' },
+				},
+			},
+		})])];
+
+		const item = model(graphics, { a: { phase: 'enter', elapsed: 0 } }).graphics[0]?.items[0];
+
+		// A slide is a canvas-space offset, so it must not be rotated by the item's
+		// own Graphic Rotation; a scale is in the item's own frame, so it must be.
+		expect(item?.style.transform).toBe('translate(60px, 0px) rotate(45deg) scale(0)');
+	});
+
+	it('wipes a reveal as a mask, so an existing Shape Geometry clip survives it', () => {
+		const clipped = group('cluster', [text('name')], {
+			clip: true,
+			geometry: { ...squareShapeGeometry(), topRight: { treatment: 'cut', size: 24 } },
+			animation: { enter: { ...LINEAR, reveal: { edge: 'left' } } },
+		});
+
+		const item = model([graphic('a', [clipped])], { a: { phase: 'enter', elapsed: 200 } }).graphics[0]?.items[0];
+
+		expect(item?.style.maskImage).toBe('linear-gradient(to right, #ffffff 0 50%, #ffffff00 50%)');
+		// The group's own Shape Geometry clip is still there: a wipe composes with
+		// clipping rather than replacing it.
+		expect(String(item?.style.clipPath)).toContain('path(');
+	});
+
+	it('wipes from each of the four edges towards the opposite one', () => {
+		const edges = { left: 'to right', right: 'to left', top: 'to bottom', bottom: 'to top' } as const;
+
+		for (const [edge, direction] of Object.entries(edges)) {
+			const graphics = [graphic('a', [shape('bar', {
+				animation: { enter: { ...LINEAR, reveal: { edge: edge as 'left' } } },
+			})])];
+			const item = model(graphics, { a: { phase: 'enter', elapsed: 0 } }).graphics[0]?.items[0];
+
+			expect(item?.style.maskImage).toBe(`linear-gradient(${direction}, #ffffff 0 0%, #ffffff00 0%)`);
+		}
+	});
+
+	it('drops the mask once a reveal is fully open, rather than emitting an inert one', () => {
+		const graphics = [graphic('a', [shape('bar', {
+			animation: { enter: { ...LINEAR, reveal: { edge: 'left' } } },
+		})])];
+
+		expect(model(graphics, { a: { phase: 'enter', elapsed: 400 } }).graphics[0]?.items[0]?.style.maskImage)
+			.toBeUndefined();
+	});
+
+	it('staggers a selected subset of direct items in list order from one shared phase start', () => {
+		const graphics = [{
+			...graphic('a', [
+				shape('first', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } }),
+				shape('second', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } }),
+				shape('third', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } }),
+			]),
+			animation: { stagger: { enter: { order: 'list' as const, step: 400, itemIds: ['first', 'third'] } } },
+		}];
+
+		const items = model(graphics, { a: { phase: 'enter', elapsed: 400 } }).graphics[0]?.items ?? [];
+
+		// `first` has finished, `second` is not staggered so it has finished too, and
+		// `third` is only now starting its own 400ms travel.
+		expect(items[0]?.style.opacity).toBeUndefined();
+		expect(items[1]?.style.opacity).toBeUndefined();
+		expect(items[2]?.style.opacity).toBe(0);
+	});
+
+	it('reverses a stagger for an exit without touching the enter order', () => {
+		const items = [
+			shape('first', { animation: { exit: { ...LINEAR, fade: { opacity: 0 } } } }),
+			shape('second', { animation: { exit: { ...LINEAR, fade: { opacity: 0 } } } }),
+		];
+		const graphics = [{
+			...graphic('a', items),
+			animation: { stagger: { exit: { order: 'reverse-list' as const, step: 400, itemIds: ['first', 'second'] } } },
+		}];
+
+		const resolved = model(graphics, { a: { phase: 'exit', elapsed: 400 } }).graphics[0]?.items ?? [];
+
+		// Reverse-list: `second` leads and has finished fading out, while `first` has
+		// not begun and so is still exactly at its Graphic Resting State.
+		expect(resolved[0]?.style.opacity).toBeUndefined();
+		expect(resolved[1]?.style.opacity).toBe(0);
+	});
+
+	it('adds a Graphic Group stagger on top of the offset the group itself received', () => {
+		const graphics = [{
+			...graphic('a', [
+				shape('bed'),
+				group('cluster', [
+					text('one', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } }),
+					text('two', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } }),
+				], {
+					animation: { stagger: { enter: { order: 'list', step: 400, itemIds: ['one', 'two'] } } },
+				}),
+			]),
+			animation: { stagger: { enter: { order: 'list' as const, step: 400, itemIds: ['bed', 'cluster'] } } },
+		}];
+
+		const children = model(graphics, { a: { phase: 'enter', elapsed: 800 } }).graphics[0]?.items[1]?.children ?? [];
+
+		// `cluster` is second in the graphic's stagger (400), `two` second in its
+		// group's (another 400), so at 800ms it is only just beginning.
+		expect(children[0]?.style.opacity).toBeUndefined();
+		expect(children[1]?.style.opacity).toBe(0);
+	});
+
+	it('clears the Graphic Group, not the canvas, for a child sliding past its parent', () => {
+		const graphics = [graphic('a', [group('cluster', [text('name', {
+			x: 0,
+			width: 100,
+			animation: { exit: { ...LINEAR, slide: { direction: 'east', distanceMode: 'clear-parent', distance: 0 } } },
+		})], { arrangement: 'canvas', width: 600 })])];
+
+		const child = model(graphics, { a: { phase: 'exit', elapsed: 400 } }).graphics[0]?.items[0]?.children?.[0];
+
+		// The group is 600 wide and the child sits at its left edge, so clearing the
+		// group is 600 — not the 1920 it would take to clear the Screen canvas.
+		expect(child?.style.transform).toBe('translate(600px, 0px)');
+	});
+
+	it('animates a row or column Graphic Group child, which has no Graphic Rotation of its own', () => {
+		const graphics = [graphic('a', [group('cluster', [text('name', {
+			animation: { enter: { ...LINEAR, scale: { factor: 0.5, origin: 'center' }, fade: { opacity: 0 } } },
+		})], { arrangement: 'row' })])];
+
+		const child = model(graphics, { a: { phase: 'enter', elapsed: 0 } }).graphics[0]?.items[0]?.children?.[0];
+
+		expect(child?.style.opacity).toBe(0);
+		expect(String(child?.style.transform)).toContain('scale(0.5)');
+		expect(String(child?.style.transform)).not.toContain('rotate');
+	});
+
+	it('resolves the same composition and animation phase in the Overlay, Fill, and Key Outputs', () => {
+		// At the same authoritative time every output has to agree, so the motion each
+		// one resolves must be identical even though what they paint differs.
+		const graphics = [{
+			...graphic('a', [shape('bar', {
+				animation: {
+					enter: {
+						...LINEAR,
+						fade: { opacity: 0 },
+						slide: { direction: 'south', distanceMode: 'fixed', distance: 40 },
+						scale: { factor: 0.8, origin: 'bottom-right' },
+						reveal: { edge: 'top' },
+					},
+				},
+			})]),
+			animation: { enter: { ...LINEAR, fade: { opacity: 0.2 } } },
+		}];
+		const at = { a: { phase: 'enter' as const, elapsed: 137 } };
+
+		const motion = (output: 'overlay' | 'fill' | 'key') => {
+			const resolved = model(graphics, at, output);
+			const item = resolved.graphics[0]!.items[0]!.style;
+			return {
+				graphic: resolved.graphics[0]!.style,
+				transform: item.transform,
+				transformOrigin: item.transformOrigin,
+				opacity: item.opacity,
+				maskImage: item.maskImage,
+			};
+		};
+
+		expect(motion('fill')).toEqual(motion('overlay'));
+		expect(motion('key')).toEqual(motion('overlay'));
+	});
+
+	it('is deterministic: one elapsed time always produces one frame', () => {
+		const graphics = [graphic('a', [shape('bar', {
+			animation: { enter: { duration: 700, easing: 'back-out', delay: 120, scale: { factor: 0.4, origin: 'top' } } },
+		})])];
+		const at = { a: { phase: 'enter' as const, elapsed: 333 } };
+
+		expect(model(graphics, at)).toEqual(model(graphics, at));
+	});
+
+	describe('the Key Output alpha matte survives animation', () => {
+		const animated = {
+			...graphic('a', [
+				shape('bar', {
+					surfaceStyle: surfaceStyle({ fillOpacity: 0.5, outline: { color: '#00d9ff', width: 4 }, glow: { color: '#ff51c7', size: 20, opacity: 0.5 } }),
+					rotation: 12,
+					animation: {
+						enter: {
+							duration: 400,
+							easing: 'ease-out',
+							delay: 0,
+							fade: { opacity: 0.1 },
+							slide: { direction: 'north-west', distanceMode: 'clear-parent', distance: 0 },
+							scale: { factor: 1.8, origin: 'bottom-left' },
+							reveal: { edge: 'bottom' },
+						},
+					},
+				}),
+				group('cluster', [text('name', {
+					surfaceStyle: surfaceStyle({ fillOpacity: 0.75 }),
+					animation: { enter: { duration: 400, easing: 'linear', delay: 0, reveal: { edge: 'right' }, fade: { opacity: 0 } } },
+				})], {
+					clip: true,
+					surfaceStyle: surfaceStyle(),
+					animation: { enter: { duration: 400, easing: 'linear', delay: 0, scale: { factor: 0.2, origin: 'center' } } },
+				}),
+			]),
+			animation: {
+				'enter': { duration: 400, easing: 'linear' as const, delay: 0, fade: { opacity: 0 }, scale: { factor: 0.5, origin: 'center' as const } },
+				'stagger': { enter: { order: 'list' as const, step: 50, itemIds: ['bar', 'cluster'] } },
+			},
+		};
+
+		it('paints nothing the matte identity does not allow, at any point in a phase', () => {
+			for (const elapsed of [0, 25, 50, 137, 200, 399, 400, 4000]) {
+				const resolved = model([animated], { a: { phase: 'enter', elapsed } }, 'key');
+
+				expect(() => graphicPaints(resolved.graphics[0]!)).not.toThrow();
+			}
+		});
+
+		it('still accumulates the alpha union of two overlapping half-opaque items', () => {
+			// The identity the Key Output is built on, re-checked with motion applied:
+			// animation contributes transforms, an opacity factor, and a stencil, none
+			// of which add paint, so the composed luminance is unchanged.
+			const alphas = [0.5, 0.5];
+			const graphics = [graphic('a', alphas.map((fillOpacity, index) => shape(`item-${index}`, {
+				surfaceStyle: surfaceStyle({ fill: { type: 'solid', color: '#123456' }, fillOpacity }),
+				animation: { enter: { duration: 400, easing: 'linear', delay: 0, slide: { direction: 'south', distanceMode: 'fixed', distance: 10 }, reveal: { edge: 'left' } } },
+			})))];
+
+			const resolved = model(graphics, { a: { phase: 'enter', elapsed: 200 } }, 'key');
+			const luminance = compositeKeyLuminance(
+				resolved.canvasStyle.background,
+				resolved.graphics[0]!.items.flatMap(item => itemPaints(item)),
+			);
+
+			expect(luminance).toBeCloseTo(0.75, 2);
+		});
+
+		it('fails closed on a mask that is not exactly one white wipe', () => {
+			const probe = (style: CSSProperties): GraphicItemRenderDescriptor => ({
+				id: 'probe',
+				label: 'probe',
+				kind: 'shape',
+				style,
+			});
+
+			for (const maskImage of [
+				'linear-gradient(to right, #000000 0 50%, transparent 50%)',
+				'linear-gradient(to right, black 0 50%, #ffffff00 50%)',
+				'linear-gradient(45deg, #ffffff 0 50%, #ffffff00 50%)',
+				'url(#wipe)',
+				'linear-gradient(to right, #ffffff 0 50%, #ffffff00 50%), linear-gradient(to top, #ffffff 0 10%, #ffffff00 10%)',
+			])
+				expect(() => itemPaints(probe({ maskImage }))).toThrow(/maskImage must be exactly one white wipe/);
+
+			expect(() => itemPaints(probe({ maskImage: 'linear-gradient(to top, #ffffff 0 12.5%, #ffffff00 12.5%)' })))
+				.not.toThrow();
+		});
+
+		it('fails closed on an animation property nothing here has vetted', () => {
+			const probe = (style: CSSProperties): GraphicItemRenderDescriptor => ({
+				id: 'probe',
+				label: 'probe',
+				kind: 'shape',
+				style,
+			});
+
+			// Every one of these is a plausible way a later animation change could
+			// reach for paint or for compositing the matte identity forbids.
+			expect(() => itemPaints(probe({ mixBlendMode: 'screen' }))).toThrow(/unrecognised style property/);
+			expect(() => itemPaints(probe({ animation: 'wipe 1s linear' }))).toThrow(/unrecognised style property/);
+			expect(() => itemPaints(probe({ transition: 'opacity 300ms linear' }))).toThrow(/unrecognised style property/);
+			expect(() => itemPaints(probe({ backdropFilter: 'blur(4px)' }))).toThrow(/unrecognised style property/);
+			expect(() => itemPaints(probe({ WebkitMaskImage: 'linear-gradient(to right, red, blue)' })))
+				.toThrow(/unrecognised style property/);
+		});
 	});
 });

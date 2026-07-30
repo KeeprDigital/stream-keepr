@@ -186,10 +186,17 @@ export function broadcastGraphicsStateService() {
 		 */
 		isMergeable: () => true,
 
+		/**
+		 * The server's clock is the authoritative effective start time of the phase
+		 * this command begins. It is read here, at acceptance, rather than sent by a
+		 * client: every output projects animation from this instant, so it has to come
+		 * from the one place that decides the authoritative order.
+		 */
 		reduce: (session, command) => applyBroadcastGraphicsPlayoutCommand(
 			session.currentState,
 			command.type,
 			command.payload,
+			{ acceptedAt: Date.now() },
 		),
 
 		casGuard: session => sql`

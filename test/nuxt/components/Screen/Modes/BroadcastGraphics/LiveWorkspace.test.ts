@@ -104,7 +104,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('lists every placed Broadcast Graphic with its Graphic Playout State', async () => {
-		mockLiveState.value = { playout: { slate: { onAir: true } } };
+		mockLiveState.value = { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } };
 
 		const wrapper = await mountComponent();
 
@@ -121,7 +121,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('takes a Broadcast Graphic off air', async () => {
-		mockLiveState.value = { playout: { slate: { onAir: true } } };
+		mockLiveState.value = { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } };
 		const wrapper = await mountComponent();
 
 		await entryFor(wrapper, 'slate').get('[data-testid="playout-out"]').trigger('click');
@@ -140,7 +140,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('keeps both actions available so a repeat converges on the operator’s latest intent', async () => {
-		mockLiveState.value = { playout: { slate: { onAir: true } } };
+		mockLiveState.value = { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } };
 		const wrapper = await mountComponent();
 		const entry = entryFor(wrapper, 'slate');
 
@@ -149,7 +149,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('reports how many Broadcast Graphics are on air', async () => {
-		mockLiveState.value = { playout: { 'slate': { onAir: true }, 'lower-third': { onAir: true } } };
+		mockLiveState.value = { playout: { 'slate': { onAir: true, effectiveStartedAt: 0, cut: false }, 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } } };
 
 		const wrapper = await mountComponent();
 

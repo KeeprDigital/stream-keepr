@@ -37,14 +37,30 @@ import {
 } from '~~/shared/types/enums';
 import {
 	GRAPHIC_ANCHOR_POINT_VALUES,
+	GRAPHIC_ANIMATION_EASING_VALUES,
+	GRAPHIC_ANIMATION_ORIGIN_VALUES,
+	GRAPHIC_ANIMATION_REPEAT_INDEFINITE,
+	GRAPHIC_ANIMATION_STAGGER_ORDER_VALUES,
 	GRAPHIC_FONT_STYLE_VALUES,
 	GRAPHIC_GROUP_ALIGN_VALUES,
 	GRAPHIC_GROUP_ARRANGEMENT_VALUES,
 	GRAPHIC_GROUP_JUSTIFY_VALUES,
+	GRAPHIC_REVEAL_EDGE_VALUES,
+	GRAPHIC_SLIDE_DIRECTION_VALUES,
+	GRAPHIC_SLIDE_DISTANCE_MODE_VALUES,
 	GRAPHIC_TEXT_ALIGN_VALUES,
 	GRAPHIC_TEXT_TRANSFORM_VALUES,
+	MAX_GRAPHIC_ANIMATION_DELAY_MS,
+	MAX_GRAPHIC_ANIMATION_DURATION_MS,
+	MAX_GRAPHIC_ANIMATION_PAUSE_MS,
+	MAX_GRAPHIC_ANIMATION_REPEAT,
+	MAX_GRAPHIC_ANIMATION_SCALE,
+	MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS,
 	MAX_GRAPHIC_FILL_STOPS,
+	MAX_GRAPHIC_SLIDE_DISTANCE_PX,
 	MAX_GRAPHIC_TEXT_LENGTH,
+	MIN_GRAPHIC_ANIMATION_DURATION_MS,
+	MIN_GRAPHIC_ANIMATION_REPEAT,
 	MIN_GRAPHIC_FILL_STOPS,
 	SHAPE_CORNER_TREATMENT_VALUES,
 	TEXT_OVERFLOW_POLICY_VALUES,
@@ -650,6 +666,86 @@ const graphicShapeGeometrySchema = z.object({
 	rightSlant: pixelPositionSchema,
 }).strict();
 
+/* Graphic Animation: bounded recipes rather than a keyframe timeline. */
+
+const graphicAnimationChannelsShape = {
+	fade: z.object({ opacity: opacitySchema }).strict().optional(),
+	slide: z.object({
+		direction: z.enum(GRAPHIC_SLIDE_DIRECTION_VALUES),
+		distanceMode: z.enum(GRAPHIC_SLIDE_DISTANCE_MODE_VALUES),
+		// Ignored while the mode clears the owner's parent, exactly as a square
+		// Shape Geometry corner ignores its size.
+		distance: finiteNumberSchema.nonnegative().max(MAX_GRAPHIC_SLIDE_DISTANCE_PX),
+	}).strict().optional(),
+	scale: z.object({
+		factor: finiteNumberSchema.min(0).max(MAX_GRAPHIC_ANIMATION_SCALE),
+		origin: z.enum(GRAPHIC_ANIMATION_ORIGIN_VALUES),
+	}).strict().optional(),
+	reveal: z.object({ edge: z.enum(GRAPHIC_REVEAL_EDGE_VALUES) }).strict().optional(),
+};
+
+const graphicAnimationRecipeShape = {
+	duration: finiteNumberSchema
+		.min(MIN_GRAPHIC_ANIMATION_DURATION_MS)
+		.max(MAX_GRAPHIC_ANIMATION_DURATION_MS),
+	easing: z.enum(GRAPHIC_ANIMATION_EASING_VALUES),
+	delay: finiteNumberSchema.nonnegative().max(MAX_GRAPHIC_ANIMATION_DELAY_MS),
+	...graphicAnimationChannelsShape,
+};
+
+const graphicAnimationRecipeSchema = z.object(graphicAnimationRecipeShape).strict();
+
+const graphicOnScreenAnimationRecipeSchema = z.object({
+	...graphicAnimationRecipeShape,
+	pause: finiteNumberSchema.nonnegative().max(MAX_GRAPHIC_ANIMATION_PAUSE_MS),
+	repeat: z.union([
+		finiteNumberSchema.int().min(MIN_GRAPHIC_ANIMATION_REPEAT).max(MAX_GRAPHIC_ANIMATION_REPEAT),
+		z.literal(GRAPHIC_ANIMATION_REPEAT_INDEFINITE),
+	]),
+}).strict();
+
+/**
+ * A stagger names a subset of one container's direct Graphic Items, so it can
+ * never name more ids than one Broadcast Graphic may hold Graphic Items. The cap
+ * is stated here rather than reused from `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC`
+ * because these schemas are built before that constant is initialised.
+ *
+ * Ids are not checked against the container's actual children: an author who
+ * deletes a staggered item must not have their next write refused, so a stale id
+ * is ignored at projection time instead.
+ */
+const MAX_GRAPHIC_ANIMATION_STAGGER_ITEMS = 100;
+
+const graphicAnimationStaggerSchema = z.object({
+	order: z.enum(GRAPHIC_ANIMATION_STAGGER_ORDER_VALUES),
+	step: finiteNumberSchema.nonnegative().max(MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS),
+	itemIds: z.array(z.string().min(1).max(100)).max(MAX_GRAPHIC_ANIMATION_STAGGER_ITEMS),
+}).strict();
+
+/**
+ * At most one recipe per lifecycle phase, stated structurally: the phases are the
+ * keys of one object, so a second enter recipe has nowhere to go.
+ */
+const graphicAnimationShape = {
+	'enter': graphicAnimationRecipeSchema.optional(),
+	'on-screen': graphicOnScreenAnimationRecipeSchema.optional(),
+	'update': graphicAnimationRecipeSchema.optional(),
+	'exit': graphicAnimationRecipeSchema.optional(),
+};
+
+const graphicAnimationSchema = z.object(graphicAnimationShape).strict();
+
+/** Only a container — a Broadcast Graphic or a Graphic Group — staggers direct items. */
+const graphicContainerAnimationSchema = z.object({
+	...graphicAnimationShape,
+	stagger: z.object({
+		'enter': graphicAnimationStaggerSchema.optional(),
+		'on-screen': graphicAnimationStaggerSchema.optional(),
+		'update': graphicAnimationStaggerSchema.optional(),
+		'exit': graphicAnimationStaggerSchema.optional(),
+	}).strict().optional(),
+}).strict();
+
 const graphicItemBaseShape = {
 	id: z.string().min(1).max(100),
 	label: z.string().min(1).max(100),
@@ -660,6 +756,7 @@ const graphicItemBaseShape = {
 	y: pixelPositionSchema,
 	width: pixelSizeSchema,
 	height: pixelSizeSchema,
+	animation: graphicAnimationSchema.optional(),
 };
 
 const textGraphicItemShape = {
@@ -716,6 +813,9 @@ const graphicGroupItemConfigSchema = z.object({
 	geometry: graphicShapeGeometrySchema,
 	surfaceStyle: graphicSurfaceStyleSchema.optional(),
 	defaultChildSurfaceStyle: graphicSurfaceStyleSchema.optional(),
+	// A Graphic Group coordinates the animation of its direct items as well as
+	// its own, so it widens the base item's animation rather than reusing it.
+	animation: graphicContainerAnimationSchema.optional(),
 	children: z.array(graphicGroupChildConfigSchema).max(
 		MAX_GRAPHIC_GROUP_CHILDREN,
 		`A Graphic Group must not contain more than ${MAX_GRAPHIC_GROUP_CHILDREN} Graphic Items`,
@@ -744,18 +844,34 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * 255,000 Graphic Items and about 485 MiB against a 512 KiB budget shared by
  * every Screen Mode.
  *
- * This cap binds the product: 200 x 2,004 + 50 x 166 is about 400 KiB, or 78% of
- * that budget, and realistic authoring measures around 119 KiB. It is
- * deliberately a named cap so an operator reads which limit they reached rather
- * than a byte count. Graphic Group children count towards it — they are Graphic
- * Items and they cost bytes.
+ * Graphic Animation is the largest single addition to that arithmetic, because
+ * every Broadcast Graphic and every Graphic Item may own one recipe per lifecycle
+ * phase. Measured against this schema's own maxima, animating all four phases with
+ * a fade, slide, scale, and reveal channel each takes the worst-case Graphic Item
+ * from 2,015 bytes to 3,054, and a Broadcast Graphic shell from 230 to 2,345 —
+ * a shell pays most because it also carries a four-phase stagger naming its
+ * direct items, and an id costs 102 bytes per appearance at the 100-character cap.
  *
- * The remaining ~112 KiB is shared with every other mode's configuration, so a
+ * The worst case now spends its Graphic Item budget across as many Broadcast
+ * Graphics as the Screen allows, because maximising animated shells costs more
+ * than concentrating items in fewer graphics. At this cap that measures 372,654
+ * bytes — 364 KiB, or 71% of the budget — pinned by a test, against 329,914 bytes
+ * for the same items gathered into Graphic Groups. Realistic authoring, where few
+ * items animate and none carry every channel, stays far below both.
+ *
+ * Halving this cap from 200 is the price of animation, and it is deliberately
+ * paid here rather than by narrowing the animation vocabulary: an author who
+ * reaches it reads a named limit instead of a byte count. One Broadcast Graphic
+ * may still fill the whole Screen's budget, so this cap and the per-graphic one
+ * coincide. Graphic Group children count towards it — they are Graphic Items and
+ * they cost bytes.
+ *
+ * The remaining ~148 KiB is shared with every other mode's configuration, so a
  * Screen carrying both a maximal Broadcast Graphics stack and a maximal Feature
  * Match Overlay layout can still reach the byte limit. That is a property of one
  * budget shared across modes and predates this cap.
  */
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 200;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 100;
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
 	return items.reduce(
@@ -791,6 +907,7 @@ const broadcastGraphicConfigSchema = z.object({
 			items => new Set(graphicItemIds(items)).size === graphicItemIds(items).length,
 			'Graphic Item ids must be unique within one Broadcast Graphic',
 		),
+	animation: graphicContainerAnimationSchema.optional(),
 }).strict();
 
 /**

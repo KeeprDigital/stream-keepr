@@ -57,7 +57,7 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	// filter, so this test cannot pass on a filter the Screen Output does not use.
 	onAirGraphicIds: (_screenId: number, graphics: readonly { id: string }[]) =>
 		onAirBroadcastGraphicIds(
-			{ playout: Object.fromEntries(mockOnAirGraphicIds.value.map(id => [id, { onAir: true }])) },
+			{ playout: Object.fromEntries(mockOnAirGraphicIds.value.map(id => [id, { onAir: true, effectiveStartedAt: 0, cut: false }])) },
 			graphics,
 		),
 	loadSession: (eventId: number, screenId: number) => mockLoadSession.value(eventId, screenId),

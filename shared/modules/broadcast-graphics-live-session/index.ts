@@ -6,14 +6,17 @@
  * live-state module and the Screen's session service, never here.
  */
 export type {
+	BroadcastGraphicPhaseTiming,
 	BroadcastGraphicPlayout,
 	BroadcastGraphicsCommandType,
 	BroadcastGraphicsLiveState,
+	BroadcastGraphicsPlayoutContext,
 	BroadcastGraphicsPlayoutPayload,
 } from './playout';
 export {
 	applyBroadcastGraphicsPlayoutCommand,
 	BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES,
+	broadcastGraphicPhaseProjection,
 	broadcastGraphicPlayoutState,
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,

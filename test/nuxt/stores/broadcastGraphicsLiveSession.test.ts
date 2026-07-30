@@ -66,7 +66,7 @@ function notification(
 		sessionId: 55,
 		sequence: 2,
 		commandType: 'Take',
-		currentState: { playout: { slate: { onAir: true } } },
+		currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } },
 		...overrides,
 	} as MessageData<'broadcastGraphicsLiveSession:commandApplied'>;
 }
@@ -83,7 +83,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 	it('derives Graphic Playout State and the on-air stack from the loaded snapshot', async () => {
 		mockRepository.getSession.mockResolvedValue(session({
-			currentState: { playout: { slate: { onAir: true }, bug: { onAir: false } } },
+			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false }, bug: { onAir: false, effectiveStartedAt: 0, cut: false } } },
 		}));
 
 		await store.loadSession(EVENT_ID, SCREEN_ID);
@@ -105,8 +105,8 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			sessionId: 55,
 			sequence: 2,
 			commandType: 'Take',
-			currentState: { playout: { slate: { onAir: true } } },
-			session: session({ sequence: 2, currentState: { playout: { slate: { onAir: true } } } }),
+			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } },
+			session: session({ sequence: 2, currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } } }),
 		});
 
 		await store.take(EVENT_ID, SCREEN_ID, 'slate');
@@ -144,7 +144,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			sessionId: 55,
 			sequence: 2,
 			commandType: 'Take',
-			currentState: { playout: { slate: { onAir: true } } },
+			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } },
 			session: session({ sequence: 2 }),
 		});
 
@@ -167,7 +167,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				sessionId: 56,
 				sequence: 2,
 				commandType: 'Take',
-				currentState: { playout: { slate: { onAir: true } } },
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } },
 				session: session({ id: 56, sequence: 2 }),
 			});
 		mockRepository.getSession.mockResolvedValue(session({ id: 56, sequence: 1 }));
@@ -196,8 +196,8 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				sessionId: 56,
 				sequence: 2,
 				commandType: 'Take',
-				currentState: { playout: { slate: { onAir: true } } },
-				session: session({ id: 56, sequence: 2, currentState: { playout: { slate: { onAir: true } } } }),
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } },
+				session: session({ id: 56, sequence: 2, currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } } }),
 			});
 		mockRepository.getSession.mockResolvedValue(session({ id: 56, sequence: 1 }));
 
@@ -252,8 +252,8 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			sessionId: 55,
 			sequence: 2,
 			commandType: 'Take',
-			currentState: { playout: { slate: { onAir: true } } },
-			session: session({ sequence: 2, currentState: { playout: { slate: { onAir: true } } } }),
+			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } },
+			session: session({ sequence: 2, currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } } }),
 		});
 		await inFlight;
 
@@ -286,7 +286,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 		await store.applyRemoteCommand(notification({
 			sequence: 2,
-			currentState: { playout: { slate: { onAir: false } } },
+			currentState: { playout: { slate: { onAir: false, effectiveStartedAt: 0, cut: false } } },
 		}));
 
 		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
@@ -297,7 +297,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		vi.clearAllMocks();
 		mockRepository.getSession.mockResolvedValue(session({
 			sequence: 9,
-			currentState: { playout: { bug: { onAir: true } } },
+			currentState: { playout: { bug: { onAir: true, effectiveStartedAt: 0, cut: false } } },
 		}));
 
 		// A disconnect swallowed sequences 2 through 8: the notification is not
