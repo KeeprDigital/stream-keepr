@@ -9,15 +9,14 @@
  */
 export type { CommandReceipt } from './receipts';
 export {
-	commandFingerprint,
-	findCommandReceipt,
-	RETAINED_COMMAND_RECEIPTS,
+	commandContentKey,
+	forgetAggregateReceipts,
 } from './receipts';
 export type {
 	SequencedCommand,
 	SequencedLiveState,
-	SequencedLiveStateCommitInput,
 	SequencedLiveStateExecuteOptions,
 	SequencedLiveStatePort,
+	SequencedLiveStateProjectionInput,
 } from './sequencedLiveState';
 export { createSequencedLiveState } from './sequencedLiveState';

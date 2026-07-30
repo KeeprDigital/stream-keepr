@@ -5,7 +5,8 @@ import type { ExternalSource } from '~~/shared/types/enums';
 import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { events, featureMatches, featureMatchSessions, liveStateCommandReceipts, matches } from '~~/server/db/schema';
+import { events, featureMatches, featureMatchSessions, matches } from '~~/server/db/schema';
+import { forgetAggregateReceipts } from '~~/server/modules/live-state';
 import { FEATURE_MATCH_SESSION_AGGREGATE_KIND, featureMatchStateService } from '~~/server/services/featureMatchState';
 import { chunkJsonRows } from '~~/server/utils/db';
 import { pickManualWritable } from '~~/server/utils/provenance';
@@ -128,21 +129,19 @@ export async function buildClearImportedMatchDataQueries(
 
 	// The Sessions closed above can never accept another command, so their command
 	// receipts have nothing left to protect against.
-	const forgetClosedSessionReceiptQueries = payloads.map(payload => db
-		.delete(liveStateCommandReceipts)
-		.where(and(
-			eq(liveStateCommandReceipts.aggregateKind, FEATURE_MATCH_SESSION_AGGREGATE_KIND),
-			sql`${liveStateCommandReceipts.aggregateId} in (
-				select ${featureMatchSessions.id}
-				from ${featureMatchSessions}
-				where ${featureMatchSessions.eventId} = ${eventId}
-					and ${featureMatchSessions.status} = 'closed'
-					and ${featureMatchSessions.slotId} in (
-						select cast(json_extract(value, '$.slotId') as integer)
-						from json_each(${payload})
-					)
-			)`,
-		)));
+	const forgetClosedSessionReceiptQueries = payloads.map(payload => forgetAggregateReceipts({
+		aggregateKind: FEATURE_MATCH_SESSION_AGGREGATE_KIND,
+		aggregateIds: sql`
+			select ${featureMatchSessions.id}
+			from ${featureMatchSessions}
+			where ${featureMatchSessions.eventId} = ${eventId}
+				and ${featureMatchSessions.status} = 'closed'
+				and ${featureMatchSessions.slotId} in (
+					select cast(json_extract(value, '$.slotId') as integer)
+					from json_each(${payload})
+				)
+		`,
+	}));
 
 	const clearAndRelinkSlotQueries = payloads.map(payload => db
 		.update(featureMatches)

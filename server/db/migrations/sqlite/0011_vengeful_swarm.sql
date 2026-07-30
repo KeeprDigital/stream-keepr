@@ -5,7 +5,7 @@ CREATE TABLE `live_state_command_receipts` (
 	`aggregate_id` integer NOT NULL,
 	`command_id` text NOT NULL,
 	`command_type` text NOT NULL,
-	`fingerprint` text NOT NULL,
+	`content_key` text NOT NULL,
 	`sequence` integer NOT NULL,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON UPDATE no action ON DELETE cascade

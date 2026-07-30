@@ -12,11 +12,11 @@ import type {
 	FeatureMatchSourceSnapshot,
 } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { events, featureMatches, featureMatchSessions, liveStateCommandReceipts, players } from '~~/server/db/schema';
+import { events, featureMatches, featureMatchSessions, players } from '~~/server/db/schema';
 import { mapFeatureMatchSessionToResponse } from '~~/server/mappers/featureMatch';
-import { createSequencedLiveState } from '~~/server/modules/live-state';
+import { createSequencedLiveState, forgetAggregateReceipts } from '~~/server/modules/live-state';
 import { publishMessage } from '~~/server/utils/ably';
 import {
 	applyFeatureMatchSessionEvent,
@@ -260,19 +260,16 @@ export function featureMatchStateService() {
 				.returning(),
 			// A closed Session can never accept another command, so its receipts have
 			// nothing left to protect against.
-			db.delete(liveStateCommandReceipts).where(and(
-				eq(liveStateCommandReceipts.aggregateKind, FEATURE_MATCH_SESSION_AGGREGATE_KIND),
-				inArray(
-					liveStateCommandReceipts.aggregateId,
-					db.select({ id: featureMatchSessions.id })
-						.from(featureMatchSessions)
-						.where(and(
-							eq(featureMatchSessions.slotId, slotId),
-							eq(featureMatchSessions.eventId, eventId),
-							eq(featureMatchSessions.status, 'closed'),
-						)),
-				),
-			)),
+			forgetAggregateReceipts({
+				aggregateKind: FEATURE_MATCH_SESSION_AGGREGATE_KIND,
+				aggregateIds: sql`
+					select ${featureMatchSessions.id}
+					from ${featureMatchSessions}
+					where ${featureMatchSessions.slotId} = ${slotId}
+						and ${featureMatchSessions.eventId} = ${eventId}
+						and ${featureMatchSessions.status} = 'closed'
+				`,
+			}),
 			db.update(featureMatches)
 				.set({
 					activeSessionId: sql<number>`(
@@ -386,32 +383,21 @@ export function featureMatchStateService() {
 				and ${featureMatchSessions.status} = 'active'
 		`,
 
-		commit: async ({ aggregate, reduction, nextSequence, receiptStatements }) => {
-			// The receipts are written first and under the same compare-and-swap
-			// condition, so a losing writer leaves neither a receipt nor a
-			// projection behind.
-			const statements: BatchItem<'sqlite'>[] = [
-				...receiptStatements,
-				db.update(featureMatchSessions)
-					.set({
-						currentState: reduction.currentState,
-						sourceSnapshot: reduction.sourceSnapshot,
-						sequence: nextSequence,
-						updatedAt: new Date(),
-					})
-					.where(and(
-						eq(featureMatchSessions.id, aggregate.id),
-						eq(featureMatchSessions.eventId, aggregate.eventId),
-						eq(featureMatchSessions.sequence, aggregate.sequence),
-						eq(featureMatchSessions.status, 'active'),
-					))
-					.returning(),
-			];
-			const results = await db.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
-
-			const updatedRows = results.at(-1) as DbFeatureMatchSession[] | undefined;
-			return updatedRows?.[0];
-		},
+		projection: ({ aggregate, reduction, nextSequence }) => db
+			.update(featureMatchSessions)
+			.set({
+				currentState: reduction.currentState,
+				sourceSnapshot: reduction.sourceSnapshot,
+				sequence: nextSequence,
+				updatedAt: new Date(),
+			})
+			.where(and(
+				eq(featureMatchSessions.id, aggregate.id),
+				eq(featureMatchSessions.eventId, aggregate.eventId),
+				eq(featureMatchSessions.sequence, aggregate.sequence),
+				eq(featureMatchSessions.status, 'active'),
+			))
+			.returning(),
 
 		toResult: (session, commandType) => ({
 			slotId: session.slotId,
@@ -433,7 +419,7 @@ export function featureMatchStateService() {
 		eventId: number,
 		command: FeatureMatchSessionCommand,
 		originConnectionId?: string,
-		options: SequencedLiveStateExecuteOptions = {},
+		options: Omit<SequencedLiveStateExecuteOptions, 'originConnectionId'> = {},
 	): Promise<FeatureMatchSessionCommandResult> => {
 		return await liveState.execute({ sessionId, eventId }, command, { ...options, originConnectionId });
 	};
@@ -463,6 +449,5 @@ export function featureMatchStateService() {
 		createSessionForSlot,
 		applyCommand,
 		applyCommandToActiveSession,
-		toEventAppliedPayload,
 	};
 }

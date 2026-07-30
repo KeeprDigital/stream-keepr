@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "14723353-f4e0-4ee9-b485-37536b7c97a1",
+  "id": "76bb1ad9-7838-4890-a9ea-aeb72d5bc909",
   "prevId": "f829157b-5cf4-476f-b0e3-0a9f7176c191",
   "tables": {
     "archetype_cards": {
@@ -2318,8 +2318,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "fingerprint": {
-          "name": "fingerprint",
+        "content_key": {
+          "name": "content_key",
           "type": "text",
           "primaryKey": false,
           "notNull": true,

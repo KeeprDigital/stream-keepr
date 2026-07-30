@@ -1,7 +1,7 @@
 import type { SQL } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbLiveStateCommandReceipt } from '~~/server/db/schema';
-import { and, eq, lte, sql } from 'drizzle-orm';
+import { and, eq, inArray, lte, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { liveStateCommandReceipts } from '~~/server/db/schema';
 
@@ -14,11 +14,11 @@ import { liveStateCommandReceipts } from '~~/server/db/schema';
  */
 export const RETAINED_COMMAND_RECEIPTS = 200;
 
-/** A committed command's identity and content digest. */
+/** A committed command's identity and canonical content. */
 export interface CommandReceipt {
 	commandId: string;
 	commandType: string;
-	fingerprint: string;
+	contentKey: string;
 	sequence: number;
 }
 
@@ -27,7 +27,7 @@ function canonicalJson(value: unknown): string {
 		return `[${value.map(canonicalJson).join(',')}]`;
 	if (value && typeof value === 'object') {
 		return `{${Object.entries(value)
-			.toSorted(([left], [right]) => left.localeCompare(right))
+			.toSorted(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
 			.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
 			.join(',')}}`;
 	}
@@ -35,13 +35,20 @@ function canonicalJson(value: unknown): string {
 }
 
 /**
- * Digest identifying a command's content independently of when it was sent.
+ * A command's content rendered as one canonical, comparable string: its type
+ * plus its payload, object keys ordered by codepoint at every depth.
  *
- * Fingerprints are taken from the command as the caller stated it, before any
- * server-side normalization, so a retry of the identical command always matches
- * even when reduction would have stamped it with a fresh timestamp.
+ * This is the content itself, not a digest of it — deliberately. A hash would
+ * be smaller, but a collision would silently accept a *different* command as a
+ * retry of this one, corrupting live state. An exact canonical string cannot
+ * collide. Key ordering is by codepoint rather than locale because the result is
+ * persisted and compared across processes.
+ *
+ * Taken from the command as the caller stated it, before any server-side
+ * normalization, so a retry of the identical command still matches even when
+ * reduction would have stamped it with a fresh timestamp.
  */
-export function commandFingerprint(type: string, payload: unknown): string {
+export function commandContentKey(type: string, payload: unknown): string {
 	return canonicalJson({ type, payload });
 }
 
@@ -87,7 +94,7 @@ export function commandReceiptStatements(input: {
 				${aggregateId},
 				${receipt.commandId},
 				${receipt.commandType},
-				${receipt.fingerprint},
+				${receipt.contentKey},
 				${receipt.sequence},
 				${Date.now()}
 			${guard}
@@ -98,4 +105,27 @@ export function commandReceiptStatements(input: {
 			lte(liveStateCommandReceipts.sequence, receipt.sequence - RETAINED_COMMAND_RECEIPTS),
 		)),
 	];
+}
+
+/**
+ * Forget every receipt belonging to the given aggregates.
+ *
+ * Callers reach for this when an aggregate stops accepting commands: a receipt
+ * only exists to make a retry safe, so once nothing can be retried there is
+ * nothing left to protect. `aggregateIds` is either an explicit list or a select
+ * yielding ids, letting the statement compose into a caller's atomic batch
+ * without the caller touching the receipt table itself.
+ */
+export function forgetAggregateReceipts(input: {
+	aggregateKind: string;
+	aggregateIds: number[] | SQL;
+}): BatchItem<'sqlite'> {
+	const { aggregateKind, aggregateIds } = input;
+
+	return db.delete(liveStateCommandReceipts).where(and(
+		eq(liveStateCommandReceipts.aggregateKind, aggregateKind),
+		Array.isArray(aggregateIds)
+			? inArray(liveStateCommandReceipts.aggregateId, aggregateIds)
+			: sql`${liveStateCommandReceipts.aggregateId} in (${aggregateIds})`,
+	));
 }

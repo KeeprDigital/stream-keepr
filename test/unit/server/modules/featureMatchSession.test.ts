@@ -5,14 +5,12 @@ import { createInitialFeatureMatchState } from '~~/shared/types/featureMatchStat
 
 const mockCreateSessionForSlot = vi.fn();
 const mockApplyCommand = vi.fn();
-const mockToEventAppliedPayload = vi.fn();
 const mockPublishMessage = vi.fn();
 
 vi.mock('~~/server/services/featureMatchState', () => ({
 	featureMatchStateService: () => ({
 		createSessionForSlot: mockCreateSessionForSlot,
 		applyCommand: mockApplyCommand,
-		toEventAppliedPayload: mockToEventAppliedPayload,
 	}),
 }));
 

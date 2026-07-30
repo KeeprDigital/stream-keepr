@@ -371,11 +371,16 @@ export const featureMatchSessions = sqliteTable('feature_match_sessions', {
 /**
  * Compact command receipts for every sequenced live-state aggregate.
  *
- * A receipt is deliberately not an event row: it retains the command's identity
- * and a fingerprint of its content, never the payload itself. That is enough to
- * answer the only two questions the live-state module asks of history — has this
- * command ID already been committed, and was it the same command? — without
- * accumulating an unbounded replayable log.
+ * A receipt is deliberately not an event row. It answers only the two questions
+ * the live-state module asks of history — has this command ID already been
+ * committed, and was it the same command? — and it is retained only for a bounded
+ * window of an aggregate's most recent commands rather than forever.
+ *
+ * Answering the second question needs the command's content, so `content_key`
+ * holds it in canonical form rather than as a hash: a hash collision would
+ * silently accept a different command as a retry and corrupt live state. Rows are
+ * therefore no smaller than the event rows they replace, but there is a fixed
+ * number of them per aggregate instead of one per command forever.
  */
 export const liveStateCommandReceipts = sqliteTable('live_state_command_receipts', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
@@ -390,8 +395,8 @@ export const liveStateCommandReceipts = sqliteTable('live_state_command_receipts
 
 	commandId: text('command_id').notNull(),
 	commandType: text('command_type').notNull(),
-	/** Canonical digest of the accepted command content, for same-ID/different-content rejection. */
-	fingerprint: text('fingerprint').notNull(),
+	/** The accepted command's canonical content, for same-ID/different-content rejection. */
+	contentKey: text('content_key').notNull(),
 	/** Authoritative sequence the command committed at. */
 	sequence: integer('sequence').notNull(),
 	createdAt: integer('created_at', { mode: 'timestamp_ms' })

@@ -1,3 +1,4 @@
+import type { BatchItem } from 'drizzle-orm/batch';
 import type { SequencedLiveStatePort } from '~~/server/modules/live-state';
 import { sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,7 +13,9 @@ vi.stubGlobal('createError', (opts: any) => {
 	return err;
 });
 
-const { commandFingerprint, createSequencedLiveState, RETAINED_COMMAND_RECEIPTS } = await import('~~/server/modules/live-state');
+const { commandContentKey, createSequencedLiveState } = await import('~~/server/modules/live-state');
+// Retention is the module's own tuning, not part of the interface it presents.
+const { RETAINED_COMMAND_RECEIPTS } = await import('~~/server/modules/live-state/receipts');
 
 /**
  * A stand-in aggregate carrying the only two facts the module insists on: an
@@ -35,15 +38,18 @@ interface CounterCommand {
 	payload: { amount: number };
 }
 
+type CounterPort = SequencedLiveStatePort<CounterRef, Counter, CounterCommand, Counter, Counter>;
+
 function counter(overrides: Partial<Counter> = {}): Counter {
 	return { id: 7, sequence: 3, total: 10, ...overrides };
 }
 
 const REF: CounterRef = { id: 7, eventId: 1 };
 
-function createPort(
-	overrides: Partial<SequencedLiveStatePort<CounterRef, Counter, CounterCommand, Counter, Counter>> = {},
-): SequencedLiveStatePort<CounterRef, Counter, CounterCommand, Counter, Counter> {
+/** Stands in for the feature's projection write. */
+const PROJECTION = { projection: true } as unknown as BatchItem<'sqlite'>;
+
+function createPort(overrides: Partial<CounterPort> = {}): CounterPort {
 	return {
 		aggregateKind: 'counter',
 		aggregateLabel: 'Counter',
@@ -60,11 +66,29 @@ function createPort(
 			total: command.type === 'Add' ? aggregate.total + command.payload.amount : command.payload.amount,
 		}),
 		casGuard: aggregate => sql`from counters where id = ${aggregate.id} and sequence = ${aggregate.sequence}`,
-		commit: vi.fn(async ({ reduction, nextSequence }) => ({ ...reduction, sequence: nextSequence })),
+		projection: vi.fn(() => PROJECTION),
 		toResult: aggregate => aggregate,
 		publish: vi.fn(async () => {}),
 		...overrides,
 	};
+}
+
+/**
+ * Make the batch behave like a store that honours the compare-and-swap: it
+ * persists exactly what the projection was asked to write, so assertions about
+ * the committed result are assertions about the port's reduction rather than
+ * about a value the test invented.
+ */
+function stageSuccessfulCommit(port: CounterPort): void {
+	mockDb.batch.mockImplementation(async () => {
+		const [input] = vi.mocked(port.projection).mock.calls.at(-1)!;
+		return [[], [], [{ ...input.reduction, sequence: input.nextSequence }]];
+	});
+}
+
+/** The guard did not hold: the projection returns no row. */
+function stageLostRace(): void {
+	mockDb.batch.mockResolvedValue([[], [], []]);
 }
 
 function add(commandId: string, amount: number): CounterCommand {
@@ -82,24 +106,29 @@ describe('sequenced live state', () => {
 	});
 
 	it('commits a command at the next authoritative sequence', async () => {
-		const liveState = createSequencedLiveState(createPort());
+		const port = createPort();
+		stageSuccessfulCommit(port);
+		const liveState = createSequencedLiveState(port);
 
 		const result = await liveState.execute(REF, add('cmd-1', 5));
 
 		expect(result).toMatchObject({ sequence: 4, total: 15 });
 	});
 
-	it('writes the command receipt inside the same atomic commit as the projection', async () => {
+	it('writes the command receipt and the projection as one indivisible batch', async () => {
 		const port = createPort();
+		stageSuccessfulCommit(port);
 		const liveState = createSequencedLiveState(port);
 
 		await liveState.execute(REF, set('cmd-1', 42));
 
-		const [input] = vi.mocked(port.commit).mock.calls[0]!;
-		expect(input.nextSequence).toBe(4);
-		expect(input.receiptStatements.length).toBeGreaterThan(0);
-		// Nothing about the receipt is written outside the feature's own commit.
-		expect(mockDb.batch).not.toHaveBeenCalled();
+		// One batch, receipt statements ahead of the projection — the feature never
+		// gets an opportunity to commit one without the other.
+		expect(mockDb.batch).toHaveBeenCalledOnce();
+		const statements = mockDb.batch.mock.calls[0]![0] as unknown[];
+		expect(statements.length).toBeGreaterThan(1);
+		expect(statements.at(-1)).toBe(PROJECTION);
+		expect(statements.slice(0, -1)).not.toContain(PROJECTION);
 	});
 
 	it('keeps receipt retention bounded by pruning alongside every commit', async () => {
@@ -107,12 +136,11 @@ describe('sequenced live state', () => {
 		expect(Number.isFinite(RETAINED_COMMAND_RECEIPTS)).toBe(true);
 
 		const port = createPort({ load: vi.fn(async () => counter({ sequence: RETAINED_COMMAND_RECEIPTS + 10 })) });
+		stageSuccessfulCommit(port);
 		const liveState = createSequencedLiveState(port);
 
 		await liveState.execute(REF, set('cmd-1', 1));
 
-		const [input] = vi.mocked(port.commit).mock.calls[0]!;
-		expect(input.receiptStatements).toHaveLength(2);
 		expect(mockDb.delete).toHaveBeenCalledOnce();
 	});
 
@@ -128,7 +156,7 @@ describe('sequenced live state', () => {
 			statusCode: 409,
 			message: 'Counter is closed',
 		});
-		expect(port.commit).not.toHaveBeenCalled();
+		expect(mockDb.batch).not.toHaveBeenCalled();
 	});
 
 	it('reports a missing aggregate as not found', async () => {
@@ -153,7 +181,7 @@ describe('sequenced live state', () => {
 		it('answers a retry of the same command with the current authoritative snapshot', async () => {
 			mockDb.query.liveStateCommandReceipts.findFirst.mockResolvedValue({
 				commandType: 'Add',
-				fingerprint: commandFingerprint('Add', { amount: 5 }),
+				contentKey: commandContentKey('Add', { amount: 5 }),
 			});
 			// The aggregate has moved on since the command committed.
 			const port = createPort({ load: vi.fn(async () => counter({ sequence: 9, total: 40 })) });
@@ -162,28 +190,27 @@ describe('sequenced live state', () => {
 			const result = await liveState.execute(REF, add('cmd-1', 5));
 
 			expect(result).toMatchObject({ sequence: 9, total: 40 });
-			expect(port.commit).not.toHaveBeenCalled();
+			expect(mockDb.batch).not.toHaveBeenCalled();
 		});
 
 		it('rejects a command ID reused with different content', async () => {
 			mockDb.query.liveStateCommandReceipts.findFirst.mockResolvedValue({
 				commandType: 'Set',
-				fingerprint: commandFingerprint('Set', { amount: 42 }),
+				contentKey: commandContentKey('Set', { amount: 42 }),
 			});
-			const port = createPort();
-			const liveState = createSequencedLiveState(port);
+			const liveState = createSequencedLiveState(createPort());
 
 			await expect(liveState.execute(REF, set('cmd-1', 43))).rejects.toMatchObject({
 				statusCode: 409,
 				message: 'commandId has already been used for a different command',
 			});
-			expect(port.commit).not.toHaveBeenCalled();
+			expect(mockDb.batch).not.toHaveBeenCalled();
 		});
 
 		it('rejects a command ID reused for a different command type', async () => {
 			mockDb.query.liveStateCommandReceipts.findFirst.mockResolvedValue({
 				commandType: 'Add',
-				fingerprint: commandFingerprint('Add', { amount: 5 }),
+				contentKey: commandContentKey('Add', { amount: 5 }),
 			});
 			const liveState = createSequencedLiveState(createPort());
 
@@ -196,7 +223,7 @@ describe('sequenced live state', () => {
 		it('reports a retry against a vanished aggregate as not found', async () => {
 			mockDb.query.liveStateCommandReceipts.findFirst.mockResolvedValue({
 				commandType: 'Add',
-				fingerprint: commandFingerprint('Add', { amount: 5 }),
+				contentKey: commandContentKey('Add', { amount: 5 }),
 			});
 			const port = createPort({ load: vi.fn(async () => undefined) });
 			const liveState = createSequencedLiveState(port);
@@ -205,16 +232,14 @@ describe('sequenced live state', () => {
 		});
 
 		it('resolves a command ID that lands concurrently as a retry rather than an error', async () => {
-			const port = createPort({
-				commit: vi.fn(async () => {
-					// The receipt's unique index is what turns the race into a failure.
-					mockDb.query.liveStateCommandReceipts.findFirst.mockResolvedValue({
-						commandType: 'Set',
-						fingerprint: commandFingerprint('Set', { amount: 42 }),
-					});
-					throw new Error('UNIQUE constraint failed');
-				}),
-				load: vi.fn(async () => counter({ sequence: 4, total: 42 })),
+			const port = createPort({ load: vi.fn(async () => counter({ sequence: 4, total: 42 })) });
+			mockDb.batch.mockImplementation(async () => {
+				// The receipt's unique index is what turns the race into a failure.
+				mockDb.query.liveStateCommandReceipts.findFirst.mockResolvedValue({
+					commandType: 'Set',
+					contentKey: commandContentKey('Set', { amount: 42 }),
+				});
+				throw new Error('UNIQUE constraint failed');
 			});
 			const liveState = createSequencedLiveState(port);
 
@@ -226,55 +251,59 @@ describe('sequenced live state', () => {
 
 	describe('compare-and-swap conflicts', () => {
 		it('rejects an absolute command that lost the race', async () => {
-			const port = createPort({ commit: vi.fn(async () => undefined) });
-			const liveState = createSequencedLiveState(port);
+			stageLostRace();
+			const liveState = createSequencedLiveState(createPort());
 
 			await expect(liveState.execute(REF, set('cmd-1', 1))).rejects.toMatchObject({
 				statusCode: 409,
 				message: 'Counter 7 state was modified concurrently',
 			});
-			expect(port.commit).toHaveBeenCalledOnce();
+			expect(mockDb.batch).toHaveBeenCalledOnce();
 		});
 
 		it('re-reduces a mergeable command onto the aggregate that won', async () => {
-			const load = vi.fn()
-				.mockResolvedValueOnce(counter({ sequence: 3, total: 10 }))
-				.mockResolvedValueOnce(counter({ sequence: 4, total: 100 }));
-			const commit = vi.fn()
-				.mockResolvedValueOnce(undefined)
-				.mockImplementationOnce(async ({ reduction, nextSequence }: any) => ({ ...reduction, sequence: nextSequence }));
-			const liveState = createSequencedLiveState(createPort({ load, commit }));
+			const port = createPort({
+				load: vi.fn()
+					.mockResolvedValueOnce(counter({ sequence: 3, total: 10 }))
+					.mockResolvedValueOnce(counter({ sequence: 4, total: 100 })),
+			});
+			stageSuccessfulCommit(port);
+			mockDb.batch.mockResolvedValueOnce([[], [], []]);
+			const liveState = createSequencedLiveState(port);
 
 			const result = await liveState.execute(REF, add('cmd-1', 5));
 
 			// The relative intent is preserved: +5 onto the newer total, not the older.
 			expect(result).toMatchObject({ sequence: 5, total: 105 });
-			expect(commit).toHaveBeenCalledTimes(2);
+			expect(mockDb.batch).toHaveBeenCalledTimes(2);
 		});
 
 		it('retries a mergeable command only once', async () => {
-			const load = vi.fn()
-				.mockResolvedValueOnce(counter({ sequence: 3 }))
-				.mockResolvedValueOnce(counter({ sequence: 4 }));
-			const commit = vi.fn(async () => undefined);
-			const liveState = createSequencedLiveState(createPort({ load, commit }));
+			const port = createPort({
+				load: vi.fn()
+					.mockResolvedValueOnce(counter({ sequence: 3 }))
+					.mockResolvedValueOnce(counter({ sequence: 4 })),
+			});
+			stageLostRace();
+			const liveState = createSequencedLiveState(port);
 
 			await expect(liveState.execute(REF, add('cmd-1', 5))).rejects.toMatchObject({ statusCode: 409 });
-			expect(commit).toHaveBeenCalledTimes(2);
+			expect(mockDb.batch).toHaveBeenCalledTimes(2);
 		});
 
 		it('reports the conflict when a mergeable command finds the aggregate unchanged', async () => {
-			const commit = vi.fn(async () => undefined);
-			const liveState = createSequencedLiveState(createPort({ commit }));
+			stageLostRace();
+			const liveState = createSequencedLiveState(createPort());
 
 			await expect(liveState.execute(REF, add('cmd-1', 5))).rejects.toMatchObject({ statusCode: 409 });
-			expect(commit).toHaveBeenCalledOnce();
+			expect(mockDb.batch).toHaveBeenCalledOnce();
 		});
 	});
 
 	describe('post-commit publication', () => {
 		it('announces the result when the caller asks for it', async () => {
 			const port = createPort();
+			stageSuccessfulCommit(port);
 			const liveState = createSequencedLiveState(port);
 
 			await liveState.execute(REF, set('cmd-1', 1), { publish: true, originConnectionId: 'origin-1' });
@@ -284,6 +313,7 @@ describe('sequenced live state', () => {
 
 		it('stays silent for writes that accompany their own notification', async () => {
 			const port = createPort();
+			stageSuccessfulCommit(port);
 			const liveState = createSequencedLiveState(port);
 
 			await liveState.execute(REF, set('cmd-1', 1));
@@ -292,7 +322,8 @@ describe('sequenced live state', () => {
 		});
 
 		it('does not announce a command it refused to commit', async () => {
-			const port = createPort({ commit: vi.fn(async () => undefined) });
+			const port = createPort();
+			stageLostRace();
 			const liveState = createSequencedLiveState(port);
 
 			await expect(liveState.execute(REF, set('cmd-1', 1), { publish: true })).rejects.toMatchObject({ statusCode: 409 });
@@ -300,17 +331,23 @@ describe('sequenced live state', () => {
 		});
 	});
 
-	describe('command fingerprints', () => {
+	describe('command content keys', () => {
 		it('ignores key order so a re-serialized retry still matches', () => {
-			expect(commandFingerprint('Set', { a: 1, b: 2 })).toBe(commandFingerprint('Set', { b: 2, a: 1 }));
+			expect(commandContentKey('Set', { a: 1, b: 2 })).toBe(commandContentKey('Set', { b: 2, a: 1 }));
+		});
+
+		it('orders keys by codepoint so the key never depends on the runtime locale', () => {
+			// A locale-aware comparator sorts these the other way round. The key is
+			// persisted and compared across processes, so the ordering must be fixed.
+			expect(commandContentKey('Set', { a: 1, B: 2 })).toBe('{"payload":{"B":2,"a":1},"type":"Set"}');
 		});
 
 		it('separates commands that differ only by type', () => {
-			expect(commandFingerprint('Set', { amount: 1 })).not.toBe(commandFingerprint('Add', { amount: 1 }));
+			expect(commandContentKey('Set', { amount: 1 })).not.toBe(commandContentKey('Add', { amount: 1 }));
 		});
 
 		it('separates commands that differ only by value', () => {
-			expect(commandFingerprint('Set', { amount: 1 })).not.toBe(commandFingerprint('Set', { amount: 2 }));
+			expect(commandContentKey('Set', { amount: 1 })).not.toBe(commandContentKey('Set', { amount: 2 }));
 		});
 	});
 });

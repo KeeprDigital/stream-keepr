@@ -21,7 +21,7 @@ vi.stubGlobal('createError', (opts: any) => {
 	return err;
 });
 
-const { commandFingerprint } = await import('~~/server/modules/live-state');
+const { commandContentKey } = await import('~~/server/modules/live-state');
 const { applyFeatureMatchSessionEvent, featureMatchStateService } = await import('~~/server/services/featureMatchState');
 
 function createSnapshot(overrides: Partial<FeatureMatchSourceSnapshot> = {}): FeatureMatchSourceSnapshot {
@@ -424,7 +424,7 @@ describe('feature match session state service', () => {
 	it('rejects reuse of a command ID for a different command', async () => {
 		mockDb.query.liveStateCommandReceipts.findFirst.mockResolvedValue({
 			commandType: 'SetLife',
-			fingerprint: commandFingerprint('SetLife', { player: 'player1', lifeTotal: 10 }),
+			contentKey: commandContentKey('SetLife', { player: 'player1', lifeTotal: 10 }),
 		});
 
 		await expect(featureMatchStateService().applyCommand(10, 1, {
@@ -444,7 +444,7 @@ describe('feature match session state service', () => {
 		const latest = createDbSession();
 		mockDb.query.liveStateCommandReceipts.findFirst.mockResolvedValue({
 			commandType: 'StartClock',
-			fingerprint: commandFingerprint('StartClock', {}),
+			contentKey: commandContentKey('StartClock', {}),
 		});
 		mockDb.query.featureMatchSessions.findFirst.mockResolvedValue(latest);
 

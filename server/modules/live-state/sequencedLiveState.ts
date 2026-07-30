@@ -1,8 +1,9 @@
 import type { SQL } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { CommandReceipt } from './receipts';
+import { db } from 'hub:db';
 import { StateConflictError } from '~~/server/utils/errors';
-import { commandFingerprint, commandReceiptStatements, findCommandReceipt } from './receipts';
+import { commandContentKey, commandReceiptStatements, findCommandReceipt } from './receipts';
 
 /** The minimum a command must state to be sequenced. */
 export interface SequencedCommand {
@@ -21,12 +22,10 @@ export interface SequencedLiveStateExecuteOptions {
 	publish?: boolean;
 }
 
-export interface SequencedLiveStateCommitInput<TAggregate, TReduction> {
+export interface SequencedLiveStateProjectionInput<TAggregate, TReduction> {
 	aggregate: TAggregate;
 	reduction: TReduction;
 	nextSequence: number;
-	/** Receipt rows that must land inside the same atomic write as the projection. */
-	receiptStatements: BatchItem<'sqlite'>[];
 }
 
 /**
@@ -65,11 +64,13 @@ export interface SequencedLiveStatePort<TRef, TAggregate, TCommand extends Seque
 	 */
 	casGuard: (aggregate: TAggregate) => SQL;
 	/**
-	 * Atomically write the reduction at `nextSequence` under the same
-	 * compare-and-swap condition, together with the given receipt statements.
-	 * Resolves `undefined` when the condition did not hold.
+	 * The single statement writing the reduction at `nextSequence`, guarded on the
+	 * same compare-and-swap condition and ending in `.returning()` so the module
+	 * can read back the committed aggregate — and detect a lost race from the
+	 * absence of a row. The module composes this with the command receipt into one
+	 * atomic batch; the feature never gets to write the projection on its own.
 	 */
-	commit: (input: SequencedLiveStateCommitInput<TAggregate, TReduction>) => Promise<TAggregate | undefined>;
+	projection: (input: SequencedLiveStateProjectionInput<TAggregate, TReduction>) => BatchItem<'sqlite'>;
 	toResult: (aggregate: TAggregate, commandType: string) => TResult;
 	/** Post-commit realtime notification. */
 	publish?: (result: TResult, originConnectionId?: string) => Promise<void>;
@@ -100,11 +101,11 @@ export function createSequencedLiveState<TRef, TAggregate, TCommand extends Sequ
 	port: SequencedLiveStatePort<TRef, TAggregate, TCommand, TReduction, TResult>,
 ): SequencedLiveState<TRef, TAggregate, TCommand, TResult> {
 	function rejectMismatchedReplay(
-		receipt: { commandType: string; fingerprint: string },
+		receipt: { commandType: string; contentKey: string },
 		command: TCommand,
 	): void {
 		if (receipt.commandType === command.type
-			&& receipt.fingerprint === commandFingerprint(command.type, command.payload)) {
+			&& receipt.contentKey === commandContentKey(command.type, command.payload)) {
 			return;
 		}
 		throw createError({
@@ -126,29 +127,40 @@ export function createSequencedLiveState<TRef, TAggregate, TCommand extends Sequ
 		return latest ? port.toResult(latest, commandType) : undefined;
 	}
 
+	/**
+	 * Write the reduction and its receipt as one indivisible batch.
+	 *
+	 * Assembling the batch here rather than handing statements to the feature is
+	 * what makes the atomicity an enforced invariant instead of a documented one:
+	 * a receipt can never be committed without its projection, nor survive a lost
+	 * compare-and-swap race.
+	 */
 	async function commitOnce(ref: TRef, aggregate: TAggregate, command: TCommand): Promise<TResult> {
 		const nextSequence = port.sequenceOf(aggregate) + 1;
 		const reduction = port.reduce(aggregate, command);
 		const receipt: CommandReceipt = {
 			commandId: command.commandId,
 			commandType: command.type,
-			fingerprint: commandFingerprint(command.type, command.payload),
+			contentKey: commandContentKey(command.type, command.payload),
 			sequence: nextSequence,
 		};
 
 		try {
-			const committed = await port.commit({
-				aggregate,
-				reduction,
-				nextSequence,
-				receiptStatements: commandReceiptStatements({
+			const statements: BatchItem<'sqlite'>[] = [
+				...commandReceiptStatements({
 					aggregateKind: port.aggregateKind,
 					aggregateId: port.aggregateIdOf(ref),
 					eventId: port.eventIdOf(ref),
 					receipt,
 					guard: port.casGuard(aggregate),
 				}),
-			});
+				port.projection({ aggregate, reduction, nextSequence }),
+			];
+			const results = await db.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
+
+			// The projection is the last statement; no returned row means the guard
+			// did not hold and another writer won.
+			const committed = (results.at(-1) as TAggregate[] | undefined)?.[0];
 			if (!committed)
 				throw new StateConflictError(port.aggregateLabel, port.aggregateIdOf(ref));
 

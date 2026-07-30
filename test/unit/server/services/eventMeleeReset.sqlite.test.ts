@@ -78,7 +78,7 @@ describe('eventService Melee config reset SQLite integration', () => {
 			`create table live_state_command_receipts (
 				id integer primary key autoincrement, event_id integer not null,
 				aggregate_kind text not null, aggregate_id integer not null,
-				command_id text not null, command_type text not null, fingerprint text not null,
+				command_id text not null, command_type text not null, content_key text not null,
 				sequence integer not null,
 				created_at integer not null default (unixepoch() * 1000),
 				unique (aggregate_kind, aggregate_id, command_id)
@@ -119,8 +119,8 @@ describe('eventService Melee config reset SQLite integration', () => {
 			args: [JSON.stringify({ old: 'snapshot' }), JSON.stringify({ old: 'state' })],
 		});
 		await client.execute(`insert into live_state_command_receipts (
-			event_id, aggregate_kind, aggregate_id, command_id, command_type, fingerprint, sequence
-		) values (1, 'featureMatchSession', 100, 'old-command', 'SnapshotCorrected', 'old-fingerprint', 7)`);
+			event_id, aggregate_kind, aggregate_id, command_id, command_type, content_key, sequence
+		) values (1, 'featureMatchSession', 100, 'old-command', 'SnapshotCorrected', 'old-content-key', 7)`);
 	});
 
 	afterAll(async () => await client.close());
