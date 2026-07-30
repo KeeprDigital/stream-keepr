@@ -227,6 +227,22 @@ describe('screens extended API', () => {
 		expect(reloaded.modeConfigs['broadcast-graphics']).toEqual({ graphics });
 	});
 
+	it('refuses to delete the authored Broadcast Graphics stack with a null patch', async () => {
+		const graphics = [{ id: 'keep-me', name: 'Keep Me', items: [] }];
+		await $fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
+			method: 'PATCH',
+			body: { graphics },
+		});
+
+		await expect($fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
+			method: 'PATCH',
+			body: { graphics: null },
+		})).rejects.toThrow();
+
+		const reloaded = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
+		expect(reloaded.modeConfigs['broadcast-graphics']).toEqual({ graphics });
+	});
+
 	it('rejects a Broadcast Graphic carrying an unsupported Graphic Item kind', async () => {
 		await expect($fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
 			method: 'PATCH',

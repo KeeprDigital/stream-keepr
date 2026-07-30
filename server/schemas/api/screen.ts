@@ -611,10 +611,18 @@ const graphicItemConfigSchema = z.discriminatedUnion('type', [
 	shapeGraphicItemConfigSchema,
 ]);
 
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC = 100;
+export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
+
 const broadcastGraphicConfigSchema = z.object({
 	id: z.string().min(1).max(100),
 	name: z.string().min(1).max(100),
-	items: z.array(graphicItemConfigSchema).max(100),
+	// Named caps: these are reached before the mode-configuration byte limit, so
+	// the operator learns which cap they hit rather than reading a byte count.
+	items: z.array(graphicItemConfigSchema).max(
+		MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
+		`A Broadcast Graphic must not contain more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC} Graphic Items`,
+	),
 }).strict();
 
 /**
@@ -622,7 +630,10 @@ const broadcastGraphicConfigSchema = z.object({
  * stack of Broadcast Graphics. The Screen's canvas stays in the Screen config.
  */
 export const broadcastGraphicsModeConfigSchema = z.object({
-	graphics: z.array(broadcastGraphicConfigSchema).max(50),
+	graphics: z.array(broadcastGraphicConfigSchema).max(
+		MAX_BROADCAST_GRAPHICS_PER_SCREEN,
+		`A Broadcast Graphics Screen must not carry more than ${MAX_BROADCAST_GRAPHICS_PER_SCREEN} Broadcast Graphics`,
+	),
 }).strict() satisfies z.ZodType<BroadcastGraphicsModeConfig>;
 
 export const metagameModeConfigSchema = z.object({
