@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
-import type { FeatureMatchOverlayWidgetRenderDescriptor } from '~/modules/feature-match-overlay/renderModel';
+import type { FeatureMatchOverlayGraphicGroupChildRenderModel } from '~/modules/feature-match-overlay/renderModel';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import { graphicAssetFontFaceFamily } from '~~/shared/featureMatchOverlayFonts';
-import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
+import { featureMatchOverlayGraphicAssetReferences, screenGraphicAssetReferenceTargetCompatibility } from '~~/shared/utils/graphicsAssetReferences';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 import { resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
 import { featureMatchOverlaySelectionKey, isFeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
-import FeatureMatchOverlayWidget from './Widget.vue';
+import FeatureMatchOverlayMediaGraphicItem from './MediaGraphicItem.vue';
+import FeatureMatchOverlayGraphicItem from './Widget.vue';
 
 const { outputMode, previewGuides, screen } = useScreenContext();
 const resolvedOutput = computed<FeatureMatchOverlayOutput>(() => outputMode?.value ?? 'overlay');
@@ -29,6 +30,12 @@ const fontAssetReferences = computed(() =>
 		.filter(item => item.kind === 'font')
 		.map(item => item.reference),
 );
+const videoTarget = useGraphicsVideoTarget();
+const videoCompatibilityBlocked = computed(() =>
+	indexedGraphicAssetReferences.value.some(reference =>
+		reference.kind === 'silent-video'
+		&& screenGraphicAssetReferenceTargetCompatibility(reference, videoTarget.value).outcome === 'blocked',
+	));
 const {
 	contentUrl: graphicAssetContentUrl,
 	contentUrlsSettled,
@@ -123,9 +130,11 @@ const renderModel = computed(() => resolveFeatureMatchOverlayRenderModel({
 }));
 
 const canvasStyle = computed(() => renderModel.value.canvasStyle);
+const layoutItems = computed(() => renderModel.value.layoutItems);
 const sourceItems = computed(() => renderModel.value.sourceItems);
-const widgetItems = computed(() => renderModel.value.widgetItems);
-const widgetGroups = computed(() => renderModel.value.widgetGroups);
+const mediaItems = computed(() => renderModel.value.mediaItems);
+const graphicItemItems = computed(() => renderModel.value.graphicItemItems);
+const graphicGroups = computed(() => renderModel.value.graphicGroups);
 const sourceCutouts = computed(() => renderModel.value.sourceCutouts);
 const frameImageStyle = computed(() => renderModel.value.frame.imageStyle);
 const frameImagePreserveAspectRatio = computed(() => renderModel.value.frame.imagePreserveAspectRatio);
@@ -157,7 +166,7 @@ function numericStyleValue(value: unknown) {
 	return Number.parseFloat(value) || 0;
 }
 
-function childGuideStyle(group: { x: number; y: number }, child: FeatureMatchOverlayWidgetRenderDescriptor) {
+function childGuideStyle(group: { x: number; y: number }, child: FeatureMatchOverlayGraphicGroupChildRenderModel) {
 	return {
 		left: `${group.x + numericStyleValue(child.style.left)}px`,
 		top: `${group.y + numericStyleValue(child.style.top)}px`,
@@ -217,7 +226,7 @@ onBeforeUnmount(() => {
 		class="feature-match-overlay"
 		:class="`feature-match-overlay--${resolvedOutput}`"
 		:style="{ ...canvasStyle, visibility: fontReady ? undefined : 'hidden' }"
-		:data-export-ready="(!loading && !error && fontReady && !fontError).toString()"
+		:data-export-ready="(!loading && !error && fontReady && !fontError && !videoCompatibilityBlocked).toString()"
 		:data-font-ready="fontReady.toString()"
 		:data-font-error="fontError.toString()"
 	>
@@ -354,7 +363,53 @@ onBeforeUnmount(() => {
 			</g>
 		</svg>
 
-		<div v-for="source in sourceItems" :key="source.item.id" :style="source.style" />
+		<template v-for="layoutItem in layoutItems" :key="layoutItem.item.id">
+			<div
+				v-if="layoutItem.kind === 'source'"
+				:data-graphic-item-id="layoutItem.item.id"
+				:style="layoutItem.style"
+			/>
+			<FeatureMatchOverlayMediaGraphicItem
+				v-else-if="layoutItem.kind === 'media'"
+				:data-graphic-item-id="layoutItem.item.id"
+				:media="layoutItem"
+			/>
+			<div
+				v-else-if="layoutItem.kind === 'graphic-item'"
+				:data-graphic-item-id="layoutItem.item.id"
+				:style="layoutItem.style"
+			>
+				<FeatureMatchOverlayGraphicItem :render="layoutItem.render" :output="resolvedOutput" />
+			</div>
+			<div
+				v-else
+				class="feature-match-overlay-graphic-group"
+				:data-graphic-item-id="layoutItem.item.id"
+				:style="layoutItem.layers.shell"
+			>
+				<div class="feature-match-overlay-graphic-group__backdrop" :style="layoutItem.layers.backdrop" aria-hidden="true" />
+				<div class="feature-match-overlay-graphic-group__children" :style="layoutItem.layers.children">
+					<template
+						v-for="child in layoutItem.children"
+						:key="child.id"
+					>
+						<FeatureMatchOverlayMediaGraphicItem
+							v-if="child.kind === 'media'"
+							class="feature-match-overlay-graphic-group__child"
+							:media="child"
+						/>
+						<div
+							v-else
+							class="feature-match-overlay-graphic-group__child"
+							:style="child.style"
+						>
+							<FeatureMatchOverlayGraphicItem :render="child.render" :output="resolvedOutput" />
+						</div>
+					</template>
+				</div>
+				<div class="feature-match-overlay-graphic-group__frame" :style="layoutItem.layers.frame" aria-hidden="true" />
+			</div>
+		</template>
 
 		<div v-if="showPreviewGuides" class="guide-layer" aria-label="Feature Match Overlay editor selection layer">
 			<button
@@ -366,7 +421,7 @@ onBeforeUnmount(() => {
 			<div
 				v-for="source in sourceItems"
 				:key="`source-guide-${source.item.id}`"
-				class="region-guide region-guide--source"
+				class="graphic-item-guide graphic-item-guide--source"
 				:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: source.item.id }) }"
 				:style="guideStyle(source.item)"
 				role="button"
@@ -379,24 +434,37 @@ onBeforeUnmount(() => {
 				<span>{{ source.item.label }}</span>
 			</div>
 			<div
-				v-for="widget in widgetItems"
-				:key="`widget-guide-${widget.id}`"
-				class="region-guide region-guide--widget"
-				:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: widget.item.id }) }"
-				:style="guideStyle(widget.item)"
+				v-for="graphicItem in graphicItemItems"
+				:key="`graphicItem-guide-${graphicItem.id}`"
+				class="graphic-item-guide graphic-item-guide--graphicItem"
+				:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: graphicItem.item.id }) }"
+				:style="guideStyle(graphicItem.item)"
 				role="button"
 				tabindex="0"
-				:aria-label="`Select ${widget.label}`"
-				@click.stop="selectPreviewTarget({ type: 'layer', itemId: widget.item.id })"
-				@keydown.enter.stop="selectPreviewTarget({ type: 'layer', itemId: widget.item.id })"
-				@keydown.space.prevent.stop="selectPreviewTarget({ type: 'layer', itemId: widget.item.id })"
+				:aria-label="`Select ${graphicItem.label}`"
+				@click.stop="selectPreviewTarget({ type: 'layer', itemId: graphicItem.item.id })"
+				@keydown.enter.stop="selectPreviewTarget({ type: 'layer', itemId: graphicItem.item.id })"
+				@keydown.space.prevent.stop="selectPreviewTarget({ type: 'layer', itemId: graphicItem.item.id })"
 			>
-				<span>{{ widget.label }}</span>
+				<span>{{ graphicItem.label }}</span>
 			</div>
 			<div
-				v-for="group in widgetGroups"
+				v-for="media in mediaItems"
+				:key="`media-guide-${media.item.id}`"
+				class="graphic-item-guide graphic-item-guide--media"
+				:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: media.item.id }) }"
+				:style="guideStyle(media.item)"
+				role="button"
+				tabindex="0"
+				:aria-label="`Select ${media.item.label}`"
+				@click.stop="selectPreviewTarget({ type: 'layer', itemId: media.item.id })"
+			>
+				<span>{{ media.item.label }}</span>
+			</div>
+			<div
+				v-for="group in graphicGroups"
 				:key="`group-guide-${group.item.id}`"
-				class="region-guide region-guide--group"
+				class="graphic-item-guide graphic-item-guide--group"
 				:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: group.item.id }) }"
 				:style="guideStyle(group.item)"
 				role="button"
@@ -408,49 +476,23 @@ onBeforeUnmount(() => {
 			>
 				<span>{{ group.item.label }}</span>
 			</div>
-			<template v-for="group in widgetGroups" :key="`group-widget-guides-${group.item.id}`">
+			<template v-for="group in graphicGroups" :key="`group-graphicItem-guides-${group.item.id}`">
 				<div
 					v-for="child in group.children"
 					:key="`child-guide-${group.item.id}-${child.id}`"
-					class="region-guide region-guide--child"
-					:class="{ 'is-selected': isPreviewTargetSelected({ type: 'widget', itemId: group.item.id, childId: child.id }) }"
+					class="graphic-item-guide graphic-item-guide--child"
+					:class="{ 'is-selected': isPreviewTargetSelected({ type: 'graphic-item', itemId: group.item.id, childId: child.id }) }"
 					:style="childGuideStyle(group.item, child)"
 					role="button"
 					tabindex="0"
 					:aria-label="`Select ${child.label}`"
-					@click.stop="selectPreviewTarget({ type: 'widget', itemId: group.item.id, childId: child.id })"
-					@keydown.enter.stop="selectPreviewTarget({ type: 'widget', itemId: group.item.id, childId: child.id })"
-					@keydown.space.prevent.stop="selectPreviewTarget({ type: 'widget', itemId: group.item.id, childId: child.id })"
+					@click.stop="selectPreviewTarget({ type: 'graphic-item', itemId: group.item.id, childId: child.id })"
+					@keydown.enter.stop="selectPreviewTarget({ type: 'graphic-item', itemId: group.item.id, childId: child.id })"
+					@keydown.space.prevent.stop="selectPreviewTarget({ type: 'graphic-item', itemId: group.item.id, childId: child.id })"
 				>
 					<span>{{ child.label }}</span>
 				</div>
 			</template>
-		</div>
-
-		<template v-for="widget in widgetItems" :key="widget.id">
-			<div :style="widget.style">
-				<FeatureMatchOverlayWidget :render="widget.render" :output="resolvedOutput" />
-			</div>
-		</template>
-
-		<div
-			v-for="group in widgetGroups"
-			:key="group.item.id"
-			class="feature-match-overlay-widget-group"
-			:style="group.layers.shell"
-		>
-			<div class="feature-match-overlay-widget-group__backdrop" :style="group.layers.backdrop" aria-hidden="true" />
-			<div class="feature-match-overlay-widget-group__children" :style="group.layers.children">
-				<div
-					v-for="child in group.children"
-					:key="child.id"
-					class="feature-match-overlay-widget-group__child"
-					:style="child.style"
-				>
-					<FeatureMatchOverlayWidget :render="child.render" :output="resolvedOutput" />
-				</div>
-			</div>
-			<div class="feature-match-overlay-widget-group__frame" :style="group.layers.frame" aria-hidden="true" />
 		</div>
 	</div>
 </template>
@@ -485,7 +527,7 @@ onBeforeUnmount(() => {
 	cursor: default;
 }
 
-.region-guide {
+.graphic-item-guide {
 	position: absolute;
 	box-sizing: border-box;
 	border: 2px dashed rgba(255, 255, 255, 0.9);
@@ -494,24 +536,24 @@ onBeforeUnmount(() => {
 	cursor: pointer;
 }
 
-.region-guide--source {
+.graphic-item-guide--source {
 	border-color: rgba(56, 189, 248, 0.95);
 }
 
-.region-guide--widget {
+.graphic-item-guide--graphicItem {
 	border-color: rgba(250, 204, 21, 0.95);
 }
 
-.region-guide--group {
+.graphic-item-guide--group {
 	border-color: rgba(34, 197, 94, 0.95);
 }
 
-.region-guide--child {
+.graphic-item-guide--child {
 	border-color: rgba(168, 85, 247, 0.95);
 	background: rgba(168, 85, 247, 0.12);
 }
 
-.region-guide span {
+.graphic-item-guide span {
 	position: absolute;
 	left: 0;
 	top: 0;
@@ -526,7 +568,7 @@ onBeforeUnmount(() => {
 	text-overflow: ellipsis;
 }
 
-.region-guide.is-selected {
+.graphic-item-guide.is-selected {
 	border-style: solid;
 	border-color: #fff;
 	background: rgba(255, 255, 255, 0.18);

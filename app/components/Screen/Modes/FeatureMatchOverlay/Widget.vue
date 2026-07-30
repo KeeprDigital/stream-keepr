@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
-import type { FeatureMatchOverlayWidgetRender } from '~/modules/feature-match-overlay/renderModel';
-import FeatureMatchOverlayGameWinsWidget from './GameWinsWidget.vue';
-import FeatureMatchOverlayStatusWidget from './StatusWidget.vue';
+import type { FeatureMatchOverlayGraphicItemRender } from '~/modules/feature-match-overlay/renderModel';
+import FeatureMatchOverlayGameWinsGraphicItem from './GameWinsWidget.vue';
+import FeatureMatchOverlayStatusGraphicItem from './StatusWidget.vue';
 import FeatureMatchOverlayTemplateLines from './TemplateLines.vue';
 
 const props = defineProps<{
-	render: FeatureMatchOverlayWidgetRender;
+	render: FeatureMatchOverlayGraphicItemRender;
 	output: FeatureMatchOverlayOutput;
 }>();
 
@@ -25,21 +25,15 @@ function gameWinBoxStyle(won: boolean) {
 		:deck-colors="render.deckColors"
 		:output="output"
 	/>
-	<img
-		v-else-if="render.type === 'image'"
-		:src="render.src"
-		:alt="render.alt"
-		:style="render.imageStyle"
-	>
 	<span v-else-if="render.type === 'clock'">{{ render.displayTime }}</span>
-	<FeatureMatchOverlayStatusWidget
+	<FeatureMatchOverlayStatusGraphicItem
 		v-else-if="render.type === 'player-life'"
 		:life-total="render.lifeTotal"
 		:animation="render.animation"
 		:duration-ms="render.durationMs"
 		:accent-color="render.accentColor"
 	/>
-	<FeatureMatchOverlayGameWinsWidget
+	<FeatureMatchOverlayGameWinsGraphicItem
 		v-else-if="render.type === 'game-wins'"
 		:boxes="render.boxes"
 		:wins="render.wins"

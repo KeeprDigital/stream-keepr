@@ -7,9 +7,9 @@ async function mountComponent(props: {
 	displayMode?: 'boxes' | 'number';
 }) {
 	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/GameWinsWidget.vue';
-	const { default: GameWinsWidget } = await import(componentPath);
+	const { default: GameWinsGraphicItem } = await import(componentPath);
 
-	return mount(GameWinsWidget, {
+	return mount(GameWinsGraphicItem, {
 		props: {
 			...props,
 			boxStyle: (won: boolean) => ({
@@ -21,7 +21,7 @@ async function mountComponent(props: {
 	});
 }
 
-describe('featureMatchOverlayGameWinsWidget', () => {
+describe('feature Match Overlay Game Wins Graphic Item', () => {
 	it('renders boxes by default', async () => {
 		const wrapper = await mountComponent({ boxes: [true, false, false], wins: 1 });
 
@@ -34,6 +34,6 @@ describe('featureMatchOverlayGameWinsWidget', () => {
 
 		expect(wrapper.findAll('.game-win-box')).toHaveLength(0);
 		expect(wrapper.get('.game-wins-number').text()).toBe('1');
-		expect(wrapper.get('.game-wins-widget').classes()).toContain('game-wins-widget--number');
+		expect(wrapper.get('.game-wins-graphic-item').classes()).toContain('game-wins-graphic-item--number');
 	});
 });

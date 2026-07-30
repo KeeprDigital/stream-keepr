@@ -73,7 +73,7 @@ const PreviewOutputAsideStub = defineComponent({
 		publicationBlockReason: { type: String, required: false },
 	},
 	emits: ['selectTarget'],
-	template: '<button data-testid="preview-output-aside" :data-selected="JSON.stringify(selectedTarget)" :data-config="JSON.stringify(config)" :data-publication-blocked="String(publicationBlocked)" :title="publicationBlockReason" @click="$emit(\'selectTarget\', { type: \'widget\', itemId: \'top-bar\', childId: \'top-name-record\' })" />',
+	template: '<button data-testid="preview-output-aside" :data-selected="JSON.stringify(selectedTarget)" :data-config="JSON.stringify(config)" :data-publication-blocked="String(publicationBlocked)" :title="publicationBlockReason" @click="$emit(\'selectTarget\', { type: \'graphic-item\', itemId: \'top-bar\', childId: \'top-name-record\' })" />',
 });
 
 const UFormFieldStub = defineComponent({
@@ -165,8 +165,8 @@ describe('featureMatchOverlaySettings', () => {
 		await wrapper.get('[data-testid="preview-output-aside"]').trigger('click');
 		await nextTick();
 
-		expect(selectedTarget(wrapper)).toEqual({ type: 'widget', itemId: 'top-bar', childId: 'top-name-record' });
-		expect(previewSelectedTarget(wrapper)).toEqual({ type: 'widget', itemId: 'top-bar', childId: 'top-name-record' });
+		expect(selectedTarget(wrapper)).toEqual({ type: 'graphic-item', itemId: 'top-bar', childId: 'top-name-record' });
+		expect(previewSelectedTarget(wrapper)).toEqual({ type: 'graphic-item', itemId: 'top-bar', childId: 'top-name-record' });
 		expect(previewConfig(wrapper).presetId).toBe(mockConfig.value.presetId);
 	});
 

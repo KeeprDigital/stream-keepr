@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>silent-video-v1 browser acceptance</title>
+	</head>
+	<body data-result="running">
+		<pre id="result">Running representative silent-video playback…</pre>
+		<script type="module">
+			const fixtures = [
+				{
+					label: 'H.264/AVC MP4',
+					mime: 'video/mp4',
+					base64: 'AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMNbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAA+gAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAjd0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAA+gAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAABAAAAAQAAAAAAHTbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAQABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABfm1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAT5zdGJsAAAAvnN0c2QAAAAAAAAAAQAAAK5hdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAABAAEABIAAAASAAAAAAAAAABFUxhdmM2Mi4yOC4xMDIgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAANGF2Y0MBZAAK/+EAF2dkAAqs2V7ARAAAAwAEAAADABA8SJZYAQAGaOvjyyLA/fj4AAAAABBwYXNwAAAAAQAAAAEAAAAUYnRydAAAAAAAABa4AAAAAAAAABhzdHRzAAAAAAAAAAEAAAACAAAgAAAAABRzdHNzAAAAAAAAAAEAAAABAAAAHHN0c2MAAAAAAAAAAQAAAAEAAAACAAAAAQAAABxzdHN6AAAAAAAAAAAAAAACAAACywAAAAwAAAAUc3RjbwAAAAAAAAABAAADPQAAAGJ1ZHRhAAAAWm1ldGEAAAAAAAAAIWhkbHIAAAAAAAAAAG1kaXJhcHBsAAAAAAAAAAAAAAAALWlsc3QAAAAlqXRvbwAAAB1kYXRhAAAAAQAAAABMYXZmNjIuMTIuMTAyAAAACGZyZWUAAALfbWRhdAAAAq0GBf//qdxF6b3m2Ui3lizYINkj7u94MjY0IC0gY29yZSAxNjUgcjMyMjIgYjM1NjA1YSAtIEguMjY0L01QRUctNCBBVkMgY29kZWMgLSBDb3B5bGVmdCAyMDAzLTIwMjUgLSBodHRwOi8vd3d3LnZpZGVvbGFuLm9yZy94MjY0Lmh0bWwgLSBvcHRpb25zOiBjYWJhYz0xIHJlZj0zIGRlYmxvY2s9MTowOjAgYW5hbHlzZT0weDM6MHgxMTMgbWU9aGV4IHN1Ym1lPTcgcHN5PTEgcHN5X3JkPTEuMDA6MC4wMCBtaXhlZF9yZWY9MSBtZV9yYW5nZT0xNiBjaHJvbWFfbWU9MSB0cmVsbGlzPTEgOHg4ZGN0PTEgY3FtPTAgZGVhZHpvbmU9MjEsMTEgZmFzdF9wc2tpcD0xIGNocm9tYV9xcF9vZmZzZXQ9LTIgdGhyZWFkcz0xIGxvb2thaGVhZF90aHJlYWRzPTEgc2xpY2VkX3RocmVhZHM9MCBucj0wIGRlY2ltYXRlPTEgaW50ZXJsYWNlZD0wIGJsdXJheV9jb21wYXQ9MCBjb25zdHJhaW5lZF9pbnRyYT0wIGJmcmFtZXM9MyBiX3B5cmFtaWQ9MiBiX2FkYXB0PTEgYl9iaWFzPTAgZGlyZWN0PTEgd2VpZ2h0Yj0xIG9wZW5fZ29wPTAgd2VpZ2h0cD0yIGtleWludD0yNTAga2V5aW50X21pbj0yIHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9NDAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAAAFmWIhAAU//7s2n4FNj3X58U0N7WUtoEAAAAIQZohbEEv/uA=',
+				},
+				{
+					label: 'VP9 WebM',
+					mime: 'video/webm',
+					base64: 'GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAIMEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggElTbuMU6uEHFO7a1OsggH27AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjIuMTIuMTAyV0GNTGF2ZjYyLjEyLjEwMkSJiECPQAAAAAAAFlSua8iuAQAAAAAAAD/XgQFzxYhkRqj8GKbqBJyBACK1nIN1bmSIgQCGhVZfVlA5g4EBI+ODhB3NZQDgkLCBELqBEJqBAlWwhFW5gQESVMNnQIBzc6BjwIBnyJpFo4dFTkNPREVSRIeNTGF2ZjYyLjEyLjEwMnNz2mPAi2PFiGRGqPwYpuoEZ8ilRaOHRU5DT0RFUkSHmExhdmM2Mi4yOC4xMDIgbGlidnB4LXZwOWfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAB9DtnXG54EAo6yBAACAgkmDQgAA8AD2ADgkHBhCAAAwcAAASqf/+5CBv///CAg////7iYcAAKOTgQH0AIYAQJKcAElAAAMgAABCQBxTu2uRu4+zgQC3iveBAfGCAavwgQM=',
+				},
+				{
+					label: 'VP9-alpha WebM',
+					mime: 'video/webm',
+					alpha: true,
+					base64: 'GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAJXEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggEpTbuMU6uEHFO7a1OsggJB7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjIuMTIuMTAyV0GNTGF2ZjYyLjEyLjEwMkSJiECPQAAAAAAAFlSua8yuAQAAAAAAAEPXgQFzxYhfhVpZqI8eM5yBACK1nIN1bmSIgQCGhVZfVlA5g4EBI+ODhB3NZQDglLCBELqBEJqBAlPAgQFVsIRVuYEBElTDZ0CAc3OgY8CAZ8iaRaOHRU5DT0RFUkSHjUxhdmY2Mi4xMi4xMDJzc9pjwItjxYhfhVpZqI8eM2fIpUWjh0VOQ09ERVJEh5hMYXZjNjIuMjguMTAyIGxpYnZweC12cDlnyKFFo4hEVVJBVElPTkSHkzAwOjAwOjAxLjAwMDAwMDAwMAAfQ7Z1QIzngQCg06GrgQAAAIJJg0IAAPAA9gA4JBwYSgAAMGAAABC///cdr////1/f////8irAAHWho6ah7oEBpZyCSYNCAADwAPYAOCQcGEoAADBgAAAQv//6ocAAoLKhk4EB9ACGAECSnABQAAADIAAAQkB1oZamlO6BAaWPhgBAkpwAUAAAAyAAAEJA+4L+DBxTu2uRu4+zgQC3iveBAfGCAa/wgQM=',
+				},
+			];
+
+			function fixtureBlob(fixture) {
+				const binary = atob(fixture.base64);
+				return new Blob(
+					[Uint8Array.from(binary, character => character.charCodeAt(0))],
+					{ type: fixture.mime },
+				);
+			}
+
+			async function verify(fixture) {
+				const url = URL.createObjectURL(fixtureBlob(fixture));
+				const video = document.createElement('video');
+				video.muted = true;
+				video.playsInline = true;
+				video.preload = 'auto';
+				document.body.appendChild(video);
+				try {
+					video.src = url;
+					await new Promise((resolve, reject) => {
+						video.addEventListener('loadedmetadata', resolve, { once: true });
+						video.addEventListener('error', () => reject(new Error(`${fixture.label} metadata failed.`)), { once: true });
+					});
+					await video.play();
+					video.pause();
+					await new Promise((resolve, reject) => {
+						video.addEventListener('seeked', resolve, { once: true });
+						video.addEventListener('error', () => reject(new Error(`${fixture.label} seek failed.`)), { once: true });
+						video.currentTime = 0.1;
+					});
+					if (video.videoWidth !== 16 || video.videoHeight !== 16)
+						throw new Error(`${fixture.label} dimensions were not 16 × 16.`);
+					if (fixture.alpha) {
+						const canvas = document.createElement('canvas');
+						canvas.width = 16;
+						canvas.height = 16;
+						const context = canvas.getContext('2d', { alpha: true, willReadFrequently: true });
+						context.clearRect(0, 0, 16, 16);
+						context.drawImage(video, 0, 0);
+						const pixels = context.getImageData(0, 0, 16, 16).data;
+						if (![...pixels].filter((_, index) => index % 4 === 3).some(alpha => alpha < 255))
+							throw new Error('Chromium did not preserve VP9 transparency.');
+					}
+				}
+				finally {
+					video.remove();
+					URL.revokeObjectURL(url);
+				}
+			}
+
+			try {
+				for (const fixture of fixtures)
+					await verify(fixture);
+				document.body.dataset.result = 'passed';
+				document.querySelector('#result').textContent = 'H.264 MP4, VP9 WebM, and VP9-alpha WebM played and sought in Chromium.';
+			}
+			catch (error) {
+				document.body.dataset.result = 'failed';
+				document.querySelector('#result').textContent = error instanceof Error ? error.message : String(error);
+			}
+		</script>
+	</body>
+</html>
