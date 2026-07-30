@@ -127,6 +127,13 @@
       "when": 1785407975932,
       "tag": "0017_flippant_dakota_north",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1785422476657,
+      "tag": "0018_powerful_machine_man",
+      "breakpoints": true
     }
   ]
 }

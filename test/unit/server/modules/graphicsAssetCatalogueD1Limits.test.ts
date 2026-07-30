@@ -88,4 +88,142 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 			),
 		})).resolves.toEqual([]);
 	});
+
+	/**
+	 * A Template Package carries up to a hundred packaged revisions, and its
+	 * publication writes contents, assets, revisions, origins, derivatives,
+	 * associations, and references for every one of them in a single batch. That
+	 * is the largest list the module ever binds, and the settled limit sits
+	 * exactly at the parameter ceiling, so it is worth proving against real D1
+	 * rather than inferring.
+	 */
+	describe('a Template Package installation at the settled revision limit', () => {
+		const PACKAGED_REVISION_LIMIT = 100;
+
+		function identity(prefix: string, index: number) {
+			return `${prefix}-${`${index}`.padStart(4, '0')}`;
+		}
+
+		async function seedOperation(operationId: string, updatedAt: number) {
+			await harness.database.prepare(`
+				INSERT INTO graphics_ingestion_operations (
+					id, idempotency_key, source, stage, initiated_by, proposed_name,
+					duplicate_content_policy, declared_byte_length, transferred_byte_length,
+					created_at, updated_at
+				) VALUES (?, ?, 'template-package', 'publishing', 'installer', 'Package',
+					'create-separate', 1, 1, ?, ?)
+			`).bind(operationId, operationId, updatedAt, updatedAt).run();
+			return {
+				id: operationId as never,
+				idempotencyKey: operationId,
+				source: 'template-package' as const,
+				initiatedBy: 'installer',
+				name: 'Package',
+				duplicateContentPolicy: 'create-separate' as const,
+				declaredByteLength: 1,
+				transferredByteLength: 1,
+				stage: 'publishing' as const,
+				createdAt: new Date(updatedAt).toISOString(),
+				updatedAt: new Date(updatedAt).toISOString(),
+			};
+		}
+
+		function createdAsset(index: number) {
+			const sourceDigest = `a${index}`.padStart(64, '0');
+			const thumbnailDigest = `b${index}`.padStart(64, '0');
+			return {
+				packagedId: identity('packaged', index),
+				basis: 'new-content' as const,
+				assetId: identity('asset', index) as never,
+				revisionId: identity('revision', index) as never,
+				derivativeId: identity('derivative', index) as never,
+				name: `Asset ${index}`,
+				kind: 'image' as const,
+				sourceDigest,
+				sourceByteLength: 70,
+				canonicalMime: 'image/png' as const,
+				compatibilityProfile: 'still-image-v1',
+				facts: { kind: 'image', sha256: sourceDigest, byteLength: 70 } as never,
+				derivativeKind: 'thumbnail' as const,
+				thumbnailDigest,
+				thumbnailByteLength: 90,
+				origin: {
+					sourceAssetId: identity('source-asset', index) as never,
+					sourceRevisionId: identity('source-revision', index) as never,
+					sourceRevisionNumber: 1,
+					digest: sourceDigest,
+				},
+			};
+		}
+
+		it('publishes a hundred created identities and their references at once', async () => {
+			const catalogue = createD1GraphicsAssetCatalogue(harness.database);
+			const operation = await seedOperation('operation-created', 1_000);
+			const created = Array.from({ length: PACKAGED_REVISION_LIMIT }, (_, index) =>
+				createdAsset(index));
+
+			const completed = await catalogue.installTemplatePackage({
+				operation,
+				template: {
+					id: 'template-created' as never,
+					kind: 'broadcast-graphic',
+					name: 'Big package',
+					document: { installed: true },
+					sourceTemplateIdentity: 'source-template',
+				},
+				created,
+				reused: [],
+				references: created.map((asset, index) => ({
+					id: identity('reference', index),
+					ownerSlot: `items[${index}].media`,
+					assetId: asset.assetId,
+					revisionId: asset.revisionId,
+				})),
+				publishedAt: new Date(2_000).toISOString(),
+			});
+
+			expect(completed.stage).toBe('completed');
+			const template = await catalogue.findInstalledGraphicsTemplate('template-created' as never);
+			expect(template?.references).toHaveLength(PACKAGED_REVISION_LIMIT);
+		});
+
+		it('publishes a hundred exact-origin reuses at once', async () => {
+			const catalogue = createD1GraphicsAssetCatalogue(harness.database);
+			// The reused identities are the ones the previous installation created,
+			// so the guard's own lists are as long as a package can make them.
+			const operation = await seedOperation('operation-reused', 3_000);
+			const reused = Array.from({ length: PACKAGED_REVISION_LIMIT }, (_, index) => ({
+				packagedId: identity('packaged', index),
+				assetId: identity('asset', index) as never,
+				revisionId: identity('revision', index) as never,
+				name: `Asset ${index}`,
+				kind: 'image' as const,
+				compatibilityProfile: 'still-image-v1',
+			}));
+
+			const completed = await catalogue.installTemplatePackage({
+				operation,
+				template: {
+					id: 'template-reused' as never,
+					kind: 'broadcast-graphic',
+					name: 'Big package again',
+					document: { installed: true },
+					sourceTemplateIdentity: 'source-template',
+				},
+				created: [],
+				reused,
+				references: reused.map((asset, index) => ({
+					id: identity('reused-reference', index),
+					ownerSlot: `items[${index}].media`,
+					assetId: asset.assetId,
+					revisionId: asset.revisionId,
+				})),
+				publishedAt: new Date(4_000).toISOString(),
+			});
+
+			expect(completed.stage).toBe('completed');
+			const template = await catalogue.findInstalledGraphicsTemplate('template-reused' as never);
+			expect(template?.references).toHaveLength(PACKAGED_REVISION_LIMIT);
+		});
+	});
 });

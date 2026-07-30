@@ -6,6 +6,8 @@ import type {
 	GraphicsAssetLibraryCapacity,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
+	InstalledGraphicsTemplate,
+	InstalledGraphicsTemplateId,
 } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicsAssetCatalogue,
@@ -19,24 +21,13 @@ import {
 } from '~~/shared/types/graphicsAsset';
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
-import {
-	MAX_SILENT_VIDEO_POSTER_BYTES,
-	SILENT_VIDEO_COMPATIBILITY_PROFILE,
-	STATIC_FONT_COMPATIBILITY_PROFILE,
-	STILL_IMAGE_COMPATIBILITY_PROFILE,
-} from '~~/shared/utils/graphicsAssetCompatibility';
+import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GraphicsAssetLibraryError } from './errors';
 import {
 	graphicsMultipartCompletedByteLength,
 	graphicsMultipartTransfer,
 } from './multipart';
 import { completedGraphicAssetReplacementOperation } from './operation';
-
-const COMPATIBILITY_PROFILES = {
-	'image': STILL_IMAGE_COMPATIBILITY_PROFILE,
-	'silent-video': SILENT_VIDEO_COMPATIBILITY_PROFILE,
-	'font': STATIC_FONT_COMPATIBILITY_PROFILE,
-} as const satisfies Record<GraphicAsset['kind'], string>;
 
 function stagingReservationBytes(operation: GraphicsIngestionOperation) {
 	return operation.declaredByteLength
@@ -61,6 +52,13 @@ export function createInMemoryGraphicsAssetCatalogue(
 		assetId: GraphicAssetId;
 		revisionNumber: number;
 		facts: GraphicAsset['facts'];
+		/**
+		 * The profile this exact revision was accepted under, which is not derivable
+		 * from its media kind: a packaged font installs under the unattested profile
+		 * because no browser loaded it here, and reusing that revision must keep
+		 * saying so.
+		 */
+		compatibilityProfile: string;
 		thumbnailDigest: string;
 	}>();
 	const thumbnailDigests = new Map<GraphicAssetId, string>();
@@ -77,6 +75,22 @@ export function createInMemoryGraphicsAssetCatalogue(
 	>();
 	const multipartStates = new Map<GraphicsIngestionOperationId, GraphicsAssetMultipartState>();
 	const packagePreflights = new Map<GraphicsIngestionOperationId, TemplatePackagePreflightState>();
+	/**
+	 * Graphic Asset Origin by local revision. Template Package installation is its
+	 * only writer, and recognising a later import is its only reader, so the
+	 * double keeps the same shape the catalogue does: immutable, at most one per
+	 * revision, never inherited by a revision created afterwards.
+	 */
+	const origins = new Map<GraphicAssetRevisionId, {
+		assetId: GraphicAssetId;
+		sourceAssetId: string;
+		sourceRevisionId: string;
+		sourceRevisionNumber: number;
+		digest: string;
+	}>();
+	const installedTemplates = new Map<InstalledGraphicsTemplateId, InstalledGraphicsTemplate>();
+	/** Persisted Graphic Asset References, which are the authoritative usage. */
+	const references = new Map<string, GraphicAssetUsage>();
 	const usage = options.usage ?? [];
 	let canonicalLimitBytes = options.canonicalLimitBytes ?? DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES;
 	let stagingLimitBytes = options.stagingLimitBytes ?? DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES;
@@ -105,6 +119,14 @@ export function createInMemoryGraphicsAssetCatalogue(
 
 	function sum(values: Iterable<number>) {
 		return [...values].reduce((total, value) => total + value, 0);
+	}
+
+	/**
+	 * Everything pinning a Graphic Asset: the usage a test injected, plus every
+	 * reference an installed Template actually persisted.
+	 */
+	function allUsage(): GraphicAssetUsage[] {
+		return [...usage, ...references.values()];
 	}
 
 	function releaseCapacity(operationId: GraphicsIngestionOperationId) {
@@ -425,32 +447,264 @@ export function createInMemoryGraphicsAssetCatalogue(
 			return true;
 		},
 		async findTemplatePackageOriginCandidates(input) {
-			// This double has no Graphic Asset Origin storage, so it answers from
-			// local identities alone: a package exported from this installation
-			// names its revisions directly. Recording an origin belongs to Template
-			// Package installation, which is the only writer of that state.
-			const exactRevision = revisions.get(input.sourceRevisionId as GraphicAssetRevisionId);
-			const exactAsset = exactRevision?.assetId === input.sourceAssetId
-				? assets.get(exactRevision.assetId)
+			// A package can name a source this installation already holds in two
+			// ways: it was exported from here, so the source identity is a local
+			// identity; or it was imported here before, so a local revision records
+			// that source as its Graphic Asset Origin. Both are the same exact
+			// provenance and both reuse the same local revision.
+			const localRevision = revisions.get(input.sourceRevisionId as GraphicAssetRevisionId);
+			const localMatch = localRevision?.assetId === input.sourceAssetId
+				? { revisionId: input.sourceRevisionId as GraphicAssetRevisionId, revision: localRevision }
 				: undefined;
+			const importedMatch = [...origins.entries()]
+				.filter(([, origin]) =>
+					origin.sourceAssetId === input.sourceAssetId
+					&& origin.sourceRevisionId === input.sourceRevisionId,
+				)
+				.map(([revisionId]) => ({ revisionId, revision: revisions.get(revisionId) }))
+				.find((candidate): candidate is {
+					revisionId: GraphicAssetRevisionId;
+					revision: NonNullable<ReturnType<typeof revisions.get>>;
+				} => candidate.revision !== undefined);
+			const exactMatch = localMatch ?? importedMatch;
+			const exactAsset = exactMatch ? assets.get(exactMatch.revision.assetId) : undefined;
 			const relatedRevisionExists = [...revisions.entries()].some(
 				([revisionId, candidate]) =>
 					candidate.assetId === input.sourceAssetId
 					&& revisionId !== input.sourceRevisionId,
+			) || [...origins.values()].some(origin =>
+				origin.sourceAssetId === input.sourceAssetId
+				&& origin.sourceRevisionId !== input.sourceRevisionId,
 			);
 			return {
-				exact: exactAsset && exactRevision
+				exact: exactAsset && exactMatch
 					? {
 							reference: {
 								assetId: exactAsset.id,
-								revisionId: input.sourceRevisionId as GraphicAssetRevisionId,
+								revisionId: exactMatch.revisionId,
 							},
-							digest: exactRevision.facts.sha256,
+							digest: exactMatch.revision.facts.sha256,
 							name: exactAsset.name,
 						}
 					: undefined,
 				relatedRevisionExists,
 			};
+		},
+		async reserveTemplatePackagePublication(input) {
+			const existing = operations.get(input.operation.id);
+			if (
+				!existing
+				|| existing.stage !== 'generating-derivatives'
+				|| existing.updatedAt !== input.operation.updatedAt
+			) {
+				throw new Error('Graphics Ingestion Operation is not ready to reserve canonical capacity');
+			}
+			const growthBytes = Math.max(0, input.growthBytes);
+			const ownReservedBytes = canonicalReservations.get(input.operation.id) ?? 0;
+			const before = getCapacity();
+			const availableBytes = before.canonical.availableBytes + ownReservedBytes;
+			if (growthBytes > availableBytes) {
+				return {
+					outcome: 'blocked' as const,
+					capacity: {
+						resource: 'canonical' as const,
+						limitBytes: before.canonical.limitBytes,
+						usedBytes: before.canonical.usedBytes,
+						reservedBytes: before.canonical.reservedBytes - ownReservedBytes,
+						requestedBytes: growthBytes,
+						availableBytes,
+					},
+				};
+			}
+			canonicalReservations.set(input.operation.id, growthBytes);
+			const reserved: GraphicsIngestionOperation = {
+				...existing,
+				canonicalCapacityOutcome: growthBytes === 0
+					? {
+							outcome: 'no-canonical-growth',
+							growthBytes: 0,
+							availableBytes,
+						}
+					: {
+							outcome: 'canonical-growth-reserved',
+							growthBytes,
+							availableBytes: Math.max(0, availableBytes - growthBytes),
+						},
+				updatedAt: input.reservedAt,
+			};
+			operations.set(reserved.id, cloneOperation(reserved));
+			return { outcome: 'reserved' as const, operation: cloneOperation(reserved) };
+		},
+		async installTemplatePackage(input) {
+			const existing = operations.get(input.operation.id);
+			if (!existing)
+				throw new Error('Graphics Ingestion Operation not found');
+			if (existing.stage === 'cancelled' || existing.stage === 'completed')
+				return cloneOperation(existing);
+			if (existing.stage !== 'publishing')
+				throw new Error('Graphics Ingestion Operation is not ready to publish');
+			if (existing.updatedAt !== input.operation.updatedAt)
+				throw new Error('Graphics Ingestion Operation publication lost its claim');
+			// The same single condition the D1 batch commits against: an exact-origin
+			// reuse whose asset or revision moved underneath this installation
+			// publishes nothing at all rather than pinning a reference the library no
+			// longer allows.
+			for (const asset of input.reused) {
+				if (
+					assets.get(asset.assetId)?.lifecycle.state !== 'active'
+					|| revisions.get(asset.revisionId)?.assetId !== asset.assetId
+				) {
+					throw new Error('Template Package installation lost an exact-origin revision it reuses');
+				}
+			}
+
+			const publishedAt = input.publishedAt;
+			for (const asset of input.created) {
+				assets.set(asset.assetId, {
+					id: asset.assetId,
+					name: asset.name,
+					kind: asset.kind,
+					revisionId: asset.revisionId,
+					revisionNumber: 1,
+					revisions: [{
+						id: asset.revisionId,
+						revisionNumber: 1,
+						facts: asset.facts,
+					}],
+					facts: asset.facts,
+					eventIds: input.operation.defaultEventId === undefined
+						? []
+						: [input.operation.defaultEventId],
+					lifecycle: { state: 'active' },
+					// Filled in below, once the terminal result exists.
+					operation: cloneOperation(existing),
+				});
+				revisions.set(asset.revisionId, {
+					assetId: asset.assetId,
+					revisionNumber: 1,
+					facts: asset.facts,
+					compatibilityProfile: asset.compatibilityProfile,
+					thumbnailDigest: asset.thumbnailDigest,
+				});
+				origins.set(asset.revisionId, {
+					assetId: asset.assetId,
+					sourceAssetId: asset.origin.sourceAssetId,
+					sourceRevisionId: asset.origin.sourceRevisionId,
+					sourceRevisionNumber: asset.origin.sourceRevisionNumber,
+					digest: asset.origin.digest,
+				});
+				thumbnailDigests.set(asset.assetId, asset.thumbnailDigest);
+				canonicalContents.set(asset.sourceDigest, {
+					byteLength: asset.sourceByteLength,
+					category: 'source',
+				});
+				if (!canonicalContents.has(asset.thumbnailDigest)) {
+					canonicalContents.set(asset.thumbnailDigest, {
+						byteLength: asset.thumbnailByteLength,
+						category: 'derivative',
+					});
+				}
+			}
+			// An installation run inside an Event associates everything it touched
+			// with that Event, including a reused asset, whose own metadata it still
+			// leaves alone.
+			if (input.operation.defaultEventId !== undefined) {
+				for (const asset of input.reused) {
+					const existingAsset = assets.get(asset.assetId)!;
+					assets.set(asset.assetId, {
+						...existingAsset,
+						eventIds: [...new Set([...existingAsset.eventIds, input.operation.defaultEventId])]
+							.sort((left, right) => left - right),
+					});
+				}
+			}
+			for (const reference of input.references) {
+				references.set(reference.id, {
+					id: reference.id,
+					reference: {
+						assetId: reference.assetId,
+						revisionId: reference.revisionId,
+					},
+					owner: {
+						kind: 'installed-graphics-template',
+						id: input.template.id,
+						name: input.template.name,
+						// An Installed Graphics Template's references carry no Event
+						// context: the Template belongs to the installation-wide library,
+						// not to the Event whose workflow installed it.
+						slot: reference.ownerSlot,
+					},
+				});
+			}
+			installedTemplates.set(input.template.id, {
+				id: input.template.id,
+				kind: input.template.kind,
+				name: input.template.name,
+				revisionNumber: 1,
+				document: structuredClone(input.template.document),
+				sourceTemplateIdentity: input.template.sourceTemplateIdentity,
+				installedByOperationId: input.operation.id,
+				eventId: input.operation.defaultEventId,
+				references: input.references
+					.map(reference => ({
+						ownerSlot: reference.ownerSlot,
+						reference: {
+							assetId: reference.assetId,
+							revisionId: reference.revisionId,
+						},
+					}))
+					.sort((left, right) => left.ownerSlot.localeCompare(right.ownerSlot)),
+				installedAt: publishedAt,
+			});
+
+			const completed: GraphicsIngestionOperation = {
+				...input.operation,
+				stage: 'completed',
+				failure: undefined,
+				templatePackageInstallation: {
+					templateId: input.template.id,
+					templateKind: input.template.kind,
+					templateName: input.template.name,
+					assets: [
+						...input.created.map(asset => ({
+							packagedId: asset.packagedId,
+							outcome: 'created' as const,
+							basis: asset.basis,
+							assetId: asset.assetId,
+							revisionId: asset.revisionId,
+							name: asset.name,
+							kind: asset.kind,
+							compatibilityProfile: asset.compatibilityProfile,
+						})),
+						...input.reused.map(asset => ({
+							packagedId: asset.packagedId,
+							outcome: 'reused' as const,
+							basis: 'exact-origin' as const,
+							assetId: asset.assetId,
+							revisionId: asset.revisionId,
+							name: asset.name,
+							kind: asset.kind,
+							compatibilityProfile: asset.compatibilityProfile,
+						})),
+					].sort((left, right) => left.packagedId.localeCompare(right.packagedId)),
+				},
+				updatedAt: publishedAt,
+			};
+			operations.set(completed.id, cloneOperation(completed));
+			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
+			canonicalWriteCandidates.delete(completed.id);
+			releaseCapacity(completed.id);
+			for (const asset of input.created) {
+				assets.set(asset.assetId, {
+					...assets.get(asset.assetId)!,
+					operation: cloneOperation(completed),
+				});
+			}
+			return cloneOperation(completed);
+		},
+		async findInstalledGraphicsTemplate(templateId) {
+			const template = installedTemplates.get(templateId);
+			return template ? structuredClone(template) : undefined;
 		},
 		async findGraphicAssetByContentDigest(digest) {
 			const revision = [...revisions.entries()].find(
@@ -504,12 +758,22 @@ export function createInMemoryGraphicsAssetCatalogue(
 		},
 		async claimGraphicsIngestion(input) {
 			const existing = operations.get(input.operation.id);
-			if (!existing || existing.initiatedBy !== input.operation.initiatedBy)
+			if (
+				!existing
+				|| existing.initiatedBy !== input.operation.initiatedBy
+				// The same compare-and-set the D1 catalogue makes: two callers
+				// reading one operation cannot both claim it.
+				|| existing.updatedAt !== input.operation.updatedAt
+			) {
 				return undefined;
+			}
 			const retryableFailure = existing.stage === 'failed' && existing.failure?.retryable;
-			const staleActive = !['created', 'completed', 'cancelled', 'failed'].includes(existing.stage)
+			// A confirmed Template Package proposal is resting rather than running,
+			// so claiming it needs no staleness proof.
+			const resting = existing.stage === 'awaiting-installation';
+			const staleActive = !['created', 'completed', 'cancelled', 'failed', 'awaiting-installation'].includes(existing.stage)
 				&& existing.updatedAt <= input.staleBefore;
-			if (!retryableFailure && !staleActive)
+			if (!retryableFailure && !resting && !staleActive)
 				return undefined;
 			const claimed: GraphicsIngestionOperation = {
 				...existing,
@@ -642,6 +906,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 				assetId: input.targetAssetId,
 				revisionNumber,
 				facts: input.report.facts,
+				compatibilityProfile: input.report.compatibilityProfile,
 				thumbnailDigest: input.thumbnailDigest,
 			});
 			assets.set(input.targetAssetId, {
@@ -752,6 +1017,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 				assetId: input.assetId,
 				revisionNumber: 1,
 				facts: input.report.facts,
+				compatibilityProfile: input.report.compatibilityProfile,
 				thumbnailDigest: input.thumbnailDigest,
 			});
 			canonicalContents.set(input.sourceDigest, {
@@ -805,7 +1071,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 				return { outcome: 'not-found' };
 			if (asset.lifecycle.state !== 'active' && asset.lifecycle.state !== 'retired')
 				return { outcome: 'not-allowed' };
-			const currentUsage = usage
+			const currentUsage = allUsage()
 				.filter(item => item.reference.assetId === input.assetId)
 				.map(item => structuredClone(item));
 			if (currentUsage.length > 0)
@@ -860,12 +1126,12 @@ export function createInMemoryGraphicsAssetCatalogue(
 				lifecycleState: asset?.lifecycle.state ?? 'active',
 				name: asset?.name ?? '',
 				revisionNumber: revision.revisionNumber,
-				compatibilityProfile: COMPATIBILITY_PROFILES[revision.facts.kind],
+				compatibilityProfile: revision.compatibilityProfile,
 				facts: structuredClone(revision.facts),
 			};
 		},
 		async listGraphicAssetUsage(assetId) {
-			return usage
+			return allUsage()
 				.filter(item => item.reference.assetId === assetId)
 				.map(item => structuredClone(item));
 		},
