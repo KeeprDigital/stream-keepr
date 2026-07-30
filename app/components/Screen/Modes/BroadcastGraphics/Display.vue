@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
-import {
-	DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
-	DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH,
-} from '~~/shared/types/screenConfig';
+import { getScreenModeGraphicsCanvas } from '~~/shared/screenModes';
 import GraphicsCompositorCanvas from '~/components/Graphics/Compositor/Canvas.vue';
 import { useBroadcastGraphicsModeData } from '~/composables/screen/useBroadcastGraphicsModeData';
 import { resolveBroadcastGraphicsRenderModel } from '~/modules/broadcast-graphics/renderModel';
@@ -12,8 +9,9 @@ const { outputMode, previewGuides, previewSafeAreas, screen } = useScreenContext
 const { graphics, onAirGraphicIds, selectedTarget, publishSelection } = useBroadcastGraphicsModeData();
 
 const resolvedOutput = computed<ScreenOutput>(() => outputMode?.value ?? 'overlay');
-const canvasWidth = computed(() => screen?.value?.screenConfig?.width ?? DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH);
-const canvasHeight = computed(() => screen?.value?.screenConfig?.height ?? DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT);
+const canvasDefaults = getScreenModeGraphicsCanvas('broadcast-graphics');
+const canvasWidth = computed(() => screen?.value?.screenConfig?.width ?? canvasDefaults.width);
+const canvasHeight = computed(() => screen?.value?.screenConfig?.height ?? canvasDefaults.height);
 
 const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	output: resolvedOutput.value,

@@ -8,10 +8,12 @@ import type { GraphicsContextKind, GraphicsHostContract } from './hostContract';
 
 /**
  * Graphic Item Definitions: the application-owned contract for each Graphic
- * Item kind — stable identifier, configuration version, editor metadata,
- * defaults, and summary. Adding a kind means one entry here plus a branch in
- * the compositor renderer; nothing else enumerates kinds. Templates never
- * provide executable Definitions.
+ * Item kind — stable identifier, editor metadata, defaults, and summary. A
+ * configuration version joins it when something reads one, which is the
+ * Template Package validation work rather than this ticket.
+ *
+ * Adding a kind means one entry here plus a branch in the compositor renderer;
+ * nothing else enumerates kinds. Templates never provide executable Definitions.
  */
 
 export interface GraphicItemDefaultsOptions {
@@ -23,8 +25,6 @@ export interface GraphicItemDefaultsOptions {
 
 export interface GraphicItemDefinition {
 	kind: GraphicItemKind;
-	/** Bumped when this kind's stored configuration shape changes. */
-	configVersion: number;
 	label: string;
 	icon: string;
 	/** A context the host must declare before the definition palette offers this kind. */
@@ -63,7 +63,6 @@ function defaultRect(options: GraphicItemDefaultsOptions) {
 const DEFINITIONS = {
 	text: {
 		kind: 'text',
-		configVersion: 1,
 		label: 'Text',
 		icon: 'i-lucide-type',
 		createDefault: options => ({
@@ -82,7 +81,6 @@ const DEFINITIONS = {
 	},
 	shape: {
 		kind: 'shape',
-		configVersion: 1,
 		label: 'Shape',
 		icon: 'i-lucide-square',
 		createDefault: options => ({

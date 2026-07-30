@@ -3,10 +3,7 @@ import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { BroadcastGraphicsWorkspace, BroadcastGraphicsWorkspaceLocation } from '~/modules/broadcast-graphics/workspace';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { Screen } from '~/types';
-import {
-	DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
-	DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH,
-} from '~~/shared/types/screenConfig';
+import { getScreenModeGraphicsCanvas } from '~~/shared/screenModes';
 import {
 	BROADCAST_GRAPHICS_GRAPHIC_QUERY_KEY,
 	BROADCAST_GRAPHICS_WORKSPACE_QUERY_KEY,
@@ -46,17 +43,19 @@ const settingsSaving = computed(() => saving.value || screenConfigSaving.value);
 
 defineExpose({ resetConfig, saving: settingsSaving });
 
+const canvasDefaults = getScreenModeGraphicsCanvas('broadcast-graphics');
+
 onMounted(async () => {
 	if (!props.screen.screenConfig?.width || !props.screen.screenConfig?.height) {
 		await screenStore.updateScreenConfig(props.eventId, props.screen.id, {
-			width: props.screen.screenConfig?.width ?? DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH,
-			height: props.screen.screenConfig?.height ?? DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
+			width: props.screen.screenConfig?.width ?? canvasDefaults.width,
+			height: props.screen.screenConfig?.height ?? canvasDefaults.height,
 		});
 	}
 });
 
-const canvasWidth = computed(() => screenConfig.value.width ?? props.screen.screenConfig?.width ?? DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH);
-const canvasHeight = computed(() => screenConfig.value.height ?? props.screen.screenConfig?.height ?? DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT);
+const canvasWidth = computed(() => screenConfig.value.width ?? props.screen.screenConfig?.width ?? canvasDefaults.width);
+const canvasHeight = computed(() => screenConfig.value.height ?? props.screen.screenConfig?.height ?? canvasDefaults.height);
 
 /** The Screen's authored back-to-front stack of Broadcast Graphics. */
 const graphics = computed<readonly BroadcastGraphicConfig[]>(() => config.value.graphics ?? []);
@@ -97,7 +96,7 @@ watch(selectedGraphicId, (graphicId) => {
 
 function updateCanvasDimension(field: 'width' | 'height', value: number | null | undefined) {
 	updateScreenConfig({
-		[field]: value ?? (field === 'width' ? DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH : DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT),
+		[field]: value ?? (field === 'width' ? canvasDefaults.width : canvasDefaults.height),
 	});
 }
 
@@ -131,7 +130,7 @@ function updateGraphics(next: BroadcastGraphicConfig[]) {
 					<UFieldGroup class="w-full">
 						<UInputNumber
 							:model-value="canvasWidth"
-							:placeholder="String(DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH)"
+							:placeholder="String(canvasDefaults.width)"
 							:min="1"
 							size="sm"
 							class="min-w-0 flex-1"
@@ -140,7 +139,7 @@ function updateGraphics(next: BroadcastGraphicConfig[]) {
 						/>
 						<UInputNumber
 							:model-value="canvasHeight"
-							:placeholder="String(DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT)"
+							:placeholder="String(canvasDefaults.height)"
 							:min="1"
 							size="sm"
 							class="min-w-0 flex-1"

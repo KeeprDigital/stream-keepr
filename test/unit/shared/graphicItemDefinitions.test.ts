@@ -3,6 +3,7 @@ import {
 	BROADCAST_GRAPHICS_HOST_CONTRACT,
 	getGraphicItemDefinition,
 	graphicItemDefinitionsForHost,
+	graphicItemSummary,
 	isGraphicItemDefinitionAvailable,
 } from '~~/shared/modules/graphics';
 
@@ -53,12 +54,21 @@ describe('graphicItemDefinitions', () => {
 		expect(item).toMatchObject({ type: 'shape', width: 400, height: 50 });
 	});
 
-	it('declares the Broadcast Graphics canvas default of 1920 by 1080 pixels', () => {
-		expect(BROADCAST_GRAPHICS_HOST_CONTRACT).toMatchObject({
-			hostId: 'broadcast-graphics',
-			canvas: { defaultWidth: 1920, defaultHeight: 1080, configurable: true },
-			writeSemantics: 'screen-stack',
+	it('carries only the contract fields the compositor reads', () => {
+		// An unread field invites false confidence that a later host's needs are
+		// already provided for. Each one joins when it has a real consumer.
+		expect(Object.keys(BROADCAST_GRAPHICS_HOST_CONTRACT).sort()).toEqual(['contextKinds', 'hostId']);
+	});
+
+	it('summarises a Graphic Item for the authoring tree', () => {
+		const text = getGraphicItemDefinition('text').createDefault({
+			id: 'item-1',
+			label: 'Headline',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
 		});
-		expect(BROADCAST_GRAPHICS_HOST_CONTRACT.hostExtras).toEqual([]);
+
+		expect(graphicItemSummary(text)).toBe('Text');
+		expect(graphicItemSummary({ ...text, text: '   ' })).toBe('Empty text');
 	});
 });

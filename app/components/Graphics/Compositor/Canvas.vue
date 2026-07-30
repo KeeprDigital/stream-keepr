@@ -63,7 +63,8 @@ const hasGuideLayer = computed(() =>
 				v-for="guide in render.itemGuides"
 				:key="`${guide.graphicId}:${guide.itemId}`"
 				class="item-guide"
-				:class="{ 'is-selected': guide.selected }"
+				:class="{ 'is-selected': guide.selected, 'is-in-selected-graphic': guide.inSelectedGraphic }"
+				:data-in-selected-graphic="String(guide.inSelectedGraphic)"
 				:style="guide.style"
 				role="button"
 				tabindex="0"
@@ -128,12 +129,22 @@ const hasGuideLayer = computed(() =>
 	line-height: 1.2;
 }
 
+/*
+ * Every composed Broadcast Graphic gets item guides, so the authored stack order
+ * is visible while authoring. The graphic under authoring is drawn brighter so it
+ * stands out from its neighbours without hiding them.
+ */
 .item-guide {
 	position: absolute;
 	box-sizing: border-box;
-	border: 2px dashed rgba(56, 189, 248, 0.95);
-	background: rgba(0, 119, 163, 0.08);
+	border: 2px dashed rgba(56, 189, 248, 0.35);
+	background: rgba(0, 119, 163, 0.04);
 	cursor: pointer;
+}
+
+.item-guide.is-in-selected-graphic {
+	border-color: rgba(56, 189, 248, 0.95);
+	background: rgba(0, 119, 163, 0.08);
 }
 
 .item-guide span {

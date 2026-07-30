@@ -11,7 +11,7 @@ import GraphicsCompositorStackTree from '~/components/Graphics/Compositor/StackT
  * The Edit workspace of a Broadcast Graphics Screen: the shared compositor's
  * authoring tree, preview, and inspector over the Screen's authored stack.
  */
-const props = defineProps<{
+defineProps<{
 	eventId: number;
 	screen: Screen;
 	graphics: readonly BroadcastGraphicConfig[];
@@ -25,9 +25,6 @@ const emit = defineEmits<{
 	'update:graphics': [graphics: BroadcastGraphicConfig[]];
 	'update:selectedTarget': [target: GraphicsSelectionTarget];
 }>();
-
-/** The preview composes the Broadcast Graphic under authoring. */
-const previewGraphicId = computed(() => props.selectedGraphicId);
 </script>
 
 <template>
@@ -50,7 +47,6 @@ const previewGraphicId = computed(() => props.selectedGraphicId);
 				:event-id="eventId"
 				:screen="screen"
 				:graphics="graphics"
-				:preview-graphic-id="previewGraphicId"
 				:selected-target="selectedTarget"
 				:canvas-width="canvasWidth"
 				:canvas-height="canvasHeight"

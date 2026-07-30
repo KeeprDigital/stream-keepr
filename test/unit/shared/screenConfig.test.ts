@@ -158,10 +158,6 @@ describe('default config constants', () => {
 		expect(DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT).toBe(1080);
 	});
 
-	it('default broadcast graphics config owns an empty Broadcast Graphics stack', () => {
-		expect(DEFAULT_BROADCAST_GRAPHICS_CONFIG.graphics).toEqual([]);
-	});
-
 	it('never resets a Broadcast Graphics Screen\'s authored stack to defaults', () => {
 		const displayDefaults = getDisplayDefaultsForMode('broadcast-graphics');
 

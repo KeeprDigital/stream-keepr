@@ -5,6 +5,7 @@ import {
 	screenOutputBackground,
 	screenOutputCanvasBackground,
 	screenOutputCompositesOverBlack,
+	screenOutputPath,
 } from '~~/shared/utils/screenOutput';
 
 describe('screen Output selection', () => {
@@ -45,6 +46,29 @@ describe('screen Output selection', () => {
 		expect(screenOutputCanvasBackground('overlay')).toBe('transparent');
 		expect(screenOutputCanvasBackground('fill')).toBe('#000000');
 		expect(screenOutputCanvasBackground('key')).toBe('#000000');
+	});
+
+	it('builds a plain Screen Output URL with no preview flags', () => {
+		expect(screenOutputPath({ eventId: 7, screenSlug: 'main' }))
+			.toBe('/event/7/screen/main?output=overlay');
+		expect(screenOutputPath({ eventId: 7, screenSlug: 'main', output: 'key' }))
+			.toBe('/event/7/screen/main?output=key');
+	});
+
+	it('carries preview and guide flags only when the embedder asks for them', () => {
+		const preview = screenOutputPath({
+			eventId: 7,
+			screenSlug: 'main',
+			output: 'fill',
+			fitToViewport: true,
+			preview: true,
+			itemGuides: true,
+			safeAreaGuides: true,
+		});
+
+		expect(preview).toBe('/event/7/screen/main?output=fill&fit=1&preview=1&guides=1&safe=1');
+		expect(screenOutputPath({ eventId: 7, screenSlug: 'main', preview: true }))
+			.toBe('/event/7/screen/main?output=overlay&preview=1');
 	});
 
 	it('never lets a PNG capture disagree with the Screen Output it captures', () => {

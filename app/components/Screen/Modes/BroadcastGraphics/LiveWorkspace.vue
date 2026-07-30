@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { Screen } from '~/types';
+import { screenOutputPath } from '~~/shared/utils/screenOutput';
 
 /**
  * The Live workspace of a Broadcast Graphics Screen, and the workspace the
@@ -22,7 +23,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{ select: [graphicId: string] }>();
 
-const programUrl = computed(() => `/event/${props.eventId}/screen/${props.screen.slug}?output=overlay&fit=1`);
+const programUrl = computed(() => screenOutputPath({
+	eventId: props.eventId,
+	screenSlug: props.screen.slug,
+	output: 'overlay',
+	fitToViewport: true,
+}));
 const programAspectStyle = computed(() => ({
 	aspectRatio: `${props.canvasWidth} / ${props.canvasHeight}`,
 	maxHeight: '46vh',

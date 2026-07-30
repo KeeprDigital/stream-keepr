@@ -10,7 +10,7 @@ import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from './selection';
 import { resolveGraphicFontFamily } from '~~/shared/modules/graphics';
 import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
-import { graphicsSelectionKey } from './selection';
+import { graphicsSelectionGraphicId, graphicsSelectionKey } from './selection';
 
 /**
  * Shared compositor render-model seam.
@@ -21,8 +21,14 @@ import { graphicsSelectionKey } from './selection';
  * Overlay, Fill, and Key Outputs always resolve one composed frame.
  *
  * Advisory preview guides are part of this model only because the editor asks
- * for them explicitly. A live Screen Output never asks, so guides can never
- * reach an output, and they never enter an item's own geometry or clipping.
+ * for them explicitly, and they never enter an item's own geometry or clipping —
+ * so they cannot clip or constrain an authored Graphic Item.
+ *
+ * That opt-in travels on the Screen URL rather than being enforced structurally:
+ * an ordinary Screen Output URL carries none of the preview flags and so draws no
+ * guides, but a URL that does carry them draws guides wherever it is opened,
+ * including a browser used as a program source. Treat the flags as a convention
+ * for editor embedding, not a guarantee about live output.
  *
  * ## The Key Output is a true alpha matte, by construction
  *
@@ -107,7 +113,10 @@ export interface GraphicsItemGuide {
 	graphicId: string;
 	itemId: string;
 	label: string;
+	/** This exact Graphic Item is the current selection. */
 	selected: boolean;
+	/** This item belongs to the Broadcast Graphic under authoring. */
+	inSelectedGraphic: boolean;
 	style: CSSProperties;
 }
 
@@ -282,6 +291,7 @@ export function resolveGraphicsCompositionRenderModel(
 		? input.graphics.filter(graphic => visible.includes(graphic.id))
 		: [...input.graphics];
 	const selectedKey = input.selectedTarget ? graphicsSelectionKey(input.selectedTarget) : null;
+	const selectedGraphicId = input.selectedTarget ? graphicsSelectionGraphicId(input.selectedTarget) : null;
 
 	return {
 		output: input.output,
@@ -311,6 +321,7 @@ export function resolveGraphicsCompositionRenderModel(
 					itemId: item.id,
 					label: item.label,
 					selected: selectedKey === graphicsSelectionKey({ type: 'item', graphicId: graphic.id, itemId: item.id }),
+					inSelectedGraphic: selectedGraphicId === graphic.id,
 					style: rectStyle(item),
 				})))
 			: [],

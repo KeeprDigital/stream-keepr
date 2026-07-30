@@ -5,6 +5,7 @@ import {
 	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
 	modeConfigPatchSchemaMap,
 } from '~~/server/schemas/api/screen';
+import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
 function graphic(id: string, itemCount = 0) {
 	return {
@@ -80,6 +81,17 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 
 		expect(patch.safeParse({ graphics: [graphic('bug', 1)] }).success).toBe(true);
 		expect(patch.safeParse({}).success).toBe(true);
+	});
+
+	it('accepts the Broadcast Graphics config a new Screen ships with', () => {
+		// The shipped default has to satisfy the wire schema, or a Screen switched
+		// into Broadcast Graphics could not persist its own starting configuration.
+		const result = broadcastGraphicsModeConfigSchema.safeParse(
+			getDefaultConfigForMode('broadcast-graphics'),
+		);
+
+		expect(result.success).toBe(true);
+		expect(result.data?.graphics).toEqual([]);
 	});
 
 	it('rejects an unknown Graphic Item kind', () => {

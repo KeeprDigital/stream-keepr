@@ -290,4 +290,19 @@ describe('graphicsCompositionRenderModel', () => {
 			['badge', true],
 		]);
 	});
+
+	it('marks which composed Graphic Items belong to the Broadcast Graphic under authoring', () => {
+		const model = resolveGraphicsCompositionRenderModel({
+			output: 'overlay',
+			graphics: [graphic('bug', [shape('logo')]), graphic('lower-third', [shape('bar')])],
+			itemGuides: true,
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+			...CANVAS,
+		});
+
+		expect(model.itemGuides.map(guide => [guide.itemId, guide.inSelectedGraphic, guide.selected])).toEqual([
+			['logo', false, false],
+			['bar', true, false],
+		]);
+	});
 });

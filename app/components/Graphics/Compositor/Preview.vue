@@ -3,6 +3,7 @@ import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { Screen } from '~/types';
+import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import {
 	GRAPHICS_PREVIEW_STATE_MESSAGE,
 	isGraphicsPreviewSelectMessage,
@@ -19,8 +20,6 @@ const props = defineProps<{
 	eventId: number;
 	screen: Screen;
 	graphics: readonly BroadcastGraphicConfig[];
-	/** The Broadcast Graphic under authoring, composed in place of the on-air set. */
-	previewGraphicId: string | null;
 	selectedTarget: GraphicsSelectionTarget;
 	canvasWidth: number;
 	canvasHeight: number;
@@ -48,11 +47,15 @@ const itemGuides = ref(true);
 const safeAreaGuides = ref(false);
 const previewFrame = ref<HTMLIFrameElement | null>(null);
 
-const previewUrl = computed(() => {
-	const guides = itemGuides.value ? '&guides=1' : '';
-	const safe = safeAreaGuides.value ? '&safe=1' : '';
-	return `/event/${props.eventId}/screen/${props.screen.slug}?output=${previewOutput.value}&fit=1&preview=1${guides}${safe}`;
-});
+const previewUrl = computed(() => screenOutputPath({
+	eventId: props.eventId,
+	screenSlug: props.screen.slug,
+	output: previewOutput.value,
+	fitToViewport: true,
+	preview: true,
+	itemGuides: itemGuides.value,
+	safeAreaGuides: safeAreaGuides.value,
+}));
 
 const previewAspectStyle = computed(() => (previewZoom.value === 'fit'
 	? { aspectRatio: `${props.canvasWidth} / ${props.canvasHeight}`, maxHeight: '46vh' }
@@ -70,7 +73,6 @@ function pushPreviewState() {
 		type: GRAPHICS_PREVIEW_STATE_MESSAGE,
 		state: {
 			graphics: JSON.parse(JSON.stringify(props.graphics)),
-			previewGraphicId: props.previewGraphicId,
 			selectedTarget: { ...props.selectedTarget },
 		},
 	}, window.location.origin);
@@ -96,7 +98,7 @@ onBeforeUnmount(() => {
 });
 
 watch(
-	() => [props.graphics, props.previewGraphicId, props.selectedTarget] as const,
+	() => [props.graphics, props.selectedTarget] as const,
 	() => pushPreviewState(),
 	{ deep: true },
 );

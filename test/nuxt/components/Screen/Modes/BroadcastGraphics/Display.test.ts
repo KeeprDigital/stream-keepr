@@ -66,15 +66,14 @@ async function mountComponent() {
 	return mount(Display);
 }
 
-function pushPreviewState(previewGraphicId: string | null) {
+function pushPreviewState(graphics: BroadcastGraphicConfig[] = [lowerThird]) {
 	window.dispatchEvent(new MessageEvent('message', {
 		origin: window.location.origin,
 		source: window,
 		data: {
 			type: GRAPHICS_PREVIEW_STATE_MESSAGE,
 			state: {
-				graphics: [lowerThird],
-				previewGraphicId,
+				graphics,
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 			},
 		},
@@ -147,7 +146,7 @@ describe('broadcastGraphicsDisplay', () => {
 		mockIsPreview.value = true;
 
 		const wrapper = await mountComponent();
-		await pushPreviewState('lower-third');
+		await pushPreviewState();
 
 		expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(true);
 		expect(wrapper.get('[data-graphic-item-kind="shape"]').attributes('style')).toContain('left: 100px');
@@ -155,9 +154,50 @@ describe('broadcastGraphicsDisplay', () => {
 
 	it('ignores a working composition pushed at a live Screen Output', async () => {
 		const wrapper = await mountComponent();
-		await pushPreviewState('lower-third');
+		await pushPreviewState();
 
 		expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(false);
+	});
+
+	it('composes every authored Broadcast Graphic in an editor preview, in stack order', async () => {
+		mockIsPreview.value = true;
+		const behind: BroadcastGraphicConfig = { ...lowerThird, id: 'bug', name: 'Bug' };
+
+		const wrapper = await mountComponent();
+		await pushPreviewState([behind, lowerThird]);
+
+		const composed = wrapper.findAll('[data-broadcast-graphic]')
+			.map(node => node.attributes('data-broadcast-graphic'));
+
+		expect(composed).toEqual(['bug', 'lower-third']);
+	});
+
+	it('reorders the composed preview when the authored stack order changes', async () => {
+		mockIsPreview.value = true;
+		const behind: BroadcastGraphicConfig = { ...lowerThird, id: 'bug', name: 'Bug' };
+
+		const wrapper = await mountComponent();
+		await pushPreviewState([behind, lowerThird]);
+		await pushPreviewState([lowerThird, behind]);
+
+		const composed = wrapper.findAll('[data-broadcast-graphic]')
+			.map(node => node.attributes('data-broadcast-graphic'));
+
+		expect(composed).toEqual(['lower-third', 'bug']);
+	});
+
+	it('marks the Broadcast Graphic under authoring among its neighbours', async () => {
+		mockIsPreview.value = true;
+		mockPreviewGuides.value = true;
+		const behind: BroadcastGraphicConfig = { ...lowerThird, id: 'bug', name: 'Bug' };
+
+		const wrapper = await mountComponent();
+		await pushPreviewState([behind, lowerThird]);
+
+		const marks = wrapper.findAll('.item-guide')
+			.map(node => node.attributes('data-in-selected-graphic'));
+
+		expect(marks).toEqual(['false', 'true']);
 	});
 
 	it('draws advisory action-safe and title-safe guides only when the preview asks for them', async () => {
@@ -165,7 +205,7 @@ describe('broadcastGraphicsDisplay', () => {
 		mockPreviewSafeAreas.value = true;
 
 		const wrapper = await mountComponent();
-		await pushPreviewState('lower-third');
+		await pushPreviewState();
 
 		expect(wrapper.get('[data-safe-area-guide="action-safe"]').attributes('style')).toContain('left: 96px');
 		expect(wrapper.get('[data-safe-area-guide="title-safe"]').attributes('style')).toContain('left: 192px');
@@ -176,7 +216,7 @@ describe('broadcastGraphicsDisplay', () => {
 		mockPreviewGuides.value = true;
 
 		const wrapper = await mountComponent();
-		await pushPreviewState('lower-third');
+		await pushPreviewState();
 
 		expect(wrapper.get('.item-guide').classes()).toContain('is-selected');
 	});

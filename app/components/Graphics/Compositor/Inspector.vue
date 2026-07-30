@@ -4,6 +4,7 @@ import type {
 	GraphicAnchorPoint,
 	GraphicGeometryUnit,
 	GraphicItemConfig,
+	GraphicSurfaceStyle,
 	GraphicTypography,
 	TEXT_OVERFLOW_POLICY_VALUES,
 
@@ -22,6 +23,10 @@ import {
 	parseGraphicGeometryValue,
 	patchBroadcastGraphic,
 	patchGraphicItem,
+	patchGraphicSurfaceStyle,
+	patchGraphicTypography,
+	patchShapeGeometry,
+	patchTextGraphicItem,
 	replaceBroadcastGraphic,
 	resizeGraphicRectFromAnchor,
 } from '~~/shared/modules/graphics';
@@ -157,11 +162,30 @@ function updateSize(axis: 'width' | 'height', value: number | null | undefined) 
 	patchSelectedItem(resizeGraphicRectFromAnchor(item, { [axis]: Math.max(1, pixels) }, item.anchor));
 }
 
-function updateTypography(patch: Partial<GraphicTypography>) {
-	const item = selectedTextItem.value;
-	if (!item)
+/** Nested property groups go through their own merge, so a single-field edit keeps its siblings. */
+function applyToSelectedGraphic(
+	merge: (graphic: BroadcastGraphicConfig, itemId: string) => BroadcastGraphicConfig,
+) {
+	const current = selection.value;
+	if (current.kind !== 'item')
 		return;
-	patchSelectedItem({ typography: { ...item.typography, ...patch } } as Partial<GraphicItemConfig>);
+	emit('update:graphics', replaceBroadcastGraphic(props.graphics, merge(current.graphic, current.item.id)));
+}
+
+function updateTypography(patch: Partial<GraphicTypography>) {
+	applyToSelectedGraphic((graphic, itemId) => patchGraphicTypography(graphic, itemId, patch));
+}
+
+function updateSurfaceStyle(patch: Partial<GraphicSurfaceStyle>) {
+	applyToSelectedGraphic((graphic, itemId) => patchGraphicSurfaceStyle(graphic, itemId, patch));
+}
+
+function updateShapeGeometry(patch: Partial<ShapeGeometry>) {
+	applyToSelectedGraphic((graphic, itemId) => patchShapeGeometry(graphic, itemId, patch));
+}
+
+function updateTextItem(patch: Partial<Omit<TextGraphicItemConfig, 'type' | 'id'>>) {
+	applyToSelectedGraphic((graphic, itemId) => patchTextGraphicItem(graphic, itemId, patch));
 }
 
 function updateGraphicName(value: string) {
@@ -288,7 +312,7 @@ function updateGraphicName(value: string) {
 					:rows="3"
 					class="w-full"
 					data-testid="graphic-item-text"
-					@update:model-value="patchSelectedItem({ text: String($event) } as never)"
+					@update:model-value="updateTextItem({ text: String($event) })"
 				/>
 			</UFormField>
 
@@ -385,7 +409,7 @@ function updateGraphicName(value: string) {
 					value-key="value"
 					class="w-full"
 					data-testid="text-overflow-policy"
-					@update:model-value="patchSelectedItem({ overflowPolicy: $event } as never)"
+					@update:model-value="updateTextItem({ overflowPolicy: $event })"
 				/>
 			</UFormField>
 
@@ -401,7 +425,7 @@ function updateGraphicName(value: string) {
 					class="w-full"
 					data-testid="text-min-font-size"
 					aria-label="Minimum font size"
-					@update:model-value="patchSelectedItem({ minFontSize: $event ?? 1 } as never)"
+					@update:model-value="updateTextItem({ minFontSize: $event ?? 1 })"
 				/>
 			</UFormField>
 		</template>
@@ -411,9 +435,7 @@ function updateGraphicName(value: string) {
 				<UIColorPicker
 					:model-value="selectedItem.surfaceStyle.fill"
 					data-testid="shape-fill"
-					@update:model-value="patchSelectedItem({
-						surfaceStyle: { ...selectedItem.surfaceStyle, fill: $event?.toString() || '#000000' },
-					} as never)"
+					@update:model-value="updateSurfaceStyle({ fill: $event?.toString() || '#000000' })"
 				/>
 			</UFormField>
 			<UFormField label="Fill opacity" size="sm">
@@ -425,9 +447,7 @@ function updateGraphicName(value: string) {
 					size="sm"
 					class="w-full"
 					aria-label="Fill opacity"
-					@update:model-value="patchSelectedItem({
-						surfaceStyle: { ...selectedItem.surfaceStyle, fillOpacity: $event ?? 1 },
-					} as never)"
+					@update:model-value="updateSurfaceStyle({ fillOpacity: $event ?? 1 })"
 				/>
 			</UFormField>
 			<UFormField label="Corner radius" size="sm">
@@ -438,7 +458,7 @@ function updateGraphicName(value: string) {
 					class="w-full"
 					data-testid="shape-corner-radius"
 					aria-label="Corner radius"
-					@update:model-value="patchSelectedItem({ geometry: { cornerRadius: $event ?? 0 } } as never)"
+					@update:model-value="updateShapeGeometry({ cornerRadius: $event ?? 0 })"
 				/>
 			</UFormField>
 		</template>

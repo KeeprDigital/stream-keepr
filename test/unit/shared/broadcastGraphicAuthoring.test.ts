@@ -8,6 +8,9 @@ import {
 	moveBroadcastGraphic,
 	moveGraphicItem,
 	patchGraphicItem,
+	patchGraphicSurfaceStyle,
+	patchGraphicTypography,
+	patchShapeGeometry,
 } from '~~/shared/modules/graphics';
 
 const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
@@ -76,6 +79,45 @@ describe('broadcastGraphicAuthoring', () => {
 
 		expect(moveGraphicItem(built, 'back', 1).items.map(item => item.id)).toEqual(['front', 'back']);
 		expect(deleteGraphicItem(built, 'back').items.map(item => item.id)).toEqual(['front']);
+	});
+
+	it('keeps sibling Shape Geometry fields when one of them is edited', () => {
+		const built = addGraphicItem(graphic('a'), { kind: 'shape', id: 'bar', ...CANVAS }).graphic;
+		// Stand in for the per-corner treatment and edge slants the geometry grows later.
+		const widened = patchGraphicItem(built, 'bar', {
+			geometry: { cornerRadius: 4, cutTopLeft: true },
+		} as never);
+
+		const patched = patchShapeGeometry(widened, 'bar', { cornerRadius: 12 });
+
+		expect(patched.items[0]).toMatchObject({ geometry: { cornerRadius: 12, cutTopLeft: true } });
+	});
+
+	it('keeps sibling Graphic Surface Style fields when one of them is edited', () => {
+		const built = addGraphicItem(graphic('a'), { kind: 'shape', id: 'bar', ...CANVAS }).graphic;
+
+		const patched = patchGraphicSurfaceStyle(built, 'bar', { fillOpacity: 0.4 });
+
+		expect(patched.items[0]).toMatchObject({
+			surfaceStyle: { fill: '#0077a3', fillOpacity: 0.4 },
+		});
+	});
+
+	it('keeps sibling typography fields when one of them is edited', () => {
+		const built = addGraphicItem(graphic('a'), { kind: 'text', id: 'name', ...CANVAS }).graphic;
+
+		const patched = patchGraphicTypography(built, 'name', { fontSize: 96 });
+
+		expect(patched.items[0]).toMatchObject({
+			typography: { fontSize: 96, fontWeight: 700, textAlign: 'left', color: '#ffffff' },
+		});
+	});
+
+	it('ignores a property-group edit aimed at the wrong Graphic Item kind', () => {
+		const built = addGraphicItem(graphic('a'), { kind: 'text', id: 'name', ...CANVAS }).graphic;
+
+		expect(patchShapeGeometry(built, 'name', { cornerRadius: 12 })).toEqual(built);
+		expect(patchGraphicTypography(built, 'missing', { fontSize: 96 })).toEqual(built);
 	});
 
 	it('patches one Graphic Item and leaves its siblings untouched', () => {

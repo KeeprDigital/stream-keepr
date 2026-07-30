@@ -24,11 +24,15 @@ export function useBroadcastGraphicsModeData() {
 		previewState.value?.graphics ?? storedConfig.value.graphics ?? [],
 	);
 
-	const onAirGraphicIds = computed<readonly string[]>(() => {
-		if (!previewState.value)
-			return [];
-		return previewState.value.previewGraphicId ? [previewState.value.previewGraphicId] : [];
-	});
+	/**
+	 * An editor preview composes the whole authored stack, exactly as an on-air
+	 * Screen would, so the authored Graphic Layer Order and any reordering of it
+	 * are visible while authoring. A live output composes only what playout has
+	 * taken on air, which is nothing until Take and Out exist.
+	 */
+	const onAirGraphicIds = computed<readonly string[]>(() =>
+		previewState.value ? previewState.value.graphics.map(graphic => graphic.id) : [],
+	);
 
 	const selectedTarget = computed<GraphicsSelectionTarget>(() =>
 		previewState.value?.selectedTarget ?? { type: 'canvas' },

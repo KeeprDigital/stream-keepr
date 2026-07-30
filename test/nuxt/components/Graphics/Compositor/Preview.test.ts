@@ -55,7 +55,6 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 			eventId: 1,
 			screen: { id: 1, slug: 'main', screenConfig: { width: 1920, height: 1080 } } as Screen,
 			graphics,
-			previewGraphicId: 'lower-third',
 			selectedTarget: { type: 'canvas' },
 			canvasWidth: 1920,
 			canvasHeight: 1080,
@@ -139,8 +138,9 @@ describe('graphicsCompositorPreview', () => {
 		expect(posted).toHaveLength(1);
 		expect(posted[0]).toMatchObject({
 			type: GRAPHICS_PREVIEW_STATE_MESSAGE,
-			state: { previewGraphicId: 'lower-third', selectedTarget: { type: 'canvas' } },
+			state: { selectedTarget: { type: 'canvas' } },
 		});
+		expect((posted[0] as { state: { graphics: unknown[] } }).state.graphics).toHaveLength(1);
 	});
 
 	it('accepts a canvas selection only from its own preview frame', async () => {

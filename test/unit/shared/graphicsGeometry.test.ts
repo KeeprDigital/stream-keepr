@@ -44,10 +44,21 @@ describe('graphicsGeometry', () => {
 		expect(displayGraphicGeometryValue(960, 1920, 'grid')).toBe(16);
 	});
 
-	it('reads an authored value in any unit back into the same canonical pixels', () => {
-		for (const unit of ['px', 'percent', 'grid'] as const) {
-			const displayed = displayGraphicGeometryValue(480, 1920, unit, true);
-			expect(parseGraphicGeometryValue(displayed, 1920, unit, true)).toBe(480);
-		}
+	it('reads an authored value in each unit back into the canonical pixels it names', () => {
+		// Anchored per unit: a quarter of a 1920px canvas is 480px, which is 25% and
+		// is 8 of 32 grid units, so -8 on the centred grid.
+		expect(parseGraphicGeometryValue(480, 1920, 'px', true)).toBe(480);
+		expect(parseGraphicGeometryValue(25, 1920, 'percent', true)).toBe(480);
+		expect(parseGraphicGeometryValue(-8, 1920, 'grid', true)).toBe(480);
+
+		// A size is not offset by the grid's centre, so the same 480px reads as 8.
+		expect(parseGraphicGeometryValue(8, 1920, 'grid')).toBe(480);
+		expect(displayGraphicGeometryValue(480, 1920, 'grid')).toBe(8);
+		expect(displayGraphicGeometryValue(480, 1920, 'grid', true)).toBe(-8);
+	});
+
+	it('rounds an authored value to whole canonical pixels', () => {
+		expect(parseGraphicGeometryValue(33.333, 1920, 'percent')).toBe(640);
+		expect(parseGraphicGeometryValue(10.4, 1920, 'px')).toBe(10);
 	});
 });

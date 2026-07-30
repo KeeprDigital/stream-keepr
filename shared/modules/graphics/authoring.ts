@@ -1,4 +1,12 @@
-import type { BroadcastGraphicConfig, GraphicItemConfig, GraphicItemKind } from '../../types/graphics';
+import type {
+	BroadcastGraphicConfig,
+	GraphicItemConfig,
+	GraphicItemKind,
+	GraphicSurfaceStyle,
+	GraphicTypography,
+	ShapeGeometry,
+	TextGraphicItemConfig,
+} from '../../types/graphics';
 import { getGraphicItemDefinition, graphicItemKindLabel } from './itemDefinitions';
 
 /**
@@ -128,6 +136,14 @@ export function deleteGraphicItem(graphic: BroadcastGraphicConfig, itemId: strin
 	return { ...graphic, items: graphic.items.filter(item => item.id !== itemId) };
 }
 
+/**
+ * Replace top-level properties of one Graphic Item.
+ *
+ * Top-level only: passing a nested object replaces it wholesale. Use the
+ * property-group helpers below for geometry, surface style, and typography so a
+ * single-field edit cannot drop its siblings — the failure mode that appears the
+ * moment a nested shape grows a second field.
+ */
 export function patchGraphicItem(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
@@ -137,4 +153,60 @@ export function patchGraphicItem(
 		...graphic,
 		items: graphic.items.map(item => item.id === itemId ? { ...item, ...patch } as GraphicItemConfig : item),
 	};
+}
+
+/** Merge into a Shape Graphic Item's Shape Geometry, preserving every other field. */
+export function patchShapeGeometry(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	patch: Partial<ShapeGeometry>,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, 'shape', item => ({
+		geometry: { ...item.geometry, ...patch },
+	}));
+}
+
+/** Merge into a Shape Graphic Item's Graphic Surface Style, preserving every other field. */
+export function patchGraphicSurfaceStyle(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	patch: Partial<GraphicSurfaceStyle>,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, 'shape', item => ({
+		surfaceStyle: { ...item.surfaceStyle, ...patch },
+	}));
+}
+
+/** Replace top-level properties of a Text Graphic Item, with its own type checked. */
+export function patchTextGraphicItem(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	patch: Partial<Omit<TextGraphicItemConfig, 'type' | 'id'>>,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, 'text', () => patch);
+}
+
+/** Merge into a Text Graphic Item's base typography, preserving every other field. */
+export function patchGraphicTypography(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	patch: Partial<GraphicTypography>,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, 'text', item => ({
+		typography: { ...item.typography, ...patch },
+	}));
+}
+
+/** Apply a nested merge to one item, and only when it is of the expected kind. */
+function patchGraphicItemGroup<K extends GraphicItemKind>(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	kind: K,
+	merge: (item: Extract<GraphicItemConfig, { type: K }>) => Partial<GraphicItemConfig>,
+): BroadcastGraphicConfig {
+	const item = graphic.items.find(candidate => candidate.id === itemId);
+	if (!item || item.type !== kind)
+		return graphic;
+
+	return patchGraphicItem(graphic, itemId, merge(item as Extract<GraphicItemConfig, { type: K }>));
 }

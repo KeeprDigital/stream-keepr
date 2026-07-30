@@ -13,7 +13,6 @@ const expectedFromEditor = { origin: 'https://keepr.test', source: editorWindow 
 
 const state = {
 	graphics: [{ id: 'lower-third', name: 'Lower Third', items: [] }],
-	previewGraphicId: 'lower-third',
 	selectedTarget: { type: 'canvas' },
 };
 
@@ -44,7 +43,7 @@ describe('graphicsPreviewMessages', () => {
 		expect(isGraphicsPreviewStateMessage({
 			origin: 'https://keepr.test',
 			source: editorWindow,
-			data: { type: GRAPHICS_PREVIEW_STATE_MESSAGE, state: { graphics: 'all', previewGraphicId: 1 } },
+			data: { type: GRAPHICS_PREVIEW_STATE_MESSAGE, state: { graphics: 'all', selectedTarget: { type: 'nowhere' } } },
 		}, expectedFromEditor)).toBe(false);
 	});
 

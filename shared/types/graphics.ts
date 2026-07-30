@@ -70,8 +70,12 @@ export interface GraphicTypography {
 }
 
 /**
- * The shared visual treatment available to Text and Shape Graphic Items.
- * Gradients, outlines, and glow join this shape with the full style vocabulary.
+ * The shared visual treatment of a Shape Graphic Item.
+ *
+ * The vocabulary offers this to Text Graphic Items and Graphic Groups too, but a
+ * Text Graphic Item does not carry one yet: its colour lives in its base
+ * typography, and giving text a fill, outline, and glow belongs with the full
+ * style vocabulary. Gradients, outlines, and glow join this shape there.
  */
 export interface GraphicSurfaceStyle {
 	fill: string;

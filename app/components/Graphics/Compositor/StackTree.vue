@@ -17,6 +17,7 @@ import {
 } from '~~/shared/modules/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
 import { graphicsSelectionKey } from '~/modules/graphics/selection';
+import GraphicsCompositorReorderControls from './ReorderControls.vue';
 
 /**
  * The compositor's authoring tree: the Screen's back-to-front stack of
@@ -141,34 +142,13 @@ function removeItem(itemId: string) {
 						<span class="mt-0.5 block truncate text-xs text-muted">{{ graphic.items.length }} items</span>
 					</span>
 				</button>
-				<div class="flex shrink-0 flex-col gap-1">
-					<UButton
-						size="xs"
-						variant="ghost"
-						color="neutral"
-						icon="i-lucide-chevron-up"
-						:disabled="index === graphics.length - 1"
-						:aria-label="`Move ${graphic.name} forward`"
-						@click="moveGraphic(graphic.id, 1)"
-					/>
-					<UButton
-						size="xs"
-						variant="ghost"
-						color="neutral"
-						icon="i-lucide-chevron-down"
-						:disabled="index === 0"
-						:aria-label="`Move ${graphic.name} backward`"
-						@click="moveGraphic(graphic.id, -1)"
-					/>
-					<UButton
-						size="xs"
-						variant="ghost"
-						color="error"
-						icon="i-lucide-trash-2"
-						:aria-label="`Delete ${graphic.name}`"
-						@click="removeGraphic(graphic.id)"
-					/>
-				</div>
+				<GraphicsCompositorReorderControls
+					:label="graphic.name"
+					:can-move-forward="index < graphics.length - 1"
+					:can-move-backward="index > 0"
+					@move="moveGraphic(graphic.id, $event)"
+					@remove="removeGraphic(graphic.id)"
+				/>
 			</div>
 		</div>
 
@@ -212,34 +192,13 @@ function removeItem(itemId: string) {
 						</span>
 						<UIcon :name="item.visible ? 'i-lucide-eye' : 'i-lucide-eye-off'" class="mt-0.5 size-4 shrink-0 text-muted" />
 					</button>
-					<div class="flex shrink-0 flex-col gap-1">
-						<UButton
-							size="xs"
-							variant="ghost"
-							color="neutral"
-							icon="i-lucide-chevron-up"
-							:disabled="index === selectedGraphic.items.length - 1"
-							:aria-label="`Move ${item.label} forward`"
-							@click="moveItem(item.id, 1)"
-						/>
-						<UButton
-							size="xs"
-							variant="ghost"
-							color="neutral"
-							icon="i-lucide-chevron-down"
-							:disabled="index === 0"
-							:aria-label="`Move ${item.label} backward`"
-							@click="moveItem(item.id, -1)"
-						/>
-						<UButton
-							size="xs"
-							variant="ghost"
-							color="error"
-							icon="i-lucide-trash-2"
-							:aria-label="`Delete ${item.label}`"
-							@click="removeItem(item.id)"
-						/>
-					</div>
+					<GraphicsCompositorReorderControls
+						:label="item.label"
+						:can-move-forward="index < selectedGraphic.items.length - 1"
+						:can-move-backward="index > 0"
+						@move="moveItem(item.id, $event)"
+						@remove="removeItem(item.id)"
+					/>
 				</div>
 			</div>
 		</section>

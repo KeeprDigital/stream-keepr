@@ -17,8 +17,11 @@ export const GRAPHICS_PREVIEW_SELECT_MESSAGE = 'graphics-compositor:select';
 export interface GraphicsPreviewState {
 	/** The working stack of Broadcast Graphics, unsaved edits included. */
 	graphics: BroadcastGraphicConfig[];
-	/** The Broadcast Graphic the editor is composing, shown in place of the on-air set. */
-	previewGraphicId: string | null;
+	/**
+	 * What the editor has selected. The preview composes the whole authored
+	 * stack — so reordering it is visible — and uses this only to mark which
+	 * Broadcast Graphic and Graphic Item are under authoring.
+	 */
 	selectedTarget: GraphicsSelectionTarget;
 }
 
@@ -57,7 +60,6 @@ export function isGraphicsPreviewStateMessage(
 	return typeof state === 'object'
 		&& state !== null
 		&& Array.isArray(state.graphics)
-		&& (state.previewGraphicId === null || typeof state.previewGraphicId === 'string')
 		&& isGraphicsSelectionTarget(state.selectedTarget);
 }
 
