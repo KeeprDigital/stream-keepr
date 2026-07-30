@@ -2,6 +2,7 @@ import type { BroadcastGraphicsRenderModelInput } from '~~/app/modules/broadcast
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import { resolveBroadcastGraphicsRenderModel } from '~~/app/modules/broadcast-graphics/renderModel';
+import { squareShapeGeometry } from '~~/shared/modules/graphics';
 
 function graphic(id: string): BroadcastGraphicConfig {
 	return {
@@ -17,8 +18,8 @@ function graphic(id: string): BroadcastGraphicConfig {
 			y: 0,
 			width: 100,
 			height: 100,
-			geometry: { cornerRadius: 0 },
-			surfaceStyle: { fill: '#ffffff', fillOpacity: 1 },
+			geometry: squareShapeGeometry(),
+			surfaceStyle: { fill: { type: 'solid', color: '#ffffff' }, fillOpacity: 1 },
 		}],
 	};
 }

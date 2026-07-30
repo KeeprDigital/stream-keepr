@@ -8,16 +8,27 @@ export interface GraphicFocalPosition {
 	vertical: number;
 }
 
-export type ShapeGeometryCorner
+/**
+ * The Shape Geometry a Media Graphic Item clips to.
+ *
+ * Deliberately scoped rather than named for the shared vocabulary: the Shared
+ * Graphics Foundation's `ShapeGeometry` lives in `shared/types/graphics.ts` and
+ * encodes the same concept differently — a flat corner treatment, and a signed
+ * edge slant that can inset either vertex rather than only the top. Both were
+ * exported as `ShapeGeometry`, which left the auto-import layer silently choosing
+ * one. Converging them changes a persisted shape and belongs with the work that
+ * puts Feature Match Overlay on the shared vocabulary; see issue #89.
+ */
+export type MediaClipShapeGeometryCorner
 	= | { kind: 'square' }
 		| { kind: 'rounded'; size: number }
 		| { kind: 'cut'; size: number };
 
-export interface ShapeGeometry {
-	topLeft: ShapeGeometryCorner;
-	topRight: ShapeGeometryCorner;
-	bottomRight: ShapeGeometryCorner;
-	bottomLeft: ShapeGeometryCorner;
+export interface MediaClipShapeGeometry {
+	topLeft: MediaClipShapeGeometryCorner;
+	topRight: MediaClipShapeGeometryCorner;
+	bottomRight: MediaClipShapeGeometryCorner;
+	bottomLeft: MediaClipShapeGeometryCorner;
 	leftEdgeSlant?: number;
 	rightEdgeSlant?: number;
 }
@@ -33,7 +44,7 @@ export interface MediaGraphicItemConfig {
 	fit: MediaGraphicItemFit;
 	focalPosition: GraphicFocalPosition;
 	opacity: number;
-	clipGeometry?: ShapeGeometry;
+	clipGeometry?: MediaClipShapeGeometry;
 	loop?: boolean;
 	playbackRate?: number;
 }

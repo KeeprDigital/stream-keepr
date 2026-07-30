@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ShapeGeometry, ShapeGeometryCorner } from '~~/shared/types/graphicItem';
+import type { MediaClipShapeGeometry, MediaClipShapeGeometryCorner } from '~~/shared/types/graphicItem';
 import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { FeatureMatchMediaGraphicItemContentConfig } from '~~/shared/types/screenConfig';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
@@ -34,7 +34,7 @@ const cornerFields = [
 	{ key: 'bottomLeft', label: 'Bottom left' },
 ] as const;
 
-function defaultClipGeometry(): ShapeGeometry {
+function defaultClipGeometry(): MediaClipShapeGeometry {
 	return {
 		topLeft: { kind: 'square' },
 		topRight: { kind: 'square' },
@@ -50,11 +50,11 @@ function patch(updates: Partial<FeatureMatchMediaGraphicItemContentConfig>) {
 	emit('update', updates);
 }
 
-function patchClipGeometry(updates: Partial<ShapeGeometry>) {
+function patchClipGeometry(updates: Partial<MediaClipShapeGeometry>) {
 	patch({ clipGeometry: { ...clipGeometry.value, ...updates } });
 }
 
-function patchCorner(field: typeof cornerFields[number]['key'], kind: ShapeGeometryCorner['kind']) {
+function patchCorner(field: typeof cornerFields[number]['key'], kind: MediaClipShapeGeometryCorner['kind']) {
 	const current = clipGeometry.value[field];
 	patchClipGeometry({
 		[field]: kind === 'square'
@@ -186,7 +186,7 @@ function selectAsset(asset: GraphicAsset, reference: GraphicAssetReference) {
 							:model-value="clipGeometry[corner.key].kind"
 							:items="cornerKindOptions"
 							value-key="value"
-							@update:model-value="patchCorner(corner.key, $event as ShapeGeometryCorner['kind'])"
+							@update:model-value="patchCorner(corner.key, $event as MediaClipShapeGeometryCorner['kind'])"
 						/>
 						<UInputNumber
 							v-if="clipGeometry[corner.key].kind !== 'square'"

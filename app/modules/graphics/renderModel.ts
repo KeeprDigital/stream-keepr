@@ -1,14 +1,25 @@
 import type { CSSProperties } from 'vue';
 import type {
 	BroadcastGraphicConfig,
+	GraphicAnchorPoint,
+	GraphicGroupChildConfig,
+	GraphicGroupItemConfig,
 	GraphicItemConfig,
 	GraphicItemKind,
 	GraphicRect,
+	GraphicSurfaceStyle,
+	ShapeGeometry,
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from './selection';
-import { resolveGraphicFontFamily } from '~~/shared/modules/graphics';
+import {
+	isRectangularShapeGeometry,
+	resolveGraphicAnchorPoint,
+	resolveGraphicFontFamily,
+	shapeGeometryPath,
+	squareShapeGeometry,
+} from '~~/shared/modules/graphics';
 import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
 import { graphicsSelectionGraphicId, graphicsSelectionKey } from './selection';
 
@@ -30,6 +41,15 @@ import { graphicsSelectionGraphicId, graphicsSelectionKey } from './selection';
  * including a browser used as a program source. Treat the flags as a convention
  * for editor embedding, not a guarantee about live output.
  *
+ * ## Every surface is one path, painted once
+ *
+ * A Text Graphic Item, Shape Graphic Item, and Graphic Group all paint their
+ * Graphic Surface Style through one surface descriptor: a Shape Geometry path,
+ * a Graphic Fill, and an optional uniform outline drawn as an inner stroke of
+ * that same path. That is why an outline follows a cut corner or a slanted edge
+ * instead of being trimmed away by the clip that produced it, and why one pure
+ * function decides what every output paints.
+ *
  * ## The Key Output is a true alpha matte, by construction
  *
  * Every element paints pure white at its own alpha over a black backdrop. The
@@ -50,6 +70,9 @@ import { graphicsSelectionGraphicId, graphicsSelectionKey } from './selection';
  *   outline that keeps its authored colour silently breaks the matte, so each
  *   must resolve to white in the Key Output too.
  * - Nothing may use `mix-blend-mode` or a filter that is not plain source-over.
+ *   A glow is a `drop-shadow`, which composites its shadow under the source and
+ *   then draws the result source-over, so a white glow accumulates like any
+ *   other white paint.
  * - A Media Graphic Item must not paint its own colours into the Key Output; it
  *   contributes its alpha as white.
  */
@@ -82,17 +105,61 @@ export interface GraphicTextShrinkBounds {
 	maxFontSize: number;
 }
 
+export interface GraphicGradientStopDescriptor {
+	offset: string;
+	color: string;
+	opacity: number;
+}
+
+/** A linear-gradient Graphic Fill, projected onto the surface's own bounding box. */
+export interface GraphicGradientDescriptor {
+	id: string;
+	x1: string;
+	y1: string;
+	x2: string;
+	y2: string;
+	stops: GraphicGradientStopDescriptor[];
+}
+
+export interface GraphicFillDescriptor {
+	/** A colour, or `url(#id)` when the fill is a gradient. */
+	color: string;
+	opacity: number;
+	gradient?: GraphicGradientDescriptor;
+}
+
+export interface GraphicOutlineDescriptor {
+	color: string;
+	/** The authored outline width; the stroke is drawn at twice this and clipped. */
+	width: number;
+	/** The clip that keeps the stroke inside the surface's own path. */
+	clipId: string;
+}
+
+/** One painted Graphic Surface Style: a Shape Geometry path, a fill, an outline. */
+export interface GraphicSurfaceRenderDescriptor {
+	width: number;
+	height: number;
+	path: string;
+	fill: GraphicFillDescriptor;
+	outline?: GraphicOutlineDescriptor;
+}
+
 export interface GraphicItemRenderDescriptor {
 	id: string;
 	label: string;
 	kind: GraphicItemKind;
 	/** The item's authored bounds, clipped so nothing renders outside them. */
 	style: CSSProperties;
+	/** The item's painted Graphic Surface Style, when it resolves one. */
+	surface?: GraphicSurfaceRenderDescriptor;
 	/** Typography and Text Overflow Policy clamping. Present for Text Graphic Items. */
 	textStyle?: CSSProperties;
 	/** Present for Text Graphic Items. */
 	text?: string;
 	shrink?: GraphicTextShrinkBounds;
+	/** Present for Graphic Groups: the group's direct children, back to front. */
+	children?: GraphicItemRenderDescriptor[];
 }
 
 export interface BroadcastGraphicRenderDescriptor {
@@ -141,26 +208,133 @@ function clampOpacity(value: number): number {
 	return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 1));
 }
 
+const HEX_COLOUR = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i;
+
 /**
- * A Key Output renders composed opacity as a grayscale alpha matte, so every
- * fill becomes pure white at its own alpha rather than its authored colour.
- * Compositing those over the black Key backdrop yields the matte itself — see
- * the module docblock for the identity and its preconditions.
+ * A colour at an alpha, as one CSS value. A Key Output always resolves white, so
+ * every painted element keeps the alpha-matte identity.
  */
-function fillColour(output: ScreenOutput, colour: string, opacity: number): string {
+function alphaColour(output: ScreenOutput, colour: string, opacity: number): string {
 	const alpha = clampOpacity(opacity);
+	const channel = Math.round(alpha * 255).toString(16).padStart(2, '0');
 
 	if (output === 'key')
-		return `#ffffff${Math.round(alpha * 255).toString(16).padStart(2, '0')}`;
-	if (alpha <= 0)
-		return 'transparent';
-
-	const match = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(colour.trim());
-	if (alpha >= 1 || !match)
+		return `#ffffff${channel}`;
+	if (alpha >= 1)
 		return colour;
 
-	const [, r, g, b] = match;
-	return `rgba(${Number.parseInt(r!, 16)}, ${Number.parseInt(g!, 16)}, ${Number.parseInt(b!, 16)}, ${alpha})`;
+	const hex = HEX_COLOUR.exec(colour.trim());
+	if (hex)
+		return `#${hex[1]}${hex[2]}${hex[3]}${channel}`.toLowerCase();
+	return `color-mix(in srgb, ${colour} ${Math.round(alpha * 100)}%, transparent)`;
+}
+
+/** A Key Output paints opacity, never colour. */
+function paintColour(output: ScreenOutput, colour: string): string {
+	return output === 'key' ? '#ffffff' : colour;
+}
+
+/**
+ * A gradient angle projected onto the surface's own bounding box, in the CSS
+ * convention: zero degrees points up, ninety degrees points right.
+ */
+function gradientAxis(angle: number) {
+	const radians = ((Number.isFinite(angle) ? angle : 0) * Math.PI) / 180;
+	const dx = Math.sin(radians);
+	const dy = -Math.cos(radians);
+	const round = (value: number) => `${Math.round(value * 10000) / 10000}`;
+
+	return {
+		x1: round(0.5 - (dx / 2)),
+		y1: round(0.5 - (dy / 2)),
+		x2: round(0.5 + (dx / 2)),
+		y2: round(0.5 + (dy / 2)),
+	};
+}
+
+/**
+ * A Graphic Fill as one paint. A gradient keeps its stop opacities and resolves
+ * every stop colour to white in the Key Output, which is exactly the case the
+ * matte identity allows: white at a varying alpha.
+ */
+function fillDescriptor(
+	output: ScreenOutput,
+	style: GraphicSurfaceStyle,
+	scope: string,
+): GraphicFillDescriptor {
+	const opacity = clampOpacity(style.fillOpacity);
+
+	if (style.fill.type === 'solid')
+		return { color: paintColour(output, style.fill.color), opacity };
+
+	const gradientId = `graphic-fill-${scope}`;
+	return {
+		color: `url(#${gradientId})`,
+		opacity,
+		gradient: {
+			id: gradientId,
+			...gradientAxis(style.fill.angle),
+			stops: style.fill.stops.map(stop => ({
+				offset: `${Math.round(clampOpacity(stop.position) * 10000) / 100}%`,
+				color: paintColour(output, stop.color),
+				opacity: clampOpacity(stop.opacity),
+			})),
+		},
+	};
+}
+
+/**
+ * SVG `url(#id)` resolution is document-scoped, and every Broadcast Graphic on a
+ * Screen composes into one document, so an element id has to be unique across the
+ * whole composition rather than within one Broadcast Graphic.
+ */
+function elementScope(graphicId: string, itemId: string): string {
+	return `${graphicId}-${itemId}`;
+}
+
+/**
+ * One painted surface. The outline is an inner stroke of the same path: drawn at
+ * twice its authored width and clipped to the path, so it hugs every corner
+ * treatment and edge slant and never leaves the item's authored bounds.
+ */
+function surfaceDescriptor(
+	output: ScreenOutput,
+	scope: string,
+	size: { width: number; height: number },
+	geometry: ShapeGeometry,
+	style: GraphicSurfaceStyle | undefined,
+): GraphicSurfaceRenderDescriptor | undefined {
+	if (!style)
+		return undefined;
+
+	const outline = style.outline && style.outline.width > 0
+		? {
+				color: paintColour(output, style.outline.color),
+				width: style.outline.width,
+				clipId: `graphic-outline-${scope}`,
+			}
+		: undefined;
+
+	return {
+		width: Math.max(0, size.width),
+		height: Math.max(0, size.height),
+		path: shapeGeometryPath(size, geometry),
+		fill: fillDescriptor(output, style, scope),
+		outline,
+	};
+}
+
+/** A glow is a drop-shadow of the element's own painted alpha. */
+function glowFilter(output: ScreenOutput, style: GraphicSurfaceStyle | undefined): string | undefined {
+	const glow = style?.glow;
+	if (!glow || glow.size <= 0 || clampOpacity(glow.opacity) <= 0)
+		return undefined;
+	return `drop-shadow(0 0 ${glow.size}px ${alphaColour(output, glow.color, glow.opacity)})`;
+}
+
+function transformOrigin(anchor: GraphicAnchorPoint | undefined): string {
+	const point = resolveGraphicAnchorPoint(anchor);
+	return `${point.x * 100}% ${point.y * 100}%`;
 }
 
 /**
@@ -190,7 +364,7 @@ export function graphicTextStyle(
 	const base: CSSProperties = {
 		margin: 0,
 		width: '100%',
-		color: output === 'key' ? '#ffffff' : typography.color,
+		color: paintColour(output, typography.color),
 		fontFamily: resolveGraphicFontFamily(typography.fontId),
 		fontSize: `${fontSize}px`,
 		fontWeight: typography.fontWeight,
@@ -202,6 +376,7 @@ export function graphicTextStyle(
 		whiteSpace: 'pre-wrap',
 		overflowWrap: 'break-word',
 		overflow: 'hidden',
+		position: 'relative',
 	};
 
 	if (item.overflowPolicy === 'clip')
@@ -216,11 +391,64 @@ export function graphicTextStyle(
 	};
 }
 
-function textItemStyle(item: TextGraphicItemConfig): CSSProperties {
+const GROUP_ALIGNMENT: Record<GraphicGroupItemConfig['align'], string> = {
+	start: 'flex-start',
+	center: 'center',
+	end: 'flex-end',
+	stretch: 'stretch',
+};
+
+const GROUP_JUSTIFICATION: Record<GraphicGroupItemConfig['justify'], string> = {
+	'start': 'flex-start',
+	'center': 'center',
+	'end': 'flex-end',
+	'space-between': 'space-between',
+};
+
+/** The bounds an item occupies on the canvas, plus rotation about its anchor. */
+function canvasPlacement(item: GraphicItemConfig, offset: { x: number; y: number }): CSSProperties {
+	const rotation = item.rotation ?? 0;
 	return {
-		...rectStyle(item),
+		...rectStyle({ ...item, x: item.x + offset.x, y: item.y + offset.y }),
 		position: 'absolute',
 		boxSizing: 'border-box',
+		...(rotation === 0
+			? {}
+			: { transform: `rotate(${rotation}deg)`, transformOrigin: transformOrigin(item.anchor) }),
+	};
+}
+
+/**
+ * A row or column child's placement. Fixed sizing pins its main-axis extent;
+ * weighted fill shares what remains. Graphic Rotation belongs to canvas
+ * positioning, so a stacked child never rotates.
+ */
+function stackedPlacement(group: GraphicGroupItemConfig, child: GraphicGroupChildConfig): CSSProperties {
+	const isRow = group.arrangement === 'row';
+	const mainExtent = isRow ? child.width : child.height;
+	const sizing = child.sizing ?? { mode: 'fixed' as const, size: mainExtent, weight: 1 };
+	const crossExtent = group.align === 'stretch'
+		? {}
+		: isRow
+			? { height: `${child.height}px` }
+			: { width: `${child.width}px` };
+
+	return {
+		position: 'relative',
+		boxSizing: 'border-box',
+		flex: sizing.mode === 'fill'
+			? `${Math.max(0, sizing.weight)} 1 0`
+			: `0 0 ${Math.max(0, sizing.size)}px`,
+		alignSelf: GROUP_ALIGNMENT[group.align],
+		minWidth: 0,
+		minHeight: 0,
+		...crossExtent,
+	};
+}
+
+/** A Text Graphic Item is a box that centres its own text block. */
+function textBoxStyle(): CSSProperties {
+	return {
 		display: 'flex',
 		flexDirection: 'column',
 		justifyContent: 'center',
@@ -228,36 +456,122 @@ function textItemStyle(item: TextGraphicItemConfig): CSSProperties {
 	};
 }
 
-function shapeItemStyle(output: ScreenOutput, item: Extract<GraphicItemConfig, { type: 'shape' }>): CSSProperties {
+function groupBoxStyle(group: GraphicGroupItemConfig): CSSProperties {
+	if (group.arrangement === 'canvas')
+		return {};
+
 	return {
-		...rectStyle(item),
-		position: 'absolute',
-		boxSizing: 'border-box',
-		background: fillColour(output, item.surfaceStyle.fill, item.surfaceStyle.fillOpacity),
-		borderRadius: `${Math.max(0, item.geometry.cornerRadius)}px`,
+		display: 'flex',
+		flexDirection: group.arrangement === 'row' ? 'row' : 'column',
+		gap: `${Math.max(0, group.gap)}px`,
+		padding: `${Math.max(0, group.padding)}px`,
+		alignItems: GROUP_ALIGNMENT[group.align],
+		justifyContent: GROUP_JUSTIFICATION[group.justify],
 	};
 }
 
-function itemDescriptor(output: ScreenOutput, item: GraphicItemConfig): GraphicItemRenderDescriptor {
-	if (item.type === 'text') {
+/**
+ * A Graphic Group's children never escape its stacking context, and an optional
+ * clip holds them inside the group's own Shape Geometry.
+ */
+function groupClip(group: GraphicGroupItemConfig): CSSProperties {
+	if (!group.clip)
+		return {};
+	if (isRectangularShapeGeometry(group.geometry))
+		return { overflow: 'hidden' };
+	return {
+		clipPath: `path('${shapeGeometryPath(group, group.geometry)}')`,
+	};
+}
+
+/** A child's own Graphic Surface Style, or the group's local style default. */
+function resolveChildSurfaceStyle(
+	group: GraphicGroupItemConfig,
+	child: GraphicGroupChildConfig,
+): GraphicSurfaceStyle | undefined {
+	return child.surfaceStyle ?? group.defaultChildSurfaceStyle;
+}
+
+function textDescriptor(
+	output: ScreenOutput,
+	scope: string,
+	item: TextGraphicItemConfig,
+	placement: CSSProperties,
+	surfaceStyle: GraphicSurfaceStyle | undefined,
+): GraphicItemRenderDescriptor {
+	return {
+		id: item.id,
+		label: item.label,
+		kind: 'text',
+		style: { ...placement, ...textBoxStyle(), filter: glowFilter(output, surfaceStyle) },
+		surface: surfaceDescriptor(output, scope, item, squareShapeGeometry(), surfaceStyle),
+		textStyle: graphicTextStyle(output, item),
+		text: item.text,
+		shrink: item.overflowPolicy === 'shrink'
+			? { minFontSize: item.minFontSize, maxFontSize: item.typography.fontSize }
+			: undefined,
+	};
+}
+
+function childDescriptor(
+	output: ScreenOutput,
+	graphicId: string,
+	group: GraphicGroupItemConfig,
+	child: GraphicGroupChildConfig,
+): GraphicItemRenderDescriptor {
+	const placement = group.arrangement === 'canvas'
+		? canvasPlacement(child, { x: Math.max(0, group.padding), y: Math.max(0, group.padding) })
+		: stackedPlacement(group, child);
+	const surfaceStyle = resolveChildSurfaceStyle(group, child);
+	const scope = elementScope(graphicId, child.id);
+
+	if (child.type === 'text')
+		return textDescriptor(output, scope, child, placement, surfaceStyle);
+
+	return {
+		id: child.id,
+		label: child.label,
+		kind: 'shape',
+		style: { ...placement, filter: glowFilter(output, surfaceStyle) },
+		surface: surfaceDescriptor(output, scope, child, child.geometry, surfaceStyle),
+	};
+}
+
+function itemDescriptor(
+	output: ScreenOutput,
+	graphicId: string,
+	item: GraphicItemConfig,
+): GraphicItemRenderDescriptor {
+	const placement = canvasPlacement(item, { x: 0, y: 0 });
+	const scope = elementScope(graphicId, item.id);
+
+	if (item.type === 'text')
+		return textDescriptor(output, scope, item, placement, item.surfaceStyle);
+
+	if (item.type === 'shape') {
 		return {
 			id: item.id,
 			label: item.label,
-			kind: 'text',
-			style: textItemStyle(item),
-			textStyle: graphicTextStyle(output, item),
-			text: item.text,
-			shrink: item.overflowPolicy === 'shrink'
-				? { minFontSize: item.minFontSize, maxFontSize: item.typography.fontSize }
-				: undefined,
+			kind: 'shape',
+			style: { ...placement, filter: glowFilter(output, item.surfaceStyle) },
+			surface: surfaceDescriptor(output, scope, item, item.geometry, item.surfaceStyle),
 		};
 	}
 
 	return {
 		id: item.id,
 		label: item.label,
-		kind: 'shape',
-		style: shapeItemStyle(output, item),
+		kind: 'group',
+		style: {
+			...placement,
+			...groupBoxStyle(item),
+			...groupClip(item),
+			filter: glowFilter(output, item.surfaceStyle),
+		},
+		surface: surfaceDescriptor(output, scope, item, item.geometry, item.surfaceStyle),
+		children: item.children
+			.filter(child => child.visible)
+			.map(child => childDescriptor(output, graphicId, item, child)),
 	};
 }
 
@@ -281,6 +595,31 @@ function safeAreaGuide(
 			height: Math.max(0, canvasHeight - (insetY * 2)),
 		}),
 	};
+}
+
+/**
+ * Guides for the items an author can point at on the canvas: every top-level
+ * Graphic Item, and the canvas-positioned children of a Graphic Group, whose
+ * canvas rectangle is known without laying anything out. A row or column child's
+ * rectangle is decided by the browser's own layout, so it is selected from the
+ * authoring tree rather than from a guide the model would have to guess.
+ */
+function guideRects(graphic: BroadcastGraphicConfig): Array<{ itemId: string; label: string; rect: GraphicRect }> {
+	return graphic.items.flatMap((item) => {
+		const own = { itemId: item.id, label: item.label, rect: item as GraphicRect };
+		if (item.type !== 'group' || item.arrangement !== 'canvas')
+			return [own];
+
+		const padding = Math.max(0, item.padding);
+		return [
+			own,
+			...item.children.map(child => ({
+				itemId: child.id,
+				label: child.label,
+				rect: { ...child, x: item.x + padding + child.x, y: item.y + padding + child.y },
+			})),
+		];
+	});
 }
 
 export function resolveGraphicsCompositionRenderModel(
@@ -307,7 +646,7 @@ export function resolveGraphicsCompositionRenderModel(
 			name: graphic.name,
 			items: graphic.items
 				.filter(item => item.visible)
-				.map(item => itemDescriptor(input.output, item)),
+				.map(item => itemDescriptor(input.output, graphic.id, item)),
 		})),
 		safeAreaGuides: input.safeAreaGuides
 			? [
@@ -316,13 +655,13 @@ export function resolveGraphicsCompositionRenderModel(
 				]
 			: [],
 		itemGuides: input.itemGuides
-			? composed.flatMap(graphic => graphic.items.map(item => ({
+			? composed.flatMap(graphic => guideRects(graphic).map(guide => ({
 					graphicId: graphic.id,
-					itemId: item.id,
-					label: item.label,
-					selected: selectedKey === graphicsSelectionKey({ type: 'item', graphicId: graphic.id, itemId: item.id }),
+					itemId: guide.itemId,
+					label: guide.label,
+					selected: selectedKey === graphicsSelectionKey({ type: 'item', graphicId: graphic.id, itemId: guide.itemId }),
 					inSelectedGraphic: selectedGraphicId === graphic.id,
-					style: rectStyle(item),
+					style: rectStyle(guide.rect),
 				})))
 			: [],
 	};
