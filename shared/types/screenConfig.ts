@@ -188,7 +188,9 @@ export interface PlayerHistoryModeConfig {
 }
 
 export type FeatureMatchOverlayPresetId = 'full-table' | 'left-stacked-player-cams' | 'neon-feature-match';
-export type FeatureMatchOverlayOutput = 'overlay' | 'fill' | 'key';
+/** The live rendering variants a graphics Screen Mode Definition exposes. */
+export type ScreenOutput = 'overlay' | 'fill' | 'key';
+export type FeatureMatchOverlayOutput = ScreenOutput;
 export const DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH = 1920;
 export const DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT = 1080;
 export const FEATURE_MATCH_OVERLAY_ANCHOR_VALUES = [
@@ -485,6 +487,16 @@ export interface FeatureMatchOverlayModeConfig {
 	layout: FeatureMatchLayoutConfig;
 }
 
+export const DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH = 1920;
+export const DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT = 1080;
+
+/**
+ * A Broadcast Graphics Screen owns no mode configuration yet: its one
+ * configurable pixel canvas is the Screen's own width and height, and the
+ * ordered stack of Broadcast Graphics arrives with the compositor.
+ */
+export type BroadcastGraphicsModeConfig = Record<string, never>;
+
 export interface MetagameModeConfig {
 	// View selection
 	viewMode: MetagameViewMode;
@@ -522,7 +534,7 @@ export interface MetagameModeConfig {
 }
 
 // Union type for all mode configs
-export type ScreenModeConfig = DeckModeConfig | CardModeConfig | IdleModeConfig | StandingsModeConfig | TopCutModeConfig | FeatureMatchModeConfig | FeatureMatchOverlayModeConfig | MetagameModeConfig | PlayerHistoryModeConfig;
+export type ScreenModeConfig = DeckModeConfig | CardModeConfig | IdleModeConfig | StandingsModeConfig | TopCutModeConfig | FeatureMatchModeConfig | FeatureMatchOverlayModeConfig | BroadcastGraphicsModeConfig | MetagameModeConfig | PlayerHistoryModeConfig;
 
 // Default configs for each mode
 export const DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG: ScreenMediaBackgroundConfig = {
@@ -732,6 +744,8 @@ export const DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG: FeatureMatchOverlayModeConfig
 	},
 };
 
+export const DEFAULT_BROADCAST_GRAPHICS_CONFIG: BroadcastGraphicsModeConfig = {};
+
 export const DEFAULT_METAGAME_CONFIG: MetagameModeConfig = {
 	viewMode: 'archetype',
 	scope: 'all',
@@ -778,6 +792,7 @@ export const DEFAULT_MODE_CONFIGS = {
 	'topCut': DEFAULT_TOPCUT_CONFIG,
 	'feature-match': DEFAULT_FEATURE_MATCH_CONFIG,
 	'feature-match-overlay': DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
+	'broadcast-graphics': DEFAULT_BROADCAST_GRAPHICS_CONFIG,
 	'metagame': DEFAULT_METAGAME_CONFIG,
 	'player-history': DEFAULT_PLAYER_HISTORY_CONFIG,
 } satisfies { [K in ScreenMode]: ScreenModeConfig };
@@ -804,6 +819,7 @@ const MODE_DATA_BINDING_KEYS = {
 	'topCut': [],
 	'feature-match': ['featureMatchId'],
 	'feature-match-overlay': ['featureMatchId'],
+	'broadcast-graphics': [],
 	'standings': ['viewMode', 'topNCount', 'sliceStart', 'sliceEnd', 'playerListId', 'revealCount', 'roundId'],
 	'metagame': ['viewMode', 'scope', 'topN', 'playerListId', 'archetypeFilter'],
 	'player-history': ['playerId'],

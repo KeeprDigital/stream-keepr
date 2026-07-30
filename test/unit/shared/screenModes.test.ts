@@ -21,6 +21,15 @@ describe('sCREEN_MODES', () => {
 		}
 	});
 
+	it('broadcast-graphics mode is an overlay mode with label, icon, and description', () => {
+		expect(SCREEN_MODES['broadcast-graphics']).toMatchObject({
+			label: 'Broadcast Graphics',
+			displayType: 'overlay',
+		});
+		expect(SCREEN_MODES['broadcast-graphics'].icon).toBeTruthy();
+		expect(SCREEN_MODES['broadcast-graphics'].description).toBeTruthy();
+	});
+
 	it('feature-match mode has control display type', () => {
 		expect(SCREEN_MODES['feature-match'].displayType).toBe('control');
 	});
@@ -42,6 +51,15 @@ describe('getContainerControls', () => {
 			padding: true,
 			textColors: true,
 			background: true,
+		});
+	});
+
+	it('hides generic padding, text color, and background controls for Broadcast Graphics', () => {
+		expect(getContainerControls('broadcast-graphics')).toEqual({
+			dimensions: true,
+			padding: false,
+			textColors: false,
+			background: false,
 		});
 	});
 
