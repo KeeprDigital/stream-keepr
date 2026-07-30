@@ -4,6 +4,7 @@ import type {
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
 } from '../utils/graphicsAssetCompatibility';
 import type { GRAPHICS_RETENTION_EVIDENCE_CATEGORIES } from '../utils/graphicsAssetRetention';
+import type { TemplatePackagePreflightReport } from './templatePackage';
 
 declare const graphicAssetIdBrand: unique symbol;
 declare const graphicAssetRevisionIdBrand: unique symbol;
@@ -151,6 +152,12 @@ export type GraphicsIngestionStage
 		| 'validating'
 		| 'generating-derivatives'
 		| 'awaiting-confirmation'
+		/**
+		 * A Template Package whose preflight succeeded and whose proposal the
+		 * author accepted, holding its verified staged result until installation
+		 * publishes it. Nothing it proposes is discoverable or addressable here.
+		 */
+		| 'awaiting-installation'
 		| 'publishing'
 		| 'completed'
 		| 'failed'
@@ -392,6 +399,13 @@ export interface GraphicsIngestionOperation extends GraphicAssetSourceDeclaratio
 	stage: GraphicsIngestionStage;
 	canonicalCapacityOutcome?: GraphicsIngestionCapacityOutcome;
 	report?: GraphicAssetValidationReport;
+	/**
+	 * The immutable Template Package preflight result, present only on a
+	 * `template-package` operation that has produced one. It travels with the
+	 * operation so one read answers what was proposed, what it would cost, and
+	 * whether the author still has something to confirm.
+	 */
+	templatePackagePreflight?: TemplatePackagePreflightReport;
 	result?: {
 		outcome: 'published' | 'reused' | 'revision-created' | 'replacement-noop';
 		assetId: GraphicAssetId;
