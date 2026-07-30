@@ -24,6 +24,9 @@ const mockPublication = {
 const mockScreenOutputAssetCapabilities = {
 	prepare: vi.fn(),
 };
+const mockBroadcastGraphicsSessions = {
+	endSessionsForScreen: vi.fn(),
+};
 
 vi.mock('~~/server/utils/routeGuards', () => ({
 	validateScreenModeConfigsReferences: mockValidateScreenModeConfigsReferences,
@@ -40,6 +43,10 @@ vi.mock('~~/server/services/card', () => ({
 
 vi.mock('~~/server/modules/event-data-publication', () => ({
 	eventDataPublicationModule: () => mockPublication,
+}));
+
+vi.mock('~~/server/modules/broadcast-graphics-session', () => ({
+	broadcastGraphicsSessionModule: () => mockBroadcastGraphicsSessions,
 }));
 
 vi.stubGlobal('createError', (input: { statusCode: number; message?: string; statusMessage?: string }) => {
@@ -260,6 +267,36 @@ describe('screenWriteModule', () => {
 			expect(mockScreenService.update).not.toHaveBeenCalled();
 		});
 
+		it('ends the Broadcast Graphics Live Session when the Screen leaves the mode', async () => {
+			mockScreenService.findById.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'broadcast-graphics' }));
+			mockScreenService.update.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'idle' }));
+
+			await screenWriteModule().updateScreen({
+				eventId: 1,
+				screenId: 7,
+				input: { stateVersion: 0, currentMode: 'idle' } as never,
+			});
+
+			// The epoch ends only once the mode change is committed, so a failed
+			// update can never orphan a running show's live state.
+			expect(mockScreenService.update.mock.invocationCallOrder[0])
+				.toBeLessThan(mockBroadcastGraphicsSessions.endSessionsForScreen.mock.invocationCallOrder[0]!);
+			expect(mockBroadcastGraphicsSessions.endSessionsForScreen).toHaveBeenCalledWith(7, 1);
+		});
+
+		it('leaves the Live Session running while the Screen stays in Broadcast Graphics mode', async () => {
+			mockScreenService.findById.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'broadcast-graphics' }));
+			mockScreenService.update.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'broadcast-graphics' }));
+
+			await screenWriteModule().updateScreen({
+				eventId: 1,
+				screenId: 7,
+				input: { stateVersion: 0, name: 'Renamed' } as never,
+			});
+
+			expect(mockBroadcastGraphicsSessions.endSessionsForScreen).not.toHaveBeenCalled();
+		});
+
 		it('returns 404 when the versioned update finds nothing to write', async () => {
 			mockScreenService.update.mockResolvedValue(undefined);
 
@@ -283,6 +320,14 @@ describe('screenWriteModule', () => {
 
 			expect(mockCardService.cleanupDeletedScreenCard).not.toHaveBeenCalled();
 			expect(mockPublication.screenDeleted).not.toHaveBeenCalled();
+		});
+
+		it('ends any playout epoch before deleting the Screen, so its receipts are discarded', async () => {
+			await screenWriteModule().deleteScreen({ eventId: 1, screenId: 7 });
+
+			expect(mockBroadcastGraphicsSessions.endSessionsForScreen.mock.invocationCallOrder[0]!)
+				.toBeLessThan(mockScreenService.remove.mock.invocationCallOrder[0]!);
+			expect(mockBroadcastGraphicsSessions.endSessionsForScreen).toHaveBeenCalledWith(7, 1);
 		});
 
 		it('cleans up the derived card after the relational delete, then publishes', async () => {

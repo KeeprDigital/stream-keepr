@@ -7,6 +7,7 @@ import type {
 	ScreenResponse,
 	TalentResponse,
 } from '../api';
+import type { BroadcastGraphicsCommandAppliedPayload } from './broadcastGraphicsSession';
 import type { MtgCard } from './card/mtg';
 import type { FeatureMatchOrientation, Game, ScreenCommand } from './enums';
 import type { FeatureMatchSessionEventAppliedPayload } from './featureMatchSession';
@@ -158,6 +159,13 @@ export interface MessageDefinitions {
 	};
 
 	'featureMatchSession:eventApplied': FeatureMatchSessionEventAppliedPayload;
+
+	/**
+	 * A Broadcast Graphics playout action was accepted. A notification, never
+	 * authority: a client that has fallen behind the authoritative sequence
+	 * reloads the snapshot instead of trusting this payload.
+	 */
+	'broadcastGraphicsSession:commandApplied': BroadcastGraphicsCommandAppliedPayload;
 
 	// Player list management
 	'playerList:created': {

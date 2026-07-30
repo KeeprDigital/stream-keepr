@@ -3,6 +3,7 @@ import type { ScreenOutputAssetCapabilityManager } from '~~/server/modules/scree
 import type { CreateScreenInput, UpdateScreenInput } from '~~/server/schemas/api/screen';
 import type { ScreenResponse } from '~~/shared/api';
 import type { ScreenMode } from '~~/shared/types/enums';
+import { broadcastGraphicsSessionModule } from '~~/server/modules/broadcast-graphics-session';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import {
 	graphicAssetId,
@@ -161,6 +162,13 @@ export function screenWriteModule(dependencies: {
 			throw createError({ statusCode: 404, message: 'Screen not found' });
 		}
 
+		// A Broadcast Graphics Live Session is the Screen's playout epoch, so
+		// leaving the mode ends it. Ending after the mode change commits means a
+		// failed update can never orphan a running show's live state.
+		if (existingScreen.currentMode === 'broadcast-graphics' && updatedScreen.currentMode !== 'broadcast-graphics') {
+			await broadcastGraphicsSessionModule().endSessionsForScreen(screenId, eventId);
+		}
+
 		return await publication.screenUpdated({
 			eventId,
 			entity: updatedScreen,
@@ -169,6 +177,10 @@ export function screenWriteModule(dependencies: {
 	}
 
 	async function deleteScreen({ eventId, screenId, originConnectionId }: DeleteScreenParams): Promise<{ success: boolean }> {
+		// End any playout epoch first: ending discards its Command Receipts, which
+		// the Screen's cascade delete would otherwise leave behind unreferenced.
+		await broadcastGraphicsSessionModule().endSessionsForScreen(screenId, eventId);
+
 		const deleted = await screens.remove(screenId, eventId);
 
 		if (!deleted) {
