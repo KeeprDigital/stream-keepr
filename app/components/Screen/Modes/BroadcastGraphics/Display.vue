@@ -7,7 +7,8 @@ import { useBroadcastGraphicsModeData } from '~/composables/screen/useBroadcastG
 import { resolveBroadcastGraphicsRenderModel } from '~/modules/broadcast-graphics/renderModel';
 
 const { outputMode, previewGuides, previewSafeAreas, screen } = useScreenContext();
-const { graphics, onAirGraphicIds, inputValues, selectedTarget, publishSelection } = useBroadcastGraphicsModeData();
+const { animationProjection, graphics, onAirGraphicIds, inputValues, selectedTarget, publishSelection }
+	= useBroadcastGraphicsModeData();
 
 const resolvedOutput = computed<ScreenOutput>(() => outputMode?.value ?? 'overlay');
 const canvasDefaults = getScreenModeGraphicsCanvas('broadcast-graphics');
@@ -40,6 +41,7 @@ const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	canvasHeight: canvasHeight.value,
 	graphics: graphics.value,
 	onAirGraphicIds: onAirGraphicIds.value,
+	animation: animationProjection.value,
 	inputValues: inputValues.value,
 	itemGuides: previewGuides?.value ?? false,
 	safeAreaGuides: previewSafeAreas?.value ?? false,

@@ -24,6 +24,7 @@ export {
 	workingGraphicInputValues,
 } from './inputs';
 export type {
+	BroadcastGraphicPhaseTiming,
 	BroadcastGraphicPlayout,
 	BroadcastGraphicsCommandInput,
 	BroadcastGraphicsCommandPayload,
@@ -37,6 +38,7 @@ export type {
 export {
 	applyBroadcastGraphicsCommand,
 	BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES,
+	broadcastGraphicPhaseProjection,
 	broadcastGraphicPlayoutState,
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,

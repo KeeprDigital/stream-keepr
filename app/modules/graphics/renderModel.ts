@@ -1,8 +1,9 @@
 import type { CSSProperties } from 'vue';
-import type { ShapeGeometrySize } from '~~/shared/modules/graphics';
+import type { GraphicAnimationValues, ShapeGeometrySize } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
 	GraphicAnchorPoint,
+	GraphicAnimationPhase,
 	GraphicGroupChildConfig,
 	GraphicGroupItemConfig,
 	GraphicInputDeclaration,
@@ -11,6 +12,7 @@ import type {
 	GraphicItemKind,
 	GraphicPlaceholderStyle,
 	GraphicRect,
+	GraphicRevealEdge,
 	GraphicSurfaceStyle,
 	MediaGraphicItemConfig,
 	ShapeGeometry,
@@ -20,9 +22,12 @@ import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from './selection';
 import {
+	graphicAnimationStaggerOffset,
 	isRectangularShapeGeometry,
 	renderGraphicTextTemplate,
 	resolveGraphicAnchorPoint,
+	resolveGraphicAnimationOrigin,
+	resolveGraphicAnimationValues,
 	resolveGraphicFontFamily,
 	shapeGeometryPath,
 	squareShapeGeometry,
@@ -86,6 +91,37 @@ import { graphicsSelectionGraphicId, graphicsSelectionKey } from './selection';
  *   Output filters its decoded pixels to pure white while leaving every alpha
  *   value exactly as decoded. Element `opacity` then multiplies through, so a
  *   half-opaque media item accumulates like a half-opaque fill.
+ *   contributes its alpha as white.
+ *
+ * ## Graphic Animation, and why it keeps the matte
+ *
+ * Animation adds exactly three things to a style, and each was chosen because it
+ * cannot paint:
+ *
+ * - `opacity` scales the element's own alpha. The matte identity is stated over
+ *   alphas, and an element at alpha `a` under an opacity `o` contributes `a * o`
+ *   to both the composed luminance and the true alpha, so it multiplies through
+ *   exactly like a Graphic Group's opacity already does.
+ * - `transform` and `transformOrigin` move, scale, and rotate what is painted
+ *   without changing it. A slide, a scale about a Graphic Animation Origin, and
+ *   the authored Graphic Rotation compose into one transform so a single
+ *   `transform-origin` serves both: rotation is applied about the Graphic Anchor
+ *   Point, and the scale is expressed as a translation plus a scale about that
+ *   same point, which is the identity `scale about O = translate((1-s)(O-A)) then
+ *   scale about A`.
+ * - A reveal wipes with `mask-image`, not `clip-path`. A Graphic Group already
+ *   spends `clip-path` on its Shape Geometry clipping, and CSS allows one clip
+ *   path per element — a reveal expressed as a clip would silently replace that
+ *   clipping, which the vocabulary forbids. A mask composes with an existing clip
+ *   instead of competing with it. Its gradient is written as white at an alpha
+ *   even though only the alpha is read, so a mask that ever did paint would fail
+ *   the same white check as everything else.
+ *
+ * Nothing here introduces a `filter` beyond the existing glow, a
+ * `mix-blend-mode`, or a CSS transition: motion is *sampled* at an elapsed time
+ * rather than declared as a transition, so the same instant always produces the
+ * same frame in every output and no output can be mid-interpolation on its own
+ * schedule.
  */
 
 /**
@@ -121,6 +157,13 @@ export interface GraphicsCompositionRenderModelInput {
 	 * whole stack; the composed order is always the authored stack order.
 	 */
 	visibleGraphicIds?: readonly string[];
+	/**
+	 * Which lifecycle phase each Broadcast Graphic is in, and how long it has been
+	 * there. A Broadcast Graphic absent from this map — or an omitted map — renders
+	 * at its Graphic Resting State, which is what an unanimated Screen, a settled
+	 * on-air graphic, and a recovered session all resolve to.
+	 */
+	animation?: Readonly<Record<string, GraphicsAnimationProjection>>;
 	/**
 	 * The accepted on-air Graphic Input values a Graphic Text Template renders,
 	 * keyed by Broadcast Graphic id.
@@ -258,9 +301,25 @@ export interface GraphicItemRenderDescriptor {
 	children?: GraphicItemRenderDescriptor[];
 }
 
+/**
+ * One Broadcast Graphic's lifecycle position, as one phase and one elapsed time.
+ *
+ * Elapsed time rather than a phase progress or a set of per-owner states: the
+ * whole point of an authoritative effective start time is that every output
+ * derives the same frame from the same single number, and a delayed or staggered
+ * recipe inside the graphic works out its own progress from it.
+ */
+export interface GraphicsAnimationProjection {
+	phase: GraphicAnimationPhase;
+	/** Milliseconds since this phase's authoritative effective start time. */
+	elapsed: number;
+}
+
 export interface BroadcastGraphicRenderDescriptor {
 	id: string;
 	name: string;
+	/** Whole-graphic Graphic Animation, composed over every item it contains. */
+	style?: CSSProperties;
 	items: GraphicItemRenderDescriptor[];
 }
 
@@ -433,6 +492,92 @@ function transformOrigin(anchor: GraphicAnchorPoint | undefined): string {
 	return `${point.x * 100}% ${point.y * 100}%`;
 }
 
+/** Trim floating-point noise out of a sampled motion value. */
+function motionValue(value: number): number {
+	return Math.round(value * 1000) / 1000;
+}
+
+/**
+ * The edge a wipe's mask fades towards. A reveal from the left leaves the left of
+ * the element visible, so the mask runs left to right.
+ */
+const REVEAL_MASK_DIRECTION: Record<GraphicRevealEdge, string> = {
+	left: 'to right',
+	right: 'to left',
+	top: 'to bottom',
+	bottom: 'to top',
+};
+
+/**
+ * A reveal as a hard-edged mask across the owner's rectangular bounds.
+ *
+ * A mask rather than a clip path, so an owner that already clips to its Shape
+ * Geometry keeps that clipping while it wipes. Written as white at full and zero
+ * alpha because only the alpha is read, and because a Key Output must never carry
+ * a colour that is not white.
+ */
+function revealMask(values: GraphicAnimationValues): string | undefined {
+	const reveal = values.reveal;
+	if (!reveal)
+		return undefined;
+	const visible = Math.max(0, Math.min(1, reveal.visible));
+	if (visible >= 1)
+		return undefined;
+
+	const stop = `${motionValue(visible * 100)}%`;
+	return `linear-gradient(${REVEAL_MASK_DIRECTION[reveal.edge]}, #ffffff 0 ${stop}, #ffffff00 ${stop})`;
+}
+
+/**
+ * One owner's sampled motion, as the smallest set of style properties that
+ * expresses it.
+ *
+ * A slide, the authored Graphic Rotation, and a scale about a Graphic Animation
+ * Origin all share one `transform`, in that order: the slide is a canvas-space
+ * offset and so is applied outside the rotation, while the scale is applied inside
+ * it and about the Graphic Animation Origin, which it reaches by translating from
+ * the Graphic Anchor Point that `transform-origin` is already set to.
+ *
+ * Nothing is emitted for an owner at its Graphic Resting State, so an unanimated
+ * composition produces exactly the styles it produced before animation existed.
+ */
+function motionStyle(
+	values: GraphicAnimationValues,
+	size: { width: number; height: number },
+	rotation: number,
+	anchor: GraphicAnchorPoint | undefined,
+): CSSProperties {
+	const parts: string[] = [];
+	const translate = values.translate;
+
+	if (translate && (translate.x !== 0 || translate.y !== 0))
+		parts.push(`translate(${motionValue(translate.x)}px, ${motionValue(translate.y)}px)`);
+
+	if (rotation !== 0)
+		parts.push(`rotate(${rotation}deg)`);
+
+	if (values.scale !== undefined) {
+		const scale = values.scale;
+		const origin = values.scaleOrigin ?? resolveGraphicAnimationOrigin(undefined);
+		const anchorPoint = resolveGraphicAnchorPoint(anchor);
+		const shiftX = (origin.x - anchorPoint.x) * size.width * (1 - scale);
+		const shiftY = (origin.y - anchorPoint.y) * size.height * (1 - scale);
+		if (shiftX !== 0 || shiftY !== 0)
+			parts.push(`translate(${motionValue(shiftX)}px, ${motionValue(shiftY)}px)`);
+		parts.push(`scale(${motionValue(scale)})`);
+	}
+
+	const mask = revealMask(values);
+
+	return {
+		...(parts.length === 0 ? {} : { transform: parts.join(' '), transformOrigin: transformOrigin(anchor) }),
+		...(values.opacity === undefined ? {} : { opacity: motionValue(values.opacity) }),
+		...(mask === undefined ? {} : { maskImage: mask }),
+	};
+}
+
+const RESTING: GraphicAnimationValues = {};
+
 /**
  * How many whole lines of text fit inside authored bounds. An `ellipsis` or
  * `shrink` Text Overflow Policy clamps to this many lines, so the last visible
@@ -501,16 +646,17 @@ const GROUP_JUSTIFICATION: Record<GraphicGroupItemConfig['justify'], string> = {
 	'space-between': 'space-between',
 };
 
-/** The bounds an item occupies on the canvas, plus rotation about its anchor. */
-function canvasPlacement(item: GraphicItemConfig, offset: { x: number; y: number }): CSSProperties {
-	const rotation = item.rotation ?? 0;
+/** The bounds an item occupies on the canvas, plus rotation about its anchor and its sampled motion. */
+function canvasPlacement(
+	item: GraphicItemConfig,
+	offset: { x: number; y: number },
+	motion: GraphicAnimationValues,
+): CSSProperties {
 	return {
 		...rectStyle({ ...item, x: item.x + offset.x, y: item.y + offset.y }),
 		position: 'absolute',
 		boxSizing: 'border-box',
-		...(rotation === 0
-			? {}
-			: { transform: `rotate(${rotation}deg)`, transformOrigin: transformOrigin(item.anchor) }),
+		...motionStyle(motion, item, item.rotation ?? 0, item.anchor),
 	};
 }
 
@@ -519,7 +665,11 @@ function canvasPlacement(item: GraphicItemConfig, offset: { x: number; y: number
  * weighted fill shares what remains. Graphic Rotation belongs to canvas
  * positioning, so a stacked child never rotates.
  */
-function stackedPlacement(group: GraphicGroupItemConfig, child: GraphicGroupChildConfig): CSSProperties {
+function stackedPlacement(
+	group: GraphicGroupItemConfig,
+	child: GraphicGroupChildConfig,
+	motion: GraphicAnimationValues,
+): CSSProperties {
 	const isRow = group.arrangement === 'row';
 	const mainExtent = isRow ? child.width : child.height;
 	const sizing = child.sizing ?? { mode: 'fixed' as const, size: mainExtent, weight: 1 };
@@ -539,6 +689,9 @@ function stackedPlacement(group: GraphicGroupItemConfig, child: GraphicGroupChil
 		minWidth: 0,
 		minHeight: 0,
 		...crossExtent,
+		// Graphic Rotation belongs to canvas positioning, but animation does not:
+		// a stacked child still slides, scales, fades, and wipes.
+		...motionStyle(motion, child, 0, child.anchor),
 	};
 }
 
@@ -784,10 +937,11 @@ function childDescriptor(
 	child: GraphicGroupChildConfig,
 	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
 	inputs: GraphicTextTemplateContext,
+	motion: GraphicAnimationValues,
 ): GraphicItemRenderDescriptor {
 	const placement = group.arrangement === 'canvas'
-		? canvasPlacement(child, { x: Math.max(0, group.padding), y: Math.max(0, group.padding) })
-		: stackedPlacement(group, child);
+		? canvasPlacement(child, { x: Math.max(0, group.padding), y: Math.max(0, group.padding) }, motion)
+		: stackedPlacement(group, child, motion);
 	const scope = elementScope(graphicId, child.id);
 
 	// A Media Graphic Item carries no Graphic Surface Style, so it never inherits
@@ -816,8 +970,10 @@ function itemDescriptor(
 	item: GraphicItemConfig,
 	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
 	inputs: GraphicTextTemplateContext,
+	context: GraphicsItemAnimationContext,
 ): GraphicItemRenderDescriptor {
-	const placement = canvasPlacement(item, { x: 0, y: 0 });
+	const motion = context.motionOf(item, context.staggerOffset, context.parent);
+	const placement = canvasPlacement(item, { x: 0, y: 0 }, motion);
 	const scope = elementScope(graphicId, item.id);
 
 	if (item.type === 'text')
@@ -850,7 +1006,103 @@ function itemDescriptor(
 		surface: surfaceDescriptor(output, scope, item, item.geometry, item.surfaceStyle),
 		children: item.children
 			.filter(child => child.visible)
-			.map(child => childDescriptor(output, graphicId, item, child, resolveContentUrl, inputs)),
+			.map(child => childDescriptor(
+				output,
+				graphicId,
+				item,
+				child,
+				resolveContentUrl,
+				inputs,
+				// A child's own delay is offset by its group's stagger, on top of
+				// whatever offset the group itself received: both are measured from the
+				// one shared phase start. A `clear-parent` slide clears the group, not
+				// the canvas, because the group is the child's parent.
+				context.motionOf(
+					child,
+					context.staggerOffset + graphicAnimationStaggerOffset(
+						item.animation?.stagger?.[context.phase],
+						item.children.map(entry => entry.id),
+						child.id,
+					),
+					item,
+				),
+			)),
+	};
+}
+
+/**
+ * How one Broadcast Graphic's items find their own motion.
+ *
+ * Bundled rather than passed as five arguments because every owner needs the same
+ * phase, the same elapsed time, and the same canvas, and only the stagger offset
+ * and the parent bounds differ between them.
+ */
+interface GraphicsItemAnimationContext {
+	phase: GraphicAnimationPhase;
+	/** The offset this item's own container added to its delay. */
+	staggerOffset: number;
+	/** The bounds a `clear-parent` slide has to leave. */
+	parent: { width: number; height: number };
+	motionOf: (
+		owner: GraphicItemConfig | GraphicGroupChildConfig,
+		staggerOffset: number,
+		parent: { width: number; height: number },
+	) => GraphicAnimationValues;
+}
+
+/**
+ * The animation context for one Broadcast Graphic, or a resting one when nothing
+ * is being projected for it.
+ *
+ * A graphic absent from the projection map is settled at its Graphic Resting
+ * State — the case that covers an unanimated Screen, a graphic that has finished
+ * entering, and a recovered Live Session alike.
+ */
+function graphicAnimationContext(
+	graphic: BroadcastGraphicConfig,
+	projection: GraphicsAnimationProjection | undefined,
+	canvas: { width: number; height: number },
+): { graphicMotion: GraphicAnimationValues; itemContext: (item: GraphicItemConfig) => GraphicsItemAnimationContext } {
+	if (!projection) {
+		const resting: GraphicsItemAnimationContext = {
+			phase: 'enter',
+			staggerOffset: 0,
+			parent: canvas,
+			motionOf: () => RESTING,
+		};
+		return { graphicMotion: RESTING, itemContext: () => resting };
+	}
+
+	const { phase, elapsed } = projection;
+	const topLevelIds = graphic.items.map(item => item.id);
+	const graphicStagger = graphic.animation?.stagger?.[phase];
+
+	const motionOf: GraphicsItemAnimationContext['motionOf'] = (owner, staggerOffset, parent) =>
+		resolveGraphicAnimationValues({
+			recipe: owner.animation?.[phase],
+			phase,
+			elapsed,
+			staggerOffset,
+			rect: owner,
+			parent,
+		});
+
+	return {
+		graphicMotion: resolveGraphicAnimationValues({
+			recipe: graphic.animation?.[phase],
+			phase,
+			elapsed,
+			// A whole-graphic recipe moves the composed frame, so its own bounds and
+			// its parent are both the Screen canvas.
+			rect: { x: 0, y: 0, ...canvas },
+			parent: canvas,
+		}),
+		itemContext: item => ({
+			phase,
+			staggerOffset: graphicAnimationStaggerOffset(graphicStagger, topLevelIds, item.id),
+			parent: canvas,
+			motionOf,
+		}),
 	};
 }
 
@@ -926,10 +1178,20 @@ export function resolveGraphicsCompositionRenderModel(
 				declarations,
 				values: resolvedInputValues(declarations, input.inputValues?.[graphic.id]),
 			};
+			const canvas = { width: input.canvasWidth, height: input.canvasHeight };
+			const { graphicMotion, itemContext } = graphicAnimationContext(
+				graphic,
+				input.animation?.[graphic.id],
+				canvas,
+			);
+			const style = motionStyle(graphicMotion, canvas, 0, 'top-left');
 
 			return {
 				id: graphic.id,
 				name: graphic.name,
+				// Omitted entirely at rest, so an unanimated Broadcast Graphic keeps the
+				// descriptor it had before animation existed.
+				...(Object.keys(style).length === 0 ? {} : { style }),
 				items: graphic.items
 					.filter(item => item.visible)
 					.map(item => itemDescriptor(
@@ -938,6 +1200,7 @@ export function resolveGraphicsCompositionRenderModel(
 						item,
 						input.graphicAssetContentUrl,
 						inputs,
+						itemContext(item),
 					)),
 			};
 		}),
