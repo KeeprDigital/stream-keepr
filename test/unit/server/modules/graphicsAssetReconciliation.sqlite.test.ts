@@ -435,8 +435,9 @@ describe('graphics asset reconciliation', () => {
 			const incident = openDiscrepancy(overview.discrepancies, 'critical-integrity-incident');
 			expect(incident.isolated).toBe(true);
 			expect(incident.reasonCode).toBe('canonical-object-facts-mismatch');
-			// The only thing an administrator may do is look again.
-			expect(incident.actions).toEqual(['recheck']);
+			// Nothing that writes is on offer. Deep verification is, because it is
+			// the only action that can settle the conflict without overwriting.
+			expect(incident.actions).toEqual(['recheck', 'verify-stored-bytes']);
 			expect((await contentAvailability(digestOf(pixelPng)))?.availability).toBe('unavailable');
 		});
 
@@ -461,7 +462,7 @@ describe('graphics asset reconciliation', () => {
 			const incident = openDiscrepancy(overview.discrepancies, 'critical-integrity-incident');
 			expect(incident.reasonCode).toBe('canonical-object-redundant-metadata-mismatch');
 			expect(incident.isolated).toBe(true);
-			expect(incident.actions).toEqual(['recheck']);
+			expect(incident.actions).toEqual(['recheck', 'verify-stored-bytes']);
 		});
 
 		it('never repairs an isolated incident by overwriting bytes', async () => {
@@ -596,76 +597,47 @@ describe('graphics asset reconciliation', () => {
 		});
 	});
 
-	describe('quarantine copy restoration', () => {
-		/**
-		 * Arranges the state the retention path produces when content loses its
-		 * final reachability: a quarantine row holding an exact copy, while the
-		 * catalogue has separately marked the content unavailable.
-		 */
-		async function quarantineExistingContent(digest: string, byteLength: number) {
-			await harness.client.execute({
-				sql: `
-					INSERT INTO graphics_content_quarantine (
-						id, digest, byte_length, origin, quarantined_at, delete_after, created_at
-					) VALUES ('quarantined-copy', ?, ?, 'orphaned-content', 0, ?, 0)
-				`,
-				args: [digest, byteLength, Date.now() + 7 * DAY],
-			});
-		}
-
-		it('restores an exact verified copy through the same integrity checks', async () => {
+	describe('deep verification of stored bytes', () => {
+		it('closes an incident once the exact bytes are provably back', async () => {
 			const context = createReconciliationLibrary();
 			const operation = await ingestImage(context, {
-				idempotencyKey: 'quarantine-restore',
-				name: 'Quarantine restore',
+				idempotencyKey: 'deep-verify',
+				name: 'Deep verify',
 			});
 			const reference = publishedReference(operation);
 			const identity = canonicalIdentity(digestOf(pixelPng));
 			await context.canonical.delete(identity);
 			await context.library.runGraphicsReconciliation();
 
-			// The bytes come back, held by quarantine rather than by the catalogue.
+			// The bytes come back exactly as publication wrote them.
 			await context.canonical.createImmutable({
 				identity,
 				bytes: boundedBytes(pixelPng),
 				metadata: canonicalMetadata(digestOf(pixelPng)),
 			});
-			await quarantineExistingContent(digestOf(pixelPng), pixelPng.byteLength);
 
 			const overview = await context.library.getReconciliationOverview();
 			const discrepancy = openDiscrepancy(overview.discrepancies, 'unavailable-content');
-			expect(discrepancy.actions).toContain('restore-quarantined-copy');
-
-			const outcome = await context.library.restoreQuarantinedGraphicAssetContent({
+			const outcome = await context.library.verifyStoredGraphicAssetContent({
 				discrepancyId: discrepancy.id,
 				actor: 'administrator',
 			});
 
-			expect(outcome).toMatchObject({
-				outcome: 'resolved',
-				resolution: 'restored-from-quarantine',
-			});
+			expect(outcome).toMatchObject({ outcome: 'resolved' });
 			expect((await contentAvailability(digestOf(pixelPng)))?.availability).toBe('available');
 			expect(await context.library.inspectGraphicAssetRevision(reference))
 				.toMatchObject({ outcome: 'available' });
-			const quarantine = await harness.client.execute(
-				'SELECT digest FROM graphics_content_quarantine',
-			);
-			expect(quarantine.rows).toHaveLength(0);
 		});
 
-		it('isolates a copy whose bytes do not hash to the digest owning their key', async () => {
+		it('detects bytes that changed behind metadata that still agrees', async () => {
 			const context = createReconciliationLibrary();
-			await ingestImage(context, {
-				idempotencyKey: 'corrupt-copy',
-				name: 'Corrupt copy',
-			});
+			await ingestImage(context, { idempotencyKey: 'silent-corruption', name: 'Silent corruption' });
 			const identity = canonicalIdentity(digestOf(pixelPng));
 			await context.canonical.delete(identity);
 			await context.library.runGraphicsReconciliation();
 
-			// Same length and media type, different bytes: only a full re-hash can
-			// tell the difference.
+			// Same length, same media type, same recorded digest metadata — only the
+			// bytes differ. Nothing short of a full re-hash can tell.
 			const corrupted = Uint8Array.from(pixelPng);
 			corrupted[corrupted.length - 20] ^= 0xFF;
 			await context.canonical.createImmutable({
@@ -673,12 +645,18 @@ describe('graphics asset reconciliation', () => {
 				bytes: boundedBytes(corrupted),
 				metadata: canonicalMetadata(digestOf(pixelPng)),
 			});
-			await quarantineExistingContent(digestOf(pixelPng), pixelPng.byteLength);
 
-			const overview = await context.library.getReconciliationOverview();
-			const discrepancy = openDiscrepancy(overview.discrepancies, 'unavailable-content');
-			const outcome = await context.library.restoreQuarantinedGraphicAssetContent({
-				discrepancyId: discrepancy.id,
+			// The open incident still says the bytes were missing, and a head
+			// request cannot tell that what came back is not what left.
+			const target = openDiscrepancy(
+				(await context.library.getReconciliationOverview()).discrepancies,
+				'unavailable-content',
+			);
+			expect(target.actions).toContain('verify-stored-bytes');
+
+			// Deep verification is the only thing that finds it.
+			const outcome = await context.library.verifyStoredGraphicAssetContent({
+				discrepancyId: target.id,
 				actor: 'administrator',
 			});
 
@@ -689,7 +667,88 @@ describe('graphics asset reconciliation', () => {
 			expect(incident.isolated).toBe(true);
 			// The conflicting bytes were left exactly where they were.
 			expect(await context.canonical.readMetadata(identity)).toMatchObject({ outcome: 'available' });
-			expect((await contentAvailability(digestOf(pixelPng)))?.availability).toBe('unavailable');
+		});
+
+		it('gives an isolated incident a genuine closing action', async () => {
+			const context = createReconciliationLibrary();
+			await ingestImage(context, { idempotencyKey: 'closeable', name: 'Closeable incident' });
+			const identity = canonicalIdentity(digestOf(pixelPng));
+			await context.canonical.delete(identity);
+			// Stored with the wrong media type: the sweep isolates it.
+			await context.canonical.createImmutable({
+				identity,
+				bytes: boundedBytes(pixelPng),
+				metadata: { contentType: 'image/jpeg', custom: { sha256: digestOf(pixelPng) } },
+			});
+			await context.library.runGraphicsReconciliation();
+			const isolated = openDiscrepancy(
+				(await context.library.getReconciliationOverview()).discrepancies,
+				'critical-integrity-incident',
+			);
+			expect(isolated.actions).toContain('verify-stored-bytes');
+
+			// An operator repairs the object metadata out of band.
+			await context.canonical.delete(identity);
+			await context.canonical.createImmutable({
+				identity,
+				bytes: boundedBytes(pixelPng),
+				metadata: canonicalMetadata(digestOf(pixelPng)),
+			});
+
+			const outcome = await context.library.verifyStoredGraphicAssetContent({
+				discrepancyId: isolated.id,
+				actor: 'administrator',
+			});
+
+			expect(outcome).toMatchObject({ outcome: 'resolved' });
+			expect((await context.library.getReconciliationOverview())
+				.openCounts['critical-integrity-incident']).toBe(0);
+			expect((await contentAvailability(digestOf(pixelPng)))?.availability).toBe('available');
+		});
+
+		it('restores verified bytes a quarantine record was holding', async () => {
+			const context = createReconciliationLibrary();
+			await ingestImage(context, {
+				idempotencyKey: 'quarantine-restore',
+				name: 'Quarantine restore',
+			});
+			const identity = canonicalIdentity(digestOf(pixelPng));
+			await context.canonical.delete(identity);
+			await context.library.runGraphicsReconciliation();
+			await context.canonical.createImmutable({
+				identity,
+				bytes: boundedBytes(pixelPng),
+				metadata: canonicalMetadata(digestOf(pixelPng)),
+			});
+			// The retention path records quarantine exactly like this when content
+			// loses its final reachability; arranging the row directly is the same
+			// kind of arrange as writing a reference by hand.
+			await harness.client.execute({
+				sql: `
+					INSERT INTO graphics_content_quarantine (
+						id, digest, byte_length, origin, quarantined_at, delete_after, created_at
+					) VALUES ('quarantined-copy', ?, ?, 'orphaned-content', 0, ?, 0)
+				`,
+				args: [digestOf(pixelPng), pixelPng.byteLength, Date.now() + 7 * DAY],
+			});
+
+			const discrepancy = openDiscrepancy(
+				(await context.library.getReconciliationOverview()).discrepancies,
+				'unavailable-content',
+			);
+			const outcome = await context.library.verifyStoredGraphicAssetContent({
+				discrepancyId: discrepancy.id,
+				actor: 'administrator',
+			});
+
+			expect(outcome).toMatchObject({
+				outcome: 'resolved',
+				resolution: 'restored-from-quarantine',
+			});
+			const quarantine = await harness.client.execute(
+				'SELECT digest FROM graphics_content_quarantine',
+			);
+			expect(quarantine.rows).toHaveLength(0);
 		});
 	});
 
@@ -809,6 +868,120 @@ describe('graphics asset reconciliation', () => {
 				outcome: 'rejected',
 				code: 'source-content-unavailable',
 			});
+		});
+	});
+
+	describe('readers and reconciliation agree on what agreement means', () => {
+		it('stops serving content an integrity conflict has isolated', async () => {
+			const context = createReconciliationLibrary();
+			const operation = await ingestImage(context, {
+				idempotencyKey: 'fail-closed',
+				name: 'Fail closed',
+			});
+			const reference = publishedReference(operation);
+			const identity = canonicalIdentity(digestOf(pixelPng));
+
+			// The right bytes, size and media type, but the redundant digest
+			// metadata publication writes is gone. Reconciliation isolates this,
+			// so delivery must refuse it too: content the library is failing
+			// closed on must never still be reaching air.
+			await context.canonical.delete(identity);
+			await context.canonical.createImmutable({
+				identity,
+				bytes: boundedBytes(pixelPng),
+				metadata: { contentType: 'image/png' },
+			});
+
+			expect(await context.library.resolveGraphicAssetRevision(reference))
+				.toEqual({ outcome: 'unavailable', retryable: true });
+			expect(await context.library.inspectGraphicAssetRevision(reference))
+				.toEqual({ outcome: 'unavailable', retryable: true });
+
+			const overview = await context.library.getReconciliationOverview();
+			const incident = openDiscrepancy(overview.discrepancies, 'critical-integrity-incident');
+			expect(incident.reasonCode).toBe('canonical-object-redundant-metadata-mismatch');
+		});
+
+		it('reports a preview whose bytes are gone as unavailable, not absent', async () => {
+			const context = createReconciliationLibrary();
+			const operation = await ingestImage(context, {
+				idempotencyKey: 'preview-gone',
+				name: 'Preview gone',
+			});
+			const reference = publishedReference(operation);
+			await context.canonical.delete(
+				canonicalIdentity(await thumbnailDigest(reference.revisionId)),
+			);
+
+			// A recorded Graphics Derivative whose bytes are missing is a retryable
+			// operational failure. Reporting it as missing would tell a caller
+			// there is no preview when there is one.
+			expect(await context.library.resolveGraphicAssetThumbnail({ assetId: reference.assetId }))
+				.toEqual({ outcome: 'unavailable', retryable: true });
+
+			// And the reader fed reconciliation on the way out, with no sweep run.
+			const overview = await context.library.getReconciliationOverview();
+			expect(overview.openCounts['missing-derivative']).toBe(1);
+		});
+
+		it('reports an asset with no preview recorded as missing', async () => {
+			const context = createReconciliationLibrary();
+			expect(await context.library.resolveGraphicAssetThumbnail({
+				assetId: 'no-such-asset' as GraphicAssetId,
+			})).toEqual({ outcome: 'missing' });
+		});
+	});
+
+	describe('repair refuses before it writes', () => {
+		it('will not restore bytes while an isolated incident is open on the same content', async () => {
+			const context = createReconciliationLibrary();
+			await ingestImage(context, { idempotencyKey: 'blocked-repair', name: 'Blocked repair' });
+			const identity = canonicalIdentity(digestOf(pixelPng));
+			await context.canonical.delete(identity);
+			await context.library.runGraphicsReconciliation();
+			const unavailable = openDiscrepancy(
+				(await context.library.getReconciliationOverview()).discrepancies,
+				'unavailable-content',
+			);
+
+			// Corrupt bytes appear and deep verification isolates them, leaving two
+			// open rows on one digest: the original unavailability and the conflict.
+			const corrupted = Uint8Array.from(pixelPng);
+			corrupted[corrupted.length - 20] ^= 0xFF;
+			await context.canonical.createImmutable({
+				identity,
+				bytes: boundedBytes(corrupted),
+				metadata: canonicalMetadata(digestOf(pixelPng)),
+			});
+			await context.library.verifyStoredGraphicAssetContent({
+				discrepancyId: unavailable.id,
+				actor: 'administrator',
+			});
+			expect((await context.library.getReconciliationOverview())
+				.openCounts['critical-integrity-incident']).toBe(1);
+
+			const outcome = await context.library.repairUnavailableGraphicAssetContent({
+				discrepancyId: unavailable.id,
+				actor: 'administrator',
+				bytes: boundedBytes(pixelPng),
+			});
+
+			// Refused before any byte moved, so the ledger cannot claim a refusal
+			// over a write that already landed.
+			expect(outcome).toMatchObject({
+				outcome: 'rejected',
+				code: 'integrity-incident-isolated',
+			});
+			const stored = await context.canonical.readMetadata(identity);
+			expect(stored.outcome === 'available' && stored.object.byteLength)
+				.toBe(corrupted.byteLength);
+			const rejections = await context.library.listGraphicsAssetEvidence({
+				categories: ['repair-rejected'],
+			});
+			expect(rejections.length).toBeGreaterThan(0);
+			expect(await context.library.listGraphicsAssetEvidence({
+				categories: ['content-repaired'],
+			})).toEqual([]);
 		});
 	});
 

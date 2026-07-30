@@ -26,7 +26,7 @@ import {
 	GRAPHICS_RETENTION_GUARANTEES,
 	graphicsRetentionDeadline,
 } from '~~/shared/utils/graphicsAssetRetention';
-import { graphicsObjectIdentity } from './object-store';
+import { canonicalContentIdentity } from './canonical-integrity';
 import { stagedIngestionObjectIdentities } from './operation';
 
 /** How many candidates one scheduled sweep processes per retention stage. */
@@ -85,7 +85,7 @@ export interface QuarantinedContent {
 	id: string;
 	digest: string;
 	byteLength: number;
-	origin: 'orphaned-content' | 'abandoned-canonical-write';
+	origin: 'orphaned-content' | 'abandoned-canonical-write' | 'unexpected-object';
 	quarantinedAt: string;
 	deleteAfter: string;
 }
@@ -533,7 +533,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				continue;
 			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable content identity.
 			const removal = await dependencies.canonical.delete(
-				graphicsObjectIdentity(`sha256/${content.digest}`),
+				canonicalContentIdentity(content.digest),
 			);
 			if (removal.outcome === 'unavailable') {
 				// The quarantine row still holds the only record of these bytes, so

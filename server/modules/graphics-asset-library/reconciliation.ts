@@ -27,6 +27,7 @@ import type {
 import {
 	canonicalObjectDigest,
 	GRAPHICS_CANONICAL_OBJECT_PREFIX,
+	GRAPHICS_DISCREPANCY_KINDS,
 	GRAPHICS_RECONCILIATION_ACTOR,
 	GRAPHICS_RECONCILIATION_STAGE_BATCH,
 	GRAPHICS_WORKING_COPY_LEASE_MILLISECONDS,
@@ -35,6 +36,7 @@ import {
 	GRAPHICS_RETENTION_GUARANTEES,
 	graphicsRetentionDeadline,
 } from '~~/shared/utils/graphicsAssetRetention';
+import { canonicalContentIdentity, canonicalObjectAgreement } from './canonical-integrity';
 import { graphicsObjectIdentity } from './object-store';
 import { stagedIngestionObjectIdentities } from './operation';
 
@@ -53,10 +55,6 @@ export function reconciliationWorkingCopyIdentity(discrepancyId: string): Graphi
 	return stagedIngestionObjectIdentities(
 		reconciliationWorkingCopyOperationId(discrepancyId),
 	)[0]!;
-}
-
-export function canonicalContentIdentity(digest: string): GraphicsObjectIdentity {
-	return graphicsObjectIdentity(`${GRAPHICS_CANONICAL_OBJECT_PREFIX}${digest}`);
 }
 
 /**
@@ -153,6 +151,16 @@ export interface GraphicsAssetReconciliationCatalogue {
 		limit: number;
 	}) => Promise<ExpectedGraphicAssetContent[]>;
 	findExpectedContent: (input: { digest: string }) => Promise<ExpectedGraphicAssetContent | undefined>;
+	/** One set-based read for a whole queue, rather than one read per row. */
+	findExpectedContents: (input: {
+		digests: readonly string[];
+	}) => Promise<Map<string, ExpectedGraphicAssetContent>>;
+	listContentUsageForDigests: (input: {
+		digests: readonly string[];
+	}) => Promise<Map<string, GraphicsDiscrepancyUsage[]>>;
+	findQuarantinedDigests: (input: {
+		digests: readonly string[];
+	}) => Promise<Map<string, { quarantinedAt: string; deleteAfter: string }>>;
 	findRevisionContentDigest: (input: {
 		assetId: GraphicAssetId;
 		revisionId: GraphicAssetRevisionId;
@@ -192,9 +200,16 @@ export interface GraphicsAssetReconciliationCatalogue {
 	listContentUsage: (input: { digest: string }) => Promise<GraphicsDiscrepancyUsage[]>;
 	openDiscrepancy: (input: OpenGraphicsDiscrepancyInput) => Promise<GraphicsDiscrepancyRecord>;
 	findDiscrepancy: (input: { id: string }) => Promise<GraphicsDiscrepancyRecord | undefined>;
+	/**
+	 * Whether any isolated critical integrity incident is open against one
+	 * content. Every action that would write bytes asks this first, so a repair
+	 * can never land and then be reported as refused.
+	 */
+	hasOpenIsolatedIncident: (input: { digest: string }) => Promise<boolean>;
 	listDiscrepancies: (input: {
 		limit: number;
 		states?: readonly GraphicsDiscrepancyState[];
+		kinds?: readonly GraphicsDiscrepancyKind[];
 	}) => Promise<GraphicsDiscrepancyRecord[]>;
 	countOpenDiscrepancies: () => Promise<Record<GraphicsDiscrepancyKind, number>>;
 	recordDiscrepancyObservation: (input: {
@@ -310,8 +325,8 @@ interface GraphicsReconciliationDependencies {
 	generateIdentity: () => string;
 }
 
-/** How many discrepancies one operational view lists. */
-const OVERVIEW_LIMIT = 200;
+/** How many discrepancies of each kind one operational view lists. */
+const OVERVIEW_KIND_LIMIT = 50;
 
 const EMPTY_OPEN_COUNTS: Record<GraphicsDiscrepancyKind, number> = {
 	'unavailable-content': 0,
@@ -364,20 +379,84 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 	 */
 	function validActions(
 		record: GraphicsDiscrepancyRecord,
-		context: { quarantined: boolean; sourceAvailable: boolean },
+		context: { regenerable: boolean; sourceAvailable: boolean },
 	): GraphicsDiscrepancyAction[] {
 		if (record.state === 'resolved')
 			return [];
+		// An isolated incident offers no action that writes. Deep verification is
+		// offered because it is the only way to settle one: it either proves the
+		// stored bytes are exactly what the catalogue expects, or proves they are
+		// not, without overwriting anything.
+		//
+		// It is offered whenever there is catalogued content to verify against,
+		// deliberately without first checking whether bytes are there. Reading
+		// the store for every row would put an operational view back into the
+		// hundreds of subrequests, and answering from the last recorded
+		// observation would hide the action at the exact moment it is wanted —
+		// right after an operator restores bytes, when nothing has re-observed
+		// them yet. The action itself reports honestly when there is nothing to
+		// verify.
 		if (record.isolated || record.kind === 'critical-integrity-incident')
-			return ['recheck'];
+			return record.digest ? ['recheck', 'verify-stored-bytes'] : ['recheck'];
+		// An unexpected object is never adopted, so nothing here writes catalogue
+		// state for it either.
 		if (record.kind === 'unexpected-object')
 			return ['recheck'];
-		const actions: GraphicsDiscrepancyAction[] = ['recheck', 'repair-with-exact-bytes'];
-		if (context.quarantined)
-			actions.push('restore-quarantined-copy');
-		if (record.kind === 'missing-derivative' && context.sourceAvailable)
+		const actions: GraphicsDiscrepancyAction[] = [
+			'recheck',
+			'verify-stored-bytes',
+			'repair-with-exact-bytes',
+		];
+		// Regeneration needs a Graphics Derivative to reproduce and a source to
+		// reproduce it from. Content nothing reaches at all has neither, so it is
+		// repaired with exact bytes like any other missing content.
+		if (record.kind === 'missing-derivative' && context.regenerable && context.sourceAvailable)
 			actions.push('regenerate-derivative');
 		return actions;
+	}
+
+	/**
+	 * Everything a queue of discrepancies needs to be described, read in a fixed
+	 * number of set-based queries rather than a few per row.
+	 *
+	 * A queue of 200 incidents used to cost hundreds of subrequests, which is a
+	 * real ceiling on a Worker; this keeps one operational view to a handful
+	 * regardless of queue depth.
+	 */
+	interface DiscrepancyContext {
+		expectations: Map<string, ExpectedGraphicAssetContent>;
+		usage: Map<string, GraphicsDiscrepancyUsage[]>;
+		quarantine: Map<string, { quarantinedAt: string; deleteAfter: string }>;
+	}
+
+	async function loadDiscrepancyContext(
+		records: readonly GraphicsDiscrepancyRecord[],
+	): Promise<DiscrepancyContext> {
+		const digests = [...new Set(
+			records.map(record => record.digest).filter((digest): digest is string => Boolean(digest)),
+		)];
+		if (digests.length === 0)
+			return { expectations: new Map(), usage: new Map(), quarantine: new Map() };
+		const [expectations, usage, quarantine] = await Promise.all([
+			catalogue.findExpectedContents({ digests }),
+			catalogue.listContentUsageForDigests({ digests }),
+			catalogue.findQuarantinedDigests({ digests }),
+		]);
+		// A missing Graphics Derivative is judged against its source, which is a
+		// different digest, so those are resolved in one further set-based read.
+		const sourceDigests = [...new Set(
+			[...expectations.values()]
+				.map(expectation => expectation.derivative?.sourceDigest)
+				.filter((digest): digest is string => Boolean(digest) && !expectations.has(digest!)),
+		)];
+		if (sourceDigests.length > 0) {
+			for (const [digest, expectation] of await catalogue.findExpectedContents({
+				digests: sourceDigests,
+			})) {
+				expectations.set(digest, expectation);
+			}
+		}
+		return { expectations, usage, quarantine };
 	}
 
 	/**
@@ -385,24 +464,25 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 	 * structured evidence behind the disagreement, the pinned usage it affects,
 	 * and only the actions valid in that state. No digest or object key crosses
 	 * this boundary.
+	 *
+	 * This reads no bytes. Whether an object is currently present comes from the
+	 * discrepancy's own last observation, and whether a derivative's source can
+	 * be reproduced comes from the catalogue's advisory availability state —
+	 * which is exactly what advisory state is for. Deciding what to *offer* may
+	 * use it; every action that acts re-proves it against the byte store first.
 	 */
-	async function describe(record: GraphicsDiscrepancyRecord): Promise<GraphicsDiscrepancy> {
-		const expectation = record.digest
-			? await catalogue.findExpectedContent({ digest: record.digest })
-			: undefined;
+	function describeWith(
+		record: GraphicsDiscrepancyRecord,
+		context: DiscrepancyContext,
+	): GraphicsDiscrepancy {
+		const expectation = record.digest ? context.expectations.get(record.digest) : undefined;
 		const quarantine = record.digest && record.state === 'open'
-			? await catalogue.findContentQuarantine({ digest: record.digest })
+			? context.quarantine.get(record.digest)
 			: undefined;
-		const affectedUsage = record.digest
-			? await catalogue.listContentUsage({ digest: record.digest })
-			: [];
+		const affectedUsage = (record.digest && context.usage.get(record.digest)) || [];
 		const derivative = expectation?.derivative;
 		const sourceAvailable = derivative !== undefined
-			&& await canonicalObjectAgrees({
-				digest: derivative.sourceDigest,
-				byteLength: derivative.sourceByteLength,
-				canonicalMime: derivative.sourceCanonicalMime,
-			});
+			&& context.expectations.get(derivative.sourceDigest)?.availability === 'available';
 		return {
 			id: record.id,
 			kind: record.kind,
@@ -436,10 +516,14 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 					}
 				: {}),
 			actions: validActions(record, {
-				quarantined: quarantine !== undefined,
+				regenerable: derivative !== undefined,
 				sourceAvailable,
 			}),
 		};
+	}
+
+	async function describe(record: GraphicsDiscrepancyRecord): Promise<GraphicsDiscrepancy> {
+		return describeWith(record, await loadDiscrepancyContext([record]));
 	}
 
 	type CanonicalObservation
@@ -478,24 +562,10 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			byteLength: result.object.byteLength,
 			canonicalMime: result.object.contentType,
 		};
-		if (
-			result.object.byteLength !== content.byteLength
-			|| result.object.contentType !== content.canonicalMime
-		) {
-			return {
-				outcome: 'mismatched',
-				reasonCode: 'canonical-object-facts-mismatch',
-				...observed,
-			};
-		}
-		if (result.object.customMetadata.sha256 !== content.digest) {
-			return {
-				outcome: 'mismatched',
-				reasonCode: 'canonical-object-redundant-metadata-mismatch',
-				...observed,
-			};
-		}
-		return { outcome: 'agrees', ...observed };
+		const agreement = canonicalObjectAgreement(content, result.object);
+		return agreement.outcome === 'agrees'
+			? { outcome: 'agrees', ...observed }
+			: { outcome: 'mismatched', reasonCode: agreement.reasonCode, ...observed };
 	}
 
 	/**
@@ -542,6 +612,7 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 	): Promise<{
 		observed: CanonicalObservation['outcome'];
 		unavailableDetected: boolean;
+		derivativeMissing: boolean;
 		availabilityRestored: boolean;
 		criticalIncident: boolean;
 	}> {
@@ -550,6 +621,7 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		const unchanged = {
 			observed: observation.outcome,
 			unavailableDetected: false,
+			derivativeMissing: false,
 			availabilityRestored: false,
 			criticalIncident: false,
 		};
@@ -598,16 +670,23 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		}
 
 		const critical = observation.outcome === 'mismatched';
+		// Only content a Graphics Derivative actually reaches can be regenerated.
+		// Content nothing reaches at all is still catalogued content whose bytes
+		// are gone, so it is reported as unavailable and repaired with exact
+		// bytes rather than offered a regeneration it has no source for.
+		const regenerable = content.revisionReach === 0
+			&& content.derivativeReach > 0
+			&& content.derivative !== undefined;
 		const reasonCode: GraphicsDiscrepancyReasonCode = observation.outcome === 'mismatched'
 			? observation.reasonCode
-			: content.revisionReach > 0
-				? 'canonical-object-missing'
-				: 'derivative-object-missing';
+			: regenerable
+				? 'derivative-object-missing'
+				: 'canonical-object-missing';
 		const kind: GraphicsDiscrepancyKind = critical
 			? 'critical-integrity-incident'
-			: content.revisionReach > 0
-				? 'unavailable-content'
-				: 'missing-derivative';
+			: regenerable
+				? 'missing-derivative'
+				: 'unavailable-content';
 
 		await catalogue.markContentUnavailable({
 			digest: content.digest,
@@ -619,7 +698,7 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			kind,
 			subjectKey: content.digest,
 			digest: content.digest,
-			derivativeId: kind === 'missing-derivative' ? content.derivative?.id : undefined,
+			derivativeId: regenerable ? content.derivative?.id : undefined,
 			reasonCode,
 			isolated: critical,
 			expected: { byteLength: content.byteLength, canonicalMime: content.canonicalMime },
@@ -652,7 +731,8 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		}
 		return {
 			observed: observation.outcome,
-			unavailableDetected: !critical,
+			unavailableDetected: !critical && !regenerable,
+			derivativeMissing: !critical && regenerable,
 			availabilityRestored: false,
 			criticalIncident: critical,
 		};
@@ -681,9 +761,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			checked++;
 			if (outcome.criticalIncident)
 				criticalIncidents++;
-			else if (outcome.unavailableDetected && content.revisionReach > 0)
+			if (outcome.unavailableDetected)
 				unavailableDetected++;
-			else if (outcome.unavailableDetected)
+			if (outcome.derivativeMissing)
 				missingDetected++;
 			if (outcome.availabilityRestored)
 				availabilityRestored++;
@@ -839,12 +919,15 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 	 */
 	async function settleUnexpectedObjects(correlationId: string) {
 		const records: GraphicsAssetEvidenceEntry[] = [];
+		// Asking for the kind being settled means a backlog of any other kind
+		// cannot starve this stage of the rows it exists to close.
 		const open = await catalogue.listDiscrepancies({
 			limit: GRAPHICS_RECONCILIATION_STAGE_BATCH,
 			states: ['open'],
+			kinds: ['unexpected-object'],
 		});
 		let settled = 0;
-		for (const record of open.filter(entry => entry.kind === 'unexpected-object')) {
+		for (const record of open) {
 			const identity = graphicsObjectIdentity(
 				record.objectKey ?? `${GRAPHICS_CANONICAL_OBJECT_PREFIX}${record.digest}`,
 			);
@@ -908,6 +991,36 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			await catalogue.releaseDiscrepancyWorkingCopy({ id: discrepancyId });
 	}
 
+	/**
+	 * The one gate every byte-writing action passes before it does anything.
+	 *
+	 * Refusing here rather than after the write is what keeps the Evidence ledger
+	 * honest: a repair that has already stored bytes must never be recorded as a
+	 * refusal, and the only way to guarantee that is to decide before writing.
+	 */
+	async function isolationRefusal(
+		record: GraphicsDiscrepancyRecord,
+		actor: string,
+	): Promise<GraphicsDiscrepancyActionOutcome | undefined> {
+		if (record.isolated || record.kind === 'critical-integrity-incident') {
+			return await rejected(
+				record,
+				'integrity-incident-isolated',
+				'A critical integrity incident is isolated and is never resolved by overwriting bytes or mutating metadata.',
+				actor,
+			);
+		}
+		if (record.digest && await catalogue.hasOpenIsolatedIncident({ digest: record.digest })) {
+			return await rejected(
+				record,
+				'integrity-incident-isolated',
+				'An isolated critical integrity incident is open for this content, so it cannot be repaired or restored until that incident is resolved.',
+				actor,
+			);
+		}
+		return undefined;
+	}
+
 	async function rejected(
 		record: GraphicsDiscrepancyRecord,
 		code: GraphicsRepairRejectionCode,
@@ -945,7 +1058,6 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 	 * creates a revision, or touches a reference.
 	 */
 	async function publishVerifiedContent(input: {
-		record: GraphicsDiscrepancyRecord;
 		digest: string;
 		byteLength: number;
 		canonicalMime: string;
@@ -994,21 +1106,23 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		actor: string;
 	}): Promise<GraphicsDiscrepancyActionOutcome> {
 		const recordedAt = timestamp();
-		// Clearing the alert is refused while any isolated incident is open on the
-		// same content, so a successful action on one discrepancy can never
-		// re-open a conflict that is still failing closed.
-		if (!await catalogue.markContentAvailable({ digest: input.digest, restoredAt: recordedAt })) {
-			return await rejected(
-				input.record,
-				'integrity-incident-isolated',
-				'An isolated critical integrity incident is open for this content, so its availability cannot be restored.',
-				input.actor,
-			);
-		}
+		// The incident is settled before the alert is cleared. Clearing refuses
+		// while any isolated incident is open on this content, and deep
+		// verification settles exactly such an incident — so resolving second
+		// would leave the content permanently unavailable after proving its bytes
+		// are correct.
 		await catalogue.resolveDiscrepancy({
 			id: input.record.id,
 			resolvedAt: recordedAt,
 			resolution: input.resolution,
+		});
+		// Every caller refuses an isolated incident before doing byte work, so
+		// this can only fail if another one is still open. The bytes are already
+		// restored by that point, and the ledger records what actually happened
+		// rather than calling a completed recovery a refusal.
+		const cleared = await catalogue.markContentAvailable({
+			digest: input.digest,
+			restoredAt: recordedAt,
 		});
 		const usage = await catalogue.listContentUsage({ digest: input.digest });
 		await catalogue.recordGraphicsAssetEvidence([evidence({
@@ -1023,6 +1137,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 				discrepancyId: input.record.id,
 				discrepancyKind: input.record.kind,
 				affectedRevisionCount: usage.length,
+				// An alert left standing over restored bytes is the one thing an
+				// administrator must not have to infer from a success.
+				...(cleared ? {} : { isolated: true }),
 			},
 		})]);
 		const updated = await catalogue.findDiscrepancy({ id: input.record.id });
@@ -1085,6 +1202,34 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		})]);
 	}
 
+	async function reconcileObservedDigest(input: { digest: string }): Promise<void> {
+		const expectation = await catalogue.findExpectedContent({ digest: input.digest });
+		if (!expectation)
+			return;
+		const correlationId = generateIdentity();
+		const records: GraphicsAssetEvidenceEntry[] = [];
+		await reconcileExpectation(expectation, correlationId, records);
+		if (records.length > 0)
+			await catalogue.recordGraphicsAssetEvidence(records);
+	}
+
+	/**
+	 * Lists open discrepancies with a budget per kind.
+	 *
+	 * One shared limit lets whichever kind sorts first fill the whole page: a
+	 * backlog of isolated incidents would hide every repairable one behind it.
+	 */
+	async function listOpenDiscrepanciesPerKind() {
+		const perKind = await Promise.all(
+			GRAPHICS_DISCREPANCY_KINDS.map(kind => catalogue.listDiscrepancies({
+				limit: OVERVIEW_KIND_LIMIT,
+				states: ['open'],
+				kinds: [kind],
+			})),
+		);
+		return perKind.flat();
+	}
+
 	return {
 		/**
 		 * The scheduled reconciliation pass. D1 decides what should be reachable,
@@ -1132,23 +1277,26 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			revisionId: GraphicAssetRevisionId;
 		}): Promise<void> {
 			const digest = await catalogue.findRevisionContentDigest(input);
-			if (!digest)
-				return;
-			const expectation = await catalogue.findExpectedContent({ digest });
-			if (!expectation)
-				return;
-			const correlationId = generateIdentity();
-			const records: GraphicsAssetEvidenceEntry[] = [];
-			await reconcileExpectation(expectation, correlationId, records);
-			if (records.length > 0)
-				await catalogue.recordGraphicsAssetEvidence(records);
+			if (digest)
+				await reconcileObservedDigest({ digest });
 		},
+		/**
+		 * Reconciles exactly the content behind one digest a caller just observed
+		 * failing. A Graphics Derivative has no revision of its own, so a reader
+		 * resolving a preview reaches reconciliation through this rather than
+		 * through an asset and revision.
+		 */
+		reconcileObservedDigest,
 		async overview(): Promise<GraphicsReconciliationOverview> {
 			const [state, openCounts, discrepancies] = await Promise.all([
 				catalogue.getReconciliationState(),
 				catalogue.countOpenDiscrepancies(),
-				catalogue.listDiscrepancies({ limit: OVERVIEW_LIMIT, states: ['open'] }),
+				// Per-kind budgets, so a large backlog of one kind — isolated
+				// incidents in particular, which sort first — cannot push every
+				// other kind off the queue an administrator is working from.
+				listOpenDiscrepanciesPerKind(),
 			]);
+			const context = await loadDiscrepancyContext(discrepancies);
 			return {
 				checkedAt: timestamp(),
 				authority: {
@@ -1168,7 +1316,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 						}
 					: {}),
 				openCounts: { ...EMPTY_OPEN_COUNTS, ...openCounts },
-				discrepancies: await Promise.all(discrepancies.map(describe)),
+				discrepancies: discrepancies.map(
+					record => describeWith(record, context),
+				),
 			};
 		},
 		async inspect(input: { discrepancyId: string }): Promise<GraphicsDiscrepancy | undefined> {
@@ -1298,14 +1448,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 				return undefined;
 			if (record.state === 'resolved')
 				return await rejected(record, 'discrepancy-already-resolved', 'This discrepancy is already resolved.', input.actor);
-			if (record.isolated || record.kind === 'critical-integrity-incident') {
-				return await rejected(
-					record,
-					'integrity-incident-isolated',
-					'A critical integrity incident is isolated and is never repaired by overwriting bytes or mutating metadata.',
-					input.actor,
-				);
-			}
+			const refusal = await isolationRefusal(record, input.actor);
+			if (refusal)
+				return refusal;
 			if (!record.digest || (record.kind !== 'unavailable-content' && record.kind !== 'missing-derivative'))
 				return await rejected(record, 'action-not-valid-in-state', 'Exact-byte repair is not valid for this discrepancy.', input.actor);
 
@@ -1374,7 +1519,6 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 					return await rejected(record, 'byte-store-unavailable', 'The verified working copy could not be read back.', input.actor);
 
 				const published = await publishVerifiedContent({
-					record,
 					digest: record.digest,
 					byteLength: expectation.byteLength,
 					canonicalMime: expectation.canonicalMime,
@@ -1401,12 +1545,30 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			}
 		},
 		/**
-		 * Restores an exact verified quarantine copy. The bytes are re-read and
-		 * re-hashed in full before the catalogue trusts them again; a hash that
-		 * disagrees with the digest owning their key is isolated as a critical
-		 * integrity incident and never overwritten.
+		 * Deep verification of the bytes the store currently holds.
+		 *
+		 * The sweep compares only what a listing and a head request can see, which
+		 * cannot detect bytes that changed behind metadata that still agrees.
+		 * This re-reads and re-hashes the object in full against the complete
+		 * chain — digest, size, canonical media type, redundant integrity
+		 * metadata, and, for source content, the validation facts its revision
+		 * recorded.
+		 *
+		 * It is the only action valid on an isolated critical integrity incident,
+		 * because it is the only one that can actually settle one: it either
+		 * proves the bytes are exactly what the catalogue expects, or it proves
+		 * they are not. It never writes, so it cannot repair a conflict by
+		 * overwriting or by mutating metadata.
+		 *
+		 * Verified bytes held under a Content Quarantine record are restored by
+		 * releasing that record. The verification is deliberately stronger than
+		 * the conditional-create reuse rule an exact-byte repair relies on: a
+		 * create-if-absent against an object already present under its
+		 * digest-owned identity would return `already-exists` and hand back the
+		 * very object being judged, so proving the bytes directly is the only
+		 * check that adds anything.
 		 */
-		async restoreQuarantinedCopy(input: {
+		async verifyStoredBytes(input: {
 			discrepancyId: string;
 			actor: string;
 		}): Promise<GraphicsDiscrepancyActionOutcome | undefined> {
@@ -1415,28 +1577,22 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 				return undefined;
 			if (record.state === 'resolved')
 				return await rejected(record, 'discrepancy-already-resolved', 'This discrepancy is already resolved.', input.actor);
-			if (record.isolated || record.kind === 'critical-integrity-incident') {
-				return await rejected(
-					record,
-					'integrity-incident-isolated',
-					'A critical integrity incident is isolated and is never restored in place.',
-					input.actor,
-				);
-			}
 			if (!record.digest)
-				return await rejected(record, 'action-not-valid-in-state', 'This discrepancy has no quarantined content.', input.actor);
+				return await rejected(record, 'action-not-valid-in-state', 'This discrepancy is not about catalogued content.', input.actor);
 
-			const quarantine = await catalogue.findContentQuarantine({ digest: record.digest });
-			if (!quarantine)
-				return await rejected(record, 'quarantine-copy-missing', 'No quarantined copy is held for this content.', input.actor);
 			const expectation = await catalogue.findExpectedContent({ digest: record.digest });
 			if (!expectation)
 				return await rejected(record, 'action-not-valid-in-state', 'The catalogue no longer expects this content.', input.actor);
 
 			const identity = canonicalContentIdentity(record.digest);
 			const observation = await observeCanonicalObject(expectation);
+			await catalogue.recordDiscrepancyObservation({
+				id: record.id,
+				observedAt: timestamp(),
+				observed: observationFacts(observation),
+			});
 			if (observation.outcome === 'missing')
-				return await rejected(record, 'quarantine-copy-missing', 'The quarantined copy no longer exists.', input.actor);
+				return await rejected(record, 'stored-bytes-missing', 'The canonical store does not hold these bytes.', input.actor);
 			if (observation.outcome === 'byte-store-unavailable')
 				return await rejected(record, 'byte-store-unavailable', 'The canonical byte store is temporarily unavailable.', input.actor);
 			if (observation.outcome === 'mismatched') {
@@ -1450,18 +1606,26 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 				return await rejected(
 					record,
 					'canonical-mime-mismatch',
-					'The quarantined copy does not match its recorded size, canonical media type, and integrity metadata; it has been isolated as a critical integrity incident.',
+					'The stored object does not match its recorded size, canonical media type, and integrity metadata; it has been isolated as a critical integrity incident.',
 					input.actor,
 				);
 			}
 
-			// The copy is re-read and re-hashed in full. Metadata agreeing is not
-			// proof of the bytes, and this is the only check that can settle it.
+			// Source content re-proves the validation facts its revision recorded.
+			// A Graphics Derivative has no revision of its own, so an exact digest,
+			// size, and canonical media type is its complete proof.
 			const verification = await media.verifyContentBytes({
 				read: range => canonical.read(identity, range),
 				expectedDigest: record.digest,
 				expectedByteLength: expectation.byteLength,
-				expectation: { kind: 'derivative', canonicalMime: expectation.canonicalMime },
+				expectation: expectation.source
+					? {
+							kind: 'source',
+							canonicalMime: expectation.canonicalMime,
+							sourceKind: expectation.source.kind,
+							facts: expectation.source.facts,
+						}
+					: { kind: 'derivative', canonicalMime: expectation.canonicalMime },
 			});
 			if (verification.outcome === 'rejected') {
 				if (verification.code === 'digest-mismatch') {
@@ -1476,13 +1640,19 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 				return await rejected(record, verification.code, verification.message, input.actor);
 			}
 
-			await catalogue.releaseContentQuarantine({ digest: record.digest });
+			// Verified bytes a quarantine record was holding are restored to the
+			// catalogue by releasing that record rather than by copying anything.
+			const released = await catalogue.releaseContentQuarantine({ digest: record.digest });
 			return await completeRecovery({
 				record,
 				digest: record.digest,
-				resolution: 'restored-from-quarantine',
-				category: 'content-restored-from-quarantine',
-				reason: 'exact-verified-quarantine-copy',
+				resolution: released ? 'restored-from-quarantine' : 'byte-store-agrees',
+				category: released
+					? 'content-restored-from-quarantine'
+					: 'discrepancy-rechecked',
+				reason: released
+					? 'exact-verified-quarantine-copy'
+					: 'stored-bytes-verified-against-expected-content',
 				actor: input.actor,
 			});
 		},
@@ -1501,7 +1671,10 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 				return undefined;
 			if (record.state === 'resolved')
 				return await rejected(record, 'discrepancy-already-resolved', 'This discrepancy is already resolved.', input.actor);
-			if (record.isolated || record.kind !== 'missing-derivative' || !record.digest)
+			const regenerationRefusal = await isolationRefusal(record, input.actor);
+			if (regenerationRefusal)
+				return regenerationRefusal;
+			if (record.kind !== 'missing-derivative' || !record.digest)
 				return await rejected(record, 'action-not-valid-in-state', 'Derivative regeneration is not valid for this discrepancy.', input.actor);
 
 			const expectation = await catalogue.findExpectedContent({ digest: record.digest });
@@ -1561,7 +1734,6 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 				}
 
 				const published = await publishVerifiedContent({
-					record,
 					digest: record.digest,
 					byteLength: expectation.byteLength,
 					canonicalMime: expectation.canonicalMime,

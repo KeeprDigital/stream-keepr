@@ -1728,18 +1728,29 @@ export function createD1GraphicsAssetCatalogue(
 				throw new Error('Graphic Asset usage lookup failed');
 			return result.results.map(usageFromRow);
 		},
-		async findThumbnailDigest(assetId) {
+		async findThumbnailContent(assetId) {
 			const row = await database.prepare(`
-				SELECT d.content_digest
+				SELECT d.content_digest, c.byte_length, c.canonical_mime
 				FROM graphics_derivatives d
 				JOIN graphic_asset_revisions r ON r.id = d.source_revision_id
 				JOIN graphic_assets a ON a.id = r.asset_id
+				JOIN graphic_asset_contents c ON c.digest = d.content_digest
 				WHERE a.id = ?
 					AND d.kind IN ('thumbnail', 'video-poster', 'font-specimen')
 				ORDER BY r.revision_number DESC
 				LIMIT 1
-			`).bind(assetId).first<{ content_digest: string }>();
-			return row?.content_digest;
+			`).bind(assetId).first<{
+				content_digest: string;
+				byte_length: number;
+				canonical_mime: string;
+			}>();
+			return row
+				? {
+						digest: row.content_digest,
+						byteLength: row.byte_length,
+						canonicalMime: row.canonical_mime as GraphicAssetCanonicalMime,
+					}
+				: undefined;
 		},
 	};
 }

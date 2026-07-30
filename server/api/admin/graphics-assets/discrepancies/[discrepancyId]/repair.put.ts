@@ -1,4 +1,5 @@
 import { requireGraphicsAdministrator } from '~~/server/modules/graphics-administrator';
+import { graphicsDiscrepancyId } from '~~/server/modules/graphics-asset-library';
 import { createBoundedByteStream } from '~~/server/modules/graphics-asset-library/object-store';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { graphicsAuthorIdentity, rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
@@ -17,7 +18,7 @@ export default defineEventHandler(async (event) => {
 	try {
 		await requireGraphicsAdministrator(event);
 		const library = graphicsAssetLibraryForEvent(event);
-		const discrepancyId = getRouterParam(event, 'discrepancyId') ?? '';
+		const discrepancyId = graphicsDiscrepancyId(getRouterParam(event, 'discrepancyId') ?? '');
 		const discrepancy = await library.inspectGraphicsDiscrepancy({ discrepancyId });
 		const body = getBoundedRequestBodyStream(event);
 		if (!body) {

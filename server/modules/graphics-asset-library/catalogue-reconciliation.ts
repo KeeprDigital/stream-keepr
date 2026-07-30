@@ -139,6 +139,28 @@ function expectedContentFromRow(row: ExpectedContentRow): ExpectedGraphicAssetCo
 	};
 }
 
+interface UsageRow {
+	asset_id: string;
+	name: string;
+	revision_id: string;
+	revision_number: number;
+	kind: 'image' | 'silent-video' | 'font';
+	lifecycle_state: 'active' | 'retired' | 'trashed';
+	reference_count: number;
+}
+
+function usageFromRow(row: UsageRow): GraphicsDiscrepancyUsage {
+	return {
+		assetId: row.asset_id as GraphicAssetId,
+		assetName: row.name,
+		revisionId: row.revision_id as GraphicAssetRevisionId,
+		revisionNumber: row.revision_number,
+		kind: row.kind,
+		lifecycleState: row.lifecycle_state,
+		referenceCount: row.reference_count,
+	};
+}
+
 interface DiscrepancyRow {
 	id: string;
 	kind: GraphicsDiscrepancyKind;
@@ -228,6 +250,81 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 			`).bind(input.digest).first<ExpectedContentRow>();
 			return row ? expectedContentFromRow(row) : undefined;
 		},
+		async findExpectedContents(input) {
+			if (input.digests.length === 0)
+				return new Map();
+			const result = await database.prepare(`
+				${EXPECTED_CONTENT_SELECT}
+				WHERE contents.digest IN (${input.digests.map(() => '?').join(', ')})
+			`).bind(...input.digests).all<ExpectedContentRow>();
+			if (!result.success)
+				throw new Error('Expected Graphic Asset Content could not be read');
+			return new Map(result.results.map(row => [row.digest, expectedContentFromRow(row)]));
+		},
+		async listContentUsageForDigests(input) {
+			if (input.digests.length === 0)
+				return new Map();
+			const placeholders = input.digests.map(() => '?').join(', ');
+			const result = await database.prepare(`
+				SELECT revision.content_digest AS digest, revision.asset_id, asset.name,
+					revision.id AS revision_id, revision.revision_number, asset.kind,
+					asset.lifecycle_state,
+					(
+						SELECT COUNT(*) FROM graphic_asset_references reference
+						WHERE reference.revision_id = revision.id
+					) AS reference_count
+				FROM graphic_asset_revisions revision
+				JOIN graphic_assets asset ON asset.id = revision.asset_id
+				WHERE revision.content_digest IN (${placeholders})
+				UNION
+				SELECT derivative.content_digest AS digest, source.asset_id, asset.name,
+					source.id AS revision_id, source.revision_number, asset.kind,
+					asset.lifecycle_state,
+					(
+						SELECT COUNT(*) FROM graphic_asset_references reference
+						WHERE reference.revision_id = source.id
+					) AS reference_count
+				FROM graphics_derivatives derivative
+				JOIN graphic_asset_revisions source ON source.id = derivative.source_revision_id
+				JOIN graphic_assets asset ON asset.id = source.asset_id
+				WHERE derivative.content_digest IN (${placeholders})
+				ORDER BY name, revision_number
+			`).bind(...input.digests, ...input.digests).all<UsageRow & { digest: string }>();
+			if (!result.success)
+				throw new Error('Graphic Asset Content usage could not be read');
+			const usage = new Map<string, GraphicsDiscrepancyUsage[]>();
+			for (const row of result.results) {
+				const existing = usage.get(row.digest) ?? [];
+				existing.push(usageFromRow(row));
+				usage.set(row.digest, existing);
+			}
+			return usage;
+		},
+		async findQuarantinedDigests(input) {
+			if (input.digests.length === 0)
+				return new Map();
+			const result = await database.prepare(`
+				SELECT digest, quarantined_at, delete_after FROM graphics_content_quarantine
+				WHERE digest IN (${input.digests.map(() => '?').join(', ')})
+			`).bind(...input.digests).all<{
+				digest: string;
+				quarantined_at: number;
+				delete_after: number;
+			}>();
+			if (!result.success)
+				throw new Error('Quarantined Graphic Asset Content could not be read');
+			return new Map(result.results.map(row => [row.digest, {
+				quarantinedAt: new Date(row.quarantined_at).toISOString(),
+				deleteAfter: new Date(row.delete_after).toISOString(),
+			}]));
+		},
+		async hasOpenIsolatedIncident(input) {
+			return Boolean(await database.prepare(`
+				SELECT 1 FROM graphics_discrepancies
+				WHERE digest = ? AND state = 'open' AND isolated = 1
+				LIMIT 1
+			`).bind(input.digest).first());
+		},
 		async findRevisionContentDigest(input) {
 			const row = await database.prepare(`
 				SELECT content_digest FROM graphic_asset_revisions
@@ -283,9 +380,16 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 			return new Set(result.results.map(row => row.digest));
 		},
 		async quarantineUnexpectedObject(input) {
-			// The insert predicate is the proof. A digest that became accounted for
-			// between the listing and this write is never quarantined, so a
-			// publication in flight cannot lose its bytes to a scan.
+			// The insert predicate re-proves, at write time, that nothing in the
+			// catalogue accounts for this digest. Publication records its write
+			// candidate before it puts any bytes, so a publication in flight is
+			// already accounted for by the time its object can be listed and this
+			// predicate refuses to quarantine it.
+			//
+			// The predicate is a proof about this instant, not a lock: a digest
+			// claimed after it runs is caught instead by publication, which deletes
+			// the quarantine record for everything it publishes in the same atomic
+			// transaction.
 			const result = await database.prepare(`
 				INSERT INTO graphics_content_quarantine (
 					id, digest, byte_length, origin, quarantined_at, delete_after, created_at
@@ -341,50 +445,8 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 			return result.meta.changes === 1;
 		},
 		async listContentUsage(input) {
-			// Content backing a Graphics Derivative affects the revision whose
-			// preview it belongs to, so both reaches report the same domain usage.
-			const result = await database.prepare(`
-				SELECT revision.asset_id, asset.name, revision.id AS revision_id,
-					revision.revision_number, asset.kind, asset.lifecycle_state,
-					(
-						SELECT COUNT(*) FROM graphic_asset_references reference
-						WHERE reference.revision_id = revision.id
-					) AS reference_count
-				FROM graphic_asset_revisions revision
-				JOIN graphic_assets asset ON asset.id = revision.asset_id
-				WHERE revision.content_digest = ?
-				UNION
-				SELECT source.asset_id, asset.name, source.id AS revision_id,
-					source.revision_number, asset.kind, asset.lifecycle_state,
-					(
-						SELECT COUNT(*) FROM graphic_asset_references reference
-						WHERE reference.revision_id = source.id
-					) AS reference_count
-				FROM graphics_derivatives derivative
-				JOIN graphic_asset_revisions source ON source.id = derivative.source_revision_id
-				JOIN graphic_assets asset ON asset.id = source.asset_id
-				WHERE derivative.content_digest = ?
-				ORDER BY name, revision_number
-			`).bind(input.digest, input.digest).all<{
-				asset_id: string;
-				name: string;
-				revision_id: string;
-				revision_number: number;
-				kind: 'image' | 'silent-video' | 'font';
-				lifecycle_state: 'active' | 'retired' | 'trashed';
-				reference_count: number;
-			}>();
-			if (!result.success)
-				throw new Error('Graphic Asset Content usage could not be read');
-			return result.results.map((row): GraphicsDiscrepancyUsage => ({
-				assetId: row.asset_id as GraphicAssetId,
-				assetName: row.name,
-				revisionId: row.revision_id as GraphicAssetRevisionId,
-				revisionNumber: row.revision_number,
-				kind: row.kind,
-				lifecycleState: row.lifecycle_state,
-				referenceCount: row.reference_count,
-			}));
+			return (await this.listContentUsageForDigests({ digests: [input.digest] }))
+				.get(input.digest) ?? [];
 		},
 		async openDiscrepancy(input) {
 			const observedAt = new Date(input.observedAt).getTime();
@@ -446,12 +508,17 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 		},
 		async listDiscrepancies(input) {
 			const states = input.states ?? [];
+			const kinds = input.kinds ?? [];
+			const predicates = [
+				...(states.length > 0 ? [`state IN (${states.map(() => '?').join(', ')})`] : []),
+				...(kinds.length > 0 ? [`kind IN (${kinds.map(() => '?').join(', ')})`] : []),
+			];
 			const result = await database.prepare(`
 				SELECT ${DISCREPANCY_COLUMNS} FROM graphics_discrepancies
-				${states.length > 0 ? `WHERE state IN (${states.map(() => '?').join(', ')})` : ''}
+				${predicates.length > 0 ? `WHERE ${predicates.join(' AND ')}` : ''}
 				ORDER BY isolated DESC, detected_at DESC, id DESC
 				LIMIT ?
-			`).bind(...states, input.limit).all<DiscrepancyRow>();
+			`).bind(...states, ...kinds, input.limit).all<DiscrepancyRow>();
 			if (!result.success)
 				throw new Error('Graphics discrepancies could not be read');
 			return result.results.map(discrepancyFromRow);

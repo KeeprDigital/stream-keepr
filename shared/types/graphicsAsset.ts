@@ -595,7 +595,7 @@ export interface GraphicAssetRetentionView {
 export interface GraphicsContentQuarantineDeadline {
 	id: string;
 	byteLength: number;
-	origin: 'orphaned-content' | 'abandoned-canonical-write';
+	origin: 'orphaned-content' | 'abandoned-canonical-write' | 'unexpected-object';
 	quarantinedAt: string;
 	deleteAfter: string;
 }

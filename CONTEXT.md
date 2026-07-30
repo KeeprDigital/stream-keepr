@@ -323,7 +323,11 @@ It fails closed, is isolated from repair, regeneration, and automatic deletion, 
 
 **Exact-Byte Repair**:
 The Graphics Administrator action that restores Unavailable Graphic Asset Content from supplied bytes proving the same application SHA-256, byte size, canonical media type, and Graphic Asset Validation facts.
-It creates no Graphic Asset Revision and changes no Graphic Asset Reference; an exact verified Content Quarantine copy may be restored through the same integrity checks.
+It creates no Graphic Asset Revision and changes no Graphic Asset Reference.
+
+**Deep Verification**:
+The Graphics Administrator action that re-reads and re-hashes stored bytes in full against the complete expectation, detecting content that changed behind size and media type that still agree.
+It writes nothing, is the only action valid on a Critical Integrity Incident, and restores an exact verified Content Quarantine copy by releasing that record.
 
 **Derivative Regeneration**:
 The reproduction of a missing Graphics Derivative from available canonical source content, without mutating its source Graphic Asset Revision.
@@ -650,6 +654,8 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - An unexpected canonical object enters **Content Quarantine** for the same seven-day recheck and is deleted only if still unaccounted for; it is never adopted as a **Graphic Asset** or **Graphic Asset Content**
 - A **Critical Integrity Incident** is isolated rather than repaired, and blocks clearing **Unavailable Graphic Asset Content** for the same content while it stays open
 - **Exact-Byte Repair** and **Derivative Regeneration** restore only bytes the catalogue already expected, and never create a **Graphic Asset Revision** or change a **Graphic Asset Reference**
+- Readers and **Graphics Reconciliation** apply one definition of agreement between the catalogue and stored bytes, so content failing closed as a **Critical Integrity Incident** is never still served
+- **Deep Verification** is the only action offered on a **Critical Integrity Incident**, and the only one that can detect stored bytes that changed behind unchanged size and media type
 - Every **Graphic Asset Revision** passes **Graphic Asset Validation** under one **Graphic Asset Compatibility Profile** before it becomes referenceable
 - The initial `still-image-v1` **Graphic Asset Compatibility Profile** accepts exact single-frame PNG, JPEG, or WebP source bytes up to 25 MiB, 8,192 pixels per axis, and 16,777,216 decoded pixels only when bounded parser evidence and a complete decode agree on an 8-bit SDR sRGB image with normal orientation
 - `still-image-v1` rejects declaration conflicts, animation, embedded colour or orientation profiles, malformed structure, partial decode, and out-of-profile facts, and generates a separate deterministic transparent 8-bit sRGB PNG thumbnail fitted within 640 × 360 without cropping or upscaling

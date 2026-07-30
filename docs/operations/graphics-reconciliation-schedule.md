@@ -64,6 +64,10 @@ the byte store agrees again.
      adopted**. The retention sweep deletes it only after re-proving it is still
      unreachable; if an ordinary publication claims those bytes in the meantime,
      the quarantine is released instead.
+   - Publication records its canonical write candidate _before_ it puts any
+     bytes, so a publication in flight is already accounted for by the time its
+     object can be listed. Recording afterwards would leave a window in which a
+     scan could quarantine a live publication's own bytes.
    - A key that is not a digest-owned identity is isolated as a critical
      integrity incident and never deleted automatically.
 3. **Reclaims stale working copies** left by a repair or regeneration that never
@@ -82,7 +86,7 @@ offers nothing else. There is deliberately no adopt action.
   demand. Safe at any time; it cannot change what the catalogue expects.
 - `GET /api/admin/graphics-assets/discrepancies/<id>` — one discrepancy's detail.
 - `POST /api/admin/graphics-assets/discrepancies/<id>/actions` — `recheck`,
-  `restore-quarantined-copy`, or `regenerate-derivative`.
+  `verify-stored-bytes`, or `regenerate-derivative`.
 - `PUT /api/admin/graphics-assets/discrepancies/<id>/repair` — exact-byte repair.
   The raw body is the exact content; the expected length comes from the
   discrepancy, so a body of any other length is refused before it is stored.
@@ -111,14 +115,44 @@ and regeneration all refuse them, and the availability flag cannot be cleared
 while one is open. Resolving a digest-key conflict is a deliberate operator
 decision made with knowledge this system does not have.
 
-### Restoring a quarantine copy
+### Deep verification, and what the sweep cannot see
 
-`restore-quarantined-copy` is offered when quarantined bytes are still holding an
-exact copy of content the catalogue has marked unavailable. It re-reads and
-re-hashes the copy in full — metadata agreeing is not proof of the bytes — and
-only then releases the quarantine and clears the flag. A copy that hashes to
-anything other than the digest owning its key is isolated as a critical
-integrity incident and left exactly where it is.
+`verify-stored-bytes` re-reads and re-hashes the stored object in full against
+the complete chain: digest, size, canonical media type, redundant integrity
+metadata, and — for source content — the validation facts its revision recorded.
+
+This exists because the sweep is deliberately shallow. Hashing every canonical
+object on every hourly pass is not affordable, so the sweep compares only what a
+listing and a head request can see. **Bytes that changed while their size and
+media type stayed the same are invisible to it.** Deep verification is the only
+thing in the system that detects that, and it is the only action offered on an
+isolated critical integrity incident — because it is the only one that can
+settle such an incident without writing: it either proves the bytes are exactly
+what the catalogue expects, or proves they are not.
+
+It is offered on every discrepancy about catalogued content, without first
+checking whether bytes are present. Reading the store for every row would put an
+operational view back into the hundreds of subrequests, and answering from the
+last recorded observation would hide the action at exactly the moment it is
+wanted — right after an operator restores bytes, when nothing has re-observed
+them yet. The action reports honestly when there is nothing to verify.
+
+Verified bytes that a Content Quarantine record was holding are restored by
+releasing that record. This is the AC5 path, and the verification is
+deliberately stronger than the conditional-create reuse rule an exact-byte
+repair relies on: a create-if-absent against an object already present under its
+digest-owned identity returns `already-exists` and hands back the very object
+being judged, so proving the bytes directly is the only check that adds
+anything.
+
+Bytes that hash to anything other than the digest owning their key are isolated
+as a critical integrity incident and left exactly where they are.
+
+**Known limitation.** Deep verification is reachable only through an open
+discrepancy. Content the sweep considers healthy has no row to act on, so silent
+byte corruption behind agreeing metadata is detectable but not yet
+_discoverable_ — an administrator must already have a reason to look. A periodic
+or sampled deep verification pass would close that, and is not in this change.
 
 ### Regenerating a derivative
 
@@ -152,3 +186,23 @@ exception:
   involvement.
 
 Reassess this exception when `@nuxthub/core` is upgraded.
+
+## Scan pace, and what it means in practice
+
+The byte-store scan reads one bounded page per pass from a cursor persisted
+between passes, so a large store is covered eventually rather than quickly. At
+the hourly trigger this is a few thousand objects a day. Two consequences worth
+stating plainly:
+
+- An unexpected object can sit unnoticed for as long as it takes the cursor to
+  reach it. It is not deleted in that time, so nothing is lost; it is simply not
+  yet reported.
+- A byte loss deep in the store is found by the scan late, but by a reader
+  immediately. The reader-triggered path is what makes loss of an asset anyone
+  actually requests visible at once, and it is why that path exists rather than
+  relying on the schedule alone.
+
+Raising the page size trades subrequest budget for coverage. It is a constant in
+`shared/utils/graphicsAssetReconciliation.ts`, deliberately not configuration,
+because the right value depends on the deployment's object count rather than on
+an operator preference.

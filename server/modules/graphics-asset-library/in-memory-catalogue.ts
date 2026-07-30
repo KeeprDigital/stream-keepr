@@ -774,10 +774,17 @@ export function createInMemoryGraphicsAssetCatalogue(
 				.filter(item => item.reference.assetId === assetId)
 				.map(item => structuredClone(item));
 		},
-		async findThumbnailDigest(assetId: GraphicAssetId) {
+		async findThumbnailContent(assetId: GraphicAssetId) {
 			const asset = assets.get(assetId);
-			return asset
-				? revisions.get(asset.revisionId)?.thumbnailDigest
+			const digest = asset ? revisions.get(asset.revisionId)?.thumbnailDigest : undefined;
+			const content = digest === undefined ? undefined : canonicalContents.get(digest);
+			return digest !== undefined && content !== undefined
+				? {
+						digest,
+						byteLength: content.byteLength,
+						// Every deterministic Graphics Derivative is a transparent sRGB PNG.
+						canonicalMime: 'image/png',
+					}
 				: undefined;
 		},
 	};

@@ -138,6 +138,12 @@ function createInMemoryGraphicsObjectStoreImplementation() {
 			// Lexicographic order makes the cursor the last key returned, which is
 			// how the production store paginates and is what lets a test advance a
 			// scan one bounded page at a time.
+			//
+			// Listings here carry complete metadata, which matches the R2 adapter
+			// only because that adapter explicitly asks for it: an R2 listing
+			// without `include` reports no content type and empty custom metadata
+			// for every object. If that request is ever dropped, this double will
+			// keep passing while production reads every object as a conflict.
 			const matching = [...objects.entries()]
 				.filter(([identity]) => identity.startsWith(input.prefix ?? ''))
 				.filter(([identity]) => input.cursor === undefined || identity > input.cursor)

@@ -80,23 +80,31 @@ export const GRAPHICS_DISCREPANCY_RESOLUTIONS = [
  * mutation is not an available action at all.
  */
 export const GRAPHICS_DISCREPANCY_ACTIONS = [
+	/** Re-observe what a listing and a head request can see. */
 	'recheck',
+	/**
+	 * Re-read and re-hash the stored bytes in full against the complete
+	 * expectation. This is the only action valid on an isolated critical
+	 * integrity incident, because it is the only one that can settle one without
+	 * writing, and the only way to detect bytes that changed behind metadata
+	 * that still agrees. Verified bytes held under a Content Quarantine record
+	 * are restored by releasing that record.
+	 */
+	'verify-stored-bytes',
 	'repair-with-exact-bytes',
-	'restore-quarantined-copy',
 	'regenerate-derivative',
 ] as const;
 
 /** Why an attempted repair, restoration, or regeneration was refused. */
 export const GRAPHICS_REPAIR_REJECTION_CODES = [
 	'action-not-valid-in-state',
-	'discrepancy-not-found',
 	'discrepancy-already-resolved',
 	'digest-mismatch',
 	'byte-length-mismatch',
 	'canonical-mime-mismatch',
 	'validation-facts-mismatch',
 	'source-content-unavailable',
-	'quarantine-copy-missing',
+	'stored-bytes-missing',
 	'derivative-regeneration-unavailable',
 	'byte-store-unavailable',
 	'integrity-incident-isolated',

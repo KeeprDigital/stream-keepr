@@ -83,6 +83,7 @@ import {
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
 } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GRAPHICS_RETENTION_ACTOR } from '~~/shared/utils/graphicsAssetRetention';
+import { canonicalContentIdentity, canonicalObjectAgreement } from './canonical-integrity';
 import { GraphicsAssetLibraryError } from './errors';
 import { processStaticFont } from './font';
 import { graphicsIngestionPartIdentity } from './multipart';
@@ -99,7 +100,6 @@ import {
 	sha256HexStream,
 } from './png';
 import {
-	canonicalContentIdentity,
 	createGraphicsReconciliation,
 	reconciliationWorkingCopyIdentity,
 	reconciliationWorkingCopyOperationId,
@@ -330,7 +330,15 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		facts: GraphicAsset['facts'];
 	} | undefined>;
 	listGraphicAssetUsage: (assetId: GraphicAssetId) => Promise<GraphicAssetUsage[]>;
-	findThumbnailDigest: (assetId: GraphicAssetId) => Promise<string | undefined>;
+	/**
+	 * The preview content for one Graphic Asset, with the facts a reader needs to
+	 * prove the stored object is the one the catalogue recorded.
+	 */
+	findThumbnailContent: (assetId: GraphicAssetId) => Promise<{
+		digest: string;
+		byteLength: number;
+		canonicalMime: GraphicAssetCanonicalMime;
+	} | undefined>;
 }
 
 export interface GraphicsAssetLibrary {
@@ -565,11 +573,12 @@ export interface GraphicsAssetLibrary {
 		bytes: BoundedByteStream;
 	}) => Promise<GraphicsDiscrepancyActionOutcome>;
 	/**
-	 * Restores an exact verified quarantine copy through the same integrity
-	 * checks. A copy whose bytes disagree with the digest owning their key is
-	 * isolated as a critical integrity incident rather than trusted.
+	 * Re-reads and re-hashes the stored bytes in full against the complete
+	 * expectation. It is the only action valid on an isolated critical integrity
+	 * incident, because it settles one without writing anything; verified bytes
+	 * a Content Quarantine record was holding are restored by releasing it.
 	 */
-	restoreQuarantinedGraphicAssetContent: (input: {
+	verifyStoredGraphicAssetContent: (input: {
 		discrepancyId: string;
 		actor: string;
 	}) => Promise<GraphicsDiscrepancyActionOutcome>;
@@ -656,6 +665,22 @@ function requireDiscrepancyOutcome(
 	if (!outcome)
 		throw new GraphicsAssetLibraryError('Graphics discrepancy not found', 'ingestion-operation-not-found');
 	return outcome;
+}
+
+/**
+ * A discrepancy identity from an untrusted edge. It is an opaque domain
+ * identity rather than a brand, but it is still validated at the boundary so a
+ * blank path segment becomes a clear input error rather than a lookup miss.
+ */
+export function graphicsDiscrepancyId(value: string): string {
+	const identity = value.trim();
+	if (!identity) {
+		throw new GraphicsAssetLibraryError(
+			'A Graphics discrepancy identity is required',
+			'invalid-ingestion-input',
+		);
+	}
+	return identity;
 }
 
 export function graphicsDerivativeId(value: string): GraphicsDerivativeId {
@@ -1055,12 +1080,18 @@ export function createGraphicsAssetLibrary(
 	 * this only turns the observation into durable operational state and must
 	 * never change or fail the caller's result.
 	 */
-	async function observeCanonicalDisagreement(input: {
-		assetId: GraphicAssetId;
-		revisionId: GraphicAssetRevisionId;
-	}) {
+	async function observeCanonicalDisagreement(
+		input:
+			| { assetId: GraphicAssetId; revisionId: GraphicAssetRevisionId }
+			| { digest: string },
+	) {
 		try {
-			await findReconciliation()?.reconcileObservedContent(input);
+			const reconciliation = findReconciliation();
+			if (!reconciliation)
+				return;
+			await ('digest' in input
+				? reconciliation.reconcileObservedDigest(input)
+				: reconciliation.reconcileObservedContent(input));
 		}
 		catch {
 			// The scheduled pass re-observes the same disagreement, so a failure to
@@ -1119,10 +1150,14 @@ export function createGraphicsAssetLibrary(
 	>;
 
 	/**
-	 * Canonical bytes are only usable when the store agrees with the catalogue
-	 * about their length and canonical media type. Any disagreement is treated as
-	 * unavailable rather than served, so no caller ever receives content that
-	 * does not match its recorded facts.
+	 * Canonical bytes are only usable when the store agrees with the catalogue in
+	 * every respect `canonicalObjectAgreement` checks — the same rule
+	 * reconciliation applies. Delivery and reconciliation deliberately share one
+	 * definition of agreement, so content reconciliation has isolated as a
+	 * critical integrity incident can never still be served on air.
+	 *
+	 * Any disagreement reads as unavailable rather than being served, so no
+	 * caller ever receives content that does not match its recorded facts.
 	 */
 	async function readCanonicalContent(
 		content: CanonicalContentFacts,
@@ -1132,13 +1167,12 @@ export function createGraphicsAssetLibrary(
 		| { outcome: 'unavailable'; retryable: true; disagreement: boolean }
 	> {
 		const result = await requireCanonical().read(
-			graphicsObjectIdentity(`sha256/${content.digest}`),
+			canonicalContentIdentity(content.digest),
 			range,
 		);
 		if (
 			result.outcome !== 'available'
-			|| result.object.byteLength !== content.byteLength
-			|| result.object.contentType !== content.canonicalMime
+			|| canonicalObjectAgreement(content, result.object).outcome !== 'agrees'
 			|| result.range.completeLength !== content.byteLength
 			|| (
 				range !== undefined
@@ -1165,12 +1199,11 @@ export function createGraphicsAssetLibrary(
 		{ outcome: 'available' } | { outcome: 'unavailable'; disagreement: boolean }
 	> {
 		const result = await requireCanonical().readMetadata(
-			graphicsObjectIdentity(`sha256/${content.digest}`),
+			canonicalContentIdentity(content.digest),
 		);
 		if (
 			result.outcome === 'available'
-			&& result.object.byteLength === content.byteLength
-			&& result.object.contentType === content.canonicalMime
+			&& canonicalObjectAgreement(content, result.object).outcome === 'agrees'
 		) {
 			return { outcome: 'available' };
 		}
@@ -1583,7 +1616,7 @@ export function createGraphicsAssetLibrary(
 		bytes: BoundedByteStream,
 		contentType: GraphicAssetCanonicalMime,
 	) {
-		const identity = graphicsObjectIdentity(`sha256/${digest}`);
+		const identity = canonicalContentIdentity(digest);
 		const result = await store.createImmutable({
 			identity,
 			bytes,
@@ -2119,6 +2152,24 @@ export function createGraphicsAssetLibrary(
 					message: 'Staged source bytes are temporarily unavailable.',
 				}, report);
 			}
+			// The claim is recorded before a byte moves. An object present in the
+			// canonical store that nothing in the catalogue accounts for is exactly
+			// what the reconciliation scan quarantines as unexpected, so writing
+			// first would leave a window in which a publication in flight could have
+			// its own bytes quarantined out from under it.
+			//
+			// Claiming a digest whose write then never happens is harmless: the
+			// candidate is removed by publication, and an abandoned operation's
+			// candidates are collected by the retention path, whose byte deletion
+			// treats an already-absent object as deleted rather than as a failure.
+			await catalogue.recordCanonicalWrites({
+				operation,
+				contents: [
+					{ digest: report.facts.sha256, byteLength: report.facts.byteLength },
+					{ digest: thumbnailDigest, byteLength: thumbnail.byteLength },
+				],
+				recordedAt: timestamp(),
+			});
 			const [sourceWrite, thumbnailWrite] = await Promise.all([
 				storeCanonicalStream(canonical, report.facts.sha256, {
 					body: canonicalSourceRead.body,
@@ -2127,26 +2178,6 @@ export function createGraphicsAssetLibrary(
 				}, report.facts.canonicalMime),
 				storeCanonicalBytes(canonical, thumbnailDigest, thumbnail),
 			]);
-			const createdCanonicalContents = [
-				sourceWrite.outcome === 'created'
-					? {
-							digest: report.facts.sha256,
-							byteLength: report.facts.byteLength,
-						}
-					: undefined,
-				thumbnailWrite.outcome === 'created'
-					? { digest: thumbnailDigest, byteLength: thumbnail.byteLength }
-					: undefined,
-			].filter((content): content is { digest: string; byteLength: number } =>
-				content !== undefined,
-			);
-			if (createdCanonicalContents.length > 0) {
-				await catalogue.recordCanonicalWrites({
-					operation,
-					contents: createdCanonicalContents,
-					recordedAt: timestamp(),
-				});
-			}
 			if (sourceWrite.outcome === 'unavailable' || thumbnailWrite.outcome === 'unavailable') {
 				return await failOperation(catalogue, operation, {
 					code: 'canonical-store-unavailable',
@@ -3278,21 +3309,26 @@ export function createGraphicsAssetLibrary(
 			};
 		},
 		async resolveGraphicAssetThumbnail(input) {
-			const digest = await catalogueRequest(
-				() => requireCatalogue().findThumbnailDigest(input.assetId),
+			const content = await catalogueRequest(
+				() => requireCatalogue().findThumbnailContent(input.assetId),
 				'Graphic Asset preview lookup is temporarily unavailable',
 			);
-			if (!digest)
+			// No Graphics Derivative recorded at all is genuinely missing. Bytes the
+			// catalogue does expect but the store cannot produce are a retryable
+			// operational failure, not an absent preview: reporting those as missing
+			// would tell a caller there is nothing to show when there is.
+			if (!content)
 				return { outcome: 'missing' };
-			const result = await requireCanonical().read(graphicsObjectIdentity(`sha256/${digest}`));
-			if (result.outcome === 'missing')
-				return { outcome: 'missing' };
-			if (result.outcome === 'unavailable')
+			const result = await readCanonicalContent(content);
+			if (result.outcome !== 'available') {
+				if (result.disagreement)
+					await observeCanonicalDisagreement({ digest: content.digest });
 				return { outcome: 'unavailable', retryable: true };
+			}
 			return {
 				outcome: 'available',
 				body: result.body,
-				byteLength: result.object.byteLength,
+				byteLength: result.byteLength,
 				contentType: 'image/png',
 			};
 		},
@@ -3433,6 +3469,12 @@ export function createGraphicsAssetLibrary(
 							open: async () => {
 								const result = await readCanonicalContent(content);
 								if (result.outcome !== 'available') {
+									// Content that resolved during the report and then failed
+									// mid-stream is the sharpest integrity observation the
+									// library gets; it must not vanish with the aborted
+									// download.
+									if (result.disagreement)
+										await observeCanonicalDisagreement({ digest: content.digest });
 									throw new GraphicsAssetLibraryError(
 										'Graphic Asset content became unavailable while the Template Package was streaming',
 										'graphics-asset-library-unavailable',
@@ -3559,13 +3601,13 @@ export function createGraphicsAssetLibrary(
 				'Graphic Asset Content repair could not be completed',
 			));
 		},
-		async restoreQuarantinedGraphicAssetContent(input) {
+		async verifyStoredGraphicAssetContent(input) {
 			return requireDiscrepancyOutcome(await catalogueRequest(
-				() => requireReconciliation().restoreQuarantinedCopy({
+				() => requireReconciliation().verifyStoredBytes({
 					discrepancyId: input.discrepancyId,
 					actor: requiredActor(input.actor),
 				}),
-				'Quarantined Graphic Asset Content could not be restored',
+				'Stored Graphic Asset Content could not be verified',
 			));
 		},
 		async regenerateGraphicsDerivative(input) {

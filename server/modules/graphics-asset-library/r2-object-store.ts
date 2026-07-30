@@ -79,10 +79,14 @@ function createR2ObjectStoreAccess(bucket: R2Bucket) {
 		},
 		async list(input: { prefix?: string; cursor?: string; limit?: number } = {}) {
 			try {
+				// Without `include`, R2 omits both maps from a listing: content type
+				// reads as null and custom metadata as `{}`, which would make every
+				// listed object look like an integrity conflict.
 				const page = await bucket.list({
 					prefix: input.prefix,
 					cursor: input.cursor,
 					limit: input.limit,
+					include: ['httpMetadata', 'customMetadata'],
 				});
 				return {
 					outcome: 'listed' as const,

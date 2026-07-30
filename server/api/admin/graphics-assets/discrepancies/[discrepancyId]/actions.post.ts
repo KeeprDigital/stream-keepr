@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { requireGraphicsAdministrator } from '~~/server/modules/graphics-administrator';
+import { graphicsDiscrepancyId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { graphicsAuthorIdentity, rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
@@ -9,7 +10,7 @@ import { graphicsAuthorIdentity, rethrowGraphicsAssetApiError } from '~~/server/
  * deliberately absent: it is never an available action.
  */
 const actionSchema = z.object({
-	action: z.enum(['recheck', 'restore-quarantined-copy', 'regenerate-derivative']),
+	action: z.enum(['recheck', 'verify-stored-bytes', 'regenerate-derivative']),
 }).strict();
 
 export default defineEventHandler(async (event) => {
@@ -18,14 +19,14 @@ export default defineEventHandler(async (event) => {
 		const { action } = await readValidatedBody(event, actionSchema.parse);
 		const library = graphicsAssetLibraryForEvent(event);
 		const request = {
-			discrepancyId: getRouterParam(event, 'discrepancyId') ?? '',
+			discrepancyId: graphicsDiscrepancyId(getRouterParam(event, 'discrepancyId') ?? ''),
 			actor: graphicsAuthorIdentity(event),
 		};
 		switch (action) {
 			case 'recheck':
 				return await library.recheckGraphicsDiscrepancy(request);
-			case 'restore-quarantined-copy':
-				return await library.restoreQuarantinedGraphicAssetContent(request);
+			case 'verify-stored-bytes':
+				return await library.verifyStoredGraphicAssetContent(request);
 			case 'regenerate-derivative':
 				return await library.regenerateGraphicsDerivative(request);
 		}
