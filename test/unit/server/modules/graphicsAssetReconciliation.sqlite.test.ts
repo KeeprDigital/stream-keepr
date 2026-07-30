@@ -31,6 +31,16 @@ const otherPng = Uint8Array.of(
 	...pixelPng.slice(-12),
 );
 
+const vp9Webm = Uint8Array.from(Buffer.from(
+	'GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAIMEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggElTbuMU6uEHFO7a1OsggH27AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjIuMTIuMTAyV0GNTGF2ZjYyLjEyLjEwMkSJiECPQAAAAAAAFlSua8iuAQAAAAAAAD/XgQFzxYhkRqj8GKbqBJyBACK1nIN1bmSIgQCGhVZfVlA5g4EBI+ODhB3NZQDgkLCBELqBEJqBAlWwhFW5gQESVMNnQIBzc6BjwIBnyJpFo4dFTkNPREVSRIeNTGF2ZjYyLjEyLjEwMnNz2mPAi2PFiGRGqPwYpuoEZ8ilRaOHRU5DT0RFUkSHmExhdmM2Mi4yOC4xMDIgbGlidnB4LXZwOWfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAB9DtnXG54EAo6yBAACAgkmDQgAA8AD2ADgkHBhCAAAwcAAASqf/+5CBv///CAg////7iYcAAKOTgQH0AIYAQJKcAElAAAMgAABCQBxTu2uRu4+zgQC3iveBAfGCAavwgQM=',
+	'base64',
+));
+
+const sixteenPixelPosterPng = Uint8Array.from(Buffer.from(
+	'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAABAAAAAQBPJcTWAAAAHUlEQVR4nGP8x8Dwn4ECwEKJ5lEDRg0YNWAwGQAAkU4CO63xbeIAAAAASUVORK5CYII=',
+	'base64',
+));
+
 const DAY = 24 * 60 * 60 * 1000;
 
 function digestOf(bytes: Uint8Array) {
@@ -63,6 +73,49 @@ function boundedBytes(bytes: Uint8Array) {
 		byteLength: bytes.byteLength,
 		maximumByteLength: bytes.byteLength,
 	});
+}
+
+/**
+ * The pinned silent-video validation runtime as a controlled adapter, exactly
+ * as the ingestion suites drive it. Regeneration must reach it the same way
+ * ingestion does, so this double also proves the staged working copy is where
+ * the runtime expects to find its source.
+ */
+function acceptEverySilentVideo() {
+	const stagedSources: string[] = [];
+	return {
+		stagedSources,
+		validate: async (input: {
+			operationId: string;
+			idempotencyKey: string;
+			sourceDigest: string;
+			factsDigest: string;
+			inspectedFacts: {
+				width: number;
+				height: number;
+				durationSeconds: number;
+				posterTimeSeconds: number;
+			};
+		}) => {
+			stagedSources.push(`ingestion/${input.operationId}/source`);
+			return {
+				outcome: 'accepted' as const,
+				operationId: input.operationId,
+				idempotencyKey: input.idempotencyKey,
+				sourceDigest: input.sourceDigest,
+				factsDigest: input.factsDigest,
+				width: input.inspectedFacts.width,
+				height: input.inspectedFacts.height,
+				durationSeconds: input.inspectedFacts.durationSeconds,
+				posterTimeSeconds: input.inspectedFacts.posterTimeSeconds,
+				mutedInlinePlayback: true as const,
+				seeked: true as const,
+				transparencyRendered: false,
+				posterDigest: digestOf(sixteenPixelPosterPng),
+				poster: boundedBytes(sixteenPixelPosterPng),
+			};
+		},
+	};
 }
 
 let harness: SqliteD1Harness;
@@ -677,6 +730,58 @@ describe('graphics asset reconciliation', () => {
 			expect(asset?.revisions).toHaveLength(1);
 			expect(asset?.revisionId).toBe(reference.revisionId);
 			expect(await thumbnailDigest(reference.revisionId)).toBe(derivativeDigest);
+		});
+
+		it('regenerates a silent-video poster through the pinned validation runtime', async () => {
+			const validator = acceptEverySilentVideo();
+			const context = createReconciliationLibrary({
+				silentVideoPlaybackValidator: validator,
+			});
+			const operation = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'video-poster',
+				initiatedBy: 'reconciliation-author',
+				name: 'Sting',
+				sourceFileName: 'sting.webm',
+				declaredMime: 'video/webm',
+				duplicateContentPolicy: 'create-separate',
+				declaredByteLength: vp9Webm.byteLength,
+			});
+			const published = await context.library.uploadGraphicAsset({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				declaredMime: 'video/webm',
+				bytes: boundedBytes(vp9Webm),
+			});
+			const reference = publishedReference(published);
+			const posterDigest = await thumbnailDigest(reference.revisionId);
+			await context.canonical.delete(canonicalIdentity(posterDigest));
+			await context.library.runGraphicsReconciliation();
+
+			const overview = await context.library.getReconciliationOverview();
+			const discrepancy = openDiscrepancy(overview.discrepancies, 'missing-derivative');
+			expect(discrepancy.derivative?.kind).toBe('video-poster');
+			expect(discrepancy.actions).toContain('regenerate-derivative');
+
+			const outcome = await context.library.regenerateGraphicsDerivative({
+				discrepancyId: discrepancy.id,
+				actor: 'administrator',
+			});
+
+			expect(outcome).toMatchObject({
+				outcome: 'resolved',
+				resolution: 'derivative-regenerated',
+			});
+			// Regeneration reproduced the exact recorded bytes, so the catalogue's
+			// derivative row never needed to change.
+			expect(await thumbnailDigest(reference.revisionId)).toBe(posterDigest);
+			expect(await context.library.resolveGraphicAssetThumbnail({ assetId: reference.assetId }))
+				.toMatchObject({ outcome: 'available' });
+
+			// The runtime read a staged working copy, and it was cleaned up after.
+			const regenerationSource = validator.stagedSources.at(-1)!;
+			expect(regenerationSource).toContain(`reconciliation-${discrepancy.id}`);
+			expect(await context.staging.readMetadata(graphicsObjectIdentity(regenerationSource)))
+				.toEqual({ outcome: 'missing' });
 		});
 
 		it('refuses to regenerate while the canonical source is unavailable', async () => {
