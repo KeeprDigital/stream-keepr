@@ -134,6 +134,20 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		});
 	});
 
+	/**
+	 * Broadcast Graphic Template actions are authoring, and the Live workspace is not
+	 * an authoring surface. Nothing here may save, place, rename, or delete a design:
+	 * a live operator's Screen must not change shape under them.
+	 */
+	it('offers no Broadcast Graphic Template action anywhere in the Live workspace', async () => {
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-testid="template-library"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="template-place"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="template-library-save"]').exists()).toBe(false);
+		expect(wrapper.text()).not.toContain('Template');
+	});
+
 	it('loads the authoritative playout snapshot for the Screen', async () => {
 		await mountComponent();
 

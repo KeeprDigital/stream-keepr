@@ -1,0 +1,564 @@
+import type { ScreenResponse } from '~~/shared/api';
+import type {
+	BroadcastGraphicTemplateResponse,
+	BroadcastGraphicTemplateSummary,
+} from '~~/shared/types/broadcastGraphicTemplate';
+import type { BroadcastGraphicConfig, MediaGraphicItemConfig } from '~~/shared/types/graphics';
+import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
+import { Buffer } from 'node:buffer';
+import { createHash, randomUUID } from 'node:crypto';
+import { $fetch, fetch } from '@nuxt/test-utils/e2e';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+
+/**
+ * The Broadcast Graphic Template library through the real API.
+ *
+ * The behaviour under test is the whole round trip an author takes: compose a
+ * Broadcast Graphic on a Screen, save it as a template, and place that template on
+ * another Screen — in another Event — as a copy that is genuinely nothing to do
+ * with the template any more.
+ */
+
+const pixelPng = Uint8Array.from(Buffer.from(
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+	'base64',
+));
+
+/** Distinguishes this run's fixtures from any a previous run left in the library. */
+const runId = randomUUID();
+
+const SQUARE_CORNER = { treatment: 'square', size: 0 } as const;
+
+// Written out rather than built from the shared factory: the integration project
+// resolves no `~~` alias, so only type imports cross this boundary.
+const SQUARE_GEOMETRY = {
+	topLeft: SQUARE_CORNER,
+	topRight: SQUARE_CORNER,
+	bottomRight: SQUARE_CORNER,
+	bottomLeft: SQUARE_CORNER,
+	leftSlant: 0,
+	rightSlant: 0,
+};
+
+const SOLID_SURFACE = {
+	fill: { type: 'solid' as const, color: '#101014' },
+	fillOpacity: 1,
+};
+
+/**
+ * Graphic Items in the current schema. A stale item shape is rejected at Screen
+ * creation with a 400, which reads as an unrelated failure.
+ */
+function shapeItem(id: string, overrides: Record<string, unknown> = {}) {
+	return {
+		type: 'shape' as const,
+		id,
+		label: id,
+		visible: true,
+		anchor: 'top-left' as const,
+		x: 0,
+		y: 0,
+		width: 640,
+		height: 120,
+		geometry: SQUARE_GEOMETRY,
+		surfaceStyle: SOLID_SURFACE,
+		...overrides,
+	};
+}
+
+function textItem(id: string, text: string) {
+	return {
+		type: 'text' as const,
+		id,
+		label: id,
+		visible: true,
+		anchor: 'top-left' as const,
+		x: 24,
+		y: 24,
+		width: 560,
+		height: 64,
+		text,
+		typography: {
+			fontId: 'inter',
+			fontSize: 48,
+			fontWeight: 700,
+			fontStyle: 'normal' as const,
+			textTransform: 'none' as const,
+			letterSpacing: 0,
+			lineHeight: 1.1,
+			textAlign: 'left' as const,
+			color: '#ffffff',
+		},
+		overflowPolicy: 'shrink' as const,
+		minFontSize: 24,
+	};
+}
+
+function mediaItem(id: string, asset?: { assetId: string; revisionId: string }) {
+	return {
+		type: 'media' as const,
+		id,
+		label: id,
+		visible: true,
+		anchor: 'top-left' as const,
+		x: 0,
+		y: 0,
+		width: 200,
+		height: 200,
+		mediaKind: 'image' as const,
+		fit: 'cover' as const,
+		focalPosition: { horizontal: 0.5, vertical: 0.5 },
+		opacity: 1,
+		playbackRate: 1,
+		loop: true,
+		...(asset ? { asset } : {}),
+	};
+}
+
+function groupItem(id: string, children: unknown[]) {
+	return {
+		type: 'group' as const,
+		id,
+		label: id,
+		visible: true,
+		anchor: 'top-left' as const,
+		x: 0,
+		y: 800,
+		width: 900,
+		height: 200,
+		arrangement: 'row' as const,
+		padding: 12,
+		gap: 12,
+		align: 'center' as const,
+		justify: 'start' as const,
+		clip: true,
+		geometry: SQUARE_GEOMETRY,
+		children,
+	};
+}
+
+async function request(
+	path: string,
+	options: { method?: string; body?: unknown; cookie?: string } = {},
+): Promise<{ status: number; data: any }> {
+	const headers: Record<string, string> = {};
+	if (options.cookie)
+		headers.cookie = options.cookie;
+	if (options.body !== undefined)
+		headers['content-type'] = 'application/json';
+
+	const response = await fetch(path, {
+		method: options.method ?? 'GET',
+		headers,
+		body: options.body === undefined ? undefined : JSON.stringify(options.body),
+	});
+	const text = await response.text();
+	return { status: response.status, data: text ? JSON.parse(text) : null };
+}
+
+/**
+ * One Graphic Asset of this suite's own. `create-separate` with a per-run
+ * idempotency key: the single-pixel PNG is ingested by other suites too, and an
+ * ordinary ingestion that matches existing content reuses that asset by design —
+ * which would mean sharing its lifecycle with a suite that retires it.
+ */
+async function ingestImage(eventId: number, name: string): Promise<{ assetId: string; revisionId: string }> {
+	const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
+		method: 'POST',
+		body: {
+			idempotencyKey: `${name}-${runId}`,
+			name,
+			defaultEventId: eventId,
+			duplicateContentPolicy: 'create-separate',
+			browserDecodeEvidence: {
+				outcome: 'decoded',
+				sourceDigest: createHash('sha256').update(pixelPng).digest('hex'),
+				width: 1,
+				height: 1,
+			},
+			declaredByteLength: pixelPng.byteLength,
+		},
+	});
+	const response = await fetch(
+		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
+		{ method: 'PUT', body: pixelPng },
+	);
+	const operation = await response.json() as GraphicsIngestionOperation;
+	return { assetId: operation.result!.assetId, revisionId: operation.result!.revisionId };
+}
+
+const TEMPLATES_PATH = '/api/graphics-templates/broadcast-graphics';
+
+describe('broadcast Graphic Template library', () => {
+	let sourceEventId: number;
+	let sourceScreenId: number;
+	let otherEventId: number;
+	let otherScreenId: number;
+	let authorCookie: string;
+	let secondAuthorCookie: string;
+	let asset: { assetId: string; revisionId: string };
+	let templateId: string;
+
+	async function createEventWithGraphicsScreen(name: string, slug: string) {
+		const event = await $fetch('/api/events', {
+			method: 'POST',
+			body: { name, game: 'mtg', featureMatchOrientation: 'horizontal' },
+		});
+		const screen = await $fetch<ScreenResponse>(`/api/events/${event.id}/screens`, {
+			method: 'POST',
+			body: { name, slug, currentMode: 'broadcast-graphics' },
+		});
+		return { eventId: event.id as number, screenId: screen.id };
+	}
+
+	async function authoredStack(eventId: number, screenId: number): Promise<BroadcastGraphicConfig[]> {
+		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
+		return (screen.modeConfigs?.['broadcast-graphics']?.graphics ?? []) as BroadcastGraphicConfig[];
+	}
+
+	async function patchStack(eventId: number, screenId: number, graphics: unknown[]) {
+		return await request(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
+			method: 'PATCH',
+			body: { graphics },
+		});
+	}
+
+	function placementPath(eventId: number, screenId: number) {
+		return `/api/events/${eventId}/screens/${screenId}/broadcast-graphics/placements`;
+	}
+
+	beforeAll(async () => {
+		authorCookie = await createGraphicsAuthorSessionCookie();
+		secondAuthorCookie = await createGraphicsAuthorSessionCookie();
+		expect(authorCookie).not.toBe(secondAuthorCookie);
+
+		const source = await createEventWithGraphicsScreen('Template Source Event', 'template-source-screen');
+		sourceEventId = source.eventId;
+		sourceScreenId = source.screenId;
+		const other = await createEventWithGraphicsScreen('Template Target Event', 'template-target-screen');
+		otherEventId = other.eventId;
+		otherScreenId = other.screenId;
+
+		asset = await ingestImage(sourceEventId, 'template-library-bug');
+
+		// One authored Broadcast Graphic with everything a template has to carry: a
+		// Graphic Group with children, a pinned Media Graphic Item, typed Graphic
+		// Inputs, and the Graphic Source Selections and Bindings its author declared.
+		const authored = await patchStack(sourceEventId, sourceScreenId, [{
+			id: 'authored-lower-third',
+			name: 'Lower third',
+			items: [
+				shapeItem('backing'),
+				textItem('headline', 'Now playing: {player}'),
+				groupItem('badges', [mediaItem('bug', asset), shapeItem('rule', { width: 4, height: 80 })]),
+			],
+			inputs: [{
+				type: 'text',
+				key: 'player',
+				label: 'Player',
+				required: true,
+				updatePolicy: 'staged',
+				default: 'Reid Duke',
+				maxLength: 40,
+			}],
+			sources: [{ key: 'player', label: 'Player', kind: 'player' }],
+			bindings: [{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.displayName' }],
+		}]);
+		expect(authored.status).toBe(200);
+	});
+
+	afterAll(async () => {
+		try {
+			if (templateId)
+				await request(`${TEMPLATES_PATH}/${templateId}`, { method: 'DELETE', cookie: authorCookie });
+		}
+		catch {}
+		for (const eventId of [sourceEventId, otherEventId]) {
+			try {
+				await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+			}
+			catch {}
+		}
+	});
+
+	it('saves a placed Broadcast Graphic as a template with a stable identity and revision 1', async () => {
+		const saved = await request(TEMPLATES_PATH, {
+			method: 'POST',
+			cookie: authorCookie,
+			body: {
+				source: { eventId: sourceEventId, screenId: sourceScreenId, graphicId: 'authored-lower-third' },
+				description: 'Main show lower third',
+			},
+		});
+
+		expect(saved.status).toBe(201);
+		const template = saved.data as BroadcastGraphicTemplateResponse;
+		expect(template.id).toEqual(expect.any(String));
+		expect(template.name).toBe('Lower third');
+		expect(template.description).toBe('Main show lower third');
+		expect(template.revision).toBe(1);
+		expect(template.document.items.map(item => item.id)).toEqual(['backing', 'headline', 'badges']);
+		templateId = template.id;
+	});
+
+	it('refuses to save a template without a graphics author session', async () => {
+		const anonymous = await request(TEMPLATES_PATH, {
+			method: 'POST',
+			body: { source: { eventId: sourceEventId, screenId: sourceScreenId, graphicId: 'authored-lower-third' } },
+		});
+
+		expect(anonymous.status).toBe(401);
+	});
+
+	it('reports a Broadcast Graphic the Screen does not carry as not found', async () => {
+		const missing = await request(TEMPLATES_PATH, {
+			method: 'POST',
+			cookie: authorCookie,
+			body: { source: { eventId: sourceEventId, screenId: sourceScreenId, graphicId: 'never-authored' } },
+		});
+
+		expect(missing.status).toBe(404);
+	});
+
+	it('browses the library from any Event in the installation', async () => {
+		const listed = await request(TEMPLATES_PATH, { cookie: authorCookie });
+
+		expect(listed.status).toBe(200);
+		const summaries = listed.data.templates as BroadcastGraphicTemplateSummary[];
+		const saved = summaries.find(summary => summary.id === templateId);
+		expect(saved).toMatchObject({ name: 'Lower third', revision: 1, itemCount: 5, inputCount: 1 });
+		// A library listing is a browse, not a download: the composition itself is not
+		// in it.
+		expect(saved).not.toHaveProperty('document');
+	});
+
+	it('places a template on a Screen in a different Event as a new Broadcast Graphic', async () => {
+		const placed = await request(placementPath(otherEventId, otherScreenId), {
+			method: 'POST',
+			cookie: authorCookie,
+			body: { templateId },
+		});
+
+		expect(placed.status).toBe(201);
+		const graphic = placed.data.graphic as BroadcastGraphicConfig;
+		expect(graphic.name).toBe('Lower third');
+		expect(graphic.id).not.toBe('authored-lower-third');
+
+		const stack = await authoredStack(otherEventId, otherScreenId);
+		expect(stack.map(entry => entry.id)).toEqual([graphic.id]);
+	});
+
+	it('regenerates every Graphic Item id so two copies coexist in one Screen document', async () => {
+		const second = await request(placementPath(otherEventId, otherScreenId), {
+			method: 'POST',
+			cookie: authorCookie,
+			body: { templateId },
+		});
+
+		expect(second.status).toBe(201);
+		const stack = await authoredStack(otherEventId, otherScreenId);
+		expect(stack).toHaveLength(2);
+
+		const itemIds = stack.flatMap(graphic => graphic.items.flatMap(item => [
+			item.id,
+			...(item.type === 'group' ? item.children.map(child => child.id) : []),
+		]));
+		expect(new Set(itemIds).size).toBe(itemIds.length);
+		expect(itemIds).not.toContain('backing');
+		expect(itemIds).not.toContain('bug');
+		// A second copy in the same Screen is named distinctly rather than duplicated.
+		expect(stack.map(graphic => graphic.name)).toEqual(['Lower third', 'Lower third (2)']);
+	});
+
+	it('carries each Graphic Input default as the placed copy\'s own initial manual value', async () => {
+		const [placed] = await authoredStack(otherEventId, otherScreenId);
+
+		expect(placed!.inputs).toEqual([{
+			type: 'text',
+			key: 'player',
+			label: 'Player',
+			required: true,
+			updatePolicy: 'staged',
+			default: 'Reid Duke',
+			maxLength: 40,
+		}]);
+		expect(placed!.sources).toEqual([{ key: 'player', label: 'Player', kind: 'player' }]);
+		expect(placed!.bindings).toEqual([
+			{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.displayName' },
+		]);
+	});
+
+	it('places an authored Graphic Asset Reference its Screen Output can resolve', async () => {
+		const stack = await authoredStack(otherEventId, otherScreenId);
+		const placedMedia = stack[0]!.items
+			.flatMap(item => item.type === 'group' ? item.children : [])
+			.find(child => child.type === 'media') as MediaGraphicItemConfig;
+
+		expect(placedMedia.asset).toEqual(asset);
+
+		// Authored, therefore indexed, therefore inside the Screen's own Screen Output
+		// Asset Capability. The capability is derived from what the Screen's
+		// configuration publishes, so a placement that produced anything other than an
+		// authored reference would leave the graphic's media unresolvable on air.
+		const { assetCapability } = await $fetch<{ assetCapability: string }>(
+			`/api/events/${otherEventId}/screens/${otherScreenId}/asset-capability`,
+			{ headers: { cookie: authorCookie } },
+		);
+		const delivered = await fetch(
+			`/api/screen-output/screens/${otherScreenId}/assets/${placedMedia.asset!.assetId}/revisions/${placedMedia.asset!.revisionId}/content`,
+			{ headers: { authorization: `Bearer ${assetCapability}` } },
+		);
+		expect(delivered.status).toBe(200);
+
+		// Still not a library-browsing hole: an asset this Screen publishes nothing of
+		// stays invisible to its outputs.
+		const unreferenced = await ingestImage(otherEventId, 'template-library-unplaced');
+		const refused = await fetch(
+			`/api/screen-output/screens/${otherScreenId}/assets/${unreferenced.assetId}/revisions/${unreferenced.revisionId}/content`,
+			{ headers: { authorization: `Bearer ${assetCapability}` } },
+		);
+		expect(refused.status).toBe(404);
+	});
+
+	it('leaves a placed copy and its template with no live coupling in either direction', async () => {
+		const before = await authoredStack(otherEventId, otherScreenId);
+		const placed = structuredClone(before[0]!);
+
+		// Editing the placed copy changes nothing about the template.
+		placed.name = 'Renamed on the Screen';
+		placed.items = placed.items.slice(0, 1);
+		placed.inputs = [{ ...(placed.inputs![0] as any), default: 'Local value' }];
+		expect((await patchStack(otherEventId, otherScreenId, [placed, before[1]!])).status).toBe(200);
+
+		const template = await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie });
+		expect(template.status).toBe(200);
+		const document = (template.data as BroadcastGraphicTemplateResponse).document;
+		expect(document.name).toBe('Lower third');
+		expect(document.items).toHaveLength(3);
+		expect(document.inputs![0]!.default).toBe('Reid Duke');
+
+		// Revising the template changes nothing about the copies already placed.
+		const revised = await request(`${TEMPLATES_PATH}/${templateId}`, {
+			method: 'PATCH',
+			cookie: authorCookie,
+			body: { name: 'Lower third v2', document: { ...document, items: document.items.slice(0, 1) } },
+		});
+		expect(revised.status).toBe(200);
+		expect((revised.data as BroadcastGraphicTemplateResponse).revision).toBe(2);
+
+		const after = await authoredStack(otherEventId, otherScreenId);
+		expect(after[0]!.name).toBe('Renamed on the Screen');
+		expect(after[1]!.name).toBe('Lower third (2)');
+		expect(after[1]!.items).toHaveLength(3);
+	});
+
+	it('leases one template at a time and refuses a second session\'s edit', async () => {
+		const leasePath = `${TEMPLATES_PATH}/${templateId}/graphics-authoring-lease`;
+
+		const held = await request(leasePath, { method: 'POST', body: {}, cookie: authorCookie });
+		expect(held.status).toBe(200);
+		expect(held.data.outcome).toBe('grant');
+		expect(held.data.lease.artifact).toEqual({ kind: 'graphics-template', id: templateId });
+
+		const observing = await request(leasePath, { method: 'POST', body: {}, cookie: secondAuthorCookie });
+		expect(observing.data.outcome).toBe('observe');
+		expect(observing.data.lease.writable).toBe(false);
+
+		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
+			method: 'PATCH',
+			cookie: secondAuthorCookie,
+			body: { description: 'Taken from under the holder' },
+		});
+		expect(refused.status).toBe(409);
+
+		const accepted = await request(`${TEMPLATES_PATH}/${templateId}`, {
+			method: 'PATCH',
+			cookie: authorCookie,
+			body: { description: 'Revised by the holder' },
+		});
+		expect(accepted.status).toBe(200);
+		expect((accepted.data as BroadcastGraphicTemplateResponse).revision).toBe(3);
+
+		expect((await request(leasePath, { method: 'DELETE', cookie: authorCookie })).status).toBe(200);
+	});
+
+	it('refuses a template document that is not a valid Broadcast Graphic', async () => {
+		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
+			method: 'PATCH',
+			cookie: authorCookie,
+			body: { document: { id: 'x', name: 'x', items: [{ type: 'text', id: 'a' }] } },
+		});
+
+		expect(refused.status).toBe(400);
+	});
+
+	it('refuses two Graphic Items with the same id in a template document', async () => {
+		const current = await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie });
+		const document = (current.data as BroadcastGraphicTemplateResponse).document;
+
+		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
+			method: 'PATCH',
+			cookie: authorCookie,
+			body: { document: { ...document, items: [document.items[0]!, document.items[0]!] } },
+		});
+
+		expect(refused.status).toBe(400);
+	});
+
+	it('reports placing a template that does not exist as not found', async () => {
+		const missing = await request(placementPath(otherEventId, otherScreenId), {
+			method: 'POST',
+			cookie: authorCookie,
+			body: { templateId: randomUUID() },
+		});
+
+		expect(missing.status).toBe(404);
+	});
+
+	it('refuses to place a template on a Screen that is not in Broadcast Graphics mode', async () => {
+		const idle = await $fetch<ScreenResponse>(`/api/events/${otherEventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Idle', slug: 'template-idle-screen', currentMode: 'idle' },
+		});
+
+		const refused = await request(placementPath(otherEventId, idle.id), {
+			method: 'POST',
+			cookie: authorCookie,
+			body: { templateId },
+		});
+
+		expect(refused.status).toBe(409);
+	});
+
+	it('refuses a placement from a session that does not hold the Screen\'s Edit workspace lease', async () => {
+		const screenLease = `/api/events/${otherEventId}/screens/${otherScreenId}/graphics-authoring-lease`;
+		expect((await request(screenLease, { method: 'POST', body: {}, cookie: authorCookie })).data.outcome)
+			.toBe('grant');
+
+		const refused = await request(placementPath(otherEventId, otherScreenId), {
+			method: 'POST',
+			cookie: secondAuthorCookie,
+			body: { templateId },
+		});
+		expect(refused.status).toBe(409);
+
+		expect((await request(screenLease, { method: 'DELETE', cookie: authorCookie })).status).toBe(200);
+	});
+
+	it('removes a template from the library without touching the copies placed from it', async () => {
+		const removed = await request(`${TEMPLATES_PATH}/${templateId}`, {
+			method: 'DELETE',
+			cookie: authorCookie,
+		});
+		expect(removed.status).toBe(204);
+
+		expect((await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie })).status).toBe(404);
+		expect((await authoredStack(otherEventId, otherScreenId))).toHaveLength(2);
+
+		const listed = await request(TEMPLATES_PATH, { cookie: authorCookie });
+		expect((listed.data.templates as BroadcastGraphicTemplateSummary[]).map(entry => entry.id))
+			.not
+			.toContain(templateId);
+	});
+});

@@ -1,0 +1,212 @@
+import type { D1PreparedStatement } from '@cloudflare/workers-types';
+import type { DbBroadcastGraphicTemplate } from '~~/server/db/schema';
+import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import { asc, eq } from 'drizzle-orm';
+import { db } from 'hub:db';
+import { broadcastGraphicTemplates } from '~~/server/db/schema';
+import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
+
+/**
+ * Storage for the installation's Broadcast Graphic Template library.
+ *
+ * Every write does two things at once: it stores the template and it republishes
+ * the exact Graphic Asset Revisions that template references. They belong in one
+ * operation for the same reason a Screen's do — a template whose document names a
+ * revision the reference index does not know about is a template whose assets the
+ * library believes nothing uses, and the Graphics Asset Library's retention is
+ * entitled to act on that belief. The reference index is the authoritative record
+ * of exact-revision usage, and a graphics Template is one of the artifacts the
+ * glossary names as holding references, alongside Screens and placed graphics.
+ *
+ * Atomicity comes from the same one-shot token the Screen write path uses:
+ * the row write stamps `graphic_asset_reference_version`, and every reference
+ * statement in the batch is conditional on still reading it. A concurrent write
+ * therefore either wins outright or contributes nothing, and no interleaving can
+ * leave one template's document paired with another write's references.
+ */
+
+const OWNER_KIND = 'broadcast-graphic-template';
+
+export interface SaveBroadcastGraphicTemplate {
+	id: string;
+	name: string;
+	description: string | null;
+	document: BroadcastGraphicConfig;
+}
+
+export interface BroadcastGraphicTemplatePatch {
+	name?: string;
+	description?: string | null;
+	document?: BroadcastGraphicConfig;
+}
+
+/**
+ * The exact revisions one template document references.
+ *
+ * Discovered by the same walk a Broadcast Graphics Screen's configuration is
+ * discovered by, over a one-graphic stack: a template carries one Broadcast
+ * Graphic, and its Media Graphic Items pin assets in exactly the way a placed
+ * graphic's do. Sharing the walk is what guarantees a template and the copy placed
+ * from it can never disagree about which assets they depend on.
+ */
+function templateAssetReferences(document: BroadcastGraphicConfig) {
+	return broadcastGraphicsGraphicAssetReferences({ graphics: [document] });
+}
+
+export function broadcastGraphicTemplateService() {
+	const findAll = async (): Promise<DbBroadcastGraphicTemplate[]> => {
+		return await db
+			.select()
+			.from(broadcastGraphicTemplates)
+			.orderBy(asc(broadcastGraphicTemplates.name));
+	};
+
+	const findById = async (id: string): Promise<DbBroadcastGraphicTemplate | undefined> => {
+		return await db.query.broadcastGraphicTemplates.findFirst({
+			where: eq(broadcastGraphicTemplates.id, id),
+		});
+	};
+
+	/**
+	 * The reference-index statements one template write publishes.
+	 *
+	 * A row is inserted only for a revision that exists, and deliberately without
+	 * the lifecycle and compatibility conditions the Screen write path applies: a
+	 * template pins revisions an author already selected, and a revision whose asset
+	 * has since been retired keeps resolving. Refusing to record it would quietly
+	 * drop the template's claim on content it still depends on, which is the opposite
+	 * of what the index is for.
+	 */
+	const referenceStatements = (
+		client: typeof db.$client,
+		id: string,
+		document: BroadcastGraphicConfig,
+		referenceVersion: string,
+		now: number,
+	): D1PreparedStatement[] => [
+		client.prepare(`
+			DELETE FROM graphic_asset_references
+			WHERE owner_kind = '${OWNER_KIND}' AND owner_id = ?
+				AND EXISTS (
+					SELECT 1 FROM broadcast_graphic_templates
+					WHERE id = ? AND graphic_asset_reference_version = ?
+				)
+		`).bind(id, id, referenceVersion),
+		...templateAssetReferences(document).map(item => client.prepare(`
+			INSERT INTO graphic_asset_references (
+				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
+				event_id, created_at, updated_at
+			)
+			SELECT ?, ?, ?, '${OWNER_KIND}', ?, ?, NULL, ?, ?
+			FROM graphic_asset_revisions revision
+			WHERE revision.id = ? AND revision.asset_id = ?
+				AND EXISTS (
+					SELECT 1 FROM broadcast_graphic_templates
+					WHERE id = ? AND graphic_asset_reference_version = ?
+				)
+		`).bind(
+			crypto.randomUUID(),
+			item.reference.assetId,
+			item.reference.revisionId,
+			id,
+			item.ownerSlot,
+			now,
+			now,
+			item.reference.revisionId,
+			item.reference.assetId,
+			id,
+			referenceVersion,
+		)),
+	];
+
+	const create = async (input: SaveBroadcastGraphicTemplate): Promise<DbBroadcastGraphicTemplate> => {
+		const referenceVersion = crypto.randomUUID();
+		const now = Date.now();
+		const client = db.$client;
+
+		await client.batch([
+			client.prepare(`
+				INSERT INTO broadcast_graphic_templates (
+					id, name, description, revision, document,
+					graphic_asset_reference_version, created_at, updated_at
+				)
+				VALUES (?, ?, ?, 1, ?, ?, ?, ?)
+			`).bind(
+				input.id,
+				input.name,
+				input.description,
+				JSON.stringify(input.document),
+				referenceVersion,
+				now,
+				now,
+			),
+			...referenceStatements(client, input.id, input.document, referenceVersion, now),
+		]);
+
+		const created = await findById(input.id);
+		if (!created)
+			throw new Error('Broadcast Graphic Template was not stored');
+		return created;
+	};
+
+	/**
+	 * One accepted edit: the merged fields, and the revision it earns.
+	 *
+	 * The revision advances for a name or description change as much as for a
+	 * document change, because a library entry is what an author browses and its
+	 * revision is what a Template Package's provenance names.
+	 */
+	const update = async (
+		id: string,
+		patch: BroadcastGraphicTemplatePatch,
+	): Promise<DbBroadcastGraphicTemplate | undefined> => {
+		const existing = await findById(id);
+		if (!existing)
+			return undefined;
+
+		const document = patch.document ?? existing.document;
+		const referenceVersion = crypto.randomUUID();
+		const now = Date.now();
+		const client = db.$client;
+
+		await client.batch([
+			client.prepare(`
+				UPDATE broadcast_graphic_templates
+				SET name = ?, description = ?, document = ?, revision = revision + 1,
+					graphic_asset_reference_version = ?, updated_at = ?
+				WHERE id = ?
+			`).bind(
+				patch.name ?? existing.name,
+				patch.description === undefined ? existing.description : patch.description,
+				JSON.stringify(document),
+				referenceVersion,
+				now,
+				id,
+			),
+			...referenceStatements(client, id, document, referenceVersion, now),
+		]);
+
+		return await findById(id);
+	};
+
+	/**
+	 * Remove a template from the library.
+	 *
+	 * Its Graphic Asset References go with it, and nothing else does: copies already
+	 * placed on Screens are independent Broadcast Graphics with their own authored
+	 * references, so deleting the design they came from cannot reach them.
+	 */
+	const remove = async (id: string): Promise<boolean> => {
+		const client = db.$client;
+		const results = await client.batch([
+			client.prepare(`
+				DELETE FROM graphic_asset_references
+				WHERE owner_kind = '${OWNER_KIND}' AND owner_id = ?
+			`).bind(id),
+			client.prepare(`DELETE FROM broadcast_graphic_templates WHERE id = ?`).bind(id),
+		]);
+		return results[1]?.meta.changes === 1;
+	};
+
+	return { findAll, findById, create, update, remove };
+}

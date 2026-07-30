@@ -4,5 +4,6 @@ export * from './hostContract';
 export * from './inputs';
 export * from './itemDefinitions';
 export * from './shapeGeometry';
+export * from './templates';
 export * from './textTemplate';
 export * from './typography';

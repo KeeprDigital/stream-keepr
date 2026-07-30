@@ -5,6 +5,7 @@ import type { BroadcastGraphicsLiveSessionStatus } from '~~/shared/types/broadca
 import type { FeatureMatchSessionStatus, FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { PlayerGameData } from '~~/shared/types/game';
+import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { ModeConfigsMap, ScreenConfig } from '~~/shared/types/screenConfig';
 import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
 import { relations, sql } from 'drizzle-orm';
@@ -487,6 +488,41 @@ export const graphicsAuthoringLeases = sqliteTable('graphics_authoring_leases', 
 }, table => [
 	uniqueIndex('graphics_authoring_leases_artifact_idx').on(table.artifactKind, table.artifactId),
 	index('graphics_authoring_leases_event_id_idx').on(table.eventId),
+]);
+
+/**
+ * The installation's library of reusable Broadcast Graphic Templates.
+ *
+ * Deliberately not Event-scoped. A template is a design an author reuses across
+ * every show the installation runs, so it has no `event_id` at all — which is also
+ * what makes it browsable across Events without anything having to aggregate per
+ * Event. A Screen's authored stack lives in `screens.mode_configs`; nothing here is
+ * ever live Screen state, and nothing here links to a placed copy.
+ *
+ * `revision` is the automatically managed revision the glossary requires: identity
+ * is `id` and never changes, and every accepted edit to the stored document,
+ * name, or description advances the revision by one. It exists so a future
+ * Template Package and a Graphic Style Set update can name exactly which version
+ * of a template they came from.
+ *
+ * `graphic_asset_reference_version` is the same one-shot token the Screen write
+ * path uses: a write stamps it and every reference-index statement in the same
+ * batch is conditional on still reading it, so a template's document and the
+ * Graphic Asset References it publishes can never disagree.
+ */
+export const broadcastGraphicTemplates = sqliteTable('broadcast_graphic_templates', {
+	id: text('id').primaryKey(),
+	name: text('name').notNull(),
+	description: text('description'),
+	/** Automatically managed: advanced by one on every accepted edit. */
+	revision: integer('revision').notNull().default(1),
+	/** The saved Broadcast Graphic composition, exactly as a Screen would carry it. */
+	document: text('document', { mode: 'json' }).$type<BroadcastGraphicConfig>().notNull(),
+	graphicAssetReferenceVersion: text('graphic_asset_reference_version'),
+
+	...timestamps,
+}, table => [
+	index('broadcast_graphic_templates_name_idx').on(table.name),
 ]);
 
 export const featureMatches = featureMatchSlots;
@@ -991,6 +1027,8 @@ export type DbFeatureMatchSession = typeof featureMatchSessions.$inferSelect;
 export type DbFeatureMatchSessionInsert = typeof featureMatchSessions.$inferInsert;
 export type DbBroadcastGraphicsLiveSession = typeof broadcastGraphicsLiveSessions.$inferSelect;
 export type DbBroadcastGraphicsLiveSessionInsert = typeof broadcastGraphicsLiveSessions.$inferInsert;
+export type DbBroadcastGraphicTemplate = typeof broadcastGraphicTemplates.$inferSelect;
+export type DbBroadcastGraphicTemplateInsert = typeof broadcastGraphicTemplates.$inferInsert;
 export type DbLiveStateCommandReceipt = typeof liveStateCommandReceipts.$inferSelect;
 export type DbLiveStateCommandReceiptInsert = typeof liveStateCommandReceipts.$inferInsert;
 export type DbScreen = typeof screens.$inferSelect;
