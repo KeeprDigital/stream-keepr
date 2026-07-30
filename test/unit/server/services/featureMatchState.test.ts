@@ -6,7 +6,13 @@ import { DEFAULT_FEATURE_MATCH_DEFAULTS } from '~~/shared/types/featureMatchDefa
 import { createInitialFeatureMatchState } from '~~/shared/types/featureMatchState';
 import { getChain, mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
 
+const mockPublishMessage = vi.fn();
+
 vi.mock('hub:db', () => ({ db: mockDb }));
+
+vi.mock('~~/server/utils/ably', () => ({
+	publishMessage: mockPublishMessage,
+}));
 
 vi.stubGlobal('createError', (opts: any) => {
 	const err = new Error(opts.message) as any;
@@ -260,6 +266,7 @@ describe('feature match session reducer', () => {
 describe('feature match session state service', () => {
 	beforeEach(() => {
 		resetDbMocks();
+		mockPublishMessage.mockReset();
 	});
 
 	it('builds source snapshots from slot, event defaults, players, and slot overrides', async () => {
@@ -495,5 +502,72 @@ describe('feature match session state service', () => {
 		expect(mockDb.batch).toHaveBeenCalledTimes(2);
 		expect(getChain('insert').select).toHaveBeenCalledTimes(2);
 		expect(getChain('insert').values).not.toHaveBeenCalled();
+	});
+
+	describe('post-commit publication', () => {
+		function stageSuccessfulCommit(): DbFeatureMatchSession {
+			const session = createDbSession({ sequence: 3 });
+			const updated = createDbSession({
+				sequence: 4,
+				currentState: reduce(session.currentState, session.sourceSnapshot, 'SetLife', { player: 'player1', lifeTotal: 12 }).currentState,
+			});
+			mockDb.query.featureMatchSessions.findFirst.mockResolvedValue(session);
+			// The projection update is the batch's last statement; the receipt writes
+			// precede it.
+			mockDb.batch.mockResolvedValue([[], [], [updated]]);
+			return updated;
+		}
+
+		it('announces the applied event on the Event channel with the accepted snapshot and state', async () => {
+			const updated = stageSuccessfulCommit();
+
+			await featureMatchStateService().applyCommand(10, 1, {
+				commandId: 'cmd-publish',
+				type: 'SetLife',
+				payload: { player: 'player1', lifeTotal: 12 },
+				baseSequence: 3,
+			}, 'origin-1', { publish: true });
+
+			expect(mockPublishMessage).toHaveBeenCalledWith(
+				1,
+				'featureMatchSession:eventApplied',
+				{
+					slotId: updated.slotId,
+					sessionId: updated.id,
+					sequence: 4,
+					eventType: 'SetLife',
+					sourceSnapshot: updated.sourceSnapshot,
+					currentState: updated.currentState,
+				},
+				'origin-1',
+			);
+		});
+
+		it('omits the session response from the announced payload', async () => {
+			stageSuccessfulCommit();
+
+			await featureMatchStateService().applyCommand(10, 1, {
+				commandId: 'cmd-publish-shape',
+				type: 'SetLife',
+				payload: { player: 'player1', lifeTotal: 12 },
+				baseSequence: 3,
+			}, 'origin-1', { publish: true });
+
+			const [,, payload] = mockPublishMessage.mock.calls[0]!;
+			expect(payload).not.toHaveProperty('session');
+		});
+
+		it('stays silent for reverse-sync writes that carry their own notification', async () => {
+			stageSuccessfulCommit();
+
+			await featureMatchStateService().applyCommand(10, 1, {
+				commandId: 'cmd-silent',
+				type: 'SetLife',
+				payload: { player: 'player1', lifeTotal: 12 },
+				baseSequence: 3,
+			});
+
+			expect(mockPublishMessage).not.toHaveBeenCalled();
+		});
 	});
 });
