@@ -16,6 +16,8 @@ import {
 } from '~~/server/schemas/api/screen';
 import {
 	GRAPHIC_ANIMATION_EASING_VALUES,
+	GRAPHIC_ANIMATION_ORIGIN_VALUES,
+	GRAPHIC_REVEAL_EDGE_VALUES,
 	GRAPHIC_SLIDE_DIRECTION_VALUES,
 	MAX_GRAPHIC_ANIMATION_DELAY_MS,
 	MAX_GRAPHIC_ANIMATION_DURATION_MS,
@@ -945,6 +947,14 @@ describe('graphic Animation bounds', () => {
 	});
 
 	it('bounds a scale channel to zero through twice the resting size, about one of nine origins', () => {
+		// `CONTEXT.md:574` and `:418` settle *nine* Graphic Animation Origins. Two of them
+		// were exercised and the count was nowhere, so removing an origin left the title
+		// claiming nine while the schema accepted eight.
+		expect(GRAPHIC_ANIMATION_ORIGIN_VALUES).toHaveLength(9);
+
+		for (const origin of GRAPHIC_ANIMATION_ORIGIN_VALUES)
+			expect(withItemAnimation({ enter: { ...recipe, scale: { factor: 1, origin } } }).success).toBe(true);
+
 		expect(withItemAnimation({ enter: { ...recipe, scale: { factor: 0, origin: 'center' } } }).success).toBe(true);
 		expect(withItemAnimation({ enter: { ...recipe, scale: { factor: MAX_GRAPHIC_ANIMATION_SCALE, origin: 'top-left' } } }).success).toBe(true);
 		expect(withItemAnimation({ enter: { ...recipe, scale: { factor: MAX_GRAPHIC_ANIMATION_SCALE + 0.01, origin: 'center' } } }).success).toBe(false);
@@ -952,6 +962,12 @@ describe('graphic Animation bounds', () => {
 	});
 
 	it('accepts a slide channel on any of eight compass directions, fixed or clearing its parent', () => {
+		// Counted, not just iterated: `CONTEXT.md:575` settles *eight* compass
+		// directions, and a loop over a shortened enum accepts every direction it is
+		// given while silently testing fewer. The count is the glossary's, so this fails
+		// when the vocabulary and the code disagree rather than restating the code.
+		expect(GRAPHIC_SLIDE_DIRECTION_VALUES).toHaveLength(8);
+
 		for (const direction of GRAPHIC_SLIDE_DIRECTION_VALUES) {
 			expect(withItemAnimation({
 				enter: { ...recipe, slide: { direction, distanceMode: 'fixed', distance: 100 } },
@@ -970,7 +986,13 @@ describe('graphic Animation bounds', () => {
 	});
 
 	it('wipes a reveal channel from one of four edges', () => {
-		expect(withItemAnimation({ enter: { ...recipe, reveal: { edge: 'bottom' } } }).success).toBe(true);
+		// `CONTEXT.md:577` names left, right, top, and bottom — four. One edge was
+		// exercised, so the title's "four" rested on nothing and dropping an edge passed.
+		expect(GRAPHIC_REVEAL_EDGE_VALUES).toHaveLength(4);
+
+		for (const edge of GRAPHIC_REVEAL_EDGE_VALUES)
+			expect(withItemAnimation({ enter: { ...recipe, reveal: { edge } } }).success).toBe(true);
+
 		expect(withItemAnimation({ enter: { ...recipe, reveal: { edge: 'diagonal' } } }).success).toBe(false);
 	});
 

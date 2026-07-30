@@ -3,6 +3,7 @@ import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { BroadcastGraphicsModeConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
+import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import {
 	broadcastGraphicsGraphicAssetReferences,
 	GRAPHIC_ASSET_REFERENCING_SCREEN_MODES,
@@ -238,12 +239,28 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 		// covers. A mode on the list that is missing a slot prefix is worse: its
 		// writes would be scoped by an undefined prefix. So every listed mode has to
 		// be recognised and equipped, and an unlisted one recognised as neither.
+		// Named as well as iterated. Iterating proves each listed mode is equipped, but
+		// only naming the list makes dropping or renaming a member fail here rather than
+		// pass quietly with one mode fewer.
+		expect([...GRAPHIC_ASSET_REFERENCING_SCREEN_MODES]).toEqual(['feature-match-overlay', 'broadcast-graphics']);
+
 		for (const mode of GRAPHIC_ASSET_REFERENCING_SCREEN_MODES) {
 			expect(isGraphicAssetReferencingScreenMode(mode)).toBe(true);
 			expect(graphicAssetReferenceSlotPrefix(mode)).toMatch(/^[a-z]+\.$/);
 		}
 
-		for (const mode of ['idle', 'card', 'deck', 'metagame', 'feature-match'])
+		// The other half of "exactly", derived from every Screen Mode there is rather
+		// than listed by hand. The hand-written list this replaces named five of the
+		// eight non-referencing modes, so standings, topCut, and player-history were
+		// asserted nowhere — and a mode added to the vocabulary joined neither list.
+		const referencing: readonly string[] = GRAPHIC_ASSET_REFERENCING_SCREEN_MODES;
+		const nonReferencing = SCREEN_MODE_VALUES.filter(mode => !referencing.includes(mode));
+
+		// Every referencing mode is a real Screen Mode: a typo in the list above removes
+		// nothing here, and the two counts stop agreeing.
+		expect(nonReferencing).toHaveLength(SCREEN_MODE_VALUES.length - GRAPHIC_ASSET_REFERENCING_SCREEN_MODES.length);
+
+		for (const mode of nonReferencing)
 			expect(isGraphicAssetReferencingScreenMode(mode)).toBe(false);
 	});
 });
