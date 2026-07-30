@@ -70,6 +70,25 @@ const textItem: GraphicItemConfig = {
 	minFontSize: 24,
 };
 
+const mediaItem: GraphicItemConfig = {
+	type: 'media',
+	id: 'logo',
+	label: 'Sponsor',
+	visible: true,
+	anchor: 'top-left',
+	x: 40,
+	y: 60,
+	width: 480,
+	height: 270,
+	asset: { assetId: 'asset-1' as never, revisionId: 'revision-1' as never },
+	mediaKind: 'image',
+	fit: 'cover',
+	focalPosition: { horizontal: 0.5, vertical: 0.5 },
+	opacity: 1,
+	playbackRate: 1,
+	loop: true,
+};
+
 function stack(items: GraphicItemConfig[]): BroadcastGraphicConfig[] {
 	return [{ id: 'lower-third', name: 'Lower Third', items }];
 }
@@ -114,6 +133,18 @@ const USwitchStub = defineComponent({
 	template: '<button type="button" @click="$emit(\'update:modelValue\', !modelValue)" />',
 });
 
+const GraphicsAssetFocusPickerStub = defineComponent({
+	name: 'GraphicsAssetFocusPicker',
+	props: {
+		modelValue: { type: Object, required: false },
+		eventId: { type: Number, required: false },
+		assetKind: { type: [String, Array], required: false },
+		videoTarget: { type: String, required: false },
+	},
+	emits: ['update:modelValue', 'select'],
+	template: '<div data-testid="media-asset-picker" :data-video-target="videoTarget" :data-asset-id="modelValue?.assetId" />',
+});
+
 async function mountComponent(options: {
 	graphics: BroadcastGraphicConfig[];
 	selectedTarget: GraphicsSelectionTarget;
@@ -128,6 +159,7 @@ async function mountComponent(options: {
 			selectedTarget: options.selectedTarget,
 			canvasWidth: 1920,
 			canvasHeight: 1080,
+			eventId: 7,
 			writable: options.writable ?? true,
 		},
 		global: {
@@ -142,6 +174,10 @@ async function mountComponent(options: {
 				UButton: UButtonStub,
 				UBadge: true,
 				UIcon: true,
+				// The Graphic Asset picker is the library's own component and is covered
+				// by its own tests; here it stands in as the seam that reports the pinned
+				// reference and any Missing or Unavailable diagnosis.
+				GraphicsAssetFocusPicker: GraphicsAssetFocusPickerStub,
 			},
 		},
 	});
@@ -173,6 +209,20 @@ function itemOf(graphics: BroadcastGraphicConfig[], index = 0) {
 function childOf(graphics: BroadcastGraphicConfig[], index = 0) {
 	const group = graphics[0]?.items[0];
 	return group?.type === 'group' ? group.children[index] : undefined;
+}
+
+/**
+ * The Graphic Surface Style of an item that can carry one. A Media Graphic Item
+ * paints an asset rather than a surface and has none, so asking narrows it away.
+ */
+function surfaceOf(graphics: BroadcastGraphicConfig[], index = 0) {
+	const item = itemOf(graphics, index);
+	return item && item.type !== 'media' ? item.surfaceStyle : undefined;
+}
+
+function childSurfaceOf(graphics: BroadcastGraphicConfig[], index = 0) {
+	const child = childOf(graphics, index);
+	return child && child.type !== 'media' ? child.surfaceStyle : undefined;
 }
 
 function textInput(key: string): GraphicInputDeclaration {
@@ -393,9 +443,9 @@ describe('graphicsCompositorInspector', () => {
 		numberField(stops, 'Stop 2 opacity')?.vm.$emit('update:modelValue', 0.4);
 		await nextTick();
 
-		const patched = itemOf(emittedGraphics(stops));
-		expect(patched?.surfaceStyle?.fill.type === 'linear-gradient'
-			&& patched.surfaceStyle.fill.stops[1]?.opacity).toBe(0.4);
+		const patched = surfaceOf(emittedGraphics(stops));
+		expect(patched?.fill.type === 'linear-gradient'
+			&& patched.fill.stops[1]?.opacity).toBe(0.4);
 	});
 
 	it('adds and removes gradient stops within the bounds of the vocabulary', async () => {
@@ -421,9 +471,9 @@ describe('graphicsCompositorInspector', () => {
 
 		await wrapper.get('[data-testid="graphic-fill-add-stop"]').trigger('click');
 
-		const patched = itemOf(emittedGraphics(wrapper));
-		expect(patched?.surfaceStyle?.fill.type === 'linear-gradient'
-			&& patched.surfaceStyle.fill.stops).toHaveLength(3);
+		const patched = surfaceOf(emittedGraphics(wrapper));
+		expect(patched?.fill.type === 'linear-gradient'
+			&& patched.fill.stops).toHaveLength(3);
 	});
 
 	it('adds an outline and a glow, and takes them away again', async () => {
@@ -435,8 +485,8 @@ describe('graphicsCompositorInspector', () => {
 		await switchField(wrapper, 'graphic-outline-enabled')?.trigger('click');
 		await switchField(wrapper, 'graphic-glow-enabled')?.trigger('click');
 
-		expect(itemOf(emittedGraphics(wrapper, 0))?.surfaceStyle?.outline).toMatchObject({ width: 2 });
-		expect(itemOf(emittedGraphics(wrapper, 1))?.surfaceStyle?.glow).toMatchObject({ size: 24 });
+		expect(surfaceOf(emittedGraphics(wrapper, 0))?.outline).toMatchObject({ width: 2 });
+		expect(surfaceOf(emittedGraphics(wrapper, 1))?.glow).toMatchObject({ size: 24 });
 
 		const styled = await mountComponent({
 			graphics: stack([{
@@ -452,7 +502,7 @@ describe('graphicsCompositorInspector', () => {
 
 		await switchField(styled, 'graphic-outline-enabled')?.trigger('click');
 
-		expect(itemOf(emittedGraphics(styled))?.surfaceStyle?.outline).toBeUndefined();
+		expect(surfaceOf(emittedGraphics(styled))?.outline).toBeUndefined();
 	});
 
 	it('gives a Text Graphic Item a Graphic Surface Style of its own', async () => {
@@ -465,7 +515,7 @@ describe('graphicsCompositorInspector', () => {
 
 		await switchField(wrapper, 'surface-style-own')?.trigger('click');
 
-		expect(itemOf(emittedGraphics(wrapper))?.surfaceStyle).toMatchObject({ fillOpacity: 1 });
+		expect(surfaceOf(emittedGraphics(wrapper))).toMatchObject({ fillOpacity: 1 });
 	});
 
 	it('offers Graphic Group controls for a group', async () => {
@@ -529,7 +579,138 @@ describe('graphicsCompositorInspector', () => {
 
 		await switchField(wrapper, 'surface-style-own')?.trigger('click');
 
-		expect(childOf(emittedGraphics(wrapper))?.surfaceStyle).toMatchObject({ fillOpacity: 1 });
+		expect(childSurfaceOf(emittedGraphics(wrapper))).toMatchObject({ fillOpacity: 1 });
+	});
+
+	describe('media Graphic Items', () => {
+		function mountMedia(overrides: Partial<Extract<GraphicItemConfig, { type: 'media' }>> = {}, writable = true) {
+			return mountComponent({
+				graphics: stack([{ ...mediaItem, ...overrides } as GraphicItemConfig]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'logo' },
+				writable,
+			});
+		}
+
+		function mediaOf(graphics: BroadcastGraphicConfig[], index = 0) {
+			const item = itemOf(graphics, index);
+			if (item?.type !== 'media')
+				throw new Error('expected a Media Graphic Item');
+			return item;
+		}
+
+		it('offers fitting, focal position, and opacity for any media kind', async () => {
+			const wrapper = await mountMedia();
+
+			selectField(wrapper, 'media-fit')?.vm.$emit('update:modelValue', 'contain');
+			await nextTick();
+			numberField(wrapper, 'Media opacity')?.vm.$emit('update:modelValue', 0.25);
+			await nextTick();
+			numberField(wrapper, 'Horizontal focal position')?.vm.$emit('update:modelValue', 0.2);
+			await nextTick();
+			numberField(wrapper, 'Vertical focal position')?.vm.$emit('update:modelValue', 0.8);
+			await nextTick();
+
+			expect(mediaOf(emittedGraphics(wrapper, 0)).fit).toBe('contain');
+			expect(mediaOf(emittedGraphics(wrapper, 1)).opacity).toBe(0.25);
+			expect(mediaOf(emittedGraphics(wrapper, 2)).focalPosition).toEqual({ horizontal: 0.2, vertical: 0.5 });
+			expect(mediaOf(emittedGraphics(wrapper, 3)).focalPosition).toEqual({ horizontal: 0.5, vertical: 0.8 });
+		});
+
+		it('offers playback controls only for a silent video, and says it is silent', async () => {
+			const image = await mountMedia();
+			const video = await mountMedia({ mediaKind: 'silent-video' });
+
+			expect(image.find('[data-testid="media-playback-rate"]').exists()).toBe(false);
+			expect(image.find('[data-testid="media-loop"]').exists()).toBe(false);
+			expect(video.find('[data-testid="media-playback-rate"]').exists()).toBe(true);
+			expect(video.text()).toContain('silent');
+			expect(video.text()).toContain('starts from its beginning');
+		});
+
+		it('edits the playback rate and looping of a silent video', async () => {
+			const wrapper = await mountMedia({ mediaKind: 'silent-video' });
+
+			numberField(wrapper, 'Playback rate')?.vm.$emit('update:modelValue', 2);
+			await nextTick();
+			await switchField(wrapper, 'media-loop')?.trigger('click');
+
+			expect(mediaOf(emittedGraphics(wrapper, 0)).playbackRate).toBe(2);
+			expect(mediaOf(emittedGraphics(wrapper, 1)).loop).toBe(false);
+		});
+
+		it('offers the Shape Geometry controls only once clipping is switched on', async () => {
+			const unclipped = await mountMedia();
+
+			expect(unclipped.find('[data-testid="shape-corner-topLeft"]').exists()).toBe(false);
+
+			await switchField(unclipped, 'media-clip-enabled')?.trigger('click');
+			expect(mediaOf(emittedGraphics(unclipped)).clipGeometry).toBeDefined();
+
+			const clipped = await mountMedia({ clipGeometry: squareShapeGeometry() });
+			expect(clipped.find('[data-testid="shape-corner-topLeft"]').exists()).toBe(true);
+
+			// The canonical Shape Geometry controls, editing the clip in place.
+			numberField(clipped, 'Right edge slant')?.vm.$emit('update:modelValue', 40);
+			await nextTick();
+			expect(mediaOf(emittedGraphics(clipped)).clipGeometry?.rightSlant).toBe(40);
+		});
+
+		it('offers no Graphic Surface Style, because a Media Graphic Item paints an asset', async () => {
+			const wrapper = await mountMedia();
+
+			expect(wrapper.find('[data-testid="surface-style-own"]').exists()).toBe(false);
+			expect(wrapper.find('[data-testid="graphic-fill-kind"]').exists()).toBe(false);
+			expect(wrapper.find('[data-testid="graphic-glow-enabled"]').exists()).toBe(false);
+		});
+
+		it('pins one exact revision through the asset picker, taking the media kind from the asset', async () => {
+			const wrapper = await mountMedia({ asset: undefined });
+			const picker = wrapper.getComponent(GraphicsAssetFocusPickerStub);
+
+			picker.vm.$emit(
+				'select',
+				{ id: 'asset-2', kind: 'silent-video', facts: { kind: 'silent-video', targetCompatibility: 'chromium-transparency' } },
+				{ assetId: 'asset-2', revisionId: 'revision-3' },
+			);
+			await nextTick();
+
+			expect(mediaOf(emittedGraphics(wrapper))).toMatchObject({
+				asset: { assetId: 'asset-2', revisionId: 'revision-3' },
+				mediaKind: 'silent-video',
+				videoCompatibility: 'chromium-transparency',
+			});
+		});
+
+		it('unpins the asset when the picker clears it', async () => {
+			const wrapper = await mountMedia();
+			const picker = wrapper.getComponent(GraphicsAssetFocusPickerStub);
+
+			picker.vm.$emit('update:modelValue', undefined);
+			await nextTick();
+
+			expect(mediaOf(emittedGraphics(wrapper)).asset).toBeUndefined();
+		});
+
+		it('asks the picker for a Chromium target, so alpha video is selectable', async () => {
+			// A Broadcast Graphics Screen Output is consumed as a Chromium browser
+			// source, which is the whole reason a transparent overlay works at all.
+			const wrapper = await mountMedia();
+
+			expect(wrapper.get('[data-testid="media-asset-picker"]').attributes('data-video-target')).toBe('chromium');
+		});
+
+		it('lets a read-only observer read every media property without changing one', async () => {
+			const wrapper = await mountMedia({ mediaKind: 'silent-video' }, false);
+
+			expect(wrapper.get('fieldset').attributes('disabled')).toBeDefined();
+			expect(wrapper.find('[data-testid="media-fit"]').exists()).toBe(true);
+			expect(wrapper.find('[data-testid="media-playback-rate"]').exists()).toBe(true);
+
+			selectField(wrapper, 'media-fit')?.vm.$emit('update:modelValue', 'contain');
+			await nextTick();
+
+			expect(wrapper.emitted('update:graphics')).toBeUndefined();
+		});
 	});
 
 	it('shows a read-only observer every property without letting it change one', async () => {

@@ -1,4 +1,5 @@
 import type { FeatureMatchOverlayFontId } from '../featureMatchOverlayFonts';
+import type { GraphicFocalPosition, MediaGraphicItemFit } from './graphicItem';
 import type { GraphicAssetReference } from './graphicsAsset';
 
 /**
@@ -6,12 +7,12 @@ import type { GraphicAssetReference } from './graphicsAsset';
  *
  * The Graphic Item, geometry, and styling model that Broadcast Graphics and
  * Feature Match Overlay both speak. It now carries the full static vocabulary
- * the compositor interprets: Text Graphic Items, Shape Graphic Items, Graphic
- * Groups, per-corner Shape Geometry with bounded edge slants, Graphic Surface
- * Style with solid and linear-gradient Graphic Fill, outline and glow, Graphic
- * Rotation, bounded Graphic Animation Recipes, and the typed Graphic Inputs a
- * Text Graphic Item renders through a Graphic Text Template. Media Graphic Items
- * join the same vocabulary later without changing this shape.
+ * the compositor interprets: Text Graphic Items, Media Graphic Items, Shape
+ * Graphic Items, Graphic Groups, per-corner Shape Geometry with bounded edge
+ * slants, Graphic Surface Style with solid and linear-gradient Graphic Fill,
+ * outline and glow, Graphic Rotation, bounded Graphic Animation Recipes, and the
+ * typed Graphic Inputs a Text Graphic Item renders through a Graphic Text
+ * Template.
  */
 
 /** One of nine points on a canvas-positioned Graphic Item. */
@@ -658,6 +659,56 @@ export interface ShapeGraphicItemConfig extends GraphicItemConfigBase {
 	surfaceStyle?: GraphicSurfaceStyle;
 }
 
+/**
+ * The bounds on a Media Graphic Item's silent-video playback rate. They live here
+ * rather than only in the wire schema so the editor bounds its own control and an
+ * author is stopped in the field instead of losing a whole write.
+ */
+export const MIN_GRAPHIC_MEDIA_PLAYBACK_RATE = 0.25;
+export const MAX_GRAPHIC_MEDIA_PLAYBACK_RATE = 4;
+
+/**
+ * A Graphic Item that renders one image or silent video Graphic Asset inside its
+ * authored bounds.
+ *
+ * Fitting, focal position, and opacity are the whole presentation vocabulary; a
+ * Media Graphic Item carries no Graphic Surface Style, because fill, outline, and
+ * glow belong to the kinds that paint a surface rather than to one that paints an
+ * asset. Clipping is an ordinary Shape Geometry — the canonical one from this
+ * file — so a media item clips to exactly the shapes a Shape Graphic Item draws.
+ *
+ * `playbackRate` and `loop` are video-only. An image item stores them and ignores
+ * them, which keeps switching an item between an image and a silent video from
+ * discarding the playback the author already set up.
+ */
+export interface MediaGraphicItemConfig extends GraphicItemConfigBase {
+	type: 'media';
+	/**
+	 * One exact Graphic Asset identity and revision. Absent is an unfilled item:
+	 * it occupies its bounds and paints nothing, so an author can place and
+	 * position it before choosing content.
+	 */
+	asset?: GraphicAssetReference;
+	mediaKind: GraphicMediaKind;
+	fit: MediaGraphicItemFit;
+	focalPosition: GraphicFocalPosition;
+	opacity: number;
+	/**
+	 * Absent clips to the item's own rectangle, which its bounds already do.
+	 * Present clips to this Shape Geometry instead.
+	 */
+	clipGeometry?: ShapeGeometry;
+	/**
+	 * The pinned revision's own target compatibility, recorded when the asset is
+	 * selected. The Graphics Asset Library's reference index checks a silent-video
+	 * reference against it, and no pure render model can ask the library, so the
+	 * fact travels with the reference that depends on it.
+	 */
+	videoCompatibility?: 'all-supported' | 'chromium-transparency';
+	playbackRate: number;
+	loop: boolean;
+}
+
 export const GRAPHIC_GROUP_ARRANGEMENT_VALUES = ['row', 'column', 'canvas'] as const;
 export type GraphicGroupArrangement = typeof GRAPHIC_GROUP_ARRANGEMENT_VALUES[number];
 
@@ -672,7 +723,8 @@ export type GraphicGroupJustify = typeof GRAPHIC_GROUP_JUSTIFY_VALUES[number];
  * Foundation vocabulary, which this union states structurally: no Graphic Group
  * can appear in another group's children.
  */
-export type GraphicGroupChildConfig = TextGraphicItemConfig | ShapeGraphicItemConfig;
+export type GraphicGroupChildConfig
+	= TextGraphicItemConfig | ShapeGraphicItemConfig | MediaGraphicItemConfig;
 
 /**
  * A structural Graphic Item that arranges its direct children as a row, column,
@@ -701,7 +753,8 @@ export interface GraphicGroupItemConfig extends GraphicItemConfigBase {
 	children: GraphicGroupChildConfig[];
 }
 
-export type GraphicItemConfig = TextGraphicItemConfig | ShapeGraphicItemConfig | GraphicGroupItemConfig;
+export type GraphicItemConfig
+	= TextGraphicItemConfig | ShapeGraphicItemConfig | MediaGraphicItemConfig | GraphicGroupItemConfig;
 
 export type GraphicItemKind = GraphicItemConfig['type'];
 

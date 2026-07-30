@@ -1,4 +1,5 @@
-import type { BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, IdleModeConfig } from '~~/shared/types/screenConfig';
+import type { ScreenMode } from '~~/shared/types/enums';
+import type { BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, IdleModeConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { SCREEN_MODE_VALUES, screens } from '~~/server/db/schema';
@@ -36,6 +37,10 @@ import {
 	VERTICAL_ALIGN_VALUES,
 } from '~~/shared/types/enums';
 import {
+	MEDIA_GRAPHIC_ITEM_FIT_VALUES,
+	MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES,
+} from '~~/shared/types/graphicItem';
+import {
 	GRAPHIC_ANCHOR_POINT_VALUES,
 	GRAPHIC_ANIMATION_EASING_VALUES,
 	GRAPHIC_ANIMATION_ORIGIN_VALUES,
@@ -64,17 +69,20 @@ import {
 	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
 	MAX_GRAPHIC_INPUT_KEY_LENGTH,
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
+	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_SLIDE_DISTANCE_PX,
 	MAX_GRAPHIC_TEXT_LENGTH,
 	MIN_GRAPHIC_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_ANIMATION_REPEAT,
 	MIN_GRAPHIC_FILL_STOPS,
+	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	ON_AIR_UPDATE_POLICY_VALUES,
 	SHAPE_CORNER_TREATMENT_VALUES,
 	TEXT_OVERFLOW_POLICY_VALUES,
 } from '~~/shared/types/graphics';
 import {
 	FEATURE_MATCH_OVERLAY_ANCHOR_VALUES,
+	mergeScreenModeConfig,
 	normalizeFeatureMatchLayout,
 } from '~~/shared/types/screenConfig';
 
@@ -133,6 +141,23 @@ function createModeConfigPatchFieldSchema(schema: any): z.ZodTypeAny {
 	return schema.optional();
 }
 
+/**
+ * The schema one mode's PATCH body is validated against.
+ *
+ * Rebuilt from the full schema's shape, so it carries every field's own bounds
+ * and accepts `null` as the "delete this key" sentinel. It deliberately does
+ * **not** carry the full schema's object-level checks: a patch is a fragment, and
+ * a whole-object rule cannot be evaluated against a fragment — the byte total in
+ * particular is a property of the *stored* configuration, not of an edit to it.
+ *
+ * That used to make object-level rules silently unenforced on this path, which is
+ * the defect in #85. What closes it is `parseModeConfigPatchResult`: the
+ * configuration a patch would produce is validated against `modeConfigsMapSchema`
+ * — the same authoritative schema Screen create and full update use — before
+ * anything is written. So dropping the checks here is safe *because* they are
+ * applied there, and any object-level rule added in future is enforced on this
+ * path automatically, with nobody needing to remember.
+ */
 function createModeConfigPatchSchema<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
 	const patchShape = Object.fromEntries(
 		Object.entries(schema.shape).map(([key, fieldSchema]) => [key, createModeConfigPatchFieldSchema(fieldSchema as any)]),
@@ -907,8 +932,37 @@ const shapeGraphicItemShape = {
 	surfaceStyle: graphicSurfaceStyleSchema.optional(),
 };
 
+/**
+ * A Media Graphic Item.
+ *
+ * `asset` is optional because an author places the rectangle before choosing its
+ * content, and `clipGeometry` because clipping is optional — absent, the item
+ * clips to its own bounds. `videoCompatibility` records the pinned revision's own
+ * target compatibility, which the Graphic Asset Reference index checks a
+ * silent-video reference against.
+ */
+const mediaGraphicItemShape = {
+	...graphicItemBaseShape,
+	type: z.literal('media'),
+	asset: graphicAssetReferenceSchema.optional(),
+	mediaKind: z.enum(GRAPHIC_MEDIA_KIND_VALUES),
+	fit: z.enum(MEDIA_GRAPHIC_ITEM_FIT_VALUES),
+	focalPosition: z.object({
+		horizontal: opacitySchema,
+		vertical: opacitySchema,
+	}).strict(),
+	opacity: opacitySchema,
+	clipGeometry: graphicShapeGeometrySchema.optional(),
+	videoCompatibility: z.enum(MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES).optional(),
+	playbackRate: finiteNumberSchema
+		.min(MIN_GRAPHIC_MEDIA_PLAYBACK_RATE)
+		.max(MAX_GRAPHIC_MEDIA_PLAYBACK_RATE),
+	loop: z.boolean(),
+};
+
 const textGraphicItemConfigSchema = z.object(textGraphicItemShape).strict();
 const shapeGraphicItemConfigSchema = z.object(shapeGraphicItemShape).strict();
+const mediaGraphicItemConfigSchema = z.object(mediaGraphicItemShape).strict();
 
 /**
  * Main-axis sizing belongs to a Graphic Group child, so only a child carries
@@ -928,6 +982,7 @@ const graphicGroupChildSizingSchema = z.object({
 const graphicGroupChildConfigSchema = z.discriminatedUnion('type', [
 	z.object({ ...textGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...shapeGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
+	z.object({ ...mediaGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 ]);
 
 export const MAX_GRAPHIC_GROUP_CHILDREN = 50;
@@ -956,6 +1011,7 @@ const graphicGroupItemConfigSchema = z.object({
 const graphicItemConfigSchema = z.discriminatedUnion('type', [
 	textGraphicItemConfigSchema,
 	shapeGraphicItemConfigSchema,
+	mediaGraphicItemConfigSchema,
 	graphicGroupItemConfigSchema,
 ]);
 
@@ -988,10 +1044,15 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * against the schema itself.
  *
  * **That figure no longer fits the budget.** It was 79% when Graphic Inputs set
- * this cap; Graphic Animation has taken it to 527,531 bytes against a 524,288
- * limit — 100.6%. So the named caps no longer bind before the byte total in the
+ * this cap; Graphic Animation has taken it to 596,673 bytes against a 524,288
+ * limit — 113.8%. So the named caps no longer bind before the byte total in the
  * worst case, and an author who filled every cap at once would read a byte count
  * rather than the limit they reached. See the animation section below.
+ *
+ * Media Graphic Items do not contribute to it. A maximal animated Media Graphic
+ * Item measures 1,906 bytes against 3,704 for a maximal animated Text Graphic
+ * Item, so the worst case is built from text, and adding a cheaper item kind
+ * cannot move it — which is why this figure did not change when they landed.
  *
  * It is deliberately a named cap so an operator reads which limit they reached
  * rather than a byte count. Graphic Group children count towards it — they are
@@ -1045,7 +1106,8 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * phases with a fade, slide, scale, and reveal channel each costs a Graphic Item
  * 1,039 bytes, and a Broadcast Graphic shell 2,115 — a shell pays more because it
  * also carries a four-phase stagger naming its direct items, and an id costs 102
- * bytes per appearance at the 100-character cap.
+ * bytes per appearance at the 100-character cap. Across 110 Graphic Items and 50
+ * Broadcast Graphic shells that is the whole 183,432-byte rise from 413,241.
  *
  * The cap is deliberately left where Graphic Inputs set it, even though the worst
  * case now exceeds the budget. Animation's cost is recorded rather than used to
@@ -1071,7 +1133,7 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * the figures above describe only this mode's own contribution to it.
  */
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 110;
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 527_531;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 596_673;
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
 	return items.reduce(
@@ -1234,15 +1296,110 @@ export const modeConfigPatchSchemaMap = {
 	'player-history': createModeConfigPatchSchema(playerHistoryModeConfigSchema),
 } as const;
 
-// Full modeConfigs map schema (all keys optional)
-export const modeConfigsMapSchema = z
-	.object(modeConfigSchemaMap)
-	.strict()
-	.partial()
-	.refine(
+/**
+ * The rules that are properties of the whole stored mode configuration rather than
+ * of any one mode.
+ *
+ * Written once and applied to both schemas below, so the two write paths cannot
+ * drift apart: a rule added here is enforced on Screen create, on full update, and
+ * on every mode-configuration PATCH, without being restated anywhere.
+ */
+function withModeConfigsMapRules<T extends z.ZodTypeAny>(schema: T) {
+	return schema.refine(
 		value => jsonByteLength(value) <= MAX_MODE_CONFIGS_BYTES,
 		`Mode configuration must not exceed ${MAX_MODE_CONFIGS_BYTES} bytes`,
 	);
+}
+
+// Full modeConfigs map schema (all keys optional)
+export const modeConfigsMapSchema = withModeConfigsMapRules(
+	z.object(modeConfigSchemaMap).strict().partial(),
+);
+
+/**
+ * The whole-map rules alone, for a stored map whose individual modes may be partial.
+ *
+ * A mode configuration is legitimately incomplete in storage: PATCH writes
+ * fragments and readers complete them from `getDefaultConfigForMode`, so a Screen
+ * can hold `{ 'feature-match-overlay': { layout } }` with no `presetId` and be
+ * entirely valid. Re-checking each mode against its full schema would therefore
+ * reject ordinary edits, which is why this deliberately checks the map's own rules
+ * and leaves each mode's shape to the patch schema that validated the fragment.
+ */
+const storedModeConfigsMapSchema = withModeConfigsMapRules(z.record(z.string(), z.unknown()));
+
+/**
+ * Object-level checks on a per-mode schema cannot reach the PATCH path, so having
+ * one must fail loudly rather than be silently unenforced.
+ *
+ * This is the other half of #85. The byte total lives on the *map*, so it can be
+ * applied to a merged result; a rule on one mode's own object cannot, because the
+ * stored config it would judge is legitimately partial and completing it here would
+ * invent values the operator never wrote. Rather than let such a rule be quietly
+ * dropped — the exact defect #85 reports — this refuses to boot and says what to do.
+ *
+ * Nothing trips it today: every current cross-field constraint deliberately lives
+ * on an array *field* (see the Graphic Item caps), which survives the patch
+ * derivation. If you are reading this because it threw, the options are to move the
+ * rule onto a field, or to extend `parseModeConfigPatchResult` to evaluate it
+ * against a defaults-completed view of that mode.
+ */
+export function modeConfigSchemasWithObjectLevelChecks(
+	schemas: Record<string, z.ZodTypeAny>,
+): string[] {
+	// In Zod 4 `.refine()` returns a ZodObject and records the check on the schema's
+	// own definition, which is why the shape rebuild loses it while the type still
+	// looks correct. Reading the checks back is therefore the only way to see one.
+	return Object.entries(schemas)
+		.filter(([, schema]) => ((schema as unknown as { _zod?: { def?: { checks?: unknown[] } } })
+			._zod
+			?.def
+			?.checks
+			?.length ?? 0) > 0)
+		.map(([mode]) => mode);
+}
+
+function assertNoUnenforceableModeConfigRules(): void {
+	const offenders = modeConfigSchemasWithObjectLevelChecks(modeConfigSchemaMap);
+
+	if (offenders.length > 0) {
+		throw new Error(
+			`Mode config schemas carry object-level checks the PATCH path cannot enforce: ${offenders.join(', ')}. `
+			+ 'Move the constraint onto a field, or extend parseModeConfigPatchResult to evaluate it. See #85.',
+		);
+	}
+}
+
+assertNoUnenforceableModeConfigRules();
+
+/**
+ * The mode configuration a patch would produce, validated as a whole.
+ *
+ * This is what makes an object-level rule real on the editors' write path. The
+ * patch itself is validated field by field by `modeConfigPatchSchemaMap`; this
+ * then merges it exactly as the write will and checks the *result* against the
+ * whole-map rules, so the mode configuration byte total holds identically whether
+ * a Screen was configured in one write or built up one patch at a time.
+ *
+ * The whole map is checked rather than only the patched mode, because that is what
+ * the rule is about: the byte total is shared across all ten Screen Modes, so a
+ * patch to one mode can only be judged against what the others already occupy.
+ * Each mode's own shape is left to the patch schema that validated the fragment —
+ * see `storedModeConfigsMapSchema` for why re-checking it here would be wrong.
+ *
+ * It throws a `ZodError`, which the route's own error handling already turns into
+ * a 400 carrying the issues — the same shape the editors read a field-level
+ * failure from, so a whole-object failure needs no special client handling.
+ */
+export function parseModeConfigPatchResult(
+	currentConfigs: ModeConfigsMap | null | undefined,
+	mode: ScreenMode,
+	patch: Record<string, unknown>,
+): ModeConfigsMap {
+	return storedModeConfigsMapSchema.parse(
+		mergeScreenModeConfig(currentConfigs ?? {}, mode, patch),
+	) as ModeConfigsMap;
+}
 
 const boundedScreenConfigSchema = screenConfigSchema.refine(
 	value => jsonByteLength(value) <= MAX_SCREEN_CONFIG_BYTES,

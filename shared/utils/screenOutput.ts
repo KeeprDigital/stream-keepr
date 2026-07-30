@@ -59,11 +59,22 @@ export interface ScreenOutputPathOptions {
 	safeAreaGuides?: boolean;
 	/** Capture the output as a PNG from a temporary tab. */
 	download?: boolean;
+	/**
+	 * The Screen Output Asset Capability this output resolves its Graphic Asset
+	 * Revisions with. Without one, an output that is not an editor preview renders
+	 * no media at all: it has no other route to the bytes, by design.
+	 *
+	 * Carried in the URL fragment rather than the query, so it is never sent to the
+	 * server as part of the navigation and stays out of request logs.
+	 */
+	assetCapability?: string | null;
 }
 
 /**
- * The one stable Screen URL for a Screen Output, with its output selection and
- * any preview flags. Built here so every embedder agrees on the query.
+ * The one stable Screen URL for a Screen Output, with its output selection, any
+ * preview flags, and any asset capability. Built here so every embedder agrees on
+ * the query — and so an embedder cannot forget the capability its output needs to
+ * show media.
  */
 export function screenOutputPath(options: ScreenOutputPathOptions): string {
 	const query = new URLSearchParams({ output: options.output ?? 'overlay' });
@@ -78,5 +89,9 @@ export function screenOutputPath(options: ScreenOutputPathOptions): string {
 	if (options.download)
 		query.set('download', '1');
 
-	return `/event/${options.eventId}/screen/${options.screenSlug}?${query.toString()}`;
+	const fragment = options.assetCapability
+		? `#asset-capability=${encodeURIComponent(options.assetCapability)}`
+		: '';
+
+	return `/event/${options.eventId}/screen/${options.screenSlug}?${query.toString()}${fragment}`;
 }

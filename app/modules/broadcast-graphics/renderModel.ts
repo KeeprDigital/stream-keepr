@@ -1,4 +1,5 @@
 import type { BroadcastGraphicConfig, GraphicInputValue } from '~~/shared/types/graphics';
+import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { GraphicsAnimationProjection, GraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
@@ -33,6 +34,13 @@ export interface BroadcastGraphicsRenderModelInput {
 	/** Editor-only advisory action-safe and title-safe guides. */
 	safeAreaGuides?: boolean;
 	selectedTarget?: GraphicsSelectionTarget;
+	/**
+	 * Resolves a Media Graphic Item's pinned Graphic Asset Revision to a URL this
+	 * output may load. A live Screen Output supplies one backed by its Screen
+	 * Output Asset Capability, so an output resolves content only through that
+	 * capability and never by browsing the Graphics Asset Library.
+	 */
+	graphicAssetContentUrl?: (reference: GraphicAssetReference) => string;
 }
 
 export type BroadcastGraphicsRenderModel = GraphicsCompositionRenderModel;
@@ -62,5 +70,6 @@ export function resolveBroadcastGraphicsRenderModel(
 		itemGuides: input.itemGuides,
 		safeAreaGuides: input.safeAreaGuides,
 		selectedTarget: input.selectedTarget,
+		graphicAssetContentUrl: input.graphicAssetContentUrl,
 	});
 }
