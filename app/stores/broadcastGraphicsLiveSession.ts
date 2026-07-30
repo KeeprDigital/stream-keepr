@@ -55,7 +55,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * fact about this client, and marking the field in a colleague's Live Control —
 	 * where their edit is the one that won — would be exactly backwards.
 	 */
-	const staleInputs = ref<Set<string>>(new Set());
+	const supersededInputs = ref<Set<string>>(new Set());
 
 	function playoutKey(screenId: number, graphicId: string): string {
 		return `${screenId}:${graphicId}`;
@@ -68,15 +68,15 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	/**
 	 * Forget this Screen's refused-edit markers, and only this Screen's.
 	 *
-	 * A marker says "your last edit to this field lost a race", which stops being true
-	 * once the epoch holding the winning value is gone. That is a fact about one
+	 * A marker says "your last edit to this field was superseded", which stops being
+	 * true once the epoch holding the winning value is gone. That is a fact about one
 	 * Screen: an operator working two Screens must not have one Screen's reset wipe
 	 * what the other is telling them.
 	 */
-	function forgetStaleInputs(screenId: number) {
-		for (const key of [...staleInputs.value]) {
+	function forgetSupersededInputs(screenId: number) {
+		for (const key of [...supersededInputs.value]) {
 			if (key.startsWith(`${screenId}:`))
-				staleInputs.value.delete(key);
+				supersededInputs.value.delete(key);
 		}
 	}
 
@@ -245,7 +245,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			{},
 			(graphic.inputs ?? [])
 				.map(declaration => declaration.key)
-				.filter(key => staleInputs.value.has(inputKeyOf(screenId, graphic.id, key))),
+				.filter(key => supersededInputs.value.has(inputKeyOf(screenId, graphic.id, key))),
 		);
 	}
 
@@ -265,7 +265,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * Reset this Screen's live state: every Broadcast Graphic off, and a new epoch.
 	 *
 	 * The way back from a recovery fault, and the only action that deliberately
-	 * discards prepared Graphic Input values — so the stale-field markers this
+	 * discards prepared Graphic Input values — so the superseded-field markers this
 	 * session was holding go with them.
 	 */
 	async function resetLiveState(eventId: number, screenId: number) {
@@ -273,7 +273,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			async () => {
 				const session = await repository.resetSession(eventId, screenId);
 				cacheSession(session);
-				forgetStaleInputs(screenId);
+				forgetSupersededInputs(screenId);
 				return session;
 			},
 			{ loadingRef: loading, errorRef: error },
@@ -297,7 +297,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		// Graphics mode, which is one of the ways an epoch ends — keeping it cached
 		// would leave every output rendering a show that is over.
 		sessions.value.delete(data.screenId);
-		forgetStaleInputs(data.screenId);
+		forgetSupersededInputs(data.screenId);
 		await loadSession(data.eventId, data.screenId);
 	}
 
@@ -336,10 +336,14 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		 * from stored values alone would send no claim at all for an input nobody has
 		 * edited yet, and that is precisely the case a second operator's first edit
 		 * falls into: it would silently overwrite the first operator's.
+		 *
+		 * Leaving it to the caller is also what keeps this correct as the layers above
+		 * the working value arrive: an override and a resolved binding change *what the
+		 * operator was shown* without changing anything here.
 		 */
 		basedOnValue: GraphicInputValue,
 	) {
-		staleInputs.value.delete(inputKeyOf(screenId, graphicId, inputKey));
+		supersededInputs.value.delete(inputKeyOf(screenId, graphicId, inputKey));
 
 		return deliverCommand(
 			eventId,
@@ -358,7 +362,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 				// value that actually landed rather than having silently overwritten it,
 				// and the field is marked so the refresh does not read as their own edit
 				// being accepted.
-				staleInputs.value.add(inputKeyOf(screenId, graphicId, inputKey));
+				supersededInputs.value.add(inputKeyOf(screenId, graphicId, inputKey));
 				await loadSession(eventId, screenId);
 			},
 		);
@@ -428,7 +432,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	function $reset() {
 		sessions.value.clear();
 		pending.value.clear();
-		staleInputs.value.clear();
+		supersededInputs.value.clear();
 		loading.value = false;
 		error.value = null;
 	}

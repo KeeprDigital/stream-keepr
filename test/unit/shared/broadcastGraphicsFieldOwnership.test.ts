@@ -168,7 +168,7 @@ describe('broadcastGraphicsFieldOwnership', () => {
 	});
 
 	describe('what Live Control shows about a refused edit', () => {
-		it('marks a Graphic Input stale so a refreshed field is not read as the operator’s own', () => {
+		it('marks a Graphic Input superseded so a refreshed field is not read as the operator’s own', () => {
 			const state = setInput(createInitialBroadcastGraphicsLiveState(), 'name', 'Ava Reed', { value: 'Unnamed' });
 
 			const [name, title] = graphicInputTraces(
@@ -179,28 +179,28 @@ describe('broadcastGraphicsFieldOwnership', () => {
 				['name'],
 			);
 
-			expect(name!.status).toBe('stale');
-			expect(title!.status).not.toBe('stale');
+			expect(name!.status).toBe('superseded');
+			expect(title!.status).not.toBe('superseded');
 		});
 
-		it('still reports the authoritative value behind a stale field', () => {
+		it('still reports the authoritative value behind a superseded field', () => {
 			const state = setInput(createInitialBroadcastGraphicsLiveState(), 'name', 'Ava Reed', { value: 'Unnamed' });
 
 			const [name] = graphicInputTraces(state, GRAPHIC, { inputs: DECLARATIONS }, {}, ['name']);
 
-			// Stale is a fact about whose edit won, not about the value: the operator has
-			// to be able to read what is there now in order to redo their change.
+			// Superseded is a fact about whose edit won, not about the value: the operator
+			// has to be able to read what is there now in order to redo their change.
 			expect(name!.working.value).toBe('Ava Reed');
 		});
 
-		it('reports no Graphic Input as stale when none was refused', () => {
+		it('reports no Graphic Input as superseded when none was refused', () => {
 			const traces = graphicInputTraces(
 				createInitialBroadcastGraphicsLiveState(),
 				GRAPHIC,
 				{ inputs: DECLARATIONS },
 			);
 
-			expect(traces.every(trace => trace.status !== 'stale')).toBe(true);
+			expect(traces.every(trace => trace.status !== 'superseded')).toBe(true);
 		});
 	});
 });

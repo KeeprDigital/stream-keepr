@@ -91,6 +91,12 @@ function editDraft(key: string, value: GraphicInputValue) {
  * Ownership claim, and it is what lets the server merge this edit with a colleague's
  * edit to a different Graphic Input while refusing to let it silently overwrite a
  * colleague's edit to this one.
+ *
+ * The claim has to stay whatever the operator was *shown*, which is why it is read
+ * from the trace rather than from stored state. Today the working value is that
+ * value. Once a Graphic Input Override and a resolved binding sit above it, it will
+ * not be — the shown value becomes the resolved one — and reading `working` here would
+ * make the claim describe something the operator never saw.
  */
 function commit(key: string, value?: GraphicInputValue) {
 	const next = value === undefined ? drafts.value[key] : value;
@@ -142,7 +148,7 @@ const STATUS_LABELS: Record<GraphicInputTrace['status'], string> = {
 	bound: 'Bound',
 	pending: 'Pending',
 	unavailable: 'Unavailable',
-	stale: 'Refreshed',
+	superseded: 'Refreshed',
 };
 
 /**
@@ -153,7 +159,7 @@ const STATUS_LABELS: Record<GraphicInputTrace['status'], string> = {
  * did not land, the field now shows the value that did, and the fix is to look and
  * decide again rather than to retry blindly.
  */
-const refreshedInputs = computed(() => traces.value.filter(trace => trace.status === 'stale'));
+const refreshedInputs = computed(() => traces.value.filter(trace => trace.status === 'superseded'));
 
 // A new selection starts from the authoritative working values rather than from
 // whatever the previously selected graphic had typed into it.
@@ -241,7 +247,7 @@ watch(
 					<UBadge
 						size="xs"
 						variant="soft"
-						:color="trace.status === 'unavailable' ? 'error' : (trace.status === 'pending' || trace.status === 'stale') ? 'warning' : 'neutral'"
+						:color="trace.status === 'unavailable' ? 'error' : (trace.status === 'pending' || trace.status === 'superseded') ? 'warning' : 'neutral'"
 						data-testid="live-control-status"
 					>
 						{{ STATUS_LABELS[trace.status] }}

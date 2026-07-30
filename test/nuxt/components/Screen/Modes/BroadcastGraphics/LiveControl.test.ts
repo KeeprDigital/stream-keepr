@@ -16,13 +16,13 @@ const mockLiveState = ref<BroadcastGraphicsLiveState>(createInitialBroadcastGrap
 const mockSetInput = vi.fn();
 const mockUpdateGraphic = vi.fn();
 /** The Graphic Inputs whose last edit from this session lost a field-scoped conflict. */
-const mockStaleInputKeys = ref<string[]>([]);
+const mockSupersededInputKeys = ref<string[]>([]);
 
 mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	setInput: mockSetInput,
 	updateGraphic: mockUpdateGraphic,
 	inputTraces: (_screenId: number, graphic: BroadcastGraphicConfig) =>
-		graphicInputTraces(mockLiveState.value, graphic.id, graphic, {}, mockStaleInputKeys.value),
+		graphicInputTraces(mockLiveState.value, graphic.id, graphic, {}, mockSupersededInputKeys.value),
 }));
 
 const ScreenSettingsCardStub = defineComponent({
@@ -128,7 +128,7 @@ describe('broadcastGraphicsLiveControl', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockLiveState.value = createInitialBroadcastGraphicsLiveState();
-		mockStaleInputKeys.value = [];
+		mockSupersededInputKeys.value = [];
 	});
 
 	it('generates one type-appropriate field for each declared Graphic Input', async () => {
@@ -278,16 +278,16 @@ describe('broadcastGraphicsLiveControl', () => {
 				playout: {},
 				inputs: { 'lower-third': { working: { name: 'Ben Cole' }, accepted: {}, acceptedRevision: 0 } },
 			};
-			mockStaleInputKeys.value = ['name'];
+			mockSupersededInputKeys.value = ['name'];
 
 			const wrapper = await mountComponent(graphic([NAME, TITLE]));
 
-			expect(wrapper.get('[data-graphic-input="name"]').attributes('data-graphic-input-status')).toBe('stale');
-			expect(wrapper.get('[data-graphic-input="title"]').attributes('data-graphic-input-status')).not.toBe('stale');
+			expect(wrapper.get('[data-graphic-input="name"]').attributes('data-graphic-input-status')).toBe('superseded');
+			expect(wrapper.get('[data-graphic-input="title"]').attributes('data-graphic-input-status')).not.toBe('superseded');
 		});
 
 		it('names what happened, and which Graphic Input it happened to', async () => {
-			mockStaleInputKeys.value = ['name'];
+			mockSupersededInputKeys.value = ['name'];
 
 			const wrapper = await mountComponent(graphic([NAME]));
 
@@ -307,7 +307,7 @@ describe('broadcastGraphicsLiveControl', () => {
 				playout: {},
 				inputs: { 'lower-third': { working: { name: 'Ben Cole' }, accepted: {}, acceptedRevision: 0 } },
 			};
-			mockStaleInputKeys.value = ['name'];
+			mockSupersededInputKeys.value = ['name'];
 			await flushPromises();
 
 			expect((wrapper.get('[data-testid="live-control-field-name"]').element as HTMLInputElement).value)

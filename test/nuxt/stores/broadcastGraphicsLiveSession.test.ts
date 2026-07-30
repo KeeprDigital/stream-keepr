@@ -471,15 +471,15 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			expect(store.inputsState(SCREEN_ID, 'slate').working.name).toBe('Ben Cole');
 		});
 
-		it('marks that Graphic Input stale, and only that one', async () => {
+		it('marks that Graphic Input superseded, and only that one', async () => {
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			mockRepository.sendCommand.mockRejectedValue(refusal());
 
 			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
 
 			const [name] = store.inputTraces(SCREEN_ID, graphic);
-			expect(name!.status).toBe('stale');
-			expect(store.inputTraces(SCREEN_ID, { ...graphic, id: 'bug' })[0]!.status).not.toBe('stale');
+			expect(name!.status).toBe('superseded');
+			expect(store.inputTraces(SCREEN_ID, { ...graphic, id: 'bug' })[0]!.status).not.toBe('superseded');
 		});
 
 		it('surfaces the refusal rather than swallowing it into a silent refresh', async () => {
@@ -491,7 +491,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			expect(store.error).toMatch(/already changed Name/);
 		});
 
-		it('clears the stale marker when the operator edits that field again', async () => {
+		it('clears the superseded marker when the operator edits that field again', async () => {
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			mockRepository.sendCommand.mockRejectedValueOnce(refusal());
 			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
@@ -506,7 +506,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Ben Cole');
 
-			expect(store.inputTraces(SCREEN_ID, graphic)[0]!.status).not.toBe('stale');
+			expect(store.inputTraces(SCREEN_ID, graphic)[0]!.status).not.toBe('superseded');
 		});
 	});
 
@@ -625,7 +625,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		});
 	});
 
-	describe('refused-edit markers', () => {
+	describe('superseded-edit markers', () => {
 		const graphic = {
 			id: 'slate',
 			name: 'Slate',
@@ -656,8 +656,8 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			});
 			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
 			await store.setInput(EVENT_ID, OTHER_SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
-			expect(store.inputTraces(SCREEN_ID, graphic)[0]!.status).toBe('stale');
-			expect(store.inputTraces(OTHER_SCREEN_ID, graphic)[0]!.status).toBe('stale');
+			expect(store.inputTraces(SCREEN_ID, graphic)[0]!.status).toBe('superseded');
+			expect(store.inputTraces(OTHER_SCREEN_ID, graphic)[0]!.status).toBe('superseded');
 
 			await store.applyEpochEnded({
 				eventId: EVENT_ID,
@@ -666,8 +666,8 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				sessionId: 55,
 			} as never);
 
-			expect(store.inputTraces(SCREEN_ID, graphic)[0]!.status).not.toBe('stale');
-			expect(store.inputTraces(OTHER_SCREEN_ID, graphic)[0]!.status).toBe('stale');
+			expect(store.inputTraces(SCREEN_ID, graphic)[0]!.status).not.toBe('superseded');
+			expect(store.inputTraces(OTHER_SCREEN_ID, graphic)[0]!.status).toBe('superseded');
 		});
 	});
 
