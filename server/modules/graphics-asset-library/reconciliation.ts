@@ -72,6 +72,12 @@ export interface ExpectedGraphicAssetContent {
 	revisionReach: number;
 	derivativeReach: number;
 	/**
+	 * Whether the retention path is already holding this content for deletion.
+	 * Content that lost its final reachability is expected to lose its bytes, so
+	 * their absence is that path completing rather than an incident.
+	 */
+	quarantined: boolean;
+	/**
 	 * The validated source facts one retained revision recorded for these exact
 	 * bytes. Every revision reaching one digest recorded the same facts, because
 	 * the facts are derived from the bytes.
@@ -629,6 +635,38 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			return unchanged;
 
 		await catalogue.recordContentReconciled({ digest: content.digest, checkedAt: observedAt });
+
+		// Content whose final reachability has disappeared and that the retention
+		// path is already holding in Content Quarantine is on its way out by
+		// design. Nothing can reference it — references pin revisions, and no
+		// revision reaches it — so its bytes going away is that path completing,
+		// not an operational failure. Reporting it would put an incident on the
+		// administrator's queue offering an exact-byte repair for bytes the
+		// library is deliberately discarding.
+		const retentionOwnsIt = content.quarantined
+			&& content.revisionReach === 0
+			&& content.derivativeReach === 0;
+		if (retentionOwnsIt && observation.outcome !== 'agrees') {
+			// Anything already raised about it is withdrawn, so a queue that
+			// predates this rule heals itself rather than holding a false alarm.
+			const withdrawn = await catalogue.resolveDiscrepanciesForDigest({
+				digest: content.digest,
+				resolvedAt: observedAt,
+				resolution: 'content-no-longer-expected',
+			});
+			for (const discrepancyId of withdrawn) {
+				records.push(evidence({
+					recordedAt: observedAt,
+					correlationId,
+					category: 'discrepancy-rechecked',
+					subject: { kind: 'graphics-discrepancy', id: discrepancyId },
+					outcome: 'content-no-longer-expected',
+					reason: 'unreachable-content-held-for-retention-deletion',
+					detail: { discrepancyId },
+				}));
+			}
+			return unchanged;
+		}
 
 		if (observation.outcome === 'agrees') {
 			// Agreement closes every non-isolated incident about these bytes,

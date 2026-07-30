@@ -871,6 +871,71 @@ describe('graphics asset reconciliation', () => {
 		});
 	});
 
+	describe('content the retention path already owns', () => {
+		it('raises no incident for unreachable content held for deletion', async () => {
+			const context = createReconciliationLibrary();
+			const operation = await ingestImage(context, {
+				idempotencyKey: 'retention-owned',
+				name: 'Retention owned',
+			});
+			const reference = publishedReference(operation);
+
+			// Trash and purge the asset. Its content row survives the cascade with
+			// nothing reaching it, which is exactly what the retention path
+			// quarantines for deletion.
+			await context.library.trashGraphicAsset({ assetId: reference.assetId });
+			await context.library.purgeTrashedGraphicAsset({
+				assetId: reference.assetId,
+				actor: 'administrator',
+				confirmation: 'purge-now',
+			});
+			await context.library.runGraphicsRetention();
+			const quarantined = await harness.client.execute(
+				'SELECT digest FROM graphics_content_quarantine',
+			);
+			expect(quarantined.rows.length).toBeGreaterThan(0);
+
+			// The bytes then go, which is the retention path completing its work.
+			await context.canonical.delete(canonicalIdentity(digestOf(pixelPng)));
+			const sweep = await context.library.runGraphicsReconciliation();
+
+			// Nothing can reference content no revision reaches, so its bytes
+			// disappearing is not an incident and must not reach the queue.
+			expect(sweep.content.unavailableDetected).toBe(0);
+			expect(sweep.derivatives.missingDetected).toBe(0);
+			const overview = await context.library.getReconciliationOverview();
+			expect(overview.openCounts['unavailable-content']).toBe(0);
+			expect(overview.openCounts['missing-derivative']).toBe(0);
+		});
+
+		it('withdraws an incident once the retention path takes the content over', async () => {
+			const context = createReconciliationLibrary();
+			const operation = await ingestImage(context, {
+				idempotencyKey: 'withdrawn',
+				name: 'Withdrawn incident',
+			});
+			const reference = publishedReference(operation);
+			await context.canonical.delete(canonicalIdentity(digestOf(pixelPng)));
+			await context.library.runGraphicsReconciliation();
+			expect((await context.library.getReconciliationOverview())
+				.openCounts['unavailable-content']).toBe(1);
+
+			// The asset is then purged, so nothing reaches the content any more.
+			await context.library.trashGraphicAsset({ assetId: reference.assetId });
+			await context.library.purgeTrashedGraphicAsset({
+				assetId: reference.assetId,
+				actor: 'administrator',
+				confirmation: 'purge-now',
+			});
+			await context.library.runGraphicsRetention();
+
+			await context.library.runGraphicsReconciliation();
+
+			expect((await context.library.getReconciliationOverview())
+				.openCounts['unavailable-content']).toBe(0);
+		});
+	});
+
 	describe('readers and reconciliation agree on what agreement means', () => {
 		it('stops serving content an integrity conflict has isolated', async () => {
 			const context = createReconciliationLibrary();

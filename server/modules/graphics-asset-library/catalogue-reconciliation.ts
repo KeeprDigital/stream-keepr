@@ -34,6 +34,7 @@ interface ExpectedContentRow {
 	derivative_source_mime: string | null;
 	derivative_source_kind: 'image' | 'silent-video' | 'font' | null;
 	derivative_source_facts: string | null;
+	quarantined: number;
 }
 
 /**
@@ -67,7 +68,11 @@ const EXPECTED_CONTENT_SELECT = `
 		derivative_source_content.byte_length AS derivative_source_byte_length,
 		derivative_source_content.canonical_mime AS derivative_source_mime,
 		derivative_asset.kind AS derivative_source_kind,
-		derivative_revision.technical_facts AS derivative_source_facts
+		derivative_revision.technical_facts AS derivative_source_facts,
+		CASE WHEN EXISTS (
+			SELECT 1 FROM graphics_content_quarantine quarantine
+			WHERE quarantine.digest = contents.digest
+		) THEN 1 ELSE 0 END AS quarantined
 	FROM graphic_asset_contents contents
 	LEFT JOIN graphic_asset_revisions source_revision ON source_revision.id = (
 		SELECT revision.id FROM graphic_asset_revisions revision
@@ -106,6 +111,7 @@ function expectedContentFromRow(row: ExpectedContentRow): ExpectedGraphicAssetCo
 		availability: row.availability,
 		revisionReach: row.revision_reach,
 		derivativeReach: row.derivative_reach,
+		quarantined: row.quarantined === 1,
 		...(row.source_kind
 			? {
 					source: {
