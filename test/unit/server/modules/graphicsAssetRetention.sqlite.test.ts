@@ -335,6 +335,55 @@ describe('scheduled Graphics Asset Library retention', () => {
 			});
 		});
 
+		it('keeps the seven-day promise for input already staged when the migration lands', async () => {
+			// Operations that were mid-flight when the transfer-completed column
+			// arrived must not be re-read as incomplete transfers: that would cut
+			// their promised seven days down to 24 hours.
+			await harness.close();
+			harness = await createSqliteD1Harness({ throughMigration: '0014' });
+			const stagedAt = new Date('2026-07-28T00:00:00.000Z').getTime();
+			await harness.client.execute({
+				sql: `
+					INSERT INTO graphics_ingestion_operations (
+						id, idempotency_key, source, stage, initiated_by, proposed_name,
+						duplicate_content_policy, declared_byte_length,
+						transferred_byte_length, staging_reserved_byte_length,
+						staging_used_byte_length, canonical_reserved_byte_length,
+						created_at, updated_at
+					) VALUES (
+						'awaiting-operation', 'pre-migration', 'local-upload',
+						'awaiting-confirmation', 'retention-author', 'Awaiting font',
+						'reuse', 100, 100, 0, 100, 0, ?, ?
+					)
+				`,
+				args: [stagedAt, stagedAt],
+			});
+			await harness.applyRemainingMigrations();
+
+			const context = createRetentionLibrary();
+			await expect(context.library.getRetentionOverview()).resolves.toMatchObject({
+				stagedInput: [
+					expect.objectContaining({
+						operationId: 'awaiting-operation',
+						transferComplete: true,
+						expiresAt: new Date(stagedAt + 7 * DAY).toISOString(),
+					}),
+				],
+			});
+
+			context.advanceTo(new Date(stagedAt + 7 * DAY - 1).toISOString());
+			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
+				expiredIncompleteTransfers: 0,
+				expiredCompletedInput: 0,
+			});
+
+			context.advanceTo(new Date(stagedAt + 7 * DAY).toISOString());
+			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
+				expiredIncompleteTransfers: 0,
+				expiredCompletedInput: 1,
+			});
+		});
+
 		it('cancels expiry when a durable checkpoint advanced since observation', async () => {
 			const context = createRetentionLibrary();
 			const resumed = await context.library.initiateGraphicsIngestion({
@@ -953,6 +1002,43 @@ describe('scheduled Graphics Asset Library retention', () => {
 			await expect(context.library.getRetentionOverview())
 				.resolves
 				.toMatchObject({ quarantinedContent: [] });
+		});
+
+		it('leaves content another sweep is already deleting alone until its claim goes stale', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'quarantine-concurrent-claim',
+				name: 'Contended bytes',
+			});
+			await purgeNow(context, published.result!.assetId);
+			expect((await context.library.runGraphicsRetention()).content.quarantined).toBe(2);
+			context.advance(7 * DAY);
+
+			// Stand in for a concurrent sweep that has claimed both rows and is
+			// still within its lease.
+			const claimedAt = context.now().getTime();
+			await harness.client.execute({
+				sql: 'UPDATE graphics_content_quarantine SET deleting_since = ?',
+				args: [claimedAt],
+			});
+			const contended = await context.library.runGraphicsRetention();
+			expect(contended.content.deleted).toBe(0);
+			expect(contended.content.bytesReclaimed).toBe(0);
+			await expect(context.library.getRetentionOverview())
+				.resolves
+				.toMatchObject({ quarantinedContent: [expect.anything(), expect.anything()] });
+
+			// Once that claim is older than its lease, this sweep may reclaim it,
+			// and it counts the work exactly once.
+			context.advanceTo(new Date(claimedAt + HOUR + 1).toISOString());
+			const reclaimed = await context.library.runGraphicsRetention();
+			expect(reclaimed.content.deleted).toBe(2);
+			await expect(context.library.getRetentionOverview())
+				.resolves
+				.toMatchObject({ quarantinedContent: [] });
+			await expect(context.library.listGraphicsAssetEvidence({
+				categories: ['content-deleted'],
+			})).resolves.toHaveLength(2);
 		});
 
 		it('rechecks reachability and spares content a new revision reaches again', async () => {

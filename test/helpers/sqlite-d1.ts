@@ -85,7 +85,18 @@ function createPreparedStatement(client: Client, sql: string, args: unknown[]) {
 export interface SqliteD1Harness {
 	database: D1Database;
 	client: Client;
+	/** Applies any migrations `throughMigration` held back, in order. */
+	applyRemainingMigrations: () => Promise<void>;
 	close: () => Promise<void>;
+}
+
+export interface SqliteD1HarnessOptions {
+	/**
+	 * Stop after this migration instead of applying every one, so a test can
+	 * arrange pre-migration rows and then observe what the next migration does
+	 * to them. Matches on a filename prefix such as `0014`.
+	 */
+	throughMigration?: string;
 }
 
 /**
@@ -93,7 +104,9 @@ export interface SqliteD1Harness {
  * Foreign keys are enabled so `ON DELETE CASCADE` and `RESTRICT` behave as they
  * do in D1.
  */
-export async function createSqliteD1Harness(): Promise<SqliteD1Harness> {
+export async function createSqliteD1Harness(
+	options: SqliteD1HarnessOptions = {},
+): Promise<SqliteD1Harness> {
 	const directory = mkdtempSync(join(tmpdir(), 'stream-keepr-d1-'));
 	const client = createClient({ url: `file:${join(directory, 'catalogue.sqlite')}` });
 	await client.execute('PRAGMA foreign_keys = ON');
@@ -106,14 +119,24 @@ export async function createSqliteD1Harness(): Promise<SqliteD1Harness> {
 	const migrations = readdirSync(migrationsDirectory)
 		.filter(entry => entry.endsWith('.sql'))
 		.toSorted();
-	for (const migration of migrations) {
-		const contents = readFileSync(join(migrationsDirectory, migration), 'utf8');
-		for (const statement of contents.split('--> statement-breakpoint')) {
-			const trimmed = statement.trim().replace(/;$/, '');
-			if (trimmed)
-				await client.execute(trimmed);
+	const heldBackFrom = options.throughMigration === undefined
+		? migrations.length
+		: migrations.findIndex(migration => migration.startsWith(options.throughMigration!)) + 1;
+	if (heldBackFrom === 0)
+		throw new Error(`No migration matches ${options.throughMigration}`);
+
+	async function applyMigrations(entries: readonly string[]) {
+		for (const migration of entries) {
+			const contents = readFileSync(join(migrationsDirectory, migration), 'utf8');
+			for (const statement of contents.split('--> statement-breakpoint')) {
+				const trimmed = statement.trim().replace(/;$/, '');
+				if (trimmed)
+					await client.execute(trimmed);
+			}
 		}
 	}
+
+	await applyMigrations(migrations.slice(0, heldBackFrom));
 
 	const database = {
 		prepare(sql: string) {
@@ -134,6 +157,9 @@ export async function createSqliteD1Harness(): Promise<SqliteD1Harness> {
 	return {
 		database,
 		client,
+		async applyRemainingMigrations() {
+			await applyMigrations(migrations.slice(heldBackFrom));
+		},
 		async close() {
 			client.close();
 			rmSync(directory, { recursive: true, force: true });

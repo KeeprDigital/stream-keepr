@@ -701,12 +701,17 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			// Only once the bytes are gone does the catalogue trace go too. Each
 			// statement re-proves unreachability, so a digest that became reachable
 			// during deletion keeps its catalogue state.
+			//
+			// The claim instant is part of the predicate, so a sweep can only
+			// complete the claim it made itself. A sweep resuming past its lease
+			// finds the row reclaimed and reports that it deleted nothing, rather
+			// than counting another sweep's work as its own.
 			const results = await database.batch([
 				database.prepare(`
 					DELETE FROM graphics_content_quarantine
-					WHERE id = ? AND deleting_since IS NOT NULL
+					WHERE id = ? AND deleting_since = ?
 						AND ${unreachableDigest('digest')}
-				`).bind(input.id),
+				`).bind(input.id, new Date(input.claimedAt).getTime()),
 				database.prepare(`
 					DELETE FROM graphic_asset_contents
 					WHERE digest = ?
@@ -731,6 +736,7 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			]);
 			if (results.some(result => !result.success))
 				throw new Error('Quarantined Graphic Asset Content deletion could not be completed');
+			return results[0]?.meta.changes === 1;
 		},
 		async countContentReachability(input) {
 			const row = await database.prepare(`

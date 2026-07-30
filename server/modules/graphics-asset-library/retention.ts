@@ -184,11 +184,15 @@ export interface GraphicsAssetRetentionCatalogue {
 	}) => Promise<boolean>;
 	/** Returns a claimed row to the queue without deleting anything. */
 	releaseQuarantinedContentClaim: (input: { id: string }) => Promise<void>;
-	/** Removes the catalogue trace once the bytes are confirmed gone. */
+	/**
+	 * Removes the catalogue trace once the bytes are confirmed gone, and reports
+	 * whether this caller's own claim was the one completed.
+	 */
 	completeQuarantinedContentDeletion: (input: {
 		id: string;
 		digest: string;
-	}) => Promise<void>;
+		claimedAt: string;
+	}) => Promise<boolean>;
 	/** Counts the revisions and derivatives that currently reach one content. */
 	countContentReachability: (input: { digest: string }) => Promise<number>;
 	/** Records content that became reachable again while its bytes were being deleted. */
@@ -557,10 +561,15 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				}));
 				continue;
 			}
-			await catalogue.completeQuarantinedContentDeletion({
+			const completed = await catalogue.completeQuarantinedContentDeletion({
 				id: content.id,
 				digest: content.digest,
+				claimedAt: deletedAt,
 			});
+			// Another sweep reclaimed this row past our lease and did the work, so
+			// it is theirs to count and to record.
+			if (!completed)
+				continue;
 			deleted++;
 			bytesReclaimed += content.byteLength;
 			records.push(evidence({

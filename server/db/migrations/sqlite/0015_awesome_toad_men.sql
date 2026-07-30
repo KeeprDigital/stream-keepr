@@ -48,4 +48,24 @@ CREATE TABLE `graphics_content_quarantine` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `graphics_content_quarantine_digest_idx` ON `graphics_content_quarantine` (`digest`);--> statement-breakpoint
 CREATE INDEX `graphics_content_quarantine_delete_after_idx` ON `graphics_content_quarantine` (`delete_after`);--> statement-breakpoint
-ALTER TABLE `graphics_ingestion_operations` ADD `transfer_completed_at` integer;
+ALTER TABLE `graphics_ingestion_operations` ADD `transfer_completed_at` integer;--> statement-breakpoint
+-- Backfill the transfer-completed fact for operations that were already past
+-- their transfer when this column arrived. Without it they would read as
+-- incomplete transfers and expire after 24 hours instead of the seven days
+-- their staged input was promised, which shortens a retention guarantee.
+-- Ambiguous rows are resolved generously: retaining input for longer is always
+-- the safe direction.
+UPDATE `graphics_ingestion_operations`
+SET `transfer_completed_at` = `updated_at`
+WHERE `transfer_completed_at` IS NULL
+	AND (
+		`stage` IN (
+			'hashing', 'validating', 'generating-derivatives',
+			'awaiting-confirmation', 'publishing'
+		)
+		OR (
+			`stage` = 'failed'
+			AND `declared_byte_length` > 0
+			AND `transferred_byte_length` >= `declared_byte_length`
+		)
+	);
