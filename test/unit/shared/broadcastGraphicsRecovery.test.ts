@@ -187,30 +187,72 @@ describe('broadcastGraphicsRecovery', () => {
 			expect(onAirBroadcastGraphicIds(next, [{ id: 'slate' }, { id: 'bug' }])).toEqual([]);
 		});
 
-		it('carries Graphic Source Selections and Overrides forward with the prepared values', () => {
-			// Both fall on the working-value side of the epoch boundary: a selection says
-			// which Player a lower third is about, an override is a correction that persists
-			// across hide and show cycles by definition, and neither is an intent to show
-			// anything. Losing them to a mode change means re-picking every source and
-			// re-typing every correction mid-show.
-			const next = carriedForwardBroadcastGraphicsLiveState({
-				...ended,
-				sources: { slate: { player: 7 } },
-				inputs: {
-					slate: {
-						working: { name: 'Ava' },
-						overrides: { name: 'Ava "Riptide" Reed' },
-						accepted: { name: 'Ava' },
-						acceptedRevision: 3,
-					},
+		const endedWithBinding = {
+			...ended,
+			sources: { slate: { player: 7 } },
+			inputs: {
+				slate: {
+					working: { name: 'Ava' },
+					overrides: { name: 'Ava "Riptide" Reed' },
+					accepted: { name: 'Ava' },
+					acceptedRevision: 3,
 				},
-			});
+			},
+		};
+
+		it('carries a Graphic Source Selection forward, because every binding re-resolves it', () => {
+			// A selection stores an entity id, so a binding reading it re-resolves from
+			// current Event Data on every read: the operator sees which entity in the picker
+			// it generated, and an entity that has gone makes the binding unavailable rather
+			// than wrong. It is also the control that costs most to redo.
+			const next = carriedForwardBroadcastGraphicsLiveState(endedWithBinding);
 
 			expect(next.sources).toEqual({ slate: { player: 7 } });
-			expect(next.inputs.slate?.overrides).toEqual({ name: 'Ava "Riptide" Reed' });
+			expect(next.inputs.slate?.working).toEqual({ name: 'Ava' });
 			// And still nothing on air, and still no acceptance.
 			expect(next.playout).toEqual({});
 			expect(next.inputs.slate?.acceptedRevision).toBe(0);
+		});
+
+		it('leaves a Graphic Input Override behind, because nothing can re-judge it', () => {
+			// The one piece of carried state that can neither be re-resolved nor become
+			// unavailable: a frozen literal whose whole purpose is to outrank the binding.
+			// Carried into a later show it would suppress a binding resolving a *different*
+			// entity perfectly correctly and put the previous show's value on program, with
+			// nothing unavailable to catch it and only a badge on an untouched field to say
+			// so.
+			const next = carriedForwardBroadcastGraphicsLiveState(endedWithBinding);
+
+			expect(next.inputs.slate?.overrides).toEqual({});
+		});
+
+		it('resumes the bound value in the new epoch rather than the previous show\'s correction', () => {
+			// The hazard stated as the behaviour that replaces it: the new epoch's first
+			// Take resolves the binding, and what reaches air is this show's value.
+			const next = carriedForwardBroadcastGraphicsLiveState(endedWithBinding);
+			const declaration: GraphicInputDeclaration = {
+				type: 'text',
+				key: 'name',
+				label: 'Name',
+				required: false,
+				updatePolicy: 'staged',
+				default: 'Unnamed',
+				maxLength: 40,
+			};
+			const bindings = [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }];
+
+			const taken = applyBroadcastGraphicsCommand(
+				next,
+				{ type: 'Take', payload: { graphicId: 'slate' } },
+				{
+					inputs: [declaration],
+					bindings,
+					resolveBindings: () => ({ name: 'Sam Ortiz' }),
+					acceptedAt: 1_700_000_000_000,
+				},
+			);
+
+			expect(taken.inputs.slate?.accepted).toEqual({ name: 'Sam Ortiz' });
 		});
 
 		it('carries no accepted value or acceptance revision into the new epoch', () => {
