@@ -7,9 +7,13 @@ import type {
 	GraphicGroupChildConfig,
 	GraphicGroupChildSizing,
 	GraphicGroupItemConfig,
+	GraphicInputChoiceOption,
+	GraphicInputDeclaration,
+	GraphicInputType,
 	GraphicItemConfig,
 	GraphicItemKind,
 	GraphicOutline,
+	GraphicPlaceholderStyle,
 	GraphicSurfaceStyle,
 	GraphicTypography,
 	ShapeCorner,
@@ -18,6 +22,8 @@ import type {
 	TextGraphicItemConfig,
 } from '../../types/graphics';
 import type { ShapeGeometryPresetId } from './shapeGeometry';
+import { GRAPHIC_INPUT_KEY_PATTERN, MAX_GRAPHIC_INPUT_KEY_LENGTH } from '../../types/graphics';
+import { createDefaultGraphicInputDeclaration } from './inputs';
 import { createDefaultGraphicSurfaceStyle, getGraphicItemDefinition, graphicItemKindLabel } from './itemDefinitions';
 import { getShapeGeometryPreset } from './shapeGeometry';
 
@@ -121,6 +127,156 @@ export function replaceBroadcastGraphic(
 	graphic: BroadcastGraphicConfig,
 ): BroadcastGraphicConfig[] {
 	return graphics.map(entry => entry.id === graphic.id ? graphic : entry);
+}
+
+/* ────────────────────────────────────────────────
+ * Graphic Inputs
+ * ──────────────────────────────────────────────── */
+
+/**
+ * A stable Graphic Input key derived from a label, made unique among the ones this
+ * Broadcast Graphic already declares.
+ *
+ * The key is generated once and never changes afterwards, which is what makes it
+ * stable: a `{inputKey}` placeholder, a Graphic Input Binding, a Graphic
+ * Placeholder Style, and every accepted value in a running Live Session all name
+ * it. Renaming is what the freely editable label is for.
+ */
+export function graphicInputKeyFromLabel(label: string, taken: readonly string[]): string {
+	const slug = label
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-+|-+$/g, '')
+		.slice(0, MAX_GRAPHIC_INPUT_KEY_LENGTH);
+	const base = GRAPHIC_INPUT_KEY_PATTERN.test(slug) ? slug : 'input';
+	const used = new Set(taken);
+	if (!used.has(base))
+		return base;
+
+	let suffix = 2;
+	while (used.has(`${base}-${suffix}`))
+		suffix += 1;
+	return `${base}-${suffix}`;
+}
+
+export function addGraphicInput(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	type: GraphicInputType,
+): BroadcastGraphicConfig[] {
+	return graphics.map((graphic) => {
+		if (graphic.id !== graphicId)
+			return graphic;
+
+		const inputs = graphic.inputs ?? [];
+		const label = nextSequentialName('Input', inputs.map(input => input.label));
+		const declaration = createDefaultGraphicInputDeclaration(type, {
+			key: graphicInputKeyFromLabel(label, inputs.map(input => input.key)),
+			label,
+		});
+
+		return { ...graphic, inputs: [...inputs, declaration] };
+	});
+}
+
+/**
+ * Merge into one Graphic Input declaration.
+ *
+ * The key is not patchable: a declaration's own type decides which other
+ * properties it has, and both are what a placeholder, a binding, and every
+ * accepted value already name.
+ */
+export function patchGraphicInput(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	key: string,
+	patch: Partial<Omit<GraphicInputDeclaration, 'key' | 'type'>>,
+): BroadcastGraphicConfig[] {
+	return graphics.map(graphic => graphic.id === graphicId
+		? {
+				...graphic,
+				inputs: (graphic.inputs ?? []).map(input =>
+					input.key === key ? { ...input, ...patch } as GraphicInputDeclaration : input,
+				),
+			}
+		: graphic);
+}
+
+/**
+ * Stop declaring one Graphic Input, and drop what referenced it.
+ *
+ * Its Graphic Input Binding and every Graphic Placeholder Style naming it go with
+ * it, because both address it by key and neither means anything once nothing
+ * declares that key. A `{inputKey}` placeholder left in a Graphic Text Template is
+ * deliberately not rewritten: it is the author's own text, and it simply renders
+ * nothing until they declare that key again or edit it away.
+ */
+export function deleteGraphicInput(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	key: string,
+): BroadcastGraphicConfig[] {
+	return graphics.map((graphic) => {
+		if (graphic.id !== graphicId)
+			return graphic;
+
+		return {
+			...graphic,
+			inputs: (graphic.inputs ?? []).filter(input => input.key !== key),
+			bindings: graphic.bindings?.filter(binding => binding.inputKey !== key),
+			items: graphic.items.map(item => stripPlaceholderStyle(item, key)),
+		};
+	});
+}
+
+function stripPlaceholderStyle<T extends GraphicItemConfig>(item: T, key: string): T {
+	if (item.type === 'group')
+		return { ...item, children: item.children.map(child => stripPlaceholderStyle(child, key)) };
+	if (item.type !== 'text' || !item.placeholderStyles || !(key in item.placeholderStyles))
+		return item;
+
+	const { [key]: _removed, ...kept } = item.placeholderStyles;
+	return { ...item, placeholderStyles: Object.keys(kept).length > 0 ? kept : undefined };
+}
+
+/** Replace a choice Graphic Input's option list. */
+export function setGraphicInputChoiceOptions(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	key: string,
+	options: GraphicInputChoiceOption[],
+): BroadcastGraphicConfig[] {
+	return graphics.map(graphic => graphic.id === graphicId
+		? {
+				...graphic,
+				inputs: (graphic.inputs ?? []).map(input =>
+					input.key === key && input.type === 'choice' ? { ...input, options } : input,
+				),
+			}
+		: graphic);
+}
+
+/**
+ * Merge into one `{inputKey}` placeholder's Graphic Placeholder Style, or remove
+ * it so the placeholder renders in the item's base typography again.
+ */
+export function patchGraphicPlaceholderStyle(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	inputKey: string,
+	patch: Partial<GraphicPlaceholderStyle> | null,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['text'], (item) => {
+		if (patch === null)
+			return stripPlaceholderStyle(item, inputKey);
+
+		return {
+			placeholderStyles: {
+				...item.placeholderStyles,
+				[inputKey]: { ...item.placeholderStyles?.[inputKey], ...patch },
+			},
+		};
+	});
 }
 
 /* ────────────────────────────────────────────────

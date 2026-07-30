@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { GraphicItemRenderDescriptor } from '~/modules/graphics/renderModel';
+import type { GraphicItemRenderDescriptor, GraphicTextRenderSegment } from '~/modules/graphics/renderModel';
 import { graphicTextClampLines } from '~/modules/graphics/renderModel';
 import { fitGraphicTextFontSize } from '~/modules/graphics/textFit';
 
@@ -27,6 +27,10 @@ function pixelValue(value: unknown): number {
 }
 
 const surface = computed(() => props.render.surface);
+/** A Text Graphic Item always has runs; a template with no placeholder has one. */
+const textSegments = computed<GraphicTextRenderSegment[]>(() =>
+	props.render.textSegments ?? [{ text: props.render.text ?? '' }],
+);
 const viewBox = computed(() => surface.value
 	? `0 0 ${Math.max(surface.value.width, 0)} ${Math.max(surface.value.height, 0)}`
 	: '0 0 0 0');
@@ -80,7 +84,16 @@ function fitText() {
 }
 
 watch(
-	() => [props.render.text, props.render.shrink, props.render.style, props.render.textStyle],
+	// `textSegments` is observed as well as `text`: a Graphic Placeholder Style edit
+	// changes a run's typography without changing the rendered string, and the fitted
+	// size depends on both.
+	() => [
+		props.render.text,
+		props.render.textSegments,
+		props.render.shrink,
+		props.render.style,
+		props.render.textStyle,
+	],
 	() => fitText(),
 	{ deep: true, flush: 'post', immediate: true },
 );
@@ -138,8 +151,19 @@ watch(
 			/>
 		</svg>
 
+		<!--
+			Rendered as runs rather than one string so each `{inputKey}` run can carry
+			its own Graphic Placeholder Style. Concatenating them is exactly the item's
+			rendered text, so the `shrink` measurement above still measures what the
+			viewer sees.
+		-->
 		<p v-if="render.kind === 'text'" ref="textElement" :style="textStyle">
-			{{ render.text }}
+			<span
+				v-for="(segment, index) in textSegments"
+				:key="index"
+				:style="segment.style"
+				:data-graphic-input-key="segment.inputKey"
+			>{{ segment.text }}</span>
 		</p>
 
 		<Item
