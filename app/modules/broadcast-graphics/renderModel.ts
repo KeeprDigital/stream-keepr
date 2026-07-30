@@ -1,4 +1,4 @@
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicInputValue } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { GraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
@@ -17,6 +17,12 @@ export interface BroadcastGraphicsRenderModelInput {
 	 * until an operator takes a graphic.
 	 */
 	onAirGraphicIds?: readonly string[];
+	/**
+	 * The accepted on-air Graphic Input values a Graphic Text Template renders,
+	 * keyed by Broadcast Graphic id. Omitted renders declared defaults, which is what
+	 * an editor preview with no Live Session shows.
+	 */
+	inputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
 	/** Editor-only item guides and selection highlighting. */
 	itemGuides?: boolean;
 	/** Editor-only advisory action-safe and title-safe guides. */
@@ -53,6 +59,7 @@ export function resolveBroadcastGraphicsRenderModel(
 		canvasHeight: input.canvasHeight,
 		graphics: input.graphics,
 		visibleGraphicIds: input.onAirGraphicIds ?? [],
+		inputValues: input.inputValues,
 		itemGuides: input.itemGuides,
 		safeAreaGuides: input.safeAreaGuides,
 		selectedTarget: input.selectedTarget,

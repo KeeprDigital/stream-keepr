@@ -14,6 +14,11 @@
 			"bucket_name": "stream-graphics-asset-canonical"
 		}
 	],
+	// Graphics Asset Library retention. Deadlines are evaluated inside the
+	// library, so this only needs to run often enough to keep queues short.
+	"triggers": {
+		"crons": ["17 * * * *"]
+	},
 	"services": [
 		{
 			// Trusted silent-video playback validation runtime. Deploy the

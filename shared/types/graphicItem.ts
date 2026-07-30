@@ -1,7 +1,12 @@
+import type { GraphicMediaKind } from './graphics';
 import type { GraphicAssetReference } from './graphicsAsset';
 
-export const MEDIA_GRAPHIC_ITEM_KIND_VALUES = ['image', 'silent-video'] as const;
-export type MediaGraphicItemKind = typeof MEDIA_GRAPHIC_ITEM_KIND_VALUES[number];
+/**
+ * The media kinds, named once for the whole vocabulary in `./graphics`. Aliased
+ * here because Feature Match Overlay's presentation contract below reads under
+ * this name, and one set of kinds must not be declared twice.
+ */
+export type MediaGraphicItemKind = GraphicMediaKind;
 
 export const MEDIA_GRAPHIC_ITEM_FIT_VALUES = ['contain', 'cover', 'fill'] as const;
 export type MediaGraphicItemFit = typeof MEDIA_GRAPHIC_ITEM_FIT_VALUES[number];

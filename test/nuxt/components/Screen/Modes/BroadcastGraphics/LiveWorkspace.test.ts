@@ -9,6 +9,7 @@ import { defineComponent, ref } from 'vue';
 import {
 	broadcastGraphicPlayoutState,
 	createInitialBroadcastGraphicsLiveState,
+	graphicInputTraces,
 	onAirBroadcastGraphicIds,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 
@@ -33,6 +34,10 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 		broadcastGraphicPlayoutState(mockLiveState.value, graphicId),
 	onAirGraphicIds: (_screenId: number, graphics: readonly { id: string }[]) =>
 		onAirBroadcastGraphicIds(mockLiveState.value, graphics),
+	inputTraces: (_screenId: number, graphic: BroadcastGraphicConfig) =>
+		graphicInputTraces(mockLiveState.value, graphic.id, graphic),
+	setInput: vi.fn(),
+	updateGraphic: vi.fn(),
 }));
 
 /** What every Graphic Asset Revision status request answers with. */
@@ -75,7 +80,10 @@ const UButtonStub = defineComponent({
 const lowerThird: BroadcastGraphicConfig = { id: 'lower-third', name: 'Lower Third', items: [] };
 const slate: BroadcastGraphicConfig = { id: 'slate', name: 'Slate', items: [] };
 
-async function mountComponent(graphics: BroadcastGraphicConfig[] = [lowerThird, slate]) {
+async function mountComponent(
+	graphics: BroadcastGraphicConfig[] = [lowerThird, slate],
+	selectedGraphicId: string | null = null,
+) {
 	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/LiveWorkspace.vue';
 	const { default: LiveWorkspace } = await import(componentPath);
 
@@ -84,7 +92,7 @@ async function mountComponent(graphics: BroadcastGraphicConfig[] = [lowerThird, 
 			eventId: 7,
 			screen: { id: 3, slug: 'main' } as Screen,
 			graphics,
-			selectedGraphicId: null,
+			selectedGraphicId,
 			canvasWidth: 1920,
 			canvasHeight: 1080,
 		},
@@ -133,7 +141,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('lists every placed Broadcast Graphic with its Graphic Playout State', async () => {
-		mockLiveState.value = { playout: { slate: { onAir: true } } };
+		mockLiveState.value = { playout: { slate: { onAir: true } }, inputs: {} };
 
 		const wrapper = await mountComponent();
 
@@ -150,7 +158,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('takes a Broadcast Graphic off air', async () => {
-		mockLiveState.value = { playout: { slate: { onAir: true } } };
+		mockLiveState.value = { playout: { slate: { onAir: true } }, inputs: {} };
 		const wrapper = await mountComponent();
 
 		await entryFor(wrapper, 'slate').get('[data-testid="playout-out"]').trigger('click');
@@ -169,7 +177,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('keeps both actions available so a repeat converges on the operator’s latest intent', async () => {
-		mockLiveState.value = { playout: { slate: { onAir: true } } };
+		mockLiveState.value = { playout: { slate: { onAir: true } }, inputs: {} };
 		const wrapper = await mountComponent();
 		const entry = entryFor(wrapper, 'slate');
 
@@ -178,7 +186,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('reports how many Broadcast Graphics are on air', async () => {
-		mockLiveState.value = { playout: { 'slate': { onAir: true }, 'lower-third': { onAir: true } } };
+		mockLiveState.value = { playout: { 'slate': { onAir: true }, 'lower-third': { onAir: true } }, inputs: {} };
 
 		const wrapper = await mountComponent();
 
@@ -225,6 +233,15 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 
 		expect(wrapper.emitted('select')).toEqual([['slate']]);
 		expect(mockTake).not.toHaveBeenCalled();
+	});
+
+	it('generates Live Control for the Broadcast Graphic the operator selected, and for none until they do', async () => {
+		const unselected = await mountComponent();
+		expect(unselected.find('[data-testid="live-control"]').exists()).toBe(false);
+		expect(unselected.text()).not.toContain('Live Control');
+
+		const selected = await mountComponent([lowerThird, slate], 'slate');
+		expect(selected.text()).toContain('Live Control');
 	});
 
 	it('gives the Program monitor a capability, so it can resolve media at all', async () => {
@@ -290,7 +307,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 
 		it('keeps Out available on an invalidated Broadcast Graphic, so it can leave air', async () => {
 			mockReferenceStatus.value = { outcome: 'missing' };
-			mockLiveState.value = { playout: { slate: { onAir: true } } };
+			mockLiveState.value = { playout: { slate: { onAir: true } }, inputs: {} };
 
 			const wrapper = await mountComponent([lowerThird, withMedia]);
 

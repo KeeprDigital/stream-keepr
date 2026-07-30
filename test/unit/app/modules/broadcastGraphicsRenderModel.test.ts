@@ -1,5 +1,5 @@
 import type { BroadcastGraphicsRenderModelInput } from '~~/app/modules/broadcast-graphics/renderModel';
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicInputDeclaration, GraphicPlaceholderStyle } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import { resolveBroadcastGraphicsRenderModel } from '~~/app/modules/broadcast-graphics/renderModel';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
@@ -31,6 +31,48 @@ function input(overrides: Partial<BroadcastGraphicsRenderModelInput> = {}): Broa
 		canvasHeight: 1080,
 		graphics: [],
 		...overrides,
+	};
+}
+
+const TEMPLATE_INPUTS: GraphicInputDeclaration[] = [
+	{ type: 'text', key: 'name', label: 'Name', required: false, updatePolicy: 'staged', default: 'Unnamed', maxLength: 20 },
+	{ type: 'text', key: 'title', label: 'Title', required: false, updatePolicy: 'staged', default: '', maxLength: 20 },
+];
+
+/** A Broadcast Graphic whose Text Graphic Item renders a Graphic Text Template. */
+function templateGraphic(
+	placeholderStyles: Record<string, GraphicPlaceholderStyle> = { title: { fontWeight: 300, fontSize: 24 } },
+): BroadcastGraphicConfig {
+	return {
+		id: 'lower-third',
+		name: 'Lower Third',
+		inputs: TEMPLATE_INPUTS,
+		items: [{
+			type: 'text',
+			id: 'name-line',
+			label: 'Name line',
+			visible: true,
+			anchor: 'top-left',
+			x: 0,
+			y: 0,
+			width: 600,
+			height: 120,
+			text: '{name} — {title}',
+			typography: {
+				fontId: 'inter',
+				fontSize: 48,
+				fontWeight: 700,
+				fontStyle: 'normal',
+				textTransform: 'none',
+				letterSpacing: 0,
+				lineHeight: 1.2,
+				textAlign: 'left',
+				color: '#ffffff',
+			},
+			overflowPolicy: 'ellipsis',
+			minFontSize: 24,
+			placeholderStyles,
+		}],
 	};
 }
 
@@ -87,5 +129,66 @@ describe('broadcast Graphics render model', () => {
 
 		expect(model.safeAreaGuides).toEqual([]);
 		expect(model.itemGuides).toEqual([]);
+	});
+
+	it('renders a Graphic Text Template from the accepted on-air Graphic Input values', () => {
+		const model = resolveBroadcastGraphicsRenderModel(input({
+			graphics: [templateGraphic()],
+			onAirGraphicIds: ['lower-third'],
+			inputValues: { 'lower-third': { name: 'Ava Reed', title: 'Champion' } },
+		}));
+
+		expect(model.graphics[0]!.items[0]!.text).toBe('Ava Reed — Champion');
+	});
+
+	it('renders declared defaults when no Live Session has accepted anything', () => {
+		// An editor preview composes the authored stack with no playout behind it, and
+		// a placed Broadcast Graphic starts from its declared defaults.
+		const model = resolveBroadcastGraphicsRenderModel(input({
+			graphics: [templateGraphic()],
+			onAirGraphicIds: ['lower-third'],
+		}));
+
+		expect(model.graphics[0]!.items[0]!.text).toBe('Unnamed — ');
+	});
+
+	it('renders nothing for a value that violates its declared constraints', () => {
+		// Unavailable rather than coerced: the literal text around it still renders.
+		const model = resolveBroadcastGraphicsRenderModel(input({
+			graphics: [templateGraphic()],
+			onAirGraphicIds: ['lower-third'],
+			inputValues: { 'lower-third': { name: 'A'.repeat(50), title: 'Champion' } },
+		}));
+
+		expect(model.graphics[0]!.items[0]!.text).toBe(' — Champion');
+	});
+
+	it('gives one placeholder its own Graphic Placeholder Style and leaves the literal text alone', () => {
+		const model = resolveBroadcastGraphicsRenderModel(input({
+			graphics: [templateGraphic()],
+			onAirGraphicIds: ['lower-third'],
+			inputValues: { 'lower-third': { name: 'Ava Reed', title: 'Champion' } },
+		}));
+		const segments = model.graphics[0]!.items[0]!.textSegments!;
+
+		expect(segments.map(segment => segment.inputKey)).toEqual(['name', undefined, 'title']);
+		expect(segments[0]!.style).toBeUndefined();
+		expect(segments[1]!.style).toBeUndefined();
+		// Only what the style overrides, so the run inherits the rest of the item's
+		// base typography.
+		expect(segments[2]!.style).toEqual({ fontWeight: 300, fontSize: '24px' });
+	});
+
+	it('resolves a Graphic Placeholder Style colour to white in the Key Output', () => {
+		// Every painted element has to be white at its own alpha or the alpha matte
+		// stops accumulating correctly.
+		const model = resolveBroadcastGraphicsRenderModel(input({
+			output: 'key',
+			graphics: [templateGraphic({ title: { color: '#ff0000' } })],
+			onAirGraphicIds: ['lower-third'],
+			inputValues: { 'lower-third': { name: 'Ava Reed', title: 'Champion' } },
+		}));
+
+		expect(model.graphics[0]!.items[0]!.textSegments![2]!.style).toEqual({ color: '#ffffff' });
 	});
 });

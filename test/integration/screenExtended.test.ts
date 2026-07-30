@@ -340,7 +340,69 @@ describe('screens extended API', () => {
 
 		expect(failure?.data?.statusCode).toBe(400);
 		expect(failure?.data?.message)
-			.toContain('A Broadcast Graphics Screen must not carry more than 200 Graphic Items in total');
+			.toContain('A Broadcast Graphics Screen must not carry more than 110 Graphic Items in total');
+	});
+
+	it('round-trips declared Graphic Inputs and Graphic Placeholder Styles through the editor patch path', async () => {
+		// The only path the editors write through, and the one an object-level
+		// refinement would silently never reach.
+		const typography = {
+			fontId: 'inter',
+			fontSize: 48,
+			fontWeight: 700,
+			fontStyle: 'normal',
+			textTransform: 'none',
+			letterSpacing: 0,
+			lineHeight: 1.2,
+			textAlign: 'left',
+			color: '#ffffff',
+		};
+		const graphics = [{
+			id: 'lower-third',
+			name: 'Lower Third',
+			inputs: [
+				{ type: 'text', key: 'name', label: 'Name', required: true, updatePolicy: 'staged', default: 'Unnamed', maxLength: 40 },
+				{ type: 'choice', key: 'side', label: 'Side', required: false, updatePolicy: 'live', default: 'left', options: [{ value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }] },
+			],
+			sources: [{ key: 'player', label: 'Player', kind: 'player' }],
+			bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'displayName' }],
+			items: [{
+				type: 'text',
+				id: 'name-line',
+				label: 'Name line',
+				visible: true,
+				anchor: 'top-left',
+				x: 0,
+				y: 0,
+				width: 600,
+				height: 120,
+				text: '{name} — {side}',
+				typography,
+				overflowPolicy: 'ellipsis',
+				minFontSize: 24,
+				placeholderStyles: { side: { fontWeight: 300, color: '#00d9ff' } },
+			}],
+		}];
+
+		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
+			method: 'PATCH',
+			body: { graphics },
+		});
+
+		expect(updated.modeConfigs['broadcast-graphics']).toEqual({ graphics });
+	});
+
+	it('refuses two Graphic Inputs sharing one key on the editor patch path', async () => {
+		const input = { type: 'text', key: 'name', label: 'Name', required: false, updatePolicy: 'staged', default: '', maxLength: 40 };
+		const graphics = [{ id: 'lower-third', name: 'Lower Third', items: [], inputs: [input, input] }];
+
+		const failure = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
+			method: 'PATCH',
+			body: { graphics },
+		}).then(() => null).catch((error: { data?: { statusCode?: number; message?: string } }) => error);
+
+		expect(failure?.data?.statusCode).toBe(400);
+		expect(failure?.data?.message).toContain('Graphic Input keys must be unique within one Broadcast Graphic');
 	});
 
 	it('refuses to delete the authored Broadcast Graphics stack with a null patch', async () => {

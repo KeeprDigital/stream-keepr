@@ -5,6 +5,7 @@ import type {
 	BroadcastGraphicsCommandResult,
 	BroadcastGraphicsLiveSessionResponse,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
+import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { mapBroadcastGraphicsLiveSessionToResponse } from '~~/server/mappers/broadcastGraphicsLiveSession';
 import {
 	graphicAssetId,
@@ -61,13 +62,19 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		return screen;
 	};
 
-	function authoredStack(screen: DbScreen) {
-		return screen.modeConfigs?.['broadcast-graphics']
+	/**
+	 * The placed Broadcast Graphic a command addresses, from the Screen's authored
+	 * stack.
+	 *
+	 * Both admission and reduction need it: whether the Screen places the graphic at
+	 * all, which Graphic Inputs it declares, and which Graphic Assets it pins. All
+	 * three are questions about authored configuration rather than live state, which
+	 * is why they are answered here rather than inside the live-state port.
+	 */
+	function findAuthoredGraphic(screen: DbScreen, graphicId: string): BroadcastGraphicConfig | undefined {
+		const config = screen.modeConfigs?.['broadcast-graphics']
 			?? getDefaultConfigForMode('broadcast-graphics');
-	}
-
-	function authoredGraphicIds(screen: DbScreen): Set<string> {
-		return new Set(authoredStack(screen).graphics.map(graphic => graphic.id));
+		return config.graphics.find(graphic => graphic.id === graphicId);
 	}
 
 	/**
@@ -76,21 +83,17 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	 *
 	 * Enforced here rather than in the reducer, and rather than only in Live
 	 * Control. The reducer's aggregate is exactly the row its projection writes
-	 * back, and this question needs two more entities — the Screen's authored stack
+	 * back, and this question needs two more entities — the placed Broadcast Graphic
 	 * and the Graphics Asset Library — so it belongs in the module that already
-	 * resolves the Screen before handing the command on. A disabled button is not
-	 * the invariant: a second operator on stale data, a replayed command, or a
-	 * direct API call all reach this path.
+	 * resolves both before handing the command on. A disabled button is not the
+	 * invariant: a second operator on stale data, a replayed command, or a direct
+	 * API call all reach this path.
 	 *
 	 * Only Take is gated. Out needs none of the asset's bytes, and blocking it would
 	 * trap on air the very graphic an operator most needs to remove. A retired asset
 	 * is not a failure either: its pinned revisions keep resolving by design.
 	 */
-	const requireResolvableGraphicAssets = async (screen: DbScreen, graphicId: string): Promise<void> => {
-		const graphic = authoredStack(screen).graphics.find(entry => entry.id === graphicId);
-		if (!graphic)
-			return;
-
+	const requireResolvableGraphicAssets = async (graphic: BroadcastGraphicConfig): Promise<void> => {
 		const references = broadcastGraphicsGraphicAssetReferences({ graphics: [graphic] });
 		if (references.length === 0)
 			return;
@@ -144,8 +147,9 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		originConnectionId,
 	}: ApplyCommandParams): Promise<BroadcastGraphicsCommandResult> => {
 		const screen = await requireBroadcastGraphicsScreen(eventId, screenId);
+		const graphic = findAuthoredGraphic(screen, command.payload.graphicId);
 
-		if (!authoredGraphicIds(screen).has(command.payload.graphicId)) {
+		if (!graphic) {
 			throw createError({
 				statusCode: 404,
 				message: 'Broadcast Graphic not found on this Screen',
@@ -153,7 +157,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		}
 
 		if (command.type === 'Take')
-			await requireResolvableGraphicAssets(screen, command.payload.graphicId);
+			await requireResolvableGraphicAssets(graphic);
 
 		const session = await state.findSessionById(sessionId, eventId);
 		if (!session || session.screenId !== screenId) {
@@ -163,7 +167,14 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 			});
 		}
 
-		return await state.applyCommand(sessionId, eventId, command, originConnectionId, { publish: true });
+		return await state.applyCommand(
+			sessionId,
+			eventId,
+			command,
+			graphic.inputs ?? [],
+			originConnectionId,
+			{ publish: true },
+		);
 	};
 
 	return {
