@@ -86,6 +86,11 @@ describe('shapeGeometry', () => {
 	});
 
 	it('initialises the same Shape Geometry from every preset', () => {
+		// Named, because "every preset" is only as strong as the list it walks: removing
+		// one shrinks this test's coverage rather than failing it. `CONTEXT.md:371` settles
+		// the membership as exactly these four, so the glossary is what is asserted.
+		expect([...SHAPE_GEOMETRY_PRESET_IDS]).toEqual(['rectangle', 'rule', 'slanted-edge', 'corner-cut']);
+
 		for (const id of SHAPE_GEOMETRY_PRESET_IDS) {
 			const result = getShapeGeometryPreset(id).apply(SIZE);
 

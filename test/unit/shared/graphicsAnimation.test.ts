@@ -298,6 +298,13 @@ describe('graphic animation presets', () => {
 	});
 
 	it('keeps every preset inside the settled recipe bounds', () => {
+		// Counted so that "every preset" cannot quietly mean fewer: dropping one shrinks
+		// this test's coverage rather than failing it. Unlike the origin, direction, and
+		// edge counts, `CONTEXT.md` settles no number here — `:572` makes presets
+		// authoring shortcuts rather than a closed vocabulary — so this guards coverage
+		// rather than restating the glossary, and a deliberate addition should update it.
+		expect(GRAPHIC_ANIMATION_PRESETS).toHaveLength(12);
+
 		for (const preset of GRAPHIC_ANIMATION_PRESETS) {
 			const created = preset.create();
 			expect(created.duration).toBeGreaterThanOrEqual(MIN_GRAPHIC_ANIMATION_DURATION_MS);
