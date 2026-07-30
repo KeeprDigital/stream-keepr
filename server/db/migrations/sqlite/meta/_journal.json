@@ -99,6 +99,13 @@
       "when": 1785381566536,
       "tag": "0013_worthless_swordsman",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1785384124630,
+      "tag": "0014_high_firestar",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
+import { requireScreenGraphicsEditWritable } from '~~/server/modules/graphics-authoring-lease/screenEditWorkspace';
 import { screenWriteModule } from '~~/server/modules/screen-write';
 import { modeConfigParamsSchema, modeConfigPatchSchemaMap } from '~~/server/schemas/api/screen';
 import { getOriginConnectionId } from '~~/server/utils/ably';
@@ -11,6 +12,13 @@ const versionedPatchSchema = z.object({
 
 export default defineEventHandler(async (event) => {
 	const { id: eventId, screenId, mode } = await getValidatedRouterParams(event, modeConfigParamsSchema.parse);
+
+	// The Broadcast Graphics stack is the Screen's graphics Edit workspace, so an
+	// authoring write to it belongs to whichever session holds that workspace's
+	// Graphics Authoring Lease. Live Control reaches the Screen through its own
+	// live command surface and is never admitted here.
+	if (mode === 'broadcast-graphics')
+		await requireScreenGraphicsEditWritable(event, eventId, screenId);
 
 	// Validate body against the mode-specific PATCH schema.
 	// Optional fields accept null as a sentinel meaning "delete this key".

@@ -30,6 +30,7 @@ async function mountComponent(options: {
 	graphics: BroadcastGraphicConfig[];
 	selectedGraphicId?: string | null;
 	selectedTarget?: GraphicsSelectionTarget;
+	writable?: boolean;
 }) {
 	const componentPath = '../../../../../app/components/Graphics/Compositor/StackTree.vue';
 	const { default: StackTree } = await import(componentPath);
@@ -42,6 +43,7 @@ async function mountComponent(options: {
 			contract: BROADCAST_GRAPHICS_HOST_CONTRACT,
 			canvasWidth: 1920,
 			canvasHeight: 1080,
+			writable: options.writable ?? true,
 		},
 		global: {
 			stubs: {
@@ -61,6 +63,44 @@ function emittedGraphics(wrapper: Awaited<ReturnType<typeof mountComponent>>, in
 
 function emittedTarget(wrapper: Awaited<ReturnType<typeof mountComponent>>, index = 0) {
 	return wrapper.emitted('update:selectedTarget')?.[index]?.[0] as GraphicsSelectionTarget;
+}
+
+function groupStack(): BroadcastGraphicConfig {
+	return {
+		id: 'a',
+		name: 'A',
+		items: [{
+			type: 'group',
+			id: 'cluster',
+			label: 'Name block',
+			visible: true,
+			anchor: 'top-left',
+			x: 0,
+			y: 0,
+			width: 400,
+			height: 100,
+			arrangement: 'row',
+			padding: 0,
+			gap: 8,
+			align: 'stretch',
+			justify: 'start',
+			clip: false,
+			geometry: squareShapeGeometry(),
+			children: [{
+				type: 'shape',
+				id: 'child',
+				label: 'Shape 1',
+				visible: true,
+				anchor: 'top-left',
+				x: 0,
+				y: 0,
+				width: 10,
+				height: 10,
+				geometry: squareShapeGeometry(),
+				surfaceStyle: { fill: { type: 'solid', color: '#ffffff' }, fillOpacity: 1 },
+			}],
+		}],
+	};
 }
 
 describe('graphicsCompositorStackTree', () => {
@@ -264,5 +304,50 @@ describe('graphicsCompositorStackTree', () => {
 		});
 
 		expect(wrapper.find('[data-testid="graphic-group-child-palette"]').exists()).toBe(false);
+	});
+
+	it('offers no authoring control to a read-only observer', async () => {
+		const wrapper = await mountComponent({
+			graphics: [{ id: 'a', name: 'A', items: [] }, { id: 'b', name: 'B', items: [] }],
+			selectedGraphicId: 'a',
+			writable: false,
+		});
+
+		expect(wrapper.find('[data-testid="add-broadcast-graphic"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="graphic-item-palette"]').exists()).toBe(false);
+		expect(wrapper.find('[aria-label="Delete A"]').exists()).toBe(false);
+		expect(wrapper.find('[aria-label="Move A forward"]').exists()).toBe(false);
+	});
+
+	it('still lets a read-only observer select what it is observing', async () => {
+		const wrapper = await mountComponent({
+			graphics: [{ id: 'a', name: 'A', items: [] }],
+			writable: false,
+		});
+
+		await wrapper.get('[data-testid="broadcast-graphic-node"]').trigger('click');
+
+		expect(emittedTarget(wrapper)).toEqual({ type: 'graphic', graphicId: 'a' });
+		expect(wrapper.emitted('update:graphics')).toBeUndefined();
+	});
+	it('offers a read-only observer no control over a Graphic Group child', async () => {
+		const wrapper = await mountComponent({
+			graphics: [groupStack()],
+			selectedGraphicId: 'a',
+			selectedTarget: { type: 'item', graphicId: 'a', itemId: 'cluster' },
+			writable: false,
+		});
+
+		// The nested row is still there to observe.
+		const rows = wrapper.findAll('[data-graphic-item-depth]');
+		expect(rows.map(row => row.attributes('data-graphic-item-depth'))).toEqual(['0', '1']);
+		expect(rows[1]!.text()).toContain('Shape 1');
+
+		// Its sibling-scoped reorder and delete controls, and the group's own child
+		// palette, are not.
+		expect(wrapper.find('[data-testid="graphic-group-child-palette"]').exists()).toBe(false);
+		expect(wrapper.find('[aria-label="Move Shape 1 forward"]').exists()).toBe(false);
+		expect(wrapper.find('[aria-label="Delete Shape 1"]').exists()).toBe(false);
+		expect(wrapper.emitted('update:graphics')).toBeUndefined();
 	});
 });

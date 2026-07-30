@@ -39,12 +39,25 @@ const props = defineProps<{
 	contract: GraphicsHostContract;
 	canvasWidth: number;
 	canvasHeight: number;
+	/**
+	 * Whether this session may author the tree. A session observing an artifact
+	 * another session's Graphics Authoring Lease covers still selects and reads it,
+	 * but is offered no authoring control and emits no change.
+	 */
+	writable?: boolean;
 }>();
 
 const emit = defineEmits<{
 	'update:graphics': [graphics: BroadcastGraphicConfig[]];
 	'update:selectedTarget': [target: GraphicsSelectionTarget];
 }>();
+
+/**
+ * Fail closed: a caller that does not grant authoring gets a read-only editor.
+ * Only a session confirmed to hold the artifact's Graphics Authoring Lease authors
+ * it, so an absent prop must never read as permission.
+ */
+const canAuthor = computed(() => props.writable === true);
 
 function paletteOptions(definitions: readonly { label: string; kind: GraphicItemKind; icon: string }[]) {
 	return definitions.map(definition => ({
@@ -101,23 +114,29 @@ function isSelected(target: GraphicsSelectionTarget) {
 }
 
 function addGraphic() {
+	if (!canAuthor.value)
+		return;
 	const { graphics, graphicId } = createBroadcastGraphic(props.graphics, { id: randomUuid() });
 	emit('update:graphics', graphics);
 	emit('update:selectedTarget', { type: 'graphic', graphicId });
 }
 
 function moveGraphic(graphicId: string, delta: 1 | -1) {
+	if (!canAuthor.value)
+		return;
 	emit('update:graphics', moveBroadcastGraphic(props.graphics, graphicId, delta));
 }
 
 function removeGraphic(graphicId: string) {
+	if (!canAuthor.value)
+		return;
 	emit('update:graphics', deleteBroadcastGraphic(props.graphics, graphicId));
 	emit('update:selectedTarget', { type: 'canvas' });
 }
 
 function addItem(kind: GraphicItemKind) {
 	const graphic = selectedGraphic.value;
-	if (!graphic)
+	if (!canAuthor.value || !graphic)
 		return;
 
 	const { graphic: updated, itemId } = addGraphicItem(graphic, {
@@ -133,7 +152,7 @@ function addItem(kind: GraphicItemKind) {
 function addChild(kind: GraphicItemKind) {
 	const graphic = selectedGraphic.value;
 	const group = selectedGroup.value;
-	if (!graphic || !group || kind === 'group')
+	if (!canAuthor.value || !graphic || !group || kind === 'group')
 		return;
 
 	// A child is sized against its Graphic Group, not the Screen canvas, so this
@@ -149,14 +168,14 @@ function addChild(kind: GraphicItemKind) {
 
 function moveItem(itemId: string, delta: 1 | -1) {
 	const graphic = selectedGraphic.value;
-	if (!graphic)
+	if (!canAuthor.value || !graphic)
 		return;
 	emit('update:graphics', replaceBroadcastGraphic(props.graphics, moveGraphicItem(graphic, itemId, delta)));
 }
 
 function removeItem(itemId: string) {
 	const graphic = selectedGraphic.value;
-	if (!graphic)
+	if (!canAuthor.value || !graphic)
 		return;
 	emit('update:graphics', replaceBroadcastGraphic(props.graphics, deleteGraphicItem(graphic, itemId)));
 	emit('update:selectedTarget', { type: 'graphic', graphicId: graphic.id });
@@ -180,6 +199,7 @@ function removeItem(itemId: string) {
 				</UBadge>
 			</div>
 			<UButton
+				v-if="canAuthor"
 				class="mt-3 w-full"
 				size="sm"
 				variant="soft"
@@ -207,6 +227,7 @@ function removeItem(itemId: string) {
 					</span>
 				</button>
 				<GraphicsCompositorReorderControls
+					v-if="canAuthor"
 					:label="graphic.name"
 					:can-move-forward="index < graphics.length - 1"
 					:can-move-backward="index > 0"
@@ -226,7 +247,7 @@ function removeItem(itemId: string) {
 				</UBadge>
 			</div>
 
-			<UFormField label="Add Graphic Item" size="sm">
+			<UFormField v-if="canAuthor" label="Add Graphic Item" size="sm">
 				<USelect
 					:items="itemKindOptions"
 					value-key="value"
@@ -238,7 +259,7 @@ function removeItem(itemId: string) {
 			</UFormField>
 
 			<UFormField
-				v-if="selectedGroup"
+				v-if="canAuthor && selectedGroup"
 				:label="`Add to ${selectedGroup.label}`"
 				size="sm"
 			>
@@ -278,6 +299,7 @@ function removeItem(itemId: string) {
 						<UIcon :name="row.item.visible ? 'i-lucide-eye' : 'i-lucide-eye-off'" class="mt-0.5 size-4 shrink-0 text-muted" />
 					</button>
 					<GraphicsCompositorReorderControls
+						v-if="canAuthor"
 						:label="row.item.label"
 						:can-move-forward="row.index < row.siblingCount - 1"
 						:can-move-backward="row.index > 0"

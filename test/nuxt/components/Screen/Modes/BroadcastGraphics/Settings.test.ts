@@ -3,7 +3,7 @@ import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, nextTick, reactive, ref } from 'vue';
+import { computed, defineComponent, nextTick, reactive, ref } from 'vue';
 
 enableAutoUnmount(afterEach);
 
@@ -45,6 +45,22 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	updateConfig: mockUpdateConfig,
 	resetConfig: vi.fn(),
 }));
+const mockLeaseWritable = ref(true);
+const mockLeaseEnabled = ref<boolean | null>(null);
+const mockTakeOver = vi.fn();
+mockNuxtImport('useGraphicsAuthoringLease', () => (options: { enabled?: () => boolean }) => {
+	mockLeaseEnabled.value = options.enabled?.() ?? true;
+	return {
+		lease: ref(null),
+		status: ref('ready'),
+		writable: mockLeaseWritable,
+		heldByAnotherSession: computed(() => !mockLeaseWritable.value),
+		canTakeOver: computed(() => !mockLeaseWritable.value),
+		refresh: vi.fn(),
+		takeOver: mockTakeOver,
+		release: vi.fn(),
+	};
+});
 mockNuxtImport('useScreenConfigUpdate', () => () => ({
 	screenConfig: mockScreenConfig,
 	saving: ref(false),
@@ -57,12 +73,16 @@ const EditWorkspaceStub = defineComponent({
 		graphics: { type: Array, required: true },
 		selectedTarget: { type: Object, required: true },
 		selectedGraphicId: { type: String, default: null },
+		writable: { type: Boolean, default: true },
+		canTakeOver: { type: Boolean, default: false },
 	},
-	emits: ['update:graphics', 'update:selectedTarget'],
+	emits: ['update:graphics', 'update:selectedTarget', 'takeOver'],
 	template: `<div
 		data-testid="edit-workspace"
 		:data-selected-graphic="selectedGraphicId ?? ''"
 		:data-selected-target="JSON.stringify(selectedTarget)"
+		:data-writable="String(writable)"
+		:data-can-take-over="String(canTakeOver)"
 	/>`,
 });
 
@@ -94,9 +114,12 @@ const UButtonStub = defineComponent({
 
 const UInputNumberStub = defineComponent({
 	name: 'UInputNumber',
-	props: { modelValue: { type: Number, required: false } },
+	props: {
+		modelValue: { type: Number, required: false },
+		disabled: { type: Boolean, default: false },
+	},
 	emits: ['update:modelValue'],
-	template: '<input :value="modelValue">',
+	template: '<input :value="modelValue" :disabled="disabled">',
 });
 
 async function mountComponent() {
@@ -132,6 +155,8 @@ describe('broadcastGraphicsSettings', () => {
 		};
 		mockScreenConfig.value = { width: 1920, height: 1080 };
 		mockRoute.query = {};
+		mockLeaseWritable.value = true;
+		mockLeaseEnabled.value = null;
 	});
 
 	it('opens the Screen configuration page on the Live workspace', async () => {
@@ -212,5 +237,99 @@ describe('broadcastGraphicsSettings', () => {
 		await nextTick();
 
 		expect(mockUpdateScreenConfig).toHaveBeenCalledWith({ height: 720 });
+	});
+	it('refuses an authoring write from a session observing the Edit workspace read-only', async () => {
+		mockRoute.query = { workspace: 'edit' };
+		mockLeaseWritable.value = false;
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const workspace = wrapper.get('[data-testid="edit-workspace"]');
+		expect(workspace.attributes('data-writable')).toBe('false');
+		expect(workspace.attributes('data-can-take-over')).toBe('true');
+
+		wrapper.getComponent(EditWorkspaceStub).vm.$emit('update:graphics', [{ id: 'bug', name: 'Bug', items: [] }]);
+		await nextTick();
+
+		expect(mockUpdateConfig).not.toHaveBeenCalled();
+	});
+
+	it('takes the Graphics Authoring Lease over on the observer\'s explicit request', async () => {
+		mockRoute.query = { workspace: 'edit' };
+		mockLeaseWritable.value = false;
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		wrapper.getComponent(EditWorkspaceStub).vm.$emit('takeOver');
+		await nextTick();
+
+		expect(mockTakeOver).toHaveBeenCalled();
+	});
+
+	it('asks for the Graphics Authoring Lease only while the Edit workspace is open', async () => {
+		await mountComponent();
+		await flushPromises();
+
+		expect(mockLeaseEnabled.value).toBe(false);
+
+		mockRoute.query = { workspace: 'edit' };
+		await mountComponent();
+		await flushPromises();
+
+		expect(mockLeaseEnabled.value).toBe(true);
+	});
+
+	it('never lets a lease restrict the Live workspace', async () => {
+		mockLeaseWritable.value = false;
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		// The Live workspace is rendered, carries the whole Screen stack, and its
+		// interactions work — for an operator holding no lease at all.
+		const live = wrapper.get('[data-testid="live-workspace"]');
+		expect(wrapper.getComponent(LiveWorkspaceStub).props('graphics')).toHaveLength(2);
+		expect(wrapper.find('[data-testid="edit-lease-notice"]').exists()).toBe(false);
+
+		await live.trigger('click');
+		await nextTick();
+
+		expect(mockRoute.query.graphic).toBe('slate');
+
+		// And the lease is never even asked for from here.
+		expect(mockLeaseEnabled.value).toBe(false);
+	});
+
+	it('leaves the canvas open to a Live operator who holds no lease', async () => {
+		mockLeaseWritable.value = false;
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const inputs = wrapper.findAllComponents({ name: 'UInputNumber' });
+		expect(inputs.map(input => input.props('disabled'))).toEqual([false, false]);
+
+		await inputs[1]?.vm.$emit('update:modelValue', 720);
+		await nextTick();
+
+		expect(mockUpdateScreenConfig).toHaveBeenCalledWith({ height: 720 });
+	});
+
+	it('closes the canvas to a session observing the Edit workspace read-only', async () => {
+		mockRoute.query = { workspace: 'edit' };
+		mockLeaseWritable.value = false;
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const inputs = wrapper.findAllComponents({ name: 'UInputNumber' });
+		expect(inputs.map(input => input.props('disabled'))).toEqual([true, true]);
+
+		await inputs[1]?.vm.$emit('update:modelValue', 720);
+		await nextTick();
+
+		expect(mockUpdateScreenConfig).not.toHaveBeenCalled();
 	});
 });

@@ -116,6 +116,7 @@ const USwitchStub = defineComponent({
 async function mountComponent(options: {
 	graphics: BroadcastGraphicConfig[];
 	selectedTarget: GraphicsSelectionTarget;
+	writable?: boolean;
 }) {
 	const componentPath = '../../../../../app/components/Graphics/Compositor/Inspector.vue';
 	const { default: Inspector } = await import(componentPath);
@@ -126,6 +127,7 @@ async function mountComponent(options: {
 			selectedTarget: options.selectedTarget,
 			canvasWidth: 1920,
 			canvasHeight: 1080,
+			writable: options.writable ?? true,
 		},
 		global: {
 			stubs: {
@@ -510,5 +512,36 @@ describe('graphicsCompositorInspector', () => {
 		await switchField(wrapper, 'surface-style-own')?.trigger('click');
 
 		expect(childOf(emittedGraphics(wrapper))?.surfaceStyle).toMatchObject({ fillOpacity: 1 });
+	});
+
+	it('shows a read-only observer every property without letting it change one', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([textItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			writable: false,
+		});
+
+		expect(wrapper.get('[data-testid="graphic-item-label"]').attributes('value')).toBe('Text 1');
+		expect(wrapper.get('fieldset').attributes('disabled')).toBeDefined();
+
+		wrapper.getComponent(USwitchStub).vm.$emit('update:modelValue', false);
+		wrapper.findAllComponents(UInputStub).forEach(input => input.vm.$emit('update:modelValue', 'changed'));
+		numberField(wrapper, 'Item width')?.vm.$emit('update:modelValue', 12);
+		await nextTick();
+
+		expect(wrapper.emitted('update:graphics')).toBeUndefined();
+	});
+
+	it('refuses a read-only observer\'s rename of the selected Broadcast Graphic', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+			writable: false,
+		});
+
+		wrapper.getComponent(UInputStub).vm.$emit('update:modelValue', 'Renamed');
+		await nextTick();
+
+		expect(wrapper.emitted('update:graphics')).toBeUndefined();
 	});
 });
