@@ -2,6 +2,7 @@ import type {
 	GraphicAsset,
 	GraphicAssetId,
 	GraphicAssetRevisionId,
+	GraphicAssetUsage,
 	GraphicsAssetLibraryCapacity,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
@@ -28,6 +29,7 @@ import { completedGraphicAssetReplacementOperation } from './operation';
 interface InMemoryGraphicsAssetCatalogueOptions {
 	canonicalLimitBytes?: number;
 	stagingLimitBytes?: number;
+	usage?: GraphicAssetUsage[];
 }
 
 export function createInMemoryGraphicsAssetCatalogue(
@@ -55,6 +57,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 		Map<string, number>
 	>();
 	const multipartStates = new Map<GraphicsIngestionOperationId, GraphicsAssetMultipartState>();
+	const usage = options.usage ?? [];
 	let canonicalLimitBytes = options.canonicalLimitBytes ?? DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES;
 	let stagingLimitBytes = options.stagingLimitBytes ?? DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES;
 
@@ -382,7 +385,8 @@ export function createInMemoryGraphicsAssetCatalogue(
 		},
 		async findReusableGraphicAsset(sourceDigest) {
 			const revision = [...revisions.entries()].find(([, candidate]) =>
-				candidate.facts.sha256 === sourceDigest,
+				candidate.facts.sha256 === sourceDigest
+				&& assets.get(candidate.assetId)?.lifecycle.state === 'active',
 			);
 			const asset = revision && assets.get(revision[1].assetId);
 			return asset
@@ -391,7 +395,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 		},
 		async findCurrentGraphicAsset(assetId) {
 			const asset = assets.get(assetId);
-			return asset
+			return asset?.lifecycle.state === 'active'
 				? {
 						assetId,
 						revisionId: asset.revisionId,
@@ -402,7 +406,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 		async reuseGraphicAsset(input) {
 			const existing = operations.get(input.operation.id);
 			const asset = assets.get(input.reusable.assetId);
-			if (!existing || !asset)
+			if (!existing || !asset || asset.lifecycle.state !== 'active')
 				throw new Error('Reusable Graphic Asset or operation not found');
 			if (existing.stage === 'cancelled' || existing.stage === 'completed')
 				return cloneOperation(existing);
@@ -441,6 +445,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			if (
 				!existing
 				|| !asset
+				|| asset.lifecycle.state !== 'active'
 				|| existing.stage !== 'publishing'
 				|| existing.updatedAt !== input.operation.updatedAt
 				|| asset.revisionId !== input.current.revisionId
@@ -465,6 +470,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			if (
 				!existing
 				|| !asset
+				|| asset.lifecycle.state !== 'active'
 				|| existing.stage !== 'publishing'
 				|| existing.updatedAt !== input.operation.updatedAt
 			) {
@@ -507,6 +513,14 @@ export function createInMemoryGraphicsAssetCatalogue(
 				kind: input.report.facts.kind,
 				revisionId: input.revisionId,
 				revisionNumber,
+				revisions: [
+					...asset.revisions,
+					{
+						id: input.revisionId,
+						revisionNumber,
+						facts: input.report.facts,
+					},
+				],
 				facts: input.report.facts,
 				operation: cloneOperation(completed),
 			});
@@ -534,7 +548,10 @@ export function createInMemoryGraphicsAssetCatalogue(
 			if (existing.updatedAt !== input.operation.updatedAt)
 				throw new Error('Graphics Ingestion Operation publication lost its claim');
 			const reusable = input.operation.duplicateContentPolicy === 'reuse'
-				? [...assets.values()].find(asset => asset.facts.sha256 === input.sourceDigest)
+				? [...assets.values()].find(asset =>
+						asset.lifecycle.state === 'active'
+						&& asset.facts.sha256 === input.sourceDigest,
+					)
 				: undefined;
 			if (reusable) {
 				const completed: GraphicsIngestionOperation = {
@@ -583,10 +600,16 @@ export function createInMemoryGraphicsAssetCatalogue(
 				kind: input.report.facts.kind,
 				revisionId: input.revisionId,
 				revisionNumber: 1,
+				revisions: [{
+					id: input.revisionId,
+					revisionNumber: 1,
+					facts: input.report.facts,
+				}],
 				facts: input.report.facts,
 				eventIds: input.operation.defaultEventId === undefined
 					? []
 					: [input.operation.defaultEventId],
+				lifecycle: { state: 'active' },
 				operation: cloneOperation(completed),
 			});
 			revisions.set(input.revisionId, {
@@ -610,7 +633,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 		},
 		async updateGraphicAsset(input) {
 			const asset = assets.get(input.assetId);
-			if (!asset)
+			if (!asset || asset.lifecycle.state !== 'active')
 				return undefined;
 			const updated = {
 				...asset,
@@ -620,11 +643,73 @@ export function createInMemoryGraphicsAssetCatalogue(
 			assets.set(input.assetId, updated);
 			return structuredClone(updated);
 		},
-		async listGraphicAssets(search) {
+		async listGraphicAssets(search, lifecycleStates) {
 			const normalizedSearch = search.trim().toLocaleLowerCase();
 			return [...assets.values()]
+				.filter(asset => lifecycleStates.includes(asset.lifecycle.state))
 				.filter(asset => !normalizedSearch || asset.name.toLocaleLowerCase().includes(normalizedSearch))
 				.map(asset => structuredClone(asset));
+		},
+		async retireGraphicAsset(input) {
+			const asset = assets.get(input.assetId);
+			if (!asset)
+				return { outcome: 'not-found' };
+			if (asset.lifecycle.state !== 'active')
+				return { outcome: 'not-allowed' };
+			const retired: GraphicAsset = {
+				...asset,
+				lifecycle: { state: 'retired' },
+			};
+			assets.set(input.assetId, retired);
+			return { outcome: 'updated', asset: structuredClone(retired) };
+		},
+		async trashGraphicAsset(input) {
+			const asset = assets.get(input.assetId);
+			if (!asset)
+				return { outcome: 'not-found' };
+			if (asset.lifecycle.state !== 'active' && asset.lifecycle.state !== 'retired')
+				return { outcome: 'not-allowed' };
+			const currentUsage = usage
+				.filter(item => item.reference.assetId === input.assetId)
+				.map(item => structuredClone(item));
+			if (currentUsage.length > 0)
+				return { outcome: 'in-use', usage: currentUsage };
+			const trashed: GraphicAsset = {
+				...asset,
+				lifecycle: {
+					state: 'trashed',
+					priorState: asset.lifecycle.state,
+					trashedAt: input.trashedAt,
+					recoverableUntil: input.recoverableUntil,
+				},
+			};
+			assets.set(input.assetId, trashed);
+			return { outcome: 'updated', asset: structuredClone(trashed) };
+		},
+		async restoreGraphicAsset(input) {
+			const asset = assets.get(input.assetId);
+			if (!asset)
+				return { outcome: 'not-found' };
+			if (asset.lifecycle.state === 'retired') {
+				const active: GraphicAsset = {
+					...asset,
+					lifecycle: { state: 'active' },
+				};
+				assets.set(input.assetId, active);
+				return { outcome: 'updated', asset: structuredClone(active) };
+			}
+			if (
+				asset.lifecycle.state !== 'trashed'
+				|| asset.lifecycle.recoverableUntil < input.restoredAt
+			) {
+				return { outcome: 'not-allowed' };
+			}
+			const restored: GraphicAsset = {
+				...asset,
+				lifecycle: { state: asset.lifecycle.priorState },
+			};
+			assets.set(input.assetId, restored);
+			return { outcome: 'updated', asset: structuredClone(restored) };
 		},
 		async findRevisionContent(input) {
 			const revision = revisions.get(input.revisionId);
@@ -635,11 +720,13 @@ export function createInMemoryGraphicsAssetCatalogue(
 				byteLength: revision.facts.byteLength,
 				canonicalMime: revision.facts.canonicalMime,
 				kind: revision.facts.kind,
-				lifecycleState: 'active',
+				lifecycleState: assets.get(revision.assetId)?.lifecycle.state ?? 'active',
 			};
 		},
-		async listGraphicAssetUsage() {
-			return [];
+		async listGraphicAssetUsage(assetId) {
+			return usage
+				.filter(item => item.reference.assetId === assetId)
+				.map(item => structuredClone(item));
 		},
 		async findThumbnailDigest(assetId: GraphicAssetId) {
 			const asset = assets.get(assetId);

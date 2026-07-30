@@ -16,6 +16,7 @@ export class GraphicsAssetLibraryError extends Error {
 			| 'invalid-ingestion-input'
 			| 'ingestion-operation-not-found'
 			| 'ingestion-operation-not-uploadable'
+			| 'graphic-asset-lifecycle-action-not-allowed'
 			| 'staging-capacity-exhausted'
 			| 'canonical-capacity-exhausted'
 			| 'graphics-asset-library-unavailable',
