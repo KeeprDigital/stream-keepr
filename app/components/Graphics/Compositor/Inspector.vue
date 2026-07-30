@@ -44,12 +44,18 @@ import { resolveGraphicsSelection } from '~/modules/graphics/selection';
  * Geometry is authored in any Graphic Geometry Unit and always stored as
  * canonical canvas pixels.
  */
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	graphics: readonly BroadcastGraphicConfig[];
 	selectedTarget: GraphicsSelectionTarget;
 	canvasWidth: number;
 	canvasHeight: number;
-}>();
+	/**
+	 * Whether this session may author the selection. A session observing an artifact
+	 * another session's Graphics Authoring Lease covers reads every property and
+	 * changes none.
+	 */
+	writable?: boolean;
+}>(), { writable: true });
 
 const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[]] }>();
 
@@ -134,7 +140,7 @@ function displayedSize(axis: 'width' | 'height') {
 
 function patchSelectedItem(patch: Partial<GraphicItemConfig>) {
 	const current = selection.value;
-	if (current.kind !== 'item')
+	if (!props.writable || current.kind !== 'item')
 		return;
 	emit('update:graphics', replaceBroadcastGraphic(
 		props.graphics,
@@ -167,7 +173,7 @@ function applyToSelectedGraphic(
 	merge: (graphic: BroadcastGraphicConfig, itemId: string) => BroadcastGraphicConfig,
 ) {
 	const current = selection.value;
-	if (current.kind !== 'item')
+	if (!props.writable || current.kind !== 'item')
 		return;
 	emit('update:graphics', replaceBroadcastGraphic(props.graphics, merge(current.graphic, current.item.id)));
 }
@@ -190,14 +196,20 @@ function updateTextItem(patch: Partial<Omit<TextGraphicItemConfig, 'type' | 'id'
 
 function updateGraphicName(value: string) {
 	const current = selection.value;
-	if (current.kind !== 'graphic')
+	if (!props.writable || current.kind !== 'graphic')
 		return;
 	emit('update:graphics', patchBroadcastGraphic(props.graphics, current.graphic.id, { name: value }));
 }
 </script>
 
 <template>
-	<div class="min-w-0 space-y-4">
+	<!--
+		A disabled fieldset is what makes the read-only editor read-only in the
+		browser rather than merely discouraging: every native control it contains
+		stops accepting input. The guards above are the same rule stated where a
+		programmatic change would otherwise slip through.
+	-->
+	<fieldset class="min-w-0 space-y-4" :disabled="!writable">
 		<div class="border-b border-default/70 pb-3">
 			<div class="flex min-w-0 items-start gap-3">
 				<UIcon :name="header.icon" class="mt-0.5 size-5 shrink-0 text-muted" />
@@ -462,5 +474,5 @@ function updateGraphicName(value: string) {
 				/>
 			</UFormField>
 		</template>
-	</div>
+	</fieldset>
 </template>

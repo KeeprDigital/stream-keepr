@@ -61,6 +61,17 @@ const canvasHeight = computed(() => screenConfig.value.height ?? props.screen.sc
 const graphics = computed<readonly BroadcastGraphicConfig[]>(() => config.value.graphics ?? []);
 
 const workspace = computed(() => resolveBroadcastGraphicsWorkspace(route.query[BROADCAST_GRAPHICS_WORKSPACE_QUERY_KEY]));
+
+/**
+ * The Screen's graphics Edit workspace is one leased authoring artifact, and the
+ * lease is asked for only while that workspace is open. The Live workspace never
+ * consults it: Live Control is not lease-restricted, and the way to keep that true
+ * is for the live path not to know the lease exists.
+ */
+const editLease = useGraphicsAuthoringLease({
+	endpoint: () => `/api/events/${props.eventId}/screens/${props.screen.id}/graphics-authoring-lease`,
+	enabled: () => workspace.value === 'edit',
+});
 const selectedGraphicId = computed(() => resolveSelectedBroadcastGraphicId(
 	route.query[BROADCAST_GRAPHICS_GRAPHIC_QUERY_KEY],
 	graphics.value,
@@ -100,7 +111,14 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 	});
 }
 
+/**
+ * The single write funnel for the authored stack, so one check covers every
+ * authoring control the Edit workspace offers. The server refuses an observer's
+ * write regardless; this keeps a read-only editor from ever asking.
+ */
 function updateGraphics(next: BroadcastGraphicConfig[]) {
+	if (!editLease.writable.value)
+		return;
 	updateConfig({ graphics: next });
 }
 </script>
@@ -160,8 +178,12 @@ function updateGraphics(next: BroadcastGraphicConfig[]) {
 			:selected-graphic-id="selectedGraphicId"
 			:canvas-width="canvasWidth"
 			:canvas-height="canvasHeight"
+			:writable="editLease.writable.value"
+			:lease-status="editLease.status.value"
+			:can-take-over="editLease.canTakeOver.value"
 			@update:graphics="updateGraphics"
 			@update:selected-target="setSelectedTarget"
+			@take-over="editLease.takeOver"
 		/>
 
 		<BroadcastGraphicsLiveWorkspace

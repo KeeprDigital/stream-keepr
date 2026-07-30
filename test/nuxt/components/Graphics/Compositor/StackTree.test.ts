@@ -30,6 +30,7 @@ async function mountComponent(options: {
 	graphics: BroadcastGraphicConfig[];
 	selectedGraphicId?: string | null;
 	selectedTarget?: GraphicsSelectionTarget;
+	writable?: boolean;
 }) {
 	const componentPath = '../../../../../app/components/Graphics/Compositor/StackTree.vue';
 	const { default: StackTree } = await import(componentPath);
@@ -42,6 +43,7 @@ async function mountComponent(options: {
 			contract: BROADCAST_GRAPHICS_HOST_CONTRACT,
 			canvasWidth: 1920,
 			canvasHeight: 1080,
+			writable: options.writable ?? true,
 		},
 		global: {
 			stubs: {
@@ -167,5 +169,30 @@ describe('graphicsCompositorStackTree', () => {
 
 		expect(emittedGraphics(wrapper)[0]?.items).toEqual([]);
 		expect(emittedTarget(wrapper)).toEqual({ type: 'graphic', graphicId: 'a' });
+	});
+
+	it('offers no authoring control to a read-only observer', async () => {
+		const wrapper = await mountComponent({
+			graphics: [{ id: 'a', name: 'A', items: [] }, { id: 'b', name: 'B', items: [] }],
+			selectedGraphicId: 'a',
+			writable: false,
+		});
+
+		expect(wrapper.find('[data-testid="add-broadcast-graphic"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="graphic-item-palette"]').exists()).toBe(false);
+		expect(wrapper.find('[aria-label="Delete A"]').exists()).toBe(false);
+		expect(wrapper.find('[aria-label="Move A forward"]').exists()).toBe(false);
+	});
+
+	it('still lets a read-only observer select what it is observing', async () => {
+		const wrapper = await mountComponent({
+			graphics: [{ id: 'a', name: 'A', items: [] }],
+			writable: false,
+		});
+
+		await wrapper.get('[data-testid="broadcast-graphic-node"]').trigger('click');
+
+		expect(emittedTarget(wrapper)).toEqual({ type: 'graphic', graphicId: 'a' });
+		expect(wrapper.emitted('update:graphics')).toBeUndefined();
 	});
 });

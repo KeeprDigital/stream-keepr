@@ -25,14 +25,20 @@ import GraphicsCompositorReorderControls from './ReorderControls.vue';
  * The definition palette offers exactly the Graphic Item kinds the Host
  * Contract's declared context supports.
  */
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	graphics: readonly BroadcastGraphicConfig[];
 	selectedTarget: GraphicsSelectionTarget;
 	selectedGraphicId: string | null;
 	contract: GraphicsHostContract;
 	canvasWidth: number;
 	canvasHeight: number;
-}>();
+	/**
+	 * Whether this session may author the tree. A session observing an artifact
+	 * another session's Graphics Authoring Lease covers still selects and reads it,
+	 * but is offered no authoring control and emits no change.
+	 */
+	writable?: boolean;
+}>(), { writable: true });
 
 const emit = defineEmits<{
 	'update:graphics': [graphics: BroadcastGraphicConfig[]];
@@ -54,23 +60,29 @@ function isSelected(target: GraphicsSelectionTarget) {
 }
 
 function addGraphic() {
+	if (!props.writable)
+		return;
 	const { graphics, graphicId } = createBroadcastGraphic(props.graphics, { id: randomUuid() });
 	emit('update:graphics', graphics);
 	emit('update:selectedTarget', { type: 'graphic', graphicId });
 }
 
 function moveGraphic(graphicId: string, delta: 1 | -1) {
+	if (!props.writable)
+		return;
 	emit('update:graphics', moveBroadcastGraphic(props.graphics, graphicId, delta));
 }
 
 function removeGraphic(graphicId: string) {
+	if (!props.writable)
+		return;
 	emit('update:graphics', deleteBroadcastGraphic(props.graphics, graphicId));
 	emit('update:selectedTarget', { type: 'canvas' });
 }
 
 function addItem(kind: GraphicItemKind) {
 	const graphic = selectedGraphic.value;
-	if (!graphic)
+	if (!props.writable || !graphic)
 		return;
 
 	const { graphic: updated, itemId } = addGraphicItem(graphic, {
@@ -85,14 +97,14 @@ function addItem(kind: GraphicItemKind) {
 
 function moveItem(itemId: string, delta: 1 | -1) {
 	const graphic = selectedGraphic.value;
-	if (!graphic)
+	if (!props.writable || !graphic)
 		return;
 	emit('update:graphics', replaceBroadcastGraphic(props.graphics, moveGraphicItem(graphic, itemId, delta)));
 }
 
 function removeItem(itemId: string) {
 	const graphic = selectedGraphic.value;
-	if (!graphic)
+	if (!props.writable || !graphic)
 		return;
 	emit('update:graphics', replaceBroadcastGraphic(props.graphics, deleteGraphicItem(graphic, itemId)));
 	emit('update:selectedTarget', { type: 'graphic', graphicId: graphic.id });
@@ -116,6 +128,7 @@ function removeItem(itemId: string) {
 				</UBadge>
 			</div>
 			<UButton
+				v-if="writable"
 				class="mt-3 w-full"
 				size="sm"
 				variant="soft"
@@ -143,6 +156,7 @@ function removeItem(itemId: string) {
 					</span>
 				</button>
 				<GraphicsCompositorReorderControls
+					v-if="writable"
 					:label="graphic.name"
 					:can-move-forward="index < graphics.length - 1"
 					:can-move-backward="index > 0"
@@ -162,7 +176,7 @@ function removeItem(itemId: string) {
 				</UBadge>
 			</div>
 
-			<UFormField label="Add Graphic Item" size="sm">
+			<UFormField v-if="writable" label="Add Graphic Item" size="sm">
 				<USelect
 					:items="itemKindOptions"
 					value-key="value"
@@ -193,6 +207,7 @@ function removeItem(itemId: string) {
 						<UIcon :name="item.visible ? 'i-lucide-eye' : 'i-lucide-eye-off'" class="mt-0.5 size-4 shrink-0 text-muted" />
 					</button>
 					<GraphicsCompositorReorderControls
+						v-if="writable"
 						:label="item.label"
 						:can-move-forward="index < selectedGraphic.items.length - 1"
 						:can-move-backward="index > 0"
