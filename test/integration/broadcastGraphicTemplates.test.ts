@@ -7,6 +7,7 @@ import type { BroadcastGraphicConfig, MediaGraphicItemConfig } from '~~/shared/t
 import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
 import { createHash, randomUUID } from 'node:crypto';
+import { crc32 } from 'node:zlib';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
@@ -21,10 +22,37 @@ import { executeIntegrationD1 } from './integrationD1';
  * with the template any more.
  */
 
-const pixelPng = Uint8Array.from(Buffer.from(
+const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 	'base64',
 ));
+
+/**
+ * This suite's own content, one valid ancillary text chunk away from the shared
+ * single-pixel PNG.
+ *
+ * `create-separate` keeps this suite from inheriting another's Graphic Asset, but it
+ * does not stop the reverse: content this suite publishes is content that a suite
+ * ingesting the identical bytes under the default reuse policy will then *reuse*
+ * rather than publish, which is a real cross-suite failure in the other direction.
+ * Owning a distinct digest is what makes the isolation mutual.
+ */
+function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array {
+	const payload = Buffer.concat([Buffer.from('tEXt'), Buffer.from(`${keyword}\0`)]);
+	const length = Buffer.alloc(4);
+	length.writeUInt32BE(payload.byteLength - 4, 0);
+	const checksum = Buffer.alloc(4);
+	checksum.writeUInt32BE(crc32(payload), 0);
+	return Uint8Array.from(Buffer.concat([
+		Buffer.from(source.slice(0, -12)),
+		length,
+		payload,
+		checksum,
+		Buffer.from(source.slice(-12)),
+	]));
+}
+
+const pixelPng = pngWithTextChunk(basePixelPng, 'sk-broadcast-graphic-template-library');
 
 /** Distinguishes this run's fixtures from any a previous run left in the library. */
 const runId = randomUUID();
