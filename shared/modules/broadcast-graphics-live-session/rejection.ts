@@ -16,6 +16,12 @@ export const BROADCAST_GRAPHICS_REJECTION_CODES = [
 	'update-unavailable',
 	/** The command named a Graphic Input this Broadcast Graphic does not declare. */
 	'unknown-input',
+	/**
+	 * The command named a Graphic Source Selection this Broadcast Graphic does not
+	 * declare, or one no operator selects — the current Event and a derived selection
+	 * both resolve without anyone picking them.
+	 */
+	'unknown-source',
 ] as const;
 
 export type BroadcastGraphicsRejectionCode = typeof BROADCAST_GRAPHICS_REJECTION_CODES[number];

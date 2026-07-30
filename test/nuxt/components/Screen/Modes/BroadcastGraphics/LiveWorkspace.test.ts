@@ -5,13 +5,14 @@ import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, ref } from 'vue';
+import { computed, defineComponent, ref } from 'vue';
 import {
 	broadcastGraphicPlayoutState,
 	createInitialBroadcastGraphicsLiveState,
 	graphicInputTraces,
 	onAirBroadcastGraphicIds,
 } from '~~/shared/modules/broadcast-graphics-live-session';
+import { createEmptyGraphicBindingDataSet } from '~~/shared/modules/graphics';
 
 enableAutoUnmount(afterEach);
 
@@ -36,8 +37,19 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 		onAirBroadcastGraphicIds(mockLiveState.value, graphics),
 	inputTraces: (_screenId: number, graphic: BroadcastGraphicConfig) =>
 		graphicInputTraces(mockLiveState.value, graphic.id, graphic),
+	sourceSelections: (_screenId: number, graphicId: string) =>
+		mockLiveState.value.sources?.[graphicId] ?? {},
 	setInput: vi.fn(),
+	setOverride: vi.fn(),
+	selectSource: vi.fn(),
 	updateGraphic: vi.fn(),
+}));
+
+// Live Control resolves its displayed bound values from Event Data; this workspace
+// suite is about which graphic's controls are generated, so it supplies none.
+mockNuxtImport('useGraphicBindingData', () => () => ({
+	dataSet: computed(() => createEmptyGraphicBindingDataSet()),
+	selectionOptions: () => [],
 }));
 
 /** What every Graphic Asset Revision status request answers with. */

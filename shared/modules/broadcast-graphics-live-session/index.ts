@@ -9,14 +9,19 @@ export type {
 	BroadcastGraphicInputsState,
 	GraphicInputStatus,
 	GraphicInputTrace,
+	GraphicInputValueSource,
 	GraphicInputValueTrace,
+	NormalizedBroadcastGraphicInputsState,
 } from './inputs';
 export {
 	acceptedGraphicInputValues,
 	acceptGraphicInputValues,
 	broadcastGraphicInputsState,
+	broadcastGraphicSourceSelections,
 	createInitialBroadcastGraphicInputsState,
+	effectiveGraphicInputValue,
 	GRAPHIC_INPUT_STATUS_VALUES,
+	GRAPHIC_INPUT_VALUE_SOURCE_VALUES,
 	graphicInputTraces,
 	isDeclaredGraphicInput,
 	sameGraphicInputValue,
@@ -31,7 +36,10 @@ export type {
 	BroadcastGraphicsLiveState,
 	BroadcastGraphicsPlayoutPayload,
 	BroadcastGraphicsReductionContext,
+	BroadcastGraphicsResolveBindingsPayload,
+	BroadcastGraphicsSelectSourcePayload,
 	BroadcastGraphicsSetInputPayload,
+	BroadcastGraphicsSetOverridePayload,
 	BroadcastGraphicsUpdatePayload,
 } from './playout';
 export {

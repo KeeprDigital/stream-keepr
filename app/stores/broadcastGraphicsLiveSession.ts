@@ -3,6 +3,7 @@ import type {
 	BroadcastGraphicsLiveState,
 	GraphicInputTrace,
 } from '~~/shared/modules/broadcast-graphics-live-session';
+import type { GraphicSourceSelectionsState } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicsCommand,
 	BroadcastGraphicsCommandResult,
@@ -18,6 +19,7 @@ import {
 	acceptedGraphicInputValues,
 	broadcastGraphicInputsState,
 	broadcastGraphicPlayoutState,
+	broadcastGraphicSourceSelections,
 	createInitialBroadcastGraphicsLiveState,
 	graphicInputTraces,
 	onAirBroadcastGraphicIds,
@@ -179,12 +181,30 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		return broadcastGraphicInputsState(liveState(screenId), graphicId);
 	}
 
+	/** Which entity each of this Broadcast Graphic's Graphic Source Selections names. */
+	function sourceSelections(screenId: number, graphicId: string): GraphicSourceSelectionsState {
+		return broadcastGraphicSourceSelections(liveState(screenId), graphicId);
+	}
+
 	/**
 	 * What Live Control shows for each declared Graphic Input: the latest bound
-	 * value, the working value, and the accepted on-air value, kept apart.
+	 * value, any Graphic Input Override masking it, the working value, and the
+	 * accepted on-air value, kept apart.
+	 *
+	 * Whether the graphic is on air is derived here rather than asked of the caller,
+	 * because it is what separates a held stale value from a plainly unavailable one
+	 * and a caller getting it wrong would mislabel what program is showing.
 	 */
-	function inputTraces(screenId: number, graphic: BroadcastGraphicConfig): GraphicInputTrace[] {
-		return graphicInputTraces(liveState(screenId), graphic.id, graphic);
+	function inputTraces(
+		screenId: number,
+		graphic: BroadcastGraphicConfig,
+		/** The latest values this graphic's Graphic Input Bindings resolve. */
+		boundValues: Readonly<Record<string, GraphicInputValue>> = {},
+	): GraphicInputTrace[] {
+		const state = playoutState(screenId, graphic.id);
+		return graphicInputTraces(liveState(screenId), graphic.id, graphic, boundValues, {
+			onAir: state !== 'off' && state !== 'waiting',
+		});
 	}
 
 	/**
@@ -218,6 +238,64 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			commandId: randomCommandId('Set Input'),
 			type: 'Set Input',
 			payload: { graphicId, inputKey, value },
+		});
+	}
+
+	/**
+	 * Mask one Graphic Input's binding with an operator's own value, or clear the mask.
+	 *
+	 * A separate command from an ordinary edit because it is a separate thing: the
+	 * binding underneath keeps resolving, so clearing resumes whatever it resolves
+	 * then rather than whatever it resolved when the override was set.
+	 */
+	function setOverride(
+		eventId: number,
+		screenId: number,
+		graphicId: string,
+		inputKey: string,
+		value: GraphicInputValue,
+	) {
+		return deliverCommand(eventId, screenId, graphicId, {
+			commandId: randomCommandId('Set Override'),
+			type: 'Set Override',
+			payload: { graphicId, inputKey, value },
+		});
+	}
+
+	/**
+	 * Point one Graphic Source Selection at an entity, or clear it with `null`.
+	 *
+	 * Every Graphic Input Binding reading that selection re-resolves authoritatively,
+	 * and each input's On-air Update Policy decides which resolved values reach air
+	 * now — which is why this is a command rather than local state.
+	 */
+	function selectSource(
+		eventId: number,
+		screenId: number,
+		graphicId: string,
+		sourceKey: string,
+		selectionId: number | null,
+	) {
+		return deliverCommand(eventId, screenId, graphicId, {
+			commandId: randomCommandId('Select Source'),
+			type: 'Select Source',
+			payload: { graphicId, sourceKey, selectionId },
+		});
+	}
+
+	/**
+	 * Tell the server that Event Data this Broadcast Graphic's bindings read has moved.
+	 *
+	 * It carries no value: the server re-resolves the bindings itself, so what reaches
+	 * air is a fact about Event Data rather than this client's reading of it. Whether
+	 * anything reaches air is each input's On-air Update Policy — a live one applies
+	 * now, a staged one waits for Update Graphic.
+	 */
+	function resolveBindings(eventId: number, screenId: number, graphicId: string) {
+		return deliverCommand(eventId, screenId, graphicId, {
+			commandId: randomCommandId('Resolve Bindings'),
+			type: 'Resolve Bindings',
+			payload: { graphicId },
 		});
 	}
 
@@ -284,11 +362,15 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		isPending,
 		inputsState,
 		inputTraces,
+		sourceSelections,
 		acceptedInputValues,
 		loadSession,
 		take,
 		out,
 		setInput,
+		setOverride,
+		selectSource,
+		resolveBindings,
 		updateGraphic,
 		applyRemoteCommand,
 		$reset,

@@ -259,17 +259,19 @@ describe('broadcastGraphicsInputs', () => {
 
 		const [trace] = graphicInputTraces(state, GRAPHIC, {
 			inputs: [NAME],
-			bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'displayName' }],
+			bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
 		});
 
 		expect(trace!.working.value).toBe('Ava Reed');
 		expect(trace!.accepted.value).toBe('Unnamed');
 		expect(trace!.pending).toBe(true);
-		expect(trace!.status).toBe('pending');
-		// The binding is declared but nothing resolves it yet, so there is no latest
-		// bound value to show — and an unresolved binding never falls back to the
-		// template default.
+		// The binding is declared but nothing resolves it, so there is no latest bound
+		// value to show — and an unresolved binding never falls back to the template
+		// default, nor to the manual value underneath it. The input therefore has no
+		// value that could go on air, which is what unavailable means.
 		expect(trace!.bound).toBeUndefined();
+		expect(trace!.status).toBe('unavailable');
+		expect(trace!.effective).toMatchObject({ source: 'none' });
 	});
 
 	it('reports an unavailable working value rather than a pending one', () => {

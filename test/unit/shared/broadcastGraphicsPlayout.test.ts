@@ -124,9 +124,13 @@ describe('broadcastGraphicsPlayout', () => {
 		//
 		// Accepted Graphic Input values are stored, and are the deliberate exception:
 		// they are the values a recovered graphic renders at its resting state, not a
-		// record of how it got there, so nothing about them is replayable.
-		expect(Object.keys(persisted).toSorted()).toEqual(['inputs', 'playout']);
+		// record of how it got there, so nothing about them is replayable. Graphic
+		// Source Selections and Graphic Input Overrides join them on the same test:
+		// both are standing operator intent that outlives a hide/show cycle, and
+		// neither says anything about a lifecycle phase.
+		expect(Object.keys(persisted).toSorted()).toEqual(['inputs', 'playout', 'sources']);
 		expect(Object.keys(persisted.playout.slate!).toSorted()).toEqual(['onAir']);
-		expect(Object.keys(persisted.inputs.slate!).toSorted()).toEqual(['accepted', 'acceptedRevision', 'working']);
+		expect(Object.keys(persisted.inputs.slate!).toSorted())
+			.toEqual(['accepted', 'acceptedRevision', 'overrides', 'working']);
 	});
 });

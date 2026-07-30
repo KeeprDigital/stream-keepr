@@ -1,0 +1,348 @@
+import type { BroadcastGraphicsCommand } from '~~/shared/types/broadcastGraphicsLiveSession';
+import type { GraphicInputDeclaration } from '~~/shared/types/graphics';
+import { $fetch } from '@nuxt/test-utils/e2e';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+	createGraphicsHarness,
+	getBroadcastGraphicsLiveSession,
+	integrationBroadcastGraphicWithBindings,
+	integrationTextInput,
+	playoutCommandId,
+	selectBroadcastGraphicSource,
+	setBroadcastGraphicOverride,
+} from './broadcastGraphicsPlayoutHelpers';
+import { $fetchRaw } from './helpers';
+
+/**
+ * Event Data binding, proven through the authoritative surface: one command in, the
+ * authoritative snapshot out.
+ *
+ * The lower third an operator actually builds is the subject — they pick a Player
+ * once, every bound field resolves, an override corrects one value without losing
+ * the feed, and nothing that cannot resolve is allowed to reach program wearing the
+ * template's own default.
+ */
+
+const GRAPHIC = 'lower-third';
+
+const NAME = integrationTextInput('name', { default: 'Unnamed', maxLength: 40 });
+const REQUIRED_NAME = integrationTextInput('name', { required: true, maxLength: 40 });
+const LIVE_NAME = integrationTextInput('name', { updatePolicy: 'live', maxLength: 40 });
+const RECORD = integrationTextInput('title', { maxLength: 40 });
+
+const PLAYER_SOURCE = { key: 'player', label: 'Player', kind: 'player' as const };
+const NAME_BINDING = { inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' };
+const RECORD_BINDING = { inputKey: 'title', sourceKey: 'player', fieldId: 'player.record' };
+
+function graphicWith(
+	inputs: GraphicInputDeclaration[],
+	sources = [PLAYER_SOURCE],
+	bindings = [NAME_BINDING],
+) {
+	return [integrationBroadcastGraphicWithBindings(GRAPHIC, inputs, sources, bindings)];
+}
+
+describe('broadcast graphics Event Data binding API', () => {
+	let eventId: number;
+	let avaId: number;
+	let samId: number;
+
+	beforeAll(async () => {
+		const event = await $fetch<{ id: number }>('/api/events', {
+			method: 'POST',
+			body: { name: 'Integration Graphic Binding Event', game: 'mtg', featureMatchOrientation: 'horizontal' },
+		});
+		eventId = event.id;
+
+		const ava = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+			method: 'POST',
+			body: { name: 'Ava Reed', wins: 4, losses: 1, draws: 0 },
+		});
+		avaId = ava.id;
+		const sam = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+			method: 'POST',
+			body: { name: 'Sam Ortiz', wins: 3, losses: 2, draws: 0 },
+		});
+		samId = sam.id;
+	});
+
+	afterAll(async () => {
+		try {
+			await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+		}
+		catch {}
+	});
+
+	it('takes the bound value on air once the operator picks a Player', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-take', graphicWith(
+			[NAME, RECORD],
+			[PLAYER_SOURCE],
+			[NAME_BINDING, RECORD_BINDING],
+		));
+
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', avaId);
+		const taken = await harness.send({
+			commandId: playoutCommandId('bind-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
+
+		// One selection, two resolved fields — including the broadcast-formatted record,
+		// which is composed here rather than in the Graphic Text Template.
+		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Ava Reed', title: '4-1' });
+	});
+
+	it('never puts the template default on air for a binding that resolves nothing', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-no-fallback', graphicWith([NAME]));
+
+		const taken = await harness.send({
+			commandId: playoutCommandId('bind-no-select'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
+
+		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({});
+	});
+
+	it('blocks Take while a required binding resolves nothing, and explains it', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-required', graphicWith([REQUIRED_NAME]));
+
+		const res = await $fetchRaw(
+			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`,
+			{
+				method: 'POST',
+				body: { commandId: playoutCommandId('bind-blocked'), type: 'Take', payload: { graphicId: GRAPHIC } },
+				ignoreResponseError: true,
+			},
+		);
+
+		expect(res.status).toBe(409);
+		expect(res._data?.message).toMatch(/must have a value/i);
+
+		const stillOff = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
+		expect(stillOff.currentState.playout[GRAPHIC]).toBeUndefined();
+	});
+
+	it('holds a staged bound change until Update Graphic accepts it', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-staged', graphicWith([NAME]));
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', avaId);
+		await harness.send({ commandId: playoutCommandId('bind-take2'), type: 'Take', payload: { graphicId: GRAPHIC } });
+
+		const reselected = await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', samId);
+
+		expect(reselected.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Ava Reed' });
+
+		const updated = await harness.send({
+			commandId: playoutCommandId('bind-update'),
+			type: 'Update Graphic',
+			payload: {
+				graphicId: GRAPHIC,
+				basedOnAcceptedRevision: reselected.currentState.inputs[GRAPHIC]!.acceptedRevision,
+			},
+		} as BroadcastGraphicsCommand);
+
+		expect(updated.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Sam Ortiz' });
+	});
+
+	it('applies a live-policy bound change the moment the selection changes', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-live', graphicWith([LIVE_NAME]));
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', avaId);
+		await harness.send({ commandId: playoutCommandId('bind-take3'), type: 'Take', payload: { graphicId: GRAPHIC } });
+
+		const reselected = await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', samId);
+
+		expect(reselected.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Sam Ortiz' });
+	});
+
+	it('holds the last accepted value on air when the selection is cleared', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-stale', graphicWith([REQUIRED_NAME]));
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', avaId);
+		await harness.send({ commandId: playoutCommandId('bind-take4'), type: 'Take', payload: { graphicId: GRAPHIC } });
+
+		const cleared = await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', null);
+
+		expect(cleared.currentState.sources![GRAPHIC]).toEqual({});
+		// Program keeps what it committed to, rather than blanking a required field.
+		expect(cleared.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Ava Reed' });
+	});
+
+	it('masks a binding with an override and resumes the current bound value when cleared', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-override', graphicWith([LIVE_NAME]));
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', avaId);
+		await harness.send({ commandId: playoutCommandId('bind-take5'), type: 'Take', payload: { graphicId: GRAPHIC } });
+
+		const overridden = await setBroadcastGraphicOverride(harness, GRAPHIC, 'name', 'Ava "Riptide" Reed');
+
+		expect(overridden.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Ava "Riptide" Reed' });
+		expect(overridden.currentState.inputs[GRAPHIC]!.overrides).toEqual({ name: 'Ava "Riptide" Reed' });
+
+		// The binding kept resolving underneath, so clearing resumes what it resolves
+		// now rather than what it resolved when the override was set.
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', samId);
+		const resumed = await setBroadcastGraphicOverride(harness, GRAPHIC, 'name', null);
+
+		expect(resumed.currentState.inputs[GRAPHIC]!.overrides).toEqual({});
+		expect(resumed.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Sam Ortiz' });
+	});
+
+	it('keeps an override across a hide and show cycle', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-override-persists', graphicWith([NAME]));
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', avaId);
+		await setBroadcastGraphicOverride(harness, GRAPHIC, 'name', 'Ava "Riptide" Reed');
+		await harness.send({ commandId: playoutCommandId('bind-take6'), type: 'Take', payload: { graphicId: GRAPHIC } });
+		await harness.send({ commandId: playoutCommandId('bind-out'), type: 'Out', payload: { graphicId: GRAPHIC } });
+		const retaken = await harness.send({
+			commandId: playoutCommandId('bind-retake'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
+
+		expect(retaken.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Ava "Riptide" Reed' });
+	});
+
+	it('survives reload with its selections and overrides', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-durable', graphicWith([NAME]));
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', avaId);
+		await setBroadcastGraphicOverride(harness, GRAPHIC, 'name', 'Ava "Riptide" Reed');
+
+		const reloaded = await harness.reload();
+
+		expect(reloaded.currentState.sources![GRAPHIC]).toEqual({ player: avaId });
+		expect(reloaded.currentState.inputs[GRAPHIC]!.overrides).toEqual({ name: 'Ava "Riptide" Reed' });
+	});
+
+	it('re-resolves a live-policy binding on air after the Event Data behind it changes', async () => {
+		const renamed = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+			method: 'POST',
+			body: { name: 'Rae Okonjo', wins: 2, losses: 0, draws: 0 },
+		});
+		const harness = await createGraphicsHarness(eventId, 'bind-reresolve', graphicWith([LIVE_NAME]));
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', renamed.id);
+		await harness.send({ commandId: playoutCommandId('bind-take7'), type: 'Take', payload: { graphicId: GRAPHIC } });
+
+		await $fetch(`/api/events/${eventId}/players/${renamed.id}`, {
+			method: 'PATCH',
+			body: { name: 'Rae Okonjo-Bell' },
+		});
+
+		// Nobody edited the graphic. The Realtime Event Session told Live Control the
+		// Player moved, and the server re-resolved the binding for itself.
+		const resolved = await harness.send({
+			commandId: playoutCommandId('bind-reresolve'),
+			type: 'Resolve Bindings',
+			payload: { graphicId: GRAPHIC },
+		} as BroadcastGraphicsCommand);
+
+		expect(resolved.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Rae Okonjo-Bell' });
+	});
+
+	it('rejects a selection the Broadcast Graphic does not declare', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-unknown-source', graphicWith([NAME]));
+
+		const res = await $fetchRaw(
+			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`,
+			{
+				method: 'POST',
+				body: {
+					commandId: playoutCommandId('bind-ghost-source'),
+					type: 'Select Source',
+					payload: { graphicId: GRAPHIC, sourceKey: 'ghost', selectionId: 1 },
+				},
+				ignoreResponseError: true,
+			},
+		);
+
+		expect(res.status).toBe(404);
+	});
+
+	it('resolves a Player derived from a Match out of that Match\'s production snapshot', async () => {
+		const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, {
+			method: 'POST',
+			body: { name: 'Swiss' },
+		});
+		const round = await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
+			method: 'POST',
+			body: { phaseId: phase.id, name: 'Round 5', roundNumber: 5 },
+		});
+		const match = await $fetch<{ id: number }>(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: {
+				roundId: round.id,
+				tableNumber: 12,
+				player1Id: avaId,
+				player2Id: samId,
+				player1Data: { name: 'Ava R.', wins: 4, losses: 1, draws: 0 },
+				player2Data: { name: 'Sam O.', wins: 3, losses: 2, draws: 0 },
+			},
+		});
+
+		const harness = await createGraphicsHarness(eventId, 'bind-derived', graphicWith(
+			[NAME, RECORD],
+			[
+				{ key: 'match', label: 'Match', kind: 'match' },
+				{ key: 'p1', label: 'Player 1', kind: 'player', from: { sourceKey: 'match', relation: 'player1' } },
+			],
+			[
+				{ inputKey: 'name', sourceKey: 'p1', fieldId: 'player.name' },
+				{ inputKey: 'title', sourceKey: 'match', fieldId: 'match.tableLabel' },
+			],
+		));
+
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'match', match.id);
+		const taken = await harness.send({
+			commandId: playoutCommandId('bind-derived-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
+
+		// The Match's snapshot said "Ava R." while the live Event Player is "Ava Reed":
+		// production committed to the snapshot, so that is what goes on air.
+		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Ava R.', title: 'Table 12' });
+	});
+
+	it('refuses a Screen whose binding names a field the catalog does not define', async () => {
+		const res = await $fetchRaw(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: {
+				name: 'Broadcast Graphics bind-bad-field',
+				slug: 'bind-bad-field',
+				currentMode: 'broadcast-graphics',
+				modeConfigs: {
+					'broadcast-graphics': {
+						graphics: graphicWith([NAME], [PLAYER_SOURCE], [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.inventedField' }]),
+					},
+				},
+			},
+			ignoreResponseError: true,
+		});
+
+		expect(res.status).toBe(400);
+	});
+
+	it('refuses a Screen whose derived selection follows a relationship that cannot yield its kind', async () => {
+		const res = await $fetchRaw(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: {
+				name: 'Broadcast Graphics bind-bad-derivation',
+				slug: 'bind-bad-derivation',
+				currentMode: 'broadcast-graphics',
+				modeConfigs: {
+					'broadcast-graphics': {
+						graphics: graphicWith(
+							[NAME],
+							[
+								PLAYER_SOURCE,
+								// A Player has no `player1`: nothing an operator could ever fix.
+								{ key: 'p1', label: 'Player 1', kind: 'player', from: { sourceKey: 'player', relation: 'player1' } },
+							],
+							[NAME_BINDING],
+						),
+					},
+				},
+			},
+			ignoreResponseError: true,
+		});
+
+		expect(res.status).toBe(400);
+	});
+});

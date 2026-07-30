@@ -356,11 +356,48 @@ export const GRAPHIC_SOURCE_SELECTION_KIND_VALUES = [
 
 export type GraphicSourceSelectionKind = typeof GRAPHIC_SOURCE_SELECTION_KIND_VALUES[number];
 
-/** A named, single-entity Event Data selection owned by a placed Broadcast Graphic. */
+/**
+ * The fixed relationships one Graphic Source Selection may follow from another.
+ *
+ * A Graphic Source Selection resolves the current Event, an operator selection, or
+ * a fixed relationship from another selection — and this is the closed set of those
+ * relationships. It is deliberately a named vocabulary rather than a path
+ * expression: an operator picks a Match once and the two Players either side of it
+ * resolve, without anyone authoring a query.
+ */
+export const GRAPHIC_SOURCE_RELATION_VALUES = [
+	'player1',
+	'player2',
+	'match',
+	'round',
+	'phase',
+	'archetype',
+	'commentator1',
+	'commentator2',
+] as const;
+
+export type GraphicSourceRelation = typeof GRAPHIC_SOURCE_RELATION_VALUES[number];
+
+/** One Graphic Source Selection derived from another rather than picked. */
+export interface GraphicSourceDerivation {
+	/** The Graphic Source Selection this one follows. */
+	sourceKey: string;
+	relation: GraphicSourceRelation;
+}
+
+/**
+ * A named, single-entity Event Data selection owned by a placed Broadcast Graphic.
+ *
+ * `from` is what makes it not a collection query in the one place that would be
+ * tempting: a Player either side of a Match is reached by a fixed relationship
+ * from the Match the operator already picked, and resolves from that Match's
+ * production snapshot rather than from current Event Data.
+ */
 export interface GraphicSourceSelectionDeclaration {
 	key: string;
 	label: string;
 	kind: GraphicSourceSelectionKind;
+	from?: GraphicSourceDerivation;
 }
 
 /**
