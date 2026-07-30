@@ -1,13 +1,10 @@
-import type { BroadcastGraphicsCommand } from '~~/shared/types/broadcastGraphicsSession';
+import type { BroadcastGraphicsCommand } from '~~/shared/types/broadcastGraphicsLiveSession';
 import { z } from 'zod';
-import { BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES } from '~~/shared/modules/broadcast-graphics-session';
+import { BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES } from '~~/shared/modules/broadcast-graphics-live-session';
+import { screenParamsSchema } from './screen';
 
-export const broadcastGraphicsScreenParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
-	screenId: z.coerce.number().int().positive(),
-});
-
-export const broadcastGraphicsSessionParamsSchema = broadcastGraphicsScreenParamsSchema.extend({
+/** A playout route names the epoch as well as the Screen that owns it. */
+export const broadcastGraphicsLiveSessionParamsSchema = screenParamsSchema.extend({
 	sessionId: z.coerce.number().int().positive(),
 });
 
@@ -25,5 +22,4 @@ export const broadcastGraphicsCommandSchema = z.object({
 	}).strict(),
 }).strict() satisfies z.ZodType<BroadcastGraphicsCommand>;
 
-export type BroadcastGraphicsScreenParams = z.infer<typeof broadcastGraphicsScreenParamsSchema>;
-export type BroadcastGraphicsSessionParams = z.infer<typeof broadcastGraphicsSessionParamsSchema>;
+export type BroadcastGraphicsLiveSessionParams = z.infer<typeof broadcastGraphicsLiveSessionParamsSchema>;

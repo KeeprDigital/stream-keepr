@@ -1,8 +1,8 @@
-import { broadcastGraphicsSessionModule } from '~~/server/modules/broadcast-graphics-session';
+import { broadcastGraphicsLiveSessionModule } from '~~/server/modules/broadcast-graphics-live-session';
 import {
 	broadcastGraphicsCommandSchema,
-	broadcastGraphicsSessionParamsSchema,
-} from '~~/server/schemas/api/broadcastGraphicsSession';
+	broadcastGraphicsLiveSessionParamsSchema,
+} from '~~/server/schemas/api/broadcastGraphicsLiveSession';
 import { getOriginConnectionId } from '~~/server/utils/ably';
 
 /**
@@ -15,11 +15,11 @@ import { getOriginConnectionId } from '~~/server/utils/ably';
 export default defineEventHandler(async (event) => {
 	const { id, screenId, sessionId } = await getValidatedRouterParams(
 		event,
-		broadcastGraphicsSessionParamsSchema.parse,
+		broadcastGraphicsLiveSessionParamsSchema.parse,
 	);
 	const command = await readValidatedBody(event, broadcastGraphicsCommandSchema.parse);
 
-	return await broadcastGraphicsSessionModule().applyCommand({
+	return await broadcastGraphicsLiveSessionModule().applyCommand({
 		eventId: id,
 		screenId,
 		sessionId,

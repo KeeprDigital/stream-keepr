@@ -6,9 +6,9 @@ interface Options {
 
 export function createBroadcastGraphicsRealtimeHandlers({ accept }: Options) {
 	return {
-		'broadcastGraphicsSession:commandApplied': accept(
-			'broadcastGraphicsSession:commandApplied',
-			data => useBroadcastGraphicsSessionStore().applyRemoteCommand(data),
+		'broadcastGraphicsLiveSession:commandApplied': accept(
+			'broadcastGraphicsLiveSession:commandApplied',
+			data => useBroadcastGraphicsLiveSessionStore().applyRemoteCommand(data),
 		),
 	};
 }

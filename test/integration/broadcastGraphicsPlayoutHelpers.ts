@@ -2,8 +2,8 @@ import type { ScreenResponse } from '~~/shared/api';
 import type {
 	BroadcastGraphicsCommand,
 	BroadcastGraphicsCommandResult,
-	BroadcastGraphicsSessionResponse,
-} from '~~/shared/types/broadcastGraphicsSession';
+	BroadcastGraphicsLiveSessionResponse,
+} from '~~/shared/types/broadcastGraphicsLiveSession';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { $fetch } from '@nuxt/test-utils/e2e';
@@ -65,12 +65,12 @@ export async function setScreenMode(
 	});
 }
 
-export async function getBroadcastGraphicsSession(
+export async function getBroadcastGraphicsLiveSession(
 	eventId: number,
 	screenId: number,
-): Promise<BroadcastGraphicsSessionResponse> {
-	return await $fetch<BroadcastGraphicsSessionResponse>(
-		`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/session`,
+): Promise<BroadcastGraphicsLiveSessionResponse> {
+	return await $fetch<BroadcastGraphicsLiveSessionResponse>(
+		`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/live-session`,
 	);
 }
 
@@ -81,7 +81,7 @@ export async function sendBroadcastGraphicsCommand(
 	command: BroadcastGraphicsCommand,
 ): Promise<BroadcastGraphicsCommandResult> {
 	return await $fetch<BroadcastGraphicsCommandResult>(
-		`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/sessions/${sessionId}/commands`,
+		`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/live-sessions/${sessionId}/commands`,
 		{ method: 'POST', body: command },
 	);
 }
@@ -92,18 +92,18 @@ export async function createPlayoutHarness(
 	graphicIds: string[],
 ): Promise<{
 	screen: ScreenResponse;
-	session: () => BroadcastGraphicsSessionResponse;
-	reload: () => Promise<BroadcastGraphicsSessionResponse>;
+	session: () => BroadcastGraphicsLiveSessionResponse;
+	reload: () => Promise<BroadcastGraphicsLiveSessionResponse>;
 	send: (command: BroadcastGraphicsCommand) => Promise<BroadcastGraphicsCommandResult>;
 }> {
 	const screen = await createBroadcastGraphicsScreen(eventId, slug, graphicIds.map(integrationBroadcastGraphic));
-	let current = await getBroadcastGraphicsSession(eventId, screen.id);
+	let current = await getBroadcastGraphicsLiveSession(eventId, screen.id);
 
 	return {
 		screen,
 		session: () => current,
 		reload: async () => {
-			current = await getBroadcastGraphicsSession(eventId, screen.id);
+			current = await getBroadcastGraphicsLiveSession(eventId, screen.id);
 			return current;
 		},
 		send: async (command) => {

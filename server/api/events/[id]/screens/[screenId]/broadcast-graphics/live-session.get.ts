@@ -1,5 +1,5 @@
-import { broadcastGraphicsSessionModule } from '~~/server/modules/broadcast-graphics-session';
-import { broadcastGraphicsScreenParamsSchema } from '~~/server/schemas/api/broadcastGraphicsSession';
+import { broadcastGraphicsLiveSessionModule } from '~~/server/modules/broadcast-graphics-live-session';
+import { screenParamsSchema } from '~~/server/schemas/api/screen';
 
 /**
  * The authoritative Broadcast Graphics Live Session snapshot.
@@ -8,7 +8,7 @@ import { broadcastGraphicsScreenParamsSchema } from '~~/server/schemas/api/broad
  * Realtime messages only announce that this snapshot has moved on.
  */
 export default defineEventHandler(async (event) => {
-	const { id, screenId } = await getValidatedRouterParams(event, broadcastGraphicsScreenParamsSchema.parse);
+	const { id, screenId } = await getValidatedRouterParams(event, screenParamsSchema.parse);
 
-	return await broadcastGraphicsSessionModule().loadSession(id, screenId);
+	return await broadcastGraphicsLiveSessionModule().loadSession(id, screenId);
 });

@@ -22,7 +22,7 @@ import {
 export function useBroadcastGraphicsModeData() {
 	const { eventId, isPreview, screen } = useScreenContext();
 	const storedConfig = useScreenModeConfig('broadcast-graphics');
-	const sessionStore = useBroadcastGraphicsSessionStore();
+	const sessionStore = useBroadcastGraphicsLiveSessionStore();
 	const previewState = ref<GraphicsPreviewState | null>(null);
 
 	const graphics = computed<readonly BroadcastGraphicConfig[]>(() =>

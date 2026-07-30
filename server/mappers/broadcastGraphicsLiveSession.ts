@@ -1,9 +1,9 @@
-import type { DbBroadcastGraphicsSession } from '~~/server/db/schema';
-import type { BroadcastGraphicsSessionResponse } from '~~/shared/types/broadcastGraphicsSession';
+import type { DbBroadcastGraphicsLiveSession } from '~~/server/db/schema';
+import type { BroadcastGraphicsLiveSessionResponse } from '~~/shared/types/broadcastGraphicsLiveSession';
 import { mapTimestamps } from '~~/server/utils/mapTimestamps';
 
-export function mapBroadcastGraphicsSessionToResponse(
-	session: DbBroadcastGraphicsSession,
-): BroadcastGraphicsSessionResponse {
+export function mapBroadcastGraphicsLiveSessionToResponse(
+	session: DbBroadcastGraphicsLiveSession,
+): BroadcastGraphicsLiveSessionResponse {
 	return mapTimestamps(session);
 }

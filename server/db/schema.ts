@@ -1,7 +1,7 @@
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type { PlayerSlotData } from '~~/shared/api';
-import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-session';
-import type { BroadcastGraphicsSessionStatus } from '~~/shared/types/broadcastGraphicsSession';
+import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
+import type { BroadcastGraphicsLiveSessionStatus } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type { FeatureMatchSessionStatus, FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { PlayerGameData } from '~~/shared/types/game';
@@ -10,7 +10,7 @@ import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
 import { relations, sql } from 'drizzle-orm';
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
-import { BROADCAST_GRAPHICS_SESSION_STATUS_VALUES } from '~~/shared/types/broadcastGraphicsSession';
+import { BROADCAST_GRAPHICS_LIVE_SESSION_STATUS_VALUES } from '~~/shared/types/broadcastGraphicsLiveSession';
 /* ENUMS — imported from shared, re-exported for backward compatibility */
 import {
 	CLOCK_TYPE_VALUES,
@@ -383,7 +383,7 @@ export const featureMatchSessions = sqliteTable('feature_match_sessions', {
  * Only one epoch is active per Screen. An ended epoch is retained rather than
  * deleted so a stale retry from it can be recognised and rejected.
  */
-export const broadcastGraphicsSessions = sqliteTable('broadcast_graphics_sessions', {
+export const broadcastGraphicsLiveSessions = sqliteTable('broadcast_graphics_live_sessions', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	eventId: integer('event_id')
 		.references(() => events.id, { onDelete: 'cascade' })
@@ -393,8 +393,8 @@ export const broadcastGraphicsSessions = sqliteTable('broadcast_graphics_session
 		.references((): AnySQLiteColumn => screens.id, { onDelete: 'cascade' })
 		.notNull(),
 
-	status: text('status', { enum: BROADCAST_GRAPHICS_SESSION_STATUS_VALUES })
-		.$type<BroadcastGraphicsSessionStatus>()
+	status: text('status', { enum: BROADCAST_GRAPHICS_LIVE_SESSION_STATUS_VALUES })
+		.$type<BroadcastGraphicsLiveSessionStatus>()
 		.notNull()
 		.default('active'),
 	currentState: text('current_state', { mode: 'json' }).$type<BroadcastGraphicsLiveState>().notNull(),
@@ -403,9 +403,9 @@ export const broadcastGraphicsSessions = sqliteTable('broadcast_graphics_session
 
 	...timestamps,
 }, table => [
-	index('broadcast_graphics_sessions_event_id_idx').on(table.eventId),
-	index('broadcast_graphics_sessions_screen_id_idx').on(table.screenId),
-	uniqueIndex('broadcast_graphics_sessions_active_screen_idx').on(table.screenId).where(sql`${table.status} = 'active'`),
+	index('broadcast_graphics_live_sessions_event_id_idx').on(table.eventId),
+	index('broadcast_graphics_live_sessions_screen_id_idx').on(table.screenId),
+	uniqueIndex('broadcast_graphics_live_sessions_active_screen_idx').on(table.screenId).where(sql`${table.status} = 'active'`),
 ]);
 
 /**
@@ -815,13 +815,13 @@ export const featureMatchSessionsRelations = relations(featureMatchSessions, ({ 
 	}),
 }));
 
-export const broadcastGraphicsSessionsRelations = relations(broadcastGraphicsSessions, ({ one }) => ({
+export const broadcastGraphicsLiveSessionsRelations = relations(broadcastGraphicsLiveSessions, ({ one }) => ({
 	event: one(events, {
-		fields: [broadcastGraphicsSessions.eventId],
+		fields: [broadcastGraphicsLiveSessions.eventId],
 		references: [events.id],
 	}),
 	screen: one(screens, {
-		fields: [broadcastGraphicsSessions.screenId],
+		fields: [broadcastGraphicsLiveSessions.screenId],
 		references: [screens.id],
 	}),
 }));
@@ -924,7 +924,7 @@ export const screensRelations = relations(screens, ({ one, many }) => ({
 		fields: [screens.eventId],
 		references: [events.id],
 	}),
-	broadcastGraphicsSessions: many(broadcastGraphicsSessions),
+	broadcastGraphicsLiveSessions: many(broadcastGraphicsLiveSessions),
 }));
 
 /* DB TYPES */
@@ -948,8 +948,8 @@ export type DbFeatureMatchSlot = typeof featureMatchSlots.$inferSelect;
 export type DbFeatureMatchSlotInsert = typeof featureMatchSlots.$inferInsert;
 export type DbFeatureMatchSession = typeof featureMatchSessions.$inferSelect;
 export type DbFeatureMatchSessionInsert = typeof featureMatchSessions.$inferInsert;
-export type DbBroadcastGraphicsSession = typeof broadcastGraphicsSessions.$inferSelect;
-export type DbBroadcastGraphicsSessionInsert = typeof broadcastGraphicsSessions.$inferInsert;
+export type DbBroadcastGraphicsLiveSession = typeof broadcastGraphicsLiveSessions.$inferSelect;
+export type DbBroadcastGraphicsLiveSessionInsert = typeof broadcastGraphicsLiveSessions.$inferInsert;
 export type DbLiveStateCommandReceipt = typeof liveStateCommandReceipts.$inferSelect;
 export type DbLiveStateCommandReceiptInsert = typeof liveStateCommandReceipts.$inferInsert;
 export type DbScreen = typeof screens.$inferSelect;

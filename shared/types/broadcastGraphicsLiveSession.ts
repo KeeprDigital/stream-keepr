@@ -2,23 +2,23 @@ import type {
 	BroadcastGraphicsCommandType,
 	BroadcastGraphicsLiveState,
 	BroadcastGraphicsPlayoutPayload,
-} from '~~/shared/modules/broadcast-graphics-session';
+} from '~~/shared/modules/broadcast-graphics-live-session';
 
 /**
  * A Broadcast Graphics Live Session is either the Screen's current playout epoch
  * or a closed one. An ended epoch keeps its row so a stale retry can be answered
  * with a rejection rather than silently affecting a later show.
  */
-export const BROADCAST_GRAPHICS_SESSION_STATUS_VALUES = ['active', 'ended'] as const;
+export const BROADCAST_GRAPHICS_LIVE_SESSION_STATUS_VALUES = ['active', 'ended'] as const;
 
-export type BroadcastGraphicsSessionStatus = typeof BROADCAST_GRAPHICS_SESSION_STATUS_VALUES[number];
+export type BroadcastGraphicsLiveSessionStatus = typeof BROADCAST_GRAPHICS_LIVE_SESSION_STATUS_VALUES[number];
 
 /** The authoritative snapshot every Live Control and Screen Output reloads. */
-export interface BroadcastGraphicsSessionResponse {
+export interface BroadcastGraphicsLiveSessionResponse {
 	id: number;
 	eventId: number;
 	screenId: number;
-	status: BroadcastGraphicsSessionStatus;
+	status: BroadcastGraphicsLiveSessionStatus;
 	currentState: BroadcastGraphicsLiveState;
 	sequence: number;
 	endedAt: Date | null;
@@ -50,5 +50,5 @@ export interface BroadcastGraphicsCommandAppliedPayload {
 }
 
 export interface BroadcastGraphicsCommandResult extends BroadcastGraphicsCommandAppliedPayload {
-	session: BroadcastGraphicsSessionResponse;
+	session: BroadcastGraphicsLiveSessionResponse;
 }

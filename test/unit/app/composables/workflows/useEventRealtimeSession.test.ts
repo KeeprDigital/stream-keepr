@@ -110,7 +110,7 @@ describe('useEventRealtimeSession', () => {
 	const featureMatchStateStore = {
 		applyRemoteSessionEvent: vi.fn(),
 	};
-	const broadcastGraphicsSessionStore = {
+	const broadcastGraphicsLiveSessionStore = {
 		applyRemoteCommand: vi.fn(),
 	};
 	const screenStore = {
@@ -169,7 +169,7 @@ describe('useEventRealtimeSession', () => {
 		vi.stubGlobal('useMatchStore', () => matchStore);
 		vi.stubGlobal('useFeatureMatchStore', () => featureMatchStore);
 		vi.stubGlobal('useFeatureMatchStateStore', () => featureMatchStateStore);
-		vi.stubGlobal('useBroadcastGraphicsSessionStore', () => broadcastGraphicsSessionStore);
+		vi.stubGlobal('useBroadcastGraphicsLiveSessionStore', () => broadcastGraphicsLiveSessionStore);
 		vi.stubGlobal('useScreenStore', () => screenStore);
 		vi.stubGlobal('useCardStore', () => cardStore);
 		vi.stubGlobal('navigateTo', mockNavigateTo);
@@ -250,7 +250,7 @@ describe('useEventRealtimeSession', () => {
 			'featureMatch:deleted': featureMatchStore.applyRemoteDeleted,
 			'featureMatch:reordered': featureMatchStore.applyRemoteReordered,
 			'featureMatchSession:eventApplied': featureMatchStateStore.applyRemoteSessionEvent,
-			'broadcastGraphicsSession:commandApplied': broadcastGraphicsSessionStore.applyRemoteCommand,
+			'broadcastGraphicsLiveSession:commandApplied': broadcastGraphicsLiveSessionStore.applyRemoteCommand,
 			'screen:created': screenStore.applyRemoteCreated,
 			'screen:updated': screenStore.applyRemoteUpdated,
 			'screen:deleted': screenStore.applyRemoteDeleted,

@@ -2,9 +2,9 @@ import type { DbScreen } from '~~/server/db/schema';
 import type {
 	BroadcastGraphicsCommand,
 	BroadcastGraphicsCommandResult,
-	BroadcastGraphicsSessionResponse,
-} from '~~/shared/types/broadcastGraphicsSession';
-import { mapBroadcastGraphicsSessionToResponse } from '~~/server/mappers/broadcastGraphicsSession';
+	BroadcastGraphicsLiveSessionResponse,
+} from '~~/shared/types/broadcastGraphicsLiveSession';
+import { mapBroadcastGraphicsLiveSessionToResponse } from '~~/server/mappers/broadcastGraphicsLiveSession';
 import { broadcastGraphicsStateService } from '~~/server/services/broadcastGraphicsState';
 import { screenService } from '~~/server/services/screen';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
@@ -29,7 +29,7 @@ interface ApplyCommandParams {
  * port, because the port's aggregate is exactly the row its projection writes
  * back — the Screen is a second entity the sequenced aggregate does not contain.
  */
-export function broadcastGraphicsSessionModule() {
+export function broadcastGraphicsLiveSessionModule() {
 	const state = broadcastGraphicsStateService();
 	const screens = screenService();
 
@@ -69,10 +69,10 @@ export function broadcastGraphicsSessionModule() {
 	const loadSession = async (
 		eventId: number,
 		screenId: number,
-	): Promise<BroadcastGraphicsSessionResponse> => {
+	): Promise<BroadcastGraphicsLiveSessionResponse> => {
 		await requireBroadcastGraphicsScreen(eventId, screenId);
 		const session = await state.ensureActiveSession(screenId, eventId);
-		return mapBroadcastGraphicsSessionToResponse(session);
+		return mapBroadcastGraphicsLiveSessionToResponse(session);
 	};
 
 	const applyCommand = async ({
@@ -106,6 +106,5 @@ export function broadcastGraphicsSessionModule() {
 		loadSession,
 		applyCommand,
 		endSessionsForScreen: state.endSessionsForScreen,
-		buildEndSessionsForScreenQueries: state.buildEndSessionsForScreenQueries,
 	};
 }

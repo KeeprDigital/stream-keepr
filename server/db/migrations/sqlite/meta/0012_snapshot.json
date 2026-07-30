@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "77ccb11a-817b-4966-b36d-88b58707013a",
+  "id": "900b7918-6b6d-46d0-8484-81eef907e799",
   "prevId": "76bb1ad9-7838-4890-a9ea-aeb72d5bc909",
   "tables": {
     "archetype_cards": {
@@ -177,8 +177,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "broadcast_graphics_sessions": {
-      "name": "broadcast_graphics_sessions",
+    "broadcast_graphics_live_sessions": {
+      "name": "broadcast_graphics_live_sessions",
       "columns": {
         "id": {
           "name": "id",
@@ -249,33 +249,33 @@
         }
       },
       "indexes": {
-        "broadcast_graphics_sessions_event_id_idx": {
-          "name": "broadcast_graphics_sessions_event_id_idx",
+        "broadcast_graphics_live_sessions_event_id_idx": {
+          "name": "broadcast_graphics_live_sessions_event_id_idx",
           "columns": [
             "event_id"
           ],
           "isUnique": false
         },
-        "broadcast_graphics_sessions_screen_id_idx": {
-          "name": "broadcast_graphics_sessions_screen_id_idx",
+        "broadcast_graphics_live_sessions_screen_id_idx": {
+          "name": "broadcast_graphics_live_sessions_screen_id_idx",
           "columns": [
             "screen_id"
           ],
           "isUnique": false
         },
-        "broadcast_graphics_sessions_active_screen_idx": {
-          "name": "broadcast_graphics_sessions_active_screen_idx",
+        "broadcast_graphics_live_sessions_active_screen_idx": {
+          "name": "broadcast_graphics_live_sessions_active_screen_idx",
           "columns": [
             "screen_id"
           ],
           "isUnique": true,
-          "where": "\"broadcast_graphics_sessions\".\"status\" = 'active'"
+          "where": "\"broadcast_graphics_live_sessions\".\"status\" = 'active'"
         }
       },
       "foreignKeys": {
-        "broadcast_graphics_sessions_event_id_events_id_fk": {
-          "name": "broadcast_graphics_sessions_event_id_events_id_fk",
-          "tableFrom": "broadcast_graphics_sessions",
+        "broadcast_graphics_live_sessions_event_id_events_id_fk": {
+          "name": "broadcast_graphics_live_sessions_event_id_events_id_fk",
+          "tableFrom": "broadcast_graphics_live_sessions",
           "tableTo": "events",
           "columnsFrom": [
             "event_id"
@@ -286,9 +286,9 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "broadcast_graphics_sessions_screen_id_screens_id_fk": {
-          "name": "broadcast_graphics_sessions_screen_id_screens_id_fk",
-          "tableFrom": "broadcast_graphics_sessions",
+        "broadcast_graphics_live_sessions_screen_id_screens_id_fk": {
+          "name": "broadcast_graphics_live_sessions_screen_id_screens_id_fk",
+          "tableFrom": "broadcast_graphics_live_sessions",
           "tableTo": "screens",
           "columnsFrom": [
             "screen_id"

@@ -1,8 +1,8 @@
 import type {
 	BroadcastGraphicsCommand,
 	BroadcastGraphicsCommandResult,
-	BroadcastGraphicsSessionResponse,
-} from '~~/shared/types/broadcastGraphicsSession';
+	BroadcastGraphicsLiveSessionResponse,
+} from '~~/shared/types/broadcastGraphicsLiveSession';
 
 /**
  * HTTP Adapter for Broadcast Graphics Live Session routes.
@@ -10,15 +10,15 @@ import type {
  * Only route paths, methods, headers, and response shapes. Command construction
  * and the playout vocabulary live in the shared session module.
  */
-export function useBroadcastGraphicsSessionRepository() {
+export function useBroadcastGraphicsLiveSessionRepository() {
 	const apiHeaders = useApiHeaders();
 
 	const getSession = async (
 		eventId: number,
 		screenId: number,
-	): Promise<BroadcastGraphicsSessionResponse> => {
-		return await $fetch<BroadcastGraphicsSessionResponse>(
-			`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/session`,
+	): Promise<BroadcastGraphicsLiveSessionResponse> => {
+		return await $fetch<BroadcastGraphicsLiveSessionResponse>(
+			`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/live-session`,
 		);
 	};
 
@@ -29,7 +29,7 @@ export function useBroadcastGraphicsSessionRepository() {
 		command: BroadcastGraphicsCommand,
 	): Promise<BroadcastGraphicsCommandResult> => {
 		return await $fetch<BroadcastGraphicsCommandResult>(
-			`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/sessions/${sessionId}/commands`,
+			`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/live-sessions/${sessionId}/commands`,
 			{
 				method: 'POST',
 				body: command,
