@@ -1,4 +1,5 @@
-import type { BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, IdleModeConfig } from '~~/shared/types/screenConfig';
+import type { ScreenMode } from '~~/shared/types/enums';
+import type { BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, IdleModeConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { SCREEN_MODE_VALUES, screens } from '~~/server/db/schema';
@@ -65,6 +66,7 @@ import {
 } from '~~/shared/types/graphics';
 import {
 	FEATURE_MATCH_OVERLAY_ANCHOR_VALUES,
+	mergeScreenModeConfig,
 	normalizeFeatureMatchLayout,
 } from '~~/shared/types/screenConfig';
 
@@ -123,6 +125,23 @@ function createModeConfigPatchFieldSchema(schema: any): z.ZodTypeAny {
 	return schema.optional();
 }
 
+/**
+ * The schema one mode's PATCH body is validated against.
+ *
+ * Rebuilt from the full schema's shape, so it carries every field's own bounds
+ * and accepts `null` as the "delete this key" sentinel. It deliberately does
+ * **not** carry the full schema's object-level checks: a patch is a fragment, and
+ * a whole-object rule cannot be evaluated against a fragment — the byte total in
+ * particular is a property of the *stored* configuration, not of an edit to it.
+ *
+ * That used to make object-level rules silently unenforced on this path, which is
+ * the defect in #85. What closes it is `parseModeConfigPatchResult`: the
+ * configuration a patch would produce is validated against `modeConfigsMapSchema`
+ * — the same authoritative schema Screen create and full update use — before
+ * anything is written. So dropping the checks here is safe *because* they are
+ * applied there, and any object-level rule added in future is enforced on this
+ * path automatically, with nobody needing to remember.
+ */
 function createModeConfigPatchSchema<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
 	const patchShape = Object.fromEntries(
 		Object.entries(schema.shape).map(([key, fieldSchema]) => [key, createModeConfigPatchFieldSchema(fieldSchema as any)]),
@@ -1137,15 +1156,110 @@ export const modeConfigPatchSchemaMap = {
 	'player-history': createModeConfigPatchSchema(playerHistoryModeConfigSchema),
 } as const;
 
-// Full modeConfigs map schema (all keys optional)
-export const modeConfigsMapSchema = z
-	.object(modeConfigSchemaMap)
-	.strict()
-	.partial()
-	.refine(
+/**
+ * The rules that are properties of the whole stored mode configuration rather than
+ * of any one mode.
+ *
+ * Written once and applied to both schemas below, so the two write paths cannot
+ * drift apart: a rule added here is enforced on Screen create, on full update, and
+ * on every mode-configuration PATCH, without being restated anywhere.
+ */
+function withModeConfigsMapRules<T extends z.ZodTypeAny>(schema: T) {
+	return schema.refine(
 		value => jsonByteLength(value) <= MAX_MODE_CONFIGS_BYTES,
 		`Mode configuration must not exceed ${MAX_MODE_CONFIGS_BYTES} bytes`,
 	);
+}
+
+// Full modeConfigs map schema (all keys optional)
+export const modeConfigsMapSchema = withModeConfigsMapRules(
+	z.object(modeConfigSchemaMap).strict().partial(),
+);
+
+/**
+ * The whole-map rules alone, for a stored map whose individual modes may be partial.
+ *
+ * A mode configuration is legitimately incomplete in storage: PATCH writes
+ * fragments and readers complete them from `getDefaultConfigForMode`, so a Screen
+ * can hold `{ 'feature-match-overlay': { layout } }` with no `presetId` and be
+ * entirely valid. Re-checking each mode against its full schema would therefore
+ * reject ordinary edits, which is why this deliberately checks the map's own rules
+ * and leaves each mode's shape to the patch schema that validated the fragment.
+ */
+const storedModeConfigsMapSchema = withModeConfigsMapRules(z.record(z.string(), z.unknown()));
+
+/**
+ * Object-level checks on a per-mode schema cannot reach the PATCH path, so having
+ * one must fail loudly rather than be silently unenforced.
+ *
+ * This is the other half of #85. The byte total lives on the *map*, so it can be
+ * applied to a merged result; a rule on one mode's own object cannot, because the
+ * stored config it would judge is legitimately partial and completing it here would
+ * invent values the operator never wrote. Rather than let such a rule be quietly
+ * dropped — the exact defect #85 reports — this refuses to boot and says what to do.
+ *
+ * Nothing trips it today: every current cross-field constraint deliberately lives
+ * on an array *field* (see the Graphic Item caps), which survives the patch
+ * derivation. If you are reading this because it threw, the options are to move the
+ * rule onto a field, or to extend `parseModeConfigPatchResult` to evaluate it
+ * against a defaults-completed view of that mode.
+ */
+export function modeConfigSchemasWithObjectLevelChecks(
+	schemas: Record<string, z.ZodTypeAny>,
+): string[] {
+	// In Zod 4 `.refine()` returns a ZodObject and records the check on the schema's
+	// own definition, which is why the shape rebuild loses it while the type still
+	// looks correct. Reading the checks back is therefore the only way to see one.
+	return Object.entries(schemas)
+		.filter(([, schema]) => ((schema as unknown as { _zod?: { def?: { checks?: unknown[] } } })
+			._zod
+			?.def
+			?.checks
+			?.length ?? 0) > 0)
+		.map(([mode]) => mode);
+}
+
+function assertNoUnenforceableModeConfigRules(): void {
+	const offenders = modeConfigSchemasWithObjectLevelChecks(modeConfigSchemaMap);
+
+	if (offenders.length > 0) {
+		throw new Error(
+			`Mode config schemas carry object-level checks the PATCH path cannot enforce: ${offenders.join(', ')}. `
+			+ 'Move the constraint onto a field, or extend parseModeConfigPatchResult to evaluate it. See #85.',
+		);
+	}
+}
+
+assertNoUnenforceableModeConfigRules();
+
+/**
+ * The mode configuration a patch would produce, validated as a whole.
+ *
+ * This is what makes an object-level rule real on the editors' write path. The
+ * patch itself is validated field by field by `modeConfigPatchSchemaMap`; this
+ * then merges it exactly as the write will and checks the *result* against the
+ * whole-map rules, so the mode configuration byte total holds identically whether
+ * a Screen was configured in one write or built up one patch at a time.
+ *
+ * The whole map is checked rather than only the patched mode, because that is what
+ * the rule is about: the byte total is shared across all ten Screen Modes, so a
+ * patch to one mode can only be judged against what the others already occupy.
+ * Each mode's own shape is left to the patch schema that validated the fragment —
+ * see `storedModeConfigsMapSchema` for why re-checking it here would be wrong.
+ *
+ * It throws a `ZodError`, which the route's own error handling already turns into
+ * a 400 carrying the issues — the same shape the editors read a field-level
+ * failure from, so a whole-object failure needs no special client handling.
+ */
+export function parseModeConfigPatchResult(
+	currentConfigs: ModeConfigsMap | null | undefined,
+	mode: ScreenMode,
+	patch: Record<string, unknown>,
+): ModeConfigsMap {
+	return storedModeConfigsMapSchema.parse(
+		mergeScreenModeConfig(currentConfigs ?? {}, mode, patch),
+	) as ModeConfigsMap;
+}
 
 const boundedScreenConfigSchema = screenConfigSchema.refine(
 	value => jsonByteLength(value) <= MAX_SCREEN_CONFIG_BYTES,
