@@ -15,6 +15,7 @@ import type {
 	GraphicsDiscrepancyRecord,
 } from './reconciliation';
 import { GRAPHICS_DISCREPANCY_KINDS } from '~~/shared/utils/graphicsAssetReconciliation';
+import { boundJsonArray, valuesFromJsonArray } from './catalogue-sql';
 
 interface ExpectedContentRow {
 	digest: string;
@@ -261,8 +262,8 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 				return new Map();
 			const result = await database.prepare(`
 				${EXPECTED_CONTENT_SELECT}
-				WHERE contents.digest IN (${input.digests.map(() => '?').join(', ')})
-			`).bind(...input.digests).all<ExpectedContentRow>();
+				WHERE contents.digest IN ${valuesFromJsonArray()}
+			`).bind(boundJsonArray(input.digests)).all<ExpectedContentRow>();
 			if (!result.success)
 				throw new Error('Expected Graphic Asset Content could not be read');
 			return new Map(result.results.map(row => [row.digest, expectedContentFromRow(row)]));
@@ -270,7 +271,6 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 		async listContentUsageForDigests(input) {
 			if (input.digests.length === 0)
 				return new Map();
-			const placeholders = input.digests.map(() => '?').join(', ');
 			const result = await database.prepare(`
 				SELECT revision.content_digest AS digest, revision.asset_id, asset.name,
 					revision.id AS revision_id, revision.revision_number, asset.kind,
@@ -281,7 +281,7 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 					) AS reference_count
 				FROM graphic_asset_revisions revision
 				JOIN graphic_assets asset ON asset.id = revision.asset_id
-				WHERE revision.content_digest IN (${placeholders})
+				WHERE revision.content_digest IN ${valuesFromJsonArray('?1')}
 				UNION
 				SELECT derivative.content_digest AS digest, source.asset_id, asset.name,
 					source.id AS revision_id, source.revision_number, asset.kind,
@@ -293,9 +293,9 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 				FROM graphics_derivatives derivative
 				JOIN graphic_asset_revisions source ON source.id = derivative.source_revision_id
 				JOIN graphic_assets asset ON asset.id = source.asset_id
-				WHERE derivative.content_digest IN (${placeholders})
+				WHERE derivative.content_digest IN ${valuesFromJsonArray('?1')}
 				ORDER BY name, revision_number
-			`).bind(...input.digests, ...input.digests).all<UsageRow & { digest: string }>();
+			`).bind(boundJsonArray(input.digests)).all<UsageRow & { digest: string }>();
 			if (!result.success)
 				throw new Error('Graphic Asset Content usage could not be read');
 			const usage = new Map<string, GraphicsDiscrepancyUsage[]>();
@@ -311,8 +311,8 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 				return new Map();
 			const result = await database.prepare(`
 				SELECT digest, quarantined_at, delete_after FROM graphics_content_quarantine
-				WHERE digest IN (${input.digests.map(() => '?').join(', ')})
-			`).bind(...input.digests).all<{
+				WHERE digest IN ${valuesFromJsonArray()}
+			`).bind(boundJsonArray(input.digests)).all<{
 				digest: string;
 				quarantined_at: number;
 				delete_after: number;
@@ -370,17 +370,24 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 		async filterAccountedDigests(input) {
 			if (input.digests.length === 0)
 				return new Set();
-			const placeholders = input.digests.map(() => '?').join(', ');
 			// A digest is accounted for when the catalogue records it, an ingestion
 			// operation has claimed it, or it is already quarantined. Anything else
 			// in the byte store is bytes the library never asked for.
+			//
+			// One bound JSON array, referenced three times. Expanding the list into
+			// placeholders would bind it three times over and hit D1's
+			// hundred-parameter ceiling at thirty-four digests — a third of one
+			// scan page.
 			const result = await database.prepare(`
-				SELECT digest FROM graphic_asset_contents WHERE digest IN (${placeholders})
+				SELECT digest FROM graphic_asset_contents
+				WHERE digest IN ${valuesFromJsonArray('?1')}
 				UNION
-				SELECT digest FROM graphics_canonical_write_candidates WHERE digest IN (${placeholders})
+				SELECT digest FROM graphics_canonical_write_candidates
+				WHERE digest IN ${valuesFromJsonArray('?1')}
 				UNION
-				SELECT digest FROM graphics_content_quarantine WHERE digest IN (${placeholders})
-			`).bind(...input.digests, ...input.digests, ...input.digests).all<{ digest: string }>();
+				SELECT digest FROM graphics_content_quarantine
+				WHERE digest IN ${valuesFromJsonArray('?1')}
+			`).bind(boundJsonArray(input.digests)).all<{ digest: string }>();
 			if (!result.success)
 				throw new Error('Accounted Graphic Asset Content digests could not be read');
 			return new Set(result.results.map(row => row.digest));

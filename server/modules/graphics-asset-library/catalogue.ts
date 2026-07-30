@@ -24,6 +24,7 @@ import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetComp
 import { GRAPHICS_RETENTION_GUARANTEES } from '~~/shared/utils/graphicsAssetRetention';
 import { createD1GraphicsAssetReconciliationCatalogue } from './catalogue-reconciliation';
 import { createD1GraphicsAssetRetentionCatalogue } from './catalogue-retention';
+import { boundJsonArray, valuesFromJsonArray } from './catalogue-sql';
 import { GraphicsAssetLibraryError } from './errors';
 import {
 	graphicsMultipartCompletedByteLength,
@@ -317,8 +318,8 @@ function releaseContentQuarantineStatement(
 ) {
 	return database.prepare(`
 		DELETE FROM graphics_content_quarantine
-		WHERE digest IN (${digests.map(() => '?').join(', ')})
-	`).bind(...digests);
+		WHERE digest IN ${valuesFromJsonArray()}
+	`).bind(boundJsonArray(digests));
 }
 
 function updateOperationStatement(

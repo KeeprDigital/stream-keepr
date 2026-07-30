@@ -378,10 +378,12 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 	/**
 	 * The actions valid in one discrepancy's exact state.
 	 *
-	 * An isolated critical integrity incident offers only a recheck: repairing
-	 * it would mean overwriting bytes or mutating metadata, which is precisely
-	 * what must not happen. An unexpected object offers only a recheck too,
-	 * because adopting it would invent catalogue state from a byte observation.
+	 * Nothing that writes is ever offered on an isolated critical integrity
+	 * incident: repairing one would mean overwriting bytes or mutating
+	 * metadata, which is precisely what must not happen. It is offered deep
+	 * verification, which writes nothing and is the only action that can settle
+	 * it. An unexpected object is offered only a recheck, because adopting it
+	 * would invent catalogue state from a byte observation.
 	 */
 	function validActions(
 		record: GraphicsDiscrepancyRecord,

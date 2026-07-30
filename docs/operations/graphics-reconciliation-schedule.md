@@ -148,6 +148,16 @@ anything.
 Bytes that hash to anything other than the digest owning their key are isolated
 as a critical integrity incident and left exactly where they are.
 
+**Racing the retention sweep.** Deep verification can succeed on a digest the
+retention path has concurrently claimed for byte deletion, so an operator can
+briefly be told the bytes are verified while they are being removed. The system
+converges correctly without intervention — the retention path rechecks
+reachability after deleting and records a `quarantine-deletion-conflict`, and
+the next reconciliation pass re-observes the content and reopens an
+unavailable-content incident — but the success message is momentarily ahead of
+the bytes. Treat a verification that is immediately followed by a fresh
+incident on the same content as this race rather than as a new fault.
+
 **Known limitation.** Deep verification is reachable only through an open
 discrepancy. Content the sweep considers healthy has no row to act on, so silent
 byte corruption behind agreeing metadata is detectable but not yet
