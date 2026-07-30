@@ -284,6 +284,25 @@ Each accepted Graphic Asset Revision records the profile and verified technical 
 A durable, reconnectable workflow through which the Graphics Asset Library receives a local upload, approved remote copy, file replacement, or Template Package and either publishes the complete result atomically or publishes nothing.
 Its provisional content is never discoverable or referenceable.
 
+**Template Package Preflight**:
+The complete inspection a received Template Package passes before anything may be installed from it, run as a Graphics Ingestion Operation over durably staged archive bytes.
+It proves archive safety and envelope limits, migrates a supported older schema deterministically in staging, revalidates every embedded source under the receiver's current Graphic Asset Compatibility Profile, regenerates the required Graphics Derivatives locally, and produces one Template Package Preflight Report.
+It only ever proposes: preflight never installs a Graphic Asset, revision, origin, reference, or Template.
+
+**Template Package Preflight Report**:
+The one immutable result of Template Package Preflight, carrying migrations, revalidation outcomes, compatibility profiles, naming and metadata differences, Template Package Mapping Proposals, quota impact, envelope limits, and every issue with a stable code and remediation.
+Errors terminate the operation permanently; warnings pause it exactly once for a confirmation bound to the report's Preflight Report Fingerprint.
+_Avoid_: Import preview, dry-run result
+
+**Preflight Report Fingerprint**:
+The immutable identity of one exact preflight proposal, covering the received archive bytes, the compatibility profiles the content was judged under, the proposed mappings, and the issues they carry — and deliberately not the clock.
+A confirmation is valid only for the fingerprint it names, so changed bytes, mappings, profiles, or proposals require a new report and a new confirmation, while a retry reaching an identical conclusion keeps the existing one.
+
+**Template Package Mapping Proposal**:
+How one packaged identity would become a local Graphic Asset, decided by provenance rather than by content alone.
+An exact Graphic Asset Origin match reuses the existing local revision untouched; a related source revision, a digest-only content match, or entirely new content each create a separate local Graphic Asset that reuses canonical bytes when the digest already exists.
+The same origin identity and revision carrying a different digest is an immutable-provenance conflict that rejects the complete package.
+
 **Graphics Derivative**:
 A generated thumbnail or preview artifact managed by the Graphics Asset Library as a dependant of one source Graphic Asset or graphics Template revision.
 It inherits its source's access and lifecycle and is never a discoverable or selectable Graphic Asset.
@@ -637,6 +656,10 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - A related packaged source revision or unrelated matching digest creates a separate local **Graphic Asset** while reusing identical **Graphic Asset Content**
 - The same packaged source identity and revision with a different digest is an integrity conflict that rejects the complete Template Package
 - A Template Package contains only **Graphic Assets** transitively required by its single graphics Template
+- **Template Package Preflight** rejects unsafe or traversing entry paths, links, case-colliding or duplicate paths, encrypted or compressed entries, nested archives, undeclared entries, missing declared entries, inconsistent sizes, and envelope-limit violations
+- **Template Package Preflight** migrates a supported older package schema deterministically in staging, and permanently rejects an unsupported future schema rather than guessing at it
+- A **Template Package Preflight Report** reports every blocking problem together, each with a stable code and remediation, rather than one problem at a time
+- Warnings pause a Template Package exactly once for a confirmation bound to its **Preflight Report Fingerprint**; changed bytes, mappings, compatibility profiles, or proposals require a new report
 - Template Package installation publishes every new asset, origin mapping, rewritten reference, and the graphics Template in one atomic operation
 - Replacing a **Graphic Asset** with its current content is a no-op; deliberately returning to older content creates a new revision backed by the existing **Graphic Asset Content**
 - A **Graphic Asset** may be associated with or referenced from more than one **Event**

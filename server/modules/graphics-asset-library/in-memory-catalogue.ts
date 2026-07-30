@@ -12,6 +12,7 @@ import type {
 	PublishGraphicAssetCatalogueInput,
 } from '.';
 import type { GraphicsAssetMultipartState } from './multipart';
+import type { TemplatePackagePreflightState } from './template-package-preflight';
 import {
 	DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES,
 	DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
@@ -75,12 +76,20 @@ export function createInMemoryGraphicsAssetCatalogue(
 		Map<string, number>
 	>();
 	const multipartStates = new Map<GraphicsIngestionOperationId, GraphicsAssetMultipartState>();
+	const packagePreflights = new Map<GraphicsIngestionOperationId, TemplatePackagePreflightState>();
 	const usage = options.usage ?? [];
 	let canonicalLimitBytes = options.canonicalLimitBytes ?? DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES;
 	let stagingLimitBytes = options.stagingLimitBytes ?? DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES;
 
 	function cloneOperation(operation: GraphicsIngestionOperation): GraphicsIngestionOperation {
 		const clone = structuredClone(operation);
+		// The preflight report and multipart transfer are derived state: the
+		// checkpoint that owns each is authoritative, so a stale copy carried on an
+		// operation being written back never survives the read.
+		const preflight = packagePreflights.get(operation.id);
+		clone.templatePackagePreflight = preflight
+			? structuredClone(preflight.report)
+			: undefined;
 		const multipart = multipartStates.get(operation.id);
 		if (!multipart)
 			return clone;
@@ -365,6 +374,63 @@ export function createInMemoryGraphicsAssetCatalogue(
 				updatedAt: input.updatedAt,
 			});
 			return true;
+		},
+		async getTemplatePackagePreflight(operationId, initiatedBy) {
+			const operation = operations.get(operationId);
+			if (operation?.initiatedBy !== initiatedBy || operation.source !== 'template-package')
+				return undefined;
+			const state = packagePreflights.get(operationId);
+			return state ? structuredClone(state) : undefined;
+		},
+		async updateTemplatePackagePreflight(input) {
+			const operation = operations.get(input.operationId);
+			if (
+				operation?.initiatedBy !== input.initiatedBy
+				|| operation.source !== 'template-package'
+				|| operation.stage === 'completed'
+				|| operation.stage === 'cancelled'
+			) {
+				return false;
+			}
+			packagePreflights.set(input.operationId, structuredClone(input.state));
+			return true;
+		},
+		async findTemplatePackageOriginCandidates(input) {
+			// This double has no Graphic Asset Origin storage, so it answers from
+			// local identities alone: a package exported from this installation
+			// names its revisions directly. Recording an origin belongs to Template
+			// Package installation, which is the only writer of that state.
+			const exactRevision = revisions.get(input.sourceRevisionId as GraphicAssetRevisionId);
+			const exactAsset = exactRevision?.assetId === input.sourceAssetId
+				? assets.get(exactRevision.assetId)
+				: undefined;
+			const relatedRevisionExists = [...revisions.entries()].some(
+				([revisionId, candidate]) =>
+					candidate.assetId === input.sourceAssetId
+					&& revisionId !== input.sourceRevisionId,
+			);
+			return {
+				exact: exactAsset && exactRevision
+					? {
+							reference: {
+								assetId: exactAsset.id,
+								revisionId: input.sourceRevisionId as GraphicAssetRevisionId,
+							},
+							digest: exactRevision.facts.sha256,
+							name: exactAsset.name,
+						}
+					: undefined,
+				relatedRevisionExists,
+			};
+		},
+		async findGraphicAssetByContentDigest(digest) {
+			const revision = [...revisions.entries()].find(
+				([, candidate]) => candidate.facts.sha256 === digest,
+			);
+			const asset = revision && assets.get(revision[1].assetId);
+			return asset
+				? { assetId: asset.id, revisionId: revision![0], name: asset.name }
+				: undefined;
 		},
 		async recordGraphicAssetMultipartCleanupComplete(operationId, initiatedBy) {
 			const operation = operations.get(operationId);

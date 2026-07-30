@@ -16,6 +16,7 @@ import type {
 } from '.';
 import type { GraphicsAssetMultipartState } from './multipart';
 import type { GraphicsAssetRetentionCatalogue } from './retention';
+import type { TemplatePackagePreflightState } from './template-package-preflight';
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
@@ -50,6 +51,7 @@ interface OperationRow {
 	declared_byte_length: number;
 	transferred_byte_length: number;
 	multipart_state: string | null;
+	package_preflight: string | null;
 	stage: GraphicsIngestionOperation['stage'];
 	capacity_outcome: string | null;
 	report: string | null;
@@ -111,6 +113,7 @@ function parseJson<T>(value: string | null): T | undefined {
 
 function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 	const multipart = parseJson<GraphicsAssetMultipartState>(row.multipart_state);
+	const preflight = parseJson<TemplatePackagePreflightState>(row.package_preflight);
 	const operation: GraphicsIngestionOperation = {
 		id: row.id as GraphicsIngestionOperationId,
 		idempotencyKey: row.idempotency_key,
@@ -128,6 +131,7 @@ function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 		stage: row.stage,
 		canonicalCapacityOutcome: parseJson(row.capacity_outcome),
 		report: parseJson(row.report),
+		templatePackagePreflight: preflight?.report,
 		result: parseJson(row.result),
 		failure: parseJson(row.failure),
 		createdAt: new Date(row.created_at).toISOString(),
@@ -157,6 +161,7 @@ function operationRowFromAsset(row: AssetRow): OperationRow {
 		declared_byte_length: row.declared_byte_length,
 		transferred_byte_length: row.transferred_byte_length,
 		multipart_state: null,
+		package_preflight: null,
 		stage: row.stage,
 		capacity_outcome: row.capacity_outcome,
 		report: row.report,
@@ -266,7 +271,8 @@ function operationSelect(where: string) {
 		SELECT id, idempotency_key, source, initiated_by, proposed_name,
 				source_file_name, declared_mime, browser_decode_evidence,
 			duplicate_content_policy, default_event_id, target_asset_id,
-			declared_byte_length, transferred_byte_length, multipart_state, stage, report, result,
+			declared_byte_length, transferred_byte_length, multipart_state, package_preflight,
+			stage, report, result,
 			capacity_outcome, failure, created_at, updated_at
 		FROM graphics_ingestion_operations
 		WHERE ${where}
@@ -938,6 +944,115 @@ export function createD1GraphicsAssetCatalogue(
 				input.expectedVersion,
 			).run();
 			return result.success && result.meta.changes === 1;
+		},
+		async getTemplatePackagePreflight(operationId, initiatedBy) {
+			const row = await database.prepare(`
+				SELECT package_preflight
+				FROM graphics_ingestion_operations
+				WHERE id = ? AND initiated_by = ? AND source = 'template-package'
+			`).bind(operationId, initiatedBy).first<{ package_preflight: string | null }>();
+			return parseJson<TemplatePackagePreflightState>(row?.package_preflight ?? null);
+		},
+		async updateTemplatePackagePreflight(input) {
+			// A terminal operation keeps whatever proposal it ended with: writing a
+			// fresh report onto a cancelled or completed package would resurrect a
+			// proposal its author already disposed of.
+			//
+			// The operation's own `updated_at` is deliberately untouched. It is the
+			// claim the following stage transition is made against, and the
+			// transition is what publishes this checkpoint; moving it here would
+			// invalidate that claim and strand the operation mid-preflight.
+			const result = await database.prepare(`
+				UPDATE graphics_ingestion_operations
+				SET package_preflight = ?
+				WHERE id = ? AND initiated_by = ? AND source = 'template-package'
+					AND stage NOT IN ('completed', 'cancelled')
+			`).bind(
+				JSON.stringify(input.state),
+				input.operationId,
+				input.initiatedBy,
+			).run();
+			if (!result.success)
+				throw new Error('Template Package preflight checkpoint could not be recorded');
+			return result.meta.changes === 1;
+		},
+		async findTemplatePackageOriginCandidates(input) {
+			// A package can name a source this installation already holds in two
+			// ways: it was exported from here, so the source identity is a local
+			// identity; or it was imported here before, so a local revision records
+			// that source as its Graphic Asset Origin. Both are the same exact
+			// provenance and both reuse the same local revision.
+			const exact = await database.prepare(`
+				SELECT r.id AS revision_id, r.asset_id, r.content_digest, a.name
+				FROM graphic_asset_revisions r
+				JOIN graphic_assets a ON a.id = r.asset_id
+				WHERE r.id = ? AND r.asset_id = ?
+				UNION ALL
+				SELECT r.id AS revision_id, r.asset_id, r.content_digest, a.name
+				FROM graphic_asset_origins o
+				JOIN graphic_asset_revisions r ON r.id = o.revision_id
+				JOIN graphic_assets a ON a.id = r.asset_id
+				WHERE o.source_asset_id = ? AND o.source_revision_id = ?
+				LIMIT 1
+			`).bind(
+				input.sourceRevisionId,
+				input.sourceAssetId,
+				input.sourceAssetId,
+				input.sourceRevisionId,
+			).first<{
+				revision_id: string;
+				asset_id: string;
+				content_digest: string;
+				name: string;
+			}>();
+			// A related revision is the same source identity at another source
+			// revision. It never reuses a local revision, but it does mean this
+			// package is a further revision of something already known here.
+			const related = await database.prepare(`
+				SELECT 1 AS present
+				FROM graphic_asset_revisions r
+				WHERE r.asset_id = ? AND r.id <> ?
+				UNION ALL
+				SELECT 1 AS present
+				FROM graphic_asset_origins o
+				WHERE o.source_asset_id = ? AND o.source_revision_id <> ?
+				LIMIT 1
+			`).bind(
+				input.sourceAssetId,
+				input.sourceRevisionId,
+				input.sourceAssetId,
+				input.sourceRevisionId,
+			).first<{ present: number }>();
+			return {
+				exact: exact
+					? {
+							reference: {
+								assetId: exact.asset_id as GraphicAssetId,
+								revisionId: exact.revision_id as GraphicAssetRevisionId,
+							},
+							digest: exact.content_digest,
+							name: exact.name,
+						}
+					: undefined,
+				relatedRevisionExists: related !== null,
+			};
+		},
+		async findGraphicAssetByContentDigest(digest) {
+			const row = await database.prepare(`
+				SELECT a.id AS asset_id, r.id AS revision_id, a.name
+				FROM graphic_assets a
+				JOIN graphic_asset_revisions r ON r.asset_id = a.id
+				WHERE r.content_digest = ?
+				ORDER BY a.created_at, a.id, r.revision_number DESC
+				LIMIT 1
+			`).bind(digest).first<{ asset_id: string; revision_id: string; name: string }>();
+			return row
+				? {
+						assetId: row.asset_id as GraphicAssetId,
+						revisionId: row.revision_id as GraphicAssetRevisionId,
+						name: row.name,
+					}
+				: undefined;
 		},
 		async recordGraphicAssetMultipartCleanupComplete(operationId, initiatedBy) {
 			const result = await database.prepare(`
