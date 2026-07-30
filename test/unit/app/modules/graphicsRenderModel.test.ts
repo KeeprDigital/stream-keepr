@@ -1688,10 +1688,19 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			expect(crossing.crossTransition?.incoming.text).toBe('AFTER');
 			expect(crossing.text).toBeUndefined();
 			expect(crossing.surface).toBeUndefined();
-			// The box keeps the item's authored placement; each rendering fills it.
+			// The box keeps the item's authored placement and *only* that. Motion belongs to
+			// each half, so leaving it on the box too would apply every transform and every
+			// opacity twice — once to the box and once inside it.
 			expect(crossing.style).toMatchObject({ position: 'absolute', left: '0px' });
-			for (const half of [crossing.crossTransition!.outgoing, crossing.crossTransition!.incoming])
+			expect(crossing.style.opacity).toBeUndefined();
+			expect(crossing.style.transform).toBeUndefined();
+			expect(crossing.style.transformOrigin).toBeUndefined();
+			expect(crossing.style.maskImage).toBeUndefined();
+			expect(crossing.style.filter).toBeUndefined();
+			for (const half of [crossing.crossTransition!.outgoing, crossing.crossTransition!.incoming]) {
 				expect(half.style).toMatchObject({ position: 'absolute', inset: '0' });
+				expect(half.style.opacity).toBe(0.5);
+			}
 		});
 
 		it('overlays a row Graphic Group child without adding a box to the group layout', () => {

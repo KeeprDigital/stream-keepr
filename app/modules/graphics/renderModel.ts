@@ -1290,6 +1290,11 @@ function graphicAnimationContext(
 			return true;
 		if (!crossTransition)
 			return false;
+		// The graphic's own arm is redundant by construction rather than load-bearing:
+		// `wholeGraphic` is false only when the graphic authored no update recipe, and an
+		// owner with no recipe projects nothing anyway. It is stated because the invariant
+		// is worth reading at the point that relies on it, not because removing it would
+		// change a frame.
 		return ownerId === null ? crossTransition.wholeGraphic : crossTransition.crossing.has(ownerId);
 	};
 
