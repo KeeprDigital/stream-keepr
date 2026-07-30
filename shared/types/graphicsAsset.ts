@@ -3,6 +3,7 @@ import type {
 	STATIC_FONT_COMPATIBILITY_PROFILE,
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
 } from '../utils/graphicsAssetCompatibility';
+import type { GRAPHICS_RETENTION_EVIDENCE_CATEGORIES } from '../utils/graphicsAssetRetention';
 
 declare const graphicAssetIdBrand: unique symbol;
 declare const graphicAssetRevisionIdBrand: unique symbol;
@@ -315,6 +316,7 @@ export type GraphicAssetValidationReport
 export interface GraphicsIngestionFailure {
 	code:
 		| 'ingestion-cancelled'
+		| 'staged-input-expired'
 		| 'staging-unavailable'
 		| 'staging-capacity-exhausted'
 		| 'canonical-capacity-exhausted'
@@ -416,6 +418,176 @@ export interface GraphicsAssetLibraryHealth {
 		canonical: GraphicsAssetLibraryComponentHealth;
 	};
 }
+
+/**
+ * Why a Graphic Asset Revision is retained, and when that retention ends.
+ * Referenced and latest revisions have no deadline at all.
+ */
+export type GraphicAssetRevisionRetention
+	= | { policy: 'latest-revision' }
+		| { policy: 'referenced'; referenceCount: number }
+		| {
+			policy: 'unreferenced-superseded';
+			unreferencedSince: string;
+			pruneAfter: string;
+		}
+		| {
+			policy: 'pruning-frozen';
+			unreferencedSince: string;
+			frozenAt: string;
+			remainingMilliseconds: number;
+		};
+
+export type GraphicsRetentionEvidenceCategory
+	= typeof GRAPHICS_RETENTION_EVIDENCE_CATEGORIES[number];
+
+export type GraphicsAssetEvidenceSubjectKind
+	= | 'graphics-ingestion-operation'
+		| 'graphic-asset'
+		| 'graphic-asset-revision'
+		| 'graphic-asset-content';
+
+/**
+ * One durable administrator-facing record of an automated lifecycle decision.
+ * Subjects are opaque domain identities: evidence never carries object keys,
+ * digests, filenames, capability secrets, or deleted bytes.
+ */
+export interface GraphicsAssetEvidenceEntry {
+	id: string;
+	recordedAt: string;
+	category: GraphicsRetentionEvidenceCategory;
+	actor: string;
+	subject: {
+		kind: GraphicsAssetEvidenceSubjectKind;
+		id: string;
+	};
+	outcome: string;
+	reason: string;
+	correlationId: string;
+	detail: {
+		/** References the proof found. Zero is the proof that reclamation was safe. */
+		referenceCount?: number;
+		revisionCount?: number;
+		bytesFreed?: number;
+		bytesReserved?: number;
+		deadline?: string;
+		remainingMilliseconds?: number;
+		canonicalUsedBytes?: number;
+		canonicalLimitBytes?: number;
+		canonicalPressure?: GraphicsCanonicalCapacityPressure;
+	};
+	expiresAt: string;
+}
+
+export interface GraphicsRetentionSweepResult {
+	correlationId: string;
+	startedAt: string;
+	completedAt: string;
+	stagedInput: {
+		expiredIncompleteTransfers: number;
+		expiredCompletedInput: number;
+	};
+	revisions: {
+		pruningScheduled: number;
+		pruningCancelled: number;
+		pruned: number;
+	};
+	trash: {
+		purged: number;
+		blockedByReferences: number;
+	};
+	content: {
+		quarantined: number;
+		quarantineReleased: number;
+		deleted: number;
+		bytesReclaimed: number;
+	};
+	evidence: {
+		recorded: number;
+		expired: number;
+	};
+}
+
+export interface GraphicsStagedInputDeadline {
+	operationId: GraphicsIngestionOperationId;
+	initiatedBy: string;
+	stage: GraphicsIngestionStage;
+	transferComplete: boolean;
+	stagingBytes: number;
+	expiresAt: string;
+}
+
+export interface GraphicsTrashDeadline {
+	assetId: GraphicAssetId;
+	name: string;
+	trashedAt: string;
+	/** Restoration is possible until this instant; final purge happens at it. */
+	recoverableUntil: string;
+	referenceCount: number;
+	revisionCount: number;
+}
+
+export interface GraphicsRevisionPruningDeadline {
+	assetId: GraphicAssetId;
+	revisionId: GraphicAssetRevisionId;
+	revisionNumber: number;
+	retention: GraphicAssetRevisionRetention;
+}
+
+/**
+ * The Library Workspace view of one Graphic Asset's recovery and cleanup
+ * deadlines: its Trash recovery window and every revision's retention policy.
+ */
+export interface GraphicAssetRetentionView {
+	assetId: GraphicAssetId;
+	lifecycle: GraphicAssetLifecycle;
+	revisions: GraphicsRevisionPruningDeadline[];
+}
+
+export interface GraphicsContentQuarantineDeadline {
+	id: string;
+	byteLength: number;
+	origin: 'orphaned-content' | 'abandoned-canonical-write';
+	quarantinedAt: string;
+	deleteAfter: string;
+}
+
+/**
+ * The operational retention view. It states every exact deadline and asserts
+ * that storage pressure never shortens a guarantee.
+ */
+export interface GraphicsRetentionOverview {
+	checkedAt: string;
+	guarantees: {
+		incompleteTransferMilliseconds: number;
+		completedInputMilliseconds: number;
+		trashRecoveryMilliseconds: number;
+		supersededRevisionMilliseconds: number;
+		orphanContentQuarantineMilliseconds: number;
+		evidenceMilliseconds: number;
+	};
+	storagePressure: GraphicsCanonicalCapacityPressure;
+	guaranteesShortenedUnderPressure: false;
+	stagedInput: GraphicsStagedInputDeadline[];
+	trashedAssets: GraphicsTrashDeadline[];
+	prunableRevisions: GraphicsRevisionPruningDeadline[];
+	quarantinedContent: GraphicsContentQuarantineDeadline[];
+}
+
+export type GraphicAssetPurgeOutcome
+	= | {
+		outcome: 'purged';
+		assetId: GraphicAssetId;
+		purgedAt: string;
+		revisionCount: number;
+		/** References the fresh proof found across every revision; always 0 when purged. */
+		referenceCount: number;
+		reason: 'trash-window-elapsed' | 'early-purge';
+	}
+	| {
+		outcome: 'in-use';
+		usage: GraphicAssetUsage[];
+	};
 
 export type GraphicsCanonicalCapacityPressure = 'normal' | 'warning' | 'critical' | 'full';
 
