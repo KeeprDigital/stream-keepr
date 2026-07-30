@@ -173,6 +173,7 @@ export interface TemplatePackageManifest {
 export const TEMPLATE_PACKAGE_EXPORT_ISSUE_CODES = [
 	'missing-graphic-asset-reference',
 	'unavailable-graphic-asset-content',
+	'invalid-graphic-asset-content-facts',
 	'unsupported-application-capability',
 	'unexpected-graphic-asset-kind',
 	'undeclared-graphic-asset-dependency',

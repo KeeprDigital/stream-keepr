@@ -48,15 +48,39 @@ const CSS_RESOURCE_FUNCTION_PATTERN = /\burl\(\s*(?:['"]\s*)?(?:[a-z][\w+.-]*:|\
 const INLINE_PAYLOAD_PATTERN = /^\s*(?:data|blob):/i;
 /**
  * Property names whose value a renderer would resolve as a resource rather than
- * display as text. The check is on the final camel-case segment, so
- * `backgroundImage`, `posterUrl`, and `sources` all qualify while `text`,
- * `label`, and `template` do not.
+ * display as text.
  */
-const RESOURCE_PROPERTY_PATTERN
-	= /(?:^|[a-z0-9])(?:url|uri|src|href|source|poster|icon|image|media|path|endpoint)s?$/i;
+const RESOURCE_PROPERTY_NAMES = new Set([
+	'url',
+	'uri',
+	'src',
+	'srcset',
+	'href',
+	'source',
+	'poster',
+	'icon',
+	'image',
+	'media',
+	'path',
+	'endpoint',
+]);
 
+/**
+ * Decided on the property's last word, whatever convention names it. A field is
+ * a resource because of what it means, not because of how it was capitalised, so
+ * `backgroundImage`, `image_url`, `IMAGE_URL`, and `sources` all qualify while
+ * `text`, `label`, and `template` do not.
+ */
 function isResourceProperty(key: string): boolean {
-	return RESOURCE_PROPERTY_PATTERN.test(key);
+	const words = key
+		.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+		.split(/[^a-z0-9]+/i)
+		.filter(Boolean);
+	const last = words.at(-1)?.toLowerCase();
+	if (!last)
+		return false;
+	return RESOURCE_PROPERTY_NAMES.has(last)
+		|| (last.endsWith('s') && RESOURCE_PROPERTY_NAMES.has(last.slice(0, -1)));
 }
 const EXECUTABLE_CONTENT_PATTERN
 	= /javascript:|vbscript:|<\s*(?:\/\s*)?script\b|\bon(?:abort|blur|change|click|error|focus|load|mouseover|submit)\s*=/i;
@@ -65,6 +89,7 @@ const UNSAFE_PROPERTY_NAMES = new Set(['__proto__', 'constructor', 'prototype'])
 const ISSUE_REMEDIATION = {
 	'missing-graphic-asset-reference': 'Point the Template field at an existing Graphic Asset Revision, or remove the field.',
 	'unavailable-graphic-asset-content': 'The exact revision exists but its bytes are temporarily unavailable. Retry the export, or ask an administrator to repair the content.',
+	'invalid-graphic-asset-content-facts': 'The catalogue records an unusable size for this content, so the package cannot be measured. Ask an administrator to reconcile the Graphic Asset before exporting.',
 	'unsupported-application-capability': 'This installation does not provide the requested application capability. Replace it with a supported one before exporting.',
 	'unexpected-graphic-asset-kind': 'The Template field requires a different media kind. Select a Graphic Asset of the expected kind.',
 	'undeclared-graphic-asset-dependency': 'Every asset a Template needs must be selected from the Graphics Asset Library. Replace the inline or undeclared value with a library selection.',
@@ -137,16 +162,22 @@ export function inspectTemplateDocument(document: unknown): TemplateDocumentInsp
 	 * A Template Package may not depend on anything outside itself, but authored
 	 * display copy is data, not a dependency: a lower third reading "Visit
 	 * https://team.com" is text the renderer draws, never a resource it fetches.
-	 * So a resource is recognised by position rather than by mentioning a scheme —
-	 * a value that is entirely a URL, a value under a resource-shaped property, or
-	 * a CSS `url()` function, which fetches wherever it is written.
+	 * So a remote resource is recognised by position rather than by mentioning a
+	 * scheme — a value that is entirely a URL, a value under a resource-shaped
+	 * property, or a CSS `url()` function, which fetches wherever it is written.
+	 *
+	 * Executable content and inline payloads are judged everywhere instead. Both
+	 * are anchored to the start of a value, so neither can fire on prose that
+	 * merely mentions them, and a value that genuinely begins `data:` or
+	 * `javascript:` has no legitimate place in authored broadcast copy. Packages
+	 * carry no undeclared files, so an inline payload is refused whatever field
+	 * it was authored into.
 	 */
 	function inspectString(value: string, path: string, resourceProperty: boolean) {
 		const wholeValueResource = WHOLE_VALUE_REMOTE_PATTERN.test(value);
-		const resourceContext = resourceProperty || wholeValueResource;
 		if (EXECUTABLE_CONTENT_PATTERN.test(value))
 			reject('executable-template-content', path, 'Template value contains executable content');
-		else if (resourceContext && INLINE_PAYLOAD_PATTERN.test(value))
+		else if (INLINE_PAYLOAD_PATTERN.test(value))
 			reject('undeclared-graphic-asset-dependency', path, 'Template value inlines content that no packaged asset declares');
 		else if (wholeValueResource || CSS_RESOURCE_FUNCTION_PATTERN.test(value))
 			reject('remote-resource-dependency', path, 'Template value requires a remote resource');
@@ -394,8 +425,19 @@ export function planTemplatePackage(input: {
 	createdAt: string;
 	archiveByteLength: (entries: readonly { name: string; byteLength: number }[]) => number;
 }): TemplatePackagePlan {
+	const issues: TemplatePackageExportIssue[] = [];
 	const contents = new Map<string, TemplatePackageContent>();
 	for (const revision of input.revisions) {
+		// A size the catalogue cannot state is not a small package — it is an
+		// unmeasurable one. Left alone it poisons every total into NaN, whose
+		// comparisons against the limits are all false, so an unbounded archive
+		// would sail through the checks and fail as an exception mid-write.
+		if (!Number.isSafeInteger(revision.byteLength) || revision.byteLength < 0) {
+			issues.push(templatePackageExportIssue('invalid-graphic-asset-content-facts', {
+				slot: revision.requiredBy[0],
+				message: `Graphic Asset "${revision.name}" records an unusable content byte length`,
+			}));
+		}
 		if (contents.has(revision.digest))
 			continue;
 		contents.set(revision.digest, {
@@ -473,7 +515,17 @@ export function planTemplatePackage(input: {
 		...contentList.map(content => ({ name: content.entry, byteLength: content.byteLength })),
 	]);
 
-	const issues: TemplatePackageExportIssue[] = [];
+	// A backstop for any other route to an unmeasurable envelope. An individual
+	// content size already named above is not restated here.
+	if (
+		issues.length === 0
+		&& (!Number.isSafeInteger(totals.expandedByteLength) || !Number.isSafeInteger(archiveByteLength))
+	) {
+		issues.push(templatePackageExportIssue('invalid-graphic-asset-content-facts', {
+			message: 'The package envelope could not be measured from the recorded content sizes',
+		}));
+	}
+	// Counts survive an unusable size, so they are always worth reporting.
 	if (totals.entryCount > TEMPLATE_PACKAGE_LIMITS.maximumEntryCount) {
 		issues.push(templatePackageExportIssue('package-entry-limit-exceeded', {
 			message: `Package would contain ${totals.entryCount} entries`,
@@ -484,12 +536,17 @@ export function planTemplatePackage(input: {
 			message: `Package would contain ${totals.packagedRevisionCount} packaged Graphic Asset Revisions`,
 		}));
 	}
-	if (totals.expandedByteLength > TEMPLATE_PACKAGE_LIMITS.maximumExpandedByteLength) {
+	// The byte limits are only meaningful over real sizes. Once a content size is
+	// unusable these totals say nothing true — NaN slips under every `>` and
+	// Infinity trips every one — so the unusable size is reported on its own
+	// rather than dressed up as an envelope the author could shrink.
+	const bytesMeasurable = issues.every(issue => issue.code !== 'invalid-graphic-asset-content-facts');
+	if (bytesMeasurable && totals.expandedByteLength > TEMPLATE_PACKAGE_LIMITS.maximumExpandedByteLength) {
 		issues.push(templatePackageExportIssue('package-expanded-limit-exceeded', {
 			message: `Package would expand to ${totals.expandedByteLength} bytes`,
 		}));
 	}
-	if (archiveByteLength > TEMPLATE_PACKAGE_LIMITS.maximumArchiveByteLength) {
+	if (bytesMeasurable && archiveByteLength > TEMPLATE_PACKAGE_LIMITS.maximumArchiveByteLength) {
 		issues.push(templatePackageExportIssue('package-archive-limit-exceeded', {
 			message: `Package archive would be ${archiveByteLength} bytes`,
 		}));

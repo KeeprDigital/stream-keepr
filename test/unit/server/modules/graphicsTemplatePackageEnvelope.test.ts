@@ -223,6 +223,26 @@ describe('template Package envelope limits', () => {
 		expect(result.totals.archiveByteLength).toBeGreaterThan(0xFFFFFFFF);
 	});
 
+	it.each([
+		['not a number', Number.NaN],
+		['infinite', Number.POSITIVE_INFINITY],
+		['negative', -1],
+		['fractional', 12.5],
+	])('reports rather than silently accepting a %s content size', (_description, byteLength) => {
+		const result = plan([packagedRevision(0, byteLength)]);
+
+		// NaN fails every `>` comparison, so an unmeasurable envelope would
+		// otherwise pass the limits and throw when the archive is opened.
+		expect(result.issues).toEqual([
+			expect.objectContaining({
+				code: 'invalid-graphic-asset-content-facts',
+				slot: 'items[0].asset',
+				retryable: false,
+				remediation: expect.any(String),
+			}),
+		]);
+	});
+
 	it('blocks a package that would expand beyond one gibibyte', () => {
 		const result = plan([packagedRevision(0, TEMPLATE_PACKAGE_LIMITS.maximumExpandedByteLength)]);
 

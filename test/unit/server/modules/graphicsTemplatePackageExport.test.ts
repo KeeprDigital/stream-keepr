@@ -703,6 +703,11 @@ describe('the Template Package export contract', () => {
 			['frame.gradient', { frame: { gradient: 'linear-gradient(#000, url(https://cdn.example.com/x.png))' } }],
 			['items[0].sources[0]', { items: [{ sources: ['https://cdn.example.com/a.mp4'] }] }],
 			['frame.backgroundUrl', { frame: { backgroundUrl: '//cdn.example.com/loop.mp4' } }],
+			// A resource field is one whatever convention named it.
+			['items[0].image_url', { items: [{ image_url: 'https://cdn.example.com/a.png' }] }],
+			['items[0].IMAGE_URL', { items: [{ IMAGE_URL: 'https://cdn.example.com/b.png' }] }],
+			['items[0].image-url', { items: [{ 'image-url': 'https://cdn.example.com/c.png' }] }],
+			['items[0].srcset', { items: [{ srcset: 'https://cdn.example.com/d.png 2x' }] }],
 		] as const;
 
 		for (const [slot, document] of cases) {
@@ -716,6 +721,31 @@ describe('the Template Package export contract', () => {
 				continue;
 			expect(result.report.issues).toEqual([
 				expect.objectContaining({ code: 'remote-resource-dependency', slot }),
+			]);
+		}
+	});
+
+	it('blocks an inline payload wherever it was authored', async () => {
+		const { library } = createExportLibrary();
+		const cases = [
+			['frame.backgroundImage', { frame: { backgroundImage: 'data:image/png;base64,iVBORw0KGgo=' } }],
+			// Not a resource-shaped field: an inline payload is refused anyway,
+			// because a package carries no undeclared files.
+			['items[0].label', { items: [{ label: 'data:image/png;base64,iVBORw0KGgo=' }] }],
+			['items[0].caption', { items: [{ caption: 'blob:https://example.com/9f3c' }] }],
+		] as const;
+
+		for (const [slot, document] of cases) {
+			const result = await library.exportTemplatePackage({
+				packageKind: 'sklayout',
+				template: { identity: 'template-16', name: 'Inline payload', document },
+				assets: [],
+			});
+			expect(result.outcome, slot).toBe('rejected');
+			if (result.outcome !== 'rejected')
+				continue;
+			expect(result.report.issues).toEqual([
+				expect.objectContaining({ code: 'undeclared-graphic-asset-dependency', slot }),
 			]);
 		}
 	});
