@@ -77,6 +77,22 @@ export async function ensureGraphicsAuthorSession(event: H3Event): Promise<strin
 	}
 }
 
+/**
+ * The asking session's identity when it has one, and nothing when it does not.
+ *
+ * Session-scoped rights that a caller may simply not have — a Graphics Authoring
+ * Lease is one — need to distinguish "no session" from "unauthorized" rather than
+ * refuse the request outright.
+ */
+export async function optionalGraphicsAuthorSession(event: H3Event): Promise<string | undefined> {
+	try {
+		return (await readSession(event))?.authorId;
+	}
+	catch {
+		return undefined;
+	}
+}
+
 export async function requireGraphicsAuthorSession(event: H3Event): Promise<string> {
 	try {
 		const session = await readSession(event);

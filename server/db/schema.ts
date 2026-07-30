@@ -408,6 +408,44 @@ export const liveStateCommandReceipts = sqliteTable('live_state_command_receipts
 	uniqueIndex('live_state_command_receipts_command_idx').on(table.aggregateKind, table.aggregateId, table.commandId),
 ]);
 
+/**
+ * The single-writer claim on one graphics authoring artifact.
+ *
+ * A Graphics Authoring Lease is session-scoped, not durable state, so this table
+ * exists for atomicity rather than persistence: exclusivity is the entire point
+ * of a lease, and only a relational conditional write can decide two simultaneous
+ * acquisitions in one authoritative order. What keeps the row from outliving its
+ * session is `expires_at` — every read treats a lapsed row as no lease at all, so
+ * a browser that closes without releasing frees its artifact on its own, with no
+ * cleanup sweep and no possibility of a restart resurrecting a stale claim.
+ *
+ * One row per artifact, enforced by the unique index rather than by convention.
+ */
+export const graphicsAuthoringLeases = sqliteTable('graphics_authoring_leases', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	/** Which kind of graphics authoring artifact is leased. */
+	artifactKind: text('artifact_kind').notNull(),
+	/** The artifact's own stable identity within that kind. */
+	artifactId: text('artifact_id').notNull(),
+	/**
+	 * The owning Event, for artifacts that have one. Reusable-library artifacts are
+	 * installation-scoped and carry none.
+	 */
+	eventId: integer('event_id').references(() => events.id, { onDelete: 'cascade' }),
+
+	/** The graphics author session holding the lease. */
+	holderSessionId: text('holder_session_id').notNull(),
+	acquiredAt: integer('acquired_at', { mode: 'timestamp_ms' }).notNull(),
+	heartbeatAt: integer('heartbeat_at', { mode: 'timestamp_ms' }).notNull(),
+	/** The deadline past which the lease counts as absent. */
+	expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+
+	...timestamps,
+}, table => [
+	uniqueIndex('graphics_authoring_leases_artifact_idx').on(table.artifactKind, table.artifactId),
+	index('graphics_authoring_leases_event_id_idx').on(table.eventId),
+]);
+
 export const featureMatches = featureMatchSlots;
 
 export const archetypes = sqliteTable('archetypes', {
