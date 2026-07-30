@@ -66,7 +66,7 @@ function notification(
 		sessionId: 55,
 		sequence: 2,
 		commandType: 'Take',
-		currentState: { playout: { slate: { onAir: true } }, inputs: {} },
+		currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 		...overrides,
 	} as MessageData<'broadcastGraphicsLiveSession:commandApplied'>;
 }
@@ -83,7 +83,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 	it('derives Graphic Playout State and the on-air stack from the loaded snapshot', async () => {
 		mockRepository.getSession.mockResolvedValue(session({
-			currentState: { playout: { slate: { onAir: true }, bug: { onAir: false } }, inputs: {} },
+			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false }, bug: { onAir: false, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 		}));
 
 		await store.loadSession(EVENT_ID, SCREEN_ID);
@@ -105,8 +105,8 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			sessionId: 55,
 			sequence: 2,
 			commandType: 'Take',
-			currentState: { playout: { slate: { onAir: true } }, inputs: {} },
-			session: session({ sequence: 2, currentState: { playout: { slate: { onAir: true } }, inputs: {} } }),
+			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			session: session({ sequence: 2, currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} } }),
 		});
 
 		await store.take(EVENT_ID, SCREEN_ID, 'slate');
@@ -144,7 +144,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			sessionId: 55,
 			sequence: 2,
 			commandType: 'Take',
-			currentState: { playout: { slate: { onAir: true } }, inputs: {} },
+			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 			session: session({ sequence: 2 }),
 		});
 
@@ -167,7 +167,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				sessionId: 56,
 				sequence: 2,
 				commandType: 'Take',
-				currentState: { playout: { slate: { onAir: true } }, inputs: {} },
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 				session: session({ id: 56, sequence: 2 }),
 			});
 		mockRepository.getSession.mockResolvedValue(session({ id: 56, sequence: 1 }));
@@ -196,8 +196,8 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				sessionId: 56,
 				sequence: 2,
 				commandType: 'Take',
-				currentState: { playout: { slate: { onAir: true } }, inputs: {} },
-				session: session({ id: 56, sequence: 2, currentState: { playout: { slate: { onAir: true } }, inputs: {} } }),
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+				session: session({ id: 56, sequence: 2, currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} } }),
 			});
 		mockRepository.getSession.mockResolvedValue(session({ id: 56, sequence: 1 }));
 
@@ -252,8 +252,8 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			sessionId: 55,
 			sequence: 2,
 			commandType: 'Take',
-			currentState: { playout: { slate: { onAir: true } }, inputs: {} },
-			session: session({ sequence: 2, currentState: { playout: { slate: { onAir: true } }, inputs: {} } }),
+			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			session: session({ sequence: 2, currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} } }),
 		});
 		await inFlight;
 
@@ -286,7 +286,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 		await store.applyRemoteCommand(notification({
 			sequence: 2,
-			currentState: { playout: { slate: { onAir: false } }, inputs: {} },
+			currentState: { playout: { slate: { onAir: false, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 		}));
 
 		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
@@ -297,7 +297,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		vi.clearAllMocks();
 		mockRepository.getSession.mockResolvedValue(session({
 			sequence: 9,
-			currentState: { playout: { bug: { onAir: true } }, inputs: {} },
+			currentState: { playout: { bug: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 		}));
 
 		// A disconnect swallowed sequences 2 through 8: the notification is not
@@ -348,13 +348,13 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 	it('names the acceptance it supersedes when it accepts a staged Graphic Input set', async () => {
 		mockRepository.getSession.mockResolvedValue(session({
 			currentState: {
-				playout: { slate: { onAir: true } },
+				playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } },
 				inputs: { slate: { working: { name: 'Ava Reed' }, accepted: { name: 'Unnamed' }, acceptedRevision: 4 } },
 			},
 		}));
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 		const accepted = {
-			playout: { slate: { onAir: true } },
+			playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } },
 			inputs: { slate: { working: { name: 'Ava Reed' }, accepted: { name: 'Ava Reed' }, acceptedRevision: 5 } },
 		};
 		mockRepository.sendCommand.mockResolvedValue({
@@ -380,7 +380,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 	it('restates one Update Graphic unchanged — same command id, same acceptance revision', async () => {
 		mockRepository.getSession.mockResolvedValue(session({
 			currentState: {
-				playout: { slate: { onAir: true } },
+				playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } },
 				inputs: { slate: { working: { name: 'Ava Reed' }, accepted: {}, acceptedRevision: 4 } },
 			},
 		}));
@@ -393,14 +393,14 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				sessionId: 56,
 				sequence: 2,
 				commandType: 'Update Graphic',
-				currentState: { playout: { slate: { onAir: true } }, inputs: {} },
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 				session: session({ id: 56, sequence: 2 }),
 			});
 		// The reload the retry goes through reports a *different* acceptance revision.
 		mockRepository.getSession.mockResolvedValue(session({
 			id: 56,
 			currentState: {
-				playout: { slate: { onAir: true } },
+				playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } },
 				inputs: { slate: { working: {}, accepted: {}, acceptedRevision: 9 } },
 			},
 		}));

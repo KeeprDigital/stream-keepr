@@ -1,9 +1,17 @@
 import type { BroadcastGraphicConfig, GraphicInputValue } from '~~/shared/types/graphics';
 import type { GraphicsPreviewState } from '~/modules/graphics/previewMessages';
+import type { GraphicsAnimationProjection } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
+import {
+	broadcastGraphicAnimationTimeline,
+	graphicAnimationTimelineAt,
+	graphicAnimationTimelineDurationMs,
+} from '~~/shared/modules/graphics';
+import { GRAPHIC_ANIMATION_PHASE_VALUES } from '~~/shared/types/graphics';
 import {
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
 	isGraphicsPreviewStateMessage,
+	readGraphicsPreviewState,
 } from '~/modules/graphics/previewMessages';
 
 /**
@@ -67,13 +75,99 @@ export function useBroadcastGraphicsModeData() {
 		previewState.value?.selectedTarget ?? { type: 'canvas' },
 	);
 
+	/*
+	 * Graphic Animation Preview.
+	 *
+	 * The editor sends a plan; the clock lives here, beside the composition it
+	 * animates. Elapsed time is the only thing that advances, and the frame is a
+	 * pure projection of it, so a run is repeatable and identical at the same
+	 * elapsed time however it was reached.
+	 *
+	 * A live output reaches none of this: it has no preview plan, so its projection
+	 * stays empty until #70 derives one from the Live Session's own authoritative
+	 * effective start times. Preview and live therefore share the projection and
+	 * share nothing else — the preview never opens a session, never accepts an
+	 * input, and never writes Screen state.
+	 */
+	const previewElapsed = ref(0);
+	const previewPlan = computed(() => previewState.value?.animation ?? null);
+
+	const previewTimeline = computed(() => {
+		const plan = previewPlan.value;
+		if (!plan)
+			return [];
+		const graphic = graphics.value.find(entry => entry.id === plan.graphicId);
+		if (!graphic)
+			return [];
+
+		const phases = plan.scope === 'phase'
+			? [plan.phase]
+			: GRAPHIC_ANIMATION_PHASE_VALUES.slice(GRAPHIC_ANIMATION_PHASE_VALUES.indexOf(plan.phase));
+		return broadcastGraphicAnimationTimeline(graphic, phases);
+	});
+
+	const animationProjection = computed<Record<string, GraphicsAnimationProjection>>(() => {
+		const plan = previewPlan.value;
+		if (!plan)
+			return {};
+		const position = graphicAnimationTimelineAt(previewTimeline.value, previewElapsed.value);
+		return position ? { [plan.graphicId]: position } : {};
+	});
+
+	let frame: number | null = null;
+	let startedAt = 0;
+
+	function stopPreviewClock() {
+		if (frame !== null && import.meta.client)
+			cancelAnimationFrame(frame);
+		frame = null;
+	}
+
+	function advancePreviewClock() {
+		const plan = previewPlan.value;
+		if (!plan) {
+			stopPreviewClock();
+			previewElapsed.value = 0;
+			return;
+		}
+
+		const total = graphicAnimationTimelineDurationMs(previewTimeline.value);
+		const elapsed = (performance.now() - startedAt) * plan.speed;
+
+		if (total > 0 && elapsed >= total && plan.loop) {
+			startedAt = performance.now();
+			previewElapsed.value = 0;
+		}
+		else {
+			// Held rather than reset once a run completes: the last phase settled is
+			// what the author just watched arrive.
+			previewElapsed.value = elapsed;
+		}
+
+		frame = requestAnimationFrame(advancePreviewClock);
+	}
+
+	// A new run token restarts the clock; that is the only thing that does. Editing
+	// the composition mid-run changes what is projected without disturbing when.
+	watch(
+		() => (previewPlan.value ? `${previewPlan.value.graphicId}:${previewPlan.value.run}` : null),
+		(token) => {
+			stopPreviewClock();
+			previewElapsed.value = 0;
+			if (token === null || !import.meta.client)
+				return;
+			startedAt = performance.now();
+			frame = requestAnimationFrame(advancePreviewClock);
+		},
+	);
+
 	function handlePreviewStateMessage(message: MessageEvent) {
 		if (!isPreview?.value)
 			return;
 		if (!isGraphicsPreviewStateMessage(message, { origin: window.location.origin, source: window.parent }))
 			return;
 
-		previewState.value = message.data.state;
+		previewState.value = readGraphicsPreviewState(message.data.state);
 	}
 
 	/** Report a canvas selection back to the editor that embedded this preview. */
@@ -102,7 +196,8 @@ export function useBroadcastGraphicsModeData() {
 
 	onBeforeUnmount(() => {
 		window.removeEventListener('message', handlePreviewStateMessage);
+		stopPreviewClock();
 	});
 
-	return { graphics, onAirGraphicIds, inputValues, selectedTarget, publishSelection };
+	return { animationProjection, graphics, onAirGraphicIds, inputValues, selectedTarget, publishSelection };
 }

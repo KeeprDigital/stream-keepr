@@ -42,22 +42,38 @@ import {
 } from '~~/shared/types/graphicItem';
 import {
 	GRAPHIC_ANCHOR_POINT_VALUES,
+	GRAPHIC_ANIMATION_EASING_VALUES,
+	GRAPHIC_ANIMATION_ORIGIN_VALUES,
+	GRAPHIC_ANIMATION_REPEAT_INDEFINITE,
+	GRAPHIC_ANIMATION_STAGGER_ORDER_VALUES,
 	GRAPHIC_FONT_STYLE_VALUES,
 	GRAPHIC_GROUP_ALIGN_VALUES,
 	GRAPHIC_GROUP_ARRANGEMENT_VALUES,
 	GRAPHIC_GROUP_JUSTIFY_VALUES,
 	GRAPHIC_INPUT_KEY_PATTERN,
 	GRAPHIC_MEDIA_KIND_VALUES,
+	GRAPHIC_REVEAL_EDGE_VALUES,
+	GRAPHIC_SLIDE_DIRECTION_VALUES,
+	GRAPHIC_SLIDE_DISTANCE_MODE_VALUES,
 	GRAPHIC_SOURCE_SELECTION_KIND_VALUES,
 	GRAPHIC_TEXT_ALIGN_VALUES,
 	GRAPHIC_TEXT_TRANSFORM_VALUES,
+	MAX_GRAPHIC_ANIMATION_DELAY_MS,
+	MAX_GRAPHIC_ANIMATION_DURATION_MS,
+	MAX_GRAPHIC_ANIMATION_PAUSE_MS,
+	MAX_GRAPHIC_ANIMATION_REPEAT,
+	MAX_GRAPHIC_ANIMATION_SCALE,
+	MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS,
 	MAX_GRAPHIC_FILL_STOPS,
 	MAX_GRAPHIC_INPUT_CHOICE_LENGTH,
 	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
 	MAX_GRAPHIC_INPUT_KEY_LENGTH,
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
 	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
+	MAX_GRAPHIC_SLIDE_DISTANCE_PX,
 	MAX_GRAPHIC_TEXT_LENGTH,
+	MIN_GRAPHIC_ANIMATION_DURATION_MS,
+	MIN_GRAPHIC_ANIMATION_REPEAT,
 	MIN_GRAPHIC_FILL_STOPS,
 	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	ON_AIR_UPDATE_POLICY_VALUES,
@@ -683,6 +699,86 @@ const graphicShapeGeometrySchema = z.object({
 	rightSlant: pixelPositionSchema,
 }).strict();
 
+/* Graphic Animation: bounded recipes rather than a keyframe timeline. */
+
+const graphicAnimationChannelsShape = {
+	fade: z.object({ opacity: opacitySchema }).strict().optional(),
+	slide: z.object({
+		direction: z.enum(GRAPHIC_SLIDE_DIRECTION_VALUES),
+		distanceMode: z.enum(GRAPHIC_SLIDE_DISTANCE_MODE_VALUES),
+		// Ignored while the mode clears the owner's parent, exactly as a square
+		// Shape Geometry corner ignores its size.
+		distance: finiteNumberSchema.nonnegative().max(MAX_GRAPHIC_SLIDE_DISTANCE_PX),
+	}).strict().optional(),
+	scale: z.object({
+		factor: finiteNumberSchema.min(0).max(MAX_GRAPHIC_ANIMATION_SCALE),
+		origin: z.enum(GRAPHIC_ANIMATION_ORIGIN_VALUES),
+	}).strict().optional(),
+	reveal: z.object({ edge: z.enum(GRAPHIC_REVEAL_EDGE_VALUES) }).strict().optional(),
+};
+
+const graphicAnimationRecipeShape = {
+	duration: finiteNumberSchema
+		.min(MIN_GRAPHIC_ANIMATION_DURATION_MS)
+		.max(MAX_GRAPHIC_ANIMATION_DURATION_MS),
+	easing: z.enum(GRAPHIC_ANIMATION_EASING_VALUES),
+	delay: finiteNumberSchema.nonnegative().max(MAX_GRAPHIC_ANIMATION_DELAY_MS),
+	...graphicAnimationChannelsShape,
+};
+
+const graphicAnimationRecipeSchema = z.object(graphicAnimationRecipeShape).strict();
+
+const graphicOnScreenAnimationRecipeSchema = z.object({
+	...graphicAnimationRecipeShape,
+	pause: finiteNumberSchema.nonnegative().max(MAX_GRAPHIC_ANIMATION_PAUSE_MS),
+	repeat: z.union([
+		finiteNumberSchema.int().min(MIN_GRAPHIC_ANIMATION_REPEAT).max(MAX_GRAPHIC_ANIMATION_REPEAT),
+		z.literal(GRAPHIC_ANIMATION_REPEAT_INDEFINITE),
+	]),
+}).strict();
+
+/**
+ * A stagger names a subset of one container's direct Graphic Items, so it can
+ * never name more ids than one Broadcast Graphic may hold Graphic Items. The cap
+ * is stated here rather than reused from `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC`
+ * because these schemas are built before that constant is initialised.
+ *
+ * Ids are not checked against the container's actual children: an author who
+ * deletes a staggered item must not have their next write refused, so a stale id
+ * is ignored at projection time instead.
+ */
+const MAX_GRAPHIC_ANIMATION_STAGGER_ITEMS = 100;
+
+const graphicAnimationStaggerSchema = z.object({
+	order: z.enum(GRAPHIC_ANIMATION_STAGGER_ORDER_VALUES),
+	step: finiteNumberSchema.nonnegative().max(MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS),
+	itemIds: z.array(z.string().min(1).max(100)).max(MAX_GRAPHIC_ANIMATION_STAGGER_ITEMS),
+}).strict();
+
+/**
+ * At most one recipe per lifecycle phase, stated structurally: the phases are the
+ * keys of one object, so a second enter recipe has nowhere to go.
+ */
+const graphicAnimationShape = {
+	'enter': graphicAnimationRecipeSchema.optional(),
+	'on-screen': graphicOnScreenAnimationRecipeSchema.optional(),
+	'update': graphicAnimationRecipeSchema.optional(),
+	'exit': graphicAnimationRecipeSchema.optional(),
+};
+
+const graphicAnimationSchema = z.object(graphicAnimationShape).strict();
+
+/** Only a container — a Broadcast Graphic or a Graphic Group — staggers direct items. */
+const graphicContainerAnimationSchema = z.object({
+	...graphicAnimationShape,
+	stagger: z.object({
+		'enter': graphicAnimationStaggerSchema.optional(),
+		'on-screen': graphicAnimationStaggerSchema.optional(),
+		'update': graphicAnimationStaggerSchema.optional(),
+		'exit': graphicAnimationStaggerSchema.optional(),
+	}).strict().optional(),
+}).strict();
+
 /* ────────────────────────────────────────────────
  * Graphic Inputs
  * ──────────────────────────────────────────────── */
@@ -793,6 +889,7 @@ const graphicItemBaseShape = {
 	y: pixelPositionSchema,
 	width: pixelSizeSchema,
 	height: pixelSizeSchema,
+	animation: graphicAnimationSchema.optional(),
 };
 
 /**
@@ -902,6 +999,9 @@ const graphicGroupItemConfigSchema = z.object({
 	geometry: graphicShapeGeometrySchema,
 	surfaceStyle: graphicSurfaceStyleSchema.optional(),
 	defaultChildSurfaceStyle: graphicSurfaceStyleSchema.optional(),
+	// A Graphic Group coordinates the animation of its direct items as well as
+	// its own, so it widens the base item's animation rather than reusing it.
+	animation: graphicContainerAnimationSchema.optional(),
 	children: z.array(graphicGroupChildConfigSchema).max(
 		MAX_GRAPHIC_GROUP_CHILDREN,
 		`A Graphic Group must not contain more than ${MAX_GRAPHIC_GROUP_CHILDREN} Graphic Items`,
@@ -941,8 +1041,18 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * each, 60 maximal choice Graphic Inputs at about 1,300, 60 Graphic Input
  * Bindings, 40 Graphic Source Selections, and 50 Broadcast Graphic shells:
  * `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES` measured
- * against the schema itself, 79% of the budget, where the previous 200-item cap
- * without Graphic Inputs was 78%.
+ * against the schema itself.
+ *
+ * **That figure no longer fits the budget.** It was 79% when Graphic Inputs set
+ * this cap; Graphic Animation has taken it to 596,673 bytes against a 524,288
+ * limit — 113.8%. So the named caps no longer bind before the byte total in the
+ * worst case, and an author who filled every cap at once would read a byte count
+ * rather than the limit they reached. See the animation section below.
+ *
+ * Media Graphic Items do not contribute to it. A maximal animated Media Graphic
+ * Item measures 1,906 bytes against 3,704 for a maximal animated Text Graphic
+ * Item, so the worst case is built from text, and adding a cheaper item kind
+ * cannot move it — which is why this figure did not change when they landed.
  *
  * It is deliberately a named cap so an operator reads which limit they reached
  * rather than a byte count. Graphic Group children count towards it — they are
@@ -970,11 +1080,12 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  *
  * Two open defects gate raising it, and neither is about storage arithmetic:
  *
- * - The whole-`modeConfigs` byte total is an object-level refinement, and those are
- *   discarded when the per-mode patch schema is rebuilt from its field schemas —
- *   so the total is not enforced on the path the editors write through. Until it
- *   is, named per-field caps are the only thing that actually refuses an oversized
- *   configuration, which is why they carry more weight here than they should.
+ * - The whole-`modeConfigs` byte total was an object-level refinement discarded
+ *   when the per-mode patch schema is rebuilt from its field schemas, so it was not
+ *   enforced on the path the editors write through. That is fixed: the merged
+ *   configuration a patch would produce is now validated before it is written, so
+ *   the total refuses an oversized write wherever it comes from, and per-field caps
+ *   no longer have to carry weight they were never meant to.
  * - Realtime still publishes whole live state and whole mode configs, so a larger
  *   cap would buy storable configuration that cannot be notified — capacity with
  *   no way to reach a client.
@@ -986,6 +1097,34 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * worse. 110 is about fifteen lower thirds plus a slate and a bug, comfortably
  * more than the fidelity prototype's acceptance evidence requires.
  *
+ *
+ * ## What Graphic Animation adds
+ *
+ * Every Broadcast Graphic and every Graphic Item may own one Graphic Animation
+ * Recipe per lifecycle phase, which is the largest single addition to this
+ * arithmetic so far. Measured against this schema's own maxima: animating all four
+ * phases with a fade, slide, scale, and reveal channel each costs a Graphic Item
+ * 1,039 bytes, and a Broadcast Graphic shell 2,115 — a shell pays more because it
+ * also carries a four-phase stagger naming its direct items, and an id costs 102
+ * bytes per appearance at the 100-character cap. Across 110 Graphic Items and 50
+ * Broadcast Graphic shells that is the whole 183,432-byte rise from 413,241.
+ *
+ * The cap is deliberately left where Graphic Inputs set it, even though the worst
+ * case now exceeds the budget. Animation's cost is recorded rather than used to
+ * re-derive a number, because two tickets already cut this same constant
+ * independently — each measuring correctly and each blind to the other — and
+ * re-deriving it a third time from one vocabulary's own arithmetic would repeat
+ * exactly that mistake. A test asserts the overshoot rather than hiding it.
+ *
+ * Two things make asserting it the right response rather than a deferral. The
+ * whole-`modeConfigs` byte total is now enforced on the editors' write path, so the
+ * overshoot is refused legibly instead of being written and truncated later; and the
+ * shape it would be refused in — an author filling all 110 Graphic Items with
+ * maximal templates, four Placeholder Styles, every animation channel on all four
+ * phases, plus 60 maximal Graphic Inputs — is not one anyone will author. Realistic
+ * authoring is a fraction of the budget. What is lost is the *named cap binds
+ * first* property, and restoring it is a cap decision that one owned measurement
+ * should make.
  * This comment deliberately states no cross-mode headroom figure. The budget is
  * shared with every other Screen Mode, so what remains is a property of the whole
  * `modeConfigs` map rather than of this cap, and reconstructing it per ticket is
@@ -994,7 +1133,7 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * the figures above describe only this mode's own contribution to it.
  */
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 110;
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 413_241;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 596_673;
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
 	return items.reduce(
@@ -1068,6 +1207,7 @@ export const broadcastGraphicConfigSchema = z.object({
 			'A Graphic Input may have at most one Graphic Input Binding',
 		)
 		.optional(),
+	animation: graphicContainerAnimationSchema.optional(),
 }).strict();
 
 /**

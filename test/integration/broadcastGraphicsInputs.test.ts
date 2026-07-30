@@ -91,7 +91,7 @@ describe('broadcast graphics Graphic Input command API', () => {
 		});
 
 		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Ava Reed' });
-		expect(taken.currentState.playout[GRAPHIC]).toEqual({ onAir: true });
+		expect(taken.currentState.playout[GRAPHIC]).toMatchObject({ onAir: true, cut: false });
 	});
 
 	it('keeps a staged edit off air until Update Graphic accepts the complete set', async () => {
@@ -243,7 +243,7 @@ describe('broadcast graphics Graphic Input command API', () => {
 			payload: { graphicId: GRAPHIC },
 		});
 
-		expect(taken.currentState.playout[GRAPHIC]).toEqual({ onAir: true });
+		expect(taken.currentState.playout[GRAPHIC]).toMatchObject({ onAir: true, cut: false });
 		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Unnamed', title: 'Champion' });
 	});
 
@@ -318,6 +318,6 @@ describe('broadcast graphics Graphic Input command API', () => {
 		const reloaded = await harness.reload();
 
 		expect(reloaded.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Ava Reed' });
-		expect(reloaded.currentState.playout[GRAPHIC]).toEqual({ onAir: true });
+		expect(reloaded.currentState.playout[GRAPHIC]).toMatchObject({ onAir: true, cut: false });
 	});
 });

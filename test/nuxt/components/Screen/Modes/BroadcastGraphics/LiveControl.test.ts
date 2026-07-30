@@ -166,7 +166,7 @@ describe('broadcastGraphicsLiveControl', () => {
 
 	it('shows the latest bound value, the working value, and the accepted on-air value apart', async () => {
 		mockLiveState.value = {
-			playout: { 'lower-third': { onAir: true } },
+			playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
 			inputs: { 'lower-third': { working: { name: 'Ava Reed' }, accepted: { name: 'Unnamed' }, acceptedRevision: 1 } },
 		};
 
@@ -218,7 +218,7 @@ describe('broadcastGraphicsLiveControl', () => {
 
 	it('accepts the staged set through Update Graphic, and immediately through its Cut variant', async () => {
 		mockLiveState.value = {
-			playout: { 'lower-third': { onAir: true } },
+			playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
 			inputs: { 'lower-third': { working: { name: 'Ava Reed' }, accepted: { name: 'Unnamed' }, acceptedRevision: 1 } },
 		};
 
@@ -233,7 +233,7 @@ describe('broadcastGraphicsLiveControl', () => {
 
 	it('offers no acceptance while nothing is staged', async () => {
 		mockLiveState.value = {
-			playout: { 'lower-third': { onAir: true } },
+			playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
 			inputs: { 'lower-third': { working: { name: 'Ava Reed' }, accepted: { name: 'Ava Reed' }, acceptedRevision: 1 } },
 		};
 
@@ -244,7 +244,7 @@ describe('broadcastGraphicsLiveControl', () => {
 
 	it('reports a value that violates its constraints as unavailable, and shows what the operator entered', async () => {
 		mockLiveState.value = {
-			playout: { 'lower-third': { onAir: true } },
+			playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
 			inputs: { 'lower-third': { working: { name: 'A'.repeat(50) }, accepted: { name: 'Ava Reed' }, acceptedRevision: 1 } },
 		};
 

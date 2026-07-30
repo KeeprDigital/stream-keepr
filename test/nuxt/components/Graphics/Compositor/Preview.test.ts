@@ -40,6 +40,13 @@ const USwitchStub = defineComponent({
 	template: '<button type="button" @click="$emit(\'update:modelValue\', !modelValue)" />',
 });
 
+const USelectMenuStub = defineComponent({
+	name: 'USelectMenu',
+	props: { modelValue: { type: [String, Number], required: false }, items: { type: Array, default: () => [] } },
+	emits: ['update:modelValue'],
+	template: '<select @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="String(item.value)" :value="item.value">{{ item.label }}</option></select>',
+});
+
 const UButtonStub = defineComponent({
 	name: 'UButton',
 	emits: ['click'],
@@ -67,6 +74,7 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 				USwitch: USwitchStub,
 				UFieldGroup: SlotOnlyStub,
 				UButton: UButtonStub,
+				USelectMenu: USelectMenuStub,
 			},
 		},
 	});
@@ -166,5 +174,151 @@ describe('graphicsCompositorPreview', () => {
 		await nextTick();
 
 		expect(wrapper.emitted('selectTarget')).toHaveLength(1);
+	});
+});
+
+describe('graphicAnimationPreview', () => {
+	function posted(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+		const frame = wrapper.get('iframe').element;
+		const messages: Array<{ type: string; state: Record<string, unknown> }> = [];
+		Object.defineProperty(frame, 'contentWindow', {
+			configurable: true,
+			value: { postMessage: (message: unknown) => messages.push(message as never) },
+		});
+		return messages;
+	}
+
+	function latestPlan(messages: Array<{ state: Record<string, unknown> }>) {
+		return messages[messages.length - 1]?.state.animation ?? null;
+	}
+
+	it('composes at the Graphic Resting State until an author starts a run', async () => {
+		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const messages = posted(wrapper);
+
+		await wrapper.get('iframe').trigger('load');
+
+		// No plan means no motion: laying a composition out is the default, and an
+		// author never has to stop a preview to author.
+		expect(latestPlan(messages)).toBeNull();
+	});
+
+	it('plays one lifecycle phase of the Broadcast Graphic under authoring', async () => {
+		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const messages = posted(wrapper);
+
+		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
+		await nextTick();
+
+		expect(latestPlan(messages)).toMatchObject({
+			graphicId: 'lower-third',
+			scope: 'phase',
+			phase: 'enter',
+			speed: 1,
+			loop: false,
+		});
+	});
+
+	it('previews the graphic that contains the selected Graphic Item', async () => {
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+		const messages = posted(wrapper);
+
+		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
+		await nextTick();
+
+		expect(latestPlan(messages)).toMatchObject({ graphicId: 'lower-third' });
+	});
+
+	it('offers no run at all with no Broadcast Graphic selected', async () => {
+		const wrapper = await mountComponent({ selectedTarget: { type: 'canvas' } });
+
+		expect(wrapper.find('[data-testid="animation-preview-hint"]').exists()).toBe(true);
+
+		const messages = posted(wrapper);
+		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
+		await nextTick();
+
+		expect(latestPlan(messages)).toBeNull();
+	});
+
+	it('plays a full lifecycle from the selected phase onwards', async () => {
+		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const messages = posted(wrapper);
+
+		await wrapper.get('[data-testid="animation-preview-scope-lifecycle"]').trigger('click');
+		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
+		await nextTick();
+
+		expect(latestPlan(messages)).toMatchObject({ scope: 'lifecycle', phase: 'enter' });
+	});
+
+	it('varies playback speed and loops an on-screen cycle', async () => {
+		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const messages = posted(wrapper);
+
+		await wrapper.get('[data-testid="animation-preview-speed-0.25"]').trigger('click');
+		await wrapper.get('[data-testid="animation-preview-loop"]').trigger('click');
+		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
+		await nextTick();
+
+		expect(latestPlan(messages)).toMatchObject({ speed: 0.25, loop: true });
+	});
+
+	it('restarts a run with a new token rather than a time, so there is no playhead', async () => {
+		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const messages = posted(wrapper);
+
+		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
+		await nextTick();
+		const first = latestPlan(messages) as { run: number };
+
+		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
+		await nextTick();
+		const second = latestPlan(messages) as { run: number };
+
+		expect(second.run).toBeGreaterThan(first.run);
+		expect(Object.keys(second)).not.toContain('startedAt');
+		expect(Object.keys(second)).not.toContain('elapsed');
+	});
+
+	it('stops a run back to the Graphic Resting State', async () => {
+		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const messages = posted(wrapper);
+
+		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
+		await nextTick();
+		await wrapper.get('[data-testid="animation-preview-stop"]').trigger('click');
+		await nextTick();
+
+		expect(latestPlan(messages)).toBeNull();
+	});
+
+	it('stops a run when the author selects a different Broadcast Graphic', async () => {
+		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const messages = posted(wrapper);
+
+		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
+		await nextTick();
+		await wrapper.setProps({ selectedTarget: { type: 'graphic', graphicId: 'bug' } });
+		await nextTick();
+
+		expect(latestPlan(messages)).toBeNull();
+	});
+
+	it('reaches the preview frame only, and never live Screen state', async () => {
+		// Gating, stated as a property of the surface: the preview's whole channel is
+		// one postMessage to the frame it embedded. It emits no configuration update,
+		// so there is nothing for a caller to persist, and it addresses no other window.
+		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const messages = posted(wrapper);
+
+		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
+		await nextTick();
+
+		expect(messages.every(message => message.type === GRAPHICS_PREVIEW_STATE_MESSAGE)).toBe(true);
+		expect(wrapper.emitted('update:graphics')).toBeUndefined();
+		expect(wrapper.emitted('selectTarget')).toBeUndefined();
 	});
 });
