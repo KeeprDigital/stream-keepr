@@ -741,12 +741,17 @@ export function createD1GraphicsAssetCatalogue(
 				...input.operation,
 				declaredByteLength: observedByteLength,
 			}) - observedByteLength;
+			// This is the remote-copy equivalent of recordStagedBytes: the one point
+			// at which a complete remote input is durably staged, so it records the
+			// same transfer-completed fact. Without it the copy would read as an
+			// incomplete transfer and lose its seven-day staged-input guarantee.
 			const result = await database.prepare(`
 				UPDATE graphics_ingestion_operations
 				SET declared_byte_length = ?,
 					transferred_byte_length = ?,
 					staging_used_byte_length = ?,
-					staging_reserved_byte_length = ?
+					staging_reserved_byte_length = ?,
+					transfer_completed_at = COALESCE(transfer_completed_at, ?)
 				WHERE id = ? AND initiated_by = ?
 					AND source = 'remote-copy'
 					AND stage NOT IN ('completed', 'cancelled')
@@ -756,6 +761,7 @@ export function createD1GraphicsAssetCatalogue(
 				observedByteLength,
 				observedByteLength,
 				residualReservation,
+				new Date(input.recordedAt).getTime(),
 				input.operation.id,
 				input.operation.initiatedBy,
 				observedByteLength + residualReservation,

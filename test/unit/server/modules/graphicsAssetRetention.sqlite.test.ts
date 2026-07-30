@@ -48,7 +48,9 @@ function decodeEvidence(bytes: Uint8Array) {
 
 let harness: SqliteD1Harness;
 
-function createRetentionLibrary() {
+function createRetentionLibrary(
+	dependencies: Partial<Parameters<typeof createGraphicsAssetLibrary>[0]> = {},
+) {
 	let currentTime = new Date('2026-07-28T00:00:00.000Z');
 	let nextIdentity = 0;
 	const staging = createInMemoryStagingGraphicsObjectStore();
@@ -59,6 +61,7 @@ function createRetentionLibrary() {
 		canonical,
 		now: () => currentTime,
 		generateIdentity: () => `retention-${++nextIdentity}`,
+		...dependencies,
 	});
 	return {
 		library,
@@ -376,6 +379,71 @@ describe('scheduled Graphics Asset Library retention', () => {
 				expiredIncompleteTransfers: 0,
 				expiredCompletedInput: 0,
 			});
+
+			context.advanceTo(new Date(stagedAt + 7 * DAY).toISOString());
+			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
+				expiredIncompleteTransfers: 0,
+				expiredCompletedInput: 1,
+			});
+		});
+
+		it('gives an approved remote copy awaiting confirmation the seven-day promise', async () => {
+			// A remote copy stages its complete input through its own path rather
+			// than the streamed-upload one. If that path skipped the durable
+			// transfer-completed fact, the copy would read as an incomplete
+			// transfer and be expired after 24 hours instead of the seven days its
+			// staged input was promised.
+			const context = createRetentionLibrary({
+				remoteSource: {
+					async open() {
+						return {
+							outcome: 'open',
+							byteLength: pixelPng.byteLength,
+							body: new ReadableStream<Uint8Array>({
+								start(controller) {
+									controller.enqueue(pixelPng);
+									controller.close();
+								},
+							}),
+						};
+					},
+				},
+			});
+			const operation = await context.library.initiateRemoteGraphicAssetCopy({
+				idempotencyKey: 'remote-copy-retention',
+				initiatedBy: 'retention-author',
+				name: 'Remote copy awaiting confirmation',
+				sourceFileName: 'logo.png',
+			});
+			const copied = await context.library.copyRemoteGraphicAssetSource({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				sourceUrl: 'https://cdn.example.test/logo.png',
+			});
+			expect(copied).toMatchObject({ stage: 'awaiting-confirmation' });
+			// Expiry runs from the operation's last durable checkpoint, which its
+			// staging transitions advance past the initiation instant.
+			const stagedAt = new Date(copied.updatedAt).getTime();
+
+			await expect(context.library.getRetentionOverview()).resolves.toMatchObject({
+				stagedInput: [
+					expect.objectContaining({
+						operationId: operation.id,
+						transferComplete: true,
+						expiresAt: new Date(stagedAt + 7 * DAY).toISOString(),
+					}),
+				],
+			});
+
+			context.advanceTo(new Date(stagedAt + 7 * DAY - 1).toISOString());
+			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
+				expiredIncompleteTransfers: 0,
+				expiredCompletedInput: 0,
+			});
+			await expect(context.library.getIngestionOperation({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+			})).resolves.toMatchObject({ stage: 'awaiting-confirmation' });
 
 			context.advanceTo(new Date(stagedAt + 7 * DAY).toISOString());
 			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({

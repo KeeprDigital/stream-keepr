@@ -943,6 +943,21 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
 	});
 
+	it('refuses a client multipart transfer against a remote-copy operation', async () => {
+		const { library } = createLibrary();
+		const operation = await library.initiateRemoteGraphicAssetCopy({
+			idempotencyKey: 'remote-multipart-refused',
+			initiatedBy: 'graphics-author-1',
+			name: 'Remote copy operation',
+			sourceFileName: 'scoreboard.png',
+		});
+
+		await expect(library.startGraphicAssetMultipartUpload({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+		})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
+	});
+
 	it('refuses a remote copy against a local-upload operation', async () => {
 		const { library } = createLibrary();
 		const operation = await library.initiateGraphicsIngestion({

@@ -179,6 +179,7 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	recordRemoteCopyStagedSource: (input: {
 		operation: GraphicsIngestionOperation;
 		observedByteLength: number;
+		recordedAt: string;
 	}) => Promise<void>;
 	recordCanonicalWrites: (input: {
 		operation: GraphicsIngestionOperation;
@@ -1872,6 +1873,14 @@ export function createGraphicsAssetLibrary(
 					'invalid-ingestion-input',
 				);
 			}
+			// An approved remote copy owns the same staging identity for the whole
+			// of its own transfer, so a client-driven multipart must not race it.
+			if (operation.source === 'remote-copy') {
+				throw new GraphicsAssetLibraryError(
+					'An approved remote copy transfers its own source and cannot accept a client multipart upload',
+					'ingestion-operation-not-uploadable',
+				);
+			}
 			if (operation.stage !== 'created' && operation.stage !== 'transferring') {
 				throw new GraphicsAssetLibraryError(
 					`Graphics Ingestion Operation cannot start multipart transfer from stage ${operation.stage}`,
@@ -2442,6 +2451,7 @@ export function createGraphicsAssetLibrary(
 				() => catalogue.recordRemoteCopyStagedSource({
 					operation: operation!,
 					observedByteLength: staged.byteLength,
+					recordedAt: timestamp(),
 				}),
 				'Approved remote Graphic Asset copy progress could not be recorded',
 			);

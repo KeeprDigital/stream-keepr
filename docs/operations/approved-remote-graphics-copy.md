@@ -78,6 +78,33 @@ declarations, and the reservation is reduced to the observed length once the
 copy is staged. A remote source without a recognisable path extension or an
 author-declared media type is therefore bounded as a still image (25 MiB).
 
+## Retention of a remote copy's staged input
+
+A remote copy stages its complete input through `recordRemoteCopyStagedSource`
+rather than the streamed-upload path's `recordStagedBytes`. Both record the same
+durable `transfer_completed_at` fact, because retention classifies staged input
+on that column alone: set means the seven-day completed-input guarantee, unset
+means the 24-hour incomplete-transfer one. Stage cannot answer it, since
+`failed` is reachable both mid-transfer and after the input was durably staged.
+A remote copy paused at `awaiting-confirmation` therefore keeps its full seven
+days, which matters because that pause is where a remote copy normally waits for
+the author.
+
+Staged-object cleanup needs no remote-specific knowledge: the copy writes only
+`ingestion/<operation>/source`, already part of the set that cancellation,
+terminal failure, and staged-input expiry all reclaim.
+
+**Known gap.** The unknown-length path starts an R2 multipart upload without
+recording its `uploadId` durably, unlike the client-driven transfer which
+checkpoints it. Every in-request failure aborts that upload, but if the Worker
+dies between the first part and completion, the parts survive with no recorded
+`uploadId`, so `releaseStagedObjects` cannot abort them and the staging bucket
+has no lifecycle rule that would. Reaching it needs an unknown-length source
+larger than 16 MiB and a hard process death mid-copy. Closing it properly means
+checkpointing the `uploadId` and clearing that state on success, which changes
+durable multipart state shared with the client transfer path; a bucket lifecycle
+rule aborting incomplete multipart uploads would also bound it.
+
 ## Browser confirmation
 
 A local upload arrives with browser decode or font evidence for the author's own
