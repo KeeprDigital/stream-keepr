@@ -1,5 +1,7 @@
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type { PlayerSlotData } from '~~/shared/api';
+import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
+import type { BroadcastGraphicsLiveSessionStatus } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type { FeatureMatchSessionStatus, FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { PlayerGameData } from '~~/shared/types/game';
@@ -8,6 +10,7 @@ import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
 import { relations, sql } from 'drizzle-orm';
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
+import { BROADCAST_GRAPHICS_LIVE_SESSION_STATUS_VALUES } from '~~/shared/types/broadcastGraphicsLiveSession';
 /* ENUMS — imported from shared, re-exported for backward compatibility */
 import {
 	CLOCK_TYPE_VALUES,
@@ -369,6 +372,43 @@ export const featureMatchSessions = sqliteTable('feature_match_sessions', {
 ]);
 
 /**
+ * The playout epoch of one Broadcast Graphics Screen.
+ *
+ * Live state, not Screen configuration: the authored stack of Broadcast Graphics
+ * lives in `screens.mode_configs`, while which of them an operator has taken on
+ * air lives here with the authoritative sequence that ordered those decisions.
+ * Keeping the row durable is what lets a reload, disconnect, or server restart
+ * recover program exactly as the operator left it.
+ *
+ * Only one epoch is active per Screen. An ended epoch is retained rather than
+ * deleted so a stale retry from it can be recognised and rejected.
+ */
+export const broadcastGraphicsLiveSessions = sqliteTable('broadcast_graphics_live_sessions', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	eventId: integer('event_id')
+		.references(() => events.id, { onDelete: 'cascade' })
+		.notNull(),
+	screenId: integer('screen_id')
+		// eslint-disable-next-line ts/no-use-before-define -- screens is declared below
+		.references((): AnySQLiteColumn => screens.id, { onDelete: 'cascade' })
+		.notNull(),
+
+	status: text('status', { enum: BROADCAST_GRAPHICS_LIVE_SESSION_STATUS_VALUES })
+		.$type<BroadcastGraphicsLiveSessionStatus>()
+		.notNull()
+		.default('active'),
+	currentState: text('current_state', { mode: 'json' }).$type<BroadcastGraphicsLiveState>().notNull(),
+	sequence: integer('sequence').notNull().default(0),
+	endedAt: integer('ended_at', { mode: 'timestamp_ms' }),
+
+	...timestamps,
+}, table => [
+	index('broadcast_graphics_live_sessions_event_id_idx').on(table.eventId),
+	index('broadcast_graphics_live_sessions_screen_id_idx').on(table.screenId),
+	uniqueIndex('broadcast_graphics_live_sessions_active_screen_idx').on(table.screenId).where(sql`${table.status} = 'active'`),
+]);
+
+/**
  * Compact command receipts for every sequenced live-state aggregate.
  *
  * A receipt is deliberately not an event row. It answers only the two questions
@@ -406,6 +446,47 @@ export const liveStateCommandReceipts = sqliteTable('live_state_command_receipts
 	index('live_state_command_receipts_event_id_idx').on(table.eventId),
 	index('live_state_command_receipts_aggregate_idx').on(table.aggregateKind, table.aggregateId, table.sequence),
 	uniqueIndex('live_state_command_receipts_command_idx').on(table.aggregateKind, table.aggregateId, table.commandId),
+]);
+
+/**
+ * The single-writer claim on one graphics authoring artifact.
+ *
+ * A Graphics Authoring Lease is session-scoped, not durable state, so this table
+ * exists for atomicity rather than persistence: exclusivity is the entire point
+ * of a lease, and only a relational conditional write can decide two simultaneous
+ * acquisitions in one authoritative order. What keeps the row from outliving its
+ * session is `expires_at` — every read treats a lapsed row as no lease at all, so
+ * a browser that closes without releasing frees its artifact on its own, with no
+ * cleanup sweep and no possibility of a restart resurrecting a stale claim.
+ *
+ * One row per artifact, enforced by the unique index rather than by convention.
+ */
+export const graphicsAuthoringLeases = sqliteTable('graphics_authoring_leases', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	/** Which kind of graphics authoring artifact is leased. */
+	artifactKind: text('artifact_kind').notNull(),
+	/** The artifact's own stable identity within that kind. */
+	artifactId: text('artifact_id').notNull(),
+	/**
+	 * The owning Event, for artifacts that have one. Reusable-library artifacts are
+	 * installation-scoped and carry none.
+	 */
+	eventId: integer('event_id').references(() => events.id, { onDelete: 'cascade' }),
+
+	/** The graphics author session holding the lease. */
+	holderSessionId: text('holder_session_id').notNull(),
+	acquiredAt: integer('acquired_at', { mode: 'timestamp_ms' }).notNull(),
+	/**
+	 * The deadline past which the lease counts as absent. Liveness is this column
+	 * alone; a heartbeat is stored only as the deadline it bought, so there is no
+	 * second timestamp to read or keep consistent with it.
+	 */
+	expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+
+	...timestamps,
+}, table => [
+	uniqueIndex('graphics_authoring_leases_artifact_idx').on(table.artifactKind, table.artifactId),
+	index('graphics_authoring_leases_event_id_idx').on(table.eventId),
 ]);
 
 export const featureMatches = featureMatchSlots;
@@ -775,6 +856,17 @@ export const featureMatchSessionsRelations = relations(featureMatchSessions, ({ 
 	}),
 }));
 
+export const broadcastGraphicsLiveSessionsRelations = relations(broadcastGraphicsLiveSessions, ({ one }) => ({
+	event: one(events, {
+		fields: [broadcastGraphicsLiveSessions.eventId],
+		references: [events.id],
+	}),
+	screen: one(screens, {
+		fields: [broadcastGraphicsLiveSessions.screenId],
+		references: [screens.id],
+	}),
+}));
+
 export const liveStateCommandReceiptsRelations = relations(liveStateCommandReceipts, ({ one }) => ({
 	event: one(events, {
 		fields: [liveStateCommandReceipts.eventId],
@@ -868,11 +960,12 @@ export const archetypeCardsRelations = relations(archetypeCards, ({ one }) => ({
 	}),
 }));
 
-export const screensRelations = relations(screens, ({ one }) => ({
+export const screensRelations = relations(screens, ({ one, many }) => ({
 	event: one(events, {
 		fields: [screens.eventId],
 		references: [events.id],
 	}),
+	broadcastGraphicsLiveSessions: many(broadcastGraphicsLiveSessions),
 }));
 
 /* DB TYPES */
@@ -896,6 +989,8 @@ export type DbFeatureMatchSlot = typeof featureMatchSlots.$inferSelect;
 export type DbFeatureMatchSlotInsert = typeof featureMatchSlots.$inferInsert;
 export type DbFeatureMatchSession = typeof featureMatchSessions.$inferSelect;
 export type DbFeatureMatchSessionInsert = typeof featureMatchSessions.$inferInsert;
+export type DbBroadcastGraphicsLiveSession = typeof broadcastGraphicsLiveSessions.$inferSelect;
+export type DbBroadcastGraphicsLiveSessionInsert = typeof broadcastGraphicsLiveSessions.$inferInsert;
 export type DbLiveStateCommandReceipt = typeof liveStateCommandReceipts.$inferSelect;
 export type DbLiveStateCommandReceiptInsert = typeof liveStateCommandReceipts.$inferInsert;
 export type DbScreen = typeof screens.$inferSelect;

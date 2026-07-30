@@ -38,8 +38,15 @@ import {
 import {
 	GRAPHIC_ANCHOR_POINT_VALUES,
 	GRAPHIC_FONT_STYLE_VALUES,
+	GRAPHIC_GROUP_ALIGN_VALUES,
+	GRAPHIC_GROUP_ARRANGEMENT_VALUES,
+	GRAPHIC_GROUP_JUSTIFY_VALUES,
 	GRAPHIC_TEXT_ALIGN_VALUES,
 	GRAPHIC_TEXT_TRANSFORM_VALUES,
+	MAX_GRAPHIC_FILL_STOPS,
+	MAX_GRAPHIC_TEXT_LENGTH,
+	MIN_GRAPHIC_FILL_STOPS,
+	SHAPE_CORNER_TREATMENT_VALUES,
 	TEXT_OVERFLOW_POLICY_VALUES,
 } from '~~/shared/types/graphics';
 import {
@@ -581,6 +588,7 @@ export const featureMatchOverlayModeConfigSchema = z.object({
  * ──────────────────────────────────────────────── */
 
 const graphicAnchorPointSchema = z.enum(GRAPHIC_ANCHOR_POINT_VALUES);
+const graphicRotationSchema = finiteNumberSchema.min(-360).max(360);
 
 const graphicTypographySchema = z.object({
 	fontId: z.enum(GRAPHIC_FONT_IDS),
@@ -594,13 +602,52 @@ const graphicTypographySchema = z.object({
 	color: cssColorSchema,
 }).strict();
 
+const graphicFillStopSchema = z.object({
+	color: cssColorSchema,
+	position: opacitySchema,
+	opacity: opacitySchema,
+}).strict();
+
+const graphicFillSchema = z.discriminatedUnion('type', [
+	z.object({
+		type: z.literal('solid'),
+		color: cssColorSchema,
+	}).strict(),
+	z.object({
+		type: z.literal('linear-gradient'),
+		angle: finiteNumberSchema.min(-360).max(360),
+		stops: z.array(graphicFillStopSchema)
+			.min(MIN_GRAPHIC_FILL_STOPS)
+			.max(MAX_GRAPHIC_FILL_STOPS),
+	}).strict(),
+]);
+
 const graphicSurfaceStyleSchema = z.object({
-	fill: cssColorSchema,
+	fill: graphicFillSchema,
 	fillOpacity: opacitySchema,
+	outline: z.object({
+		color: cssColorSchema,
+		width: nonNegativePixelSchema.max(500),
+	}).strict().optional(),
+	glow: z.object({
+		color: cssColorSchema,
+		size: nonNegativePixelSchema.max(500),
+		opacity: opacitySchema,
+	}).strict().optional(),
+}).strict();
+
+const graphicShapeCornerSchema = z.object({
+	treatment: z.enum(SHAPE_CORNER_TREATMENT_VALUES),
+	size: nonNegativePixelSchema,
 }).strict();
 
 const graphicShapeGeometrySchema = z.object({
-	cornerRadius: nonNegativePixelSchema,
+	topLeft: graphicShapeCornerSchema,
+	topRight: graphicShapeCornerSchema,
+	bottomRight: graphicShapeCornerSchema,
+	bottomLeft: graphicShapeCornerSchema,
+	leftSlant: pixelPositionSchema,
+	rightSlant: pixelPositionSchema,
 }).strict();
 
 const graphicItemBaseShape = {
@@ -608,45 +655,142 @@ const graphicItemBaseShape = {
 	label: z.string().min(1).max(100),
 	visible: z.boolean(),
 	anchor: graphicAnchorPointSchema,
+	rotation: graphicRotationSchema.optional(),
 	x: pixelPositionSchema,
 	y: pixelPositionSchema,
 	width: pixelSizeSchema,
 	height: pixelSizeSchema,
 };
 
-const textGraphicItemConfigSchema = z.object({
+const textGraphicItemShape = {
 	...graphicItemBaseShape,
 	type: z.literal('text'),
-	text: z.string().max(1000),
+	text: z.string().max(MAX_GRAPHIC_TEXT_LENGTH),
 	typography: graphicTypographySchema,
 	overflowPolicy: z.enum(TEXT_OVERFLOW_POLICY_VALUES),
 	minFontSize: finiteNumberSchema.positive().max(600),
-}).strict();
+	surfaceStyle: graphicSurfaceStyleSchema.optional(),
+};
 
-const shapeGraphicItemConfigSchema = z.object({
+const shapeGraphicItemShape = {
 	...graphicItemBaseShape,
 	type: z.literal('shape'),
 	geometry: graphicShapeGeometrySchema,
-	surfaceStyle: graphicSurfaceStyleSchema,
+	surfaceStyle: graphicSurfaceStyleSchema.optional(),
+};
+
+const textGraphicItemConfigSchema = z.object(textGraphicItemShape).strict();
+const shapeGraphicItemConfigSchema = z.object(shapeGraphicItemShape).strict();
+
+/**
+ * Main-axis sizing belongs to a Graphic Group child, so only a child carries
+ * one: a top-level Graphic Item has no group to be sized inside.
+ */
+const graphicGroupChildSizingSchema = z.object({
+	mode: z.enum(['fixed', 'fill']),
+	size: nonNegativePixelSchema,
+	weight: finiteNumberSchema.min(0).max(100),
+}).strict();
+
+/**
+ * A Graphic Group child is any base Graphic Item kind except another Graphic
+ * Group: the union simply omits it, so non-nesting is a property of the wire
+ * schema rather than a rule something has to check.
+ */
+const graphicGroupChildConfigSchema = z.discriminatedUnion('type', [
+	z.object({ ...textGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
+	z.object({ ...shapeGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
+]);
+
+export const MAX_GRAPHIC_GROUP_CHILDREN = 50;
+
+const graphicGroupItemConfigSchema = z.object({
+	...graphicItemBaseShape,
+	type: z.literal('group'),
+	arrangement: z.enum(GRAPHIC_GROUP_ARRANGEMENT_VALUES),
+	padding: nonNegativePixelSchema,
+	gap: nonNegativePixelSchema,
+	align: z.enum(GRAPHIC_GROUP_ALIGN_VALUES),
+	justify: z.enum(GRAPHIC_GROUP_JUSTIFY_VALUES),
+	clip: z.boolean(),
+	geometry: graphicShapeGeometrySchema,
+	surfaceStyle: graphicSurfaceStyleSchema.optional(),
+	defaultChildSurfaceStyle: graphicSurfaceStyleSchema.optional(),
+	children: z.array(graphicGroupChildConfigSchema).max(
+		MAX_GRAPHIC_GROUP_CHILDREN,
+		`A Graphic Group must not contain more than ${MAX_GRAPHIC_GROUP_CHILDREN} Graphic Items`,
+	),
 }).strict();
 
 const graphicItemConfigSchema = z.discriminatedUnion('type', [
 	textGraphicItemConfigSchema,
 	shapeGraphicItemConfigSchema,
+	graphicGroupItemConfigSchema,
 ]);
 
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC = 100;
 export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
+
+/**
+ * The whole-Screen Graphic Item budget.
+ *
+ * The per-graphic and per-Screen caps bound each list independently, but their
+ * product does not come close to fitting `MAX_MODE_CONFIGS_BYTES`. Measured
+ * against this schema's own maxima, the most expensive Graphic Item a Graphic
+ * Group can hold serializes to 2,004 bytes (a 1,000-character Text Graphic Item
+ * with a four-stop gradient, an outline, a glow, rotation, and main-axis sizing),
+ * a Graphic Group shell to 1,510, and a Broadcast Graphic shell to 166. Without
+ * a total cap, 50 Broadcast Graphics x 100 Graphic Groups x 50 children is
+ * 255,000 Graphic Items and about 485 MiB against a 512 KiB budget shared by
+ * every Screen Mode.
+ *
+ * This cap binds the product: 200 x 2,004 + 50 x 166 is about 400 KiB, or 78% of
+ * that budget, and realistic authoring measures around 119 KiB. It is
+ * deliberately a named cap so an operator reads which limit they reached rather
+ * than a byte count. Graphic Group children count towards it — they are Graphic
+ * Items and they cost bytes.
+ *
+ * The remaining ~112 KiB is shared with every other mode's configuration, so a
+ * Screen carrying both a maximal Broadcast Graphics stack and a maximal Feature
+ * Match Overlay layout can still reach the byte limit. That is a property of one
+ * budget shared across modes and predates this cap.
+ */
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 200;
+
+function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
+	return items.reduce(
+		(total, item) => total + 1 + (item.type === 'group' ? (item.children?.length ?? 0) : 0),
+		0,
+	);
+}
+
+function graphicItemIds(items: readonly { id: string; type: string; children?: readonly { id: string }[] }[]) {
+	return items.flatMap(item => [
+		item.id,
+		...(item.type === 'group' ? (item.children ?? []).map(child => child.id) : []),
+	]);
+}
 
 const broadcastGraphicConfigSchema = z.object({
 	id: z.string().min(1).max(100),
 	name: z.string().min(1).max(100),
 	// Named caps: these are reached before the mode-configuration byte limit, so
 	// the operator learns which cap they hit rather than reading a byte count.
-	items: z.array(graphicItemConfigSchema).max(
-		MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
-		`A Broadcast Graphic must not contain more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC} Graphic Items`,
-	),
+	items: z.array(graphicItemConfigSchema)
+		.max(
+			MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
+			`A Broadcast Graphic must not contain more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC} Graphic Items`,
+		)
+		// Graphic Item ids are unique within one Broadcast Graphic, including a
+		// Graphic Group's children. Every authoring operation addresses an item by
+		// id alone and resolves it against both levels, so a duplicate would edit,
+		// move, or delete the wrong item. The check belongs on this field rather
+		// than on the object: the mode-configuration patch schema rebuilds each
+		// mode from its field schemas and drops object-level refinements.
+		.refine(
+			items => new Set(graphicItemIds(items)).size === graphicItemIds(items).length,
+			'Graphic Item ids must be unique within one Broadcast Graphic',
+		),
 }).strict();
 
 /**
@@ -654,10 +798,19 @@ const broadcastGraphicConfigSchema = z.object({
  * stack of Broadcast Graphics. The Screen's canvas stays in the Screen config.
  */
 export const broadcastGraphicsModeConfigSchema = z.object({
-	graphics: z.array(broadcastGraphicConfigSchema).max(
-		MAX_BROADCAST_GRAPHICS_PER_SCREEN,
-		`A Broadcast Graphics Screen must not carry more than ${MAX_BROADCAST_GRAPHICS_PER_SCREEN} Broadcast Graphics`,
-	),
+	// Every cap lives on the array itself rather than on this object: the
+	// mode-configuration patch schema rebuilds each mode from its field schemas,
+	// so an object-level refinement would never reach the write path the editor uses.
+	graphics: z.array(broadcastGraphicConfigSchema)
+		.max(
+			MAX_BROADCAST_GRAPHICS_PER_SCREEN,
+			`A Broadcast Graphics Screen must not carry more than ${MAX_BROADCAST_GRAPHICS_PER_SCREEN} Broadcast Graphics`,
+		)
+		.refine(
+			graphics => graphics.reduce((total, graphic) => total + countGraphicItems(graphic.items), 0)
+				<= MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN,
+			`A Broadcast Graphics Screen must not carry more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Items in total`,
+		),
 }).strict() satisfies z.ZodType<BroadcastGraphicsModeConfig>;
 
 export const metagameModeConfigSchema = z.object({

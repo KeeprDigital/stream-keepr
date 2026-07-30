@@ -4,11 +4,12 @@ import type { FeatureMatchOverlayFontId } from '../featureMatchOverlayFonts';
  * Shared Graphics Foundation vocabulary.
  *
  * The Graphic Item, geometry, and styling model that Broadcast Graphics and
- * Feature Match Overlay both speak. This module carries only the minimal
- * vocabulary the compositor interprets today — Text Graphic Items and Shape
- * Graphic Items. Graphic Groups, per-corner Shape Geometry and edge slants,
- * gradients, glow, Graphic Rotation, Media Graphic Items, and Graphic
- * Animation join the same vocabulary later without changing this shape.
+ * Feature Match Overlay both speak. It now carries the full static vocabulary
+ * the compositor interprets: Text Graphic Items, Shape Graphic Items, Graphic
+ * Groups, per-corner Shape Geometry with bounded edge slants, Graphic Surface
+ * Style with solid and linear-gradient Graphic Fill, outline and glow, and
+ * Graphic Rotation. Media Graphic Items, Graphic Inputs, and Graphic Animation
+ * join the same vocabulary later without changing this shape.
  */
 
 /** One of nine points on a canvas-positioned Graphic Item. */
@@ -30,6 +31,26 @@ export type GraphicAnchorPoint = typeof GRAPHIC_ANCHOR_POINT_VALUES[number];
 export const TEXT_OVERFLOW_POLICY_VALUES = ['clip', 'ellipsis', 'shrink'] as const;
 
 export type TextOverflowPolicy = typeof TEXT_OVERFLOW_POLICY_VALUES[number];
+
+/**
+ * The operator-visible lifecycle status of a placed Broadcast Graphic.
+ *
+ * The whole vocabulary is declared here because it is settled, but playout
+ * currently produces only off and on-air. Waiting belongs to an Out-then-in
+ * Graphic Channel handoff, and entering, updating, and exiting are the phases of
+ * a Graphic Animation, so each becomes reachable with the capability that
+ * creates it.
+ */
+export const GRAPHIC_PLAYOUT_STATE_VALUES = [
+	'off',
+	'waiting',
+	'entering',
+	'on-air',
+	'updating',
+	'exiting',
+] as const;
+
+export type GraphicPlayoutState = typeof GRAPHIC_PLAYOUT_STATE_VALUES[number];
 
 /** An authoring projection of canonical pixel geometry. Storage is always pixels. */
 export const GRAPHIC_GEOMETRY_UNIT_VALUES = ['px', 'percent', 'grid'] as const;
@@ -69,26 +90,118 @@ export interface GraphicTypography {
 	color: string;
 }
 
-/**
- * The shared visual treatment of a Shape Graphic Item.
- *
- * The vocabulary offers this to Text Graphic Items and Graphic Groups too, but a
- * Text Graphic Item does not carry one yet: its colour lives in its base
- * typography, and giving text a fill, outline, and glow belongs with the full
- * style vocabulary. Gradients, outlines, and glow join this shape there.
- */
-export interface GraphicSurfaceStyle {
-	fill: string;
-	fillOpacity: number;
+/* ────────────────────────────────────────────────
+ * Graphic Fill and Graphic Surface Style
+ * ──────────────────────────────────────────────── */
+
+export const GRAPHIC_FILL_KIND_VALUES = ['solid', 'linear-gradient'] as const;
+export type GraphicFillKind = typeof GRAPHIC_FILL_KIND_VALUES[number];
+
+/** One positioned colour stop of a linear-gradient Graphic Fill. */
+export interface GraphicFillStop {
+	color: string;
+	/** Fraction along the gradient axis, 0 to 1. */
+	position: number;
+	opacity: number;
 }
 
 /**
- * A parameterised rectangle. Per-corner square/rounded/cut treatment and
- * bounded edge slants extend this shape with the full geometry vocabulary; a
- * basic Shape Graphic Item authors one uniform corner radius.
+ * The bound on a Text Graphic Item's own text. It holds a name, a title, or a
+ * Graphic Text Template with `{inputKey}` placeholders, and its Text Overflow
+ * Policy already assumes the rendered result fits authored bounds.
+ *
+ * It lives here rather than in the wire schema so the editor can bound its own
+ * control, and an operator is stopped in the field instead of losing a whole
+ * write to a validation error.
+ */
+export const MAX_GRAPHIC_TEXT_LENGTH = 1000;
+
+export const MIN_GRAPHIC_FILL_STOPS = 2;
+export const MAX_GRAPHIC_FILL_STOPS = 4;
+
+/**
+ * A solid colour or a declarative linear gradient with an angle and two to four
+ * positioned colour stops. Complex or procedural surfaces are Media Graphic
+ * Items rather than Graphic Fills.
+ */
+export type GraphicFill
+	=	| { type: 'solid'; color: string }
+		| { type: 'linear-gradient'; angle: number; stops: GraphicFillStop[] };
+
+/** A uniform outline drawn inside a surface's own Shape Geometry. */
+export interface GraphicOutline {
+	color: string;
+	width: number;
+}
+
+/** A soft halo around a surface's painted alpha. */
+export interface GraphicGlow {
+	color: string;
+	size: number;
+	opacity: number;
+}
+
+/**
+ * The shared visual treatment available to Text Graphic Items, Shape Graphic
+ * Items, and Graphic Groups: fill, fill opacity, a uniform outline around the
+ * Shape Geometry, and glow.
+ *
+ * Typography belongs to the Text Graphic Item and corners and slants belong to
+ * Shape Geometry. An independently styled edge is a Shape Graphic Item created
+ * from the rule preset rather than one side of an outline.
+ */
+export interface GraphicSurfaceStyle {
+	fill: GraphicFill;
+	fillOpacity: number;
+	outline?: GraphicOutline;
+	glow?: GraphicGlow;
+}
+
+/* ────────────────────────────────────────────────
+ * Shape Geometry
+ * ──────────────────────────────────────────────── */
+
+export const SHAPE_CORNER_TREATMENT_VALUES = ['square', 'rounded', 'cut'] as const;
+export type ShapeCornerTreatment = typeof SHAPE_CORNER_TREATMENT_VALUES[number];
+
+/** One independently configured corner. `size` is ignored while square. */
+export interface ShapeCorner {
+	treatment: ShapeCornerTreatment;
+	size: number;
+}
+
+export const SHAPE_CORNER_KEYS = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft'] as const;
+export type ShapeCornerKey = typeof SHAPE_CORNER_KEYS[number];
+
+/**
+ * A parameterised rectangle with independently configurable square, rounded, or
+ * cut corners and bounded left or right edge slants.
+ *
+ * A slant is a signed horizontal offset in canvas pixels: positive insets that
+ * edge's top vertex, negative insets its bottom vertex. Rectangle, rule,
+ * slanted-edge, and corner-cut presets are authoring shortcuts that initialise
+ * this same shape rather than distinct persisted types.
  */
 export interface ShapeGeometry {
-	cornerRadius: number;
+	topLeft: ShapeCorner;
+	topRight: ShapeCorner;
+	bottomRight: ShapeCorner;
+	bottomLeft: ShapeCorner;
+	leftSlant: number;
+	rightSlant: number;
+}
+
+/* ────────────────────────────────────────────────
+ * Graphic Items
+ * ──────────────────────────────────────────────── */
+
+/** Weighted-fill or fixed main-axis sizing for a row or column Graphic Group child. */
+export interface GraphicGroupChildSizing {
+	mode: 'fixed' | 'fill';
+	/** Main-axis pixels while fixed. */
+	size: number;
+	/** Share of the remaining main axis while filling. */
+	weight: number;
 }
 
 interface GraphicItemConfigBase extends GraphicRect {
@@ -97,6 +210,16 @@ interface GraphicItemConfigBase extends GraphicRect {
 	visible: boolean;
 	/** Determines the item's displayed position; stored geometry stays a top-left rectangle. */
 	anchor: GraphicAnchorPoint;
+	/**
+	 * Graphic Rotation in degrees around the Graphic Anchor Point. Only
+	 * canvas-positioned items rotate; a row or column Graphic Group child ignores it.
+	 */
+	rotation?: number;
+	/**
+	 * Main-axis sizing inside a row or column Graphic Group. Only a Graphic Group
+	 * child carries one, and only its group's arrangement reads it.
+	 */
+	sizing?: GraphicGroupChildSizing;
 }
 
 export interface TextGraphicItemConfig extends GraphicItemConfigBase {
@@ -107,15 +230,62 @@ export interface TextGraphicItemConfig extends GraphicItemConfigBase {
 	overflowPolicy: TextOverflowPolicy;
 	/** The author-set floor a `shrink` Text Overflow Policy shrinks to before ellipsis. */
 	minFontSize: number;
+	/**
+	 * Absent means the item paints no surface of its own, and inherits its Graphic
+	 * Group's local style default when it has one.
+	 */
+	surfaceStyle?: GraphicSurfaceStyle;
 }
 
 export interface ShapeGraphicItemConfig extends GraphicItemConfigBase {
 	type: 'shape';
 	geometry: ShapeGeometry;
-	surfaceStyle: GraphicSurfaceStyle;
+	/** Absent inherits the containing Graphic Group's local style default. */
+	surfaceStyle?: GraphicSurfaceStyle;
 }
 
-export type GraphicItemConfig = TextGraphicItemConfig | ShapeGraphicItemConfig;
+export const GRAPHIC_GROUP_ARRANGEMENT_VALUES = ['row', 'column', 'canvas'] as const;
+export type GraphicGroupArrangement = typeof GRAPHIC_GROUP_ARRANGEMENT_VALUES[number];
+
+export const GRAPHIC_GROUP_ALIGN_VALUES = ['start', 'center', 'end', 'stretch'] as const;
+export type GraphicGroupAlign = typeof GRAPHIC_GROUP_ALIGN_VALUES[number];
+
+export const GRAPHIC_GROUP_JUSTIFY_VALUES = ['start', 'center', 'end', 'space-between'] as const;
+export type GraphicGroupJustify = typeof GRAPHIC_GROUP_JUSTIFY_VALUES[number];
+
+/**
+ * A Graphic Group child. Groups are not nested in the initial Shared Graphics
+ * Foundation vocabulary, which this union states structurally: no Graphic Group
+ * can appear in another group's children.
+ */
+export type GraphicGroupChildConfig = TextGraphicItemConfig | ShapeGraphicItemConfig;
+
+/**
+ * A structural Graphic Item that arranges its direct children as a row, column,
+ * or canvas. It forms one layer among its siblings, and its children cannot
+ * escape that stacking context.
+ */
+export interface GraphicGroupItemConfig extends GraphicItemConfigBase {
+	type: 'group';
+	arrangement: GraphicGroupArrangement;
+	/** Inset from the group's own bounds, in canvas pixels. */
+	padding: number;
+	/** Row and column spacing between children, in canvas pixels. */
+	gap: number;
+	align: GraphicGroupAlign;
+	justify: GraphicGroupJustify;
+	/** Clip children to the group's Shape Geometry. */
+	clip: boolean;
+	/** The group's own surface shape and, while clipping, its clipping boundary. */
+	geometry: ShapeGeometry;
+	surfaceStyle?: GraphicSurfaceStyle;
+	/** A local style default each direct child can override with its own. */
+	defaultChildSurfaceStyle?: GraphicSurfaceStyle;
+	/** Graphic Layer Order of this group's direct children. */
+	children: GraphicGroupChildConfig[];
+}
+
+export type GraphicItemConfig = TextGraphicItemConfig | ShapeGraphicItemConfig | GraphicGroupItemConfig;
 
 export type GraphicItemKind = GraphicItemConfig['type'];
 
