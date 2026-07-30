@@ -4,11 +4,14 @@ import type {
 	GraphicGroupChildConfig,
 	GraphicGroupItemConfig,
 	GraphicSurfaceStyle,
+	MediaGraphicItemConfig,
 	ShapeGraphicItemConfig,
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
+import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicItemRenderDescriptor,
+	GraphicMediaRenderDescriptor,
 	GraphicSurfaceRenderDescriptor,
 } from '~/modules/graphics/renderModel';
 import { describe, expect, it } from 'vitest';
@@ -51,6 +54,38 @@ function text(id: string, overrides: Partial<TextGraphicItemConfig> = {}): TextG
 		typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY },
 		overflowPolicy: 'ellipsis',
 		minFontSize: 24,
+		...overrides,
+	};
+}
+
+const ASSET: GraphicAssetReference = {
+	assetId: 'asset-1' as GraphicAssetReference['assetId'],
+	revisionId: 'revision-7' as GraphicAssetReference['revisionId'],
+};
+
+/** Resolves exactly the way a Screen Output's capability-backed resolver does. */
+function contentUrl(reference: GraphicAssetReference): string {
+	return `/api/screen-output/screens/9/assets/${reference.assetId}/revisions/${reference.revisionId}/content`;
+}
+
+function media(id: string, overrides: Partial<MediaGraphicItemConfig> = {}): MediaGraphicItemConfig {
+	return {
+		type: 'media',
+		id,
+		label: id,
+		visible: true,
+		anchor: 'top-left',
+		x: 40,
+		y: 60,
+		width: 480,
+		height: 270,
+		asset: ASSET,
+		mediaKind: 'image',
+		fit: 'cover',
+		focalPosition: { horizontal: 0.5, vertical: 0.5 },
+		opacity: 1,
+		playbackRate: 1,
+		loop: true,
 		...overrides,
 	};
 }
@@ -145,6 +180,16 @@ const COLOUR_TOKEN = /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|c
 const RECOGNISED_COLOUR_KEYS = new Set(['color']);
 
 /**
+ * The one filter a Media Graphic Item's element may carry in the Key Output: the
+ * alpha-as-white conversion, and nothing else.
+ *
+ * Written out rather than imported so the guard states the requirement
+ * independently of the module it guards. A model that changed the conversion —
+ * or dropped it — would still have to satisfy this exact string.
+ */
+const KEY_MEDIA_ALPHA_TO_WHITE = 'brightness(0) invert(1)';
+
+/**
  * Every style property the render model is known to emit that cannot paint.
  *
  * This, rather than colour detection, is what keeps the guard closed against
@@ -236,6 +281,62 @@ function stylePaints(style: CSSProperties, path: string): KeyPaint[] {
 	return paints;
 }
 
+/**
+ * Every style property a Media Graphic Item's element is known to emit that
+ * cannot paint. Deliberately its own allowlist rather than a few additions to
+ * `NON_PAINTING_KEYS`: `objectFit`, `objectPosition`, and `opacity` are
+ * meaningless on an item, text, or surface style, and an element paint appearing
+ * on one of those should still fail by key alone.
+ */
+const MEDIA_NON_PAINTING_KEYS = new Set([
+	'display',
+	'height',
+	'objectFit',
+	'objectPosition',
+	'opacity',
+	'width',
+]);
+
+/**
+ * What one Media Graphic Item paints, and proof that it paints white.
+ *
+ * An image or video element cannot be recoloured by a CSS paint property, so the
+ * check is inverted from the surface one: rather than asserting a colour is
+ * white, it asserts the alpha-as-white conversion is present. Without it the
+ * element paints the asset's own colours straight into the matte — which looks
+ * perfect in the Overlay Output and silently corrupts the keyed feed, the exact
+ * failure this guard exists to catch.
+ *
+ * An unresolved reference paints nothing, so it contributes no paint. A resolved
+ * one contributes white at the element's opacity: the worst case for the matte,
+ * a fully opaque region of the asset.
+ */
+function mediaPaints(media: GraphicMediaRenderDescriptor, path: string): KeyPaint[] {
+	for (const [key, value] of Object.entries(media.style)) {
+		if (value === undefined || value === null)
+			continue;
+		const text = String(value);
+
+		if (key === 'filter') {
+			if (text !== KEY_MEDIA_ALPHA_TO_WHITE)
+				throw new Error(`${path}.media.filter must be exactly the alpha-as-white conversion, got: ${text}`);
+			continue;
+		}
+
+		if (!MEDIA_NON_PAINTING_KEYS.has(key))
+			throw new Error(`${path}.media.${key} is an unrecognised style property in the Key Output: ${text}`);
+		if ((text.match(COLOUR_TOKEN) ?? []).length > 0)
+			throw new Error(`${path}.media.${key} is an unrecognised paint in the Key Output: ${text}`);
+	}
+
+	if (media.src === '')
+		return [];
+	if (media.style.filter !== KEY_MEDIA_ALPHA_TO_WHITE)
+		throw new Error(`${path}.media paints its own colours into the Key Output instead of its alpha as white`);
+
+	return [{ color: '#ffffff', opacity: Number(media.style.opacity ?? 1) }];
+}
+
 function surfacePaints(surface: GraphicSurfaceRenderDescriptor, path: string): KeyPaint[] {
 	const paints: KeyPaint[] = [];
 	const gradient = surface.fill.gradient;
@@ -273,6 +374,7 @@ function itemPaints(item: GraphicItemRenderDescriptor, prefix = ''): KeyPaint[] 
 		...stylePaints(item.style, path),
 		...(item.textStyle ? stylePaints(item.textStyle, `${path}.textStyle`) : []),
 		...(item.surface ? surfacePaints(item.surface, path) : []),
+		...(item.media ? mediaPaints(item.media, path) : []),
 		...(item.children ?? []).flatMap(child => itemPaints(child, `${path}>`)),
 	];
 }
@@ -637,6 +739,164 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 	});
 
+	describe('media Graphic Items', () => {
+		it('fits an asset inside the authored bounds at its focal position and opacity', () => {
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('a', [
+					media('cover'),
+					media('contained', { fit: 'contain', opacity: 0.4, focalPosition: { horizontal: 0, vertical: 1 } }),
+					media('filled', { fit: 'fill' }),
+				])],
+				graphicAssetContentUrl: contentUrl,
+				...CANVAS,
+			});
+
+			const [cover, contained, filled] = model.graphics[0]!.items;
+			expect(cover?.kind).toBe('media');
+			expect(cover?.media?.style).toMatchObject({
+				objectFit: 'cover',
+				objectPosition: '50% 50%',
+				opacity: 1,
+			});
+			expect(contained?.media?.style).toMatchObject({
+				objectFit: 'contain',
+				objectPosition: '0% 100%',
+				opacity: 0.4,
+			});
+			expect(filled?.media?.style.objectFit).toBe('fill');
+			// A cover fit overflows the box it fills, so the item always hides overflow.
+			for (const item of [cover, contained, filled])
+				expect(item?.style.overflow).toBe('hidden');
+		});
+
+		it('resolves content only through the resolver its output supplies', () => {
+			// A Screen Output supplies a resolver backed by its Screen Output Asset
+			// Capability. The model never derives a library URL of its own, so there is
+			// no path by which an output could reach unpublished library content.
+			const graphics = [graphic('a', [media('logo')])];
+
+			const resolved = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics,
+				graphicAssetContentUrl: contentUrl,
+				...CANVAS,
+			});
+			const withoutResolver = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics,
+				...CANVAS,
+			});
+
+			expect(resolved.graphics[0]?.items[0]?.media?.src)
+				.toBe('/api/screen-output/screens/9/assets/asset-1/revisions/revision-7/content');
+			expect(withoutResolver.graphics[0]?.items[0]?.media?.src).toBe('');
+		});
+
+		it('paints nothing for an item with no asset pinned, and still occupies its bounds', () => {
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('a', [media('empty', { asset: undefined })])],
+				graphicAssetContentUrl: contentUrl,
+				...CANVAS,
+			});
+
+			const item = model.graphics[0]?.items[0];
+			expect(item?.media?.src).toBe('');
+			expect(item?.style).toMatchObject({ left: '40px', top: '60px', width: '480px', height: '270px' });
+		});
+
+		it('carries silent-video playback and starts from the beginning by construction', () => {
+			// Nothing in the model expresses a playback position: an element created
+			// when its graphic enters starts at zero, so "from its start" is a property
+			// of mounting the element rather than a value to carry.
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('a', [media('sting', {
+					mediaKind: 'silent-video',
+					playbackRate: 0.5,
+					loop: false,
+					videoCompatibility: 'chromium-transparency',
+				})])],
+				graphicAssetContentUrl: contentUrl,
+				...CANVAS,
+			});
+
+			expect(model.graphics[0]?.items[0]?.media).toMatchObject({
+				mediaKind: 'silent-video',
+				playbackRate: 0.5,
+				loop: false,
+				videoCompatibility: 'chromium-transparency',
+			});
+			expect(model.graphics[0]?.items[0]?.media).not.toHaveProperty('currentTime');
+		});
+
+		it('clips to an optional Shape Geometry, and to its own rectangle without one', () => {
+			const clipped = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('a', [media('angled', {
+					width: 600,
+					height: 120,
+					clipGeometry: { ...squareShapeGeometry(), rightSlant: 60 },
+				})])],
+				graphicAssetContentUrl: contentUrl,
+				...CANVAS,
+			});
+			const rectangular = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('a', [media('plain', { clipGeometry: squareShapeGeometry() })])],
+				graphicAssetContentUrl: contentUrl,
+				...CANVAS,
+			});
+			const unclipped = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('a', [media('plain')])],
+				graphicAssetContentUrl: contentUrl,
+				...CANVAS,
+			});
+
+			// The canonical Shape Geometry path, identical to the one a Shape Graphic
+			// Item of the same size and geometry draws.
+			expect(clipped.graphics[0]?.items[0]?.style.clipPath)
+				.toBe(`path('M 0 0 L 540 0 L 600 120 L 0 120 Z')`);
+			expect(rectangular.graphics[0]?.items[0]?.style.clipPath).toBeUndefined();
+			expect(unclipped.graphics[0]?.items[0]?.style.clipPath).toBeUndefined();
+		});
+
+		it('places a Media Graphic Item inside a Graphic Group like any other child', () => {
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('a', [group('cluster', [
+					media('badge', { sizing: { mode: 'fixed', size: 120, weight: 1 } }),
+				], {
+					// A Media Graphic Item paints no surface, so a group style default has
+					// nothing on it to fill in.
+					defaultChildSurfaceStyle: { fill: { type: 'solid', color: '#00ff00' }, fillOpacity: 1 },
+				})])],
+				graphicAssetContentUrl: contentUrl,
+				...CANVAS,
+			});
+
+			const child = model.graphics[0]!.items[0]!.children![0]!;
+			expect(child.kind).toBe('media');
+			expect(child.style.flex).toBe('0 0 120px');
+			expect(child.surface).toBeUndefined();
+			expect(child.media?.src).not.toBe('');
+		});
+
+		it('paints no Graphic Surface Style and no glow of its own', () => {
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('a', [media('logo')])],
+				graphicAssetContentUrl: contentUrl,
+				...CANVAS,
+			});
+
+			expect(model.graphics[0]?.items[0]?.surface).toBeUndefined();
+			expect(model.graphics[0]?.items[0]?.style.filter).toBeUndefined();
+		});
+	});
+
 	it('scopes gradient and clip element ids to the whole composition', () => {
 		// Concurrent Broadcast Graphics composite into one document, and SVG
 		// `url(#id)` resolution is document-scoped, so two items sharing an id across
@@ -774,6 +1034,126 @@ describe('graphicsCompositionRenderModel', () => {
 			expect(key.graphics[0]?.items[0]?.style.filter).toBe('drop-shadow(0 0 20px #ffffff80)');
 		});
 
+		it('contributes a Media Graphic Item as its alpha in white, never as its own colours', () => {
+			// The failure this prevents is asymmetric: a media element that keeps its
+			// colours looks perfect in the Overlay Output and produces a matte that is
+			// the asset's luminance instead of its alpha, so the downstream composite
+			// is wrong only once it is on air.
+			const graphics = [graphic('a', [media('logo')])];
+
+			const overlay = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics,
+				graphicAssetContentUrl: contentUrl,
+				...CANVAS,
+			});
+			const key = resolveGraphicsCompositionRenderModel({
+				output: 'key',
+				graphics,
+				graphicAssetContentUrl: contentUrl,
+				...CANVAS,
+			});
+
+			expect(overlay.graphics[0]?.items[0]?.media?.style.filter).toBeUndefined();
+			expect(key.graphics[0]?.items[0]?.media?.style.filter).toBe(KEY_MEDIA_ALPHA_TO_WHITE);
+			// Same asset, same fitting: the Key Output differs by the conversion alone,
+			// so it resolves the same composition as the Overlay Output.
+			expect(key.graphics[0]?.items[0]?.media?.src).toBe(overlay.graphics[0]?.items[0]?.media?.src);
+			expect(key.graphics[0]?.items[0]?.style).toEqual(overlay.graphics[0]?.items[0]?.style);
+		});
+
+		it('accumulates a Media Graphic Item into the alpha union with the items it overlaps', () => {
+			// A half-opaque media item over a half-opaque shape is the same 0.75 union as
+			// two half-opaque shapes. If media painted its own luminance instead, this
+			// number would move with the asset.
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'key',
+				graphics: [graphic('a', [
+					shape('under', { surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }) }),
+					media('over', { opacity: 0.5 }),
+				])],
+				graphicAssetContentUrl: contentUrl,
+				...CANVAS,
+			});
+
+			const luminance = compositeKeyLuminance(
+				model.canvasStyle.background,
+				model.graphics[0]!.items.flatMap(item => itemPaints(item)),
+			);
+
+			expect(luminance).toBeCloseTo(0.75, 2);
+		});
+
+		it('lets an unresolved Media Graphic Item contribute no alpha at all', () => {
+			// An empty or unresolvable reference paints nothing, so it must add nothing
+			// to the matte either — an opaque white rectangle where content failed to
+			// load would key a hole in program.
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'key',
+				graphics: [graphic('a', [media('empty', { asset: undefined })])],
+				graphicAssetContentUrl: contentUrl,
+				...CANVAS,
+			});
+
+			const luminance = compositeKeyLuminance(
+				model.canvasStyle.background,
+				model.graphics[0]!.items.flatMap(item => itemPaints(item)),
+			);
+
+			expect(luminance).toBe(0);
+		});
+
+		it('fails closed on media: rejects an element paint the matte identity does not allow', () => {
+			const probe = (style: CSSProperties, src = '/content'): GraphicItemRenderDescriptor => ({
+				id: 'probe',
+				label: 'probe',
+				kind: 'media',
+				style: {},
+				media: {
+					mediaKind: 'image',
+					src,
+					style,
+					loop: true,
+					playbackRate: 1,
+				} satisfies GraphicMediaRenderDescriptor,
+			});
+
+			// The conversion missing altogether is the regression that matters most.
+			expect(() => itemPaints(probe({ opacity: 1 })))
+				.toThrow(/paints its own colours into the Key Output/);
+
+			// A conversion that only looks right must fail too: `grayscale` maps colour
+			// to its luminance, which is precisely the wrong matte.
+			for (const filter of [
+				'grayscale(1)',
+				'brightness(0)',
+				'invert(1)',
+				'brightness(0) invert(1) blur(2px)',
+				'drop-shadow(0 0 8px #ffffff80)',
+			])
+				expect(() => itemPaints(probe({ filter }))).toThrow(/alpha-as-white conversion/);
+
+			// And an element reaching for a paint property of its own is caught by key.
+			expect(() => itemPaints(probe({ filter: KEY_MEDIA_ALPHA_TO_WHITE, backgroundColor: '#ff0000' })))
+				.toThrow(/unrecognised style property/);
+			expect(() => itemPaints(probe({ filter: KEY_MEDIA_ALPHA_TO_WHITE, mixBlendMode: 'screen' })))
+				.toThrow(/unrecognised style property/);
+
+			// What the model really does emit still passes.
+			expect(() => itemPaints(probe({
+				display: 'block',
+				width: '100%',
+				height: '100%',
+				objectFit: 'cover',
+				objectPosition: '50% 50%',
+				opacity: 0.5,
+				filter: KEY_MEDIA_ALPHA_TO_WHITE,
+			}))).not.toThrow();
+			// An unresolved reference is exempt from needing the conversion: it paints
+			// nothing, so there is nothing to convert.
+			expect(() => itemPaints(probe({ opacity: 1 }, ''))).not.toThrow();
+		});
+
 		it('fails closed: rejects any paint the matte identity does not allow', () => {
 			// The guard above is only worth having if it cannot be satisfied by a
 			// colour it failed to recognise. Every one of these is a way colour could
@@ -849,19 +1229,23 @@ describe('graphicsCompositionRenderModel', () => {
 						surfaceStyle: loud,
 						typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, color: '#bd167f' },
 					}),
+					media('picture', { clipGeometry: { ...squareShapeGeometry(), leftSlant: 20 } }),
 					group('cluster', [
 						shape('child', { surfaceStyle: loud }),
 						text('child-name', { typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, color: '#321048' } }),
+						media('child-picture', { mediaKind: 'silent-video' }),
 					], { surfaceStyle: loud, defaultChildSurfaceStyle: loud }),
 				])],
+				graphicAssetContentUrl: contentUrl,
 				...CANVAS,
 			});
 
-			// Exactly what the three items paint: a glow, three gradient stops and an
-			// outline each, plus one text colour each for the two text items, and the
-			// group's own surface on top of its two children.
+			// Exactly what the four items paint: a glow, three gradient stops and an
+			// outline each, plus one text colour each for the two text items, the
+			// group's own surface on top of its three children, and one white
+			// contribution for each of the two Media Graphic Items.
 			const paints = model.graphics[0]!.items.flatMap(item => itemPaints(item));
-			expect(paints).toHaveLength(27);
+			expect(paints).toHaveLength(29);
 			for (const paint of paints)
 				expect(keyChannels(paint.color).luminance).toBe(1);
 		});

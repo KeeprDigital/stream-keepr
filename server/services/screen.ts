@@ -7,10 +7,11 @@ import { db } from 'hub:db';
 import { screens } from '~~/server/db/schema';
 import {
 	deleteScreenWithGraphicAssetReferences,
-	updateFeatureMatchOverlayWithGraphicAssetReferences,
+	updateScreenModeConfigWithGraphicAssetReferences,
 } from '~~/server/modules/screen-graphic-asset-references';
 import { StateConflictError } from '~~/server/utils/errors';
 import { mergeScreenConfig, mergeScreenModeConfig } from '~~/shared/types/screenConfig';
+import { isGraphicAssetReferencingScreenMode } from '~~/shared/utils/graphicsAssetReferences';
 
 export function screenService() {
 	const findById = async (id: number, eventId: number): Promise<DbScreen | undefined> => {
@@ -138,10 +139,14 @@ export function screenService() {
 		partialConfig: Record<string, unknown>,
 		stateVersion?: number,
 	): Promise<DbScreen | undefined> => {
-		if (mode === 'feature-match-overlay') {
-			return await updateFeatureMatchOverlayWithGraphicAssetReferences({
+		// A graphics mode's configuration and its Graphic Asset Reference index are
+		// one write, so a Screen Output can never resolve a revision the Screen no
+		// longer publishes, or fail to resolve one it does.
+		if (isGraphicAssetReferencingScreenMode(mode)) {
+			return await updateScreenModeConfigWithGraphicAssetReferences({
 				id,
 				eventId,
+				mode,
 				partialConfig,
 				stateVersion,
 			});

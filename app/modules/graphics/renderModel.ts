@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'vue';
+import type { MediaGraphicItemKind } from '~~/shared/types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
 	GraphicAnchorPoint,
@@ -8,9 +9,11 @@ import type {
 	GraphicItemKind,
 	GraphicRect,
 	GraphicSurfaceStyle,
+	MediaGraphicItemConfig,
 	ShapeGeometry,
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
+import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from './selection';
 import {
@@ -74,8 +77,26 @@ import { graphicsSelectionGraphicId, graphicsSelectionKey } from './selection';
  *   then draws the result source-over, so a white glow accumulates like any
  *   other white paint.
  * - A Media Graphic Item must not paint its own colours into the Key Output; it
- *   contributes its alpha as white.
+ *   contributes its alpha as white. `KEY_MEDIA_ALPHA_TO_WHITE` is how: an image
+ *   or video element cannot be recoloured by a CSS paint property, so the Key
+ *   Output filters its decoded pixels to pure white while leaving every alpha
+ *   value exactly as decoded. Element `opacity` then multiplies through, so a
+ *   half-opaque media item accumulates like a half-opaque fill.
  */
+
+/**
+ * How a Media Graphic Item contributes its alpha as white to the Key Output.
+ *
+ * `brightness(0)` takes every colour channel to zero and `invert(1)` takes it to
+ * one, and neither touches the alpha channel — so a partly transparent PNG or a
+ * VP9-alpha video keeps its exact per-pixel alpha while its colour stops
+ * existing. This is the only filter the Key Output applies to a media element,
+ * and it composites plain source-over like every other white paint.
+ *
+ * Getting this wrong is invisible in the Overlay Output and wrong on air, which
+ * is why it is named, exported, and asserted rather than inlined.
+ */
+export const KEY_MEDIA_ALPHA_TO_WHITE = 'brightness(0) invert(1)';
 
 /** Advisory action-safe guides sit at a five-percent inset, title-safe at ten percent. */
 export const GRAPHICS_ACTION_SAFE_INSET = 0.05;
@@ -97,6 +118,17 @@ export interface GraphicsCompositionRenderModelInput {
 	/** Editor-only advisory action-safe and title-safe guides. */
 	safeAreaGuides?: boolean;
 	selectedTarget?: GraphicsSelectionTarget;
+	/**
+	 * Resolves one pinned Graphic Asset Reference to a URL this output may load.
+	 *
+	 * Injected rather than computed, because a live Screen Output resolves content
+	 * only through its Screen Output Asset Capability and the editor preview
+	 * resolves it as an author — two different URLs for the same pinned revision,
+	 * and neither is something a pure model can decide. An absent resolver, or one
+	 * that returns an empty string, renders a Media Graphic Item as its bounds and
+	 * nothing else, which is what an unresolvable reference should look like.
+	 */
+	graphicAssetContentUrl?: (reference: GraphicAssetReference) => string;
 }
 
 /** The measurement bounds a `shrink` Text Overflow Policy fits text between. */
@@ -145,6 +177,31 @@ export interface GraphicSurfaceRenderDescriptor {
 	outline?: GraphicOutlineDescriptor;
 }
 
+/** One Media Graphic Item's asset, and how its element paints inside the item's bounds. */
+export interface GraphicMediaRenderDescriptor {
+	mediaKind: MediaGraphicItemKind;
+	/**
+	 * The URL the element loads. Empty when no asset is pinned, or when this
+	 * output cannot currently resolve the pinned revision — in both cases the item
+	 * paints nothing rather than a broken element.
+	 */
+	src: string;
+	/**
+	 * The element's own paint: fitting, focal position, and opacity, plus the Key
+	 * Output's alpha-as-white conversion. Separate from the item style so a media
+	 * element's filter can never collide with a glow's.
+	 */
+	style: CSSProperties;
+	/** Silent-video playback. An image item carries both and ignores them. */
+	loop: boolean;
+	playbackRate: number;
+	/**
+	 * The pinned revision's own target compatibility, so an output can report a
+	 * VP9-alpha video it cannot play rather than showing a blank rectangle.
+	 */
+	videoCompatibility?: 'all-supported' | 'chromium-transparency';
+}
+
 export interface GraphicItemRenderDescriptor {
 	id: string;
 	label: string;
@@ -158,6 +215,8 @@ export interface GraphicItemRenderDescriptor {
 	/** Present for Text Graphic Items. */
 	text?: string;
 	shrink?: GraphicTextShrinkBounds;
+	/** Present for Media Graphic Items. */
+	media?: GraphicMediaRenderDescriptor;
 	/** Present for Graphic Groups: the group's direct children, back to front. */
 	children?: GraphicItemRenderDescriptor[];
 }
@@ -484,10 +543,15 @@ function groupClip(group: GraphicGroupItemConfig): CSSProperties {
 	};
 }
 
-/** A child's own Graphic Surface Style, or the group's local style default. */
+/**
+ * A child's own Graphic Surface Style, or the group's local style default.
+ *
+ * Only a child that can carry one asks: a Media Graphic Item paints an asset
+ * rather than a surface, so it has nothing for a group default to fill in.
+ */
 function resolveChildSurfaceStyle(
 	group: GraphicGroupItemConfig,
-	child: GraphicGroupChildConfig,
+	child: Exclude<GraphicGroupChildConfig, MediaGraphicItemConfig>,
 ): GraphicSurfaceStyle | undefined {
 	return child.surfaceStyle ?? group.defaultChildSurfaceStyle;
 }
@@ -513,17 +577,88 @@ function textDescriptor(
 	};
 }
 
+/**
+ * A Media Graphic Item's optional Shape Geometry clipping.
+ *
+ * Absent clipping still hides overflow, because a `cover` fit deliberately
+ * overflows the box it fills and nothing may paint outside an item's authored
+ * bounds. A rectangular clip needs no path for the same reason a Graphic Group's
+ * does not.
+ */
+function mediaClip(item: MediaGraphicItemConfig): CSSProperties {
+	if (!item.clipGeometry || isRectangularShapeGeometry(item.clipGeometry))
+		return { overflow: 'hidden' };
+	return {
+		overflow: 'hidden',
+		clipPath: `path('${shapeGeometryPath(item, item.clipGeometry)}')`,
+	};
+}
+
+/**
+ * One Media Graphic Item's element paint.
+ *
+ * Focal position is where `objectPosition` puts the asset inside the box, which
+ * is what decides which part of a `cover` fit survives the crop. In the Key
+ * Output the element is filtered to white at its own alpha; see
+ * `KEY_MEDIA_ALPHA_TO_WHITE`.
+ */
+function mediaDescriptor(
+	output: ScreenOutput,
+	item: MediaGraphicItemConfig,
+	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
+): GraphicMediaRenderDescriptor {
+	return {
+		mediaKind: item.mediaKind,
+		src: item.asset && resolveContentUrl ? resolveContentUrl(item.asset) : '',
+		style: {
+			display: 'block',
+			width: '100%',
+			height: '100%',
+			objectFit: item.fit,
+			objectPosition: `${clampOpacity(item.focalPosition.horizontal) * 100}% ${clampOpacity(item.focalPosition.vertical) * 100}%`,
+			opacity: clampOpacity(item.opacity),
+			filter: output === 'key' ? KEY_MEDIA_ALPHA_TO_WHITE : undefined,
+		},
+		loop: item.loop,
+		playbackRate: item.playbackRate,
+		videoCompatibility: item.videoCompatibility,
+	};
+}
+
+function mediaItemDescriptor(
+	output: ScreenOutput,
+	item: MediaGraphicItemConfig,
+	placement: CSSProperties,
+	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
+): GraphicItemRenderDescriptor {
+	return {
+		id: item.id,
+		label: item.label,
+		kind: 'media',
+		style: { ...placement, ...mediaClip(item) },
+		media: mediaDescriptor(output, item, resolveContentUrl),
+	};
+}
+
 function childDescriptor(
 	output: ScreenOutput,
 	graphicId: string,
 	group: GraphicGroupItemConfig,
 	child: GraphicGroupChildConfig,
+	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
 ): GraphicItemRenderDescriptor {
 	const placement = group.arrangement === 'canvas'
 		? canvasPlacement(child, { x: Math.max(0, group.padding), y: Math.max(0, group.padding) })
 		: stackedPlacement(group, child);
-	const surfaceStyle = resolveChildSurfaceStyle(group, child);
 	const scope = elementScope(graphicId, child.id);
+
+	// A Media Graphic Item carries no Graphic Surface Style, so it never inherits
+	// its Graphic Group's local style default either: there is nothing on it for
+	// that default to fill in.
+	if (child.type === 'media')
+		return mediaItemDescriptor(output, child, placement, resolveContentUrl);
+
+	const surfaceStyle = resolveChildSurfaceStyle(group, child);
 
 	if (child.type === 'text')
 		return textDescriptor(output, scope, child, placement, surfaceStyle);
@@ -541,12 +676,16 @@ function itemDescriptor(
 	output: ScreenOutput,
 	graphicId: string,
 	item: GraphicItemConfig,
+	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
 ): GraphicItemRenderDescriptor {
 	const placement = canvasPlacement(item, { x: 0, y: 0 });
 	const scope = elementScope(graphicId, item.id);
 
 	if (item.type === 'text')
 		return textDescriptor(output, scope, item, placement, item.surfaceStyle);
+
+	if (item.type === 'media')
+		return mediaItemDescriptor(output, item, placement, resolveContentUrl);
 
 	if (item.type === 'shape') {
 		return {
@@ -571,7 +710,7 @@ function itemDescriptor(
 		surface: surfaceDescriptor(output, scope, item, item.geometry, item.surfaceStyle),
 		children: item.children
 			.filter(child => child.visible)
-			.map(child => childDescriptor(output, graphicId, item, child)),
+			.map(child => childDescriptor(output, graphicId, item, child, resolveContentUrl)),
 	};
 }
 
@@ -646,7 +785,7 @@ export function resolveGraphicsCompositionRenderModel(
 			name: graphic.name,
 			items: graphic.items
 				.filter(item => item.visible)
-				.map(item => itemDescriptor(input.output, graphic.id, item)),
+				.map(item => itemDescriptor(input.output, graphic.id, item, input.graphicAssetContentUrl)),
 		})),
 		safeAreaGuides: input.safeAreaGuides
 			? [

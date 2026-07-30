@@ -1,3 +1,4 @@
+import type { GraphicFocalPosition, MediaGraphicItemKind } from '../../types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
 	GraphicFill,
@@ -12,14 +13,16 @@ import type {
 	GraphicOutline,
 	GraphicSurfaceStyle,
 	GraphicTypography,
+	MediaGraphicItemConfig,
 	ShapeCorner,
 	ShapeCornerKey,
 	ShapeGeometry,
 	TextGraphicItemConfig,
 } from '../../types/graphics';
+import type { GraphicAssetReference } from '../../types/graphicsAsset';
 import type { ShapeGeometryPresetId } from './shapeGeometry';
 import { createDefaultGraphicSurfaceStyle, getGraphicItemDefinition, graphicItemKindLabel } from './itemDefinitions';
-import { getShapeGeometryPreset } from './shapeGeometry';
+import { getShapeGeometryPreset, squareShapeGeometry } from './shapeGeometry';
 
 /**
  * Authoring operations for a Screen's back-to-front stack of Broadcast
@@ -307,11 +310,35 @@ function patchGraphicItemGroup<K extends GraphicItemKind>(
 	return patchGraphicItem(graphic, itemId, merge(item as Extract<GraphicItemConfig, { type: K }>));
 }
 
-/** The kinds that own a Shape Geometry: a Shape Graphic Item and a Graphic Group. */
-const GEOMETRY_KINDS = ['shape', 'group'] as const;
+/**
+ * The kinds that own a Shape Geometry: a Shape Graphic Item and a Graphic Group
+ * draw one, and a Media Graphic Item clips to one.
+ */
+const GEOMETRY_KINDS = ['shape', 'group', 'media'] as const;
 
-/** The kinds that may carry a Graphic Surface Style. */
+/** The kinds that may carry a Graphic Surface Style. A Media Graphic Item paints an asset, not a surface. */
 const SURFACE_KINDS = ['text', 'shape', 'group'] as const;
+
+type GeometryOwner = Extract<GraphicItemConfig, { type: typeof GEOMETRY_KINDS[number] }>;
+
+/**
+ * Where one item keeps the Shape Geometry a geometry edit means, and what it
+ * currently holds.
+ *
+ * A Shape Graphic Item and a Graphic Group always have a `geometry`. A Media
+ * Graphic Item's `clipGeometry` is optional, and absent means it clips to nothing
+ * but its own bounds — so a geometry edit aimed at one that is not clipping
+ * resolves to nothing and becomes a no-op, rather than switching clipping on as a
+ * side effect of nudging a corner. `setMediaClipGeometry` is the one control that
+ * decides whether a media item clips at all.
+ */
+function ownedShapeGeometry(
+	item: GeometryOwner,
+): { field: 'geometry' | 'clipGeometry'; geometry: ShapeGeometry } | null {
+	if (item.type === 'media')
+		return item.clipGeometry ? { field: 'clipGeometry', geometry: item.clipGeometry } : null;
+	return { field: 'geometry', geometry: item.geometry };
+}
 
 /** Merge into a Shape Geometry, preserving every other field. */
 export function patchShapeGeometry(
@@ -319,9 +346,10 @@ export function patchShapeGeometry(
 	itemId: string,
 	patch: Partial<ShapeGeometry>,
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, GEOMETRY_KINDS, item => ({
-		geometry: { ...item.geometry, ...patch },
-	}));
+	return patchGraphicItemGroup(graphic, itemId, GEOMETRY_KINDS, (item) => {
+		const owned = ownedShapeGeometry(item);
+		return owned ? { [owned.field]: { ...owned.geometry, ...patch } } : {};
+	});
 }
 
 /** Merge into one independently configured corner of a Shape Geometry. */
@@ -331,9 +359,14 @@ export function patchShapeCorner(
 	corner: ShapeCornerKey,
 	patch: Partial<ShapeCorner>,
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, GEOMETRY_KINDS, item => ({
-		geometry: { ...item.geometry, [corner]: { ...item.geometry[corner], ...patch } },
-	}));
+	return patchGraphicItemGroup(graphic, itemId, GEOMETRY_KINDS, (item) => {
+		const owned = ownedShapeGeometry(item);
+		if (!owned)
+			return {};
+		return {
+			[owned.field]: { ...owned.geometry, [corner]: { ...owned.geometry[corner], ...patch } },
+		};
+	});
 }
 
 /**
@@ -347,11 +380,89 @@ export function applyShapeGeometryPreset(
 	presetId: ShapeGeometryPresetId,
 ): BroadcastGraphicConfig {
 	return patchGraphicItemGroup(graphic, itemId, GEOMETRY_KINDS, (item) => {
+		const owned = ownedShapeGeometry(item);
+		if (!owned)
+			return {};
 		const result = getShapeGeometryPreset(presetId).apply({ width: item.width, height: item.height });
 		return result.height === undefined
-			? { geometry: result.geometry }
-			: { geometry: result.geometry, height: result.height };
+			? { [owned.field]: result.geometry }
+			: { [owned.field]: result.geometry, height: result.height };
 	});
+}
+
+/**
+ * Turn a Media Graphic Item's optional Shape Geometry clipping on or off.
+ *
+ * Switching it off drops the authored clip rather than flattening it to a
+ * rectangle, so the item goes back to clipping to its own bounds and nothing
+ * persists a shape the author cannot see.
+ */
+export function setMediaClipGeometry(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	clipping: boolean,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['media'], item => ({
+		clipGeometry: clipping ? (item.clipGeometry ?? squareShapeGeometry()) : undefined,
+	}));
+}
+
+/** Replace top-level properties of a Media Graphic Item, with its own type checked. */
+export function patchMediaGraphicItem(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	patch: Partial<Omit<MediaGraphicItemConfig, 'type' | 'id'>>,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['media'], () => patch);
+}
+
+/** Merge into a Media Graphic Item's focal position, preserving the other axis. */
+export function patchMediaFocalPosition(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	patch: Partial<GraphicFocalPosition>,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['media'], item => ({
+		focalPosition: { ...item.focalPosition, ...patch },
+	}));
+}
+
+/**
+ * Pin one exact Graphic Asset identity and revision on a Media Graphic Item.
+ *
+ * The asset's own kind decides the item's media kind, and a silent video also
+ * records the revision's target compatibility, which the reference index checks.
+ * Playback rate and looping survive a switch to an image and back: they are the
+ * author's settings, not the asset's.
+ */
+export function selectMediaGraphicItemAsset(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	selection: {
+		asset: GraphicAssetReference;
+		mediaKind: MediaGraphicItemKind;
+		videoCompatibility?: 'all-supported' | 'chromium-transparency';
+	},
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['media'], () => ({
+		asset: selection.asset,
+		mediaKind: selection.mediaKind,
+		videoCompatibility: selection.mediaKind === 'silent-video' ? selection.videoCompatibility : undefined,
+	}));
+}
+
+/**
+ * Unpin a Media Graphic Item's Graphic Asset, leaving an item that occupies its
+ * bounds and paints nothing.
+ */
+export function clearMediaGraphicItemAsset(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['media'], () => ({
+		asset: undefined,
+		videoCompatibility: undefined,
+	}));
 }
 
 /**
@@ -581,7 +692,7 @@ export function patchGraphicGroupChildSizing(
 	if (!findGraphicItem(graphic, itemId)?.group)
 		return graphic;
 
-	return patchGraphicItemGroup(graphic, itemId, ['text', 'shape'], item => ({
+	return patchGraphicItemGroup(graphic, itemId, ['text', 'shape', 'media'], item => ({
 		sizing: { mode: 'fixed', size: item.width, weight: 1, ...item.sizing, ...patch },
 	}));
 }

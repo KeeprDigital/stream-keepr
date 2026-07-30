@@ -1,5 +1,6 @@
 import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { GraphicAssetReferenceStatus } from '~~/shared/types/graphicsAsset';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
@@ -33,6 +34,21 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	onAirGraphicIds: (_screenId: number, graphics: readonly { id: string }[]) =>
 		onAirBroadcastGraphicIds(mockLiveState.value, graphics),
 }));
+
+/** What every Graphic Asset Revision status request answers with. */
+const mockReferenceStatus = ref<GraphicAssetReferenceStatus>({
+	outcome: 'available',
+	lifecycleState: 'active',
+	kind: 'image',
+});
+const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+
+mockNuxtImport('$fetch', () => mockApiFetch);
+
+const UAlertStub = defineComponent({
+	props: { title: { type: String, required: false }, description: { type: String, required: false } },
+	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span></div>',
+});
 
 const ScreenSettingsCardStub = defineComponent({
 	props: { title: { type: String, required: false } },
@@ -78,6 +94,7 @@ async function mountComponent(graphics: BroadcastGraphicConfig[] = [lowerThird, 
 				UIcon: UIconStub,
 				UFieldGroup: UFieldGroupStub,
 				UButton: UButtonStub,
+				UAlert: UAlertStub,
 			},
 		},
 	});
@@ -95,6 +112,8 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		mockLiveState.value = createInitialBroadcastGraphicsLiveState();
 		mockPendingGraphicIds.value = [];
 		mockError.value = null;
+		mockReferenceStatus.value = { outcome: 'available', lifecycleState: 'active', kind: 'image' };
+		mockApiFetch.mockImplementation(async () => mockReferenceStatus.value);
 	});
 
 	it('loads the authoritative playout snapshot for the Screen', async () => {
@@ -196,5 +215,91 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 
 		expect(wrapper.emitted('select')).toEqual([['slate']]);
 		expect(mockTake).not.toHaveBeenCalled();
+	});
+
+	describe('graphic asset references', () => {
+		const withMedia: BroadcastGraphicConfig = {
+			id: 'slate',
+			name: 'Slate',
+			items: [{
+				type: 'media',
+				id: 'logo',
+				label: 'Sponsor',
+				visible: true,
+				anchor: 'top-left',
+				x: 0,
+				y: 0,
+				width: 100,
+				height: 100,
+				asset: { assetId: 'asset-1' as never, revisionId: 'revision-1' as never },
+				mediaKind: 'image',
+				fit: 'cover',
+				focalPosition: { horizontal: 0.5, vertical: 0.5 },
+				opacity: 1,
+				playbackRate: 1,
+				loop: true,
+			}],
+		};
+
+		it('blocks Take on a Broadcast Graphic whose Graphic Asset Reference is missing, and says which item', async () => {
+			mockReferenceStatus.value = { outcome: 'missing' };
+
+			const wrapper = await mountComponent([lowerThird, withMedia]);
+
+			const entry = entryFor(wrapper, 'slate');
+			expect(entry.get('[data-testid="playout-take"]').attributes('disabled')).toBeDefined();
+			expect(entry.get('[data-testid="playout-cut-take"]').attributes('disabled')).toBeDefined();
+			expect(wrapper.get('[data-testid="playout-asset-blocked-slate"]').text())
+				.toContain('graphics.slate.items.logo.asset');
+			// Only the owning graphic is invalidated; the rest of the stack still operates.
+			expect(entryFor(wrapper, 'lower-third').get('[data-testid="playout-take"]').attributes('disabled'))
+				.toBeUndefined();
+		});
+
+		it('keeps Out available on an invalidated Broadcast Graphic, so it can leave air', async () => {
+			mockReferenceStatus.value = { outcome: 'missing' };
+			mockLiveState.value = { playout: { slate: { onAir: true } } };
+
+			const wrapper = await mountComponent([lowerThird, withMedia]);
+
+			const entry = entryFor(wrapper, 'slate');
+			expect(entry.get('[data-testid="playout-out"]').attributes('disabled')).toBeUndefined();
+
+			await entry.get('[data-testid="playout-out"]').trigger('click');
+			expect(mockOut).toHaveBeenCalledWith(7, 3, 'slate', false);
+		});
+
+		it('offers a retry for Unavailable Graphic Asset Content, and none for a missing reference', async () => {
+			// Unavailable is retryable because the revision still exists; missing is an
+			// integrity failure that only a repair in the Edit workspace resolves.
+			mockReferenceStatus.value = { outcome: 'unavailable', retryable: true };
+			const unavailable = await mountComponent([withMedia]);
+
+			expect(unavailable.get('[data-testid="playout-asset-blocked-slate"]').text()).toContain('Retry');
+			expect(unavailable.find('[data-testid="playout-retry-asset-content"]').exists()).toBe(true);
+
+			mockReferenceStatus.value = { outcome: 'missing' };
+			const missing = await mountComponent([withMedia]);
+
+			expect(missing.find('[data-testid="playout-retry-asset-content"]').exists()).toBe(false);
+		});
+
+		it('leaves every action available when each pinned revision resolves', async () => {
+			mockReferenceStatus.value = { outcome: 'available', lifecycleState: 'active', kind: 'image' };
+
+			const wrapper = await mountComponent([withMedia]);
+
+			expect(wrapper.find('[data-testid="playout-asset-blocked-slate"]').exists()).toBe(false);
+			expect(entryFor(wrapper, 'slate').get('[data-testid="playout-take"]').attributes('disabled'))
+				.toBeUndefined();
+		});
+
+		it('never asks about a Broadcast Graphic that pins no assets at all', async () => {
+			const wrapper = await mountComponent([lowerThird]);
+
+			expect(mockApiFetch).not.toHaveBeenCalled();
+			expect(entryFor(wrapper, 'lower-third').get('[data-testid="playout-take"]').attributes('disabled'))
+				.toBeUndefined();
+		});
 	});
 });

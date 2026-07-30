@@ -1,4 +1,4 @@
-import type { BroadcastGraphicConfig, GraphicGroupItemConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicGroupItemConfig, MediaGraphicItemConfig } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import {
 	addGraphicGroupChild,
@@ -6,6 +6,7 @@ import {
 	applyShapeGeometryPreset,
 	changeGraphicGradientStopCount,
 	clearGraphicSurfaceStyle,
+	clearMediaGraphicItemAsset,
 	createBroadcastGraphic,
 	deleteBroadcastGraphic,
 	deleteGraphicItem,
@@ -25,9 +26,13 @@ import {
 	patchGraphicSolidFill,
 	patchGraphicSurfaceStyle,
 	patchGraphicTypography,
+	patchMediaFocalPosition,
+	patchMediaGraphicItem,
 	patchShapeCorner,
 	patchShapeGeometry,
+	selectMediaGraphicItemAsset,
 	setGraphicFillKind,
+	setMediaClipGeometry,
 } from '~~/shared/modules/graphics';
 
 const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
@@ -418,6 +423,172 @@ describe('broadcastGraphicAuthoring', () => {
 
 			expect(group(patched)).toMatchObject({ arrangement: 'canvas', clip: true });
 			expect(group(patched).children).toEqual(group(built).children);
+		});
+
+		it('sizes a Media Graphic Item child on the main axis of its group', () => {
+			const built = addGraphicGroupChild(
+				addGraphicItem(graphic('a'), { kind: 'group', id: 'cluster', ...CANVAS }).graphic,
+				{ kind: 'media', groupId: 'cluster', id: 'logo' },
+			).graphic;
+
+			const patched = patchGraphicGroupChildSizing(built, 'logo', { mode: 'fill', weight: 2 });
+
+			expect(group(patched).children[0]).toMatchObject({ type: 'media', sizing: { mode: 'fill', weight: 2 } });
+		});
+	});
+
+	describe('media Graphic Items', () => {
+		const REFERENCE = { assetId: 'asset-1' as never, revisionId: 'revision-1' as never };
+
+		function withMedia() {
+			return addGraphicItem(graphic('a'), { kind: 'media', id: 'logo', ...CANVAS }).graphic;
+		}
+
+		function media(built: BroadcastGraphicConfig): MediaGraphicItemConfig {
+			const item = built.items.find(entry => entry.id === 'logo');
+			if (item?.type !== 'media')
+				throw new Error('expected a Media Graphic Item');
+			return item;
+		}
+
+		it('pins one exact Graphic Asset identity and revision, taking its kind from the asset', () => {
+			const patched = selectMediaGraphicItemAsset(withMedia(), 'logo', {
+				asset: REFERENCE,
+				mediaKind: 'silent-video',
+				videoCompatibility: 'chromium-transparency',
+			});
+
+			expect(media(patched)).toMatchObject({
+				asset: REFERENCE,
+				mediaKind: 'silent-video',
+				videoCompatibility: 'chromium-transparency',
+			});
+		});
+
+		it('records target compatibility only for a silent video, and clears it for an image', () => {
+			// The compatibility fact belongs to a video revision. Carrying a stale one
+			// on an image would make the reference index check a rule that no longer
+			// applies to the pinned bytes.
+			const video = selectMediaGraphicItemAsset(withMedia(), 'logo', {
+				asset: REFERENCE,
+				mediaKind: 'silent-video',
+				videoCompatibility: 'all-supported',
+			});
+
+			const image = selectMediaGraphicItemAsset(video, 'logo', {
+				asset: REFERENCE,
+				mediaKind: 'image',
+				videoCompatibility: 'all-supported',
+			});
+
+			expect(media(video).videoCompatibility).toBe('all-supported');
+			expect(media(image).videoCompatibility).toBeUndefined();
+			expect(media(image).mediaKind).toBe('image');
+		});
+
+		it('keeps authored playback settings across a change of asset kind', () => {
+			// Playback rate and looping are the author's, not the asset's, so a detour
+			// through an image must not discard them.
+			const configured = patchMediaGraphicItem(withMedia(), 'logo', { playbackRate: 0.5, loop: false });
+
+			const asImage = selectMediaGraphicItemAsset(configured, 'logo', { asset: REFERENCE, mediaKind: 'image' });
+			const asVideo = selectMediaGraphicItemAsset(asImage, 'logo', {
+				asset: REFERENCE,
+				mediaKind: 'silent-video',
+				videoCompatibility: 'all-supported',
+			});
+
+			expect(media(asVideo)).toMatchObject({ playbackRate: 0.5, loop: false });
+		});
+
+		it('unpins an asset without disturbing the presentation of the item', () => {
+			const pinned = selectMediaGraphicItemAsset(
+				patchMediaGraphicItem(withMedia(), 'logo', { fit: 'contain' }),
+				'logo',
+				{ asset: REFERENCE, mediaKind: 'silent-video', videoCompatibility: 'all-supported' },
+			);
+
+			const cleared = clearMediaGraphicItemAsset(pinned, 'logo');
+
+			expect(media(cleared).asset).toBeUndefined();
+			expect(media(cleared).videoCompatibility).toBeUndefined();
+			expect(media(cleared).fit).toBe('contain');
+		});
+
+		it('merges one focal axis without dropping the other', () => {
+			const built = patchMediaFocalPosition(withMedia(), 'logo', { horizontal: 0.2 });
+
+			const patched = patchMediaFocalPosition(built, 'logo', { vertical: 0.9 });
+
+			expect(media(patched).focalPosition).toEqual({ horizontal: 0.2, vertical: 0.9 });
+		});
+
+		it('clips to an ordinary Shape Geometry, edited by the same helpers a shape uses', () => {
+			const clipping = setMediaClipGeometry(withMedia(), 'logo', true);
+
+			const slanted = patchShapeCorner(
+				patchShapeGeometry(clipping, 'logo', { rightSlant: 30 }),
+				'logo',
+				'topLeft',
+				{ treatment: 'cut', size: 12 },
+			);
+
+			expect(media(slanted).clipGeometry).toMatchObject({
+				rightSlant: 30,
+				topLeft: { treatment: 'cut', size: 12 },
+				// The canonical Shape Geometry, so every other corner is still stated.
+				bottomRight: { treatment: 'square', size: 0 },
+			});
+			expect(media(slanted).clipGeometry?.leftSlant).toBe(0);
+		});
+
+		it('initialises the clip of a Media Graphic Item from a Shape Geometry preset', () => {
+			const clipping = setMediaClipGeometry(withMedia(), 'logo', true);
+
+			const patched = applyShapeGeometryPreset(clipping, 'logo', 'corner-cut');
+
+			expect(media(patched).clipGeometry?.topRight.treatment).toBe('cut');
+			expect(media(patched).clipGeometry?.topRight.size).toBeGreaterThan(0);
+		});
+
+		it('never turns clipping on as a side effect of a geometry edit', () => {
+			// Absent clipping means the item clips to its own bounds. Nudging a corner
+			// of a clip that does not exist must stay a no-op, or an author would
+			// discover a shape they never asked for.
+			const built = withMedia();
+
+			expect(patchShapeGeometry(built, 'logo', { rightSlant: 30 })).toEqual(built);
+			expect(patchShapeCorner(built, 'logo', 'topLeft', { treatment: 'rounded', size: 8 })).toEqual(built);
+			expect(applyShapeGeometryPreset(built, 'logo', 'corner-cut')).toEqual(built);
+		});
+
+		it('drops an authored clip rather than flattening it when clipping is switched off', () => {
+			const clipping = patchShapeGeometry(
+				setMediaClipGeometry(withMedia(), 'logo', true),
+				'logo',
+				{ leftSlant: 24 },
+			);
+
+			const off = setMediaClipGeometry(clipping, 'logo', false);
+			const onceMore = setMediaClipGeometry(off, 'logo', true);
+
+			expect(media(off).clipGeometry).toBeUndefined();
+			expect(media(onceMore).clipGeometry?.leftSlant).toBe(0);
+		});
+
+		it('paints no Graphic Surface Style: a Media Graphic Item renders an asset, not a surface', () => {
+			const built = withMedia();
+
+			expect(patchGraphicSurfaceStyle(built, 'logo', { fillOpacity: 0.5 })).toEqual(built);
+			expect(clearGraphicSurfaceStyle(built, 'logo')).toEqual(built);
+		});
+
+		it('ignores a media edit aimed at another Graphic Item kind', () => {
+			const built = addGraphicItem(graphic('a'), { kind: 'shape', id: 'bar', ...CANVAS }).graphic;
+
+			expect(patchMediaGraphicItem(built, 'bar', { fit: 'fill' })).toEqual(built);
+			expect(setMediaClipGeometry(built, 'bar', true)).toEqual(built);
+			expect(patchMediaFocalPosition(built, 'bar', { horizontal: 0 })).toEqual(built);
 		});
 	});
 });

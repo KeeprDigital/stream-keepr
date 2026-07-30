@@ -99,7 +99,7 @@ describe('screenWriteModule', () => {
 				} as never,
 			})).rejects.toMatchObject({
 				statusCode: 400,
-				message: expect.stringContaining('Feature Match Overlay configuration endpoint'),
+				message: expect.stringContaining('Screen Mode configuration endpoint'),
 			});
 			expect(mockScreenService.create).not.toHaveBeenCalled();
 		});
@@ -179,7 +179,7 @@ describe('screenWriteModule', () => {
 				input: { stateVersion: 0, modeConfigs: null } as never,
 			})).rejects.toMatchObject({
 				statusCode: 400,
-				message: expect.stringContaining('Feature Match Overlay configuration endpoint'),
+				message: expect.stringContaining('Screen Mode configuration endpoint'),
 			});
 
 			expect(mockScreenService.update).not.toHaveBeenCalled();

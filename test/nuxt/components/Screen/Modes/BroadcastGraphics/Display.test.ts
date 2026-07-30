@@ -1,9 +1,9 @@
-import type { BroadcastGraphicConfig, ShapeGraphicItemConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, MediaGraphicItemConfig, ShapeGraphicItemConfig } from '~~/shared/types/graphics';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { enableAutoUnmount, mount } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
 import { onAirBroadcastGraphicIds } from '~~/shared/modules/broadcast-graphics-live-session';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
@@ -17,6 +17,7 @@ const mockIsPreview = ref(false);
 const mockPreviewGuides = ref(false);
 const mockPreviewSafeAreas = ref(false);
 const mockScreen = ref<Screen | null>(null);
+const mockAssetCapability = ref<string | undefined>(undefined);
 
 mockNuxtImport('useScreenContext', () => () => ({
 	screen: mockScreen,
@@ -27,7 +28,15 @@ mockNuxtImport('useScreenContext', () => () => ({
 	isPreview: mockIsPreview,
 	previewGuides: mockPreviewGuides,
 	previewSafeAreas: mockPreviewSafeAreas,
+	assetCapability: mockAssetCapability,
 }));
+
+/**
+ * Every capability-session exchange a live Screen Output makes, so a test can
+ * prove media content is resolved through the capability rather than by any other
+ * route.
+ */
+const capabilitySessionRequests: string[] = [];
 
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => ({
 	graphics: [],
@@ -110,6 +119,16 @@ describe('broadcastGraphicsDisplay', () => {
 		mockScreen.value = screenWithStack();
 		mockOnAirGraphicIds.value = [];
 		mockLoadSession.value = () => {};
+		mockAssetCapability.value = undefined;
+		capabilitySessionRequests.length = 0;
+		vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+			capabilitySessionRequests.push(String(input));
+			return new Response(null, { status: 204 });
+		}));
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
 	});
 
 	it('renders an empty Broadcast Graphics Screen transparent in the Overlay Output', async () => {
@@ -316,6 +335,100 @@ describe('broadcastGraphicsDisplay', () => {
 		// case-sensitive SVG attribute has to survive the template.
 		expect(wrapper.get('[data-graphic-item-kind="shape"] svg').attributes('preserveAspectRatio')).toBe('none');
 		expect(wrapper.get('[data-graphic-item-kind="shape"] path[stroke]').attributes('stroke-width')).toBe('6');
+	});
+
+	describe('media Graphic Items', () => {
+		const logo: MediaGraphicItemConfig = {
+			type: 'media',
+			id: 'logo',
+			label: 'Sponsor',
+			visible: true,
+			anchor: 'top-left',
+			x: 40,
+			y: 60,
+			width: 480,
+			height: 270,
+			asset: { assetId: 'asset-1' as never, revisionId: 'revision-7' as never },
+			mediaKind: 'image',
+			fit: 'cover',
+			focalPosition: { horizontal: 0.25, vertical: 0.75 },
+			opacity: 0.5,
+			playbackRate: 1,
+			loop: true,
+		};
+
+		function withMedia(overrides: Partial<MediaGraphicItemConfig> = {}): BroadcastGraphicConfig {
+			return { id: 'lower-third', name: 'Lower Third', items: [{ ...logo, ...overrides }] };
+		}
+
+		it('renders an image fitted at its focal position and opacity', async () => {
+			mockIsPreview.value = true;
+
+			const wrapper = await mountComponent();
+			await pushPreviewState([withMedia()]);
+
+			const image = wrapper.get('[data-graphic-item-kind="media"] img');
+			expect(image.attributes('style')).toContain('object-fit: cover');
+			expect(image.attributes('style')).toContain('object-position: 25% 75%');
+			expect(image.attributes('style')).toContain('opacity: 0.5');
+			expect(wrapper.get('[data-graphic-item-kind="media"]').attributes('style')).toContain('left: 40px');
+		});
+
+		it('renders a silent video that loops, muted, and from its beginning', async () => {
+			mockIsPreview.value = true;
+
+			const wrapper = await mountComponent();
+			await pushPreviewState([withMedia({ mediaKind: 'silent-video', loop: false, playbackRate: 2 })]);
+
+			const video = wrapper.get('[data-graphic-item-kind="media"] video');
+			// Silent by construction rather than by an authored control: the asset is a
+			// silent video and the element is muted regardless.
+			expect(video.attributes('muted')).toBeDefined();
+			expect(video.attributes('autoplay')).toBeDefined();
+			expect(video.attributes('loop')).toBeUndefined();
+			// No seek, no start offset: a fresh element begins at zero.
+			expect(video.attributes()).not.toHaveProperty('currenttime');
+			expect((video.element as HTMLVideoElement).playbackRate).toBe(2);
+		});
+
+		it('paints media as its alpha in white in the Key Output', async () => {
+			mockIsPreview.value = true;
+			mockOutputMode.value = 'key';
+
+			const wrapper = await mountComponent();
+			await pushPreviewState([withMedia()]);
+
+			// Colour removed, alpha untouched: the matte stays a true alpha matte.
+			expect(wrapper.get('[data-graphic-item-kind="media"] img').attributes('style'))
+				.toContain('filter: brightness(0) invert(1)');
+		});
+
+		it('renders nothing at all for an item with no asset pinned', async () => {
+			mockIsPreview.value = true;
+
+			const wrapper = await mountComponent();
+			await pushPreviewState([withMedia({ asset: undefined })]);
+
+			const item = wrapper.get('[data-graphic-item-kind="media"]');
+			expect(item.find('img').exists()).toBe(false);
+			expect(item.find('video').exists()).toBe(false);
+		});
+
+		it('resolves a live Screen Output’s media only through its Screen Output Asset Capability', async () => {
+			// The whole point of the capability: an output URL is never a hole through
+			// which the Graphics Asset Library can be browsed.
+			mockAssetCapability.value = 'capability-token';
+			mockScreen.value = screenWithStack([withMedia()]);
+			mockOnAirGraphicIds.value = ['lower-third'];
+
+			const wrapper = await mountComponent();
+			await flushPromises();
+			await nextTick();
+
+			expect(wrapper.get('[data-graphic-item-kind="media"] img').attributes('src'))
+				.toBe('/api/screen-output/screens/1/assets/asset-1/revisions/revision-7/content');
+			expect(capabilitySessionRequests).toEqual(['/api/screen-output/screens/1/asset-capability-session']);
+		});
 	});
 
 	it('composes a Graphic Group and its children in one stacking context', async () => {

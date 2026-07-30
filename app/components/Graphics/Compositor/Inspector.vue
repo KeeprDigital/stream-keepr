@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ShapeGeometryPresetId } from '~~/shared/modules/graphics';
+import type { GraphicFocalPosition, MediaGraphicItemFit } from '~~/shared/types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
 	GRAPHIC_FILL_KIND_VALUES,
@@ -13,18 +14,21 @@ import type {
 	GraphicOutline,
 	GraphicSurfaceStyle,
 	GraphicTypography,
+	MediaGraphicItemConfig,
 	ShapeCorner,
 	ShapeCornerKey,
 	ShapeGeometry,
 	TEXT_OVERFLOW_POLICY_VALUES,
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
+import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
 	anchoredGraphicPosition,
 	applyShapeGeometryPreset,
 	changeGraphicGradientStopCount,
 	clearGraphicSurfaceStyle,
+	clearMediaGraphicItemAsset,
 	displayGraphicGeometryValue,
 	GRAPHIC_ANCHOR_POINTS,
 	GRAPHIC_FONT_OPTIONS,
@@ -45,14 +49,19 @@ import {
 	patchGraphicSolidFill,
 	patchGraphicSurfaceStyle,
 	patchGraphicTypography,
+	patchMediaFocalPosition,
+	patchMediaGraphicItem,
 	patchShapeCorner,
 	patchShapeGeometry,
 	patchTextGraphicItem,
 	replaceBroadcastGraphic,
 	resizeGraphicRectFromAnchor,
+	selectMediaGraphicItemAsset,
 	setGraphicFillKind,
+	setMediaClipGeometry,
 	SHAPE_GEOMETRY_PRESETS,
 } from '~~/shared/modules/graphics';
+import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
 	GRAPHIC_FONT_STYLE_VALUES,
 	GRAPHIC_GEOMETRY_UNIT_VALUES,
@@ -62,8 +71,10 @@ import {
 	GRAPHIC_TEXT_ALIGN_VALUES,
 	GRAPHIC_TEXT_TRANSFORM_VALUES,
 	MAX_GRAPHIC_FILL_STOPS,
+	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_TEXT_LENGTH,
 	MIN_GRAPHIC_FILL_STOPS,
+	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	SHAPE_CORNER_KEYS,
 	SHAPE_CORNER_TREATMENT_VALUES,
 } from '~~/shared/types/graphics';
@@ -88,6 +99,8 @@ const props = defineProps<{
 	selectedTarget: GraphicsSelectionTarget;
 	canvasWidth: number;
 	canvasHeight: number;
+	/** The Event whose Graphic Asset associations organise the asset picker's discovery. */
+	eventId: number;
 	/**
 	 * Whether this session may author the selection. A session observing an artifact
 	 * another session's Graphics Authoring Lease covers reads every property and
@@ -125,6 +138,7 @@ const FILL_KIND_OPTIONS = [
 	{ label: 'Linear gradient', value: 'linear-gradient' },
 ] satisfies Array<{ label: string; value: typeof GRAPHIC_FILL_KIND_VALUES[number] }>;
 const CORNER_TREATMENT_OPTIONS = SHAPE_CORNER_TREATMENT_VALUES.map(value => ({ label: value, value }));
+const MEDIA_FIT_OPTIONS = MEDIA_GRAPHIC_ITEM_FIT_VALUES.map(value => ({ label: value, value }));
 const GEOMETRY_PRESET_OPTIONS = SHAPE_GEOMETRY_PRESETS.map(preset => ({
 	label: preset.label,
 	value: preset.id,
@@ -187,14 +201,25 @@ const parentGroup = computed<GraphicGroupItemConfig | null>(() =>
 const selectedTextItem = computed<TextGraphicItemConfig | null>(() =>
 	selectedItem.value?.type === 'text' ? selectedItem.value : null,
 );
+const selectedMediaItem = computed<MediaGraphicItemConfig | null>(() =>
+	selectedItem.value?.type === 'media' ? selectedItem.value : null,
+);
 const selectedGroup = computed<GraphicGroupItemConfig | null>(() =>
 	selectedItem.value?.type === 'group' ? selectedItem.value : null,
 );
-/** A Shape Graphic Item and a Graphic Group both own a Shape Geometry. */
+/**
+ * The Shape Geometry the geometry controls edit.
+ *
+ * A Shape Graphic Item and a Graphic Group draw one and always have one. A Media
+ * Graphic Item clips to one only while clipping is switched on, so the same
+ * controls appear for it exactly when there is a clip to shape.
+ */
 const selectedGeometry = computed<ShapeGeometry | null>(() => {
 	const item = selectedItem.value;
 	if (item?.type === 'shape' || item?.type === 'group')
 		return item.geometry;
+	if (item?.type === 'media')
+		return item.clipGeometry ?? null;
 	return null;
 });
 
@@ -210,8 +235,16 @@ const isStackedChild = computed(() =>
  * Only an item's own Graphic Surface Style is editable here. A Graphic Group
  * child with none of its own inherits the group's local style default, which is
  * edited on the group itself.
+ *
+ * A Media Graphic Item never has one: fill, outline, and glow belong to the kinds
+ * that paint a surface, and it paints an asset.
  */
-const ownSurfaceStyle = computed<GraphicSurfaceStyle | null>(() => selectedItem.value?.surfaceStyle ?? null);
+const ownSurfaceStyle = computed<GraphicSurfaceStyle | null>(() => {
+	const item = selectedItem.value;
+	if (!item || item.type === 'media')
+		return null;
+	return item.surfaceStyle ?? null;
+});
 
 /** A Graphic Geometry Unit projects against the containing canvas — a Graphic Group for its children. */
 function axisTotal(axis: 'x' | 'y') {
@@ -345,6 +378,35 @@ function updateChildSizing(patch: Partial<GraphicGroupChildSizing>) {
 
 function updateTextItem(patch: Partial<Omit<TextGraphicItemConfig, 'type' | 'id'>>) {
 	applyToSelectedGraphic((graphic, itemId) => patchTextGraphicItem(graphic, itemId, patch));
+}
+
+function updateMediaItem(patch: Partial<Omit<MediaGraphicItemConfig, 'type' | 'id'>>) {
+	applyToSelectedGraphic((graphic, itemId) => patchMediaGraphicItem(graphic, itemId, patch));
+}
+
+function updateFocalPosition(patch: Partial<GraphicFocalPosition>) {
+	applyToSelectedGraphic((graphic, itemId) => patchMediaFocalPosition(graphic, itemId, patch));
+}
+
+function updateMediaClipping(clipping: boolean) {
+	applyToSelectedGraphic((graphic, itemId) => setMediaClipGeometry(graphic, itemId, clipping));
+}
+
+/**
+ * Pin one exact Graphic Asset identity and revision. The asset's own kind decides
+ * the item's media kind, and a silent video also records the revision's target
+ * compatibility, so the reference index has the fact it checks against.
+ */
+function selectMediaAsset(asset: GraphicAsset, reference: GraphicAssetReference) {
+	applyToSelectedGraphic((graphic, itemId) => selectMediaGraphicItemAsset(graphic, itemId, {
+		asset: reference,
+		mediaKind: asset.kind === 'silent-video' ? 'silent-video' : 'image',
+		videoCompatibility: asset.facts.kind === 'silent-video' ? asset.facts.targetCompatibility : undefined,
+	}));
+}
+
+function clearMediaAsset() {
+	applyToSelectedGraphic((graphic, itemId) => clearMediaGraphicItemAsset(graphic, itemId));
 }
 
 function updateGraphicName(value: string) {
@@ -751,6 +813,124 @@ function updateGraphicName(value: string) {
 			</UFormField>
 		</template>
 
+		<template v-if="selectedMediaItem">
+			<div class="rounded-lg border border-default/70 p-3 space-y-2">
+				<p class="text-xs font-semibold text-muted">
+					Media
+				</p>
+
+				<!--
+					The picker pins one exact Graphic Asset identity and revision, and
+					reports a Missing Graphic Asset Reference or Unavailable Graphic Asset
+					Content against this exact item so an author repairs the item that
+					pinned it. A Broadcast Graphics Screen Output is consumed as a
+					Chromium browser source, which is what makes VP9 alpha selectable.
+				-->
+				<UFormField label="Graphic Asset" size="sm">
+					<GraphicsAssetFocusPicker
+						:model-value="selectedMediaItem.asset"
+						:event-id="eventId"
+						field-label="Media Graphic Item"
+						:asset-kind="['image', 'silent-video']"
+						video-target="chromium"
+						@update:model-value="$event ? undefined : clearMediaAsset()"
+						@select="selectMediaAsset"
+					/>
+				</UFormField>
+
+				<div class="grid grid-cols-2 gap-2">
+					<UFormField label="Fit" size="sm">
+						<USelect
+							:model-value="selectedMediaItem.fit"
+							:items="MEDIA_FIT_OPTIONS"
+							value-key="value"
+							class="w-full"
+							data-testid="media-fit"
+							@update:model-value="updateMediaItem({ fit: $event as MediaGraphicItemFit })"
+						/>
+					</UFormField>
+					<UFormField label="Opacity" size="sm">
+						<UInputNumber
+							:model-value="selectedMediaItem.opacity"
+							:min="0"
+							:max="1"
+							:step="0.05"
+							size="sm"
+							class="w-full"
+							data-testid="media-opacity"
+							aria-label="Media opacity"
+							@update:model-value="updateMediaItem({ opacity: $event ?? 1 })"
+						/>
+					</UFormField>
+					<UFormField label="Focal X" size="sm">
+						<UInputNumber
+							:model-value="selectedMediaItem.focalPosition.horizontal"
+							:min="0"
+							:max="1"
+							:step="0.05"
+							size="sm"
+							class="w-full"
+							data-testid="media-focal-horizontal"
+							aria-label="Horizontal focal position"
+							@update:model-value="updateFocalPosition({ horizontal: $event ?? 0.5 })"
+						/>
+					</UFormField>
+					<UFormField label="Focal Y" size="sm">
+						<UInputNumber
+							:model-value="selectedMediaItem.focalPosition.vertical"
+							:min="0"
+							:max="1"
+							:step="0.05"
+							size="sm"
+							class="w-full"
+							data-testid="media-focal-vertical"
+							aria-label="Vertical focal position"
+							@update:model-value="updateFocalPosition({ vertical: $event ?? 0.5 })"
+						/>
+					</UFormField>
+				</div>
+
+				<!--
+					Playback belongs to a silent video, so an image item is offered
+					neither control even though it stores both — switching an item back to
+					a video restores the playback its author already set up.
+				-->
+				<template v-if="selectedMediaItem.mediaKind === 'silent-video'">
+					<UFormField label="Playback rate" size="sm">
+						<UInputNumber
+							:model-value="selectedMediaItem.playbackRate"
+							:min="MIN_GRAPHIC_MEDIA_PLAYBACK_RATE"
+							:max="MAX_GRAPHIC_MEDIA_PLAYBACK_RATE"
+							:step="0.05"
+							size="sm"
+							class="w-full"
+							data-testid="media-playback-rate"
+							aria-label="Playback rate"
+							@update:model-value="updateMediaItem({ playbackRate: $event ?? 1 })"
+						/>
+					</UFormField>
+					<UFormField label="Loop" size="sm">
+						<USwitch
+							:model-value="selectedMediaItem.loop"
+							data-testid="media-loop"
+							@update:model-value="updateMediaItem({ loop: $event })"
+						/>
+					</UFormField>
+					<p class="text-xs text-muted">
+						Video is silent, and starts from its beginning when its Broadcast Graphic enters.
+					</p>
+				</template>
+
+				<UFormField label="Clip to Shape Geometry" size="sm">
+					<USwitch
+						:model-value="selectedMediaItem.clipGeometry !== undefined"
+						data-testid="media-clip-enabled"
+						@update:model-value="updateMediaClipping($event)"
+					/>
+				</UFormField>
+			</div>
+		</template>
+
 		<template v-if="selectedGeometry">
 			<div class="rounded-lg border border-default/70 p-3 space-y-2">
 				<p class="text-xs font-semibold text-muted">
@@ -819,7 +999,8 @@ function updateGraphicName(value: string) {
 			</div>
 		</template>
 
-		<template v-if="selectedItem">
+		<!-- A Media Graphic Item paints an asset rather than a surface, so it is offered none. -->
+		<template v-if="selectedItem && selectedItem.type !== 'media'">
 			<div class="rounded-lg border border-default/70 p-3 space-y-2">
 				<p class="text-xs font-semibold text-muted">
 					Graphic Surface Style

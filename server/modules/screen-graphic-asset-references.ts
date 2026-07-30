@@ -1,14 +1,14 @@
 import type { DbScreen } from '~~/server/db/schema';
-import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
+import type { GraphicAssetReferencingScreenMode } from '~~/shared/utils/graphicsAssetReferences';
 import { and, eq } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { screens } from '~~/server/db/schema';
 import { StateConflictError } from '~~/server/utils/errors';
 import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
-	featureMatchOverlayGraphicAssetReferences,
 	sameGraphicAssetReference,
 	screenGraphicAssetReferenceTargetCompatibility,
+	screenModeGraphicAssetReferences,
 } from '~~/shared/utils/graphicsAssetReferences';
 
 const GRAPHIC_ASSET_REFERENCE_SQL_PREDICATE = `
@@ -79,9 +79,21 @@ export async function deleteScreenWithGraphicAssetReferences(
 	return results[2]?.meta.changes === 1;
 }
 
-export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input: {
+/**
+ * Write one graphics Screen Mode's configuration and its Graphic Asset Reference
+ * index in a single atomic operation.
+ *
+ * Every mode that publishes references shares this one write, because the
+ * guarantees are the mode-independent part: the configuration and its index move
+ * together or not at all, each reference's exact revision must resolve for the
+ * write to commit, and a revision already pinned at the same owner slot keeps
+ * resolving even once its asset is retired. Only which references a configuration
+ * publishes is mode-specific, and that is one dispatcher away.
+ */
+export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 	id: number;
 	eventId: number;
+	mode: GraphicAssetReferencingScreenMode;
 	partialConfig: Record<string, unknown>;
 	stateVersion?: number;
 }): Promise<DbScreen | undefined> {
@@ -91,27 +103,23 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 
 	const mergedConfigs = mergeScreenModeConfig(
 		screen.modeConfigs ?? {},
-		'feature-match-overlay',
+		input.mode,
 		input.partialConfig,
 	);
-	const config = mergedConfigs['feature-match-overlay'] as FeatureMatchOverlayModeConfig | undefined;
-	if (!config)
-		throw new Error('Feature Match Overlay configuration is missing');
+	if (!mergedConfigs[input.mode])
+		throw new Error(`${input.mode} configuration is missing`);
 
 	const expectedVersion = input.stateVersion ?? screen.stateVersion;
 	const referenceVersion = crypto.randomUUID();
 	const now = Date.now();
-	const references = featureMatchOverlayGraphicAssetReferences(config);
+	const references = screenModeGraphicAssetReferences(input.mode, mergedConfigs);
 	if (references.some(reference =>
 		screenGraphicAssetReferenceTargetCompatibility(reference).outcome === 'blocked')) {
 		throw new StateConflictError('Screen Output target compatibility', input.id);
 	}
-	const previousConfig = screen.modeConfigs?.['feature-match-overlay'];
 	const previousReferences = new Map(
-		previousConfig
-			? featureMatchOverlayGraphicAssetReferences(previousConfig)
-					.map(item => [item.ownerSlot, item.reference] as const)
-			: [],
+		screenModeGraphicAssetReferences(input.mode, screen.modeConfigs)
+			.map(item => [item.ownerSlot, item.reference] as const),
 	);
 	const indexedReferences = references.map((item) => {
 		const previous = previousReferences.get(item.ownerSlot);

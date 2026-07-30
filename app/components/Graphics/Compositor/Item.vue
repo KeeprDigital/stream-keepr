@@ -13,6 +13,12 @@ import { fitGraphicTextFontSize } from '~/modules/graphics/textFit';
  * and stretches to the element's real box, so a weighted-fill Graphic Group
  * child paints its surface across the width its group actually gave it.
  *
+ * A Media Graphic Item renders one image or video element inside the item's
+ * bounds. Everything about how it paints — fitting, focal position, opacity, and
+ * the Key Output's alpha-as-white conversion — comes from the render model; the
+ * element exists here only because a pure model cannot own a DOM node with a
+ * playback rate.
+ *
  * A Graphic Group renders its children through this same component. Graphic
  * Groups do not nest, so that recursion is one level deep.
  */
@@ -20,7 +26,30 @@ const props = defineProps<{ render: GraphicItemRenderDescriptor }>();
 
 const bounds = ref<HTMLElement | null>(null);
 const textElement = ref<HTMLElement | null>(null);
+const videoElement = ref<HTMLVideoElement | null>(null);
 const fittedFontSize = ref<number | null>(null);
+
+const media = computed(() => props.render.media);
+const actualVideoTarget = useGraphicsVideoTarget();
+
+/**
+ * A VP9-alpha silent video only plays in Chromium. Rather than a blank rectangle,
+ * an output that cannot play one says so, so the reason is diagnosable from the
+ * output itself.
+ */
+const videoBlocked = computed(() => media.value?.videoCompatibility === 'chromium-transparency'
+	&& actualVideoTarget.value !== 'chromium');
+
+/**
+ * Playback rate is set on the element rather than bound, because it is a property
+ * with no attribute. The element is created when its Broadcast Graphic enters and
+ * destroyed when it leaves, so playback starts from the beginning each time
+ * without anything having to seek it there.
+ */
+watchEffect(() => {
+	if (videoElement.value)
+		videoElement.value.playbackRate = media.value?.playbackRate ?? 1;
+});
 
 function pixelValue(value: unknown): number {
 	return typeof value === 'string' ? Number.parseFloat(value) || 0 : 0;
@@ -141,6 +170,35 @@ watch(
 		<p v-if="render.kind === 'text'" ref="textElement" :style="textStyle">
 			{{ render.text }}
 		</p>
+
+		<!--
+			A Media Graphic Item renders nothing at all without resolvable content: an
+			empty `src` would be a broken element, and in the Key Output a broken
+			element still paints a box.
+		-->
+		<template v-if="media && media.src !== ''">
+			<video
+				v-if="media.mediaKind === 'silent-video' && !videoBlocked"
+				ref="videoElement"
+				:src="media.src"
+				:loop="media.loop"
+				autoplay
+				muted
+				playsinline
+				preload="auto"
+				:style="media.style"
+			/>
+			<span
+				v-else-if="media.mediaKind === 'silent-video'"
+				data-video-compatibility-blocked="vp9-alpha-chromium-required"
+			/>
+			<img
+				v-else
+				:src="media.src"
+				:alt="render.label"
+				:style="media.style"
+			>
+		</template>
 
 		<Item
 			v-for="child in render.children"
