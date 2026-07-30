@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import type { FeatureMatchOverlayModeConfig, FeatureMatchWidgetConfig, FeatureMatchWidgetItemConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchGraphicItemDefinitionConfig, FeatureMatchOverlayModeConfig, FeatureMatchSpecificGraphicItemConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import type { FeatureMatchOverlayAnchorValue } from '~/utils/featureMatchOverlayGeometry';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
-import { appearanceSummary, FEATURE_MATCH_OVERLAY_WIDGET_KIND_OPTIONS, rectSummary, widgetSummary, widgetTypeLabel } from '~/modules/feature-match-overlay/layerSummaries';
-import { featureMatchOverlayWidgetDefinition } from '~/modules/feature-match-overlay/widgetDefinitions';
+import { featureMatchOverlayGraphicItemDefinition } from '~/modules/feature-match-overlay/graphicItemDefinitions';
+import { appearanceSummary, FEATURE_MATCH_OVERLAY_GRAPHIC_ITEM_KIND_OPTIONS, graphicItemSummary, graphicItemTypeLabel, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
 import { anchorFeatureMatchOverlayRect } from '~/utils/featureMatchOverlayGeometry';
 import FeatureMatchOverlayBoxStyleFields from './BoxStyleFields.vue';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
 import FeatureMatchOverlayGeometryFields from './GeometryFields.vue';
 import FeatureMatchOverlayOrderSection from './OrderSection.vue';
-import FeatureMatchOverlayWidgetEditor from './WidgetEditor.vue';
+import FeatureMatchOverlayGraphicItemEditor from './WidgetEditor.vue';
 
 const props = defineProps<{
 	config: FeatureMatchOverlayModeConfig;
@@ -18,7 +18,7 @@ const props = defineProps<{
 	screenWidth: number;
 	screenHeight: number;
 	eventId: number;
-	item: FeatureMatchWidgetItemConfig;
+	item: FeatureMatchSpecificGraphicItemConfig;
 }>();
 
 const emit = defineEmits<{
@@ -39,8 +39,8 @@ function removeSelf() {
 	emit('removed');
 }
 
-function replaceWidgetType(type: FeatureMatchWidgetConfig['type']) {
-	editor.updateItem(props.item.id, { widget: featureMatchOverlayWidgetDefinition(type).defaultConfig() });
+function replaceGraphicItemType(type: FeatureMatchGraphicItemDefinitionConfig['type']) {
+	editor.updateItem(props.item.id, { graphicItem: featureMatchOverlayGraphicItemDefinition(type).defaultConfig() });
 }
 </script>
 
@@ -49,7 +49,7 @@ function replaceWidgetType(type: FeatureMatchWidgetConfig['type']) {
 		<FeatureMatchOverlayControlSection
 			title="Details"
 			default-open
-			:badge="widgetTypeLabel(item.widget.type)"
+			:badge="graphicItemTypeLabel(item.graphicItem.type)"
 			:summary="item.label"
 		>
 			<div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
@@ -94,24 +94,24 @@ function replaceWidgetType(type: FeatureMatchWidgetConfig['type']) {
 
 		<FeatureMatchOverlayControlSection
 			title="Content"
-			:summary="widgetSummary(item.widget)"
+			:summary="graphicItemSummary(item.graphicItem)"
 		>
 			<div class="space-y-3">
-				<UFormField label="Widget type">
+				<UFormField label="Graphic Item type">
 					<USelect
-						:model-value="item.widget.type"
-						:items="FEATURE_MATCH_OVERLAY_WIDGET_KIND_OPTIONS"
+						:model-value="item.graphicItem.type"
+						:items="FEATURE_MATCH_OVERLAY_GRAPHIC_ITEM_KIND_OPTIONS"
 						value-key="value"
 						size="sm"
 						class="w-full"
-						@update:model-value="replaceWidgetType($event as FeatureMatchWidgetConfig['type'])"
+						@update:model-value="replaceGraphicItemType($event as FeatureMatchGraphicItemDefinitionConfig['type'])"
 					/>
 				</UFormField>
-				<FeatureMatchOverlayWidgetEditor
-					:widget="item.widget"
-					:widget-surface-style="item.surfaceStyle"
+				<FeatureMatchOverlayGraphicItemEditor
+					:graphic-item="item.graphicItem"
+					:graphic-item-surface-style="item.surfaceStyle"
 					:event-id="eventId"
-					@update="widget => editor.updateItem(item.id, { widget: { ...item.widget, ...widget } as FeatureMatchWidgetConfig })"
+					@update="graphicItem => editor.updateItem(item.id, { graphicItem: { ...item.graphicItem, ...graphicItem } as FeatureMatchGraphicItemDefinitionConfig })"
 				/>
 			</div>
 		</FeatureMatchOverlayControlSection>
@@ -130,11 +130,9 @@ function replaceWidgetType(type: FeatureMatchWidgetConfig['type']) {
 		</FeatureMatchOverlayControlSection>
 
 		<FeatureMatchOverlayOrderSection
-			:z-index="item.zIndex ?? 0"
 			@send-to-back="editor.sendItemToBack(item.id)"
 			@move="delta => editor.moveItemOrder(item.id, delta)"
 			@bring-to-front="editor.bringItemToFront(item.id)"
-			@update-z-index="zIndex => editor.setItemOrder(item.id, zIndex)"
 		/>
 	</div>
 </template>

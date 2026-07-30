@@ -32,6 +32,26 @@ export const TEXT_OVERFLOW_POLICY_VALUES = ['clip', 'ellipsis', 'shrink'] as con
 
 export type TextOverflowPolicy = typeof TEXT_OVERFLOW_POLICY_VALUES[number];
 
+/**
+ * The operator-visible lifecycle status of a placed Broadcast Graphic.
+ *
+ * The whole vocabulary is declared here because it is settled, but playout
+ * currently produces only off and on-air. Waiting belongs to an Out-then-in
+ * Graphic Channel handoff, and entering, updating, and exiting are the phases of
+ * a Graphic Animation, so each becomes reachable with the capability that
+ * creates it.
+ */
+export const GRAPHIC_PLAYOUT_STATE_VALUES = [
+	'off',
+	'waiting',
+	'entering',
+	'on-air',
+	'updating',
+	'exiting',
+] as const;
+
+export type GraphicPlayoutState = typeof GRAPHIC_PLAYOUT_STATE_VALUES[number];
+
 /** An authoring projection of canonical pixel geometry. Storage is always pixels. */
 export const GRAPHIC_GEOMETRY_UNIT_VALUES = ['px', 'percent', 'grid'] as const;
 

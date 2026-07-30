@@ -5,6 +5,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
+import { onAirBroadcastGraphicIds } from '~~/shared/modules/broadcast-graphics-live-session';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
 import { GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
 
@@ -46,6 +47,21 @@ const bar: ShapeGraphicItemConfig = {
 	geometry: squareShapeGeometry(),
 	surfaceStyle: { fill: { type: 'solid', color: '#0077a3' }, fillOpacity: 1 },
 };
+
+/** The authoritative playout snapshot a live Screen Output would have loaded. */
+const mockOnAirGraphicIds = ref<string[]>([]);
+const mockLoadSession = ref<(eventId: number, screenId: number) => void>(() => {});
+
+mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
+	// Delegates to the real reducer rather than reimplementing the authored-order
+	// filter, so this test cannot pass on a filter the Screen Output does not use.
+	onAirGraphicIds: (_screenId: number, graphics: readonly { id: string }[]) =>
+		onAirBroadcastGraphicIds(
+			{ playout: Object.fromEntries(mockOnAirGraphicIds.value.map(id => [id, { onAir: true }])) },
+			graphics,
+		),
+	loadSession: (eventId: number, screenId: number) => mockLoadSession.value(eventId, screenId),
+}));
 
 const lowerThird: BroadcastGraphicConfig = {
 	id: 'lower-third',
@@ -92,6 +108,8 @@ describe('broadcastGraphicsDisplay', () => {
 		mockPreviewGuides.value = false;
 		mockPreviewSafeAreas.value = false;
 		mockScreen.value = screenWithStack();
+		mockOnAirGraphicIds.value = [];
+		mockLoadSession.value = () => {};
 	});
 
 	it('renders an empty Broadcast Graphics Screen transparent in the Overlay Output', async () => {
@@ -134,6 +152,54 @@ describe('broadcastGraphicsDisplay', () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(false);
+	});
+
+	it('composes a Broadcast Graphic that playout has taken on air', async () => {
+		mockScreen.value = screenWithStack([lowerThird]);
+		mockOnAirGraphicIds.value = ['lower-third'];
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(true);
+		expect(wrapper.get('[data-graphic-item-kind="shape"]').attributes('style')).toContain('left: 100px');
+	});
+
+	it('composes concurrent on-air Broadcast Graphics in authored stack order, not take order', async () => {
+		const bug: BroadcastGraphicConfig = { ...lowerThird, id: 'bug', name: 'Bug' };
+		mockScreen.value = screenWithStack([bug, lowerThird]);
+		mockOnAirGraphicIds.value = ['lower-third', 'bug'];
+
+		const wrapper = await mountComponent();
+
+		const composed = wrapper.findAll('[data-broadcast-graphic]')
+			.map(node => node.attributes('data-broadcast-graphic'));
+
+		expect(composed).toEqual(['bug', 'lower-third']);
+	});
+
+	it('loads the authoritative playout snapshot for a live Screen Output', async () => {
+		const loads: Array<[number, number]> = [];
+		mockLoadSession.value = (eventId, screenId) => {
+			loads.push([eventId, screenId]);
+		};
+		mockScreen.value = screenWithStack([lowerThird]);
+
+		await mountComponent();
+
+		expect(loads).toEqual([[1, 1]]);
+	});
+
+	it('never loads a playout snapshot for an embedded editor preview', async () => {
+		const loads: Array<[number, number]> = [];
+		mockLoadSession.value = (eventId, screenId) => {
+			loads.push([eventId, screenId]);
+		};
+		mockIsPreview.value = true;
+		mockScreen.value = screenWithStack([lowerThird]);
+
+		await mountComponent();
+
+		expect(loads).toEqual([]);
 	});
 
 	it('never draws advisory guides on a live Screen Output', async () => {

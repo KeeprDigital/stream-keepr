@@ -5,7 +5,9 @@ import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
+import { screenOutputAssetCapabilityCookieName } from '../../shared/utils/graphicsAssetReferences';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { executeIntegrationD1 } from './integrationD1';
 
 const pixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -87,7 +89,21 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		revisionId = operation.result!.revisionId;
 
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame.backgroundImage = { assetId, revisionId };
+		const group = config.layout.items.find(item => item.type === 'graphic-group');
+		if (group?.type !== 'graphic-group')
+			throw new Error('Expected a Graphic Group fixture');
+		group.children.push({
+			id: 'range-delivered-group-media',
+			type: 'media',
+			label: 'Range-delivered group media',
+			visible: true,
+			layout: { mode: 'canvas', x: 0, y: 0, width: 160, height: 90 },
+			asset: { assetId, revisionId },
+			mediaKind: 'image',
+			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+		});
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
 			{ method: 'PATCH', body: { layout: config.layout } },
@@ -133,6 +149,34 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		expect(new Uint8Array(await range.arrayBuffer())).toEqual(pixelPng.slice(8, 16));
 	});
 
+	it('range-delivers the exact revision when native media sends its path-scoped capability cookie', async () => {
+		const session = await fetch(
+			`/api/screen-output/screens/${screenId}/asset-capability-session`,
+			{ method: 'POST', headers: authorizedHeaders() },
+		);
+		expect(session.status).toBe(204);
+		expect(session.headers.get('cache-control')).toBe('private, no-store');
+		expect(await session.text()).toBe('');
+		const setCookie = session.headers.get('set-cookie');
+		expect(setCookie).toContain(
+			`${screenOutputAssetCapabilityCookieName(screenId)}=${capability}`,
+		);
+		expect(setCookie).toContain(`Path=/api/screen-output/screens/${screenId}/`);
+		expect(setCookie).toContain('HttpOnly');
+		expect(setCookie).toContain('SameSite=Strict');
+		const range = await fetch(contentPath(), {
+			headers: {
+				cookie: setCookie!.split(';', 1)[0]!,
+				range: 'bytes=8-15',
+			},
+		});
+
+		expect(range.status).toBe(206);
+		expect(range.headers.get('content-range')).toBe(`bytes 8-15/${pixelPng.byteLength}`);
+		expect(range.headers.get('vary')).toBe('authorization, cookie');
+		expect(new Uint8Array(await range.arrayBuffer())).toEqual(pixelPng.slice(8, 16));
+	});
+
 	it('denies a removed revision immediately even when its immutable bytes were cached', async () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		await $fetch(
@@ -163,12 +207,133 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		capability = ((await rotation.json()) as { assetCapability: string }).assetCapability;
 		expect(capability).not.toBe(previous);
 
+		const staleSession = await fetch(
+			`/api/screen-output/screens/${screenId}/asset-capability-session`,
+			{
+				method: 'POST',
+				headers: { authorization: `Bearer ${previous}` },
+			},
+		);
+		expect(staleSession.status).toBe(404);
+		expect(staleSession.headers.get('set-cookie')).toBeNull();
+
 		const revoked = await fetch(contentPath(), {
 			headers: { authorization: `Bearer ${previous}` },
 		});
 		expect(revoked.status).toBe(404);
 		const authorized = await fetch(contentPath(), { headers: authorizedHeaders() });
 		expect(authorized.status).toBe(200);
+	});
+
+	it('uses live Screen PATCH and User-Agent bootstrap as authoritative restricted-video playout gates', async () => {
+		const baseline = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		await $fetch(
+			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
+			{ method: 'PATCH', body: { layout: baseline.layout } },
+		);
+		await executeIntegrationD1(`
+			UPDATE graphic_assets
+			SET kind = 'silent-video'
+			WHERE id = '${assetId}';
+			UPDATE graphic_asset_revisions
+			SET technical_facts = json_set(
+				technical_facts,
+				'$.kind', 'silent-video',
+				'$.targetCompatibility', 'chromium-transparency'
+			)
+			WHERE id = '${revisionId}';
+		`);
+
+		const restricted = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		restricted.layout.items.push({
+			id: 'restricted-video',
+			type: 'media',
+			label: 'Restricted VP9 alpha',
+			visible: true,
+			x: 0,
+			y: 0,
+			width: 640,
+			height: 360,
+			asset: { assetId, revisionId },
+			mediaKind: 'silent-video',
+			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+			loop: true,
+			playbackRate: 1,
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'safari',
+		});
+
+		const publication = await fetch(
+			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
+			{
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ layout: restricted.layout }),
+			},
+		);
+		expect(publication.status).toBe(409);
+
+		const persisted = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
+		expect(persisted.modeConfigs['feature-match-overlay'].layout.items).not.toContainEqual(
+			expect.objectContaining({ id: 'restricted-video' }),
+		);
+
+		restricted.layout.items.at(-1)!.videoTarget = 'chromium';
+		const chromiumPublication = await fetch(
+			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
+			{
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ layout: restricted.layout }),
+			},
+		);
+		expect(chromiumPublication.status).toBe(200);
+
+		const safariBootstrap = await fetch(
+			`/api/screen-output/screens/${screenId}/asset-capability-session`,
+			{
+				method: 'POST',
+				headers: {
+					...Object.fromEntries(authorizedHeaders()),
+					'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/605.1.15 Version/18.5 Safari/605.1.15',
+				},
+			},
+		);
+		expect(safariBootstrap.status).toBe(409);
+		expect(safariBootstrap.headers.get('set-cookie')).toBeNull();
+		await expect(safariBootstrap.json()).resolves.toMatchObject({
+			data: { code: 'vp9-alpha-chromium-required' },
+		});
+
+		const iosChromiumBootstrap = await fetch(
+			`/api/screen-output/screens/${screenId}/asset-capability-session`,
+			{
+				method: 'POST',
+				headers: {
+					...Object.fromEntries(authorizedHeaders()),
+					'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 CriOS/138.0 Mobile/15E148 Safari/604.1',
+				},
+			},
+		);
+		expect(iosChromiumBootstrap.status).toBe(409);
+		expect(iosChromiumBootstrap.headers.get('set-cookie')).toBeNull();
+
+		const chromiumBootstrap = await fetch(
+			`/api/screen-output/screens/${screenId}/asset-capability-session`,
+			{
+				method: 'POST',
+				headers: {
+					...Object.fromEntries(authorizedHeaders()),
+					'user-agent': 'Mozilla/5.0 Chrome/138.0.0.0 Safari/537.36',
+				},
+			},
+		);
+		expect(chromiumBootstrap.status).toBe(204);
+		expect(chromiumBootstrap.headers.get('set-cookie')).toContain(
+			screenOutputAssetCapabilityCookieName(screenId),
+		);
 	});
 
 	it('deleting the Screen revokes its current capability', async () => {

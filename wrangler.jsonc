@@ -14,6 +14,14 @@
 			"bucket_name": "stream-graphics-asset-canonical"
 		}
 	],
+	"services": [
+		{
+			// Trusted silent-video playback validation runtime. Deploy the
+			// validator first (pnpm deploy:validator) so this binding resolves.
+			"binding": "SILENT_VIDEO_PLAYBACK_VALIDATOR",
+			"service": "stream-silent-video-validator"
+		}
+	],
 	"observability": {
 		"enabled": true,
 		"logs": {

@@ -12,14 +12,14 @@ describe('feature Match Overlay exact font Graphic Asset References', () => {
 		config.layout.items[0]!.surfaceStyle = {
 			font: { kind: 'asset', reference },
 		};
-		const group = config.layout.items.find(item => item.type === 'widget-group');
-		if (!group || group.type !== 'widget-group')
+		const group = config.layout.items.find(item => item.type === 'graphic-group');
+		if (!group || group.type !== 'graphic-group')
 			throw new Error('Expected default group fixture');
 		group.defaultChildSurfaceStyle = { font: { kind: 'asset', reference } };
 		group.children[0]!.surfaceStyle = { font: { kind: 'asset', reference } };
-		const textChild = group.children.find(child => child.widget.type === 'text');
-		if (textChild?.widget.type === 'text') {
-			textChild.widget.tokenStyles = {
+		const textChild = group.children.find(child => child.graphicItem.type === 'text');
+		if (textChild?.graphicItem.type === 'text') {
+			textChild.graphicItem.tokenStyles = {
 				name: { font: { kind: 'asset', reference } },
 			};
 		}

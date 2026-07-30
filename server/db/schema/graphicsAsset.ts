@@ -55,6 +55,9 @@ export const graphicAssets = sqliteTable('graphic_assets', {
 	name: text('name').notNull(),
 	kind: text('kind', { enum: GRAPHIC_ASSET_KIND_VALUES }).notNull(),
 	lifecycleState: text('lifecycle_state', { enum: GRAPHIC_ASSET_LIFECYCLE_STATE_VALUES }).notNull().default('active'),
+	trashPriorState: text('trash_prior_state', { enum: ['active', 'retired'] }),
+	trashedAt: integer('trashed_at', { mode: 'timestamp_ms' }),
+	trashRecoverableUntil: integer('trash_recoverable_until', { mode: 'timestamp_ms' }),
 	createdAt,
 	updatedAt,
 }, table => [

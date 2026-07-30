@@ -1,13 +1,13 @@
 import type {
+	FeatureMatchGraphicGroupChildConfig,
+	FeatureMatchGraphicGroupGraphicItemDefinitionConfig,
+	FeatureMatchGraphicGroupItemConfig,
 	FeatureMatchLayoutFrameConfig,
 	FeatureMatchLayoutItemConfig,
 	FeatureMatchOverlayBoxStyle,
 	FeatureMatchOverlayModeConfig,
-	FeatureMatchWidgetConfig,
-	FeatureMatchWidgetGroupChildConfig,
-	FeatureMatchWidgetGroupItemConfig,
 } from '~~/shared/types/screenConfig';
-import type { FeatureMatchOverlayGeometryField, FeatureMatchOverlayLayerKind } from '~/modules/feature-match-overlay/layout';
+import type { FeatureMatchGraphicGroupChildKind, FeatureMatchOverlayGeometryField, FeatureMatchOverlayLayerKind } from '~/modules/feature-match-overlay/layout';
 import type { FeatureMatchOverlayGeometryUnit } from '~/utils/featureMatchOverlayGeometry';
 import * as layoutWriter from '~/modules/feature-match-overlay/layout';
 import { parseGeometryInput } from '~/utils/featureMatchOverlayGeometry';
@@ -73,7 +73,7 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		submit(layoutWriter.removeItem(layout(), id));
 	}
 
-	function updateGroup(id: string, updates: Partial<FeatureMatchWidgetGroupItemConfig>) {
+	function updateGroup(id: string, updates: Partial<FeatureMatchGraphicGroupItemConfig>) {
 		submit(layoutWriter.patchGroup(layout(), id, updates));
 	}
 
@@ -81,19 +81,19 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		submit(layoutWriter.patchGroupDefaultChildSurfaceStyle(layout(), id, updates));
 	}
 
-	function updateGroupChild(groupId: string, childId: string, updates: Partial<FeatureMatchWidgetGroupChildConfig>) {
+	function updateGroupChild(groupId: string, childId: string, updates: Partial<FeatureMatchGraphicGroupChildConfig>) {
 		submit(layoutWriter.patchGroupChild(layout(), groupId, childId, updates));
 	}
 
-	function updateGroupChildWidget(groupId: string, childId: string, updates: Partial<FeatureMatchWidgetConfig>) {
-		submit(layoutWriter.patchGroupChildWidget(layout(), groupId, childId, updates));
+	function updateGroupChildGraphicItem(groupId: string, childId: string, updates: Partial<FeatureMatchGraphicGroupGraphicItemDefinitionConfig>) {
+		submit(layoutWriter.patchGroupChildGraphicItem(layout(), groupId, childId, updates));
 	}
 
 	function updateGroupChildSurfaceStyle(groupId: string, childId: string, updates: Partial<FeatureMatchOverlayBoxStyle>) {
 		submit(layoutWriter.patchGroupChildSurfaceStyle(layout(), groupId, childId, updates));
 	}
 
-	function addGroupChild(groupId: string, child: FeatureMatchWidgetGroupChildConfig) {
+	function addGroupChild(groupId: string, child: FeatureMatchGraphicGroupChildConfig) {
 		submit(layoutWriter.addGroupChild(layout(), groupId, child));
 	}
 
@@ -106,17 +106,13 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		submit(layoutWriter.patchItemRectFromAnchor(layout(), id, field, geometryValue(value, field, unit)));
 	}
 
-	/** Anchored geometry edit for a canvas-positioned Widget Group child. */
+	/** Anchored geometry edit for a canvas-positioned Graphic Group child. */
 	function updateGroupChildRectFromAnchor(groupId: string, childId: string, field: FeatureMatchOverlayGeometryField, value: string | number, unit: FeatureMatchOverlayGeometryUnit) {
 		submit(layoutWriter.patchGroupChildRectFromAnchor(layout(), groupId, childId, field, geometryValue(value, field, unit)));
 	}
 
 	function convertGroupArrangement(id: string, mode: 'row' | 'column' | 'canvas') {
 		submit(layoutWriter.convertGroupArrangement(layout(), id, mode));
-	}
-
-	function setItemOrder(id: string, order: number) {
-		submit(layoutWriter.setItemOrder(layout(), id, order));
 	}
 
 	function moveItemOrder(id: string, direction: -1 | 1) {
@@ -131,6 +127,18 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		submit(layoutWriter.bringItemToFront(layout(), id));
 	}
 
+	function moveGroupChildOrder(groupId: string, childId: string, direction: -1 | 1) {
+		submit(layoutWriter.moveGroupChildOrder(layout(), groupId, childId, direction));
+	}
+
+	function sendGroupChildToBack(groupId: string, childId: string) {
+		submit(layoutWriter.sendGroupChildToBack(layout(), groupId, childId));
+	}
+
+	function bringGroupChildToFront(groupId: string, childId: string) {
+		submit(layoutWriter.bringGroupChildToFront(layout(), groupId, childId));
+	}
+
 	/** Create a new Layout Item of the given kind. Returns the new item's id. */
 	function createLayoutItem(kind: FeatureMatchOverlayLayerKind): string {
 		const { layout: next, id } = layoutWriter.createLayoutItem(layout(), kind);
@@ -138,8 +146,8 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		return id;
 	}
 
-	/** Create a new child in a Widget Group, matching its arrangement mode. Returns the child id, or null when the item is not a group. */
-	function createGroupChild(groupId: string, type: FeatureMatchWidgetConfig['type']): string | null {
+	/** Create a new child in a Graphic Group, matching its arrangement mode. Returns the child id, or null when the item is not a group. */
+	function createGroupChild(groupId: string, type: FeatureMatchGraphicGroupChildKind): string | null {
 		const { layout: next, id } = layoutWriter.createGroupChild(layout(), groupId, type);
 		submit(next);
 		return id;
@@ -156,17 +164,19 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		updateGroup,
 		updateGroupDefaultChildSurfaceStyle,
 		updateGroupChild,
-		updateGroupChildWidget,
+		updateGroupChildGraphicItem,
 		updateGroupChildSurfaceStyle,
 		addGroupChild,
 		removeGroupChild,
 		updateItemRectFromAnchor,
 		updateGroupChildRectFromAnchor,
 		convertGroupArrangement,
-		setItemOrder,
 		moveItemOrder,
 		sendItemToBack,
 		bringItemToFront,
+		moveGroupChildOrder,
+		sendGroupChildToBack,
+		bringGroupChildToFront,
 		createLayoutItem,
 		createGroupChild,
 	};

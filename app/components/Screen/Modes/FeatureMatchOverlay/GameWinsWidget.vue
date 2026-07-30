@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import type { FeatureMatchGameWinsWidgetConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchGameWinsGraphicItemConfig } from '~~/shared/types/screenConfig';
 
 withDefaults(defineProps<{
 	boxes: boolean[];
 	wins: number;
-	displayMode?: FeatureMatchGameWinsWidgetConfig['displayMode'];
+	displayMode?: FeatureMatchGameWinsGraphicItemConfig['displayMode'];
 	boxStyle: (won: boolean, index: number) => Record<string, string | number | undefined>;
 }>(), {
 	displayMode: 'boxes',
@@ -12,7 +12,7 @@ withDefaults(defineProps<{
 </script>
 
 <template>
-	<div class="game-wins-widget" :class="{ 'game-wins-widget--number': displayMode === 'number' }">
+	<div class="game-wins-graphic-item" :class="{ 'game-wins-graphic-item--number': displayMode === 'number' }">
 		<span v-if="displayMode === 'number'" class="game-wins-number">{{ wins }}</span>
 		<template v-else>
 			<span
@@ -26,7 +26,7 @@ withDefaults(defineProps<{
 </template>
 
 <style scoped>
-.game-wins-widget {
+.game-wins-graphic-item {
 	display: flex;
 	flex-direction: var(--game-win-direction, row);
 	align-items: center;
@@ -42,7 +42,7 @@ withDefaults(defineProps<{
 	flex: 0 0 auto;
 }
 
-.game-wins-widget--number {
+.game-wins-graphic-item--number {
 	gap: 0;
 }
 

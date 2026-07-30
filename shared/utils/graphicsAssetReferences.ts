@@ -1,14 +1,32 @@
 import type { GraphicAssetReference } from '../types/graphicsAsset';
 import type {
+	FeatureMatchGraphicItemDefinitionOwnedConfig,
 	FeatureMatchOverlayBoxStyle,
 	FeatureMatchOverlayModeConfig,
-	FeatureMatchWidgetConfig,
 } from '../types/screenConfig';
+import type { GraphicsVideoTarget } from './graphicAssetTargetCompatibility';
+import { discoverFeatureMatchGraphicItemAssetReferences } from '../featureMatchGraphicItemDefinitions';
+import { chromiumTransparencyTargetCompatibility } from './graphicAssetTargetCompatibility';
 
 export interface ScreenGraphicAssetReference {
 	reference: GraphicAssetReference;
 	ownerSlot: string;
-	kind: 'image' | 'font';
+	kind: 'image' | 'silent-video' | 'font';
+	videoCompatibility?: 'all-supported' | 'chromium-transparency';
+	videoTarget?: Exclude<GraphicsVideoTarget, 'other'>;
+}
+
+export function screenGraphicAssetReferenceTargetCompatibility(
+	reference: ScreenGraphicAssetReference,
+	actualTarget?: GraphicsVideoTarget,
+):
+	| { outcome: 'compatible' }
+	| { outcome: 'blocked'; code: 'vp9-alpha-chromium-required' } {
+	return chromiumTransparencyTargetCompatibility(
+		reference.videoCompatibility === 'chromium-transparency',
+		reference.videoTarget,
+		actualTarget,
+	);
 }
 
 export function sameGraphicAssetReference(
@@ -17,15 +35,6 @@ export function sameGraphicAssetReference(
 ): boolean {
 	return left?.assetId === right?.assetId
 		&& left?.revisionId === right?.revisionId;
-}
-
-function widgetReference(
-	widget: FeatureMatchWidgetConfig,
-	ownerSlot: string,
-): ScreenGraphicAssetReference | undefined {
-	return widget.type === 'image' && widget.asset
-		? { reference: widget.asset, ownerSlot, kind: 'image' }
-		: undefined;
 }
 
 function fontReference(
@@ -47,15 +56,20 @@ function appendFontReference(
 		references.push(reference);
 }
 
-function appendTokenFontReferences(
+function appendGraphicItemAssetReferences(
 	references: ScreenGraphicAssetReference[],
-	widget: FeatureMatchWidgetConfig,
+	graphicItem: FeatureMatchGraphicItemDefinitionOwnedConfig,
 	ownerSlot: string,
 ) {
-	if (widget.type !== 'text')
-		return;
-	for (const [token, style] of Object.entries(widget.tokenStyles ?? {}))
-		appendFontReference(references, style, `${ownerSlot}.tokenStyles.${token}.font`);
+	for (const discovered of discoverFeatureMatchGraphicItemAssetReferences(graphicItem)) {
+		references.push({
+			reference: discovered.reference,
+			ownerSlot: `${ownerSlot}.${discovered.ownerSuffix}`,
+			kind: discovered.kind,
+			videoCompatibility: discovered.videoCompatibility,
+			videoTarget: discovered.videoTarget,
+		});
+	}
 }
 
 export function featureMatchOverlayGraphicAssetReferences(
@@ -70,40 +84,13 @@ export function featureMatchOverlayGraphicAssetReferences(
 		});
 	}
 	for (const item of config.layout.items) {
-		appendFontReference(references, item.surfaceStyle, `layout.items.${item.id}.surfaceStyle.font`);
-		if (item.type === 'widget') {
-			const reference = widgetReference(
-				item.widget,
-				`layout.items.${item.id}.widget.asset`,
-			);
-			if (reference)
-				references.push(reference);
-			appendTokenFontReferences(references, item.widget, `layout.items.${item.id}.widget`);
+		if (item.type === 'graphic-item')
+			appendFontReference(references, item.surfaceStyle, `layout.items.${item.id}.surfaceStyle.font`);
+		if (item.type === 'graphic-item') {
+			appendGraphicItemAssetReferences(references, item.graphicItem, `layout.items.${item.id}.graphicItem`);
 		}
-		if (item.type === 'widget-group') {
-			appendFontReference(
-				references,
-				item.defaultChildSurfaceStyle,
-				`layout.items.${item.id}.defaultChildSurfaceStyle.font`,
-			);
-			for (const child of item.children) {
-				appendFontReference(
-					references,
-					child.surfaceStyle,
-					`layout.items.${item.id}.children.${child.id}.surfaceStyle.font`,
-				);
-				const reference = widgetReference(
-					child.widget,
-					`layout.items.${item.id}.children.${child.id}.widget.asset`,
-				);
-				if (reference)
-					references.push(reference);
-				appendTokenFontReferences(
-					references,
-					child.widget,
-					`layout.items.${item.id}.children.${child.id}.widget`,
-				);
-			}
+		else {
+			appendGraphicItemAssetReferences(references, item, `layout.items.${item.id}`);
 		}
 	}
 	return references;
@@ -121,6 +108,8 @@ export function sameScreenGraphicAssetReferences(
 	return left.every((item) => {
 		const other = rightBySlot.get(item.ownerSlot);
 		return item.kind === other?.kind
+			&& item.videoCompatibility === other?.videoCompatibility
+			&& item.videoTarget === other?.videoTarget
 			&& sameGraphicAssetReference(item.reference, other.reference);
 	});
 }
@@ -134,6 +123,18 @@ export function screenOutputGraphicAssetRevisionContentPath(
 	reference: GraphicAssetReference,
 ): string {
 	return `/api/screen-output/screens/${screenId}/assets/${encodeURIComponent(reference.assetId)}/revisions/${encodeURIComponent(reference.revisionId)}/content`;
+}
+
+export function screenOutputAssetCapabilityCookieName(screenId: number): string {
+	return `screen-output-asset-capability-${screenId}`;
+}
+
+export function screenOutputAssetCapabilityCookiePath(screenId: number): string {
+	return `/api/screen-output/screens/${screenId}/`;
+}
+
+export function screenOutputAssetCapabilitySessionPath(screenId: number): string {
+	return `${screenOutputAssetCapabilityCookiePath(screenId)}asset-capability-session`;
 }
 
 export function graphicAssetRevisionStatusPath(reference: GraphicAssetReference): string {

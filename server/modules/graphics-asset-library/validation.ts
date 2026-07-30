@@ -3,6 +3,7 @@ import type {
 	GraphicAssetValidationReport,
 } from '~~/shared/types/graphicsAsset';
 import type {
+	SILENT_VIDEO_COMPATIBILITY_PROFILE,
 	STATIC_FONT_COMPATIBILITY_PROFILE,
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
 } from '~~/shared/utils/graphicsAssetCompatibility';
@@ -35,7 +36,7 @@ export function validationError(
 
 export function rejectedValidationReport(
 	error: GraphicAssetValidationError,
-	profile: typeof STILL_IMAGE_COMPATIBILITY_PROFILE | typeof STATIC_FONT_COMPATIBILITY_PROFILE
+	profile: typeof STILL_IMAGE_COMPATIBILITY_PROFILE | typeof SILENT_VIDEO_COMPATIBILITY_PROFILE | typeof STATIC_FONT_COMPATIBILITY_PROFILE
 		= STILL_IMAGE_PROFILE,
 ): GraphicAssetValidationReport {
 	return {

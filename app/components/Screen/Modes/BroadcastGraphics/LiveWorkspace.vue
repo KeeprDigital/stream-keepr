@@ -8,9 +8,18 @@ import { screenOutputPath } from '~~/shared/utils/screenOutput';
  * Screen configuration page opens on.
  *
  * Its Program monitor is the authoritative Overlay Output itself, not a preview,
- * so it carries no editor guides. Playout actions and generated Live Control
- * per placed Broadcast Graphic arrive with the playout and input work; until
- * then no Broadcast Graphic is on air and program is empty.
+ * so it carries no editor guides. Its stack lists every placed Broadcast Graphic
+ * with the Graphic Playout State the Broadcast Graphics Live Session says it has,
+ * and Take and Out state the operator's latest intent for one graphic.
+ *
+ * Both actions stay available in every state: they are idempotent target-state
+ * commands, so pressing Take on a graphic that is already on air is a harmless
+ * restatement of the same intent rather than a second take. Cut variants reach
+ * the same target without running the corresponding Graphic Animation phase,
+ * which is indistinguishable from the plain action until animation exists.
+ *
+ * Generated Live Control per placed graphic — source pickers and typed input
+ * fields — arrives with the Graphic Input work.
  */
 const props = defineProps<{
 	eventId: number;
@@ -23,6 +32,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{ select: [graphicId: string] }>();
 
+const sessionStore = useBroadcastGraphicsLiveSessionStore();
+
 const programUrl = computed(() => screenOutputPath({
 	eventId: props.eventId,
 	screenSlug: props.screen.slug,
@@ -33,6 +44,39 @@ const programAspectStyle = computed(() => ({
 	aspectRatio: `${props.canvasWidth} / ${props.canvasHeight}`,
 	maxHeight: '46vh',
 }));
+
+/**
+ * The stack an operator reads top to bottom, front Broadcast Graphic first.
+ *
+ * Authored order is back to front, so the list is reversed for display only;
+ * nothing about composition order changes.
+ */
+const entries = computed(() => [...props.graphics].reverse().map(graphic => ({
+	graphic,
+	playoutState: sessionStore.playoutState(props.screen.id, graphic.id),
+	// Scoped per graphic: an action on one must never freeze another's controls.
+	pending: sessionStore.isPending(props.screen.id, graphic.id),
+})));
+
+const onAirCount = computed(() => sessionStore.onAirGraphicIds(props.screen.id, props.graphics).length);
+
+function take(graphicId: string, cut: boolean) {
+	void sessionStore.take(props.eventId, props.screen.id, graphicId, cut);
+}
+
+function out(graphicId: string, cut: boolean) {
+	void sessionStore.out(props.eventId, props.screen.id, graphicId, cut);
+}
+
+// Realtime messages only announce that playout moved on; this is the authority
+// they point at, so the workspace loads it on arrival and after a Screen change.
+watch(
+	() => [props.eventId, props.screen.id] as const,
+	([eventId, screenId]) => {
+		void sessionStore.loadSession(eventId, screenId);
+	},
+	{ immediate: true },
+);
 </script>
 
 <template>
@@ -57,25 +101,104 @@ const programAspectStyle = computed(() => ({
 				title="No Broadcast Graphics"
 				description="Compose a Broadcast Graphic in the Edit workspace."
 			/>
-			<div v-else class="space-y-1.5">
-				<button
-					v-for="graphic in graphics"
-					:key="graphic.id"
-					type="button"
-					class="flex w-full items-start gap-3 rounded-lg border p-3 text-left transition"
-					:class="selectedGraphicId === graphic.id ? 'border-primary bg-primary/10' : 'border-default/70 bg-muted/20 hover:bg-muted/40'"
-					data-testid="live-stack-entry"
-					@click="emit('select', graphic.id)"
+			<div v-else class="space-y-2">
+				<p class="text-xs text-muted" data-testid="on-air-count">
+					{{ onAirCount }} of {{ graphics.length }} on air
+				</p>
+
+				<!--
+					A rejected playout action must never be invisible: the operator has to
+					know that what they asked for is not what program is showing.
+				-->
+				<UAlert
+					v-if="sessionStore.error"
+					data-testid="playout-error"
+					color="error"
+					variant="soft"
+					icon="i-lucide-triangle-alert"
+					title="Playout action failed"
+					:description="sessionStore.error"
+				/>
+
+				<div
+					v-for="entry in entries"
+					:key="entry.graphic.id"
+					class="rounded-lg border p-3 transition"
+					:class="selectedGraphicId === entry.graphic.id ? 'border-primary bg-primary/10' : 'border-default/70 bg-muted/20'"
+					:data-playout-entry="entry.graphic.id"
+					:data-playout-state="entry.playoutState"
 				>
-					<UIcon name="i-lucide-layers" class="mt-0.5 size-4 shrink-0 text-muted" />
-					<span class="min-w-0 flex-1">
-						<span class="block truncate text-sm font-medium">{{ graphic.name }}</span>
-						<span class="mt-0.5 block truncate text-xs text-muted">{{ graphic.items.length }} items</span>
-					</span>
-					<UBadge size="xs" variant="soft" class="shrink-0">
-						Off
-					</UBadge>
-				</button>
+					<button
+						type="button"
+						class="flex w-full items-start gap-3 text-left"
+						data-testid="playout-select"
+						@click="emit('select', entry.graphic.id)"
+					>
+						<UIcon name="i-lucide-layers" class="mt-0.5 size-4 shrink-0 text-muted" />
+						<span class="min-w-0 flex-1">
+							<span class="block truncate text-sm font-medium">{{ entry.graphic.name }}</span>
+							<span class="mt-0.5 block truncate text-xs text-muted">{{ entry.graphic.items.length }} items</span>
+						</span>
+						<UBadge
+							size="xs"
+							:color="entry.playoutState === 'on-air' ? 'error' : 'neutral'"
+							variant="soft"
+							class="shrink-0"
+						>
+							{{ entry.playoutState === 'on-air' ? 'On air' : 'Off' }}
+						</UBadge>
+					</button>
+
+					<div class="mt-2 flex gap-1.5">
+						<UFieldGroup size="xs" class="flex-1">
+							<UButton
+								color="primary"
+								variant="subtle"
+								class="flex-1 justify-center"
+								:disabled="entry.pending"
+								data-testid="playout-take"
+								@click="take(entry.graphic.id, false)"
+							>
+								Take
+							</UButton>
+							<UButton
+								color="primary"
+								variant="outline"
+								aria-label="Cut Take"
+								:disabled="entry.pending"
+								title="Take without its enter animation"
+								data-testid="playout-cut-take"
+								@click="take(entry.graphic.id, true)"
+							>
+								Cut
+							</UButton>
+						</UFieldGroup>
+
+						<UFieldGroup size="xs" class="flex-1">
+							<UButton
+								color="neutral"
+								variant="subtle"
+								class="flex-1 justify-center"
+								:disabled="entry.pending"
+								data-testid="playout-out"
+								@click="out(entry.graphic.id, false)"
+							>
+								Out
+							</UButton>
+							<UButton
+								color="neutral"
+								variant="outline"
+								aria-label="Cut Out"
+								:disabled="entry.pending"
+								title="Out without its exit animation"
+								data-testid="playout-cut-out"
+								@click="out(entry.graphic.id, true)"
+							>
+								Cut
+							</UButton>
+						</UFieldGroup>
+					</div>
+				</div>
 			</div>
 		</ScreenSettingsCard>
 	</div>
