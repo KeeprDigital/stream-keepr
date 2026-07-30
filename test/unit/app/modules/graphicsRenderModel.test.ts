@@ -43,11 +43,45 @@ function graphic(id: string, items: BroadcastGraphicConfig['items']): BroadcastG
 	return { id, name: id, items };
 }
 
+/**
+ * Stand-in for the browser's compositor: plain source-over of each painted
+ * colour onto the backdrop, `C_out = C_src * a_src + C_dst * (1 - a_src)`,
+ * written from the compositing rule rather than from this module. Returns the
+ * resulting luminance, which for a Key Output is the composed alpha.
+ *
+ * Deliberately strict: a fill that is not pure white, or a backdrop that is not
+ * black, produces a luminance that no longer equals the alpha union — which is
+ * exactly the regression this guards against.
+ */
+function compositeKeyLuminance(backdrop: unknown, paints: unknown[]): number {
+	function channels(value: unknown): { luminance: number; alpha: number } {
+		const hex = /^#([\da-f]{6})([\da-f]{2})?$/i.exec(String(value ?? ''));
+		if (!hex)
+			throw new Error(`Key Output painted a colour this compositor cannot read: ${String(value)}`);
+		const rgb = hex[1]!;
+		const red = Number.parseInt(rgb.slice(0, 2), 16) / 255;
+		const green = Number.parseInt(rgb.slice(2, 4), 16) / 255;
+		const blue = Number.parseInt(rgb.slice(4, 6), 16) / 255;
+		if (red !== green || green !== blue)
+			throw new Error(`Key Output must paint greyscale, got #${rgb}`);
+		return {
+			luminance: red,
+			alpha: hex[2] === undefined ? 1 : Number.parseInt(hex[2], 16) / 255,
+		};
+	}
+
+	const base = channels(backdrop);
+	return paints.reduce<number>((destination, paint) => {
+		const source = channels(paint);
+		return (source.luminance * source.alpha) + (destination * (1 - source.alpha));
+	}, base.luminance * base.alpha);
+}
+
 const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
 
 describe('graphicsCompositionRenderModel', () => {
 	it('renders an empty composition transparent in the Overlay Output and black in Fill and Key', () => {
-		for (const [output, background] of [['overlay', 'transparent'], ['fill', '#000'], ['key', '#000']] as const) {
+		for (const [output, background] of [['overlay', 'transparent'], ['fill', '#000000'], ['key', '#000000']] as const) {
 			const model = resolveGraphicsCompositionRenderModel({ output, graphics: [], ...CANVAS });
 
 			expect(model.graphics).toEqual([]);
@@ -125,6 +159,46 @@ describe('graphicsCompositionRenderModel', () => {
 
 		expect(model.graphics[0]?.items[0]?.style.background).toBe('#ffffff80');
 		expect(model.graphics[0]?.items[1]?.textStyle?.color).toBe('#ffffff');
+	});
+
+	it('accumulates overlapping Graphic Items into their true combined alpha in the Key Output', () => {
+		// Two half-opaque items over the same bounds. Their true combined alpha is
+		// the alpha union 1 - (1 - a1)(1 - a2) = 0.75, independent of this module.
+		const model = resolveGraphicsCompositionRenderModel({
+			output: 'key',
+			graphics: [graphic('a', [
+				shape('under', { surfaceStyle: { fill: '#0077a3', fillOpacity: 0.5 } }),
+				shape('over', { surfaceStyle: { fill: '#ff0000', fillOpacity: 0.5 } }),
+			])],
+			...CANVAS,
+		});
+
+		const luminance = compositeKeyLuminance(
+			model.canvasStyle.background,
+			model.graphics[0]!.items.map(item => item.style.background),
+		);
+
+		// 8-bit alpha quantisation puts 0.5 at 128/255, so compare to 2 decimals.
+		expect(luminance).toBeCloseTo(0.75, 2);
+	});
+
+	it('holds the Key Output matte for a stack of many overlapping Graphic Items', () => {
+		const alphas = [0.25, 0.5, 0.75, 0.5];
+		const model = resolveGraphicsCompositionRenderModel({
+			output: 'key',
+			graphics: [graphic('a', alphas.map((fillOpacity, index) =>
+				shape(`item-${index}`, { surfaceStyle: { fill: '#123456', fillOpacity } }),
+			))],
+			...CANVAS,
+		});
+
+		const expectedUnion = 1 - alphas.reduce((remaining, alpha) => remaining * (1 - alpha), 1);
+		const luminance = compositeKeyLuminance(
+			model.canvasStyle.background,
+			model.graphics[0]!.items.map(item => item.style.background),
+		);
+
+		expect(luminance).toBeCloseTo(expectedUnion, 2);
 	});
 
 	it('clips every Text Overflow Policy inside the authored bounds', () => {

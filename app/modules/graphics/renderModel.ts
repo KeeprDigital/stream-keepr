@@ -9,6 +9,7 @@ import type {
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from './selection';
 import { resolveGraphicFontFamily } from '~~/shared/modules/graphics';
+import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
 import { graphicsSelectionKey } from './selection';
 
 /**
@@ -22,6 +23,29 @@ import { graphicsSelectionKey } from './selection';
  * Advisory preview guides are part of this model only because the editor asks
  * for them explicitly. A live Screen Output never asks, so guides can never
  * reach an output, and they never enter an item's own geometry or clipping.
+ *
+ * ## The Key Output is a true alpha matte, by construction
+ *
+ * Every element paints pure white at its own alpha over a black backdrop. The
+ * browser's own source-over compositing then accumulates the matte for free:
+ * over a black backdrop, two elements leave a luminance of
+ * `a2 + a1 * (1 - a2)`, which is exactly the alpha union
+ * `1 - (1 - a1) * (1 - a2)`. Two overlapping half-opaque items composite to
+ * 0.75 grey, and their true combined alpha is 0.75. That identity holds to any
+ * depth of overlap, so no separate compositing pass is needed or wanted.
+ *
+ * The identity is not free of preconditions, and these are a contract every
+ * later addition to the vocabulary has to honour:
+ *
+ * - The Key backdrop must stay black (`screenOutputCanvasBackground`).
+ * - Every painted element must be pure white at its own alpha. A gradient is
+ *   fine — white with varying alpha still accumulates correctly — and group or
+ *   element opacity is fine, because it multiplies through. A glow, shadow, or
+ *   outline that keeps its authored colour silently breaks the matte, so each
+ *   must resolve to white in the Key Output too.
+ * - Nothing may use `mix-blend-mode` or a filter that is not plain source-over.
+ * - A Media Graphic Item must not paint its own colours into the Key Output; it
+ *   contributes its alpha as white.
  */
 
 /** Advisory action-safe guides sit at a five-percent inset, title-safe at ten percent. */
@@ -110,7 +134,9 @@ function clampOpacity(value: number): number {
 
 /**
  * A Key Output renders composed opacity as a grayscale alpha matte, so every
- * fill becomes white at its own alpha rather than its authored colour.
+ * fill becomes pure white at its own alpha rather than its authored colour.
+ * Compositing those over the black Key backdrop yields the matte itself — see
+ * the module docblock for the identity and its preconditions.
  */
 function fillColour(output: ScreenOutput, colour: string, opacity: number): string {
 	const alpha = clampOpacity(opacity);
@@ -264,7 +290,7 @@ export function resolveGraphicsCompositionRenderModel(
 			height: '100%',
 			position: 'relative',
 			overflow: 'hidden',
-			background: input.output === 'overlay' ? 'transparent' : '#000',
+			background: screenOutputCanvasBackground(input.output),
 		},
 		graphics: composed.map(graphic => ({
 			id: graphic.id,

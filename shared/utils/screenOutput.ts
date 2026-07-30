@@ -16,7 +16,27 @@ export function parseScreenOutput(value: unknown): { output: ScreenOutput; warni
 	return { output: 'overlay', warning: `Invalid output mode "${String(raw)}"; rendering overlay.` };
 }
 
-/** The capture background for a Screen Output: transparency for overlay, black for fill and key. */
+/** The one black every Screen Output composes over when it is not transparent. */
+export const SCREEN_OUTPUT_BLACK = '#000000';
+
+/**
+ * Whether a Screen Output composes over black rather than transparency.
+ *
+ * The single source of this rule: an empty Screen is transparent in its Overlay
+ * Output and black in its Fill Output and Key Output. The live composed canvas
+ * and the PNG capture both derive from here so a capture can never diverge from
+ * the output it captures.
+ */
+export function screenOutputCompositesOverBlack(output: ScreenOutput): boolean {
+	return output !== 'overlay';
+}
+
+/** The CSS background of the composed canvas for a Screen Output. */
+export function screenOutputCanvasBackground(output: ScreenOutput): string {
+	return screenOutputCompositesOverBlack(output) ? SCREEN_OUTPUT_BLACK : 'transparent';
+}
+
+/** The capture background for a Screen Output; omitted for the transparent Overlay Output. */
 export function screenOutputBackground(output: ScreenOutput): string | undefined {
-	return output === 'overlay' ? undefined : '#000000';
+	return screenOutputCompositesOverBlack(output) ? SCREEN_OUTPUT_BLACK : undefined;
 }

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { parseScreenOutput, SCREEN_OUTPUT_VALUES, screenOutputBackground } from '~~/shared/utils/screenOutput';
+import {
+	parseScreenOutput,
+	SCREEN_OUTPUT_VALUES,
+	screenOutputBackground,
+	screenOutputCanvasBackground,
+	screenOutputCompositesOverBlack,
+} from '~~/shared/utils/screenOutput';
 
 describe('screen Output selection', () => {
 	it('accepts an overlay, fill, or key output selection', () => {
@@ -33,5 +39,21 @@ describe('screen Output selection', () => {
 		expect(screenOutputBackground('overlay')).toBeUndefined();
 		expect(screenOutputBackground('fill')).toBe('#000000');
 		expect(screenOutputBackground('key')).toBe('#000000');
+	});
+
+	it('composes the Fill Output and Key Output canvases over black and the Overlay Output over transparency', () => {
+		expect(screenOutputCanvasBackground('overlay')).toBe('transparent');
+		expect(screenOutputCanvasBackground('fill')).toBe('#000000');
+		expect(screenOutputCanvasBackground('key')).toBe('#000000');
+	});
+
+	it('never lets a PNG capture disagree with the Screen Output it captures', () => {
+		for (const output of SCREEN_OUTPUT_VALUES) {
+			const capture = screenOutputBackground(output);
+			const canvas = screenOutputCanvasBackground(output);
+
+			expect(screenOutputCompositesOverBlack(output)).toBe(canvas !== 'transparent');
+			expect(capture ?? 'transparent').toBe(canvas);
+		}
 	});
 });

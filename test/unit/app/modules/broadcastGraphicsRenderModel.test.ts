@@ -42,8 +42,8 @@ describe('broadcast Graphics render model', () => {
 	});
 
 	it('renders an empty Broadcast Graphics Screen black in the Fill and Key Outputs', () => {
-		expect(resolveBroadcastGraphicsRenderModel(input({ output: 'fill' })).canvasStyle.background).toBe('#000');
-		expect(resolveBroadcastGraphicsRenderModel(input({ output: 'key' })).canvasStyle.background).toBe('#000');
+		expect(resolveBroadcastGraphicsRenderModel(input({ output: 'fill' })).canvasStyle.background).toBe('#000000');
+		expect(resolveBroadcastGraphicsRenderModel(input({ output: 'key' })).canvasStyle.background).toBe('#000000');
 	});
 
 	it('gives the Overlay, Fill, and Key Outputs identical canvas dimensions', () => {
