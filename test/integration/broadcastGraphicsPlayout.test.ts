@@ -1,8 +1,10 @@
 import { $fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+	createBroadcastGraphicsScreen,
 	createPlayoutHarness,
-	getBroadcastGraphicsSession,
+	getBroadcastGraphicsLiveSession,
+	integrationBroadcastGraphic,
 	playoutCommandId,
 	sendBroadcastGraphicsCommand,
 	setScreenMode,
@@ -98,7 +100,7 @@ describe('broadcast graphics playout command API', () => {
 		await harness.send({ commandId: reusedId, type: 'Take', payload: { graphicId: 'a' } });
 
 		const res = await $fetchRaw(
-			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/sessions/${harness.session().id}/commands`,
+			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`,
 			{
 				method: 'POST',
 				body: { commandId: reusedId, type: 'Take', payload: { graphicId: 'b' } },
@@ -161,7 +163,7 @@ describe('broadcast graphics playout command API', () => {
 		const harness = await createPlayoutHarness(eventId, 'playout-unknown', ['a']);
 
 		const res = await $fetchRaw(
-			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/sessions/${harness.session().id}/commands`,
+			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`,
 			{
 				method: 'POST',
 				body: { commandId: playoutCommandId('unknown'), type: 'Take', payload: { graphicId: 'nope' } },
@@ -178,22 +180,53 @@ describe('broadcast graphics playout command API', () => {
 		await harness.send({ commandId: playoutCommandId('epoch-take'), type: 'Take', payload: { graphicId: 'a' } });
 
 		await setScreenMode(eventId, harness.screen.id, 'idle');
+		await setScreenMode(eventId, harness.screen.id, 'broadcast-graphics');
 
+		const nextEpoch = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
+		expect(nextEpoch.id).not.toBe(endedSessionId);
+		expect(nextEpoch.currentState.playout).toEqual({});
+
+		// Retried against the ended epoch while the Screen is a Broadcast Graphics
+		// Screen again, so the Screen-mode guard cannot be what rejects it: the only
+		// thing left to refuse this command is the epoch it names having ended.
 		const rejected = await $fetchRaw(
-			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/sessions/${endedSessionId}/commands`,
+			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${endedSessionId}/commands`,
 			{
 				method: 'POST',
 				body: { commandId: playoutCommandId('epoch-stale'), type: 'Out', payload: { graphicId: 'a' } },
 				ignoreResponseError: true,
 			},
 		);
+
 		expect(rejected.status).toBe(409);
+		expect(rejected._data?.message).toMatch(/live session has ended/i);
 
-		await setScreenMode(eventId, harness.screen.id, 'broadcast-graphics');
-		const nextEpoch = await getBroadcastGraphicsSession(eventId, harness.screen.id);
+		// The stale retry reached neither epoch: the show running now still has
+		// nothing on air.
+		const afterRetry = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
+		expect(afterRetry.id).toBe(nextEpoch.id);
+		expect(afterRetry.sequence).toBe(nextEpoch.sequence);
+		expect(afterRetry.currentState.playout).toEqual({});
+	});
 
-		expect(nextEpoch.id).not.toBe(endedSessionId);
-		expect(nextEpoch.currentState.playout).toEqual({});
+	it('opens exactly one epoch for a Screen no matter how many clients ask at once', async () => {
+		// Every Live Control and Screen Output opens the epoch by asking for the
+		// snapshot, so a show starting up races several of these at once. Only one
+		// epoch may exist per Screen — the partial unique index on the active status
+		// is what enforces it, and the loser of the race has to resolve to the
+		// winner's epoch rather than failing or creating a second one.
+		const screen = await createBroadcastGraphicsScreen(
+			eventId,
+			'playout-single-epoch',
+			[integrationBroadcastGraphic('a')],
+		);
+
+		const opened = await Promise.all(
+			Array.from({ length: 6 }, () => getBroadcastGraphicsLiveSession(eventId, screen.id)),
+		);
+
+		expect(new Set(opened.map(session => session.id)).size).toBe(1);
+		expect(opened.every(session => session.status === 'active')).toBe(true);
 	});
 
 	it('refuses a snapshot for a Screen that is not in Broadcast Graphics mode', async () => {
@@ -201,7 +234,7 @@ describe('broadcast graphics playout command API', () => {
 		await setScreenMode(eventId, harness.screen.id, 'idle');
 
 		const res = await $fetchRaw(
-			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/session`,
+			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-session`,
 			{ ignoreResponseError: true },
 		);
 

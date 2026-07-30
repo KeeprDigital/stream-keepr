@@ -5,6 +5,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
+import { onAirBroadcastGraphicIds } from '~~/shared/modules/broadcast-graphics-live-session';
 import { GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
 
 enableAutoUnmount(afterEach);
@@ -36,9 +37,14 @@ mockNuxtImport('useScreenModeConfig', () => () => computed(() => ({
 const mockOnAirGraphicIds = ref<string[]>([]);
 const mockLoadSession = ref<(eventId: number, screenId: number) => void>(() => {});
 
-mockNuxtImport('useBroadcastGraphicsSessionStore', () => () => ({
+mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
+	// Delegates to the real reducer rather than reimplementing the authored-order
+	// filter, so this test cannot pass on a filter the Screen Output does not use.
 	onAirGraphicIds: (_screenId: number, graphics: readonly { id: string }[]) =>
-		graphics.filter(graphic => mockOnAirGraphicIds.value.includes(graphic.id)).map(graphic => graphic.id),
+		onAirBroadcastGraphicIds(
+			{ playout: Object.fromEntries(mockOnAirGraphicIds.value.map(id => [id, { onAir: true }])) },
+			graphics,
+		),
 	loadSession: (eventId: number, screenId: number) => mockLoadSession.value(eventId, screenId),
 }));
 

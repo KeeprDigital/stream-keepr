@@ -1,4 +1,4 @@
-import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-session';
+import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import {
@@ -6,7 +6,7 @@ import {
 	broadcastGraphicPlayoutState,
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,
-} from '~~/shared/modules/broadcast-graphics-session';
+} from '~~/shared/modules/broadcast-graphics-live-session';
 
 function graphic(id: string): BroadcastGraphicConfig {
 	return { id, name: id, items: [] };
@@ -101,12 +101,24 @@ describe('broadcastGraphicsPlayout', () => {
 	it('recovers a target-on-air Broadcast Graphic settled on air rather than entering', () => {
 		const persisted = take(createInitialBroadcastGraphicsLiveState(), 'slate');
 
-		// A reload, disconnect, or server restart reaches the reducer as nothing
-		// more than the persisted state: no lifecycle phase is stored, so there is
-		// nothing for recovery to replay.
-		const recovered = structuredClone(persisted);
+		// A reload, disconnect, or server restart reaches the reducer as nothing but
+		// the JSON that was in the session's text column.
+		const recovered: BroadcastGraphicsLiveState = JSON.parse(JSON.stringify(persisted));
 
 		expect(broadcastGraphicPlayoutState(recovered, 'slate')).toBe('on-air');
 		expect(onAirBroadcastGraphicIds(recovered, [graphic('slate')])).toEqual(['slate']);
+	});
+
+	it('persists the accepted intent and nothing that could replay animation', () => {
+		const persisted = take(createInitialBroadcastGraphicsLiveState(), 'slate');
+
+		// The guarantee that recovery settles at the Graphic Resting State holds
+		// because no lifecycle phase or phase start time is stored — there is
+		// nothing for recovery to resume. That is a property of the persisted shape,
+		// so it is asserted as one: adding a field here (a phase, an effective start
+		// time) must fail this test and force a conscious decision about whether
+		// recovery would replay it.
+		expect(Object.keys(persisted).toSorted()).toEqual(['playout']);
+		expect(Object.keys(persisted.playout.slate!).toSorted()).toEqual(['onAir']);
 	});
 });

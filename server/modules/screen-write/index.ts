@@ -3,7 +3,7 @@ import type { ScreenOutputAssetCapabilityManager } from '~~/server/modules/scree
 import type { CreateScreenInput, UpdateScreenInput } from '~~/server/schemas/api/screen';
 import type { ScreenResponse } from '~~/shared/api';
 import type { ScreenMode } from '~~/shared/types/enums';
-import { broadcastGraphicsSessionModule } from '~~/server/modules/broadcast-graphics-session';
+import { broadcastGraphicsLiveSessionModule } from '~~/server/modules/broadcast-graphics-live-session';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import {
 	graphicAssetId,
@@ -166,7 +166,7 @@ export function screenWriteModule(dependencies: {
 		// leaving the mode ends it. Ending after the mode change commits means a
 		// failed update can never orphan a running show's live state.
 		if (existingScreen.currentMode === 'broadcast-graphics' && updatedScreen.currentMode !== 'broadcast-graphics') {
-			await broadcastGraphicsSessionModule().endSessionsForScreen(screenId, eventId);
+			await broadcastGraphicsLiveSessionModule().endSessionsForScreen(screenId, eventId);
 		}
 
 		return await publication.screenUpdated({
@@ -177,9 +177,15 @@ export function screenWriteModule(dependencies: {
 	}
 
 	async function deleteScreen({ eventId, screenId, originConnectionId }: DeleteScreenParams): Promise<{ success: boolean }> {
-		// End any playout epoch first: ending discards its Command Receipts, which
-		// the Screen's cascade delete would otherwise leave behind unreferenced.
-		await broadcastGraphicsSessionModule().endSessionsForScreen(screenId, eventId);
+		// End any playout epoch before the delete, and only for a Screen that has
+		// one. Ending is what discards the epoch's Command Receipts, and it has to
+		// happen while the sessions still exist: the Screen's cascade delete removes
+		// them, after which nothing identifies the receipts they left behind. That is
+		// the opposite order from `updateScreen`, which ends the epoch only after its
+		// mode change commits so a failed update cannot blank a running show.
+		const existingScreen = await screens.findById(screenId, eventId);
+		if (existingScreen?.currentMode === 'broadcast-graphics')
+			await broadcastGraphicsLiveSessionModule().endSessionsForScreen(screenId, eventId);
 
 		const deleted = await screens.remove(screenId, eventId);
 
