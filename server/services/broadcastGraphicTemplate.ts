@@ -38,6 +38,16 @@ export interface BroadcastGraphicTemplatePatch {
 	name?: string;
 	description?: string | null;
 	document?: BroadcastGraphicConfig;
+	/** The revision the writer believes is current; the write is refused otherwise. */
+	revision?: number;
+}
+
+/** A revision the writer did not expect: someone else revised the template first. */
+export class BroadcastGraphicTemplateRevisionConflict extends Error {
+	constructor(readonly currentRevision: number) {
+		super(`Broadcast Graphic Template is at revision ${currentRevision}`);
+		this.name = 'BroadcastGraphicTemplateRevisionConflict';
+	}
 }
 
 /**
@@ -155,6 +165,11 @@ export function broadcastGraphicTemplateService() {
 	 * The revision advances for a name or description change as much as for a
 	 * document change, because a library entry is what an author browses and its
 	 * revision is what a Template Package's provenance names.
+	 *
+	 * A stated `revision` makes the write compare-and-swap: it is applied only while
+	 * the stored revision is still the one the writer read. The condition lives in the
+	 * `UPDATE` itself rather than in a read-then-write, so two writers arriving at the
+	 * same instant are ordered by the database and exactly one of them wins.
 	 */
 	const update = async (
 		id: string,
@@ -169,12 +184,13 @@ export function broadcastGraphicTemplateService() {
 		const now = Date.now();
 		const client = db.$client;
 
-		await client.batch([
+		const [updated] = await client.batch([
 			client.prepare(`
 				UPDATE broadcast_graphic_templates
 				SET name = ?, description = ?, document = ?, revision = revision + 1,
 					graphic_asset_reference_version = ?, updated_at = ?
 				WHERE id = ?
+					${patch.revision === undefined ? '' : 'AND revision = ?'}
 			`).bind(
 				patch.name ?? existing.name,
 				patch.description === undefined ? existing.description : patch.description,
@@ -182,9 +198,20 @@ export function broadcastGraphicTemplateService() {
 				referenceVersion,
 				now,
 				id,
+				...(patch.revision === undefined ? [] : [patch.revision]),
 			),
 			...referenceStatements(client, id, document, referenceVersion, now),
 		]);
+
+		// Nothing written means the precondition failed: the template is still there,
+		// at a revision this writer did not expect. Its reference rows are untouched,
+		// because every one of them is conditional on the stamp this write never made.
+		if (updated?.meta.changes !== 1) {
+			const current = await findById(id);
+			if (!current)
+				return undefined;
+			throw new BroadcastGraphicTemplateRevisionConflict(current.revision);
+		}
 
 		return await findById(id);
 	};

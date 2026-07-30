@@ -3,7 +3,7 @@ import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent } from 'vue';
+import { defineComponent, ref } from 'vue';
 
 enableAutoUnmount(afterEach);
 
@@ -23,8 +23,14 @@ mockNuxtImport('useBroadcastGraphicTemplateRepository', () => () => ({
 }));
 
 const mockGetScreenById = vi.fn();
+const mockScreens = ref<Array<{ id: number; stateVersion: number }>>([{ id: 3, stateVersion: 12 }]);
 
-mockNuxtImport('useScreenStore', () => () => ({ getScreenById: mockGetScreenById }));
+mockNuxtImport('useScreenStore', () => () => ({
+	getScreenById: mockGetScreenById,
+	get screens() {
+		return mockScreens.value;
+	},
+}));
 
 const ScreenSettingsCardStub = defineComponent({
 	props: { title: { type: String, required: false } },
@@ -116,6 +122,8 @@ describe('graphicsTemplateLibrary', () => {
 			screen: { id: 3 },
 			graphic: { ...lowerThird, id: 'placed-copy' },
 		});
+		mockRemove.mockResolvedValue(undefined);
+		mockScreens.value = [{ id: 3, stateVersion: 12 }];
 	});
 
 	it('browses the installation library', async () => {
@@ -152,7 +160,14 @@ describe('graphicsTemplateLibrary', () => {
 		await wrapper.get('[data-testid="template-place"]').trigger('click');
 		await flushPromises();
 
-		expect(mockPlace).toHaveBeenCalledWith({ eventId: 7, screenId: 3, templateId: 'template-1' });
+		// A placement read-modify-writes the Screen's whole stack, so it must state the
+		// version it read or the server has nothing to refuse a stale write against.
+		expect(mockPlace).toHaveBeenCalledWith({
+			eventId: 7,
+			screenId: 3,
+			templateId: 'template-1',
+			stateVersion: 12,
+		});
 		// The Screen was written server-side, so the authoritative Screen is reloaded
 		// rather than guessed at.
 		expect(mockGetScreenById).toHaveBeenCalledWith(7, 3);
@@ -164,19 +179,84 @@ describe('graphicsTemplateLibrary', () => {
 
 		const input = wrapper.get('[data-testid="template-name"]');
 		await input.setValue('Main show lower third');
-		await input.trigger('change');
 		await flushPromises();
 
-		expect(mockUpdate).toHaveBeenCalledWith('template-1', { name: 'Main show lower third' });
+		expect(mockUpdate).toHaveBeenCalledWith('template-1', {
+			name: 'Main show lower third',
+			revision: 1,
+		});
 	});
 
-	it('removes a template from the library', async () => {
+	it('asks before removing a template, and removes it once confirmed', async () => {
 		const wrapper = await mountLibrary();
 
 		await wrapper.get('[data-testid="template-delete"]').trigger('click');
 		await flushPromises();
 
+		// Deleting a design is irreversible, so the first click asks. The prompt says
+		// what an author most needs to know: placed copies survive.
+		const prompt = wrapper.get('[data-testid="template-delete-confirm"]');
+		expect(prompt.text()).toContain('cannot be undone');
+		expect(prompt.text()).toContain('not affected');
+		expect(mockRemove).not.toHaveBeenCalled();
+
+		await wrapper.get('[data-testid="template-delete-confirmed"]').trigger('click');
+		await flushPromises();
+
 		expect(mockRemove).toHaveBeenCalledWith('template-1');
+	});
+
+	it('abandons a deletion that is cancelled', async () => {
+		const wrapper = await mountLibrary();
+
+		await wrapper.get('[data-testid="template-delete"]').trigger('click');
+		await wrapper.get('[data-testid="template-delete-cancelled"]').trigger('click');
+		await flushPromises();
+
+		expect(wrapper.find('[data-testid="template-delete-confirm"]').exists()).toBe(false);
+		expect(mockRemove).not.toHaveBeenCalled();
+	});
+
+	it('describes a template, and clears an emptied description', async () => {
+		const wrapper = await mountLibrary();
+
+		const field = wrapper.get('[data-testid="template-description"]');
+		await field.setValue('Main show, both casters');
+		await flushPromises();
+
+		expect(mockUpdate).toHaveBeenCalledWith('template-1', {
+			description: 'Main show, both casters',
+			revision: 1,
+		});
+
+		mockList.mockResolvedValue([summary({ description: 'Main show, both casters' })]);
+		const described = await mountLibrary();
+		const clearing = described.get('[data-testid="template-description"]');
+		await clearing.setValue('   ');
+		await flushPromises();
+
+		// An emptied field clears the description rather than storing whitespace.
+		expect(mockUpdate).toHaveBeenLastCalledWith('template-1', { description: null, revision: 1 });
+	});
+
+	it('re-reads the library when a revision is refused as stale', async () => {
+		mockUpdate.mockRejectedValue({
+			data: { message: 'Broadcast Graphic Template has been revised by another session (now revision 4)' },
+		});
+		const wrapper = await mountLibrary();
+
+		const input = wrapper.get('[data-testid="template-name"]');
+		await input.setValue('Renamed against a stale revision');
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="template-library-error"]').text())
+			.toContain('revised by another session');
+		// Re-read, so the author is looking at the revision that actually exists before
+		// they try again.
+		// One edit, one write, and one re-read: the library is re-listed so the author is
+		// looking at the revision that actually exists before trying again.
+		expect(mockUpdate).toHaveBeenCalledTimes(1);
+		expect(mockList).toHaveBeenCalledTimes(2);
 	});
 
 	it('browses read-only without offering any authoring action', async () => {
@@ -186,6 +266,8 @@ describe('graphicsTemplateLibrary', () => {
 		expect(wrapper.find('[data-testid="template-library-save"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="template-place"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="template-delete"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="template-name"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="template-description"]').exists()).toBe(false);
 	});
 
 	it('reports a refused placement instead of leaving the author guessing', async () => {

@@ -48,9 +48,18 @@ export function useBroadcastGraphicTemplateRepository() {
 		});
 	};
 
+	/**
+	 * `revision` is the revision the caller read, and the write is refused if the
+	 * template has moved on since — compare-and-swap rather than last-write-wins.
+	 */
 	const update = async (
 		templateId: string,
-		patch: { name?: string; description?: string | null; document?: BroadcastGraphicConfig },
+		patch: {
+			name?: string;
+			description?: string | null;
+			document?: BroadcastGraphicConfig;
+			revision?: number;
+		},
 	): Promise<BroadcastGraphicTemplateResponse> => {
 		return await $fetch<BroadcastGraphicTemplateResponse>(`${library}/${templateId}`, {
 			method: 'PATCH',

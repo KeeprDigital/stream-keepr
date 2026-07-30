@@ -44,6 +44,8 @@ const loading = ref(false);
 const busyTemplateId = ref<string | null>(null);
 const saving = ref(false);
 const error = ref<string | null>(null);
+/** The template whose deletion is awaiting confirmation, if any. */
+const pendingDeleteId = ref<string | null>(null);
 
 /** Fail closed: an unstated permission is never permission. */
 const canAuthor = computed(() => props.writable === true);
@@ -56,11 +58,19 @@ function failureMessage(caught: unknown): string {
 	return caught instanceof Error ? caught.message : 'The Broadcast Graphic Template library is unavailable';
 }
 
-async function refresh() {
+/**
+ * Re-read the library.
+ *
+ * `keepError` exists for the one case that matters: a refused write re-reads the
+ * library so the author is looking at what actually exists, and a successful re-read
+ * must not then erase the message explaining why their write was refused.
+ */
+async function refresh(keepError = false) {
 	loading.value = true;
 	try {
 		templates.value = await repository.list();
-		error.value = null;
+		if (!keepError)
+			error.value = null;
 	}
 	catch (caught) {
 		error.value = failureMessage(caught);
@@ -107,6 +117,12 @@ async function place(templateId: string) {
 			eventId: props.eventId,
 			screenId: props.screenId,
 			templateId,
+			// A placement is a read-modify-write of the Screen's whole stack, so it states
+			// the version it was built against. Without one the server has nothing to
+			// compare and the write would silently discard whatever another author did to
+			// the stack in the meantime — the same guard every other write from this editor
+			// carries. An unknown Screen yields 0, which is refused rather than unchecked.
+			stateVersion: screenStore.screens.find(screen => screen.id === props.screenId)?.stateVersion ?? 0,
 		});
 		error.value = null;
 		// The Screen was written on the server, and this client's own realtime echo is
@@ -122,22 +138,63 @@ async function place(templateId: string) {
 	}
 }
 
-async function rename(template: BroadcastGraphicTemplateSummary, name: string) {
-	const next = name.trim();
-	if (!canAuthor.value || next.length === 0 || next === template.name)
+/**
+ * Revise one library entry's own fields.
+ *
+ * The stored revision travels with the write, so two authors who both had the
+ * library open cannot silently overwrite one another: the second is told the template
+ * has moved on and the list is re-read.
+ */
+async function revise(
+	template: BroadcastGraphicTemplateSummary,
+	patch: { name?: string; description?: string | null },
+) {
+	if (!canAuthor.value)
 		return;
 	busyTemplateId.value = template.id;
 	try {
-		await repository.update(template.id, { name: next });
+		await repository.update(template.id, { ...patch, revision: template.revision });
 		error.value = null;
 		await refresh();
 	}
 	catch (caught) {
 		error.value = failureMessage(caught);
+		await refresh(true);
 	}
 	finally {
 		busyTemplateId.value = null;
 	}
+}
+
+async function rename(template: BroadcastGraphicTemplateSummary, name: string) {
+	const next = name.trim();
+	if (next.length === 0 || next === template.name)
+		return;
+	await revise(template, { name: next });
+}
+
+/** An emptied description clears it rather than storing an empty string. */
+async function describe(template: BroadcastGraphicTemplateSummary, description: string) {
+	const next = description.trim();
+	if (next === (template.description ?? ''))
+		return;
+	await revise(template, { description: next.length === 0 ? null : next });
+}
+
+/**
+ * Deleting a template is irreversible and there is no undo, so the first click asks
+ * and the second one does it. Copies already placed from the design are unaffected —
+ * which is worth saying in the prompt, because it is the thing an author about to
+ * delete a design most needs to know.
+ */
+function askToRemove(templateId: string) {
+	if (!canAuthor.value)
+		return;
+	pendingDeleteId.value = pendingDeleteId.value === templateId ? null : templateId;
+}
+
+function cancelRemove() {
+	pendingDeleteId.value = null;
 }
 
 async function remove(templateId: string) {
@@ -147,6 +204,7 @@ async function remove(templateId: string) {
 	try {
 		await repository.remove(templateId);
 		error.value = null;
+		pendingDeleteId.value = null;
 		await refresh();
 	}
 	catch (caught) {
@@ -224,7 +282,17 @@ onMounted(() => {
 							<p class="mt-0.5 truncate text-xs text-muted">
 								{{ template.itemCount }} items · {{ template.inputCount }} inputs · revision {{ template.revision }}
 							</p>
-							<p v-if="template.description" class="mt-0.5 truncate text-xs text-muted">
+							<UInput
+								v-if="canAuthor"
+								:model-value="template.description ?? ''"
+								size="xs"
+								class="mt-1 w-full"
+								placeholder="Description"
+								aria-label="Template description"
+								data-testid="template-description"
+								@change="describe(template, ($event.target as HTMLInputElement).value)"
+							/>
+							<p v-else-if="template.description" class="mt-0.5 truncate text-xs text-muted">
 								{{ template.description }}
 							</p>
 						</div>
@@ -248,8 +316,46 @@ onMounted(() => {
 								:disabled="busyTemplateId === template.id"
 								:aria-label="`Delete ${template.name}`"
 								data-testid="template-delete"
-								@click="remove(template.id)"
+								@click="askToRemove(template.id)"
 							/>
+						</div>
+					</div>
+
+					<!--
+						Deleting a design cannot be undone, so the first click asks. The prompt
+						says the thing an author most needs to know before answering: the
+						Broadcast Graphics already placed from it are independent copies and
+						survive.
+					-->
+					<div
+						v-if="canAuthor && pendingDeleteId === template.id"
+						class="mt-2 rounded-md border border-error/40 bg-error/10 p-2"
+						data-testid="template-delete-confirm"
+					>
+						<p class="text-xs">
+							Delete “{{ template.name }}” from the library? This cannot be undone.
+							Broadcast Graphics already placed from it are not affected.
+						</p>
+						<div class="mt-2 flex gap-1.5">
+							<UButton
+								size="xs"
+								color="error"
+								variant="subtle"
+								:disabled="busyTemplateId === template.id"
+								data-testid="template-delete-confirmed"
+								@click="remove(template.id)"
+							>
+								Delete
+							</UButton>
+							<UButton
+								size="xs"
+								color="neutral"
+								variant="ghost"
+								data-testid="template-delete-cancelled"
+								@click="cancelRemove"
+							>
+								Cancel
+							</UButton>
 						</div>
 					</div>
 				</div>

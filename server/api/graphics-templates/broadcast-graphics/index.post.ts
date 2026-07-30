@@ -1,8 +1,10 @@
 import { mapBroadcastGraphicTemplateToResponse } from '~~/server/mappers/broadcastGraphicTemplate';
+import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { saveBroadcastGraphicTemplateSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
 import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGraphicTemplate';
 import { screenService } from '~~/server/services/screen';
+import { assertBroadcastGraphicTemplateReferencesExist } from '~~/server/utils/broadcastGraphicTemplateReferences';
 import { broadcastGraphicTemplateDocument } from '~~/shared/modules/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
 
@@ -32,11 +34,14 @@ export default defineEventHandler(async (event) => {
 		});
 	}
 
+	const document = broadcastGraphicTemplateDocument(graphic);
+	await assertBroadcastGraphicTemplateReferencesExist(graphicsAssetLibraryForEvent(event), document);
+
 	const template = await broadcastGraphicTemplateService().create({
 		id: randomUuid(),
 		name: body.name ?? graphic.name,
 		description: body.description ?? null,
-		document: broadcastGraphicTemplateDocument(graphic),
+		document,
 	});
 
 	setResponseStatus(event, 201);

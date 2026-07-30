@@ -47,11 +47,22 @@ export const saveBroadcastGraphicTemplateSchema = z.object({
 	description: templateDescriptionSchema.optional(),
 }).strict();
 
-/** `null` clears a description; an omitted field is left as it is. */
+/**
+ * `null` clears a description; an omitted field is left as it is.
+ *
+ * `revision` is the revision the author was looking at, and it is how a library
+ * write gets optimistic concurrency without pretending to be an editing session. A
+ * template revision is a single-shot write — rename, describe, replace the document
+ * — so the control it needs is compare-and-swap, not a lease: two authors who both
+ * open the library and rename the same entry must not silently overwrite each other,
+ * and the second one should be told to look again. Omitting it accepts the write
+ * unconditionally, for a caller that has no revision to state.
+ */
 export const updateBroadcastGraphicTemplateSchema = z.object({
 	name: templateNameSchema.optional(),
 	description: templateDescriptionSchema.nullable().optional(),
 	document: broadcastGraphicConfigSchema.optional(),
+	revision: z.number().int().positive().optional(),
 }).strict().refine(
 	patch => Object.keys(patch).length > 0,
 	'A template revision must change something',

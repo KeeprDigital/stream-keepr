@@ -173,8 +173,11 @@ describe('placeBroadcastGraphicTemplate', () => {
 
 	it('rewrites a Broadcast Graphic\'s staggered subset onto the placed copy\'s own Graphic Item ids', () => {
 		const document = composed();
-		// The stagger names the two top-level items, deliberately in reverse of their
-		// list order, so the assertion proves order is carried rather than recomputed.
+		// The stagger names both top-level items, listed in reverse of their list order.
+		// `itemIds` is a *selection*: the stagger sequence comes from the container's
+		// list order restricted to that selection, then reversed for `reverse-list`, so
+		// this array's own order carries no meaning. It is written this way so the
+		// assertion below pins each entry's mapping rather than a coincidence of order.
 		document.animation = {
 			enter: { duration: 400, easing: 'ease-out', delay: 0, fade: { opacity: 0 } },
 			stagger: { enter: { order: 'list', step: 80, itemIds: ['headline', 'cluster'] } },
@@ -238,7 +241,190 @@ describe('placeBroadcastGraphicTemplate', () => {
 
 		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
 
-		expect(placed.animation).toBeUndefined();
+		// The key is absent rather than present-and-undefined: this shape is persisted
+		// as JSON, where the two are indistinguishable, and compared in memory, where
+		// they are not.
+		expect('animation' in placed).toBe(false);
+	});
+
+	it('shares no object with the template document, one level down', () => {
+		// `toEqual` passes on identity, so equality cannot see this: a copy that returned
+		// the template's own recipe objects would satisfy every other test in this file
+		// while making a placed graphic's animation editable through the template.
+		const document = composed();
+		document.animation = {
+			enter: { duration: 400, easing: 'ease-out', delay: 0, fade: { opacity: 0 } },
+			exit: { duration: 200, easing: 'ease-in', delay: 0, fade: { opacity: 0 } },
+		};
+		const template = { id: 'template-1', name: 'Lower third', document };
+
+		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+
+		expect(placed.animation).not.toBe(document.animation);
+		expect(placed.animation!.enter).not.toBe(document.animation.enter);
+		expect(placed.animation!.enter!.fade).not.toBe(document.animation.enter!.fade);
+		expect(placed.animation!.exit).not.toBe(document.animation.exit);
+	});
+
+	it('shares no object with the template document when a stagger is rewritten', () => {
+		const document = composed();
+		document.animation = {
+			enter: { duration: 400, easing: 'ease-out', delay: 0, fade: { opacity: 0 } },
+			stagger: { enter: { order: 'list', step: 80, itemIds: ['headline'] } },
+		};
+		const template = { id: 'template-1', name: 'Lower third', document };
+
+		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		placed.animation!.enter!.duration = 1;
+		placed.animation!.stagger!.enter!.step = 1;
+
+		expect(document.animation.enter!.duration).toBe(400);
+		expect(document.animation.stagger!.enter!.step).toBe(80);
+	});
+
+	it('drops a Graphic Group\'s animation entirely when its only stagger was stale', () => {
+		const document = composed();
+		const group = groupOf(document);
+		group.animation = {
+			stagger: { enter: { order: 'list', step: 50, itemIds: ['deleted-long-ago'] } },
+		};
+		const template = { id: 'template-1', name: 'Lower third', document };
+
+		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+
+		expect('animation' in groupOf(placed)).toBe(false);
+	});
+
+	it('reports what every template Graphic Item id became', () => {
+		const document = composed();
+		const template = { id: 'template-1', name: 'Lower third', document };
+		const idMap = new Map<string, string>();
+
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+			idMap,
+		});
+
+		// A placement failure has to be reportable against an id the author can find in
+		// the template, not against one placement generated a moment ago.
+		expect(idMap.get('cluster')).toBe(placed.items[0]!.id);
+		expect(idMap.get('child')).toBe(groupOf(placed).children[0]!.id);
+		expect(idMap.get('headline')).toBe(placed.items[1]!.id);
+	});
+
+	/**
+	 * The structural guard on the copy itself.
+	 *
+	 * Placement clones the document and replaces only what it is defined to change, so
+	 * a field added to the vocabulary is carried by default. This asserts that
+	 * directly: a document with every field populated must come back deeply equal
+	 * except for the identities placement rewrites. It fails when a new field is
+	 * dropped, and it fails when a field that should have been rewritten is carried —
+	 * which no test enumerating the fields the author remembered can do.
+	 */
+	it('carries every field of a maximally populated document except what it rewrites', () => {
+		const document = composed();
+		document.animation = {
+			'enter': { duration: 400, easing: 'ease-out', delay: 100, fade: { opacity: 0 } },
+			'on-screen': {
+				duration: 800,
+				easing: 'linear',
+				delay: 0,
+				pause: 200,
+				repeat: 3,
+				scale: { factor: 1.1, origin: 'center' },
+			},
+			'update': { duration: 250, easing: 'ease-in-out', delay: 0, fade: { opacity: 0.5 } },
+			'exit': {
+				duration: 300,
+				easing: 'ease-in',
+				delay: 0,
+				slide: { direction: 'south', distanceMode: 'fixed', distance: 200 },
+				reveal: { edge: 'left' },
+			},
+			'stagger': {
+				'enter': { order: 'list', step: 80, itemIds: ['headline', 'cluster'] },
+				'on-screen': { order: 'reverse-list', step: 40, itemIds: ['cluster'] },
+				'update': { order: 'list', step: 20, itemIds: ['headline'] },
+				'exit': { order: 'reverse-list', step: 60, itemIds: ['cluster', 'headline'] },
+			},
+		};
+		groupOf(document).animation = {
+			enter: { duration: 300, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+			stagger: { enter: { order: 'list', step: 30, itemIds: ['child'] } },
+		};
+		document.items[1]!.animation = {
+			exit: { duration: 150, easing: 'ease-in', delay: 50, fade: { opacity: 0 } },
+		};
+		document.inputs = [
+			{
+				type: 'text',
+				key: 'headline',
+				label: 'Headline',
+				required: true,
+				updatePolicy: 'staged',
+				default: 'Match point',
+				maxLength: 60,
+			},
+			{
+				type: 'choice',
+				key: 'corner',
+				label: 'Corner',
+				required: false,
+				updatePolicy: 'live',
+				default: 'left',
+				options: [{ value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }],
+			},
+		];
+		document.sources = [{ key: 'player', label: 'Player', kind: 'player' }];
+		document.bindings = [{ inputKey: 'headline', sourceKey: 'player', fieldId: 'player.displayName' }];
+		const template = { id: 'template-1', name: 'Lower third', document };
+		const idMap = new Map<string, string>();
+
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+			idMap,
+		});
+
+		/** The document as placement should have rewritten it, built independently. */
+		function expected(source: BroadcastGraphicConfig): BroadcastGraphicConfig {
+			const rewriteIds = (ids: readonly string[]) => ids.map(id => idMap.get(id) ?? id);
+			const rewriteStagger = (animation: any) => animation?.stagger
+				? {
+						...animation,
+						stagger: Object.fromEntries(Object.entries(animation.stagger).map(
+							([phase, entry]) => [phase, { ...(entry as any), itemIds: rewriteIds((entry as any).itemIds) }],
+						)),
+					}
+				: animation;
+
+			return {
+				...structuredClone(source),
+				id: placed.id,
+				// The copy is named from the library entry, not from the stored document's
+				// own `name` — a renamed template names the graphics placed from it.
+				name: template.name,
+				animation: rewriteStagger(source.animation),
+				items: source.items.map((item) => {
+					const copied: any = { ...structuredClone(item), id: idMap.get(item.id) };
+					if (copied.type === 'group') {
+						copied.children = (item as any).children.map((child: any) => ({
+							...structuredClone(child),
+							id: idMap.get(child.id),
+						}));
+						copied.animation = rewriteStagger(copied.animation);
+					}
+					return copied;
+				}),
+			};
+		}
+
+		expect(placed).toEqual(expected(document));
+		// And every id it was defined to rewrite actually changed.
+		expect(placed.id).not.toBe(document.id);
+		expect(placed.items.map(item => item.id)).not.toEqual(document.items.map(item => item.id));
 	});
 
 	it('places two copies of one template with no Graphic Item id in common', () => {

@@ -56,24 +56,74 @@ export default defineEventHandler(async (event) => {
 	}
 
 	const existing = screen.modeConfigs?.['broadcast-graphics']?.graphics ?? [];
+	// Kept so a failure about a placed Graphic Item can be reported against the
+	// template Graphic Item an author can actually go and look at.
+	const idMap = new Map<string, string>();
 	const graphic = placeBroadcastGraphicTemplate(
 		{ id: template.id, name: template.name, document: template.document },
-		{ generateId: randomUuid, existing },
+		{ generateId: randomUuid, existing, idMap },
 	);
 
-	const updated = await screenWriteModule({
-		graphicsAssets: graphicsAssetLibraryForEvent(event),
-	}).updateModeConfig({
-		eventId,
-		screenId,
-		mode: 'broadcast-graphics',
-		// The copy joins the front of the Graphic Layer Order, where a newly authored
-		// Broadcast Graphic also lands.
-		config: { graphics: [...existing, graphic] },
-		stateVersion: body.stateVersion,
-		originConnectionId: getOriginConnectionId(event),
-	});
+	try {
+		const updated = await screenWriteModule({
+			graphicsAssets: graphicsAssetLibraryForEvent(event),
+		}).updateModeConfig({
+			eventId,
+			screenId,
+			mode: 'broadcast-graphics',
+			// The copy joins the front of the Graphic Layer Order, where a newly authored
+			// Broadcast Graphic also lands.
+			config: { graphics: [...existing, graphic] },
+			stateVersion: body.stateVersion,
+			originConnectionId: getOriginConnectionId(event),
+		});
 
-	setResponseStatus(event, 201);
-	return { screen: updated, graphic };
+		setResponseStatus(event, 201);
+		return { screen: updated, graphic };
+	}
+	catch (error) {
+		throw templateOrientedPlacementError(error, template, graphic.id, idMap);
+	}
 });
+
+/**
+ * Restate a Screen write failure in terms of the template that was placed.
+ *
+ * The Screen's write path refuses a Graphic Asset Reference that is not selectable
+ * now, and names the slot that carries it — which for a placement is composed
+ * entirely of ids generated microseconds earlier, on a Broadcast Graphic that was
+ * never written. An author reading `graphics.<uuid>.items.<uuid>.asset` has nothing
+ * to look for, so the ids are translated back to the template's own and the template
+ * is named. This is the branch's most consequential inherited behaviour: a template
+ * whose asset has since been retired cannot be placed, and the operator has to be
+ * able to tell *which design* is unplaceable and *which item* in it to repair.
+ */
+function templateOrientedPlacementError(
+	error: unknown,
+	template: { id: string; name: string; document: { id: string } },
+	placedGraphicId: string,
+	idMap: Map<string, string>,
+): unknown {
+	const failure = error as { statusCode?: number; message?: string };
+	if (failure?.statusCode !== 409 || typeof failure.message !== 'string')
+		return error;
+	if (!failure.message.startsWith('Graphic Asset Reference at '))
+		return error;
+
+	const toTemplateId = new Map([
+		[placedGraphicId, template.document.id],
+		...[...idMap].map(([templateItemId, placedItemId]) => [placedItemId, templateItemId] as const),
+	]);
+	const slot = failure.message
+		.slice('Graphic Asset Reference at '.length)
+		.replace(/ is not selectable$/, '')
+		.split('.')
+		.map(segment => toTemplateId.get(segment) ?? segment)
+		.join('.');
+
+	return createError({
+		statusCode: 409,
+		statusMessage: 'Conflict',
+		message: `Broadcast Graphic Template "${template.name}" cannot be placed: the Graphic Asset Revision at ${slot} is no longer selectable`,
+	});
+}

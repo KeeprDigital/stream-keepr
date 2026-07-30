@@ -1,11 +1,16 @@
 import { mapBroadcastGraphicTemplateToResponse } from '~~/server/mappers/broadcastGraphicTemplate';
+import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { requireGraphicsTemplateWritable } from '~~/server/modules/graphics-authoring-lease/graphicsTemplate';
 import {
 	broadcastGraphicTemplateParamsSchema,
 	updateBroadcastGraphicTemplateSchema,
 } from '~~/server/schemas/api/broadcastGraphicTemplate';
-import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGraphicTemplate';
+import {
+	BroadcastGraphicTemplateRevisionConflict,
+	broadcastGraphicTemplateService,
+} from '~~/server/services/broadcastGraphicTemplate';
+import { assertBroadcastGraphicTemplateReferencesExist } from '~~/server/utils/broadcastGraphicTemplateReferences';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
 /**
@@ -25,14 +30,32 @@ export default defineEventHandler(async (event) => {
 		await readJsonPayloadLimited(event, 512 * 1024, 'Broadcast Graphic Template'),
 	);
 
-	const template = await broadcastGraphicTemplateService().update(templateId, body);
-	if (!template) {
-		throw createError({
-			statusCode: 404,
-			statusMessage: 'Not Found',
-			message: 'Broadcast Graphic Template not found',
-		});
-	}
+	if (body.document)
+		await assertBroadcastGraphicTemplateReferencesExist(graphicsAssetLibraryForEvent(event), body.document);
 
-	return mapBroadcastGraphicTemplateToResponse(template);
+	try {
+		const template = await broadcastGraphicTemplateService().update(templateId, body);
+		if (!template) {
+			throw createError({
+				statusCode: 404,
+				statusMessage: 'Not Found',
+				message: 'Broadcast Graphic Template not found',
+			});
+		}
+
+		return mapBroadcastGraphicTemplateToResponse(template);
+	}
+	catch (error) {
+		// A stale revision is the author's problem to resolve, not an internal fault:
+		// they are told which revision the template is actually at so they can re-read
+		// it rather than retrying blindly.
+		if (error instanceof BroadcastGraphicTemplateRevisionConflict) {
+			throw createError({
+				statusCode: 409,
+				statusMessage: 'Conflict',
+				message: `Broadcast Graphic Template has been revised by another session (now revision ${error.currentRevision})`,
+			});
+		}
+		throw error;
+	}
 });

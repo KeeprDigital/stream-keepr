@@ -10,6 +10,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { executeIntegrationD1 } from './integrationD1';
 
 /**
  * The Broadcast Graphic Template library through the real API.
@@ -391,8 +392,11 @@ describe('broadcast Graphic Template library', () => {
 
 		const graphicStagger = placed!.animation!.stagger!.enter!;
 		const [backing, headline] = placed!.items.map(item => item.id);
-		// The authored subset named headline before backing, and that order is the
-		// choreography — it is carried, not recomputed from list order.
+		// `itemIds` is the *selection* of staggered items; the sequence comes from the
+		// container's list order restricted to it, then reversed for `reverse-list`. So
+		// this asserts each authored entry's mapping, entry by entry — the array's own
+		// order carries no behaviour and is preserved only because rewriting it in place
+		// is the simplest correct thing to do.
 		expect(graphicStagger.itemIds).toEqual([headline, backing]);
 		expect(graphicStagger.step).toBe(80);
 
@@ -585,6 +589,140 @@ describe('broadcast Graphic Template library', () => {
 		expect(refused.status).toBe(409);
 
 		expect((await request(screenLease, { method: 'DELETE', cookie: authorCookie })).status).toBe(200);
+	});
+
+	it('refuses a revision built on a stale one, naming the revision that exists', async () => {
+		const current = await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie });
+		const stale = (current.data as BroadcastGraphicTemplateResponse).revision;
+
+		const accepted = await request(`${TEMPLATES_PATH}/${templateId}`, {
+			method: 'PATCH',
+			cookie: authorCookie,
+			body: { description: 'First writer wins', revision: stale },
+		});
+		expect(accepted.status).toBe(200);
+
+		// The second author had the library open and never saw the revision above.
+		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
+			method: 'PATCH',
+			cookie: secondAuthorCookie,
+			body: { description: 'Second writer overwrites', revision: stale },
+		});
+
+		expect(refused.status).toBe(409);
+		expect(refused.data.message).toContain(`revision ${stale + 1}`);
+		const after = await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie });
+		expect((after.data as BroadcastGraphicTemplateResponse).description).toBe('First writer wins');
+	});
+
+	it('reports a lease on a template that does not exist as not found', async () => {
+		const missing = await request(`${TEMPLATES_PATH}/${randomUUID()}/graphics-authoring-lease`, {
+			method: 'POST',
+			body: {},
+			cookie: authorCookie,
+		});
+
+		// A lease on nothing could never be discovered or released by anybody.
+		expect(missing.status).toBe(404);
+	});
+
+	it('refuses an observer\'s deletion of a leased template', async () => {
+		const leasePath = `${TEMPLATES_PATH}/${templateId}/graphics-authoring-lease`;
+		expect((await request(leasePath, { method: 'POST', body: {}, cookie: authorCookie })).data.outcome)
+			.toBe('grant');
+
+		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
+			method: 'DELETE',
+			cookie: secondAuthorCookie,
+		});
+		expect(refused.status).toBe(409);
+		expect((await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie })).status).toBe(200);
+
+		expect((await request(leasePath, { method: 'DELETE', cookie: authorCookie })).status).toBe(200);
+	});
+
+	it('refuses to save a template whose Graphic Asset Revision does not exist', async () => {
+		// A Screen cannot normally hold one — its write path checks a newly chosen
+		// reference — so this is written straight into the stack the way an unlucky
+		// migration or a future import could.
+		const invented = { assetId: randomUUID(), revisionId: randomUUID() };
+		const screen = await $fetch<ScreenResponse>(`/api/events/${sourceEventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Phantom', slug: 'template-phantom-screen', currentMode: 'broadcast-graphics' },
+		});
+		const phantomConfig = JSON.stringify({
+			'broadcast-graphics': {
+				graphics: [{
+					id: 'phantom-graphic',
+					name: 'Phantom',
+					items: [mediaItem('ghost', invented)],
+				}],
+			},
+		}).replace(/'/g, '\'\'');
+		await executeIntegrationD1(
+			`UPDATE screens SET mode_configs = '${phantomConfig}' WHERE id = ${screen.id}`,
+		);
+
+		const refused = await request(TEMPLATES_PATH, {
+			method: 'POST',
+			cookie: authorCookie,
+			body: { source: { eventId: sourceEventId, screenId: screen.id, graphicId: 'phantom-graphic' } },
+		});
+
+		// Storing it would put a healthy-looking entry in the library whose reference
+		// index records nothing, so nothing is diagnosable until a placement fails.
+		expect(refused.status).toBe(409);
+		expect(refused.data.message).toContain('do not exist');
+
+		const listed = await request(TEMPLATES_PATH, { cookie: authorCookie });
+		expect((listed.data.templates as BroadcastGraphicTemplateSummary[]).map(entry => entry.name))
+			.not
+			.toContain('Phantom');
+	});
+
+	it('refuses to place a template whose Graphic Asset has been retired, naming the template Graphic Item', async () => {
+		const retiredAsset = await ingestImage(sourceEventId, 'template-library-retired');
+		const sourceScreen = await $fetch<ScreenResponse>(`/api/events/${sourceEventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Retiring', slug: 'template-retiring-screen', currentMode: 'broadcast-graphics' },
+		});
+		expect((await patchStack(sourceEventId, sourceScreen.id, [{
+			id: 'retiring-graphic',
+			name: 'Retiring bug',
+			items: [mediaItem('brand-bug', retiredAsset)],
+		}])).status).toBe(200);
+
+		const saved = await request(TEMPLATES_PATH, {
+			method: 'POST',
+			cookie: authorCookie,
+			body: {
+				source: { eventId: sourceEventId, screenId: sourceScreen.id, graphicId: 'retiring-graphic' },
+			},
+		});
+		expect(saved.status).toBe(201);
+		const retiringTemplateId = (saved.data as BroadcastGraphicTemplateResponse).id;
+
+		await $fetch(`/api/graphics-assets/${retiredAsset.assetId}/lifecycle-actions`, {
+			method: 'POST',
+			body: { action: 'retire' },
+		});
+
+		const refused = await request(placementPath(otherEventId, otherScreenId), {
+			method: 'POST',
+			cookie: authorCookie,
+			body: { templateId: retiringTemplateId },
+		});
+
+		// The Screen's write path refuses a reference that is not selectable now. What
+		// matters here is that the operator can act on the refusal: it names the design
+		// and the Graphic Item *in the template*, not the ids placement generated for a
+		// Broadcast Graphic that was never written.
+		expect(refused.status).toBe(409);
+		expect(refused.data.message).toContain('Retiring bug');
+		expect(refused.data.message).toContain('brand-bug');
+		expect(refused.data.message).toContain('retiring-graphic');
+
+		await request(`${TEMPLATES_PATH}/${retiringTemplateId}`, { method: 'DELETE', cookie: authorCookie });
 	});
 
 	it('removes a template from the library without touching the copies placed from it', async () => {
