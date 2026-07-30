@@ -69,7 +69,10 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	const shouldDownload = computed(() => route.query.download === '1');
 	const fitToViewport = computed(() => route.query.fit === '1');
 	const isPreview = computed(() => route.query.preview === '1');
+	// Editor-only guides exist only inside an embedded preview, so a live Screen
+	// Output can never be asked to draw them.
 	const previewGuides = computed(() => isPreview.value && route.query.guides === '1');
+	const previewSafeAreas = computed(() => isPreview.value && route.query.safe === '1');
 	const assetCapability = computed(() => screenOutputAssetCapability(route.hash ?? ''));
 
 	const isControlScreen = computed(() => {
@@ -91,6 +94,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		fitToViewport,
 		isPreview,
 		previewGuides,
+		previewSafeAreas,
 		assetCapability,
 	};
 

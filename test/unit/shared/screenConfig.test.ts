@@ -158,6 +158,10 @@ describe('default config constants', () => {
 		expect(DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT).toBe(1080);
 	});
 
+	it('default broadcast graphics config owns an empty Broadcast Graphics stack', () => {
+		expect(DEFAULT_BROADCAST_GRAPHICS_CONFIG.graphics).toEqual([]);
+	});
+
 	it('default standings config defaults to all view mode', () => {
 		expect(DEFAULT_STANDINGS_CONFIG.viewMode).toBe('all');
 	});

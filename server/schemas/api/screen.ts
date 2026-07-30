@@ -1,4 +1,4 @@
-import type { FeatureMatchOverlayModeConfig, IdleModeConfig } from '~~/shared/types/screenConfig';
+import type { BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, IdleModeConfig } from '~~/shared/types/screenConfig';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { SCREEN_MODE_VALUES, screens } from '~~/server/db/schema';
@@ -6,6 +6,7 @@ import {
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
+import { GRAPHIC_FONT_IDS } from '~~/shared/modules/graphics';
 import {
 	CARD_ANIMATION_SPEED_VALUES,
 	DECK_CARD_SIZE_VALUES,
@@ -30,6 +31,13 @@ import {
 	STANDINGS_VIEW_MODE_VALUES,
 	VERTICAL_ALIGN_VALUES,
 } from '~~/shared/types/enums';
+import {
+	GRAPHIC_ANCHOR_POINT_VALUES,
+	GRAPHIC_FONT_STYLE_VALUES,
+	GRAPHIC_TEXT_ALIGN_VALUES,
+	GRAPHIC_TEXT_TRANSFORM_VALUES,
+	TEXT_OVERFLOW_POLICY_VALUES,
+} from '~~/shared/types/graphics';
 import { FEATURE_MATCH_OVERLAY_ANCHOR_VALUES } from '~~/shared/types/screenConfig';
 
 const MAX_SCREEN_CONFIG_BYTES = 64 * 1024;
@@ -544,8 +552,78 @@ export const featureMatchOverlayModeConfigSchema = z.object({
 	}).strict(),
 }).strict() satisfies z.ZodType<FeatureMatchOverlayModeConfig>;
 
-/** Broadcast Graphics owns no mode configuration yet; its canvas lives in the Screen config. */
-export const broadcastGraphicsModeConfigSchema = z.object({}).strict();
+/* ────────────────────────────────────────────────
+ * Shared Graphics Foundation vocabulary
+ * ──────────────────────────────────────────────── */
+
+const graphicAnchorPointSchema = z.enum(GRAPHIC_ANCHOR_POINT_VALUES);
+
+const graphicTypographySchema = z.object({
+	fontId: z.enum(GRAPHIC_FONT_IDS),
+	fontSize: finiteNumberSchema.positive().max(600),
+	fontWeight: finiteNumberSchema.int().min(1).max(1000),
+	fontStyle: z.enum(GRAPHIC_FONT_STYLE_VALUES),
+	textTransform: z.enum(GRAPHIC_TEXT_TRANSFORM_VALUES),
+	letterSpacing: finiteNumberSchema.min(-20).max(100),
+	lineHeight: finiteNumberSchema.positive().max(10),
+	textAlign: z.enum(GRAPHIC_TEXT_ALIGN_VALUES),
+	color: cssColorSchema,
+}).strict();
+
+const graphicSurfaceStyleSchema = z.object({
+	fill: cssColorSchema,
+	fillOpacity: opacitySchema,
+}).strict();
+
+const shapeGeometrySchema = z.object({
+	cornerRadius: nonNegativePixelSchema,
+}).strict();
+
+const graphicItemBaseShape = {
+	id: z.string().min(1).max(100),
+	label: z.string().min(1).max(100),
+	visible: z.boolean(),
+	anchor: graphicAnchorPointSchema,
+	x: pixelPositionSchema,
+	y: pixelPositionSchema,
+	width: pixelSizeSchema,
+	height: pixelSizeSchema,
+};
+
+const textGraphicItemConfigSchema = z.object({
+	...graphicItemBaseShape,
+	type: z.literal('text'),
+	text: z.string().max(1000),
+	typography: graphicTypographySchema,
+	overflowPolicy: z.enum(TEXT_OVERFLOW_POLICY_VALUES),
+	minFontSize: finiteNumberSchema.positive().max(600),
+}).strict();
+
+const shapeGraphicItemConfigSchema = z.object({
+	...graphicItemBaseShape,
+	type: z.literal('shape'),
+	geometry: shapeGeometrySchema,
+	surfaceStyle: graphicSurfaceStyleSchema,
+}).strict();
+
+const graphicItemConfigSchema = z.discriminatedUnion('type', [
+	textGraphicItemConfigSchema,
+	shapeGraphicItemConfigSchema,
+]);
+
+const broadcastGraphicConfigSchema = z.object({
+	id: z.string().min(1).max(100),
+	name: z.string().min(1).max(100),
+	items: z.array(graphicItemConfigSchema).max(100),
+}).strict();
+
+/**
+ * Broadcast Graphics mode configuration: the Screen's authored back-to-front
+ * stack of Broadcast Graphics. The Screen's canvas stays in the Screen config.
+ */
+export const broadcastGraphicsModeConfigSchema = z.object({
+	graphics: z.array(broadcastGraphicConfigSchema).max(50),
+}).strict() satisfies z.ZodType<BroadcastGraphicsModeConfig>;
 
 export const metagameModeConfigSchema = z.object({
 	viewMode: z.enum(METAGAME_VIEW_MODE_VALUES),

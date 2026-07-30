@@ -1,4 +1,5 @@
 import type { CardAnimationSpeed, DeckCardSize, DeckViewMode, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardLayout, StandingsColumnKey, StandingsViewMode, VerticalAlign } from './enums';
+import type { BroadcastGraphicConfig } from './graphics';
 import type { GraphicAssetReference } from './graphicsAsset';
 
 // ─── Screen-level config (applies to all modes) ───────────────────────
@@ -491,11 +492,17 @@ export const DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH = 1920;
 export const DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT = 1080;
 
 /**
- * A Broadcast Graphics Screen owns no mode configuration yet: its one
- * configurable pixel canvas is the Screen's own width and height, and the
- * ordered stack of Broadcast Graphics arrives with the compositor.
+ * Screen-owned Broadcast Graphics mode configuration.
+ *
+ * `graphics` is the Screen's authored back-to-front stack of Broadcast
+ * Graphics; concurrent graphics always render in this order. The Screen's one
+ * configurable pixel canvas remains the Screen's own width and height, and
+ * playout, channels, inputs, and animation are live state rather than authored
+ * configuration.
  */
-export type BroadcastGraphicsModeConfig = Record<string, never>;
+export interface BroadcastGraphicsModeConfig {
+	graphics: BroadcastGraphicConfig[];
+}
 
 export interface MetagameModeConfig {
 	// View selection
@@ -744,7 +751,9 @@ export const DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG: FeatureMatchOverlayModeConfig
 	},
 };
 
-export const DEFAULT_BROADCAST_GRAPHICS_CONFIG: BroadcastGraphicsModeConfig = {};
+export const DEFAULT_BROADCAST_GRAPHICS_CONFIG: BroadcastGraphicsModeConfig = {
+	graphics: [],
+};
 
 export const DEFAULT_METAGAME_CONFIG: MetagameModeConfig = {
 	viewMode: 'archetype',

@@ -42,6 +42,12 @@ export interface ScreenModeConfigurationPolicy {
 	dimensions: Record<ScreenModeDimensionField, ScreenModeDimensionControl>;
 	resetScreenConfigDefaults?: Partial<ScreenConfig>;
 	outputOptions: ScreenModeOutputOption[];
+	/**
+	 * Whether the Screen configuration page gives this mode the full page width
+	 * and collapses generic container settings. A graphics host embeds the
+	 * compositor's tree, preview, and inspector side by side and needs it.
+	 */
+	fullWidthConfiguration: boolean;
 }
 
 export interface SharedScreenModeDefinition<M extends ScreenMode = ScreenMode> {
@@ -152,6 +158,7 @@ export function getScreenModeConfigurationPolicy(mode: ScreenMode): ScreenModeCo
 			? { width: host.defaultWidth, height: host.defaultHeight }
 			: undefined,
 		outputOptions: graphicsHost ? GRAPHICS_SCREEN_OUTPUT_OPTIONS : [],
+		fullWidthConfiguration: Boolean(graphicsHost),
 	};
 }
 
