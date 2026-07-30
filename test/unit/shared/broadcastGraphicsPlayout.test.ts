@@ -498,6 +498,21 @@ describe('the clock an output does not own', () => {
 		expect(broadcastGraphicPhaseProjection(taken, 'slate', at(T0 - 30_000))).toBeNull();
 	});
 
+	it('projects nothing at all for a reader with no instant it trusts', () => {
+		// A reader that has not established the authoritative clock cannot say which phase
+		// anything is in, and guessing on its own clock is the one thing it must not do — so
+		// asking without an instant answers "nothing to animate" rather than falling back.
+		// Every graphic then resolves to the settled state its intent targets, which is the
+		// same answer recovery gives, and an exiting graphic is reported off rather than
+		// being held on program by a clock nobody has checked.
+		let state = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
+		state = out(state, 'slate', false, T0 + 300);
+
+		expect(broadcastGraphicPhaseProjection(state, 'slate')).toBeNull();
+		expect(broadcastGraphicPlayoutState(state, 'slate')).toBe('off');
+		expect(onAirBroadcastGraphicIds(state, [graphic('slate')])).toEqual([]);
+	});
+
 	it('bounds a reversal by the phase it reverses rather than by the skew', () => {
 		const entering = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 		const reversed = out(entering, 'slate', false, T0 + 400);

@@ -44,25 +44,27 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	const repository = useBroadcastGraphicsLiveSessionRepository();
 	const { executeAction } = useAsyncAction();
 
+	/**
+	 * The authoritative clock, shared with every other live surface in the application.
+	 *
+	 * Every effective start time in a snapshot was stamped by the server's clock, and an
+	 * output must not subtract two clocks it does not own: a browser a minute behind the
+	 * server would believe an exiting Broadcast Graphic was still exiting for that whole
+	 * minute, and since an exiting graphic is on program, a graphic the operator has
+	 * taken off would stay on air on that output. Phases last at most twenty seconds; an
+	 * un-synchronised clock is routinely minutes out.
+	 *
+	 * This is deliberately the existing installation-wide sync rather than a playout-specific
+	 * one. It already compensates for round-trip time across three samples with the worst
+	 * discarded and re-syncs every sixty seconds, so its residual error is smaller than
+	 * anything a single snapshot read could establish — and one clock for the whole
+	 * application means the Feature Match Session clock and Broadcast Graphics playout can
+	 * never disagree about what time it is.
+	 */
+	const { getServerTime, isSynced: isClockSynced } = useServerTime();
 	const sessions = ref<Map<number, BroadcastGraphicsLiveSessionResponse>>(new Map());
 	const loading = ref(false);
 	const error = ref<string | null>(null);
-	/**
-	 * How far this browser's clock is from the authoritative one, in milliseconds.
-	 *
-	 * Every effective start time in a snapshot was stamped by the server's clock, and
-	 * an output must not subtract two clocks it does not own. Without this correction a
-	 * browser a minute behind the server would believe an exiting Broadcast Graphic was
-	 * still exiting for that whole minute — and since an exiting graphic is on program,
-	 * a graphic the operator has taken off would stay on air on that output. Phases last
-	 * at most twenty seconds; an un-synchronised clock is routinely minutes out.
-	 *
-	 * One number, re-established on every authoritative read, so it corrects rather than
-	 * accumulates. `CONTEXT.md` promises no hardware genlock between output browsers, so
-	 * a bounded offset between them is acceptable; an unbounded one that changes which
-	 * phase an output believes it is in is not.
-	 */
-	const clockOffset = ref(0);
 	/** Playout actions awaiting their authoritative answer, keyed per Broadcast Graphic. */
 	const pending = ref<Set<string>>(new Set());
 
@@ -97,15 +99,33 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * The only instant any playout projection in this client is allowed to use.
 	 */
 	function serverNow(): number {
-		return Date.now() + clockOffset.value;
+		return getServerTime();
 	}
 
-	/** Everything one Broadcast Graphic's phases are projected against, at `now`. */
+	/**
+	 * Everything one Broadcast Graphic's phases are projected against, at `now` — or
+	 * nothing at all until this browser knows what time the server thinks it is.
+	 *
+	 * Before the first sync the offset is zero, which means the local clock unmodified —
+	 * exactly the condition the clock-skew hazard describes. So an unsynced reader is
+	 * given no timing, and no timing already means "report only the settled states":
+	 * an on-air Broadcast Graphic renders at its Graphic Resting State, an exiting one is
+	 * reported off and leaves program at once, and nothing animates.
+	 *
+	 * That is the same answer recovery resolves to, and it is chosen over projecting on an
+	 * unknown clock because the two failures are not equally bad. Projecting unsynced can
+	 * pin a graphic at full excursion for the length of the skew and then play its
+	 * entrance from zero the moment the sync lands — the replay the no-replay invariant
+	 * forbids, arriving through the clock. Holding the resting state instead costs an
+	 * entrance that pops on rather than animating, for the length of one sync (three
+	 * samples fifty milliseconds apart) after a load. A missed entrance is a blemish; a
+	 * replayed one mid-show is a fault.
+	 */
 	function timingFor(
 		graphic: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
 		now: number,
-	): BroadcastGraphicPhaseTiming {
-		return broadcastGraphicPhaseTiming(graphic, now);
+	): BroadcastGraphicPhaseTiming | undefined {
+		return isClockSynced.value ? broadcastGraphicPhaseTiming(graphic, now) : undefined;
 	}
 
 	/**
@@ -205,32 +225,11 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		return { current, outgoing };
 	}
 
-	/**
-	 * Re-establish the offset from one authoritative read.
-	 *
-	 * The request midpoint is the client instant the server's stamp is compared against,
-	 * so the residual error is half a round trip rather than a whole one — and it is
-	 * re-measured rather than averaged, because a correction that accumulates history
-	 * would carry a bad sample forward into every frame after it.
-	 */
-	function trackServerClock(session: BroadcastGraphicsLiveSessionResponse, sentAt: number, receivedAt: number) {
-		if (typeof session.serverTime !== 'number')
-			return;
-		clockOffset.value = session.serverTime - ((sentAt + receivedAt) / 2);
-	}
-
 	function cacheSession(session: BroadcastGraphicsLiveSessionResponse) {
 		sessions.value.set(session.screenId, session);
 	}
 
-	function cacheCommandResult(
-		result: BroadcastGraphicsCommandResult,
-		sentAt: number,
-	): BroadcastGraphicsLiveSessionResponse {
-		// A command's answer is an authoritative read like any other, and it is the one
-		// that lands immediately after an operator pressed Take — the moment the offset
-		// most needs to be right.
-		trackServerClock(result.session, sentAt, Date.now());
+	function cacheCommandResult(result: BroadcastGraphicsCommandResult): BroadcastGraphicsLiveSessionResponse {
 		cacheSession(result.session);
 		return result.session;
 	}
@@ -238,9 +237,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	async function loadSession(eventId: number, screenId: number): Promise<BroadcastGraphicsLiveSessionResponse | null> {
 		return await executeAction(
 			async () => {
-				const sentAt = Date.now();
 				const session = await repository.getSession(eventId, screenId);
-				trackServerClock(session, sentAt, Date.now());
 				cacheSession(session);
 				return session;
 			},
@@ -274,11 +271,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 					const session = sessions.value.get(screenId) ?? await repository.getSession(eventId, screenId);
 
 					try {
-						const sentAt = Date.now();
-						return cacheCommandResult(
-							await repository.sendCommand(eventId, screenId, session.id, command),
-							sentAt,
-						);
+						return cacheCommandResult(await repository.sendCommand(eventId, screenId, session.id, command));
 					}
 					catch (failure) {
 						// A conflict is what an epoch this client no longer shares looks
@@ -292,10 +285,8 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 
 						const current = await repository.getSession(eventId, screenId);
 						cacheSession(current);
-						const retriedAt = Date.now();
 						return cacheCommandResult(
 							await repository.sendCommand(eventId, screenId, current.id, command),
-							retriedAt,
 						);
 					}
 				},
@@ -422,7 +413,6 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	function $reset() {
 		sessions.value.clear();
 		pending.value.clear();
-		clockOffset.value = 0;
 		loading.value = false;
 		error.value = null;
 	}
@@ -431,7 +421,6 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		sessions,
 		loading,
 		error,
-		clockOffset,
 		serverNow,
 		playoutState,
 		onAirGraphicIds,

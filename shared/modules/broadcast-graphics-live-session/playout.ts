@@ -828,10 +828,16 @@ export function broadcastGraphicPlayoutState(
 export function broadcastGraphicPhaseProjection(
 	state: BroadcastGraphicsLiveState,
 	graphicId: string,
-	timing: BroadcastGraphicPhaseTiming,
+	/**
+	 * Omitted means there is nothing to animate, which is the honest answer for a caller
+	 * with no instant it trusts: a reader that has not established the authoritative
+	 * clock cannot say which phase anything is in, and guessing on its own clock is the
+	 * one thing it must not do.
+	 */
+	timing?: BroadcastGraphicPhaseTiming,
 ): { phase: GraphicAnimationPhase; elapsed: number } | null {
 	const playout = state.playout[graphicId];
-	if (!playout)
+	if (!playout || !timing)
 		return null;
 
 	const flight = enterExitFlight(playout, timing);

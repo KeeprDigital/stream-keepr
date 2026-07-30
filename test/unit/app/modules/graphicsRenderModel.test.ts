@@ -1687,6 +1687,38 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			expect(outgoing.items[0]?.children?.[1]?.text).toBe('BEFORE');
 		});
 
+		it('notices a change that moves content between a Graphic Group\'s children', () => {
+			// The group's own content is its children's, and comparing it means joining
+			// them — so the join has to be separated. Concatenating with nothing would make
+			// children reading "ab" and "c" indistinguishable from "a" and "bc", the group's
+			// update recipe would be suppressed for a change that is plainly on screen, and
+			// the new rendering would hard-cut in.
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [{
+					...graphic('a', [
+						group('cluster', [
+							text('first', { text: '{one}' }),
+							text('second', { text: '{two}' }),
+						], { animation: { update: CROSS_FADE } }),
+					]),
+					inputs: [
+						{ ...HEADLINE, key: 'one' },
+						{ ...HEADLINE, key: 'two' },
+					],
+				}],
+				animation: { a: { phase: 'update', elapsed: 200 } },
+				inputValues: { a: { one: 'a', two: 'bc' } },
+				outgoingInputValues: { a: { one: 'ab', two: 'c' } },
+				...CANVAS,
+			});
+
+			const outgoing = model.graphics[0]!.outgoing;
+			expect(outgoing).toBeDefined();
+			expect(outgoing?.items[0]?.children?.map(child => child.text)).toEqual(['ab', 'c']);
+			expect(model.graphics[0]?.items[0]?.children?.map(child => child.text)).toEqual(['a', 'bc']);
+		});
+
 		it('keeps the Key Output a true alpha matte through a cross-transition', () => {
 			for (const elapsed of [0, 100, 200, 399, 400]) {
 				const model = updating([headlineGraphic([

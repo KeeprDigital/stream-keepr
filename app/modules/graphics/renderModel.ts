@@ -1155,6 +1155,18 @@ function graphicAnimationContext(
  * offered to it here: an update recipe runs when *that owner's* rendered content
  * changes, and its content did not.
  */
+/**
+ * Separates a Graphic Group's children when their content is joined for comparison.
+ *
+ * A separator rather than a plain concatenation because the comparison has to be
+ * exact: joining with nothing would make a group whose children read "ab" and "c"
+ * indistinguishable from one reading "a" and "bc", and an update animation would be
+ * skipped for a change that is plainly visible. A unit separator is used because a
+ * Graphic Text Template can render any printable character an operator can type, so
+ * any printable separator could be forged by the very content it is separating.
+ */
+const GROUP_CONTENT_SEPARATOR = '\u001F';
+
 function renderedContent(
 	owner: GraphicItemConfig | GraphicGroupChildConfig,
 	declarations: readonly GraphicInputDeclaration[],
@@ -1163,7 +1175,7 @@ function renderedContent(
 	if (owner.type === 'text')
 		return renderGraphicTextTemplate(owner.text, declarations, values).map(segment => segment.text).join('');
 	if (owner.type === 'group')
-		return owner.children.map(child => renderedContent(child, declarations, values)).join(' ');
+		return owner.children.map(child => renderedContent(child, declarations, values)).join(GROUP_CONTENT_SEPARATOR);
 	return '';
 }
 

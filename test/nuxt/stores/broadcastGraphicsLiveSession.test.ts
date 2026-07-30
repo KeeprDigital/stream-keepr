@@ -3,6 +3,7 @@ import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { MessageData } from '~/types/realtime';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ref } from 'vue';
 
 const mockRepository = {
 	getSession: vi.fn(),
@@ -39,6 +40,24 @@ mockNuxtImport('useAsyncAction', () => () => ({
 	}),
 }));
 
+/**
+ * The installation-wide server clock, stubbed so a test can put this browser a known
+ * distance from the authoritative one — and can hold it unsynced, which is the state
+ * every output is in for the first moments after it loads.
+ */
+const mockServerTimeOffset = ref(0);
+const mockClockSynced = ref(true);
+
+mockNuxtImport('useServerTime', () => () => ({
+	serverTimeOffset: mockServerTimeOffset,
+	isSynced: mockClockSynced,
+	lastSyncedAt: ref(null),
+	getServerTime: () => Date.now() + mockServerTimeOffset.value,
+	sync: vi.fn(),
+	startSync: vi.fn(),
+	stopSync: vi.fn(),
+}));
+
 const EVENT_ID = 12;
 const SCREEN_ID = 3;
 
@@ -53,7 +72,6 @@ function session(overrides: Partial<BroadcastGraphicsLiveSessionResponse> = {}):
 		endedAt: null,
 		createdAt: new Date(0),
 		updatedAt: new Date(0),
-		serverTime: Date.now(),
 		...overrides,
 	};
 }
@@ -433,23 +451,28 @@ describe('the authoritative clock a Screen Output projects on', () => {
 	const FADE_IN = {
 		enter: { duration: 1000, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } },
 	};
+	const FADE_OUT = {
+		exit: { duration: 1000, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } },
+	};
 
 	beforeEach(() => {
 		store = useBroadcastGraphicsLiveSessionStore();
 		store.$reset();
 		vi.clearAllMocks();
-		vi.useRealTimers();
+		mockRepository.getSession.mockResolvedValue(session());
+		mockServerTimeOffset.value = 0;
+		mockClockSynced.value = true;
 	});
 
-	it('projects on the clock that stamped the timestamps, not on this browser\'s', async () => {
-		// A browser two minutes behind the server. Without the correction it would read a
-		// graphic taken a moment ago as having been taken two minutes in its own future,
-		// pin it at full excursion for the whole of the skew, and then play its entrance
-		// from zero — the replay the no-replay invariant forbids, arriving through the
-		// clock rather than through the stored field.
+	it('projects on the shared server clock, not on this browser\'s', async () => {
+		// A browser two minutes behind the server. Reading its own clock, it would take a
+		// graphic taken a moment ago to have been taken two minutes in its own future, pin
+		// it at full excursion for the whole of the skew, and then play its entrance from
+		// zero once its clock caught up — the replay the no-replay invariant forbids,
+		// arriving through the clock rather than through the stored field.
+		mockServerTimeOffset.value = 120_000;
 		const serverNow = Date.now() + 120_000;
 		mockRepository.getSession.mockResolvedValue(session({
-			serverTime: serverNow,
 			currentState: {
 				playout: { slate: { onAir: true, effectiveStartedAt: serverNow - 400, cut: false } },
 				inputs: {},
@@ -459,30 +482,68 @@ describe('the authoritative clock a Screen Output projects on', () => {
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 		const projection = store.animationProjection(SCREEN_ID, [graphic('slate', FADE_IN)]);
 
-		expect(store.clockOffset).toBeGreaterThan(119_000);
 		expect(projection.slate?.phase).toBe('enter');
 		expect(projection.slate?.elapsed).toBeGreaterThanOrEqual(400);
 		expect(projection.slate?.elapsed).toBeLessThan(1000);
 	});
 
 	it('keeps an Out Broadcast Graphic on program for exactly its exit, on that same clock', async () => {
+		mockServerTimeOffset.value = -90_000;
 		const serverNow = Date.now() - 90_000;
 		mockRepository.getSession.mockResolvedValue(session({
-			serverTime: serverNow,
 			currentState: {
 				playout: { slate: { onAir: false, effectiveStartedAt: serverNow - 200, cut: false } },
 				inputs: {},
 			},
 		}));
-		const graphics = [graphic('slate', { exit: { duration: 1000, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } } })];
+		const graphics = [graphic('slate', FADE_OUT)];
 
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 
-		// Still exiting, so still on program — and it leaves 1000ms after Out, rather
-		// than in ninety seconds when this browser's clock catches up.
+		// Still exiting, so still on program — and it leaves 1000ms after Out, rather than
+		// in ninety seconds when this browser's clock catches up.
 		expect(store.playoutState(SCREEN_ID, 'slate', graphics[0])).toBe('exiting');
 		expect(store.onAirGraphicIds(SCREEN_ID, graphics)).toEqual(['slate']);
 		expect(store.onAirGraphicIds(SCREEN_ID, graphics, store.serverNow() + 1200)).toEqual([]);
+	});
+
+	it('holds the Graphic Resting State until this browser knows the server clock', async () => {
+		// Before the first sync the offset is zero, which is the local clock unmodified —
+		// exactly the condition the hazard describes. So an unsynced output projects
+		// nothing: an on-air graphic sits at its resting state rather than being pinned at
+		// full excursion and then replaying its entrance the moment the sync lands.
+		mockClockSynced.value = false;
+		const serverNow = Date.now();
+		mockRepository.getSession.mockResolvedValue(session({
+			currentState: {
+				playout: { slate: { onAir: true, effectiveStartedAt: serverNow - 400, cut: false } },
+				inputs: {},
+			},
+		}));
+
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+
+		expect(store.animationProjection(SCREEN_ID, [graphic('slate', FADE_IN)])).toEqual({});
+		expect(store.playoutState(SCREEN_ID, 'slate', graphic('slate', FADE_IN))).toBe('on-air');
+	});
+
+	it('takes an unsynced output off program at once rather than stranding it there', async () => {
+		// The same rule on the way off air, where holding the settled state is not merely
+		// tidier but safer: an exiting graphic is on program, so an unsynced output that
+		// guessed at the phase could keep a graphic the operator has taken off on air.
+		mockClockSynced.value = false;
+		mockRepository.getSession.mockResolvedValue(session({
+			currentState: {
+				playout: { slate: { onAir: false, effectiveStartedAt: Date.now() - 200, cut: false } },
+				inputs: {},
+			},
+		}));
+		const graphics = [graphic('slate', FADE_OUT)];
+
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+
+		expect(store.playoutState(SCREEN_ID, 'slate', graphics[0])).toBe('off');
+		expect(store.onAirGraphicIds(SCREEN_ID, graphics)).toEqual([]);
 	});
 
 	it('has no phase to project for a Broadcast Graphic that authored no animation', async () => {
@@ -497,15 +558,5 @@ describe('the authoritative clock a Screen Output projects on', () => {
 
 		expect(store.animationProjection(SCREEN_ID, [graphic('slate')])).toEqual({});
 		expect(store.playoutState(SCREEN_ID, 'slate', graphic('slate'))).toBe('on-air');
-	});
-
-	it('forgets the offset on reset, so a fresh Screen re-establishes its own', async () => {
-		mockRepository.getSession.mockResolvedValue(session({ serverTime: Date.now() + 60_000 }));
-		await store.loadSession(EVENT_ID, SCREEN_ID);
-		expect(store.clockOffset).toBeGreaterThan(0);
-
-		store.$reset();
-
-		expect(store.clockOffset).toBe(0);
 	});
 });

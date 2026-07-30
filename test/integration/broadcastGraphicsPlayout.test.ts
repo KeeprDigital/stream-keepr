@@ -321,7 +321,7 @@ describe('broadcast graphics live playout animation', () => {
 		catch {}
 	});
 
-	it('stamps the snapshot with the clock that stamped its effective start times', async () => {
+	it('stamps effective start times on the clock outputs synchronise against', async () => {
 		const harness = await createGraphicsHarness(eventId, 'playout-clock', [
 			integrationBroadcastGraphic('a', integrationGraphicAnimation({ enter: 5000 })),
 		]);
@@ -331,14 +331,16 @@ describe('broadcast graphics live playout animation', () => {
 			type: 'Take',
 			payload: { graphicId: 'a' },
 		});
-		const reloaded = await harness.reload();
+		const clock = await $fetch<{ serverTime: number }>('/api/time');
 
-		// An output must not subtract two clocks it does not own, so the snapshot carries
-		// the authoritative one alongside the timestamps it stamped. Same clock, so the
-		// entrance is always in the snapshot's own past.
-		expect(typeof reloaded.serverTime).toBe('number');
-		expect(reloaded.serverTime).toBeGreaterThanOrEqual(taken.currentState.playout.a!.effectiveStartedAt);
-		expect(reloaded.serverTime - taken.currentState.playout.a!.effectiveStartedAt).toBeLessThan(60_000);
+		// An output must not subtract two clocks it does not own. It gets the authoritative
+		// one from `/api/time`, which is what `useServerTime` synchronises against — so the
+		// thing that has to be true is that acceptance stamps effective start times on *that
+		// same* clock. If it did not, every output would project against a schedule from a
+		// clock it had no way to correct for.
+		const startedAt = taken.currentState.playout.a!.effectiveStartedAt;
+		expect(clock.serverTime).toBeGreaterThanOrEqual(startedAt);
+		expect(clock.serverTime - startedAt).toBeLessThan(60_000);
 	});
 
 	it('reverses an entrance that Out interrupted, bounded by the entrance itself', async () => {
