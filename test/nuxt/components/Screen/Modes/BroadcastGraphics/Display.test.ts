@@ -1,10 +1,10 @@
 import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
-import type { BroadcastGraphicConfig, ShapeGraphicItemConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, MediaGraphicItemConfig, ShapeGraphicItemConfig } from '~~/shared/types/graphics';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { enableAutoUnmount, mount } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
 import {
 	acceptedGraphicInputValues,
@@ -22,6 +22,7 @@ const mockIsPreview = ref(false);
 const mockPreviewGuides = ref(false);
 const mockPreviewSafeAreas = ref(false);
 const mockScreen = ref<Screen | null>(null);
+const mockAssetCapability = ref<string | undefined>(undefined);
 
 mockNuxtImport('useScreenContext', () => () => ({
 	screen: mockScreen,
@@ -32,7 +33,15 @@ mockNuxtImport('useScreenContext', () => () => ({
 	isPreview: mockIsPreview,
 	previewGuides: mockPreviewGuides,
 	previewSafeAreas: mockPreviewSafeAreas,
+	assetCapability: mockAssetCapability,
 }));
+
+/**
+ * Every capability-session exchange a live Screen Output makes, so a test can
+ * prove media content is resolved through the capability rather than by any other
+ * route.
+ */
+const capabilitySessionRequests: string[] = [];
 
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => ({
 	graphics: [],
@@ -150,6 +159,16 @@ describe('broadcastGraphicsDisplay', () => {
 		mockScreen.value = screenWithStack();
 		mockOnAirGraphicIds.value = [];
 		mockLoadSession.value = () => {};
+		mockAssetCapability.value = undefined;
+		capabilitySessionRequests.length = 0;
+		vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+			capabilitySessionRequests.push(String(input));
+			return new Response(null, { status: 204 });
+		}));
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
 	});
 
 	it('renders an empty Broadcast Graphics Screen transparent in the Overlay Output', async () => {
@@ -356,6 +375,146 @@ describe('broadcastGraphicsDisplay', () => {
 		// case-sensitive SVG attribute has to survive the template.
 		expect(wrapper.get('[data-graphic-item-kind="shape"] svg').attributes('preserveAspectRatio')).toBe('none');
 		expect(wrapper.get('[data-graphic-item-kind="shape"] path[stroke]').attributes('stroke-width')).toBe('6');
+	});
+
+	describe('media Graphic Items', () => {
+		const logo: MediaGraphicItemConfig = {
+			type: 'media',
+			id: 'logo',
+			label: 'Sponsor',
+			visible: true,
+			anchor: 'top-left',
+			x: 40,
+			y: 60,
+			width: 480,
+			height: 270,
+			asset: { assetId: 'asset-1' as never, revisionId: 'revision-7' as never },
+			mediaKind: 'image',
+			fit: 'cover',
+			focalPosition: { horizontal: 0.25, vertical: 0.75 },
+			opacity: 0.5,
+			playbackRate: 1,
+			loop: true,
+		};
+
+		function withMedia(overrides: Partial<MediaGraphicItemConfig> = {}): BroadcastGraphicConfig {
+			return { id: 'lower-third', name: 'Lower Third', items: [{ ...logo, ...overrides }] };
+		}
+
+		it('renders an image fitted at its focal position and opacity', async () => {
+			mockIsPreview.value = true;
+
+			const wrapper = await mountComponent();
+			await pushPreviewState([withMedia()]);
+
+			const image = wrapper.get('[data-graphic-item-kind="media"] img');
+			expect(image.attributes('style')).toContain('object-fit: cover');
+			expect(image.attributes('style')).toContain('object-position: 25% 75%');
+			expect(image.attributes('style')).toContain('opacity: 0.5');
+			expect(wrapper.get('[data-graphic-item-kind="media"]').attributes('style')).toContain('left: 40px');
+			// Empty alt: a broken image draws its alt text inside its own box, which in
+			// the Key Output would paint the authored label into the alpha matte.
+			expect(image.attributes('alt')).toBe('');
+		});
+
+		it('renders a silent video muted and autoplaying at its authored playback rate', async () => {
+			mockIsPreview.value = true;
+
+			const wrapper = await mountComponent();
+			await pushPreviewState([withMedia({ mediaKind: 'silent-video', loop: false, playbackRate: 2 })]);
+
+			const video = wrapper.get('[data-graphic-item-kind="media"] video');
+			// Silent by construction rather than by an authored control: the asset is a
+			// silent video and the element is muted regardless.
+			expect(video.attributes('muted')).toBeDefined();
+			expect(video.attributes('autoplay')).toBeDefined();
+			// Playback rate is a property with no attribute, so it has to be set.
+			expect((video.element as HTMLVideoElement).playbackRate).toBe(2);
+			// Playback begins at zero because the element is new, not because anything
+			// seeks it there.
+			expect((video.element as HTMLVideoElement).currentTime).toBe(0);
+		});
+
+		it('honours the authored looping choice', async () => {
+			mockIsPreview.value = true;
+
+			const wrapper = await mountComponent();
+			await pushPreviewState([withMedia({ id: 'a', mediaKind: 'silent-video', loop: true })]);
+			expect(wrapper.get('[data-graphic-item-kind="media"] video').attributes('loop')).toBeDefined();
+
+			await pushPreviewState([withMedia({ id: 'b', mediaKind: 'silent-video', loop: false })]);
+			expect(wrapper.get('[data-graphic-item-kind="media"] video').attributes('loop')).toBeUndefined();
+		});
+
+		it('keeps an on-air video mounted when an unrelated part of the stack is edited', async () => {
+			// Resolving content clears the URL map before refetching, which unmounts every
+			// media element. A stack edit that changes no revision must not do that: it
+			// would restart an on-air video from zero.
+			mockAssetCapability.value = 'capability-token';
+			mockScreen.value = screenWithStack([withMedia()]);
+			mockOnAirGraphicIds.value = ['lower-third'];
+
+			const wrapper = await mountComponent();
+			await flushPromises();
+			await nextTick();
+			const before = wrapper.get('[data-graphic-item-kind="media"] img').attributes('src');
+			expect(before).not.toBe('');
+
+			// Same pinned revision, different authored geometry.
+			mockScreen.value = screenWithStack([{
+				id: 'lower-third',
+				name: 'Lower Third',
+				items: [{ ...logo, x: 99 }],
+			}]);
+			await flushPromises();
+			await nextTick();
+
+			// Re-resolving is what unmounts a media element: it clears the URL map before
+			// refetching, so `src` empties and the `<video>` is torn down and rebuilt. No
+			// second capability exchange means no such window ever opened.
+			expect(capabilitySessionRequests).toHaveLength(1);
+			expect(wrapper.get('[data-graphic-item-kind="media"] img').attributes('src')).toBe(before);
+			expect(wrapper.get('[data-graphic-item-kind="media"]').attributes('style')).toContain('left: 99px');
+		});
+
+		it('paints media as its alpha in white in the Key Output', async () => {
+			mockIsPreview.value = true;
+			mockOutputMode.value = 'key';
+
+			const wrapper = await mountComponent();
+			await pushPreviewState([withMedia()]);
+
+			// Colour removed, alpha untouched: the matte stays a true alpha matte.
+			expect(wrapper.get('[data-graphic-item-kind="media"] img').attributes('style'))
+				.toContain('filter: brightness(0) invert(1)');
+		});
+
+		it('renders nothing at all for an item with no asset pinned', async () => {
+			mockIsPreview.value = true;
+
+			const wrapper = await mountComponent();
+			await pushPreviewState([withMedia({ asset: undefined })]);
+
+			const item = wrapper.get('[data-graphic-item-kind="media"]');
+			expect(item.find('img').exists()).toBe(false);
+			expect(item.find('video').exists()).toBe(false);
+		});
+
+		it('resolves a live Screen Output’s media only through its Screen Output Asset Capability', async () => {
+			// The whole point of the capability: an output URL is never a hole through
+			// which the Graphics Asset Library can be browsed.
+			mockAssetCapability.value = 'capability-token';
+			mockScreen.value = screenWithStack([withMedia()]);
+			mockOnAirGraphicIds.value = ['lower-third'];
+
+			const wrapper = await mountComponent();
+			await flushPromises();
+			await nextTick();
+
+			expect(wrapper.get('[data-graphic-item-kind="media"] img').attributes('src'))
+				.toBe('/api/screen-output/screens/1/assets/asset-1/revisions/revision-7/content');
+			expect(capabilitySessionRequests).toEqual(['/api/screen-output/screens/1/asset-capability-session']);
+		});
 	});
 
 	it('composes a Graphic Group and its children in one stacking context', async () => {

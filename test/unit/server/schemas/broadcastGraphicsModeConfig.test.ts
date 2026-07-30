@@ -50,6 +50,28 @@ function shapeItem(id: string, overrides: Record<string, unknown> = {}) {
 	};
 }
 
+function mediaItem(id: string, overrides: Record<string, unknown> = {}) {
+	return {
+		type: 'media' as const,
+		id,
+		label: id,
+		visible: true,
+		anchor: 'top-left' as const,
+		x: 0,
+		y: 0,
+		width: 10,
+		height: 10,
+		asset: { assetId: 'asset-1', revisionId: 'revision-1' },
+		mediaKind: 'image' as const,
+		fit: 'cover' as const,
+		focalPosition: { horizontal: 0.5, vertical: 0.5 },
+		opacity: 1,
+		playbackRate: 1,
+		loop: true,
+		...overrides,
+	};
+}
+
 function graphic(id: string, itemCount = 0) {
 	return {
 		id,
@@ -452,11 +474,112 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 			graphics: [{
 				id: 'a',
 				name: 'A',
-				items: [{ type: 'media', id: 'logo', label: 'Media 1', visible: true, anchor: 'top-left', x: 0, y: 0, width: 10, height: 10 }],
+				items: [{ type: 'gauge', id: 'meter', label: 'Meter', visible: true, anchor: 'top-left', x: 0, y: 0, width: 10, height: 10 }],
 			}],
 		});
 
 		expect(result.success).toBe(false);
+	});
+
+	describe('media Graphic Items', () => {
+		function withItems(items: Array<Record<string, unknown>>) {
+			return broadcastGraphicsModeConfigSchema.safeParse({
+				graphics: [{ id: 'a', name: 'A', items }],
+			});
+		}
+
+		it('accepts a Media Graphic Item pinning one exact identity and revision', () => {
+			const result = withItems([mediaItem('logo')]);
+
+			expect(result.success).toBe(true);
+			const item = result.data?.graphics[0]?.items[0];
+			expect(item?.type === 'media' && item.asset).toEqual({ assetId: 'asset-1', revisionId: 'revision-1' });
+		});
+
+		it('accepts one with no asset pinned, and none with a partial reference', () => {
+			// An author places the rectangle before choosing content, so an absent asset
+			// is a complete item. Half a reference is not: it pins no exact revision.
+			expect(withItems([mediaItem('logo', { asset: undefined })]).success).toBe(true);
+			expect(withItems([mediaItem('logo', { asset: { assetId: 'asset-1' } })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { asset: { revisionId: 'revision-1' } })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { asset: { assetId: 'asset-1', revisionId: 'revision-1', latest: true } })]).success).toBe(false);
+		});
+
+		it('bounds fitting, focal position, opacity, and playback rate', () => {
+			expect(withItems([mediaItem('logo', { fit: 'stretch' })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { mediaKind: 'audio' })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { focalPosition: { horizontal: 1.5, vertical: 0.5 } })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { focalPosition: { horizontal: 0.5 } })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { opacity: -0.1 })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { playbackRate: 0 })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { playbackRate: 8 })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { playbackRate: 0.25 })]).success).toBe(true);
+			expect(withItems([mediaItem('logo', { playbackRate: 4 })]).success).toBe(true);
+		});
+
+		it('clips with the canonical Shape Geometry, and rejects the media-clip encoding', () => {
+			// The canonical Shape Geometry states a flat treatment and size per corner
+			// and a signed slant per edge. The Feature Match Overlay media fork encodes
+			// a corner as a tagged union and a slant as an optional unsigned inset, and
+			// must not be accepted here.
+			expect(withItems([mediaItem('logo', { clipGeometry: GEOMETRY })]).success).toBe(true);
+			expect(withItems([mediaItem('logo', { clipGeometry: undefined })]).success).toBe(true);
+			expect(withItems([mediaItem('logo', {
+				clipGeometry: {
+					topLeft: { kind: 'rounded', size: 8 },
+					topRight: { kind: 'square' },
+					bottomRight: { kind: 'square' },
+					bottomLeft: { kind: 'square' },
+					leftEdgeSlant: 4,
+				},
+			})]).success).toBe(false);
+		});
+
+		it('rejects a Graphic Surface Style on a Media Graphic Item', () => {
+			// It paints an asset, not a surface, so a fill would be an unread field the
+			// compositor silently ignores.
+			expect(withItems([mediaItem('logo', {
+				surfaceStyle: { fill: { type: 'solid', color: '#ffffff' }, fillOpacity: 1 },
+			})]).success).toBe(false);
+		});
+
+		it('accepts a Media Graphic Item as a Graphic Group child with main-axis sizing', () => {
+			const result = withItems([{
+				type: 'group',
+				id: 'cluster',
+				label: 'Cluster',
+				visible: true,
+				anchor: 'top-left',
+				x: 0,
+				y: 0,
+				width: 100,
+				height: 50,
+				arrangement: 'row',
+				padding: 0,
+				gap: 0,
+				align: 'stretch',
+				justify: 'start',
+				clip: false,
+				geometry: GEOMETRY,
+				children: [mediaItem('badge', { sizing: { mode: 'fill', size: 0, weight: 2 } })],
+			}]);
+
+			expect(result.success).toBe(true);
+		});
+
+		it('rejects main-axis sizing on a top-level Media Graphic Item', () => {
+			// Only a Graphic Group child has a group to be sized inside.
+			expect(withItems([mediaItem('logo', { sizing: { mode: 'fill', size: 0, weight: 2 } })]).success).toBe(false);
+		});
+
+		it('counts a Media Graphic Item towards the whole-Screen Graphic Item cap', () => {
+			const overCap = Array.from(
+				{ length: MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN + 1 },
+				(_, index) => mediaItem(`logo-${index}`),
+			);
+
+			expect(withItems(overCap).success).toBe(false);
+		});
 	});
 
 	it('rejects a Graphic Group inside a Graphic Group', () => {

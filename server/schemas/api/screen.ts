@@ -37,6 +37,10 @@ import {
 	VERTICAL_ALIGN_VALUES,
 } from '~~/shared/types/enums';
 import {
+	MEDIA_GRAPHIC_ITEM_FIT_VALUES,
+	MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES,
+} from '~~/shared/types/graphicItem';
+import {
 	GRAPHIC_ANCHOR_POINT_VALUES,
 	GRAPHIC_FONT_STYLE_VALUES,
 	GRAPHIC_GROUP_ALIGN_VALUES,
@@ -52,8 +56,10 @@ import {
 	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
 	MAX_GRAPHIC_INPUT_KEY_LENGTH,
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
+	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_TEXT_LENGTH,
 	MIN_GRAPHIC_FILL_STOPS,
+	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	ON_AIR_UPDATE_POLICY_VALUES,
 	SHAPE_CORNER_TREATMENT_VALUES,
 	TEXT_OVERFLOW_POLICY_VALUES,
@@ -829,8 +835,37 @@ const shapeGraphicItemShape = {
 	surfaceStyle: graphicSurfaceStyleSchema.optional(),
 };
 
+/**
+ * A Media Graphic Item.
+ *
+ * `asset` is optional because an author places the rectangle before choosing its
+ * content, and `clipGeometry` because clipping is optional — absent, the item
+ * clips to its own bounds. `videoCompatibility` records the pinned revision's own
+ * target compatibility, which the Graphic Asset Reference index checks a
+ * silent-video reference against.
+ */
+const mediaGraphicItemShape = {
+	...graphicItemBaseShape,
+	type: z.literal('media'),
+	asset: graphicAssetReferenceSchema.optional(),
+	mediaKind: z.enum(GRAPHIC_MEDIA_KIND_VALUES),
+	fit: z.enum(MEDIA_GRAPHIC_ITEM_FIT_VALUES),
+	focalPosition: z.object({
+		horizontal: opacitySchema,
+		vertical: opacitySchema,
+	}).strict(),
+	opacity: opacitySchema,
+	clipGeometry: graphicShapeGeometrySchema.optional(),
+	videoCompatibility: z.enum(MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES).optional(),
+	playbackRate: finiteNumberSchema
+		.min(MIN_GRAPHIC_MEDIA_PLAYBACK_RATE)
+		.max(MAX_GRAPHIC_MEDIA_PLAYBACK_RATE),
+	loop: z.boolean(),
+};
+
 const textGraphicItemConfigSchema = z.object(textGraphicItemShape).strict();
 const shapeGraphicItemConfigSchema = z.object(shapeGraphicItemShape).strict();
+const mediaGraphicItemConfigSchema = z.object(mediaGraphicItemShape).strict();
 
 /**
  * Main-axis sizing belongs to a Graphic Group child, so only a child carries
@@ -850,6 +885,7 @@ const graphicGroupChildSizingSchema = z.object({
 const graphicGroupChildConfigSchema = z.discriminatedUnion('type', [
 	z.object({ ...textGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...shapeGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
+	z.object({ ...mediaGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 ]);
 
 export const MAX_GRAPHIC_GROUP_CHILDREN = 50;
@@ -875,6 +911,7 @@ const graphicGroupItemConfigSchema = z.object({
 const graphicItemConfigSchema = z.discriminatedUnion('type', [
 	textGraphicItemConfigSchema,
 	shapeGraphicItemConfigSchema,
+	mediaGraphicItemConfigSchema,
 	graphicGroupItemConfigSchema,
 ]);
 
