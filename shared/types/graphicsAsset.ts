@@ -297,7 +297,6 @@ export interface GraphicAssetValidationIssue {
 		| 'remote-source-destination-not-public'
 		| 'remote-source-redirect-limit-exceeded'
 		| 'remote-source-not-retrievable'
-		| 'remote-source-length-required'
 		| 'remote-source-length-exceeded'
 		| 'remote-source-length-mismatch';
 	message: string;

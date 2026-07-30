@@ -704,9 +704,11 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				throw new Error('Graphics staging progress could not be recorded');
 		},
 		async recordRemoteCopyStagedSource(input) {
-			const observedByteLength = input.operation.declaredByteLength;
-			const residualReservation
-				= stagingReservationBytes(input.operation) - observedByteLength;
+			const { observedByteLength } = input;
+			const residualReservation = stagingReservationBytes({
+				...input.operation,
+				declaredByteLength: observedByteLength,
+			}) - observedByteLength;
 			const result = await database.prepare(`
 				UPDATE graphics_ingestion_operations
 				SET declared_byte_length = ?,

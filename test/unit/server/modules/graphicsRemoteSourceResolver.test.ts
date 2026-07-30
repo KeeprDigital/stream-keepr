@@ -40,6 +40,8 @@ describe('resolved remote destination addresses', () => {
 		'1.1.1.1',
 		'2606:4700:10::ac42:93f3',
 		'2001:4860:4860::8888',
+		// 6to4 wrapping a public IPv4 (93.184.216.34) stays public.
+		'2002:5db8:d822::',
 	])('accepts the public address %s', (address) => {
 		expect(isPublicRemoteAddress(address)).toBe(true);
 	});
@@ -76,6 +78,12 @@ describe('resolved remote destination addresses', () => {
 		['IPv4-mapped private', '::ffff:10.0.0.1'],
 		['IPv4-mapped metadata', '::ffff:169.254.169.254'],
 		['NAT64-embedded private', '64:ff9b::192.168.1.1'],
+		['6to4-embedded cloud metadata', '2002:a9fe:a9fe::'],
+		['6to4-embedded loopback', '2002:7f00:0001::'],
+		['6to4-embedded private', '2002:0a00:0001::'],
+		['6to4-embedded link-local', '2002:a9fe:0001::'],
+		['Teredo', '2001::1'],
+		['Teredo with embedded client', '2001:0:4136:e378:8000:63bf:3fff:fdd2'],
 		['zone-scoped link-local', 'fe80::1%eth0'],
 		['unparseable', 'not-an-address'],
 		['empty', ''],

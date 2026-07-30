@@ -18,19 +18,21 @@ and enforces, at the initial URL and again after every redirect:
   cookie, authorization header, reusable cloud credential, or interactive
   authentication is ever supplied. The only request header sent is `accept`;
 - **at most three redirects**, each `Location` resolved against the current hop
-  and fully revalidated, with repeat destinations rejected as a loop;
+  and fully revalidated, with an exactly repeated URL rejected as a loop;
 - **non-public destinations rejected** — loopback, this-network, private,
   carrier-grade NAT, link-local (including the `169.254.169.254` cloud-metadata
-  address), IETF protocol-assignment, documentation, benchmarking, 6to4 relay,
-  multicast, reserved, and broadcast ranges, their IPv6 equivalents, and
-  IPv4-mapped and NAT64-embedded forms of all of the above. Hostnames that
+  address), IETF protocol-assignment, documentation, benchmarking, 6to4 relay
+  anycast, multicast, reserved, and broadcast ranges; their IPv6 equivalents
+  (unspecified, loopback, unique-local, link-local, multicast, discard-only,
+  documentation, ORCHIDv2); and every embedded-IPv4 form — IPv4-mapped,
+  IPv4-compatible, NAT64 (`64:ff9b::/96`) and 6to4 (`2002::/16`), each unwrapped
+  and judged by the IPv4 rules. Teredo (`2001::/32`) is rejected outright
+  because its relay and client addresses cannot be verified. Hostnames that
   cannot denote a public destination (`localhost`, `.local`, `.internal`,
   `.home.arpa`, reverse-DNS zones, and known cloud-metadata names) are rejected
   before any lookup;
-- **an exact declared length** — the response must declare a `Content-Length`
-  within the byte limit for the Graphic Asset kind, and the observed bytes must
-  match it exactly while streaming into staging. Nothing is buffered whole in
-  Worker memory.
+- **a bounded transfer** — the copy is always bounded by the byte limit for the
+  Graphic Asset kind, and nothing is buffered whole in Worker memory.
 
 Redirects are followed manually (`redirect: 'manual'`). The runtime's automatic
 `follow` mode forwards `Cookie` and `Authorization` across hostnames, so it is
@@ -41,8 +43,16 @@ never used here.
 The remote `Content-Type` and any remote file name are ignored entirely. The
 authoritative kind, format, canonical MIME, technical facts, and SHA-256 come
 from the library's own bounded parsing and decoding of the staged bytes, exactly
-as for a local upload. The declared length is a bound that must be matched, not
-a fact that is trusted. A remote digest is never accepted as proof of anything.
+as for a local upload. A remote digest is never accepted as proof of anything.
+
+`Content-Length` is a hint too. When the origin declares a usable length it is
+rejected early if it exceeds the kind's limit, and the delivered bytes must then
+match it exactly. When the origin declares none — chunked HTTP/1.1, many HTTP/2
+origins, and runtime-decompressed responses legitimately omit or misstate it —
+or declares an unusable value, the length is simply unknown and the transfer is
+bounded by the kind's maximum instead. An unknown-length copy accumulates up to
+one 16 MiB multipart part; only if the source outgrows that part does a
+resumable multipart transfer begin, so at most one part is ever resident.
 
 The Graphic Asset name and the optional source file-name hint are author-supplied
 at initiation, and the workspace derives the hint from the URL **path** only.
@@ -75,10 +85,21 @@ file. An approved remote copy has no client-side bytes, so after server-side
 validation the operation pauses at `awaiting-confirmation`. The workspace reads
 the exact staged bytes from
 `GET /api/graphics-assets/ingestion-operations/:id/staged-source` — private,
-`no-store`, gated on a graphics-author session, scoped to the initiating author,
-and only while that operation is awaiting confirmation — produces the evidence,
-and submits it to
+`no-store`, gated on an authenticated graphics-author session, scoped to the
+supplied graphics author identity, and readable only while that operation is
+awaiting confirmation — produces the evidence, and submits it to
 `POST /api/graphics-assets/ingestion-operations/:id/browser-evidence`.
+
+This is the only Graphics Ingestion Operation route that requires a session at
+all. Note the limit of that scoping: the graphics author identity is the
+client-supplied `x-graphics-author-id` header across the whole library, and it
+is not authenticated. A caller that claims another author's identity is
+therefore treated as that author here exactly as it already is on every other
+operation route. Provisional staged bytes are a new class of data behind that
+pre-existing model, so making the session the authoritative author identity is
+worth doing installation-wide; it cannot be done in this route alone, because
+the session's `authorId` is an unrelated random UUID that no operation is keyed
+by.
 
 ## Platform limitation: DNS rebinding
 

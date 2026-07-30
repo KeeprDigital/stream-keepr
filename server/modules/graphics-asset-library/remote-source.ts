@@ -25,7 +25,6 @@ export type GraphicsRemoteSourceRejectionCode
 		| 'remote-source-destination-not-public'
 		| 'remote-source-redirect-limit-exceeded'
 		| 'remote-source-not-retrievable'
-		| 'remote-source-length-required'
 		| 'remote-source-length-exceeded';
 
 export interface GraphicsRemoteSourceRejection {
@@ -45,7 +44,13 @@ export interface GraphicsRemoteHostResolver {
 export type GraphicsRemoteSourceOutcome
 	= | {
 		outcome: 'open';
-		byteLength: number;
+		/**
+		 * The origin's declared length, or `undefined` when it declared none or
+		 * declared one that is not a usable whole byte count. It stays a hint:
+		 * the caller bounds the stream by the Graphic Asset kind's maximum
+		 * either way, and enforces an exact match only when a length is present.
+		 */
+		byteLength?: number;
 		body: ReadableStream<Uint8Array>;
 	}
 	| { outcome: 'rejected'; rejection: GraphicsRemoteSourceRejection }
@@ -160,8 +165,19 @@ function ipv6Groups(address: string): number[] | undefined {
 	return [...headGroups, ...Array.from<number>({ length: missing }).fill(0), ...tailGroups];
 }
 
+function ipv4FromGroupPair(high: number, low: number) {
+	return [high >> 8, high & 0xFF, low >> 8, low & 0xFF];
+}
+
 function isPublicIpv6(groups: readonly number[]) {
 	const [first = 0, second = 0, third = 0, fourth = 0, fifth = 0, sixth = 0] = groups;
+	// Teredo (2001::/32) tunnels over an arbitrary IPv4 relay and obfuscates its
+	// client address, so it can never be verified as a public destination.
+	if (first === 0x2001 && second === 0)
+		return false;
+	// 6to4 (2002::/16) carries its IPv4 destination in the next two groups.
+	if (first === 0x2002)
+		return isPublicIpv4(ipv4FromGroupPair(second, third));
 	// IPv4-mapped (::ffff:0:0/96) and IPv4-compatible destinations inherit the
 	// IPv4 rules; NAT64 (64:ff9b::/96) embeds its IPv4 destination the same way.
 	const embedsIpv4 = (
@@ -174,7 +190,7 @@ function isPublicIpv6(groups: readonly number[]) {
 			return false;
 		if (seventh === 0 && eighth === 1)
 			return false;
-		return isPublicIpv4([seventh >> 8, seventh & 0xFF, eighth >> 8, eighth & 0xFF]);
+		return isPublicIpv4(ipv4FromGroupPair(seventh, eighth));
 	}
 	// Unspecified and loopback.
 	if (groups.every(group => group === 0))
@@ -344,8 +360,11 @@ export function createGraphicsRemoteSourceFetcher(dependencies: {
 							`${remoteSourceOrigin(url)} redirected to an unusable destination.`,
 						);
 					}
-					visited.add(`${url.origin}${url.pathname}`);
-					if (visited.has(`${next.origin}${next.pathname}`)) {
+					// Keyed on the full URL: paginated redirects legitimately revisit
+					// one path with different query parameters, and the hop cap
+					// already bounds any chain that never terminates.
+					visited.add(url.href);
+					if (visited.has(next.href)) {
 						return rejection(
 							'remote-source-redirect-limit-exceeded',
 							'The approved remote Graphic Asset source redirects in a loop.',
@@ -370,20 +389,16 @@ export function createGraphicsRemoteSourceFetcher(dependencies: {
 					);
 				}
 
+				// A declared length is an untrusted hint. Chunked HTTP/1.1 origins,
+				// HTTP/2 origins, and runtime-decompressed responses legitimately
+				// omit or misstate it, so an unusable value simply means "unknown"
+				// and the transfer stays bounded by the kind's maximum instead.
 				const declaredLength = response.headers.get('content-length');
-				const byteLength = declaredLength === null ? Number.NaN : Number(declaredLength);
-				if (
-					declaredLength === null
-					|| !Number.isSafeInteger(byteLength)
-					|| byteLength <= 0
-				) {
-					await response.body.cancel().catch(() => undefined);
-					return rejection(
-						'remote-source-length-required',
-						`${remoteSourceOrigin(url)} did not declare an exact content length.`,
-					);
-				}
-				if (byteLength > input.maximumByteLength) {
+				const declared = declaredLength === null ? Number.NaN : Number(declaredLength);
+				const byteLength = Number.isSafeInteger(declared) && declared > 0
+					? declared
+					: undefined;
+				if (byteLength !== undefined && byteLength > input.maximumByteLength) {
 					await response.body.cancel().catch(() => undefined);
 					return rejection(
 						'remote-source-length-exceeded',

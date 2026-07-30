@@ -25,7 +25,9 @@ import type { GraphicsAssetMultipartState } from './multipart';
 import type {
 	BoundedByteStream,
 	GraphicsCanonicalObjectStore,
+	GraphicsMultipartPart,
 	GraphicsMultipartPartIdentity,
+	GraphicsMultipartUploadIdentity,
 	GraphicsObjectStoreHealth,
 	GraphicsStagingObjectStore,
 } from './object-store';
@@ -166,6 +168,7 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	 */
 	recordRemoteCopyStagedSource: (input: {
 		operation: GraphicsIngestionOperation;
+		observedByteLength: number;
 	}) => Promise<void>;
 	recordCanonicalWrites: (input: {
 		operation: GraphicsIngestionOperation;
@@ -1042,6 +1045,176 @@ export function createGraphicsAssetLibrary(
 			}),
 			'image/png',
 		);
+	}
+
+	type StageRemoteSourceOutcome
+		= | { outcome: 'staged'; byteLength: number }
+			| { outcome: 'length-mismatch' }
+			| { outcome: 'length-exceeded' }
+			| { outcome: 'empty' }
+			| { outcome: 'unavailable' };
+
+	/**
+	 * Copies a remote body into staging without ever holding a complete Graphic
+	 * Asset in Worker memory.
+	 *
+	 * A declared length lets the object store write one fixed-length object. When
+	 * the origin declared none, the length is discovered while reading: bytes
+	 * accumulate up to one multipart part, and only if the source outgrows that
+	 * part does a resumable multipart transfer start. So at most one part is ever
+	 * resident, which is the same bound the single-shot upload route enforces.
+	 */
+	async function stageRemoteSource(input: {
+		staging: GraphicsStagingObjectStore;
+		identity: ReturnType<typeof graphicsObjectIdentity>;
+		operationId: GraphicsIngestionOperationId;
+		body: ReadableStream<Uint8Array>;
+		maximumByteLength: number;
+		declaredByteLength?: number;
+	}): Promise<StageRemoteSourceOutcome> {
+		const metadata = {
+			contentType: 'application/octet-stream',
+			custom: { operationId: input.operationId },
+		} as const;
+
+		if (input.declaredByteLength !== undefined) {
+			let staged: Awaited<ReturnType<typeof input.staging.createImmutable>>;
+			try {
+				staged = await input.staging.createImmutable({
+					identity: input.identity,
+					bytes: createBoundedByteStream(input.body, {
+						byteLength: input.declaredByteLength,
+						maximumByteLength: input.maximumByteLength,
+					}),
+					metadata,
+				});
+			}
+			catch (error) {
+				return error instanceof GraphicsObjectInputError
+					? { outcome: 'length-mismatch' }
+					: { outcome: 'unavailable' };
+			}
+			if (staged.outcome === 'unavailable')
+				return { outcome: 'unavailable' };
+			return staged.object.byteLength === input.declaredByteLength
+				? { outcome: 'staged', byteLength: staged.object.byteLength }
+				: { outcome: 'length-mismatch' };
+		}
+
+		const reader = input.body.getReader();
+		const pending: Uint8Array[] = [];
+		let pendingByteLength = 0;
+		let totalByteLength = 0;
+		let upload: { identity: typeof input.identity; uploadId: GraphicsMultipartUploadIdentity } | undefined;
+		const parts: GraphicsMultipartPart[] = [];
+
+		function takePendingPart(byteCount: number) {
+			const part = new Uint8Array(byteCount);
+			let offset = 0;
+			while (offset < byteCount) {
+				const chunk = pending[0]!;
+				const take = Math.min(chunk.byteLength, byteCount - offset);
+				part.set(chunk.subarray(0, take), offset);
+				offset += take;
+				if (take === chunk.byteLength)
+					pending.shift();
+				else
+					pending[0] = chunk.subarray(take);
+			}
+			pendingByteLength -= byteCount;
+			return part;
+		}
+
+		async function abort() {
+			await reader.cancel().catch(() => undefined);
+			if (upload)
+				await input.staging.abortMultipart(upload);
+		}
+
+		try {
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done)
+					break;
+				totalByteLength += value.byteLength;
+				if (totalByteLength > input.maximumByteLength) {
+					await abort();
+					return { outcome: 'length-exceeded' };
+				}
+				pending.push(value);
+				pendingByteLength += value.byteLength;
+				// Keep one whole part in hand so the last part can be the short one.
+				while (pendingByteLength > GRAPHICS_MULTIPART_PART_BYTES) {
+					if (!upload) {
+						const started = await input.staging.beginMultipart({
+							identity: input.identity,
+							metadata,
+						});
+						if (started.outcome === 'unavailable') {
+							await abort();
+							return { outcome: 'unavailable' };
+						}
+						upload = started.upload;
+					}
+					const uploaded = await input.staging.uploadPart({
+						upload,
+						partNumber: parts.length + 1,
+						bytes: createBoundedByteStream(takePendingPart(GRAPHICS_MULTIPART_PART_BYTES), {
+							byteLength: GRAPHICS_MULTIPART_PART_BYTES,
+							maximumByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+						}),
+					});
+					if (uploaded.outcome === 'unavailable') {
+						await abort();
+						return { outcome: 'unavailable' };
+					}
+					parts.push(uploaded.part);
+				}
+			}
+		}
+		catch {
+			await abort();
+			return { outcome: 'unavailable' };
+		}
+
+		if (totalByteLength === 0) {
+			await abort();
+			return { outcome: 'empty' };
+		}
+
+		const tail = takePendingPart(pendingByteLength);
+		if (!upload) {
+			const staged = await input.staging.createImmutable({
+				identity: input.identity,
+				bytes: createBoundedByteStream(tail, {
+					byteLength: tail.byteLength,
+					maximumByteLength: input.maximumByteLength,
+				}),
+				metadata,
+			});
+			if (staged.outcome === 'unavailable')
+				return { outcome: 'unavailable' };
+			return { outcome: 'staged', byteLength: staged.object.byteLength };
+		}
+		const uploadedTail = await input.staging.uploadPart({
+			upload,
+			partNumber: parts.length + 1,
+			bytes: createBoundedByteStream(tail, {
+				byteLength: tail.byteLength,
+				maximumByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+			}),
+		});
+		if (uploadedTail.outcome === 'unavailable') {
+			await abort();
+			return { outcome: 'unavailable' };
+		}
+		parts.push(uploadedTail.part);
+		const completed = await input.staging.completeMultipart({ upload, parts });
+		if (completed.outcome === 'unavailable')
+			return { outcome: 'unavailable' };
+		return completed.object.byteLength === totalByteLength
+			? { outcome: 'staged', byteLength: completed.object.byteLength }
+			: { outcome: 'length-mismatch' };
 	}
 
 	async function continueGraphicsIngestion(
@@ -2123,51 +2296,46 @@ export function createGraphicsAssetLibrary(
 				'Approved remote Graphic Asset copy could not be started',
 			);
 			const stagingIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
-			let staged: Awaited<ReturnType<typeof staging.createImmutable>>;
-			try {
-				staged = await staging.createImmutable({
-					identity: stagingIdentity,
-					bytes: createBoundedByteStream(opened.body, {
-						byteLength: opened.byteLength,
-						maximumByteLength: policy.maximumByteLength,
-					}),
-					metadata: {
-						contentType: 'application/octet-stream',
-						custom: { operationId: operation.id },
-					},
-				});
-			}
-			catch (error) {
+			const staged = await stageRemoteSource({
+				staging,
+				identity: stagingIdentity,
+				operationId: operation.id,
+				body: opened.body,
+				maximumByteLength: policy.maximumByteLength,
+				declaredByteLength: opened.byteLength,
+			});
+			if (staged.outcome !== 'staged') {
 				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
 				await staging.delete(stagingIdentity);
-				if (error instanceof GraphicsObjectInputError) {
+				if (staged.outcome === 'unavailable') {
 					return await failOperation(catalogue, operation, {
-						code: 'remote-source-rejected',
-						retryable: false,
-						message: 'The approved remote Graphic Asset source did not deliver the exact byte count it declared.',
-					}, {
-						outcome: 'rejected',
-						compatibilityProfile: policy.compatibilityProfile,
-						issues: [{
-							severity: 'error',
-							code: 'remote-source-length-mismatch',
-							message: `The remote source declared ${opened.byteLength} bytes but delivered a different length.`,
-						}],
+						code: 'staging-unavailable',
+						retryable: true,
+						message: 'Copied remote source bytes could not be staged and verified.',
 					});
 				}
+				const rejection = staged.outcome === 'length-exceeded'
+					? {
+							code: 'remote-source-length-exceeded' as const,
+							message: `The remote source delivered more than the ${policy.maximumByteLength}-byte limit for this Graphic Asset kind.`,
+						}
+					: staged.outcome === 'empty'
+						? {
+								code: 'remote-source-not-retrievable' as const,
+								message: 'The remote source returned no content.',
+							}
+						: {
+								code: 'remote-source-length-mismatch' as const,
+								message: `The remote source declared ${opened.byteLength} bytes but delivered a different length.`,
+							};
 				return await failOperation(catalogue, operation, {
-					code: 'staging-unavailable',
-					retryable: true,
-					message: 'Staging byte storage was interrupted while copying the approved remote source.',
-				});
-			}
-			if (staged.outcome === 'unavailable' || staged.object.byteLength !== opened.byteLength) {
-				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-				await staging.delete(stagingIdentity);
-				return await failOperation(catalogue, operation, {
-					code: 'staging-unavailable',
-					retryable: true,
-					message: 'Copied remote source bytes could not be staged and verified.',
+					code: 'remote-source-rejected',
+					retryable: false,
+					message: 'The approved remote Graphic Asset source did not deliver a usable bounded copy.',
+				}, {
+					outcome: 'rejected',
+					compatibilityProfile: policy.compatibilityProfile,
+					issues: [{ severity: 'error', ...rejection }],
 				});
 			}
 			const authoritative = await catalogueRequest(
@@ -2181,7 +2349,8 @@ export function createGraphicsAssetLibrary(
 			}
 			await catalogueRequest(
 				() => catalogue.recordRemoteCopyStagedSource({
-					operation: { ...operation!, declaredByteLength: opened.byteLength },
+					operation: operation!,
+					observedByteLength: staged.byteLength,
 				}),
 				'Approved remote Graphic Asset copy progress could not be recorded',
 			);

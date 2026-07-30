@@ -15,6 +15,10 @@ import {
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { createGraphicsRemoteSourceFetcher } from '~~/server/modules/graphics-asset-library/remote-source';
+import {
+	GRAPHICS_MULTIPART_PART_BYTES,
+	MAX_STILL_IMAGE_INGESTION_BYTES,
+} from '~~/shared/utils/graphicsAssetCompatibility';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -552,11 +556,6 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 
 	it.each([
 		{
-			label: 'no declared length',
-			hop: { contentLength: null },
-			code: 'remote-source-length-required',
-		},
-		{
 			label: 'a length above the still-image limit',
 			hop: { contentLength: String(26 * 1024 * 1024) },
 			code: 'remote-source-length-exceeded',
@@ -597,6 +596,148 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		await expect(
 			staging.readMetadata(graphicsObjectIdentity(`ingestion/${operation.id}/source`)),
 		).resolves.toMatchObject({ outcome: 'missing' });
+	});
+
+	it.each([
+		{ label: 'declares no length at all', contentLength: null },
+		{ label: 'declares an unparseable length', contentLength: 'chunked' },
+		{ label: 'declares a zero length', contentLength: '0' },
+	] as const)('copies a remote source that $label', async ({ contentLength }) => {
+		const { library } = createLibrary({
+			hops: {
+				'https://cdn.example.test/scoreboard.png': {
+					body: transparentPixelPng,
+					contentLength,
+				},
+			},
+		});
+		const operation = await library.initiateRemoteGraphicAssetCopy({
+			idempotencyKey: `remote-unknown-length-${contentLength}`,
+			initiatedBy: 'graphics-author-1',
+			name: 'Chunked remote source',
+			sourceFileName: 'scoreboard.png',
+		});
+
+		const copied = await library.copyRemoteGraphicAssetSource({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			sourceUrl: 'https://cdn.example.test/scoreboard.png',
+		});
+
+		expect(copied).toMatchObject({
+			stage: 'awaiting-confirmation',
+			declaredByteLength: transparentPixelPng.byteLength,
+			transferredByteLength: transparentPixelPng.byteLength,
+			report: {
+				outcome: 'accepted',
+				compatibilityProfile: 'still-image-v1',
+				facts: { kind: 'image', format: 'png' },
+			},
+		});
+	});
+
+	it('rejects an undeclared remote source that outgrows its Graphic Asset kind limit', async () => {
+		const { library, staging } = createLibrary({
+			hops: {
+				'https://cdn.example.test/scoreboard.png': {
+					body: new Uint8Array(MAX_STILL_IMAGE_INGESTION_BYTES + 1),
+					contentLength: null,
+				},
+			},
+		});
+		const operation = await library.initiateRemoteGraphicAssetCopy({
+			idempotencyKey: 'remote-unknown-length-exceeded',
+			initiatedBy: 'graphics-author-1',
+			name: 'Oversized remote source',
+			sourceFileName: 'scoreboard.png',
+		});
+
+		const failed = await library.copyRemoteGraphicAssetSource({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			sourceUrl: 'https://cdn.example.test/scoreboard.png',
+		});
+
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			failure: { code: 'remote-source-rejected', retryable: false },
+			report: {
+				outcome: 'rejected',
+				issues: [{ code: 'remote-source-length-exceeded' }],
+			},
+		});
+		await expect(
+			staging.readMetadata(graphicsObjectIdentity(`ingestion/${operation.id}/source`)),
+		).resolves.toMatchObject({ outcome: 'missing' });
+	});
+
+	it('rejects an undeclared remote source that returns no content', async () => {
+		const { library } = createLibrary({
+			hops: {
+				'https://cdn.example.test/scoreboard.png': {
+					body: new Uint8Array(0),
+					contentLength: null,
+				},
+			},
+		});
+		const operation = await library.initiateRemoteGraphicAssetCopy({
+			idempotencyKey: 'remote-unknown-length-empty',
+			initiatedBy: 'graphics-author-1',
+			name: 'Empty remote source',
+			sourceFileName: 'scoreboard.png',
+		});
+
+		await expect(library.copyRemoteGraphicAssetSource({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			sourceUrl: 'https://cdn.example.test/scoreboard.png',
+		})).resolves.toMatchObject({
+			stage: 'failed',
+			report: {
+				outcome: 'rejected',
+				issues: [{ code: 'remote-source-not-retrievable' }],
+			},
+		});
+	});
+
+	it('stages an undeclared remote source larger than one multipart part', async () => {
+		// Bytes beyond one 16 MiB part force the resumable multipart path, so the
+		// whole source reaches staging without ever being held in memory at once.
+		const oversized = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 4096);
+		oversized.set(transparentPixelPng, 0);
+		const { library } = createLibrary({
+			hops: {
+				'https://cdn.example.test/scoreboard.png': {
+					body: oversized,
+					contentLength: null,
+				},
+			},
+		});
+		const operation = await library.initiateRemoteGraphicAssetCopy({
+			idempotencyKey: 'remote-unknown-length-multipart',
+			initiatedBy: 'graphics-author-1',
+			name: 'Large remote source',
+			sourceFileName: 'scoreboard.png',
+		});
+
+		const failed = await library.copyRemoteGraphicAssetSource({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			sourceUrl: 'https://cdn.example.test/scoreboard.png',
+		});
+
+		// Every byte was staged and hashed; the source is then rejected on its own
+		// merits by the compatibility profile, not by the remote-source guard.
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			declaredByteLength: oversized.byteLength,
+			transferredByteLength: oversized.byteLength,
+			failure: { code: 'validation-failed', retryable: false },
+		});
+		expect(
+			failed.report?.outcome === 'rejected'
+			&& failed.report.issues.every(issue => !issue.code.startsWith('remote-source-')),
+		).toBe(true);
 	});
 
 	it('treats the remote content type as an untrusted hint and trusts observed bytes', async () => {

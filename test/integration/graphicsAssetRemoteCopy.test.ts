@@ -186,7 +186,12 @@ describe('the approved remote HTTPS copy API', () => {
 		expect(response.status).toBe(409);
 	});
 
-	it('keeps a remote copy operation private to its initiating author', async () => {
+	// Scoping is by the graphics author identity the caller supplies, which is the
+	// installation-wide model for every Graphics Ingestion Operation route. That
+	// identity is not authenticated today, so this proves the scoping mechanism,
+	// not resistance to a caller that claims another author's identity. Making
+	// the session the authoritative author identity is tracked separately.
+	it('scopes a remote copy operation to the graphics author identity that initiated it', async () => {
 		const initiated = await initiateRemoteCopy(
 			'integration-remote-copy-isolation',
 			'Private remote copy',
@@ -207,5 +212,13 @@ describe('the approved remote HTTPS copy API', () => {
 			{ headers: otherAuthorHeaders },
 		);
 		expect(foreignStagedSource.status).toBe(404);
+
+		// Unlike every other operation route, staged provisional bytes also
+		// require an authenticated graphics author session.
+		const sessionless = await fetch(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/staged-source`,
+			{ headers: { 'x-graphics-author-id': authorHeaders['x-graphics-author-id']! } },
+		);
+		expect(sessionless.status).toBe(401);
 	});
 });

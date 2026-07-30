@@ -235,9 +235,11 @@ export function createInMemoryGraphicsAssetCatalogue(
 		},
 		async recordRemoteCopyStagedSource(input) {
 			const operation = operations.get(input.operation.id);
-			const observedByteLength = input.operation.declaredByteLength;
-			const residualReservation = stagingReservationBytes(input.operation)
-				- observedByteLength;
+			const { observedByteLength } = input;
+			const residualReservation = stagingReservationBytes({
+				...input.operation,
+				declaredByteLength: observedByteLength,
+			}) - observedByteLength;
 			const stagingEnvelope = (stagingUsage.get(input.operation.id) ?? 0)
 				+ (stagingReservations.get(input.operation.id) ?? 0);
 			if (
