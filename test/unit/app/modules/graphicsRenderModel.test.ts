@@ -140,11 +140,57 @@ const COLOUR_TOKEN = /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|c
 
 /**
  * The one style key allowed to carry a colour. Every other key carrying one is an
- * unrecognised paint and fails, which is what keeps this guard closed as the
- * vocabulary grows: #63 painted through `style.background`, so a later addition
- * reaching for a new property is not hypothetical.
+ * unrecognised paint and fails.
  */
 const RECOGNISED_COLOUR_KEYS = new Set(['color']);
+
+/**
+ * Every style property the render model is known to emit that cannot paint.
+ *
+ * This, rather than colour detection, is what keeps the guard closed against
+ * property drift: a property that is not on this list fails whatever its value,
+ * so a later addition reaching for `background`, `boxShadow`, or
+ * `WebkitTextStroke` is caught by its key alone and never has to be recognised as
+ * a colour first. #63 painted through `style.background`, so that drift is not
+ * hypothetical. Adding a layout property here is the moment to ask whether it
+ * paints.
+ */
+const NON_PAINTING_KEYS = new Set([
+	'alignItems',
+	'alignSelf',
+	'boxSizing',
+	'clipPath',
+	'display',
+	'flex',
+	'flexDirection',
+	'fontFamily',
+	'fontSize',
+	'fontStyle',
+	'fontWeight',
+	'gap',
+	'height',
+	'justifyContent',
+	'left',
+	'letterSpacing',
+	'lineHeight',
+	'margin',
+	'minHeight',
+	'minWidth',
+	'overflow',
+	'overflowWrap',
+	'padding',
+	'position',
+	'textAlign',
+	'textOverflow',
+	'textTransform',
+	'top',
+	'transform',
+	'transformOrigin',
+	'WebkitBoxOrient',
+	'WebkitLineClamp',
+	'whiteSpace',
+	'width',
+]);
 
 /**
  * Every colour one style object paints, and proof that it paints nothing else.
@@ -170,6 +216,9 @@ function stylePaints(style: CSSProperties, path: string): KeyPaint[] {
 			paints.push({ color: glow[1]!, opacity: 1 });
 			continue;
 		}
+
+		if (!RECOGNISED_COLOUR_KEYS.has(key) && !NON_PAINTING_KEYS.has(key))
+			throw new Error(`${path}.${key} is an unrecognised style property in the Key Output: ${text}`);
 
 		const tokens = text.match(COLOUR_TOKEN) ?? [];
 		if (tokens.length === 0)
@@ -750,17 +799,25 @@ describe('graphicsCompositionRenderModel', () => {
 				expect(() => itemPaints(white({ filter }))).toThrow(/drop-shadow/);
 
 			expect(() => itemPaints(white({ background: '#ff0000' })))
-				.toThrow(/unrecognised paint/);
+				.toThrow(/unrecognised style property/);
 			expect(() => itemPaints(white({ boxShadow: '0 0 8px rgba(255,0,0,0.5)' })))
-				.toThrow(/unrecognised paint/);
+				.toThrow(/unrecognised style property/);
 			expect(() => itemPaints(white({ color: '#ff0000' })))
 				.toThrow(/must paint white/);
 
-			// A hidden colour inside a Graphic Group child is found too.
+			// A new painting property is caught by its key alone, so the guard does not
+			// depend on recognising every CSS colour form. `ButtonFace` is a system
+			// colour keyword no colour pattern here would match.
+			expect(() => itemPaints(white({ backgroundColor: 'ButtonFace' })))
+				.toThrow(/unrecognised style property/);
+			expect(() => itemPaints(white({ WebkitTextStrokeColor: 'papayawhip' })))
+				.toThrow(/unrecognised style property/);
+
+			// A hidden paint inside a Graphic Group child is found too.
 			expect(() => itemPaints({
 				...white({}),
 				children: [white({ background: 'red' })],
-			})).toThrow(/unrecognised paint/);
+			})).toThrow(/unrecognised style property/);
 
 			// And the shapes the model really does emit still pass.
 			expect(() => itemPaints(white({ filter: 'drop-shadow(0 0 20px #ffffff80)' }))).not.toThrow();
