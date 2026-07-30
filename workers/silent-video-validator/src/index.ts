@@ -379,13 +379,12 @@ export default {
 				);
 			}
 			if (status.status === 'errored' || status.status === 'terminated') {
-				try {
-					await instance.restart();
-				}
-				catch {
-					// The next validation attempt reconnects and retries the restart.
-				}
-				return retryableUnavailable('Validation workflow is being restarted');
+				// Automatic retries stay bounded inside the Workflow's step
+				// configuration. A settled failure needs an operator to fix the
+				// cause and restart the instance (wrangler workflows instances
+				// restart); until then the caller keeps seeing a retryable
+				// failure instead of an unbounded automatic restart loop.
+				return retryableUnavailable(`Validation workflow settled as ${status.status} and awaits operator recovery`);
 			}
 			if (Date.now() >= deadline)
 				return retryableUnavailable('Validation is still running');

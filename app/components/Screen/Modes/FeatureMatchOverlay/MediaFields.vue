@@ -96,7 +96,7 @@ function selectAsset(asset: GraphicAsset, reference: GraphicAssetReference) {
 <template>
 	<FeatureMatchOverlayControlSection title="Content" :summary="media.asset ? media.mediaKind : 'Choose an asset'" default-open>
 		<div class="grid gap-3 md:grid-cols-2">
-			<UFormField label="Screen output target" class="md:col-span-2">
+			<UFormField label="Video target" class="md:col-span-2">
 				<USelect
 					:model-value="media.videoTarget ?? 'safari'"
 					:items="targetOptions"

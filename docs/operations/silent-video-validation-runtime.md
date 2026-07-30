@@ -55,9 +55,20 @@ Worker named `stream-silent-video-validator`:
   stores only structured facts durably. The deterministic poster is written to
   `validation/silent-video/<validation-id>/poster` in the staging bucket and
   streamed back on the accepted response; durable state never contains binary
-  payloads.
-- `container/` holds the pinned image (digest-pinned Debian bookworm with
-  Chromium and ffmpeg). The Container independently recomputes the source
+  payloads. Consumed posters are reclaimed by the staging bucket's
+  `silent-video-validation-posters` lifecycle rule (30-day expiry on the
+  `validation/silent-video/` prefix), created at first deployment with
+  `wrangler r2 bucket lifecycle add`.
+- Automatic retries stay bounded inside the Workflow's per-step retry
+  configuration. An instance that settles as errored or terminated is never
+  restarted automatically; the service binding keeps answering with a
+  retryable failure until an operator fixes the cause and runs
+  `wrangler workflows instances restart silent-video-validation <id>`.
+- `container/` holds the pinned image: the base image is digest-pinned and
+  chromium/ffmpeg resolve from a fixed `snapshot.debian.org` archive
+  (`DEBIAN_SNAPSHOT` build argument), so rebuilds produce identical tool
+  versions and identical deterministic poster bytes.
+  The Container independently recomputes the source
   SHA-256 and byte length, verifies container/codec/dimension/duration
   identity with ffprobe, proves complete decode and the exact inspected frame
   count with ffmpeg (libvpx-vp9 for VP9 so alpha planes decode), proves muted

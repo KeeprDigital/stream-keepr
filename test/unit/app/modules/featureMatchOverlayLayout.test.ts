@@ -454,7 +454,7 @@ describe('feature-match-overlay layout writer', () => {
 		});
 
 		it('creates a Graphic Item using the Graphic Item Definition default config', () => {
-			const { layout, id } = createLayoutItem(layoutOf([]), 'life-graphic-item');
+			const { layout, id } = createLayoutItem(layoutOf([]), 'player-life-graphic-item');
 
 			const item = layout.items[0]!;
 			expect(item.id).toBe(id);

@@ -172,7 +172,7 @@ describe('featureMatchOverlayLayerInspector', () => {
 		const updateConfig = vi.fn();
 		const wrapper = await mountComponent({ updateConfig, variant: 'tree' });
 
-		await wrapper.find('[data-testid="overlay-guided-add"] [data-value="life-graphic-item"]').trigger('click');
+		await wrapper.find('[data-testid="overlay-guided-add"] [data-value="player-life-graphic-item"]').trigger('click');
 
 		const patch = updateConfig.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig>;
 		const added = patch.layout?.items.at(-1);

@@ -20,7 +20,7 @@ import { updateFeatureMatchOverlayRectFromAnchor } from '~/utils/featureMatchOve
  */
 
 export type FeatureMatchOverlayGeometryField = 'x' | 'y' | 'width' | 'height';
-export type FeatureMatchOverlayLayerKind = 'source' | 'media' | 'graphic-group' | 'text-graphic-item' | 'clock-graphic-item' | 'life-graphic-item' | 'wins-graphic-item';
+export type FeatureMatchOverlayLayerKind = 'source' | 'media' | 'graphic-group' | 'text-graphic-item' | 'clock-graphic-item' | 'player-life-graphic-item' | 'game-wins-graphic-item';
 export type FeatureMatchGraphicGroupChildKind = FeatureMatchGraphicItemDefinitionConfig['type'] | 'media';
 
 function nextId(prefix: string) {
@@ -31,9 +31,9 @@ function graphicItemTypeFromLayerKind(kind: FeatureMatchOverlayLayerKind): Featu
 	switch (kind) {
 		case 'clock-graphic-item':
 			return 'clock';
-		case 'life-graphic-item':
+		case 'player-life-graphic-item':
 			return 'player-life';
-		case 'wins-graphic-item':
+		case 'game-wins-graphic-item':
 			return 'game-wins';
 		case 'text-graphic-item':
 		default:

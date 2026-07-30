@@ -36,8 +36,8 @@ const LAYER_KIND_OPTIONS = [
 	{ ...featureMatchOverlayGraphicItemDefinition('text'), value: 'text-graphic-item' },
 	{ ...featureMatchOverlayGraphicItemDefinition('media'), value: 'media' },
 	{ ...featureMatchOverlayGraphicItemDefinition('clock'), value: 'clock-graphic-item' },
-	{ ...featureMatchOverlayGraphicItemDefinition('player-life'), label: 'Player Life', value: 'life-graphic-item' },
-	{ ...featureMatchOverlayGraphicItemDefinition('game-wins'), label: 'Game Wins', value: 'wins-graphic-item' },
+	{ ...featureMatchOverlayGraphicItemDefinition('player-life'), label: 'Player Life', value: 'player-life-graphic-item' },
+	{ ...featureMatchOverlayGraphicItemDefinition('game-wins'), label: 'Game Wins', value: 'game-wins-graphic-item' },
 	{ ...featureMatchOverlayGraphicItemDefinition('graphic-group'), value: 'graphic-group' },
 ];
 
