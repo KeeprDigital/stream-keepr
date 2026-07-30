@@ -21,16 +21,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  */
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
 
-const SQUARE = { treatment: 'square' as const, size: 0 };
-const GEOMETRY = {
-	topLeft: SQUARE,
-	topRight: SQUARE,
-	bottomRight: SQUARE,
-	bottomLeft: SQUARE,
-	leftSlant: 0,
-	rightSlant: 0,
-};
-
 /** The most expensive Graphic Item the schema accepts, near enough. */
 function fatGraphicItem(id: string) {
 	return {
@@ -132,7 +122,7 @@ function bytes(value: unknown): number {
 	return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }
 
-type FetchFailure = { data?: { statusCode?: number; message?: string } };
+interface FetchFailure { data?: { statusCode?: number; message?: string } }
 
 async function patchConfig(path: string, body: unknown) {
 	return await $fetch(path, { method: 'PATCH', body }).then(
@@ -166,7 +156,6 @@ describe('mode configuration byte total', () => {
 		});
 		return screen.id as number;
 	}
-
 
 	it('refuses a Screen whose whole mode configuration exceeds the byte total, on create', async () => {
 		// The full-config path has always enforced this. It is asserted here so the

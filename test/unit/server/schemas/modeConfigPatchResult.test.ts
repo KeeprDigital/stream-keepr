@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
 	modeConfigPatchSchemaMap,
 	modeConfigSchemaMap,
+	modeConfigSchemasWithObjectLevelChecks,
 	modeConfigsMapSchema,
 	parseModeConfigPatchResult,
 } from '~~/server/schemas/api/screen';
@@ -16,16 +18,6 @@ import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
  * full update and not on the path the editors write through.
  */
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
-
-const SQUARE = { treatment: 'square' as const, size: 0 };
-const GEOMETRY = {
-	topLeft: SQUARE,
-	topRight: SQUARE,
-	bottomRight: SQUARE,
-	bottomLeft: SQUARE,
-	leftSlant: 0,
-	rightSlant: 0,
-};
 
 function fatGraphicItem(id: string) {
 	return {
@@ -127,10 +119,21 @@ describe('parseModeConfigPatchResult', () => {
 		// Neither write is unreasonable on its own; the accumulated configuration is
 		// what breaches the limit, which is why only the merged result can catch it.
 		const stored = { 'broadcast-graphics': { graphics: graphicsStack(200, 50) } };
+		const layout = fatOverlayLayout();
 
-		expect(bytes(stored)).toBeLessThan(MAX_MODE_CONFIGS_BYTES);
+		// Both halves measured, so it stays visible that neither alone is the problem
+		// and that the fixtures still straddle the limit if a vocabulary grows.
+		// Measured, with a narrow margin. Their sum is 546,263 bytes against a 524,288
+		// limit — a 4% overshoot, so a vocabulary change that shifted either figure
+		// materially would move the pair off the limit and be caught here rather than
+		// quietly making this test prove nothing.
+		expect(bytes(stored)).toBeGreaterThan(374_000);
+		expect(bytes(stored)).toBeLessThan(384_000);
+		expect(bytes({ layout })).toBeGreaterThan(165_000);
+		expect(bytes({ layout })).toBeLessThan(170_000);
+		expect(bytes(stored) + bytes({ layout })).toBeGreaterThan(MAX_MODE_CONFIGS_BYTES);
 
-		expect(() => parseModeConfigPatchResult(stored, 'feature-match-overlay', { layout: fatOverlayLayout() }))
+		expect(() => parseModeConfigPatchResult(stored, 'feature-match-overlay', { layout }))
 			.toThrow(/Mode configuration must not exceed/);
 	});
 
@@ -170,7 +173,12 @@ describe('parseModeConfigPatchResult', () => {
 			{ graphics: graphicsStack(20, 5) },
 		);
 
-		expect(bytes(merged)).toBeLessThan(MAX_MODE_CONFIGS_BYTES / 4);
+		// A measured figure with a stated margin, not a round envelope. A loose
+		// assertion here is exactly what let two tickets each believe they had
+		// measured the shared budget: anything under a generous ceiling passed, so a
+		// vocabulary that grew the per-item cost never showed up.
+		expect(bytes(merged)).toBeGreaterThan(38_000);
+		expect(bytes(merged)).toBeLessThan(40_000);
 		expect(merged['broadcast-graphics']).toBeDefined();
 		// Other modes are carried through untouched.
 		expect(merged.metagame).toEqual(getDefaultConfigForMode('metagame'));
@@ -219,26 +227,6 @@ describe('parseModeConfigPatchResult', () => {
 });
 
 describe('object-level rules cannot be silently unenforced', () => {
-	it('keeps every per-mode schema free of object-level checks', () => {
-		// The patch path can enforce rules on the *map* — it validates a merged result
-		// — but not rules on one mode's own object, because the stored configuration
-		// such a rule would judge is legitimately partial. So a per-mode object-level
-		// check is unenforceable here, and the schema module refuses to load with one
-		// rather than dropping it silently, which is the defect #85 reports.
-		//
-		// This asserts the same property that guard checks, so the reason is visible in
-		// a test rather than only in a module-load throw. Every current cross-field
-		// constraint deliberately lives on an array field, which survives the patch
-		// derivation — the Graphic Item caps are the worked example.
-		for (const [mode, schema] of Object.entries(modeConfigSchemaMap)) {
-			const checks = (schema as unknown as { _zod?: { def?: { checks?: unknown[] } } })
-				._zod?.def?.checks ?? [];
-
-			expect(checks, `${mode} carries an object-level check the PATCH path cannot enforce`)
-				.toHaveLength(0);
-		}
-	});
-
 	it('still derives a patch schema that enforces every field bound', () => {
 		// The division of labour the fix relies on: fields here, whole-object rules in
 		// `parseModeConfigPatchResult`. If field bounds stopped working, moving the
@@ -249,5 +237,53 @@ describe('object-level rules cannot be silently unenforced', () => {
 		expect(patch.safeParse({ graphics: [{ id: '', name: 'A', items: [] }] }).success).toBe(false);
 		expect(patch.safeParse({ graphics: null }).success).toBe(false);
 		expect(patch.safeParse({ unknownKey: 1 }).success).toBe(false);
+	});
+});
+
+describe('the object-level check detector', () => {
+	// The guard is only worth having if it catches the thing #85 reports, so this
+	// runs the issue's own reproduction against the detector rather than asserting
+	// only that today's schemas happen to be clean.
+	const plain = z.object({ topN: z.number() }).strict();
+
+	it('finds an object-level refinement, which is what the shape rebuild loses', () => {
+		const refined = plain.refine(() => false, 'never valid');
+
+		expect(modeConfigSchemasWithObjectLevelChecks({ metagame: refined })).toEqual(['metagame']);
+		// The reason it was invisible: `.refine()` returns a ZodObject, so the schema
+		// still has a `.shape` and the rebuild typechecks and reads as correct.
+		expect(refined).toBeInstanceOf(z.ZodObject);
+		expect(Object.keys(refined.shape)).toEqual(['topN']);
+	});
+
+	it('finds a superRefine and a whole-object check too, not just refine', () => {
+		expect(modeConfigSchemasWithObjectLevelChecks({
+			card: plain.superRefine(() => {}),
+		})).toEqual(['card']);
+	});
+
+	it('names every offender, so one boot failure reports them all', () => {
+		expect(modeConfigSchemasWithObjectLevelChecks({
+			card: plain.refine(() => false),
+			deck: plain,
+			metagame: plain.refine(() => false),
+		})).toEqual(['card', 'metagame']);
+	});
+
+	it('passes a schema whose constraints live on its fields', () => {
+		// The pattern every current cross-field rule uses: an array-level check, which
+		// survives the rebuild because field schemas are carried over intact.
+		const fieldLevel = z.object({
+			graphics: z.array(z.string()).refine(value => value.length < 3, 'too many'),
+		}).strict();
+
+		expect(modeConfigSchemasWithObjectLevelChecks({ 'broadcast-graphics': fieldLevel })).toEqual([]);
+	});
+
+	it('holds for every shipped mode config schema', () => {
+		// The property the module-load guard enforces. If this fails, the schema module
+		// refuses to load rather than silently dropping the rule — the failure #85 is
+		// about becomes a boot error instead of a validation bypass.
+		expect(modeConfigSchemasWithObjectLevelChecks(modeConfigSchemaMap)).toEqual([]);
 	});
 });

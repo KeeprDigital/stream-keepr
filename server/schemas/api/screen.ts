@@ -1,6 +1,6 @@
+import type { ScreenMode } from '~~/shared/types/enums';
 import type { BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, IdleModeConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
-import type { ScreenMode } from '~~/shared/types/enums';
 import { z } from 'zod';
 import { SCREEN_MODE_VALUES, screens } from '~~/server/db/schema';
 import {
@@ -928,11 +928,23 @@ const storedModeConfigsMapSchema = withModeConfigsMapRules(z.record(z.string(), 
  * rule onto a field, or to extend `parseModeConfigPatchResult` to evaluate it
  * against a defaults-completed view of that mode.
  */
-function assertNoUnenforceableModeConfigRules(): void {
-	const offenders = Object.entries(modeConfigSchemaMap)
+export function modeConfigSchemasWithObjectLevelChecks(
+	schemas: Record<string, z.ZodTypeAny>,
+): string[] {
+	// In Zod 4 `.refine()` returns a ZodObject and records the check on the schema's
+	// own definition, which is why the shape rebuild loses it while the type still
+	// looks correct. Reading the checks back is therefore the only way to see one.
+	return Object.entries(schemas)
 		.filter(([, schema]) => ((schema as unknown as { _zod?: { def?: { checks?: unknown[] } } })
-			._zod?.def?.checks?.length ?? 0) > 0)
+			._zod
+			?.def
+			?.checks
+			?.length ?? 0) > 0)
 		.map(([mode]) => mode);
+}
+
+function assertNoUnenforceableModeConfigRules(): void {
+	const offenders = modeConfigSchemasWithObjectLevelChecks(modeConfigSchemaMap);
 
 	if (offenders.length > 0) {
 		throw new Error(
