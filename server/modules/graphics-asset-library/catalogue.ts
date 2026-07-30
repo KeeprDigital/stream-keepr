@@ -8,15 +8,19 @@ import type {
 	GraphicAssetUsage,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
+	GraphicsIngestionSource,
 } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicsAssetCatalogue,
 	PublishGraphicAssetCatalogueInput,
 } from '.';
 import type { GraphicsAssetMultipartState } from './multipart';
+import type { GraphicsAssetRetentionCatalogue } from './retention';
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { GRAPHICS_RETENTION_GUARANTEES } from '~~/shared/utils/graphicsAssetRetention';
+import { createD1GraphicsAssetRetentionCatalogue } from './catalogue-retention';
 import { GraphicsAssetLibraryError } from './errors';
 import {
 	graphicsMultipartCompletedByteLength,
@@ -34,6 +38,7 @@ function stagingReservationBytes(operation: GraphicsIngestionOperation) {
 interface OperationRow {
 	id: string;
 	idempotency_key: string;
+	source: GraphicsIngestionSource;
 	initiated_by: string;
 	proposed_name: string;
 	source_file_name: string | null;
@@ -69,6 +74,7 @@ interface AssetRow {
 	event_ids: string;
 	operation_id: string;
 	idempotency_key: string;
+	source: GraphicsIngestionSource;
 	initiated_by: string;
 	proposed_name: string;
 	source_file_name: string | null;
@@ -108,6 +114,7 @@ function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 	const operation: GraphicsIngestionOperation = {
 		id: row.id as GraphicsIngestionOperationId,
 		idempotencyKey: row.idempotency_key,
+		source: row.source,
 		initiatedBy: row.initiated_by,
 		name: row.proposed_name,
 		sourceFileName: row.source_file_name ?? undefined,
@@ -138,6 +145,7 @@ function operationRowFromAsset(row: AssetRow): OperationRow {
 	return {
 		id: row.operation_id,
 		idempotency_key: row.idempotency_key,
+		source: row.source,
 		initiated_by: row.initiated_by,
 		proposed_name: row.proposed_name,
 		source_file_name: row.source_file_name,
@@ -255,7 +263,7 @@ async function classifyLifecycleTransitionMiss(
 
 function operationSelect(where: string) {
 	return `
-		SELECT id, idempotency_key, initiated_by, proposed_name,
+		SELECT id, idempotency_key, source, initiated_by, proposed_name,
 				source_file_name, declared_mime, browser_decode_evidence,
 			duplicate_content_policy, default_event_id, target_asset_id,
 			declared_byte_length, transferred_byte_length, multipart_state, stage, report, result,
@@ -289,6 +297,20 @@ async function assertContentCompatible(
 	) {
 		throw new Error('Graphic Asset Content digest conflicts with existing catalogue facts');
 	}
+}
+
+/**
+ * Publication makes its content reachable again, so it cancels any pending
+ * orphan quarantine for those digests inside the same atomic transaction.
+ */
+function releaseContentQuarantineStatement(
+	database: D1Database,
+	digests: readonly string[],
+) {
+	return database.prepare(`
+		DELETE FROM graphics_content_quarantine
+		WHERE digest IN (${digests.map(() => '?').join(', ')})
+	`).bind(...digests);
 }
 
 function updateOperationStatement(
@@ -362,8 +384,11 @@ function updateOperationStatement(
 	);
 }
 
-export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAssetCatalogue {
+export function createD1GraphicsAssetCatalogue(
+	database: D1Database,
+): GraphicsAssetCatalogue & GraphicsAssetRetentionCatalogue {
 	return {
+		...createD1GraphicsAssetRetentionCatalogue(database),
 		async checkHealth() {
 			const result = await database
 				.prepare('SELECT 1 AS healthy FROM graphic_assets LIMIT 1')
@@ -491,6 +516,11 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 							)
 								AND NOT EXISTS (
 									SELECT 1
+									FROM graphics_content_quarantine held
+									WHERE held.digest = candidates.digest
+								)
+								AND NOT EXISTS (
+									SELECT 1
 									FROM graphic_asset_contents contents
 									WHERE contents.digest = candidates.digest
 										AND (
@@ -506,6 +536,8 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 								)
 							GROUP BY candidates.digest
 						) quarantine
+					), 0) + COALESCE((
+						SELECT SUM(byte_length) FROM graphics_content_quarantine
 					), 0) AS unreachable_quarantine_bytes
 				FROM graphics_capacity_settings settings
 				WHERE settings.id = 1
@@ -636,7 +668,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			`).bind(
 				operation.id,
 				operation.idempotencyKey,
-				operation.targetAssetId ? 'replacement' : 'local-upload',
+				operation.source,
 				operation.initiatedBy,
 				operation.name,
 				operation.sourceFileName ?? null,
@@ -679,11 +711,15 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			return authoritative;
 		},
 		async recordStagedBytes(input) {
+			// This is the one point at which a complete input is durably staged,
+			// for both single-shot and multipart transfer, so it is where the
+			// transfer-completed fact is recorded.
 			const result = await database.prepare(`
 				UPDATE graphics_ingestion_operations
 				SET staging_used_byte_length = ?,
 					staging_reserved_byte_length =
-						staging_reserved_byte_length + staging_used_byte_length - ?
+						staging_reserved_byte_length + staging_used_byte_length - ?,
+					transfer_completed_at = COALESCE(transfer_completed_at, ?)
 				WHERE id = ? AND initiated_by = ?
 					AND stage NOT IN ('completed', 'cancelled')
 					AND ? BETWEEN 0
@@ -691,12 +727,47 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			`).bind(
 				input.usedBytes,
 				input.usedBytes,
+				new Date(input.recordedAt).getTime(),
 				input.operation.id,
 				input.operation.initiatedBy,
 				input.usedBytes,
 			).run();
 			if (!result.success || result.meta.changes !== 1)
 				throw new Error('Graphics staging progress could not be recorded');
+		},
+		async recordRemoteCopyStagedSource(input) {
+			const { observedByteLength } = input;
+			const residualReservation = stagingReservationBytes({
+				...input.operation,
+				declaredByteLength: observedByteLength,
+			}) - observedByteLength;
+			// This is the remote-copy equivalent of recordStagedBytes: the one point
+			// at which a complete remote input is durably staged, so it records the
+			// same transfer-completed fact. Without it the copy would read as an
+			// incomplete transfer and lose its seven-day staged-input guarantee.
+			const result = await database.prepare(`
+				UPDATE graphics_ingestion_operations
+				SET declared_byte_length = ?,
+					transferred_byte_length = ?,
+					staging_used_byte_length = ?,
+					staging_reserved_byte_length = ?,
+					transfer_completed_at = COALESCE(transfer_completed_at, ?)
+				WHERE id = ? AND initiated_by = ?
+					AND source = 'remote-copy'
+					AND stage NOT IN ('completed', 'cancelled')
+					AND ? <= staging_reserved_byte_length + staging_used_byte_length
+			`).bind(
+				observedByteLength,
+				observedByteLength,
+				observedByteLength,
+				residualReservation,
+				new Date(input.recordedAt).getTime(),
+				input.operation.id,
+				input.operation.initiatedBy,
+				observedByteLength + residualReservation,
+			).run();
+			if (!result.success || result.meta.changes !== 1)
+				throw new Error('Remote Graphic Asset copy progress could not be recorded');
 		},
 		async recordCanonicalWrites(input) {
 			if (input.contents.length === 0)
@@ -1162,6 +1233,40 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					input.targetAssetId,
 					input.revisionId,
 				),
+				// Supersession is the exact instant an unreferenced revision's
+				// 90-day recovery window starts, so the deadline is authored here
+				// rather than drifting to whenever a sweep first observes it.
+				database.prepare(`
+					INSERT OR IGNORE INTO graphic_asset_revision_retention (
+						revision_id, unreferenced_since, prune_after,
+						frozen_at, frozen_remaining_milliseconds, created_at
+					)
+					SELECT superseded.id, ?, ?, NULL, NULL, ?
+					FROM graphic_asset_revisions superseded
+					WHERE superseded.asset_id = ?
+						AND EXISTS (
+							SELECT 1 FROM graphic_asset_revisions created WHERE created.id = ?
+						)
+						AND superseded.revision_number < (
+							SELECT MAX(latest.revision_number)
+							FROM graphic_asset_revisions latest
+							WHERE latest.asset_id = superseded.asset_id
+						)
+						AND NOT EXISTS (
+							SELECT 1 FROM graphic_asset_references reference
+							WHERE reference.revision_id = superseded.id
+						)
+				`).bind(
+					publishedAt,
+					publishedAt + GRAPHICS_RETENTION_GUARANTEES.supersededRevisionMilliseconds,
+					publishedAt,
+					input.targetAssetId,
+					input.revisionId,
+				),
+				releaseContentQuarantineStatement(database, [
+					input.sourceDigest,
+					input.thumbnailDigest,
+				]),
 				database.prepare(`
 					DELETE FROM graphics_canonical_write_candidates WHERE operation_id = ?
 				`).bind(input.operation.id),
@@ -1218,7 +1323,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			]);
 			if (
 				results.some(result => !result.success)
-				|| results[6]?.meta.changes !== 1
+				|| results.at(-1)?.meta.changes !== 1
 			) {
 				throw new Error('Graphic Asset replacement publication transaction failed');
 			}
@@ -1281,6 +1386,9 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 						WHERE id = ? AND initiated_by = ? AND stage = 'publishing'
 							AND updated_at = ?
 					)
+						AND NOT EXISTS (
+							SELECT 1 FROM graphic_asset_tombstones WHERE asset_id = ?
+						)
 						AND (
 							? = 'create-separate'
 							OR NOT EXISTS (
@@ -1301,6 +1409,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					input.operation.id,
 					input.operation.initiatedBy,
 					new Date(input.operation.updatedAt).getTime(),
+					input.assetId,
 					input.operation.duplicateContentPolicy,
 					input.sourceDigest,
 				),
@@ -1342,6 +1451,10 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 							input.operation.defaultEventId,
 							new Date(input.publishedAt).getTime(),
 						)]),
+				releaseContentQuarantineStatement(database, [
+					input.sourceDigest,
+					input.thumbnailDigest,
+				]),
 				database.prepare(`
 					DELETE FROM graphics_canonical_write_candidates WHERE operation_id = ?
 				`).bind(input.operation.id),
@@ -1383,7 +1496,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 							ORDER BY event_id
 						)
 					), '[]') AS event_ids,
-						o.id AS operation_id, o.idempotency_key, o.initiated_by,
+						o.id AS operation_id, o.idempotency_key, o.source, o.initiated_by,
 						o.proposed_name, o.source_file_name, o.declared_mime,
 						o.browser_decode_evidence, o.target_asset_id,
 					o.duplicate_content_policy,
@@ -1437,7 +1550,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			return await classifyLifecycleTransitionMiss(database, input.assetId);
 		},
 		async trashGraphicAsset(input) {
-			const [transition, usage] = await database.batch([
+			const [transition, , usage] = await database.batch([
 				database.prepare(`
 					UPDATE graphic_assets
 					SET trash_prior_state = lifecycle_state, lifecycle_state = 'trashed',
@@ -1453,6 +1566,26 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					new Date(input.recoverableUntil).getTime(),
 					new Date(input.trashedAt).getTime(),
 					input.assetId,
+				),
+				// Trash freezes revision pruning for the complete recovery window by
+				// banking the remaining time instead of letting the deadline run.
+				database.prepare(`
+					UPDATE graphic_asset_revision_retention
+					SET frozen_at = ?, frozen_remaining_milliseconds = MAX(0, prune_after - ?)
+					WHERE frozen_at IS NULL
+						AND revision_id IN (
+							SELECT id FROM graphic_asset_revisions WHERE asset_id = ?
+						)
+						AND EXISTS (
+							SELECT 1 FROM graphic_assets
+							WHERE id = ? AND lifecycle_state = 'trashed' AND trashed_at = ?
+						)
+				`).bind(
+					new Date(input.trashedAt).getTime(),
+					new Date(input.trashedAt).getTime(),
+					input.assetId,
+					input.assetId,
+					new Date(input.trashedAt).getTime(),
 				),
 				database.prepare(usageSelect()).bind(input.assetId),
 			]);
@@ -1473,25 +1606,42 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 		},
 		async restoreGraphicAsset(input) {
 			const restoredAt = new Date(input.restoredAt).getTime();
-			const result = await database.prepare(`
-				UPDATE graphic_assets
-				SET lifecycle_state = CASE
-						WHEN lifecycle_state = 'retired' THEN 'active'
-						ELSE trash_prior_state
-					END,
-					trash_prior_state = NULL, trashed_at = NULL,
-					trash_recoverable_until = NULL, updated_at = ?
-				WHERE id = ?
-					AND (
-						lifecycle_state = 'retired'
-						OR (
-							lifecycle_state = 'trashed'
-							AND trash_prior_state IN ('active', 'retired')
-							AND trash_recoverable_until >= ?
+			const [result] = await database.batch([
+				database.prepare(`
+					UPDATE graphic_assets
+					SET lifecycle_state = CASE
+							WHEN lifecycle_state = 'retired' THEN 'active'
+							ELSE trash_prior_state
+						END,
+						trash_prior_state = NULL, trashed_at = NULL,
+						trash_recoverable_until = NULL, updated_at = ?
+					WHERE id = ?
+						AND (
+							lifecycle_state = 'retired'
+							OR (
+								lifecycle_state = 'trashed'
+								AND trash_prior_state IN ('active', 'retired')
+								AND trash_recoverable_until >= ?
+							)
 						)
-					)
-			`).bind(restoredAt, input.assetId, restoredAt).run();
-			if (!result.success)
+				`).bind(restoredAt, input.assetId, restoredAt),
+				// Restoration resumes the banked recovery time rather than
+				// restarting the guarantee from scratch.
+				database.prepare(`
+					UPDATE graphic_asset_revision_retention
+					SET prune_after = ? + COALESCE(frozen_remaining_milliseconds, 0),
+						frozen_at = NULL, frozen_remaining_milliseconds = NULL
+					WHERE frozen_at IS NOT NULL
+						AND revision_id IN (
+							SELECT id FROM graphic_asset_revisions WHERE asset_id = ?
+						)
+						AND EXISTS (
+							SELECT 1 FROM graphic_assets
+							WHERE id = ? AND lifecycle_state <> 'trashed' AND updated_at = ?
+						)
+				`).bind(restoredAt, input.assetId, input.assetId, restoredAt),
+			]);
+			if (!result?.success)
 				throw new Error('Graphic Asset restoration failed');
 			if (result.meta.changes === 1) {
 				const asset = await readLifecycleTransitionAsset(
