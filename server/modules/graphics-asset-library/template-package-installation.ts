@@ -32,11 +32,21 @@ export function installedGraphicsTemplateKind(
 /** The owner slot a reference at the document root would occupy. */
 const DOCUMENT_ROOT_SLOT = '$';
 
+/**
+ * The one key a packaged source identity and revision are matched by.
+ *
+ * Both halves are identifiers a sender chose, so a separator alone cannot
+ * distinguish them: joining `"a b"` and `"c"` with a space produces the same key
+ * as `"a"` and `"b c"`. Two unrelated packaged assets colliding on one key is
+ * how a Template ends up pointing at the wrong local revision, so this is
+ * unambiguous by construction rather than by an assumption about what a sender's
+ * identifiers may contain.
+ */
 export function packagedOriginKey(input: {
 	sourceAssetId: string;
 	sourceRevisionId: string;
 }): string {
-	return `${input.sourceAssetId} ${input.sourceRevisionId}`;
+	return JSON.stringify([input.sourceAssetId, input.sourceRevisionId]);
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

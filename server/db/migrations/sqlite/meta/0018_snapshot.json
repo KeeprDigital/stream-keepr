@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f8482a92-e79c-41f3-a43a-d4e39d2bd687",
+  "id": "3bfd0fe4-8c18-4ab0-a16c-f47c1a728d1c",
   "prevId": "5b9f4434-a7d3-4df4-b042-b42f4fdb5e6e",
   "tables": {
     "archetype_cards": {
@@ -3323,19 +3323,6 @@
         }
       },
       "foreignKeys": {
-        "installed_graphics_templates_installed_by_operation_id_graphics_ingestion_operations_id_fk": {
-          "name": "installed_graphics_templates_installed_by_operation_id_graphics_ingestion_operations_id_fk",
-          "tableFrom": "installed_graphics_templates",
-          "tableTo": "graphics_ingestion_operations",
-          "columnsFrom": [
-            "installed_by_operation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "installed_graphics_templates_event_id_events_id_fk": {
           "name": "installed_graphics_templates_event_id_events_id_fk",
           "tableFrom": "installed_graphics_templates",

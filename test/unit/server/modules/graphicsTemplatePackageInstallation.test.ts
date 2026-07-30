@@ -1,3 +1,4 @@
+import type { GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library';
 import type {
 	GraphicAsset,
 	GraphicAssetReference,
@@ -54,13 +55,28 @@ function digestOf(bytes: Uint8Array) {
 	return createHash('sha256').update(bytes).digest('hex');
 }
 
-function createLibrary(label: string, options: { canonicalLimitBytes?: number } = {}) {
+/**
+ * Overrides one catalogue method for one call, so a failure the catalogue can
+ * genuinely produce — a lost reservation, a transaction that does not commit —
+ * can be observed at the public seam without contriving the race that causes it.
+ */
+type CatalogueFault = Partial<GraphicsAssetCatalogue>;
+
+function createLibrary(
+	label: string,
+	options: { canonicalLimitBytes?: number; fault?: () => CatalogueFault } = {},
+) {
 	let nextIdentity = 0;
 	const canonical = createInMemoryCanonicalGraphicsObjectStore();
 	const staging = createInMemoryStagingGraphicsObjectStore();
 	const catalogue = createInMemoryGraphicsAssetCatalogue(options);
 	const library = createGraphicsAssetLibrary({
-		catalogue,
+		catalogue: new Proxy(catalogue, {
+			get(target, property, receiver) {
+				const override = options.fault?.()[property as keyof GraphicsAssetCatalogue];
+				return override ?? Reflect.get(target, property, receiver);
+			},
+		}),
 		staging,
 		canonical,
 		now: () => new Date('2026-07-31T09:00:00.000Z'),
@@ -692,6 +708,15 @@ describe('the Template Package installation contract', () => {
 			});
 			expect(refused.templatePackageInstallation).toBeUndefined();
 			expect(await activeAssets(library)).toEqual([]);
+			// The report names the asset and what to do about it, rather than
+			// leaving the author to infer either from a failed transaction.
+			expect(refused.templatePackagePreflight!.issues).toContainEqual(
+				expect.objectContaining({
+					code: 'graphic-asset-origin-not-referenceable',
+					severity: 'error',
+					retryable: true,
+				}),
+			);
 
 			// Restoring what the proposal needs makes the same installation work.
 			await library.restoreGraphicAsset({ assetId: backdrop.assetId });
@@ -860,6 +885,108 @@ describe('the Template Package installation contract', () => {
 			expect(await activeAssets(receiver)).toHaveLength(1);
 		});
 
+		it('publishes nothing when capacity runs out between confirmation and publication', async () => {
+			const { library: sender } = createLibrary('sender');
+			const backdrop = await ingestImage(sender, 'Backdrop');
+			const archive = await exportPackage(sender, {
+				assets: [{ slot: 'backdrop', reference: backdrop }],
+			});
+
+			// The report was computed against a library with room. The reservation
+			// installation takes for itself is the last check before bytes become
+			// permanent, and it is the one that has to hold.
+			let exhausted = false;
+			const { library: receiver } = createLibrary('receiver', {
+				fault: () => exhausted
+					? {
+							reserveTemplatePackagePublication: async () => ({
+								outcome: 'blocked',
+								capacity: {
+									resource: 'canonical',
+									limitBytes: 1_000,
+									usedBytes: 1_000,
+									reservedBytes: 0,
+									requestedBytes: 70,
+									availableBytes: 0,
+								},
+							}),
+						}
+					: {},
+			});
+			const resting = await preflight(receiver, archive);
+			expect(resting.stage).toBe('awaiting-installation');
+			exhausted = true;
+
+			const failed = await receiver.installTemplatePackage({
+				operationId: resting.id,
+				initiatedBy: resting.initiatedBy,
+			});
+
+			expect(failed.stage).toBe('failed');
+			expect(failed.failure).toMatchObject({
+				code: 'canonical-capacity-exhausted',
+				retryable: true,
+			});
+			expect(failed.canonicalCapacityOutcome)
+				.toMatchObject({ outcome: 'canonical-capacity-blocked' });
+			expect(await activeAssets(receiver)).toEqual([]);
+			expect(failed.templatePackageInstallation).toBeUndefined();
+
+			// With room again, the same staged package installs.
+			exhausted = false;
+			const completed = await receiver.installTemplatePackage({
+				operationId: resting.id,
+				initiatedBy: resting.initiatedBy,
+			});
+			expect(completed.stage).toBe('completed');
+			expect(await activeAssets(receiver)).toHaveLength(1);
+		});
+
+		it('publishes nothing when the publication transaction itself fails', async () => {
+			const { library: sender } = createLibrary('sender');
+			const backdrop = await ingestImage(sender, 'Backdrop');
+			const archive = await exportPackage(sender, {
+				assets: [{ slot: 'backdrop', reference: backdrop }],
+			});
+
+			let catalogueFails = false;
+			const { library: receiver } = createLibrary('receiver', {
+				fault: () => catalogueFails
+					? {
+							installTemplatePackage: async () => {
+								throw new Error('D1 is unavailable');
+							},
+						}
+					: {},
+			});
+			const resting = await preflight(receiver, archive);
+			catalogueFails = true;
+
+			const failed = await receiver.installTemplatePackage({
+				operationId: resting.id,
+				initiatedBy: resting.initiatedBy,
+			});
+
+			// The bytes were written and verified before this point, but nothing
+			// they belong to exists, so the library is exactly as it was.
+			expect(failed.stage).toBe('failed');
+			expect(failed.failure?.retryable).toBe(true);
+			expect(failed.templatePackageInstallation).toBeUndefined();
+			expect(await activeAssets(receiver)).toEqual([]);
+			await expect(receiver.inspectInstalledGraphicsTemplate({
+				templateId: 'receiver-identity-1' as never,
+			})).rejects.toMatchObject({ code: 'ingestion-operation-not-found' });
+
+			// A retry over the same durable staged bytes publishes once.
+			catalogueFails = false;
+			const completed = await receiver.installTemplatePackage({
+				operationId: resting.id,
+				initiatedBy: resting.initiatedBy,
+			});
+			expect(completed.stage).toBe('completed');
+			expect(await activeAssets(receiver)).toHaveLength(1);
+		});
+
 		it('publishes nothing when installing would exceed canonical capacity', async () => {
 			const { library: sender } = createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
@@ -939,7 +1066,75 @@ describe('the Template Package installation contract', () => {
 			})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
 		});
 
-		it('never lets a later local revision inherit an imported revision\'s origin', async () => {
+		it('refuses to reuse an exact origin whose asset can no longer take references', async () => {
+			const { library } = createLibrary('sender');
+			const backdrop = await ingestImage(library, 'Backdrop');
+			const archive = await exportPackage(library, {
+				assets: [{ slot: 'backdrop', reference: backdrop }],
+			});
+			// Retirement hides an asset from discovery and stops it taking new
+			// references, so a proposal to reuse it could never be installed.
+			await library.retireGraphicAsset({ assetId: backdrop.assetId });
+
+			const operation = await preflight(library, archive);
+
+			expect(operation.stage).toBe('failed');
+			expect(operation.templatePackagePreflight!.outcome).toBe('rejected');
+			expect(operation.templatePackagePreflight!.issues).toContainEqual(
+				expect.objectContaining({
+					code: 'graphic-asset-origin-not-referenceable',
+					subject: 'packaged-asset-0001',
+					severity: 'error',
+					// Restoring the asset is the fix, so the operation stays
+					// resumable rather than terminating on a condition an author
+					// can undo.
+					retryable: true,
+				}),
+			);
+			expect(operation.failure).toMatchObject({ retryable: true });
+
+			// Restoring it makes the same staged package installable.
+			await library.restoreGraphicAsset({ assetId: backdrop.assetId });
+			const completed = await library.installTemplatePackage({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+			});
+			expect(completed.stage).toBe('completed');
+			expect(installationOf(completed).assets[0]).toMatchObject({
+				outcome: 'reused',
+				assetId: backdrop.assetId,
+			});
+		});
+
+		it('rejects a package whose packaged identities claim one source revision', async () => {
+			const { library: sender } = createLibrary('sender');
+			const backdrop = await ingestImage(sender, 'Backdrop');
+			const badge = await ingestImage(sender, 'Badge', webpPixel, 'image/webp');
+			const parts = readTemplatePackageParts(await exportPackage(sender, {
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+					{ slot: 'badge', reference: badge },
+				],
+			}));
+			// Two packaged identities, one provenance. Neither can be mapped: a
+			// Template field naming that origin has two candidate local revisions,
+			// and only one origin row can record it.
+			const [first, second] = parts.manifest.packagedAssets;
+			parts.manifest.packagedAssets = [
+				first!,
+				{ ...second!, origin: { ...second!.origin, ...first!.origin, digest: second!.origin.digest } },
+			];
+
+			const { library: receiver } = createLibrary('receiver');
+			const operation = await preflight(receiver, writeTemplatePackage(parts));
+
+			expect(operation.stage).toBe('failed');
+			expect(operation.templatePackagePreflight!.issues.map(issue => issue.code))
+				.toContain('duplicate-packaged-origin');
+			expect(await activeAssets(receiver)).toEqual([]);
+		});
+
+		it('never lets a later local revision inherit the origin of a revision it installed', async () => {
 			const { library: sender } = createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {

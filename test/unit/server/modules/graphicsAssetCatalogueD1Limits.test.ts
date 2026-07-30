@@ -1,7 +1,17 @@
+import type { GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library';
+import type { GraphicAssetImageFacts } from '~~/shared/types/graphicsAsset';
 import type { MiniflareD1Harness } from '~~/test/helpers/miniflare-d1';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+	graphicAssetId,
+	graphicAssetRevisionId,
+	graphicsDerivativeId,
+	graphicsIngestionOperationId,
+	installedGraphicsTemplateId,
+} from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import { D1_MAXIMUM_BOUND_PARAMETERS } from '~~/server/modules/graphics-asset-library/catalogue-sql';
+import { TEMPLATE_PACKAGE_LIMITS } from '~~/shared/types/templatePackage';
 import { createMiniflareD1Harness } from '~~/test/helpers/miniflare-d1';
 
 /**
@@ -98,34 +108,32 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 	 * rather than inferring.
 	 */
 	describe('a Template Package installation at the settled revision limit', () => {
-		const PACKAGED_REVISION_LIMIT = 100;
+		const PACKAGED_REVISION_LIMIT = TEMPLATE_PACKAGE_LIMITS.maximumPackagedRevisionCount;
 
 		function identity(prefix: string, index: number) {
 			return `${prefix}-${`${index}`.padStart(4, '0')}`;
 		}
 
-		async function seedOperation(operationId: string, updatedAt: number) {
-			await harness.database.prepare(`
-				INSERT INTO graphics_ingestion_operations (
-					id, idempotency_key, source, stage, initiated_by, proposed_name,
-					duplicate_content_policy, declared_byte_length, transferred_byte_length,
-					created_at, updated_at
-				) VALUES (?, ?, 'template-package', 'publishing', 'installer', 'Package',
-					'create-separate', 1, 1, ?, ?)
-			`).bind(operationId, operationId, updatedAt, updatedAt).run();
-			return {
-				id: operationId as never,
-				idempotencyKey: operationId,
-				source: 'template-package' as const,
+		/** Drives an operation to the stage a publication commits against. */
+		async function claimedOperation(catalogue: GraphicsAssetCatalogue, key: string) {
+			const created = await catalogue.initiateGraphicsIngestion({
+				id: graphicsIngestionOperationId(key),
+				idempotencyKey: key,
+				source: 'template-package',
 				initiatedBy: 'installer',
-				name: 'Package',
-				duplicateContentPolicy: 'create-separate' as const,
-				declaredByteLength: 1,
-				transferredByteLength: 1,
-				stage: 'publishing' as const,
-				createdAt: new Date(updatedAt).toISOString(),
-				updatedAt: new Date(updatedAt).toISOString(),
-			};
+				name: 'Large package',
+				sourceFileName: 'large.skgraphic',
+				duplicateContentPolicy: 'create-separate',
+				declaredByteLength: 1_024,
+				transferredByteLength: 1_024,
+				stage: 'created',
+				createdAt: new Date(1_000).toISOString(),
+				updatedAt: new Date(1_000).toISOString(),
+			});
+			return await catalogue.updateIngestionOperation(
+				{ ...created, stage: 'publishing', updatedAt: new Date(2_000).toISOString() },
+				created.updatedAt,
+			);
 		}
 
 		function createdAsset(index: number) {
@@ -134,22 +142,37 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 			return {
 				packagedId: identity('packaged', index),
 				basis: 'new-content' as const,
-				assetId: identity('asset', index) as never,
-				revisionId: identity('revision', index) as never,
-				derivativeId: identity('derivative', index) as never,
+				assetId: graphicAssetId(identity('asset', index)),
+				revisionId: graphicAssetRevisionId(identity('revision', index)),
+				derivativeId: graphicsDerivativeId(identity('derivative', index)),
 				name: `Asset ${index}`,
 				kind: 'image' as const,
 				sourceDigest,
 				sourceByteLength: 70,
 				canonicalMime: 'image/png' as const,
 				compatibilityProfile: 'still-image-v1',
-				facts: { kind: 'image', sha256: sourceDigest, byteLength: 70 } as never,
+				facts: {
+					kind: 'image',
+					format: 'png',
+					canonicalMime: 'image/png',
+					byteLength: 70,
+					sha256: sourceDigest,
+					width: 1,
+					height: 1,
+					pixelCount: 1,
+					frameCount: 1,
+					bitDepth: 8,
+					colorSpace: 'srgb',
+					colorModel: 'rgba',
+					hasAlpha: true,
+					orientation: 'normal',
+				} satisfies GraphicAssetImageFacts,
 				derivativeKind: 'thumbnail' as const,
 				thumbnailDigest,
 				thumbnailByteLength: 90,
 				origin: {
-					sourceAssetId: identity('source-asset', index) as never,
-					sourceRevisionId: identity('source-revision', index) as never,
+					sourceAssetId: graphicAssetId(identity('source-asset', index)),
+					sourceRevisionId: graphicAssetRevisionId(identity('source-revision', index)),
 					sourceRevisionNumber: 1,
 					digest: sourceDigest,
 				},
@@ -158,14 +181,17 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 
 		it('publishes a hundred created identities and their references at once', async () => {
 			const catalogue = createD1GraphicsAssetCatalogue(harness.database);
-			const operation = await seedOperation('operation-created', 1_000);
-			const created = Array.from({ length: PACKAGED_REVISION_LIMIT }, (_, index) =>
-				createdAsset(index));
+			const operation = await claimedOperation(catalogue, 'install-created');
+			const created = Array.from(
+				{ length: PACKAGED_REVISION_LIMIT },
+				(_, index) => createdAsset(index),
+			);
+			const templateId = installedGraphicsTemplateId('template-created');
 
 			const completed = await catalogue.installTemplatePackage({
 				operation,
 				template: {
-					id: 'template-created' as never,
+					id: templateId,
 					kind: 'broadcast-graphic',
 					name: 'Big package',
 					document: { installed: true },
@@ -179,32 +205,50 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 					assetId: asset.assetId,
 					revisionId: asset.revisionId,
 				})),
-				publishedAt: new Date(2_000).toISOString(),
+				publishedAt: new Date(3_000).toISOString(),
 			});
 
+			// The batch reports what it wrote, so a statement silently writing
+			// fewer rows than the package has revisions would have thrown by now.
 			expect(completed.stage).toBe('completed');
-			const template = await catalogue.findInstalledGraphicsTemplate('template-created' as never);
+			expect(completed.templatePackageInstallation?.assets)
+				.toHaveLength(PACKAGED_REVISION_LIMIT);
+			const template = await catalogue.findInstalledGraphicsTemplate(templateId);
 			expect(template?.references).toHaveLength(PACKAGED_REVISION_LIMIT);
+			// Every identity is discoverable, which is only true if every asset,
+			// revision, and derivative row landed.
+			const assets = await catalogue.listGraphicAssets('', ['active']);
+			expect(assets).toHaveLength(PACKAGED_REVISION_LIMIT);
+			expect(assets.every(asset => asset.operation.id === operation.id)).toBe(true);
+			expect(assets.every(asset => asset.revisionId.startsWith('revision-'))).toBe(true);
+			// And every one of them is pinned, so none could enter Trash.
+			const usage = await catalogue.listGraphicAssetUsage(assets[0]!.id);
+			expect(usage).toHaveLength(1);
+			expect(usage[0]?.owner).toMatchObject({
+				kind: 'installed-graphics-template',
+				name: 'Big package',
+			});
 		});
 
 		it('publishes a hundred exact-origin reuses at once', async () => {
 			const catalogue = createD1GraphicsAssetCatalogue(harness.database);
 			// The reused identities are the ones the previous installation created,
 			// so the guard's own lists are as long as a package can make them.
-			const operation = await seedOperation('operation-reused', 3_000);
+			const operation = await claimedOperation(catalogue, 'install-reused');
 			const reused = Array.from({ length: PACKAGED_REVISION_LIMIT }, (_, index) => ({
 				packagedId: identity('packaged', index),
-				assetId: identity('asset', index) as never,
-				revisionId: identity('revision', index) as never,
+				assetId: graphicAssetId(identity('asset', index)),
+				revisionId: graphicAssetRevisionId(identity('revision', index)),
 				name: `Asset ${index}`,
 				kind: 'image' as const,
 				compatibilityProfile: 'still-image-v1',
 			}));
+			const templateId = installedGraphicsTemplateId('template-reused');
 
 			const completed = await catalogue.installTemplatePackage({
 				operation,
 				template: {
-					id: 'template-reused' as never,
+					id: templateId,
 					kind: 'broadcast-graphic',
 					name: 'Big package again',
 					document: { installed: true },
@@ -222,8 +266,13 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 			});
 
 			expect(completed.stage).toBe('completed');
-			const template = await catalogue.findInstalledGraphicsTemplate('template-reused' as never);
+			const template = await catalogue.findInstalledGraphicsTemplate(templateId);
 			expect(template?.references).toHaveLength(PACKAGED_REVISION_LIMIT);
+			// Reuse created nothing, and left the assets describing their own
+			// origin operation rather than this package.
+			const assets = await catalogue.listGraphicAssets('', ['active']);
+			expect(assets).toHaveLength(PACKAGED_REVISION_LIMIT);
+			expect(assets.every(asset => asset.operation.id === 'install-created')).toBe(true);
 		});
 	});
 });

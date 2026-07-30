@@ -269,6 +269,28 @@ describe('template Package installation through the API boundary', () => {
 		expect(reused.name).toBe(before.name);
 		expect(reused.revisions).toEqual(before.revisions);
 		expect(after).toHaveLength(existing.length);
+		// And it kept describing itself by the upload that produced it. An
+		// installation that only referenced this asset published nothing, so it
+		// must not become the operation the library reports as its provenance:
+		// that is how an uploaded asset ends up presenting the archive's filename
+		// with no validation report behind it.
+		expect(reused.operation.id).toBe(before.operation.id);
+		expect(reused.operation.source).toBe('local-upload');
+		expect(reused.operation.sourceFileName).toBe(before.operation.sourceFileName);
+		expect(reused.operation.report?.outcome).toBe('accepted');
+		expect(reused.operation.report?.compatibilityProfile).toBe('still-image-v1');
+
+		// Usage names the Template that pins it, which is what an author needs
+		// before retiring or trashing anything.
+		const usage = await $fetch<GraphicAssetUsage[]>(
+			`/api/graphics-assets/${reference.assetId}/usage`,
+		);
+		expect(usage).toContainEqual(expect.objectContaining({
+			owner: expect.objectContaining({
+				kind: 'installed-graphics-template',
+				name: 'Installation Overlay',
+			}),
+		}));
 
 		const template = await $fetch<InstalledGraphicsTemplate>(
 			`/api/graphics-assets/installed-templates/${installation.templateId}`,

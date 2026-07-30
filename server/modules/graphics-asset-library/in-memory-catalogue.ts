@@ -27,7 +27,11 @@ import {
 	graphicsMultipartCompletedByteLength,
 	graphicsMultipartTransfer,
 } from './multipart';
-import { completedGraphicAssetReplacementOperation } from './operation';
+import {
+	completedGraphicAssetReplacementOperation,
+	INSTALLED_GRAPHICS_TEMPLATE_FIRST_REVISION,
+	templatePackageInstallationResult,
+} from './operation';
 
 function stagingReservationBytes(operation: GraphicsIngestionOperation) {
 	return operation.declaredByteLength
@@ -485,6 +489,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 							},
 							digest: exactMatch.revision.facts.sha256,
 							name: exactAsset.name,
+							lifecycleState: exactAsset.lifecycle.state,
 						}
 					: undefined,
 				relatedRevisionExists,
@@ -537,14 +542,18 @@ export function createInMemoryGraphicsAssetCatalogue(
 		},
 		async installTemplatePackage(input) {
 			const existing = operations.get(input.operation.id);
-			if (!existing)
-				throw new Error('Graphics Ingestion Operation not found');
-			if (existing.stage === 'cancelled' || existing.stage === 'completed')
-				return cloneOperation(existing);
-			if (existing.stage !== 'publishing')
-				throw new Error('Graphics Ingestion Operation is not ready to publish');
-			if (existing.updatedAt !== input.operation.updatedAt)
-				throw new Error('Graphics Ingestion Operation publication lost its claim');
+			// The D1 batch guards every statement on the operation still being the
+			// claimed one, and refuses rather than answering when it is not — so a
+			// cancellation or a completed installation that arrived first raises
+			// here too. The caller re-reads the authoritative operation and reports
+			// what actually happened to it.
+			if (
+				!existing
+				|| existing.stage !== 'publishing'
+				|| existing.updatedAt !== input.operation.updatedAt
+			) {
+				throw new Error('Template Package installation lost its claim before publishing');
+			}
 			// The same single condition the D1 batch commits against: an exact-origin
 			// reuse whose asset or revision moved underneath this installation
 			// publishes nothing at all rather than pinning a reference the library no
@@ -640,7 +649,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 				id: input.template.id,
 				kind: input.template.kind,
 				name: input.template.name,
-				revisionNumber: 1,
+				revisionNumber: INSTALLED_GRAPHICS_TEMPLATE_FIRST_REVISION,
 				document: structuredClone(input.template.document),
 				sourceTemplateIdentity: input.template.sourceTemplateIdentity,
 				installedByOperationId: input.operation.id,
@@ -653,7 +662,10 @@ export function createInMemoryGraphicsAssetCatalogue(
 							revisionId: reference.revisionId,
 						},
 					}))
-					.sort((left, right) => left.ownerSlot.localeCompare(right.ownerSlot)),
+					// Code-point order, which is what the catalogue's own ORDER BY
+					// gives; a locale-aware comparison would order these differently
+					// from the database this double stands in for.
+					.sort((left, right) => (left.ownerSlot < right.ownerSlot ? -1 : left.ownerSlot > right.ownerSlot ? 1 : 0)),
 				installedAt: publishedAt,
 			});
 
@@ -661,33 +673,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 				...input.operation,
 				stage: 'completed',
 				failure: undefined,
-				templatePackageInstallation: {
-					templateId: input.template.id,
-					templateKind: input.template.kind,
-					templateName: input.template.name,
-					assets: [
-						...input.created.map(asset => ({
-							packagedId: asset.packagedId,
-							outcome: 'created' as const,
-							basis: asset.basis,
-							assetId: asset.assetId,
-							revisionId: asset.revisionId,
-							name: asset.name,
-							kind: asset.kind,
-							compatibilityProfile: asset.compatibilityProfile,
-						})),
-						...input.reused.map(asset => ({
-							packagedId: asset.packagedId,
-							outcome: 'reused' as const,
-							basis: 'exact-origin' as const,
-							assetId: asset.assetId,
-							revisionId: asset.revisionId,
-							name: asset.name,
-							kind: asset.kind,
-							compatibilityProfile: asset.compatibilityProfile,
-						})),
-					].sort((left, right) => left.packagedId.localeCompare(right.packagedId)),
-				},
+				templatePackageInstallation: templatePackageInstallationResult(input),
 				updatedAt: publishedAt,
 			};
 			operations.set(completed.id, cloneOperation(completed));

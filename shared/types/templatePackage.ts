@@ -255,6 +255,8 @@ export const TEMPLATE_PACKAGE_PREFLIGHT_ERROR_CODES = [
 	'incompatible-graphic-asset-content',
 	'derivative-generation-failed',
 	'immutable-origin-digest-conflict',
+	'duplicate-packaged-origin',
+	'graphic-asset-origin-not-referenceable',
 	'canonical-capacity-blocked',
 ] as const;
 

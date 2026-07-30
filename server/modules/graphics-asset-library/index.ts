@@ -144,6 +144,7 @@ import {
 } from './template-package-archive';
 import {
 	installedGraphicsTemplateKind,
+	packagedOriginKey,
 	rewriteTemplateDocumentReferences,
 	templatePackageLocalReferences,
 } from './template-package-installation';
@@ -433,21 +434,23 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	}) => Promise<
 		| { outcome: 'reserved'; operation: GraphicsIngestionOperation }
 		| { outcome: 'blocked'; capacity: GraphicsCapacityExhaustedDetails }
+		/** Another attempt took the operation; this one has nothing left to reserve for. */
+		| { outcome: 'lost-claim' }
 	>;
 	/**
 	 * Publishes one complete Template Package installation.
 	 *
 	 * Every new Graphic Asset, revision, Graphic Asset Origin, derivative, Event
-	 * association, rewritten Graphic Asset Reference, the imported Template, and
-	 * the terminal operation result commit together or not at all. Reusing an
-	 * exact origin writes nothing to the local asset it reuses beyond the Event
-	 * association an Event-scoped installation adds.
+	 * association, rewritten Graphic Asset Reference, the Installed Graphics
+	 * Template, and the terminal operation result commit together or not at all.
+	 * Reusing an exact origin writes nothing to the local asset it reuses beyond
+	 * the Event association an Event-scoped installation adds.
 	 */
 	installTemplatePackage: (
 		input: InstallTemplatePackageCatalogueInput,
 	) => Promise<GraphicsIngestionOperation>;
 	/**
-	 * One installed graphics Template and the exact revisions its references pin.
+	 * One Installed Graphics Template and the exact revisions its references pin.
 	 */
 	findInstalledGraphicsTemplate: (
 		templateId: InstalledGraphicsTemplateId,
@@ -465,6 +468,7 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 			reference: GraphicAssetReference;
 			digest: string;
 			name: string;
+			lifecycleState: GraphicAssetLifecycleState;
 		};
 		relatedRevisionExists: boolean;
 	}>;
@@ -655,7 +659,7 @@ export interface GraphicsAssetLibrary {
 		initiatedBy: string;
 	}) => Promise<GraphicsIngestionOperation>;
 	/**
-	 * One installed graphics Template: its independent local document, and the
+	 * One Installed Graphics Template: its independent local document, and the
 	 * exact local revisions its rewritten references pin.
 	 */
 	inspectInstalledGraphicsTemplate: (input: {
@@ -948,7 +952,7 @@ export function graphicsIngestionOperationId(value: string): GraphicsIngestionOp
 }
 
 export function installedGraphicsTemplateId(value: string): InstalledGraphicsTemplateId {
-	return requiredIdentity<InstalledGraphicsTemplateId>(value, 'installed graphics Template identity');
+	return requiredIdentity<InstalledGraphicsTemplateId>(value, 'Installed Graphics Template identity');
 }
 
 export function graphicsMultipartPartByteLength(
@@ -2348,8 +2352,11 @@ export function createGraphicsAssetLibrary(
 			}));
 		}
 
+		// Keyed the same way installation resolves a rewritten reference, so the
+		// asset a Template's field is matched to here is the asset it is mapped to
+		// there.
 		const declaredOrigins = new Map(manifest.packagedAssets.map(asset => [
-			`${asset.origin.sourceAssetId} ${asset.origin.sourceRevisionId}`,
+			packagedOriginKey(asset.origin),
 			asset,
 		]));
 		const templateEntry = entryByName.get(TEMPLATE_PACKAGE_TEMPLATE_ENTRY);
@@ -2384,7 +2391,10 @@ export function createGraphicsAssetLibrary(
 				// provenance each packaged asset declares.
 				const required = new Set<string>();
 				for (const discovered of inspected.references) {
-					const key = `${discovered.reference.assetId} ${discovered.reference.revisionId}`;
+					const key = packagedOriginKey({
+						sourceAssetId: discovered.reference.assetId,
+						sourceRevisionId: discovered.reference.revisionId,
+					});
 					if (declaredOrigins.has(key)) {
 						required.add(key);
 						continue;
@@ -2778,6 +2788,16 @@ export function createGraphicsAssetLibrary(
 				growthBytes: report.quota.canonicalGrowthBytes,
 				reservedAt: changedOperation(operation, {}).updatedAt,
 			});
+			if (reservation.outcome === 'lost-claim') {
+				// Another attempt owns this operation now, and whatever it decided is
+				// the authoritative answer — so it is read rather than guessed at, and
+				// never reported as a capacity problem the author would go off and try
+				// to solve.
+				return await catalogueRequest(
+					() => catalogue.getIngestionOperation(operation.id, operation.initiatedBy),
+					'Graphics ingestion state is temporarily unavailable',
+				) ?? operation;
+			}
 			if (reservation.outcome === 'blocked') {
 				operation = {
 					...operation,
@@ -2808,9 +2828,9 @@ export function createGraphicsAssetLibrary(
 					assetId: graphicAssetId(generateIdentity()),
 					revisionId: graphicAssetRevisionId(generateIdentity()),
 					derivativeId: graphicsDerivativeId(generateIdentity()),
-					// A new imported asset takes the packaged metadata snapshot. Only
-					// its technical facts and compatibility profile are this
-					// installation's own, because those are what it actually proved.
+					// An asset this installation creates takes the packaged metadata
+					// snapshot. Only its technical facts and compatibility profile are
+					// this installation's own, because those are what it proved.
 					name: mapping.name,
 					kind: content.facts.kind,
 					sourceDigest: mapping.origin.digest,
@@ -3014,16 +3034,25 @@ export function createGraphicsAssetLibrary(
 
 			if (state.report.outcome === 'rejected') {
 				// A package this installation cannot accept fails permanently unless
-				// the only thing standing in its way is locally reclaimable capacity.
-				const retryable = state.report.issues.some(
+				// the only thing standing in its way is something this installation
+				// can change. The failure names which one, because "free some space
+				// and retry" and "restore that asset first" are different
+				// instructions and an author can only act on the right one.
+				const retryable = state.report.issues.find(
 					issue => issue.severity === 'error' && issue.retryable,
 				);
 				return await failOperation(catalogue, operation, retryable
-					? {
-							code: 'canonical-capacity-exhausted',
-							retryable: true,
-							message: 'Installing this Template Package would exceed canonical capacity.',
-						}
+					? retryable.code === 'graphic-asset-origin-not-referenceable'
+						? {
+								code: 'template-package-mapping-unavailable',
+								retryable: true,
+								message: 'A Graphic Asset this Template Package reuses can no longer receive references.',
+							}
+						: {
+								code: 'canonical-capacity-exhausted',
+								retryable: true,
+								message: 'Installing this Template Package would exceed canonical capacity.',
+							}
 					: {
 							code: 'validation-failed',
 							retryable: false,
@@ -3724,15 +3753,27 @@ export function createGraphicsAssetLibrary(
 				() => catalogue.getTemplatePackagePreflight(operation.id, operation.initiatedBy),
 				'Template Package preflight is temporarily unavailable',
 			);
-			if (!state || !templatePackagePreflightConfirmed(state)) {
-				throw new GraphicsAssetLibraryError(
-					'This Template Package has no confirmed preflight proposal to install',
-					'ingestion-operation-not-uploadable',
-				);
-			}
 			if (operation.stage === 'failed' && !operation.failure?.retryable) {
 				throw new GraphicsAssetLibraryError(
 					'This Template Package failed permanently and cannot be installed',
+					'ingestion-operation-not-uploadable',
+				);
+			}
+			// An operation resting on a proposal is judged by that proposal: nothing
+			// installs from a pause the author never answered.
+			//
+			// A retryable failure has no resting proposal. The run that failed will
+			// have recorded the report explaining why — an exhausted quota, an asset
+			// that had gone into Trash — so judging the retry by that report would
+			// refuse exactly the attempt the author was told to make after fixing it.
+			// The re-derived report decides instead, and it either matches the
+			// confirmation the author already gave or returns the operation to them.
+			if (
+				operation.stage !== 'failed'
+				&& (!state || !templatePackagePreflightConfirmed(state))
+			) {
+				throw new GraphicsAssetLibraryError(
+					'This Template Package has no confirmed preflight proposal to install',
 					'ingestion-operation-not-uploadable',
 				);
 			}
@@ -3772,7 +3813,7 @@ export function createGraphicsAssetLibrary(
 			);
 			if (!template) {
 				throw new GraphicsAssetLibraryError(
-					'Installed graphics Template not found',
+					'Installed Graphics Template not found',
 					'ingestion-operation-not-found',
 				);
 			}

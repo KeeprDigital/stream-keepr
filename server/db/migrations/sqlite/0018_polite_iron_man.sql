@@ -9,7 +9,6 @@ CREATE TABLE `installed_graphics_templates` (
 	`event_id` integer,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
-	FOREIGN KEY (`installed_by_operation_id`) REFERENCES `graphics_ingestion_operations`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint

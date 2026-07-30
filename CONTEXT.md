@@ -708,8 +708,11 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - Template Package installation publishes every new asset, origin mapping, rewritten reference, and the graphics Template in one atomic operation
 - A **Template Package Installation** installs exactly one **Installed Graphics Template** and maps every packaged identity to one exact local **Graphic Asset Revision**
 - A **Template Package Installation** applies only the **Template Package Mapping Proposals** of the **Preflight Report Fingerprint** its author confirmed, and re-proves that fingerprint before publishing
+- Two packaged identities claiming one source identity and revision cannot both map to one local revision, so **Template Package Preflight** rejects the complete package
+- A **Template Package Mapping Proposal** that would reuse a **Retired Graphic Asset** or **Trashed Graphic Asset** is reported before confirmation and stays retryable, because neither can take a new **Graphic Asset Reference** until it is restored
 - An **Installed Graphics Template** owns one **Graphic Asset Reference** for each Graphic Asset field its document carries
 - An **Installed Graphics Template**'s references are ordinary **Graphic Asset References**, so a **Graphic Asset** one of them pins cannot enter Trash
+- Reusing an exact **Graphic Asset Origin** publishes no **Graphic Asset**, so the reused asset keeps describing itself by the **Graphics Ingestion Operation** that created it rather than by the package that referenced it
 - A **Template Package Installation** run inside an **Event** associates every **Graphic Asset** it created or reused with that **Event** without changing a reused asset's own metadata
 - A failed or cancelled **Template Package Installation** leaves no discoverable **Graphic Asset**, **Graphic Asset Revision**, **Graphic Asset Origin**, **Graphic Asset Reference**, or **Installed Graphics Template**
 - Replacing a **Graphic Asset** with its current content is a no-op; deliberately returning to older content creates a new revision backed by the existing **Graphic Asset Content**

@@ -364,7 +364,6 @@ export interface GraphicsIngestionFailure {
 		| 'catalogue-publication-failed'
 		| 'ingestion-processing-failed'
 		| 'validation-failed'
-		| 'template-package-proposal-superseded'
 		| 'template-package-mapping-unavailable'
 		| 'remote-source-rejected';
 	retryable: boolean;

@@ -30,7 +30,11 @@ import {
 	graphicsMultipartCompletedByteLength,
 	graphicsMultipartTransfer,
 } from './multipart';
-import { completedGraphicAssetReplacementOperation } from './operation';
+import {
+	completedGraphicAssetReplacementOperation,
+	INSTALLED_GRAPHICS_TEMPLATE_FIRST_REVISION,
+	templatePackageInstallationResult,
+} from './operation';
 
 function stagingReservationBytes(operation: GraphicsIngestionOperation) {
 	return operation.declaredByteLength
@@ -236,6 +240,11 @@ function usageSelect() {
 			asset_reference.owner_slot, asset_reference.event_id,
 			CASE
 				WHEN asset_reference.owner_kind = 'screen' THEN screens.name
+				-- Inspecting usage before a lifecycle action is how an author learns
+				-- what would break, and "some installed Template" does not answer
+				-- that. Every owner kind that has a name says it.
+				WHEN asset_reference.owner_kind = 'installed-graphics-template'
+					THEN installed_template.name
 				ELSE NULL
 			END AS owner_name
 		FROM graphic_asset_references asset_reference
@@ -243,6 +252,9 @@ function usageSelect() {
 			ON asset_reference.owner_kind = 'screen'
 			AND CAST(screens.id AS TEXT) = asset_reference.owner_id
 			AND screens.event_id = asset_reference.event_id
+		LEFT JOIN installed_graphics_templates installed_template
+			ON asset_reference.owner_kind = 'installed-graphics-template'
+			AND installed_template.id = asset_reference.owner_id
 		WHERE asset_reference.asset_id = ?
 		ORDER BY asset_reference.owner_kind, asset_reference.owner_id,
 			asset_reference.owner_slot, asset_reference.id
@@ -315,15 +327,21 @@ async function assertContentCompatible(
 /**
  * Publication makes its content reachable again, so it cancels any pending
  * orphan quarantine for those digests inside the same atomic transaction.
+ *
+ * A batch that can commit without having published passes the condition its
+ * publication actually depends on, so a release can never outlive the
+ * reachability that justified it.
  */
 function releaseContentQuarantineStatement(
 	database: D1Database,
 	digests: readonly string[],
+	publication?: { guard: string; bindings: readonly unknown[] },
 ) {
 	return database.prepare(`
 		DELETE FROM graphics_content_quarantine
 		WHERE digest IN ${valuesFromJsonArray()}
-	`).bind(boundJsonArray(digests));
+		${publication ? `AND ${publication.guard}` : ''}
+	`).bind(boundJsonArray(digests), ...(publication?.bindings ?? []));
 }
 
 function updateOperationStatement(
@@ -986,16 +1004,28 @@ export function createD1GraphicsAssetCatalogue(
 			).run();
 			if (!result.success)
 				throw new Error('Template Package canonical reservation failed');
+			const operation = await firstOperation(
+				database,
+				'id = ? AND initiated_by = ?',
+				input.operation.id,
+				input.operation.initiatedBy,
+			);
 			if (result.meta.changes === 1) {
-				const operation = await firstOperation(
-					database,
-					'id = ? AND initiated_by = ?',
-					input.operation.id,
-					input.operation.initiatedBy,
-				);
 				if (!operation)
 					throw new Error('Template Package canonical reservation was not durable');
 				return { outcome: 'reserved' as const, operation };
+			}
+			// The statement is conditional on both the operation's claim and the
+			// capacity, so a miss has two very different causes. Telling an author
+			// their library is full when in fact another attempt took the operation
+			// from under this one sends them to free space that was never the
+			// problem, so the two are distinguished before either is reported.
+			if (
+				!operation
+				|| operation.stage !== 'generating-derivatives'
+				|| operation.updatedAt !== input.operation.updatedAt
+			) {
+				return { outcome: 'lost-claim' as const };
 			}
 			const capacity = await this.getCapacity();
 			return {
@@ -1012,6 +1042,7 @@ export function createD1GraphicsAssetCatalogue(
 		},
 		async installTemplatePackage(input) {
 			const publishedAt = new Date(input.publishedAt).getTime();
+			const createdAssetIds = input.created.map(asset => asset.assetId);
 			const reusedAssetIds = [...new Set(input.reused.map(asset => asset.assetId))];
 			const reusedRevisionIds = [...new Set(input.reused.map(asset => asset.revisionId))];
 			await Promise.all([
@@ -1030,15 +1061,17 @@ export function createD1GraphicsAssetCatalogue(
 			/**
 			 * The one condition every statement in this batch commits against.
 			 *
-			 * D1 runs a batch as one transaction, but a statement whose own
-			 * condition is false simply writes nothing rather than aborting the
-			 * rest. So sharing a single condition is what makes the publication
-			 * all-or-nothing: either every statement sees it hold, or none does.
+			 * D1 runs a batch as one transaction, but a statement whose own condition
+			 * is false simply writes nothing rather than aborting the rest. So
+			 * sharing a single condition is what makes the publication all-or-nothing:
+			 * either every statement sees it hold, or none does.
 			 *
-			 * It covers the operation's claim and the exact-origin revisions being
-			 * reused, so a Trash, retirement, or pruning that commits first leaves
-			 * this installation writing nothing at all instead of pinning a
-			 * reference the library no longer allows.
+			 * It covers the operation's claim, the exact-origin revisions being
+			 * reused, and the local identities about to be created — so a Trash,
+			 * retirement, or pruning that commits first, or a generated identity
+			 * colliding with the tombstone of a purged one, leaves this installation
+			 * writing nothing at all rather than pinning a reference the library no
+			 * longer allows or resurrecting an asset a purge retired for good.
 			 */
 			const guard = `
 				EXISTS (
@@ -1054,6 +1087,10 @@ export function createD1GraphicsAssetCatalogue(
 					SELECT COUNT(*) FROM graphic_asset_revisions
 					WHERE id IN ${valuesFromJsonArray('?')}
 				) = ?
+				AND NOT EXISTS (
+					SELECT 1 FROM graphic_asset_tombstones
+					WHERE asset_id IN ${valuesFromJsonArray('?')}
+				)
 			`;
 			const guardBindings = [
 				input.operation.id,
@@ -1063,6 +1100,7 @@ export function createD1GraphicsAssetCatalogue(
 				reusedAssetIds.length,
 				boundJsonArray(reusedRevisionIds),
 				reusedRevisionIds.length,
+				boundJsonArray(createdAssetIds),
 			];
 
 			// Every list-shaped payload travels as one bound JSON array. A package
@@ -1089,10 +1127,7 @@ export function createD1GraphicsAssetCatalogue(
 			})));
 			const references = JSON.stringify(input.references);
 			const associatedAssetIds = boundJsonArray([
-				...new Set([
-					...input.created.map(asset => asset.assetId),
-					...reusedAssetIds,
-				]),
+				...new Set([...createdAssetIds, ...reusedAssetIds]),
 			]);
 			const quarantineDigests = [
 				...new Set(input.created.flatMap(asset => [asset.sourceDigest, asset.thumbnailDigest])),
@@ -1102,190 +1137,230 @@ export function createD1GraphicsAssetCatalogue(
 				...input.operation,
 				stage: 'completed',
 				failure: undefined,
-				templatePackageInstallation: {
-					templateId: input.template.id,
-					templateKind: input.template.kind,
-					templateName: input.template.name,
-					assets: [
-						...input.created.map(asset => ({
-							packagedId: asset.packagedId,
-							outcome: 'created' as const,
-							basis: asset.basis,
-							assetId: asset.assetId,
-							revisionId: asset.revisionId,
-							name: asset.name,
-							kind: asset.kind,
-							compatibilityProfile: asset.compatibilityProfile,
-						})),
-						...input.reused.map(asset => ({
-							packagedId: asset.packagedId,
-							outcome: 'reused' as const,
-							basis: 'exact-origin' as const,
-							assetId: asset.assetId,
-							revisionId: asset.revisionId,
-							name: asset.name,
-							kind: asset.kind,
-							compatibilityProfile: asset.compatibilityProfile,
-						})),
-					].sort((left, right) => left.packagedId.localeCompare(right.packagedId)),
-				},
+				templatePackageInstallation: templatePackageInstallationResult(input),
 				updatedAt: input.publishedAt,
 			};
 
-			const statements: D1PreparedStatement[] = [
-				database.prepare(`
-					INSERT OR IGNORE INTO graphic_asset_contents (
-						digest, byte_length, canonical_mime, availability, created_at
-					)
-					SELECT json_extract(value, '$.sourceDigest'),
-						json_extract(value, '$.sourceByteLength'),
-						json_extract(value, '$.canonicalMime'), 'available', ?
-					FROM json_each(?)
-					WHERE ${guard}
-				`).bind(publishedAt, created, ...guardBindings),
-				database.prepare(`
-					INSERT OR IGNORE INTO graphic_asset_contents (
-						digest, byte_length, canonical_mime, availability, created_at
-					)
-					SELECT json_extract(value, '$.thumbnailDigest'),
-						json_extract(value, '$.thumbnailByteLength'), 'image/png', 'available', ?
-					FROM json_each(?)
-					WHERE ${guard}
-				`).bind(publishedAt, created, ...guardBindings),
-				// A purged local identity is never reused, so a generated identity
-				// colliding with a tombstone stops this installation rather than
-				// resurrecting the asset it replaced.
-				database.prepare(`
-					INSERT INTO graphic_assets (id, name, kind, lifecycle_state, created_at, updated_at)
-					SELECT json_extract(value, '$.assetId'), json_extract(value, '$.name'),
-						json_extract(value, '$.kind'), 'active', ?, ?
-					FROM json_each(?)
-					WHERE ${guard}
-						AND NOT EXISTS (
-							SELECT 1 FROM graphic_asset_tombstones
-							WHERE asset_id = json_extract(value, '$.assetId')
+			/**
+			 * One statement, and the number of rows it must write.
+			 *
+			 * The guard makes the batch all-or-nothing, but "all" still has to mean
+			 * every row. A statement whose count the payload decides is checked
+			 * against that count, which is what makes the guard something the
+			 * transaction proves rather than something these comments assert.
+			 * `undefined` marks the statements whose count legitimately varies —
+			 * shared content and repeated Event associations both write fewer rows
+			 * than the payload has entries.
+			 */
+			const planned: { statement: D1PreparedStatement; expectedChanges?: number }[] = [
+				{
+					statement: database.prepare(`
+						INSERT OR IGNORE INTO graphic_asset_contents (
+							digest, byte_length, canonical_mime, availability, created_at
 						)
-				`).bind(publishedAt, publishedAt, created, ...guardBindings),
-				database.prepare(`
-					INSERT INTO graphic_asset_revisions (
-						id, asset_id, revision_number, content_digest,
-						compatibility_profile, technical_facts, created_at
-					)
-					SELECT json_extract(value, '$.revisionId'), json_extract(value, '$.assetId'), 1,
-						json_extract(value, '$.sourceDigest'),
-						json_extract(value, '$.compatibilityProfile'),
-						json_extract(value, '$.facts'), ?
-					FROM json_each(?)
-					WHERE ${guard}
-				`).bind(publishedAt, created, ...guardBindings),
-				// Graphic Asset Origin is written exactly once, on the revision this
-				// import created. It is never rewritten: a package claiming an origin
-				// already recorded with different content was rejected at preflight
-				// rather than allowed to update one here.
-				database.prepare(`
-					INSERT OR IGNORE INTO graphic_asset_origins (
-						revision_id, asset_id, source_asset_id, source_revision_id,
-						source_revision_number, digest, created_at
-					)
-					SELECT json_extract(value, '$.revisionId'), json_extract(value, '$.assetId'),
-						json_extract(value, '$.sourceAssetId'), json_extract(value, '$.sourceRevisionId'),
-						json_extract(value, '$.sourceRevisionNumber'), json_extract(value, '$.originDigest'), ?
-					FROM json_each(?)
-					WHERE ${guard}
-				`).bind(publishedAt, created, ...guardBindings),
-				database.prepare(`
-					INSERT INTO graphics_derivatives (
-						id, source_revision_id, kind, content_digest, created_at
-					)
-					SELECT json_extract(value, '$.derivativeId'), json_extract(value, '$.revisionId'),
-						json_extract(value, '$.derivativeKind'), json_extract(value, '$.thumbnailDigest'), ?
-					FROM json_each(?)
-					WHERE ${guard}
-				`).bind(publishedAt, created, ...guardBindings),
+						SELECT json_extract(value, '$.sourceDigest'),
+							json_extract(value, '$.sourceByteLength'),
+							json_extract(value, '$.canonicalMime'), 'available', ?
+						FROM json_each(?)
+						WHERE ${guard}
+					`).bind(publishedAt, created, ...guardBindings),
+				},
+				{
+					statement: database.prepare(`
+						INSERT OR IGNORE INTO graphic_asset_contents (
+							digest, byte_length, canonical_mime, availability, created_at
+						)
+						SELECT json_extract(value, '$.thumbnailDigest'),
+							json_extract(value, '$.thumbnailByteLength'), 'image/png', 'available', ?
+						FROM json_each(?)
+						WHERE ${guard}
+					`).bind(publishedAt, created, ...guardBindings),
+				},
+				{
+					statement: database.prepare(`
+						INSERT INTO graphic_assets (id, name, kind, lifecycle_state, created_at, updated_at)
+						SELECT json_extract(value, '$.assetId'), json_extract(value, '$.name'),
+							json_extract(value, '$.kind'), 'active', ?, ?
+						FROM json_each(?)
+						WHERE ${guard}
+					`).bind(publishedAt, publishedAt, created, ...guardBindings),
+					expectedChanges: input.created.length,
+				},
+				{
+					statement: database.prepare(`
+						INSERT INTO graphic_asset_revisions (
+							id, asset_id, revision_number, content_digest,
+							compatibility_profile, technical_facts, created_at
+						)
+						SELECT json_extract(value, '$.revisionId'), json_extract(value, '$.assetId'), 1,
+							json_extract(value, '$.sourceDigest'),
+							json_extract(value, '$.compatibilityProfile'),
+							json_extract(value, '$.facts'), ?
+						FROM json_each(?)
+						WHERE ${guard}
+					`).bind(publishedAt, created, ...guardBindings),
+					expectedChanges: input.created.length,
+				},
+				{
+					// Graphic Asset Origin is written exactly once, on the revision
+					// this installation created. It is never rewritten: a package
+					// claiming an origin already recorded with different content was
+					// rejected at preflight rather than allowed to update one here.
+					// The ignore is the backstop, and the expected count is what
+					// proves it never had to fire.
+					statement: database.prepare(`
+						INSERT OR IGNORE INTO graphic_asset_origins (
+							revision_id, asset_id, source_asset_id, source_revision_id,
+							source_revision_number, digest, created_at
+						)
+						SELECT json_extract(value, '$.revisionId'), json_extract(value, '$.assetId'),
+							json_extract(value, '$.sourceAssetId'), json_extract(value, '$.sourceRevisionId'),
+							json_extract(value, '$.sourceRevisionNumber'), json_extract(value, '$.originDigest'), ?
+						FROM json_each(?)
+						WHERE ${guard}
+					`).bind(publishedAt, created, ...guardBindings),
+					expectedChanges: input.created.length,
+				},
+				{
+					statement: database.prepare(`
+						INSERT INTO graphics_derivatives (
+							id, source_revision_id, kind, content_digest, created_at
+						)
+						SELECT json_extract(value, '$.derivativeId'), json_extract(value, '$.revisionId'),
+							json_extract(value, '$.derivativeKind'), json_extract(value, '$.thumbnailDigest'), ?
+						FROM json_each(?)
+						WHERE ${guard}
+					`).bind(publishedAt, created, ...guardBindings),
+					expectedChanges: input.created.length,
+				},
 				...(input.operation.defaultEventId === undefined
 					? []
 					// An installation run inside an Event associates everything it
 					// touched with that Event. The association organises discovery and
 					// adds nothing to a reused asset's own metadata.
-					: [database.prepare(`
-							INSERT OR IGNORE INTO graphic_asset_event_associations (asset_id, event_id, created_at)
-							SELECT value, ?, ?
-							FROM json_each(?)
-							WHERE ${guard}
-						`).bind(
-							input.operation.defaultEventId,
-							publishedAt,
-							associatedAssetIds,
-							...guardBindings,
-						)]),
-				// The rewritten references pin exactly the revisions this transaction
-				// created or proved, so the join is the proof that no reference can
-				// name a revision that does not resolve.
-				//
-				// They carry no Event context, unlike a Screen's. An Installed Graphics
-				// Template belongs to the installation-wide library rather than to the
-				// Event whose workflow happened to install it, and deleting an Event
-				// removes the references scoped to it — which would quietly strip a
-				// library Template of the pins its own document depends on. Which Event
-				// the installation ran inside is recorded on the Template instead.
-				database.prepare(`
-					INSERT INTO graphic_asset_references (
-						id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
-						event_id, created_at, updated_at
-					)
-					SELECT json_extract(reference.value, '$.id'),
-						json_extract(reference.value, '$.assetId'),
-						json_extract(reference.value, '$.revisionId'),
-						'installed-graphics-template', ?,
-						json_extract(reference.value, '$.ownerSlot'), NULL, ?, ?
-					FROM json_each(?) AS reference
-					JOIN graphic_asset_revisions revision
-						ON revision.id = json_extract(reference.value, '$.revisionId')
-						AND revision.asset_id = json_extract(reference.value, '$.assetId')
-					WHERE ${guard}
-				`).bind(
-					input.template.id,
-					publishedAt,
-					publishedAt,
-					references,
-					...guardBindings,
-				),
-				database.prepare(`
-					INSERT INTO installed_graphics_templates (
-						id, kind, name, revision_number, document, source_template_identity,
-						installed_by_operation_id, event_id, created_at, updated_at
-					)
-					SELECT ?, ?, ?, 1, ?, ?, ?, ?, ?, ?
-					WHERE ${guard}
-				`).bind(
-					input.template.id,
-					input.template.kind,
-					input.template.name,
-					JSON.stringify(input.template.document),
-					input.template.sourceTemplateIdentity,
-					input.operation.id,
-					input.operation.defaultEventId ?? null,
-					publishedAt,
-					publishedAt,
-					...guardBindings,
-				),
-				releaseContentQuarantineStatement(database, quarantineDigests),
-				database.prepare(`
-					DELETE FROM graphics_canonical_write_candidates WHERE operation_id = ?
-				`).bind(input.operation.id),
-				updateOperationStatement(
-					database,
-					completed,
-					input.operation.updatedAt,
-					`AND ${guard}`,
-					guardBindings,
-				),
+					: [{
+							statement: database.prepare(`
+								INSERT OR IGNORE INTO graphic_asset_event_associations (asset_id, event_id, created_at)
+								SELECT value, ?, ?
+								FROM json_each(?)
+								WHERE ${guard}
+							`).bind(
+								input.operation.defaultEventId,
+								publishedAt,
+								associatedAssetIds,
+								...guardBindings,
+							),
+						}]),
+				{
+					// The rewritten references pin exactly the revisions this
+					// transaction created or proved, so the join is the proof that no
+					// reference can name a revision that does not resolve — and the
+					// expected count is the proof that every one of them did.
+					//
+					// They carry no Event context, unlike a Screen's. An Installed
+					// Graphics Template belongs to the installation-wide library rather
+					// than to the Event whose workflow happened to install it, and
+					// deleting an Event removes the references scoped to it — which
+					// would quietly strip a library Template of the pins its own
+					// document depends on. Which Event the installation ran inside is
+					// recorded on the Template instead.
+					statement: database.prepare(`
+						INSERT INTO graphic_asset_references (
+							id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
+							event_id, created_at, updated_at
+						)
+						SELECT json_extract(reference.value, '$.id'),
+							json_extract(reference.value, '$.assetId'),
+							json_extract(reference.value, '$.revisionId'),
+							'installed-graphics-template', ?,
+							json_extract(reference.value, '$.ownerSlot'), NULL, ?, ?
+						FROM json_each(?) AS reference
+						JOIN graphic_asset_revisions revision
+							ON revision.id = json_extract(reference.value, '$.revisionId')
+							AND revision.asset_id = json_extract(reference.value, '$.assetId')
+						WHERE ${guard}
+					`).bind(
+						input.template.id,
+						publishedAt,
+						publishedAt,
+						references,
+						...guardBindings,
+					),
+					expectedChanges: input.references.length,
+				},
+				{
+					statement: database.prepare(`
+						INSERT INTO installed_graphics_templates (
+							id, kind, name, revision_number, document, source_template_identity,
+							installed_by_operation_id, event_id, created_at, updated_at
+						)
+						SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+						WHERE ${guard}
+					`).bind(
+						input.template.id,
+						input.template.kind,
+						input.template.name,
+						INSTALLED_GRAPHICS_TEMPLATE_FIRST_REVISION,
+						JSON.stringify(input.template.document),
+						input.template.sourceTemplateIdentity,
+						input.operation.id,
+						input.operation.defaultEventId ?? null,
+						publishedAt,
+						publishedAt,
+						...guardBindings,
+					),
+					expectedChanges: 1,
+				},
+				// Both of these reclaim state only a publication that actually
+				// happened has the right to reclaim, so both carry the guard. A failed
+				// publication that cleared its own write candidates would hand its
+				// unreachable bytes to the generic sweep instead of the candidate
+				// machinery built to collect them, and one that released a quarantine
+				// would restart a seven-day clock on content still unreachable.
+				{
+					statement: releaseContentQuarantineStatement(database, quarantineDigests, {
+						guard,
+						bindings: guardBindings,
+					}),
+				},
+				{
+					statement: database.prepare(`
+						DELETE FROM graphics_canonical_write_candidates
+						WHERE operation_id = ? AND ${guard}
+					`).bind(input.operation.id, ...guardBindings),
+				},
+				{
+					statement: updateOperationStatement(
+						database,
+						completed,
+						input.operation.updatedAt,
+						`AND ${guard}`,
+						guardBindings,
+					),
+					expectedChanges: 1,
+				},
 			];
+
 			const results = await database.batch(
-				statements as [D1PreparedStatement, ...D1PreparedStatement[]],
+				planned.map(entry => entry.statement) as [D1PreparedStatement, ...D1PreparedStatement[]],
 			);
-			if (results.some(result => !result.success) || results.at(-1)?.meta.changes !== 1)
+			if (results.some(result => !result.success))
 				throw new Error('Template Package installation transaction failed');
+			// The terminal transition is last, so its count is the one that answers
+			// whether the guard held at all. Losing it means nothing committed.
+			if (results.at(-1)?.meta.changes !== 1)
+				throw new Error('Template Package installation lost its claim before publishing');
+			const shortfall = planned.findIndex((entry, index) =>
+				entry.expectedChanges !== undefined
+				&& results[index]?.meta.changes !== entry.expectedChanges,
+			);
+			if (shortfall !== -1) {
+				throw new Error(
+					`Template Package installation wrote ${
+						results[shortfall]?.meta.changes
+					} of ${planned[shortfall]?.expectedChanges} expected rows`,
+				);
+			}
 			const authoritative = await firstOperation(
 				database,
 				'id = ? AND initiated_by = ?',
@@ -1461,12 +1536,14 @@ export function createD1GraphicsAssetCatalogue(
 			// that source as its Graphic Asset Origin. Both are the same exact
 			// provenance and both reuse the same local revision.
 			const exact = await database.prepare(`
-				SELECT r.id AS revision_id, r.asset_id, r.content_digest, a.name
+				SELECT r.id AS revision_id, r.asset_id, r.content_digest, a.name,
+					a.lifecycle_state
 				FROM graphic_asset_revisions r
 				JOIN graphic_assets a ON a.id = r.asset_id
 				WHERE r.id = ? AND r.asset_id = ?
 				UNION ALL
-				SELECT r.id AS revision_id, r.asset_id, r.content_digest, a.name
+				SELECT r.id AS revision_id, r.asset_id, r.content_digest, a.name,
+					a.lifecycle_state
 				FROM graphic_asset_origins o
 				JOIN graphic_asset_revisions r ON r.id = o.revision_id
 				JOIN graphic_assets a ON a.id = r.asset_id
@@ -1482,6 +1559,7 @@ export function createD1GraphicsAssetCatalogue(
 				asset_id: string;
 				content_digest: string;
 				name: string;
+				lifecycle_state: GraphicAssetLifecycleState;
 			}>();
 			// A related revision is the same source identity at another source
 			// revision. It never reuses a local revision, but it does mean this
@@ -1510,6 +1588,7 @@ export function createD1GraphicsAssetCatalogue(
 							},
 							digest: exact.content_digest,
 							name: exact.name,
+							lifecycleState: exact.lifecycle_state,
 						}
 					: undefined,
 				relatedRevisionExists: related !== null,
@@ -2118,15 +2197,25 @@ export function createD1GraphicsAssetCatalogue(
 						WHERE latest_operation.stage = 'completed'
 							AND (
 								json_extract(latest_operation.result, '$.assetId') = a.id
-								-- One Template Package installation publishes every asset
-								-- its Template needs, so its result names them all rather
-								-- than one.
+								-- One Template Package installation publishes every
+								-- asset its Template needs, so its result names them
+								-- all rather than one.
+								--
+								-- Only the ones it created. An installation that
+								-- merely reused an exact origin published no asset,
+								-- and letting it answer for one would re-attribute an
+								-- upload's provenance to the package that happened to
+								-- reference it: the asset would start describing
+								-- itself by the archive's filename, with no validation
+								-- report behind it. Reuse leaves library metadata
+								-- alone, and this is the metadata an author reads.
 								OR EXISTS (
 									SELECT 1
 									FROM json_each(COALESCE(
 										json_extract(latest_operation.package_installation, '$.assets'), '[]'
 									)) installed
 									WHERE json_extract(installed.value, '$.assetId') = a.id
+										AND json_extract(installed.value, '$.outcome') = 'created'
 								)
 							)
 						ORDER BY latest_operation.updated_at DESC, latest_operation.id DESC
