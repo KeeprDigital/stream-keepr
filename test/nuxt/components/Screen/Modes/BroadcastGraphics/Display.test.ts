@@ -1,10 +1,12 @@
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, ShapeGraphicItemConfig } from '~~/shared/types/graphics';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
+import { onAirBroadcastGraphicIds } from '~~/shared/modules/broadcast-graphics-live-session';
+import { squareShapeGeometry } from '~~/shared/modules/graphics';
 import { GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
 
 enableAutoUnmount(afterEach);
@@ -32,22 +34,39 @@ mockNuxtImport('useScreenModeConfig', () => () => computed(() => ({
 	...mockScreen.value?.modeConfigs?.['broadcast-graphics'],
 })));
 
+const bar: ShapeGraphicItemConfig = {
+	type: 'shape',
+	id: 'bar',
+	label: 'Shape 1',
+	visible: true,
+	anchor: 'top-left',
+	x: 100,
+	y: 800,
+	width: 900,
+	height: 120,
+	geometry: squareShapeGeometry(),
+	surfaceStyle: { fill: { type: 'solid', color: '#0077a3' }, fillOpacity: 1 },
+};
+
+/** The authoritative playout snapshot a live Screen Output would have loaded. */
+const mockOnAirGraphicIds = ref<string[]>([]);
+const mockLoadSession = ref<(eventId: number, screenId: number) => void>(() => {});
+
+mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
+	// Delegates to the real reducer rather than reimplementing the authored-order
+	// filter, so this test cannot pass on a filter the Screen Output does not use.
+	onAirGraphicIds: (_screenId: number, graphics: readonly { id: string }[]) =>
+		onAirBroadcastGraphicIds(
+			{ playout: Object.fromEntries(mockOnAirGraphicIds.value.map(id => [id, { onAir: true }])) },
+			graphics,
+		),
+	loadSession: (eventId: number, screenId: number) => mockLoadSession.value(eventId, screenId),
+}));
+
 const lowerThird: BroadcastGraphicConfig = {
 	id: 'lower-third',
 	name: 'Lower Third',
-	items: [{
-		type: 'shape',
-		id: 'bar',
-		label: 'Shape 1',
-		visible: true,
-		anchor: 'top-left',
-		x: 100,
-		y: 800,
-		width: 900,
-		height: 120,
-		geometry: { cornerRadius: 0 },
-		surfaceStyle: { fill: '#0077a3', fillOpacity: 1 },
-	}],
+	items: [bar],
 };
 
 function screenWithStack(graphics: BroadcastGraphicConfig[] = []): Screen {
@@ -89,6 +108,8 @@ describe('broadcastGraphicsDisplay', () => {
 		mockPreviewGuides.value = false;
 		mockPreviewSafeAreas.value = false;
 		mockScreen.value = screenWithStack();
+		mockOnAirGraphicIds.value = [];
+		mockLoadSession.value = () => {};
 	});
 
 	it('renders an empty Broadcast Graphics Screen transparent in the Overlay Output', async () => {
@@ -131,6 +152,54 @@ describe('broadcastGraphicsDisplay', () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(false);
+	});
+
+	it('composes a Broadcast Graphic that playout has taken on air', async () => {
+		mockScreen.value = screenWithStack([lowerThird]);
+		mockOnAirGraphicIds.value = ['lower-third'];
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(true);
+		expect(wrapper.get('[data-graphic-item-kind="shape"]').attributes('style')).toContain('left: 100px');
+	});
+
+	it('composes concurrent on-air Broadcast Graphics in authored stack order, not take order', async () => {
+		const bug: BroadcastGraphicConfig = { ...lowerThird, id: 'bug', name: 'Bug' };
+		mockScreen.value = screenWithStack([bug, lowerThird]);
+		mockOnAirGraphicIds.value = ['lower-third', 'bug'];
+
+		const wrapper = await mountComponent();
+
+		const composed = wrapper.findAll('[data-broadcast-graphic]')
+			.map(node => node.attributes('data-broadcast-graphic'));
+
+		expect(composed).toEqual(['bug', 'lower-third']);
+	});
+
+	it('loads the authoritative playout snapshot for a live Screen Output', async () => {
+		const loads: Array<[number, number]> = [];
+		mockLoadSession.value = (eventId, screenId) => {
+			loads.push([eventId, screenId]);
+		};
+		mockScreen.value = screenWithStack([lowerThird]);
+
+		await mountComponent();
+
+		expect(loads).toEqual([[1, 1]]);
+	});
+
+	it('never loads a playout snapshot for an embedded editor preview', async () => {
+		const loads: Array<[number, number]> = [];
+		mockLoadSession.value = (eventId, screenId) => {
+			loads.push([eventId, screenId]);
+		};
+		mockIsPreview.value = true;
+		mockScreen.value = screenWithStack([lowerThird]);
+
+		await mountComponent();
+
+		expect(loads).toEqual([]);
 	});
 
 	it('never draws advisory guides on a live Screen Output', async () => {
@@ -219,5 +288,77 @@ describe('broadcastGraphicsDisplay', () => {
 		await pushPreviewState();
 
 		expect(wrapper.get('.item-guide').classes()).toContain('is-selected');
+	});
+
+	it('paints a Graphic Surface Style as one Shape Geometry path with its outline', async () => {
+		mockIsPreview.value = true;
+		const outlined: BroadcastGraphicConfig = {
+			...lowerThird,
+			items: [{
+				...bar,
+				geometry: { ...squareShapeGeometry(), rightSlant: 60 },
+				surfaceStyle: {
+					fill: { type: 'solid', color: '#0077a3' },
+					fillOpacity: 1,
+					outline: { color: '#00d9ff', width: 3 },
+				},
+			}],
+		};
+
+		const wrapper = await mountComponent();
+		await pushPreviewState([outlined]);
+
+		const paths = wrapper.findAll('[data-graphic-item-kind="shape"] path');
+		// One fill, one clip path for the stroke, and the stroke itself.
+		expect(paths.length).toBe(3);
+		expect(paths[0]!.attributes('d')).toBe('M 0 0 L 840 0 L 900 120 L 0 120 Z');
+		// The surface stretches to the box the layout actually gave the item, so the
+		// case-sensitive SVG attribute has to survive the template.
+		expect(wrapper.get('[data-graphic-item-kind="shape"] svg').attributes('preserveAspectRatio')).toBe('none');
+		expect(wrapper.get('[data-graphic-item-kind="shape"] path[stroke]').attributes('stroke-width')).toBe('6');
+	});
+
+	it('composes a Graphic Group and its children in one stacking context', async () => {
+		mockIsPreview.value = true;
+		const grouped: BroadcastGraphicConfig = {
+			id: 'lower-third',
+			name: 'Lower Third',
+			items: [{
+				type: 'group',
+				id: 'cluster',
+				label: 'Name block',
+				visible: true,
+				anchor: 'top-left',
+				x: 100,
+				y: 800,
+				width: 900,
+				height: 120,
+				arrangement: 'row',
+				padding: 12,
+				gap: 8,
+				align: 'stretch',
+				justify: 'start',
+				clip: true,
+				geometry: squareShapeGeometry(),
+				children: [{
+					...bar,
+					id: 'child',
+					x: 0,
+					y: 0,
+					sizing: { mode: 'fill', size: 0, weight: 1 },
+				}],
+			}],
+		};
+
+		const wrapper = await mountComponent();
+		await pushPreviewState([grouped]);
+
+		const group = wrapper.get('[data-graphic-item-kind="group"]');
+		expect(group.attributes('style')).toContain('display: flex');
+		expect(group.attributes('style')).toContain('padding: 12px');
+		expect(group.find('[data-graphic-item-kind="shape"]').exists()).toBe(true);
+		// The browser expands the flex shorthand, so a weighted-fill child grows.
+		expect(group.get('[data-graphic-item-kind="shape"]').attributes('style')).toContain('flex-grow: 1');
+		expect(group.get('[data-graphic-item-kind="shape"]').attributes('style')).toContain('flex-basis: 0px');
 	});
 });

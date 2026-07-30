@@ -1,9 +1,14 @@
-import type { BroadcastGraphicConfig, GraphicItemConfig } from '~~/shared/types/graphics';
+import type {
+	BroadcastGraphicConfig,
+	GraphicGroupItemConfig,
+	GraphicItemConfig,
+} from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
-import { DEFAULT_GRAPHIC_TYPOGRAPHY } from '~~/shared/modules/graphics';
+import { DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
+import { MAX_GRAPHIC_TEXT_LENGTH } from '~~/shared/types/graphics';
 
 enableAutoUnmount(afterEach);
 
@@ -17,9 +22,36 @@ const shapeItem: GraphicItemConfig = {
 	y: 200,
 	width: 400,
 	height: 100,
-	geometry: { cornerRadius: 8 },
-	surfaceStyle: { fill: '#0077a3', fillOpacity: 1 },
+	geometry: squareShapeGeometry(),
+	surfaceStyle: { fill: { type: 'solid', color: '#0077a3' }, fillOpacity: 1 },
 };
+
+const groupItem: GraphicGroupItemConfig = {
+	type: 'group',
+	id: 'cluster',
+	label: 'Name block',
+	visible: true,
+	anchor: 'top-left',
+	x: 200,
+	y: 400,
+	width: 800,
+	height: 200,
+	arrangement: 'row',
+	padding: 0,
+	gap: 16,
+	align: 'stretch',
+	justify: 'start',
+	clip: false,
+	geometry: squareShapeGeometry(),
+	children: [],
+};
+
+function groupWith(
+	children: GraphicGroupItemConfig['children'],
+	overrides: Partial<GraphicGroupItemConfig> = {},
+): GraphicGroupItemConfig {
+	return { ...groupItem, children, ...overrides };
+}
 
 const textItem: GraphicItemConfig = {
 	type: 'text',
@@ -67,6 +99,13 @@ const UInputStub = defineComponent({
 	template: '<input :value="modelValue" />',
 });
 
+const UButtonStub = defineComponent({
+	name: 'UButton',
+	props: { disabled: { type: Boolean, required: false } },
+	emits: ['click'],
+	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+});
+
 const USwitchStub = defineComponent({
 	name: 'USwitch',
 	props: { modelValue: { type: Boolean, required: false } },
@@ -77,6 +116,7 @@ const USwitchStub = defineComponent({
 async function mountComponent(options: {
 	graphics: BroadcastGraphicConfig[];
 	selectedTarget: GraphicsSelectionTarget;
+	writable?: boolean;
 }) {
 	const componentPath = '../../../../../app/components/Graphics/Compositor/Inspector.vue';
 	const { default: Inspector } = await import(componentPath);
@@ -87,6 +127,7 @@ async function mountComponent(options: {
 			selectedTarget: options.selectedTarget,
 			canvasWidth: 1920,
 			canvasHeight: 1080,
+			writable: options.writable ?? true,
 		},
 		global: {
 			stubs: {
@@ -97,6 +138,7 @@ async function mountComponent(options: {
 				USwitch: USwitchStub,
 				UTextarea: UInputStub,
 				UIColorPicker: UInputStub,
+				UButton: UButtonStub,
 				UBadge: true,
 				UIcon: true,
 			},
@@ -111,6 +153,25 @@ function emittedGraphics(wrapper: Awaited<ReturnType<typeof mountComponent>>, in
 function numberField(wrapper: Awaited<ReturnType<typeof mountComponent>>, ariaLabel: string) {
 	return wrapper.findAllComponents({ name: 'UInputNumber' })
 		.find(input => input.attributes('aria-label') === ariaLabel);
+}
+
+function selectField(wrapper: Awaited<ReturnType<typeof mountComponent>>, testId: string) {
+	return wrapper.findAllComponents({ name: 'USelect' })
+		.find(select => select.attributes('data-testid') === testId);
+}
+
+function switchField(wrapper: Awaited<ReturnType<typeof mountComponent>>, testId: string) {
+	return wrapper.findAllComponents({ name: 'USwitch' })
+		.find(entry => entry.attributes('data-testid') === testId);
+}
+
+function itemOf(graphics: BroadcastGraphicConfig[], index = 0) {
+	return graphics[0]?.items[index];
+}
+
+function childOf(graphics: BroadcastGraphicConfig[], index = 0) {
+	const group = graphics[0]?.items[0];
+	return group?.type === 'group' ? group.children[index] : undefined;
 }
 
 describe('graphicsCompositorInspector', () => {
@@ -187,7 +248,7 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
-		expect(wrapper.find('[data-testid="shape-corner-radius"]').exists()).toBe(true);
+		expect(wrapper.find('[data-testid="shape-geometry-preset"]').exists()).toBe(true);
 		expect(wrapper.find('[data-testid="text-overflow-policy"]').exists()).toBe(false);
 	});
 
@@ -199,7 +260,7 @@ describe('graphicsCompositorInspector', () => {
 
 		expect(wrapper.find('[data-testid="text-overflow-policy"]').exists()).toBe(true);
 		expect(wrapper.find('[data-testid="graphic-item-text"]').exists()).toBe(true);
-		expect(wrapper.find('[data-testid="shape-corner-radius"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="shape-geometry-preset"]').exists()).toBe(false);
 	});
 
 	it('hides a Graphic Item without removing it from the Graphic Layer Order', async () => {
@@ -222,5 +283,265 @@ describe('graphicsCompositorInspector', () => {
 
 		expect(wrapper.text()).toContain('Selection unavailable');
 		expect(wrapper.find('[data-testid="graphic-item-label"]').exists()).toBe(false);
+	});
+
+	it('bounds the text control so an operator is stopped in the field', async () => {
+		// Without this the only bound is the wire schema, and an over-long text
+		// costs the operator a whole write to an opaque validation error.
+		const wrapper = await mountComponent({
+			graphics: stack([textItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+		});
+
+		expect(wrapper.get('[data-testid="graphic-item-text"]').attributes('maxlength'))
+			.toBe(String(MAX_GRAPHIC_TEXT_LENGTH));
+	});
+
+	it('offers Graphic Rotation for a canvas-positioned item and stores its degrees', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([shapeItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		numberField(wrapper, 'Graphic Rotation')?.vm.$emit('update:modelValue', -6);
+		await nextTick();
+
+		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ rotation: -6 });
+	});
+
+	it('configures one Shape Geometry corner without disturbing the others', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([shapeItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		selectField(wrapper, 'shape-corner-topRight')?.vm.$emit('update:modelValue', 'cut');
+		await nextTick();
+
+		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({
+			geometry: {
+				topRight: { treatment: 'cut' },
+				topLeft: { treatment: 'square' },
+			},
+		});
+	});
+
+	it('slants an edge in canonical pixels', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([shapeItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		numberField(wrapper, 'Right edge slant')?.vm.$emit('update:modelValue', 48);
+		await nextTick();
+
+		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ geometry: { rightSlant: 48 } });
+	});
+
+	it('initialises a Shape Geometry from a preset', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([shapeItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		selectField(wrapper, 'shape-geometry-preset')?.vm.$emit('update:modelValue', 'corner-cut');
+		await nextTick();
+
+		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({
+			geometry: { topRight: { treatment: 'cut' }, bottomLeft: { treatment: 'cut' } },
+		});
+	});
+
+	it('switches a Graphic Fill to a linear gradient and edits one of its stops', async () => {
+		const gradient = await mountComponent({
+			graphics: stack([shapeItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		selectField(gradient, 'graphic-fill-kind')?.vm.$emit('update:modelValue', 'linear-gradient');
+		await nextTick();
+
+		const withGradient = emittedGraphics(gradient);
+		expect(itemOf(withGradient)).toMatchObject({
+			surfaceStyle: { fill: { type: 'linear-gradient', angle: 90 } },
+		});
+
+		const stops = await mountComponent({
+			graphics: withGradient,
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+		expect(stops.findAll('[data-testid="graphic-fill-stop"]')).toHaveLength(2);
+
+		numberField(stops, 'Stop 2 opacity')?.vm.$emit('update:modelValue', 0.4);
+		await nextTick();
+
+		const patched = itemOf(emittedGraphics(stops));
+		expect(patched?.surfaceStyle?.fill.type === 'linear-gradient'
+			&& patched.surfaceStyle.fill.stops[1]?.opacity).toBe(0.4);
+	});
+
+	it('adds and removes gradient stops within the bounds of the vocabulary', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([{
+				...shapeItem,
+				surfaceStyle: {
+					fill: {
+						type: 'linear-gradient',
+						angle: 90,
+						stops: [
+							{ color: '#000000', position: 0, opacity: 1 },
+							{ color: '#ffffff', position: 1, opacity: 1 },
+						],
+					},
+					fillOpacity: 1,
+				},
+			}]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		expect(wrapper.get('[data-testid="graphic-fill-remove-stop"]').attributes('disabled')).toBeDefined();
+
+		await wrapper.get('[data-testid="graphic-fill-add-stop"]').trigger('click');
+
+		const patched = itemOf(emittedGraphics(wrapper));
+		expect(patched?.surfaceStyle?.fill.type === 'linear-gradient'
+			&& patched.surfaceStyle.fill.stops).toHaveLength(3);
+	});
+
+	it('adds an outline and a glow, and takes them away again', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([shapeItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		await switchField(wrapper, 'graphic-outline-enabled')?.trigger('click');
+		await switchField(wrapper, 'graphic-glow-enabled')?.trigger('click');
+
+		expect(itemOf(emittedGraphics(wrapper, 0))?.surfaceStyle?.outline).toMatchObject({ width: 2 });
+		expect(itemOf(emittedGraphics(wrapper, 1))?.surfaceStyle?.glow).toMatchObject({ size: 24 });
+
+		const styled = await mountComponent({
+			graphics: stack([{
+				...shapeItem,
+				surfaceStyle: {
+					fill: { type: 'solid', color: '#0077a3' },
+					fillOpacity: 1,
+					outline: { color: '#ffffff', width: 4 },
+				},
+			}]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		await switchField(styled, 'graphic-outline-enabled')?.trigger('click');
+
+		expect(itemOf(emittedGraphics(styled))?.surfaceStyle?.outline).toBeUndefined();
+	});
+
+	it('gives a Text Graphic Item a Graphic Surface Style of its own', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([textItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+		});
+
+		expect(wrapper.find('[data-testid="graphic-fill-kind"]').exists()).toBe(false);
+
+		await switchField(wrapper, 'surface-style-own')?.trigger('click');
+
+		expect(itemOf(emittedGraphics(wrapper))?.surfaceStyle).toMatchObject({ fillOpacity: 1 });
+	});
+
+	it('offers Graphic Group controls for a group', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([groupItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'cluster' },
+		});
+
+		selectField(wrapper, 'graphic-group-arrangement')?.vm.$emit('update:modelValue', 'canvas');
+		await nextTick();
+
+		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ arrangement: 'canvas' });
+		// A Graphic Group owns a Shape Geometry too, for its surface and its clipping.
+		expect(wrapper.find('[data-testid="shape-geometry-preset"]').exists()).toBe(true);
+		expect(wrapper.find('[data-testid="graphic-group-clip"]').exists()).toBe(true);
+	});
+
+	it('offers main-axis sizing instead of a coordinate for a row Graphic Group child', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([groupWith([shapeItem])]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		expect(numberField(wrapper, 'Item x')).toBeUndefined();
+		expect(wrapper.find('[data-testid="graphic-item-rotation"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="graphic-group-child-sizing-mode"]').exists()).toBe(true);
+
+		selectField(wrapper, 'graphic-group-child-sizing-mode')?.vm.$emit('update:modelValue', 'fill');
+		await nextTick();
+
+		expect(childOf(emittedGraphics(wrapper))).toMatchObject({ sizing: { mode: 'fill' } });
+	});
+
+	it('projects a canvas Graphic Group child coordinate against its group bounds', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([groupWith(
+				[{ ...shapeItem, anchor: 'top-left', x: 400, y: 100 }],
+				{ arrangement: 'canvas' },
+			)]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		selectField(wrapper, 'graphic-geometry-unit')?.vm.$emit('update:modelValue', 'percent');
+		await nextTick();
+
+		// The group is 800 wide, so 400px is half of the containing canvas.
+		expect(numberField(wrapper, 'Item x')?.props('modelValue')).toBe(50);
+	});
+
+	it('lets a Graphic Group child override the local style default of its group', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([groupWith(
+				[{ ...shapeItem, surfaceStyle: undefined }],
+				{ defaultChildSurfaceStyle: { fill: { type: 'solid', color: '#00ff00' }, fillOpacity: 0.5 } },
+			)]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		// Inheriting, so the group owns the style and the child offers no fill controls.
+		expect(wrapper.find('[data-testid="graphic-fill-kind"]').exists()).toBe(false);
+
+		await switchField(wrapper, 'surface-style-own')?.trigger('click');
+
+		expect(childOf(emittedGraphics(wrapper))?.surfaceStyle).toMatchObject({ fillOpacity: 1 });
+	});
+
+	it('shows a read-only observer every property without letting it change one', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([textItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			writable: false,
+		});
+
+		expect(wrapper.get('[data-testid="graphic-item-label"]').attributes('value')).toBe('Text 1');
+		expect(wrapper.get('fieldset').attributes('disabled')).toBeDefined();
+
+		wrapper.getComponent(USwitchStub).vm.$emit('update:modelValue', false);
+		wrapper.findAllComponents(UInputStub).forEach(input => input.vm.$emit('update:modelValue', 'changed'));
+		numberField(wrapper, 'Item width')?.vm.$emit('update:modelValue', 12);
+		await nextTick();
+
+		expect(wrapper.emitted('update:graphics')).toBeUndefined();
+	});
+
+	it('refuses a read-only observer\'s rename of the selected Broadcast Graphic', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+			writable: false,
+		});
+
+		wrapper.getComponent(UInputStub).vm.$emit('update:modelValue', 'Renamed');
+		await nextTick();
+
+		expect(wrapper.emitted('update:graphics')).toBeUndefined();
 	});
 });
