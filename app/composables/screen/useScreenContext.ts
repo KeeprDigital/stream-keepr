@@ -21,8 +21,10 @@ export interface ScreenContext {
 	fitToViewport?: Ref<boolean>;
 	/** True when the screen is embedded in the editor preview. */
 	isPreview?: Ref<boolean>;
-	/** Show editor-only guides in embedded previews. */
+	/** Show editor-only item guides in embedded previews. */
 	previewGuides?: Ref<boolean>;
+	/** Show advisory action-safe and title-safe guides in embedded previews. */
+	previewSafeAreas?: Ref<boolean>;
 	/** Opaque capability supplied to an unattended Screen Output via its URL fragment. */
 	assetCapability?: Ref<string | null>;
 }

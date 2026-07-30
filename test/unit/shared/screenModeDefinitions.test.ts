@@ -49,6 +49,12 @@ describe('screen Mode Definition module', () => {
 		expect(policy.resetScreenConfigDefaults).toEqual({ width: 1920, height: 1080 });
 	});
 
+	it('gives every graphics host the full Screen configuration width for its compositor', () => {
+		expect(getScreenModeConfigurationPolicy('broadcast-graphics').fullWidthConfiguration).toBe(true);
+		expect(getScreenModeConfigurationPolicy('feature-match-overlay').fullWidthConfiguration).toBe(true);
+		expect(getScreenModeConfigurationPolicy('standings').fullWidthConfiguration).toBe(false);
+	});
+
 	it('keeps Feature Match Overlay fixed dimensions and output options in shared policy', () => {
 		const definition = getScreenModeDefinition('feature-match-overlay');
 		const policy = getScreenModeConfigurationPolicy('feature-match-overlay');

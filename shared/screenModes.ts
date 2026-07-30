@@ -101,3 +101,17 @@ export function getContainerControls(mode: ScreenMode): Required<ScreenModeConta
 		...(SCREEN_MODES[mode].containerControls ?? {}),
 	};
 }
+
+/**
+ * The canvas a graphics Screen Mode defaults to, when a Screen has not yet been
+ * given its own width and height. This is the one home for that number: editors
+ * and Screen Outputs read it here rather than reaching for a loose constant.
+ * Only a graphics host has a canvas, so asking about any other mode is a bug.
+ */
+export function getScreenModeGraphicsCanvas(mode: ScreenMode): { width: number; height: number } {
+	const graphicsHost = SCREEN_MODES[mode].graphicsHost;
+	if (!graphicsHost)
+		throw new Error(`Screen Mode "${mode}" has no graphics host canvas.`);
+
+	return { width: graphicsHost.canvasWidth, height: graphicsHost.canvasHeight };
+}

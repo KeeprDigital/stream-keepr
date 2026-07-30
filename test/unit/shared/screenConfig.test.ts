@@ -158,6 +158,20 @@ describe('default config constants', () => {
 		expect(DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT).toBe(1080);
 	});
 
+	it('never resets a Broadcast Graphics Screen\'s authored stack to defaults', () => {
+		const displayDefaults = getDisplayDefaultsForMode('broadcast-graphics');
+
+		expect('graphics' in displayDefaults).toBe(false);
+		expect(getDefaultConfigForMode('broadcast-graphics').graphics).toEqual([]);
+	});
+
+	it('still resets a Feature Match Layout, which returns to a recoverable preset', () => {
+		const displayDefaults = getDisplayDefaultsForMode('feature-match-overlay');
+
+		expect('layout' in displayDefaults).toBe(true);
+		expect(displayDefaults.layout?.items.length).toBeGreaterThan(0);
+	});
+
 	it('default standings config defaults to all view mode', () => {
 		expect(DEFAULT_STANDINGS_CONFIG.viewMode).toBe('all');
 	});
