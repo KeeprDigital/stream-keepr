@@ -141,7 +141,7 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 				integrationBroadcastGraphic('a'),
 			]);
 
-			expect(harness.session().currentState).toEqual({ playout: {}, inputs: {} });
+			expect(harness.session().currentState).toEqual({ playout: {}, inputs: {}, sources: {} });
 			expect(harness.session().recoveryFault).toBeNull();
 		});
 	});
@@ -160,7 +160,7 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 
 			expect(reset.id).not.toBe(endedSessionId);
 			expect(reset.status).toBe('active');
-			expect(reset.currentState).toEqual({ playout: {}, inputs: {} });
+			expect(reset.currentState).toEqual({ playout: {}, inputs: {}, sources: {} });
 		});
 
 		it('leaves the Screen with exactly one epoch, so the next command has one to name', async () => {

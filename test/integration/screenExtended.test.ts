@@ -368,7 +368,9 @@ describe('screens extended API', () => {
 				{ type: 'choice', key: 'side', label: 'Side', required: false, updatePolicy: 'live', default: 'left', options: [{ value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }] },
 			],
 			sources: [{ key: 'player', label: 'Player', kind: 'player' }],
-			bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'displayName' }],
+			// A Graphic Input Binding names a field from the binding catalog, so this is a
+			// catalog field id rather than an arbitrary property path.
+			bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
 			items: [{
 				type: 'text',
 				id: 'name-line',

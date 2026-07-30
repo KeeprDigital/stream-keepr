@@ -132,7 +132,14 @@ export function recoveredBroadcastGraphicsLiveState(raw: unknown): BroadcastGrap
 		return createInitialBroadcastGraphicsLiveState();
 
 	const state = raw as Partial<BroadcastGraphicsLiveState>;
-	return { ...state, playout: state.playout ?? {}, inputs: state.inputs ?? {} } as BroadcastGraphicsLiveState;
+	return {
+		...state,
+		playout: state.playout ?? {},
+		inputs: state.inputs ?? {},
+		// Normalised like the other two: a session persisted before Graphic Source
+		// Selections existed carries no such key, and every reader expects the map.
+		sources: state.sources ?? {},
+	} as BroadcastGraphicsLiveState;
 }
 
 /**
@@ -163,6 +170,40 @@ export function recoveredBroadcastGraphicsLiveState(raw: unknown): BroadcastGrap
  * The acceptance revision goes with it: it counts acceptances, and the new epoch
  * has had none.
  *
+ * ## What crosses is what gets re-judged
+ *
+ * The line is not "prepared work crosses". It is that **state crossing this boundary
+ * must be re-judged against current Event Data the next time it is used**, because
+ * the boundary cannot tell an incidental mode change during one show from the gap
+ * between two shows.
+ *
+ * A Graphic Source Selection crosses. It stores an entity id, and every binding
+ * reading it re-resolves from current Event Data on every read: if the entity is
+ * gone the binding is unavailable and a required input blocks the Take, and if it is
+ * present the operator sees which entity in the picker that generated it. It is also
+ * the control that costs most to redo — one per graphic, and the first thing an
+ * operator sets.
+ *
+ * A **Graphic Input Override does not cross.** It is a frozen literal whose entire
+ * purpose is to outrank the binding, so it is the one piece of carried state that can
+ * neither be re-resolved nor become unavailable. Carried into a later show it would
+ * suppress a binding that is resolving a *different* entity perfectly correctly, and
+ * put the previous show's value on program — the mirror of the rule that a value
+ * whose source no longer resolves must not be taken again, except that here nothing
+ * is unavailable, so nothing catches it. Its only signal would be an `overridden`
+ * badge on a field the operator never touched this show, which is opt-out at exactly
+ * the moment attention is elsewhere.
+ *
+ * Carrying the correction would save re-typing it after an incidental mode flip.
+ * That is a real cost, and it is the smaller one: an operator who wants the previous
+ * show's corrections can re-enter them, and an operator who does not want them has no
+ * way to discover they are there.
+ *
+ * Accepted values do not cross for their own reason, above. Note that the guarantee
+ * there is structural rather than argued: every entry is rebuilt from
+ * `createInitialBroadcastGraphicInputsState()`, so `accepted` and `acceptedRevision`
+ * are empty in the new epoch whatever the Take gate later decides to consult.
+ *
  * State that cannot be trusted carries nothing forward: the same reasoning that
  * refuses to salvage half a playout map refuses to salvage half an input map.
  */
@@ -175,5 +216,5 @@ export function carriedForwardBroadcastGraphicsLiveState(raw: unknown): Broadcas
 		}]),
 	);
 
-	return { ...createInitialBroadcastGraphicsLiveState(), inputs };
+	return { ...createInitialBroadcastGraphicsLiveState(), inputs, sources: recovered.sources ?? {} };
 }

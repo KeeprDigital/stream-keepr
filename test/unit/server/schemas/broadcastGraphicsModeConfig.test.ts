@@ -14,6 +14,7 @@ import {
 	modeConfigPatchSchemaMap,
 	modeConfigsMapSchema,
 } from '~~/server/schemas/api/screen';
+import { graphicBindingFieldIds } from '~~/shared/modules/graphics';
 import {
 	GRAPHIC_ANIMATION_EASING_VALUES,
 	GRAPHIC_SLIDE_DIRECTION_VALUES,
@@ -209,20 +210,47 @@ function worstCaseChoiceInput(key: string) {
 	};
 }
 
+/**
+ * The most expensive field id the binding catalog actually offers.
+ *
+ * Derived from the catalog rather than written out, because a `fieldId` must now name
+ * a catalog field: the schema refuses an invented 100-character id, so the honest
+ * worst case is the longest real name, and it moves with the catalog.
+ */
+const LONGEST_BINDING_FIELD_ID = graphicBindingFieldIds()
+	.reduce((longest, id) => (id.length > longest.length ? id : longest), '');
+
+const WORST_CASE_PARENT_SOURCE_KEY = 'p'.repeat(MAX_GRAPHIC_INPUT_KEY_LENGTH);
+
 function worstCaseBinding(inputKey: string) {
 	return {
 		inputKey: inputKey.padEnd(MAX_GRAPHIC_INPUT_KEY_LENGTH, 'k'),
-		sourceKey: 's'.repeat(MAX_GRAPHIC_INPUT_KEY_LENGTH),
-		fieldId: 'f'.repeat(100),
+		sourceKey: WORST_CASE_PARENT_SOURCE_KEY,
+		fieldId: LONGEST_BINDING_FIELD_ID,
 	};
 }
 
-function worstCaseSource(key: string) {
-	return {
-		key: key.padEnd(MAX_GRAPHIC_INPUT_KEY_LENGTH, 's'),
+/**
+ * One operator-selected Graphic Source Selection per Broadcast Graphic and derived
+ * ones after it.
+ *
+ * Derived is the expensive shape — it carries a `from` naming a maximal sibling key
+ * — and it has to be reachable, so the first selection is the Feature Match Slot the
+ * rest follow. Several derived selections sharing one parent is exactly the intended
+ * use: an operator picks the slot once and both Players resolve.
+ */
+function worstCaseSource(key: string, derived: boolean) {
+	const base = {
+		key: derived ? key.padEnd(MAX_GRAPHIC_INPUT_KEY_LENGTH, 's') : WORST_CASE_PARENT_SOURCE_KEY,
 		label: 'L'.repeat(MAX_GRAPHIC_INPUT_LABEL_LENGTH),
-		kind: 'feature-match-slot' as const,
 	};
+	return derived
+		? {
+				...base,
+				kind: 'player' as const,
+				from: { sourceKey: WORST_CASE_PARENT_SOURCE_KEY, relation: 'player1' as const },
+			}
+		: { ...base, kind: 'feature-match-slot' as const };
 }
 
 function textInput(key: string) {
@@ -389,7 +417,9 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		fill(
 			MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 			MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
-			(graphic, index) => graphic.sources.push(worstCaseSource(`s${index}`)),
+			(graphic, index) => graphic.sources.push(
+				worstCaseSource(`s${index}`, graphic.sources.length > 0),
+			),
 		);
 
 		// A Broadcast Graphic owns whole-graphic motion as well as its items' own, and

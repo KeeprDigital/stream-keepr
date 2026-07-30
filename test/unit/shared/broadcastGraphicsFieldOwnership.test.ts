@@ -183,9 +183,9 @@ describe('broadcastGraphicsFieldOwnership', () => {
 			const [name, title] = graphicInputTraces(
 				state,
 				GRAPHIC,
-				{ inputs: DECLARATIONS, acceptedAt: T0 },
+				{ inputs: DECLARATIONS },
 				{},
-				['name'],
+				{ supersededInputKeys: ['name'] },
 			);
 
 			expect(name!.status).toBe('superseded');
@@ -195,7 +195,13 @@ describe('broadcastGraphicsFieldOwnership', () => {
 		it('still reports the authoritative value behind a superseded field', () => {
 			const state = setInput(createInitialBroadcastGraphicsLiveState(), 'name', 'Ava Reed', { value: 'Unnamed' });
 
-			const [name] = graphicInputTraces(state, GRAPHIC, { inputs: DECLARATIONS }, {}, ['name']);
+			const [name] = graphicInputTraces(
+				state,
+				GRAPHIC,
+				{ inputs: DECLARATIONS },
+				{},
+				{ supersededInputKeys: ['name'] },
+			);
 
 			// Superseded is a fact about whose edit won, not about the value: the operator
 			// has to be able to read what is there now in order to redo their change.
@@ -206,7 +212,7 @@ describe('broadcastGraphicsFieldOwnership', () => {
 			const traces = graphicInputTraces(
 				createInitialBroadcastGraphicsLiveState(),
 				GRAPHIC,
-				{ inputs: DECLARATIONS, acceptedAt: T0 },
+				{ inputs: DECLARATIONS },
 			);
 
 			expect(traces.every(trace => trace.status !== 'superseded')).toBe(true);

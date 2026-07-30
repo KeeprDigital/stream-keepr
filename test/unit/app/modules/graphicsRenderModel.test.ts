@@ -1101,6 +1101,10 @@ describe('graphicsCompositionRenderModel', () => {
 						placeholderStyles: { name: { color: '#ff0000', fontWeight: 300 } },
 					})],
 				}],
+				// Stated as an accepted value rather than left to the declared default, so
+				// this guard depends only on the matte identity and not on whether unset
+				// Graphic Inputs render their authored defaults.
+				inputValues: { a: { name: 'Ava Reed' } },
 				...CANVAS,
 			});
 

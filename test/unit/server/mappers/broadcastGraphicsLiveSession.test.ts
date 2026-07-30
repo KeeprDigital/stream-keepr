@@ -41,14 +41,14 @@ describe('mapBroadcastGraphicsLiveSessionToResponse', () => {
 		const mapped = mapBroadcastGraphicsLiveSessionToResponse(row(state));
 
 		expect(mapped.recoveryFault).toBeNull();
-		expect(mapped.currentState).toEqual(state);
+		expect(mapped.currentState).toEqual({ ...state, sources: {} });
 	});
 
 	it('replaces live state it cannot read with one that has nothing on air', () => {
 		const mapped = mapBroadcastGraphicsLiveSessionToResponse(row({ playout: { slate: 'yes' }, inputs: {} }));
 
 		expect(mapped.recoveryFault?.reason).toBe('corrupt');
-		expect(mapped.currentState).toEqual({ playout: {}, inputs: {} });
+		expect(mapped.currentState).toEqual({ playout: {}, inputs: {}, sources: {} });
 	});
 
 	it('reports a missing live state rather than answering with an empty one silently', () => {
@@ -57,7 +57,7 @@ describe('mapBroadcastGraphicsLiveSessionToResponse', () => {
 		const mapped = mapBroadcastGraphicsLiveSessionToResponse(row(null));
 
 		expect(mapped.recoveryFault?.reason).toBe('missing');
-		expect(mapped.currentState).toEqual({ playout: {}, inputs: {} });
+		expect(mapped.currentState).toEqual({ playout: {}, inputs: {}, sources: {} });
 	});
 
 	it('keeps the epoch’s own identity and sequence, which the fault does not invalidate', () => {
@@ -81,7 +81,7 @@ describe('mapBroadcastGraphicsCommandResult', () => {
 		const result = mapBroadcastGraphicsCommandResult(row({ playout: { slate: 'yes' }, inputs: {} }), 'Take');
 
 		expect(result.currentState).toEqual(result.session.currentState);
-		expect(result.currentState).toEqual({ playout: {}, inputs: {} });
+		expect(result.currentState).toEqual({ playout: {}, inputs: {}, sources: {} });
 		expect(result.session.recoveryFault?.reason).toBe('corrupt');
 	});
 
