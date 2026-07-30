@@ -137,7 +137,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		}));
 	});
 
-	it('names each command distinctly so a retry is the only thing a receipt suppresses', async () => {
+	it('names two separate operator intents distinctly, so neither suppresses the other', async () => {
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 		mockRepository.sendCommand.mockResolvedValue({
 			screenId: SCREEN_ID,
@@ -148,11 +148,39 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			session: session({ sequence: 2 }),
 		});
 
+		// Two presses are two intents. Sharing an id would make the receipt store
+		// answer the second with the first one's outcome.
 		await store.take(EVENT_ID, SCREEN_ID, 'slate');
 		await store.take(EVENT_ID, SCREEN_ID, 'slate');
 
 		const [first, second] = mockRepository.sendCommand.mock.calls.map(call => call[3].commandId);
 		expect(first).not.toBe(second);
+	});
+
+	it('reuses the command id when it restates one intent against the current epoch', async () => {
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		vi.clearAllMocks();
+		mockRepository.sendCommand
+			.mockRejectedValueOnce({ statusCode: 409, message: 'Broadcast graphics live session has ended' })
+			.mockResolvedValueOnce({
+				screenId: SCREEN_ID,
+				sessionId: 56,
+				sequence: 2,
+				commandType: 'Take',
+				currentState: { playout: { slate: { onAir: true } } },
+				session: session({ id: 56, sequence: 2 }),
+			});
+		mockRepository.getSession.mockResolvedValue(session({ id: 56, sequence: 1 }));
+
+		await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+		// One press is one intent however many times it has to be delivered, so the
+		// retry carries the same command id. A fresh id would defeat the receipt
+		// that exists to recognise it: were the first attempt to have landed after
+		// all, the retry would be accepted a second time rather than answered with
+		// the outcome it already had.
+		const [first, retried] = mockRepository.sendCommand.mock.calls.map(call => call[3].commandId);
+		expect(retried).toBe(first);
 	});
 
 	it('reloads and retries once when the epoch it cached has already ended', async () => {
