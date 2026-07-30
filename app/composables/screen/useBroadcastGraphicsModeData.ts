@@ -1,4 +1,4 @@
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicInputValue } from '~~/shared/types/graphics';
 import type { GraphicsPreviewState } from '~/modules/graphics/previewMessages';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
@@ -43,6 +43,26 @@ export function useBroadcastGraphicsModeData() {
 		return screenId ? sessionStore.onAirGraphicIds(screenId, graphics.value) : [];
 	});
 
+	/**
+	 * The accepted on-air Graphic Input values each composed Broadcast Graphic
+	 * renders.
+	 *
+	 * A preview has no Live Session, so it contributes nothing here and the
+	 * compositor falls back to each graphic's declared defaults — the design as
+	 * authored. A live output contributes what its Live Session has accepted, so
+	 * program shows accepted values and never a working edit.
+	 */
+	const inputValues = computed<Record<string, Record<string, GraphicInputValue>>>(() => {
+		const screenId = screen.value?.id;
+		if (previewState.value || !screenId)
+			return {};
+
+		return Object.fromEntries(graphics.value.map(graphic => [
+			graphic.id,
+			sessionStore.acceptedInputValues(screenId, graphic),
+		]));
+	});
+
 	const selectedTarget = computed<GraphicsSelectionTarget>(() =>
 		previewState.value?.selectedTarget ?? { type: 'canvas' },
 	);
@@ -84,5 +104,5 @@ export function useBroadcastGraphicsModeData() {
 		window.removeEventListener('message', handlePreviewStateMessage);
 	});
 
-	return { graphics, onAirGraphicIds, selectedTarget, publishSelection };
+	return { graphics, onAirGraphicIds, inputValues, selectedTarget, publishSelection };
 }
