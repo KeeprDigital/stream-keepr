@@ -44,6 +44,12 @@ import { getMtgGameData, getOpGameData } from '../../utils/gameData';
  * reason to substitute the Graphic Input's declared default. Nothing here clamps,
  * truncates, or invents a value: a Player with no recorded position has no
  * position, and a lower third bound to it shows nothing rather than a zero.
+ *
+ * The three `toggle` fields are the stated exception. A boolean has no absence to
+ * render, and "this Match has no recorded result" is exactly what `false` means
+ * there, so they resolve `false` rather than `undefined` — otherwise a toggle-gated
+ * Graphic Item would become inoperable rather than simply off. Every non-toggle field
+ * follows the rule without exception.
  */
 
 /** Whether a field is one stored value or a composed broadcast rendering of several. */
@@ -275,8 +281,17 @@ const EVENT_FIELDS: readonly GraphicBindingField<GraphicBindingEvent>[] = [
 		label: 'Game name',
 		type: 'text',
 		shape: 'formatted',
-		// The stored value is a code (`mtg`); a broadcast wants the game's own name.
-		resolve: event => (event.game === 'mtg' ? 'Magic: The Gathering' : 'One Piece'),
+		// The stored value is a code (`mtg`); a broadcast wants the game's own name. A
+		// switch rather than a ternary so adding a game is a compile error here rather
+		// than a broadcast silently captioned with the wrong game.
+		resolve: (event) => {
+			switch (event.game) {
+				case 'mtg':
+					return 'Magic: The Gathering';
+				case 'op':
+					return 'One Piece';
+			}
+		},
 	},
 ];
 
@@ -374,6 +389,10 @@ const MATCH_FIELDS: readonly GraphicBindingField<GraphicBindingMatch>[] = [
 			return first === undefined || second === undefined ? undefined : `${first} - ${second}`;
 		},
 	},
+	// The three toggle fields are the module's one documented exception to "resolve
+	// nothing rather than invent something": a boolean has no absence to report, and a
+	// Match with no recorded result has, factually, not got one. Absent reads as false
+	// rather than as unavailable, so a toggle-gated Graphic Item stays operable.
 	{ id: 'match.hasResult', label: 'Has a result', type: 'toggle', shape: 'atomic', resolve: match => match.hasResult ?? false },
 	{ id: 'match.isBye', label: 'Is a bye', type: 'toggle', shape: 'atomic', resolve: match => match.isBye ?? false },
 ];
@@ -481,6 +500,8 @@ const FEATURE_MATCH_SLOT_FIELDS: readonly GraphicBindingField<GraphicBindingFeat
 		label: 'Match complete',
 		type: 'toggle',
 		shape: 'atomic',
+		// Absent reads as false, as with the Match toggles above: a slot with no live
+		// session has not completed a match.
 		resolve: slot => slotLiveState(slot)?.isComplete ?? false,
 	},
 ];

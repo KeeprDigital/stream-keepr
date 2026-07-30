@@ -22,6 +22,12 @@ export const BROADCAST_GRAPHICS_REJECTION_CODES = [
 	 * both resolve without anyone picking them.
 	 */
 	'unknown-source',
+	/**
+	 * A Graphic Input Override was set on a Graphic Input with no Graphic Input
+	 * Binding. An override exists to mask a binding; with no binding there is nothing
+	 * to mask, and the working value is the one way to set such an input.
+	 */
+	'override-unbound',
 ] as const;
 
 export type BroadcastGraphicsRejectionCode = typeof BROADCAST_GRAPHICS_REJECTION_CODES[number];

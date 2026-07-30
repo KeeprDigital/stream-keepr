@@ -19,10 +19,15 @@ export interface BroadcastGraphicsRenderModelInput {
 	onAirGraphicIds?: readonly string[];
 	/**
 	 * The accepted on-air Graphic Input values a Graphic Text Template renders,
-	 * keyed by Broadcast Graphic id. Omitted renders declared defaults, which is what
-	 * an editor preview with no Live Session shows.
+	 * keyed by Broadcast Graphic id. A Graphic Input with no value here renders
+	 * nothing, never its authored default.
 	 */
 	inputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
+	/**
+	 * Render authored defaults for unset Graphic Inputs. An editor preview does, so an
+	 * author sees the design as authored; a live Screen Output never does.
+	 */
+	substituteAuthoredDefaults?: boolean;
 	/** Editor-only item guides and selection highlighting. */
 	itemGuides?: boolean;
 	/** Editor-only advisory action-safe and title-safe guides. */
@@ -60,6 +65,7 @@ export function resolveBroadcastGraphicsRenderModel(
 		graphics: input.graphics,
 		visibleGraphicIds: input.onAirGraphicIds ?? [],
 		inputValues: input.inputValues,
+		substituteAuthoredDefaults: input.substituteAuthoredDefaults,
 		itemGuides: input.itemGuides,
 		safeAreaGuides: input.safeAreaGuides,
 		selectedTarget: input.selectedTarget,

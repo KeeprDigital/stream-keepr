@@ -255,6 +255,14 @@ function boundValuesFor(
  * invalidate a staged Update Graphic another operator is preparing on the same
  * graphic's other inputs.
  */
+/*
+ * `keys` narrows this to one edited field, which is what a Set Input or Set Override
+ * passes. A Select Source or Resolve Bindings deliberately passes none: more than one
+ * binding may read the changed selection — including through a derived one — and
+ * re-accepting every live-policy input is both cheaper than working out which, and
+ * more correct, since it also picks up a live input that could not be accepted
+ * earlier and now can.
+ */
 function acceptLivePolicyValues(
 	inputs: NormalizedBroadcastGraphicInputsState,
 	context: BroadcastGraphicsReductionContext,
@@ -313,10 +321,12 @@ function reduceTake(
 		);
 	}
 
+	// An off-air acceptance: a Take composes its values afresh rather than holding a
+	// value from the last time this graphic was on air.
 	return {
 		...withInputs(state, payload.graphicId, {
 			...inputs,
-			accepted: acceptGraphicInputValues(inputs, context.inputs, context.bindings, bound),
+			accepted: acceptGraphicInputValues(inputs, context.inputs, context.bindings, bound, false),
 			acceptedRevision: inputs.acceptedRevision + 1,
 		}),
 		playout,
@@ -353,9 +363,11 @@ function reduceUpdateGraphic(
 
 	const bound = boundValuesFor(state, payload.graphicId, context);
 
+	// An on-air acceptance: an input that has become unavailable keeps its last
+	// accepted value, because program must not blank mid-show.
 	return withInputs(state, payload.graphicId, {
 		...inputs,
-		accepted: acceptGraphicInputValues(inputs, context.inputs, context.bindings, bound),
+		accepted: acceptGraphicInputValues(inputs, context.inputs, context.bindings, bound, true),
 		acceptedRevision: inputs.acceptedRevision + 1,
 	});
 }
@@ -426,10 +438,28 @@ function reduceSetOverride(
 
 	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
 	const overrides = { ...inputs.overrides };
-	if (payload.value === null)
+
+	if (payload.value === null) {
+		// Clearing is always allowed, whatever the bindings say now. An author who removes
+		// a binding leaves any override standing — precedence is override-first — so the
+		// operator must always be able to take the mask off again.
 		delete overrides[payload.inputKey];
-	else
+	}
+	else {
+		// A Graphic Input Override masks a Graphic Input Binding. Setting one where there
+		// is no binding would be a second way to hold a value, with no rule saying which
+		// of the two wins, so it is refused rather than quietly becoming a manual value
+		// under a different name. Live Control never asks for this: it writes a working
+		// value for an unbound input and an override only for a bound one.
+		if (!context.bindings?.some(binding => binding.inputKey === payload.inputKey)) {
+			throw new BroadcastGraphicsCommandRejection(
+				'override-unbound',
+				`${payload.inputKey} has no Graphic Input Binding to override`,
+				[payload.inputKey],
+			);
+		}
 		overrides[payload.inputKey] = payload.value;
+	}
 
 	const edited: NormalizedBroadcastGraphicInputsState = { ...inputs, overrides };
 

@@ -166,6 +166,52 @@ describe('broadcast graphics Event Data binding API', () => {
 		expect(cleared.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Ava Reed' });
 	});
 
+	it('refuses to take a graphic again once a required binding has stopped resolving', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-retake-blocked', graphicWith([REQUIRED_NAME]));
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', avaId);
+		await harness.send({ commandId: playoutCommandId('bind-take8'), type: 'Take', payload: { graphicId: GRAPHIC } });
+		await harness.send({ commandId: playoutCommandId('bind-out2'), type: 'Out', payload: { graphicId: GRAPHIC } });
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', null);
+
+		// It was legitimately on air with Ava Reed, and that value is still stored. Taking
+		// it again would put a name nobody has selected back on program with no warning,
+		// so the off-air rule applies and the Take is refused.
+		const res = await $fetchRaw(
+			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`,
+			{
+				method: 'POST',
+				body: { commandId: playoutCommandId('bind-retake'), type: 'Take', payload: { graphicId: GRAPHIC } },
+				ignoreResponseError: true,
+			},
+		);
+
+		expect(res.status).toBe(409);
+		expect(res._data?.message).toMatch(/must have a value/i);
+
+		const stillOff = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
+		expect(stillOff.currentState.playout[GRAPHIC]).toEqual({ onAir: false });
+	});
+
+	it('refuses an override on a Graphic Input with no binding to mask', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-override-unbound', graphicWith([NAME], [PLAYER_SOURCE], []));
+
+		const res = await $fetchRaw(
+			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`,
+			{
+				method: 'POST',
+				body: {
+					commandId: playoutCommandId('bind-override-unbound'),
+					type: 'Set Override',
+					payload: { graphicId: GRAPHIC, inputKey: 'name', value: 'Ava Reed' },
+				},
+				ignoreResponseError: true,
+			},
+		);
+
+		expect(res.status).toBe(409);
+		expect(res._data?.message).toMatch(/no Graphic Input Binding to override/i);
+	});
+
 	it('masks a binding with an override and resumes the current bound value when cleared', async () => {
 		const harness = await createGraphicsHarness(eventId, 'bind-override', graphicWith([LIVE_NAME]));
 		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', avaId);

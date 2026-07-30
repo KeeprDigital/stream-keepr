@@ -33,6 +33,7 @@ const REJECTION_STATUS: Record<BroadcastGraphicsCommandRejection['code'], number
 	'update-unavailable': 409,
 	'unknown-input': 404,
 	'unknown-source': 404,
+	'override-unbound': 409,
 };
 
 /** Namespaces Broadcast Graphics Live Session receipts in the shared receipt store. */

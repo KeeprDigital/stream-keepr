@@ -98,7 +98,11 @@ describe('broadcastGraphicsInputs', () => {
 		const state = createInitialBroadcastGraphicsLiveState();
 
 		expect(workingGraphicInputValues(state, GRAPHIC, [NAME])).toEqual({ name: 'Unnamed' });
-		expect(acceptedGraphicInputValues(state, GRAPHIC, [NAME])).toEqual({ name: 'Unnamed' });
+		// Working values start at the declared defaults — that is what copying a template
+		// onto a Screen means. Accepted values do not: nothing has been accepted, so
+		// nothing is on air, and reporting the default here would be reporting a value
+		// the Screen Outputs would then render as though an acceptance had produced it.
+		expect(acceptedGraphicInputValues(state, GRAPHIC, [NAME])).toEqual({});
 		expect(broadcastGraphicInputsState(state, GRAPHIC).acceptedRevision).toBe(0);
 	});
 

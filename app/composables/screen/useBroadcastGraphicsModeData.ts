@@ -44,17 +44,27 @@ export function useBroadcastGraphicsModeData() {
 	});
 
 	/**
+	 * Whether this is an authoring preview rather than a live output.
+	 *
+	 * The distinction decides what an unset Graphic Input renders, so it is named once
+	 * and both `inputValues` and the compositor read the same answer. A preview has no
+	 * Live Session to accept anything and shows the design as authored; a live output
+	 * shows only what an acceptance produced.
+	 */
+	const isAuthoringPreview = computed(() => previewState.value !== null || !screen.value?.id);
+
+	/**
 	 * The accepted on-air Graphic Input values each composed Broadcast Graphic
 	 * renders.
 	 *
-	 * A preview has no Live Session, so it contributes nothing here and the
-	 * compositor falls back to each graphic's declared defaults — the design as
-	 * authored. A live output contributes what its Live Session has accepted, so
-	 * program shows accepted values and never a working edit.
+	 * A live output contributes exactly what its Live Session has accepted — never a
+	 * working edit, and never a declared default standing in for a value no acceptance
+	 * produced. A preview contributes nothing and lets the compositor substitute
+	 * authored defaults instead, which is why the two travel together.
 	 */
 	const inputValues = computed<Record<string, Record<string, GraphicInputValue>>>(() => {
 		const screenId = screen.value?.id;
-		if (previewState.value || !screenId)
+		if (isAuthoringPreview.value || !screenId)
 			return {};
 
 		return Object.fromEntries(graphics.value.map(graphic => [
@@ -104,5 +114,12 @@ export function useBroadcastGraphicsModeData() {
 		window.removeEventListener('message', handlePreviewStateMessage);
 	});
 
-	return { graphics, onAirGraphicIds, inputValues, selectedTarget, publishSelection };
+	return {
+		graphics,
+		onAirGraphicIds,
+		inputValues,
+		isAuthoringPreview,
+		selectedTarget,
+		publishSelection,
+	};
 }

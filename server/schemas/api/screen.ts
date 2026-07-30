@@ -795,12 +795,21 @@ const graphicSourceSelectionSchema = z.object({
 /**
  * A Graphic Input Binding names one catalog field.
  *
- * Only that the field id is a catalog name is checked here. Whether it suits the
- * kind of the Graphic Source Selection it reads and the type of the Graphic Input it
- * feeds needs all three arrays at once, which is an object-level rule — and
- * object-level rules do not survive the per-mode patch derivation the editors write
- * through. Resolution is total instead: a binding whose field does not fit resolves
- * nothing, so the invariant that matters on air is enforced where it is enforceable.
+ * Only that the field id is a catalog name **somewhere** is checked here, across all
+ * eight Graphic Source Selection kinds at once. So `player.name` on a
+ * `feature-match-slot` selection passes this check and then resolves nothing for as
+ * long as it exists — authorable but permanently dead.
+ *
+ * That gap is deliberate rather than overlooked. Narrowing the id to the kind of the
+ * selection it reads, or checking it against the type of the Graphic Input it feeds,
+ * needs the `bindings`, `sources`, and `inputs` arrays together — an object-level
+ * rule, and object-level rules do not survive the per-mode patch derivation the
+ * editors write through, so it would be enforced on one write path and silently
+ * dropped on the other. Resolution is total instead: a binding whose field does not
+ * fit its kind or type resolves nothing, so the invariant that matters on air holds
+ * where it is enforceable. An authoring surface that only ever offers
+ * `graphicBindingFields(kind, game)` cannot produce the dead combination in the first
+ * place; a hand-written API call can.
  */
 const graphicInputBindingSchema = z.object({
 	inputKey: graphicInputKeySchema,
@@ -830,7 +839,13 @@ function graphicSourceDerivationsResolve(
 	});
 }
 
-/** Whether the `from` chains terminate rather than looping back on themselves. */
+/**
+ * Whether the `from` chains terminate rather than looping back on themselves.
+ *
+ * Unreachable while the relation vocabulary stays acyclic, since a loop fails the
+ * reachability check above first. Kept as the rule an author would want stated if a
+ * future relation closes a cycle.
+ */
 function graphicSourceDerivationsAcyclic(
 	sources: readonly { key: string; from?: { sourceKey: string } }[],
 ): boolean {

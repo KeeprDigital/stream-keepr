@@ -205,13 +205,32 @@ export function workingGraphicInputValues(
 	return resolveValues(broadcastGraphicInputsState(state, graphicId).working, declarations);
 }
 
-/** The values an on-air Broadcast Graphic renders. */
+/**
+ * The values an on-air Broadcast Graphic renders.
+ *
+ * Exactly what acceptance stored, and nothing else. A key that acceptance passed over
+ * is missing here rather than filled in with the declared default: the default is
+ * authored placeholder text, and substituting it for a binding that resolves nothing
+ * would put that placeholder on air looking like live data — the one thing the
+ * settled rule forbids outright.
+ *
+ * This is deliberately not symmetric with `workingGraphicInputValues`, which does
+ * layer defaults. There the default is the right answer, because copying a Broadcast
+ * Graphic Template onto a Screen makes each default the placed graphic's initial
+ * manual value. Here there is no such claim to make: nothing has been accepted, so
+ * nothing is on air.
+ */
 export function acceptedGraphicInputValues(
 	state: { inputs?: Record<string, BroadcastGraphicInputsState> },
 	graphicId: string,
 	declarations: readonly GraphicInputDeclaration[],
 ): Record<string, GraphicInputValue> {
-	return resolveValues(broadcastGraphicInputsState(state, graphicId).accepted, declarations);
+	const accepted = broadcastGraphicInputsState(state, graphicId).accepted;
+	return Object.fromEntries(
+		declarations
+			.filter(declaration => declaration.key in accepted)
+			.map(declaration => [declaration.key, accepted[declaration.key]!]),
+	);
 }
 
 function hasBindingFor(
@@ -252,16 +271,30 @@ export function effectiveGraphicInputValue(
 /**
  * Accept the complete staged set.
  *
- * Only available values are accepted. An unavailable one is passed over rather
- * than coerced or blanked, which is what keeps an on-air value that has become
- * unavailable showing its last accepted rendering. Keys whose declaration has
- * gone are dropped, so acceptance also bounds what the Live Session stores.
+ * Only available values are accepted; an unavailable one is passed over rather than
+ * coerced or blanked. Keys whose declaration has gone are dropped, so acceptance
+ * also bounds what the Live Session stores.
+ *
+ * ## Why holding the last accepted value depends on being on air
+ *
+ * The settled rules are two, and they are scoped differently on purpose. An input
+ * that becomes unavailable *on air* keeps its last accepted value visible until the
+ * operator updates or overrides it — program must not blank mid-show. A required
+ * unavailable input prevents an *off-air* graphic from being taken on air at all.
+ *
+ * Applying the first rule to an off-air acceptance would invert the second in
+ * exactly the case it was written for: a graphic that has been on air before, and
+ * has since lost the Graphic Source Selection behind a required input, would be
+ * taken again showing the previous entity's value with no warning. So the hold
+ * applies only while the graphic is on air, and a Take composes its values afresh.
  */
 export function acceptGraphicInputValues(
 	inputs: NormalizedBroadcastGraphicInputsState,
 	declarations: readonly GraphicInputDeclaration[],
 	bindings: readonly GraphicInputBinding[] | undefined = undefined,
 	bound: Readonly<Record<string, GraphicInputValue>> = {},
+	/** Whether this acceptance is happening to a graphic already on a program output. */
+	onAir = false,
 ): Record<string, GraphicInputValue> {
 	const accepted: Record<string, GraphicInputValue> = {};
 
@@ -273,7 +306,7 @@ export function acceptGraphicInputValues(
 			continue;
 		}
 
-		if (declaration.key in inputs.accepted)
+		if (onAir && declaration.key in inputs.accepted)
 			accepted[declaration.key] = inputs.accepted[declaration.key]!;
 	}
 
@@ -281,11 +314,12 @@ export function acceptGraphicInputValues(
 }
 
 /**
- * The required Graphic Inputs with no value that could go on air.
+ * The required Graphic Inputs that stop this Broadcast Graphic being taken on air.
  *
- * Measured against the values acceptance would actually produce rather than
- * against the staged set alone: a required input whose new edit is unavailable
- * but whose accepted value still is available is not missing from program.
+ * Measured against the values an off-air acceptance would actually produce — which
+ * is what a Take performs. A previously accepted value does not count: it belonged
+ * to the last time this graphic was on air, and taking it again on the strength of a
+ * source that no longer resolves is exactly how a dead name reaches program.
  */
 export function unavailableRequiredGraphicInputs(
 	inputs: NormalizedBroadcastGraphicInputsState,
@@ -293,7 +327,7 @@ export function unavailableRequiredGraphicInputs(
 	bindings: readonly GraphicInputBinding[] | undefined = undefined,
 	bound: Readonly<Record<string, GraphicInputValue>> = {},
 ): GraphicInputDeclaration[] {
-	const accepted = acceptGraphicInputValues(inputs, declarations, bindings, bound);
+	const accepted = acceptGraphicInputValues(inputs, declarations, bindings, bound, false);
 	return declarations.filter(declaration =>
 		declaration.required && !graphicInputAvailability(declaration, accepted[declaration.key]).available,
 	);
@@ -316,7 +350,9 @@ export function graphicInputTraces(
 	const stored = broadcastGraphicInputsState(state, graphicId);
 	const working = resolveValues(stored.working, declarations);
 	const accepted = resolveValues(stored.accepted, declarations);
-	const acceptance = acceptGraphicInputValues(stored, declarations, graphic.bindings, boundValues);
+	// `blocksTake` is the off-air question, so the acceptance it is measured against is
+	// the one a Take would perform — never the on-air hold.
+	const acceptance = acceptGraphicInputValues(stored, declarations, graphic.bindings, boundValues, false);
 
 	return declarations.map((declaration) => {
 		const key = declaration.key;

@@ -228,6 +228,9 @@ export function resolveGraphicSourceSelections(
 		if (!declaration.from)
 			return { key: declaration.key, kind: declaration.kind, entity: selectedEntity(declaration, selections, data) };
 
+		// Unreachable while the relation table stays acyclic — the kind check below
+		// refuses any loop first — and kept deliberately, because a future relation whose
+		// result kind closes a cycle would otherwise recurse until the stack gave out.
 		if (visiting.has(declaration.key))
 			return { key: declaration.key, kind: declaration.kind };
 
@@ -284,6 +287,11 @@ export function resolveGraphicInputBindings(
 	const game: Game | undefined = data.event?.game;
 	const bound: Record<string, GraphicInputValue> = {};
 
+	// Resolution always knows the Event, so a game-specific field with no game to check
+	// against is a fact this data set cannot support — not a reason to resolve it
+	// anyway. (Authoring surfaces with no Event context are the lenient case, and that
+	// leniency lives in `isGraphicBindingFieldCompatible`, not here.)
+
 	for (const binding of bindings) {
 		const declaration = declarations.find(entry => entry.key === binding.inputKey);
 		const source = sources[binding.sourceKey];
@@ -295,7 +303,7 @@ export function resolveGraphicInputBindings(
 		// Graphic Input cannot hold, resolves nothing rather than something coerced.
 		if (!field || field.type !== declaration.type)
 			continue;
-		if (field.game !== undefined && game !== undefined && field.game !== game)
+		if (field.game !== undefined && field.game !== game)
 			continue;
 
 		const value = resolveGraphicBindingField(source.kind, binding.fieldId, source.entity as never, data);

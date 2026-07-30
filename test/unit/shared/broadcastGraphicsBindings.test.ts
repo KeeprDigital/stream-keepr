@@ -161,9 +161,13 @@ describe('bound Graphic Inputs on air', () => {
 		const state = take(createInitialBroadcastGraphicsLiveState());
 
 		// Nothing is selected, so the binding resolves nothing. The default 'Unnamed'
-		// is authored placeholder text and must not reach program dressed as live data.
-		expect(acceptedGraphicInputValues(state, GRAPHIC, [NAME])).toEqual({ name: 'Unnamed' });
+		// is authored placeholder text and must not reach program dressed as live data,
+		// so the key is absent — both in what acceptance stored and in what the values
+		// the compositor reads report. An optional input has no `blocksTake` shielding
+		// it, so this is the only thing standing between a placeholder and program.
 		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({});
+		expect(acceptedGraphicInputValues(state, GRAPHIC, [NAME])).toEqual({});
+		expect('name' in acceptedGraphicInputValues(state, GRAPHIC, [NAME])).toBe(false);
 	});
 
 	it('blocks Take while a required bound Graphic Input resolves nothing, and names it', () => {
@@ -230,12 +234,41 @@ describe('bound Graphic Inputs on air', () => {
 		const [trace] = traces(state, required, false);
 
 		// Stale is about what program is showing, and program is showing nothing, so the
-		// binding is simply unavailable. Take is not blocked, because the value this
-		// graphic was legitimately last on air with is still what acceptance would
-		// produce — blocking is for a required input with no value at all.
+		// binding is simply unavailable — and the same input read as on air would be
+		// stale instead.
 		expect(trace!.status).toBe('unavailable');
-		expect(trace!.blocksTake).toBe(false);
 		expect(traces(state, required, true)[0]!.status).toBe('stale');
+	});
+
+	it('refuses to take a graphic again once a required binding has stopped resolving', () => {
+		const required = context({ inputs: [REQUIRED_NAME] });
+		let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, required), required);
+		state = reduce(state, { type: 'Out', payload: { graphicId: GRAPHIC } }, required);
+		state = selectPlayer(state, null, required);
+
+		// The value it was last on air with belonged to a Player nobody has selected any
+		// more. Taking it again would put a dead name on program with no warning, so the
+		// off-air rule applies: a required unavailable input blocks the Take.
+		expect(traces(state, required, false)[0]!.blocksTake).toBe(true);
+
+		const failure = rejection(() => take(state, required));
+
+		expect(failure.code).toBe('required-input-unavailable');
+		expect(failure.inputKeys).toEqual(['name']);
+	});
+
+	it('drops an optional value whose binding has stopped resolving when retaken', () => {
+		let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1));
+
+		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({ name: 'Ava Reed' });
+
+		state = reduce(state, { type: 'Out', payload: { graphicId: GRAPHIC } });
+		state = selectPlayer(state, null);
+		state = take(state);
+
+		// Nothing blocks an optional input, so the only protection is that a Take
+		// composes afresh: the stale name is gone rather than silently re-taken.
+		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({});
 	});
 });
 
@@ -356,6 +389,29 @@ describe('graphic Input Overrides', () => {
 		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({ name: 'Ava "Riptide" Reed' });
 	});
 
+	it('refuses an override on a Graphic Input with no binding to mask', () => {
+		const unbound = context({ bindings: [] });
+
+		const failure = rejection(() => setOverride(createInitialBroadcastGraphicsLiveState(), 'Ava Reed', unbound));
+
+		// An override masks a binding. With no binding it would be a second way to hold a
+		// value with no rule saying which wins, so the working value is the only way in.
+		expect(failure.code).toBe('override-unbound');
+	});
+
+	it('still clears an override whose binding an author has since removed', () => {
+		let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1));
+		state = setOverride(state, 'Ava "Riptide" Reed');
+
+		// The author removes the binding under the running show. The override stands,
+		// because precedence is override-first — so the operator must still be able to
+		// take the mask off.
+		const unbound = context({ bindings: [] });
+		const cleared = setOverride(state, null, unbound);
+
+		expect(broadcastGraphicInputsState(cleared, GRAPHIC).overrides).toEqual({});
+	});
+
 	it('refuses an override naming a Graphic Input the Broadcast Graphic does not declare', () => {
 		const failure = rejection(() => reduce(
 			createInitialBroadcastGraphicsLiveState(),
@@ -363,6 +419,21 @@ describe('graphic Input Overrides', () => {
 		));
 
 		expect(failure.code).toBe('unknown-input');
+	});
+
+	it('reads an unusable override as unavailable rather than stale', () => {
+		let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1));
+		state = setOverride(state, 'A'.repeat(80));
+
+		const [trace] = traces(state, context(), true);
+
+		// The binding is still resolving and program still shows the last accepted value,
+		// which is the shape of stale — but the cause is the operator's own unusable
+		// entry, and calling that stale would point them at the data source instead of at
+		// the value they need to fix.
+		expect(trace!.accepted.value).toBe('Ava Reed');
+		expect(trace!.bound!.value).toBe('Ava Reed');
+		expect(trace!.status).toBe('unavailable');
 	});
 
 	it('leaves an unavailable override off air rather than coercing it', () => {

@@ -84,8 +84,17 @@ const traces = computed<GraphicInputTrace[]>(() =>
 
 const isOnAir = computed(() => props.playoutState !== 'off' && props.playoutState !== 'waiting');
 
-/** Update Graphic has something to accept exactly when an edit is not yet on air. */
-const hasStagedChanges = computed(() => traces.value.some(trace => trace.pending));
+/**
+ * Update Graphic has something to accept exactly when an edit is not yet on air *and*
+ * could go on air.
+ *
+ * `pending` alone is true for an unavailable value too, since it only says the staged
+ * value differs from the accepted one. Offering the action then would offer an
+ * acceptance that provably accepts nothing.
+ */
+const hasStagedChanges = computed(() => traces.value.some(trace =>
+	trace.pending && trace.effective.availability.available,
+));
 
 /**
  * The required Graphic Inputs that stop this Broadcast Graphic going on air.
@@ -132,9 +141,21 @@ function commitNow(key: string, value: GraphicInputValue) {
 
 /** Stop masking a binding, after which its current bound value resumes. */
 function clearOverride(key: string) {
-	drafts.value = { ...drafts.value, [key]: null };
-	delete drafts.value[key];
+	// Drop the local draft too, so the field falls back to showing the bound value the
+	// binding resumes rather than the override the operator just cleared.
+	const { [key]: _cleared, ...rest } = drafts.value;
+	drafts.value = rest;
 	void sessionStore.setOverride(props.eventId, props.screen.id, props.graphic.id, key, null);
+}
+
+/**
+ * One picker value as a selection id. Anything that is not a positive entity id —
+ * including the empty value a cleared picker emits — is a clear rather than a
+ * selection, so it never reaches the route as `NaN`.
+ */
+function selectionIdOf(value: unknown): number | null {
+	const id = Number(value);
+	return Number.isInteger(id) && id > 0 ? id : null;
 }
 
 function selectSource(sourceKey: string, selectionId: number | null) {
@@ -251,7 +272,7 @@ watch(boundValues, (next, previous) => {
 						size="sm"
 						placeholder="Nothing selected"
 						:data-testid="`live-control-source-${source.key}`"
-						@update:model-value="selectSource(source.key, Number($event))"
+						@update:model-value="selectSource(source.key, selectionIdOf($event))"
 					/>
 					<UButton
 						size="xs"

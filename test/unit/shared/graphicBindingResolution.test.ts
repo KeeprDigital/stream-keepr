@@ -123,7 +123,7 @@ describe('graphic Source Selection resolution', () => {
 		expect(resolved.nope!.entity).toBeUndefined();
 	});
 
-	it('resolves nothing rather than recursing through an authored cycle', () => {
+	it('terminates on a derived chain that loops back on itself', () => {
 		const resolved = resolveGraphicSourceSelections(
 			[
 				{ key: 'a', label: 'A', kind: 'player', from: { sourceKey: 'b', relation: 'player1' } },
@@ -133,6 +133,10 @@ describe('graphic Source Selection resolution', () => {
 			data(),
 		);
 
+		// Both resolve nothing and resolution returns rather than recursing. Note *why* it
+		// returns: today the relation table is acyclic by construction, so the kind check
+		// refuses this chain before the visiting guard is consulted. The guard is defence
+		// for a relation table that stops being acyclic, not the thing this proves.
 		expect(resolved.a!.entity).toBeUndefined();
 		expect(resolved.b!.entity).toBeUndefined();
 	});

@@ -1,4 +1,8 @@
-import type { GraphicBindingDataSet } from '~~/shared/modules/graphics';
+import type { FeatureMatchSlotResponse } from '~~/shared/api';
+import type {
+	GraphicBindingDataSet,
+	GraphicBindingFeatureMatchSlot,
+} from '~~/shared/modules/graphics';
 import type { GraphicSourceSelectionKind } from '~~/shared/types/graphics';
 
 /**
@@ -27,9 +31,50 @@ export function useGraphicBindingData() {
 	const roundStore = useRoundStore();
 	const archetypeStore = useArchetypeStore();
 	const featureMatchStore = useFeatureMatchStore();
+	const featureMatchStateStore = useFeatureMatchStateStore();
 
 	function byId<T extends { id: number }>(rows: readonly T[]): Record<number, T> {
 		return Object.fromEntries(rows.map(row => [row.id, row]));
+	}
+
+	/**
+	 * One Feature Match Slot with its *live* session rather than the one that happened
+	 * to be attached when the page loaded.
+	 *
+	 * A slot's `activeSession` is a page-load snapshot; the Feature Match state store is
+	 * what the Realtime Event Session keeps current, which is why every other consumer
+	 * prefers it. Reading the stale one here would show an operator a life total the
+	 * server would not accept — the divergence that sharing one resolution function
+	 * exists to prevent, since the function being shared is worth nothing if the facts
+	 * fed to it differ.
+	 */
+	function withLiveSession(
+		slot: FeatureMatchSlotResponse,
+	): GraphicBindingFeatureMatchSlot & { id: number } {
+		const sessionId = featureMatchStateStore.sessionIdBySlotId?.get(slot.id) ?? slot.activeSessionId ?? null;
+		const liveSession = sessionId === null
+			? null
+			: featureMatchStateStore.featureMatchSessions?.get(sessionId) ?? null;
+		const liveState = featureMatchStateStore.featureMatchStates?.get(slot.id) ?? null;
+		const loaded = slot.activeSession ?? null;
+		const session = liveSession ?? loaded;
+
+		return {
+			id: slot.id,
+			matchId: slot.matchId,
+			tableNumber: slot.tableNumber,
+			roundName: slot.roundName,
+			formatName: slot.formatName,
+			bestOf: slot.bestOf,
+			player1Data: slot.player1Data,
+			player2Data: slot.player2Data,
+			activeSession: session
+				? {
+						sourceSnapshot: session.sourceSnapshot,
+						currentState: liveState ?? session.currentState,
+					}
+				: null,
+		};
 	}
 
 	/**
@@ -45,7 +90,7 @@ export function useGraphicBindingData() {
 		phases: byId(phaseStore.phases ?? []),
 		rounds: byId(roundStore.rounds ?? []),
 		matches: byId(matchStore.matches ?? []),
-		featureMatchSlots: byId(featureMatchStore.featureMatches ?? []),
+		featureMatchSlots: byId((featureMatchStore.featureMatches ?? []).map(withLiveSession)),
 		archetypes: byId(archetypeStore.archetypes ?? []),
 	}));
 

@@ -126,11 +126,23 @@ export interface GraphicsCompositionRenderModelInput {
 	 * keyed by Broadcast Graphic id.
 	 *
 	 * Accepted values only: a Screen Output renders what an acceptance put on air,
-	 * never a working value someone is still editing. A graphic with no entry — an
-	 * editor preview, which has no Live Session to accept anything — renders its
-	 * declared defaults, which is what a placed Broadcast Graphic starts from.
+	 * never a working value someone is still editing. A Graphic Input with no value
+	 * here renders nothing.
 	 */
 	inputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
+	/**
+	 * Render each Graphic Input's authored default where no value is set.
+	 *
+	 * An editor preview sets this: it has no Live Session to accept anything, and the
+	 * author wants to see the design as they authored it. A live Screen Output must
+	 * never set it — an unset value there means an acceptance passed the input over,
+	 * and substituting the authored default would put placeholder text on program
+	 * wearing the appearance of live data.
+	 *
+	 * It defaults to off so that the failure mode of forgetting it is a missing value
+	 * rather than a fabricated one.
+	 */
+	substituteAuthoredDefaults?: boolean;
 	/** Editor-only selection and item guides. */
 	itemGuides?: boolean;
 	/** Editor-only advisory action-safe and title-safe guides. */
@@ -629,14 +641,19 @@ function placeholderStyle(
 /**
  * The values this Broadcast Graphic's Graphic Text Templates render.
  *
- * Declared defaults first, then whatever acceptance has put on air. That layering
- * is what makes an editor preview show the design as authored while a live output
- * shows the show as taken, from one code path.
+ * Whatever acceptance put on air, and — only when the caller asks for it — each
+ * declared default underneath. The asking is the whole point: an editor preview
+ * wants the design as authored, and a live output must show nothing at all for a
+ * value no acceptance produced.
  */
 function resolvedInputValues(
 	declarations: readonly GraphicInputDeclaration[],
 	accepted: Readonly<Record<string, GraphicInputValue>> | undefined,
+	substituteAuthoredDefaults: boolean,
 ): Record<string, GraphicInputValue> {
+	if (!substituteAuthoredDefaults)
+		return { ...accepted };
+
 	const values: Record<string, GraphicInputValue> = {};
 	for (const declaration of declarations)
 		values[declaration.key] = declaration.default;
@@ -924,7 +941,11 @@ export function resolveGraphicsCompositionRenderModel(
 			const declarations = graphic.inputs ?? [];
 			const inputs: GraphicTextTemplateContext = {
 				declarations,
-				values: resolvedInputValues(declarations, input.inputValues?.[graphic.id]),
+				values: resolvedInputValues(
+					declarations,
+					input.inputValues?.[graphic.id],
+					input.substituteAuthoredDefaults ?? false,
+				),
 			};
 
 			return {

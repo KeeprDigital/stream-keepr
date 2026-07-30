@@ -39,19 +39,29 @@ import { roundService } from './round';
  * the whole list does.
  */
 
-/** Every kind a graphic's declarations can reach, following fixed relationships. */
+/**
+ * Every kind a graphic's declarations can reach, following fixed relationships.
+ *
+ * A declared kind is reachable, and so is whatever each derived selection's own
+ * relationship yields from its parent — which is one pass, because every derived
+ * selection already names the parent it follows.
+ */
 function reachableKinds(
 	declarations: readonly GraphicSourceSelectionDeclaration[],
 ): Set<GraphicSourceSelectionKind> {
+	const byKey = new Map(declarations.map(declaration => [declaration.key, declaration]));
 	const kinds = new Set<GraphicSourceSelectionKind>();
+
 	for (const declaration of declarations) {
 		kinds.add(declaration.kind);
-		for (const other of declarations) {
-			const derived = other.from && graphicSourceRelationKind(declaration.kind, other.from.relation);
-			if (derived)
-				kinds.add(derived);
-		}
+		if (!declaration.from)
+			continue;
+		const parent = byKey.get(declaration.from.sourceKey);
+		const derived = parent && graphicSourceRelationKind(parent.kind, declaration.from.relation);
+		if (derived)
+			kinds.add(derived);
 	}
+
 	return kinds;
 }
 
@@ -113,28 +123,34 @@ export function graphicBindingDataService() {
 			talents: byId(event.talents ?? []),
 		};
 
-		if (kinds.has('archetype') || kinds.has('player'))
-			Object.assign(data.archetypes, byId(await archetypes.findByEventId(eventId)));
-		if (kinds.has('phase'))
-			Object.assign(data.phases, byId(await phases.findByEventId(eventId)));
-		if (kinds.has('round'))
-			Object.assign(data.rounds, byId(await rounds.findByEventId(eventId)));
+		// Concurrently: nothing here depends on anything else here, and a command is on
+		// the operator's critical path, so serialising these round trips would only add
+		// latency to every Take.
+		const [
+			eventArchetypes,
+			eventPhases,
+			eventRounds,
+			selectedPlayers,
+			selectedMatches,
+			selectedSlots,
+		] = await Promise.all([
+			kinds.has('archetype') || kinds.has('player') ? archetypes.findByEventId(eventId) : [],
+			kinds.has('phase') ? phases.findByEventId(eventId) : [],
+			kinds.has('round') ? rounds.findByEventId(eventId) : [],
+			Promise.all(selectedIds(declarations, selections, 'player')
+				.map(async id => await players.findById(id, eventId))),
+			Promise.all(selectedIds(declarations, selections, 'match')
+				.map(async id => await matches.findById(id, eventId))),
+			Promise.all(selectedIds(declarations, selections, 'feature-match-slot')
+				.map(async id => await slots.findById(id, eventId))),
+		]);
 
-		for (const id of selectedIds(declarations, selections, 'player')) {
-			const player = await players.findById(id, eventId);
-			if (player)
-				Object.assign(data.players, { [id]: player });
-		}
-		for (const id of selectedIds(declarations, selections, 'match')) {
-			const match = await matches.findById(id, eventId);
-			if (match)
-				Object.assign(data.matches, { [id]: match });
-		}
-		for (const id of selectedIds(declarations, selections, 'feature-match-slot')) {
-			const slot = await slots.findById(id, eventId);
-			if (slot)
-				Object.assign(data.featureMatchSlots, { [id]: slot });
-		}
+		Object.assign(data.archetypes, byId(eventArchetypes));
+		Object.assign(data.phases, byId(eventPhases));
+		Object.assign(data.rounds, byId(eventRounds));
+		Object.assign(data.players, byId(selectedPlayers.filter(row => row !== undefined)));
+		Object.assign(data.matches, byId(selectedMatches.filter(row => row !== undefined)));
+		Object.assign(data.featureMatchSlots, byId(selectedSlots.filter(row => row !== undefined)));
 
 		// A Match reached from a Feature Match Slot, and a Round reached from a Match,
 		// are the two relationships whose target is not itself selectable in bulk.
