@@ -77,6 +77,25 @@ function createR2ObjectStoreAccess(bucket: R2Bucket) {
 				return unavailableObjectStoreOutcome();
 			}
 		},
+		async list(input: { prefix?: string; cursor?: string; limit?: number } = {}) {
+			try {
+				const page = await bucket.list({
+					prefix: input.prefix,
+					cursor: input.cursor,
+					limit: input.limit,
+				});
+				return {
+					outcome: 'listed' as const,
+					listing: {
+						objects: page.objects.map(mapR2Object),
+						cursor: page.truncated ? page.cursor : undefined,
+					},
+				};
+			}
+			catch {
+				return unavailableObjectStoreOutcome();
+			}
+		},
 		async delete(identity: GraphicsObjectIdentity) {
 			try {
 				const existing = await bucket.head(identity);

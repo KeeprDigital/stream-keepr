@@ -271,6 +271,7 @@ It is an integrity failure and never follows another revision or substitutes con
 **Unavailable Graphic Asset Content**:
 The retryable state in which a referenced Graphic Asset and revision exist but their content cannot currently be resolved.
 It never changes or redirects the Graphic Asset Reference.
+The catalogue's record of it is advisory state that Graphics Reconciliation maintains and readers never treat as authority; a caller that needs bytes always asks the byte store, which is the only current source.
 
 **Graphic Asset Validation**:
 The strict acceptance process that proves exact source bytes are safe, supported, decodable, and internally consistent without converting, normalising, repairing, or otherwise changing them.
@@ -308,8 +309,28 @@ It performs the same fresh reference proof, tombstone, and atomic removal as sch
 The holding state for Graphic Asset Content whose final reachability has disappeared, kept for seven days and rechecked against the catalogue before any byte is deleted.
 Content that a retained revision or Graphics Derivative reaches again is released instead of deleted.
 
+**Graphics Reconciliation**:
+The pass, run on a schedule and when a reader observes an integrity failure, in which the Graphics Asset Library compares the Graphic Asset Content the catalogue expects to reach against the bytes the canonical store actually holds.
+The catalogue is authoritative for expected reachability and the byte store only for present bytes; a byte observation never creates, redirects, or removes catalogue state.
+
+**Graphics Discrepancy**:
+One durable disagreement between the catalogue and the canonical byte store, carrying its structured evidence, the pinned usage it affects, and exactly the actions valid in its current state.
+It identifies its subject by opaque domain identity and never exposes an object key, content digest, or bucket.
+
+**Critical Integrity Incident**:
+A Graphics Discrepancy in which stored bytes contradict the digest that owns their key, or an object contradicts the redundant integrity metadata it was written with, or a canonical object has no digest-owned identity at all.
+It fails closed, is isolated from repair, regeneration, and automatic deletion, and is never resolved by overwriting bytes or mutating metadata.
+
+**Exact-Byte Repair**:
+The Graphics Administrator action that restores Unavailable Graphic Asset Content from supplied bytes proving the same application SHA-256, byte size, canonical media type, and Graphic Asset Validation facts.
+It creates no Graphic Asset Revision and changes no Graphic Asset Reference; an exact verified Content Quarantine copy may be restored through the same integrity checks.
+
+**Derivative Regeneration**:
+The reproduction of a missing Graphics Derivative from available canonical source content, without mutating its source Graphic Asset Revision.
+It must reproduce the exact bytes the catalogue already recorded; anything else is a Critical Integrity Incident rather than a repair.
+
 **Evidence Ledger**:
-The chronological administrator-facing record of automated Graphics Asset Library lifecycle decisions, retained for one year after the cleanup it explains.
+The chronological administrator-facing record of automated Graphics Asset Library lifecycle and reconciliation decisions, retained for one year after the cleanup it explains.
 It identifies subjects by opaque domain identity and never carries object keys, content digests, filenames, capability secrets, or deleted bytes.
 
 **Text Graphic Item**:
@@ -624,6 +645,11 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - Creating, changing, publishing, or transferring a **Graphic Asset Reference** requires its exact revision to resolve successfully
 - A **Missing Graphic Asset Reference** remains persisted and diagnosable until explicitly repaired, while invalidating its owning graphics artifact
 - **Unavailable Graphic Asset Content** causes a retryable failure only for operations that currently require its bytes
+- **Graphics Reconciliation** is the only writer of the catalogue's **Unavailable Graphic Asset Content** state, and every reader that observes the byte store contradicting the catalogue feeds it
+- A **Graphics Discrepancy** never changes the **Graphic Asset**, **Graphic Asset Revision**, or **Graphic Asset Reference** it affects, and offers only the actions valid in its current state
+- An unexpected canonical object enters **Content Quarantine** for the same seven-day recheck and is deleted only if still unaccounted for; it is never adopted as a **Graphic Asset** or **Graphic Asset Content**
+- A **Critical Integrity Incident** is isolated rather than repaired, and blocks clearing **Unavailable Graphic Asset Content** for the same content while it stays open
+- **Exact-Byte Repair** and **Derivative Regeneration** restore only bytes the catalogue already expected, and never create a **Graphic Asset Revision** or change a **Graphic Asset Reference**
 - Every **Graphic Asset Revision** passes **Graphic Asset Validation** under one **Graphic Asset Compatibility Profile** before it becomes referenceable
 - The initial `still-image-v1` **Graphic Asset Compatibility Profile** accepts exact single-frame PNG, JPEG, or WebP source bytes up to 25 MiB, 8,192 pixels per axis, and 16,777,216 decoded pixels only when bounded parser evidence and a complete decode agree on an 8-bit SDR sRGB image with normal orientation
 - `still-image-v1` rejects declaration conflicts, animation, embedded colour or orientation profiles, malformed structure, partial decode, and out-of-profile facts, and generates a separate deterministic transparent 8-bit sRGB PNG thumbnail fitted within 640 × 360 without cropping or upscaling

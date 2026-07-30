@@ -3,6 +3,7 @@ import type {
 	GraphicAssetLifecycle,
 	GraphicAssetRetentionView,
 	GraphicAssetRevisionId,
+	GraphicsAssetEvidenceCategory,
 	GraphicsAssetEvidenceEntry,
 	GraphicsAssetLibraryCapacity,
 	GraphicsContentQuarantineDeadline,
@@ -219,7 +220,7 @@ export interface GraphicsAssetRetentionCatalogue {
 	) => Promise<void>;
 	listGraphicsAssetEvidence: (input: {
 		limit: number;
-		categories?: readonly GraphicsRetentionEvidenceCategory[];
+		categories?: readonly GraphicsAssetEvidenceCategory[];
 	}) => Promise<GraphicsAssetEvidenceEntry[]>;
 	expireGraphicsAssetEvidence: (input: { expiredBefore: string }) => Promise<number>;
 }
@@ -804,7 +805,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 		},
 		async listEvidence(input: {
 			limit?: number;
-			categories?: readonly GraphicsRetentionEvidenceCategory[];
+			categories?: readonly GraphicsAssetEvidenceCategory[];
 		} = {}) {
 			return await catalogue.listGraphicsAssetEvidence({
 				limit: Math.min(Math.max(input.limit ?? 100, 1), 500),

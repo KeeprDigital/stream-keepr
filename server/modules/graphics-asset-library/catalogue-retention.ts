@@ -754,11 +754,15 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			// Reachability implies a catalogue content row, so an update is enough:
 			// the identity and its references stay intact and become an explicit,
 			// repairable Unavailable Graphic Asset Content incident.
+			//
+			// The first observation is kept, so a repeating reconciliation sweep
+			// reports how long an incident has been open rather than resetting its
+			// age on every pass.
 			const result = await database.prepare(`
 				UPDATE graphic_asset_contents
 				SET availability = 'unavailable',
 					unavailable_reason_code = ?,
-					unavailable_since = ?
+					unavailable_since = COALESCE(unavailable_since, ?)
 				WHERE digest = ?
 			`).bind(
 				input.reasonCode,

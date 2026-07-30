@@ -15,11 +15,13 @@ import type {
 	PublishGraphicAssetCatalogueInput,
 } from '.';
 import type { GraphicsAssetMultipartState } from './multipart';
+import type { GraphicsAssetReconciliationCatalogue } from './reconciliation';
 import type { GraphicsAssetRetentionCatalogue } from './retention';
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GRAPHICS_RETENTION_GUARANTEES } from '~~/shared/utils/graphicsAssetRetention';
+import { createD1GraphicsAssetReconciliationCatalogue } from './catalogue-reconciliation';
 import { createD1GraphicsAssetRetentionCatalogue } from './catalogue-retention';
 import { GraphicsAssetLibraryError } from './errors';
 import {
@@ -386,8 +388,9 @@ function updateOperationStatement(
 
 export function createD1GraphicsAssetCatalogue(
 	database: D1Database,
-): GraphicsAssetCatalogue & GraphicsAssetRetentionCatalogue {
+): GraphicsAssetCatalogue & GraphicsAssetRetentionCatalogue & GraphicsAssetReconciliationCatalogue {
 	return {
+		...createD1GraphicsAssetReconciliationCatalogue(database),
 		...createD1GraphicsAssetRetentionCatalogue(database),
 		async checkHealth() {
 			const result = await database
