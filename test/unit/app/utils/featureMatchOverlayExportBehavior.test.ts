@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { featureMatchOverlayOutputBackground } from '~/utils/featureMatchOverlayOutput';
+import { screenOutputBackground } from '~~/shared/utils/screenOutput';
 
 describe('broadcast layout export behavior', () => {
 	it('keeps overlay export transparent by default', () => {
-		expect(featureMatchOverlayOutputBackground('overlay')).toBeUndefined();
+		expect(screenOutputBackground('overlay')).toBeUndefined();
 	});
 
 	it('flattens fill and key exports over black', () => {
-		expect(featureMatchOverlayOutputBackground('fill')).toBe('#000000');
-		expect(featureMatchOverlayOutputBackground('key')).toBe('#000000');
+		expect(screenOutputBackground('fill')).toBe('#000000');
+		expect(screenOutputBackground('key')).toBe('#000000');
 	});
 });

@@ -1,9 +1,10 @@
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
-import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
+import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { ScreenPresenceData } from '~/types/screen';
 import { useIntervalFn } from '@vueuse/core';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue';
+import { parseScreenOutput, screenOutputBackground } from '~~/shared/utils/screenOutput';
 import { useRoute } from '#app';
 import { useRealtime } from '~/composables/core/useRealtime';
 import { useScreenRealtimeSession } from '~/composables/screen/useScreenRealtimeSession';
@@ -11,7 +12,6 @@ import { getScreenModeDisplayType, isControlScreenMode } from '~/modules/screen-
 import { useEventStore } from '~/stores/event';
 import { useScreenStore } from '~/stores/screen';
 import { buildFeatureMatchOverlayExportFilename, exportElementPng } from '~/utils/exportElementPng';
-import { featureMatchOverlayOutputBackground, parseFeatureMatchOverlayOutput } from '~/utils/featureMatchOverlayOutput';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
 interface ScreenRealtimeDisplaySession {
@@ -63,13 +63,18 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 
 	const eventId = computed(() => eventStore.eventId);
 	const screenSlug = computed(() => firstRouteParam(route.params.screenSlug as string | string[]));
-	const parsedOutput = computed(() => parseFeatureMatchOverlayOutput(route.query.output));
-	const outputMode = computed<FeatureMatchOverlayOutput>(() => parsedOutput.value.output);
+	const parsedOutput = computed(() => parseScreenOutput(route.query.output));
+	const outputMode = computed<ScreenOutput>(() => parsedOutput.value.output);
 	const outputWarning = computed(() => parsedOutput.value.warning);
 	const shouldDownload = computed(() => route.query.download === '1');
 	const fitToViewport = computed(() => route.query.fit === '1');
 	const isPreview = computed(() => route.query.preview === '1');
+	// Editor-only guides require the preview flag as well as their own, so an
+	// ordinary Screen Output URL draws none. This is a URL convention rather than
+	// a structural barrier: a URL carrying both flags draws guides wherever it is
+	// opened.
 	const previewGuides = computed(() => isPreview.value && route.query.guides === '1');
+	const previewSafeAreas = computed(() => isPreview.value && route.query.safe === '1');
 	const assetCapability = computed(() => screenOutputAssetCapability(route.hash ?? ''));
 
 	const isControlScreen = computed(() => {
@@ -91,6 +96,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		fitToViewport,
 		isPreview,
 		previewGuides,
+		previewSafeAreas,
 		assetCapability,
 	};
 
@@ -181,7 +187,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 					width,
 					height,
 				}),
-				backgroundColor: featureMatchOverlayOutputBackground(output),
+				backgroundColor: screenOutputBackground(output),
 			});
 			setTimeout(exportAdapter.closeWindow, 500);
 		}

@@ -168,6 +168,94 @@ describe('screens extended API', () => {
 		});
 	});
 
+	it('persists the authored Broadcast Graphics stack as Screen-owned mode configuration', async () => {
+		const graphics = [
+			{
+				id: 'lower-third',
+				name: 'Lower Third',
+				items: [
+					{
+						type: 'shape',
+						id: 'bar',
+						label: 'Shape 1',
+						visible: true,
+						anchor: 'top-left',
+						x: 120,
+						y: 820,
+						width: 900,
+						height: 120,
+						geometry: { cornerRadius: 8 },
+						surfaceStyle: { fill: '#0077a3', fillOpacity: 1 },
+					},
+					{
+						type: 'text',
+						id: 'name',
+						label: 'Text 1',
+						visible: true,
+						anchor: 'left',
+						x: 150,
+						y: 840,
+						width: 800,
+						height: 80,
+						text: 'Commentator',
+						typography: {
+							fontId: 'inter',
+							fontSize: 64,
+							fontWeight: 700,
+							fontStyle: 'normal',
+							textTransform: 'none',
+							letterSpacing: 0,
+							lineHeight: 1.15,
+							textAlign: 'left',
+							color: '#ffffff',
+						},
+						overflowPolicy: 'shrink',
+						minFontSize: 32,
+					},
+				],
+			},
+		];
+
+		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
+			method: 'PATCH',
+			body: { graphics },
+		});
+
+		expect(updated.modeConfigs['broadcast-graphics']).toEqual({ graphics });
+
+		const reloaded = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
+		expect(reloaded.modeConfigs['broadcast-graphics']).toEqual({ graphics });
+	});
+
+	it('refuses to delete the authored Broadcast Graphics stack with a null patch', async () => {
+		const graphics = [{ id: 'keep-me', name: 'Keep Me', items: [] }];
+		await $fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
+			method: 'PATCH',
+			body: { graphics },
+		});
+
+		await expect($fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
+			method: 'PATCH',
+			body: { graphics: null },
+		})).rejects.toThrow();
+
+		const reloaded = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
+		expect(reloaded.modeConfigs['broadcast-graphics']).toEqual({ graphics });
+	});
+
+	it('rejects a Broadcast Graphic carrying an unsupported Graphic Item kind', async () => {
+		await expect($fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
+			method: 'PATCH',
+			body: {
+				graphics: [{
+					id: 'invalid',
+					name: 'Invalid',
+					items: [{ type: 'media', id: 'logo', label: 'Media 1', visible: true, anchor: 'top-left', x: 0, y: 0, width: 10, height: 10 }],
+				}],
+			},
+		})).rejects.toThrow();
+	});
+
 	// ── Screen config endpoint ────────────────────────────────────────
 
 	it('updates screen config', async () => {

@@ -82,6 +82,14 @@ _Avoid_: request id, generation.
 The set of fields one optimistic action may write, derived from the change the action predicts. Result merges and rollbacks write only owned fields; remote updates never overwrite fields another action currently owns.
 _Avoid_: owns array, field mask, declared ownership.
 
+**Sequenced Live State**:
+The server-side module owning the invariant "one authoritative order of accepted commands per live aggregate." Loads an aggregate and executes a command; owns monotonic sequencing, compare-and-swap protection, Command Receipts, and post-commit publication. Domain reducers and merge policies stay with the feature that uses it.
+_Avoid_: event store, event sourcing, command bus, write-ahead log.
+
+**Command Receipt**:
+The record that one command ID was already accepted for a live aggregate, holding the command's canonical content so a retry of the same command can be answered with the current authoritative snapshot and a reuse of the ID with different content can be rejected. Retained for a bounded window of recent commands, not as history.
+_Avoid_: event row, command log, audit record, idempotency key.
+
 **Event Data**:
 The client-side access path for Event-scoped data such as Players, Phases, Rounds, Matches, Feature Match Slots, Feature Match Assignments, Screens, Talents, Archetypes, and Player Lists.
 
@@ -204,6 +212,10 @@ A Definition may declare a required host or data context; editors offer it only 
 **Shared Graphics Foundation**:
 The Graphic Item, geometry, styling, grouping, animation, definition, and rendering vocabulary used by both Broadcast Graphics and Feature Match Overlay.
 It unifies their composition model without merging their Screen Modes, live context, or template artifacts.
+
+**Host Contract**:
+The declaration a graphics Screen Mode supplies when embedding the shared compositor: its available context kinds, top-level host extras, canvas rules, and write semantics.
+The definition palette, binding catalogue, and editor behaviour follow from it; capability outside the contract stays host-owned.
 
 **Graphics Asset Library**:
 The shared graphics-specific module that ingests, validates, stores, resolves, deduplicates, and lifecycle-manages images, silent videos, fonts, and generated thumbnails used by Broadcast Graphics and Feature Match Overlay.

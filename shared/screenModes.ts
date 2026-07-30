@@ -1,4 +1,10 @@
 import type { DisplayType, ScreenMode } from './types/enums';
+import {
+	DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
+	DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH,
+	DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT,
+	DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH,
+} from './types/screenConfig';
 
 export interface ScreenModeContainerControls {
 	dimensions?: boolean;
@@ -7,13 +13,36 @@ export interface ScreenModeContainerControls {
 	background?: boolean;
 }
 
+/**
+ * The graphics host profile of a Screen Mode that renders a pixel-exact canvas
+ * and exposes Overlay, Fill, and Key Screen Outputs.
+ *
+ * Declaring it here keeps host size, generic-control exclusions, dimension
+ * placement, and output options together on the Screen Mode Definition instead
+ * of scattering them across parallel per-mode lookup tables.
+ */
+export interface ScreenModeGraphicsHost {
+	canvasWidth: number;
+	canvasHeight: number;
+	/** Feature Match Overlay still honours generic Screen alignment; a transparent host does not. */
+	useScreenAlignment?: boolean;
+}
+
 export interface ScreenModeDefinition {
 	label: string;
 	icon: string;
 	displayType: DisplayType;
 	description: string;
 	containerControls?: ScreenModeContainerControls;
+	graphicsHost?: ScreenModeGraphicsHost;
 }
+
+/** Generic Screen container controls a graphics host replaces with its own canvas and styling. */
+const GRAPHICS_HOST_CONTAINER_CONTROLS: ScreenModeContainerControls = {
+	padding: false,
+	textColors: false,
+	background: false,
+};
 
 export const DEFAULT_OVERLAY_CONTAINER_CONTROLS: Required<ScreenModeContainerControls> = {
 	dimensions: true,
@@ -38,10 +67,22 @@ export const SCREEN_MODES: Record<ScreenMode, ScreenModeDefinition> = {
 		icon: 'i-lucide-panels-top-left',
 		displayType: 'overlay',
 		description: 'Pixel-exact feature match overlay with fill/key outputs',
-		containerControls: {
-			padding: false,
-			textColors: false,
-			background: false,
+		containerControls: GRAPHICS_HOST_CONTAINER_CONTROLS,
+		graphicsHost: {
+			canvasWidth: DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH,
+			canvasHeight: DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT,
+		},
+	},
+	'broadcast-graphics': {
+		label: 'Broadcast Graphics',
+		icon: 'i-lucide-layout-template',
+		displayType: 'overlay',
+		description: 'Composed broadcast graphics stack with overlay/fill/key outputs',
+		containerControls: GRAPHICS_HOST_CONTAINER_CONTROLS,
+		graphicsHost: {
+			canvasWidth: DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH,
+			canvasHeight: DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
+			useScreenAlignment: false,
 		},
 	},
 	'metagame': { label: 'Metagame', icon: 'i-lucide-pie-chart', displayType: 'overlay', description: 'Metagame breakdown' },
@@ -59,4 +100,18 @@ export function getContainerControls(mode: ScreenMode): Required<ScreenModeConta
 		...DEFAULT_OVERLAY_CONTAINER_CONTROLS,
 		...(SCREEN_MODES[mode].containerControls ?? {}),
 	};
+}
+
+/**
+ * The canvas a graphics Screen Mode defaults to, when a Screen has not yet been
+ * given its own width and height. This is the one home for that number: editors
+ * and Screen Outputs read it here rather than reaching for a loose constant.
+ * Only a graphics host has a canvas, so asking about any other mode is a bug.
+ */
+export function getScreenModeGraphicsCanvas(mode: ScreenMode): { width: number; height: number } {
+	const graphicsHost = SCREEN_MODES[mode].graphicsHost;
+	if (!graphicsHost)
+		throw new Error(`Screen Mode "${mode}" has no graphics host canvas.`);
+
+	return { width: graphicsHost.canvasWidth, height: graphicsHost.canvasHeight };
 }

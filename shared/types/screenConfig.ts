@@ -1,6 +1,7 @@
 import type { GraphicsVideoTarget } from '../utils/graphicAssetTargetCompatibility';
 import type { CardAnimationSpeed, DeckCardSize, DeckViewMode, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardLayout, StandingsColumnKey, StandingsViewMode, VerticalAlign } from './enums';
 import type { MediaGraphicItemConfig } from './graphicItem';
+import type { BroadcastGraphicConfig } from './graphics';
 import type { GraphicAssetReference } from './graphicsAsset';
 import { migrateFeatureMatchGraphicItemConfig } from '../featureMatchGraphicItemDefinitions';
 
@@ -191,7 +192,9 @@ export interface PlayerHistoryModeConfig {
 }
 
 export type FeatureMatchOverlayPresetId = 'full-table' | 'left-stacked-player-cams' | 'neon-feature-match';
-export type FeatureMatchOverlayOutput = 'overlay' | 'fill' | 'key';
+/** The live rendering variants a graphics Screen Mode Definition exposes. */
+export type ScreenOutput = 'overlay' | 'fill' | 'key';
+export type FeatureMatchOverlayOutput = ScreenOutput;
 export const DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH = 1920;
 export const DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT = 1080;
 export const FEATURE_MATCH_OVERLAY_ANCHOR_VALUES = [
@@ -650,6 +653,22 @@ export interface FeatureMatchOverlayModeConfig {
 	layout: FeatureMatchLayoutConfig;
 }
 
+export const DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH = 1920;
+export const DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT = 1080;
+
+/**
+ * Screen-owned Broadcast Graphics mode configuration.
+ *
+ * `graphics` is the Screen's authored back-to-front stack of Broadcast
+ * Graphics; concurrent graphics always render in this order. The Screen's one
+ * configurable pixel canvas remains the Screen's own width and height, and
+ * playout, channels, inputs, and animation are live state rather than authored
+ * configuration.
+ */
+export interface BroadcastGraphicsModeConfig {
+	graphics: BroadcastGraphicConfig[];
+}
+
 export interface MetagameModeConfig {
 	// View selection
 	viewMode: MetagameViewMode;
@@ -687,7 +706,7 @@ export interface MetagameModeConfig {
 }
 
 // Union type for all mode configs
-export type ScreenModeConfig = DeckModeConfig | CardModeConfig | IdleModeConfig | StandingsModeConfig | TopCutModeConfig | FeatureMatchModeConfig | FeatureMatchOverlayModeConfig | MetagameModeConfig | PlayerHistoryModeConfig;
+export type ScreenModeConfig = DeckModeConfig | CardModeConfig | IdleModeConfig | StandingsModeConfig | TopCutModeConfig | FeatureMatchModeConfig | FeatureMatchOverlayModeConfig | BroadcastGraphicsModeConfig | MetagameModeConfig | PlayerHistoryModeConfig;
 
 // Default configs for each mode
 export const DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG: ScreenMediaBackgroundConfig = {
@@ -897,6 +916,10 @@ export const DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG: FeatureMatchOverlayModeConfig
 	},
 };
 
+export const DEFAULT_BROADCAST_GRAPHICS_CONFIG: BroadcastGraphicsModeConfig = {
+	graphics: [],
+};
+
 export const DEFAULT_METAGAME_CONFIG: MetagameModeConfig = {
 	viewMode: 'archetype',
 	scope: 'all',
@@ -943,6 +966,7 @@ export const DEFAULT_MODE_CONFIGS = {
 	'topCut': DEFAULT_TOPCUT_CONFIG,
 	'feature-match': DEFAULT_FEATURE_MATCH_CONFIG,
 	'feature-match-overlay': DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
+	'broadcast-graphics': DEFAULT_BROADCAST_GRAPHICS_CONFIG,
 	'metagame': DEFAULT_METAGAME_CONFIG,
 	'player-history': DEFAULT_PLAYER_HISTORY_CONFIG,
 } satisfies { [K in ScreenMode]: ScreenModeConfig };
@@ -957,22 +981,33 @@ export type ModeConfigsMap = Partial<ModeConfigTypeMap>;
 // Sending `null` for a field means "delete this key from stored config".
 export type NullableScreenConfig = { [K in keyof ScreenConfig]: ScreenConfig[K] | null };
 
-// Keys that are data bindings (not display settings) — excluded from display resets
-type ModeDataBindingKeysMap = {
+/**
+ * Keys a display reset must not touch. Two kinds qualify:
+ *
+ * - Data bindings, such as the selected Feature Match Slot or Player: resetting
+ *   display settings should not unpick what the Screen is pointing at.
+ * - Authored content with no recovery path, such as a Broadcast Graphics
+ *   Screen's stack of Broadcast Graphics. Resetting a Feature Match Layout
+ *   restores a Feature Match Overlay Preset — a non-empty design the author can
+ *   keep editing — whereas resetting the Broadcast Graphics stack would empty
+ *   it, and there is no undo. The two are not the same action.
+ */
+type ModeResetPreservedKeysMap = {
 	[K in ScreenMode]: readonly (keyof ModeConfigTypeMap[K])[];
 };
 
-const MODE_DATA_BINDING_KEYS = {
+const MODE_RESET_PRESERVED_KEYS = {
 	'idle': [],
 	'card': ['featureMatchId'],
 	'deck': ['playerId'],
 	'topCut': [],
 	'feature-match': ['featureMatchId'],
 	'feature-match-overlay': ['featureMatchId'],
+	'broadcast-graphics': ['graphics'],
 	'standings': ['viewMode', 'topNCount', 'sliceStart', 'sliceEnd', 'playerListId', 'revealCount', 'roundId'],
 	'metagame': ['viewMode', 'scope', 'topN', 'playerListId', 'archetypeFilter'],
 	'player-history': ['playerId'],
-} as const satisfies ModeDataBindingKeysMap;
+} as const satisfies ModeResetPreservedKeysMap;
 
 // Helper to get default config for a mode
 export function getDefaultConfigForMode<T extends ScreenMode>(mode: T): ModeConfigTypeMap[T] {
@@ -980,14 +1015,16 @@ export function getDefaultConfigForMode<T extends ScreenMode>(mode: T): ModeConf
 }
 
 /**
- * Returns the display-only defaults for a mode (excludes data bindings like featureMatchId, playerId).
- * Used by the "Reset to Defaults" feature so data bindings are preserved.
+ * Returns the display-only defaults for a mode. Used by "Reset to Defaults", so
+ * it omits every key a reset must preserve — data bindings such as
+ * `featureMatchId`, and authored content such as a Broadcast Graphics Screen's
+ * stack of Broadcast Graphics.
  */
 export function getDisplayDefaultsForMode<T extends ScreenMode>(mode: T): Partial<ModeConfigTypeMap[T]> {
 	const full = getDefaultConfigForMode(mode);
-	const bindingKeys = MODE_DATA_BINDING_KEYS[mode];
+	const preservedKeys = MODE_RESET_PRESERVED_KEYS[mode];
 	const display = { ...full } as Record<string, unknown>;
-	for (const key of bindingKeys) {
+	for (const key of preservedKeys) {
 		delete display[key as string];
 	}
 	return display as Partial<ModeConfigTypeMap[T]>;
