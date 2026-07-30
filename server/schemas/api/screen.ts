@@ -42,6 +42,7 @@ import {
 	GRAPHIC_GROUP_ARRANGEMENT_VALUES,
 	GRAPHIC_GROUP_JUSTIFY_VALUES,
 	GRAPHIC_INPUT_KEY_PATTERN,
+	GRAPHIC_MEDIA_KIND_VALUES,
 	GRAPHIC_SOURCE_SELECTION_KIND_VALUES,
 	GRAPHIC_TEXT_ALIGN_VALUES,
 	GRAPHIC_TEXT_TRANSFORM_VALUES,
@@ -741,7 +742,7 @@ const graphicInputDeclarationSchema = z.discriminatedUnion('type', [
 		// A media Graphic Input's default is a pinned Graphics Asset Library
 		// revision, exactly as an authored asset reference is.
 		default: graphicAssetReferenceSchema.nullable(),
-		mediaKind: z.enum(['image', 'silent-video']),
+		mediaKind: z.enum(GRAPHIC_MEDIA_KIND_VALUES),
 	}).strict(),
 ]);
 
@@ -891,10 +892,50 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * rather than a byte count. Graphic Group children count towards it — they are
  * Graphic Items and they cost bytes.
  *
- * The remaining ~124 KiB is shared with every other mode's configuration, so a
+ * ## That 79% is a bound, not a forecast
+ *
+ * Read without its construction the figure suggests the budget is nearly full. It
+ * is not. It describes a Screen where all 110 Graphic Items are simultaneously
+ * Text Graphic Items carrying a 1,000-character template, a 100-character label,
+ * four maximal Graphic Placeholder Styles, a four-stop gradient, an outline and a
+ * glow, alongside 60 maximal choice Graphic Inputs — a configuration nobody will
+ * author. Realistic authoring measures around 119 KiB, roughly 23% of the budget.
+ * The number proves the caps cannot be combined into an oversized write; it does
+ * not predict what a Screen will hold.
+ *
+ * ## Which limit binds first
+ *
+ * For a realistic large graphics package it is not this cap but
+ * `MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN`: fifteen lower thirds at four
+ * Graphic Inputs each is exactly 60. Anyone finding a package too small to author
+ * should move that number before this one.
+ *
+ * ## Why it is 110 and not more
+ *
+ * Two open defects gate raising it, and neither is about storage arithmetic:
+ *
+ * - The whole-`modeConfigs` byte total is an object-level refinement, and those are
+ *   discarded when the per-mode patch schema is rebuilt from its field schemas —
+ *   so the total is not enforced on the path the editors write through. Until it
+ *   is, named per-field caps are the only thing that actually refuses an oversized
+ *   configuration, which is why they carry more weight here than they should.
+ * - Realtime still publishes whole live state and whole mode configs, so a larger
+ *   cap would buy storable configuration that cannot be notified — capacity with
+ *   no way to reach a client.
+ *
+ * With both fixed, this cap can be generous, because the worst case is then
+ * allowed not to fit: an author who approaches the total gets told which limit
+ * they reached and removes something, and every other author never sees it.
+ * Until then, reducing is the only direction that does not make the second defect
+ * worse. 110 is about fifteen lower thirds plus a slate and a bug, comfortably
+ * more than the fidelity prototype's acceptance evidence requires.
+ *
+ * The remaining ~108 KiB is shared with every other mode's configuration, so a
  * Screen carrying both a maximal Broadcast Graphics stack and a maximal Feature
  * Match Overlay layout can still reach the byte limit. That is a property of one
- * budget shared across modes and predates this cap.
+ * budget shared across modes and predates this cap. Note the direction: shared
+ * headroom *shrank* from the ~112 KiB the 200-item cap left, because this cap fell
+ * by less than Graphic Inputs added.
  */
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 110;
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 413_241;
@@ -960,7 +1001,10 @@ const broadcastGraphicConfigSchema = z.object({
 		)
 		.optional(),
 	bindings: z.array(graphicInputBindingSchema)
-		.max(MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC)
+		.max(
+			MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC,
+			`A Broadcast Graphic must not declare more than ${MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC} Graphic Input Bindings`,
+		)
 		// A Graphic Input Binding maps one Graphic Input to one field, so a second
 		// binding for the same input would leave which one resolves undecided.
 		.refine(

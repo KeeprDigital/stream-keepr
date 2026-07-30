@@ -311,7 +311,7 @@ export interface ColorGraphicInputDeclaration extends GraphicInputDeclarationBas
 export interface MediaGraphicInputDeclaration extends GraphicInputDeclarationBase {
 	type: 'media';
 	default: GraphicAssetReference | null;
-	mediaKind: 'image' | 'silent-video';
+	mediaKind: GraphicMediaKind;
 }
 
 export type GraphicInputDeclaration
@@ -331,6 +331,15 @@ export type GraphicInputDeclaration
  * entered and why it cannot go on air.
  */
 export type GraphicInputValue = string | number | boolean | GraphicAssetReference | null;
+
+/**
+ * The media a Media Graphic Item can render, and therefore what a media Graphic
+ * Input may resolve to. Named rather than inlined because the Media Graphic Item
+ * vocabulary needs the identical set.
+ */
+export const GRAPHIC_MEDIA_KIND_VALUES = ['image', 'silent-video'] as const;
+
+export type GraphicMediaKind = typeof GRAPHIC_MEDIA_KIND_VALUES[number];
 
 /** The single-entity Event Data kinds a Graphic Source Selection may select. */
 export const GRAPHIC_SOURCE_SELECTION_KIND_VALUES = [

@@ -84,7 +84,16 @@ function fitText() {
 }
 
 watch(
-	() => [props.render.text, props.render.shrink, props.render.style, props.render.textStyle],
+	// `textSegments` is observed as well as `text`: a Graphic Placeholder Style edit
+	// changes a run's typography without changing the rendered string, and the fitted
+	// size depends on both.
+	() => [
+		props.render.text,
+		props.render.textSegments,
+		props.render.shrink,
+		props.render.style,
+		props.render.textStyle,
+	],
 	() => fitText(),
 	{ deep: true, flush: 'post', immediate: true },
 );

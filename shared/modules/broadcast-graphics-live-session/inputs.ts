@@ -63,6 +63,17 @@ export interface GraphicInputValueTrace {
 	availability: GraphicInputAvailability;
 }
 
+/**
+ * What Live Control shows about one Graphic Input's value.
+ *
+ * The settled vocabulary is bound, overridden, pending, unavailable, and stale;
+ * only these four are reachable. `overridden` belongs to a Graphic Input Override,
+ * which masks a binding that keeps resolving underneath it — there is nothing to
+ * mask until Graphic Input Bindings resolve against Event Data. `stale` belongs to
+ * field-scoped multi-operator conflict handling. Each becomes reachable with the
+ * capability that produces it, and shipping a status no code path can produce would
+ * be a state an operator could never be shown.
+ */
 export const GRAPHIC_INPUT_STATUS_VALUES = ['manual', 'bound', 'pending', 'unavailable'] as const;
 
 export type GraphicInputStatus = typeof GRAPHIC_INPUT_STATUS_VALUES[number];
