@@ -36,12 +36,22 @@ const actualVideoTarget = useGraphicsVideoTarget();
  * A VP9-alpha silent video only plays in Chromium, so elsewhere the element is
  * withheld and a marked placeholder takes its place.
  *
- * The marker is a data attribute with no visible text: it is readable by a test or
- * a developer inspecting the DOM, not by an operator looking at the output. It is
- * also close to unreachable on a live output, because the capability session is
- * refused outright when the Screen publishes a chromium-transparency revision to a
- * non-Chromium target, so no media resolves at all. Reporting this to an operator
- * is tracked separately.
+ * The marker is a data attribute with no visible text: readable by a test or by a
+ * developer inspecting the DOM, not by anyone looking at the output. Where it can
+ * be seen is worth stating precisely, because the two cases differ.
+ *
+ * On a live Screen Output it is unreachable. The capability session is refused
+ * outright when the Screen publishes a chromium-transparency revision to a
+ * non-Chromium target, so no content URL resolves, every `src` is empty, and the
+ * branch below never renders — the output loses all of its media, not just the
+ * video it cannot play.
+ *
+ * In an editor preview it does render, because a preview resolves content as an
+ * author rather than through a capability. That includes the Key preview, which is
+ * why giving this real text is not a local change: visible text carries colour, and
+ * colour in the Key Output breaks the alpha matte, so the decision has to come from
+ * the render model that knows the output. Reporting either case to a person is
+ * tracked on #98.
  */
 const videoBlocked = computed(() => media.value?.videoCompatibility === 'chromium-transparency'
 	&& actualVideoTarget.value !== 'chromium');
