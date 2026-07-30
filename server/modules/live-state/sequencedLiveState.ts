@@ -50,9 +50,27 @@ export interface SequencedLiveStatePort<TRef, TAggregate, TCommand extends Seque
 	/**
 	 * Feature-specific admission: lifecycle status, ownership, and base-sequence
 	 * policy. Throws to reject the command before anything is written.
+	 *
+	 * It sees the sequenced aggregate and nothing else — `TAggregate` is exactly
+	 * the row `projection` returns, so it cannot be widened into a composite.
+	 * Admission that needs a second entity belongs in the feature's own module,
+	 * checked before it calls `execute`, rather than being denormalized into live
+	 * state to bring it within reach here. Broadcast Graphics playout is the worked
+	 * example: whether a Take names a Broadcast Graphic the Screen actually places
+	 * is a question about the Screen's authored configuration, so its module
+	 * resolves the Screen and rejects an unplaced graphic before executing.
 	 */
 	admit: (aggregate: TAggregate, command: TCommand) => void;
-	/** Whether a losing command may be re-reduced against the newer aggregate. */
+	/**
+	 * Whether a losing command is safe to re-reduce onto a newer aggregate.
+	 *
+	 * The question is only that — not whether the command is relative. Relative
+	 * intents (adjust by, step by) qualify because they compose with whatever got
+	 * in first, and field-scoped absolute intents qualify too: a command that
+	 * claims one field's latest value is not invalidated by a concurrent writer
+	 * claiming a different field. Answering `false` for the latter turns ordinary
+	 * concurrent editing of disjoint fields into spurious conflicts.
+	 */
 	isMergeable: (command: TCommand) => boolean;
 	/** Pure domain reduction of the command onto the aggregate. */
 	reduce: (aggregate: TAggregate, command: TCommand) => TReduction;
@@ -209,9 +227,9 @@ export function createSequencedLiveState<TRef, TAggregate, TCommand extends Sequ
 			if (!port.isMergeable(command))
 				throw error;
 
-			// A mergeable command states a relative intent (adjust by, step by), so a
-			// writer that got in first does not invalidate it — re-reduce it onto the
-			// newer aggregate exactly once.
+			// A mergeable command is one a writer who got in first does not
+			// invalidate — a relative intent, or an absolute one scoped to its own
+			// field. Re-reduce it onto the newer aggregate exactly once.
 			const latest = await port.load(ref);
 			if (!latest || port.sequenceOf(latest) === port.sequenceOf(aggregate))
 				throw error;
