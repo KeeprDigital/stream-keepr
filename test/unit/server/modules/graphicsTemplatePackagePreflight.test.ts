@@ -21,6 +21,7 @@ import {
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { TEMPLATE_PACKAGE_LIMITS } from '~~/shared/types/templatePackage';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
 import { collectStream } from '../../../helpers/storedZipArchive';
 import {
 	readTemplatePackageParts,
@@ -1132,6 +1133,96 @@ describe('the Template Package preflight contract', () => {
 				fingerprint: reportOf(operation).fingerprint,
 			})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
 		});
+	});
+
+	it('round-trips a Broadcast Graphic Template that places Media Graphic Items', async () => {
+		// Media Graphic Items are the Foundation's asset-bearing vocabulary, so a
+		// package carrying them must survive the full loop: export declares what
+		// the items pin, and preflight reconciles the Template document against
+		// those declarations without reporting anything undeclared or unused.
+		const { library: sender } = createLibrary('sender');
+		const backdrop = await ingestImage(sender, 'Backdrop', transparentPixelPng);
+		const insert = await ingestImage(sender, 'Insert', webpPixel, 'image/webp');
+		const graphic = {
+			id: 'media-lower-third',
+			name: 'Media lower third',
+			items: [
+				{
+					id: 'backdrop',
+					type: 'media' as const,
+					label: 'Backdrop',
+					visible: true,
+					anchor: 'top-left' as const,
+					x: 0,
+					y: 0,
+					width: 1920,
+					height: 1080,
+					asset: backdrop,
+					mediaKind: 'image' as const,
+					fit: 'cover' as const,
+					focalPosition: { x: 0.5, y: 0.5 },
+					opacity: 1,
+				},
+				{
+					id: 'stack',
+					type: 'group' as const,
+					label: 'Stack',
+					visible: true,
+					anchor: 'top-left' as const,
+					x: 0,
+					y: 0,
+					width: 800,
+					height: 200,
+					arrangement: 'column' as const,
+					padding: 0,
+					gap: 8,
+					align: 'start' as const,
+					justify: 'start' as const,
+					clip: false,
+					geometry: { cornerRadius: 0 },
+					children: [{
+						id: 'nested-insert',
+						type: 'media' as const,
+						label: 'Insert',
+						visible: true,
+						anchor: 'top-left' as const,
+						x: 0,
+						y: 0,
+						width: 400,
+						height: 200,
+						asset: insert,
+						mediaKind: 'image' as const,
+						fit: 'contain' as const,
+						focalPosition: { x: 0.5, y: 0.5 },
+						opacity: 1,
+					}],
+				},
+			],
+		};
+		const requirements = broadcastGraphicTemplatePackageRequirements(
+			graphic as unknown as Parameters<typeof broadcastGraphicTemplatePackageRequirements>[0],
+		);
+		const exported = await sender.exportTemplatePackage({
+			packageKind: 'skgraphic',
+			template: { identity: graphic.id, name: graphic.name, document: graphic },
+			assets: requirements.assets,
+			capabilities: requirements.capabilities,
+		});
+		if (exported.outcome !== 'exported')
+			throw new Error(`Expected an export, got ${JSON.stringify(exported.report.issues)}`);
+		const archive = await collectStream(exported.package.open());
+
+		const { library: receiver } = createLibrary('receiver');
+		const report = reportOf(await preflight(receiver, archive));
+
+		expect(report.issues.filter(issue => issue.severity === 'error')).toEqual([]);
+		expect(report.outcome).toBe('ready');
+		expect(report.mappings).toHaveLength(2);
+		expect(report.mappings.map(mapping => mapping.origin.sourceRevisionId).sort())
+			.toEqual([backdrop.revisionId, insert.revisionId].sort());
+		// Neither direction of the "every and only" rule fires on a valid package.
+		expect(codes(report)).not.toContain('undeclared-graphic-asset-dependency');
+		expect(codes(report)).not.toContain('unused-packaged-graphic-asset');
 	});
 
 	describe('packaged font attestation', () => {
