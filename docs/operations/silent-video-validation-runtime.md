@@ -59,6 +59,10 @@ Worker named `stream-silent-video-validator`:
   `silent-video-validation-posters` lifecycle rule (30-day expiry on the
   `validation/silent-video/` prefix), created at first deployment with
   `wrangler r2 bucket lifecycle add`.
+- Validations map deterministically onto a small warm Container pool sized to
+  the container application's `max_instances`; a busy Container answers 409
+  and the Workflow step retries, so bursts queue instead of exhausting
+  container capacity.
 - Automatic retries stay bounded inside the Workflow's per-step retry
   configuration. An instance that settles as errored or terminated is never
   restarted automatically; the service binding keeps answering with a

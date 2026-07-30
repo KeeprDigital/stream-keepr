@@ -79,6 +79,10 @@ type ContainerValidationResponse
 const MAX_SILENT_VIDEO_POSTER_BYTES = 2 * 1024 * 1024;
 const RESULT_POLL_DEADLINE_MILLISECONDS = 22_000;
 const RESULT_POLL_INTERVAL_MILLISECONDS = 750;
+// Must not exceed the container application's max_instances. Validations map
+// deterministically onto this warm pool; a busy container answers 409 and the
+// Workflow step retries, so bursts queue instead of exhausting capacity.
+const CONTAINER_POOL_SIZE = 4;
 
 const textEncoder = new TextEncoder();
 
@@ -94,6 +98,11 @@ async function sha256Hex(bytes: Uint8Array | ArrayBuffer) {
 
 function posterObjectKey(validationId: string) {
 	return `validation/silent-video/${validationId}/poster`;
+}
+
+function containerPoolName(instanceId: string) {
+	const slot = Number.parseInt(instanceId.slice(0, 8), 16) % CONTAINER_POOL_SIZE;
+	return `silent-video-validation-${slot}`;
 }
 
 function stagedSourceKey(operationId: string) {
@@ -149,7 +158,7 @@ export class SilentVideoValidationWorkflow extends WorkflowEntrypoint<ValidatorE
 		return await step.do(
 			'validate-in-container',
 			{
-				retries: { limit: 3, delay: '15 seconds', backoff: 'exponential' },
+				retries: { limit: 5, delay: '20 seconds', backoff: 'exponential' },
 				timeout: '15 minutes',
 			},
 			async () => {
@@ -157,7 +166,7 @@ export class SilentVideoValidationWorkflow extends WorkflowEntrypoint<ValidatorE
 				if (!source)
 					throw new NonRetryableError('Staged silent-video source disappeared before validation');
 				const poster = posterFitDimensions(input.inspectedFacts);
-				const container = this.env.SILENT_VIDEO_VALIDATION_CONTAINER.getByName(event.instanceId);
+				const container = this.env.SILENT_VIDEO_VALIDATION_CONTAINER.getByName(containerPoolName(event.instanceId));
 				await container.startAndWaitForPorts();
 				const response = await container.fetch('http://silent-video-validation-container/validate', {
 					method: 'POST',
