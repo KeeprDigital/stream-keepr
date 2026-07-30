@@ -9,20 +9,25 @@ import type {
 	GraphicAssetReferenceStatus,
 	GraphicAssetRetentionView,
 	GraphicAssetRevisionId,
+	GraphicAssetSilentVideoFacts,
 	GraphicAssetSourceDeclarations,
 	GraphicAssetUsage,
 	GraphicAssetValidationReport,
 	GraphicsAssetCapacityLimits,
+	GraphicsAssetEvidenceCategory,
 	GraphicsAssetEvidenceEntry,
 	GraphicsAssetLibraryCapacity,
 	GraphicsAssetLibraryComponentHealth,
 	GraphicsAssetLibraryHealth,
 	GraphicsDerivativeId,
+	GraphicsDiscrepancy,
+	GraphicsDiscrepancyActionOutcome,
 	GraphicsDuplicateContentPolicy,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 	GraphicsIngestionSource,
-	GraphicsRetentionEvidenceCategory,
+	GraphicsReconciliationOverview,
+	GraphicsReconciliationSweepResult,
 	GraphicsRetentionOverview,
 	GraphicsRetentionSweepResult,
 } from '~~/shared/types/graphicsAsset';
@@ -50,7 +55,14 @@ import type {
 	GraphicsMultipartUploadIdentity,
 	GraphicsObjectStoreHealth,
 	GraphicsStagingObjectStore,
+	ReadGraphicsObjectOutcome,
 } from './object-store';
+import type {
+	GraphicsAssetReconciliationCatalogue,
+	GraphicsReconciliationMedia,
+	RegenerateGraphicsDerivativeOutcome,
+	VerifyGraphicsContentBytesOutcome,
+} from './reconciliation';
 import type { GraphicsRemoteSourceFetcher } from './remote-source';
 import type { GraphicsAssetRetentionCatalogue } from './retention';
 import type { SilentVideoPlaybackValidator } from './silent-video-playback-validator';
@@ -81,6 +93,7 @@ import {
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
 } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GRAPHICS_RETENTION_ACTOR } from '~~/shared/utils/graphicsAssetRetention';
+import { canonicalContentIdentity, canonicalObjectAgreement } from './canonical-integrity';
 import { GraphicsAssetLibraryError } from './errors';
 import { processStaticFont } from './font';
 import { graphicsIngestionPartIdentity } from './multipart';
@@ -96,6 +109,11 @@ import {
 	sha256Hex,
 	sha256HexStream,
 } from './png';
+import {
+	createGraphicsReconciliation,
+	reconciliationWorkingCopyIdentity,
+	reconciliationWorkingCopyOperationId,
+} from './reconciliation';
 import { createGraphicsRetention } from './retention';
 import {
 	processSilentVideo,
@@ -395,7 +413,15 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		facts: GraphicAsset['facts'];
 	} | undefined>;
 	listGraphicAssetUsage: (assetId: GraphicAssetId) => Promise<GraphicAssetUsage[]>;
-	findThumbnailDigest: (assetId: GraphicAssetId) => Promise<string | undefined>;
+	/**
+	 * The preview content for one Graphic Asset, with the facts a reader needs to
+	 * prove the stored object is the one the catalogue recorded.
+	 */
+	findThumbnailContent: (assetId: GraphicAssetId) => Promise<{
+		digest: string;
+		byteLength: number;
+		canonicalMime: GraphicAssetCanonicalMime;
+	} | undefined>;
 }
 
 export interface GraphicsAssetLibrary {
@@ -612,7 +638,7 @@ export interface GraphicsAssetLibrary {
 	}) => Promise<GraphicAssetPurgeOutcome>;
 	listGraphicsAssetEvidence: (input?: {
 		limit?: number;
-		categories?: readonly GraphicsRetentionEvidenceCategory[];
+		categories?: readonly GraphicsAssetEvidenceCategory[];
 	}) => Promise<GraphicsAssetEvidenceEntry[]>;
 	/** Every exact recovery and cleanup deadline the installation is holding. */
 	getRetentionOverview: () => Promise<GraphicsRetentionOverview>;
@@ -620,6 +646,55 @@ export interface GraphicsAssetLibrary {
 	inspectGraphicAssetRetention: (input: {
 		assetId: GraphicAssetId;
 	}) => Promise<GraphicAssetRetentionView>;
+	/**
+	 * Runs one reconciliation pass. The catalogue decides what should be
+	 * reachable and the byte store reports only what it holds; nothing here
+	 * creates, redirects, or removes an identity or a reference.
+	 */
+	runGraphicsReconciliation: () => Promise<GraphicsReconciliationSweepResult>;
+	/** Catalogue-versus-byte-store health and every open discrepancy. */
+	getReconciliationOverview: () => Promise<GraphicsReconciliationOverview>;
+	/**
+	 * One discrepancy's structured evidence, the pinned usage it affects, and
+	 * exactly the actions valid in its current state.
+	 */
+	inspectGraphicsDiscrepancy: (input: {
+		discrepancyId: string;
+	}) => Promise<GraphicsDiscrepancy>;
+	/** Re-observes one discrepancy against the byte store right now. */
+	recheckGraphicsDiscrepancy: (input: {
+		discrepancyId: string;
+		actor: string;
+	}) => Promise<GraphicsDiscrepancyActionOutcome>;
+	/**
+	 * Repairs Unavailable Graphic Asset Content from exact supplied bytes. The
+	 * bytes must prove the same application SHA-256, byte size, canonical media
+	 * type, and validation facts; a successful repair creates no Graphic Asset
+	 * Revision and changes no Graphic Asset Reference.
+	 */
+	repairUnavailableGraphicAssetContent: (input: {
+		discrepancyId: string;
+		actor: string;
+		bytes: BoundedByteStream;
+	}) => Promise<GraphicsDiscrepancyActionOutcome>;
+	/**
+	 * Re-reads and re-hashes the stored bytes in full against the complete
+	 * expectation. It is the only action valid on an isolated critical integrity
+	 * incident, because it settles one without writing anything; verified bytes
+	 * a Content Quarantine record was holding are restored by releasing it.
+	 */
+	verifyStoredGraphicAssetContent: (input: {
+		discrepancyId: string;
+		actor: string;
+	}) => Promise<GraphicsDiscrepancyActionOutcome>;
+	/**
+	 * Regenerates one missing deterministic Graphics Derivative from available
+	 * canonical source content, without mutating its source revision.
+	 */
+	regenerateGraphicsDerivative: (input: {
+		discrepancyId: string;
+		actor: string;
+	}) => Promise<GraphicsDiscrepancyActionOutcome>;
 }
 
 export interface TemplatePackageExportRequest {
@@ -672,6 +747,45 @@ export function graphicAssetId(value: string): GraphicAssetId {
 
 export function graphicAssetRevisionId(value: string): GraphicAssetRevisionId {
 	return requiredIdentity<GraphicAssetRevisionId>(value, 'Graphic Asset Revision identity');
+}
+
+function requiredActor(actor: string): string {
+	const identity = actor.trim();
+	if (!identity) {
+		throw new GraphicsAssetLibraryError(
+			'A reconciliation action requires an administrator identity',
+			'invalid-ingestion-input',
+		);
+	}
+	return identity;
+}
+
+/**
+ * A reconciliation action addresses one discrepancy by identity, so an unknown
+ * identity is a not-found result rather than a silently ignored request.
+ */
+function requireDiscrepancyOutcome(
+	outcome: GraphicsDiscrepancyActionOutcome | undefined,
+): GraphicsDiscrepancyActionOutcome {
+	if (!outcome)
+		throw new GraphicsAssetLibraryError('Graphics discrepancy not found', 'ingestion-operation-not-found');
+	return outcome;
+}
+
+/**
+ * A discrepancy identity from an untrusted edge. It is an opaque domain
+ * identity rather than a brand, but it is still validated at the boundary so a
+ * blank path segment becomes a clear input error rather than a lookup miss.
+ */
+export function graphicsDiscrepancyId(value: string): string {
+	const identity = value.trim();
+	if (!identity) {
+		throw new GraphicsAssetLibraryError(
+			'A Graphics discrepancy identity is required',
+			'invalid-ingestion-input',
+		);
+	}
+	return identity;
 }
 
 export function graphicsDerivativeId(value: string): GraphicsDerivativeId {
@@ -757,6 +871,257 @@ export function createGraphicsAssetLibrary(
 	}
 
 	/**
+	 * Attestations a browser or the pinned validation runtime made about these
+	 * exact bytes at ingestion. Re-inspection cannot reproduce them and does not
+	 * need to: an exact SHA-256 match already proves the bytes are the same ones
+	 * those attestations were made about.
+	 */
+	const RUNTIME_ATTESTATION_FACTS = [
+		'browserDecodable',
+		'browserPlayable',
+		'browserLoadable',
+		'chromiumTransparencyPlayback',
+		'representativeGlyphsRendered',
+	] as const;
+
+	function comparableFacts(facts: Record<string, unknown>): string {
+		const attested = new Set<string>(RUNTIME_ATTESTATION_FACTS);
+		return JSON.stringify(
+			Object.fromEntries(
+				Object.entries(facts)
+					.filter(([key]) => !attested.has(key))
+					.toSorted(([left], [right]) => left.localeCompare(right)),
+			),
+		);
+	}
+
+	/**
+	 * Re-derives a source's validation facts from bytes already staged or stored.
+	 * Video is inspected through random access so a repair candidate is never
+	 * held complete in memory.
+	 */
+	async function inspectContentBytes(
+		read: (range?: { offset: number; length: number }) => Promise<ReadGraphicsObjectOutcome>,
+		byteLength: number,
+		sourceKind: GraphicAssetSourceKind,
+		digest: string,
+	) {
+		if (sourceKind === 'silent-video') {
+			return await processSilentVideoFromRandomAccess({
+				byteLength,
+				sha256: digest,
+				read: async (offset, length) => {
+					const range = await read({ offset, length });
+					if (range.outcome !== 'available') {
+						return range.outcome === 'missing'
+							? { outcome: 'missing' as const }
+							: { outcome: 'unavailable' as const, retryable: true as const };
+					}
+					const bytes = await consumeBoundedByteStream({
+						body: range.body,
+						byteLength: length,
+						maximumByteLength: length,
+					});
+					return {
+						outcome: 'available' as const,
+						bytes,
+						completeLength: range.range.completeLength,
+					};
+				},
+			}, {});
+		}
+		const complete = await read();
+		if (complete.outcome !== 'available')
+			throw new GraphicsObjectInputError('The content bytes could not be read for inspection');
+		const bytes = await consumeBoundedByteStream({
+			body: complete.body,
+			byteLength: complete.object.byteLength,
+			maximumByteLength: GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind].maximumByteLength,
+		});
+		return await processGraphicAssetSource(sourceKind, bytes, {});
+	}
+
+	/**
+	 * Regenerates a silent-video poster.
+	 *
+	 * The pinned validation runtime reads staged sources, so the canonical bytes
+	 * are streamed into the working copy this regeneration already owns. The
+	 * copy is the same identity reconciliation claimed and cleans up, so a
+	 * crashed regeneration can never leave staged bytes with no catalogue trace.
+	 */
+	async function regenerateSilentVideoPoster(input: {
+		discrepancyId: string;
+		sourceDigest: string;
+		sourceByteLength: number;
+		sourceCanonicalMime: string;
+		sourceFacts: Record<string, unknown>;
+	}): Promise<RegenerateGraphicsDerivativeOutcome> {
+		const unavailable = {
+			outcome: 'unavailable' as const,
+			code: 'derivative-regeneration-unavailable' as const,
+			message: 'The pinned silent-video validation runtime could not reproduce this poster.',
+		};
+		const source = await requireCanonical().read(canonicalContentIdentity(input.sourceDigest));
+		if (source.outcome !== 'available')
+			return { ...unavailable, code: 'source-content-unavailable', message: 'The canonical source content is not currently available.' };
+		// Staged objects are create-if-absent, so an abandoned copy from a
+		// previous attempt would otherwise be validated instead of this one.
+		// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+		await requireStaging().delete(reconciliationWorkingCopyIdentity(input.discrepancyId));
+		const staged = await requireStaging().createImmutable({
+			identity: reconciliationWorkingCopyIdentity(input.discrepancyId),
+			bytes: {
+				body: source.body,
+				byteLength: input.sourceByteLength,
+				maximumByteLength: input.sourceByteLength,
+			},
+			metadata: { contentType: input.sourceCanonicalMime },
+		});
+		if (staged.outcome === 'unavailable')
+			return { ...unavailable, code: 'byte-store-unavailable', message: 'The staging byte store is temporarily unavailable.' };
+		try {
+			const trusted = await reportWithTrustedSilentVideoValidation(
+				{
+					outcome: 'accepted',
+					compatibilityProfile: SILENT_VIDEO_COMPATIBILITY_PROFILE,
+					issues: [],
+					facts: JSON.parse(
+						comparableFacts(input.sourceFacts),
+					) as GraphicAssetSilentVideoFacts,
+				},
+				{ id: reconciliationWorkingCopyOperationId(input.discrepancyId) } as GraphicsIngestionOperation,
+			);
+			return { outcome: 'generated', bytes: trusted.derivative };
+		}
+		catch {
+			return unavailable;
+		}
+	}
+
+	/**
+	 * The media-aware half of reconciliation. Compatibility profiles, parsers,
+	 * and the pinned validation runtime stay here; reconciliation only decides
+	 * what must be proven and what happens to catalogue state once it is.
+	 */
+	const reconciliationMedia: GraphicsReconciliationMedia = {
+		async verifyContentBytes(input): Promise<VerifyGraphicsContentBytesOutcome> {
+			const metadata = await input.read({ offset: 0, length: 1 });
+			if (metadata.outcome !== 'available') {
+				return {
+					outcome: 'rejected',
+					code: 'byte-store-unavailable',
+					message: 'The bytes to verify could not be read.',
+				};
+			}
+			if (metadata.range.completeLength !== input.expectedByteLength) {
+				return {
+					outcome: 'rejected',
+					code: 'byte-length-mismatch',
+					message: `Verification requires exactly ${input.expectedByteLength} bytes; these are ${metadata.range.completeLength}.`,
+				};
+			}
+
+			// The digest is computed over the exact stored bytes by streaming, so
+			// nothing here depends on holding a complete asset in memory.
+			const complete = await input.read();
+			if (complete.outcome !== 'available') {
+				return {
+					outcome: 'rejected',
+					code: 'byte-store-unavailable',
+					message: 'The bytes to verify could not be read.',
+				};
+			}
+			const digest = await sha256HexStream({
+				body: complete.body,
+				byteLength: input.expectedByteLength,
+				maximumByteLength: input.expectedByteLength,
+			});
+			if (digest !== input.expectedDigest) {
+				return {
+					outcome: 'rejected',
+					code: 'digest-mismatch',
+					message: 'These bytes do not hash to the exact expected content digest.',
+				};
+			}
+			if (input.expectation.kind === 'derivative')
+				return { outcome: 'verified' };
+
+			let inspected;
+			try {
+				inspected = await inspectContentBytes(
+					input.read,
+					input.expectedByteLength,
+					input.expectation.sourceKind,
+					digest,
+				);
+			}
+			catch {
+				return {
+					outcome: 'rejected',
+					code: 'validation-facts-mismatch',
+					message: 'These bytes could not be revalidated under the recorded compatibility profile.',
+				};
+			}
+			if (inspected.report.outcome !== 'accepted') {
+				return {
+					outcome: 'rejected',
+					code: 'validation-facts-mismatch',
+					message: 'These bytes no longer pass Graphic Asset Validation.',
+				};
+			}
+			if (inspected.report.facts.canonicalMime !== input.expectation.canonicalMime) {
+				return {
+					outcome: 'rejected',
+					code: 'canonical-mime-mismatch',
+					message: `Repair requires ${input.expectation.canonicalMime}; these bytes are ${inspected.report.facts.canonicalMime}.`,
+				};
+			}
+			if (
+				comparableFacts(inspected.report.facts as unknown as Record<string, unknown>)
+				!== comparableFacts(input.expectation.facts)
+			) {
+				return {
+					outcome: 'rejected',
+					code: 'validation-facts-mismatch',
+					message: 'These bytes do not reproduce the validation facts the revision recorded.',
+				};
+			}
+			return { outcome: 'verified' };
+		},
+		async regenerateDerivative(input): Promise<RegenerateGraphicsDerivativeOutcome> {
+			if (input.sourceKind === 'silent-video')
+				return await regenerateSilentVideoPoster(input);
+			const source = await requireCanonical().read(canonicalContentIdentity(input.sourceDigest));
+			if (source.outcome !== 'available') {
+				return {
+					outcome: 'unavailable',
+					code: 'source-content-unavailable',
+					message: 'The canonical source content is not currently available.',
+				};
+			}
+			try {
+				const bytes = await consumeBoundedByteStream({
+					body: source.body,
+					byteLength: input.sourceByteLength,
+					maximumByteLength: GRAPHIC_ASSET_SOURCE_POLICIES[input.sourceKind].maximumByteLength,
+				});
+				const processed = await processGraphicAssetSource(input.sourceKind, bytes, {});
+				if (!('thumbnail' in processed))
+					throw new Error('The validated source did not produce its deterministic derivative');
+				return { outcome: 'generated', bytes: processed.thumbnail };
+			}
+			catch {
+				return {
+					outcome: 'unavailable',
+					code: 'derivative-regeneration-unavailable',
+					message: 'The deterministic derivative could not be reproduced from the canonical source.',
+				};
+			}
+		},
+		sha256Hex,
+	};
+
+	/**
 	 * The scheduled retention path needs transactional catalogue proofs that an
 	 * ordinary in-memory catalogue double cannot provide.
 	 */
@@ -782,6 +1147,61 @@ export function createGraphicsAssetLibrary(
 			);
 		}
 		return retention;
+	}
+
+	/**
+	 * Reconciliation needs the same transactional catalogue proofs the retention
+	 * path does, so it is likewise unavailable against an ordinary in-memory
+	 * catalogue double.
+	 */
+	function findReconciliation() {
+		const catalogue = requireCatalogue();
+		if (!('listExpectedContent' in catalogue))
+			return undefined;
+		return createGraphicsReconciliation({
+			catalogue: catalogue as GraphicsAssetCatalogue & GraphicsAssetReconciliationCatalogue,
+			canonical: requireCanonical(),
+			staging: requireStaging(),
+			media: reconciliationMedia,
+			now,
+			generateIdentity,
+		});
+	}
+
+	function requireReconciliation() {
+		const reconciliation = findReconciliation();
+		if (!reconciliation) {
+			throw new GraphicsAssetLibraryError(
+				'Graphics Asset reconciliation is unavailable for this catalogue',
+				'graphics-asset-library-unavailable',
+			);
+		}
+		return reconciliation;
+	}
+
+	/**
+	 * Records that a reader just observed the byte store contradicting the
+	 * catalogue. Delivery has already decided its own outcome by this point, so
+	 * this only turns the observation into durable operational state and must
+	 * never change or fail the caller's result.
+	 */
+	async function observeCanonicalDisagreement(
+		input:
+			| { assetId: GraphicAssetId; revisionId: GraphicAssetRevisionId }
+			| { digest: string },
+	) {
+		try {
+			const reconciliation = findReconciliation();
+			if (!reconciliation)
+				return;
+			await ('digest' in input
+				? reconciliation.reconcileObservedDigest(input)
+				: reconciliation.reconcileObservedContent(input));
+		}
+		catch {
+			// The scheduled pass re-observes the same disagreement, so a failure to
+			// record it immediately only delays the alert.
+		}
 	}
 
 	/**
@@ -835,33 +1255,43 @@ export function createGraphicsAssetLibrary(
 	>;
 
 	/**
-	 * Canonical bytes are only usable when the store agrees with the catalogue
-	 * about their length and canonical media type. Any disagreement is treated as
-	 * unavailable rather than served, so no caller ever receives content that
-	 * does not match its recorded facts.
+	 * Canonical bytes are only usable when the store agrees with the catalogue in
+	 * every respect `canonicalObjectAgreement` checks — the same rule
+	 * reconciliation applies. Delivery and reconciliation deliberately share one
+	 * definition of agreement, so content reconciliation has isolated as a
+	 * critical integrity incident can never still be served on air.
+	 *
+	 * Any disagreement reads as unavailable rather than being served, so no
+	 * caller ever receives content that does not match its recorded facts.
 	 */
 	async function readCanonicalContent(
 		content: CanonicalContentFacts,
 		range?: { offset: number; length: number },
 	): Promise<
 		| { outcome: 'available'; body: ReadableStream<Uint8Array>; byteLength: number }
-		| { outcome: 'unavailable'; retryable: true }
+		| { outcome: 'unavailable'; retryable: true; disagreement: boolean }
 	> {
 		const result = await requireCanonical().read(
-			graphicsObjectIdentity(`sha256/${content.digest}`),
+			canonicalContentIdentity(content.digest),
 			range,
 		);
 		if (
 			result.outcome !== 'available'
-			|| result.object.byteLength !== content.byteLength
-			|| result.object.contentType !== content.canonicalMime
+			|| canonicalObjectAgreement(content, result.object).outcome !== 'agrees'
 			|| result.range.completeLength !== content.byteLength
 			|| (
 				range !== undefined
 				&& (result.range.offset !== range.offset || result.range.length !== range.length)
 			)
 		) {
-			return { outcome: 'unavailable', retryable: true };
+			return {
+				outcome: 'unavailable',
+				retryable: true,
+				// A store that could not answer proves nothing about this object; a
+				// store that answered and disagreed is a real integrity observation
+				// worth reconciling.
+				disagreement: result.outcome !== 'unavailable',
+			};
 		}
 		return {
 			outcome: 'available',
@@ -870,13 +1300,19 @@ export function createGraphicsAssetLibrary(
 		};
 	}
 
-	async function canonicalContentAvailable(content: CanonicalContentFacts): Promise<boolean> {
+	async function observeCanonicalContent(content: CanonicalContentFacts): Promise<
+		{ outcome: 'available' } | { outcome: 'unavailable'; disagreement: boolean }
+	> {
 		const result = await requireCanonical().readMetadata(
-			graphicsObjectIdentity(`sha256/${content.digest}`),
+			canonicalContentIdentity(content.digest),
 		);
-		return result.outcome === 'available'
-			&& result.object.byteLength === content.byteLength
-			&& result.object.contentType === content.canonicalMime;
+		if (
+			result.outcome === 'available'
+			&& canonicalObjectAgreement(content, result.object).outcome === 'agrees'
+		) {
+			return { outcome: 'available' };
+		}
+		return { outcome: 'unavailable', disagreement: result.outcome !== 'unavailable' };
 	}
 
 	function timestampAfter(updatedAt: string) {
@@ -1292,7 +1728,7 @@ export function createGraphicsAssetLibrary(
 		bytes: BoundedByteStream,
 		contentType: GraphicAssetCanonicalMime,
 	) {
-		const identity = graphicsObjectIdentity(`sha256/${digest}`);
+		const identity = canonicalContentIdentity(digest);
 		const result = await store.createImmutable({
 			identity,
 			bytes,
@@ -2544,6 +2980,24 @@ export function createGraphicsAssetLibrary(
 					message: 'Staged source bytes are temporarily unavailable.',
 				}, report);
 			}
+			// The claim is recorded before a byte moves. An object present in the
+			// canonical store that nothing in the catalogue accounts for is exactly
+			// what the reconciliation scan quarantines as unexpected, so writing
+			// first would leave a window in which a publication in flight could have
+			// its own bytes quarantined out from under it.
+			//
+			// Claiming a digest whose write then never happens is harmless: the
+			// candidate is removed by publication, and an abandoned operation's
+			// candidates are collected by the retention path, whose byte deletion
+			// treats an already-absent object as deleted rather than as a failure.
+			await catalogue.recordCanonicalWrites({
+				operation,
+				contents: [
+					{ digest: report.facts.sha256, byteLength: report.facts.byteLength },
+					{ digest: thumbnailDigest, byteLength: thumbnail.byteLength },
+				],
+				recordedAt: timestamp(),
+			});
 			const [sourceWrite, thumbnailWrite] = await Promise.all([
 				storeCanonicalStream(canonical, report.facts.sha256, {
 					body: canonicalSourceRead.body,
@@ -2552,26 +3006,6 @@ export function createGraphicsAssetLibrary(
 				}, report.facts.canonicalMime),
 				storeCanonicalBytes(canonical, thumbnailDigest, thumbnail),
 			]);
-			const createdCanonicalContents = [
-				sourceWrite.outcome === 'created'
-					? {
-							digest: report.facts.sha256,
-							byteLength: report.facts.byteLength,
-						}
-					: undefined,
-				thumbnailWrite.outcome === 'created'
-					? { digest: thumbnailDigest, byteLength: thumbnail.byteLength }
-					: undefined,
-			].filter((content): content is { digest: string; byteLength: number } =>
-				content !== undefined,
-			);
-			if (createdCanonicalContents.length > 0) {
-				await catalogue.recordCanonicalWrites({
-					operation,
-					contents: createdCanonicalContents,
-					recordedAt: timestamp(),
-				});
-			}
 			if (sourceWrite.outcome === 'unavailable' || thumbnailWrite.outcome === 'unavailable') {
 				return await failOperation(catalogue, operation, {
 					code: 'canonical-store-unavailable',
@@ -3752,8 +4186,12 @@ export function createGraphicsAssetLibrary(
 			);
 			if (!content)
 				return { outcome: 'missing' };
-			if (!await canonicalContentAvailable(content))
+			const observation = await observeCanonicalContent(content);
+			if (observation.outcome !== 'available') {
+				if (observation.disagreement)
+					await observeCanonicalDisagreement(input);
 				return { outcome: 'unavailable', retryable: true };
+			}
 			return {
 				outcome: 'available',
 				lifecycleState: content.lifecycleState,
@@ -3767,8 +4205,12 @@ export function createGraphicsAssetLibrary(
 			);
 			if (!content)
 				return { outcome: 'missing' };
-			if (!await canonicalContentAvailable(content))
+			const observation = await observeCanonicalContent(content);
+			if (observation.outcome !== 'available') {
+				if (observation.disagreement)
+					await observeCanonicalDisagreement(input);
 				return { outcome: 'unavailable', retryable: true };
+			}
 			return {
 				outcome: 'available',
 				byteLength: content.byteLength,
@@ -3783,8 +4225,11 @@ export function createGraphicsAssetLibrary(
 			if (!content)
 				return { outcome: 'missing' };
 			const result = await readCanonicalContent(content, input.range);
-			if (result.outcome !== 'available')
+			if (result.outcome !== 'available') {
+				if (result.disagreement)
+					await observeCanonicalDisagreement(input);
 				return { outcome: 'unavailable', retryable: true };
+			}
 			return {
 				outcome: 'available',
 				body: result.body,
@@ -3793,21 +4238,26 @@ export function createGraphicsAssetLibrary(
 			};
 		},
 		async resolveGraphicAssetThumbnail(input) {
-			const digest = await catalogueRequest(
-				() => requireCatalogue().findThumbnailDigest(input.assetId),
+			const content = await catalogueRequest(
+				() => requireCatalogue().findThumbnailContent(input.assetId),
 				'Graphic Asset preview lookup is temporarily unavailable',
 			);
-			if (!digest)
+			// No Graphics Derivative recorded at all is genuinely missing. Bytes the
+			// catalogue does expect but the store cannot produce are a retryable
+			// operational failure, not an absent preview: reporting those as missing
+			// would tell a caller there is nothing to show when there is.
+			if (!content)
 				return { outcome: 'missing' };
-			const result = await requireCanonical().read(graphicsObjectIdentity(`sha256/${digest}`));
-			if (result.outcome === 'missing')
-				return { outcome: 'missing' };
-			if (result.outcome === 'unavailable')
+			const result = await readCanonicalContent(content);
+			if (result.outcome !== 'available') {
+				if (result.disagreement)
+					await observeCanonicalDisagreement({ digest: content.digest });
 				return { outcome: 'unavailable', retryable: true };
+			}
 			return {
 				outcome: 'available',
 				body: result.body,
-				byteLength: result.object.byteLength,
+				byteLength: result.byteLength,
 				contentType: 'image/png',
 			};
 		},
@@ -3854,7 +4304,14 @@ export function createGraphicsAssetLibrary(
 					}));
 					continue;
 				}
-				if (!await canonicalContentAvailable(content)) {
+				// Export asks the byte store rather than trusting the catalogue's
+				// advisory availability flag, because a package must contain the
+				// bytes that exist now. A disagreement it finds is fed straight back
+				// into reconciliation so the incident is not lost with the report.
+				const observation = await observeCanonicalContent(content);
+				if (observation.outcome !== 'available') {
+					if (observation.disagreement)
+						await observeCanonicalDisagreement(requirement.reference);
 					issues.push(templatePackageExportIssue('unavailable-graphic-asset-content', {
 						slot: requirement.slots[0],
 						message: 'The exact Graphic Asset Revision exists but its content is unavailable',
@@ -3941,6 +4398,12 @@ export function createGraphicsAssetLibrary(
 							open: async () => {
 								const result = await readCanonicalContent(content);
 								if (result.outcome !== 'available') {
+									// Content that resolved during the report and then failed
+									// mid-stream is the sharpest integrity observation the
+									// library gets; it must not vanish with the aborted
+									// download.
+									if (result.disagreement)
+										await observeCanonicalDisagreement({ digest: content.digest });
 									throw new GraphicsAssetLibraryError(
 										'Graphic Asset content became unavailable while the Template Package was streaming',
 										'graphics-asset-library-unavailable',
@@ -4026,6 +4489,64 @@ export function createGraphicsAssetLibrary(
 			if (!view)
 				throw new GraphicsAssetLibraryError('Graphic Asset not found', 'ingestion-operation-not-found');
 			return view;
+		},
+		async runGraphicsReconciliation() {
+			return await catalogueRequest(
+				() => requireReconciliation().run(),
+				'Graphics Asset reconciliation could not complete because the catalogue is unavailable',
+			);
+		},
+		async getReconciliationOverview() {
+			return await catalogueRequest(
+				() => requireReconciliation().overview(),
+				'Graphics Asset reconciliation state is temporarily unavailable',
+			);
+		},
+		async inspectGraphicsDiscrepancy(input) {
+			const discrepancy = await catalogueRequest(
+				() => requireReconciliation().inspect({ discrepancyId: input.discrepancyId }),
+				'Graphics discrepancy evidence is temporarily unavailable',
+			);
+			if (!discrepancy)
+				throw new GraphicsAssetLibraryError('Graphics discrepancy not found', 'ingestion-operation-not-found');
+			return discrepancy;
+		},
+		async recheckGraphicsDiscrepancy(input) {
+			return requireDiscrepancyOutcome(await catalogueRequest(
+				() => requireReconciliation().recheck({
+					discrepancyId: input.discrepancyId,
+					actor: requiredActor(input.actor),
+				}),
+				'Graphics discrepancy could not be rechecked',
+			));
+		},
+		async repairUnavailableGraphicAssetContent(input) {
+			return requireDiscrepancyOutcome(await catalogueRequest(
+				() => requireReconciliation().repair({
+					discrepancyId: input.discrepancyId,
+					actor: requiredActor(input.actor),
+					bytes: input.bytes,
+				}),
+				'Graphic Asset Content repair could not be completed',
+			));
+		},
+		async verifyStoredGraphicAssetContent(input) {
+			return requireDiscrepancyOutcome(await catalogueRequest(
+				() => requireReconciliation().verifyStoredBytes({
+					discrepancyId: input.discrepancyId,
+					actor: requiredActor(input.actor),
+				}),
+				'Stored Graphic Asset Content could not be verified',
+			));
+		},
+		async regenerateGraphicsDerivative(input) {
+			return requireDiscrepancyOutcome(await catalogueRequest(
+				() => requireReconciliation().regenerateDerivative({
+					discrepancyId: input.discrepancyId,
+					actor: requiredActor(input.actor),
+				}),
+				'Graphics Derivative could not be regenerated',
+			));
 		},
 	};
 }

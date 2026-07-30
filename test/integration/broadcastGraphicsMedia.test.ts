@@ -21,17 +21,31 @@ import { executeIntegrationD1 } from './integrationD1';
  * Output Asset Capability.
  */
 
-const pixelPng = Uint8Array.from(Buffer.from(
+const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 	'base64',
 ));
+const emptyTextChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85);
+
+/**
+ * Integration suites share one database, and identical bytes deduplicate across
+ * Graphic Assets by design. Padding each fixture with a chunk count no other
+ * suite uses keeps this suite's content digests to itself — without it, whether
+ * a suite that ingests the bare pixel publishes or reuses depends on which file
+ * ran first.
+ */
+function pngWithTextChunks(count: number) {
+	return Uint8Array.from(Buffer.concat([
+		transparentPixelPng.slice(0, -12),
+		...Array.from({ length: count }).fill(emptyTextChunk) as Uint8Array[],
+		transparentPixelPng.slice(-12),
+	]));
+}
+
+const pixelPng = pngWithTextChunks(50);
 
 /** A second payload, so the two pinned fixtures differ in content as well as identity. */
-const taggedPng = Uint8Array.from(Buffer.concat([
-	pixelPng.slice(0, -12),
-	Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85),
-	pixelPng.slice(-12),
-]));
+const taggedPng = pngWithTextChunks(51);
 
 /** Distinguishes this run's fixtures from any a previous run left in the library. */
 const runId = randomUUID();

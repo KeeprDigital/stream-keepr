@@ -17,6 +17,12 @@ The Nitro `cloudflare:scheduled` hook is handled by
 from a request. A failed sweep is logged and swallowed so it can never take the
 Worker down; the next run retries from durable state.
 
+The same trigger also runs the reconciliation pass, from its own plugin and its
+own hook handler, so neither can fail the other. The two meet at Content
+Quarantine: reconciliation puts unexpected canonical objects into it, and this
+sweep is what deletes them after the seven-day recheck. See
+[the reconciliation schedule](./graphics-reconciliation-schedule.md).
+
 ## Why this is a direct Cloudflare dependency
 
 The pinned `@nuxthub/core` 0.10.8 public runtime interface exposes no way to

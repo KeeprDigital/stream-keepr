@@ -4,8 +4,21 @@ import {
 	DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES,
 	DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
 } from '~~/shared/types/graphicsAsset';
+import {
+	GRAPHICS_DISCREPANCY_KINDS,
+	GRAPHICS_DISCREPANCY_REASON_CODES,
+	GRAPHICS_DISCREPANCY_RESOLUTIONS,
+	GRAPHICS_DISCREPANCY_STATES,
+	GRAPHICS_RECONCILIATION_EVIDENCE_CATEGORIES,
+} from '~~/shared/utils/graphicsAssetReconciliation';
 import { GRAPHICS_RETENTION_EVIDENCE_CATEGORIES } from '~~/shared/utils/graphicsAssetRetention';
 import { events } from '../schema';
+
+/** Every category the one shared Evidence ledger accepts. */
+export const GRAPHICS_ASSET_EVIDENCE_CATEGORY_VALUES = [
+	...GRAPHICS_RETENTION_EVIDENCE_CATEGORIES,
+	...GRAPHICS_RECONCILIATION_EVIDENCE_CATEGORIES,
+] as const;
 
 export const GRAPHIC_ASSET_KIND_VALUES = ['image', 'silent-video', 'font'] as const;
 export const GRAPHIC_ASSET_LIFECYCLE_STATE_VALUES = ['active', 'retired', 'trashed'] as const;
@@ -17,12 +30,16 @@ export const GRAPHIC_ASSET_PURGE_REASON_VALUES = ['trash-window-elapsed', 'early
 export const GRAPHICS_CONTENT_QUARANTINE_ORIGIN_VALUES = [
 	'orphaned-content',
 	'abandoned-canonical-write',
+	/** Bytes the canonical store held that the catalogue never expected. */
+	'unexpected-object',
 ] as const;
 export const GRAPHICS_ASSET_EVIDENCE_SUBJECT_KIND_VALUES = [
 	'graphics-ingestion-operation',
 	'graphic-asset',
 	'graphic-asset-revision',
 	'graphic-asset-content',
+	'graphics-derivative',
+	'graphics-discrepancy',
 ] as const;
 export const GRAPHICS_INGESTION_STAGE_VALUES = [
 	'created',
@@ -86,12 +103,25 @@ export const graphicAssetContents = sqliteTable('graphic_asset_contents', {
 	digest: text('digest').primaryKey(),
 	byteLength: integer('byte_length').notNull(),
 	canonicalMime: text('canonical_mime').notNull(),
+	/**
+	 * Advisory reconciliation state, not a reader authority. A caller that needs
+	 * bytes asks the canonical byte store, which is the only current source;
+	 * this column keeps a known incident visible, alertable, and repairable
+	 * between sweeps. Reconciliation is its only writer.
+	 */
 	availability: text('availability', { enum: GRAPHIC_ASSET_CONTENT_AVAILABILITY_VALUES }).notNull().default('available'),
 	unavailableReasonCode: text('unavailable_reason_code'),
 	unavailableSince: integer('unavailable_since', { mode: 'timestamp_ms' }),
+	/**
+	 * When reconciliation last compared this content against the byte store.
+	 * A null value sorts first, so newly published content is checked before
+	 * content a recent sweep already agreed on.
+	 */
+	reconciledAt: integer('reconciled_at', { mode: 'timestamp_ms' }),
 	createdAt,
 }, table => [
 	index('graphic_asset_contents_availability_idx').on(table.availability),
+	index('graphic_asset_contents_reconciled_idx').on(table.reconciledAt),
 ]);
 
 /** One immutable, ordered, content-bearing version of a Graphic Asset. */
@@ -325,6 +355,67 @@ export const graphicsContentQuarantine = sqliteTable('graphics_content_quarantin
 ]);
 
 /**
+ * One durable disagreement between the catalogue and the canonical byte store.
+ *
+ * The row carries the internal digest or object key it is about, because acting
+ * on it requires them; nothing that leaves the module ever does. At most one
+ * open row exists per subject, so a repeating sweep re-observes an incident
+ * instead of stacking duplicates.
+ */
+export const graphicsDiscrepancies = sqliteTable('graphics_discrepancies', {
+	id: text('id').primaryKey(),
+	kind: text('kind', { enum: GRAPHICS_DISCREPANCY_KINDS }).notNull(),
+	/** The exact expectation this row is about: a digest, derivative, or object key. */
+	subjectKey: text('subject_key').notNull(),
+	digest: text('digest'),
+	objectKey: text('object_key'),
+	derivativeId: text('derivative_id'),
+	state: text('state', { enum: GRAPHICS_DISCREPANCY_STATES }).notNull().default('open'),
+	reasonCode: text('reason_code', { enum: GRAPHICS_DISCREPANCY_REASON_CODES }).notNull(),
+	/**
+	 * A critical integrity incident fails closed: it is excluded from repair,
+	 * regeneration, and automatic deletion until an administrator resolves it.
+	 */
+	isolated: integer('isolated', { mode: 'boolean' }).notNull().default(false),
+	expected: text('expected', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+	observed: text('observed', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+	detectedAt: integer('detected_at', { mode: 'timestamp_ms' }).notNull(),
+	lastCheckedAt: integer('last_checked_at', { mode: 'timestamp_ms' }).notNull(),
+	resolvedAt: integer('resolved_at', { mode: 'timestamp_ms' }),
+	resolution: text('resolution', { enum: GRAPHICS_DISCREPANCY_RESOLUTIONS }),
+	/**
+	 * The staging identity a repair or regeneration is currently holding, and
+	 * when it claimed it. The claim outlives the byte work it authorises so a
+	 * crashed action cannot leak staged bytes with no catalogue trace.
+	 */
+	workingCopyKey: text('working_copy_key'),
+	workingCopySince: integer('working_copy_since', { mode: 'timestamp_ms' }),
+	correlationId: text('correlation_id').notNull(),
+	createdAt,
+}, table => [
+	uniqueIndex('graphics_discrepancies_open_subject_idx')
+		.on(table.kind, table.subjectKey)
+		.where(sql`state = 'open'`),
+	index('graphics_discrepancies_state_idx').on(table.state, table.kind),
+	index('graphics_discrepancies_digest_idx').on(table.digest),
+	index('graphics_discrepancies_working_copy_idx').on(table.workingCopySince),
+]);
+
+/**
+ * Singleton progress for the canonical byte-store scan. The scan is a cursor
+ * over an external store rather than over catalogue rows, so its position must
+ * survive between scheduled sweeps for a large bucket to be covered at all.
+ */
+export const graphicsReconciliationState = sqliteTable('graphics_reconciliation_state', {
+	id: integer('id').primaryKey().default(1),
+	canonicalScanCursor: text('canonical_scan_cursor'),
+	canonicalScanStartedAt: integer('canonical_scan_started_at', { mode: 'timestamp_ms' }),
+	lastSweepCorrelationId: text('last_sweep_correlation_id'),
+	lastSweepStartedAt: integer('last_sweep_started_at', { mode: 'timestamp_ms' }),
+	lastSweepCompletedAt: integer('last_sweep_completed_at', { mode: 'timestamp_ms' }),
+});
+
+/**
  * Chronological administrator-facing Evidence for automated lifecycle work.
  * Subjects are domain identities; no object key, filename, digest, capability
  * secret, or deleted byte ever enters this ledger.
@@ -332,7 +423,7 @@ export const graphicsContentQuarantine = sqliteTable('graphics_content_quarantin
 export const graphicsAssetEvidence = sqliteTable('graphics_asset_evidence', {
 	id: text('id').primaryKey(),
 	recordedAt: integer('recorded_at', { mode: 'timestamp_ms' }).notNull(),
-	category: text('category', { enum: GRAPHICS_RETENTION_EVIDENCE_CATEGORIES }).notNull(),
+	category: text('category', { enum: GRAPHICS_ASSET_EVIDENCE_CATEGORY_VALUES }).notNull(),
 	actor: text('actor').notNull(),
 	subjectKind: text('subject_kind', {
 		enum: GRAPHICS_ASSET_EVIDENCE_SUBJECT_KIND_VALUES,
@@ -365,4 +456,6 @@ export type DbGraphicsCanonicalWriteCandidate = typeof graphicsCanonicalWriteCan
 export type DbGraphicAssetRevisionRetention = typeof graphicAssetRevisionRetention.$inferSelect;
 export type DbGraphicAssetTombstone = typeof graphicAssetTombstones.$inferSelect;
 export type DbGraphicsContentQuarantine = typeof graphicsContentQuarantine.$inferSelect;
+export type DbGraphicsDiscrepancy = typeof graphicsDiscrepancies.$inferSelect;
+export type DbGraphicsReconciliationState = typeof graphicsReconciliationState.$inferSelect;
 export type DbGraphicsAssetEvidence = typeof graphicsAssetEvidence.$inferSelect;

@@ -15,13 +15,16 @@ import type {
 	PublishGraphicAssetCatalogueInput,
 } from '.';
 import type { GraphicsAssetMultipartState } from './multipart';
+import type { GraphicsAssetReconciliationCatalogue } from './reconciliation';
 import type { GraphicsAssetRetentionCatalogue } from './retention';
 import type { TemplatePackagePreflightState } from './template-package-preflight';
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GRAPHICS_RETENTION_GUARANTEES } from '~~/shared/utils/graphicsAssetRetention';
+import { createD1GraphicsAssetReconciliationCatalogue } from './catalogue-reconciliation';
 import { createD1GraphicsAssetRetentionCatalogue } from './catalogue-retention';
+import { boundJsonArray, valuesFromJsonArray } from './catalogue-sql';
 import { GraphicsAssetLibraryError } from './errors';
 import {
 	graphicsMultipartCompletedByteLength,
@@ -315,8 +318,8 @@ function releaseContentQuarantineStatement(
 ) {
 	return database.prepare(`
 		DELETE FROM graphics_content_quarantine
-		WHERE digest IN (${digests.map(() => '?').join(', ')})
-	`).bind(...digests);
+		WHERE digest IN ${valuesFromJsonArray()}
+	`).bind(boundJsonArray(digests));
 }
 
 function updateOperationStatement(
@@ -392,8 +395,9 @@ function updateOperationStatement(
 
 export function createD1GraphicsAssetCatalogue(
 	database: D1Database,
-): GraphicsAssetCatalogue & GraphicsAssetRetentionCatalogue {
+): GraphicsAssetCatalogue & GraphicsAssetRetentionCatalogue & GraphicsAssetReconciliationCatalogue {
 	return {
+		...createD1GraphicsAssetReconciliationCatalogue(database),
 		...createD1GraphicsAssetRetentionCatalogue(database),
 		async checkHealth() {
 			const result = await database
@@ -1872,18 +1876,29 @@ export function createD1GraphicsAssetCatalogue(
 				throw new Error('Graphic Asset usage lookup failed');
 			return result.results.map(usageFromRow);
 		},
-		async findThumbnailDigest(assetId) {
+		async findThumbnailContent(assetId) {
 			const row = await database.prepare(`
-				SELECT d.content_digest
+				SELECT d.content_digest, c.byte_length, c.canonical_mime
 				FROM graphics_derivatives d
 				JOIN graphic_asset_revisions r ON r.id = d.source_revision_id
 				JOIN graphic_assets a ON a.id = r.asset_id
+				JOIN graphic_asset_contents c ON c.digest = d.content_digest
 				WHERE a.id = ?
 					AND d.kind IN ('thumbnail', 'video-poster', 'font-specimen')
 				ORDER BY r.revision_number DESC
 				LIMIT 1
-			`).bind(assetId).first<{ content_digest: string }>();
-			return row?.content_digest;
+			`).bind(assetId).first<{
+				content_digest: string;
+				byte_length: number;
+				canonical_mime: string;
+			}>();
+			return row
+				? {
+						digest: row.content_digest,
+						byteLength: row.byte_length,
+						canonicalMime: row.canonical_mime as GraphicAssetCanonicalMime,
+					}
+				: undefined;
 		},
 	};
 }
