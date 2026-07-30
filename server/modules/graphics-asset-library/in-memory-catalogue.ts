@@ -26,6 +26,13 @@ import {
 } from './multipart';
 import { completedGraphicAssetReplacementOperation } from './operation';
 
+function stagingReservationBytes(operation: GraphicsIngestionOperation) {
+	return operation.declaredByteLength
+		+ (graphicAssetSourceKind(operation) === 'silent-video'
+			? MAX_SILENT_VIDEO_POSTER_BYTES
+			: 0);
+}
+
 interface InMemoryGraphicsAssetCatalogueOptions {
 	canonicalLimitBytes?: number;
 	stagingLimitBytes?: number;
@@ -188,10 +195,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			const usedBytes = sum(stagingUsage.values());
 			const reservedBytes = sum(stagingReservations.values());
 			const availableBytes = Math.max(0, stagingLimitBytes - usedBytes - reservedBytes);
-			const requestedBytes = operation.declaredByteLength
-				+ (graphicAssetSourceKind(operation) === 'silent-video'
-					? MAX_SILENT_VIDEO_POSTER_BYTES
-					: 0);
+			const requestedBytes = stagingReservationBytes(operation);
 			if (requestedBytes > availableBytes) {
 				throw new GraphicsAssetLibraryError(
 					'Graphics staging capacity is exhausted',
@@ -228,6 +232,32 @@ export function createInMemoryGraphicsAssetCatalogue(
 			}
 			stagingUsage.set(operation.id, input.usedBytes);
 			stagingReservations.set(operation.id, stagingEnvelope - input.usedBytes);
+		},
+		async recordRemoteCopyStagedSource(input) {
+			const operation = operations.get(input.operation.id);
+			const { observedByteLength } = input;
+			const residualReservation = stagingReservationBytes({
+				...input.operation,
+				declaredByteLength: observedByteLength,
+			}) - observedByteLength;
+			const stagingEnvelope = (stagingUsage.get(input.operation.id) ?? 0)
+				+ (stagingReservations.get(input.operation.id) ?? 0);
+			if (
+				!operation
+				|| operation.source !== 'remote-copy'
+				|| operation.stage === 'completed'
+				|| operation.stage === 'cancelled'
+				|| observedByteLength + residualReservation > stagingEnvelope
+			) {
+				throw new Error('Remote Graphic Asset copy progress could not be recorded');
+			}
+			operations.set(operation.id, cloneOperation({
+				...operation,
+				declaredByteLength: observedByteLength,
+				transferredByteLength: observedByteLength,
+			}));
+			stagingUsage.set(operation.id, observedByteLength);
+			stagingReservations.set(operation.id, residualReservation);
 		},
 		async recordCanonicalWrites(input) {
 			const existing = canonicalWriteCandidates.get(input.operation.id) ?? new Map<string, number>();

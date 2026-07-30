@@ -8,6 +8,7 @@ import type {
 	GraphicAssetUsage,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
+	GraphicsIngestionSource,
 } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicsAssetCatalogue,
@@ -37,6 +38,7 @@ function stagingReservationBytes(operation: GraphicsIngestionOperation) {
 interface OperationRow {
 	id: string;
 	idempotency_key: string;
+	source: GraphicsIngestionSource;
 	initiated_by: string;
 	proposed_name: string;
 	source_file_name: string | null;
@@ -72,6 +74,7 @@ interface AssetRow {
 	event_ids: string;
 	operation_id: string;
 	idempotency_key: string;
+	source: GraphicsIngestionSource;
 	initiated_by: string;
 	proposed_name: string;
 	source_file_name: string | null;
@@ -111,6 +114,7 @@ function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 	const operation: GraphicsIngestionOperation = {
 		id: row.id as GraphicsIngestionOperationId,
 		idempotencyKey: row.idempotency_key,
+		source: row.source,
 		initiatedBy: row.initiated_by,
 		name: row.proposed_name,
 		sourceFileName: row.source_file_name ?? undefined,
@@ -141,6 +145,7 @@ function operationRowFromAsset(row: AssetRow): OperationRow {
 	return {
 		id: row.operation_id,
 		idempotency_key: row.idempotency_key,
+		source: row.source,
 		initiated_by: row.initiated_by,
 		proposed_name: row.proposed_name,
 		source_file_name: row.source_file_name,
@@ -258,7 +263,7 @@ async function classifyLifecycleTransitionMiss(
 
 function operationSelect(where: string) {
 	return `
-		SELECT id, idempotency_key, initiated_by, proposed_name,
+		SELECT id, idempotency_key, source, initiated_by, proposed_name,
 				source_file_name, declared_mime, browser_decode_evidence,
 			duplicate_content_policy, default_event_id, target_asset_id,
 			declared_byte_length, transferred_byte_length, multipart_state, stage, report, result,
@@ -663,7 +668,7 @@ export function createD1GraphicsAssetCatalogue(
 			`).bind(
 				operation.id,
 				operation.idempotencyKey,
-				operation.targetAssetId ? 'replacement' : 'local-upload',
+				operation.source,
 				operation.initiatedBy,
 				operation.name,
 				operation.sourceFileName ?? null,
@@ -729,6 +734,40 @@ export function createD1GraphicsAssetCatalogue(
 			).run();
 			if (!result.success || result.meta.changes !== 1)
 				throw new Error('Graphics staging progress could not be recorded');
+		},
+		async recordRemoteCopyStagedSource(input) {
+			const { observedByteLength } = input;
+			const residualReservation = stagingReservationBytes({
+				...input.operation,
+				declaredByteLength: observedByteLength,
+			}) - observedByteLength;
+			// This is the remote-copy equivalent of recordStagedBytes: the one point
+			// at which a complete remote input is durably staged, so it records the
+			// same transfer-completed fact. Without it the copy would read as an
+			// incomplete transfer and lose its seven-day staged-input guarantee.
+			const result = await database.prepare(`
+				UPDATE graphics_ingestion_operations
+				SET declared_byte_length = ?,
+					transferred_byte_length = ?,
+					staging_used_byte_length = ?,
+					staging_reserved_byte_length = ?,
+					transfer_completed_at = COALESCE(transfer_completed_at, ?)
+				WHERE id = ? AND initiated_by = ?
+					AND source = 'remote-copy'
+					AND stage NOT IN ('completed', 'cancelled')
+					AND ? <= staging_reserved_byte_length + staging_used_byte_length
+			`).bind(
+				observedByteLength,
+				observedByteLength,
+				observedByteLength,
+				residualReservation,
+				new Date(input.recordedAt).getTime(),
+				input.operation.id,
+				input.operation.initiatedBy,
+				observedByteLength + residualReservation,
+			).run();
+			if (!result.success || result.meta.changes !== 1)
+				throw new Error('Remote Graphic Asset copy progress could not be recorded');
 		},
 		async recordCanonicalWrites(input) {
 			if (input.contents.length === 0)
@@ -1457,7 +1496,7 @@ export function createD1GraphicsAssetCatalogue(
 							ORDER BY event_id
 						)
 					), '[]') AS event_ids,
-						o.id AS operation_id, o.idempotency_key, o.initiated_by,
+						o.id AS operation_id, o.idempotency_key, o.source, o.initiated_by,
 						o.proposed_name, o.source_file_name, o.declared_mime,
 						o.browser_decode_evidence, o.target_asset_id,
 					o.duplicate_content_policy,

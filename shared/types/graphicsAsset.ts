@@ -87,6 +87,17 @@ export type GraphicAssetReferenceStatus
 
 export type GraphicsDuplicateContentPolicy = 'reuse' | 'create-separate';
 
+/**
+ * Where a Graphics Ingestion Operation's bytes come from. An approved remote
+ * copy is a one-time transfer: the published Graphic Asset keeps no hotlink,
+ * refresh schedule, or dependency on the remote host.
+ */
+export type GraphicsIngestionSource
+	= | 'local-upload'
+		| 'remote-copy'
+		| 'replacement'
+		| 'template-package';
+
 export interface GraphicAssetFontBrowserChallenge {
 	digest: string;
 	codePoints: number[];
@@ -281,7 +292,14 @@ export interface GraphicAssetValidationIssue {
 		| 'font-name-invalid'
 		| 'browser-font-load-failed'
 		| 'browser-font-render-failed'
-		| 'browser-font-evidence-mismatch';
+		| 'browser-font-evidence-mismatch'
+		| 'remote-source-not-https'
+		| 'remote-source-credentials-present'
+		| 'remote-source-destination-not-public'
+		| 'remote-source-redirect-limit-exceeded'
+		| 'remote-source-not-retrievable'
+		| 'remote-source-length-exceeded'
+		| 'remote-source-length-mismatch';
 	message: string;
 }
 
@@ -324,7 +342,8 @@ export interface GraphicsIngestionFailure {
 		| 'validation-runtime-unavailable'
 		| 'catalogue-publication-failed'
 		| 'ingestion-processing-failed'
-		| 'validation-failed';
+		| 'validation-failed'
+		| 'remote-source-rejected';
 	retryable: boolean;
 	message: string;
 }
@@ -349,6 +368,7 @@ export type GraphicsIngestionCapacityOutcome
 export interface GraphicsIngestionOperation extends GraphicAssetSourceDeclarations {
 	id: GraphicsIngestionOperationId;
 	idempotencyKey: string;
+	source: GraphicsIngestionSource;
 	initiatedBy: string;
 	name: string;
 	targetAssetId?: GraphicAssetId;
