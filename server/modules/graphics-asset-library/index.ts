@@ -1049,7 +1049,8 @@ export function createGraphicsAssetLibrary(
 
 	type StageRemoteSourceOutcome
 		= | { outcome: 'staged'; byteLength: number }
-			| { outcome: 'length-mismatch' }
+			/** Only a source that declared a length can contradict it. */
+			| { outcome: 'length-mismatch'; declaredByteLength: number }
 			| { outcome: 'length-exceeded' }
 			| { outcome: 'empty' }
 			| { outcome: 'unavailable' };
@@ -1091,14 +1092,14 @@ export function createGraphicsAssetLibrary(
 			}
 			catch (error) {
 				return error instanceof GraphicsObjectInputError
-					? { outcome: 'length-mismatch' }
+					? { outcome: 'length-mismatch', declaredByteLength: input.declaredByteLength }
 					: { outcome: 'unavailable' };
 			}
 			if (staged.outcome === 'unavailable')
 				return { outcome: 'unavailable' };
 			return staged.object.byteLength === input.declaredByteLength
 				? { outcome: 'staged', byteLength: staged.object.byteLength }
-				: { outcome: 'length-mismatch' };
+				: { outcome: 'length-mismatch', declaredByteLength: input.declaredByteLength };
 		}
 
 		const reader = input.body.getReader();
@@ -1212,9 +1213,11 @@ export function createGraphicsAssetLibrary(
 		const completed = await input.staging.completeMultipart({ upload, parts });
 		if (completed.outcome === 'unavailable')
 			return { outcome: 'unavailable' };
+		// The source declared no length to contradict, so a store that assembles a
+		// different total is a staging integrity failure, not a remote rejection.
 		return completed.object.byteLength === totalByteLength
 			? { outcome: 'staged', byteLength: completed.object.byteLength }
-			: { outcome: 'length-mismatch' };
+			: { outcome: 'unavailable' };
 	}
 
 	async function continueGraphicsIngestion(
@@ -2326,7 +2329,7 @@ export function createGraphicsAssetLibrary(
 							}
 						: {
 								code: 'remote-source-length-mismatch' as const,
-								message: `The remote source declared ${opened.byteLength} bytes but delivered a different length.`,
+								message: `The remote source declared ${staged.declaredByteLength} bytes but delivered a different length.`,
 							};
 				return await failOperation(catalogue, operation, {
 					code: 'remote-source-rejected',

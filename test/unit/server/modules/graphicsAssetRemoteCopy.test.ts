@@ -592,6 +592,13 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			failure: { code: 'remote-source-rejected', retryable: false },
 			report: { outcome: 'rejected', issues: [{ code }] },
 		});
+		// A reported byte count must name the length the source actually declared.
+		const reported = failed.report?.outcome === 'rejected'
+			? failed.report.issues[0]!.message
+			: '';
+		expect(reported).not.toContain('undefined');
+		if (code === 'remote-source-length-mismatch')
+			expect(reported).toContain(String(transparentPixelPng.byteLength + 5));
 		await expect(library.listGraphicAssets({})).resolves.toEqual([]);
 		await expect(
 			staging.readMetadata(graphicsObjectIdentity(`ingestion/${operation.id}/source`)),
