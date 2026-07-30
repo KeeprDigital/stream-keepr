@@ -114,9 +114,12 @@ const UButtonStub = defineComponent({
 
 const UInputNumberStub = defineComponent({
 	name: 'UInputNumber',
-	props: { modelValue: { type: Number, required: false } },
+	props: {
+		modelValue: { type: Number, required: false },
+		disabled: { type: Boolean, default: false },
+	},
 	emits: ['update:modelValue'],
-	template: '<input :value="modelValue">',
+	template: '<input :value="modelValue" :disabled="disabled">',
 });
 
 async function mountComponent() {
@@ -284,13 +287,49 @@ describe('broadcastGraphicsSettings', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		// Program, the on-air stack, and every live action stay exactly as they are
-		// for an operator who does not hold the Edit workspace's lease.
-		expect(wrapper.get('[data-testid="live-workspace"]').attributes()).not.toHaveProperty('disabled');
+		// The Live workspace is rendered, carries the whole Screen stack, and its
+		// interactions work — for an operator holding no lease at all.
+		const live = wrapper.get('[data-testid="live-workspace"]');
+		expect(wrapper.getComponent(LiveWorkspaceStub).props('graphics')).toHaveLength(2);
+		expect(wrapper.find('[data-testid="edit-lease-notice"]').exists()).toBe(false);
 
-		await wrapper.get('[data-testid="live-workspace"]').trigger('click');
+		await live.trigger('click');
 		await nextTick();
 
 		expect(mockRoute.query.graphic).toBe('slate');
+
+		// And the lease is never even asked for from here.
+		expect(mockLeaseEnabled.value).toBe(false);
+	});
+
+	it('leaves the canvas open to a Live operator who holds no lease', async () => {
+		mockLeaseWritable.value = false;
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const inputs = wrapper.findAllComponents({ name: 'UInputNumber' });
+		expect(inputs.map(input => input.props('disabled'))).toEqual([false, false]);
+
+		await inputs[1]?.vm.$emit('update:modelValue', 720);
+		await nextTick();
+
+		expect(mockUpdateScreenConfig).toHaveBeenCalledWith({ height: 720 });
+	});
+
+	it('closes the canvas to a session observing the Edit workspace read-only', async () => {
+		mockRoute.query = { workspace: 'edit' };
+		mockLeaseWritable.value = false;
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const inputs = wrapper.findAllComponents({ name: 'UInputNumber' });
+		expect(inputs.map(input => input.props('disabled'))).toEqual([true, true]);
+
+		await inputs[1]?.vm.$emit('update:modelValue', 720);
+		await nextTick();
+
+		expect(mockUpdateScreenConfig).not.toHaveBeenCalled();
 	});
 });

@@ -15,7 +15,6 @@ function held(overrides: Partial<GraphicsAuthoringLeaseRecord> = {}): GraphicsAu
 	return {
 		holderSessionId: 'session-a',
 		acquiredAt: NOW - 5_000,
-		heartbeatAt: NOW - 1_000,
 		expiresAt: NOW + 59_000,
 		...overrides,
 	};

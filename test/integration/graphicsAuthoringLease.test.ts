@@ -60,8 +60,12 @@ describe('graphics Authoring Leases', () => {
 		return await request(leasePath(), { method: 'POST', body, cookie }) as { status: number; data: LeaseResponse };
 	}
 
-	async function readLease(cookie?: string): Promise<{ status: number; data: LeaseResponse }> {
-		return await request(leasePath(), { cookie }) as { status: number; data: LeaseResponse };
+	async function patchCanvas(cookie: string | undefined, height: number) {
+		return await request(`/api/events/${eventId}/screens/${screenId}/screen-config`, {
+			method: 'PATCH',
+			body: { height },
+			cookie,
+		});
 	}
 
 	async function patchStack(cookie: string | undefined, graphics: BroadcastGraphicConfig[]) {
@@ -131,17 +135,13 @@ describe('graphics Authoring Leases', () => {
 	});
 
 	it('leaves a second session observing the same Edit workspace read-only', async () => {
-		const observed = await readLease(authorB);
-
-		expect(observed.data.lease.role).toBe('observer');
-		expect(observed.data.lease.writable).toBe(false);
-		expect(observed.data.lease.heldByAnotherSession).toBe(true);
-
 		const asked = await askForLease(authorB);
 
 		expect(asked.status).toBe(200);
 		expect(asked.data.outcome).toBe('observe');
+		expect(asked.data.lease.role).toBe('observer');
 		expect(asked.data.lease.writable).toBe(false);
+		expect(asked.data.lease.heldByAnotherSession).toBe(true);
 	});
 
 	it('accepts the holder\'s authoring write and refuses an observer\'s', async () => {
@@ -167,7 +167,7 @@ describe('graphics Authoring Leases', () => {
 	});
 
 	it('renews the deadline for the session already holding the lease', async () => {
-		const before = await readLease(authorA);
+		const before = await askForLease(authorA);
 		await new Promise(resolve => setTimeout(resolve, 20));
 		const renewed = await askForLease(authorA);
 
@@ -204,6 +204,41 @@ describe('graphics Authoring Leases', () => {
 		expect(live.currentState.player1.lifeTotal).toBe(17);
 	});
 
+	it('refuses an observer\'s resize of the leased Screen canvas', async () => {
+		expect((await askForLease(authorA)).data.lease.writable).toBe(true);
+
+		expect((await patchCanvas(authorA, 1080)).status).toBe(200);
+		expect((await patchCanvas(authorB, 720)).status).toBe(409);
+
+		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
+		expect(screen.screenConfig?.height).toBe(1080);
+	});
+
+	it('leaves every other Screen configuration field open while the canvas is leased', async () => {
+		// The lease covers the canvas, not the route. A generic Screen field is not
+		// part of any graphics Edit workspace and stays open to every operator.
+		expect((await request(`/api/events/${eventId}/screens/${screenId}/screen-config`, {
+			method: 'PATCH',
+			body: { paddingX: 12 },
+			cookie: authorB,
+		})).status).toBe(200);
+	});
+
+	it('never leases the canvas of a Screen that is not in Broadcast Graphics mode', async () => {
+		const other = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Idle Screen', slug: 'lease-idle-screen', currentMode: 'idle' },
+		});
+
+		const resized = await request(`/api/events/${eventId}/screens/${other.id}/screen-config`, {
+			method: 'PATCH',
+			body: { height: 480 },
+			cookie: authorB,
+		});
+
+		expect(resized.status).toBe(200);
+	});
+
 	it('hands the artifact over on an explicit takeover and demotes the previous holder', async () => {
 		const takenOver = await askForLease(authorB, { takeover: true });
 
@@ -235,8 +270,6 @@ describe('graphics Authoring Leases', () => {
 		expect(released.data.lease.writable).toBe(true);
 		expect(released.data.lease.heldByAnotherSession).toBe(false);
 		expect(released.data.lease.expiresAt).toBeNull();
-
-		expect((await readLease(authorA)).data.lease.writable).toBe(true);
 	});
 
 	it('frees an artifact whose holding session disappeared without releasing it', async () => {
@@ -245,24 +278,21 @@ describe('graphics Authoring Leases', () => {
 		expect(acquired.data.lease.expiresAt! - Date.now()).toBeLessThanOrEqual(3_000);
 
 		// Session A is gone: it never heartbeats again and never releases.
-		expect((await readLease(authorB)).data.lease.writable).toBe(false);
+		expect((await askForLease(authorB)).data.outcome).toBe('observe');
 
 		await new Promise(resolve => setTimeout(resolve, 3_200));
 
-		const recovered = await readLease(authorB);
-		expect(recovered.data.lease.writable).toBe(true);
+		const recovered = await askForLease(authorB);
+		expect(recovered.data.outcome).toBe('grant');
+		expect(recovered.data.lease.role).toBe('holder');
 		expect(recovered.data.lease.heldByAnotherSession).toBe(false);
-
-		const reacquired = await askForLease(authorB);
-		expect(reacquired.data.outcome).toBe('grant');
-		expect(reacquired.data.lease.role).toBe('holder');
 
 		await request(leasePath(), { method: 'DELETE', cookie: authorB });
 	});
 
-	it('leaves an unleased Edit workspace writable', async () => {
-		expect((await readLease()).data.lease.writable).toBe(true);
+	it('leaves an unleased Edit workspace writable by anyone', async () => {
 		expect((await patchStack(undefined, [graphic('unleased')])).status).toBe(200);
 		expect((await authoredStack()).map(entry => entry.id)).toEqual(['unleased']);
+		expect((await patchCanvas(undefined, 900)).status).toBe(200);
 	});
 });

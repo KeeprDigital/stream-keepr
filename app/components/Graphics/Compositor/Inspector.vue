@@ -44,7 +44,7 @@ import { resolveGraphicsSelection } from '~/modules/graphics/selection';
  * Geometry is authored in any Graphic Geometry Unit and always stored as
  * canonical canvas pixels.
  */
-const props = withDefaults(defineProps<{
+const props = defineProps<{
 	graphics: readonly BroadcastGraphicConfig[];
 	selectedTarget: GraphicsSelectionTarget;
 	canvasWidth: number;
@@ -55,9 +55,16 @@ const props = withDefaults(defineProps<{
 	 * changes none.
 	 */
 	writable?: boolean;
-}>(), { writable: true });
+}>();
 
 const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[]] }>();
+
+/**
+ * Fail closed: a caller that does not grant authoring gets a read-only editor.
+ * Only a session confirmed to hold the artifact's Graphics Authoring Lease authors
+ * it, so an absent prop must never read as permission.
+ */
+const canAuthor = computed(() => props.writable === true);
 
 const geometryUnit = ref<GraphicGeometryUnit>('px');
 
@@ -140,7 +147,7 @@ function displayedSize(axis: 'width' | 'height') {
 
 function patchSelectedItem(patch: Partial<GraphicItemConfig>) {
 	const current = selection.value;
-	if (!props.writable || current.kind !== 'item')
+	if (!canAuthor.value || current.kind !== 'item')
 		return;
 	emit('update:graphics', replaceBroadcastGraphic(
 		props.graphics,
@@ -173,7 +180,7 @@ function applyToSelectedGraphic(
 	merge: (graphic: BroadcastGraphicConfig, itemId: string) => BroadcastGraphicConfig,
 ) {
 	const current = selection.value;
-	if (!props.writable || current.kind !== 'item')
+	if (!canAuthor.value || current.kind !== 'item')
 		return;
 	emit('update:graphics', replaceBroadcastGraphic(props.graphics, merge(current.graphic, current.item.id)));
 }
@@ -196,7 +203,7 @@ function updateTextItem(patch: Partial<Omit<TextGraphicItemConfig, 'type' | 'id'
 
 function updateGraphicName(value: string) {
 	const current = selection.value;
-	if (!props.writable || current.kind !== 'graphic')
+	if (!canAuthor.value || current.kind !== 'graphic')
 		return;
 	emit('update:graphics', patchBroadcastGraphic(props.graphics, current.graphic.id, { name: value }));
 }
@@ -209,7 +216,7 @@ function updateGraphicName(value: string) {
 		stops accepting input. The guards above are the same rule stated where a
 		programmatic change would otherwise slip through.
 	-->
-	<fieldset class="min-w-0 space-y-4" :disabled="!writable">
+	<fieldset class="min-w-0 space-y-4" :disabled="!canAuthor">
 		<div class="border-b border-default/70 pb-3">
 			<div class="flex min-w-0 items-start gap-3">
 				<UIcon :name="header.icon" class="mt-0.5 size-5 shrink-0 text-muted" />

@@ -117,6 +117,16 @@ export function useGraphicsAuthoringLease(options: UseGraphicsAuthoringLeaseOpti
 				return;
 			void fetch(endpoint.value, { method: 'DELETE', keepalive: true }).catch(() => {});
 		});
+
+		// Browsers throttle timers in a hidden tab — potentially to about once a
+		// minute, which is the deadline itself — so a holder that tabs away can lose
+		// its lease to a waiting observer. Asking again the moment the tab comes back
+		// both renews a lease that survived and discovers one that did not, before the
+		// author touches anything.
+		useEventListener(document, 'visibilitychange', () => {
+			if (document.visibilityState === 'visible')
+				void ask();
+		});
 	}
 
 	onScopeDispose(() => {

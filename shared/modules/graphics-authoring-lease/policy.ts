@@ -30,11 +30,16 @@ const MAX_LEASE_TTL_MS = 180_000;
  */
 export const GRAPHICS_AUTHORING_LEASE_DEFAULT_HEARTBEAT_MS = 20_000;
 
-/** One session's currently stored claim on an artifact. */
+/**
+ * One session's currently stored claim on an artifact.
+ *
+ * A heartbeat leaves no separate trace: it is stored as the deadline it bought,
+ * so liveness has exactly one source and there is no second timestamp to keep
+ * consistent with it.
+ */
 export interface GraphicsAuthoringLeaseRecord {
 	holderSessionId: string;
 	acquiredAt: number;
-	heartbeatAt: number;
 	expiresAt: number;
 }
 

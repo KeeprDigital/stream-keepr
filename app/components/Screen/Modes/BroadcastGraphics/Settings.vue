@@ -105,7 +105,18 @@ watch(selectedGraphicId, (graphicId) => {
 	selectedTarget.value = graphicId ? { type: 'graphic', graphicId } : { type: 'canvas' };
 }, { immediate: true });
 
+/**
+ * The canvas belongs to the leased Edit workspace, but its controls sit outside
+ * both workspaces. Gating them on the lease alone would disable them for a Live
+ * operator who has no editor open at all — and an artifact nobody holds is
+ * writable by anyone. So they close only while this session is looking at an Edit
+ * workspace it does not hold; the server refuses the resize either way.
+ */
+const canvasWritable = computed(() => workspace.value !== 'edit' || editLease.writable.value);
+
 function updateCanvasDimension(field: 'width' | 'height', value: number | null | undefined) {
+	if (!canvasWritable.value)
+		return;
 	updateScreenConfig({
 		[field]: value ?? (field === 'width' ? canvasDefaults.width : canvasDefaults.height),
 	});
@@ -150,6 +161,7 @@ function updateGraphics(next: BroadcastGraphicConfig[]) {
 							:model-value="canvasWidth"
 							:placeholder="String(canvasDefaults.width)"
 							:min="1"
+							:disabled="!canvasWritable"
 							size="sm"
 							class="min-w-0 flex-1"
 							aria-label="Canvas width"
@@ -159,6 +171,7 @@ function updateGraphics(next: BroadcastGraphicConfig[]) {
 							:model-value="canvasHeight"
 							:placeholder="String(canvasDefaults.height)"
 							:min="1"
+							:disabled="!canvasWritable"
 							size="sm"
 							class="min-w-0 flex-1"
 							aria-label="Canvas height"

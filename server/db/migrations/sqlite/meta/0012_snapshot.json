@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9ecde06c-b419-4c32-80e5-4c70c6e10c88",
+  "id": "887d47e6-0331-4c86-94ce-8082e4f63db0",
   "prevId": "76bb1ad9-7838-4890-a9ea-aeb72d5bc909",
   "tables": {
     "archetype_cards": {
@@ -1870,13 +1870,6 @@
         },
         "acquired_at": {
           "name": "acquired_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "heartbeat_at": {
-          "name": "heartbeat_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,

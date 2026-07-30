@@ -69,7 +69,6 @@ function toRecord(row: StoredLease | undefined): GraphicsAuthoringLeaseRecord | 
 	return {
 		holderSessionId: row.holderSessionId,
 		acquiredAt: row.acquiredAt.getTime(),
-		heartbeatAt: row.heartbeatAt.getTime(),
 		expiresAt: row.expiresAt.getTime(),
 	};
 }
@@ -163,7 +162,7 @@ export function graphicsAuthoringLeaseModule() {
 		if (resolution.outcome === 'renew') {
 			const renewed = await db
 				.update(graphicsAuthoringLeases)
-				.set({ heartbeatAt: new Date(now), expiresAt: new Date(expiresAt) })
+				.set({ expiresAt: new Date(expiresAt) })
 				.where(and(
 					artifactCondition(artifact),
 					eq(graphicsAuthoringLeases.holderSessionId, sessionId),
@@ -177,6 +176,13 @@ export function graphicsAuthoringLeaseModule() {
 		// A grant claims an artifact that is unheld or whose holder's deadline has
 		// passed; a takeover claims one whose holder is still live. Both are the same
 		// write, so the condition is what separates them.
+		//
+		// A takeover's condition is unconditional on purpose, which leaves one narrow
+		// window: two explicit takeovers landing within the same instant both commit
+		// and both read back their own row, so both report success. The last write
+		// wins in the table, and the loser is demoted at its next heartbeat. Closing it
+		// would mean guarding a takeover on the holder it intends to displace — and a
+		// takeover exists precisely to not care who that is.
 		const claimable = resolution.outcome === 'takeover'
 			? artifactCondition(artifact)
 			: and(artifactCondition(artifact), or(
@@ -190,7 +196,6 @@ export function graphicsAuthoringLeaseModule() {
 				eventId: eventId ?? null,
 				holderSessionId: sessionId,
 				acquiredAt: new Date(now),
-				heartbeatAt: new Date(now),
 				expiresAt: new Date(expiresAt),
 			})
 			.where(claimable)
@@ -209,7 +214,6 @@ export function graphicsAuthoringLeaseModule() {
 					eventId: eventId ?? null,
 					holderSessionId: sessionId,
 					acquiredAt: new Date(now),
-					heartbeatAt: new Date(now),
 					expiresAt: new Date(expiresAt),
 				})
 				.returning();

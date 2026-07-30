@@ -31,10 +31,3 @@ export function graphicsTemplateArtifact(templateId: string): GraphicsAuthoringA
 export function graphicsAuthoringArtifactKey(artifact: GraphicsAuthoringArtifactRef): string {
 	return `${artifact.kind}:${artifact.id}`;
 }
-
-export function sameGraphicsAuthoringArtifact(
-	left: GraphicsAuthoringArtifactRef,
-	right: GraphicsAuthoringArtifactRef,
-): boolean {
-	return left.kind === right.kind && left.id === right.id;
-}

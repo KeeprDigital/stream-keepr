@@ -18,7 +18,7 @@ import GraphicsCompositorStackTree from '~/components/Graphics/Compositor/StackT
  * properties — because watching a colleague compose is the point, and it takes the
  * lease over when it needs to author instead.
  */
-const props = withDefaults(defineProps<{
+const props = defineProps<{
 	eventId: number;
 	screen: Screen;
 	graphics: readonly BroadcastGraphicConfig[];
@@ -30,7 +30,7 @@ const props = withDefaults(defineProps<{
 	writable?: boolean;
 	leaseStatus?: GraphicsAuthoringLeaseStatus;
 	canTakeOver?: boolean;
-}>(), { writable: true, leaseStatus: 'ready', canTakeOver: false });
+}>();
 
 const emit = defineEmits<{
 	'update:graphics': [graphics: BroadcastGraphicConfig[]];
@@ -38,8 +38,14 @@ const emit = defineEmits<{
 	'takeOver': [];
 }>();
 
+/**
+ * Fail closed: until a caller says this session holds the lease, the workspace is
+ * an observer's. An unstated permission must never read as one that was granted.
+ */
+const canAuthor = computed(() => props.writable === true);
+
 const leaseNotice = computed(() => {
-	if (props.writable)
+	if (canAuthor.value)
 		return null;
 	if (props.leaseStatus === 'error')
 		return 'The Graphics Authoring Lease for this Edit workspace could not be checked, so authoring stays read-only.';
@@ -61,7 +67,7 @@ const leaseNotice = computed(() => {
 				{{ leaseNotice }}
 			</p>
 			<UButton
-				v-if="canTakeOver"
+				v-if="canTakeOver === true"
 				size="xs"
 				variant="soft"
 				icon="i-lucide-pencil-ruler"
@@ -81,7 +87,7 @@ const leaseNotice = computed(() => {
 					:contract="BROADCAST_GRAPHICS_HOST_CONTRACT"
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
-					:writable="writable"
+					:writable="canAuthor"
 					@update:graphics="emit('update:graphics', $event)"
 					@update:selected-target="emit('update:selectedTarget', $event)"
 				/>
@@ -105,7 +111,7 @@ const leaseNotice = computed(() => {
 					:selected-target="selectedTarget"
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
-					:writable="writable"
+					:writable="canAuthor"
 					@update:graphics="emit('update:graphics', $event)"
 				/>
 			</section>

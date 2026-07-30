@@ -5,7 +5,6 @@ CREATE TABLE `graphics_authoring_leases` (
 	`event_id` integer,
 	`holder_session_id` text NOT NULL,
 	`acquired_at` integer NOT NULL,
-	`heartbeat_at` integer NOT NULL,
 	`expires_at` integer NOT NULL,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,

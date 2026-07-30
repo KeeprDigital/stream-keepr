@@ -436,8 +436,11 @@ export const graphicsAuthoringLeases = sqliteTable('graphics_authoring_leases', 
 	/** The graphics author session holding the lease. */
 	holderSessionId: text('holder_session_id').notNull(),
 	acquiredAt: integer('acquired_at', { mode: 'timestamp_ms' }).notNull(),
-	heartbeatAt: integer('heartbeat_at', { mode: 'timestamp_ms' }).notNull(),
-	/** The deadline past which the lease counts as absent. */
+	/**
+	 * The deadline past which the lease counts as absent. Liveness is this column
+	 * alone; a heartbeat is stored only as the deadline it bought, so there is no
+	 * second timestamp to read or keep consistent with it.
+	 */
 	expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
 
 	...timestamps,
