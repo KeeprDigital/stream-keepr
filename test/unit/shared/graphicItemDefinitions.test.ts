@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { FEATURE_MATCH_TOKEN_CATALOGUE } from '~~/shared/featureMatchTokenCatalogue';
 import {
+	authorsGraphicInputs,
+	authorsGraphicStack,
 	BROADCAST_GRAPHICS_HOST_CONTRACT,
+	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 	getGraphicItemDefinition,
 	graphicFillSummary,
 	graphicGroupChildDefinitionsForHost,
 	graphicItemDefinitionsForHost,
 	graphicItemSummary,
+	graphicsHostTokenCatalogue,
 	isGraphicItemDefinitionAvailable,
 } from '~~/shared/modules/graphics';
 
@@ -112,8 +117,43 @@ describe('graphicItemDefinitions', () => {
 
 	it('carries only the contract fields the compositor reads', () => {
 		// An unread field invites false confidence that a later host's needs are
-		// already provided for. Each one joins when it has a real consumer.
-		expect(Object.keys(BROADCAST_GRAPHICS_HOST_CONTRACT).sort()).toEqual(['contextKinds', 'hostId']);
+		// already provided for. Each one joins when it has a real consumer:
+		// `contextKinds` gates the palette, `composition` decides whether a stack is
+		// authored, and `textValues` decides where placeholder values come from and
+		// therefore whether Graphic Inputs are declared. Instant-apply write
+		// semantics is deliberately not among them — both hosts already write
+		// instantly, so a field for it would have no reader.
+		const fields = ['composition', 'contextKinds', 'hostId', 'textValues'];
+
+		expect(Object.keys(BROADCAST_GRAPHICS_HOST_CONTRACT).sort()).toEqual(fields);
+		expect(Object.keys(FEATURE_MATCH_OVERLAY_HOST_CONTRACT).sort()).toEqual(fields);
+	});
+
+	it('offers the Feature Match host the Event and Feature Match contexts', () => {
+		// The three context-gated Definitions require the Feature Match context, and
+		// the token catalogue reads current Event Data as well as a Feature Match
+		// Session, so a Feature Match Overlay declares both.
+		expect(FEATURE_MATCH_OVERLAY_HOST_CONTRACT.contextKinds).toEqual(['event', 'feature-match']);
+	});
+
+	it('authors a stack for Broadcast Graphics and one composition for Feature Match Overlay', () => {
+		// A Broadcast Graphics Screen composes an ordered stack of Broadcast
+		// Graphics; a Feature Match Overlay renders exactly one Feature Match Layout
+		// for exactly one Feature Match Slot, so it offers no stack to author.
+		expect(authorsGraphicStack(BROADCAST_GRAPHICS_HOST_CONTRACT)).toBe(true);
+		expect(authorsGraphicStack(FEATURE_MATCH_OVERLAY_HOST_CONTRACT)).toBe(false);
+	});
+
+	it('declares Graphic Inputs for Broadcast Graphics and binds host tokens for Feature Match Overlay', () => {
+		// The two are exclusive by construction rather than by a rule something has
+		// to check: one field carries the catalogue, so a host cannot bind tokens
+		// without one or declare Graphic Inputs while binding them.
+		expect(authorsGraphicInputs(BROADCAST_GRAPHICS_HOST_CONTRACT)).toBe(true);
+		expect(graphicsHostTokenCatalogue(BROADCAST_GRAPHICS_HOST_CONTRACT)).toEqual([]);
+
+		expect(authorsGraphicInputs(FEATURE_MATCH_OVERLAY_HOST_CONTRACT)).toBe(false);
+		expect(graphicsHostTokenCatalogue(FEATURE_MATCH_OVERLAY_HOST_CONTRACT))
+			.toBe(FEATURE_MATCH_TOKEN_CATALOGUE);
 	});
 
 	it('creates a Graphic Group arranging no children yet', () => {
