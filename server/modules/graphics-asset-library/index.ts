@@ -17,6 +17,7 @@ import type {
 	GraphicsDuplicateContentPolicy,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
+	GraphicsIngestionSource,
 } from '~~/shared/types/graphicsAsset';
 import type { GraphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import type { GraphicsCapacityExhaustedDetails } from './errors';
@@ -28,6 +29,7 @@ import type {
 	GraphicsObjectStoreHealth,
 	GraphicsStagingObjectStore,
 } from './object-store';
+import type { GraphicsRemoteSourceFetcher } from './remote-source';
 import type { SilentVideoPlaybackValidator } from './silent-video-playback-validator';
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import {
@@ -51,6 +53,7 @@ import {
 	consumeBoundedByteStream,
 	createBoundedByteStream,
 	graphicsObjectIdentity,
+	GraphicsObjectInputError,
 } from './object-store';
 import {
 	sha256Hex,
@@ -154,6 +157,15 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	recordStagedBytes: (input: {
 		operation: GraphicsIngestionOperation;
 		usedBytes: number;
+	}) => Promise<void>;
+	/**
+	 * An approved remote copy reserves the worst-case staging envelope before
+	 * any byte moves, because the exact length is only knowable from the remote
+	 * response. This records the observed length as the operation's declared
+	 * length and releases the unused part of that reservation.
+	 */
+	recordRemoteCopyStagedSource: (input: {
+		operation: GraphicsIngestionOperation;
 	}) => Promise<void>;
 	recordCanonicalWrites: (input: {
 		operation: GraphicsIngestionOperation;
@@ -278,6 +290,50 @@ export interface GraphicsAssetLibrary {
 		initiatedBy: string;
 		declaredByteLength: number;
 	}) => Promise<GraphicsIngestionOperation>;
+	/**
+	 * Initiates a one-time copy of an approved public HTTPS resource. The remote
+	 * length is unknown until the copy runs, so the operation starts with the
+	 * worst-case bound for the Graphic Asset kind implied by its declarations.
+	 */
+	initiateRemoteGraphicAssetCopy: (input: GraphicAssetSourceDeclarations & {
+		idempotencyKey: string;
+		initiatedBy: string;
+		name: string;
+		defaultEventId?: number;
+		duplicateContentPolicy?: GraphicsDuplicateContentPolicy;
+	}) => Promise<GraphicsIngestionOperation>;
+	/**
+	 * Runs the bounded remote copy. The URL is never persisted, logged, or
+	 * reported: it is supplied per attempt and its query parameters and fragment
+	 * are treated as secrets.
+	 */
+	copyRemoteGraphicAssetSource: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
+		sourceUrl: string;
+	}) => Promise<GraphicsIngestionOperation>;
+	/**
+	 * Provisional staged bytes for an operation paused for browser confirmation.
+	 * Only the initiating author may read them, and they remain undiscoverable
+	 * and non-addressable outside this operation.
+	 */
+	resolveStagedGraphicAssetSource: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
+	}) => Promise<
+		| {
+			outcome: 'available';
+			body: ReadableStream<Uint8Array>;
+			byteLength: number;
+		}
+		| { outcome: 'missing' }
+		| { outcome: 'unavailable'; retryable: true }
+	>;
+	confirmGraphicAssetBrowserEvidence: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
+		evidence: NonNullable<GraphicAssetSourceDeclarations['browserDecodeEvidence']>;
+	}) => Promise<GraphicsIngestionOperation>;
 	cancelGraphicsIngestion: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
@@ -310,6 +366,11 @@ export interface GraphicsAssetLibrary {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
 	}) => Promise<GraphicsIngestionOperation>;
+	/**
+	 * The font-specific entry point into {@link confirmGraphicAssetBrowserEvidence}.
+	 * It rejects non-font evidence before the shared kind check so a font client
+	 * receives a font-shaped error.
+	 */
 	confirmFontBrowserEvidence: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
@@ -383,6 +444,7 @@ interface GraphicsAssetLibraryDependencies {
 	staging: GraphicsObjectStoreHealth | GraphicsStagingObjectStore;
 	canonical: GraphicsObjectStoreHealth | GraphicsCanonicalObjectStore;
 	silentVideoPlaybackValidator?: SilentVideoPlaybackValidator;
+	remoteSource?: GraphicsRemoteSourceFetcher;
 	now?: () => Date;
 	generateIdentity?: () => string;
 }
@@ -567,6 +629,7 @@ export function createGraphicsAssetLibrary(
 		idempotencyKey: string;
 		initiatedBy: string;
 		name: string;
+		source: GraphicsIngestionSource;
 		targetAssetId?: GraphicAssetId;
 		defaultEventId?: number;
 		duplicateContentPolicy: GraphicsDuplicateContentPolicy;
@@ -577,6 +640,7 @@ export function createGraphicsAssetLibrary(
 		return await catalogueRequest(() => requireCatalogue().initiateGraphicsIngestion({
 			id: graphicsIngestionOperationId(generateIdentity()),
 			idempotencyKey: input.idempotencyKey,
+			source: input.source,
 			initiatedBy: input.initiatedBy,
 			name: input.name.trim(),
 			targetAssetId: input.targetAssetId,
@@ -1130,9 +1194,15 @@ export function createGraphicsAssetLibrary(
 						declaredMime: operation.declaredMime,
 					});
 				}
+				// A local upload arrives with browser evidence for its own file. An
+				// approved remote copy has no client-side bytes, so the operation
+				// pauses here until the author confirms the staged source instead.
 				if (
-					processed.report.facts.kind === 'font'
-					&& !operation.browserDecodeEvidence
+					!operation.browserDecodeEvidence
+					&& (
+						processed.report.facts.kind === 'font'
+						|| (operation.source === 'remote-copy' && processed.report.facts.kind === 'image')
+					)
 				) {
 					return await catalogue.updateIngestionOperation(
 						changedOperation(operation, {
@@ -1454,6 +1524,7 @@ export function createGraphicsAssetLibrary(
 			return await initiateGraphicsOperation({
 				...input,
 				name: input.name,
+				source: 'local-upload',
 				duplicateContentPolicy: input.duplicateContentPolicy ?? 'reuse',
 			});
 		},
@@ -1461,8 +1532,21 @@ export function createGraphicsAssetLibrary(
 			return await initiateGraphicsOperation({
 				...input,
 				name: 'Graphic Asset replacement',
+				source: 'replacement',
 				targetAssetId: input.assetId,
 				duplicateContentPolicy: 'create-separate',
+			});
+		},
+		async initiateRemoteGraphicAssetCopy(input) {
+			if (!input.name.trim())
+				throw new GraphicsAssetLibraryError('Graphic Asset name is required', 'invalid-ingestion-input');
+			return await initiateGraphicsOperation({
+				...input,
+				name: input.name,
+				source: 'remote-copy',
+				duplicateContentPolicy: input.duplicateContentPolicy ?? 'reuse',
+				declaredByteLength:
+					GRAPHIC_ASSET_SOURCE_POLICIES[graphicAssetSourceKind(input)].maximumByteLength,
 			});
 		},
 		async getIngestionOperation(input) {
@@ -1960,7 +2044,179 @@ export function createGraphicsAssetLibrary(
 			);
 			return await continueGraphicsIngestion(operation);
 		},
-		async confirmFontBrowserEvidence(input) {
+		async copyRemoteGraphicAssetSource(input) {
+			const catalogue = requireCatalogue();
+			const staging = requireStaging();
+			const remoteSource = dependencies.remoteSource;
+			if (!remoteSource) {
+				throw new GraphicsAssetLibraryError(
+					'Approved remote Graphic Asset copying is unavailable',
+					'graphics-asset-library-unavailable',
+				);
+			}
+			let operation = await catalogueRequest(
+				() => catalogue.getIngestionOperation(input.operationId, input.initiatedBy),
+				'Graphics ingestion state is temporarily unavailable',
+			);
+			if (!operation)
+				throw new GraphicsAssetLibraryError('Graphics Ingestion Operation not found', 'ingestion-operation-not-found');
+			if (operation.stage === 'completed' || operation.stage === 'cancelled')
+				return operation;
+			if (operation.source !== 'remote-copy') {
+				throw new GraphicsAssetLibraryError(
+					'This Graphics Ingestion Operation does not copy an approved remote source',
+					'ingestion-operation-not-uploadable',
+				);
+			}
+			// The remote URL is supplied per attempt rather than persisted, so the
+			// byte-source phase may be re-run while no staged bytes exist.
+			const resumable = operation.transferredByteLength === 0
+				&& (
+					operation.stage === 'created'
+					|| operation.stage === 'transferring'
+					|| (operation.stage === 'failed' && operation.failure?.retryable !== false)
+				);
+			if (!resumable) {
+				throw new GraphicsAssetLibraryError(
+					`Graphics Ingestion Operation cannot copy an approved remote source from stage ${operation.stage}`,
+					'ingestion-operation-not-uploadable',
+				);
+			}
+
+			const sourceKind = graphicAssetSourceKind(operation);
+			const policy = GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind];
+			const opened = await remoteSource.open({
+				sourceUrl: input.sourceUrl,
+				maximumByteLength: policy.maximumByteLength,
+			});
+			if (opened.outcome === 'unavailable') {
+				throw new GraphicsAssetLibraryError(
+					opened.message,
+					'graphics-asset-library-unavailable',
+				);
+			}
+			if (opened.outcome === 'rejected') {
+				return await failOperation(catalogue, operation, {
+					code: 'remote-source-rejected',
+					retryable: false,
+					message: 'The approved remote Graphic Asset source was rejected before any byte was copied.',
+				}, {
+					outcome: 'rejected',
+					compatibilityProfile: policy.compatibilityProfile,
+					issues: [{
+						severity: 'error',
+						code: opened.rejection.code,
+						message: opened.rejection.message,
+					}],
+				});
+			}
+
+			operation = await catalogueRequest(
+				() => catalogue.updateIngestionOperation(
+					changedOperation(operation!, {
+						stage: 'transferring',
+						failure: undefined,
+						report: undefined,
+					}),
+					operation!.updatedAt,
+				),
+				'Approved remote Graphic Asset copy could not be started',
+			);
+			const stagingIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
+			let staged: Awaited<ReturnType<typeof staging.createImmutable>>;
+			try {
+				staged = await staging.createImmutable({
+					identity: stagingIdentity,
+					bytes: createBoundedByteStream(opened.body, {
+						byteLength: opened.byteLength,
+						maximumByteLength: policy.maximumByteLength,
+					}),
+					metadata: {
+						contentType: 'application/octet-stream',
+						custom: { operationId: operation.id },
+					},
+				});
+			}
+			catch (error) {
+				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+				await staging.delete(stagingIdentity);
+				if (error instanceof GraphicsObjectInputError) {
+					return await failOperation(catalogue, operation, {
+						code: 'remote-source-rejected',
+						retryable: false,
+						message: 'The approved remote Graphic Asset source did not deliver the exact byte count it declared.',
+					}, {
+						outcome: 'rejected',
+						compatibilityProfile: policy.compatibilityProfile,
+						issues: [{
+							severity: 'error',
+							code: 'remote-source-length-mismatch',
+							message: `The remote source declared ${opened.byteLength} bytes but delivered a different length.`,
+						}],
+					});
+				}
+				return await failOperation(catalogue, operation, {
+					code: 'staging-unavailable',
+					retryable: true,
+					message: 'Staging byte storage was interrupted while copying the approved remote source.',
+				});
+			}
+			if (staged.outcome === 'unavailable' || staged.object.byteLength !== opened.byteLength) {
+				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+				await staging.delete(stagingIdentity);
+				return await failOperation(catalogue, operation, {
+					code: 'staging-unavailable',
+					retryable: true,
+					message: 'Copied remote source bytes could not be staged and verified.',
+				});
+			}
+			const authoritative = await catalogueRequest(
+				() => catalogue.getIngestionOperation(operation!.id, operation!.initiatedBy),
+				'Approved remote Graphic Asset copy checkpoint is temporarily unavailable',
+			);
+			if (authoritative?.stage === 'cancelled' || authoritative?.stage === 'completed') {
+				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+				await staging.delete(stagingIdentity);
+				return authoritative;
+			}
+			await catalogueRequest(
+				() => catalogue.recordRemoteCopyStagedSource({
+					operation: { ...operation!, declaredByteLength: opened.byteLength },
+				}),
+				'Approved remote Graphic Asset copy progress could not be recorded',
+			);
+			return await continueGraphicsIngestion(await catalogueRequest(
+				() => catalogue.getIngestionOperation(operation!.id, operation!.initiatedBy),
+				'Graphics ingestion state is temporarily unavailable',
+			) ?? operation);
+		},
+		async resolveStagedGraphicAssetSource(input) {
+			const operation = await catalogueRequest(
+				() => requireCatalogue().getIngestionOperation(input.operationId, input.initiatedBy),
+				'Graphics ingestion state is temporarily unavailable',
+			);
+			if (!operation)
+				throw new GraphicsAssetLibraryError('Graphics Ingestion Operation not found', 'ingestion-operation-not-found');
+			if (operation.stage !== 'awaiting-confirmation')
+				return { outcome: 'missing' };
+			const result = await requireStaging().read(
+				graphicsObjectIdentity(`ingestion/${operation.id}/source`),
+			);
+			if (result.outcome === 'missing')
+				return { outcome: 'missing' };
+			if (
+				result.outcome === 'unavailable'
+				|| result.object.byteLength !== operation.declaredByteLength
+			) {
+				return { outcome: 'unavailable', retryable: true };
+			}
+			return {
+				outcome: 'available',
+				body: result.body,
+				byteLength: result.object.byteLength,
+			};
+		},
+		async confirmGraphicAssetBrowserEvidence(input) {
 			const catalogue = requireCatalogue();
 			const operation = await catalogueRequest(
 				() => catalogue.getIngestionOperation(input.operationId, input.initiatedBy),
@@ -1971,16 +2227,17 @@ export function createGraphicsAssetLibrary(
 			if (
 				operation.stage !== 'awaiting-confirmation'
 				|| operation.report?.outcome !== 'accepted'
-				|| operation.report.facts.kind !== 'font'
 			) {
 				throw new GraphicsAssetLibraryError(
-					`Graphics Ingestion Operation cannot confirm font rendering from stage ${operation.stage}`,
+					`Graphics Ingestion Operation cannot confirm browser evidence from stage ${operation.stage}`,
 					'ingestion-operation-not-uploadable',
 				);
 			}
-			if (input.evidence.outcome !== 'font-loaded' && input.evidence.outcome !== 'font-rejected') {
+			const fontEvidence = input.evidence.outcome === 'font-loaded'
+				|| input.evidence.outcome === 'font-rejected';
+			if ((operation.report.facts.kind === 'font') !== fontEvidence) {
 				throw new GraphicsAssetLibraryError(
-					'Font browser challenge evidence is required',
+					'Browser evidence must answer the challenge for this Graphic Asset kind',
 					'invalid-ingestion-input',
 				);
 			}
@@ -1993,9 +2250,18 @@ export function createGraphicsAssetLibrary(
 					}),
 					operation.updatedAt,
 				),
-				'Font browser challenge evidence could not be recorded',
+				'Browser validation evidence could not be recorded',
 			);
 			return await continueGraphicsIngestion(confirmed);
+		},
+		async confirmFontBrowserEvidence(input) {
+			if (input.evidence.outcome !== 'font-loaded' && input.evidence.outcome !== 'font-rejected') {
+				throw new GraphicsAssetLibraryError(
+					'Font browser challenge evidence is required',
+					'invalid-ingestion-input',
+				);
+			}
+			return await this.confirmGraphicAssetBrowserEvidence(input);
 		},
 		async retryGraphicsIngestion(input) {
 			const catalogue = requireCatalogue();

@@ -7,6 +7,8 @@ import {
 	createR2CanonicalGraphicsObjectStore,
 	createR2StagingGraphicsObjectStore,
 } from './r2-object-store';
+import { createGraphicsRemoteSourceFetcher } from './remote-source';
+import { createDnsOverHttpsRemoteHostResolver } from './remote-source-resolver';
 import {
 	createSilentVideoPlaybackServiceBindingValidator,
 	createUnavailableSilentVideoPlaybackValidator,
@@ -52,5 +54,8 @@ export function graphicsAssetLibraryForEvent(event: H3Event) {
 		silentVideoPlaybackValidator: validationBinding
 			? createSilentVideoPlaybackServiceBindingValidator(validationBinding)
 			: createUnavailableSilentVideoPlaybackValidator(),
+		remoteSource: createGraphicsRemoteSourceFetcher({
+			resolver: createDnsOverHttpsRemoteHostResolver(),
+		}),
 	});
 }
