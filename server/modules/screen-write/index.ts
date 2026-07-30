@@ -9,6 +9,7 @@ import {
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
+import { parseModeConfigPatchResult } from '~~/server/schemas/api/screen';
 import { cardService } from '~~/server/services/card';
 import { screenService } from '~~/server/services/screen';
 import {
@@ -228,10 +229,26 @@ export function screenWriteModule(dependencies: {
 
 	async function updateModeConfig({ eventId, screenId, mode, config, stateVersion, originConnectionId }: UpdateModeConfigParams): Promise<ScreenResponse> {
 		await validateScreenModeConfigReferences(eventId, mode, config);
+
+		const existing = await screens.findById(screenId, eventId);
+		if (!existing)
+			throw createError({ statusCode: 404, message: 'Screen not found' });
+
+		/*
+		 * Every whole-object rule the mode configuration has to satisfy is checked
+		 * here, against the configuration this patch would produce.
+		 *
+		 * A patch is a fragment, so the patch schema can only enforce field bounds;
+		 * rules about the whole configuration — today the byte total shared across all
+		 * ten Screen Modes — are properties of the merged result. Checking them at this
+		 * one point is what makes them hold identically whether a Screen was configured
+		 * in a single write or built up one patch at a time, and it means a rule added
+		 * to `modeConfigSchemaMap` in future is enforced on the editors' write path
+		 * without anyone having to remember to wire it up. See #85.
+		 */
+		parseModeConfigPatchResult(existing.modeConfigs, mode, config);
+
 		if (mode === 'feature-match-overlay') {
-			const existing = await screens.findById(screenId, eventId);
-			if (!existing)
-				throw createError({ statusCode: 404, message: 'Screen not found' });
 			const currentConfig = existing.modeConfigs?.[mode];
 			const nextConfig = mergeScreenModeConfig(
 				existing.modeConfigs ?? {},
