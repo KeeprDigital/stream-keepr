@@ -1,7 +1,7 @@
 import type {
+	BroadcastGraphicsCommandInput,
 	BroadcastGraphicsCommandType,
 	BroadcastGraphicsLiveState,
-	BroadcastGraphicsPlayoutPayload,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 
 /**
@@ -27,18 +27,19 @@ export interface BroadcastGraphicsLiveSessionResponse {
 }
 
 /**
- * One playout action, named by a stable command id so a retry is recognisable.
+ * One action, named by a stable command id so a retry is recognisable.
  *
  * Unlike an absolute Feature Match Session command there is no base sequence:
  * Take and Out state the latest desired on-air state of one Broadcast Graphic,
  * so a session that has advanced does not invalidate them. The last accepted
  * conflicting intent is meant to win.
+ *
+ * Update Graphic is the exception, and it carries its own guard in its payload
+ * rather than a session-wide base sequence: it supersedes one *acceptance*, so a
+ * newer acceptance of the same graphic's Graphic Inputs is the only thing that
+ * invalidates it. An unrelated Take does not.
  */
-export interface BroadcastGraphicsCommand {
-	commandId: string;
-	type: BroadcastGraphicsCommandType;
-	payload: BroadcastGraphicsPlayoutPayload;
-}
+export type BroadcastGraphicsCommand = BroadcastGraphicsCommandInput & { commandId: string };
 
 /** The realtime notification that the authoritative order has advanced. */
 export interface BroadcastGraphicsCommandAppliedPayload {

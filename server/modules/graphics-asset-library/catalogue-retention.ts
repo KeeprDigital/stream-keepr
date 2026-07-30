@@ -29,6 +29,7 @@ const RETAINED_INPUT_STAGES = [
 	'validating',
 	'generating-derivatives',
 	'awaiting-confirmation',
+	'awaiting-installation',
 	'publishing',
 ] as const;
 

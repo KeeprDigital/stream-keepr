@@ -13,7 +13,7 @@ describe('graphicItemDefinitions', () => {
 	it('offers the shared base Graphic Item kinds to the Broadcast Graphics host', () => {
 		const definitions = graphicItemDefinitionsForHost(BROADCAST_GRAPHICS_HOST_CONTRACT);
 
-		expect(definitions.map(definition => definition.kind)).toEqual(['text', 'shape', 'group']);
+		expect(definitions.map(definition => definition.kind)).toEqual(['text', 'shape', 'media', 'group']);
 	});
 
 	it('never offers a Graphic Group inside a Graphic Group', () => {
@@ -21,7 +21,7 @@ describe('graphicItemDefinitions', () => {
 		// group offers is the host palette without itself.
 		const definitions = graphicGroupChildDefinitionsForHost(BROADCAST_GRAPHICS_HOST_CONTRACT);
 
-		expect(definitions.map(definition => definition.kind)).toEqual(['text', 'shape']);
+		expect(definitions.map(definition => definition.kind)).toEqual(['text', 'shape', 'media']);
 	});
 
 	it('withholds a Definition whose required context the Host Contract cannot supply', () => {
@@ -62,6 +62,52 @@ describe('graphicItemDefinitions', () => {
 		});
 
 		expect(item).toMatchObject({ type: 'shape', width: 400, height: 50 });
+	});
+
+	it('creates a Media Graphic Item that fills its bounds from its centre with no asset yet', () => {
+		const item = getGraphicItemDefinition('media').createDefault({
+			id: 'item-4',
+			label: 'Sponsor',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		});
+
+		// An author places the rectangle first and chooses content second, so a new
+		// item is complete and renderable without a Graphic Asset Reference.
+		expect(item).toMatchObject({
+			type: 'media',
+			mediaKind: 'image',
+			fit: 'cover',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+			playbackRate: 1,
+			loop: true,
+		});
+		expect(item.type === 'media' && item.asset).toBeUndefined();
+		expect(item.type === 'media' && item.clipGeometry).toBeUndefined();
+	});
+
+	it('summarises a Media Graphic Item by whether it pins an asset at all', () => {
+		const empty = getGraphicItemDefinition('media').createDefault({
+			id: 'item-5',
+			label: 'Sponsor',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		});
+		if (empty.type !== 'media')
+			throw new Error('expected a Media Graphic Item');
+
+		expect(graphicItemSummary(empty)).toBe('No Graphic Asset');
+		expect(graphicItemSummary({
+			...empty,
+			asset: { assetId: 'asset-1' as never, revisionId: 'revision-1' as never },
+		})).toBe('image • cover');
+		expect(graphicItemSummary({
+			...empty,
+			mediaKind: 'silent-video',
+			fit: 'contain',
+			asset: { assetId: 'asset-1' as never, revisionId: 'revision-1' as never },
+		})).toBe('silent video • contain');
 	});
 
 	it('carries only the contract fields the compositor reads', () => {

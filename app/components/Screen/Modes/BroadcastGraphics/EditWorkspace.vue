@@ -111,6 +111,7 @@ const leaseNotice = computed(() => {
 					:selected-target="selectedTarget"
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
+					:event-id="eventId"
 					:writable="canAuthor"
 					@update:graphics="emit('update:graphics', $event)"
 				/>

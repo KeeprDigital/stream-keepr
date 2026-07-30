@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "052de7df-6f7a-43fa-bb02-9afaa7e74e09",
+  "id": "b181473c-d523-404e-8a43-f49647a2f80a",
   "prevId": "afc4b7b9-b6a8-44fd-976e-f2d0b7373a6a",
   "tables": {
     "archetype_cards": {
@@ -1539,13 +1539,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "reconciled_at": {
-          "name": "reconciled_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1560,13 +1553,6 @@
           "name": "graphic_asset_contents_availability_idx",
           "columns": [
             "availability"
-          ],
-          "isUnique": false
-        },
-        "graphic_asset_contents_reconciled_idx": {
-          "name": "graphic_asset_contents_reconciled_idx",
-          "columns": [
-            "reconciled_at"
           ],
           "isUnique": false
         }
@@ -1648,6 +1634,116 @@
           "name": "graphic_asset_event_associations_asset_id_event_id_pk"
         }
       },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "graphic_asset_origins": {
+      "name": "graphic_asset_origins",
+      "columns": {
+        "revision_id": {
+          "name": "revision_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "asset_id": {
+          "name": "asset_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_asset_id": {
+          "name": "source_asset_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_revision_id": {
+          "name": "source_revision_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_revision_number": {
+          "name": "source_revision_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "digest": {
+          "name": "digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "graphic_asset_origins_source_revision_idx": {
+          "name": "graphic_asset_origins_source_revision_idx",
+          "columns": [
+            "source_asset_id",
+            "source_revision_id"
+          ],
+          "isUnique": true
+        },
+        "graphic_asset_origins_source_asset_idx": {
+          "name": "graphic_asset_origins_source_asset_idx",
+          "columns": [
+            "source_asset_id"
+          ],
+          "isUnique": false
+        },
+        "graphic_asset_origins_asset_idx": {
+          "name": "graphic_asset_origins_asset_idx",
+          "columns": [
+            "asset_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "graphic_asset_origins_revision_id_graphic_asset_revisions_id_fk": {
+          "name": "graphic_asset_origins_revision_id_graphic_asset_revisions_id_fk",
+          "tableFrom": "graphic_asset_origins",
+          "tableTo": "graphic_asset_revisions",
+          "columnsFrom": [
+            "revision_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "graphic_asset_origins_asset_id_graphic_assets_id_fk": {
+          "name": "graphic_asset_origins_asset_id_graphic_assets_id_fk",
+          "tableFrom": "graphic_asset_origins",
+          "tableTo": "graphic_assets",
+          "columnsFrom": [
+            "asset_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
@@ -2617,184 +2713,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "graphics_discrepancies": {
-      "name": "graphics_discrepancies",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "subject_key": {
-          "name": "subject_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "digest": {
-          "name": "digest",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "object_key": {
-          "name": "object_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "derivative_id": {
-          "name": "derivative_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "state": {
-          "name": "state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'open'"
-        },
-        "reason_code": {
-          "name": "reason_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "isolated": {
-          "name": "isolated",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "expected": {
-          "name": "expected",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "observed": {
-          "name": "observed",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "detected_at": {
-          "name": "detected_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "last_checked_at": {
-          "name": "last_checked_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "resolved_at": {
-          "name": "resolved_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "resolution": {
-          "name": "resolution",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "working_copy_key": {
-          "name": "working_copy_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "working_copy_since": {
-          "name": "working_copy_since",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "correlation_id": {
-          "name": "correlation_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch() * 1000)"
-        }
-      },
-      "indexes": {
-        "graphics_discrepancies_open_subject_idx": {
-          "name": "graphics_discrepancies_open_subject_idx",
-          "columns": [
-            "kind",
-            "subject_key"
-          ],
-          "isUnique": true,
-          "where": "state = 'open'"
-        },
-        "graphics_discrepancies_state_idx": {
-          "name": "graphics_discrepancies_state_idx",
-          "columns": [
-            "state",
-            "kind"
-          ],
-          "isUnique": false
-        },
-        "graphics_discrepancies_digest_idx": {
-          "name": "graphics_discrepancies_digest_idx",
-          "columns": [
-            "digest"
-          ],
-          "isUnique": false
-        },
-        "graphics_discrepancies_working_copy_idx": {
-          "name": "graphics_discrepancies_working_copy_idx",
-          "columns": [
-            "working_copy_since"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "graphics_ingestion_operations": {
       "name": "graphics_ingestion_operations",
       "columns": {
@@ -2901,6 +2819,13 @@
         },
         "multipart_state": {
           "name": "multipart_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "package_preflight": {
+          "name": "package_preflight",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -3041,59 +2966,6 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "graphics_reconciliation_state": {
-      "name": "graphics_reconciliation_state",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "canonical_scan_cursor": {
-          "name": "canonical_scan_cursor",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "canonical_scan_started_at": {
-          "name": "canonical_scan_started_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_sweep_correlation_id": {
-          "name": "last_sweep_correlation_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_sweep_started_at": {
-          "name": "last_sweep_started_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_sweep_completed_at": {
-          "name": "last_sweep_completed_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}

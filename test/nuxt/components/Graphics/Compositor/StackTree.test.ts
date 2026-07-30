@@ -153,7 +153,7 @@ describe('graphicsCompositorStackTree', () => {
 		});
 
 		const palette = wrapper.getComponent({ name: 'USelect' });
-		expect((palette.props('items') as Array<{ value: string }>).map(item => item.value)).toEqual(['text', 'shape', 'group']);
+		expect((palette.props('items') as Array<{ value: string }>).map(item => item.value)).toEqual(['text', 'shape', 'media', 'group']);
 	});
 
 	it('places a Graphic Item at the front of the Graphic Layer Order and selects it', async () => {
@@ -287,7 +287,7 @@ describe('graphicsCompositorStackTree', () => {
 		const palettes = wrapper.findAllComponents({ name: 'USelect' });
 		const childPalette = palettes[palettes.length - 1]!;
 		expect((childPalette.props('items') as Array<{ value: string }>).map(item => item.value))
-			.toEqual(['text', 'shape']);
+			.toEqual(['text', 'shape', 'media']);
 
 		childPalette.vm.$emit('update:modelValue', 'text');
 		await nextTick();

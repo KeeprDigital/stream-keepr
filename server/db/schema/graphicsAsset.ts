@@ -48,6 +48,7 @@ export const GRAPHICS_INGESTION_STAGE_VALUES = [
 	'validating',
 	'generating-derivatives',
 	'awaiting-confirmation',
+	'awaiting-installation',
 	'publishing',
 	'completed',
 	'failed',
@@ -141,6 +142,35 @@ export const graphicAssetRevisions = sqliteTable('graphic_asset_revisions', {
 	index('graphic_asset_revisions_content_idx').on(table.contentDigest),
 ]);
 
+/**
+ * Graphic Asset Origin: the immutable source identity, source revision, and
+ * content digest of the Template Package that produced this exact local
+ * revision.
+ *
+ * It exists to recognise a future import, not to create a live link. A revision
+ * has at most one origin, a locally created revision has none, and the row is
+ * never rewritten — a package claiming an origin already recorded here with a
+ * different digest is an integrity conflict rather than an update.
+ */
+export const graphicAssetOrigins = sqliteTable('graphic_asset_origins', {
+	revisionId: text('revision_id')
+		.primaryKey()
+		.references(() => graphicAssetRevisions.id, { onDelete: 'cascade' }),
+	assetId: text('asset_id')
+		.references(() => graphicAssets.id, { onDelete: 'cascade' })
+		.notNull(),
+	sourceAssetId: text('source_asset_id').notNull(),
+	sourceRevisionId: text('source_revision_id').notNull(),
+	sourceRevisionNumber: integer('source_revision_number').notNull(),
+	digest: text('digest').notNull(),
+	createdAt,
+}, table => [
+	uniqueIndex('graphic_asset_origins_source_revision_idx')
+		.on(table.sourceAssetId, table.sourceRevisionId),
+	index('graphic_asset_origins_source_asset_idx').on(table.sourceAssetId),
+	index('graphic_asset_origins_asset_idx').on(table.assetId),
+]);
+
 /** Generated, non-selectable bytes owned by one exact source revision. */
 export const graphicsDerivatives = sqliteTable('graphics_derivatives', {
 	id: text('id').primaryKey(),
@@ -218,6 +248,13 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	declaredByteLength: integer('declared_byte_length'),
 	transferredByteLength: integer('transferred_byte_length').notNull().default(0),
 	multipartState: text('multipart_state', { mode: 'json' }).$type<Record<string, unknown>>(),
+	/**
+	 * The immutable Template Package preflight report, its proposed mappings, and
+	 * the fingerprint any confirmation is bound to. It lives beside the operation
+	 * so a reconnecting author, a retry, and a cancellation all read the same
+	 * durable proposal rather than re-deriving one that might have changed.
+	 */
+	packagePreflight: text('package_preflight', { mode: 'json' }).$type<Record<string, unknown>>(),
 	stagingReservedByteLength: integer('staging_reserved_byte_length').notNull().default(0),
 	stagingUsedByteLength: integer('staging_used_byte_length').notNull().default(0),
 	canonicalReservedByteLength: integer('canonical_reserved_byte_length').notNull().default(0),

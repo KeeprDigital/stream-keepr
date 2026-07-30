@@ -5,6 +5,7 @@ import type {
 	GraphicAssetLifecycleActionOutcome,
 	GraphicAssetLifecycleState,
 	GraphicAssetPurgeOutcome,
+	GraphicAssetReference,
 	GraphicAssetReferenceStatus,
 	GraphicAssetRetentionView,
 	GraphicAssetRevisionId,
@@ -37,6 +38,11 @@ import type {
 	TemplatePackageExportReport,
 	TemplatePackageKind,
 	TemplatePackageManifest,
+	TemplatePackagePreflightIssue,
+	TemplatePackagePreflightMapping,
+	TemplatePackagePreflightQuota,
+	TemplatePackagePreflightReport,
+	TemplatePackageTotals,
 } from '~~/shared/types/templatePackage';
 import type { GraphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import type { GraphicsCapacityExhaustedDetails } from './errors';
@@ -61,10 +67,13 @@ import type { GraphicsRemoteSourceFetcher } from './remote-source';
 import type { GraphicsAssetRetentionCatalogue } from './retention';
 import type { SilentVideoPlaybackValidator } from './silent-video-playback-validator';
 import type { ResolvedPackagedRevision } from './template-package';
+import type { TemplatePackageArchiveEntry } from './template-package-archive';
+import type { TemplatePackagePreflightState } from './template-package-preflight';
 import {
 	TEMPLATE_PACKAGE_ARTIFACTS,
 	TEMPLATE_PACKAGE_LIMITS,
 	TEMPLATE_PACKAGE_MANIFEST_ENTRY,
+	TEMPLATE_PACKAGE_SCHEMA_VERSION,
 	TEMPLATE_PACKAGE_TEMPLATE_ENTRY,
 	templatePackageFileName,
 } from '~~/shared/types/templatePackage';
@@ -80,6 +89,7 @@ import {
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 	SILENT_VIDEO_COMPATIBILITY_PROFILE,
 	STATIC_FONT_COMPATIBILITY_PROFILE,
+	STATIC_FONT_UNATTESTED_COMPATIBILITY_PROFILE,
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
 } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GRAPHICS_RETENTION_ACTOR } from '~~/shared/utils/graphicsAssetRetention';
@@ -124,6 +134,22 @@ import {
 	undeclaredReferenceIssues,
 } from './template-package';
 import {
+	readTemplatePackageArchive,
+	TemplatePackageArchiveSourceError,
+} from './template-package-archive';
+import {
+	assembleTemplatePackagePreflightReport,
+	hasNestedArchiveSignature,
+	inspectReceivedApplicationCapabilities,
+	inspectTemplatePackageEntries,
+	NESTED_ARCHIVE_PROBE_BYTES,
+	readTemplatePackageManifest,
+	templatePackageMappingProposal,
+	templatePackagePreflightConfirmed,
+	templatePackagePreflightFingerprintMaterial,
+} from './template-package-preflight';
+import { templatePackagePreflightIssue } from './template-package-preflight-issues';
+import {
 	GraphicAssetValidationError,
 	rejectedValidationReport,
 	validationError,
@@ -132,6 +158,16 @@ import { createStoredZipArchive, storedZipArchiveByteLength } from './zip-archiv
 
 export { GraphicsAssetLibraryError } from './errors';
 export { createInMemoryGraphicsAssetCatalogue } from './in-memory-catalogue';
+
+/**
+ * A manifest or Template document is parsed in full, so both are bounded well
+ * below the envelope's own limits. Neither has any legitimate reason to be
+ * larger, and a package cannot be allowed to make a receiver hold one that is.
+ */
+const MAXIMUM_PACKAGE_DOCUMENT_BYTES = 8 * 1024 * 1024;
+
+/** How much of an archive entry is resident while its digest is recomputed. */
+const PACKAGE_ENTRY_READ_CHUNK_BYTES = 1024 * 1024;
 
 const GRAPHIC_ASSET_SOURCE_POLICIES = {
 	'image': {
@@ -263,6 +299,53 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		operationId: GraphicsIngestionOperationId,
 		initiatedBy: string,
 	) => Promise<void>;
+	getTemplatePackagePreflight: (
+		operationId: GraphicsIngestionOperationId,
+		initiatedBy: string,
+	) => Promise<TemplatePackagePreflightState | undefined>;
+	/** Returns false when the operation reached a terminal or confirmed stage first. */
+	updateTemplatePackagePreflight: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
+		state: TemplatePackagePreflightState;
+	}) => Promise<boolean>;
+	/**
+	 * Accepts one exact proposal and readies it for installation in a single
+	 * conditional transition.
+	 *
+	 * Recording the confirmation and advancing the stage must not be two steps: a
+	 * retry can durably record a newer report between them, and a confirmation
+	 * written back over it would install a proposal nobody agreed to. So this
+	 * compares and sets — it commits only while the operation is still paused on
+	 * the exact report the author saw, and writes only the confirmation.
+	 */
+	confirmTemplatePackagePreflight: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
+		fingerprint: string;
+		confirmedAt: string;
+		updatedAt: string;
+	}) => Promise<boolean>;
+	/**
+	 * What this installation already holds for one packaged Graphic Asset Origin:
+	 * the exact local revision carrying that source identity and revision, and
+	 * whether any other revision of the same source is present.
+	 */
+	findTemplatePackageOriginCandidates: (input: {
+		sourceAssetId: string;
+		sourceRevisionId: string;
+	}) => Promise<{
+		exact?: {
+			reference: GraphicAssetReference;
+			digest: string;
+			name: string;
+		};
+		relatedRevisionExists: boolean;
+	}>;
+	findGraphicAssetByContentDigest: (digest: string) => Promise<
+		| (ReusableGraphicAsset & { name: string })
+		| undefined
+	>;
 	updateIngestionOperation: (
 		operation: GraphicsIngestionOperation,
 		expectedUpdatedAt: string,
@@ -404,6 +487,28 @@ export interface GraphicsAssetLibrary {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
 		evidence: NonNullable<GraphicAssetSourceDeclarations['browserDecodeEvidence']>;
+	}) => Promise<GraphicsIngestionOperation>;
+	/**
+	 * Initiates preflight of one received Template Package. The package is
+	 * transferred and staged through the same durable path every other ingestion
+	 * source uses, so it resumes, cancels, and expires identically.
+	 */
+	initiateTemplatePackagePreflight: (input: {
+		idempotencyKey: string;
+		initiatedBy: string;
+		sourceFileName?: string;
+		declaredByteLength: number;
+		defaultEventId?: number;
+	}) => Promise<GraphicsIngestionOperation>;
+	/**
+	 * Accepts the exact proposal a report describes. The fingerprint must match
+	 * the current report, so a confirmation can never be applied to a package,
+	 * mapping, or compatibility profile the author never saw.
+	 */
+	confirmTemplatePackagePreflight: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
+		fingerprint: string;
 	}) => Promise<GraphicsIngestionOperation>;
 	cancelGraphicsIngestion: (input: {
 		operationId: GraphicsIngestionOperationId;
@@ -1220,20 +1325,27 @@ export function createGraphicsAssetLibrary(
 	function validateGraphicsIngestionInput(input: GraphicAssetSourceDeclarations & {
 		idempotencyKey: string;
 		initiatedBy: string;
+		source: GraphicsIngestionSource;
 		declaredByteLength: number;
 		defaultEventId?: number;
 	}) {
 		if (!input.idempotencyKey.trim() || !input.initiatedBy.trim())
 			throw new GraphicsAssetLibraryError('Ingestion identity and author are required', 'invalid-ingestion-input');
-		const sourceKind = graphicAssetSourceKind(input);
-		const policy = GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind];
+		// A Template Package is an envelope rather than one Graphic Asset, so it is
+		// held to the archive limit instead of any single asset kind's limit.
+		const { label, maximumByteLength } = input.source === 'template-package'
+			? {
+					label: 'Template Package',
+					maximumByteLength: TEMPLATE_PACKAGE_LIMITS.maximumArchiveByteLength,
+				}
+			: GRAPHIC_ASSET_SOURCE_POLICIES[graphicAssetSourceKind(input)];
 		if (
 			!Number.isSafeInteger(input.declaredByteLength)
 			|| input.declaredByteLength <= 0
-			|| input.declaredByteLength > policy.maximumByteLength
+			|| input.declaredByteLength > maximumByteLength
 		) {
 			throw new GraphicsAssetLibraryError(
-				`${policy.label} must be between 1 and ${policy.maximumByteLength} bytes`,
+				`${label} must be between 1 and ${maximumByteLength} bytes`,
 				'invalid-ingestion-input',
 			);
 		}
@@ -1860,9 +1972,725 @@ export function createGraphicsAssetLibrary(
 			: { outcome: 'unavailable' };
 	}
 
+	/**
+	 * The export-side document rules a received Template must satisfy too. Both
+	 * sides ask the same question — is this document plain, self-contained data? —
+	 * so preflight reuses the exporter's inspection and reports its answers in
+	 * preflight's own vocabulary rather than restating the rules.
+	 */
+	const RECEIVED_DOCUMENT_ISSUE_CODES = {
+		'invalid-template-document': 'invalid-template-document',
+		'remote-resource-dependency': 'remote-resource-dependency',
+		'executable-template-content': 'executable-template-content',
+		'undeclared-graphic-asset-dependency': 'undeclared-graphic-asset-dependency',
+	} as const;
+
+	/**
+	 * Streams one archive entry in bounded chunks so its digest can be recomputed
+	 * without the entry ever being resident in full.
+	 */
+	function archiveEntryStream(
+		entry: TemplatePackageArchiveEntry,
+		readRange: (offset: number, length: number) => Promise<Uint8Array>,
+	): ReadableStream<Uint8Array> {
+		let delivered = 0;
+		return new ReadableStream<Uint8Array>({
+			async pull(controller) {
+				if (delivered >= entry.byteLength) {
+					controller.close();
+					return;
+				}
+				const length = Math.min(PACKAGE_ENTRY_READ_CHUNK_BYTES, entry.byteLength - delivered);
+				const bytes = await readRange(entry.dataOffset + delivered, length);
+				delivered += bytes.byteLength;
+				controller.enqueue(bytes);
+			},
+		});
+	}
+
+	/**
+	 * Inspects one staged Template Package completely and returns the immutable
+	 * report it produced. Every check runs even after an earlier one failed, so an
+	 * author sees the complete reason a package cannot install rather than
+	 * correcting one problem at a time.
+	 */
+	async function inspectStagedTemplatePackage(input: {
+		operation: GraphicsIngestionOperation;
+		sourceDigest: string;
+		readRange: (offset: number, length: number) => Promise<Uint8Array>;
+		catalogue: GraphicsAssetCatalogue;
+		canonical: GraphicsCanonicalObjectStore;
+	}): Promise<{
+		report: TemplatePackagePreflightReport;
+		derivatives: TemplatePackagePreflightState['derivatives'];
+	}> {
+		const { operation, readRange, catalogue, canonical } = input;
+		const checkedAt = timestamp();
+		const archiveByteLength = operation.declaredByteLength;
+		const issues: TemplatePackagePreflightIssue[] = [];
+		const decoder = new TextDecoder('utf-8', { fatal: true });
+
+		function finish(
+			reportIssues: readonly TemplatePackagePreflightIssue[],
+			options: {
+				packageKind?: TemplatePackageKind;
+				templateIdentity?: string;
+				templateName?: string;
+				schema?: TemplatePackagePreflightReport['schema'];
+				compatibilityProfiles?: readonly string[];
+				mappings?: readonly TemplatePackagePreflightMapping[];
+				quota?: TemplatePackagePreflightQuota;
+				observed?: TemplatePackageTotals & { archiveByteLength: number };
+			} = {},
+		) {
+			const material = {
+				packageKind: options.packageKind ?? 'skgraphic',
+				templateIdentity: options.templateIdentity ?? '',
+				templateName: options.templateName ?? '',
+				sourceDigest: input.sourceDigest,
+				schema: options.schema ?? {
+					received: 0,
+					supported: TEMPLATE_PACKAGE_SCHEMA_VERSION,
+					migrated: false,
+				},
+				compatibilityProfiles: options.compatibilityProfiles ?? [],
+				issues: reportIssues,
+				mappings: options.mappings ?? [],
+				quota: options.quota ?? {
+					canonicalGrowthBytes: 0,
+					canonicalAvailableBytes: 0,
+					canonicalLimitBytes: 0,
+					pressure: 'normal' as const,
+				},
+				observed: options.observed ?? {
+					entryCount: 0,
+					packagedAssetCount: 0,
+					packagedRevisionCount: 0,
+					uniqueContentCount: 0,
+					expandedByteLength: 0,
+					archiveByteLength,
+				},
+			};
+			return sha256Hex(new TextEncoder().encode(
+				templatePackagePreflightFingerprintMaterial(material),
+			)).then(fingerprint => assembleTemplatePackagePreflightReport({
+				...material,
+				checkedAt,
+				fingerprint,
+			}));
+		}
+
+		const archive = await readTemplatePackageArchive({
+			byteLength: archiveByteLength,
+			read: readRange,
+		});
+		if (archive.outcome === 'rejected')
+			return { report: await finish(archive.issues), derivatives: [] };
+
+		const entries = archive.entries;
+		const entryByName = new Map(entries.map(entry => [entry.name, entry]));
+		const observedExpandedByteLength = entries
+			.reduce((total, entry) => total + entry.byteLength, 0);
+
+		async function readEntryDocument(
+			entry: TemplatePackageArchiveEntry,
+		): Promise<unknown | undefined> {
+			if (entry.byteLength > MAXIMUM_PACKAGE_DOCUMENT_BYTES)
+				return undefined;
+			try {
+				return JSON.parse(decoder.decode(await readRange(entry.dataOffset, entry.byteLength)));
+			}
+			catch (error) {
+				if (error instanceof TemplatePackageArchiveSourceError)
+					throw error;
+				return undefined;
+			}
+		}
+
+		const manifestEntry = entryByName.get(TEMPLATE_PACKAGE_MANIFEST_ENTRY);
+		if (!manifestEntry) {
+			return {
+				report: await finish([templatePackagePreflightIssue('missing-package-entry', {
+					subject: TEMPLATE_PACKAGE_MANIFEST_ENTRY,
+					message: 'The archive carries no package manifest',
+				})]),
+				derivatives: [],
+			};
+		}
+		const manifestValue = await readEntryDocument(manifestEntry);
+		if (manifestValue === undefined) {
+			return {
+				report: await finish([templatePackagePreflightIssue('invalid-package-manifest', {
+					subject: TEMPLATE_PACKAGE_MANIFEST_ENTRY,
+					message: 'The package manifest is not readable JSON within the size a manifest may occupy',
+				})]),
+				derivatives: [],
+			};
+		}
+		const manifestRead = readTemplatePackageManifest(manifestValue);
+		if (manifestRead.outcome === 'rejected')
+			return { report: await finish(manifestRead.issues), derivatives: [] };
+		const { manifest, receivedSchemaVersion, migrated } = manifestRead.result;
+		const schema = {
+			received: receivedSchemaVersion,
+			supported: TEMPLATE_PACKAGE_SCHEMA_VERSION,
+			migrated,
+		};
+		const observed = {
+			entryCount: entries.length,
+			packagedAssetCount: manifest.packagedAssets.length,
+			packagedRevisionCount: manifest.packagedAssets.length,
+			uniqueContentCount: manifest.contents.length,
+			expandedByteLength: observedExpandedByteLength,
+			archiveByteLength,
+		};
+		const reportOptions = {
+			packageKind: manifest.packageKind,
+			templateIdentity: manifest.template.identity,
+			templateName: manifest.template.name,
+			schema,
+			observed,
+		};
+
+		// A migration happened in staging and changed nothing the sender chose, but
+		// the author still confirms the result they are about to install.
+		if (migrated) {
+			issues.push(templatePackagePreflightIssue('package-schema-migrated', {
+				message: `The package was migrated from schema version ${receivedSchemaVersion} to ${TEMPLATE_PACKAGE_SCHEMA_VERSION} in staging`,
+			}));
+		}
+		issues.push(...inspectTemplatePackageEntries(entries, manifest));
+		issues.push(...inspectReceivedApplicationCapabilities(manifest));
+		// The received file name is a hint, and the manifest alone determines the
+		// artifact type — so a package transferred without a name (an API client
+		// streaming bytes it never had a file for) is not penalised for it. When a
+		// name is supplied it must not contradict the manifest, because one of the
+		// two is then describing a different artifact.
+		const extension = TEMPLATE_PACKAGE_ARTIFACTS[manifest.packageKind].extension;
+		const receivedName = operation.sourceFileName?.toLowerCase();
+		if (receivedName !== undefined && !receivedName.endsWith(extension)) {
+			const receivedExtension = receivedName.slice(receivedName.lastIndexOf('.'));
+			issues.push(templatePackagePreflightIssue('unsupported-package-artifact', {
+				subject: operation.sourceFileName,
+				message: `A ${manifest.packageKind} package must be received as a "${extension}" file, but this one arrived as "${
+					receivedExtension.startsWith('.') ? receivedExtension : 'a file with no extension'
+				}"`,
+			}));
+		}
+
+		const declaredOrigins = new Map(manifest.packagedAssets.map(asset => [
+			`${asset.origin.sourceAssetId} ${asset.origin.sourceRevisionId}`,
+			asset,
+		]));
+		const templateEntry = entryByName.get(TEMPLATE_PACKAGE_TEMPLATE_ENTRY);
+		if (!templateEntry) {
+			issues.push(templatePackagePreflightIssue('missing-package-entry', {
+				subject: TEMPLATE_PACKAGE_TEMPLATE_ENTRY,
+				message: 'The archive carries no Template document',
+			}));
+		}
+		else {
+			const document = await readEntryDocument(templateEntry);
+			if (document === undefined) {
+				issues.push(templatePackagePreflightIssue('invalid-template-document', {
+					subject: TEMPLATE_PACKAGE_TEMPLATE_ENTRY,
+					message: 'The Template document is not readable JSON within the size a Template may occupy',
+				}));
+			}
+			else {
+				const inspected = inspectTemplateDocument(document);
+				for (const issue of inspected.issues) {
+					const code = RECEIVED_DOCUMENT_ISSUE_CODES[
+						issue.code as keyof typeof RECEIVED_DOCUMENT_ISSUE_CODES
+					];
+					issues.push(templatePackagePreflightIssue(code ?? 'invalid-template-document', {
+						subject: issue.slot,
+						message: issue.message,
+					}));
+				}
+				// A package embeds every asset its Template needs and no others.
+				// The document names the sender's identities, which are exactly the
+				// provenance each packaged asset declares.
+				const required = new Set<string>();
+				for (const discovered of inspected.references) {
+					const key = `${discovered.reference.assetId} ${discovered.reference.revisionId}`;
+					if (declaredOrigins.has(key)) {
+						required.add(key);
+						continue;
+					}
+					issues.push(templatePackagePreflightIssue('undeclared-graphic-asset-dependency', {
+						subject: discovered.path,
+						message: 'The Template requires a Graphic Asset Revision the package never embedded',
+					}));
+				}
+				for (const [key, asset] of declaredOrigins) {
+					if (required.has(key))
+						continue;
+					issues.push(templatePackagePreflightIssue('unused-packaged-graphic-asset', {
+						subject: asset.packagedId,
+						message: `The package embeds "${asset.name}", which its Template never requires`,
+					}));
+				}
+			}
+		}
+
+		// Every embedded source is revalidated here under this installation's
+		// current profiles. The sender's recorded facts are never trusted: they are
+		// a snapshot of another installation's rules, which may be older, newer, or
+		// simply different from the ones this receiver must enforce.
+		const validated = new Map<string, {
+			facts: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>['facts'];
+			compatibilityProfile: string;
+			thumbnail: Uint8Array;
+		}>();
+		for (const content of manifest.contents) {
+			const entry = entryByName.get(content.entry);
+			if (!entry)
+				continue;
+			// Enough to cover a complete tar header block, whose magic is not at the
+			// start of the file. Media sniffing still only looks at the first 64.
+			const leadingLength = Math.min(NESTED_ARCHIVE_PROBE_BYTES, entry.byteLength);
+			const leadingBytes = leadingLength > 0
+				? await readRange(entry.dataOffset, leadingLength)
+				: new Uint8Array();
+			if (hasNestedArchiveSignature(leadingBytes)) {
+				issues.push(templatePackagePreflightIssue('nested-package-archive', {
+					subject: entry.name,
+					message: 'Packaged content is itself an archive',
+				}));
+				continue;
+			}
+			// The digest is recomputed from the exact archived bytes. A package that
+			// disagrees with itself about its own content cannot be installed.
+			const observedDigest = await sha256HexStream({
+				body: archiveEntryStream(entry, readRange),
+				byteLength: entry.byteLength,
+				maximumByteLength: entry.byteLength,
+			});
+			if (observedDigest !== content.digest) {
+				issues.push(templatePackagePreflightIssue('package-content-digest-mismatch', {
+					subject: entry.name,
+					message: 'Packaged content does not match the digest the manifest records for it',
+				}));
+				continue;
+			}
+			const sourceKind = graphicAssetSourceKind(
+				{ declaredMime: content.canonicalMime },
+				leadingBytes.subarray(0, 64),
+			);
+			const policy = GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind];
+			if (entry.byteLength > policy.maximumByteLength) {
+				issues.push(templatePackagePreflightIssue('incompatible-graphic-asset-content', {
+					subject: entry.name,
+					message: `${policy.label} content of ${entry.byteLength} bytes exceeds this installation's ${policy.maximumByteLength}-byte limit`,
+				}));
+				continue;
+			}
+			try {
+				let accepted: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>;
+				let thumbnail: Uint8Array;
+				if (sourceKind === 'silent-video') {
+					const processed = await processSilentVideoFromRandomAccess({
+						byteLength: entry.byteLength,
+						sha256: observedDigest,
+						read: async (offset, length) => {
+							try {
+								return {
+									outcome: 'available' as const,
+									bytes: await readRange(entry.dataOffset + offset, length),
+									completeLength: entry.byteLength,
+								};
+							}
+							catch {
+								return { outcome: 'unavailable' as const, retryable: true as const };
+							}
+						},
+					}, { declaredMime: content.canonicalMime });
+					// A packaged video is proven by the same pinned native validation an
+					// uploaded one is; there is no interactive client here to attest for it.
+					const trusted = await reportWithTrustedSilentVideoValidation(
+						processed.report as Extract<GraphicAssetValidationReport, {
+							outcome: 'accepted';
+							compatibilityProfile: 'silent-video-v1';
+						}>,
+						operation,
+					);
+					accepted = trusted.report;
+					thumbnail = trusted.derivative;
+				}
+				else {
+					const bytes = await consumeBoundedByteStream({
+						body: archiveEntryStream(entry, readRange),
+						byteLength: entry.byteLength,
+						maximumByteLength: policy.maximumByteLength,
+					});
+					const processed = await processGraphicAssetSource(sourceKind, bytes, {
+						declaredMime: content.canonicalMime,
+					});
+					if (!('thumbnail' in processed)) {
+						issues.push(templatePackagePreflightIssue('derivative-generation-failed', {
+							subject: entry.name,
+							message: 'Validated packaged content produced no deterministic preview',
+						}));
+						continue;
+					}
+					accepted = processed.report;
+					thumbnail = processed.thumbnail;
+				}
+				// `static-font-v1` includes `FontFace.load()` and representative glyph
+				// rendering, which an interactive upload collects from the author's own
+				// browser. A package has no such client, and unlike silent video there
+				// is no server-side substitute for actually loading a face. So a
+				// packaged font records what it genuinely satisfied rather than
+				// claiming a profile it did not: its facts already carry neither
+				// `browserLoadable` nor `representativeGlyphsRendered`, and a warning
+				// makes the gap something the author confirms knowingly.
+				validated.set(content.digest, {
+					facts: accepted.facts,
+					compatibilityProfile: accepted.facts.kind === 'font'
+						? STATIC_FONT_UNATTESTED_COMPATIBILITY_PROFILE
+						: accepted.compatibilityProfile,
+					thumbnail,
+				});
+			}
+			catch (error) {
+				if (error instanceof SilentVideoInspectionSourceError)
+					throw new TemplatePackageArchiveSourceError('Staged Template Package bytes are temporarily unavailable');
+				if (error instanceof SilentVideoValidationRuntimeError)
+					throw error;
+				if (!(error instanceof GraphicAssetValidationError))
+					throw error;
+				const rejection = rejectedValidationReport(error, policy.compatibilityProfile);
+				for (const rejected of rejection.issues) {
+					issues.push(templatePackagePreflightIssue('incompatible-graphic-asset-content', {
+						subject: entry.name,
+						message: `${rejected.code}: ${rejected.message}`,
+					}));
+				}
+			}
+		}
+
+		// Mappings are proposed only from content this installation has actually
+		// validated, so a proposal never describes bytes it could not accept.
+		const mappings: TemplatePackagePreflightMapping[] = [];
+		const countedContentDigests = new Set<string>();
+		const derivatives: TemplatePackagePreflightState['derivatives'] = [];
+		const countedDerivativeDigests = new Set<string>();
+		let derivativeGrowthBytes = 0;
+		for (const asset of manifest.packagedAssets) {
+			const content = validated.get(asset.integrity.digest);
+			if (!content)
+				continue;
+			const [originCandidates, contentStored, sharedContent] = await Promise.all([
+				catalogue.findTemplatePackageOriginCandidates({
+					sourceAssetId: asset.origin.sourceAssetId,
+					sourceRevisionId: asset.origin.sourceRevisionId,
+				}),
+				canonical.readMetadata(graphicsObjectIdentity(`sha256/${asset.integrity.digest}`)),
+				catalogue.findGraphicAssetByContentDigest(asset.integrity.digest),
+			]);
+			const contentAlreadyStored = contentStored.outcome === 'available'
+				&& contentStored.object.byteLength === content.facts.byteLength;
+			const proposal = templatePackageMappingProposal({
+				asset,
+				originMatch: originCandidates.exact,
+				relatedOriginExists: originCandidates.relatedRevisionExists,
+				contentAlreadyStored,
+				contentCountedByAnotherMapping: countedContentDigests.has(asset.integrity.digest),
+				sharedContentName: originCandidates.exact ? undefined : sharedContent?.name,
+				compatibilityRestricted: content.facts.kind === 'silent-video'
+					&& content.facts.targetCompatibility !== 'all-supported',
+			});
+			if (proposal.mapping.canonicalGrowthBytes > 0)
+				countedContentDigests.add(asset.integrity.digest);
+			mappings.push(proposal.mapping);
+			issues.push(...proposal.issues);
+			// Only a font this package would actually install carries the gap.
+			// Reusing an exact origin keeps the local revision and whatever
+			// attestation it already earned, so there is nothing new to accept.
+			if (
+				content.facts.kind === 'font'
+				&& proposal.mapping.proposal === 'create-graphic-asset'
+			) {
+				issues.push(templatePackagePreflightIssue('graphic-asset-font-attestation-deferred', {
+					subject: asset.packagedId,
+					message: `"${asset.name}" would be installed under ${STATIC_FONT_UNATTESTED_COMPATIBILITY_PROFILE}: no browser has loaded and rendered it here`,
+				}));
+			}
+
+			// A reused revision already has its preview; only a new Graphic Asset
+			// brings a derivative this installation would have to store.
+			const derivativeDigest = await sha256Hex(content.thumbnail);
+			derivatives.push({
+				packagedId: asset.packagedId,
+				digest: derivativeDigest,
+				byteLength: content.thumbnail.byteLength,
+			});
+			if (
+				proposal.mapping.proposal === 'create-graphic-asset'
+				&& !countedDerivativeDigests.has(derivativeDigest)
+			) {
+				countedDerivativeDigests.add(derivativeDigest);
+				const stored = await canonical.readMetadata(
+					graphicsObjectIdentity(`sha256/${derivativeDigest}`),
+				);
+				if (stored.outcome !== 'available')
+					derivativeGrowthBytes += content.thumbnail.byteLength;
+			}
+		}
+
+		const canonicalGrowthBytes = mappings
+			.reduce((total, mapping) => total + mapping.canonicalGrowthBytes, 0)
+			+ derivativeGrowthBytes;
+		const capacity = await catalogue.getCapacity();
+		const quota: TemplatePackagePreflightQuota = {
+			canonicalGrowthBytes,
+			canonicalAvailableBytes: capacity.canonical.availableBytes,
+			canonicalLimitBytes: capacity.canonical.limitBytes,
+			pressure: capacity.canonical.pressure,
+		};
+		// A package that adds nothing to canonical storage stays possible at a full
+		// quota; only real growth the installation cannot absorb is blocked.
+		if (canonicalGrowthBytes > capacity.canonical.availableBytes) {
+			issues.push(templatePackagePreflightIssue('canonical-capacity-blocked', {
+				message: `Installing this package would add ${canonicalGrowthBytes} canonical bytes with ${capacity.canonical.availableBytes} available`,
+			}));
+		}
+
+		const compatibilityProfiles = [
+			...new Set([...validated.values()].map(content => content.compatibilityProfile)),
+		];
+		return {
+			report: await finish(issues, {
+				...reportOptions,
+				compatibilityProfiles,
+				mappings,
+				quota,
+			}),
+			derivatives,
+		};
+	}
+
+	/**
+	 * Runs one complete Template Package preflight over durably staged bytes.
+	 *
+	 * The archive is never expanded. Its entries are located through ranged reads
+	 * of the staged object and each one is inspected in place, so a package at the
+	 * 1 GiB limit costs the same bounded Worker memory as a small one. Nothing the
+	 * package asserts is believed: the container is re-derived, every content
+	 * digest is recomputed, and every embedded source is revalidated under this
+	 * installation's current compatibility profiles rather than the sender's.
+	 *
+	 * The result is one immutable report. It is written durably before the stage
+	 * changes, so a reconnecting author, a retry, and a cancellation all read the
+	 * same proposal, and nothing it proposes exists outside this operation.
+	 */
+	async function continueTemplatePackagePreflight(
+		initialOperation: GraphicsIngestionOperation,
+	): Promise<GraphicsIngestionOperation> {
+		const catalogue = requireCatalogue();
+		const staging = requireStaging();
+		let operation = initialOperation;
+		const stagingIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
+
+		async function terminalOperationAtCheckpoint() {
+			const authoritative = await catalogue.getIngestionOperation(
+				operation.id,
+				operation.initiatedBy,
+			);
+			if (authoritative?.stage !== 'cancelled' && authoritative?.stage !== 'completed')
+				return undefined;
+			if (authoritative.stage === 'cancelled') {
+				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+				await staging.delete(stagingIdentity);
+			}
+			return authoritative;
+		}
+
+		async function stagingUnavailable(message: string) {
+			return await failOperation(catalogue, operation, {
+				code: 'staging-unavailable',
+				retryable: true,
+				message,
+			});
+		}
+
+		/** Reads an exact window of the staged archive, or reports it unreadable. */
+		async function readStagedRange(offset: number, length: number): Promise<Uint8Array> {
+			const range = await staging.read(stagingIdentity, { offset, length });
+			if (
+				range.outcome !== 'available'
+				|| range.range.offset !== offset
+				|| range.range.length !== length
+				|| range.range.completeLength !== operation.declaredByteLength
+			) {
+				throw new TemplatePackageArchiveSourceError('Staged Template Package bytes are temporarily unavailable');
+			}
+			try {
+				return await consumeBoundedByteStream({
+					body: range.body,
+					byteLength: length,
+					maximumByteLength: length,
+				});
+			}
+			catch (error) {
+				throw new TemplatePackageArchiveSourceError(
+					'Staged Template Package bytes could not be read',
+					{ cause: error },
+				);
+			}
+		}
+
+		try {
+			const stagedMetadata = await staging.readMetadata(stagingIdentity);
+			if (
+				stagedMetadata.outcome !== 'available'
+				|| stagedMetadata.object.byteLength !== operation.declaredByteLength
+				|| stagedMetadata.object.customMetadata.operationId !== operation.id
+			) {
+				return await stagingUnavailable('Staged Template Package bytes could not be verified.');
+			}
+
+			operation = await catalogue.updateIngestionOperation(
+				changedOperation(operation, {
+					stage: 'hashing',
+					transferredByteLength: operation.declaredByteLength,
+					failure: undefined,
+				}),
+				operation.updatedAt,
+			);
+			const archiveRead = await staging.read(stagingIdentity);
+			if (archiveRead.outcome !== 'available')
+				return await stagingUnavailable('Staged Template Package bytes are temporarily unavailable.');
+			// The digest of the exact received bytes anchors the report fingerprint,
+			// so a different package can never inherit an author's confirmation.
+			const sourceDigest = await sha256HexStream({
+				body: archiveRead.body,
+				byteLength: archiveRead.object.byteLength,
+				maximumByteLength: TEMPLATE_PACKAGE_LIMITS.maximumArchiveByteLength,
+			});
+			const hashingTerminal = await terminalOperationAtCheckpoint();
+			if (hashingTerminal)
+				return hashingTerminal;
+
+			operation = await catalogue.updateIngestionOperation(
+				changedOperation(operation, { stage: 'validating' }),
+				operation.updatedAt,
+			);
+
+			const inspection = await inspectStagedTemplatePackage({
+				operation,
+				sourceDigest,
+				readRange: readStagedRange,
+				catalogue,
+				canonical: requireCanonical(),
+			});
+			const derivativeTerminal = await terminalOperationAtCheckpoint();
+			if (derivativeTerminal)
+				return derivativeTerminal;
+
+			// The proposal is durable before the stage that exposes it changes, so a
+			// paused operation can never be observed without the report it paused on.
+			const existing = await catalogue.getTemplatePackagePreflight(
+				operation.id,
+				operation.initiatedBy,
+			);
+			const state: TemplatePackagePreflightState = {
+				report: inspection.report,
+				// A confirmation survives only a proposal that reached the identical
+				// conclusion. Any other outcome discards it and asks again.
+				confirmedFingerprint: existing?.confirmedFingerprint === inspection.report.fingerprint
+					? existing.confirmedFingerprint
+					: undefined,
+				confirmedAt: existing?.confirmedFingerprint === inspection.report.fingerprint
+					? existing.confirmedAt
+					: undefined,
+				derivatives: inspection.derivatives,
+			};
+			const recorded = await catalogueRequest(
+				() => catalogue.updateTemplatePackagePreflight({
+					operationId: operation.id,
+					initiatedBy: operation.initiatedBy,
+					state,
+				}),
+				'Template Package preflight could not be recorded',
+			);
+			if (!recorded) {
+				return await catalogueRequest(
+					() => catalogue.getIngestionOperation(operation.id, operation.initiatedBy),
+					'Graphics ingestion state is temporarily unavailable',
+				) ?? operation;
+			}
+
+			if (state.report.outcome === 'rejected') {
+				// A package this installation cannot accept fails permanently unless
+				// the only thing standing in its way is locally reclaimable capacity.
+				const retryable = state.report.issues.some(
+					issue => issue.severity === 'error' && issue.retryable,
+				);
+				return await failOperation(catalogue, operation, retryable
+					? {
+							code: 'canonical-capacity-exhausted',
+							retryable: true,
+							message: 'Installing this Template Package would exceed canonical capacity.',
+						}
+					: {
+							code: 'validation-failed',
+							retryable: false,
+							message: 'The Template Package did not satisfy this installation\'s requirements.',
+						});
+			}
+
+			return await catalogue.updateIngestionOperation(
+				changedOperation(operation, {
+					// A clean or already-confirmed proposal rests until installation
+					// claims it; anything else pauses for exactly one confirmation.
+					stage: templatePackagePreflightConfirmed(state)
+						? 'awaiting-installation'
+						: 'awaiting-confirmation',
+					failure: undefined,
+				}),
+				operation.updatedAt,
+			);
+		}
+		catch (error) {
+			if (error instanceof TemplatePackageArchiveSourceError)
+				return await stagingUnavailable('Staged Template Package bytes are temporarily unavailable.');
+			if (error instanceof SilentVideoValidationRuntimeError) {
+				return await failOperation(catalogue, operation, {
+					code: 'validation-runtime-unavailable',
+					retryable: true,
+					message: 'Trusted silent-video playback validation is temporarily unavailable.',
+				});
+			}
+			let authoritative: GraphicsIngestionOperation | undefined;
+			try {
+				authoritative = await catalogue.getIngestionOperation(operation.id, operation.initiatedBy);
+			}
+			catch (catalogueError) {
+				throw new GraphicsAssetLibraryError(
+					'Template Package preflight was interrupted while the catalogue was unavailable',
+					'graphics-asset-library-unavailable',
+					{ cause: catalogueError },
+				);
+			}
+			if (authoritative?.stage === 'completed' || authoritative?.stage === 'cancelled')
+				return authoritative;
+			if (authoritative && authoritative.updatedAt !== operation.updatedAt)
+				return authoritative;
+			return await failOperation(catalogue, authoritative ?? operation, {
+				code: 'ingestion-processing-failed',
+				retryable: true,
+				message: 'Template Package preflight was interrupted and can be retried from staged bytes.',
+			});
+		}
+	}
+
 	async function continueGraphicsIngestion(
 		initialOperation: GraphicsIngestionOperation,
 	): Promise<GraphicsIngestionOperation> {
+		if (initialOperation.source === 'template-package')
+			return await continueTemplatePackagePreflight(initialOperation);
 		const catalogue = requireCatalogue();
 		const staging = requireStaging();
 		const canonical = requireCanonical();
@@ -2372,6 +3200,98 @@ export function createGraphicsAssetLibrary(
 				throw new GraphicsAssetLibraryError('Graphics Ingestion Operation not found', 'ingestion-operation-not-found');
 			return operation;
 		},
+		async initiateTemplatePackagePreflight(input) {
+			return await initiateGraphicsOperation({
+				...input,
+				// A package names no asset, so the operation is labelled by what the
+				// author actually handed over. The Template's own name is not known
+				// until the manifest is read, and the label must exist before that.
+				name: input.sourceFileName?.trim() || 'Received Template Package',
+				source: 'template-package',
+				// A package never merges a packaged identity into a local one. Shared
+				// bytes are reused, but each mapping decides its own identity.
+				duplicateContentPolicy: 'create-separate',
+			});
+		},
+		async confirmTemplatePackagePreflight(input) {
+			const catalogue = requireCatalogue();
+			const operation = await this.getIngestionOperation(input);
+			if (operation.source !== 'template-package') {
+				throw new GraphicsAssetLibraryError(
+					'This Graphics Ingestion Operation does not receive a Template Package',
+					'invalid-ingestion-input',
+				);
+			}
+			const state = await catalogueRequest(
+				() => catalogue.getTemplatePackagePreflight(operation.id, operation.initiatedBy),
+				'Template Package preflight is temporarily unavailable',
+			);
+			// Confirming twice is the same act twice, not a conflict, so a repeat of
+			// the confirmation that already succeeded is answered rather than
+			// refused for having left `awaiting-confirmation` behind.
+			if (
+				state?.confirmedFingerprint === input.fingerprint
+				&& operation.stage === 'awaiting-installation'
+			) {
+				return operation;
+			}
+			if (!state || operation.stage !== 'awaiting-confirmation') {
+				throw new GraphicsAssetLibraryError(
+					`Template Package preflight cannot be confirmed from stage ${operation.stage}`,
+					'ingestion-operation-not-uploadable',
+				);
+			}
+			// The fingerprint is the whole point of the pause: it proves the author
+			// accepted this exact package, proposal, and set of warnings, so a report
+			// that has since been superseded cannot be confirmed by an earlier one.
+			if (input.fingerprint !== state.report.fingerprint) {
+				throw new GraphicsAssetLibraryError(
+					'Template Package confirmation does not match the current preflight report',
+					'invalid-ingestion-input',
+				);
+			}
+			// Everything above is a courtesy check against a stale read. The decision
+			// is made by the conditional transition below, which is the only thing
+			// standing between a concurrent retry and an installed proposal nobody
+			// agreed to.
+			const confirmed = await catalogueRequest(
+				() => catalogue.confirmTemplatePackagePreflight({
+					operationId: operation.id,
+					initiatedBy: operation.initiatedBy,
+					fingerprint: input.fingerprint,
+					confirmedAt: timestamp(),
+					updatedAt: timestampAfter(operation.updatedAt),
+				}),
+				'Template Package confirmation could not be recorded',
+			);
+			if (confirmed)
+				return await this.getIngestionOperation(input);
+
+			// The compare-and-set lost. What replaced it decides what the author is
+			// told, so the authoritative state is re-read rather than guessed at.
+			const latest = await this.getIngestionOperation(input);
+			const latestState = await catalogueRequest(
+				() => catalogue.getTemplatePackagePreflight(latest.id, latest.initiatedBy),
+				'Template Package preflight is temporarily unavailable',
+			);
+			// Confirming twice is the same act twice, not a conflict.
+			if (
+				latestState?.confirmedFingerprint === input.fingerprint
+				&& latest.stage === 'awaiting-installation'
+			) {
+				return latest;
+			}
+			if (latestState && latestState.report.fingerprint !== input.fingerprint) {
+				throw new GraphicsAssetLibraryError(
+					'Template Package confirmation does not match the current preflight report',
+					'invalid-ingestion-input',
+				);
+			}
+			throw new GraphicsAssetLibraryError(
+				`Template Package preflight cannot be confirmed from stage ${latest.stage}`,
+				'ingestion-operation-not-uploadable',
+			);
+		},
 		async cancelGraphicsIngestion(input) {
 			const catalogue = requireCatalogue();
 			const operation = await catalogueRequest(
@@ -2787,7 +3707,16 @@ export function createGraphicsAssetLibrary(
 			}
 			const initiatedMime = operation.declaredMime?.trim().toLocaleLowerCase();
 			const transferMime = input.declaredMime?.trim().toLocaleLowerCase();
-			if (initiatedMime && transferMime && initiatedMime !== transferMime) {
+			// A Template Package declares its artifact type in its own manifest, and
+			// preflight holds that declaration to the archive it actually received.
+			// A transfer header disagreeing with it is not a validation report about
+			// one Graphic Asset, so it is left for preflight to judge.
+			if (
+				operation.source !== 'template-package'
+				&& initiatedMime
+				&& transferMime
+				&& initiatedMime !== transferMime
+			) {
 				const sourceKind = graphicAssetSourceKind(operation);
 				const sourcePolicy = GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind];
 				return await failOperation(catalogue, operation, {

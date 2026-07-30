@@ -4,6 +4,8 @@ import {
 	GRAPHICS_PREVIEW_STATE_MESSAGE,
 	isGraphicsPreviewSelectMessage,
 	isGraphicsPreviewStateMessage,
+	readGraphicsPreviewAnimationPlan,
+	readGraphicsPreviewState,
 } from '~/modules/graphics/previewMessages';
 
 const editorWindow = { name: 'editor' };
@@ -72,5 +74,89 @@ describe('graphicsPreviewMessages', () => {
 			source: null,
 			data: { type: GRAPHICS_PREVIEW_SELECT_MESSAGE, target: { type: 'canvas' } },
 		}, { origin: 'https://keepr.test', source: null })).toBe(false);
+	});
+});
+
+describe('readGraphicsPreviewAnimationPlan', () => {
+	const plan = {
+		graphicId: 'lower-third',
+		scope: 'phase',
+		phase: 'enter',
+		run: 3,
+		speed: 0.5,
+		loop: true,
+	};
+
+	it('accepts a well-formed Graphic Animation Preview run', () => {
+		expect(readGraphicsPreviewAnimationPlan(plan)).toEqual(plan);
+	});
+
+	it('drops a run that names no Broadcast Graphic', () => {
+		expect(readGraphicsPreviewAnimationPlan({ ...plan, graphicId: '' })).toBeNull();
+		expect(readGraphicsPreviewAnimationPlan({ ...plan, graphicId: 7 })).toBeNull();
+	});
+
+	it('drops a run outside the lifecycle vocabulary', () => {
+		expect(readGraphicsPreviewAnimationPlan({ ...plan, phase: 'hover' })).toBeNull();
+		expect(readGraphicsPreviewAnimationPlan({ ...plan, scope: 'everything' })).toBeNull();
+	});
+
+	it('drops a speed that would run backwards or not at all', () => {
+		// A non-positive or non-finite speed makes elapsed time meaningless, and the
+		// preview has to hold its Graphic Resting State rather than guess.
+		expect(readGraphicsPreviewAnimationPlan({ ...plan, speed: 0 })).toBeNull();
+		expect(readGraphicsPreviewAnimationPlan({ ...plan, speed: -1 })).toBeNull();
+		expect(readGraphicsPreviewAnimationPlan({ ...plan, speed: Number.POSITIVE_INFINITY })).toBeNull();
+		expect(readGraphicsPreviewAnimationPlan({ ...plan, speed: '2' })).toBeNull();
+	});
+
+	it('drops a malformed run token or loop flag', () => {
+		expect(readGraphicsPreviewAnimationPlan({ ...plan, run: 'first' })).toBeNull();
+		expect(readGraphicsPreviewAnimationPlan({ ...plan, run: Number.NaN })).toBeNull();
+		expect(readGraphicsPreviewAnimationPlan({ ...plan, loop: 'yes' })).toBeNull();
+	});
+
+	it('carries no schedule of its own, so the preview cannot be told when to be', () => {
+		// A run is an instruction, not a timestamp: anything else on it is dropped.
+		expect(readGraphicsPreviewAnimationPlan({ ...plan, startedAt: 12345, elapsed: 900 })).toEqual(plan);
+	});
+
+	it('drops anything that is not a run at all', () => {
+		expect(readGraphicsPreviewAnimationPlan(null)).toBeNull();
+		expect(readGraphicsPreviewAnimationPlan('enter')).toBeNull();
+		expect(readGraphicsPreviewAnimationPlan(undefined)).toBeNull();
+	});
+
+	it('still accepts a state message whose run is absent or malformed', () => {
+		// The working composition has to reach the preview either way; a bad run just
+		// means the preview holds its Graphic Resting State.
+		for (const animation of [undefined, null, { scope: 'phase' }]) {
+			const message = {
+				origin: 'https://keepr.test',
+				source: editorWindow,
+				data: {
+					type: GRAPHICS_PREVIEW_STATE_MESSAGE,
+					state: { graphics: [], selectedTarget: { type: 'canvas' }, animation },
+				},
+			};
+
+			expect(isGraphicsPreviewStateMessage(message, expectedFromEditor)).toBe(true);
+			// The guard does not rewrite the message; the reader normalises it.
+			expect(readGraphicsPreviewState(message.data.state as never).animation).toBeNull();
+		}
+	});
+
+	it('normalises a valid run onto the state it validated', () => {
+		const message = {
+			origin: 'https://keepr.test',
+			source: editorWindow,
+			data: {
+				type: GRAPHICS_PREVIEW_STATE_MESSAGE,
+				state: { graphics: [], selectedTarget: { type: 'canvas' }, animation: { ...plan, startedAt: 5 } },
+			},
+		};
+
+		expect(isGraphicsPreviewStateMessage(message, expectedFromEditor)).toBe(true);
+		expect(readGraphicsPreviewState(message.data.state as never).animation).toEqual(plan);
 	});
 });

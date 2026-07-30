@@ -207,6 +207,169 @@ export interface TemplatePackageExportReport {
 	observed: TemplatePackageTotals & { archiveByteLength: number };
 }
 
+/**
+ * The oldest package schema this installation can migrate forward. A version
+ * below it, or above {@link TEMPLATE_PACKAGE_SCHEMA_VERSION}, cannot be read at
+ * all: guessing at an unknown envelope is how an unsafe package gets installed.
+ */
+export const TEMPLATE_PACKAGE_MINIMUM_MIGRATABLE_SCHEMA_VERSION = 1;
+
+/**
+ * Stable preflight error codes. Every one found is reported together, so an
+ * author sees the complete reason a package cannot be installed rather than the
+ * first reason.
+ *
+ * Anything the package itself got wrong fails the same way however many times it
+ * is retried, so those errors terminate the operation permanently. The exception
+ * is `canonical-capacity-blocked`: nothing is wrong with the package, only with
+ * how much room this installation has, which an administrator can change. It is
+ * marked retryable and the operation stays resumable from its staged bytes.
+ */
+export const TEMPLATE_PACKAGE_PREFLIGHT_ERROR_CODES = [
+	'malformed-package-archive',
+	'unsafe-package-entry-path',
+	'package-entry-path-traversal',
+	'package-entry-link',
+	'duplicate-package-entry-path',
+	'encrypted-package-entry',
+	'compressed-package-entry',
+	'nested-package-archive',
+	'undeclared-package-entry',
+	'unused-packaged-graphic-asset',
+	'missing-package-entry',
+	'inconsistent-package-entry-size',
+	'package-archive-limit-exceeded',
+	'package-expanded-limit-exceeded',
+	'package-entry-limit-exceeded',
+	'packaged-revision-limit-exceeded',
+	'unsupported-package-schema-version',
+	'package-migration-unavailable',
+	'invalid-package-manifest',
+	'unsupported-package-artifact',
+	'invalid-template-document',
+	'remote-resource-dependency',
+	'executable-template-content',
+	'undeclared-graphic-asset-dependency',
+	'unsupported-application-capability',
+	'package-content-digest-mismatch',
+	'incompatible-graphic-asset-content',
+	'derivative-generation-failed',
+	'immutable-origin-digest-conflict',
+	'canonical-capacity-blocked',
+] as const;
+
+/**
+ * Stable preflight warning codes. Warnings never block installation; they pause
+ * it exactly once so the author confirms the proposed result they describe.
+ */
+export const TEMPLATE_PACKAGE_PREFLIGHT_WARNING_CODES = [
+	'package-schema-migrated',
+	'graphic-asset-name-differs',
+	'graphic-asset-compatibility-restricted',
+	'graphic-asset-font-attestation-deferred',
+	'graphic-asset-created-from-related-origin',
+	'graphic-asset-created-from-shared-content',
+] as const;
+
+export type TemplatePackagePreflightErrorCode
+	= typeof TEMPLATE_PACKAGE_PREFLIGHT_ERROR_CODES[number];
+
+export type TemplatePackagePreflightWarningCode
+	= typeof TEMPLATE_PACKAGE_PREFLIGHT_WARNING_CODES[number];
+
+export type TemplatePackagePreflightIssueCode
+	= TemplatePackagePreflightErrorCode | TemplatePackagePreflightWarningCode;
+
+export interface TemplatePackagePreflightIssue {
+	code: TemplatePackagePreflightIssueCode;
+	severity: 'error' | 'warning';
+	/** The archive entry, packaged identity, or Template document path responsible. */
+	subject?: string;
+	message: string;
+	remediation: string;
+	/**
+	 * Whether re-running the operation from its staged bytes could succeed. An
+	 * error about the package's own contents never can; a transient local
+	 * condition such as exhausted capacity can.
+	 */
+	retryable: boolean;
+}
+
+/**
+ * How one packaged identity would become a local Graphic Asset. These are
+ * proposals: preflight decides them, records them in an immutable report, and
+ * installation applies exactly the set the author confirmed.
+ */
+export type TemplatePackageMappingBasis
+	/** The exact source identity, source revision, and digest already exist locally. */
+	= | 'exact-origin'
+	/** The same source identity at a different source revision exists locally. */
+		| 'related-origin-revision'
+	/** Only the content digest matches something local; provenance does not. */
+		| 'shared-content-digest'
+		| 'new-content';
+
+export interface TemplatePackagePreflightMapping {
+	packagedId: string;
+	name: string;
+	kind: 'image' | 'silent-video' | 'font';
+	origin: TemplatePackageAssetOrigin;
+	/**
+	 * Exact-origin matches reuse the local revision untouched. Everything else
+	 * creates a separate local Graphic Asset, sharing canonical bytes when the
+	 * digest already exists but never merging identity or provenance.
+	 */
+	proposal: 'reuse-graphic-asset-revision' | 'create-graphic-asset';
+	basis: TemplatePackageMappingBasis;
+	/** The exact local revision to reuse, present only for an exact-origin match. */
+	reference?: GraphicAssetReference;
+	/** Whether the canonical byte store already holds this content. */
+	contentAlreadyStored: boolean;
+	/** Canonical bytes this mapping would add. Zero when content is shared. */
+	canonicalGrowthBytes: number;
+	/** The differing local name, when a matched local asset carries its own. */
+	localName?: string;
+}
+
+export interface TemplatePackagePreflightQuota {
+	canonicalGrowthBytes: number;
+	canonicalAvailableBytes: number;
+	canonicalLimitBytes: number;
+	pressure: 'normal' | 'warning' | 'critical' | 'full';
+}
+
+/**
+ * The one complete Template Package preflight result. It is immutable once
+ * recorded: its {@link TemplatePackagePreflightReport.fingerprint} covers the
+ * received bytes, the proposed mappings, and the compatibility profiles they
+ * were judged under, so any change to the package, the library, or the proposal
+ * invalidates a confirmation rather than silently installing something else.
+ */
+export interface TemplatePackagePreflightReport {
+	packageKind: TemplatePackageKind;
+	templateIdentity: string;
+	templateName: string;
+	checkedAt: string;
+	fingerprint: string;
+	schema: {
+		received: number;
+		supported: number;
+		migrated: boolean;
+	};
+	/** Every compatibility profile the embedded sources were revalidated under. */
+	compatibilityProfiles: readonly string[];
+	issues: readonly TemplatePackagePreflightIssue[];
+	mappings: readonly TemplatePackagePreflightMapping[];
+	quota: TemplatePackagePreflightQuota;
+	limits: typeof TEMPLATE_PACKAGE_LIMITS;
+	observed: TemplatePackageTotals & { archiveByteLength: number };
+	/**
+	 * `rejected` is terminal. `requires-confirmation` pauses for exactly one
+	 * confirmation bound to the fingerprint. `ready` needs no confirmation.
+	 */
+	outcome: 'ready' | 'requires-confirmation' | 'rejected';
+}
+
 export function templatePackageContentEntry(digest: string): string {
 	return `${TEMPLATE_PACKAGE_CONTENT_ENTRY_PREFIX}sha256-${digest}.bin`;
 }

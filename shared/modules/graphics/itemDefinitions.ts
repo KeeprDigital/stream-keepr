@@ -115,6 +115,37 @@ const DEFINITIONS = {
 			? `${surfaceSummary(item.surfaceStyle)} • ${shapeGeometrySummary(item.geometry)}`
 			: 'Shape',
 	},
+	media: {
+		kind: 'media',
+		label: 'Media',
+		icon: 'i-lucide-image',
+		createDefault: options => ({
+			type: 'media',
+			id: options.id,
+			label: options.label,
+			visible: true,
+			anchor: 'top-left',
+			...defaultRect(options),
+			// An image until an asset says otherwise: the overwhelmingly common case,
+			// and the one whose video-only controls stay out of the author's way.
+			mediaKind: 'image',
+			// Cover fills the authored bounds, which is what an author who just placed
+			// a rectangle for a picture means. Focal position then decides what
+			// survives the crop, so it starts at the centre.
+			fit: 'cover',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+			playbackRate: 1,
+			loop: true,
+		}),
+		summary: (item) => {
+			if (item.type !== 'media')
+				return 'Media';
+			if (!item.asset)
+				return 'No Graphic Asset';
+			return `${item.mediaKind === 'silent-video' ? 'silent video' : 'image'} • ${item.fit}`;
+		},
+	},
 	group: {
 		kind: 'group',
 		label: 'Group',

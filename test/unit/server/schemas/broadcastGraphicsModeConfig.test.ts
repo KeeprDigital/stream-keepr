@@ -3,12 +3,31 @@ import {
 	broadcastGraphicsModeConfigSchema,
 	MAX_BROADCAST_GRAPHICS_PER_SCREEN,
 	MAX_GRAPHIC_GROUP_CHILDREN,
+	MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC,
+	MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN,
 	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
 	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN,
+	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES,
+	MAX_GRAPHIC_PLACEHOLDER_STYLES_PER_TEXT_ITEM,
+	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
+	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 	modeConfigPatchSchemaMap,
 	modeConfigsMapSchema,
 } from '~~/server/schemas/api/screen';
-import { MAX_GRAPHIC_TEXT_LENGTH } from '~~/shared/types/graphics';
+import {
+	GRAPHIC_ANIMATION_EASING_VALUES,
+	GRAPHIC_SLIDE_DIRECTION_VALUES,
+	MAX_GRAPHIC_ANIMATION_DELAY_MS,
+	MAX_GRAPHIC_ANIMATION_DURATION_MS,
+	MAX_GRAPHIC_ANIMATION_SCALE,
+	MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS,
+	MAX_GRAPHIC_INPUT_CHOICE_LENGTH,
+	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
+	MAX_GRAPHIC_INPUT_KEY_LENGTH,
+	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
+	MAX_GRAPHIC_TEXT_LENGTH,
+	MIN_GRAPHIC_ANIMATION_DURATION_MS,
+} from '~~/shared/types/graphics';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
 const SQUARE = { treatment: 'square' as const, size: 0 };
@@ -38,6 +57,28 @@ function shapeItem(id: string, overrides: Record<string, unknown> = {}) {
 	};
 }
 
+function mediaItem(id: string, overrides: Record<string, unknown> = {}) {
+	return {
+		type: 'media' as const,
+		id,
+		label: id,
+		visible: true,
+		anchor: 'top-left' as const,
+		x: 0,
+		y: 0,
+		width: 10,
+		height: 10,
+		asset: { assetId: 'asset-1', revisionId: 'revision-1' },
+		mediaKind: 'image' as const,
+		fit: 'cover' as const,
+		focalPosition: { horizontal: 0.5, vertical: 0.5 },
+		opacity: 1,
+		playbackRate: 1,
+		loop: true,
+		...overrides,
+	};
+}
+
 function graphic(id: string, itemCount = 0) {
 	return {
 		id,
@@ -55,6 +96,42 @@ const WORST_GEOMETRY = {
 	leftSlant: -9999.5,
 	rightSlant: 9999.5,
 };
+/** The most expensive Graphic Animation Recipe the schema accepts. */
+const WORST_RECIPE = {
+	duration: 9999.5,
+	easing: 'ease-in-out' as const,
+	delay: 9999.5,
+	fade: { opacity: 0.85 },
+	slide: { direction: 'north-east' as const, distanceMode: 'clear-parent' as const, distance: 9999.5 },
+	scale: { factor: 1.95, origin: 'bottom-right' as const },
+	reveal: { edge: 'bottom' as const },
+};
+
+/** Every lifecycle phase animated, which is the most an owner may carry. */
+const WORST_ANIMATION = {
+	'enter': WORST_RECIPE,
+	'on-screen': { ...WORST_RECIPE, pause: 59999.5, repeat: 100 },
+	'update': WORST_RECIPE,
+	'exit': WORST_RECIPE,
+};
+
+/** A container's stagger, naming every direct item it could name. */
+function worstStagger(itemIds: string[]) {
+	return { order: 'reverse-list' as const, step: 9999.5, itemIds };
+}
+
+function worstContainerAnimation(itemIds: string[]) {
+	return {
+		...WORST_ANIMATION,
+		stagger: {
+			'enter': worstStagger(itemIds),
+			'on-screen': worstStagger(itemIds),
+			'update': worstStagger(itemIds),
+			'exit': worstStagger(itemIds),
+		},
+	};
+}
+
 const WORST_SURFACE_STYLE = {
 	fill: {
 		type: 'linear-gradient' as const,
@@ -73,6 +150,20 @@ const WORST_SURFACE_STYLE = {
 /** The most expensive Graphic Item the schema accepts, used for the byte budget. */
 function worstCaseItem(id: string) {
 	return {
+		placeholderStyles: Object.fromEntries(
+			Array.from({ length: MAX_GRAPHIC_PLACEHOLDER_STYLES_PER_TEXT_ITEM }, (_, index) => [
+				`k${index}`.padEnd(MAX_GRAPHIC_INPUT_KEY_LENGTH, 'k'),
+				{
+					fontId: 'inter' as const,
+					fontSize: 599.5,
+					fontWeight: 900,
+					fontStyle: 'italic' as const,
+					textTransform: 'uppercase' as const,
+					letterSpacing: -19.5,
+					color: '#0077a3',
+				},
+			]),
+		),
 		type: 'text' as const,
 		id,
 		label: 'L'.repeat(100),
@@ -84,7 +175,6 @@ function worstCaseItem(id: string) {
 		width: 9999.5,
 		height: 9999.5,
 		text: 'T'.repeat(MAX_GRAPHIC_TEXT_LENGTH),
-		sizing: { mode: 'fill' as const, size: 9999.5, weight: 99.5 },
 		typography: {
 			fontId: 'inter' as const,
 			fontSize: 599.5,
@@ -99,6 +189,51 @@ function worstCaseItem(id: string) {
 		overflowPolicy: 'shrink' as const,
 		minFontSize: 24.5,
 		surfaceStyle: WORST_SURFACE_STYLE,
+		animation: WORST_ANIMATION,
+	};
+}
+
+/** The most expensive Graphic Input the schema accepts: a full choice list. */
+function worstCaseChoiceInput(key: string) {
+	return {
+		type: 'choice' as const,
+		key: key.padEnd(MAX_GRAPHIC_INPUT_KEY_LENGTH, 'k'),
+		label: 'L'.repeat(MAX_GRAPHIC_INPUT_LABEL_LENGTH),
+		required: true,
+		updatePolicy: 'staged' as const,
+		default: 'd'.repeat(MAX_GRAPHIC_INPUT_CHOICE_LENGTH),
+		options: Array.from({ length: MAX_GRAPHIC_INPUT_CHOICE_OPTIONS }, () => ({
+			value: 'v'.repeat(MAX_GRAPHIC_INPUT_CHOICE_LENGTH),
+			label: 'L'.repeat(MAX_GRAPHIC_INPUT_CHOICE_LENGTH),
+		})),
+	};
+}
+
+function worstCaseBinding(inputKey: string) {
+	return {
+		inputKey: inputKey.padEnd(MAX_GRAPHIC_INPUT_KEY_LENGTH, 'k'),
+		sourceKey: 's'.repeat(MAX_GRAPHIC_INPUT_KEY_LENGTH),
+		fieldId: 'f'.repeat(100),
+	};
+}
+
+function worstCaseSource(key: string) {
+	return {
+		key: key.padEnd(MAX_GRAPHIC_INPUT_KEY_LENGTH, 's'),
+		label: 'L'.repeat(MAX_GRAPHIC_INPUT_LABEL_LENGTH),
+		kind: 'feature-match-slot' as const,
+	};
+}
+
+function textInput(key: string) {
+	return {
+		type: 'text' as const,
+		key,
+		label: key,
+		required: false,
+		updatePolicy: 'staged' as const,
+		default: '',
+		maxLength: MAX_GRAPHIC_TEXT_LENGTH,
 	};
 }
 
@@ -127,9 +262,13 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		});
 
 		expect(result.success).toBe(false);
-		expect(messages(result)).toEqual([
+		// One Broadcast Graphic may fill the whole Screen's Graphic Item budget, so
+		// these two caps coincide and overrunning the per-graphic one reports both.
+		// Either way the operator reads a named limit rather than a byte count.
+		expect(messages(result)).toContain(
 			`A Broadcast Graphic must not contain more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC} Graphic Items`,
-		]);
+		);
+		expect(messages(result).every(message => !message.includes('bytes'))).toBe(true);
 	});
 
 	it('names the whole-Screen Graphic Item cap rather than reporting a byte count', () => {
@@ -173,65 +312,266 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 			}],
 		});
 
-		const withinCap = Array.from({ length: 3 }, (_, index) => groupOf(`g${index}`, MAX_GRAPHIC_GROUP_CHILDREN));
-		const overCap = Array.from({ length: 5 }, (_, index) => groupOf(`g${index}`, MAX_GRAPHIC_GROUP_CHILDREN));
+		const perGroup = MAX_GRAPHIC_GROUP_CHILDREN + 1;
+		const withinCap = Array.from(
+			{ length: Math.floor(MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN / perGroup) },
+			(_, index) => groupOf(`g${index}`, MAX_GRAPHIC_GROUP_CHILDREN),
+		);
+		const overCap = Array.from(
+			{ length: Math.ceil((MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN + 1) / perGroup) },
+			(_, index) => groupOf(`g${index}`, MAX_GRAPHIC_GROUP_CHILDREN),
+		);
 
 		expect(broadcastGraphicsModeConfigSchema.safeParse({ graphics: withinCap }).success).toBe(true);
 		expect(broadcastGraphicsModeConfigSchema.safeParse({ graphics: overCap }).success).toBe(false);
 	});
 
 	it('accepts a stack at the whole-Screen Graphic Item cap', () => {
+		// One Broadcast Graphic filled to its own cap, and the rest sharing whatever
+		// the whole-Screen cap has left.
+		const spare = MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN - MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC;
 		const graphics = Array.from(
 			{ length: MAX_BROADCAST_GRAPHICS_PER_SCREEN },
-			(_, index) => graphic(`graphic-${index}`, index === 0 ? MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC : 2),
+			(_, index) => graphic(
+				`graphic-${index}`,
+				index === 0 ? MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC : (index <= spare ? 1 : 0),
+			),
 		);
 
 		expect(broadcastGraphicsModeConfigSchema.safeParse({ graphics }).success).toBe(true);
 	});
 
+	it('accepts one Broadcast Graphic filled to the per-graphic Graphic Item cap', () => {
+		const graphics = [graphic('lower-third', MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC)];
+
+		expect(broadcastGraphicsModeConfigSchema.safeParse({ graphics }).success).toBe(true);
+	});
+
 	it('keeps a worst-case authored Screen inside the mode-configuration byte limit', () => {
-		// The named Graphic Item cap has to bind before the byte limit, or an
-		// operator reads an opaque byte count instead of the limit they reached. The
-		// most expensive Graphic Item the schema accepts is a Graphic Group child, so
-		// this fills the cap with those.
+		// The named caps have to bind before the byte limit, or an operator reads an
+		// opaque byte count instead of the limit they reached. This is the most
+		// expensive Screen every cap together still admits: every Graphic Item slot
+		// filled with a maximal Text Graphic Item carrying maximal Graphic Placeholder
+		// Styles, every Graphic Input slot filled with a maximal choice input, and
+		// every binding, Graphic Source Selection, and Broadcast Graphic shell present.
+		const graphics = Array.from({ length: MAX_BROADCAST_GRAPHICS_PER_SCREEN }, (_, index) => ({
+			id: `graphic-${index}`,
+			name: 'N'.repeat(100),
+			items: [] as ReturnType<typeof worstCaseItem>[],
+			inputs: [] as ReturnType<typeof worstCaseChoiceInput>[],
+			bindings: [] as ReturnType<typeof worstCaseBinding>[],
+			sources: [] as ReturnType<typeof worstCaseSource>[],
+			animation: undefined as ReturnType<typeof worstContainerAnimation> | undefined,
+		}));
+
+		function fill(total: number, perGraphic: number, add: (graphic: typeof graphics[number], index: number) => void) {
+			let remaining = total;
+			for (const graphic of graphics) {
+				for (let index = 0; index < perGraphic && remaining > 0; index += 1, remaining -= 1)
+					add(graphic, total - remaining);
+			}
+			expect(remaining).toBe(0);
+		}
+
+		fill(
+			MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN,
+			MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
+			(graphic, index) => graphic.items.push(worstCaseItem(`item-${index}`)),
+		);
+		fill(
+			MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN,
+			MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC,
+			(graphic, index) => {
+				graphic.inputs.push(worstCaseChoiceInput(`k${index}`));
+				graphic.bindings.push(worstCaseBinding(`k${index}`));
+			},
+		);
+		fill(
+			MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
+			MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
+			(graphic, index) => graphic.sources.push(worstCaseSource(`s${index}`)),
+		);
+
+		// A Broadcast Graphic owns whole-graphic motion as well as its items' own, and
+		// staggers those items per phase. Leaving the shells unanimated would understate
+		// the worst case by the most expensive thing a shell can carry.
+		for (const graphic of graphics)
+			graphic.animation = worstContainerAnimation(graphic.items.map(item => item.id));
+
+		const config = { graphics };
+		const bytes = new TextEncoder().encode(JSON.stringify(config)).byteLength;
+
+		// Every named cap admits it — that is what makes it the worst case the caps
+		// allow rather than an arbitrary large Screen.
+		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(true);
+
+		// The figure the caps are justified by, so the schema's own arithmetic is
+		// checked rather than described. Lowering a cap without measuring, or raising
+		// one, has to move this number.
+		expect(bytes).toBe(MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES);
+
+		// And the mode-configuration byte total refuses it.
+		//
+		// This is a change of kind, not of degree. Before Graphic Animation the worst
+		// case the caps allow *fitted* the budget, which is what let the named caps
+		// bind first and an operator read which limit they reached. Animation adds
+		// 1,039 bytes to every Graphic Item and 2,115 to every Broadcast Graphic
+		// shell, taking the worst case from 413,241 to 596,673 against a 524,288
+		// limit — so an author who somehow filled every cap at once now reads a byte
+		// count instead.
+		//
+		// Media Graphic Items do not contribute to this. A maximal animated Media
+		// Graphic Item is 1,906 bytes against 3,704 for a maximal animated Text
+		// Graphic Item, so the worst case is built from text and adding a cheaper item
+		// kind cannot move it.
+		//
+		// It is asserted rather than fixed here because the fix is a cap, and this
+		// ticket does not own the cap: two tickets already cut it independently, each
+		// measuring correctly and each blind to the other. #99 owns the merged
+		// measurement and decides whether to lower a cap or accept that the worst case
+		// need not fit — the latter being sound now that the total is actually enforced
+		// on the editors' write path.
+		expect(modeConfigsMapSchema.safeParse({ 'broadcast-graphics': config }).success).toBe(false);
+		expect(bytes).toBeGreaterThan(512 * 1024);
+	});
+
+	it('names the whole-Screen Graphic Input cap rather than reporting a byte count', () => {
+		const perGraphic = MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC;
+		const graphics = Array.from(
+			{ length: Math.ceil((MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN + 1) / perGraphic) },
+			(_, index) => ({
+				...graphic(`graphic-${index}`),
+				inputs: Array.from({ length: perGraphic }, (_, entry) => textInput(`k${index}x${entry}`)),
+			}),
+		);
+
+		const result = broadcastGraphicsModeConfigSchema.safeParse({ graphics });
+
+		expect(result.success).toBe(false);
+		expect(messages(result)).toContain(
+			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Inputs in total`,
+		);
+	});
+
+	it('applies the whole-Screen Graphic Input cap on the patch path the editor writes through', () => {
+		// Same reason the Graphic Item cap lives on the array: the patch schema rebuilds
+		// each mode from its field schemas and drops object-level refinements.
+		const perGraphic = MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC;
+		const graphics = Array.from(
+			{ length: Math.ceil((MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN + 1) / perGraphic) },
+			(_, index) => ({
+				...graphic(`graphic-${index}`),
+				inputs: Array.from({ length: perGraphic }, (_, entry) => textInput(`k${index}x${entry}`)),
+			}),
+		);
+
+		const result = modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({ graphics });
+
+		expect(result.success).toBe(false);
+		expect(messages(result)).toContain(
+			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Inputs in total`,
+		);
+	});
+
+	it('rejects two Graphic Inputs sharing one key, and two bindings for one input', () => {
+		// Every placeholder, binding, and Live Control edit addresses an input by key
+		// alone, so a duplicate would render, bind, and edit whichever came first.
+		const duplicateKeys = broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [{ ...graphic('lower-third'), inputs: [textInput('name'), textInput('name')] }],
+		});
+		const duplicateBindings = broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [{
+				...graphic('lower-third'),
+				inputs: [textInput('name')],
+				sources: [worstCaseSource('player')],
+				bindings: [worstCaseBinding('name'), worstCaseBinding('name')],
+			}],
+		});
+
+		expect(messages(duplicateKeys)).toContain('Graphic Input keys must be unique within one Broadcast Graphic');
+		expect(messages(duplicateBindings)).toContain('A Graphic Input may have at most one Graphic Input Binding');
+	});
+
+	it('rejects a Graphic Input key a Graphic Text Template could not name', () => {
+		const result = broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [{ ...graphic('lower-third'), inputs: [textInput('2 names')] }],
+		});
+
+		expect(result.success).toBe(false);
+	});
+
+	it('caps the Graphic Placeholder Styles one Text Graphic Item may define', () => {
+		const styles = (count: number) => Object.fromEntries(
+			Array.from({ length: count }, (_, index) => [`k${index}`, { fontWeight: 700 }]),
+		);
+		const withStyles = (count: number) => ({
+			graphics: [{
+				...graphic('lower-third'),
+				items: [{ ...worstCaseItem('t'), placeholderStyles: styles(count) }],
+			}],
+		});
+
+		expect(broadcastGraphicsModeConfigSchema.safeParse(
+			withStyles(MAX_GRAPHIC_PLACEHOLDER_STYLES_PER_TEXT_ITEM),
+		).success).toBe(true);
+		expect(broadcastGraphicsModeConfigSchema.safeParse(
+			withStyles(MAX_GRAPHIC_PLACEHOLDER_STYLES_PER_TEXT_ITEM + 1),
+		).success).toBe(false);
+	});
+
+	it('costs no more with a Graphic Group holding the same animated Graphic Items', () => {
+		// The other shape the cap has to survive: fewer Broadcast Graphics, each
+		// spending its items on a Graphic Group and animated children. It measures
+		// smaller than the maximal-shell case above, which is why that one is the
+		// figure the cap is justified by.
 		const perGroup = 4;
 		const graphics = Array.from(
 			{ length: MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN / (perGroup + 1) },
-			(_, index) => ({
-				id: `graphic-${index}`,
-				name: 'N'.repeat(100),
-				items: [{
-					type: 'group' as const,
-					id: `group-${index}`,
-					label: 'L'.repeat(100),
-					visible: true,
-					anchor: 'bottom-right' as const,
-					rotation: -359.99,
-					x: -9999.5,
-					y: -9999.5,
-					width: 9999.5,
-					height: 9999.5,
-					arrangement: 'column' as const,
-					padding: 9999.5,
-					gap: 9999.5,
-					align: 'stretch' as const,
-					justify: 'space-between' as const,
-					clip: true,
-					geometry: WORST_GEOMETRY,
-					surfaceStyle: WORST_SURFACE_STYLE,
-					defaultChildSurfaceStyle: WORST_SURFACE_STYLE,
-					children: Array.from({ length: perGroup }, (_, item) => worstCaseItem(`item-${index}-${item}`)),
-				}],
-			}),
+			(_, index) => {
+				const children = Array.from({ length: perGroup }, (_, item) => worstCaseItem(`item-${index}-${item}`));
+				return {
+					id: `graphic-${index}`,
+					name: 'N'.repeat(100),
+					items: [{
+						type: 'group' as const,
+						id: `group-${index}`,
+						label: 'L'.repeat(100),
+						visible: true,
+						anchor: 'bottom-right' as const,
+						rotation: -359.99,
+						x: -9999.5,
+						y: -9999.5,
+						width: 9999.5,
+						height: 9999.5,
+						arrangement: 'column' as const,
+						padding: 9999.5,
+						gap: 9999.5,
+						align: 'stretch' as const,
+						justify: 'space-between' as const,
+						clip: true,
+						geometry: WORST_GEOMETRY,
+						surfaceStyle: WORST_SURFACE_STYLE,
+						defaultChildSurfaceStyle: WORST_SURFACE_STYLE,
+						animation: worstContainerAnimation(children.map(child => child.id)),
+						children,
+					}],
+					animation: worstContainerAnimation([`group-${index}`]),
+				};
+			},
 		);
 
 		const config = { graphics };
 		const bytes = new TextEncoder().encode(JSON.stringify(config)).byteLength;
 
 		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(true);
+		// Measured, and it still fits: gathering the same animated Graphic Items into
+		// Graphic Groups is cheaper than spreading them across maximal Broadcast
+		// Graphic shells, because a shell carries its own animation, stagger, Graphic
+		// Inputs, and Graphic Source Selections. That contrast is why "which worst
+		// case" has to be a measured choice rather than an assumption — the maximal-
+		// shell shape above is the one that binds.
 		expect(modeConfigsMapSchema.safeParse({ 'broadcast-graphics': config }).success).toBe(true);
-		// The figure the cap is justified by, so the schema's own arithmetic is checked.
-		expect(bytes).toBeLessThan(410 * 1024);
+		expect(bytes).toBe(425_322);
 	});
 
 	it('applies the whole-Screen Graphic Item cap on the patch path the editor writes through', () => {
@@ -284,11 +624,112 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 			graphics: [{
 				id: 'a',
 				name: 'A',
-				items: [{ type: 'media', id: 'logo', label: 'Media 1', visible: true, anchor: 'top-left', x: 0, y: 0, width: 10, height: 10 }],
+				items: [{ type: 'gauge', id: 'meter', label: 'Meter', visible: true, anchor: 'top-left', x: 0, y: 0, width: 10, height: 10 }],
 			}],
 		});
 
 		expect(result.success).toBe(false);
+	});
+
+	describe('media Graphic Items', () => {
+		function withItems(items: Array<Record<string, unknown>>) {
+			return broadcastGraphicsModeConfigSchema.safeParse({
+				graphics: [{ id: 'a', name: 'A', items }],
+			});
+		}
+
+		it('accepts a Media Graphic Item pinning one exact identity and revision', () => {
+			const result = withItems([mediaItem('logo')]);
+
+			expect(result.success).toBe(true);
+			const item = result.data?.graphics[0]?.items[0];
+			expect(item?.type === 'media' && item.asset).toEqual({ assetId: 'asset-1', revisionId: 'revision-1' });
+		});
+
+		it('accepts one with no asset pinned, and none with a partial reference', () => {
+			// An author places the rectangle before choosing content, so an absent asset
+			// is a complete item. Half a reference is not: it pins no exact revision.
+			expect(withItems([mediaItem('logo', { asset: undefined })]).success).toBe(true);
+			expect(withItems([mediaItem('logo', { asset: { assetId: 'asset-1' } })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { asset: { revisionId: 'revision-1' } })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { asset: { assetId: 'asset-1', revisionId: 'revision-1', latest: true } })]).success).toBe(false);
+		});
+
+		it('bounds fitting, focal position, opacity, and playback rate', () => {
+			expect(withItems([mediaItem('logo', { fit: 'stretch' })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { mediaKind: 'audio' })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { focalPosition: { horizontal: 1.5, vertical: 0.5 } })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { focalPosition: { horizontal: 0.5 } })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { opacity: -0.1 })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { playbackRate: 0 })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { playbackRate: 8 })]).success).toBe(false);
+			expect(withItems([mediaItem('logo', { playbackRate: 0.25 })]).success).toBe(true);
+			expect(withItems([mediaItem('logo', { playbackRate: 4 })]).success).toBe(true);
+		});
+
+		it('clips with the canonical Shape Geometry, and rejects the media-clip encoding', () => {
+			// The canonical Shape Geometry states a flat treatment and size per corner
+			// and a signed slant per edge. The Feature Match Overlay media fork encodes
+			// a corner as a tagged union and a slant as an optional unsigned inset, and
+			// must not be accepted here.
+			expect(withItems([mediaItem('logo', { clipGeometry: GEOMETRY })]).success).toBe(true);
+			expect(withItems([mediaItem('logo', { clipGeometry: undefined })]).success).toBe(true);
+			expect(withItems([mediaItem('logo', {
+				clipGeometry: {
+					topLeft: { kind: 'rounded', size: 8 },
+					topRight: { kind: 'square' },
+					bottomRight: { kind: 'square' },
+					bottomLeft: { kind: 'square' },
+					leftEdgeSlant: 4,
+				},
+			})]).success).toBe(false);
+		});
+
+		it('rejects a Graphic Surface Style on a Media Graphic Item', () => {
+			// It paints an asset, not a surface, so a fill would be an unread field the
+			// compositor silently ignores.
+			expect(withItems([mediaItem('logo', {
+				surfaceStyle: { fill: { type: 'solid', color: '#ffffff' }, fillOpacity: 1 },
+			})]).success).toBe(false);
+		});
+
+		it('accepts a Media Graphic Item as a Graphic Group child with main-axis sizing', () => {
+			const result = withItems([{
+				type: 'group',
+				id: 'cluster',
+				label: 'Cluster',
+				visible: true,
+				anchor: 'top-left',
+				x: 0,
+				y: 0,
+				width: 100,
+				height: 50,
+				arrangement: 'row',
+				padding: 0,
+				gap: 0,
+				align: 'stretch',
+				justify: 'start',
+				clip: false,
+				geometry: GEOMETRY,
+				children: [mediaItem('badge', { sizing: { mode: 'fill', size: 0, weight: 2 } })],
+			}]);
+
+			expect(result.success).toBe(true);
+		});
+
+		it('rejects main-axis sizing on a top-level Media Graphic Item', () => {
+			// Only a Graphic Group child has a group to be sized inside.
+			expect(withItems([mediaItem('logo', { sizing: { mode: 'fill', size: 0, weight: 2 } })]).success).toBe(false);
+		});
+
+		it('counts a Media Graphic Item towards the whole-Screen Graphic Item cap', () => {
+			const overCap = Array.from(
+				{ length: MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN + 1 },
+				(_, index) => mediaItem(`logo-${index}`),
+			);
+
+			expect(withItems(overCap).success).toBe(false);
+		});
 	});
 
 	it('rejects a Graphic Group inside a Graphic Group', () => {
@@ -451,5 +892,162 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		});
 
 		expect(result.success).toBe(false);
+	});
+});
+
+describe('graphic Animation bounds', () => {
+	function withItemAnimation(animation: unknown) {
+		return broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [{ id: 'a', name: 'A', items: [shapeItem('bar', { animation })] }],
+		});
+	}
+
+	function withGraphicAnimation(animation: unknown) {
+		return broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [{ id: 'a', name: 'A', items: [shapeItem('bar')], animation }],
+		});
+	}
+
+	const recipe = { duration: 400, easing: 'ease-out' as const, delay: 0 };
+
+	it('accepts a Broadcast Graphic and a Graphic Item with no Graphic Animation at all', () => {
+		// A newly authored graphic or item has no recipes until its author enables them.
+		expect(withItemAnimation(undefined).success).toBe(true);
+		expect(withGraphicAnimation(undefined).success).toBe(true);
+	});
+
+	it('bounds a recipe duration to the settled 50ms to 10s range', () => {
+		expect(withItemAnimation({ enter: { ...recipe, duration: MIN_GRAPHIC_ANIMATION_DURATION_MS } }).success).toBe(true);
+		expect(withItemAnimation({ enter: { ...recipe, duration: MAX_GRAPHIC_ANIMATION_DURATION_MS } }).success).toBe(true);
+		expect(withItemAnimation({ enter: { ...recipe, duration: MIN_GRAPHIC_ANIMATION_DURATION_MS - 1 } }).success).toBe(false);
+		expect(withItemAnimation({ enter: { ...recipe, duration: MAX_GRAPHIC_ANIMATION_DURATION_MS + 1 } }).success).toBe(false);
+	});
+
+	it('bounds a delay to ten seconds and refuses a negative one', () => {
+		expect(withItemAnimation({ enter: { ...recipe, delay: MAX_GRAPHIC_ANIMATION_DELAY_MS } }).success).toBe(true);
+		expect(withItemAnimation({ enter: { ...recipe, delay: MAX_GRAPHIC_ANIMATION_DELAY_MS + 1 } }).success).toBe(false);
+		expect(withItemAnimation({ enter: { ...recipe, delay: -1 } }).success).toBe(false);
+	});
+
+	it('accepts only the seven bounded easings', () => {
+		for (const easing of GRAPHIC_ANIMATION_EASING_VALUES)
+			expect(withItemAnimation({ enter: { ...recipe, easing } }).success).toBe(true);
+
+		expect(withItemAnimation({ enter: { ...recipe, easing: 'cubic-bezier(0,0,1,1)' } }).success).toBe(false);
+		expect(GRAPHIC_ANIMATION_EASING_VALUES).toHaveLength(7);
+	});
+
+	it('bounds a fade channel to a zero-to-one reduction', () => {
+		expect(withItemAnimation({ enter: { ...recipe, fade: { opacity: 0 } } }).success).toBe(true);
+		expect(withItemAnimation({ enter: { ...recipe, fade: { opacity: 1 } } }).success).toBe(true);
+		expect(withItemAnimation({ enter: { ...recipe, fade: { opacity: -0.1 } } }).success).toBe(false);
+		expect(withItemAnimation({ enter: { ...recipe, fade: { opacity: 1.1 } } }).success).toBe(false);
+	});
+
+	it('bounds a scale channel to zero through twice the resting size, about one of nine origins', () => {
+		expect(withItemAnimation({ enter: { ...recipe, scale: { factor: 0, origin: 'center' } } }).success).toBe(true);
+		expect(withItemAnimation({ enter: { ...recipe, scale: { factor: MAX_GRAPHIC_ANIMATION_SCALE, origin: 'top-left' } } }).success).toBe(true);
+		expect(withItemAnimation({ enter: { ...recipe, scale: { factor: MAX_GRAPHIC_ANIMATION_SCALE + 0.01, origin: 'center' } } }).success).toBe(false);
+		expect(withItemAnimation({ enter: { ...recipe, scale: { factor: 1, origin: 'middle' } } }).success).toBe(false);
+	});
+
+	it('accepts a slide channel on any of eight compass directions, fixed or clearing its parent', () => {
+		for (const direction of GRAPHIC_SLIDE_DIRECTION_VALUES) {
+			expect(withItemAnimation({
+				enter: { ...recipe, slide: { direction, distanceMode: 'fixed', distance: 100 } },
+			}).success).toBe(true);
+		}
+
+		expect(withItemAnimation({
+			enter: { ...recipe, slide: { direction: 'north', distanceMode: 'clear-parent', distance: 0 } },
+		}).success).toBe(true);
+		expect(withItemAnimation({
+			enter: { ...recipe, slide: { direction: 'north', distanceMode: 'fixed', distance: -1 } },
+		}).success).toBe(false);
+		expect(withItemAnimation({
+			enter: { ...recipe, slide: { direction: 'inward', distanceMode: 'fixed', distance: 1 } },
+		}).success).toBe(false);
+	});
+
+	it('wipes a reveal channel from one of four edges', () => {
+		expect(withItemAnimation({ enter: { ...recipe, reveal: { edge: 'bottom' } } }).success).toBe(true);
+		expect(withItemAnimation({ enter: { ...recipe, reveal: { edge: 'diagonal' } } }).success).toBe(false);
+	});
+
+	it('bounds on-screen repetition to one through 100 cycles or indefinitely, with a pause up to a minute', () => {
+		const onScreen = (patch: Record<string, unknown>) =>
+			withItemAnimation({ 'on-screen': { ...recipe, pause: 0, repeat: 1, ...patch } }).success;
+
+		expect(onScreen({})).toBe(true);
+		expect(onScreen({ repeat: 100 })).toBe(true);
+		expect(onScreen({ repeat: 'indefinite' })).toBe(true);
+		expect(onScreen({ repeat: 0 })).toBe(false);
+		expect(onScreen({ repeat: 101 })).toBe(false);
+		expect(onScreen({ repeat: 1.5 })).toBe(false);
+		expect(onScreen({ repeat: 'forever' })).toBe(false);
+		expect(onScreen({ pause: 60000 })).toBe(true);
+		expect(onScreen({ pause: 60001 })).toBe(false);
+	});
+
+	it('refuses on-screen repetition and pause on a phase that does not cycle', () => {
+		expect(withItemAnimation({ enter: { ...recipe, pause: 0, repeat: 2 } }).success).toBe(false);
+	});
+
+	it('holds at most one recipe per lifecycle phase, and refuses an unknown phase', () => {
+		expect(withItemAnimation({
+			'enter': recipe,
+			'on-screen': { ...recipe, pause: 0, repeat: 1 },
+			'update': recipe,
+			'exit': recipe,
+		}).success).toBe(true);
+		expect(withItemAnimation({ hover: recipe }).success).toBe(false);
+	});
+
+	it('refuses arbitrary transforms the vocabulary does not include', () => {
+		// Rotation, skew, perspective, filters, and shape morphing are outside
+		// Graphic Animation, which the strict recipe schema states by rejecting them.
+		expect(withItemAnimation({ enter: { ...recipe, rotate: { degrees: 90 } } }).success).toBe(false);
+		expect(withItemAnimation({ enter: { ...recipe, skew: { x: 10 } } }).success).toBe(false);
+		expect(withItemAnimation({ enter: { ...recipe, blur: { radius: 4 } } }).success).toBe(false);
+		expect(withItemAnimation({ enter: { ...recipe, keyframes: [] } }).success).toBe(false);
+	});
+
+	it('lets a Broadcast Graphic and a Graphic Group stagger their direct items, and nothing else', () => {
+		const stagger = { order: 'reverse-list' as const, step: 120, itemIds: ['bar'] };
+
+		expect(withGraphicAnimation({ stagger: { exit: stagger } }).success).toBe(true);
+		// A Text or Shape Graphic Item has no direct items to order.
+		expect(withItemAnimation({ stagger: { exit: stagger } }).success).toBe(false);
+	});
+
+	it('bounds a stagger step to ten seconds', () => {
+		const stagger = (step: number) => withGraphicAnimation({
+			stagger: { enter: { order: 'list', step, itemIds: ['bar'] } },
+		}).success;
+
+		expect(stagger(MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS)).toBe(true);
+		expect(stagger(MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS + 1)).toBe(false);
+		expect(stagger(-1)).toBe(false);
+	});
+
+	it('accepts a stagger naming an item that is no longer in the composition', () => {
+		// An author who deletes a staggered Graphic Item must not have their next
+		// write refused; a stale id is ignored when the phase is projected instead.
+		expect(withGraphicAnimation({
+			stagger: { enter: { order: 'list', step: 100, itemIds: ['deleted'] } },
+		}).success).toBe(true);
+	});
+
+	it('applies every animation bound on the patch path the editor writes through', () => {
+		// The patch schema rebuilds each mode from its field schemas, so a bound that
+		// only held on a full-config write would never reach a real edit.
+		const patch = modeConfigPatchSchemaMap['broadcast-graphics'];
+		const withDuration = (duration: number) => patch.safeParse({
+			graphics: [{ id: 'a', name: 'A', items: [shapeItem('bar', { animation: { enter: { ...recipe, duration } } })] }],
+		}).success;
+
+		expect(withDuration(400)).toBe(true);
+		expect(withDuration(MAX_GRAPHIC_ANIMATION_DURATION_MS + 1)).toBe(false);
+		expect(withDuration(MIN_GRAPHIC_ANIMATION_DURATION_MS - 1)).toBe(false);
 	});
 });
