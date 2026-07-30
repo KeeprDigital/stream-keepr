@@ -1,10 +1,8 @@
 import type { ScreenModeContainerControls } from './screenModes';
 import type { DisplayType, ScreenMode } from './types/enums';
-import type { FeatureMatchOverlayOutput, ModeConfigTypeMap, ScreenConfig } from './types/screenConfig';
+import type { ModeConfigTypeMap, ScreenConfig, ScreenOutput } from './types/screenConfig';
 import { getContainerControls, SCREEN_MODES } from './screenModes';
 import {
-	DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT,
-	DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH,
 	getDefaultConfigForMode,
 	getDisplayDefaultsForMode,
 } from './types/screenConfig';
@@ -26,7 +24,7 @@ export interface ScreenModeHostDefinition {
 }
 
 export interface ScreenModeOutputOption {
-	value: FeatureMatchOverlayOutput;
+	value: ScreenOutput;
 	label: string;
 	icon: string;
 }
@@ -44,6 +42,12 @@ export interface ScreenModeConfigurationPolicy {
 	dimensions: Record<ScreenModeDimensionField, ScreenModeDimensionControl>;
 	resetScreenConfigDefaults?: Partial<ScreenConfig>;
 	outputOptions: ScreenModeOutputOption[];
+	/**
+	 * Whether the Screen configuration page gives this mode the full page width
+	 * and collapses generic container settings. A graphics host embeds the
+	 * compositor's tree, preview, and inspector side by side and needs it.
+	 */
+	fullWidthConfiguration: boolean;
 }
 
 export interface SharedScreenModeDefinition<M extends ScreenMode = ScreenMode> {
@@ -82,16 +86,8 @@ const CONTROL_HOST_DEFAULTS: ScreenModeHostDefinition = {
 	themePolicy: 'screen-color-mode',
 };
 
-const SCREEN_MODE_HOST_OVERRIDES: Partial<Record<ScreenMode, Partial<ScreenModeHostDefinition>>> = {
-	'feature-match-overlay': {
-		defaultWidth: DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH,
-		defaultHeight: DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT,
-		useScreenPadding: false,
-		useScreenBackground: false,
-	},
-};
-
-const FEATURE_MATCH_OVERLAY_OUTPUT_OPTIONS: ScreenModeOutputOption[] = [
+/** The Screen Outputs every graphics host exposes. */
+const GRAPHICS_SCREEN_OUTPUT_OPTIONS: ScreenModeOutputOption[] = [
 	{ value: 'overlay', label: 'Open overlay output', icon: 'i-lucide-panel-top' },
 	{ value: 'fill', label: 'Open fill output', icon: 'i-lucide-square' },
 	{ value: 'key', label: 'Open key output', icon: 'i-lucide-contrast' },
@@ -102,12 +98,6 @@ const DEFAULT_CONTAINER_CONTROL_PLACEMENT: ScreenModeConfigurationPolicy['contai
 	padding: 'container',
 	textColors: 'container',
 	background: 'container',
-};
-
-const CONTAINER_CONTROL_PLACEMENT_OVERRIDES: Partial<Record<ScreenMode, Partial<ScreenModeConfigurationPolicy['containerControlPlacement']>>> = {
-	'feature-match-overlay': {
-		dimensions: 'mode',
-	},
 };
 
 function getScreenModeDimensionControl(field: ScreenModeDimensionField, defaultValue?: number): ScreenModeDimensionControl {
@@ -131,16 +121,25 @@ export function getScreenModeHostDefinition(mode: ScreenMode): ScreenModeHostDef
 	const base = sharedDefinition.displayType === 'control'
 		? CONTROL_HOST_DEFAULTS
 		: OVERLAY_HOST_DEFAULTS;
+	const graphicsHost = sharedDefinition.graphicsHost;
+
+	if (!graphicsHost)
+		return { ...base };
 
 	return {
 		...base,
-		...SCREEN_MODE_HOST_OVERRIDES[mode],
+		defaultWidth: graphicsHost.canvasWidth,
+		defaultHeight: graphicsHost.canvasHeight,
+		useScreenPadding: false,
+		useScreenBackground: false,
+		useScreenAlignment: graphicsHost.useScreenAlignment ?? base.useScreenAlignment,
 	};
 }
 
 export function getScreenModeConfigurationPolicy(mode: ScreenMode): ScreenModeConfigurationPolicy {
 	const sharedDefinition = SCREEN_MODES[mode];
 	const host = getScreenModeHostDefinition(mode);
+	const graphicsHost = sharedDefinition.graphicsHost;
 	const fixedDimensions = host.defaultWidth && host.defaultHeight;
 
 	return {
@@ -148,7 +147,8 @@ export function getScreenModeConfigurationPolicy(mode: ScreenMode): ScreenModeCo
 		containerControls: getContainerControls(mode),
 		containerControlPlacement: {
 			...DEFAULT_CONTAINER_CONTROL_PLACEMENT,
-			...(CONTAINER_CONTROL_PLACEMENT_OVERRIDES[mode] ?? {}),
+			// A graphics host owns its canvas, so its dimension controls sit with the mode.
+			...(graphicsHost ? { dimensions: 'mode' as const } : {}),
 		},
 		dimensions: {
 			width: getScreenModeDimensionControl('width', host.defaultWidth),
@@ -157,7 +157,8 @@ export function getScreenModeConfigurationPolicy(mode: ScreenMode): ScreenModeCo
 		resetScreenConfigDefaults: fixedDimensions
 			? { width: host.defaultWidth, height: host.defaultHeight }
 			: undefined,
-		outputOptions: mode === 'feature-match-overlay' ? FEATURE_MATCH_OVERLAY_OUTPUT_OPTIONS : [],
+		outputOptions: graphicsHost ? GRAPHICS_SCREEN_OUTPUT_OPTIONS : [],
+		fullWidthConfiguration: Boolean(graphicsHost),
 	};
 }
 

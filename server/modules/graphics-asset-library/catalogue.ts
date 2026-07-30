@@ -13,14 +13,23 @@ import type {
 	GraphicsAssetCatalogue,
 	PublishGraphicAssetCatalogueInput,
 } from '.';
-import type { GraphicsImageMultipartState } from './multipart';
+import type { GraphicsAssetMultipartState } from './multipart';
+import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
+import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GraphicsAssetLibraryError } from './errors';
 import {
 	graphicsMultipartCompletedByteLength,
 	graphicsMultipartTransfer,
 } from './multipart';
 import { completedGraphicAssetReplacementOperation } from './operation';
+
+function stagingReservationBytes(operation: GraphicsIngestionOperation) {
+	return operation.declaredByteLength
+		+ (graphicAssetSourceKind(operation) === 'silent-video'
+			? MAX_SILENT_VIDEO_POSTER_BYTES
+			: 0);
+}
 
 interface OperationRow {
 	id: string;
@@ -95,7 +104,7 @@ function parseJson<T>(value: string | null): T | undefined {
 }
 
 function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
-	const multipart = parseJson<GraphicsImageMultipartState>(row.multipart_state);
+	const multipart = parseJson<GraphicsAssetMultipartState>(row.multipart_state);
 	const operation: GraphicsIngestionOperation = {
 		id: row.id as GraphicsIngestionOperationId,
 		idempotencyKey: row.idempotency_key,
@@ -596,6 +605,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			return await this.getCapacity();
 		},
 		async initiateGraphicsIngestion(operation) {
+			const requestedStagingBytes = stagingReservationBytes(operation);
 			const existing = await firstOperation(
 				database,
 				'initiated_by = ? AND idempotency_key = ?',
@@ -638,10 +648,10 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				operation.defaultEventId ?? null,
 				operation.targetAssetId ?? null,
 				operation.declaredByteLength,
-				operation.declaredByteLength,
+				requestedStagingBytes,
 				new Date(operation.createdAt).getTime(),
 				new Date(operation.updatedAt).getTime(),
-				operation.declaredByteLength,
+				requestedStagingBytes,
 			).run();
 			const authoritative = await firstOperation(
 				database,
@@ -660,7 +670,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 							limitBytes: capacity.staging.limitBytes,
 							usedBytes: capacity.staging.usedBytes,
 							reservedBytes: capacity.staging.reservedBytes,
-							requestedBytes: operation.declaredByteLength,
+							requestedBytes: requestedStagingBytes,
 							availableBytes: capacity.staging.availableBytes,
 						},
 					},
@@ -672,10 +682,12 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			const result = await database.prepare(`
 				UPDATE graphics_ingestion_operations
 				SET staging_used_byte_length = ?,
-					staging_reserved_byte_length = declared_byte_length - ?
+					staging_reserved_byte_length =
+						staging_reserved_byte_length + staging_used_byte_length - ?
 				WHERE id = ? AND initiated_by = ?
 					AND stage NOT IN ('completed', 'cancelled')
-					AND ? BETWEEN 0 AND declared_byte_length
+					AND ? BETWEEN 0
+						AND staging_reserved_byte_length + staging_used_byte_length
 			`).bind(
 				input.usedBytes,
 				input.usedBytes,
@@ -822,17 +834,17 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 		async getIngestionOperation(operationId, initiatedBy) {
 			return await firstOperation(database, 'id = ? AND initiated_by = ?', operationId, initiatedBy);
 		},
-		async getImageMultipartState(operationId, initiatedBy) {
+		async getGraphicAssetMultipartState(operationId, initiatedBy) {
 			const row = await database.prepare(`
 				SELECT multipart_state
 				FROM graphics_ingestion_operations
 				WHERE id = ? AND initiated_by = ?
 			`).bind(operationId, initiatedBy).first<{ multipart_state: string | null }>();
 			return row?.multipart_state
-				? JSON.parse(row.multipart_state) as GraphicsImageMultipartState
+				? JSON.parse(row.multipart_state) as GraphicsAssetMultipartState
 				: undefined;
 		},
-		async updateImageMultipartState(input) {
+		async updateGraphicAssetMultipartState(input) {
 			if (input.state.version !== input.expectedVersion + 1)
 				return false;
 			const completedByteLength = graphicsMultipartCompletedByteLength(input.state);
@@ -856,7 +868,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 			).run();
 			return result.success && result.meta.changes === 1;
 		},
-		async recordImageMultipartCleanupComplete(operationId, initiatedBy) {
+		async recordGraphicAssetMultipartCleanupComplete(operationId, initiatedBy) {
 			const result = await database.prepare(`
 				UPDATE graphics_ingestion_operations
 				SET multipart_state = json_set(
@@ -1129,11 +1141,12 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 					INSERT INTO graphics_derivatives (
 						id, source_revision_id, kind, content_digest, created_at
 					)
-					SELECT ?, revision.id, 'thumbnail', ?, ?
+					SELECT ?, revision.id, ?, ?, ?
 					FROM graphic_asset_revisions revision
 					WHERE revision.id = ?
 				`).bind(
 					input.derivativeId,
+					input.report.facts.kind === 'silent-video' ? 'video-poster' : 'thumbnail',
 					input.thumbnailDigest,
 					publishedAt,
 					input.revisionId,
@@ -1311,7 +1324,11 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				`).bind(
 					input.derivativeId,
 					input.revisionId,
-					input.report.facts.kind === 'font' ? 'font-specimen' : 'thumbnail',
+					input.report.facts.kind === 'font'
+						? 'font-specimen'
+						: input.report.facts.kind === 'silent-video'
+							? 'video-poster'
+							: 'thumbnail',
 					input.thumbnailDigest,
 					new Date(input.publishedAt).getTime(),
 				),
@@ -1555,7 +1572,7 @@ export function createD1GraphicsAssetCatalogue(database: D1Database): GraphicsAs
 				JOIN graphic_asset_revisions r ON r.id = d.source_revision_id
 				JOIN graphic_assets a ON a.id = r.asset_id
 				WHERE a.id = ?
-					AND d.kind IN ('thumbnail', 'font-specimen')
+					AND d.kind IN ('thumbnail', 'video-poster', 'font-specimen')
 				ORDER BY r.revision_number DESC
 				LIMIT 1
 			`).bind(assetId).first<{ content_digest: string }>();

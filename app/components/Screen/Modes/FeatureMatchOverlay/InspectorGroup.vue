@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { FeatureMatchOverlayModeConfig, FeatureMatchWidgetConfig, FeatureMatchWidgetGroupItemConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchGraphicGroupItemConfig, FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
+import type { FeatureMatchGraphicGroupChildKind } from '~/modules/feature-match-overlay/layout';
 import type { FeatureMatchOverlayAnchorValue } from '~/utils/featureMatchOverlayGeometry';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
-import { appearanceSummary, FEATURE_MATCH_OVERLAY_WIDGET_KIND_OPTIONS, groupLayoutSummary, groupWidgetDefaultsSummary, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
+import { appearanceSummary, FEATURE_MATCH_OVERLAY_GROUP_CHILD_KIND_OPTIONS, groupGraphicItemDefaultsSummary, groupLayoutSummary, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
 import { anchorFeatureMatchOverlayRect } from '~/utils/featureMatchOverlayGeometry';
 import FeatureMatchOverlayBoxStyleFields from './BoxStyleFields.vue';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
@@ -15,7 +16,7 @@ const props = defineProps<{
 	updateConfig: FeatureMatchOverlayConfigUpdater;
 	screenWidth: number;
 	screenHeight: number;
-	item: FeatureMatchWidgetGroupItemConfig;
+	item: FeatureMatchGraphicGroupItemConfig;
 }>();
 
 const emit = defineEmits<{
@@ -57,7 +58,7 @@ function removeSelf() {
 	emit('removed');
 }
 
-function addChild(type: FeatureMatchWidgetConfig['type']) {
+function addChild(type: FeatureMatchGraphicGroupChildKind) {
 	const childId = editor.createGroupChild(props.item.id, type);
 	if (childId)
 		emit('childAdded', childId);
@@ -130,16 +131,14 @@ function addChild(type: FeatureMatchWidgetConfig['type']) {
 		</FeatureMatchOverlayControlSection>
 
 		<FeatureMatchOverlayOrderSection
-			:z-index="item.zIndex ?? 0"
 			@send-to-back="editor.sendItemToBack(item.id)"
 			@move="delta => editor.moveItemOrder(item.id, delta)"
 			@bring-to-front="editor.bringItemToFront(item.id)"
-			@update-z-index="zIndex => editor.setItemOrder(item.id, zIndex)"
 		/>
 
 		<div class="pt-2 mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-muted">
 			<UIcon name="i-lucide-layout-template" class="size-3.5" />
-			<span>Widgets</span>
+			<span>Graphic Items</span>
 		</div>
 
 		<FeatureMatchOverlayControlSection
@@ -207,15 +206,15 @@ function addChild(type: FeatureMatchWidgetConfig['type']) {
 						/>
 					</UFormField>
 				</div>
-				<UFormField label="Add widget">
+				<UFormField label="Add Graphic Item">
 					<USelect
-						:items="FEATURE_MATCH_OVERLAY_WIDGET_KIND_OPTIONS"
+						:items="FEATURE_MATCH_OVERLAY_GROUP_CHILD_KIND_OPTIONS"
 						value-key="value"
 						size="sm"
-						placeholder="Add widget..."
+						placeholder="Add Graphic Item..."
 						class="w-full"
-						data-testid="overlay-guided-add-widget"
-						@update:model-value="addChild($event as FeatureMatchWidgetConfig['type'])"
+						data-testid="overlay-guided-add-graphicItem"
+						@update:model-value="addChild($event as FeatureMatchGraphicGroupChildKind)"
 					/>
 				</UFormField>
 			</div>
@@ -224,7 +223,7 @@ function addChild(type: FeatureMatchWidgetConfig['type']) {
 		<FeatureMatchOverlayControlSection
 			title="Defaults"
 			badge="Inherited"
-			:summary="groupWidgetDefaultsSummary(item)"
+			:summary="groupGraphicItemDefaultsSummary(item)"
 		>
 			<FeatureMatchOverlayBoxStyleFields
 				:box-style="item.defaultChildSurfaceStyle"

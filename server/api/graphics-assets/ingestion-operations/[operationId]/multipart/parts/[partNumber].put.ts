@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
 				message: 'Multipart part body is required',
 			});
 		}
-		return await library.uploadImageMultipartPart({
+		return await library.uploadGraphicAssetMultipartPart({
 			operationId,
 			initiatedBy,
 			partNumber,

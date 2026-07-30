@@ -31,7 +31,7 @@ const screenModeConfigurationPolicy = computed(() => {
 	const mode = screen.value?.currentMode;
 	return mode ? getScreenModeConfigurationPolicy(mode) : null;
 });
-const isFeatureMatchOverlayScreen = computed(() => screen.value?.currentMode === 'feature-match-overlay');
+const usesFullWidthConfiguration = computed(() => screenModeConfigurationPolicy.value?.fullWidthConfiguration === true);
 const isControlScreen = computed(() => screenModeConfigurationPolicy.value?.displayType === 'control');
 const containerControls = computed(() => screenModeConfigurationPolicy.value?.containerControls ?? null);
 const containerControlPlacement = computed(() => screenModeConfigurationPolicy.value?.containerControlPlacement ?? null);
@@ -304,7 +304,7 @@ async function sendCommand(command: ScreenCommand) {
 			</UButton>
 		</template>
 
-		<UContainer :class="isFeatureMatchOverlayScreen ? '!max-w-none' : undefined">
+		<UContainer :class="usesFullWidthConfiguration ? '!max-w-none' : undefined">
 			<UILoadingSpinner v-if="loading" size="sm" />
 
 			<UIEmptyState
@@ -514,7 +514,7 @@ async function sendCommand(command: ScreenCommand) {
 				</UCard>
 
 				<!-- Screen-level Container Settings -->
-				<ScreenSettingsCard v-if="hasContainerSettings" title="Container" :default-open="!isFeatureMatchOverlayScreen">
+				<ScreenSettingsCard v-if="hasContainerSettings" title="Container" :default-open="!usesFullWidthConfiguration">
 					<!-- Color Mode (control screens only) -->
 					<UFormField
 						v-if="isControlScreen"

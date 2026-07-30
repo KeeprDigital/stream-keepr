@@ -11,12 +11,14 @@ import type {
 	GraphicsAssetCatalogue,
 	PublishGraphicAssetCatalogueInput,
 } from '.';
-import type { GraphicsImageMultipartState } from './multipart';
+import type { GraphicsAssetMultipartState } from './multipart';
 import {
 	DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES,
 	DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
 } from '~~/shared/types/graphicsAsset';
+import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
+import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GraphicsAssetLibraryError } from './errors';
 import {
 	graphicsMultipartCompletedByteLength,
@@ -54,7 +56,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 		GraphicsIngestionOperationId,
 		Map<string, number>
 	>();
-	const multipartStates = new Map<GraphicsIngestionOperationId, GraphicsImageMultipartState>();
+	const multipartStates = new Map<GraphicsIngestionOperationId, GraphicsAssetMultipartState>();
 	const usage = options.usage ?? [];
 	let canonicalLimitBytes = options.canonicalLimitBytes ?? DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES;
 	let stagingLimitBytes = options.stagingLimitBytes ?? DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES;
@@ -186,7 +188,11 @@ export function createInMemoryGraphicsAssetCatalogue(
 			const usedBytes = sum(stagingUsage.values());
 			const reservedBytes = sum(stagingReservations.values());
 			const availableBytes = Math.max(0, stagingLimitBytes - usedBytes - reservedBytes);
-			if (operation.declaredByteLength > availableBytes) {
+			const requestedBytes = operation.declaredByteLength
+				+ (graphicAssetSourceKind(operation) === 'silent-video'
+					? MAX_SILENT_VIDEO_POSTER_BYTES
+					: 0);
+			if (requestedBytes > availableBytes) {
 				throw new GraphicsAssetLibraryError(
 					'Graphics staging capacity is exhausted',
 					'staging-capacity-exhausted',
@@ -196,7 +202,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 							limitBytes: stagingLimitBytes,
 							usedBytes,
 							reservedBytes,
-							requestedBytes: operation.declaredByteLength,
+							requestedBytes,
 							availableBytes,
 						},
 					},
@@ -204,22 +210,24 @@ export function createInMemoryGraphicsAssetCatalogue(
 			}
 			operations.set(operation.id, cloneOperation(operation));
 			operationsByIdentity.set(identity, operation.id);
-			stagingReservations.set(operation.id, operation.declaredByteLength);
+			stagingReservations.set(operation.id, requestedBytes);
 			return cloneOperation(operation);
 		},
 		async recordStagedBytes(input) {
 			const operation = operations.get(input.operation.id);
+			const stagingEnvelope = (stagingUsage.get(input.operation.id) ?? 0)
+				+ (stagingReservations.get(input.operation.id) ?? 0);
 			if (
 				!operation
 				|| operation.stage === 'completed'
 				|| operation.stage === 'cancelled'
 				|| input.usedBytes < 0
-				|| input.usedBytes > operation.declaredByteLength
+				|| input.usedBytes > stagingEnvelope
 			) {
 				throw new Error('Graphics staging progress could not be recorded');
 			}
 			stagingUsage.set(operation.id, input.usedBytes);
-			stagingReservations.set(operation.id, operation.declaredByteLength - input.usedBytes);
+			stagingReservations.set(operation.id, stagingEnvelope - input.usedBytes);
 		},
 		async recordCanonicalWrites(input) {
 			const existing = canonicalWriteCandidates.get(input.operation.id) ?? new Map<string, number>();
@@ -287,14 +295,14 @@ export function createInMemoryGraphicsAssetCatalogue(
 			const operation = operations.get(operationId);
 			return operation?.initiatedBy === initiatedBy ? cloneOperation(operation) : undefined;
 		},
-		async getImageMultipartState(operationId, initiatedBy) {
+		async getGraphicAssetMultipartState(operationId, initiatedBy) {
 			const operation = operations.get(operationId);
 			if (!operation || operation.initiatedBy !== initiatedBy)
 				return undefined;
 			const state = multipartStates.get(operationId);
 			return state ? structuredClone(state) : undefined;
 		},
-		async updateImageMultipartState(input) {
+		async updateGraphicAssetMultipartState(input) {
 			const operation = operations.get(input.operationId);
 			const existing = multipartStates.get(input.operationId);
 			if (
@@ -317,7 +325,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			});
 			return true;
 		},
-		async recordImageMultipartCleanupComplete(operationId, initiatedBy) {
+		async recordGraphicAssetMultipartCleanupComplete(operationId, initiatedBy) {
 			const operation = operations.get(operationId);
 			const state = multipartStates.get(operationId);
 			if (!operation || operation.initiatedBy !== initiatedBy || operation.stage !== 'cancelled' || !state)

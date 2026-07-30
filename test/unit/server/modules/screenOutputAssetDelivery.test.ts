@@ -4,12 +4,15 @@ import { createScreenOutputAssetDelivery } from '~~/server/modules/screen-output
 const signingKey = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 const sourceBytes = Uint8Array.of(10, 20, 30, 40, 50);
 
-function availableContent() {
+function availableContent(range?: { offset: number; length: number }) {
+	const bodyBytes = range
+		? sourceBytes.slice(range.offset, range.offset + range.length)
+		: sourceBytes;
 	return {
 		outcome: 'available' as const,
 		body: new ReadableStream<Uint8Array>({
 			start(controller) {
-				controller.enqueue(sourceBytes);
+				controller.enqueue(bodyBytes);
 				controller.close();
 			},
 		}),
@@ -24,6 +27,7 @@ async function responseBytes(response: Response) {
 
 describe('screen Output exact Graphic Asset Revision delivery', () => {
 	const authorize = vi.fn();
+	const inspect = vi.fn();
 	const resolve = vi.fn();
 	const match = vi.fn();
 	const put = vi.fn();
@@ -35,7 +39,12 @@ describe('screen Output exact Graphic Asset Revision delivery', () => {
 			outcome: 'authorized',
 			contentIdentity: 'internal-content-digest',
 		});
-		resolve.mockResolvedValue(availableContent());
+		inspect.mockResolvedValue({
+			outcome: 'available',
+			byteLength: sourceBytes.byteLength,
+			contentType: 'image/png',
+		});
+		resolve.mockImplementation(({ range }) => Promise.resolve(availableContent(range)));
 		match.mockResolvedValue(undefined);
 		put.mockResolvedValue(undefined);
 	});
@@ -44,6 +53,7 @@ describe('screen Output exact Graphic Asset Revision delivery', () => {
 		return createScreenOutputAssetDelivery({
 			signingKey,
 			authorize,
+			inspect,
 			resolve,
 			cache: { match, put },
 			defer,
@@ -70,6 +80,7 @@ describe('screen Output exact Graphic Asset Revision delivery', () => {
 			revisionId: 'revision-1',
 		});
 		expect(match).not.toHaveBeenCalled();
+		expect(inspect).not.toHaveBeenCalled();
 		expect(resolve).not.toHaveBeenCalled();
 	});
 
@@ -82,6 +93,7 @@ describe('screen Output exact Graphic Asset Revision delivery', () => {
 		});
 
 		expect(match).not.toHaveBeenCalled();
+		expect(inspect).not.toHaveBeenCalled();
 		expect(resolve).not.toHaveBeenCalled();
 	});
 
@@ -97,7 +109,7 @@ describe('screen Output exact Graphic Asset Revision delivery', () => {
 		expect(result.response.headers.get('content-length')).toBe('5');
 		expect(result.response.headers.get('accept-ranges')).toBe('bytes');
 		expect(result.response.headers.get('cache-control')).toBe('private, no-store');
-		expect(result.response.headers.get('vary')).toBe('authorization');
+		expect(result.response.headers.get('vary')).toBe('authorization, cookie');
 		expect(result.response.headers.get('etag')).toMatch(/^"sk-[\w-]{43}"$/);
 		expect(result.response.headers.get('etag')).not.toContain('asset-1');
 		expect(match).toHaveBeenCalledWith(expect.objectContaining({
@@ -120,8 +132,8 @@ describe('screen Output exact Graphic Asset Revision delivery', () => {
 		if (first.outcome !== 'delivered')
 			throw new Error('expected delivered response');
 		const etag = first.response.headers.get('etag')!;
-		resolve.mockResolvedValue(availableContent());
-
+		inspect.mockClear();
+		resolve.mockClear();
 		const result = await delivery().deliver({
 			...request,
 			headers: new Headers({ 'if-none-match': etag }),
@@ -132,7 +144,8 @@ describe('screen Output exact Graphic Asset Revision delivery', () => {
 			return;
 		expect(result.response.status).toBe(304);
 		expect(result.response.body).toBeNull();
-		expect(resolve).toHaveBeenCalled();
+		expect(inspect).toHaveBeenCalledOnce();
+		expect(resolve).not.toHaveBeenCalled();
 	});
 
 	it('streams a satisfiable single byte range without buffering the full object', async () => {
@@ -148,6 +161,11 @@ describe('screen Output exact Graphic Asset Revision delivery', () => {
 		expect(result.response.headers.get('content-range')).toBe('bytes 1-3/5');
 		expect(result.response.headers.get('content-length')).toBe('3');
 		expect(await responseBytes(result.response)).toEqual([20, 30, 40]);
+		expect(resolve).toHaveBeenCalledWith({
+			assetId: 'asset-1',
+			revisionId: 'revision-1',
+			range: { offset: 1, length: 3 },
+		});
 		expect(defer).not.toHaveBeenCalled();
 	});
 
@@ -162,7 +180,8 @@ describe('screen Output exact Graphic Asset Revision delivery', () => {
 			return;
 		expect(result.response.status).toBe(416);
 		expect(result.response.headers.get('content-range')).toBe('bytes */5');
-		expect(resolve).toHaveBeenCalledOnce();
+		expect(inspect).toHaveBeenCalledOnce();
+		expect(resolve).not.toHaveBeenCalled();
 	});
 
 	it('maps missing canonical bytes to a retryable outcome rather than an integrity result', async () => {

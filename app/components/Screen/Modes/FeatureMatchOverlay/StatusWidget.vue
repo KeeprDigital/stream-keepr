@@ -30,7 +30,7 @@ const lifeStyle = computed(() => ({
 </script>
 
 <template>
-	<div class="status-widget">
+	<div class="status-graphicItem">
 		<div
 			:key="animationKey"
 			class="life-total"
@@ -43,7 +43,7 @@ const lifeStyle = computed(() => ({
 </template>
 
 <style scoped>
-.status-widget {
+.status-graphicItem {
 	display: flex;
 	align-items: center;
 	justify-content: center;

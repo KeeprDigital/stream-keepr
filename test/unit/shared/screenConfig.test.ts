@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+	DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
+	DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH,
+	DEFAULT_BROADCAST_GRAPHICS_CONFIG,
 	DEFAULT_CARD_CONFIG,
 	DEFAULT_DECK_CONFIG,
 	DEFAULT_FEATURE_MATCH_CONFIG,
@@ -41,6 +44,10 @@ describe('getDefaultConfigForMode', () => {
 
 	it('returns feature-match-overlay config for feature-match-overlay mode', () => {
 		expect(getDefaultConfigForMode('feature-match-overlay')).toEqual(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+	});
+
+	it('returns broadcast-graphics config for broadcast-graphics mode', () => {
+		expect(getDefaultConfigForMode('broadcast-graphics')).toEqual(DEFAULT_BROADCAST_GRAPHICS_CONFIG);
 	});
 
 	it('returns metagame config for metagame mode', () => {
@@ -144,6 +151,25 @@ describe('default config constants', () => {
 			playbackRate: 1,
 			loop: true,
 		});
+	});
+
+	it('default broadcast graphics canvas is 1920 by 1080 pixels', () => {
+		expect(DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH).toBe(1920);
+		expect(DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT).toBe(1080);
+	});
+
+	it('never resets a Broadcast Graphics Screen\'s authored stack to defaults', () => {
+		const displayDefaults = getDisplayDefaultsForMode('broadcast-graphics');
+
+		expect('graphics' in displayDefaults).toBe(false);
+		expect(getDefaultConfigForMode('broadcast-graphics').graphics).toEqual([]);
+	});
+
+	it('still resets a Feature Match Layout, which returns to a recoverable preset', () => {
+		const displayDefaults = getDisplayDefaultsForMode('feature-match-overlay');
+
+		expect('layout' in displayDefaults).toBe(true);
+		expect(displayDefaults.layout?.items.length).toBeGreaterThan(0);
 	});
 
 	it('default standings config defaults to all view mode', () => {

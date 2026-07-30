@@ -80,6 +80,44 @@ const assets = ref<GraphicAsset[]>([
 		},
 		operation: {} as never,
 	},
+	{
+		id: 'asset-alpha-video' as never,
+		name: 'Chromium alpha ident',
+		kind: 'silent-video',
+		revisionId: 'revision-alpha-video-1' as never,
+		revisionNumber: 1,
+		revisions: [{
+			id: 'revision-alpha-video-1' as never,
+			revisionNumber: 1,
+			facts: {} as never,
+		}],
+		lifecycle: { state: 'active' },
+		eventIds: [7],
+		facts: {
+			kind: 'silent-video',
+			format: 'webm',
+			codec: 'vp9',
+			canonicalMime: 'video/webm',
+			byteLength: 2048,
+			sha256: 'video-digest',
+			width: 640,
+			height: 360,
+			durationSeconds: 1,
+			frameRate: 30,
+			frameCount: 30,
+			bitDepth: 8,
+			colorSpace: 'sdr',
+			chromaSubsampling: '4:2:0',
+			hasAlpha: true,
+			fastStart: null,
+			seekable: true,
+			posterTimeSeconds: 0.1,
+			targetCompatibility: 'chromium-transparency',
+			browserPlayable: true,
+			chromiumTransparencyPlayback: true,
+		},
+		operation: {} as never,
+	},
 ]);
 const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
 
@@ -175,6 +213,42 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 
 		expect(wrapper.text()).toContain('Missing Graphic Asset Reference');
 		expect(wrapper.text()).toContain('Publication-requiring actions are unavailable');
+	});
+
+	it('blocks VP9-alpha placement for a Safari target and permits a declared Chromium target', async () => {
+		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
+		const wrapper = mount(FocusPicker, {
+			props: {
+				eventId: 7,
+				fieldLabel: 'Media Graphic Item',
+				assetKind: ['silent-video'],
+				videoTarget: 'safari',
+			},
+			global: {
+				stubs: {
+					UModal: passthroughStub,
+					UButton: buttonStub,
+					UInput: passthroughStub,
+					UBadge: passthroughStub,
+					UAlert: passthroughStub,
+					UIcon: passthroughStub,
+				},
+			},
+		});
+
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+		const select = wrapper.get('[data-testid="select-asset-alpha-video"]');
+		expect(select.attributes('disabled')).toBeDefined();
+		await select.trigger('click');
+		expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+
+		await wrapper.setProps({ videoTarget: 'chromium' });
+		expect(select.attributes('disabled')).toBeUndefined();
+		await select.trigger('click');
+		expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toEqual({
+			assetId: 'asset-alpha-video',
+			revisionId: 'revision-alpha-video-1',
+		});
 	});
 
 	it('refreshes its exact-revision status when unavailable content is retried', async () => {

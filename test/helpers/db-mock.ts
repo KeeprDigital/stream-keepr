@@ -90,7 +90,7 @@ export const mockDb = {
 		playerRoundStandings: createQueryTable(),
 		featureMatches: createQueryTable(),
 		featureMatchSessions: createQueryTable(),
-		featureMatchSessionEvents: createQueryTable(),
+		liveStateCommandReceipts: createQueryTable(),
 		screens: createQueryTable(),
 		archetypes: createQueryTable(),
 		cards: createQueryTable(),

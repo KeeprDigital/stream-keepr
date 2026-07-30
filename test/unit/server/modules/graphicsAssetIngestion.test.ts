@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
 	createInMemoryGraphicsAssetCatalogue,
@@ -15,9 +15,14 @@ import {
 	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
+import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+	'base64',
+));
+const sixteenPixelPosterPng = Uint8Array.from(Buffer.from(
+	'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAABAAAAAQBPJcTWAAAAHUlEQVR4nGP8x8Dwn4ECwEKJ5lEDRg0YNWAwGQAAkU4CO63xbeIAAAAASUVORK5CYII=',
 	'base64',
 ));
 const jpegPixel = Uint8Array.from(Buffer.from(
@@ -26,6 +31,10 @@ const jpegPixel = Uint8Array.from(Buffer.from(
 ));
 const webpPixel = Uint8Array.from(Buffer.from(
 	'UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAEAdQlFKUp4CBiOh/AAA=',
+	'base64',
+));
+const vp9Webm = Uint8Array.from(Buffer.from(
+	'GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAIMEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggElTbuMU6uEHFO7a1OsggH27AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjIuMTIuMTAyV0GNTGF2ZjYyLjEyLjEwMkSJiECPQAAAAAAAFlSua8iuAQAAAAAAAD/XgQFzxYhkRqj8GKbqBJyBACK1nIN1bmSIgQCGhVZfVlA5g4EBI+ODhB3NZQDgkLCBELqBEJqBAlWwhFW5gQESVMNnQIBzc6BjwIBnyJpFo4dFTkNPREVSRIeNTGF2ZjYyLjEyLjEwMnNz2mPAi2PFiGRGqPwYpuoEZ8ilRaOHRU5DT0RFUkSHmExhdmM2Mi4yOC4xMDIgbGlidnB4LXZwOWfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAB9DtnXG54EAo6yBAACAgkmDQgAA8AD2ADgkHBhCAAAwcAAASqf/+5CBv///CAg////7iYcAAKOTgQH0AIYAQJKcAElAAAMgAABCQBxTu2uRu4+zgQC3iveBAfGCAavwgQM=',
 	'base64',
 ));
 
@@ -85,6 +94,10 @@ function createLibrary(
 	staging = createInMemoryStagingGraphicsObjectStore(),
 	canonical = createInMemoryCanonicalGraphicsObjectStore(),
 	catalogue = createInMemoryGraphicsAssetCatalogue(),
+	now = () => new Date('2026-07-27T04:00:00.000Z'),
+	silentVideoPlaybackValidator?: {
+		validate: (input: any) => Promise<any>;
+	},
 ) {
 	let nextIdentity = 0;
 	const libraryDelegate = createGraphicsAssetLibrary({
@@ -92,7 +105,8 @@ function createLibrary(
 		staging,
 		canonical,
 		generateIdentity: () => `identity-${++nextIdentity}`,
-		now: () => new Date('2026-07-27T04:00:00.000Z'),
+		now,
+		silentVideoPlaybackValidator,
 	});
 	const library: typeof libraryDelegate = {
 		...libraryDelegate,
@@ -104,14 +118,16 @@ function createLibrary(
 					: transparentPixelPng;
 			return await libraryDelegate.initiateGraphicsIngestion({
 				...input,
-				browserDecodeEvidence: Object.hasOwn(input, 'browserDecodeEvidence')
+				browserDecodeEvidence: input.declaredMime?.startsWith('video/')
 					? input.browserDecodeEvidence
-					: {
-							outcome: 'decoded',
-							sourceDigest: sourceDigest(fixture),
-							width: 1,
-							height: 1,
-						},
+					: Object.hasOwn(input, 'browserDecodeEvidence')
+						? input.browserDecodeEvidence
+						: {
+								outcome: 'decoded',
+								sourceDigest: sourceDigest(fixture),
+								width: 1,
+								height: 1,
+							},
 			});
 		},
 	};
@@ -397,6 +413,50 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		});
 	});
 
+	it('threads an exact requested byte range to canonical storage', async () => {
+		const canonicalDelegate = createInMemoryCanonicalGraphicsObjectStore();
+		const read = vi.fn(canonicalDelegate.read);
+		const { library } = createLibrary(
+			createInMemoryStagingGraphicsObjectStore(),
+			{ ...canonicalDelegate, read },
+		);
+		const operation = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'range-scoreboard-logo',
+			initiatedBy: 'graphics-author-1',
+			name: 'Range scoreboard logo',
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+		const completed = await library.uploadGraphicAsset({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			bytes: createBoundedByteStream(transparentPixelPng, {
+				byteLength: transparentPixelPng.byteLength,
+				maximumByteLength: 16 * 1024 * 1024,
+			}),
+		});
+		read.mockClear();
+
+		const resolved = await library.resolveGraphicAssetRevision({
+			assetId: completed.result!.assetId,
+			revisionId: completed.result!.revisionId,
+			range: { offset: 24, length: 8 },
+		});
+
+		expect(read).toHaveBeenCalledWith(
+			graphicsObjectIdentity(`sha256/${completed.report!.facts.sha256}`),
+			{ offset: 24, length: 8 },
+		);
+		expect(resolved).toMatchObject({
+			outcome: 'available',
+			byteLength: transparentPixelPng.byteLength,
+		});
+		if (resolved.outcome !== 'available')
+			throw new Error('Expected ranged content to resolve');
+		await expect(
+			new Response(resolved.body).arrayBuffer(),
+		).resolves.toEqual(transparentPixelPng.slice(24, 32).buffer);
+	});
+
 	it('durably publishes one validated PNG and discovers it with its exact operation result', async () => {
 		const { library } = createLibrary();
 		const initiation = {
@@ -499,8 +559,13 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			async read(...input: Parameters<typeof stagingDelegate.read>) {
 				const result = await stagingDelegate.read(...input);
 				stagingReadCount++;
-				if (result.outcome !== 'available' || stagingReadCount !== 3)
+				if (
+					result.outcome !== 'available'
+					|| input[1] !== undefined
+					|| stagingReadCount !== 4
+				) {
 					return result;
+				}
 				let offset = 0;
 				return {
 					...result,
@@ -1287,5 +1352,410 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			stage: 'validating',
 			updatedAt: '2026-07-27T04:01:01.000Z',
 		}, transferring.updatedAt)).rejects.toThrow('lost its claim');
+	});
+});
+
+describe('silent-video ingestion through the Graphics Asset Library public module', () => {
+	it('publishes only from trusted operation/source/facts-bound playback validation', async () => {
+		const validate = vi.fn(async (input: any) => ({
+			outcome: 'accepted',
+			operationId: input.operationId,
+			idempotencyKey: input.idempotencyKey,
+			sourceDigest: input.sourceDigest,
+			factsDigest: input.factsDigest,
+			width: input.inspectedFacts.width,
+			height: input.inspectedFacts.height,
+			durationSeconds: input.inspectedFacts.durationSeconds,
+			posterTimeSeconds: input.inspectedFacts.posterTimeSeconds,
+			mutedInlinePlayback: true,
+			seeked: true,
+			transparencyRendered: false,
+			posterDigest: sourceDigest(sixteenPixelPosterPng),
+			poster: createBoundedByteStream(sixteenPixelPosterPng, {
+				byteLength: sixteenPixelPosterPng.byteLength,
+				maximumByteLength: MAX_SILENT_VIDEO_POSTER_BYTES,
+			}),
+		}));
+		const { library } = createLibrary(
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			{ validate },
+		);
+		const initiated = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'trusted-video-runtime',
+			initiatedBy: 'graphics-author-1',
+			name: 'Trusted VP9',
+			sourceFileName: 'trusted.webm',
+			declaredMime: 'video/webm',
+			declaredByteLength: vp9Webm.byteLength,
+		});
+
+		const completed = await library.uploadGraphicAsset({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+			declaredMime: 'video/webm',
+			bytes: createBoundedByteStream(vp9Webm, {
+				byteLength: vp9Webm.byteLength,
+				maximumByteLength: 250 * 1024 * 1024,
+			}),
+		});
+
+		expect(completed).toMatchObject({
+			stage: 'completed',
+			report: {
+				outcome: 'accepted',
+				facts: { browserPlayable: true },
+			},
+		});
+		expect(validate).toHaveBeenCalledOnce();
+		expect(validate).toHaveBeenCalledWith(expect.objectContaining({
+			operationId: initiated.id,
+			sourceDigest: sourceDigest(vp9Webm),
+			inspectedFacts: expect.objectContaining({
+				sha256: sourceDigest(vp9Webm),
+				format: 'webm',
+				codec: 'vp9',
+			}),
+			factsDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+			idempotencyKey: expect.stringContaining(initiated.id),
+		}));
+	});
+
+	it('fails retryably closed when the trusted playback runtime is unavailable', async () => {
+		const { library } = createLibrary();
+		const initiated = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'missing-video-runtime',
+			initiatedBy: 'graphics-author-1',
+			name: 'No runtime VP9',
+			sourceFileName: 'missing-runtime.webm',
+			declaredMime: 'video/webm',
+			declaredByteLength: vp9Webm.byteLength,
+		});
+
+		const failed = await library.uploadGraphicAsset({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+			declaredMime: 'video/webm',
+			bytes: createBoundedByteStream(vp9Webm, {
+				byteLength: vp9Webm.byteLength,
+				maximumByteLength: 250 * 1024 * 1024,
+			}),
+		});
+
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			failure: {
+				code: 'validation-runtime-unavailable',
+				retryable: true,
+			},
+		});
+		await expect(library.listGraphicAssets({})).resolves.toEqual([]);
+	});
+
+	it('reuses the exact validation idempotency binding after a retryable runtime failure', async () => {
+		const accepted = (input: any) => ({
+			outcome: 'accepted',
+			operationId: input.operationId,
+			idempotencyKey: input.idempotencyKey,
+			sourceDigest: input.sourceDigest,
+			factsDigest: input.factsDigest,
+			width: input.inspectedFacts.width,
+			height: input.inspectedFacts.height,
+			durationSeconds: input.inspectedFacts.durationSeconds,
+			posterTimeSeconds: input.inspectedFacts.posterTimeSeconds,
+			mutedInlinePlayback: true,
+			seeked: true,
+			transparencyRendered: false,
+			posterDigest: sourceDigest(sixteenPixelPosterPng),
+			poster: createBoundedByteStream(sixteenPixelPosterPng, {
+				byteLength: sixteenPixelPosterPng.byteLength,
+				maximumByteLength: MAX_SILENT_VIDEO_POSTER_BYTES,
+			}),
+		});
+		const validate = vi.fn()
+			.mockResolvedValueOnce({ outcome: 'unavailable', retryable: true })
+			.mockImplementation(async input => accepted(input));
+		const { library } = createLibrary(
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			{ validate },
+		);
+		const initiated = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'trusted-video-retry',
+			initiatedBy: 'graphics-author-1',
+			name: 'Retry trusted VP9',
+			sourceFileName: 'retry.webm',
+			declaredMime: 'video/webm',
+			declaredByteLength: vp9Webm.byteLength,
+		});
+		const first = await library.uploadGraphicAsset({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+			declaredMime: 'video/webm',
+			bytes: createBoundedByteStream(vp9Webm, {
+				byteLength: vp9Webm.byteLength,
+				maximumByteLength: 250 * 1024 * 1024,
+			}),
+		});
+		expect(first).toMatchObject({
+			stage: 'failed',
+			failure: { code: 'validation-runtime-unavailable', retryable: true },
+		});
+
+		const completed = await library.retryGraphicsIngestion({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+		});
+		expect(completed.stage).toBe('completed');
+		expect(validate).toHaveBeenCalledTimes(2);
+		expect(validate.mock.calls[1]![0]).toMatchObject({
+			operationId: validate.mock.calls[0]![0].operationId,
+			idempotencyKey: validate.mock.calls[0]![0].idempotencyKey,
+			sourceDigest: validate.mock.calls[0]![0].sourceDigest,
+			factsDigest: validate.mock.calls[0]![0].factsDigest,
+		});
+	});
+
+	it('fails retryably closed for a trusted result bound to a different source', async () => {
+		const validate = vi.fn(async (input: any) => ({
+			outcome: 'accepted',
+			operationId: input.operationId,
+			idempotencyKey: input.idempotencyKey,
+			sourceDigest: '0'.repeat(64),
+			factsDigest: input.factsDigest,
+			width: 16,
+			height: 16,
+			durationSeconds: 1,
+			posterTimeSeconds: 0.1,
+			mutedInlinePlayback: true,
+			seeked: true,
+			transparencyRendered: false,
+			posterDigest: sourceDigest(sixteenPixelPosterPng),
+			poster: createBoundedByteStream(sixteenPixelPosterPng, {
+				byteLength: sixteenPixelPosterPng.byteLength,
+				maximumByteLength: MAX_SILENT_VIDEO_POSTER_BYTES,
+			}),
+		}));
+		const { library } = createLibrary(
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			{ validate },
+		);
+		const initiated = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'misbound-trusted-video',
+			initiatedBy: 'graphics-author-1',
+			name: 'Misbound trusted VP9',
+			sourceFileName: 'misbound.webm',
+			declaredMime: 'video/webm',
+			declaredByteLength: vp9Webm.byteLength,
+		});
+		const failed = await library.uploadGraphicAsset({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+			declaredMime: 'video/webm',
+			bytes: createBoundedByteStream(vp9Webm, {
+				byteLength: vp9Webm.byteLength,
+				maximumByteLength: 250 * 1024 * 1024,
+			}),
+		});
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			failure: { code: 'validation-runtime-unavailable', retryable: true },
+		});
+	});
+
+	it('maps a trusted adapter execution fault to retryable runtime unavailability', async () => {
+		const { library } = createLibrary(
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			{
+				async validate() {
+					throw new Error('validation service disconnected');
+				},
+			},
+		);
+		const initiated = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'faulting-trusted-video',
+			initiatedBy: 'graphics-author-1',
+			name: 'Faulting trusted VP9',
+			sourceFileName: 'fault.webm',
+			declaredMime: 'video/webm',
+			declaredByteLength: vp9Webm.byteLength,
+		});
+		const failed = await library.uploadGraphicAsset({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+			declaredMime: 'video/webm',
+			bytes: createBoundedByteStream(vp9Webm, {
+				byteLength: vp9Webm.byteLength,
+				maximumByteLength: 250 * 1024 * 1024,
+			}),
+		});
+
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			failure: { code: 'validation-runtime-unavailable', retryable: true },
+		});
+	});
+
+	it('fails retryably closed when the trusted runtime returns an invalid poster', async () => {
+		const invalidPoster = Uint8Array.of(1, 2, 3);
+		const { library } = createLibrary(
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			{
+				async validate(input) {
+					return {
+						outcome: 'accepted',
+						operationId: input.operationId,
+						idempotencyKey: input.idempotencyKey,
+						sourceDigest: input.sourceDigest,
+						factsDigest: input.factsDigest,
+						width: input.inspectedFacts.width,
+						height: input.inspectedFacts.height,
+						durationSeconds: input.inspectedFacts.durationSeconds,
+						posterTimeSeconds: input.inspectedFacts.posterTimeSeconds,
+						mutedInlinePlayback: true,
+						seeked: true,
+						transparencyRendered: false,
+						posterDigest: sourceDigest(invalidPoster),
+						poster: createBoundedByteStream(invalidPoster, {
+							byteLength: invalidPoster.byteLength,
+							maximumByteLength: MAX_SILENT_VIDEO_POSTER_BYTES,
+						}),
+					};
+				},
+			},
+		);
+		const initiated = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'invalid-trusted-poster',
+			initiatedBy: 'graphics-author-1',
+			name: 'Invalid trusted poster',
+			sourceFileName: 'invalid-poster.webm',
+			declaredMime: 'video/webm',
+			declaredByteLength: vp9Webm.byteLength,
+		});
+		const failed = await library.uploadGraphicAsset({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+			declaredMime: 'video/webm',
+			bytes: createBoundedByteStream(vp9Webm, {
+				byteLength: vp9Webm.byteLength,
+				maximumByteLength: 250 * 1024 * 1024,
+			}),
+		});
+
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			failure: { code: 'validation-runtime-unavailable', retryable: true },
+		});
+	});
+
+	it('permanently rejects a trusted playback or seek failure', async () => {
+		const validate = vi.fn(async (input: any) => ({
+			outcome: 'rejected',
+			operationId: input.operationId,
+			idempotencyKey: input.idempotencyKey,
+			sourceDigest: input.sourceDigest,
+			factsDigest: input.factsDigest,
+			stage: 'seek',
+		}));
+		const { library } = createLibrary(
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			{ validate },
+		);
+		const initiated = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'trusted-video-rejected',
+			initiatedBy: 'graphics-author-1',
+			name: 'Rejected trusted VP9',
+			sourceFileName: 'rejected.webm',
+			declaredMime: 'video/webm',
+			declaredByteLength: vp9Webm.byteLength,
+		});
+		const failed = await library.uploadGraphicAsset({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+			declaredMime: 'video/webm',
+			bytes: createBoundedByteStream(vp9Webm, {
+				byteLength: vp9Webm.byteLength,
+				maximumByteLength: 250 * 1024 * 1024,
+			}),
+		});
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			report: {
+				outcome: 'rejected',
+				issues: [{ code: 'browser-video-playback-failed' }],
+			},
+			failure: { code: 'validation-failed', retryable: false },
+		});
+	});
+
+	it('reserves the poster envelope in the Graphics Staging Allowance', async () => {
+		const blockedCatalogue = createInMemoryGraphicsAssetCatalogue({
+			stagingLimitBytes: vp9Webm.byteLength + MAX_SILENT_VIDEO_POSTER_BYTES - 1,
+		});
+		const { library: blocked } = createLibrary(
+			createInMemoryStagingGraphicsObjectStore(),
+			createInMemoryCanonicalGraphicsObjectStore(),
+			blockedCatalogue,
+		);
+		await expect(blocked.initiateGraphicsIngestion({
+			idempotencyKey: 'vp9-poster-capacity-blocked',
+			initiatedBy: 'graphics-author-1',
+			name: 'VP9 poster capacity',
+			sourceFileName: 'ident.webm',
+			declaredMime: 'video/webm',
+			declaredByteLength: vp9Webm.byteLength,
+		})).rejects.toMatchObject({
+			code: 'staging-capacity-exhausted',
+			capacity: {
+				requestedBytes: vp9Webm.byteLength + MAX_SILENT_VIDEO_POSTER_BYTES,
+			},
+		});
+
+		const { library } = createLibrary();
+		const initiated = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'vp9-poster-capacity-accounted',
+			initiatedBy: 'graphics-author-1',
+			name: 'VP9 poster accounted',
+			sourceFileName: 'ident.webm',
+			declaredMime: 'video/webm',
+			declaredByteLength: vp9Webm.byteLength,
+		});
+		await expect(library.getCapacity()).resolves.toMatchObject({
+			staging: {
+				usedBytes: 0,
+				reservedBytes: vp9Webm.byteLength + MAX_SILENT_VIDEO_POSTER_BYTES,
+			},
+		});
+		await library.uploadGraphicAsset({
+			operationId: initiated.id,
+			initiatedBy: initiated.initiatedBy,
+			declaredMime: 'video/webm',
+			bytes: createBoundedByteStream(vp9Webm, {
+				byteLength: vp9Webm.byteLength,
+				maximumByteLength: 250 * 1024 * 1024,
+			}),
+		});
+		await expect(library.getCapacity()).resolves.toMatchObject({
+			staging: {
+				usedBytes: vp9Webm.byteLength,
+				reservedBytes: MAX_SILENT_VIDEO_POSTER_BYTES,
+			},
+		});
 	});
 });

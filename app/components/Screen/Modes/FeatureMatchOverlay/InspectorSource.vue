@@ -120,11 +120,9 @@ function removeSelf() {
 		</FeatureMatchOverlayControlSection>
 
 		<FeatureMatchOverlayOrderSection
-			:z-index="item.zIndex ?? 0"
 			@send-to-back="editor.sendItemToBack(item.id)"
 			@move="delta => editor.moveItemOrder(item.id, delta)"
 			@bring-to-front="editor.bringItemToFront(item.id)"
-			@update-z-index="zIndex => editor.setItemOrder(item.id, zIndex)"
 		/>
 	</div>
 </template>
