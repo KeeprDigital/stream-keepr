@@ -105,25 +105,44 @@ function assertSafeEntryNames(entries: readonly { name: string }[]): void {
  * The exact archive length, known before streaming because stored entries add no
  * compression overhead. Export compares this against the archive byte limit and
  * a route may publish it as `Content-Length`.
+ *
+ * Measuring deliberately never fails. A caller measures precisely so it can
+ * refuse an oversized package through its own reporting contract, so throwing
+ * here would pre-empt that report with an exception for the very case the
+ * caller is trying to describe. The format's own ceilings are enforced by
+ * `createStoredZipArchive`, which is the point where bytes would be written.
  */
 export function storedZipArchiveByteLength(
 	entries: readonly { name: string; byteLength: number }[],
 ): number {
+	let total = END_OF_CENTRAL_DIRECTORY_BYTES;
+	for (const entry of entries) {
+		const nameBytes = encodeName(entry.name).byteLength;
+		total += LOCAL_HEADER_BYTES + nameBytes + entry.byteLength + DATA_DESCRIPTOR_BYTES;
+		total += CENTRAL_HEADER_BYTES + nameBytes;
+	}
+	return total;
+}
+
+/**
+ * The non-Zip64 ceilings, checked only where an archive is actually produced.
+ * Template Package limits are far stricter, so a caller honouring them can never
+ * reach these; they exist so a future caller cannot silently emit a container no
+ * reader could open.
+ */
+function assertWritableArchive(
+	entries: readonly { name: string; byteLength: number }[],
+): void {
 	if (entries.length > MAXIMUM_ENTRY_COUNT)
 		throw new StoredZipArchiveError('Archive has more entries than a non-Zip64 archive can record');
-	let total = END_OF_CENTRAL_DIRECTORY_BYTES;
 	for (const entry of entries) {
 		if (!Number.isSafeInteger(entry.byteLength) || entry.byteLength < 0)
 			throw new StoredZipArchiveError(`Archive entry "${entry.name}" has an invalid byte length`);
 		if (entry.byteLength > MAXIMUM_ENTRY_BYTE_LENGTH)
 			throw new StoredZipArchiveError(`Archive entry "${entry.name}" is too large for a non-Zip64 archive`);
-		const nameBytes = encodeName(entry.name).byteLength;
-		total += LOCAL_HEADER_BYTES + nameBytes + entry.byteLength + DATA_DESCRIPTOR_BYTES;
-		total += CENTRAL_HEADER_BYTES + nameBytes;
 	}
-	if (total > MAXIMUM_ENTRY_BYTE_LENGTH)
+	if (storedZipArchiveByteLength(entries) > MAXIMUM_ENTRY_BYTE_LENGTH)
 		throw new StoredZipArchiveError('Archive is too large for a non-Zip64 archive');
-	return total;
 }
 
 function localHeader(name: Uint8Array): Uint8Array {
@@ -203,6 +222,7 @@ async function* archiveChunks(entries: readonly StoredZipEntry[]): AsyncGenerato
 		let crc = 0;
 		let observedByteLength = 0;
 		const reader = (await entry.open()).getReader();
+		let drained = false;
 		try {
 			for (;;) {
 				const { done, value } = await reader.read();
@@ -218,8 +238,14 @@ async function* archiveChunks(entries: readonly StoredZipEntry[]): AsyncGenerato
 				offset += value.byteLength;
 				yield value;
 			}
+			drained = true;
 		}
 		finally {
+			// An abandoned generator — a client aborting the download, or an entry
+			// failing mid-stream — must release the source it opened. Without this
+			// the in-flight canonical body stays open for the rest of the request.
+			if (!drained)
+				await reader.cancel().catch(() => {});
 			reader.releaseLock();
 		}
 		if (observedByteLength !== entry.byteLength) {
@@ -255,13 +281,14 @@ async function* archiveChunks(entries: readonly StoredZipEntry[]): AsyncGenerato
 /**
  * Streams the archive one chunk at a time, honouring reader backpressure. An
  * entry whose bytes disappear or change length mid-stream errors the stream
- * rather than emitting a silently truncated archive.
+ * rather than emitting a silently truncated archive, and cancelling the archive
+ * cancels whatever entry source is currently open without opening any more.
  */
 export function createStoredZipArchive(
 	entries: readonly StoredZipEntry[],
 ): ReadableStream<Uint8Array> {
 	assertSafeEntryNames(entries);
-	storedZipArchiveByteLength(entries);
+	assertWritableArchive(entries);
 	const chunks = archiveChunks(entries);
 	return new ReadableStream<Uint8Array>({
 		async pull(controller) {

@@ -41,9 +41,23 @@ const MAXIMUM_DOCUMENT_NODES = 100_000;
 
 /** Schemes that would make a package depend on something outside itself. */
 const REMOTE_RESOURCE_PATTERN = /(?:https?|ftps?|wss?|file|filesystem):\/\//i;
-const PROTOCOL_RELATIVE_PATTERN = /^\s*\/\/[^/\s]/;
+const WHOLE_VALUE_REMOTE_PATTERN = /^\s*(?:(?:https?|ftps?|wss?|file|filesystem):\/\/|\/\/[^/\s])\S*\s*$/i;
+/** A CSS resource function fetches whatever it names, wherever it is authored. */
+const CSS_RESOURCE_FUNCTION_PATTERN = /\burl\(\s*(?:['"]\s*)?(?:[a-z][\w+.-]*:|\/\/)/i;
 /** Inline payloads bypass the library, so they are undeclared dependencies. */
 const INLINE_PAYLOAD_PATTERN = /^\s*(?:data|blob):/i;
+/**
+ * Property names whose value a renderer would resolve as a resource rather than
+ * display as text. The check is on the final camel-case segment, so
+ * `backgroundImage`, `posterUrl`, and `sources` all qualify while `text`,
+ * `label`, and `template` do not.
+ */
+const RESOURCE_PROPERTY_PATTERN
+	= /(?:^|[a-z0-9])(?:url|uri|src|href|source|poster|icon|image|media|path|endpoint)s?$/i;
+
+function isResourceProperty(key: string): boolean {
+	return RESOURCE_PROPERTY_PATTERN.test(key);
+}
 const EXECUTABLE_CONTENT_PATTERN
 	= /javascript:|vbscript:|<\s*(?:\/\s*)?script\b|\bon(?:abort|blur|change|click|error|focus|load|mouseover|submit)\s*=/i;
 const UNSAFE_PROPERTY_NAMES = new Set(['__proto__', 'constructor', 'prototype']);
@@ -119,16 +133,28 @@ export function inspectTemplateDocument(document: unknown): TemplateDocumentInsp
 		issues.push(templatePackageExportIssue(code, { slot: path, message }));
 	}
 
-	function inspectString(value: string, path: string) {
+	/**
+	 * A Template Package may not depend on anything outside itself, but authored
+	 * display copy is data, not a dependency: a lower third reading "Visit
+	 * https://team.com" is text the renderer draws, never a resource it fetches.
+	 * So a resource is recognised by position rather than by mentioning a scheme —
+	 * a value that is entirely a URL, a value under a resource-shaped property, or
+	 * a CSS `url()` function, which fetches wherever it is written.
+	 */
+	function inspectString(value: string, path: string, resourceProperty: boolean) {
+		const wholeValueResource = WHOLE_VALUE_REMOTE_PATTERN.test(value);
+		const resourceContext = resourceProperty || wholeValueResource;
 		if (EXECUTABLE_CONTENT_PATTERN.test(value))
 			reject('executable-template-content', path, 'Template value contains executable content');
-		else if (INLINE_PAYLOAD_PATTERN.test(value))
+		else if (resourceContext && INLINE_PAYLOAD_PATTERN.test(value))
 			reject('undeclared-graphic-asset-dependency', path, 'Template value inlines content that no packaged asset declares');
-		else if (REMOTE_RESOURCE_PATTERN.test(value) || PROTOCOL_RELATIVE_PATTERN.test(value))
+		else if (wholeValueResource || CSS_RESOURCE_FUNCTION_PATTERN.test(value))
+			reject('remote-resource-dependency', path, 'Template value requires a remote resource');
+		else if (resourceProperty && REMOTE_RESOURCE_PATTERN.test(value))
 			reject('remote-resource-dependency', path, 'Template value requires a remote resource');
 	}
 
-	function walk(value: unknown, path: string, depth: number) {
+	function walk(value: unknown, path: string, depth: number, resourceProperty = false) {
 		nodeCount += 1;
 		if (nodeCount > MAXIMUM_DOCUMENT_NODES) {
 			if (nodeCount === MAXIMUM_DOCUMENT_NODES + 1)
@@ -147,11 +173,12 @@ export function inspectTemplateDocument(document: unknown): TemplateDocumentInsp
 			return;
 		}
 		if (typeof value === 'string') {
-			inspectString(value, path);
+			inspectString(value, path, resourceProperty);
 			return;
 		}
 		if (Array.isArray(value)) {
-			value.forEach((item, index) => walk(item, `${path}[${index}]`, depth + 1));
+			// An array inherits its property's meaning, so `sources: [...]` stays resource-shaped.
+			value.forEach((item, index) => walk(item, `${path}[${index}]`, depth + 1, resourceProperty));
 			return;
 		}
 		if (isPlainObject(value)) {
@@ -163,7 +190,7 @@ export function inspectTemplateDocument(document: unknown): TemplateDocumentInsp
 					reject('invalid-template-document', path ? `${path}.${key}` : key, 'Template document declares an unsafe property name');
 					continue;
 				}
-				walk(value[key], path ? `${path}.${key}` : key, depth + 1);
+				walk(value[key], path ? `${path}.${key}` : key, depth + 1, isResourceProperty(key));
 			}
 			return;
 		}
@@ -475,16 +502,5 @@ export function planTemplatePackage(input: {
 		contents: contentList,
 		issues,
 		totals: { ...totals, archiveByteLength },
-	};
-}
-
-export function emptyTemplatePackageTotals(): TemplatePackageTotals & { archiveByteLength: number } {
-	return {
-		entryCount: 0,
-		packagedAssetCount: 0,
-		packagedRevisionCount: 0,
-		uniqueContentCount: 0,
-		expandedByteLength: 0,
-		archiveByteLength: 0,
 	};
 }

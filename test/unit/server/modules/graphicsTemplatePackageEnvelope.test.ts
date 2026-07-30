@@ -122,6 +122,41 @@ describe('the stored-ZIP archive Template Packages are written as', () => {
 			.toThrow(StoredZipArchiveError);
 	});
 
+	it('cancels the entry source a client abandons and opens no later entry', async () => {
+		let cancelled = false;
+		let secondEntryOpened = false;
+		const archive = createStoredZipArchive([
+			{
+				name: 'content/sha256-aa.bin',
+				byteLength: 1024 * 1024,
+				open: async () => new ReadableStream<Uint8Array>({
+					pull(controller) {
+						controller.enqueue(new Uint8Array(1024));
+					},
+					cancel() {
+						cancelled = true;
+					},
+				}),
+			},
+			{
+				name: 'content/sha256-bb.bin',
+				byteLength: 8,
+				open: async () => {
+					secondEntryOpened = true;
+					return readableBytes(new Uint8Array(8));
+				},
+			},
+		]);
+
+		const reader = archive.getReader();
+		await reader.read();
+		await reader.read();
+		await reader.cancel('client aborted the download');
+
+		expect(cancelled).toBe(true);
+		expect(secondEntryOpened).toBe(false);
+	});
+
 	it('errors the stream rather than truncating when an entry produces the wrong byte count', async () => {
 		const stream = createStoredZipArchive([{
 			name: 'content/sha256-aa.bin',
@@ -167,6 +202,25 @@ describe('template Package envelope limits', () => {
 		expect(result.issues.map(issue => issue.code)).toEqual(
 			expect.arrayContaining(['package-entry-limit-exceeded']),
 		);
+	});
+
+	it('reports rather than throws when a plan exceeds what a non-Zip64 archive could hold', () => {
+		// 100 packaged revisions of 250 MiB is inside every documented ceiling
+		// except the byte limits, and its ~25 GiB total is past the point the
+		// container format itself gives out. Measuring must still yield a report.
+		const revisions = Array.from(
+			{ length: TEMPLATE_PACKAGE_LIMITS.maximumPackagedRevisionCount },
+			(_value, index) => packagedRevision(index, 250 * 1024 * 1024),
+		);
+		const result = plan(revisions);
+
+		expect(result.issues.map(issue => issue.code)).toEqual(
+			expect.arrayContaining(['package-archive-limit-exceeded', 'package-expanded-limit-exceeded']),
+		);
+		// Past 0xFFFFFFFF, the point a non-Zip64 central directory can no longer
+		// describe — measured and reported rather than thrown.
+		expect(result.totals.archiveByteLength).toBeGreaterThan(100 * 250 * 1024 * 1024);
+		expect(result.totals.archiveByteLength).toBeGreaterThan(0xFFFFFFFF);
 	});
 
 	it('blocks a package that would expand beyond one gibibyte', () => {

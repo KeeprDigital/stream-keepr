@@ -590,6 +590,84 @@ describe('the Template Package export contract', () => {
 		expect(result.report.limits.maximumPackagedRevisionCount).toBe(100);
 	});
 
+	it('keeps authored display copy that mentions a URL exportable', async () => {
+		const { library } = createExportLibrary();
+
+		const result = await library.exportTemplatePackage({
+			packageKind: 'skgraphic',
+			template: {
+				identity: 'template-13',
+				name: 'Authored copy',
+				document: {
+					items: [{
+						id: 'headline',
+						type: 'text',
+						label: 'Call to action',
+						text: 'Visit https://team.example.com for the full bracket',
+					}],
+				},
+			},
+			assets: [],
+		});
+
+		// Display text is data the renderer draws, not a resource it fetches.
+		expect(result.outcome).toBe('exported');
+	});
+
+	it('still blocks a remote resource in a position a renderer would fetch', async () => {
+		const { library } = createExportLibrary();
+		const cases = [
+			['frame.mediaBackground.url', { frame: { mediaBackground: { url: 'https://cdn.example.com/loop.mp4' } } }],
+			['items[0].posterUrl', { items: [{ posterUrl: 'https://cdn.example.com/poster.png' }] }],
+			['frame.gradient', { frame: { gradient: 'linear-gradient(#000, url(https://cdn.example.com/x.png))' } }],
+			['items[0].sources[0]', { items: [{ sources: ['https://cdn.example.com/a.mp4'] }] }],
+			['frame.backgroundUrl', { frame: { backgroundUrl: '//cdn.example.com/loop.mp4' } }],
+		] as const;
+
+		for (const [slot, document] of cases) {
+			const result = await library.exportTemplatePackage({
+				packageKind: 'sklayout',
+				template: { identity: 'template-14', name: 'Remote dependency', document },
+				assets: [],
+			});
+			expect(result.outcome, slot).toBe('rejected');
+			if (result.outcome !== 'rejected')
+				continue;
+			expect(result.report.issues).toEqual([
+				expect.objectContaining({ code: 'remote-resource-dependency', slot }),
+			]);
+		}
+	});
+
+	it('reports a missing reference and an envelope limit in the same report', async () => {
+		const { library } = createExportLibrary();
+		const assets: { slot: string; reference: GraphicAssetReference }[] = [];
+		for (let index = 0; index < 101; index += 1) {
+			const reference = await ingestImage(library, `Bulk ${index}`, transparentPixelPng);
+			assets.push({ slot: `items[${index}].asset`, reference });
+		}
+		assets.push({
+			slot: 'items[999].asset',
+			reference: {
+				assetId: assets[0]!.reference.assetId,
+				revisionId: 'revision-that-never-existed' as GraphicAssetRevisionId,
+			},
+		});
+
+		const result = await library.exportTemplatePackage({
+			packageKind: 'sklayout',
+			template: { identity: 'template-15', name: 'Two problem classes', document: {} },
+			assets,
+		});
+
+		expect(result.outcome).toBe('rejected');
+		if (result.outcome !== 'rejected')
+			return;
+		const codes = result.report.issues.map(issue => issue.code);
+		expect(codes).toContain('missing-graphic-asset-reference');
+		expect(codes).toContain('packaged-revision-limit-exceeded');
+	});
+
 	it('exposes no storage-provider detail to either package consumer', async () => {
 		const { library } = createExportLibrary();
 		const logo = await ingestImage(library, 'Logo', transparentPixelPng);
@@ -605,8 +683,14 @@ describe('the Template Package export contract', () => {
 				continue;
 			const archive = readStoredZipArchive(await collectStream(result.package.open()));
 			const serialised = JSON.stringify(result.package.manifest) + archive.entryNames.join(' ');
-			// Canonical object keys, bucket bindings, and staging paths stay internal.
-			expect(serialised).not.toMatch(/sha256\//);
+			const digest = digestOf(transparentPixelPng);
+			// The canonical object identity for these exact bytes. The digest is a
+			// published integrity fact, but the key that addresses the object store
+			// is not, so assert on the whole identity rather than on the digest.
+			const canonicalObjectKey = `sha256/${digest}`;
+			expect(serialised).toContain(digest);
+			expect(serialised).not.toContain(canonicalObjectKey);
+			expect(archive.entryNames).toContain(`content/sha256-${digest}.bin`);
 			expect(serialised).not.toMatch(/GRAPHICS_ASSET_(?:CANONICAL|STAGING)/);
 			expect(serialised).not.toMatch(/ingestion\//);
 			expect(serialised).not.toMatch(/\br2\b/i);

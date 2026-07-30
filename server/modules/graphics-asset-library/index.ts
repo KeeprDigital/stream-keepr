@@ -84,7 +84,6 @@ import {
 } from './silent-video-playback-validator';
 import { processStillImage } from './still-image';
 import {
-	emptyTemplatePackageTotals,
 	groupTemplatePackageRequirements,
 	inspectTemplateDocument,
 	inspectTemplatePackageCapabilities,
@@ -2429,9 +2428,12 @@ export function createGraphicsAssetLibrary(
 				};
 			}
 
-			if (issues.length > 0)
-				return rejected(issues, emptyTemplatePackageTotals());
-
+			// The envelope is measured even when a requirement already failed, so one
+			// report carries resolution and limit problems together rather than
+			// making an author fix a reference only to discover the package was
+			// always too large. Totals cover the revisions that did resolve, so a
+			// limit reported here is always real; an unresolvable revision's bytes
+			// simply cannot be counted, which can only understate a violation.
 			const plan = planTemplatePackage({
 				packageKind: input.packageKind,
 				template: { identity, name, document: input.template.document },
@@ -2442,8 +2444,8 @@ export function createGraphicsAssetLibrary(
 			});
 			// Limits are measured before a byte is written, so a package that would
 			// exceed the envelope never produces a partial archive.
-			if (plan.issues.length > 0)
-				return rejected(plan.issues, plan.totals);
+			if (issues.length > 0 || plan.issues.length > 0)
+				return rejected([...issues, ...plan.issues], plan.totals);
 
 			return {
 				outcome: 'exported',
