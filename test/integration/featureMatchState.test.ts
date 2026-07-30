@@ -104,6 +104,32 @@ describe('feature match session command API', () => {
 		expect(second.currentState.player1.lifeTotal).toBe(15);
 	});
 
+	it('answers a retry with the current authoritative snapshot, not the one the command produced', async () => {
+		const harness = await createCommandHarness(eventId);
+		const retriedCommand = {
+			commandId: commandId('retry-after-advance'),
+			type: 'SetLife',
+			payload: { player: 'player1', lifeTotal: 15 },
+			baseSequence: harness.session().sequence,
+		} satisfies Parameters<typeof harness.send>[0];
+
+		const first = await harness.send(retriedCommand);
+
+		// The session moves on before the original command is retried.
+		await harness.send({
+			commandId: commandId('advance-before-retry'),
+			type: 'SetLife',
+			payload: { player: 'player2', lifeTotal: 7 },
+			baseSequence: harness.session().sequence,
+		});
+
+		const retried = await sendFeatureMatchCommand(eventId, harness.session().id, retriedCommand);
+
+		expect(retried.sequence).toBe(first.sequence + 1);
+		expect(retried.currentState.player1.lifeTotal).toBe(15);
+		expect(retried.currentState.player2.lifeTotal).toBe(7);
+	});
+
 	it('rejects reuse of a commandId for a different payload', async () => {
 		const harness = await createCommandHarness(eventId);
 		const reusedCommandId = commandId('mismatched-idempotency');

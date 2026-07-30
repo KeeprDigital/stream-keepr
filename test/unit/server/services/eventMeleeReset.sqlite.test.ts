@@ -75,12 +75,13 @@ describe('eventService Melee config reset SQLite integration', () => {
 			)`,
 			`create unique index feature_match_sessions_active_slot_idx
 				on feature_match_sessions(slot_id) where status = 'active'`,
-			`create table feature_match_session_events (
-				id integer primary key autoincrement, event_id integer not null, slot_id integer not null,
-				session_id integer not null, sequence integer not null, type text not null, payload text not null,
-				command_id text not null, origin_connection_id text,
+			`create table live_state_command_receipts (
+				id integer primary key autoincrement, event_id integer not null,
+				aggregate_kind text not null, aggregate_id integer not null,
+				command_id text not null, command_type text not null, content_key text not null,
+				sequence integer not null,
 				created_at integer not null default (unixepoch() * 1000),
-				unique (session_id, sequence), unique (session_id, command_id)
+				unique (aggregate_kind, aggregate_id, command_id)
 			)`,
 		]) {
 			await client.execute(statement);
@@ -117,19 +118,16 @@ describe('eventService Melee config reset SQLite integration', () => {
 			) values (100, 1, 10, 'active', ?, ?, 7)`,
 			args: [JSON.stringify({ old: 'snapshot' }), JSON.stringify({ old: 'state' })],
 		});
-		await client.execute({
-			sql: `insert into feature_match_session_events (
-				event_id, slot_id, session_id, sequence, type, payload, command_id
-			) values (1, 10, 100, 7, 'SnapshotCorrected', ?, 'old-command')`,
-			args: [JSON.stringify({ old: true })],
-		});
+		await client.execute(`insert into live_state_command_receipts (
+			event_id, aggregate_kind, aggregate_id, command_id, command_type, content_key, sequence
+		) values (1, 'featureMatchSession', 100, 'old-command', 'SnapshotCorrected', 'old-content-key', 7)`);
 	});
 
 	afterAll(async () => await client.close());
 
 	it('rolls back imported data, feature state, and Event config when a later statement fails', async () => {
 		await client.execute(`create trigger reject_replacement_session_event
-			before insert on feature_match_session_events
+			before delete on live_state_command_receipts
 			begin
 				select raise(abort, 'forced reset failure');
 			end`);
@@ -177,7 +175,7 @@ describe('eventService Melee config reset SQLite integration', () => {
 		expect(await rowCount('feature_match_sessions')).toBe(1);
 		expect(await firstRow(`select status, sequence from feature_match_sessions where id = 100`))
 			.toMatchObject({ status: 'active', sequence: 7 });
-		expect(await rowCount('feature_match_session_events')).toBe(1);
+		expect(await rowCount('live_state_command_receipts')).toBe(1);
 
 		await client.execute(`drop trigger reject_replacement_session_event`);
 		await expect(eventService().updateMeleeConfig(1, input)).resolves.toBe(true);
@@ -238,8 +236,9 @@ describe('eventService Melee config reset SQLite integration', () => {
 			player1: { playerId: null, data: null },
 			player2: { playerId: null, data: null },
 		});
-		const startedEvent = await firstRow(`select * from feature_match_session_events where session_id = ${Number(newSession.id)}`);
-		expect(startedEvent).toMatchObject({ sequence: 1, type: 'SessionStarted', slot_id: 10, event_id: 1 });
+		// The replaced Session's receipts go with it: a closed Session accepts no
+		// further command, so nothing is left to deduplicate against.
+		expect(await rowCount('live_state_command_receipts')).toBe(0);
 		expect(protectMeleeClientSecret).toHaveBeenCalledWith('new-secret');
 	});
 });

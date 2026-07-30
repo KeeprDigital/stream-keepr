@@ -1,6 +1,6 @@
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type { PlayerSlotData } from '~~/shared/api';
-import type { FeatureMatchSessionEventType, FeatureMatchSessionStatus, FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
+import type { FeatureMatchSessionStatus, FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { PlayerGameData } from '~~/shared/types/game';
 import type { ModeConfigsMap, ScreenConfig } from '~~/shared/types/screenConfig';
@@ -24,7 +24,7 @@ import {
 	SCREEN_MODE_VALUES,
 	UNRESOLVED_DECK_ENTRY_TYPE_VALUES,
 } from '~~/shared/types/enums';
-import { FEATURE_MATCH_SESSION_EVENT_TYPE_VALUES, FEATURE_MATCH_SESSION_STATUS_VALUES } from '~~/shared/types/featureMatchSession';
+import { FEATURE_MATCH_SESSION_STATUS_VALUES } from '~~/shared/types/featureMatchSession';
 
 export {
 	CLOCK_TYPE_VALUES,
@@ -368,32 +368,44 @@ export const featureMatchSessions = sqliteTable('feature_match_sessions', {
 	uniqueIndex('feature_match_sessions_active_slot_idx').on(table.slotId).where(sql`${table.status} = 'active'`),
 ]);
 
-export const featureMatchSessionEvents = sqliteTable('feature_match_session_events', {
+/**
+ * Compact command receipts for every sequenced live-state aggregate.
+ *
+ * A receipt is deliberately not an event row. It answers only the two questions
+ * the live-state module asks of history — has this command ID already been
+ * committed, and was it the same command? — and it is retained only for a bounded
+ * window of an aggregate's most recent commands rather than forever.
+ *
+ * Answering the second question needs the command's content, so `content_key`
+ * holds it in canonical form rather than as a hash: a hash collision would
+ * silently accept a different command as a retry and corrupt live state. Rows are
+ * therefore no smaller than the event rows they replace, but there is a fixed
+ * number of them per aggregate instead of one per command forever.
+ */
+export const liveStateCommandReceipts = sqliteTable('live_state_command_receipts', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	eventId: integer('event_id')
 		.references(() => events.id, { onDelete: 'cascade' })
 		.notNull(),
-	slotId: integer('slot_id')
-		.references(() => featureMatchSlots.id, { onDelete: 'cascade' })
-		.notNull(),
-	sessionId: integer('session_id')
-		.references(() => featureMatchSessions.id, { onDelete: 'cascade' })
-		.notNull(),
 
-	sequence: integer('sequence').notNull(),
-	type: text('type', { enum: FEATURE_MATCH_SESSION_EVENT_TYPE_VALUES }).$type<FeatureMatchSessionEventType>().notNull(),
-	payload: text('payload', { mode: 'json' }).$type<unknown>().notNull(),
+	/** Which family of live-state aggregates the receipt belongs to. */
+	aggregateKind: text('aggregate_kind').notNull(),
+	/** The aggregate's own primary key within that family. */
+	aggregateId: integer('aggregate_id').notNull(),
+
 	commandId: text('command_id').notNull(),
-	originConnectionId: text('origin_connection_id'),
+	commandType: text('command_type').notNull(),
+	/** The accepted command's canonical content, for same-ID/different-content rejection. */
+	contentKey: text('content_key').notNull(),
+	/** Authoritative sequence the command committed at. */
+	sequence: integer('sequence').notNull(),
 	createdAt: integer('created_at', { mode: 'timestamp_ms' })
 		.notNull()
 		.default(sql`(unixepoch() * 1000)`),
 }, table => [
-	index('feature_match_session_events_event_id_idx').on(table.eventId),
-	index('feature_match_session_events_slot_id_idx').on(table.slotId),
-	index('feature_match_session_events_session_id_idx').on(table.sessionId),
-	uniqueIndex('feature_match_session_events_sequence_idx').on(table.sessionId, table.sequence),
-	uniqueIndex('feature_match_session_events_command_idx').on(table.sessionId, table.commandId),
+	index('live_state_command_receipts_event_id_idx').on(table.eventId),
+	index('live_state_command_receipts_aggregate_idx').on(table.aggregateKind, table.aggregateId, table.sequence),
+	uniqueIndex('live_state_command_receipts_command_idx').on(table.aggregateKind, table.aggregateId, table.commandId),
 ]);
 
 export const featureMatches = featureMatchSlots;
@@ -725,7 +737,6 @@ export const featureMatchesRelations = relations(featureMatches, ({ one, many })
 		relationName: 'featureMatchActiveSession',
 	}),
 	sessions: many(featureMatchSessions),
-	sessionEvents: many(featureMatchSessionEvents),
 	assignments: many(featureMatchAssignments),
 }));
 
@@ -748,7 +759,7 @@ export const featureMatchAssignmentsRelations = relations(featureMatchAssignment
 	}),
 }));
 
-export const featureMatchSessionsRelations = relations(featureMatchSessions, ({ one, many }) => ({
+export const featureMatchSessionsRelations = relations(featureMatchSessions, ({ one }) => ({
 	event: one(events, {
 		fields: [featureMatchSessions.eventId],
 		references: [events.id],
@@ -762,21 +773,12 @@ export const featureMatchSessionsRelations = relations(featureMatchSessions, ({ 
 		references: [featureMatches.activeSessionId],
 		relationName: 'featureMatchActiveSession',
 	}),
-	events: many(featureMatchSessionEvents),
 }));
 
-export const featureMatchSessionEventsRelations = relations(featureMatchSessionEvents, ({ one }) => ({
+export const liveStateCommandReceiptsRelations = relations(liveStateCommandReceipts, ({ one }) => ({
 	event: one(events, {
-		fields: [featureMatchSessionEvents.eventId],
+		fields: [liveStateCommandReceipts.eventId],
 		references: [events.id],
-	}),
-	slot: one(featureMatches, {
-		fields: [featureMatchSessionEvents.slotId],
-		references: [featureMatches.id],
-	}),
-	session: one(featureMatchSessions, {
-		fields: [featureMatchSessionEvents.sessionId],
-		references: [featureMatchSessions.id],
 	}),
 }));
 
@@ -894,8 +896,8 @@ export type DbFeatureMatchSlot = typeof featureMatchSlots.$inferSelect;
 export type DbFeatureMatchSlotInsert = typeof featureMatchSlots.$inferInsert;
 export type DbFeatureMatchSession = typeof featureMatchSessions.$inferSelect;
 export type DbFeatureMatchSessionInsert = typeof featureMatchSessions.$inferInsert;
-export type DbFeatureMatchSessionEvent = typeof featureMatchSessionEvents.$inferSelect;
-export type DbFeatureMatchSessionEventInsert = typeof featureMatchSessionEvents.$inferInsert;
+export type DbLiveStateCommandReceipt = typeof liveStateCommandReceipts.$inferSelect;
+export type DbLiveStateCommandReceiptInsert = typeof liveStateCommandReceipts.$inferInsert;
 export type DbScreen = typeof screens.$inferSelect;
 export type DbScreenInsert = typeof screens.$inferInsert;
 export type DbArchetype = typeof archetypes.$inferSelect;
