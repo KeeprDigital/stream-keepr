@@ -5,6 +5,7 @@ import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
 	addGraphicGroupChild,
 	addGraphicItem,
+	authorsGraphicStack,
 	createBroadcastGraphic,
 	deleteBroadcastGraphic,
 	deleteGraphicItem,
@@ -31,6 +32,15 @@ import GraphicsCompositorReorderControls from './ReorderControls.vue';
  * The definition palette offers exactly the Graphic Item kinds the Host
  * Contract's declared context supports, and a Graphic Group's own palette omits
  * Graphic Group because groups do not nest.
+ *
+ * ## A host that composes one composition has no stack
+ *
+ * The stack is the Broadcast Graphics host's, not the compositor's. A Feature
+ * Match Overlay renders exactly one Feature Match Layout for exactly one Feature
+ * Match Slot, so it declares `composition: 'single'` and this tree shows only that
+ * composition's Graphic Layer Order — no stack section, no way to add, reorder, or
+ * remove a member. It is still passed as a stack of one, because the render model
+ * composes a stack and one is a stack.
  */
 const props = defineProps<{
 	graphics: readonly BroadcastGraphicConfig[];
@@ -58,6 +68,15 @@ const emit = defineEmits<{
  * it, so an absent prop must never read as permission.
  */
 const canAuthor = computed(() => props.writable === true);
+
+/**
+ * Whether the tree roots an author-editable stack at all.
+ *
+ * Read from the contract rather than inferred from `graphics.length`: a Broadcast
+ * Graphics Screen with one Broadcast Graphic still authors a stack, and a length
+ * of one must not silently take its stack controls away.
+ */
+const showStack = computed(() => authorsGraphicStack(props.contract));
 
 function paletteOptions(definitions: readonly { label: string; kind: GraphicItemKind; icon: string }[]) {
 	return definitions.map(definition => ({
@@ -113,8 +132,13 @@ function isSelected(target: GraphicsSelectionTarget) {
 	return graphicsSelectionKey(props.selectedTarget) === graphicsSelectionKey(target);
 }
 
+/**
+ * The stack mutators check the contract as well as the lease. Hiding a control is
+ * a presentation decision; refusing to emit is what makes "this host has no stack"
+ * a property of the component rather than of its current markup.
+ */
 function addGraphic() {
-	if (!canAuthor.value)
+	if (!canAuthor.value || !showStack.value)
 		return;
 	const { graphics, graphicId } = createBroadcastGraphic(props.graphics, { id: randomUuid() });
 	emit('update:graphics', graphics);
@@ -122,13 +146,13 @@ function addGraphic() {
 }
 
 function moveGraphic(graphicId: string, delta: 1 | -1) {
-	if (!canAuthor.value)
+	if (!canAuthor.value || !showStack.value)
 		return;
 	emit('update:graphics', moveBroadcastGraphic(props.graphics, graphicId, delta));
 }
 
 function removeGraphic(graphicId: string) {
-	if (!canAuthor.value)
+	if (!canAuthor.value || !showStack.value)
 		return;
 	emit('update:graphics', deleteBroadcastGraphic(props.graphics, graphicId));
 	emit('update:selectedTarget', { type: 'canvas' });
@@ -184,7 +208,7 @@ function removeItem(itemId: string) {
 
 <template>
 	<div class="space-y-4">
-		<section class="rounded-lg border border-default/70 bg-default p-3">
+		<section v-if="showStack" class="rounded-lg border border-default/70 bg-default p-3" data-testid="graphic-stack-section">
 			<div class="flex items-center justify-between gap-3">
 				<div>
 					<p class="text-sm font-semibold">
@@ -211,7 +235,7 @@ function removeItem(itemId: string) {
 			</UButton>
 		</section>
 
-		<div class="space-y-1.5">
+		<div v-if="showStack" class="space-y-1.5">
 			<div v-for="(graphic, index) in graphics" :key="graphic.id" class="flex gap-1">
 				<button
 					type="button"
