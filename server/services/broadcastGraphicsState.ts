@@ -8,16 +8,18 @@ import type {
 	BroadcastGraphicsCommandResult,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type { GraphicInputDeclaration } from '~~/shared/types/graphics';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { broadcastGraphicsLiveSessions } from '~~/server/db/schema';
-import { mapBroadcastGraphicsLiveSessionToResponse } from '~~/server/mappers/broadcastGraphicsLiveSession';
+import { mapBroadcastGraphicsCommandResult } from '~~/server/mappers/broadcastGraphicsLiveSession';
 import { createSequencedLiveState, forgetAggregateReceipts } from '~~/server/modules/live-state';
 import { publishMessage } from '~~/server/utils/ably';
 import {
 	applyBroadcastGraphicsCommand,
 	BroadcastGraphicsCommandRejection,
+	carriedForwardBroadcastGraphicsLiveState,
 	createInitialBroadcastGraphicsLiveState,
+	recoveredBroadcastGraphicsLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 
 /**
@@ -30,6 +32,7 @@ import {
  */
 const REJECTION_STATUS: Record<BroadcastGraphicsCommandRejection['code'], number> = {
 	'stale-input-acceptance': 409,
+	'stale-input-edit': 409,
 	'required-input-unavailable': 409,
 	'update-unavailable': 409,
 	'unknown-input': 404,
@@ -71,20 +74,47 @@ export function broadcastGraphicsStateService() {
 	};
 
 	/**
-	 * End whichever epoch a Screen currently owns and discard its receipts.
+	 * The epoch a Screen ended most recently, whose prepared work the next one
+	 * inherits.
+	 *
+	 * Ordered by identity rather than by `endedAt`, because a mode change flipped in
+	 * and out inside one millisecond gives two rows the same timestamp and the later
+	 * identity is the one that was actually running.
+	 */
+	const findLatestEndedSessionByScreen = async (
+		screenId: number,
+		eventId: number,
+	): Promise<DbBroadcastGraphicsLiveSession | undefined> => {
+		return await db.query.broadcastGraphicsLiveSessions.findFirst({
+			where: and(
+				eq(broadcastGraphicsLiveSessions.screenId, screenId),
+				eq(broadcastGraphicsLiveSessions.eventId, eventId),
+				eq(broadcastGraphicsLiveSessions.status, 'ended'),
+			),
+			orderBy: desc(broadcastGraphicsLiveSessions.id),
+		});
+	};
+
+	/**
+	 * The two writes that end whichever epoch a Screen currently owns.
 	 *
 	 * A Broadcast Graphics Live Session ends when the Screen leaves Broadcast
-	 * Graphics mode, and an ended epoch can never accept another command — so its
-	 * receipts have nothing left to protect. The row itself is kept: a stale retry
-	 * addressed to it must be recognisably rejected rather than silently opening a
-	 * fresh epoch.
+	 * Graphics mode or an operator explicitly resets live state, and an ended epoch
+	 * can never accept another command — so its receipts have nothing left to
+	 * protect. The row itself is kept: a stale retry addressed to it must be
+	 * recognisably rejected rather than silently opening a fresh epoch.
 	 *
-	 * Both writes go in one batch so an epoch can never be ended without its
-	 * receipts being discarded, or vice versa.
+	 * Returned as statements rather than executed so that a reset can commit them
+	 * together with the successor epoch it opens; on their own they always go in one
+	 * batch, so an epoch can never be ended without its receipts being discarded, or
+	 * vice versa.
 	 */
-	const endSessionsForScreen = async (screenId: number, eventId: number): Promise<void> => {
+	const endSessionStatements = (
+		screenId: number,
+		eventId: number,
+	): [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]] => {
 		const now = new Date();
-		const queries: [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]] = [
+		return [
 			db.update(broadcastGraphicsLiveSessions)
 				.set({ status: 'ended', endedAt: now, updatedAt: now })
 				.where(and(
@@ -103,8 +133,57 @@ export function broadcastGraphicsStateService() {
 				`,
 			}),
 		];
+	};
 
-		await db.batch(queries);
+	const openSessionStatement = (
+		screenId: number,
+		eventId: number,
+		currentState: BroadcastGraphicsLiveState,
+	): BatchItem<'sqlite'> => db.insert(broadcastGraphicsLiveSessions)
+		.values({ eventId, screenId, status: 'active', currentState, sequence: 1 })
+		.returning();
+
+	/** Ends the Screen's epoch, answering which one it was so it can be announced. */
+	const endSessionsForScreen = async (
+		screenId: number,
+		eventId: number,
+	): Promise<DbBroadcastGraphicsLiveSession | undefined> => {
+		const ended = await findActiveSessionByScreen(screenId, eventId);
+		await db.batch(endSessionStatements(screenId, eventId));
+		return ended;
+	};
+
+	/**
+	 * End the Screen's epoch and open its successor in one commit, carrying nothing
+	 * forward.
+	 *
+	 * This is what an explicit live-state reset means: every Broadcast Graphic off,
+	 * a new epoch that stale retries from the old one cannot reach, and — unlike a
+	 * mode change — no prepared Graphic Input values either. A mode change is
+	 * incidental to the show and the operator's staged work should survive it; a
+	 * reset is the operator asking for a clean slate, and silently keeping their
+	 * previous values would make it the one action that cannot deliver one.
+	 *
+	 * One batch, so there is no instant at which the Screen has no epoch — a
+	 * concurrent snapshot request would otherwise open one and carry forward exactly
+	 * the values this is discarding.
+	 */
+	const resetSessionForScreen = async (
+		screenId: number,
+		eventId: number,
+	): Promise<{ ended?: DbBroadcastGraphicsLiveSession; opened: DbBroadcastGraphicsLiveSession }> => {
+		const ended = await findActiveSessionByScreen(screenId, eventId);
+		const [first, ...rest] = endSessionStatements(screenId, eventId);
+		const results = await db.batch([
+			first,
+			...rest,
+			openSessionStatement(screenId, eventId, createInitialBroadcastGraphicsLiveState()),
+		]);
+		const opened = (results.at(-1) as DbBroadcastGraphicsLiveSession[] | undefined)?.[0];
+		if (!opened)
+			throw new Error('Failed to open broadcast graphics live session');
+
+		return { ended, opened };
 	};
 
 	/**
@@ -112,7 +191,10 @@ export function broadcastGraphicsStateService() {
 	 *
 	 * A Screen in Broadcast Graphics mode always has exactly one active epoch, so
 	 * the first operator or Screen Output to ask for the authoritative snapshot
-	 * opens it. A fresh epoch starts with nothing on air.
+	 * opens it. A fresh epoch has nothing on air, and inherits the previous epoch's
+	 * prepared Graphic Input values: a Screen flipped out of and back into Broadcast
+	 * Graphics mode is one show continuing, so the values an operator staged for
+	 * their next take are not theirs to retype.
 	 */
 	const ensureActiveSession = async (
 		screenId: number,
@@ -122,13 +204,17 @@ export function broadcastGraphicsStateService() {
 		if (existing)
 			return existing;
 
+		const previous = await findLatestEndedSessionByScreen(screenId, eventId);
+
 		try {
 			const [created] = await db.insert(broadcastGraphicsLiveSessions)
 				.values({
 					eventId,
 					screenId,
 					status: 'active',
-					currentState: createInitialBroadcastGraphicsLiveState(),
+					currentState: previous
+						? carriedForwardBroadcastGraphicsLiveState(previous.currentState)
+						: createInitialBroadcastGraphicsLiveState(),
 					sequence: 1,
 				})
 				.returning();
@@ -222,11 +308,17 @@ export function broadcastGraphicsStateService() {
 		 * A domain refusal is raised from the shared reducer, which is deliberately
 		 * ignorant of HTTP; this is the one place that maps it. Reduction happens
 		 * before the compare-and-swap write, so a refusal never leaves a receipt.
+		 *
+		 * Reduction starts from the *recovered* state, which is what makes an explicit
+		 * Take the way out of a recovery fault: the command is reduced onto a state
+		 * with nothing on air rather than onto the unreadable one, so the write that
+		 * commits it also replaces the state nobody could read. Reducing onto the raw
+		 * state instead would either throw or persist the corruption forward.
 		 */
 		reduce: (session, command) => {
 			try {
 				return applyBroadcastGraphicsCommand(
-					session.currentState,
+					recoveredBroadcastGraphicsLiveState(session.currentState),
 					command,
 					// The server's clock is the authoritative effective start time of the
 					// phase this command begins. It is read here, at acceptance, rather than
@@ -270,14 +362,14 @@ export function broadcastGraphicsStateService() {
 			))
 			.returning(),
 
-		toResult: (session, commandType) => ({
-			screenId: session.screenId,
-			sessionId: session.id,
-			sequence: session.sequence,
-			commandType: commandType as BroadcastGraphicsCommandResult['commandType'],
-			currentState: session.currentState,
-			session: mapBroadcastGraphicsLiveSessionToResponse(session),
-		}),
+		// One mapped snapshot feeds both the result and the notification derived from
+		// it, so a client cannot be handed a recovered `session` alongside a raw
+		// `currentState` that disagrees with it. The invariant lives with the mapper
+		// that owns recovery, and is pinned there.
+		toResult: (session, commandType) => mapBroadcastGraphicsCommandResult(
+			session,
+			commandType as BroadcastGraphicsCommandResult['commandType'],
+		),
 
 		publish: async (result, originConnectionId) => {
 			await publishMessage(
@@ -306,6 +398,7 @@ export function broadcastGraphicsStateService() {
 		findSessionById,
 		ensureActiveSession,
 		endSessionsForScreen,
+		resetSessionForScreen,
 		applyCommand,
 	};
 }

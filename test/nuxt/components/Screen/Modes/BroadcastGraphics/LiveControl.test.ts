@@ -15,12 +15,14 @@ enableAutoUnmount(afterEach);
 const mockLiveState = ref<BroadcastGraphicsLiveState>(createInitialBroadcastGraphicsLiveState());
 const mockSetInput = vi.fn();
 const mockUpdateGraphic = vi.fn();
+/** The Graphic Inputs whose last edit from this session lost a field-scoped conflict. */
+const mockSupersededInputKeys = ref<string[]>([]);
 
 mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	setInput: mockSetInput,
 	updateGraphic: mockUpdateGraphic,
 	inputTraces: (_screenId: number, graphic: BroadcastGraphicConfig) =>
-		graphicInputTraces(mockLiveState.value, graphic.id, graphic),
+		graphicInputTraces(mockLiveState.value, graphic.id, graphic, {}, mockSupersededInputKeys.value),
 }));
 
 const ScreenSettingsCardStub = defineComponent({
@@ -90,6 +92,7 @@ function graphic(inputs: GraphicInputDeclaration[], overrides: Partial<Broadcast
 async function mountComponent(
 	config: BroadcastGraphicConfig,
 	playoutState: GraphicPlayoutState = 'off',
+	disconnected = false,
 ) {
 	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/LiveControl.vue';
 	const { default: LiveControl } = await import(componentPath);
@@ -100,6 +103,7 @@ async function mountComponent(
 			screen: { id: 3, slug: 'main' } as Screen,
 			graphic: config,
 			playoutState,
+			disconnected,
 		},
 		global: {
 			stubs: {
@@ -124,6 +128,7 @@ describe('broadcastGraphicsLiveControl', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockLiveState.value = createInitialBroadcastGraphicsLiveState();
+		mockSupersededInputKeys.value = [];
 	});
 
 	it('generates one type-appropriate field for each declared Graphic Input', async () => {
@@ -177,7 +182,11 @@ describe('broadcastGraphicsLiveControl', () => {
 		await field.setValue('Ava Reed');
 		await field.trigger('blur');
 
-		expect(mockSetInput).toHaveBeenCalledWith(7, 3, 'lower-third', 'name', 'Ava Reed');
+		// The edit carries the value the operator was editing away from — the declared
+		// default here, because nobody has edited this input yet. That is its Field
+		// Ownership claim, and sending nothing would let this first edit silently
+		// overwrite a colleague's.
+		expect(mockSetInput).toHaveBeenCalledWith(7, 3, 'lower-third', 'name', 'Ava Reed', 'Unnamed');
 	});
 
 	it('writes a discrete control the moment it changes', async () => {
@@ -187,7 +196,8 @@ describe('broadcastGraphicsLiveControl', () => {
 
 		await wrapper.get('[data-testid="live-control-field-flag"]').trigger('change');
 
-		expect(mockSetInput).toHaveBeenCalledWith(7, 3, 'lower-third', 'flag', true);
+		// The new value, and the declared default it was toggled away from.
+		expect(mockSetInput).toHaveBeenCalledWith(7, 3, 'lower-third', 'flag', true, false);
 	});
 
 	it('shows no Update Graphic action while the Broadcast Graphic is off', async () => {
@@ -261,5 +271,88 @@ describe('broadcastGraphicsLiveControl', () => {
 		const wrapper = await mountComponent(graphic([NAME, TITLE]), 'off');
 
 		expect(wrapper.find('[data-testid="live-control-take-blocked"]').exists()).toBe(false);
+	});
+	describe('a Graphic Input whose edit lost a field-scoped conflict', () => {
+		it('is reported as refreshed rather than as the operator’s own accepted edit', async () => {
+			mockLiveState.value = {
+				playout: {},
+				inputs: { 'lower-third': { working: { name: 'Ben Cole' }, accepted: {}, acceptedRevision: 0 } },
+			};
+			mockSupersededInputKeys.value = ['name'];
+
+			const wrapper = await mountComponent(graphic([NAME, TITLE]));
+
+			expect(wrapper.get('[data-graphic-input="name"]').attributes('data-graphic-input-status')).toBe('superseded');
+			expect(wrapper.get('[data-graphic-input="title"]').attributes('data-graphic-input-status')).not.toBe('superseded');
+		});
+
+		it('names what happened, and which Graphic Input it happened to', async () => {
+			mockSupersededInputKeys.value = ['name'];
+
+			const wrapper = await mountComponent(graphic([NAME]));
+
+			expect(wrapper.get('[data-testid="live-control-refreshed"]').text()).toContain('Presenter name');
+			expect(wrapper.get('[data-testid="live-control-refreshed"]').text()).toMatch(/not applied/i);
+		});
+
+		it('gives the field back to the value that actually landed', async () => {
+			// The refused text must not stay in the box: an operator looking at their own
+			// rejected edit would believe it is on its way to air.
+			const wrapper = await mountComponent(graphic([NAME]));
+			const field = wrapper.get('[data-testid="live-control-field-name"]');
+			await field.setValue('Ava Reed');
+			expect((field.element as HTMLInputElement).value).toBe('Ava Reed');
+
+			mockLiveState.value = {
+				playout: {},
+				inputs: { 'lower-third': { working: { name: 'Ben Cole' }, accepted: {}, acceptedRevision: 0 } },
+			};
+			mockSupersededInputKeys.value = ['name'];
+			await flushPromises();
+
+			expect((wrapper.get('[data-testid="live-control-field-name"]').element as HTMLInputElement).value)
+				.toBe('Ben Cole');
+		});
+
+		it('shows nothing about conflicts when no edit was refused', async () => {
+			const wrapper = await mountComponent(graphic([NAME]));
+
+			expect(wrapper.find('[data-testid="live-control-refreshed"]').exists()).toBe(false);
+		});
+	});
+
+	describe('while this browser is disconnected', () => {
+		it('withholds every generated field', async () => {
+			const wrapper = await mountComponent(graphic([NAME]), 'off', true);
+
+			expect(wrapper.get('[data-testid="live-control-field-name"]').attributes('disabled')).toBeDefined();
+		});
+
+		it('withholds Update Graphic even with a staged set waiting', async () => {
+			mockLiveState.value = {
+				playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
+				inputs: { 'lower-third': { working: { name: 'Ava Reed' }, accepted: { name: 'Unnamed' }, acceptedRevision: 1 } },
+			};
+
+			const wrapper = await mountComponent(graphic([NAME]), 'on-air', true);
+
+			expect(wrapper.get('[data-testid="live-control-update"]').attributes('disabled')).toBeDefined();
+			expect(wrapper.get('[data-testid="live-control-cut-update"]').attributes('disabled')).toBeDefined();
+		});
+
+		it('queues no edit: nothing is sent while disconnected, and nothing afterwards', async () => {
+			const wrapper = await mountComponent(graphic([NAME]), 'off', true);
+			const field = wrapper.get('[data-testid="live-control-field-name"]');
+
+			await field.setValue('Ava Reed');
+			await field.trigger('blur');
+			expect(mockSetInput).not.toHaveBeenCalled();
+
+			// An edit formed offline would arrive claiming a value it could not have
+			// checked, which is exactly the silent overwrite the conflict rule prevents.
+			await wrapper.setProps({ disconnected: false });
+			await flushPromises();
+			expect(mockSetInput).not.toHaveBeenCalled();
+		});
 	});
 });

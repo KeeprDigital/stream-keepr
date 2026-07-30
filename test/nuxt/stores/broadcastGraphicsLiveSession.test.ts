@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mockRepository = {
 	getSession: vi.fn(),
 	sendCommand: vi.fn(),
+	resetSession: vi.fn(),
 };
 
 vi.mock('~/composables/repositories/useBroadcastGraphicsLiveSessionRepository', () => ({
@@ -48,6 +49,7 @@ function session(overrides: Partial<BroadcastGraphicsLiveSessionResponse> = {}):
 		screenId: SCREEN_ID,
 		status: 'active',
 		currentState: { playout: {}, inputs: {} },
+		recoveryFault: null,
 		sequence: 1,
 		endedAt: null,
 		createdAt: new Date(0),
@@ -337,11 +339,19 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			session: session({ sequence: 2 }),
 		});
 
-		await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed');
+		await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
 
+		// The edit states the value it replaces: its Field Ownership claim, which is
+		// what lets the server merge it with a colleague's edit to another Graphic
+		// Input while refusing to let it silently overwrite theirs to this one.
 		expect(mockRepository.sendCommand).toHaveBeenCalledWith(EVENT_ID, SCREEN_ID, 55, expect.objectContaining({
 			type: 'Set Input',
-			payload: { graphicId: 'slate', inputKey: 'name', value: 'Ava Reed' },
+			payload: {
+				graphicId: 'slate',
+				inputKey: 'name',
+				value: 'Ava Reed',
+				basedOn: { value: 'Unnamed' },
+			},
 		}));
 	});
 
@@ -416,5 +426,264 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		expect(retried.commandId).toBe(first.commandId);
 		expect(retried.payload).toEqual(first.payload);
 		expect(first.payload.basedOnAcceptedRevision).toBe(4);
+	});
+	describe('a Graphic Input edit that loses a field-scoped conflict', () => {
+		const graphic = {
+			id: 'slate',
+			name: 'Slate',
+			items: [],
+			inputs: [{
+				type: 'text' as const,
+				key: 'name',
+				label: 'Name',
+				required: false,
+				updatePolicy: 'staged' as const,
+				default: 'Unnamed',
+				maxLength: 20,
+			}],
+		};
+
+		function refusal() {
+			return {
+				statusCode: 409,
+				message: 'Another operator has already changed Name on this Broadcast Graphic',
+				data: { code: 'stale-input-edit', inputKeys: ['name'] },
+			};
+		}
+
+		it('refreshes the field from the authoritative snapshot instead of restating the edit', async () => {
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+			mockRepository.sendCommand.mockRejectedValue(refusal());
+			mockRepository.getSession.mockResolvedValue(session({
+				sequence: 3,
+				currentState: {
+					playout: {},
+					inputs: { slate: { working: { name: 'Ben Cole' }, accepted: {}, acceptedRevision: 0 } },
+				},
+			}));
+
+			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
+
+			// Delivered once, never restated. A second delivery would arrive claiming the
+			// same overtaken value and race the refresh it is supposed to produce.
+			expect(mockRepository.sendCommand).toHaveBeenCalledOnce();
+			expect(store.inputsState(SCREEN_ID, 'slate').working.name).toBe('Ben Cole');
+		});
+
+		it('marks that Graphic Input superseded, and only that one', async () => {
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			mockRepository.sendCommand.mockRejectedValue(refusal());
+
+			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
+
+			const [name] = store.inputTraces(SCREEN_ID, graphic);
+			expect(name!.status).toBe('superseded');
+			expect(store.inputTraces(SCREEN_ID, { ...graphic, id: 'bug' })[0]!.status).not.toBe('superseded');
+		});
+
+		it('surfaces the refusal rather than swallowing it into a silent refresh', async () => {
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			mockRepository.sendCommand.mockRejectedValue(refusal());
+
+			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
+
+			expect(store.error).toMatch(/already changed Name/);
+		});
+
+		it('clears the superseded marker when the operator edits that field again', async () => {
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			mockRepository.sendCommand.mockRejectedValueOnce(refusal());
+			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
+			mockRepository.sendCommand.mockResolvedValue({
+				screenId: SCREEN_ID,
+				sessionId: 55,
+				sequence: 4,
+				commandType: 'Set Input',
+				currentState: { playout: {}, inputs: {} },
+				session: session({ sequence: 4 }),
+			});
+
+			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Ben Cole');
+
+			expect(store.inputTraces(SCREEN_ID, graphic)[0]!.status).not.toBe('superseded');
+		});
+	});
+
+	describe('a domain refusal that is not about the epoch', () => {
+		it('is not restated against a reloaded epoch', async () => {
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+			// A required Graphic Input with no value is a fact about the show, not about
+			// which epoch this client holds. Reloading and re-sending would be refused
+			// again for exactly the same reason.
+			mockRepository.sendCommand.mockRejectedValue({
+				statusCode: 409,
+				message: 'Title must have a value before this Broadcast Graphic can go on air',
+				data: { code: 'required-input-unavailable', inputKeys: ['title'] },
+			});
+
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+			expect(mockRepository.sendCommand).toHaveBeenCalledOnce();
+			expect(mockRepository.getSession).not.toHaveBeenCalled();
+			expect(store.error).toMatch(/must have a value/);
+		});
+	});
+
+	describe('durable live state that could not be recovered', () => {
+		it('reports the fault the snapshot carries', async () => {
+			mockRepository.getSession.mockResolvedValue(session({
+				currentState: { playout: {}, inputs: {} },
+				recoveryFault: { reason: 'corrupt', detail: 'the playout record for slate is not a record' },
+			}));
+
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+
+			expect(store.recoveryFault(SCREEN_ID)?.reason).toBe('corrupt');
+			// The recovered state is what every output composes, so nothing is on air.
+			expect(store.onAirGraphicIds(SCREEN_ID, [{ id: 'slate' }])).toEqual([]);
+		});
+
+		it('reports no fault for a Screen it has never loaded', () => {
+			expect(store.recoveryFault(SCREEN_ID)).toBeNull();
+		});
+
+		it('reloads rather than applying a notification in place while it holds a fault', async () => {
+			// A colleague's Take is what recovers the session, and it recovers it for
+			// everyone — the server reduces onto recovered state and writes clean. The
+			// notification carries only state, so applying it in place would advance the
+			// sequence while leaving this client's fault asserted: it would keep showing
+			// "nothing is on air, take something" over a live show. Only the snapshot
+			// carries both facts, so only the snapshot can resolve it.
+			mockRepository.getSession.mockResolvedValue(session({
+				recoveryFault: { reason: 'corrupt', detail: 'the playout record for slate is not a record' },
+			}));
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+			mockRepository.getSession.mockResolvedValue(session({
+				sequence: 2,
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+				recoveryFault: null,
+			}));
+
+			await store.applyRemoteCommand(notification({ sequence: 2 }));
+
+			expect(mockRepository.getSession).toHaveBeenCalledWith(EVENT_ID, SCREEN_ID);
+			expect(store.recoveryFault(SCREEN_ID)).toBeNull();
+			expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
+		});
+
+		it('still applies a contiguous notification in place when it holds no fault', async () => {
+			// The fault reload must not become a reload on every notification: the
+			// incremental path is what keeps a healthy show off the snapshot route.
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+
+			await store.applyRemoteCommand(notification());
+
+			expect(mockRepository.getSession).not.toHaveBeenCalled();
+			expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
+		});
+	});
+
+	describe('an epoch that has been replaced', () => {
+		it('discards what it holds and reloads the authoritative snapshot', async () => {
+			mockRepository.getSession.mockResolvedValue(session({
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			}));
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
+			vi.clearAllMocks();
+			mockRepository.getSession.mockResolvedValue(session({ id: 56, sequence: 1 }));
+
+			await store.applyEpochEnded({ eventId: EVENT_ID, timestamp: 1_000, screenId: SCREEN_ID, sessionId: 55 } as never);
+
+			expect(mockRepository.getSession).toHaveBeenCalledWith(EVENT_ID, SCREEN_ID);
+			expect(store.playoutState(SCREEN_ID, 'slate')).toBe('off');
+		});
+
+		it('leaves nothing on air even when the reload fails', async () => {
+			// One of the ways an epoch ends is the Screen leaving Broadcast Graphics mode,
+			// after which the snapshot route refuses this client. Keeping the ended
+			// epoch's state would leave every output rendering a show that is over.
+			mockRepository.getSession.mockResolvedValue(session({
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			}));
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			mockRepository.getSession.mockRejectedValue({ statusCode: 409, message: 'Screen is not in Broadcast Graphics mode' });
+
+			await store.applyEpochEnded({ eventId: EVENT_ID, timestamp: 1_000, screenId: SCREEN_ID, sessionId: 55 } as never);
+
+			expect(store.onAirGraphicIds(SCREEN_ID, [{ id: 'slate' }])).toEqual([]);
+		});
+
+		it('does not open an epoch for a Screen it was not following', async () => {
+			await store.applyEpochEnded({ eventId: EVENT_ID, timestamp: 1_000, screenId: SCREEN_ID, sessionId: 55 } as never);
+
+			expect(mockRepository.getSession).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('superseded-edit markers', () => {
+		const graphic = {
+			id: 'slate',
+			name: 'Slate',
+			items: [],
+			inputs: [{
+				type: 'text' as const,
+				key: 'name',
+				label: 'Name',
+				required: false,
+				updatePolicy: 'staged' as const,
+				default: 'Unnamed',
+				maxLength: 20,
+			}],
+		};
+		const OTHER_SCREEN_ID = 4;
+
+		it('are forgotten for the Screen whose epoch ended, and only that Screen', async () => {
+			// An operator working two Screens must not have one Screen's epoch change wipe
+			// what the other is still telling them about a refused edit.
+			mockRepository.getSession.mockImplementation(async (_eventId: number, screenId: number) =>
+				session({ id: screenId === SCREEN_ID ? 55 : 66, screenId }));
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			await store.loadSession(EVENT_ID, OTHER_SCREEN_ID);
+			mockRepository.sendCommand.mockRejectedValue({
+				statusCode: 409,
+				message: 'Another operator has already changed Name on this Broadcast Graphic',
+				data: { code: 'stale-input-edit', inputKeys: ['name'] },
+			});
+			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
+			await store.setInput(EVENT_ID, OTHER_SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
+			expect(store.inputTraces(SCREEN_ID, graphic)[0]!.status).toBe('superseded');
+			expect(store.inputTraces(OTHER_SCREEN_ID, graphic)[0]!.status).toBe('superseded');
+
+			await store.applyEpochEnded({
+				eventId: EVENT_ID,
+				timestamp: 1_000,
+				screenId: SCREEN_ID,
+				sessionId: 55,
+			} as never);
+
+			expect(store.inputTraces(SCREEN_ID, graphic)[0]!.status).not.toBe('superseded');
+			expect(store.inputTraces(OTHER_SCREEN_ID, graphic)[0]!.status).toBe('superseded');
+		});
+	});
+
+	describe('resetting live state', () => {
+		it('caches the fresh epoch the reset opened', async () => {
+			mockRepository.getSession.mockResolvedValue(session({
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			}));
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			mockRepository.resetSession.mockResolvedValue(session({ id: 57, sequence: 1 }));
+
+			await store.resetLiveState(EVENT_ID, SCREEN_ID);
+
+			expect(mockRepository.resetSession).toHaveBeenCalledWith(EVENT_ID, SCREEN_ID);
+			expect(store.sessions.get(SCREEN_ID)?.id).toBe(57);
+			expect(store.playoutState(SCREEN_ID, 'slate')).toBe('off');
+		});
 	});
 });

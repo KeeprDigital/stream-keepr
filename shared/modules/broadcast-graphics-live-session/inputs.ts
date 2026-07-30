@@ -66,15 +66,32 @@ export interface GraphicInputValueTrace {
 /**
  * What Live Control shows about one Graphic Input's value.
  *
- * The settled vocabulary is bound, overridden, pending, unavailable, and stale;
- * only these four are reachable. `overridden` belongs to a Graphic Input Override,
- * which masks a binding that keeps resolving underneath it — there is nothing to
- * mask until Graphic Input Bindings resolve against Event Data. `stale` belongs to
- * field-scoped multi-operator conflict handling. Each becomes reachable with the
- * capability that produces it, and shipping a status no code path can produce would
- * be a state an operator could never be shown.
+ * `overridden` belongs to a Graphic Input Override, which masks a binding that keeps
+ * resolving underneath it — there is nothing to mask until Graphic Input Bindings
+ * resolve against Event Data, so it is still unreachable. Each status becomes
+ * reachable with the capability that produces it, and shipping one no code path can
+ * produce would be a state an operator could never be shown.
+ *
+ * ## Why this one is `superseded` rather than `stale`
+ *
+ * The spec says "stale" twice and means two different things by it. As a value-trace
+ * status it means an on-air value whose source no longer provides it — program has
+ * outlived its binding — and that meaning keeps the word. `superseded` is the other
+ * one: this operator's last edit lost a field-scoped race, so the field has been
+ * refreshed to the value that won.
+ *
+ * They need separate slots because **one input can be in both states at the same
+ * instant** — on air, its binding dropped, and its last edit refused — and the
+ * remedies are opposite: one says "your source moved on", the other says "look
+ * again, someone beat you". Collapsing them would make the more urgent of the two
+ * unsayable. `superseded` also reads against the Flight and Guarded Sequence
+ * vocabulary, where superseding is already what a newer piece of work does to an
+ * older one.
+ *
+ * The rejection code `stale-input-edit` deliberately keeps its own name: it is in a
+ * different namespace and describes the *command's* fate rather than the value's.
  */
-export const GRAPHIC_INPUT_STATUS_VALUES = ['manual', 'bound', 'pending', 'unavailable'] as const;
+export const GRAPHIC_INPUT_STATUS_VALUES = ['manual', 'bound', 'pending', 'unavailable', 'superseded'] as const;
 
 export type GraphicInputStatus = typeof GRAPHIC_INPUT_STATUS_VALUES[number];
 
@@ -205,6 +222,16 @@ export function graphicInputTraces(
 	},
 	/** The latest bound values, once something resolves Graphic Input Bindings. */
 	boundValues: Readonly<Record<string, GraphicInputValue>> = {},
+	/**
+	 * The Graphic Inputs whose last edit from this session lost a field-scoped
+	 * conflict.
+	 *
+	 * Client-side knowledge, not live state: whether *this* operator's edit was the
+	 * one refused is a fact about this session, and a second operator looking at the
+	 * same authoritative snapshot must not see their colleague's field — the one that
+	 * won — marked as superseded.
+	 */
+	supersededInputKeys: readonly string[] = [],
 ): GraphicInputTrace[] {
 	const declarations = graphic.inputs ?? [];
 	const stored = broadcastGraphicInputsState(state, graphicId);
@@ -236,13 +263,18 @@ export function graphicInputTraces(
 			working: workingTrace,
 			accepted: acceptedTrace,
 			pending,
-			status: !workingTrace.availability.available
-				? 'unavailable'
-				: pending
-					? 'pending'
-					: binding
-						? 'bound'
-						: 'manual',
+			// Superseded outranks every other status: the field has just been refreshed
+			// out from under the operator, and telling them the value is merely `bound`
+			// or `manual` would read as their own edit having been accepted.
+			status: supersededInputKeys.includes(declaration.key)
+				? 'superseded'
+				: !workingTrace.availability.available
+						? 'unavailable'
+						: pending
+							? 'pending'
+							: binding
+								? 'bound'
+								: 'manual',
 			blocksTake: declaration.required
 				&& !graphicInputAvailability(
 					declaration,

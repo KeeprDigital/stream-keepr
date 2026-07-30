@@ -7,7 +7,10 @@ import type {
 	ScreenResponse,
 	TalentResponse,
 } from '../api';
-import type { BroadcastGraphicsCommandAppliedPayload } from './broadcastGraphicsLiveSession';
+import type {
+	BroadcastGraphicsCommandAppliedPayload,
+	BroadcastGraphicsEpochEndedPayload,
+} from './broadcastGraphicsLiveSession';
 import type { MtgCard } from './card/mtg';
 import type { FeatureMatchOrientation, Game, ScreenCommand } from './enums';
 import type { FeatureMatchSessionEventAppliedPayload } from './featureMatchSession';
@@ -166,6 +169,13 @@ export interface MessageDefinitions {
 	 * reloads the snapshot instead of trusting this payload.
 	 */
 	'broadcastGraphicsLiveSession:commandApplied': BroadcastGraphicsCommandAppliedPayload;
+
+	/**
+	 * A Screen's Broadcast Graphics playout epoch ended and any successor starts
+	 * fresh. Carries no state: everything a client holds belongs to the epoch that
+	 * ended, so the only correct response is to reload the authoritative snapshot.
+	 */
+	'broadcastGraphicsLiveSession:epochEnded': BroadcastGraphicsEpochEndedPayload;
 
 	// Player list management
 	'playerList:created': {

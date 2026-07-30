@@ -12,6 +12,7 @@ import {
 	broadcastGraphicInputsState,
 	createInitialBroadcastGraphicInputsState,
 	isDeclaredGraphicInput,
+	sameGraphicInputValue,
 	unavailableRequiredGraphicInputs,
 } from './inputs';
 import { BroadcastGraphicsCommandRejection } from './rejection';
@@ -146,6 +147,23 @@ export interface BroadcastGraphicsSetInputPayload {
 	graphicId: string;
 	inputKey: string;
 	value: GraphicInputValue;
+	/**
+	 * The value this edit believes it replaces: its Field Ownership claim.
+	 *
+	 * Field Ownership is the set of fields one action may write, derived from the
+	 * change it predicts — and a Set Input predicts exactly one Graphic Input going
+	 * from one value to another. Stating the value it started from is what makes
+	 * two operators on one Broadcast Graphic safe without locking either out: an
+	 * edit whose claim still holds is applied, and one whose claim has been
+	 * overtaken is refused so the operator can see what landed instead rather than
+	 * silently erasing a colleague's correction seconds before it goes on air.
+	 *
+	 * Wrapped in an object rather than left as a bare optional value because `null`
+	 * is itself a legitimate Graphic Input value: the wrapper distinguishes
+	 * "I claim the value was empty" from "I claim nothing". An edit that claims
+	 * nothing is not making a Field Ownership claim and is applied unconditionally.
+	 */
+	basedOn?: { value: GraphicInputValue };
 }
 
 export type BroadcastGraphicsCommandPayload
@@ -329,6 +347,23 @@ function reduceSetInput(
 
 	const declaration = findGraphicInputDeclaration(context.inputs, payload.inputKey)!;
 	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
+
+	// The Field Ownership claim, checked against the one field this edit owns. An
+	// unedited input reads as its declared default rather than as absence, because
+	// the default is what the operator was looking at when they made the claim.
+	if (payload.basedOn) {
+		const current = payload.inputKey in inputs.working
+			? inputs.working[payload.inputKey]!
+			: declaration.default;
+		if (!sameGraphicInputValue(payload.basedOn.value, current)) {
+			throw new BroadcastGraphicsCommandRejection(
+				'stale-input-edit',
+				`Another operator has already changed ${declaration.label} on this Broadcast Graphic`,
+				[payload.inputKey],
+			);
+		}
+	}
+
 	const acceptsImmediately = declaration.updatePolicy === 'live'
 		&& state.playout[payload.graphicId]?.onAir === true
 		&& graphicInputAvailability(declaration, payload.value).available;
