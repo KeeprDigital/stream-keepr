@@ -177,7 +177,7 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 				type: 'Take',
 				payload: { graphicId: 'a' },
 			});
-			expect(taken.currentState.playout.a).toEqual({ onAir: true });
+			expect(taken.currentState.playout.a).toMatchObject({ onAir: true });
 		});
 
 		it('rejects a command from the epoch it replaced', async () => {
@@ -394,7 +394,10 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 			for (const reload of reloads) {
 				expect(reload.id).toBe(taken.sessionId);
 				expect(reload.sequence).toBe(taken.sequence);
-				expect(reload.currentState.playout.a).toEqual({ onAir: true });
+				// Compared against the command's own answer rather than against a literal:
+				// reloading must return the *same* record, including the authoritative
+				// animation start time, which a literal could only restate approximately.
+				expect(reload.currentState.playout.a).toEqual(taken.currentState.playout.a);
 			}
 		});
 	});
