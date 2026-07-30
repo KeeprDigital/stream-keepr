@@ -3,14 +3,16 @@ import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig
 import type { FeatureMatchOverlayConfigUpdater, FeatureMatchOverlayLayerKind } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
-import { childSummary, itemSummary, layerIcon, layerTypeLabel, widgetIcon, widgetTypeLabel } from '~/modules/feature-match-overlay/layerSummaries';
+import { featureMatchOverlayGraphicItemDefinition } from '~/modules/feature-match-overlay/graphicItemDefinitions';
+import { childIcon, childSummary, childTypeLabel, itemSummary, layerIcon, layerTypeLabel } from '~/modules/feature-match-overlay/layerSummaries';
 import { featureMatchOverlaySelectionKey, resolveFeatureMatchOverlaySelection } from '~/modules/feature-match-overlay/selection';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
 import FeatureMatchOverlayFrameStyleCard from './FrameStyleCard.vue';
 import FeatureMatchOverlayInspectorGroup from './InspectorGroup.vue';
 import FeatureMatchOverlayInspectorGroupChild from './InspectorGroupChild.vue';
+import FeatureMatchOverlayInspectorMedia from './InspectorMedia.vue';
 import FeatureMatchOverlayInspectorSource from './InspectorSource.vue';
-import FeatureMatchOverlayInspectorWidget from './InspectorWidget.vue';
+import FeatureMatchOverlayInspectorGraphicItem from './InspectorWidget.vue';
 
 const props = defineProps<{
 	config: FeatureMatchOverlayModeConfig;
@@ -30,13 +32,13 @@ const expandedGroups = ref<Record<string, boolean>>({});
 const treeNodeRefs = ref<Record<string, HTMLElement>>({});
 
 const LAYER_KIND_OPTIONS = [
-	{ label: 'Source', value: 'source', icon: 'i-lucide-video' },
-	{ label: 'Text', value: 'text-widget', icon: 'i-lucide-type' },
-	{ label: 'Image', value: 'image-widget', icon: 'i-lucide-image' },
-	{ label: 'Clock', value: 'clock-widget', icon: 'i-lucide-clock' },
-	{ label: 'Player Life', value: 'life-widget', icon: 'i-lucide-heart-pulse' },
-	{ label: 'Game Wins', value: 'wins-widget', icon: 'i-lucide-trophy' },
-	{ label: 'Group', value: 'widget-group', icon: 'i-lucide-group' },
+	{ ...featureMatchOverlayGraphicItemDefinition('source'), value: 'source' },
+	{ ...featureMatchOverlayGraphicItemDefinition('text'), value: 'text-graphic-item' },
+	{ ...featureMatchOverlayGraphicItemDefinition('media'), value: 'media' },
+	{ ...featureMatchOverlayGraphicItemDefinition('clock'), value: 'clock-graphic-item' },
+	{ ...featureMatchOverlayGraphicItemDefinition('player-life'), label: 'Player Life', value: 'player-life-graphic-item' },
+	{ ...featureMatchOverlayGraphicItemDefinition('game-wins'), label: 'Game Wins', value: 'game-wins-graphic-item' },
+	{ ...featureMatchOverlayGraphicItemDefinition('graphic-group'), value: 'graphic-group' },
 ];
 
 const { createLayoutItem, patchFrame } = useFeatureMatchOverlayConfigEditor({
@@ -67,8 +69,8 @@ function selectLayer(itemId: string) {
 	emit('update:selectedTarget', { type: 'layer', itemId });
 }
 
-function selectWidget(itemId: string, childId: string) {
-	emit('update:selectedTarget', { type: 'widget', itemId, childId });
+function selectGraphicItem(itemId: string, childId: string) {
+	emit('update:selectedTarget', { type: 'graphic-item', itemId, childId });
 }
 
 function addLayoutItem(kind: string) {
@@ -78,7 +80,7 @@ function addLayoutItem(kind: string) {
 
 function onChildAdded(groupId: string, childId: string) {
 	expandedGroups.value = { ...expandedGroups.value, [groupId]: true };
-	selectWidget(groupId, childId);
+	selectGraphicItem(groupId, childId);
 }
 
 function onChildRemoved(groupId: string) {
@@ -97,8 +99,8 @@ function layerTreeKey(itemId: string) {
 	return `layer:${itemId}`;
 }
 
-function widgetTreeKey(itemId: string, childId: string) {
-	return `widget:${itemId}:${childId}`;
+function graphicItemTreeKey(itemId: string, childId: string) {
+	return `graphicItem:${itemId}:${childId}`;
 }
 
 function setTreeNodeRef(key: string, element: unknown) {
@@ -135,9 +137,9 @@ const selectedInspectorHeader = computed(() => {
 
 	if (current.kind === 'child') {
 		return {
-			icon: widgetIcon(current.child.widget.type),
+			icon: childIcon(current.child),
 			label: current.child.label,
-			badge: widgetTypeLabel(current.child.widget.type),
+			badge: childTypeLabel(current.child),
 			summary: `${current.group.label} • ${childSummary(current.child)}`,
 			visible: current.child.visible !== false,
 		};
@@ -157,7 +159,7 @@ const selectedInspectorHeader = computed(() => {
 		icon: 'i-lucide-circle-help',
 		label: 'Selection unavailable',
 		badge: 'Missing',
-		summary: 'Choose another layer or widget',
+		summary: 'Choose another layer or Graphic Item',
 		visible: false,
 	};
 });
@@ -174,7 +176,7 @@ const selectedInspectorHeader = computed(() => {
 								Scene
 							</p>
 							<p class="text-xs text-muted">
-								Canvas, layers, and widgets
+								Canvas, layers, and Graphic Items
 							</p>
 						</div>
 						<UBadge variant="soft">
@@ -213,10 +215,10 @@ const selectedInspectorHeader = computed(() => {
 					<div v-for="item in config.layout.items" :key="item.id" class="space-y-1">
 						<div class="flex gap-1">
 							<button
-								v-if="item.type === 'widget-group'"
+								v-if="item.type === 'graphic-group'"
 								type="button"
 								class="mt-2 size-7 shrink-0 rounded-md hover:bg-muted"
-								:aria-label="isGroupExpanded(item.id) ? 'Collapse group' : 'Expand group'"
+								:aria-label="isGroupExpanded(item.id) ? 'Collapse Graphic Group' : 'Expand Graphic Group'"
 								@click="toggleGroupExpanded(item.id)"
 							>
 								<UIcon name="i-lucide-chevron-right" class="mx-auto size-4 transition-transform" :class="{ 'rotate-90': isGroupExpanded(item.id) }" />
@@ -242,22 +244,22 @@ const selectedInspectorHeader = computed(() => {
 							</button>
 						</div>
 
-						<div v-if="item.type === 'widget-group' && isGroupExpanded(item.id)" class="ml-12 space-y-1.5">
+						<div v-if="item.type === 'graphic-group' && isGroupExpanded(item.id)" class="ml-12 space-y-1.5">
 							<button
 								v-for="child in item.children"
 								:key="child.id"
-								:ref="element => setTreeNodeRef(widgetTreeKey(item.id, child.id), element)"
+								:ref="element => setTreeNodeRef(graphicItemTreeKey(item.id, child.id), element)"
 								type="button"
 								class="flex w-full items-start gap-2 rounded-lg border p-2 text-left transition"
-								:class="selectedTarget.type === 'widget' && selectedTarget.childId === child.id ? 'border-primary bg-primary/10' : 'border-default/70 bg-muted/10 hover:bg-muted/30'"
-								data-testid="overlay-tree-widget"
-								@click="selectWidget(item.id, child.id)"
+								:class="selectedTarget.type === 'graphic-item' && selectedTarget.childId === child.id ? 'border-primary bg-primary/10' : 'border-default/70 bg-muted/10 hover:bg-muted/30'"
+								data-testid="overlay-tree-graphicItem"
+								@click="selectGraphicItem(item.id, child.id)"
 							>
-								<UIcon :name="widgetIcon(child.widget.type)" class="mt-0.5 size-4 shrink-0 text-muted" />
+								<UIcon :name="childIcon(child)" class="mt-0.5 size-4 shrink-0 text-muted" />
 								<span class="min-w-0 flex-1">
 									<span class="flex items-center gap-2">
 										<span class="truncate text-sm font-medium">{{ child.label }}</span>
-										<UBadge size="xs" variant="soft">{{ widgetTypeLabel(child.widget.type) }}</UBadge>
+										<UBadge size="xs" variant="soft">{{ childTypeLabel(child) }}</UBadge>
 									</span>
 									<span class="mt-0.5 block truncate text-xs text-muted">{{ childSummary(child) }}</span>
 								</span>
@@ -328,8 +330,19 @@ const selectedInspectorHeader = computed(() => {
 					@removed="selectCanvas"
 				/>
 
-				<FeatureMatchOverlayInspectorWidget
-					v-else-if="selection.kind === 'widget'"
+				<FeatureMatchOverlayInspectorGraphicItem
+					v-else-if="selection.kind === 'graphic-item'"
+					:config="config"
+					:update-config="updateConfig"
+					:screen-width="screenWidth"
+					:screen-height="screenHeight"
+					:event-id="eventId"
+					:item="selection.item"
+					@removed="selectCanvas"
+				/>
+
+				<FeatureMatchOverlayInspectorMedia
+					v-else-if="selection.kind === 'media'"
 					:config="config"
 					:update-config="updateConfig"
 					:screen-width="screenWidth"
@@ -340,14 +353,14 @@ const selectedInspectorHeader = computed(() => {
 				/>
 
 				<FeatureMatchOverlayInspectorGroup
-					v-else-if="selection.kind === 'group'"
+					v-else-if="selection.kind === 'graphic-group'"
 					:config="config"
 					:update-config="updateConfig"
 					:screen-width="screenWidth"
 					:screen-height="screenHeight"
 					:item="selection.item"
 					@removed="selectCanvas"
-					@child-added="childId => selection.kind === 'group' && onChildAdded(selection.item.id, childId)"
+					@child-added="childId => selection.kind === 'graphic-group' && onChildAdded(selection.item.id, childId)"
 				/>
 			</section>
 		</div>

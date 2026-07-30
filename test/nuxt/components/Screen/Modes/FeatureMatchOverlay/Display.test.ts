@@ -50,8 +50,8 @@ async function mountComponent() {
 			stubs: {
 				FeatureMatchOverlayFrameAnimation: true,
 				FeatureMatchOverlayFrameMedia: true,
-				FeatureMatchOverlayGameWinsWidget: true,
-				FeatureMatchOverlayStatusWidget: true,
+				FeatureMatchOverlayGameWinsGraphicItem: true,
+				FeatureMatchOverlayStatusGraphicItem: true,
 				FeatureMatchOverlayTemplateLines: true,
 			},
 		},
@@ -63,14 +63,13 @@ function groupLayerConfig(): FeatureMatchOverlayModeConfig {
 	config.layout.items = [
 		{
 			id: 'framed-group',
-			type: 'widget-group',
+			type: 'graphic-group',
 			label: 'Framed Group',
 			visible: true,
 			x: 10,
 			y: 20,
 			width: 300,
 			height: 80,
-			zIndex: 5,
 			overflow: 'clip',
 			arrangement: { mode: 'canvas', padding: 0 },
 			surfaceStyle: {
@@ -91,9 +90,10 @@ function groupLayerConfig(): FeatureMatchOverlayModeConfig {
 			children: [
 				{
 					id: 'full-child',
+					type: 'graphic-item',
 					label: 'Full Child',
 					visible: true,
-					widget: { type: 'clock' },
+					graphicItem: { type: 'clock' },
 					layout: { mode: 'canvas', x: 0, y: 0, width: 300, height: 80 },
 				},
 			],
@@ -123,23 +123,23 @@ describe('featureMatchOverlayDisplay', () => {
 		});
 	});
 
-	it('renders Widget Group appearance above clipped child widgets', async () => {
+	it('renders Graphic Group appearance above clipped child Graphic Items', async () => {
 		const wrapper = await mountComponent();
-		const group = wrapper.get('.feature-match-overlay-widget-group');
+		const group = wrapper.get('.feature-match-overlay-graphic-group');
 		const groupElement = group.element as HTMLElement;
 		const children = Array.from(groupElement.children);
 
 		expect(groupElement.style.overflow).toBe('visible');
 		expect(groupElement.style.background).toBe('');
 		expect(groupElement.style.borderTop).toBe('');
-		expect(children[0]?.classList.contains('feature-match-overlay-widget-group__backdrop')).toBe(true);
-		expect(children[1]?.classList.contains('feature-match-overlay-widget-group__children')).toBe(true);
-		expect(children[2]?.classList.contains('feature-match-overlay-widget-group__frame')).toBe(true);
+		expect(children[0]?.classList.contains('feature-match-overlay-graphic-group__backdrop')).toBe(true);
+		expect(children[1]?.classList.contains('feature-match-overlay-graphic-group__children')).toBe(true);
+		expect(children[2]?.classList.contains('feature-match-overlay-graphic-group__frame')).toBe(true);
 
-		const childLayer = wrapper.get('.feature-match-overlay-widget-group__children');
-		const child = wrapper.get('.feature-match-overlay-widget-group__child');
-		const backdrop = wrapper.get('.feature-match-overlay-widget-group__backdrop');
-		const frame = wrapper.get('.feature-match-overlay-widget-group__frame');
+		const childLayer = wrapper.get('.feature-match-overlay-graphic-group__children');
+		const child = wrapper.get('.feature-match-overlay-graphic-group__child');
+		const backdrop = wrapper.get('.feature-match-overlay-graphic-group__backdrop');
+		const frame = wrapper.get('.feature-match-overlay-graphic-group__frame');
 		const childLayerElement = childLayer.element as HTMLElement;
 		const childElement = child.element as HTMLElement;
 		const backdropElement = backdrop.element as HTMLElement;
@@ -154,8 +154,86 @@ describe('featureMatchOverlayDisplay', () => {
 		expect(frameElement.style.zIndex).toBe('2');
 	});
 
+	it('renders every Graphic Item kind in authoritative back-to-front list order', async () => {
+		const base = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		const source = base.layout.items.find(item => item.type === 'source')!;
+		const graphicItem = base.layout.items.find(item => item.type === 'graphic-item')!;
+		const group = base.layout.items.find(item => item.type === 'graphic-group')!;
+		base.layout.items = [
+			{ ...graphicItem, id: 'back-graphicItem' },
+			{
+				id: 'middle-media',
+				type: 'media',
+				label: 'Middle media',
+				visible: true,
+				x: 0,
+				y: 0,
+				width: 100,
+				height: 100,
+				mediaKind: 'image',
+				fit: 'cover',
+				focalPosition: { horizontal: 0.5, vertical: 0.5 },
+				opacity: 1,
+			},
+			{ ...source, id: 'front-source' },
+			{ ...group, id: 'front-group' },
+		];
+		mockConfig.value = base;
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.findAll('[data-graphic-item-id]').map(item => item.attributes('data-graphic-item-id')))
+			.toEqual(['back-graphicItem', 'middle-media', 'front-source', 'front-group']);
+	});
+
+	it('renders an exact silent-video Media Graphic Item inside its Graphic Group', async () => {
+		const config = groupLayerConfig();
+		const group = config.layout.items[0];
+		if (group?.type !== 'graphic-group')
+			throw new Error('Expected a Graphic Group fixture');
+		group.children = [{
+			id: 'sponsor-loop',
+			type: 'media',
+			label: 'Sponsor loop',
+			visible: true,
+			layout: { mode: 'canvas', x: 10, y: 8, width: 240, height: 120 },
+			asset: {
+				assetId: 'sponsor-video-asset' as never,
+				revisionId: 'sponsor-video-revision-5' as never,
+			},
+			mediaKind: 'silent-video',
+			fit: 'cover',
+			focalPosition: { horizontal: 0.35, vertical: 0.6 },
+			opacity: 0.8,
+			loop: false,
+			playbackRate: 1.25,
+			videoCompatibility: 'all-supported',
+			videoTarget: 'safari',
+		}];
+		mockConfig.value = config;
+
+		const wrapper = await mountComponent();
+
+		const childLayer = wrapper.get('.feature-match-overlay-graphic-group__children');
+		const video = childLayer.get('video');
+		expect(video.attributes('src')).toBe(
+			'/private-assets/sponsor-video-asset/sponsor-video-revision-5',
+		);
+		expect(video.attributes()).toMatchObject({
+			autoplay: '',
+			muted: '',
+			playsinline: '',
+			preload: 'auto',
+		});
+		expect((video.element as HTMLVideoElement).loop).toBe(false);
+		expect((video.element as HTMLVideoElement).playbackRate).toBe(1.25);
+	});
+
 	it('hides preview and output rendering until every exact font revision is ready', async () => {
-		mockConfig.value.layout.items[0]!.surfaceStyle = {
+		const firstItem = mockConfig.value.layout.items[0]!;
+		if (firstItem.type !== 'graphic-group')
+			throw new Error('Expected Graphic Group test fixture');
+		firstItem.surfaceStyle = {
 			font: {
 				kind: 'asset',
 				reference: {
@@ -197,7 +275,10 @@ describe('featureMatchOverlayDisplay', () => {
 	});
 
 	it('retries exact font loading when private content URLs finish resolving', async () => {
-		mockConfig.value.layout.items[0]!.surfaceStyle = {
+		const firstItem = mockConfig.value.layout.items[0]!;
+		if (firstItem.type !== 'graphic-group')
+			throw new Error('Expected Graphic Group test fixture');
+		firstItem.surfaceStyle = {
 			font: {
 				kind: 'asset',
 				reference: {
@@ -227,5 +308,62 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(load).toHaveBeenCalled();
 			expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('true');
 		});
+	});
+
+	it('marks restricted video output not ready outside a proven Chromium target', async () => {
+		mockConfig.value.layout.items = [{
+			id: 'restricted-video',
+			type: 'media',
+			label: 'Restricted VP9 alpha',
+			visible: true,
+			x: 0,
+			y: 0,
+			width: 640,
+			height: 360,
+			mediaKind: 'silent-video',
+			asset: {
+				assetId: 'video-asset' as never,
+				revisionId: 'video-revision-1' as never,
+			},
+			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'chromium',
+		}];
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.get('.feature-match-overlay').attributes('data-export-ready')).toBe('false');
+	});
+
+	it('applies the same VP9 compatibility gate to a Graphic Group media child', async () => {
+		const config = groupLayerConfig();
+		const group = config.layout.items[0];
+		if (group?.type !== 'graphic-group')
+			throw new Error('Expected a Graphic Group fixture');
+		group.children = [{
+			id: 'restricted-group-video',
+			type: 'media',
+			label: 'Restricted group VP9 alpha',
+			visible: true,
+			layout: { mode: 'canvas', x: 0, y: 0, width: 640, height: 360 },
+			asset: {
+				assetId: 'group-video-asset' as never,
+				revisionId: 'group-video-revision-1' as never,
+			},
+			mediaKind: 'silent-video',
+			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'chromium',
+		}];
+		mockConfig.value = config;
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.get('.feature-match-overlay').attributes('data-export-ready')).toBe('false');
+		expect(wrapper.find('[data-video-compatibility-blocked="vp9-alpha-chromium-required"]').exists()).toBe(true);
 	});
 });

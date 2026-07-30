@@ -169,6 +169,30 @@ describe('screens extended API', () => {
 	});
 
 	it('persists the authored Broadcast Graphics stack as Screen-owned mode configuration', async () => {
+		const square = { treatment: 'square', size: 0 };
+		const rectangle = {
+			topLeft: square,
+			topRight: square,
+			bottomRight: square,
+			bottomLeft: square,
+			leftSlant: 0,
+			rightSlant: 0,
+		};
+		const typography = {
+			fontId: 'inter',
+			fontSize: 64,
+			fontWeight: 700,
+			fontStyle: 'normal',
+			textTransform: 'none',
+			letterSpacing: 0,
+			lineHeight: 1.15,
+			textAlign: 'left',
+			color: '#ffffff',
+		};
+
+		// The whole static vocabulary in one stack: per-corner geometry and an edge
+		// slant, a gradient Graphic Fill with an outline and a glow, Graphic
+		// Rotation, and a Graphic Group with a local style default its child overrides.
 		const graphics = [
 			{
 				id: 'lower-third',
@@ -180,37 +204,87 @@ describe('screens extended API', () => {
 						label: 'Shape 1',
 						visible: true,
 						anchor: 'top-left',
+						rotation: -2,
 						x: 120,
 						y: 820,
 						width: 900,
 						height: 120,
-						geometry: { cornerRadius: 8 },
-						surfaceStyle: { fill: '#0077a3', fillOpacity: 1 },
+						geometry: {
+							...rectangle,
+							topRight: { treatment: 'cut', size: 24 },
+							bottomLeft: { treatment: 'rounded', size: 12 },
+							rightSlant: 60,
+						},
+						surfaceStyle: {
+							fill: {
+								type: 'linear-gradient',
+								angle: 90,
+								stops: [
+									{ color: '#080d12', position: 0, opacity: 0.97 },
+									{ color: '#1c272d', position: 1, opacity: 0.9 },
+								],
+							},
+							fillOpacity: 1,
+							outline: { color: '#00d9ff', width: 3 },
+							glow: { color: '#00d9ff', size: 24, opacity: 0.6 },
+						},
 					},
 					{
-						type: 'text',
-						id: 'name',
-						label: 'Text 1',
+						type: 'group',
+						id: 'name-block',
+						label: 'Group 1',
 						visible: true,
-						anchor: 'left',
+						anchor: 'top-left',
 						x: 150,
 						y: 840,
 						width: 800,
 						height: 80,
-						text: 'Commentator',
-						typography: {
-							fontId: 'inter',
-							fontSize: 64,
-							fontWeight: 700,
-							fontStyle: 'normal',
-							textTransform: 'none',
-							letterSpacing: 0,
-							lineHeight: 1.15,
-							textAlign: 'left',
-							color: '#ffffff',
+						arrangement: 'row',
+						padding: 8,
+						gap: 12,
+						align: 'stretch',
+						justify: 'start',
+						clip: true,
+						geometry: rectangle,
+						defaultChildSurfaceStyle: {
+							fill: { type: 'solid', color: '#0077a3' },
+							fillOpacity: 0.5,
 						},
-						overflowPolicy: 'shrink',
-						minFontSize: 32,
+						children: [
+							{
+								type: 'shape',
+								id: 'rule',
+								label: 'Shape 2',
+								visible: true,
+								anchor: 'top-left',
+								x: 0,
+								y: 0,
+								width: 4,
+								height: 80,
+								sizing: { mode: 'fixed', size: 4, weight: 1 },
+								geometry: rectangle,
+							},
+							{
+								type: 'text',
+								id: 'name',
+								label: 'Text 1',
+								visible: true,
+								anchor: 'left',
+								x: 0,
+								y: 0,
+								width: 700,
+								height: 80,
+								sizing: { mode: 'fill', size: 0, weight: 1 },
+								text: 'Commentator',
+								typography,
+								overflowPolicy: 'shrink',
+								minFontSize: 32,
+								surfaceStyle: {
+									fill: { type: 'solid', color: '#ffffff' },
+									fillOpacity: 0.08,
+								},
+							},
+						],
 					},
 				],
 			},
@@ -225,6 +299,48 @@ describe('screens extended API', () => {
 
 		const reloaded = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
 		expect(reloaded.modeConfigs['broadcast-graphics']).toEqual({ graphics });
+	});
+
+	it('refuses a Broadcast Graphics stack over the whole-Screen Graphic Item cap', async () => {
+		// The named cap is reached before the mode-configuration byte limit, so an
+		// operator reads which limit they hit rather than an opaque byte count.
+		const item = (id: string) => ({
+			type: 'shape',
+			id,
+			label: id,
+			visible: true,
+			anchor: 'top-left',
+			x: 0,
+			y: 0,
+			width: 10,
+			height: 10,
+			geometry: {
+				topLeft: { treatment: 'square', size: 0 },
+				topRight: { treatment: 'square', size: 0 },
+				bottomRight: { treatment: 'square', size: 0 },
+				bottomLeft: { treatment: 'square', size: 0 },
+				leftSlant: 0,
+				rightSlant: 0,
+			},
+		});
+		const graphics = Array.from({ length: 6 }, (_, graphic) => ({
+			id: `graphic-${graphic}`,
+			name: `Graphic ${graphic}`,
+			items: Array.from({ length: 40 }, (_, index) => item(`item-${graphic}-${index}`)),
+		}));
+
+		// Assert which limit fired, and that it reaches the operator. A bare rejection
+		// would be satisfied by any 400, including the opaque byte-limit failure this
+		// cap exists to prevent, and the named message travels in the response body
+		// rather than in the thrown error's own message.
+		const failure = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
+			method: 'PATCH',
+			body: { graphics },
+		}).then(() => null).catch((error: { data?: { statusCode?: number; message?: string } }) => error);
+
+		expect(failure?.data?.statusCode).toBe(400);
+		expect(failure?.data?.message)
+			.toContain('A Broadcast Graphics Screen must not carry more than 200 Graphic Items in total');
 	});
 
 	it('refuses to delete the authored Broadcast Graphics stack with a null patch', async () => {

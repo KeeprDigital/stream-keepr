@@ -95,7 +95,7 @@ async function initiateLargeTransfer(
 		name: 'Large transfer',
 		declaredByteLength: GRAPHICS_MULTIPART_PART_BYTES + 1,
 	});
-	await library.startImageMultipartUpload({
+	await library.startGraphicAssetMultipartUpload({
 		operationId: operation.id,
 		initiatedBy: operation.initiatedBy,
 	});
@@ -120,7 +120,7 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 			declaredByteLength: bytes.byteLength,
 		});
 
-		const started = await library.startImageMultipartUpload({
+		const started = await library.startGraphicAssetMultipartUpload({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 		});
@@ -137,7 +137,7 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 		});
 
 		const firstPartBytes = bytes.subarray(0, GRAPHICS_MULTIPART_PART_BYTES);
-		const afterFirstPart = await library.uploadImageMultipartPart({
+		const afterFirstPart = await library.uploadGraphicAssetMultipartPart({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			partNumber: 1,
@@ -162,7 +162,7 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 			},
 		});
 
-		const duplicate = await library.uploadImageMultipartPart({
+		const duplicate = await library.uploadGraphicAssetMultipartPart({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			partNumber: 1,
@@ -174,7 +174,7 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 		expect(duplicate).toEqual(afterFirstPart);
 
 		const finalPartBytes = bytes.subarray(GRAPHICS_MULTIPART_PART_BYTES);
-		await library.uploadImageMultipartPart({
+		await library.uploadGraphicAssetMultipartPart({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			partNumber: 2,
@@ -183,7 +183,7 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 				maximumByteLength: GRAPHICS_MULTIPART_PART_BYTES,
 			}),
 		});
-		const completed = await library.completeImageMultipartUpload({
+		const completed = await library.completeGraphicAssetMultipartUpload({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 		});
@@ -220,7 +220,7 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 		const operation = await initiateLargeTransfer(library, 'ambiguous-part-response');
 		const firstPart = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES);
 
-		await expect(library.uploadImageMultipartPart({
+		await expect(library.uploadGraphicAssetMultipartPart({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			partNumber: 1,
@@ -237,7 +237,7 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 			transfer: { completedParts: [] },
 		});
 
-		const retried = await library.uploadImageMultipartPart({
+		const retried = await library.uploadGraphicAssetMultipartPart({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			partNumber: 1,
@@ -270,7 +270,7 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 		staging.injectTransientFailure('multipart-upload-part', 3);
 
 		for (let attempt = 0; attempt < 3; attempt++) {
-			await expect(library.uploadImageMultipartPart({
+			await expect(library.uploadGraphicAssetMultipartPart({
 				operationId: operation.id,
 				initiatedBy: operation.initiatedBy,
 				partNumber: 1,
@@ -280,7 +280,7 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 				}),
 			})).rejects.toMatchObject({ code: 'graphics-asset-library-unavailable' });
 		}
-		await expect(library.uploadImageMultipartPart({
+		await expect(library.uploadGraphicAssetMultipartPart({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			partNumber: 1,

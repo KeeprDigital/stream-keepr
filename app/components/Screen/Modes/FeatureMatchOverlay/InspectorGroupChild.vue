@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import type { FeatureMatchOverlayModeConfig, FeatureMatchWidgetConfig, FeatureMatchWidgetGroupChildConfig, FeatureMatchWidgetGroupItemConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchGraphicGroupChildConfig, FeatureMatchGraphicGroupItemConfig, FeatureMatchGraphicItemDefinitionConfig, FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
+import type { FeatureMatchGraphicGroupChildKind } from '~/modules/feature-match-overlay/layout';
 import type { FeatureMatchOverlayAnchorValue } from '~/utils/featureMatchOverlayGeometry';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
-import { childAppearanceBadge, childAppearanceSummary, childSummary, FEATURE_MATCH_OVERLAY_WIDGET_KIND_OPTIONS, hasStyleOverrides, widgetIcon, widgetSummary, widgetTypeLabel } from '~/modules/feature-match-overlay/layerSummaries';
-import { featureMatchOverlayWidgetDefinition } from '~/modules/feature-match-overlay/widgetDefinitions';
+import { featureMatchOverlayGraphicItemDefinition } from '~/modules/feature-match-overlay/graphicItemDefinitions';
+import { childAppearanceBadge, childAppearanceSummary, childIcon, childSummary, childTypeLabel, FEATURE_MATCH_OVERLAY_GROUP_CHILD_KIND_OPTIONS, graphicItemSummary, hasStyleOverrides } from '~/modules/feature-match-overlay/layerSummaries';
 import { anchorFeatureMatchOverlayRect } from '~/utils/featureMatchOverlayGeometry';
 import FeatureMatchOverlayBoxStyleFields from './BoxStyleFields.vue';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
 import FeatureMatchOverlayGeometryFields from './GeometryFields.vue';
-import FeatureMatchOverlayWidgetEditor from './WidgetEditor.vue';
+import FeatureMatchOverlayMediaFields from './MediaFields.vue';
+import FeatureMatchOverlayOrderSection from './OrderSection.vue';
+import FeatureMatchOverlayGraphicItemEditor from './WidgetEditor.vue';
 
 const props = defineProps<{
 	config: FeatureMatchOverlayModeConfig;
@@ -17,8 +20,8 @@ const props = defineProps<{
 	screenWidth: number;
 	screenHeight: number;
 	eventId: number;
-	group: FeatureMatchWidgetGroupItemConfig;
-	child: FeatureMatchWidgetGroupChildConfig;
+	group: FeatureMatchGraphicGroupItemConfig;
+	child: FeatureMatchGraphicGroupChildConfig;
 }>();
 
 const emit = defineEmits<{
@@ -50,7 +53,7 @@ const childAnchorValue = computed<FeatureMatchOverlayAnchorValue>(() =>
 
 const resolvedSurfaceStyle = computed(() => ({
 	...(props.group.defaultChildSurfaceStyle ?? {}),
-	...(props.child.surfaceStyle ?? {}),
+	...(props.child.type === 'media' ? {} : props.child.surfaceStyle ?? {}),
 }));
 
 function removeSelf() {
@@ -58,32 +61,67 @@ function removeSelf() {
 	emit('removed');
 }
 
-function replaceWidgetType(type: FeatureMatchWidgetConfig['type']) {
-	editor.updateGroupChild(props.group.id, props.child.id, { widget: featureMatchOverlayWidgetDefinition(type).defaultConfig() });
+function replaceContentType(type: FeatureMatchGraphicGroupChildKind) {
+	if (type !== 'media' && props.child.type !== 'media') {
+		editor.updateGroupChild(props.group.id, props.child.id, {
+			type: 'graphic-item',
+			graphicItem: featureMatchOverlayGraphicItemDefinition(type).defaultConfig(),
+		});
+		return;
+	}
+
+	const base = {
+		id: props.child.id,
+		label: type === 'media' ? 'Media Graphic Item' : `${featureMatchOverlayGraphicItemDefinition(type).label} Graphic Item`,
+		visible: props.child.visible,
+		layout: props.child.layout,
+	};
+	const replacement: FeatureMatchGraphicGroupChildConfig = type === 'media'
+		? {
+				...base,
+				...featureMatchOverlayGraphicItemDefinition('media').defaultConfig(),
+				type: 'media',
+			}
+		: {
+				...base,
+				type: 'graphic-item',
+				graphicItem: featureMatchOverlayGraphicItemDefinition(type).defaultConfig(),
+			};
+	editor.updateGroup(props.group.id, {
+		children: props.group.children.map(child => child.id === props.child.id ? replacement : child),
+	});
 }
 
 function resetSurfaceStyle() {
 	editor.updateGroup(props.group.id, {
 		children: props.group.children.map((child) => {
-			if (child.id !== props.child.id)
+			if (child.id !== props.child.id || child.type === 'media')
 				return child;
 			const { surfaceStyle: _surfaceStyle, ...childWithoutSurfaceStyle } = child;
 			return childWithoutSurfaceStyle;
 		}),
 	});
 }
+
+function patchMedia(updates: Partial<FeatureMatchGraphicGroupChildConfig>) {
+	editor.updateGroupChild(props.group.id, props.child.id, updates);
+}
+
+function patchGraphicItem(updates: FeatureMatchGraphicItemDefinitionConfig) {
+	editor.updateGroupChildGraphicItem(props.group.id, props.child.id, updates);
+}
 </script>
 
 <template>
 	<div class="min-w-0">
 		<div class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-muted">
-			<UIcon :name="widgetIcon(child.widget.type)" class="size-3.5" />
-			<span>Widget</span>
+			<UIcon :name="childIcon(child)" class="size-3.5" />
+			<span>Graphic Item</span>
 		</div>
 
 		<FeatureMatchOverlayControlSection
 			title="Details"
-			:badge="widgetTypeLabel(child.widget.type)"
+			:badge="childTypeLabel(child)"
 			:summary="child.label"
 		>
 			<div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
@@ -104,8 +142,8 @@ function resetSurfaceStyle() {
 					color="error"
 					variant="soft"
 					icon="i-lucide-trash-2"
-					aria-label="Remove widget"
-					title="Remove widget"
+					aria-label="Remove Graphic Item"
+					title="Remove Graphic Item"
 					@click="removeSelf"
 				/>
 			</div>
@@ -185,30 +223,39 @@ function resetSurfaceStyle() {
 		</FeatureMatchOverlayControlSection>
 
 		<FeatureMatchOverlayControlSection
-			title="Content"
-			:summary="widgetSummary(child.widget)"
+			:title="child.type === 'media' ? 'Graphic Item' : 'Content'"
+			:summary="child.type === 'media' ? childSummary(child) : graphicItemSummary(child.graphicItem)"
 		>
 			<div class="space-y-3">
-				<UFormField label="Widget type">
+				<UFormField label="Graphic Item type">
 					<USelect
-						:model-value="child.widget.type"
-						:items="FEATURE_MATCH_OVERLAY_WIDGET_KIND_OPTIONS"
+						:model-value="child.type === 'media' ? 'media' : child.graphicItem.type"
+						:items="FEATURE_MATCH_OVERLAY_GROUP_CHILD_KIND_OPTIONS"
 						value-key="value"
 						size="sm"
 						class="w-full"
-						@update:model-value="replaceWidgetType($event as FeatureMatchWidgetConfig['type'])"
+						@update:model-value="replaceContentType($event as FeatureMatchGraphicGroupChildKind)"
 					/>
 				</UFormField>
-				<FeatureMatchOverlayWidgetEditor
-					:widget="child.widget"
-					:widget-surface-style="resolvedSurfaceStyle"
+				<FeatureMatchOverlayGraphicItemEditor
+					v-if="child.type !== 'media'"
+					:graphic-item="child.graphicItem"
+					:graphic-item-surface-style="resolvedSurfaceStyle"
 					:event-id="eventId"
-					@update="widget => editor.updateGroupChildWidget(group.id, child.id, widget)"
+					@update="patchGraphicItem"
 				/>
 			</div>
 		</FeatureMatchOverlayControlSection>
 
+		<FeatureMatchOverlayMediaFields
+			v-if="child.type === 'media'"
+			:media="child"
+			:event-id="eventId"
+			@update="patchMedia"
+		/>
+
 		<FeatureMatchOverlayControlSection
+			v-if="child.type !== 'media'"
 			title="Overrides"
 			:badge="childAppearanceBadge(child)"
 			:summary="childAppearanceSummary(child)"
@@ -220,7 +267,7 @@ function resetSurfaceStyle() {
 						variant="soft"
 						icon="i-lucide-rotate-ccw"
 						:disabled="!hasStyleOverrides(child.surfaceStyle)"
-						data-testid="reset-widget-appearance"
+						data-testid="reset-graphicItem-appearance"
 						@click="resetSurfaceStyle"
 					>
 						Reset to Defaults
@@ -236,5 +283,11 @@ function resetSurfaceStyle() {
 				/>
 			</div>
 		</FeatureMatchOverlayControlSection>
+
+		<FeatureMatchOverlayOrderSection
+			@send-to-back="editor.sendGroupChildToBack(group.id, child.id)"
+			@move="delta => editor.moveGroupChildOrder(group.id, child.id, delta)"
+			@bring-to-front="editor.bringGroupChildToFront(group.id, child.id)"
+		/>
 	</div>
 </template>

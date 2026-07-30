@@ -73,7 +73,7 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 		const previewFrame = wrapper.get('iframe').element;
 		Object.defineProperty(previewFrame, 'contentWindow', { configurable: true, value: window });
 		const previewWindow = previewFrame.contentWindow;
-		const target = { type: 'widget', itemId: 'top-bar', childId: 'top-name-record' };
+		const target = { type: 'graphic-item', itemId: 'top-bar', childId: 'top-name-record' };
 
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: window.location.origin,

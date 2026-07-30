@@ -2,6 +2,8 @@ import type {
 	GraphicAsset,
 	GraphicAssetCanonicalMime,
 	GraphicAssetId,
+	GraphicAssetLifecycleActionOutcome,
+	GraphicAssetLifecycleState,
 	GraphicAssetReferenceStatus,
 	GraphicAssetRevisionId,
 	GraphicAssetSourceDeclarations,
@@ -16,8 +18,9 @@ import type {
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 } from '~~/shared/types/graphicsAsset';
+import type { GraphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import type { GraphicsCapacityExhaustedDetails } from './errors';
-import type { GraphicsImageMultipartState } from './multipart';
+import type { GraphicsAssetMultipartState } from './multipart';
 import type {
 	BoundedByteStream,
 	GraphicsCanonicalObjectStore,
@@ -25,14 +28,18 @@ import type {
 	GraphicsObjectStoreHealth,
 	GraphicsStagingObjectStore,
 } from './object-store';
+import type { SilentVideoPlaybackValidator } from './silent-video-playback-validator';
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import {
 	GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
 	GRAPHICS_MULTIPART_MAXIMUM_PART_ATTEMPTS,
 	GRAPHICS_MULTIPART_PART_BYTES,
 	GRAPHICS_MULTIPART_PART_TRANSFER_TIMEOUT_MILLISECONDS,
+	MAX_SILENT_VIDEO_INGESTION_BYTES,
+	MAX_SILENT_VIDEO_POSTER_BYTES,
 	MAX_STATIC_FONT_INGESTION_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
+	SILENT_VIDEO_COMPATIBILITY_PROFILE,
 	STATIC_FONT_COMPATIBILITY_PROFILE,
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
 } from '~~/shared/utils/graphicsAssetCompatibility';
@@ -49,6 +56,15 @@ import {
 	sha256Hex,
 	sha256HexStream,
 } from './png';
+import {
+	processSilentVideo,
+	processSilentVideoFromRandomAccess,
+	SilentVideoInspectionSourceError,
+} from './silent-video';
+import {
+	createUnavailableSilentVideoPlaybackValidator,
+	silentVideoPlaybackValidationIssue,
+} from './silent-video-playback-validator';
 import { processStillImage } from './still-image';
 import {
 	GraphicAssetValidationError,
@@ -58,6 +74,47 @@ import {
 
 export { GraphicsAssetLibraryError } from './errors';
 export { createInMemoryGraphicsAssetCatalogue } from './in-memory-catalogue';
+
+const GRAPHIC_ASSET_SOURCE_POLICIES = {
+	'image': {
+		label: 'Still image',
+		maximumByteLength: MAX_STILL_IMAGE_INGESTION_BYTES,
+		compatibilityProfile: STILL_IMAGE_COMPATIBILITY_PROFILE,
+		conflictingMimeCode: 'conflicting-image-mime',
+	},
+	'silent-video': {
+		label: 'Silent video',
+		maximumByteLength: MAX_SILENT_VIDEO_INGESTION_BYTES,
+		compatibilityProfile: SILENT_VIDEO_COMPATIBILITY_PROFILE,
+		conflictingMimeCode: 'conflicting-video-mime',
+	},
+	'font': {
+		label: 'Static font',
+		maximumByteLength: MAX_STATIC_FONT_INGESTION_BYTES,
+		compatibilityProfile: STATIC_FONT_COMPATIBILITY_PROFILE,
+		conflictingMimeCode: 'conflicting-font-mime',
+	},
+} as const satisfies Record<GraphicAssetSourceKind, {
+	label: string;
+	maximumByteLength: number;
+	compatibilityProfile: GraphicAssetValidationReport['compatibilityProfile'];
+	conflictingMimeCode: Extract<GraphicAssetValidationReport, { outcome: 'rejected' }>['issues'][number]['code'];
+}>;
+
+async function processGraphicAssetSource(
+	kind: GraphicAssetSourceKind,
+	bytes: Uint8Array,
+	declarations: Pick<GraphicAssetSourceDeclarations, 'sourceFileName' | 'declaredMime'>,
+) {
+	switch (kind) {
+		case 'font':
+			return await processStaticFont(bytes, declarations);
+		case 'silent-video':
+			return await processSilentVideo(bytes, declarations);
+		case 'image':
+			return await processStillImage(bytes, declarations);
+	}
+}
 
 export interface GraphicsAssetCatalogueHealth {
 	checkHealth: () => Promise<{ outcome: 'healthy' }>;
@@ -79,6 +136,17 @@ export interface ReusableGraphicAsset {
 	assetId: GraphicAssetId;
 	revisionId: GraphicAssetRevisionId;
 }
+
+export type GraphicAssetLifecycleTransition
+	= | {
+		outcome: 'updated';
+		asset: GraphicAsset;
+	}
+	| {
+		outcome: 'in-use';
+		usage: GraphicAssetUsage[];
+	}
+	| { outcome: 'not-found' | 'not-allowed' };
 
 export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
@@ -110,18 +178,18 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		operationId: GraphicsIngestionOperationId,
 		initiatedBy: string,
 	) => Promise<GraphicsIngestionOperation | undefined>;
-	getImageMultipartState: (
+	getGraphicAssetMultipartState: (
 		operationId: GraphicsIngestionOperationId,
 		initiatedBy: string,
-	) => Promise<GraphicsImageMultipartState | undefined>;
-	updateImageMultipartState: (input: {
+	) => Promise<GraphicsAssetMultipartState | undefined>;
+	updateGraphicAssetMultipartState: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
 		expectedVersion: number;
-		state: GraphicsImageMultipartState;
+		state: GraphicsAssetMultipartState;
 		updatedAt: string;
 	}) => Promise<boolean>;
-	recordImageMultipartCleanupComplete: (
+	recordGraphicAssetMultipartCleanupComplete: (
 		operationId: GraphicsIngestionOperationId,
 		initiatedBy: string,
 	) => Promise<void>;
@@ -159,7 +227,23 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		eventIds: number[];
 		updatedAt: string;
 	}) => Promise<GraphicAsset | undefined>;
-	listGraphicAssets: (search: string) => Promise<GraphicAsset[]>;
+	listGraphicAssets: (
+		search: string,
+		lifecycleStates: readonly GraphicAssetLifecycleState[],
+	) => Promise<GraphicAsset[]>;
+	retireGraphicAsset: (input: {
+		assetId: GraphicAssetId;
+		updatedAt: string;
+	}) => Promise<GraphicAssetLifecycleTransition>;
+	trashGraphicAsset: (input: {
+		assetId: GraphicAssetId;
+		trashedAt: string;
+		recoverableUntil: string;
+	}) => Promise<GraphicAssetLifecycleTransition>;
+	restoreGraphicAsset: (input: {
+		assetId: GraphicAssetId;
+		restoredAt: string;
+	}) => Promise<GraphicAssetLifecycleTransition>;
 	findRevisionContent: (input: {
 		assetId: GraphicAssetId;
 		revisionId: GraphicAssetRevisionId;
@@ -167,7 +251,7 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		digest: string;
 		byteLength: number;
 		canonicalMime: GraphicAssetCanonicalMime;
-		kind: 'image' | 'font';
+		kind: 'image' | 'silent-video' | 'font';
 		lifecycleState: 'active' | 'retired' | 'trashed';
 	} | undefined>;
 	listGraphicAssetUsage: (assetId: GraphicAssetId) => Promise<GraphicAssetUsage[]>;
@@ -208,17 +292,17 @@ export interface GraphicsAssetLibrary {
 		declaredMime?: string;
 		bytes: BoundedByteStream;
 	}) => Promise<GraphicsIngestionOperation>;
-	startImageMultipartUpload: (input: {
+	startGraphicAssetMultipartUpload: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
 	}) => Promise<GraphicsIngestionOperation>;
-	uploadImageMultipartPart: (input: {
+	uploadGraphicAssetMultipartPart: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
 		partNumber: number;
 		bytes: BoundedByteStream;
 	}) => Promise<GraphicsIngestionOperation>;
-	completeImageMultipartUpload: (input: {
+	completeGraphicAssetMultipartUpload: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
 	}) => Promise<GraphicsIngestionOperation>;
@@ -231,7 +315,19 @@ export interface GraphicsAssetLibrary {
 		initiatedBy: string;
 		evidence: NonNullable<GraphicAssetSourceDeclarations['browserDecodeEvidence']>;
 	}) => Promise<GraphicsIngestionOperation>;
-	listGraphicAssets: (input: { search?: string }) => Promise<GraphicAsset[]>;
+	listGraphicAssets: (input: {
+		search?: string;
+		lifecycleStates?: readonly GraphicAssetLifecycleState[];
+	}) => Promise<GraphicAsset[]>;
+	retireGraphicAsset: (input: {
+		assetId: GraphicAssetId;
+	}) => Promise<GraphicAssetLifecycleActionOutcome>;
+	trashGraphicAsset: (input: {
+		assetId: GraphicAssetId;
+	}) => Promise<GraphicAssetLifecycleActionOutcome>;
+	restoreGraphicAsset: (input: {
+		assetId: GraphicAssetId;
+	}) => Promise<GraphicAssetLifecycleActionOutcome>;
 	updateGraphicAsset: (input: {
 		assetId: GraphicAssetId;
 		name: string;
@@ -242,9 +338,22 @@ export interface GraphicsAssetLibrary {
 		assetId: GraphicAssetId;
 		revisionId: GraphicAssetRevisionId;
 	}) => Promise<GraphicAssetReferenceStatus>;
+	inspectGraphicAssetRevisionContent: (input: {
+		assetId: GraphicAssetId;
+		revisionId: GraphicAssetRevisionId;
+	}) => Promise<
+		| {
+			outcome: 'available';
+			byteLength: number;
+			contentType: GraphicAssetCanonicalMime;
+		}
+		| { outcome: 'missing' }
+		| { outcome: 'unavailable'; retryable: true }
+	>;
 	resolveGraphicAssetRevision: (input: {
 		assetId: GraphicAssetId;
 		revisionId: GraphicAssetRevisionId;
+		range?: { offset: number; length: number };
 	}) => Promise<
 		| {
 			outcome: 'available';
@@ -273,6 +382,7 @@ interface GraphicsAssetLibraryDependencies {
 	catalogue: GraphicsAssetCatalogueHealth | GraphicsAssetCatalogue;
 	staging: GraphicsObjectStoreHealth | GraphicsStagingObjectStore;
 	canonical: GraphicsObjectStoreHealth | GraphicsCanonicalObjectStore;
+	silentVideoPlaybackValidator?: SilentVideoPlaybackValidator;
 	now?: () => Date;
 	generateIdentity?: () => string;
 }
@@ -349,8 +459,11 @@ export function createGraphicsAssetLibrary(
 ): GraphicsAssetLibrary {
 	const now = dependencies.now ?? (() => new Date());
 	const generateIdentity = dependencies.generateIdentity ?? (() => crypto.randomUUID());
+	const silentVideoPlaybackValidator = dependencies.silentVideoPlaybackValidator
+		?? createUnavailableSilentVideoPlaybackValidator();
 	const activeIngestionLeaseMilliseconds
 		= GRAPHICS_MULTIPART_PART_TRANSFER_TIMEOUT_MILLISECONDS + 30_000;
+	const trashRecoveryMilliseconds = 30 * 24 * 60 * 60 * 1000;
 
 	function requireCatalogue(): GraphicsAssetCatalogue {
 		if (!('initiateGraphicsIngestion' in dependencies.catalogue))
@@ -408,16 +521,14 @@ export function createGraphicsAssetLibrary(
 		if (!input.idempotencyKey.trim() || !input.initiatedBy.trim())
 			throw new GraphicsAssetLibraryError('Ingestion identity and author are required', 'invalid-ingestion-input');
 		const sourceKind = graphicAssetSourceKind(input);
-		const maximumByteLength = sourceKind === 'font'
-			? MAX_STATIC_FONT_INGESTION_BYTES
-			: MAX_STILL_IMAGE_INGESTION_BYTES;
+		const policy = GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind];
 		if (
 			!Number.isSafeInteger(input.declaredByteLength)
 			|| input.declaredByteLength <= 0
-			|| input.declaredByteLength > maximumByteLength
+			|| input.declaredByteLength > policy.maximumByteLength
 		) {
 			throw new GraphicsAssetLibraryError(
-				`${sourceKind === 'font' ? 'Static font' : 'Still image'} must be between 1 and ${maximumByteLength} bytes`,
+				`${policy.label} must be between 1 and ${policy.maximumByteLength} bytes`,
 				'invalid-ingestion-input',
 			);
 		}
@@ -494,6 +605,131 @@ export function createGraphicsAssetLibrary(
 			...operation,
 			...changes,
 			updatedAt,
+		};
+	}
+
+	class SilentVideoValidationRuntimeError extends Error {}
+
+	async function reportWithTrustedSilentVideoValidation(
+		report: Extract<GraphicAssetValidationReport, {
+			outcome: 'accepted';
+			compatibilityProfile: 'silent-video-v1';
+		}>,
+		operation: GraphicsIngestionOperation,
+	) {
+		const factsDigest = await sha256Hex(
+			new TextEncoder().encode(JSON.stringify(report.facts)),
+		);
+		const idempotencyKey = [
+			'silent-video-playback-v1',
+			operation.id,
+			report.facts.sha256,
+			factsDigest,
+		].join(':');
+		const validationInput = {
+			operationId: operation.id,
+			idempotencyKey,
+			sourceDigest: report.facts.sha256,
+			sourceByteLength: report.facts.byteLength,
+			sourceContentType: report.facts.canonicalMime,
+			factsDigest,
+			inspectedFacts: report.facts,
+		} as const;
+		let validation;
+		try {
+			validation = await silentVideoPlaybackValidator.validate(validationInput);
+		}
+		catch {
+			throw new SilentVideoValidationRuntimeError(
+				'Silent-video validation runtime failed while executing the bound operation',
+			);
+		}
+		if (validation.outcome === 'unavailable')
+			throw new SilentVideoValidationRuntimeError('Silent-video validation runtime is unavailable');
+		if (
+			validation.operationId !== operation.id
+			|| validation.idempotencyKey !== idempotencyKey
+			|| validation.sourceDigest !== report.facts.sha256
+			|| validation.factsDigest !== factsDigest
+		) {
+			throw new SilentVideoValidationRuntimeError(
+				'Silent-video validation result was not bound to the exact operation, source, and inspected facts',
+			);
+		}
+		const validationIssue = silentVideoPlaybackValidationIssue(validationInput, validation);
+		if (validationIssue) {
+			validationError(
+				validationIssue,
+				'Pinned native validation could not decode, play, and seek the exact silent video.',
+			);
+		}
+		if (validation.outcome === 'rejected')
+			throw new SilentVideoValidationRuntimeError('Rejected validation did not produce an issue');
+		if (
+			validation.mutedInlinePlayback !== true
+			|| validation.seeked !== true
+			|| validation.width !== report.facts.width
+			|| validation.height !== report.facts.height
+			|| Math.abs(validation.durationSeconds - report.facts.durationSeconds) > 0.05
+			|| Math.abs(validation.posterTimeSeconds - report.facts.posterTimeSeconds) > 0.001
+		) {
+			throw new SilentVideoValidationRuntimeError(
+				'Silent-video validation facts conflict with bounded inspection',
+			);
+		}
+		if (
+			validation.poster.byteLength <= 0
+			|| validation.poster.byteLength > MAX_SILENT_VIDEO_POSTER_BYTES
+			|| !/^[a-f0-9]{64}$/.test(validation.posterDigest)
+		) {
+			throw new SilentVideoValidationRuntimeError(
+				'Silent-video validation returned an invalid deterministic poster envelope',
+			);
+		}
+		let poster;
+		try {
+			const posterBytes = await consumeBoundedByteStream(validation.poster);
+			if (await sha256Hex(posterBytes) !== validation.posterDigest) {
+				throw new SilentVideoValidationRuntimeError(
+					'Silent-video validation poster digest does not match its exact bytes',
+				);
+			}
+			poster = await processStillImage(posterBytes, {
+				sourceFileName: 'poster.png',
+				declaredMime: 'image/png',
+			});
+		}
+		catch (error) {
+			if (error instanceof SilentVideoValidationRuntimeError)
+				throw error;
+			throw new SilentVideoValidationRuntimeError(
+				'Silent-video validation returned a poster that could not be verified',
+			);
+		}
+		const scale = Math.min(1, 640 / report.facts.width, 360 / report.facts.height);
+		const expectedWidth = Math.max(1, Math.round(report.facts.width * scale));
+		const expectedHeight = Math.max(1, Math.round(report.facts.height * scale));
+		if (
+			poster.report.facts.kind !== 'image'
+			|| poster.report.facts.width !== expectedWidth
+			|| poster.report.facts.height !== expectedHeight
+		) {
+			throw new SilentVideoValidationRuntimeError(
+				'Silent-video validation poster violates the deterministic fit rule',
+			);
+		}
+		return {
+			report: {
+				...report,
+				facts: {
+					...report.facts,
+					browserPlayable: true as const,
+					...(report.facts.hasAlpha
+						? { chromiumTransparencyPlayback: true as const }
+						: {}),
+				},
+			},
+			derivative: poster.thumbnail,
 		};
 	}
 
@@ -579,7 +815,10 @@ export function createGraphicsAssetLibrary(
 				'Browser-decoded source digest does not match the staged source bytes.',
 			);
 		}
-		if (evidence.outcome === 'font-loaded' || evidence.outcome === 'font-rejected') {
+		if (
+			evidence.outcome === 'font-loaded'
+			|| evidence.outcome === 'font-rejected'
+		) {
 			validationError(
 				'browser-image-decode-failed',
 				'Image browser decode evidence is required before publication.',
@@ -639,7 +878,7 @@ export function createGraphicsAssetLibrary(
 		operation: GraphicsIngestionOperation,
 	): Promise<GraphicsIngestionOperation> {
 		const multipart = await catalogueRequest(
-			() => catalogue.getImageMultipartState(operation.id, operation.initiatedBy),
+			() => catalogue.getGraphicAssetMultipartState(operation.id, operation.initiatedBy),
 			'Graphics multipart cancellation checkpoint is temporarily unavailable',
 		);
 		if (!multipart?.uploadId || !multipart.cleanupPending)
@@ -655,7 +894,7 @@ export function createGraphicsAssetLibrary(
 		if (aborted.outcome === 'unavailable' || deleted.outcome === 'unavailable')
 			return operation;
 		await catalogueRequest(
-			() => catalogue.recordImageMultipartCleanupComplete(operation.id, operation.initiatedBy),
+			() => catalogue.recordGraphicAssetMultipartCleanupComplete(operation.id, operation.initiatedBy),
 			'Graphics multipart cleanup completion could not be recorded',
 		);
 		return await catalogueRequest(
@@ -749,6 +988,7 @@ export function createGraphicsAssetLibrary(
 		const canonical = requireCanonical();
 		let operation = initialOperation;
 		const stagingIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
+		const posterIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/video-poster`);
 
 		async function terminalOperationAtCheckpoint() {
 			const authoritative = await catalogue.getIngestionOperation(
@@ -757,9 +997,12 @@ export function createGraphicsAssetLibrary(
 			);
 			if (authoritative?.stage !== 'cancelled' && authoritative?.stage !== 'completed')
 				return;
-			if (authoritative.stage === 'cancelled')
+			if (authoritative.stage === 'cancelled') {
 				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
 				await staging.delete(stagingIdentity);
+				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+				await staging.delete(posterIdentity);
+			}
 			return authoritative;
 		}
 
@@ -793,10 +1036,12 @@ export function createGraphicsAssetLibrary(
 					message: 'Staged source bytes are temporarily unavailable.',
 				}, operation.report);
 			}
-			await sha256HexStream({
+			const sourceDigest = await sha256HexStream({
 				body: stagedRead.body,
 				byteLength: stagedRead.object.byteLength,
-				maximumByteLength: MAX_STILL_IMAGE_INGESTION_BYTES,
+				maximumByteLength: GRAPHIC_ASSET_SOURCE_POLICIES[
+					graphicAssetSourceKind(operation)
+				].maximumByteLength,
 			});
 			const hashingTerminal = await terminalOperationAtCheckpoint();
 			if (hashingTerminal)
@@ -806,8 +1051,12 @@ export function createGraphicsAssetLibrary(
 				changedOperation(operation, { stage: 'validating' }),
 				operation.updatedAt,
 			);
-			const validationRead = await staging.read(stagingIdentity);
-			if (validationRead.outcome !== 'available') {
+			const leadingLength = Math.min(64, operation.declaredByteLength);
+			const leadingRead = await staging.read(stagingIdentity, {
+				offset: 0,
+				length: leadingLength,
+			});
+			if (leadingRead.outcome !== 'available') {
 				return await failOperation(catalogue, operation, {
 					code: 'staging-unavailable',
 					retryable: true,
@@ -816,25 +1065,75 @@ export function createGraphicsAssetLibrary(
 			}
 			let processed:
 				| Awaited<ReturnType<typeof processStillImage>>
+				| Awaited<ReturnType<typeof processSilentVideo>>
 				| Awaited<ReturnType<typeof processStaticFont>>;
-			let sourceKind: 'image' | 'font' = graphicAssetSourceKind(operation);
+			let sourceKind: GraphicAssetSourceKind = graphicAssetSourceKind(operation);
+			let derivative: Uint8Array | undefined;
+			let report: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>;
 			try {
-				const validationBytes = await consumeBoundedByteStream({
-					body: validationRead.body,
-					byteLength: validationRead.object.byteLength,
-					maximumByteLength: MAX_STILL_IMAGE_INGESTION_BYTES,
+				const leadingBytes = await consumeBoundedByteStream({
+					body: leadingRead.body,
+					byteLength: leadingLength,
+					maximumByteLength: leadingLength,
 				});
-				sourceKind = graphicAssetSourceKind(operation, validationBytes.subarray(0, 64));
-				processed = sourceKind === 'font'
-					? await processStaticFont(validationBytes, {
-							sourceFileName: operation.sourceFileName,
-							declaredMime: operation.declaredMime,
-						})
-					: await processStillImage(validationBytes, {
-							sourceFileName: operation.sourceFileName,
-							declaredMime: operation.declaredMime,
-						});
-				if (processed.report.facts.kind === 'font' && !operation.browserDecodeEvidence) {
+				sourceKind = graphicAssetSourceKind(operation, leadingBytes);
+				if (sourceKind === 'silent-video') {
+					processed = await processSilentVideoFromRandomAccess({
+						byteLength: stagedMetadata.object.byteLength,
+						sha256: sourceDigest,
+						read: async (offset, length) => {
+							const range = await staging.read(stagingIdentity, { offset, length });
+							if (range.outcome !== 'available') {
+								return range.outcome === 'missing'
+									? { outcome: 'missing' as const }
+									: { outcome: 'unavailable' as const, retryable: true as const };
+							}
+							try {
+								const bytes = await consumeBoundedByteStream({
+									body: range.body,
+									byteLength: length,
+									maximumByteLength: length,
+								});
+								if (
+									range.range.offset !== offset
+									|| range.range.length !== length
+									|| range.range.completeLength !== stagedMetadata.object.byteLength
+								) {
+									return { outcome: 'unavailable' as const, retryable: true as const };
+								}
+								return {
+									outcome: 'available' as const,
+									bytes,
+									completeLength: range.range.completeLength,
+								};
+							}
+							catch {
+								return { outcome: 'unavailable' as const, retryable: true as const };
+							}
+						},
+					}, {
+						sourceFileName: operation.sourceFileName,
+						declaredMime: operation.declaredMime,
+					});
+				}
+				else {
+					const validationRead = await staging.read(stagingIdentity);
+					if (validationRead.outcome !== 'available')
+						throw new Error('Staged source bytes are temporarily unavailable.');
+					const validationBytes = await consumeBoundedByteStream({
+						body: validationRead.body,
+						byteLength: validationRead.object.byteLength,
+						maximumByteLength: GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind].maximumByteLength,
+					});
+					processed = await processGraphicAssetSource(sourceKind, validationBytes, {
+						sourceFileName: operation.sourceFileName,
+						declaredMime: operation.declaredMime,
+					});
+				}
+				if (
+					processed.report.facts.kind === 'font'
+					&& !operation.browserDecodeEvidence
+				) {
 					return await catalogue.updateIngestionOperation(
 						changedOperation(operation, {
 							stage: 'awaiting-confirmation',
@@ -843,19 +1142,46 @@ export function createGraphicsAssetLibrary(
 						operation.updatedAt,
 					);
 				}
-				processed = {
-					...processed,
-					report: reportWithBrowserDecodeEvidence(processed.report, operation),
-				};
+				if (processed.report.facts.kind === 'silent-video') {
+					const trusted = await reportWithTrustedSilentVideoValidation(
+						processed.report as Extract<GraphicAssetValidationReport, {
+							outcome: 'accepted';
+							compatibilityProfile: 'silent-video-v1';
+						}>,
+						operation,
+					);
+					report = trusted.report;
+					derivative = trusted.derivative;
+				}
+				else {
+					report = reportWithBrowserDecodeEvidence(processed.report, operation);
+					if (!('thumbnail' in processed))
+						throw new Error('Validated still image or font is missing its deterministic derivative');
+					derivative = processed.thumbnail;
+				}
 			}
 			catch (error) {
+				if (error instanceof SilentVideoInspectionSourceError) {
+					return await failOperation(catalogue, operation, {
+						code: 'staging-unavailable',
+						retryable: true,
+						message: error.outcome === 'missing'
+							? 'Staged source bytes are missing.'
+							: 'Staged source bytes are temporarily unavailable.',
+					}, operation.report);
+				}
+				if (error instanceof SilentVideoValidationRuntimeError) {
+					return await failOperation(catalogue, operation, {
+						code: 'validation-runtime-unavailable',
+						retryable: true,
+						message: 'Trusted silent-video playback validation is temporarily unavailable.',
+					}, operation.report);
+				}
 				if (!(error instanceof GraphicAssetValidationError))
 					throw error;
 				const report = rejectedValidationReport(
 					error,
-					sourceKind === 'font'
-						? STATIC_FONT_COMPATIBILITY_PROFILE
-						: STILL_IMAGE_COMPATIBILITY_PROFILE,
+					GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind].compatibilityProfile,
 				);
 				const failed = await failOperation(catalogue, operation, {
 					code: 'validation-failed',
@@ -864,6 +1190,8 @@ export function createGraphicsAssetLibrary(
 				}, report);
 				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
 				await staging.delete(stagingIdentity);
+				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+				await staging.delete(posterIdentity);
 				return failed;
 			}
 			const validationTerminal = await terminalOperationAtCheckpoint();
@@ -874,11 +1202,11 @@ export function createGraphicsAssetLibrary(
 				const current = await catalogue.findCurrentGraphicAsset(operation.targetAssetId);
 				if (!current)
 					throw new Error('Replacement target Graphic Asset was not found');
-				if (current.sourceDigest === processed.report.facts.sha256) {
+				if (current.sourceDigest === report.facts.sha256) {
 					operation = await catalogue.updateIngestionOperation(
 						changedOperation(operation, {
 							stage: 'publishing',
-							report: processed.report,
+							report,
 						}),
 						operation.updatedAt,
 					);
@@ -896,7 +1224,7 @@ export function createGraphicsAssetLibrary(
 			operation = await catalogue.updateIngestionOperation(
 				changedOperation(operation, {
 					stage: 'generating-derivatives',
-					report: processed.report,
+					report,
 				}),
 				operation.updatedAt,
 			);
@@ -904,12 +1232,12 @@ export function createGraphicsAssetLibrary(
 			if (derivativeStartTerminal)
 				return derivativeStartTerminal;
 
-			const thumbnail = processed.thumbnail;
+			const thumbnail = derivative!;
 			const thumbnailDigest = await sha256Hex(thumbnail);
 			const reservation = await catalogue.reserveGraphicAssetPublication({
 				operation,
-				sourceDigest: processed.report.facts.sha256,
-				sourceByteLength: processed.report.facts.byteLength,
+				sourceDigest: report.facts.sha256,
+				sourceByteLength: report.facts.byteLength,
 				thumbnailDigest,
 				thumbnailByteLength: thumbnail.byteLength,
 				reservedAt: changedOperation(operation, {}).updatedAt,
@@ -927,7 +1255,7 @@ export function createGraphicsAssetLibrary(
 					code: 'canonical-capacity-exhausted',
 					retryable: true,
 					message: 'Canonical capacity is exhausted; this operation would add new bytes.',
-				}, processed.report);
+				}, report);
 			}
 			operation = reservation.operation;
 			const canonicalSourceRead = await staging.read(stagingIdentity);
@@ -936,21 +1264,21 @@ export function createGraphicsAssetLibrary(
 					code: 'staging-unavailable',
 					retryable: true,
 					message: 'Staged source bytes are temporarily unavailable.',
-				}, processed.report);
+				}, report);
 			}
 			const [sourceWrite, thumbnailWrite] = await Promise.all([
-				storeCanonicalStream(canonical, processed.report.facts.sha256, {
+				storeCanonicalStream(canonical, report.facts.sha256, {
 					body: canonicalSourceRead.body,
 					byteLength: canonicalSourceRead.object.byteLength,
-					maximumByteLength: MAX_STILL_IMAGE_INGESTION_BYTES,
-				}, processed.report.facts.canonicalMime),
+					maximumByteLength: GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind].maximumByteLength,
+				}, report.facts.canonicalMime),
 				storeCanonicalBytes(canonical, thumbnailDigest, thumbnail),
 			]);
 			const createdCanonicalContents = [
 				sourceWrite.outcome === 'created'
 					? {
-							digest: processed.report.facts.sha256,
-							byteLength: processed.report.facts.byteLength,
+							digest: report.facts.sha256,
+							byteLength: report.facts.byteLength,
 						}
 					: undefined,
 				thumbnailWrite.outcome === 'created'
@@ -971,7 +1299,7 @@ export function createGraphicsAssetLibrary(
 					code: 'canonical-store-unavailable',
 					retryable: true,
 					message: 'Canonical source or thumbnail storage is temporarily unavailable.',
-				}, processed.report);
+				}, report);
 			}
 			const derivativeTerminal = await terminalOperationAtCheckpoint();
 			if (derivativeTerminal)
@@ -986,7 +1314,7 @@ export function createGraphicsAssetLibrary(
 				return publicationTerminal;
 
 			const reusable = !operation.targetAssetId && operation.duplicateContentPolicy === 'reuse'
-				? await catalogue.findReusableGraphicAsset(processed.report.facts.sha256)
+				? await catalogue.findReusableGraphicAsset(report.facts.sha256)
 				: undefined;
 			let completed: GraphicsIngestionOperation;
 			if (reusable) {
@@ -1000,11 +1328,11 @@ export function createGraphicsAssetLibrary(
 				completed = await catalogue.publishGraphicAssetReplacement({
 					operation,
 					targetAssetId: operation.targetAssetId,
-					report: processed.report,
+					report,
 					assetId: operation.targetAssetId,
 					revisionId: graphicAssetRevisionId(generateIdentity()),
 					derivativeId: graphicsDerivativeId(generateIdentity()),
-					sourceDigest: processed.report.facts.sha256,
+					sourceDigest: report.facts.sha256,
 					thumbnailDigest,
 					thumbnailByteLength: thumbnail.byteLength,
 					publishedAt: timestamp(),
@@ -1014,11 +1342,11 @@ export function createGraphicsAssetLibrary(
 				try {
 					completed = await catalogue.publishGraphicAsset({
 						operation,
-						report: processed.report,
+						report,
 						assetId: graphicAssetId(generateIdentity()),
 						revisionId: graphicAssetRevisionId(generateIdentity()),
 						derivativeId: graphicsDerivativeId(generateIdentity()),
-						sourceDigest: processed.report.facts.sha256,
+						sourceDigest: report.facts.sha256,
 						thumbnailDigest,
 						thumbnailByteLength: thumbnail.byteLength,
 						publishedAt: timestamp(),
@@ -1028,7 +1356,7 @@ export function createGraphicsAssetLibrary(
 					if (operation.duplicateContentPolicy === 'create-separate')
 						throw publicationError;
 					const concurrentlyPublished = await catalogue.findReusableGraphicAsset(
-						processed.report.facts.sha256,
+						report.facts.sha256,
 					);
 					if (!concurrentlyPublished)
 						throw publicationError;
@@ -1041,6 +1369,8 @@ export function createGraphicsAssetLibrary(
 			}
 			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
 			await staging.delete(stagingIdentity);
+			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+			await staging.delete(posterIdentity);
 			return completed;
 		}
 		catch {
@@ -1171,15 +1501,15 @@ export function createGraphicsAssetLibrary(
 				'Graphics ingestion cancellation could not be recorded',
 			);
 			const cleaned = await cleanupCancelledMultipart(catalogue, cancelled);
-			if (!cancelled.transfer) {
-				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-				await requireStaging().delete(
-					graphicsObjectIdentity(`ingestion/${operation.id}/source`),
-				);
-			}
+			const staging = requireStaging();
+			// Source and poster are one operation's provisional staging set.
+			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+			await staging.delete(graphicsObjectIdentity(`ingestion/${operation.id}/source`));
+			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+			await staging.delete(graphicsObjectIdentity(`ingestion/${operation.id}/video-poster`));
 			return cleaned;
 		},
-		async startImageMultipartUpload(input) {
+		async startGraphicAssetMultipartUpload(input) {
 			const catalogue = requireCatalogue();
 			const staging = requireStaging();
 			const operation = await catalogueRequest(
@@ -1204,7 +1534,7 @@ export function createGraphicsAssetLibrary(
 			}
 
 			const existing = await catalogueRequest(
-				() => catalogue.getImageMultipartState(operation.id, operation.initiatedBy),
+				() => catalogue.getGraphicAssetMultipartState(operation.id, operation.initiatedBy),
 				'Graphics multipart checkpoint is temporarily unavailable',
 			);
 			const stagingIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
@@ -1233,14 +1563,14 @@ export function createGraphicsAssetLibrary(
 				);
 			}
 			const initialVersion = existing?.version ?? 0;
-			const state: GraphicsImageMultipartState = {
+			const state: GraphicsAssetMultipartState = {
 				version: initialVersion + 1,
 				uploadId: started.upload.uploadId,
 				cleanupPending: false,
 				parts: existing?.parts ?? [],
 			};
 			const recorded = await catalogueRequest(
-				() => catalogue.updateImageMultipartState({
+				() => catalogue.updateGraphicAssetMultipartState({
 					operationId: operation.id,
 					initiatedBy: operation.initiatedBy,
 					expectedVersion: initialVersion,
@@ -1251,11 +1581,11 @@ export function createGraphicsAssetLibrary(
 			);
 			if (!recorded) {
 				await staging.abortMultipart(started.upload);
-				return await this.startImageMultipartUpload(input);
+				return await this.startGraphicAssetMultipartUpload(input);
 			}
 			return await this.getIngestionOperation(input);
 		},
-		async uploadImageMultipartPart(input) {
+		async uploadGraphicAssetMultipartPart(input) {
 			const catalogue = requireCatalogue();
 			const staging = requireStaging();
 			let operation = await catalogueRequest(
@@ -1283,10 +1613,10 @@ export function createGraphicsAssetLibrary(
 				);
 			}
 
-			let claimedState: GraphicsImageMultipartState | undefined;
+			let claimedState: GraphicsAssetMultipartState | undefined;
 			for (let claimAttempt = 0; claimAttempt < 8; claimAttempt++) {
 				const state = await catalogueRequest(
-					() => catalogue.getImageMultipartState(operation!.id, operation!.initiatedBy),
+					() => catalogue.getGraphicAssetMultipartState(operation!.id, operation!.initiatedBy),
 					'Graphics multipart checkpoint is temporarily unavailable',
 				);
 				if (!state?.uploadId)
@@ -1321,7 +1651,7 @@ export function createGraphicsAssetLibrary(
 						'ingestion-operation-not-uploadable',
 					);
 				}
-				const claimedPart: GraphicsImageMultipartState['parts'][number] = {
+				const claimedPart: GraphicsAssetMultipartState['parts'][number] = {
 					partNumber: input.partNumber,
 					partIdentity: graphicsIngestionPartIdentity(operation.id, input.partNumber),
 					byteLength: expectedByteLength,
@@ -1329,7 +1659,7 @@ export function createGraphicsAssetLibrary(
 					claimedAt: timestamp(),
 					attempts,
 				};
-				const claimed: GraphicsImageMultipartState = {
+				const claimed: GraphicsAssetMultipartState = {
 					...state,
 					version: state.version + 1,
 					parts: [
@@ -1338,7 +1668,7 @@ export function createGraphicsAssetLibrary(
 					],
 				};
 				const recorded = await catalogueRequest(
-					() => catalogue.updateImageMultipartState({
+					() => catalogue.updateGraphicAssetMultipartState({
 						operationId: operation!.id,
 						initiatedBy: operation!.initiatedBy,
 						expectedVersion: state.version,
@@ -1375,7 +1705,7 @@ export function createGraphicsAssetLibrary(
 				),
 			});
 			if (uploaded.outcome === 'unavailable') {
-				const failedState: GraphicsImageMultipartState = {
+				const failedState: GraphicsAssetMultipartState = {
 					...claimedState,
 					version: claimedState.version + 1,
 					parts: claimedState.parts.map(part =>
@@ -1384,7 +1714,7 @@ export function createGraphicsAssetLibrary(
 							: part),
 				};
 				await catalogueRequest(
-					() => catalogue.updateImageMultipartState({
+					() => catalogue.updateGraphicAssetMultipartState({
 						operationId: operation!.id,
 						initiatedBy: operation!.initiatedBy,
 						expectedVersion: claimedState!.version,
@@ -1401,7 +1731,7 @@ export function createGraphicsAssetLibrary(
 
 			for (let recordAttempt = 0; recordAttempt < 8; recordAttempt++) {
 				const latest = await catalogueRequest(
-					() => catalogue.getImageMultipartState(operation!.id, operation!.initiatedBy),
+					() => catalogue.getGraphicAssetMultipartState(operation!.id, operation!.initiatedBy),
 					'Graphics multipart checkpoint is temporarily unavailable',
 				);
 				if (!latest)
@@ -1409,7 +1739,7 @@ export function createGraphicsAssetLibrary(
 				const existing = latest.parts.find(part => part.partNumber === input.partNumber);
 				if (existing?.status === 'completed')
 					return await this.getIngestionOperation(input);
-				const completed: GraphicsImageMultipartState = {
+				const completed: GraphicsAssetMultipartState = {
 					...latest,
 					version: latest.version + 1,
 					parts: [
@@ -1426,7 +1756,7 @@ export function createGraphicsAssetLibrary(
 					],
 				};
 				const recorded = await catalogueRequest(
-					() => catalogue.updateImageMultipartState({
+					() => catalogue.updateGraphicAssetMultipartState({
 						operationId: operation!.id,
 						initiatedBy: operation!.initiatedBy,
 						expectedVersion: latest.version,
@@ -1446,7 +1776,7 @@ export function createGraphicsAssetLibrary(
 				'graphics-asset-library-unavailable',
 			);
 		},
-		async completeImageMultipartUpload(input) {
+		async completeGraphicAssetMultipartUpload(input) {
 			const catalogue = requireCatalogue();
 			const staging = requireStaging();
 			const operation = await catalogueRequest(
@@ -1464,7 +1794,7 @@ export function createGraphicsAssetLibrary(
 				);
 			}
 			const state = await catalogueRequest(
-				() => catalogue.getImageMultipartState(operation.id, operation.initiatedBy),
+				() => catalogue.getGraphicAssetMultipartState(operation.id, operation.initiatedBy),
 				'Graphics multipart checkpoint is temporarily unavailable',
 			);
 			if (!state?.uploadId)
@@ -1552,18 +1882,17 @@ export function createGraphicsAssetLibrary(
 			const transferMime = input.declaredMime?.trim().toLocaleLowerCase();
 			if (initiatedMime && transferMime && initiatedMime !== transferMime) {
 				const sourceKind = graphicAssetSourceKind(operation);
+				const sourcePolicy = GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind];
 				return await failOperation(catalogue, operation, {
 					code: 'validation-failed',
 					retryable: false,
 					message: 'Graphic Asset declarations conflict before validation.',
 				}, {
 					outcome: 'rejected',
-					compatibilityProfile: sourceKind === 'font'
-						? STATIC_FONT_COMPATIBILITY_PROFILE
-						: STILL_IMAGE_COMPATIBILITY_PROFILE,
+					compatibilityProfile: sourcePolicy.compatibilityProfile,
 					issues: [{
 						severity: 'error',
-						code: sourceKind === 'font' ? 'conflicting-font-mime' : 'conflicting-image-mime',
+						code: sourcePolicy.conflictingMimeCode,
 						message: `Initiated MIME ${initiatedMime} conflicts with transfer MIME ${transferMime}.`,
 					}],
 				});
@@ -1707,10 +2036,95 @@ export function createGraphicsAssetLibrary(
 			return await continueGraphicsIngestion(claimed);
 		},
 		async listGraphicAssets(input) {
+			const lifecycleStates = input.lifecycleStates ?? ['active'];
+			if (
+				lifecycleStates.length === 0
+				|| lifecycleStates.some(state => !['active', 'retired', 'trashed'].includes(state))
+			) {
+				throw new GraphicsAssetLibraryError(
+					'At least one valid Graphic Asset lifecycle state is required',
+					'invalid-ingestion-input',
+				);
+			}
 			return await catalogueRequest(
-				() => requireCatalogue().listGraphicAssets(input.search ?? ''),
+				() => requireCatalogue().listGraphicAssets(
+					input.search ?? '',
+					[...new Set(lifecycleStates)],
+				),
 				'Graphic Asset discovery is temporarily unavailable',
 			);
+		},
+		async retireGraphicAsset(input) {
+			const transition = await catalogueRequest(
+				() => requireCatalogue().retireGraphicAsset({
+					assetId: input.assetId,
+					updatedAt: timestamp(),
+				}),
+				'Graphic Asset retirement could not be completed',
+			);
+			if (transition.outcome === 'not-found') {
+				throw new GraphicsAssetLibraryError(
+					'Graphic Asset not found',
+					'ingestion-operation-not-found',
+				);
+			}
+			if (transition.outcome !== 'updated') {
+				throw new GraphicsAssetLibraryError(
+					'Only an active Graphic Asset can be retired',
+					'graphic-asset-lifecycle-action-not-allowed',
+				);
+			}
+			return { outcome: 'retired', asset: transition.asset };
+		},
+		async trashGraphicAsset(input) {
+			const trashedAt = now();
+			const transition = await catalogueRequest(
+				() => requireCatalogue().trashGraphicAsset({
+					assetId: input.assetId,
+					trashedAt: trashedAt.toISOString(),
+					recoverableUntil: new Date(
+						trashedAt.getTime() + trashRecoveryMilliseconds,
+					).toISOString(),
+				}),
+				'Graphic Asset Trash transition could not be completed',
+			);
+			if (transition.outcome === 'not-found') {
+				throw new GraphicsAssetLibraryError(
+					'Graphic Asset not found',
+					'ingestion-operation-not-found',
+				);
+			}
+			if (transition.outcome === 'in-use')
+				return transition;
+			if (transition.outcome !== 'updated') {
+				throw new GraphicsAssetLibraryError(
+					'Only an active or Retired Graphic Asset can enter Trash',
+					'graphic-asset-lifecycle-action-not-allowed',
+				);
+			}
+			return { outcome: 'trashed', asset: transition.asset };
+		},
+		async restoreGraphicAsset(input) {
+			const transition = await catalogueRequest(
+				() => requireCatalogue().restoreGraphicAsset({
+					assetId: input.assetId,
+					restoredAt: timestamp(),
+				}),
+				'Graphic Asset restoration could not be completed',
+			);
+			if (transition.outcome === 'not-found') {
+				throw new GraphicsAssetLibraryError(
+					'Graphic Asset not found',
+					'ingestion-operation-not-found',
+				);
+			}
+			if (transition.outcome !== 'updated') {
+				throw new GraphicsAssetLibraryError(
+					'Graphic Asset cannot be restored from its current lifecycle state or its recovery window has ended',
+					'graphic-asset-lifecycle-action-not-allowed',
+				);
+			}
+			return { outcome: 'restored', asset: transition.asset };
 		},
 		async updateGraphicAsset(input) {
 			const name = input.name.trim();
@@ -1770,6 +2184,29 @@ export function createGraphicsAssetLibrary(
 				kind: content.kind,
 			};
 		},
+		async inspectGraphicAssetRevisionContent(input) {
+			const content = await catalogueRequest(
+				() => requireCatalogue().findRevisionContent(input),
+				'Graphic Asset Revision lookup is temporarily unavailable',
+			);
+			if (!content)
+				return { outcome: 'missing' };
+			const result = await requireCanonical().readMetadata(
+				graphicsObjectIdentity(`sha256/${content.digest}`),
+			);
+			if (
+				result.outcome !== 'available'
+				|| result.object.byteLength !== content.byteLength
+				|| result.object.contentType !== content.canonicalMime
+			) {
+				return { outcome: 'unavailable', retryable: true };
+			}
+			return {
+				outcome: 'available',
+				byteLength: content.byteLength,
+				contentType: content.canonicalMime,
+			};
+		},
 		async resolveGraphicAssetRevision(input) {
 			const content = await catalogueRequest(
 				() => requireCatalogue().findRevisionContent(input),
@@ -1779,12 +2216,21 @@ export function createGraphicsAssetLibrary(
 				return { outcome: 'missing' };
 			const result = await requireCanonical().read(
 				graphicsObjectIdentity(`sha256/${content.digest}`),
+				input.range,
 			);
 			if (result.outcome !== 'available')
 				return { outcome: 'unavailable', retryable: true };
 			if (
 				result.object.byteLength !== content.byteLength
 				|| result.object.contentType !== content.canonicalMime
+				|| result.range.completeLength !== content.byteLength
+				|| (
+					input.range !== undefined
+					&& (
+						result.range.offset !== input.range.offset
+						|| result.range.length !== input.range.length
+					)
+				)
 			) {
 				return { outcome: 'unavailable', retryable: true };
 			}

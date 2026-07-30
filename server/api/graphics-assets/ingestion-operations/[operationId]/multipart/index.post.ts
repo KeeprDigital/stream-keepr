@@ -7,7 +7,7 @@ import {
 
 export default defineEventHandler(async (event) => {
 	try {
-		return await graphicsAssetLibraryForEvent(event).startImageMultipartUpload({
+		return await graphicsAssetLibraryForEvent(event).startGraphicAssetMultipartUpload({
 			operationId: graphicsIngestionOperationId(getRouterParam(event, 'operationId') ?? ''),
 			initiatedBy: graphicsAuthorIdentity(event),
 		});

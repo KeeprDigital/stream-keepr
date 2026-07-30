@@ -113,7 +113,7 @@ export default defineNuxtConfig({
 				boundedRawMutations: {
 					PUT: {
 						maxBytes: MAX_STILL_IMAGE_INGESTION_BYTES,
-						label: 'still-image transfer',
+						label: 'Graphic Asset transfer',
 					},
 				},
 			},

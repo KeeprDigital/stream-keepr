@@ -89,8 +89,22 @@
     {
       "idx": 12,
       "version": "6",
-      "when": 1785379258894,
-      "tag": "0012_mature_blade",
+      "when": 1785377937628,
+      "tag": "0012_wet_blade",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1785381566536,
+      "tag": "0013_worthless_swordsman",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1785384124630,
+      "tag": "0014_high_firestar",
       "breakpoints": true
     }
   ]

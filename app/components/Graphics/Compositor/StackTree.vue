@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import type { GraphicsHostContract } from '~~/shared/modules/graphics';
-import type { BroadcastGraphicConfig, GraphicItemKind } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicItemConfig, GraphicItemKind } from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
+	addGraphicGroupChild,
 	addGraphicItem,
 	createBroadcastGraphic,
 	deleteBroadcastGraphic,
 	deleteGraphicItem,
+	findGraphicItem,
+	graphicGroupChildDefinitionsForHost,
 	graphicItemDefinitionsForHost,
 	graphicItemIcon,
 	graphicItemKindLabel,
@@ -22,8 +25,12 @@ import GraphicsCompositorReorderControls from './ReorderControls.vue';
 /**
  * The compositor's authoring tree: the Screen's back-to-front stack of
  * Broadcast Graphics and, within the selected graphic, its Graphic Layer Order.
+ * A Graphic Group appears as one layer among its siblings with its own children
+ * nested beneath it, which is exactly how it composites.
+ *
  * The definition palette offers exactly the Graphic Item kinds the Host
- * Contract's declared context supports.
+ * Contract's declared context supports, and a Graphic Group's own palette omits
+ * Graphic Group because groups do not nest.
  */
 const props = defineProps<{
 	graphics: readonly BroadcastGraphicConfig[];
@@ -52,15 +59,55 @@ const emit = defineEmits<{
  */
 const canAuthor = computed(() => props.writable === true);
 
-const itemKindOptions = computed(() => graphicItemDefinitionsForHost(props.contract).map(definition => ({
-	label: definition.label,
-	value: definition.kind,
-	icon: definition.icon,
-})));
+function paletteOptions(definitions: readonly { label: string; kind: GraphicItemKind; icon: string }[]) {
+	return definitions.map(definition => ({
+		label: definition.label,
+		value: definition.kind,
+		icon: definition.icon,
+	}));
+}
+
+const itemKindOptions = computed(() => paletteOptions(graphicItemDefinitionsForHost(props.contract)));
+const groupChildKindOptions = computed(() => paletteOptions(graphicGroupChildDefinitionsForHost(props.contract)));
 
 const selectedGraphic = computed(() =>
 	props.graphics.find(graphic => graphic.id === props.selectedGraphicId) ?? null,
 );
+
+/** The Graphic Group the current selection sits in or is, if any. */
+const selectedGroup = computed(() => {
+	const graphic = selectedGraphic.value;
+	if (!graphic || props.selectedTarget.type !== 'item')
+		return null;
+	const location = findGraphicItem(graphic, props.selectedTarget.itemId);
+	if (location?.group)
+		return location.group;
+	return location?.item.type === 'group' ? location.item : null;
+});
+
+interface TreeRow {
+	item: GraphicItemConfig;
+	depth: number;
+	index: number;
+	siblingCount: number;
+}
+
+/** One flat list of rows, each knowing its own sibling list for reordering. */
+const itemRows = computed<TreeRow[]>(() => (selectedGraphic.value?.items ?? []).flatMap((item, index, items) => {
+	const row: TreeRow = { item, depth: 0, index, siblingCount: items.length };
+	if (item.type !== 'group')
+		return [row];
+
+	return [
+		row,
+		...item.children.map((child, childIndex) => ({
+			item: child as GraphicItemConfig,
+			depth: 1,
+			index: childIndex,
+			siblingCount: item.children.length,
+		})),
+	];
+}));
 
 function isSelected(target: GraphicsSelectionTarget) {
 	return graphicsSelectionKey(props.selectedTarget) === graphicsSelectionKey(target);
@@ -97,6 +144,23 @@ function addItem(kind: GraphicItemKind) {
 		id: randomUuid(),
 		canvasWidth: props.canvasWidth,
 		canvasHeight: props.canvasHeight,
+	});
+	emit('update:graphics', replaceBroadcastGraphic(props.graphics, updated));
+	emit('update:selectedTarget', { type: 'item', graphicId: graphic.id, itemId });
+}
+
+function addChild(kind: GraphicItemKind) {
+	const graphic = selectedGraphic.value;
+	const group = selectedGroup.value;
+	if (!canAuthor.value || !graphic || !group || kind === 'group')
+		return;
+
+	// A child is sized against its Graphic Group, not the Screen canvas, so this
+	// deliberately passes no canvas dimensions.
+	const { graphic: updated, itemId } = addGraphicGroupChild(graphic, {
+		kind,
+		groupId: group.id,
+		id: randomUuid(),
 	});
 	emit('update:graphics', replaceBroadcastGraphic(props.graphics, updated));
 	emit('update:selectedTarget', { type: 'item', graphicId: graphic.id, itemId });
@@ -194,32 +258,53 @@ function removeItem(itemId: string) {
 				/>
 			</UFormField>
 
+			<UFormField
+				v-if="canAuthor && selectedGroup"
+				:label="`Add to ${selectedGroup.label}`"
+				size="sm"
+			>
+				<USelect
+					:items="groupChildKindOptions"
+					value-key="value"
+					placeholder="Add to group..."
+					class="w-full"
+					data-testid="graphic-group-child-palette"
+					@update:model-value="addChild($event as GraphicItemKind)"
+				/>
+			</UFormField>
+
 			<div class="space-y-1.5">
-				<div v-for="(item, index) in selectedGraphic.items" :key="item.id" class="flex gap-1">
+				<div
+					v-for="row in itemRows"
+					:key="row.item.id"
+					class="flex gap-1"
+					:class="row.depth > 0 ? 'pl-4' : ''"
+					:data-graphic-item-depth="row.depth"
+				>
 					<button
 						type="button"
 						class="flex min-w-0 flex-1 items-start gap-3 rounded-lg border p-2 text-left transition"
-						:class="isSelected({ type: 'item', graphicId: selectedGraphic.id, itemId: item.id }) ? 'border-primary bg-primary/10' : 'border-default/70 bg-muted/10 hover:bg-muted/30'"
+						:class="isSelected({ type: 'item', graphicId: selectedGraphic.id, itemId: row.item.id }) ? 'border-primary bg-primary/10' : 'border-default/70 bg-muted/10 hover:bg-muted/30'"
 						data-testid="graphic-item-node"
-						@click="emit('update:selectedTarget', { type: 'item', graphicId: selectedGraphic.id, itemId: item.id })"
+						@click="emit('update:selectedTarget', { type: 'item', graphicId: selectedGraphic.id, itemId: row.item.id })"
 					>
-						<UIcon :name="graphicItemIcon(item.type)" class="mt-0.5 size-4 shrink-0 text-muted" />
+						<UIcon :name="graphicItemIcon(row.item.type)" class="mt-0.5 size-4 shrink-0 text-muted" />
 						<span class="min-w-0 flex-1">
 							<span class="flex items-center gap-2">
-								<span class="truncate text-sm font-medium">{{ item.label }}</span>
-								<UBadge size="xs" variant="soft">{{ graphicItemKindLabel(item.type) }}</UBadge>
+								<span class="truncate text-sm font-medium">{{ row.item.label }}</span>
+								<UBadge size="xs" variant="soft">{{ graphicItemKindLabel(row.item.type) }}</UBadge>
 							</span>
-							<span class="mt-0.5 block truncate text-xs text-muted">{{ graphicItemSummary(item) }}</span>
+							<span class="mt-0.5 block truncate text-xs text-muted">{{ graphicItemSummary(row.item) }}</span>
 						</span>
-						<UIcon :name="item.visible ? 'i-lucide-eye' : 'i-lucide-eye-off'" class="mt-0.5 size-4 shrink-0 text-muted" />
+						<UIcon :name="row.item.visible ? 'i-lucide-eye' : 'i-lucide-eye-off'" class="mt-0.5 size-4 shrink-0 text-muted" />
 					</button>
 					<GraphicsCompositorReorderControls
 						v-if="canAuthor"
-						:label="item.label"
-						:can-move-forward="index < selectedGraphic.items.length - 1"
-						:can-move-backward="index > 0"
-						@move="moveItem(item.id, $event)"
-						@remove="removeItem(item.id)"
+						:label="row.item.label"
+						:can-move-forward="row.index < row.siblingCount - 1"
+						:can-move-backward="row.index > 0"
+						@move="moveItem(row.item.id, $event)"
+						@remove="removeItem(row.item.id)"
 					/>
 				</div>
 			</div>

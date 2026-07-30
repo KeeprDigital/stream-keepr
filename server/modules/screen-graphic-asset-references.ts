@@ -8,7 +8,37 @@ import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
 	featureMatchOverlayGraphicAssetReferences,
 	sameGraphicAssetReference,
+	screenGraphicAssetReferenceTargetCompatibility,
 } from '~~/shared/utils/graphicsAssetReferences';
+
+const GRAPHIC_ASSET_REFERENCE_SQL_PREDICATE = `
+	AND (asset.lifecycle_state = 'active' OR ? = 1)
+	AND asset.kind = ?
+	AND (
+		? != 'silent-video'
+		OR json_extract(revision.technical_facts, '$.targetCompatibility') = ?
+	)
+	AND (
+		COALESCE(?, '') != 'chromium-transparency'
+		OR ? = 'chromium'
+	)
+`;
+
+function graphicAssetReferencePredicateBindings(input: {
+	allowRetired: boolean;
+	kind: 'image' | 'silent-video' | 'font';
+	videoCompatibility?: 'all-supported' | 'chromium-transparency';
+	videoTarget?: 'chromium' | 'safari';
+}) {
+	return [
+		input.allowRetired ? 1 : 0,
+		input.kind,
+		input.kind,
+		input.videoCompatibility ?? null,
+		input.videoCompatibility ?? null,
+		input.videoTarget ?? null,
+	] as const;
+}
 
 async function findScreen(id: number, eventId: number): Promise<DbScreen | undefined> {
 	return await db.query.screens.findFirst({
@@ -72,6 +102,10 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 	const referenceVersion = crypto.randomUUID();
 	const now = Date.now();
 	const references = featureMatchOverlayGraphicAssetReferences(config);
+	if (references.some(reference =>
+		screenGraphicAssetReferenceTargetCompatibility(reference).outcome === 'blocked')) {
+		throw new StateConflictError('Screen Output target compatibility', input.id);
+	}
 	const previousConfig = screen.modeConfigs?.['feature-match-overlay'];
 	const previousReferences = new Map(
 		previousConfig
@@ -91,14 +125,25 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 			SELECT 1
 			FROM graphic_asset_revisions revision
 			JOIN graphic_assets asset ON asset.id = revision.asset_id
-			WHERE revision.id = ? AND revision.asset_id = ?
-				AND (asset.lifecycle_state = 'active' OR ? = 1)
-		)
-	`).join('');
-	const referencePreconditionBindings = indexedReferences.flatMap(({ reference, allowRetired }) => [
+				WHERE revision.id = ? AND revision.asset_id = ?
+					${GRAPHIC_ASSET_REFERENCE_SQL_PREDICATE}
+			)
+		`).join('');
+	const referencePreconditionBindings = indexedReferences.flatMap(({
+		reference,
+		allowRetired,
+		kind,
+		videoCompatibility,
+		videoTarget,
+	}) => [
 		reference.revisionId,
 		reference.assetId,
-		allowRetired ? 1 : 0,
+		...graphicAssetReferencePredicateBindings({
+			allowRetired,
+			kind,
+			videoCompatibility,
+			videoTarget,
+		}),
 	]);
 	const client = db.$client;
 	const statements: D1PreparedStatement[] = [
@@ -126,7 +171,14 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 						AND graphic_asset_reference_version = ?
 				)
 		`).bind(String(input.id), input.id, input.eventId, referenceVersion),
-		...indexedReferences.map(({ reference, ownerSlot, allowRetired }) => client.prepare(`
+		...indexedReferences.map(({
+			reference,
+			ownerSlot,
+			allowRetired,
+			kind,
+			videoCompatibility,
+			videoTarget,
+		}) => client.prepare(`
 			INSERT INTO graphic_asset_references (
 				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
 				event_id, created_at, updated_at
@@ -134,9 +186,9 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 			SELECT ?, ?, ?, 'screen', ?, ?, ?, ?, ?
 			FROM graphic_asset_revisions revision
 			JOIN graphic_assets asset ON asset.id = revision.asset_id
-			WHERE revision.id = ? AND revision.asset_id = ?
-				AND (asset.lifecycle_state = 'active' OR ? = 1)
-				AND EXISTS (
+				WHERE revision.id = ? AND revision.asset_id = ?
+					${GRAPHIC_ASSET_REFERENCE_SQL_PREDICATE}
+					AND EXISTS (
 					SELECT 1 FROM screens
 					WHERE id = ? AND event_id = ?
 						AND graphic_asset_reference_version = ?
@@ -152,7 +204,12 @@ export async function updateFeatureMatchOverlayWithGraphicAssetReferences(input:
 			now,
 			reference.revisionId,
 			reference.assetId,
-			allowRetired ? 1 : 0,
+			...graphicAssetReferencePredicateBindings({
+				allowRetired,
+				kind,
+				videoCompatibility,
+				videoTarget,
+			}),
 			input.id,
 			input.eventId,
 			referenceVersion,

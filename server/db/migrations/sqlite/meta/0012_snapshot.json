@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "887d47e6-0331-4c86-94ce-8082e4f63db0",
+  "id": "d0d98bfe-7d1c-4cf9-85b7-955c13b5289d",
   "prevId": "76bb1ad9-7838-4890-a9ea-aeb72d5bc909",
   "tables": {
     "archetype_cards": {
@@ -1791,6 +1791,27 @@
           "autoincrement": false,
           "default": "'active'"
         },
+        "trash_prior_state": {
+          "name": "trash_prior_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "trashed_at": {
+          "name": "trashed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "trash_recoverable_until": {
+          "name": "trash_recoverable_until",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1826,111 +1847,6 @@
         }
       },
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "graphics_authoring_leases": {
-      "name": "graphics_authoring_leases",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "artifact_kind": {
-          "name": "artifact_kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "artifact_id": {
-          "name": "artifact_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "event_id": {
-          "name": "event_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "holder_session_id": {
-          "name": "holder_session_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "acquired_at": {
-          "name": "acquired_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch() * 1000)"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch() * 1000)"
-        }
-      },
-      "indexes": {
-        "graphics_authoring_leases_artifact_idx": {
-          "name": "graphics_authoring_leases_artifact_idx",
-          "columns": [
-            "artifact_kind",
-            "artifact_id"
-          ],
-          "isUnique": true
-        },
-        "graphics_authoring_leases_event_id_idx": {
-          "name": "graphics_authoring_leases_event_id_idx",
-          "columns": [
-            "event_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "graphics_authoring_leases_event_id_events_id_fk": {
-          "name": "graphics_authoring_leases_event_id_events_id_fk",
-          "tableFrom": "graphics_authoring_leases",
-          "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}

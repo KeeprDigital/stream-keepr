@@ -1,4 +1,5 @@
 import type {
+	SILENT_VIDEO_COMPATIBILITY_PROFILE,
 	STATIC_FONT_COMPATIBILITY_PROFILE,
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
 } from '../utils/graphicsAssetCompatibility';
@@ -11,6 +12,7 @@ declare const graphicsIngestionPartIdentityBrand: unique symbol;
 
 export const DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES = 100 * 1024 * 1024 * 1024;
 export const DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES = 10 * 1024 * 1024 * 1024;
+export const GRAPHIC_ASSET_LIFECYCLE_ACTIONS = ['retire', 'trash', 'restore'] as const;
 
 export type GraphicAssetId = string & {
 	readonly [graphicAssetIdBrand]: 'GraphicAssetId';
@@ -49,11 +51,35 @@ export interface GraphicAssetUsage {
 	};
 }
 
+export type GraphicAssetLifecycleState = 'active' | 'retired' | 'trashed';
+export type GraphicAssetLifecycleAction = typeof GRAPHIC_ASSET_LIFECYCLE_ACTIONS[number];
+
+export type GraphicAssetLifecycle
+	= | {
+		state: 'active' | 'retired';
+	}
+	| {
+		state: 'trashed';
+		priorState: 'active' | 'retired';
+		trashedAt: string;
+		recoverableUntil: string;
+	};
+
+export type GraphicAssetLifecycleActionOutcome
+	= | {
+		outcome: 'retired' | 'restored' | 'trashed';
+		asset: GraphicAsset;
+	}
+	| {
+		outcome: 'in-use';
+		usage: GraphicAssetUsage[];
+	};
+
 export type GraphicAssetReferenceStatus
 	= | {
 		outcome: 'available';
 		lifecycleState: 'active' | 'retired' | 'trashed';
-		kind: 'image' | 'font';
+		kind: 'image' | 'silent-video' | 'font';
 	}
 	| { outcome: 'missing' }
 	| { outcome: 'unavailable'; retryable: true };
@@ -97,10 +123,13 @@ export type GraphicAssetBrowserDecodeEvidence
 		stage: 'load' | 'render';
 	};
 
+export type GraphicAssetBrowserValidationEvidence
+	= GraphicAssetBrowserDecodeEvidence;
+
 export interface GraphicAssetSourceDeclarations {
 	sourceFileName?: string;
 	declaredMime?: string;
-	browserDecodeEvidence?: GraphicAssetBrowserDecodeEvidence;
+	browserDecodeEvidence?: GraphicAssetBrowserValidationEvidence;
 }
 
 export type GraphicsIngestionStage
@@ -156,8 +185,34 @@ export interface GraphicAssetFontFacts {
 	representativeGlyphsRendered?: true;
 }
 
+export interface GraphicAssetSilentVideoFacts {
+	kind: 'silent-video';
+	format: 'mp4' | 'webm';
+	codec: 'h264' | 'vp9';
+	canonicalMime: 'video/mp4' | 'video/webm';
+	byteLength: number;
+	sha256: string;
+	width: number;
+	height: number;
+	durationSeconds: number;
+	frameRate: number;
+	frameCount: number;
+	bitDepth: 8;
+	colorSpace: 'sdr';
+	chromaSubsampling: '4:2:0';
+	hasAlpha: boolean;
+	fastStart: boolean | null;
+	seekable: true;
+	posterTimeSeconds: number;
+	targetCompatibility: 'all-supported' | 'chromium-transparency';
+	browserPlayable?: true;
+	chromiumTransparencyPlayback?: true;
+}
+
 export type GraphicAssetCanonicalMime
-	= GraphicAssetImageFacts['canonicalMime'] | GraphicAssetFontFacts['canonicalMime'];
+	= GraphicAssetImageFacts['canonicalMime']
+		| GraphicAssetSilentVideoFacts['canonicalMime']
+		| GraphicAssetFontFacts['canonicalMime'];
 
 export interface GraphicAssetValidationIssue {
 	severity: 'error';
@@ -186,6 +241,25 @@ export interface GraphicAssetValidationIssue {
 		| 'conflicting-image-mime'
 		| 'browser-image-decode-failed'
 		| 'browser-image-decode-mismatch'
+		| 'unsupported-video-format'
+		| 'conflicting-video-extension'
+		| 'conflicting-video-mime'
+		| 'video-source-size-exceeded'
+		| 'malformed-video'
+		| 'unsupported-video-codec'
+		| 'unsupported-video-tracks'
+		| 'unsupported-video-encryption'
+		| 'unsupported-video-transform'
+		| 'unsupported-video-profile'
+		| 'video-dimensions-exceeded'
+		| 'video-duration-exceeded'
+		| 'video-frame-rate-exceeded'
+		| 'malformed-video-timeline'
+		| 'video-index-incomplete'
+		| 'mp4-fast-start-required'
+		| 'browser-video-playback-failed'
+		| 'browser-video-evidence-mismatch'
+		| 'vp9-alpha-chromium-required'
 		| 'unsupported-font-format'
 		| 'conflicting-font-extension'
 		| 'conflicting-font-mime'
@@ -221,6 +295,7 @@ export type GraphicAssetValidationReport
 		outcome: 'rejected';
 		compatibilityProfile:
 			| typeof STILL_IMAGE_COMPATIBILITY_PROFILE
+			| typeof SILENT_VIDEO_COMPATIBILITY_PROFILE
 			| typeof STATIC_FONT_COMPATIBILITY_PROFILE;
 		issues: GraphicAssetValidationIssue[];
 	}
@@ -229,6 +304,12 @@ export type GraphicAssetValidationReport
 		compatibilityProfile: typeof STATIC_FONT_COMPATIBILITY_PROFILE;
 		issues: [];
 		facts: GraphicAssetFontFacts;
+	}
+	| {
+		outcome: 'accepted';
+		compatibilityProfile: typeof SILENT_VIDEO_COMPATIBILITY_PROFILE;
+		issues: [];
+		facts: GraphicAssetSilentVideoFacts;
 	};
 
 export interface GraphicsIngestionFailure {
@@ -238,6 +319,7 @@ export interface GraphicsIngestionFailure {
 		| 'staging-capacity-exhausted'
 		| 'canonical-capacity-exhausted'
 		| 'canonical-store-unavailable'
+		| 'validation-runtime-unavailable'
 		| 'catalogue-publication-failed'
 		| 'ingestion-processing-failed'
 		| 'validation-failed';
@@ -301,11 +383,17 @@ export interface GraphicsIngestionOperation extends GraphicAssetSourceDeclaratio
 export interface GraphicAsset {
 	id: GraphicAssetId;
 	name: string;
-	kind: 'image' | 'font';
+	kind: 'image' | 'silent-video' | 'font';
 	revisionId: GraphicAssetRevisionId;
 	revisionNumber: number;
-	facts: GraphicAssetImageFacts | GraphicAssetFontFacts;
+	revisions: {
+		id: GraphicAssetRevisionId;
+		revisionNumber: number;
+		facts: GraphicAssetImageFacts | GraphicAssetSilentVideoFacts | GraphicAssetFontFacts;
+	}[];
+	facts: GraphicAssetImageFacts | GraphicAssetSilentVideoFacts | GraphicAssetFontFacts;
 	eventIds: number[];
+	lifecycle: GraphicAssetLifecycle;
 	operation: GraphicsIngestionOperation;
 }
 

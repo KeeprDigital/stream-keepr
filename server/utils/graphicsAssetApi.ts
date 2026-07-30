@@ -23,6 +23,7 @@ export function rethrowGraphicsAssetApiError(error: unknown, event?: H3Event): n
 			'invalid-ingestion-input': 400,
 			'ingestion-operation-not-found': 404,
 			'ingestion-operation-not-uploadable': 409,
+			'graphic-asset-lifecycle-action-not-allowed': 409,
 			'staging-capacity-exhausted': 500,
 			'canonical-capacity-exhausted': 500,
 			'graphics-asset-library-unavailable': 503,

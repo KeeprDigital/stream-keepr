@@ -84,20 +84,33 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		config.layout.frame.backgroundImage = reference;
 		config.layout.items.push({
 			id: 'sponsor-logo',
-			type: 'widget',
+			type: 'media',
 			label: 'Sponsor logo',
 			visible: true,
 			x: 20,
 			y: 20,
 			width: 200,
 			height: 100,
-			widget: {
-				type: 'image',
-				asset: reference,
-				fit: 'contain',
-				opacity: 1,
-				borderRadius: 0,
-			},
+			mediaKind: 'image',
+			asset: reference,
+			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+		});
+		const group = config.layout.items.find(item => item.type === 'graphic-group');
+		if (group?.type !== 'graphic-group')
+			throw new Error('Expected a Graphic Group fixture');
+		group.children.push({
+			id: 'group-sponsor-logo',
+			type: 'media',
+			label: 'Grouped sponsor logo',
+			visible: true,
+			layout: { mode: 'canvas', x: 0, y: 0, width: 160, height: 90 },
+			asset: reference,
+			mediaKind: 'image',
+			fit: 'contain',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
 		});
 
 		const updated = await $fetch(
@@ -126,7 +139,17 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 					kind: 'screen',
 					id: String(screenId),
 					name: 'Pinned Overlay',
-					slot: 'layout.items.sponsor-logo.widget.asset',
+					slot: 'layout.items.sponsor-logo.asset',
+					eventId,
+				},
+			}),
+			expect.objectContaining({
+				reference,
+				owner: {
+					kind: 'screen',
+					id: String(screenId),
+					name: 'Pinned Overlay',
+					slot: `layout.items.${group.id}.children.group-sponsor-logo.asset`,
 					eventId,
 				},
 			}),
@@ -153,7 +176,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		});
 		await expect($fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${operation.result!.assetId}/usage`,
-		)).resolves.toHaveLength(2);
+		)).resolves.toHaveLength(3);
 	});
 
 	it('keeps unchanged retired revisions indexed and exactly resolvable', async () => {
@@ -173,7 +196,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 
 		await expect($fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${operation.result!.assetId}/usage`,
-		)).resolves.toHaveLength(2);
+		)).resolves.toHaveLength(3);
 		const resolution = await fetch(
 			`/api/graphics-assets/${operation.result!.assetId}/revisions/${operation.result!.revisionId}/content`,
 			{ headers: { cookie: graphicsAuthorCookie } },

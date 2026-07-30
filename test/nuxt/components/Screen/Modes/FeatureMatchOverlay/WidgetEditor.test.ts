@@ -1,4 +1,4 @@
-import type { FeatureMatchWidgetConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchGraphicItemDefinitionConfig } from '~~/shared/types/screenConfig';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
@@ -54,12 +54,38 @@ const UButtonStub = defineComponent({
 	template: '<button data-testid="u-button" type="button" :data-icon="icon" @click="$emit(\'click\', $event)"><slot /></button>',
 });
 
-async function mountComponent(widget: FeatureMatchWidgetConfig) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/WidgetEditor.vue';
-	const { default: WidgetEditor } = await import(componentPath);
+const GraphicsAssetFocusPickerStub = defineComponent({
+	emits: ['update:modelValue', 'select'],
+	setup(_, { emit }) {
+		const reference = {
+			assetId: 'video-asset',
+			revisionId: 'video-revision-4',
+		};
+		const asset = {
+			id: reference.assetId,
+			revisionId: reference.revisionId,
+			kind: 'silent-video',
+			facts: {
+				kind: 'silent-video',
+				targetCompatibility: 'all-supported',
+			},
+		};
+		return {
+			select: () => {
+				emit('update:modelValue', reference);
+				emit('select', asset, reference);
+			},
+		};
+	},
+	template: '<button data-testid="select-media" type="button" @click="select">Select media</button>',
+});
 
-	return mount(WidgetEditor, {
-		props: { widget, eventId: 7 },
+async function mountComponent(graphicItem: FeatureMatchGraphicItemDefinitionConfig) {
+	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/WidgetEditor.vue';
+	const { default: GraphicItemEditor } = await import(componentPath);
+
+	return mount(GraphicItemEditor, {
+		props: { graphicItem, eventId: 7 },
 		global: {
 			stubs: {
 				UButton: UButtonStub,
@@ -67,13 +93,14 @@ async function mountComponent(widget: FeatureMatchWidgetConfig) {
 				USelect: USelectStub,
 				UInputNumber: UInputNumberStub,
 				UTextarea: UTextareaStub,
+				GraphicsAssetFocusPicker: GraphicsAssetFocusPickerStub,
 			},
 		},
 	});
 }
 
-describe('featureMatchOverlayWidgetEditor', () => {
-	it('adds spacer tokens and edits spacer width for text widgets', async () => {
+describe('feature Match Overlay Graphic Item editor', () => {
+	it('adds spacer tokens and edits spacer width for text graphicItems', async () => {
 		const wrapper = await mountComponent({
 			type: 'text',
 			playerSide: 'player1',
@@ -87,7 +114,7 @@ describe('featureMatchOverlayWidgetEditor', () => {
 
 		expect(wrapper.emitted('update')?.at(-1)?.[0]).toMatchObject({ template: '{name}{spacer}' });
 
-		await wrapper.setProps({ widget: { type: 'text', playerSide: 'player1', template: '{name}{spacer}' } });
+		await wrapper.setProps({ graphicItem: { type: 'text', playerSide: 'player1', template: '{name}{spacer}' } });
 		const recordButton = wrapper.findAll('[data-testid="u-button"]').find(button => button.text().includes('{record}'));
 		await recordButton!.trigger('click');
 
@@ -98,7 +125,7 @@ describe('featureMatchOverlayWidgetEditor', () => {
 		expect(wrapper.emitted('update')?.at(-1)?.[0]).toMatchObject({ spacerWidth: 48 });
 	});
 
-	it('edits game-win box gap and border width as widget content settings', async () => {
+	it('edits game-win box gap and border width as graphicItem content settings', async () => {
 		const wrapper = await mountComponent({
 			type: 'game-wins',
 			playerSide: 'player1',
@@ -121,12 +148,12 @@ describe('featureMatchOverlayWidgetEditor', () => {
 		expect(wrapper.emitted('update')?.at(-1)?.[0]).toMatchObject({ boxBorderWidth: 5 });
 	});
 
-	it('shows legacy game-win gap and border width from the widget surface style', async () => {
+	it('shows legacy game-win gap and border width from the graphicItem surface style', async () => {
 		const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/WidgetEditor.vue';
-		const { default: WidgetEditor } = await import(componentPath);
-		const wrapper = mount(WidgetEditor, {
+		const { default: GraphicItemEditor } = await import(componentPath);
+		const wrapper = mount(GraphicItemEditor, {
 			props: {
-				widget: {
+				graphicItem: {
 					type: 'game-wins',
 					playerSide: 'player1',
 					displayMode: 'boxes',
@@ -134,7 +161,7 @@ describe('featureMatchOverlayWidgetEditor', () => {
 					boxWidth: 22,
 					boxHeight: 22,
 				},
-				widgetSurfaceStyle: {
+				graphicItemSurfaceStyle: {
 					padding: 4,
 					borderWidth: 3,
 				},
@@ -147,6 +174,7 @@ describe('featureMatchOverlayWidgetEditor', () => {
 					USelect: USelectStub,
 					UInputNumber: UInputNumberStub,
 					UTextarea: UTextareaStub,
+					GraphicsAssetFocusPicker: GraphicsAssetFocusPickerStub,
 				},
 			},
 		});

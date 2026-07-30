@@ -6,7 +6,7 @@ import {
 	rethrowGraphicsAssetApiError,
 } from '~~/server/utils/graphicsAssetApi';
 import { getBoundedRequestBodyStream } from '~~/server/utils/payloadLimits';
-import { MAX_STILL_IMAGE_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { MAX_SILENT_VIDEO_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 
 export default defineEventHandler(async (event) => {
 	try {
@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
 			declaredMime: declaredContentType,
 			bytes: createBoundedByteStream(body, {
 				byteLength: operation.declaredByteLength,
-				maximumByteLength: MAX_STILL_IMAGE_INGESTION_BYTES,
+				maximumByteLength: MAX_SILENT_VIDEO_INGESTION_BYTES,
 			}),
 		});
 	}

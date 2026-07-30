@@ -6,6 +6,10 @@ import {
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
+import {
+	featureMatchGraphicItemDefinition,
+	featureMatchGraphicItemSchemas,
+} from '~~/shared/featureMatchGraphicItemDefinitions';
 import { GRAPHIC_FONT_IDS } from '~~/shared/modules/graphics';
 import {
 	CARD_ANIMATION_SPEED_VALUES,
@@ -34,11 +38,21 @@ import {
 import {
 	GRAPHIC_ANCHOR_POINT_VALUES,
 	GRAPHIC_FONT_STYLE_VALUES,
+	GRAPHIC_GROUP_ALIGN_VALUES,
+	GRAPHIC_GROUP_ARRANGEMENT_VALUES,
+	GRAPHIC_GROUP_JUSTIFY_VALUES,
 	GRAPHIC_TEXT_ALIGN_VALUES,
 	GRAPHIC_TEXT_TRANSFORM_VALUES,
+	MAX_GRAPHIC_FILL_STOPS,
+	MAX_GRAPHIC_TEXT_LENGTH,
+	MIN_GRAPHIC_FILL_STOPS,
+	SHAPE_CORNER_TREATMENT_VALUES,
 	TEXT_OVERFLOW_POLICY_VALUES,
 } from '~~/shared/types/graphics';
-import { FEATURE_MATCH_OVERLAY_ANCHOR_VALUES } from '~~/shared/types/screenConfig';
+import {
+	FEATURE_MATCH_OVERLAY_ANCHOR_VALUES,
+	normalizeFeatureMatchLayout,
+} from '~~/shared/types/screenConfig';
 
 const MAX_SCREEN_CONFIG_BYTES = 64 * 1024;
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
@@ -416,74 +430,28 @@ const featureMatchOverlayTokenStyleMapSchema = z
 	.record(z.string().min(1).max(50), featureMatchOverlayBoxStyleSchema)
 	.refine(value => Object.keys(value).length <= 100, 'Too many token style entries');
 
-const featureMatchTextWidgetConfigSchema = z.object({
-	type: z.literal('text'),
-	template: z.string().max(1000),
-	playerSide: z.enum(PLAYER_SIDE_VALUES).optional(),
-	spacerWidth: finiteNumberSchema.nonnegative().max(1000).optional(),
-	tokenStyles: featureMatchOverlayTokenStyleMapSchema.optional(),
-}).strict();
-
-const featureMatchImageWidgetConfigSchema = z.object({
-	type: z.literal('image'),
-	asset: graphicAssetReferenceSchema.optional(),
-	fit: z.enum(['contain', 'cover', 'fill']),
-	opacity: opacitySchema,
-	borderRadius: nonNegativePixelSchema,
-}).strict();
-
-const featureMatchClockWidgetConfigSchema = z.object({
-	type: z.literal('clock'),
-}).strict();
-
-const featureMatchPlayerLifeWidgetConfigSchema = z.object({
-	type: z.literal('player-life'),
-	playerSide: z.enum(PLAYER_SIDE_VALUES),
-	lifeAnimation: featureMatchOverlayPlayerLifeAnimationSchema.optional(),
-	lifeAnimationDurationMs: finiteNumberSchema.int().min(100).max(3000).optional(),
-	lifeAnimationAccentColor: optionalCssColorSchema,
-}).strict();
-
-const featureMatchGameWinsWidgetConfigSchema = z.object({
-	type: z.literal('game-wins'),
-	playerSide: z.enum(PLAYER_SIDE_VALUES),
-	displayMode: featureMatchGameWinsDisplayModeSchema.optional(),
-	boxOrientation: featureMatchGameWinsBoxOrientationSchema.optional(),
-	boxWidth: finiteNumberSchema.positive().max(10000).optional(),
-	boxHeight: finiteNumberSchema.positive().max(10000).optional(),
-	boxGap: nonNegativePixelSchema.optional(),
-	boxBorderWidth: nonNegativePixelSchema.optional(),
-}).strict();
-
-const featureMatchWidgetConfigSchema = z.discriminatedUnion('type', [
-	featureMatchTextWidgetConfigSchema,
-	featureMatchImageWidgetConfigSchema,
-	featureMatchClockWidgetConfigSchema,
-	featureMatchPlayerLifeWidgetConfigSchema,
-	featureMatchGameWinsWidgetConfigSchema,
+const shapeGeometryCornerSchema = z.discriminatedUnion('kind', [
+	z.object({ kind: z.literal('square') }).strict(),
+	z.object({
+		kind: z.literal('rounded'),
+		size: nonNegativePixelSchema,
+	}).strict(),
+	z.object({
+		kind: z.literal('cut'),
+		size: nonNegativePixelSchema,
+	}).strict(),
 ]);
 
-const featureMatchLayoutItemBaseSchema = featureMatchOverlayRectSchema.extend({
-	id: z.string().min(1).max(100),
-	label: z.string().min(1).max(100),
-	visible: z.boolean(),
-	anchor: featureMatchOverlayAnchorValueSchema.optional(),
-	zIndex: finiteNumberSchema.int().min(-10000).max(10000).optional(),
-	surfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
+const shapeGeometrySchema = z.object({
+	topLeft: shapeGeometryCornerSchema,
+	topRight: shapeGeometryCornerSchema,
+	bottomRight: shapeGeometryCornerSchema,
+	bottomLeft: shapeGeometryCornerSchema,
+	leftEdgeSlant: nonNegativePixelSchema.optional(),
+	rightEdgeSlant: nonNegativePixelSchema.optional(),
 }).strict();
 
-const featureMatchSourceItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
-	type: z.literal('source'),
-	sourceRole: z.string().min(1).max(100).optional(),
-	frameCutout: z.boolean(),
-}).strict();
-
-const featureMatchWidgetItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
-	type: z.literal('widget'),
-	widget: featureMatchWidgetConfigSchema,
-}).strict();
-
-const featureMatchWidgetGroupStackChildLayoutSchema = z.object({
+const featureMatchGraphicGroupStackChildLayoutSchema = z.object({
 	mode: z.literal('stack'),
 	sizing: z.object({
 		mode: z.enum(['fixed', 'content', 'fill']),
@@ -497,59 +465,122 @@ const featureMatchWidgetGroupStackChildLayoutSchema = z.object({
 	alignSelf: z.enum(['start', 'center', 'end', 'stretch']).optional(),
 }).strict();
 
-const featureMatchWidgetGroupCanvasChildLayoutSchema = featureMatchOverlayRectSchema.extend({
+const featureMatchGraphicGroupCanvasChildLayoutSchema = featureMatchOverlayRectSchema.extend({
 	mode: z.literal('canvas'),
 	anchor: featureMatchOverlayAnchorValueSchema.optional(),
-	zIndex: finiteNumberSchema.int().min(-10000).max(10000).optional(),
 }).strict();
 
-const featureMatchWidgetGroupChildConfigSchema = z.object({
+const featureMatchGraphicGroupChildLayoutSchema = z.discriminatedUnion('mode', [
+	featureMatchGraphicGroupStackChildLayoutSchema,
+	featureMatchGraphicGroupCanvasChildLayoutSchema,
+]);
+
+/**
+ * Every Graphic Item configuration schema is owned by its Graphic Item
+ * Definition. This layer only supplies the shared primitive vocabulary the
+ * Definitions compose from, plus the lazily resolved Definition unions.
+ */
+function featureMatchDefinitionSchemaDependencies() {
+	return {
+		z,
+		playerSide: z.enum(PLAYER_SIDE_VALUES),
+		optionalCssColor: optionalCssColorSchema,
+		finiteNumber: finiteNumberSchema,
+		tokenStyleMap: featureMatchOverlayTokenStyleMapSchema,
+		lifeAnimation: featureMatchOverlayPlayerLifeAnimationSchema,
+		gameWinsDisplayMode: featureMatchGameWinsDisplayModeSchema,
+		gameWinsBoxOrientation: featureMatchGameWinsBoxOrientationSchema,
+		opacity: opacitySchema,
+		nonNegativePixel: nonNegativePixelSchema,
+		boxStyle: featureMatchOverlayBoxStyleSchema,
+		graphicAssetReference: graphicAssetReferenceSchema,
+		shapeGeometry: shapeGeometrySchema,
+		groupChildLayout: featureMatchGraphicGroupChildLayoutSchema,
+		// Lazy thunks: both schemas are hoisted consts that exist before any
+		// Definition schema is parsed, breaking the construction cycle.
+		// eslint-disable-next-line ts/no-use-before-define
+		graphicItemConfig: () => featureMatchGraphicItemDefinitionConfigSchema,
+		// eslint-disable-next-line ts/no-use-before-define
+		media: () => registeredFeatureMatchMediaGraphicItemContentConfigSchema,
+	};
+}
+
+const featureMatchGraphicItemSchemasFromDefinitions = featureMatchGraphicItemSchemas(
+	featureMatchDefinitionSchemaDependencies(),
+);
+
+const featureMatchGraphicItemDefinitionConfigSchema = z.union(
+	featureMatchGraphicItemSchemasFromDefinitions,
+);
+
+const featureMatchLayoutItemBaseSchema = featureMatchOverlayRectSchema.extend({
 	id: z.string().min(1).max(100),
 	label: z.string().min(1).max(100),
 	visible: z.boolean(),
-	widget: featureMatchWidgetConfigSchema,
-	layout: z.discriminatedUnion('mode', [
-		featureMatchWidgetGroupStackChildLayoutSchema,
-		featureMatchWidgetGroupCanvasChildLayoutSchema,
-	]),
+	anchor: featureMatchOverlayAnchorValueSchema.optional(),
+}).strict();
+
+const registeredFeatureMatchSourceItemContentConfigSchema
+	= featureMatchGraphicItemDefinition('source')
+		.schema(featureMatchDefinitionSchemaDependencies()) as unknown as z.ZodObject;
+const registeredFeatureMatchMediaGraphicItemContentConfigSchema
+	= featureMatchGraphicItemDefinition('media')
+		.schema(featureMatchDefinitionSchemaDependencies()) as unknown as z.ZodObject;
+const registeredFeatureMatchGraphicGroupContentConfigSchema
+	= featureMatchGraphicItemDefinition('graphic-group')
+		.schema(featureMatchDefinitionSchemaDependencies()) as unknown as z.ZodObject;
+
+const featureMatchSourceItemConfigSchema = featureMatchLayoutItemBaseSchema.extend(
+	registeredFeatureMatchSourceItemContentConfigSchema.shape,
+).strict();
+
+const featureMatchMediaGraphicItemConfigSchema = featureMatchLayoutItemBaseSchema.extend(
+	registeredFeatureMatchMediaGraphicItemContentConfigSchema.shape,
+).strict();
+
+const featureMatchSpecificGraphicItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
+	type: z.literal('graphic-item'),
+	graphicItem: featureMatchGraphicItemDefinitionConfigSchema,
 	surfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
 }).strict();
 
-const featureMatchWidgetGroupArrangementSchema = z.discriminatedUnion('mode', [
-	z.object({
-		mode: z.enum(['row', 'column']),
-		padding: nonNegativePixelSchema.optional(),
-		gap: nonNegativePixelSchema,
-		align: z.enum(['start', 'center', 'end', 'stretch']),
-		justify: z.enum(['start', 'center', 'end', 'space-between']),
-	}).strict(),
-	z.object({
-		mode: z.literal('canvas'),
-		padding: nonNegativePixelSchema.optional(),
-	}).strict(),
-]);
-
-const featureMatchWidgetGroupItemConfigSchema = featureMatchLayoutItemBaseSchema.extend({
-	type: z.literal('widget-group'),
-	arrangement: featureMatchWidgetGroupArrangementSchema,
-	defaultChildSurfaceStyle: featureMatchOverlayBoxStyleSchema.optional(),
-	overflow: z.enum(['clip', 'visible']).optional(),
-	children: z.array(featureMatchWidgetGroupChildConfigSchema).max(50),
-}).strict();
+const featureMatchGraphicGroupItemConfigSchema = featureMatchLayoutItemBaseSchema.extend(
+	registeredFeatureMatchGraphicGroupContentConfigSchema.shape,
+).strict();
 
 const featureMatchLayoutItemConfigSchema = z.discriminatedUnion('type', [
 	featureMatchSourceItemConfigSchema,
-	featureMatchWidgetItemConfigSchema,
-	featureMatchWidgetGroupItemConfigSchema,
-]);
+	featureMatchMediaGraphicItemConfigSchema,
+	featureMatchSpecificGraphicItemConfigSchema,
+	featureMatchGraphicGroupItemConfigSchema,
+]) as unknown as z.ZodType<FeatureMatchLayoutItemConfig>;
 
 export const featureMatchOverlayModeConfigSchema = z.object({
 	featureMatchId: z.number().int().positive().nullable(),
 	presetId: featureMatchOverlayPresetIdSchema,
-	layout: z.object({
-		frame: featureMatchOverlayFrameConfigSchema,
-		items: z.array(featureMatchLayoutItemConfigSchema).min(1).max(100),
-	}).strict(),
+	layout: z.preprocess(
+		(value) => {
+			if (
+				typeof value !== 'object'
+				|| value === null
+				|| !Array.isArray((value as { items?: unknown }).items)
+			) {
+				return value;
+			}
+			try {
+				return normalizeFeatureMatchLayout(value as FeatureMatchOverlayModeConfig['layout']);
+			}
+			catch {
+				// Keep unsupported future-version input intact so the strict
+				// version literals below report an ordinary atomic parse failure.
+				return value;
+			}
+		},
+		z.object({
+			frame: featureMatchOverlayFrameConfigSchema,
+			items: z.array(featureMatchLayoutItemConfigSchema).min(1).max(100),
+		}).strict(),
+	),
 }).strict() satisfies z.ZodType<FeatureMatchOverlayModeConfig>;
 
 /* ────────────────────────────────────────────────
@@ -557,6 +588,7 @@ export const featureMatchOverlayModeConfigSchema = z.object({
  * ──────────────────────────────────────────────── */
 
 const graphicAnchorPointSchema = z.enum(GRAPHIC_ANCHOR_POINT_VALUES);
+const graphicRotationSchema = finiteNumberSchema.min(-360).max(360);
 
 const graphicTypographySchema = z.object({
 	fontId: z.enum(GRAPHIC_FONT_IDS),
@@ -570,13 +602,52 @@ const graphicTypographySchema = z.object({
 	color: cssColorSchema,
 }).strict();
 
-const graphicSurfaceStyleSchema = z.object({
-	fill: cssColorSchema,
-	fillOpacity: opacitySchema,
+const graphicFillStopSchema = z.object({
+	color: cssColorSchema,
+	position: opacitySchema,
+	opacity: opacitySchema,
 }).strict();
 
-const shapeGeometrySchema = z.object({
-	cornerRadius: nonNegativePixelSchema,
+const graphicFillSchema = z.discriminatedUnion('type', [
+	z.object({
+		type: z.literal('solid'),
+		color: cssColorSchema,
+	}).strict(),
+	z.object({
+		type: z.literal('linear-gradient'),
+		angle: finiteNumberSchema.min(-360).max(360),
+		stops: z.array(graphicFillStopSchema)
+			.min(MIN_GRAPHIC_FILL_STOPS)
+			.max(MAX_GRAPHIC_FILL_STOPS),
+	}).strict(),
+]);
+
+const graphicSurfaceStyleSchema = z.object({
+	fill: graphicFillSchema,
+	fillOpacity: opacitySchema,
+	outline: z.object({
+		color: cssColorSchema,
+		width: nonNegativePixelSchema.max(500),
+	}).strict().optional(),
+	glow: z.object({
+		color: cssColorSchema,
+		size: nonNegativePixelSchema.max(500),
+		opacity: opacitySchema,
+	}).strict().optional(),
+}).strict();
+
+const graphicShapeCornerSchema = z.object({
+	treatment: z.enum(SHAPE_CORNER_TREATMENT_VALUES),
+	size: nonNegativePixelSchema,
+}).strict();
+
+const graphicShapeGeometrySchema = z.object({
+	topLeft: graphicShapeCornerSchema,
+	topRight: graphicShapeCornerSchema,
+	bottomRight: graphicShapeCornerSchema,
+	bottomLeft: graphicShapeCornerSchema,
+	leftSlant: pixelPositionSchema,
+	rightSlant: pixelPositionSchema,
 }).strict();
 
 const graphicItemBaseShape = {
@@ -584,45 +655,142 @@ const graphicItemBaseShape = {
 	label: z.string().min(1).max(100),
 	visible: z.boolean(),
 	anchor: graphicAnchorPointSchema,
+	rotation: graphicRotationSchema.optional(),
 	x: pixelPositionSchema,
 	y: pixelPositionSchema,
 	width: pixelSizeSchema,
 	height: pixelSizeSchema,
 };
 
-const textGraphicItemConfigSchema = z.object({
+const textGraphicItemShape = {
 	...graphicItemBaseShape,
 	type: z.literal('text'),
-	text: z.string().max(1000),
+	text: z.string().max(MAX_GRAPHIC_TEXT_LENGTH),
 	typography: graphicTypographySchema,
 	overflowPolicy: z.enum(TEXT_OVERFLOW_POLICY_VALUES),
 	minFontSize: finiteNumberSchema.positive().max(600),
-}).strict();
+	surfaceStyle: graphicSurfaceStyleSchema.optional(),
+};
 
-const shapeGraphicItemConfigSchema = z.object({
+const shapeGraphicItemShape = {
 	...graphicItemBaseShape,
 	type: z.literal('shape'),
-	geometry: shapeGeometrySchema,
-	surfaceStyle: graphicSurfaceStyleSchema,
+	geometry: graphicShapeGeometrySchema,
+	surfaceStyle: graphicSurfaceStyleSchema.optional(),
+};
+
+const textGraphicItemConfigSchema = z.object(textGraphicItemShape).strict();
+const shapeGraphicItemConfigSchema = z.object(shapeGraphicItemShape).strict();
+
+/**
+ * Main-axis sizing belongs to a Graphic Group child, so only a child carries
+ * one: a top-level Graphic Item has no group to be sized inside.
+ */
+const graphicGroupChildSizingSchema = z.object({
+	mode: z.enum(['fixed', 'fill']),
+	size: nonNegativePixelSchema,
+	weight: finiteNumberSchema.min(0).max(100),
+}).strict();
+
+/**
+ * A Graphic Group child is any base Graphic Item kind except another Graphic
+ * Group: the union simply omits it, so non-nesting is a property of the wire
+ * schema rather than a rule something has to check.
+ */
+const graphicGroupChildConfigSchema = z.discriminatedUnion('type', [
+	z.object({ ...textGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
+	z.object({ ...shapeGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
+]);
+
+export const MAX_GRAPHIC_GROUP_CHILDREN = 50;
+
+const graphicGroupItemConfigSchema = z.object({
+	...graphicItemBaseShape,
+	type: z.literal('group'),
+	arrangement: z.enum(GRAPHIC_GROUP_ARRANGEMENT_VALUES),
+	padding: nonNegativePixelSchema,
+	gap: nonNegativePixelSchema,
+	align: z.enum(GRAPHIC_GROUP_ALIGN_VALUES),
+	justify: z.enum(GRAPHIC_GROUP_JUSTIFY_VALUES),
+	clip: z.boolean(),
+	geometry: graphicShapeGeometrySchema,
+	surfaceStyle: graphicSurfaceStyleSchema.optional(),
+	defaultChildSurfaceStyle: graphicSurfaceStyleSchema.optional(),
+	children: z.array(graphicGroupChildConfigSchema).max(
+		MAX_GRAPHIC_GROUP_CHILDREN,
+		`A Graphic Group must not contain more than ${MAX_GRAPHIC_GROUP_CHILDREN} Graphic Items`,
+	),
 }).strict();
 
 const graphicItemConfigSchema = z.discriminatedUnion('type', [
 	textGraphicItemConfigSchema,
 	shapeGraphicItemConfigSchema,
+	graphicGroupItemConfigSchema,
 ]);
 
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC = 100;
 export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
+
+/**
+ * The whole-Screen Graphic Item budget.
+ *
+ * The per-graphic and per-Screen caps bound each list independently, but their
+ * product does not come close to fitting `MAX_MODE_CONFIGS_BYTES`. Measured
+ * against this schema's own maxima, the most expensive Graphic Item a Graphic
+ * Group can hold serializes to 2,004 bytes (a 1,000-character Text Graphic Item
+ * with a four-stop gradient, an outline, a glow, rotation, and main-axis sizing),
+ * a Graphic Group shell to 1,510, and a Broadcast Graphic shell to 166. Without
+ * a total cap, 50 Broadcast Graphics x 100 Graphic Groups x 50 children is
+ * 255,000 Graphic Items and about 485 MiB against a 512 KiB budget shared by
+ * every Screen Mode.
+ *
+ * This cap binds the product: 200 x 2,004 + 50 x 166 is about 400 KiB, or 78% of
+ * that budget, and realistic authoring measures around 119 KiB. It is
+ * deliberately a named cap so an operator reads which limit they reached rather
+ * than a byte count. Graphic Group children count towards it — they are Graphic
+ * Items and they cost bytes.
+ *
+ * The remaining ~112 KiB is shared with every other mode's configuration, so a
+ * Screen carrying both a maximal Broadcast Graphics stack and a maximal Feature
+ * Match Overlay layout can still reach the byte limit. That is a property of one
+ * budget shared across modes and predates this cap.
+ */
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 200;
+
+function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
+	return items.reduce(
+		(total, item) => total + 1 + (item.type === 'group' ? (item.children?.length ?? 0) : 0),
+		0,
+	);
+}
+
+function graphicItemIds(items: readonly { id: string; type: string; children?: readonly { id: string }[] }[]) {
+	return items.flatMap(item => [
+		item.id,
+		...(item.type === 'group' ? (item.children ?? []).map(child => child.id) : []),
+	]);
+}
 
 const broadcastGraphicConfigSchema = z.object({
 	id: z.string().min(1).max(100),
 	name: z.string().min(1).max(100),
 	// Named caps: these are reached before the mode-configuration byte limit, so
 	// the operator learns which cap they hit rather than reading a byte count.
-	items: z.array(graphicItemConfigSchema).max(
-		MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
-		`A Broadcast Graphic must not contain more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC} Graphic Items`,
-	),
+	items: z.array(graphicItemConfigSchema)
+		.max(
+			MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
+			`A Broadcast Graphic must not contain more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC} Graphic Items`,
+		)
+		// Graphic Item ids are unique within one Broadcast Graphic, including a
+		// Graphic Group's children. Every authoring operation addresses an item by
+		// id alone and resolves it against both levels, so a duplicate would edit,
+		// move, or delete the wrong item. The check belongs on this field rather
+		// than on the object: the mode-configuration patch schema rebuilds each
+		// mode from its field schemas and drops object-level refinements.
+		.refine(
+			items => new Set(graphicItemIds(items)).size === graphicItemIds(items).length,
+			'Graphic Item ids must be unique within one Broadcast Graphic',
+		),
 }).strict();
 
 /**
@@ -630,10 +798,19 @@ const broadcastGraphicConfigSchema = z.object({
  * stack of Broadcast Graphics. The Screen's canvas stays in the Screen config.
  */
 export const broadcastGraphicsModeConfigSchema = z.object({
-	graphics: z.array(broadcastGraphicConfigSchema).max(
-		MAX_BROADCAST_GRAPHICS_PER_SCREEN,
-		`A Broadcast Graphics Screen must not carry more than ${MAX_BROADCAST_GRAPHICS_PER_SCREEN} Broadcast Graphics`,
-	),
+	// Every cap lives on the array itself rather than on this object: the
+	// mode-configuration patch schema rebuilds each mode from its field schemas,
+	// so an object-level refinement would never reach the write path the editor uses.
+	graphics: z.array(broadcastGraphicConfigSchema)
+		.max(
+			MAX_BROADCAST_GRAPHICS_PER_SCREEN,
+			`A Broadcast Graphics Screen must not carry more than ${MAX_BROADCAST_GRAPHICS_PER_SCREEN} Broadcast Graphics`,
+		)
+		.refine(
+			graphics => graphics.reduce((total, graphic) => total + countGraphicItems(graphic.items), 0)
+				<= MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN,
+			`A Broadcast Graphics Screen must not carry more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Items in total`,
+		),
 }).strict() satisfies z.ZodType<BroadcastGraphicsModeConfig>;
 
 export const metagameModeConfigSchema = z.object({

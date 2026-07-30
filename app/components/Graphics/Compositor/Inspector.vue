@@ -1,18 +1,30 @@
 <script setup lang="ts">
+import type { ShapeGeometryPresetId } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
+	GRAPHIC_FILL_KIND_VALUES,
 	GraphicAnchorPoint,
+	GraphicFillStop,
 	GraphicGeometryUnit,
+	GraphicGlow,
+	GraphicGroupChildSizing,
+	GraphicGroupItemConfig,
 	GraphicItemConfig,
+	GraphicOutline,
 	GraphicSurfaceStyle,
 	GraphicTypography,
+	ShapeCorner,
+	ShapeCornerKey,
+	ShapeGeometry,
 	TEXT_OVERFLOW_POLICY_VALUES,
-
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
 	anchoredGraphicPosition,
+	applyShapeGeometryPreset,
+	changeGraphicGradientStopCount,
+	clearGraphicSurfaceStyle,
 	displayGraphicGeometryValue,
 	GRAPHIC_ANCHOR_POINTS,
 	GRAPHIC_FONT_OPTIONS,
@@ -22,27 +34,54 @@ import {
 	moveGraphicRectToAnchoredPosition,
 	parseGraphicGeometryValue,
 	patchBroadcastGraphic,
+	patchGraphicGlow,
+	patchGraphicGradientAngle,
+	patchGraphicGradientStop,
+	patchGraphicGroup,
+	patchGraphicGroupChildSizing,
+	patchGraphicGroupDefaultChildSurfaceStyle,
 	patchGraphicItem,
+	patchGraphicOutline,
+	patchGraphicSolidFill,
 	patchGraphicSurfaceStyle,
 	patchGraphicTypography,
+	patchShapeCorner,
 	patchShapeGeometry,
 	patchTextGraphicItem,
 	replaceBroadcastGraphic,
 	resizeGraphicRectFromAnchor,
+	setGraphicFillKind,
+	SHAPE_GEOMETRY_PRESETS,
 } from '~~/shared/modules/graphics';
 import {
 	GRAPHIC_FONT_STYLE_VALUES,
 	GRAPHIC_GEOMETRY_UNIT_VALUES,
+	GRAPHIC_GROUP_ALIGN_VALUES,
+	GRAPHIC_GROUP_ARRANGEMENT_VALUES,
+	GRAPHIC_GROUP_JUSTIFY_VALUES,
 	GRAPHIC_TEXT_ALIGN_VALUES,
 	GRAPHIC_TEXT_TRANSFORM_VALUES,
+	MAX_GRAPHIC_FILL_STOPS,
+	MAX_GRAPHIC_TEXT_LENGTH,
+	MIN_GRAPHIC_FILL_STOPS,
+	SHAPE_CORNER_KEYS,
+	SHAPE_CORNER_TREATMENT_VALUES,
 } from '~~/shared/types/graphics';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 
 /**
  * Property controls for the current selection: the Broadcast Graphic, or one
- * Graphic Item's geometry, Graphic Anchor Point, and kind-specific properties.
- * Geometry is authored in any Graphic Geometry Unit and always stored as
- * canonical canvas pixels.
+ * Graphic Item's geometry, Graphic Anchor Point, Graphic Surface Style, and
+ * kind-specific properties. Geometry is authored in any Graphic Geometry Unit
+ * and always stored as canonical canvas pixels.
+ *
+ * Every nested property group goes through its own merge helper, so editing one
+ * field of a Shape Geometry, Graphic Fill, or typography never drops its siblings.
+ *
+ * A row or column Graphic Group child is positioned by its group rather than by
+ * a coordinate, so it offers main-axis sizing instead of X, Y, and Graphic
+ * Rotation. A canvas-positioned child offers all three, projected against its
+ * group's own bounds.
  */
 const props = defineProps<{
 	graphics: readonly BroadcastGraphicConfig[];
@@ -81,6 +120,29 @@ const OVERFLOW_POLICY_OPTIONS = [
 const TEXT_ALIGN_OPTIONS = GRAPHIC_TEXT_ALIGN_VALUES.map(value => ({ label: value, value }));
 const TEXT_TRANSFORM_OPTIONS = GRAPHIC_TEXT_TRANSFORM_VALUES.map(value => ({ label: value, value }));
 const FONT_STYLE_OPTIONS = GRAPHIC_FONT_STYLE_VALUES.map(value => ({ label: value, value }));
+const FILL_KIND_OPTIONS = [
+	{ label: 'Solid', value: 'solid' },
+	{ label: 'Linear gradient', value: 'linear-gradient' },
+] satisfies Array<{ label: string; value: typeof GRAPHIC_FILL_KIND_VALUES[number] }>;
+const CORNER_TREATMENT_OPTIONS = SHAPE_CORNER_TREATMENT_VALUES.map(value => ({ label: value, value }));
+const GEOMETRY_PRESET_OPTIONS = SHAPE_GEOMETRY_PRESETS.map(preset => ({
+	label: preset.label,
+	value: preset.id,
+	icon: preset.icon,
+}));
+const ARRANGEMENT_OPTIONS = GRAPHIC_GROUP_ARRANGEMENT_VALUES.map(value => ({ label: value, value }));
+const ALIGN_OPTIONS = GRAPHIC_GROUP_ALIGN_VALUES.map(value => ({ label: value, value }));
+const JUSTIFY_OPTIONS = GRAPHIC_GROUP_JUSTIFY_VALUES.map(value => ({ label: value, value }));
+const SIZING_MODE_OPTIONS = [
+	{ label: 'Fixed', value: 'fixed' },
+	{ label: 'Weighted fill', value: 'fill' },
+] satisfies Array<{ label: string; value: GraphicGroupChildSizing['mode'] }>;
+const CORNER_LABELS: Record<ShapeCornerKey, string> = {
+	topLeft: 'Top left',
+	topRight: 'Top right',
+	bottomRight: 'Bottom right',
+	bottomLeft: 'Bottom left',
+};
 
 const selection = computed(() => resolveGraphicsSelection(props.graphics, props.selectedTarget));
 
@@ -119,16 +181,49 @@ const header = computed(() => {
 });
 
 const selectedItem = computed(() => selection.value.kind === 'item' ? selection.value.item : null);
+const parentGroup = computed<GraphicGroupItemConfig | null>(() =>
+	selection.value.kind === 'item' ? selection.value.group ?? null : null,
+);
 const selectedTextItem = computed<TextGraphicItemConfig | null>(() =>
 	selectedItem.value?.type === 'text' ? selectedItem.value : null,
 );
+const selectedGroup = computed<GraphicGroupItemConfig | null>(() =>
+	selectedItem.value?.type === 'group' ? selectedItem.value : null,
+);
+/** A Shape Graphic Item and a Graphic Group both own a Shape Geometry. */
+const selectedGeometry = computed<ShapeGeometry | null>(() => {
+	const item = selectedItem.value;
+	if (item?.type === 'shape' || item?.type === 'group')
+		return item.geometry;
+	return null;
+});
+
+/** Only a canvas-positioned item has a coordinate and a Graphic Rotation. */
+const isCanvasPositioned = computed(() =>
+	selectedItem.value !== null && (parentGroup.value === null || parentGroup.value.arrangement === 'canvas'),
+);
+const isStackedChild = computed(() =>
+	parentGroup.value !== null && parentGroup.value.arrangement !== 'canvas',
+);
+
+/**
+ * Only an item's own Graphic Surface Style is editable here. A Graphic Group
+ * child with none of its own inherits the group's local style default, which is
+ * edited on the group itself.
+ */
+const ownSurfaceStyle = computed<GraphicSurfaceStyle | null>(() => selectedItem.value?.surfaceStyle ?? null);
+
+/** A Graphic Geometry Unit projects against the containing canvas — a Graphic Group for its children. */
+function axisTotal(axis: 'x' | 'y') {
+	const group = parentGroup.value;
+	if (group)
+		return axis === 'x' ? group.width : group.height;
+	return axis === 'x' ? props.canvasWidth : props.canvasHeight;
+}
+
 const anchoredPosition = computed(() => selectedItem.value
 	? anchoredGraphicPosition(selectedItem.value, selectedItem.value.anchor)
 	: { x: 0, y: 0 });
-
-function axisTotal(axis: 'x' | 'y') {
-	return axis === 'x' ? props.canvasWidth : props.canvasHeight;
-}
 
 function displayedPosition(axis: 'x' | 'y') {
 	return displayGraphicGeometryValue(anchoredPosition.value[axis], axisTotal(axis), geometryUnit.value, true);
@@ -138,11 +233,7 @@ function displayedSize(axis: 'width' | 'height') {
 	const item = selectedItem.value;
 	if (!item)
 		return 0;
-	return displayGraphicGeometryValue(
-		item[axis],
-		axis === 'width' ? props.canvasWidth : props.canvasHeight,
-		geometryUnit.value,
-	);
+	return displayGraphicGeometryValue(item[axis], axisTotal(axis === 'width' ? 'x' : 'y'), geometryUnit.value);
 }
 
 function patchSelectedItem(patch: Partial<GraphicItemConfig>) {
@@ -169,7 +260,7 @@ function updateSize(axis: 'width' | 'height', value: number | null | undefined) 
 		return;
 	const pixels = parseGraphicGeometryValue(
 		value ?? 0,
-		axis === 'width' ? props.canvasWidth : props.canvasHeight,
+		axisTotal(axis === 'width' ? 'x' : 'y'),
 		geometryUnit.value,
 	);
 	patchSelectedItem(resizeGraphicRectFromAnchor(item, { [axis]: Math.max(1, pixels) }, item.anchor));
@@ -193,8 +284,63 @@ function updateSurfaceStyle(patch: Partial<GraphicSurfaceStyle>) {
 	applyToSelectedGraphic((graphic, itemId) => patchGraphicSurfaceStyle(graphic, itemId, patch));
 }
 
-function updateShapeGeometry(patch: Partial<ShapeGeometry>) {
+/** One switch owns whether the item paints a surface of its own at all. */
+function updateOwnSurfaceStyle(present: boolean) {
+	applyToSelectedGraphic((graphic, itemId) => present
+		? patchGraphicSurfaceStyle(graphic, itemId, {})
+		: clearGraphicSurfaceStyle(graphic, itemId));
+}
+
+function updateFillKind(kind: typeof GRAPHIC_FILL_KIND_VALUES[number]) {
+	applyToSelectedGraphic((graphic, itemId) => setGraphicFillKind(graphic, itemId, kind));
+}
+
+function updateSolidFill(color: string) {
+	applyToSelectedGraphic((graphic, itemId) => patchGraphicSolidFill(graphic, itemId, color));
+}
+
+function updateGradientAngle(angle: number) {
+	applyToSelectedGraphic((graphic, itemId) => patchGraphicGradientAngle(graphic, itemId, angle));
+}
+
+function updateGradientStop(index: number, patch: Partial<GraphicFillStop>) {
+	applyToSelectedGraphic((graphic, itemId) => patchGraphicGradientStop(graphic, itemId, index, patch));
+}
+
+function changeStopCount(delta: 1 | -1) {
+	applyToSelectedGraphic((graphic, itemId) => changeGraphicGradientStopCount(graphic, itemId, delta));
+}
+
+function updateOutline(patch: Partial<GraphicOutline> | null) {
+	applyToSelectedGraphic((graphic, itemId) => patchGraphicOutline(graphic, itemId, patch));
+}
+
+function updateGlow(patch: Partial<GraphicGlow> | null) {
+	applyToSelectedGraphic((graphic, itemId) => patchGraphicGlow(graphic, itemId, patch));
+}
+
+function updateGeometry(patch: Partial<ShapeGeometry>) {
 	applyToSelectedGraphic((graphic, itemId) => patchShapeGeometry(graphic, itemId, patch));
+}
+
+function updateCorner(corner: ShapeCornerKey, patch: Partial<ShapeCorner>) {
+	applyToSelectedGraphic((graphic, itemId) => patchShapeCorner(graphic, itemId, corner, patch));
+}
+
+function applyPreset(presetId: ShapeGeometryPresetId) {
+	applyToSelectedGraphic((graphic, itemId) => applyShapeGeometryPreset(graphic, itemId, presetId));
+}
+
+function updateGroup(patch: Partial<Omit<GraphicGroupItemConfig, 'type' | 'id' | 'children'>>) {
+	applyToSelectedGraphic((graphic, itemId) => patchGraphicGroup(graphic, itemId, patch));
+}
+
+function updateDefaultChildStyle(patch: Partial<GraphicSurfaceStyle> | null) {
+	applyToSelectedGraphic((graphic, itemId) => patchGraphicGroupDefaultChildSurfaceStyle(graphic, itemId, patch));
+}
+
+function updateChildSizing(patch: Partial<GraphicGroupChildSizing>) {
+	applyToSelectedGraphic((graphic, itemId) => patchGraphicGroupChildSizing(graphic, itemId, patch));
 }
 
 function updateTextItem(patch: Partial<Omit<TextGraphicItemConfig, 'type' | 'id'>>) {
@@ -263,7 +409,7 @@ function updateGraphicName(value: string) {
 				/>
 			</UFormField>
 
-			<UFormField label="Graphic Anchor Point" size="sm">
+			<UFormField v-if="isCanvasPositioned" label="Graphic Anchor Point" size="sm">
 				<USelect
 					:model-value="selectedItem.anchor"
 					:items="ANCHOR_OPTIONS"
@@ -285,7 +431,7 @@ function updateGraphicName(value: string) {
 			</UFormField>
 
 			<div class="grid grid-cols-2 gap-2">
-				<UFormField label="X" size="sm">
+				<UFormField v-if="isCanvasPositioned" label="X" size="sm">
 					<UInputNumber
 						:model-value="displayedPosition('x')"
 						size="sm"
@@ -294,7 +440,7 @@ function updateGraphicName(value: string) {
 						@update:model-value="updatePosition('x', $event)"
 					/>
 				</UFormField>
-				<UFormField label="Y" size="sm">
+				<UFormField v-if="isCanvasPositioned" label="Y" size="sm">
 					<UInputNumber
 						:model-value="displayedPosition('y')"
 						size="sm"
@@ -322,6 +468,161 @@ function updateGraphicName(value: string) {
 					/>
 				</UFormField>
 			</div>
+
+			<UFormField v-if="isCanvasPositioned" label="Graphic Rotation" size="sm">
+				<UInputNumber
+					:model-value="selectedItem.rotation ?? 0"
+					:min="-360"
+					:max="360"
+					size="sm"
+					class="w-full"
+					data-testid="graphic-item-rotation"
+					aria-label="Graphic Rotation"
+					@update:model-value="patchSelectedItem({ rotation: $event ?? 0 })"
+				/>
+			</UFormField>
+		</template>
+
+		<template v-if="isStackedChild && selectedItem">
+			<div class="rounded-lg border border-default/70 p-3">
+				<p class="mb-2 text-xs font-semibold text-muted">
+					Graphic Group sizing
+				</p>
+				<UFormField label="Main axis" size="sm">
+					<USelect
+						:model-value="selectedItem.sizing?.mode ?? 'fixed'"
+						:items="SIZING_MODE_OPTIONS"
+						value-key="value"
+						class="w-full"
+						data-testid="graphic-group-child-sizing-mode"
+						@update:model-value="updateChildSizing({ mode: $event as GraphicGroupChildSizing['mode'] })"
+					/>
+				</UFormField>
+				<UFormField
+					v-if="(selectedItem.sizing?.mode ?? 'fixed') === 'fixed'"
+					label="Fixed size"
+					size="sm"
+				>
+					<UInputNumber
+						:model-value="selectedItem.sizing?.size ?? selectedItem.width"
+						:min="0"
+						size="sm"
+						class="w-full"
+						aria-label="Fixed main axis size"
+						@update:model-value="updateChildSizing({ size: $event ?? 0 })"
+					/>
+				</UFormField>
+				<UFormField v-else label="Fill weight" size="sm">
+					<UInputNumber
+						:model-value="selectedItem.sizing?.weight ?? 1"
+						:min="0"
+						:step="0.5"
+						size="sm"
+						class="w-full"
+						aria-label="Fill weight"
+						@update:model-value="updateChildSizing({ weight: $event ?? 1 })"
+					/>
+				</UFormField>
+			</div>
+		</template>
+
+		<template v-if="selectedGroup">
+			<div class="rounded-lg border border-default/70 p-3 space-y-2">
+				<p class="text-xs font-semibold text-muted">
+					Graphic Group
+				</p>
+				<UFormField label="Arrangement" size="sm">
+					<USelect
+						:model-value="selectedGroup.arrangement"
+						:items="ARRANGEMENT_OPTIONS"
+						value-key="value"
+						class="w-full"
+						data-testid="graphic-group-arrangement"
+						@update:model-value="updateGroup({ arrangement: $event as never })"
+					/>
+				</UFormField>
+				<div class="grid grid-cols-2 gap-2">
+					<UFormField label="Padding" size="sm">
+						<UInputNumber
+							:model-value="selectedGroup.padding"
+							:min="0"
+							size="sm"
+							class="w-full"
+							aria-label="Group padding"
+							@update:model-value="updateGroup({ padding: $event ?? 0 })"
+						/>
+					</UFormField>
+					<UFormField v-if="selectedGroup.arrangement !== 'canvas'" label="Gap" size="sm">
+						<UInputNumber
+							:model-value="selectedGroup.gap"
+							:min="0"
+							size="sm"
+							class="w-full"
+							aria-label="Group gap"
+							@update:model-value="updateGroup({ gap: $event ?? 0 })"
+						/>
+					</UFormField>
+					<UFormField v-if="selectedGroup.arrangement !== 'canvas'" label="Align" size="sm">
+						<USelect
+							:model-value="selectedGroup.align"
+							:items="ALIGN_OPTIONS"
+							value-key="value"
+							class="w-full"
+							@update:model-value="updateGroup({ align: $event as never })"
+						/>
+					</UFormField>
+					<UFormField v-if="selectedGroup.arrangement !== 'canvas'" label="Justify" size="sm">
+						<USelect
+							:model-value="selectedGroup.justify"
+							:items="JUSTIFY_OPTIONS"
+							value-key="value"
+							class="w-full"
+							@update:model-value="updateGroup({ justify: $event as never })"
+						/>
+					</UFormField>
+				</div>
+				<UFormField label="Clip children" size="sm">
+					<USwitch
+						:model-value="selectedGroup.clip"
+						data-testid="graphic-group-clip"
+						@update:model-value="updateGroup({ clip: $event })"
+					/>
+				</UFormField>
+				<UFormField label="Child style default" size="sm">
+					<USwitch
+						:model-value="selectedGroup.defaultChildSurfaceStyle !== undefined"
+						data-testid="graphic-group-child-style-default"
+						@update:model-value="updateDefaultChildStyle($event ? {} : null)"
+					/>
+				</UFormField>
+				<UFormField
+					v-if="selectedGroup.defaultChildSurfaceStyle"
+					label="Child fill opacity"
+					size="sm"
+				>
+					<UInputNumber
+						:model-value="selectedGroup.defaultChildSurfaceStyle.fillOpacity"
+						:min="0"
+						:max="1"
+						:step="0.05"
+						size="sm"
+						class="w-full"
+						aria-label="Child fill opacity"
+						@update:model-value="updateDefaultChildStyle({ fillOpacity: $event ?? 1 })"
+					/>
+				</UFormField>
+				<UFormField
+					v-if="selectedGroup.defaultChildSurfaceStyle?.fill.type === 'solid'"
+					label="Child fill"
+					size="sm"
+				>
+					<UIColorPicker
+						:model-value="selectedGroup.defaultChildSurfaceStyle.fill.color"
+						data-testid="graphic-group-child-fill"
+						@update:model-value="updateDefaultChildStyle({ fill: { type: 'solid', color: $event?.toString() || '#000000' } })"
+					/>
+				</UFormField>
+			</div>
 		</template>
 
 		<template v-if="selectedTextItem">
@@ -329,6 +630,7 @@ function updateGraphicName(value: string) {
 				<UTextarea
 					:model-value="selectedTextItem.text"
 					:rows="3"
+					:maxlength="MAX_GRAPHIC_TEXT_LENGTH"
 					class="w-full"
 					data-testid="graphic-item-text"
 					@update:model-value="updateTextItem({ text: String($event) })"
@@ -449,37 +751,263 @@ function updateGraphicName(value: string) {
 			</UFormField>
 		</template>
 
-		<template v-if="selectedItem?.type === 'shape'">
-			<UFormField label="Fill" size="sm">
-				<UIColorPicker
-					:model-value="selectedItem.surfaceStyle.fill"
-					data-testid="shape-fill"
-					@update:model-value="updateSurfaceStyle({ fill: $event?.toString() || '#000000' })"
-				/>
-			</UFormField>
-			<UFormField label="Fill opacity" size="sm">
-				<UInputNumber
-					:model-value="selectedItem.surfaceStyle.fillOpacity"
-					:min="0"
-					:max="1"
-					:step="0.05"
+		<template v-if="selectedGeometry">
+			<div class="rounded-lg border border-default/70 p-3 space-y-2">
+				<p class="text-xs font-semibold text-muted">
+					Shape Geometry
+				</p>
+				<UFormField label="Preset" size="sm">
+					<USelect
+						:items="GEOMETRY_PRESET_OPTIONS"
+						value-key="value"
+						placeholder="Apply preset..."
+						class="w-full"
+						data-testid="shape-geometry-preset"
+						@update:model-value="applyPreset($event as ShapeGeometryPresetId)"
+					/>
+				</UFormField>
+
+				<div v-for="corner in SHAPE_CORNER_KEYS" :key="corner" class="grid grid-cols-2 gap-2">
+					<UFormField :label="CORNER_LABELS[corner]" size="sm">
+						<USelect
+							:model-value="selectedGeometry[corner].treatment"
+							:items="CORNER_TREATMENT_OPTIONS"
+							value-key="value"
+							class="w-full"
+							:data-testid="`shape-corner-${corner}`"
+							@update:model-value="updateCorner(corner, { treatment: $event as never })"
+						/>
+					</UFormField>
+					<UFormField
+						v-if="selectedGeometry[corner].treatment !== 'square'"
+						label="Size"
+						size="sm"
+					>
+						<UInputNumber
+							:model-value="selectedGeometry[corner].size"
+							:min="0"
+							size="sm"
+							class="w-full"
+							:aria-label="`${CORNER_LABELS[corner]} size`"
+							@update:model-value="updateCorner(corner, { size: $event ?? 0 })"
+						/>
+					</UFormField>
+				</div>
+
+				<div class="grid grid-cols-2 gap-2">
+					<UFormField label="Left slant" size="sm">
+						<UInputNumber
+							:model-value="selectedGeometry.leftSlant"
+							size="sm"
+							class="w-full"
+							data-testid="shape-left-slant"
+							aria-label="Left edge slant"
+							@update:model-value="updateGeometry({ leftSlant: $event ?? 0 })"
+						/>
+					</UFormField>
+					<UFormField label="Right slant" size="sm">
+						<UInputNumber
+							:model-value="selectedGeometry.rightSlant"
+							size="sm"
+							class="w-full"
+							data-testid="shape-right-slant"
+							aria-label="Right edge slant"
+							@update:model-value="updateGeometry({ rightSlant: $event ?? 0 })"
+						/>
+					</UFormField>
+				</div>
+			</div>
+		</template>
+
+		<template v-if="selectedItem">
+			<div class="rounded-lg border border-default/70 p-3 space-y-2">
+				<p class="text-xs font-semibold text-muted">
+					Graphic Surface Style
+				</p>
+
+				<UFormField
+					:label="parentGroup ? 'Override group style default' : 'Paint a surface'"
 					size="sm"
-					class="w-full"
-					aria-label="Fill opacity"
-					@update:model-value="updateSurfaceStyle({ fillOpacity: $event ?? 1 })"
-				/>
-			</UFormField>
-			<UFormField label="Corner radius" size="sm">
-				<UInputNumber
-					:model-value="selectedItem.geometry.cornerRadius"
-					:min="0"
-					size="sm"
-					class="w-full"
-					data-testid="shape-corner-radius"
-					aria-label="Corner radius"
-					@update:model-value="updateShapeGeometry({ cornerRadius: $event ?? 0 })"
-				/>
-			</UFormField>
+				>
+					<USwitch
+						:model-value="ownSurfaceStyle !== null"
+						data-testid="surface-style-own"
+						@update:model-value="updateOwnSurfaceStyle($event)"
+					/>
+				</UFormField>
+
+				<template v-if="ownSurfaceStyle">
+					<UFormField label="Graphic Fill" size="sm">
+						<USelect
+							:model-value="ownSurfaceStyle.fill.type"
+							:items="FILL_KIND_OPTIONS"
+							value-key="value"
+							class="w-full"
+							data-testid="graphic-fill-kind"
+							@update:model-value="updateFillKind($event as never)"
+						/>
+					</UFormField>
+
+					<UFormField v-if="ownSurfaceStyle.fill.type === 'solid'" label="Fill colour" size="sm">
+						<UIColorPicker
+							:model-value="ownSurfaceStyle.fill.color"
+							data-testid="shape-fill"
+							@update:model-value="updateSolidFill($event?.toString() || '#000000')"
+						/>
+					</UFormField>
+
+					<template v-else>
+						<UFormField label="Gradient angle" size="sm">
+							<UInputNumber
+								:model-value="ownSurfaceStyle.fill.angle"
+								:min="-360"
+								:max="360"
+								size="sm"
+								class="w-full"
+								data-testid="graphic-fill-angle"
+								aria-label="Gradient angle"
+								@update:model-value="updateGradientAngle($event ?? 0)"
+							/>
+						</UFormField>
+						<div
+							v-for="(stop, index) in ownSurfaceStyle.fill.stops"
+							:key="index"
+							class="grid grid-cols-3 gap-2"
+							data-testid="graphic-fill-stop"
+						>
+							<UFormField :label="`Stop ${index + 1}`" size="sm">
+								<UIColorPicker
+									:model-value="stop.color"
+									@update:model-value="updateGradientStop(index, { color: $event?.toString() || '#000000' })"
+								/>
+							</UFormField>
+							<UFormField label="At" size="sm">
+								<UInputNumber
+									:model-value="stop.position"
+									:min="0"
+									:max="1"
+									:step="0.05"
+									size="sm"
+									class="w-full"
+									:aria-label="`Stop ${index + 1} position`"
+									@update:model-value="updateGradientStop(index, { position: $event ?? 0 })"
+								/>
+							</UFormField>
+							<UFormField label="Opacity" size="sm">
+								<UInputNumber
+									:model-value="stop.opacity"
+									:min="0"
+									:max="1"
+									:step="0.05"
+									size="sm"
+									class="w-full"
+									:aria-label="`Stop ${index + 1} opacity`"
+									@update:model-value="updateGradientStop(index, { opacity: $event ?? 1 })"
+								/>
+							</UFormField>
+						</div>
+						<div class="flex gap-2">
+							<UButton
+								size="xs"
+								variant="soft"
+								icon="i-lucide-plus"
+								:disabled="ownSurfaceStyle.fill.stops.length >= MAX_GRAPHIC_FILL_STOPS"
+								data-testid="graphic-fill-add-stop"
+								@click="changeStopCount(1)"
+							>
+								Stop
+							</UButton>
+							<UButton
+								size="xs"
+								variant="soft"
+								icon="i-lucide-minus"
+								:disabled="ownSurfaceStyle.fill.stops.length <= MIN_GRAPHIC_FILL_STOPS"
+								data-testid="graphic-fill-remove-stop"
+								@click="changeStopCount(-1)"
+							>
+								Stop
+							</UButton>
+						</div>
+					</template>
+
+					<UFormField label="Fill opacity" size="sm">
+						<UInputNumber
+							:model-value="ownSurfaceStyle.fillOpacity"
+							:min="0"
+							:max="1"
+							:step="0.05"
+							size="sm"
+							class="w-full"
+							aria-label="Fill opacity"
+							@update:model-value="updateSurfaceStyle({ fillOpacity: $event ?? 1 })"
+						/>
+					</UFormField>
+
+					<UFormField label="Outline" size="sm">
+						<USwitch
+							:model-value="ownSurfaceStyle.outline !== undefined"
+							data-testid="graphic-outline-enabled"
+							@update:model-value="updateOutline($event ? {} : null)"
+						/>
+					</UFormField>
+					<div v-if="ownSurfaceStyle.outline" class="grid grid-cols-2 gap-2">
+						<UFormField label="Outline colour" size="sm">
+							<UIColorPicker
+								:model-value="ownSurfaceStyle.outline.color"
+								@update:model-value="updateOutline({ color: $event?.toString() || '#ffffff' })"
+							/>
+						</UFormField>
+						<UFormField label="Outline width" size="sm">
+							<UInputNumber
+								:model-value="ownSurfaceStyle.outline.width"
+								:min="0"
+								size="sm"
+								class="w-full"
+								aria-label="Outline width"
+								@update:model-value="updateOutline({ width: $event ?? 0 })"
+							/>
+						</UFormField>
+					</div>
+
+					<UFormField label="Glow" size="sm">
+						<USwitch
+							:model-value="ownSurfaceStyle.glow !== undefined"
+							data-testid="graphic-glow-enabled"
+							@update:model-value="updateGlow($event ? {} : null)"
+						/>
+					</UFormField>
+					<div v-if="ownSurfaceStyle.glow" class="grid grid-cols-3 gap-2">
+						<UFormField label="Glow colour" size="sm">
+							<UIColorPicker
+								:model-value="ownSurfaceStyle.glow.color"
+								@update:model-value="updateGlow({ color: $event?.toString() || '#ffffff' })"
+							/>
+						</UFormField>
+						<UFormField label="Glow size" size="sm">
+							<UInputNumber
+								:model-value="ownSurfaceStyle.glow.size"
+								:min="0"
+								size="sm"
+								class="w-full"
+								aria-label="Glow size"
+								@update:model-value="updateGlow({ size: $event ?? 0 })"
+							/>
+						</UFormField>
+						<UFormField label="Glow opacity" size="sm">
+							<UInputNumber
+								:model-value="ownSurfaceStyle.glow.opacity"
+								:min="0"
+								:max="1"
+								:step="0.05"
+								size="sm"
+								class="w-full"
+								aria-label="Glow opacity"
+								@update:model-value="updateGlow({ opacity: $event ?? 1 })"
+							/>
+						</UFormField>
+					</div>
+				</template>
+			</div>
 		</template>
 	</fieldset>
 </template>
