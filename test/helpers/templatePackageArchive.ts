@@ -42,6 +42,12 @@ export interface TestArchiveEntry {
 	/** Overrides the size the central directory records for this entry. */
 	declaredUncompressedSize?: number;
 	declaredCompressedSize?: number;
+	/**
+	 * Overrides the size the *local* header records, leaving the central
+	 * directory's own figure alone, so the two records can be made to disagree
+	 * about the same bytes. Only meaningful without a data descriptor.
+	 */
+	localUncompressedSize?: number;
 }
 
 export interface TestArchiveOptions {
@@ -94,7 +100,7 @@ export function writeTestArchive(
 		if ((flags & 0x08) === 0) {
 			headerView.setUint32(14, checksum, true);
 			headerView.setUint32(18, compressedSize, true);
-			headerView.setUint32(22, uncompressedSize, true);
+			headerView.setUint32(22, entry.localUncompressedSize ?? uncompressedSize, true);
 		}
 		headerView.setUint16(26, localName.byteLength, true);
 		header.set(localName, LOCAL_HEADER_BYTES);

@@ -7,39 +7,44 @@ import {
 import { TEMPLATE_PACKAGE_LIMITS } from '~~/shared/types/templatePackage';
 import { MAX_SILENT_VIDEO_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 
-const initiationSchema = z.object({
+const browserDecodeEvidenceSchema = z.discriminatedUnion('outcome', [
+	z.object({
+		outcome: z.literal('decoded'),
+		sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
+		width: z.number().int().positive(),
+		height: z.number().int().positive(),
+	}).strict(),
+	z.object({
+		outcome: z.literal('rejected'),
+		sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
+	}).strict(),
+]);
+
+const graphicAssetDeclarations = {
 	idempotencyKey: z.string().trim().min(1).max(200),
 	name: z.string().trim().min(1).max(200),
 	sourceFileName: z.string().trim().min(1).max(255).optional(),
 	declaredMime: z.string().trim().min(1).max(255).optional(),
-	browserDecodeEvidence: z.discriminatedUnion('outcome', [
-		z.object({
-			outcome: z.literal('decoded'),
-			sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
-			width: z.number().int().positive(),
-			height: z.number().int().positive(),
-		}).strict(),
-		z.object({
-			outcome: z.literal('rejected'),
-			sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
-		}).strict(),
-	]).optional(),
+	browserDecodeEvidence: browserDecodeEvidenceSchema.optional(),
 	defaultEventId: z.number().int().positive().optional(),
 	duplicateContentPolicy: z.enum(['reuse', 'create-separate']).optional(),
-	// An approved remote copy cannot declare an exact length up front: the length
-	// is only knowable from the remote response, and remains an untrusted hint
-	// until the observed bytes match it.
-	source: z.enum(['local-upload', 'remote-copy']).optional(),
-	declaredByteLength: z.number().int().positive().max(MAX_SILENT_VIDEO_INGESTION_BYTES).optional(),
-}).strict().refine(
-	input => input.source === 'remote-copy'
-		? input.declaredByteLength === undefined
-		: input.declaredByteLength !== undefined,
-	{
-		error: 'A local upload must declare its byte length; an approved remote copy must not.',
-		path: ['declaredByteLength'],
-	},
-);
+} as const;
+
+const localUploadSchema = z.object({
+	...graphicAssetDeclarations,
+	source: z.literal('local-upload'),
+	declaredByteLength: z.number().int().positive().max(MAX_SILENT_VIDEO_INGESTION_BYTES),
+}).strict();
+
+/**
+ * An approved remote copy cannot declare an exact length up front: the length is
+ * only knowable from the remote response, and remains an untrusted hint until
+ * the observed bytes match it.
+ */
+const remoteCopySchema = z.object({
+	...graphicAssetDeclarations,
+	source: z.literal('remote-copy'),
+}).strict();
 
 /**
  * A received Template Package is an envelope rather than one Graphic Asset, so
@@ -47,7 +52,7 @@ const initiationSchema = z.object({
  * asset, and is bounded by the archive limit instead of any one asset kind's.
  * Everything inside it is declared by its own manifest and proven by preflight.
  */
-const templatePackageInitiationSchema = z.object({
+const templatePackageSchema = z.object({
 	idempotencyKey: z.string().trim().min(1).max(200),
 	source: z.literal('template-package'),
 	sourceFileName: z.string().trim().min(1).max(255).optional(),
@@ -55,29 +60,48 @@ const templatePackageInitiationSchema = z.object({
 	declaredByteLength: z.number().int().positive().max(TEMPLATE_PACKAGE_LIMITS.maximumArchiveByteLength),
 }).strict();
 
+/**
+ * The source decides which envelope applies, so it discriminates the schema.
+ * It stays optional on the wire — a client uploading a file has always been able
+ * to omit it — and is filled in before the union sees the body.
+ */
+const initiationSchema = z.preprocess(
+	value => (
+		typeof value === 'object'
+		&& value !== null
+		&& !Array.isArray(value)
+		&& (value as { source?: unknown }).source === undefined
+			? { ...value, source: 'local-upload' }
+			: value
+	),
+	z.discriminatedUnion('source', [
+		localUploadSchema,
+		remoteCopySchema,
+		templatePackageSchema,
+	]),
+);
+
 export default defineEventHandler(async (event) => {
 	try {
-		const body = await readBody(event);
+		const body = await readValidatedBody(event, initiationSchema.parse);
 		const library = graphicsAssetLibraryForEvent(event);
 		const initiatedBy = graphicsAuthorIdentity(event);
-		if ((body as { source?: unknown } | null)?.source === 'template-package') {
-			const { source: _packageSource, ...packageInput }
-				= templatePackageInitiationSchema.parse(body);
-			const started = await library.initiateTemplatePackagePreflight({
-				...packageInput,
-				initiatedBy,
-			});
-			setResponseStatus(event, 201);
-			return started;
-		}
-		const { source, declaredByteLength, ...input } = initiationSchema.parse(body);
-		const operation = source === 'remote-copy'
-			? await library.initiateRemoteGraphicAssetCopy({ ...input, initiatedBy })
-			: await library.initiateGraphicsIngestion({
-					...input,
-					initiatedBy,
-					declaredByteLength: declaredByteLength!,
-				});
+		const operation = await (async () => {
+			switch (body.source) {
+				case 'template-package': {
+					const { source: _source, ...input } = body;
+					return await library.initiateTemplatePackagePreflight({ ...input, initiatedBy });
+				}
+				case 'remote-copy': {
+					const { source: _source, ...input } = body;
+					return await library.initiateRemoteGraphicAssetCopy({ ...input, initiatedBy });
+				}
+				case 'local-upload': {
+					const { source: _source, ...input } = body;
+					return await library.initiateGraphicsIngestion({ ...input, initiatedBy });
+				}
+			}
+		})();
 		setResponseStatus(event, 201);
 		return operation;
 	}

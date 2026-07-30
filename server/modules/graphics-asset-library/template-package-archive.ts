@@ -286,7 +286,9 @@ export async function readTemplatePackageArchive(
 			issues.push(nameIssue);
 		// Case collisions are refused because a receiver that resolved them by
 		// filesystem rules would install different content on different platforms.
-		const collisionKey = entry.name.toLocaleLowerCase();
+		// Locale-invariant on purpose: a Turkish locale folds "I" to "ı", so
+		// `toLocaleLowerCase` would decide collisions differently by server locale.
+		const collisionKey = entry.name.toLowerCase();
 		const collided = seenNames.get(collisionKey);
 		if (collided !== undefined) {
 			issues.push(templatePackagePreflightIssue('duplicate-package-entry-path', {
@@ -359,6 +361,17 @@ export async function readTemplatePackageArchive(
 		const localExtraLength = headerView.getUint16(28, true);
 		if (localExtraLength !== 0) {
 			issues.push(malformed(`Package entry "${entry.name}" carries an undeclared local extra field`));
+			continue;
+		}
+		// Without a data descriptor the local header states the CRC and sizes
+		// itself. Two records describing the same bytes must agree, or a reader
+		// choosing either one could extract something different.
+		if ((entry.flags & 0x08) === 0 && (
+			headerView.getUint32(14, true) !== entry.crc32
+			|| headerView.getUint32(18, true) !== entry.compressedSize
+			|| headerView.getUint32(22, true) !== entry.byteLength
+		)) {
+			issues.push(malformed(`Package entry "${entry.name}" disagrees with its local header sizes or checksum`));
 			continue;
 		}
 		const localName = localNameLength === 0

@@ -1,4 +1,4 @@
-import type { GraphicAssetCanonicalMime, GraphicAssetReference } from '~~/shared/types/graphicsAsset';
+import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
 	TemplatePackageAsset,
 	TemplatePackageCapabilityKind,
@@ -83,8 +83,12 @@ export type ReadTemplatePackageManifestOutcome
  * Migration is deterministic and total: it must produce the same current-schema
  * manifest for the same input every time, because a package that migrated
  * differently on a retry would invalidate the report an author already
- * confirmed. Version 1 is currently both the oldest supported and the current
- * schema, so this is the identity step that later versions extend.
+ * confirmed.
+ *
+ * Version 1 is currently both the oldest supported and the current schema, so
+ * every branch below is unreachable today: nothing migrates, and
+ * `package-migration-unavailable` cannot be produced. This is scaffolding a
+ * schema 2 extends, not behaviour any test can exercise yet.
  */
 function migrateManifest(
 	value: Record<string, unknown>,
@@ -388,22 +392,31 @@ export function inspectTemplatePackageEntries(
  * receiver never validated travels inside one it did, so they are recognised by
  * their own leading bytes rather than by what the manifest called them.
  */
-const ARCHIVE_SIGNATURES: readonly (readonly number[])[] = [
-	[0x50, 0x4B, 0x03, 0x04],
-	[0x50, 0x4B, 0x05, 0x06],
-	[0x50, 0x4B, 0x07, 0x08],
-	[0x1F, 0x8B],
-	[0x42, 0x5A, 0x68],
-	[0xFD, 0x37, 0x7A, 0x58, 0x5A],
-	[0x28, 0xB5, 0x2F, 0xFD],
-	[0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C],
-	[0x52, 0x61, 0x72, 0x21],
-	[0x75, 0x73, 0x74, 0x61, 0x72],
+const ARCHIVE_SIGNATURES: readonly { offset: number; bytes: readonly number[] }[] = [
+	{ offset: 0, bytes: [0x50, 0x4B, 0x03, 0x04] },
+	{ offset: 0, bytes: [0x50, 0x4B, 0x05, 0x06] },
+	{ offset: 0, bytes: [0x50, 0x4B, 0x07, 0x08] },
+	{ offset: 0, bytes: [0x1F, 0x8B] },
+	{ offset: 0, bytes: [0x42, 0x5A, 0x68] },
+	{ offset: 0, bytes: [0xFD, 0x37, 0x7A, 0x58, 0x5A] },
+	{ offset: 0, bytes: [0x28, 0xB5, 0x2F, 0xFD] },
+	{ offset: 0, bytes: [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C] },
+	{ offset: 0, bytes: [0x52, 0x61, 0x72, 0x21] },
+	// A tar has no header magic at all: `ustar` sits at byte 257 of its first
+	// 512-byte block, after the name, mode, owner, size, and mtime fields.
+	{ offset: 257, bytes: [0x75, 0x73, 0x74, 0x61, 0x72] },
 ];
+
+/**
+ * The bytes of an entry a nested-archive check needs to see. It covers a
+ * complete tar header block so the one signature that is not at the start of
+ * the file can still be found.
+ */
+export const NESTED_ARCHIVE_PROBE_BYTES = 512;
 
 export function hasNestedArchiveSignature(leadingBytes: Uint8Array): boolean {
 	return ARCHIVE_SIGNATURES.some(signature =>
-		signature.every((byte, index) => leadingBytes[index] === byte),
+		signature.bytes.every((byte, index) => leadingBytes[signature.offset + index] === byte),
 	);
 }
 
@@ -602,19 +615,29 @@ export function templatePackagePreflightFingerprintMaterial(
 		compatibilityProfiles: [...input.compatibilityProfiles].sort(),
 		quotaGrowthBytes: input.quota.canonicalGrowthBytes,
 		observed: input.observed,
+		// Every field the author reads is covered, not just the structural ones.
+		// A mapping whose displayed name changed is a different proposal to the
+		// person confirming it, however identical its shape.
 		mappings: input.mappings.map(mapping => ({
 			packagedId: mapping.packagedId,
+			name: mapping.name,
+			kind: mapping.kind,
 			origin: mapping.origin,
 			proposal: mapping.proposal,
 			basis: mapping.basis,
 			reference: mapping.reference ?? null,
 			contentAlreadyStored: mapping.contentAlreadyStored,
 			canonicalGrowthBytes: mapping.canonicalGrowthBytes,
+			localName: mapping.localName ?? null,
 		})),
 		issues: input.issues.map(issue => ({
 			code: issue.code,
 			severity: issue.severity,
 			subject: issue.subject ?? null,
+			// The message carries the specifics a code cannot — which local asset
+			// the content matched, which name differs — so it is part of what was
+			// agreed to.
+			message: issue.message,
 		})),
 	});
 }
@@ -657,18 +680,21 @@ export function assembleTemplatePackagePreflightReport(
 	};
 }
 
-export function templatePackageCanonicalMimeOf(value: string): GraphicAssetCanonicalMime {
-	return value as GraphicAssetCanonicalMime;
-}
-
 /**
  * One Template Package operation's durable preflight checkpoint.
  *
  * The report is immutable once written. A confirmation records the exact
  * fingerprint it accepted, so a later run that reaches a different conclusion
  * cannot inherit it, and a run that reaches the same conclusion does not ask the
- * author again. Regenerated derivatives are recorded by packaged identity so a
- * retry reuses verified staged bytes rather than producing them a second time.
+ * author again.
+ *
+ * Derivatives record only what preflight proved it could produce: the digest and
+ * size of each regenerated preview, by packaged identity. The bytes themselves
+ * are deliberately not staged — generation is deterministic, installation must
+ * read the staged archive anyway, and a per-derivative staged object would be a
+ * new class of state that cancellation, staged-input expiry, and the staging
+ * reservation would all have to learn to reclaim. So this is a record of proof
+ * and of quota cost, not a cache a retry reads back.
  */
 export interface TemplatePackagePreflightState {
 	report: TemplatePackagePreflightReport;

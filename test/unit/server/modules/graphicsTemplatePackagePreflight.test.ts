@@ -317,12 +317,14 @@ describe('the Template Package preflight contract', () => {
 		const report = reportOf(await preflight(receiver, archive));
 
 		// Each embedded source was judged under the receiver's own profile for its
-		// kind, not under whatever profile the sender recorded.
+		// kind, not under whatever profile the sender recorded. The font records an
+		// explicitly weaker profile because no browser attested it here.
 		expect(report.compatibilityProfiles).toEqual([
 			'silent-video-v1',
-			'static-font-v1',
+			'static-font-v1-unattested',
 			'still-image-v1',
 		]);
+		expect(report.compatibilityProfiles).not.toContain('static-font-v1');
 		expect(report.mappings).toHaveLength(3);
 		// Nothing in the receiving library matches, so every packaged identity
 		// becomes a separate local Graphic Asset carrying new content.
@@ -518,6 +520,52 @@ describe('the Template Package preflight contract', () => {
 
 			expect(await rejectionCodes(writeTemplatePackage(parts)))
 				.toContain('nested-package-archive');
+		});
+
+		it('rejects a nested tar, whose magic is not at the start of the file', async () => {
+			// A tar has no leading signature: `ustar` sits at byte 257 of its first
+			// 512-byte header block, after the name, mode, owner, size, and mtime.
+			const parts = await validParts();
+			const tar = new Uint8Array(1024);
+			tar.set(new TextEncoder().encode('payload.bin'), 0);
+			tar.set(new TextEncoder().encode('ustar'), 257);
+			const tarDigest = digestOf(tar);
+			parts.contents = [{ name: `content/sha256-${tarDigest}.bin`, bytes: tar }];
+			parts.manifest.contents = [{
+				...parts.manifest.contents[0]!,
+				digest: tarDigest,
+				byteLength: tar.byteLength,
+				entry: `content/sha256-${tarDigest}.bin`,
+			}];
+			parts.manifest.packagedAssets = [{
+				...parts.manifest.packagedAssets[0]!,
+				origin: { ...parts.manifest.packagedAssets[0]!.origin, digest: tarDigest },
+				integrity: {
+					...parts.manifest.packagedAssets[0]!.integrity,
+					digest: tarDigest,
+					byteLength: tar.byteLength,
+				},
+				content: { entry: `content/sha256-${tarDigest}.bin` },
+			}];
+
+			expect(await rejectionCodes(writeTemplatePackage(parts)))
+				.toContain('nested-package-archive');
+		});
+
+		it('rejects an entry whose local header contradicts the central directory', async () => {
+			// Without a data descriptor both records state the CRC and sizes. A
+			// reader trusting either one could extract something different.
+			const parts = await validParts();
+			expect(await rejectionCodes(writeTemplatePackage(parts, {
+				extraEntries: [{
+					name: 'two-faced.bin',
+					bytes: new Uint8Array([1, 2, 3, 4]),
+					// Bit 3 cleared, so the local header carries its own sizes — and
+					// this one is told a size the central directory disagrees with.
+					generalPurposeFlags: 0x0800,
+					localUncompressedSize: 64,
+				}],
+			}))).toContain('malformed-package-archive');
 		});
 
 		it('rejects bytes appended after the archive ends', async () => {
@@ -933,6 +981,142 @@ describe('the Template Package preflight contract', () => {
 			expect(separate.fingerprint).toBe(before);
 		});
 
+		it('refuses a confirmation a concurrent retry has already superseded', async () => {
+			// The dangerous interleaving: the author's confirmation is in flight when
+			// a retry durably records a different report. Writing the confirmation
+			// back over it would install a proposal nobody agreed to.
+			const { library: sender } = createLibrary('sender');
+			const backdrop = await ingestImage(sender, 'Backdrop');
+			const archive = await exportPackage(sender, {
+				assets: [{ slot: 'backdrop', reference: backdrop }],
+			});
+
+			const base = createInMemoryGraphicsAssetCatalogue();
+			let interleave: (() => Promise<void>) | undefined;
+			// Fires between the confirm handler's read of the report and its write.
+			const catalogue = new Proxy(base, {
+				get(target, property, receiver) {
+					const value = Reflect.get(target, property, receiver);
+					if (property !== 'getTemplatePackagePreflight' || typeof value !== 'function')
+						return value;
+					return async (...args: unknown[]) => {
+						const result = await (value as (...a: unknown[]) => Promise<unknown>)
+							.apply(target, args);
+						const run = interleave;
+						interleave = undefined;
+						await run?.();
+						return result;
+					};
+				},
+			});
+			const canonical = createInMemoryCanonicalGraphicsObjectStore();
+			// The retry has to be able to claim the operation, which needs the
+			// active-ingestion lease to have elapsed — so this clock advances.
+			let clock = Date.parse('2026-07-30T09:00:00.000Z');
+			const receiver = createGraphicsAssetLibrary({
+				catalogue,
+				staging: createInMemoryStagingGraphicsObjectStore(),
+				canonical,
+				now: () => new Date(clock),
+				generateIdentity: (() => {
+					let next = 0;
+					return () => `receiver-identity-${++next}`;
+				})(),
+			});
+			await ingestImage(receiver, 'Locally uploaded backdrop');
+
+			const started = await receiver.initiateTemplatePackagePreflight({
+				idempotencyKey: 'preflight-interleaved',
+				initiatedBy: 'package-author',
+				sourceFileName: 'lower-third.skgraphic',
+				declaredByteLength: archive.byteLength,
+			});
+			const paused = await receiver.uploadGraphicAsset({
+				operationId: started.id,
+				initiatedBy: started.initiatedBy,
+				bytes: createBoundedByteStream(archive, {
+					byteLength: archive.byteLength,
+					maximumByteLength: archive.byteLength,
+				}),
+			});
+			expect(paused.stage).toBe('awaiting-confirmation');
+			const superseded = reportOf(paused).fingerprint;
+
+			// The shared bytes the first report counted on disappear, so a retry
+			// reaches a materially different proposal: real canonical growth.
+			interleave = async () => {
+				await canonical.delete(
+					graphicsObjectIdentity(`sha256/${digestOf(transparentPixelPng)}`),
+				);
+				clock += 60 * 60 * 1000;
+				await receiver.retryGraphicsIngestion({
+					operationId: paused.id,
+					initiatedBy: paused.initiatedBy,
+				});
+			};
+
+			await expect(receiver.confirmTemplatePackagePreflight({
+				operationId: paused.id,
+				initiatedBy: paused.initiatedBy,
+				fingerprint: superseded,
+			})).rejects.toMatchObject({ code: 'invalid-ingestion-input' });
+
+			const final = await receiver.getIngestionOperation({
+				operationId: paused.id,
+				initiatedBy: paused.initiatedBy,
+			});
+			// The newer report survives intact and the operation stays paused on it.
+			expect(final.stage).toBe('awaiting-confirmation');
+			expect(reportOf(final).fingerprint).not.toBe(superseded);
+			expect(reportOf(final).quota.canonicalGrowthBytes)
+				.toBe(transparentPixelPng.byteLength);
+		});
+
+		it('treats confirming the same report twice as the same act', async () => {
+			const { receiver, operation } = await pausedPackage();
+			const { fingerprint } = reportOf(operation);
+
+			const first = await receiver.confirmTemplatePackagePreflight({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				fingerprint,
+			});
+			const second = await receiver.confirmTemplatePackagePreflight({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				fingerprint,
+			});
+
+			expect(first.stage).toBe('awaiting-installation');
+			expect(second.stage).toBe('awaiting-installation');
+			expect(reportOf(second).fingerprint).toBe(fingerprint);
+		});
+
+		it('gives a changed mapping name a different fingerprint', async () => {
+			// A mapping whose displayed name changed is a different proposal to the
+			// person confirming it, however identical its shape.
+			const { library: sender } = createLibrary('sender');
+			const backdrop = await ingestImage(sender, 'Backdrop');
+			const archive = await exportPackage(sender, {
+				assets: [{ slot: 'backdrop', reference: backdrop }],
+			});
+			const { library: receiver } = createLibrary('receiver');
+			const local = await ingestImage(receiver, 'Local original name');
+
+			const before = await preflight(receiver, archive);
+			expect(reportOf(before).mappings[0]!.localName).toBe('Local original name');
+
+			await receiver.updateGraphicAsset({
+				assetId: local.assetId,
+				name: 'Renamed after the report',
+				eventIds: [],
+			});
+			const after = await preflight(receiver, archive);
+
+			expect(reportOf(after).mappings[0]!.localName).toBe('Renamed after the report');
+			expect(reportOf(after).fingerprint).not.toBe(reportOf(before).fingerprint);
+		});
+
 		it('does not pause a proposal that carries nothing to confirm', async () => {
 			const { library } = createLibrary('sender');
 			const backdrop = await ingestImage(library, 'Backdrop');
@@ -947,6 +1131,66 @@ describe('the Template Package preflight contract', () => {
 				initiatedBy: operation.initiatedBy,
 				fingerprint: reportOf(operation).fingerprint,
 			})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
+		});
+	});
+
+	describe('packaged font attestation', () => {
+		it('records the weaker profile a packaged font actually satisfied', async () => {
+			const { library: sender } = createLibrary('sender');
+			const face = await ingestStaticFont(sender, 'Face');
+			const archive = await exportPackage(sender, {
+				assets: [{ slot: 'face', reference: face }],
+			});
+
+			const { library: receiver } = createLibrary('receiver');
+			const operation = await preflight(receiver, archive);
+			const report = reportOf(operation);
+
+			// `static-font-v1` includes FontFace.load() and glyph rendering, which
+			// only an interactive upload can collect. A package has no such client,
+			// so the report must not claim the profile was satisfied.
+			expect(report.compatibilityProfiles).toEqual(['static-font-v1-unattested']);
+			expect(codes(report)).toContain('graphic-asset-font-attestation-deferred');
+			expect(report.outcome).toBe('requires-confirmation');
+			expect(operation.stage).toBe('awaiting-confirmation');
+			// The gap is a warning the author accepts, never a silent pass.
+			const warning = report.issues
+				.find(issue => issue.code === 'graphic-asset-font-attestation-deferred');
+			expect(warning).toMatchObject({ severity: 'warning', retryable: false });
+			expect(warning!.remediation).toContain('upload the font directly');
+		});
+
+		it('does not raise the gap when an exact origin reuses an attested revision', async () => {
+			// Reusing the local revision keeps whatever attestation it already
+			// earned, so there is no weaker profile for the author to accept.
+			const { library } = createLibrary('sender');
+			const face = await ingestStaticFont(library, 'Face');
+			const operation = await preflight(library, await exportPackage(library, {
+				assets: [{ slot: 'face', reference: face }],
+			}));
+			const report = reportOf(operation);
+
+			expect(report.mappings[0]).toMatchObject({
+				proposal: 'reuse-graphic-asset-revision',
+				basis: 'exact-origin',
+			});
+			expect(codes(report)).not.toContain('graphic-asset-font-attestation-deferred');
+			expect(report.outcome).toBe('ready');
+		});
+
+		it('leaves an uploaded font\'s own full attestation untouched', async () => {
+			// The upload path still collects real evidence, so the weaker profile is
+			// scoped to the packaged path rather than a library-wide downgrade.
+			const { library } = createLibrary('sender');
+			const face = await ingestStaticFont(library, 'Face');
+			const assets = await library.listGraphicAssets({});
+			const uploaded = assets.find(asset => asset.id === face.assetId);
+
+			expect(uploaded?.facts).toMatchObject({
+				kind: 'font',
+				browserLoadable: true,
+				representativeGlyphsRendered: true,
+			});
 		});
 	});
 
@@ -1046,7 +1290,9 @@ describe('the Template Package preflight contract', () => {
 				packageKind: 'skgraphic',
 				templateIdentity: 'template-1',
 				templateName: 'Lower third',
-				outcome: 'ready',
+				// The packaged font carries an unattested-profile warning, so this
+				// proposal is one the author is asked about rather than a silent pass.
+				outcome: 'requires-confirmation',
 				limits: TEMPLATE_PACKAGE_LIMITS,
 			});
 			expect(report.observed).toMatchObject({

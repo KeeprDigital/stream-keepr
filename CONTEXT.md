@@ -291,7 +291,7 @@ It only ever proposes: preflight never installs a Graphic Asset, revision, origi
 
 **Template Package Preflight Report**:
 The one immutable result of Template Package Preflight, carrying migrations, revalidation outcomes, compatibility profiles, naming and metadata differences, Template Package Mapping Proposals, quota impact, envelope limits, and every issue with a stable code and remediation.
-Errors terminate the operation permanently; warnings pause it exactly once for a confirmation bound to the report's Preflight Report Fingerprint.
+Errors about the package itself terminate the operation permanently; an error about this installation's own exhausted canonical capacity is retryable and leaves the operation resumable. Warnings pause it exactly once for a confirmation bound to the report's Preflight Report Fingerprint.
 _Avoid_: Import preview, dry-run result
 
 **Preflight Report Fingerprint**:
@@ -657,7 +657,8 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - The same packaged source identity and revision with a different digest is an integrity conflict that rejects the complete Template Package
 - A Template Package contains only **Graphic Assets** transitively required by its single graphics Template
 - **Template Package Preflight** rejects unsafe or traversing entry paths, links, case-colliding or duplicate paths, encrypted or compressed entries, nested archives, undeclared entries, missing declared entries, inconsistent sizes, and envelope-limit violations
-- **Template Package Preflight** migrates a supported older package schema deterministically in staging, and permanently rejects an unsupported future schema rather than guessing at it
+- **Template Package Preflight** permanently rejects a package schema newer than this installation reads, rather than guessing at it
+- The migration step exists and is deterministic by construction, but schema 1 is currently both the oldest supported and the current version, so no package migrates yet and `package-migration-unavailable` is unreachable until a schema 2 exists
 - A **Template Package Preflight Report** reports every blocking problem together, each with a stable code and remediation, rather than one problem at a time
 - Warnings pause a Template Package exactly once for a confirmation bound to its **Preflight Report Fingerprint**; changed bytes, mappings, compatibility profiles, or proposals require a new report
 - Template Package installation publishes every new asset, origin mapping, rewritten reference, and the graphics Template in one atomic operation

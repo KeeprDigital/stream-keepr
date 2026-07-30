@@ -389,10 +389,39 @@ export function createInMemoryGraphicsAssetCatalogue(
 				|| operation.source !== 'template-package'
 				|| operation.stage === 'completed'
 				|| operation.stage === 'cancelled'
+				// A retry finishing after the author confirmed must not overwrite the
+				// proposal they accepted.
+				|| operation.stage === 'awaiting-installation'
 			) {
 				return false;
 			}
 			packagePreflights.set(input.operationId, structuredClone(input.state));
+			return true;
+		},
+		async confirmTemplatePackagePreflight(input) {
+			const operation = operations.get(input.operationId);
+			const state = packagePreflights.get(input.operationId);
+			// The same compare-and-set the D1 catalogue performs in one statement:
+			// commit only while the operation is still paused on this exact report.
+			if (
+				operation?.initiatedBy !== input.initiatedBy
+				|| operation.source !== 'template-package'
+				|| operation.stage !== 'awaiting-confirmation'
+				|| state?.report.fingerprint !== input.fingerprint
+			) {
+				return false;
+			}
+			packagePreflights.set(input.operationId, {
+				...structuredClone(state),
+				confirmedFingerprint: input.fingerprint,
+				confirmedAt: input.confirmedAt,
+			});
+			operations.set(input.operationId, {
+				...operation,
+				stage: 'awaiting-installation',
+				failure: undefined,
+				updatedAt: input.updatedAt,
+			});
 			return true;
 		},
 		async findTemplatePackageOriginCandidates(input) {

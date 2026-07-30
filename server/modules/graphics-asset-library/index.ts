@@ -77,6 +77,7 @@ import {
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 	SILENT_VIDEO_COMPATIBILITY_PROFILE,
 	STATIC_FONT_COMPATIBILITY_PROFILE,
+	STATIC_FONT_UNATTESTED_COMPATIBILITY_PROFILE,
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
 } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GRAPHICS_RETENTION_ACTOR } from '~~/shared/utils/graphicsAssetRetention';
@@ -123,6 +124,7 @@ import {
 	hasNestedArchiveSignature,
 	inspectReceivedApplicationCapabilities,
 	inspectTemplatePackageEntries,
+	NESTED_ARCHIVE_PROBE_BYTES,
 	readTemplatePackageManifest,
 	templatePackageMappingProposal,
 	templatePackagePreflightConfirmed,
@@ -283,11 +285,28 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		operationId: GraphicsIngestionOperationId,
 		initiatedBy: string,
 	) => Promise<TemplatePackagePreflightState | undefined>;
-	/** Returns false when the operation reached a terminal stage first. */
+	/** Returns false when the operation reached a terminal or confirmed stage first. */
 	updateTemplatePackagePreflight: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
 		state: TemplatePackagePreflightState;
+	}) => Promise<boolean>;
+	/**
+	 * Accepts one exact proposal and readies it for installation in a single
+	 * conditional transition.
+	 *
+	 * Recording the confirmation and advancing the stage must not be two steps: a
+	 * retry can durably record a newer report between them, and a confirmation
+	 * written back over it would install a proposal nobody agreed to. So this
+	 * compares and sets — it commits only while the operation is still paused on
+	 * the exact report the author saw, and writes only the confirmation.
+	 */
+	confirmTemplatePackagePreflight: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
+		fingerprint: string;
+		confirmedAt: string;
+		updatedAt: string;
 	}) => Promise<boolean>;
 	/**
 	 * What this installation already holds for one packaged Graphic Asset Origin:
@@ -455,11 +474,6 @@ export interface GraphicsAssetLibrary {
 		declaredByteLength: number;
 		defaultEventId?: number;
 	}) => Promise<GraphicsIngestionOperation>;
-	/** The immutable preflight report this operation produced, if it has one. */
-	getTemplatePackagePreflight: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-	}) => Promise<TemplatePackagePreflightReport>;
 	/**
 	 * Accepts the exact proposal a report describes. The fingerprint must match
 	 * the current report, so a confirmation can never be applied to a package,
@@ -1711,16 +1725,20 @@ export function createGraphicsAssetLibrary(
 		}
 		issues.push(...inspectTemplatePackageEntries(entries, manifest));
 		issues.push(...inspectReceivedApplicationCapabilities(manifest));
-		// The received file name is a hint, but a name that contradicts the
-		// manifest means one of the two is describing a different artifact.
+		// The received file name is a hint, and the manifest alone determines the
+		// artifact type — so a package transferred without a name (an API client
+		// streaming bytes it never had a file for) is not penalised for it. When a
+		// name is supplied it must not contradict the manifest, because one of the
+		// two is then describing a different artifact.
 		const extension = TEMPLATE_PACKAGE_ARTIFACTS[manifest.packageKind].extension;
-		if (
-			operation.sourceFileName
-			&& !operation.sourceFileName.toLocaleLowerCase().endsWith(extension)
-		) {
+		const receivedName = operation.sourceFileName?.toLowerCase();
+		if (receivedName !== undefined && !receivedName.endsWith(extension)) {
+			const receivedExtension = receivedName.slice(receivedName.lastIndexOf('.'));
 			issues.push(templatePackagePreflightIssue('unsupported-package-artifact', {
 				subject: operation.sourceFileName,
-				message: `A ${manifest.packageKind} package is received as a "${extension}" file`,
+				message: `A ${manifest.packageKind} package must be received as a "${extension}" file, but this one arrived as "${
+					receivedExtension.startsWith('.') ? receivedExtension : 'a file with no extension'
+				}"`,
 			}));
 		}
 
@@ -1793,7 +1811,9 @@ export function createGraphicsAssetLibrary(
 			const entry = entryByName.get(content.entry);
 			if (!entry)
 				continue;
-			const leadingLength = Math.min(64, entry.byteLength);
+			// Enough to cover a complete tar header block, whose magic is not at the
+			// start of the file. Media sniffing still only looks at the first 64.
+			const leadingLength = Math.min(NESTED_ARCHIVE_PROBE_BYTES, entry.byteLength);
 			const leadingBytes = leadingLength > 0
 				? await readRange(entry.dataOffset, leadingLength)
 				: new Uint8Array();
@@ -1820,7 +1840,7 @@ export function createGraphicsAssetLibrary(
 			}
 			const sourceKind = graphicAssetSourceKind(
 				{ declaredMime: content.canonicalMime },
-				leadingBytes,
+				leadingBytes.subarray(0, 64),
 			);
 			const policy = GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind];
 			if (entry.byteLength > policy.maximumByteLength) {
@@ -1881,9 +1901,19 @@ export function createGraphicsAssetLibrary(
 					accepted = processed.report;
 					thumbnail = processed.thumbnail;
 				}
+				// `static-font-v1` includes `FontFace.load()` and representative glyph
+				// rendering, which an interactive upload collects from the author's own
+				// browser. A package has no such client, and unlike silent video there
+				// is no server-side substitute for actually loading a face. So a
+				// packaged font records what it genuinely satisfied rather than
+				// claiming a profile it did not: its facts already carry neither
+				// `browserLoadable` nor `representativeGlyphsRendered`, and a warning
+				// makes the gap something the author confirms knowingly.
 				validated.set(content.digest, {
 					facts: accepted.facts,
-					compatibilityProfile: accepted.compatibilityProfile,
+					compatibilityProfile: accepted.facts.kind === 'font'
+						? STATIC_FONT_UNATTESTED_COMPATIBILITY_PROFILE
+						: accepted.compatibilityProfile,
 					thumbnail,
 				});
 			}
@@ -1939,6 +1969,18 @@ export function createGraphicsAssetLibrary(
 				countedContentDigests.add(asset.integrity.digest);
 			mappings.push(proposal.mapping);
 			issues.push(...proposal.issues);
+			// Only a font this package would actually install carries the gap.
+			// Reusing an exact origin keeps the local revision and whatever
+			// attestation it already earned, so there is nothing new to accept.
+			if (
+				content.facts.kind === 'font'
+				&& proposal.mapping.proposal === 'create-graphic-asset'
+			) {
+				issues.push(templatePackagePreflightIssue('graphic-asset-font-attestation-deferred', {
+					subject: asset.packagedId,
+					message: `"${asset.name}" would be installed under ${STATIC_FONT_UNATTESTED_COMPATIBILITY_PROFILE}: no browser has loaded and rendered it here`,
+				}));
+			}
 
 			// A reused revision already has its preview; only a new Graphic Asset
 			// brings a derivative this installation would have to store.
@@ -2727,28 +2769,15 @@ export function createGraphicsAssetLibrary(
 		async initiateTemplatePackagePreflight(input) {
 			return await initiateGraphicsOperation({
 				...input,
-				name: 'Template Package',
+				// A package names no asset, so the operation is labelled by what the
+				// author actually handed over. The Template's own name is not known
+				// until the manifest is read, and the label must exist before that.
+				name: input.sourceFileName?.trim() || 'Received Template Package',
 				source: 'template-package',
 				// A package never merges a packaged identity into a local one. Shared
 				// bytes are reused, but each mapping decides its own identity.
 				duplicateContentPolicy: 'create-separate',
 			});
-		},
-		async getTemplatePackagePreflight(input) {
-			const operation = await this.getIngestionOperation(input);
-			if (operation.source !== 'template-package') {
-				throw new GraphicsAssetLibraryError(
-					'This Graphics Ingestion Operation does not receive a Template Package',
-					'invalid-ingestion-input',
-				);
-			}
-			if (!operation.templatePackagePreflight) {
-				throw new GraphicsAssetLibraryError(
-					`Template Package preflight has not produced a report from stage ${operation.stage}`,
-					'ingestion-operation-not-found',
-				);
-			}
-			return operation.templatePackagePreflight;
 		},
 		async confirmTemplatePackagePreflight(input) {
 			const catalogue = requireCatalogue();
@@ -2763,6 +2792,15 @@ export function createGraphicsAssetLibrary(
 				() => catalogue.getTemplatePackagePreflight(operation.id, operation.initiatedBy),
 				'Template Package preflight is temporarily unavailable',
 			);
+			// Confirming twice is the same act twice, not a conflict, so a repeat of
+			// the confirmation that already succeeded is answered rather than
+			// refused for having left `awaiting-confirmation` behind.
+			if (
+				state?.confirmedFingerprint === input.fingerprint
+				&& operation.stage === 'awaiting-installation'
+			) {
+				return operation;
+			}
 			if (!state || operation.stage !== 'awaiting-confirmation') {
 				throw new GraphicsAssetLibraryError(
 					`Template Package preflight cannot be confirmed from stage ${operation.stage}`,
@@ -2778,34 +2816,46 @@ export function createGraphicsAssetLibrary(
 					'invalid-ingestion-input',
 				);
 			}
-			const confirmedAt = timestamp();
-			const recorded = await catalogueRequest(
-				() => catalogue.updateTemplatePackagePreflight({
+			// Everything above is a courtesy check against a stale read. The decision
+			// is made by the conditional transition below, which is the only thing
+			// standing between a concurrent retry and an installed proposal nobody
+			// agreed to.
+			const confirmed = await catalogueRequest(
+				() => catalogue.confirmTemplatePackagePreflight({
 					operationId: operation.id,
 					initiatedBy: operation.initiatedBy,
-					state: {
-						...state,
-						confirmedFingerprint: state.report.fingerprint,
-						confirmedAt,
-					},
+					fingerprint: input.fingerprint,
+					confirmedAt: timestamp(),
+					updatedAt: timestampAfter(operation.updatedAt),
 				}),
 				'Template Package confirmation could not be recorded',
 			);
-			if (!recorded)
+			if (confirmed)
 				return await this.getIngestionOperation(input);
-			const claimed = await catalogueRequest(
-				() => catalogue.getIngestionOperation(operation.id, operation.initiatedBy),
-				'Graphics ingestion state is temporarily unavailable',
-			) ?? operation;
-			return await catalogueRequest(
-				() => catalogue.updateIngestionOperation(
-					changedOperation(claimed, {
-						stage: 'awaiting-installation',
-						failure: undefined,
-					}),
-					claimed.updatedAt,
-				),
-				'Template Package confirmation could not advance the operation',
+
+			// The compare-and-set lost. What replaced it decides what the author is
+			// told, so the authoritative state is re-read rather than guessed at.
+			const latest = await this.getIngestionOperation(input);
+			const latestState = await catalogueRequest(
+				() => catalogue.getTemplatePackagePreflight(latest.id, latest.initiatedBy),
+				'Template Package preflight is temporarily unavailable',
+			);
+			// Confirming twice is the same act twice, not a conflict.
+			if (
+				latestState?.confirmedFingerprint === input.fingerprint
+				&& latest.stage === 'awaiting-installation'
+			) {
+				return latest;
+			}
+			if (latestState && latestState.report.fingerprint !== input.fingerprint) {
+				throw new GraphicsAssetLibraryError(
+					'Template Package confirmation does not match the current preflight report',
+					'invalid-ingestion-input',
+				);
+			}
+			throw new GraphicsAssetLibraryError(
+				`Template Package preflight cannot be confirmed from stage ${latest.stage}`,
+				'ingestion-operation-not-uploadable',
 			);
 		},
 		async cancelGraphicsIngestion(input) {

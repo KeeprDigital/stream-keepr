@@ -53,6 +53,7 @@ const WARNING_REMEDIATION = {
 	'package-schema-migrated': 'The package was migrated to the current schema in staging. Review the proposed result and confirm to continue.',
 	'graphic-asset-name-differs': 'The packaged name differs from the name this library already records. Confirming keeps the local name; the packaged name is not applied.',
 	'graphic-asset-compatibility-restricted': 'This asset plays only on targets that prove the required capability. Confirm only if its Screens use a supported target.',
+	'graphic-asset-font-attestation-deferred': 'This font passed every server-side check, but no browser has loaded and rendered it here as an uploaded font would have. It is recorded under a weaker profile. Confirm only if you trust the sender\'s typography, or upload the font directly to have it fully proven.',
 	'graphic-asset-created-from-related-origin': 'This package carries a different revision of an asset already imported here. Confirming creates a separate Graphic Asset rather than changing the existing one.',
 	'graphic-asset-created-from-shared-content': 'Content identical to this already exists here under different provenance. Confirming creates a separate Graphic Asset that reuses the stored bytes.',
 } as const satisfies Record<TemplatePackagePreflightWarningCode, string>;

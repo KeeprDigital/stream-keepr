@@ -215,9 +215,15 @@ export interface TemplatePackageExportReport {
 export const TEMPLATE_PACKAGE_MINIMUM_MIGRATABLE_SCHEMA_VERSION = 1;
 
 /**
- * Stable preflight error codes. Every one of them terminates the operation
- * permanently, and every one found is reported together so an author sees the
- * complete reason a package cannot be installed rather than the first reason.
+ * Stable preflight error codes. Every one found is reported together, so an
+ * author sees the complete reason a package cannot be installed rather than the
+ * first reason.
+ *
+ * Anything the package itself got wrong fails the same way however many times it
+ * is retried, so those errors terminate the operation permanently. The exception
+ * is `canonical-capacity-blocked`: nothing is wrong with the package, only with
+ * how much room this installation has, which an administrator can change. It is
+ * marked retryable and the operation stays resumable from its staged bytes.
  */
 export const TEMPLATE_PACKAGE_PREFLIGHT_ERROR_CODES = [
 	'malformed-package-archive',
@@ -260,6 +266,7 @@ export const TEMPLATE_PACKAGE_PREFLIGHT_WARNING_CODES = [
 	'package-schema-migrated',
 	'graphic-asset-name-differs',
 	'graphic-asset-compatibility-restricted',
+	'graphic-asset-font-attestation-deferred',
 	'graphic-asset-created-from-related-origin',
 	'graphic-asset-created-from-shared-content',
 ] as const;

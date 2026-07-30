@@ -962,11 +962,14 @@ export function createD1GraphicsAssetCatalogue(
 			// claim the following stage transition is made against, and the
 			// transition is what publishes this checkpoint; moving it here would
 			// invalidate that claim and strand the operation mid-preflight.
+			// `awaiting-installation` is excluded for the same reason: a retry that
+			// finishes after the author confirmed must not overwrite the proposal
+			// they accepted with a freshly derived one.
 			const result = await database.prepare(`
 				UPDATE graphics_ingestion_operations
 				SET package_preflight = ?
 				WHERE id = ? AND initiated_by = ? AND source = 'template-package'
-					AND stage NOT IN ('completed', 'cancelled')
+					AND stage NOT IN ('completed', 'cancelled', 'awaiting-installation')
 			`).bind(
 				JSON.stringify(input.state),
 				input.operationId,
@@ -974,6 +977,35 @@ export function createD1GraphicsAssetCatalogue(
 			).run();
 			if (!result.success)
 				throw new Error('Template Package preflight checkpoint could not be recorded');
+			return result.meta.changes === 1;
+		},
+		async confirmTemplatePackagePreflight(input) {
+			// One statement records the confirmation and readies the operation,
+			// conditional on the exact report still being the paused one. A retry
+			// that replaced the report, or that is still mid-flight, fails this
+			// compare-and-set rather than being silently overwritten.
+			const result = await database.prepare(`
+				UPDATE graphics_ingestion_operations
+				SET package_preflight = json_set(
+						json_set(package_preflight, '$.confirmedFingerprint', ?),
+						'$.confirmedAt', ?
+					),
+					stage = 'awaiting-installation',
+					failure = NULL,
+					updated_at = ?
+				WHERE id = ? AND initiated_by = ? AND source = 'template-package'
+					AND stage = 'awaiting-confirmation'
+					AND json_extract(package_preflight, '$.report.fingerprint') = ?
+			`).bind(
+				input.fingerprint,
+				input.confirmedAt,
+				new Date(input.updatedAt).getTime(),
+				input.operationId,
+				input.initiatedBy,
+				input.fingerprint,
+			).run();
+			if (!result.success)
+				throw new Error('Template Package confirmation could not be recorded');
 			return result.meta.changes === 1;
 		},
 		async findTemplatePackageOriginCandidates(input) {
