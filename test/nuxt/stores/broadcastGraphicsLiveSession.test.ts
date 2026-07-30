@@ -527,6 +527,50 @@ describe('the authoritative clock a Screen Output projects on', () => {
 		expect(store.playoutState(SCREEN_ID, 'slate', graphic('slate', FADE_IN))).toBe('on-air');
 	});
 
+	it('still withholds a coalescing acceptance while the clock is unsynced', async () => {
+		// Holding the resting state must not quietly mean skipping the coalescing deferral.
+		// Which rendering is on screen is one non-animating choice rather than a per-frame
+		// sample, and the update chain bounds its own staleness, so it is answered even
+		// unsynced — program keeps showing what the graphic entered with.
+		mockClockSynced.value = false;
+		const serverNow = Date.now();
+		mockRepository.getSession.mockResolvedValue(session({
+			currentState: {
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: serverNow - 200, cut: false, updateStartedAt: serverNow + 800 },
+				},
+				inputs: {
+					slate: {
+						working: { headline: 'after' },
+						accepted: { headline: 'after' },
+						acceptedRevision: 2,
+						updateFrom: { headline: 'before' },
+					},
+				},
+			},
+		}));
+		const graphics = [{
+			...graphic('slate', { ...FADE_IN, update: { duration: 400, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } } }),
+			inputs: [{
+				type: 'text' as const,
+				key: 'headline',
+				label: 'Headline',
+				required: false,
+				updatePolicy: 'staged' as const,
+				default: '',
+				maxLength: 80,
+			}],
+		}];
+
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		const rendered = store.renderedInputValues(SCREEN_ID, graphics);
+
+		expect(rendered.current.slate).toEqual({ headline: 'before' });
+		expect(rendered.outgoing.slate).toBeUndefined();
+		// And nothing animates, because the phase is still not projected while unsynced.
+		expect(store.animationProjection(SCREEN_ID, graphics)).toEqual({});
+	});
+
 	it('takes an unsynced output off program at once rather than stranding it there', async () => {
 		// The same rule on the way off air, where holding the settled state is not merely
 		// tidier but safer: an exiting graphic is on program, so an unsynced output that

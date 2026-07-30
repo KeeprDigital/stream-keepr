@@ -552,9 +552,12 @@ export interface GraphicAnimationOwnerValues {
  * they belong in one value rather than in two projections a caller has to keep in
  * step.
  *
- * `outgoing` is present only for an update phase, and only when the recipe has
- * something for the old rendering to do. Every other phase has one rendering, so
- * every other phase leaves it absent and nothing downstream changes.
+ * `outgoing` is present for exactly the update phase and nothing else. Present, not
+ * necessarily populated: a recipe with no channels enabled yields an empty one, because
+ * the phase still has two renderings in play even when neither is being moved. So its
+ * presence answers "is this an update?", never "is there motion?" — a caller wanting the
+ * latter has to look at the values, which is why every reader treats an absent or empty
+ * half as the Graphic Resting State rather than testing for the key.
  */
 export interface GraphicAnimationValues extends GraphicAnimationOwnerValues {
 	outgoing?: GraphicAnimationOwnerValues;
@@ -802,14 +805,22 @@ export function resolveGraphicAnimationValues(input: GraphicAnimationProjectionI
  * Whether a projection leaves its owner exactly at its Graphic Resting State.
  *
  * Asked of the owner's own rendering only. An update phase's outgoing rendering is a
- * second rendering rather than a second opinion about this one, and it is settled or
- * not on its own terms.
+ * second rendering rather than a second opinion about this one, and it is settled or not
+ * on its own terms.
+ *
+ * Judged by value rather than by absence, because for one phase the two differ. Enter,
+ * exit, and on-screen return nothing at all once settled, so absence alone would do. An
+ * update cannot: it has to keep projecting both halves for as long as the phase runs —
+ * dropping the outgoing half at the moment this owner's own recipe finished would put
+ * the rendering being replaced back on screen at full strength for the rest of the
+ * phase. So a settled update reports `opacity: 1` and a zero offset rather than nothing,
+ * and those describe an owner at rest as surely as an empty projection does.
  */
 export function isGraphicRestingProjection(values: GraphicAnimationOwnerValues): boolean {
-	return values.opacity === undefined
-		&& values.translate === undefined
-		&& values.scale === undefined
-		&& values.reveal === undefined;
+	return (values.opacity === undefined || values.opacity === 1)
+		&& (values.translate === undefined || (values.translate.x === 0 && values.translate.y === 0))
+		&& (values.scale === undefined || values.scale === 1)
+		&& (values.reveal === undefined || values.reveal.visible >= 1);
 }
 
 /* ────────────────────────────────────────────────

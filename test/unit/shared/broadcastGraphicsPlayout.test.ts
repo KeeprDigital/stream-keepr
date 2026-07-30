@@ -755,6 +755,16 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 	});
 
 	it('discards a pending visual update on exit while keeping its accepted values', () => {
+		// Exit drops the *whole* chain, running transition included, and that is a wider
+		// reading than CONTEXT.md:556 requires — it discards the *pending* update, so a
+		// transition already in flight could in principle finish underneath the exit
+		// recipe. The reason it does not is not a missing persisted field: keeping
+		// `updateStartedAt` across an Out costs nothing durable. It is that finishing it
+		// would need two phases projected for one graphic at the same instant — an update
+		// and an exit, composed — and both `broadcastGraphicPhaseProjection` and the
+		// compositor answer with exactly one phase per Broadcast Graphic. Widening that to a
+		// set of concurrent phases is the change, and it is the same change the on-screen
+		// half of interruption reversal needs, so both wait for whoever makes it.
 		let state = settledOnAir('first');
 		state = edit(state, 'second', T0 + 2000);
 		state = accept(state, T0 + 2000);
@@ -790,12 +800,72 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 1100))).toBe('on-air');
 	});
 
-	it('starts no update phase when the acceptance changes no rendered value', () => {
+	it('starts no update phase when the acceptance changes no accepted value', () => {
+		// Only about the *accepted values* being unchanged. Whether an accepted change is
+		// one any Graphic Item actually renders is a question about the composition, which
+		// this module deliberately cannot see — so the phase starts and the compositor is
+		// what declines to animate an owner whose rendered content did not change.
 		let state = settledOnAir('first');
 		state = accept(state, T0 + 2000);
 
 		expect(state.playout.slate!.updateStartedAt).toBeUndefined();
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 2000))).toBe('on-air');
+	});
+
+	it('bounds a deferred update by the entrance it waits for, not by the reader\'s clock', () => {
+		// The same magnitude bound the enter/exit axis carries, in the one direction this
+		// field can be misread. An update is deferred by at most an entrance, so a start
+		// time further ahead than that means the reader's clock is behind — and without the
+		// bound such a reader sits before the update forever and renders the *old* values
+		// indefinitely, which is the failure this ticket exists to remove reappearing in
+		// the field the ticket added.
+		let state = taken();
+		state = edit(state, 'second', T0 + 100);
+		state = accept(state, T0 + 100);
+
+		// Deferred to T0 + 1000. A reader half a minute behind cannot still be waiting.
+		expect(rendered(state, T0 + 500)).toEqual({ current: { headline: '' } });
+		expect(rendered(state, T0 - 30_000)).toEqual({ current: { headline: 'second' } });
+		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 - 30_000))).toBe('on-air');
+	});
+
+	it('abandons a running update when a live Graphic Input is applied immediately', () => {
+		// A live On-air Update Policy means applied immediately, and immediately is
+		// incompatible with a cross-transition still travelling towards the old target:
+		// writing the field into the accepted set would retarget the running transition and
+		// the content it is halfway through revealing would cut. So the animation gives way
+		// and the new rendering is simply what is on screen.
+		const live: GraphicInputDeclaration = { ...HEADLINE, key: 'ticker', updatePolicy: 'live' };
+		const context = { inputs: [HEADLINE, live], durations: TIMING };
+		let state = applyBroadcastGraphicsCommand(
+			createInitialBroadcastGraphicsLiveState(),
+			{ type: 'Take', payload: { graphicId: 'slate', cut: false } },
+			{ ...context, acceptedAt: T0 },
+		);
+		state = applyBroadcastGraphicsCommand(
+			state,
+			{ type: 'Set Input', payload: { graphicId: 'slate', inputKey: 'headline', value: 'second' } },
+			{ ...context, acceptedAt: T0 + 2000 },
+		);
+		state = applyBroadcastGraphicsCommand(
+			state,
+			{ type: 'Update Graphic', payload: { graphicId: 'slate', cut: false, basedOnAcceptedRevision: 1 } },
+			{ ...context, acceptedAt: T0 + 2000 },
+		);
+		expect(state.playout.slate!.updateStartedAt).toBe(T0 + 2000);
+
+		state = applyBroadcastGraphicsCommand(
+			state,
+			{ type: 'Set Input', payload: { graphicId: 'slate', inputKey: 'ticker', value: 'now' } },
+			{ ...context, acceptedAt: T0 + 2100 },
+		);
+
+		expect(state.playout.slate!.updateStartedAt).toBeUndefined();
+		expect(broadcastGraphicRenderedInputs(state, 'slate', [HEADLINE, live], at(T0 + 2100)))
+			.toEqual({ current: { headline: 'second', ticker: 'now' } });
+		// A live acceptance still does not count as an acceptance of the staged set, so a
+		// colleague's pending Update Graphic is not invalidated by it.
+		expect(broadcastGraphicInputsState(state, 'slate').acceptedRevision).toBe(2);
 	});
 
 	it('enters with the latest accepted values rather than updating, after an Out', () => {

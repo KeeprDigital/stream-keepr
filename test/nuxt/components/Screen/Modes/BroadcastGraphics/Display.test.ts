@@ -924,10 +924,11 @@ describe('live playout animation in a Screen Output', () => {
 		const wrapper = await mountComponent();
 		const texts = wrapper.findAll('[data-graphic-item-kind="text"] p').map(node => node.text());
 
-		// The old rendering is drawn under the new one, so a wipe boundary passes over
-		// old content rather than under it.
+		// The old rendering is drawn inside the item's own box, immediately behind the new
+		// one, so Graphic Layer Order still composes around the pair.
 		expect(texts).toEqual(['Live: Before', 'Live: After']);
-		expect(wrapper.find('[data-broadcast-graphic-outgoing="templated"]').exists()).toBe(true);
+		expect(wrapper.find('[data-graphic-item-cross-transition="name-line"]').exists()).toBe(true);
+		expect(wrapper.find('[data-broadcast-graphic-outgoing="templated"]').exists()).toBe(false);
 	});
 
 	it('draws one rendering once the update has completed', async () => {
@@ -957,7 +958,7 @@ describe('live playout animation in a Screen Output', () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.findAll('[data-graphic-item-kind="text"] p').map(node => node.text())).toEqual(['Live: After']);
-		expect(wrapper.find('[data-broadcast-graphic-outgoing="templated"]').exists()).toBe(false);
+		expect(wrapper.find('[data-graphic-item-cross-transition="name-line"]').exists()).toBe(false);
 	});
 
 	it('shows the rendering it entered with while an acceptance coalesces behind the entrance', async () => {
@@ -992,6 +993,6 @@ describe('live playout animation in a Screen Output', () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.findAll('[data-graphic-item-kind="text"] p').map(node => node.text())).toEqual(['Live: Before']);
-		expect(wrapper.find('[data-broadcast-graphic-outgoing="templated"]').exists()).toBe(false);
+		expect(wrapper.find('[data-graphic-item-cross-transition="name-line"]').exists()).toBe(false);
 	});
 });

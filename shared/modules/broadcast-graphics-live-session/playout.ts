@@ -228,10 +228,11 @@ export type BroadcastGraphicsCommandInput
 /**
  * What the reducer needs to know about the Broadcast Graphic a command addresses.
  *
- * Only its declared Graphic Inputs: acceptance has to know each input's type,
- * constraints, requiredness, and On-air Update Policy, and none of that belongs
- * in live state, because it is authored configuration that an author may change
- * under a running show.
+ * Its declared Graphic Inputs, because acceptance has to know each input's type,
+ * constraints, requiredness, and On-air Update Policy; and how long its lifecycle
+ * phases last, because two of acceptance's decisions are about a schedule. Neither
+ * belongs in live state: both are authored configuration that an author may change
+ * under a running show, so a copy in the session would be a copy that can go stale.
  */
 export interface BroadcastGraphicsReductionContext {
 	inputs: readonly GraphicInputDeclaration[];
@@ -253,11 +254,13 @@ export interface BroadcastGraphicsReductionContext {
 	 * authoritative order, rather than by each output against its own clock.
 	 *
 	 * Still supplied rather than looked up — they are authored Screen configuration
-	 * that this module deliberately does not read, and an author may change them
-	 * under a running show. Deciding the schedule at acceptance is also what stops
-	 * such an edit moving a phase that is already on program. Omitted means every
-	 * phase is immediate, which is the answer a caller with no composition in hand
-	 * should get.
+	 * that this module deliberately does not read, and an author may change them under a
+	 * running show. Note that reading them here does *not* freeze a phase already on
+	 * program: every reader measures against the durations it currently holds, so an
+	 * author who shortens an entrance mid-entrance completes it early on every output.
+	 * These are used for the two decisions only acceptance can make, not to pin a
+	 * schedule. Omitted means every phase is immediate, which is the answer a caller with
+	 * no composition in hand should get.
 	 */
 	durations?: BroadcastGraphicPhaseDurations;
 }
@@ -372,8 +375,20 @@ function rollUpdateChain(
 	inputs: BroadcastGraphicInputsState,
 	updateMs: number,
 	now: number,
+	/** How long the entrance an update may have been deferred behind lasts. */
+	enterMs = 0,
 ): BroadcastGraphicUpdateFlight | null {
 	if (!playout || playout.updateStartedAt === undefined || updateMs <= 0)
+		return null;
+
+	// The same bound the enter/exit axis carries, in the one direction this field can be
+	// read wrong. An update is deferred by at most an entrance, so a start time further
+	// ahead than that means the reader's clock is behind the authoritative one — and
+	// without the bound such a reader sits at `now < startedAt` for the whole of the skew
+	// and renders the *old* rendering indefinitely. That is the same
+	// bounded-in-sign-unbounded-in-magnitude failure this ticket exists to remove, so it
+	// does not get to reappear in the field the ticket added.
+	if (playout.updateStartedAt - now > Math.max(0, enterMs) + updateMs)
 		return null;
 
 	let startedAt = playout.updateStartedAt;
@@ -613,7 +628,7 @@ function reduceUpdateGraphic(
 		};
 	}
 
-	const flight = rollUpdateChain(playout, inputs, updateMs, context.acceptedAt);
+	const flight = rollUpdateChain(playout, inputs, updateMs, context.acceptedAt, durationOf(context.durations, 'enter'));
 	const scheduled = flight
 		? context.acceptedAt >= flight.startedAt
 			// An update is actually running: this acceptance becomes the one pending
@@ -653,6 +668,15 @@ function reduceUpdateGraphic(
  * own field and nothing else, so counting it would make ordinary live edits
  * invalidate a staged Update Graphic another operator is preparing on the same
  * graphic's other inputs.
+ *
+ * It does collapse an update phase that is still running, and that is not
+ * housekeeping. An update cross-transitions a *pair* of renderings, and its target is
+ * the accepted set — so writing one field into `accepted` while the transition is in
+ * flight would change what the running transition is travelling towards, and the
+ * content it is halfway through revealing would cut. Live means applied immediately,
+ * so applying it immediately is right and the animation is what gives way: the
+ * transition is abandoned, the new rendering is what is on screen, and there is no
+ * half-crossed state for anyone to read.
  */
 function reduceSetInput(
 	state: BroadcastGraphicsLiveState,
@@ -673,13 +697,22 @@ function reduceSetInput(
 		&& state.playout[payload.graphicId]?.onAir === true
 		&& graphicInputAvailability(declaration, payload.value).available;
 
-	return withInputs(state, payload.graphicId, {
-		...inputs,
-		working: { ...inputs.working, [payload.inputKey]: payload.value },
-		accepted: acceptsImmediately
-			? { ...inputs.accepted, [payload.inputKey]: payload.value }
-			: inputs.accepted,
-	});
+	if (!acceptsImmediately) {
+		return withInputs(state, payload.graphicId, {
+			...inputs,
+			working: { ...inputs.working, [payload.inputKey]: payload.value },
+		});
+	}
+
+	const playout = state.playout[payload.graphicId]!;
+	return {
+		...withInputs(state, payload.graphicId, {
+			working: { ...inputs.working, [payload.inputKey]: payload.value },
+			accepted: { ...inputs.accepted, [payload.inputKey]: payload.value },
+			acceptedRevision: inputs.acceptedRevision,
+		}),
+		playout: { ...state.playout, [payload.graphicId]: withoutUpdatePhase(playout) },
+	};
 }
 
 /**
@@ -805,7 +838,13 @@ export function broadcastGraphicPlayoutState(
 	if (!playout.onAir)
 		return 'off';
 
-	const update = rollUpdateChain(playout, broadcastGraphicInputsState(state, graphicId), durationOf(timing.durations, 'update'), timing.now);
+	const update = rollUpdateChain(
+		playout,
+		broadcastGraphicInputsState(state, graphicId),
+		durationOf(timing.durations, 'update'),
+		timing.now,
+		durationOf(timing.durations, 'enter'),
+	);
 	// A deferred update has not begun, so the graphic is still on air rather than
 	// updating — and an indefinite on-screen recipe never stops it being on air either.
 	return update && timing.now >= update.startedAt ? 'updating' : 'on-air';
@@ -849,7 +888,7 @@ export function broadcastGraphicPhaseProjection(
 
 	const inputs = broadcastGraphicInputsState(state, graphicId);
 	const updateMs = durationOf(timing.durations, 'update');
-	const update = rollUpdateChain(playout, inputs, updateMs, timing.now);
+	const update = rollUpdateChain(playout, inputs, updateMs, timing.now, durationOf(timing.durations, 'enter'));
 	if (update && timing.now >= update.startedAt)
 		return { phase: 'update', elapsed: timing.now - update.startedAt };
 
@@ -894,6 +933,7 @@ export function broadcastGraphicRenderedInputs(
 		inputs,
 		durationOf(timing.durations, 'update'),
 		timing.now,
+		durationOf(timing.durations, 'enter'),
 	);
 	if (!update)
 		return settled;

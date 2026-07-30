@@ -33,10 +33,12 @@ const hasGuideLayer = computed(() =>
 	>
 		<template v-for="graphic in render.graphics" :key="graphic.id">
 			<!--
-				The rendering an update phase is leaving, drawn under the one arriving so
-				new content is in front of old as a wipe boundary passes over it. It is a
-				sibling wrapper rather than a layer inside the graphic's own, because the
-				two renderings carry different whole-graphic motion.
+				A *whole-graphic* update recipe moves the composed frame, so the frame being
+				replaced is drawn as its own layer beneath the one arriving — which is what a
+				cross-dissolve is, and the only case where two canvas-wide copies are right.
+				A per-item cross-transition never comes through here: it pairs the two
+				renderings inside the crossing item's own box, where Graphic Layer Order
+				still composes.
 			-->
 			<div
 				v-if="graphic.outgoing"

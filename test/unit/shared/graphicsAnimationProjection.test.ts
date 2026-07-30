@@ -180,6 +180,12 @@ describe('channel projection', () => {
 	it('leaves the Graphic Resting State untouched with no recipe', () => {
 		expect(project(undefined, 'enter', 0)).toEqual({});
 		expect(isGraphicRestingProjection(project(undefined, 'enter', 0))).toBe(true);
+		// A settled update still projects both halves, so it reports values rather than
+		// nothing — and an owner whose own recipe has finished is at rest all the same.
+		const fade: GraphicAnimationRecipe = { ...LINEAR, fade: { opacity: 0 } };
+		expect(isGraphicRestingProjection(project(fade, 'update', 400))).toBe(true);
+		expect(isGraphicRestingProjection(project(fade, 'update', 200))).toBe(false);
+		expect(isGraphicRestingProjection(project(fade, 'update', 400).outgoing!)).toBe(false);
 	});
 
 	it('reduces opacity from resting towards the authored fade', () => {

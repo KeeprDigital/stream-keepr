@@ -129,6 +129,34 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	}
 
 	/**
+	 * The timing *which rendering is on screen* is answered against — supplied even while
+	 * the clock is unsynced, unlike the timing motion is answered against.
+	 *
+	 * The two questions are not equally dangerous on a clock this browser has not
+	 * checked. Motion is sampled every frame, so a wrong clock there means a phase pinned
+	 * and then replayed. Which values are showing is a single, non-animating choice
+	 * between two renderings, and the update chain carries its own magnitude bound: a
+	 * reader further from the authoritative clock than the deferral could possibly last
+	 * falls through to the accepted set rather than stalling on the old rendering.
+	 *
+	 * Which is why this is not simply routed through the unsynced hold. An absent timing
+	 * makes `broadcastGraphicRenderedInputs` answer with the accepted set, and while an
+	 * acceptance is coalescing behind an entrance the accepted set is exactly what must
+	 * not* be on screen yet — so holding here would quietly skip the coalescing deferral
+	 * rather than being conservative about it. Answering "old rendering" instead would be
+	 * worse again: nothing clears `updateStartedAt` when an update merely completes, so a
+	 * chain existing usually means one finished long ago, and a reader with no clock would
+	 * show stale content indefinitely. Bounding the chain and reading it is the only one
+	 * of the three that is right in both directions.
+	 */
+	function renderTimingFor(
+		graphic: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
+		now: number,
+	): BroadcastGraphicPhaseTiming {
+		return broadcastGraphicPhaseTiming(graphic, now);
+	}
+
+	/**
 	 * The Graphic Playout State of one placed Broadcast Graphic.
 	 *
 	 * With a graphic and an instant it reports entering, updating, and exiting as well
@@ -215,7 +243,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 				state,
 				graphic.id,
 				graphic.inputs ?? [],
-				timingFor(graphic, instant),
+				renderTimingFor(graphic, instant),
 			);
 			current[graphic.id] = rendered.current;
 			if (rendered.outgoing)
