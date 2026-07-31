@@ -23,10 +23,13 @@ import type {
 	GraphicsDiscrepancy,
 	GraphicsDiscrepancyActionOutcome,
 	GraphicsDuplicateContentPolicy,
+	GraphicsIngestionAttentionItem,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 	GraphicsIngestionSource,
+	GraphicsOperationalQueuesOverview,
 	GraphicsOperationsCockpit,
+	GraphicsQueueInspection,
 	GraphicsReconciliationOverview,
 	GraphicsReconciliationSweepResult,
 	GraphicsRetentionOverview,
@@ -51,6 +54,7 @@ import type {
 	TemplatePackageTotals,
 } from '~~/shared/types/templatePackage';
 import type { GraphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
+import type { GraphicsOperationalQueueId } from '~~/shared/utils/graphicsOperationalQueues';
 import type { GraphicsCapacityExhaustedDetails } from './errors';
 import type { GraphicsAssetMultipartState } from './multipart';
 import type {
@@ -63,6 +67,7 @@ import type {
 	GraphicsStagingObjectStore,
 	ReadGraphicsObjectOutcome,
 } from './object-store';
+import type { GraphicsOperationalQueuesCatalogue } from './operational-queues';
 import type { GraphicsOperationsCockpitCatalogue } from './operations-cockpit';
 import type {
 	GraphicsAssetReconciliationCatalogue,
@@ -112,6 +117,7 @@ import {
 	GraphicsObjectInputError,
 	readableBytes,
 } from './object-store';
+import { createGraphicsOperationalQueues } from './operational-queues';
 import { readGraphicsOperationsCockpit } from './operations-cockpit';
 import {
 	sha256Hex,
@@ -374,6 +380,8 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	}) => Promise<
 		| { outcome: 'reserved'; operation: GraphicsIngestionOperation }
 		| { outcome: 'blocked'; capacity: GraphicsCapacityExhaustedDetails }
+		/** Another attempt took the operation; this one has nothing left to reserve for. */
+		| { outcome: 'lost-claim' }
 	>;
 	updateCapacityLimits: (
 		input: GraphicsAssetCapacityLimits & { updatedAt: string },
@@ -808,7 +816,36 @@ export interface GraphicsAssetLibrary {
 	listGraphicsAssetEvidence: (input?: {
 		limit?: number;
 		categories?: readonly GraphicsAssetEvidenceCategory[];
+		/**
+		 * Narrows the ledger to one opaque domain subject. Without it the ledger
+		 * answers with the newest entries the installation holds, which is a
+		 * different question from what happened to this asset.
+		 */
+		subject?: { kind: GraphicsAssetEvidenceEntry['subject']['kind']; id: string };
 	}) => Promise<GraphicsAssetEvidenceEntry[]>;
+	/**
+	 * Every operational queue in one risk-ordered reading: what needs doing,
+	 * how much of it there is, and the soonest deadline each queue is holding.
+	 */
+	getOperationalQueues: () => Promise<GraphicsOperationalQueuesOverview>;
+	/**
+	 * Everything the persistent inspector shows for one selected queue item:
+	 * its domain identity, current state, exact deadline, affected pinned usage,
+	 * the catalogue's expectations beside the byte evidence, the Evidence ledger
+	 * filtered to that subject, and only the actions valid in that state.
+	 */
+	inspectOperationalQueueItem: (input: {
+		queue: GraphicsOperationalQueueId;
+		subjectId: string;
+	}) => Promise<GraphicsQueueInspection>;
+	/**
+	 * One unfinished Graphics Ingestion Operation by identity, without the owner
+	 * scope every author-facing read applies. An administrator acting from a
+	 * queue needs to know whose operation it is before acting on their behalf.
+	 */
+	findQueuedIngestionOperation: (input: {
+		operationId: GraphicsIngestionOperationId;
+	}) => Promise<GraphicsIngestionAttentionItem | undefined>;
 	/** Every exact recovery and cleanup deadline the installation is holding. */
 	getRetentionOverview: () => Promise<GraphicsRetentionOverview>;
 	/** One Graphic Asset's recovery window and per-revision retention. */
@@ -1371,6 +1408,48 @@ export function createGraphicsAssetLibrary(
 			);
 		}
 		return catalogue as GraphicsAssetCatalogue & GraphicsOperationsCockpitCatalogue;
+	}
+
+	/**
+	 * The queues read the same aggregates the cockpit does plus the bounded
+	 * deadline samples retention owns, so like both they are available only
+	 * against a catalogue that can answer them. Every method is checked rather
+	 * than one standing in for the rest, so a partially implemented double fails
+	 * with the domain error instead of a `TypeError` mid-reading.
+	 */
+	const QUEUE_CATALOGUE_METHODS = [
+		'countOpenDiscrepancies',
+		'summariseIngestionQueues',
+		'findIngestionAttentionItem',
+		'summariseRetentionDeadlines',
+		'listTrashDeadlines',
+		'listRevisionRetention',
+		'findRevisionRetention',
+		'findGraphicAssetName',
+		'listRetiredGraphicAssets',
+		'listGraphicsAssetEvidence',
+		'listGraphicAssetUsage',
+	] as const satisfies readonly (keyof GraphicsOperationalQueuesCatalogue)[];
+
+	function requireQueuesCatalogue(): GraphicsOperationalQueuesCatalogue {
+		const catalogue = requireCatalogue();
+		if (!QUEUE_CATALOGUE_METHODS.every(method => method in catalogue)) {
+			throw new GraphicsAssetLibraryError(
+				'Graphics Asset Library operational queues are unavailable for this catalogue',
+				'graphics-asset-library-unavailable',
+			);
+		}
+		return catalogue as GraphicsAssetCatalogue & GraphicsOperationalQueuesCatalogue;
+	}
+
+	function requireOperationalQueues() {
+		const catalogue = requireQueuesCatalogue();
+		return createGraphicsOperationalQueues({
+			catalogue: () => catalogue,
+			reconciliation: () => requireReconciliation(),
+			inspectRetention: async assetId => await requireRetention().inspect(assetId),
+			now,
+		});
 	}
 
 	function requireReconciliation() {
@@ -3440,6 +3519,15 @@ export function createGraphicsAssetLibrary(
 				thumbnailByteLength: thumbnail.byteLength,
 				reservedAt: changedOperation(operation, {}).updatedAt,
 			});
+			if (reservation.outcome === 'lost-claim') {
+				// Another attempt owns this operation now, and whatever it decided is the
+				// authoritative answer — so it is read rather than guessed at, and never
+				// reported as a capacity problem the author would go off and try to solve.
+				return await catalogueRequest(
+					() => catalogue.getIngestionOperation(operation.id, operation.initiatedBy),
+					'Graphics ingestion state is temporarily unavailable',
+				) ?? operation;
+			}
 			if (reservation.outcome === 'blocked') {
 				operation = {
 					...operation,
@@ -4632,9 +4720,12 @@ export function createGraphicsAssetLibrary(
 				'Graphics ingestion retry could not claim the durable operation',
 			);
 			if (!claimed) {
+				// Still leased by whoever is working it. That lapses on its own, so
+				// this is worth trying again — unlike a stage a retry cannot resume
+				// from, which never becomes retryable.
 				throw new GraphicsAssetLibraryError(
 					'Graphics Ingestion Operation is still active and cannot be claimed for retry',
-					'ingestion-operation-not-uploadable',
+					'ingestion-operation-lease-held',
 				);
 			}
 			return await continueGraphicsIngestion(claimed);
@@ -5058,6 +5149,27 @@ export function createGraphicsAssetLibrary(
 			return await catalogueRequest(
 				() => requireRetention().listEvidence(input),
 				'Graphics Asset Evidence is temporarily unavailable',
+			);
+		},
+		async getOperationalQueues() {
+			return await catalogueRequest(
+				() => requireOperationalQueues().overview(),
+				'Graphics Asset Library operational queues are temporarily unavailable',
+			);
+		},
+		async inspectOperationalQueueItem(input) {
+			return await catalogueRequest(
+				() => requireOperationalQueues().inspect(input),
+				'The operational queue item is temporarily unavailable',
+			);
+		},
+		async findQueuedIngestionOperation(input) {
+			return await catalogueRequest(
+				() => requireQueuesCatalogue().findIngestionAttentionItem({
+					now: now().toISOString(),
+					operationId: input.operationId,
+				}),
+				'Graphics ingestion state is temporarily unavailable',
 			);
 		},
 		async getRetentionOverview() {

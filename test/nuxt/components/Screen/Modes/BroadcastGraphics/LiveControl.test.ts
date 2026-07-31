@@ -166,6 +166,20 @@ describe('broadcastGraphicsLiveControl', () => {
 		mockSupersededInputKeys.value = [];
 	});
 
+	/**
+	 * Generated Live Control is exactly the controls a template author declared —
+	 * source pickers and typed Graphic Inputs. A template action would be an
+	 * authoring control appearing in the one surface that never authors.
+	 */
+	it('generates no Broadcast Graphic Template action for a live operator', async () => {
+		const wrapper = await mountComponent(graphic([]));
+
+		expect(wrapper.find('[data-testid="template-library"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="template-place"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="template-name"]').exists()).toBe(false);
+		expect(wrapper.text()).not.toContain('Template');
+	});
+
 	it('generates one type-appropriate field for each declared Graphic Input', async () => {
 		const wrapper = await mountComponent(graphic([
 			NAME,
