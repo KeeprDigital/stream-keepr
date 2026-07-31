@@ -215,11 +215,19 @@ export function broadcastGraphicTemplateDocument(
  * anyone adding one that must not be copied as-is has to override it here: anything
  * naming a Graphic Item by id (as a stagger does), anything naming a Screen, an
  * Event, or a Graphic Style Set entry, and anything that should be per-placement
- * rather than per-design. This comment is doing the job the enumeration used to do,
- * and it is the only thing doing it — which is why the round-trip test over a
- * maximally populated document exists: it is what actually enforces both halves,
- * failing when a field is dropped *and* when a field that needed rewriting was
- * carried. What makes the trade worthwhile is that this direction fails visibly: a
+ * rather than per-design.
+ *
+ * Be clear about what enforces which half. The round-trip test over a maximally
+ * populated document enforces the *drop* half only: it fails when a field stops
+ * being carried. It cannot catch a field that needed rewriting and was carried
+ * anyway, because it builds its expectation by cloning the source and rewriting the
+ * same identities this function does — so a new `styleSetId` that must be
+ * re-resolved per placement would be carried verbatim on both sides and the test
+ * would pass. Nothing here catches that, and no test can: which fields need
+ * rewriting is a fact about the vocabulary, not about this document. The carry half
+ * rests on whoever adds the field reading this comment.
+ *
+ * What makes the trade worthwhile even so is that this direction fails visibly: a
  * wrongly-carried field is present in the stored copy and shows up in a diff, while
  * a dropped one leaves nothing to notice.
  */

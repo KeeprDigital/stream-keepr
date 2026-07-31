@@ -121,7 +121,9 @@ async function place(templateId: string) {
 			// the version it was built against. Without one the server has nothing to
 			// compare and the write would silently discard whatever another author did to
 			// the stack in the meantime — the same guard every other write from this editor
-			// carries. An unknown Screen yields 0, which is refused rather than unchecked.
+			// carries. A Screen missing from the store falls back to 0, which is a real
+			// version rather than a skip: it is what a Screen that has never been written
+			// carries, so it matches one of those and is refused by every other Screen.
 			stateVersion: screenStore.screens.find(screen => screen.id === props.screenId)?.stateVersion ?? 0,
 		});
 		error.value = null;

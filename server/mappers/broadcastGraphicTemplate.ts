@@ -3,6 +3,7 @@ import type {
 	BroadcastGraphicTemplateResponse,
 	BroadcastGraphicTemplateSummary,
 } from '~~/shared/types/broadcastGraphicTemplate';
+import { mapTimestamps } from '~~/server/utils/mapTimestamps';
 import { flattenGraphicItems } from '~~/shared/modules/graphics';
 
 /**
@@ -15,7 +16,7 @@ import { flattenGraphicItems } from '~~/shared/modules/graphics';
 export function mapBroadcastGraphicTemplateToSummary(
 	template: DbBroadcastGraphicTemplate,
 ): BroadcastGraphicTemplateSummary {
-	return {
+	return mapTimestamps({
 		id: template.id,
 		name: template.name,
 		description: template.description,
@@ -24,9 +25,9 @@ export function mapBroadcastGraphicTemplateToSummary(
 		// exactly as they do against the Screen's own Graphic Item caps.
 		itemCount: flattenGraphicItems(template.document).length,
 		inputCount: template.document.inputs?.length ?? 0,
-		createdAt: new Date(template.createdAt),
-		updatedAt: new Date(template.updatedAt),
-	};
+		createdAt: template.createdAt,
+		updatedAt: template.updatedAt,
+	});
 }
 
 export function mapBroadcastGraphicTemplateToResponse(

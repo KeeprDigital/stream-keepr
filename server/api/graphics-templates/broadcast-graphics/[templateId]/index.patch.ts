@@ -17,9 +17,15 @@ import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
  * Revise one Broadcast Graphic Template.
  *
  * Every accepted change — name, description, or composition — advances the
- * automatically managed revision by one under the same stable identity. The write
- * is admitted by the template's own Graphics Authoring Lease, so a second session
- * with the library open observes the revision instead of overwriting it.
+ * automatically managed revision by one under the same stable identity.
+ *
+ * Two independent guards, and they answer different questions. The compare-and-swap
+ * on `revision` is what stops a second session with the library open overwriting a
+ * change it never read: it refuses any writer whose stated revision is stale, whether
+ * or not a lease exists anywhere. The Graphics Authoring Lease is coarser and answers
+ * "may this session write this template at all" — while one session holds it, every
+ * other session is refused even with a current revision. Nothing takes a template
+ * lease yet, so today the compare-and-swap is the guard that actually fires.
  */
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);

@@ -112,7 +112,7 @@ const leaseNotice = computed(() => {
 					nowhere else: saving and placing designs is authoring, and the Live
 					workspace deliberately has no route to either.
 				-->
-				<GraphicsTemplateLibrary
+				<GraphicsBroadcastGraphicTemplateLibrary
 					class="mt-4 block"
 					:event-id="eventId"
 					:screen-id="screen.id"

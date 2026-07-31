@@ -319,9 +319,16 @@ describe('placeBroadcastGraphicTemplate', () => {
 	 * Placement clones the document and replaces only what it is defined to change, so
 	 * a field added to the vocabulary is carried by default. This asserts that
 	 * directly: a document with every field populated must come back deeply equal
-	 * except for the identities placement rewrites. It fails when a new field is
-	 * dropped, and it fails when a field that should have been rewritten is carried —
-	 * which no test enumerating the fields the author remembered can do.
+	 * except for the identities placement rewrites, so it fails when a new field stops
+	 * being carried — which no test enumerating the fields the author remembered can do.
+	 *
+	 * It does *not* catch the opposite mistake. `expected()` below builds its
+	 * expectation by cloning the source and rewriting the same identities placement
+	 * rewrites, so a field that needed per-placement rewriting and was carried verbatim
+	 * would be carried on both sides and pass. That half is not tested here and cannot
+	 * be: which fields need rewriting is a fact about the vocabulary rather than about
+	 * this document. `placeBroadcastGraphicTemplate` says so at its own doc comment,
+	 * which is the only thing standing behind it.
 	 */
 	it('carries every field of a maximally populated document except what it rewrites', () => {
 		const document = composed();

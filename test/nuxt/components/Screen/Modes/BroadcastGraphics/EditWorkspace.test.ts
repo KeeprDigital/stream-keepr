@@ -31,7 +31,7 @@ const UButtonStub = defineComponent({
 
 /** Stands in for the library panel, reporting the props the workspace hands it. */
 const TemplateLibraryStub = defineComponent({
-	name: 'GraphicsTemplateLibrary',
+	name: 'GraphicsBroadcastGraphicTemplateLibrary',
 	props: {
 		eventId: { type: Number, required: true },
 		screenId: { type: Number, required: true },
@@ -73,7 +73,7 @@ async function mountWorkspace(props: Record<string, unknown> = {}) {
 				GraphicsCompositorStackTree: StackTreeStub,
 				GraphicsCompositorPreview: PreviewStub,
 				GraphicsCompositorInspector: InspectorStub,
-				GraphicsTemplateLibrary: TemplateLibraryStub,
+				GraphicsBroadcastGraphicTemplateLibrary: TemplateLibraryStub,
 				UIcon: UIconStub,
 				UButton: UButtonStub,
 			},

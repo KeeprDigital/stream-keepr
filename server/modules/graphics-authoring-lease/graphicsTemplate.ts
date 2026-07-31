@@ -29,26 +29,32 @@ export function graphicsTemplateLeaseRef(templateId: string): GraphicsAuthoringL
  * workspace lease. Two authors may place the same template at the same moment
  * without either of them holding it.
  *
- * ## This admission is deliberately inert today
+ * ## Why this exists now, and what is still missing
  *
- * No client takes a template lease yet, and an unleased artifact is writable by
- * anyone — so this currently admits every caller. That is not an oversight, and it is
- * not the control protecting template revisions: the library offers rename, describe,
- * delete, and place, which are *single-shot* writes, and the right control for those
- * is the compare-and-swap on `revision` that the PATCH route enforces. A lease is
+ * It is required: #77's first acceptance criterion is one exclusive session-scoped
+ * lease "per Screen graphics Edit workspace **and per reusable graphics Template**",
+ * and the glossary names the same two artifacts. #77 shipped the Screen half only,
+ * so this is the unmet half of a closed ticket rather than generality invented here.
+ *
+ * The guard is live and discriminating, not a placeholder: while one session holds
+ * the lease, another session's write is refused and the holder's identical write
+ * succeeds. The integration suite drives exactly that through the real routes — grant,
+ * observe with `writable: false`, the observer's PATCH refused 409, the holder's PATCH
+ * accepted — plus a 404 for a lease on a template that does not exist.
+ *
+ * What is missing is only client wiring: `useBroadcastGraphicTemplateRepository`
+ * exposes no acquire or release, so nothing in the app takes a template lease yet, and
+ * an artifact nobody holds is writable by anyone. That is deliberate. The library today
+ * offers rename, describe, delete, and place, which are *single-shot* writes; a lease is
  * session-scoped, heartbeaten, and takeover-able because it protects a composition
- * edited *over time*; acquiring and releasing one around a single PATCH would be a
- * mutex the database already provides, and it would refuse an author renaming an entry
- * that someone else merely has open.
+ * edited *over time*, and acquiring one around a single PATCH would refuse an author
+ * renaming an entry that someone else merely has open.
  *
  * What wires it is a **template editing session**: a workspace that opens one
  * template's composition in the compositor and writes it repeatedly — the template-side
  * equivalent of the Screen Edit workspace. When that exists it should acquire this
  * lease on open, heartbeat it, and release it on close, using the same client
- * composable the Screen workspace uses (it takes an endpoint, not a Screen). Until
- * then the guard is proven rather than exercised: the integration suite asserts a
- * lease on a nonexistent template is 404, and that a second session's DELETE is
- * refused while another holds the lease.
+ * composable the Screen workspace uses (it takes an endpoint, not a Screen).
  */
 export async function requireGraphicsTemplateWritable(
 	event: H3Event,

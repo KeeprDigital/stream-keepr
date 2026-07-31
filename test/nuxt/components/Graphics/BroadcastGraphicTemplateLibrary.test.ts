@@ -84,7 +84,7 @@ function summary(overrides: Partial<BroadcastGraphicTemplateSummary> = {}): Broa
 }
 
 async function mountLibrary(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../app/components/Graphics/TemplateLibrary.vue';
+	const componentPath = '../../../../app/components/Graphics/BroadcastGraphicTemplateLibrary.vue';
 	const { default: TemplateLibrary } = await import(componentPath);
 
 	const wrapper = mount(TemplateLibrary, {
@@ -112,7 +112,7 @@ async function mountLibrary(props: Record<string, unknown> = {}) {
 	return wrapper;
 }
 
-describe('graphicsTemplateLibrary', () => {
+describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockList.mockResolvedValue([summary()]);
