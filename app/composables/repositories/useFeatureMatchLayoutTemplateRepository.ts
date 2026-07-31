@@ -28,6 +28,7 @@ export function useFeatureMatchLayoutTemplateRepository() {
 	 * belongs here.
 	 */
 	const ingestion = '/api/graphics-assets/ingestion-operations';
+	const ingestionTransfer = useGraphicsIngestionTransfer();
 
 	const list = async (): Promise<FeatureMatchLayoutTemplateSummary[]> => {
 		const response = await $fetch<FeatureMatchLayoutTemplateListResponse>(library);
@@ -122,6 +123,11 @@ export function useFeatureMatchLayoutTemplateRepository() {
 	 * Import is a Graphics Ingestion Operation, so it is the operation that comes back
 	 * rather than a template: preflight may reject it, or pause it once for a
 	 * confirmation, and only a caller looking at the operation can tell which.
+	 *
+	 * A package is an envelope holding whole Graphic Assets, so it is routinely
+	 * longer than any single transfer request may carry. The bytes therefore go
+	 * through the shared ingestion transfer, which sends a large archive as a
+	 * resumable multipart transfer rather than refusing it.
 	 */
 	const receivePackage = async (file: File): Promise<GraphicsIngestionOperation> => {
 		const initiated = await $fetch<GraphicsIngestionOperation>(ingestion, {
@@ -134,11 +140,7 @@ export function useFeatureMatchLayoutTemplateRepository() {
 				declaredByteLength: file.size,
 			},
 		});
-		return await $fetch<GraphicsIngestionOperation>(`${ingestion}/${initiated.id}/content`, {
-			method: 'PUT',
-			headers: apiHeaders.getHeaders(),
-			body: file,
-		});
+		return await ingestionTransfer.transfer(initiated, file);
 	};
 
 	/**

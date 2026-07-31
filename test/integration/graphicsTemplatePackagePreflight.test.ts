@@ -5,7 +5,8 @@ import { crc32 } from 'node:zlib';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
-import { TEMPLATE_PACKAGE_LIMITS } from '../../shared/types/templatePackage';
+import { TEMPLATE_PACKAGE_LIMITS, templatePackageContentEntry } from '../../shared/types/templatePackage';
+import { MAX_STILL_IMAGE_INGESTION_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
 import { collectStream } from '../helpers/storedZipArchive';
 import {
 	readTemplatePackageParts,
@@ -36,6 +37,32 @@ function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array {
 
 const packagePixelPng = pngWithTextChunk(basePixelPng, 'sk-template-package-preflight');
 
+/**
+ * A valid PNG of an exact length, padded inside one ancillary text chunk.
+ *
+ * It exists so a package can be built that is larger than a single Graphic Asset
+ * transfer may carry while the one asset inside it stays within the still-image
+ * limit — which is the shape of every real package carrying media.
+ */
+function pngPaddedTo(byteLength: number, keyword: string): Uint8Array {
+	const heading = Buffer.from(`tEXt${keyword}\0`);
+	const payload = Buffer.concat([
+		heading,
+		Buffer.alloc(byteLength - basePixelPng.byteLength - heading.byteLength - 8, 0x61),
+	]);
+	const length = Buffer.alloc(4);
+	length.writeUInt32BE(payload.byteLength - 4, 0);
+	const checksum = Buffer.alloc(4);
+	checksum.writeUInt32BE(crc32(payload), 0);
+	return Uint8Array.from(Buffer.concat([
+		Buffer.from(basePixelPng.slice(0, -12)),
+		length,
+		payload,
+		checksum,
+		Buffer.from(basePixelPng.slice(-12)),
+	]));
+}
+
 function digestOf(bytes: Uint8Array) {
 	return createHash('sha256').update(bytes).digest('hex');
 }
@@ -62,6 +89,45 @@ async function receivePackage(archive: Uint8Array, options: { fileName?: string 
 	);
 	expect(response.status).toBe(200);
 	return await response.json() as GraphicsIngestionOperation;
+}
+
+/**
+ * Runs one package through the resumable transfer, which is the only way an
+ * archive longer than a single request may arrive.
+ */
+async function receivePackageInParts(archive: Uint8Array, options: { fileName?: string } = {}) {
+	const initiated = await $fetch<GraphicsIngestionOperation>(
+		'/api/graphics-assets/ingestion-operations',
+		{
+			method: 'POST',
+			body: {
+				idempotencyKey: `template-package-preflight-${++preflightSequence}`,
+				source: 'template-package',
+				sourceFileName: options.fileName ?? 'exportable-overlay.sklayout',
+				declaredByteLength: archive.byteLength,
+			},
+		},
+	);
+	const started = await $fetch<GraphicsIngestionOperation>(
+		`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart`,
+		{ method: 'POST' },
+	);
+	const transfer = started.transfer!;
+	for (let partNumber = 1; partNumber <= transfer.partCount; partNumber += 1) {
+		const offset = (partNumber - 1) * transfer.partByteLength;
+		const response = await fetch(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/parts/${partNumber}`,
+			{
+				method: 'PUT',
+				body: archive.slice(offset, Math.min(archive.byteLength, offset + transfer.partByteLength)),
+			},
+		);
+		expect(response.status).toBe(200);
+	}
+	return await $fetch<GraphicsIngestionOperation>(
+		`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/complete`,
+		{ method: 'POST' },
+	);
 }
 
 describe('template Package preflight through the API boundary', () => {
@@ -170,6 +236,80 @@ describe('template Package preflight through the API boundary', () => {
 		);
 		expect(reread.templatePackagePreflight?.fingerprint).toBe(report.fingerprint);
 		expect(reread.stage).toBe('awaiting-installation');
+	});
+
+	/**
+	 * Export will emit an archive up to the envelope's own limit, so import has to
+	 * be able to receive one. Nothing about a package is bounded by what a single
+	 * Graphic Asset transfer may carry: a package holding one still image already
+	 * outgrows the still-image ceiling, and a package holding media outgrows it
+	 * many times over.
+	 *
+	 * It drives the resumable route itself, so what it pins is the server side:
+	 * that transfer, staging and preflight carry every byte of such an archive.
+	 * That the importer reaches for that route rather than a single request is a
+	 * separate statement, made in
+	 * `test/nuxt/composables/repositories/templatePackageImport.test.ts`.
+	 */
+	it('receives a package larger than a single Graphic Asset transfer may carry', async () => {
+		const parts = readTemplatePackageParts(exportedPackage);
+		const packaged = parts.manifest.packagedAssets[0]!;
+		// One still image at its own limit, which is all it takes to put the archive
+		// holding it past that limit.
+		const filling = pngPaddedTo(MAX_STILL_IMAGE_INGESTION_BYTES, 'sk-template-package-filling');
+		const unseen = {
+			assetId: 'an-asset-never-seen-here',
+			revisionId: 'a-revision-never-seen-here',
+		};
+		const entry = templatePackageContentEntry(digestOf(filling));
+		parts.contents = [{ name: entry, bytes: filling }];
+		parts.manifest.packagedAssets = [{
+			...packaged,
+			content: { entry },
+			origin: {
+				sourceAssetId: unseen.assetId as never,
+				sourceRevisionId: unseen.revisionId as never,
+				sourceRevisionNumber: 1,
+				digest: digestOf(filling),
+			},
+			integrity: {
+				...packaged.integrity,
+				digest: digestOf(filling),
+				byteLength: filling.byteLength,
+			},
+			facts: {
+				...packaged.facts,
+				byteLength: filling.byteLength,
+				sha256: digestOf(filling),
+			},
+		}];
+		parts.manifest.contents = [{
+			...parts.manifest.contents[0]!,
+			digest: digestOf(filling),
+			byteLength: filling.byteLength,
+			entry,
+		}];
+		parts.template = {
+			...(parts.template as Record<string, unknown>),
+			frame: {
+				...((parts.template as { frame: Record<string, unknown> }).frame),
+				backgroundImage: unseen,
+			},
+		};
+
+		const archive = writeTemplatePackage(parts);
+		expect(archive.byteLength).toBeGreaterThan(MAX_STILL_IMAGE_INGESTION_BYTES);
+		expect(archive.byteLength)
+			.toBeLessThanOrEqual(TEMPLATE_PACKAGE_LIMITS.maximumArchiveByteLength);
+
+		const operation = await receivePackageInParts(archive, { fileName: 'filled-overlay.sklayout' });
+
+		// Every byte arrived and preflight read the whole archive, rather than the
+		// transfer being refused for exceeding a Graphic Asset's ceiling.
+		expect(operation.stage).toBe('awaiting-installation');
+		const report = operation.templatePackagePreflight!;
+		expect(report.outcome).toBe('ready');
+		expect(report.observed.archiveByteLength).toBe(archive.byteLength);
 	});
 
 	it('pauses on warnings and installs nothing until the exact report is confirmed', async () => {
@@ -315,5 +455,12 @@ describe('template Package preflight through the API boundary', () => {
 		});
 
 		expect(response.status).toBe(400);
+		// Which envelope refused them, in words: a reader told only that some byte
+		// length was too large goes looking at the Graphic Asset transfer limits,
+		// which describe a different envelope entirely.
+		const failure = await response.json() as { message?: string };
+		expect(failure.message).toContain(
+			`Template Package must not exceed ${TEMPLATE_PACKAGE_LIMITS.maximumArchiveByteLength} bytes`,
+		);
 	});
 });
