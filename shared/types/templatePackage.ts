@@ -396,9 +396,11 @@ export interface TemplatePackagePreflightReport {
  * migration, conflict, and atomic installation contract while retaining separate
  * payloads, libraries, and import/export workflows". This contract is where that
  * separation lives. The Graphics Asset Library owns everything the sentence says is
- * shared and treats the Template document as opaque data; a payload owns the two
- * things it cannot — reading the document as the artifact it claims to be, and
- * putting the installed result into the library that artifact belongs to.
+ * shared and treats the Template document as opaque data; a payload owns the one
+ * thing it cannot — reading the document as the artifact it claims to be. Placing
+ * the installed result in the library that artifact belongs to is the other half of
+ * the separation, and it is not on this contract: the Graphics Asset Library records
+ * an Installed Graphics Template and each artifact's own write path picks it up.
  *
  * ## Why the document is read at all, when the envelope already validates
  *

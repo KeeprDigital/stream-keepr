@@ -238,8 +238,12 @@ describe('broadcast Graphic Template Packages', () => {
 	 * an installation boundary the loss is invisible — a dropped field looks exactly
 	 * like one the sender never had — and the bytes that travelled are already wrong
 	 * by the time anyone notices, so re-exporting repairs nothing. Comparing a
-	 * maximally populated document whole is the only check that fails when the
-	 * vocabulary grows rather than when somebody remembers.
+	 * maximally populated document whole is what turns that into a failing test.
+	 *
+	 * It catches a field the *transfer* drops, not a field the vocabulary grew: the
+	 * fixture is hand-enumerated, so a new field nobody added there is carried by a
+	 * document that never had it. `maximalBroadcastGraphicDocument` says why it
+	 * cannot be derived from the schema instead.
 	 */
 	it('imports the design as a library entry carrying every field it left with', async () => {
 		const received = await receivePackage(exportedPackage);
