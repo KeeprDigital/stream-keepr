@@ -134,6 +134,39 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(composition).toBeGreaterThan(source);
 		});
 
+		it('never covers the host-owned layer with a backdrop of its own', async () => {
+			// The composed tree is mounted above the Frame, the Source Items, and the
+			// legacy widgets. A Fill or Key Output's black backdrop painted here would
+			// cover all of them — an operator switching an existing overlay to Fill would
+			// get solid black on air. Checked in every output, because the Overlay
+			// Output's transparent backdrop hides the mistake.
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.composition = {
+				...createFeatureMatchLayoutComposition(),
+				items: [getGraphicItemDefinition('clock').createDefault({
+					id: 'clock',
+					label: 'Clock',
+					canvasWidth: 1920,
+					canvasHeight: 1080,
+				})],
+			};
+
+			for (const output of ['overlay', 'fill', 'key'] as const) {
+				mockConfig.value = config;
+				mockOutputMode.value = output;
+
+				const wrapper = await mountComponent();
+				const style = wrapper.get('.feature-match-overlay__composition').attributes('style') ?? '';
+
+				expect(style).not.toContain('#000000');
+				expect(style).not.toContain('rgb(0, 0, 0)');
+				// The host places the layer, so the model must not position it either.
+				expect(style).not.toContain('position: relative');
+				// It is still the tree that renders, in every output.
+				expect(wrapper.get('[data-graphic-item-kind="clock"]').text()).toBe('12:34');
+			}
+		});
+
 		it('punches a Source Item cutout through the Frame rather than through the tree', async () => {
 			// The cutout is a mask on the Frame's own layers. The composed tree is a
 			// sibling above it and is never masked, so a Graphic Item over a Source Item

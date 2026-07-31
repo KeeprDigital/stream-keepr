@@ -66,6 +66,10 @@ export function resolveFeatureMatchOverlayCompositorRenderModel(
 		canvasWidth: input.canvasWidth,
 		canvasHeight: input.canvasHeight,
 		graphics: featureMatchLayoutStack(input.layout),
+		// One layer inside a canvas this host already paints, mounted above the Frame
+		// and the Source Items. It must paint no backdrop of its own: a Fill or Key
+		// Output's black would cover the entire host-owned layer.
+		canvasRole: 'layer',
 		// Deliberately no `visibleGraphicIds`: the one composition is always composed.
 		textDeclarations: featureMatchTokenDeclarations(),
 		inputValues: input.tokenValues

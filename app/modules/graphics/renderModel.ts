@@ -217,6 +217,27 @@ export interface GraphicsCompositionRenderModelInput {
 	 * carry an item that reads it.
 	 */
 	featureMatch?: GraphicsFeatureMatchContext;
+	/**
+	 * Whether this composition is the Screen Output's own canvas, or one layer
+	 * inside a canvas its host already paints.
+	 *
+	 * `screen-output` paints the backdrop the Screen Output is defined by —
+	 * transparent for an Overlay Output, black for a Fill or Key Output — and
+	 * establishes the positioning context its items are absolutely placed against.
+	 * A Broadcast Graphics Screen is exactly this: the composed frame *is* the
+	 * output.
+	 *
+	 * `layer` paints no backdrop and establishes no positioning. A Feature Match
+	 * Overlay paints its own canvas and mounts this above the Frame and the Source
+	 * Items, so a backdrop here would be a second opaque copy covering the whole
+	 * host-owned layer — solid black in Fill and Key, hiding everything beneath it.
+	 * The host positions the layer instead, because the canvas coordinate space
+	 * belongs to the Screen and the Frame is drawn in the same space.
+	 *
+	 * It defaults to `screen-output` so the failure mode of forgetting it is a
+	 * visible backdrop rather than an invisible composition.
+	 */
+	canvasRole?: 'screen-output' | 'layer';
 	/** Editor-only selection and item guides. */
 	itemGuides?: boolean;
 	/** Editor-only advisory action-safe and title-safe guides. */
@@ -1796,14 +1817,18 @@ export function resolveGraphicsCompositionRenderModel(
 	const selectedKey = input.selectedTarget ? graphicsSelectionKey(input.selectedTarget) : null;
 	const selectedGraphicId = input.selectedTarget ? graphicsSelectionGraphicId(input.selectedTarget) : null;
 
+	const isLayer = input.canvasRole === 'layer';
+
 	return {
 		output: input.output,
 		canvasStyle: {
 			width: '100%',
 			height: '100%',
-			position: 'relative',
+			// A layer is placed and backed by its host. Painting either here would
+			// override the host's own placement and cover everything beneath it.
+			position: isLayer ? undefined : 'relative',
 			overflow: 'hidden',
-			background: screenOutputCanvasBackground(input.output),
+			background: isLayer ? 'transparent' : screenOutputCanvasBackground(input.output),
 		},
 		graphics: composed.map((graphic) => {
 			// A host that supplies its own declarations supplies all of them: a

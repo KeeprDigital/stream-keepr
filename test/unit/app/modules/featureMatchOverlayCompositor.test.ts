@@ -99,19 +99,35 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 		expect(wins!.winBoxes?.map(box => box.won)).toEqual([true, true]);
 	});
 
-	it('renders an empty layout transparent in Overlay and black in Fill and Key', () => {
-		// A Feature Match Overlay whose Slot holds no Match, or whose layout has no
-		// shared items yet, is an ordinary state rather than a failure.
-		for (const [output, background] of [['overlay', 'transparent'], ['fill', '#000000'], ['key', '#000000']] as const) {
+	it('paints no canvas backdrop of its own in any Screen Output', () => {
+		// The composed tree is one layer inside a canvas the Feature Match Overlay
+		// already paints, and it is mounted above the Frame and the Source Items. A
+		// backdrop here would be a second, opaque copy covering the whole host-owned
+		// layer — solid black in the Fill and Key Outputs, which is an on-air failure
+		// rather than a cosmetic one.
+		for (const output of ['overlay', 'fill', 'key'] as const) {
 			const model = resolveFeatureMatchOverlayCompositorRenderModel({
 				output,
 				layout: { composition: undefined },
 				...CANVAS,
 			});
 
-			expect(model.canvasStyle.background).toBe(background);
+			expect(model.canvasStyle.background).toBe('transparent');
 			expect(model.graphics[0]!.items).toEqual([]);
 		}
+	});
+
+	it('leaves the layer in flow rather than establishing its own positioning', () => {
+		// The host positions the layer, because the canvas coordinate space belongs to
+		// the Screen and the Frame is drawn in the same space. An inline `position`
+		// here would override the scoped rule that places it.
+		const model = resolveFeatureMatchOverlayCompositorRenderModel({
+			output: 'overlay',
+			layout: { composition: undefined },
+			...CANVAS,
+		});
+
+		expect(model.canvasStyle.position).toBeUndefined();
 	});
 });
 
