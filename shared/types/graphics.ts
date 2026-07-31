@@ -2,6 +2,7 @@ import type { FeatureMatchOverlayFontId } from '../featureMatchOverlayFonts';
 import type { PlayerSide } from './enums';
 import type { GraphicFocalPosition, MediaGraphicItemFit } from './graphicItem';
 import type { GraphicAssetReference } from './graphicsAsset';
+import type { GraphicContainerStyleRefs, GraphicStyleRefs, GraphicStyleSetLink } from './graphicStyleSet';
 
 /**
  * Shared Graphics Foundation vocabulary.
@@ -682,6 +683,17 @@ interface GraphicItemConfigBase extends GraphicRect {
 	 * every lifecycle phase, which is what a newly authored item gets.
 	 */
 	animation?: GraphicAnimation;
+	/**
+	 * Which of this item's property groups are inherited from a Graphic Style Set
+	 * entry, and how the author has deviated from each.
+	 *
+	 * It never holds a value. Every property above stays the authoritative resolved
+	 * one, so this item renders, travels, and is copied without its Style Set being
+	 * anywhere in reach — which is exactly why a placed copy cannot change under an
+	 * author who republishes a Style Set. This is provenance, and it is what turns a
+	 * republished entry into a reviewable offer rather than a silent mutation.
+	 */
+	styleRefs?: GraphicStyleRefs;
 }
 
 export interface TextGraphicItemConfig extends GraphicItemConfigBase {
@@ -959,4 +971,14 @@ export interface BroadcastGraphicConfig {
 	sources?: GraphicSourceSelectionDeclaration[];
 	/** Graphic Input Bindings, at most one per Graphic Input. */
 	bindings?: GraphicInputBinding[];
+	/**
+	 * The one Graphic Style Set this composition's inherited properties come from.
+	 *
+	 * At most one, structurally. Absent means every property in this composition is
+	 * local, which is what a Broadcast Graphic authored without a Style Set has and
+	 * what detaching from one leaves behind.
+	 */
+	styleSet?: GraphicStyleSetLink;
+	/** Whole-graphic Graphic Animation Recipes inherited from that Style Set. */
+	styleRefs?: GraphicContainerStyleRefs;
 }

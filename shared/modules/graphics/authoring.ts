@@ -36,6 +36,7 @@ import type {
 	TextOverflowPolicy,
 } from '../../types/graphics';
 import type { GraphicAssetReference } from '../../types/graphicsAsset';
+import type { GraphicStyleSlot } from '../../types/graphicStyleSet';
 import type { ShapeGeometryPresetId } from './shapeGeometry';
 import { GRAPHIC_ANIMATION_PHASE_VALUES, GRAPHIC_INPUT_KEY_PATTERN, MAX_GRAPHIC_INPUT_KEY_LENGTH } from '../../types/graphics';
 import { createDefaultGraphicAnimationRecipe, getGraphicAnimationPreset } from './animation';
@@ -507,21 +508,29 @@ const GEOMETRY_KINDS = ['shape', 'group', 'media', 'game-wins'] as const;
  * the indicator, so both are ordinary authored surfaces rather than one style
  * with a hardcoded variant.
  */
-export type GraphicSurfaceStyleSlot = 'surfaceStyle' | 'boxSurfaceStyle' | 'wonBoxSurfaceStyle';
+export type GraphicSurfaceStyleSlot = Extract<
+	GraphicStyleSlot,
+	'surfaceStyle' | 'boxSurfaceStyle' | 'wonBoxSurfaceStyle'
+>;
 
 /**
  * The kinds each slot exists on. A Media Graphic Item paints an asset rather
  * than a surface and so carries none; the two box slots belong to Game Wins
  * alone.
+ *
+ * Exported because it is the *only* statement of this fact. Graphic Style Sets
+ * inherit into these same three surfaces, and a second table saying which kinds own
+ * them would let a style reference be bound to a surface the editor knows the item
+ * does not have — a picker that appears and then writes nothing.
  */
-const SURFACE_SLOT_KINDS: Record<GraphicSurfaceStyleSlot, readonly GraphicItemKind[]> = {
+export const GRAPHIC_SURFACE_STYLE_SLOT_KINDS: Record<GraphicSurfaceStyleSlot, readonly GraphicItemKind[]> = {
 	surfaceStyle: ['text', 'shape', 'group', 'clock', 'player-life', 'game-wins'],
 	boxSurfaceStyle: ['game-wins'],
 	wonBoxSurfaceStyle: ['game-wins'],
 };
 
 /** The kinds whose own Graphic Surface Style is optional, so it can be cleared. */
-const SURFACE_KINDS = SURFACE_SLOT_KINDS.surfaceStyle;
+const SURFACE_KINDS = GRAPHIC_SURFACE_STYLE_SLOT_KINDS.surfaceStyle;
 
 /**
  * The kinds that carry typography. The three context-gated Definitions render a
@@ -734,7 +743,7 @@ function patchSurfaceStyleSlot(
 	slot: GraphicSurfaceStyleSlot,
 	merge: (style: GraphicSurfaceStyle) => GraphicSurfaceStyle,
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, SURFACE_SLOT_KINDS[slot], item => ({
+	return patchGraphicItemGroup(graphic, itemId, GRAPHIC_SURFACE_STYLE_SLOT_KINDS[slot], item => ({
 		[slot]: merge(surfaceStyleAt(item, slot) ?? createDefaultGraphicSurfaceStyle()),
 	}));
 }

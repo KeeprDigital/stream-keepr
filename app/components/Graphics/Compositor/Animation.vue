@@ -7,7 +7,14 @@ import type {
 	GraphicContainerAnimation,
 	GraphicOnScreenAnimationRecipe,
 } from '~~/shared/types/graphics';
+import type { GraphicStyleSlot } from '~~/shared/types/graphicStyleSet';
+import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
+import {
+	bindGraphicStyleRef,
+	recaptureGraphicStyleOverrides,
+	unbindGraphicStyleRef,
+} from '~~/shared/modules/graphic-style-sets';
 import {
 	applyBroadcastGraphicAnimationPreset,
 	applyGraphicItemAnimationPreset,
@@ -68,6 +75,13 @@ const props = defineProps<{
 	selectedTarget: GraphicsSelectionTarget;
 	/** Whether this session holds the artifact's Graphics Authoring Lease. */
 	writable?: boolean;
+	/**
+	 * The published Graphic Style Set this composition is linked to, when it is
+	 * linked to one. A Graphic Animation Recipe preset is referenced per lifecycle
+	 * phase, from the phase's own controls, exactly as every other preset is
+	 * referenced from the property control that already edits it.
+	 */
+	styleSet?: GraphicStyleAuthoringContext;
 }>();
 
 const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[]] }>();
@@ -76,6 +90,62 @@ const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[
 const canAuthor = computed(() => props.writable === true);
 
 const selection = computed(() => resolveGraphicsSelection(props.graphics, props.selectedTarget));
+
+/**
+ * The Graphic Style Set slot one lifecycle phase's recipe is inherited through.
+ *
+ * The slot vocabulary names the phase, so a preset assigned to enter and the same
+ * preset assigned to exit are two independent references to one entry — which is
+ * exactly the glossary's rule that a template "assigns presets to lifecycle phases"
+ * while item selection, staggering, and choreography stay local.
+ */
+function styleSlotFor(phase: GraphicAnimationPhase): GraphicStyleSlot {
+	return `animation.${phase}` as GraphicStyleSlot;
+}
+
+function styleRefFor(phase: GraphicAnimationPhase) {
+	const current = selection.value;
+	if (current.kind === 'graphic')
+		return current.graphic.styleRefs?.[styleSlotFor(phase) as 'animation.enter'];
+	if (current.kind === 'item')
+		return current.item.styleRefs?.[styleSlotFor(phase)];
+	return undefined;
+}
+
+/** The owner a reference is written against: null is the Broadcast Graphic itself. */
+function styleOwnerId(): string | null | undefined {
+	const current = selection.value;
+	if (current.kind === 'graphic')
+		return null;
+	return current.kind === 'item' ? current.item.id : undefined;
+}
+
+function bindStyleRef(phase: GraphicAnimationPhase, entryId: string) {
+	const current = selection.value;
+	const context = props.styleSet;
+	const ownerId = styleOwnerId();
+	if (!canAuthor.value || ownerId === undefined || !context)
+		return;
+	if (current.kind !== 'graphic' && current.kind !== 'item')
+		return;
+	emit('update:graphics', replaceBroadcastGraphic(
+		props.graphics,
+		bindGraphicStyleRef(current.graphic, ownerId, styleSlotFor(phase), entryId, context.resolution),
+	));
+}
+
+function unbindStyleRef(phase: GraphicAnimationPhase) {
+	const current = selection.value;
+	const ownerId = styleOwnerId();
+	if (!canAuthor.value || ownerId === undefined)
+		return;
+	if (current.kind !== 'graphic' && current.kind !== 'item')
+		return;
+	emit('update:graphics', replaceBroadcastGraphic(
+		props.graphics,
+		unbindGraphicStyleRef(current.graphic, ownerId, styleSlotFor(phase)),
+	));
+}
 
 const EASING_OPTIONS = GRAPHIC_ANIMATION_EASING_VALUES.map(value => ({ label: value, value }));
 const ORIGIN_OPTIONS = GRAPHIC_ANIMATION_ORIGINS.map(origin => ({ label: origin.label, value: origin.value }));
@@ -148,10 +218,34 @@ function apply(
 	const current = selection.value;
 	if (!canAuthor.value)
 		return;
-	if (current.kind === 'graphic')
-		emit('update:graphics', onGraphic(props.graphics, current.graphic.id));
-	else if (current.kind === 'item')
-		emit('update:graphics', replaceBroadcastGraphic(props.graphics, onItem(current.graphic, current.item.id)));
+	if (current.kind === 'graphic') {
+		const graphics = onGraphic(props.graphics, current.graphic.id);
+		const edited = graphics.find(graphic => graphic.id === current.graphic.id);
+		emit('update:graphics', edited
+			? graphics.map(graphic => graphic.id === edited.id ? withRecapturedStyleOverrides(edited) : graphic)
+			: graphics);
+	}
+	else if (current.kind === 'item') {
+		emit('update:graphics', replaceBroadcastGraphic(
+			props.graphics,
+			withRecapturedStyleOverrides(onItem(current.graphic, current.item.id)),
+		));
+	}
+}
+
+/**
+ * One edited Broadcast Graphic, with its Graphic Style Set overrides brought back
+ * into line with what it now holds.
+ *
+ * The same funnel the inspector's property controls go through, for the same reason:
+ * these controls write recipe *values*, and an edit to a phase whose recipe is
+ * inherited is a deviation by definition. Deriving it here is what makes it the
+ * explicit property-level override the glossary requires — without it, the author's
+ * change would be silently reverted by the next applied Style Set update.
+ */
+function withRecapturedStyleOverrides(graphic: BroadcastGraphicConfig): BroadcastGraphicConfig {
+	const context = props.styleSet;
+	return context ? recaptureGraphicStyleOverrides(graphic, context.resolution) : graphic;
 }
 
 function setPhaseEnabled(phase: GraphicAnimationPhase, enabled: boolean) {
@@ -262,6 +356,16 @@ function onScreenRecipeOf() {
 			</div>
 
 			<div v-if="recipeOf(phase)" class="mt-2 space-y-2">
+				<GraphicsCompositorStyleRef
+					:style-slot="`animation.${phase}`"
+					:label="`${GRAPHIC_ANIMATION_PHASE_LABELS[phase]} recipe`"
+					:entries="styleSet?.entries"
+					:current="styleRefFor(phase)"
+					:writable="canAuthor"
+					@bind="entryId => bindStyleRef(phase, entryId)"
+					@unbind="unbindStyleRef(phase)"
+				/>
+
 				<UFormField label="Preset" size="xs">
 					<USelectMenu
 						:items="presetOptions(phase)"

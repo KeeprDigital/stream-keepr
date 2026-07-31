@@ -23,6 +23,13 @@ import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphic
  * statement in the batch is conditional on still reading it. A concurrent write
  * therefore either wins outright or contributes nothing, and no interleaving can
  * leave one template's document paired with another write's references.
+ *
+ * Every write also restates the document's Graphic Style Set link into its own
+ * columns. They are a denormalisation of `document.styleSet` and are derived here
+ * rather than accepted from a caller, so a template's stored link can never disagree
+ * with the composition it is a link for. What they buy is the one question the Style
+ * Set library asks constantly — which templates does this Style Set reach — answered
+ * by an index instead of by parsing every document in the library.
  */
 
 const OWNER_KIND = 'broadcast-graphic-template';
@@ -138,15 +145,18 @@ export function broadcastGraphicTemplateService() {
 			client.prepare(`
 				INSERT INTO broadcast_graphic_templates (
 					id, name, description, revision, document,
-					graphic_asset_reference_version, created_at, updated_at
+					graphic_asset_reference_version, style_set_id, style_set_revision,
+					created_at, updated_at
 				)
-				VALUES (?, ?, ?, 1, ?, ?, ?, ?)
+				VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
 			`).bind(
 				input.id,
 				input.name,
 				input.description,
 				JSON.stringify(input.document),
 				referenceVersion,
+				input.document.styleSet?.styleSetId ?? null,
+				input.document.styleSet?.revision ?? null,
 				now,
 				now,
 			),
@@ -189,13 +199,16 @@ export function broadcastGraphicTemplateService() {
 			client.prepare(`
 				UPDATE broadcast_graphic_templates
 				SET name = ?, description = ?, document = ?, revision = revision + 1,
-					graphic_asset_reference_version = ?, updated_at = ?
+					graphic_asset_reference_version = ?, style_set_id = ?, style_set_revision = ?,
+					updated_at = ?
 				WHERE id = ? AND revision = ?
 			`).bind(
 				patch.name ?? existing.name,
 				patch.description === undefined ? existing.description : patch.description,
 				JSON.stringify(document),
 				referenceVersion,
+				document.styleSet?.styleSetId ?? null,
+				document.styleSet?.revision ?? null,
 				now,
 				id,
 				patch.revision,

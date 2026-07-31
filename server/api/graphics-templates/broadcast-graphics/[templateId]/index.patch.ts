@@ -11,6 +11,7 @@ import {
 	broadcastGraphicTemplateService,
 } from '~~/server/services/broadcastGraphicTemplate';
 import { assertBroadcastGraphicTemplateReferencesExist } from '~~/server/utils/broadcastGraphicTemplateReferences';
+import { assertBroadcastGraphicTemplateStyleSetResolves } from '~~/server/utils/broadcastGraphicTemplateStyleSet';
 import { refuseInstalledBroadcastGraphicTemplateWrite } from '~~/server/utils/broadcastGraphicTemplateWrites';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
@@ -37,8 +38,10 @@ export default defineEventHandler(async (event) => {
 		await readJsonPayloadLimited(event, 512 * 1024, 'Broadcast Graphic Template'),
 	);
 
-	if (body.document)
+	if (body.document) {
 		await assertBroadcastGraphicTemplateReferencesExist(graphicsAssetLibraryForEvent(event), body.document);
+		await assertBroadcastGraphicTemplateStyleSetResolves(body.document);
+	}
 
 	try {
 		const template = await broadcastGraphicTemplateService().update(templateId, body);

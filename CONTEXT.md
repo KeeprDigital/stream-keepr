@@ -143,6 +143,7 @@ Media treatment presets define presentation without selecting an image or video;
 Each Graphic Style Set has a stable identity and managed revision; each entry has a stable identity, kind, and schema version.
 Renaming a Graphic Style Set or entry preserves its identity, while an entry's kind cannot change in place.
 Edits accumulate in a working draft; one explicit atomic publish validates entry references, cycles, schemas, and asset availability before creating a Style Set revision and identifying affected templates.
+Publishing is the only way a draft edit becomes published, with one exception: deleting a published entry removes it from the published entries and creates a Style Set revision without a publish, because an entry left published would keep every linked template resolving against something already deleted. For the same reason a replacement entry must itself already be published.
 Graphics templates linked to a changed Graphic Style Set receive an available style update that an author must explicitly review and apply as a new template revision.
 An update is available only when a referenced entry or one of its transitive dependencies changes in resolved style, schema, or asset dependency; unused changes and renames do not revise a template.
 Placed Broadcast Graphics and Screen-owned Feature Match Layouts never receive Graphic Style Set changes automatically.
@@ -153,7 +154,9 @@ During review, an author may preserve a previous resolved property as a new loca
 Each Broadcast Graphic Template or Feature Match Layout Template links to at most one Graphic Style Set.
 Graphic Style Set entries may reference entries in the same set but never entries in another Style Set, and Style Sets do not inherit from or compose one another.
 A template adopts a Graphic Style Set without a bulk-mapping workflow: authors select entries directly in existing property controls, and every unselected property remains local.
-Deleting a referenced entry or Style Set offers one atomic operation to replace its references or detach them by freezing their resolved values into new template revisions; deletion occurs only if every affected template update succeeds.
+Deleting a referenced entry offers one atomic operation to replace its references with another entry of the same kind or detach them by freezing their resolved values into new template revisions.
+Deleting a whole Graphic Style Set offers detachment only: replacing one Style Set with another would mean matching entries between two independently authored sets, which is the bulk-mapping workflow adopting a Style Set already rules out.
+Either deletion occurs only if every affected template update succeeds.
 Export resolves every used entry into a self-contained template snapshot while retaining the source Graphic Style Set and entry identities, revisions, kinds, schemas, and value hashes as provenance.
 Importing a Broadcast Graphic Template or Feature Match Layout Template never requires, creates, or modifies a Graphic Style Set; it may explicitly relink the template to an installed Style Set with matching identity and structurally compatible entries after showing the resulting differences.
 
