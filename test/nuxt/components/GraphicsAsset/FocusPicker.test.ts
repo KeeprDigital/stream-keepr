@@ -127,6 +127,12 @@ mockNuxtImport('useFetch', () => () => ({
 	error: ref(null),
 }));
 mockNuxtImport('$fetch', () => mockApiFetch);
+// The real composable auto-starts a singleton that synchronises against
+// `/api/time` on its own timers, so the shared `$fetch` mock would count
+// requests this file never made.
+mockNuxtImport('useServerTime', () => () => ({
+	getServerTime: () => Date.now(),
+}));
 
 const passthroughStub = defineComponent({
 	template: '<div><slot name="content" /><slot /></div>',
