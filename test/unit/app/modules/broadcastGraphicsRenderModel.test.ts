@@ -121,6 +121,23 @@ describe('broadcast Graphics render model', () => {
 		expect(model.graphics.map(entry => entry.id)).toEqual(['back', 'front']);
 	});
 
+	it('composes concurrent Broadcast Graphics in authored stack order whatever their Graphic Channel', () => {
+		// Channel membership is a playout relationship, not a compositing one. The
+		// composition is derived from the authored stack and a membership set, so a
+		// channel member interleaved between two graphics in no channel — and taken last
+		// — still composites exactly where it was authored.
+		const model = resolveBroadcastGraphicsRenderModel(input({
+			graphics: [
+				graphic('back'),
+				{ ...graphic('middle'), channelId: 'thirds' },
+				{ ...graphic('front'), channelId: 'slates' },
+			],
+			onAirGraphicIds: ['middle', 'front', 'back'],
+		}));
+
+		expect(model.graphics.map(entry => entry.id)).toEqual(['back', 'middle', 'front']);
+	});
+
 	it('keeps advisory guides out of a Screen Output that does not ask for them', () => {
 		const model = resolveBroadcastGraphicsRenderModel(input({
 			graphics: [graphic('lower-third')],

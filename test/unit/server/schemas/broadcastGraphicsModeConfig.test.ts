@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	broadcastGraphicsModeConfigSchema,
 	MAX_BROADCAST_GRAPHICS_PER_SCREEN,
+	MAX_GRAPHIC_CHANNELS_PER_SCREEN,
 	MAX_GRAPHIC_GROUP_CHILDREN,
 	MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC,
 	MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN,
@@ -377,6 +378,75 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		expect(broadcastGraphicsModeConfigSchema.safeParse({ graphics }).success).toBe(true);
 	});
 
+	it('accepts a Broadcast Graphic joining a declared Graphic Channel', () => {
+		const config = {
+			graphics: [{ ...graphic('lower-third-a'), channelId: 'thirds' }, { ...graphic('lower-third-b'), channelId: 'thirds' }],
+			channels: [{ id: 'thirds', name: 'Lower thirds', handoff: 'out-then-in' as const }],
+		};
+
+		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(true);
+	});
+
+	it('accepts a Graphic Channel that states no Handoff Policy, because it defaults to Overlap', () => {
+		const config = { graphics: [], channels: [{ id: 'thirds', name: 'Lower thirds' }] };
+
+		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(true);
+	});
+
+	it('refuses an unknown Graphic Channel Handoff Policy', () => {
+		const config = { graphics: [], channels: [{ id: 'thirds', name: 'Lower thirds', handoff: 'queue' }] };
+
+		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(false);
+	});
+
+	it('refuses two Graphic Channels sharing one id', () => {
+		const config = {
+			graphics: [],
+			channels: [{ id: 'thirds', name: 'Lower thirds' }, { id: 'thirds', name: 'Also lower thirds' }],
+		};
+		const result = broadcastGraphicsModeConfigSchema.safeParse(config);
+
+		expect(result.success).toBe(false);
+		expect(messages(result)).toContain('Graphic Channel ids must be unique within one Broadcast Graphics Screen');
+	});
+
+	it('names the Graphic Channel cap rather than reporting a byte count', () => {
+		const channels = Array.from(
+			{ length: MAX_GRAPHIC_CHANNELS_PER_SCREEN + 1 },
+			(_, index) => ({ id: `channel-${index}`, name: `Channel ${index}` }),
+		);
+		const result = broadcastGraphicsModeConfigSchema.safeParse({ graphics: [], channels });
+
+		expect(result.success).toBe(false);
+		expect(messages(result)).toContain(
+			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_CHANNELS_PER_SCREEN} Graphic Channels`,
+		);
+	});
+
+	it('accepts a Broadcast Graphic naming a Graphic Channel the Screen does not declare', () => {
+		// Tolerated rather than refused: a cross-field rule is an object-level refinement,
+		// which the mode-configuration patch schema drops, so refusing here would hold on
+		// one write path and not the other. Membership that resolves to nothing is the
+		// uniform answer instead, and it is what a graphic left behind by a deleted
+		// channel needs in order to keep running concurrently.
+		const config = { graphics: [{ ...graphic('bug'), channelId: 'deleted' }] };
+
+		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(true);
+	});
+
+	it('carries Graphic Channels through the mode-configuration patch path', () => {
+		// The path the editors write through rebuilds each mode from its field schemas,
+		// so a field that only validates in the whole-config schema never reaches it.
+		const patch = modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({
+			channels: [{ id: 'thirds', name: 'Lower thirds', handoff: 'out-then-in' }],
+		});
+
+		expect(patch.success).toBe(true);
+		expect(modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({
+			channels: [{ id: 'thirds', name: 'A' }, { id: 'thirds', name: 'B' }],
+		}).success).toBe(false);
+	});
+
 	it('keeps a worst-case authored Screen inside the mode-configuration byte limit', () => {
 		// The named caps have to bind before the byte limit, or an operator reads an
 		// opaque byte count instead of the limit they reached. This is the most
@@ -430,7 +500,19 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		for (const graphic of graphics)
 			graphic.animation = worstContainerAnimation(graphic.items.map(item => item.id));
 
-		const config = { graphics };
+		// Every Graphic Channel slot filled, and every Broadcast Graphic in one. Channel
+		// membership costs on both sides — the declaration and the id each graphic joins
+		// it by — so leaving either out would understate what the caps together admit.
+		const channels = Array.from({ length: MAX_GRAPHIC_CHANNELS_PER_SCREEN }, (_, index) => ({
+			id: `${'c'.repeat(98)}${String(index).padStart(2, '0')}`,
+			name: 'N'.repeat(100),
+			handoff: 'out-then-in' as const,
+		}));
+		graphics.forEach((graphic, index) => {
+			(graphic as { channelId?: string }).channelId = channels[index % channels.length]!.id;
+		});
+
+		const config = { graphics, channels };
 		const bytes = new TextEncoder().encode(JSON.stringify(config)).byteLength;
 
 		// Every named cap admits it — that is what makes it the worst case the caps

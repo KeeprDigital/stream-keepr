@@ -38,6 +38,16 @@ export function useBroadcastGraphicsModeData() {
 	);
 
 	/**
+	 * The Screen's Graphic Channels, which decide when an Out-then-in handoff's
+	 * incoming graphic stops being held off program.
+	 *
+	 * Read from stored Screen configuration even under a preview, because a preview
+	 * composes the whole authored stack and never consults playout at all — so the
+	 * channels only ever matter on the live path below.
+	 */
+	const channels = computed(() => storedConfig.value.channels ?? []);
+
+	/**
 	 * The one instant every live projection below is read at, on the authoritative
 	 * clock rather than this browser's.
 	 *
@@ -61,7 +71,9 @@ export function useBroadcastGraphicsModeData() {
 		const screenId = screen.value?.id;
 		// Timed, because an exiting Broadcast Graphic is still on program: it leaves the
 		// frame when its exit phase completes, not when Out is accepted.
-		return screenId ? sessionStore.onAirGraphicIds(screenId, graphics.value, liveNow.value) : [];
+		return screenId
+			? sessionStore.onAirGraphicIds(screenId, graphics.value, liveNow.value, channels.value)
+			: [];
 	});
 
 	/**
@@ -123,7 +135,9 @@ export function useBroadcastGraphicsModeData() {
 		if (previewState.value || !screenId)
 			return false;
 
-		return Object.keys(sessionStore.animationProjection(screenId, graphics.value, liveNow.value)).length > 0;
+		return Object.keys(
+			sessionStore.animationProjection(screenId, graphics.value, liveNow.value, channels.value),
+		).length > 0;
 	}
 
 	function stopLiveClock() {
@@ -211,7 +225,7 @@ export function useBroadcastGraphicsModeData() {
 		// effective start times, read on the authoritative clock. Nothing here is
 		// accumulated between frames, so an output that opens late, reloads, or
 		// reconnects catches up to the current phase instead of replaying it.
-		return sessionStore.animationProjection(screenId, graphics.value, liveNow.value);
+		return sessionStore.animationProjection(screenId, graphics.value, liveNow.value, channels.value);
 	});
 
 	let frame: number | null = null;

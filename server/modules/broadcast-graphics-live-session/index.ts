@@ -7,6 +7,7 @@ import type {
 	BroadcastGraphicsLiveSessionResponse,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicsModeConfig } from '~~/shared/types/screenConfig';
 import { mapBroadcastGraphicsLiveSessionToResponse } from '~~/server/mappers/broadcastGraphicsLiveSession';
 import {
 	graphicAssetId,
@@ -17,6 +18,7 @@ import { graphicBindingDataService } from '~~/server/services/graphicBindingData
 import { screenService } from '~~/server/services/screen';
 import { publishMessage } from '~~/server/utils/ably';
 import {
+	broadcastGraphicChannelContexts,
 	broadcastGraphicSourceSelections,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { broadcastGraphicPhaseDurations, resolveGraphicInputBindings } from '~~/shared/modules/graphics';
@@ -71,18 +73,22 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	};
 
 	/**
-	 * The placed Broadcast Graphic a command addresses, from the Screen's authored
-	 * stack.
+	 * The Screen's authored Broadcast Graphics stack and its Graphic Channels.
 	 *
-	 * Both admission and reduction need it: whether the Screen places the graphic at
-	 * all, which Graphic Inputs it declares, and which Graphic Assets it pins. All
-	 * three are questions about authored configuration rather than live state, which
-	 * is why they are answered here rather than inside the live-state port.
+	 * Everything a command has to be admitted and reduced against that is not live
+	 * state: whether the Screen places the graphic at all, which Graphic Inputs it
+	 * declares, which Graphic Assets it pins, and which Graphic Channel it runs in.
+	 * All of it is authored configuration, which is why it is answered here rather
+	 * than inside the live-state port.
 	 */
-	function findAuthoredGraphic(screen: DbScreen, graphicId: string): BroadcastGraphicConfig | undefined {
-		const config = screen.modeConfigs?.['broadcast-graphics']
+	function authoredStack(screen: DbScreen): BroadcastGraphicsModeConfig {
+		return screen.modeConfigs?.['broadcast-graphics']
 			?? getDefaultConfigForMode('broadcast-graphics');
-		return config.graphics.find(graphic => graphic.id === graphicId);
+	}
+
+	/** The placed Broadcast Graphic a command addresses. */
+	function findAuthoredGraphic(screen: DbScreen, graphicId: string): BroadcastGraphicConfig | undefined {
+		return authoredStack(screen).graphics.find(graphic => graphic.id === graphicId);
 	}
 
 	/**
@@ -148,6 +154,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	 */
 	const reductionContextFor = async (
 		eventId: number,
+		screen: DbScreen,
 		graphic: BroadcastGraphicConfig,
 		currentState: BroadcastGraphicsLiveState,
 		command: BroadcastGraphicsCommand,
@@ -168,6 +175,13 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 			// graphic this module already had to find. Authored Screen configuration, which
 			// is exactly why the reducer is handed it rather than reaching for it.
 			durations: broadcastGraphicPhaseDurations(graphic),
+			// The Graphic Channel this graphic runs in, and every other Broadcast Graphic
+			// the Screen places in it. A Take is the one command whose effect reaches past
+			// the graphic it names — it replaces whichever member the channel holds — so
+			// resolving the channel is admission's job in exactly the way resolving the
+			// graphic is: both are questions about the Screen's authored configuration,
+			// which the sequenced aggregate does not contain.
+			channel: broadcastGraphicChannelContexts(authoredStack(screen))[graphic.id],
 		};
 	};
 
@@ -291,7 +305,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 			sessionId,
 			eventId,
 			command,
-			await reductionContextFor(eventId, graphic, session.currentState, command),
+			await reductionContextFor(eventId, screen, graphic, session.currentState, command),
 			originConnectionId,
 			{ publish: true },
 		);

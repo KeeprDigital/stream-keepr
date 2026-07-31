@@ -1,4 +1,5 @@
 import type {
+	BroadcastGraphicChannelContext,
 	BroadcastGraphicInputsState,
 	BroadcastGraphicPhaseTiming,
 	BroadcastGraphicsLiveState,
@@ -15,6 +16,7 @@ import type {
 import type {
 	BroadcastGraphicConfig,
 	GraphicAnimationPhase,
+	GraphicChannelConfig,
 	GraphicInputValue,
 	GraphicPlayoutState,
 } from '~~/shared/types/graphics';
@@ -22,6 +24,7 @@ import type { MessageData } from '~/types/realtime';
 import {
 	acceptedGraphicInputValues,
 	BROADCAST_GRAPHICS_REJECTION_CODES,
+	broadcastGraphicChannelContexts,
 	broadcastGraphicInputsState,
 	broadcastGraphicPhaseProjection,
 	broadcastGraphicPhaseTiming,
@@ -175,8 +178,9 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	function timingFor(
 		graphic: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
 		now: number,
+		channel?: BroadcastGraphicChannelContext,
 	): BroadcastGraphicPhaseTiming | undefined {
-		return isClockSynced.value ? broadcastGraphicPhaseTiming(graphic, now) : undefined;
+		return isClockSynced.value ? broadcastGraphicPhaseTiming(graphic, now, channel) : undefined;
 	}
 
 	/**
@@ -208,6 +212,22 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	}
 
 	/**
+	 * The Graphic Channel context each placed Broadcast Graphic is read against.
+	 *
+	 * Resolved from the Screen's authored stack the caller already holds, because
+	 * waiting is not a fact about one graphic's own record: it is whether the channel
+	 * that graphic belongs to is still occupied by the member it is replacing. A caller
+	 * with no channels to offer gets none, and no channel means no waiting — which is
+	 * the right answer for every Broadcast Graphic that belongs to none.
+	 */
+	function channelContexts(
+		graphics: readonly BroadcastGraphicConfig[],
+		channels: readonly GraphicChannelConfig[] | undefined,
+	): Record<string, BroadcastGraphicChannelContext> {
+		return channels?.length ? broadcastGraphicChannelContexts({ graphics, channels }) : {};
+	}
+
+	/**
 	 * The Graphic Playout State of one placed Broadcast Graphic.
 	 *
 	 * With a graphic and an instant it reports entering, updating, and exiting as well
@@ -219,11 +239,17 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		graphicId: string,
 		graphic?: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
 		now?: number,
+		/**
+		 * The Graphic Channel this graphic belongs to, from `channelContexts`. Only a
+		 * caller holding the whole authored stack can supply one, and only a caller that
+		 * does can be told the graphic is waiting.
+		 */
+		channel?: BroadcastGraphicChannelContext,
 	): GraphicPlayoutState {
 		return broadcastGraphicPlayoutState(
 			liveState(screenId),
 			graphicId,
-			graphic ? timingFor(graphic, now ?? serverNow()) : undefined,
+			graphic ? timingFor(graphic, now ?? serverNow(), channel) : undefined,
 		);
 	}
 
@@ -237,12 +263,14 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		screenId: number,
 		graphics: readonly BroadcastGraphicConfig[],
 		now?: number,
+		channels?: readonly GraphicChannelConfig[],
 	): string[] {
 		const instant = now ?? serverNow();
+		const contexts = channelContexts(graphics, channels);
 		return onAirBroadcastGraphicIds(
 			liveState(screenId),
 			graphics,
-			graphic => timingFor(graphic as BroadcastGraphicConfig, instant),
+			graphic => timingFor(graphic as BroadcastGraphicConfig, instant, contexts[graphic.id]),
 		);
 	}
 
@@ -256,13 +284,19 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		screenId: number,
 		graphics: readonly BroadcastGraphicConfig[],
 		now?: number,
+		channels?: readonly GraphicChannelConfig[],
 	): Record<string, { phase: GraphicAnimationPhase; elapsed: number }> {
 		const state = liveState(screenId);
 		const instant = now ?? serverNow();
+		const contexts = channelContexts(graphics, channels);
 		const projections: Record<string, { phase: GraphicAnimationPhase; elapsed: number }> = {};
 
 		for (const graphic of graphics) {
-			const projection = broadcastGraphicPhaseProjection(state, graphic.id, timingFor(graphic, instant));
+			const projection = broadcastGraphicPhaseProjection(
+				state,
+				graphic.id,
+				timingFor(graphic, instant, contexts[graphic.id]),
+			);
 			if (projection)
 				projections[graphic.id] = projection;
 		}
@@ -723,6 +757,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		loading,
 		error,
 		serverNow,
+		channelContexts,
 		playoutState,
 		onAirGraphicIds,
 		animationProjection,
