@@ -70,6 +70,14 @@ export const TEMPLATE_PACKAGE_LIMITS = {
 export const TEMPLATE_PACKAGE_CAPABILITY_KINDS = [
 	'application-font',
 	'graphic-item-definition',
+	/**
+	 * A term from a vocabulary the host owns rather than the Template: a Source
+	 * Item's role, a Frame animation effect, a host token a Graphic Text Template
+	 * binds. Declared for the same reason a Definition is — the receiving
+	 * installation supplies the meaning, so it must be given the chance to say it
+	 * has none for this term.
+	 */
+	'host-vocabulary',
 ] as const;
 
 export type TemplatePackageCapabilityKind = typeof TEMPLATE_PACKAGE_CAPABILITY_KINDS[number];

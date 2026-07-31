@@ -1,9 +1,13 @@
 import type { H3Event } from 'h3';
 import type { TemplatePackageExportOutcome } from '~~/server/modules/graphics-asset-library';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
-import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
+import {
+	broadcastGraphicTemplatePackageRequirements,
+	featureMatchLayoutTemplatePackageRequirements,
+} from '~~/shared/utils/templatePackageRequirements';
 
 /**
  * The shared HTTP boundary for both Template Package exporters.
@@ -51,20 +55,55 @@ export function respondWithTemplatePackage(
  * Graphics Asset Library export contract, and stream what comes back. Sharing it
  * means the two can never come to package the same design differently.
  */
+/** One exportable Template: its provenance, and the document that travels. */
+interface ExportableTemplate<TDocument> {
+	identity: string;
+	name: string;
+	/** Present where the exporting workflow manages one; provenance, never a link. */
+	revision?: number;
+	document: TDocument;
+}
+
 export function exportBroadcastGraphicTemplatePackage(
 	event: H3Event,
-	template: {
-		identity: string;
-		name: string;
-		/** Present where the exporting workflow manages one; provenance, never a link. */
-		revision?: number;
-		document: BroadcastGraphicConfig;
-	},
+	template: ExportableTemplate<BroadcastGraphicConfig>,
 ): Promise<ReadableStream<Uint8Array>> {
 	const requirements = broadcastGraphicTemplatePackageRequirements(template.document);
 	return graphicsAssetLibraryForEvent(event)
 		.exportTemplatePackage({
 			packageKind: 'skgraphic',
+			template,
+			assets: requirements.assets,
+			capabilities: requirements.capabilities,
+		})
+		.then(outcome => respondWithTemplatePackage(event, outcome))
+		.catch(error => rethrowGraphicsAssetApiError(error, event));
+}
+
+/**
+ * One reusable Feature Match Layout as a `.sklayout` Template Package.
+ *
+ * The mirror of the Broadcast Graphic exporter, and separate from it for the
+ * reason the glossary gives: the two kinds "share the package envelope, asset
+ * handling, validation, migration, conflict, and atomic installation contract
+ * while retaining separate payloads, libraries, and import/export workflows". What
+ * is shared is everything below this line — the one Graphics Asset Library export
+ * contract, the same limits, the same integrity facts. What is not shared is which
+ * artifact is being packaged and what it requires, and that is the whole of what
+ * these two functions differ by.
+ *
+ * Two routes reach a layout worth packaging — a library entry by its own identity,
+ * and a Screen by the layout it currently carries — and from there the act is
+ * identical, so they share this.
+ */
+export function exportFeatureMatchLayoutTemplatePackage(
+	event: H3Event,
+	template: ExportableTemplate<FeatureMatchLayoutConfig>,
+): Promise<ReadableStream<Uint8Array>> {
+	const requirements = featureMatchLayoutTemplatePackageRequirements(template.document);
+	return graphicsAssetLibraryForEvent(event)
+		.exportTemplatePackage({
+			packageKind: 'sklayout',
 			template,
 			assets: requirements.assets,
 			capabilities: requirements.capabilities,

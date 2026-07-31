@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
 import { createFeatureMatchLayoutComposition, FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
+import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES } from '~~/shared/featureMatchSampleDataset';
 import { getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 
@@ -23,6 +24,8 @@ mockNuxtImport('useScreenContext', () => () => ({
 	screen: mockScreen,
 }));
 
+const mockUsesSampleDataset = ref(false);
+
 mockNuxtImport('useFeatureMatchOverlayModeData', () => () => ({
 	config: computed(() => mockConfig.value),
 	match: ref(null),
@@ -31,6 +34,7 @@ mockNuxtImport('useFeatureMatchOverlayModeData', () => () => ({
 	round: ref(null),
 	phase: ref(null),
 	event: ref(null),
+	usesSampleDataset: computed(() => mockUsesSampleDataset.value),
 	loading: mockLoading,
 	error: mockError,
 }));
@@ -272,6 +276,62 @@ describe('featureMatchOverlayDisplay', () => {
 		mockLoading.value = false;
 		mockError.value = null;
 		mockContentUrlsSettled.value = true;
+		mockUsesSampleDataset.value = false;
+	});
+
+	/**
+	 * The canonical Feature Match sample dataset, and the one rule that keeps it
+	 * safe: it is a preview affordance and never reaches air.
+	 */
+	describe('the canonical sample dataset', () => {
+		function layoutBindingAToken(): FeatureMatchOverlayModeConfig {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			const nameplate = getGraphicItemDefinition('text').createDefault({
+				id: 'nameplate',
+				label: 'Nameplate',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			});
+			if (nameplate.type !== 'text')
+				throw new Error('expected a Text Graphic Item');
+			nameplate.text = '{player1Name}';
+			config.layout.composition = {
+				...createFeatureMatchLayoutComposition(),
+				items: [nameplate],
+			};
+			config.layout.sources = [];
+			return config;
+		}
+
+		/**
+		 * A layout is authored long before the show it will run, so the Slot behind it
+		 * is usually empty and every placeholder renders blank. An empty preview hides
+		 * exactly what an author is judging: whether real values fit inside the bounds
+		 * they drew.
+		 */
+		it('stands in for a Feature Match the preview does not have', async () => {
+			mockConfig.value = layoutBindingAToken();
+			mockUsesSampleDataset.value = true;
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.text()).toContain(FEATURE_MATCH_SAMPLE_TOKEN_VALUES.player1Name);
+		});
+
+		/**
+		 * The one failure sample data must never cause. A live Screen Output whose
+		 * Feature Match Slot holds no Match renders empty; putting invented player
+		 * names on air instead would be indistinguishable, to everyone watching, from
+		 * real ones.
+		 */
+		it('never reaches a live Screen Output', async () => {
+			mockConfig.value = layoutBindingAToken();
+			mockUsesSampleDataset.value = false;
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.text()).not.toContain(FEATURE_MATCH_SAMPLE_TOKEN_VALUES.player1Name);
+		});
 	});
 
 	describe('the host-owned Source Items', () => {

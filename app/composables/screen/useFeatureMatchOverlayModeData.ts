@@ -65,6 +65,19 @@ export function useFeatureMatchOverlayModeData() {
 		return featureMatchStateStore.featureMatchStates.get(config.value.featureMatchId) ?? null;
 	});
 
+	/**
+	 * Whether this rendering stands in the canonical Feature Match sample dataset
+	 * for the Feature Match it does not have.
+	 *
+	 * Both halves are necessary. A preview with a Slot selected shows that Slot's
+	 * real data, because an author checking a name plate against the actual finalists
+	 * is checking something the sample cannot tell them. And a live Screen Output
+	 * never substitutes at all, whatever its Slot holds: an unassigned Overlay
+	 * renders empty on air, which is the one behaviour sample data must never
+	 * change.
+	 */
+	const usesSampleDataset = computed(() => Boolean(isPreview?.value) && !config.value.featureMatchId);
+
 	const round = computed(() => sourceMatch.value ? roundStore.getRoundById(sourceMatch.value.roundId) : undefined);
 	const phase = computed(() => round.value ? phaseStore.getPhaseById(round.value.phaseId) : undefined);
 
@@ -95,5 +108,5 @@ export function useFeatureMatchOverlayModeData() {
 		{ immediate: true },
 	);
 
-	return { config, match, matchState, sourceMatch, round, phase, event: computed(() => eventStore.event), loading, error };
+	return { config, match, matchState, sourceMatch, round, phase, event: computed(() => eventStore.event), usesSampleDataset, loading, error };
 }

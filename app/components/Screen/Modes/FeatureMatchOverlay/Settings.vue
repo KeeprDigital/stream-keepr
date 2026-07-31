@@ -241,6 +241,23 @@ function updateComposition(composition: BroadcastGraphicConfig) {
 			</UButton>
 		</section>
 
+		<!--
+			The installation's reusable Feature Match Layouts. It sits beside the preset
+			control rather than inside the compositor because it acts on the whole
+			layout: saving copies this Screen's layout out to the library, and placing
+			replaces this Screen's layout with one from it.
+
+			Writable unconditionally, which is the honest state rather than an omission:
+			the Feature Match Overlay editor takes no Graphics Authoring Lease today, so
+			every control on this page is already as writable as this one.
+		-->
+		<GraphicsFeatureMatchLayoutTemplateLibrary
+			:event-id="eventId"
+			:screen-id="screen.id"
+			writable
+			@placed="clearSelection"
+		/>
+
 		<div class="grid min-h-[calc(100vh-18rem)] items-start gap-4 xl:grid-cols-[minmax(15rem,18rem)_minmax(0,1fr)_minmax(19rem,24rem)] 2xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)_minmax(24rem,30rem)]">
 			<section class="min-w-0 space-y-4 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
 				<!--

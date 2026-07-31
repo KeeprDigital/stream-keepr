@@ -138,6 +138,10 @@ async function mountComponent(screen: Partial<Screen> = {}) {
 				FeatureMatchOverlayCompositorTree: CompositorTreeStub,
 				FeatureMatchOverlayCompositorInspector: CompositorInspectorStub,
 				FeatureMatchOverlayPreviewOutputAside: PreviewOutputAsideStub,
+				// The Feature Match Layout Template library reads the installation's
+				// library on mount. It has its own suite; here it is only a neighbour of
+				// the two authoring surfaces under test.
+				GraphicsFeatureMatchLayoutTemplateLibrary: true,
 				UFormField: UFormFieldStub,
 				USelect: true,
 				UInputNumber: UInputNumberStub,

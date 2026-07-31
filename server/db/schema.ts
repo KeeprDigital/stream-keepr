@@ -7,7 +7,7 @@ import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { PlayerGameData } from '~~/shared/types/game';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
-import type { ModeConfigsMap, ScreenConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchLayoutConfig, ModeConfigsMap, ScreenConfig } from '~~/shared/types/screenConfig';
 import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
 import { relations, sql } from 'drizzle-orm';
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
@@ -539,6 +539,41 @@ export const broadcastGraphicTemplates = sqliteTable('broadcast_graphic_template
 }, table => [
 	index('broadcast_graphic_templates_name_idx').on(table.name),
 	index('broadcast_graphic_templates_style_set_idx').on(table.styleSetId),
+]);
+
+/**
+ * The installation's library of reusable Feature Match Layout Templates.
+ *
+ * A separate table from `broadcast_graphic_templates`, and not a `kind` column on
+ * it, because the two are separate artifacts that only share an envelope. Their
+ * documents are different shapes validated by different schemas, their packages are
+ * non-interchangeable, and each has its own library and workflows — one table would
+ * make every read of either say which it wanted and every write able to get it
+ * wrong.
+ *
+ * Installation-scoped for the same reason the Broadcast Graphic Template library
+ * is: a layout is a design an author reuses across every show, and a Feature Match
+ * Slot assignment is Screen state that never travels with it. `revision` and
+ * `graphic_asset_reference_version` carry exactly the meanings they carry there.
+ *
+ * There is no Graphic Style Set link. A Feature Match Overlay's Frame and Source
+ * Items are host-owned and its composition declares no Graphic Inputs, so nothing
+ * in a layout is a linked Style Set property today; adding the columns before there
+ * is anything to put in them would be an index over an empty question.
+ */
+export const featureMatchLayoutTemplates = sqliteTable('feature_match_layout_templates', {
+	id: text('id').primaryKey(),
+	name: text('name').notNull(),
+	description: text('description'),
+	/** Automatically managed: advanced by one on every accepted edit. */
+	revision: integer('revision').notNull().default(1),
+	/** The saved Feature Match Layout, exactly as a Screen would carry it. */
+	document: text('document', { mode: 'json' }).$type<FeatureMatchLayoutConfig>().notNull(),
+	graphicAssetReferenceVersion: text('graphic_asset_reference_version'),
+
+	...timestamps,
+}, table => [
+	index('feature_match_layout_templates_name_idx').on(table.name),
 ]);
 
 /**
@@ -1110,6 +1145,8 @@ export type DbBroadcastGraphicsLiveSession = typeof broadcastGraphicsLiveSession
 export type DbBroadcastGraphicsLiveSessionInsert = typeof broadcastGraphicsLiveSessions.$inferInsert;
 export type DbBroadcastGraphicTemplate = typeof broadcastGraphicTemplates.$inferSelect;
 export type DbBroadcastGraphicTemplateInsert = typeof broadcastGraphicTemplates.$inferInsert;
+export type DbFeatureMatchLayoutTemplate = typeof featureMatchLayoutTemplates.$inferSelect;
+export type DbFeatureMatchLayoutTemplateInsert = typeof featureMatchLayoutTemplates.$inferInsert;
 export type DbGraphicStyleSet = typeof graphicStyleSets.$inferSelect;
 export type DbGraphicStyleSetInsert = typeof graphicStyleSets.$inferInsert;
 export type DbLiveStateCommandReceipt = typeof liveStateCommandReceipts.$inferSelect;

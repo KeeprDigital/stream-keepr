@@ -219,7 +219,25 @@ export const FEATURE_MATCH_OVERLAY_ANCHOR_VALUES = [
 export type FeatureMatchOverlayAnchorValue = typeof FEATURE_MATCH_OVERLAY_ANCHOR_VALUES[number];
 export type ScreenMediaBackgroundType = 'video';
 export type ScreenMediaBackgroundFit = 'cover' | 'contain' | 'fill';
-export type FeatureMatchSourceRole = 'main' | 'player1' | 'player2' | string;
+
+/**
+ * What a Source Item declares instead of a camera.
+ *
+ * A closed vocabulary rather than free text, because a role is the only thing a
+ * Source Item carries that survives leaving this installation. A Feature Match
+ * Layout Template travels with "there is a main source here and a player-one
+ * source there"; a receiving installation routes its own inputs into those roles.
+ * A free-form string would travel as an operator's local shorthand — `cam-3-left`
+ * means nothing to the show that receives it, and nothing could tell it from a
+ * role the receiver does implement.
+ *
+ * Pinned by the Source Item Definition's configuration version: adding a role is
+ * a change to what a Feature Match Layout can say, so a package using a new one is
+ * refused by an installation that predates it rather than silently framing nothing.
+ */
+export const FEATURE_MATCH_SOURCE_ROLE_VALUES = ['main', 'player1', 'player2'] as const;
+
+export type FeatureMatchSourceRole = typeof FEATURE_MATCH_SOURCE_ROLE_VALUES[number];
 
 export interface FeatureMatchOverlayRect {
 	x: number;
@@ -280,7 +298,17 @@ export interface ScreenMediaBackgroundConfig {
 	loop: boolean;
 }
 
-export type FeatureMatchOverlayFrameAnimationEffect = 'cells' | 'dots' | 'fog' | 'globe' | 'halo' | 'net' | 'rings' | 'ripple' | 'waves';
+/**
+ * The Feature Match Overlay Frame's animation effects.
+ *
+ * A closed vocabulary for the same reason a Source Role is: an effect names a
+ * renderer that ships with Stream Keepr, so a Feature Match Layout Template
+ * carries the name and the receiving installation supplies the renderer. One it
+ * does not implement is a capability it lacks, not a value it can approximate.
+ */
+export const FEATURE_MATCH_OVERLAY_FRAME_ANIMATION_EFFECT_VALUES = ['cells', 'dots', 'fog', 'globe', 'halo', 'net', 'rings', 'ripple', 'waves'] as const;
+
+export type FeatureMatchOverlayFrameAnimationEffect = typeof FEATURE_MATCH_OVERLAY_FRAME_ANIMATION_EFFECT_VALUES[number];
 export type FeatureMatchOverlayPlayerLifeAnimation = 'none' | 'fade' | 'pop' | 'slide' | 'glow';
 
 export interface FeatureMatchOverlayFrameAnimationConfig {
