@@ -15,6 +15,39 @@ describe('feature Match Overlay render model', () => {
 		expect(resolveFeatureMatchOverlayRenderModel({ config: base, output: 'key', canvasWidth: 1920, canvasHeight: 1080, displayTime: '' }).frame.fill).toBe('#fff');
 	});
 
+	it('backs the Key Output with black at the host root, which is the only thing that does', () => {
+		// This host paints its own canvas and mounts the shared compositor above it as
+		// a nested layer, so the shared model's canvas backdrop — and the Key matte
+		// suite that asserts on it — covers the root role only. Here the Key black comes
+		// from this root and from nowhere else.
+		//
+		// Asserted alongside `fill` rather than left to `frame.fill`, which says what
+		// the Frame paints rather than what it paints *onto*: a Frame covering part of
+		// the canvas would leave the rest showing whatever the backdrop is, and in the
+		// Key Output that has to be black for the alpha matte to mean anything.
+		for (const output of ['fill', 'key'] as const) {
+			const model = resolveFeatureMatchOverlayRenderModel({
+				config: config(),
+				output,
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+				displayTime: '',
+			});
+
+			expect(model.canvasStyle.background).toBe('#000');
+		}
+
+		// And still transparent in the Overlay Output, which composes over whatever is
+		// behind the Screen rather than over a backdrop of its own.
+		expect(resolveFeatureMatchOverlayRenderModel({
+			config: config(),
+			output: 'overlay',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+			displayTime: '',
+		}).canvasStyle.background).toBe('transparent');
+	});
+
 	it('preserves authoritative sibling list order across every Graphic Item kind', () => {
 		const base = config();
 		const source = base.layout.items.find(item => item.type === 'source')!;
