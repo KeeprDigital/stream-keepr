@@ -21,6 +21,7 @@ import type {
 	GraphicSurfaceRenderDescriptor,
 } from '~/modules/graphics/renderModel';
 import { describe, expect, it } from 'vitest';
+import { featureMatchTokenDeclarations } from '~~/shared/featureMatchTokenCatalogue';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition, squareShapeGeometry } from '~~/shared/modules/graphics';
 import { resolveGraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 
@@ -826,6 +827,64 @@ describe('graphicsCompositionRenderModel', () => {
 			expect(model.graphics[0]?.items.map(item => item.id)).toEqual(['behind', 'cluster', 'in-front']);
 			expect(model.graphics[0]?.items[1]?.children?.map(child => child.id)).toEqual(['name', 'rule']);
 			expect(model.graphics[0]?.items[1]?.kind).toBe('group');
+		});
+	});
+
+	describe('host-supplied placeholder declarations', () => {
+		it('resolves a Graphic Text Template against the host catalogue when the host supplies one', () => {
+			// A Feature Match Overlay declares no Graphic Inputs. Its tokens are ordinary
+			// text declarations whose values the host resolves, so the shared Graphic Text
+			// Template mechanism renders them with nothing special added to it.
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('layout', [text('name', { text: '{player1Name} vs {player2Name}' })])],
+				textDeclarations: featureMatchTokenDeclarations(),
+				inputValues: { layout: { player1Name: 'Alice', player2Name: 'Bo' } },
+				...CANVAS,
+			});
+
+			expect(model.graphics[0]!.items[0]!.text).toBe('Alice vs Bo');
+		});
+
+		it('renders a placeholder no host token names as empty rather than as its own literal', () => {
+			// `{name}` is the legacy per-side token. The catalogue moved the side into the
+			// key, so nothing declares it and nothing resolves it.
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('layout', [text('name', { text: 'Hi {name}' })])],
+				textDeclarations: featureMatchTokenDeclarations(),
+				inputValues: { layout: { name: 'Alice' } },
+				...CANVAS,
+			});
+
+			expect(model.graphics[0]!.items[0]!.text).toBe('Hi ');
+		});
+
+		it('ignores a composition"s own Graphic Inputs while the host supplies declarations', () => {
+			// The host supplies all of them or none: a Feature Match Overlay's vocabulary
+			// is its catalogue, not its catalogue plus whatever a stored graphic declares.
+			const declared: GraphicInputDeclaration = {
+				type: 'text',
+				key: 'player1Name',
+				label: 'Smuggled',
+				required: false,
+				updatePolicy: 'live',
+				default: 'Wrong',
+				maxLength: 40,
+			};
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [{
+					...graphic('layout', [text('name', { text: '{player1Name}' })]),
+					inputs: [declared],
+				}],
+				textDeclarations: featureMatchTokenDeclarations(),
+				inputValues: { layout: { player1Name: 'Alice' } },
+				substituteAuthoredDefaults: true,
+				...CANVAS,
+			});
+
+			expect(model.graphics[0]!.items[0]!.text).toBe('Alice');
 		});
 	});
 

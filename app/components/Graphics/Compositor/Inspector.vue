@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ShapeGeometryPresetId } from '~~/shared/modules/graphics';
+import type { GraphicsHostContract, ShapeGeometryPresetId } from '~~/shared/modules/graphics';
 import type { GraphicFocalPosition, MediaGraphicItemFit } from '~~/shared/types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
@@ -32,6 +32,7 @@ import {
 	addGraphicInput,
 	anchoredGraphicPosition,
 	applyShapeGeometryPreset,
+	authorsGraphicInputs,
 	changeGraphicGradientStopCount,
 	clearGraphicSurfaceStyle,
 	clearMediaGraphicItemAsset,
@@ -42,6 +43,7 @@ import {
 	graphicItemIcon,
 	graphicItemKindLabel,
 	graphicItemSummary,
+	graphicsHostTokenCatalogue,
 	graphicTextTemplateInputKeys,
 	moveGraphicRectToAnchoredPosition,
 	parseGraphicGeometryValue,
@@ -114,6 +116,12 @@ const props = defineProps<{
 	selectedTarget: GraphicsSelectionTarget;
 	canvasWidth: number;
 	canvasHeight: number;
+	/**
+	 * The embedding host's declaration. It decides where a Graphic Text Template's
+	 * placeholder values come from, and therefore whether this panel offers controls
+	 * to declare Graphic Inputs or a catalogue of host tokens to reference.
+	 */
+	contract: GraphicsHostContract;
 	/** The Event whose Graphic Asset associations organise the asset picker's discovery. */
 	eventId: number;
 	/**
@@ -446,6 +454,38 @@ const selectedGraphicInputs = computed<GraphicInputDeclaration[]>(() =>
 	selection.value.kind === 'graphic' ? selection.value.graphic.inputs ?? [] : [],
 );
 
+/**
+ * Whether this host's compositions declare their own Graphic Inputs.
+ *
+ * A host binding host tokens must never see these controls: its catalogue is
+ * fixed, so an author cannot add, rename, or delete an entry, and offering the
+ * controls anyway would let one write a declaration nothing resolves.
+ */
+const authorsInputs = computed(() => authorsGraphicInputs(props.contract));
+
+/**
+ * The placeholder keys this host supplies itself, empty when the composition
+ * declares its own. A Feature Match Overlay's Graphic Text Templates name exactly
+ * these and nothing else.
+ */
+const hostTokens = computed(() => graphicsHostTokenCatalogue(props.contract));
+
+/**
+ * Every placeholder key the selected Graphic Item's template may name, whichever
+ * side supplies them. One list rather than two branches at each use, because the
+ * question a placeholder asks — "does anything resolve this key?" — has one answer
+ * however the host answers it.
+ */
+const availablePlaceholderKeys = computed<string[]>(() => {
+	if (!authorsInputs.value)
+		return hostTokens.value.map(token => token.key);
+
+	const current = selection.value;
+	if (current.kind !== 'graphic' && current.kind !== 'item')
+		return [];
+	return (current.graphic.inputs ?? []).map(input => input.key);
+});
+
 const INPUT_TYPE_OPTIONS = GRAPHIC_INPUT_TYPE_VALUES.map(value => ({ label: value, value }));
 const UPDATE_POLICY_OPTIONS = [
 	{ label: 'Staged', value: 'staged' },
@@ -466,6 +506,24 @@ const newInputType = ref<GraphicInputType>('text');
 /** A Graphic Input key written the way a Graphic Text Template names it. */
 function placeholderToken(key: string): string {
 	return `{${key}}`;
+}
+
+/**
+ * Append one host token to the selected Text Graphic Item's template.
+ *
+ * Appending rather than inserting at a caret: the textarea is bound to the model
+ * rather than held as a ref, so there is no caret this component owns. Bounded by
+ * the same maximum the field enforces, so a click can never write a template a
+ * direct edit would have refused.
+ */
+function appendHostToken(key: string) {
+	const item = selectedTextItem.value;
+	if (!canAuthor.value || !item)
+		return;
+
+	const next = `${item.text}${placeholderToken(key)}`;
+	if (next.length <= MAX_GRAPHIC_TEXT_LENGTH)
+		updateTextItem({ text: next });
 }
 
 function addInput() {
@@ -517,19 +575,21 @@ function parseChoiceOptions(key: string, value: string) {
  * ──────────────────────────────────────────────── */
 
 /**
- * The `{inputKey}` placeholders of the selected Text Graphic Item that name a
- * declared Graphic Input.
+ * The `{inputKey}` placeholders of the selected Text Graphic Item that something
+ * actually resolves — a declared Graphic Input, or a token this host supplies.
  *
- * Only declared ones: styling a placeholder nothing declares would be styling
- * something that renders nothing.
+ * Only resolvable ones: styling a placeholder nothing resolves would be styling
+ * something that renders nothing. Asking `availablePlaceholderKeys` rather than the
+ * graphic's own declarations is what makes a Feature Match Overlay's `{player1Name}`
+ * styleable at all — it is a host token, so no Graphic Input declares it.
  */
 const styleablePlaceholders = computed(() => {
 	const current = selection.value;
 	if (current.kind !== 'item' || current.item.type !== 'text')
 		return [];
 
-	const declared = new Set((current.graphic.inputs ?? []).map(input => input.key));
-	return graphicTextTemplateInputKeys(current.item.text).filter(key => declared.has(key));
+	const available = new Set(availablePlaceholderKeys.value);
+	return graphicTextTemplateInputKeys(current.item.text).filter(key => available.has(key));
 });
 
 function placeholderStyleFor(inputKey: string): GraphicPlaceholderStyle {
@@ -582,8 +642,12 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 		<!--
 			Graphic Inputs belong to the Broadcast Graphic, not to one Graphic Item: any
 			of its Text Graphic Items may name the same `{inputKey}`.
+
+			Offered only where the host's compositions declare their own. A host binding
+			a fixed token catalogue has nothing here to author, and showing the controls
+			anyway would let an author write a declaration nothing resolves.
 		-->
-		<template v-if="selection.kind === 'graphic'">
+		<template v-if="selection.kind === 'graphic' && authorsInputs">
 			<div class="flex items-end gap-2">
 				<UFormField label="Graphic Inputs" size="sm" class="flex-1">
 					<USelect
@@ -964,6 +1028,30 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 					data-testid="graphic-item-text"
 					@update:model-value="updateTextItem({ text: String($event) })"
 				/>
+			</UFormField>
+
+			<!--
+				The host's token binding catalogue, offered to reference rather than to
+				author. A Feature Match Overlay's placeholder vocabulary is fixed, so the
+				useful control is one that appends a valid key to the template — the
+				editor offers exactly these keys, and an author never declares one.
+			-->
+			<UFormField v-if="hostTokens.length > 0" label="Tokens" size="sm">
+				<div class="flex flex-wrap gap-1" data-testid="graphic-host-tokens">
+					<UButton
+						v-for="token in hostTokens"
+						:key="token.key"
+						size="xs"
+						variant="soft"
+						color="neutral"
+						:disabled="!canAuthor"
+						:title="token.label"
+						:data-host-token="token.key"
+						@click="appendHostToken(token.key)"
+					>
+						{{ placeholderToken(token.key) }}
+					</UButton>
+				</div>
 			</UFormField>
 
 			<UFormField label="Font" size="sm">

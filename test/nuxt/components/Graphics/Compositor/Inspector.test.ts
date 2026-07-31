@@ -1,3 +1,4 @@
+import type { GraphicsHostContract } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
 	GraphicGroupItemConfig,
@@ -8,7 +9,13 @@ import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
-import { DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
+import { FEATURE_MATCH_TOKEN_CATALOGUE } from '~~/shared/featureMatchTokenCatalogue';
+import {
+	BROADCAST_GRAPHICS_HOST_CONTRACT,
+	DEFAULT_GRAPHIC_TYPOGRAPHY,
+	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+	squareShapeGeometry,
+} from '~~/shared/modules/graphics';
 import { MAX_GRAPHIC_TEXT_LENGTH } from '~~/shared/types/graphics';
 
 enableAutoUnmount(afterEach);
@@ -149,6 +156,7 @@ async function mountComponent(options: {
 	graphics: BroadcastGraphicConfig[];
 	selectedTarget: GraphicsSelectionTarget;
 	writable?: boolean;
+	contract?: GraphicsHostContract;
 }) {
 	const componentPath = '../../../../../app/components/Graphics/Compositor/Inspector.vue';
 	const { default: Inspector } = await import(componentPath);
@@ -157,6 +165,7 @@ async function mountComponent(options: {
 		props: {
 			graphics: options.graphics,
 			selectedTarget: options.selectedTarget,
+			contract: options.contract ?? BROADCAST_GRAPHICS_HOST_CONTRACT,
 			canvasWidth: 1920,
 			canvasHeight: 1080,
 			eventId: 7,
@@ -742,6 +751,109 @@ describe('graphicsCompositorInspector', () => {
 		await nextTick();
 
 		expect(wrapper.emitted('update:graphics')).toBeUndefined();
+	});
+
+	describe('host-supplied placeholder values', () => {
+		function tokenButtons(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+			return wrapper.findAllComponents(UButtonStub)
+				.filter(button => button.attributes('data-host-token') !== undefined);
+		}
+
+		it('withholds the Graphic Inputs controls from a host that binds host tokens', async () => {
+			// A Feature Match Overlay's placeholder vocabulary is a fixed catalogue, so
+			// there is nothing here to declare, rename, or delete. Offering the controls
+			// anyway would let an author write a declaration nothing ever resolves.
+			const wrapper = await mountComponent({
+				graphics: stack([]),
+				selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+			});
+
+			expect(selectField(wrapper, 'graphic-input-type')).toBeUndefined();
+			expect(wrapper.findAll('[data-testid="graphic-input-add"]')).toHaveLength(0);
+		});
+
+		it('keeps them for a host whose compositions declare their own', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([]),
+				selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+			});
+
+			expect(selectField(wrapper, 'graphic-input-type')).toBeDefined();
+			expect(tokenButtons(wrapper)).toHaveLength(0);
+		});
+
+		it('offers the host token catalogue to reference on a Text Graphic Item', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([textItem]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+			});
+
+			const keys = tokenButtons(wrapper).map(button => button.attributes('data-host-token'));
+			expect(keys).toEqual(FEATURE_MATCH_TOKEN_CATALOGUE.map(token => token.key));
+		});
+
+		it('appends a referenced token to the Graphic Text Template', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([textItem]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+			});
+
+			tokenButtons(wrapper)
+				.find(button => button.attributes('data-host-token') === 'player1Name')
+				?.vm
+				.$emit('click');
+			await nextTick();
+
+			expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ text: 'Commentator{player1Name}' });
+		});
+
+		it('never writes a token through a read-only session', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([textItem]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+				writable: false,
+			});
+
+			tokenButtons(wrapper)
+				.find(button => button.attributes('data-host-token') === 'player1Name')
+				?.vm
+				.$emit('click');
+			await nextTick();
+
+			expect(wrapper.emitted('update:graphics')).toBeUndefined();
+		});
+
+		it('styles a host token placeholder that no Graphic Input declares', async () => {
+			// The styleable set follows whichever side supplies the keys. Asking the
+			// graphic's own declarations would leave every Feature Match placeholder
+			// unstyleable, because a Feature Match Overlay declares none.
+			const wrapper = await mountComponent({
+				graphics: stack([{ ...textItem, text: 'Hi {player1Name}' } as GraphicItemConfig]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+			});
+
+			expect(wrapper.findAll('[data-graphic-placeholder-style]').map(node =>
+				node.attributes('data-graphic-placeholder-style'),
+			)).toEqual(['player1Name']);
+		});
+
+		it('offers no Graphic Placeholder Style for a key this host does not supply', async () => {
+			// `{name}` is a legacy Feature Match token, and the shared catalogue moved the
+			// side into the key. Nothing resolves it, so styling it would style something
+			// that renders nothing.
+			const wrapper = await mountComponent({
+				graphics: stack([{ ...textItem, text: 'Hi {name}' } as GraphicItemConfig]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+			});
+
+			expect(wrapper.findAll('[data-graphic-placeholder-style]')).toHaveLength(0);
+		});
 	});
 
 	it('declares a typed Graphic Input on the selected Broadcast Graphic', async () => {
