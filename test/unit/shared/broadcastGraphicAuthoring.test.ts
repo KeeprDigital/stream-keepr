@@ -664,7 +664,7 @@ describe('broadcastGraphicAuthoring', () => {
 			});
 		});
 
-		it('sets a Game Wins Item"s display mode and win box dimensions', () => {
+		it('sets a Game Wins Item’s display mode and win box dimensions', () => {
 			const built = patchGameWinsGraphicItem(withKind('game-wins'), 'game-wins', {
 				displayMode: 'number',
 				boxOrientation: 'vertical',
@@ -682,14 +682,14 @@ describe('broadcastGraphicAuthoring', () => {
 			});
 		});
 
-		it('shapes a Game Wins Item"s win box rather than its own bounds', () => {
+		it('shapes a Game Wins Item’s win box rather than its own bounds', () => {
 			// A win box is an ordinary painted surface, so a cut-corner one is authored
 			// with exactly the controls a Shape Graphic Item uses.
 			const built = patchShapeCorner(withKind('game-wins'), 'game-wins', 'topRight', { treatment: 'cut', size: 6 });
 			const item = itemOf(built, 'game-wins');
 
 			expect(item.type === 'game-wins' && item.boxGeometry.topRight).toMatchObject({ treatment: 'cut', size: 6 });
-			// The indicator's own rectangle is untouched: the geometry is the box"s.
+			// The indicator's own rectangle is untouched: the geometry is the box’s.
 			expect(item).toMatchObject({ width: 768, height: 108 });
 		});
 
@@ -704,7 +704,7 @@ describe('broadcastGraphicAuthoring', () => {
 			expect(item.height).toBe(108);
 		});
 
-		it('paints the two win box surfaces independently of the item"s own', () => {
+		it('paints the two win box surfaces independently of the item’s own', () => {
 			// An unwon box reads as an empty outline and a won one as a filled pip, which
 			// is the distinction the indicator exists to make — so both are ordinary
 			// authored surfaces rather than one style with a hardcoded variant.

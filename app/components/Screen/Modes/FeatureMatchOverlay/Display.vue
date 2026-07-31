@@ -520,7 +520,7 @@ onBeforeUnmount(() => {
 		<GraphicsCompositorGuideLayer
 			:item-guides="compositorRenderModel.itemGuides"
 			:safe-area-guides="compositorRenderModel.safeAreaGuides"
-			:canvas-guide="showPreviewGuides"
+			:selectable-canvas="showPreviewGuides"
 			@select="selectCompositorPreviewTarget"
 		>
 			<template v-if="showPreviewGuides">

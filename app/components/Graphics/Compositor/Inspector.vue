@@ -4,6 +4,8 @@ import type { PlayerSide } from '~~/shared/types/enums';
 import type { GraphicFocalPosition, MediaGraphicItemFit } from '~~/shared/types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
+	GameWinsBoxOrientation,
+	GameWinsDisplayMode,
 	GameWinsGraphicItemConfig,
 	GraphicAnchorPoint,
 	GraphicGeometryUnit,
@@ -18,6 +20,7 @@ import type {
 	GraphicTypography,
 	MediaGraphicItemConfig,
 	OnAirUpdatePolicy,
+	PlayerLifeAnimation,
 	PlayerLifeGraphicItemConfig,
 	ShapeCorner,
 	ShapeCornerKey,
@@ -84,7 +87,9 @@ import {
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
 	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_TEXT_LENGTH,
+	MAX_PLAYER_LIFE_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
+	MIN_PLAYER_LIFE_ANIMATION_DURATION_MS,
 	PLAYER_LIFE_ANIMATION_VALUES,
 	SHAPE_CORNER_KEYS,
 	SHAPE_CORNER_TREATMENT_VALUES,
@@ -238,11 +243,17 @@ const selectedGameWins = computed<GameWinsGraphicItemConfig | null>(() =>
  * text; they read the string from the live Feature Match Session rather than from
  * an author, which decides what the item says and nothing about how it is set. So
  * one typography block serves all four kinds rather than one per kind.
+ *
+ * A Game Wins Item paints text only in its `number` display mode; in `boxes` it
+ * paints boxes, and offering typography there would be a whole block of controls
+ * that change nothing on screen.
  */
 const selectedTypography = computed<GraphicTypography | null>(() => {
 	const item = selectedItem.value;
 	if (!item || item.type === 'shape' || item.type === 'media' || item.type === 'group')
 		return null;
+	if (item.type === 'game-wins')
+		return item.displayMode === 'number' ? item.typography : null;
 	return item.typography;
 });
 

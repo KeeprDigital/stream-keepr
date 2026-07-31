@@ -1049,13 +1049,18 @@ describe('graphicsCompositorInspector', () => {
 		}
 
 		it.each(['clock', 'player-life', 'game-wins'] as const)('sets the base typography of a %s Item', async (kind) => {
-			const wrapper = await mountKind(kind);
+			// A Game Wins Item paints text only while it renders its win count.
+			const graphics = featureMatchStack(kind);
+			const item = graphics[0]!.items[0]!;
+			if (item.type === 'game-wins')
+				item.displayMode = 'number';
 
+			const wrapper = await mountKind(kind, graphics);
 			numberField(wrapper, 'Font size')?.vm.$emit('update:modelValue', 96);
 			await nextTick();
 
-			const item = itemOf(emittedGraphics(wrapper));
-			expect(item?.type === kind && item.typography.fontSize).toBe(96);
+			const patched = itemOf(emittedGraphics(wrapper));
+			expect(patched?.type === kind && patched.typography.fontSize).toBe(96);
 		});
 
 		it.each(['clock', 'player-life'] as const)('bounds a %s Item with a Text Overflow Policy', async (kind) => {
@@ -1092,9 +1097,16 @@ describe('graphicsCompositorInspector', () => {
 			await nextTick();
 			numberFieldByTestId(wrapper, 'player-life-animation-duration')?.vm.$emit('update:modelValue', 800);
 			await nextTick();
+			// The colour a glow or slide change tints; the other animations ignore it.
+			wrapper.findAllComponents(UInputStub)
+				.find(input => input.attributes('data-testid') === 'player-life-animation-accent')
+				?.vm
+				.$emit('update:modelValue', '#ff0055');
+			await nextTick();
 
 			expect(itemOf(emittedGraphics(wrapper, 0))).toMatchObject({ lifeAnimation: 'pop' });
 			expect(itemOf(emittedGraphics(wrapper, 1))).toMatchObject({ lifeAnimationDurationMs: 800 });
+			expect(itemOf(emittedGraphics(wrapper, 2))).toMatchObject({ lifeAnimationAccentColor: '#ff0055' });
 		});
 
 		it('sets a Game Wins Item’s win box orientation, dimensions, and gap', async () => {
@@ -1132,7 +1144,10 @@ describe('graphicsCompositorInspector', () => {
 			expect(number.find('[data-testid="game-wins-box-shape-fill"]').exists()).toBe(false);
 			expect(number.find('[data-testid="game-wins-won-box-shape-fill"]').exists()).toBe(false);
 			expect(number.find('[data-testid="shape-geometry-preset"]').exists()).toBe(false);
-			// The win count is still text, so it still has typography.
+			// Typography goes the other way: a Game Wins Item paints text only in the
+			// `number` mode, so offering it beside the boxes would be a whole block of
+			// controls that change nothing on screen.
+			expect(numberField(boxes, 'Font size')).toBeUndefined();
 			expect(numberField(number, 'Font size')).toBeDefined();
 		});
 
@@ -1167,6 +1182,27 @@ describe('graphicsCompositorInspector', () => {
 			const item = itemOf(emittedGraphics(wrapper));
 			expect(item?.type === 'game-wins' && item.boxGeometry.topRight.treatment).toBe('cut');
 			expect(item).toMatchObject({ width: 768, height: 108 });
+		});
+
+		it('sizes a context-gated Item inside a row Graphic Group like any other child', async () => {
+			// A Clock is an ordinary Graphic Group child, so its main-axis sizing is
+			// the group's to decide in exactly the way a Text Item's is.
+			const clock = getGraphicItemDefinition('clock').createDefault({
+				id: 'clock',
+				label: 'Clock',
+				canvasWidth: 800,
+				canvasHeight: 200,
+			});
+			const wrapper = await mountComponent({
+				graphics: stack([groupWith([clock as never])]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'clock' },
+				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+			});
+
+			selectField(wrapper, 'graphic-group-child-sizing-mode')?.vm.$emit('update:modelValue', 'fill');
+			await nextTick();
+
+			expect(childOf(emittedGraphics(wrapper))).toMatchObject({ sizing: { mode: 'fill' } });
 		});
 
 		it('offers no win box or life-change control to a kind that has none', async () => {

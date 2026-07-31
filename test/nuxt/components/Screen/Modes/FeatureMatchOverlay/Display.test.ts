@@ -256,7 +256,7 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(html.indexOf('data-item-guide')).toBeLessThan(html.indexOf('graphic-item-guide--source'));
 		});
 
-		it('reports a shared Graphic Item click back to the editor in the compositor"s vocabulary', async () => {
+		it('reports a shared Graphic Item click back to the editor in the compositor’s vocabulary', async () => {
 			mockConfig.value = guidedConfig();
 			mockPreviewGuides.value = true;
 			const postMessage = vi.spyOn(window.parent, 'postMessage');

@@ -35,7 +35,7 @@ const props = defineProps<{
 	 * Whether clicking empty canvas selects the canvas. Off while only advisory
 	 * safe-area guides are shown, because there is then no selection to make.
 	 */
-	canvasGuide?: boolean;
+	selectableCanvas?: boolean;
 }>();
 
 const emit = defineEmits<{ select: [target: GraphicsSelectionTarget] }>();
@@ -45,14 +45,14 @@ function selectItem(guide: GraphicsItemGuide) {
 }
 
 const hasGuideLayer = computed(() =>
-	props.canvasGuide === true || props.itemGuides.length > 0 || props.safeAreaGuides.length > 0,
+	props.selectableCanvas === true || props.itemGuides.length > 0 || props.safeAreaGuides.length > 0,
 );
 </script>
 
 <template>
 	<div v-if="hasGuideLayer" class="guide-layer" aria-label="Graphics compositor guide layer">
 		<button
-			v-if="canvasGuide"
+			v-if="selectableCanvas"
 			type="button"
 			class="canvas-guide"
 			aria-label="Select canvas"

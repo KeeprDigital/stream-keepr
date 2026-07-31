@@ -73,7 +73,7 @@ const ownsGuideLayer = computed(() => props.render.canvasRole === 'screen-output
 			v-if="ownsGuideLayer"
 			:item-guides="render.itemGuides"
 			:safe-area-guides="render.safeAreaGuides"
-			:canvas-guide="render.itemGuides.length > 0"
+			:selectable-canvas="render.itemGuides.length > 0"
 			@select="emit('select', $event)"
 		/>
 	</div>
