@@ -77,11 +77,13 @@ describe('the queue action outcome vocabulary', () => {
 			resolution: 'repaired-with-exact-bytes',
 		} as GraphicsDiscrepancyActionOutcome)).toBe('completed');
 
-		// A recheck that found nothing to change is the idempotent second run of
-		// an action that already succeeded.
+		// A recheck that found nothing to change is the commonest answer on open
+		// unavailable content, and it means the bytes are still gone. Calling that
+		// "already in state" would report the subject as how the administrator
+		// wanted it, which is the opposite of what happened.
 		expect(graphicsDiscrepancyQueueOutcome({
 			outcome: 'unchanged',
-		} as GraphicsDiscrepancyActionOutcome)).toBe('already-in-state');
+		} as GraphicsDiscrepancyActionOutcome)).toBe('retryable-unavailable');
 
 		const rejections: Record<string, string> = {
 			'discrepancy-already-resolved': 'already-in-state',

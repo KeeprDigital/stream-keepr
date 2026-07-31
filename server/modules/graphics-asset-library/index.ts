@@ -23,6 +23,7 @@ import type {
 	GraphicsDiscrepancy,
 	GraphicsDiscrepancyActionOutcome,
 	GraphicsDuplicateContentPolicy,
+	GraphicsIngestionAttentionItem,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 	GraphicsIngestionSource,
@@ -835,6 +836,14 @@ export interface GraphicsAssetLibrary {
 		queue: GraphicsOperationalQueueId;
 		subjectId: string;
 	}) => Promise<GraphicsQueueInspection>;
+	/**
+	 * One unfinished Graphics Ingestion Operation by identity, without the owner
+	 * scope every author-facing read applies. An administrator acting from a
+	 * queue needs to know whose operation it is before acting on their behalf.
+	 */
+	findQueuedIngestionOperation: (input: {
+		operationId: GraphicsIngestionOperationId;
+	}) => Promise<GraphicsIngestionAttentionItem | undefined>;
 	/** Every exact recovery and cleanup deadline the installation is holding. */
 	getRetentionOverview: () => Promise<GraphicsRetentionOverview>;
 	/** One Graphic Asset's recovery window and per-revision retention. */
@@ -1408,16 +1417,19 @@ export function createGraphicsAssetLibrary(
 	 */
 	const QUEUE_CATALOGUE_METHODS = [
 		'countOpenDiscrepancies',
-		'summariseIngestionAttention',
+		'summariseIngestionQueues',
+		'findIngestionAttentionItem',
 		'summariseRetentionDeadlines',
 		'listTrashDeadlines',
 		'listRevisionRetention',
+		'findRevisionRetention',
+		'findGraphicAssetName',
 		'listRetiredGraphicAssets',
 		'listGraphicsAssetEvidence',
 		'listGraphicAssetUsage',
 	] as const satisfies readonly (keyof GraphicsOperationalQueuesCatalogue)[];
 
-	function requireOperationalQueues() {
+	function requireQueuesCatalogue(): GraphicsOperationalQueuesCatalogue {
 		const catalogue = requireCatalogue();
 		if (!QUEUE_CATALOGUE_METHODS.every(method => method in catalogue)) {
 			throw new GraphicsAssetLibraryError(
@@ -1425,8 +1437,13 @@ export function createGraphicsAssetLibrary(
 				'graphics-asset-library-unavailable',
 			);
 		}
+		return catalogue as GraphicsAssetCatalogue & GraphicsOperationalQueuesCatalogue;
+	}
+
+	function requireOperationalQueues() {
+		const catalogue = requireQueuesCatalogue();
 		return createGraphicsOperationalQueues({
-			catalogue: () => catalogue as GraphicsAssetCatalogue & GraphicsOperationalQueuesCatalogue,
+			catalogue: () => catalogue,
 			reconciliation: () => requireReconciliation(),
 			inspectRetention: async assetId => await requireRetention().inspect(assetId),
 			now,
@@ -4692,9 +4709,12 @@ export function createGraphicsAssetLibrary(
 				'Graphics ingestion retry could not claim the durable operation',
 			);
 			if (!claimed) {
+				// Still leased by whoever is working it. That lapses on its own, so
+				// this is worth trying again — unlike a stage a retry cannot resume
+				// from, which never becomes retryable.
 				throw new GraphicsAssetLibraryError(
 					'Graphics Ingestion Operation is still active and cannot be claimed for retry',
-					'ingestion-operation-not-uploadable',
+					'ingestion-operation-lease-held',
 				);
 			}
 			return await continueGraphicsIngestion(claimed);
@@ -5130,6 +5150,15 @@ export function createGraphicsAssetLibrary(
 			return await catalogueRequest(
 				() => requireOperationalQueues().inspect(input),
 				'The operational queue item is temporarily unavailable',
+			);
+		},
+		async findQueuedIngestionOperation(input) {
+			return await catalogueRequest(
+				() => requireQueuesCatalogue().findIngestionAttentionItem({
+					now: now().toISOString(),
+					operationId: input.operationId,
+				}),
+				'Graphics ingestion state is temporarily unavailable',
 			);
 		},
 		async getRetentionOverview() {

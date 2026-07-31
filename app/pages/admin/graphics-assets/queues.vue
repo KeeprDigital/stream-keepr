@@ -2,7 +2,6 @@
 import type {
 	GraphicAssetPurgeOutcome,
 	GraphicsDiscrepancyActionOutcome,
-	GraphicsOperationalQueue,
 	GraphicsOperationalQueueItem,
 	GraphicsOperationalQueuesOverview,
 	GraphicsQueueInspection,
@@ -31,16 +30,10 @@ definePageMeta({
  * is which item is selected, and it keeps that in the address rather than in
  * memory so a reload lands on the same item.
  */
-const POLL_INTERVAL_MILLISECONDS = 5000;
-
 const route = useRoute();
 const router = useRouter();
 
-const administratorToken = ref('');
-const queues = ref<GraphicsOperationalQueuesOverview | null>(null);
 const inspection = ref<GraphicsQueueInspection | null>(null);
-const loadPending = ref(false);
-const loadError = ref<string | null>(null);
 const inspectionError = ref<string | null>(null);
 const actionPending = ref<GraphicsQueueAction | null>(null);
 const actionOutcome = ref<GraphicsQueueActionOutcome | null>(null);
@@ -48,8 +41,6 @@ const actionDetail = ref<string | null>(null);
 const purgeRequested = ref(false);
 const purgeConfirmation = ref('');
 const repairRequested = ref(false);
-
-const hasReading = computed(() => queues.value !== null);
 
 /**
  * Which item is selected.
@@ -70,48 +61,31 @@ function selectionFromRoute() {
 
 const selection = ref(selectionFromRoute());
 
-function administratorHeaders() {
-	return { 'x-graphics-admin-token': administratorToken.value };
-}
-
-function describeFailure(caught: unknown, fallback: string) {
-	return caught instanceof Error ? caught.message : fallback;
-}
-
-function statusOf(caught: unknown) {
-	return (caught as { statusCode?: number; status?: number } | null)?.statusCode
-		?? (caught as { status?: number } | null)?.status;
-}
-
-function isAuthorizationFailure(caught: unknown) {
-	const status = statusOf(caught);
-	return status === 401 || status === 403;
-}
-
-async function loadQueues() {
-	loadPending.value = true;
-	loadError.value = null;
-	try {
-		queues.value = await $fetch<GraphicsOperationalQueuesOverview>(
-			'/api/admin/graphics-assets/queues',
-			{ headers: administratorHeaders() },
-		);
+const {
+	administratorToken,
+	reading: queues,
+	loadPending,
+	loadError,
+	hasReading,
+	administratorHeaders,
+	describeFailure,
+	statusOf,
+	isAuthorizationFailure,
+	load: loadQueues,
+} = useGraphicsAdminReading<GraphicsOperationalQueuesOverview>({
+	read: async headers => await $fetch<GraphicsOperationalQueuesOverview>(
+		'/api/admin/graphics-assets/queues',
+		{ headers },
+	),
+	failureMessage: 'The operational queues could not be read.',
+	onAuthorizationLost: () => {
+		inspection.value = null;
+	},
+	onReading: async () => {
 		if (selection.value)
 			await loadInspection();
-	}
-	catch (caught) {
-		loadError.value = describeFailure(caught, 'The operational queues could not be read.');
-		// A rotated token must put the token form back rather than leaving a
-		// reading on screen that nobody is still checking.
-		if (isAuthorizationFailure(caught)) {
-			queues.value = null;
-			inspection.value = null;
-		}
-	}
-	finally {
-		loadPending.value = false;
-	}
-}
+	},
+});
 
 /**
  * Reads the selected item afresh rather than reusing the row the list showed.
@@ -154,21 +128,6 @@ async function select(item: GraphicsOperationalQueueItem) {
 	});
 	await loadInspection();
 }
-
-let pollHandle: number | undefined;
-
-onMounted(() => {
-	pollHandle = window.setInterval(() => {
-		if (!hasReading.value || loadPending.value || actionPending.value !== null)
-			return;
-		void loadQueues();
-	}, POLL_INTERVAL_MILLISECONDS);
-});
-
-onBeforeUnmount(() => {
-	if (pollHandle !== undefined)
-		window.clearInterval(pollHandle);
-});
 
 /** Named for what is wrong, never for the provider object underneath. */
 const QUEUE_LABELS: Record<GraphicsOperationalQueueId, string> = {
@@ -226,7 +185,7 @@ const OUTCOME_SUMMARIES: Record<GraphicsQueueActionOutcome, string> = {
 	'completed': 'The action changed durable state and the subject left this queue.',
 	'already-in-state': 'The subject was already in the state this action asks for.',
 	'reference-blocked': 'A fresh reference proof found pinned usage, so nothing was reclaimed.',
-	'retryable-unavailable': 'Bytes or a component could not answer. This action is worth running again.',
+	'retryable-unavailable': 'Nothing has been put right yet. The same action is worth running again once the bytes or the component behind it answer.',
 	'integrity-conflict': 'The library refused rather than write over a disagreement. It fails closed.',
 };
 
@@ -306,6 +265,13 @@ async function run(action: GraphicsQueueAction, perform: () => Promise<GraphicsQ
 		report(await perform());
 	}
 	catch (caught) {
+		// A token that stopped being accepted is not a domain outcome. Reporting
+		// one would tell an administrator the library considered their action and
+		// answered, when in fact it never looked at it.
+		if (isAuthorizationFailure(caught)) {
+			await loadQueues();
+			return;
+		}
 		const status = statusOf(caught);
 		report(
 			status === undefined ? 'retryable-unavailable' : graphicsQueueOutcomeFromStatus(status),
@@ -366,12 +332,7 @@ async function retryIngestion() {
 		outcome: GraphicsQueueActionOutcome;
 	}>(
 		`/api/admin/graphics-assets/ingestion-operations/${operation.operationId}/retry`,
-		{
-			method: 'POST',
-			headers: administratorHeaders(),
-			// The operation stays owned by the author who started it.
-			body: { initiatedBy: operation.initiatedBy },
-		},
+		{ method: 'POST', headers: administratorHeaders() },
 	)).outcome);
 }
 
@@ -408,10 +369,6 @@ function actionHandler(action: GraphicsQueueAction) {
 	if (action === 'retry-ingestion')
 		return retryIngestion;
 	return () => runDiscrepancyAction(action);
-}
-
-function queueItems(queue: GraphicsOperationalQueue) {
-	return queue.items;
 }
 </script>
 
@@ -527,7 +484,7 @@ function queueItems(queue: GraphicsOperationalQueue) {
 								Nothing in this queue.
 							</p>
 							<ul v-else class="mt-3 flex flex-col gap-2">
-								<li v-for="item in queueItems(queue)" :key="item.key">
+								<li v-for="item in queue.items" :key="item.key">
 									<UButton
 										block
 										:color="isSelected(item) ? 'primary' : 'neutral'"
@@ -868,7 +825,7 @@ function queueItems(queue: GraphicsOperationalQueue) {
 							<UCard>
 								<template #header>
 									<h3 class="font-semibold text-highlighted">
-										Audit history
+										Evidence Ledger
 									</h3>
 								</template>
 								<p v-if="inspection.evidence.length === 0" class="text-sm text-muted">

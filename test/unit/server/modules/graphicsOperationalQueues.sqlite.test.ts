@@ -10,6 +10,8 @@ import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createGraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
+import { createD1GraphicsAssetReconciliationCatalogue } from '~~/server/modules/graphics-asset-library/catalogue-reconciliation';
+import { createD1GraphicsAssetRetentionCatalogue } from '~~/server/modules/graphics-asset-library/catalogue-retention';
 import {
 	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
@@ -40,6 +42,29 @@ function digestOf(bytes: Uint8Array) {
 
 function canonicalIdentity(digest: string) {
 	return graphicsObjectIdentity(`sha256/${digest}`);
+}
+
+function canonicalMetadata(digest: string) {
+	return { contentType: 'image/png', custom: { sha256: digest } };
+}
+
+function boundedBytes(bytes: Uint8Array) {
+	return createBoundedByteStream(bytes, {
+		byteLength: bytes.byteLength,
+		maximumByteLength: bytes.byteLength,
+	});
+}
+
+/** A distinct valid PNG per index, so each seeds its own content digest. */
+function paddedPng(index: number) {
+	const padding: number[] = [];
+	for (let repeat = 0; repeat < index; repeat++)
+		padding.push(...emptyTextChunk);
+	return Uint8Array.of(
+		...pixelPng.slice(0, -12),
+		...padding,
+		...pixelPng.slice(-12),
+	);
 }
 
 function decodeEvidence(bytes: Uint8Array) {
@@ -405,6 +430,172 @@ describe('the Graphics Asset Library operational queues', () => {
 	});
 });
 
+describe('one queue never crowding out another', () => {
+	it('offers a retryable ingestion its retry behind a backlog of expired input', async () => {
+		const context = createQueuesLibrary();
+
+		// One operation the library is still holding verified input for.
+		context.canonical.injectTransientFailure('create', 2);
+		const interrupted = await context.library.initiateGraphicsIngestion({
+			idempotencyKey: 'starved-retryable',
+			initiatedBy: 'queues-author',
+			name: 'Interrupted publication',
+			sourceFileName: 'logo.png',
+			declaredMime: 'image/png',
+			browserDecodeEvidence: decodeEvidence(pixelPng),
+			declaredByteLength: pixelPng.byteLength,
+		});
+		await context.library.uploadGraphicAsset({
+			operationId: interrupted.id,
+			initiatedBy: interrupted.initiatedBy,
+			declaredMime: 'image/png',
+			bytes: boundedBytes(pixelPng),
+		});
+
+		// A backlog of abandoned transfers larger than any one queue's sample,
+		// each a minute apart so their expiry deadlines are genuinely distinct.
+		const beyondSample: string[] = [];
+		for (let index = 0; index < 60; index++) {
+			const abandoned = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: `abandoned-${index}`,
+				initiatedBy: 'queues-author',
+				name: `Abandoned ${index}`,
+				sourceFileName: 'logo.png',
+				declaredMime: 'image/png',
+				declaredByteLength: pixelPng.byteLength,
+			});
+			beyondSample.push(abandoned.id);
+			context.advance(60 * 1000);
+		}
+		context.advance(DAY + 1);
+
+		const overview = await context.library.getOperationalQueues();
+		const expired = queueOf(overview, 'expired-ingestion-input');
+		const retryable = queueOf(overview, 'retryable-ingestion');
+
+		expect(expired.totalCount).toBe(60);
+		// The retryable operation is listed, not merely counted: a queue whose
+		// only action is unreachable is the same as no queue at all.
+		expect(retryable.totalCount).toBe(1);
+		expect(retryable.items).toHaveLength(1);
+		expect(retryable.items[0]).toMatchObject({
+			subject: { kind: 'graphics-ingestion-operation', id: interrupted.id },
+			actions: ['retry-ingestion'],
+		});
+
+		// The inspector resolves its subject by identity, so an operation past the
+		// end of the triage sample still inspects rather than reading as gone.
+		const listed = new Set(
+			expired.items.map(item => item.subject.id),
+		);
+		const unlisted = beyondSample.find(id => !listed.has(id));
+		expect(unlisted).toBeDefined();
+		await expect(context.library.inspectOperationalQueueItem({
+			queue: 'expired-ingestion-input',
+			subjectId: unlisted!,
+		})).resolves.toMatchObject({
+			queue: 'expired-ingestion-input',
+			subject: { kind: 'graphics-ingestion-operation', id: unlisted },
+			actions: [],
+		});
+	});
+
+	it('lists the quarantined objects closest to deletion, not the newest', async () => {
+		const context = createQueuesLibrary();
+		const firstDigest = digestOf(paddedPng(1));
+		await context.canonical.createImmutable({
+			identity: canonicalIdentity(firstDigest),
+			bytes: boundedBytes(paddedPng(1)),
+			metadata: canonicalMetadata(firstDigest),
+		});
+		await context.library.runGraphicsReconciliation();
+
+		// A second object quarantined a week later is deleted a week later, so
+		// ordering by when it was noticed puts the urgent one last.
+		context.advance(6 * DAY);
+		const secondDigest = digestOf(paddedPng(2));
+		await context.canonical.createImmutable({
+			identity: canonicalIdentity(secondDigest),
+			bytes: boundedBytes(paddedPng(2)),
+			metadata: canonicalMetadata(secondDigest),
+		});
+		await context.library.runGraphicsReconciliation();
+
+		const quarantined = queueOf(
+			await context.library.getOperationalQueues(),
+			'quarantined-object',
+		);
+
+		expect(quarantined.totalCount).toBe(2);
+		const deadlines = quarantined.items.map(item => item.deadline);
+		expect(deadlines).toEqual([...deadlines].sort());
+		// The stated next deadline is the one actually nearest, not the nearest
+		// among whichever rows happened to be sampled.
+		expect(quarantined.nextDeadline).toBe(deadlines[0]);
+
+		// Which rows a bounded sample selects is what actually matters, and the
+		// queue's own budget is far larger than any fixture worth seeding. Asked
+		// for exactly one, the read must offer the object closest to deletion —
+		// under newest-first ordering it would offer the one furthest from it.
+		const sampled = await createD1GraphicsAssetReconciliationCatalogue(harness.database)
+			.listDiscrepancies({
+				limit: 1,
+				states: ['open'],
+				kinds: ['unexpected-object'],
+				orderBy: 'quarantine-deadline',
+			});
+		expect(sampled).toHaveLength(1);
+		expect(sampled[0]!.id).toBe(quarantined.items[0]!.subject.id);
+	});
+
+	it('lists the superseded revisions closest to pruning and skips frozen ones', async () => {
+		const context = createQueuesLibrary();
+		const revisions: string[] = [];
+		for (let index = 1; index <= 3; index++) {
+			const asset = await ingestAsset(context, {
+				idempotencyKey: `pruning-${index}`,
+				name: `Pruning ${index}`,
+				bytes: paddedPng(index + 10),
+			});
+			await addReference({
+				referenceId: `reference-pruning-${index}`,
+				assetId: asset.result!.assetId,
+				revisionId: asset.result!.revisionId,
+				ownerSlot: `layout.frame.pruning-${index}`,
+			});
+			await replaceAsset(context, {
+				assetId: asset.result!.assetId,
+				idempotencyKey: `pruning-replacement-${index}`,
+				bytes: paddedPng(index + 20),
+			});
+			await removeReference(`reference-pruning-${index}`);
+			// Each becomes prunable a day apart, so pruning order and identity
+			// order are deliberately different.
+			await context.library.runGraphicsRetention();
+			revisions.push(asset.result!.revisionId);
+			context.advance(DAY);
+		}
+
+		const superseded = queueOf(
+			await context.library.getOperationalQueues(),
+			'superseded-revision',
+		);
+
+		expect(superseded.totalCount).toBe(3);
+		const deadlines = superseded.items.map(item => item.deadline);
+		expect(deadlines).toEqual([...deadlines].sort());
+		expect(superseded.items.map(item => item.subject.id)).toEqual(revisions);
+		expect(superseded.nextDeadline).toBe(deadlines[0]);
+
+		// Asked for one, the read must offer the revision pruned soonest rather
+		// than whichever asset identity happens to sort first.
+		const sampled = await createD1GraphicsAssetRetentionCatalogue(harness.database)
+			.listRevisionRetention({ limit: 1, prunableOnly: true });
+		expect(sampled).toHaveLength(1);
+		expect(sampled[0]!.revisionId).toBe(revisions[0]);
+	});
+});
+
 describe('the operational queue inspector', () => {
 	it('shows a Trashed asset with its deadline, usage, and audit history', async () => {
 		const context = createQueuesLibrary();
@@ -513,7 +704,7 @@ describe('the operational queue inspector', () => {
 		await expect(context.library.inspectOperationalQueueItem({
 			queue: 'trashed-asset',
 			subjectId: asset.result!.assetId,
-		})).rejects.toMatchObject({ code: 'ingestion-operation-not-found' });
+		})).rejects.toMatchObject({ code: 'graphics-subject-not-found' });
 	});
 });
 

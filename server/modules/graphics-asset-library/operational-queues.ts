@@ -17,6 +17,7 @@ import type {
 	GraphicAssetId,
 	GraphicAssetRetentionView,
 	GraphicAssetRevisionId,
+	GraphicAssetRevisionRetention,
 	GraphicAssetUsage,
 	GraphicsAssetEvidenceEntry,
 	GraphicsDiscrepancy,
@@ -43,8 +44,6 @@ import {
 } from '~~/shared/utils/graphicsOperationalQueues';
 import { GraphicsAssetLibraryError } from './errors';
 
-export type { RetiredGraphicAsset };
-
 /**
  * How many items each queue carries.
  *
@@ -64,21 +63,32 @@ export const GRAPHICS_QUEUE_INSPECTION_EVIDENCE_LIMIT = 50;
  */
 export interface GraphicsOperationalQueuesCatalogue {
 	countOpenDiscrepancies: () => Promise<Record<GraphicsDiscrepancyKind, number>>;
-	summariseIngestionAttention: (input: {
+	/** Complete counts, plus one independent bounded sample per queued state. */
+	summariseIngestionQueues: (input: {
 		now: string;
 		limit: number;
 	}) => Promise<{
 		counts: Partial<Record<GraphicsIngestionAttentionState, number>>;
-		operations: GraphicsIngestionAttentionItem[];
+		retryable: GraphicsIngestionAttentionItem[];
+		expired: GraphicsIngestionAttentionItem[];
 	}>;
+	findIngestionAttentionItem: (input: {
+		now: string;
+		operationId: string;
+	}) => Promise<GraphicsIngestionAttentionItem | undefined>;
 	summariseRetentionDeadlines: () => Promise<GraphicsRetentionDeadlineSummary>;
 	listTrashDeadlines: (input: { limit: number }) => Promise<GraphicsTrashDeadline[]>;
 	listRevisionRetention: (input: {
 		assetId?: GraphicAssetId;
 		limit: number;
+		prunableOnly?: boolean;
 	}) => Promise<GraphicsRevisionPruningDeadline[]>;
 	/** Retired assets, oldest first, with the pinned usage each still carries. */
 	listRetiredGraphicAssets: (input: { limit: number }) => Promise<RetiredGraphicAsset[]>;
+	findRevisionRetention: (
+		revisionId: GraphicAssetRevisionId,
+	) => Promise<GraphicsRevisionPruningDeadline | undefined>;
+	findGraphicAssetName: (assetId: GraphicAssetId) => Promise<string | undefined>;
 	listGraphicsAssetEvidence: (input: {
 		limit: number;
 		subject?: { kind: GraphicsAssetEvidenceEntry['subject']['kind']; id: string };
@@ -104,6 +114,11 @@ const DISCREPANCY_QUEUES: Record<GraphicsDiscrepancyKind, GraphicsOperationalQue
 	'missing-derivative': 'missing-derivative',
 	'unexpected-object': 'quarantined-object',
 };
+
+/** The queues whose subject is a Graphics Discrepancy rather than a domain record. */
+const DISCREPANCY_QUEUE_IDS = new Set<GraphicsOperationalQueueId>(
+	Object.values(DISCREPANCY_QUEUES),
+);
 
 /** Which queue each unfinished ingestion state belongs in, where one applies. */
 const INGESTION_QUEUES: Partial<
@@ -174,9 +189,11 @@ function discrepancyTitle(discrepancy: GraphicsDiscrepancy): string {
 }
 
 function discrepancyItem(discrepancy: GraphicsDiscrepancy): GraphicsOperationalQueueItem {
-	const queue = DISCREPANCY_QUEUES[
-		discrepancy.isolated ? 'critical-integrity-incident' : discrepancy.kind
-	];
+	// Strictly by kind, so the items in a queue and the count beside them are
+	// the same population. Reconciliation opens a separate critical incident
+	// when it isolates something, so an isolated row never needs re-routing —
+	// and re-routing it would count it in two queues at once.
+	const queue = DISCREPANCY_QUEUES[discrepancy.kind];
 	return {
 		key: graphicsQueueItemKey(queue, discrepancy.id),
 		queue,
@@ -206,11 +223,18 @@ function trashItem(deadline: GraphicsTrashDeadline): GraphicsOperationalQueueIte
 	};
 }
 
-function supersededItem(
-	deadline: GraphicsRevisionPruningDeadline & {
-		retention: { policy: 'unreferenced-superseded'; pruneAfter: string };
-	},
-): GraphicsOperationalQueueItem {
+/** A revision with an actual pruning deadline, rather than one merely retained. */
+type PrunableRevision = GraphicsRevisionPruningDeadline & {
+	retention: Extract<GraphicAssetRevisionRetention, { policy: 'unreferenced-superseded' }>;
+};
+
+function isPrunableRevision(
+	deadline: GraphicsRevisionPruningDeadline,
+): deadline is PrunableRevision {
+	return deadline.retention.policy === 'unreferenced-superseded';
+}
+
+function supersededItem(deadline: PrunableRevision): GraphicsOperationalQueueItem {
 	return {
 		key: graphicsQueueItemKey('superseded-revision', deadline.revisionId),
 		queue: 'superseded-revision',
@@ -253,7 +277,7 @@ function retiredItem(asset: RetiredGraphicAsset): GraphicsOperationalQueueItem {
 }
 
 function notFound(message: string): never {
-	throw new GraphicsAssetLibraryError(message, 'ingestion-operation-not-found');
+	throw new GraphicsAssetLibraryError(message, 'graphics-subject-not-found');
 }
 
 export function createGraphicsOperationalQueues(
@@ -281,13 +305,23 @@ export function createGraphicsOperationalQueues(
 				retiredAssets,
 			] = await Promise.all([
 				dependencies.reconciliation().overview(),
-				catalogue.summariseIngestionAttention({
+				// Each queued state gets its own budget: one shared sample ordered
+				// expired-before-retryable empties the retryable queue behind any
+				// backlog of expired input, and a queue whose only action is
+				// unreachable is the same as no queue at all.
+				catalogue.summariseIngestionQueues({
 					now: checkedAt,
 					limit: GRAPHICS_QUEUE_ITEM_LIMIT,
 				}),
 				catalogue.summariseRetentionDeadlines(),
 				catalogue.listTrashDeadlines({ limit: GRAPHICS_QUEUE_ITEM_LIMIT }),
-				catalogue.listRevisionRetention({ limit: GRAPHICS_QUEUE_ITEM_LIMIT }),
+				// Frozen and referenced revisions are excluded at the query rather
+				// than after the slice, so the sample budget is spent on revisions
+				// that are actually being pruned and matches the count beside it.
+				catalogue.listRevisionRetention({
+					limit: GRAPHICS_QUEUE_ITEM_LIMIT,
+					prunableOnly: true,
+				}),
 				catalogue.listRetiredGraphicAssets({ limit: GRAPHICS_QUEUE_ITEM_LIMIT }),
 			]);
 
@@ -301,19 +335,9 @@ export function createGraphicsOperationalQueues(
 					discrepancyItems.set(item.queue, [item]);
 			}
 
-			/**
-			 * An isolated incident is counted in its own queue rather than in the
-			 * kind it was opened against, because that is the queue it is listed
-			 * in and the two numbers must agree.
-			 */
-			const isolatedCount = reconciliation.discrepancies
-				.filter(discrepancy => discrepancy.isolated
-					&& discrepancy.kind !== 'critical-integrity-incident')
-				.length;
-
-			const discrepancyCounts: Record<GraphicsOperationalQueueId, number> = {
+			const totals: Record<GraphicsOperationalQueueId, number> = {
 				'critical-integrity-incident':
-					reconciliation.openCounts['critical-integrity-incident'] + isolatedCount,
+					reconciliation.openCounts['critical-integrity-incident'],
 				'unavailable-content': reconciliation.openCounts['unavailable-content'],
 				'missing-derivative': reconciliation.openCounts['missing-derivative'],
 				'quarantined-object': reconciliation.openCounts['unexpected-object'],
@@ -324,32 +348,19 @@ export function createGraphicsOperationalQueues(
 				'retired-asset': retentionCounts.retiredCount,
 			};
 
-			const ingestionItems = new Map<GraphicsOperationalQueueId, GraphicsOperationalQueueItem[]>();
-			for (const operation of ingestion.operations) {
-				const queue = INGESTION_QUEUES[operation.attention];
-				if (!queue)
-					continue;
-				const existing = ingestionItems.get(queue);
-				const item = ingestionItem(operation, queue);
-				if (existing)
-					existing.push(item);
-				else
-					ingestionItems.set(queue, [item]);
-			}
-
 			const itemsByQueue: Record<GraphicsOperationalQueueId, GraphicsOperationalQueueItem[]> = {
 				'critical-integrity-incident': discrepancyItems.get('critical-integrity-incident') ?? [],
 				'unavailable-content': discrepancyItems.get('unavailable-content') ?? [],
 				'missing-derivative': discrepancyItems.get('missing-derivative') ?? [],
 				'quarantined-object': discrepancyItems.get('quarantined-object') ?? [],
-				'retryable-ingestion': ingestionItems.get('retryable-ingestion') ?? [],
-				'expired-ingestion-input': ingestionItems.get('expired-ingestion-input') ?? [],
+				'retryable-ingestion': ingestion.retryable
+					.map(operation => ingestionItem(operation, 'retryable-ingestion')),
+				'expired-ingestion-input': ingestion.expired
+					.map(operation => ingestionItem(operation, 'expired-ingestion-input')),
 				'trashed-asset': trashDeadlines.map(trashItem),
 				'superseded-revision': revisionDeadlines
-					.filter(deadline => deadline.retention.policy === 'unreferenced-superseded')
-					.map(deadline => supersededItem(
-						deadline as Parameters<typeof supersededItem>[0],
-					)),
+					.filter(isPrunableRevision)
+					.map(supersededItem),
 				'retired-asset': retiredAssets.map(retiredItem),
 			};
 
@@ -359,7 +370,7 @@ export function createGraphicsOperationalQueues(
 				// reader never has to infer which side decides what.
 				authority: reconciliation.authority,
 				queues: GRAPHICS_OPERATIONAL_QUEUES.map(id =>
-					buildQueue(id, discrepancyCounts[id], itemsByQueue[id])),
+					buildQueue(id, totals[id], itemsByQueue[id])),
 			};
 		},
 
@@ -399,12 +410,7 @@ export function createGraphicsOperationalQueues(
 				});
 			}
 
-			if (
-				input.queue === 'critical-integrity-incident'
-				|| input.queue === 'unavailable-content'
-				|| input.queue === 'missing-derivative'
-				|| input.queue === 'quarantined-object'
-			) {
+			if (DISCREPANCY_QUEUE_IDS.has(input.queue)) {
 				const discrepancy = await dependencies.reconciliation()
 					.inspect({ discrepancyId: input.subjectId });
 				if (!discrepancy)
@@ -432,22 +438,14 @@ export function createGraphicsOperationalQueues(
 				const expected = input.queue === 'trashed-asset' ? 'trashed' : 'retired';
 				if (retention.lifecycle.state !== expected)
 					notFound('Graphic Asset is no longer in that queue');
-				const [usage, trashDeadlines, retiredAssets] = await Promise.all([
+				const [usage, name] = await Promise.all([
 					catalogue.listGraphicAssetUsage(assetId),
-					input.queue === 'trashed-asset'
-						? catalogue.listTrashDeadlines({ limit: GRAPHICS_QUEUE_ITEM_LIMIT })
-						: Promise.resolve([]),
-					input.queue === 'retired-asset'
-						? catalogue.listRetiredGraphicAssets({ limit: GRAPHICS_QUEUE_ITEM_LIMIT })
-						: Promise.resolve([]),
+					catalogue.findGraphicAssetName(assetId),
 				]);
-				const name = trashDeadlines.find(deadline => deadline.assetId === assetId)?.name
-					?? retiredAssets.find(asset => asset.assetId === assetId)?.name
-					?? assetId;
 				return {
 					...base,
 					subject: { kind: 'graphic-asset', id: assetId },
-					title: name,
+					title: name ?? assetId,
 					...(retention.lifecycle.state === 'trashed'
 						? { deadline: retention.lifecycle.recoverableUntil }
 						: {}),
@@ -467,11 +465,8 @@ export function createGraphicsOperationalQueues(
 
 			if (input.queue === 'superseded-revision') {
 				const revisionId = input.subjectId as GraphicAssetRevisionId;
-				const deadlines = await catalogue.listRevisionRetention({
-					limit: GRAPHICS_QUEUE_ITEM_LIMIT,
-				});
-				const deadline = deadlines.find(candidate => candidate.revisionId === revisionId);
-				if (!deadline || deadline.retention.policy !== 'unreferenced-superseded')
+				const deadline = await catalogue.findRevisionRetention(revisionId);
+				if (!deadline || !isPrunableRevision(deadline))
 					notFound('Graphic Asset Revision is no longer in that queue');
 				return {
 					...base,
@@ -493,12 +488,10 @@ export function createGraphicsOperationalQueues(
 				};
 			}
 
-			const ingestion = await catalogue.summariseIngestionAttention({
+			const operation = await catalogue.findIngestionAttentionItem({
 				now: now().toISOString(),
-				limit: GRAPHICS_QUEUE_ITEM_LIMIT,
+				operationId: input.subjectId,
 			});
-			const operation = ingestion.operations
-				.find(candidate => candidate.operationId === input.subjectId);
 			if (!operation || INGESTION_QUEUES[operation.attention] !== input.queue)
 				notFound('Graphics Ingestion Operation is no longer in that queue');
 			const item = ingestionItem(operation, input.queue);

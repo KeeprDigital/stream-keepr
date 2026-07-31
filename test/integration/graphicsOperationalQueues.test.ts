@@ -89,11 +89,21 @@ describe('the Graphics Asset Library operational queues API', () => {
 		).then(response => response.json() as Promise<GraphicsIngestionOperation>);
 	}
 
-	async function act(assetId: string, action: string, extra: Record<string, unknown> = {}) {
+	/** The queue's own action: restoration, reported in the outcome vocabulary. */
+	async function restore(assetId: string) {
 		return await $fetch<QueueActionResult>(
 			`/api/admin/graphics-assets/${assetId}/lifecycle-actions`,
-			{ method: 'POST', headers: administratorHeaders, body: { action, ...extra } },
+			{ method: 'POST', headers: administratorHeaders, body: { action: 'restore' } },
 		);
+	}
+
+	/** How assets actually reach Retired and Trash: the Library Workspace. */
+	async function authorLifecycleAction(assetId: string, action: 'retire' | 'trash') {
+		return await fetch(`/api/graphics-assets/${assetId}/lifecycle-actions`, {
+			method: 'POST',
+			headers: { ...authorHeaders, 'content-type': 'application/json' },
+			body: JSON.stringify({ action }),
+		}).then(async response => await response.json() as { outcome: string });
 	}
 
 	it('keeps every queue surface administrator-only', async () => {
@@ -111,13 +121,20 @@ describe('the Graphics Asset Library operational queues API', () => {
 		expect(lifecycle.status).toBe(403);
 		const retry = await fetch(
 			'/api/admin/graphics-assets/ingestion-operations/x/retry',
-			{
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ initiatedBy: 'queues-integration-author' }),
-			},
+			{ method: 'POST', headers: { 'content-type': 'application/json' } },
 		);
 		expect(retry.status).toBe(403);
+	});
+
+	it('offers restoration alone, not every lifecycle transition', async () => {
+		const refused = await fetch('/api/admin/graphics-assets/anything/lifecycle-actions', {
+			method: 'POST',
+			headers: { ...administratorHeaders, 'content-type': 'application/json' },
+			body: JSON.stringify({ action: 'trash' }),
+		});
+		// Retiring and Trashing are the Library Workspace's decisions about a live
+		// asset. No queue offers them, so this surface does not accept them.
+		expect(refused.status).toBe(400);
 	});
 
 	it('states every queue in risk order with its complete count', async () => {
@@ -145,7 +162,7 @@ describe('the Graphics Asset Library operational queues API', () => {
 	it('inspects a Retired asset and reports restoration exactly once', async () => {
 		const operation = await ingest('Queues retired logo', 'queues-retired', queuesRetiredPng);
 		const assetId = operation.result!.assetId;
-		expect(await act(assetId, 'retire')).toEqual({ outcome: 'completed' });
+		expect(await authorLifecycleAction(assetId, 'retire')).toMatchObject({ outcome: 'retired' });
 
 		const inspection = await $fetch<GraphicsQueueInspection>(
 			'/api/admin/graphics-assets/queues/inspection',
@@ -168,10 +185,10 @@ describe('the Graphics Asset Library operational queues API', () => {
 			lifecycle: { state: 'retired' },
 		});
 
-		expect(await act(assetId, 'restore')).toEqual({ outcome: 'completed' });
+		expect(await restore(assetId)).toEqual({ outcome: 'completed' });
 		// The same action again is the idempotent no-op, reported as such rather
 		// than as a second success or a bare error.
-		expect(await act(assetId, 'restore')).toEqual({ outcome: 'already-in-state' });
+		expect(await restore(assetId)).toEqual({ outcome: 'already-in-state' });
 
 		// The asset left the queue it was in, so it can no longer be inspected there.
 		const gone = await fetch(
@@ -181,7 +198,7 @@ describe('the Graphics Asset Library operational queues API', () => {
 		expect(gone.status).toBe(404);
 	});
 
-	it('reports a Trash blocked by pinned usage as reference-blocked', async () => {
+	it('refuses to Trash a Graphic Asset any artifact still pins', async () => {
 		const event = await $fetch<{ id: number }>('/api/events', {
 			method: 'POST',
 			body: {
@@ -216,7 +233,7 @@ describe('the Graphics Asset Library operational queues API', () => {
 			);
 
 			// A fresh reference proof found pinned usage, so nothing was reclaimed.
-			expect(await act(assetId, 'trash')).toEqual({ outcome: 'reference-blocked' });
+			expect(await authorLifecycleAction(assetId, 'trash')).toMatchObject({ outcome: 'in-use' });
 		}
 		finally {
 			await $fetch(`/api/events/${event.id}`, { method: 'DELETE' }).catch(() => {});
@@ -226,7 +243,7 @@ describe('the Graphics Asset Library operational queues API', () => {
 	it('requires an explicit confirmation before an early purge', async () => {
 		const operation = await ingest('Queues trashed logo', 'queues-trashed', queuesTrashedPng);
 		const assetId = operation.result!.assetId;
-		expect(await act(assetId, 'trash')).toEqual({ outcome: 'completed' });
+		expect(await authorLifecycleAction(assetId, 'trash')).toMatchObject({ outcome: 'trashed' });
 
 		// The queue's purge action goes to the existing fresh-proof endpoint, and
 		// that endpoint refuses anything but the exact confirmation.
@@ -263,11 +280,7 @@ describe('the Graphics Asset Library operational queues API', () => {
 		// A completed operation is terminal: retrying it is the idempotent no-op.
 		const retried = await $fetch<QueueActionResult>(
 			`/api/admin/graphics-assets/ingestion-operations/${operation.id}/retry`,
-			{
-				method: 'POST',
-				headers: administratorHeaders,
-				body: { initiatedBy: 'queues-integration-author' },
-			},
+			{ method: 'POST', headers: administratorHeaders },
 		);
 		expect(retried).toEqual({ outcome: 'already-in-state' });
 	});
@@ -275,7 +288,7 @@ describe('the Graphics Asset Library operational queues API', () => {
 	it('filters the Evidence ledger to one subject', async () => {
 		const operation = await ingest('Queues evidence logo', 'queues-evidence', pngWithTextChunks(64));
 		const assetId = operation.result!.assetId;
-		await act(assetId, 'trash');
+		await authorLifecycleAction(assetId, 'trash');
 		await $fetch(`/api/admin/graphics-assets/${assetId}/purge`, {
 			method: 'POST',
 			headers: administratorHeaders,

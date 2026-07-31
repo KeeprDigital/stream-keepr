@@ -213,7 +213,15 @@ export interface GraphicsAssetRetentionCatalogue {
 	listRevisionRetention: (input: {
 		assetId?: GraphicAssetId;
 		limit: number;
+		/** Installation-wide, narrows to revisions actually scheduled for pruning. */
+		prunableOnly?: boolean;
 	}) => Promise<GraphicsRevisionPruningDeadline[]>;
+	/** One revision's retention policy, resolved by identity rather than by scan. */
+	findRevisionRetention: (
+		revisionId: GraphicAssetRevisionId,
+	) => Promise<GraphicsRevisionPruningDeadline | undefined>;
+	/** One Graphic Asset's name, for naming a queue subject without listing rows. */
+	findGraphicAssetName: (assetId: GraphicAssetId) => Promise<string | undefined>;
 	listTrashDeadlines: (input: { limit: number }) => Promise<GraphicsTrashDeadline[]>;
 	/** Retired Graphic Assets, oldest first. Retirement carries no deadline. */
 	listRetiredGraphicAssets: (input: { limit: number }) => Promise<RetiredGraphicAsset[]>;

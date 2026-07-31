@@ -1146,6 +1146,15 @@ export type GraphicsOperationsCockpit
 	};
 
 /**
+ * What one queue item or inspection is about: an opaque domain identity and the
+ * kind of thing it identifies. Never a bucket, object key, digest, or filename.
+ */
+export interface GraphicsQueueSubject {
+	kind: GraphicsAssetEvidenceSubjectKind;
+	id: string;
+}
+
+/**
  * One piece of work in an operational queue.
  *
  * An item names the domain identity it is about and the exact instant its state
@@ -1159,11 +1168,7 @@ export interface GraphicsOperationalQueueItem {
 	 */
 	key: string;
 	queue: GraphicsOperationalQueueId;
-	/** An opaque domain identity, never a provider object. */
-	subject: {
-		kind: GraphicsAssetEvidenceSubjectKind;
-		id: string;
-	};
+	subject: GraphicsQueueSubject;
 	/** What an administrator recognises this item by. */
 	title: string;
 	/** The exact instant this item's state changes if nobody acts. */
@@ -1242,7 +1247,7 @@ export interface GraphicsQueueInspection {
 	key: string;
 	queue: GraphicsOperationalQueueId;
 	severity: GraphicsStorageHealthAlertSeverity;
-	subject: GraphicsOperationalQueueItem['subject'];
+	subject: GraphicsQueueSubject;
 	title: string;
 	/** Restated per inspection, so the evidence below is never read as one voice. */
 	authority: GraphicsReconciliationOverview['authority'];

@@ -793,9 +793,17 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				LEFT JOIN graphic_asset_revision_retention retention
 					ON retention.revision_id = revision.id
 				${input.assetId === undefined
-					? 'WHERE retention.revision_id IS NOT NULL'
+					? `WHERE retention.revision_id IS NOT NULL${
+						input.prunableOnly
+							? ' AND retention.prune_after IS NOT NULL AND retention.frozen_at IS NULL'
+							: ''}`
 					: 'WHERE revision.asset_id = ?'}
-				ORDER BY revision.asset_id, revision.revision_number
+				${input.assetId === undefined
+					// Installation-wide, the question is which revision is pruned
+					// soonest. Per asset it is which revision came first, because
+					// that read describes one asset's history rather than a queue.
+					? 'ORDER BY retention.prune_after, revision.id'
+					: 'ORDER BY revision.asset_id, revision.revision_number'}
 				LIMIT ?
 			`).bind(
 				...(input.assetId === undefined ? [] : [input.assetId]),
@@ -804,6 +812,33 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			if (!result.success)
 				throw new Error('Graphic Asset Revision retention could not be read');
 			return result.results.map(revisionRetentionFromRow);
+		},
+		async findRevisionRetention(revisionId) {
+			const row = await database.prepare(`
+				SELECT revision.id, revision.asset_id, revision.revision_number,
+					(
+						SELECT COUNT(*) FROM graphic_asset_references reference
+						WHERE reference.revision_id = revision.id
+					) AS reference_count,
+					CASE WHEN revision.revision_number = (
+						SELECT MAX(latest.revision_number)
+						FROM graphic_asset_revisions latest
+						WHERE latest.asset_id = revision.asset_id
+					) THEN 1 ELSE 0 END AS is_latest,
+					retention.unreferenced_since, retention.prune_after,
+					retention.frozen_at, retention.frozen_remaining_milliseconds
+				FROM graphic_asset_revisions revision
+				LEFT JOIN graphic_asset_revision_retention retention
+					ON retention.revision_id = revision.id
+				WHERE revision.id = ?
+			`).bind(revisionId).first<RevisionRetentionRow>();
+			return row ? revisionRetentionFromRow(row) : undefined;
+		},
+		async findGraphicAssetName(assetId) {
+			const row = await database.prepare(
+				'SELECT name FROM graphic_assets WHERE id = ?',
+			).bind(assetId).first<{ name: string }>();
+			return row?.name;
 		},
 		async listRetiredGraphicAssets(input) {
 			const result = await database.prepare(`

@@ -1,5 +1,4 @@
 import type { GraphicsQueueActionOutcome } from '~~/shared/utils/graphicsOperationalQueues';
-import { z } from 'zod';
 import { requireGraphicsAdministrator } from '~~/server/modules/graphics-administrator';
 import { graphicsIngestionOperationId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
@@ -8,35 +7,41 @@ import { graphicsQueueActionErrorOutcome } from '~~/server/utils/graphicsQueueAc
 import { graphicsIngestionRetryQueueOutcome } from '~~/shared/utils/graphicsOperationalQueues';
 
 /**
- * A Graphics Ingestion Operation stays owned by the author who started it, and
- * the library scopes every read and every durable claim by that owner. An
- * administrator resuming one from a queue therefore names the owner rather than
- * taking it over: the operation, its retained input, and its eventual result
- * all remain the author's. A name that does not own the operation resolves to
- * nothing, which is the same safe answer the author-facing route gives.
- */
-const retrySchema = z.object({
-	initiatedBy: z.string().min(1).max(200),
-}).strict();
-
-/**
  * Resumes one Graphics Ingestion Operation from its retained verified input.
  *
- * Retry is idempotent by construction: a terminal operation is returned
- * unchanged, and an operation whose staged input has expired cannot be resumed
- * at all. Both report `already-in-state` rather than a second success.
+ * The operation stays owned by the author who started it: the library scopes
+ * every read and every durable claim by that owner, and an administrator
+ * resuming one from a queue is not taking it over. The owner is therefore read
+ * from the operation record rather than named by the caller, so no identity in
+ * the request can disagree with the one the library holds.
+ *
+ * Retry is idempotent by construction. A terminal operation is returned
+ * unchanged, and one whose staged input has expired cannot be resumed at all;
+ * both report `already-in-state` rather than a second success.
  */
 export default defineEventHandler(async (event): Promise<{
 	outcome: GraphicsQueueActionOutcome;
 }> => {
-	await requireGraphicsAdministrator(event);
-	const { initiatedBy } = await readValidatedBody(event, retrySchema.parse);
 	try {
-		const operation = await graphicsAssetLibraryForEvent(event).retryGraphicsIngestion({
-			operationId: graphicsIngestionOperationId(getRouterParam(event, 'operationId') ?? ''),
-			initiatedBy,
-		});
-		return { outcome: graphicsIngestionRetryQueueOutcome(operation) };
+		await requireGraphicsAdministrator(event);
+		const operationId = graphicsIngestionOperationId(
+			getRouterParam(event, 'operationId') ?? '',
+		);
+		const library = graphicsAssetLibraryForEvent(event);
+		const queued = await library.findQueuedIngestionOperation({ operationId });
+		if (!queued) {
+			// Nothing unfinished under that identity: already published, cancelled,
+			// or swept away. Retrying it is the idempotent no-op it looks like.
+			return { outcome: 'already-in-state' };
+		}
+		return {
+			outcome: graphicsIngestionRetryQueueOutcome(
+				await library.retryGraphicsIngestion({
+					operationId,
+					initiatedBy: queued.initiatedBy,
+				}),
+			),
+		};
 	}
 	catch (error) {
 		const outcome = graphicsQueueActionErrorOutcome(error);

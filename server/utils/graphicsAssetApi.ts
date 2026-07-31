@@ -22,7 +22,9 @@ export function rethrowGraphicsAssetApiError(error: unknown, event?: H3Event): n
 		const statusCode = capacityError?.statusCode ?? ({
 			'invalid-ingestion-input': 400,
 			'ingestion-operation-not-found': 404,
+			'graphics-subject-not-found': 404,
 			'ingestion-operation-not-uploadable': 409,
+			'ingestion-operation-lease-held': 409,
 			'graphic-asset-lifecycle-action-not-allowed': 409,
 			'staging-capacity-exhausted': 500,
 			'canonical-capacity-exhausted': 500,

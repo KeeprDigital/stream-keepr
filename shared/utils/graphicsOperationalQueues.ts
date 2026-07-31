@@ -82,13 +82,6 @@ export function graphicsQueueSeverity(
 	return QUEUE_SEVERITIES[queue];
 }
 
-/** Ranks a severity for ordering, most urgent first. */
-export const GRAPHICS_QUEUE_SEVERITY_RANK: Record<GraphicsStorageHealthAlertSeverity, number> = {
-	critical: 0,
-	warning: 1,
-	info: 2,
-};
-
 /**
  * Every action a queue item can offer.
  *
@@ -161,13 +154,23 @@ const REJECTION_OUTCOMES: Record<GraphicsRepairRejectionCode, GraphicsQueueActio
 	'byte-store-unavailable': 'retryable-unavailable',
 };
 
+/**
+ * What a reconciliation action did.
+ *
+ * `unchanged` is the commonest answer a recheck gives on open unavailable
+ * content, and it means the bytes are still gone. Reporting that as
+ * `already-in-state` would tell an administrator the subject was already how
+ * they wanted it, which is the opposite of what happened: nothing has been
+ * fixed, and the same recheck is worth running again once the byte store or a
+ * later sweep has moved.
+ */
 export function graphicsDiscrepancyQueueOutcome(
 	outcome: GraphicsDiscrepancyActionOutcome,
 ): GraphicsQueueActionOutcome {
 	if (outcome.outcome === 'resolved')
 		return 'completed';
 	if (outcome.outcome === 'unchanged')
-		return 'already-in-state';
+		return 'retryable-unavailable';
 	return REJECTION_OUTCOMES[outcome.code];
 }
 

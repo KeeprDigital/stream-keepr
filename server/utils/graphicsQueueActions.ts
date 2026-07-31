@@ -24,8 +24,12 @@ const LIBRARY_ERROR_OUTCOMES: Partial<Record<
 	// The subject moved on before the action arrived: purged, restored, or past
 	// the stage the action applies to.
 	'ingestion-operation-not-found': 'already-in-state',
+	'graphics-subject-not-found': 'already-in-state',
 	'ingestion-operation-not-uploadable': 'already-in-state',
 	'graphic-asset-lifecycle-action-not-allowed': 'already-in-state',
+	// A lease another worker still holds lapses on its own, so unlike a stage a
+	// retry cannot resume from, this one is worth running again.
+	'ingestion-operation-lease-held': 'retryable-unavailable',
 	'graphics-asset-library-unavailable': 'retryable-unavailable',
 	'staging-capacity-exhausted': 'retryable-unavailable',
 	'canonical-capacity-exhausted': 'retryable-unavailable',

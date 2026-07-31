@@ -396,7 +396,7 @@ Its selection lives in the address rather than in the surface, so it survives na
 
 **Queue Action Outcome**:
 The one vocabulary every Operational Queue action reports in: completed, already-in-state, reference-blocked, retryable-unavailable, or integrity-conflict.
-Every action is idempotent, so a second run reports already-in-state rather than a second success or a bare failure, and a refusal always names which of the three reasons the library refused for.
+Every action is idempotent, so a second run reports already-in-state rather than a second success or a bare failure; already-in-state means the subject was already how the action asks for it, never that the action ran and fixed nothing.
 
 **Text Graphic Item**:
 A Graphic Item that renders literal text or a Graphic Text Template.
@@ -726,6 +726,9 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - A **Queue Inspector** offers only the actions valid in its subject's current state, and the library re-proves that validity before writing anything
 - **Exact-Byte Repair** is offered only for Unavailable Graphic Asset Content and **Derivative Regeneration** only for a missing Graphics Derivative; a quarantined object exposes its recheck deadline and evidence and offers no action that writes
 - Every **Operational Queue** action reports one **Queue Action Outcome**, and running the same action twice reports already-in-state
+- A recheck that leaves a **Graphics Discrepancy** open reports retryable-unavailable rather than already-in-state, because nothing has been put right
+- Each **Operational Queue** samples independently and by deadline proximity, so no queue's backlog can leave another queue's work unlisted and unactionable
+- A **Queue Inspector** resolves its subject by identity rather than from a queue's bounded sample, so a subject past the end of a sample still inspects
 - An **Early Purge** from a **Queue Inspector** requires an explicit typed confirmation as well as the fresh all-revision reference proof the library takes regardless
 - Every **Graphic Asset Revision** passes **Graphic Asset Validation** under one **Graphic Asset Compatibility Profile** before it becomes referenceable
 - The initial `still-image-v1` **Graphic Asset Compatibility Profile** accepts exact single-frame PNG, JPEG, or WebP source bytes up to 25 MiB, 8,192 pixels per axis, and 16,777,216 decoded pixels only when bounded parser evidence and a complete decode agree on an 8-bit SDR sRGB image with normal orientation

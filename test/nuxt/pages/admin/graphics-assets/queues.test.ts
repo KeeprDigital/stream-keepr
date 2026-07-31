@@ -258,6 +258,30 @@ function trashedInspection(): GraphicsQueueInspection {
 	};
 }
 
+function retiredInspection(): GraphicsQueueInspection {
+	return {
+		key: 'retired-asset:asset-retired',
+		queue: 'retired-asset',
+		severity: 'info',
+		subject: { kind: 'graphic-asset', id: 'asset-retired' },
+		title: 'Season one backdrop',
+		authority: {
+			expectedReachability: 'catalogue',
+			presentBytes: 'byte-store',
+			contentAvailabilityFlag: 'advisory-reconciliation-state',
+		},
+		referenceCount: 1,
+		actions: ['restore-graphic-asset'],
+		detail: {
+			kind: 'graphic-asset',
+			lifecycle: { state: 'retired' },
+			revisions: [],
+			usage: [],
+		},
+		evidence: [],
+	};
+}
+
 const passthroughStub = defineComponent({
 	template: '<div><slot name="actions" /><slot name="header" /><slot /></div>',
 });
@@ -468,10 +492,11 @@ describe('the Graphics Asset Library operational queues page', () => {
 		);
 	});
 
-	it('reports every action in the same five-outcome vocabulary', async () => {
-		// Reconciliation answers in its own vocabulary; the queue maps it onto the
-		// five outcomes every action reports, so a recheck that found nothing to
-		// change reads as the idempotent second run it is.
+	it('reports a recheck that fixed nothing as still needing another run', async () => {
+		// Reconciliation answers in its own vocabulary. `unchanged` is what a
+		// recheck says when the bytes are still gone, which is the commonest
+		// answer on open unavailable content — and the opposite of the subject
+		// already being how the administrator wanted it.
 		serve({ action: { outcome: 'unchanged' } });
 		const wrapper = await openQueues();
 		await buttonNamed(wrapper, 'Lower third · revision 1')!.trigger('click');
@@ -483,6 +508,26 @@ describe('the Graphics Asset Library operational queues page', () => {
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			'/api/admin/graphics-assets/discrepancies/discrepancy-unavailable/actions',
 			expect.objectContaining({ method: 'POST', body: { action: 'recheck' } }),
+		);
+		expect(wrapper.text()).toContain('Retryable — unavailable');
+		expect(wrapper.text()).not.toContain('Already in state');
+	});
+
+	it('reports an already-restored asset as already in state', async () => {
+		serve({
+			inspection: retiredInspection(),
+			action: { outcome: 'already-in-state' },
+		});
+		const wrapper = await openQueues();
+		await buttonNamed(wrapper, 'Season one backdrop')!.trigger('click');
+		await settle();
+
+		await buttonNamed(wrapper, 'Restore')!.trigger('click');
+		await settle();
+
+		expect(mockApiFetch).toHaveBeenCalledWith(
+			'/api/admin/graphics-assets/asset-retired/lifecycle-actions',
+			expect.objectContaining({ method: 'POST', body: { action: 'restore' } }),
 		);
 		expect(wrapper.text()).toContain('Already in state');
 	});
