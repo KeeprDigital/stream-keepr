@@ -1,9 +1,11 @@
 import type {
+	GraphicsIngestionAttentionItem,
 	GraphicsIngestionOperationId,
 	GraphicsIngestionSource,
 	GraphicsIngestionStage,
 } from '~~/shared/types/graphicsAsset';
 import type { GraphicsIngestionAttentionState } from '~~/shared/utils/graphicsOperationsCockpit';
+import type { GraphicsOperationalQueuesCatalogue } from './operational-queues';
 import type {
 	GraphicsDeadlineGroupSummary,
 	GraphicsIngestionAttentionRead,
@@ -105,6 +107,38 @@ interface AttentionRow {
 	updated_at: number;
 }
 
+const ATTENTION_COLUMNS = `id, ${ATTENTION_SQL} AS attention, stage, source, initiated_by,
+	proposed_name, transferred_byte_length, declared_byte_length,
+	${TRANSFER_COMPLETE_SQL} AS transfer_complete,
+	staging_used_byte_length + staging_reserved_byte_length AS staging_bytes,
+	${INPUT_EXPIRES_AT_SQL} AS input_expires_at,
+	json_extract(failure, '$.code') AS failure_code,
+	updated_at`;
+
+function attentionItem(row: AttentionRow): GraphicsIngestionAttentionItem {
+	return {
+		operationId: row.id as GraphicsIngestionOperationId,
+		attention: row.attention,
+		stage: row.stage,
+		source: row.source,
+		initiatedBy: row.initiated_by,
+		name: row.proposed_name,
+		transferredByteLength: row.transferred_byte_length,
+		declaredByteLength: row.declared_byte_length,
+		transferComplete: row.transfer_complete === 1,
+		stagingBytes: row.staging_bytes,
+		inputExpiresAt: new Date(row.input_expires_at).toISOString(),
+		...(row.failure_code === null
+			? {}
+			: {
+					failureCode: row.failure_code as NonNullable<
+						GraphicsIngestionAttentionItem['failureCode']
+					>,
+				}),
+		updatedAt: new Date(row.updated_at).toISOString(),
+	};
+}
+
 function deadlineGroup(row: {
 	group_count: number;
 	next_deadline: number | null;
@@ -139,6 +173,9 @@ export function createD1GraphicsOperationsCockpitCatalogue(
 	| 'countIsolatedDiscrepancies'
 	| 'summariseIngestionAttention'
 	| 'summariseRetentionDeadlines'
+> & Pick<
+	GraphicsOperationalQueuesCatalogue,
+	'summariseIngestionQueues' | 'findIngestionAttentionItem'
 > {
 	return {
 		async countUnavailableContent() {
@@ -196,26 +233,69 @@ export function createD1GraphicsOperationsCockpitCatalogue(
 
 			return {
 				counts,
-				operations: (listed.results as AttentionRow[]).map(row => ({
-					operationId: row.id as GraphicsIngestionOperationId,
-					attention: row.attention,
-					stage: row.stage,
-					source: row.source,
-					initiatedBy: row.initiated_by,
-					name: row.proposed_name,
-					transferredByteLength: row.transferred_byte_length,
-					declaredByteLength: row.declared_byte_length,
-					transferComplete: row.transfer_complete === 1,
-					stagingBytes: row.staging_bytes,
-					inputExpiresAt: new Date(row.input_expires_at).toISOString(),
-					...(row.failure_code === null
-						? {}
-						: { failureCode: row.failure_code as NonNullable<
-								GraphicsIngestionAttentionRead['operations'][number]['failureCode']
-							> }),
-					updatedAt: new Date(row.updated_at).toISOString(),
-				})),
+				operations: (listed.results as AttentionRow[]).map(attentionItem),
 			};
+		},
+		/**
+		 * Complete counts plus one independent sample per attention state.
+		 *
+		 * The cockpit's single risk-ordered sample is right for a cockpit, which
+		 * shows the most urgent work of any kind. It is wrong for queues: one
+		 * shared budget ordered expired-before-retryable means a backlog of
+		 * expired input empties the retryable queue, and a queue whose only
+		 * action is unreachable is the same as no queue at all. Each state
+		 * therefore gets its own budget, and each is ordered by the deadline the
+		 * queue states rather than by when the operation last moved.
+		 */
+		async summariseIngestionQueues(input) {
+			const checkedAt = new Date(input.now).getTime();
+			const [counted, retryable, expired] = await database.batch<
+				{ attention: GraphicsIngestionAttentionState; total: number } | AttentionRow
+			>([
+				database.prepare(`
+					SELECT ${ATTENTION_SQL} AS attention, COUNT(*) AS total
+					FROM graphics_ingestion_operations
+					WHERE ${UNFINISHED_SQL}
+					GROUP BY attention
+				`).bind(checkedAt),
+				...(['retryable', 'input-expired'] as const).map(state =>
+					database.prepare(`
+						SELECT ${ATTENTION_COLUMNS}
+						FROM graphics_ingestion_operations
+						WHERE ${UNFINISHED_SQL} AND ${ATTENTION_SQL} = ?2
+						ORDER BY input_expires_at, id
+						LIMIT ?3
+					`).bind(checkedAt, state, input.limit)),
+			]);
+			if (!counted?.success || !retryable?.success || !expired?.success)
+				throw new Error('Graphics Ingestion Operation queues could not be read');
+
+			const counts = {} as Record<GraphicsIngestionAttentionState, number>;
+			for (const row of counted.results as {
+				attention: GraphicsIngestionAttentionState | null;
+				total: number;
+			}[]) {
+				if (row.attention !== null)
+					counts[row.attention] = row.total;
+			}
+			return {
+				counts,
+				retryable: (retryable.results as AttentionRow[]).map(attentionItem),
+				expired: (expired.results as AttentionRow[]).map(attentionItem),
+			};
+		},
+		/**
+		 * One unfinished operation by identity, for the inspector and for
+		 * resolving the author an administrator's retry acts on behalf of.
+		 * Scanning a triage sample for it would make both fail past the sample.
+		 */
+		async findIngestionAttentionItem(input) {
+			const row = await database.prepare(`
+				SELECT ${ATTENTION_COLUMNS}
+				FROM graphics_ingestion_operations
+				WHERE id = ?2 AND ${UNFINISHED_SQL}
+			`).bind(new Date(input.now).getTime(), input.operationId).first<AttentionRow>();
+			return row ? attentionItem(row) : undefined;
 		},
 		async summariseRetentionDeadlines(): Promise<GraphicsRetentionDeadlineSummary> {
 			const [lifecycle, revisions, quarantine, stagedInput] = await database.batch([

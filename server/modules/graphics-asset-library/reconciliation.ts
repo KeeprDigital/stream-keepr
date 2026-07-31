@@ -216,6 +216,12 @@ export interface GraphicsAssetReconciliationCatalogue {
 		limit: number;
 		states?: readonly GraphicsDiscrepancyState[];
 		kinds?: readonly GraphicsDiscrepancyKind[];
+		/**
+		 * `detected` answers what went wrong most recently. `quarantine-deadline`
+		 * answers which held bytes are closest to being deleted, which is the only
+		 * useful order for a bounded sample of quarantined objects.
+		 */
+		orderBy?: 'detected' | 'quarantine-deadline';
 	}) => Promise<GraphicsDiscrepancyRecord[]>;
 	countOpenDiscrepancies: () => Promise<Record<GraphicsDiscrepancyKind, number>>;
 	recordDiscrepancyObservation: (input: {
@@ -1265,6 +1271,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 				limit: OVERVIEW_KIND_LIMIT,
 				states: ['open'],
 				kinds: [kind],
+				// Quarantined bytes are sampled by how soon they are deleted; every
+				// other kind by what went wrong most recently.
+				orderBy: kind === 'unexpected-object' ? 'quarantine-deadline' : 'detected',
 			})),
 		);
 		return perKind.flat();
