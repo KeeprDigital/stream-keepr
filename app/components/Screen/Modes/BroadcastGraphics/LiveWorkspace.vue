@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import type { BroadcastGraphicConfig, GraphicPlayoutState } from '~~/shared/types/graphics';
+import type {
+	BroadcastGraphicConfig,
+	GraphicChannelConfig,
+	GraphicChannelHandoffPolicy,
+	GraphicPlayoutState,
+} from '~~/shared/types/graphics';
 import type { Screen } from '~/types';
+import { graphicChannelGroups, graphicChannelHandoffPolicy } from '~~/shared/modules/graphics';
 import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import { LazyUIConfirmActionModal } from '#components';
 
@@ -40,6 +46,8 @@ const props = defineProps<{
 	eventId: number;
 	screen: Screen;
 	graphics: readonly BroadcastGraphicConfig[];
+	/** The Screen's Graphic Channels, which the rundown is organised by. */
+	channels?: readonly GraphicChannelConfig[];
 	selectedGraphicId: string | null;
 	canvasWidth: number;
 	canvasHeight: number;
@@ -110,7 +118,8 @@ function stopClock() {
 
 function advance() {
 	now.value = sessionStore.serverNow();
-	if (Object.keys(sessionStore.animationProjection(props.screen.id, props.graphics, now.value)).length === 0) {
+	const projection = sessionStore.animationProjection(props.screen.id, props.graphics, now.value, props.channels);
+	if (Object.keys(projection).length === 0) {
 		stopClock();
 		return;
 	}
@@ -143,17 +152,65 @@ const PLAYOUT_STATE_LABELS: Record<GraphicPlayoutState, string> = {
 	'exiting': 'Exiting',
 };
 
+const PLAYOUT_STATE_COLORS: Record<GraphicPlayoutState, 'neutral' | 'warning' | 'error'> = {
+	'off': 'neutral',
+	'waiting': 'warning',
+	'entering': 'error',
+	'on-air': 'error',
+	'updating': 'error',
+	'exiting': 'error',
+};
+
+const HANDOFF_POLICY_LABELS: Record<GraphicChannelHandoffPolicy, string> = {
+	'overlap': 'Overlap',
+	'out-then-in': 'Out then in',
+};
+
+const channelContexts = computed(() => sessionStore.channelContexts(props.graphics, props.channels));
+
 const entries = computed(() => [...props.graphics].reverse().map(graphic => ({
 	graphic,
-	playoutState: sessionStore.playoutState(props.screen.id, graphic.id, graphic, now.value),
+	playoutState: sessionStore.playoutState(
+		props.screen.id,
+		graphic.id,
+		graphic,
+		now.value,
+		channelContexts.value[graphic.id],
+	),
 	// Scoped per graphic: an action on one must never freeze another's controls.
 	pending: sessionStore.isPending(props.screen.id, graphic.id),
 	assetBlockedReason: takeBlockedReason(graphic.id),
 	assetRetryable: assetContentRetryable(graphic.id),
 })));
 
+/**
+ * The rundown, organised by Graphic Channel.
+ *
+ * Grouping is a reading of the stack rather than a reordering of it: within a group
+ * the graphics stay in authored Screen stack order, front first, exactly as the flat
+ * list has them — Graphic Channel membership never changes what composites over what.
+ * What grouping buys an operator is that the graphics competing for one lane sit
+ * together under the Graphic Channel Handoff Policy that decides how they replace
+ * each other.
+ */
+const groups = computed(() => {
+	const byId = new Map(entries.value.map(entry => [entry.graphic.id, entry]));
+	return graphicChannelGroups({ graphics: props.graphics, channels: props.channels }).map(group => ({
+		key: group.channel?.id ?? '',
+		channel: group.channel,
+		policy: HANDOFF_POLICY_LABELS[graphicChannelHandoffPolicy(group.channel ?? undefined)],
+		entries: [...group.graphics].reverse().map(graphic => byId.get(graphic.id)!),
+	}));
+});
+
+/**
+ * Headings only once a Graphic Channel actually organises something. A Screen with
+ * no channels is one lane, and labelling every graphic "No channel" would be noise.
+ */
+const organised = computed(() => groups.value.some(group => group.channel !== null));
+
 const onAirCount = computed(() =>
-	sessionStore.onAirGraphicIds(props.screen.id, props.graphics, now.value).length,
+	sessionStore.onAirGraphicIds(props.screen.id, props.graphics, now.value, props.channels).length,
 );
 
 /**
@@ -313,115 +370,150 @@ async function resetLiveState() {
 				</UButton>
 
 				<div
-					v-for="entry in entries"
-					:key="entry.graphic.id"
-					class="rounded-lg border p-3 transition"
-					:class="selectedGraphicId === entry.graphic.id ? 'border-primary bg-primary/10' : 'border-default/70 bg-muted/20'"
-					:data-playout-entry="entry.graphic.id"
-					:data-playout-state="entry.playoutState"
+					v-for="group in groups"
+					:key="group.key"
+					class="space-y-2"
+					:data-playout-channel="group.channel?.id ?? ''"
 				>
-					<button
-						type="button"
-						class="flex w-full items-start gap-3 text-left"
-						data-testid="playout-select"
-						@click="emit('select', entry.graphic.id)"
-					>
-						<UIcon name="i-lucide-layers" class="mt-0.5 size-4 shrink-0 text-muted" />
-						<span class="min-w-0 flex-1">
-							<span class="block truncate text-sm font-medium">{{ entry.graphic.name }}</span>
-							<span class="mt-0.5 block truncate text-xs text-muted">{{ entry.graphic.items.length }} items</span>
-						</span>
-						<!--
-							An operator has to be able to tell a graphic that is on program from
-							one that is on its way there or away, so every lifecycle phase reads as
-							itself. Anything not off is on program, so anything not off is red.
-						-->
-						<UBadge
-							size="xs"
-							:color="entry.playoutState === 'off' ? 'neutral' : 'error'"
-							variant="soft"
-							class="shrink-0"
-						>
-							{{ PLAYOUT_STATE_LABELS[entry.playoutState] }}
-						</UBadge>
-					</button>
-
 					<!--
-						Diagnosable, not merely blocked: the alert names the owner slot the
-						author has to repair, and offers a retry only for content that could
-						come back.
+						A Graphic Channel holds at most one of its members on air, so the
+						operator reads the lane and the rule that governs it above the graphics
+						competing for it. Grouping never reorders the stack.
 					-->
-					<UAlert
-						v-if="entry.assetBlockedReason"
-						class="mt-2"
-						:data-testid="`playout-asset-blocked-${entry.graphic.id}`"
-						:color="entry.assetRetryable ? 'warning' : 'error'"
-						variant="soft"
-						icon="i-lucide-image-off"
-						:title="entry.assetRetryable ? 'Unavailable Graphic Asset Content' : 'Missing Graphic Asset Reference'"
-						:description="entry.assetBlockedReason"
-					/>
-					<UButton
-						v-if="entry.assetRetryable"
-						class="mt-2"
-						size="xs"
-						color="warning"
-						variant="soft"
-						icon="i-lucide-refresh-cw"
-						data-testid="playout-retry-asset-content"
-						@click="retryAssetContent"
+					<div
+						v-if="organised"
+						class="flex items-baseline gap-2 pt-1"
+						data-testid="playout-channel-heading"
 					>
-						Retry Graphic Asset Content
-					</UButton>
+						<span class="min-w-0 flex-1 truncate text-xs font-medium">
+							{{ group.channel?.name ?? 'No Graphic Channel' }}
+						</span>
+						<UBadge
+							v-if="group.channel"
+							size="xs"
+							color="neutral"
+							variant="outline"
+							class="shrink-0"
+							data-testid="playout-channel-policy"
+						>
+							{{ group.policy }}
+						</UBadge>
+					</div>
 
-					<div class="mt-2 flex gap-1.5">
-						<UFieldGroup size="xs" class="flex-1">
-							<UButton
-								color="primary"
-								variant="subtle"
-								class="flex-1 justify-center"
-								:disabled="disconnected || entry.pending || entry.assetBlockedReason !== undefined"
-								data-testid="playout-take"
-								@click="take(entry.graphic.id, false)"
+					<div
+						v-for="entry in group.entries"
+						:key="entry.graphic.id"
+						class="rounded-lg border p-3 transition"
+						:class="selectedGraphicId === entry.graphic.id ? 'border-primary bg-primary/10' : 'border-default/70 bg-muted/20'"
+						:data-playout-entry="entry.graphic.id"
+						:data-playout-state="entry.playoutState"
+					>
+						<button
+							type="button"
+							class="flex w-full items-start gap-3 text-left"
+							data-testid="playout-select"
+							@click="emit('select', entry.graphic.id)"
+						>
+							<UIcon name="i-lucide-layers" class="mt-0.5 size-4 shrink-0 text-muted" />
+							<span class="min-w-0 flex-1">
+								<span class="block truncate text-sm font-medium">{{ entry.graphic.name }}</span>
+								<span class="mt-0.5 block truncate text-xs text-muted">{{ entry.graphic.items.length }} items</span>
+							</span>
+							<!--
+								An operator has to be able to tell a graphic that is on program from
+								one that is on its way there or away, so every lifecycle phase reads as
+								itself. Anything on program is red; off is neutral; and waiting is
+								neither — it is the operator's latest selection for its Graphic
+								Channel while being absent from every output, so reading it as on
+								program would be the one wrong thing this badge could say.
+							-->
+							<UBadge
+								size="xs"
+								:color="PLAYOUT_STATE_COLORS[entry.playoutState]"
+								variant="soft"
+								class="shrink-0"
 							>
-								Take
-							</UButton>
-							<UButton
-								color="primary"
-								variant="outline"
-								aria-label="Cut Take"
-								:disabled="disconnected || entry.pending || entry.assetBlockedReason !== undefined"
-								title="Take without its enter animation"
-								data-testid="playout-cut-take"
-								@click="take(entry.graphic.id, true)"
-							>
-								Cut
-							</UButton>
-						</UFieldGroup>
+								{{ PLAYOUT_STATE_LABELS[entry.playoutState] }}
+							</UBadge>
+						</button>
 
-						<UFieldGroup size="xs" class="flex-1">
-							<UButton
-								color="neutral"
-								variant="subtle"
-								class="flex-1 justify-center"
-								:disabled="disconnected || entry.pending"
-								data-testid="playout-out"
-								@click="out(entry.graphic.id, false)"
-							>
-								Out
-							</UButton>
-							<UButton
-								color="neutral"
-								variant="outline"
-								aria-label="Cut Out"
-								:disabled="disconnected || entry.pending"
-								title="Out without its exit animation"
-								data-testid="playout-cut-out"
-								@click="out(entry.graphic.id, true)"
-							>
-								Cut
-							</UButton>
-						</UFieldGroup>
+						<!--
+							Diagnosable, not merely blocked: the alert names the owner slot the
+							author has to repair, and offers a retry only for content that could
+							come back.
+						-->
+						<UAlert
+							v-if="entry.assetBlockedReason"
+							class="mt-2"
+							:data-testid="`playout-asset-blocked-${entry.graphic.id}`"
+							:color="entry.assetRetryable ? 'warning' : 'error'"
+							variant="soft"
+							icon="i-lucide-image-off"
+							:title="entry.assetRetryable ? 'Unavailable Graphic Asset Content' : 'Missing Graphic Asset Reference'"
+							:description="entry.assetBlockedReason"
+						/>
+						<UButton
+							v-if="entry.assetRetryable"
+							class="mt-2"
+							size="xs"
+							color="warning"
+							variant="soft"
+							icon="i-lucide-refresh-cw"
+							data-testid="playout-retry-asset-content"
+							@click="retryAssetContent"
+						>
+							Retry Graphic Asset Content
+						</UButton>
+
+						<div class="mt-2 flex gap-1.5">
+							<UFieldGroup size="xs" class="flex-1">
+								<UButton
+									color="primary"
+									variant="subtle"
+									class="flex-1 justify-center"
+									:disabled="disconnected || entry.pending || entry.assetBlockedReason !== undefined"
+									data-testid="playout-take"
+									@click="take(entry.graphic.id, false)"
+								>
+									Take
+								</UButton>
+								<UButton
+									color="primary"
+									variant="outline"
+									aria-label="Cut Take"
+									:disabled="disconnected || entry.pending || entry.assetBlockedReason !== undefined"
+									title="Take without its enter animation"
+									data-testid="playout-cut-take"
+									@click="take(entry.graphic.id, true)"
+								>
+									Cut
+								</UButton>
+							</UFieldGroup>
+
+							<UFieldGroup size="xs" class="flex-1">
+								<UButton
+									color="neutral"
+									variant="subtle"
+									class="flex-1 justify-center"
+									:disabled="disconnected || entry.pending"
+									data-testid="playout-out"
+									@click="out(entry.graphic.id, false)"
+								>
+									Out
+								</UButton>
+								<UButton
+									color="neutral"
+									variant="outline"
+									aria-label="Cut Out"
+									:disabled="disconnected || entry.pending"
+									title="Out without its exit animation"
+									data-testid="playout-cut-out"
+									@click="out(entry.graphic.id, true)"
+								>
+									Cut
+								</UButton>
+							</UFieldGroup>
+						</div>
 					</div>
 				</div>
 			</div>

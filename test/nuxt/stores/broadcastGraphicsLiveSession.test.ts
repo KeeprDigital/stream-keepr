@@ -873,3 +873,69 @@ describe('the authoritative clock a Screen Output projects on', () => {
 		expect(store.playoutState(SCREEN_ID, 'slate', graphic('slate'))).toBe('on-air');
 	});
 });
+
+describe('a Graphic Channel holding one member off program', () => {
+	let store: ReturnType<typeof useBroadcastGraphicsLiveSessionStore>;
+
+	const FADE_OUT = {
+		exit: { duration: 1000, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } },
+	};
+
+	function member(id: string): BroadcastGraphicConfig {
+		return { id, name: id, items: [], channelId: 'thirds', animation: FADE_OUT };
+	}
+
+	beforeEach(() => {
+		store = useBroadcastGraphicsLiveSessionStore();
+		store.$reset();
+		vi.clearAllMocks();
+		mockServerTimeOffset.value = 0;
+		mockClockSynced.value = true;
+	});
+
+	it('reports the incoming graphic waiting and keeps it off every output', async () => {
+		const serverNow = Date.now();
+		mockRepository.getSession.mockResolvedValue(session({
+			currentState: {
+				playout: {
+					alpha: { onAir: false, effectiveStartedAt: serverNow - 200, cut: false },
+					bravo: { onAir: true, effectiveStartedAt: serverNow + 800, cut: false },
+				},
+				inputs: {},
+			},
+		}));
+		const graphics = [member('alpha'), member('bravo')];
+		const channels = [{ id: 'thirds', name: 'Lower thirds', handoff: 'out-then-in' as const }];
+
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		const contexts = store.channelContexts(graphics, channels);
+
+		expect(store.playoutState(SCREEN_ID, 'bravo', graphics[1], undefined, contexts.bravo)).toBe('waiting');
+		expect(store.onAirGraphicIds(SCREEN_ID, graphics, undefined, channels)).toEqual(['alpha']);
+		expect(store.animationProjection(SCREEN_ID, graphics, undefined, channels).bravo).toBeUndefined();
+
+		// Once the outgoing exit completes, the held graphic enters and composes.
+		const entered = store.serverNow() + 900;
+		expect(store.onAirGraphicIds(SCREEN_ID, graphics, entered, channels)).toEqual(['bravo']);
+	});
+
+	it('shows the graphic rather than holding it when the caller offers no Graphic Channel', async () => {
+		// A reader that cannot see the channel reaches the target immediately, which is
+		// the failure direction every projection in this store chooses.
+		const serverNow = Date.now();
+		mockRepository.getSession.mockResolvedValue(session({
+			currentState: {
+				playout: {
+					alpha: { onAir: false, effectiveStartedAt: serverNow - 200, cut: false },
+					bravo: { onAir: true, effectiveStartedAt: serverNow + 800, cut: false },
+				},
+				inputs: {},
+			},
+		}));
+		const graphics = [member('alpha'), member('bravo')];
+
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+
+		expect(store.onAirGraphicIds(SCREEN_ID, graphics)).toEqual(['alpha', 'bravo']);
+	});
+});

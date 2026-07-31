@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/types/graphics';
 import type { BroadcastGraphicsWorkspace, BroadcastGraphicsWorkspaceLocation } from '~/modules/broadcast-graphics/workspace';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { Screen } from '~/types';
@@ -59,6 +59,9 @@ const canvasHeight = computed(() => screenConfig.value.height ?? props.screen.sc
 
 /** The Screen's authored back-to-front stack of Broadcast Graphics. */
 const graphics = computed<readonly BroadcastGraphicConfig[]>(() => config.value.graphics ?? []);
+
+/** The Screen's Graphic Channels: its optional playout lanes and their Handoff Policies. */
+const channels = computed<readonly GraphicChannelConfig[]>(() => config.value.channels ?? []);
 
 const workspace = computed(() => resolveBroadcastGraphicsWorkspace(route.query[BROADCAST_GRAPHICS_WORKSPACE_QUERY_KEY]));
 
@@ -132,6 +135,19 @@ function updateGraphics(next: BroadcastGraphicConfig[]) {
 		return;
 	updateConfig({ graphics: next });
 }
+
+/**
+ * Declaring a Graphic Channel and joining a Broadcast Graphic to one are one write.
+ *
+ * Deleting a channel has to release its members in the same patch, or the Screen
+ * would briefly hold graphics naming a lane it no longer declares — resolved
+ * tolerantly everywhere, but a state no authoring action should be able to create.
+ */
+function updateChannels(next: { channels: GraphicChannelConfig[]; graphics?: BroadcastGraphicConfig[] }) {
+	if (!editLease.writable.value)
+		return;
+	updateConfig(next.graphics ? { channels: next.channels, graphics: next.graphics } : { channels: next.channels });
+}
 </script>
 
 <template>
@@ -187,6 +203,7 @@ function updateGraphics(next: BroadcastGraphicConfig[]) {
 			:event-id="eventId"
 			:screen="screen"
 			:graphics="graphics"
+			:channels="channels"
 			:selected-target="selectedTarget"
 			:selected-graphic-id="selectedGraphicId"
 			:canvas-width="canvasWidth"
@@ -195,6 +212,7 @@ function updateGraphics(next: BroadcastGraphicConfig[]) {
 			:lease-status="editLease.status.value"
 			:can-take-over="editLease.canTakeOver.value"
 			@update:graphics="updateGraphics"
+			@update:channels="updateChannels"
 			@update:selected-target="setSelectedTarget"
 			@take-over="editLease.takeOver"
 		/>
@@ -204,6 +222,7 @@ function updateGraphics(next: BroadcastGraphicConfig[]) {
 			:event-id="eventId"
 			:screen="screen"
 			:graphics="graphics"
+			:channels="channels"
 			:selected-graphic-id="selectedGraphicId"
 			:canvas-width="canvasWidth"
 			:canvas-height="canvasHeight"
