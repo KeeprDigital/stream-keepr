@@ -2,6 +2,7 @@ import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { fileOfByteLength, requestsMadeTo } from '~~/test/helpers/ingestionTransferRequests';
 
 const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 
@@ -10,24 +11,7 @@ mockNuxtImport('tryUseRealtime', () => () => undefined);
 
 const ingestion = '/api/graphics-assets/ingestion-operations';
 
-/** A package file of an exact length, without holding that many bytes in the test. */
-function packageFile(name: string, byteLength: number): File {
-	const file = new File([new Uint8Array(1)], name);
-	return Object.create(file, {
-		size: { value: byteLength },
-		slice: {
-			value: (start: number, end: number) =>
-				Object.create(file, { size: { value: end - start } }) as Blob,
-		},
-	}) as File;
-}
-
-/** Every request an import made, in order, as `METHOD path`. */
-function requests() {
-	return mockFetch.mock.calls.map(
-		call => `${(call[1] as { method?: string } | undefined)?.method ?? 'GET'} ${call[0] as string}`,
-	);
-}
+const requests = () => requestsMadeTo(mockFetch);
 
 /**
  * Both Template Package kinds import through one Graphics Ingestion Operation on
@@ -69,7 +53,7 @@ describe.each(packageKinds)('importing a $extension Template Package', ({ extens
 	});
 
 	it('declares the archive as a Template Package rather than as one Graphic Asset', async () => {
-		const file = packageFile(`lower-third${extension}`, 2048);
+		const file = fileOfByteLength(`lower-third${extension}`, 2048);
 
 		await repository().receivePackage(file);
 
@@ -84,7 +68,7 @@ describe.each(packageKinds)('importing a $extension Template Package', ({ extens
 	});
 
 	it('sends a package that fits one request as a single transfer', async () => {
-		const file = packageFile(`lower-third${extension}`, GRAPHICS_MULTIPART_PART_BYTES);
+		const file = fileOfByteLength(`lower-third${extension}`, GRAPHICS_MULTIPART_PART_BYTES);
 
 		await repository().receivePackage(file);
 
@@ -101,7 +85,7 @@ describe.each(packageKinds)('importing a $extension Template Package', ({ extens
 	 * package the same installation was willing to produce.
 	 */
 	it('sends a package too long for one request as a resumable multipart transfer', async () => {
-		const file = packageFile(`motion-overlay${extension}`, GRAPHICS_MULTIPART_PART_BYTES + 1);
+		const file = fileOfByteLength(`motion-overlay${extension}`, GRAPHICS_MULTIPART_PART_BYTES + 1);
 
 		const received = await repository().receivePackage(file);
 

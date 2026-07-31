@@ -2,6 +2,7 @@ import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { requestsMadeTo, sourceOfByteLength } from '~~/test/helpers/ingestionTransferRequests';
 
 const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 
@@ -35,24 +36,7 @@ function transferFacts(partCount: number, heldPartNumbers: number[] = []) {
 	};
 }
 
-/** A source of an exact length, without holding that many bytes in the test. */
-function sourceOf(byteLength: number): Blob {
-	const source = new Blob([new Uint8Array(1)]);
-	return Object.create(source, {
-		size: { value: byteLength },
-		slice: {
-			value: (start: number, end: number) =>
-				Object.create(source, { size: { value: end - start } }) as Blob,
-		},
-	}) as Blob;
-}
-
-/** Every request the transfer made, in order, as `METHOD path`. */
-function requests() {
-	return mockFetch.mock.calls.map(
-		call => `${(call[1] as { method?: string } | undefined)?.method ?? 'GET'} ${call[0] as string}`,
-	);
-}
+const requests = () => requestsMadeTo(mockFetch);
 
 describe('useGraphicsIngestionTransfer', () => {
 	beforeEach(() => {
@@ -65,7 +49,7 @@ describe('useGraphicsIngestionTransfer', () => {
 
 		const result = await useGraphicsIngestionTransfer().transfer(
 			operation(),
-			sourceOf(GRAPHICS_MULTIPART_PART_BYTES),
+			sourceOfByteLength(GRAPHICS_MULTIPART_PART_BYTES),
 		);
 
 		expect(result).toBe(completed);
@@ -84,7 +68,7 @@ describe('useGraphicsIngestionTransfer', () => {
 
 		const result = await useGraphicsIngestionTransfer().transfer(
 			operation(),
-			sourceOf(GRAPHICS_MULTIPART_PART_BYTES + 1),
+			sourceOfByteLength(GRAPHICS_MULTIPART_PART_BYTES + 1),
 		);
 
 		expect(result).toBe(completed);
@@ -110,7 +94,7 @@ describe('useGraphicsIngestionTransfer', () => {
 
 		await useGraphicsIngestionTransfer().transfer(
 			operation(),
-			sourceOf(GRAPHICS_MULTIPART_PART_BYTES + 1),
+			sourceOfByteLength(GRAPHICS_MULTIPART_PART_BYTES + 1),
 		);
 
 		expect(requests()).toEqual([
@@ -131,7 +115,7 @@ describe('useGraphicsIngestionTransfer', () => {
 
 		await expect(useGraphicsIngestionTransfer().transfer(
 			operation(),
-			sourceOf(GRAPHICS_MULTIPART_PART_BYTES + 1),
+			sourceOfByteLength(GRAPHICS_MULTIPART_PART_BYTES + 1),
 		)).rejects.toThrow('Connection reset');
 
 		expect(requests().filter(request => request.endsWith('/multipart/parts/2')))
