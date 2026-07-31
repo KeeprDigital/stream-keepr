@@ -2,6 +2,8 @@ import type { GraphicSourceSelectionsState } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
 	GraphicAnimationPhase,
+	GraphicChannelConfig,
+	GraphicChannelHandoffPolicy,
 	GraphicInputBinding,
 	GraphicInputDeclaration,
 	GraphicInputValue,
@@ -17,6 +19,7 @@ import {
 	broadcastGraphicHasPhaseAnimation,
 	broadcastGraphicPhaseDurations,
 	findGraphicInputDeclaration,
+	graphicChannelHandoffPolicy,
 	graphicInputAvailability,
 	isOperatorSelectedGraphicSource,
 } from '~~/shared/modules/graphics';
@@ -380,6 +383,43 @@ export interface BroadcastGraphicsReductionContext {
 	 * no composition in hand should get.
 	 */
 	durations?: BroadcastGraphicPhaseDurations;
+	/**
+	 * The Graphic Channel the addressed Broadcast Graphic belongs to, if it belongs
+	 * to one.
+	 *
+	 * A Take is the one playout action that writes more than one graphic's field:
+	 * taking a channel member replaces whichever member the channel currently holds.
+	 * That replacement needs the channel's other members and how long *their* phases
+	 * last, which is authored Screen configuration exactly as this graphic's own
+	 * durations are — so it arrives the same way, and for the same reason.
+	 *
+	 * Absent is a Broadcast Graphic in no Graphic Channel, which runs concurrently
+	 * with everything else and replaces nothing.
+	 */
+	channel?: BroadcastGraphicChannelContext;
+}
+
+/** One placed Broadcast Graphic in a Graphic Channel, and how long its phases last. */
+export interface BroadcastGraphicChannelMember {
+	graphicId: string;
+	durations?: BroadcastGraphicPhaseDurations;
+}
+
+/**
+ * What playout needs to know about one Graphic Channel.
+ *
+ * The channel's authored policy and every Broadcast Graphic the Screen places in
+ * it, including the graphic being addressed — which is skipped by id rather than
+ * excluded when the context is built, so one context describes the channel rather
+ * than one graphic's view of it and can be shared by every member.
+ *
+ * Which member the channel currently holds is deliberately not here: it is the
+ * member whose latest accepted intent is on air, so it is already in live state and
+ * a second copy could only disagree with it.
+ */
+export interface BroadcastGraphicChannelContext {
+	handoff: GraphicChannelHandoffPolicy;
+	members: readonly BroadcastGraphicChannelMember[];
 }
 
 export function createInitialBroadcastGraphicsLiveState(): BroadcastGraphicsLiveState {
@@ -450,14 +490,17 @@ function enterExitFlight(
 }
 
 /**
- * When this Broadcast Graphic's enter phase is scheduled to have completed.
+ * When the phase this Broadcast Graphic's latest accepted intent began is scheduled
+ * to have completed.
  *
- * The instant on-screen cycling may begin from, and the instant an update accepted
- * during enter is deferred to. Cut and a reversal each reach the settled state on
- * their own schedule, so each supplies its own answer rather than being bent into
- * the enter duration.
+ * For an on-air intent that is the instant on-screen cycling may begin from and the
+ * instant an update accepted during enter is deferred to; for an off-air one it is
+ * the instant the graphic leaves program, which is what an Out then in Graphic
+ * Channel handoff schedules the incoming enter at. Cut and a reversal each reach the
+ * settled state on their own schedule, so each supplies its own answer rather than
+ * being bent into a phase duration.
  */
-function enterCompletesAt(
+function phaseSettlesAt(
 	playout: BroadcastGraphicPlayout,
 	durations: BroadcastGraphicPhaseDurations | undefined,
 ): number {
@@ -465,7 +508,73 @@ function enterCompletesAt(
 		return playout.reversalCompletesAt;
 	if (playout.cut)
 		return playout.effectiveStartedAt;
-	return playout.effectiveStartedAt + durationOf(durations, 'enter');
+	return playout.effectiveStartedAt + durationOf(durations, playout.onAir ? 'enter' : 'exit');
+}
+
+/**
+ * The record a Broadcast Graphic removed from program without running an exit phase
+ * carries.
+ *
+ * Two things reach it. A Cut channel replacement, which bypasses the Graphic Channel
+ * Handoff Policy and switches immediately; and a Take or Out that cancels a member
+ * still waiting, which has no exit to run because it never reached program at all.
+ * Both are the same durable fact — this graphic is off, it settled at once, and there
+ * is nothing for a reader to animate — which is exactly what `cut` records.
+ */
+function cutOff(acceptedAt: number): BroadcastGraphicPlayout {
+	return { onAir: false, effectiveStartedAt: acceptedAt, cut: true };
+}
+
+/**
+ * Whether a Graphic Channel is holding this Broadcast Graphic waiting.
+ *
+ * The glossary sentence, transcribed: the graphic is selected by an Out then in
+ * Graphic Channel handoff but remains off every program output until the outgoing
+ * graphic finishes. Both halves are read rather than stored — the selection from this
+ * graphic's own accepted intent, the outgoing graphic from its channel's other
+ * members — because a written-down waiting flag is a phase by another name, and this
+ * module persists no phase.
+ *
+ * ## Why occupancy is the test rather than the deferred start time
+ *
+ * The handoff also back-dates nothing and forward-dates one thing: the incoming
+ * graphic's effective start time is the outgoing exit's authoritative scheduled
+ * completion, so `now < effectiveStartedAt` says the same thing. It is not the test
+ * used here, because it has no bound. A reader whose clock lags the authoritative one
+ * would sit before that instant for the whole of the skew and hold a graphic off
+ * program indefinitely — the worst failure this module can produce, and the one the
+ * enter/exit magnitude bound exists to prevent.
+ *
+ * Occupancy carries that bound for free. It is answered by each outgoing member's own
+ * `enterExitFlight`, which is already bounded in both directions, so a badly skewed
+ * reader concludes the channel is clear and enters the graphic at once. That is the
+ * failure direction this module chooses everywhere: reaching the target immediately
+ * beats never reaching it.
+ *
+ * Overlap is excluded before any member is looked at. Under Overlap the outgoing exit
+ * and the incoming enter begin at the same logical instant, so the channel is occupied
+ * for the whole of the overlap by design — reading occupancy alone would hold every
+ * Overlap handoff's incoming graphic off program, which is the opposite of what
+ * Overlap means.
+ */
+function channelHoldsWaiting(
+	playout: BroadcastGraphicPlayout | undefined,
+	state: BroadcastGraphicsLiveState,
+	graphicId: string,
+	channel: BroadcastGraphicChannelContext | undefined,
+	now: number,
+): boolean {
+	if (playout?.onAir !== true || channel?.handoff !== 'out-then-in')
+		return false;
+
+	return channel.members.some((member) => {
+		if (member.graphicId === graphicId)
+			return false;
+		const other = state.playout[member.graphicId];
+		return other !== undefined
+			&& !other.onAir
+			&& enterExitFlight(other, { now, durations: member.durations }) !== null;
+	});
 }
 
 /** The active update transition, walked forward to `now`. */
@@ -589,11 +698,21 @@ function nextPlayout(
 	intent: { onAir: boolean; cut: boolean },
 	acceptedAt: number,
 	durations: BroadcastGraphicPhaseDurations | undefined,
+	/**
+	 * When this intent's phase begins, if a Graphic Channel has deferred it past the
+	 * instant the command was accepted at.
+	 *
+	 * Only Out then in supplies one, and it never applies to an intent that takes over
+	 * a phase in flight: a graphic already on program cannot be held waiting, because
+	 * waiting means absent from every output. So a reversal or a resumption keeps the
+	 * schedule it computes for itself, and only a clean start is deferred.
+	 */
+	startsAt = acceptedAt,
 ): BroadcastGraphicPlayout {
 	if (current && current.onAir === intent.onAir && !(intent.cut && !current.cut))
 		return current;
 
-	const settled: BroadcastGraphicPlayout = { onAir: intent.onAir, effectiveStartedAt: acceptedAt, cut: intent.cut };
+	const settled: BroadcastGraphicPlayout = { onAir: intent.onAir, effectiveStartedAt: startsAt, cut: intent.cut };
 	if (!current || intent.cut)
 		return settled;
 
@@ -607,7 +726,7 @@ function nextPlayout(
 	if (flight.phase === (intent.onAir ? 'enter' : 'exit'))
 		return { ...settled, effectiveStartedAt: acceptedAt - flight.elapsed };
 
-	return { ...settled, reversalCompletesAt: acceptedAt + flight.elapsed };
+	return { ...settled, effectiveStartedAt: acceptedAt, reversalCompletesAt: acceptedAt + flight.elapsed };
 }
 
 /**
@@ -765,6 +884,87 @@ function requireClaimMatchesShownValue(
 }
 
 /**
+ * The Graphic Channel handoff one Take performs: what becomes of the members it
+ * replaces, and when the newcomer's own enter may begin.
+ *
+ * A Graphic Channel allows at most one of its Broadcast Graphics on air at a time,
+ * so taking a member is the one playout action that writes another graphic's field.
+ * It retains only its latest selection and never queues earlier Takes, which is why
+ * this reads the channel's members rather than any stored queue: whatever each member
+ * is currently doing, one command decides what all of them do next.
+ *
+ * Each other member falls into exactly one of three cases at the instant the command
+ * is accepted:
+ *
+ * - **The current selection** — the member whose latest accepted intent is on air,
+ *   whether it is settled, still entering, or still waiting. It gives way. A waiting
+ *   member is cancelled outright rather than sent to exit, because it never reached
+ *   program and so has nothing to animate off; every other selection is Out'd
+ *   normally, which reverses an entrance still in flight and starts a clean exit
+ *   otherwise.
+ * - **An older outgoing graphic** — already on its way off program before this
+ *   command. Under Overlap it is cut off, so a channel racing through three graphics
+ *   never accumulates exits; under Out then in the current outgoing graphic finishes
+ *   normally, because that exit is precisely what the incoming graphic is waiting for.
+ * - **Absent** — off, or settled off already. Untouched, which is what makes a
+ *   duplicate Take of the member already selected write nothing at all.
+ *
+ * Cut collapses all of it: it bypasses the Graphic Channel Handoff Policy and
+ * switches immediately, so every other member is cut off and the newcomer starts at
+ * once.
+ */
+function channelHandoff(
+	state: BroadcastGraphicsLiveState,
+	graphicId: string,
+	cut: boolean,
+	context: BroadcastGraphicsReductionContext,
+): { playout: Record<string, BroadcastGraphicPlayout>; entersAt: number } {
+	const acceptedAt = context.acceptedAt;
+	const channel = context.channel;
+	if (!channel)
+		return { playout: state.playout, entersAt: acceptedAt };
+
+	let playout = state.playout;
+	// Where the newcomer's enter may begin under Out then in: the latest authoritative
+	// scheduled completion among the exits this channel is still running.
+	let outgoingSettlesAt = acceptedAt;
+
+	for (const member of channel.members) {
+		if (member.graphicId === graphicId)
+			continue;
+
+		const current = playout[member.graphicId];
+		if (!current)
+			continue;
+
+		if (current.onAir) {
+			const waiting = channelHoldsWaiting(current, state, member.graphicId, channel, acceptedAt);
+			const replaced = cut || waiting
+				? cutOff(acceptedAt)
+				: nextPlayout(current, { onAir: false, cut: false }, acceptedAt, member.durations);
+			playout = { ...playout, [member.graphicId]: replaced };
+			if (!cut && !waiting)
+				outgoingSettlesAt = Math.max(outgoingSettlesAt, phaseSettlesAt(replaced, member.durations));
+			continue;
+		}
+
+		// Off, or an exit that has already completed: nothing on program to hand over from.
+		if (!enterExitFlight(current, { now: acceptedAt, durations: member.durations }))
+			continue;
+
+		if (cut || channel.handoff === 'overlap')
+			playout = { ...playout, [member.graphicId]: cutOff(acceptedAt) };
+		else
+			outgoingSettlesAt = Math.max(outgoingSettlesAt, phaseSettlesAt(current, member.durations));
+	}
+
+	return {
+		playout,
+		entersAt: cut || channel.handoff === 'overlap' ? acceptedAt : outgoingSettlesAt,
+	};
+}
+
+/**
  * Take: state that this Broadcast Graphic is the operator's latest desired on-air
  * intent, and accept the values it should enter with.
  *
@@ -773,22 +973,40 @@ function requireClaimMatchesShownValue(
  * would reach program without anyone confirming them — so Take accepts only on the
  * way on air, which is exactly the rule that editing an off graphic changes the
  * working values its *next* Take accepts.
+ *
+ * A restatement performs no Graphic Channel handoff either, and that is not merely an
+ * optimisation. Overlap cuts off an older outgoing graphic when a *new* selection
+ * arrives; running that for a duplicate delivery of the Take that made this graphic
+ * the selection would pop the graphic it is currently overlapping straight off
+ * program. Duplicate delivery of the same action has no additional effect, and this is
+ * where that rule reaches the rest of the channel. Cut Take is the exception: it
+ * restates the same on-air target but demands the handoff happen immediately, so it
+ * still runs.
  */
 function reduceTake(
 	state: BroadcastGraphicsLiveState,
 	payload: BroadcastGraphicsPlayoutPayload,
 	context: BroadcastGraphicsReductionContext,
 ): BroadcastGraphicsLiveState {
+	const cut = payload.cut === true;
+	const current = state.playout[payload.graphicId];
+	const restated = current?.onAir === true && !cut;
+
+	const handoff = restated
+		? { playout: state.playout, entersAt: context.acceptedAt }
+		: channelHandoff(state, payload.graphicId, cut, context);
+
 	const playout = {
-		...state.playout,
+		...handoff.playout,
 		[payload.graphicId]: nextPlayout(
-			state.playout[payload.graphicId],
-			{ onAir: true, cut: payload.cut === true },
+			current,
+			{ onAir: true, cut },
 			context.acceptedAt,
 			context.durations,
+			handoff.entersAt,
 		),
 	};
-	if (state.playout[payload.graphicId]?.onAir)
+	if (current?.onAir)
 		return { ...state, playout };
 
 	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
@@ -811,6 +1029,46 @@ function reduceTake(
 			acceptedRevision: inputs.acceptedRevision + 1,
 		}),
 		playout,
+	};
+}
+
+/**
+ * Out: state that this Broadcast Graphic is no longer the operator's desired on-air
+ * intent.
+ *
+ * Ordinarily that is one assignment, and the exit it produces is the whole of it — a
+ * graphic in a Graphic Channel leaves the channel empty rather than promoting anything,
+ * because a channel holds the operator's latest selection and Out is the operator
+ * selecting nothing.
+ *
+ * The one case that is not a plain exit is Out on a member its channel is still holding
+ * waiting. Out cancels a waiting Take: the graphic is absent from every output, so
+ * there is nothing on program to animate away, and running an exit phase would put a
+ * graphic on air in order to take it back off again. It settles off at once instead,
+ * whether or not the operator asked for Cut, because the phase Cut would have skipped
+ * does not exist here.
+ */
+function reduceOut(
+	state: BroadcastGraphicsLiveState,
+	payload: BroadcastGraphicsPlayoutPayload,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicsLiveState {
+	const current = state.playout[payload.graphicId];
+	const waiting = channelHoldsWaiting(current, state, payload.graphicId, context.channel, context.acceptedAt);
+
+	return {
+		...state,
+		playout: {
+			...state.playout,
+			[payload.graphicId]: waiting
+				? cutOff(context.acceptedAt)
+				: nextPlayout(
+						current,
+						{ onAir: false, cut: payload.cut === true },
+						context.acceptedAt,
+						context.durations,
+					),
+		},
 	};
 }
 
@@ -893,7 +1151,7 @@ function reduceUpdateGraphic(
 			// completes" one update however many acceptances arrive during the entrance.
 			: { startedAt: flight.startedAt, updateFrom: flight.from, pendingUpdateFrom: undefined }
 		: {
-				startedAt: Math.max(context.acceptedAt, enterCompletesAt(playout, context.durations)),
+				startedAt: Math.max(context.acceptedAt, phaseSettlesAt(playout, context.durations)),
 				updateFrom: inputs.accepted,
 				pendingUpdateFrom: undefined,
 			};
@@ -1141,18 +1399,7 @@ export function applyBroadcastGraphicsCommand(
 		case 'Take':
 			return reduceTake(normalized, command.payload, context);
 		case 'Out':
-			return {
-				...normalized,
-				playout: {
-					...normalized.playout,
-					[command.payload.graphicId]: nextPlayout(
-						normalized.playout[command.payload.graphicId],
-						{ onAir: false, cut: command.payload.cut === true },
-						context.acceptedAt,
-						context.durations,
-					),
-				},
-			};
+			return reduceOut(normalized, command.payload, context);
 		case 'Update Graphic':
 			return reduceUpdateGraphic(normalized, command.payload, context);
 		case 'Set Input':
@@ -1181,12 +1428,60 @@ export { createInitialBroadcastGraphicInputsState };
 export function broadcastGraphicPhaseTiming(
 	graphic: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
 	now: number,
+	/**
+	 * The Graphic Channel this graphic belongs to, for a reader that has the Screen's
+	 * whole stack in hand. Omitted answers every settled and animating state correctly
+	 * and only leaves waiting unreachable, which is the right answer for a graphic in
+	 * no channel and an honest one for a caller that cannot see the channel's members.
+	 */
+	channel?: BroadcastGraphicChannelContext,
 ): BroadcastGraphicPhaseTiming {
 	return {
 		now,
 		durations: broadcastGraphicPhaseDurations(graphic),
 		onScreen: broadcastGraphicHasPhaseAnimation(graphic, 'on-screen'),
+		...(channel ? { channel } : {}),
 	};
+}
+
+/**
+ * The Graphic Channel context each placed Broadcast Graphic is read and reduced
+ * against, keyed by Broadcast Graphic id.
+ *
+ * One derivation from authored Screen configuration, shared by the server that
+ * reduces a Take and by every client that reads what is on air, so the instant a
+ * handoff schedules and the instant a reader stops holding the incoming graphic
+ * waiting are the same instant computed the same way.
+ *
+ * A Broadcast Graphic in no Graphic Channel — or in one the Screen no longer declares
+ * — gets no entry, which is exactly the absent context that means "replaces nothing".
+ */
+export function broadcastGraphicChannelContexts(
+	stack: {
+		graphics: readonly BroadcastGraphicConfig[];
+		channels?: readonly GraphicChannelConfig[];
+	},
+): Record<string, BroadcastGraphicChannelContext> {
+	const contexts: Record<string, BroadcastGraphicChannelContext> = {};
+
+	for (const channel of stack.channels ?? []) {
+		const members = stack.graphics
+			.filter(graphic => graphic.channelId === channel.id)
+			.map(graphic => ({ graphicId: graphic.id, durations: broadcastGraphicPhaseDurations(graphic) }));
+		if (members.length === 0)
+			continue;
+
+		// One object per channel rather than per member: the context describes the channel,
+		// and every member reads the same one and skips itself by id.
+		const context: BroadcastGraphicChannelContext = {
+			handoff: graphicChannelHandoffPolicy(channel),
+			members,
+		};
+		for (const member of members)
+			contexts[member.graphicId] = context;
+	}
+
+	return contexts;
 }
 
 /**
@@ -1211,6 +1506,12 @@ export interface BroadcastGraphicPhaseTiming {
 	 * every owner decide for itself when it has stopped cycling.
 	 */
 	onScreen?: boolean;
+	/**
+	 * The Graphic Channel this Broadcast Graphic belongs to, when the reader can see
+	 * one. It is the only way waiting is reachable: waiting is not a fact about this
+	 * graphic's own record but about whether its channel is still occupied.
+	 */
+	channel?: BroadcastGraphicChannelContext;
 }
 
 /**
@@ -1225,8 +1526,14 @@ export interface BroadcastGraphicPhaseTiming {
  *
  * The enter/exit axis is answered first and wins: a graphic on its way off air is
  * exiting even if an update was still pending when Out was accepted, which is the
- * same statement as exit discarding a pending visual update. Waiting arrives with the
- * Graphic Channel handoff that produces it.
+ * same statement as exit discarding a pending visual update.
+ *
+ * Waiting is answered before all of it. A graphic its Graphic Channel is still holding
+ * has not begun any phase, so there is no phase for the axis below to be asked about —
+ * and because a waiting graphic is absent from overlay, fill, and key alike, answering
+ * it first is what keeps it off every output. Recovery resolves it away by itself: the
+ * outgoing exit it waits on has long since completed by the time a restarted reader
+ * looks, so what recovery finds is a graphic settled on air.
  */
 export function broadcastGraphicPlayoutState(
 	state: BroadcastGraphicsLiveState,
@@ -1240,6 +1547,9 @@ export function broadcastGraphicPlayoutState(
 	const settled = playout.onAir ? 'on-air' : 'off';
 	if (!timing)
 		return settled;
+
+	if (channelHoldsWaiting(playout, state, graphicId, timing.channel, timing.now))
+		return 'waiting';
 
 	// Which way the graphic is travelling is the intent's, not the projected phase's: a
 	// reversal renders the phase it is unwinding, so a graphic reversing its entrance
@@ -1291,6 +1601,11 @@ export function broadcastGraphicPhaseProjection(
 	if (!playout || !timing)
 		return null;
 
+	// A Broadcast Graphic its Graphic Channel is holding has not entered, so there is no
+	// phase to project and nothing composes it into the frame to project one onto.
+	if (channelHoldsWaiting(playout, state, graphicId, timing.channel, timing.now))
+		return null;
+
 	const flight = enterExitFlight(playout, timing);
 	if (flight)
 		return flight;
@@ -1308,7 +1623,7 @@ export function broadcastGraphicPhaseProjection(
 		return null;
 
 	const cyclesFrom = Math.max(
-		enterCompletesAt(playout, timing.durations),
+		phaseSettlesAt(playout, timing.durations),
 		updateChainEndsAt(playout, inputs, updateMs) ?? Number.NEGATIVE_INFINITY,
 	);
 	return timing.now >= cyclesFrom ? { phase: 'on-screen', elapsed: timing.now - cyclesFrom } : null;

@@ -47,6 +47,12 @@ describe('broadcastGraphicTemplateDocument', () => {
 		expect(document).toEqual(placed);
 	});
 
+	it('leaves Graphic Channel membership behind on the Screen it was saved from', () => {
+		const document = broadcastGraphicTemplateDocument({ ...composed(), channelId: 'lower-thirds' });
+
+		expect(document.channelId).toBeUndefined();
+	});
+
 	it('never shares structure with the placed graphic it was saved from', () => {
 		const placed = composed();
 
@@ -67,6 +73,18 @@ describe('placeBroadcastGraphicTemplate', () => {
 
 		expect(placed.id).toBe('new-1');
 		expect(placed.name).toBe('Lower third');
+	});
+
+	it('never joins the placed copy to a Graphic Channel the document happens to name', () => {
+		const template = {
+			id: 'template-1',
+			name: 'Lower third',
+			document: { ...composed(), channelId: 'lower-thirds' },
+		};
+
+		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+
+		expect(placed.channelId).toBeUndefined();
 	});
 
 	it('regenerates every Graphic Item id, including a Graphic Group\'s children', () => {
