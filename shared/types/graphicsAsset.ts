@@ -13,6 +13,12 @@ import type {
 	GRAPHICS_REPAIR_REJECTION_CODES,
 } from '../utils/graphicsAssetReconciliation';
 import type { GRAPHICS_RETENTION_EVIDENCE_CATEGORIES } from '../utils/graphicsAssetRetention';
+import type {
+	GraphicsIngestionAttentionState,
+	GraphicsRecentOutcomeGroup,
+	GraphicsStorageHealthAlertCode,
+	GraphicsStorageHealthAlertSeverity,
+} from '../utils/graphicsOperationsCockpit';
 import type { TemplatePackagePreflightReport } from './templatePackage';
 
 declare const graphicAssetIdBrand: unique symbol;
@@ -893,3 +899,244 @@ export interface GraphicsAssetLibraryCapacity {
 		availableBytes: number;
 	};
 }
+
+/**
+ * Why a component that is answering is nonetheless not fully healthy.
+ *
+ * Each side is judged against its own durable evidence: the catalogue against
+ * the content it has recorded as unresolvable, and the canonical byte store
+ * against the disagreements reconciliation has observed in it.
+ */
+export type GraphicsLibraryDegradedReasonCode
+	/** The catalogue answers and records content it cannot currently serve. */
+	= | 'catalogue-records-unavailable-content'
+	/** The byte store answers and its bytes disagree with what the catalogue expects. */
+		| 'canonical-bytes-disagree-with-catalogue';
+
+/**
+ * One library component's condition: whether it can answer at all, and whether
+ * what it holds currently agrees with the other side.
+ *
+ * This is strictly more than {@link GraphicsAssetLibraryComponentHealth}, which
+ * is only a liveness probe. A component that cannot answer is `unavailable` and
+ * cannot be judged for agreement at all; one that answers while carrying known
+ * disagreement is `degraded`; one that answers with nothing outstanding is
+ * `healthy`.
+ */
+export type GraphicsLibraryComponentCondition
+	= | { status: 'healthy' }
+		| {
+			status: 'degraded';
+			reason: {
+				code: GraphicsLibraryDegradedReasonCode;
+				retryable: true;
+				/** How many durable subjects currently hold it in this state. */
+				openCount: number;
+			};
+		}
+		| {
+			status: 'unavailable';
+			reason: {
+				code: 'catalogue-unavailable' | 'byte-store-unavailable';
+				retryable: true;
+			};
+		};
+
+export type GraphicsLibraryConditionStatus = 'healthy' | 'degraded' | 'unavailable';
+
+/**
+ * D1 catalogue condition and R2 byte-store condition, stated separately.
+ *
+ * They are never merged into one number: the catalogue deciding what the
+ * library expects and the byte store holding what exists are different
+ * authorities, and an administrator has to see which one is in trouble.
+ */
+export interface GraphicsLibraryConditionSummary {
+	/** The worst condition any component is in. */
+	status: GraphicsLibraryConditionStatus;
+	/** D1 is authoritative for what the library expects to reach. */
+	catalogue: GraphicsLibraryComponentCondition;
+	/** R2 canonical is authoritative for which validated bytes exist right now. */
+	canonicalByteStore: GraphicsLibraryComponentCondition;
+	/** R2 staging holds only provisional transfers, so its condition is liveness. */
+	stagingByteStore: GraphicsLibraryComponentCondition;
+}
+
+/**
+ * One open storage-health alert, derived from durable state rather than raised
+ * and remembered. Resolving its subject is the only thing that clears it.
+ */
+export interface GraphicsStorageHealthAlert {
+	code: GraphicsStorageHealthAlertCode;
+	severity: GraphicsStorageHealthAlertSeverity;
+	/** How many durable subjects hold this alert open; at least one. */
+	openCount: number;
+	/**
+	 * Whether the alert outlives this reading. A persistent alert reappears on
+	 * reload and after navigation until an administrator resolves its subject.
+	 */
+	persistent: boolean;
+}
+
+export interface GraphicsStorageHealthAlertSummary {
+	/**
+	 * How many open *subjects* sit at each severity — not how many alert codes.
+	 * This is the same unit {@link GraphicsReconciliationBacklog} counts in, so
+	 * the two summaries can be read side by side without converting between them.
+	 */
+	countsBySeverity: Record<GraphicsStorageHealthAlertSeverity, number>;
+	/** Ordered most severe first. */
+	open: GraphicsStorageHealthAlert[];
+}
+
+/** The exact boundaries of the Canonical Graphics Quota, in bytes and fractions. */
+export interface GraphicsCanonicalQuotaBoundaries {
+	warningFraction: number;
+	criticalFraction: number;
+	fullFraction: number;
+	warningBytes: number;
+	criticalBytes: number;
+	fullBytes: number;
+}
+
+/**
+ * Canonical and staging capacity as two independent budgets. Staging is never
+ * borrowed from or lent to the Canonical Graphics Quota, so it carries no
+ * canonical boundary and no canonical pressure.
+ */
+export interface GraphicsCockpitCapacity {
+	canonical: GraphicsAssetLibraryCapacity['canonical'] & {
+		usedFraction: number;
+		boundaries: GraphicsCanonicalQuotaBoundaries;
+	};
+	staging: GraphicsAssetLibraryCapacity['staging'] & { usedFraction: number };
+}
+
+/**
+ * One Graphics Ingestion Operation that is not finished, with the exact facts of
+ * the stage it is actually in.
+ *
+ * A failure is reported by its stable code alone. The free-text message a
+ * failure also carries is for the author who caused it, not for an
+ * installation-wide surface.
+ */
+export interface GraphicsIngestionAttentionItem {
+	operationId: GraphicsIngestionOperationId;
+	attention: GraphicsIngestionAttentionState;
+	stage: GraphicsIngestionStage;
+	source: GraphicsIngestionSource;
+	initiatedBy: string;
+	name: string;
+	/** Exactly what has transferred, never a guessed overall percentage. */
+	transferredByteLength: number;
+	declaredByteLength: number;
+	transferComplete: boolean;
+	stagingBytes: number;
+	/** When this operation's staged input reaches its retention guarantee. */
+	inputExpiresAt: string;
+	failureCode?: GraphicsIngestionFailure['code'];
+	updatedAt: string;
+}
+
+export interface GraphicsIngestionAttentionSummary {
+	/** Complete counts, taken across every operation rather than the list below. */
+	counts: Record<GraphicsIngestionAttentionState, number>;
+	/** A bounded, risk-ordered sample: expired first, then retryable, then waiting. */
+	operations: GraphicsIngestionAttentionItem[];
+}
+
+/**
+ * The reconciliation backlog as counts. The cockpit summarises; the
+ * reconciliation surface remains the place to inspect and act on one
+ * discrepancy.
+ */
+export interface GraphicsReconciliationBacklog {
+	/** Restated here so a cockpit reader never has to infer which side wins. */
+	authority: GraphicsReconciliationOverview['authority'];
+	lastSweep?: {
+		correlationId: string;
+		startedAt: string;
+		completedAt: string;
+	};
+	openCounts: Record<GraphicsDiscrepancyKind, number>;
+	/** How many open discrepancy subjects sit at each severity. */
+	countsBySeverity: Record<GraphicsStorageHealthAlertSeverity, number>;
+	/** Incidents that fail closed and are never repaired in place. */
+	isolatedIncidentCount: number;
+}
+
+/** One lifecycle group's size and the soonest deadline it is holding. */
+export interface GraphicsLifecycleDeadlineGroup {
+	count: number;
+	/** The soonest deadline in the group; absent when the group is empty. */
+	nextDeadline?: string;
+	/** The complete guarantee every member of the group is held to. */
+	guaranteeMilliseconds: number;
+}
+
+/**
+ * Lifecycle counts with the distinct recovery or cleanup deadline each one
+ * carries. Retirement is the only reversible state with no deadline at all.
+ */
+export interface GraphicsLifecycleSummary {
+	retired: {
+		count: number;
+		/** Retirement is reversible and never expires, so it has no deadline. */
+		reversibleWithoutDeadline: true;
+	};
+	trashed: GraphicsLifecycleDeadlineGroup;
+	supersededRevisions: GraphicsLifecycleDeadlineGroup;
+	/** Superseded revisions whose pruning is frozen by their asset's Trash window. */
+	frozenRevisions: { count: number };
+	quarantinedContent: GraphicsLifecycleDeadlineGroup;
+	stagedInput: GraphicsLifecycleDeadlineGroup;
+	/** Storage pressure never shortens any deadline above. */
+	guaranteesShortenedUnderPressure: false;
+}
+
+/** One recent automated outcome, read from the Evidence ledger. */
+export interface GraphicsRecentOutcome {
+	id: string;
+	recordedAt: string;
+	group: GraphicsRecentOutcomeGroup;
+	category: GraphicsAssetEvidenceCategory;
+	subject: GraphicsAssetEvidenceEntry['subject'];
+	outcome: string;
+	reason: string;
+}
+
+export interface GraphicsRecentOutcomeSummary {
+	/** How many recent Evidence entries the counts below were taken over. */
+	consideredEntryCount: number;
+	countsByGroup: Record<GraphicsRecentOutcomeGroup, number>;
+	/** The most recent entries, newest first. */
+	entries: GraphicsRecentOutcome[];
+}
+
+/**
+ * The administrator-only Operations Cockpit reading.
+ *
+ * Its first answer is always whether the library is safe, which is why a
+ * catalogue that cannot answer still produces a reading: the condition and the
+ * alerts explaining it are present, and only the sections that genuinely
+ * require the catalogue are absent.
+ */
+export type GraphicsOperationsCockpit
+	= | {
+		outcome: 'complete';
+		checkedAt: string;
+		condition: GraphicsLibraryConditionSummary;
+		alerts: GraphicsStorageHealthAlertSummary;
+		capacity: GraphicsCockpitCapacity;
+		ingestion: GraphicsIngestionAttentionSummary;
+		reconciliation: GraphicsReconciliationBacklog;
+		lifecycle: GraphicsLifecycleSummary;
+		recentOutcomes: GraphicsRecentOutcomeSummary;
+	}
+	| {
+		/** The catalogue could not answer, so nothing it owns can be reported. */
+		outcome: 'catalogue-unavailable';
+		checkedAt: string;
+		condition: GraphicsLibraryConditionSummary;
+		alerts: GraphicsStorageHealthAlertSummary;
+	};
