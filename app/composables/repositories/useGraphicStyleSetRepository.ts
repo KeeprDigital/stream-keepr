@@ -100,9 +100,18 @@ export function useGraphicStyleSetRepository() {
 		return await $fetch<GraphicStyleUpdateReview>(`${templates}/${templateId}/style-update`);
 	};
 
+	/**
+	 * Apply a reviewed update. Both revisions are the ones the review was read at: the
+	 * server refuses the apply if either has moved on, rather than applying a Style Set
+	 * revision the author never saw.
+	 */
 	const applyTemplateUpdate = async (
 		templateId: string,
-		input: { revision: number; decisions?: Record<string, GraphicStyleUpdateDecision> },
+		input: {
+			revision: number;
+			styleSetRevision: number;
+			decisions?: Record<string, GraphicStyleUpdateDecision>;
+		},
 	): Promise<BroadcastGraphicTemplateResponse> => {
 		return await $fetch<BroadcastGraphicTemplateResponse>(`${templates}/${templateId}/style-update`, {
 			method: 'POST',

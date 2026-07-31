@@ -80,12 +80,16 @@ function decide(itemId: string | null, slot: string, decision: GraphicStyleUpdat
 }
 
 async function apply() {
-	if (!canAuthor.value || !available.value)
+	const reviewed = review.value?.styleSet;
+	if (!canAuthor.value || !available.value || !reviewed)
 		return;
 	busy.value = true;
 	try {
+		// The Style Set revision this review was read at, so a republish in between is
+		// refused rather than applied under decisions the author never made about it.
 		await repository.applyTemplateUpdate(props.template.id, {
 			revision: props.template.revision,
+			styleSetRevision: reviewed.publishedRevision,
 			decisions: decisions.value,
 		});
 		error.value = null;

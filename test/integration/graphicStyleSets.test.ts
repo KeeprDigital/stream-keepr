@@ -400,11 +400,12 @@ describe('graphic Style Sets', () => {
 
 	it('applies the update atomically as one new template revision, preserving overrides', async () => {
 		const before = await template();
+		const reviewed = await styleUpdate();
 
 		const applied = await request(`${TEMPLATES}/${templateId}/style-update`, {
 			method: 'POST',
 			cookie: authorCookie,
-			body: { revision: before.revision },
+			body: { revision: before.revision, styleSetRevision: reviewed.styleSet!.publishedRevision },
 		});
 
 		expect(applied.status).toBe(200);
@@ -440,10 +441,15 @@ describe('graphic Style Sets', () => {
 		expect((await publish()).status).toBe(200);
 
 		const before = await template();
+		const reviewed = await styleUpdate();
 		const applied = await request(`${TEMPLATES}/${templateId}/style-update`, {
 			method: 'POST',
 			cookie: authorCookie,
-			body: { revision: before.revision, decisions: { 'headline::typography': 'keep-as-override' } },
+			body: {
+				revision: before.revision,
+				styleSetRevision: reviewed.styleSet!.publishedRevision,
+				decisions: { 'headline::typography': 'keep-as-override' },
+			},
 		});
 
 		expect(applied.status).toBe(200);
@@ -453,6 +459,55 @@ describe('graphic Style Sets', () => {
 		// …and it is now the author's own, so a later republish cannot move it back.
 		expect(headlineOf(after.document).styleRefs?.typography?.overrides)
 			.toMatchObject({ fontSize: 64 });
+		expect((await styleUpdate()).available).toBe(false);
+	});
+
+	/**
+	 * The review is a promise about *one* Style Set revision, and this is what makes it
+	 * one. An author who reviewed revision N and posts back after someone republished
+	 * gets nothing applied — because their decisions say nothing about slots that only
+	 * changed in N+1, and every one of those would silently inherit.
+	 */
+	it('refuses an apply built on a Style Set revision the author did not review', async () => {
+		const reviewedRevision = (await styleUpdate()).styleSet!.publishedRevision;
+
+		const republished = soundDraft('#2244ff', 96).map(entry =>
+			entry.id === HEADING ? { ...entry, name: 'Show heading' } : entry,
+		);
+		expect((await saveDraft(republished)).status).toBe(200);
+		expect((await publish()).status).toBe(200);
+
+		const before = await template();
+		const refused = await request(`${TEMPLATES}/${templateId}/style-update`, {
+			method: 'POST',
+			cookie: authorCookie,
+			body: { revision: before.revision, styleSetRevision: reviewedRevision },
+		});
+
+		expect(refused.status).toBe(409);
+		// And the template is exactly where it was: not half applied, not applied at all.
+		const untouched = await template();
+		expect(untouched.revision).toBe(before.revision);
+		expect(untouched.document).toEqual(before.document);
+
+		// Re-reviewed and applied, the same update goes through.
+		const rereviewed = await styleUpdate();
+		expect(rereviewed.available).toBe(true);
+		const applied = await request(`${TEMPLATES}/${templateId}/style-update`, {
+			method: 'POST',
+			cookie: authorCookie,
+			body: {
+				revision: before.revision,
+				styleSetRevision: rereviewed.styleSet!.publishedRevision,
+			},
+		});
+
+		expect(applied.status).toBe(200);
+		// The headline's whole typography group became the author's own in the test
+		// above, so the subhead is the item still inheriting the palette colour.
+		const subhead = (applied.data as BroadcastGraphicTemplateResponse)
+			.document.items.find(item => item.id === 'subhead');
+		expect(subhead?.type === 'text' && subhead.typography.color).toBe('#2244ff');
 		expect((await styleUpdate()).available).toBe(false);
 	});
 

@@ -257,9 +257,18 @@ export const deleteGraphicStyleSetEntrySchema = z.discriminatedUnion('mode', [
  * everything else inherits. There is deliberately no "leave this one alone" — an
  * author cannot end up with inherited references spread across a mixture of Style
  * Set revisions, so every slot moves together in one new template revision.
+ *
+ * Both revisions are required, and `styleSetRevision` is the one that makes the
+ * review mean anything. `decisions` is keyed by slot and says nothing about slots the
+ * author never saw, so applying against a Style Set republished since the review
+ * would take the default — inherit — for every one of them. That is precisely the
+ * silent mutation the review exists to prevent, so the revision the author read is a
+ * precondition rather than a hint.
  */
 export const applyGraphicStyleUpdateSchema = z.object({
 	revision: z.number().int().positive(),
+	/** The Graphic Style Set's published revision, as the author reviewed it. */
+	styleSetRevision: z.number().int().positive(),
 	decisions: z.record(
 		z.string().min(1).max(200),
 		z.enum(GRAPHIC_STYLE_UPDATE_DECISION_VALUES),

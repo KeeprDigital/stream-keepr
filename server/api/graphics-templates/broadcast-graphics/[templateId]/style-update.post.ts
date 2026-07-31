@@ -16,7 +16,10 @@ import { applyGraphicStyleSet, resolveGraphicStyleSet } from '~~/shared/modules/
  * Three properties, and each is load-bearing:
  *
  * - **Explicit.** Nothing here happens as a consequence of publishing. An author read
- *   the review and posted back, naming the template revision they were looking at.
+ *   the review and posted back, naming both revisions they were looking at: the
+ *   template's, and the Style Set's. Either one having moved on refuses the apply,
+ *   because the decisions are keyed by slot and carry no answer for a slot that only
+ *   changed in a revision the author never saw — which would silently inherit.
  * - **Atomic, and one new revision.** The whole document is rebuilt and written once
  *   through the template's ordinary compare-and-swap write, so a template is never
  *   half-updated and the update is visible in the library as exactly one revision.
@@ -60,6 +63,14 @@ export default defineEventHandler(async (event) => {
 			statusCode: 409,
 			statusMessage: 'Conflict',
 			message: 'The Graphic Style Set this template links to has no published revision',
+		});
+	}
+
+	if (styleSet.revision !== body.styleSetRevision) {
+		throw createError({
+			statusCode: 409,
+			statusMessage: 'Conflict',
+			message: `The Graphic Style Set has been republished since this update was reviewed (now revision ${styleSet.revision})`,
 		});
 	}
 
