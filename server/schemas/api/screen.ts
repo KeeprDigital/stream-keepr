@@ -1441,20 +1441,11 @@ export const broadcastGraphicsModeConfigSchema = z.object({
 }).strict() satisfies z.ZodType<BroadcastGraphicsModeConfig>;
 
 /**
- * Feature Match Overlay mode configuration.
- *
- * It sits here, after the Shared Graphics Foundation section, because a Feature
- * Match Layout is a Frame, its host-owned Source Items, and one shared item tree —
- * and that tree is the Shared Graphics Foundation vocabulary above.
- *
- * Every cap lives on its own array for the same reason every Broadcast Graphics
- * cap does: the mode-configuration patch schema rebuilds each mode from its field
- * schemas, so an object-level refinement would never reach the write path the
- * editor uses.
- */
-/**
  * One Feature Match Layout: the Frame, its host-owned Source Items, and the
  * shared item tree.
+ *
+ * It sits here, after the Shared Graphics Foundation section, because that tree is
+ * the Shared Graphics Foundation vocabulary above.
  *
  * Named and exported because it is the boundary of the portable artifact as well
  * as a field of the mode configuration. A Feature Match Layout Template's document
@@ -1477,6 +1468,15 @@ export const featureMatchLayoutConfigSchema = z.object({
 	composition: featureMatchLayoutCompositionSchema,
 }).strict();
 
+/**
+ * Feature Match Overlay mode configuration: one Feature Match Layout, the Feature
+ * Match Slot it renders, and the preset it was initialised from.
+ *
+ * Every cap lives on its own array for the same reason every Broadcast Graphics
+ * cap does: the mode-configuration patch schema rebuilds each mode from its field
+ * schemas, so an object-level refinement would never reach the write path the
+ * editor uses.
+ */
 export const featureMatchOverlayModeConfigSchema = z.object({
 	featureMatchId: z.number().int().positive().nullable(),
 	presetId: featureMatchOverlayPresetIdSchema,

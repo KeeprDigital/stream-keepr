@@ -121,4 +121,55 @@ describe('useFeatureMatchOverlayModeData', () => {
 		expect(data().config.value.layout.sources[0]?.id).toBe('saved-source');
 		wrapper.unmount();
 	});
+
+	/**
+	 * Whether the canonical Feature Match Sample Dataset stands in for the Feature
+	 * Match this rendering does not have.
+	 *
+	 * This one flag is the whole of the rule the glossary states — the dataset
+	 * "never appears on a live Screen Output" — so it is proved here rather than
+	 * only where it is consumed.
+	 */
+	describe('the canonical sample dataset', () => {
+		function slotBound(featureMatchId: number | null): FeatureMatchOverlayModeConfig {
+			const config = layoutNamed('saved-source');
+			config.featureMatchId = featureMatchId;
+			return config;
+		}
+
+		it('stands in when an editor preview has no Feature Match Slot bound', async () => {
+			const { wrapper, data } = mountOverlay({ isPreview: ref(true) });
+			await flushPromises();
+
+			pushPreviewConfig(slotBound(null));
+			await nextTick();
+
+			expect(data().usesSampleDataset.value).toBe(true);
+			wrapper.unmount();
+		});
+
+		it('stands aside when the preview has a Slot to show real data from', async () => {
+			// An author checking a name plate against the actual finalists is checking
+			// something the sample cannot tell them.
+			const { wrapper, data } = mountOverlay({ isPreview: ref(true) });
+			await flushPromises();
+
+			pushPreviewConfig(slotBound(11));
+			await nextTick();
+
+			expect(data().usesSampleDataset.value).toBe(false);
+			wrapper.unmount();
+		});
+
+		it('never stands in on a live Screen Output, whatever its Slot holds', async () => {
+			// An unassigned Overlay renders empty on air. Invented player names would be
+			// indistinguishable, to everyone watching, from real ones.
+			const { wrapper, data } = mountOverlay({ isPreview: ref(false) });
+			await flushPromises();
+
+			expect(data().config.value.featureMatchId).toBeNull();
+			expect(data().usesSampleDataset.value).toBe(false);
+			wrapper.unmount();
+		});
+	});
 });

@@ -1,8 +1,7 @@
-import type { BroadcastGraphicConfig, GraphicItemConfig } from '../types/graphics';
+import type { BroadcastGraphicConfig, GraphicGroupChildConfig, GraphicItemConfig } from '../types/graphics';
 import type {
 	BroadcastGraphicsModeConfig,
 	FeatureMatchLayoutConfig,
-	FeatureMatchOverlayModeConfig,
 } from '../types/screenConfig';
 import type {
 	TemplatePackageAssetRequirement,
@@ -16,11 +15,12 @@ import {
 	FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION,
 	FEATURE_MATCH_SOURCE_ITEM_DEFINITION_ID,
 } from '../featureMatchSourceItems';
+import { isFeatureMatchTokenKey } from '../featureMatchTokenCatalogue';
 import { getGraphicItemDefinition } from '../modules/graphics/itemDefinitions';
 import { graphicTextTemplateInputKeys } from '../modules/graphics/textTemplate';
 import {
 	broadcastGraphicsGraphicAssetReferences,
-	featureMatchOverlayGraphicAssetReferences,
+	featureMatchLayoutGraphicAssetReferences,
 } from './graphicsAssetReferences';
 
 /**
@@ -122,20 +122,38 @@ export function broadcastGraphicTemplatePackageRequirements(
  * Two places name one: the `{placeholder}` a template substitutes, and a Graphic
  * Placeholder Style keyed by the same token. Both are collected, because a style
  * naming a token this installation does not have is a style that can never apply.
+ *
+ * ## Why a placeholder that is not a catalogue token is not declared
+ *
+ * A Graphic Text Template is a substitution rather than an evaluator, and
+ * `renderGraphicTextTemplate` renders a placeholder naming nothing as an absence
+ * by design — "a Text Graphic Item is one item of a composition and must keep
+ * rendering the literal text around a value it cannot show". An author who typed
+ * `{player1name}` sees an empty run locally, and declaring that as a required
+ * capability would make the same layout unexportable: refused with a message about
+ * a vocabulary term, over a typo, with no way to satisfy it.
+ *
+ * Filtering to the catalogue also keeps the two directions symmetric, which is the
+ * stronger reason. A sender declares the tokens it really has, so a receiver
+ * missing one refuses the package — the protection this exists for. A placeholder
+ * neither installation has resolves to an absence on both, which is the same
+ * rendering the sender was already looking at.
  */
 function appendFeatureMatchTokenCapabilities(
 	capabilities: TemplatePackageCapabilityRequirement[],
 	items: readonly GraphicItemConfig[],
 	slotPrefix: string,
 ): void {
-	function append(item: { type: string; text?: string; placeholderStyles?: Record<string, unknown> }, slot: string) {
+	function append(item: GraphicItemConfig | GraphicGroupChildConfig, slot: string) {
 		if (item.type !== 'text')
 			return;
 		const keys = new Set([
-			...graphicTextTemplateInputKeys(item.text ?? ''),
+			...graphicTextTemplateInputKeys(item.text),
 			...Object.keys(item.placeholderStyles ?? {}),
 		]);
 		for (const key of keys) {
+			if (!isFeatureMatchTokenKey(key))
+				continue;
 			capabilities.push({
 				slot: `${slot}.text`,
 				capability: 'host-vocabulary',
@@ -172,12 +190,11 @@ function appendFeatureMatchTokenCapabilities(
 export function featureMatchLayoutTemplatePackageRequirements(
 	layout: FeatureMatchLayoutConfig,
 ): TemplatePackageRequirements {
-	const assets = featureMatchOverlayGraphicAssetReferences({ layout } as FeatureMatchOverlayModeConfig)
-		.map(discovered => ({
-			slot: discovered.ownerSlot.replace(/^layout\./, ''),
-			reference: discovered.reference,
-			expectedKind: discovered.kind,
-		}));
+	const assets = featureMatchLayoutGraphicAssetReferences(layout).map(discovered => ({
+		slot: discovered.ownerSlot.replace(/^layout\./, ''),
+		reference: discovered.reference,
+		expectedKind: discovered.kind,
+	}));
 	const capabilities: TemplatePackageCapabilityRequirement[] = [];
 	for (const source of layout.sources) {
 		capabilities.push({

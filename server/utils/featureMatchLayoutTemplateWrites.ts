@@ -1,9 +1,9 @@
 import type { H3Event } from 'h3';
 import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
-import type { FeatureMatchLayoutConfig, FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { findFeatureMatchLayoutTemplateLibraryEntry } from '~~/server/modules/feature-match-layout-template-library';
 import { graphicAssetId, graphicAssetRevisionId } from '~~/server/modules/graphics-asset-library';
-import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
+import { featureMatchLayoutGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 
 /**
  * What a Feature Match Layout Template is allowed to reference.
@@ -24,7 +24,7 @@ export async function assertFeatureMatchLayoutTemplateReferencesExist(
 	library: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevision'>,
 	document: FeatureMatchLayoutConfig,
 ): Promise<void> {
-	const references = featureMatchOverlayGraphicAssetReferences({ layout: document } as FeatureMatchOverlayModeConfig);
+	const references = featureMatchLayoutGraphicAssetReferences(document);
 	const missing: string[] = [];
 
 	for (const item of references) {

@@ -2,6 +2,7 @@ import type { GraphicGroupChildConfig, GraphicItemConfig } from '../types/graphi
 import type { GraphicAssetReference } from '../types/graphicsAsset';
 import type {
 	BroadcastGraphicsModeConfig,
+	FeatureMatchLayoutConfig,
 	FeatureMatchOverlayModeConfig,
 } from '../types/screenConfig';
 import type { GraphicsVideoTarget } from './graphicAssetTargetCompatibility';
@@ -81,32 +82,43 @@ function appendSharedGraphicItemReferences(
 }
 
 /**
- * Every Graphic Asset Revision a Feature Match Overlay Screen publishes.
+ * Every Graphic Asset Revision one Feature Match Layout pins.
  *
  * Two sources, and only two: the Frame's background image, which is host-owned
  * capability outside the shared vocabulary, and the Media Graphic Items of the
  * shared item tree. Source Items pin nothing — they frame an external video
  * source rather than carrying content.
+ *
+ * Discovery takes the layout rather than the Screen configuration around it,
+ * because a layout is what pins assets and a layout is what travels: a Feature
+ * Match Layout Template stores one with no Screen anywhere near it, and its
+ * references have to be the same references the Screen holding the same layout
+ * publishes. Slots keep the `layout.` prefix either way. That prefix is
+ * load-bearing: a write scopes its reference delete to it, and a Screen Output
+ * resolves only the prefix for its Screen's current mode, so a tree publishing
+ * outside it would have its references orphaned by the next write.
  */
-export function featureMatchOverlayGraphicAssetReferences(
-	config: FeatureMatchOverlayModeConfig,
+export function featureMatchLayoutGraphicAssetReferences(
+	layout: FeatureMatchLayoutConfig,
 ): ScreenGraphicAssetReference[] {
 	const references: ScreenGraphicAssetReference[] = [];
-	if (config.layout.frame.backgroundImage) {
+	if (layout.frame.backgroundImage) {
 		references.push({
-			reference: config.layout.frame.backgroundImage,
+			reference: layout.frame.backgroundImage,
 			ownerSlot: 'layout.frame.backgroundImage',
 			kind: 'image',
 		});
 	}
-	// The shared item tree publishes under the same `layout.` prefix as everything
-	// else this mode owns. That prefix is load-bearing: a write scopes its reference
-	// delete to it, and a Screen Output resolves only the prefix for its Screen's
-	// current mode, so a tree publishing outside it would have its references
-	// orphaned by the next write.
-	appendSharedGraphicItemReferences(references, config.layout.composition.items, 'layout.composition.items');
+	appendSharedGraphicItemReferences(references, layout.composition.items, 'layout.composition.items');
 
 	return references;
+}
+
+/** Every Graphic Asset Revision a Feature Match Overlay Screen publishes. */
+export function featureMatchOverlayGraphicAssetReferences(
+	config: FeatureMatchOverlayModeConfig,
+): ScreenGraphicAssetReference[] {
+	return featureMatchLayoutGraphicAssetReferences(config.layout);
 }
 
 /**

@@ -109,8 +109,10 @@ export function maximalFeatureMatchLayoutDocument(
 
 	// Two catalogue tokens in one template, and a Graphic Placeholder Style on a
 	// third — three distinct terms of the binding vocabulary for the package to
-	// declare.
-	name.text = '{player1Name} · {player1Record}';
+	// declare. `{player1name}` is deliberately mis-cased: it is a placeholder the
+	// catalogue does not have, which renders as an absence rather than an error, and
+	// a package must carry it without claiming a capability for it.
+	name.text = '{player1Name} · {player1Record} {player1name}';
 	name.placeholderStyles = {
 		player1Name: {
 			fontId: 'inter',

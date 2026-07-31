@@ -1,10 +1,10 @@
 import type { D1PreparedStatement } from '@cloudflare/workers-types';
 import type { DbFeatureMatchLayoutTemplate } from '~~/server/db/schema';
-import type { FeatureMatchLayoutConfig, FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { asc, eq } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { featureMatchLayoutTemplates } from '~~/server/db/schema';
-import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
+import { featureMatchLayoutGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 
 /**
  * Storage for the installation's Feature Match Layout Template library.
@@ -59,7 +59,7 @@ export class FeatureMatchLayoutTemplateRevisionConflict extends Error {
  * rows for one design incomparable.
  */
 function templateAssetReferences(document: FeatureMatchLayoutConfig) {
-	return featureMatchOverlayGraphicAssetReferences({ layout: document } as FeatureMatchOverlayModeConfig);
+	return featureMatchLayoutGraphicAssetReferences(document);
 }
 
 export function featureMatchLayoutTemplateService() {

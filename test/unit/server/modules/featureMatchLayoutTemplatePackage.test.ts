@@ -259,6 +259,27 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 	});
 
 	/**
+	 * A `{placeholder}` that names no catalogue token is not a capability. The shared
+	 * Graphic Text Template mechanism renders one as an absence by design, so an
+	 * author who mis-typed `{player1name}` is looking at an empty run and a package
+	 * that refused to carry it would be refusing over a typo — with a message about a
+	 * vocabulary term and no way to satisfy it.
+	 */
+	it('carries a placeholder that names no token without claiming a capability for it', async () => {
+		const { archive } = await exportedPackage();
+		const parts = readTemplatePackageParts(archive);
+		const declared = parts.manifest.applicationCapabilities.map(declaration => declaration.identity);
+
+		// It travelled…
+		expect(JSON.stringify(parts.template)).toContain('{player1name}');
+		// …and nothing was declared for it.
+		expect(declared).not.toContain(featureMatchLayoutVocabularyIdentity('token', 'player1name'));
+		// …and a receiver installs the layout rather than refusing it.
+		const report = reportOf(await preflight(createLibrary('receiver'), archive));
+		expect(report.outcome).not.toBe('rejected');
+	});
+
+	/**
 	 * A term this installation has never heard of is refused rather than installed
 	 * and rendered as an absence. A Source Item framing a role nobody routes is a hole
 	 * in a live layout, discovered on air.
