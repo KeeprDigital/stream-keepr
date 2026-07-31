@@ -362,26 +362,13 @@ describe('the Graphics Asset Library retention API', () => {
 	});
 
 	it('never stores or displays anything the ledger promised to keep out', async () => {
-		// Drive one asset through the transitions that write Evidence, so the
-		// negative below is asserted against several category groups rather than
-		// against a thin payload that would pass by saying almost nothing. The
-		// purge group comes from the early-purge case above, which has already
-		// written to the same ledger; purging again here would strand the content
-		// of a second asset, and the suites share one database.
+		// Read the ledger this suite has already written. The cases above retire,
+		// Trash, restore, replace, and purge, so several category groups are
+		// present without this test adding churn of its own to a database every
+		// integration suite shares.
 		//
 		// Quarantine and ingestion expiry are absent on purpose: both need days
 		// to elapse, which only the controlled-clock module tests can offer.
-		const leakage = await ingest('Leak scan logo', 'retention-leak-scan', pngWithTextChunks(33));
-		const leakageAssetId = leakage.result!.assetId;
-		await replace(leakageAssetId, 'retention-leak-scan-replacement');
-		for (const action of ['retire', 'trash', 'restore'] as const) {
-			await $fetch(`/api/graphics-assets/${leakageAssetId}/lifecycle-actions`, {
-				method: 'POST',
-				headers: authorHeaders,
-				body: { action },
-			});
-		}
-
 		const page = await $fetch<GraphicsAssetEvidencePage>(
 			'/api/admin/graphics-assets/evidence',
 			{ headers: administratorHeaders, query: { limit: 500 } },
