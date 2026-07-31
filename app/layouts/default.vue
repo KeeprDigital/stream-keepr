@@ -41,6 +41,14 @@ interface NavGroup {
 	items: NavigationMenuItem[];
 }
 
+function graphicsOperationsCockpitItem(): NavigationMenuItem {
+	return {
+		label: 'Graphics Operations',
+		icon: 'i-lucide-gauge',
+		to: '/admin/graphics-assets',
+	};
+}
+
 function graphicsAssetLibraryHealthItem(): NavigationMenuItem {
 	return {
 		label: 'Graphics Asset Library health',
@@ -118,7 +126,11 @@ const navGroups = computed<NavGroup[]>(() => {
 		},
 		{
 			label: 'Administration',
-			items: [graphicsAssetLibraryItem(), graphicsAssetLibraryHealthItem()],
+			items: [
+				graphicsAssetLibraryItem(),
+				graphicsOperationsCockpitItem(),
+				graphicsAssetLibraryHealthItem(),
+			],
 		},
 	];
 });
@@ -128,7 +140,7 @@ const homeLinks = computed<NavigationMenuItem[]>(() => [{
 	label: 'Events',
 	icon: 'i-lucide-calendar',
 	to: '/',
-}, graphicsAssetLibraryItem(), graphicsAssetLibraryHealthItem()]);
+}, graphicsAssetLibraryItem(), graphicsOperationsCockpitItem(), graphicsAssetLibraryHealthItem()]);
 </script>
 
 <template>

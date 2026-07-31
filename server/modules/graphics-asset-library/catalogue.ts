@@ -15,6 +15,7 @@ import type {
 	PublishGraphicAssetCatalogueInput,
 } from '.';
 import type { GraphicsAssetMultipartState } from './multipart';
+import type { GraphicsOperationsCockpitCatalogue } from './operations-cockpit';
 import type { GraphicsAssetReconciliationCatalogue } from './reconciliation';
 import type { GraphicsAssetRetentionCatalogue } from './retention';
 import type { TemplatePackagePreflightState } from './template-package-preflight';
@@ -22,6 +23,7 @@ import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GRAPHICS_RETENTION_GUARANTEES } from '~~/shared/utils/graphicsAssetRetention';
+import { createD1GraphicsOperationsCockpitCatalogue } from './catalogue-cockpit';
 import { createD1GraphicsAssetReconciliationCatalogue } from './catalogue-reconciliation';
 import { createD1GraphicsAssetRetentionCatalogue } from './catalogue-retention';
 import { boundJsonArray, valuesFromJsonArray } from './catalogue-sql';
@@ -424,10 +426,14 @@ function updateOperationStatement(
 
 export function createD1GraphicsAssetCatalogue(
 	database: D1Database,
-): GraphicsAssetCatalogue & GraphicsAssetRetentionCatalogue & GraphicsAssetReconciliationCatalogue {
+): GraphicsAssetCatalogue
+	& GraphicsAssetRetentionCatalogue
+	& GraphicsAssetReconciliationCatalogue
+	& GraphicsOperationsCockpitCatalogue {
 	return {
 		...createD1GraphicsAssetReconciliationCatalogue(database),
 		...createD1GraphicsAssetRetentionCatalogue(database),
+		...createD1GraphicsOperationsCockpitCatalogue(database),
 		async checkHealth() {
 			const result = await database
 				.prepare('SELECT 1 AS healthy FROM graphic_assets LIMIT 1')

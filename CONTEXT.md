@@ -368,6 +368,23 @@ It must reproduce the exact bytes the catalogue already recorded; anything else 
 The chronological administrator-facing record of automated Graphics Asset Library lifecycle and reconciliation decisions, retained for one year after the cleanup it explains.
 It identifies subjects by opaque domain identity and never carries object keys, content digests, filenames, capability secrets, or deleted bytes.
 
+**Operations Cockpit**:
+The administrator-only surface that answers, in one reading, whether the Graphics Asset Library is safe and what currently needs attention.
+It composes Library Component Condition, Storage Health Alerts, capacity against its exact boundaries, unfinished Graphics Ingestion Operations, the Graphics Discrepancy backlog, recovery and cleanup deadlines, and recent Evidence Ledger outcomes; it holds no state of its own, so every reading is reproducible from the catalogue.
+_Avoid_: dashboard, storage admin panel.
+
+**Library Component Condition**:
+Whether one Graphics Asset Library component can answer at all, and whether what it holds agrees with the other side: healthy, degraded, or unavailable.
+The catalogue and the canonical byte store are always judged separately and on their own durable evidence — the catalogue by the Unavailable Graphic Asset Content it records, the byte store by the Graphics Discrepancies observed in it — because a component that cannot answer and one that answers while disagreeing are different problems.
+
+**Storage Health Alert**:
+One open call on a Graphics Administrator's attention, classified critical, warning, or info, and derived from durable state rather than raised and remembered.
+A persistent alert is backed by a record only an administrator action or a byte-store recovery can clear, so it survives navigation and reload until its subject is resolved.
+
+**Graphics Ingestion Attention State**:
+What an unfinished Graphics Ingestion Operation needs right now: its staged input has expired, it is retryable, it is awaiting its author's confirmation, or it is actively working.
+Expiry is decided before stage, because an operation whose staged input passed its guarantee needs a new operation whichever stage it paused in; a terminal operation has no attention state at all.
+
 **Text Graphic Item**:
 A Graphic Item that renders literal text or a Graphic Text Template.
 
@@ -687,6 +704,10 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - **Exact-Byte Repair** and **Derivative Regeneration** restore only bytes the catalogue already expected, and never create a **Graphic Asset Revision** or change a **Graphic Asset Reference**
 - Readers and **Graphics Reconciliation** apply one definition of agreement between the catalogue and stored bytes, so content failing closed as a **Critical Integrity Incident** is never still served
 - **Deep Verification** is the only action offered on a **Critical Integrity Incident**, and the only one that can detect stored bytes that changed behind unchanged size and media type
+- The **Operations Cockpit** states D1 **Library Component Condition** separately from canonical byte condition, and never merges them into one number
+- A **Storage Health Alert** is derived from durable state on every reading, so a persistent one reappears after navigation and reload until its subject is resolved
+- The **Operations Cockpit** counts every lifecycle group by aggregate rather than by expanding rows, so one reading costs the same against any size of backlog
+- The **Operations Cockpit** offers only actions that cannot shorten a recovery guarantee, and still answers whether the library is safe when the catalogue cannot answer
 - Every **Graphic Asset Revision** passes **Graphic Asset Validation** under one **Graphic Asset Compatibility Profile** before it becomes referenceable
 - The initial `still-image-v1` **Graphic Asset Compatibility Profile** accepts exact single-frame PNG, JPEG, or WebP source bytes up to 25 MiB, 8,192 pixels per axis, and 16,777,216 decoded pixels only when bounded parser evidence and a complete decode agree on an 8-bit SDR sRGB image with normal orientation
 - `still-image-v1` rejects declaration conflicts, animation, embedded colour or orientation profiles, malformed structure, partial decode, and out-of-profile facts, and generates a separate deterministic transparent 8-bit sRGB PNG thumbnail fitted within 640 × 360 without cropping or upscaling
