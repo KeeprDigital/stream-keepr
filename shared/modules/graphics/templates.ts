@@ -180,11 +180,20 @@ function withRemappedGroupStagger(item: GraphicItemConfig, idMap: Map<string, st
  * phase in flight, and a selected Event Data entity all belong to the Broadcast
  * Graphics Live Session and are not part of a Broadcast Graphic's configuration at
  * all, so saving a template cannot capture them.
+ *
+ * Graphic Channel membership is configuration and still does not travel. A
+ * `channelId` names one lane on one Screen, and a template is explicitly for copying
+ * onto other Screens and other Events, where that name means either nothing or
+ * something else — silently joining a design to whichever channel happened to share
+ * its id would put two unrelated graphics into mutual exclusion on air. The
+ * placement decides the lane, which is the same rule as the placed copy's name and
+ * ids.
  */
 export function broadcastGraphicTemplateDocument(
 	graphic: BroadcastGraphicConfig,
 ): BroadcastGraphicConfig {
-	return structuredClone(graphic);
+	const { channelId: _screenLocal, ...document } = structuredClone(graphic);
+	return document;
 }
 
 /**
@@ -248,6 +257,12 @@ export function placeBroadcastGraphicTemplate(
 		name: distinctName(template.name, options.existing),
 		items: items.map(item => withRemappedGroupStagger(item, idMap)),
 	};
+
+	// A Graphic Channel is per-placement, not per-design: the id names a lane on one
+	// Screen. A saved template drops it, but an imported or hand-built document may
+	// still carry one, and a placed copy silently joining a same-named lane would put
+	// two unrelated graphics into mutual exclusion on air.
+	delete placed.channelId;
 
 	// `placed.animation` is already this copy's own clone, so rewriting its staggers
 	// cannot reach the template's own recipes.

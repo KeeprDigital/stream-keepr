@@ -1,7 +1,7 @@
 import type { GraphicsVideoTarget } from '../utils/graphicAssetTargetCompatibility';
 import type { CardAnimationSpeed, DeckCardSize, DeckViewMode, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardLayout, StandingsColumnKey, StandingsViewMode, VerticalAlign } from './enums';
 import type { FeatureMatchMediaPresentationConfig } from './graphicItem';
-import type { BroadcastGraphicConfig } from './graphics';
+import type { BroadcastGraphicConfig, GraphicChannelConfig } from './graphics';
 import type { GraphicAssetReference } from './graphicsAsset';
 import { migrateFeatureMatchGraphicItemConfig } from '../featureMatchGraphicItemDefinitions';
 
@@ -691,13 +691,18 @@ export const DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT = 1080;
  * Screen-owned Broadcast Graphics mode configuration.
  *
  * `graphics` is the Screen's authored back-to-front stack of Broadcast
- * Graphics; concurrent graphics always render in this order. The Screen's one
- * configurable pixel canvas remains the Screen's own width and height, and
- * playout, channels, inputs, and animation are live state rather than authored
+ * Graphics; concurrent graphics always render in this order. `channels` declares
+ * the Screen's Graphic Channels, which each graphic joins by id — a lane is a
+ * design decision about the show, so it is authored here, while which member a
+ * channel currently holds is derived from the Live Session's playout intents.
+ * The Screen's one configurable pixel canvas remains the Screen's own width and
+ * height, and playout, inputs, and animation are live state rather than authored
  * configuration.
  */
 export interface BroadcastGraphicsModeConfig {
 	graphics: BroadcastGraphicConfig[];
+	/** Absent declares no Graphic Channels, so every graphic runs concurrently. */
+	channels?: GraphicChannelConfig[];
 }
 
 export interface MetagameModeConfig {

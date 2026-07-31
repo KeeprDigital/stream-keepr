@@ -5,7 +5,11 @@ import type {
 	BroadcastGraphicsLiveSessionResponse,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type { ScreenMode } from '~~/shared/types/enums';
-import type { BroadcastGraphicConfig, GraphicInputDeclaration } from '~~/shared/types/graphics';
+import type {
+	BroadcastGraphicConfig,
+	GraphicChannelConfig,
+	GraphicInputDeclaration,
+} from '~~/shared/types/graphics';
 import { $fetch } from '@nuxt/test-utils/e2e';
 
 const SQUARE_CORNER = { treatment: 'square', size: 0 } as const;
@@ -197,6 +201,7 @@ export async function createBroadcastGraphicsScreen(
 	eventId: number,
 	slug: string,
 	graphics: BroadcastGraphicConfig[],
+	channels?: GraphicChannelConfig[],
 ): Promise<ScreenResponse> {
 	return await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
 		method: 'POST',
@@ -204,7 +209,9 @@ export async function createBroadcastGraphicsScreen(
 			name: `Broadcast Graphics ${slug}`,
 			slug,
 			currentMode: 'broadcast-graphics',
-			modeConfigs: { 'broadcast-graphics': { graphics } },
+			modeConfigs: {
+				'broadcast-graphics': { graphics, ...(channels === undefined ? {} : { channels }) },
+			},
 		},
 	});
 }
@@ -250,13 +257,14 @@ export interface PlayoutHarness {
 	send: (command: BroadcastGraphicsCommand) => Promise<BroadcastGraphicsCommandResult>;
 }
 
-/** A harness over a Screen whose Broadcast Graphics are supplied in full. */
+/** A harness over a Screen whose Broadcast Graphics, and Graphic Channels, are supplied in full. */
 export async function createGraphicsHarness(
 	eventId: number,
 	slug: string,
 	graphics: BroadcastGraphicConfig[],
+	channels?: GraphicChannelConfig[],
 ): Promise<PlayoutHarness> {
-	const screen = await createBroadcastGraphicsScreen(eventId, slug, graphics);
+	const screen = await createBroadcastGraphicsScreen(eventId, slug, graphics, channels);
 	let current = await getBroadcastGraphicsLiveSession(eventId, screen.id);
 
 	return {
