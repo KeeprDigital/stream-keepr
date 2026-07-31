@@ -23,6 +23,7 @@ import type {
 import { describe, expect, it } from 'vitest';
 import { featureMatchTokenDeclarations } from '~~/shared/featureMatchTokenCatalogue';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition, squareShapeGeometry } from '~~/shared/modules/graphics';
+import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
 import { resolveGraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 
 function surfaceStyle(overrides: Partial<GraphicSurfaceStyle> = {}): GraphicSurfaceStyle {
@@ -480,6 +481,38 @@ describe('graphicsCompositionRenderModel', () => {
 			expect(model.graphics).toEqual([]);
 			expect(model.canvasStyle.background).toBe(background);
 		}
+	});
+
+	it('paints the Screen Output backdrop for a root composition and never for a nested one', () => {
+		// The backdrop belongs to whichever element is the canvas root, and the two
+		// hosts differ. A Broadcast Graphics Screen mounts this model's canvas as its
+		// whole Display, so this is the only thing making its Fill and Key Outputs
+		// black — removing it outright would fix the nested host by breaking the root
+		// one. A Feature Match Overlay paints its own canvas and mounts this above the
+		// Frame, so a backdrop here would cover the entire host-owned layer.
+		//
+		// Pinned together in one place because the two are one decision: a change that
+		// satisfies either host alone is the bug this guards against.
+		for (const output of ['overlay', 'fill', 'key'] as const) {
+			const root = resolveGraphicsCompositionRenderModel({ output, graphics: [], ...CANVAS });
+			const nested = resolveGraphicsCompositionRenderModel({
+				output,
+				graphics: [],
+				canvasRole: 'layer',
+				...CANVAS,
+			});
+
+			expect(root.canvasStyle.background).toBe(screenOutputCanvasBackground(output));
+			expect(root.canvasStyle.position).toBe('relative');
+
+			expect(nested.canvasStyle.background).toBe('transparent');
+			expect(nested.canvasStyle.position).toBeUndefined();
+		}
+
+		// The default is the root role, so forgetting to declare it shows a backdrop
+		// rather than silently hiding a Screen Output's own.
+		expect(resolveGraphicsCompositionRenderModel({ output: 'key', graphics: [], ...CANVAS }).canvasStyle.background)
+			.toBe('#000000');
 	});
 
 	it('composites concurrent Broadcast Graphics in authored Screen stack order regardless of selection order', () => {
