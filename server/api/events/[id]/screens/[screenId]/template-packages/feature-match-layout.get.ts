@@ -1,17 +1,16 @@
-import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { screenParamsSchema } from '~~/server/schemas/api/screen';
 import { screenService } from '~~/server/services/screen';
-import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
-import { respondWithTemplatePackage } from '~~/server/utils/templatePackageExportApi';
-import { featureMatchLayoutTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
+import { exportFeatureMatchLayoutTemplatePackage } from '~~/server/utils/templatePackageExportApi';
 
 /**
- * Exports one Feature Match Layout Template as a `.sklayout` Template Package.
+ * Exports the Feature Match Layout a Screen currently carries as a `.sklayout`
+ * Template Package.
  *
- * This workflow owns its payload — the Screen's reusable layout — and its own
- * asset discovery. Collecting and embedding the exact revisions is the Graphics
- * Asset Library's one export contract, shared with the `.skgraphic` workflow.
+ * The layout travels without the Screen around it. A Feature Match Slot assignment
+ * is Screen state and lives beside the layout rather than inside it, so what is
+ * packaged here is exactly what the library stores when the same layout is saved as
+ * a Feature Match Layout Template — the same document, through the same exporter.
  */
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);
@@ -34,25 +33,9 @@ export default defineEventHandler(async (event) => {
 		});
 	}
 
-	const requirements = featureMatchLayoutTemplatePackageRequirements(stored);
-	try {
-		return respondWithTemplatePackage(
-			event,
-			await graphicsAssetLibraryForEvent(event).exportTemplatePackage({
-				packageKind: 'sklayout',
-				template: {
-					identity: `screen-${screenId}-feature-match-layout`,
-					name: screen.name,
-					// A Template carries the reusable layout, never the Screen's
-					// current Feature Match assignment or live state.
-					document: stored.layout,
-				},
-				assets: requirements.assets,
-				capabilities: requirements.capabilities,
-			}),
-		);
-	}
-	catch (error) {
-		rethrowGraphicsAssetApiError(error, event);
-	}
+	return await exportFeatureMatchLayoutTemplatePackage(event, {
+		identity: `screen-${screenId}-feature-match-layout`,
+		name: screen.name,
+		document: stored.layout,
+	});
 });

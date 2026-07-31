@@ -90,6 +90,8 @@ import {
 } from '~~/shared/types/graphics';
 import {
 	FEATURE_MATCH_OVERLAY_ANCHOR_VALUES,
+	FEATURE_MATCH_OVERLAY_FRAME_ANIMATION_EFFECT_VALUES,
+	FEATURE_MATCH_SOURCE_ROLE_VALUES,
 	mergeScreenModeConfig,
 } from '~~/shared/types/screenConfig';
 
@@ -366,7 +368,7 @@ export const playerHistoryModeConfigSchema = z.object({
 
 const featureMatchOverlayPresetIdSchema = z.enum(['full-table', 'left-stacked-player-cams', 'neon-feature-match']);
 const featureMatchOverlayAnchorValueSchema = z.enum(FEATURE_MATCH_OVERLAY_ANCHOR_VALUES);
-const featureMatchOverlayFrameAnimationEffectSchema = z.enum(['cells', 'dots', 'fog', 'globe', 'halo', 'net', 'rings', 'ripple', 'waves']);
+const featureMatchOverlayFrameAnimationEffectSchema = z.enum(FEATURE_MATCH_OVERLAY_FRAME_ANIMATION_EFFECT_VALUES);
 
 const featureMatchOverlayRectSchema = z.object({
 	x: pixelPositionSchema,
@@ -470,7 +472,9 @@ const featureMatchSourceItemConfigSchema = featureMatchOverlayRectSchema.extend(
 	visible: z.boolean(),
 	anchor: featureMatchOverlayAnchorValueSchema.optional(),
 	configurationVersion: z.literal(FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION).optional(),
-	sourceRole: z.string().min(1).max(100).optional(),
+	// A closed vocabulary, not free text: a role is the one thing a Source Item
+	// declares that means anything on another installation.
+	sourceRole: z.enum(FEATURE_MATCH_SOURCE_ROLE_VALUES).optional(),
 	frameCutout: z.boolean(),
 	framingStyle: featureMatchSourceFramingStyleSchema.optional(),
 }).strict() satisfies z.ZodType<FeatureMatchSourceItemConfig>;
@@ -1448,17 +1452,35 @@ export const broadcastGraphicsModeConfigSchema = z.object({
  * schemas, so an object-level refinement would never reach the write path the
  * editor uses.
  */
+/**
+ * One Feature Match Layout: the Frame, its host-owned Source Items, and the
+ * shared item tree.
+ *
+ * Named and exported because it is the boundary of the portable artifact as well
+ * as a field of the mode configuration. A Feature Match Layout Template's document
+ * is exactly this and a Template Package's payload proves a received one against
+ * this same schema — so a layout that installs is a layout the Screen write path
+ * will accept, and the two can never come apart.
+ *
+ * Being `.strict()` is what makes "Event identities stripped" enforceable rather
+ * than merely observed. A Feature Match Slot assignment lives on the mode
+ * configuration beside this object and never inside it, so a document that carries
+ * one — hand-edited, or written by something that thought a layout was Screen
+ * state — is refused on the unknown key rather than installed and quietly ignored.
+ */
+export const featureMatchLayoutConfigSchema = z.object({
+	frame: featureMatchOverlayFrameConfigSchema,
+	// Host-owned Source Items: top-level only, with Frame cutout behaviour the
+	// shared vocabulary has no way to express. Their list order is their Graphic
+	// Layer Order beneath the composition.
+	sources: z.array(featureMatchSourceItemConfigSchema).max(MAX_FEATURE_MATCH_SOURCE_ITEMS),
+	composition: featureMatchLayoutCompositionSchema,
+}).strict();
+
 export const featureMatchOverlayModeConfigSchema = z.object({
 	featureMatchId: z.number().int().positive().nullable(),
 	presetId: featureMatchOverlayPresetIdSchema,
-	layout: z.object({
-		frame: featureMatchOverlayFrameConfigSchema,
-		// Host-owned Source Items: top-level only, with Frame cutout behaviour the
-		// shared vocabulary has no way to express. Their list order is their Graphic
-		// Layer Order beneath the composition.
-		sources: z.array(featureMatchSourceItemConfigSchema).max(MAX_FEATURE_MATCH_SOURCE_ITEMS),
-		composition: featureMatchLayoutCompositionSchema,
-	}).strict(),
+	layout: featureMatchLayoutConfigSchema,
 }).strict() satisfies z.ZodType<FeatureMatchOverlayModeConfig>;
 
 export const metagameModeConfigSchema = z.object({
