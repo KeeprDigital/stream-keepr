@@ -193,6 +193,14 @@ export function graphicStyleSetService() {
 	 * The draft is seeded with the same entries, so the Style Set opens with no
 	 * unpublished changes and the first thing an author does to it is an edit rather
 	 * than a reconciliation.
+	 *
+	 * Conditional on the identity being free, for the same reason
+	 * {@link republishFromPackage} is conditional on a revision: preflight decided this
+	 * identity was unheld, and a concurrent install of the same package — or an author
+	 * creating a Style Set — could claim it before this statement runs. An unconditional
+	 * insert would answer that race with a primary-key violation, which is the modelled
+	 * conflict escaping as a crash. Resolves undefined instead, and the caller reports
+	 * the conflict its sibling dispositions already report.
 	 */
 	const createPublished = async (input: {
 		id: string;
@@ -200,20 +208,34 @@ export function graphicStyleSetService() {
 		description: string | null;
 		revision: number;
 		entries: GraphicStyleSetEntry[];
-	}): Promise<DbGraphicStyleSet> => {
-		const now = new Date();
-		await db.insert(graphicStyleSets).values({
-			id: input.id,
-			name: input.name,
-			description: input.description,
-			revision: input.revision,
-			draftRevision: 1,
-			draft: input.entries,
-			published: input.entries,
-			publishedAt: now,
-			createdAt: now,
-			updatedAt: now,
-		});
+	}): Promise<DbGraphicStyleSet | undefined> => {
+		const client = db.$client;
+		const now = Date.now();
+		const entries = JSON.stringify(input.entries);
+		// `WHERE NOT EXISTS` rather than `INSERT OR IGNORE`, which would swallow every
+		// other constraint this row has as silently as it swallows a taken identity.
+		const [inserted] = await client.batch([
+			client.prepare(`
+				INSERT INTO graphic_style_sets
+					(id, name, description, revision, draft_revision, draft, published, published_at, created_at, updated_at)
+				SELECT ?, ?, ?, ?, 1, ?, ?, ?, ?, ?
+				WHERE NOT EXISTS (SELECT 1 FROM graphic_style_sets WHERE id = ?)
+			`).bind(
+				input.id,
+				input.name,
+				input.description,
+				input.revision,
+				entries,
+				entries,
+				now,
+				now,
+				now,
+				input.id,
+			),
+		]);
+
+		if (inserted?.meta.changes !== 1)
+			return undefined;
 
 		const created = await findById(input.id);
 		if (!created)

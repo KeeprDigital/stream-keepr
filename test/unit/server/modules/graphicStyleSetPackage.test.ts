@@ -10,7 +10,7 @@ import {
 } from '~~/server/modules/graphic-style-set-package';
 import { readableBytes } from '~~/server/modules/graphics-asset-library/object-store';
 import { createStoredZipArchive } from '~~/server/modules/graphics-asset-library/zip-archive';
-import { sameGraphicStyleValue } from '~~/shared/modules/graphic-style-sets';
+import { graphicStyleSetContentDigest, sameGraphicStyleValue } from '~~/shared/modules/graphic-style-sets';
 import {
 	GRAPHIC_STYLE_SET_PACKAGE_MANIFEST_ENTRY,
 	GRAPHIC_STYLE_SET_PACKAGE_MEDIA_TYPE,
@@ -58,6 +58,20 @@ function heading(fontSize = 64, fontId: GraphicFontId = 'inter'): GraphicStyleSe
 	};
 }
 
+/**
+ * An entry carrying a Graphic Asset Reference — the shape no Style Set entry kind
+ * produces today, and the one both sides of a transfer refuse rather than drop.
+ */
+function styleEntryNeedingAnAsset(): GraphicStyleSetEntry {
+	return {
+		id: 'backdrop',
+		kind: 'media-treatment',
+		name: 'Backdrop',
+		schemaVersion: 1,
+		value: { source: { assetId: 'asset-1', revisionId: 'revision-1' } },
+	} as unknown as GraphicStyleSetEntry;
+}
+
 const SOURCE_ID = 'style-set-from-the-sending-installation';
 
 function storedStyleSet(overrides: Partial<DbGraphicStyleSet> = {}): DbGraphicStyleSet {
@@ -101,6 +115,11 @@ function library(seed: DbGraphicStyleSet[] = []) {
 		findInstalledRow: async styleSetId => rows.get(styleSetId),
 		findLinkedTemplates: async () => linked,
 		createPublished: async (input) => {
+			// Conditional on the identity being free, exactly as the stored library's
+			// `INSERT … WHERE NOT EXISTS` is. A fake that overwrote instead would let an
+			// unguarded creation pass a test the database would answer with a crash.
+			if (rows.has(input.id))
+				return undefined;
 			const created = storedStyleSet({
 				id: input.id,
 				name: input.name,
@@ -154,14 +173,14 @@ async function packageBytes(styleSet: DbGraphicStyleSet): Promise<Uint8Array> {
 /** Rebuilds an archive from a package's two documents, so a test can tamper with one. */
 async function rebuiltArchive(
 	bytes: Uint8Array,
-	rewrite: (documents: { manifest: any; snapshot: any }) => void,
+	rewrite: (documents: { manifest: any; snapshot: any }) => void | Promise<void>,
 ): Promise<Uint8Array> {
 	const archive = readStoredZipArchive(bytes);
 	const documents = {
 		manifest: archive.json(GRAPHIC_STYLE_SET_PACKAGE_MANIFEST_ENTRY),
 		snapshot: archive.json(GRAPHIC_STYLE_SET_PACKAGE_STYLE_SET_ENTRY),
 	};
-	rewrite(documents);
+	await rewrite(documents);
 	const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value, null, '\t'));
 	const encoded = [
 		{ name: GRAPHIC_STYLE_SET_PACKAGE_MANIFEST_ENTRY, bytes: encode(documents.manifest) },
@@ -230,6 +249,27 @@ describe('exporting a Graphic Style Set as a `.skstyle` package', () => {
 			revision: 3,
 			entries: [BRAND, heading()],
 		});
+	});
+
+	it('refuses an entry that requires a Graphic Asset Revision the package cannot carry', async () => {
+		// No Graphic Style Set entry carries one today, and this guard is why that stays a
+		// fact rather than an assumption: the first entry kind that gains a media selection
+		// fails loudly here instead of exporting a package whose asset silently vanished.
+		const outcome = await exportGraphicStyleSetPackage({
+			styleSet: storedStyleSet({
+				published: [BRAND, styleEntryNeedingAnAsset()],
+				draft: [BRAND, styleEntryNeedingAnAsset()],
+			}),
+			now: NOW,
+		});
+
+		expect(outcome.outcome).toBe('rejected');
+		if (outcome.outcome !== 'rejected')
+			return;
+		expect(outcome.report.issues).toContainEqual(expect.objectContaining({
+			code: 'undeclared-graphic-asset-dependency',
+			entryId: 'entries[1].value.source',
+		}));
 	});
 
 	it('freezes the published entries rather than the working draft', async () => {
@@ -560,8 +600,86 @@ describe('receiving a `.skstyle` package on another installation', () => {
 		expect(receiver.rows.get(SOURCE_ID)?.revision).toBe(0);
 	});
 
+	it('refuses a package whose entries require a Graphic Asset Revision it never carried', async () => {
+		// A digest the receiver agrees with, so this is the package a future build would
+		// legitimately produce rather than a tampered one — the asset dependency is the
+		// only thing wrong with it, and it is enough on its own.
+		const withAsset = await rebuiltArchive(sent, async (documents) => {
+			documents.snapshot.entries[1] = styleEntryNeedingAnAsset();
+			documents.manifest.styleSet.contentDigest
+				= await graphicStyleSetContentDigest(documents.snapshot.entries);
+		});
+		const receiver = library();
+
+		const outcome = await installGraphicStyleSetPackage({
+			archive: withAsset,
+			resolution: 'preserve-identity',
+			ports: receiver.ports,
+			now: NOW,
+		});
+
+		expect(outcome.outcome).toBe('rejected');
+		expect(outcome.report.issues).toContainEqual(expect.objectContaining({
+			code: 'undeclared-graphic-asset-dependency',
+			severity: 'error',
+			subject: 'entries[1].value.source',
+		}));
+		expect(receiver.rows.size).toBe(0);
+	});
+
 	it('writes nothing when a draft edit lands between the confirmed report and the install', async () => {
-		const receiver = library([storedStyleSet()]);
+		// The installed Style Set already has unpublished draft changes, so the warning
+		// naming them is in *both* reports and the only thing the second author's edit
+		// moves is the draft revision. A baseline whose draft matched its published
+		// entries would pass this for the wrong reason: the edit would introduce a warning
+		// that was absent before, and the confirmation would be refused over the issue
+		// list rather than over the revision the write is actually bound to.
+		const receiver = library([storedStyleSet({ draft: [BRAND, heading(120)] })]);
+		const newer = await packageBytes(storedStyleSet({
+			revision: 4,
+			draft: [BRAND, heading(96)],
+			published: [BRAND, heading(96)],
+		}));
+
+		const proposal = await installGraphicStyleSetPackage({
+			archive: newer,
+			resolution: 'preserve-identity',
+			ports: receiver.ports,
+			now: NOW,
+		});
+		expect(proposal.outcome).toBe('requires-confirmation');
+		expect(proposal.report.issues.map(issue => issue.code))
+			.toContain('graphic-style-set-draft-discarded');
+		expect(proposal.report.installedDraftRevision).toBe(4);
+
+		// Another author saves a further draft edit after the report the confirmation is
+		// bound to. Nothing else about the library moves.
+		const installed = receiver.rows.get(SOURCE_ID)!;
+		receiver.rows.set(SOURCE_ID, {
+			...installed,
+			draft: [BRAND, heading(150)],
+			draftRevision: installed.draftRevision + 1,
+		} as DbGraphicStyleSet);
+
+		const raced = await installGraphicStyleSetPackage({
+			archive: newer,
+			resolution: 'preserve-identity',
+			ports: receiver.ports,
+			confirmedFingerprint: proposal.report.fingerprint,
+			now: NOW,
+		});
+
+		// The draft revision is inside the fingerprint, so the edit made in the meantime
+		// is a different proposal rather than one the earlier confirmation carries over
+		// to — and the second author's work is still there.
+		expect(raced.outcome).toBe('requires-confirmation');
+		expect(raced.report.installedDraftRevision).toBe(5);
+		expect(receiver.rows.get(SOURCE_ID)?.draft).toEqual([BRAND, heading(150)]);
+		expect(receiver.rows.get(SOURCE_ID)?.revision).toBe(3);
+	});
+
+	it('writes nothing when a draft edit lands inside the install’s own preflight', async () => {
+		const receiver = library([storedStyleSet({ draft: [BRAND, heading(120)] })]);
 		const newer = await packageBytes(storedStyleSet({
 			revision: 4,
 			draft: [BRAND, heading(96)],
@@ -576,26 +694,62 @@ describe('receiving a `.skstyle` package on another installation', () => {
 		});
 		expect(proposal.outcome).toBe('requires-confirmation');
 
-		// Another author saves a draft edit after the report the confirmation is bound to.
-		const installed = receiver.rows.get(SOURCE_ID)!;
-		receiver.rows.set(SOURCE_ID, {
-			...installed,
-			draft: [BRAND, heading(120)],
-			draftRevision: installed.draftRevision + 1,
-		} as DbGraphicStyleSet);
+		// The narrowest window there is: the edit lands after the install's own preflight
+		// read the draft revision and before it writes. The report is identical to the one
+		// confirmed, so the fingerprint still matches and only the compare-and-swap can
+		// refuse this — which is exactly what a write taking its precondition from a fresh
+		// read instead of from the report would fail to do.
+		const racing: GraphicStyleSetPackageInstallPorts = {
+			...receiver.ports,
+			findLinkedTemplates: async (styleSetId, entries) => {
+				const linked = await receiver.ports.findLinkedTemplates(styleSetId, entries);
+				const installed = receiver.rows.get(SOURCE_ID)!;
+				receiver.rows.set(SOURCE_ID, {
+					...installed,
+					draft: [BRAND, heading(150)],
+					draftRevision: installed.draftRevision + 1,
+				} as DbGraphicStyleSet);
+				return linked;
+			},
+		};
 
 		const raced = await installGraphicStyleSetPackage({
 			archive: newer,
 			resolution: 'preserve-identity',
-			ports: receiver.ports,
+			ports: racing,
 			confirmedFingerprint: proposal.report.fingerprint,
 			now: NOW,
 		});
 
-		// The write is conditional on the draft revision the *report* recorded, so the
-		// edit made in the meantime is not silently replaced by the packaged entries.
-		expect(raced.outcome).not.toBe('installed');
-		expect(receiver.rows.get(SOURCE_ID)?.draft).toEqual([BRAND, heading(120)]);
+		expect(raced.outcome).toBe('conflict');
+		expect(receiver.rows.get(SOURCE_ID)?.draft).toEqual([BRAND, heading(150)]);
 		expect(receiver.rows.get(SOURCE_ID)?.revision).toBe(3);
+	});
+
+	it('writes nothing when the packaged identity is claimed between the report and the install', async () => {
+		const receiver = library();
+		// The identity is free when preflight reads it and held by the time the creation
+		// runs — a concurrent install of the same package, or an author who happened to
+		// create a Style Set. That is the same race an update guards against, so it is
+		// answered the same way rather than as an unhandled constraint violation.
+		const racing: GraphicStyleSetPackageInstallPorts = {
+			...receiver.ports,
+			findInstalled: async (styleSetId) => {
+				const facts = await receiver.ports.findInstalled(styleSetId);
+				receiver.rows.set(SOURCE_ID, storedStyleSet({ name: 'Claimed first' }));
+				return facts;
+			},
+		};
+
+		const outcome = await installGraphicStyleSetPackage({
+			archive: sent,
+			resolution: 'preserve-identity',
+			ports: racing,
+			now: NOW,
+		});
+
+		expect(outcome.outcome).toBe('conflict');
+		expect(outcome.report.disposition).toBe('install-new');
+		expect(receiver.rows.get(SOURCE_ID)?.name).toBe('Claimed first');
 	});
 });

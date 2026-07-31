@@ -29,11 +29,16 @@ import { graphicStyleSetPackagePreflight } from './preflight';
  * statement. There is no partial state to prevent, because there is no second write to
  * be inconsistent with.
  *
- * The one write that *could* race is an update: a concurrent publish or draft edit
- * between the report and the write would install entries over something the author
- * never saw. So it is a conditional update on the exact revision and draft revision the
- * report* recorded — never on a fresh read, which would only ever guard the moment
- * between that read and the write — and a write that matches nothing installs nothing.
+ * What a single statement does *not* settle is whether the library still looks the way
+ * the report described it, so every write here is conditional on the fact its
+ * disposition was chosen from. An update is conditional on the exact revision and draft
+ * revision the *report* recorded — never on a fresh read, which would only ever guard
+ * the moment between that read and the write — because a concurrent publish or draft
+ * edit would otherwise install entries over something the author never saw. A creation
+ * is conditional on the packaged identity still being unheld, because a concurrent
+ * install of the same package would otherwise turn a modelled conflict into a
+ * primary-key violation. A write that matches nothing installs nothing, and both answer
+ * with `conflict`.
  */
 
 export interface GraphicStyleSetPackageInstallPorts {
@@ -41,14 +46,17 @@ export interface GraphicStyleSetPackageInstallPorts {
 	findLinkedTemplates: GraphicStyleSetPackagePreflightInput['findLinkedTemplates'];
 	/** The stored Graphic Style Set itself, for the response an install answers with. */
 	findInstalledRow: (styleSetId: string) => Promise<DbGraphicStyleSet | undefined>;
-	/** Creates a Graphic Style Set published at the entries and revision given. */
+	/**
+	 * Creates a Graphic Style Set published at the entries and revision given, but only
+	 * while that identity is still unheld. Resolves undefined when it is not.
+	 */
 	createPublished: (input: {
 		id: string;
 		name: string;
 		description: string | null;
 		revision: number;
 		entries: GraphicStyleSetEntry[];
-	}) => Promise<DbGraphicStyleSet>;
+	}) => Promise<DbGraphicStyleSet | undefined>;
 	/**
 	 * Publishes the entries over an installed Graphic Style Set, but only while it is
 	 * still at the revision and draft revision the proposal was decided against.
@@ -81,9 +89,10 @@ export type GraphicStyleSetPackageInstallOutcome
 	/** The proposal carries warnings and no confirmation covers this exact fingerprint. */
 	| { outcome: 'requires-confirmation'; report: GraphicStyleSetPackagePreflightReport }
 	/**
-	 * The installed Graphic Style Set moved between the report and the write — published,
-	 * edited, or deleted. Nothing was written, and a fresh report shows the library as it
-	 * now stands.
+	 * The library moved between the report and the write — the installed Style Set was
+	 * published, edited, or deleted, or the packaged identity this was about to create
+	 * was claimed. Nothing was written, and a fresh report shows the library as it now
+	 * stands.
 	 */
 	| { outcome: 'conflict'; report: GraphicStyleSetPackagePreflightReport };
 
@@ -129,6 +138,10 @@ export async function installGraphicStyleSetPackage(
 		}
 
 		case 'install-new': {
+			// Preflight found the packaged identity unheld, and the creation is conditional
+			// on it still being unheld. A concurrent install of the same package, or an
+			// author creating a Style Set, is the same race an update guards against — and
+			// answered the same way, rather than as a constraint violation nobody modelled.
 			const styleSet = await ports.createPublished({
 				id: snapshot.id,
 				name: snapshot.name,
@@ -136,6 +149,8 @@ export async function installGraphicStyleSetPackage(
 				revision: snapshot.revision,
 				entries: snapshot.entries,
 			});
+			if (!styleSet)
+				return { outcome: 'conflict', report };
 			return { outcome: 'installed', report, styleSet, affectedTemplates: [] };
 		}
 
@@ -151,6 +166,11 @@ export async function installGraphicStyleSetPackage(
 				revision: 1,
 				entries: snapshot.entries,
 			});
+			// A minted identity should never be held, so this is unreachable rather than
+			// expected — but it is reported as the conflict it is, because the alternative
+			// is asserting a uniqueness this module does not own.
+			if (!styleSet)
+				return { outcome: 'conflict', report };
 			return { outcome: 'installed', report, styleSet, affectedTemplates: [] };
 		}
 

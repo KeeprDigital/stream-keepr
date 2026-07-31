@@ -62,8 +62,9 @@ export default defineEventHandler(async (event) => {
 			});
 
 		case 'conflict':
-			// Published, edited, or deleted since the package was inspected. Nothing was
-			// written; the author reruns preflight and sees the library as it now stands.
+			// Published, edited, or deleted since the package was inspected — or, for a
+			// first import, its identity claimed in the meantime. Nothing was written; the
+			// author reruns preflight and sees the library as it now stands.
 			throw createError({
 				statusCode: 409,
 				statusMessage: 'Conflict',
