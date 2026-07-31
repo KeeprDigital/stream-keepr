@@ -38,6 +38,13 @@ function transferFacts(partCount: number, heldPartNumbers: number[] = []) {
 
 const requests = () => requestsMadeTo(mockFetch);
 
+/** The length of each part sent, in the order it was sent. */
+function partSizes(): number[] {
+	return mockFetch.mock.calls
+		.filter(call => String(call[0]).includes('/multipart/parts/'))
+		.map(call => (call[1] as { body: Blob }).body.size);
+}
+
 describe('useGraphicsIngestionTransfer', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -79,10 +86,7 @@ describe('useGraphicsIngestionTransfer', () => {
 			`POST ${ingestion}/operation-1/multipart/complete`,
 		]);
 		// The last part carries only what is left, not a whole part's worth.
-		const partSizes = mockFetch.mock.calls
-			.filter(call => String(call[0]).includes('/multipart/parts/'))
-			.map(call => (call[1] as { body: Blob }).body.size);
-		expect(partSizes).toEqual([GRAPHICS_MULTIPART_PART_BYTES, 1]);
+		expect(partSizes()).toEqual([GRAPHICS_MULTIPART_PART_BYTES, 1]);
 	});
 
 	it('sends only the parts the library does not already hold', async () => {
@@ -102,6 +106,9 @@ describe('useGraphicsIngestionTransfer', () => {
 			`PUT ${ingestion}/operation-1/multipart/parts/2`,
 			`POST ${ingestion}/operation-1/multipart/complete`,
 		]);
+		// Part 2 carries part 2's bytes: an outstanding part is sliced by which part
+		// it is, not by its position in what is left to send.
+		expect(partSizes()).toEqual([1]);
 	});
 
 	it('re-sends a part the transport lost, and gives up once its attempts are spent', async () => {
