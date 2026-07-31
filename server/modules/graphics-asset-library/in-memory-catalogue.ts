@@ -652,6 +652,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 				revisionNumber: INSTALLED_GRAPHICS_TEMPLATE_FIRST_REVISION,
 				document: structuredClone(input.template.document),
 				sourceTemplateIdentity: input.template.sourceTemplateIdentity,
+				sourceTemplateRevision: input.template.sourceTemplateRevision,
 				installedByOperationId: input.operation.id,
 				eventId: input.operation.defaultEventId,
 				references: input.references
@@ -691,6 +692,17 @@ export function createInMemoryGraphicsAssetCatalogue(
 		async findInstalledGraphicsTemplate(templateId) {
 			const template = installedTemplates.get(templateId);
 			return template ? structuredClone(template) : undefined;
+		},
+		async listInstalledGraphicsTemplates(kind) {
+			return [...installedTemplates.values()]
+				.filter(template => template.kind === kind)
+				// Name then identity, matching the catalogue's own ORDER BY, and by code
+				// point rather than locale for the same reason the references above are.
+				.sort((left, right) => {
+					const order = `${left.name} ${left.id}` < `${right.name} ${right.id}` ? -1 : 1;
+					return left.id === right.id ? 0 : order;
+				})
+				.map(({ references: _references, ...summary }) => structuredClone(summary));
 		},
 		async findGraphicAssetByContentDigest(digest) {
 			const revision = [...revisions.entries()].find(

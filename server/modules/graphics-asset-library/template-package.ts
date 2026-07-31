@@ -1,3 +1,4 @@
+import type { GraphicItemKind } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
 	TemplatePackageAsset,
@@ -16,7 +17,7 @@ import {
 	FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION,
 	FEATURE_MATCH_SOURCE_ITEM_DEFINITION_ID,
 } from '~~/shared/featureMatchSourceItems';
-import { GRAPHIC_ITEM_KINDS } from '~~/shared/modules/graphics/itemDefinitions';
+import { getGraphicItemDefinition, GRAPHIC_ITEM_KINDS } from '~~/shared/modules/graphics/itemDefinitions';
 import {
 	TEMPLATE_PACKAGE_ARTIFACTS,
 	TEMPLATE_PACKAGE_LIMITS,
@@ -235,13 +236,42 @@ export function inspectTemplateDocument(document: unknown): TemplateDocumentInsp
 	return { issues, references };
 }
 
-function supportedGraphicItemDefinitionVersion(identity: string): number | undefined {
-	// Source Item is the one host-owned Graphic Item Definition left; everything
-	// else a template can name is a shared Graphics Foundation kind carrying its
-	// first configuration version.
-	if (identity === FEATURE_MATCH_SOURCE_ITEM_DEFINITION_ID)
-		return FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION;
-	return (GRAPHIC_ITEM_KINDS as readonly string[]).includes(identity) ? 1 : undefined;
+/**
+ * The Graphic Item vocabulary a package kind's capability identities are named in.
+ *
+ * It was introduced to keep two rival tables apart: a Feature Match Layout and a
+ * Broadcast Graphic each had their own Graphic Item registry, both spelled `text`
+ * and `media`, and each advanced its own configuration version, so an identity on
+ * its own could not say which version it meant.
+ *
+ * That is no longer why it exists. Feature Match Overlay now speaks the Shared
+ * Graphics Foundation vocabulary, so there is one table of Graphic Item
+ * Definitions and one configuration version per kind. What remains is narrower and
+ * still real: **Source Item is the one Definition the shared vocabulary does not
+ * own, and only a Feature Match Layout can place one.** Naming the vocabulary per
+ * package kind is what refuses a `.skgraphic` that declares a Source Item, rather
+ * than accepting whichever table happens to be consulted first.
+ */
+const CAPABILITY_VOCABULARY: Record<TemplatePackageKind, 'graphics-foundation' | 'feature-match'> = {
+	skgraphic: 'graphics-foundation',
+	sklayout: 'feature-match',
+};
+
+function supportedGraphicItemDefinitionVersion(
+	packageKind: TemplatePackageKind,
+	identity: string,
+): number | undefined {
+	if (identity === FEATURE_MATCH_SOURCE_ITEM_DEFINITION_ID) {
+		return CAPABILITY_VOCABULARY[packageKind] === 'feature-match'
+			? FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION
+			: undefined;
+	}
+	// The shared Graphics Foundation kinds state their own configuration version on
+	// their Graphic Item Definition, so a kind whose stored configuration gains
+	// meaning advances one number and every package check follows it.
+	return (GRAPHIC_ITEM_KINDS as readonly string[]).includes(identity)
+		? getGraphicItemDefinition(identity as GraphicItemKind).configurationVersion
+		: undefined;
 }
 
 /**
@@ -250,6 +280,7 @@ function supportedGraphicItemDefinitionVersion(identity: string): number | undef
  * implements, blocks export rather than shipping a package that cannot install.
  */
 export function inspectTemplatePackageCapabilities(
+	packageKind: TemplatePackageKind,
 	requirements: readonly TemplatePackageCapabilityRequirement[],
 ): {
 	issues: TemplatePackageExportIssue[];
@@ -260,7 +291,7 @@ export function inspectTemplatePackageCapabilities(
 	for (const requirement of requirements) {
 		const supportedVersion = requirement.capability === 'application-font'
 			? ((FEATURE_MATCH_OVERLAY_FONT_IDS as readonly string[]).includes(requirement.identity) ? 1 : undefined)
-			: supportedGraphicItemDefinitionVersion(requirement.identity);
+			: supportedGraphicItemDefinitionVersion(packageKind, requirement.identity);
 		if (
 			supportedVersion === undefined
 			|| (requirement.configurationVersion !== undefined && requirement.configurationVersion > supportedVersion)
@@ -418,7 +449,7 @@ function encodeJson(value: unknown): Uint8Array {
  */
 export function planTemplatePackage(input: {
 	packageKind: TemplatePackageKind;
-	template: { identity: string; name: string; document: unknown };
+	template: { identity: string; name: string; revision?: number; document: unknown };
 	revisions: readonly ResolvedPackagedRevision[];
 	capabilities: readonly TemplatePackageCapabilityDeclaration[];
 	createdAt: string;
@@ -490,6 +521,9 @@ export function planTemplatePackage(input: {
 		template: {
 			identity: input.template.identity,
 			name: input.template.name,
+			// Written only when the exporting workflow has one, so a manifest never
+			// claims a revision that means nothing.
+			...(input.template.revision === undefined ? {} : { revision: input.template.revision }),
 			entry: TEMPLATE_PACKAGE_TEMPLATE_ENTRY,
 		},
 		packagedAssets,

@@ -69,11 +69,12 @@ function appendBroadcastGraphicItemCapabilities(
 	item: GraphicItemConfig,
 	slot: string,
 ): void {
+	const definition = getGraphicItemDefinition(item.type);
 	capabilities.push({
 		slot: `${slot}.type`,
 		capability: 'graphic-item-definition',
-		identity: getGraphicItemDefinition(item.type).kind,
-		configurationVersion: 1,
+		identity: definition.kind,
+		configurationVersion: definition.configurationVersion,
 	});
 	if (item.type !== 'group')
 		return;

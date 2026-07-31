@@ -1,9 +1,9 @@
+import { findBroadcastGraphicTemplateLibraryEntry } from '~~/server/modules/broadcast-graphic-template-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { requireScreenGraphicsEditWritable } from '~~/server/modules/graphics-authoring-lease/screenEditWorkspace';
 import { screenWriteModule } from '~~/server/modules/screen-write';
 import { placeBroadcastGraphicTemplateSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
 import { screenParamsSchema } from '~~/server/schemas/api/screen';
-import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGraphicTemplate';
 import { screenService } from '~~/server/services/screen';
 import { getOriginConnectionId } from '~~/server/utils/ably';
 import { placeBroadcastGraphicTemplate } from '~~/shared/modules/graphics';
@@ -46,7 +46,11 @@ export default defineEventHandler(async (event) => {
 		});
 	}
 
-	const template = await broadcastGraphicTemplateService().findById(body.templateId);
+	// Resolved from the library as a whole. A design a Template Package installed is
+	// placed by exactly this path — its document already names local Graphic Asset
+	// identities and revisions, so there is nothing about it for placement to treat
+	// differently.
+	const template = await findBroadcastGraphicTemplateLibraryEntry(event, body.templateId);
 	if (!template) {
 		throw createError({
 			statusCode: 404,

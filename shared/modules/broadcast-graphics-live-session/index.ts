@@ -32,6 +32,8 @@ export {
 	workingGraphicInputValues,
 } from './inputs';
 export type {
+	BroadcastGraphicChannelContext,
+	BroadcastGraphicChannelMember,
 	BroadcastGraphicPhaseDurations,
 	BroadcastGraphicPhaseTiming,
 	BroadcastGraphicPlayout,
@@ -50,6 +52,7 @@ export type {
 export {
 	applyBroadcastGraphicsCommand,
 	BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES,
+	broadcastGraphicChannelContexts,
 	broadcastGraphicPhaseProjection,
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,

@@ -11,6 +11,7 @@ import {
 	broadcastGraphicTemplateService,
 } from '~~/server/services/broadcastGraphicTemplate';
 import { assertBroadcastGraphicTemplateReferencesExist } from '~~/server/utils/broadcastGraphicTemplateReferences';
+import { refuseInstalledBroadcastGraphicTemplateWrite } from '~~/server/utils/broadcastGraphicTemplateWrites';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
 /**
@@ -42,6 +43,7 @@ export default defineEventHandler(async (event) => {
 	try {
 		const template = await broadcastGraphicTemplateService().update(templateId, body);
 		if (!template) {
+			await refuseInstalledBroadcastGraphicTemplateWrite(event, templateId, 'revised');
 			throw createError({
 				statusCode: 404,
 				statusMessage: 'Not Found',

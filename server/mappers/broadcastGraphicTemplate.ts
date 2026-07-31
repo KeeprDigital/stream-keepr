@@ -21,6 +21,10 @@ export function mapBroadcastGraphicTemplateToSummary(
 		name: template.name,
 		description: template.description,
 		revision: template.revision,
+		// Everything this store holds was authored here. An entry a Template Package
+		// installed lives in the Graphics Asset Library's own record and reaches a
+		// caller through the Broadcast Graphic Template library module instead.
+		authored: true,
 		// Graphic Group children are Graphic Items in their own right and count as such,
 		// exactly as they do against the Screen's own Graphic Item caps.
 		itemCount: flattenGraphicItems(template.document).length,

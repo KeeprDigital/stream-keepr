@@ -1,8 +1,9 @@
 import type {
+	BroadcastGraphicChannelContext,
 	BroadcastGraphicsLiveState,
 	BroadcastGraphicsRecoveryFault,
 } from '~~/shared/modules/broadcast-graphics-live-session';
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/types/graphics';
 import type { GraphicAssetReferenceStatus } from '~~/shared/types/graphicsAsset';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
@@ -10,6 +11,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import {
+	broadcastGraphicChannelContexts,
 	broadcastGraphicPhaseProjection,
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
@@ -69,32 +71,55 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 		return mockSessions.value;
 	},
 	serverNow: () => mockServerNow.value,
+	channelContexts: (
+		graphics: readonly BroadcastGraphicConfig[],
+		channels: readonly GraphicChannelConfig[] | undefined,
+	) => (channels?.length ? broadcastGraphicChannelContexts({ graphics, channels }) : {}),
 	isPending: (_screenId: number, graphicId: string) => mockPendingGraphicIds.value.includes(graphicId),
 	playoutState: (
 		_screenId: number,
 		graphicId: string,
 		graphic?: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
 		now?: number,
+		channel?: BroadcastGraphicChannelContext,
 	) => broadcastGraphicPlayoutState(
 		mockLiveState.value,
 		graphicId,
-		graphic ? broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value) : undefined,
+		graphic ? broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value, channel) : undefined,
 	),
-	onAirGraphicIds: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) =>
-		onAirBroadcastGraphicIds(
+	onAirGraphicIds: (
+		_screenId: number,
+		graphics: readonly BroadcastGraphicConfig[],
+		now?: number,
+		channels?: readonly GraphicChannelConfig[],
+	) => {
+		const contexts = channels?.length ? broadcastGraphicChannelContexts({ graphics, channels }) : {};
+		return onAirBroadcastGraphicIds(
 			mockLiveState.value,
 			graphics,
-			graphic => broadcastGraphicPhaseTiming(graphic as BroadcastGraphicConfig, now ?? mockServerNow.value),
-		),
-	animationProjection: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) =>
-		Object.fromEntries(graphics.flatMap((graphic) => {
+			graphic => broadcastGraphicPhaseTiming(
+				graphic as BroadcastGraphicConfig,
+				now ?? mockServerNow.value,
+				contexts[graphic.id],
+			),
+		);
+	},
+	animationProjection: (
+		_screenId: number,
+		graphics: readonly BroadcastGraphicConfig[],
+		now?: number,
+		channels?: readonly GraphicChannelConfig[],
+	) => {
+		const contexts = channels?.length ? broadcastGraphicChannelContexts({ graphics, channels }) : {};
+		return Object.fromEntries(graphics.flatMap((graphic) => {
 			const projection = broadcastGraphicPhaseProjection(
 				mockLiveState.value,
 				graphic.id,
-				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value),
+				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value, contexts[graphic.id]),
 			);
 			return projection ? [[graphic.id, projection]] : [];
-		})),
+		}));
+	},
 	inputTraces: (_screenId: number, graphic: BroadcastGraphicConfig) =>
 		graphicInputTraces(mockLiveState.value, graphic.id, graphic),
 	sourceSelections: (_screenId: number, graphicId: string) =>
@@ -157,6 +182,7 @@ const slate: BroadcastGraphicConfig = { id: 'slate', name: 'Slate', items: [] };
 async function mountComponent(
 	graphics: BroadcastGraphicConfig[] = [lowerThird, slate],
 	selectedGraphicId: string | null = null,
+	channels: GraphicChannelConfig[] = [],
 ) {
 	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/LiveWorkspace.vue';
 	const { default: LiveWorkspace } = await import(componentPath);
@@ -166,6 +192,7 @@ async function mountComponent(
 			eventId: 7,
 			screen: { id: 3, slug: 'main' } as Screen,
 			graphics,
+			channels,
 			selectedGraphicId,
 			canvasWidth: 1920,
 			canvasHeight: 1080,
@@ -595,6 +622,64 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 			expect(mockConfirmOpen).toHaveBeenCalledWith(expect.objectContaining({
 				description: expect.stringMatching(/Graphic Input values are discarded/),
 			}));
+		});
+	});
+	describe('a rundown organised by Graphic Channel', () => {
+		const alpha: BroadcastGraphicConfig = { id: 'alpha', name: 'Alpha', items: [], channelId: 'thirds' };
+		const bravo: BroadcastGraphicConfig = { id: 'bravo', name: 'Bravo', items: [], channelId: 'thirds' };
+		const thirds: GraphicChannelConfig = { id: 'thirds', name: 'Lower thirds', handoff: 'out-then-in' };
+
+		it('groups each Graphic Channel\'s members together and names its Handoff Policy', async () => {
+			const wrapper = await mountComponent([alpha, bravo, slate], null, [thirds]);
+
+			const headings = wrapper.findAll('[data-testid="playout-channel-heading"]');
+			expect(headings.map(heading => heading.text())).toEqual([
+				'Lower thirdsOut then in',
+				'No Graphic Channel',
+			]);
+
+			const channelled = wrapper.get('[data-playout-channel="thirds"]');
+			expect(channelled.findAll('[data-playout-entry]').map(entry => entry.attributes('data-playout-entry')))
+				.toEqual(['bravo', 'alpha']);
+		});
+
+		it('states a Graphic Channel that declares no policy as Overlap', async () => {
+			const wrapper = await mountComponent([alpha, bravo], null, [{ id: 'thirds', name: 'Lower thirds' }]);
+
+			expect(wrapper.get('[data-testid="playout-channel-policy"]').text()).toBe('Overlap');
+		});
+
+		it('leaves a Screen with no Graphic Channels reading as one flat stack', async () => {
+			const wrapper = await mountComponent();
+
+			expect(wrapper.find('[data-testid="playout-channel-heading"]').exists()).toBe(false);
+			expect(wrapper.findAll('[data-playout-entry]').map(entry => entry.attributes('data-playout-entry')))
+				.toEqual(['slate', 'lower-third']);
+		});
+
+		it('reads a Broadcast Graphic its channel is holding as waiting, and not as on air', async () => {
+			// alpha is on its way off program; bravo is the channel's latest selection and
+			// is held off every output until that exit completes.
+			mockLiveState.value = {
+				playout: {
+					alpha: { onAir: false, effectiveStartedAt: mockServerNow.value, cut: false },
+					bravo: { onAir: true, effectiveStartedAt: mockServerNow.value + 500, cut: false },
+				},
+				inputs: {},
+			};
+			const animated = (id: string, name: string): BroadcastGraphicConfig => ({
+				id,
+				name,
+				items: [],
+				channelId: 'thirds',
+				animation: { exit: { duration: 500, easing: 'linear', delay: 0, fade: { opacity: 0 } } },
+			});
+			const wrapper = await mountComponent([animated('alpha', 'Alpha'), animated('bravo', 'Bravo')], null, [thirds]);
+
+			expect(entryFor(wrapper, 'bravo').attributes('data-playout-state')).toBe('waiting');
+			expect(entryFor(wrapper, 'alpha').attributes('data-playout-state')).toBe('exiting');
+			// A waiting graphic is absent from every program output, so it is not counted.
+			expect(wrapper.get('[data-testid="on-air-count"]').text()).toBe('1 of 2 on air');
 		});
 	});
 });

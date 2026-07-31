@@ -1,5 +1,7 @@
-import { mapBroadcastGraphicTemplateToSummary } from '~~/server/mappers/broadcastGraphicTemplate';
-import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGraphicTemplate';
+import {
+	broadcastGraphicTemplateLibrarySummary,
+	listBroadcastGraphicTemplateLibrary,
+} from '~~/server/modules/broadcast-graphic-template-library';
 
 /**
  * Browse the installation's Broadcast Graphic Template library.
@@ -8,9 +10,13 @@ import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGra
  * listing is the same listing from every Event's Edit workspace — which is what
  * "browsable across Events" means in practice, rather than an aggregation someone
  * has to build per Event.
+ *
+ * Designs authored here and designs a Template Package installed appear in one list,
+ * because "what can I place" is one question. Where an entry came from is a property
+ * of the entry rather than a reason to look somewhere else for it.
  */
-export default defineEventHandler(async () => {
-	const templates = await broadcastGraphicTemplateService().findAll();
+export default defineEventHandler(async (event) => {
+	const entries = await listBroadcastGraphicTemplateLibrary(event);
 
-	return { templates: templates.map(mapBroadcastGraphicTemplateToSummary) };
+	return { templates: entries.map(broadcastGraphicTemplateLibrarySummary) };
 });

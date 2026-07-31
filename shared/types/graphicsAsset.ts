@@ -434,6 +434,11 @@ export interface InstalledGraphicsTemplate {
 	revisionNumber: number;
 	document: unknown;
 	sourceTemplateIdentity: string;
+	/**
+	 * The revision the source Template was exported at, where the package declared
+	 * one. Provenance completing the identity, never an update link.
+	 */
+	sourceTemplateRevision?: number;
 	installedByOperationId: GraphicsIngestionOperationId;
 	eventId?: number;
 	references: {
@@ -442,6 +447,17 @@ export interface InstalledGraphicsTemplate {
 	}[];
 	installedAt: string;
 }
+
+/**
+ * One Installed Graphics Template as a library listing reads it.
+ *
+ * Its Graphic Asset References are deliberately absent: browsing a library of
+ * designs is choosing between them, and which exact revisions each one pins is a
+ * question about one design rather than about the list. The document stays, because
+ * what an author chooses between — how many Graphic Items, how many Graphic Inputs —
+ * is derived from it.
+ */
+export type InstalledGraphicsTemplateSummary = Omit<InstalledGraphicsTemplate, 'references'>;
 
 export type GraphicsIngestionCapacityOutcome
 	= | {

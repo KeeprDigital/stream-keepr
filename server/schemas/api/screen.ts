@@ -49,6 +49,7 @@ import {
 	GRAPHIC_ANIMATION_ORIGIN_VALUES,
 	GRAPHIC_ANIMATION_REPEAT_INDEFINITE,
 	GRAPHIC_ANIMATION_STAGGER_ORDER_VALUES,
+	GRAPHIC_CHANNEL_HANDOFF_POLICY_VALUES,
 	GRAPHIC_FONT_STYLE_VALUES,
 	GRAPHIC_GROUP_ALIGN_VALUES,
 	GRAPHIC_GROUP_ARRANGEMENT_VALUES,
@@ -1006,6 +1007,17 @@ export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC = 100;
 export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
 
 /**
+ * The Graphic Channel cap.
+ *
+ * A Graphic Channel exists to make two Broadcast Graphics mutually exclusive, so a
+ * channel with one member excludes nothing and a channel with none is not a lane at
+ * all. Half the Broadcast Graphic cap is therefore the point past which another
+ * channel cannot be given a second member, which makes it the cap that binds on
+ * meaning rather than on an arbitrary number.
+ */
+export const MAX_GRAPHIC_CHANNELS_PER_SCREEN = 25;
+
+/**
  * The whole-Screen Graphic Item budget.
  *
  * The per-graphic and per-Screen caps bound each list independently, but their
@@ -1127,9 +1139,18 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * how two tickets came to quote different baselines for the same pre-existing
  * Graphic Item. One owned measurement of the merged worst case reports it instead;
  * the figures above describe only this mode's own contribution to it.
+ *
+ * ## What Graphic Channels add
+ *
+ * 11,863 bytes, taking 595,148 to 607,011. Membership costs on both sides: 25 maximal
+ * channel declarations at about 244 bytes each, and a 100-character `channelId` on
+ * every one of the 50 Broadcast Graphic shells. It is by some distance the cheapest
+ * capability measured here, and it does not change the conclusion above — the worst
+ * case already exceeded the budget, the total is enforced on the write path, and the
+ * cap decision remains #99's.
  */
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 110;
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 595_148;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 607_011;
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
 	return items.reduce(
@@ -1148,6 +1169,12 @@ function graphicItemIds(items: readonly { id: string; type: string; children?: r
 export const broadcastGraphicConfigSchema = z.object({
 	id: z.string().min(1).max(100),
 	name: z.string().min(1).max(100),
+	// The one Graphic Channel this Broadcast Graphic runs in. Deliberately not checked
+	// against the Screen's declared channels: that is a cross-field rule, and an
+	// object-level refinement never reaches the patch path the editors write through,
+	// so it would hold on one write path and not the other. Membership of a channel the
+	// Screen does not declare resolves to no membership instead, uniformly.
+	channelId: z.string().min(1).max(100).optional(),
 	// Named caps: these are reached before the mode-configuration byte limit, so
 	// the operator learns which cap they hit rather than reading a byte count.
 	items: z.array(graphicItemConfigSchema)
@@ -1252,8 +1279,22 @@ const featureMatchLayoutCompositionSchema = z.object({
 export const MAX_FEATURE_MATCH_SOURCE_ITEMS = 20;
 
 /**
+ * A Graphic Channel: one optional playout lane, and how it replaces its member.
+ *
+ * `handoff` is optional because a Graphic Channel defaults to Overlap, and an absent
+ * policy is the only way that default stays true of a channel nobody has configured
+ * as well as of one whose author chose it.
+ */
+const graphicChannelConfigSchema = z.object({
+	id: z.string().min(1).max(100),
+	name: z.string().min(1).max(100),
+	handoff: z.enum(GRAPHIC_CHANNEL_HANDOFF_POLICY_VALUES).optional(),
+}).strict();
+
+/**
  * Broadcast Graphics mode configuration: the Screen's authored back-to-front
- * stack of Broadcast Graphics. The Screen's canvas stays in the Screen config.
+ * stack of Broadcast Graphics, and the Graphic Channels its members join. The
+ * Screen's canvas stays in the Screen config.
  */
 export const broadcastGraphicsModeConfigSchema = z.object({
 	// Every cap lives on the array itself rather than on this object: the
@@ -1287,6 +1328,19 @@ export const broadcastGraphicsModeConfigSchema = z.object({
 				<= MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Source Selections in total`,
 		),
+	channels: z.array(graphicChannelConfigSchema)
+		.max(
+			MAX_GRAPHIC_CHANNELS_PER_SCREEN,
+			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_CHANNELS_PER_SCREEN} Graphic Channels`,
+		)
+		// A Broadcast Graphic joins a channel by id alone, so two channels sharing one id
+		// would leave which policy governs the handoff undecided. On the field for the
+		// same reason every other uniqueness rule here is.
+		.refine(
+			channels => new Set(channels.map(channel => channel.id)).size === channels.length,
+			'Graphic Channel ids must be unique within one Broadcast Graphics Screen',
+		)
+		.optional(),
 }).strict() satisfies z.ZodType<BroadcastGraphicsModeConfig>;
 
 /**
