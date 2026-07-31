@@ -180,6 +180,124 @@ export function graphicStyleSetService() {
 	};
 
 	/**
+	 * Create one Graphic Style Set already published at the entries and revision given.
+	 *
+	 * The only writer of this is a `.skstyle` installation, and it is separate from
+	 * {@link create} because the two disagree about the one thing that matters: an
+	 * authored Style Set starts at revision zero and becomes publishable, while an
+	 * imported one arrives *already published* and preserves the revision its package
+	 * declared. That preservation is the whole mechanism by which a later package of the
+	 * same Style Set can be recognised as a newer revision of this one rather than as an
+	 * unrelated import.
+	 *
+	 * The draft is seeded with the same entries, so the Style Set opens with no
+	 * unpublished changes and the first thing an author does to it is an edit rather
+	 * than a reconciliation.
+	 *
+	 * Conditional on the identity being free, for the same reason
+	 * {@link republishFromPackage} is conditional on a revision: preflight decided this
+	 * identity was unheld, and a concurrent install of the same package — or an author
+	 * creating a Style Set — could claim it before this statement runs. An unconditional
+	 * insert would answer that race with a primary-key violation, which is the modelled
+	 * conflict escaping as a crash. Resolves undefined instead, and the caller reports
+	 * the conflict its sibling dispositions already report.
+	 */
+	const createPublished = async (input: {
+		id: string;
+		name: string;
+		description: string | null;
+		revision: number;
+		entries: GraphicStyleSetEntry[];
+	}): Promise<DbGraphicStyleSet | undefined> => {
+		const client = db.$client;
+		const now = Date.now();
+		const entries = JSON.stringify(input.entries);
+		// `WHERE NOT EXISTS` rather than `INSERT OR IGNORE`, which would swallow every
+		// other constraint this row has as silently as it swallows a taken identity.
+		const [inserted] = await client.batch([
+			client.prepare(`
+				INSERT INTO graphic_style_sets
+					(id, name, description, revision, draft_revision, draft, published, published_at, created_at, updated_at)
+				SELECT ?, ?, ?, ?, 1, ?, ?, ?, ?, ?
+				WHERE NOT EXISTS (SELECT 1 FROM graphic_style_sets WHERE id = ?)
+			`).bind(
+				input.id,
+				input.name,
+				input.description,
+				input.revision,
+				entries,
+				entries,
+				now,
+				now,
+				now,
+				input.id,
+			),
+		]);
+
+		if (inserted?.meta.changes !== 1)
+			return undefined;
+
+		const created = await findById(input.id);
+		if (!created)
+			throw new Error('Graphic Style Set was not stored');
+		return created;
+	};
+
+	/**
+	 * Publish packaged entries over an installed Graphic Style Set at an exact revision.
+	 *
+	 * Conditional on both revisions the proposal was decided against. The published
+	 * revision is the one the author was told they were updating from, and the draft
+	 * revision is what makes a concurrent draft edit refuse the write rather than have
+	 * it discarded — an import that overwrote somebody's working draft would be
+	 * field-merging two Style Sets by omission.
+	 *
+	 * `revision` is set to the packaged revision rather than incremented, so the two
+	 * installations stay on the same numbering and a third package can still be
+	 * recognised against either of them. Nothing else is written: every linked template
+	 * is offered the change as an available style update to review, exactly as an
+	 * ordinary publish leaves them.
+	 */
+	const republishFromPackage = async (input: {
+		id: string;
+		revision: number;
+		entries: GraphicStyleSetEntry[];
+		expectedRevision: number;
+		expectedDraftRevision: number;
+	}): Promise<DbGraphicStyleSet | undefined> => {
+		const client = db.$client;
+		const now = Date.now();
+		const [updated] = await client.batch([
+			client.prepare(`
+				UPDATE graphic_style_sets
+				SET draft = ?,
+					published = ?,
+					revision = ?,
+					draft_revision = draft_revision + 1,
+					published_at = ?,
+					updated_at = ?
+				WHERE id = ? AND revision = ? AND draft_revision = ?
+			`).bind(
+				JSON.stringify(input.entries),
+				JSON.stringify(input.entries),
+				input.revision,
+				now,
+				now,
+				input.id,
+				input.expectedRevision,
+				input.expectedDraftRevision,
+			),
+		]);
+
+		// A write that matched nothing wrote nothing. The Style Set moved under the
+		// report, so the caller reports a conflict rather than retrying blind.
+		if (updated?.meta.changes !== 1)
+			return undefined;
+
+		return await findById(input.id);
+	};
+
+	/**
 	 * The precondition, stated on the operation's *first* statement, that every
 	 * template it is about to rewrite is still at the revision it was read at.
 	 *
@@ -347,5 +465,16 @@ export function graphicStyleSetService() {
 		return results.at(-1)?.meta.changes === 1;
 	};
 
-	return { findAll, findById, linkedTemplates, create, update, publish, deleteEntry, remove };
+	return {
+		findAll,
+		findById,
+		linkedTemplates,
+		create,
+		createPublished,
+		republishFromPackage,
+		update,
+		publish,
+		deleteEntry,
+		remove,
+	};
 }

@@ -1,9 +1,11 @@
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { GraphicStyleSetResponse, GraphicStyleSetSummary } from '~~/shared/types/graphicStyleSet';
+import type { GraphicStyleSetPackagePreflightReport } from '~~/shared/types/graphicStyleSetPackage';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
+import { GRAPHIC_STYLE_SET_PACKAGE_LIMITS } from '~~/shared/types/graphicStyleSetPackage';
 
 /**
  * The Graphic Style Set library as an author operates it.
@@ -23,6 +25,8 @@ const mockUpdate = vi.fn();
 const mockPublish = vi.fn();
 const mockDeleteEntry = vi.fn();
 const mockRemove = vi.fn();
+const mockInspectPackage = vi.fn();
+const mockInstallPackage = vi.fn();
 
 mockNuxtImport('useGraphicStyleSetRepository', () => () => ({
 	list: mockList,
@@ -34,6 +38,9 @@ mockNuxtImport('useGraphicStyleSetRepository', () => () => ({
 	remove: mockRemove,
 	reviewTemplateUpdate: vi.fn(),
 	applyTemplateUpdate: vi.fn(),
+	packageUrl: (styleSetId: string) => `/api/graphics-style-sets/${styleSetId}/package`,
+	inspectPackage: mockInspectPackage,
+	installPackage: mockInstallPackage,
 }));
 
 const ScreenSettingsCardStub = defineComponent({
@@ -139,6 +146,41 @@ function response(overrides: Partial<GraphicStyleSetResponse> = {}): GraphicStyl
 	return { ...summary(), draft: [brand], published: [brand], ...overrides };
 }
 
+function preflightReport(
+	overrides: Partial<GraphicStyleSetPackagePreflightReport> = {},
+): GraphicStyleSetPackagePreflightReport {
+	return {
+		packageKind: 'skstyle',
+		checkedAt: '2026-07-31T00:00:00.000Z',
+		fingerprint: 'a'.repeat(64),
+		schema: { received: 1, supported: 1, migrated: false },
+		provenance: { sourceStyleSetId: 'style-1', sourceRevision: 3, contentDigest: 'b'.repeat(64) },
+		styleSetName: 'Show style',
+		styleSetEntryCount: 1,
+		resolution: 'preserve-identity',
+		disposition: 'install-new',
+		affectedTemplates: [],
+		publishIssues: [],
+		issues: [],
+		limits: GRAPHIC_STYLE_SET_PACKAGE_LIMITS,
+		observed: { archiveByteLength: 512, archiveEntryCount: 2, expandedByteLength: 400 },
+		outcome: 'ready',
+		...overrides,
+	};
+}
+
+/** A `.skstyle` archive as the file picker hands one over. */
+function packageFile() {
+	return new File([new Uint8Array([1, 2, 3])], 'show-style.skstyle');
+}
+
+async function choosePackage(wrapper: Awaited<ReturnType<typeof mountLibrary>>) {
+	const input = wrapper.get<HTMLInputElement>('[data-testid="style-set-import-input"]');
+	Object.defineProperty(input.element, 'files', { value: [packageFile()], configurable: true });
+	await input.trigger('change');
+	await flushPromises();
+}
+
 async function mountLibrary(props: Record<string, unknown> = {}) {
 	const componentPath = '../../../../app/components/Graphics/StyleSetLibrary.vue';
 	const { default: StyleSetLibrary } = await import(componentPath);
@@ -180,6 +222,12 @@ describe('graphicsStyleSetLibrary', () => {
 		});
 		mockDeleteEntry.mockResolvedValue(response());
 		mockRemove.mockResolvedValue(undefined);
+		mockInspectPackage.mockResolvedValue(preflightReport());
+		mockInstallPackage.mockResolvedValue({
+			report: preflightReport(),
+			styleSet: response(),
+			affectedTemplates: [],
+		});
 	});
 
 	it('browses the installation-wide library', async () => {
@@ -319,5 +367,175 @@ describe('graphicsStyleSetLibrary', () => {
 		expect(wrapper.find('[data-testid="style-set-create"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="style-set-link"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="style-set-unlink"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="style-set-import"]').exists()).toBe(false);
+	});
+
+	it('offers a package of every published Style Set and of no unpublished one', async () => {
+		mockList.mockResolvedValue([
+			summary({ id: 'published-style' }),
+			summary({ id: 'unpublished-style', revision: 0 }),
+		]);
+
+		const wrapper = await mountLibrary();
+
+		const published = wrapper.get('[data-style-set-id="published-style"]');
+		expect(published.find('[data-testid="style-set-export"]').exists()).toBe(true);
+		// A Style Set that has never been published has no snapshot to freeze.
+		const unpublished = wrapper.get('[data-style-set-id="unpublished-style"]');
+		expect(unpublished.find('[data-testid="style-set-export"]').exists()).toBe(false);
+	});
+
+	it('installs a package that has nothing for its author to weigh, without asking', async () => {
+		const wrapper = await mountLibrary();
+
+		await choosePackage(wrapper);
+
+		expect(mockInspectPackage).toHaveBeenCalledWith(expect.any(File), 'preserve-identity');
+		expect(mockInstallPackage).toHaveBeenCalledWith(
+			expect.any(File),
+			{ resolution: 'preserve-identity' },
+		);
+		expect(wrapper.find('[data-testid="style-set-import-report"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="style-set-import-notice"]').exists()).toBe(false);
+		expect(wrapper.emitted('published')).toHaveLength(1);
+	});
+
+	it('tells the author what a package that asked nothing still had to say', async () => {
+		// An exact identity, revision, and content match under a different name. There is
+		// no decision to make and nothing was written, so the import is never paused — but
+		// the two libraries disagreeing about the name is the one thing it was going to
+		// tell the author, and a report they never see tells them nothing.
+		const alreadyInstalled = preflightReport({
+			disposition: 'already-installed',
+			outcome: 'ready',
+			installedRevision: 3,
+			installedDraftRevision: 9,
+			issues: [{
+				code: 'graphic-style-set-name-differs',
+				severity: 'warning',
+				message: 'The package calls this Graphic Style Set “Season look”; this library records it as “Show style”',
+				remediation: 'This library keeps the name it already records; the packaged name is not applied. Rename it here if the two libraries should agree.',
+			}],
+		});
+		mockInspectPackage.mockResolvedValue(alreadyInstalled);
+		mockInstallPackage.mockResolvedValue({
+			report: alreadyInstalled,
+			styleSet: response(),
+			affectedTemplates: [],
+		});
+
+		const wrapper = await mountLibrary();
+		await choosePackage(wrapper);
+
+		expect(mockInstallPackage).toHaveBeenCalledWith(
+			expect.any(File),
+			{ resolution: 'preserve-identity' },
+		);
+		const notice = wrapper.get('[data-testid="style-set-import-notice"]');
+		expect(notice.text()).toContain('already installed');
+		expect(notice.text()).toContain('this library records it as “Show style”');
+		expect(notice.text()).toContain('the packaged name is not applied');
+		// Nothing is waiting on the author, so there is nothing here to confirm.
+		expect(wrapper.find('[data-testid="style-set-import-confirm"]').exists()).toBe(false);
+
+		await notice.get('[data-testid="style-set-import-notice-dismiss"]').trigger('click');
+		expect(wrapper.find('[data-testid="style-set-import-notice"]').exists()).toBe(false);
+	});
+
+	it('pauses on a proposal that would publish over an installed Style Set, and installs only once confirmed', async () => {
+		mockInspectPackage.mockResolvedValue(preflightReport({
+			disposition: 'update-installed',
+			outcome: 'requires-confirmation',
+			installedRevision: 3,
+			affectedTemplates: [{ id: 'template-1', name: 'Lower third', revision: 6, styleChanged: true }],
+			issues: [{
+				code: 'graphic-style-set-revision-updated',
+				severity: 'warning',
+				message: 'This will publish revision 4 over the installed revision 3',
+				remediation: 'Every linked template is offered the change as an available style update.',
+			}],
+		}));
+
+		const wrapper = await mountLibrary();
+		await choosePackage(wrapper);
+
+		const report = wrapper.get('[data-testid="style-set-import-report"]');
+		expect(report.text()).toContain('This will publish revision 4 over the installed revision 3');
+		expect(mockInstallPackage).not.toHaveBeenCalled();
+
+		await report.get('[data-testid="style-set-import-confirm"]').trigger('click');
+		await flushPromises();
+
+		// The confirmation is bound to the exact proposal the author read.
+		expect(mockInstallPackage).toHaveBeenCalledWith(expect.any(File), {
+			resolution: 'preserve-identity',
+			fingerprint: 'a'.repeat(64),
+		});
+		expect(wrapper.emitted('published')).toHaveLength(1);
+	});
+
+	it('offers an independent copy for a conflict, and re-reads the proposal rather than reusing it', async () => {
+		mockInspectPackage.mockResolvedValueOnce(preflightReport({
+			disposition: 'rejected',
+			outcome: 'rejected',
+			issues: [{
+				code: 'graphic-style-set-revision-conflict',
+				severity: 'error',
+				message: 'Revision 3 of this Graphic Style Set is already installed with different entries',
+				remediation: 'Install it as an independent copy.',
+			}],
+		}));
+		mockInspectPackage.mockResolvedValueOnce(preflightReport({
+			resolution: 'independent-copy',
+			disposition: 'install-independent-copy',
+			outcome: 'requires-confirmation',
+			fingerprint: 'c'.repeat(64),
+			issues: [{
+				code: 'graphic-style-set-installed-as-copy',
+				severity: 'warning',
+				message: '“Show style” will be installed as an independent Graphic Style Set with a new identity',
+				remediation: 'Nothing links to the copy until a template selects entries from it.',
+			}],
+		}));
+
+		const wrapper = await mountLibrary();
+		await choosePackage(wrapper);
+
+		expect(wrapper.get('[data-testid="style-set-import-report"]').text())
+			.toContain('already installed with different entries');
+
+		await wrapper.get('[data-testid="style-set-import-as-copy"]').trigger('click');
+		await flushPromises();
+
+		// A fresh report, because the two resolutions are different proposals.
+		expect(mockInspectPackage).toHaveBeenLastCalledWith(expect.any(File), 'independent-copy');
+		await wrapper.get('[data-testid="style-set-import-confirm"]').trigger('click');
+		await flushPromises();
+
+		expect(mockInstallPackage).toHaveBeenCalledWith(expect.any(File), {
+			resolution: 'independent-copy',
+			fingerprint: 'c'.repeat(64),
+		});
+	});
+
+	it('does not offer a copy for a package this installation could never install', async () => {
+		mockInspectPackage.mockResolvedValue(preflightReport({
+			disposition: 'rejected',
+			outcome: 'rejected',
+			issues: [{
+				code: 'unsupported-application-capability',
+				severity: 'error',
+				message: 'This installation does not provide application font "aurora"',
+				remediation: 'Update this installation.',
+			}],
+		}));
+
+		const wrapper = await mountLibrary();
+		await choosePackage(wrapper);
+
+		expect(wrapper.get('[data-testid="style-set-import-report"]').text()).toContain('aurora');
+		// A copy of an uninstallable package is just as uninstallable.
+		expect(wrapper.find('[data-testid="style-set-import-as-copy"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="style-set-import-confirm"]').exists()).toBe(false);
 	});
 });
