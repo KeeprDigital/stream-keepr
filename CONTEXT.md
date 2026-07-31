@@ -525,8 +525,18 @@ _Avoid_: Template when referring to the whole layout preset.
 
 **Feature Match Layout Template**:
 A user-created reusable Feature Match Layout that can later be copied into a Screen's Feature Match Overlay configuration.
-Templates are not live Screen state.
+Templates are not live Screen state: a Template carries no Feature Match Slot assignment, and placing one replaces the receiving Screen's whole Feature Match Layout as an unlinked copy.
 _Avoid_: Preset when referring to user-owned reusable layouts.
+
+**Feature Match Layout Host Vocabulary**:
+The terms a Feature Match Layout uses whose meaning the installation supplies rather than the layout carrying it: a Source Item's Source Role, a Feature Match Overlay Frame animation effect, and a Feature Match token a Graphic Text Template binds.
+Each is closed and pinned by one Feature Match Layout format version, so a Template Package naming a term an installation does not implement is refused before anything is installed.
+_Avoid_: Free-form role, camera name
+
+**Feature Match Sample Dataset**:
+One canonical set of Feature Match values that a preview resolves a Feature Match Layout against when no Feature Match Slot is bound.
+It exists so an author can judge whether real values fit the bounds they drew; it is fixed data so the same layout always previews identically, and it never appears on a live Screen Output.
+_Avoid_: Dummy data, test data
 
 **Screen Output**:
 A live rendering variant exposed by a Screen Mode Definition, such as overlay, fill, or key.
@@ -828,6 +838,8 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - **Clock Graphic Item**, **Player Life Graphic Item**, and **Game Wins Graphic Item** are shared **Graphic Item Definitions** that require Feature Match context
 - A **Feature Match Overlay Preset** initializes a **Feature Match Layout**
 - A **Feature Match Layout Template** stores a reusable **Feature Match Layout**
+- A **Feature Match Layout** declares its **Feature Match Layout Host Vocabulary** terms to a **Template Package**, and never carries an Event identity
+- A **Feature Match Sample Dataset** resolves a **Feature Match Layout** preview when no **Feature Match Slot** is bound, and never a **Screen Output**
 - **Broadcast Graphics Screen** and **Feature Match Overlay** each expose **Overlay Output**, **Fill Output**, and **Key Output** variants
 
 ## Example dialogue
