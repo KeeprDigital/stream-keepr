@@ -374,10 +374,10 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			reason: input.reason,
 			correlationId: input.correlationId,
 			detail: input.detail ?? {},
-			expiresAt: graphicsRetentionDeadline(
-				input.recordedAt,
-				GRAPHICS_RETENTION_GUARANTEES.evidenceMilliseconds,
-			),
+			// The one-year window runs from the subject's terminal cleanup, which
+			// the scheduled sweep stamps on once a discrepancy is settled. An open
+			// discrepancy is still being worked, so its Evidence has no expiry yet.
+			expiresAt: null,
 		};
 	}
 
@@ -739,8 +739,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			reasonCode,
 			since: observedAt,
 		});
+		const announcedId = generateIdentity();
 		const discrepancy = await catalogue.openDiscrepancy({
-			id: generateIdentity(),
+			id: announcedId,
 			kind,
 			subjectKey: content.digest,
 			digest: content.digest,
@@ -753,8 +754,13 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			correlationId,
 		});
 		// A discrepancy that was already open is re-observed, not re-announced:
-		// an hourly sweep must not fill the ledger with the same incident.
-		if (discrepancy.detectedAt === observedAt) {
+		// an hourly sweep must not fill the ledger with the same incident, and
+		// neither must the delivery path, where the same missing content can be
+		// read thousands of times a second. Opening is idempotent on the open
+		// subject, so the identity that came back is the proof of who opened it —
+		// comparing the timestamps instead would announce once per observation
+		// that shared a millisecond with the one that won.
+		if (discrepancy.id === announcedId) {
 			records.push(evidence({
 				recordedAt: observedAt,
 				correlationId,
@@ -849,8 +855,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			const digest = canonicalObjectDigest(object.identity);
 			if (!digest) {
 				const observedAt = timestamp();
+				const announcedId = generateIdentity();
 				const incident = await catalogue.openDiscrepancy({
-					id: generateIdentity(),
+					id: announcedId,
 					kind: 'critical-integrity-incident',
 					subjectKey: object.identity,
 					objectKey: object.identity,
@@ -865,7 +872,7 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 					observedAt,
 					correlationId,
 				});
-				if (incident.detectedAt === observedAt) {
+				if (incident.id === announcedId) {
 					criticalIncidents++;
 					records.push(evidence({
 						recordedAt: observedAt,

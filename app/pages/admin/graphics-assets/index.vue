@@ -214,6 +214,13 @@ function boundaryMarkerStyle(fraction: number) {
 			<UButton
 				color="neutral"
 				variant="outline"
+				icon="i-lucide-scroll-text"
+				to="/admin/graphics-assets/evidence"
+				label="Open Evidence ledger"
+			/>
+			<UButton
+				color="neutral"
+				variant="outline"
 				icon="i-lucide-refresh-cw"
 				:loading="loadPending"
 				:disabled="!hasReading"

@@ -17,6 +17,8 @@ import {
 	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
+import { GRAPHICS_EVIDENCE_CATEGORY_GROUPS } from '~~/shared/utils/graphicsAssetEvidence';
+import { evidenceOf } from '~~/test/helpers/graphicsEvidence';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import { collectStream } from '~~/test/helpers/storedZipArchive';
 
@@ -572,7 +574,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 			const swept = await context.library.runGraphicsRetention();
 			expect(swept.evidence.recorded).toBe(1);
 
-			const ledger = await context.library.listGraphicsAssetEvidence();
+			const ledger = await evidenceOf(context.library);
 			expect(ledger).toEqual([
 				expect.objectContaining({
 					category: 'staged-input-expired',
@@ -612,16 +614,16 @@ describe('scheduled Graphics Asset Library retention', () => {
 			});
 			context.advance(DAY + 1);
 			await context.library.runGraphicsRetention();
-			expect(await context.library.listGraphicsAssetEvidence()).toHaveLength(1);
+			expect(await evidenceOf(context.library)).toHaveLength(1);
 
 			context.advance(365 * DAY - 1);
 			await context.library.runGraphicsRetention();
-			expect(await context.library.listGraphicsAssetEvidence()).toHaveLength(1);
+			expect(await evidenceOf(context.library)).toHaveLength(1);
 
 			context.advance(1);
 			const swept = await context.library.runGraphicsRetention();
 			expect(swept.evidence.expired).toBe(1);
-			expect(await context.library.listGraphicsAssetEvidence()).toEqual([]);
+			expect(await evidenceOf(context.library)).toEqual([]);
 		});
 
 		it('releases the staging reservation and staged bytes it expired', async () => {
@@ -855,7 +857,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 				.rejects
 				.toMatchObject({ code: 'ingestion-operation-not-found' });
 
-			const purgeEvidence = await context.library.listGraphicsAssetEvidence({
+			const purgeEvidence = await evidenceOf(context.library, {
 				categories: ['graphic-asset-purged'],
 			});
 			expect(purgeEvidence).toEqual([
@@ -893,7 +895,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 			await expect(context.library.listGraphicAssets({
 				lifecycleStates: ['trashed'],
 			})).resolves.toHaveLength(1);
-			await expect(context.library.listGraphicsAssetEvidence({
+			await expect(evidenceOf(context.library, {
 				categories: ['graphic-asset-purge-blocked'],
 			})).resolves.toEqual([
 				expect.objectContaining({
@@ -936,7 +938,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 			await expect(context.library.listGraphicAssets({
 				lifecycleStates: ['active', 'retired', 'trashed'],
 			})).resolves.toEqual([]);
-			await expect(context.library.listGraphicsAssetEvidence({
+			await expect(evidenceOf(context.library, {
 				categories: ['graphic-asset-purged'],
 			})).resolves.toEqual([
 				expect.objectContaining({
@@ -982,6 +984,83 @@ describe('scheduled Graphics Asset Library retention', () => {
 			})).rejects.toMatchObject({
 				code: 'graphic-asset-lifecycle-action-not-allowed',
 			});
+		});
+
+		it('leaves a tombstone that explains the purge but satisfies no reference', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'tombstone-satisfies-nothing',
+				name: 'Tombstoned logo',
+			});
+			const { assetId, revisionId } = published.result!;
+			await context.library.trashGraphicAsset({ assetId });
+			await context.library.purgeTrashedGraphicAsset({
+				assetId,
+				actor: 'installation-administrator',
+				confirmation: 'purge-now',
+			});
+			const purgedAt = context.now().getTime();
+
+			// The tombstone outlives the asset and is what explains a later
+			// provenance question about this identity.
+			const tombstone = await harness.client.execute({
+				sql: 'SELECT purged_at, purge_reason, revision_count, reference_count FROM graphic_asset_tombstones WHERE asset_id = ?',
+				args: [assetId],
+			});
+			expect(tombstone.rows).toHaveLength(1);
+			expect(tombstone.rows[0]).toMatchObject({
+				purged_at: purgedAt,
+				purge_reason: 'early-purge',
+				revision_count: 1,
+				// A purge only ever commits against a proof of zero references, so
+				// a tombstone can carry no other reference count.
+				reference_count: 0,
+			});
+
+			// What the tombstone must never do is stand in for the asset it
+			// replaced. Every existing proof adds a reference before the purge and
+			// watches the purge refuse; this is the other direction.
+			await expect(addReference({
+				referenceId: 'reference-against-tombstone',
+				assetId,
+				revisionId,
+			})).rejects.toThrow();
+			const references = await harness.client.execute({
+				sql: 'SELECT id FROM graphic_asset_references WHERE asset_id = ?',
+				args: [assetId],
+			});
+			expect(references.rows).toEqual([]);
+
+			// Nor may resolution find anything behind it.
+			await expect(context.library.inspectGraphicAssetRevision({ assetId, revisionId }))
+				.resolves
+				.toEqual({ outcome: 'missing' });
+			await expect(context.library.listGraphicAssetUsage({ assetId }))
+				.resolves
+				.toEqual([]);
+
+			// The ledger reports the tombstone beside the Evidence, because once
+			// that Evidence expires an empty page for a purged identity would
+			// otherwise be indistinguishable from one that never existed.
+			await expect(context.library.listGraphicsAssetEvidence({
+				subject: { kind: 'graphic-asset', id: assetId },
+			})).resolves.toMatchObject({
+				tombstone: {
+					assetId,
+					purgedAt: new Date(purgedAt).toISOString(),
+					reason: 'early-purge',
+					revisionCount: 1,
+					referenceCount: 0,
+				},
+			});
+			// A live asset has none, so the field is an answer rather than decoration.
+			const live = await ingestAsset(context, {
+				idempotencyKey: 'tombstone-absent',
+				name: 'Living logo',
+			});
+			await expect(context.library.listGraphicsAssetEvidence({
+				subject: { kind: 'graphic-asset', id: live.result!.assetId },
+			})).resolves.not.toHaveProperty('tombstone');
 		});
 
 		it('never lets re-ingestion reuse a purged local identity', async () => {
@@ -1098,7 +1177,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 			await expect(context.canonical.readMetadata(sourceObject))
 				.resolves
 				.toEqual({ outcome: 'missing' });
-			await expect(context.library.listGraphicsAssetEvidence({
+			await expect(evidenceOf(context.library, {
 				categories: ['content-deleted'],
 			})).resolves.toEqual([
 				expect.objectContaining({
@@ -1108,7 +1187,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 				}),
 				expect.objectContaining({ outcome: 'content-deleted' }),
 			]);
-			expect(JSON.stringify(await context.library.listGraphicsAssetEvidence()))
+			expect(JSON.stringify(await evidenceOf(context.library)))
 				.not
 				.toContain(digestOf(pixelPng));
 		});
@@ -1180,7 +1259,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 			await expect(context.library.getRetentionOverview())
 				.resolves
 				.toMatchObject({ quarantinedContent: [] });
-			await expect(context.library.listGraphicsAssetEvidence({
+			await expect(evidenceOf(context.library, {
 				categories: ['content-deleted'],
 			})).resolves.toHaveLength(2);
 		});
@@ -1373,20 +1452,26 @@ describe('scheduled Graphics Asset Library retention', () => {
 
 			context.advance(20 * DAY);
 			await context.library.trashGraphicAsset({ assetId });
-			await expect(context.library.listGraphicsAssetEvidence({
+			await expect(evidenceOf(context.library, {
 				categories: ['revision-pruning-frozen'],
 			})).resolves.toEqual([
 				expect.objectContaining({
 					subject: { kind: 'graphic-asset-revision', id: firstRevisionId },
 					outcome: 'revision-pruning-frozen',
 					reason: 'trash-freezes-revision-pruning',
-					detail: { remainingMilliseconds: 70 * DAY },
+					detail: {
+						remainingMilliseconds: 70 * DAY,
+						transition: {
+							from: 'unreferenced-superseded',
+							to: 'pruning-frozen',
+						},
+					},
 				}),
 			]);
 
 			context.advance(DAY);
 			await context.library.restoreGraphicAsset({ assetId });
-			await expect(context.library.listGraphicsAssetEvidence({
+			await expect(evidenceOf(context.library, {
 				categories: ['revision-pruning-resumed'],
 			})).resolves.toEqual([
 				expect.objectContaining({
@@ -1397,6 +1482,10 @@ describe('scheduled Graphics Asset Library retention', () => {
 						deadline: new Date(
 							supersededAt + 21 * DAY + 70 * DAY,
 						).toISOString(),
+						transition: {
+							from: 'pruning-frozen',
+							to: 'unreferenced-superseded',
+						},
 					},
 				}),
 			]);
@@ -1499,6 +1588,392 @@ describe('scheduled Graphics Asset Library retention', () => {
 			expect(pressured.trashedAssets).toEqual(relaxed.trashedAssets);
 			expect(pressured.prunableRevisions).toEqual(relaxed.prunableRevisions);
 			expect((await context.library.runGraphicsRetention()).trash.purged).toBe(0);
+		});
+	});
+
+	describe('reading the Evidence ledger', () => {
+		/**
+		 * A ledger with entries from two assets, two actors, and several
+		 * categories, so every filter has something it must exclude as well as
+		 * something it must find.
+		 */
+		async function populatedLedger() {
+			const context = createRetentionLibrary();
+			const first = await ingestAsset(context, {
+				idempotencyKey: 'ledger-first',
+				name: 'First logo',
+			});
+			const second = await ingestAsset(context, {
+				idempotencyKey: 'ledger-second',
+				name: 'Second logo',
+			});
+			for (const asset of [first, second]) {
+				context.advance(HOUR);
+				await context.library.retireGraphicAsset({
+					assetId: asset.result!.assetId,
+					actor: 'librarian',
+				});
+				context.advance(HOUR);
+				await context.library.trashGraphicAsset({
+					assetId: asset.result!.assetId,
+					actor: 'archivist',
+				});
+			}
+			return { context, first: first.result!, second: second.result! };
+		}
+
+		it('narrows by actor, category group, correlation, and time range', async () => {
+			const { context, first } = await populatedLedger();
+
+			const byActor = await evidenceOf(context.library, { actor: 'archivist' });
+			expect(byActor).toHaveLength(2);
+			for (const entry of byActor)
+				expect(entry.category).toBe('graphic-asset-trashed');
+
+			// A group is the same question in the operational vocabulary: asking
+			// for lifecycle finds retirement and Trash without naming either.
+			const byGroup = await context.library.listGraphicsAssetEvidence({
+				categories: [...GRAPHICS_EVIDENCE_CATEGORY_GROUPS.lifecycle],
+			});
+			expect(byGroup.entries).toHaveLength(4);
+
+			const trashed = byActor[0]!;
+			const byCorrelation = await evidenceOf(context.library, {
+				correlationId: trashed.correlationId,
+			});
+			expect(byCorrelation).toEqual([trashed]);
+
+			const bySubject = await evidenceOf(context.library, {
+				subject: { kind: 'graphic-asset', id: first.assetId },
+			});
+			expect(bySubject).toHaveLength(2);
+
+			// The range is inclusive at both ends, so an entry recorded exactly on
+			// a boundary is inside the window an administrator asked about.
+			await expect(evidenceOf(context.library, {
+				recordedFrom: trashed.recordedAt,
+				recordedUntil: trashed.recordedAt,
+			})).resolves.toEqual([trashed]);
+		});
+
+		it('walks the whole ledger by cursor without repeating or skipping', async () => {
+			const { context } = await populatedLedger();
+			const everything = await evidenceOf(context.library);
+			expect(everything).toHaveLength(4);
+
+			const first = await context.library.listGraphicsAssetEvidence({ limit: 2 });
+			expect(first.entries).toEqual(everything.slice(0, 2));
+			// Nothing is newer than the newest page, so there is no way back from
+			// where reading started.
+			expect(first.newer).toBeNull();
+			expect(first.older).toEqual({
+				recordedAt: everything[1]!.recordedAt,
+				id: everything[1]!.id,
+			});
+
+			const second = await context.library.listGraphicsAssetEvidence({
+				limit: 2,
+				cursor: first.older!,
+			});
+			expect(second.entries).toEqual(everything.slice(2));
+			// The end of the ledger is reported rather than offering a next page
+			// that would turn out to be empty.
+			expect(second.older).toBeNull();
+
+			const back = await context.library.listGraphicsAssetEvidence({
+				limit: 2,
+				cursor: second.newer!,
+				direction: 'newer',
+			});
+			expect(back.entries).toEqual(everything.slice(0, 2));
+			expect(back.newer).toBeNull();
+		});
+
+		it('orders entries sharing an instant by a tiebreak the cursor also uses', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'ledger-same-instant',
+				name: 'Simultaneous logo',
+			});
+			const { assetId, revisionId } = published.result!;
+			// A reference holds the first revision out of the retention rows while
+			// it is superseded, so once it is released both revisions are scheduled
+			// by the same publication and share a recorded instant. That is where a
+			// cursor comparing only the timestamp repeats an entry or loses one.
+			await addReference({ referenceId: 'reference-same-instant', assetId, revisionId });
+			const second = await replaceAsset(context, {
+				assetId,
+				idempotencyKey: 'ledger-same-instant-second',
+				bytes: replacementPng,
+			});
+			await removeReference('reference-same-instant');
+			await replaceAsset(context, {
+				assetId,
+				idempotencyKey: 'ledger-same-instant-third',
+				bytes: Uint8Array.of(
+					...replacementPng.slice(0, -12),
+					...emptyTextChunk,
+					...replacementPng.slice(-12),
+				),
+			});
+			const everything = await evidenceOf(context.library);
+			expect(everything).toHaveLength(2);
+			expect(everything[0]!.recordedAt).toBe(everything[1]!.recordedAt);
+			expect(everything.map(entry => entry.subject.id).sort())
+				.toEqual([revisionId, second.result!.revisionId].sort());
+
+			const walked = [];
+			let cursor = undefined as { recordedAt: string; id: string } | undefined;
+			do {
+				const page = await context.library.listGraphicsAssetEvidence({
+					limit: 1,
+					cursor,
+				});
+				walked.push(...page.entries);
+				cursor = page.older ?? undefined;
+			} while (cursor);
+			expect(walked).toEqual(everything);
+		});
+	});
+
+	describe('the Evidence that establishes a deadline', () => {
+		it('records the Trash recovery deadline with the transition that set it', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'trash-deadline-evidence',
+				name: 'Deadline logo',
+			});
+			const { assetId } = published.result!;
+			await context.library.retireGraphicAsset({ assetId, actor: 'librarian' });
+			const retiredAt = context.now().toISOString();
+			context.advance(HOUR);
+			await context.library.trashGraphicAsset({ assetId, actor: 'librarian' });
+			const trashedAt = context.now().getTime();
+
+			await expect(evidenceOf(context.library, {
+				categories: ['graphic-asset-retired'],
+			})).resolves.toEqual([
+				expect.objectContaining({
+					actor: 'librarian',
+					recordedAt: retiredAt,
+					subject: { kind: 'graphic-asset', id: assetId },
+					detail: expect.objectContaining({
+						transition: { from: 'active', to: 'retired' },
+					}),
+				}),
+			]);
+			// Trash is entered from Retired here, so the transition records where
+			// restoration would put the asset back rather than assuming 'active'.
+			await expect(evidenceOf(context.library, {
+				categories: ['graphic-asset-trashed'],
+			})).resolves.toEqual([
+				expect.objectContaining({
+					actor: 'librarian',
+					subject: { kind: 'graphic-asset', id: assetId },
+					detail: expect.objectContaining({
+						transition: { from: 'retired', to: 'trashed' },
+						deadline: new Date(trashedAt + 30 * DAY).toISOString(),
+						remainingMilliseconds: 30 * DAY,
+					}),
+				}),
+			]);
+
+			context.advance(DAY);
+			await context.library.restoreGraphicAsset({ assetId, actor: 'librarian' });
+			await expect(evidenceOf(context.library, {
+				categories: ['graphic-asset-restored'],
+			})).resolves.toEqual([
+				expect.objectContaining({
+					actor: 'librarian',
+					detail: expect.objectContaining({
+						transition: { from: 'trashed', to: 'retired' },
+					}),
+				}),
+			]);
+		});
+
+		it('records the revision retention deadline supersession established', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'supersession-deadline-evidence',
+				name: 'Superseded logo',
+			});
+			const { assetId, revisionId } = published.result!;
+			await replaceAsset(context, {
+				assetId,
+				idempotencyKey: 'supersession-deadline-evidence-replacement',
+				bytes: replacementPng,
+			});
+			const supersededAt = context.now().getTime();
+
+			// The catalogue authors this deadline inside the publication
+			// transaction, so without Evidence here the ledger would only ever
+			// show the deadline being acted on, never the moment it was set.
+			await expect(evidenceOf(context.library, {
+				categories: ['revision-pruning-scheduled'],
+			})).resolves.toEqual([
+				expect.objectContaining({
+					actor: 'retention-author',
+					subject: { kind: 'graphic-asset-revision', id: revisionId },
+					outcome: 'revision-pruning-scheduled',
+					reason: 'superseded-by-new-revision',
+					detail: expect.objectContaining({
+						referenceCount: 0,
+						deadline: new Date(supersededAt + 90 * DAY).toISOString(),
+						transition: {
+							from: 'latest-revision',
+							to: 'unreferenced-superseded',
+						},
+					}),
+				}),
+			]);
+		});
+
+		it('records the deadline and quota state a purge decided against', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'purge-deadline-evidence',
+				name: 'Purged logo',
+			});
+			const { assetId } = published.result!;
+			await context.library.trashGraphicAsset({ assetId });
+			const trashedAt = context.now().getTime();
+
+			context.advance(DAY);
+			await context.library.purgeTrashedGraphicAsset({
+				assetId,
+				actor: 'installation-administrator',
+				confirmation: 'purge-now',
+			});
+
+			// An early purge acts against a deadline that has not arrived, which
+			// is exactly what distinguishes it from the scheduled purge.
+			await expect(evidenceOf(context.library, {
+				categories: ['graphic-asset-purged'],
+			})).resolves.toEqual([
+				expect.objectContaining({
+					actor: 'installation-administrator',
+					reason: 'early-purge',
+					detail: expect.objectContaining({
+						referenceCount: 0,
+						revisionCount: 1,
+						deadline: new Date(trashedAt + 30 * DAY).toISOString(),
+						transition: { from: 'trashed', to: 'purged' },
+						canonicalPressure: expect.any(String),
+						canonicalUsedBytes: expect.any(Number),
+					}),
+				}),
+			]);
+		});
+	});
+
+	describe('the one-year Evidence window', () => {
+		it('keeps Evidence for a subject that has not been cleaned up', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'evidence-live-subject',
+				name: 'Living logo',
+			});
+			const { assetId, revisionId } = published.result!;
+			// A referenced asset in Trash is refused at every purge attempt, so it
+			// accumulates Evidence while never reaching a terminal cleanup.
+			await context.library.trashGraphicAsset({ assetId });
+			await addReference({ referenceId: 'reference-keeps-subject-live', assetId, revisionId });
+			context.advance(31 * DAY);
+			await context.library.runGraphicsRetention();
+			const blocked = await evidenceOf(context.library, {
+				categories: ['graphic-asset-purge-blocked'],
+			});
+			expect(blocked).toHaveLength(1);
+			// Nothing has been cleaned up, so nothing anchors an expiry yet.
+			expect(blocked[0]!.expiresAt).toBeNull();
+
+			context.advance(2 * 365 * DAY);
+			const swept = await context.library.runGraphicsRetention();
+			expect(swept.evidence.expired).toBe(0);
+			await expect(evidenceOf(context.library, {
+				categories: ['graphic-asset-purge-blocked'],
+				subject: { kind: 'graphic-asset', id: assetId },
+			})).resolves.not.toHaveLength(0);
+		});
+
+		it('expires a purged asset\'s Evidence one year after the purge, not after the entry', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'evidence-purged-subject',
+				name: 'Doomed logo',
+			});
+			const { assetId } = published.result!;
+			await context.library.trashGraphicAsset({ assetId });
+			const trashedAt = context.now().getTime();
+
+			// A year passes before the purge. The entries written at Trash time are
+			// older than the window but explain a subject that is still recoverable,
+			// so an entry-age anchor would already have destroyed them.
+			context.advanceTo(new Date(trashedAt + 366 * DAY).toISOString());
+			expect((await context.library.runGraphicsRetention()).evidence.expired).toBe(0);
+			await expect(evidenceOf(context.library, {
+				subject: { kind: 'graphic-asset', id: assetId },
+			})).resolves.not.toHaveLength(0);
+
+			const purgedAt = context.now().getTime();
+			expect((await context.library.listGraphicAssets({
+				lifecycleStates: ['trashed'],
+			}))).toHaveLength(0);
+
+			const sealed = await evidenceOf(context.library, {
+				subject: { kind: 'graphic-asset', id: assetId },
+			});
+			expect(sealed).not.toHaveLength(0);
+			for (const entry of sealed)
+				expect(entry.expiresAt).toBe(new Date(purgedAt + 365 * DAY).toISOString());
+
+			context.advanceTo(new Date(purgedAt + 365 * DAY - 1).toISOString());
+			expect((await context.library.runGraphicsRetention()).evidence.expired).toBe(0);
+			await expect(evidenceOf(context.library, {
+				subject: { kind: 'graphic-asset', id: assetId },
+			})).resolves.not.toHaveLength(0);
+
+			context.advanceTo(new Date(purgedAt + 365 * DAY).toISOString());
+			expect((await context.library.runGraphicsRetention()).evidence.expired)
+				.toBeGreaterThan(0);
+			await expect(evidenceOf(context.library, {
+				subject: { kind: 'graphic-asset', id: assetId },
+			})).resolves.toEqual([]);
+		});
+
+		it('records no Evidence about expiring Evidence', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'evidence-no-self-reference',
+				name: 'Self-referential logo',
+			});
+			const { assetId } = published.result!;
+			await context.library.trashGraphicAsset({ assetId });
+			await context.library.purgeTrashedGraphicAsset({
+				assetId,
+				actor: 'installation-administrator',
+				confirmation: 'purge-now',
+			});
+			// Sweep the content the purge orphaned all the way to deletion, so
+			// every subject the asset leaves behind has recorded its own terminal
+			// cleanup and the whole ledger is anchored rather than only part of it.
+			await context.library.runGraphicsRetention();
+			context.advance(8 * DAY);
+			await context.library.runGraphicsRetention();
+			const settledAt = context.now().getTime();
+			expect(await evidenceOf(context.library)).not.toHaveLength(0);
+
+			context.advanceTo(new Date(settledAt + 365 * DAY).toISOString());
+			const swept = await context.library.runGraphicsRetention();
+			expect(swept.evidence.expired).toBeGreaterThan(0);
+			// Sealing and expiry are ledger housekeeping. Recording them in the
+			// ledger would write rows that outlive the rows they explain, and the
+			// next sweep would then have those to explain in turn.
+			expect(swept.evidence.recorded).toBe(0);
+			await expect(evidenceOf(context.library))
+				.resolves
+				.toEqual([]);
 		});
 	});
 });

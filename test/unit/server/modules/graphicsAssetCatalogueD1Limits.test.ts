@@ -97,6 +97,35 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 				() => 'content-deleted' as const,
 			),
 		})).resolves.toEqual([]);
+		// Every filter the ledger offers, bound at once on top of that same long
+		// category list. The list stays one bound value, so what fixes the
+		// statement's parameter count is how many filters exist rather than how
+		// long any one of them is.
+		await expect(catalogue.listGraphicsAssetEvidence({
+			limit: 10,
+			categories: Array.from(
+				{ length: OVER_THE_LIMIT },
+				() => 'content-deleted' as const,
+			),
+			subject: { kind: 'graphic-asset', id: 'asset' },
+			actor: 'graphics-retention-policy',
+			correlationId: 'correlation',
+			recordedFrom: '2026-01-01T00:00:00.000Z',
+			recordedUntil: '2027-01-01T00:00:00.000Z',
+			cursor: { recordedAt: '2026-06-01T00:00:00.000Z', id: 'entry' },
+			direction: 'newer',
+		})).resolves.toEqual([]);
+		// Sealing binds its terminal-category list the same way, and it is the
+		// one ledger statement whose list is fixed by the vocabulary rather than
+		// by a batch size, so it grows every time a category is added.
+		await expect(catalogue.sealGraphicsAssetEvidence({
+			terminalCategories: Array.from(
+				{ length: OVER_THE_LIMIT },
+				() => 'graphic-asset-purged' as const,
+			),
+			retentionMilliseconds: 365 * 24 * 60 * 60 * 1000,
+			limit: 200,
+		})).resolves.toBe(0);
 	});
 
 	/**

@@ -1,10 +1,14 @@
 import type {
 	GraphicAssetId,
 	GraphicAssetLifecycle,
+	GraphicAssetLifecycleState,
 	GraphicAssetRetentionView,
 	GraphicAssetRevisionId,
+	GraphicAssetTombstone,
 	GraphicsAssetEvidenceCategory,
 	GraphicsAssetEvidenceEntry,
+	GraphicsAssetEvidencePage,
+	GraphicsAssetEvidenceQuery,
 	GraphicsAssetLibraryCapacity,
 	GraphicsContentQuarantineDeadline,
 	GraphicsIngestionOperationId,
@@ -21,6 +25,10 @@ import type {
 	GraphicsCanonicalObjectStore,
 	GraphicsStagingObjectStore,
 } from './object-store';
+import {
+	GRAPHICS_EVIDENCE_RETENTION_MILLISECONDS,
+	GRAPHICS_EVIDENCE_TERMINAL_CATEGORIES,
+} from '~~/shared/utils/graphicsAssetEvidence';
 import {
 	GRAPHICS_RETENTION_ACTOR,
 	GRAPHICS_RETENTION_GUARANTEES,
@@ -98,10 +106,21 @@ export interface QuarantinedContent {
 }
 
 export type PurgeGraphicAssetOutcome
-	= | { outcome: 'purged'; revisionCount: number; referenceCount: 0 }
-		| { outcome: 'blocked'; revisionCount: number; referenceCount: number }
-		| { outcome: 'not-trashed' }
-		| { outcome: 'not-found' };
+	= | {
+		outcome: 'purged';
+		revisionCount: number;
+		referenceCount: 0;
+		/** The recovery deadline the purge proof observed, for the Evidence. */
+		recoverableUntil?: string;
+	}
+	| {
+		outcome: 'blocked';
+		revisionCount: number;
+		referenceCount: number;
+		recoverableUntil?: string;
+	}
+	| { outcome: 'not-trashed' }
+	| { outcome: 'not-found' };
 
 /**
  * The catalogue capabilities the scheduled retention path needs. They are kept
@@ -235,13 +254,24 @@ export interface GraphicsAssetRetentionCatalogue {
 	recordGraphicsAssetEvidence: (
 		entries: readonly GraphicsAssetEvidenceEntry[],
 	) => Promise<void>;
-	listGraphicsAssetEvidence: (input: {
+	listGraphicsAssetEvidence: (
+		input: GraphicsAssetEvidenceQuery & { limit: number },
+	) => Promise<GraphicsAssetEvidenceEntry[]>;
+	/**
+	 * Stamps the one-year expiry onto every unsealed entry whose subject has
+	 * since recorded a terminal cleanup, anchored on the last such cleanup.
+	 * Returns how many subjects were sealed.
+	 */
+	sealGraphicsAssetEvidence: (input: {
+		terminalCategories: readonly GraphicsAssetEvidenceCategory[];
+		retentionMilliseconds: number;
 		limit: number;
-		categories?: readonly GraphicsAssetEvidenceCategory[];
-		/** Narrows the ledger to one opaque domain subject, newest first. */
-		subject?: { kind: GraphicsAssetEvidenceEntry['subject']['kind']; id: string };
-	}) => Promise<GraphicsAssetEvidenceEntry[]>;
+	}) => Promise<number>;
 	expireGraphicsAssetEvidence: (input: { expiredBefore: string }) => Promise<number>;
+	/** The proof that one Graphic Asset identity was purged, if it was. */
+	findGraphicAssetTombstone: (
+		assetId: GraphicAssetId,
+	) => Promise<GraphicAssetTombstone | undefined>;
 }
 
 interface GraphicsRetentionDependencies {
@@ -285,10 +315,12 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			reason: input.reason,
 			correlationId: input.correlationId,
 			detail: input.detail ?? {},
-			expiresAt: graphicsRetentionDeadline(
-				input.recordedAt,
-				GRAPHICS_RETENTION_GUARANTEES.evidenceMilliseconds,
-			),
+			// The one-year window runs from the subject's terminal cleanup, which
+			// has usually not happened yet when an entry is written. Sealing it
+			// here from the entry's own timestamp would destroy the history of a
+			// live asset on its first birthday and would expire a Trashed asset's
+			// early evidence before the purge it was written to explain.
+			expiresAt: null,
 		};
 	}
 
@@ -379,7 +411,9 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 					: 'incomplete-transfer-without-verified-progress',
 				detail: {
 					...quotaState,
+					operationId: candidate.operationId,
 					bytesFreed: candidate.stagingBytes,
+					transition: { from: candidate.stage, to: 'expired' },
 					deadline: graphicsRetentionDeadline(
 						candidate.observedUpdatedAt,
 						candidate.transferComplete
@@ -413,7 +447,13 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				subject: { kind: 'graphic-asset-revision', id: revision.revisionId },
 				outcome: 'revision-retained',
 				reason: revision.reason,
-				detail: { referenceCount: revision.referenceCount },
+				detail: {
+					referenceCount: revision.referenceCount,
+					transition: {
+						from: 'unreferenced-superseded',
+						to: revision.reason === 'referenced' ? 'referenced' : 'latest-revision',
+					},
+				},
 			}));
 		}
 
@@ -442,6 +482,10 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 					referenceCount: 0,
 					deadline: revision.pruneAfter,
 					remainingMilliseconds: GRAPHICS_RETENTION_GUARANTEES.supersededRevisionMilliseconds,
+					transition: {
+						from: 'latest-revision',
+						to: revision.frozen ? 'pruning-frozen' : 'unreferenced-superseded',
+					},
 				},
 			}));
 		}
@@ -467,6 +511,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				detail: {
 					referenceCount: 0,
 					deadline: revision.pruneAfter,
+					transition: { from: 'unreferenced-superseded', to: 'pruned' },
 				},
 			}));
 		}
@@ -515,6 +560,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				detail: {
 					bytesReserved: content.byteLength,
 					deadline: content.deleteAfter,
+					transition: { from: 'reachable', to: 'quarantined' },
 				},
 			}));
 		}
@@ -526,7 +572,10 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				subject: { kind: 'graphic-asset-content', id: content.id },
 				outcome: 'content-retained',
 				reason: 'reachable-again-at-recheck',
-				detail: { bytesReserved: content.byteLength },
+				detail: {
+					bytesReserved: content.byteLength,
+					transition: { from: 'quarantined', to: 'reachable' },
+				},
 			}));
 		}
 
@@ -577,7 +626,11 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 					subject: { kind: 'graphic-asset-content', id: content.id },
 					outcome: 'content-unavailable',
 					reason: 'became-reachable-during-deletion',
-					detail: { referenceCount: reachableAgain, ...quotaState },
+					detail: {
+						referenceCount: reachableAgain,
+						transition: { from: 'quarantined', to: 'unavailable' },
+						...quotaState,
+					},
 				}));
 				continue;
 			}
@@ -602,6 +655,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				detail: {
 					bytesFreed: content.byteLength,
 					deadline: content.deleteAfter,
+					transition: { from: 'quarantined', to: 'deleted' },
 					...quotaState,
 				},
 			}));
@@ -625,8 +679,12 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 		actor?: string;
 		reason: 'trash-window-elapsed' | 'early-purge';
 		outcome: PurgeGraphicAssetOutcome;
+		quotaState?: GraphicsAssetEvidenceEntry['detail'];
 	}): GraphicsAssetEvidenceEntry {
 		const purged = input.outcome.outcome === 'purged';
+		const proof = input.outcome.outcome === 'purged' || input.outcome.outcome === 'blocked'
+			? input.outcome
+			: undefined;
 		return evidence({
 			recordedAt: input.purgedAt,
 			correlationId: input.correlationId,
@@ -635,16 +693,30 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			subject: { kind: 'graphic-asset', id: input.assetId },
 			outcome: purged ? 'graphic-asset-purged' : 'graphic-asset-retained',
 			reason: purged ? input.reason : 'reference-proof-found-usage',
-			detail: input.outcome.outcome === 'purged' || input.outcome.outcome === 'blocked'
+			detail: proof
 				? {
-						referenceCount: input.outcome.referenceCount,
-						revisionCount: input.outcome.revisionCount,
+						referenceCount: proof.referenceCount,
+						revisionCount: proof.revisionCount,
+						// The Trash deadline the proof observed. An early purge is
+						// recorded against a deadline that had not yet arrived, which
+						// is exactly what distinguishes it from the scheduled one.
+						...(proof.recoverableUntil === undefined
+							? {}
+							: { deadline: proof.recoverableUntil }),
+						transition: {
+							from: 'trashed',
+							to: purged ? 'purged' : 'trashed',
+						},
+						...input.quotaState,
 					}
 				: {},
 		});
 	}
 
-	async function purgeElapsedTrash(correlationId: string) {
+	async function purgeElapsedTrash(
+		correlationId: string,
+		quotaState: GraphicsAssetEvidenceEntry['detail'],
+	) {
 		const records: GraphicsAssetEvidenceEntry[] = [];
 		const purgeable = await catalogue.listPurgeableTrashedAssets({
 			purgeableBefore: timestamp(),
@@ -672,6 +744,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				correlationId,
 				reason: 'trash-window-elapsed',
 				outcome,
+				quotaState,
 			}));
 		}
 		return { trash: { purged, blockedByReferences }, records };
@@ -740,11 +813,101 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				reason: input.transition === 'frozen'
 					? 'trash-freezes-revision-pruning'
 					: 'restoration-resumes-remaining-recovery-time',
-				detail: revision.retention.policy === 'pruning-frozen'
-					? { remainingMilliseconds: revision.retention.remainingMilliseconds }
-					: revision.retention.policy === 'unreferenced-superseded'
+				detail: {
+					transition: input.transition === 'frozen'
+						? { from: 'unreferenced-superseded', to: 'pruning-frozen' }
+						: { from: 'pruning-frozen', to: 'unreferenced-superseded' },
+					...(revision.retention.policy === 'pruning-frozen'
+						? { remainingMilliseconds: revision.retention.remainingMilliseconds }
+						: revision.retention.policy === 'unreferenced-superseded'
+							? { deadline: revision.retention.pruneAfter }
+							: {}),
+				},
+			})));
+		},
+		/**
+		 * Records a Graphic Asset changing lifecycle state.
+		 *
+		 * Trash is where the recovery deadline is established, and restoration is
+		 * where it is discarded, so this is the entry that has to carry it: an
+		 * administrator asking why an asset was purged on a given day needs the
+		 * deadline beside the transition that set it, not only beside the purge
+		 * that eventually acted on it.
+		 */
+		async recordLifecycleTransition(input: {
+			assetId: GraphicAssetId;
+			transition: 'retired' | 'trashed' | 'restored';
+			from: GraphicAssetLifecycleState;
+			to: GraphicAssetLifecycleState;
+			actor: string;
+			recordedAt: string;
+			/** The recovery deadline Trash established, where the transition set one. */
+			deadline?: string;
+		}) {
+			await catalogue.recordGraphicsAssetEvidence([evidence({
+				recordedAt: input.recordedAt,
+				correlationId: generateIdentity(),
+				actor: input.actor,
+				category: `graphic-asset-${input.transition}`,
+				subject: { kind: 'graphic-asset', id: input.assetId },
+				outcome: `graphic-asset-${input.transition}`,
+				reason: input.transition === 'trashed'
+					? 'trash-recovery-window-opened'
+					: input.transition === 'restored'
+						? 'restored-before-recovery-window-elapsed'
+						: 'withdrawn-from-selection',
+				detail: {
+					transition: { from: input.from, to: input.to },
+					...(input.deadline === undefined ? {} : { deadline: input.deadline }),
+					...(input.transition === 'trashed'
+						? { remainingMilliseconds: GRAPHICS_RETENTION_GUARANTEES.trashRecoveryMilliseconds }
+						: {}),
+				},
+			})]);
+		},
+		/**
+		 * Records the revision retention deadlines a publication just established.
+		 *
+		 * Supersession is the instant an unreferenced revision's recovery window
+		 * starts, and the catalogue authors the deadline inside the publication
+		 * transaction rather than waiting for a sweep to notice. Without this the
+		 * ledger would only ever show that deadline being cancelled, frozen, or
+		 * acted on — never the moment it was set.
+		 */
+		async recordSupersession(input: {
+			assetId: GraphicAssetId;
+			supersededAt: string;
+			actor: string;
+		}) {
+			const revisions = await catalogue.listRevisionRetention({
+				assetId: input.assetId,
+				limit: OVERVIEW_LIMIT,
+			});
+			// Only the revisions this publication superseded, identified by the
+			// instant their window opened. An earlier revision already carrying a
+			// deadline had its own entry when that deadline was established.
+			const superseded = revisions.filter(revision =>
+				revision.retention.policy === 'unreferenced-superseded'
+				&& revision.retention.unreferencedSince === input.supersededAt);
+			if (superseded.length === 0)
+				return;
+			const correlationId = generateIdentity();
+			await catalogue.recordGraphicsAssetEvidence(superseded.map(revision => evidence({
+				recordedAt: input.supersededAt,
+				correlationId,
+				actor: input.actor,
+				category: 'revision-pruning-scheduled',
+				subject: { kind: 'graphic-asset-revision', id: revision.revisionId },
+				outcome: 'revision-pruning-scheduled',
+				reason: 'superseded-by-new-revision',
+				detail: {
+					referenceCount: 0,
+					transition: { from: 'latest-revision', to: 'unreferenced-superseded' },
+					...(revision.retention.policy === 'unreferenced-superseded'
 						? { deadline: revision.retention.pruneAfter }
-						: {},
+						: {}),
+					remainingMilliseconds: GRAPHICS_RETENTION_GUARANTEES.supersededRevisionMilliseconds,
+				},
 			})));
 		},
 		async inspect(assetId: GraphicAssetId): Promise<GraphicAssetRetentionView | undefined> {
@@ -782,6 +945,10 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				actor: input.actor,
 				reason: 'early-purge',
 				outcome,
+				// An early purge is how an administrator reclaims space under
+				// pressure, so the capacity it was reclaiming against is the first
+				// thing anyone reviewing the decision will want.
+				quotaState: await observeQuotaState(),
 			})]);
 			return outcome.outcome === 'purged'
 				? {
@@ -797,7 +964,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			const startedAt = timestamp();
 			const quotaState = await observeQuotaState();
 			const staged = await expireStagedInput(correlationId, quotaState);
-			const trash = await purgeElapsedTrash(correlationId);
+			const trash = await purgeElapsedTrash(correlationId, quotaState);
 			const revisions = await pruneRevisions(correlationId);
 			const content = await collectUnreachableContent(correlationId, quotaState);
 			const records = [
@@ -808,6 +975,17 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			];
 			if (records.length > 0)
 				await catalogue.recordGraphicsAssetEvidence(records);
+			// Sealing runs after this sweep's own records so a subject cleaned up
+			// moments ago has its whole history stamped in the same pass rather
+			// than leaving the entry that explains the cleanup unsealed until the
+			// next one. Neither sealing nor expiry records Evidence of its own:
+			// entries about the ledger's housekeeping would outlive the entries
+			// they explain, and the next sweep would then have those to explain.
+			await catalogue.sealGraphicsAssetEvidence({
+				terminalCategories: GRAPHICS_EVIDENCE_TERMINAL_CATEGORIES,
+				retentionMilliseconds: GRAPHICS_EVIDENCE_RETENTION_MILLISECONDS,
+				limit: GRAPHICS_RETENTION_STAGE_BATCH,
+			});
 			const expiredEvidence = await catalogue.expireGraphicsAssetEvidence({
 				expiredBefore: timestamp(),
 			});
@@ -822,16 +1000,53 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				evidence: { recorded: records.length, expired: expiredEvidence },
 			};
 		},
-		async listEvidence(input: {
-			limit?: number;
-			categories?: readonly GraphicsAssetEvidenceCategory[];
-			subject?: { kind: GraphicsAssetEvidenceEntry['subject']['kind']; id: string };
-		} = {}) {
-			return await catalogue.listGraphicsAssetEvidence({
-				limit: Math.min(Math.max(input.limit ?? 100, 1), 500),
-				categories: input.categories,
-				subject: input.subject,
+		/**
+		 * One page of the ledger. The page is read one entry longer than it is
+		 * reported so the presence of a further page is observed rather than
+		 * guessed from a full page, which would offer a next page that turns out
+		 * to be empty at the exact end of the ledger.
+		 */
+		async listEvidence(
+			input: GraphicsAssetEvidenceQuery & { limit?: number } = {},
+		): Promise<GraphicsAssetEvidencePage> {
+			const limit = Math.min(Math.max(input.limit ?? 100, 1), 500);
+			const found = await catalogue.listGraphicsAssetEvidence({
+				...input,
+				limit: limit + 1,
 			});
+			const travellingNewer = input.direction === 'newer';
+			const beyond = found.length > limit;
+			// Reading newer walks away from the cursor, so the extra entry is the
+			// far one and the page keeps the entries adjacent to where the caller
+			// was. Both directions then report newest first.
+			const entries = travellingNewer
+				? found.slice(0, limit).reverse()
+				: found.slice(0, limit);
+			const first = entries[0];
+			const last = entries[entries.length - 1];
+			// A page is bounded by its own entries rather than by the cursor that
+			// produced it: the position to come back to is the entry at that edge,
+			// and the cursor is exclusive, so handing the old one back would skip
+			// the entry the caller is looking at.
+			function positionAt(entry: typeof first) {
+				return entry === undefined ? null : { recordedAt: entry.recordedAt, id: entry.id };
+			}
+			// A purged identity has a tombstone that outlives both the asset and
+			// this Evidence, and an empty ledger for a purged asset means something
+			// quite different from an empty ledger for one that never existed.
+			const tombstone = input.subject?.kind === 'graphic-asset'
+				? await catalogue.findGraphicAssetTombstone(input.subject.id as GraphicAssetId)
+				: undefined;
+			return {
+				...(tombstone === undefined ? {} : { tombstone }),
+				entries,
+				older: travellingNewer
+					? (input.cursor === undefined ? null : positionAt(last))
+					: (beyond ? positionAt(last) : null),
+				newer: travellingNewer
+					? (beyond ? positionAt(first) : null)
+					: (input.cursor === undefined ? null : positionAt(first)),
+			};
 		},
 	};
 }

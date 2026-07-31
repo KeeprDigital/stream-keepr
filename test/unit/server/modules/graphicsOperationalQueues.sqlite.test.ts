@@ -20,6 +20,7 @@ import {
 	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
+import { evidenceOf } from '~~/test/helpers/graphicsEvidence';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 const pixelPng = Uint8Array.from(Buffer.from(
@@ -645,14 +646,24 @@ describe('the operational queue inspector', () => {
 		});
 
 		// The ledger is filtered to this subject rather than to the newest rows
-		// the installation happens to hold.
-		expect(inspection.evidence).toHaveLength(1);
+		// the installation happens to hold, and it is chronological, so the
+		// refused purge is above the Trash transition that preceded it.
+		expect(inspection.evidence).toHaveLength(2);
 		expect(inspection.evidence[0]).toMatchObject({
 			category: 'graphic-asset-purge-blocked',
 			subject: { kind: 'graphic-asset', id: asset.result!.assetId },
 			outcome: 'graphic-asset-retained',
 			reason: 'reference-proof-found-usage',
 			detail: { referenceCount: 1 },
+		});
+		// Trash is where the recovery deadline was established, so the deadline
+		// the inspector shows above has Evidence standing behind it.
+		expect(inspection.evidence[1]).toMatchObject({
+			category: 'graphic-asset-trashed',
+			detail: {
+				transition: { from: 'active', to: 'trashed' },
+				deadline: inspection.deadline,
+			},
 		});
 	});
 
@@ -738,17 +749,20 @@ describe('the Evidence ledger read by subject', () => {
 			});
 		}
 
-		const entries = await context.library.listGraphicsAssetEvidence({
+		const entries = await evidenceOf(context.library, {
 			subject: { kind: 'graphic-asset', id: blocked.result!.assetId },
 		});
 
-		expect(entries).toHaveLength(1);
-		expect(entries[0]!.subject.id).toBe(blocked.result!.assetId);
+		expect(entries).not.toHaveLength(0);
+		for (const entry of entries)
+			expect(entry.subject.id).toBe(blocked.result!.assetId);
 
-		// The unfiltered read still sees both, so the filter is narrowing rather
-		// than the ledger only ever having held one entry.
-		await expect(context.library.listGraphicsAssetEvidence())
-			.resolves
-			.toHaveLength(2);
+		// The unfiltered read still sees the other asset's entries too, so the
+		// filter is narrowing rather than the ledger only ever having held one
+		// subject's worth.
+		const everything = await evidenceOf(context.library);
+		expect(everything.length).toBeGreaterThan(entries.length);
+		expect(everything.some(entry => entry.subject.id === other.result!.assetId))
+			.toBe(true);
 	});
 });

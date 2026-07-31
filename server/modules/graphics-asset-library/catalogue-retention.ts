@@ -151,7 +151,7 @@ interface EvidenceRow {
 	reason: string;
 	correlation_id: string;
 	detail: string;
-	expires_at: number;
+	expires_at: number | null;
 }
 
 function evidenceFromRow(row: EvidenceRow): GraphicsAssetEvidenceEntry {
@@ -165,7 +165,9 @@ function evidenceFromRow(row: EvidenceRow): GraphicsAssetEvidenceEntry {
 		reason: row.reason,
 		correlationId: row.correlation_id,
 		detail: JSON.parse(row.detail) as GraphicsAssetEvidenceEntry['detail'],
-		expiresAt: new Date(row.expires_at).toISOString(),
+		expiresAt: row.expires_at === null
+			? null
+			: new Date(row.expires_at).toISOString(),
 	};
 }
 
@@ -534,17 +536,25 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			const survivor = await database.prepare(
 				'SELECT 1 FROM graphic_assets WHERE id = ?',
 			).bind(input.assetId).first();
+			// The recovery deadline this purge proof observed. Reporting it lets the
+			// Evidence say which deadline authorised the purge, rather than leaving
+			// a reader to assume it from the reason.
+			const recoverableUntil = current.trash_recoverable_until === null
+				? undefined
+				: new Date(current.trash_recoverable_until).toISOString();
 			if (survivor) {
 				return {
 					outcome: 'blocked',
 					revisionCount: current.revision_count,
 					referenceCount: current.reference_count,
+					recoverableUntil,
 				};
 			}
 			return {
 				outcome: 'purged',
 				revisionCount: current.revision_count,
 				referenceCount: 0,
+				recoverableUntil,
 			};
 		},
 		async reconcileContentQuarantine(input) {
@@ -1001,7 +1011,7 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				entry.reason,
 				entry.correlationId,
 				JSON.stringify(entry.detail),
-				new Date(entry.expiresAt).getTime(),
+				entry.expiresAt === null ? null : new Date(entry.expiresAt).getTime(),
 			)) as [D1PreparedStatement, ...D1PreparedStatement[]];
 			const results = await database.batch(statements);
 			if (results.some(result => !result.success))
@@ -1009,39 +1019,127 @@ export function createD1GraphicsAssetRetentionCatalogue(
 		},
 		async listGraphicsAssetEvidence(input) {
 			const categories = input.categories ?? [];
-			// The category list stays one bound JSON array, so the subject filter
+			// The category list stays one bound JSON array, so every other filter
 			// below can take ordinary parameters without any list length being
-			// able to push the statement past D1's bound-parameter ceiling.
+			// able to push the statement past D1's bound-parameter ceiling. With
+			// the list as one value the whole statement binds at most eleven.
 			const conditions: string[] = [];
 			const bindings: (string | number)[] = [];
-			if (categories.length > 0) {
-				conditions.push(`category IN ${valuesFromJsonArray(`?${bindings.length + 1}`)}`);
-				bindings.push(boundJsonArray(categories));
+			function bind(...values: (string | number)[]) {
+				const first = bindings.length + 1;
+				bindings.push(...values);
+				return values.map((_, offset) => `?${first + offset}`);
 			}
+			if (categories.length > 0)
+				conditions.push(`category IN ${valuesFromJsonArray(bind(boundJsonArray(categories))[0]!)}`);
 			if (input.subject) {
-				conditions.push(
-					`subject_kind = ?${bindings.length + 1} AND subject_id = ?${bindings.length + 2}`,
+				const [kind, id] = bind(input.subject.kind, input.subject.id);
+				conditions.push(`subject_kind = ${kind} AND subject_id = ${id}`);
+			}
+			if (input.actor !== undefined)
+				conditions.push(`actor = ${bind(input.actor)[0]}`);
+			if (input.correlationId !== undefined)
+				conditions.push(`correlation_id = ${bind(input.correlationId)[0]}`);
+			if (input.recordedFrom !== undefined)
+				conditions.push(`recorded_at >= ${bind(new Date(input.recordedFrom).getTime())[0]}`);
+			if (input.recordedUntil !== undefined)
+				conditions.push(`recorded_at <= ${bind(new Date(input.recordedUntil).getTime())[0]}`);
+			// Reading newer than a cursor walks the ledger the other way, so the
+			// comparison, the ordering, and the tiebreak all have to flip together.
+			// Ordering by anything the cursor does not also compare would let a
+			// page skip an entry written in the same millisecond as the boundary.
+			const older = input.direction !== 'newer';
+			if (input.cursor) {
+				const [at, id] = bind(
+					new Date(input.cursor.recordedAt).getTime(),
+					input.cursor.id,
 				);
-				bindings.push(input.subject.kind, input.subject.id);
+				conditions.push(older
+					? `(recorded_at < ${at} OR (recorded_at = ${at} AND id < ${id}))`
+					: `(recorded_at > ${at} OR (recorded_at = ${at} AND id > ${id}))`);
 			}
 			const result = await database.prepare(`
 				SELECT id, recorded_at, category, actor, subject_kind, subject_id,
 					outcome, reason, correlation_id, detail, expires_at
 				FROM graphics_asset_evidence
 				${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
-				ORDER BY recorded_at DESC, id DESC
-				LIMIT ?${bindings.length + 1}
-			`).bind(
-				...bindings,
-				input.limit,
-			).all<EvidenceRow>();
+				ORDER BY recorded_at ${older ? 'DESC' : 'ASC'}, id ${older ? 'DESC' : 'ASC'}
+				LIMIT ${bind(input.limit)[0]}
+			`).bind(...bindings).all<EvidenceRow>();
 			if (!result.success)
 				throw new Error('Graphics Asset Evidence could not be read');
 			return result.results.map(evidenceFromRow);
 		},
+		async sealGraphicsAssetEvidence(input) {
+			// Sealing is driven from inside the ledger: the entry that records a
+			// terminal cleanup is what proves the subject will never be heard from
+			// again, so no other table has to be consulted to know when a subject's
+			// window may start. The batch is bounded by subject, and a subject that
+			// records further Evidence after being sealed is simply sealed again on
+			// the next sweep against the same anchor.
+			const terminal = await database.prepare(`
+				SELECT terminal.subject_kind, terminal.subject_id,
+					MAX(terminal.recorded_at) AS terminal_at
+				FROM graphics_asset_evidence terminal
+				WHERE terminal.category IN ${valuesFromJsonArray('?1')}
+					AND EXISTS (
+						SELECT 1 FROM graphics_asset_evidence unsealed
+						WHERE unsealed.subject_kind = terminal.subject_kind
+							AND unsealed.subject_id = terminal.subject_id
+							AND unsealed.expires_at IS NULL
+					)
+				GROUP BY terminal.subject_kind, terminal.subject_id
+				ORDER BY terminal_at
+				LIMIT ?2
+			`).bind(
+				boundJsonArray(input.terminalCategories),
+				input.limit,
+			).all<{ subject_kind: string; subject_id: string; terminal_at: number }>();
+			if (!terminal.success)
+				throw new Error('Terminal Graphics Asset Evidence could not be read');
+			if (terminal.results.length === 0)
+				return 0;
+			const statements = terminal.results.map(subject => database.prepare(`
+				UPDATE graphics_asset_evidence
+				SET expires_at = ?
+				WHERE subject_kind = ? AND subject_id = ? AND expires_at IS NULL
+			`).bind(
+				subject.terminal_at + input.retentionMilliseconds,
+				subject.subject_kind,
+				subject.subject_id,
+			)) as [D1PreparedStatement, ...D1PreparedStatement[]];
+			const results = await database.batch(statements);
+			if (results.some(result => !result.success))
+				throw new Error('Graphics Asset Evidence could not be sealed');
+			return terminal.results.length;
+		},
+		async findGraphicAssetTombstone(assetId) {
+			const row = await database.prepare(`
+				SELECT purged_at, purge_reason, revision_count, reference_count
+				FROM graphic_asset_tombstones WHERE asset_id = ?
+			`).bind(assetId).first<{
+				purged_at: number;
+				purge_reason: 'trash-window-elapsed' | 'early-purge';
+				revision_count: number;
+				reference_count: number;
+			}>();
+			return row
+				? {
+						assetId,
+						purgedAt: new Date(row.purged_at).toISOString(),
+						reason: row.purge_reason,
+						revisionCount: row.revision_count,
+						referenceCount: row.reference_count,
+					}
+				: undefined;
+		},
 		async expireGraphicsAssetEvidence(input) {
+			// Unsealed Evidence has no expiry to have passed. Comparing a null
+			// against the cutoff is already false in SQL, but saying so keeps the
+			// one statement that destroys Evidence explicit about what it spares.
 			const result = await database.prepare(`
-				DELETE FROM graphics_asset_evidence WHERE expires_at <= ?
+				DELETE FROM graphics_asset_evidence
+				WHERE expires_at IS NOT NULL AND expires_at <= ?
 			`).bind(new Date(input.expiredBefore).getTime()).run();
 			if (!result.success)
 				throw new Error('Expired Graphics Asset Evidence could not be removed');
