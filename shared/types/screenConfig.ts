@@ -246,10 +246,17 @@ export interface FeatureMatchOverlayBorderSides {
  *
  * It carries no typography, padding, or overflow. Those belonged to the legacy
  * widget model, and a Source Item paints a bordered hole rather than text.
+ *
+ * `backgroundGradient` is a raw CSS gradient string, as the Frame's own
+ * `gradient` is. The shared Graphic Fill replaced arbitrary CSS with a bounded
+ * two-to-four-stop gradient, but that is a rule for the shared vocabulary — the
+ * host layer keeps the string it always painted, and keeping it here and on the
+ * Frame means the two host-owned surfaces state the same capability.
  */
 export interface FeatureMatchSourceFramingStyle extends FeatureMatchOverlayBorderSides {
 	backgroundColor?: string;
 	backgroundOpacity?: number;
+	backgroundGradient?: string;
 	borderVisible?: boolean;
 	borderColor?: string;
 	borderWidth?: number;

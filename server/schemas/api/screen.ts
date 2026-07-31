@@ -394,6 +394,7 @@ const featureMatchOverlayBorderSidesSchema = z.object({
 const featureMatchSourceFramingStyleSchema = featureMatchOverlayBorderSidesSchema.extend({
 	backgroundColor: optionalCssColorSchema,
 	backgroundOpacity: opacitySchema.optional(),
+	backgroundGradient: z.string().max(1000).optional(),
 	borderVisible: z.boolean().optional(),
 	borderColor: optionalCssColorSchema,
 	borderWidth: nonNegativePixelSchema.optional(),

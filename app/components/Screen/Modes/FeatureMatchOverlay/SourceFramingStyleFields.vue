@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FeatureMatchSourceFramingStyle } from '~~/shared/types/screenConfig';
+import FeatureMatchOverlayBackgroundFields from './BackgroundFields.vue';
 import FeatureMatchOverlayBorderRadiusControl from './BorderRadiusControl.vue';
 import FeatureMatchOverlayBorderSidesControl from './BorderSidesControl.vue';
 
@@ -11,6 +12,9 @@ import FeatureMatchOverlayBorderSidesControl from './BorderSidesControl.vue';
  * has no per-side border by design — a composed rule-preset Shape Graphic Item
  * replaces it there — but the Frame and its Source Items are host capability, and
  * that is what this edits.
+ *
+ * The background block is the Frame's own, so both host-owned surfaces offer the
+ * same base colour, gradient overlay, and opacity.
  */
 
 const props = defineProps<{ framingStyle?: FeatureMatchSourceFramingStyle }>();
@@ -24,32 +28,29 @@ const style = computed(() => props.framingStyle ?? {});
 function update(updates: Partial<FeatureMatchSourceFramingStyle>) {
 	emit('update', updates);
 }
+
+function updateBackground(updates: { color?: string; gradient?: string; opacity?: number }) {
+	const styleUpdates: Partial<FeatureMatchSourceFramingStyle> = {};
+	if ('color' in updates)
+		styleUpdates.backgroundColor = updates.color;
+	if ('gradient' in updates)
+		styleUpdates.backgroundGradient = updates.gradient;
+	if ('opacity' in updates)
+		styleUpdates.backgroundOpacity = updates.opacity ?? 0;
+	update(styleUpdates);
+}
 </script>
 
 <template>
 	<div class="space-y-3">
-		<div class="grid gap-3 md:grid-cols-2">
-			<UFormField label="Background">
-				<UInput
-					type="color"
-					:model-value="style.backgroundColor ?? '#000000'"
-					size="sm"
-					class="w-full"
-					@update:model-value="update({ backgroundColor: String($event) })"
-				/>
-			</UFormField>
-			<UFormField label="Background opacity">
-				<UInputNumber
-					:model-value="style.backgroundOpacity ?? 0"
-					:min="0"
-					:max="1"
-					:step="0.05"
-					size="sm"
-					class="w-full"
-					@update:model-value="update({ backgroundOpacity: $event ?? 0 })"
-				/>
-			</UFormField>
-		</div>
+		<FeatureMatchOverlayBackgroundFields
+			:color="style.backgroundColor"
+			:gradient="style.backgroundGradient"
+			:opacity="style.backgroundOpacity"
+			color-label="Background"
+			opacity-label="Background opacity"
+			@update="updateBackground"
+		/>
 
 		<div class="grid gap-3 md:grid-cols-3 md:items-end">
 			<ScreenSettingsToggle

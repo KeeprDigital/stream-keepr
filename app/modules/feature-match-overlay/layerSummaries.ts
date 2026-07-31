@@ -19,6 +19,8 @@ export function appearanceSummary(style?: FeatureMatchSourceFramingStyle) {
 	const parts = [];
 	if (style?.backgroundOpacity)
 		parts.push('background');
+	if (style?.backgroundGradient)
+		parts.push('gradient');
 	if (style?.borderVisible)
 		parts.push(`border ${style.borderWidth ?? 1}px`);
 	if (style?.glowSize)

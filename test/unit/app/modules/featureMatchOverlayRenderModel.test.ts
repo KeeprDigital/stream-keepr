@@ -86,6 +86,33 @@ describe('feature match overlay host render model', () => {
 		});
 	});
 
+	it('keeps the background gradient, which the host layer did not drop either', () => {
+		// The shared Graphic Fill replaced arbitrary CSS gradients with two-to-four
+		// positioned stops, but that rule is the shared vocabulary's own. A Source
+		// Item paints the string the Frame beside it still paints.
+		const gradient = 'linear-gradient(90deg, #b80054, #7f22f6)';
+		const model = resolveFeatureMatchOverlayRenderModel({
+			config: configWith([source({ framingStyle: { backgroundGradient: gradient } })]),
+			output: 'overlay',
+		});
+		const overBase = resolveFeatureMatchOverlayRenderModel({
+			config: configWith([source({
+				framingStyle: { backgroundGradient: gradient, backgroundColor: '#001122', backgroundOpacity: 0.5 },
+			})]),
+			output: 'overlay',
+		});
+		const key = resolveFeatureMatchOverlayRenderModel({
+			config: configWith([source({ framingStyle: { backgroundGradient: gradient } })]),
+			output: 'key',
+		});
+
+		// A gradient alone is fully opaque, as it was before the rewrite.
+		expect(model.sourceItems[0]!.style.background).toBe(gradient);
+		expect(overBase.sourceItems[0]!.style.background).toBe(`${gradient}, rgba(0, 17, 34, 0.5)`);
+		// A Key Output is a matte: the gradient becomes coverage, not colour.
+		expect(key.sourceItems[0]!.style.background).toBe('#ffffffff');
+	});
+
 	it('paints the Key Output in white and the Fill Output over black', () => {
 		const key = resolveFeatureMatchOverlayRenderModel({
 			config: configWith([source({ framingStyle: { borderVisible: true, borderColor: '#0077a3', borderWidth: 4 } })]),

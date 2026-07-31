@@ -85,13 +85,18 @@ function colorWithOpacity(output: FeatureMatchOverlayOutput, color: string | und
 }
 
 function cssBackgroundStyle(output: FeatureMatchOverlayOutput, style: FeatureMatchSourceFramingStyle | undefined) {
-	const opacity = style?.backgroundOpacity ?? 0;
+	const gradient = style?.backgroundGradient?.trim();
+	const opacity = style?.backgroundOpacity ?? (gradient ? 1 : 0);
 	const color = style?.backgroundColor?.trim();
 	const hasBaseColor = Boolean(color && !/^transparent$/i.test(color));
 
 	if (output === 'key')
-		return opacity > 0 && hasBaseColor ? colorWithOpacity(output, '#ffffff', opacity) : 'transparent';
-	if (opacity <= 0 || !hasBaseColor)
+		return opacity > 0 && (gradient || hasBaseColor) ? colorWithOpacity(output, '#ffffff', opacity) : 'transparent';
+	if (opacity <= 0)
+		return 'transparent';
+	if (gradient)
+		return hasBaseColor ? `${gradient}, ${colorWithOpacity(output, color, opacity)}` : gradient;
+	if (!hasBaseColor)
 		return 'transparent';
 
 	return colorWithOpacity(output, color, opacity);
