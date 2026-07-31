@@ -5,6 +5,7 @@ import type {
 	BroadcastGraphicTemplateSummary,
 } from '~~/shared/types/broadcastGraphicTemplate';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 
 /**
  * HTTP adapter for the Broadcast Graphic Template library.
@@ -19,6 +20,14 @@ import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 export function useBroadcastGraphicTemplateRepository() {
 	const apiHeaders = useApiHeaders();
 	const library = '/api/graphics-templates/broadcast-graphics';
+	/**
+	 * Importing a Template Package is a Graphics Ingestion Operation, so it runs on
+	 * the Graphics Asset Library's own durable path rather than on the template
+	 * library's. That is the artifact boundary again: receiving, validating, and
+	 * installing bytes belongs to the asset library, and only the design that comes
+	 * out the other end belongs here.
+	 */
+	const ingestion = '/api/graphics-assets/ingestion-operations';
 
 	const list = async (): Promise<BroadcastGraphicTemplateSummary[]> => {
 		const response = await $fetch<BroadcastGraphicTemplateListResponse>(library);
@@ -93,5 +102,74 @@ export function useBroadcastGraphicTemplateRepository() {
 		);
 	};
 
-	return { list, get, save, update, remove, place };
+	/**
+	 * Where one template's `.skgraphic` Template Package is served from.
+	 *
+	 * A URL rather than a fetch, because the browser downloading it directly is the
+	 * whole point: a package is a file an author keeps, and pulling megabytes of
+	 * embedded assets through JavaScript to hand them straight back to a download
+	 * would buffer the entire archive in the tab for no gain.
+	 */
+	const packageUrl = (templateId: string): string => `${library}/${templateId}/template-package`;
+
+	/**
+	 * Receive one `.skgraphic` Template Package and run it through preflight.
+	 *
+	 * Import is a Graphics Ingestion Operation, so it is the operation that comes
+	 * back rather than a template: preflight may reject it, or pause it once for a
+	 * confirmation, and only a caller looking at the operation can tell which.
+	 */
+	const receivePackage = async (file: File): Promise<GraphicsIngestionOperation> => {
+		const initiated = await $fetch<GraphicsIngestionOperation>(ingestion, {
+			method: 'POST',
+			headers: apiHeaders.getHeaders(),
+			body: {
+				idempotencyKey: `skgraphic-import-${crypto.randomUUID()}`,
+				source: 'template-package',
+				sourceFileName: file.name,
+				declaredByteLength: file.size,
+			},
+		});
+		return await $fetch<GraphicsIngestionOperation>(`${ingestion}/${initiated.id}/content`, {
+			method: 'PUT',
+			headers: apiHeaders.getHeaders(),
+			body: file,
+		});
+	};
+
+	/**
+	 * Accept one exact preflight proposal. The fingerprint is what is being accepted,
+	 * not the operation: a report that has since changed is a different proposal and
+	 * this confirmation does not carry over to it.
+	 */
+	const confirmPackage = async (
+		operationId: string,
+		fingerprint: string,
+	): Promise<GraphicsIngestionOperation> => {
+		return await $fetch<GraphicsIngestionOperation>(
+			`${ingestion}/${operationId}/template-package-confirmation`,
+			{ method: 'POST', headers: apiHeaders.getHeaders(), body: { fingerprint } },
+		);
+	};
+
+	/** Install a confirmed package. Repeating it answers with the installation that committed. */
+	const installPackage = async (operationId: string): Promise<GraphicsIngestionOperation> => {
+		return await $fetch<GraphicsIngestionOperation>(
+			`${ingestion}/${operationId}/template-package-installation`,
+			{ method: 'POST', headers: apiHeaders.getHeaders() },
+		);
+	};
+
+	return {
+		list,
+		get,
+		save,
+		update,
+		remove,
+		place,
+		packageUrl,
+		receivePackage,
+		confirmPackage,
+		installPackage,
+	};
 }

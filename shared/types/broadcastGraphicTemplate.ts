@@ -20,6 +20,20 @@ export const MAX_BROADCAST_GRAPHIC_TEMPLATE_NAME_LENGTH = 100;
 export const MAX_BROADCAST_GRAPHIC_TEMPLATE_DESCRIPTION_LENGTH = 500;
 
 /**
+ * Where a Template Package brought a library entry in from.
+ *
+ * The exporting installation's Template identity and the revision it was exported
+ * at, and nothing more. It exists so a later package of the same design can be
+ * recognised as related; it is never an update link, nothing re-reads it when the
+ * entry is revised here, and the entry's own `revision` starts from 1 like any
+ * other. Absent on every entry authored here.
+ */
+export interface BroadcastGraphicTemplateOrigin {
+	sourceTemplateIdentity: string;
+	sourceTemplateRevision: number | null;
+}
+
+/**
  * One library entry as the library browser reads it.
  *
  * Deliberately without the composition: browsing a library of designs is not
@@ -31,6 +45,8 @@ export interface BroadcastGraphicTemplateSummary {
 	name: string;
 	description: string | null;
 	revision: number;
+	/** Present only on an entry a Template Package import produced. */
+	origin?: BroadcastGraphicTemplateOrigin;
 	/** Graphic Items in the saved composition, Graphic Group children included. */
 	itemCount: number;
 	inputCount: number;

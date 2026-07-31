@@ -1,4 +1,5 @@
 import type { FeatureMatchGraphicItemType } from '~~/shared/featureMatchGraphicItemDefinitions';
+import type { GraphicItemKind } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
 	TemplatePackageAsset,
@@ -17,7 +18,7 @@ import {
 	featureMatchGraphicItemDefinition,
 } from '~~/shared/featureMatchGraphicItemDefinitions';
 import { FEATURE_MATCH_OVERLAY_FONT_IDS } from '~~/shared/featureMatchOverlayFonts';
-import { GRAPHIC_ITEM_KINDS } from '~~/shared/modules/graphics/itemDefinitions';
+import { getGraphicItemDefinition, GRAPHIC_ITEM_KINDS } from '~~/shared/modules/graphics/itemDefinitions';
 import {
 	TEMPLATE_PACKAGE_ARTIFACTS,
 	TEMPLATE_PACKAGE_LIMITS,
@@ -241,8 +242,12 @@ function supportedGraphicItemDefinitionVersion(identity: string): number | undef
 		return featureMatchGraphicItemDefinition(identity as FeatureMatchGraphicItemType)
 			.configurationVersion;
 	}
-	// The shared Graphics Foundation kinds carry their first configuration version.
-	return (GRAPHIC_ITEM_KINDS as readonly string[]).includes(identity) ? 1 : undefined;
+	// The shared Graphics Foundation kinds state their own configuration version on
+	// their Graphic Item Definition, so a kind whose stored configuration gains
+	// meaning advances one number and every package check follows it.
+	return (GRAPHIC_ITEM_KINDS as readonly string[]).includes(identity)
+		? getGraphicItemDefinition(identity as GraphicItemKind).configurationVersion
+		: undefined;
 }
 
 /**
@@ -419,7 +424,7 @@ function encodeJson(value: unknown): Uint8Array {
  */
 export function planTemplatePackage(input: {
 	packageKind: TemplatePackageKind;
-	template: { identity: string; name: string; document: unknown };
+	template: { identity: string; name: string; revision?: number; document: unknown };
 	revisions: readonly ResolvedPackagedRevision[];
 	capabilities: readonly TemplatePackageCapabilityDeclaration[];
 	createdAt: string;
@@ -491,6 +496,9 @@ export function planTemplatePackage(input: {
 		template: {
 			identity: input.template.identity,
 			name: input.template.name,
+			// Written only when the exporting workflow has one, so a manifest never
+			// claims a revision that means nothing.
+			...(input.template.revision === undefined ? {} : { revision: input.template.revision }),
 			entry: TEMPLATE_PACKAGE_TEMPLATE_ENTRY,
 		},
 		packagedAssets,

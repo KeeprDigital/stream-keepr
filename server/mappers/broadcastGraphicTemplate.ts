@@ -21,6 +21,17 @@ export function mapBroadcastGraphicTemplateToSummary(
 		name: template.name,
 		description: template.description,
 		revision: template.revision,
+		// Provenance is presented only when there is provenance to present, so an
+		// author reading a library entry can tell an imported design from one authored
+		// here without every entry carrying empty origin fields.
+		...(template.sourceTemplateIdentity === null
+			? {}
+			: {
+					origin: {
+						sourceTemplateIdentity: template.sourceTemplateIdentity,
+						sourceTemplateRevision: template.sourceTemplateRevision,
+					},
+				}),
 		// Graphic Group children are Graphic Items in their own right and count as such,
 		// exactly as they do against the Screen's own Graphic Item caps.
 		itemCount: flattenGraphicItems(template.document).length,

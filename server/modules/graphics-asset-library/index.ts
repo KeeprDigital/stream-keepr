@@ -47,6 +47,7 @@ import type {
 	TemplatePackageKind,
 	TemplatePackageManifest,
 	TemplatePackageMappingBasis,
+	TemplatePackagePayloads,
 	TemplatePackagePreflightIssue,
 	TemplatePackagePreflightMapping,
 	TemplatePackagePreflightQuota,
@@ -909,6 +910,11 @@ export interface TemplatePackageExportRequest {
 	template: {
 		identity: string;
 		name: string;
+		/**
+		 * The revision the exporting workflow is at, where it manages one. It travels
+		 * as provenance beside the identity and never as an update link.
+		 */
+		revision?: number;
 		document: unknown;
 	};
 	/** Every exact revision the Template transitively requires, by Template slot. */
@@ -937,6 +943,17 @@ interface GraphicsAssetLibraryDependencies {
 	canonical: GraphicsObjectStoreHealth | GraphicsCanonicalObjectStore;
 	silentVideoPlaybackValidator?: SilentVideoPlaybackValidator;
 	remoteSource?: GraphicsRemoteSourceFetcher;
+	/**
+	 * How a received Template document is read as the artifact its package kind
+	 * claims. Injected rather than imported, because the library must not learn what
+	 * a Broadcast Graphic is to carry one.
+	 *
+	 * Omitted, every kind's document is carried under the envelope's own rules alone
+	 * — data-only, self-contained, every packaged asset accounted for — and nothing
+	 * further is claimed about it. That is the right default for a library test
+	 * double; the application always wires the real registry.
+	 */
+	templatePayloads?: TemplatePackagePayloads;
 	now?: () => Date;
 	generateIdentity?: () => string;
 }
@@ -2270,6 +2287,59 @@ export function createGraphicsAssetLibrary(
 	} as const;
 
 	/**
+	 * Reads a received Template document as the artifact its package claims to
+	 * carry, and holds the manifest to what that document actually requires.
+	 *
+	 * Two separate refusals, and they fail differently on purpose:
+	 *
+	 * - A document that is not this kind's artifact is `invalid-template-document`.
+	 *   Nothing downstream could use it, so there is nothing to weigh.
+	 * - A document requiring an application capability the manifest never declares
+	 *   is `unsupported-application-capability`. The declaration is the *only* place
+	 *   a configuration version is stated — a document carries a Graphic Item's
+	 *   configuration, never the version it was written under — so an undeclared
+	 *   Definition is one whose version this installation was never given a chance
+	 *   to check. Installing it would be assuming the sender meant the version we
+	 *   happen to implement, which is precisely the assumption a version-pinned
+	 *   envelope exists to refuse.
+	 *
+	 * Over-declaration is not an error. A manifest naming a capability the document
+	 * no longer uses costs a supported-capability check and nothing else, and a
+	 * receiver refusing it would reject packages that are entirely installable.
+	 */
+	function inspectReceivedTemplatePayload(
+		manifest: TemplatePackageManifest,
+		document: unknown,
+	): TemplatePackagePreflightIssue[] {
+		const payload = dependencies.templatePayloads?.(manifest.packageKind);
+		if (!payload)
+			return [];
+		const read = payload.readInstallableDocument(document);
+		if (read.outcome === 'rejected') {
+			return read.issues.map(issue => templatePackagePreflightIssue(issue.code, {
+				subject: issue.subject,
+				message: issue.message,
+			}));
+		}
+		const declared = new Set(manifest.applicationCapabilities.map(
+			declaration => `${declaration.capability}:${declaration.identity}`,
+		));
+		const undeclared = new Map<string, TemplatePackageCapabilityRequirement>();
+		for (const requirement of read.capabilities) {
+			const key = `${requirement.capability}:${requirement.identity}`;
+			if (declared.has(key) || undeclared.has(key))
+				continue;
+			undeclared.set(key, requirement);
+		}
+		return [...undeclared.values()].map(requirement =>
+			templatePackagePreflightIssue('unsupported-application-capability', {
+				subject: requirement.slot,
+				message: `The Template requires ${requirement.capability} "${requirement.identity}", which the package never declares`,
+			}),
+		);
+	}
+
+	/**
 	 * Streams one archive entry in bounded chunks so its digest can be recomputed
 	 * without the entry ever being resident in full.
 	 */
@@ -2332,6 +2402,7 @@ export function createGraphicsAssetLibrary(
 				packageKind?: TemplatePackageKind;
 				templateIdentity?: string;
 				templateName?: string;
+				templateRevision?: number;
 				schema?: TemplatePackagePreflightReport['schema'];
 				compatibilityProfiles?: readonly string[];
 				mappings?: readonly TemplatePackagePreflightMapping[];
@@ -2343,6 +2414,7 @@ export function createGraphicsAssetLibrary(
 				packageKind: options.packageKind ?? 'skgraphic',
 				templateIdentity: options.templateIdentity ?? '',
 				templateName: options.templateName ?? '',
+				templateRevision: options.templateRevision,
 				sourceDigest: input.sourceDigest,
 				schema: options.schema ?? {
 					received: 0,
@@ -2447,6 +2519,7 @@ export function createGraphicsAssetLibrary(
 			packageKind: manifest.packageKind,
 			templateIdentity: manifest.template.identity,
 			templateName: manifest.template.name,
+			templateRevision: manifest.template.revision,
 			schema,
 			observed,
 		};
@@ -2511,6 +2584,12 @@ export function createGraphicsAssetLibrary(
 						message: issue.message,
 					}));
 				}
+				// The envelope has now proved the document is data. Only the package
+				// kind's own payload can prove it is the *artifact* the package
+				// claims, and only it can say which application capabilities the
+				// document genuinely requires — which is what holds the manifest's
+				// declarations to the document rather than to the sender's word.
+				issues.push(...inspectReceivedTemplatePayload(manifest, document));
 				// A package embeds every asset its Template needs and no others.
 				// The document names the sender's identities, which are exactly the
 				// provenance each packaged asset declares.
@@ -5039,7 +5118,12 @@ export function createGraphicsAssetLibrary(
 			// simply cannot be counted, which can only understate a violation.
 			const plan = planTemplatePackage({
 				packageKind: input.packageKind,
-				template: { identity, name, document: input.template.document },
+				template: {
+					identity,
+					name,
+					revision: input.template.revision,
+					document: input.template.document,
+				},
 				revisions,
 				capabilities: capabilities.declarations,
 				createdAt: checkedAt,

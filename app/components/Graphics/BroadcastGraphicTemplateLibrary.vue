@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { BroadcastGraphicTemplateSummary } from '~~/shared/types/broadcastGraphicTemplate';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 
 /**
  * The Broadcast Graphic Template library, as an author browses and manages it.
@@ -217,6 +218,97 @@ async function remove(templateId: string) {
 	}
 }
 
+/* ────────────────────────────────────────────────
+ * Template Packages
+ * ──────────────────────────────────────────────── */
+
+/**
+ * Importing a package is deliberately not a one-click action.
+ *
+ * Preflight can reach three conclusions and each needs a different thing from the
+ * author: a rejection is terminal and explains itself, a clean proposal installs
+ * straight away, and a proposal carrying warnings pauses exactly once for a
+ * confirmation bound to that exact report. Collapsing the last case into an
+ * automatic install would silently accept, on the author's behalf, decisions like
+ * "this content already exists here under a different name" — which are precisely
+ * the ones a Template Package Preflight Report exists to put in front of them.
+ */
+const importing = ref(false);
+const pendingImport = ref<GraphicsIngestionOperation | null>(null);
+
+const importFileInput = useTemplateRef<HTMLInputElement>('importFileInput');
+
+/** The issues an author is being asked to accept, or the reasons a package was refused. */
+const importIssues = computed(() => pendingImport.value?.templatePackagePreflight?.issues ?? []);
+const importRejected = computed(() =>
+	pendingImport.value?.templatePackagePreflight?.outcome === 'rejected',
+);
+const importAwaitingConfirmation = computed(() =>
+	pendingImport.value?.stage === 'awaiting-confirmation',
+);
+
+function dismissImport() {
+	pendingImport.value = null;
+}
+
+/** Finish an operation that has nothing left to ask, and show what it produced. */
+async function installReceivedPackage(operationId: string) {
+	const installed = await repository.installPackage(operationId);
+	pendingImport.value = installed.stage === 'completed' ? null : installed;
+	await refresh();
+}
+
+async function importPackage(file: File) {
+	if (!canAuthor.value)
+		return;
+	importing.value = true;
+	pendingImport.value = null;
+	try {
+		const received = await repository.receivePackage(file);
+		error.value = null;
+		if (received.stage === 'awaiting-installation') {
+			await installReceivedPackage(received.id);
+			return;
+		}
+		// Rejected, or paused for the one confirmation it is entitled to ask for.
+		pendingImport.value = received;
+	}
+	catch (caught) {
+		error.value = failureMessage(caught);
+	}
+	finally {
+		importing.value = false;
+	}
+}
+
+async function confirmImport() {
+	const operation = pendingImport.value;
+	const fingerprint = operation?.templatePackagePreflight?.fingerprint;
+	if (!canAuthor.value || !operation || !fingerprint)
+		return;
+	importing.value = true;
+	try {
+		await repository.confirmPackage(operation.id, fingerprint);
+		await installReceivedPackage(operation.id);
+		error.value = null;
+	}
+	catch (caught) {
+		error.value = failureMessage(caught);
+	}
+	finally {
+		importing.value = false;
+	}
+}
+
+function onImportFileChosen(event: Event) {
+	const input = event.target as HTMLInputElement;
+	const file = input.files?.[0];
+	// Cleared straight away so choosing the same file twice still fires a change.
+	input.value = '';
+	if (file)
+		void importPackage(file);
+}
+
 onMounted(() => {
 	void refresh();
 });
@@ -241,6 +333,78 @@ onMounted(() => {
 			>
 				Save {{ selectedGraphic ? selectedGraphic.name : 'Broadcast Graphic' }} as a template
 			</UButton>
+
+			<!--
+				Importing a design from elsewhere. The file picker is hidden behind an
+				ordinary button so the control reads like the library's other actions
+				rather than like a form.
+			-->
+			<div v-if="canAuthor">
+				<input
+					ref="importFileInput"
+					type="file"
+					accept=".skgraphic"
+					class="hidden"
+					data-testid="template-library-import-input"
+					@change="onImportFileChosen"
+				>
+				<UButton
+					size="xs"
+					variant="soft"
+					icon="i-lucide-package-open"
+					:loading="importing"
+					:disabled="importing"
+					data-testid="template-library-import"
+					@click="importFileInput?.click()"
+				>
+					Import a Template Package
+				</UButton>
+			</div>
+
+			<!--
+				What preflight concluded. A rejection is terminal and lists every reason
+				at once; a pause lists what the author is being asked to accept before
+				anything is installed.
+			-->
+			<div
+				v-if="pendingImport"
+				class="rounded-md border p-2"
+				:class="importRejected ? 'border-error/40 bg-error/10' : 'border-warning/40 bg-warning/10'"
+				data-testid="template-library-import-report"
+			>
+				<p class="text-xs font-medium">
+					{{ importRejected
+						? 'This Template Package cannot be installed'
+						: 'Review before installing this Template Package' }}
+				</p>
+				<ul class="mt-1 space-y-1">
+					<li v-for="(issue, index) in importIssues" :key="`${issue.code}-${index}`" class="text-xs text-muted">
+						{{ issue.message }}<span v-if="issue.remediation"> — {{ issue.remediation }}</span>
+					</li>
+				</ul>
+				<div class="mt-2 flex gap-1.5">
+					<UButton
+						v-if="importAwaitingConfirmation"
+						size="xs"
+						variant="subtle"
+						:loading="importing"
+						:disabled="importing"
+						data-testid="template-library-import-confirm"
+						@click="confirmImport"
+					>
+						Install
+					</UButton>
+					<UButton
+						size="xs"
+						color="neutral"
+						variant="ghost"
+						data-testid="template-library-import-dismiss"
+						@click="dismissImport"
+					>
+						{{ importAwaitingConfirmation ? 'Cancel' : 'Dismiss' }}
+					</UButton>
+				</div>
+			</div>
 
 			<UAlert
 				v-if="error"
@@ -299,6 +463,21 @@ onMounted(() => {
 							</p>
 						</div>
 						<div v-if="canAuthor" class="flex shrink-0 gap-1">
+							<!--
+								A plain download, because a Template Package is a file an author
+								keeps rather than a response this component has any use for.
+							-->
+							<UButton
+								size="xs"
+								color="neutral"
+								variant="ghost"
+								icon="i-lucide-package"
+								:to="repository.packageUrl(template.id)"
+								external
+								download
+								:aria-label="`Export ${template.name}`"
+								data-testid="template-export"
+							/>
 							<UButton
 								size="xs"
 								variant="subtle"
