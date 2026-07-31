@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { wasmModulePlugin } from './build/wasmModulePlugin';
 import {
 	GRAPHICS_MULTIPART_PART_BYTES,
+	MAX_SILENT_VIDEO_INGESTION_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from './shared/utils/graphicsAssetCompatibility';
 import { MUTATION_BODY_METHODS } from './shared/utils/requestBodyLimits';
@@ -114,6 +115,17 @@ export default defineNuxtConfig({
 					PUT: {
 						maxBytes: MAX_STILL_IMAGE_INGESTION_BYTES,
 						label: 'Graphic Asset transfer',
+					},
+				},
+			},
+			// Exact-byte repair carries whole content of any accepted kind, so its
+			// limit is the largest source the compatibility profile accepts. The
+			// route streams it without buffering, exactly like ingestion.
+			'/api/admin/graphics-assets/discrepancies/**': {
+				boundedRawMutations: {
+					PUT: {
+						maxBytes: MAX_SILENT_VIDEO_INGESTION_BYTES,
+						label: 'Graphic Asset Content repair',
 					},
 				},
 			},

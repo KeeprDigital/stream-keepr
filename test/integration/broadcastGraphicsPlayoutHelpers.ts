@@ -87,6 +87,22 @@ export function integrationGraphicAnimation(
 	};
 }
 
+/**
+ * The same graphic, plus the Graphic Source Selections and Graphic Input Bindings a
+ * placed Broadcast Graphic owns.
+ *
+ * Written through the ordinary Screen write so the declarations, the bindings, and
+ * the derivations all pass the schema an editor writes through.
+ */
+export function integrationBroadcastGraphicWithBindings(
+	id: string,
+	inputs: GraphicInputDeclaration[],
+	sources: BroadcastGraphicConfig['sources'],
+	bindings: BroadcastGraphicConfig['bindings'],
+): BroadcastGraphicConfig {
+	return { ...integrationBroadcastGraphicWithInputs(id, inputs), sources, bindings };
+}
+
 /** A text Graphic Input, staged and optional unless stated otherwise. */
 export function integrationTextInput(
 	key: string,
@@ -102,6 +118,32 @@ export function integrationTextInput(
 		maxLength: 20,
 		...overrides,
 	};
+}
+
+export async function selectBroadcastGraphicSource(
+	harness: { send: (command: BroadcastGraphicsCommand) => Promise<BroadcastGraphicsCommandResult> },
+	graphicId: string,
+	sourceKey: string,
+	selectionId: number | null,
+): Promise<BroadcastGraphicsCommandResult> {
+	return await harness.send({
+		commandId: playoutCommandId(`select-${sourceKey}`),
+		type: 'Select Source',
+		payload: { graphicId, sourceKey, selectionId },
+	} as BroadcastGraphicsCommand);
+}
+
+export async function setBroadcastGraphicOverride(
+	harness: { send: (command: BroadcastGraphicsCommand) => Promise<BroadcastGraphicsCommandResult> },
+	graphicId: string,
+	inputKey: string,
+	value: unknown,
+): Promise<BroadcastGraphicsCommandResult> {
+	return await harness.send({
+		commandId: playoutCommandId(`override-${inputKey}`),
+		type: 'Set Override',
+		payload: { graphicId, inputKey, value },
+	} as BroadcastGraphicsCommand);
 }
 
 export async function setBroadcastGraphicInput(

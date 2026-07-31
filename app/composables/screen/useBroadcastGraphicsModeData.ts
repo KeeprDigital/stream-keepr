@@ -65,18 +65,30 @@ export function useBroadcastGraphicsModeData() {
 	});
 
 	/**
+	 * Whether this is an authoring preview rather than a live output.
+	 *
+	 * The distinction decides what an unset Graphic Input renders, so it is named once
+	 * and both `inputValues` and the compositor read the same answer. A preview has no
+	 * Live Session to accept anything and shows the design as authored; a live output
+	 * shows only what an acceptance produced.
+	 */
+	const isAuthoringPreview = computed(() => previewState.value !== null || !screen.value?.id);
+
+	/**
 	 * The rendering each composed Broadcast Graphic draws, and the one an update phase
 	 * is leaving behind.
 	 *
-	 * A preview has no Live Session, so it contributes nothing here and the
-	 * compositor falls back to each graphic's declared defaults — the design as
-	 * authored. A live output contributes what its Live Session says is on screen at
-	 * this instant, which is not always the accepted set: an acceptance coalescing
-	 * behind an entrance has been accepted without yet being shown.
+	 * A live output contributes exactly what its Live Session says is on screen at this
+	 * instant — never a working edit, and never a declared default standing in for a
+	 * value no acceptance produced. That is not always the accepted set: an acceptance
+	 * coalescing behind an entrance has been accepted without yet being shown.
+	 *
+	 * A preview contributes nothing and lets the compositor substitute authored defaults
+	 * instead — the design as authored — which is why the two travel together.
 	 */
 	const renderedInputs = computed(() => {
 		const screenId = screen.value?.id;
-		if (previewState.value || !screenId)
+		if (isAuthoringPreview.value || !screenId)
 			return { current: {} as Record<string, Record<string, GraphicInputValue>>, outgoing: {} };
 
 		return sessionStore.renderedInputValues(screenId, graphics.value, liveNow.value);
@@ -268,14 +280,15 @@ export function useBroadcastGraphicsModeData() {
 
 	// A preview has no Live Session of its own: it renders the working stack, so
 	// asking for playout would open an epoch the author never took anything on.
-	watch(
-		() => [eventId.value, screen.value?.id, isPreview?.value ?? false] as const,
-		([evtId, screenId, preview]) => {
-			if (preview || !evtId || !screenId)
-				return;
-			void sessionStore.loadSession(evtId, screenId);
-		},
-		{ immediate: true },
+	//
+	// A live output loads the authoritative snapshot and reloads it whenever it has
+	// been out of touch, which is what lets a late-loading or reconnected output
+	// catch up to the current authoritative state rather than replaying how it got
+	// there. It never clears on a disconnection: program holds its last accepted
+	// rendering.
+	useBroadcastGraphicsLiveSessionSync(
+		() => (isPreview?.value ? undefined : eventId.value ?? undefined),
+		() => (isPreview?.value ? undefined : screen.value?.id),
 	);
 
 	onMounted(() => {
@@ -294,6 +307,7 @@ export function useBroadcastGraphicsModeData() {
 		onAirGraphicIds,
 		inputValues,
 		outgoingInputValues,
+		isAuthoringPreview,
 		selectedTarget,
 		publishSelection,
 	};

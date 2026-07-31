@@ -67,10 +67,43 @@ const updatePayloadSchema = z.object({
 	basedOnAcceptedRevision: z.number().int().nonnegative(),
 }).strict();
 
+const inputKeySchema = z.string().min(1).max(MAX_GRAPHIC_INPUT_KEY_LENGTH).regex(GRAPHIC_INPUT_KEY_PATTERN);
+
+/**
+ * One working-value edit, optionally stating the value it believes it replaces.
+ *
+ * The claim is wrapped in an object rather than sent as a bare optional value
+ * because `null` is a legitimate Graphic Input value: only a wrapper can tell
+ * "I claim the field was empty" apart from "I claim nothing", and the difference
+ * decides whether a second operator's edit is refused or silently overwritten.
+ */
 const setInputPayloadSchema = z.object({
 	graphicId: graphicIdSchema,
-	inputKey: z.string().min(1).max(MAX_GRAPHIC_INPUT_KEY_LENGTH).regex(GRAPHIC_INPUT_KEY_PATTERN),
+	inputKey: inputKeySchema,
 	value: graphicInputValueSchema,
+	basedOn: z.object({ value: graphicInputValueSchema }).strict().optional(),
+}).strict();
+
+/**
+ * A Graphic Input Override carries a value in exactly the shape a working value
+ * does, because it is the same kind of thing: an operator's own value, judged
+ * against the same declaration. `null` clears it, which is why there is no separate
+ * clear action — an override always holds a real value, and not masking is the
+ * absence of one.
+ */
+const setOverridePayloadSchema = setInputPayloadSchema;
+
+/**
+ * One Graphic Source Selection pointed at an entity id, or cleared with `null`.
+ *
+ * Only the id crosses the wire. Which entity that is, and whether the operator may
+ * see it, are the Event's questions and are answered by resolving against the
+ * Event's own data rather than by trusting a client-supplied entity.
+ */
+const selectSourcePayloadSchema = z.object({
+	graphicId: graphicIdSchema,
+	sourceKey: inputKeySchema,
+	selectionId: z.number().int().positive().nullable(),
 }).strict();
 
 const commandIdSchema = z.string().min(1).max(100);
@@ -95,6 +128,23 @@ export const broadcastGraphicsCommandSchema = z.discriminatedUnion('type', [
 		commandId: commandIdSchema,
 		type: z.literal('Set Input'),
 		payload: setInputPayloadSchema,
+	}).strict(),
+	z.object({
+		commandId: commandIdSchema,
+		type: z.literal('Set Override'),
+		payload: setOverridePayloadSchema,
+	}).strict(),
+	z.object({
+		commandId: commandIdSchema,
+		type: z.literal('Select Source'),
+		payload: selectSourcePayloadSchema,
+	}).strict(),
+	z.object({
+		commandId: commandIdSchema,
+		type: z.literal('Resolve Bindings'),
+		// It names only the Broadcast Graphic. Nothing about what Event Data now says
+		// crosses the wire, because the server reads that itself.
+		payload: z.object({ graphicId: graphicIdSchema }).strict(),
 	}).strict(),
 ]) satisfies z.ZodType<BroadcastGraphicsCommand>;
 

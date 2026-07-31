@@ -2,6 +2,7 @@
 import type { BroadcastGraphicConfig, GraphicPlayoutState } from '~~/shared/types/graphics';
 import type { Screen } from '~/types';
 import { screenOutputPath } from '~~/shared/utils/screenOutput';
+import { LazyUIConfirmActionModal } from '#components';
 
 /**
  * The Live workspace of a Broadcast Graphics Screen, and the workspace the
@@ -13,15 +14,22 @@ import { screenOutputPath } from '~~/shared/utils/screenOutput';
  * with the Graphic Playout State the Broadcast Graphics Live Session says it has,
  * and Take and Out state the operator's latest intent for one graphic.
  *
- * Both actions stay available in every state: they are idempotent target-state
- * commands, so pressing Take on a graphic that is already on air is a harmless
- * restatement of the same intent rather than a second take. Cut variants reach
- * the same target without running the corresponding Graphic Animation phase,
+ * Both actions stay available in every playout state: they are idempotent
+ * target-state commands, so pressing Take on a graphic that is already on air is a
+ * harmless restatement of the same intent rather than a second take. Cut variants
+ * reach the same target without running the corresponding Graphic Animation phase,
  * which is indistinguishable from the plain action until animation exists.
  *
  * Take is the one action a broken Graphic Asset Reference withholds. Out stays
- * available in every state, because a graphic already on air whose media has just
- * gone missing is exactly the graphic an operator most needs to remove.
+ * available in every playout state, because a graphic already on air whose media
+ * has just gone missing is exactly the graphic an operator most needs to remove.
+ *
+ * A disconnection withholds every action, and that is not the same kind of rule.
+ * The others are about the show; this one is about this browser having no way to
+ * reach the authoritative order. Nothing is queued for reconnection: a playout
+ * intent is a statement about what should be on air *now*, so replaying one formed
+ * during an outage would put a graphic on program that the operator decided about
+ * minutes ago and has since watched not happen.
  *
  * Generated Live Control for the selected Broadcast Graphic sits alongside the
  * stack: typed fields for its declared Graphic Inputs, the value trace behind each
@@ -164,15 +172,58 @@ function out(graphicId: string, cut: boolean) {
 	void sessionStore.out(props.eventId, props.screen.id, graphicId, cut);
 }
 
-// Realtime messages only announce that playout moved on; this is the authority
-// they point at, so the workspace loads it on arrival and after a Screen change.
-watch(
-	() => [props.eventId, props.screen.id] as const,
-	([eventId, screenId]) => {
-		void sessionStore.loadSession(eventId, screenId);
-	},
-	{ immediate: true },
+/**
+ * Realtime messages only announce that playout moved on; the snapshot is the
+ * authority they point at. The workspace loads it on arrival, after a Screen
+ * change, and again on reconnection — a notification published while this client
+ * was away never arrives late, so reconnecting is the only thing that can tell it
+ * what it missed.
+ */
+const { disconnected } = useBroadcastGraphicsLiveSessionSync(
+	() => props.eventId,
+	() => props.screen.id,
 );
+
+/**
+ * Why this Screen's durable live state could not be read, when it could not.
+ *
+ * Prominent and not dismissible: nothing is on air, every output is transparent,
+ * and no amount of waiting changes that — only an explicit Take, which is the one
+ * thing an operator will not think to try unless told.
+ */
+const recoveryFault = computed(() => sessionStore.recoveryFault(props.screen.id));
+
+const resettingLiveState = ref(false);
+const overlay = useOverlay();
+
+/**
+ * Confirmed, because it is the one operator action that both blanks program and
+ * throws away staged work — and it is offered next to the recovery fault it is the
+ * answer to.
+ */
+async function resetLiveState() {
+	const modal = overlay.create(LazyUIConfirmActionModal);
+	const confirmed = await modal.open({
+		title: 'Reset live state',
+		message: 'Take every Broadcast Graphic off air and start a new Broadcast Graphics Live Session?',
+		description: 'Prepared Graphic Input values are discarded, and commands from the current session stop being accepted.',
+		confirmLabel: 'Reset live state',
+		confirmColor: 'error',
+		icon: 'i-lucide-rotate-ccw',
+		iconColor: 'text-error',
+	}).result;
+
+	if (!confirmed)
+		return;
+
+	resettingLiveState.value = true;
+	try {
+		await sessionStore.resetLiveState(props.eventId, props.screen.id);
+	}
+	finally {
+		resettingLiveState.value = false;
+	}
+}
 </script>
 
 <template>
@@ -203,6 +254,37 @@ watch(
 				</p>
 
 				<!--
+					Durable live state that could not be read: nothing is on air anywhere,
+					and only an explicit Take puts anything back. Stated first, because
+					every other reading of this panel is wrong until the operator knows it.
+				-->
+				<UAlert
+					v-if="recoveryFault"
+					data-testid="playout-recovery-fault"
+					color="error"
+					variant="solid"
+					icon="i-lucide-shield-alert"
+					title="Live state could not be recovered"
+					:description="`Every Broadcast Graphic is off and every output is transparent because ${recoveryFault.detail}. Take the graphics this show needs to put them back on air.`"
+				/>
+
+				<!--
+					A disconnected Live Control is not a Live Control: what it shows is as
+					old as the disconnection, and nothing it sends can be accepted. It says
+					so and withholds its actions rather than queueing them for later — a
+					playout intent formed minutes ago is not one an operator still wants.
+				-->
+				<UAlert
+					v-if="disconnected"
+					data-testid="playout-disconnected"
+					color="warning"
+					variant="soft"
+					icon="i-lucide-wifi-off"
+					title="Disconnected"
+					description="Playout actions are unavailable until the connection returns. Nothing is queued; this panel reloads the authoritative state on reconnection."
+				/>
+
+				<!--
 					A rejected playout action must never be invisible: the operator has to
 					know that what they asked for is not what program is showing.
 				-->
@@ -215,6 +297,20 @@ watch(
 					title="Playout action failed"
 					:description="sessionStore.error"
 				/>
+
+				<UButton
+					size="xs"
+					color="error"
+					variant="subtle"
+					icon="i-lucide-rotate-ccw"
+					block
+					:loading="resettingLiveState"
+					:disabled="disconnected"
+					data-testid="playout-reset-live-state"
+					@click="resetLiveState"
+				>
+					Reset live state
+				</UButton>
 
 				<div
 					v-for="entry in entries"
@@ -284,7 +380,7 @@ watch(
 								color="primary"
 								variant="subtle"
 								class="flex-1 justify-center"
-								:disabled="entry.pending || entry.assetBlockedReason !== undefined"
+								:disabled="disconnected || entry.pending || entry.assetBlockedReason !== undefined"
 								data-testid="playout-take"
 								@click="take(entry.graphic.id, false)"
 							>
@@ -294,7 +390,7 @@ watch(
 								color="primary"
 								variant="outline"
 								aria-label="Cut Take"
-								:disabled="entry.pending || entry.assetBlockedReason !== undefined"
+								:disabled="disconnected || entry.pending || entry.assetBlockedReason !== undefined"
 								title="Take without its enter animation"
 								data-testid="playout-cut-take"
 								@click="take(entry.graphic.id, true)"
@@ -308,7 +404,7 @@ watch(
 								color="neutral"
 								variant="subtle"
 								class="flex-1 justify-center"
-								:disabled="entry.pending"
+								:disabled="disconnected || entry.pending"
 								data-testid="playout-out"
 								@click="out(entry.graphic.id, false)"
 							>
@@ -318,7 +414,7 @@ watch(
 								color="neutral"
 								variant="outline"
 								aria-label="Cut Out"
-								:disabled="entry.pending"
+								:disabled="disconnected || entry.pending"
 								title="Out without its exit animation"
 								data-testid="playout-cut-out"
 								@click="out(entry.graphic.id, true)"
@@ -338,6 +434,7 @@ watch(
 			:graphic="selectedEntry.graphic"
 			:playout-state="selectedEntry.playoutState"
 			:pending="selectedEntry.pending"
+			:disconnected="disconnected"
 		/>
 	</div>
 </template>

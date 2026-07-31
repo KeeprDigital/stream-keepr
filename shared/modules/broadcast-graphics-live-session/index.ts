@@ -10,14 +10,19 @@ export type {
 	GraphicInputStatus,
 	GraphicInputTrace,
 	GraphicInputValues,
+	GraphicInputValueSource,
 	GraphicInputValueTrace,
+	NormalizedBroadcastGraphicInputsState,
 } from './inputs';
 export {
 	acceptedGraphicInputValues,
 	acceptGraphicInputValues,
 	broadcastGraphicInputsState,
+	broadcastGraphicSourceSelections,
 	createInitialBroadcastGraphicInputsState,
+	effectiveGraphicInputValue,
 	GRAPHIC_INPUT_STATUS_VALUES,
+	GRAPHIC_INPUT_VALUE_SOURCE_VALUES,
 	graphicInputTraces,
 	isDeclaredGraphicInput,
 	resolveGraphicInputValues,
@@ -36,7 +41,10 @@ export type {
 	BroadcastGraphicsLiveState,
 	BroadcastGraphicsPlayoutPayload,
 	BroadcastGraphicsReductionContext,
+	BroadcastGraphicsResolveBindingsPayload,
+	BroadcastGraphicsSelectSourcePayload,
 	BroadcastGraphicsSetInputPayload,
+	BroadcastGraphicsSetOverridePayload,
 	BroadcastGraphicsUpdatePayload,
 } from './playout';
 export {
@@ -49,6 +57,16 @@ export {
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,
 } from './playout';
+export type {
+	BroadcastGraphicsRecoveryFault,
+	BroadcastGraphicsRecoveryFaultReason,
+} from './recovery';
+export {
+	BROADCAST_GRAPHICS_RECOVERY_FAULT_REASONS,
+	broadcastGraphicsRecoveryFault,
+	carriedForwardBroadcastGraphicsLiveState,
+	recoveredBroadcastGraphicsLiveState,
+} from './recovery';
 export type { BroadcastGraphicsRejectionCode } from './rejection';
 export {
 	BROADCAST_GRAPHICS_REJECTION_CODES,

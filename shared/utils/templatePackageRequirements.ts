@@ -1,5 +1,6 @@
 import type { BroadcastGraphicConfig, GraphicItemConfig } from '../types/graphics';
 import type {
+	BroadcastGraphicsModeConfig,
 	FeatureMatchGraphicGroupContentConfig,
 	FeatureMatchLayoutItemConfig,
 	FeatureMatchOverlayModeConfig,
@@ -14,7 +15,10 @@ import {
 	featureMatchLayoutItemDefinition,
 } from '../featureMatchGraphicItemDefinitions';
 import { getGraphicItemDefinition } from '../modules/graphics/itemDefinitions';
-import { featureMatchOverlayGraphicAssetReferences } from './graphicsAssetReferences';
+import {
+	broadcastGraphicsGraphicAssetReferences,
+	featureMatchOverlayGraphicAssetReferences,
+} from './graphicsAssetReferences';
 
 /**
  * What each graphics template kind requires from a Template Package.
@@ -91,9 +95,21 @@ export function broadcastGraphicTemplatePackageRequirements(
 	for (const item of graphic.items)
 		appendBroadcastGraphicItemCapabilities(capabilities, item, `items.${item.id}`);
 	appendApplicationFontCapabilities(capabilities, graphic.items, 'items');
-	// The Shared Graphics Foundation vocabulary carries no Graphic Asset
-	// Reference yet; Media Graphic Items add them without changing this contract.
-	return { assets: [], capabilities };
+	// Media Graphic Items pin exact revisions, and discovery is shared with the
+	// Screen reference index rather than repeated here: a Template must package
+	// exactly the revisions its Screen would publish, so a Media Graphic Item
+	// added to one walk can never be missed by the other. Slots are renamed
+	// relative to the graphic the package carries, as the layout side does.
+	const graphicSlotPrefix = `graphics.${graphic.id}.`;
+	const assets = broadcastGraphicsGraphicAssetReferences({ graphics: [graphic] } as BroadcastGraphicsModeConfig)
+		.map(discovered => ({
+			slot: discovered.ownerSlot.startsWith(graphicSlotPrefix)
+				? discovered.ownerSlot.slice(graphicSlotPrefix.length)
+				: discovered.ownerSlot,
+			reference: discovered.reference,
+			expectedKind: discovered.kind,
+		}));
+	return { assets, capabilities };
 }
 
 function appendFeatureMatchItemCapabilities(

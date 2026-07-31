@@ -13,6 +13,7 @@ const {
 	onAirGraphicIds,
 	inputValues,
 	outgoingInputValues,
+	isAuthoringPreview,
 	selectedTarget,
 	publishSelection,
 } = useBroadcastGraphicsModeData();
@@ -51,6 +52,9 @@ const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	animation: animationProjection.value,
 	inputValues: inputValues.value,
 	outgoingInputValues: outgoingInputValues.value,
+	// An author sees unset Graphic Inputs as their authored defaults; a live output
+	// shows nothing for them rather than putting placeholder text on program.
+	substituteAuthoredDefaults: isAuthoringPreview.value,
 	itemGuides: previewGuides?.value ?? false,
 	safeAreaGuides: previewSafeAreas?.value ?? false,
 	selectedTarget: selectedTarget.value,

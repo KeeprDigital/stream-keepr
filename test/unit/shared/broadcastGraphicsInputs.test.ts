@@ -47,12 +47,15 @@ const LIVE_SCORE: GraphicInputDeclaration = {
 
 const GRAPHIC = 'lower-third';
 
+/** A fixed acceptance instant: nothing here is about animation timing. */
+const T0 = 1_700_000_000_000;
+
 function reduce(
 	state: BroadcastGraphicsLiveState,
 	command: BroadcastGraphicsCommandInput,
 	inputs: readonly GraphicInputDeclaration[] = [NAME],
 ): BroadcastGraphicsLiveState {
-	return applyBroadcastGraphicsCommand(state, command, { inputs });
+	return applyBroadcastGraphicsCommand(state, command, { inputs, acceptedAt: T0 });
 }
 
 function take(state: BroadcastGraphicsLiveState, inputs?: readonly GraphicInputDeclaration[]) {
@@ -98,7 +101,11 @@ describe('broadcastGraphicsInputs', () => {
 		const state = createInitialBroadcastGraphicsLiveState();
 
 		expect(workingGraphicInputValues(state, GRAPHIC, [NAME])).toEqual({ name: 'Unnamed' });
-		expect(acceptedGraphicInputValues(state, GRAPHIC, [NAME])).toEqual({ name: 'Unnamed' });
+		// Working values start at the declared defaults — that is what copying a template
+		// onto a Screen means. Accepted values do not: nothing has been accepted, so
+		// nothing is on air, and reporting the default here would be reporting a value
+		// the Screen Outputs would then render as though an acceptance had produced it.
+		expect(acceptedGraphicInputValues(state, GRAPHIC, [NAME])).toEqual({});
 		expect(broadcastGraphicInputsState(state, GRAPHIC).acceptedRevision).toBe(0);
 	});
 
@@ -259,17 +266,19 @@ describe('broadcastGraphicsInputs', () => {
 
 		const [trace] = graphicInputTraces(state, GRAPHIC, {
 			inputs: [NAME],
-			bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'displayName' }],
+			bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
 		});
 
 		expect(trace!.working.value).toBe('Ava Reed');
 		expect(trace!.accepted.value).toBe('Unnamed');
 		expect(trace!.pending).toBe(true);
-		expect(trace!.status).toBe('pending');
-		// The binding is declared but nothing resolves it yet, so there is no latest
-		// bound value to show — and an unresolved binding never falls back to the
-		// template default.
+		// The binding is declared but nothing resolves it, so there is no latest bound
+		// value to show — and an unresolved binding never falls back to the template
+		// default, nor to the manual value underneath it. The input therefore has no
+		// value that could go on air, which is what unavailable means.
 		expect(trace!.bound).toBeUndefined();
+		expect(trace!.status).toBe('unavailable');
+		expect(trace!.effective).toMatchObject({ source: 'none' });
 	});
 
 	it('reports an unavailable working value rather than a pending one', () => {

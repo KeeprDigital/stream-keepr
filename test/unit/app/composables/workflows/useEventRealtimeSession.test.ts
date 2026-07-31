@@ -112,6 +112,7 @@ describe('useEventRealtimeSession', () => {
 	};
 	const broadcastGraphicsLiveSessionStore = {
 		applyRemoteCommand: vi.fn(),
+		applyEpochEnded: vi.fn(),
 	};
 	const screenStore = {
 		applyRemoteCreated: vi.fn(),
@@ -251,6 +252,7 @@ describe('useEventRealtimeSession', () => {
 			'featureMatch:reordered': featureMatchStore.applyRemoteReordered,
 			'featureMatchSession:eventApplied': featureMatchStateStore.applyRemoteSessionEvent,
 			'broadcastGraphicsLiveSession:commandApplied': broadcastGraphicsLiveSessionStore.applyRemoteCommand,
+			'broadcastGraphicsLiveSession:epochEnded': broadcastGraphicsLiveSessionStore.applyEpochEnded,
 			'screen:created': screenStore.applyRemoteCreated,
 			'screen:updated': screenStore.applyRemoteUpdated,
 			'screen:deleted': screenStore.applyRemoteDeleted,

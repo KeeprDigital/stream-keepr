@@ -132,6 +132,32 @@ function createInMemoryGraphicsObjectStoreImplementation() {
 				},
 			};
 		},
+		async list(input: { prefix?: string; cursor?: string; limit?: number } = {}) {
+			if (shouldFailTransiently('list'))
+				return unavailableObjectStoreOutcome();
+			// Lexicographic order makes the cursor the last key returned, which is
+			// how the production store paginates and is what lets a test advance a
+			// scan one bounded page at a time.
+			//
+			// Listings here carry complete metadata, which matches the R2 adapter
+			// only because that adapter explicitly asks for it: an R2 listing
+			// without `include` reports no content type and empty custom metadata
+			// for every object. If that request is ever dropped, this double will
+			// keep passing while production reads every object as a conflict.
+			const matching = [...objects.entries()]
+				.filter(([identity]) => identity.startsWith(input.prefix ?? ''))
+				.filter(([identity]) => input.cursor === undefined || identity > input.cursor)
+				.toSorted(([left], [right]) => left.localeCompare(right));
+			const limit = input.limit ?? matching.length;
+			const page = matching.slice(0, limit);
+			return {
+				outcome: 'listed' as const,
+				listing: {
+					objects: page.map(([, stored]) => stored.metadata),
+					cursor: matching.length > page.length ? page.at(-1)?.[0] : undefined,
+				},
+			};
+		},
 		async beginMultipart(input: Pick<CreateImmutableGraphicsObjectInput, 'identity' | 'metadata'>) {
 			if (shouldFailTransiently('multipart-start'))
 				return unavailableObjectStoreOutcome();
@@ -257,6 +283,7 @@ function canonicalCapabilities(
 		createImmutable: implementation.createImmutable,
 		readMetadata: implementation.readMetadata,
 		read: implementation.read,
+		list: implementation.list,
 		// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory adapter method, not a Drizzle table.
 		delete: implementation.delete,
 		markUnavailable: implementation.markUnavailable,

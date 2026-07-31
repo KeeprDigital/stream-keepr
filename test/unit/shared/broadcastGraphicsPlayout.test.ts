@@ -167,9 +167,15 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		// deliberate exception: they are the values a recovered graphic renders at its
 		// resting state, not a record of how it got there, so nothing about them is
 		// replayable either.
-		expect(Object.keys(persisted).toSorted()).toEqual(['inputs', 'playout']);
+		// Graphic Source Selections and Graphic Input Overrides join the accepted values
+		// on the same terms: both are standing operator intent that outlives a hide/show
+		// cycle, and neither says anything about a lifecycle phase, so neither gives
+		// recovery anything to replay.
+		expect(Object.keys(persisted).toSorted()).toEqual(['inputs', 'playout', 'sources']);
 		expect(Object.keys(persisted.playout.slate!).toSorted()).toEqual(['cut', 'effectiveStartedAt', 'onAir']);
 		expect(persisted.playout.slate).toEqual({ onAir: true, effectiveStartedAt: T0, cut: false });
+		expect(Object.keys(persisted.inputs.slate!).toSorted())
+			.toEqual(['accepted', 'acceptedRevision', 'overrides', 'working']);
 	});
 
 	it('adds a scheduled reversal completion only to an intent that actually interrupted a phase', () => {
@@ -267,8 +273,14 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 			.toEqual(['cut', 'effectiveStartedAt', 'onAir', 'updateStartedAt']);
 		// The rendering it transitions away from is stored beside the accepted values it
 		// is made of, because an output that joins mid-update has to have both.
+		//
+		// `overrides` is here because every reduction writes it — an override is durable
+		// state a later reduction has to find, so it is normalised in rather than left
+		// absent. `pendingUpdateFrom` is *not*, and that is the load-bearing half of this
+		// assertion: only one update is in flight, so a second outgoing rendering would
+		// mean the chain had been lengthened rather than replaced.
 		expect(Object.keys(state.inputs.slate!).toSorted())
-			.toEqual(['accepted', 'acceptedRevision', 'updateFrom', 'working']);
+			.toEqual(['accepted', 'acceptedRevision', 'overrides', 'updateFrom', 'working']);
 
 		const recovered: BroadcastGraphicsLiveState = JSON.parse(JSON.stringify(state));
 		const hoursLater = T0 + (4 * 60 * 60 * 1000);

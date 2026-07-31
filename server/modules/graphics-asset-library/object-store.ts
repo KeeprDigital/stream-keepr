@@ -104,6 +104,20 @@ export type ReadGraphicsObjectOutcome
 	| { outcome: 'missing' }
 	| GraphicsObjectStoreUnavailable;
 
+export interface GraphicsObjectStoreListing {
+	objects: readonly GraphicsObjectMetadata[];
+	/**
+	 * Where the next page starts, or `undefined` once the store has no more
+	 * objects. Reconciliation persists it so one bounded sweep still covers a
+	 * large store instead of re-reading its first page forever.
+	 */
+	cursor?: string;
+}
+
+export type ListGraphicsObjectsOutcome
+	= | { outcome: 'listed'; listing: GraphicsObjectStoreListing }
+		| GraphicsObjectStoreUnavailable;
+
 export interface GraphicsObjectStoreHealth {
 	checkHealth: () => Promise<{ outcome: 'healthy' } | GraphicsObjectStoreUnavailable>;
 }
@@ -111,6 +125,12 @@ export interface GraphicsObjectStoreHealth {
 interface GraphicsObjectStoreAccess extends GraphicsObjectStoreHealth {
 	readMetadata: (identity: GraphicsObjectIdentity) => Promise<GraphicsObjectMetadataOutcome>;
 	read: (identity: GraphicsObjectIdentity, range?: { offset: number; length: number }) => Promise<ReadGraphicsObjectOutcome>;
+	/**
+	 * One bounded page of stored objects. This is the only way the library can
+	 * observe bytes the catalogue never recorded, so it is deliberately a
+	 * paginated read rather than an enumeration of the whole store.
+	 */
+	list: (input?: { prefix?: string; cursor?: string; limit?: number }) => Promise<ListGraphicsObjectsOutcome>;
 	delete: (identity: GraphicsObjectIdentity) => Promise<DeleteGraphicsObjectOutcome>;
 }
 
@@ -147,6 +167,7 @@ export type GraphicsCanonicalObjectStoreOperation
 		| 'create'
 		| 'metadata'
 		| 'read'
+		| 'list'
 		| 'delete';
 
 export type GraphicsStagingObjectStoreOperation

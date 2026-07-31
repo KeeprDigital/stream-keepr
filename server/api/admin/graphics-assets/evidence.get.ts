@@ -1,14 +1,14 @@
 import { z } from 'zod';
+import { GRAPHICS_ASSET_EVIDENCE_CATEGORY_VALUES } from '~~/server/db/schema/graphicsAsset';
 import { requireGraphicsAdministrator } from '~~/server/modules/graphics-administrator';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
-import { GRAPHICS_RETENTION_EVIDENCE_CATEGORIES } from '~~/shared/utils/graphicsAssetRetention';
 
 const evidenceQuerySchema = z.object({
 	limit: z.coerce.number().int().min(1).max(500).optional(),
 	category: z.union([
-		z.enum(GRAPHICS_RETENTION_EVIDENCE_CATEGORIES),
-		z.array(z.enum(GRAPHICS_RETENTION_EVIDENCE_CATEGORIES)),
+		z.enum(GRAPHICS_ASSET_EVIDENCE_CATEGORY_VALUES),
+		z.array(z.enum(GRAPHICS_ASSET_EVIDENCE_CATEGORY_VALUES)),
 	]).optional(),
 }).strict();
 

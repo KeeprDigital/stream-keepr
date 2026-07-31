@@ -1,5 +1,6 @@
 import type { DbScreen } from '~~/server/db/schema';
 import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
+import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
 import type {
 	BroadcastGraphicsCommand,
 	BroadcastGraphicsCommandResult,
@@ -12,8 +13,13 @@ import {
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
 import { broadcastGraphicsStateService } from '~~/server/services/broadcastGraphicsState';
+import { graphicBindingDataService } from '~~/server/services/graphicBindingData';
 import { screenService } from '~~/server/services/screen';
-import { broadcastGraphicPhaseDurations } from '~~/shared/modules/graphics';
+import { publishMessage } from '~~/server/utils/ably';
+import {
+	broadcastGraphicSourceSelections,
+} from '~~/shared/modules/broadcast-graphics-live-session';
+import { broadcastGraphicPhaseDurations, resolveGraphicInputBindings } from '~~/shared/modules/graphics';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 
@@ -42,6 +48,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 } = {}) {
 	const state = broadcastGraphicsStateService();
 	const screens = screenService();
+	const bindingData = graphicBindingDataService();
 
 	/**
 	 * The Screen, proven to be a Broadcast Graphics Screen.
@@ -125,6 +132,46 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	};
 
 	/**
+	 * What reduction needs to know about the addressed Broadcast Graphic: its
+	 * declarations, and how its Graphic Input Bindings resolve against Event Data.
+	 *
+	 * Event Data is loaded once, here, for the Graphic Source Selections this command
+	 * could leave in place — the ones already accepted, plus the one this command is
+	 * about. Reduction then resolves against that loaded set, so a Select Source can
+	 * see its own effect and a merge retry re-resolves without another round trip.
+	 *
+	 * The bindings resolve through the shared catalog, which is the same function Live
+	 * Control resolves its displayed bound values with. That is deliberate: an
+	 * operator's "latest bound value" and the value acceptance actually puts on air are
+	 * then the same computation over the same facts, rather than two implementations
+	 * that agree until they do not.
+	 */
+	const reductionContextFor = async (
+		eventId: number,
+		graphic: BroadcastGraphicConfig,
+		currentState: BroadcastGraphicsLiveState,
+		command: BroadcastGraphicsCommand,
+	) => {
+		const accepted = broadcastGraphicSourceSelections(currentState, graphic.id);
+		const candidate = command.type === 'Select Source' && command.payload.selectionId !== null
+			? { ...accepted, [command.payload.sourceKey]: command.payload.selectionId }
+			: accepted;
+		const data = await bindingData.load(eventId, graphic.sources ?? [], candidate);
+
+		return {
+			inputs: graphic.inputs ?? [],
+			sources: graphic.sources ?? [],
+			bindings: graphic.bindings ?? [],
+			resolveBindings: (selections: Readonly<Record<string, number>>) =>
+				resolveGraphicInputBindings(graphic, selections, data),
+			// How long this graphic's lifecycle phases last, resolved from the placed
+			// graphic this module already had to find. Authored Screen configuration, which
+			// is exactly why the reducer is handed it rather than reaching for it.
+			durations: broadcastGraphicPhaseDurations(graphic),
+		};
+	};
+
+	/**
 	 * The authoritative snapshot, opening the Screen's epoch if it has none.
 	 *
 	 * Every reconnecting Live Control and Screen Output reloads through here:
@@ -138,6 +185,78 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		await requireBroadcastGraphicsScreen(eventId, screenId);
 		const session = await state.ensureActiveSession(screenId, eventId);
 		return mapBroadcastGraphicsLiveSessionToResponse(session);
+	};
+
+	/**
+	 * Announce that a Screen's playout epoch has been replaced.
+	 *
+	 * Its own notification rather than a variant of `commandApplied`, because it is
+	 * not a command and nothing about it can be applied: every client holding state
+	 * for this Screen is holding state from a session that has ended, and the only
+	 * correct response is to reload.
+	 *
+	 * The case that needs it is an explicit reset, which changes nothing about the
+	 * Screen and so publishes no other message — without this, every peer would sit on
+	 * the ended epoch still rendering the graphics the reset was meant to clear. A mode
+	 * change is already covered by `screen:updated`, and publishes this as well only so
+	 * the stale epoch is dropped deterministically.
+	 */
+	const publishEpochEnded = async (
+		eventId: number,
+		screenId: number,
+		sessionId: number | null,
+		originConnectionId?: string,
+	): Promise<void> => {
+		await publishMessage(
+			eventId,
+			'broadcastGraphicsLiveSession:epochEnded',
+			{ screenId, sessionId },
+			originConnectionId,
+		);
+	};
+
+	/**
+	 * End the Screen's epoch, announcing it when the caller wants clients to notice.
+	 *
+	 * A mode change and a reset both leave the Screen in place with live clients
+	 * watching it, so both announce. Deleting the Screen does not: those clients are
+	 * about to be told the Screen itself is gone, and pointing them at a snapshot
+	 * route that will now refuse them would surface a spurious failure on the way
+	 * out — which is why this is a caller's choice rather than something ending an
+	 * epoch always does.
+	 */
+	const endSessionsForScreen = async (
+		screenId: number,
+		eventId: number,
+		options: { notify?: boolean; originConnectionId?: string } = {},
+	): Promise<void> => {
+		const ended = await state.endSessionsForScreen(screenId, eventId);
+		if (options.notify)
+			await publishEpochEnded(eventId, screenId, ended?.id ?? null, options.originConnectionId);
+	};
+
+	/**
+	 * Reset the Screen's live state: every Broadcast Graphic off, a new epoch, and
+	 * nothing carried forward.
+	 *
+	 * The operator's escape hatch, and the recovery action for a Live Session whose
+	 * durable state cannot be read at all. It is deliberately the same epoch
+	 * advance as a mode change, so the guarantee that a command from an ended epoch
+	 * can never affect a later show covers it for free.
+	 */
+	const resetLiveState = async ({
+		eventId,
+		screenId,
+		originConnectionId,
+	}: {
+		eventId: number;
+		screenId: number;
+		originConnectionId?: string;
+	}): Promise<BroadcastGraphicsLiveSessionResponse> => {
+		await requireBroadcastGraphicsScreen(eventId, screenId);
+		const { ended, opened } = await state.resetSessionForScreen(screenId, eventId);
+		await publishEpochEnded(eventId, screenId, ended?.id ?? null, originConnectionId);
+		return mapBroadcastGraphicsLiveSessionToResponse(opened);
 	};
 
 	const applyCommand = async ({
@@ -172,11 +291,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 			sessionId,
 			eventId,
 			command,
-			// Resolved from the placed graphic this module already had to find: what it
-			// declares, and how long its lifecycle phases last. Both are authored Screen
-			// configuration, which is exactly why the reducer is handed them rather than
-			// reaching for them.
-			{ inputs: graphic.inputs ?? [], durations: broadcastGraphicPhaseDurations(graphic) },
+			await reductionContextFor(eventId, graphic, session.currentState, command),
 			originConnectionId,
 			{ publish: true },
 		);
@@ -185,6 +300,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	return {
 		loadSession,
 		applyCommand,
-		endSessionsForScreen: state.endSessionsForScreen,
+		resetLiveState,
+		endSessionsForScreen,
 	};
 }
