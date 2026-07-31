@@ -1,6 +1,7 @@
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import { templatePackagePayloads } from '~~/server/modules/template-package-payload';
+import { GRAPHIC_ITEM_KINDS } from '~~/shared/modules/graphics/itemDefinitions';
 import { TEMPLATE_PACKAGE_KINDS } from '~~/shared/types/templatePackage';
 import { maximalBroadcastGraphicDocument } from '../../../helpers/broadcastGraphicDocument';
 
@@ -47,11 +48,16 @@ describe('the `.skgraphic` payload', () => {
 		// Every Graphic Item Definition the document uses is named, a Graphic Group's
 		// children included: a receiver that never learned a child's Definition could
 		// accept a package holding a kind it cannot render.
+		//
+		// Compared against the shared vocabulary rather than a written list, so it also
+		// pins that the fixture still uses every kind. A Definition added to
+		// `GRAPHIC_ITEM_KINDS` and never placed in the fixture is a branch of the
+		// transfer nobody is holding to anything, and this is where that shows up.
 		const definitions = outcome.capabilities
 			.filter(requirement => requirement.capability === 'graphic-item-definition')
 			.map(requirement => requirement.identity)
 			.sort();
-		expect(definitions).toEqual(['group', 'media', 'shape', 'text']);
+		expect(definitions).toEqual([...GRAPHIC_ITEM_KINDS].sort());
 		// And the application fonts, which travel as identifiers rather than bytes.
 		expect(outcome.capabilities.some(requirement =>
 			requirement.capability === 'application-font' && requirement.identity === 'inter',

@@ -10,6 +10,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { crc32 } from 'node:zlib';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { GRAPHIC_ITEM_KINDS } from '../../shared/modules/graphics/itemDefinitions';
 import { maximalBroadcastGraphicDocument } from '../helpers/broadcastGraphicDocument';
 import { collectStream } from '../helpers/storedZipArchive';
 import {
@@ -225,9 +226,12 @@ describe('broadcast Graphic Template Packages', () => {
 			sourceRevisionId: asset.revisionId,
 		});
 		expect(parts.contents).toHaveLength(1);
-		// Application-owned capabilities are declared, never duplicated into bytes.
+		// Application-owned capabilities are declared, never duplicated into bytes:
+		// every Graphic Item Definition the design uses, plus the application font it
+		// names. Compared against the shared vocabulary so this also pins that the
+		// design still exercises every kind.
 		expect(parts.manifest.applicationCapabilities.map(entry => entry.identity).sort())
-			.toEqual(['group', 'inter', 'media', 'shape', 'text']);
+			.toEqual([...GRAPHIC_ITEM_KINDS, 'inter'].sort());
 	});
 
 	/**

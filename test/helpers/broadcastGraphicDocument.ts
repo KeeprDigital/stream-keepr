@@ -26,7 +26,17 @@ import {
  * re-exporting repairs nothing.
  *
  * Built through the same authoring operations an editor uses, so its base items can
- * never drift from what the editor actually produces.
+ * never drift from what the editor actually produces. All seven `GraphicItemConfig`
+ * branches appear, including the three the Broadcast Graphics palette does not offer
+ * — see the item list below for why they belong here anyway.
+ *
+ * ## One field is deliberately absent: `channelId`
+ *
+ * A Graphic Channel names a lane on one Screen, so `broadcastGraphicTemplateDocument`
+ * strips it on save and `placeBroadcastGraphicTemplate` deletes it on placement. A
+ * fixture carrying one would assert the opposite of that rule: it would either be
+ * dropped by the path under test and read as a transfer defect, or survive and prove
+ * a lane leaked between Screens. Absent is what a saved template actually looks like.
  *
  * ## It is hand-enumerated, and that is the weakness it cannot fix
  *
@@ -85,10 +95,20 @@ export function maximalBroadcastGraphicDocument(
 		name: options.name ?? 'Lower third',
 		items: [],
 	};
+	// Every branch of `GraphicItemConfig`, the three context-gated Definitions
+	// included. A Broadcast Graphics palette does not offer Clock, Player Life, or
+	// Game Wins today — the Host Contract declares only the `event` context — but
+	// `broadcastGraphicConfigSchema` validates all seven kinds and a `.skgraphic`
+	// receiver resolves capability identities against all seven, so a package
+	// carrying one is accepted and installed. A transfer that has never been held to
+	// three of the seven branches is a transfer nobody has tested.
 	const withGroup = addGraphicItem(base, { kind: 'group', id: 'cluster', ...CANVAS }).graphic;
 	const withChild = addGraphicGroupChild(withGroup, { kind: 'shape', groupId: 'cluster', id: 'child' }).graphic;
 	const withHeadline = addGraphicItem(withChild, { kind: 'text', id: 'headline', ...CANVAS }).graphic;
-	const document = addGraphicItem(withHeadline, { kind: 'media', id: 'backdrop', ...CANVAS }).graphic;
+	const withBackdrop = addGraphicItem(withHeadline, { kind: 'media', id: 'backdrop', ...CANVAS }).graphic;
+	const withClock = addGraphicItem(withBackdrop, { kind: 'clock', id: 'countdown', ...CANVAS }).graphic;
+	const withLife = addGraphicItem(withClock, { kind: 'player-life', id: 'life', ...CANVAS }).graphic;
+	const document = addGraphicItem(withLife, { kind: 'game-wins', id: 'wins', ...CANVAS }).graphic;
 
 	const group = document.items.find(item => item.id === 'cluster');
 	if (group?.type !== 'group')
@@ -102,6 +122,15 @@ export function maximalBroadcastGraphicDocument(
 	const backdrop = document.items.find(item => item.id === 'backdrop');
 	if (backdrop?.type !== 'media')
 		throw new Error('expected a Media Graphic Item');
+	const countdown = document.items.find(item => item.id === 'countdown');
+	if (countdown?.type !== 'clock')
+		throw new Error('expected a Clock Graphic Item');
+	const life = document.items.find(item => item.id === 'life');
+	if (life?.type !== 'player-life')
+		throw new Error('expected a Player Life Graphic Item');
+	const wins = document.items.find(item => item.id === 'wins');
+	if (wins?.type !== 'game-wins')
+		throw new Error('expected a Game Wins Graphic Item');
 
 	// The one field a Template Package is *defined* to rewrite, so the round trip has
 	// something to prove it rewrote as well as something to prove it carried.
@@ -141,6 +170,37 @@ export function maximalBroadcastGraphicDocument(
 	child.sizing = { mode: 'fill', size: 240, weight: 2 };
 	child.surfaceStyle = maximalSurfaceStyle();
 
+	countdown.surfaceStyle = maximalSurfaceStyle();
+	countdown.rotation = 1;
+
+	life.surfaceStyle = maximalSurfaceStyle();
+	life.playerSide = 'player2';
+	life.lifeAnimation = 'slide';
+	life.lifeAnimationDurationMs = 620;
+	life.lifeAnimationAccentColor = '#ff3366';
+
+	wins.surfaceStyle = maximalSurfaceStyle();
+	wins.playerSide = 'player2';
+	wins.displayMode = 'number';
+	wins.boxOrientation = 'vertical';
+	// A win box is an ordinary painted surface, so its two styles are held to the
+	// same maxima every other surface is rather than left at the Definition default.
+	wins.boxGeometry = {
+		topLeft: { treatment: 'cut', size: 6 },
+		topRight: { treatment: 'rounded', size: 10 },
+		bottomRight: { treatment: 'rounded', size: 10 },
+		bottomLeft: { treatment: 'square', size: 0 },
+		leftSlant: 2,
+		rightSlant: -2,
+	};
+	wins.boxSurfaceStyle = maximalSurfaceStyle();
+	wins.wonBoxSurfaceStyle = {
+		fill: { type: 'solid', color: '#22c55e' },
+		fillOpacity: 1,
+		outline: { color: '#ffffff', width: 2 },
+		glow: { color: '#22c55e', size: 12, opacity: 0.5 },
+	};
+
 	group.surfaceStyle = maximalSurfaceStyle();
 	group.defaultChildSurfaceStyle = {
 		fill: { type: 'solid', color: '#101820' },
@@ -171,7 +231,7 @@ export function maximalBroadcastGraphicDocument(
 			'enter': { order: 'list', step: 80, itemIds: ['headline', 'cluster'] },
 			'on-screen': { order: 'reverse-list', step: 40, itemIds: ['cluster'] },
 			'update': { order: 'list', step: 20, itemIds: ['headline'] },
-			'exit': { order: 'reverse-list', step: 60, itemIds: ['cluster', 'backdrop'] },
+			'exit': { order: 'reverse-list', step: 60, itemIds: ['cluster', 'backdrop', 'countdown', 'life', 'wins'] },
 		},
 	};
 	group.animation = {
