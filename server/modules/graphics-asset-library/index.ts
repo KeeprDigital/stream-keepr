@@ -991,9 +991,9 @@ interface GraphicsAssetLibraryDependencies {
 	 * a Broadcast Graphic is to carry one.
 	 *
 	 * Optional because most of the library never receives a package at all — a
-	 * delivery path serving canonical bytes has no use for it. It is not optional
-	 * *to receiving*: `initiateTemplatePackagePreflight` refuses without it rather
-	 * than letting the artifact check quietly become a no-op.
+	 * delivery path serving canonical bytes has no use for it. Receiving one is a
+	 * different matter: `initiateTemplatePackagePreflight` refuses without a registry
+	 * rather than letting the artifact check quietly become a no-op.
 	 */
 	templatePayloads?: TemplatePackagePayloads;
 	now?: () => Date;

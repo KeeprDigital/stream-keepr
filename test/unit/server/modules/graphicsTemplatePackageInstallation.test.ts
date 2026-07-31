@@ -21,11 +21,11 @@ import {
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { collectStream } from '../../../helpers/storedZipArchive';
-import { acceptEveryTemplateDocument } from '../../../helpers/templatePackagePayload';
 import {
 	readTemplatePackageParts,
 	writeTemplatePackage,
 } from '../../../helpers/templatePackageArchive';
+import { acceptEveryTemplateDocument } from '../../../helpers/templatePackagePayload';
 
 /**
  * Template Package installation, through the Graphics Asset Library's public

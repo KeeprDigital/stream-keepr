@@ -23,12 +23,12 @@ import { TEMPLATE_PACKAGE_LIMITS } from '~~/shared/types/templatePackage';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
 import { collectStream } from '../../../helpers/storedZipArchive';
-import { acceptEveryTemplateDocument } from '../../../helpers/templatePackagePayload';
 import {
 	readTemplatePackageParts,
 	writeTemplatePackage,
 	writeTestArchive,
 } from '../../../helpers/templatePackageArchive';
+import { acceptEveryTemplateDocument } from '../../../helpers/templatePackagePayload';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
