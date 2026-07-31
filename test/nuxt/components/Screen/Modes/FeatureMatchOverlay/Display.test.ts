@@ -90,8 +90,8 @@ describe('featureMatchOverlayDisplay', () => {
 		});
 
 		it('never covers the host-owned layer with a backdrop of its own', async () => {
-			// The composed tree is mounted above the Frame, the Source Items, and the
-			// legacy widgets. A Fill or Key Output's black backdrop painted here would
+			// The composed tree is mounted above the Frame and the Source Items. A Fill
+			// or Key Output's black backdrop painted here would
 			// cover all of them — an operator switching an existing overlay to Fill would
 			// get solid black on air. Checked in every output, because the Overlay
 			// Output's transparent backdrop hides the mistake.
@@ -134,7 +134,7 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(wrapper.get('.feature-match-overlay__composition').attributes('mask')).toBeUndefined();
 		});
 
-		it('renders the shared item tree even when the layout has no legacy items', async () => {
+		it('feeds a composed context-gated Graphic Item from the host match state', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.composition = {
 				...createFeatureMatchLayoutComposition(),

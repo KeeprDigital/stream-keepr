@@ -92,14 +92,16 @@ describe('feature Match Overlay capability parity', () => {
 		expect(graphicsHostTokenCatalogue(FEATURE_MATCH_OVERLAY_HOST_CONTRACT).length).toBe(FEATURE_MATCH_TOKEN_KEYS.length);
 	});
 
-	it('row: image widget becomes a Media Graphic Item that pins a Graphic Asset', () => {
+	it('row: image widget becomes a Media Graphic Item with an unfilled Graphic Asset slot', () => {
 		const media = everyPresetItem().filter(item => item.type === 'media');
 
 		expect(media.length).toBeGreaterThan(0);
 		for (const item of media) {
 			expect(item.mediaKind).toBe('image');
 			expect(item.fit).toBe('contain');
-			// Unfilled until an author picks a revision: a preset ships no content.
+			// A preset ships no content, so the slot the row is about is empty until an
+			// author picks a revision. That the slot pins one exact Graphic Asset
+			// Revision is covered by `test/unit/shared/graphicsAssetMediaReferences.test.ts`.
 			expect(item.asset).toBeUndefined();
 		}
 	});
