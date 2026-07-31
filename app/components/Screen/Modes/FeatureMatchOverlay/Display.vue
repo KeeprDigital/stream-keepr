@@ -2,6 +2,10 @@
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
+import {
+	FEATURE_MATCH_SAMPLE_CONTEXT,
+	FEATURE_MATCH_SAMPLE_TOKEN_VALUES,
+} from '~~/shared/featureMatchSampleDataset';
 import { featureMatchOverlayGraphicAssetReferences, screenGraphicAssetReferenceTargetCompatibility } from '~~/shared/utils/graphicsAssetReferences';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 import { resolveFeatureMatchOverlayCompositorRenderModel } from '~/modules/feature-match-overlay/compositorRenderModel';
@@ -23,7 +27,7 @@ const canvasWidth = computed(() => screen.value?.screenConfig?.width ?? 1920);
 const canvasHeight = computed(() => screen.value?.screenConfig?.height ?? 1080);
 const frameMaskId = `feature-match-overlay-frame-mask-${useId().replace(/[^\w-]/g, '')}`;
 const frameGlowFilterId = `feature-match-overlay-frame-glow-${useId().replace(/[^\w-]/g, '')}`;
-const { config, match, matchState, sourceMatch, round, phase, event, loading, error } = useFeatureMatchOverlayModeData();
+const { config, match, matchState, sourceMatch, round, phase, event, usesSampleDataset, loading, error } = useFeatureMatchOverlayModeData();
 const indexedGraphicAssetReferences = computed(() =>
 	featureMatchOverlayGraphicAssetReferences(config.value),
 );
@@ -80,8 +84,15 @@ const compositorRenderModel = computed(() => resolveFeatureMatchOverlayComposito
 	canvasWidth: canvasWidth.value,
 	canvasHeight: canvasHeight.value,
 	layout: config.value.layout,
-	tokenValues: featureMatchTokenValues(hostState.value),
-	featureMatch: featureMatchGraphicsContext(hostState.value),
+	// A preview with no Feature Match Slot behind it shows the canonical sample
+	// dataset rather than a layout of empty boxes. A live Screen Output never
+	// reaches this branch, because it is never a preview.
+	tokenValues: usesSampleDataset.value
+		? FEATURE_MATCH_SAMPLE_TOKEN_VALUES
+		: featureMatchTokenValues(hostState.value),
+	featureMatch: usesSampleDataset.value
+		? FEATURE_MATCH_SAMPLE_CONTEXT
+		: featureMatchGraphicsContext(hostState.value),
 	// Editor-only, and asked for only by an embedded preview. A live Screen Output
 	// never sets either flag, so no guide can reach one.
 	itemGuides: showPreviewGuides.value,
