@@ -6,7 +6,7 @@ import type {
 import type { GraphicsIngestionAttentionState } from '~~/shared/utils/graphicsOperationsCockpit';
 import type {
 	GraphicsDeadlineGroupSummary,
-	GraphicsIngestionAttentionSummaryRecord,
+	GraphicsIngestionAttentionRead,
 	GraphicsOperationsCockpitCatalogue,
 	GraphicsRetentionDeadlineSummary,
 } from './operations-cockpit';
@@ -90,7 +90,14 @@ interface AttentionRow {
 	initiated_by: string;
 	proposed_name: string;
 	transferred_byte_length: number;
-	declared_byte_length: number | null;
+	/**
+	 * Always present. Every initiation path binds it, including an approved
+	 * remote copy, which starts at the worst-case bound for its Graphic Asset
+	 * kind precisely because the exact length is not knowable until the copy
+	 * runs. Treating it as absent here would invent an unknown-length operation
+	 * the domain never produces.
+	 */
+	declared_byte_length: number;
 	transfer_complete: number;
 	staging_bytes: number;
 	input_expires_at: number;
@@ -150,7 +157,7 @@ export function createD1GraphicsOperationsCockpitCatalogue(
 				'Isolated Graphics Discrepancies could not be counted',
 			);
 		},
-		async summariseIngestionAttention(input): Promise<GraphicsIngestionAttentionSummaryRecord> {
+		async summariseIngestionAttention(input): Promise<GraphicsIngestionAttentionRead> {
 			const checkedAt = new Date(input.now).getTime();
 			const [counted, listed] = await database.batch<
 				{ attention: GraphicsIngestionAttentionState; total: number } | AttentionRow
@@ -197,14 +204,14 @@ export function createD1GraphicsOperationsCockpitCatalogue(
 					initiatedBy: row.initiated_by,
 					name: row.proposed_name,
 					transferredByteLength: row.transferred_byte_length,
-					declaredByteLength: row.declared_byte_length ?? 0,
+					declaredByteLength: row.declared_byte_length,
 					transferComplete: row.transfer_complete === 1,
 					stagingBytes: row.staging_bytes,
 					inputExpiresAt: new Date(row.input_expires_at).toISOString(),
 					...(row.failure_code === null
 						? {}
 						: { failureCode: row.failure_code as NonNullable<
-								GraphicsIngestionAttentionSummaryRecord['operations'][number]['failureCode']
+								GraphicsIngestionAttentionRead['operations'][number]['failureCode']
 							> }),
 					updatedAt: new Date(row.updated_at).toISOString(),
 				})),

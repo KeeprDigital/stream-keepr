@@ -42,9 +42,13 @@ backlog. Concretely:
   bounded, risk-ordered sample of at most 20 operations.
 - Recent outcomes read one bounded window of the Evidence ledger.
 
-None of these queries binds a list, so none of them approaches the D1 bound-
-parameter ceiling that `test/unit/server/modules/graphicsAssetCatalogueD1Limits.test.ts`
-guards.
+The cost of a reading is therefore constant in the size of the library. The one
+query that binds a list binds a fixed one — the eleven Evidence categories the
+outcome groups map — and the one query that returns more than a handful of rows
+returns a fixed 200-row window. Neither grows with the catalogue, so neither
+approaches the D1 bound-parameter ceiling that
+`test/unit/server/modules/graphicsAssetCatalogueD1Limits.test.ts` guards, and
+there is nothing new for that suite to cover.
 
 ## Two conditions, never one number
 

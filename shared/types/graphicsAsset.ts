@@ -979,6 +979,11 @@ export interface GraphicsStorageHealthAlert {
 }
 
 export interface GraphicsStorageHealthAlertSummary {
+	/**
+	 * How many open *subjects* sit at each severity — not how many alert codes.
+	 * This is the same unit {@link GraphicsReconciliationBacklog} counts in, so
+	 * the two summaries can be read side by side without converting between them.
+	 */
 	countsBySeverity: Record<GraphicsStorageHealthAlertSeverity, number>;
 	/** Ordered most severe first. */
 	open: GraphicsStorageHealthAlert[];
@@ -1054,6 +1059,7 @@ export interface GraphicsReconciliationBacklog {
 		completedAt: string;
 	};
 	openCounts: Record<GraphicsDiscrepancyKind, number>;
+	/** How many open discrepancy subjects sit at each severity. */
 	countsBySeverity: Record<GraphicsStorageHealthAlertSeverity, number>;
 	/** Incidents that fail closed and are never repaired in place. */
 	isolatedIncidentCount: number;

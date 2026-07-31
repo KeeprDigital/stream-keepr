@@ -36,8 +36,10 @@ const loadError = ref<string | null>(null);
 const sweepPending = ref<'reconciliation' | 'retention' | null>(null);
 const sweepSummary = ref<string | null>(null);
 const sweepError = ref<string | null>(null);
+const consecutiveFailures = ref(0);
 
-const authorized = computed(() => cockpit.value !== null);
+/** Whether a reading is currently being shown, not whether the token is valid. */
+const hasReading = computed(() => cockpit.value !== null);
 
 function administratorHeaders() {
 	return { 'x-graphics-admin-token': administratorToken.value };
@@ -45,6 +47,12 @@ function administratorHeaders() {
 
 function describeFailure(caught: unknown, fallback: string) {
 	return caught instanceof Error ? caught.message : fallback;
+}
+
+function isAuthorizationFailure(caught: unknown) {
+	const status = (caught as { statusCode?: number; status?: number } | null)?.statusCode
+		?? (caught as { status?: number } | null)?.status;
+	return status === 401 || status === 403;
 }
 
 async function loadCockpit() {
@@ -55,9 +63,16 @@ async function loadCockpit() {
 			'/api/admin/graphics-assets/operations-cockpit',
 			{ headers: administratorHeaders() },
 		);
+		consecutiveFailures.value = 0;
 	}
 	catch (caught) {
+		consecutiveFailures.value += 1;
 		loadError.value = describeFailure(caught, 'The Operations Cockpit could not be read.');
+		// A rotated or revoked token must put the token form back rather than
+		// leaving a stale reading on screen forever. Keeping the last reading
+		// would show an administrator a library state nobody is still checking.
+		if (isAuthorizationFailure(caught))
+			cockpit.value = null;
 	}
 	finally {
 		loadPending.value = false;
@@ -101,11 +116,32 @@ async function runSweep(sweep: 'reconciliation' | 'retention') {
 }
 
 let pollHandle: number | undefined;
+let ticksSinceAttempt = 0;
+
+/**
+ * How many polling ticks to skip after repeated failures, doubling up to a cap.
+ * A library that is down should not be asked every five seconds indefinitely,
+ * and the first success resets it, so an intermittent failure costs at most one
+ * slower recovery rather than a permanently slower page.
+ */
+const MAXIMUM_BACKOFF_TICKS = 12;
+
+function backoffTicks() {
+	return consecutiveFailures.value === 0
+		? 0
+		: Math.min(2 ** (consecutiveFailures.value - 1), MAXIMUM_BACKOFF_TICKS);
+}
 
 onMounted(() => {
 	pollHandle = window.setInterval(() => {
-		if (authorized.value && !loadPending.value)
-			void loadCockpit();
+		if (!hasReading.value || loadPending.value)
+			return;
+		if (ticksSinceAttempt < backoffTicks()) {
+			ticksSinceAttempt += 1;
+			return;
+		}
+		ticksSinceAttempt = 0;
+		void loadCockpit();
 	}, POLL_INTERVAL_MILLISECONDS);
 });
 
@@ -203,6 +239,7 @@ const OUTCOME_GROUP_LABELS: Record<GraphicsRecentOutcomeGroup, string> = {
 	'quarantined-object': 'Quarantined objects',
 	'integrity-incident': 'Integrity incidents',
 	'resolved-repair': 'Resolved repairs',
+	'rejected-repair': 'Rejected repairs',
 };
 
 function formatInstant(instant: string | undefined) {
@@ -216,6 +253,17 @@ function formatGuarantee(milliseconds: number) {
 function boundaryOffset(fraction: number) {
 	return `${Math.min(fraction, 1) * 100}%`;
 }
+
+/**
+ * The 100% marker sits exactly on the track's right edge, where a marker drawn
+ * from its left edge would fall outside the rounded track and disappear. Pulling
+ * the final marker back by its own width keeps it visible and still on the line.
+ */
+function boundaryMarkerStyle(fraction: number) {
+	return fraction >= 1
+		? { right: '0px' }
+		: { left: boundaryOffset(fraction) };
+}
 </script>
 
 <template>
@@ -226,7 +274,7 @@ function boundaryOffset(fraction: number) {
 				variant="outline"
 				icon="i-lucide-refresh-cw"
 				:loading="loadPending"
-				:disabled="!authorized"
+				:disabled="!hasReading"
 				@click="loadCockpit"
 			>
 				Refresh
@@ -243,7 +291,7 @@ function boundaryOffset(fraction: number) {
 				</p>
 			</div>
 
-			<UCard v-if="!authorized">
+			<UCard v-if="!hasReading">
 				<template #header>
 					<h2 class="font-semibold text-highlighted">
 						Graphics Administrator access
@@ -394,7 +442,15 @@ function boundaryOffset(fraction: number) {
 								</div>
 							</template>
 
-							<div class="relative h-3 w-full rounded-full bg-elevated">
+							<div
+								class="relative h-3 w-full overflow-hidden rounded-full bg-elevated"
+								role="progressbar"
+								aria-label="Canonical Graphics Quota used"
+								:aria-valuemin="0"
+								:aria-valuemax="cockpit.capacity.canonical.limitBytes"
+								:aria-valuenow="cockpit.capacity.canonical.usedBytes"
+								:aria-valuetext="`${formatByteCount(cockpit.capacity.canonical.usedBytes)} of ${formatByteCount(cockpit.capacity.canonical.limitBytes)} used, ${cockpit.capacity.canonical.pressure} pressure`"
+							>
 								<div
 									class="absolute inset-y-0 left-0 rounded-full bg-primary"
 									:style="{ width: boundaryOffset(cockpit.capacity.canonical.usedFraction) }"
@@ -407,7 +463,7 @@ function boundaryOffset(fraction: number) {
 									]"
 									:key="boundary.label"
 									class="absolute inset-y-0 w-px bg-inverted"
-									:style="{ left: boundaryOffset(boundary.fraction) }"
+									:style="boundaryMarkerStyle(boundary.fraction)"
 								/>
 							</div>
 							<dl class="mt-3 grid grid-cols-3 gap-3 text-sm">
@@ -703,7 +759,7 @@ function boundaryOffset(fraction: number) {
 							<UButton
 								color="neutral"
 								variant="outline"
-								icon="i-lucide-broom"
+								icon="i-lucide-brush-cleaning"
 								:loading="sweepPending === 'retention'"
 								@click="runSweep('retention')"
 							>

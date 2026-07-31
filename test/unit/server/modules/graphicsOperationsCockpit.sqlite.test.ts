@@ -197,6 +197,7 @@ describe('the Operations Cockpit against a real catalogue', () => {
 			'quarantined-object': 0,
 			'integrity-incident': 0,
 			'resolved-repair': 0,
+			'rejected-repair': 0,
 		});
 	});
 

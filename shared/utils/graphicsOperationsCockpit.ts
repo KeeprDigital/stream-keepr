@@ -127,6 +127,22 @@ export function graphicsDiscrepancySeverity(
 	return DISCREPANCY_SEVERITIES[kind];
 }
 
+/**
+ * Whether a kind of open disagreement counts against the byte store's condition.
+ *
+ * An `info` disagreement does not. An unexpected object is bytes the catalogue
+ * never asked for, held safely in Content Quarantine and rechecked before
+ * anything is deleted: nothing the library is expected to serve is affected by
+ * it. Letting one degrade the headline would put the condition badge and the
+ * alert row into open disagreement — "Degraded" above a row reporting nothing
+ * worse than info — and teach an administrator to stop trusting the headline.
+ */
+export function graphicsDiscrepancyDegradesCondition(
+	kind: GraphicsDiscrepancyKind,
+): boolean {
+	return graphicsDiscrepancySeverity(kind) !== 'info';
+}
+
 /** The alert each open discrepancy kind raises. */
 const DISCREPANCY_ALERT_CODES: Record<GraphicsDiscrepancyKind, GraphicsStorageHealthAlertCode> = {
 	'critical-integrity-incident': 'critical-integrity-incident-open',
@@ -190,6 +206,13 @@ export const GRAPHICS_RECENT_OUTCOME_GROUPS = [
 	'quarantined-object',
 	'integrity-incident',
 	'resolved-repair',
+	/**
+	 * A repair, restoration, or regeneration the library refused. It sits beside
+	 * resolved repairs rather than among them: an administrator who tried to fix
+	 * something and was turned down has to see that, and counting it as resolved
+	 * would report the opposite of what happened.
+	 */
+	'rejected-repair',
 ] as const;
 
 export type GraphicsRecentOutcomeGroup = typeof GRAPHICS_RECENT_OUTCOME_GROUPS[number];
@@ -198,9 +221,20 @@ export type GraphicsRecentOutcomeGroup = typeof GRAPHICS_RECENT_OUTCOME_GROUPS[n
  * Which outcome group each Evidence category answers.
  *
  * Every category maps to at most one group, so the counts never double-count a
- * single decision. Routine lifecycle categories — pruning, purge, staged-input
- * expiry, ordinary deletion — belong to the Evidence ledger rather than to the
- * cockpit's recent outcomes, and are deliberately absent.
+ * single decision.
+ *
+ * Every reconciliation category is mapped. `discrepancy-rechecked` belongs with
+ * the resolved repairs because reconciliation only ever records it alongside a
+ * resolution — bytes verified as agreeing, an unexpected object gone after its
+ * recheck, or content withdrawn as no longer expected. A recheck that changes
+ * nothing records no Evidence at all, so this can never inflate the resolved
+ * count with non-events.
+ *
+ * The categories deliberately left out are the routine retention decisions —
+ * pruning scheduled, cancelled, frozen, resumed, or carried out; purge and
+ * blocked purge; staged-input expiry; ordinary content deletion. Those are the
+ * lifecycle working as designed rather than outcomes of an incident, and the
+ * Evidence ledger remains the place to read them.
  */
 const OUTCOME_GROUPS: Partial<Record<GraphicsAssetEvidenceCategory, GraphicsRecentOutcomeGroup>> = {
 	'content-unavailable-detected': 'unavailable-content',
@@ -214,6 +248,8 @@ const OUTCOME_GROUPS: Partial<Record<GraphicsAssetEvidenceCategory, GraphicsRece
 	'content-restored-from-quarantine': 'resolved-repair',
 	'content-quarantine-released': 'resolved-repair',
 	'derivative-regenerated': 'resolved-repair',
+	'discrepancy-rechecked': 'resolved-repair',
+	'repair-rejected': 'rejected-repair',
 };
 
 export function graphicsRecentOutcomeGroup(

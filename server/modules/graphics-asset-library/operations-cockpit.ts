@@ -32,6 +32,7 @@ import {
 	GRAPHICS_RECENT_OUTCOME_GROUPS,
 	GRAPHICS_STORAGE_HEALTH_ALERT_SEVERITIES,
 	graphicsDiscrepancyAlertCode,
+	graphicsDiscrepancyDegradesCondition,
 	graphicsDiscrepancySeverity,
 	graphicsRecentOutcomeGroup,
 	graphicsStorageHealthAlertPersists,
@@ -71,8 +72,13 @@ export interface GraphicsRetentionDeadlineSummary {
 	stagedInput: GraphicsDeadlineGroupSummary;
 }
 
-export interface GraphicsIngestionAttentionSummaryRecord {
-	counts: Record<GraphicsIngestionAttentionState, number>;
+/**
+ * What the catalogue returns for unfinished ingestion. The counts are partial
+ * because the grouping query returns only the states that actually occur; the
+ * reading fills the rest in with zero.
+ */
+export interface GraphicsIngestionAttentionRead {
+	counts: Partial<Record<GraphicsIngestionAttentionState, number>>;
 	operations: GraphicsIngestionAttentionItem[];
 }
 
@@ -91,7 +97,7 @@ export interface GraphicsOperationsCockpitCatalogue {
 	summariseIngestionAttention: (input: {
 		now: string;
 		limit: number;
-	}) => Promise<GraphicsIngestionAttentionSummaryRecord>;
+	}) => Promise<GraphicsIngestionAttentionRead>;
 	summariseRetentionDeadlines: () => Promise<GraphicsRetentionDeadlineSummary>;
 	listGraphicsAssetEvidence: (input: {
 		limit: number;
@@ -138,6 +144,12 @@ function emptyOutcomeCounts(): Record<GraphicsRecentOutcomeGroup, number> {
  * Collects the alerts, ordered most severe first, and counts them by severity.
  * An alert with no open subject is never raised, so the presence of an alert is
  * itself the finding.
+ *
+ * The severity counts are counts of *subjects*, not of alert codes, and are the
+ * same unit the reconciliation backlog counts in. Counting codes here would put
+ * two different questions behind one identical-looking number: forty missing
+ * derivatives and one unavailable content would read as "2 warning" beside the
+ * backlog's "41 warning", and nothing on the surface would explain the gap.
  */
 function summariseAlerts(
 	raised: readonly { code: GraphicsStorageHealthAlertCode; openCount: number }[],
@@ -154,33 +166,37 @@ function summariseAlerts(
 		.sort((first, second) =>
 			SEVERITY_RANK[first.severity] - SEVERITY_RANK[second.severity]);
 	for (const alert of open)
-		countsBySeverity[alert.severity] += 1;
+		countsBySeverity[alert.severity] += alert.openCount;
 	return { countsBySeverity, open };
 }
 
+type GraphicsLibraryComponent = 'catalogue' | 'canonical' | 'staging';
+
 /**
- * The alert a component's liveness raises. A component that cannot answer is
+ * The alert each component's liveness raises. A component that cannot answer is
  * the most urgent thing an administrator can be told.
  */
-function livenessAlertCode(
-	component: 'catalogue' | 'canonical' | 'staging',
-): GraphicsStorageHealthAlertCode {
-	return component === 'catalogue'
-		? 'catalogue-unavailable'
-		: component === 'canonical'
-			? 'canonical-byte-store-unavailable'
-			: 'staging-byte-store-unavailable';
-}
+const LIVENESS_ALERT_CODES: Record<GraphicsLibraryComponent, GraphicsStorageHealthAlertCode> = {
+	catalogue: 'catalogue-unavailable',
+	canonical: 'canonical-byte-store-unavailable',
+	staging: 'staging-byte-store-unavailable',
+};
+
+const UNAVAILABLE_REASON_CODES: Record<
+	GraphicsLibraryComponent,
+	'catalogue-unavailable' | 'byte-store-unavailable'
+> = {
+	catalogue: 'catalogue-unavailable',
+	canonical: 'byte-store-unavailable',
+	staging: 'byte-store-unavailable',
+};
 
 function unavailableCondition(
-	component: 'catalogue' | 'canonical' | 'staging',
+	component: GraphicsLibraryComponent,
 ): GraphicsLibraryComponentCondition {
 	return {
 		status: 'unavailable',
-		reason: {
-			code: component === 'catalogue' ? 'catalogue-unavailable' : 'byte-store-unavailable',
-			retryable: true,
-		},
+		reason: { code: UNAVAILABLE_REASON_CODES[component], retryable: true },
 	};
 }
 
@@ -195,140 +211,130 @@ function worstStatus(
 }
 
 /**
- * The Operations Cockpit.
+ * Takes one Operations Cockpit reading.
  *
  * It composes readings the library already owns rather than holding state of
  * its own: component liveness, the durable disagreements reconciliation
  * recorded, capacity, ingestion stages, retention deadlines, and Evidence. A
  * cockpit reading is therefore always reproducible, and a critical incident it
  * reports stays reported until the incident itself is resolved.
+ *
+ * Liveness is probed first because a component that cannot answer cannot be
+ * judged for agreement, and because a catalogue that cannot answer must still
+ * produce the safety answer the cockpit exists to give.
  */
-export function createGraphicsOperationsCockpit(
+export async function readGraphicsOperationsCockpit(
 	dependencies: GraphicsOperationsCockpitDependencies,
-) {
+): Promise<GraphicsOperationsCockpit> {
 	const { now, probeHealth } = dependencies;
+	const health = await probeHealth();
+	const checkedAt = now().toISOString();
+	const stagingByteStore: GraphicsLibraryComponentCondition
+		= health.byteStores.staging.status === 'healthy'
+			? { status: 'healthy' }
+			: unavailableCondition('staging');
 
-	function timestamp() {
-		return now().toISOString();
-	}
-
-	/**
-	 * Reads the reading in one pass.
-	 *
-	 * Liveness is probed first because a component that cannot answer cannot be
-	 * judged for agreement, and because a catalogue that cannot answer must still
-	 * produce the safety answer the cockpit exists to give.
-	 */
-	async function read(): Promise<GraphicsOperationsCockpit> {
-		const health = await probeHealth();
-		const checkedAt = timestamp();
-		const stagingByteStore: GraphicsLibraryComponentCondition
-			= health.byteStores.staging.status === 'healthy'
+	if (health.catalogue.status !== 'healthy') {
+		const canonicalByteStore: GraphicsLibraryComponentCondition
+			= health.byteStores.canonical.status === 'healthy'
 				? { status: 'healthy' }
-				: unavailableCondition('staging');
-
-		if (health.catalogue.status !== 'healthy') {
-			const canonicalByteStore: GraphicsLibraryComponentCondition
-				= health.byteStores.canonical.status === 'healthy'
-					? { status: 'healthy' }
-					: unavailableCondition('canonical');
-			const condition: GraphicsLibraryConditionSummary = {
-				status: 'unavailable',
-				catalogue: unavailableCondition('catalogue'),
-				canonicalByteStore,
-				stagingByteStore,
-			};
-			return {
-				outcome: 'catalogue-unavailable',
-				checkedAt,
-				condition,
-				alerts: summariseAlerts([
-					{ code: livenessAlertCode('catalogue'), openCount: 1 },
-					{
-						code: livenessAlertCode('canonical'),
-						openCount: canonicalByteStore.status === 'unavailable' ? 1 : 0,
-					},
-					{
-						code: livenessAlertCode('staging'),
-						openCount: stagingByteStore.status === 'unavailable' ? 1 : 0,
-					},
-				]),
-			};
-		}
-
-		const catalogue = dependencies.catalogue();
-		const [
-			capacity,
-			unavailableContentCount,
-			openCounts,
-			isolatedIncidentCount,
-			reconciliationState,
-			ingestion,
-			retention,
-			evidence,
-		] = await Promise.all([
-			catalogue.getCapacity(),
-			catalogue.countUnavailableContent(),
-			catalogue.countOpenDiscrepancies(),
-			catalogue.countIsolatedDiscrepancies(),
-			catalogue.getReconciliationState(),
-			catalogue.summariseIngestionAttention({
-				now: checkedAt,
-				limit: INGESTION_SAMPLE_LIMIT,
-			}),
-			catalogue.summariseRetentionDeadlines(),
-			catalogue.listGraphicsAssetEvidence({
-				limit: RECENT_OUTCOME_WINDOW,
-				categories: GRAPHICS_RECENT_OUTCOME_CATEGORIES,
-			}),
-		]);
-
-		const condition = describeCondition({
-			health,
+				: unavailableCondition('canonical');
+		const condition: GraphicsLibraryConditionSummary = {
+			status: 'unavailable',
+			catalogue: unavailableCondition('catalogue'),
+			canonicalByteStore,
 			stagingByteStore,
-			unavailableContentCount,
-			openCounts,
-		});
-
+		};
 		return {
-			outcome: 'complete',
+			outcome: 'catalogue-unavailable',
 			checkedAt,
 			condition,
 			alerts: summariseAlerts([
+				{ code: LIVENESS_ALERT_CODES.catalogue, openCount: 1 },
 				{
-					code: livenessAlertCode('canonical'),
-					openCount: condition.canonicalByteStore.status === 'unavailable' ? 1 : 0,
+					code: LIVENESS_ALERT_CODES.canonical,
+					openCount: canonicalByteStore.status === 'unavailable' ? 1 : 0,
 				},
 				{
-					code: livenessAlertCode('staging'),
+					code: LIVENESS_ALERT_CODES.staging,
 					openCount: stagingByteStore.status === 'unavailable' ? 1 : 0,
 				},
-				...Object.entries(openCounts).map(([kind, openCount]) => ({
-					code: graphicsDiscrepancyAlertCode(kind as GraphicsDiscrepancyKind),
-					openCount,
-				})),
-				...quotaAlerts(capacity),
-				{
-					code: 'graphics-ingestion-input-expired' as const,
-					openCount: ingestion.counts['input-expired'],
-				},
 			]),
-			capacity: describeCapacity(capacity),
-			ingestion: {
-				counts: { ...emptyAttentionCounts(), ...ingestion.counts },
-				operations: ingestion.operations,
-			},
-			reconciliation: describeBacklog({
-				openCounts,
-				isolatedIncidentCount,
-				state: reconciliationState,
-			}),
-			lifecycle: describeLifecycle(retention),
-			recentOutcomes: describeRecentOutcomes(evidence),
 		};
 	}
 
-	return { read };
+	const catalogue = dependencies.catalogue();
+	const [
+		capacity,
+		unavailableContentCount,
+		openCounts,
+		isolatedIncidentCount,
+		reconciliationState,
+		ingestion,
+		retention,
+		evidence,
+	] = await Promise.all([
+		catalogue.getCapacity(),
+		catalogue.countUnavailableContent(),
+		catalogue.countOpenDiscrepancies(),
+		catalogue.countIsolatedDiscrepancies(),
+		catalogue.getReconciliationState(),
+		catalogue.summariseIngestionAttention({
+			now: checkedAt,
+			limit: INGESTION_SAMPLE_LIMIT,
+		}),
+		catalogue.summariseRetentionDeadlines(),
+		catalogue.listGraphicsAssetEvidence({
+			limit: RECENT_OUTCOME_WINDOW,
+			categories: GRAPHICS_RECENT_OUTCOME_CATEGORIES,
+		}),
+	]);
+
+	const condition = describeCondition({
+		health,
+		stagingByteStore,
+		unavailableContentCount,
+		openCounts,
+	});
+
+	const attentionCounts = { ...emptyAttentionCounts(), ...ingestion.counts };
+
+	return {
+		outcome: 'complete',
+		checkedAt,
+		condition,
+		alerts: summariseAlerts([
+			{
+				code: LIVENESS_ALERT_CODES.canonical,
+				openCount: condition.canonicalByteStore.status === 'unavailable' ? 1 : 0,
+			},
+			{
+				code: LIVENESS_ALERT_CODES.staging,
+				openCount: stagingByteStore.status === 'unavailable' ? 1 : 0,
+			},
+			...Object.entries(openCounts).map(([kind, openCount]) => ({
+				code: graphicsDiscrepancyAlertCode(kind as GraphicsDiscrepancyKind),
+				openCount,
+			})),
+			...quotaAlerts(capacity),
+			{
+				code: 'graphics-ingestion-input-expired' as const,
+				openCount: attentionCounts['input-expired'],
+			},
+		]),
+		capacity: describeCapacity(capacity),
+		ingestion: {
+			counts: attentionCounts,
+			operations: ingestion.operations,
+		},
+		reconciliation: describeBacklog({
+			openCounts,
+			isolatedIncidentCount,
+			state: reconciliationState,
+		}),
+		lifecycle: describeLifecycle(retention),
+		recentOutcomes: describeRecentOutcomes(evidence),
+	};
 }
 
 function emptyAttentionCounts(): Record<GraphicsIngestionAttentionState, number> {
@@ -340,10 +346,24 @@ function emptyAttentionCounts(): Record<GraphicsIngestionAttentionState, number>
 /**
  * Judges each side against its own durable evidence.
  *
- * The catalogue is degraded by the content it has itself recorded as
- * unresolvable; the canonical byte store is degraded by the disagreements
- * observed in it. Keeping the two sources apart is what makes the two answers
- * independently meaningful rather than one number reported twice.
+ * The catalogue is degraded by the Unavailable Graphic Asset Content it has
+ * itself recorded; the canonical byte store is degraded by the disagreements
+ * reconciliation observed in it.
+ *
+ * Reading the advisory availability flag as the catalogue's condition is
+ * deliberate, and is not a breach of the authority contract. The contract
+ * forbids treating that flag as a *reader* authority — nobody may serve or
+ * withhold bytes on the strength of it. Here it is read as the catalogue's
+ * self-knowledge: what D1 believes about its own contents, which is exactly
+ * what a catalogue-condition question asks. The byte store is still asked
+ * separately, and is still the only thing that decides which bytes exist.
+ *
+ * The two answers usually corroborate rather than diverge — one lost object
+ * both flags the catalogue and opens a discrepancy — and that is the point.
+ * They are sourced independently, so when they *do* disagree, the disagreement
+ * is information: a flagged catalogue with a clean byte store means the flag is
+ * stale, and a clean catalogue with open discrepancies means a sweep has not
+ * caught up yet. One merged number could report neither.
  */
 function describeCondition(input: {
 	health: GraphicsAssetLibraryHealth;
@@ -362,8 +382,9 @@ function describeCondition(input: {
 			}
 		: { status: 'healthy' };
 
-	const disagreementCount = Object.values(input.openCounts)
-		.reduce((total, count) => total + count, 0);
+	const disagreementCount = Object.entries(input.openCounts)
+		.filter(([kind]) => graphicsDiscrepancyDegradesCondition(kind as GraphicsDiscrepancyKind))
+		.reduce((total, [, count]) => total + count, 0);
 	const canonicalByteStore: GraphicsLibraryComponentCondition
 		= input.health.byteStores.canonical.status !== 'healthy'
 			? unavailableCondition('canonical')
@@ -524,7 +545,10 @@ function describeRecentOutcomes(
 		});
 	}
 	return {
-		consideredEntryCount: outcomes.length,
+		// Every entry the window offered, not the subset that mapped to a group.
+		// Counting the mapped ones would make the denominator move whenever the
+		// mapping changed, and silently claim a smaller window had been read.
+		consideredEntryCount: entries.length,
 		countsByGroup,
 		entries: outcomes.slice(0, RECENT_OUTCOME_SAMPLE_LIMIT),
 	};

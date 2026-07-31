@@ -38,7 +38,8 @@ function completeCockpit(
 			stagingByteStore: { status: 'healthy' },
 		},
 		alerts: {
-			countsBySeverity: { critical: 1, warning: 1, info: 0 },
+			// Subjects, not codes: one integrity incident and two unavailable contents.
+			countsBySeverity: { critical: 1, warning: 2, info: 0 },
 			open: [
 				{
 					code: 'critical-integrity-incident-open',
@@ -164,6 +165,7 @@ function completeCockpit(
 				'quarantined-object': 0,
 				'integrity-incident': 1,
 				'resolved-repair': 0,
+				'rejected-repair': 0,
 			},
 			entries: [
 				{
@@ -197,6 +199,10 @@ const buttonStub = defineComponent({
 	emits: ['click'],
 	template: '<button @click="$emit(\'click\')"><slot />{{ label }}</button>',
 });
+const formFieldStub = defineComponent({
+	props: ['label', 'description'],
+	template: '<div><label>{{ label }}</label><p>{{ description }}</p><slot /></div>',
+});
 const inputStub = defineComponent({
 	props: ['modelValue', 'type'],
 	emits: ['update:modelValue'],
@@ -218,7 +224,7 @@ async function mountPage() {
 				UCard: passthroughStub,
 				UBadge: badgeStub,
 				UIcon: passthroughStub,
-				UFormField: passthroughStub,
+				UFormField: formFieldStub,
 				UInput: inputStub,
 			},
 		},
@@ -325,13 +331,65 @@ describe('the Graphics Asset Library Operations cockpit page', () => {
 		expect(wrapper.text()).toContain('Critical integrity incidents are open and fail closed');
 		expect(wrapper.text()).toContain('Persistent');
 
-		// Leaving the page discards nothing that matters: the incident is durable
-		// catalogue state, so returning reads exactly the same alert back.
+		// The page keeps no dismissal state of its own: unmounting and remounting
+		// re-reads the server and the same alert comes back. That the underlying
+		// incident is durable is proved against a real catalogue in
+		// test/unit/server/modules/graphicsOperationsCockpit.sqlite.test.ts.
 		wrapper.unmount();
 		const returned = await openCockpit();
 
 		expect(returned.text()).toContain('Critical integrity incidents are open and fail closed');
 		expect(returned.text()).toContain('1 critical');
+	});
+
+	it('returns to the token form when the token stops being accepted', async () => {
+		const wrapper = await openCockpit();
+		expect(wrapper.text()).toContain('Library condition');
+
+		// The token is rotated underneath a page that is already polling.
+		mockApiFetch.mockRejectedValue(Object.assign(
+			new Error('Graphics Administrator authorization is required'),
+			{ statusCode: 403 },
+		));
+		await wrapper.findAll('button')
+			.find(button => button.text() === 'Refresh')!
+			.trigger('click');
+		await nextTick();
+
+		// The stale reading is dropped rather than left on screen as a library
+		// state nobody is still checking, and re-authorising is possible again.
+		expect(wrapper.text()).not.toContain('Library condition');
+		expect(wrapper.text()).toContain('Graphics Administrator token');
+		expect(wrapper.text()).toContain('Graphics Administrator authorization is required');
+		expect(wrapper.findAll('button').some(button => button.text() === 'Open cockpit'))
+			.toBe(true);
+	});
+
+	it('recovers on the next reading after a transient failure', async () => {
+		const wrapper = await openCockpit();
+
+		// A transient failure is not an authorization failure, so the last good
+		// reading stays on screen while the error is reported alongside it.
+		mockApiFetch.mockRejectedValueOnce(Object.assign(
+			new Error('The Graphics Asset Operations Cockpit is temporarily unavailable'),
+			{ statusCode: 503 },
+		));
+		await wrapper.findAll('button')
+			.find(button => button.text() === 'Refresh')!
+			.trigger('click');
+		await nextTick();
+
+		expect(wrapper.text()).toContain('The last reading failed');
+		expect(wrapper.text()).toContain('Library condition');
+
+		serve(completeCockpit());
+		await wrapper.findAll('button')
+			.find(button => button.text() === 'Refresh')!
+			.trigger('click');
+		await nextTick();
+
+		expect(wrapper.text()).not.toContain('The last reading failed');
+		expect(wrapper.text()).toContain('Library condition');
 	});
 
 	it('re-reads durable state after running a sweep', async () => {

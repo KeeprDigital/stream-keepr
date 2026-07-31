@@ -31,8 +31,10 @@ describe('the Operations Cockpit API', () => {
 		expect(['healthy', 'degraded']).toContain(cockpit.condition.catalogue.status);
 		expect(['healthy', 'degraded']).toContain(cockpit.condition.canonicalByteStore.status);
 		expect(cockpit.condition.stagingByteStore.status).toBe('healthy');
-		expect(cockpit.condition.catalogue)
-			.not.toBe(cockpit.condition.canonicalByteStore);
+		// Whether the two sides genuinely derive from separate evidence is proved
+		// against a controlled catalogue in
+		// test/unit/server/modules/graphicsOperationsCockpit.sqlite.test.ts; here
+		// only the composed contract is exercised.
 
 		// The canonical quota states where its boundaries actually sit, and the
 		// staging allowance stays a budget of its own.
