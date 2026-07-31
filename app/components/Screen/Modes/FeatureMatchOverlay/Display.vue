@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayGraphicGroupChildRenderModel } from '~/modules/feature-match-overlay/renderModel';
+import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import { graphicAssetFontFaceFamily } from '~~/shared/featureMatchOverlayFonts';
 import { featureMatchOverlayGraphicAssetReferences, screenGraphicAssetReferenceTargetCompatibility } from '~~/shared/utils/graphicsAssetReferences';
@@ -9,15 +10,20 @@ import { resolveFeatureMatchOverlayCompositorRenderModel } from '~/modules/featu
 import { resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
 import { featureMatchOverlaySelectionKey, isFeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
 import { featureMatchGraphicsContext, featureMatchTokenValues } from '~/modules/feature-match-overlay/tokenValues';
+import {
+	GRAPHICS_PREVIEW_SELECT_MESSAGE,
+	isGraphicsPreviewSelectedTargetMessage,
+} from '~/modules/graphics/previewMessages';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
 import FeatureMatchOverlayMediaGraphicItem from './MediaGraphicItem.vue';
 import FeatureMatchOverlayGraphicItem from './Widget.vue';
 
-const { outputMode, previewGuides, screen } = useScreenContext();
+const { outputMode, previewGuides, previewSafeAreas, screen } = useScreenContext();
 const resolvedOutput = computed<FeatureMatchOverlayOutput>(() => outputMode?.value ?? 'overlay');
 const showPreviewGuides = computed(() => previewGuides?.value ?? false);
+const showSafeAreaGuides = computed(() => previewSafeAreas?.value ?? false);
 const canvasWidth = computed(() => screen.value?.screenConfig?.width ?? 1920);
 const canvasHeight = computed(() => screen.value?.screenConfig?.height ?? 1080);
 const frameMaskId = `feature-match-overlay-frame-mask-${useId().replace(/[^\w-]/g, '')}`;
@@ -57,6 +63,13 @@ const fontAssetSources = computed(() => ({
 }));
 const { displayTime } = useClockDisplay(() => matchState.value?.clock ?? null);
 const selectedPreviewTarget = ref<FeatureMatchOverlaySelectionTarget>({ type: 'canvas' });
+/**
+ * The shared item tree's own selection, held separately from the host-owned one
+ * for the same reason the editor holds two refs: they name things in different
+ * vocabularies. Exactly one of them is ever non-canvas, because the editor clears
+ * the other and pushes both back down.
+ */
+const selectedCompositorTarget = ref<GraphicsSelectionTarget>({ type: 'canvas' });
 const fontReady = ref(true);
 const fontError = ref(false);
 let loadedFontFaces: FontFace[] = [];
@@ -161,6 +174,11 @@ const compositorRenderModel = computed(() => resolveFeatureMatchOverlayComposito
 	layout: config.value.layout,
 	tokenValues: featureMatchTokenValues(hostState.value),
 	featureMatch: featureMatchGraphicsContext(hostState.value),
+	// Editor-only, and asked for only by an embedded preview. A live Screen Output
+	// never sets either flag, so no guide can reach one.
+	itemGuides: showPreviewGuides.value,
+	safeAreaGuides: showSafeAreaGuides.value,
+	selectedTarget: selectedCompositorTarget.value,
 	graphicAssetContentUrl,
 }));
 
@@ -225,6 +243,39 @@ function selectPreviewTarget(target: FeatureMatchOverlaySelectionTarget) {
 	postPreviewMessage('feature-match-overlay:select', { target });
 }
 
+/**
+ * Report a shared Graphic Item selection back to the editor that embedded this
+ * preview, in the shared compositor's own vocabulary.
+ *
+ * Clicking empty canvas reports both surfaces, because it means "nothing is
+ * selected" rather than "the compositor has nothing selected" — an author who has
+ * a Source Item selected and clicks the backdrop expects it deselected too. Every
+ * other click reports only the compositor: the editor clears the host-owned
+ * selection itself and pushes both back down.
+ */
+function selectCompositorPreviewTarget(target: GraphicsSelectionTarget) {
+	if (!showPreviewGuides.value)
+		return;
+
+	selectedCompositorTarget.value = target;
+	if (import.meta.client)
+		window.parent?.postMessage({ type: GRAPHICS_PREVIEW_SELECT_MESSAGE, target }, window.location.origin);
+
+	if (target.type === 'canvas')
+		selectPreviewTarget({ type: 'canvas' });
+}
+
+function handleSelectedCompositorTargetMessage(message: MessageEvent) {
+	if (!isGraphicsPreviewSelectedTargetMessage(message, {
+		origin: window.location.origin,
+		source: window.parent,
+	})) {
+		return;
+	}
+
+	selectedCompositorTarget.value = message.data.target;
+}
+
 function isPreviewTargetSelected(target: FeatureMatchOverlaySelectionTarget) {
 	return featureMatchOverlaySelectionKey(selectedPreviewTarget.value) === featureMatchOverlaySelectionKey(target);
 }
@@ -247,10 +298,12 @@ function handleSelectedPreviewTargetMessage(message: MessageEvent) {
 
 onMounted(() => {
 	window.addEventListener('message', handleSelectedPreviewTargetMessage);
+	window.addEventListener('message', handleSelectedCompositorTargetMessage);
 });
 
 onBeforeUnmount(() => {
 	window.removeEventListener('message', handleSelectedPreviewTargetMessage);
+	window.removeEventListener('message', handleSelectedCompositorTargetMessage);
 	fontLoads.supersede();
 	discardFontFaces(loadedFontFaces);
 });
@@ -458,89 +511,96 @@ onBeforeUnmount(() => {
 			:render="compositorRenderModel"
 		/>
 
-		<div v-if="showPreviewGuides" class="guide-layer" aria-label="Feature Match Overlay editor selection layer">
-			<button
-				type="button"
-				class="canvas-guide"
-				aria-label="Select canvas"
-				@click.stop="selectPreviewTarget({ type: 'canvas' })"
-			/>
-			<div
-				v-for="source in sourceItems"
-				:key="`source-guide-${source.item.id}`"
-				class="graphic-item-guide graphic-item-guide--source"
-				:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: source.item.id }) }"
-				:style="guideStyle(source.item)"
-				role="button"
-				tabindex="0"
-				:aria-label="`Select ${source.item.label}`"
-				@click.stop="selectPreviewTarget({ type: 'layer', itemId: source.item.id })"
-				@keydown.enter.stop="selectPreviewTarget({ type: 'layer', itemId: source.item.id })"
-				@keydown.space.prevent.stop="selectPreviewTarget({ type: 'layer', itemId: source.item.id })"
-			>
-				<span>{{ source.item.label }}</span>
-			</div>
-			<div
-				v-for="graphicItem in graphicItemItems"
-				:key="`graphicItem-guide-${graphicItem.id}`"
-				class="graphic-item-guide graphic-item-guide--graphicItem"
-				:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: graphicItem.item.id }) }"
-				:style="guideStyle(graphicItem.item)"
-				role="button"
-				tabindex="0"
-				:aria-label="`Select ${graphicItem.label}`"
-				@click.stop="selectPreviewTarget({ type: 'layer', itemId: graphicItem.item.id })"
-				@keydown.enter.stop="selectPreviewTarget({ type: 'layer', itemId: graphicItem.item.id })"
-				@keydown.space.prevent.stop="selectPreviewTarget({ type: 'layer', itemId: graphicItem.item.id })"
-			>
-				<span>{{ graphicItem.label }}</span>
-			</div>
-			<div
-				v-for="media in mediaItems"
-				:key="`media-guide-${media.item.id}`"
-				class="graphic-item-guide graphic-item-guide--media"
-				:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: media.item.id }) }"
-				:style="guideStyle(media.item)"
-				role="button"
-				tabindex="0"
-				:aria-label="`Select ${media.item.label}`"
-				@click.stop="selectPreviewTarget({ type: 'layer', itemId: media.item.id })"
-			>
-				<span>{{ media.item.label }}</span>
-			</div>
-			<div
-				v-for="group in graphicGroups"
-				:key="`group-guide-${group.item.id}`"
-				class="graphic-item-guide graphic-item-guide--group"
-				:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: group.item.id }) }"
-				:style="guideStyle(group.item)"
-				role="button"
-				tabindex="0"
-				:aria-label="`Select ${group.item.label}`"
-				@click.stop="selectPreviewTarget({ type: 'layer', itemId: group.item.id })"
-				@keydown.enter.stop="selectPreviewTarget({ type: 'layer', itemId: group.item.id })"
-				@keydown.space.prevent.stop="selectPreviewTarget({ type: 'layer', itemId: group.item.id })"
-			>
-				<span>{{ group.item.label }}</span>
-			</div>
-			<template v-for="group in graphicGroups" :key="`group-graphicItem-guides-${group.item.id}`">
+		<!--
+			One guide layer over one canvas, drawn by the host that paints the canvas.
+			The shared compositor's guides come from its own render model; the Frame's
+			Source Items and the legacy widgets are host-owned and drawn here, above
+			them, so a host-owned item stays selectable where the two overlap.
+		-->
+		<GraphicsCompositorGuideLayer
+			:item-guides="compositorRenderModel.itemGuides"
+			:safe-area-guides="compositorRenderModel.safeAreaGuides"
+			:selectable-canvas="showPreviewGuides"
+			@select="selectCompositorPreviewTarget"
+		>
+			<template v-if="showPreviewGuides">
 				<div
-					v-for="child in group.children"
-					:key="`child-guide-${group.item.id}-${child.id}`"
-					class="graphic-item-guide graphic-item-guide--child"
-					:class="{ 'is-selected': isPreviewTargetSelected({ type: 'graphic-item', itemId: group.item.id, childId: child.id }) }"
-					:style="childGuideStyle(group.item, child)"
+					v-for="source in sourceItems"
+					:key="`source-guide-${source.item.id}`"
+					class="graphic-item-guide graphic-item-guide--source"
+					:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: source.item.id }) }"
+					:style="guideStyle(source.item)"
 					role="button"
 					tabindex="0"
-					:aria-label="`Select ${child.label}`"
-					@click.stop="selectPreviewTarget({ type: 'graphic-item', itemId: group.item.id, childId: child.id })"
-					@keydown.enter.stop="selectPreviewTarget({ type: 'graphic-item', itemId: group.item.id, childId: child.id })"
-					@keydown.space.prevent.stop="selectPreviewTarget({ type: 'graphic-item', itemId: group.item.id, childId: child.id })"
+					:aria-label="`Select ${source.item.label}`"
+					@click.stop="selectPreviewTarget({ type: 'layer', itemId: source.item.id })"
+					@keydown.enter.stop="selectPreviewTarget({ type: 'layer', itemId: source.item.id })"
+					@keydown.space.prevent.stop="selectPreviewTarget({ type: 'layer', itemId: source.item.id })"
 				>
-					<span>{{ child.label }}</span>
+					<span>{{ source.item.label }}</span>
 				</div>
+				<div
+					v-for="graphicItem in graphicItemItems"
+					:key="`graphicItem-guide-${graphicItem.id}`"
+					class="graphic-item-guide graphic-item-guide--graphicItem"
+					:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: graphicItem.item.id }) }"
+					:style="guideStyle(graphicItem.item)"
+					role="button"
+					tabindex="0"
+					:aria-label="`Select ${graphicItem.label}`"
+					@click.stop="selectPreviewTarget({ type: 'layer', itemId: graphicItem.item.id })"
+					@keydown.enter.stop="selectPreviewTarget({ type: 'layer', itemId: graphicItem.item.id })"
+					@keydown.space.prevent.stop="selectPreviewTarget({ type: 'layer', itemId: graphicItem.item.id })"
+				>
+					<span>{{ graphicItem.label }}</span>
+				</div>
+				<div
+					v-for="media in mediaItems"
+					:key="`media-guide-${media.item.id}`"
+					class="graphic-item-guide graphic-item-guide--media"
+					:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: media.item.id }) }"
+					:style="guideStyle(media.item)"
+					role="button"
+					tabindex="0"
+					:aria-label="`Select ${media.item.label}`"
+					@click.stop="selectPreviewTarget({ type: 'layer', itemId: media.item.id })"
+				>
+					<span>{{ media.item.label }}</span>
+				</div>
+				<div
+					v-for="group in graphicGroups"
+					:key="`group-guide-${group.item.id}`"
+					class="graphic-item-guide graphic-item-guide--group"
+					:class="{ 'is-selected': isPreviewTargetSelected({ type: 'layer', itemId: group.item.id }) }"
+					:style="guideStyle(group.item)"
+					role="button"
+					tabindex="0"
+					:aria-label="`Select ${group.item.label}`"
+					@click.stop="selectPreviewTarget({ type: 'layer', itemId: group.item.id })"
+					@keydown.enter.stop="selectPreviewTarget({ type: 'layer', itemId: group.item.id })"
+					@keydown.space.prevent.stop="selectPreviewTarget({ type: 'layer', itemId: group.item.id })"
+				>
+					<span>{{ group.item.label }}</span>
+				</div>
+				<template v-for="group in graphicGroups" :key="`group-graphicItem-guides-${group.item.id}`">
+					<div
+						v-for="child in group.children"
+						:key="`child-guide-${group.item.id}-${child.id}`"
+						class="graphic-item-guide graphic-item-guide--child"
+						:class="{ 'is-selected': isPreviewTargetSelected({ type: 'graphic-item', itemId: group.item.id, childId: child.id }) }"
+						:style="childGuideStyle(group.item, child)"
+						role="button"
+						tabindex="0"
+						:aria-label="`Select ${child.label}`"
+						@click.stop="selectPreviewTarget({ type: 'graphic-item', itemId: group.item.id, childId: child.id })"
+						@keydown.enter.stop="selectPreviewTarget({ type: 'graphic-item', itemId: group.item.id, childId: child.id })"
+						@keydown.space.prevent.stop="selectPreviewTarget({ type: 'graphic-item', itemId: group.item.id, childId: child.id })"
+					>
+						<span>{{ child.label }}</span>
+					</div>
+				</template>
 			</template>
-		</div>
+		</GraphicsCompositorGuideLayer>
 	</div>
 </template>
 
@@ -569,21 +629,12 @@ onBeforeUnmount(() => {
 	height: 100%;
 }
 
-.guide-layer {
-	position: absolute;
-	inset: 0;
-	pointer-events: auto;
-	z-index: 999;
-}
-
-.canvas-guide {
-	position: absolute;
-	inset: 0;
-	border: 0;
-	background: transparent;
-	cursor: default;
-}
-
+/*
+ * The host-owned guides slotted into the shared guide layer. The layer itself,
+ * its canvas catch-all, and the shared item guides are the compositor's; these
+ * are the Frame's Source Items and the legacy widgets, which have no shared
+ * vocabulary and so keep their own colours.
+ */
 .graphic-item-guide {
 	position: absolute;
 	box-sizing: border-box;

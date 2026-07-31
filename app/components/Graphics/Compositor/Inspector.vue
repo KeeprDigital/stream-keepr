@@ -1,26 +1,27 @@
 <script setup lang="ts">
-import type { GraphicsHostContract, ShapeGeometryPresetId } from '~~/shared/modules/graphics';
+import type { GraphicsHostContract, GraphicSurfaceStyleEdit, GraphicSurfaceStyleSlot, ShapeGeometryPresetId } from '~~/shared/modules/graphics';
 import type { PlayerSide } from '~~/shared/types/enums';
 import type { GraphicFocalPosition, MediaGraphicItemFit } from '~~/shared/types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
-	GRAPHIC_FILL_KIND_VALUES,
+	GameWinsBoxOrientation,
+	GameWinsDisplayMode,
+	GameWinsGraphicItemConfig,
 	GraphicAnchorPoint,
-	GraphicFillStop,
 	GraphicGeometryUnit,
-	GraphicGlow,
 	GraphicGroupChildSizing,
 	GraphicGroupItemConfig,
 	GraphicInputChoiceOption,
 	GraphicInputDeclaration,
 	GraphicInputType,
 	GraphicItemConfig,
-	GraphicOutline,
 	GraphicPlaceholderStyle,
 	GraphicSurfaceStyle,
 	GraphicTypography,
 	MediaGraphicItemConfig,
 	OnAirUpdatePolicy,
+	PlayerLifeAnimation,
+	PlayerLifeGraphicItemConfig,
 	ShapeCorner,
 	ShapeCornerKey,
 	ShapeGeometry,
@@ -32,10 +33,9 @@ import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
 	addGraphicInput,
 	anchoredGraphicPosition,
+	applyGraphicSurfaceStyleEdit,
 	applyShapeGeometryPreset,
 	authorsGraphicInputs,
-	changeGraphicGradientStopCount,
-	clearGraphicSurfaceStyle,
 	clearMediaGraphicItemAsset,
 	deleteGraphicInput,
 	displayGraphicGeometryValue,
@@ -49,34 +49,32 @@ import {
 	moveGraphicRectToAnchoredPosition,
 	parseGraphicGeometryValue,
 	patchBroadcastGraphic,
-	patchGraphicGlow,
-	patchGraphicGradientAngle,
-	patchGraphicGradientStop,
+	patchGameWinsGraphicItem,
 	patchGraphicGroup,
 	patchGraphicGroupChildSizing,
 	patchGraphicGroupDefaultChildSurfaceStyle,
 	patchGraphicInput,
 	patchGraphicItem,
-	patchGraphicOutline,
 	patchGraphicPlaceholderStyle,
-	patchGraphicSolidFill,
-	patchGraphicSurfaceStyle,
+	patchGraphicTextOverflow,
 	patchGraphicTypography,
 	patchMediaFocalPosition,
 	patchMediaGraphicItem,
+	patchPlayerLifeGraphicItem,
 	patchShapeCorner,
 	patchShapeGeometry,
 	patchTextGraphicItem,
 	replaceBroadcastGraphic,
 	resizeGraphicRectFromAnchor,
 	selectMediaGraphicItemAsset,
-	setGraphicFillKind,
 	setGraphicInputChoiceOptions,
 	setMediaClipGeometry,
 	SHAPE_GEOMETRY_PRESETS,
 } from '~~/shared/modules/graphics';
 import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
+	GAME_WINS_BOX_ORIENTATION_VALUES,
+	GAME_WINS_DISPLAY_MODE_VALUES,
 	GRAPHIC_FONT_STYLE_VALUES,
 	GRAPHIC_GEOMETRY_UNIT_VALUES,
 	GRAPHIC_GROUP_ALIGN_VALUES,
@@ -85,13 +83,14 @@ import {
 	GRAPHIC_INPUT_TYPE_VALUES,
 	GRAPHIC_TEXT_ALIGN_VALUES,
 	GRAPHIC_TEXT_TRANSFORM_VALUES,
-	MAX_GRAPHIC_FILL_STOPS,
 	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
 	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_TEXT_LENGTH,
-	MIN_GRAPHIC_FILL_STOPS,
+	MAX_PLAYER_LIFE_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
+	MIN_PLAYER_LIFE_ANIMATION_DURATION_MS,
+	PLAYER_LIFE_ANIMATION_VALUES,
 	SHAPE_CORNER_KEYS,
 	SHAPE_CORNER_TREATMENT_VALUES,
 } from '~~/shared/types/graphics';
@@ -157,11 +156,10 @@ const OVERFLOW_POLICY_OPTIONS = [
 const TEXT_ALIGN_OPTIONS = GRAPHIC_TEXT_ALIGN_VALUES.map(value => ({ label: value, value }));
 const TEXT_TRANSFORM_OPTIONS = GRAPHIC_TEXT_TRANSFORM_VALUES.map(value => ({ label: value, value }));
 const FONT_STYLE_OPTIONS = GRAPHIC_FONT_STYLE_VALUES.map(value => ({ label: value, value }));
-const FILL_KIND_OPTIONS = [
-	{ label: 'Solid', value: 'solid' },
-	{ label: 'Linear gradient', value: 'linear-gradient' },
-] satisfies Array<{ label: string; value: typeof GRAPHIC_FILL_KIND_VALUES[number] }>;
 const CORNER_TREATMENT_OPTIONS = SHAPE_CORNER_TREATMENT_VALUES.map(value => ({ label: value, value }));
+const PLAYER_LIFE_ANIMATION_OPTIONS = PLAYER_LIFE_ANIMATION_VALUES.map(value => ({ label: value, value }));
+const GAME_WINS_DISPLAY_MODE_OPTIONS = GAME_WINS_DISPLAY_MODE_VALUES.map(value => ({ label: value, value }));
+const GAME_WINS_BOX_ORIENTATION_OPTIONS = GAME_WINS_BOX_ORIENTATION_VALUES.map(value => ({ label: value, value }));
 const MEDIA_FIT_OPTIONS = MEDIA_GRAPHIC_ITEM_FIT_VALUES.map(value => ({ label: value, value }));
 const GEOMETRY_PRESET_OPTIONS = SHAPE_GEOMETRY_PRESETS.map(preset => ({
 	label: preset.label,
@@ -231,15 +229,53 @@ const selectedMediaItem = computed<MediaGraphicItemConfig | null>(() =>
 const selectedGroup = computed<GraphicGroupItemConfig | null>(() =>
 	selectedItem.value?.type === 'group' ? selectedItem.value : null,
 );
+const selectedPlayerLife = computed<PlayerLifeGraphicItemConfig | null>(() =>
+	selectedItem.value?.type === 'player-life' ? selectedItem.value : null,
+);
+const selectedGameWins = computed<GameWinsGraphicItemConfig | null>(() =>
+	selectedItem.value?.type === 'game-wins' ? selectedItem.value : null,
+);
+
+/**
+ * The base typography of whatever the selection paints text with.
+ *
+ * A Clock, a Player Life, and a Game Wins Item rendering its win count all paint
+ * text; they read the string from the live Feature Match Session rather than from
+ * an author, which decides what the item says and nothing about how it is set. So
+ * one typography block serves all four kinds rather than one per kind.
+ *
+ * A Game Wins Item paints text only in its `number` display mode; in `boxes` it
+ * paints boxes, and offering typography there would be a whole block of controls
+ * that change nothing on screen.
+ */
+const selectedTypography = computed<GraphicTypography | null>(() => {
+	const item = selectedItem.value;
+	if (!item || item.type === 'shape' || item.type === 'media' || item.type === 'group')
+		return null;
+	if (item.type === 'game-wins')
+		return item.displayMode === 'number' ? item.typography : null;
+	return item.typography;
+});
+
+/**
+ * The Text Overflow Policy of a selection whose rendered text can exceed its
+ * authored bounds. A live string can be longer than the author ever saw, which is
+ * exactly why a Clock and a Player Life are bounded like a Text Graphic Item.
+ */
+const selectedTextOverflow = computed(() => {
+	const item = selectedItem.value;
+	if (item?.type !== 'text' && item?.type !== 'clock' && item?.type !== 'player-life')
+		return null;
+	return { overflowPolicy: item.overflowPolicy, minFontSize: item.minFontSize };
+});
+
 /**
  * The Player a context-gated Graphic Item reads.
  *
- * The one control these kinds cannot do without: a Player Life fixed to `player1`
- * makes a two-player overlay unbuildable, because both sides would show the same
- * total. The rest of their authoring surface — typography, the win-box geometry and
- * its two Graphic Surface Styles, the life-change animation — is still only
- * reachable through the legacy editor, which stays in place for exactly that reason
- * until the contract ticket recreates the presets.
+ * Its own control rather than part of the shared geometry block, because it is
+ * the only property of these kinds that decides *whose* live state renders — a
+ * Player Life fixed to `player1` makes a two-player overlay unbuildable, because
+ * both sides would show the same total.
  */
 const selectedPlayerSide = computed<PlayerSide | null>(() => {
 	const item = selectedItem.value;
@@ -260,7 +296,9 @@ function updatePlayerSide(playerSide: PlayerSide) {
  *
  * A Shape Graphic Item and a Graphic Group draw one and always have one. A Media
  * Graphic Item clips to one only while clipping is switched on, so the same
- * controls appear for it exactly when there is a clip to shape.
+ * controls appear for it exactly when there is a clip to shape. A Game Wins Item's
+ * is the shape of one win box: a cut-corner win box is authored with exactly the
+ * controls a Shape Graphic Item uses.
  */
 const selectedGeometry = computed<ShapeGeometry | null>(() => {
 	const item = selectedItem.value;
@@ -268,8 +306,18 @@ const selectedGeometry = computed<ShapeGeometry | null>(() => {
 		return item.geometry;
 	if (item?.type === 'media')
 		return item.clipGeometry ?? null;
+	// Offered only while boxes are what renders. A `number` display mode paints a
+	// win count, which has no box to shape — and the authored geometry survives the
+	// switch, so going back restores what the author already set up.
+	if (item?.type === 'game-wins')
+		return item.displayMode === 'boxes' ? item.boxGeometry : null;
 	return null;
 });
+
+/** Named for what it shapes, because a Game Wins Item's geometry is not its own bounds. */
+const geometryTitle = computed(() =>
+	selectedItem.value?.type === 'game-wins' ? 'Win box Shape Geometry' : 'Shape Geometry',
+);
 
 /** Only a canvas-positioned item has a coordinate and a Graphic Rotation. */
 const isCanvasPositioned = computed(() =>
@@ -293,6 +341,16 @@ const ownSurfaceStyle = computed<GraphicSurfaceStyle | null>(() => {
 		return null;
 	return item.surfaceStyle ?? null;
 });
+
+/**
+ * Apply one Graphic Surface Style edit to one of the selection's surfaces.
+ *
+ * Which surface is this panel's decision rather than the controls': a Game Wins
+ * Item has three, and the controls for all three are identical.
+ */
+function applySurfaceStyleEdit(slot: GraphicSurfaceStyleSlot, edit: GraphicSurfaceStyleEdit) {
+	applyToSelectedGraphic((graphic, itemId) => applyGraphicSurfaceStyleEdit(graphic, itemId, slot, edit));
+}
 
 /** A Graphic Geometry Unit projects against the containing canvas — a Graphic Group for its children. */
 function axisTotal(axis: 'x' | 'y') {
@@ -361,45 +419,6 @@ function updateTypography(patch: Partial<GraphicTypography>) {
 	applyToSelectedGraphic((graphic, itemId) => patchGraphicTypography(graphic, itemId, patch));
 }
 
-function updateSurfaceStyle(patch: Partial<GraphicSurfaceStyle>) {
-	applyToSelectedGraphic((graphic, itemId) => patchGraphicSurfaceStyle(graphic, itemId, patch));
-}
-
-/** One switch owns whether the item paints a surface of its own at all. */
-function updateOwnSurfaceStyle(present: boolean) {
-	applyToSelectedGraphic((graphic, itemId) => present
-		? patchGraphicSurfaceStyle(graphic, itemId, {})
-		: clearGraphicSurfaceStyle(graphic, itemId));
-}
-
-function updateFillKind(kind: typeof GRAPHIC_FILL_KIND_VALUES[number]) {
-	applyToSelectedGraphic((graphic, itemId) => setGraphicFillKind(graphic, itemId, kind));
-}
-
-function updateSolidFill(color: string) {
-	applyToSelectedGraphic((graphic, itemId) => patchGraphicSolidFill(graphic, itemId, color));
-}
-
-function updateGradientAngle(angle: number) {
-	applyToSelectedGraphic((graphic, itemId) => patchGraphicGradientAngle(graphic, itemId, angle));
-}
-
-function updateGradientStop(index: number, patch: Partial<GraphicFillStop>) {
-	applyToSelectedGraphic((graphic, itemId) => patchGraphicGradientStop(graphic, itemId, index, patch));
-}
-
-function changeStopCount(delta: 1 | -1) {
-	applyToSelectedGraphic((graphic, itemId) => changeGraphicGradientStopCount(graphic, itemId, delta));
-}
-
-function updateOutline(patch: Partial<GraphicOutline> | null) {
-	applyToSelectedGraphic((graphic, itemId) => patchGraphicOutline(graphic, itemId, patch));
-}
-
-function updateGlow(patch: Partial<GraphicGlow> | null) {
-	applyToSelectedGraphic((graphic, itemId) => patchGraphicGlow(graphic, itemId, patch));
-}
-
 function updateGeometry(patch: Partial<ShapeGeometry>) {
 	applyToSelectedGraphic((graphic, itemId) => patchShapeGeometry(graphic, itemId, patch));
 }
@@ -426,6 +445,19 @@ function updateChildSizing(patch: Partial<GraphicGroupChildSizing>) {
 
 function updateTextItem(patch: Partial<Omit<TextGraphicItemConfig, 'type' | 'id'>>) {
 	applyToSelectedGraphic((graphic, itemId) => patchTextGraphicItem(graphic, itemId, patch));
+}
+
+/** Shared by every kind whose rendered text can exceed its authored bounds. */
+function updateTextOverflow(patch: { overflowPolicy?: TextGraphicItemConfig['overflowPolicy']; minFontSize?: number }) {
+	applyToSelectedGraphic((graphic, itemId) => patchGraphicTextOverflow(graphic, itemId, patch));
+}
+
+function updatePlayerLifeItem(patch: Partial<Omit<PlayerLifeGraphicItemConfig, 'type' | 'id'>>) {
+	applyToSelectedGraphic((graphic, itemId) => patchPlayerLifeGraphicItem(graphic, itemId, patch));
+}
+
+function updateGameWinsItem(patch: Partial<Omit<GameWinsGraphicItemConfig, 'type' | 'id'>>) {
+	applyToSelectedGraphic((graphic, itemId) => patchGameWinsGraphicItem(graphic, itemId, patch));
 }
 
 function updateMediaItem(patch: Partial<Omit<MediaGraphicItemConfig, 'type' | 'id'>>) {
@@ -1060,6 +1092,115 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 			/>
 		</UFormField>
 
+		<!--
+			How a Player Life Item marks a change to the total it renders. The motion
+			belongs to the Definition rather than to a Graphic Animation Recipe: it fires
+			on a value change from the live session rather than on a lifecycle phase,
+			which is not something the shared animation vocabulary expresses.
+		-->
+		<div v-if="selectedPlayerLife" class="rounded-lg border border-default/70 p-3 space-y-2">
+			<p class="text-xs font-semibold text-muted">
+				Life change
+			</p>
+			<UFormField label="Animation" size="sm">
+				<USelect
+					:model-value="selectedPlayerLife.lifeAnimation"
+					:items="PLAYER_LIFE_ANIMATION_OPTIONS"
+					value-key="value"
+					class="w-full"
+					data-testid="player-life-animation"
+					@update:model-value="updatePlayerLifeItem({ lifeAnimation: $event as PlayerLifeAnimation })"
+				/>
+			</UFormField>
+			<div class="grid grid-cols-2 gap-2">
+				<UFormField label="Duration (ms)" size="sm">
+					<UInputNumber
+						:model-value="selectedPlayerLife.lifeAnimationDurationMs"
+						:min="MIN_PLAYER_LIFE_ANIMATION_DURATION_MS"
+						:max="MAX_PLAYER_LIFE_ANIMATION_DURATION_MS"
+						size="sm"
+						class="w-full"
+						data-testid="player-life-animation-duration"
+						aria-label="Life change duration"
+						@update:model-value="updatePlayerLifeItem({ lifeAnimationDurationMs: $event ?? MIN_PLAYER_LIFE_ANIMATION_DURATION_MS })"
+					/>
+				</UFormField>
+				<!-- Tinted by a glow or slide change only; the others ignore it. -->
+				<UFormField label="Accent colour" size="sm">
+					<UIColorPicker
+						:model-value="selectedPlayerLife.lifeAnimationAccentColor"
+						data-testid="player-life-animation-accent"
+						@update:model-value="updatePlayerLifeItem({ lifeAnimationAccentColor: $event?.toString() || '#ffffff' })"
+					/>
+				</UFormField>
+			</div>
+		</div>
+
+		<!--
+			A Game Wins Item's own indicator. The box count is deliberately absent: it
+			comes from the Match's best-of rather than from configuration, so a layout
+			never restates what the session already knows.
+		-->
+		<div v-if="selectedGameWins" class="rounded-lg border border-default/70 p-3 space-y-2">
+			<p class="text-xs font-semibold text-muted">
+				Game Wins
+			</p>
+			<div class="grid grid-cols-2 gap-2">
+				<UFormField label="Display mode" size="sm">
+					<USelect
+						:model-value="selectedGameWins.displayMode"
+						:items="GAME_WINS_DISPLAY_MODE_OPTIONS"
+						value-key="value"
+						class="w-full"
+						data-testid="game-wins-display-mode"
+						@update:model-value="updateGameWinsItem({ displayMode: $event as GameWinsDisplayMode })"
+					/>
+				</UFormField>
+				<UFormField v-if="selectedGameWins.displayMode === 'boxes'" label="Box orientation" size="sm">
+					<USelect
+						:model-value="selectedGameWins.boxOrientation"
+						:items="GAME_WINS_BOX_ORIENTATION_OPTIONS"
+						value-key="value"
+						class="w-full"
+						data-testid="game-wins-box-orientation"
+						@update:model-value="updateGameWinsItem({ boxOrientation: $event as GameWinsBoxOrientation })"
+					/>
+				</UFormField>
+			</div>
+			<div v-if="selectedGameWins.displayMode === 'boxes'" class="grid grid-cols-3 gap-2">
+				<UFormField label="Box width" size="sm">
+					<UInputNumber
+						:model-value="selectedGameWins.boxWidth"
+						:min="1"
+						size="sm"
+						class="w-full"
+						aria-label="Win box width"
+						@update:model-value="updateGameWinsItem({ boxWidth: Math.max(1, $event ?? 1) })"
+					/>
+				</UFormField>
+				<UFormField label="Box height" size="sm">
+					<UInputNumber
+						:model-value="selectedGameWins.boxHeight"
+						:min="1"
+						size="sm"
+						class="w-full"
+						aria-label="Win box height"
+						@update:model-value="updateGameWinsItem({ boxHeight: Math.max(1, $event ?? 1) })"
+					/>
+				</UFormField>
+				<UFormField label="Box gap" size="sm">
+					<UInputNumber
+						:model-value="selectedGameWins.boxGap"
+						:min="0"
+						size="sm"
+						class="w-full"
+						aria-label="Win box gap"
+						@update:model-value="updateGameWinsItem({ boxGap: $event ?? 0 })"
+					/>
+				</UFormField>
+			</div>
+		</div>
+
 		<template v-if="selectedTextItem">
 			<UFormField label="Text" size="sm">
 				<UTextarea
@@ -1095,10 +1236,18 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 					</UButton>
 				</div>
 			</UFormField>
+		</template>
 
+		<!--
+			Base typography, offered wherever the selection paints text. A Clock, a
+			Player Life, and a Game Wins Item rendering its win count read their string
+			from the live Feature Match Session rather than from an author — which
+			decides what the item says, and nothing about how it is set.
+		-->
+		<template v-if="selectedTypography">
 			<UFormField label="Font" size="sm">
 				<USelect
-					:model-value="selectedTextItem.typography.fontId"
+					:model-value="selectedTypography.fontId"
 					:items="GRAPHIC_FONT_OPTIONS"
 					value-key="value"
 					class="w-full"
@@ -1109,7 +1258,7 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 			<div class="grid grid-cols-2 gap-2">
 				<UFormField label="Size" size="sm">
 					<UInputNumber
-						:model-value="selectedTextItem.typography.fontSize"
+						:model-value="selectedTypography.fontSize"
 						:min="1"
 						size="sm"
 						class="w-full"
@@ -1119,7 +1268,7 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 				</UFormField>
 				<UFormField label="Weight" size="sm">
 					<UInputNumber
-						:model-value="selectedTextItem.typography.fontWeight"
+						:model-value="selectedTypography.fontWeight"
 						:min="1"
 						:max="1000"
 						size="sm"
@@ -1130,7 +1279,7 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 				</UFormField>
 				<UFormField label="Letter spacing" size="sm">
 					<UInputNumber
-						:model-value="selectedTextItem.typography.letterSpacing"
+						:model-value="selectedTypography.letterSpacing"
 						size="sm"
 						class="w-full"
 						aria-label="Letter spacing"
@@ -1139,7 +1288,7 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 				</UFormField>
 				<UFormField label="Line height" size="sm">
 					<UInputNumber
-						:model-value="selectedTextItem.typography.lineHeight"
+						:model-value="selectedTypography.lineHeight"
 						:step="0.05"
 						size="sm"
 						class="w-full"
@@ -1149,7 +1298,7 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 				</UFormField>
 				<UFormField label="Style" size="sm">
 					<USelect
-						:model-value="selectedTextItem.typography.fontStyle"
+						:model-value="selectedTypography.fontStyle"
 						:items="FONT_STYLE_OPTIONS"
 						value-key="value"
 						class="w-full"
@@ -1158,7 +1307,7 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 				</UFormField>
 				<UFormField label="Case" size="sm">
 					<USelect
-						:model-value="selectedTextItem.typography.textTransform"
+						:model-value="selectedTypography.textTransform"
 						:items="TEXT_TRANSFORM_OPTIONS"
 						value-key="value"
 						class="w-full"
@@ -1167,7 +1316,7 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 				</UFormField>
 				<UFormField label="Align" size="sm">
 					<USelect
-						:model-value="selectedTextItem.typography.textAlign"
+						:model-value="selectedTypography.textAlign"
 						:items="TEXT_ALIGN_OPTIONS"
 						value-key="value"
 						class="w-full"
@@ -1176,39 +1325,49 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 				</UFormField>
 				<UFormField label="Colour" size="sm">
 					<UIColorPicker
-						:model-value="selectedTextItem.typography.color"
+						:model-value="selectedTypography.color"
 						@update:model-value="updateTypography({ color: $event?.toString() || '#ffffff' })"
 					/>
 				</UFormField>
 			</div>
+		</template>
 
+		<!--
+			Text does not render with visible overflow beyond its authored bounds, and a
+			string from a live Feature Match Session can be longer than the author ever
+			saw — so a Clock and a Player Life are bounded by the same policy a Text
+			Graphic Item is.
+		-->
+		<template v-if="selectedTextOverflow">
 			<UFormField label="Text Overflow Policy" size="sm">
 				<USelect
-					:model-value="selectedTextItem.overflowPolicy"
+					:model-value="selectedTextOverflow.overflowPolicy"
 					:items="OVERFLOW_POLICY_OPTIONS"
 					value-key="value"
 					class="w-full"
 					data-testid="text-overflow-policy"
-					@update:model-value="updateTextItem({ overflowPolicy: $event })"
+					@update:model-value="updateTextOverflow({ overflowPolicy: $event })"
 				/>
 			</UFormField>
 
 			<UFormField
-				v-if="selectedTextItem.overflowPolicy === 'shrink'"
+				v-if="selectedTextOverflow.overflowPolicy === 'shrink'"
 				label="Minimum font size"
 				size="sm"
 			>
 				<UInputNumber
-					:model-value="selectedTextItem.minFontSize"
+					:model-value="selectedTextOverflow.minFontSize"
 					:min="1"
 					size="sm"
 					class="w-full"
 					data-testid="text-min-font-size"
 					aria-label="Minimum font size"
-					@update:model-value="updateTextItem({ minFontSize: $event ?? 1 })"
+					@update:model-value="updateTextOverflow({ minFontSize: $event ?? 1 })"
 				/>
 			</UFormField>
+		</template>
 
+		<template v-if="selectedTextItem">
 			<!--
 				One optional typography override per `{inputKey}` this Graphic Text Template
 				names. Literal text always uses the base typography above, and only
@@ -1388,7 +1547,7 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 		<template v-if="selectedGeometry">
 			<div class="rounded-lg border border-default/70 p-3 space-y-2">
 				<p class="text-xs font-semibold text-muted">
-					Shape Geometry
+					{{ geometryTitle }}
 				</p>
 				<UFormField label="Preset" size="sm">
 					<USelect
@@ -1453,196 +1612,33 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 			</div>
 		</template>
 
-		<!-- A Media Graphic Item paints an asset rather than a surface, so it is offered none. -->
-		<template v-if="selectedItem && selectedItem.type !== 'media'">
-			<div class="rounded-lg border border-default/70 p-3 space-y-2">
-				<p class="text-xs font-semibold text-muted">
-					Graphic Surface Style
-				</p>
+		<!--
+			A Media Graphic Item paints an asset rather than a surface, so it is offered
+			none. Every other kind gets the same controls, and a Game Wins Item gets
+			them three times over — its own surface, and the two that paint a win box
+			before and after the Player wins it.
+		-->
+		<GraphicsCompositorSurfaceStyleFields
+			v-if="selectedItem && selectedItem.type !== 'media'"
+			:surface-style="ownSurfaceStyle"
+			title="Graphic Surface Style"
+			:presence-label="parentGroup ? 'Override group style default' : 'Paint a surface'"
+			@edit="applySurfaceStyleEdit('surfaceStyle', $event)"
+		/>
 
-				<UFormField
-					:label="parentGroup ? 'Override group style default' : 'Paint a surface'"
-					size="sm"
-				>
-					<USwitch
-						:model-value="ownSurfaceStyle !== null"
-						data-testid="surface-style-own"
-						@update:model-value="updateOwnSurfaceStyle($event)"
-					/>
-				</UFormField>
-
-				<template v-if="ownSurfaceStyle">
-					<UFormField label="Graphic Fill" size="sm">
-						<USelect
-							:model-value="ownSurfaceStyle.fill.type"
-							:items="FILL_KIND_OPTIONS"
-							value-key="value"
-							class="w-full"
-							data-testid="graphic-fill-kind"
-							@update:model-value="updateFillKind($event as never)"
-						/>
-					</UFormField>
-
-					<UFormField v-if="ownSurfaceStyle.fill.type === 'solid'" label="Fill colour" size="sm">
-						<UIColorPicker
-							:model-value="ownSurfaceStyle.fill.color"
-							data-testid="shape-fill"
-							@update:model-value="updateSolidFill($event?.toString() || '#000000')"
-						/>
-					</UFormField>
-
-					<template v-else>
-						<UFormField label="Gradient angle" size="sm">
-							<UInputNumber
-								:model-value="ownSurfaceStyle.fill.angle"
-								:min="-360"
-								:max="360"
-								size="sm"
-								class="w-full"
-								data-testid="graphic-fill-angle"
-								aria-label="Gradient angle"
-								@update:model-value="updateGradientAngle($event ?? 0)"
-							/>
-						</UFormField>
-						<div
-							v-for="(stop, index) in ownSurfaceStyle.fill.stops"
-							:key="index"
-							class="grid grid-cols-3 gap-2"
-							data-testid="graphic-fill-stop"
-						>
-							<UFormField :label="`Stop ${index + 1}`" size="sm">
-								<UIColorPicker
-									:model-value="stop.color"
-									@update:model-value="updateGradientStop(index, { color: $event?.toString() || '#000000' })"
-								/>
-							</UFormField>
-							<UFormField label="At" size="sm">
-								<UInputNumber
-									:model-value="stop.position"
-									:min="0"
-									:max="1"
-									:step="0.05"
-									size="sm"
-									class="w-full"
-									:aria-label="`Stop ${index + 1} position`"
-									@update:model-value="updateGradientStop(index, { position: $event ?? 0 })"
-								/>
-							</UFormField>
-							<UFormField label="Opacity" size="sm">
-								<UInputNumber
-									:model-value="stop.opacity"
-									:min="0"
-									:max="1"
-									:step="0.05"
-									size="sm"
-									class="w-full"
-									:aria-label="`Stop ${index + 1} opacity`"
-									@update:model-value="updateGradientStop(index, { opacity: $event ?? 1 })"
-								/>
-							</UFormField>
-						</div>
-						<div class="flex gap-2">
-							<UButton
-								size="xs"
-								variant="soft"
-								icon="i-lucide-plus"
-								:disabled="ownSurfaceStyle.fill.stops.length >= MAX_GRAPHIC_FILL_STOPS"
-								data-testid="graphic-fill-add-stop"
-								@click="changeStopCount(1)"
-							>
-								Stop
-							</UButton>
-							<UButton
-								size="xs"
-								variant="soft"
-								icon="i-lucide-minus"
-								:disabled="ownSurfaceStyle.fill.stops.length <= MIN_GRAPHIC_FILL_STOPS"
-								data-testid="graphic-fill-remove-stop"
-								@click="changeStopCount(-1)"
-							>
-								Stop
-							</UButton>
-						</div>
-					</template>
-
-					<UFormField label="Fill opacity" size="sm">
-						<UInputNumber
-							:model-value="ownSurfaceStyle.fillOpacity"
-							:min="0"
-							:max="1"
-							:step="0.05"
-							size="sm"
-							class="w-full"
-							aria-label="Fill opacity"
-							@update:model-value="updateSurfaceStyle({ fillOpacity: $event ?? 1 })"
-						/>
-					</UFormField>
-
-					<UFormField label="Outline" size="sm">
-						<USwitch
-							:model-value="ownSurfaceStyle.outline !== undefined"
-							data-testid="graphic-outline-enabled"
-							@update:model-value="updateOutline($event ? {} : null)"
-						/>
-					</UFormField>
-					<div v-if="ownSurfaceStyle.outline" class="grid grid-cols-2 gap-2">
-						<UFormField label="Outline colour" size="sm">
-							<UIColorPicker
-								:model-value="ownSurfaceStyle.outline.color"
-								@update:model-value="updateOutline({ color: $event?.toString() || '#ffffff' })"
-							/>
-						</UFormField>
-						<UFormField label="Outline width" size="sm">
-							<UInputNumber
-								:model-value="ownSurfaceStyle.outline.width"
-								:min="0"
-								size="sm"
-								class="w-full"
-								aria-label="Outline width"
-								@update:model-value="updateOutline({ width: $event ?? 0 })"
-							/>
-						</UFormField>
-					</div>
-
-					<UFormField label="Glow" size="sm">
-						<USwitch
-							:model-value="ownSurfaceStyle.glow !== undefined"
-							data-testid="graphic-glow-enabled"
-							@update:model-value="updateGlow($event ? {} : null)"
-						/>
-					</UFormField>
-					<div v-if="ownSurfaceStyle.glow" class="grid grid-cols-3 gap-2">
-						<UFormField label="Glow colour" size="sm">
-							<UIColorPicker
-								:model-value="ownSurfaceStyle.glow.color"
-								@update:model-value="updateGlow({ color: $event?.toString() || '#ffffff' })"
-							/>
-						</UFormField>
-						<UFormField label="Glow size" size="sm">
-							<UInputNumber
-								:model-value="ownSurfaceStyle.glow.size"
-								:min="0"
-								size="sm"
-								class="w-full"
-								aria-label="Glow size"
-								@update:model-value="updateGlow({ size: $event ?? 0 })"
-							/>
-						</UFormField>
-						<UFormField label="Glow opacity" size="sm">
-							<UInputNumber
-								:model-value="ownSurfaceStyle.glow.opacity"
-								:min="0"
-								:max="1"
-								:step="0.05"
-								size="sm"
-								class="w-full"
-								aria-label="Glow opacity"
-								@update:model-value="updateGlow({ opacity: $event ?? 1 })"
-							/>
-						</UFormField>
-					</div>
-				</template>
-			</div>
+		<template v-if="selectedGameWins && selectedGameWins.displayMode === 'boxes'">
+			<GraphicsCompositorSurfaceStyleFields
+				:surface-style="selectedGameWins.boxSurfaceStyle"
+				title="Win box"
+				test-id-prefix="game-wins-box"
+				@edit="applySurfaceStyleEdit('boxSurfaceStyle', $event)"
+			/>
+			<GraphicsCompositorSurfaceStyleFields
+				:surface-style="selectedGameWins.wonBoxSurfaceStyle"
+				title="Won win box"
+				test-id-prefix="game-wins-won-box"
+				@edit="applySurfaceStyleEdit('wonBoxSurfaceStyle', $event)"
+			/>
 		</template>
 
 		<GraphicsCompositorAnimation

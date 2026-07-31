@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	addGraphicGroupChild,
 	addGraphicItem,
+	applyGraphicSurfaceStyleEdit,
 	applyShapeGeometryPreset,
 	changeGraphicGradientStopCount,
 	clearGraphicSurfaceStyle,
@@ -15,6 +16,7 @@ import {
 	GRAPHIC_RULE_PRESET_HEIGHT,
 	moveBroadcastGraphic,
 	moveGraphicItem,
+	patchGameWinsGraphicItem,
 	patchGraphicGlow,
 	patchGraphicGradientAngle,
 	patchGraphicGradientStop,
@@ -25,9 +27,11 @@ import {
 	patchGraphicOutline,
 	patchGraphicSolidFill,
 	patchGraphicSurfaceStyle,
+	patchGraphicTextOverflow,
 	patchGraphicTypography,
 	patchMediaFocalPosition,
 	patchMediaGraphicItem,
+	patchPlayerLifeGraphicItem,
 	patchShapeCorner,
 	patchShapeGeometry,
 	selectMediaGraphicItemAsset,
@@ -605,6 +609,147 @@ describe('broadcastGraphicAuthoring', () => {
 			expect(patchMediaGraphicItem(built, 'bar', { fit: 'fill' })).toEqual(built);
 			expect(setMediaClipGeometry(built, 'bar', true)).toEqual(built);
 			expect(patchMediaFocalPosition(built, 'bar', { horizontal: 0 })).toEqual(built);
+		});
+	});
+	describe('the context-gated Feature Match Definitions', () => {
+		/** A Broadcast Graphic holding one item of a context-gated kind. */
+		function withKind(kind: 'clock' | 'player-life' | 'game-wins') {
+			return addGraphicItem(graphic('a'), { kind, id: kind, ...CANVAS }).graphic;
+		}
+
+		function itemOf(built: BroadcastGraphicConfig, id: string) {
+			const item = built.items.find(entry => entry.id === id);
+			if (!item)
+				throw new Error(`expected a ${id} Graphic Item`);
+			return item;
+		}
+
+		it.each(['clock', 'player-life', 'game-wins'] as const)('sets the base typography of a %s Item', (kind) => {
+			// Their string comes from the live Feature Match Session rather than from an
+			// author, which decides what they say and nothing about how it is set.
+			const built = patchGraphicTypography(withKind(kind), kind, { fontSize: 96 });
+			const item = itemOf(built, kind);
+
+			expect(item.type !== 'shape' && item.type !== 'media' && item.type !== 'group' && item.typography)
+				.toMatchObject({ fontSize: 96, fontWeight: 700 });
+		});
+
+		it.each(['clock', 'player-life', 'game-wins'] as const)('gives a %s Item a Graphic Surface Style of its own', (kind) => {
+			const built = patchGraphicSurfaceStyle(withKind(kind), kind, { fillOpacity: 0.4 });
+			const item = itemOf(built, kind);
+
+			expect(item.type !== 'media' && item.surfaceStyle).toMatchObject({ fillOpacity: 0.4 });
+		});
+
+		it.each(['clock', 'player-life'] as const)('bounds a %s Item with a Text Overflow Policy', (kind) => {
+			// A live string can be longer than the author ever saw, and text does not
+			// render with visible overflow beyond its authored bounds.
+			const built = patchGraphicTextOverflow(withKind(kind), kind, { overflowPolicy: 'shrink', minFontSize: 30 });
+			const item = itemOf(built, kind);
+
+			expect(item.type === kind && item).toMatchObject({ overflowPolicy: 'shrink', minFontSize: 30 });
+		});
+
+		it('sets the life-change animation a Player Life Item marks a change with', () => {
+			const built = patchPlayerLifeGraphicItem(withKind('player-life'), 'player-life', {
+				lifeAnimation: 'pop',
+				lifeAnimationDurationMs: 800,
+				lifeAnimationAccentColor: '#ff0055',
+			});
+
+			expect(itemOf(built, 'player-life')).toMatchObject({
+				lifeAnimation: 'pop',
+				lifeAnimationDurationMs: 800,
+				lifeAnimationAccentColor: '#ff0055',
+			});
+		});
+
+		it('sets a Game Wins Item’s display mode and win box dimensions', () => {
+			const built = patchGameWinsGraphicItem(withKind('game-wins'), 'game-wins', {
+				displayMode: 'number',
+				boxOrientation: 'vertical',
+				boxWidth: 40,
+				boxHeight: 12,
+				boxGap: 3,
+			});
+
+			expect(itemOf(built, 'game-wins')).toMatchObject({
+				displayMode: 'number',
+				boxOrientation: 'vertical',
+				boxWidth: 40,
+				boxHeight: 12,
+				boxGap: 3,
+			});
+		});
+
+		it('shapes a Game Wins Item’s win box rather than its own bounds', () => {
+			// A win box is an ordinary painted surface, so a cut-corner one is authored
+			// with exactly the controls a Shape Graphic Item uses.
+			const built = patchShapeCorner(withKind('game-wins'), 'game-wins', 'topRight', { treatment: 'cut', size: 6 });
+			const item = itemOf(built, 'game-wins');
+
+			expect(item.type === 'game-wins' && item.boxGeometry.topRight).toMatchObject({ treatment: 'cut', size: 6 });
+			// The indicator's own rectangle is untouched: the geometry is the box’s.
+			expect(item).toMatchObject({ width: 768, height: 108 });
+		});
+
+		it('sizes a win box preset against the box rather than against the whole indicator', () => {
+			// A preset that proposes a height is proposing one for the shape it just
+			// initialised. Writing it to the indicator would resize every box at once and
+			// leave the shape it was measured for unchanged.
+			const built = applyShapeGeometryPreset(withKind('game-wins'), 'game-wins', 'rule');
+			const item = itemOf(built, 'game-wins');
+
+			expect(item.type === 'game-wins' && item.boxHeight).toBe(GRAPHIC_RULE_PRESET_HEIGHT);
+			expect(item.height).toBe(108);
+		});
+
+		it('paints the two win box surfaces independently of the item’s own', () => {
+			// An unwon box reads as an empty outline and a won one as a filled pip, which
+			// is the distinction the indicator exists to make — so both are ordinary
+			// authored surfaces rather than one style with a hardcoded variant.
+			const built = applyGraphicSurfaceStyleEdit(
+				applyGraphicSurfaceStyleEdit(
+					withKind('game-wins'),
+					'game-wins',
+					'boxSurfaceStyle',
+					{ kind: 'solid-fill', color: '#123456' },
+				),
+				'game-wins',
+				'wonBoxSurfaceStyle',
+				{ kind: 'glow', patch: { size: 12 } },
+			);
+			const item = itemOf(built, 'game-wins');
+			if (item.type !== 'game-wins')
+				throw new Error('expected a Game Wins Item');
+
+			expect(item.boxSurfaceStyle.fill).toEqual({ type: 'solid', color: '#123456' });
+			expect(item.wonBoxSurfaceStyle.glow).toMatchObject({ size: 12 });
+			// Neither edit reached the other surface, or the item's own.
+			expect(item.wonBoxSurfaceStyle.fill).toEqual({ type: 'solid', color: '#22c55e' });
+			expect(item.boxSurfaceStyle.glow).toBeUndefined();
+			expect(item.surfaceStyle).toBeUndefined();
+		});
+
+		it('refuses to clear a win box surface, which always paints one', () => {
+			// Both box slots are required by the wire schema, so a caller that asked would
+			// be authoring a shape no write accepts.
+			const built = withKind('game-wins');
+
+			expect(applyGraphicSurfaceStyleEdit(built, 'game-wins', 'boxSurfaceStyle', { kind: 'present', present: false }))
+				.toEqual(built);
+			expect(applyGraphicSurfaceStyleEdit(built, 'game-wins', 'wonBoxSurfaceStyle', { kind: 'present', present: false }))
+				.toEqual(built);
+		});
+
+		it('ignores a win box edit aimed at another Graphic Item kind', () => {
+			const built = addGraphicItem(graphic('a'), { kind: 'shape', id: 'bar', ...CANVAS }).graphic;
+
+			expect(applyGraphicSurfaceStyleEdit(built, 'bar', 'boxSurfaceStyle', { kind: 'solid-fill', color: '#000000' }))
+				.toEqual(built);
+			expect(patchGameWinsGraphicItem(built, 'bar', { displayMode: 'number' })).toEqual(built);
+			expect(patchPlayerLifeGraphicItem(built, 'bar', { lifeAnimation: 'pop' })).toEqual(built);
+			expect(patchGraphicTextOverflow(built, 'bar', { overflowPolicy: 'clip' })).toEqual(built);
 		});
 	});
 });
