@@ -1,5 +1,6 @@
 import type {
 	GraphicAssetId,
+	GraphicAssetPurgeReason,
 	GraphicAssetRevisionId,
 	GraphicAssetRevisionRetention,
 	GraphicsAssetEvidenceEntry,
@@ -1022,7 +1023,7 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			// The category list stays one bound JSON array, so every other filter
 			// below can take ordinary parameters without any list length being
 			// able to push the statement past D1's bound-parameter ceiling. With
-			// the list as one value the whole statement binds at most eleven.
+			// the list as one value the whole statement binds at most ten.
 			const conditions: string[] = [];
 			const bindings: (string | number)[] = [];
 			function bind(...values: (string | number)[]) {
@@ -1099,12 +1100,21 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				throw new Error('Terminal Graphics Asset Evidence could not be read');
 			if (terminal.results.length === 0)
 				return 0;
+			// The anchor is the subject's terminal cleanup, but an entry may be
+			// written after it — a tombstone explains provenance observations for
+			// as long as the identity is asked about, and one recorded more than a
+			// year later would otherwise be sealed already expired and deleted by
+			// the very same sweep, so it could never be read at all. The floor
+			// gives every entry its own full window from when it was recorded, and
+			// leaves the ordinary case, where entries precede the cleanup they
+			// explain, anchored exactly on that cleanup.
 			const statements = terminal.results.map(subject => database.prepare(`
 				UPDATE graphics_asset_evidence
-				SET expires_at = ?
-				WHERE subject_kind = ? AND subject_id = ? AND expires_at IS NULL
+				SET expires_at = MAX(?1, recorded_at + ?2)
+				WHERE subject_kind = ?3 AND subject_id = ?4 AND expires_at IS NULL
 			`).bind(
 				subject.terminal_at + input.retentionMilliseconds,
+				input.retentionMilliseconds,
 				subject.subject_kind,
 				subject.subject_id,
 			)) as [D1PreparedStatement, ...D1PreparedStatement[]];
@@ -1119,7 +1129,7 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				FROM graphic_asset_tombstones WHERE asset_id = ?
 			`).bind(assetId).first<{
 				purged_at: number;
-				purge_reason: 'trash-window-elapsed' | 'early-purge';
+				purge_reason: GraphicAssetPurgeReason;
 				revision_count: number;
 				reference_count: number;
 			}>();

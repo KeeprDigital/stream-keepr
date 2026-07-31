@@ -12,7 +12,10 @@ import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
-import { GRAPHICS_EVIDENCE_CATEGORY_GROUPS } from '../../shared/utils/graphicsAssetEvidence';
+import {
+	GRAPHICS_EVIDENCE_CATEGORY_GROUP_VALUES,
+	GRAPHICS_EVIDENCE_CATEGORY_GROUPS,
+} from '../../shared/utils/graphicsAssetEvidence';
 import { GRAPHICS_RETENTION_GUARANTEES } from '../../shared/utils/graphicsAssetRetention';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
@@ -359,16 +362,37 @@ describe('the Graphics Asset Library retention API', () => {
 	});
 
 	it('never stores or displays anything the ledger promised to keep out', async () => {
-		// One payload with entries from every category group the installation has
-		// written, so the negative is asserted against real Evidence rather than
-		// against an empty page that would pass by saying nothing at all.
+		// Drive one asset through the transitions that write Evidence, so the
+		// negative below is asserted against several category groups rather than
+		// against a thin payload that would pass by saying almost nothing. The
+		// purge group comes from the early-purge case above, which has already
+		// written to the same ledger; purging again here would strand the content
+		// of a second asset, and the suites share one database.
+		//
+		// Quarantine and ingestion expiry are absent on purpose: both need days
+		// to elapse, which only the controlled-clock module tests can offer.
+		const leakage = await ingest('Leak scan logo', 'retention-leak-scan', pngWithTextChunks(33));
+		const leakageAssetId = leakage.result!.assetId;
+		await replace(leakageAssetId, 'retention-leak-scan-replacement');
+		for (const action of ['retire', 'trash', 'restore'] as const) {
+			await $fetch(`/api/graphics-assets/${leakageAssetId}/lifecycle-actions`, {
+				method: 'POST',
+				headers: authorHeaders,
+				body: { action },
+			});
+		}
+
 		const page = await $fetch<GraphicsAssetEvidencePage>(
 			'/api/admin/graphics-assets/evidence',
 			{ headers: administratorHeaders, query: { limit: 500 } },
 		);
 		expect(page.entries.length).toBeGreaterThan(0);
-		const written = new Set(page.entries.map(entry => entry.category));
-		expect(written.size).toBeGreaterThan(1);
+		const covered = new Set(page.entries.flatMap(entry =>
+			GRAPHICS_EVIDENCE_CATEGORY_GROUP_VALUES.filter(group =>
+				(GRAPHICS_EVIDENCE_CATEGORY_GROUPS[group] as readonly string[])
+					.includes(entry.category))));
+		for (const group of ['lifecycle', 'pruning', 'purge', 'restoration'] as const)
+			expect([...covered], `no Evidence from the ${group} group`).toContain(group);
 
 		const serialised = JSON.stringify(page);
 		// Source filenames, raw object keys and canonical prefixes, digests, and

@@ -720,7 +720,7 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - **Graphic Asset Content** stays reachable while any retained **Graphic Asset Revision** or **Graphics Derivative** points at it, and enters **Content Quarantine** only once that final reachability disappears
 - A **Graphics Derivative** is reclaimed with its source **Graphic Asset Revision** and never keeps that revision's **Graphic Asset Content** reachable on its own
 - Every automated **Graphics Retention Sweep** decision and every **Early Purge** records one entry in the **Evidence Ledger**
-- Every **Graphic Asset** lifecycle transition records one **Evidence Ledger** entry naming the actor, the states either side, and the recovery deadline Trash established
+- Every **Graphic Asset** lifecycle transition records, on a best-effort basis, one **Evidence Ledger** entry naming the actor, the states either side, and the recovery deadline Trash established; the transition itself is already durable and never fails for want of Evidence
 - The **Graphic Asset Revision** retention deadline is established at supersession and recorded there, not when a sweep first observes it
 - **Evidence Ledger** entries are retained until their subject's **Evidence Terminal Cleanup** and for one year after it, never expiring on their own age
 - A **Graphic Asset Tombstone** explains later provenance and audit observations, outlives the **Evidence Ledger** entries about its purge, and satisfies no **Graphic Asset Reference**

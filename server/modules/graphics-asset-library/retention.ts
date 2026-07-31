@@ -2,6 +2,7 @@ import type {
 	GraphicAssetId,
 	GraphicAssetLifecycle,
 	GraphicAssetLifecycleState,
+	GraphicAssetPurgeReason,
 	GraphicAssetRetentionView,
 	GraphicAssetRevisionId,
 	GraphicAssetTombstone,
@@ -177,7 +178,7 @@ export interface GraphicsAssetRetentionCatalogue {
 	purgeGraphicAsset: (input: {
 		assetId: GraphicAssetId;
 		purgedAt: string;
-		reason: 'trash-window-elapsed' | 'early-purge';
+		reason: GraphicAssetPurgeReason;
 		requireRecoveryWindowElapsed: boolean;
 	}) => Promise<PurgeGraphicAssetOutcome>;
 	/**
@@ -677,7 +678,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 		purgedAt: string;
 		correlationId: string;
 		actor?: string;
-		reason: 'trash-window-elapsed' | 'early-purge';
+		reason: GraphicAssetPurgeReason;
 		outcome: PurgeGraphicAssetOutcome;
 		quotaState?: GraphicsAssetEvidenceEntry['detail'];
 	}): GraphicsAssetEvidenceEntry {

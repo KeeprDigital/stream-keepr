@@ -817,6 +817,23 @@ describe('graphics asset reconciliation', () => {
 			expect(asset?.revisions).toHaveLength(1);
 			expect(asset?.revisionId).toBe(reference.revisionId);
 			expect(await thumbnailDigest(reference.revisionId)).toBe(derivativeDigest);
+
+			// A recovery is the one reconciliation action that puts bytes back, so
+			// its Evidence records the transition it made and the capacity those
+			// bytes landed in.
+			await expect(evidenceOf(context.library, {
+				categories: ['derivative-regenerated'],
+			})).resolves.toEqual([
+				expect.objectContaining({
+					actor: 'administrator',
+					detail: expect.objectContaining({
+						transition: { from: 'open', to: 'resolved' },
+						canonicalPressure: expect.any(String),
+						canonicalUsedBytes: expect.any(Number),
+						canonicalLimitBytes: expect.any(Number),
+					}),
+				}),
+			]);
 		});
 
 		it('regenerates a silent-video poster through the pinned validation runtime', async () => {
@@ -1072,6 +1089,10 @@ describe('graphics asset reconciliation', () => {
 				categories: ['repair-rejected'],
 			});
 			expect(rejections.length).toBeGreaterThan(0);
+			// A refusal decides nothing and moves nothing, so it records neither a
+			// transition nor a quota reading rather than inventing either.
+			expect(rejections[0]!.detail).not.toHaveProperty('transition');
+			expect(rejections[0]!.detail).not.toHaveProperty('canonicalPressure');
 			expect(await evidenceOf(context.library, {
 				categories: ['content-repaired'],
 			})).toEqual([]);
@@ -1100,6 +1121,11 @@ describe('graphics asset reconciliation', () => {
 			expect(evidence[0]).toMatchObject({
 				outcome: 'content-unavailable',
 				reason: 'canonical-object-missing',
+				// A discrepancy genuinely transitions, so the entry says so rather
+				// than leaving a reader to infer it from the category.
+				detail: expect.objectContaining({
+					transition: { from: 'none', to: 'open' },
+				}),
 			});
 			// Evidence never carries a digest, object key, or filename.
 			expect(JSON.stringify(evidence[0])).not.toContain(digestOf(pixelPng));

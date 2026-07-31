@@ -150,6 +150,12 @@ export interface GraphicsReconciliationStateRecord {
  */
 export interface GraphicsAssetReconciliationCatalogue {
 	/**
+	 * Canonical capacity as it stands, for the Evidence of a recovery that moved
+	 * bytes. Recording it there keeps an incident explainable without having to
+	 * re-derive what the library was holding at the time.
+	 */
+	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
+	/**
 	 * Content the catalogue expects to reach, least recently reconciled first,
 	 * so one bounded sweep eventually covers every expectation.
 	 */
@@ -670,7 +676,10 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 					subject: { kind: 'graphics-discrepancy', id: discrepancyId },
 					outcome: 'content-no-longer-expected',
 					reason: 'unreachable-content-held-for-retention-deletion',
-					detail: { discrepancyId },
+					detail: {
+						discrepancyId,
+						transition: { from: 'open', to: 'resolved' },
+					},
 				}));
 			}
 			return unchanged;
@@ -698,6 +707,7 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 					reason: 'byte-store-agrees-with-catalogue',
 					detail: {
 						discrepancyId,
+						transition: { from: 'open', to: 'resolved' },
 						affectedRevisionCount: content.revisionReach,
 					},
 				}));
@@ -777,6 +787,7 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 					discrepancyKind: kind,
 					reasonCode,
 					isolated: critical,
+					transition: { from: 'none', to: critical ? 'isolated' : 'open' },
 					affectedRevisionCount: content.revisionReach,
 				},
 			}));
@@ -886,6 +897,7 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 							discrepancyKind: 'critical-integrity-incident',
 							reasonCode: 'foreign-canonical-object',
 							isolated: true,
+							transition: { from: 'none', to: 'isolated' },
 						},
 					}));
 				}
@@ -943,6 +955,7 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 					discrepancyId: discrepancy.id,
 					discrepancyKind: 'unexpected-object',
 					reasonCode: 'unexpected-canonical-object',
+					transition: { from: 'none', to: 'open' },
 					bytesReserved: object.byteLength,
 					deadline: deleteAfter,
 				},
@@ -1006,6 +1019,7 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 				detail: {
 					discrepancyId: record.id,
 					discrepancyKind: 'unexpected-object',
+					transition: { from: 'open', to: 'resolved' },
 				},
 			}));
 		}
@@ -1094,6 +1108,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 				discrepancyKind: record.kind,
 				rejectionCode: code,
 				isolated: record.isolated,
+				// A refusal decides nothing and moves nothing: the discrepancy is
+				// left exactly as it was found, which is why this entry carries
+				// neither a transition nor a quota reading.
 			},
 		})]);
 		return {
@@ -1178,6 +1195,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			restoredAt: recordedAt,
 		});
 		const usage = await catalogue.listContentUsage({ digest: input.digest });
+		// A recovery is the one reconciliation action that puts bytes back, so
+		// the capacity it landed in is part of explaining it later.
+		const capacity = await catalogue.getCapacity();
 		await catalogue.recordGraphicsAssetEvidence([evidence({
 			recordedAt,
 			correlationId: input.record.correlationId,
@@ -1189,7 +1209,11 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			detail: {
 				discrepancyId: input.record.id,
 				discrepancyKind: input.record.kind,
+				transition: { from: 'open', to: 'resolved' },
 				affectedRevisionCount: usage.length,
+				canonicalUsedBytes: capacity.canonical.usedBytes,
+				canonicalLimitBytes: capacity.canonical.limitBytes,
+				canonicalPressure: capacity.canonical.pressure,
 				// An alert left standing over restored bytes is the one thing an
 				// administrator must not have to infer from a success.
 				...(cleared ? {} : { isolated: true }),
@@ -1251,6 +1275,7 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 				discrepancyKind: 'critical-integrity-incident',
 				reasonCode: input.reasonCode,
 				isolated: true,
+				transition: { from: 'none', to: 'isolated' },
 			},
 		})]);
 	}

@@ -1,3 +1,4 @@
+import type { GraphicAssetPurgeReason } from '~~/shared/types/graphicsAsset';
 import { sql } from 'drizzle-orm';
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import {
@@ -27,6 +28,13 @@ export const GRAPHIC_ASSET_CONTENT_AVAILABILITY_VALUES = ['available', 'unavaila
 export const GRAPHICS_DERIVATIVE_KIND_VALUES = ['thumbnail', 'video-poster', 'font-specimen'] as const;
 export const GRAPHICS_INGESTION_SOURCE_VALUES = ['local-upload', 'remote-copy', 'replacement', 'template-package'] as const;
 export const GRAPHICS_DUPLICATE_CONTENT_POLICY_VALUES = ['reuse', 'create-separate'] as const;
+/**
+ * Written out rather than aliased to the shared `GRAPHIC_ASSET_PURGE_REASONS`.
+ * Sourcing a column enum from another module makes the inferred table types
+ * depend on it, and that dependency propagates through the schema barrel far
+ * enough to collapse unrelated inference elsewhere. The type assertion below is
+ * what keeps the two lists honest instead.
+ */
 export const GRAPHIC_ASSET_PURGE_REASON_VALUES = ['trash-window-elapsed', 'early-purge'] as const;
 export const GRAPHICS_CONTENT_QUARANTINE_ORIGIN_VALUES = [
 	'orphaned-content',
@@ -517,6 +525,13 @@ export type DbGraphicsIngestionOperation = typeof graphicsIngestionOperations.$i
 export type DbGraphicsIngestionOperationInsert = typeof graphicsIngestionOperations.$inferInsert;
 export type DbGraphicsCanonicalWriteCandidate = typeof graphicsCanonicalWriteCandidates.$inferSelect;
 export type DbGraphicAssetRevisionRetention = typeof graphicAssetRevisionRetention.$inferSelect;
+/** The stored purge reasons and the domain's are the same list, in both directions. */
+type PurgeReasonsAgree = [
+	Exclude<GraphicAssetPurgeReason, typeof GRAPHIC_ASSET_PURGE_REASON_VALUES[number]>,
+	Exclude<typeof GRAPHIC_ASSET_PURGE_REASON_VALUES[number], GraphicAssetPurgeReason>,
+] extends [never, never] ? true : never;
+export const GRAPHIC_ASSET_PURGE_REASONS_AGREE: PurgeReasonsAgree = true;
+
 export type DbGraphicAssetTombstone = typeof graphicAssetTombstones.$inferSelect;
 export type DbGraphicsContentQuarantine = typeof graphicsContentQuarantine.$inferSelect;
 export type DbGraphicsDiscrepancy = typeof graphicsDiscrepancies.$inferSelect;

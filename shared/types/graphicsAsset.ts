@@ -12,7 +12,10 @@ import type {
 	GRAPHICS_RECONCILIATION_EVIDENCE_CATEGORIES,
 	GRAPHICS_REPAIR_REJECTION_CODES,
 } from '../utils/graphicsAssetReconciliation';
-import type { GRAPHICS_RETENTION_EVIDENCE_CATEGORIES } from '../utils/graphicsAssetRetention';
+import type {
+	GRAPHIC_ASSET_PURGE_REASONS,
+	GRAPHICS_RETENTION_EVIDENCE_CATEGORIES,
+} from '../utils/graphicsAssetRetention';
 import type {
 	GraphicsOperationalQueueId,
 	GraphicsQueueAction,
@@ -567,6 +570,8 @@ export type GraphicAssetRevisionRetention
 			remainingMilliseconds: number;
 		};
 
+export type GraphicAssetPurgeReason = typeof GRAPHIC_ASSET_PURGE_REASONS[number];
+
 export type GraphicsRetentionEvidenceCategory
 	= typeof GRAPHICS_RETENTION_EVIDENCE_CATEGORIES[number];
 
@@ -649,7 +654,7 @@ export interface GraphicsAssetEvidenceEntry {
  * everything already skipped and would silently shift under a sweep writing new
  * entries mid-read, so a page is addressed by the last entry it contained.
  */
-export interface GraphicsAssetEvidenceCursor {
+export interface GraphicsAssetEvidencePosition {
 	recordedAt: string;
 	id: string;
 }
@@ -668,7 +673,7 @@ export interface GraphicsAssetEvidenceQuery {
 	correlationId?: string;
 	recordedFrom?: string;
 	recordedUntil?: string;
-	cursor?: GraphicsAssetEvidenceCursor;
+	cursor?: GraphicsAssetEvidencePosition;
 	/** Which side of the cursor to read. Reading starts at the newest end. */
 	direction?: 'older' | 'newer';
 }
@@ -684,7 +689,7 @@ export interface GraphicsAssetEvidenceQuery {
 export interface GraphicAssetTombstone {
 	assetId: GraphicAssetId;
 	purgedAt: string;
-	reason: 'trash-window-elapsed' | 'early-purge';
+	reason: GraphicAssetPurgeReason;
 	revisionCount: number;
 	/** How many references the purge proof found. A purge only commits at zero. */
 	referenceCount: number;
@@ -697,8 +702,8 @@ export interface GraphicAssetTombstone {
  */
 export interface GraphicsAssetEvidencePage {
 	entries: GraphicsAssetEvidenceEntry[];
-	older: GraphicsAssetEvidenceCursor | null;
-	newer: GraphicsAssetEvidenceCursor | null;
+	older: GraphicsAssetEvidencePosition | null;
+	newer: GraphicsAssetEvidencePosition | null;
 	/**
 	 * The tombstone for the subject asked about, when the question was about one
 	 * Graphic Asset and that asset has been purged. It is reported beside the
@@ -811,7 +816,7 @@ export type GraphicAssetPurgeOutcome
 		revisionCount: number;
 		/** References the fresh proof found across every revision; always 0 when purged. */
 		referenceCount: number;
-		reason: 'trash-window-elapsed' | 'early-purge';
+		reason: GraphicAssetPurgeReason;
 	}
 	| {
 		outcome: 'in-use';

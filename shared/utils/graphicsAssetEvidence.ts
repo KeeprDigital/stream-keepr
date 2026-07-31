@@ -43,9 +43,6 @@ export const GRAPHICS_EVIDENCE_TERMINAL_CATEGORIES = [
 	'derivative-regenerated',
 ] as const satisfies readonly GraphicsAssetEvidenceCategory[];
 
-export type GraphicsEvidenceTerminalCategory
-	= typeof GRAPHICS_EVIDENCE_TERMINAL_CATEGORIES[number];
-
 /**
  * How long Evidence outlives the cleanup it explains. Re-exported here so a
  * reader of the ledger does not have to know that the number is defined among
@@ -117,7 +114,7 @@ export type GraphicsEvidenceCategoryGroup = keyof typeof GRAPHICS_EVIDENCE_CATEG
  * absent: after a purge, a prune, or a byte deletion there is no subject left to
  * inspect, and offering a link to one would promise a page that answers 404.
  */
-export const GRAPHICS_EVIDENCE_QUEUE_BY_CATEGORY = {
+const GRAPHICS_EVIDENCE_QUEUE_BY_CATEGORY = {
 	'critical-integrity-incident': 'critical-integrity-incident',
 	'content-unavailable-detected': 'unavailable-content',
 	'derivative-missing-detected': 'missing-derivative',

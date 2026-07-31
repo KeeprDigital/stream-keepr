@@ -221,13 +221,16 @@ const DISCREPANCY_COLUMNS = `
 `;
 
 /**
- * Evidence recording and the unavailable-content marker are shared with the
- * retention path and provided once by the composed catalogue, so this factory
- * deliberately does not reimplement them.
+ * Evidence recording, the unavailable-content marker, and the capacity reading
+ * are shared with the retention path and provided once by the composed
+ * catalogue, so this factory deliberately does not reimplement them.
  */
 export function createD1GraphicsAssetReconciliationCatalogue(
 	database: D1Database,
-): Omit<GraphicsAssetReconciliationCatalogue, 'recordGraphicsAssetEvidence' | 'markContentUnavailable'> {
+): Omit<
+	GraphicsAssetReconciliationCatalogue,
+	'recordGraphicsAssetEvidence' | 'markContentUnavailable' | 'getCapacity'
+> {
 	async function findOpenDiscrepancy(kind: GraphicsDiscrepancyKind, subjectKey: string) {
 		const row = await database.prepare(`
 			SELECT ${DISCREPANCY_COLUMNS} FROM graphics_discrepancies

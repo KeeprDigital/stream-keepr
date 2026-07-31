@@ -4,7 +4,7 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 
 const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
@@ -137,6 +137,16 @@ async function openLedger() {
 	return wrapper;
 }
 
+/** Types into the correlation field without applying it. */
+async function typeCorrelation(
+	wrapper: Awaited<ReturnType<typeof mountPage>>,
+	value: string,
+) {
+	await wrapper.findAll('input')
+		.find(input => input.attributes('placeholder') === 'Opaque identity')!
+		.setValue(value);
+}
+
 function lastQuery() {
 	return mockApiFetch.mock.calls[mockApiFetch.mock.calls.length - 1]![1].query;
 }
@@ -145,6 +155,12 @@ describe('the Graphics Asset Library Evidence ledger page', () => {
 	beforeEach(() => {
 		mockApiFetch.mockReset();
 		mockApiFetch.mockResolvedValue(ledger());
+	});
+
+	// A test that installs fake timers must not leave them installed for the
+	// next one, whether it finished or timed out.
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	it('refuses to read anything before an administrator token is given', async () => {
@@ -191,6 +207,42 @@ describe('the Graphics Asset Library Evidence ledger page', () => {
 		// A new question is asked from the top rather than from wherever the
 		// previous answer had been paged to.
 		expect(lastQuery().cursorId).toBeUndefined();
+	});
+
+	it('asks only the question that was applied, however the form is edited', async () => {
+		// The reading refreshes on a timer, and every refresh goes through the
+		// same read closure. Advancing the clock exercises the poll itself;
+		// shouldAdvanceTime keeps the zero-delay awaits in settle() resolving.
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		const wrapper = await openLedger();
+		const asked = mockApiFetch.mock.calls.length;
+
+		// A half-typed identity is exactly what a tick would otherwise submit,
+		// and an audit surface answering "no Evidence matches" in the middle of
+		// a word invites precisely the wrong conclusion.
+		await typeCorrelation(wrapper, 'correl');
+
+		await vi.advanceTimersByTimeAsync(5000);
+		await settle();
+
+		expect(mockApiFetch.mock.calls.length).toBeGreaterThan(asked);
+		expect(lastQuery()).not.toHaveProperty('correlationId');
+	});
+
+	it('resets the position when a new question is applied', async () => {
+		const wrapper = await openLedger();
+
+		await buttonNamed(wrapper, 'Older')!.trigger('click');
+		await settle();
+		expect(lastQuery()).toHaveProperty('cursorId', 'entry-2');
+
+		await typeCorrelation(wrapper, 'correlation-1');
+		await buttonNamed(wrapper, 'Apply')!.trigger('click');
+		await settle();
+
+		// A position within the answer to one question means nothing to another.
+		expect(lastQuery()).toMatchObject({ correlationId: 'correlation-1' });
+		expect(lastQuery()).not.toHaveProperty('cursorId');
 	});
 
 	it('turns pages by the entry each one ended on rather than by an offset', async () => {

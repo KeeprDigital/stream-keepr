@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type {
-	GraphicsAssetEvidenceCursor,
 	GraphicsAssetEvidenceEntry,
 	GraphicsAssetEvidencePage,
+	GraphicsAssetEvidencePosition,
 	GraphicsAssetEvidenceSubjectKind,
 } from '~~/shared/types/graphicsAsset';
 import type { GraphicsEvidenceCategoryGroup } from '~~/shared/utils/graphicsAssetEvidence';
 import { formatByteCount } from '~~/shared/utils/formatByteCount';
+import { formatInstant } from '~~/shared/utils/formatInstant';
 import {
 	GRAPHICS_EVIDENCE_CATEGORY_GROUP_VALUES,
 	graphicsEvidenceQueueFor,
@@ -51,20 +52,47 @@ const GROUP_LABELS: Record<GraphicsEvidenceCategoryGroup, string> = {
 	restoration: 'Restoration',
 };
 
-const groups = ref<GraphicsEvidenceCategoryGroup[]>([]);
-const subjectKind = ref<GraphicsAssetEvidenceSubjectKind | ''>('');
-const subjectId = ref('');
-const actor = ref('');
-const correlationId = ref('');
-const recordedFrom = ref('');
-const recordedUntil = ref('');
+interface EvidenceFilters {
+	groups: GraphicsEvidenceCategoryGroup[];
+	subjectKind: GraphicsAssetEvidenceSubjectKind | '';
+	subjectId: string;
+	actor: string;
+	correlationId: string;
+	recordedFrom: string;
+	recordedUntil: string;
+}
+
+function noFilters(): EvidenceFilters {
+	return {
+		groups: [],
+		subjectKind: '',
+		subjectId: '',
+		actor: '',
+		correlationId: '',
+		recordedFrom: '',
+		recordedUntil: '',
+	};
+}
 
 /**
- * Where in the ledger this page is. It is deliberately not part of the filter
- * state: changing a filter asks a different question, and the position within
- * the answer to the previous one means nothing to it.
+ * The filter form, and separately the question it was last used to ask.
+ *
+ * Only Apply moves one into the other. The reading is refreshed on a timer, so
+ * a form bound straight to the query would submit half a typed identity on
+ * whichever keystroke a tick landed between — and an audit surface answering
+ * "no Evidence matches" mid-word invites exactly the wrong conclusion. Worse,
+ * a tick would carry the changed filter while keeping the position from the
+ * previous question, which is the one thing the position must never do.
  */
-const cursor = ref<GraphicsAssetEvidenceCursor | null>(null);
+const draft = ref<EvidenceFilters>(noFilters());
+const applied = ref<EvidenceFilters>(noFilters());
+
+/**
+ * Where in the ledger this page is. It belongs to the applied question rather
+ * than to the form: a position within the answer to one question means nothing
+ * to another, so asking again always starts at the newest end.
+ */
+const cursor = ref<GraphicsAssetEvidencePosition | null>(null);
 const direction = ref<'older' | 'newer'>('older');
 
 /** A local datetime from the form as the instant the ledger stores. */
@@ -76,19 +104,20 @@ function instantFrom(local: string) {
 }
 
 function evidenceQuery() {
+	const question = applied.value;
 	return {
 		limit: PAGE_LIMIT,
-		...(groups.value.length > 0 ? { group: groups.value } : {}),
-		...(subjectKind.value && subjectId.value.trim()
-			? { subjectKind: subjectKind.value, subjectId: subjectId.value.trim() }
+		...(question.groups.length > 0 ? { group: question.groups } : {}),
+		...(question.subjectKind && question.subjectId.trim()
+			? { subjectKind: question.subjectKind, subjectId: question.subjectId.trim() }
 			: {}),
-		...(actor.value.trim() ? { actor: actor.value.trim() } : {}),
-		...(correlationId.value.trim() ? { correlationId: correlationId.value.trim() } : {}),
-		...(instantFrom(recordedFrom.value)
-			? { recordedFrom: instantFrom(recordedFrom.value) }
+		...(question.actor.trim() ? { actor: question.actor.trim() } : {}),
+		...(question.correlationId.trim() ? { correlationId: question.correlationId.trim() } : {}),
+		...(instantFrom(question.recordedFrom)
+			? { recordedFrom: instantFrom(question.recordedFrom) }
 			: {}),
-		...(instantFrom(recordedUntil.value)
-			? { recordedUntil: instantFrom(recordedUntil.value) }
+		...(instantFrom(question.recordedUntil)
+			? { recordedUntil: instantFrom(question.recordedUntil) }
 			: {}),
 		...(cursor.value
 			? {
@@ -115,29 +144,23 @@ const {
 	failureMessage: 'The Evidence ledger could not be read.',
 });
 
-/** Asks the question again from the newest end, because it is a new question. */
+/**
+ * Submits the form as the new question. It is a new question, so it is asked
+ * from the newest end rather than from wherever the previous answer was paged.
+ */
 async function applyFilters() {
+	applied.value = { ...draft.value, groups: [...draft.value.groups] };
 	cursor.value = null;
 	direction.value = 'older';
 	await loadLedger();
 }
 
-function forgetFilters() {
-	groups.value = [];
-	subjectKind.value = '';
-	subjectId.value = '';
-	actor.value = '';
-	correlationId.value = '';
-	recordedFrom.value = '';
-	recordedUntil.value = '';
-}
-
 async function clearFilters() {
-	forgetFilters();
+	draft.value = noFilters();
 	await applyFilters();
 }
 
-async function turnTo(position: GraphicsAssetEvidenceCursor, towards: 'older' | 'newer') {
+async function turnTo(position: GraphicsAssetEvidencePosition, towards: 'older' | 'newer') {
 	cursor.value = position;
 	direction.value = towards;
 	await loadLedger();
@@ -150,26 +173,18 @@ async function turnTo(position: GraphicsAssetEvidenceCursor, towards: 'older' | 
  * a thread is a new question and not a narrowing of the old one.
  */
 async function followSubject(entry: GraphicsAssetEvidenceEntry) {
-	forgetFilters();
-	subjectKind.value = entry.subject.kind;
-	subjectId.value = entry.subject.id;
+	draft.value = { ...noFilters(), subjectKind: entry.subject.kind, subjectId: entry.subject.id };
 	await applyFilters();
 }
 
 async function followCorrelation(entry: GraphicsAssetEvidenceEntry) {
-	forgetFilters();
-	correlationId.value = entry.correlationId;
+	draft.value = { ...noFilters(), correlationId: entry.correlationId };
 	await applyFilters();
 }
 
 async function followActor(entry: GraphicsAssetEvidenceEntry) {
-	forgetFilters();
-	actor.value = entry.actor;
+	draft.value = { ...noFilters(), actor: entry.actor };
 	await applyFilters();
-}
-
-function formatInstant(instant: string | null | undefined) {
-	return instant ? new Date(instant).toLocaleString() : 'None';
 }
 
 /**
@@ -237,13 +252,14 @@ function measurements(entry: GraphicsAssetEvidenceEntry) {
 	].filter(measurement => measurement !== null);
 }
 
+/** Whether the ledger on screen is an answer to a narrowed question. */
 const filtered = computed(() =>
-	groups.value.length > 0
-	|| Boolean(subjectId.value.trim())
-	|| Boolean(actor.value.trim())
-	|| Boolean(correlationId.value.trim())
-	|| Boolean(recordedFrom.value)
-	|| Boolean(recordedUntil.value));
+	applied.value.groups.length > 0
+	|| Boolean(applied.value.subjectId.trim())
+	|| Boolean(applied.value.actor.trim())
+	|| Boolean(applied.value.correlationId.trim())
+	|| Boolean(applied.value.recordedFrom)
+	|| Boolean(applied.value.recordedUntil));
 </script>
 
 <template>
@@ -336,12 +352,12 @@ const filtered = computed(() =>
 									v-for="group in GRAPHICS_EVIDENCE_CATEGORY_GROUP_VALUES"
 									:key="group"
 									size="xs"
-									:color="groups.includes(group) ? 'primary' : 'neutral'"
-									:variant="groups.includes(group) ? 'solid' : 'outline'"
+									:color="draft.groups.includes(group) ? 'primary' : 'neutral'"
+									:variant="draft.groups.includes(group) ? 'solid' : 'outline'"
 									:label="GROUP_LABELS[group]"
-									@click="groups = groups.includes(group)
-										? groups.filter(selected => selected !== group)
-										: [...groups, group]"
+									@click="draft.groups = draft.groups.includes(group)
+										? draft.groups.filter(selected => selected !== group)
+										: [...draft.groups, group]"
 								/>
 							</div>
 						</UFormField>
@@ -349,7 +365,7 @@ const filtered = computed(() =>
 						<div class="grid gap-4 sm:grid-cols-2">
 							<UFormField label="Subject kind">
 								<USelect
-									v-model="subjectKind"
+									v-model="draft.subjectKind"
 									:items="[{ label: 'Any', value: '' },
 										...SUBJECT_KINDS.map(kind => ({ label: kind, value: kind }))]"
 								/>
@@ -358,22 +374,22 @@ const filtered = computed(() =>
 								label="Subject identity"
 								description="Both halves are needed; a kind alone would widen the question."
 							>
-								<UInput v-model="subjectId" placeholder="Opaque domain identity" />
+								<UInput v-model="draft.subjectId" placeholder="Opaque domain identity" />
 							</UFormField>
 							<UFormField label="Actor or policy">
-								<UInput v-model="actor" placeholder="graphics-retention-policy" />
+								<UInput v-model="draft.actor" placeholder="graphics-retention-policy" />
 							</UFormField>
 							<UFormField
 								label="Operation or correlation identity"
 								description="Everything one sweep or one request decided."
 							>
-								<UInput v-model="correlationId" placeholder="Opaque identity" />
+								<UInput v-model="draft.correlationId" placeholder="Opaque identity" />
 							</UFormField>
 							<UFormField label="Recorded from">
-								<UInput v-model="recordedFrom" type="datetime-local" />
+								<UInput v-model="draft.recordedFrom" type="datetime-local" />
 							</UFormField>
 							<UFormField label="Recorded until">
-								<UInput v-model="recordedUntil" type="datetime-local" />
+								<UInput v-model="draft.recordedUntil" type="datetime-local" />
 							</UFormField>
 						</div>
 

@@ -161,6 +161,29 @@ async function addReference(input: {
 	});
 }
 
+/**
+ * One Evidence entry written straight to the ledger, for the case the library
+ * cannot stage through its own writers: an observation recorded long after the
+ * subject it explains was already cleaned up.
+ */
+async function recordLateEvidence(input: {
+	id: string;
+	assetId: GraphicAssetId;
+	recordedAt: number;
+}) {
+	await harness.client.execute({
+		sql: `
+			INSERT INTO graphics_asset_evidence (
+				id, recorded_at, category, actor, subject_kind, subject_id,
+				outcome, reason, correlation_id, detail, expires_at
+			) VALUES (?, ?, 'graphic-asset-purge-blocked', 'installation-administrator',
+				'graphic-asset', ?, 'graphic-asset-retained', 'reference-proof-found-usage',
+				'late-correlation', '{}', NULL)
+		`,
+		args: [input.id, input.recordedAt, input.assetId],
+	});
+}
+
 async function removeReference(referenceId: string) {
 	await harness.client.execute({
 		sql: 'DELETE FROM graphic_asset_references WHERE id = ?',
@@ -1940,6 +1963,48 @@ describe('scheduled Graphics Asset Library retention', () => {
 			await expect(evidenceOf(context.library, {
 				subject: { kind: 'graphic-asset', id: assetId },
 			})).resolves.toEqual([]);
+		});
+
+		it('keeps Evidence recorded after the anchor readable for its own year', async () => {
+			const context = createRetentionLibrary();
+			const published = await ingestAsset(context, {
+				idempotencyKey: 'evidence-after-the-anchor',
+				name: 'Long-remembered logo',
+			});
+			const { assetId } = published.result!;
+			await context.library.trashGraphicAsset({ assetId });
+			await context.library.purgeTrashedGraphicAsset({
+				assetId,
+				actor: 'installation-administrator',
+				confirmation: 'purge-now',
+			});
+			const purgedAt = context.now().getTime();
+
+			// A provenance question about a purged identity can arrive at any time,
+			// and the tombstone is there to answer it. Evidence written more than a
+			// year after the purge would be sealed already expired against the
+			// terminal anchor and destroyed by the same sweep that sealed it.
+			context.advanceTo(new Date(purgedAt + 400 * DAY).toISOString());
+			const observedAt = context.now().getTime();
+			await recordLateEvidence({ id: 'late-observation', assetId, recordedAt: observedAt });
+
+			await context.library.runGraphicsRetention();
+			const sealed = await evidenceOf(context.library, {
+				subject: { kind: 'graphic-asset', id: assetId },
+			});
+			expect(sealed).toEqual([
+				expect.objectContaining({
+					id: 'late-observation',
+					// Its own full window, not the anchor's, which has already passed.
+					expiresAt: new Date(observedAt + 365 * DAY).toISOString(),
+				}),
+			]);
+
+			context.advanceTo(new Date(observedAt + 365 * DAY - 1).toISOString());
+			expect((await context.library.runGraphicsRetention()).evidence.expired).toBe(0);
+			await expect(evidenceOf(context.library, {
+				subject: { kind: 'graphic-asset', id: assetId },
+			})).resolves.toHaveLength(1);
 		});
 
 		it('records no Evidence about expiring Evidence', async () => {
