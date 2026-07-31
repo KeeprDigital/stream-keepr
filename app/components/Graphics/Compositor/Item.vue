@@ -98,20 +98,26 @@ const rendersText = computed(() => props.render.textStyle !== undefined);
  * The life-change animation, restarted by re-keying the element.
  *
  * A CSS animation only runs when the element is new, so the key is what makes a
- * second change to the same total animate again. It deliberately does not tick on
- * mount: an output joining mid-match would otherwise flash every life total the
- * moment it connected.
+ * second change to the same total animate again.
+ *
+ * An output joining mid-match must not flash every life total the moment it
+ * connects, and the transition that would cause that is the one out of the empty
+ * state: a Player Life renders nothing until the session holds a total, so the
+ * first value arriving reads as a change from `''`. Guarding on the values rather
+ * than on a mount tick is what makes that precise. A guard that skipped the first
+ * fire instead would depend on whether the store already held the match when this
+ * mounted — the watcher does not run on mount, so with data already present the
+ * first *genuine* life change would be the one swallowed.
  */
 const lifeChange = computed(() => props.render.lifeChange);
 const lifeAnimationKey = ref(0);
-const lifeSettled = ref(false);
 
 watch(() => props.render.text, (next, previous) => {
-	if (!lifeSettled.value) {
-		lifeSettled.value = true;
+	// Arriving at or departing from the empty state is the session gaining or
+	// losing a total, which is not a life change.
+	if (!next || !previous || next === previous)
 		return;
-	}
-	if (next !== previous && lifeChange.value && lifeChange.value.animation !== 'none')
+	if (lifeChange.value && lifeChange.value.animation !== 'none')
 		lifeAnimationKey.value += 1;
 });
 
