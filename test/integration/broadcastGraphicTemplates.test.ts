@@ -4,7 +4,7 @@ import type {
 	BroadcastGraphicTemplateSummary,
 } from '~~/shared/types/broadcastGraphicTemplate';
 import type { BroadcastGraphicConfig, MediaGraphicItemConfig } from '~~/shared/types/graphics';
-import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
+import type { GraphicAssetUsage, GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
 import { createHash, randomUUID } from 'node:crypto';
 import { crc32 } from 'node:zlib';
@@ -510,6 +510,28 @@ describe('broadcast Graphic Template library', () => {
 			{ headers: { authorization: `Bearer ${assetCapability}` } },
 		);
 		expect(refused.status).toBe(404);
+	});
+
+	/**
+	 * Inspecting usage is how an author learns what retiring or trashing an asset
+	 * would break, and a template is one of the things it would break. The library
+	 * already names every other owner kind that has a name; an owner reported with no
+	 * name at all is an entry the author cannot go and look at, which is the one thing
+	 * the usage listing exists to prevent.
+	 */
+	it('names the Broadcast Graphic Template that pins an asset in its usage', async () => {
+		const usage = await $fetch<GraphicAssetUsage[]>(
+			`/api/graphics-assets/${asset.assetId}/usage`,
+		);
+
+		expect(usage).toContainEqual(expect.objectContaining({
+			reference: asset,
+			owner: expect.objectContaining({
+				kind: 'broadcast-graphic-template',
+				id: templateId,
+				name: 'Lower third',
+			}),
+		}));
 	});
 
 	it('leaves a placed copy and its template with no live coupling in either direction', async () => {
