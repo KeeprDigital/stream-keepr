@@ -5,6 +5,7 @@ import { saveBroadcastGraphicTemplateSchema } from '~~/server/schemas/api/broadc
 import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGraphicTemplate';
 import { screenService } from '~~/server/services/screen';
 import { assertBroadcastGraphicTemplateReferencesExist } from '~~/server/utils/broadcastGraphicTemplateReferences';
+import { assertBroadcastGraphicTemplateStyleSetResolves } from '~~/server/utils/broadcastGraphicTemplateStyleSet';
 import { broadcastGraphicTemplateDocument } from '~~/shared/modules/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
 
@@ -36,6 +37,10 @@ export default defineEventHandler(async (event) => {
 
 	const document = broadcastGraphicTemplateDocument(graphic);
 	await assertBroadcastGraphicTemplateReferencesExist(graphicsAssetLibraryForEvent(event), document);
+	// The Screen's write path does not prove Graphic Style Set references, because a
+	// placed graphic never receives an update from one. Saving it into the library is
+	// where it becomes a linked artifact, so it is where the link has to hold.
+	await assertBroadcastGraphicTemplateStyleSetResolves(document);
 
 	const template = await broadcastGraphicTemplateService().create({
 		id: randomUuid(),

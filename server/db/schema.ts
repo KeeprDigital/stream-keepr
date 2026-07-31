@@ -6,6 +6,7 @@ import type { FeatureMatchSessionStatus, FeatureMatchSourceSnapshot } from '~~/s
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { PlayerGameData } from '~~/shared/types/game';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
 import type { ModeConfigsMap, ScreenConfig } from '~~/shared/types/screenConfig';
 import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
 import { relations, sql } from 'drizzle-orm';
@@ -519,10 +520,73 @@ export const broadcastGraphicTemplates = sqliteTable('broadcast_graphic_template
 	/** The saved Broadcast Graphic composition, exactly as a Screen would carry it. */
 	document: text('document', { mode: 'json' }).$type<BroadcastGraphicConfig>().notNull(),
 	graphicAssetReferenceVersion: text('graphic_asset_reference_version'),
+	/**
+	 * The one Graphic Style Set this template's inherited properties come from, and
+	 * the published revision they were last reconciled to.
+	 *
+	 * Both are already inside `document`, and both are here anyway. The reason is the
+	 * one question the Style Set library has to answer cheaply and completely: when an
+	 * author publishes, which templates does this reach? That is a lookup by Style Set
+	 * across the whole library, and answering it by parsing every stored document
+	 * would make one publish cost the size of the library. There is no foreign key,
+	 * because deleting a Style Set is an operation that rewrites every template it
+	 * touches rather than a cascade that silently unlinks them.
+	 */
+	styleSetId: text('style_set_id'),
+	styleSetRevision: integer('style_set_revision'),
 
 	...timestamps,
 }, table => [
 	index('broadcast_graphic_templates_name_idx').on(table.name),
+	index('broadcast_graphic_templates_style_set_idx').on(table.styleSetId),
+]);
+
+/**
+ * The installation's library of reusable Graphic Style Sets.
+ *
+ * Installation-scoped for the same reason the Broadcast Graphic Template library is:
+ * a Style Set exists so a family of independently portable templates keeps one
+ * visual language, and a per-Event one could not do that. Events consume Style Sets
+ * through templates and never own them.
+ *
+ * ## Two entry lists, on purpose
+ *
+ * `draft` is where an author's edits accumulate and `published` is what every linked
+ * template resolves against. They are separate columns rather than one list with a
+ * dirty flag because the separation *is* the guarantee: an author can restructure a
+ * palette all afternoon, leaving the draft referentially broken for most of it,
+ * without one linked template seeing an available update. One atomic publish
+ * validates the draft, copies it into `published`, and advances `revision`.
+ *
+ * `revision` starts at zero, which is a real state rather than a placeholder: it
+ * means never published, and a template cannot link to a Style Set that has never
+ * resolved to anything.
+ */
+export const graphicStyleSets = sqliteTable('graphic_style_sets', {
+	id: text('id').primaryKey(),
+	name: text('name').notNull(),
+	description: text('description'),
+	/** The published revision. Zero until the first publish. */
+	revision: integer('revision').notNull().default(0),
+	/**
+	 * Advanced by one on every accepted write to the draft, its name, or its
+	 * description, and the token every such write compare-and-swaps on.
+	 *
+	 * Separate from `revision` because they answer different questions. `revision` is
+	 * what a linked template names as its provenance and only publish moves it;
+	 * this one exists so two authors with the library open cannot silently overwrite
+	 * each other's draft edits, which happens far more often than a publish does.
+	 */
+	draftRevision: integer('draft_revision').notNull().default(1),
+	/** The working draft's entries. Always present, even before the first publish. */
+	draft: text('draft', { mode: 'json' }).$type<GraphicStyleSetEntry[]>().notNull(),
+	/** The entries at `revision`. Null until the first publish. */
+	published: text('published', { mode: 'json' }).$type<GraphicStyleSetEntry[] | null>(),
+	publishedAt: integer('published_at', { mode: 'timestamp_ms' }),
+
+	...timestamps,
+}, table => [
+	index('graphic_style_sets_name_idx').on(table.name),
 ]);
 
 export const featureMatches = featureMatchSlots;
@@ -1029,6 +1093,8 @@ export type DbBroadcastGraphicsLiveSession = typeof broadcastGraphicsLiveSession
 export type DbBroadcastGraphicsLiveSessionInsert = typeof broadcastGraphicsLiveSessions.$inferInsert;
 export type DbBroadcastGraphicTemplate = typeof broadcastGraphicTemplates.$inferSelect;
 export type DbBroadcastGraphicTemplateInsert = typeof broadcastGraphicTemplates.$inferInsert;
+export type DbGraphicStyleSet = typeof graphicStyleSets.$inferSelect;
+export type DbGraphicStyleSetInsert = typeof graphicStyleSets.$inferInsert;
 export type DbLiveStateCommandReceipt = typeof liveStateCommandReceipts.$inferSelect;
 export type DbLiveStateCommandReceiptInsert = typeof liveStateCommandReceipts.$inferInsert;
 export type DbScreen = typeof screens.$inferSelect;

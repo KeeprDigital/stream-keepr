@@ -937,6 +937,83 @@ function graphicSourceDerivationsAcyclic(
 	});
 }
 
+/* ────────────────────────────────────────────────
+ * Graphic Style Set references
+ * ──────────────────────────────────────────────── */
+
+const graphicStyleEntryIdSchema = z.string().min(1).max(100);
+
+/**
+ * A media treatment's owned properties, as one object so its override shape is a
+ * partial of exactly the same thing the Media Graphic Item stores.
+ */
+const graphicMediaTreatmentPropertiesSchema = z.object({
+	fit: z.enum(MEDIA_GRAPHIC_ITEM_FIT_VALUES),
+	focalPosition: z.object({ horizontal: opacitySchema, vertical: opacitySchema }).strict(),
+	opacity: opacitySchema,
+	clipGeometry: graphicShapeGeometrySchema.optional(),
+	playbackRate: finiteNumberSchema
+		.min(MIN_GRAPHIC_MEDIA_PLAYBACK_RATE)
+		.max(MAX_GRAPHIC_MEDIA_PLAYBACK_RATE),
+	loop: z.boolean(),
+}).strict();
+
+/**
+ * One slot's reference to a Graphic Style Set entry.
+ *
+ * Every override shape is derived from the property schema it deviates from, rather
+ * than restated: an override is a *partial of the same property group*, so a bound
+ * that tightens on typography tightens on a typography override in the same commit.
+ * A slot whose value has no meaningful partial — a Graphic Fill, which is a
+ * discriminated union — takes no overrides at all.
+ *
+ * The reference carries no value. A graphics document always stores its own resolved
+ * properties inline, so nothing here is needed to render it; this is the provenance
+ * that makes a republished Style Set a reviewable offer instead of a silent change.
+ */
+function graphicStyleRefSchema<T extends z.ZodType>(overrides: T) {
+	return z.object({
+		entryId: graphicStyleEntryIdSchema,
+		overrides: overrides.optional(),
+	}).strict();
+}
+
+/** The one slot with no meaningful partial to override. */
+const graphicFillStyleRefSchema = z.object({ entryId: graphicStyleEntryIdSchema }).strict();
+
+const graphicAnimationRecipeOverridesSchema = z.object(graphicAnimationRecipeShape).strict().partial();
+
+const graphicAnimationStyleRefShape = {
+	'animation.enter': graphicStyleRefSchema(graphicAnimationRecipeOverridesSchema).optional(),
+	'animation.on-screen': graphicStyleRefSchema(graphicOnScreenAnimationRecipeSchema.partial()).optional(),
+	'animation.update': graphicStyleRefSchema(graphicAnimationRecipeOverridesSchema).optional(),
+	'animation.exit': graphicStyleRefSchema(graphicAnimationRecipeOverridesSchema).optional(),
+};
+
+const graphicItemStyleRefsSchema = z.object({
+	'typography': graphicStyleRefSchema(graphicTypographySchema.omit({ textAlign: true }).partial()).optional(),
+	'surfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
+	'surfaceStyle.fill': graphicFillStyleRefSchema.optional(),
+	'defaultChildSurfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
+	'geometry': graphicStyleRefSchema(graphicShapeGeometrySchema.partial()).optional(),
+	'clipGeometry': graphicStyleRefSchema(graphicShapeGeometrySchema.partial()).optional(),
+	'media': graphicStyleRefSchema(graphicMediaTreatmentPropertiesSchema.partial()).optional(),
+	...graphicAnimationStyleRefShape,
+}).strict();
+
+/**
+ * A Broadcast Graphic's own references: whole-composition motion and nothing else.
+ * It has no typography, surface, geometry, or media to inherit into, so the wire
+ * refuses those slots rather than storing references nothing can apply.
+ */
+const graphicContainerStyleRefsSchema = z.object(graphicAnimationStyleRefShape).strict();
+
+/** At most one Graphic Style Set per composition, stated by this being one object. */
+const graphicStyleSetLinkSchema = z.object({
+	styleSetId: graphicStyleEntryIdSchema,
+	revision: z.number().int().nonnegative(),
+}).strict();
+
 const graphicItemBaseShape = {
 	id: z.string().min(1).max(100),
 	label: z.string().min(1).max(100),
@@ -948,6 +1025,7 @@ const graphicItemBaseShape = {
 	width: pixelSizeSchema,
 	height: pixelSizeSchema,
 	animation: graphicAnimationSchema.optional(),
+	styleRefs: graphicItemStyleRefsSchema.optional(),
 };
 
 /**
@@ -1356,6 +1434,8 @@ export const broadcastGraphicConfigSchema = z.object({
 		)
 		.optional(),
 	animation: graphicContainerAnimationSchema.optional(),
+	styleSet: graphicStyleSetLinkSchema.optional(),
+	styleRefs: graphicContainerStyleRefsSchema.optional(),
 }).strict();
 
 /**

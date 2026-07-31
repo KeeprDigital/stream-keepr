@@ -297,6 +297,17 @@ onMounted(() => {
 							<p v-else-if="template.description" class="mt-0.5 truncate text-xs text-muted">
 								{{ template.description }}
 							</p>
+
+							<!--
+								A Graphic Style Set change reaches this template as an offer, never as a
+								write. The badge says whether one is waiting; applying it is an explicit
+								reviewed act that creates one new template revision.
+							-->
+							<GraphicsStyleUpdateReview
+								:template="template"
+								:writable="canAuthor"
+								@applied="refresh()"
+							/>
 						</div>
 						<div v-if="canAuthor" class="flex shrink-0 gap-1">
 							<UButton

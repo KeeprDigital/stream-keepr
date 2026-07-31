@@ -7,7 +7,13 @@ import type {
 	GraphicContainerAnimation,
 	GraphicOnScreenAnimationRecipe,
 } from '~~/shared/types/graphics';
+import type { GraphicStyleSlot } from '~~/shared/types/graphicStyleSet';
+import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
+import {
+	bindGraphicStyleRef,
+	unbindGraphicStyleRef,
+} from '~~/shared/modules/graphic-style-sets';
 import {
 	applyBroadcastGraphicAnimationPreset,
 	applyGraphicItemAnimationPreset,
@@ -68,6 +74,13 @@ const props = defineProps<{
 	selectedTarget: GraphicsSelectionTarget;
 	/** Whether this session holds the artifact's Graphics Authoring Lease. */
 	writable?: boolean;
+	/**
+	 * The published Graphic Style Set this composition is linked to, when it is
+	 * linked to one. A Graphic Animation Recipe preset is referenced per lifecycle
+	 * phase, from the phase's own controls, exactly as every other preset is
+	 * referenced from the property control that already edits it.
+	 */
+	styleSet?: GraphicStyleAuthoringContext;
 }>();
 
 const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[]] }>();
@@ -76,6 +89,62 @@ const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[
 const canAuthor = computed(() => props.writable === true);
 
 const selection = computed(() => resolveGraphicsSelection(props.graphics, props.selectedTarget));
+
+/**
+ * The Graphic Style Set slot one lifecycle phase's recipe is inherited through.
+ *
+ * The slot vocabulary names the phase, so a preset assigned to enter and the same
+ * preset assigned to exit are two independent references to one entry — which is
+ * exactly the glossary's rule that a template "assigns presets to lifecycle phases"
+ * while item selection, staggering, and choreography stay local.
+ */
+function styleSlotFor(phase: GraphicAnimationPhase): GraphicStyleSlot {
+	return `animation.${phase}` as GraphicStyleSlot;
+}
+
+function styleRefFor(phase: GraphicAnimationPhase) {
+	const current = selection.value;
+	if (current.kind === 'graphic')
+		return current.graphic.styleRefs?.[styleSlotFor(phase) as 'animation.enter'];
+	if (current.kind === 'item')
+		return current.item.styleRefs?.[styleSlotFor(phase)];
+	return undefined;
+}
+
+/** The owner a reference is written against: null is the Broadcast Graphic itself. */
+function styleOwnerId(): string | null | undefined {
+	const current = selection.value;
+	if (current.kind === 'graphic')
+		return null;
+	return current.kind === 'item' ? current.item.id : undefined;
+}
+
+function bindStyleRef(phase: GraphicAnimationPhase, entryId: string) {
+	const current = selection.value;
+	const context = props.styleSet;
+	const ownerId = styleOwnerId();
+	if (!canAuthor.value || ownerId === undefined || !context)
+		return;
+	if (current.kind !== 'graphic' && current.kind !== 'item')
+		return;
+	emit('update:graphics', replaceBroadcastGraphic(
+		props.graphics,
+		bindGraphicStyleRef(current.graphic, ownerId, styleSlotFor(phase), entryId, context.resolution),
+	));
+}
+
+function unbindStyleRef(phase: GraphicAnimationPhase) {
+	const current = selection.value;
+	const ownerId = styleOwnerId();
+	if (!canAuthor.value || ownerId === undefined)
+		return;
+	if (current.kind !== 'graphic' && current.kind !== 'item')
+		return;
+	emit('update:graphics', replaceBroadcastGraphic(
+		props.graphics,
+		unbindGraphicStyleRef(current.graphic, ownerId, styleSlotFor(phase)),
+	));
+}
 
 const EASING_OPTIONS = GRAPHIC_ANIMATION_EASING_VALUES.map(value => ({ label: value, value }));
 const ORIGIN_OPTIONS = GRAPHIC_ANIMATION_ORIGINS.map(origin => ({ label: origin.label, value: origin.value }));
@@ -262,6 +331,16 @@ function onScreenRecipeOf() {
 			</div>
 
 			<div v-if="recipeOf(phase)" class="mt-2 space-y-2">
+				<GraphicsCompositorStyleRef
+					:style-slot="`animation.${phase}`"
+					:label="`${GRAPHIC_ANIMATION_PHASE_LABELS[phase]} recipe`"
+					:entries="styleSet?.entries"
+					:current="styleRefFor(phase)"
+					:writable="canAuthor"
+					@bind="entryId => bindStyleRef(phase, entryId)"
+					@unbind="unbindStyleRef(phase)"
+				/>
+
 				<UFormField label="Preset" size="xs">
 					<USelectMenu
 						:items="presetOptions(phase)"

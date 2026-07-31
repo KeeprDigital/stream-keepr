@@ -28,7 +28,14 @@ import type {
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
 import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphicsAsset';
+import type { GraphicStyleRef, GraphicStyleSlot } from '~~/shared/types/graphicStyleSet';
+import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
+import {
+	bindGraphicStyleRef,
+	recaptureGraphicStyleOverrides,
+	unbindGraphicStyleRef,
+} from '~~/shared/modules/graphic-style-sets';
 import {
 	addGraphicInput,
 	anchoredGraphicPosition,
@@ -125,6 +132,16 @@ const props = defineProps<{
 	contract: GraphicsHostContract;
 	/** The Event whose Graphic Asset associations organise the asset picker's discovery. */
 	eventId: number;
+	/**
+	 * The published Graphic Style Set this composition is linked to, when it is
+	 * linked to one.
+	 *
+	 * Absent means every property here is local, and no picker appears at all. That
+	 * is the unlinked case and also the failure case — a Style Set that could not be
+	 * loaded leaves the properties exactly as they are rather than offering entries
+	 * that might not be the ones the composition was authored against.
+	 */
+	styleSet?: GraphicStyleAuthoringContext;
 	/**
 	 * Whether this session may author the selection. A session observing an artifact
 	 * another session's Graphics Authoring Lease covers reads every property and
@@ -317,13 +334,58 @@ function displayedSize(axis: 'width' | 'height') {
 	return displayGraphicGeometryValue(item[axis], axisTotal(axis === 'width' ? 'x' : 'y'), geometryUnit.value);
 }
 
+/**
+ * One edited Broadcast Graphic, with its Graphic Style Set overrides brought back
+ * into line with what it now holds.
+ *
+ * This is the single place a property edit becomes an explicit property-level
+ * override. The controls below write *values* — an author drags a font size on an
+ * item whose typography is inherited — and nothing about them knows about
+ * provenance. Re-deriving the deviations here means every control participates
+ * without any of them being taught to, and an author who edits a value and puts it
+ * back is left with no override rather than one pinning it.
+ *
+ * With no Style Set loaded it is the identity, so an unlinked composition is
+ * untouched.
+ */
+function withRecapturedStyleOverrides(graphic: BroadcastGraphicConfig): BroadcastGraphicConfig {
+	const context = props.styleSet;
+	return context ? recaptureGraphicStyleOverrides(graphic, context.resolution) : graphic;
+}
+
 function patchSelectedItem(patch: Partial<GraphicItemConfig>) {
 	const current = selection.value;
 	if (!canAuthor.value || current.kind !== 'item')
 		return;
 	emit('update:graphics', replaceBroadcastGraphic(
 		props.graphics,
-		patchGraphicItem(current.graphic, current.item.id, patch),
+		withRecapturedStyleOverrides(patchGraphicItem(current.graphic, current.item.id, patch)),
+	));
+}
+
+/** The Graphic Style Set entry one slot of the selected Graphic Item follows. */
+function styleRefFor(slot: GraphicStyleSlot): GraphicStyleRef | undefined {
+	return selectedItem.value?.styleRefs?.[slot];
+}
+
+function bindStyleRef(slot: GraphicStyleSlot, entryId: string) {
+	const current = selection.value;
+	const context = props.styleSet;
+	if (!canAuthor.value || current.kind !== 'item' || !context)
+		return;
+	emit('update:graphics', replaceBroadcastGraphic(
+		props.graphics,
+		bindGraphicStyleRef(current.graphic, current.item.id, slot, entryId, context.resolution),
+	));
+}
+
+function unbindStyleRef(slot: GraphicStyleSlot) {
+	const current = selection.value;
+	if (!canAuthor.value || current.kind !== 'item')
+		return;
+	emit('update:graphics', replaceBroadcastGraphic(
+		props.graphics,
+		unbindGraphicStyleRef(current.graphic, current.item.id, slot),
 	));
 }
 
@@ -354,7 +416,10 @@ function applyToSelectedGraphic(
 	const current = selection.value;
 	if (!canAuthor.value || current.kind !== 'item')
 		return;
-	emit('update:graphics', replaceBroadcastGraphic(props.graphics, merge(current.graphic, current.item.id)));
+	emit('update:graphics', replaceBroadcastGraphic(
+		props.graphics,
+		withRecapturedStyleOverrides(merge(current.graphic, current.item.id)),
+	));
 }
 
 function updateTypography(patch: Partial<GraphicTypography>) {
@@ -1013,6 +1078,16 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 						@update:model-value="updateDefaultChildStyle($event ? {} : null)"
 					/>
 				</UFormField>
+				<GraphicsCompositorStyleRef
+					v-if="selectedGroup.defaultChildSurfaceStyle"
+					style-slot="defaultChildSurfaceStyle"
+					label="Child style default"
+					:entries="styleSet?.entries"
+					:current="styleRefFor('defaultChildSurfaceStyle')"
+					:writable="canAuthor"
+					@bind="entryId => bindStyleRef('defaultChildSurfaceStyle', entryId)"
+					@unbind="unbindStyleRef('defaultChildSurfaceStyle')"
+				/>
 				<UFormField
 					v-if="selectedGroup.defaultChildSurfaceStyle"
 					label="Child fill opacity"
@@ -1096,6 +1171,15 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 				</div>
 			</UFormField>
 
+			<GraphicsCompositorStyleRef
+				style-slot="typography"
+				label="Typography"
+				:entries="styleSet?.entries"
+				:current="styleRefFor('typography')"
+				:writable="canAuthor"
+				@bind="entryId => bindStyleRef('typography', entryId)"
+				@unbind="unbindStyleRef('typography')"
+			/>
 			<UFormField label="Font" size="sm">
 				<USelect
 					:model-value="selectedTextItem.typography.fontId"
@@ -1273,6 +1357,16 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 					Media
 				</p>
 
+				<GraphicsCompositorStyleRef
+					style-slot="media"
+					label="Media treatment"
+					:entries="styleSet?.entries"
+					:current="styleRefFor('media')"
+					:writable="canAuthor"
+					@bind="entryId => bindStyleRef('media', entryId)"
+					@unbind="unbindStyleRef('media')"
+				/>
+
 				<!--
 					The picker pins one exact Graphic Asset identity and revision, and
 					reports a Missing Graphic Asset Reference or Unavailable Graphic Asset
@@ -1390,6 +1484,16 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 				<p class="text-xs font-semibold text-muted">
 					Shape Geometry
 				</p>
+
+				<GraphicsCompositorStyleRef
+					:style-slot="selectedItem?.type === 'media' ? 'clipGeometry' : 'geometry'"
+					label="Shape Geometry"
+					:entries="styleSet?.entries"
+					:current="styleRefFor(selectedItem?.type === 'media' ? 'clipGeometry' : 'geometry')"
+					:writable="canAuthor"
+					@bind="entryId => bindStyleRef(selectedItem?.type === 'media' ? 'clipGeometry' : 'geometry', entryId)"
+					@unbind="unbindStyleRef(selectedItem?.type === 'media' ? 'clipGeometry' : 'geometry')"
+				/>
 				<UFormField label="Preset" size="sm">
 					<USelect
 						:items="GEOMETRY_PRESET_OPTIONS"
@@ -1459,6 +1563,25 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 				<p class="text-xs font-semibold text-muted">
 					Graphic Surface Style
 				</p>
+
+				<GraphicsCompositorStyleRef
+					style-slot="surfaceStyle"
+					label="Surface style"
+					:entries="styleSet?.entries"
+					:current="styleRefFor('surfaceStyle')"
+					:writable="canAuthor"
+					@bind="entryId => bindStyleRef('surfaceStyle', entryId)"
+					@unbind="unbindStyleRef('surfaceStyle')"
+				/>
+				<GraphicsCompositorStyleRef
+					style-slot="surfaceStyle.fill"
+					label="Graphic Fill"
+					:entries="styleSet?.entries"
+					:current="styleRefFor('surfaceStyle.fill')"
+					:writable="canAuthor"
+					@bind="entryId => bindStyleRef('surfaceStyle.fill', entryId)"
+					@unbind="unbindStyleRef('surfaceStyle.fill')"
+				/>
 
 				<UFormField
 					:label="parentGroup ? 'Override group style default' : 'Paint a surface'"
@@ -1649,6 +1772,7 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 			:graphics="graphics"
 			:selected-target="selectedTarget"
 			:writable="writable"
+			:style-set="styleSet"
 			@update:graphics="emit('update:graphics', $event)"
 		/>
 	</fieldset>

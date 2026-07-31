@@ -141,6 +141,13 @@
       "when": 1785460213548,
       "tag": "0019_mysterious_hannibal_king",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1785485612240,
+      "tag": "0020_lean_maximus",
+      "breakpoints": true
     }
   ]
 }
