@@ -63,7 +63,11 @@ type Catalogue = ReturnType<typeof createD1GraphicsAssetCatalogue>;
 async function claimedOperation(
 	catalogue: Catalogue,
 	key: string,
-	options: { stage?: 'publishing' | 'generating-derivatives'; targetAssetId?: GraphicAssetId } = {},
+	options: {
+		stage?: 'publishing' | 'generating-derivatives';
+		targetAssetId?: GraphicAssetId;
+		duplicateContentPolicy?: 'reuse' | 'create-separate';
+	} = {},
 ) {
 	const created = await catalogue.initiateGraphicsIngestion({
 		id: graphicsIngestionOperationId(key),
@@ -74,7 +78,7 @@ async function claimedOperation(
 		sourceFileName: 'logo.png',
 		declaredMime: 'image/png',
 		targetAssetId: options.targetAssetId,
-		duplicateContentPolicy: 'create-separate',
+		duplicateContentPolicy: options.duplicateContentPolicy ?? 'create-separate',
 		declaredByteLength: 70,
 		transferredByteLength: 70,
 		stage: 'created',
@@ -118,6 +122,89 @@ async function countOf(table: string) {
 	const result = await harness.client.execute(`SELECT COUNT(*) AS total FROM ${table}`);
 	return Number(result.rows[0]?.total);
 }
+
+describe('an ordinary ingestion publication that holds its claim', () => {
+	/**
+	 * The guard reads the library while the batch writes to it, so the publication
+	 * in progress is the one thing it must not see. Under the reuse policy it asks
+	 * whether an active asset already holds these bytes — which the asset this very
+	 * batch is inserting would answer, silencing every statement after the insert
+	 * and reclaiming nothing.
+	 */
+	it('publishes and reclaims both while asking whether the content is already held', async () => {
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
+		const operation = await claimedOperation(catalogue, 'upload-reuse-policy', {
+			duplicateContentPolicy: 'reuse',
+		});
+		await arrangeReclaimableState(catalogue, operation, [SOURCE_DIGEST, THUMBNAIL_DIGEST]);
+
+		const published = await catalogue.publishGraphicAsset({
+			operation,
+			report: acceptedReport(SOURCE_DIGEST),
+			assetId: graphicAssetId('published-asset'),
+			revisionId: graphicAssetRevisionId('published-revision'),
+			derivativeId: graphicsDerivativeId('published-derivative'),
+			sourceDigest: SOURCE_DIGEST,
+			thumbnailDigest: THUMBNAIL_DIGEST,
+			thumbnailByteLength: 90,
+			publishedAt: new Date(3_000).toISOString(),
+		});
+
+		expect(published.stage).toBe('completed');
+		expect(await countOf('graphic_assets')).toBe(1);
+		expect(await countOf('graphic_asset_revisions')).toBe(1);
+		expect(await countOf('graphics_derivatives')).toBe(1);
+		expect(await countOf('graphic_asset_contents')).toBe(2);
+		// These bytes are reachable now, so the orphan quarantine holding them is
+		// released and the candidate records that stood in for them are spent.
+		expect(await countOf('graphics_content_quarantine')).toBe(0);
+		expect(await countOf('graphics_canonical_write_candidates')).toBe(0);
+	});
+
+	it('publishes and reclaims both when a replacement holds its claim', async () => {
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
+		const first = await claimedOperation(catalogue, 'upload-before-replacement');
+		const target = graphicAssetId('replaced-target');
+		await catalogue.publishGraphicAsset({
+			operation: first,
+			report: acceptedReport(SOURCE_DIGEST),
+			assetId: target,
+			revisionId: graphicAssetRevisionId('replaced-target-revision'),
+			derivativeId: graphicsDerivativeId('replaced-target-derivative'),
+			sourceDigest: SOURCE_DIGEST,
+			thumbnailDigest: THUMBNAIL_DIGEST,
+			thumbnailByteLength: 90,
+			publishedAt: new Date(3_000).toISOString(),
+		});
+
+		const replacement = await claimedOperation(catalogue, 'replacement-held-claim', {
+			targetAssetId: target,
+		});
+		await arrangeReclaimableState(catalogue, replacement, [
+			REPLACEMENT_DIGEST,
+			REPLACEMENT_THUMBNAIL_DIGEST,
+		]);
+
+		const published = await catalogue.publishGraphicAssetReplacement({
+			operation: replacement,
+			targetAssetId: target,
+			report: acceptedReport(REPLACEMENT_DIGEST),
+			assetId: target,
+			revisionId: graphicAssetRevisionId('replaced-revision'),
+			derivativeId: graphicsDerivativeId('replaced-derivative'),
+			sourceDigest: REPLACEMENT_DIGEST,
+			thumbnailDigest: REPLACEMENT_THUMBNAIL_DIGEST,
+			thumbnailByteLength: 90,
+			publishedAt: new Date(4_000).toISOString(),
+		});
+
+		expect(published.stage).toBe('completed');
+		expect(published.result?.outcome).toBe('revision-created');
+		expect(await countOf('graphic_asset_revisions')).toBe(2);
+		expect(await countOf('graphics_content_quarantine')).toBe(0);
+		expect(await countOf('graphics_canonical_write_candidates')).toBe(0);
+	});
+});
 
 describe('an ordinary ingestion publication that lost its claim', () => {
 	it('reclaims neither the quarantine nor the write candidates it never earned', async () => {
