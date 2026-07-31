@@ -35,6 +35,19 @@ export function squareShapeGeometry(): ShapeGeometry {
 	};
 }
 
+/** Every corner rounded by the same radius, neither edge slanted. */
+export function roundedShapeGeometry(size: number): ShapeGeometry {
+	const corner: ShapeCorner = { treatment: 'rounded', size };
+	return {
+		topLeft: { ...corner },
+		topRight: { ...corner },
+		bottomRight: { ...corner },
+		bottomLeft: { ...corner },
+		leftSlant: 0,
+		rightSlant: 0,
+	};
+}
+
 interface Point {
 	x: number;
 	y: number;

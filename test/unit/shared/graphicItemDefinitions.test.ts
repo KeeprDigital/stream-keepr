@@ -30,13 +30,100 @@ describe('graphicItemDefinitions', () => {
 	});
 
 	it('withholds a Definition whose required context the Host Contract cannot supply', () => {
-		const clockDefinition = {
-			...getGraphicItemDefinition('text'),
-			requiredContext: 'feature-match' as const,
-		};
-
-		expect(isGraphicItemDefinitionAvailable(clockDefinition, BROADCAST_GRAPHICS_HOST_CONTRACT)).toBe(false);
+		expect(isGraphicItemDefinitionAvailable(getGraphicItemDefinition('clock'), BROADCAST_GRAPHICS_HOST_CONTRACT)).toBe(false);
 		expect(isGraphicItemDefinitionAvailable(getGraphicItemDefinition('text'), BROADCAST_GRAPHICS_HOST_CONTRACT)).toBe(true);
+	});
+
+	it('offers the Feature Match host the base kinds and the three context-gated Definitions', () => {
+		// Clock, Player Life, and Game Wins are shared Definitions rather than a
+		// Feature Match hierarchy: the same compositor renders them, and only the
+		// declared context decides whether the palette offers them at all.
+		const definitions = graphicItemDefinitionsForHost(FEATURE_MATCH_OVERLAY_HOST_CONTRACT);
+
+		expect(definitions.map(definition => definition.kind))
+			.toEqual(['text', 'shape', 'media', 'group', 'clock', 'player-life', 'game-wins']);
+	});
+
+	it('offers the context-gated Definitions inside a Graphic Group too', () => {
+		// A Feature Match Layout composes a player cluster from a life total and a
+		// win indicator in one row, so the group palette gates on context exactly as
+		// the top-level palette does — it withholds only another Graphic Group.
+		const definitions = graphicGroupChildDefinitionsForHost(FEATURE_MATCH_OVERLAY_HOST_CONTRACT);
+
+		expect(definitions.map(definition => definition.kind))
+			.toEqual(['text', 'shape', 'media', 'clock', 'player-life', 'game-wins']);
+	});
+
+	it('requires the Feature Match context for the Clock, Player Life, and Game Wins Definitions', () => {
+		for (const kind of ['clock', 'player-life', 'game-wins'] as const)
+			expect(getGraphicItemDefinition(kind).requiredContext).toBe('feature-match');
+
+		// The base kinds compose from nothing a host has to supply, so they require
+		// no context and stay available to every host.
+		for (const kind of ['text', 'shape', 'media', 'group'] as const)
+			expect(getGraphicItemDefinition(kind).requiredContext).toBeUndefined();
+	});
+
+	it('creates a Clock Graphic Item that renders the session clock rather than a template', () => {
+		// A Clock reads the active Feature Match Session, so it carries typography and
+		// a Text Overflow Policy but no Graphic Text Template to author.
+		const item = getGraphicItemDefinition('clock').createDefault({
+			id: 'item-6',
+			label: 'Clock',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		});
+
+		expect(item).toMatchObject({ type: 'clock', visible: true, anchor: 'top-left', overflowPolicy: 'clip' });
+		expect(item.type === 'clock' && item.typography.textAlign).toBe('center');
+		expect(graphicItemSummary(item)).toBe('Feature Match clock');
+	});
+
+	it('creates Player Life and Game Wins Items for the first player by default', () => {
+		// The side lives on these two Definitions rather than in a token key: they
+		// render one player's live state rather than substituting a placeholder.
+		const life = getGraphicItemDefinition('player-life').createDefault({
+			id: 'item-7',
+			label: 'Life',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		});
+		const wins = getGraphicItemDefinition('game-wins').createDefault({
+			id: 'item-8',
+			label: 'Wins',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		});
+
+		expect(life).toMatchObject({ type: 'player-life', playerSide: 'player1', lifeAnimation: 'glow' });
+		expect(wins).toMatchObject({
+			type: 'game-wins',
+			playerSide: 'player1',
+			displayMode: 'boxes',
+			boxOrientation: 'horizontal',
+		});
+		expect(graphicItemSummary(life)).toBe('Player 1 life');
+		expect(graphicItemSummary(wins)).toBe('Player 1 wins • boxes');
+		expect(graphicItemSummary({ ...wins, playerSide: 'player2', displayMode: 'number' }))
+			.toBe('Player 2 wins • number');
+	});
+
+	it('gives a Game Wins box the canonical Shape Geometry rather than a bespoke radius', () => {
+		// The legacy widget carried its own border width and corner radius. A box is
+		// an ordinary painted surface, so it uses the Shape Geometry and Graphic
+		// Surface Style vocabulary every other kind already speaks.
+		const wins = getGraphicItemDefinition('game-wins').createDefault({
+			id: 'item-9',
+			label: 'Wins',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		});
+		if (wins.type !== 'game-wins')
+			throw new Error('expected a Game Wins Graphic Item');
+
+		expect(wins.boxGeometry.leftSlant).toBe(0);
+		expect(wins.boxGeometry.topLeft).toEqual({ treatment: 'rounded', size: 4 });
+		expect(wins.wonBoxSurfaceStyle.fill).toEqual({ type: 'solid', color: '#22c55e' });
 	});
 
 	it('creates a Text Graphic Item with base typography and a Text Overflow Policy', () => {

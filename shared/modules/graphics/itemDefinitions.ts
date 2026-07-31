@@ -1,3 +1,4 @@
+import type { PlayerSide } from '../../types/enums';
 import type {
 	GraphicFill,
 	GraphicItemConfig,
@@ -6,7 +7,7 @@ import type {
 	GraphicTypography,
 } from '../../types/graphics';
 import type { GraphicsContextKind, GraphicsHostContract } from './hostContract';
-import { shapeGeometrySummary, squareShapeGeometry } from './shapeGeometry';
+import { roundedShapeGeometry, shapeGeometrySummary, squareShapeGeometry } from './shapeGeometry';
 
 /**
  * Graphic Item Definitions: the application-owned contract for each Graphic
@@ -78,8 +79,13 @@ function surfaceSummary(style: GraphicSurfaceStyle | undefined): string {
 	return style ? graphicFillSummary(style.fill) : 'inherited style';
 }
 
+/** The side a context-gated Definition reads, as an author names it. */
+function playerSideLabel(side: PlayerSide): string {
+	return side === 'player1' ? 'Player 1' : 'Player 2';
+}
+
 const DEFINITIONS = {
-	text: {
+	'text': {
 		kind: 'text',
 		label: 'Text',
 		icon: 'i-lucide-type',
@@ -97,7 +103,7 @@ const DEFINITIONS = {
 		}),
 		summary: item => item.type === 'text' ? (item.text.trim() || 'Empty text') : 'Text',
 	},
-	shape: {
+	'shape': {
 		kind: 'shape',
 		label: 'Shape',
 		icon: 'i-lucide-square',
@@ -115,7 +121,7 @@ const DEFINITIONS = {
 			? `${surfaceSummary(item.surfaceStyle)} • ${shapeGeometrySummary(item.geometry)}`
 			: 'Shape',
 	},
-	media: {
+	'media': {
 		kind: 'media',
 		label: 'Media',
 		icon: 'i-lucide-image',
@@ -146,7 +152,7 @@ const DEFINITIONS = {
 			return `${item.mediaKind === 'silent-video' ? 'silent video' : 'image'} • ${item.fit}`;
 		},
 	},
-	group: {
+	'group': {
 		kind: 'group',
 		label: 'Group',
 		icon: 'i-lucide-group',
@@ -169,6 +175,85 @@ const DEFINITIONS = {
 		summary: item => item.type === 'group'
 			? `${item.arrangement} • ${item.children.length} items`
 			: 'Group',
+	},
+	'clock': {
+		kind: 'clock',
+		label: 'Clock',
+		icon: 'i-lucide-clock',
+		requiredContext: 'feature-match',
+		createDefault: options => ({
+			type: 'clock',
+			id: options.id,
+			label: options.label,
+			visible: true,
+			anchor: 'top-left',
+			...defaultRect(options),
+			// A clock is read at a glance from across a room and its width is stable,
+			// so it starts centred and clips rather than reflowing under a shrink.
+			typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, textAlign: 'center' },
+			overflowPolicy: 'clip',
+			minFontSize: 24,
+		}),
+		summary: () => 'Feature Match clock',
+	},
+	'player-life': {
+		kind: 'player-life',
+		label: 'Life',
+		icon: 'i-lucide-heart-pulse',
+		requiredContext: 'feature-match',
+		createDefault: options => ({
+			type: 'player-life',
+			id: options.id,
+			label: options.label,
+			visible: true,
+			anchor: 'top-left',
+			...defaultRect(options),
+			playerSide: 'player1',
+			typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, textAlign: 'center' },
+			overflowPolicy: 'clip',
+			minFontSize: 24,
+			lifeAnimation: 'glow',
+			lifeAnimationDurationMs: 420,
+			lifeAnimationAccentColor: '#ffffff',
+		}),
+		summary: item => item.type === 'player-life' ? `${playerSideLabel(item.playerSide)} life` : 'Life',
+	},
+	'game-wins': {
+		kind: 'game-wins',
+		label: 'Wins',
+		icon: 'i-lucide-trophy',
+		requiredContext: 'feature-match',
+		createDefault: options => ({
+			type: 'game-wins',
+			id: options.id,
+			label: options.label,
+			visible: true,
+			anchor: 'top-left',
+			...defaultRect(options),
+			playerSide: 'player1',
+			displayMode: 'boxes',
+			boxOrientation: 'horizontal',
+			boxWidth: 22,
+			boxHeight: 22,
+			boxGap: 6,
+			boxGeometry: roundedShapeGeometry(4),
+			// An unwon box reads as an empty outline and a won one as a filled pip,
+			// which is the distinction the indicator exists to make.
+			boxSurfaceStyle: {
+				fill: { type: 'solid', color: '#000000' },
+				fillOpacity: 0,
+				outline: { width: 2, color: '#ffffff', opacity: 1 },
+			},
+			wonBoxSurfaceStyle: {
+				fill: { type: 'solid', color: '#22c55e' },
+				fillOpacity: 1,
+				outline: { width: 2, color: '#ffffff', opacity: 1 },
+			},
+			typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, textAlign: 'center' },
+		}),
+		summary: item => item.type === 'game-wins'
+			? `${playerSideLabel(item.playerSide)} wins • ${item.displayMode}`
+			: 'Wins',
 	},
 } satisfies Record<GraphicItemKind, GraphicItemDefinition>;
 

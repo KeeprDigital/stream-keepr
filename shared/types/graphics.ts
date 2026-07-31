@@ -1,4 +1,5 @@
 import type { FeatureMatchOverlayFontId } from '../featureMatchOverlayFonts';
+import type { PlayerSide } from './enums';
 import type { GraphicFocalPosition, MediaGraphicItemFit } from './graphicItem';
 import type { GraphicAssetReference } from './graphicsAsset';
 
@@ -761,7 +762,12 @@ export type GraphicGroupJustify = typeof GRAPHIC_GROUP_JUSTIFY_VALUES[number];
  * can appear in another group's children.
  */
 export type GraphicGroupChildConfig
-	= TextGraphicItemConfig | ShapeGraphicItemConfig | MediaGraphicItemConfig;
+	= TextGraphicItemConfig
+		| ShapeGraphicItemConfig
+		| MediaGraphicItemConfig
+		| ClockGraphicItemConfig
+		| PlayerLifeGraphicItemConfig
+		| GameWinsGraphicItemConfig;
 
 /**
  * A structural Graphic Item that arranges its direct children as a row, column,
@@ -790,8 +796,102 @@ export interface GraphicGroupItemConfig extends GraphicItemConfigBase {
 	children: GraphicGroupChildConfig[];
 }
 
+/**
+ * The context-gated Graphic Items.
+ *
+ * Clock, Player Life, and Game Wins are shared Graphic Item Definitions that
+ * require the Feature Match context rather than a Feature Match-specific
+ * hierarchy: the same compositor lays them out, animates them, and paints their
+ * surfaces, and only the Host Contract's declared context decides whether the
+ * palette offers them. Each reads live Feature Match Session state instead of
+ * substituting a placeholder, which is why they exist at all — a Graphic Text
+ * Template resolves a value once per accepted change, and a ticking clock or a
+ * life total is exactly the collection- and time-shaped state `CONTEXT.md` says
+ * "require specialised Graphic Items".
+ *
+ * The player side lives on Player Life and Game Wins rather than in a token key,
+ * which is the mirror image of the Feature Match token catalogue's decision. A
+ * Text Graphic Item has no side because its template names one — `{player1Name}`
+ * — while these two render one player's state with nothing to name it in.
+ */
+
+/**
+ * How a Player Life Graphic Item marks a change to the life total it renders.
+ * The motion belongs to the Definition rather than to a Graphic Animation Recipe:
+ * it fires on a value change from the live session rather than on a lifecycle
+ * phase, which is not a thing the shared animation vocabulary expresses.
+ */
+export const PLAYER_LIFE_ANIMATION_VALUES = ['none', 'fade', 'pop', 'slide', 'glow'] as const;
+export type PlayerLifeAnimation = typeof PLAYER_LIFE_ANIMATION_VALUES[number];
+
+export const MIN_PLAYER_LIFE_ANIMATION_DURATION_MS = 100;
+export const MAX_PLAYER_LIFE_ANIMATION_DURATION_MS = 3000;
+
+/** A Graphic Item that renders the active Feature Match Session clock. */
+export interface ClockGraphicItemConfig extends GraphicItemConfigBase {
+	type: 'clock';
+	typography: GraphicTypography;
+	overflowPolicy: TextOverflowPolicy;
+	/** The author-set floor a `shrink` Text Overflow Policy shrinks to before ellipsis. */
+	minFontSize: number;
+	surfaceStyle?: GraphicSurfaceStyle;
+}
+
+/** A Graphic Item that renders one Player's life total. */
+export interface PlayerLifeGraphicItemConfig extends GraphicItemConfigBase {
+	type: 'player-life';
+	playerSide: PlayerSide;
+	typography: GraphicTypography;
+	overflowPolicy: TextOverflowPolicy;
+	minFontSize: number;
+	lifeAnimation: PlayerLifeAnimation;
+	lifeAnimationDurationMs: number;
+	/** The colour a `glow` or `slide` change animation tints; ignored by the others. */
+	lifeAnimationAccentColor: string;
+	surfaceStyle?: GraphicSurfaceStyle;
+}
+
+export const GAME_WINS_DISPLAY_MODE_VALUES = ['boxes', 'number'] as const;
+export type GameWinsDisplayMode = typeof GAME_WINS_DISPLAY_MODE_VALUES[number];
+
+export const GAME_WINS_BOX_ORIENTATION_VALUES = ['horizontal', 'vertical'] as const;
+export type GameWinsBoxOrientation = typeof GAME_WINS_BOX_ORIENTATION_VALUES[number];
+
+/**
+ * A Graphic Item that renders one Player's game-win indicators.
+ *
+ * A box is an ordinary painted surface: it carries a canonical Shape Geometry and
+ * two Graphic Surface Styles rather than the legacy widget's own border width and
+ * corner radius, so a cut-corner win box is authored with the same controls a
+ * Shape Graphic Item uses. The box count comes from the Match's best-of rather
+ * than from configuration, so a layout does not restate what the session knows.
+ */
+export interface GameWinsGraphicItemConfig extends GraphicItemConfigBase {
+	type: 'game-wins';
+	playerSide: PlayerSide;
+	displayMode: GameWinsDisplayMode;
+	boxOrientation: GameWinsBoxOrientation;
+	boxWidth: number;
+	boxHeight: number;
+	boxGap: number;
+	boxGeometry: ShapeGeometry;
+	/** A box this player has not yet won. */
+	boxSurfaceStyle: GraphicSurfaceStyle;
+	/** A box this player has won. */
+	wonBoxSurfaceStyle: GraphicSurfaceStyle;
+	/** Renders the win count while the display mode is `number`. */
+	typography: GraphicTypography;
+	surfaceStyle?: GraphicSurfaceStyle;
+}
+
 export type GraphicItemConfig
-	= TextGraphicItemConfig | ShapeGraphicItemConfig | MediaGraphicItemConfig | GraphicGroupItemConfig;
+	= TextGraphicItemConfig
+		| ShapeGraphicItemConfig
+		| MediaGraphicItemConfig
+		| GraphicGroupItemConfig
+		| ClockGraphicItemConfig
+		| PlayerLifeGraphicItemConfig
+		| GameWinsGraphicItemConfig;
 
 export type GraphicItemKind = GraphicItemConfig['type'];
 

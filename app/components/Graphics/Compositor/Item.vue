@@ -21,6 +21,14 @@ import { fitGraphicTextFontSize } from '~/modules/graphics/textFit';
  *
  * A Graphic Group renders its children through this same component. Graphic
  * Groups do not nest, so that recursion is one level deep.
+ *
+ * The context-gated kinds render here too rather than in a Feature Match
+ * hierarchy. A Clock and a Player Life are text whose string the host resolved, so
+ * they take the same paragraph, typography, and `shrink` measurement a Text
+ * Graphic Item does. A Game Wins indicator is either that same text or a row of
+ * painted Shape Geometry boxes. Only the life-change animation is local, because
+ * it fires on a value arriving from the live session rather than on a lifecycle
+ * phase the render model projects.
  */
 const props = defineProps<{ render: GraphicItemRenderDescriptor }>();
 
@@ -76,6 +84,48 @@ const surface = computed(() => props.render.surface);
 const textSegments = computed<GraphicTextRenderSegment[]>(() =>
 	props.render.textSegments ?? [{ text: props.render.text ?? '' }],
 );
+
+/**
+ * Whether this item paints text at all.
+ *
+ * Asked of the model rather than of the kind: a Game Wins indicator is text in its
+ * `number` display mode and painted boxes in its `boxes` one, so the kind alone
+ * does not answer it, while the presence of a resolved typography does.
+ */
+const rendersText = computed(() => props.render.textStyle !== undefined);
+
+/**
+ * The life-change animation, restarted by re-keying the element.
+ *
+ * A CSS animation only runs when the element is new, so the key is what makes a
+ * second change to the same total animate again. It deliberately does not tick on
+ * mount: an output joining mid-match would otherwise flash every life total the
+ * moment it connected.
+ */
+const lifeChange = computed(() => props.render.lifeChange);
+const lifeAnimationKey = ref(0);
+const lifeSettled = ref(false);
+
+watch(() => props.render.text, (next, previous) => {
+	if (!lifeSettled.value) {
+		lifeSettled.value = true;
+		return;
+	}
+	if (next !== previous && lifeChange.value && lifeChange.value.animation !== 'none')
+		lifeAnimationKey.value += 1;
+});
+
+const lifeClass = computed(() => {
+	const animation = lifeChange.value?.animation;
+	return animation && animation !== 'none' ? `graphics-compositor-item--life-${animation}` : undefined;
+});
+
+const lifeStyle = computed(() => lifeChange.value
+	? {
+			'--life-animation-duration': `${lifeChange.value.durationMs}ms`,
+			'--life-animation-accent': lifeChange.value.accentColor,
+		}
+	: undefined);
 const viewBox = computed(() => surface.value
 	? `0 0 ${Math.max(surface.value.width, 0)} ${Math.max(surface.value.height, 0)}`
 	: '0 0 0 0');
@@ -219,7 +269,13 @@ watch(
 			rendered text, so the `shrink` measurement above still measures what the
 			viewer sees.
 		-->
-		<p v-if="render.kind === 'text'" ref="textElement" :style="textStyle">
+		<p
+			v-if="rendersText"
+			:key="lifeAnimationKey"
+			ref="textElement"
+			:class="lifeClass"
+			:style="{ ...textStyle, ...lifeStyle }"
+		>
 			<span
 				v-for="(segment, index) in textSegments"
 				:key="index"
@@ -227,6 +283,61 @@ watch(
 				:data-graphic-input-key="segment.inputKey"
 			>{{ segment.text }}</span>
 		</p>
+
+		<!--
+			A game-win indicator's boxes. Each is an ordinary painted Shape Geometry, so
+			a won box differs from an unwon one only by the Graphic Surface Style the
+			model resolved for it.
+		-->
+		<div
+			v-for="(box, index) in render.winBoxes"
+			:key="`box-${index}`"
+			class="graphics-compositor-item__win-box"
+			:data-game-win="box.won ? 'won' : 'pending'"
+			:style="box.style"
+		>
+			<svg
+				:viewBox="`0 0 ${Math.max(box.surface.width, 0)} ${Math.max(box.surface.height, 0)}`"
+				preserveAspectRatio="none"
+				aria-hidden="true"
+				focusable="false"
+			>
+				<defs>
+					<linearGradient
+						v-if="box.surface.fill.gradient"
+						:id="box.surface.fill.gradient.id"
+						:x1="box.surface.fill.gradient.x1"
+						:y1="box.surface.fill.gradient.y1"
+						:x2="box.surface.fill.gradient.x2"
+						:y2="box.surface.fill.gradient.y2"
+					>
+						<stop
+							v-for="(stop, stopIndex) in box.surface.fill.gradient.stops"
+							:key="stopIndex"
+							:offset="stop.offset"
+							:stop-color="stop.color"
+							:stop-opacity="stop.opacity"
+						/>
+					</linearGradient>
+					<clipPath v-if="box.surface.outline" :id="box.surface.outline.clipId">
+						<path :d="box.surface.path" />
+					</clipPath>
+				</defs>
+				<path
+					:d="box.surface.path"
+					:fill="box.surface.fill.color"
+					:fill-opacity="box.surface.fill.opacity"
+				/>
+				<path
+					v-if="box.surface.outline"
+					:d="box.surface.path"
+					fill="none"
+					:stroke="box.surface.outline.color"
+					:stroke-width="box.surface.outline.width * 2"
+					:clip-path="`url(#${box.surface.outline.clipId})`"
+				/>
+			</svg>
+		</div>
 
 		<!--
 			A Media Graphic Item renders nothing at all without resolvable content: an
@@ -282,5 +393,87 @@ watch(
 	display: block;
 	overflow: visible;
 	pointer-events: none;
+}
+
+.graphics-compositor-item__win-box > svg {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	display: block;
+	overflow: visible;
+	pointer-events: none;
+}
+
+/*
+ * A life total's change animation. It marks a value arriving from the live
+ * session, which is why it lives here rather than in a Graphic Animation Recipe:
+ * the shared vocabulary's phases are lifecycle positions, and a life total
+ * changing is not one of them.
+ */
+.graphics-compositor-item--life-fade {
+	animation: graphics-life-fade var(--life-animation-duration, 420ms) ease-out both;
+}
+
+.graphics-compositor-item--life-pop {
+	animation: graphics-life-pop var(--life-animation-duration, 420ms) cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.graphics-compositor-item--life-slide {
+	animation: graphics-life-slide var(--life-animation-duration, 420ms) cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.graphics-compositor-item--life-glow {
+	animation: graphics-life-glow var(--life-animation-duration, 420ms) ease-out both;
+}
+
+@keyframes graphics-life-fade {
+	0% {
+		opacity: 0.35;
+	}
+	100% {
+		opacity: 1;
+	}
+}
+
+@keyframes graphics-life-pop {
+	0% {
+		transform: scale(0.92);
+		opacity: 0.75;
+	}
+	55% {
+		transform: scale(1.08);
+		opacity: 1;
+	}
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+
+@keyframes graphics-life-slide {
+	0% {
+		transform: translateY(0.18em);
+		opacity: 0;
+	}
+	100% {
+		transform: translateY(0);
+		opacity: 1;
+	}
+}
+
+@keyframes graphics-life-glow {
+	0% {
+		text-shadow: 0 0 0 transparent;
+		filter: brightness(1);
+	}
+	35% {
+		text-shadow: 0 0 0.35em var(--life-animation-accent, #fff);
+		filter: brightness(1.25);
+	}
+	100% {
+		text-shadow: 0 0 0 transparent;
+		filter: brightness(1);
+	}
 }
 </style>

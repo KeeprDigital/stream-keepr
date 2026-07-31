@@ -2,6 +2,8 @@ import type { CSSProperties } from 'vue';
 import type { GraphicAnimationOwnerValues, GraphicAnimationValues, ShapeGeometrySize } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
+	ClockGraphicItemConfig,
+	GameWinsGraphicItemConfig,
 	GraphicAnchorPoint,
 	GraphicAnimationPhase,
 	GraphicGroupChildConfig,
@@ -15,6 +17,8 @@ import type {
 	GraphicRevealEdge,
 	GraphicSurfaceStyle,
 	MediaGraphicItemConfig,
+	PlayerLifeAnimation,
+	PlayerLifeGraphicItemConfig,
 	ShapeGeometry,
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
@@ -196,6 +200,23 @@ export interface GraphicsCompositionRenderModelInput {
 	 * rather than a fabricated one.
 	 */
 	substituteAuthoredDefaults?: boolean;
+	/**
+	 * The placeholder declarations a Graphic Text Template resolves against, when
+	 * the host supplies them rather than the composition declaring them.
+	 *
+	 * A Feature Match Overlay declares no Graphic Inputs: its Host Contract carries
+	 * a fixed token catalogue instead, and these are that catalogue in the shape the
+	 * shared mechanism already resolves. Omitted keeps the Broadcast Graphics
+	 * behaviour of reading each graphic's own `inputs`, so the host that declares
+	 * nothing is the one that has to say so.
+	 */
+	textDeclarations?: readonly GraphicInputDeclaration[];
+	/**
+	 * The live Feature Match state the context-gated Graphic Items read. Only a host
+	 * declaring the Feature Match context supplies one, and only its Screens can
+	 * carry an item that reads it.
+	 */
+	featureMatch?: GraphicsFeatureMatchContext;
 	/** Editor-only selection and item guides. */
 	itemGuides?: boolean;
 	/** Editor-only advisory action-safe and title-safe guides. */
@@ -299,6 +320,45 @@ export interface GraphicMediaRenderDescriptor {
 	videoCompatibility?: 'all-supported' | 'chromium-transparency';
 }
 
+/** One Player's live Feature Match Session state, as the context-gated kinds read it. */
+export interface GraphicsFeatureMatchPlayerState {
+	/** Absent while the session holds no total, which renders as an empty item. */
+	lifeTotal: number | null;
+	gameWins: number;
+}
+
+/**
+ * The live Feature Match state the context-gated Graphic Items read.
+ *
+ * Supplied by the host rather than fetched here, so the model stays pure and every
+ * Screen Output derives the same frame from the same resolved snapshot. Absent
+ * means no host declared the Feature Match context — a Broadcast Graphics Screen
+ * cannot offer these kinds at all, so nothing on it can need one — and the kinds
+ * render their empty state rather than throwing.
+ */
+export interface GraphicsFeatureMatchContext {
+	/** The active Feature Match Session clock, already formatted by its owner. */
+	clockDisplayTime: string;
+	player1: GraphicsFeatureMatchPlayerState;
+	player2: GraphicsFeatureMatchPlayerState;
+	/** The Match length, which decides how many win boxes an indicator draws. */
+	bestOf: number;
+}
+
+/** One game-win indicator box: a painted Shape Geometry that is filled or not. */
+export interface GraphicWinBoxRenderDescriptor {
+	won: boolean;
+	style: CSSProperties;
+	surface: GraphicSurfaceRenderDescriptor;
+}
+
+/** How a Player Life Graphic Item marks a change to the total it renders. */
+export interface GraphicLifeChangeRenderDescriptor {
+	animation: PlayerLifeAnimation;
+	durationMs: number;
+	accentColor: string;
+}
+
 export interface GraphicItemRenderDescriptor {
 	id: string;
 	label: string;
@@ -319,6 +379,14 @@ export interface GraphicItemRenderDescriptor {
 	shrink?: GraphicTextShrinkBounds;
 	/** Present for Media Graphic Items. */
 	media?: GraphicMediaRenderDescriptor;
+	/**
+	 * Present for a Player Life Graphic Item. The component re-runs it whenever
+	 * `text` changes, because the change is a new value from the live session
+	 * rather than a lifecycle phase the shared animation vocabulary projects.
+	 */
+	lifeChange?: GraphicLifeChangeRenderDescriptor;
+	/** Present for a Game Wins Graphic Item in `boxes` display mode, in play order. */
+	winBoxes?: GraphicWinBoxRenderDescriptor[];
 	/** Present for Graphic Groups: the group's direct children, back to front. */
 	children?: GraphicItemRenderDescriptor[];
 	/**
@@ -521,16 +589,13 @@ function elementScope(graphicId: string, itemId: string): string {
  * twice its authored width and clipped to the path, so it hugs every corner
  * treatment and edge slant and never leaves the item's authored bounds.
  */
-function surfaceDescriptor(
+function paintedSurface(
 	output: ScreenOutput,
 	scope: string,
 	size: { width: number; height: number },
 	geometry: ShapeGeometry,
-	style: GraphicSurfaceStyle | undefined,
-): GraphicSurfaceRenderDescriptor | undefined {
-	if (!style)
-		return undefined;
-
+	style: GraphicSurfaceStyle,
+): GraphicSurfaceRenderDescriptor {
 	const outline = style.outline && style.outline.width > 0
 		? {
 				color: paintColour(output, style.outline.color),
@@ -546,6 +611,17 @@ function surfaceDescriptor(
 		fill: fillDescriptor(output, style, scope),
 		outline,
 	};
+}
+
+/** The same surface, for the kinds whose Graphic Surface Style is optional. */
+function surfaceDescriptor(
+	output: ScreenOutput,
+	scope: string,
+	size: { width: number; height: number },
+	geometry: ShapeGeometry,
+	style: GraphicSurfaceStyle | undefined,
+): GraphicSurfaceRenderDescriptor | undefined {
+	return style ? paintedSurface(output, scope, size, geometry, style) : undefined;
 }
 
 /** A glow is a drop-shadow of the element's own painted alpha. */
@@ -665,9 +741,18 @@ export function graphicTextClampLines(height: number, fontSize: number, lineHeig
  * overflowing text off, while `ellipsis` and `shrink` clamp to whole lines and
  * end the last one with an ellipsis.
  */
+/**
+ * What painting text needs from the item painting it.
+ *
+ * Structural rather than one kind: a Clock and a Player Life render text through
+ * exactly this vocabulary without being Text Graphic Items, and neither has a
+ * Graphic Text Template for a `TextGraphicItemConfig` to promise.
+ */
+export type GraphicTextStyled = Pick<TextGraphicItemConfig, 'typography' | 'overflowPolicy' | 'height'>;
+
 export function graphicTextStyle(
 	output: ScreenOutput,
-	item: TextGraphicItemConfig,
+	item: GraphicTextStyled,
 	fontSize = item.typography.fontSize,
 ): CSSProperties {
 	const typography = item.typography;
@@ -879,7 +964,7 @@ function textDescriptor(
 	item: TextGraphicItemConfig,
 	placement: CSSProperties,
 	surfaceStyle: GraphicSurfaceStyle | undefined,
-	inputs: GraphicTextTemplateContext,
+	inputs: GraphicItemContentContext,
 ): GraphicItemRenderDescriptor {
 	const segments = renderGraphicTextTemplate(item.text, inputs.declarations, inputs.values)
 		.map(segment => ({
@@ -902,6 +987,130 @@ function textDescriptor(
 		shrink: item.overflowPolicy === 'shrink'
 			? { minFontSize: item.minFontSize, maxFontSize: item.typography.fontSize }
 			: undefined,
+	};
+}
+
+/**
+ * A Clock or Player Life Graphic Item: text the host resolves rather than a
+ * Graphic Text Template the author writes.
+ *
+ * It reuses every part of a Text Graphic Item's paint — surface, typography box,
+ * Text Overflow Policy clamping, shrink bounds — because these kinds differ from a
+ * Text Graphic Item only in where their string comes from. One segment rather than
+ * a run list: there is no placeholder to style when nothing was substituted.
+ */
+function resolvedTextDescriptor(
+	output: ScreenOutput,
+	scope: string,
+	item: ClockGraphicItemConfig | PlayerLifeGraphicItemConfig,
+	text: string,
+	placement: CSSProperties,
+	surfaceStyle: GraphicSurfaceStyle | undefined,
+): GraphicItemRenderDescriptor {
+	return {
+		id: item.id,
+		label: item.label,
+		kind: item.type,
+		style: { ...placement, ...textBoxStyle(), filter: glowFilter(output, surfaceStyle) },
+		surface: surfaceDescriptor(output, scope, item, squareShapeGeometry(), surfaceStyle),
+		textStyle: graphicTextStyle(output, item),
+		text,
+		textSegments: [{ text }],
+		shrink: item.overflowPolicy === 'shrink'
+			? { minFontSize: item.minFontSize, maxFontSize: item.typography.fontSize }
+			: undefined,
+		lifeChange: item.type === 'player-life'
+			? {
+					animation: item.lifeAnimation,
+					durationMs: item.lifeAnimationDurationMs,
+					accentColor: paintColour(output, item.lifeAnimationAccentColor),
+				}
+			: undefined,
+	};
+}
+
+/** A life total as it reads on air: an absent one renders nothing rather than a zero. */
+function lifeTotalText(state: GraphicsFeatureMatchPlayerState | undefined): string {
+	const total = state?.lifeTotal;
+	return total === null || total === undefined ? '' : String(total);
+}
+
+/**
+ * How many win boxes an indicator draws, and which are filled.
+ *
+ * The count comes from the Match's own length rather than from configuration, so a
+ * best-of-five Match grows the indicator without the layout being re-authored.
+ */
+function winBoxStates(
+	item: GameWinsGraphicItemConfig,
+	featureMatch: GraphicsFeatureMatchContext | undefined,
+): boolean[] {
+	const wins = Math.max(0, Math.floor(featureMatch?.[item.playerSide].gameWins ?? 0));
+	const bestOf = Math.max(1, Math.floor(featureMatch?.bestOf ?? 3));
+	return Array.from({ length: Math.ceil(bestOf / 2) }, (_, index) => index < wins);
+}
+
+/**
+ * A Game Wins Graphic Item.
+ *
+ * The `number` display mode is text and paints exactly like one. The `boxes` mode
+ * lays its boxes out along the authored orientation and paints each as an ordinary
+ * Shape Geometry surface, so a won box differs from an unwon one only by which
+ * Graphic Surface Style it resolves.
+ */
+function gameWinsDescriptor(
+	output: ScreenOutput,
+	scope: string,
+	item: GameWinsGraphicItemConfig,
+	placement: CSSProperties,
+	surfaceStyle: GraphicSurfaceStyle | undefined,
+	featureMatch: GraphicsFeatureMatchContext | undefined,
+): GraphicItemRenderDescriptor {
+	const states = winBoxStates(item, featureMatch);
+	const base: GraphicItemRenderDescriptor = {
+		id: item.id,
+		label: item.label,
+		kind: 'game-wins',
+		surface: surfaceDescriptor(output, scope, item, squareShapeGeometry(), surfaceStyle),
+		style: { ...placement, filter: glowFilter(output, surfaceStyle) },
+	};
+
+	if (item.displayMode === 'number') {
+		const text = String(states.filter(Boolean).length);
+		return {
+			...base,
+			style: { ...base.style, ...textBoxStyle() },
+			// A win count is one short number in a box sized for it, so it clips
+			// rather than reflowing: there is no Text Overflow Policy to author.
+			textStyle: graphicTextStyle(output, { ...item, overflowPolicy: 'clip' }),
+			text,
+			textSegments: [{ text }],
+		};
+	}
+
+	const size = { width: item.boxWidth, height: item.boxHeight };
+	return {
+		...base,
+		style: {
+			...base.style,
+			display: 'flex',
+			flexDirection: item.boxOrientation === 'vertical' ? 'column' : 'row',
+			alignItems: 'center',
+			justifyContent: 'center',
+			gap: `${item.boxGap}px`,
+			overflow: 'hidden',
+		},
+		winBoxes: states.map((won, index) => ({
+			won,
+			style: { ...size, flex: '0 0 auto', position: 'relative' },
+			surface: paintedSurface(
+				output,
+				`${scope}-box-${index}`,
+				size,
+				item.boxGeometry,
+				won ? item.wonBoxSurfaceStyle : item.boxSurfaceStyle,
+			),
+		})),
 	};
 }
 
@@ -1002,9 +1211,29 @@ function mediaItemDescriptor(
 }
 
 /** What one Broadcast Graphic's Graphic Text Templates resolve their placeholders from. */
-interface GraphicTextTemplateContext {
+/**
+ * Everything one Broadcast Graphic's items resolve their content from.
+ *
+ * The declarations and values answer a Graphic Text Template's placeholders, and
+ * come either from the graphic's own Graphic Inputs or from the host's token
+ * catalogue — the model does not care which, because a host token is exactly a
+ * text declaration whose value the host supplies. The Feature Match state answers
+ * the context-gated kinds, which read live session state instead.
+ */
+interface GraphicItemContentContext {
 	declarations: readonly GraphicInputDeclaration[];
 	values: Readonly<Record<string, GraphicInputValue>>;
+	featureMatch?: GraphicsFeatureMatchContext;
+}
+
+/** What a Clock or Player Life Graphic Item renders, given the host's session state. */
+function contextText(
+	item: ClockGraphicItemConfig | PlayerLifeGraphicItemConfig,
+	featureMatch: GraphicsFeatureMatchContext | undefined,
+): string {
+	return item.type === 'clock'
+		? featureMatch?.clockDisplayTime ?? ''
+		: lifeTotalText(featureMatch?.[item.playerSide]);
 }
 
 function childDescriptor(
@@ -1013,7 +1242,7 @@ function childDescriptor(
 	group: GraphicGroupItemConfig,
 	child: GraphicGroupChildConfig,
 	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
-	inputs: GraphicTextTemplateContext,
+	inputs: GraphicItemContentContext,
 	placement: CSSProperties,
 ): GraphicItemRenderDescriptor {
 	const scope = elementScope(graphicId, child.id);
@@ -1028,6 +1257,20 @@ function childDescriptor(
 
 	if (child.type === 'text')
 		return textDescriptor(output, scope, child, placement, surfaceStyle, inputs);
+
+	if (child.type === 'clock' || child.type === 'player-life') {
+		return resolvedTextDescriptor(
+			output,
+			scope,
+			child,
+			contextText(child, inputs.featureMatch),
+			placement,
+			surfaceStyle,
+		);
+	}
+
+	if (child.type === 'game-wins')
+		return gameWinsDescriptor(output, scope, child, placement, surfaceStyle, inputs.featureMatch);
 
 	return {
 		id: child.id,
@@ -1084,7 +1327,7 @@ function itemDescriptor(
 	graphicId: string,
 	item: GraphicItemConfig,
 	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
-	inputs: GraphicTextTemplateContext,
+	inputs: GraphicItemContentContext,
 	context: GraphicsItemAnimationContext,
 ): GraphicItemRenderDescriptor {
 	const motion = context.motionOf(item, context.staggerOffset, context.parent);
@@ -1153,7 +1396,7 @@ function paintedItemDescriptor(
 	graphicId: string,
 	item: GraphicItemConfig,
 	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
-	inputs: GraphicTextTemplateContext,
+	inputs: GraphicItemContentContext,
 	context: GraphicsItemAnimationContext,
 	placement: CSSProperties,
 ): GraphicItemRenderDescriptor {
@@ -1175,6 +1418,20 @@ function paintedItemDescriptor(
 			surface: surfaceDescriptor(output, scope, item, item.geometry, item.surfaceStyle),
 		};
 	}
+
+	if (item.type === 'clock' || item.type === 'player-life') {
+		return resolvedTextDescriptor(
+			output,
+			scope,
+			item,
+			contextText(item, inputs.featureMatch),
+			placement,
+			item.surfaceStyle,
+		);
+	}
+
+	if (item.type === 'game-wins')
+		return gameWinsDescriptor(output, scope, item, placement, item.surfaceStyle, inputs.featureMatch);
 
 	return {
 		id: item.id,
@@ -1206,7 +1463,7 @@ function groupChildDescriptor(
 	group: GraphicGroupItemConfig,
 	child: GraphicGroupChildConfig,
 	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
-	inputs: GraphicTextTemplateContext,
+	inputs: GraphicItemContentContext,
 	context: GraphicsItemAnimationContext,
 ): GraphicItemRenderDescriptor {
 	// A child's own delay is offset by its group's stagger, on top of whatever offset the
@@ -1277,7 +1534,7 @@ interface GraphicsItemAnimationContext {
 	crossing?: (ownerId: string) => boolean;
 	/** The rendering being replaced: its Graphic Input values, and its half of the motion. */
 	outgoing?: {
-		inputs: GraphicTextTemplateContext;
+		inputs: GraphicItemContentContext;
 		motionOf: GraphicsItemAnimationContext['motionOf'];
 	};
 }
@@ -1398,12 +1655,19 @@ const GROUP_CONTENT_SEPARATOR = '\u001F';
  * What one owner renders from the current Graphic Input values, as a string that
  * changes exactly when its rendered content does.
  *
- * Only a Graphic Text Template reads Graphic Input values today, so only a Text
- * Graphic Item's content can change under a graphic that is already on air — and a
- * Graphic Group's content is its children's. A Shape or Media Graphic Item renders
- * the same thing whatever the values are, which is why an update animation is not
- * offered to it here: an update recipe runs when *that owner's* rendered content
- * changes, and its content did not.
+ * Only a Graphic Text Template reads Graphic Input values, so only a Text Graphic
+ * Item's content can change under a graphic that is already on air — and a Graphic
+ * Group's content is its children's. A Shape or Media Graphic Item renders the same
+ * thing whatever the values are, which is why an update animation is not offered to
+ * it here: an update recipe runs when *that owner's* rendered content changes, and
+ * its content did not.
+ *
+ * The context-gated kinds answer the same way, and for a stronger reason than
+ * "their content did not change": their content changes constantly, but from the
+ * live Feature Match Session rather than from an acceptance. An update phase exists
+ * to animate one atomically accepted set of Graphic Input changes, and only a host
+ * that declares Graphic Inputs has acceptances at all — so the host that can carry
+ * a ticking clock is exactly the host that never enters an update phase.
  */
 function renderedContent(
 	owner: GraphicItemConfig | GraphicGroupChildConfig,
@@ -1542,14 +1806,18 @@ export function resolveGraphicsCompositionRenderModel(
 			background: screenOutputCanvasBackground(input.output),
 		},
 		graphics: composed.map((graphic) => {
-			const declarations = graphic.inputs ?? [];
-			const inputs: GraphicTextTemplateContext = {
+			// A host that supplies its own declarations supplies all of them: a
+			// Feature Match Overlay's tokens are not a graphic's Graphic Inputs plus
+			// extras, they are the whole vocabulary a template may name.
+			const declarations = input.textDeclarations ?? graphic.inputs ?? [];
+			const inputs: GraphicItemContentContext = {
 				declarations,
 				values: resolvedInputValues(
 					declarations,
 					input.inputValues?.[graphic.id],
 					input.substituteAuthoredDefaults ?? false,
 				),
+				featureMatch: input.featureMatch,
 			};
 			const canvas = { width: input.canvasWidth, height: input.canvasHeight };
 			const projection = input.animation?.[graphic.id];
@@ -1560,7 +1828,7 @@ export function resolveGraphicsCompositionRenderModel(
 			const outgoingValues = projection?.phase === 'update'
 				? input.outgoingInputValues?.[graphic.id]
 				: undefined;
-			const outgoingInputs: GraphicTextTemplateContext = {
+			const outgoingInputs: GraphicItemContentContext = {
 				declarations,
 				// Substitution follows the same rule as the incoming rendering: the pair is
 				// two renderings of one graphic, so an authored default standing in on one
@@ -1571,6 +1839,7 @@ export function resolveGraphicsCompositionRenderModel(
 					outgoingValues ?? {},
 					input.substituteAuthoredDefaults ?? false,
 				),
+				featureMatch: input.featureMatch,
 			};
 			const crossTransition = outgoingValues
 				? updateCrossTransition(graphic, declarations, inputs.values, outgoingInputs.values)
@@ -1590,7 +1859,7 @@ export function resolveGraphicsCompositionRenderModel(
 			const style = motionStyle(graphicMotion, canvas, 0, 'top-left');
 
 			const buildItems = (
-				values: GraphicTextTemplateContext,
+				values: GraphicItemContentContext,
 				context: (item: GraphicItemConfig) => GraphicsItemAnimationContext,
 				pairing: GraphicsItemAnimationContext['outgoing'],
 			) => graphic.items
