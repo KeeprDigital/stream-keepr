@@ -166,6 +166,9 @@ It uses the Template Package principles of data-only contents, strict validation
 The first import preserves the packaged Style Set identity and revision; an exact identity, revision, and content hash is already installed.
 A newer related revision may explicitly update the installed Style Set through its ordinary publish and affected-template review flow, while an older revision never silently downgrades it.
 The same identity and revision with different content is a conflict, and any related or conflicting package may instead install as an independent copy with a new identity; imports never field-merge Style Sets.
+A package carries the published revision frozen whole, so a Graphic Style Set that has never been published has nothing to export.
+An installed Style Set that has never been published, or that has unpublished draft changes, is a working draft rather than a revision a package can relate to, so an import over it is refused rather than merged and the independent copy is offered instead.
+An independent copy is published at its own first revision, and the packaged identity and revision travel with it only as the import's own report.
 
 **Template Package**:
 A single-template portable artifact used to transfer either one Broadcast Graphic Template or one Feature Match Layout Template.

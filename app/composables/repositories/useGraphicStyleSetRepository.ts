@@ -9,6 +9,11 @@ import type {
 	GraphicStyleUpdateDecision,
 	GraphicStyleUpdateReview,
 } from '~~/shared/types/graphicStyleSet';
+import type {
+	GraphicStyleSetPackageInstallation,
+	GraphicStyleSetPackagePreflightReport,
+	GraphicStyleSetPackageResolution,
+} from '~~/shared/types/graphicStyleSetPackage';
 
 /**
  * HTTP adapter for the Graphic Style Set library.
@@ -120,6 +125,61 @@ export function useGraphicStyleSetRepository() {
 		});
 	};
 
+	/**
+	 * Where one Graphic Style Set's `.skstyle` package is served from.
+	 *
+	 * A URL rather than a fetch, because the browser downloading it directly is the
+	 * whole point: a package is a file an author keeps, and pulling it through
+	 * JavaScript to hand it straight back to a download gains nothing.
+	 */
+	const packageUrl = (styleSetId: string): string => `${library}/${styleSetId}/package`;
+
+	/**
+	 * Inspect a received `.skstyle` package without installing anything.
+	 *
+	 * Safe to repeat, and the only way to learn what an install would do. The report's
+	 * fingerprint is what {@link installPackage} is bound to.
+	 */
+	const inspectPackage = async (
+		file: File,
+		resolution: GraphicStyleSetPackageResolution = 'preserve-identity',
+	): Promise<GraphicStyleSetPackagePreflightReport> => {
+		return await $fetch<GraphicStyleSetPackagePreflightReport>(`${library}/packages/preflight`, {
+			method: 'POST',
+			headers: apiHeaders.getHeaders(),
+			query: { resolution, sourceFileName: file.name },
+			body: file,
+		});
+	};
+
+	/**
+	 * Install a received `.skstyle` package.
+	 *
+	 * The bytes travel again rather than being staged: a Style Set package is two small
+	 * JSON documents, and re-deriving the report from the exact bytes being installed is
+	 * a stronger guarantee than reading a stored one back. The fingerprint is what is
+	 * being accepted — a report that has since changed is a different proposal, and this
+	 * confirmation does not carry over to it.
+	 */
+	const installPackage = async (
+		file: File,
+		options: {
+			resolution?: GraphicStyleSetPackageResolution;
+			fingerprint?: string;
+		} = {},
+	): Promise<GraphicStyleSetPackageInstallation> => {
+		return await $fetch<GraphicStyleSetPackageInstallation>(`${library}/packages`, {
+			method: 'POST',
+			headers: apiHeaders.getHeaders(),
+			query: {
+				resolution: options.resolution ?? 'preserve-identity',
+				sourceFileName: file.name,
+				...(options.fingerprint ? { fingerprint: options.fingerprint } : {}),
+			},
+			body: file,
+		});
+	};
+
 	return {
 		list,
 		get,
@@ -130,5 +190,8 @@ export function useGraphicStyleSetRepository() {
 		remove,
 		reviewTemplateUpdate,
 		applyTemplateUpdate,
+		packageUrl,
+		inspectPackage,
+		installPackage,
 	};
 }

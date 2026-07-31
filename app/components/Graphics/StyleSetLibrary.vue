@@ -8,6 +8,10 @@ import type {
 	GraphicStyleSetResponse,
 	GraphicStyleSetSummary,
 } from '~~/shared/types/graphicStyleSet';
+import type {
+	GraphicStyleSetPackagePreflightReport,
+	GraphicStyleSetPackageResolution,
+} from '~~/shared/types/graphicStyleSetPackage';
 import {
 	createGraphicStyleEntry,
 	detachGraphicStyleRefs,
@@ -322,6 +326,123 @@ function link(styleSet: GraphicStyleSetSummary) {
 	});
 }
 
+/* ────────────────────────────────────────────────
+ * Graphic Style Set Packages
+ * ──────────────────────────────────────────────── */
+
+const importFileInput = useTemplateRef<HTMLInputElement>('importFileInput');
+const importing = ref(false);
+/**
+ * The received package and what preflight concluded about it.
+ *
+ * The file is held beside the report because installing sends the bytes again: nothing
+ * is staged, so the confirmation is proved against the exact archive the report was
+ * derived from rather than against a stored copy of it.
+ */
+const pendingImport = ref<{
+	file: File;
+	resolution: GraphicStyleSetPackageResolution;
+	report: GraphicStyleSetPackagePreflightReport;
+} | null>(null);
+
+const importIssues = computed(() => pendingImport.value?.report.issues ?? []);
+const importRejected = computed(() => pendingImport.value?.report.outcome === 'rejected');
+const importAwaitingConfirmation = computed(() =>
+	pendingImport.value?.report.outcome === 'requires-confirmation',
+);
+/**
+ * Whether an independent copy is worth offering.
+ *
+ * Only for a package this installation refused because of how it relates to what is
+ * already here. A malformed archive, an unreadable document, or a font this
+ * installation does not have is no more installable as a copy than as an update, and
+ * offering one would invite an author to retry something that cannot work.
+ */
+const RESOLVABLE_BY_COPY = new Set([
+	'graphic-style-set-revision-conflict',
+	'graphic-style-set-revision-superseded',
+	'graphic-style-set-draft-diverged',
+]);
+const importResolvableAsCopy = computed(() =>
+	pendingImport.value?.resolution === 'preserve-identity'
+	&& importIssues.value.some(issue => RESOLVABLE_BY_COPY.has(issue.code)),
+);
+
+function dismissImport() {
+	pendingImport.value = null;
+}
+
+async function receivePackage(file: File, resolution: GraphicStyleSetPackageResolution) {
+	if (!canAuthor.value)
+		return;
+	importing.value = true;
+	pendingImport.value = null;
+	try {
+		const report = await repository.inspectPackage(file, resolution);
+		error.value = null;
+		if (report.outcome !== 'ready') {
+			// Rejected, or paused for the one confirmation it is entitled to ask for.
+			pendingImport.value = { file, resolution, report };
+			return;
+		}
+		await repository.installPackage(file, { resolution });
+		emit('published');
+		await refresh();
+	}
+	catch (caught) {
+		error.value = failureMessage(caught);
+	}
+	finally {
+		importing.value = false;
+	}
+}
+
+async function confirmImport() {
+	const pending = pendingImport.value;
+	if (!canAuthor.value || !pending)
+		return;
+	importing.value = true;
+	try {
+		await repository.installPackage(pending.file, {
+			resolution: pending.resolution,
+			fingerprint: pending.report.fingerprint,
+		});
+		pendingImport.value = null;
+		error.value = null;
+		emit('published');
+		await refresh();
+	}
+	catch (caught) {
+		error.value = failureMessage(caught);
+	}
+	finally {
+		importing.value = false;
+	}
+}
+
+/**
+ * Ask for the same package again as an independent copy.
+ *
+ * A fresh report rather than a re-decision, because the two resolutions are different
+ * proposals: one publishes over a Style Set every linked template resolves against and
+ * the other creates something nothing links to. An author confirms the one they are
+ * actually being shown.
+ */
+function importAsCopy() {
+	const pending = pendingImport.value;
+	if (pending)
+		void receivePackage(pending.file, 'independent-copy');
+}
+
+function onImportFileChosen(event: Event) {
+	const input = event.target as HTMLInputElement;
+	const file = input.files?.[0];
+	// Cleared straight away so choosing the same file twice still fires a change.
+	input.value = '';
+	if (file)
+		void receivePackage(file, 'preserve-identity');
+}
+
 /** Unlinking keeps every value the Style Set produced and drops only the provenance. */
 function unlink() {
 	const graphic = props.selectedGraphic;
@@ -385,6 +506,100 @@ onMounted(() => {
 				</UButton>
 			</div>
 
+			<!--
+				Receiving a style from elsewhere. The file picker is hidden behind an
+				ordinary button so the control reads like the library's other actions
+				rather than like a form.
+			-->
+			<div v-if="canAuthor">
+				<input
+					ref="importFileInput"
+					type="file"
+					accept=".skstyle"
+					class="hidden"
+					data-testid="style-set-import-input"
+					@change="onImportFileChosen"
+				>
+				<UButton
+					size="xs"
+					variant="soft"
+					icon="i-lucide-package-open"
+					:loading="importing"
+					:disabled="importing"
+					data-testid="style-set-import"
+					@click="importFileInput?.click()"
+				>
+					Import a Graphic Style Set Package
+				</UButton>
+			</div>
+
+			<!--
+				What preflight concluded. A rejection is terminal and lists every reason at
+				once; a pause lists what the author is being asked to accept before anything
+				is installed. A package refused only because of how it relates to what is
+				already here can still be taken as an independent copy.
+			-->
+			<div
+				v-if="pendingImport"
+				class="rounded-md border p-2"
+				:class="importRejected ? 'border-error/40 bg-error/10' : 'border-warning/40 bg-warning/10'"
+				data-testid="style-set-import-report"
+			>
+				<p class="text-xs font-medium">
+					{{ importRejected
+						? 'This Graphic Style Set Package cannot be installed'
+						: 'Review before installing this Graphic Style Set Package' }}
+				</p>
+				<ul class="mt-1 space-y-1">
+					<li v-for="(issue, index) in importIssues" :key="`${issue.code}-${index}`" class="text-xs text-muted">
+						{{ issue.message }}<span v-if="issue.remediation"> — {{ issue.remediation }}</span>
+					</li>
+				</ul>
+				<ul v-if="pendingImport.report.publishIssues.length > 0" class="mt-1 space-y-0.5">
+					<li
+						v-for="issue in pendingImport.report.publishIssues"
+						:key="`${issue.code}-${issue.entryId}`"
+						class="text-xs text-muted"
+					>
+						{{ issue.message }}
+					</li>
+				</ul>
+				<div class="mt-2 flex flex-wrap gap-1.5">
+					<UButton
+						v-if="importAwaitingConfirmation"
+						size="xs"
+						variant="subtle"
+						:loading="importing"
+						:disabled="importing"
+						data-testid="style-set-import-confirm"
+						@click="confirmImport"
+					>
+						Install
+					</UButton>
+					<UButton
+						v-if="importResolvableAsCopy"
+						size="xs"
+						variant="subtle"
+						icon="i-lucide-copy"
+						:loading="importing"
+						:disabled="importing"
+						data-testid="style-set-import-as-copy"
+						@click="importAsCopy"
+					>
+						Install as an independent copy
+					</UButton>
+					<UButton
+						size="xs"
+						color="neutral"
+						variant="ghost"
+						data-testid="style-set-import-dismiss"
+						@click="dismissImport"
+					>
+						{{ importAwaitingConfirmation ? 'Cancel' : 'Dismiss' }}
+					</UButton>
+				</div>
+			</div>
+
 			<UIEmptyState
 				v-if="styleSets.length === 0 && !loading"
 				icon="i-lucide-palette"
@@ -441,6 +656,23 @@ onMounted(() => {
 						>
 							{{ open?.id === styleSet.id ? 'Editing' : 'Edit' }}
 						</UButton>
+						<!--
+							The browser downloads the package directly. A Style Set that has
+							never been published has no snapshot to freeze, so there is nothing
+							to offer until it has one.
+						-->
+						<UButton
+							v-if="styleSet.revision > 0"
+							size="xs"
+							color="neutral"
+							variant="ghost"
+							icon="i-lucide-package"
+							:to="repository.packageUrl(styleSet.id)"
+							external
+							download
+							:aria-label="`Export ${styleSet.name}`"
+							data-testid="style-set-export"
+						/>
 						<UButton
 							v-if="canAuthor && selectedGraphic && linkedId !== styleSet.id"
 							size="xs"

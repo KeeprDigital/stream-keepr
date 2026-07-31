@@ -194,6 +194,24 @@ export const graphicStyleSetDraftSchema = z.array(graphicStyleSetEntrySchema)
 		'Graphic Style Set entry ids must be unique within one Style Set',
 	);
 
+/**
+ * The frozen snapshot a `.skstyle` package carries.
+ *
+ * Read through the same entry schema every authored draft goes through, and not a
+ * second copy of it. That identity is the point: a snapshot this accepts is one this
+ * installation can store and publish, so an import cannot produce a Graphic Style Set
+ * that fails the first time an author opens it. Its `revision` is positive because a
+ * package only ever carries published entries — revision zero means never published,
+ * and there would be nothing to freeze.
+ */
+export const graphicStyleSetSnapshotSchema = z.object({
+	id: graphicStyleSetIdSchema,
+	name: styleSetNameSchema,
+	description: styleSetDescriptionSchema.nullable(),
+	revision: z.number().int().positive(),
+	entries: graphicStyleSetDraftSchema,
+}).strict();
+
 export const graphicStyleSetParamsSchema = z.object({
 	styleSetId: graphicStyleSetIdSchema,
 });
@@ -206,7 +224,7 @@ export const graphicStyleSetEntryParamsSchema = z.object({
 export const createGraphicStyleSetSchema = z.object({
 	name: styleSetNameSchema,
 	description: styleSetDescriptionSchema.optional(),
-	/** An initial draft, so a `.skstyle` import can create a populated Style Set. */
+	/** An initial draft, so an editor can create a populated Style Set in one step. */
 	draft: graphicStyleSetDraftSchema.optional(),
 }).strict();
 
