@@ -242,12 +242,12 @@ const DEFINITIONS = {
 			boxSurfaceStyle: {
 				fill: { type: 'solid', color: '#000000' },
 				fillOpacity: 0,
-				outline: { width: 2, color: '#ffffff', opacity: 1 },
+				outline: { width: 2, color: '#ffffff' },
 			},
 			wonBoxSurfaceStyle: {
 				fill: { type: 'solid', color: '#22c55e' },
 				fillOpacity: 1,
-				outline: { width: 2, color: '#ffffff', opacity: 1 },
+				outline: { width: 2, color: '#ffffff' },
 			},
 			typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, textAlign: 'center' },
 		}),

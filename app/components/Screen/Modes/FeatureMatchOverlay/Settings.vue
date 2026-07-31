@@ -1,8 +1,12 @@
 <script setup lang="ts">
+import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { FeatureMatchOverlayPresetId } from '~~/shared/types/screenConfig';
+import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
 import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT, DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH } from '~~/shared/types/screenConfig';
+import FeatureMatchOverlayCompositorInspector from './CompositorInspector.vue';
+import FeatureMatchOverlayCompositorTree from './CompositorTree.vue';
 import FeatureMatchOverlayLayerInspector from './LayerInspector.vue';
 import FeatureMatchOverlayPreviewOutputAside from './PreviewOutputAside.vue';
 
@@ -85,6 +89,32 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 	updateScreenConfig({
 		[field]: value ?? (field === 'width' ? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH : DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT),
 	});
+}
+
+/* ────────────────────────────────────────────────
+ * Shared compositor
+ * ──────────────────────────────────────────────── */
+
+/**
+ * The shared item tree's own selection, held separately from the host-owned one.
+ *
+ * Two selections rather than one union, because they address different things: the
+ * shared one names a Graphic Item inside the one composition, and the host-owned
+ * one names the Frame, a Source Item, or a legacy widget. Merging them would make
+ * every consumer of either handle both, and the two authoring surfaces are exactly
+ * what the contract ticket will separate.
+ */
+const compositorTarget = ref<GraphicsSelectionTarget>({ type: 'canvas' });
+
+/**
+ * The single write funnel for the shared item tree.
+ *
+ * It writes the whole layout rather than the composition alone, because the mode
+ * config's merge is a shallow spread: sending `{ layout: { composition } }` would
+ * replace the Frame and the legacy items with nothing.
+ */
+function updateComposition(composition: BroadcastGraphicConfig) {
+	updateConfig({ layout: { ...config.value.layout, composition } });
 }
 </script>
 
@@ -183,7 +213,25 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 		</section>
 
 		<div class="grid min-h-[calc(100vh-18rem)] items-start gap-4 xl:grid-cols-[minmax(15rem,18rem)_minmax(0,1fr)_minmax(19rem,24rem)] 2xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)_minmax(24rem,30rem)]">
-			<section class="min-w-0 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
+			<section class="min-w-0 space-y-4 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
+				<!--
+					The Feature Match Layout's shared item tree, authored by the shared
+					compositor behind the Feature Match Overlay Host Contract.
+				-->
+				<FeatureMatchOverlayCompositorTree
+					v-model:selected-target="compositorTarget"
+					:layout="config.layout"
+					:canvas-width="screenWidth"
+					:canvas-height="screenHeight"
+					writable
+					@update:composition="updateComposition"
+				/>
+
+				<!--
+					The Frame, Source Items, and Frame cutouts stay host-owned, and so does
+					the legacy widget list until the contract ticket removes it. Both are
+					reached through the editor that already knows their vocabulary.
+				-->
 				<FeatureMatchOverlayLayerInspector
 					v-model:selected-target="selectedTarget"
 					variant="tree"
@@ -207,8 +255,19 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 				/>
 			</section>
 
-			<section class="min-w-0 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
+			<section class="min-w-0 space-y-4 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
+				<FeatureMatchOverlayCompositorInspector
+					v-if="compositorTarget.type !== 'canvas'"
+					:layout="config.layout"
+					:selected-target="compositorTarget"
+					:canvas-width="screenWidth"
+					:canvas-height="screenHeight"
+					:event-id="eventId"
+					writable
+					@update:composition="updateComposition"
+				/>
 				<FeatureMatchOverlayLayerInspector
+					v-else
 					v-model:selected-target="selectedTarget"
 					variant="inspector"
 					:config="config"

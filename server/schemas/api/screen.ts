@@ -1,5 +1,5 @@
 import type { ScreenMode } from '~~/shared/types/enums';
-import type { BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, IdleModeConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
+import type { BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig, IdleModeConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { SCREEN_MODE_VALUES, screens } from '~~/server/db/schema';
@@ -45,6 +45,8 @@ import {
 	MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES,
 } from '~~/shared/types/graphicItem';
 import {
+	GAME_WINS_BOX_ORIENTATION_VALUES,
+	GAME_WINS_DISPLAY_MODE_VALUES,
 	GRAPHIC_ANCHOR_POINT_VALUES,
 	GRAPHIC_ANIMATION_EASING_VALUES,
 	GRAPHIC_ANIMATION_ORIGIN_VALUES,
@@ -77,11 +79,14 @@ import {
 	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_SLIDE_DISTANCE_PX,
 	MAX_GRAPHIC_TEXT_LENGTH,
+	MAX_PLAYER_LIFE_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_ANIMATION_REPEAT,
 	MIN_GRAPHIC_FILL_STOPS,
 	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
+	MIN_PLAYER_LIFE_ANIMATION_DURATION_MS,
 	ON_AIR_UPDATE_POLICY_VALUES,
+	PLAYER_LIFE_ANIMATION_VALUES,
 	SHAPE_CORNER_TREATMENT_VALUES,
 	TEXT_OVERFLOW_POLICY_VALUES,
 } from '~~/shared/types/graphics';
@@ -609,34 +614,6 @@ const featureMatchLayoutItemConfigSchema = z.discriminatedUnion('type', [
 	featureMatchGraphicGroupItemConfigSchema,
 ]) as unknown as z.ZodType<FeatureMatchLayoutItemConfig>;
 
-export const featureMatchOverlayModeConfigSchema = z.object({
-	featureMatchId: z.number().int().positive().nullable(),
-	presetId: featureMatchOverlayPresetIdSchema,
-	layout: z.preprocess(
-		(value) => {
-			if (
-				typeof value !== 'object'
-				|| value === null
-				|| !Array.isArray((value as { items?: unknown }).items)
-			) {
-				return value;
-			}
-			try {
-				return normalizeFeatureMatchLayout(value as FeatureMatchOverlayModeConfig['layout']);
-			}
-			catch {
-				// Keep unsupported future-version input intact so the strict
-				// version literals below report an ordinary atomic parse failure.
-				return value;
-			}
-		},
-		z.object({
-			frame: featureMatchOverlayFrameConfigSchema,
-			items: z.array(featureMatchLayoutItemConfigSchema).min(1).max(100),
-		}).strict(),
-	),
-}).strict() satisfies z.ZodType<FeatureMatchOverlayModeConfig>;
-
 /* ────────────────────────────────────────────────
  * Shared Graphics Foundation vocabulary
  * ──────────────────────────────────────────────── */
@@ -1041,9 +1018,73 @@ const mediaGraphicItemShape = {
 	loop: z.boolean(),
 };
 
+/**
+ * The context-gated Graphic Items.
+ *
+ * They are ordinary members of this union rather than a separate Feature Match
+ * one: the compositor renders them, so the wire shape the compositor accepts is
+ * the wire shape they have. Which host may carry one is decided by the Host
+ * Contract's declared contexts at authoring time, not here — a schema that
+ * rejected them for Broadcast Graphics would be restating a rule the definition
+ * palette already enforces, in a place that cannot see the contract.
+ *
+ * A Clock and a Player Life carry a Text Graphic Item's typography and Text
+ * Overflow Policy without its template, because their string comes from the live
+ * Feature Match Session rather than from an author.
+ */
+const clockGraphicItemShape = {
+	...graphicItemBaseShape,
+	type: z.literal('clock'),
+	typography: graphicTypographySchema,
+	overflowPolicy: z.enum(TEXT_OVERFLOW_POLICY_VALUES),
+	minFontSize: finiteNumberSchema.positive().max(600),
+	surfaceStyle: graphicSurfaceStyleSchema.optional(),
+};
+
+const playerLifeGraphicItemShape = {
+	...graphicItemBaseShape,
+	type: z.literal('player-life'),
+	playerSide: z.enum(PLAYER_SIDE_VALUES),
+	typography: graphicTypographySchema,
+	overflowPolicy: z.enum(TEXT_OVERFLOW_POLICY_VALUES),
+	minFontSize: finiteNumberSchema.positive().max(600),
+	lifeAnimation: z.enum(PLAYER_LIFE_ANIMATION_VALUES),
+	lifeAnimationDurationMs: finiteNumberSchema
+		.int()
+		.min(MIN_PLAYER_LIFE_ANIMATION_DURATION_MS)
+		.max(MAX_PLAYER_LIFE_ANIMATION_DURATION_MS),
+	lifeAnimationAccentColor: cssColorSchema,
+	surfaceStyle: graphicSurfaceStyleSchema.optional(),
+};
+
+/**
+ * A Game Wins Graphic Item. Its boxes are painted surfaces, so they carry a
+ * canonical Shape Geometry and two Graphic Surface Styles rather than the legacy
+ * widget's own border width and corner radius. The box count is absent by design:
+ * it comes from the Match's best-of rather than from configuration.
+ */
+const gameWinsGraphicItemShape = {
+	...graphicItemBaseShape,
+	type: z.literal('game-wins'),
+	playerSide: z.enum(PLAYER_SIDE_VALUES),
+	displayMode: z.enum(GAME_WINS_DISPLAY_MODE_VALUES),
+	boxOrientation: z.enum(GAME_WINS_BOX_ORIENTATION_VALUES),
+	boxWidth: pixelSizeSchema,
+	boxHeight: pixelSizeSchema,
+	boxGap: nonNegativePixelSchema,
+	boxGeometry: graphicShapeGeometrySchema,
+	boxSurfaceStyle: graphicSurfaceStyleSchema,
+	wonBoxSurfaceStyle: graphicSurfaceStyleSchema,
+	typography: graphicTypographySchema,
+	surfaceStyle: graphicSurfaceStyleSchema.optional(),
+};
+
 const textGraphicItemConfigSchema = z.object(textGraphicItemShape).strict();
 const shapeGraphicItemConfigSchema = z.object(shapeGraphicItemShape).strict();
 const mediaGraphicItemConfigSchema = z.object(mediaGraphicItemShape).strict();
+const clockGraphicItemConfigSchema = z.object(clockGraphicItemShape).strict();
+const playerLifeGraphicItemConfigSchema = z.object(playerLifeGraphicItemShape).strict();
+const gameWinsGraphicItemConfigSchema = z.object(gameWinsGraphicItemShape).strict();
 
 /**
  * Main-axis sizing belongs to a Graphic Group child, so only a child carries
@@ -1064,6 +1105,9 @@ const graphicGroupChildConfigSchema = z.discriminatedUnion('type', [
 	z.object({ ...textGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...shapeGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...mediaGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
+	z.object({ ...clockGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
+	z.object({ ...playerLifeGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
+	z.object({ ...gameWinsGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 ]);
 
 export const MAX_GRAPHIC_GROUP_CHILDREN = 50;
@@ -1094,6 +1138,9 @@ const graphicItemConfigSchema = z.discriminatedUnion('type', [
 	shapeGraphicItemConfigSchema,
 	mediaGraphicItemConfigSchema,
 	graphicGroupItemConfigSchema,
+	clockGraphicItemConfigSchema,
+	playerLifeGraphicItemConfigSchema,
+	gameWinsGraphicItemConfigSchema,
 ]);
 
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC = 100;
@@ -1311,6 +1358,34 @@ const broadcastGraphicConfigSchema = z.object({
 	animation: graphicContainerAnimationSchema.optional(),
 }).strict();
 
+/** How many external video source areas one Feature Match Layout may place. */
+export const MAX_FEATURE_MATCH_SOURCE_ITEMS = 10;
+
+/**
+ * A Feature Match Layout's shared item tree.
+ *
+ * The same Graphic Items and the same whole-composition animation a Broadcast
+ * Graphic carries, and deliberately none of its Graphic Inputs, Graphic Source
+ * Selections, or Graphic Input Bindings. A Feature Match Overlay binds a fixed
+ * host token catalogue instead of declaring inputs, so accepting the fields would
+ * let a write store declarations nothing resolves and nothing can accept — the
+ * Host Contract's `textValues` rule, restated where the wire is checked.
+ */
+const featureMatchLayoutCompositionSchema = z.object({
+	id: z.string().min(1).max(100),
+	name: z.string().min(1).max(100),
+	items: z.array(graphicItemConfigSchema)
+		.max(
+			MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
+			`A Feature Match Layout must not contain more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC} Graphic Items`,
+		)
+		.refine(
+			items => new Set(graphicItemIds(items)).size === graphicItemIds(items).length,
+			'Graphic Item ids must be unique within one Feature Match Layout',
+		),
+	animation: graphicContainerAnimationSchema.optional(),
+}).strict();
+
 /**
  * Broadcast Graphics mode configuration: the Screen's authored back-to-front
  * stack of Broadcast Graphics. The Screen's canvas stays in the Screen config.
@@ -1348,6 +1423,60 @@ export const broadcastGraphicsModeConfigSchema = z.object({
 			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Source Selections in total`,
 		),
 }).strict() satisfies z.ZodType<BroadcastGraphicsModeConfig>;
+
+/**
+ * Feature Match Overlay mode configuration.
+ *
+ * It sits here, after the Shared Graphics Foundation section, because its layout
+ * now carries a shared item tree as well as the legacy widget list — a Feature
+ * Match Layout speaks both vocabularies until the contract ticket removes the
+ * older one.
+ *
+ * `composition` and `sourceItems` are optional so a layout authored before the
+ * compositor still validates. Both are bounded on their own arrays for the same
+ * reason every Broadcast Graphics cap is: the mode-configuration patch schema
+ * rebuilds each mode from its field schemas, so an object-level refinement would
+ * never reach the write path the editor uses.
+ */
+export const featureMatchOverlayModeConfigSchema = z.object({
+	featureMatchId: z.number().int().positive().nullable(),
+	presetId: featureMatchOverlayPresetIdSchema,
+	layout: z.preprocess(
+		(value) => {
+			if (
+				typeof value !== 'object'
+				|| value === null
+				|| !Array.isArray((value as { items?: unknown }).items)
+			) {
+				return value;
+			}
+			try {
+				return normalizeFeatureMatchLayout(value as FeatureMatchOverlayModeConfig['layout']);
+			}
+			catch {
+				// Keep unsupported future-version input intact so the strict
+				// version literals below report an ordinary atomic parse failure.
+				return value;
+			}
+		},
+		z.object({
+			frame: featureMatchOverlayFrameConfigSchema,
+			items: z.array(featureMatchLayoutItemConfigSchema).min(1).max(100),
+			// Source Items stay host-owned: top-level only, with Frame cutout
+			// behaviour the shared vocabulary has no way to express.
+			// Cast for the same reason the legacy item union above casts: these
+			// schemas are assembled from the Feature Match Graphic Item Definitions'
+			// own Zod builders, which infer a record rather than the config type.
+			sourceItems: z.array(featureMatchSourceItemConfigSchema as unknown as z.ZodType<FeatureMatchSourceItemConfig>)
+				.max(
+					MAX_FEATURE_MATCH_SOURCE_ITEMS,
+					`A Feature Match Layout must not carry more than ${MAX_FEATURE_MATCH_SOURCE_ITEMS} Source Items`,
+				)
+				.optional(),
+			composition: featureMatchLayoutCompositionSchema.optional(),
+		}).strict(),
+	),
+}).strict() satisfies z.ZodType<FeatureMatchOverlayModeConfig>;
 
 export const metagameModeConfigSchema = z.object({
 	viewMode: z.enum(METAGAME_VIEW_MODE_VALUES),

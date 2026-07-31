@@ -520,9 +520,40 @@ export type FeatureMatchLayoutItemConfig
 		| FeatureMatchSpecificGraphicItemConfig
 		| FeatureMatchGraphicGroupItemConfig;
 
+/**
+ * The authored arrangement a Feature Match Overlay renders.
+ *
+ * It carries three things, and they are three rather than one because the Host
+ * Contract draws the line between them:
+ *
+ * - `frame` is the Feature Match Overlay Frame: the continuous graphic area
+ *   behind and around everything else. It stays host-owned — backgrounds, media,
+ *   shader animation effects, per-side border, and glow are capability outside the
+ *   shared vocabulary, and the contract's rule is that capability outside the
+ *   contract stays with the host.
+ * - `sourceItems` are Source Items: top-level-only areas for an external video
+ *   source, which may cut through the Frame. Also host-owned, and for the same
+ *   reason — no Broadcast Graphics Screen has an external video source to place,
+ *   and a Frame cutout is a Frame concern.
+ * - `composition` is the shared item tree, held as exactly one composition because
+ *   a Feature Match Overlay renders exactly one Feature Match Layout. It is a
+ *   `BroadcastGraphicConfig` because that is the shape the shared compositor
+ *   authors and the shared render model composes, not because a Feature Match
+ *   Layout is a Broadcast Graphic.
+ *
+ * `items` is the legacy widget model. It stays until the contract ticket removes
+ * it, so adopting the compositor cannot regress an overlay that already renders.
+ */
 export interface FeatureMatchLayoutConfig {
 	frame: FeatureMatchLayoutFrameConfig;
 	items: FeatureMatchLayoutItemConfig[];
+	/** Host-owned Source Items, beneath and cutting through the Frame. */
+	sourceItems?: FeatureMatchSourceItemConfig[];
+	/**
+	 * The shared Graphic Item tree. Absent on a layout authored before the
+	 * compositor, which renders through the legacy model until an author adds to it.
+	 */
+	composition?: BroadcastGraphicConfig;
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
