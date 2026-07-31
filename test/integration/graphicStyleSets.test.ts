@@ -505,8 +505,8 @@ describe('graphic Style Sets', () => {
 		expect(applied.status).toBe(200);
 		// The headline's whole typography group became the author's own in the test
 		// above, so the subhead is the item still inheriting the palette colour.
-		const subhead = (applied.data as BroadcastGraphicTemplateResponse)
-			.document.items.find(item => item.id === 'subhead');
+		const after = applied.data as BroadcastGraphicTemplateResponse;
+		const subhead = after.document.items.find(item => item.id === 'subhead');
 		expect(subhead?.type === 'text' && subhead.typography.color).toBe('#2244ff');
 		expect((await styleUpdate()).available).toBe(false);
 	});
