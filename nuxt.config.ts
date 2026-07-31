@@ -2,6 +2,7 @@ import type { MutationBodyMethod } from './shared/utils/requestBodyLimits';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { wasmModulePlugin } from './build/wasmModulePlugin';
+import { GRAPHIC_STYLE_SET_PACKAGE_LIMITS } from './shared/types/graphicStyleSetPackage';
 import {
 	GRAPHICS_MULTIPART_PART_BYTES,
 	MAX_SILENT_VIDEO_INGESTION_BYTES,
@@ -115,6 +116,29 @@ export default defineNuxtConfig({
 					PUT: {
 						maxBytes: MAX_STILL_IMAGE_INGESTION_BYTES,
 						label: 'Graphic Asset transfer',
+					},
+				},
+			},
+			// A received Graphic Style Set Package is the archive itself, and it is far
+			// smaller than any media transfer: two JSON files bounded by the number of
+			// entries a Style Set may hold. The route owns the ceiling so a `.skstyle`
+			// is not held to the general JSON-body limit, which describes a different
+			// kind of request entirely.
+			// Both the install route itself and its preflight sibling, stated separately
+			// because a `/**` pattern is about what lies *under* a path.
+			'/api/graphics-style-sets/packages': {
+				boundedRawMutations: {
+					POST: {
+						maxBytes: GRAPHIC_STYLE_SET_PACKAGE_LIMITS.maximumArchiveByteLength,
+						label: 'Graphic Style Set Package',
+					},
+				},
+			},
+			'/api/graphics-style-sets/packages/**': {
+				boundedRawMutations: {
+					POST: {
+						maxBytes: GRAPHIC_STYLE_SET_PACKAGE_LIMITS.maximumArchiveByteLength,
+						label: 'Graphic Style Set Package',
 					},
 				},
 			},
