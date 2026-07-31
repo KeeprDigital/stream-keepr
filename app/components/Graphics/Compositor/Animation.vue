@@ -12,6 +12,7 @@ import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraph
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
 	bindGraphicStyleRef,
+	recaptureGraphicStyleOverrides,
 	unbindGraphicStyleRef,
 } from '~~/shared/modules/graphic-style-sets';
 import {
@@ -217,10 +218,34 @@ function apply(
 	const current = selection.value;
 	if (!canAuthor.value)
 		return;
-	if (current.kind === 'graphic')
-		emit('update:graphics', onGraphic(props.graphics, current.graphic.id));
-	else if (current.kind === 'item')
-		emit('update:graphics', replaceBroadcastGraphic(props.graphics, onItem(current.graphic, current.item.id)));
+	if (current.kind === 'graphic') {
+		const graphics = onGraphic(props.graphics, current.graphic.id);
+		const edited = graphics.find(graphic => graphic.id === current.graphic.id);
+		emit('update:graphics', edited
+			? graphics.map(graphic => graphic.id === edited.id ? withRecapturedStyleOverrides(edited) : graphic)
+			: graphics);
+	}
+	else if (current.kind === 'item') {
+		emit('update:graphics', replaceBroadcastGraphic(
+			props.graphics,
+			withRecapturedStyleOverrides(onItem(current.graphic, current.item.id)),
+		));
+	}
+}
+
+/**
+ * One edited Broadcast Graphic, with its Graphic Style Set overrides brought back
+ * into line with what it now holds.
+ *
+ * The same funnel the inspector's property controls go through, for the same reason:
+ * these controls write recipe *values*, and an edit to a phase whose recipe is
+ * inherited is a deviation by definition. Deriving it here is what makes it the
+ * explicit property-level override the glossary requires — without it, the author's
+ * change would be silently reverted by the next applied Style Set update.
+ */
+function withRecapturedStyleOverrides(graphic: BroadcastGraphicConfig): BroadcastGraphicConfig {
+	const context = props.styleSet;
+	return context ? recaptureGraphicStyleOverrides(graphic, context.resolution) : graphic;
 }
 
 function setPhaseEnabled(phase: GraphicAnimationPhase, enabled: boolean) {

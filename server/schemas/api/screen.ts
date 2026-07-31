@@ -941,7 +941,16 @@ function graphicSourceDerivationsAcyclic(
  * Graphic Style Set references
  * ──────────────────────────────────────────────── */
 
-const graphicStyleEntryIdSchema = z.string().min(1).max(100);
+/**
+ * The bound on a Graphic Style Set identity, and on one entry's identity within it.
+ *
+ * One schema because they are the same kind of opaque stable id, generated the same
+ * way and stored the same way. They are named separately so a reader of the two
+ * fields below does not have to work out that a `styleSetId` is not an entry id.
+ */
+const graphicStyleIdSchema = z.string().min(1).max(100);
+const graphicStyleEntryIdSchema = graphicStyleIdSchema;
+const graphicStyleSetIdSchema = graphicStyleIdSchema;
 
 /**
  * A media treatment's owned properties, as one object so its override shape is a
@@ -1010,7 +1019,7 @@ const graphicContainerStyleRefsSchema = z.object(graphicAnimationStyleRefShape).
 
 /** At most one Graphic Style Set per composition, stated by this being one object. */
 const graphicStyleSetLinkSchema = z.object({
-	styleSetId: graphicStyleEntryIdSchema,
+	styleSetId: graphicStyleSetIdSchema,
 	revision: z.number().int().nonnegative(),
 }).strict();
 

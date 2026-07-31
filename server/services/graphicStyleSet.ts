@@ -282,11 +282,10 @@ export function graphicStyleSetService() {
 	): Promise<boolean> => {
 		const client = db.$client;
 		const results = await client.batch([
-			...options.rewrites.map(rewrite => client.prepare(`
-				UPDATE broadcast_graphic_templates
-				SET document = ?, revision = revision + 1, style_set_id = NULL, style_set_revision = NULL, updated_at = ?
-				WHERE id = ? AND revision = ?
-			`).bind(JSON.stringify(rewrite.document), Date.now(), rewrite.id, rewrite.revision)),
+			// The same rewrite statements every library-wide operation uses. Each detached
+			// document carries no Style Set link, so they write a null link back — which is
+			// the whole difference between deleting a Style Set and deleting one entry.
+			...templateRewriteStatements(client, options.rewrites, null),
 			client.prepare(`DELETE FROM graphic_style_sets WHERE id = ? AND draft_revision = ?`)
 				.bind(id, options.draftRevision),
 		]);

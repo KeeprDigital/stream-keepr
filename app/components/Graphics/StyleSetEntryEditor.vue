@@ -5,14 +5,19 @@ import { GRAPHIC_FONT_OPTIONS } from '~~/shared/modules/graphics';
 import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
 	GRAPHIC_ANIMATION_EASING_VALUES,
+	GRAPHIC_ANIMATION_ORIGIN_VALUES,
 	GRAPHIC_FONT_STYLE_VALUES,
 	GRAPHIC_REVEAL_EDGE_VALUES,
 	GRAPHIC_SLIDE_DIRECTION_VALUES,
 	GRAPHIC_SLIDE_DISTANCE_MODE_VALUES,
 	GRAPHIC_TEXT_TRANSFORM_VALUES,
 	MAX_GRAPHIC_ANIMATION_DURATION_MS,
+	MAX_GRAPHIC_ANIMATION_PAUSE_MS,
+	MAX_GRAPHIC_ANIMATION_REPEAT,
+	MAX_GRAPHIC_ANIMATION_SCALE,
 	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MIN_GRAPHIC_ANIMATION_DURATION_MS,
+	MIN_GRAPHIC_ANIMATION_REPEAT,
 	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	SHAPE_CORNER_KEYS,
 	SHAPE_CORNER_TREATMENT_VALUES,
@@ -61,6 +66,7 @@ const DIRECTION_OPTIONS = GRAPHIC_SLIDE_DIRECTION_VALUES.map(value => ({ label: 
 const DISTANCE_MODE_OPTIONS = GRAPHIC_SLIDE_DISTANCE_MODE_VALUES.map(value => ({ label: value, value }));
 const REVEAL_EDGE_OPTIONS = GRAPHIC_REVEAL_EDGE_VALUES.map(value => ({ label: value, value }));
 const CORNER_TREATMENT_OPTIONS = SHAPE_CORNER_TREATMENT_VALUES.map(value => ({ label: value, value }));
+const ANIMATION_ORIGIN_OPTIONS = GRAPHIC_ANIMATION_ORIGIN_VALUES.map(value => ({ label: value, value }));
 
 /** Merge into the entry's value, so a single-field edit never drops its siblings. */
 function patch(fields: Record<string, unknown>) {
@@ -602,6 +608,39 @@ function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 				</UFormField>
 			</div>
 
+			<UFormField label="Scale" size="xs">
+				<USwitch
+					:model-value="entry.value.scale !== undefined"
+					:disabled="disabled"
+					data-testid="style-entry-animation-scale"
+					@update:model-value="patch({ scale: $event ? { factor: 0.9, origin: 'center' } : undefined })"
+				/>
+			</UFormField>
+			<div v-if="entry.value.scale" class="grid grid-cols-2 gap-2">
+				<UFormField label="Scale from" size="xs">
+					<UInputNumber
+						:model-value="entry.value.scale.factor"
+						:min="0"
+						:max="MAX_GRAPHIC_ANIMATION_SCALE"
+						:step="0.05"
+						size="xs"
+						:disabled="disabled"
+						@update:model-value="patch({ scale: { ...(entry.value as { scale: object }).scale, factor: $event ?? 1 } })"
+					/>
+				</UFormField>
+				<UFormField label="Origin" size="xs">
+					<USelect
+						:model-value="entry.value.scale.origin"
+						:items="ANIMATION_ORIGIN_OPTIONS"
+						value-key="value"
+						size="xs"
+						class="w-full"
+						:disabled="disabled"
+						@update:model-value="patch({ scale: { ...(entry.value as { scale: object }).scale, origin: $event } })"
+					/>
+				</UFormField>
+			</div>
+
 			<UFormField label="Reveal" size="xs">
 				<USwitch
 					:model-value="entry.value.reveal !== undefined"
@@ -618,6 +657,44 @@ function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 					class="w-full"
 					:disabled="disabled"
 					@update:model-value="patch({ reveal: { edge: $event } })"
+				/>
+			</UFormField>
+
+			<!--
+				On-screen-only defaults. A template may assign this same preset to any
+				lifecycle phase, and the three that do not cycle simply never receive them —
+				which is why they are authored here rather than being a separate kind.
+			-->
+			<div class="grid grid-cols-2 gap-2">
+				<UFormField label="Pause between cycles (ms)" size="xs">
+					<UInputNumber
+						:model-value="entry.value.pause ?? 0"
+						:min="0"
+						:max="MAX_GRAPHIC_ANIMATION_PAUSE_MS"
+						size="xs"
+						:disabled="disabled"
+						data-testid="style-entry-animation-pause"
+						@update:model-value="patch({ pause: $event ?? 0 })"
+					/>
+				</UFormField>
+				<UFormField label="Repeat" size="xs">
+					<UInputNumber
+						:model-value="entry.value.repeat === 'indefinite' ? undefined : Number(entry.value.repeat ?? 1)"
+						:min="MIN_GRAPHIC_ANIMATION_REPEAT"
+						:max="MAX_GRAPHIC_ANIMATION_REPEAT"
+						:disabled="disabled || entry.value.repeat === 'indefinite'"
+						size="xs"
+						data-testid="style-entry-animation-repeat"
+						@update:model-value="patch({ repeat: $event ?? 1 })"
+					/>
+				</UFormField>
+			</div>
+			<UFormField label="Repeat indefinitely" size="xs">
+				<USwitch
+					:model-value="entry.value.repeat === 'indefinite'"
+					:disabled="disabled"
+					data-testid="style-entry-animation-repeat-indefinite"
+					@update:model-value="patch({ repeat: $event ? 'indefinite' : 1 })"
 				/>
 			</UFormField>
 		</template>

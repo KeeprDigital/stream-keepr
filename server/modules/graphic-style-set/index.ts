@@ -1,5 +1,6 @@
 import type { DbBroadcastGraphicTemplate, DbGraphicStyleSet } from '~~/server/db/schema';
 import type { GraphicsTemplateRewrite } from '~~/server/services/graphicStyleSet';
+import type { GraphicStyleSetResolution } from '~~/shared/modules/graphic-style-sets';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type {
 	AffectedGraphicsTemplate,
@@ -8,7 +9,7 @@ import type {
 } from '~~/shared/types/graphicStyleSet';
 import {
 	detachGraphicStyleRefs,
-	graphicStyleEntryReferences,
+	graphicStyleEntriesReferencing,
 	graphicStyleSetEntryIdsInDocument,
 	graphicStyleUpdateAvailable,
 	replaceGraphicStyleRefs,
@@ -35,9 +36,8 @@ import {
 /** What a publish or a deletion would reach, and whether each template actually moves. */
 export function affectedTemplates(
 	templates: readonly DbBroadcastGraphicTemplate[],
-	entries: readonly GraphicStyleSetEntry[],
+	resolution: GraphicStyleSetResolution,
 ): AffectedGraphicsTemplate[] {
-	const resolution = resolveGraphicStyleSet(entries);
 	return templates.map(template => ({
 		id: template.id,
 		name: template.name,
@@ -63,11 +63,11 @@ export function planGraphicStyleSetPublish(
 	draft: readonly GraphicStyleSetEntry[],
 	templates: readonly DbBroadcastGraphicTemplate[],
 ): GraphicStyleSetPublishPlan {
-	const { issues } = validateGraphicStyleSetDraft(draft);
+	const { resolution, issues } = validateGraphicStyleSetDraft(draft);
 	if (issues.length > 0)
 		return { issues, affected: [] };
 
-	return { issues, affected: affectedTemplates(templates, draft) };
+	return { issues, affected: affectedTemplates(templates, resolution) };
 }
 
 /** Why one entry cannot be deleted the way the author asked. */
@@ -76,6 +76,7 @@ export type GraphicStyleEntryDeletionRefusal
 		| { code: 'replacement-not-found' }
 		| { code: 'replacement-kind-mismatch' }
 		| { code: 'replacement-is-subject' }
+		| { code: 'replacement-unpublished' }
 		| { code: 'detach-would-break-entries'; entryIds: string[] };
 
 export interface GraphicStyleEntryDeletionPlan {
@@ -117,10 +118,16 @@ export function planGraphicStyleEntryDeletion(
 		// keys the new property group does not have.
 		if (replacement.kind !== subject.kind)
 			return { code: 'replacement-kind-mismatch' };
+		// And it has to be published. This operation repoints the *published* entries
+		// and every affected template's document without going through publish, so a
+		// replacement that exists only in the draft would leave every one of those
+		// templates referencing an id no linked template can resolve — invisible until
+		// their next save was refused.
+		if (styleSet.published && !styleSet.published.some(entry => entry.id === mode.replacementEntryId))
+			return { code: 'replacement-unpublished' };
 	}
 
-	const dependants = styleSet.draft.filter(entry => entry.id !== entryId
-		&& graphicStyleEntryReferences(entry).some(reference => reference.entryId === entryId));
+	const dependants = graphicStyleEntriesReferencing(styleSet.draft, entryId);
 
 	if (mode.mode === 'detach' && dependants.length > 0)
 		return { code: 'detach-would-break-entries', entryIds: dependants.map(entry => entry.id) };

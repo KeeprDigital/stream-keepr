@@ -217,6 +217,23 @@ describe('graphicsStyleSetLibrary', () => {
 		expect(linked.items).toEqual(lowerThird.items);
 	});
 
+	it('drops the previous Style Set\'s references when switching the link', async () => {
+		mockList.mockResolvedValue([summary({ id: 'style-9', name: 'Other style' })]);
+
+		// Already linked to `style-1`, with an item referencing one of its entries.
+		const wrapper = await mountLibrary();
+		await wrapper.get('[data-testid="style-set-link"]').trigger('click');
+
+		const switched = wrapper.emitted('update:graphic')![0]![0] as BroadcastGraphicConfig;
+		expect(switched.styleSet).toEqual({ styleSetId: 'style-9', revision: 3 });
+		// A composition links to at most one Style Set, so a reference to the old one
+		// would name an entry the new one has never heard of.
+		expect(switched.items[0]).not.toHaveProperty('styleRefs');
+		// And nothing it renders moved.
+		const headline = switched.items[0];
+		expect(headline?.type === 'text' && headline.typography.color).toBe('#ff0044');
+	});
+
 	it('will not link to a Style Set that has never been published', async () => {
 		mockList.mockResolvedValue([summary({ id: 'style-9', revision: 0 })]);
 

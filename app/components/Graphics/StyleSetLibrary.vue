@@ -95,11 +95,19 @@ function failureMessage(caught: unknown): string {
 	return caught instanceof Error ? caught.message : 'The Graphic Style Set library is unavailable';
 }
 
-async function refresh() {
+/**
+ * Re-read the library.
+ *
+ * `keepError` exists for the one case that matters: a refused write re-reads the
+ * library so the author is looking at what actually exists, and a successful re-read
+ * must not then erase the message explaining why their write was refused.
+ */
+async function refresh(keepError = false) {
 	loading.value = true;
 	try {
 		styleSets.value = await repository.list();
-		error.value = null;
+		if (!keepError)
+			error.value = null;
 	}
 	catch (caught) {
 		error.value = failureMessage(caught);
@@ -109,13 +117,15 @@ async function refresh() {
 	}
 }
 
-async function openStyleSet(styleSetId: string) {
+async function reopenStyleSet(styleSetId: string, keepError = true) {
 	busy.value = true;
 	try {
 		open.value = await repository.get(styleSetId);
-		issues.value = [];
-		affected.value = null;
-		error.value = null;
+		if (!keepError) {
+			issues.value = [];
+			affected.value = null;
+			error.value = null;
+		}
 	}
 	catch (caught) {
 		error.value = failureMessage(caught);
@@ -123,6 +133,10 @@ async function openStyleSet(styleSetId: string) {
 	finally {
 		busy.value = false;
 	}
+}
+
+async function openStyleSet(styleSetId: string) {
+	await reopenStyleSet(styleSetId, false);
 }
 
 async function create() {
@@ -165,7 +179,9 @@ async function saveDraft(draft: GraphicStyleSetEntry[]) {
 	}
 	catch (caught) {
 		error.value = failureMessage(caught);
-		await openStyleSet(current.id);
+		// Re-read so the author is looking at the draft that actually exists, without
+		// erasing the message explaining why their write was refused.
+		await reopenStyleSet(current.id);
 	}
 	finally {
 		busy.value = false;
@@ -285,13 +301,23 @@ async function removeStyleSet() {
  * Adopting nothing is the point: the link records where inherited properties will
  * come from, and every property stays local until an author picks an entry for it in
  * the inspector.
+ *
+ * Switching from another Style Set detaches first. A composition links to at most
+ * one, so references left over from the previous one would name entries the new
+ * Style Set has never heard of — refused the moment the design was saved as a
+ * template, and stored unchecked on a Screen until then. Detaching keeps every value
+ * they produced, so switching changes what the design *can* inherit and nothing about
+ * what it renders.
  */
 function link(styleSet: GraphicStyleSetSummary) {
 	const graphic = props.selectedGraphic;
 	if (!canAuthor.value || !graphic || styleSet.revision === 0)
 		return;
+	const local = graphic.styleSet && graphic.styleSet.styleSetId !== styleSet.id
+		? detachGraphicStyleRefs(graphic, null)
+		: graphic;
 	emit('update:graphic', {
-		...graphic,
+		...local,
 		styleSet: { styleSetId: styleSet.id, revision: styleSet.revision },
 	});
 }

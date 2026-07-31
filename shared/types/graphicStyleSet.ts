@@ -503,9 +503,15 @@ export const GRAPHIC_STYLE_ENTRY_DELETION_MODE_VALUES = ['replace', 'detach'] as
 
 export type GraphicStyleEntryDeletionMode = typeof GRAPHIC_STYLE_ENTRY_DELETION_MODE_VALUES[number];
 
-/** What deleting an entry or Style Set would reach, before anything is deleted. */
-export interface GraphicStyleDeletionImpact {
-	/** Entries inside the same Style Set that reference the subject. */
-	referencingEntries: { id: string; name: string; kind: GraphicStyleEntryKind }[];
-	affectedTemplates: AffectedGraphicsTemplate[];
+/**
+ * One template a deletion rewrote, at the revision the rewrite created.
+ *
+ * Named rather than counted, for the same reason a publish names the templates it
+ * reaches: an author who has just had four designs revised under them needs to know
+ * which four.
+ */
+export interface RewrittenGraphicsTemplate {
+	id: string;
+	name: string;
+	revision: number;
 }

@@ -4,10 +4,8 @@ import {
 	graphicStyleSetParamsSchema,
 	updateGraphicStyleSetSchema,
 } from '~~/server/schemas/api/graphicStyleSet';
-import {
-	GraphicStyleSetRevisionConflict,
-	graphicStyleSetService,
-} from '~~/server/services/graphicStyleSet';
+import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
+import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSetConflict';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
 /**
@@ -42,13 +40,6 @@ export default defineEventHandler(async (event) => {
 		return mapGraphicStyleSetToResponse(styleSet);
 	}
 	catch (error) {
-		if (error instanceof GraphicStyleSetRevisionConflict) {
-			throw createError({
-				statusCode: 409,
-				statusMessage: 'Conflict',
-				message: `Graphic Style Set has been edited by another session (now draft revision ${error.currentDraftRevision})`,
-			});
-		}
-		throw error;
+		rethrowAsGraphicStyleSetConflict(error, 'This Graphic Style Set has been edited by another session');
 	}
 });

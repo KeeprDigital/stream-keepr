@@ -16,7 +16,7 @@ import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
  *
  * The behaviour under test is the operator-visible contract of a shared style: edits
  * accumulate privately, one atomic publish makes them real, a linked template is
- * *offered* an update rather than given one, applying it keeps the author's own
+ * offered* an update rather than given one, applying it keeps the author's own
  * deviations, and a placed Broadcast Graphic never moves at all.
  *
  * Everything goes through command → snapshot: the composition is written through the
@@ -27,19 +27,6 @@ import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 const runId = randomUUID();
 /** A short, slug-safe discriminator: a Screen slug is capped at 50 characters. */
 const shortId = runId.slice(0, 8);
-
-const SQUARE_CORNER = { treatment: 'square', size: 0 } as const;
-
-// Written out rather than imported: the integration project resolves no `~~` alias,
-// so only type imports cross this boundary.
-const SQUARE_GEOMETRY = {
-	topLeft: SQUARE_CORNER,
-	topRight: SQUARE_CORNER,
-	bottomRight: SQUARE_CORNER,
-	bottomLeft: SQUARE_CORNER,
-	leftSlant: 0,
-	rightSlant: 0,
-};
 
 const BRAND = `brand-${runId}`;
 const INK = `ink-${runId}`;
@@ -518,7 +505,7 @@ describe('graphic Style Sets', () => {
 		expect(deleted.status).toBe(409);
 		expect(deleted.data.data.code).toBe('replacement-not-found');
 
-		// Add a second typography preset to replace it with, then delete for real.
+		// Add a second typography preset to replace it with.
 		const withAlternative = [
 			...current.draft,
 			{
@@ -539,6 +526,24 @@ describe('graphic Style Sets', () => {
 			},
 		];
 		expect((await saveDraft(withAlternative)).status).toBe(200);
+
+		// Replacing with a draft-only entry is refused. This operation repoints the
+		// published entries and every affected template's document without going through
+		// publish, so a replacement nothing has published yet would leave every one of
+		// those templates referencing an id no linked template can resolve.
+		const unpublished = await styleSet();
+		const premature = await request(`${STYLE_SETS}/${styleSetId}/entries/${HEADING}`, {
+			method: 'DELETE',
+			cookie: authorCookie,
+			body: {
+				mode: 'replace',
+				replacementEntryId: `${HEADING}-alt`,
+				draftRevision: unpublished.draftRevision,
+			},
+		});
+		expect(premature.status).toBe(409);
+		expect(premature.data.data.code).toBe('replacement-unpublished');
+
 		expect((await publish()).status).toBe(200);
 
 		const beforeReplacement = await styleSet();
@@ -553,6 +558,11 @@ describe('graphic Style Sets', () => {
 		});
 
 		expect(replaced.status).toBe(200);
+		// The templates it rewrote are named, each already at its new revision, so an
+		// author whose designs were revised under them knows which ones to look at.
+		expect(replaced.data.rewrittenTemplates).toEqual([
+			expect.objectContaining({ id: templateId, name: 'Lower third' }),
+		]);
 		const after = await template();
 		// One new template revision, with the reference repointed and the author's own
 		// override carried across with it.

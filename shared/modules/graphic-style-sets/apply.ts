@@ -355,6 +355,17 @@ export function applyGraphicStyleSet(
 				// Preserving the previously resolved property means recording it as the
 				// author's own: the reference stays, every owned key becomes a deviation,
 				// and the property does not move now or on any later republish.
+				//
+				// A slot with no owned keys has no partial to deviate in — a Graphic Fill
+				// is a discriminated union — so keeping its value means letting go of the
+				// reference entirely. The value is already stored inline and does not move;
+				// only the provenance does. Recording an empty override instead would leave
+				// the reference in place and the change offered again on every later
+				// review, which is the one answer this decision must not produce.
+				if (GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot].length === 0) {
+					delete (nextRefs as Record<string, unknown>)[slot];
+					continue;
+				}
 				(nextRefs as Record<string, unknown>)[slot] = {
 					entryId: ref.entryId,
 					overrides: pick(

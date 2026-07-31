@@ -5,10 +5,8 @@ import {
 	graphicStyleSetParamsSchema,
 	publishGraphicStyleSetSchema,
 } from '~~/server/schemas/api/graphicStyleSet';
-import {
-	GraphicStyleSetRevisionConflict,
-	graphicStyleSetService,
-} from '~~/server/services/graphicStyleSet';
+import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
+import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSetConflict';
 
 /**
  * Publish one Graphic Style Set's working draft as a new revision.
@@ -68,13 +66,7 @@ export default defineEventHandler(async (event) => {
 		};
 	}
 	catch (error) {
-		if (error instanceof GraphicStyleSetRevisionConflict) {
-			throw createError({
-				statusCode: 409,
-				statusMessage: 'Conflict',
-				message: `Graphic Style Set has been edited since it was reviewed (now draft revision ${error.currentDraftRevision})`,
-			});
-		}
-		throw error;
+		// A publish that raced a draft edit would publish entries nobody validated.
+		rethrowAsGraphicStyleSetConflict(error, 'This Graphic Style Set has been edited since its draft was validated');
 	}
 });

@@ -1,15 +1,12 @@
-import type { GraphicStyleDeletionImpact } from '~~/shared/types/graphicStyleSet';
 import { mapGraphicStyleSetToResponse } from '~~/server/mappers/graphicStyleSet';
-import { affectedTemplates, planGraphicStyleEntryDeletion } from '~~/server/modules/graphic-style-set';
+import { planGraphicStyleEntryDeletion } from '~~/server/modules/graphic-style-set';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import {
 	deleteGraphicStyleSetEntrySchema,
 	graphicStyleSetEntryParamsSchema,
 } from '~~/server/schemas/api/graphicStyleSet';
-import {
-	GraphicStyleSetRevisionConflict,
-	graphicStyleSetService,
-} from '~~/server/services/graphicStyleSet';
+import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
+import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSetConflict';
 
 /**
  * Delete one Graphic Style Set entry, and deal with every reference to it in the
@@ -83,24 +80,22 @@ export default defineEventHandler(async (event) => {
 			});
 		}
 
-		const impact: GraphicStyleDeletionImpact = {
-			referencingEntries: [],
-			affectedTemplates: affectedTemplates(
-				linked.filter(template => plan.rewrites.some(rewrite => rewrite.id === template.id)),
-				updated.published ?? [],
-			),
+		// The templates this deletion actually rewrote, each already at its new revision.
+		// Reported rather than counted, because the point of naming them is that an
+		// author can go and look at one.
+		return {
+			styleSet: mapGraphicStyleSetToResponse(updated),
+			rewrittenTemplates: plan.rewrites.map((rewrite) => {
+				const template = linked.find(candidate => candidate.id === rewrite.id);
+				return { id: rewrite.id, name: template?.name ?? rewrite.id, revision: rewrite.revision + 1 };
+			}),
 		};
-		return { styleSet: mapGraphicStyleSetToResponse(updated), impact };
 	}
 	catch (error) {
-		if (error instanceof GraphicStyleSetRevisionConflict) {
-			throw createError({
-				statusCode: 409,
-				statusMessage: 'Conflict',
-				message: 'The Graphic Style Set or one of the templates referencing this entry changed while it was being deleted',
-			});
-		}
-		throw error;
+		rethrowAsGraphicStyleSetConflict(
+			error,
+			'The Graphic Style Set or one of the templates referencing this entry changed while it was being deleted',
+		);
 	}
 });
 
@@ -112,6 +107,8 @@ function refusalMessage(refusal: { code: string; entryIds?: string[] }): string 
 			return 'A Graphic Style Set entry can only be replaced by an entry of the same kind';
 		case 'replacement-is-subject':
 			return 'A Graphic Style Set entry cannot replace itself';
+		case 'replacement-unpublished':
+			return 'The replacement Graphic Style Set entry has not been published, so the templates repointed at it could not resolve it — publish the Style Set first';
 		case 'detach-would-break-entries':
 			return `This entry is referenced by other Graphic Style Set entries (${refusal.entryIds?.join(', ')}), which have nowhere to store a value of their own — replace it instead of detaching it`;
 		default:

@@ -5,6 +5,7 @@ import {
 	applyGraphicStyleSet,
 	captureGraphicStyleOverrides,
 	detachGraphicStyleRefs,
+	GRAPHIC_STYLE_SLOT_OWNED_KEYS,
 	graphicStyleChangeKey,
 	graphicStyleSetEntryIdsInDocument,
 	graphicStyleUpdateChanges,
@@ -12,6 +13,7 @@ import {
 	resolveGraphicStyleSet,
 } from '~~/shared/modules/graphic-style-sets';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
+import { GRAPHIC_STYLE_SLOT_VALUES } from '~~/shared/types/graphicStyleSet';
 
 /**
  * Referencing Graphic Style Set entries from a graphics composition.
@@ -113,6 +115,45 @@ function headlineOf(config: BroadcastGraphicConfig): TextGraphicItemConfig {
 		throw new Error('expected the Text Graphic Item');
 	return item;
 }
+
+describe('gRAPHIC_STYLE_SLOT_OWNED_KEYS', () => {
+	/**
+	 * The owned-key lists are strings, and the property groups they name are types.
+	 * Nothing makes them agree, and the failure if they stop agreeing is silent: a
+	 * field added to `GraphicTypography` or `ShapeGeometry` would keep being written
+	 * by the property control and stop being capturable as an override, so an author's
+	 * deviation in it would be reverted by the next applied update with nothing
+	 * rejected. So each list is pinned against a maximal value of its property group,
+	 * built from the vocabulary rather than restated.
+	 */
+	it('names exactly the keys of the property group each slot inherits', () => {
+		const surfaceKeys = ['fill', 'fillOpacity', 'outline', 'glow'];
+		const geometryKeys = Object.keys(squareShapeGeometry());
+		const mediaKeys = ['fit', 'focalPosition', 'opacity', 'clipGeometry', 'playbackRate', 'loop'];
+		const recipeKeys = ['duration', 'easing', 'delay', 'fade', 'slide', 'scale', 'reveal'];
+
+		// Typography less the one key that stays item-specific.
+		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.typography].sort())
+			.toEqual(Object.keys(TYPOGRAPHY).filter(key => key !== 'textAlign').sort());
+		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.surfaceStyle].sort()).toEqual([...surfaceKeys].sort());
+		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.defaultChildSurfaceStyle].sort()).toEqual([...surfaceKeys].sort());
+		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.geometry].sort()).toEqual([...geometryKeys].sort());
+		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.clipGeometry].sort()).toEqual([...geometryKeys].sort());
+		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.media].sort()).toEqual([...mediaKeys].sort());
+		for (const phase of ['animation.enter', 'animation.update', 'animation.exit'] as const)
+			expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS[phase]].sort()).toEqual([...recipeKeys].sort());
+		// Only the on-screen phase cycles, so only it owns the repetition defaults.
+		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS['animation.on-screen']].sort())
+			.toEqual([...recipeKeys, 'pause', 'repeat'].sort());
+		// A Graphic Fill is a discriminated union, so it has no partial to deviate in.
+		expect(GRAPHIC_STYLE_SLOT_OWNED_KEYS['surfaceStyle.fill']).toEqual([]);
+	});
+
+	it('gives every slot in the vocabulary a list', () => {
+		expect(Object.keys(GRAPHIC_STYLE_SLOT_OWNED_KEYS).sort())
+			.toEqual([...GRAPHIC_STYLE_SLOT_VALUES].sort());
+	});
+});
 
 describe('applyGraphicStyleSet', () => {
 	it('writes a typography preset\'s resolved properties into the item and leaves the item-specific ones alone', () => {
@@ -327,6 +368,33 @@ describe('applyGraphicStyleSet', () => {
 		expect(headlineOf(applied).styleRefs?.typography?.overrides)
 			.toMatchObject({ fontSize: 64, color: '#ff0044' });
 		expect(headlineOf(applied).styleRefs?.typography?.entryId).toBe('heading');
+	});
+
+	it('keeps a Graphic Fill slot\'s value by letting go of the reference', () => {
+		const entries = [...styleSet(), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' })];
+		const composition = applyGraphicStyleSet(
+			graphic([textItem({
+				surfaceStyle: { fill: { type: 'solid', color: '#000000' }, fillOpacity: 1 },
+				styleRefs: { 'surfaceStyle.fill': { entryId: 'accent-fill' } },
+			})]),
+			resolveGraphicStyleSet(entries),
+		);
+
+		const applied = applyGraphicStyleSet(
+			composition,
+			resolveGraphicStyleSet([...styleSet('#00ff88'), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' })]),
+			{ decisions: { [graphicStyleChangeKey('headline', 'surfaceStyle.fill')]: 'keep-as-override' } },
+		);
+
+		// A Graphic Fill has no partial to record a deviation in, so keeping it means the
+		// property goes local. Recording an empty override instead would leave the
+		// reference in place and offer the same change again on every later review.
+		expect(headlineOf(applied).surfaceStyle?.fill).toEqual({ type: 'solid', color: '#ff0044' });
+		expect(headlineOf(applied).styleRefs?.['surfaceStyle.fill']).toBeUndefined();
+		expect(graphicStyleUpdateChanges(
+			applied,
+			resolveGraphicStyleSet([...styleSet('#00ff88'), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' })]),
+		)).toEqual([]);
 	});
 
 	it('never mutates the composition it was given', () => {
