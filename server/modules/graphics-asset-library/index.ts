@@ -14,8 +14,8 @@ import type {
 	GraphicAssetUsage,
 	GraphicAssetValidationReport,
 	GraphicsAssetCapacityLimits,
-	GraphicsAssetEvidenceCategory,
-	GraphicsAssetEvidenceEntry,
+	GraphicsAssetEvidencePage,
+	GraphicsAssetEvidenceQuery,
 	GraphicsAssetLibraryCapacity,
 	GraphicsAssetLibraryComponentHealth,
 	GraphicsAssetLibraryHealth,
@@ -764,14 +764,25 @@ export interface GraphicsAssetLibrary {
 		search?: string;
 		lifecycleStates?: readonly GraphicAssetLifecycleState[];
 	}) => Promise<GraphicAsset[]>;
+	/**
+	 * The lifecycle transitions, each recorded in the Evidence ledger.
+	 *
+	 * The actor is who decided. It is optional because a transition the library
+	 * takes on its own behalf has no person behind it, and recording the policy
+	 * that acted is more honest than attributing it to whoever happened to be
+	 * holding the request.
+	 */
 	retireGraphicAsset: (input: {
 		assetId: GraphicAssetId;
+		actor?: string;
 	}) => Promise<GraphicAssetLifecycleActionOutcome>;
 	trashGraphicAsset: (input: {
 		assetId: GraphicAssetId;
+		actor?: string;
 	}) => Promise<GraphicAssetLifecycleActionOutcome>;
 	restoreGraphicAsset: (input: {
 		assetId: GraphicAssetId;
+		actor?: string;
 	}) => Promise<GraphicAssetLifecycleActionOutcome>;
 	updateGraphicAsset: (input: {
 		assetId: GraphicAssetId;
@@ -844,16 +855,17 @@ export interface GraphicsAssetLibrary {
 		actor: string;
 		confirmation: 'purge-now';
 	}) => Promise<GraphicAssetPurgeOutcome>;
-	listGraphicsAssetEvidence: (input?: {
-		limit?: number;
-		categories?: readonly GraphicsAssetEvidenceCategory[];
-		/**
-		 * Narrows the ledger to one opaque domain subject. Without it the ledger
-		 * answers with the newest entries the installation holds, which is a
-		 * different question from what happened to this asset.
-		 */
-		subject?: { kind: GraphicsAssetEvidenceEntry['subject']['kind']; id: string };
-	}) => Promise<GraphicsAssetEvidenceEntry[]>;
+	/**
+	 * One page of the chronological Evidence ledger.
+	 *
+	 * Every filter narrows. Without one the ledger answers with the newest
+	 * entries the installation holds, which is a different question from what
+	 * happened to one asset — so a caller asking about a subject says so rather
+	 * than reading the newest page and hoping the subject appears on it.
+	 */
+	listGraphicsAssetEvidence: (
+		input?: GraphicsAssetEvidenceQuery & { limit?: number },
+	) => Promise<GraphicsAssetEvidencePage>;
 	/**
 	 * Every operational queue in one risk-ordered reading: what needs doing,
 	 * how much of it there is, and the soonest deadline each queue is holding.
@@ -1555,6 +1567,48 @@ export function createGraphicsAssetLibrary(
 		catch {
 			// The transition is already durable; Evidence for it is best-effort and
 			// the next sweep re-observes the deadline either way.
+		}
+	}
+
+	/**
+	 * Records a committed lifecycle transition in the Evidence ledger. Like the
+	 * pruning Evidence beside it, this never fails the transition that already
+	 * committed — but unlike a deadline, no later sweep re-observes who moved an
+	 * asset and when, so this is the only chance to record it.
+	 */
+	async function recordLifecycleTransition(input: {
+		assetId: GraphicAssetId;
+		transition: 'retired' | 'trashed' | 'restored';
+		from: GraphicAssetLifecycleState;
+		to: GraphicAssetLifecycleState;
+		actor: string;
+		deadline?: string;
+	}) {
+		try {
+			await findRetention()?.recordLifecycleTransition({
+				...input,
+				recordedAt: timestamp(),
+			});
+		}
+		catch {
+			// Evidence is best-effort against a transition that already committed.
+		}
+	}
+
+	/**
+	 * Records the retention deadlines a publication just established on the
+	 * revisions it superseded.
+	 */
+	async function recordSupersession(input: {
+		assetId: GraphicAssetId;
+		supersededAt: string;
+		actor: string;
+	}) {
+		try {
+			await findRetention()?.recordSupersession(input);
+		}
+		catch {
+			// Evidence is best-effort against a publication that already committed.
 		}
 	}
 
@@ -3711,6 +3765,10 @@ export function createGraphicsAssetLibrary(
 				? await catalogue.findReusableGraphicAsset(report.facts.sha256)
 				: undefined;
 			let completed: GraphicsIngestionOperation;
+			// Replacement supersedes the previous revision and the catalogue
+			// authors its retention deadline inside that same transaction, so the
+			// exact instant is captured here to record the deadline as Evidence.
+			let supersededAt: string | undefined;
 			if (reusable) {
 				completed = await catalogue.reuseGraphicAsset({
 					operation,
@@ -3719,6 +3777,7 @@ export function createGraphicsAssetLibrary(
 				});
 			}
 			else if (operation.targetAssetId) {
+				supersededAt = timestamp();
 				completed = await catalogue.publishGraphicAssetReplacement({
 					operation,
 					targetAssetId: operation.targetAssetId,
@@ -3729,7 +3788,7 @@ export function createGraphicsAssetLibrary(
 					sourceDigest: report.facts.sha256,
 					thumbnailDigest,
 					thumbnailByteLength: thumbnail.byteLength,
-					publishedAt: timestamp(),
+					publishedAt: supersededAt,
 				});
 			}
 			else {
@@ -3765,6 +3824,13 @@ export function createGraphicsAssetLibrary(
 			await staging.delete(stagingIdentity);
 			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
 			await staging.delete(posterIdentity);
+			if (supersededAt && operation.targetAssetId) {
+				await recordSupersession({
+					assetId: operation.targetAssetId,
+					supersededAt,
+					actor: operation.initiatedBy,
+				});
+			}
 			return completed;
 		}
 		catch {
@@ -4895,6 +4961,13 @@ export function createGraphicsAssetLibrary(
 					'graphic-asset-lifecycle-action-not-allowed',
 				);
 			}
+			await recordLifecycleTransition({
+				assetId: input.assetId,
+				transition: 'retired',
+				from: 'active',
+				to: 'retired',
+				actor: input.actor ?? GRAPHICS_RETENTION_ACTOR,
+			});
 			return { outcome: 'retired', asset: transition.asset };
 		},
 		async trashGraphicAsset(input) {
@@ -4924,9 +4997,24 @@ export function createGraphicsAssetLibrary(
 				);
 			}
 			await recordPruningTransition(input.assetId, 'frozen');
+			// The lifecycle read back is what carries the state the asset came
+			// from and the recovery deadline Trash just established, neither of
+			// which the transition itself reports.
+			const trashed = (await findRetention()?.inspect(input.assetId))?.lifecycle;
+			await recordLifecycleTransition({
+				assetId: input.assetId,
+				transition: 'trashed',
+				from: trashed?.state === 'trashed' ? trashed.priorState : 'active',
+				to: 'trashed',
+				actor: input.actor ?? GRAPHICS_RETENTION_ACTOR,
+				deadline: trashed?.state === 'trashed' ? trashed.recoverableUntil : undefined,
+			});
 			return { outcome: 'trashed', asset: transition.asset };
 		},
 		async restoreGraphicAsset(input) {
+			// Restoration discards the state it is leaving, so the lifecycle is
+			// read before the transition rather than after it.
+			const restoring = (await findRetention()?.inspect(input.assetId))?.lifecycle;
 			const transition = await catalogueRequest(
 				() => requireCatalogue().restoreGraphicAsset({
 					assetId: input.assetId,
@@ -4947,6 +5035,13 @@ export function createGraphicsAssetLibrary(
 				);
 			}
 			await recordPruningTransition(input.assetId, 'resumed');
+			await recordLifecycleTransition({
+				assetId: input.assetId,
+				transition: 'restored',
+				from: restoring?.state ?? 'trashed',
+				to: transition.asset.lifecycle.state,
+				actor: input.actor ?? GRAPHICS_RETENTION_ACTOR,
+			});
 			return { outcome: 'restored', asset: transition.asset };
 		},
 		async updateGraphicAsset(input) {

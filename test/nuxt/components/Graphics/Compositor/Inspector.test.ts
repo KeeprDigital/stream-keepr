@@ -450,7 +450,9 @@ describe('graphicsCompositorInspector', () => {
 		});
 		expect(stops.findAll('[data-testid="graphic-fill-stop"]')).toHaveLength(2);
 
-		numberField(stops, 'Stop 2 opacity')?.vm.$emit('update:modelValue', 0.4);
+		// Each surface's controls name the surface they belong to, because a Game Wins
+		// Item shows three sets of them at once.
+		numberField(stops, 'Graphic Surface Style stop 2 opacity')?.vm.$emit('update:modelValue', 0.4);
 		await nextTick();
 
 		const patched = surfaceOf(emittedGraphics(stops));
@@ -1022,5 +1024,197 @@ describe('graphicsCompositorInspector', () => {
 		await nextTick();
 
 		expect(wrapper.emitted('update:graphics')).toBeUndefined();
+	});
+	describe('the context-gated Feature Match Definitions', () => {
+		/**
+		 * A Feature Match Layout holding one item of a context-gated kind. Authored
+		 * under the Feature Match Overlay Host Contract, because that is the only host
+		 * that can supply the context these Definitions require.
+		 */
+		function featureMatchStack(kind: 'clock' | 'player-life' | 'game-wins') {
+			return stack([getGraphicItemDefinition(kind).createDefault({
+				id: kind,
+				label: kind,
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			})]);
+		}
+
+		function mountKind(kind: 'clock' | 'player-life' | 'game-wins', graphics = featureMatchStack(kind)) {
+			return mountComponent({
+				graphics,
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: kind },
+				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+			});
+		}
+
+		it.each(['clock', 'player-life', 'game-wins'] as const)('sets the base typography of a %s Item', async (kind) => {
+			// A Game Wins Item paints text only while it renders its win count.
+			const graphics = featureMatchStack(kind);
+			const item = graphics[0]!.items[0]!;
+			if (item.type === 'game-wins')
+				item.displayMode = 'number';
+
+			const wrapper = await mountKind(kind, graphics);
+			numberField(wrapper, 'Font size')?.vm.$emit('update:modelValue', 96);
+			await nextTick();
+
+			const patched = itemOf(emittedGraphics(wrapper));
+			expect(patched?.type === kind && patched.typography.fontSize).toBe(96);
+		});
+
+		it.each(['clock', 'player-life'] as const)('bounds a %s Item with a Text Overflow Policy', async (kind) => {
+			const wrapper = await mountKind(kind);
+
+			selectField(wrapper, 'text-overflow-policy')?.vm.$emit('update:modelValue', 'shrink');
+			await nextTick();
+
+			const item = itemOf(emittedGraphics(wrapper));
+			expect(item?.type === kind && item.overflowPolicy).toBe('shrink');
+
+			// The floor a shrink policy stops at only appears once shrinking is what happens.
+			const shrinking = await mountKind(kind, emittedGraphics(wrapper));
+			numberFieldByTestId(shrinking, 'text-min-font-size')?.vm.$emit('update:modelValue', 30);
+			await nextTick();
+
+			const bounded = itemOf(emittedGraphics(shrinking));
+			expect(bounded?.type === kind && bounded.minFontSize).toBe(30);
+		});
+
+		it.each(['clock', 'player-life', 'game-wins'] as const)('gives a %s Item a Graphic Surface Style of its own', async (kind) => {
+			const wrapper = await mountKind(kind);
+
+			await switchField(wrapper, 'surface-style-own')?.trigger('click');
+
+			const item = itemOf(emittedGraphics(wrapper));
+			expect(item?.type !== 'media' && item?.surfaceStyle).toMatchObject({ fillOpacity: 1 });
+		});
+
+		it('sets the life-change animation a Player Life Item marks a change with', async () => {
+			const wrapper = await mountKind('player-life');
+
+			selectField(wrapper, 'player-life-animation')?.vm.$emit('update:modelValue', 'pop');
+			await nextTick();
+			numberFieldByTestId(wrapper, 'player-life-animation-duration')?.vm.$emit('update:modelValue', 800);
+			await nextTick();
+			// The colour a glow or slide change tints; the other animations ignore it.
+			wrapper.findAllComponents(UInputStub)
+				.find(input => input.attributes('data-testid') === 'player-life-animation-accent')
+				?.vm
+				.$emit('update:modelValue', '#ff0055');
+			await nextTick();
+
+			expect(itemOf(emittedGraphics(wrapper, 0))).toMatchObject({ lifeAnimation: 'pop' });
+			expect(itemOf(emittedGraphics(wrapper, 1))).toMatchObject({ lifeAnimationDurationMs: 800 });
+			expect(itemOf(emittedGraphics(wrapper, 2))).toMatchObject({ lifeAnimationAccentColor: '#ff0055' });
+		});
+
+		it('sets a Game Wins Item’s win box orientation, dimensions, and gap', async () => {
+			const wrapper = await mountKind('game-wins');
+
+			selectField(wrapper, 'game-wins-box-orientation')?.vm.$emit('update:modelValue', 'vertical');
+			await nextTick();
+			numberField(wrapper, 'Win box width')?.vm.$emit('update:modelValue', 40);
+			await nextTick();
+			numberField(wrapper, 'Win box height')?.vm.$emit('update:modelValue', 12);
+			await nextTick();
+			numberField(wrapper, 'Win box gap')?.vm.$emit('update:modelValue', 3);
+			await nextTick();
+
+			expect(itemOf(emittedGraphics(wrapper, 0))).toMatchObject({ boxOrientation: 'vertical' });
+			expect(itemOf(emittedGraphics(wrapper, 1))).toMatchObject({ boxWidth: 40 });
+			expect(itemOf(emittedGraphics(wrapper, 2))).toMatchObject({ boxHeight: 12 });
+			expect(itemOf(emittedGraphics(wrapper, 3))).toMatchObject({ boxGap: 3 });
+		});
+
+		it('shows a Game Wins Item the boxes it renders, and only while it renders them', async () => {
+			// The `number` display mode paints a win count: there is no box to orient,
+			// size, shape, or paint, and the authored values survive the switch.
+			const boxes = await mountKind('game-wins');
+			expect(boxes.find('[data-testid="game-wins-box-orientation"]').exists()).toBe(true);
+			expect(boxes.find('[data-testid="game-wins-box-shape-fill"]').exists()).toBe(true);
+			expect(boxes.find('[data-testid="game-wins-won-box-shape-fill"]').exists()).toBe(true);
+			expect(boxes.find('[data-testid="shape-geometry-preset"]').exists()).toBe(true);
+
+			selectField(boxes, 'game-wins-display-mode')?.vm.$emit('update:modelValue', 'number');
+			await nextTick();
+
+			const number = await mountKind('game-wins', emittedGraphics(boxes));
+			expect(number.find('[data-testid="game-wins-box-orientation"]').exists()).toBe(false);
+			expect(number.find('[data-testid="game-wins-box-shape-fill"]').exists()).toBe(false);
+			expect(number.find('[data-testid="game-wins-won-box-shape-fill"]').exists()).toBe(false);
+			expect(number.find('[data-testid="shape-geometry-preset"]').exists()).toBe(false);
+			// Typography goes the other way: a Game Wins Item paints text only in the
+			// `number` mode, so offering it beside the boxes would be a whole block of
+			// controls that change nothing on screen.
+			expect(numberField(boxes, 'Font size')).toBeUndefined();
+			expect(numberField(number, 'Font size')).toBeDefined();
+		});
+
+		it('paints a Game Wins Item’s unwon and won boxes independently', async () => {
+			// An unwon box reads as an empty outline and a won one as a filled pip, which
+			// is the distinction the indicator exists to make.
+			const wrapper = await mountKind('game-wins');
+
+			wrapper.findAllComponents(UInputStub)
+				.find(input => input.attributes('data-testid') === 'game-wins-box-shape-fill')
+				?.vm
+				.$emit('update:modelValue', '#123456');
+			await nextTick();
+			await switchField(wrapper, 'game-wins-won-box-graphic-glow-enabled')?.trigger('click');
+
+			const unwon = itemOf(emittedGraphics(wrapper, 0));
+			expect(unwon?.type === 'game-wins' && unwon.boxSurfaceStyle.fill).toEqual({ type: 'solid', color: '#123456' });
+			// Neither edit reached the other surface.
+			expect(unwon?.type === 'game-wins' && unwon.wonBoxSurfaceStyle.fill).toEqual({ type: 'solid', color: '#22c55e' });
+
+			const won = itemOf(emittedGraphics(wrapper, 1));
+			expect(won?.type === 'game-wins' && won.wonBoxSurfaceStyle.glow).toBeDefined();
+			expect(won?.type === 'game-wins' && won.boxSurfaceStyle.glow).toBeUndefined();
+		});
+
+		it('shapes a Game Wins Item’s win box rather than its own bounds', async () => {
+			const wrapper = await mountKind('game-wins');
+
+			selectField(wrapper, 'shape-corner-topRight')?.vm.$emit('update:modelValue', 'cut');
+			await nextTick();
+
+			const item = itemOf(emittedGraphics(wrapper));
+			expect(item?.type === 'game-wins' && item.boxGeometry.topRight.treatment).toBe('cut');
+			expect(item).toMatchObject({ width: 768, height: 108 });
+		});
+
+		it('sizes a context-gated Item inside a row Graphic Group like any other child', async () => {
+			// A Clock is an ordinary Graphic Group child, so its main-axis sizing is
+			// the group's to decide in exactly the way a Text Item's is.
+			const clock = getGraphicItemDefinition('clock').createDefault({
+				id: 'clock',
+				label: 'Clock',
+				canvasWidth: 800,
+				canvasHeight: 200,
+			});
+			const wrapper = await mountComponent({
+				graphics: stack([groupWith([clock as never])]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'clock' },
+				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+			});
+
+			selectField(wrapper, 'graphic-group-child-sizing-mode')?.vm.$emit('update:modelValue', 'fill');
+			await nextTick();
+
+			expect(childOf(emittedGraphics(wrapper))).toMatchObject({ sizing: { mode: 'fill' } });
+		});
+
+		it('offers no win box or life-change control to a kind that has none', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([shapeItem]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+			});
+
+			expect(wrapper.find('[data-testid="game-wins-display-mode"]').exists()).toBe(false);
+			expect(wrapper.find('[data-testid="player-life-animation"]').exists()).toBe(false);
+			expect(wrapper.find('[data-testid="game-wins-box-shape-fill"]').exists()).toBe(false);
+			expect(numberField(wrapper, 'Font size')).toBeUndefined();
+		});
 	});
 });

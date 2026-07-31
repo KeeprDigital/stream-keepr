@@ -2,14 +2,15 @@ import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayOutput } from '~
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, ref } from 'vue';
-import { createFeatureMatchLayoutComposition } from '~~/shared/featureMatchLayoutComposition';
+import { computed, nextTick, ref } from 'vue';
+import { createFeatureMatchLayoutComposition, FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 
 const mockConfig = ref<FeatureMatchOverlayModeConfig>(structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG));
 const mockOutputMode = ref<FeatureMatchOverlayOutput>('overlay');
 const mockPreviewGuides = ref(false);
+const mockPreviewSafeAreas = ref(false);
 const mockScreen = ref({ screenConfig: { width: 1920, height: 1080 } });
 const mockLoading = ref(false);
 const mockError = ref<string | null>(null);
@@ -18,6 +19,7 @@ const mockContentUrlsSettled = ref(true);
 mockNuxtImport('useScreenContext', () => () => ({
 	outputMode: mockOutputMode,
 	previewGuides: mockPreviewGuides,
+	previewSafeAreas: mockPreviewSafeAreas,
 	screen: mockScreen,
 }));
 
@@ -200,10 +202,119 @@ describe('featureMatchOverlayDisplay', () => {
 		});
 	});
 
+	describe('the editor preview guide layer', () => {
+		function guidedConfig(): FeatureMatchOverlayModeConfig {
+			// A layout with both authoring surfaces populated: the Source Items the
+			// default preset carries, and one shared Graphic Item in the composition.
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.composition = {
+				...createFeatureMatchLayoutComposition(),
+				items: [getGraphicItemDefinition('clock').createDefault({
+					id: 'shared-clock',
+					label: 'Shared Clock',
+					canvasWidth: 1920,
+					canvasHeight: 1080,
+				})],
+			};
+			return config;
+		}
+
+		it('draws no guide of any kind on a live Screen Output', async () => {
+			// Preview guides never appear in live Screen Outputs or captures. A live
+			// output is exactly a Screen that was not asked for guides, and the check
+			// runs in every output because none of them changes the answer.
+			for (const output of ['overlay', 'fill', 'key'] as const) {
+				mockConfig.value = guidedConfig();
+				mockOutputMode.value = output;
+
+				const wrapper = await mountComponent();
+
+				expect(wrapper.find('.guide-layer').exists()).toBe(false);
+				expect(wrapper.find('[data-item-guide]').exists()).toBe(false);
+				expect(wrapper.find('[data-safe-area-guide]').exists()).toBe(false);
+				expect(wrapper.find('[aria-label="Select canvas"]').exists()).toBe(false);
+			}
+		});
+
+		it('guides both authoring surfaces from one layer with one canvas catch-all', async () => {
+			// Two guide layers over one canvas would leave whichever landed underneath
+			// unclickable, and each would contribute a second catch-all swallowing the
+			// other's guides. The host-owned guides come last, so a Source Item stays
+			// selectable where it overlaps a shared Graphic Item.
+			mockConfig.value = guidedConfig();
+			mockPreviewGuides.value = true;
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.findAll('.guide-layer')).toHaveLength(1);
+			expect(wrapper.findAll('[aria-label="Select canvas"]')).toHaveLength(1);
+			expect(wrapper.find('[data-item-guide="shared-clock"]').exists()).toBe(true);
+			expect(wrapper.findAll('.graphic-item-guide--source').length).toBeGreaterThan(0);
+
+			const html = wrapper.html();
+			expect(html.indexOf('aria-label="Select canvas"')).toBeLessThan(html.indexOf('data-item-guide'));
+			expect(html.indexOf('data-item-guide')).toBeLessThan(html.indexOf('graphic-item-guide--source'));
+		});
+
+		it('reports a shared Graphic Item click back to the editor in the compositor’s vocabulary', async () => {
+			mockConfig.value = guidedConfig();
+			mockPreviewGuides.value = true;
+			const postMessage = vi.spyOn(window.parent, 'postMessage');
+
+			const wrapper = await mountComponent();
+			await wrapper.get('[data-item-guide="shared-clock"]').trigger('click');
+
+			expect(postMessage).toHaveBeenCalledWith(
+				{
+					type: 'graphics-compositor:select',
+					target: { type: 'item', graphicId: FEATURE_MATCH_LAYOUT_COMPOSITION_ID, itemId: 'shared-clock' },
+				},
+				window.location.origin,
+			);
+			postMessage.mockRestore();
+		});
+
+		it('marks the shared Graphic Item the editor selected', async () => {
+			mockConfig.value = guidedConfig();
+			mockPreviewGuides.value = true;
+
+			const wrapper = await mountComponent();
+			expect(wrapper.get('[data-item-guide="shared-clock"]').classes()).not.toContain('is-selected');
+
+			window.dispatchEvent(new MessageEvent('message', {
+				origin: window.location.origin,
+				source: window.parent,
+				data: {
+					type: 'graphics-compositor:selected-target',
+					target: { type: 'item', graphicId: FEATURE_MATCH_LAYOUT_COMPOSITION_ID, itemId: 'shared-clock' },
+				},
+			}));
+			await nextTick();
+
+			expect(wrapper.get('[data-item-guide="shared-clock"]').classes()).toContain('is-selected');
+		});
+
+		it('draws advisory safe areas without offering anything to select', async () => {
+			// The safe-area guides are advisory: they never clip or constrain an
+			// authored Graphic Item, and with item guides switched off there is no
+			// selection to make, so nothing in the layer is clickable.
+			mockConfig.value = guidedConfig();
+			mockPreviewSafeAreas.value = true;
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.findAll('[data-safe-area-guide]').map(guide => guide.attributes('data-safe-area-guide')))
+				.toEqual(['action-safe', 'title-safe']);
+			expect(wrapper.find('[aria-label="Select canvas"]').exists()).toBe(false);
+			expect(wrapper.find('[data-item-guide]').exists()).toBe(false);
+		});
+	});
+
 	beforeEach(() => {
 		mockConfig.value = groupLayerConfig();
 		mockOutputMode.value = 'overlay';
 		mockPreviewGuides.value = false;
+		mockPreviewSafeAreas.value = false;
 		mockScreen.value = { screenConfig: { width: 1920, height: 1080 } };
 		mockLoading.value = false;
 		mockError.value = null;

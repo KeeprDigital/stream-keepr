@@ -15,6 +15,19 @@ import { isGraphicsSelectionTarget } from './selection';
 export const GRAPHICS_PREVIEW_STATE_MESSAGE = 'graphics-compositor:preview-state';
 export const GRAPHICS_PREVIEW_SELECT_MESSAGE = 'graphics-compositor:select';
 
+/**
+ * The compositor selection, pushed on its own rather than inside a whole preview
+ * state.
+ *
+ * A host that owns its preview transport already pushes its own working
+ * composition — a Feature Match Overlay pushes a whole mode configuration,
+ * because its Frame and Source Items are host-owned and travel with it. Only the
+ * shared compositor's selection is missing from that, and it is the same
+ * `GraphicsSelectionTarget` whichever host sends it, so it travels as one shared
+ * message rather than as a second per-host one.
+ */
+export const GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE = 'graphics-compositor:selected-target';
+
 /** How much of a lifecycle one Graphic Animation Preview run plays. */
 export const GRAPHICS_PREVIEW_ANIMATION_SCOPE_VALUES = ['phase', 'lifecycle'] as const;
 
@@ -160,6 +173,18 @@ export function readGraphicsPreviewState(state: GraphicsPreviewState): GraphicsP
 			? null
 			: readGraphicsPreviewAnimationPlan(state.animation),
 	};
+}
+
+/** The editor's current compositor selection, pushed into an embedded preview. */
+export function isGraphicsPreviewSelectedTargetMessage(
+	message: MessageEnvelope,
+	expected: ExpectedSender,
+): message is MessageEnvelope & { data: { type: string; target: GraphicsSelectionTarget } } {
+	if (!isFromExpectedSender(message, expected))
+		return false;
+
+	const data = message.data as Record<string, unknown>;
+	return data.type === GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE && isGraphicsSelectionTarget(data.target);
 }
 
 export function isGraphicsPreviewSelectMessage(

@@ -129,6 +129,55 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 
 		expect(model.canvasStyle.position).toBeUndefined();
 	});
+
+	it('declares itself a layer, so its host draws the one guide layer over it', () => {
+		// The same division that decides the backdrop and the placement decides the
+		// guides: whoever paints the canvas draws them. Two guide layers stacked over
+		// one canvas would leave whichever landed underneath unclickable.
+		const model = resolveFeatureMatchOverlayCompositorRenderModel({
+			output: 'overlay',
+			layout: { composition: undefined },
+			...CANVAS,
+		});
+
+		expect(model.canvasRole).toBe('layer');
+	});
+
+	it('draws no guide of any kind unless an editor preview asks for one', () => {
+		// Preview guides never appear in live Screen Outputs or captures. A live output
+		// asks for neither flag, so this is the model-level half of that property —
+		// checked in every output, because nothing about the output selection changes
+		// the answer.
+		for (const output of ['overlay', 'fill', 'key'] as const) {
+			const model = resolveFeatureMatchOverlayCompositorRenderModel({
+				output,
+				layout: layout([item('clock', 'clock'), item('game-wins', 'wins')]),
+				selectedTarget: { type: 'item', graphicId: FEATURE_MATCH_LAYOUT_COMPOSITION_ID, itemId: 'clock' },
+				...CANVAS,
+			});
+
+			expect(model.itemGuides).toEqual([]);
+			expect(model.safeAreaGuides).toEqual([]);
+		}
+	});
+
+	it('guides every shared Graphic Item and marks the selected one, when asked', () => {
+		const model = resolveFeatureMatchOverlayCompositorRenderModel({
+			output: 'overlay',
+			layout: layout([item('clock', 'clock'), item('game-wins', 'wins')]),
+			itemGuides: true,
+			safeAreaGuides: true,
+			selectedTarget: { type: 'item', graphicId: FEATURE_MATCH_LAYOUT_COMPOSITION_ID, itemId: 'wins' },
+			...CANVAS,
+		});
+
+		expect(model.itemGuides.map(guide => [guide.itemId, guide.selected])).toEqual([
+			['clock', false],
+			['wins', true],
+		]);
+		// Advisory action-safe at a five-percent inset, title-safe at ten.
+		expect(model.safeAreaGuides.map(guide => guide.id)).toEqual(['action-safe', 'title-safe']);
+	});
 });
 
 describe('featureMatchTokenValues', () => {

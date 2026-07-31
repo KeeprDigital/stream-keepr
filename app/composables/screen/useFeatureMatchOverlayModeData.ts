@@ -3,10 +3,19 @@ import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig
 import type { FeatureMatch, Match } from '~/types';
 
 export function useFeatureMatchOverlayModeData() {
-	const { eventId, previewGuides } = useScreenContext();
+	const { eventId, isPreview } = useScreenContext();
 	const storedConfig = useScreenModeConfig('feature-match-overlay');
 	const previewConfigOverride = ref<FeatureMatchOverlayModeConfig | null>(null);
-	const config = computed(() => previewGuides?.value && previewConfigOverride.value ? previewConfigOverride.value : storedConfig.value);
+	/**
+	 * An embedded editor preview renders the working configuration the editor
+	 * pushes in; a live Screen Output renders the stored one.
+	 *
+	 * Gated on being a preview rather than on the guides switch: whether an author
+	 * is looking at item guides has nothing to do with whether they are looking at
+	 * their unsaved edits, and reading the guides flag here meant switching guides
+	 * off silently swapped the preview back to the saved configuration.
+	 */
+	const config = computed(() => isPreview?.value && previewConfigOverride.value ? previewConfigOverride.value : storedConfig.value);
 	const eventStore = useEventStore();
 	const featureMatchStore = useFeatureMatchStore();
 	const featureMatchStateStore = useFeatureMatchStateStore();
@@ -30,7 +39,7 @@ export function useFeatureMatchOverlayModeData() {
 	}
 
 	function handlePreviewConfigMessage(message: MessageEvent) {
-		if (!previewGuides?.value || !isPreviewConfigMessage(message))
+		if (!isPreview?.value || !isPreviewConfigMessage(message))
 			return;
 
 		previewConfigOverride.value = message.data.config;

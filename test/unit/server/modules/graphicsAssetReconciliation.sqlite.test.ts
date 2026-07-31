@@ -18,6 +18,7 @@ import {
 	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
+import { evidenceOf } from '~~/test/helpers/graphicsEvidence';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 const pixelPng = Uint8Array.from(Buffer.from(
@@ -340,6 +341,33 @@ describe('graphics asset reconciliation', () => {
 			const overview = await context.library.getReconciliationOverview();
 			expect(overview.openCounts['unavailable-content']).toBe(1);
 			expect((await contentAvailability(digestOf(pixelPng)))?.availability).toBe('unavailable');
+		});
+
+		it('keeps repeated delivery reads out of the ledger after the first', async () => {
+			const context = createReconciliationLibrary();
+			const operation = await ingestImage(context, {
+				idempotencyKey: 'high-volume-delivery',
+				name: 'Repeatedly delivered',
+			});
+			const reference = publishedReference(operation);
+			await context.canonical.delete(canonicalIdentity(digestOf(pixelPng)));
+
+			// Delivery is the highest-volume path the library has. A per-request
+			// audit row would put the ledger's growth in the hands of whoever is
+			// watching the stream, so the incident is announced once and every
+			// later read re-observes the discrepancy already open.
+			for (let read = 0; read < 25; read++)
+				await context.library.resolveGraphicAssetRevision(reference);
+
+			const overview = await context.library.getReconciliationOverview();
+			expect(overview.openCounts['unavailable-content']).toBe(1);
+			const entries = await evidenceOf(context.library, {
+				categories: ['content-unavailable-detected'],
+				limit: 500,
+			});
+			expect(entries).toHaveLength(1);
+			// Nothing about an individual read reaches the ledger either.
+			expect(entries[0]!.subject.kind).toBe('graphics-discrepancy');
 		});
 
 		it('does not record an incident when the byte store merely could not answer', async () => {
@@ -789,6 +817,23 @@ describe('graphics asset reconciliation', () => {
 			expect(asset?.revisions).toHaveLength(1);
 			expect(asset?.revisionId).toBe(reference.revisionId);
 			expect(await thumbnailDigest(reference.revisionId)).toBe(derivativeDigest);
+
+			// A recovery is the one reconciliation action that puts bytes back, so
+			// its Evidence records the transition it made and the capacity those
+			// bytes landed in.
+			await expect(evidenceOf(context.library, {
+				categories: ['derivative-regenerated'],
+			})).resolves.toEqual([
+				expect.objectContaining({
+					actor: 'administrator',
+					detail: expect.objectContaining({
+						transition: { from: 'open', to: 'resolved' },
+						canonicalPressure: expect.any(String),
+						canonicalUsedBytes: expect.any(Number),
+						canonicalLimitBytes: expect.any(Number),
+					}),
+				}),
+			]);
 		});
 
 		it('regenerates a silent-video poster through the pinned validation runtime', async () => {
@@ -1040,11 +1085,15 @@ describe('graphics asset reconciliation', () => {
 			const stored = await context.canonical.readMetadata(identity);
 			expect(stored.outcome === 'available' && stored.object.byteLength)
 				.toBe(corrupted.byteLength);
-			const rejections = await context.library.listGraphicsAssetEvidence({
+			const rejections = await evidenceOf(context.library, {
 				categories: ['repair-rejected'],
 			});
 			expect(rejections.length).toBeGreaterThan(0);
-			expect(await context.library.listGraphicsAssetEvidence({
+			// A refusal decides nothing and moves nothing, so it records neither a
+			// transition nor a quota reading rather than inventing either.
+			expect(rejections[0]!.detail).not.toHaveProperty('transition');
+			expect(rejections[0]!.detail).not.toHaveProperty('canonicalPressure');
+			expect(await evidenceOf(context.library, {
 				categories: ['content-repaired'],
 			})).toEqual([]);
 		});
@@ -1065,13 +1114,18 @@ describe('graphics asset reconciliation', () => {
 			});
 			expect(overview.lastSweep?.correlationId).toBeDefined();
 
-			const evidence = await context.library.listGraphicsAssetEvidence({
+			const evidence = await evidenceOf(context.library, {
 				categories: ['content-unavailable-detected'],
 			});
 			expect(evidence).toHaveLength(1);
 			expect(evidence[0]).toMatchObject({
 				outcome: 'content-unavailable',
 				reason: 'canonical-object-missing',
+				// A discrepancy genuinely transitions, so the entry says so rather
+				// than leaving a reader to infer it from the category.
+				detail: expect.objectContaining({
+					transition: { from: 'none', to: 'open' },
+				}),
 			});
 			// Evidence never carries a digest, object key, or filename.
 			expect(JSON.stringify(evidence[0])).not.toContain(digestOf(pixelPng));

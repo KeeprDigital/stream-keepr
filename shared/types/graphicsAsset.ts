@@ -12,7 +12,10 @@ import type {
 	GRAPHICS_RECONCILIATION_EVIDENCE_CATEGORIES,
 	GRAPHICS_REPAIR_REJECTION_CODES,
 } from '../utils/graphicsAssetReconciliation';
-import type { GRAPHICS_RETENTION_EVIDENCE_CATEGORIES } from '../utils/graphicsAssetRetention';
+import type {
+	GRAPHIC_ASSET_PURGE_REASONS,
+	GRAPHICS_RETENTION_EVIDENCE_CATEGORIES,
+} from '../utils/graphicsAssetRetention';
 import type {
 	GraphicsOperationalQueueId,
 	GraphicsQueueAction,
@@ -583,6 +586,8 @@ export type GraphicAssetRevisionRetention
 			remainingMilliseconds: number;
 		};
 
+export type GraphicAssetPurgeReason = typeof GRAPHIC_ASSET_PURGE_REASONS[number];
+
 export type GraphicsRetentionEvidenceCategory
 	= typeof GRAPHICS_RETENTION_EVIDENCE_CATEGORIES[number];
 
@@ -627,6 +632,14 @@ export interface GraphicsAssetEvidenceEntry {
 		bytesReserved?: number;
 		deadline?: string;
 		remainingMilliseconds?: number;
+		/**
+		 * The named states either side of the change, where the subject has them.
+		 * The category says what happened; this says what it happened to, so a
+		 * reader does not have to know which category implies which prior state.
+		 */
+		transition?: { from: string; to: string };
+		/** The ingestion operation an entry belongs to, when it is not the subject. */
+		operationId?: string;
 		canonicalUsedBytes?: number;
 		canonicalLimitBytes?: number;
 		canonicalPressure?: GraphicsCanonicalCapacityPressure;
@@ -640,7 +653,80 @@ export interface GraphicsAssetEvidenceEntry {
 		/** Whether the incident fails closed and is excluded from automatic action. */
 		isolated?: boolean;
 	};
-	expiresAt: string;
+	/**
+	 * When this entry may be removed, or null while its subject is still live.
+	 *
+	 * The one-year window runs from the subject's terminal cleanup, so an entry
+	 * has no expiry until something records that cleanup. Null therefore means
+	 * "retained", not "retained forever": every subject reaches a terminal
+	 * outcome eventually, and the sweep stamps the whole subject's entries when
+	 * it does.
+	 */
+	expiresAt: string | null;
+}
+
+/**
+ * One position in the chronological ledger. Paging by offset would re-read
+ * everything already skipped and would silently shift under a sweep writing new
+ * entries mid-read, so a page is addressed by the last entry it contained.
+ */
+export interface GraphicsAssetEvidencePosition {
+	recordedAt: string;
+	id: string;
+}
+
+/**
+ * What an administrator is asking the Evidence ledger. Every filter narrows;
+ * none of them widen, so an unfiltered query is the whole ledger newest first.
+ */
+export interface GraphicsAssetEvidenceQuery {
+	categories?: readonly GraphicsAssetEvidenceCategory[];
+	/** Narrows the ledger to one opaque domain subject. */
+	subject?: { kind: GraphicsAssetEvidenceSubjectKind; id: string };
+	/** The administrator or automated policy that decided. */
+	actor?: string;
+	/** Everything one sweep or one request decided, however far apart. */
+	correlationId?: string;
+	recordedFrom?: string;
+	recordedUntil?: string;
+	cursor?: GraphicsAssetEvidencePosition;
+	/** Which side of the cursor to read. Reading starts at the newest end. */
+	direction?: 'older' | 'newer';
+}
+
+/**
+ * Proof that a Graphic Asset identity was purged.
+ *
+ * A tombstone outlives both the asset and the Evidence explaining its purge, so
+ * it is what still answers a provenance question about the identity a year
+ * later. It is a record of an absence and never resolves to content: nothing
+ * reaches it from a Graphic Asset Reference.
+ */
+export interface GraphicAssetTombstone {
+	assetId: GraphicAssetId;
+	purgedAt: string;
+	reason: GraphicAssetPurgeReason;
+	revisionCount: number;
+	/** How many references the purge proof found. A purge only commits at zero. */
+	referenceCount: number;
+}
+
+/**
+ * One page of the ledger, always in newest-first order whichever direction it
+ * was read in. A null cursor is the end of the ledger in that direction rather
+ * than an empty page, so navigation can stop without a further read.
+ */
+export interface GraphicsAssetEvidencePage {
+	entries: GraphicsAssetEvidenceEntry[];
+	older: GraphicsAssetEvidencePosition | null;
+	newer: GraphicsAssetEvidencePosition | null;
+	/**
+	 * The tombstone for the subject asked about, when the question was about one
+	 * Graphic Asset and that asset has been purged. It is reported beside the
+	 * Evidence because an empty ledger for a purged identity means something
+	 * quite different from an empty ledger for one that never existed.
+	 */
+	tombstone?: GraphicAssetTombstone;
 }
 
 export interface GraphicsRetentionSweepResult {
@@ -746,7 +832,7 @@ export type GraphicAssetPurgeOutcome
 		revisionCount: number;
 		/** References the fresh proof found across every revision; always 0 when purged. */
 		referenceCount: number;
-		reason: 'trash-window-elapsed' | 'early-purge';
+		reason: GraphicAssetPurgeReason;
 	}
 	| {
 		outcome: 'in-use';

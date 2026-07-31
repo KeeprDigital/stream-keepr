@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "09fac86e-95e8-4fca-ac40-2bd818aa2f04",
-  "prevId": "41aab9e5-c7f7-4133-89a8-9d5e8f4ad2b7",
+  "id": "e8b6a365-3e40-4e26-909c-52fe48ad7496",
+  "prevId": "09fac86e-95e8-4fca-ac40-2bd818aa2f04",
   "tables": {
     "archetype_cards": {
       "name": "archetype_cards",
@@ -3367,6 +3367,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "source_template_revision": {
+          "name": "source_template_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "installed_by_operation_id": {
