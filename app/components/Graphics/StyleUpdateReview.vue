@@ -40,6 +40,8 @@ const SLOT_LABELS: Record<string, string> = {
 	'surfaceStyle': 'Graphic Surface Style',
 	'surfaceStyle.fill': 'Graphic Fill',
 	'defaultChildSurfaceStyle': 'Child style default',
+	'boxSurfaceStyle': 'Game win box',
+	'wonBoxSurfaceStyle': 'Won game win box',
 	'geometry': 'Shape Geometry',
 	'clipGeometry': 'Clipping geometry',
 	'media': 'Media treatment',

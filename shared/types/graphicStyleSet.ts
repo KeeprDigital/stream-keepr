@@ -234,12 +234,20 @@ export type GraphicStyleSetEntry = {
  * and the finer slot is applied last and wins. That ordering is the whole rule;
  * there is no validation refusing the combination, because "a brand surface but
  * this one gradient" is an ordinary thing to want.
+ *
+ * A Graphic Item may own more than one Graphic Surface Style, and each gets its own
+ * slot rather than sharing one. A Game Wins Graphic Item has three — its own
+ * surface, an unwon box, and a won box — and the whole point of the won box is that
+ * it looks *different*, so a vocabulary that could only say "this item's surface"
+ * could never express the one distinction that item exists to draw.
  */
 export const GRAPHIC_STYLE_SLOT_VALUES = [
 	'typography',
 	'surfaceStyle',
 	'surfaceStyle.fill',
 	'defaultChildSurfaceStyle',
+	'boxSurfaceStyle',
+	'wonBoxSurfaceStyle',
 	'geometry',
 	'clipGeometry',
 	'media',
@@ -288,6 +296,8 @@ export interface GraphicStyleOverridesBySlot {
 	'surfaceStyle': Partial<GraphicSurfaceStyle>;
 	'surfaceStyle.fill': Record<string, never>;
 	'defaultChildSurfaceStyle': Partial<GraphicSurfaceStyle>;
+	'boxSurfaceStyle': Partial<GraphicSurfaceStyle>;
+	'wonBoxSurfaceStyle': Partial<GraphicSurfaceStyle>;
 	'geometry': Partial<ShapeGeometry>;
 	'clipGeometry': Partial<ShapeGeometry>;
 	'media': Partial<GraphicStyleMediaProperties>;

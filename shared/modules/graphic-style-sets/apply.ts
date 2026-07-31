@@ -99,6 +99,8 @@ export const GRAPHIC_STYLE_SLOT_OWNED_KEYS: Record<GraphicStyleSlot, readonly st
 	// takes no overrides at all: deviating from a Graphic Fill preset is unbinding it.
 	'surfaceStyle.fill': [],
 	'defaultChildSurfaceStyle': ['fill', 'fillOpacity', 'outline', 'glow'],
+	'boxSurfaceStyle': ['fill', 'fillOpacity', 'outline', 'glow'],
+	'wonBoxSurfaceStyle': ['fill', 'fillOpacity', 'outline', 'glow'],
 	'geometry': ['topLeft', 'topRight', 'bottomRight', 'bottomLeft', 'leftSlant', 'rightSlant'],
 	'clipGeometry': ['topLeft', 'topRight', 'bottomRight', 'bottomLeft', 'leftSlant', 'rightSlant'],
 	'media': ['fit', 'focalPosition', 'opacity', 'clipGeometry', 'playbackRate', 'loop'],

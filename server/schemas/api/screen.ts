@@ -1004,6 +1004,8 @@ const graphicItemStyleRefsSchema = z.object({
 	'surfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
 	'surfaceStyle.fill': graphicFillStyleRefSchema.optional(),
 	'defaultChildSurfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
+	'boxSurfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
+	'wonBoxSurfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
 	'geometry': graphicStyleRefSchema(graphicShapeGeometrySchema.partial()).optional(),
 	'clipGeometry': graphicStyleRefSchema(graphicShapeGeometrySchema.partial()).optional(),
 	'media': graphicStyleRefSchema(graphicMediaTreatmentPropertiesSchema.partial()).optional(),

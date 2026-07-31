@@ -136,7 +136,8 @@ describe('gRAPHIC_STYLE_SLOT_OWNED_KEYS', () => {
 		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.typography].sort())
 			.toEqual(Object.keys(TYPOGRAPHY).filter(key => key !== 'textAlign').sort());
 		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.surfaceStyle].sort()).toEqual([...surfaceKeys].sort());
-		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.defaultChildSurfaceStyle].sort()).toEqual([...surfaceKeys].sort());
+		for (const slot of ['defaultChildSurfaceStyle', 'boxSurfaceStyle', 'wonBoxSurfaceStyle'] as const)
+			expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot]].sort()).toEqual([...surfaceKeys].sort());
 		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.geometry].sort()).toEqual([...geometryKeys].sort());
 		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.clipGeometry].sort()).toEqual([...geometryKeys].sort());
 		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.media].sort()).toEqual([...mediaKeys].sort());
@@ -314,6 +315,48 @@ describe('applyGraphicStyleSet', () => {
 
 		expect(headlineOf(applied).typography).toEqual(TYPOGRAPHY);
 		expect(headlineOf(applied).styleRefs).toEqual({ typography: { entryId: 'heading' } });
+	});
+
+	it('inherits each of a Game Wins item\'s three surfaces independently', () => {
+		const surface = { fill: { type: 'solid' as const, color: '#000000' }, fillOpacity: 1 };
+		const gameWins: GraphicItemConfig = {
+			type: 'game-wins',
+			id: 'wins',
+			label: 'Game wins',
+			visible: true,
+			anchor: 'top-left',
+			x: 0,
+			y: 0,
+			width: 200,
+			height: 40,
+			playerSide: 'player1',
+			displayMode: 'boxes',
+			boxOrientation: 'horizontal',
+			boxWidth: 24,
+			boxHeight: 24,
+			boxGap: 4,
+			boxGeometry: squareShapeGeometry(),
+			boxSurfaceStyle: { ...surface },
+			wonBoxSurfaceStyle: { ...surface },
+			typography: { ...TYPOGRAPHY },
+			styleRefs: { wonBoxSurfaceStyle: { entryId: 'panel' } },
+		};
+
+		const applied = applyGraphicStyleSet(graphic([gameWins]), resolveGraphicStyleSet(styleSet()));
+
+		const item = applied.items[0];
+		if (item?.type !== 'game-wins')
+			throw new Error('expected the Game Wins Graphic Item');
+		// The won box is the whole point of the item: it has to be able to say something
+		// different from the unwon one, so the two surfaces are separate slots rather
+		// than one "this item's surface".
+		expect(item.wonBoxSurfaceStyle).toMatchObject({
+			fill: { type: 'solid', color: '#101014' },
+			fillOpacity: 0.9,
+			glow: { color: '#ff0044', size: 8, opacity: 0.5 },
+		});
+		expect(item.boxSurfaceStyle).toEqual(surface);
+		expect(item.surfaceStyle).toBeUndefined();
 	});
 
 	it('ignores a reference in a slot the Graphic Item cannot hold', () => {

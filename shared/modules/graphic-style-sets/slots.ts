@@ -42,6 +42,8 @@ export const GRAPHIC_STYLE_SLOT_KINDS: Record<GraphicStyleSlot, GraphicStyleEntr
 	'surfaceStyle': 'surface-style',
 	'surfaceStyle.fill': 'fill',
 	'defaultChildSurfaceStyle': 'surface-style',
+	'boxSurfaceStyle': 'surface-style',
+	'wonBoxSurfaceStyle': 'surface-style',
 	'geometry': 'shape-geometry',
 	'clipGeometry': 'shape-geometry',
 	'media': 'media-treatment',
@@ -66,6 +68,8 @@ export const GRAPHIC_STYLE_SLOT_APPLICATION_ORDER: readonly GraphicStyleSlot[] =
 	'surfaceStyle',
 	'surfaceStyle.fill',
 	'defaultChildSurfaceStyle',
+	'boxSurfaceStyle',
+	'wonBoxSurfaceStyle',
 	'geometry',
 	'media',
 	'clipGeometry',
@@ -130,6 +134,9 @@ export function graphicStyleOwnerSupportsSlot(owner: GraphicStyleOwnerNode, slot
 			return kind !== null && SURFACE_KINDS.includes(kind);
 		case 'defaultChildSurfaceStyle':
 			return kind === 'group';
+		case 'boxSurfaceStyle':
+		case 'wonBoxSurfaceStyle':
+			return kind === 'game-wins';
 		case 'geometry':
 			return kind === 'shape' || kind === 'group';
 		case 'clipGeometry':
@@ -168,6 +175,10 @@ export function readGraphicStyleSlot(
 			return (item as { surfaceStyle?: { fill?: unknown } }).surfaceStyle?.fill;
 		case 'defaultChildSurfaceStyle':
 			return item.type === 'group' ? item.defaultChildSurfaceStyle : undefined;
+		case 'boxSurfaceStyle':
+			return item.type === 'game-wins' ? item.boxSurfaceStyle : undefined;
+		case 'wonBoxSurfaceStyle':
+			return item.type === 'game-wins' ? item.wonBoxSurfaceStyle : undefined;
 		case 'geometry':
 			return item.type === 'shape' || item.type === 'group' ? item.geometry : undefined;
 		case 'clipGeometry':
@@ -228,6 +239,10 @@ export function writeGraphicStyleSlot<T extends GraphicStyleOwnerNode>(
 			} as unknown as T;
 		case 'defaultChildSurfaceStyle':
 			return { ...item, defaultChildSurfaceStyle: value } as unknown as T;
+		case 'boxSurfaceStyle':
+			return { ...item, boxSurfaceStyle: value } as unknown as T;
+		case 'wonBoxSurfaceStyle':
+			return { ...item, wonBoxSurfaceStyle: value } as unknown as T;
 		case 'geometry':
 			return { ...item, geometry: value } as unknown as T;
 		case 'clipGeometry':
