@@ -510,42 +510,45 @@ describe('one queue never crowding out another', () => {
 		});
 		await context.library.runGraphicsReconciliation();
 
-		// A second object quarantined a week later is deleted a week later, so
-		// ordering by when it was noticed puts the urgent one last.
-		context.advance(6 * DAY);
-		const secondDigest = digestOf(paddedPng(2));
-		await context.canonical.createImmutable({
-			identity: canonicalIdentity(secondDigest),
-			bytes: boundedBytes(paddedPng(2)),
-			metadata: canonicalMetadata(secondDigest),
-		});
-		await context.library.runGraphicsReconciliation();
+		// Objects quarantined later are deleted later, so ordering by when each was
+		// noticed puts the most urgent last.
+		for (const index of [2, 3]) {
+			context.advance(2 * DAY);
+			const digest = digestOf(paddedPng(index));
+			await context.canonical.createImmutable({
+				identity: canonicalIdentity(digest),
+				bytes: boundedBytes(paddedPng(index)),
+				metadata: canonicalMetadata(digest),
+			});
+			await context.library.runGraphicsReconciliation();
+		}
 
 		const quarantined = queueOf(
 			await context.library.getOperationalQueues(),
 			'quarantined-object',
 		);
 
-		expect(quarantined.totalCount).toBe(2);
+		expect(quarantined.totalCount).toBe(3);
 		const deadlines = quarantined.items.map(item => item.deadline);
 		expect(deadlines).toEqual([...deadlines].sort());
 		// The stated next deadline is the one actually nearest, not the nearest
 		// among whichever rows happened to be sampled.
 		expect(quarantined.nextDeadline).toBe(deadlines[0]);
 
-		// Which rows a bounded sample selects is what actually matters, and the
+		// Which rows a bounded sample leaves out is what actually matters, and the
 		// queue's own budget is far larger than any fixture worth seeding. Asked
-		// for exactly one, the read must offer the object closest to deletion —
-		// under newest-first ordering it would offer the one furthest from it.
+		// for two of the three, the read must offer the two closest to deletion —
+		// under newest-first ordering it would offer the two furthest from it.
 		const sampled = await createD1GraphicsAssetReconciliationCatalogue(harness.database)
 			.listDiscrepancies({
-				limit: 1,
+				limit: 2,
 				states: ['open'],
 				kinds: ['unexpected-object'],
 				orderBy: 'quarantine-deadline',
 			});
-		expect(sampled).toHaveLength(1);
-		expect(sampled[0]!.id).toBe(quarantined.items[0]!.subject.id);
+		expect(sampled.map(discrepancy => discrepancy.id)).toEqual(
+			quarantined.items.slice(0, 2).map(item => item.subject.id),
+		);
 	});
 
 	it('lists the superseded revisions closest to pruning and skips frozen ones', async () => {
@@ -587,12 +590,12 @@ describe('one queue never crowding out another', () => {
 		expect(superseded.items.map(item => item.subject.id)).toEqual(revisions);
 		expect(superseded.nextDeadline).toBe(deadlines[0]);
 
-		// Asked for one, the read must offer the revision pruned soonest rather
-		// than whichever asset identity happens to sort first.
+		// Asked for two of the three, the read must offer the two pruned soonest
+		// rather than whichever asset identities happen to sort first.
 		const sampled = await createD1GraphicsAssetRetentionCatalogue(harness.database)
-			.listRevisionRetention({ limit: 1, prunableOnly: true });
-		expect(sampled).toHaveLength(1);
-		expect(sampled[0]!.revisionId).toBe(revisions[0]);
+			.listRevisionRetention({ limit: 2, prunableOnly: true });
+		expect(sampled.map(deadline => deadline.revisionId))
+			.toEqual(revisions.slice(0, 2));
 	});
 });
 

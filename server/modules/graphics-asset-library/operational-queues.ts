@@ -156,6 +156,15 @@ function byDeadline(
 	return first.deadline < second.deadline ? -1 : 1;
 }
 
+/**
+ * Assembles one queue from its complete count and its sample.
+ *
+ * `nextDeadline` is taken from the first item, which is the installation-wide
+ * soonest deadline only while every deadline-bearing sample is selected by the
+ * same field it reports as its deadline. A read whose `ORDER BY` drifts from
+ * its deadline field would still produce a sorted list here and a `nextDeadline`
+ * that quietly understates how much time is left.
+ */
 function buildQueue(
 	id: GraphicsOperationalQueueId,
 	totalCount: number,

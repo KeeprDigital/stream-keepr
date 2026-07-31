@@ -45,6 +45,12 @@ export function useGraphicsAdminReading<Reading>(options: {
 	onAuthorizationLost?: () => void;
 	/** Run after each successful reading, for state derived from it. */
 	onReading?: () => Promise<void> | void;
+	/**
+	 * Whether polling should hold off. A reading taken while the surface has an
+	 * action in flight would race that action's own re-read and could show the
+	 * state from before it, so the caller says when it is mid-change.
+	 */
+	paused?: () => boolean;
 }): GraphicsAdminReading<Reading> {
 	const administratorToken = ref('');
 	const reading = ref<Reading | null>(null) as Ref<Reading | null>;
@@ -107,7 +113,7 @@ export function useGraphicsAdminReading<Reading>(options: {
 
 	onMounted(() => {
 		pollHandle = window.setInterval(() => {
-			if (!hasReading.value || loadPending.value)
+			if (!hasReading.value || loadPending.value || options.paused?.())
 				return;
 			if (ticksSinceAttempt < backoffTicks()) {
 				ticksSinceAttempt += 1;

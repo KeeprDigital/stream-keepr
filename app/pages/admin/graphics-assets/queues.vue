@@ -85,6 +85,9 @@ const {
 		if (selection.value)
 			await loadInspection();
 	},
+	// An action re-reads on its own once it settles; polling over the top of one
+	// in flight could put the state from before it back on screen.
+	paused: () => actionPending.value !== null,
 });
 
 /**
@@ -267,11 +270,10 @@ async function run(action: GraphicsQueueAction, perform: () => Promise<GraphicsQ
 	catch (caught) {
 		// A token that stopped being accepted is not a domain outcome. Reporting
 		// one would tell an administrator the library considered their action and
-		// answered, when in fact it never looked at it.
-		if (isAuthorizationFailure(caught)) {
-			await loadQueues();
+		// answered, when in fact it never looked at it. The re-read below is the
+		// one that puts the token form back, so nothing extra is needed here.
+		if (isAuthorizationFailure(caught))
 			return;
-		}
 		const status = statusOf(caught);
 		report(
 			status === undefined ? 'retryable-unavailable' : graphicsQueueOutcomeFromStatus(status),

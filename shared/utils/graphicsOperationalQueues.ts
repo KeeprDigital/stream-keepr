@@ -174,6 +174,16 @@ export function graphicsDiscrepancyQueueOutcome(
 	return REJECTION_OUTCOMES[outcome.code];
 }
 
+/**
+ * What a lifecycle transition did.
+ *
+ * Only restoration is offered from a queue today, and restoration either
+ * succeeds or throws, so `in-use` is currently unreachable here. It is kept
+ * because this maps the library's own lifecycle union, which Trash does answer
+ * with: dropping the branch would make the function partial over its declared
+ * input and silently report a reference-blocked Trash as completed the moment a
+ * queue offered one.
+ */
 export function graphicsLifecycleQueueOutcome(
 	outcome: GraphicAssetLifecycleActionOutcome,
 ): GraphicsQueueActionOutcome {
