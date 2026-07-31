@@ -1110,10 +1110,17 @@ function reduceUpdateGraphic(
 	context: BroadcastGraphicsReductionContext,
 ): BroadcastGraphicsLiveState {
 	const playout = state.playout[payload.graphicId];
-	if (!playout?.onAir) {
+	// A graphic its Graphic Channel is still holding is selected but absent from every
+	// output, so there is no rendering for an update to transition and nothing an
+	// operator would see accept. It enters with the values its Take accepted, which is
+	// the same rule that makes editing an off graphic change its next Take's values.
+	if (
+		!playout?.onAir
+		|| channelHoldsWaiting(playout, state, payload.graphicId, context.channel, context.acceptedAt)
+	) {
 		throw new BroadcastGraphicsCommandRejection(
 			'update-unavailable',
-			'Update Graphic is available only while a Broadcast Graphic is on air',
+			'Update Graphic is available only while a Broadcast Graphic is entering, on air, or updating',
 		);
 	}
 

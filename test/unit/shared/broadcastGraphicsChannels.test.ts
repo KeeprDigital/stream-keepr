@@ -414,3 +414,30 @@ describe('the Graphic Channel context read from authored Screen configuration', 
 		]);
 	});
 });
+
+describe('what an operator may do to a waiting Broadcast Graphic', () => {
+	function waitingChannel(): BroadcastGraphicsLiveState {
+		const state = take(createInitialBroadcastGraphicsLiveState(), 'alpha', { channel: QUEUED_THIRDS });
+		return take(state, 'bravo', { at: T0 + 5000, channel: QUEUED_THIRDS });
+	}
+
+	it('refuses Update Graphic, which is available only while a graphic is entering, on air, or updating', () => {
+		const state = waitingChannel();
+
+		expect(() => applyBroadcastGraphicsCommand(
+			state,
+			{ type: 'Update Graphic', payload: { graphicId: 'bravo', basedOnAcceptedRevision: 1 } },
+			{ inputs: [], durations: TIMING, acceptedAt: T0 + 5200, channel: QUEUED_THIRDS },
+		)).toThrow(/only while a Broadcast Graphic is entering, on air, or updating/);
+	});
+
+	it('accepts Update Graphic again once its Graphic Channel has cleared and it has entered', () => {
+		const state = waitingChannel();
+
+		expect(() => applyBroadcastGraphicsCommand(
+			state,
+			{ type: 'Update Graphic', payload: { graphicId: 'bravo', basedOnAcceptedRevision: 1 } },
+			{ inputs: [], durations: TIMING, acceptedAt: T0 + 5600, channel: QUEUED_THIRDS },
+		)).not.toThrow();
+	});
+});
