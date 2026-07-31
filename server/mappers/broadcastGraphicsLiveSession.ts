@@ -10,7 +10,16 @@ import {
 } from '~~/shared/modules/broadcast-graphics-live-session';
 
 /**
- * The authoritative snapshot, recovered on the way out.
+ * The snapshot every Live Control and Screen Output reads, recovered on the way out.
+ *
+ * It deliberately does *not* carry the authoritative clock, even though every
+ * effective start time inside it was stamped with one. A reader has to project on that
+ * clock rather than its own, but `useServerTime` already establishes it installation-wide
+ * with round-trip compensation over several samples and a periodic re-sync — which is
+ * both more accurate than one snapshot read could be and shared with every other live
+ * surface, so the Feature Match Session clock and Broadcast Graphics playout cannot
+ * disagree about what time it is. Restating it here would add bytes to a payload that is
+ * already the largest thing this feature publishes, to worse effect.
  *
  * Every read of a Broadcast Graphics Live Session goes through here — the snapshot
  * route, every command result, and the realtime notification derived from one — so

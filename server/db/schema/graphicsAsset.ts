@@ -3,6 +3,7 @@ import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'driz
 import {
 	DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES,
 	DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
+	INSTALLED_GRAPHICS_TEMPLATE_KINDS,
 } from '~~/shared/types/graphicsAsset';
 import {
 	GRAPHICS_DISCREPANCY_KINDS,
@@ -255,6 +256,13 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	 * durable proposal rather than re-deriving one that might have changed.
 	 */
 	packagePreflight: text('package_preflight', { mode: 'json' }).$type<Record<string, unknown>>(),
+	/**
+	 * What one complete Template Package installation published: the Template it
+	 * created and every packaged identity's local outcome. It sits beside the
+	 * single-revision `result` the other ingestion paths produce, because a
+	 * package's terminal result is the whole set or nothing.
+	 */
+	packageInstallation: text('package_installation', { mode: 'json' }).$type<Record<string, unknown>>(),
 	stagingReservedByteLength: integer('staging_reserved_byte_length').notNull().default(0),
 	stagingUsedByteLength: integer('staging_used_byte_length').notNull().default(0),
 	canonicalReservedByteLength: integer('canonical_reserved_byte_length').notNull().default(0),
@@ -276,6 +284,46 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	uniqueIndex('graphics_ingestion_operations_author_idempotency_idx').on(table.initiatedBy, table.idempotencyKey),
 	index('graphics_ingestion_operations_stage_idx').on(table.stage),
 	index('graphics_ingestion_operations_event_idx').on(table.defaultEventId),
+]);
+
+/**
+ * One graphics Template a Template Package installed here.
+ *
+ * The document is an independent local copy whose Graphic Asset References were
+ * rewritten to exact local identities and revisions before it was written, so it
+ * is valid the instant it exists, and its references are indexed under this
+ * Template's own owner identity. The source Template identity is provenance for
+ * recognising a related package later, never a link to the installation that
+ * exported it; placing this Template on a Screen copies it again.
+ */
+export const installedGraphicsTemplates = sqliteTable('installed_graphics_templates', {
+	id: text('id').primaryKey(),
+	kind: text('kind', { enum: INSTALLED_GRAPHICS_TEMPLATE_KINDS }).notNull(),
+	name: text('name').notNull(),
+	revisionNumber: integer('revision_number').notNull().default(1),
+	document: text('document', { mode: 'json' }).notNull(),
+	sourceTemplateIdentity: text('source_template_identity').notNull(),
+	/**
+	 * Which Graphics Ingestion Operation installed this Template, recorded as a
+	 * plain identity rather than a foreign key.
+	 *
+	 * A Template is permanent library state; the operation that installed it is a
+	 * transient workflow record the retention contract plans to clean up a year
+	 * after it goes terminal. A cascade would let that cleanup delete the Template
+	 * — and leave its owner-less references behind, permanently blocking Trash on
+	 * assets nothing can be shown to use. A restrict would instead make the
+	 * cleanup fail forever on every operation that ever installed anything. So
+	 * this outlives what it names, exactly as a Graphic Asset Tombstone does.
+	 */
+	installedByOperationId: text('installed_by_operation_id').notNull(),
+	/** The Event the installation ran inside, when it ran inside one. */
+	eventId: integer('event_id').references(() => events.id, { onDelete: 'set null' }),
+	createdAt,
+	updatedAt,
+}, table => [
+	index('installed_graphics_templates_kind_idx').on(table.kind),
+	index('installed_graphics_templates_operation_idx').on(table.installedByOperationId),
+	index('installed_graphics_templates_source_idx').on(table.sourceTemplateIdentity),
 ]);
 
 /**
@@ -450,6 +498,8 @@ export type DbGraphicsDerivative = typeof graphicsDerivatives.$inferSelect;
 export type DbGraphicsDerivativeInsert = typeof graphicsDerivatives.$inferInsert;
 export type DbGraphicAssetReference = typeof graphicAssetReferences.$inferSelect;
 export type DbGraphicAssetReferenceInsert = typeof graphicAssetReferences.$inferInsert;
+export type DbInstalledGraphicsTemplate = typeof installedGraphicsTemplates.$inferSelect;
+export type DbInstalledGraphicsTemplateInsert = typeof installedGraphicsTemplates.$inferInsert;
 export type DbGraphicsIngestionOperation = typeof graphicsIngestionOperations.$inferSelect;
 export type DbGraphicsIngestionOperationInsert = typeof graphicsIngestionOperations.$inferInsert;
 export type DbGraphicsCanonicalWriteCandidate = typeof graphicsCanonicalWriteCandidates.$inferSelect;

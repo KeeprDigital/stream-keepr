@@ -1,5 +1,6 @@
 import type { DbScreen } from '~~/server/db/schema';
 import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
+import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
 import type {
 	BroadcastGraphicsCommand,
 	BroadcastGraphicsCommandResult,
@@ -12,8 +13,13 @@ import {
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
 import { broadcastGraphicsStateService } from '~~/server/services/broadcastGraphicsState';
+import { graphicBindingDataService } from '~~/server/services/graphicBindingData';
 import { screenService } from '~~/server/services/screen';
 import { publishMessage } from '~~/server/utils/ably';
+import {
+	broadcastGraphicSourceSelections,
+} from '~~/shared/modules/broadcast-graphics-live-session';
+import { broadcastGraphicPhaseDurations, resolveGraphicInputBindings } from '~~/shared/modules/graphics';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 
@@ -42,6 +48,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 } = {}) {
 	const state = broadcastGraphicsStateService();
 	const screens = screenService();
+	const bindingData = graphicBindingDataService();
 
 	/**
 	 * The Screen, proven to be a Broadcast Graphics Screen.
@@ -122,6 +129,46 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 					: `Graphic Asset Content at ${item.ownerSlot} is temporarily unavailable, so this Broadcast Graphic cannot be taken on air`,
 			});
 		}
+	};
+
+	/**
+	 * What reduction needs to know about the addressed Broadcast Graphic: its
+	 * declarations, and how its Graphic Input Bindings resolve against Event Data.
+	 *
+	 * Event Data is loaded once, here, for the Graphic Source Selections this command
+	 * could leave in place — the ones already accepted, plus the one this command is
+	 * about. Reduction then resolves against that loaded set, so a Select Source can
+	 * see its own effect and a merge retry re-resolves without another round trip.
+	 *
+	 * The bindings resolve through the shared catalog, which is the same function Live
+	 * Control resolves its displayed bound values with. That is deliberate: an
+	 * operator's "latest bound value" and the value acceptance actually puts on air are
+	 * then the same computation over the same facts, rather than two implementations
+	 * that agree until they do not.
+	 */
+	const reductionContextFor = async (
+		eventId: number,
+		graphic: BroadcastGraphicConfig,
+		currentState: BroadcastGraphicsLiveState,
+		command: BroadcastGraphicsCommand,
+	) => {
+		const accepted = broadcastGraphicSourceSelections(currentState, graphic.id);
+		const candidate = command.type === 'Select Source' && command.payload.selectionId !== null
+			? { ...accepted, [command.payload.sourceKey]: command.payload.selectionId }
+			: accepted;
+		const data = await bindingData.load(eventId, graphic.sources ?? [], candidate);
+
+		return {
+			inputs: graphic.inputs ?? [],
+			sources: graphic.sources ?? [],
+			bindings: graphic.bindings ?? [],
+			resolveBindings: (selections: Readonly<Record<string, number>>) =>
+				resolveGraphicInputBindings(graphic, selections, data),
+			// How long this graphic's lifecycle phases last, resolved from the placed
+			// graphic this module already had to find. Authored Screen configuration, which
+			// is exactly why the reducer is handed it rather than reaching for it.
+			durations: broadcastGraphicPhaseDurations(graphic),
+		};
 	};
 
 	/**
@@ -244,7 +291,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 			sessionId,
 			eventId,
 			command,
-			graphic.inputs ?? [],
+			await reductionContextFor(eventId, graphic, session.currentState, command),
 			originConnectionId,
 			{ publish: true },
 		);

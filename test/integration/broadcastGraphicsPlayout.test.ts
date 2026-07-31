@@ -2,11 +2,16 @@ import { $fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	createBroadcastGraphicsScreen,
+	createGraphicsHarness,
 	createPlayoutHarness,
 	getBroadcastGraphicsLiveSession,
 	integrationBroadcastGraphic,
+	integrationBroadcastGraphicWithInputs,
+	integrationGraphicAnimation,
+	integrationTextInput,
 	playoutCommandId,
 	sendBroadcastGraphicsCommand,
+	setBroadcastGraphicInput,
 	setScreenMode,
 } from './broadcastGraphicsPlayoutHelpers';
 import { $fetchRaw } from './helpers';
@@ -287,5 +292,278 @@ describe('broadcast graphics playout command API', () => {
 		);
 
 		expect(res.status).toBe(409);
+	});
+});
+
+/**
+ * Live playout animation, proven through the authoritative surface.
+ *
+ * The schedule an output animates against is decided here, at acceptance, from the
+ * Screen's own authored Graphic Animation — so these are the tests that prove the
+ * durations actually reach the reducer, rather than an output inventing a schedule
+ * of its own.
+ */
+describe('broadcast graphics live playout animation', () => {
+	let eventId: number;
+
+	beforeAll(async () => {
+		const event = await $fetch<{ id: number }>('/api/events', {
+			method: 'POST',
+			body: { name: 'Integration Live Playout Event', game: 'mtg', featureMatchOrientation: 'horizontal' },
+		});
+		eventId = event.id;
+	});
+
+	afterAll(async () => {
+		try {
+			await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+		}
+		catch {}
+	});
+
+	it('stamps effective start times on the clock outputs synchronise against', async () => {
+		const harness = await createGraphicsHarness(eventId, 'playout-clock', [
+			integrationBroadcastGraphic('a', integrationGraphicAnimation({ enter: 5000 })),
+		]);
+
+		const taken = await harness.send({
+			commandId: playoutCommandId('clock-take'),
+			type: 'Take',
+			payload: { graphicId: 'a' },
+		});
+		const clock = await $fetch<{ serverTime: number }>('/api/time');
+
+		// An output must not subtract two clocks it does not own. It gets the authoritative
+		// one from `/api/time`, which is what `useServerTime` synchronises against — so the
+		// thing that has to be true is that acceptance stamps effective start times on *that
+		// same* clock. If it did not, every output would project against a schedule from a
+		// clock it had no way to correct for.
+		const startedAt = taken.currentState.playout.a!.effectiveStartedAt;
+		expect(clock.serverTime).toBeGreaterThanOrEqual(startedAt);
+		// Seconds, not a minute. The envelope has to be tight enough that two clocks a
+		// phase-duration apart would fail it, and a phase lasts at most twenty seconds.
+		expect(clock.serverTime - startedAt).toBeLessThan(5_000);
+	});
+
+	it('reverses an entrance that Out interrupted, bounded by the entrance itself', async () => {
+		const harness = await createGraphicsHarness(eventId, 'playout-reverse', [
+			integrationBroadcastGraphic('a', integrationGraphicAnimation({ enter: 5000, exit: 5000 })),
+		]);
+
+		const taken = await harness.send({
+			commandId: playoutCommandId('reverse-take'),
+			type: 'Take',
+			payload: { graphicId: 'a' },
+		});
+		const outed = await harness.send({
+			commandId: playoutCommandId('reverse-out'),
+			type: 'Out',
+			payload: { graphicId: 'a' },
+		});
+
+		const record = outed.currentState.playout.a!;
+		const startedAt = taken.currentState.playout.a!.effectiveStartedAt;
+
+		expect(Object.keys(record).toSorted())
+			.toEqual(['cut', 'effectiveStartedAt', 'onAir', 'reversalCompletesAt']);
+		// The reversal unwinds exactly as much of the entrance as had played, so it
+		// completes as far after Out as Out was after Take.
+		expect(record.reversalCompletesAt!).toBe(record.effectiveStartedAt + (record.effectiveStartedAt - startedAt));
+		expect(record.reversalCompletesAt! - record.effectiveStartedAt).toBeLessThanOrEqual(5000);
+	});
+
+	it('records no reversal once the phase it would reverse has completed', async () => {
+		const harness = await createGraphicsHarness(eventId, 'playout-no-reverse', [
+			integrationBroadcastGraphic('a', integrationGraphicAnimation({ enter: 50, exit: 5000 })),
+		]);
+
+		await harness.send({
+			commandId: playoutCommandId('no-reverse-take'),
+			type: 'Take',
+			payload: { graphicId: 'a' },
+		});
+		await new Promise((resolve) => {
+			setTimeout(resolve, 300);
+		});
+		const outed = await harness.send({
+			commandId: playoutCommandId('no-reverse-out'),
+			type: 'Out',
+			payload: { graphicId: 'a' },
+		});
+
+		// A settled entrance is not interrupted, so this is an ordinary exit — and the
+		// durable record is the three fields it has always been.
+		expect(Object.keys(outed.currentState.playout.a!).toSorted())
+			.toEqual(['cut', 'effectiveStartedAt', 'onAir']);
+	});
+
+	it('defers an acceptance during enter to one update at the entrance completion', async () => {
+		const harness = await createGraphicsHarness(eventId, 'playout-coalesce', [
+			integrationBroadcastGraphicWithInputs(
+				'a',
+				[integrationTextInput('name'), integrationTextInput('title')],
+				integrationGraphicAnimation({ enter: 5000, update: 1000 }),
+			),
+		]);
+
+		const taken = await harness.send({
+			commandId: playoutCommandId('coalesce-take'),
+			type: 'Take',
+			payload: { graphicId: 'a' },
+		});
+		await setBroadcastGraphicInput(harness, 'a', 'name', 'First');
+		const first = await harness.send({
+			commandId: playoutCommandId('coalesce-update-1'),
+			type: 'Update Graphic',
+			payload: { graphicId: 'a', basedOnAcceptedRevision: 1 },
+		});
+		await setBroadcastGraphicInput(harness, 'a', 'name', 'Second');
+		const second = await harness.send({
+			commandId: playoutCommandId('coalesce-update-2'),
+			type: 'Update Graphic',
+			payload: { graphicId: 'a', basedOnAcceptedRevision: 2 },
+		});
+
+		const enterStartedAt = taken.currentState.playout.a!.effectiveStartedAt;
+		// Both acceptances land in one update, scheduled for the instant the entrance
+		// completes — and the entrance schedule itself is untouched.
+		expect(first.currentState.playout.a!.updateStartedAt).toBe(enterStartedAt + 5000);
+		expect(second.currentState.playout.a!.updateStartedAt).toBe(enterStartedAt + 5000);
+		expect(second.currentState.playout.a!.effectiveStartedAt).toBe(enterStartedAt);
+		// One transition, from what it entered with straight to the latest values.
+		expect(second.currentState.inputs.a!.updateFrom).toEqual({ name: '', title: '' });
+		expect(second.currentState.inputs.a!.pendingUpdateFrom).toBeUndefined();
+		expect(second.currentState.inputs.a!.accepted).toEqual({ name: 'Second', title: '' });
+	});
+
+	it('holds an acceptance during a running update as exactly one pending rendering', async () => {
+		const harness = await createGraphicsHarness(eventId, 'playout-pending', [
+			integrationBroadcastGraphicWithInputs(
+				'a',
+				[integrationTextInput('name'), integrationTextInput('title')],
+				integrationGraphicAnimation({ update: 5000 }),
+			),
+		]);
+
+		await harness.send({
+			commandId: playoutCommandId('pending-take'),
+			type: 'Take',
+			payload: { graphicId: 'a' },
+		});
+		await setBroadcastGraphicInput(harness, 'a', 'name', 'First');
+		await harness.send({
+			commandId: playoutCommandId('pending-update-1'),
+			type: 'Update Graphic',
+			payload: { graphicId: 'a', basedOnAcceptedRevision: 1 },
+		});
+		await setBroadcastGraphicInput(harness, 'a', 'name', 'Second');
+		await harness.send({
+			commandId: playoutCommandId('pending-update-2'),
+			type: 'Update Graphic',
+			payload: { graphicId: 'a', basedOnAcceptedRevision: 2 },
+		});
+		await setBroadcastGraphicInput(harness, 'a', 'name', 'Third');
+		const third = await harness.send({
+			commandId: playoutCommandId('pending-update-3'),
+			type: 'Update Graphic',
+			payload: { graphicId: 'a', basedOnAcceptedRevision: 3 },
+		});
+
+		const inputs = third.currentState.inputs.a!;
+		// Two transitions and no more: the third acceptance replaced the pending
+		// rendering's target rather than lengthening a queue.
+		expect(inputs.updateFrom).toEqual({ name: '', title: '' });
+		expect(inputs.pendingUpdateFrom).toEqual({ name: 'First', title: '' });
+		expect(inputs.accepted).toEqual({ name: 'Third', title: '' });
+		expect(inputs.acceptedRevision).toBe(4);
+	});
+
+	it('shows a Cut Update immediately while preserving the enter schedule', async () => {
+		const harness = await createGraphicsHarness(eventId, 'playout-cut-update', [
+			integrationBroadcastGraphicWithInputs(
+				'a',
+				[integrationTextInput('name'), integrationTextInput('title')],
+				integrationGraphicAnimation({ enter: 5000, update: 1000 }),
+			),
+		]);
+
+		const taken = await harness.send({
+			commandId: playoutCommandId('cut-update-take'),
+			type: 'Take',
+			payload: { graphicId: 'a' },
+		});
+		await setBroadcastGraphicInput(harness, 'a', 'name', 'Swapped');
+		const cut = await harness.send({
+			commandId: playoutCommandId('cut-update'),
+			type: 'Update Graphic',
+			payload: { graphicId: 'a', cut: true, basedOnAcceptedRevision: 1 },
+		});
+
+		// The new rendering is on screen at once, the entrance carries on unchanged, and
+		// nothing is left pending for those values.
+		expect(cut.currentState.playout.a!.effectiveStartedAt)
+			.toBe(taken.currentState.playout.a!.effectiveStartedAt);
+		expect(cut.currentState.playout.a!.updateStartedAt).toBeUndefined();
+		expect(cut.currentState.inputs.a!.updateFrom).toBeUndefined();
+		expect(cut.currentState.inputs.a!.accepted).toEqual({ name: 'Swapped', title: '' });
+	});
+
+	it('discards a pending visual update on Out while keeping its accepted values', async () => {
+		const harness = await createGraphicsHarness(eventId, 'playout-exit-discards', [
+			integrationBroadcastGraphicWithInputs(
+				'a',
+				[integrationTextInput('name'), integrationTextInput('title')],
+				integrationGraphicAnimation({ update: 5000, exit: 5000 }),
+			),
+		]);
+
+		await harness.send({
+			commandId: playoutCommandId('discard-take'),
+			type: 'Take',
+			payload: { graphicId: 'a' },
+		});
+		await setBroadcastGraphicInput(harness, 'a', 'name', 'Accepted');
+		await harness.send({
+			commandId: playoutCommandId('discard-update'),
+			type: 'Update Graphic',
+			payload: { graphicId: 'a', basedOnAcceptedRevision: 1 },
+		});
+		const outed = await harness.send({
+			commandId: playoutCommandId('discard-out'),
+			type: 'Out',
+			payload: { graphicId: 'a' },
+		});
+
+		expect(outed.currentState.playout.a!.updateStartedAt).toBeUndefined();
+		expect(outed.currentState.inputs.a!.accepted).toEqual({ name: 'Accepted', title: '' });
+	});
+
+	it('answers a reload with the same schedule, so a reconnecting output catches up', async () => {
+		const harness = await createGraphicsHarness(eventId, 'playout-reload-schedule', [
+			integrationBroadcastGraphicWithInputs(
+				'a',
+				[integrationTextInput('name'), integrationTextInput('title')],
+				integrationGraphicAnimation({ enter: 5000, update: 5000 }),
+			),
+		]);
+
+		await harness.send({
+			commandId: playoutCommandId('reload-take'),
+			type: 'Take',
+			payload: { graphicId: 'a' },
+		});
+		await setBroadcastGraphicInput(harness, 'a', 'name', 'Reloaded');
+		const accepted = await harness.send({
+			commandId: playoutCommandId('reload-update'),
+			type: 'Update Graphic',
+			payload: { graphicId: 'a', basedOnAcceptedRevision: 1 },
+		});
+
+		const reloaded = await harness.reload();
+
+		// Byte-for-byte the same schedule and the same pair of renderings, so an output
+		// that joins mid-update draws the transition rather than cutting to the end of it.
+		expect(reloaded.currentState.playout.a).toEqual(accepted.currentState.playout.a);
+		expect(reloaded.currentState.inputs.a).toEqual(accepted.currentState.inputs.a);
 	});
 });

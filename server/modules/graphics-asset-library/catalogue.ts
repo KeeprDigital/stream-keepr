@@ -15,6 +15,7 @@ import type {
 	PublishGraphicAssetCatalogueInput,
 } from '.';
 import type { GraphicsAssetMultipartState } from './multipart';
+import type { GraphicsOperationsCockpitCatalogue } from './operations-cockpit';
 import type { GraphicsAssetReconciliationCatalogue } from './reconciliation';
 import type { GraphicsAssetRetentionCatalogue } from './retention';
 import type { TemplatePackagePreflightState } from './template-package-preflight';
@@ -22,6 +23,7 @@ import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GRAPHICS_RETENTION_GUARANTEES } from '~~/shared/utils/graphicsAssetRetention';
+import { createD1GraphicsOperationsCockpitCatalogue } from './catalogue-cockpit';
 import { createD1GraphicsAssetReconciliationCatalogue } from './catalogue-reconciliation';
 import { createD1GraphicsAssetRetentionCatalogue } from './catalogue-retention';
 import { boundJsonArray, valuesFromJsonArray } from './catalogue-sql';
@@ -30,7 +32,11 @@ import {
 	graphicsMultipartCompletedByteLength,
 	graphicsMultipartTransfer,
 } from './multipart';
-import { completedGraphicAssetReplacementOperation } from './operation';
+import {
+	completedGraphicAssetReplacementOperation,
+	INSTALLED_GRAPHICS_TEMPLATE_FIRST_REVISION,
+	templatePackageInstallationResult,
+} from './operation';
 
 function stagingReservationBytes(operation: GraphicsIngestionOperation) {
 	return operation.declaredByteLength
@@ -55,6 +61,7 @@ interface OperationRow {
 	transferred_byte_length: number;
 	multipart_state: string | null;
 	package_preflight: string | null;
+	package_installation: string | null;
 	stage: GraphicsIngestionOperation['stage'];
 	capacity_outcome: string | null;
 	report: string | null;
@@ -94,6 +101,7 @@ interface AssetRow {
 	capacity_outcome: string | null;
 	report: string | null;
 	result: string | null;
+	package_installation: string | null;
 	failure: string | null;
 	operation_created_at: number;
 	operation_updated_at: number;
@@ -136,6 +144,7 @@ function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 		report: parseJson(row.report),
 		templatePackagePreflight: preflight?.report,
 		result: parseJson(row.result),
+		templatePackageInstallation: parseJson(row.package_installation),
 		failure: parseJson(row.failure),
 		createdAt: new Date(row.created_at).toISOString(),
 		updatedAt: new Date(row.updated_at).toISOString(),
@@ -165,6 +174,7 @@ function operationRowFromAsset(row: AssetRow): OperationRow {
 		transferred_byte_length: row.transferred_byte_length,
 		multipart_state: null,
 		package_preflight: null,
+		package_installation: row.package_installation,
 		stage: row.stage,
 		capacity_outcome: row.capacity_outcome,
 		report: row.report,
@@ -232,6 +242,11 @@ function usageSelect() {
 			asset_reference.owner_slot, asset_reference.event_id,
 			CASE
 				WHEN asset_reference.owner_kind = 'screen' THEN screens.name
+				-- Inspecting usage before a lifecycle action is how an author learns
+				-- what would break, and "some installed Template" does not answer
+				-- that. Every owner kind that has a name says it.
+				WHEN asset_reference.owner_kind = 'installed-graphics-template'
+					THEN installed_template.name
 				ELSE NULL
 			END AS owner_name
 		FROM graphic_asset_references asset_reference
@@ -239,6 +254,9 @@ function usageSelect() {
 			ON asset_reference.owner_kind = 'screen'
 			AND CAST(screens.id AS TEXT) = asset_reference.owner_id
 			AND screens.event_id = asset_reference.event_id
+		LEFT JOIN installed_graphics_templates installed_template
+			ON asset_reference.owner_kind = 'installed-graphics-template'
+			AND installed_template.id = asset_reference.owner_id
 		WHERE asset_reference.asset_id = ?
 		ORDER BY asset_reference.owner_kind, asset_reference.owner_id,
 			asset_reference.owner_slot, asset_reference.id
@@ -275,7 +293,7 @@ function operationSelect(where: string) {
 				source_file_name, declared_mime, browser_decode_evidence,
 			duplicate_content_policy, default_event_id, target_asset_id,
 			declared_byte_length, transferred_byte_length, multipart_state, package_preflight,
-			stage, report, result,
+			package_installation, stage, report, result,
 			capacity_outcome, failure, created_at, updated_at
 		FROM graphics_ingestion_operations
 		WHERE ${where}
@@ -311,15 +329,21 @@ async function assertContentCompatible(
 /**
  * Publication makes its content reachable again, so it cancels any pending
  * orphan quarantine for those digests inside the same atomic transaction.
+ *
+ * A batch that can commit without having published passes the condition its
+ * publication actually depends on, so a release can never outlive the
+ * reachability that justified it.
  */
 function releaseContentQuarantineStatement(
 	database: D1Database,
 	digests: readonly string[],
+	publication?: { guard: string; bindings: readonly unknown[] },
 ) {
 	return database.prepare(`
 		DELETE FROM graphics_content_quarantine
 		WHERE digest IN ${valuesFromJsonArray()}
-	`).bind(boundJsonArray(digests));
+		${publication ? `AND ${publication.guard}` : ''}
+	`).bind(boundJsonArray(digests), ...(publication?.bindings ?? []));
 }
 
 function updateOperationStatement(
@@ -333,6 +357,10 @@ function updateOperationStatement(
 		UPDATE graphics_ingestion_operations
 			SET stage = ?, transferred_byte_length = ?, source_file_name = ?,
 				declared_mime = ?, browser_decode_evidence = ?, report = ?, result = ?,
+			-- Written once, by the installation that produced it. Every other
+			-- transition passes null and keeps whatever is already recorded, so a
+			-- terminal result can never be blanked by an unrelated update.
+			package_installation = COALESCE(?, package_installation),
 			failure = ?, capacity_outcome = ?, updated_at = ?,
 			multipart_state = CASE
 				WHEN ? = 'cancelled' AND multipart_state IS NOT NULL
@@ -371,6 +399,9 @@ function updateOperationStatement(
 			: JSON.stringify(operation.browserDecodeEvidence),
 		operation.report === undefined ? null : JSON.stringify(operation.report),
 		operation.result === undefined ? null : JSON.stringify(operation.result),
+		operation.templatePackageInstallation === undefined
+			? null
+			: JSON.stringify(operation.templatePackageInstallation),
 		operation.failure === undefined ? null : JSON.stringify(operation.failure),
 		operation.canonicalCapacityOutcome === undefined
 			? null
@@ -395,10 +426,14 @@ function updateOperationStatement(
 
 export function createD1GraphicsAssetCatalogue(
 	database: D1Database,
-): GraphicsAssetCatalogue & GraphicsAssetRetentionCatalogue & GraphicsAssetReconciliationCatalogue {
+): GraphicsAssetCatalogue
+	& GraphicsAssetRetentionCatalogue
+	& GraphicsAssetReconciliationCatalogue
+	& GraphicsOperationsCockpitCatalogue {
 	return {
 		...createD1GraphicsAssetReconciliationCatalogue(database),
 		...createD1GraphicsAssetRetentionCatalogue(database),
+		...createD1GraphicsOperationsCockpitCatalogue(database),
 		async checkHealth() {
 			const result = await database
 				.prepare('SELECT 1 AS healthy FROM graphic_assets LIMIT 1')
@@ -912,6 +947,494 @@ export function createD1GraphicsAssetCatalogue(
 				},
 			};
 		},
+		async reserveTemplatePackagePublication(input) {
+			const growthBytes = Math.max(0, input.growthBytes);
+			const currentReservation = await database.prepare(`
+				SELECT canonical_reserved_byte_length
+				FROM graphics_ingestion_operations
+				WHERE id = ? AND initiated_by = ?
+			`).bind(
+				input.operation.id,
+				input.operation.initiatedBy,
+			).first<{ canonical_reserved_byte_length: number }>();
+			const ownReservedBytes = currentReservation?.canonical_reserved_byte_length ?? 0;
+			const before = await this.getCapacity();
+			const availableBeforeReservation = before.canonical.availableBytes + ownReservedBytes;
+			const capacityOutcome = growthBytes === 0
+				? {
+						outcome: 'no-canonical-growth' as const,
+						growthBytes: 0 as const,
+						availableBytes: availableBeforeReservation,
+					}
+				: {
+						outcome: 'canonical-growth-reserved' as const,
+						growthBytes,
+						availableBytes: Math.max(0, availableBeforeReservation - growthBytes),
+					};
+			const result = await database.prepare(`
+				UPDATE graphics_ingestion_operations
+				SET canonical_reserved_byte_length = ?,
+					capacity_outcome = ?,
+					updated_at = ?
+				WHERE id = ? AND initiated_by = ? AND updated_at = ?
+					AND stage = 'generating-derivatives'
+					AND ? <= (
+						SELECT canonical_limit_bytes
+						FROM graphics_capacity_settings
+						WHERE id = 1
+					) - (
+						SELECT COALESCE(SUM(byte_length), 0)
+						FROM graphic_asset_contents
+						WHERE EXISTS (
+							SELECT 1 FROM graphic_asset_revisions
+							WHERE content_digest = graphic_asset_contents.digest
+						)
+							OR EXISTS (
+								SELECT 1 FROM graphics_derivatives
+								WHERE content_digest = graphic_asset_contents.digest
+							)
+					) - (
+						SELECT COALESCE(SUM(canonical_reserved_byte_length), 0)
+						FROM graphics_ingestion_operations
+						WHERE id <> ?
+					)
+			`).bind(
+				growthBytes,
+				JSON.stringify(capacityOutcome),
+				new Date(input.reservedAt).getTime(),
+				input.operation.id,
+				input.operation.initiatedBy,
+				new Date(input.operation.updatedAt).getTime(),
+				growthBytes,
+				input.operation.id,
+			).run();
+			if (!result.success)
+				throw new Error('Template Package canonical reservation failed');
+			const operation = await firstOperation(
+				database,
+				'id = ? AND initiated_by = ?',
+				input.operation.id,
+				input.operation.initiatedBy,
+			);
+			if (result.meta.changes === 1) {
+				if (!operation)
+					throw new Error('Template Package canonical reservation was not durable');
+				return { outcome: 'reserved' as const, operation };
+			}
+			// The statement is conditional on both the operation's claim and the
+			// capacity, so a miss has two very different causes. Telling an author
+			// their library is full when in fact another attempt took the operation
+			// from under this one sends them to free space that was never the
+			// problem, so the two are distinguished before either is reported.
+			if (
+				!operation
+				|| operation.stage !== 'generating-derivatives'
+				|| operation.updatedAt !== input.operation.updatedAt
+			) {
+				return { outcome: 'lost-claim' as const };
+			}
+			const capacity = await this.getCapacity();
+			return {
+				outcome: 'blocked' as const,
+				capacity: {
+					resource: 'canonical' as const,
+					limitBytes: capacity.canonical.limitBytes,
+					usedBytes: capacity.canonical.usedBytes,
+					reservedBytes: capacity.canonical.reservedBytes - ownReservedBytes,
+					requestedBytes: growthBytes,
+					availableBytes: capacity.canonical.availableBytes + ownReservedBytes,
+				},
+			};
+		},
+		async installTemplatePackage(input) {
+			const publishedAt = new Date(input.publishedAt).getTime();
+			const createdAssetIds = input.created.map(asset => asset.assetId);
+			const reusedAssetIds = [...new Set(input.reused.map(asset => asset.assetId))];
+			const reusedRevisionIds = [...new Set(input.reused.map(asset => asset.revisionId))];
+			await Promise.all([
+				...input.created.map(asset => assertContentCompatible(database, {
+					digest: asset.sourceDigest,
+					byteLength: asset.sourceByteLength,
+					canonicalMime: asset.canonicalMime,
+				})),
+				...input.created.map(asset => assertContentCompatible(database, {
+					digest: asset.thumbnailDigest,
+					byteLength: asset.thumbnailByteLength,
+					canonicalMime: 'image/png',
+				})),
+			]);
+
+			/**
+			 * The one condition every statement in this batch commits against.
+			 *
+			 * D1 runs a batch as one transaction, but a statement whose own condition
+			 * is false simply writes nothing rather than aborting the rest. So
+			 * sharing a single condition is what makes the publication all-or-nothing:
+			 * either every statement sees it hold, or none does.
+			 *
+			 * It covers the operation's claim, the exact-origin revisions being
+			 * reused, and the local identities about to be created — so a Trash,
+			 * retirement, or pruning that commits first, or a generated identity
+			 * colliding with the tombstone of a purged one, leaves this installation
+			 * writing nothing at all rather than pinning a reference the library no
+			 * longer allows or resurrecting an asset a purge retired for good.
+			 */
+			const guard = `
+				EXISTS (
+					SELECT 1 FROM graphics_ingestion_operations
+					WHERE id = ? AND initiated_by = ? AND stage = 'publishing'
+						AND updated_at = ?
+				)
+				AND (
+					SELECT COUNT(*) FROM graphic_assets
+					WHERE id IN ${valuesFromJsonArray('?')} AND lifecycle_state = 'active'
+				) = ?
+				AND (
+					SELECT COUNT(*) FROM graphic_asset_revisions
+					WHERE id IN ${valuesFromJsonArray('?')}
+				) = ?
+				AND NOT EXISTS (
+					SELECT 1 FROM graphic_asset_tombstones
+					WHERE asset_id IN ${valuesFromJsonArray('?')}
+				)
+			`;
+			const guardBindings = [
+				input.operation.id,
+				input.operation.initiatedBy,
+				new Date(input.operation.updatedAt).getTime(),
+				boundJsonArray(reusedAssetIds),
+				reusedAssetIds.length,
+				boundJsonArray(reusedRevisionIds),
+				reusedRevisionIds.length,
+				boundJsonArray(createdAssetIds),
+			];
+
+			// Every list-shaped payload travels as one bound JSON array. A package
+			// carries up to 100 packaged revisions, and one placeholder each would
+			// pass every local test and then fail on D1's 100-parameter limit.
+			const created = JSON.stringify(input.created.map(asset => ({
+				assetId: asset.assetId,
+				revisionId: asset.revisionId,
+				derivativeId: asset.derivativeId,
+				name: asset.name,
+				kind: asset.kind,
+				sourceDigest: asset.sourceDigest,
+				sourceByteLength: asset.sourceByteLength,
+				canonicalMime: asset.canonicalMime,
+				compatibilityProfile: asset.compatibilityProfile,
+				facts: asset.facts,
+				derivativeKind: asset.derivativeKind,
+				thumbnailDigest: asset.thumbnailDigest,
+				thumbnailByteLength: asset.thumbnailByteLength,
+				sourceAssetId: asset.origin.sourceAssetId,
+				sourceRevisionId: asset.origin.sourceRevisionId,
+				sourceRevisionNumber: asset.origin.sourceRevisionNumber,
+				originDigest: asset.origin.digest,
+			})));
+			const references = JSON.stringify(input.references);
+			const associatedAssetIds = boundJsonArray([
+				...new Set([...createdAssetIds, ...reusedAssetIds]),
+			]);
+			const quarantineDigests = [
+				...new Set(input.created.flatMap(asset => [asset.sourceDigest, asset.thumbnailDigest])),
+			];
+
+			const completed: GraphicsIngestionOperation = {
+				...input.operation,
+				stage: 'completed',
+				failure: undefined,
+				templatePackageInstallation: templatePackageInstallationResult(input),
+				updatedAt: input.publishedAt,
+			};
+
+			/**
+			 * One statement, and the number of rows it must write.
+			 *
+			 * The guard makes the batch all-or-nothing, but "all" still has to mean
+			 * every row. A statement whose count the payload decides is checked
+			 * against that count, which is what makes the guard something the
+			 * transaction proves rather than something these comments assert.
+			 * `undefined` marks the statements whose count legitimately varies —
+			 * shared content and repeated Event associations both write fewer rows
+			 * than the payload has entries.
+			 */
+			const planned: { statement: D1PreparedStatement; expectedChanges?: number }[] = [
+				{
+					statement: database.prepare(`
+						INSERT OR IGNORE INTO graphic_asset_contents (
+							digest, byte_length, canonical_mime, availability, created_at
+						)
+						SELECT json_extract(value, '$.sourceDigest'),
+							json_extract(value, '$.sourceByteLength'),
+							json_extract(value, '$.canonicalMime'), 'available', ?
+						FROM json_each(?)
+						WHERE ${guard}
+					`).bind(publishedAt, created, ...guardBindings),
+				},
+				{
+					statement: database.prepare(`
+						INSERT OR IGNORE INTO graphic_asset_contents (
+							digest, byte_length, canonical_mime, availability, created_at
+						)
+						SELECT json_extract(value, '$.thumbnailDigest'),
+							json_extract(value, '$.thumbnailByteLength'), 'image/png', 'available', ?
+						FROM json_each(?)
+						WHERE ${guard}
+					`).bind(publishedAt, created, ...guardBindings),
+				},
+				{
+					statement: database.prepare(`
+						INSERT INTO graphic_assets (id, name, kind, lifecycle_state, created_at, updated_at)
+						SELECT json_extract(value, '$.assetId'), json_extract(value, '$.name'),
+							json_extract(value, '$.kind'), 'active', ?, ?
+						FROM json_each(?)
+						WHERE ${guard}
+					`).bind(publishedAt, publishedAt, created, ...guardBindings),
+					expectedChanges: input.created.length,
+				},
+				{
+					statement: database.prepare(`
+						INSERT INTO graphic_asset_revisions (
+							id, asset_id, revision_number, content_digest,
+							compatibility_profile, technical_facts, created_at
+						)
+						SELECT json_extract(value, '$.revisionId'), json_extract(value, '$.assetId'), 1,
+							json_extract(value, '$.sourceDigest'),
+							json_extract(value, '$.compatibilityProfile'),
+							json_extract(value, '$.facts'), ?
+						FROM json_each(?)
+						WHERE ${guard}
+					`).bind(publishedAt, created, ...guardBindings),
+					expectedChanges: input.created.length,
+				},
+				{
+					// Graphic Asset Origin is written exactly once, on the revision
+					// this installation created. It is never rewritten: a package
+					// claiming an origin already recorded with different content was
+					// rejected at preflight rather than allowed to update one here.
+					// The ignore is the backstop, and the expected count is what
+					// proves it never had to fire.
+					statement: database.prepare(`
+						INSERT OR IGNORE INTO graphic_asset_origins (
+							revision_id, asset_id, source_asset_id, source_revision_id,
+							source_revision_number, digest, created_at
+						)
+						SELECT json_extract(value, '$.revisionId'), json_extract(value, '$.assetId'),
+							json_extract(value, '$.sourceAssetId'), json_extract(value, '$.sourceRevisionId'),
+							json_extract(value, '$.sourceRevisionNumber'), json_extract(value, '$.originDigest'), ?
+						FROM json_each(?)
+						WHERE ${guard}
+					`).bind(publishedAt, created, ...guardBindings),
+					expectedChanges: input.created.length,
+				},
+				{
+					statement: database.prepare(`
+						INSERT INTO graphics_derivatives (
+							id, source_revision_id, kind, content_digest, created_at
+						)
+						SELECT json_extract(value, '$.derivativeId'), json_extract(value, '$.revisionId'),
+							json_extract(value, '$.derivativeKind'), json_extract(value, '$.thumbnailDigest'), ?
+						FROM json_each(?)
+						WHERE ${guard}
+					`).bind(publishedAt, created, ...guardBindings),
+					expectedChanges: input.created.length,
+				},
+				...(input.operation.defaultEventId === undefined
+					? []
+					// An installation run inside an Event associates everything it
+					// touched with that Event. The association organises discovery and
+					// adds nothing to a reused asset's own metadata.
+					: [{
+							statement: database.prepare(`
+								INSERT OR IGNORE INTO graphic_asset_event_associations (asset_id, event_id, created_at)
+								SELECT value, ?, ?
+								FROM json_each(?)
+								WHERE ${guard}
+							`).bind(
+								input.operation.defaultEventId,
+								publishedAt,
+								associatedAssetIds,
+								...guardBindings,
+							),
+						}]),
+				{
+					// The rewritten references pin exactly the revisions this
+					// transaction created or proved, so the join is the proof that no
+					// reference can name a revision that does not resolve — and the
+					// expected count is the proof that every one of them did.
+					//
+					// They carry no Event context, unlike a Screen's. An Installed
+					// Graphics Template belongs to the installation-wide library rather
+					// than to the Event whose workflow happened to install it, and
+					// deleting an Event removes the references scoped to it — which
+					// would quietly strip a library Template of the pins its own
+					// document depends on. Which Event the installation ran inside is
+					// recorded on the Template instead.
+					statement: database.prepare(`
+						INSERT INTO graphic_asset_references (
+							id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
+							event_id, created_at, updated_at
+						)
+						SELECT json_extract(reference.value, '$.id'),
+							json_extract(reference.value, '$.assetId'),
+							json_extract(reference.value, '$.revisionId'),
+							'installed-graphics-template', ?,
+							json_extract(reference.value, '$.ownerSlot'), NULL, ?, ?
+						FROM json_each(?) AS reference
+						JOIN graphic_asset_revisions revision
+							ON revision.id = json_extract(reference.value, '$.revisionId')
+							AND revision.asset_id = json_extract(reference.value, '$.assetId')
+						WHERE ${guard}
+					`).bind(
+						input.template.id,
+						publishedAt,
+						publishedAt,
+						references,
+						...guardBindings,
+					),
+					expectedChanges: input.references.length,
+				},
+				{
+					statement: database.prepare(`
+						INSERT INTO installed_graphics_templates (
+							id, kind, name, revision_number, document, source_template_identity,
+							installed_by_operation_id, event_id, created_at, updated_at
+						)
+						SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+						WHERE ${guard}
+					`).bind(
+						input.template.id,
+						input.template.kind,
+						input.template.name,
+						INSTALLED_GRAPHICS_TEMPLATE_FIRST_REVISION,
+						JSON.stringify(input.template.document),
+						input.template.sourceTemplateIdentity,
+						input.operation.id,
+						input.operation.defaultEventId ?? null,
+						publishedAt,
+						publishedAt,
+						...guardBindings,
+					),
+					expectedChanges: 1,
+				},
+				// Both of these reclaim state only a publication that actually
+				// happened has the right to reclaim, so both carry the guard. A failed
+				// publication that cleared its own write candidates would hand its
+				// unreachable bytes to the generic sweep instead of the candidate
+				// machinery built to collect them, and one that released a quarantine
+				// would restart a seven-day clock on content still unreachable.
+				{
+					statement: releaseContentQuarantineStatement(database, quarantineDigests, {
+						guard,
+						bindings: guardBindings,
+					}),
+				},
+				{
+					statement: database.prepare(`
+						DELETE FROM graphics_canonical_write_candidates
+						WHERE operation_id = ? AND ${guard}
+					`).bind(input.operation.id, ...guardBindings),
+				},
+				{
+					statement: updateOperationStatement(
+						database,
+						completed,
+						input.operation.updatedAt,
+						`AND ${guard}`,
+						guardBindings,
+					),
+					expectedChanges: 1,
+				},
+			];
+
+			const results = await database.batch(
+				planned.map(entry => entry.statement) as [D1PreparedStatement, ...D1PreparedStatement[]],
+			);
+			if (results.some(result => !result.success))
+				throw new Error('Template Package installation transaction failed');
+			// The terminal transition is last, so its count is the one that answers
+			// whether the guard held at all. Losing it means nothing committed.
+			if (results.at(-1)?.meta.changes !== 1)
+				throw new Error('Template Package installation lost its claim before publishing');
+			const shortfall = planned.findIndex((entry, index) =>
+				entry.expectedChanges !== undefined
+				&& results[index]?.meta.changes !== entry.expectedChanges,
+			);
+			if (shortfall !== -1) {
+				throw new Error(
+					`Template Package installation wrote ${
+						results[shortfall]?.meta.changes
+					} of ${planned[shortfall]?.expectedChanges} expected rows`,
+				);
+			}
+			const authoritative = await firstOperation(
+				database,
+				'id = ? AND initiated_by = ?',
+				input.operation.id,
+				input.operation.initiatedBy,
+			);
+			if (!authoritative || authoritative.stage !== 'completed')
+				throw new Error('Template Package installation was not durable');
+			return authoritative;
+		},
+		async findInstalledGraphicsTemplate(templateId) {
+			const row = await database.prepare(`
+				SELECT template.id, template.kind, template.name, template.revision_number,
+					template.document, template.source_template_identity,
+					template.installed_by_operation_id, template.event_id, template.created_at,
+					COALESCE((
+						SELECT json_group_array(json_object(
+							'ownerSlot', reference.owner_slot,
+							'assetId', reference.asset_id,
+							'revisionId', reference.revision_id
+						))
+						FROM (
+							SELECT owner_slot, asset_id, revision_id
+							FROM graphic_asset_references
+							WHERE owner_kind = 'installed-graphics-template'
+								AND owner_id = template.id
+							ORDER BY owner_slot
+						) reference
+					), '[]') AS template_references
+				FROM installed_graphics_templates template
+				WHERE template.id = ?
+			`).bind(templateId).first<{
+				id: string;
+				kind: InstalledGraphicsTemplateKind;
+				name: string;
+				revision_number: number;
+				document: string;
+				source_template_identity: string;
+				installed_by_operation_id: string;
+				event_id: number | null;
+				created_at: number;
+				template_references: string;
+			}>();
+			if (!row)
+				return undefined;
+			return {
+				id: row.id as InstalledGraphicsTemplateId,
+				kind: row.kind,
+				name: row.name,
+				revisionNumber: row.revision_number,
+				document: JSON.parse(row.document),
+				sourceTemplateIdentity: row.source_template_identity,
+				installedByOperationId: row.installed_by_operation_id as GraphicsIngestionOperationId,
+				eventId: row.event_id ?? undefined,
+				references: (JSON.parse(row.template_references) as {
+					ownerSlot: string;
+					assetId: GraphicAssetId;
+					revisionId: GraphicAssetRevisionId;
+				}[]).map(reference => ({
+					ownerSlot: reference.ownerSlot,
+					reference: {
+						assetId: reference.assetId,
+						revisionId: reference.revisionId,
+					},
+				})),
+				installedAt: new Date(row.created_at).toISOString(),
+			};
+		},
 		async getIngestionOperation(operationId, initiatedBy) {
 			return await firstOperation(database, 'id = ? AND initiated_by = ?', operationId, initiatedBy);
 		},
@@ -1019,12 +1542,14 @@ export function createD1GraphicsAssetCatalogue(
 			// that source as its Graphic Asset Origin. Both are the same exact
 			// provenance and both reuse the same local revision.
 			const exact = await database.prepare(`
-				SELECT r.id AS revision_id, r.asset_id, r.content_digest, a.name
+				SELECT r.id AS revision_id, r.asset_id, r.content_digest, a.name,
+					a.lifecycle_state
 				FROM graphic_asset_revisions r
 				JOIN graphic_assets a ON a.id = r.asset_id
 				WHERE r.id = ? AND r.asset_id = ?
 				UNION ALL
-				SELECT r.id AS revision_id, r.asset_id, r.content_digest, a.name
+				SELECT r.id AS revision_id, r.asset_id, r.content_digest, a.name,
+					a.lifecycle_state
 				FROM graphic_asset_origins o
 				JOIN graphic_asset_revisions r ON r.id = o.revision_id
 				JOIN graphic_assets a ON a.id = r.asset_id
@@ -1040,6 +1565,7 @@ export function createD1GraphicsAssetCatalogue(
 				asset_id: string;
 				content_digest: string;
 				name: string;
+				lifecycle_state: GraphicAssetLifecycleState;
 			}>();
 			// A related revision is the same source identity at another source
 			// revision. It never reuses a local revision, but it does mean this
@@ -1068,6 +1594,7 @@ export function createD1GraphicsAssetCatalogue(
 							},
 							digest: exact.content_digest,
 							name: exact.name,
+							lifecycleState: exact.lifecycle_state,
 						}
 					: undefined,
 				relatedRevisionExists: related !== null,
@@ -1132,6 +1659,10 @@ export function createD1GraphicsAssetCatalogue(
 				WHERE id = ? AND initiated_by = ? AND updated_at = ?
 					AND (
 						(stage = 'failed' AND json_extract(failure, '$.retryable') = 1)
+						-- A confirmed Template Package proposal is resting rather than
+						-- running, so claiming it needs no staleness proof: the
+						-- compare-and-set above already settles which caller has it.
+						OR stage = 'awaiting-installation'
 						OR (
 							stage IN (
 								'transferring', 'hashing', 'validating',
@@ -1652,7 +2183,8 @@ export function createD1GraphicsAssetCatalogue(
 						o.browser_decode_evidence, o.target_asset_id,
 					o.duplicate_content_policy,
 					o.default_event_id, o.declared_byte_length,
-					o.transferred_byte_length, o.stage, o.report, o.result, o.failure,
+					o.transferred_byte_length, o.stage, o.report, o.result,
+					o.package_installation, o.failure,
 					o.capacity_outcome,
 					o.created_at AS operation_created_at,
 					o.updated_at AS operation_updated_at
@@ -1668,8 +2200,30 @@ export function createD1GraphicsAssetCatalogue(
 					ON o.id = (
 						SELECT latest_operation.id
 						FROM graphics_ingestion_operations latest_operation
-						WHERE json_extract(latest_operation.result, '$.assetId') = a.id
-							AND latest_operation.stage = 'completed'
+						WHERE latest_operation.stage = 'completed'
+							AND (
+								json_extract(latest_operation.result, '$.assetId') = a.id
+								-- One Template Package installation publishes every
+								-- asset its Template needs, so its result names them
+								-- all rather than one.
+								--
+								-- Only the ones it created. An installation that
+								-- merely reused an exact origin published no asset,
+								-- and letting it answer for one would re-attribute an
+								-- upload's provenance to the package that happened to
+								-- reference it: the asset would start describing
+								-- itself by the archive's filename, with no validation
+								-- report behind it. Reuse leaves library metadata
+								-- alone, and this is the metadata an author reads.
+								OR EXISTS (
+									SELECT 1
+									FROM json_each(COALESCE(
+										json_extract(latest_operation.package_installation, '$.assets'), '[]'
+									)) installed
+									WHERE json_extract(installed.value, '$.assetId') = a.id
+										AND json_extract(installed.value, '$.outcome') = 'created'
+								)
+							)
 						ORDER BY latest_operation.updated_at DESC, latest_operation.id DESC
 						LIMIT 1
 					)

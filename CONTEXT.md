@@ -304,6 +304,18 @@ How one packaged identity would become a local Graphic Asset, decided by provena
 An exact Graphic Asset Origin match reuses the existing local revision untouched; a related source revision, a digest-only content match, or entirely new content each create a separate local Graphic Asset that reuses canonical bytes when the digest already exists.
 The same origin identity and revision carrying a different digest is an immutable-provenance conflict that rejects the complete package.
 
+**Template Package Installation**:
+The one atomic act that turns a confirmed Template Package Preflight Report into local state.
+It re-derives the report from the same staged bytes and installs only while the conclusion is still the one the author confirmed; a changed library, compatibility profile, or proposal returns the operation for a new confirmation instead.
+Canonical bytes and Graphics Derivatives are written and verified first, then one transaction publishes every new Graphic Asset, Graphic Asset Revision, Graphic Asset Origin, Event association, rewritten Graphic Asset Reference, the Installed Graphics Template, and the operation's terminal result together.
+Repeating it answers with the installation that already committed rather than publishing a second one.
+
+**Installed Graphics Template**:
+The independent local copy of the single graphics Template a Template Package carried, created by Template Package Installation with its own installation-owned identity and managed revision.
+Its Graphic Asset References are already rewritten to exact local identity and revision pairs, so it is valid the instant it becomes visible, and those references are the authoritative usage protecting every revision it pins.
+It records the packaged Template's source identity as provenance only; there is no live link to the installation that exported it, and copying it onto a Screen copies it again.
+_Avoid_: Imported template, template installation record.
+
 **Graphics Derivative**:
 A generated thumbnail or preview artifact managed by the Graphics Asset Library as a dependant of one source Graphic Asset or graphics Template revision.
 It inherits its source's access and lifecycle and is never a discoverable or selectable Graphic Asset.
@@ -355,6 +367,23 @@ It must reproduce the exact bytes the catalogue already recorded; anything else 
 **Evidence Ledger**:
 The chronological administrator-facing record of automated Graphics Asset Library lifecycle and reconciliation decisions, retained for one year after the cleanup it explains.
 It identifies subjects by opaque domain identity and never carries object keys, content digests, filenames, capability secrets, or deleted bytes.
+
+**Operations Cockpit**:
+The administrator-only surface that answers, in one reading, whether the Graphics Asset Library is safe and what currently needs attention.
+It composes Library Component Condition, Storage Health Alerts, capacity against its exact boundaries, unfinished Graphics Ingestion Operations, the Graphics Discrepancy backlog, recovery and cleanup deadlines, and recent Evidence Ledger outcomes; it holds no state of its own, so every reading is reproducible from the catalogue.
+_Avoid_: dashboard, storage admin panel.
+
+**Library Component Condition**:
+Whether one Graphics Asset Library component can answer at all, and whether what it holds agrees with the other side: healthy, degraded, or unavailable.
+The catalogue and the canonical byte store are always judged separately and on their own durable evidence — the catalogue by the Unavailable Graphic Asset Content it records, the byte store by the Graphics Discrepancies observed in it — because a component that cannot answer and one that answers while disagreeing are different problems.
+
+**Storage Health Alert**:
+One open call on a Graphics Administrator's attention, classified critical, warning, or info, and derived from durable state rather than raised and remembered.
+A persistent alert is backed by a record only an administrator action or a byte-store recovery can clear, so it survives navigation and reload until its subject is resolved.
+
+**Graphics Ingestion Attention State**:
+What an unfinished Graphics Ingestion Operation needs right now: its staged input has expired, it is retryable, it is awaiting its author's confirmation, or it is actively working.
+Expiry is decided before stage, because an operation whose staged input passed its guarantee needs a new operation whichever stage it paused in; a terminal operation has no attention state at all.
 
 **Text Graphic Item**:
 A Graphic Item that renders literal text or a Graphic Text Template.
@@ -675,6 +704,10 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - **Exact-Byte Repair** and **Derivative Regeneration** restore only bytes the catalogue already expected, and never create a **Graphic Asset Revision** or change a **Graphic Asset Reference**
 - Readers and **Graphics Reconciliation** apply one definition of agreement between the catalogue and stored bytes, so content failing closed as a **Critical Integrity Incident** is never still served
 - **Deep Verification** is the only action offered on a **Critical Integrity Incident**, and the only one that can detect stored bytes that changed behind unchanged size and media type
+- The **Operations Cockpit** states D1 **Library Component Condition** separately from canonical byte condition, and never merges them into one number
+- A **Storage Health Alert** is derived from durable state on every reading, so a persistent one reappears after navigation and reload until its subject is resolved
+- The **Operations Cockpit** counts every lifecycle group by aggregate rather than by expanding rows, so one reading costs the same against any size of backlog
+- The **Operations Cockpit** offers only actions that cannot shorten a recovery guarantee, and still answers whether the library is safe when the catalogue cannot answer
 - Every **Graphic Asset Revision** passes **Graphic Asset Validation** under one **Graphic Asset Compatibility Profile** before it becomes referenceable
 - The initial `still-image-v1` **Graphic Asset Compatibility Profile** accepts exact single-frame PNG, JPEG, or WebP source bytes up to 25 MiB, 8,192 pixels per axis, and 16,777,216 decoded pixels only when bounded parser evidence and a complete decode agree on an 8-bit SDR sRGB image with normal orientation
 - `still-image-v1` rejects declaration conflicts, animation, embedded colour or orientation profiles, malformed structure, partial decode, and out-of-profile facts, and generates a separate deterministic transparent 8-bit sRGB PNG thumbnail fitted within 640 × 360 without cropping or upscaling
@@ -694,6 +727,15 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - A **Template Package Preflight Report** reports every blocking problem together, each with a stable code and remediation, rather than one problem at a time
 - Warnings pause a Template Package exactly once for a confirmation bound to its **Preflight Report Fingerprint**; changed bytes, mappings, compatibility profiles, or proposals require a new report
 - Template Package installation publishes every new asset, origin mapping, rewritten reference, and the graphics Template in one atomic operation
+- A **Template Package Installation** installs exactly one **Installed Graphics Template** and maps every packaged identity to one exact local **Graphic Asset Revision**
+- A **Template Package Installation** applies only the **Template Package Mapping Proposals** of the **Preflight Report Fingerprint** its author confirmed, and re-proves that fingerprint before publishing
+- Two packaged identities claiming one source identity and revision cannot both map to one local revision, so **Template Package Preflight** rejects the complete package
+- A **Template Package Mapping Proposal** that would reuse a **Retired Graphic Asset** or **Trashed Graphic Asset** is reported before confirmation and stays retryable, because neither can take a new **Graphic Asset Reference** until it is restored
+- An **Installed Graphics Template** owns one **Graphic Asset Reference** for each Graphic Asset field its document carries
+- An **Installed Graphics Template**'s references are ordinary **Graphic Asset References**, so a **Graphic Asset** one of them pins cannot enter Trash
+- Reusing an exact **Graphic Asset Origin** publishes no **Graphic Asset**, so the reused asset keeps describing itself by the **Graphics Ingestion Operation** that created it rather than by the package that referenced it
+- A **Template Package Installation** run inside an **Event** associates every **Graphic Asset** it created or reused with that **Event** without changing a reused asset's own metadata
+- A failed or cancelled **Template Package Installation** leaves no discoverable **Graphic Asset**, **Graphic Asset Revision**, **Graphic Asset Origin**, **Graphic Asset Reference**, or **Installed Graphics Template**
 - Replacing a **Graphic Asset** with its current content is a no-op; deliberately returning to older content creates a new revision backed by the existing **Graphic Asset Content**
 - A **Graphic Asset** may be associated with or referenced from more than one **Event**
 - A **Graphic Asset**'s optional **Event** associations organise discovery and never establish ownership, restrict access, or count as references

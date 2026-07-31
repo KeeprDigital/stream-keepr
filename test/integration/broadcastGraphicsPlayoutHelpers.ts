@@ -28,11 +28,13 @@ export function playoutCommandId(prefix: string): string {
 export function integrationBroadcastGraphicWithInputs(
 	id: string,
 	inputs: GraphicInputDeclaration[],
+	animation?: BroadcastGraphicConfig['animation'],
 ): BroadcastGraphicConfig {
 	return {
 		id,
 		name: `Graphic ${id}`,
 		inputs,
+		...(animation === undefined ? {} : { animation }),
 		items: [{
 			id: `${id}-text`,
 			label: 'Name',
@@ -62,6 +64,45 @@ export function integrationBroadcastGraphicWithInputs(
 	};
 }
 
+/**
+ * A whole-graphic Graphic Animation with the phases a test needs and nothing else.
+ *
+ * Written longhand for the same reason as everything else here: the integration
+ * project resolves no `~~` alias, so only type imports cross this boundary.
+ */
+export function integrationGraphicAnimation(
+	durations: { enter?: number; update?: number; exit?: number },
+): NonNullable<BroadcastGraphicConfig['animation']> {
+	const recipe = (duration: number) => ({
+		duration,
+		easing: 'linear' as const,
+		delay: 0,
+		fade: { opacity: 0 },
+	});
+
+	return {
+		...(durations.enter === undefined ? {} : { enter: recipe(durations.enter) }),
+		...(durations.update === undefined ? {} : { update: recipe(durations.update) }),
+		...(durations.exit === undefined ? {} : { exit: recipe(durations.exit) }),
+	};
+}
+
+/**
+ * The same graphic, plus the Graphic Source Selections and Graphic Input Bindings a
+ * placed Broadcast Graphic owns.
+ *
+ * Written through the ordinary Screen write so the declarations, the bindings, and
+ * the derivations all pass the schema an editor writes through.
+ */
+export function integrationBroadcastGraphicWithBindings(
+	id: string,
+	inputs: GraphicInputDeclaration[],
+	sources: BroadcastGraphicConfig['sources'],
+	bindings: BroadcastGraphicConfig['bindings'],
+): BroadcastGraphicConfig {
+	return { ...integrationBroadcastGraphicWithInputs(id, inputs), sources, bindings };
+}
+
 /** A text Graphic Input, staged and optional unless stated otherwise. */
 export function integrationTextInput(
 	key: string,
@@ -79,6 +120,32 @@ export function integrationTextInput(
 	};
 }
 
+export async function selectBroadcastGraphicSource(
+	harness: { send: (command: BroadcastGraphicsCommand) => Promise<BroadcastGraphicsCommandResult> },
+	graphicId: string,
+	sourceKey: string,
+	selectionId: number | null,
+): Promise<BroadcastGraphicsCommandResult> {
+	return await harness.send({
+		commandId: playoutCommandId(`select-${sourceKey}`),
+		type: 'Select Source',
+		payload: { graphicId, sourceKey, selectionId },
+	} as BroadcastGraphicsCommand);
+}
+
+export async function setBroadcastGraphicOverride(
+	harness: { send: (command: BroadcastGraphicsCommand) => Promise<BroadcastGraphicsCommandResult> },
+	graphicId: string,
+	inputKey: string,
+	value: unknown,
+): Promise<BroadcastGraphicsCommandResult> {
+	return await harness.send({
+		commandId: playoutCommandId(`override-${inputKey}`),
+		type: 'Set Override',
+		payload: { graphicId, inputKey, value },
+	} as BroadcastGraphicsCommand);
+}
+
 export async function setBroadcastGraphicInput(
 	harness: { send: (command: BroadcastGraphicsCommand) => Promise<BroadcastGraphicsCommandResult> },
 	graphicId: string,
@@ -93,10 +160,14 @@ export async function setBroadcastGraphicInput(
 }
 
 /** A minimal but renderable Broadcast Graphic: one opaque Shape Graphic Item. */
-export function integrationBroadcastGraphic(id: string): BroadcastGraphicConfig {
+export function integrationBroadcastGraphic(
+	id: string,
+	animation?: BroadcastGraphicConfig['animation'],
+): BroadcastGraphicConfig {
 	return {
 		id,
 		name: `Graphic ${id}`,
+		...(animation === undefined ? {} : { animation }),
 		items: [{
 			id: `${id}-shape`,
 			label: 'Panel',
@@ -208,7 +279,7 @@ export async function createPlayoutHarness(
 	slug: string,
 	graphicIds: string[],
 ): Promise<PlayoutHarness> {
-	const screen = await createBroadcastGraphicsScreen(eventId, slug, graphicIds.map(integrationBroadcastGraphic));
+	const screen = await createBroadcastGraphicsScreen(eventId, slug, graphicIds.map(id => integrationBroadcastGraphic(id)));
 	let current = await getBroadcastGraphicsLiveSession(eventId, screen.id);
 
 	return {

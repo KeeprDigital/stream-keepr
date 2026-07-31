@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'vue';
-import type { GraphicAnimationValues, ShapeGeometrySize } from '~~/shared/modules/graphics';
+import type { GraphicAnimationOwnerValues, GraphicAnimationValues, ShapeGeometrySize } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
 	GraphicAnchorPoint,
@@ -169,11 +169,33 @@ export interface GraphicsCompositionRenderModelInput {
 	 * keyed by Broadcast Graphic id.
 	 *
 	 * Accepted values only: a Screen Output renders what an acceptance put on air,
-	 * never a working value someone is still editing. A graphic with no entry — an
-	 * editor preview, which has no Live Session to accept anything — renders its
-	 * declared defaults, which is what a placed Broadcast Graphic starts from.
+	 * never a working value someone is still editing. A Graphic Input with no value
+	 * here renders nothing.
 	 */
 	inputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
+	/**
+	 * The rendering an update phase is transitioning *away* from, keyed by Broadcast
+	 * Graphic id.
+	 *
+	 * Present only while a Broadcast Graphic is updating, and only from a Live Session
+	 * that has both renderings — which is what lets an output joining mid-update draw
+	 * the transition rather than cut to the new values. An entry for a graphic that is
+	 * not in an update phase is ignored.
+	 */
+	outgoingInputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
+	/**
+	 * Render each Graphic Input's authored default where no value is set.
+	 *
+	 * An editor preview sets this: it has no Live Session to accept anything, and the
+	 * author wants to see the design as they authored it. A live Screen Output must
+	 * never set it — an unset value there means an acceptance passed the input over,
+	 * and substituting the authored default would put placeholder text on program
+	 * wearing the appearance of live data.
+	 *
+	 * It defaults to off so that the failure mode of forgetting it is a missing value
+	 * rather than a fabricated one.
+	 */
+	substituteAuthoredDefaults?: boolean;
 	/** Editor-only selection and item guides. */
 	itemGuides?: boolean;
 	/** Editor-only advisory action-safe and title-safe guides. */
@@ -299,6 +321,29 @@ export interface GraphicItemRenderDescriptor {
 	media?: GraphicMediaRenderDescriptor;
 	/** Present for Graphic Groups: the group's direct children, back to front. */
 	children?: GraphicItemRenderDescriptor[];
+	/**
+	 * The two renderings an update phase draws for this Graphic Item, overlaid inside
+	 * its own box.
+	 *
+	 * Present only while this item is cross-transitioning, and when it is, this
+	 * descriptor paints nothing itself — it is the positioning box, and the pair fills
+	 * it. That is what keeps a cross-transition inside Graphic Layer Order: both
+	 * renderings sit exactly where this one item sits, so an opaque Graphic Item on a
+	 * lower layer cannot cover the rendering being replaced, and one on a higher layer
+	 * still covers both. Drawing the old rendering in a second canvas-wide layer put
+	 * every outgoing pixel under every incoming one, which silently degraded the
+	 * commonest shape this feature has — an updating name over an opaque panel — to a
+	 * hard cut.
+	 *
+	 * Inside the box rather than beside it because a row or column Graphic Group lays
+	 * its children out: a second sibling would shift every later child along, while an
+	 * overlay consumes no layout at all.
+	 */
+	crossTransition?: {
+		/** Drawn first, so the arriving rendering composites in front of it. */
+		outgoing: GraphicItemRenderDescriptor;
+		incoming: GraphicItemRenderDescriptor;
+	};
 }
 
 /**
@@ -315,12 +360,36 @@ export interface GraphicsAnimationProjection {
 	elapsed: number;
 }
 
+/**
+ * The whole composed Broadcast Graphic, drawn from the rendering an update is
+ * replacing.
+ *
+ * Present only when the *Broadcast Graphic itself* authored an update recipe, which is
+ * the one case where drawing everything twice is what the author asked for: a
+ * whole-graphic recipe moves the composed frame, so the old frame leaves as the new
+ * one arrives, unchanged parts included, and the cross-fade dip through the middle is
+ * the effect rather than a defect. Occlusion between the two copies is inherent to
+ * that — the old frame passes beneath the new one, which is what a cross-dissolve is.
+ *
+ * A per-item cross-transition never uses this. It pairs the two renderings inside the
+ * crossing item's own box instead, so Graphic Layer Order still composes; see
+ * `GraphicItemRenderDescriptor.crossTransition`. The two are mutually exclusive by
+ * construction, which is what keeps either from having to reason about the other's
+ * stacking.
+ */
+export interface BroadcastGraphicOutgoingRenderDescriptor {
+	style?: CSSProperties;
+	items: GraphicItemRenderDescriptor[];
+}
+
 export interface BroadcastGraphicRenderDescriptor {
 	id: string;
 	name: string;
 	/** Whole-graphic Graphic Animation, composed over every item it contains. */
 	style?: CSSProperties;
 	items: GraphicItemRenderDescriptor[];
+	/** Present only while an update phase has an old rendering still on screen. */
+	outgoing?: BroadcastGraphicOutgoingRenderDescriptor;
 }
 
 export type GraphicsSafeAreaGuideId = 'action-safe' | 'title-safe';
@@ -516,7 +585,7 @@ const REVEAL_MASK_DIRECTION: Record<GraphicRevealEdge, string> = {
  * alpha because only the alpha is read, and because a Key Output must never carry
  * a colour that is not white.
  */
-function revealMask(values: GraphicAnimationValues): string | undefined {
+function revealMask(values: GraphicAnimationOwnerValues): string | undefined {
 	const reveal = values.reveal;
 	if (!reveal)
 		return undefined;
@@ -542,7 +611,7 @@ function revealMask(values: GraphicAnimationValues): string | undefined {
  * composition produces exactly the styles it produced before animation existed.
  */
 function motionStyle(
-	values: GraphicAnimationValues,
+	values: GraphicAnimationOwnerValues,
 	size: { width: number; height: number },
 	rotation: number,
 	anchor: GraphicAnchorPoint | undefined,
@@ -576,7 +645,7 @@ function motionStyle(
 	};
 }
 
-const RESTING: GraphicAnimationValues = {};
+const RESTING: GraphicAnimationOwnerValues = {};
 
 /**
  * How many whole lines of text fit inside authored bounds. An `ellipsis` or
@@ -650,7 +719,7 @@ const GROUP_JUSTIFICATION: Record<GraphicGroupItemConfig['justify'], string> = {
 function canvasPlacement(
 	item: GraphicItemConfig,
 	offset: { x: number; y: number },
-	motion: GraphicAnimationValues,
+	motion: GraphicAnimationOwnerValues,
 ): CSSProperties {
 	return {
 		...rectStyle({ ...item, x: item.x + offset.x, y: item.y + offset.y }),
@@ -668,7 +737,7 @@ function canvasPlacement(
 function stackedPlacement(
 	group: GraphicGroupItemConfig,
 	child: GraphicGroupChildConfig,
-	motion: GraphicAnimationValues,
+	motion: GraphicAnimationOwnerValues,
 ): CSSProperties {
 	const isRow = group.arrangement === 'row';
 	const mainExtent = isRow ? child.width : child.height;
@@ -680,6 +749,9 @@ function stackedPlacement(
 			: { width: `${child.width}px` };
 
 	return {
+		// Load-bearing, and not only for this element's own children: a cross-transitioning
+		// child positions both of its renderings `inset: 0` against this box, so removing
+		// this as unused would send them out to fill the canvas instead of the child.
 		position: 'relative',
 		boxSizing: 'border-box',
 		flex: sizing.mode === 'fill'
@@ -782,14 +854,19 @@ function placeholderStyle(
 /**
  * The values this Broadcast Graphic's Graphic Text Templates render.
  *
- * Declared defaults first, then whatever acceptance has put on air. That layering
- * is what makes an editor preview show the design as authored while a live output
- * shows the show as taken, from one code path.
+ * Whatever acceptance put on air, and — only when the caller asks for it — each
+ * declared default underneath. The asking is the whole point: an editor preview
+ * wants the design as authored, and a live output must show nothing at all for a
+ * value no acceptance produced.
  */
 function resolvedInputValues(
 	declarations: readonly GraphicInputDeclaration[],
 	accepted: Readonly<Record<string, GraphicInputValue>> | undefined,
+	substituteAuthoredDefaults: boolean,
 ): Record<string, GraphicInputValue> {
+	if (!substituteAuthoredDefaults)
+		return { ...accepted };
+
 	const values: Record<string, GraphicInputValue> = {};
 	for (const declaration of declarations)
 		values[declaration.key] = declaration.default;
@@ -937,11 +1014,8 @@ function childDescriptor(
 	child: GraphicGroupChildConfig,
 	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
 	inputs: GraphicTextTemplateContext,
-	motion: GraphicAnimationValues,
+	placement: CSSProperties,
 ): GraphicItemRenderDescriptor {
-	const placement = group.arrangement === 'canvas'
-		? canvasPlacement(child, { x: Math.max(0, group.padding), y: Math.max(0, group.padding) }, motion)
-		: stackedPlacement(group, child, motion);
 	const scope = elementScope(graphicId, child.id);
 
 	// A Media Graphic Item carries no Graphic Surface Style, so it never inherits
@@ -964,6 +1038,47 @@ function childDescriptor(
 	};
 }
 
+/**
+ * The box a cross-transitioning owner's two renderings share.
+ *
+ * The pair fills the owner's own box, so this is the placement with every trace of
+ * motion and paint removed: motion belongs to each half, and the box is only there to
+ * put both halves where the one item goes.
+ *
+ * It requires the placement it is given to establish a positioning context, because each
+ * half is `position: absolute; inset: 0` against it. Every placement does — a top-level
+ * or canvas-group item is `absolute` and a row or column child is `relative` — and
+ * `.graphics-compositor-item` sets no `position` of its own, so there is no fallback if
+ * one ever stopped. Both halves would escape to the canvas rather than fail visibly.
+ */
+function crossTransitionBox(placement: CSSProperties): CSSProperties {
+	const { transform, transformOrigin, opacity, maskImage, filter, ...box } = placement;
+	return box;
+}
+
+/** Where one half of a cross-transition sits: filling the shared box, under its own motion. */
+function crossTransitionHalf(
+	motion: GraphicAnimationOwnerValues,
+	size: { width: number; height: number },
+	rotation: number,
+	anchor: GraphicAnchorPoint | undefined,
+): CSSProperties {
+	return {
+		position: 'absolute',
+		inset: '0',
+		boxSizing: 'border-box',
+		...motionStyle(motion, size, rotation, anchor),
+	};
+}
+
+/**
+ * One top-level Graphic Item, paired with the rendering it is replacing when it crosses.
+ *
+ * The pair is overlaid inside the item's own box rather than drawn as a second
+ * canvas-wide layer, so both renderings occupy this item's place in Graphic Layer
+ * Order: an opaque item below cannot cover the rendering being replaced, and one above
+ * still covers both.
+ */
 function itemDescriptor(
 	output: ScreenOutput,
 	graphicId: string,
@@ -974,6 +1089,74 @@ function itemDescriptor(
 ): GraphicItemRenderDescriptor {
 	const motion = context.motionOf(item, context.staggerOffset, context.parent);
 	const placement = canvasPlacement(item, { x: 0, y: 0 }, motion);
+
+	if (!context.crossing?.(item.id))
+		return paintedItemDescriptor(output, graphicId, item, resolveContentUrl, inputs, context, placement);
+
+	const half = (values: GraphicAnimationOwnerValues) =>
+		crossTransitionHalf(values, item, item.rotation ?? 0, item.anchor);
+
+	/**
+	 * The context each half hands to its own children.
+	 *
+	 * `crossing` is dropped, so only the outermost qualifying owner pairs. A Graphic
+	 * Group's rendered content is its children's, so a changed child makes its group
+	 * changed too and both qualify — and pairing the child again inside each half would
+	 * draw it four times, with both copies inside the outgoing half resolving from the
+	 * outgoing values. The gate is dropped here rather than in `updateCrossTransition`
+	 * because that set does double duty: it also decides which owners an update recipe
+	 * may animate, and a child's own recipe is meant to compose with its group's exactly
+	 * as an item's composes with a whole-graphic one. Narrowing the set would silence the
+	 * child's motion along with its pairing.
+	 *
+	 * `motionOf` is swapped for the half's own, which is the part that is easy to miss:
+	 * without it the children of the rendering being *replaced* would animate on the
+	 * arriving rendering's schedule.
+	 */
+	const halfContext = (motionOf: GraphicsItemAnimationContext['motionOf']): GraphicsItemAnimationContext => ({
+		phase: context.phase,
+		staggerOffset: context.staggerOffset,
+		parent: context.parent,
+		motionOf,
+	});
+
+	return {
+		id: item.id,
+		label: item.label,
+		kind: item.type,
+		style: crossTransitionBox(placement),
+		crossTransition: {
+			outgoing: paintedItemDescriptor(
+				output,
+				graphicId,
+				item,
+				resolveContentUrl,
+				context.outgoing!.inputs,
+				halfContext(context.outgoing!.motionOf),
+				half(context.outgoing!.motionOf(item, context.staggerOffset, context.parent)),
+			),
+			incoming: paintedItemDescriptor(
+				output,
+				graphicId,
+				item,
+				resolveContentUrl,
+				inputs,
+				halfContext(context.motionOf),
+				half(motion),
+			),
+		},
+	};
+}
+
+function paintedItemDescriptor(
+	output: ScreenOutput,
+	graphicId: string,
+	item: GraphicItemConfig,
+	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
+	inputs: GraphicTextTemplateContext,
+	context: GraphicsItemAnimationContext,
+	placement: CSSProperties,
+): GraphicItemRenderDescriptor {
 	const scope = elementScope(graphicId, item.id);
 
 	if (item.type === 'text')
@@ -1006,27 +1189,63 @@ function itemDescriptor(
 		surface: surfaceDescriptor(output, scope, item, item.geometry, item.surfaceStyle),
 		children: item.children
 			.filter(child => child.visible)
-			.map(child => childDescriptor(
+			.map(child => groupChildDescriptor(output, graphicId, item, child, resolveContentUrl, inputs, context)),
+	};
+}
+
+/**
+ * One Graphic Group child, paired with the rendering it is replacing when it crosses.
+ *
+ * The pair goes inside the child's own box because a row or column group lays its
+ * children out: a second sibling would shift every later child along, while an overlay
+ * consumes no layout.
+ */
+function groupChildDescriptor(
+	output: ScreenOutput,
+	graphicId: string,
+	group: GraphicGroupItemConfig,
+	child: GraphicGroupChildConfig,
+	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
+	inputs: GraphicTextTemplateContext,
+	context: GraphicsItemAnimationContext,
+): GraphicItemRenderDescriptor {
+	// A child's own delay is offset by its group's stagger, on top of whatever offset the
+	// group itself received: both are measured from the one shared phase start. A
+	// `clear-parent` slide clears the group, not the canvas, because the group is the
+	// child's parent.
+	const staggerOffset = context.staggerOffset + graphicAnimationStaggerOffset(
+		group.animation?.stagger?.[context.phase],
+		group.children.map(entry => entry.id),
+		child.id,
+	);
+	const motion = context.motionOf(child, staggerOffset, group);
+	const placement = group.arrangement === 'canvas'
+		? canvasPlacement(child, { x: Math.max(0, group.padding), y: Math.max(0, group.padding) }, motion)
+		: stackedPlacement(group, child, motion);
+
+	if (!context.crossing?.(child.id))
+		return childDescriptor(output, graphicId, group, child, resolveContentUrl, inputs, placement);
+
+	const rotation = group.arrangement === 'canvas' ? child.rotation ?? 0 : 0;
+	const half = (values: GraphicAnimationOwnerValues) => crossTransitionHalf(values, child, rotation, child.anchor);
+
+	return {
+		id: child.id,
+		label: child.label,
+		kind: child.type,
+		style: crossTransitionBox(placement),
+		crossTransition: {
+			outgoing: childDescriptor(
 				output,
 				graphicId,
-				item,
+				group,
 				child,
 				resolveContentUrl,
-				inputs,
-				// A child's own delay is offset by its group's stagger, on top of
-				// whatever offset the group itself received: both are measured from the
-				// one shared phase start. A `clear-parent` slide clears the group, not
-				// the canvas, because the group is the child's parent.
-				context.motionOf(
-					child,
-					context.staggerOffset + graphicAnimationStaggerOffset(
-						item.animation?.stagger?.[context.phase],
-						item.children.map(entry => entry.id),
-						child.id,
-					),
-					item,
-				),
-			)),
+				context.outgoing!.inputs,
+				half(context.outgoing!.motionOf(child, staggerOffset, group)),
+			),
+			incoming: childDescriptor(output, graphicId, group, child, resolveContentUrl, inputs, half(motion)),
+		},
 	};
 }
 
@@ -1047,7 +1266,20 @@ interface GraphicsItemAnimationContext {
 		owner: GraphicItemConfig | GraphicGroupChildConfig,
 		staggerOffset: number,
 		parent: { width: number; height: number },
-	) => GraphicAnimationValues;
+	) => GraphicAnimationOwnerValues;
+	/**
+	 * Whether this owner draws both renderings of an update, overlaid in its own box.
+	 *
+	 * Absent whenever nothing is cross-transitioning per item — outside an update phase,
+	 * and inside one when the Broadcast Graphic's own recipe is what crosses, because
+	 * then the whole composed frame is drawn twice instead.
+	 */
+	crossing?: (ownerId: string) => boolean;
+	/** The rendering being replaced: its Graphic Input values, and its half of the motion. */
+	outgoing?: {
+		inputs: GraphicTextTemplateContext;
+		motionOf: GraphicsItemAnimationContext['motionOf'];
+	};
 }
 
 /**
@@ -1062,7 +1294,22 @@ function graphicAnimationContext(
 	graphic: BroadcastGraphicConfig,
 	projection: GraphicsAnimationProjection | undefined,
 	canvas: { width: number; height: number },
-): { graphicMotion: GraphicAnimationValues; itemContext: (item: GraphicItemConfig) => GraphicsItemAnimationContext } {
+	/** Which rendering this context animates: the one arriving, or the one leaving. */
+	half: 'incoming' | 'outgoing' = 'incoming',
+	/**
+	 * Which owners an update phase may animate, and whether the graphic is one of them.
+	 *
+	 * Absent outside an update phase, where every owner animates from its own recipe.
+	 * Inside one it is the gate: an update recipe runs only where that owner's own
+	 * rendered content changed, so this is what stops an item — or the whole composed
+	 * graphic — moving for an input change that draws nothing.
+	 */
+	crossTransition?: GraphicsUpdateCrossTransition | null,
+): {
+	graphicMotion: GraphicAnimationOwnerValues;
+	motionOf: GraphicsItemAnimationContext['motionOf'];
+	itemContext: (item: GraphicItemConfig) => GraphicsItemAnimationContext;
+} {
 	if (!projection) {
 		const resting: GraphicsItemAnimationContext = {
 			phase: 'enter',
@@ -1070,33 +1317,62 @@ function graphicAnimationContext(
 			parent: canvas,
 			motionOf: () => RESTING,
 		};
-		return { graphicMotion: RESTING, itemContext: () => resting };
+		return { graphicMotion: RESTING, motionOf: () => RESTING, itemContext: () => resting };
 	}
 
 	const { phase, elapsed } = projection;
 	const topLevelIds = graphic.items.map(item => item.id);
 	const graphicStagger = graphic.animation?.stagger?.[phase];
 
+	// The two halves of a cross-transition are one projection read from both ends, so
+	// selecting a half is all this does — it never projects the outgoing rendering
+	// separately, and the two can therefore never fall out of step.
+	const halfOf = (values: GraphicAnimationValues): GraphicAnimationOwnerValues =>
+		half === 'outgoing' ? values.outgoing ?? RESTING : values;
+
+	/**
+	 * An update recipe runs only where that owner's own rendered content changed. Outside
+	 * an update phase there is nothing to gate: enter, exit, and on-screen are about the
+	 * graphic's lifecycle rather than about its content.
+	 */
+	const animates = (ownerId: string | null): boolean => {
+		if (phase !== 'update')
+			return true;
+		if (!crossTransition)
+			return false;
+		// The graphic's own arm is redundant by construction rather than load-bearing:
+		// `wholeGraphic` is false only when the graphic authored no update recipe, and an
+		// owner with no recipe projects nothing anyway. It is stated because the invariant
+		// is worth reading at the point that relies on it, not because removing it would
+		// change a frame.
+		return ownerId === null ? crossTransition.wholeGraphic : crossTransition.crossing.has(ownerId);
+	};
+
 	const motionOf: GraphicsItemAnimationContext['motionOf'] = (owner, staggerOffset, parent) =>
-		resolveGraphicAnimationValues({
-			recipe: owner.animation?.[phase],
-			phase,
-			elapsed,
-			staggerOffset,
-			rect: owner,
-			parent,
-		});
+		animates(owner.id)
+			? halfOf(resolveGraphicAnimationValues({
+					recipe: owner.animation?.[phase],
+					phase,
+					elapsed,
+					staggerOffset,
+					rect: owner,
+					parent,
+				}))
+			: RESTING;
 
 	return {
-		graphicMotion: resolveGraphicAnimationValues({
-			recipe: graphic.animation?.[phase],
-			phase,
-			elapsed,
-			// A whole-graphic recipe moves the composed frame, so its own bounds and
-			// its parent are both the Screen canvas.
-			rect: { x: 0, y: 0, ...canvas },
-			parent: canvas,
-		}),
+		graphicMotion: animates(null)
+			? halfOf(resolveGraphicAnimationValues({
+					recipe: graphic.animation?.[phase],
+					phase,
+					elapsed,
+					// A whole-graphic recipe moves the composed frame, so its own bounds and
+					// its parent are both the Screen canvas.
+					rect: { x: 0, y: 0, ...canvas },
+					parent: canvas,
+				}))
+			: RESTING,
+		motionOf,
 		itemContext: item => ({
 			phase,
 			staggerOffset: graphicAnimationStaggerOffset(graphicStagger, topLevelIds, item.id),
@@ -1104,6 +1380,99 @@ function graphicAnimationContext(
 			motionOf,
 		}),
 	};
+}
+
+/**
+ * Separates a Graphic Group's children when their content is joined for comparison.
+ *
+ * A separator rather than a plain concatenation because the comparison has to be
+ * exact: joining with nothing would make a group whose children read "ab" and "c"
+ * indistinguishable from one reading "a" and "bc", and an update animation would be
+ * skipped for a change that is plainly visible. A unit separator is used because a
+ * Graphic Text Template can render any printable character an operator can type, so
+ * any printable separator could be forged by the very content it is separating.
+ */
+const GROUP_CONTENT_SEPARATOR = '\u001F';
+
+/**
+ * What one owner renders from the current Graphic Input values, as a string that
+ * changes exactly when its rendered content does.
+ *
+ * Only a Graphic Text Template reads Graphic Input values today, so only a Text
+ * Graphic Item's content can change under a graphic that is already on air — and a
+ * Graphic Group's content is its children's. A Shape or Media Graphic Item renders
+ * the same thing whatever the values are, which is why an update animation is not
+ * offered to it here: an update recipe runs when *that owner's* rendered content
+ * changes, and its content did not.
+ */
+function renderedContent(
+	owner: GraphicItemConfig | GraphicGroupChildConfig,
+	declarations: readonly GraphicInputDeclaration[],
+	values: Readonly<Record<string, GraphicInputValue>>,
+): string {
+	if (owner.type === 'text')
+		return renderGraphicTextTemplate(owner.text, declarations, values).map(segment => segment.text).join('');
+	if (owner.type === 'group')
+		return owner.children.map(child => renderedContent(child, declarations, values)).join(GROUP_CONTENT_SEPARATOR);
+	return '';
+}
+
+/**
+ * Which owners cross-transition, and whether the graphic itself is the one doing it.
+ *
+ * An update phase begins on any changed Graphic Input *value*, which is not the same
+ * question as changed rendered *content* — a value no Text Graphic Item renders changes
+ * nothing on screen. So every owner is asked about its own content, and an owner whose
+ * content is unchanged is animated by nothing at all: there would be no old rendering
+ * to cross it with, and running its update recipe anyway would dip or slide it on
+ * program with no counterpart. That is `CONTEXT.md:545` for an item and `:546` for the
+ * graphic, and the graphic's case is the one that would have been most visible — a
+ * whole composed graphic dipping to half opacity and back for an input nothing draws.
+ *
+ * `wholeGraphic` decides *how* the pair is drawn as well as what. A whole-graphic
+ * recipe moves the composed frame, so it needs two whole frames; anything else pairs
+ * the two renderings inside each crossing item's own box, where Graphic Layer Order
+ * still composes. The two are mutually exclusive, so neither has to reason about the
+ * other's stacking.
+ */
+interface GraphicsUpdateCrossTransition {
+	/** The Broadcast Graphic's own update recipe is what is cross-transitioning. */
+	wholeGraphic: boolean;
+	/** Owners whose own rendered content changed, so their update recipe may run. */
+	crossing: Set<string>;
+}
+
+function updateCrossTransition(
+	graphic: BroadcastGraphicConfig,
+	declarations: readonly GraphicInputDeclaration[],
+	current: Readonly<Record<string, GraphicInputValue>>,
+	outgoing: Readonly<Record<string, GraphicInputValue>>,
+): GraphicsUpdateCrossTransition | null {
+	const changed = (owner: GraphicItemConfig | GraphicGroupChildConfig): boolean =>
+		renderedContent(owner, declarations, current) !== renderedContent(owner, declarations, outgoing);
+
+	if (!graphic.items.some(item => changed(item)))
+		return null;
+
+	const crossing = new Set<string>();
+	for (const item of graphic.items) {
+		if (item.animation?.update && changed(item))
+			crossing.add(item.id);
+		if (item.type !== 'group')
+			continue;
+		for (const child of item.children) {
+			if (child.animation?.update && changed(child))
+				crossing.add(child.id);
+		}
+	}
+
+	// A Broadcast Graphic's update recipe runs when any of its rendered content changes,
+	// and every item participates because the frame is what moves. An item's own update
+	// recipe still applies inside each copy, gated by its own content as above.
+	if (graphic.animation?.update)
+		return { wholeGraphic: true, crossing };
+
+	return crossing.size === 0 ? null : { wholeGraphic: false, crossing };
 }
 
 function safeAreaGuide(
@@ -1176,15 +1545,81 @@ export function resolveGraphicsCompositionRenderModel(
 			const declarations = graphic.inputs ?? [];
 			const inputs: GraphicTextTemplateContext = {
 				declarations,
-				values: resolvedInputValues(declarations, input.inputValues?.[graphic.id]),
+				values: resolvedInputValues(
+					declarations,
+					input.inputValues?.[graphic.id],
+					input.substituteAuthoredDefaults ?? false,
+				),
 			};
 			const canvas = { width: input.canvasWidth, height: input.canvasHeight };
+			const projection = input.animation?.[graphic.id];
+
+			// The rendering being replaced exists only inside an update phase, and only when
+			// the Live Session supplied it. Anything else — an editor preview, a settled
+			// graphic, an entrance — has one rendering and nothing to cross.
+			const outgoingValues = projection?.phase === 'update'
+				? input.outgoingInputValues?.[graphic.id]
+				: undefined;
+			const outgoingInputs: GraphicTextTemplateContext = {
+				declarations,
+				// Substitution follows the same rule as the incoming rendering: the pair is
+				// two renderings of one graphic, so an authored default standing in on one
+				// side and not the other would make the transition itself the thing that
+				// changes the value.
+				values: resolvedInputValues(
+					declarations,
+					outgoingValues ?? {},
+					input.substituteAuthoredDefaults ?? false,
+				),
+			};
+			const crossTransition = outgoingValues
+				? updateCrossTransition(graphic, declarations, inputs.values, outgoingInputs.values)
+				: null;
+			const perItem = crossTransition !== null && !crossTransition.wholeGraphic;
+
 			const { graphicMotion, itemContext } = graphicAnimationContext(
 				graphic,
-				input.animation?.[graphic.id],
+				projection,
 				canvas,
+				'incoming',
+				crossTransition,
 			);
+			const outgoingHalf = crossTransition
+				? graphicAnimationContext(graphic, projection, canvas, 'outgoing', crossTransition)
+				: null;
 			const style = motionStyle(graphicMotion, canvas, 0, 'top-left');
+
+			const buildItems = (
+				values: GraphicTextTemplateContext,
+				context: (item: GraphicItemConfig) => GraphicsItemAnimationContext,
+				pairing: GraphicsItemAnimationContext['outgoing'],
+			) => graphic.items
+				.filter(item => item.visible)
+				.map(item => itemDescriptor(
+					input.output,
+					graphic.id,
+					item,
+					input.graphicAssetContentUrl,
+					values,
+					{
+						...context(item),
+						...(pairing === undefined
+							? {}
+							: { crossing: (ownerId: string) => crossTransition!.crossing.has(ownerId), outgoing: pairing }),
+					},
+				));
+
+			// Two whole frames only when the Broadcast Graphic's own recipe is what moves.
+			// A per-item cross-transition pairs inside each crossing item's box instead, so
+			// the two mechanisms never both apply to one graphic.
+			let outgoing: BroadcastGraphicOutgoingRenderDescriptor | undefined;
+			if (crossTransition?.wholeGraphic && outgoingHalf) {
+				const outgoingStyle = motionStyle(outgoingHalf.graphicMotion, canvas, 0, 'top-left');
+				outgoing = {
+					...(Object.keys(outgoingStyle).length === 0 ? {} : { style: outgoingStyle }),
+					items: buildItems(outgoingInputs, outgoingHalf.itemContext, undefined),
+				};
+			}
 
 			return {
 				id: graphic.id,
@@ -1192,16 +1627,14 @@ export function resolveGraphicsCompositionRenderModel(
 				// Omitted entirely at rest, so an unanimated Broadcast Graphic keeps the
 				// descriptor it had before animation existed.
 				...(Object.keys(style).length === 0 ? {} : { style }),
-				items: graphic.items
-					.filter(item => item.visible)
-					.map(item => itemDescriptor(
-						input.output,
-						graphic.id,
-						item,
-						input.graphicAssetContentUrl,
-						inputs,
-						itemContext(item),
-					)),
+				items: buildItems(
+					inputs,
+					itemContext,
+					perItem && outgoingHalf
+						? { inputs: outgoingInputs, motionOf: outgoingHalf.motionOf }
+						: undefined,
+				),
+				...(outgoing === undefined ? {} : { outgoing }),
 			};
 		}),
 		safeAreaGuides: input.safeAreaGuides

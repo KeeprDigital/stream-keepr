@@ -5,6 +5,7 @@ import type {
 } from '../../types/graphics';
 import type {
 	GraphicInputAvailability,
+	GraphicSourceSelectionsState,
 } from '../graphics';
 import {
 	findGraphicInputDeclaration,
@@ -14,22 +15,38 @@ import {
 /**
  * The Graphic Input half of a Broadcast Graphics Live Session's state.
  *
- * ## Three values, not one
+ * ## Four values, not one
  *
  * A live operator has to be able to tell apart what a binding currently resolves,
- * what they have edited, and what program is actually showing. Those are three
- * distinct things and this module keeps them distinct:
+ * what they have masked it with, what they have edited, and what program is
+ * actually showing. Those are distinct things and this module keeps them distinct:
  *
  * - the **latest bound value** is resolved from a Graphic Input Binding and is
  *   never stored here, because it follows Event Data rather than the Live
  *   Session;
- * - the **working value** is the server-accepted edit. It lives in the Live
+ * - a **Graphic Input Override** is an operator value masking that binding. It
+ *   lives in the Live Session because it persists across hide/show cycles until
+ *   cleared, and the binding keeps resolving underneath it;
+ * - the **working value** is the server-accepted manual edit. It lives in the Live
  *   Session, so a second operator's Live Control sees it the moment it is
  *   accepted rather than when its author chooses to publish it;
  * - the **accepted on-air value** is what an on-air Broadcast Graphic renders.
  *   It changes only through an acceptance — Take for an off graphic, Update
  *   Graphic for an on-air one, or a live On-air Update Policy edit — so a partial
  *   edit can never leak on air.
+ *
+ * ## One effective value, and where it comes from
+ *
+ * Exactly one of those feeds acceptance, and the precedence is fixed: an override
+ * masks everything; failing that a declared Graphic Input Binding decides, whether
+ * or not it currently resolves; failing that the manual working value, which
+ * starts at the declared default.
+ *
+ * The middle clause is the load-bearing one. A binding that resolves nothing makes
+ * its Graphic Input unavailable and *does not* fall back to the manual value or the
+ * template default. Falling back would put an authored placeholder on air wearing
+ * the appearance of live data, which is the one failure the settled rule names
+ * explicitly. Correcting an unavailable binding is what an override is for.
  *
  * ## Why acceptance has its own revision
  *
@@ -43,18 +60,66 @@ import {
  * the same one.
  */
 
+/** One rendering: the Graphic Input values a Broadcast Graphic draws itself from. */
+export type GraphicInputValues = Record<string, GraphicInputValue>;
+
 /** The Graphic Input values of one placed Broadcast Graphic. */
 export interface BroadcastGraphicInputsState {
-	/** Server-accepted edits, shared between sessions immediately. */
-	working: Record<string, GraphicInputValue>;
+	/** Server-accepted manual edits, shared between sessions immediately. */
+	working: GraphicInputValues;
+	/**
+	 * Graphic Input Overrides, masking their bindings until cleared.
+	 *
+	 * Optional because this state is a persisted JSON projection that a session
+	 * written before overrides existed does not carry. Every read goes through
+	 * `broadcastGraphicInputsState`, which fills it in, and every reduction writes it.
+	 */
+	overrides?: GraphicInputValues;
 	/** What an on-air Broadcast Graphic renders. */
-	accepted: Record<string, GraphicInputValue>;
+	accepted: GraphicInputValues;
 	/** How many times the staged set has been accepted, for the sequence guard. */
 	acceptedRevision: number;
+	/**
+	 * The rendering the active update phase cross-transitions *away* from.
+	 *
+	 * An update animation shows two renderings passing each other, so the outgoing
+	 * one has to be in the authoritative snapshot rather than remembered by whichever
+	 * client happened to be watching — otherwise an output that joins mid-update has
+	 * nothing to transition from and would cut instead of catching up.
+	 *
+	 * Reachable only through `playout.updateStartedAt`: with no update phase in
+	 * flight this is inert, which is why nothing has to clear it.
+	 */
+	updateFrom?: GraphicInputValues;
+	/**
+	 * The rendering the one pending update cross-transitions away from, when a
+	 * second acceptance arrived while an update was still running.
+	 *
+	 * At most one, never a queue: a third acceptance replaces this pending update's
+	 * target rather than lengthening the chain.
+	 */
+	pendingUpdateFrom?: GraphicInputValues;
 }
 
-export function createInitialBroadcastGraphicInputsState(): BroadcastGraphicInputsState {
-	return { working: {}, accepted: {}, acceptedRevision: 0 };
+/**
+ * The same state with every optional *projection* field filled in.
+ *
+ * Only the fields a session always has once read: `overrides` is optional on the
+ * stored shape purely because a session written before overrides existed does not
+ * carry it, so filling it in is recovering a projection rather than inventing state.
+ *
+ * `updateFrom` and `pendingUpdateFrom` are deliberately left optional. Their absence
+ * is meaningful rather than incidental — it is what "no update phase in flight" looks
+ * like — and they are reachable only through `playout.updateStartedAt`, which is why
+ * nothing has to clear them. Requiring them here would force every construction site
+ * to invent an outgoing rendering for a graphic that is not transitioning.
+ */
+export type NormalizedBroadcastGraphicInputsState
+	= Required<Pick<BroadcastGraphicInputsState, 'working' | 'overrides' | 'accepted' | 'acceptedRevision'>>
+		& Pick<BroadcastGraphicInputsState, 'updateFrom' | 'pendingUpdateFrom'>;
+
+export function createInitialBroadcastGraphicInputsState(): NormalizedBroadcastGraphicInputsState {
+	return { working: {}, overrides: {}, accepted: {}, acceptedRevision: 0 };
 }
 
 /** One Graphic Input's value with the judgement of whether it can be shown. */
@@ -63,16 +128,39 @@ export interface GraphicInputValueTrace {
 	availability: GraphicInputAvailability;
 }
 
+/** Which of a Graphic Input's values acceptance would actually use. */
+export const GRAPHIC_INPUT_VALUE_SOURCE_VALUES = ['override', 'bound', 'manual', 'none'] as const;
+
+export type GraphicInputValueSource = typeof GRAPHIC_INPUT_VALUE_SOURCE_VALUES[number];
+
 /**
  * What Live Control shows about one Graphic Input's value.
  *
- * `overridden` belongs to a Graphic Input Override, which masks a binding that keeps
- * resolving underneath it — there is nothing to mask until Graphic Input Bindings
- * resolve against Event Data, so it is still unreachable. Each status becomes
- * reachable with the capability that produces it, and shipping one no code path can
- * produce would be a state an operator could never be shown.
+ * The settled vocabulary is bound, overridden, pending, unavailable, superseded, and
+ * stale, and every one of them is now reachable:
  *
- * ## Why this one is `superseded` rather than `stale`
+ * - `manual` — no binding, showing what an operator typed or the declared default;
+ * - `bound` — a Graphic Input Binding is resolving it and program agrees;
+ * - `overridden` — a Graphic Input Override is masking a binding that keeps
+ *   resolving underneath it;
+ * - `pending` — the value that would go on air differs from the one that is;
+ * - `unavailable` — nothing that could go on air: an unresolved binding, or a value
+ *   violating its declared type or constraints;
+ * - `superseded` — this operator's last edit lost a field-scoped race and the field
+ *   has been refreshed to the value that won;
+ * - `stale` — on air, and holding a last accepted value that its Graphic Input
+ *   Binding no longer provides. Program is not empty: the last accepted rendering
+ *   stays until the operator updates or overrides it, and they need to know they are
+ *   looking at it.
+ *
+ * `stale` is reported for any bound input in that position rather than only a
+ * required one. Requiredness decides what blocks a Take; it does not change whether
+ * what program is showing has outlived its source. What it does need is a binding:
+ * an operator's own unusable edit, or an unusable override, is not a source that
+ * moved on — it is a value to fix, and calling it stale would point at the wrong
+ * cause.
+ *
+ * ## Why `superseded` and `stale` are separate slots
  *
  * The spec says "stale" twice and means two different things by it. As a value-trace
  * status it means an on-air value whose source no longer provides it — program has
@@ -91,25 +179,36 @@ export interface GraphicInputValueTrace {
  * The rejection code `stale-input-edit` deliberately keeps its own name: it is in a
  * different namespace and describes the *command's* fate rather than the value's.
  */
-export const GRAPHIC_INPUT_STATUS_VALUES = ['manual', 'bound', 'pending', 'unavailable', 'superseded'] as const;
+export const GRAPHIC_INPUT_STATUS_VALUES = [
+	'manual',
+	'bound',
+	'overridden',
+	'pending',
+	'unavailable',
+	'superseded',
+	'stale',
+] as const;
 
 export type GraphicInputStatus = typeof GRAPHIC_INPUT_STATUS_VALUES[number];
 
-/** What Live Control shows for one generated field. */
+/** What Live Control generates one field from. */
 export interface GraphicInputTrace {
 	declaration: GraphicInputDeclaration;
 	/**
 	 * The latest value this input's Graphic Input Binding resolves, when it has one
-	 * and something resolved it. Resolving the curated field catalogue against
-	 * current Event Data is not implemented yet, so a declared binding currently
-	 * leaves this absent — and an unresolved binding never falls back to the
-	 * template default.
+	 * and it currently resolves. Absent for an unresolved binding — which never falls
+	 * back to the template default.
 	 */
 	bound?: GraphicInputValueTrace;
 	binding?: GraphicInputBinding;
+	/** The Graphic Input Override masking this input's binding, while it has one. */
+	override?: GraphicInputValueTrace;
+	/** The stored manual value, which starts at the declared default. */
 	working: GraphicInputValueTrace;
+	/** What an acceptance would put on air now, and where it came from. */
+	effective: GraphicInputValueTrace & { source: GraphicInputValueSource };
 	accepted: GraphicInputValueTrace;
-	/** The working value differs from what is accepted on air. */
+	/** The effective value differs from what is accepted on air. */
 	pending: boolean;
 	status: GraphicInputStatus;
 	/** This required Graphic Input has no value that could go on air. */
@@ -120,22 +219,33 @@ export interface GraphicInputTrace {
 export function broadcastGraphicInputsState(
 	state: { inputs?: Record<string, BroadcastGraphicInputsState> },
 	graphicId: string,
-): BroadcastGraphicInputsState {
+): NormalizedBroadcastGraphicInputsState {
 	const stored = state.inputs?.[graphicId];
 	if (!stored)
 		return createInitialBroadcastGraphicInputsState();
 
 	return {
 		working: stored.working ?? {},
+		overrides: stored.overrides ?? {},
 		accepted: stored.accepted ?? {},
 		acceptedRevision: stored.acceptedRevision ?? 0,
+		...(stored.updateFrom ? { updateFrom: stored.updateFrom } : {}),
+		...(stored.pendingUpdateFrom ? { pendingUpdateFrom: stored.pendingUpdateFrom } : {}),
 	};
 }
 
+/** The Graphic Source Selections one placed Broadcast Graphic's operator has made. */
+export function broadcastGraphicSourceSelections(
+	state: { sources?: Record<string, GraphicSourceSelectionsState> },
+	graphicId: string,
+): GraphicSourceSelectionsState {
+	return state.sources?.[graphicId] ?? {};
+}
+
 function resolveValues(
-	stored: Record<string, GraphicInputValue>,
+	stored: GraphicInputValues,
 	declarations: readonly GraphicInputDeclaration[],
-): Record<string, GraphicInputValue> {
+): GraphicInputValues {
 	return Object.fromEntries(declarations.map(declaration => [
 		declaration.key,
 		declaration.key in stored ? stored[declaration.key]! : declaration.default,
@@ -143,8 +253,36 @@ function resolveValues(
 }
 
 /**
- * The values Live Control edits. An input nobody has edited resolves to its
- * declared default, which is what copying a Broadcast Graphic Template onto a
+ * One stored rendering, filled out against the current declarations.
+ *
+ * Exported because an update phase renders two of them and the phase projection is
+ * what decides which two, rather than only the accepted set.
+ */
+export function resolveGraphicInputValues(
+	stored: GraphicInputValues,
+	declarations: readonly GraphicInputDeclaration[],
+): GraphicInputValues {
+	return resolveValues(stored, declarations);
+}
+
+/**
+ * Whether two renderings are the same rendering.
+ *
+ * Compared over the union of both key sets, so a key that acceptance dropped
+ * counts as a change rather than being passed over.
+ */
+export function sameGraphicInputValues(left: GraphicInputValues, right: GraphicInputValues): boolean {
+	const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+	for (const key of keys) {
+		if (!sameGraphicInputValue(left[key] ?? null, right[key] ?? null))
+			return false;
+	}
+	return true;
+}
+
+/**
+ * The values Live Control edits manually. An input nobody has edited resolves to
+ * its declared default, which is what copying a Broadcast Graphic Template onto a
  * Screen means: the default becomes the placed graphic's initial manual value.
  */
 export function workingGraphicInputValues(
@@ -155,40 +293,108 @@ export function workingGraphicInputValues(
 	return resolveValues(broadcastGraphicInputsState(state, graphicId).working, declarations);
 }
 
-/** The values an on-air Broadcast Graphic renders. */
+/**
+ * The values an on-air Broadcast Graphic renders.
+ *
+ * Exactly what acceptance stored, and nothing else. A key that acceptance passed over
+ * is missing here rather than filled in with the declared default: the default is
+ * authored placeholder text, and substituting it for a binding that resolves nothing
+ * would put that placeholder on air looking like live data — the one thing the
+ * settled rule forbids outright.
+ *
+ * This is deliberately not symmetric with `workingGraphicInputValues`, which does
+ * layer defaults. There the default is the right answer, because copying a Broadcast
+ * Graphic Template onto a Screen makes each default the placed graphic's initial
+ * manual value. Here there is no such claim to make: nothing has been accepted, so
+ * nothing is on air.
+ */
 export function acceptedGraphicInputValues(
 	state: { inputs?: Record<string, BroadcastGraphicInputsState> },
 	graphicId: string,
 	declarations: readonly GraphicInputDeclaration[],
 ): Record<string, GraphicInputValue> {
-	return resolveValues(broadcastGraphicInputsState(state, graphicId).accepted, declarations);
+	const accepted = broadcastGraphicInputsState(state, graphicId).accepted;
+	return Object.fromEntries(
+		declarations
+			.filter(declaration => declaration.key in accepted)
+			.map(declaration => [declaration.key, accepted[declaration.key]!]),
+	);
+}
+
+function hasBindingFor(
+	bindings: readonly GraphicInputBinding[] | undefined,
+	key: string,
+): boolean {
+	return bindings?.some(binding => binding.inputKey === key) ?? false;
+}
+
+/**
+ * Which value an acceptance would use for one Graphic Input, and where it came from.
+ *
+ * `none` is a real answer, not a missing one: a declared binding that resolves
+ * nothing leaves the input with no value, and reporting that honestly is what stops
+ * the template default from standing in for live data.
+ */
+export function effectiveGraphicInputValue(
+	declaration: GraphicInputDeclaration,
+	inputs: NormalizedBroadcastGraphicInputsState,
+	bindings: readonly GraphicInputBinding[] | undefined,
+	bound: Readonly<Record<string, GraphicInputValue>> = {},
+): { value: GraphicInputValue; source: GraphicInputValueSource } {
+	if (declaration.key in inputs.overrides)
+		return { value: inputs.overrides[declaration.key]!, source: 'override' };
+
+	if (hasBindingFor(bindings, declaration.key)) {
+		return declaration.key in bound
+			? { value: bound[declaration.key]!, source: 'bound' }
+			: { value: null, source: 'none' };
+	}
+
+	return {
+		value: declaration.key in inputs.working ? inputs.working[declaration.key]! : declaration.default,
+		source: 'manual',
+	};
 }
 
 /**
  * Accept the complete staged set.
  *
- * Only available values are accepted. An unavailable one is passed over rather
- * than coerced or blanked, which is what keeps an on-air value that has become
- * unavailable showing its last accepted rendering. Keys whose declaration has
- * gone are dropped, so acceptance also bounds what the Live Session stores.
+ * Only available values are accepted; an unavailable one is passed over rather than
+ * coerced or blanked. Keys whose declaration has gone are dropped, so acceptance
+ * also bounds what the Live Session stores.
+ *
+ * ## Why holding the last accepted value depends on being on air
+ *
+ * The settled rules are two, and they are scoped differently on purpose. An input
+ * that becomes unavailable *on air* keeps its last accepted value visible until the
+ * operator updates or overrides it — program must not blank mid-show. A required
+ * unavailable input prevents an *off-air* graphic from being taken on air at all.
+ *
+ * Applying the first rule to an off-air acceptance would invert the second in
+ * exactly the case it was written for: a graphic that has been on air before, and
+ * has since lost the Graphic Source Selection behind a required input, would be
+ * taken again showing the previous entity's value with no warning. So the hold
+ * applies only while the graphic is on air, and a Take composes its values afresh.
  */
 export function acceptGraphicInputValues(
-	inputs: BroadcastGraphicInputsState,
+	inputs: NormalizedBroadcastGraphicInputsState,
 	declarations: readonly GraphicInputDeclaration[],
+	bindings: readonly GraphicInputBinding[] | undefined = undefined,
+	bound: Readonly<Record<string, GraphicInputValue>> = {},
+	/** Whether this acceptance is happening to a graphic already on a program output. */
+	onAir = false,
 ): Record<string, GraphicInputValue> {
 	const accepted: Record<string, GraphicInputValue> = {};
 
 	for (const declaration of declarations) {
-		const working = declaration.key in inputs.working
-			? inputs.working[declaration.key]!
-			: declaration.default;
+		const effective = effectiveGraphicInputValue(declaration, inputs, bindings, bound);
 
-		if (graphicInputAvailability(declaration, working).available) {
-			accepted[declaration.key] = working;
+		if (graphicInputAvailability(declaration, effective.value).available) {
+			accepted[declaration.key] = effective.value;
 			continue;
 		}
 
-		if (declaration.key in inputs.accepted)
+		if (onAir && declaration.key in inputs.accepted)
 			accepted[declaration.key] = inputs.accepted[declaration.key]!;
 	}
 
@@ -196,17 +402,20 @@ export function acceptGraphicInputValues(
 }
 
 /**
- * The required Graphic Inputs with no value that could go on air.
+ * The required Graphic Inputs that stop this Broadcast Graphic being taken on air.
  *
- * Measured against the values acceptance would actually produce rather than
- * against the working set alone: a required input whose new edit is unavailable
- * but whose accepted value still is available is not missing from program.
+ * Measured against the values an off-air acceptance would actually produce — which
+ * is what a Take performs. A previously accepted value does not count: it belonged
+ * to the last time this graphic was on air, and taking it again on the strength of a
+ * source that no longer resolves is exactly how a dead name reaches program.
  */
 export function unavailableRequiredGraphicInputs(
-	inputs: BroadcastGraphicInputsState,
+	inputs: NormalizedBroadcastGraphicInputsState,
 	declarations: readonly GraphicInputDeclaration[],
+	bindings: readonly GraphicInputBinding[] | undefined = undefined,
+	bound: Readonly<Record<string, GraphicInputValue>> = {},
 ): GraphicInputDeclaration[] {
-	const accepted = acceptGraphicInputValues(inputs, declarations);
+	const accepted = acceptGraphicInputValues(inputs, declarations, bindings, bound, false);
 	return declarations.filter(declaration =>
 		declaration.required && !graphicInputAvailability(declaration, accepted[declaration.key]).available,
 	);
@@ -220,66 +429,105 @@ export function graphicInputTraces(
 		inputs?: readonly GraphicInputDeclaration[];
 		bindings?: readonly GraphicInputBinding[];
 	},
-	/** The latest bound values, once something resolves Graphic Input Bindings. */
+	/** The latest values this graphic's Graphic Input Bindings resolve. */
 	boundValues: Readonly<Record<string, GraphicInputValue>> = {},
 	/**
-	 * The Graphic Inputs whose last edit from this session lost a field-scoped
-	 * conflict.
+	 * What Live Control knows that the authoritative snapshot does not.
 	 *
-	 * Client-side knowledge, not live state: whether *this* operator's edit was the
-	 * one refused is a fact about this session, and a second operator looking at the
-	 * same authoritative snapshot must not see their colleague's field — the one that
-	 * won — marked as superseded.
+	 * Both entries are per-session rather than per-aggregate, which is why they arrive
+	 * here rather than living in the Broadcast Graphics Live Session.
 	 */
-	supersededInputKeys: readonly string[] = [],
+	options: {
+		/** Whether this Broadcast Graphic is on a program output, which is what makes a held value stale. */
+		onAir?: boolean;
+		/**
+		 * The Graphic Inputs whose last edit from this session lost a field-scoped
+		 * conflict.
+		 *
+		 * Client-side knowledge, not live state: whether *this* operator's edit was the
+		 * one refused is a fact about this session, and a second operator looking at the
+		 * same authoritative snapshot must not see their colleague's field — the one that
+		 * won — marked as superseded.
+		 */
+		supersededInputKeys?: readonly string[];
+	} = {},
 ): GraphicInputTrace[] {
 	const declarations = graphic.inputs ?? [];
 	const stored = broadcastGraphicInputsState(state, graphicId);
 	const working = resolveValues(stored.working, declarations);
 	const accepted = resolveValues(stored.accepted, declarations);
+	// `blocksTake` is the off-air question, so the acceptance it is measured against is
+	// the one a Take would perform — never the on-air hold.
+	const acceptance = acceptGraphicInputValues(stored, declarations, graphic.bindings, boundValues, false);
 
 	return declarations.map((declaration) => {
-		const binding = graphic.bindings?.find(entry => entry.inputKey === declaration.key);
-		const hasBoundValue = declaration.key in boundValues;
-		const workingTrace: GraphicInputValueTrace = {
-			value: working[declaration.key]!,
-			availability: graphicInputAvailability(declaration, working[declaration.key]),
+		const key = declaration.key;
+		const binding = graphic.bindings?.find(entry => entry.inputKey === key);
+		const effective = effectiveGraphicInputValue(declaration, stored, graphic.bindings, boundValues);
+		const effectiveTrace = {
+			value: effective.value,
+			source: effective.source,
+			availability: graphicInputAvailability(declaration, effective.value),
 		};
 		const acceptedTrace: GraphicInputValueTrace = {
-			value: accepted[declaration.key]!,
-			availability: graphicInputAvailability(declaration, accepted[declaration.key]),
+			value: accepted[key]!,
+			availability: graphicInputAvailability(declaration, accepted[key]),
 		};
-		const pending = !sameGraphicInputValue(workingTrace.value, acceptedTrace.value);
+		const pending = !sameGraphicInputValue(effectiveTrace.value, acceptedTrace.value);
+		// On air, holding a last accepted value that this input's *source* no longer
+		// provides: program keeps the last accepted rendering, and the operator is told
+		// it has outlived its source. An operator's own unusable edit is not stale, it
+		// is simply unavailable — which is why this needs a binding, and why an
+		// unusable override does not qualify.
+		const stale = (options.onAir ?? false)
+			&& binding !== undefined
+			&& effective.source !== 'override'
+			&& !effectiveTrace.availability.available
+			&& acceptedTrace.availability.available;
 
 		return {
 			declaration,
 			binding,
-			bound: hasBoundValue
+			bound: key in boundValues
 				? {
-						value: boundValues[declaration.key]!,
-						availability: graphicInputAvailability(declaration, boundValues[declaration.key]),
+						value: boundValues[key]!,
+						availability: graphicInputAvailability(declaration, boundValues[key]),
 					}
 				: undefined,
-			working: workingTrace,
+			override: key in stored.overrides
+				? {
+						value: stored.overrides[key]!,
+						availability: graphicInputAvailability(declaration, stored.overrides[key]),
+					}
+				: undefined,
+			working: {
+				value: working[key]!,
+				availability: graphicInputAvailability(declaration, working[key]),
+			},
+			effective: effectiveTrace,
 			accepted: acceptedTrace,
 			pending,
-			// Superseded outranks every other status: the field has just been refreshed
-			// out from under the operator, and telling them the value is merely `bound`
-			// or `manual` would read as their own edit having been accepted.
-			status: supersededInputKeys.includes(declaration.key)
+			// Superseded outranks every other status, including stale: the field has just
+			// been refreshed out from under the operator, and telling them the value is
+			// merely `bound` or `manual` would read as their own edit having been
+			// accepted. An input can be superseded *and* stale at once — the remedies
+			// differ, but "look again, someone beat you" is the one that has to be said
+			// first, because it is the one the operator can act on immediately.
+			status: (options.supersededInputKeys ?? []).includes(key)
 				? 'superseded'
-				: !workingTrace.availability.available
-						? 'unavailable'
-						: pending
-							? 'pending'
-							: binding
-								? 'bound'
-								: 'manual',
+				: stale
+					? 'stale'
+					: !effectiveTrace.availability.available
+							? 'unavailable'
+							: effective.source === 'override' && binding
+								? 'overridden'
+								: pending
+									? 'pending'
+									: binding
+										? 'bound'
+										: 'manual',
 			blocksTake: declaration.required
-				&& !graphicInputAvailability(
-					declaration,
-					acceptGraphicInputValues(stored, declarations)[declaration.key],
-				).available,
+				&& !graphicInputAvailability(declaration, acceptance[key]).available,
 		};
 	});
 }

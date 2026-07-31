@@ -141,15 +141,41 @@ describe('broadcast Graphics render model', () => {
 		expect(model.graphics[0]!.items[0]!.text).toBe('Ava Reed — Champion');
 	});
 
-	it('renders declared defaults when no Live Session has accepted anything', () => {
-		// An editor preview composes the authored stack with no playout behind it, and
-		// a placed Broadcast Graphic starts from its declared defaults.
+	it('renders declared defaults for an authoring preview, which has nothing accepted', () => {
+		// An editor preview composes the authored stack with no playout behind it, so an
+		// author sees the design as they authored it.
+		const model = resolveBroadcastGraphicsRenderModel(input({
+			graphics: [templateGraphic()],
+			onAirGraphicIds: ['lower-third'],
+			substituteAuthoredDefaults: true,
+		}));
+
+		expect(model.graphics[0]!.items[0]!.text).toBe('Unnamed — ');
+	});
+
+	it('renders nothing for an unset Graphic Input on a live output', () => {
+		// The same composition on a live Screen Output. An unset value means acceptance
+		// passed the input over — because its binding resolved nothing, or because its
+		// value was unavailable — and the authored default is placeholder text that must
+		// never reach program looking like live data.
+		const model = resolveBroadcastGraphicsRenderModel(input({
+			graphics: [templateGraphic()],
+			onAirGraphicIds: ['lower-third'],
+			inputValues: { 'lower-third': { title: 'Champion' } },
+		}));
+
+		expect(model.graphics[0]!.items[0]!.text).toBe(' — Champion');
+	});
+
+	it('renders nothing for an unset Graphic Input when the caller says nothing at all', () => {
+		// Forgetting to declare which situation this is must fail towards a missing
+		// value, never a fabricated one.
 		const model = resolveBroadcastGraphicsRenderModel(input({
 			graphics: [templateGraphic()],
 			onAirGraphicIds: ['lower-third'],
 		}));
 
-		expect(model.graphics[0]!.items[0]!.text).toBe('Unnamed — ');
+		expect(model.graphics[0]!.items[0]!.text).toBe(' — ');
 	});
 
 	it('renders nothing for a value that violates its declared constraints', () => {

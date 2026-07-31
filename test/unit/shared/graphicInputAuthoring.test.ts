@@ -90,7 +90,7 @@ describe('graphicInputAuthoring', () => {
 	it('drops the binding and Graphic Placeholder Style of a Graphic Input it stops declaring', () => {
 		const graphics = stack({
 			inputs: [{ type: 'text', key: 'title', label: 'Title', required: false, updatePolicy: 'staged', default: '', maxLength: 20 }],
-			bindings: [{ inputKey: 'title', sourceKey: 'player', fieldId: 'title' }],
+			bindings: [{ inputKey: 'title', sourceKey: 'player', fieldId: 'player.name' }],
 			items: [textItem({ placeholderStyles: { title: { fontWeight: 300 }, name: { fontWeight: 900 } } })],
 		});
 

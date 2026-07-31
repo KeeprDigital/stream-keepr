@@ -26,18 +26,24 @@ import type {
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 	GraphicsIngestionSource,
+	GraphicsOperationsCockpit,
 	GraphicsReconciliationOverview,
 	GraphicsReconciliationSweepResult,
 	GraphicsRetentionOverview,
 	GraphicsRetentionSweepResult,
+	InstalledGraphicsTemplate,
+	InstalledGraphicsTemplateId,
+	InstalledGraphicsTemplateKind,
 } from '~~/shared/types/graphicsAsset';
 import type {
+	TemplatePackageAssetOrigin,
 	TemplatePackageAssetRequirement,
 	TemplatePackageCapabilityRequirement,
 	TemplatePackageExportIssue,
 	TemplatePackageExportReport,
 	TemplatePackageKind,
 	TemplatePackageManifest,
+	TemplatePackageMappingBasis,
 	TemplatePackagePreflightIssue,
 	TemplatePackagePreflightMapping,
 	TemplatePackagePreflightQuota,
@@ -57,6 +63,7 @@ import type {
 	GraphicsStagingObjectStore,
 	ReadGraphicsObjectOutcome,
 } from './object-store';
+import type { GraphicsOperationsCockpitCatalogue } from './operations-cockpit';
 import type {
 	GraphicsAssetReconciliationCatalogue,
 	GraphicsReconciliationMedia,
@@ -105,6 +112,7 @@ import {
 	GraphicsObjectInputError,
 	readableBytes,
 } from './object-store';
+import { readGraphicsOperationsCockpit } from './operations-cockpit';
 import {
 	sha256Hex,
 	sha256HexStream,
@@ -137,6 +145,12 @@ import {
 	readTemplatePackageArchive,
 	TemplatePackageArchiveSourceError,
 } from './template-package-archive';
+import {
+	installedGraphicsTemplateKind,
+	packagedOriginKey,
+	rewriteTemplateDocumentReferences,
+	templatePackageLocalReferences,
+} from './template-package-installation';
 import {
 	assembleTemplatePackagePreflightReport,
 	hasNestedArchiveSignature,
@@ -229,6 +243,90 @@ export interface PublishGraphicAssetCatalogueInput {
 export interface ReusableGraphicAsset {
 	assetId: GraphicAssetId;
 	revisionId: GraphicAssetRevisionId;
+}
+
+/**
+ * One packaged identity this installation is creating a local Graphic Asset for.
+ *
+ * It carries the packaged metadata snapshot — the name and kind the sender
+ * recorded — together with the facts and compatibility profile *this*
+ * installation proved for the same bytes, because a receiver never adopts
+ * another installation's judgement of what its content is.
+ */
+export interface CreatedTemplatePackageGraphicAsset {
+	packagedId: string;
+	basis: TemplatePackageMappingBasis;
+	assetId: GraphicAssetId;
+	revisionId: GraphicAssetRevisionId;
+	derivativeId: GraphicsDerivativeId;
+	name: string;
+	kind: 'image' | 'silent-video' | 'font';
+	sourceDigest: string;
+	sourceByteLength: number;
+	canonicalMime: GraphicAssetCanonicalMime;
+	compatibilityProfile: string;
+	facts: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>['facts'];
+	derivativeKind: 'thumbnail' | 'video-poster' | 'font-specimen';
+	thumbnailDigest: string;
+	thumbnailByteLength: number;
+	origin: TemplatePackageAssetOrigin;
+}
+
+/**
+ * One packaged identity that matched an exact Graphic Asset Origin and so reuses
+ * the local revision untouched. Its name and compatibility profile are the
+ * library's own current record, never the package's: reuse preserves locally
+ * curated metadata, and the differences were already reported at preflight.
+ */
+export interface ReusedTemplatePackageGraphicAsset {
+	packagedId: string;
+	assetId: GraphicAssetId;
+	revisionId: GraphicAssetRevisionId;
+	name: string;
+	kind: 'image' | 'silent-video' | 'font';
+	compatibilityProfile: string;
+}
+
+export interface InstallTemplatePackageCatalogueInput {
+	/** Claimed at `publishing`; every statement commits only against this claim. */
+	operation: GraphicsIngestionOperation;
+	template: {
+		id: InstalledGraphicsTemplateId;
+		kind: InstalledGraphicsTemplateKind;
+		name: string;
+		/** Already rewritten to exact local identities and revisions. */
+		document: unknown;
+		sourceTemplateIdentity: string;
+	};
+	created: readonly CreatedTemplatePackageGraphicAsset[];
+	reused: readonly ReusedTemplatePackageGraphicAsset[];
+	references: readonly {
+		id: string;
+		ownerSlot: string;
+		assetId: GraphicAssetId;
+		revisionId: GraphicAssetRevisionId;
+	}[];
+	publishedAt: string;
+}
+
+/**
+ * One packaged content entry as this installation read and judged it: where its
+ * bytes are in the staged archive, the facts a local revalidation proved, and
+ * the preview regenerated from them.
+ */
+interface ValidatedPackagedContent {
+	entry: TemplatePackageArchiveEntry;
+	facts: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>['facts'];
+	compatibilityProfile: string;
+	thumbnail: Uint8Array;
+	thumbnailDigest: string;
+}
+
+interface StagedTemplatePackageMaterial {
+	manifest?: TemplatePackageManifest;
+	/** The received document, exactly as packaged and before any rewrite. */
+	templateDocument?: unknown;
+	contents: Map<string, ValidatedPackagedContent>;
 }
 
 export type GraphicAssetLifecycleTransition
@@ -327,6 +425,40 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		updatedAt: string;
 	}) => Promise<boolean>;
 	/**
+	 * Reserves the canonical growth one confirmed Template Package proposal
+	 * costs, as one number rather than per digest: the report already counted
+	 * every shared byte once, so re-deriving it here could only disagree with
+	 * what the author confirmed.
+	 */
+	reserveTemplatePackagePublication: (input: {
+		operation: GraphicsIngestionOperation;
+		growthBytes: number;
+		reservedAt: string;
+	}) => Promise<
+		| { outcome: 'reserved'; operation: GraphicsIngestionOperation }
+		| { outcome: 'blocked'; capacity: GraphicsCapacityExhaustedDetails }
+		/** Another attempt took the operation; this one has nothing left to reserve for. */
+		| { outcome: 'lost-claim' }
+	>;
+	/**
+	 * Publishes one complete Template Package installation.
+	 *
+	 * Every new Graphic Asset, revision, Graphic Asset Origin, derivative, Event
+	 * association, rewritten Graphic Asset Reference, the Installed Graphics
+	 * Template, and the terminal operation result commit together or not at all.
+	 * Reusing an exact origin writes nothing to the local asset it reuses beyond
+	 * the Event association an Event-scoped installation adds.
+	 */
+	installTemplatePackage: (
+		input: InstallTemplatePackageCatalogueInput,
+	) => Promise<GraphicsIngestionOperation>;
+	/**
+	 * One Installed Graphics Template and the exact revisions its references pin.
+	 */
+	findInstalledGraphicsTemplate: (
+		templateId: InstalledGraphicsTemplateId,
+	) => Promise<InstalledGraphicsTemplate | undefined>;
+	/**
 	 * What this installation already holds for one packaged Graphic Asset Origin:
 	 * the exact local revision carrying that source identity and revision, and
 	 * whether any other revision of the same source is present.
@@ -339,6 +471,7 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 			reference: GraphicAssetReference;
 			digest: string;
 			name: string;
+			lifecycleState: GraphicAssetLifecycleState;
 		};
 		relatedRevisionExists: boolean;
 	}>;
@@ -426,6 +559,17 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 
 export interface GraphicsAssetLibrary {
 	getHealth: () => Promise<GraphicsAssetLibraryHealth>;
+	/**
+	 * The administrator-only Operations Cockpit reading: whether the library is
+	 * safe, and what needs attention.
+	 *
+	 * It composes catalogue and byte-store condition, capacity against its exact
+	 * boundaries, unfinished ingestion, the reconciliation backlog, lifecycle
+	 * deadlines, and recent outcomes into one domain-shaped answer. A catalogue
+	 * that cannot answer still produces a reading, because the question the
+	 * cockpit exists to settle is exactly the one that matters most then.
+	 */
+	getOperationsCockpit: () => Promise<GraphicsOperationsCockpit>;
 	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
 	updateCapacityLimits: (
 		input: GraphicsAssetCapacityLimits,
@@ -510,6 +654,31 @@ export interface GraphicsAssetLibrary {
 		initiatedBy: string;
 		fingerprint: string;
 	}) => Promise<GraphicsIngestionOperation>;
+	/**
+	 * Installs one confirmed Template Package.
+	 *
+	 * The staged package is inspected again from its exact received bytes, and
+	 * the proposal that produces must still be the one the author accepted: a
+	 * library, compatibility profile, or capacity that moved underneath a resting
+	 * confirmation returns the operation to `awaiting-confirmation` with the new
+	 * report rather than installing something nobody agreed to.
+	 *
+	 * Everything the package publishes becomes discoverable in one transaction,
+	 * so calling this twice, retrying it after an ambiguous failure, or racing it
+	 * against a cancellation can never produce a partial or duplicated
+	 * installation.
+	 */
+	installTemplatePackage: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
+	}) => Promise<GraphicsIngestionOperation>;
+	/**
+	 * One Installed Graphics Template: its independent local document, and the
+	 * exact local revisions its rewritten references pin.
+	 */
+	inspectInstalledGraphicsTemplate: (input: {
+		templateId: InstalledGraphicsTemplateId;
+	}) => Promise<InstalledGraphicsTemplate>;
 	cancelGraphicsIngestion: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
@@ -794,6 +963,10 @@ export function graphicsDerivativeId(value: string): GraphicsDerivativeId {
 
 export function graphicsIngestionOperationId(value: string): GraphicsIngestionOperationId {
 	return requiredIdentity<GraphicsIngestionOperationId>(value, 'Graphics Ingestion Operation identity');
+}
+
+export function installedGraphicsTemplateId(value: string): InstalledGraphicsTemplateId {
+	return requiredIdentity<InstalledGraphicsTemplateId>(value, 'Installed Graphics Template identity');
 }
 
 export function graphicsMultipartPartByteLength(
@@ -1166,6 +1339,38 @@ export function createGraphicsAssetLibrary(
 			now,
 			generateIdentity,
 		});
+	}
+
+	/**
+	 * The Operations Cockpit reads aggregates the ordinary in-memory catalogue
+	 * double does not implement, so it is available only against a catalogue that
+	 * can answer them.
+	 *
+	 * Every cockpit-specific method is checked rather than one standing in for
+	 * the rest, because a partially implemented double would otherwise fail
+	 * mid-reading with a `TypeError` instead of the domain error that says the
+	 * cockpit is unavailable for this catalogue.
+	 */
+	const COCKPIT_CATALOGUE_METHODS = [
+		'getCapacity',
+		'countUnavailableContent',
+		'countOpenDiscrepancies',
+		'countIsolatedDiscrepancies',
+		'getReconciliationState',
+		'summariseIngestionAttention',
+		'summariseRetentionDeadlines',
+		'listGraphicsAssetEvidence',
+	] as const satisfies readonly (keyof GraphicsOperationsCockpitCatalogue)[];
+
+	function requireCockpitCatalogue(): GraphicsOperationsCockpitCatalogue {
+		const catalogue = requireCatalogue();
+		if (!COCKPIT_CATALOGUE_METHODS.every(method => method in catalogue)) {
+			throw new GraphicsAssetLibraryError(
+				'The Graphics Asset Operations Cockpit is unavailable for this catalogue',
+				'graphics-asset-library-unavailable',
+			);
+		}
+		return catalogue as GraphicsAssetCatalogue & GraphicsOperationsCockpitCatalogue;
 	}
 
 	function requireReconciliation() {
@@ -2023,12 +2228,24 @@ export function createGraphicsAssetLibrary(
 	}): Promise<{
 		report: TemplatePackagePreflightReport;
 		derivatives: TemplatePackagePreflightState['derivatives'];
+		/**
+		 * What installation would need to publish the proposal this report
+		 * describes: the received Template document, and — per packaged content
+		 * digest — this installation's own validated facts, the archive entry its
+		 * bytes live in, and the preview it regenerated locally.
+		 *
+		 * It is deliberately the same pass. A report and the material published
+		 * under it must describe one reading of one archive, or an installation
+		 * could publish bytes no report was ever computed over.
+		 */
+		material: StagedTemplatePackageMaterial;
 	}> {
 		const { operation, readRange, catalogue, canonical } = input;
 		const checkedAt = timestamp();
 		const archiveByteLength = operation.declaredByteLength;
 		const issues: TemplatePackagePreflightIssue[] = [];
 		const decoder = new TextDecoder('utf-8', { fatal: true });
+		const material: StagedTemplatePackageMaterial = { contents: new Map() };
 
 		function finish(
 			reportIssues: readonly TemplatePackagePreflightIssue[],
@@ -2085,7 +2302,7 @@ export function createGraphicsAssetLibrary(
 			read: readRange,
 		});
 		if (archive.outcome === 'rejected')
-			return { report: await finish(archive.issues), derivatives: [] };
+			return { report: await finish(archive.issues), derivatives: [], material };
 
 		const entries = archive.entries;
 		const entryByName = new Map(entries.map(entry => [entry.name, entry]));
@@ -2115,6 +2332,7 @@ export function createGraphicsAssetLibrary(
 					message: 'The archive carries no package manifest',
 				})]),
 				derivatives: [],
+				material,
 			};
 		}
 		const manifestValue = await readEntryDocument(manifestEntry);
@@ -2125,12 +2343,14 @@ export function createGraphicsAssetLibrary(
 					message: 'The package manifest is not readable JSON within the size a manifest may occupy',
 				})]),
 				derivatives: [],
+				material,
 			};
 		}
 		const manifestRead = readTemplatePackageManifest(manifestValue);
 		if (manifestRead.outcome === 'rejected')
-			return { report: await finish(manifestRead.issues), derivatives: [] };
+			return { report: await finish(manifestRead.issues), derivatives: [], material };
 		const { manifest, receivedSchemaVersion, migrated } = manifestRead.result;
+		material.manifest = manifest;
 		const schema = {
 			received: receivedSchemaVersion,
 			supported: TEMPLATE_PACKAGE_SCHEMA_VERSION,
@@ -2178,8 +2398,11 @@ export function createGraphicsAssetLibrary(
 			}));
 		}
 
+		// Keyed the same way installation resolves a rewritten reference, so the
+		// asset a Template's field is matched to here is the asset it is mapped to
+		// there.
 		const declaredOrigins = new Map(manifest.packagedAssets.map(asset => [
-			`${asset.origin.sourceAssetId} ${asset.origin.sourceRevisionId}`,
+			packagedOriginKey(asset.origin),
 			asset,
 		]));
 		const templateEntry = entryByName.get(TEMPLATE_PACKAGE_TEMPLATE_ENTRY);
@@ -2198,6 +2421,7 @@ export function createGraphicsAssetLibrary(
 				}));
 			}
 			else {
+				material.templateDocument = document;
 				const inspected = inspectTemplateDocument(document);
 				for (const issue of inspected.issues) {
 					const code = RECEIVED_DOCUMENT_ISSUE_CODES[
@@ -2213,7 +2437,10 @@ export function createGraphicsAssetLibrary(
 				// provenance each packaged asset declares.
 				const required = new Set<string>();
 				for (const discovered of inspected.references) {
-					const key = `${discovered.reference.assetId} ${discovered.reference.revisionId}`;
+					const key = packagedOriginKey({
+						sourceAssetId: discovered.reference.assetId,
+						sourceRevisionId: discovered.reference.revisionId,
+					});
 					if (declaredOrigins.has(key)) {
 						required.add(key);
 						continue;
@@ -2238,11 +2465,7 @@ export function createGraphicsAssetLibrary(
 		// current profiles. The sender's recorded facts are never trusted: they are
 		// a snapshot of another installation's rules, which may be older, newer, or
 		// simply different from the ones this receiver must enforce.
-		const validated = new Map<string, {
-			facts: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>['facts'];
-			compatibilityProfile: string;
-			thumbnail: Uint8Array;
-		}>();
+		const validated = material.contents;
 		for (const content of manifest.contents) {
 			const entry = entryByName.get(content.entry);
 			if (!entry)
@@ -2346,11 +2569,13 @@ export function createGraphicsAssetLibrary(
 				// `browserLoadable` nor `representativeGlyphsRendered`, and a warning
 				// makes the gap something the author confirms knowingly.
 				validated.set(content.digest, {
+					entry,
 					facts: accepted.facts,
 					compatibilityProfile: accepted.facts.kind === 'font'
 						? STATIC_FONT_UNATTESTED_COMPATIBILITY_PROFILE
 						: accepted.compatibilityProfile,
 					thumbnail,
+					thumbnailDigest: await sha256Hex(thumbnail),
 				});
 			}
 			catch (error) {
@@ -2420,7 +2645,7 @@ export function createGraphicsAssetLibrary(
 
 			// A reused revision already has its preview; only a new Graphic Asset
 			// brings a derivative this installation would have to store.
-			const derivativeDigest = await sha256Hex(content.thumbnail);
+			const derivativeDigest = content.thumbnailDigest;
 			derivatives.push({
 				packagedId: asset.packagedId,
 				digest: derivativeDigest,
@@ -2468,11 +2693,13 @@ export function createGraphicsAssetLibrary(
 				quota,
 			}),
 			derivatives,
+			material,
 		};
 	}
 
 	/**
-	 * Runs one complete Template Package preflight over durably staged bytes.
+	 * Runs one complete Template Package preflight over durably staged bytes, and
+	 * — when installing — publishes the proposal it produces.
 	 *
 	 * The archive is never expanded. Its entries are located through ranged reads
 	 * of the staged object and each one is inspected in place, so a package at the
@@ -2484,12 +2711,22 @@ export function createGraphicsAssetLibrary(
 	 * The result is one immutable report. It is written durably before the stage
 	 * changes, so a reconnecting author, a retry, and a cancellation all read the
 	 * same proposal, and nothing it proposes exists outside this operation.
+	 *
+	 * Installation deliberately runs the identical inspection rather than trusting
+	 * the resting report. A confirmation names one exact proposal, and the library
+	 * it was made against can move while the operation rests: re-deriving the
+	 * report is the only way to know the author still agrees with what would now
+	 * be installed. A run that reaches the same conclusion keeps the confirmation
+	 * and publishes; one that does not returns the operation to the author with
+	 * the new report instead.
 	 */
 	async function continueTemplatePackagePreflight(
 		initialOperation: GraphicsIngestionOperation,
+		options: { install: boolean } = { install: false },
 	): Promise<GraphicsIngestionOperation> {
 		const catalogue = requireCatalogue();
 		const staging = requireStaging();
+		const canonical = requireCanonical();
 		let operation = initialOperation;
 		const stagingIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
 
@@ -2539,6 +2776,225 @@ export function createGraphicsAssetLibrary(
 					{ cause: error },
 				);
 			}
+		}
+
+		/**
+		 * Publishes one confirmed proposal.
+		 *
+		 * Everything before the final catalogue call is preparation this operation
+		 * can still lose without consequence: bytes written into the canonical store
+		 * are claimed as its candidates first, stay unreachable until a revision
+		 * points at them, and are collected if it never finishes. Only the one
+		 * transaction at the end makes any of it exist.
+		 */
+		async function publishConfirmedTemplatePackage(input: {
+			report: TemplatePackagePreflightReport;
+			material: StagedTemplatePackageMaterial;
+		}): Promise<GraphicsIngestionOperation> {
+			const { report, material } = input;
+			const manifest = material.manifest;
+			if (!manifest || material.templateDocument === undefined) {
+				// A report is installable only once its manifest and Template document
+				// have both read, so this is a broken invariant rather than anything
+				// the package got wrong.
+				throw new Error('A confirmed Template Package has no manifest or Template document');
+			}
+
+			// Every exact-origin reuse is proven to still resolve, and to still be an
+			// asset that may take a new reference, before a byte moves. The name and
+			// profile recorded here are the library's own: reuse never adopts the
+			// packaged snapshot over locally curated metadata, and the differences
+			// were already reported at preflight.
+			const reused: ReusedTemplatePackageGraphicAsset[] = [];
+			for (const mapping of report.mappings) {
+				if (mapping.proposal !== 'reuse-graphic-asset-revision' || !mapping.reference)
+					continue;
+				const local = await catalogue.findRevisionContent(mapping.reference);
+				if (!local || local.lifecycleState !== 'active') {
+					return await failOperation(catalogue, operation, {
+						code: 'template-package-mapping-unavailable',
+						retryable: true,
+						message: 'A Graphic Asset this Template Package reuses can no longer receive references.',
+					});
+				}
+				reused.push({
+					packagedId: mapping.packagedId,
+					assetId: mapping.reference.assetId,
+					revisionId: mapping.reference.revisionId,
+					name: local.name,
+					kind: local.kind,
+					compatibilityProfile: local.compatibilityProfile,
+				});
+			}
+
+			// The confirmed report already counted every shared byte once, so its
+			// growth is exactly what this reservation holds.
+			const reservation = await catalogue.reserveTemplatePackagePublication({
+				operation,
+				growthBytes: report.quota.canonicalGrowthBytes,
+				reservedAt: changedOperation(operation, {}).updatedAt,
+			});
+			if (reservation.outcome === 'lost-claim') {
+				// Another attempt owns this operation now, and whatever it decided is
+				// the authoritative answer — so it is read rather than guessed at, and
+				// never reported as a capacity problem the author would go off and try
+				// to solve.
+				return await catalogueRequest(
+					() => catalogue.getIngestionOperation(operation.id, operation.initiatedBy),
+					'Graphics ingestion state is temporarily unavailable',
+				) ?? operation;
+			}
+			if (reservation.outcome === 'blocked') {
+				operation = {
+					...operation,
+					canonicalCapacityOutcome: {
+						outcome: 'canonical-capacity-blocked',
+						growthBytes: reservation.capacity.requestedBytes,
+						availableBytes: reservation.capacity.availableBytes,
+					},
+				};
+				return await failOperation(catalogue, operation, {
+					code: 'canonical-capacity-exhausted',
+					retryable: true,
+					message: 'Canonical capacity is exhausted; installing this Template Package would add new bytes.',
+				});
+			}
+			operation = reservation.operation;
+
+			const created: CreatedTemplatePackageGraphicAsset[] = [];
+			for (const mapping of report.mappings) {
+				if (mapping.proposal !== 'create-graphic-asset')
+					continue;
+				const content = material.contents.get(mapping.origin.digest);
+				if (!content)
+					throw new Error('A confirmed Template Package mapping names content this run never validated');
+				created.push({
+					packagedId: mapping.packagedId,
+					basis: mapping.basis,
+					assetId: graphicAssetId(generateIdentity()),
+					revisionId: graphicAssetRevisionId(generateIdentity()),
+					derivativeId: graphicsDerivativeId(generateIdentity()),
+					// An asset this installation creates takes the packaged metadata
+					// snapshot. Only its technical facts and compatibility profile are
+					// this installation's own, because those are what it proved.
+					name: mapping.name,
+					kind: content.facts.kind,
+					sourceDigest: mapping.origin.digest,
+					sourceByteLength: content.facts.byteLength,
+					canonicalMime: content.facts.canonicalMime,
+					compatibilityProfile: content.compatibilityProfile,
+					facts: content.facts,
+					derivativeKind: content.facts.kind === 'font'
+						? 'font-specimen'
+						: content.facts.kind === 'silent-video'
+							? 'video-poster'
+							: 'thumbnail',
+					thumbnailDigest: content.thumbnailDigest,
+					thumbnailByteLength: content.thumbnail.byteLength,
+					origin: mapping.origin,
+				});
+			}
+
+			// Claimed before a byte moves, for the reason ordinary ingestion claims
+			// its own: an object the canonical store holds that the catalogue cannot
+			// account for is what the reconciliation scan quarantines, so writing
+			// first would let a publication in flight have its bytes taken out from
+			// under it.
+			const claimed = new Map<string, number>();
+			for (const asset of created) {
+				claimed.set(asset.sourceDigest, asset.sourceByteLength);
+				claimed.set(asset.thumbnailDigest, asset.thumbnailByteLength);
+			}
+			await catalogue.recordCanonicalWrites({
+				operation,
+				contents: [...claimed].map(([digest, byteLength]) => ({ digest, byteLength })),
+				recordedAt: timestamp(),
+			});
+
+			// Identical bytes behind distinct packaged identities are written once,
+			// which is exactly what the quota was charged for.
+			const written = new Set<string>();
+			for (const asset of created) {
+				const content = material.contents.get(asset.sourceDigest)!;
+				const writes = [];
+				if (!written.has(asset.sourceDigest)) {
+					written.add(asset.sourceDigest);
+					writes.push(storeCanonicalStream(canonical, asset.sourceDigest, {
+						body: archiveEntryStream(content.entry, readStagedRange),
+						byteLength: content.entry.byteLength,
+						maximumByteLength: content.entry.byteLength,
+					}, asset.canonicalMime));
+				}
+				if (!written.has(asset.thumbnailDigest)) {
+					written.add(asset.thumbnailDigest);
+					writes.push(storeCanonicalBytes(canonical, asset.thumbnailDigest, content.thumbnail));
+				}
+				const results = await Promise.all(writes);
+				if (results.some(result => result.outcome === 'unavailable')) {
+					return await failOperation(catalogue, operation, {
+						code: 'canonical-store-unavailable',
+						retryable: true,
+						message: 'Canonical storage for this Template Package is temporarily unavailable.',
+					});
+				}
+			}
+
+			const bytesTerminal = await terminalOperationAtCheckpoint();
+			if (bytesTerminal)
+				return bytesTerminal;
+
+			operation = await catalogue.updateIngestionOperation(
+				changedOperation(operation, { stage: 'publishing' }),
+				operation.updatedAt,
+			);
+			const publicationTerminal = await terminalOperationAtCheckpoint();
+			if (publicationTerminal)
+				return publicationTerminal;
+
+			// Every reference the Template carries becomes an exact local identity and
+			// revision pair, whether its mapping reused a revision or created one. A
+			// reference the confirmed proposal does not account for would install a
+			// Template with a dangling field, so it is refused instead.
+			const rewrite = rewriteTemplateDocumentReferences(
+				material.templateDocument,
+				templatePackageLocalReferences(
+					report.mappings,
+					new Map(created.map(asset => [asset.packagedId, {
+						assetId: asset.assetId,
+						revisionId: asset.revisionId,
+					}])),
+				),
+			);
+			if (rewrite.unmapped.length > 0) {
+				return await failOperation(catalogue, operation, {
+					code: 'validation-failed',
+					retryable: false,
+					message: 'The Template requires a Graphic Asset Revision this proposal never mapped.',
+				});
+			}
+
+			const installed = await catalogue.installTemplatePackage({
+				operation,
+				template: {
+					id: installedGraphicsTemplateId(generateIdentity()),
+					kind: installedGraphicsTemplateKind(report.packageKind),
+					name: manifest.template.name,
+					document: rewrite.document,
+					sourceTemplateIdentity: manifest.template.identity,
+				},
+				created,
+				reused,
+				references: rewrite.references.map(reference => ({
+					id: generateIdentity(),
+					ownerSlot: reference.ownerSlot,
+					assetId: reference.reference.assetId,
+					revisionId: reference.reference.revisionId,
+				})),
+				publishedAt: timestamp(),
+			});
+			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+			await staging.delete(stagingIdentity);
+			return installed;
 		}
 
 		try {
@@ -2624,16 +3080,25 @@ export function createGraphicsAssetLibrary(
 
 			if (state.report.outcome === 'rejected') {
 				// A package this installation cannot accept fails permanently unless
-				// the only thing standing in its way is locally reclaimable capacity.
-				const retryable = state.report.issues.some(
+				// the only thing standing in its way is something this installation
+				// can change. The failure names which one, because "free some space
+				// and retry" and "restore that asset first" are different
+				// instructions and an author can only act on the right one.
+				const retryable = state.report.issues.find(
 					issue => issue.severity === 'error' && issue.retryable,
 				);
 				return await failOperation(catalogue, operation, retryable
-					? {
-							code: 'canonical-capacity-exhausted',
-							retryable: true,
-							message: 'Installing this Template Package would exceed canonical capacity.',
-						}
+					? retryable.code === 'graphic-asset-origin-not-referenceable'
+						? {
+								code: 'template-package-mapping-unavailable',
+								retryable: true,
+								message: 'A Graphic Asset this Template Package reuses can no longer receive references.',
+							}
+						: {
+								code: 'canonical-capacity-exhausted',
+								retryable: true,
+								message: 'Installing this Template Package would exceed canonical capacity.',
+							}
 					: {
 							code: 'validation-failed',
 							retryable: false,
@@ -2641,17 +3106,36 @@ export function createGraphicsAssetLibrary(
 						});
 			}
 
-			return await catalogue.updateIngestionOperation(
+			const confirmed = templatePackagePreflightConfirmed(state);
+			if (!options.install || !confirmed) {
+				// A clean or already-confirmed proposal rests until installation claims
+				// it; anything else pauses for exactly one confirmation. An installation
+				// that lands here reached a conclusion its confirmation no longer covers,
+				// so the author is asked about the new proposal rather than having the
+				// old confirmation applied to it.
+				return await catalogue.updateIngestionOperation(
+					changedOperation(operation, {
+						stage: confirmed ? 'awaiting-installation' : 'awaiting-confirmation',
+						failure: undefined,
+					}),
+					operation.updatedAt,
+				);
+			}
+
+			operation = await catalogue.updateIngestionOperation(
 				changedOperation(operation, {
-					// A clean or already-confirmed proposal rests until installation
-					// claims it; anything else pauses for exactly one confirmation.
-					stage: templatePackagePreflightConfirmed(state)
-						? 'awaiting-installation'
-						: 'awaiting-confirmation',
+					stage: 'generating-derivatives',
 					failure: undefined,
 				}),
 				operation.updatedAt,
 			);
+			const installationTerminal = await terminalOperationAtCheckpoint();
+			if (installationTerminal)
+				return installationTerminal;
+			return await publishConfirmedTemplatePackage({
+				report: state.report,
+				material: inspection.material,
+			});
 		}
 		catch (error) {
 			if (error instanceof TemplatePackageArchiveSourceError)
@@ -3113,26 +3597,41 @@ export function createGraphicsAssetLibrary(
 		}
 	}
 
-	return {
-		async getHealth() {
-			const checkedAt = now().toISOString();
-			const [catalogue, staging, canonical] = await Promise.all([
-				catalogueHealth(dependencies.catalogue),
-				byteStoreHealth(dependencies.staging),
-				byteStoreHealth(dependencies.canonical),
-			]);
-			const status = catalogue.status === 'healthy'
+	/**
+	 * Whether each component can answer at all. Every component is probed even
+	 * when an earlier one has already failed, so one reading always reports the
+	 * complete picture rather than stopping at the first problem.
+	 */
+	async function probeLibraryHealth(): Promise<GraphicsAssetLibraryHealth> {
+		const checkedAt = now().toISOString();
+		const [catalogue, staging, canonical] = await Promise.all([
+			catalogueHealth(dependencies.catalogue),
+			byteStoreHealth(dependencies.staging),
+			byteStoreHealth(dependencies.canonical),
+		]);
+		return {
+			status: catalogue.status === 'healthy'
 				&& staging.status === 'healthy'
 				&& canonical.status === 'healthy'
 				? 'healthy'
-				: 'degraded';
+				: 'degraded',
+			checkedAt,
+			catalogue,
+			byteStores: { staging, canonical },
+		};
+	}
 
-			return {
-				status,
-				checkedAt,
-				catalogue,
-				byteStores: { staging, canonical },
-			};
+	return {
+		getHealth: probeLibraryHealth,
+		async getOperationsCockpit() {
+			return await catalogueRequest(
+				async () => await readGraphicsOperationsCockpit({
+					probeHealth: probeLibraryHealth,
+					catalogue: requireCockpitCatalogue,
+					now,
+				}),
+				'The Graphics Asset Operations Cockpit is temporarily unavailable',
+			);
 		},
 		async getCapacity() {
 			return await catalogueRequest(
@@ -3291,6 +3790,95 @@ export function createGraphicsAssetLibrary(
 				`Template Package preflight cannot be confirmed from stage ${latest.stage}`,
 				'ingestion-operation-not-uploadable',
 			);
+		},
+		async installTemplatePackage(input) {
+			const catalogue = requireCatalogue();
+			const operation = await this.getIngestionOperation(input);
+			if (operation.source !== 'template-package') {
+				throw new GraphicsAssetLibraryError(
+					'This Graphics Ingestion Operation does not receive a Template Package',
+					'invalid-ingestion-input',
+				);
+			}
+			// Installing what is already installed is the same act twice, not a
+			// conflict. This is also the answer to an installation that committed and
+			// then lost its reply: the terminal result is durable, so a retry reads it
+			// rather than publishing a second copy of the same package.
+			if (operation.stage === 'completed')
+				return operation;
+			// A cancellation that reached the operation before publication started
+			// wins, and stays won.
+			if (operation.stage === 'cancelled')
+				return operation;
+			const state = await catalogueRequest(
+				() => catalogue.getTemplatePackagePreflight(operation.id, operation.initiatedBy),
+				'Template Package preflight is temporarily unavailable',
+			);
+			if (operation.stage === 'failed' && !operation.failure?.retryable) {
+				throw new GraphicsAssetLibraryError(
+					'This Template Package failed permanently and cannot be installed',
+					'ingestion-operation-not-uploadable',
+				);
+			}
+			// An operation resting on a proposal is judged by that proposal: nothing
+			// installs from a pause the author never answered.
+			//
+			// A retryable failure has no resting proposal. The run that failed will
+			// have recorded the report explaining why — an exhausted quota, an asset
+			// that had gone into Trash — so judging the retry by that report would
+			// refuse exactly the attempt the author was told to make after fixing it.
+			// The re-derived report decides instead, and it either matches the
+			// confirmation the author already gave or returns the operation to them.
+			if (
+				operation.stage !== 'failed'
+				&& (!state || !templatePackagePreflightConfirmed(state))
+			) {
+				throw new GraphicsAssetLibraryError(
+					'This Template Package has no confirmed preflight proposal to install',
+					'ingestion-operation-not-uploadable',
+				);
+			}
+			const claimedAt = new Date(Math.max(
+				now().getTime(),
+				new Date(operation.updatedAt).getTime() + 1,
+			)).toISOString();
+			// The claim is what makes two concurrent installations of one operation
+			// impossible: whichever compare-and-set commits owns the publication, and
+			// the other is told the operation is already busy rather than starting a
+			// second run over the same staged bytes.
+			const claimed = await catalogueRequest(
+				() => catalogue.claimGraphicsIngestion({
+					operation,
+					claimedAt,
+					staleBefore: new Date(
+						new Date(claimedAt).getTime() - activeIngestionLeaseMilliseconds,
+					).toISOString(),
+				}),
+				'Template Package installation could not claim the durable operation',
+			);
+			if (!claimed) {
+				const latest = await this.getIngestionOperation(input);
+				if (latest.stage === 'completed' || latest.stage === 'cancelled')
+					return latest;
+				throw new GraphicsAssetLibraryError(
+					`Template Package installation cannot start from stage ${latest.stage}`,
+					'ingestion-operation-not-uploadable',
+				);
+			}
+			return await continueTemplatePackagePreflight(claimed, { install: true });
+		},
+		async inspectInstalledGraphicsTemplate(input) {
+			const template = await catalogueRequest(
+				() => requireCatalogue().findInstalledGraphicsTemplate(input.templateId),
+				'Installed graphics Template state is temporarily unavailable',
+			);
+			if (!template) {
+				throw new GraphicsAssetLibraryError(
+					'Installed Graphics Template not found',
+					'ingestion-operation-not-found',
+				);
+			}
+			return template;
 		},
 		async cancelGraphicsIngestion(input) {
 			const catalogue = requireCatalogue();

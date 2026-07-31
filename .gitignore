@@ -31,3 +31,8 @@ coverage
 .dev.vars
 .dev.vars.*
 !.dev.vars.example
+
+.claude/worktrees/issue-46/.data
+.claude/worktrees/issue-70/.data
+.claude/worktrees/issue-47/.data
+.claude/worktrees/issue-73/.data

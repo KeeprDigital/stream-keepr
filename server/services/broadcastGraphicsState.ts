@@ -1,13 +1,12 @@
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbBroadcastGraphicsLiveSession } from '~~/server/db/schema';
 import type { SequencedLiveStateExecuteOptions } from '~~/server/modules/live-state';
-import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
+import type { BroadcastGraphicsLiveState, BroadcastGraphicsReductionContext } from '~~/shared/modules/broadcast-graphics-live-session';
 import type {
 	BroadcastGraphicsCommand,
 	BroadcastGraphicsCommandAppliedPayload,
 	BroadcastGraphicsCommandResult,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
-import type { GraphicInputDeclaration } from '~~/shared/types/graphics';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { broadcastGraphicsLiveSessions } from '~~/server/db/schema';
@@ -36,6 +35,8 @@ const REJECTION_STATUS: Record<BroadcastGraphicsCommandRejection['code'], number
 	'required-input-unavailable': 409,
 	'update-unavailable': 409,
 	'unknown-input': 404,
+	'unknown-source': 404,
+	'override-unbound': 409,
 };
 
 /** Namespaces Broadcast Graphics Live Session receipts in the shared receipt store. */
@@ -251,14 +252,16 @@ export function broadcastGraphicsStateService() {
 	 * duplicate suppression, and conflict protection are the module's.
 	 *
 	 * It is built per command because reduction needs the addressed Broadcast
-	 * Graphic's declared Graphic Inputs, and the port's reduction sees only the
-	 * sequenced aggregate and the command. Declarations are authored Screen
-	 * configuration — an author may change them under a running show — so
-	 * denormalizing them into live state to bring them within the port's reach would
-	 * be storing a copy that can go stale. Closing over them for the one command
-	 * that needs them keeps the authored config authoritative.
+	 * Graphic's declared Graphic Inputs, Graphic Source Selections, and Graphic Input
+	 * Bindings — plus the Event Data those bindings resolve against — and the port's
+	 * reduction sees only the sequenced aggregate and the command. Declarations are
+	 * authored Screen configuration and Event Data belongs to the Event; an author or
+	 * a tournament can change either under a running show, so denormalizing them into
+	 * live state to bring them within the port's reach would be storing a copy that
+	 * can go stale. Closing over them for the one command that needs them keeps both
+	 * authoritative where they live.
 	 */
-	const liveStateFor = (declarations: readonly GraphicInputDeclaration[]) => createSequencedLiveState<
+	const liveStateFor = (context: Omit<BroadcastGraphicsReductionContext, 'acceptedAt'>) => createSequencedLiveState<
 		BroadcastGraphicsLiveSessionRef,
 		DbBroadcastGraphicsLiveSession,
 		BroadcastGraphicsCommand,
@@ -324,7 +327,13 @@ export function broadcastGraphicsStateService() {
 					// phase this command begins. It is read here, at acceptance, rather than
 					// sent by a client: every output projects animation from this instant, so
 					// it has to come from the one place that decides the authoritative order.
-					{ inputs: declarations, acceptedAt: Date.now() },
+					//
+					// The addressed graphic's phase durations travel with it, because two of
+					// the reducer's decisions are about a schedule rather than a target — was
+					// the phase this intent interrupts still running, and when is a coalesced
+					// update due — and both have to be settled once, here, rather than by
+					// each output against its own clock.
+					{ ...context, acceptedAt: Date.now() },
 				);
 			}
 			catch (error) {
@@ -385,12 +394,19 @@ export function broadcastGraphicsStateService() {
 		sessionId: number,
 		eventId: number,
 		command: BroadcastGraphicsCommand,
-		/** The addressed Broadcast Graphic's declared Graphic Inputs. */
-		declarations: readonly GraphicInputDeclaration[],
+		/**
+		 * The addressed Broadcast Graphic's declarations, and how its bindings resolve.
+		 *
+		 * Everything the reducer needs except the acceptance instant, which is read from
+		 * the server's own clock at acceptance rather than passed in — every output
+		 * projects animation from it, so it has to come from the one place that decides
+		 * the authoritative order.
+		 */
+		context: Omit<BroadcastGraphicsReductionContext, 'acceptedAt'>,
 		originConnectionId?: string,
 		options: Omit<SequencedLiveStateExecuteOptions, 'originConnectionId'> = {},
 	): Promise<BroadcastGraphicsCommandResult> => {
-		return await liveStateFor(declarations)
+		return await liveStateFor(context)
 			.execute({ sessionId, eventId }, command, { ...options, originConnectionId });
 	};
 

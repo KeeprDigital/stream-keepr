@@ -7,7 +7,10 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
 import {
-	acceptedGraphicInputValues,
+	broadcastGraphicPhaseProjection,
+	broadcastGraphicPhaseTiming,
+	broadcastGraphicPlayoutState,
+	broadcastGraphicRenderedInputs,
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,
 } from '~~/shared/modules/broadcast-graphics-live-session';
@@ -67,19 +70,77 @@ const mockOnAirGraphicIds = ref<string[]>([]);
 const mockAcceptedInputs = ref<BroadcastGraphicsLiveState>(createInitialBroadcastGraphicsLiveState());
 const mockLoadSession = ref<(eventId: number, screenId: number) => void>(() => {});
 
-mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
-	// Delegates to the real reducer rather than reimplementing the authored-order
-	// filter, so this test cannot pass on a filter the Screen Output does not use.
-	onAirGraphicIds: (_screenId: number, graphics: readonly { id: string }[]) =>
-		onAirBroadcastGraphicIds(
-			{ playout: Object.fromEntries(mockOnAirGraphicIds.value.map(id => [id, { onAir: true, effectiveStartedAt: 0, cut: false }])), inputs: {} },
-			graphics,
+/** The authoritative clock a live Screen Output projects on, and the epoch it holds. */
+const mockServerNow = ref(1_700_000_000_000);
+const mockSessionSequence = ref(1);
+
+/**
+ * The authoritative snapshot, assembled from whichever parts a test cares about.
+ *
+ * A test that only wants a graphic on air sets `mockOnAirGraphicIds`; one that wants
+ * it mid-phase sets `mockPlayout` directly with the effective start times the server
+ * would have stamped.
+ */
+const mockPlayout = ref<BroadcastGraphicsLiveState['playout'] | null>(null);
+
+function mockState(): BroadcastGraphicsLiveState {
+	return {
+		playout: mockPlayout.value ?? Object.fromEntries(
+			mockOnAirGraphicIds.value.map(id => [id, { onAir: true, effectiveStartedAt: 0, cut: false }]),
 		),
+		inputs: mockAcceptedInputs.value.inputs,
+	};
+}
+
+mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
+	// Every selector delegates to the real shared module rather than reimplementing it,
+	// so these tests cannot pass on behaviour the Screen Output does not actually use.
+	get sessions() {
+		return new Map([[mockScreen.value?.id ?? 0, { id: 55, sequence: mockSessionSequence.value }]]);
+	},
+	serverNow: () => mockServerNow.value,
+	onAirGraphicIds: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) =>
+		onAirBroadcastGraphicIds(
+			mockState(),
+			graphics,
+			graphic => broadcastGraphicPhaseTiming(graphic as BroadcastGraphicConfig, now ?? mockServerNow.value),
+		),
+	animationProjection: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) =>
+		Object.fromEntries(graphics.flatMap((graphic) => {
+			const projection = broadcastGraphicPhaseProjection(
+				mockState(),
+				graphic.id,
+				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value),
+			);
+			return projection ? [[graphic.id, projection]] : [];
+		})),
+	renderedInputValues: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) => {
+		const current: Record<string, Record<string, unknown>> = {};
+		const outgoing: Record<string, Record<string, unknown>> = {};
+		for (const graphic of graphics) {
+			const rendered = broadcastGraphicRenderedInputs(
+				mockState(),
+				graphic.id,
+				graphic.inputs ?? [],
+				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value),
+			);
+			current[graphic.id] = rendered.current;
+			if (rendered.outgoing)
+				outgoing[graphic.id] = rendered.outgoing;
+		}
+		return { current, outgoing };
+	},
+	playoutState: (
+		_screenId: number,
+		graphicId: string,
+		graphic?: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
+		now?: number,
+	) => broadcastGraphicPlayoutState(
+		mockState(),
+		graphicId,
+		graphic ? broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value) : undefined,
+	),
 	loadSession: (eventId: number, screenId: number) => mockLoadSession.value(eventId, screenId),
-	// Likewise the accepted Graphic Input values a Graphic Text Template renders:
-	// the real selector, so a Screen Output can never be shown a working value.
-	acceptedInputValues: (_screenId: number, graphic: BroadcastGraphicConfig) =>
-		acceptedGraphicInputValues(mockAcceptedInputs.value, graphic.id, graphic.inputs ?? []),
 }));
 
 const lowerThird: BroadcastGraphicConfig = {
@@ -192,6 +253,10 @@ describe('broadcastGraphicsDisplay', () => {
 		mockPreviewSafeAreas.value = false;
 		mockScreen.value = screenWithStack();
 		mockOnAirGraphicIds.value = [];
+		mockPlayout.value = null;
+		mockAcceptedInputs.value = createInitialBroadcastGraphicsLiveState();
+		mockServerNow.value = 1_700_000_000_000;
+		mockSessionSequence.value = 1;
 		mockLoadSession.value = () => {};
 		mockAssetCapability.value = undefined;
 		capabilitySessionRequests.length = 0;
@@ -621,6 +686,9 @@ describe('graphicAnimationPreview in a Screen Output frame', () => {
 		mockPreviewSafeAreas.value = false;
 		mockScreen.value = screenWithStack();
 		mockOnAirGraphicIds.value = [];
+		mockPlayout.value = null;
+		mockAcceptedInputs.value = createInitialBroadcastGraphicsLiveState();
+		mockServerNow.value = 1_700_000_000_000;
 		mockLoadSession.value = () => {};
 	});
 
@@ -721,5 +789,210 @@ describe('graphicAnimationPreview in a Screen Output frame', () => {
 		await pushPreviewState([animatedLowerThird], previewPlan());
 
 		expect(loads).toEqual([]);
+	});
+});
+
+describe('live playout animation in a Screen Output', () => {
+	/** A four-second fade-and-slide entrance and a two-second wipe out. */
+	const ANIMATED: BroadcastGraphicConfig = {
+		...lowerThird,
+		items: [{
+			...bar,
+			animation: {
+				enter: {
+					duration: 4000,
+					easing: 'linear',
+					delay: 0,
+					fade: { opacity: 0 },
+					slide: { direction: 'south', distanceMode: 'fixed', distance: 120 },
+				},
+				exit: { duration: 2000, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+			},
+		}],
+	};
+
+	const T0 = 1_700_000_000_000;
+
+	beforeEach(() => {
+		mockOutputMode.value = 'overlay';
+		mockOutputModeProvided.value = true;
+		mockIsPreview.value = false;
+		mockPreviewGuides.value = false;
+		mockPreviewSafeAreas.value = false;
+		mockScreen.value = screenWithStack([ANIMATED]);
+		mockOnAirGraphicIds.value = [];
+		mockAcceptedInputs.value = createInitialBroadcastGraphicsLiveState();
+		mockPlayout.value = null;
+		mockServerNow.value = T0;
+		mockSessionSequence.value = 1;
+		mockLoadSession.value = () => {};
+		mockAssetCapability.value = undefined;
+	});
+
+	it('joins an entrance already in progress rather than replaying it from the beginning', async () => {
+		// A capture browser opened, or reconnected, one second into a four-second
+		// entrance. The frame it draws is the frame every other output is drawing.
+		mockPlayout.value = { 'lower-third': { onAir: true, effectiveStartedAt: T0 - 1000, cut: false } };
+
+		const wrapper = await mountComponent();
+
+		// A quarter of the way through: a quarter of the fade and a quarter of the slide.
+		expect(itemStyle(wrapper)).toContain('opacity: 0.25');
+		expect(itemStyle(wrapper)).toContain('translate(0px, 90px)');
+	});
+
+	it('settles a Broadcast Graphic whose entrance is long over, without animating it', async () => {
+		mockPlayout.value = { 'lower-third': { onAir: true, effectiveStartedAt: T0 - 4_000_000, cut: false } };
+
+		const wrapper = await mountComponent();
+
+		expect(itemStyle(wrapper)).not.toContain('opacity');
+		expect(itemStyle(wrapper)).not.toContain('transform');
+	});
+
+	it('settles a Cut Take immediately, with no entrance at all', async () => {
+		mockPlayout.value = { 'lower-third': { onAir: true, effectiveStartedAt: T0, cut: true } };
+
+		const wrapper = await mountComponent();
+
+		expect(itemStyle(wrapper)).not.toContain('opacity');
+		expect(itemStyle(wrapper)).not.toContain('transform');
+	});
+
+	it('keeps an exiting Broadcast Graphic on program until its exit completes', async () => {
+		mockPlayout.value = { 'lower-third': { onAir: false, effectiveStartedAt: T0 - 1000, cut: false } };
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(true);
+		expect(itemStyle(wrapper)).toContain('opacity: 0.5');
+	});
+
+	it('removes an exiting Broadcast Graphic from program once its exit has completed', async () => {
+		mockPlayout.value = { 'lower-third': { onAir: false, effectiveStartedAt: T0 - 3000, cut: false } };
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(false);
+	});
+
+	it('reverses an interrupted entrance from the frame that was on program', async () => {
+		// Out arrived one second into the entrance, so the reversal unwinds that one
+		// second of enter over the next second. Half a second later, half of it is left.
+		mockPlayout.value = {
+			'lower-third': {
+				onAir: false,
+				effectiveStartedAt: T0 - 500,
+				cut: false,
+				reversalCompletesAt: T0 + 500,
+			},
+		};
+
+		const wrapper = await mountComponent();
+
+		// 500ms of a four-second entrance still rendered: an eighth of the way in, and
+		// heading back out rather than onwards.
+		expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(true);
+		expect(itemStyle(wrapper)).toContain('opacity: 0.125');
+		expect(itemStyle(wrapper)).toContain('translate(0px, 105px)');
+	});
+
+	it('draws both renderings while an update cross-transitions, and only then', async () => {
+		const updating: BroadcastGraphicConfig = {
+			...templated,
+			items: [{
+				...templated.items[0]!,
+				animation: { update: { duration: 1000, easing: 'linear', delay: 0, fade: { opacity: 0 } } },
+			}],
+		};
+		mockScreen.value = screenWithStack([updating]);
+		mockPlayout.value = {
+			templated: { onAir: true, effectiveStartedAt: T0 - 10_000, cut: false, updateStartedAt: T0 - 500 },
+		};
+		mockAcceptedInputs.value = {
+			playout: {},
+			inputs: {
+				templated: {
+					working: { name: 'After' },
+					accepted: { name: 'After' },
+					acceptedRevision: 2,
+					updateFrom: { name: 'Before' },
+				},
+			},
+		};
+
+		const wrapper = await mountComponent();
+		const texts = wrapper.findAll('[data-graphic-item-kind="text"] p').map(node => node.text());
+
+		// The old rendering is drawn inside the item's own box, immediately behind the new
+		// one, so Graphic Layer Order still composes around the pair.
+		expect(texts).toEqual(['Live: Before', 'Live: After']);
+		expect(wrapper.find('[data-graphic-item-cross-transition="name-line"]').exists()).toBe(true);
+		expect(wrapper.find('[data-broadcast-graphic-outgoing="templated"]').exists()).toBe(false);
+	});
+
+	it('draws one rendering once the update has completed', async () => {
+		const updating: BroadcastGraphicConfig = {
+			...templated,
+			items: [{
+				...templated.items[0]!,
+				animation: { update: { duration: 1000, easing: 'linear', delay: 0, fade: { opacity: 0 } } },
+			}],
+		};
+		mockScreen.value = screenWithStack([updating]);
+		mockPlayout.value = {
+			templated: { onAir: true, effectiveStartedAt: T0 - 10_000, cut: false, updateStartedAt: T0 - 5000 },
+		};
+		mockAcceptedInputs.value = {
+			playout: {},
+			inputs: {
+				templated: {
+					working: { name: 'After' },
+					accepted: { name: 'After' },
+					acceptedRevision: 2,
+					updateFrom: { name: 'Before' },
+				},
+			},
+		};
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.findAll('[data-graphic-item-kind="text"] p').map(node => node.text())).toEqual(['Live: After']);
+		expect(wrapper.find('[data-graphic-item-cross-transition="name-line"]').exists()).toBe(false);
+	});
+
+	it('shows the rendering it entered with while an acceptance coalesces behind the entrance', async () => {
+		const updating: BroadcastGraphicConfig = {
+			...templated,
+			items: [{
+				...templated.items[0]!,
+				animation: {
+					enter: { duration: 4000, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+					update: { duration: 1000, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+				},
+			}],
+		};
+		mockScreen.value = screenWithStack([updating]);
+		// Taken one second ago with "Before"; an acceptance of "After" is scheduled for
+		// the instant the entrance completes, three seconds from now.
+		mockPlayout.value = {
+			templated: { onAir: true, effectiveStartedAt: T0 - 1000, cut: false, updateStartedAt: T0 + 3000 },
+		};
+		mockAcceptedInputs.value = {
+			playout: {},
+			inputs: {
+				templated: {
+					working: { name: 'After' },
+					accepted: { name: 'After' },
+					acceptedRevision: 2,
+					updateFrom: { name: 'Before' },
+				},
+			},
+		};
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.findAll('[data-graphic-item-kind="text"] p').map(node => node.text())).toEqual(['Live: Before']);
+		expect(wrapper.find('[data-graphic-item-cross-transition="name-line"]').exists()).toBe(false);
 	});
 });
