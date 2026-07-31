@@ -15,6 +15,7 @@ import type {
 	PrunableRevision,
 	PurgeableTrashedAsset,
 	QuarantinedContent,
+	RetiredGraphicAsset,
 	RevisionPruningCancellation,
 	RevisionPruningSchedule,
 	StagedInputExpiryCandidate,
@@ -804,6 +805,30 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				throw new Error('Graphic Asset Revision retention could not be read');
 			return result.results.map(revisionRetentionFromRow);
 		},
+		async listRetiredGraphicAssets(input) {
+			const result = await database.prepare(`
+				SELECT asset.id, asset.name,
+					(
+						SELECT COUNT(*) FROM graphic_asset_references reference
+						WHERE reference.asset_id = asset.id
+					) AS reference_count
+				FROM graphic_assets asset
+				WHERE asset.lifecycle_state = 'retired'
+				ORDER BY asset.updated_at, asset.id
+				LIMIT ?
+			`).bind(input.limit).all<{
+				id: string;
+				name: string;
+				reference_count: number;
+			}>();
+			if (!result.success)
+				throw new Error('Retired Graphic Assets could not be read');
+			return result.results.map((row): RetiredGraphicAsset => ({
+				assetId: row.id as GraphicAssetId,
+				name: row.name,
+				referenceCount: row.reference_count,
+			}));
+		},
 		async listTrashDeadlines(input) {
 			const result = await database.prepare(`
 				SELECT asset.id, asset.name, asset.trashed_at, asset.trash_recoverable_until,
@@ -949,17 +974,30 @@ export function createD1GraphicsAssetRetentionCatalogue(
 		},
 		async listGraphicsAssetEvidence(input) {
 			const categories = input.categories ?? [];
+			// The category list stays one bound JSON array, so the subject filter
+			// below can take ordinary parameters without any list length being
+			// able to push the statement past D1's bound-parameter ceiling.
+			const conditions: string[] = [];
+			const bindings: (string | number)[] = [];
+			if (categories.length > 0) {
+				conditions.push(`category IN ${valuesFromJsonArray(`?${bindings.length + 1}`)}`);
+				bindings.push(boundJsonArray(categories));
+			}
+			if (input.subject) {
+				conditions.push(
+					`subject_kind = ?${bindings.length + 1} AND subject_id = ?${bindings.length + 2}`,
+				);
+				bindings.push(input.subject.kind, input.subject.id);
+			}
 			const result = await database.prepare(`
 				SELECT id, recorded_at, category, actor, subject_kind, subject_id,
 					outcome, reason, correlation_id, detail, expires_at
 				FROM graphics_asset_evidence
-				${categories.length > 0
-					? `WHERE category IN ${valuesFromJsonArray('?1')}`
-					: ''}
+				${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
 				ORDER BY recorded_at DESC, id DESC
-				LIMIT ${categories.length > 0 ? '?2' : '?1'}
+				LIMIT ?${bindings.length + 1}
 			`).bind(
-				...(categories.length > 0 ? [boundJsonArray(categories)] : []),
+				...bindings,
 				input.limit,
 			).all<EvidenceRow>();
 			if (!result.success)

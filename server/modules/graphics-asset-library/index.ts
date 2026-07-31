@@ -26,7 +26,9 @@ import type {
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 	GraphicsIngestionSource,
+	GraphicsOperationalQueuesOverview,
 	GraphicsOperationsCockpit,
+	GraphicsQueueInspection,
 	GraphicsReconciliationOverview,
 	GraphicsReconciliationSweepResult,
 	GraphicsRetentionOverview,
@@ -51,6 +53,7 @@ import type {
 	TemplatePackageTotals,
 } from '~~/shared/types/templatePackage';
 import type { GraphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
+import type { GraphicsOperationalQueueId } from '~~/shared/utils/graphicsOperationalQueues';
 import type { GraphicsCapacityExhaustedDetails } from './errors';
 import type { GraphicsAssetMultipartState } from './multipart';
 import type {
@@ -63,6 +66,7 @@ import type {
 	GraphicsStagingObjectStore,
 	ReadGraphicsObjectOutcome,
 } from './object-store';
+import type { GraphicsOperationalQueuesCatalogue } from './operational-queues';
 import type { GraphicsOperationsCockpitCatalogue } from './operations-cockpit';
 import type {
 	GraphicsAssetReconciliationCatalogue,
@@ -112,6 +116,7 @@ import {
 	GraphicsObjectInputError,
 	readableBytes,
 } from './object-store';
+import { createGraphicsOperationalQueues } from './operational-queues';
 import { readGraphicsOperationsCockpit } from './operations-cockpit';
 import {
 	sha256Hex,
@@ -808,7 +813,28 @@ export interface GraphicsAssetLibrary {
 	listGraphicsAssetEvidence: (input?: {
 		limit?: number;
 		categories?: readonly GraphicsAssetEvidenceCategory[];
+		/**
+		 * Narrows the ledger to one opaque domain subject. Without it the ledger
+		 * answers with the newest entries the installation holds, which is a
+		 * different question from what happened to this asset.
+		 */
+		subject?: { kind: GraphicsAssetEvidenceEntry['subject']['kind']; id: string };
 	}) => Promise<GraphicsAssetEvidenceEntry[]>;
+	/**
+	 * Every operational queue in one risk-ordered reading: what needs doing,
+	 * how much of it there is, and the soonest deadline each queue is holding.
+	 */
+	getOperationalQueues: () => Promise<GraphicsOperationalQueuesOverview>;
+	/**
+	 * Everything the persistent inspector shows for one selected queue item:
+	 * its domain identity, current state, exact deadline, affected pinned usage,
+	 * the catalogue's expectations beside the byte evidence, the Evidence ledger
+	 * filtered to that subject, and only the actions valid in that state.
+	 */
+	inspectOperationalQueueItem: (input: {
+		queue: GraphicsOperationalQueueId;
+		subjectId: string;
+	}) => Promise<GraphicsQueueInspection>;
 	/** Every exact recovery and cleanup deadline the installation is holding. */
 	getRetentionOverview: () => Promise<GraphicsRetentionOverview>;
 	/** One Graphic Asset's recovery window and per-revision retention. */
@@ -1371,6 +1397,40 @@ export function createGraphicsAssetLibrary(
 			);
 		}
 		return catalogue as GraphicsAssetCatalogue & GraphicsOperationsCockpitCatalogue;
+	}
+
+	/**
+	 * The queues read the same aggregates the cockpit does plus the bounded
+	 * deadline samples retention owns, so like both they are available only
+	 * against a catalogue that can answer them. Every method is checked rather
+	 * than one standing in for the rest, so a partially implemented double fails
+	 * with the domain error instead of a `TypeError` mid-reading.
+	 */
+	const QUEUE_CATALOGUE_METHODS = [
+		'countOpenDiscrepancies',
+		'summariseIngestionAttention',
+		'summariseRetentionDeadlines',
+		'listTrashDeadlines',
+		'listRevisionRetention',
+		'listRetiredGraphicAssets',
+		'listGraphicsAssetEvidence',
+		'listGraphicAssetUsage',
+	] as const satisfies readonly (keyof GraphicsOperationalQueuesCatalogue)[];
+
+	function requireOperationalQueues() {
+		const catalogue = requireCatalogue();
+		if (!QUEUE_CATALOGUE_METHODS.every(method => method in catalogue)) {
+			throw new GraphicsAssetLibraryError(
+				'Graphics Asset Library operational queues are unavailable for this catalogue',
+				'graphics-asset-library-unavailable',
+			);
+		}
+		return createGraphicsOperationalQueues({
+			catalogue: () => catalogue as GraphicsAssetCatalogue & GraphicsOperationalQueuesCatalogue,
+			reconciliation: () => requireReconciliation(),
+			inspectRetention: async assetId => await requireRetention().inspect(assetId),
+			now,
+		});
 	}
 
 	function requireReconciliation() {
@@ -5058,6 +5118,18 @@ export function createGraphicsAssetLibrary(
 			return await catalogueRequest(
 				() => requireRetention().listEvidence(input),
 				'Graphics Asset Evidence is temporarily unavailable',
+			);
+		},
+		async getOperationalQueues() {
+			return await catalogueRequest(
+				() => requireOperationalQueues().overview(),
+				'Graphics Asset Library operational queues are temporarily unavailable',
+			);
+		},
+		async inspectOperationalQueueItem(input) {
+			return await catalogueRequest(
+				() => requireOperationalQueues().inspect(input),
+				'The operational queue item is temporarily unavailable',
 			);
 		},
 		async getRetentionOverview() {

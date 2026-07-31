@@ -272,6 +272,13 @@ function boundaryMarkerStyle(fraction: number) {
 			<UButton
 				color="neutral"
 				variant="outline"
+				icon="i-lucide-list-checks"
+				to="/admin/graphics-assets/queues"
+				label="Open lifecycle queues"
+			/>
+			<UButton
+				color="neutral"
+				variant="outline"
 				icon="i-lucide-refresh-cw"
 				:loading="loadPending"
 				:disabled="!hasReading"
