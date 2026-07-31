@@ -20,6 +20,24 @@ export const MAX_BROADCAST_GRAPHIC_TEMPLATE_NAME_LENGTH = 100;
 export const MAX_BROADCAST_GRAPHIC_TEMPLATE_DESCRIPTION_LENGTH = 500;
 
 /**
+ * Where a Template Package brought a library entry in from.
+ *
+ * The exporting installation's Template identity and the revision it was exported
+ * at, and nothing more. It exists so a later package of the same design can be
+ * recognised as related; it is never an update link, and nothing reads it back when
+ * the entry is used here. Absent on every entry authored here.
+ *
+ * Deliberately not called an origin. **Graphic Asset Origin** is a settled term for
+ * the provenance attached to one imported Graphic Asset Revision, and reusing the
+ * word for a Template's provenance would put two different things behind one name in
+ * the same import workflow.
+ */
+export interface BroadcastGraphicTemplateOrigin {
+	sourceTemplateIdentity: string;
+	sourceTemplateRevision: number | null;
+}
+
+/**
  * One library entry as the library browser reads it.
  *
  * Deliberately without the composition: browsing a library of designs is not
@@ -31,6 +49,18 @@ export interface BroadcastGraphicTemplateSummary {
 	name: string;
 	description: string | null;
 	revision: number;
+	/** Present only on an entry a Template Package installed. */
+	provenance?: BroadcastGraphicTemplateOrigin;
+	/**
+	 * Whether this installation authored the entry, and so may rename, describe,
+	 * revise, or delete it.
+	 *
+	 * An installed entry is the Graphics Asset Library's own record — this library
+	 * reads it and never writes it — so it can be browsed, placed, and exported but
+	 * not changed. Changing an imported design means placing it and saving the placed
+	 * copy, which is the same route every authored entry took.
+	 */
+	authored: boolean;
 	/** Graphic Items in the saved composition, Graphic Group children included. */
 	itemCount: number;
 	inputCount: number;

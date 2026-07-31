@@ -1,0 +1,1 @@
+ALTER TABLE `installed_graphics_templates` ADD `source_template_revision` integer;

@@ -312,6 +312,16 @@ export const installedGraphicsTemplates = sqliteTable('installed_graphics_templa
 	document: text('document', { mode: 'json' }).notNull(),
 	sourceTemplateIdentity: text('source_template_identity').notNull(),
 	/**
+	 * The revision the source Template was exported at, where the package declared
+	 * one.
+	 *
+	 * It completes the provenance the identity starts. An identity alone cannot tell
+	 * a re-import of the same design from a later revision of it, which is the one
+	 * question recognising a related package has to answer. Null for a package that
+	 * came from a workflow with no managed revision.
+	 */
+	sourceTemplateRevision: integer('source_template_revision'),
+	/**
 	 * Which Graphics Ingestion Operation installed this Template, recorded as a
 	 * plain identity rather than a foreign key.
 	 *

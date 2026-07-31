@@ -11,12 +11,25 @@ import { roundedShapeGeometry, shapeGeometrySummary, squareShapeGeometry } from 
 
 /**
  * Graphic Item Definitions: the application-owned contract for each Graphic
- * Item kind — stable identifier, editor metadata, defaults, and summary. A
- * configuration version joins it when something reads one, which is the
- * Template Package validation work rather than this ticket.
+ * Item kind — stable identifier, configuration version, editor metadata,
+ * defaults, and summary.
  *
  * Adding a kind means one entry here plus a branch in the compositor renderer;
  * nothing else enumerates kinds. Templates never provide executable Definitions.
+ *
+ * ## The configuration version is a portability contract, not a changelog
+ *
+ * It is what a Template Package declares and what a receiving installation checks:
+ * a package requiring version 2 of `media` cannot install here while this
+ * installation implements version 1, and it fails atomically rather than
+ * installing a Graphic Item nothing can render as authored.
+ *
+ * So it advances only when a kind's *stored configuration* gains meaning an older
+ * installation would silently misread — a new field it would drop, or a changed
+ * interpretation of an existing one. Renaming a label, changing an icon, moving a
+ * default, or adding an editor control changes nothing a stored document carries
+ * and must leave the version alone: raising it needlessly refuses packages this
+ * installation could have rendered perfectly.
  */
 
 export interface GraphicItemDefaultsOptions {
@@ -28,6 +41,12 @@ export interface GraphicItemDefaultsOptions {
 
 export interface GraphicItemDefinition {
 	kind: GraphicItemKind;
+	/**
+	 * The version of this kind's stored configuration that this installation
+	 * implements. A Template Package declaring a higher one for this kind is
+	 * refused; a lower one is readable.
+	 */
+	configurationVersion: number;
 	label: string;
 	icon: string;
 	/** A context the host must declare before the definition palette offers this kind. */
@@ -87,6 +106,7 @@ function playerSideLabel(side: PlayerSide): string {
 const DEFINITIONS = {
 	'text': {
 		kind: 'text',
+		configurationVersion: 1,
 		label: 'Text',
 		icon: 'i-lucide-type',
 		createDefault: options => ({
@@ -105,6 +125,7 @@ const DEFINITIONS = {
 	},
 	'shape': {
 		kind: 'shape',
+		configurationVersion: 1,
 		label: 'Shape',
 		icon: 'i-lucide-square',
 		createDefault: options => ({
@@ -123,6 +144,7 @@ const DEFINITIONS = {
 	},
 	'media': {
 		kind: 'media',
+		configurationVersion: 1,
 		label: 'Media',
 		icon: 'i-lucide-image',
 		createDefault: options => ({
@@ -154,6 +176,7 @@ const DEFINITIONS = {
 	},
 	'group': {
 		kind: 'group',
+		configurationVersion: 1,
 		label: 'Group',
 		icon: 'i-lucide-group',
 		createDefault: options => ({
@@ -178,6 +201,7 @@ const DEFINITIONS = {
 	},
 	'clock': {
 		kind: 'clock',
+		configurationVersion: 1,
 		label: 'Clock',
 		icon: 'i-lucide-clock',
 		requiredContext: 'feature-match',
@@ -198,6 +222,7 @@ const DEFINITIONS = {
 	},
 	'player-life': {
 		kind: 'player-life',
+		configurationVersion: 1,
 		label: 'Life',
 		icon: 'i-lucide-heart-pulse',
 		requiredContext: 'feature-match',
@@ -220,6 +245,7 @@ const DEFINITIONS = {
 	},
 	'game-wins': {
 		kind: 'game-wins',
+		configurationVersion: 1,
 		label: 'Wins',
 		icon: 'i-lucide-trophy',
 		requiredContext: 'feature-match',

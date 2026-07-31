@@ -12,6 +12,9 @@ const mockSave = vi.fn();
 const mockUpdate = vi.fn();
 const mockRemove = vi.fn();
 const mockPlace = vi.fn();
+const mockReceivePackage = vi.fn();
+const mockConfirmPackage = vi.fn();
+const mockInstallPackage = vi.fn();
 
 mockNuxtImport('useBroadcastGraphicTemplateRepository', () => () => ({
 	list: mockList,
@@ -20,6 +23,11 @@ mockNuxtImport('useBroadcastGraphicTemplateRepository', () => () => ({
 	update: mockUpdate,
 	remove: mockRemove,
 	place: mockPlace,
+	packageUrl: (templateId: string) =>
+		`/api/graphics-templates/broadcast-graphics/${templateId}/template-package`,
+	receivePackage: mockReceivePackage,
+	confirmPackage: mockConfirmPackage,
+	installPackage: mockInstallPackage,
 }));
 
 const mockGetScreenById = vi.fn();
@@ -75,12 +83,38 @@ function summary(overrides: Partial<BroadcastGraphicTemplateSummary> = {}): Broa
 		name: 'Lower third',
 		description: null,
 		revision: 1,
+		authored: true,
 		itemCount: 4,
 		inputCount: 2,
 		createdAt: new Date('2026-01-01T00:00:00.000Z'),
 		updatedAt: new Date('2026-01-02T00:00:00.000Z'),
 		...overrides,
 	};
+}
+
+/** One Graphics Ingestion Operation carrying a Template Package preflight report. */
+function receivedPackage(
+	stage: string,
+	preflight: Record<string, unknown> = { outcome: 'ready', issues: [] },
+): Record<string, unknown> {
+	return {
+		id: 'operation-1',
+		stage,
+		templatePackagePreflight: { fingerprint: 'fingerprint-1', ...preflight },
+	};
+}
+
+/**
+ * Choosing a `.skgraphic` the way an author does. The hidden file input is the
+ * component's real entry point, so driving it is what proves the button behind it
+ * is wired to anything.
+ */
+async function chooseImportFile(wrapper: { get: (selector: string) => any }) {
+	const input = wrapper.get('[data-testid="template-library-import-input"]');
+	const file = new File([new Uint8Array([1, 2, 3])], 'lower-third.skgraphic');
+	Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
+	await input.trigger('change');
+	await flushPromises();
 }
 
 async function mountLibrary(props: Record<string, unknown> = {}) {
@@ -287,5 +321,118 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 		const wrapper = await mountLibrary();
 
 		expect(wrapper.get('[data-testid="empty-state"]').text()).toContain('No Broadcast Graphic Templates');
+	});
+
+	it('offers each design as a Template Package an author can take away', async () => {
+		const wrapper = await mountLibrary();
+
+		expect(wrapper.get('[data-testid="template-export"]').attributes('to'))
+			.toBe('/api/graphics-templates/broadcast-graphics/template-1/template-package');
+	});
+
+	it('installs a clean Template Package without asking anything', async () => {
+		mockReceivePackage.mockResolvedValue(receivedPackage('awaiting-installation'));
+		mockInstallPackage.mockResolvedValue({ ...receivedPackage('completed'), stage: 'completed' });
+		const wrapper = await mountLibrary();
+
+		await chooseImportFile(wrapper);
+
+		expect(mockReceivePackage).toHaveBeenCalled();
+		expect(mockInstallPackage).toHaveBeenCalledWith('operation-1');
+		expect(mockConfirmPackage).not.toHaveBeenCalled();
+		// The imported design is a library entry, so the library is re-read to show it.
+		expect(mockList).toHaveBeenCalledTimes(2);
+		expect(wrapper.find('[data-testid="template-library-import-report"]').exists()).toBe(false);
+	});
+
+	/**
+	 * Warnings pause an import exactly once, and the pause is the point: the author
+	 * is accepting a specific proposal — this content already exists here under
+	 * another name — rather than approving "import" in the abstract.
+	 */
+	it('pauses on a proposal carrying warnings until the author accepts it', async () => {
+		mockReceivePackage.mockResolvedValue(receivedPackage('awaiting-confirmation', {
+			outcome: 'requires-confirmation',
+			issues: [{
+				code: 'graphic-asset-created-from-shared-content',
+				severity: 'warning',
+				message: '"Backdrop" carries content this installation already stores as "Bug"',
+				remediation: 'Install it as a separate Graphic Asset, or cancel and reuse the existing one.',
+				retryable: false,
+			}],
+		}));
+		mockConfirmPackage.mockResolvedValue(receivedPackage('awaiting-installation'));
+		mockInstallPackage.mockResolvedValue({ ...receivedPackage('completed'), stage: 'completed' });
+		const wrapper = await mountLibrary();
+
+		await chooseImportFile(wrapper);
+
+		expect(mockInstallPackage).not.toHaveBeenCalled();
+		const report = wrapper.get('[data-testid="template-library-import-report"]');
+		expect(report.text()).toContain('already stores as "Bug"');
+
+		await wrapper.get('[data-testid="template-library-import-confirm"]').trigger('click');
+		await flushPromises();
+
+		// The confirmation names the exact report it accepted, never the operation alone.
+		expect(mockConfirmPackage).toHaveBeenCalledWith('operation-1', 'fingerprint-1');
+		expect(mockInstallPackage).toHaveBeenCalledWith('operation-1');
+	});
+
+	/**
+	 * A rejected package is terminal and there is nothing to accept, so the report is
+	 * shown with every reason at once and no way to install it anyway.
+	 */
+	it('reports a rejected Template Package without offering to install it', async () => {
+		mockReceivePackage.mockResolvedValue(receivedPackage('failed', {
+			outcome: 'rejected',
+			issues: [{
+				code: 'unsupported-application-capability',
+				severity: 'error',
+				message: 'This installation does not provide graphic-item-definition "media" at configuration version 2',
+				remediation: 'Replace it with a supported one before exporting.',
+				retryable: false,
+			}],
+		}));
+		const wrapper = await mountLibrary();
+
+		await chooseImportFile(wrapper);
+
+		const report = wrapper.get('[data-testid="template-library-import-report"]');
+		expect(report.text()).toContain('configuration version 2');
+		expect(wrapper.find('[data-testid="template-library-import-confirm"]').exists()).toBe(false);
+		expect(mockInstallPackage).not.toHaveBeenCalled();
+		expect(mockConfirmPackage).not.toHaveBeenCalled();
+	});
+
+	it('offers no import while this session may only observe', async () => {
+		const wrapper = await mountLibrary({ writable: false });
+
+		expect(wrapper.find('[data-testid="template-library-import"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="template-export"]').exists()).toBe(false);
+	});
+
+	/**
+	 * An imported design is the Graphics Asset Library's own record of what a
+	 * Template Package published, and this library reads it rather than writing it.
+	 * Offering a name field or a delete would be a control that cannot save, so the
+	 * component offers only what actually works on one: place, and export.
+	 */
+	it('offers an imported design only what can be done to it', async () => {
+		mockList.mockResolvedValue([summary({
+			id: 'installed-1',
+			authored: false,
+			provenance: { sourceTemplateIdentity: 'template-elsewhere', sourceTemplateRevision: 3 },
+		})]);
+		const wrapper = await mountLibrary();
+
+		const entry = wrapper.get('[data-template-id="installed-1"]');
+		expect(entry.text()).toContain('imported');
+		expect(entry.find('[data-testid="template-name"]').exists()).toBe(false);
+		expect(entry.find('[data-testid="template-description"]').exists()).toBe(false);
+		expect(entry.find('[data-testid="template-delete"]').exists()).toBe(false);
+		// Still a design, so it still places and still travels.
+		expect(entry.find('[data-testid="template-place"]').exists()).toBe(true);
+		expect(entry.find('[data-testid="template-export"]').exists()).toBe(true);
 	});
 });

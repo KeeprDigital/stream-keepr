@@ -1,5 +1,9 @@
 import type { H3Event } from 'h3';
 import type { TemplatePackageExportOutcome } from '~~/server/modules/graphics-asset-library';
+import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
+import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
+import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
 
 /**
  * The shared HTTP boundary for both Template Package exporters.
@@ -36,4 +40,35 @@ export function respondWithTemplatePackage(
 		'cache-control': 'no-store',
 	});
 	return envelope.open();
+}
+
+/**
+ * One authored Broadcast Graphic as a `.skgraphic` Template Package.
+ *
+ * Two routes reach a Broadcast Graphic worth packaging by different paths — a
+ * library entry by its own identity, a placed graphic through its Screen — and from
+ * there the act is identical: discover what the design requires, hand it to the one
+ * Graphics Asset Library export contract, and stream what comes back. Sharing it
+ * means the two can never come to package the same design differently.
+ */
+export function exportBroadcastGraphicTemplatePackage(
+	event: H3Event,
+	template: {
+		identity: string;
+		name: string;
+		/** Present where the exporting workflow manages one; provenance, never a link. */
+		revision?: number;
+		document: BroadcastGraphicConfig;
+	},
+): Promise<ReadableStream<Uint8Array>> {
+	const requirements = broadcastGraphicTemplatePackageRequirements(template.document);
+	return graphicsAssetLibraryForEvent(event)
+		.exportTemplatePackage({
+			packageKind: 'skgraphic',
+			template,
+			assets: requirements.assets,
+			capabilities: requirements.capabilities,
+		})
+		.then(outcome => respondWithTemplatePackage(event, outcome))
+		.catch(error => rethrowGraphicsAssetApiError(error, event));
 }

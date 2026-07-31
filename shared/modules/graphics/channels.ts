@@ -2,8 +2,8 @@ import type {
 	BroadcastGraphicConfig,
 	GraphicChannelConfig,
 	GraphicChannelHandoffPolicy,
-} from '~~/shared/types/graphics';
-import { DEFAULT_GRAPHIC_CHANNEL_HANDOFF_POLICY } from '~~/shared/types/graphics';
+} from '../../types/graphics';
+import { DEFAULT_GRAPHIC_CHANNEL_HANDOFF_POLICY } from '../../types/graphics';
 
 /**
  * Graphic Channel membership, read from authored Screen configuration.

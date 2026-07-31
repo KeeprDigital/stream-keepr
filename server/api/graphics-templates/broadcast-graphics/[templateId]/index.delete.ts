@@ -2,6 +2,7 @@ import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-
 import { requireGraphicsTemplateWritable } from '~~/server/modules/graphics-authoring-lease/graphicsTemplate';
 import { broadcastGraphicTemplateParamsSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
 import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGraphicTemplate';
+import { refuseInstalledBroadcastGraphicTemplateWrite } from '~~/server/utils/broadcastGraphicTemplateWrites';
 
 /**
  * Remove one Broadcast Graphic Template from the library.
@@ -10,6 +11,10 @@ import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGra
  * their Screens, with their own Graphic Inputs, their own Graphic Asset References,
  * and no link to the design they were initialised from. Deleting a template can
  * therefore never blank a Screen or a live show.
+ *
+ * A design a Template Package installed is refused rather than silently reported as
+ * missing: it is visible in the library, so "not found" would be a lie about
+ * something the author is looking straight at.
  */
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);
@@ -18,6 +23,7 @@ export default defineEventHandler(async (event) => {
 
 	const removed = await broadcastGraphicTemplateService().remove(templateId);
 	if (!removed) {
+		await refuseInstalledBroadcastGraphicTemplateWrite(event, templateId, 'deleted');
 		throw createError({
 			statusCode: 404,
 			statusMessage: 'Not Found',

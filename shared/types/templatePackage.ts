@@ -158,6 +158,20 @@ export interface TemplatePackageManifest {
 	template: {
 		identity: string;
 		name: string;
+		/**
+		 * The Template revision this package was exported at, where the exporting
+		 * workflow has one.
+		 *
+		 * Provenance travelling beside the identity, and only useful together with
+		 * it: an installation recognising a source identity it has imported before
+		 * needs the revision to tell "the same design again" from "a later revision
+		 * of it". Never an update link — nothing follows it back.
+		 *
+		 * Optional because a package may be exported from something with no managed
+		 * revision, and because a schema-1 package written before this field existed
+		 * must still read.
+		 */
+		revision?: number;
 		entry: string;
 	};
 	packagedAssets: readonly TemplatePackageAsset[];
@@ -351,6 +365,8 @@ export interface TemplatePackagePreflightReport {
 	packageKind: TemplatePackageKind;
 	templateIdentity: string;
 	templateName: string;
+	/** The source Template revision the package declared, where it declared one. */
+	templateRevision?: number;
 	checkedAt: string;
 	fingerprint: string;
 	schema: {
@@ -371,6 +387,93 @@ export interface TemplatePackagePreflightReport {
 	 */
 	outcome: 'ready' | 'requires-confirmation' | 'rejected';
 }
+
+/**
+ * The receiving half of one Template Package kind's payload.
+ *
+ * A Template Package is one envelope carrying one of several artifacts: both
+ * template kinds "share the package envelope, asset handling, validation,
+ * migration, conflict, and atomic installation contract while retaining separate
+ * payloads, libraries, and import/export workflows". This contract is where that
+ * separation lives. The Graphics Asset Library owns everything the sentence says is
+ * shared and treats the Template document as opaque data; a payload owns the one
+ * thing it cannot — reading the document as the artifact it claims to be. Placing
+ * the installed result in the library that artifact belongs to is the other half of
+ * the separation, and it is not on this contract: the Graphics Asset Library records
+ * an Installed Graphics Template and each artifact's own write path picks it up.
+ *
+ * ## Why the document is read at all, when the envelope already validates
+ *
+ * The envelope proves a Template document is *data*: plain JSON, no executable
+ * value, no remote dependency, no undeclared asset. It cannot prove the document is
+ * a *Broadcast Graphic*, because it does not know what one is. Without this seam a
+ * package could carry any well-formed JSON object and install it as a Template
+ * nothing can place, render, or repair — discovered by an author days later, on a
+ * design they can no longer re-import correctly because the bytes that travelled
+ * were always wrong.
+ *
+ * The check runs at Template Package Preflight, where a failure is a terminal error
+ * with a stable code and nothing has been written. That is what makes an unsupported
+ * Graphic Item Definition or configuration version fail *atomically*: it is refused
+ * before an asset, an origin, a reference, or a Template exists.
+ *
+ * ## The export-side counterpart
+ *
+ * Discovery of what a Template requires — its exact Graphic Asset Revisions and the
+ * application capabilities it declares — is the sending half, in
+ * `shared/utils/templatePackageRequirements.ts`, where both editors reach it while
+ * authoring. The two halves are deliberately symmetric per kind: whatever a kind
+ * declares on the way out is what a receiver holds it to on the way in.
+ *
+ * The types live here rather than beside the implementations so the Graphics Asset
+ * Library can be handed a payload without importing one. It stays a library that
+ * knows nothing about Broadcast Graphics.
+ */
+
+/**
+ * A reason a received document cannot be installed, in the preflight vocabulary.
+ *
+ * Both codes are existing {@link TemplatePackagePreflightErrorCode}s: a payload
+ * explains itself in terms a report already presents, rather than inventing a second
+ * issue vocabulary a caller would have to translate.
+ */
+export interface TemplatePackagePayloadIssue {
+	code: 'invalid-template-document' | 'unsupported-application-capability';
+	/** The document path responsible, where one exists. */
+	subject?: string;
+	message: string;
+}
+
+export type ReadInstallableTemplateDocumentOutcome
+	= | {
+		outcome: 'read';
+		/**
+		 * The application-owned capabilities this document actually requires,
+		 * derived by the same walk the exporting workflow declares them with.
+		 *
+		 * Preflight holds the manifest to them. A package requiring a Graphic Item
+		 * Definition it never declares is one no exporter here could have produced,
+		 * and accepting it would install a Graphic Item whose configuration version
+		 * was never checked against anything.
+		 */
+		capabilities: readonly TemplatePackageCapabilityRequirement[];
+	}
+	| { outcome: 'rejected'; issues: readonly TemplatePackagePayloadIssue[] };
+
+export interface TemplatePackagePayload {
+	packageKind: TemplatePackageKind;
+	/**
+	 * Proves a received Template document is the artifact its package claims, under
+	 * the vocabulary and configuration versions *this* installation implements.
+	 *
+	 * Called during Template Package Preflight over the document exactly as it
+	 * travelled — before its Graphic Asset References are rewritten, so every
+	 * identity in it is still the sender's.
+	 */
+	readInstallableDocument: (document: unknown) => ReadInstallableTemplateDocumentOutcome;
+}
+
+export type TemplatePackagePayloads = (kind: TemplatePackageKind) => TemplatePackagePayload;
 
 export function templatePackageContentEntry(digest: string): string {
 	return `${TEMPLATE_PACKAGE_CONTENT_ENTRY_PREFIX}sha256-${digest}.bin`;
