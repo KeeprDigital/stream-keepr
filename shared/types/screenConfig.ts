@@ -531,24 +531,24 @@ export type FeatureMatchLayoutItemConfig
  *   shader animation effects, per-side border, and glow are capability outside the
  *   shared vocabulary, and the contract's rule is that capability outside the
  *   contract stays with the host.
- * - `sourceItems` are Source Items: top-level-only areas for an external video
- *   source, which may cut through the Frame. Also host-owned, and for the same
- *   reason — no Broadcast Graphics Screen has an external video source to place,
- *   and a Frame cutout is a Frame concern.
  * - `composition` is the shared item tree, held as exactly one composition because
  *   a Feature Match Overlay renders exactly one Feature Match Layout. It is a
  *   `BroadcastGraphicConfig` because that is the shape the shared compositor
  *   authors and the shared render model composes, not because a Feature Match
  *   Layout is a Broadcast Graphic.
+ * - `items` is the legacy widget list, and also the home of Source Items.
  *
- * `items` is the legacy widget model. It stays until the contract ticket removes
- * it, so adopting the compositor cannot regress an overlay that already renders.
+ * Source Items are host-owned for the same reason the Frame is: no Broadcast
+ * Graphics Screen has an external video source to place, and a Frame cutout is a
+ * Frame concern. They stay in `items` rather than moving to a list of their own,
+ * because a second list would have no reader today — the Display already renders
+ * them beneath the composed tree, and their cutouts already punch through the
+ * Frame. Giving them a home independent of the legacy list belongs with the ticket
+ * that removes that list.
  */
 export interface FeatureMatchLayoutConfig {
 	frame: FeatureMatchLayoutFrameConfig;
 	items: FeatureMatchLayoutItemConfig[];
-	/** Host-owned Source Items, beneath and cutting through the Frame. */
-	sourceItems?: FeatureMatchSourceItemConfig[];
 	/**
 	 * The shared Graphic Item tree. Absent on a layout authored before the
 	 * compositor, which renders through the legacy model until an author adds to it.

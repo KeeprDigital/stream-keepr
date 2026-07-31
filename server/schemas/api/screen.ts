@@ -1,5 +1,5 @@
 import type { ScreenMode } from '~~/shared/types/enums';
-import type { BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig, IdleModeConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
+import type { BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, IdleModeConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { SCREEN_MODE_VALUES, screens } from '~~/server/db/schema';
@@ -1358,9 +1358,6 @@ const broadcastGraphicConfigSchema = z.object({
 	animation: graphicContainerAnimationSchema.optional(),
 }).strict();
 
-/** How many external video source areas one Feature Match Layout may place. */
-export const MAX_FEATURE_MATCH_SOURCE_ITEMS = 10;
-
 /**
  * A Feature Match Layout's shared item tree.
  *
@@ -1461,18 +1458,10 @@ export const featureMatchOverlayModeConfigSchema = z.object({
 		},
 		z.object({
 			frame: featureMatchOverlayFrameConfigSchema,
+			// Source Items live here too, host-owned alongside the legacy widgets:
+			// top-level only, with Frame cutout behaviour the shared vocabulary has
+			// no way to express.
 			items: z.array(featureMatchLayoutItemConfigSchema).min(1).max(100),
-			// Source Items stay host-owned: top-level only, with Frame cutout
-			// behaviour the shared vocabulary has no way to express.
-			// Cast for the same reason the legacy item union above casts: these
-			// schemas are assembled from the Feature Match Graphic Item Definitions'
-			// own Zod builders, which infer a record rather than the config type.
-			sourceItems: z.array(featureMatchSourceItemConfigSchema as unknown as z.ZodType<FeatureMatchSourceItemConfig>)
-				.max(
-					MAX_FEATURE_MATCH_SOURCE_ITEMS,
-					`A Feature Match Layout must not carry more than ${MAX_FEATURE_MATCH_SOURCE_ITEMS} Source Items`,
-				)
-				.optional(),
 			composition: featureMatchLayoutCompositionSchema.optional(),
 		}).strict(),
 	),
