@@ -9,6 +9,7 @@ import type {
 	GraphicStyleSetSummary,
 } from '~~/shared/types/graphicStyleSet';
 import type {
+	GraphicStyleSetPackageErrorCode,
 	GraphicStyleSetPackagePreflightReport,
 	GraphicStyleSetPackageResolution,
 } from '~~/shared/types/graphicStyleSetPackage';
@@ -358,14 +359,16 @@ const importAwaitingConfirmation = computed(() =>
  * installation does not have is no more installable as a copy than as an update, and
  * offering one would invite an author to retry something that cannot work.
  */
-const RESOLVABLE_BY_COPY = new Set([
+const RESOLVABLE_BY_COPY = new Set<GraphicStyleSetPackageErrorCode>([
 	'graphic-style-set-revision-conflict',
 	'graphic-style-set-revision-superseded',
-	'graphic-style-set-draft-diverged',
+	'graphic-style-set-identity-unpublished',
 ]);
 const importResolvableAsCopy = computed(() =>
 	pendingImport.value?.resolution === 'preserve-identity'
-	&& importIssues.value.some(issue => RESOLVABLE_BY_COPY.has(issue.code)),
+	&& importIssues.value.some(issue =>
+		RESOLVABLE_BY_COPY.has(issue.code as GraphicStyleSetPackageErrorCode),
+	),
 );
 
 function dismissImport() {

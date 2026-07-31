@@ -20,6 +20,7 @@ import {
 	graphicStyleSetContentDigest,
 	graphicStyleSetPackageCapabilities,
 	graphicStyleSetPackageDisposition,
+	graphicStyleSetPackageIssue,
 	readGraphicStyleSetPackageManifest,
 	validateGraphicStyleSetDraft,
 } from '~~/shared/modules/graphic-style-sets';
@@ -35,7 +36,6 @@ import {
 import {
 	graphicStyleSetPackageEnvelopeCode,
 	graphicStyleSetPackageEnvelopeIssue,
-	graphicStyleSetPackageWarning,
 } from './issues';
 
 /**
@@ -67,12 +67,19 @@ import {
  */
 const MAXIMUM_REPORTED_SCHEMA_ISSUES = 10;
 
-/** How the shared data-only inspection's findings are named for a Style Set. */
-const DOCUMENT_ISSUE_CODES = {
-	'executable-template-content': 'executable-template-content',
-	'remote-resource-dependency': 'remote-resource-dependency',
-	'undeclared-graphic-asset-dependency': 'undeclared-graphic-asset-dependency',
-} as const;
+/**
+ * The data-only inspection's findings that are about the envelope rather than about a
+ * Graphic Style Set, and so keep the envelope's own codes.
+ *
+ * A remote dependency and an undeclared asset mean the same thing whatever artifact
+ * carried them. Executable content does not appear here because it is reported in the
+ * Style Set's own vocabulary — the same code an export refuses it under, so one
+ * condition is named one way on both sides of a transfer.
+ */
+const ENVELOPE_DOCUMENT_ISSUE_CODES = new Set([
+	'remote-resource-dependency',
+	'undeclared-graphic-asset-dependency',
+]);
 
 export interface GraphicStyleSetPackagePreflightInput {
 	archive: Uint8Array;
@@ -123,6 +130,7 @@ function fingerprintMaterial(input: {
 	styleSetName?: string;
 	targetStyleSetId?: string;
 	installedRevision?: number;
+	installedDraftRevision?: number;
 	affectedTemplates: readonly AffectedGraphicsTemplate[];
 	issues: readonly GraphicStyleSetPackagePreflightIssue[];
 }): string {
@@ -135,6 +143,9 @@ function fingerprintMaterial(input: {
 		styleSetName: input.styleSetName ?? null,
 		targetStyleSetId: input.targetStyleSetId ?? null,
 		installedRevision: input.installedRevision ?? null,
+		// Part of what a confirmation is bound to, because it is the token the write
+		// compare-and-swaps on: a draft edit after this report changes the fingerprint.
+		installedDraftRevision: input.installedDraftRevision ?? null,
 		affectedTemplates: input.affectedTemplates.map(template => ({
 			id: template.id,
 			name: template.name,
@@ -168,14 +179,15 @@ export async function graphicStyleSetPackagePreflight(
 	};
 	let provenance: GraphicStyleSetPackageProvenance | undefined;
 	let styleSetName: string | undefined;
-	let entryCount: number | undefined;
+	let styleSetEntryCount: number | undefined;
 	let snapshot: GraphicStyleSetSnapshot | undefined;
 	let disposition: GraphicStyleSetPackageDisposition = 'rejected';
 	let targetStyleSetId: string | undefined;
 	let installedRevision: number | undefined;
+	let installedDraftRevision: number | undefined;
 	let affectedTemplates: AffectedGraphicsTemplate[] = [];
 	let publishIssues: GraphicStyleSetPublishIssue[] = [];
-	let observedEntryCount = 0;
+	let observedArchiveEntryCount = 0;
 	let observedExpandedByteLength = 0;
 
 	async function finish(): Promise<GraphicStyleSetPackagePreflightOutcome> {
@@ -192,6 +204,7 @@ export async function graphicStyleSetPackagePreflight(
 			styleSetName,
 			targetStyleSetId,
 			installedRevision,
+			installedDraftRevision,
 			affectedTemplates,
 			issues: sorted,
 		})));
@@ -206,18 +219,19 @@ export async function graphicStyleSetPackagePreflight(
 				schema,
 				provenance,
 				styleSetName,
-				entryCount,
+				styleSetEntryCount,
 				resolution: input.resolution,
 				disposition: settled,
 				targetStyleSetId,
 				installedRevision,
+				installedDraftRevision,
 				affectedTemplates,
 				publishIssues,
 				issues: sorted,
 				limits: GRAPHIC_STYLE_SET_PACKAGE_LIMITS,
 				observed: {
 					archiveByteLength,
-					entryCount: observedEntryCount,
+					archiveEntryCount: observedArchiveEntryCount,
 					expandedByteLength: observedExpandedByteLength,
 				},
 				outcome: hasError
@@ -264,11 +278,11 @@ export async function graphicStyleSetPackagePreflight(
 	}
 
 	const archiveEntries = archiveRead.entries;
-	observedEntryCount = archiveEntries.length;
+	observedArchiveEntryCount = archiveEntries.length;
 	observedExpandedByteLength = archiveEntries.reduce((total, entry) => total + entry.byteLength, 0);
-	if (observedEntryCount > GRAPHIC_STYLE_SET_PACKAGE_LIMITS.maximumEntryCount) {
+	if (observedArchiveEntryCount > GRAPHIC_STYLE_SET_PACKAGE_LIMITS.maximumEntryCount) {
 		issues.push(graphicStyleSetPackageEnvelopeIssue('package-entry-limit-exceeded', {
-			message: `The archive carries ${observedEntryCount} files; a Graphic Style Set Package carries ${GRAPHIC_STYLE_SET_PACKAGE_LIMITS.maximumEntryCount}`,
+			message: `The archive carries ${observedArchiveEntryCount} files; a Graphic Style Set Package carries ${GRAPHIC_STYLE_SET_PACKAGE_LIMITS.maximumEntryCount}`,
 		}));
 	}
 	if (observedExpandedByteLength > GRAPHIC_STYLE_SET_PACKAGE_LIMITS.maximumExpandedByteLength) {
@@ -337,7 +351,7 @@ export async function graphicStyleSetPackagePreflight(
 		migrated,
 	};
 	styleSetName = manifest.styleSet.name;
-	entryCount = manifest.styleSet.entryCount;
+	styleSetEntryCount = manifest.styleSet.entryCount;
 	provenance = {
 		sourceStyleSetId: manifest.styleSet.identity,
 		sourceRevision: manifest.styleSet.revision,
@@ -346,7 +360,7 @@ export async function graphicStyleSetPackagePreflight(
 	// A migration changed nothing the sender chose, but the author still confirms the
 	// result they are about to install.
 	if (migrated) {
-		issues.push(graphicStyleSetPackageWarning('package-schema-migrated', {
+		issues.push(graphicStyleSetPackageIssue('package-schema-migrated', {
 			message: `The package was migrated from schema version ${receivedSchemaVersion} to ${GRAPHIC_STYLE_SET_PACKAGE_SCHEMA_VERSION} while it was read`,
 		}));
 	}
@@ -371,13 +385,10 @@ export async function graphicStyleSetPackagePreflight(
 	}
 	const snapshotValue = readEntryDocument(GRAPHIC_STYLE_SET_PACKAGE_STYLE_SET_ENTRY);
 	if (snapshotValue === undefined) {
-		issues.push({
-			code: 'invalid-graphic-style-set-document',
-			severity: 'error',
+		issues.push(graphicStyleSetPackageIssue('invalid-graphic-style-set-document', {
 			subject: GRAPHIC_STYLE_SET_PACKAGE_STYLE_SET_ENTRY,
 			message: 'The Graphic Style Set document is not readable JSON within the size one may occupy',
-			remediation: 'Export the package again from the sending installation.',
-		});
+		}));
 		return await finish();
 	}
 
@@ -385,21 +396,19 @@ export async function graphicStyleSetPackagePreflight(
 	// proves it is the artifact the package claims.
 	const inspected = inspectTemplateDocument(snapshotValue);
 	for (const documentIssue of inspected.issues) {
-		const code = DOCUMENT_ISSUE_CODES[documentIssue.code as keyof typeof DOCUMENT_ISSUE_CODES];
-		if (code) {
-			issues.push(graphicStyleSetPackageEnvelopeIssue(code, {
-				subject: documentIssue.slot,
-				message: documentIssue.message,
-			}));
+		if (ENVELOPE_DOCUMENT_ISSUE_CODES.has(documentIssue.code)) {
+			issues.push(graphicStyleSetPackageEnvelopeIssue(
+				graphicStyleSetPackageEnvelopeCode(documentIssue.code),
+				{ subject: documentIssue.slot, message: documentIssue.message },
+			));
 			continue;
 		}
-		issues.push({
-			code: 'invalid-graphic-style-set-document',
-			severity: 'error',
-			subject: documentIssue.slot,
-			message: documentIssue.message,
-			remediation: 'The Graphic Style Set must be plain data. Ask the sender to correct it before exporting.',
-		});
+		issues.push(graphicStyleSetPackageIssue(
+			documentIssue.code === 'executable-template-content'
+				? 'executable-graphic-style-set-content'
+				: 'invalid-graphic-style-set-document',
+			{ subject: documentIssue.slot, message: documentIssue.message },
+		));
 	}
 	for (const discovered of inspected.references) {
 		issues.push(graphicStyleSetPackageEnvelopeIssue('undeclared-graphic-asset-dependency', {
@@ -412,27 +421,21 @@ export async function graphicStyleSetPackagePreflight(
 	if (!parsed.success) {
 		const problems = parsed.error.issues;
 		for (const problem of problems.slice(0, MAXIMUM_REPORTED_SCHEMA_ISSUES)) {
-			issues.push({
-				code: 'invalid-graphic-style-set-document',
-				severity: 'error',
+			issues.push(graphicStyleSetPackageIssue('invalid-graphic-style-set-document', {
 				subject: problem.path.length > 0 ? problem.path.join('.') : undefined,
 				message: problem.message,
-				remediation: 'The document is not a Graphic Style Set this installation reads. Ask the sender to export it from a compatible version.',
-			});
+			}));
 		}
 		if (problems.length > MAXIMUM_REPORTED_SCHEMA_ISSUES) {
-			issues.push({
-				code: 'invalid-graphic-style-set-document',
-				severity: 'error',
+			issues.push(graphicStyleSetPackageIssue('invalid-graphic-style-set-document', {
 				message: `The Graphic Style Set document has ${problems.length} validation problems; the first ${MAXIMUM_REPORTED_SCHEMA_ISSUES} are reported`,
-				remediation: 'The document is not a Graphic Style Set this installation reads. Ask the sender to export it from a compatible version.',
-			});
+			}));
 		}
 		return await finish();
 	}
 
 	snapshot = parsed.data as GraphicStyleSetSnapshot;
-	entryCount = snapshot.entries.length;
+	styleSetEntryCount = snapshot.entries.length;
 
 	// Provenance and the document describe one Style Set, so a package that disagrees
 	// with itself about which one cannot be mapped to anything.
@@ -476,18 +479,18 @@ export async function graphicStyleSetPackagePreflight(
 	const validation = validateGraphicStyleSetDraft(snapshot.entries);
 	publishIssues = validation.issues;
 	if (publishIssues.length > 0) {
-		issues.push({
-			code: 'graphic-style-set-unpublishable',
-			severity: 'error',
+		issues.push(graphicStyleSetPackageIssue('graphic-style-set-unpublishable', {
 			message: `The packaged Graphic Style Set has ${publishIssues.length} ${
 				publishIssues.length === 1 ? 'entry that does not' : 'entries that do not'
 			} resolve on this installation`,
-			remediation: 'Ask the sender to correct the reported entries and publish the Graphic Style Set again before exporting it.',
-		});
+		}));
 	}
 
 	const installed = await input.findInstalled(snapshot.id);
 	installedRevision = installed?.revision;
+	// Recorded, and covered by the fingerprint, because installation writes conditional
+	// on it rather than on whatever the draft revision has become by then.
+	installedDraftRevision = installed?.draftRevision;
 	const decided = graphicStyleSetPackageDisposition({
 		packaged: snapshot,
 		installed,
@@ -506,7 +509,7 @@ export async function graphicStyleSetPackagePreflight(
 		for (const template of affectedTemplates) {
 			if (!template.styleChanged)
 				continue;
-			issues.push(graphicStyleSetPackageWarning('graphic-style-set-template-affected', {
+			issues.push(graphicStyleSetPackageIssue('graphic-style-set-template-affected', {
 				subject: template.id,
 				message: `“${template.name}” will be offered an available style update`,
 			}));

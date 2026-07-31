@@ -1,9 +1,11 @@
 import type { GraphicStyleSetEntry } from '../../types/graphicStyleSet';
 import type {
 	GraphicStyleSetPackageDisposition,
+	GraphicStyleSetPackageErrorCode,
 	GraphicStyleSetPackageManifest,
 	GraphicStyleSetPackagePreflightIssue,
 	GraphicStyleSetPackageResolution,
+	GraphicStyleSetPackageWarningCode,
 	GraphicStyleSetSnapshot,
 } from '../../types/graphicStyleSetPackage';
 import type { TemplatePackageCapabilityDeclaration } from '../../types/templatePackage';
@@ -11,9 +13,12 @@ import { MAX_GRAPHIC_STYLE_SET_ENTRIES } from '../../types/graphicStyleSet';
 import {
 	GRAPHIC_STYLE_SET_PACKAGE_ARTIFACT_KIND,
 	GRAPHIC_STYLE_SET_PACKAGE_KIND,
+	GRAPHIC_STYLE_SET_PACKAGE_LIMITS,
 	GRAPHIC_STYLE_SET_PACKAGE_MINIMUM_MIGRATABLE_SCHEMA_VERSION,
+	GRAPHIC_STYLE_SET_PACKAGE_REMEDIATION,
 	GRAPHIC_STYLE_SET_PACKAGE_SCHEMA_VERSION,
 	GRAPHIC_STYLE_SET_PACKAGE_STYLE_SET_ENTRY,
+	GRAPHIC_STYLE_SET_PACKAGE_WARNING_CODES,
 } from '../../types/graphicStyleSetPackage';
 import { sameGraphicStyleValue } from './apply';
 
@@ -265,7 +270,7 @@ export function readGraphicStyleSetPackageManifest(
 	const totals = migrated.totals;
 	if (
 		!isPlainObject(totals)
-		|| totals.entryCount !== 2
+		|| totals.archiveEntryCount !== GRAPHIC_STYLE_SET_PACKAGE_LIMITS.maximumEntryCount
 		|| !Number.isSafeInteger(totals.expandedByteLength)
 		|| (totals.expandedByteLength as number) < 0
 	) {
@@ -286,11 +291,27 @@ export function readGraphicStyleSetPackageManifest(
  * What installing this package would do
  * ──────────────────────────────────────────────── */
 
-const DISPOSITION_REMEDIATION = {
-	'graphic-style-set-revision-conflict': 'Two installations published different entries as the same revision of this Graphic Style Set. Install it as an independent copy, or reconcile the two by hand and publish a newer revision on one of them.',
-	'graphic-style-set-revision-superseded': 'This installation already holds a newer revision of this Graphic Style Set. Export the newer one instead, or install this package as an independent copy.',
-	'graphic-style-set-draft-diverged': 'The installed Graphic Style Set has unpublished draft changes this update would discard. Publish or revert the draft first, or install this package as an independent copy.',
-} as const;
+/**
+ * One issue in the Style Set's own preflight vocabulary.
+ *
+ * The remediation comes from the one table beside the codes rather than from a literal
+ * here, so a code cannot be raised without guidance and two sites cannot come to give
+ * different guidance for the same code.
+ */
+export function graphicStyleSetPackageIssue(
+	code: GraphicStyleSetPackageErrorCode | GraphicStyleSetPackageWarningCode,
+	input: { message: string; subject?: string },
+): GraphicStyleSetPackagePreflightIssue {
+	return {
+		code,
+		severity: (GRAPHIC_STYLE_SET_PACKAGE_WARNING_CODES as readonly string[]).includes(code)
+			? 'warning'
+			: 'error',
+		subject: input.subject,
+		message: input.message,
+		remediation: GRAPHIC_STYLE_SET_PACKAGE_REMEDIATION[code],
+	};
+}
 
 /** One installed Style Set as the disposition decision reads it. */
 export interface InstalledGraphicStyleSetFacts {
@@ -344,12 +365,9 @@ export function graphicStyleSetPackageDisposition(
 	// An explicit copy answers every relation the same way: a new identity relates to
 	// nothing installed, so no revision comparison can apply to it.
 	if (input.resolution === 'independent-copy') {
-		issues.push({
-			code: 'graphic-style-set-installed-as-copy',
-			severity: 'warning',
+		issues.push(graphicStyleSetPackageIssue('graphic-style-set-installed-as-copy', {
 			message: `“${input.packaged.name}” will be installed as an independent Graphic Style Set with a new identity`,
-			remediation: 'Nothing links to the copy until a template selects entries from it, and it will never receive an update from this package\'s source.',
-		});
+		}));
 		return { disposition: 'install-independent-copy', issues };
 	}
 
@@ -361,64 +379,49 @@ export function graphicStyleSetPackageDisposition(
 		return { disposition: 'install-new', issues };
 
 	if (installed.revision === 0 || installed.published === null) {
-		// The identity exists here but has never been published, so it is somebody's
-		// working draft rather than a revision the package can relate to. An import
-		// never overwrites a draft: that is a merge decision, and imports never merge.
-		issues.push({
-			code: 'graphic-style-set-draft-diverged',
-			severity: 'error',
-			message: 'A Graphic Style Set with this identity exists here and has never been published, so installing over it would discard an unpublished draft',
-			remediation: DISPOSITION_REMEDIATION['graphic-style-set-draft-diverged'],
-		});
+		// The identity exists here but has never been published, so there is no installed
+		// revision for the package to be newer, older, or the same as. Nothing decides
+		// what installing it would mean, so nothing is proposed.
+		issues.push(graphicStyleSetPackageIssue('graphic-style-set-identity-unpublished', {
+			message: 'A Graphic Style Set with this identity exists here and has never been published, so this package has no installed revision to relate to',
+		}));
 		return { disposition: 'rejected', issues };
 	}
 
 	if (installed.name !== input.packaged.name) {
-		issues.push({
-			code: 'graphic-style-set-name-differs',
-			severity: 'warning',
+		issues.push(graphicStyleSetPackageIssue('graphic-style-set-name-differs', {
 			message: `The package calls this Graphic Style Set “${input.packaged.name}”; this library records it as “${installed.name}”`,
-			remediation: 'Confirm to keep the installed name, or rename the Graphic Style Set after installing.',
-		});
+		}));
 	}
 
 	if (input.packaged.revision === installed.revision) {
 		if (sameGraphicStyleValue(input.packaged.entries, installed.published))
 			return { disposition: 'already-installed', issues };
-		issues.push({
-			code: 'graphic-style-set-revision-conflict',
-			severity: 'error',
+		issues.push(graphicStyleSetPackageIssue('graphic-style-set-revision-conflict', {
 			message: `Revision ${input.packaged.revision} of this Graphic Style Set is already installed with different entries`,
-			remediation: DISPOSITION_REMEDIATION['graphic-style-set-revision-conflict'],
-		});
+		}));
 		return { disposition: 'rejected', issues };
 	}
 
 	if (input.packaged.revision < installed.revision) {
-		issues.push({
-			code: 'graphic-style-set-revision-superseded',
-			severity: 'error',
+		issues.push(graphicStyleSetPackageIssue('graphic-style-set-revision-superseded', {
 			message: `The package carries revision ${input.packaged.revision}; this installation already publishes revision ${installed.revision}`,
-			remediation: DISPOSITION_REMEDIATION['graphic-style-set-revision-superseded'],
-		});
+		}));
 		return { disposition: 'rejected', issues };
 	}
 
-	if (installed.hasUnpublishedChanges) {
-		issues.push({
-			code: 'graphic-style-set-draft-diverged',
-			severity: 'error',
-			message: `The installed Graphic Style Set has unpublished draft changes that installing revision ${input.packaged.revision} would discard`,
-			remediation: DISPOSITION_REMEDIATION['graphic-style-set-draft-diverged'],
-		});
-		return { disposition: 'rejected', issues };
-	}
-
-	issues.push({
-		code: 'graphic-style-set-revision-updated',
-		severity: 'warning',
+	issues.push(graphicStyleSetPackageIssue('graphic-style-set-revision-updated', {
 		message: `This will publish revision ${input.packaged.revision} over the installed revision ${installed.revision}`,
-		remediation: 'Every linked template is offered the change as an available style update to review; none of them is rewritten by this install.',
-	});
+	}));
+	// A draft the author has not published is work this update replaces. It does not
+	// refuse the update — the glossary says a newer revision *may* update the installed
+	// Style Set, and replacing one whole thing with another is not a field merge — but
+	// it is not something an import may do quietly, so it is named in what the author
+	// confirms, and the write is conditional on this exact draft revision.
+	if (installed.hasUnpublishedChanges) {
+		issues.push(graphicStyleSetPackageIssue('graphic-style-set-draft-discarded', {
+			message: 'The installed Graphic Style Set has unpublished draft changes that installing this revision will discard',
+		}));
+	}
 	return { disposition: 'update-installed', issues };
 }

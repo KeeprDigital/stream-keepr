@@ -512,7 +512,7 @@ describe('receiving a `.skstyle` package on another installation', () => {
 		expect(receiver.rows.size).toBe(0);
 	});
 
-	it('refuses to publish over unpublished draft changes it would discard', async () => {
+	it('names an unpublished draft it would discard, and discards it only once confirmed', async () => {
 		const receiver = library([storedStyleSet({ draft: [BRAND, heading(120)] })]);
 		const newer = await packageBytes(storedStyleSet({
 			revision: 4,
@@ -520,15 +520,82 @@ describe('receiving a `.skstyle` package on another installation', () => {
 			published: [BRAND, heading(96)],
 		}));
 
-		const outcome = await installGraphicStyleSetPackage({
+		const unconfirmed = await installGraphicStyleSetPackage({
 			archive: newer,
 			resolution: 'preserve-identity',
 			ports: receiver.ports,
 			now: NOW,
 		});
 
-		expect(outcome.outcome).toBe('rejected');
-		expect(outcome.report.issues).toMatchObject([{ code: 'graphic-style-set-draft-diverged' }]);
+		expect(unconfirmed.outcome).toBe('requires-confirmation');
+		expect(unconfirmed.report.issues.map(issue => issue.code))
+			.toContain('graphic-style-set-draft-discarded');
 		expect(receiver.rows.get(SOURCE_ID)?.draft).toEqual([BRAND, heading(120)]);
+
+		const confirmed = await installGraphicStyleSetPackage({
+			archive: newer,
+			resolution: 'preserve-identity',
+			ports: receiver.ports,
+			confirmedFingerprint: unconfirmed.report.fingerprint,
+			now: NOW,
+		});
+
+		expect(confirmed.outcome).toBe('installed');
+		expect(receiver.rows.get(SOURCE_ID)?.draft).toEqual([BRAND, heading(96)]);
+	});
+
+	it('refuses a package whose identity exists here and has never been published', async () => {
+		const receiver = library([storedStyleSet({ revision: 0, published: null })]);
+
+		const outcome = await installGraphicStyleSetPackage({
+			archive: sent,
+			resolution: 'preserve-identity',
+			ports: receiver.ports,
+			now: NOW,
+		});
+
+		expect(outcome.outcome).toBe('rejected');
+		expect(outcome.report.issues)
+			.toMatchObject([{ code: 'graphic-style-set-identity-unpublished', severity: 'error' }]);
+		expect(receiver.rows.get(SOURCE_ID)?.revision).toBe(0);
+	});
+
+	it('writes nothing when a draft edit lands between the confirmed report and the install', async () => {
+		const receiver = library([storedStyleSet()]);
+		const newer = await packageBytes(storedStyleSet({
+			revision: 4,
+			draft: [BRAND, heading(96)],
+			published: [BRAND, heading(96)],
+		}));
+
+		const proposal = await installGraphicStyleSetPackage({
+			archive: newer,
+			resolution: 'preserve-identity',
+			ports: receiver.ports,
+			now: NOW,
+		});
+		expect(proposal.outcome).toBe('requires-confirmation');
+
+		// Another author saves a draft edit after the report the confirmation is bound to.
+		const installed = receiver.rows.get(SOURCE_ID)!;
+		receiver.rows.set(SOURCE_ID, {
+			...installed,
+			draft: [BRAND, heading(120)],
+			draftRevision: installed.draftRevision + 1,
+		} as DbGraphicStyleSet);
+
+		const raced = await installGraphicStyleSetPackage({
+			archive: newer,
+			resolution: 'preserve-identity',
+			ports: receiver.ports,
+			confirmedFingerprint: proposal.report.fingerprint,
+			now: NOW,
+		});
+
+		// The write is conditional on the draft revision the *report* recorded, so the
+		// edit made in the meantime is not silently replaced by the packaged entries.
+		expect(raced.outcome).not.toBe('installed');
+		expect(receiver.rows.get(SOURCE_ID)?.draft).toEqual([BRAND, heading(120)]);
+		expect(receiver.rows.get(SOURCE_ID)?.revision).toBe(3);
 	});
 });

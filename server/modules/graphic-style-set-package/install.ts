@@ -32,7 +32,8 @@ import { graphicStyleSetPackagePreflight } from './preflight';
  * The one write that *could* race is an update: a concurrent publish or draft edit
  * between the report and the write would install entries over something the author
  * never saw. So it is a conditional update on the exact revision and draft revision the
- * proposal was decided against, and a write that matches nothing installs nothing.
+ * report* recorded — never on a fresh read, which would only ever guard the moment
+ * between that read and the write — and a write that matches nothing installs nothing.
  */
 
 export interface GraphicStyleSetPackageInstallPorts {
@@ -79,7 +80,11 @@ export type GraphicStyleSetPackageInstallOutcome
 	| { outcome: 'rejected'; report: GraphicStyleSetPackagePreflightReport }
 	/** The proposal carries warnings and no confirmation covers this exact fingerprint. */
 	| { outcome: 'requires-confirmation'; report: GraphicStyleSetPackagePreflightReport }
-	/** The installed Graphic Style Set moved between the report and the write. */
+	/**
+	 * The installed Graphic Style Set moved between the report and the write — published,
+	 * edited, or deleted. Nothing was written, and a fresh report shows the library as it
+	 * now stands.
+	 */
 	| { outcome: 'conflict'; report: GraphicStyleSetPackagePreflightReport };
 
 export interface InstallGraphicStyleSetPackageInput
@@ -117,8 +122,10 @@ export async function installGraphicStyleSetPackage(
 			// the draft revision and the updated-at of a Style Set nothing about has
 			// changed, and would make a repeated import look like an edit to every author
 			// watching the library.
-			const installed = await requireInstalled(ports, snapshot.id);
-			return { outcome: 'already-installed', report, styleSet: installed };
+			const installed = await ports.findInstalledRow(snapshot.id);
+			return installed
+				? { outcome: 'already-installed', report, styleSet: installed }
+				: { outcome: 'conflict', report };
 		}
 
 		case 'install-new': {
@@ -148,13 +155,19 @@ export async function installGraphicStyleSetPackage(
 		}
 
 		case 'update-installed': {
-			const installed = await requireInstalled(ports, snapshot.id);
+			// Both preconditions come from the report, so the window they guard is the
+			// whole time since the author read it. Taking either from a fresh read would
+			// guard only the microseconds after that read — and the draft revision is
+			// precisely what stops an edit made in the meantime being replaced by the
+			// packaged entries without anybody having agreed to it.
+			if (report.installedRevision === undefined || report.installedDraftRevision === undefined)
+				return { outcome: 'conflict', report };
 			const republished = await ports.republish({
 				id: snapshot.id,
 				revision: snapshot.revision,
 				entries: snapshot.entries,
-				expectedRevision: report.installedRevision ?? installed.revision,
-				expectedDraftRevision: installed.draftRevision,
+				expectedRevision: report.installedRevision,
+				expectedDraftRevision: report.installedDraftRevision,
 			});
 			if (!republished)
 				return { outcome: 'conflict', report };
@@ -170,29 +183,5 @@ export async function installGraphicStyleSetPackage(
 
 		case 'rejected':
 			return { outcome: 'rejected', report };
-	}
-}
-
-/**
- * The installed Style Set a disposition already proved is there.
- *
- * It can only be absent if it was deleted between the report and this read, which is
- * the same race the conditional update refuses — reported the same way rather than as
- * an exception, so a caller has one thing to handle.
- */
-async function requireInstalled(
-	ports: GraphicStyleSetPackageInstallPorts,
-	styleSetId: string,
-): Promise<DbGraphicStyleSet> {
-	const installed = await ports.findInstalledRow(styleSetId);
-	if (!installed)
-		throw new GraphicStyleSetPackageRaceError(styleSetId);
-	return installed;
-}
-
-export class GraphicStyleSetPackageRaceError extends Error {
-	constructor(readonly styleSetId: string) {
-		super(`Graphic Style Set ${styleSetId} changed while its package was being installed`);
-		this.name = 'GraphicStyleSetPackageRaceError';
 	}
 }

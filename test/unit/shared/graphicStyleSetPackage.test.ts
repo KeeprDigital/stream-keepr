@@ -146,7 +146,7 @@ describe('reading a received Graphic Style Set Package manifest', () => {
 				entry: GRAPHIC_STYLE_SET_PACKAGE_STYLE_SET_ENTRY,
 			},
 			applicationCapabilities: [],
-			totals: { entryCount: 2, expandedByteLength: 1024 },
+			totals: { archiveEntryCount: 2, expandedByteLength: 1024 },
 			...overrides,
 		};
 	}
@@ -183,7 +183,7 @@ describe('reading a received Graphic Style Set Package manifest', () => {
 
 	it('refuses a manifest that does not agree with its own totals', () => {
 		const read = readGraphicStyleSetPackageManifest(manifest({
-			totals: { entryCount: 5, expandedByteLength: 1024 },
+			totals: { archiveEntryCount: 5, expandedByteLength: 1024 },
 		}));
 		expect(read).toMatchObject({ outcome: 'rejected', issues: [{ code: 'invalid-package-manifest' }] });
 	});
@@ -262,28 +262,51 @@ describe('what installing a Graphic Style Set Package would do', () => {
 		]);
 	});
 
-	it('refuses to publish an update over unpublished draft changes it would discard', () => {
+	it('names an unpublished draft an update would discard, without refusing the update', () => {
 		const decided = graphicStyleSetPackageDisposition({
 			packaged: packaged({ revision: 4 }),
 			installed: installed({ hasUnpublishedChanges: true }),
 			resolution: 'preserve-identity',
 		});
-		expect(decided.disposition).toBe('rejected');
+		// Replacing one whole Style Set with another is not a field merge, and the
+		// glossary says a newer revision *may* update the installed one — so the author
+		// is told what they would lose rather than being refused.
+		expect(decided.disposition).toBe('update-installed');
 		expect(decided.issues).toMatchObject([
-			{ code: 'graphic-style-set-draft-diverged', severity: 'error' },
+			{ code: 'graphic-style-set-revision-updated', severity: 'warning' },
+			{ code: 'graphic-style-set-draft-discarded', severity: 'warning' },
 		]);
 	});
 
-	it('refuses to install over an identity that exists here and has never been published', () => {
+	it('refuses an identity that exists here and has never been published', () => {
 		const decided = graphicStyleSetPackageDisposition({
 			packaged: packaged(),
 			installed: installed({ revision: 0, published: null, hasUnpublishedChanges: true }),
 			resolution: 'preserve-identity',
 		});
+		// There is no installed revision for the package to be newer, older, or the same
+		// as, so nothing decides what installing it would mean.
 		expect(decided.disposition).toBe('rejected');
 		expect(decided.issues).toMatchObject([
-			{ code: 'graphic-style-set-draft-diverged', severity: 'error' },
+			{ code: 'graphic-style-set-identity-unpublished', severity: 'error' },
 		]);
+	});
+
+	it('gives every issue it raises a remediation, whatever the relation', () => {
+		const relations = [
+			{ packaged: packaged(), installed: undefined },
+			{ packaged: packaged({ name: 'Renamed' }), installed: installed() },
+			{ packaged: packaged({ revision: 2 }), installed: installed() },
+			{ packaged: packaged({ revision: 4 }), installed: installed({ hasUnpublishedChanges: true }) },
+			{ packaged: packaged({ entries: [BRAND, heading('inter', 72)] }), installed: installed() },
+			{ packaged: packaged(), installed: installed({ revision: 0, published: null }) },
+		] as const;
+
+		for (const relation of relations) {
+			const decided = graphicStyleSetPackageDisposition({ ...relation, resolution: 'preserve-identity' });
+			for (const issue of decided.issues)
+				expect(issue.remediation.length, issue.code).toBeGreaterThan(0);
+		}
 	});
 
 	it.each([

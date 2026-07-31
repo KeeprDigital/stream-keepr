@@ -1,7 +1,4 @@
-import type {
-	GraphicStyleSetPackagePreflightIssue,
-	GraphicStyleSetPackageWarningCode,
-} from '~~/shared/types/graphicStyleSetPackage';
+import type { GraphicStyleSetPackagePreflightIssue } from '~~/shared/types/graphicStyleSetPackage';
 import { GRAPHIC_STYLE_SET_PACKAGE_LIMITS } from '~~/shared/types/graphicStyleSetPackage';
 
 /**
@@ -16,6 +13,12 @@ import { GRAPHIC_STYLE_SET_PACKAGE_LIMITS } from '~~/shared/types/graphicStyleSe
  * The list is closed rather than partial so a code with no Style Set remediation
  * cannot be raised at all: a report that named a condition and left the author to
  * guess what to do about it is the failure this table exists to prevent.
+ *
+ * This is one of exactly two such tables, and together they are total over every code
+ * a report can carry. The other — `GRAPHIC_STYLE_SET_PACKAGE_REMEDIATION`, raised
+ * through `graphicStyleSetPackageIssue` — covers the Style Set's own vocabulary and
+ * lives beside those codes, because they are decided by a pure function that knows
+ * nothing about archives.
  */
 export const GRAPHIC_STYLE_SET_PACKAGE_ENVELOPE_ERROR_CODES = [
 	'malformed-package-archive',
@@ -74,14 +77,6 @@ const ENVELOPE_REMEDIATION = {
 	'package-content-digest-mismatch': 'The packaged Graphic Style Set does not match the digest its manifest records. Retransfer the package, or obtain it again from its source.',
 } as const satisfies Record<GraphicStyleSetPackageEnvelopeErrorCode, string>;
 
-const WARNING_REMEDIATION = {
-	'package-schema-migrated': 'The package was migrated to the current schema while it was read. Review the proposed result and confirm to continue.',
-	'graphic-style-set-name-differs': 'Confirm to keep the installed name; the packaged name is not applied.',
-	'graphic-style-set-revision-updated': 'Every linked template is offered the change as an available style update to review; none of them is rewritten by this install.',
-	'graphic-style-set-template-affected': 'Review this template and apply the style update to it, or leave it on the revision it is reconciled to.',
-	'graphic-style-set-installed-as-copy': 'Nothing links to the copy until a template selects entries from it.',
-} as const satisfies Record<GraphicStyleSetPackageWarningCode, string>;
-
 export function graphicStyleSetPackageEnvelopeIssue(
 	code: GraphicStyleSetPackageEnvelopeErrorCode,
 	input: { message: string; subject?: string },
@@ -92,19 +87,6 @@ export function graphicStyleSetPackageEnvelopeIssue(
 		subject: input.subject,
 		message: input.message,
 		remediation: ENVELOPE_REMEDIATION[code],
-	};
-}
-
-export function graphicStyleSetPackageWarning(
-	code: GraphicStyleSetPackageWarningCode,
-	input: { message: string; subject?: string },
-): GraphicStyleSetPackagePreflightIssue {
-	return {
-		code,
-		severity: 'warning',
-		subject: input.subject,
-		message: input.message,
-		remediation: WARNING_REMEDIATION[code],
 	};
 }
 

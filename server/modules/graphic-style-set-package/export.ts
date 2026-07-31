@@ -19,6 +19,7 @@ import {
 } from '~~/shared/modules/graphic-style-sets';
 import {
 	GRAPHIC_STYLE_SET_PACKAGE_ARTIFACT_KIND,
+	GRAPHIC_STYLE_SET_PACKAGE_EXPORT_REMEDIATION,
 	GRAPHIC_STYLE_SET_PACKAGE_KIND,
 	GRAPHIC_STYLE_SET_PACKAGE_LIMITS,
 	GRAPHIC_STYLE_SET_PACKAGE_MANIFEST_ENTRY,
@@ -36,17 +37,6 @@ import {
  * up to two hundred entries and an author fixes them in one sitting.
  */
 
-const ISSUE_REMEDIATION = {
-	'graphic-style-set-never-published': 'A package carries what a Graphic Style Set publishes, not what it is being edited into. Publish this Graphic Style Set, then export it.',
-	'graphic-style-set-unresolvable': 'The published entries do not resolve here, so no installation could publish them either. Correct the entries and publish again before exporting.',
-	'undeclared-graphic-asset-dependency': 'A Graphic Style Set Package does not yet carry Graphics Asset Library content. Replace the entry\'s library selection with an application font before exporting.',
-	'executable-graphic-style-set-content': 'Packages are data-only. Remove the executable value from the entry before exporting.',
-	'remote-resource-dependency': 'A package cannot depend on a remote resource. Remove the remote reference from the entry before exporting.',
-	'invalid-graphic-style-set-document': 'The Graphic Style Set must be plain data. Remove the unsupported value before exporting.',
-	'package-expanded-limit-exceeded': `A Graphic Style Set Package may expand to at most ${GRAPHIC_STYLE_SET_PACKAGE_LIMITS.maximumExpandedByteLength} bytes. Reduce the number or size of the Style Set's entries.`,
-	'package-archive-limit-exceeded': `A Graphic Style Set Package archive may be at most ${GRAPHIC_STYLE_SET_PACKAGE_LIMITS.maximumArchiveByteLength} bytes. Reduce the number or size of the Style Set's entries.`,
-} as const satisfies Record<GraphicStyleSetPackageExportIssueCode, string>;
-
 function exportIssue(
 	code: GraphicStyleSetPackageExportIssueCode,
 	input: { message: string; entryId?: string },
@@ -55,7 +45,7 @@ function exportIssue(
 		code,
 		entryId: input.entryId,
 		message: input.message,
-		remediation: ISSUE_REMEDIATION[code],
+		remediation: GRAPHIC_STYLE_SET_PACKAGE_EXPORT_REMEDIATION[code],
 	};
 }
 
@@ -183,7 +173,10 @@ export async function exportGraphicStyleSetPackage(input: {
 			entry: GRAPHIC_STYLE_SET_PACKAGE_STYLE_SET_ENTRY,
 		},
 		applicationCapabilities: graphicStyleSetPackageCapabilities(snapshot.entries),
-		totals: { entryCount: 2, expandedByteLength: 0 },
+		totals: {
+			archiveEntryCount: GRAPHIC_STYLE_SET_PACKAGE_LIMITS.maximumEntryCount,
+			expandedByteLength: 0,
+		},
 	};
 	// The manifest records the expanded size it is itself part of. Re-encoding only
 	// ever widens the recorded number, so this settles on a fixed point.

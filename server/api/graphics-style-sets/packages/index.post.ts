@@ -1,8 +1,5 @@
 import { mapGraphicStyleSetToResponse } from '~~/server/mappers/graphicStyleSet';
-import {
-	GraphicStyleSetPackageRaceError,
-	installGraphicStyleSetPackage,
-} from '~~/server/modules/graphic-style-set-package';
+import { installGraphicStyleSetPackage } from '~~/server/modules/graphic-style-set-package';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { graphicStyleSetPackageInstallQuerySchema } from '~~/server/schemas/api/graphicStyleSetPackage';
 import {
@@ -43,18 +40,6 @@ export default defineEventHandler(async (event) => {
 		confirmedFingerprint: query.fingerprint,
 		ports: graphicStyleSetPackagePorts(),
 		now: () => new Date(),
-	}).catch((error) => {
-		// The Style Set was deleted between the report and the write. Reported as the
-		// conflict it is rather than as a server fault: the author reruns preflight and
-		// sees the library as it now stands.
-		if (error instanceof GraphicStyleSetPackageRaceError) {
-			throw createError({
-				statusCode: 409,
-				statusMessage: 'Conflict',
-				message: 'This Graphic Style Set changed while its package was being installed',
-			});
-		}
-		throw error;
 	});
 
 	switch (outcome.outcome) {
@@ -77,10 +62,12 @@ export default defineEventHandler(async (event) => {
 			});
 
 		case 'conflict':
+			// Published, edited, or deleted since the package was inspected. Nothing was
+			// written; the author reruns preflight and sees the library as it now stands.
 			throw createError({
 				statusCode: 409,
 				statusMessage: 'Conflict',
-				message: 'This Graphic Style Set has been published or edited since its package was inspected',
+				message: 'This Graphic Style Set has changed since its package was inspected',
 				data: { report: outcome.report },
 			});
 

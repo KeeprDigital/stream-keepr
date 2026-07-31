@@ -156,6 +156,7 @@ export interface GraphicStyleSetPackageManifest {
 		revision: number;
 		/** SHA-256 over the canonical form of the snapshot's entries. */
 		contentDigest: string;
+		/** How many entries the Style Set holds — never an archive file count. */
 		entryCount: number;
 		entry: string;
 	};
@@ -166,7 +167,8 @@ export interface GraphicStyleSetPackageManifest {
 	 */
 	applicationCapabilities: readonly TemplatePackageCapabilityDeclaration[];
 	totals: {
-		entryCount: number;
+		/** How many files the archive carries — never a Style Set entry count. */
+		archiveEntryCount: number;
 		expandedByteLength: number;
 	};
 }
@@ -195,6 +197,25 @@ export const GRAPHIC_STYLE_SET_PACKAGE_EXPORT_ISSUE_CODES = [
 	'package-expanded-limit-exceeded',
 	'package-archive-limit-exceeded',
 ] as const;
+
+/**
+ * The remediation each export refusal carries.
+ *
+ * Beside the codes rather than beside the exporter, for the same reason the receiving
+ * side's tables are beside theirs: a code with no guidance is a report that names a
+ * condition and leaves the author to guess what to do about it, and `satisfies` is what
+ * makes adding a code without guidance impossible.
+ */
+export const GRAPHIC_STYLE_SET_PACKAGE_EXPORT_REMEDIATION = {
+	'graphic-style-set-never-published': 'A package carries what a Graphic Style Set publishes, not what it is being edited into. Publish this Graphic Style Set, then export it.',
+	'graphic-style-set-unresolvable': 'The published entries do not resolve here, so no installation could publish them either. Correct the entries and publish again before exporting.',
+	'undeclared-graphic-asset-dependency': 'A Graphic Style Set Package does not yet carry Graphics Asset Library content. Replace the entry\'s library selection with an application font before exporting.',
+	'executable-graphic-style-set-content': 'Packages are data-only. Remove the executable value from the entry before exporting.',
+	'remote-resource-dependency': 'A package cannot depend on a remote resource. Remove the remote reference from the entry before exporting.',
+	'invalid-graphic-style-set-document': 'The Graphic Style Set must be plain data. Remove the unsupported value before exporting.',
+	'package-expanded-limit-exceeded': `A Graphic Style Set Package may expand to at most ${GRAPHIC_STYLE_SET_PACKAGE_LIMITS.maximumExpandedByteLength} bytes. Reduce the number or size of the Style Set's entries.`,
+	'package-archive-limit-exceeded': `A Graphic Style Set Package archive may be at most ${GRAPHIC_STYLE_SET_PACKAGE_LIMITS.maximumArchiveByteLength} bytes. Reduce the number or size of the Style Set's entries.`,
+} as const satisfies Record<GraphicStyleSetPackageExportIssueCode, string>;
 
 export type GraphicStyleSetPackageExportIssueCode
 	= typeof GRAPHIC_STYLE_SET_PACKAGE_EXPORT_ISSUE_CODES[number];
@@ -230,6 +251,8 @@ export interface GraphicStyleSetPackageExportReport {
  */
 export const GRAPHIC_STYLE_SET_PACKAGE_ERROR_CODES = [
 	'invalid-graphic-style-set-document',
+	/** A value a renderer would execute rather than draw. Packages are data-only. */
+	'executable-graphic-style-set-content',
 	/**
 	 * The packaged entries do not resolve under this installation's vocabulary — a
 	 * dangling reference, a kind mismatch, a cycle, an entry schema this build does not
@@ -250,11 +273,14 @@ export const GRAPHIC_STYLE_SET_PACKAGE_ERROR_CODES = [
 	 */
 	'graphic-style-set-revision-superseded',
 	/**
-	 * The installed Style Set has unpublished draft changes an update would discard.
-	 * Imports never field-merge Style Sets, and overwriting an author's working draft
-	 * is a merge decision by another name.
+	 * A Style Set with the packaged identity exists here and has never been published.
+	 *
+	 * There is no installed revision for the package to relate to, so nothing decides
+	 * whether it is newer, older, or the same — and the row is somebody's working draft.
+	 * Distinct from a diverged draft, which *does* have an installed revision and so can
+	 * be offered as an update the author confirms.
 	 */
-	'graphic-style-set-draft-diverged',
+	'graphic-style-set-identity-unpublished',
 ] as const;
 
 /**
@@ -271,6 +297,16 @@ export const GRAPHIC_STYLE_SET_PACKAGE_WARNING_CODES = [
 	'graphic-style-set-template-affected',
 	/** The author chose a new identity, so nothing here links to the result yet. */
 	'graphic-style-set-installed-as-copy',
+	/**
+	 * The installed Style Set has unpublished draft changes this update would discard.
+	 *
+	 * A warning rather than a refusal, because the glossary says a newer revision "may
+	 * explicitly update the installed Style Set" and discarding a draft is not a merge —
+	 * it is one whole thing replacing another, which is exactly what every disposition
+	 * here does. What it is not is something an import may do *quietly*, so the author
+	 * is told what they would lose and confirms it against that exact draft.
+	 */
+	'graphic-style-set-draft-discarded',
 ] as const;
 
 export type GraphicStyleSetPackageErrorCode
@@ -278,6 +314,32 @@ export type GraphicStyleSetPackageErrorCode
 
 export type GraphicStyleSetPackageWarningCode
 	= typeof GRAPHIC_STYLE_SET_PACKAGE_WARNING_CODES[number];
+
+/**
+ * The remediation each Style-Set-specific preflight issue carries.
+ *
+ * Beside the codes, so the envelope's table (which lives with the archive reader) and
+ * this one together cover every code a report can carry, each total over its own half.
+ * Splitting them that way is what keeps the archive vocabulary shared with the Template
+ * Package while the guidance stays about a Graphic Style Set.
+ */
+export const GRAPHIC_STYLE_SET_PACKAGE_REMEDIATION = {
+	'invalid-graphic-style-set-document': 'The document is not a Graphic Style Set this installation reads. Ask the sender to export it from a compatible version.',
+	'executable-graphic-style-set-content': 'Packages are data-only. Ask the sender to remove the executable value from the Graphic Style Set before exporting.',
+	'graphic-style-set-unpublishable': 'Ask the sender to correct the reported entries and publish the Graphic Style Set again before exporting it.',
+	'graphic-style-set-revision-conflict': 'Two installations published different entries as the same revision of this Graphic Style Set. Install it as an independent copy, or reconcile the two by hand and publish a newer revision on one of them.',
+	'graphic-style-set-revision-superseded': 'This installation already holds a newer revision of this Graphic Style Set. Export the newer one instead, or install this package as an independent copy.',
+	'graphic-style-set-identity-unpublished': 'A Graphic Style Set with this identity exists here and has never been published, so there is no revision for this package to relate to. Publish or delete it first, or install this package as an independent copy.',
+	'package-schema-migrated': 'The package was migrated to the current schema while it was read. Review the proposed result and confirm to continue.',
+	'graphic-style-set-name-differs': 'Confirm to keep the installed name; the packaged name is not applied.',
+	'graphic-style-set-revision-updated': 'Every linked template is offered the change as an available style update to review; none of them is rewritten by this install.',
+	'graphic-style-set-template-affected': 'Review this template and apply the style update to it, or leave it on the revision it is reconciled to.',
+	'graphic-style-set-installed-as-copy': 'Nothing links to the copy until a template selects entries from it.',
+	'graphic-style-set-draft-discarded': 'Publish or revert the draft first if you want to keep it, or install this package as an independent copy. Confirming replaces the draft with the packaged entries.',
+} as const satisfies Record<
+	GraphicStyleSetPackageErrorCode | GraphicStyleSetPackageWarningCode,
+	string
+>;
 
 /**
  * Every code a `.skstyle` preflight issue may carry: the shared archive and envelope
@@ -359,13 +421,23 @@ export interface GraphicStyleSetPackagePreflightReport {
 	/** Absent when the archive or manifest could not be read at all. */
 	provenance?: GraphicStyleSetPackageProvenance;
 	styleSetName?: string;
-	entryCount?: number;
+	/** How many entries the packaged Style Set holds — never an archive file count. */
+	styleSetEntryCount?: number;
 	resolution: GraphicStyleSetPackageResolution;
 	disposition: GraphicStyleSetPackageDisposition;
 	/** The local identity the install would write, once one is decided. */
 	targetStyleSetId?: string;
 	/** The revision installed here for this identity, where one is installed. */
 	installedRevision?: number;
+	/**
+	 * The draft revision the installed Style Set was at when this proposal was decided.
+	 *
+	 * Carried on the report rather than re-read at installation, and that is the whole
+	 * point: it is the compare-and-swap token the write is conditional on, so a draft
+	 * edit landing at any moment after the author saw this report refuses the write
+	 * instead of being silently replaced by the packaged entries.
+	 */
+	installedDraftRevision?: number;
 	/**
 	 * Templates that would be offered an available style update. Named rather than
 	 * counted, for the same reason a publish names them: an author who is about to
@@ -378,7 +450,8 @@ export interface GraphicStyleSetPackagePreflightReport {
 	limits: typeof GRAPHIC_STYLE_SET_PACKAGE_LIMITS;
 	observed: {
 		archiveByteLength: number;
-		entryCount: number;
+		/** How many files the archive carries — never a Style Set entry count. */
+		archiveEntryCount: number;
 		expandedByteLength: number;
 	};
 	/**
