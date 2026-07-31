@@ -3,13 +3,24 @@ import type {
 	STATIC_FONT_COMPATIBILITY_PROFILE,
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
 } from '../utils/graphicsAssetCompatibility';
+import type {
+	GRAPHICS_DISCREPANCY_ACTIONS,
+	GRAPHICS_DISCREPANCY_KINDS,
+	GRAPHICS_DISCREPANCY_REASON_CODES,
+	GRAPHICS_DISCREPANCY_RESOLUTIONS,
+	GRAPHICS_DISCREPANCY_STATES,
+	GRAPHICS_RECONCILIATION_EVIDENCE_CATEGORIES,
+	GRAPHICS_REPAIR_REJECTION_CODES,
+} from '../utils/graphicsAssetReconciliation';
 import type { GRAPHICS_RETENTION_EVIDENCE_CATEGORIES } from '../utils/graphicsAssetRetention';
+import type { TemplatePackagePreflightReport } from './templatePackage';
 
 declare const graphicAssetIdBrand: unique symbol;
 declare const graphicAssetRevisionIdBrand: unique symbol;
 declare const graphicsDerivativeIdBrand: unique symbol;
 declare const graphicsIngestionOperationIdBrand: unique symbol;
 declare const graphicsIngestionPartIdentityBrand: unique symbol;
+declare const installedGraphicsTemplateIdBrand: unique symbol;
 
 export const DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES = 100 * 1024 * 1024 * 1024;
 export const DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES = 10 * 1024 * 1024 * 1024;
@@ -33,6 +44,10 @@ export type GraphicsIngestionOperationId = string & {
 
 export type GraphicsIngestionPartIdentity = string & {
 	readonly [graphicsIngestionPartIdentityBrand]: 'GraphicsIngestionPartIdentity';
+};
+
+export type InstalledGraphicsTemplateId = string & {
+	readonly [installedGraphicsTemplateIdBrand]: 'InstalledGraphicsTemplateId';
 };
 
 export interface GraphicAssetReference {
@@ -151,6 +166,12 @@ export type GraphicsIngestionStage
 		| 'validating'
 		| 'generating-derivatives'
 		| 'awaiting-confirmation'
+		/**
+		 * A Template Package whose preflight succeeded and whose proposal the
+		 * author accepted, holding its verified staged result until installation
+		 * publishes it. Nothing it proposes is discoverable or addressable here.
+		 */
+		| 'awaiting-installation'
 		| 'publishing'
 		| 'completed'
 		| 'failed'
@@ -343,9 +364,70 @@ export interface GraphicsIngestionFailure {
 		| 'catalogue-publication-failed'
 		| 'ingestion-processing-failed'
 		| 'validation-failed'
+		| 'template-package-mapping-unavailable'
 		| 'remote-source-rejected';
 	retryable: boolean;
 	message: string;
+}
+
+/**
+ * What one packaged identity actually became locally.
+ *
+ * The compatibility profile is the installed revision's own, not the packaged
+ * bytes': an exact-origin reuse keeps whatever the local revision already
+ * earned, so a caller reading this learns the truth about the revision its
+ * Template now pins rather than what the sender happened to ship.
+ */
+export interface InstalledTemplatePackageAsset {
+	packagedId: string;
+	/** Whether this identity created a local Graphic Asset or reused one. */
+	outcome: 'created' | 'reused';
+	basis: 'exact-origin' | 'related-origin-revision' | 'shared-content-digest' | 'new-content';
+	assetId: GraphicAssetId;
+	revisionId: GraphicAssetRevisionId;
+	name: string;
+	kind: 'image' | 'silent-video' | 'font';
+	compatibilityProfile: string;
+}
+
+/** What one complete Template Package installation published. */
+export interface TemplatePackageInstallationResult {
+	templateId: InstalledGraphicsTemplateId;
+	templateKind: InstalledGraphicsTemplateKind;
+	templateName: string;
+	/** Every packaged identity, whichever way it resolved locally. */
+	assets: InstalledTemplatePackageAsset[];
+}
+
+export const INSTALLED_GRAPHICS_TEMPLATE_KINDS = [
+	'broadcast-graphic',
+	'feature-match-layout',
+] as const;
+
+export type InstalledGraphicsTemplateKind = typeof INSTALLED_GRAPHICS_TEMPLATE_KINDS[number];
+
+/**
+ * One graphics Template a Template Package installed into this installation.
+ *
+ * Its document is an independent local copy whose Graphic Asset References are
+ * already rewritten to exact local identities and revisions, so it is valid the
+ * instant it becomes visible. It records the source Template identity as
+ * provenance only: there is no link back to the installation that exported it.
+ */
+export interface InstalledGraphicsTemplate {
+	id: InstalledGraphicsTemplateId;
+	kind: InstalledGraphicsTemplateKind;
+	name: string;
+	revisionNumber: number;
+	document: unknown;
+	sourceTemplateIdentity: string;
+	installedByOperationId: GraphicsIngestionOperationId;
+	eventId?: number;
+	references: {
+		ownerSlot: string;
+		reference: GraphicAssetReference;
+	}[];
+	installedAt: string;
 }
 
 export type GraphicsIngestionCapacityOutcome
@@ -392,11 +474,28 @@ export interface GraphicsIngestionOperation extends GraphicAssetSourceDeclaratio
 	stage: GraphicsIngestionStage;
 	canonicalCapacityOutcome?: GraphicsIngestionCapacityOutcome;
 	report?: GraphicAssetValidationReport;
+	/**
+	 * The immutable Template Package preflight result, present only on a
+	 * `template-package` operation that has produced one. It travels with the
+	 * operation so one read answers what was proposed, what it would cost, and
+	 * whether the author still has something to confirm.
+	 */
+	templatePackagePreflight?: TemplatePackagePreflightReport;
 	result?: {
 		outcome: 'published' | 'reused' | 'revision-created' | 'replacement-noop';
 		assetId: GraphicAssetId;
 		revisionId: GraphicAssetRevisionId;
 	};
+	/**
+	 * The terminal result of one Template Package installation, present only on a
+	 * `template-package` operation that published one.
+	 *
+	 * A package's result is meaningful only as the complete set it published
+	 * together — one Template and every local revision its rewritten references
+	 * pin — so it is recorded beside the single-revision result the other
+	 * ingestion paths produce rather than pretending to be one.
+	 */
+	templatePackageInstallation?: TemplatePackageInstallationResult;
 	failure?: GraphicsIngestionFailure;
 	createdAt: string;
 	updatedAt: string;
@@ -461,11 +560,21 @@ export type GraphicAssetRevisionRetention
 export type GraphicsRetentionEvidenceCategory
 	= typeof GRAPHICS_RETENTION_EVIDENCE_CATEGORIES[number];
 
+export type GraphicsReconciliationEvidenceCategory
+	= typeof GRAPHICS_RECONCILIATION_EVIDENCE_CATEGORIES[number];
+
+/** Every category the one shared Evidence ledger accepts. */
+export type GraphicsAssetEvidenceCategory
+	= | GraphicsRetentionEvidenceCategory
+		| GraphicsReconciliationEvidenceCategory;
+
 export type GraphicsAssetEvidenceSubjectKind
 	= | 'graphics-ingestion-operation'
 		| 'graphic-asset'
 		| 'graphic-asset-revision'
-		| 'graphic-asset-content';
+		| 'graphic-asset-content'
+		| 'graphics-derivative'
+		| 'graphics-discrepancy';
 
 /**
  * One durable administrator-facing record of an automated lifecycle decision.
@@ -475,7 +584,7 @@ export type GraphicsAssetEvidenceSubjectKind
 export interface GraphicsAssetEvidenceEntry {
 	id: string;
 	recordedAt: string;
-	category: GraphicsRetentionEvidenceCategory;
+	category: GraphicsAssetEvidenceCategory;
 	actor: string;
 	subject: {
 		kind: GraphicsAssetEvidenceSubjectKind;
@@ -495,6 +604,15 @@ export interface GraphicsAssetEvidenceEntry {
 		canonicalUsedBytes?: number;
 		canonicalLimitBytes?: number;
 		canonicalPressure?: GraphicsCanonicalCapacityPressure;
+		/** Which disagreement an entry explains, for reconciliation categories. */
+		discrepancyKind?: GraphicsDiscrepancyKind;
+		discrepancyId?: string;
+		reasonCode?: GraphicsDiscrepancyReasonCode;
+		rejectionCode?: GraphicsRepairRejectionCode;
+		/** How many pinned revisions the discrepancy affected; all stay intact. */
+		affectedRevisionCount?: number;
+		/** Whether the incident fails closed and is excluded from automatic action. */
+		isolated?: boolean;
 	};
 	expiresAt: string;
 }
@@ -567,7 +685,7 @@ export interface GraphicAssetRetentionView {
 export interface GraphicsContentQuarantineDeadline {
 	id: string;
 	byteLength: number;
-	origin: 'orphaned-content' | 'abandoned-canonical-write';
+	origin: 'orphaned-content' | 'abandoned-canonical-write' | 'unexpected-object';
 	quarantinedAt: string;
 	deleteAfter: string;
 }
@@ -607,6 +725,143 @@ export type GraphicAssetPurgeOutcome
 	| {
 		outcome: 'in-use';
 		usage: GraphicAssetUsage[];
+	};
+
+export type GraphicsDiscrepancyKind = typeof GRAPHICS_DISCREPANCY_KINDS[number];
+export type GraphicsDiscrepancyState = typeof GRAPHICS_DISCREPANCY_STATES[number];
+export type GraphicsDiscrepancyReasonCode = typeof GRAPHICS_DISCREPANCY_REASON_CODES[number];
+export type GraphicsDiscrepancyResolution = typeof GRAPHICS_DISCREPANCY_RESOLUTIONS[number];
+export type GraphicsDiscrepancyAction = typeof GRAPHICS_DISCREPANCY_ACTIONS[number];
+export type GraphicsRepairRejectionCode = typeof GRAPHICS_REPAIR_REJECTION_CODES[number];
+
+/**
+ * One pinned use a discrepancy currently affects. Reconciliation never
+ * redirects, rewrites, or clears any of them: they are reported so an
+ * administrator can see the blast radius before acting.
+ */
+export interface GraphicsDiscrepancyUsage {
+	assetId: GraphicAssetId;
+	assetName: string;
+	revisionId: GraphicAssetRevisionId;
+	revisionNumber: number;
+	kind: 'image' | 'silent-video' | 'font';
+	lifecycleState: GraphicAssetLifecycleState;
+	referenceCount: number;
+}
+
+/**
+ * One durable disagreement between the catalogue and the canonical byte store,
+ * with the structured evidence behind it and exactly the actions valid in its
+ * current state.
+ *
+ * Identities here are opaque domain identities. A discrepancy never exposes an
+ * object key, a content digest, a bucket, or a provider URL.
+ */
+export interface GraphicsDiscrepancy {
+	id: string;
+	kind: GraphicsDiscrepancyKind;
+	state: GraphicsDiscrepancyState;
+	reasonCode: GraphicsDiscrepancyReasonCode;
+	/** A critical integrity incident fails closed and is never repaired in place. */
+	isolated: boolean;
+	detectedAt: string;
+	lastCheckedAt: string;
+	resolvedAt?: string;
+	resolution?: GraphicsDiscrepancyResolution;
+	/** What D1 says the library should be able to reach. */
+	expected: {
+		byteLength: number;
+		canonicalMime?: string;
+	};
+	/** What the canonical byte store actually reported at `lastCheckedAt`. */
+	observed: {
+		present: boolean;
+		byteLength?: number;
+		canonicalMime?: string;
+		/** Set when the byte store itself could not answer, rather than disagreeing. */
+		byteStoreUnavailable?: boolean;
+	};
+	affectedUsage: GraphicsDiscrepancyUsage[];
+	derivative?: {
+		id: GraphicsDerivativeId;
+		kind: 'thumbnail' | 'video-poster' | 'font-specimen';
+		sourceAssetId: GraphicAssetId;
+		sourceRevisionId: GraphicAssetRevisionId;
+		/** Regeneration is possible only while the canonical source content resolves. */
+		sourceAvailable: boolean;
+	};
+	/** Present when quarantined bytes are still holding an exact copy. */
+	quarantine?: {
+		quarantinedAt: string;
+		deleteAfter: string;
+	};
+	actions: GraphicsDiscrepancyAction[];
+}
+
+export interface GraphicsReconciliationSweepResult {
+	correlationId: string;
+	startedAt: string;
+	completedAt: string;
+	content: {
+		checked: number;
+		unavailableDetected: number;
+		availabilityRestored: number;
+	};
+	derivatives: {
+		missingDetected: number;
+	};
+	unexpectedObjects: {
+		scanned: number;
+		quarantined: number;
+	};
+	criticalIntegrityIncidents: number;
+	workingCopies: {
+		reclaimed: number;
+	};
+	evidence: {
+		recorded: number;
+	};
+}
+
+/**
+ * The Operations cockpit view of catalogue-versus-byte-store health. It states
+ * the authority contract explicitly so a reader never has to infer whether the
+ * catalogue's availability flag or the byte store wins.
+ */
+export interface GraphicsReconciliationOverview {
+	checkedAt: string;
+	authority: {
+		/** D1 decides what the library expects to reach. */
+		expectedReachability: 'catalogue';
+		/** R2 decides which bytes exist right now. */
+		presentBytes: 'byte-store';
+		/** The catalogue availability flag is maintained state, never a read authority. */
+		contentAvailabilityFlag: 'advisory-reconciliation-state';
+	};
+	lastSweep?: {
+		correlationId: string;
+		startedAt: string;
+		completedAt: string;
+	};
+	openCounts: Record<GraphicsDiscrepancyKind, number>;
+	discrepancies: GraphicsDiscrepancy[];
+}
+
+export type GraphicsDiscrepancyActionOutcome
+	= | {
+		outcome: 'resolved';
+		resolution: GraphicsDiscrepancyResolution;
+		discrepancy: GraphicsDiscrepancy;
+	}
+	| {
+		outcome: 'unchanged';
+		discrepancy: GraphicsDiscrepancy;
+	}
+	| {
+		outcome: 'rejected';
+		code: GraphicsRepairRejectionCode;
+		message: string;
+		discrepancy: GraphicsDiscrepancy;
 	};
 
 export type GraphicsCanonicalCapacityPressure = 'normal' | 'warning' | 'critical' | 'full';

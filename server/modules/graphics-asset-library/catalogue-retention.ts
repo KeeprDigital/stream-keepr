@@ -20,6 +20,7 @@ import type {
 	StagedInputExpiryCandidate,
 } from './retention';
 import { GRAPHICS_RETENTION_GUARANTEES } from '~~/shared/utils/graphicsAssetRetention';
+import { boundJsonArray, valuesFromJsonArray } from './catalogue-sql';
 
 /** Stages that still hold staged input and may therefore expire. */
 const RETAINED_INPUT_STAGES = [
@@ -29,6 +30,7 @@ const RETAINED_INPUT_STAGES = [
 	'validating',
 	'generating-derivatives',
 	'awaiting-confirmation',
+	'awaiting-installation',
 	'publishing',
 ] as const;
 
@@ -273,8 +275,8 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			}));
 			const removal = await database.prepare(`
 				DELETE FROM graphic_asset_revision_retention
-				WHERE revision_id IN (${cancelled.map(() => '?').join(', ')})
-			`).bind(...cancelled.map(revision => revision.revisionId)).run();
+				WHERE revision_id IN ${valuesFromJsonArray()}
+			`).bind(boundJsonArray(cancelled.map(revision => revision.revisionId))).run();
 			if (!removal.success)
 				throw new Error('Graphic Asset Revision pruning could not be cancelled');
 			return cancelled;
@@ -623,8 +625,8 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				...(reachable.results.length > 0
 					? [database.prepare(`
 							DELETE FROM graphics_content_quarantine
-							WHERE id IN (${reachable.results.map(() => '?').join(', ')})
-						`).bind(...reachable.results.map(row => row.id))]
+							WHERE id IN ${valuesFromJsonArray()}
+						`).bind(boundJsonArray(reachable.results.map(row => row.id)))]
 					: []),
 			];
 			if (statements.length > 0) {
@@ -754,11 +756,15 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			// Reachability implies a catalogue content row, so an update is enough:
 			// the identity and its references stay intact and become an explicit,
 			// repairable Unavailable Graphic Asset Content incident.
+			//
+			// The first observation is kept, so a repeating reconciliation sweep
+			// reports how long an incident has been open rather than resetting its
+			// age on every pass.
 			const result = await database.prepare(`
 				UPDATE graphic_asset_contents
 				SET availability = 'unavailable',
 					unavailable_reason_code = ?,
-					unavailable_since = ?
+					unavailable_since = COALESCE(unavailable_since, ?)
 				WHERE digest = ?
 			`).bind(
 				input.reasonCode,
@@ -948,11 +954,14 @@ export function createD1GraphicsAssetRetentionCatalogue(
 					outcome, reason, correlation_id, detail, expires_at
 				FROM graphics_asset_evidence
 				${categories.length > 0
-					? `WHERE category IN (${categories.map(() => '?').join(', ')})`
+					? `WHERE category IN ${valuesFromJsonArray('?1')}`
 					: ''}
 				ORDER BY recorded_at DESC, id DESC
-				LIMIT ?
-			`).bind(...categories, input.limit).all<EvidenceRow>();
+				LIMIT ${categories.length > 0 ? '?2' : '?1'}
+			`).bind(
+				...(categories.length > 0 ? [boundJsonArray(categories)] : []),
+				input.limit,
+			).all<EvidenceRow>();
 			if (!result.success)
 				throw new Error('Graphics Asset Evidence could not be read');
 			return result.results.map(evidenceFromRow);

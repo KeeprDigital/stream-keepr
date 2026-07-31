@@ -333,7 +333,7 @@ describe('broadcast Graphic Template library', () => {
 				maxLength: 40,
 			}],
 			sources: [{ key: 'player', label: 'Player', kind: 'player' }],
-			bindings: [{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.displayName' }],
+			bindings: [{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.name' }],
 		}]);
 		expect(authored.status).toBe(200);
 	});
@@ -476,7 +476,7 @@ describe('broadcast Graphic Template library', () => {
 		}]);
 		expect(placed!.sources).toEqual([{ key: 'player', label: 'Player', kind: 'player' }]);
 		expect(placed!.bindings).toEqual([
-			{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.displayName' },
+			{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.name' },
 		]);
 	});
 

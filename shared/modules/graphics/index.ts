@@ -1,5 +1,7 @@
 export * from './animation';
 export * from './authoring';
+export * from './bindingCatalog';
+export * from './bindingResolution';
 export * from './geometry';
 export * from './hostContract';
 export * from './inputs';

@@ -158,9 +158,15 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		// deliberate exception: they are the values a recovered graphic renders at its
 		// resting state, not a record of how it got there, so nothing about them is
 		// replayable either.
-		expect(Object.keys(persisted).toSorted()).toEqual(['inputs', 'playout']);
+		// Graphic Source Selections and Graphic Input Overrides join the accepted values
+		// on the same terms: both are standing operator intent that outlives a hide/show
+		// cycle, and neither says anything about a lifecycle phase, so neither gives
+		// recovery anything to replay.
+		expect(Object.keys(persisted).toSorted()).toEqual(['inputs', 'playout', 'sources']);
 		expect(Object.keys(persisted.playout.slate!).toSorted()).toEqual(['cut', 'effectiveStartedAt', 'onAir']);
 		expect(persisted.playout.slate).toEqual({ onAir: true, effectiveStartedAt: T0, cut: false });
+		expect(Object.keys(persisted.inputs.slate!).toSorted())
+			.toEqual(['accepted', 'acceptedRevision', 'overrides', 'working']);
 	});
 
 	it('stores no lifecycle phase, so there is nothing for recovery to resume', () => {

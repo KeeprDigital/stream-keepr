@@ -1,23 +1,24 @@
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbBroadcastGraphicsLiveSession } from '~~/server/db/schema';
 import type { SequencedLiveStateExecuteOptions } from '~~/server/modules/live-state';
-import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
+import type { BroadcastGraphicsLiveState, BroadcastGraphicsReductionContext } from '~~/shared/modules/broadcast-graphics-live-session';
 import type {
 	BroadcastGraphicsCommand,
 	BroadcastGraphicsCommandAppliedPayload,
 	BroadcastGraphicsCommandResult,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
-import type { GraphicInputDeclaration } from '~~/shared/types/graphics';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { broadcastGraphicsLiveSessions } from '~~/server/db/schema';
-import { mapBroadcastGraphicsLiveSessionToResponse } from '~~/server/mappers/broadcastGraphicsLiveSession';
+import { mapBroadcastGraphicsCommandResult } from '~~/server/mappers/broadcastGraphicsLiveSession';
 import { createSequencedLiveState, forgetAggregateReceipts } from '~~/server/modules/live-state';
 import { publishMessage } from '~~/server/utils/ably';
 import {
 	applyBroadcastGraphicsCommand,
 	BroadcastGraphicsCommandRejection,
+	carriedForwardBroadcastGraphicsLiveState,
 	createInitialBroadcastGraphicsLiveState,
+	recoveredBroadcastGraphicsLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 
 /**
@@ -30,9 +31,12 @@ import {
  */
 const REJECTION_STATUS: Record<BroadcastGraphicsCommandRejection['code'], number> = {
 	'stale-input-acceptance': 409,
+	'stale-input-edit': 409,
 	'required-input-unavailable': 409,
 	'update-unavailable': 409,
 	'unknown-input': 404,
+	'unknown-source': 404,
+	'override-unbound': 409,
 };
 
 /** Namespaces Broadcast Graphics Live Session receipts in the shared receipt store. */
@@ -71,20 +75,47 @@ export function broadcastGraphicsStateService() {
 	};
 
 	/**
-	 * End whichever epoch a Screen currently owns and discard its receipts.
+	 * The epoch a Screen ended most recently, whose prepared work the next one
+	 * inherits.
+	 *
+	 * Ordered by identity rather than by `endedAt`, because a mode change flipped in
+	 * and out inside one millisecond gives two rows the same timestamp and the later
+	 * identity is the one that was actually running.
+	 */
+	const findLatestEndedSessionByScreen = async (
+		screenId: number,
+		eventId: number,
+	): Promise<DbBroadcastGraphicsLiveSession | undefined> => {
+		return await db.query.broadcastGraphicsLiveSessions.findFirst({
+			where: and(
+				eq(broadcastGraphicsLiveSessions.screenId, screenId),
+				eq(broadcastGraphicsLiveSessions.eventId, eventId),
+				eq(broadcastGraphicsLiveSessions.status, 'ended'),
+			),
+			orderBy: desc(broadcastGraphicsLiveSessions.id),
+		});
+	};
+
+	/**
+	 * The two writes that end whichever epoch a Screen currently owns.
 	 *
 	 * A Broadcast Graphics Live Session ends when the Screen leaves Broadcast
-	 * Graphics mode, and an ended epoch can never accept another command — so its
-	 * receipts have nothing left to protect. The row itself is kept: a stale retry
-	 * addressed to it must be recognisably rejected rather than silently opening a
-	 * fresh epoch.
+	 * Graphics mode or an operator explicitly resets live state, and an ended epoch
+	 * can never accept another command — so its receipts have nothing left to
+	 * protect. The row itself is kept: a stale retry addressed to it must be
+	 * recognisably rejected rather than silently opening a fresh epoch.
 	 *
-	 * Both writes go in one batch so an epoch can never be ended without its
-	 * receipts being discarded, or vice versa.
+	 * Returned as statements rather than executed so that a reset can commit them
+	 * together with the successor epoch it opens; on their own they always go in one
+	 * batch, so an epoch can never be ended without its receipts being discarded, or
+	 * vice versa.
 	 */
-	const endSessionsForScreen = async (screenId: number, eventId: number): Promise<void> => {
+	const endSessionStatements = (
+		screenId: number,
+		eventId: number,
+	): [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]] => {
 		const now = new Date();
-		const queries: [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]] = [
+		return [
 			db.update(broadcastGraphicsLiveSessions)
 				.set({ status: 'ended', endedAt: now, updatedAt: now })
 				.where(and(
@@ -103,8 +134,57 @@ export function broadcastGraphicsStateService() {
 				`,
 			}),
 		];
+	};
 
-		await db.batch(queries);
+	const openSessionStatement = (
+		screenId: number,
+		eventId: number,
+		currentState: BroadcastGraphicsLiveState,
+	): BatchItem<'sqlite'> => db.insert(broadcastGraphicsLiveSessions)
+		.values({ eventId, screenId, status: 'active', currentState, sequence: 1 })
+		.returning();
+
+	/** Ends the Screen's epoch, answering which one it was so it can be announced. */
+	const endSessionsForScreen = async (
+		screenId: number,
+		eventId: number,
+	): Promise<DbBroadcastGraphicsLiveSession | undefined> => {
+		const ended = await findActiveSessionByScreen(screenId, eventId);
+		await db.batch(endSessionStatements(screenId, eventId));
+		return ended;
+	};
+
+	/**
+	 * End the Screen's epoch and open its successor in one commit, carrying nothing
+	 * forward.
+	 *
+	 * This is what an explicit live-state reset means: every Broadcast Graphic off,
+	 * a new epoch that stale retries from the old one cannot reach, and — unlike a
+	 * mode change — no prepared Graphic Input values either. A mode change is
+	 * incidental to the show and the operator's staged work should survive it; a
+	 * reset is the operator asking for a clean slate, and silently keeping their
+	 * previous values would make it the one action that cannot deliver one.
+	 *
+	 * One batch, so there is no instant at which the Screen has no epoch — a
+	 * concurrent snapshot request would otherwise open one and carry forward exactly
+	 * the values this is discarding.
+	 */
+	const resetSessionForScreen = async (
+		screenId: number,
+		eventId: number,
+	): Promise<{ ended?: DbBroadcastGraphicsLiveSession; opened: DbBroadcastGraphicsLiveSession }> => {
+		const ended = await findActiveSessionByScreen(screenId, eventId);
+		const [first, ...rest] = endSessionStatements(screenId, eventId);
+		const results = await db.batch([
+			first,
+			...rest,
+			openSessionStatement(screenId, eventId, createInitialBroadcastGraphicsLiveState()),
+		]);
+		const opened = (results.at(-1) as DbBroadcastGraphicsLiveSession[] | undefined)?.[0];
+		if (!opened)
+			throw new Error('Failed to open broadcast graphics live session');
+
+		return { ended, opened };
 	};
 
 	/**
@@ -112,7 +192,10 @@ export function broadcastGraphicsStateService() {
 	 *
 	 * A Screen in Broadcast Graphics mode always has exactly one active epoch, so
 	 * the first operator or Screen Output to ask for the authoritative snapshot
-	 * opens it. A fresh epoch starts with nothing on air.
+	 * opens it. A fresh epoch has nothing on air, and inherits the previous epoch's
+	 * prepared Graphic Input values: a Screen flipped out of and back into Broadcast
+	 * Graphics mode is one show continuing, so the values an operator staged for
+	 * their next take are not theirs to retype.
 	 */
 	const ensureActiveSession = async (
 		screenId: number,
@@ -122,13 +205,17 @@ export function broadcastGraphicsStateService() {
 		if (existing)
 			return existing;
 
+		const previous = await findLatestEndedSessionByScreen(screenId, eventId);
+
 		try {
 			const [created] = await db.insert(broadcastGraphicsLiveSessions)
 				.values({
 					eventId,
 					screenId,
 					status: 'active',
-					currentState: createInitialBroadcastGraphicsLiveState(),
+					currentState: previous
+						? carriedForwardBroadcastGraphicsLiveState(previous.currentState)
+						: createInitialBroadcastGraphicsLiveState(),
 					sequence: 1,
 				})
 				.returning();
@@ -165,14 +252,16 @@ export function broadcastGraphicsStateService() {
 	 * duplicate suppression, and conflict protection are the module's.
 	 *
 	 * It is built per command because reduction needs the addressed Broadcast
-	 * Graphic's declared Graphic Inputs, and the port's reduction sees only the
-	 * sequenced aggregate and the command. Declarations are authored Screen
-	 * configuration — an author may change them under a running show — so
-	 * denormalizing them into live state to bring them within the port's reach would
-	 * be storing a copy that can go stale. Closing over them for the one command
-	 * that needs them keeps the authored config authoritative.
+	 * Graphic's declared Graphic Inputs, Graphic Source Selections, and Graphic Input
+	 * Bindings — plus the Event Data those bindings resolve against — and the port's
+	 * reduction sees only the sequenced aggregate and the command. Declarations are
+	 * authored Screen configuration and Event Data belongs to the Event; an author or
+	 * a tournament can change either under a running show, so denormalizing them into
+	 * live state to bring them within the port's reach would be storing a copy that
+	 * can go stale. Closing over them for the one command that needs them keeps both
+	 * authoritative where they live.
 	 */
-	const liveStateFor = (declarations: readonly GraphicInputDeclaration[]) => createSequencedLiveState<
+	const liveStateFor = (context: Omit<BroadcastGraphicsReductionContext, 'acceptedAt'>) => createSequencedLiveState<
 		BroadcastGraphicsLiveSessionRef,
 		DbBroadcastGraphicsLiveSession,
 		BroadcastGraphicsCommand,
@@ -222,17 +311,23 @@ export function broadcastGraphicsStateService() {
 		 * A domain refusal is raised from the shared reducer, which is deliberately
 		 * ignorant of HTTP; this is the one place that maps it. Reduction happens
 		 * before the compare-and-swap write, so a refusal never leaves a receipt.
+		 *
+		 * Reduction starts from the *recovered* state, which is what makes an explicit
+		 * Take the way out of a recovery fault: the command is reduced onto a state
+		 * with nothing on air rather than onto the unreadable one, so the write that
+		 * commits it also replaces the state nobody could read. Reducing onto the raw
+		 * state instead would either throw or persist the corruption forward.
 		 */
 		reduce: (session, command) => {
 			try {
 				return applyBroadcastGraphicsCommand(
-					session.currentState,
+					recoveredBroadcastGraphicsLiveState(session.currentState),
 					command,
 					// The server's clock is the authoritative effective start time of the
 					// phase this command begins. It is read here, at acceptance, rather than
 					// sent by a client: every output projects animation from this instant, so
 					// it has to come from the one place that decides the authoritative order.
-					{ inputs: declarations, acceptedAt: Date.now() },
+					{ ...context, acceptedAt: Date.now() },
 				);
 			}
 			catch (error) {
@@ -270,14 +365,14 @@ export function broadcastGraphicsStateService() {
 			))
 			.returning(),
 
-		toResult: (session, commandType) => ({
-			screenId: session.screenId,
-			sessionId: session.id,
-			sequence: session.sequence,
-			commandType: commandType as BroadcastGraphicsCommandResult['commandType'],
-			currentState: session.currentState,
-			session: mapBroadcastGraphicsLiveSessionToResponse(session),
-		}),
+		// One mapped snapshot feeds both the result and the notification derived from
+		// it, so a client cannot be handed a recovered `session` alongside a raw
+		// `currentState` that disagrees with it. The invariant lives with the mapper
+		// that owns recovery, and is pinned there.
+		toResult: (session, commandType) => mapBroadcastGraphicsCommandResult(
+			session,
+			commandType as BroadcastGraphicsCommandResult['commandType'],
+		),
 
 		publish: async (result, originConnectionId) => {
 			await publishMessage(
@@ -293,12 +388,19 @@ export function broadcastGraphicsStateService() {
 		sessionId: number,
 		eventId: number,
 		command: BroadcastGraphicsCommand,
-		/** The addressed Broadcast Graphic's declared Graphic Inputs. */
-		declarations: readonly GraphicInputDeclaration[],
+		/**
+		 * The addressed Broadcast Graphic's declarations, and how its bindings resolve.
+		 *
+		 * Everything the reducer needs except the acceptance instant, which is read from
+		 * the server's own clock at acceptance rather than passed in — every output
+		 * projects animation from it, so it has to come from the one place that decides
+		 * the authoritative order.
+		 */
+		context: Omit<BroadcastGraphicsReductionContext, 'acceptedAt'>,
 		originConnectionId?: string,
 		options: Omit<SequencedLiveStateExecuteOptions, 'originConnectionId'> = {},
 	): Promise<BroadcastGraphicsCommandResult> => {
-		return await liveStateFor(declarations)
+		return await liveStateFor(context)
 			.execute({ sessionId, eventId }, command, { ...options, originConnectionId });
 	};
 
@@ -306,6 +408,7 @@ export function broadcastGraphicsStateService() {
 		findSessionById,
 		ensureActiveSession,
 		endSessionsForScreen,
+		resetSessionForScreen,
 		applyCommand,
 	};
 }

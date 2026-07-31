@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9deacdfd-d10c-4375-bdd2-808239b8a5ca",
+  "id": "b181473c-d523-404e-8a43-f49647a2f80a",
   "prevId": "afc4b7b9-b6a8-44fd-976e-f2d0b7373a6a",
   "tables": {
     "archetype_cards": {
@@ -173,83 +173,6 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "broadcast_graphic_templates": {
-      "name": "broadcast_graphic_templates",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "revision": {
-          "name": "revision",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "document": {
-          "name": "document",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "graphic_asset_reference_version": {
-          "name": "graphic_asset_reference_version",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch() * 1000)"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch() * 1000)"
-        }
-      },
-      "indexes": {
-        "broadcast_graphic_templates_name_idx": {
-          "name": "broadcast_graphic_templates_name_idx",
-          "columns": [
-            "name"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -1714,6 +1637,116 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "graphic_asset_origins": {
+      "name": "graphic_asset_origins",
+      "columns": {
+        "revision_id": {
+          "name": "revision_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "asset_id": {
+          "name": "asset_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_asset_id": {
+          "name": "source_asset_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_revision_id": {
+          "name": "source_revision_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_revision_number": {
+          "name": "source_revision_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "digest": {
+          "name": "digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "graphic_asset_origins_source_revision_idx": {
+          "name": "graphic_asset_origins_source_revision_idx",
+          "columns": [
+            "source_asset_id",
+            "source_revision_id"
+          ],
+          "isUnique": true
+        },
+        "graphic_asset_origins_source_asset_idx": {
+          "name": "graphic_asset_origins_source_asset_idx",
+          "columns": [
+            "source_asset_id"
+          ],
+          "isUnique": false
+        },
+        "graphic_asset_origins_asset_idx": {
+          "name": "graphic_asset_origins_asset_idx",
+          "columns": [
+            "asset_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "graphic_asset_origins_revision_id_graphic_asset_revisions_id_fk": {
+          "name": "graphic_asset_origins_revision_id_graphic_asset_revisions_id_fk",
+          "tableFrom": "graphic_asset_origins",
+          "tableTo": "graphic_asset_revisions",
+          "columnsFrom": [
+            "revision_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "graphic_asset_origins_asset_id_graphic_assets_id_fk": {
+          "name": "graphic_asset_origins_asset_id_graphic_assets_id_fk",
+          "tableFrom": "graphic_asset_origins",
+          "tableTo": "graphic_assets",
+          "columnsFrom": [
+            "asset_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "graphic_asset_references": {
       "name": "graphic_asset_references",
       "columns": {
@@ -2786,6 +2819,13 @@
         },
         "multipart_state": {
           "name": "multipart_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "package_preflight": {
+          "name": "package_preflight",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

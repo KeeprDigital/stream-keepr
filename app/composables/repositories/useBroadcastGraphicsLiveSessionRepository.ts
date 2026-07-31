@@ -38,8 +38,23 @@ export function useBroadcastGraphicsLiveSessionRepository() {
 		);
 	};
 
+	/**
+	 * Addressed to the Screen rather than to an epoch: this is the action for an
+	 * operator whose epoch is unusable, so naming one would defeat it.
+	 */
+	const resetSession = async (
+		eventId: number,
+		screenId: number,
+	): Promise<BroadcastGraphicsLiveSessionResponse> => {
+		return await $fetch<BroadcastGraphicsLiveSessionResponse>(
+			`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/live-session/reset`,
+			{ method: 'POST', headers: apiHeaders.getHeaders() },
+		);
+	};
+
 	return {
 		getSession,
 		sendCommand,
+		resetSession,
 	};
 }

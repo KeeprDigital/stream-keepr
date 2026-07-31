@@ -14,8 +14,11 @@ import {
 	modeConfigPatchSchemaMap,
 	modeConfigsMapSchema,
 } from '~~/server/schemas/api/screen';
+import { graphicBindingFieldIds } from '~~/shared/modules/graphics';
 import {
 	GRAPHIC_ANIMATION_EASING_VALUES,
+	GRAPHIC_ANIMATION_ORIGIN_VALUES,
+	GRAPHIC_REVEAL_EDGE_VALUES,
 	GRAPHIC_SLIDE_DIRECTION_VALUES,
 	MAX_GRAPHIC_ANIMATION_DELAY_MS,
 	MAX_GRAPHIC_ANIMATION_DURATION_MS,
@@ -209,20 +212,47 @@ function worstCaseChoiceInput(key: string) {
 	};
 }
 
+/**
+ * The most expensive field id the binding catalog actually offers.
+ *
+ * Derived from the catalog rather than written out, because a `fieldId` must now name
+ * a catalog field: the schema refuses an invented 100-character id, so the honest
+ * worst case is the longest real name, and it moves with the catalog.
+ */
+const LONGEST_BINDING_FIELD_ID = graphicBindingFieldIds()
+	.reduce((longest, id) => (id.length > longest.length ? id : longest), '');
+
+const WORST_CASE_PARENT_SOURCE_KEY = 'p'.repeat(MAX_GRAPHIC_INPUT_KEY_LENGTH);
+
 function worstCaseBinding(inputKey: string) {
 	return {
 		inputKey: inputKey.padEnd(MAX_GRAPHIC_INPUT_KEY_LENGTH, 'k'),
-		sourceKey: 's'.repeat(MAX_GRAPHIC_INPUT_KEY_LENGTH),
-		fieldId: 'f'.repeat(100),
+		sourceKey: WORST_CASE_PARENT_SOURCE_KEY,
+		fieldId: LONGEST_BINDING_FIELD_ID,
 	};
 }
 
-function worstCaseSource(key: string) {
-	return {
-		key: key.padEnd(MAX_GRAPHIC_INPUT_KEY_LENGTH, 's'),
+/**
+ * One operator-selected Graphic Source Selection per Broadcast Graphic and derived
+ * ones after it.
+ *
+ * Derived is the expensive shape — it carries a `from` naming a maximal sibling key
+ * — and it has to be reachable, so the first selection is the Feature Match Slot the
+ * rest follow. Several derived selections sharing one parent is exactly the intended
+ * use: an operator picks the slot once and both Players resolve.
+ */
+function worstCaseSource(key: string, derived: boolean) {
+	const base = {
+		key: derived ? key.padEnd(MAX_GRAPHIC_INPUT_KEY_LENGTH, 's') : WORST_CASE_PARENT_SOURCE_KEY,
 		label: 'L'.repeat(MAX_GRAPHIC_INPUT_LABEL_LENGTH),
-		kind: 'feature-match-slot' as const,
 	};
+	return derived
+		? {
+				...base,
+				kind: 'player' as const,
+				from: { sourceKey: WORST_CASE_PARENT_SOURCE_KEY, relation: 'player1' as const },
+			}
+		: { ...base, kind: 'feature-match-slot' as const };
 }
 
 function textInput(key: string) {
@@ -389,7 +419,9 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		fill(
 			MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 			MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
-			(graphic, index) => graphic.sources.push(worstCaseSource(`s${index}`)),
+			(graphic, index) => graphic.sources.push(
+				worstCaseSource(`s${index}`, graphic.sources.length > 0),
+			),
 		);
 
 		// A Broadcast Graphic owns whole-graphic motion as well as its items' own, and
@@ -945,6 +977,14 @@ describe('graphic Animation bounds', () => {
 	});
 
 	it('bounds a scale channel to zero through twice the resting size, about one of nine origins', () => {
+		// `CONTEXT.md:574` and `:418` settle *nine* Graphic Animation Origins. Two of them
+		// were exercised and the count was nowhere, so removing an origin left the title
+		// claiming nine while the schema accepted eight.
+		expect(GRAPHIC_ANIMATION_ORIGIN_VALUES).toHaveLength(9);
+
+		for (const origin of GRAPHIC_ANIMATION_ORIGIN_VALUES)
+			expect(withItemAnimation({ enter: { ...recipe, scale: { factor: 1, origin } } }).success).toBe(true);
+
 		expect(withItemAnimation({ enter: { ...recipe, scale: { factor: 0, origin: 'center' } } }).success).toBe(true);
 		expect(withItemAnimation({ enter: { ...recipe, scale: { factor: MAX_GRAPHIC_ANIMATION_SCALE, origin: 'top-left' } } }).success).toBe(true);
 		expect(withItemAnimation({ enter: { ...recipe, scale: { factor: MAX_GRAPHIC_ANIMATION_SCALE + 0.01, origin: 'center' } } }).success).toBe(false);
@@ -952,6 +992,12 @@ describe('graphic Animation bounds', () => {
 	});
 
 	it('accepts a slide channel on any of eight compass directions, fixed or clearing its parent', () => {
+		// Counted, not just iterated: `CONTEXT.md:575` settles *eight* compass
+		// directions, and a loop over a shortened enum accepts every direction it is
+		// given while silently testing fewer. The count is the glossary's, so this fails
+		// when the vocabulary and the code disagree rather than restating the code.
+		expect(GRAPHIC_SLIDE_DIRECTION_VALUES).toHaveLength(8);
+
 		for (const direction of GRAPHIC_SLIDE_DIRECTION_VALUES) {
 			expect(withItemAnimation({
 				enter: { ...recipe, slide: { direction, distanceMode: 'fixed', distance: 100 } },
@@ -970,7 +1016,13 @@ describe('graphic Animation bounds', () => {
 	});
 
 	it('wipes a reveal channel from one of four edges', () => {
-		expect(withItemAnimation({ enter: { ...recipe, reveal: { edge: 'bottom' } } }).success).toBe(true);
+		// `CONTEXT.md:577` names left, right, top, and bottom — four. One edge was
+		// exercised, so the title's "four" rested on nothing and dropping an edge passed.
+		expect(GRAPHIC_REVEAL_EDGE_VALUES).toHaveLength(4);
+
+		for (const edge of GRAPHIC_REVEAL_EDGE_VALUES)
+			expect(withItemAnimation({ enter: { ...recipe, reveal: { edge } } }).success).toBe(true);
+
 		expect(withItemAnimation({ enter: { ...recipe, reveal: { edge: 'diagonal' } } }).success).toBe(false);
 	});
 

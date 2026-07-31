@@ -3,9 +3,23 @@ import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'driz
 import {
 	DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES,
 	DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
+	INSTALLED_GRAPHICS_TEMPLATE_KINDS,
 } from '~~/shared/types/graphicsAsset';
+import {
+	GRAPHICS_DISCREPANCY_KINDS,
+	GRAPHICS_DISCREPANCY_REASON_CODES,
+	GRAPHICS_DISCREPANCY_RESOLUTIONS,
+	GRAPHICS_DISCREPANCY_STATES,
+	GRAPHICS_RECONCILIATION_EVIDENCE_CATEGORIES,
+} from '~~/shared/utils/graphicsAssetReconciliation';
 import { GRAPHICS_RETENTION_EVIDENCE_CATEGORIES } from '~~/shared/utils/graphicsAssetRetention';
 import { events } from '../schema';
+
+/** Every category the one shared Evidence ledger accepts. */
+export const GRAPHICS_ASSET_EVIDENCE_CATEGORY_VALUES = [
+	...GRAPHICS_RETENTION_EVIDENCE_CATEGORIES,
+	...GRAPHICS_RECONCILIATION_EVIDENCE_CATEGORIES,
+] as const;
 
 export const GRAPHIC_ASSET_KIND_VALUES = ['image', 'silent-video', 'font'] as const;
 export const GRAPHIC_ASSET_LIFECYCLE_STATE_VALUES = ['active', 'retired', 'trashed'] as const;
@@ -17,12 +31,16 @@ export const GRAPHIC_ASSET_PURGE_REASON_VALUES = ['trash-window-elapsed', 'early
 export const GRAPHICS_CONTENT_QUARANTINE_ORIGIN_VALUES = [
 	'orphaned-content',
 	'abandoned-canonical-write',
+	/** Bytes the canonical store held that the catalogue never expected. */
+	'unexpected-object',
 ] as const;
 export const GRAPHICS_ASSET_EVIDENCE_SUBJECT_KIND_VALUES = [
 	'graphics-ingestion-operation',
 	'graphic-asset',
 	'graphic-asset-revision',
 	'graphic-asset-content',
+	'graphics-derivative',
+	'graphics-discrepancy',
 ] as const;
 export const GRAPHICS_INGESTION_STAGE_VALUES = [
 	'created',
@@ -31,6 +49,7 @@ export const GRAPHICS_INGESTION_STAGE_VALUES = [
 	'validating',
 	'generating-derivatives',
 	'awaiting-confirmation',
+	'awaiting-installation',
 	'publishing',
 	'completed',
 	'failed',
@@ -85,12 +104,25 @@ export const graphicAssetContents = sqliteTable('graphic_asset_contents', {
 	digest: text('digest').primaryKey(),
 	byteLength: integer('byte_length').notNull(),
 	canonicalMime: text('canonical_mime').notNull(),
+	/**
+	 * Advisory reconciliation state, not a reader authority. A caller that needs
+	 * bytes asks the canonical byte store, which is the only current source;
+	 * this column keeps a known incident visible, alertable, and repairable
+	 * between sweeps. Reconciliation is its only writer.
+	 */
 	availability: text('availability', { enum: GRAPHIC_ASSET_CONTENT_AVAILABILITY_VALUES }).notNull().default('available'),
 	unavailableReasonCode: text('unavailable_reason_code'),
 	unavailableSince: integer('unavailable_since', { mode: 'timestamp_ms' }),
+	/**
+	 * When reconciliation last compared this content against the byte store.
+	 * A null value sorts first, so newly published content is checked before
+	 * content a recent sweep already agreed on.
+	 */
+	reconciledAt: integer('reconciled_at', { mode: 'timestamp_ms' }),
 	createdAt,
 }, table => [
 	index('graphic_asset_contents_availability_idx').on(table.availability),
+	index('graphic_asset_contents_reconciled_idx').on(table.reconciledAt),
 ]);
 
 /** One immutable, ordered, content-bearing version of a Graphic Asset. */
@@ -109,6 +141,35 @@ export const graphicAssetRevisions = sqliteTable('graphic_asset_revisions', {
 }, table => [
 	uniqueIndex('graphic_asset_revisions_asset_number_idx').on(table.assetId, table.revisionNumber),
 	index('graphic_asset_revisions_content_idx').on(table.contentDigest),
+]);
+
+/**
+ * Graphic Asset Origin: the immutable source identity, source revision, and
+ * content digest of the Template Package that produced this exact local
+ * revision.
+ *
+ * It exists to recognise a future import, not to create a live link. A revision
+ * has at most one origin, a locally created revision has none, and the row is
+ * never rewritten — a package claiming an origin already recorded here with a
+ * different digest is an integrity conflict rather than an update.
+ */
+export const graphicAssetOrigins = sqliteTable('graphic_asset_origins', {
+	revisionId: text('revision_id')
+		.primaryKey()
+		.references(() => graphicAssetRevisions.id, { onDelete: 'cascade' }),
+	assetId: text('asset_id')
+		.references(() => graphicAssets.id, { onDelete: 'cascade' })
+		.notNull(),
+	sourceAssetId: text('source_asset_id').notNull(),
+	sourceRevisionId: text('source_revision_id').notNull(),
+	sourceRevisionNumber: integer('source_revision_number').notNull(),
+	digest: text('digest').notNull(),
+	createdAt,
+}, table => [
+	uniqueIndex('graphic_asset_origins_source_revision_idx')
+		.on(table.sourceAssetId, table.sourceRevisionId),
+	index('graphic_asset_origins_source_asset_idx').on(table.sourceAssetId),
+	index('graphic_asset_origins_asset_idx').on(table.assetId),
 ]);
 
 /** Generated, non-selectable bytes owned by one exact source revision. */
@@ -188,6 +249,20 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	declaredByteLength: integer('declared_byte_length'),
 	transferredByteLength: integer('transferred_byte_length').notNull().default(0),
 	multipartState: text('multipart_state', { mode: 'json' }).$type<Record<string, unknown>>(),
+	/**
+	 * The immutable Template Package preflight report, its proposed mappings, and
+	 * the fingerprint any confirmation is bound to. It lives beside the operation
+	 * so a reconnecting author, a retry, and a cancellation all read the same
+	 * durable proposal rather than re-deriving one that might have changed.
+	 */
+	packagePreflight: text('package_preflight', { mode: 'json' }).$type<Record<string, unknown>>(),
+	/**
+	 * What one complete Template Package installation published: the Template it
+	 * created and every packaged identity's local outcome. It sits beside the
+	 * single-revision `result` the other ingestion paths produce, because a
+	 * package's terminal result is the whole set or nothing.
+	 */
+	packageInstallation: text('package_installation', { mode: 'json' }).$type<Record<string, unknown>>(),
 	stagingReservedByteLength: integer('staging_reserved_byte_length').notNull().default(0),
 	stagingUsedByteLength: integer('staging_used_byte_length').notNull().default(0),
 	canonicalReservedByteLength: integer('canonical_reserved_byte_length').notNull().default(0),
@@ -209,6 +284,46 @@ export const graphicsIngestionOperations = sqliteTable('graphics_ingestion_opera
 	uniqueIndex('graphics_ingestion_operations_author_idempotency_idx').on(table.initiatedBy, table.idempotencyKey),
 	index('graphics_ingestion_operations_stage_idx').on(table.stage),
 	index('graphics_ingestion_operations_event_idx').on(table.defaultEventId),
+]);
+
+/**
+ * One graphics Template a Template Package installed here.
+ *
+ * The document is an independent local copy whose Graphic Asset References were
+ * rewritten to exact local identities and revisions before it was written, so it
+ * is valid the instant it exists, and its references are indexed under this
+ * Template's own owner identity. The source Template identity is provenance for
+ * recognising a related package later, never a link to the installation that
+ * exported it; placing this Template on a Screen copies it again.
+ */
+export const installedGraphicsTemplates = sqliteTable('installed_graphics_templates', {
+	id: text('id').primaryKey(),
+	kind: text('kind', { enum: INSTALLED_GRAPHICS_TEMPLATE_KINDS }).notNull(),
+	name: text('name').notNull(),
+	revisionNumber: integer('revision_number').notNull().default(1),
+	document: text('document', { mode: 'json' }).notNull(),
+	sourceTemplateIdentity: text('source_template_identity').notNull(),
+	/**
+	 * Which Graphics Ingestion Operation installed this Template, recorded as a
+	 * plain identity rather than a foreign key.
+	 *
+	 * A Template is permanent library state; the operation that installed it is a
+	 * transient workflow record the retention contract plans to clean up a year
+	 * after it goes terminal. A cascade would let that cleanup delete the Template
+	 * — and leave its owner-less references behind, permanently blocking Trash on
+	 * assets nothing can be shown to use. A restrict would instead make the
+	 * cleanup fail forever on every operation that ever installed anything. So
+	 * this outlives what it names, exactly as a Graphic Asset Tombstone does.
+	 */
+	installedByOperationId: text('installed_by_operation_id').notNull(),
+	/** The Event the installation ran inside, when it ran inside one. */
+	eventId: integer('event_id').references(() => events.id, { onDelete: 'set null' }),
+	createdAt,
+	updatedAt,
+}, table => [
+	index('installed_graphics_templates_kind_idx').on(table.kind),
+	index('installed_graphics_templates_operation_idx').on(table.installedByOperationId),
+	index('installed_graphics_templates_source_idx').on(table.sourceTemplateIdentity),
 ]);
 
 /**
@@ -288,6 +403,67 @@ export const graphicsContentQuarantine = sqliteTable('graphics_content_quarantin
 ]);
 
 /**
+ * One durable disagreement between the catalogue and the canonical byte store.
+ *
+ * The row carries the internal digest or object key it is about, because acting
+ * on it requires them; nothing that leaves the module ever does. At most one
+ * open row exists per subject, so a repeating sweep re-observes an incident
+ * instead of stacking duplicates.
+ */
+export const graphicsDiscrepancies = sqliteTable('graphics_discrepancies', {
+	id: text('id').primaryKey(),
+	kind: text('kind', { enum: GRAPHICS_DISCREPANCY_KINDS }).notNull(),
+	/** The exact expectation this row is about: a digest, derivative, or object key. */
+	subjectKey: text('subject_key').notNull(),
+	digest: text('digest'),
+	objectKey: text('object_key'),
+	derivativeId: text('derivative_id'),
+	state: text('state', { enum: GRAPHICS_DISCREPANCY_STATES }).notNull().default('open'),
+	reasonCode: text('reason_code', { enum: GRAPHICS_DISCREPANCY_REASON_CODES }).notNull(),
+	/**
+	 * A critical integrity incident fails closed: it is excluded from repair,
+	 * regeneration, and automatic deletion until an administrator resolves it.
+	 */
+	isolated: integer('isolated', { mode: 'boolean' }).notNull().default(false),
+	expected: text('expected', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+	observed: text('observed', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+	detectedAt: integer('detected_at', { mode: 'timestamp_ms' }).notNull(),
+	lastCheckedAt: integer('last_checked_at', { mode: 'timestamp_ms' }).notNull(),
+	resolvedAt: integer('resolved_at', { mode: 'timestamp_ms' }),
+	resolution: text('resolution', { enum: GRAPHICS_DISCREPANCY_RESOLUTIONS }),
+	/**
+	 * The staging identity a repair or regeneration is currently holding, and
+	 * when it claimed it. The claim outlives the byte work it authorises so a
+	 * crashed action cannot leak staged bytes with no catalogue trace.
+	 */
+	workingCopyKey: text('working_copy_key'),
+	workingCopySince: integer('working_copy_since', { mode: 'timestamp_ms' }),
+	correlationId: text('correlation_id').notNull(),
+	createdAt,
+}, table => [
+	uniqueIndex('graphics_discrepancies_open_subject_idx')
+		.on(table.kind, table.subjectKey)
+		.where(sql`state = 'open'`),
+	index('graphics_discrepancies_state_idx').on(table.state, table.kind),
+	index('graphics_discrepancies_digest_idx').on(table.digest),
+	index('graphics_discrepancies_working_copy_idx').on(table.workingCopySince),
+]);
+
+/**
+ * Singleton progress for the canonical byte-store scan. The scan is a cursor
+ * over an external store rather than over catalogue rows, so its position must
+ * survive between scheduled sweeps for a large bucket to be covered at all.
+ */
+export const graphicsReconciliationState = sqliteTable('graphics_reconciliation_state', {
+	id: integer('id').primaryKey().default(1),
+	canonicalScanCursor: text('canonical_scan_cursor'),
+	canonicalScanStartedAt: integer('canonical_scan_started_at', { mode: 'timestamp_ms' }),
+	lastSweepCorrelationId: text('last_sweep_correlation_id'),
+	lastSweepStartedAt: integer('last_sweep_started_at', { mode: 'timestamp_ms' }),
+	lastSweepCompletedAt: integer('last_sweep_completed_at', { mode: 'timestamp_ms' }),
+});
+
+/**
  * Chronological administrator-facing Evidence for automated lifecycle work.
  * Subjects are domain identities; no object key, filename, digest, capability
  * secret, or deleted byte ever enters this ledger.
@@ -295,7 +471,7 @@ export const graphicsContentQuarantine = sqliteTable('graphics_content_quarantin
 export const graphicsAssetEvidence = sqliteTable('graphics_asset_evidence', {
 	id: text('id').primaryKey(),
 	recordedAt: integer('recorded_at', { mode: 'timestamp_ms' }).notNull(),
-	category: text('category', { enum: GRAPHICS_RETENTION_EVIDENCE_CATEGORIES }).notNull(),
+	category: text('category', { enum: GRAPHICS_ASSET_EVIDENCE_CATEGORY_VALUES }).notNull(),
 	actor: text('actor').notNull(),
 	subjectKind: text('subject_kind', {
 		enum: GRAPHICS_ASSET_EVIDENCE_SUBJECT_KIND_VALUES,
@@ -322,10 +498,14 @@ export type DbGraphicsDerivative = typeof graphicsDerivatives.$inferSelect;
 export type DbGraphicsDerivativeInsert = typeof graphicsDerivatives.$inferInsert;
 export type DbGraphicAssetReference = typeof graphicAssetReferences.$inferSelect;
 export type DbGraphicAssetReferenceInsert = typeof graphicAssetReferences.$inferInsert;
+export type DbInstalledGraphicsTemplate = typeof installedGraphicsTemplates.$inferSelect;
+export type DbInstalledGraphicsTemplateInsert = typeof installedGraphicsTemplates.$inferInsert;
 export type DbGraphicsIngestionOperation = typeof graphicsIngestionOperations.$inferSelect;
 export type DbGraphicsIngestionOperationInsert = typeof graphicsIngestionOperations.$inferInsert;
 export type DbGraphicsCanonicalWriteCandidate = typeof graphicsCanonicalWriteCandidates.$inferSelect;
 export type DbGraphicAssetRevisionRetention = typeof graphicAssetRevisionRetention.$inferSelect;
 export type DbGraphicAssetTombstone = typeof graphicAssetTombstones.$inferSelect;
 export type DbGraphicsContentQuarantine = typeof graphicsContentQuarantine.$inferSelect;
+export type DbGraphicsDiscrepancy = typeof graphicsDiscrepancies.$inferSelect;
+export type DbGraphicsReconciliationState = typeof graphicsReconciliationState.$inferSelect;
 export type DbGraphicsAssetEvidence = typeof graphicsAssetEvidence.$inferSelect;

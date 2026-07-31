@@ -1,17 +1,30 @@
+import type { GraphicSourceSelectionsState } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
 	GraphicAnimationPhase,
+	GraphicInputBinding,
 	GraphicInputDeclaration,
 	GraphicInputValue,
 	GraphicPlayoutState,
+	GraphicSourceSelectionDeclaration,
 } from '~~/shared/types/graphics';
-import type { BroadcastGraphicInputsState } from './inputs';
-import { findGraphicInputDeclaration, graphicInputAvailability } from '~~/shared/modules/graphics';
+import type {
+	BroadcastGraphicInputsState,
+	NormalizedBroadcastGraphicInputsState,
+} from './inputs';
+import {
+	findGraphicInputDeclaration,
+	graphicInputAvailability,
+	isOperatorSelectedGraphicSource,
+} from '~~/shared/modules/graphics';
 import {
 	acceptGraphicInputValues,
 	broadcastGraphicInputsState,
+	broadcastGraphicSourceSelections,
 	createInitialBroadcastGraphicInputsState,
+	effectiveGraphicInputValue,
 	isDeclaredGraphicInput,
+	sameGraphicInputValue,
 	unavailableRequiredGraphicInputs,
 } from './inputs';
 import { BroadcastGraphicsCommandRejection } from './rejection';
@@ -65,6 +78,17 @@ import { BroadcastGraphicsCommandRejection } from './rejection';
  * resets* makes recovery replay from it. Persisting one authoritative instant and
  * deriving everything from it is the only shape where the correct behaviour is the
  * behaviour you get by doing nothing special.
+ *
+ * ## Why Event Data reaches reduction as a function
+ *
+ * Graphic Input Bindings resolve against Event Data, which is neither live state
+ * nor something a pure reducer can read. It arrives in the reduction context as a
+ * resolver over Graphic Source Selections rather than as a fixed map, because
+ * Select Source changes the very selections the bindings resolve against: the
+ * command's own effect has to be visible to the resolution its acceptance depends
+ * on. Authored declarations arrive the same way, and for the same reason they
+ * always have — an author may change them under a running show, so live state must
+ * never hold a copy.
  */
 
 /** The latest accepted playout intent for one placed Broadcast Graphic. */
@@ -95,8 +119,17 @@ export interface BroadcastGraphicPlayout {
  */
 export interface BroadcastGraphicsLiveState {
 	playout: Record<string, BroadcastGraphicPlayout>;
-	/** Working and accepted Graphic Input values, per placed Broadcast Graphic. */
+	/** Working, override, and accepted Graphic Input values, per placed Broadcast Graphic. */
 	inputs: Record<string, BroadcastGraphicInputsState>;
+	/**
+	 * Which entity each operator-selected Graphic Source Selection names, per placed
+	 * Broadcast Graphic. Only the selection is stored — never the entity, which
+	 * follows Event Data.
+	 *
+	 * Optional for the same reason `overrides` is: a session persisted before Graphic
+	 * Source Selections existed carries no such key, and every read normalizes.
+	 */
+	sources?: Record<string, GraphicSourceSelectionsState>;
 }
 
 /** The actions a Broadcast Graphics Live Session accepts. */
@@ -105,6 +138,9 @@ export const BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES = [
 	'Out',
 	'Update Graphic',
 	'Set Input',
+	'Set Override',
+	'Select Source',
+	'Resolve Bindings',
 ] as const;
 
 export type BroadcastGraphicsCommandType = typeof BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES[number];
@@ -146,29 +182,107 @@ export interface BroadcastGraphicsSetInputPayload {
 	graphicId: string;
 	inputKey: string;
 	value: GraphicInputValue;
+	/**
+	 * The value this edit believes it replaces: its Field Ownership claim.
+	 *
+	 * Field Ownership is the set of fields one action may write, derived from the
+	 * change it predicts — and a Set Input predicts exactly one Graphic Input going
+	 * from one value to another. Stating the value it started from is what makes
+	 * two operators on one Broadcast Graphic safe without locking either out: an
+	 * edit whose claim still holds is applied, and one whose claim has been
+	 * overtaken is refused so the operator can see what landed instead rather than
+	 * silently erasing a colleague's correction seconds before it goes on air.
+	 *
+	 * Wrapped in an object rather than left as a bare optional value because `null`
+	 * is itself a legitimate Graphic Input value: the wrapper distinguishes
+	 * "I claim the value was empty" from "I claim nothing". An edit that claims
+	 * nothing is not making a Field Ownership claim and is applied unconditionally.
+	 */
+	basedOn?: { value: GraphicInputValue };
+}
+
+/**
+ * One Graphic Input Override set or cleared.
+ *
+ * `null` clears it. An override exists to mask a binding with an operator's own
+ * value, so masking with "no value" would mean nothing — clearing is how an
+ * operator stops masking, after which the current bound value resumes.
+ */
+export interface BroadcastGraphicsSetOverridePayload {
+	graphicId: string;
+	inputKey: string;
+	value: GraphicInputValue;
+	/**
+	 * The value this override believes it replaces: its Field Ownership claim, in
+	 * exactly the shape a working edit's is. An override is field-scoped for the same
+	 * reason and is refused on the same terms.
+	 */
+	basedOn?: { value: GraphicInputValue };
+}
+
+/**
+ * One Graphic Source Selection pointed at an entity, or cleared with `null`.
+ *
+ * Only the entity id is accepted. Storing the entity itself would make live state
+ * a stale copy of Event Data, and every binding through this selection re-resolves
+ * from current Event Data instead.
+ */
+export interface BroadcastGraphicsSelectSourcePayload {
+	graphicId: string;
+	sourceKey: string;
+	selectionId: number | null;
+}
+
+/**
+ * One re-resolution of a Broadcast Graphic's Graphic Input Bindings.
+ *
+ * Sent when Event Data a binding reads has changed, so a live On-air Update Policy
+ * input can reach air without an operator touching anything. It carries no value:
+ * the server re-resolves from Event Data itself, so this is a notification that the
+ * facts moved rather than a client's claim about what they moved to. Applying it
+ * twice accepts the same resolved value twice, which is why redelivery — including
+ * from a second Live Control watching the same change — converges.
+ */
+export interface BroadcastGraphicsResolveBindingsPayload {
+	graphicId: string;
 }
 
 export type BroadcastGraphicsCommandPayload
 	= | BroadcastGraphicsPlayoutPayload
 		| BroadcastGraphicsUpdatePayload
-		| BroadcastGraphicsSetInputPayload;
+		| BroadcastGraphicsSetInputPayload
+		| BroadcastGraphicsSetOverridePayload
+		| BroadcastGraphicsSelectSourcePayload
+		| BroadcastGraphicsResolveBindingsPayload;
 
 /** One command as the reducer reads it: what kind of intent, and its content. */
 export type BroadcastGraphicsCommandInput
 	= | { type: 'Take' | 'Out'; payload: BroadcastGraphicsPlayoutPayload }
 		| { type: 'Update Graphic'; payload: BroadcastGraphicsUpdatePayload }
-		| { type: 'Set Input'; payload: BroadcastGraphicsSetInputPayload };
+		| { type: 'Set Input'; payload: BroadcastGraphicsSetInputPayload }
+		| { type: 'Set Override'; payload: BroadcastGraphicsSetOverridePayload }
+		| { type: 'Select Source'; payload: BroadcastGraphicsSelectSourcePayload }
+		| { type: 'Resolve Bindings'; payload: BroadcastGraphicsResolveBindingsPayload };
 
 /**
  * What the reducer needs to know about the Broadcast Graphic a command addresses.
  *
- * Only its declared Graphic Inputs: acceptance has to know each input's type,
- * constraints, requiredness, and On-air Update Policy, and none of that belongs
- * in live state, because it is authored configuration that an author may change
- * under a running show.
+ * Its declared Graphic Inputs, Graphic Source Selections, and Graphic Input
+ * Bindings, plus a way to resolve those bindings against current Event Data. None
+ * of it belongs in live state: the declarations are authored configuration an
+ * author may change under a running show, and Event Data belongs to the Event.
  */
 export interface BroadcastGraphicsReductionContext {
 	inputs: readonly GraphicInputDeclaration[];
+	sources?: readonly GraphicSourceSelectionDeclaration[];
+	bindings?: readonly GraphicInputBinding[];
+	/**
+	 * The latest bound value of each bound Graphic Input, for a given set of Graphic
+	 * Source Selections. Absent resolves nothing, which is what a caller with no
+	 * Event Data to hand — and every Broadcast Graphic that declares no binding —
+	 * correctly means.
+	 */
+	resolveBindings?: (selections: GraphicSourceSelectionsState) => Record<string, GraphicInputValue>;
 	/**
 	 * The authoritative instant this command was accepted at.
 	 *
@@ -181,7 +295,7 @@ export interface BroadcastGraphicsReductionContext {
 }
 
 export function createInitialBroadcastGraphicsLiveState(): BroadcastGraphicsLiveState {
-	return { playout: {}, inputs: {} };
+	return { playout: {}, inputs: {}, sources: {} };
 }
 
 /**
@@ -219,9 +333,105 @@ function nextPlayout(
 function withInputs(
 	state: BroadcastGraphicsLiveState,
 	graphicId: string,
-	inputs: BroadcastGraphicInputsState,
+	inputs: NormalizedBroadcastGraphicInputsState,
 ): BroadcastGraphicsLiveState {
 	return { ...state, inputs: { ...state.inputs, [graphicId]: inputs } };
+}
+
+/** The latest bound values for one Broadcast Graphic's current Graphic Source Selections. */
+function boundValuesFor(
+	state: BroadcastGraphicsLiveState,
+	graphicId: string,
+	context: BroadcastGraphicsReductionContext,
+	selections: GraphicSourceSelectionsState = broadcastGraphicSourceSelections(state, graphicId),
+): Record<string, GraphicInputValue> {
+	return context.resolveBindings?.(selections) ?? {};
+}
+
+/**
+ * Accept one Graphic Input's effective value now, if its On-air Update Policy says
+ * so and the graphic is on air.
+ *
+ * A live acceptance deliberately leaves `acceptedRevision` alone. It accepts its
+ * own fields and nothing else, so counting it would make ordinary live edits
+ * invalidate a staged Update Graphic another operator is preparing on the same
+ * graphic's other inputs.
+ */
+/*
+ * `keys` narrows this to one edited field, which is what a Set Input or Set Override
+ * passes. A Select Source or Resolve Bindings deliberately passes none: more than one
+ * binding may read the changed selection — including through a derived one — and
+ * re-accepting every live-policy input is both cheaper than working out which, and
+ * more correct, since it also picks up a live input that could not be accepted
+ * earlier and now can.
+ */
+function acceptLivePolicyValues(
+	inputs: NormalizedBroadcastGraphicInputsState,
+	context: BroadcastGraphicsReductionContext,
+	bound: Readonly<Record<string, GraphicInputValue>>,
+	onAir: boolean,
+	keys?: readonly string[],
+): Record<string, GraphicInputValue> {
+	if (!onAir)
+		return inputs.accepted;
+
+	let accepted = inputs.accepted;
+	for (const declaration of context.inputs) {
+		if (declaration.updatePolicy !== 'live')
+			continue;
+		if (keys && !keys.includes(declaration.key))
+			continue;
+
+		const effective = effectiveGraphicInputValue(declaration, inputs, context.bindings, bound);
+		if (!graphicInputAvailability(declaration, effective.value).available)
+			continue;
+		if (accepted === inputs.accepted)
+			accepted = { ...inputs.accepted };
+		accepted[declaration.key] = effective.value;
+	}
+
+	return accepted;
+}
+
+/**
+ * Refuse an edit whose Field Ownership claim no longer describes what its operator
+ * was shown.
+ *
+ * The claim is compared against the *effective* value — override, then a resolving
+ * binding, then the working value resolved against the declared default — because
+ * that is the value Live Control puts in the field. An unedited unbound input
+ * therefore reads as its declared default rather than as absence, which is the case a
+ * second operator's first edit falls into: without it, that edit would carry no
+ * comparable claim and silently overwrite the first operator's.
+ *
+ * A command with no claim is accepted unconditionally, which is what a caller with no
+ * displayed value to speak for — a server-side replay, a test — correctly means.
+ */
+function requireClaimMatchesShownValue(
+	state: BroadcastGraphicsLiveState,
+	graphicId: string,
+	inputKey: string,
+	basedOn: { value: GraphicInputValue } | undefined,
+	context: BroadcastGraphicsReductionContext,
+): void {
+	if (!basedOn)
+		return;
+
+	const declaration = findGraphicInputDeclaration(context.inputs, inputKey)!;
+	const shown = effectiveGraphicInputValue(
+		declaration,
+		broadcastGraphicInputsState(state, graphicId),
+		context.bindings,
+		boundValuesFor(state, graphicId, context),
+	);
+
+	if (!sameGraphicInputValue(basedOn.value, shown.value)) {
+		throw new BroadcastGraphicsCommandRejection(
+			'stale-input-edit',
+			`Another operator has already changed ${declaration.label} on this Broadcast Graphic`,
+			[inputKey],
+		);
+	}
 }
 
 /**
@@ -251,7 +461,8 @@ function reduceTake(
 		return { ...state, playout };
 
 	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
-	const blocked = unavailableRequiredGraphicInputs(inputs, context.inputs);
+	const bound = boundValuesFor(state, payload.graphicId, context);
+	const blocked = unavailableRequiredGraphicInputs(inputs, context.inputs, context.bindings, bound);
 	if (blocked.length > 0) {
 		throw new BroadcastGraphicsCommandRejection(
 			'required-input-unavailable',
@@ -260,10 +471,12 @@ function reduceTake(
 		);
 	}
 
+	// An off-air acceptance: a Take composes its values afresh rather than holding a
+	// value from the last time this graphic was on air.
 	return {
 		...withInputs(state, payload.graphicId, {
 			...inputs,
-			accepted: acceptGraphicInputValues(inputs, context.inputs),
+			accepted: acceptGraphicInputValues(inputs, context.inputs, context.bindings, bound, false),
 			acceptedRevision: inputs.acceptedRevision + 1,
 		}),
 		playout,
@@ -298,9 +511,13 @@ function reduceUpdateGraphic(
 		);
 	}
 
+	const bound = boundValuesFor(state, payload.graphicId, context);
+
+	// An on-air acceptance: an input that has become unavailable keeps its last
+	// accepted value, because program must not blank mid-show.
 	return withInputs(state, payload.graphicId, {
 		...inputs,
-		accepted: acceptGraphicInputValues(inputs, context.inputs),
+		accepted: acceptGraphicInputValues(inputs, context.inputs, context.bindings, bound, true),
 		acceptedRevision: inputs.acceptedRevision + 1,
 	});
 }
@@ -309,10 +526,12 @@ function reduceUpdateGraphic(
  * Set Input: change one working value, and — under a live On-air Update Policy on
  * an on-air graphic — accept that one field with it.
  *
- * A live acceptance deliberately leaves `acceptedRevision` alone. It accepts its
- * own field and nothing else, so counting it would make ordinary live edits
- * invalidate a staged Update Graphic another operator is preparing on the same
- * graphic's other inputs.
+ * An input a Graphic Input Binding resolves takes its value from that binding
+ * rather than from here, so this write is accepted but does not reach air while the
+ * binding stands. Live Control offers a Graphic Input Override for a bound input
+ * instead; this stays permissive because an author may add or remove a binding
+ * under a running show, and refusing an operator's keystroke over that race would
+ * be worse than storing a value the binding currently masks.
  */
 function reduceSetInput(
 	state: BroadcastGraphicsLiveState,
@@ -327,18 +546,175 @@ function reduceSetInput(
 		);
 	}
 
-	const declaration = findGraphicInputDeclaration(context.inputs, payload.inputKey)!;
 	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
-	const acceptsImmediately = declaration.updatePolicy === 'live'
-		&& state.playout[payload.graphicId]?.onAir === true
-		&& graphicInputAvailability(declaration, payload.value).available;
+	// The Field Ownership claim, checked against the one field this edit owns.
+	//
+	// Compared against what the operator was *shown*, which is the effective value —
+	// an override first, then a resolving binding, then the working value resolved
+	// against the declared default. That last case is the one the working value alone
+	// used to cover, and it is still what an unbound Graphic Input shows, which is the
+	// only kind Live Control writes here. Comparing against `working` would now make
+	// the claim describe something the operator never saw for a bound input.
+	requireClaimMatchesShownValue(state, payload.graphicId, payload.inputKey, payload.basedOn, context);
+
+	const edited: NormalizedBroadcastGraphicInputsState = {
+		...inputs,
+		working: { ...inputs.working, [payload.inputKey]: payload.value },
+	};
+
+	return withInputs(state, payload.graphicId, {
+		...edited,
+		accepted: acceptLivePolicyValues(
+			edited,
+			context,
+			boundValuesFor(state, payload.graphicId, context),
+			state.playout[payload.graphicId]?.onAir === true,
+			[payload.inputKey],
+		),
+	});
+}
+
+/**
+ * Set Override: mask this Graphic Input's binding with an operator's value, or clear
+ * the mask.
+ *
+ * The binding keeps resolving underneath, which is the whole point: an operator
+ * correcting one wrong value does not lose the live feed, and clearing the override
+ * resumes whatever the binding resolves at that moment rather than whatever it
+ * resolved when the override was set.
+ */
+function reduceSetOverride(
+	state: BroadcastGraphicsLiveState,
+	payload: BroadcastGraphicsSetOverridePayload,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicsLiveState {
+	if (!isDeclaredGraphicInput(context.inputs, payload.inputKey)) {
+		throw new BroadcastGraphicsCommandRejection(
+			'unknown-input',
+			`This Broadcast Graphic declares no Graphic Input named ${payload.inputKey}`,
+			[payload.inputKey],
+		);
+	}
+
+	// An override is field-scoped in exactly the way a working edit is, so it carries
+	// the same Field Ownership claim and is refused on the same terms. Without it, the
+	// one command an operator uses to correct a bound value would be the single hole in
+	// that discipline: two operators masking the same input would silently clobber each
+	// other while every other edit path refused to.
+	requireClaimMatchesShownValue(state, payload.graphicId, payload.inputKey, payload.basedOn, context);
+
+	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
+	const overrides = { ...inputs.overrides };
+
+	if (payload.value === null) {
+		// Clearing is always allowed, whatever the bindings say now. An author who removes
+		// a binding leaves any override standing — precedence is override-first — so the
+		// operator must always be able to take the mask off again.
+		delete overrides[payload.inputKey];
+	}
+	else {
+		// A Graphic Input Override masks a Graphic Input Binding. Setting one where there
+		// is no binding would be a second way to hold a value, with no rule saying which
+		// of the two wins, so it is refused rather than quietly becoming a manual value
+		// under a different name. Live Control never asks for this: it writes a working
+		// value for an unbound input and an override only for a bound one.
+		if (!context.bindings?.some(binding => binding.inputKey === payload.inputKey)) {
+			throw new BroadcastGraphicsCommandRejection(
+				'override-unbound',
+				`${payload.inputKey} has no Graphic Input Binding to override`,
+				[payload.inputKey],
+			);
+		}
+		overrides[payload.inputKey] = payload.value;
+	}
+
+	const edited: NormalizedBroadcastGraphicInputsState = { ...inputs, overrides };
+
+	return withInputs(state, payload.graphicId, {
+		...edited,
+		accepted: acceptLivePolicyValues(
+			edited,
+			context,
+			boundValuesFor(state, payload.graphicId, context),
+			state.playout[payload.graphicId]?.onAir === true,
+			[payload.inputKey],
+		),
+	});
+}
+
+/**
+ * Select Source: point one Graphic Source Selection at an entity, or clear it.
+ *
+ * Every Graphic Input Binding reading that selection re-resolves, and the On-air
+ * Update Policy decides which of those resolved values reach air now: a live one
+ * applies immediately, a staged one waits for Update Graphic. That is why the new
+ * selection is resolved here rather than after the command — the acceptance this
+ * command performs depends on its own effect.
+ */
+function reduceSelectSource(
+	state: BroadcastGraphicsLiveState,
+	payload: BroadcastGraphicsSelectSourcePayload,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicsLiveState {
+	const declaration = context.sources?.find(source => source.key === payload.sourceKey);
+	if (!declaration || !isOperatorSelectedGraphicSource(declaration)) {
+		throw new BroadcastGraphicsCommandRejection(
+			'unknown-source',
+			`This Broadcast Graphic has no operator-selected Graphic Source Selection named ${payload.sourceKey}`,
+		);
+	}
+
+	const selections = { ...broadcastGraphicSourceSelections(state, payload.graphicId) };
+	if (payload.selectionId === null)
+		delete selections[payload.sourceKey];
+	else
+		selections[payload.sourceKey] = payload.selectionId;
+
+	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
+	const bound = boundValuesFor(state, payload.graphicId, context, selections);
+
+	return {
+		...state,
+		sources: { ...state.sources, [payload.graphicId]: selections },
+		inputs: {
+			...state.inputs,
+			[payload.graphicId]: {
+				...inputs,
+				accepted: acceptLivePolicyValues(
+					inputs,
+					context,
+					bound,
+					state.playout[payload.graphicId]?.onAir === true,
+				),
+			},
+		},
+	};
+}
+
+/**
+ * Resolve Bindings: re-resolve this Broadcast Graphic's bindings and let the On-air
+ * Update Policy decide what that means.
+ *
+ * A live-policy input reaches air immediately; a staged one is left pending for an
+ * Update Graphic, which is the same rule every other acceptance follows. The command
+ * exists because Event Data changes without anybody issuing an operator action, and
+ * a lower third bound to a Player who has just been renamed should say the new name.
+ */
+function reduceResolveBindings(
+	state: BroadcastGraphicsLiveState,
+	payload: BroadcastGraphicsResolveBindingsPayload,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicsLiveState {
+	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
 
 	return withInputs(state, payload.graphicId, {
 		...inputs,
-		working: { ...inputs.working, [payload.inputKey]: payload.value },
-		accepted: acceptsImmediately
-			? { ...inputs.accepted, [payload.inputKey]: payload.value }
-			: inputs.accepted,
+		accepted: acceptLivePolicyValues(
+			inputs,
+			context,
+			boundValuesFor(state, payload.graphicId, context),
+			state.playout[payload.graphicId]?.onAir === true,
+		),
 	});
 }
 
@@ -356,7 +732,11 @@ export function applyBroadcastGraphicsCommand(
 	command: BroadcastGraphicsCommandInput,
 	context: BroadcastGraphicsReductionContext,
 ): BroadcastGraphicsLiveState {
-	const normalized: BroadcastGraphicsLiveState = { playout: state.playout ?? {}, inputs: state.inputs ?? {} };
+	const normalized: BroadcastGraphicsLiveState = {
+		playout: state.playout ?? {},
+		inputs: state.inputs ?? {},
+		sources: state.sources ?? {},
+	};
 
 	switch (command.type) {
 		case 'Take':
@@ -377,6 +757,12 @@ export function applyBroadcastGraphicsCommand(
 			return reduceUpdateGraphic(normalized, command.payload, context);
 		case 'Set Input':
 			return reduceSetInput(normalized, command.payload, context);
+		case 'Set Override':
+			return reduceSetOverride(normalized, command.payload, context);
+		case 'Select Source':
+			return reduceSelectSource(normalized, command.payload, context);
+		case 'Resolve Bindings':
+			return reduceResolveBindings(normalized, command.payload, context);
 	}
 }
 

@@ -332,6 +332,14 @@ function operationOutcomeLabel(outcome: NonNullable<GraphicsIngestionOperation['
 	return 'Graphic Asset Content unchanged';
 }
 
+function templatePackageInstallationLabel(
+	installation: NonNullable<GraphicsIngestionOperation['templatePackageInstallation']>,
+) {
+	return `Installed Template "${installation.templateName}" with ${installation.assets.length} Graphic Asset ${
+		installation.assets.length === 1 ? 'Revision' : 'Revisions'
+	}`;
+}
+
 async function inspectUsage(asset: GraphicAsset) {
 	usagePendingAssetId.value = asset.id;
 	try {
@@ -1260,6 +1268,9 @@ onMounted(async () => {
 							@click="cancelOperation"
 						/>
 					</div>
+					<p v-if="currentOperation.templatePackageInstallation" class="mt-2 text-sm text-muted">
+						{{ templatePackageInstallationLabel(currentOperation.templatePackageInstallation) }}
+					</p>
 					<p v-if="currentOperation.result" class="mt-2 text-sm text-muted">
 						{{ operationOutcomeLabel(currentOperation.result.outcome) }} Graphic Asset {{ currentOperation.result.assetId }} Graphic Asset Revision {{ currentOperation.result.revisionId }}
 					</p>

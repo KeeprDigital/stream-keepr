@@ -11,7 +11,11 @@ import {
 	featureMatchGraphicItemDefinition,
 	featureMatchGraphicItemSchemas,
 } from '~~/shared/featureMatchGraphicItemDefinitions';
-import { GRAPHIC_FONT_IDS } from '~~/shared/modules/graphics';
+import {
+	GRAPHIC_FONT_IDS,
+	graphicSourceRelationKind,
+	isKnownGraphicBindingFieldId,
+} from '~~/shared/modules/graphics';
 import {
 	CARD_ANIMATION_SPEED_VALUES,
 	DECK_CARD_SIZE_VALUES,
@@ -55,6 +59,7 @@ import {
 	GRAPHIC_REVEAL_EDGE_VALUES,
 	GRAPHIC_SLIDE_DIRECTION_VALUES,
 	GRAPHIC_SLIDE_DISTANCE_MODE_VALUES,
+	GRAPHIC_SOURCE_RELATION_VALUES,
 	GRAPHIC_SOURCE_SELECTION_KIND_VALUES,
 	GRAPHIC_TEXT_ALIGN_VALUES,
 	GRAPHIC_TEXT_TRANSFORM_VALUES,
@@ -871,13 +876,89 @@ const graphicSourceSelectionSchema = z.object({
 	key: graphicInputKeySchema,
 	label: graphicInputLabelSchema,
 	kind: z.enum(GRAPHIC_SOURCE_SELECTION_KIND_VALUES),
+	/**
+	 * A fixed relationship from another Graphic Source Selection instead of an
+	 * operator pick. Whether the named selection exists and whether the relationship
+	 * can yield this kind are checked on the `sources` array, which is the only place
+	 * that can see its siblings.
+	 */
+	from: z.object({
+		sourceKey: graphicInputKeySchema,
+		relation: z.enum(GRAPHIC_SOURCE_RELATION_VALUES),
+	}).strict().optional(),
 }).strict();
 
+/**
+ * A Graphic Input Binding names one catalog field.
+ *
+ * Only that the field id is a catalog name **somewhere** is checked here, across all
+ * eight Graphic Source Selection kinds at once. So `player.name` on a
+ * `feature-match-slot` selection passes this check and then resolves nothing for as
+ * long as it exists — authorable but permanently dead.
+ *
+ * That gap is deliberate rather than overlooked. Narrowing the id to the kind of the
+ * selection it reads, or checking it against the type of the Graphic Input it feeds,
+ * needs the `bindings`, `sources`, and `inputs` arrays together — an object-level
+ * rule, and object-level rules do not survive the per-mode patch derivation the
+ * editors write through, so it would be enforced on one write path and silently
+ * dropped on the other. Resolution is total instead: a binding whose field does not
+ * fit its kind or type resolves nothing, so the invariant that matters on air holds
+ * where it is enforceable. An authoring surface that only ever offers
+ * `graphicBindingFields(kind, game)` cannot produce the dead combination in the first
+ * place; a hand-written API call can.
+ */
 const graphicInputBindingSchema = z.object({
 	inputKey: graphicInputKeySchema,
 	sourceKey: graphicInputKeySchema,
-	fieldId: z.string().min(1).max(100),
+	fieldId: z.string().min(1).max(100).refine(
+		isKnownGraphicBindingFieldId,
+		'A Graphic Input Binding must name a field from the binding catalog',
+	),
 }).strict();
+
+/** Whether every derived Graphic Source Selection names a sibling it can actually follow. */
+function graphicSourceDerivationsResolve(
+	sources: readonly { key: string; kind: string; from?: { sourceKey: string; relation: string } }[],
+): boolean {
+	const byKey = new Map(sources.map(source => [source.key, source]));
+
+	return sources.every((source) => {
+		if (!source.from)
+			return true;
+		const parent = byKey.get(source.from.sourceKey);
+		if (!parent || parent.key === source.key)
+			return false;
+		return graphicSourceRelationKind(
+			parent.kind as never,
+			source.from.relation as never,
+		) === source.kind;
+	});
+}
+
+/**
+ * Whether the `from` chains terminate rather than looping back on themselves.
+ *
+ * Unreachable while the relation vocabulary stays acyclic, since a loop fails the
+ * reachability check above first. Kept as the rule an author would want stated if a
+ * future relation closes a cycle.
+ */
+function graphicSourceDerivationsAcyclic(
+	sources: readonly { key: string; from?: { sourceKey: string } }[],
+): boolean {
+	const byKey = new Map(sources.map(source => [source.key, source]));
+
+	return sources.every((source) => {
+		const seen = new Set<string>([source.key]);
+		let current = source.from?.sourceKey;
+		while (current !== undefined) {
+			if (seen.has(current))
+				return false;
+			seen.add(current);
+			current = byKey.get(current)?.from?.sourceKey;
+		}
+		return true;
+	});
+}
 
 const graphicItemBaseShape = {
 	id: z.string().min(1).max(100),
@@ -1054,6 +1135,15 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * Item, so the worst case is built from text, and adding a cheaper item kind
  * cannot move it — which is why this figure did not change when they landed.
  *
+ * Event Data binding moved that figure twice, in opposite directions, and left it
+ * slightly lower: a Graphic Input Binding's `fieldId` must now name a field the
+ * binding catalog actually defines, so the worst one is the longest real field name
+ * rather than 100 arbitrary characters, while a derived Graphic Source Selection
+ * gained a `from` naming a sibling key. Net effect is 1,525 bytes less than the
+ * animation-inclusive measurement it merged with — 596,673 became 595,148. The cap
+ * itself is unchanged: it is not this ticket's to set, and the number above the cap
+ * is a measurement of what the caps admit rather than a budget anyone chose.
+ *
  * It is deliberately a named cap so an operator reads which limit they reached
  * rather than a byte count. Graphic Group children count towards it — they are
  * Graphic Items and they cost bytes.
@@ -1133,7 +1223,7 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * the figures above describe only this mode's own contribution to it.
  */
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 110;
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 596_673;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 595_148;
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
 	return items.reduce(
@@ -1193,6 +1283,17 @@ export const broadcastGraphicConfigSchema = z.object({
 		.refine(
 			sources => new Set(sources.map(source => source.key)).size === sources.length,
 			'Graphic Source Selection keys must be unique within one Broadcast Graphic',
+		)
+		// A derived Graphic Source Selection is only meaningful if the relationship it
+		// names exists and yields the kind it declares — otherwise it is a selection
+		// that can never resolve, and an operator would have no picker to fix it with.
+		.refine(
+			graphicSourceDerivationsResolve,
+			'A derived Graphic Source Selection must follow a declared selection through a relationship that yields its own kind',
+		)
+		.refine(
+			graphicSourceDerivationsAcyclic,
+			'Graphic Source Selections must not derive from one another in a cycle',
 		)
 		.optional(),
 	bindings: z.array(graphicInputBindingSchema)

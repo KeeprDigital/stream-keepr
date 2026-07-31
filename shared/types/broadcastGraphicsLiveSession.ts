@@ -2,6 +2,7 @@ import type {
 	BroadcastGraphicsCommandInput,
 	BroadcastGraphicsCommandType,
 	BroadcastGraphicsLiveState,
+	BroadcastGraphicsRecoveryFault,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 
 /**
@@ -19,7 +20,19 @@ export interface BroadcastGraphicsLiveSessionResponse {
 	eventId: number;
 	screenId: number;
 	status: BroadcastGraphicsLiveSessionStatus;
+	/**
+	 * The live state every reader acts on.
+	 *
+	 * Already recovered: durable state that could not be trusted is reported through
+	 * `recoveryFault` and replaced here by a state with nothing on air, so no client
+	 * can accidentally render half of an unreadable session.
+	 */
 	currentState: BroadcastGraphicsLiveState;
+	/**
+	 * Why the durable live state behind this snapshot could not be trusted, when it
+	 * could not. Present until an explicit playout action writes a state that can be.
+	 */
+	recoveryFault: BroadcastGraphicsRecoveryFault | null;
 	sequence: number;
 	endedAt: Date | null;
 	createdAt: Date;
@@ -52,4 +65,41 @@ export interface BroadcastGraphicsCommandAppliedPayload {
 
 export interface BroadcastGraphicsCommandResult extends BroadcastGraphicsCommandAppliedPayload {
 	session: BroadcastGraphicsLiveSessionResponse;
+}
+
+/**
+ * The realtime notification that a Screen's playout epoch has been replaced.
+ *
+ * Deliberately carries no state at all. A client cannot apply an epoch change —
+ * whatever it holds belongs to a session that has ended, and the snapshot is the
+ * only thing that can say which epoch is current and what it starts from. So this
+ * says only "stop trusting what you have", which is what every reload path this
+ * notification triggers already knows how to answer.
+ *
+ * ## Which epoch endings publish it, and why
+ *
+ * An explicit live-state reset is the case that *needs* it: the Screen is unchanged,
+ * so no other message is published, and without this every peer would sit on the
+ * ended epoch — still rendering the graphics the reset was meant to clear.
+ *
+ * A mode change publishes it too, but as belt and braces rather than necessity:
+ * `screen:updated` already reaches every client, including Screen Outputs, and an
+ * output renders by the Screen's current mode, so it stops composing graphics on its
+ * own. This makes the cached epoch go deterministically rather than as a
+ * side effect of a component remount.
+ *
+ * A Screen delete deliberately publishes nothing. Those clients are about to be told
+ * the Screen itself is gone, and pointing them at a snapshot route that will now
+ * refuse them would surface a spurious failure on the way out.
+ */
+export interface BroadcastGraphicsEpochEndedPayload {
+	screenId: number;
+	/**
+	 * The epoch that ended, or null when the Screen had none open.
+	 *
+	 * Diagnostic rather than load-bearing: an epoch ending invalidates whatever a
+	 * client holds for that Screen whichever epoch it was, so no client decides
+	 * anything from this.
+	 */
+	sessionId: number | null;
 }
