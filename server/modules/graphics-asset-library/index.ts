@@ -26,6 +26,7 @@ import type {
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 	GraphicsIngestionSource,
+	GraphicsOperationsCockpit,
 	GraphicsReconciliationOverview,
 	GraphicsReconciliationSweepResult,
 	GraphicsRetentionOverview,
@@ -62,6 +63,7 @@ import type {
 	GraphicsStagingObjectStore,
 	ReadGraphicsObjectOutcome,
 } from './object-store';
+import type { GraphicsOperationsCockpitCatalogue } from './operations-cockpit';
 import type {
 	GraphicsAssetReconciliationCatalogue,
 	GraphicsReconciliationMedia,
@@ -110,6 +112,7 @@ import {
 	GraphicsObjectInputError,
 	readableBytes,
 } from './object-store';
+import { readGraphicsOperationsCockpit } from './operations-cockpit';
 import {
 	sha256Hex,
 	sha256HexStream,
@@ -556,6 +559,17 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 
 export interface GraphicsAssetLibrary {
 	getHealth: () => Promise<GraphicsAssetLibraryHealth>;
+	/**
+	 * The administrator-only Operations Cockpit reading: whether the library is
+	 * safe, and what needs attention.
+	 *
+	 * It composes catalogue and byte-store condition, capacity against its exact
+	 * boundaries, unfinished ingestion, the reconciliation backlog, lifecycle
+	 * deadlines, and recent outcomes into one domain-shaped answer. A catalogue
+	 * that cannot answer still produces a reading, because the question the
+	 * cockpit exists to settle is exactly the one that matters most then.
+	 */
+	getOperationsCockpit: () => Promise<GraphicsOperationsCockpit>;
 	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
 	updateCapacityLimits: (
 		input: GraphicsAssetCapacityLimits,
@@ -1325,6 +1339,38 @@ export function createGraphicsAssetLibrary(
 			now,
 			generateIdentity,
 		});
+	}
+
+	/**
+	 * The Operations Cockpit reads aggregates the ordinary in-memory catalogue
+	 * double does not implement, so it is available only against a catalogue that
+	 * can answer them.
+	 *
+	 * Every cockpit-specific method is checked rather than one standing in for
+	 * the rest, because a partially implemented double would otherwise fail
+	 * mid-reading with a `TypeError` instead of the domain error that says the
+	 * cockpit is unavailable for this catalogue.
+	 */
+	const COCKPIT_CATALOGUE_METHODS = [
+		'getCapacity',
+		'countUnavailableContent',
+		'countOpenDiscrepancies',
+		'countIsolatedDiscrepancies',
+		'getReconciliationState',
+		'summariseIngestionAttention',
+		'summariseRetentionDeadlines',
+		'listGraphicsAssetEvidence',
+	] as const satisfies readonly (keyof GraphicsOperationsCockpitCatalogue)[];
+
+	function requireCockpitCatalogue(): GraphicsOperationsCockpitCatalogue {
+		const catalogue = requireCatalogue();
+		if (!COCKPIT_CATALOGUE_METHODS.every(method => method in catalogue)) {
+			throw new GraphicsAssetLibraryError(
+				'The Graphics Asset Operations Cockpit is unavailable for this catalogue',
+				'graphics-asset-library-unavailable',
+			);
+		}
+		return catalogue as GraphicsAssetCatalogue & GraphicsOperationsCockpitCatalogue;
 	}
 
 	function requireReconciliation() {
@@ -3551,26 +3597,41 @@ export function createGraphicsAssetLibrary(
 		}
 	}
 
-	return {
-		async getHealth() {
-			const checkedAt = now().toISOString();
-			const [catalogue, staging, canonical] = await Promise.all([
-				catalogueHealth(dependencies.catalogue),
-				byteStoreHealth(dependencies.staging),
-				byteStoreHealth(dependencies.canonical),
-			]);
-			const status = catalogue.status === 'healthy'
+	/**
+	 * Whether each component can answer at all. Every component is probed even
+	 * when an earlier one has already failed, so one reading always reports the
+	 * complete picture rather than stopping at the first problem.
+	 */
+	async function probeLibraryHealth(): Promise<GraphicsAssetLibraryHealth> {
+		const checkedAt = now().toISOString();
+		const [catalogue, staging, canonical] = await Promise.all([
+			catalogueHealth(dependencies.catalogue),
+			byteStoreHealth(dependencies.staging),
+			byteStoreHealth(dependencies.canonical),
+		]);
+		return {
+			status: catalogue.status === 'healthy'
 				&& staging.status === 'healthy'
 				&& canonical.status === 'healthy'
 				? 'healthy'
-				: 'degraded';
+				: 'degraded',
+			checkedAt,
+			catalogue,
+			byteStores: { staging, canonical },
+		};
+	}
 
-			return {
-				status,
-				checkedAt,
-				catalogue,
-				byteStores: { staging, canonical },
-			};
+	return {
+		getHealth: probeLibraryHealth,
+		async getOperationsCockpit() {
+			return await catalogueRequest(
+				async () => await readGraphicsOperationsCockpit({
+					probeHealth: probeLibraryHealth,
+					catalogue: requireCockpitCatalogue,
+					now,
+				}),
+				'The Graphics Asset Operations Cockpit is temporarily unavailable',
+			);
 		},
 		async getCapacity() {
 			return await catalogueRequest(
