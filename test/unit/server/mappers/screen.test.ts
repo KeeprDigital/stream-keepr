@@ -60,45 +60,17 @@ describe('screen mapper', () => {
 			expect(result.screenConfig).toBeNull();
 		});
 
-		it('normalizes legacy Graphic Layer Order on reads', () => {
+		it('returns a stored Feature Match Layout unchanged, because nothing migrates one', () => {
+			// The legacy widget model is gone and the database is wiped before ship, so a
+			// read boundary has nothing to convert: what was stored is what is served.
 			const overlay = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-			overlay.layout.items = [
-				{
-					...overlay.layout.items[0]!,
-					id: 'front',
-					zIndex: 20,
-				},
-				{
-					id: 'legacy-media',
-					type: 'media',
-					label: 'Legacy media',
-					visible: true,
-					x: 0,
-					y: 0,
-					width: 640,
-					height: 360,
-					mediaKind: 'image',
-					fit: 'cover',
-					opacity: 1,
-				},
-				{
-					...overlay.layout.items[1]!,
-					id: 'back',
-					zIndex: 1,
-				},
-			] as never;
 			const screen = createMockScreen({
 				modeConfigs: { 'feature-match-overlay': overlay },
 			});
 
 			const result = mapScreenToResponse(screen);
-			const items = result.modeConfigs?.['feature-match-overlay'].layout.items ?? [];
-			expect(items.map(item => item.id)).toEqual(['legacy-media', 'back', 'front']);
-			expect(items.every(item => !('zIndex' in item))).toBe(true);
-			expect(items[0]).toMatchObject({
-				type: 'media',
-				focalPosition: { horizontal: 0.5, vertical: 0.5 },
-			});
+
+			expect(result.modeConfigs?.['feature-match-overlay']).toEqual(overlay);
 		});
 
 		it('never exposes capability material or internal reference markers', () => {

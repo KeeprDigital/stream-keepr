@@ -101,15 +101,8 @@ describe('template Package export through the API boundary', () => {
 		};
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		config.layout.frame.backgroundImage = reference;
-		// An application font alongside the library asset, so one package proves
-		// both halves of the rule: declared capability, embedded asset.
-		const styled = config.layout.items[0]!;
-		if (styled.type !== 'source')
-			throw new Error('Expected a styled source item fixture');
-		styled.surfaceStyle = {
-			...styled.surfaceStyle,
-			font: { kind: 'application', fontId: 'inter' },
-		};
+		// The preset's Text Graphic Items already name an application font, so one
+		// package proves both halves of the rule: declared capability, embedded asset.
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
 			{ method: 'PATCH', body: { layout: config.layout } },
@@ -152,7 +145,7 @@ describe('template Package export through the API boundary', () => {
 			'manifest.json',
 			'template.json',
 		].sort());
-		const template = archive.json<{ frame: { backgroundImage: unknown }; items: unknown[] }>('template.json');
+		const template = archive.json<{ frame: { backgroundImage: unknown }; sources: unknown[]; composition: { items: unknown[] } }>('template.json');
 		expect(template.frame.backgroundImage).toEqual(reference);
 		// A Template is not Screen live state: no Feature Match assignment travels.
 		expect(archive.text('template.json')).not.toContain('featureMatchId');
@@ -161,9 +154,10 @@ describe('template Package export through the API boundary', () => {
 			expect.objectContaining({
 				capability: 'application-font',
 				identity: 'inter',
-				requiredBy: ['items[0].surfaceStyle.font.fontId'],
 			}),
 			expect.objectContaining({ capability: 'graphic-item-definition', identity: 'source' }),
+			expect.objectContaining({ capability: 'graphic-item-definition', identity: 'group' }),
+			expect.objectContaining({ capability: 'graphic-item-definition', identity: 'text' }),
 		]));
 	});
 

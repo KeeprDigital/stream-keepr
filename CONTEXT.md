@@ -99,7 +99,7 @@ It also owns the Screen host contract: whether the mode renders as an overlay or
 Generic Screen configuration UI policy, such as container controls, dimension defaults, reset defaults, and output options, belongs with the Screen Mode Definition rather than the Screen configuration page.
 
 **Feature Match Overlay**:
-A Screen Mode that renders a production-ready Feature Match Layout for a Feature Match Slot, including external video source areas, widgets, frame graphics, and fill/key outputs.
+A Screen Mode that renders a production-ready Feature Match Layout for a Feature Match Slot, including external video source areas, Graphic Items, frame graphics, and fill/key outputs.
 _Avoid_: Generic overlay editor
 
 **Broadcast Graphics Screen**:

@@ -1,9 +1,7 @@
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
-import type { FeatureMatchOverlayMediaGraphicItemRenderModel } from '~/modules/feature-match-overlay/renderModel';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import FeatureMatchOverlayMediaGraphicItem from '~/components/Screen/Modes/FeatureMatchOverlay/MediaGraphicItem.vue';
 
 const reference: GraphicAssetReference = {
 	assetId: 'video-asset' as never,
@@ -35,31 +33,7 @@ describe('useScreenGraphicAssetContentUrls', () => {
 		const Child = defineComponent({
 			setup() {
 				const { contentUrl } = useScreenGraphicAssetContentUrls([reference]);
-				const media = computed<FeatureMatchOverlayMediaGraphicItemRenderModel>(() => ({
-					item: {
-						id: 'motion-ident',
-						type: 'media',
-						label: 'Motion ident',
-						visible: true,
-						x: 0,
-						y: 0,
-						width: 640,
-						height: 360,
-						mediaKind: 'silent-video',
-						asset: reference,
-						fit: 'cover',
-						focalPosition: { horizontal: 0.5, vertical: 0.5 },
-						opacity: 1,
-						loop: true,
-						playbackRate: 1,
-						videoCompatibility: 'all-supported',
-						videoTarget: 'chromium',
-					},
-					style: {},
-					contentStyle: {},
-					src: contentUrl(reference),
-				}));
-				return () => h(FeatureMatchOverlayMediaGraphicItem, { media: media.value });
+				return () => h('video', { src: contentUrl(reference) });
 			},
 		});
 		const Parent = defineComponent({

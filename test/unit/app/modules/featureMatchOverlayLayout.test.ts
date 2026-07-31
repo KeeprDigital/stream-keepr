@@ -1,517 +1,120 @@
-import type { FeatureMatchGraphicGroupItemConfig, FeatureMatchLayoutConfig, FeatureMatchLayoutItemConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchLayoutConfig, FeatureMatchSourceItemConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import {
-	addGroupChild,
-	addItem,
-	bringGroupChildToFront,
-	bringItemToFront,
-	convertGroupArrangement,
-	createGroupChild,
-	createLayoutItem,
-	moveGroupChildOrder,
-	moveItemOrder,
+	bringSourceToFront,
+	createSourceItem,
+	moveSourceOrder,
 	patchFrame,
-	patchGroup,
-	patchGroupChild,
-	patchGroupChildGraphicItem,
-	patchGroupChildRectFromAnchor,
-	patchItem,
-	patchItemRectFromAnchor,
-	removeGroupChild,
-	removeItem,
-	sendGroupChildToBack,
-	sendItemToBack,
-	setItemOrder,
+	patchSource,
+	patchSourceRectFromAnchor,
+	patchSourceSurfaceStyle,
+	removeSource,
+	sendSourceToBack,
 } from '~~/app/modules/feature-match-overlay/layout';
-import {
-	DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
-	normalizeFeatureMatchLayout,
-} from '~~/shared/types/screenConfig';
+import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 
-function graphicItemItem(overrides: Partial<Extract<FeatureMatchLayoutItemConfig, { type: 'graphic-item' }>> = {}): FeatureMatchLayoutItemConfig {
+/**
+ * The host-owned Feature Match Layout writer.
+ *
+ * It writes the Frame and the Source Items and nothing else — the shared item
+ * tree has its own writer — and every mutation that cannot apply returns the same
+ * layout reference so callers know not to submit.
+ */
+
+function source(overrides: Partial<FeatureMatchSourceItemConfig> = {}): FeatureMatchSourceItemConfig {
 	return {
-		id: 'w1',
-		type: 'graphic-item',
-		label: 'Graphic Item',
+		id: 's1',
+		label: 'Source',
 		visible: true,
 		x: 100,
 		y: 50,
-		width: 100,
-		height: 40,
-		graphicItem: { type: 'clock' },
-		...overrides,
-	};
-}
-
-function groupItem(overrides: Partial<FeatureMatchGraphicGroupItemConfig> = {}): FeatureMatchLayoutItemConfig {
-	return {
-		id: 'g1',
-		type: 'graphic-group',
-		label: 'Group',
-		visible: true,
-		x: 0,
-		y: 0,
-		width: 500,
+		width: 200,
 		height: 100,
-		arrangement: { mode: 'row', padding: 10, gap: 8, align: 'stretch', justify: 'start' },
-		children: [
-			{ id: 'c1', label: 'Child', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'stack', sizing: { mode: 'fixed', size: 120 } } },
-		],
+		sourceRole: 'main',
+		frameCutout: true,
 		...overrides,
 	};
 }
 
-function layoutOf(items: FeatureMatchLayoutItemConfig[]): FeatureMatchLayoutConfig {
+function layoutOf(sources: FeatureMatchSourceItemConfig[]): FeatureMatchLayoutConfig {
 	const base = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-	return { ...base.layout, items };
+	return { ...base.layout, sources };
 }
 
-function group(layout: FeatureMatchLayoutConfig, id = 'g1'): FeatureMatchGraphicGroupItemConfig {
-	return layout.items.find(item => item.id === id) as FeatureMatchGraphicGroupItemConfig;
-}
+describe('feature match layout writer', () => {
+	it('patches the Frame without touching the Source Items or the composition', () => {
+		const layout = layoutOf([source()]);
 
-describe('feature-match-overlay layout writer', () => {
-	it('migrates persisted legacy Widget structure only at the normalizer boundary', () => {
-		const legacy = {
-			...layoutOf([]),
-			items: [{
-				id: 'legacy-group',
-				type: 'widget-group',
-				label: 'Legacy group',
-				visible: true,
-				x: 0,
-				y: 0,
-				width: 100,
-				height: 100,
-				arrangement: { mode: 'canvas' },
-				children: [{
-					id: 'legacy-clock',
-					type: 'widget',
-					label: 'Clock',
-					visible: true,
-					widget: { type: 'clock' },
-					layout: { mode: 'canvas', x: 0, y: 0, width: 100, height: 40 },
-				}],
-			}],
-		} as unknown as FeatureMatchLayoutConfig;
+		const next = patchFrame(layout, { backgroundColor: '#123456' });
 
-		const normalized = normalizeFeatureMatchLayout(legacy);
-
-		expect(normalized.items).toEqual([
-			expect.objectContaining({
-				type: 'graphic-group',
-				children: [
-					expect.objectContaining({
-						type: 'graphic-item',
-						graphicItem: { type: 'clock', configurationVersion: 1 },
-					}),
-				],
-			}),
-		]);
-		expect(JSON.stringify(normalized)).not.toContain('"widget"');
+		expect(next.frame.backgroundColor).toBe('#123456');
+		expect(next.sources).toBe(layout.sources);
+		expect(next.composition).toBe(layout.composition);
 	});
 
-	it('fails closed on legacy image Widget asset values instead of reshaping them', () => {
-		const legacy = {
-			...layoutOf([]),
-			items: [{
-				id: 'legacy-image',
-				type: 'widget',
-				label: 'Image',
-				visible: true,
-				x: 10,
-				y: 20,
-				width: 200,
-				height: 100,
-				widget: {
-					type: 'image',
-					asset: { assetId: 'asset-1', revisionId: 'revision-2' },
-					fit: 'cover',
-					opacity: 0.6,
-					borderRadius: 12,
-				},
-			}],
-		} as unknown as FeatureMatchLayoutConfig;
+	it('patches a Source Item by id', () => {
+		const layout = layoutOf([source(), source({ id: 's2' })]);
 
-		expect(() => normalizeFeatureMatchLayout(legacy)).toThrow();
+		const next = patchSource(layout, 's2', { label: 'Renamed' });
+
+		expect(next.sources[1]!.label).toBe('Renamed');
+		expect(next.sources[0]).toBe(layout.sources[0]);
 	});
 
-	it('migrates every legacy missing Definition version without mutating the source layout', () => {
-		const legacy = layoutOf([
-			graphicItemItem({
-				graphicItem: { type: 'clock' },
-			}),
-			{
-				id: 'media',
-				type: 'media',
-				label: 'Media',
-				visible: true,
-				x: 0,
-				y: 0,
-				width: 100,
-				height: 100,
-				mediaKind: 'image',
-				fit: 'contain',
-				focalPosition: { horizontal: 0.5, vertical: 0.5 },
-				opacity: 1,
-			},
-			groupItem({
-				children: [{
-					id: 'nested-clock',
-					type: 'graphic-item',
-					label: 'Clock',
-					visible: true,
-					graphicItem: { type: 'clock' },
-					layout: { mode: 'canvas', x: 0, y: 0, width: 100, height: 40 },
-				}, {
-					id: 'nested-media',
-					type: 'media',
-					label: 'Media',
-					visible: true,
-					mediaKind: 'image',
-					fit: 'contain',
-					focalPosition: { horizontal: 0.5, vertical: 0.5 },
-					opacity: 1,
-					layout: { mode: 'canvas', x: 0, y: 40, width: 100, height: 60 },
-				}],
-			}),
-		] as FeatureMatchLayoutItemConfig[]);
+	it('merges a Source Item surface style rather than replacing it', () => {
+		const layout = layoutOf([source({ surfaceStyle: { borderVisible: true, borderColor: '#ffffff' } })]);
 
-		const normalized = normalizeFeatureMatchLayout(legacy);
+		const next = patchSourceSurfaceStyle(layout, 's1', { borderWidth: 6 });
 
-		expect(normalized.items[0]?.type === 'graphic-item' ? normalized.items[0].graphicItem.configurationVersion : null).toBe(1);
-		expect(normalized.items[1]?.type === 'media' ? normalized.items[1].configurationVersion : null).toBe(1);
-		expect(normalized.items[2]?.type === 'graphic-group' ? normalized.items[2].configurationVersion : null).toBe(1);
-		expect(normalized.items[2]?.type === 'graphic-group'
-			? normalized.items[2].children.map(child => child.type === 'media' ? child.configurationVersion : child.graphicItem.configurationVersion)
-			: []).toEqual([1, 1]);
-		expect(JSON.stringify(legacy)).not.toContain('configurationVersion');
+		expect(next.sources[0]!.surfaceStyle).toEqual({ borderVisible: true, borderColor: '#ffffff', borderWidth: 6 });
 	});
 
-	it('rejects an unsupported future Definition version atomically', () => {
-		const future = layoutOf([
-			graphicItemItem({
-				graphicItem: { type: 'clock', configurationVersion: 2 } as never,
-			}),
-			groupItem(),
-		]);
-		const original = structuredClone(future);
+	it('returns the same layout when an id names nothing', () => {
+		const layout = layoutOf([source()]);
 
-		expect(() => normalizeFeatureMatchLayout(future)).toThrow(
-			'Unsupported Graphic Item configuration version 2.',
-		);
-		expect(future).toEqual(original);
+		expect(patchSource(layout, 'missing', { label: 'x' })).toBe(layout);
+		expect(patchSourceSurfaceStyle(layout, 'missing', { borderWidth: 1 })).toBe(layout);
+		expect(patchSourceRectFromAnchor(layout, 'missing', 'width', 10)).toBe(layout);
+		expect(removeSource(layout, 'missing')).toBe(layout);
+		expect(moveSourceOrder(layout, 'missing', 1)).toBe(layout);
 	});
 
-	describe('id addressing and narrowing', () => {
-		it('patches an item by id, leaving siblings untouched', () => {
-			const layout = layoutOf([graphicItemItem({ id: 'a' }), graphicItemItem({ id: 'b' })]);
+	it('resizes a Source Item around its anchor', () => {
+		const layout = layoutOf([source({ anchor: 'center' })]);
 
-			const next = patchItem(layout, 'b', { label: 'Renamed' });
+		const next = patchSourceRectFromAnchor(layout, 's1', 'width', 100);
 
-			expect(next.items.find(item => item.id === 'b')!.label).toBe('Renamed');
-			expect(next.items.find(item => item.id === 'a')).toBe(layout.items[0]);
-		});
-
-		it('returns the same layout reference for an unknown id', () => {
-			const layout = layoutOf([graphicItemItem()]);
-
-			expect(patchItem(layout, 'missing', { label: 'x' })).toBe(layout);
-		});
-
-		it('patchGroup is a no-op (same reference) on a non-group item', () => {
-			const layout = layoutOf([graphicItemItem()]);
-
-			expect(patchGroup(layout, 'w1', { label: 'x' })).toBe(layout);
-		});
-
-		it('patches a Graphic Group child and narrows without casts', () => {
-			const layout = layoutOf([groupItem()]);
-
-			const next = patchGroupChildGraphicItem(layout, 'g1', 'c1', { type: 'clock', showLabel: true } as never);
-
-			expect(group(next).children[0]!.graphicItem).toMatchObject({ type: 'clock', showLabel: true });
-		});
-
-		it('patchGroupChild on a graphicItem item is a no-op', () => {
-			const layout = layoutOf([graphicItemItem()]);
-
-			expect(patchGroupChild(layout, 'w1', 'c1', { label: 'x' })).toBe(layout);
-		});
+		// The centre stays at 200; halving the width moves the left edge in by 50.
+		expect(next.sources[0]).toMatchObject({ x: 150, width: 100 });
 	});
 
-	describe('frame', () => {
-		it('patchFrame merges frame fields without touching items', () => {
-			const layout = layoutOf([graphicItemItem()]);
+	it('orders Source Items back to front by list order', () => {
+		const layout = layoutOf([source(), source({ id: 's2' }), source({ id: 's3' })]);
 
-			const next = patchFrame(layout, { backgroundColor: '#123456' });
-
-			expect(next.frame.backgroundColor).toBe('#123456');
-			expect(next.items).toBe(layout.items);
-		});
+		expect(sendSourceToBack(layout, 's3').sources.map(item => item.id)).toEqual(['s3', 's1', 's2']);
+		expect(bringSourceToFront(layout, 's1').sources.map(item => item.id)).toEqual(['s2', 's3', 's1']);
+		expect(moveSourceOrder(layout, 's1', 1).sources.map(item => item.id)).toEqual(['s2', 's1', 's3']);
 	});
 
-	describe('membership', () => {
-		it('addItem appends and removeItem removes by id', () => {
-			const layout = layoutOf([graphicItemItem({ id: 'a' })]);
+	it('does not reorder past either end', () => {
+		const layout = layoutOf([source(), source({ id: 's2' })]);
 
-			const withB = addItem(layout, graphicItemItem({ id: 'b' }));
-			expect(withB.items.map(item => item.id)).toEqual(['a', 'b']);
-
-			const withoutA = removeItem(withB, 'a');
-			expect(withoutA.items.map(item => item.id)).toEqual(['b']);
-		});
-
-		it('addGroupChild and removeGroupChild address the group by id', () => {
-			const layout = layoutOf([groupItem()]);
-
-			const withChild = addGroupChild(layout, 'g1', { id: 'c2', label: 'New', visible: true, type: 'graphic-item', graphicItem: { type: 'text' } as never, layout: { mode: 'stack', sizing: { mode: 'fixed', size: 100 } } });
-			expect(group(withChild).children.map(child => child.id)).toEqual(['c1', 'c2']);
-
-			const withoutFirst = removeGroupChild(withChild, 'g1', 'c1');
-			expect(group(withoutFirst).children.map(child => child.id)).toEqual(['c2']);
-		});
+		expect(moveSourceOrder(layout, 's1', -1)).toBe(layout);
+		expect(moveSourceOrder(layout, 's2', 1)).toBe(layout);
 	});
 
-	describe('anchored geometry', () => {
-		it('keeps the anchored edge fixed when resizing an item', () => {
-			const layout = layoutOf([graphicItemItem({ anchor: 'top-right' } as never)]);
+	it('creates a Source Item that cuts through the Frame by default', () => {
+		const layout = layoutOf([]);
 
-			const next = patchItemRectFromAnchor(layout, 'w1', 'width', 200);
+		const { layout: next, id } = createSourceItem(layout);
 
-			// Right edge was at 200; growing to 200 wide moves x to 0.
-			expect(next.items[0]).toMatchObject({ width: 200, x: 0 });
-		});
-
-		it('moves without resizing for position fields', () => {
-			const layout = layoutOf([graphicItemItem()]);
-
-			const next = patchItemRectFromAnchor(layout, 'w1', 'x', 300);
-
-			expect(next.items[0]).toMatchObject({ x: 300, width: 100 });
-		});
-
-		it('updates canvas child geometry through its anchor', () => {
-			const layout = layoutOf([groupItem({
-				arrangement: { mode: 'canvas', padding: 0 },
-				children: [
-					{ id: 'c1', label: 'Child', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'canvas', x: 10, y: 10, width: 100, height: 40 } },
-				],
-			})]);
-
-			const next = patchGroupChildRectFromAnchor(layout, 'g1', 'c1', 'width', 160);
-
-			expect(group(next).children[0]!.layout).toMatchObject({ width: 160, x: 10 });
-		});
-
-		it('is a no-op for stack children', () => {
-			const layout = layoutOf([groupItem()]);
-
-			expect(patchGroupChildRectFromAnchor(layout, 'g1', 'c1', 'width', 160)).toBe(layout);
-		});
+		expect(next.sources).toHaveLength(1);
+		expect(next.sources[0]).toMatchObject({ id, frameCutout: true, sourceRole: 'main' });
 	});
 
-	describe('arrangement conversion', () => {
-		it('converts stack children to canvas rects when switching to canvas', () => {
-			const layout = layoutOf([groupItem()]);
+	it('removes a Source Item by id', () => {
+		const layout = layoutOf([source(), source({ id: 's2' })]);
 
-			const next = convertGroupArrangement(layout, 'g1', 'canvas');
-
-			expect(group(next).arrangement).toEqual({ mode: 'canvas', padding: 10 });
-			expect(group(next).children[0]!.layout).toEqual({ mode: 'canvas', x: 0, y: 0, width: 120, height: 80 });
-		});
-
-		it('converts canvas children to fixed stack sizing when switching to row', () => {
-			const layout = layoutOf([groupItem({
-				arrangement: { mode: 'canvas', padding: 4 },
-				children: [
-					{ id: 'c1', label: 'Child', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'canvas', x: 20, y: 10, width: 150, height: 60 } },
-				],
-			})]);
-
-			const next = convertGroupArrangement(layout, 'g1', 'row');
-
-			expect(group(next).arrangement).toMatchObject({ mode: 'row', padding: 4, gap: 8, align: 'stretch', justify: 'start' });
-			expect(group(next).children[0]!.layout).toEqual({ mode: 'stack', sizing: { mode: 'fixed', size: 150 }, offsetX: 0, offsetY: 0 });
-		});
-
-		it('leaves children already in the target mode untouched, and non-groups as a no-op', () => {
-			const layout = layoutOf([groupItem(), graphicItemItem({ id: 'w9' })]);
-			const before = group(layout).children[0];
-
-			const next = convertGroupArrangement(layout, 'g1', 'column');
-			expect(group(next).children[0]).toEqual(before);
-			expect(group(next).arrangement).toMatchObject({ mode: 'column' });
-
-			expect(convertGroupArrangement(layout, 'w9', 'canvas')).toBe(layout);
-		});
-	});
-
-	describe('layer ordering', () => {
-		function threeItems() {
-			return [
-				graphicItemItem({ id: 'a' }),
-				{
-					id: 'media',
-					type: 'media',
-					label: 'Media',
-					visible: true,
-					x: 0,
-					y: 0,
-					width: 100,
-					height: 100,
-					mediaKind: 'image',
-					fit: 'contain',
-					focalPosition: { horizontal: 0.5, vertical: 0.5 },
-					opacity: 1,
-				} as FeatureMatchLayoutItemConfig,
-				graphicItemItem({ id: 'b' }),
-				graphicItemItem({ id: 'c' }),
-			];
-		}
-
-		it('sends an item behind every other layer', () => {
-			const next = sendItemToBack(layoutOf(threeItems()), 'c');
-			expect(next.items.map(item => item.id)).toEqual(['c', 'a', 'media', 'b']);
-		});
-
-		it('brings an item in front of every other layer', () => {
-			const next = bringItemToFront(layoutOf(threeItems()), 'a');
-			expect(next.items.map(item => item.id)).toEqual(['media', 'b', 'c', 'a']);
-		});
-
-		it('moves every Graphic Item kind one step in sibling list order', () => {
-			const next = moveItemOrder(layoutOf(threeItems()), 'a', 1);
-			expect(next.items.map(item => item.id)).toEqual(['media', 'a', 'b', 'c']);
-
-			const movedMedia = moveItemOrder(next, 'media', 1);
-			expect(movedMedia.items.map(item => item.id)).toEqual(['a', 'media', 'b', 'c']);
-		});
-
-		it('sets an item list position without persisting z-index', () => {
-			const next = setItemOrder(layoutOf(threeItems()), 'b', 0);
-			expect(next.items.map(item => item.id)).toEqual(['b', 'a', 'media', 'c']);
-			expect(next.items.every(item => !('zIndex' in item))).toBe(true);
-		});
-
-		it('reorders Graphic Group children by sibling list order', () => {
-			const source = layoutOf([groupItem({
-				children: [
-					{ id: 'a', label: 'A', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'canvas', x: 0, y: 0, width: 10, height: 10 } },
-					{ id: 'b', label: 'B', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'canvas', x: 0, y: 0, width: 10, height: 10 } },
-					{ id: 'c', label: 'C', visible: true, type: 'graphic-item', graphicItem: { type: 'clock' }, layout: { mode: 'canvas', x: 0, y: 0, width: 10, height: 10 } },
-				],
-			})]);
-
-			expect(group(moveGroupChildOrder(source, 'g1', 'a', 1)).children.map(child => child.id))
-				.toEqual(['b', 'a', 'c']);
-			expect(group(sendGroupChildToBack(source, 'g1', 'c')).children.map(child => child.id))
-				.toEqual(['c', 'a', 'b']);
-			expect(group(bringGroupChildToFront(source, 'g1', 'a')).children.map(child => child.id))
-				.toEqual(['b', 'c', 'a']);
-		});
-	});
-
-	describe('legacy normalization', () => {
-		it('preserves effective legacy stacking while removing z-index', () => {
-			const legacy = layoutOf([
-				graphicItemItem({ id: 'front', zIndex: 30 } as never),
-				{
-					id: 'media',
-					type: 'media',
-					label: 'Media',
-					visible: true,
-					x: 0,
-					y: 0,
-					width: 100,
-					height: 100,
-					mediaKind: 'image',
-					fit: 'cover',
-					opacity: 1,
-				} as never,
-				graphicItemItem({ id: 'middle', zIndex: 10 } as never),
-			]);
-
-			const normalized = normalizeFeatureMatchLayout(legacy);
-
-			expect(normalized.items.map(item => item.id)).toEqual(['media', 'middle', 'front']);
-			expect(normalized.items.every(item => !('zIndex' in item))).toBe(true);
-			expect(normalized.items[0]).toMatchObject({
-				type: 'media',
-				focalPosition: { horizontal: 0.5, vertical: 0.5 },
-			});
-		});
-	});
-
-	describe('creation', () => {
-		it('creates a Source Item with source defaults and returns its id', () => {
-			const { layout, id } = createLayoutItem(layoutOf([]), 'source');
-
-			const item = layout.items[0]!;
-			expect(item.id).toBe(id);
-			expect(item.type).toBe('source');
-			expect(item).toMatchObject({ frameCutout: true, sourceRole: 'main' });
-		});
-
-		it('creates a Graphic Item using the Graphic Item Definition default config', () => {
-			const { layout, id } = createLayoutItem(layoutOf([]), 'player-life-graphic-item');
-
-			const item = layout.items[0]!;
-			expect(item.id).toBe(id);
-			expect(item.type).toBe('graphic-item');
-			if (item.type === 'graphic-item') {
-				expect(item.graphicItem).toMatchObject({ type: 'player-life', playerSide: 'player1' });
-				expect(item.label).toBe('Life Graphic Item');
-			}
-		});
-
-		it('creates a first-class Media Graphic Item without author-editable z-index', () => {
-			const { layout } = createLayoutItem(layoutOf([]), 'media');
-
-			expect(layout.items[0]).toMatchObject({
-				type: 'media',
-				mediaKind: 'image',
-				fit: 'contain',
-				focalPosition: { horizontal: 0.5, vertical: 0.5 },
-			});
-			expect(layout.items[0]).not.toHaveProperty('zIndex');
-			expect(layout.items[0]).not.toHaveProperty('surfaceStyle');
-		});
-
-		it('creates a Graphic Group child matching the group arrangement mode', () => {
-			const { layout, id } = createGroupChild(layoutOf([groupItem()]), 'g1', 'text');
-
-			const child = group(layout).children.at(-1)!;
-			expect(child.id).toBe(id);
-			expect(child.type !== 'media' ? child.graphicItem.type : undefined).toBe('text');
-			expect(child.layout.mode).toBe('stack');
-		});
-
-		it('creates a Media Graphic Item child from the shared media defaults', () => {
-			const { layout, id } = createGroupChild(layoutOf([groupItem()]), 'g1', 'media' as never);
-
-			const child = group(layout).children.at(-1)!;
-			expect(child).toMatchObject({
-				id,
-				type: 'media',
-				label: 'Media Graphic Item',
-				mediaKind: 'image',
-				fit: 'contain',
-				focalPosition: { horizontal: 0.5, vertical: 0.5 },
-				opacity: 1,
-				videoTarget: 'safari',
-			});
-			expect(child).not.toHaveProperty('graphic-item');
-			expect(child).not.toHaveProperty('surfaceStyle');
-			expect(child).not.toHaveProperty('zIndex');
-		});
-
-		it('returns a null id and the same layout when creating a child on a non-group item', () => {
-			const source = layoutOf([graphicItemItem()]);
-			const { layout, id } = createGroupChild(source, 'w1', 'text');
-
-			expect(id).toBeNull();
-			expect(layout).toBe(source);
-		});
+		expect(removeSource(layout, 's1').sources.map(item => item.id)).toEqual(['s2']);
 	});
 });

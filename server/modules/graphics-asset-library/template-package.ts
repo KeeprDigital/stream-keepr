@@ -1,4 +1,3 @@
-import type { FeatureMatchGraphicItemType } from '~~/shared/featureMatchGraphicItemDefinitions';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
 	TemplatePackageAsset,
@@ -12,11 +11,11 @@ import type {
 	TemplatePackageManifest,
 	TemplatePackageTotals,
 } from '~~/shared/types/templatePackage';
-import {
-	FEATURE_MATCH_GRAPHIC_ITEM_TYPES,
-	featureMatchGraphicItemDefinition,
-} from '~~/shared/featureMatchGraphicItemDefinitions';
 import { FEATURE_MATCH_OVERLAY_FONT_IDS } from '~~/shared/featureMatchOverlayFonts';
+import {
+	FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION,
+	FEATURE_MATCH_SOURCE_ITEM_DEFINITION_ID,
+} from '~~/shared/featureMatchSourceItems';
 import { GRAPHIC_ITEM_KINDS } from '~~/shared/modules/graphics/itemDefinitions';
 import {
 	TEMPLATE_PACKAGE_ARTIFACTS,
@@ -237,11 +236,11 @@ export function inspectTemplateDocument(document: unknown): TemplateDocumentInsp
 }
 
 function supportedGraphicItemDefinitionVersion(identity: string): number | undefined {
-	if ((FEATURE_MATCH_GRAPHIC_ITEM_TYPES as readonly string[]).includes(identity)) {
-		return featureMatchGraphicItemDefinition(identity as FeatureMatchGraphicItemType)
-			.configurationVersion;
-	}
-	// The shared Graphics Foundation kinds carry their first configuration version.
+	// Source Item is the one host-owned Graphic Item Definition left; everything
+	// else a template can name is a shared Graphics Foundation kind carrying its
+	// first configuration version.
+	if (identity === FEATURE_MATCH_SOURCE_ITEM_DEFINITION_ID)
+		return FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION;
 	return (GRAPHIC_ITEM_KINDS as readonly string[]).includes(identity) ? 1 : undefined;
 }
 

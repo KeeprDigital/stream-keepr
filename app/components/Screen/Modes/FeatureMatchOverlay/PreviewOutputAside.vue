@@ -15,7 +15,7 @@ import {
  * and advisory action-safe and title-safe guides.
  *
  * Two selections travel through it, because the page has two authoring surfaces.
- * The host-owned one names the Frame, a Source Item, or a legacy widget; the
+ * The host-owned one names the Frame or a Source Item; the
  * shared one names a Graphic Item inside the one composition. Each is pushed into
  * the frame and reported back in its own vocabulary, and the editor keeps at most
  * one of them non-canvas.

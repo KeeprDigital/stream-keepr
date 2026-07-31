@@ -1,8 +1,6 @@
 import type { BroadcastGraphicConfig, GraphicItemConfig } from '../types/graphics';
 import type {
 	BroadcastGraphicsModeConfig,
-	FeatureMatchGraphicGroupContentConfig,
-	FeatureMatchLayoutItemConfig,
 	FeatureMatchOverlayModeConfig,
 } from '../types/screenConfig';
 import type {
@@ -10,10 +8,9 @@ import type {
 	TemplatePackageCapabilityRequirement,
 } from '../types/templatePackage';
 import {
-	featureMatchGraphicGroupChildGraphicItemConfig,
-	featureMatchGraphicItemDefinition,
-	featureMatchLayoutItemDefinition,
-} from '../featureMatchGraphicItemDefinitions';
+	FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION,
+	FEATURE_MATCH_SOURCE_ITEM_DEFINITION_ID,
+} from '../featureMatchSourceItems';
 import { getGraphicItemDefinition } from '../modules/graphics/itemDefinitions';
 import {
 	broadcastGraphicsGraphicAssetReferences,
@@ -112,37 +109,15 @@ export function broadcastGraphicTemplatePackageRequirements(
 	return { assets, capabilities };
 }
 
-function appendFeatureMatchItemCapabilities(
-	capabilities: TemplatePackageCapabilityRequirement[],
-	item: FeatureMatchLayoutItemConfig,
-): void {
-	const definition = featureMatchLayoutItemDefinition(item);
-	capabilities.push({
-		slot: `items.${item.id}.type`,
-		capability: 'graphic-item-definition',
-		identity: definition.id,
-		configurationVersion: definition.configurationVersion,
-	});
-	const content = item.type === 'graphic-item' ? item.graphicItem : item;
-	if (content.type !== 'graphic-group')
-		return;
-	for (const child of (content as FeatureMatchGraphicGroupContentConfig).children) {
-		const childDefinition = featureMatchGraphicItemDefinition(
-			featureMatchGraphicGroupChildGraphicItemConfig(child).type,
-		);
-		capabilities.push({
-			slot: `items.${item.id}.children.${child.id}.type`,
-			capability: 'graphic-item-definition',
-			identity: childDefinition.id,
-			configurationVersion: childDefinition.configurationVersion,
-		});
-	}
-}
-
 /**
  * A Feature Match Layout Template's payload is one reusable layout, so slots are
  * named relative to the layout the package carries rather than to the Screen
  * configuration the layout was discovered in.
+ *
+ * A layout declares two kinds of Graphic Item Definition capability: the shared
+ * ones its composition places, and the host-owned Source Item Definition. Both
+ * are declared, because a receiver that cannot render either cannot render the
+ * layout.
  */
 export function featureMatchLayoutTemplatePackageRequirements(
 	config: FeatureMatchOverlayModeConfig,
@@ -153,8 +128,16 @@ export function featureMatchLayoutTemplatePackageRequirements(
 		expectedKind: discovered.kind,
 	}));
 	const capabilities: TemplatePackageCapabilityRequirement[] = [];
-	for (const item of config.layout.items)
-		appendFeatureMatchItemCapabilities(capabilities, item);
+	for (const source of config.layout.sources) {
+		capabilities.push({
+			slot: `sources.${source.id}.type`,
+			capability: 'graphic-item-definition',
+			identity: FEATURE_MATCH_SOURCE_ITEM_DEFINITION_ID,
+			configurationVersion: FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION,
+		});
+	}
+	for (const item of config.layout.composition.items)
+		appendBroadcastGraphicItemCapabilities(capabilities, item, `composition.items.${item.id}`);
 	appendApplicationFontCapabilities(capabilities, config.layout, '');
 	return { assets, capabilities };
 }

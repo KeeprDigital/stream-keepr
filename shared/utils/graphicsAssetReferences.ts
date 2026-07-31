@@ -2,12 +2,9 @@ import type { GraphicGroupChildConfig, GraphicItemConfig } from '../types/graphi
 import type { GraphicAssetReference } from '../types/graphicsAsset';
 import type {
 	BroadcastGraphicsModeConfig,
-	FeatureMatchGraphicItemDefinitionOwnedConfig,
-	FeatureMatchOverlayBoxStyle,
 	FeatureMatchOverlayModeConfig,
 } from '../types/screenConfig';
 import type { GraphicsVideoTarget } from './graphicAssetTargetCompatibility';
-import { discoverFeatureMatchGraphicItemAssetReferences } from '../featureMatchGraphicItemDefinitions';
 import { chromiumTransparencyTargetCompatibility } from './graphicAssetTargetCompatibility';
 
 export interface ScreenGraphicAssetReference {
@@ -37,41 +34,6 @@ export function sameGraphicAssetReference(
 ): boolean {
 	return left?.assetId === right?.assetId
 		&& left?.revisionId === right?.revisionId;
-}
-
-function fontReference(
-	style: FeatureMatchOverlayBoxStyle | undefined,
-	ownerSlot: string,
-): ScreenGraphicAssetReference | undefined {
-	return style?.font?.kind === 'asset'
-		? { reference: style.font.reference, ownerSlot, kind: 'font' }
-		: undefined;
-}
-
-function appendFontReference(
-	references: ScreenGraphicAssetReference[],
-	style: FeatureMatchOverlayBoxStyle | undefined,
-	ownerSlot: string,
-) {
-	const reference = fontReference(style, ownerSlot);
-	if (reference)
-		references.push(reference);
-}
-
-function appendGraphicItemAssetReferences(
-	references: ScreenGraphicAssetReference[],
-	graphicItem: FeatureMatchGraphicItemDefinitionOwnedConfig,
-	ownerSlot: string,
-) {
-	for (const discovered of discoverFeatureMatchGraphicItemAssetReferences(graphicItem)) {
-		references.push({
-			reference: discovered.reference,
-			ownerSlot: `${ownerSlot}.${discovered.ownerSuffix}`,
-			kind: discovered.kind,
-			videoCompatibility: discovered.videoCompatibility,
-			videoTarget: discovered.videoTarget,
-		});
-	}
 }
 
 /**
@@ -118,6 +80,14 @@ function appendSharedGraphicItemReferences(
 	}
 }
 
+/**
+ * Every Graphic Asset Revision a Feature Match Overlay Screen publishes.
+ *
+ * Two sources, and only two: the Frame's background image, which is host-owned
+ * capability outside the shared vocabulary, and the Media Graphic Items of the
+ * shared item tree. Source Items pin nothing — they frame an external video
+ * source rather than carrying content.
+ */
 export function featureMatchOverlayGraphicAssetReferences(
 	config: FeatureMatchOverlayModeConfig,
 ): ScreenGraphicAssetReference[] {
@@ -129,23 +99,12 @@ export function featureMatchOverlayGraphicAssetReferences(
 			kind: 'image',
 		});
 	}
-	for (const item of config.layout.items) {
-		if (item.type === 'graphic-item')
-			appendFontReference(references, item.surfaceStyle, `layout.items.${item.id}.surfaceStyle.font`);
-		if (item.type === 'graphic-item') {
-			appendGraphicItemAssetReferences(references, item.graphicItem, `layout.items.${item.id}.graphicItem`);
-		}
-		else {
-			appendGraphicItemAssetReferences(references, item, `layout.items.${item.id}`);
-		}
-	}
 	// The shared item tree publishes under the same `layout.` prefix as everything
 	// else this mode owns. That prefix is load-bearing: a write scopes its reference
 	// delete to it, and a Screen Output resolves only the prefix for its Screen's
 	// current mode, so a tree publishing outside it would have its references
 	// orphaned by the next write.
-	if (config.layout.composition)
-		appendSharedGraphicItemReferences(references, config.layout.composition.items, 'layout.composition.items');
+	appendSharedGraphicItemReferences(references, config.layout.composition.items, 'layout.composition.items');
 
 	return references;
 }

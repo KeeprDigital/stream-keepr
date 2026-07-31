@@ -87,7 +87,7 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 		const previewFrame = wrapper.get('iframe').element;
 		Object.defineProperty(previewFrame, 'contentWindow', { configurable: true, value: window });
 		const previewWindow = previewFrame.contentWindow;
-		const target = { type: 'graphic-item', itemId: 'top-bar', childId: 'top-name-record' };
+		const target = { type: 'source', itemId: 'main-source' };
 
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: window.location.origin,
@@ -100,12 +100,12 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: window.location.origin,
 			source: null,
-			data: { type: 'feature-match-overlay:select', target: { type: 'layer', itemId: 'spoofed' } },
+			data: { type: 'feature-match-overlay:select', target: { type: 'source', itemId: 'spoofed' } },
 		}));
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: 'https://example.invalid',
 			source: previewWindow,
-			data: { type: 'feature-match-overlay:select', target: { type: 'layer', itemId: 'spoofed' } },
+			data: { type: 'feature-match-overlay:select', target: { type: 'source', itemId: 'spoofed' } },
 		}));
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: window.location.origin,

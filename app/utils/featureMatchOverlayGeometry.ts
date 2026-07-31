@@ -1,4 +1,4 @@
-import type { FeatureMatchOverlayBoxStyle, FeatureMatchOverlayRect, FeatureMatchSourceItemConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayRect, FeatureMatchSourceItemConfig, FeatureMatchSourceSurfaceStyle } from '~~/shared/types/screenConfig';
 
 export type FeatureMatchOverlayGeometryUnit = 'px' | '%' | 'center';
 export type { FeatureMatchOverlayAnchorValue } from '~~/shared/types/screenConfig';
@@ -155,11 +155,11 @@ function pixelValue(value: number | undefined, fallback = 0): number {
 	return Number.isFinite(numeric) ? Math.max(0, numeric) : Math.max(0, fallback);
 }
 
-function borderSideEnabled(style: FeatureMatchOverlayBoxStyle, side: 'Top' | 'Right' | 'Bottom' | 'Left'): boolean {
-	return style[`border${side}Visible` as keyof FeatureMatchOverlayBoxStyle] !== false;
+function borderSideEnabled(style: FeatureMatchSourceSurfaceStyle, side: 'Top' | 'Right' | 'Bottom' | 'Left'): boolean {
+	return style[`border${side}Visible` as keyof FeatureMatchSourceSurfaceStyle] !== false;
 }
 
-function borderSideInset(style: FeatureMatchOverlayBoxStyle, side: 'Top' | 'Right' | 'Bottom' | 'Left', borderWidth: number): number {
+function borderSideInset(style: FeatureMatchSourceSurfaceStyle, side: 'Top' | 'Right' | 'Bottom' | 'Left', borderWidth: number): number {
 	return style.borderVisible && borderSideEnabled(style, side) ? borderWidth : 0;
 }
 
@@ -223,7 +223,7 @@ export function normalizeFeatureMatchOverlayRadiiForRect(radii: FeatureMatchOver
 }
 
 export function featureMatchOverlaySourceCutoutRect(region: FeatureMatchSourceItemConfig): FeatureMatchOverlayRoundedRect {
-	const style: FeatureMatchOverlayBoxStyle = region.surfaceStyle ?? {};
+	const style: FeatureMatchSourceSurfaceStyle = region.surfaceStyle ?? {};
 	const borderWidth = style.borderVisible ? pixelValue(style.borderWidth) : 0;
 	const regionWidth = pixelValue(region.width);
 	const regionHeight = pixelValue(region.height);

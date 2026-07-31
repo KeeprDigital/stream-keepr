@@ -6,6 +6,7 @@ import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { getGraphicItemDefinition } from '../../shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 import { executeIntegrationD1 } from './integrationD1';
@@ -82,36 +83,27 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		};
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		config.layout.frame.backgroundImage = reference;
-		config.layout.items.push({
-			id: 'sponsor-logo',
-			type: 'media',
-			label: 'Sponsor logo',
-			visible: true,
-			x: 20,
-			y: 20,
-			width: 200,
-			height: 100,
-			mediaKind: 'image',
+		config.layout.composition.items.push({
+			...getGraphicItemDefinition('media').createDefault({
+				id: 'sponsor-logo',
+				label: 'Sponsor logo',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			}),
 			asset: reference,
-			fit: 'contain',
-			focalPosition: { horizontal: 0.5, vertical: 0.5 },
-			opacity: 1,
-		});
-		const group = config.layout.items.find(item => item.type === 'graphic-group');
-		if (group?.type !== 'graphic-group')
+		} as never);
+		const group = config.layout.composition.items.find(item => item.type === 'group');
+		if (group?.type !== 'group')
 			throw new Error('Expected a Graphic Group fixture');
 		group.children.push({
-			id: 'group-sponsor-logo',
-			type: 'media',
-			label: 'Grouped sponsor logo',
-			visible: true,
-			layout: { mode: 'canvas', x: 0, y: 0, width: 160, height: 90 },
+			...getGraphicItemDefinition('media').createDefault({
+				id: 'group-sponsor-logo',
+				label: 'Grouped sponsor logo',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			}),
 			asset: reference,
-			mediaKind: 'image',
-			fit: 'contain',
-			focalPosition: { horizontal: 0.5, vertical: 0.5 },
-			opacity: 1,
-		});
+		} as never);
 
 		const updated = await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
@@ -122,6 +114,8 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		const usage = await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${reference.assetId}/usage`,
 		);
+		// Usage is reported in owner-slot order, so the composed tree precedes the
+		// Frame it is drawn over.
 		expect(usage).toEqual([
 			expect.objectContaining({
 				reference,
@@ -129,27 +123,27 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 					kind: 'screen',
 					id: String(screenId),
 					name: 'Pinned Overlay',
+					slot: 'layout.composition.items.sponsor-logo.asset',
+					eventId,
+				},
+			}),
+			expect.objectContaining({
+				reference,
+				owner: {
+					kind: 'screen',
+					id: String(screenId),
+					name: 'Pinned Overlay',
+					slot: `layout.composition.items.${group.id}.children.group-sponsor-logo.asset`,
+					eventId,
+				},
+			}),
+			expect.objectContaining({
+				reference,
+				owner: {
+					kind: 'screen',
+					id: String(screenId),
+					name: 'Pinned Overlay',
 					slot: 'layout.frame.backgroundImage',
-					eventId,
-				},
-			}),
-			expect.objectContaining({
-				reference,
-				owner: {
-					kind: 'screen',
-					id: String(screenId),
-					name: 'Pinned Overlay',
-					slot: 'layout.items.sponsor-logo.asset',
-					eventId,
-				},
-			}),
-			expect.objectContaining({
-				reference,
-				owner: {
-					kind: 'screen',
-					id: String(screenId),
-					name: 'Pinned Overlay',
-					slot: `layout.items.${group.id}.children.group-sponsor-logo.asset`,
 					eventId,
 				},
 			}),
@@ -163,7 +157,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 			assetId: 'missing-asset',
 			revisionId: 'missing-revision',
 		};
-		config.layout.items = config.layout.items.filter((item: { id: string }) => item.id !== 'sponsor-logo');
+		config.layout.composition.items = config.layout.composition.items.filter((item: { id: string }) => item.id !== 'sponsor-logo');
 
 		await expect($fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
