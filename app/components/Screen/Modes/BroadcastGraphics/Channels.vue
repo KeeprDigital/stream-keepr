@@ -34,7 +34,12 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-	'update:channels': [next: { channels: GraphicChannelConfig[]; graphics?: BroadcastGraphicConfig[] }];
+	/**
+	 * The Screen configuration this change writes, carrying only the fields it moves —
+	 * except that deleting a Graphic Channel carries both, because releasing its members
+	 * must never be a second write.
+	 */
+	'update:channels': [next: { channels?: GraphicChannelConfig[]; graphics?: BroadcastGraphicConfig[] }];
 }>();
 
 const POLICY_OPTIONS = GRAPHIC_CHANNEL_HANDOFF_POLICY_VALUES.map(value => ({
@@ -65,52 +70,50 @@ const channelOptions = computed(() => [
 	...props.channels.map(channel => ({ value: channel.id, label: channel.name })),
 ]);
 
-function write(channels: GraphicChannelConfig[], graphics?: BroadcastGraphicConfig[]) {
+function write(next: { channels?: GraphicChannelConfig[]; graphics?: BroadcastGraphicConfig[] }) {
 	if (!canAuthor.value)
 		return;
-	emit('update:channels', graphics ? { channels, graphics } : { channels });
+	emit('update:channels', next);
 }
 
 function addChannel() {
-	write([
-		...props.channels,
-		{ id: randomCommandId('channel'), name: `Channel ${props.channels.length + 1}` },
-	]);
+	write({
+		channels: [
+			...props.channels,
+			{ id: randomCommandId('channel'), name: `Channel ${props.channels.length + 1}` },
+		],
+	});
 }
 
 function renameChannel(channelId: string, name: string) {
-	write(props.channels.map(channel => (channel.id === channelId ? { ...channel, name } : channel)));
+	write({ channels: props.channels.map(channel => (channel.id === channelId ? { ...channel, name } : channel)) });
 }
 
 function setPolicy(channelId: string, handoff: GraphicChannelHandoffPolicy) {
-	write(props.channels.map(channel => (channel.id === channelId ? { ...channel, handoff } : channel)));
+	write({ channels: props.channels.map(channel => (channel.id === channelId ? { ...channel, handoff } : channel)) });
+}
+
+/** The same Broadcast Graphic with no Graphic Channel, rather than an empty membership. */
+function released(graphic: BroadcastGraphicConfig): BroadcastGraphicConfig {
+	const { channelId: _released, ...rest } = graphic;
+	return rest;
 }
 
 function removeChannel(channelId: string) {
-	write(
-		props.channels.filter(channel => channel.id !== channelId),
-		props.graphics.map((graphic) => {
-			if (graphic.channelId !== channelId)
-				return graphic;
-			const { channelId: _released, ...rest } = graphic;
-			return rest;
-		}),
-	);
+	write({
+		channels: props.channels.filter(channel => channel.id !== channelId),
+		graphics: props.graphics.map(graphic => (graphic.channelId === channelId ? released(graphic) : graphic)),
+	});
 }
 
 function setMembership(graphicId: string, channelId: string | null) {
-	write(
-		[...props.channels],
-		props.graphics.map((graphic) => {
+	write({
+		graphics: props.graphics.map((graphic) => {
 			if (graphic.id !== graphicId)
 				return graphic;
-			if (channelId === null) {
-				const { channelId: _released, ...rest } = graphic;
-				return rest;
-			}
-			return { ...graphic, channelId };
+			return channelId === null ? released(graphic) : { ...graphic, channelId };
 		}),
-	);
+	});
 }
 </script>
 

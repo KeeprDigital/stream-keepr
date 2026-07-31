@@ -172,6 +172,42 @@ describe('broadcast graphics Graphic Channel handoffs', () => {
 		expect(state.b!.reversalCompletesAt).toBeUndefined();
 	});
 
+	it('brings the waiting graphic forward when Cut Out ends the exit it was waiting for', async () => {
+		const harness = await channelHarness('channel-cut-out', OUT_THEN_IN);
+		await take(harness, 'a');
+		await settle();
+		const handed = (await take(harness, 'b')).currentState.playout;
+
+		const state = (await harness.send({
+			commandId: playoutCommandId('cut-out-a'),
+			type: 'Out',
+			payload: { graphicId: 'a', cut: true },
+		})).currentState.playout;
+
+		// The outgoing exit's authoritative scheduled completion is now, so that is where
+		// the incoming enter begins — rather than staying at the instant the Take
+		// scheduled, which would hold the graphic off program for the exit's whole
+		// remaining run and then drop it on already settled.
+		expect(state.a).toMatchObject({ onAir: false, cut: true });
+		expect(state.b!.effectiveStartedAt).toBe(state.a!.effectiveStartedAt);
+		expect(state.b!.effectiveStartedAt).toBeLessThan(handed.b!.effectiveStartedAt);
+	});
+
+	it('leaves a waiting graphic where it is when a plain Out restates an exit already running', async () => {
+		const harness = await channelHarness('channel-plain-out', OUT_THEN_IN);
+		await take(harness, 'a');
+		await settle();
+		const handed = (await take(harness, 'b')).currentState.playout;
+
+		const state = (await harness.send({
+			commandId: playoutCommandId('plain-out-a'),
+			type: 'Out',
+			payload: { graphicId: 'a' },
+		})).currentState.playout;
+
+		expect(state).toEqual(handed);
+	});
+
 	it('performs the handoff immediately on Cut Take, bypassing the Handoff Policy', async () => {
 		const harness = await channelHarness('channel-cut', OUT_THEN_IN);
 		const taken = await take(harness, 'a');

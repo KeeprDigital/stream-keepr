@@ -168,7 +168,8 @@ const HANDOFF_POLICY_LABELS: Record<GraphicChannelHandoffPolicy, string> = {
 
 const channelContexts = computed(() => sessionStore.channelContexts(props.graphics, props.channels));
 
-const entries = computed(() => [...props.graphics].reverse().map(graphic => ({
+/** Every placed Broadcast Graphic's row, looked up by id. Order belongs to `groups`. */
+const entries = computed(() => props.graphics.map(graphic => ({
 	graphic,
 	playoutState: sessionStore.playoutState(
 		props.screen.id,

@@ -66,7 +66,7 @@ async function mountPanel(props: {
 function written(wrapper: Awaited<ReturnType<typeof mountPanel>>) {
 	const emitted = wrapper.emitted('update:channels');
 	return emitted?.[emitted.length - 1]?.[0] as
-		| { channels: GraphicChannelConfig[]; graphics?: BroadcastGraphicConfig[] }
+		| { channels?: GraphicChannelConfig[]; graphics?: BroadcastGraphicConfig[] }
 		| undefined;
 }
 
@@ -104,10 +104,10 @@ describe('broadcastGraphicsChannels', () => {
 		(picker.element as unknown as HTMLSelectElement).value = 'thirds';
 		await picker.trigger('change');
 
-		expect(written(wrapper)?.graphics).toEqual([
-			{ ...lowerThirdA, channelId: 'thirds' },
-			lowerThirdB,
-		]);
+		// Membership moves no channel, so the write carries none: it says what changed.
+		expect(written(wrapper)).toEqual({
+			graphics: [{ ...lowerThirdA, channelId: 'thirds' }, lowerThirdB],
+		});
 	});
 
 	it('releases a Broadcast Graphic rather than storing an empty membership', async () => {

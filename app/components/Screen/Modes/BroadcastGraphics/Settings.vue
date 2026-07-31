@@ -143,10 +143,10 @@ function updateGraphics(next: BroadcastGraphicConfig[]) {
  * would briefly hold graphics naming a lane it no longer declares — resolved
  * tolerantly everywhere, but a state no authoring action should be able to create.
  */
-function updateChannels(next: { channels: GraphicChannelConfig[]; graphics?: BroadcastGraphicConfig[] }) {
+function updateChannels(next: { channels?: GraphicChannelConfig[]; graphics?: BroadcastGraphicConfig[] }) {
 	if (!editLease.writable.value)
 		return;
-	updateConfig(next.graphics ? { channels: next.channels, graphics: next.graphics } : { channels: next.channels });
+	updateConfig(next);
 }
 </script>
 

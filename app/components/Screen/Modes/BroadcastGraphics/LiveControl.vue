@@ -107,15 +107,13 @@ const isOnAir = computed(() =>
  *
  * Waiting says what it actually is rather than "off": the graphic is this Graphic
  * Channel's latest selection and is about to enter, so telling an operator it is off
- * would read as a Take that did not land. The three on-air states never reach this.
+ * would read as a Take that did not land. Entering, on-air, and updating are absent
+ * because `isOnAir` is true for all three, so the note they would carry never renders.
  */
-const OFF_AIR_NOTES: Record<GraphicPlayoutState, string> = {
-	'off': 'This Broadcast Graphic is off.',
-	'waiting': 'This Broadcast Graphic is waiting for its Graphic Channel to clear.',
-	'exiting': 'This Broadcast Graphic is leaving air.',
-	'entering': '',
-	'on-air': '',
-	'updating': '',
+const OFF_AIR_NOTES: Partial<Record<GraphicPlayoutState, string>> = {
+	off: 'This Broadcast Graphic is off.',
+	waiting: 'This Broadcast Graphic is waiting for its Graphic Channel to clear.',
+	exiting: 'This Broadcast Graphic is leaving air.',
 };
 
 /**

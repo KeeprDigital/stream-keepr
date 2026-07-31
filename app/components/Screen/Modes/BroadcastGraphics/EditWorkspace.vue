@@ -41,7 +41,7 @@ const emit = defineEmits<{
 	 * any membership the change releases or assigns — one write, because deleting a
 	 * lane and releasing its members must never be two.
 	 */
-	'update:channels': [next: { channels: GraphicChannelConfig[]; graphics?: BroadcastGraphicConfig[] }];
+	'update:channels': [next: { channels?: GraphicChannelConfig[]; graphics?: BroadcastGraphicConfig[] }];
 	'update:selectedTarget': [target: GraphicsSelectionTarget];
 	'takeOver': [];
 }>();

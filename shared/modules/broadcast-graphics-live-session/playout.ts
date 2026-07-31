@@ -1,8 +1,7 @@
-import type { GraphicSourceSelectionsState } from '~~/shared/modules/graphics';
+import type { GraphicChannelStack, GraphicSourceSelectionsState } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
 	GraphicAnimationPhase,
-	GraphicChannelConfig,
 	GraphicChannelHandoffPolicy,
 	GraphicInputBinding,
 	GraphicInputDeclaration,
@@ -20,6 +19,7 @@ import {
 	broadcastGraphicPhaseDurations,
 	findGraphicInputDeclaration,
 	graphicChannelHandoffPolicy,
+	graphicChannelMembers,
 	graphicInputAvailability,
 	isOperatorSelectedGraphicSource,
 } from '~~/shared/modules/graphics';
@@ -558,23 +558,48 @@ function cutOff(acceptedAt: number): BroadcastGraphicPlayout {
  * Overlap means.
  */
 function channelHoldsWaiting(
-	playout: BroadcastGraphicPlayout | undefined,
-	state: BroadcastGraphicsLiveState,
+	playout: Readonly<Record<string, BroadcastGraphicPlayout>>,
 	graphicId: string,
 	channel: BroadcastGraphicChannelContext | undefined,
 	now: number,
 ): boolean {
-	if (playout?.onAir !== true || channel?.handoff !== 'out-then-in')
+	if (playout[graphicId]?.onAir !== true || channel?.handoff !== 'out-then-in')
 		return false;
 
-	return channel.members.some((member) => {
+	return channelClearsAt(playout, graphicId, channel, now) > now;
+}
+
+/**
+ * When this Graphic Channel's remaining outgoing graphics are scheduled to have left
+ * program, or `now` if none of them is still on it.
+ *
+ * The one instant an Out then in handoff schedules an incoming enter at, computed
+ * from the channel's other members rather than remembered — which is what keeps the
+ * instant a member *waits until* and the instant its enter *begins at* the same
+ * number even after a Cut Out shortens the exit it was waiting for.
+ *
+ * Bounded by each member's own `enterExitFlight`, so a reader whose clock is far from
+ * the authoritative one concludes the channel is clear and lets the incoming graphic
+ * in, rather than holding it off program for the length of the skew.
+ */
+function channelClearsAt(
+	playout: Readonly<Record<string, BroadcastGraphicPlayout>>,
+	graphicId: string,
+	channel: BroadcastGraphicChannelContext,
+	now: number,
+): number {
+	let clearsAt = now;
+
+	for (const member of channel.members) {
 		if (member.graphicId === graphicId)
-			return false;
-		const other = state.playout[member.graphicId];
-		return other !== undefined
-			&& !other.onAir
-			&& enterExitFlight(other, { now, durations: member.durations }) !== null;
-	});
+			continue;
+		const other = playout[member.graphicId];
+		if (!other || other.onAir || !enterExitFlight(other, { now, durations: member.durations }))
+			continue;
+		clearsAt = Math.max(clearsAt, phaseSettlesAt(other, member.durations));
+	}
+
+	return clearsAt;
 }
 
 /** The active update transition, walked forward to `now`. */
@@ -925,9 +950,6 @@ function channelHandoff(
 		return { playout: state.playout, entersAt: acceptedAt };
 
 	let playout = state.playout;
-	// Where the newcomer's enter may begin under Out then in: the latest authoritative
-	// scheduled completion among the exits this channel is still running.
-	let outgoingSettlesAt = acceptedAt;
 
 	for (const member of channel.members) {
 		if (member.graphicId === graphicId)
@@ -938,13 +960,13 @@ function channelHandoff(
 			continue;
 
 		if (current.onAir) {
-			const waiting = channelHoldsWaiting(current, state, member.graphicId, channel, acceptedAt);
-			const replaced = cut || waiting
-				? cutOff(acceptedAt)
-				: nextPlayout(current, { onAir: false, cut: false }, acceptedAt, member.durations);
-			playout = { ...playout, [member.graphicId]: replaced };
-			if (!cut && !waiting)
-				outgoingSettlesAt = Math.max(outgoingSettlesAt, phaseSettlesAt(replaced, member.durations));
+			const waiting = channelHoldsWaiting(state.playout, member.graphicId, channel, acceptedAt);
+			playout = {
+				...playout,
+				[member.graphicId]: cut || waiting
+					? cutOff(acceptedAt)
+					: nextPlayout(current, { onAir: false, cut: false }, acceptedAt, member.durations),
+			};
 			continue;
 		}
 
@@ -954,13 +976,15 @@ function channelHandoff(
 
 		if (cut || channel.handoff === 'overlap')
 			playout = { ...playout, [member.graphicId]: cutOff(acceptedAt) };
-		else
-			outgoingSettlesAt = Math.max(outgoingSettlesAt, phaseSettlesAt(current, member.durations));
 	}
 
 	return {
 		playout,
-		entersAt: cut || channel.handoff === 'overlap' ? acceptedAt : outgoingSettlesAt,
+		// Read back off the members this handoff has just written, so the instant the
+		// newcomer enters at is the same one every reader will hold it waiting until.
+		entersAt: cut || channel.handoff === 'overlap'
+			? acceptedAt
+			: channelClearsAt(playout, graphicId, channel, acceptedAt),
 	};
 }
 
@@ -1053,23 +1077,42 @@ function reduceOut(
 	payload: BroadcastGraphicsPlayoutPayload,
 	context: BroadcastGraphicsReductionContext,
 ): BroadcastGraphicsLiveState {
+	const { acceptedAt, channel } = context;
 	const current = state.playout[payload.graphicId];
-	const waiting = channelHoldsWaiting(current, state, payload.graphicId, context.channel, context.acceptedAt);
+	const next = channelHoldsWaiting(state.playout, payload.graphicId, channel, acceptedAt)
+		? cutOff(acceptedAt)
+		: nextPlayout(current, { onAir: false, cut: payload.cut === true }, acceptedAt, context.durations);
 
-	return {
-		...state,
-		playout: {
-			...state.playout,
-			[payload.graphicId]: waiting
-				? cutOff(context.acceptedAt)
-				: nextPlayout(
-						current,
-						{ onAir: false, cut: payload.cut === true },
-						context.acceptedAt,
-						context.durations,
-					),
-		},
-	};
+	if (next === current)
+		return state;
+
+	let playout = { ...state.playout, [payload.graphicId]: next };
+	if (channel?.handoff !== 'out-then-in')
+		return { ...state, playout };
+
+	// Out on the graphic a channel member is being held behind moves that member's enter
+	// with it. Out then in begins the incoming enter at the outgoing exit's authoritative
+	// scheduled completion, and a Cut Out makes that completion now — so the instant is
+	// re-derived rather than left where the Take put it. Leaving it would strand the
+	// incoming graphic at the first frame of its entrance, or drop it onto program
+	// already settled, for as long as the exit it was waiting for had left to run.
+	for (const member of channel.members) {
+		const held = state.playout[member.graphicId];
+		if (member.graphicId === payload.graphicId || !held)
+			continue;
+		if (!channelHoldsWaiting(state.playout, member.graphicId, channel, acceptedAt))
+			continue;
+
+		playout = {
+			...playout,
+			[member.graphicId]: {
+				...held,
+				effectiveStartedAt: channelClearsAt(playout, member.graphicId, channel, acceptedAt),
+			},
+		};
+	}
+
+	return { ...state, playout };
 }
 
 /**
@@ -1116,7 +1159,7 @@ function reduceUpdateGraphic(
 	// the same rule that makes editing an off graphic change its next Take's values.
 	if (
 		!playout?.onAir
-		|| channelHoldsWaiting(playout, state, payload.graphicId, context.channel, context.acceptedAt)
+		|| channelHoldsWaiting(state.playout, payload.graphicId, context.channel, context.acceptedAt)
 	) {
 		throw new BroadcastGraphicsCommandRejection(
 			'update-unavailable',
@@ -1464,16 +1507,12 @@ export function broadcastGraphicPhaseTiming(
  * — gets no entry, which is exactly the absent context that means "replaces nothing".
  */
 export function broadcastGraphicChannelContexts(
-	stack: {
-		graphics: readonly BroadcastGraphicConfig[];
-		channels?: readonly GraphicChannelConfig[];
-	},
+	stack: GraphicChannelStack,
 ): Record<string, BroadcastGraphicChannelContext> {
 	const contexts: Record<string, BroadcastGraphicChannelContext> = {};
 
 	for (const channel of stack.channels ?? []) {
-		const members = stack.graphics
-			.filter(graphic => graphic.channelId === channel.id)
+		const members = graphicChannelMembers(stack, channel.id)
 			.map(graphic => ({ graphicId: graphic.id, durations: broadcastGraphicPhaseDurations(graphic) }));
 		if (members.length === 0)
 			continue;
@@ -1555,7 +1594,7 @@ export function broadcastGraphicPlayoutState(
 	if (!timing)
 		return settled;
 
-	if (channelHoldsWaiting(playout, state, graphicId, timing.channel, timing.now))
+	if (channelHoldsWaiting(state.playout, graphicId, timing.channel, timing.now))
 		return 'waiting';
 
 	// Which way the graphic is travelling is the intent's, not the projected phase's: a
@@ -1610,7 +1649,7 @@ export function broadcastGraphicPhaseProjection(
 
 	// A Broadcast Graphic its Graphic Channel is holding has not entered, so there is no
 	// phase to project and nothing composes it into the frame to project one onto.
-	if (channelHoldsWaiting(playout, state, graphicId, timing.channel, timing.now))
+	if (channelHoldsWaiting(state.playout, graphicId, timing.channel, timing.now))
 		return null;
 
 	const flight = enterExitFlight(playout, timing);

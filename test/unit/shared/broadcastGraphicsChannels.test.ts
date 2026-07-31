@@ -13,11 +13,7 @@ import {
 	onAirBroadcastGraphicIds,
 	recoveredBroadcastGraphicsLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
-import {
-	broadcastGraphicChannel,
-	graphicChannelGroups,
-	graphicChannelHandoffPolicy,
-} from '~~/shared/modules/graphics';
+import { graphicChannelGroups, graphicChannelHandoffPolicy } from '~~/shared/modules/graphics';
 
 /** A fixed authoritative clock, so nothing here depends on wall time. */
 const T0 = 1_700_000_000_000;
@@ -272,6 +268,29 @@ describe('the Out then in Graphic Channel Handoff Policy', () => {
 		expect(stateOf(state, 'bravo', T0, QUEUED_THIRDS)).toBe('entering');
 		expect(stateOf(state, 'bravo', T0 + 1000, QUEUED_THIRDS)).toBe('on-air');
 	});
+
+	it('brings the waiting graphic forward when Cut Out ends the exit it was waiting for', () => {
+		let state = take(createInitialBroadcastGraphicsLiveState(), 'alpha', { channel: QUEUED_THIRDS });
+		state = take(state, 'bravo', { at: T0 + 5000, channel: QUEUED_THIRDS });
+		// The outgoing graphic's exit was scheduled to complete at T0 + 5500; cutting it
+		// makes its authoritative completion now, and the incoming enter begins there.
+		state = out(state, 'alpha', { at: T0 + 5200, cut: true, channel: QUEUED_THIRDS });
+
+		expect(stateOf(state, 'alpha', T0 + 5200, QUEUED_THIRDS)).toBe('off');
+		expect(stateOf(state, 'bravo', T0 + 5200, QUEUED_THIRDS)).toBe('entering');
+		expect(broadcastGraphicPhaseProjection(state, 'bravo', at(T0 + 5200, QUEUED_THIRDS)))
+			.toEqual({ phase: 'enter', elapsed: 0 });
+		expect(stateOf(state, 'bravo', T0 + 6200, QUEUED_THIRDS)).toBe('on-air');
+	});
+
+	it('leaves a waiting graphic where it is when a plain Out restates an exit already running', () => {
+		let state = take(createInitialBroadcastGraphicsLiveState(), 'alpha', { channel: QUEUED_THIRDS });
+		const handed = take(state, 'bravo', { at: T0 + 5000, channel: QUEUED_THIRDS });
+
+		state = out(handed, 'alpha', { at: T0 + 5200, channel: QUEUED_THIRDS });
+
+		expect(state).toEqual(handed);
+	});
 });
 
 describe('cancelling and cutting a Graphic Channel handoff', () => {
@@ -398,7 +417,9 @@ describe('the Graphic Channel context read from authored Screen configuration', 
 		const stack = { graphics: [graphic('alpha', 'deleted-channel')], channels };
 
 		expect(broadcastGraphicChannelContexts(stack).alpha).toBeUndefined();
-		expect(broadcastGraphicChannel(stack, 'alpha')).toBeUndefined();
+		expect(graphicChannelGroups(stack)).toEqual([
+			{ channel: null, graphics: [graphic('alpha', 'deleted-channel')] },
+		]);
 	});
 
 	it('organises the rundown by channel, in authored order, with unchanneled graphics last', () => {

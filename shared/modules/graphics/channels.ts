@@ -42,17 +42,6 @@ export function graphicChannelHandoffPolicy(
 	return channel?.handoff ?? DEFAULT_GRAPHIC_CHANNEL_HANDOFF_POLICY;
 }
 
-/** The Graphic Channel one placed Broadcast Graphic belongs to, if the Screen declares it. */
-export function broadcastGraphicChannel(
-	stack: GraphicChannelStack,
-	graphicId: string,
-): GraphicChannelConfig | undefined {
-	const channelId = stack.graphics.find(graphic => graphic.id === graphicId)?.channelId;
-	if (channelId === undefined)
-		return undefined;
-	return stack.channels?.find(channel => channel.id === channelId);
-}
-
 /**
  * The placed Broadcast Graphics in one Graphic Channel, in authored stack order.
  *
@@ -80,7 +69,12 @@ export function graphicChannelGroups(
 		.map(channel => ({ channel, graphics: graphicChannelMembers(stack, channel.id) }))
 		.filter(group => group.graphics.length > 0);
 
-	const unchanneled = stack.graphics.filter(graphic => !broadcastGraphicChannel(stack, graphic.id));
+	// A channel the Screen does not declare is no channel, so its members fall through
+	// here — which is the same tolerant resolution every other reader applies.
+	const declared = new Set(groups.map(group => group.channel.id));
+	const unchanneled = stack.graphics.filter(
+		graphic => graphic.channelId === undefined || !declared.has(graphic.channelId),
+	);
 	return unchanneled.length > 0
 		? [...groups, { channel: null, graphics: unchanneled }]
 		: groups;
