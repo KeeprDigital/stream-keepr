@@ -103,6 +103,20 @@ const isOnAir = computed(() =>
 );
 
 /**
+ * Why Update Graphic has nowhere to land, in the operator's terms.
+ *
+ * Waiting says what it actually is rather than "off": the graphic is this Graphic
+ * Channel's latest selection and is about to enter, so telling an operator it is off
+ * would read as a Take that did not land. Entering, on-air, and updating are absent
+ * because `isOnAir` is true for all three, so the note they would carry never renders.
+ */
+const OFF_AIR_NOTES: Partial<Record<GraphicPlayoutState, string>> = {
+	off: 'This Broadcast Graphic is off.',
+	waiting: 'This Broadcast Graphic is waiting for its Graphic Channel to clear.',
+	exiting: 'This Broadcast Graphic is leaving air.',
+};
+
+/**
  * Update Graphic has something to accept exactly when an edit is not yet on air *and*
  * could go on air.
  *
@@ -367,7 +381,7 @@ watch(
 				</div>
 			</div>
 			<p v-if="!isOnAir" class="text-xs text-muted" data-testid="live-control-off-note">
-				{{ playoutState === 'exiting' ? 'This Broadcast Graphic is leaving air.' : 'This Broadcast Graphic is off.' }}
+				{{ OFF_AIR_NOTES[playoutState] }}
 				Edits change the working values its next Take accepts.
 			</p>
 

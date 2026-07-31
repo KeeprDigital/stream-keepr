@@ -25,6 +25,7 @@ import {
 	readTemplatePackageParts,
 	writeTemplatePackage,
 } from '../../../helpers/templatePackageArchive';
+import { acceptEveryTemplateDocument } from '../../../helpers/templatePackagePayload';
 
 /**
  * Template Package installation, through the Graphics Asset Library's public
@@ -79,6 +80,7 @@ function createLibrary(
 		}),
 		staging,
 		canonical,
+		templatePayloads: acceptEveryTemplateDocument(),
 		now: () => new Date('2026-07-31T09:00:00.000Z'),
 		generateIdentity: () => `${label}-identity-${++nextIdentity}`,
 	});

@@ -132,7 +132,7 @@ describe('broadcast graphics Graphic Input command API', () => {
 		);
 
 		expect(res.status).toBe(409);
-		expect(res._data?.message).toMatch(/only while a Broadcast Graphic is on air/i);
+		expect(res._data?.message).toMatch(/only while a Broadcast Graphic is entering, on air, or updating/i);
 	});
 
 	it('rejects an acceptance another operator has already superseded', async () => {

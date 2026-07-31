@@ -237,6 +237,16 @@ export function readTemplatePackageManifest(value: unknown): ReadTemplatePackage
 			message: 'The package does not declare exactly one Template at its Template entry',
 		}));
 	}
+	// A declared source revision is provenance, so an unusable one is refused rather
+	// than dropped: silently discarding it would leave a later import unable to tell
+	// a re-import of the same design from a newer revision of it, with nothing in
+	// the report to say the information was ever there.
+	else if (
+		template.revision !== undefined
+		&& (!Number.isSafeInteger(template.revision) || (template.revision as number) <= 0)
+	) {
+		issues.push(invalidManifest('The package declares an unusable Template revision', 'template.revision'));
+	}
 
 	if (typeof migratedValue.createdAt !== 'string')
 		issues.push(invalidManifest('The package manifest records no creation time'));
@@ -603,6 +613,7 @@ export function inspectReceivedApplicationCapabilities(
 	manifest: TemplatePackageManifest,
 ): TemplatePackagePreflightIssue[] {
 	const { issues } = inspectTemplatePackageCapabilities(
+		manifest.packageKind,
 		manifest.applicationCapabilities.map(declaration => ({
 			slot: declaration.requiredBy[0] ?? declaration.identity,
 			capability: declaration.capability as TemplatePackageCapabilityKind,
@@ -620,6 +631,7 @@ export interface TemplatePackagePreflightReportInput {
 	packageKind: TemplatePackageKind;
 	templateIdentity: string;
 	templateName: string;
+	templateRevision?: number;
 	checkedAt: string;
 	/** The digest of the exact received archive bytes. */
 	sourceDigest: string;
@@ -649,6 +661,9 @@ export function templatePackagePreflightFingerprintMaterial(
 		packageKind: input.packageKind,
 		templateIdentity: input.templateIdentity,
 		templateName: input.templateName,
+		// Part of the provenance the installed copy keeps, so a confirmation is bound
+		// to the revision it was shown as much as to the identity.
+		templateRevision: input.templateRevision ?? null,
 		schema: input.schema,
 		compatibilityProfiles: [...input.compatibilityProfiles].sort(),
 		quotaGrowthBytes: input.quota.canonicalGrowthBytes,
@@ -701,6 +716,7 @@ export function assembleTemplatePackagePreflightReport(
 		packageKind: input.packageKind,
 		templateIdentity: input.templateIdentity,
 		templateName: input.templateName,
+		templateRevision: input.templateRevision,
 		checkedAt: input.checkedAt,
 		fingerprint: input.fingerprint,
 		schema: input.schema,

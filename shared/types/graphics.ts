@@ -40,11 +40,10 @@ export type TextOverflowPolicy = typeof TEXT_OVERFLOW_POLICY_VALUES[number];
 /**
  * The operator-visible lifecycle status of a placed Broadcast Graphic.
  *
- * The whole vocabulary is declared here because it is settled, but playout
- * currently produces only off and on-air. Waiting belongs to an Out-then-in
- * Graphic Channel handoff, and entering, updating, and exiting are the phases of
- * a Graphic Animation, so each becomes reachable with the capability that
- * creates it.
+ * Waiting means the graphic is selected by an Out then in Graphic Channel
+ * handoff but remains off every program output until the outgoing graphic
+ * finishes; entering, updating, and exiting are the phases of a Graphic
+ * Animation.
  */
 export const GRAPHIC_PLAYOUT_STATE_VALUES = [
 	'off',
@@ -56,6 +55,25 @@ export const GRAPHIC_PLAYOUT_STATE_VALUES = [
 ] as const;
 
 export type GraphicPlayoutState = typeof GRAPHIC_PLAYOUT_STATE_VALUES[number];
+
+/**
+ * The per-Graphic Channel rule for replacing its selected Broadcast Graphic.
+ *
+ * Overlap starts the outgoing exit and incoming enter together; Out then in
+ * waits for the outgoing exit to complete before starting the incoming enter.
+ */
+export const GRAPHIC_CHANNEL_HANDOFF_POLICY_VALUES = ['overlap', 'out-then-in'] as const;
+
+export type GraphicChannelHandoffPolicy = typeof GRAPHIC_CHANNEL_HANDOFF_POLICY_VALUES[number];
+
+/**
+ * The policy a Graphic Channel has when it does not state one.
+ *
+ * Absence rather than a written default, so "a Graphic Channel defaults to
+ * Overlap" is true of a channel nobody has configured as well as of one whose
+ * author chose it.
+ */
+export const DEFAULT_GRAPHIC_CHANNEL_HANDOFF_POLICY: GraphicChannelHandoffPolicy = 'overlap';
 
 /** An authoring projection of canonical pixel geometry. Storage is always pixels. */
 export const GRAPHIC_GEOMETRY_UNIT_VALUES = ['px', 'percent', 'grid'] as const;
@@ -907,10 +925,36 @@ export type GraphicItemConfig
 
 export type GraphicItemKind = GraphicItemConfig['type'];
 
+/**
+ * An optional playout lane allowing at most one of its Broadcast Graphics to be
+ * on air at a time.
+ *
+ * Authored Screen configuration rather than live state: which lane a graphic
+ * runs in is a decision about the show's design, and the channel's current
+ * member is derived from the playout intents the Live Session already holds.
+ */
+export interface GraphicChannelConfig {
+	id: string;
+	name: string;
+	/**
+	 * How this channel hands one member over to the next. Absent is Overlap,
+	 * which is the policy a Graphic Channel defaults to.
+	 */
+	handoff?: GraphicChannelHandoffPolicy;
+}
+
 /** An authored visual composition shown, hidden, and controlled as one unit. */
 export interface BroadcastGraphicConfig {
 	id: string;
 	name: string;
+	/**
+	 * The one Graphic Channel this Broadcast Graphic belongs to, or absent for a
+	 * graphic that runs concurrently with everything else.
+	 *
+	 * It never affects Graphic Layer Order: concurrent Broadcast Graphics always
+	 * render in their authored Screen stack order, whatever their channel.
+	 */
+	channelId?: string;
 	/** Graphic Layer Order: the back-to-front list order of this graphic's direct Graphic Items. */
 	items: GraphicItemConfig[];
 	/**

@@ -28,6 +28,7 @@ import {
 	writeTemplatePackage,
 	writeTestArchive,
 } from '../../../helpers/templatePackageArchive';
+import { acceptEveryTemplateDocument } from '../../../helpers/templatePackagePayload';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -99,6 +100,7 @@ function createLibrary(label: string) {
 		staging,
 		canonical,
 		silentVideoPlaybackValidator: acceptEverySilentVideo(),
+		templatePayloads: acceptEveryTemplateDocument(),
 		now: () => new Date('2026-07-30T09:00:00.000Z'),
 		generateIdentity: () => `${label}-identity-${++nextIdentity}`,
 	});
@@ -1018,6 +1020,7 @@ describe('the Template Package preflight contract', () => {
 				catalogue,
 				staging: createInMemoryStagingGraphicsObjectStore(),
 				canonical,
+				templatePayloads: acceptEveryTemplateDocument(),
 				now: () => new Date(clock),
 				generateIdentity: (() => {
 					let next = 0;

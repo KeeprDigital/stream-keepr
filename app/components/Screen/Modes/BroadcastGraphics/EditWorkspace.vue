@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/types/graphics';
 import type { GraphicsAuthoringLeaseStatus } from '~/composables/screen/useGraphicsAuthoringLease';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { Screen } from '~/types';
@@ -22,6 +22,8 @@ const props = defineProps<{
 	eventId: number;
 	screen: Screen;
 	graphics: readonly BroadcastGraphicConfig[];
+	/** The Screen's Graphic Channels: its optional playout lanes. */
+	channels: readonly GraphicChannelConfig[];
 	selectedTarget: GraphicsSelectionTarget;
 	selectedGraphicId: string | null;
 	canvasWidth: number;
@@ -34,6 +36,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	'update:graphics': [graphics: BroadcastGraphicConfig[]];
+	/**
+	 * Declaring, renaming, repolicying, or deleting a Graphic Channel, together with
+	 * any membership the change releases or assigns — one write, because deleting a
+	 * lane and releasing its members must never be two.
+	 */
+	'update:channels': [next: { channels?: GraphicChannelConfig[]; graphics?: BroadcastGraphicConfig[] }];
 	'update:selectedTarget': [target: GraphicsSelectionTarget];
 	'takeOver': [];
 }>();
@@ -134,6 +142,19 @@ const leaseNotice = computed(() => {
 					:selected-graphic="selectedGraphic"
 					:writable="canAuthor"
 					@placed="selectPlacedGraphic"
+				/>
+
+				<!--
+					Graphic Channels sit beside the stack rather than in it: a lane decides
+					which graphics replace each other on air, and never what composites over
+					what.
+				-->
+				<ScreenModesBroadcastGraphicsChannels
+					class="mt-4 block"
+					:graphics="graphics"
+					:channels="channels"
+					:writable="canAuthor"
+					@update:channels="emit('update:channels', $event)"
 				/>
 
 				<!--

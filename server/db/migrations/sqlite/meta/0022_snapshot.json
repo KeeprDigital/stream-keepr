@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e8b6a365-3e40-4e26-909c-52fe48ad7496",
-  "prevId": "09fac86e-95e8-4fca-ac40-2bd818aa2f04",
+  "id": "151169fe-0fbb-4e40-b10f-914cc4765168",
+  "prevId": "e8b6a365-3e40-4e26-909c-52fe48ad7496",
   "tables": {
     "archetype_cards": {
       "name": "archetype_cards",
@@ -223,6 +223,20 @@
           "notNull": false,
           "autoincrement": false
         },
+        "style_set_id": {
+          "name": "style_set_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "style_set_revision": {
+          "name": "style_set_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -245,6 +259,13 @@
           "name": "broadcast_graphic_templates_name_idx",
           "columns": [
             "name"
+          ],
+          "isUnique": false
+        },
+        "broadcast_graphic_templates_style_set_idx": {
+          "name": "broadcast_graphic_templates_style_set_idx",
+          "columns": [
+            "style_set_id"
           ],
           "isUnique": false
         }
@@ -2296,6 +2317,105 @@
         },
         "graphic_assets_name_idx": {
           "name": "graphic_assets_name_idx",
+          "columns": [
+            "name"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "graphic_style_sets": {
+      "name": "graphic_style_sets",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "draft_revision": {
+          "name": "draft_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "draft": {
+          "name": "draft",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "published": {
+          "name": "published",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "operation_version": {
+          "name": "operation_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "graphic_style_sets_name_idx": {
+          "name": "graphic_style_sets_name_idx",
           "columns": [
             "name"
           ],

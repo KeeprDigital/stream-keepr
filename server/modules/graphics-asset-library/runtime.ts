@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3';
 import type { GraphicsObjectStoreHealth } from './object-store';
 import { db } from 'hub:db';
+import { templatePackagePayloads } from '~~/server/modules/template-package-payload';
 import { createGraphicsAssetLibrary } from '.';
 import { createD1GraphicsAssetCatalogue } from './catalogue';
 import {
@@ -60,6 +61,11 @@ export function graphicsAssetLibraryForBindings(bindings: GraphicsBindings | und
 		remoteSource: createGraphicsRemoteSourceFetcher({
 			resolver: createDnsOverHttpsRemoteHostResolver(),
 		}),
+		// Every Template Package this installation receives is read as the artifact
+		// its kind declares, not merely as data. Wiring it here rather than importing
+		// it inside the library is what keeps the library from having to know what a
+		// Broadcast Graphic is in order to carry one.
+		templatePayloads: templatePackagePayloads,
 	});
 }
 

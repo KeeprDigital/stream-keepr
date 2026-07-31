@@ -1,10 +1,7 @@
-import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { screenParamsSchema } from '~~/server/schemas/api/screen';
 import { screenService } from '~~/server/services/screen';
-import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
-import { respondWithTemplatePackage } from '~~/server/utils/templatePackageExportApi';
-import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
+import { exportBroadcastGraphicTemplatePackage } from '~~/server/utils/templatePackageExportApi';
 
 /**
  * Exports one Broadcast Graphic Template as a `.skgraphic` Template Package.
@@ -37,23 +34,11 @@ export default defineEventHandler(async (event) => {
 		});
 	}
 
-	const requirements = broadcastGraphicTemplatePackageRequirements(graphic);
-	try {
-		return respondWithTemplatePackage(
-			event,
-			await graphicsAssetLibraryForEvent(event).exportTemplatePackage({
-				packageKind: 'skgraphic',
-				template: {
-					identity: graphic.id,
-					name: graphic.name,
-					document: graphic,
-				},
-				assets: requirements.assets,
-				capabilities: requirements.capabilities,
-			}),
-		);
-	}
-	catch (error) {
-		rethrowGraphicsAssetApiError(error, event);
-	}
+	// No revision to declare: a placed Broadcast Graphic is Screen configuration
+	// rather than a library entry, so it has no managed revision to be provenance.
+	return await exportBroadcastGraphicTemplatePackage(event, {
+		identity: graphic.id,
+		name: graphic.name,
+		document: graphic,
+	});
 });

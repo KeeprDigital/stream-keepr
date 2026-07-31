@@ -21,6 +21,7 @@ import { GRAPHICS_EVIDENCE_CATEGORY_GROUPS } from '~~/shared/utils/graphicsAsset
 import { evidenceOf } from '~~/test/helpers/graphicsEvidence';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import { collectStream } from '~~/test/helpers/storedZipArchive';
+import { acceptEveryTemplateDocument } from '~~/test/helpers/templatePackagePayload';
 
 const pixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -62,6 +63,7 @@ function createRetentionLibrary(
 		catalogue: createD1GraphicsAssetCatalogue(harness.database),
 		staging,
 		canonical,
+		templatePayloads: acceptEveryTemplateDocument(),
 		now: () => currentTime,
 		generateIdentity: () => `retention-${++nextIdentity}`,
 		...dependencies,

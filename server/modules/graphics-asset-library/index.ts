@@ -37,6 +37,7 @@ import type {
 	InstalledGraphicsTemplate,
 	InstalledGraphicsTemplateId,
 	InstalledGraphicsTemplateKind,
+	InstalledGraphicsTemplateSummary,
 } from '~~/shared/types/graphicsAsset';
 import type {
 	TemplatePackageAssetOrigin,
@@ -47,6 +48,7 @@ import type {
 	TemplatePackageKind,
 	TemplatePackageManifest,
 	TemplatePackageMappingBasis,
+	TemplatePackagePayloads,
 	TemplatePackagePreflightIssue,
 	TemplatePackagePreflightMapping,
 	TemplatePackagePreflightQuota,
@@ -303,6 +305,8 @@ export interface InstallTemplatePackageCatalogueInput {
 		/** Already rewritten to exact local identities and revisions. */
 		document: unknown;
 		sourceTemplateIdentity: string;
+		/** The revision the package declared for that identity, where it declared one. */
+		sourceTemplateRevision?: number;
 	};
 	created: readonly CreatedTemplatePackageGraphicAsset[];
 	reused: readonly ReusedTemplatePackageGraphicAsset[];
@@ -466,6 +470,10 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	findInstalledGraphicsTemplate: (
 		templateId: InstalledGraphicsTemplateId,
 	) => Promise<InstalledGraphicsTemplate | undefined>;
+	/** Every Installed Graphics Template of one kind, for that kind's library browser. */
+	listInstalledGraphicsTemplates: (
+		kind: InstalledGraphicsTemplateKind,
+	) => Promise<InstalledGraphicsTemplateSummary[]>;
 	/**
 	 * What this installation already holds for one packaged Graphic Asset Origin:
 	 * the exact local revision carrying that source identity and revision, and
@@ -687,6 +695,29 @@ export interface GraphicsAssetLibrary {
 	inspectInstalledGraphicsTemplate: (input: {
 		templateId: InstalledGraphicsTemplateId;
 	}) => Promise<InstalledGraphicsTemplate>;
+	/**
+	 * One Installed Graphics Template, or nothing.
+	 *
+	 * The tolerant read beside {@link inspectInstalledGraphicsTemplate}'s strict one.
+	 * A caller resolving an identity that may belong to something else entirely is
+	 * asking a question, not asserting the Template exists, and turning that into a
+	 * thrown error it has to catch and re-interpret is how a genuine failure ends up
+	 * indistinguishable from a miss.
+	 */
+	findInstalledGraphicsTemplate: (input: {
+		templateId: string;
+	}) => Promise<InstalledGraphicsTemplate | undefined>;
+	/**
+	 * Every Installed Graphics Template of one kind.
+	 *
+	 * Read by the library that owns that artifact, so an imported design appears
+	 * alongside the ones authored here rather than in a second place an author has to
+	 * know to look. The library's own storage stays here: nothing outside reads or
+	 * writes an Installed Graphics Template row.
+	 */
+	listInstalledGraphicsTemplates: (input: {
+		kind: InstalledGraphicsTemplateKind;
+	}) => Promise<InstalledGraphicsTemplateSummary[]>;
 	cancelGraphicsIngestion: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
@@ -921,6 +952,11 @@ export interface TemplatePackageExportRequest {
 	template: {
 		identity: string;
 		name: string;
+		/**
+		 * The revision the exporting workflow is at, where it manages one. It travels
+		 * as provenance beside the identity and never as an update link.
+		 */
+		revision?: number;
 		document: unknown;
 	};
 	/** Every exact revision the Template transitively requires, by Template slot. */
@@ -949,6 +985,17 @@ interface GraphicsAssetLibraryDependencies {
 	canonical: GraphicsObjectStoreHealth | GraphicsCanonicalObjectStore;
 	silentVideoPlaybackValidator?: SilentVideoPlaybackValidator;
 	remoteSource?: GraphicsRemoteSourceFetcher;
+	/**
+	 * How a received Template document is read as the artifact its package kind
+	 * claims. Injected rather than imported, because the library must not learn what
+	 * a Broadcast Graphic is to carry one.
+	 *
+	 * Optional because most of the library never receives a package at all — a
+	 * delivery path serving canonical bytes has no use for it. Receiving one is a
+	 * different matter: `initiateTemplatePackagePreflight` refuses without a registry
+	 * rather than letting the artifact check quietly become a no-op.
+	 */
+	templatePayloads?: TemplatePackagePayloads;
 	now?: () => Date;
 	generateIdentity?: () => string;
 }
@@ -1090,6 +1137,16 @@ export function createGraphicsAssetLibrary(
 		if (!('createImmutable' in dependencies.canonical))
 			throw new GraphicsAssetLibraryError('Graphics Asset canonical byte store is unavailable', 'graphics-asset-library-unavailable');
 		return dependencies.canonical;
+	}
+
+	function requireTemplatePayloads(): TemplatePackagePayloads {
+		if (!dependencies.templatePayloads) {
+			throw new GraphicsAssetLibraryError(
+				'Template Package receipt is unavailable without a Template Package payload registry',
+				'graphics-asset-library-unavailable',
+			);
+		}
+		return dependencies.templatePayloads;
 	}
 
 	/**
@@ -2324,6 +2381,56 @@ export function createGraphicsAssetLibrary(
 	} as const;
 
 	/**
+	 * Reads a received Template document as the artifact its package claims to
+	 * carry, and holds the manifest to what that document actually requires.
+	 *
+	 * Two separate refusals, and they fail differently on purpose:
+	 *
+	 * - A document that is not this kind's artifact is `invalid-template-document`.
+	 *   Nothing downstream could use it, so there is nothing to weigh.
+	 * - A document requiring an application capability the manifest never declares
+	 *   is `unsupported-application-capability`. The declaration is the *only* place
+	 *   a configuration version is stated — a document carries a Graphic Item's
+	 *   configuration, never the version it was written under — so an undeclared
+	 *   Definition is one whose version this installation was never given a chance
+	 *   to check. Installing it would be assuming the sender meant the version we
+	 *   happen to implement, which is precisely the assumption a version-pinned
+	 *   envelope exists to refuse.
+	 *
+	 * Over-declaration is not an error. A manifest naming a capability the document
+	 * no longer uses costs a supported-capability check and nothing else, and a
+	 * receiver refusing it would reject packages that are entirely installable.
+	 */
+	function inspectReceivedTemplatePayload(
+		manifest: TemplatePackageManifest,
+		document: unknown,
+	): TemplatePackagePreflightIssue[] {
+		const read = requireTemplatePayloads()(manifest.packageKind).readInstallableDocument(document);
+		if (read.outcome === 'rejected') {
+			return read.issues.map(issue => templatePackagePreflightIssue(issue.code, {
+				subject: issue.subject,
+				message: issue.message,
+			}));
+		}
+		const declared = new Set(manifest.applicationCapabilities.map(
+			declaration => `${declaration.capability}:${declaration.identity}`,
+		));
+		const undeclared = new Map<string, TemplatePackageCapabilityRequirement>();
+		for (const requirement of read.capabilities) {
+			const key = `${requirement.capability}:${requirement.identity}`;
+			if (declared.has(key) || undeclared.has(key))
+				continue;
+			undeclared.set(key, requirement);
+		}
+		return [...undeclared.values()].map(requirement =>
+			templatePackagePreflightIssue('unsupported-application-capability', {
+				subject: requirement.slot,
+				message: `The Template requires ${requirement.capability} "${requirement.identity}", which the package never declares`,
+			}),
+		);
+	}
+
+	/**
 	 * Streams one archive entry in bounded chunks so its digest can be recomputed
 	 * without the entry ever being resident in full.
 	 */
@@ -2386,6 +2493,7 @@ export function createGraphicsAssetLibrary(
 				packageKind?: TemplatePackageKind;
 				templateIdentity?: string;
 				templateName?: string;
+				templateRevision?: number;
 				schema?: TemplatePackagePreflightReport['schema'];
 				compatibilityProfiles?: readonly string[];
 				mappings?: readonly TemplatePackagePreflightMapping[];
@@ -2397,6 +2505,7 @@ export function createGraphicsAssetLibrary(
 				packageKind: options.packageKind ?? 'skgraphic',
 				templateIdentity: options.templateIdentity ?? '',
 				templateName: options.templateName ?? '',
+				templateRevision: options.templateRevision,
 				sourceDigest: input.sourceDigest,
 				schema: options.schema ?? {
 					received: 0,
@@ -2501,6 +2610,7 @@ export function createGraphicsAssetLibrary(
 			packageKind: manifest.packageKind,
 			templateIdentity: manifest.template.identity,
 			templateName: manifest.template.name,
+			templateRevision: manifest.template.revision,
 			schema,
 			observed,
 		};
@@ -2565,6 +2675,12 @@ export function createGraphicsAssetLibrary(
 						message: issue.message,
 					}));
 				}
+				// The envelope has now proved the document is data. Only the package
+				// kind's own payload can prove it is the *artifact* the package
+				// claims, and only it can say which application capabilities the
+				// document genuinely requires — which is what holds the manifest's
+				// declarations to the document rather than to the sender's word.
+				issues.push(...inspectReceivedTemplatePayload(manifest, document));
 				// A package embeds every asset its Template needs and no others.
 				// The document names the sender's identities, which are exactly the
 				// provenance each packaged asset declares.
@@ -3114,6 +3230,7 @@ export function createGraphicsAssetLibrary(
 					name: manifest.template.name,
 					document: rewrite.document,
 					sourceTemplateIdentity: manifest.template.identity,
+					sourceTemplateRevision: manifest.template.revision,
 				},
 				created,
 				reused,
@@ -3854,6 +3971,13 @@ export function createGraphicsAssetLibrary(
 			return operation;
 		},
 		async initiateTemplatePackagePreflight(input) {
+			// Reading the artifact is the one check the envelope cannot make for itself,
+			// and preflight is the only place it happens. With no registry wired the
+			// check does not fail — it disappears, and every well-formed archive installs
+			// as a Template nothing can use. So a library asked to receive a package
+			// without one refuses before it takes a single byte, rather than accepting
+			// bytes it has no way to hold to the rule.
+			requireTemplatePayloads();
 			return await initiateGraphicsOperation({
 				...input,
 				// A package names no asset, so the operation is labelled by what the
@@ -4033,6 +4157,22 @@ export function createGraphicsAssetLibrary(
 				);
 			}
 			return template;
+		},
+		async findInstalledGraphicsTemplate(input) {
+			if (input.templateId.length === 0)
+				return undefined;
+			return await catalogueRequest(
+				() => requireCatalogue().findInstalledGraphicsTemplate(
+					input.templateId as InstalledGraphicsTemplateId,
+				),
+				'Installed graphics Template state is temporarily unavailable',
+			);
+		},
+		async listInstalledGraphicsTemplates(input) {
+			return await catalogueRequest(
+				() => requireCatalogue().listInstalledGraphicsTemplates(input.kind),
+				'Installed graphics Template state is temporarily unavailable',
+			);
 		},
 		async cancelGraphicsIngestion(input) {
 			const catalogue = requireCatalogue();
@@ -5048,7 +5188,7 @@ export function createGraphicsAssetLibrary(
 
 			const document = inspectTemplateDocument(input.template.document);
 			const requirements = groupTemplatePackageRequirements(input.assets);
-			const capabilities = inspectTemplatePackageCapabilities(input.capabilities ?? []);
+			const capabilities = inspectTemplatePackageCapabilities(input.packageKind, input.capabilities ?? []);
 			const issues: TemplatePackageExportIssue[] = [
 				...document.issues,
 				...undeclaredReferenceIssues(document.references, input.assets),
@@ -5134,7 +5274,12 @@ export function createGraphicsAssetLibrary(
 			// simply cannot be counted, which can only understate a violation.
 			const plan = planTemplatePackage({
 				packageKind: input.packageKind,
-				template: { identity, name, document: input.template.document },
+				template: {
+					identity,
+					name,
+					revision: input.template.revision,
+					document: input.template.document,
+				},
 				revisions,
 				capabilities: capabilities.declarations,
 				createdAt: checkedAt,

@@ -51,6 +51,23 @@ const TemplateLibraryStub = defineComponent({
 	},
 });
 
+/** Stands in for the Graphic Channels panel, reporting what the workspace hands it. */
+const ChannelsStub = defineComponent({
+	name: 'ScreenModesBroadcastGraphicsChannels',
+	props: {
+		graphics: { type: Array, default: () => [] },
+		channels: { type: Array, default: () => [] },
+		writable: { type: Boolean, default: false },
+	},
+	setup(props) {
+		return () => h('div', {
+			'data-testid': 'graphic-channels-panel',
+			'data-channels': String(props.channels.length),
+			'data-writable': String(props.writable),
+		});
+	},
+});
+
 async function mountWorkspace(props: Record<string, unknown> = {}) {
 	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/EditWorkspace.vue';
 	const { default: EditWorkspace } = await import(componentPath);
@@ -60,6 +77,7 @@ async function mountWorkspace(props: Record<string, unknown> = {}) {
 			eventId: 7,
 			screen: { id: 3, slug: 'main' } as Screen,
 			graphics: [lowerThird, slate],
+			channels: [],
 			selectedTarget: { type: 'graphic', graphicId: 'slate' },
 			selectedGraphicId: 'slate',
 			canvasWidth: 1920,
@@ -74,6 +92,7 @@ async function mountWorkspace(props: Record<string, unknown> = {}) {
 				GraphicsCompositorPreview: PreviewStub,
 				GraphicsCompositorInspector: InspectorStub,
 				GraphicsBroadcastGraphicTemplateLibrary: TemplateLibraryStub,
+				ScreenModesBroadcastGraphicsChannels: ChannelsStub,
 				UIcon: UIconStub,
 				UButton: UButtonStub,
 			},
@@ -109,5 +128,16 @@ describe('broadcastGraphicsEditWorkspace', () => {
 		const wrapper = await mountWorkspace({ writable: false });
 
 		expect(wrapper.get('[data-testid="template-library"]').attributes('data-writable')).toBe('false');
+	});
+
+	it('carries Graphic Channel authoring, under the same Graphics Authoring Lease', async () => {
+		const wrapper = await mountWorkspace({
+			channels: [{ id: 'thirds', name: 'Lower thirds' }],
+			writable: false,
+		});
+
+		const panel = wrapper.get('[data-testid="graphic-channels-panel"]');
+		expect(panel.attributes('data-channels')).toBe('1');
+		expect(panel.attributes('data-writable')).toBe('false');
 	});
 });
