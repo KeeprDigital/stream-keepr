@@ -896,6 +896,13 @@ describe('graphicsCompositionRenderModel', () => {
 		it('ignores a composition"s own Graphic Inputs while the host supplies declarations', () => {
 			// The host supplies all of them or none: a Feature Match Overlay's vocabulary
 			// is its catalogue, not its catalogue plus whatever a stored graphic declares.
+			//
+			// The discriminator has to be the *default*, not a value. An explicit
+			// `inputValues` entry resolves the same under either declaration list, so a
+			// test that supplied one would assert nothing about which list was consulted
+			// — it would pass just as happily if the smuggled declaration had won.
+			// Withholding the value makes `substituteAuthoredDefaults` reach for a
+			// default, and the two lists disagree about what it is.
 			const declared: GraphicInputDeclaration = {
 				type: 'text',
 				key: 'player1Name',
@@ -912,8 +919,23 @@ describe('graphicsCompositionRenderModel', () => {
 					inputs: [declared],
 				}],
 				textDeclarations: featureMatchTokenDeclarations(),
-				inputValues: { layout: { player1Name: 'Alice' } },
 				substituteAuthoredDefaults: true,
+				...CANVAS,
+			});
+
+			// A host token carries no authored default, so the catalogue renders empty.
+			// `'Wrong'` here would mean the composition's own declaration had won.
+			expect(model.graphics[0]!.items[0]!.text).toBe('');
+		});
+
+		it('still resolves a host token"s supplied value', () => {
+			// The companion to the above: withholding the value proves which declaration
+			// list wins, and this proves the values still arrive through it.
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('layout', [text('name', { text: '{player1Name}' })])],
+				textDeclarations: featureMatchTokenDeclarations(),
+				inputValues: { layout: { player1Name: 'Alice' } },
 				...CANVAS,
 			});
 
