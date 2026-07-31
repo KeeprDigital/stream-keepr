@@ -30,6 +30,14 @@ export interface BroadcastGraphicsRenderModelInput {
 	 */
 	inputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
 	/**
+	 * The rendering each updating Broadcast Graphic is transitioning away from.
+	 *
+	 * Needed alongside `inputValues` because an update cross-transitions two
+	 * renderings, and both have to come from the authoritative snapshot for an output
+	 * that joins mid-update to draw the transition rather than cut.
+	 */
+	outgoingInputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
+	/**
 	 * Render authored defaults for unset Graphic Inputs. An editor preview does, so an
 	 * author sees the design as authored; a live Screen Output never does.
 	 */
@@ -72,6 +80,7 @@ export function resolveBroadcastGraphicsRenderModel(
 		visibleGraphicIds: input.onAirGraphicIds ?? [],
 		animation: input.animation,
 		inputValues: input.inputValues,
+		outgoingInputValues: input.outgoingInputValues,
 		substituteAuthoredDefaults: input.substituteAuthoredDefaults,
 		itemGuides: input.itemGuides,
 		safeAreaGuides: input.safeAreaGuides,

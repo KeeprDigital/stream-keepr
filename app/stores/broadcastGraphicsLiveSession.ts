@@ -1,5 +1,6 @@
 import type {
 	BroadcastGraphicInputsState,
+	BroadcastGraphicPhaseTiming,
 	BroadcastGraphicsLiveState,
 	BroadcastGraphicsRecoveryFault,
 	BroadcastGraphicsRejectionCode,
@@ -13,6 +14,7 @@ import type {
 } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type {
 	BroadcastGraphicConfig,
+	GraphicAnimationPhase,
 	GraphicInputValue,
 	GraphicPlayoutState,
 } from '~~/shared/types/graphics';
@@ -21,7 +23,10 @@ import {
 	acceptedGraphicInputValues,
 	BROADCAST_GRAPHICS_REJECTION_CODES,
 	broadcastGraphicInputsState,
+	broadcastGraphicPhaseProjection,
+	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
+	broadcastGraphicRenderedInputs,
 	broadcastGraphicSourceSelections,
 	createInitialBroadcastGraphicsLiveState,
 	graphicInputTraces,
@@ -44,6 +49,24 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	const repository = useBroadcastGraphicsLiveSessionRepository();
 	const { executeAction } = useAsyncAction();
 
+	/**
+	 * The authoritative clock, shared with every other live surface in the application.
+	 *
+	 * Every effective start time in a snapshot was stamped by the server's clock, and an
+	 * output must not subtract two clocks it does not own: a browser a minute behind the
+	 * server would believe an exiting Broadcast Graphic was still exiting for that whole
+	 * minute, and since an exiting graphic is on program, a graphic the operator has
+	 * taken off would stay on air on that output. Phases last at most twenty seconds; an
+	 * un-synchronised clock is routinely minutes out.
+	 *
+	 * This is deliberately the existing installation-wide sync rather than a playout-specific
+	 * one. It already compensates for round-trip time across three samples with the worst
+	 * discarded and re-syncs every sixty seconds, so its residual error is smaller than
+	 * anything a single snapshot read could establish — and one clock for the whole
+	 * application means the Feature Match Session clock and Broadcast Graphics playout can
+	 * never disagree about what time it is.
+	 */
+	const { getServerTime, isSynced: isClockSynced } = useServerTime();
 	const sessions = ref<Map<number, BroadcastGraphicsLiveSessionResponse>>(new Map());
 	const loading = ref(false);
 	const error = ref<string | null>(null);
@@ -113,17 +136,172 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		return sessions.value.get(screenId)?.currentState ?? createInitialBroadcastGraphicsLiveState();
 	}
 
-	/** The Graphic Playout State of one placed Broadcast Graphic. */
-	function playoutState(screenId: number, graphicId: string): GraphicPlayoutState {
-		return broadcastGraphicPlayoutState(liveState(screenId), graphicId);
+	/**
+	 * Now, on the clock that stamped the effective start times being read.
+	 *
+	 * The only instant any playout projection in this client is allowed to use.
+	 */
+	function serverNow(): number {
+		return getServerTime();
 	}
 
-	/** Which Broadcast Graphics compose into the Screen's frame, in authored stack order. */
+	/**
+	 * Everything one Broadcast Graphic's phases are projected against, at `now` — or
+	 * nothing at all until this browser knows what time the server thinks it is.
+	 *
+	 * Before the first sync the offset is zero, which means the local clock unmodified —
+	 * exactly the condition the clock-skew hazard describes. So an unsynced reader is
+	 * given no timing, and no timing already means "report only the settled states":
+	 * an on-air Broadcast Graphic renders at its Graphic Resting State, an exiting one is
+	 * reported off and leaves program at once, and nothing animates.
+	 *
+	 * That is the same answer recovery resolves to, and it is chosen over projecting on an
+	 * unknown clock because the two failures are not equally bad. Projecting unsynced can
+	 * pin a graphic at full excursion for the length of the skew and then play its
+	 * entrance from zero the moment the sync lands — the replay the no-replay invariant
+	 * forbids, arriving through the clock. It can also jump *backwards*: a settled graphic
+	 * read on a clock that is ahead of the authoritative one, then corrected, re-enters a
+	 * phase it had already finished. Holding the resting state instead costs an entrance
+	 * that pops on rather than animating, for the length of one sync (three samples fifty
+	 * milliseconds apart) after a load. A missed entrance is a blemish; a replayed or
+	 * rewound one mid-show is a fault.
+	 *
+	 * Note that `isSynced` means "has synced at least once", not "is currently in sync" —
+	 * `lastSyncedAt` is not consulted, so a browser whose clock drifts after a successful
+	 * sync reads as synced until the next one. That is the case the magnitude bound inside
+	 * the shared projection covers, and the reason it is kept rather than treated as
+	 * redundant once the offset exists.
+	 */
+	function timingFor(
+		graphic: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
+		now: number,
+	): BroadcastGraphicPhaseTiming | undefined {
+		return isClockSynced.value ? broadcastGraphicPhaseTiming(graphic, now) : undefined;
+	}
+
+	/**
+	 * The timing *which rendering is on screen* is answered against — supplied even while
+	 * the clock is unsynced, unlike the timing motion is answered against.
+	 *
+	 * The two questions are not equally dangerous on a clock this browser has not
+	 * checked. Motion is sampled every frame, so a wrong clock there means a phase pinned
+	 * and then replayed. Which values are showing is a single, non-animating choice
+	 * between two renderings, and the update chain carries its own magnitude bound: a
+	 * reader further from the authoritative clock than the deferral could possibly last
+	 * falls through to the accepted set rather than stalling on the old rendering.
+	 *
+	 * Which is why this is not simply routed through the unsynced hold. An absent timing
+	 * makes `broadcastGraphicRenderedInputs` answer with the accepted set, and while an
+	 * acceptance is coalescing behind an entrance the accepted set is exactly what must
+	 * not* be on screen yet — so holding here would quietly skip the coalescing deferral
+	 * rather than being conservative about it. Answering "old rendering" instead would be
+	 * worse again: nothing clears `updateStartedAt` when an update merely completes, so a
+	 * chain existing usually means one finished long ago, and a reader with no clock would
+	 * show stale content indefinitely. Bounding the chain and reading it is the only one
+	 * of the three that is right in both directions.
+	 */
+	function renderTimingFor(
+		graphic: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
+		now: number,
+	): BroadcastGraphicPhaseTiming {
+		return broadcastGraphicPhaseTiming(graphic, now);
+	}
+
+	/**
+	 * The Graphic Playout State of one placed Broadcast Graphic.
+	 *
+	 * With a graphic and an instant it reports entering, updating, and exiting as well
+	 * as the settled states; with neither it reports only the settled ones, which is
+	 * what a caller that is not animating anything wants.
+	 */
+	function playoutState(
+		screenId: number,
+		graphicId: string,
+		graphic?: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
+		now?: number,
+	): GraphicPlayoutState {
+		return broadcastGraphicPlayoutState(
+			liveState(screenId),
+			graphicId,
+			graphic ? timingFor(graphic, now ?? serverNow()) : undefined,
+		);
+	}
+
+	/**
+	 * Which Broadcast Graphics compose into the Screen's frame, in authored stack order.
+	 *
+	 * Each graphic is timed against its own authored durations, because an exiting
+	 * graphic stays on program until *its* exit completes.
+	 */
 	function onAirGraphicIds(
 		screenId: number,
-		graphics: readonly Pick<BroadcastGraphicConfig, 'id'>[],
+		graphics: readonly BroadcastGraphicConfig[],
+		now?: number,
 	): string[] {
-		return onAirBroadcastGraphicIds(liveState(screenId), graphics);
+		const instant = now ?? serverNow();
+		return onAirBroadcastGraphicIds(
+			liveState(screenId),
+			graphics,
+			graphic => timingFor(graphic as BroadcastGraphicConfig, instant),
+		);
+	}
+
+	/**
+	 * The lifecycle phase and elapsed time each on-air Broadcast Graphic renders.
+	 *
+	 * Keyed by Broadcast Graphic id, in exactly the shape the compositor takes, so every
+	 * output and the Program monitor resolve one frame from one authoritative instant.
+	 */
+	function animationProjection(
+		screenId: number,
+		graphics: readonly BroadcastGraphicConfig[],
+		now?: number,
+	): Record<string, { phase: GraphicAnimationPhase; elapsed: number }> {
+		const state = liveState(screenId);
+		const instant = now ?? serverNow();
+		const projections: Record<string, { phase: GraphicAnimationPhase; elapsed: number }> = {};
+
+		for (const graphic of graphics) {
+			const projection = broadcastGraphicPhaseProjection(state, graphic.id, timingFor(graphic, instant));
+			if (projection)
+				projections[graphic.id] = projection;
+		}
+
+		return projections;
+	}
+
+	/**
+	 * The rendering each Broadcast Graphic draws now, and the one an update is leaving.
+	 *
+	 * Not simply the accepted values: while an acceptance is coalescing behind an
+	 * entrance, program still shows what the graphic entered with.
+	 */
+	function renderedInputValues(
+		screenId: number,
+		graphics: readonly BroadcastGraphicConfig[],
+		now?: number,
+	): {
+		current: Record<string, Record<string, GraphicInputValue>>;
+		outgoing: Record<string, Record<string, GraphicInputValue>>;
+	} {
+		const state = liveState(screenId);
+		const instant = now ?? serverNow();
+		const current: Record<string, Record<string, GraphicInputValue>> = {};
+		const outgoing: Record<string, Record<string, GraphicInputValue>> = {};
+
+		for (const graphic of graphics) {
+			const rendered = broadcastGraphicRenderedInputs(
+				state,
+				graphic.id,
+				graphic.inputs ?? [],
+				renderTimingFor(graphic, instant),
+			);
+			current[graphic.id] = rendered.current;
+			if (rendered.outgoing)
+				outgoing[graphic.id] = rendered.outgoing;
+		}
+
+		return { current, outgoing };
 	}
 
 	function cacheSession(session: BroadcastGraphicsLiveSessionResponse) {
@@ -544,8 +722,11 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		sessions,
 		loading,
 		error,
+		serverNow,
 		playoutState,
 		onAirGraphicIds,
+		animationProjection,
+		renderedInputValues,
 		isPending,
 		inputsState,
 		inputTraces,

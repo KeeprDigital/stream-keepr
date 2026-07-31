@@ -19,7 +19,7 @@ import { publishMessage } from '~~/server/utils/ably';
 import {
 	broadcastGraphicSourceSelections,
 } from '~~/shared/modules/broadcast-graphics-live-session';
-import { resolveGraphicInputBindings } from '~~/shared/modules/graphics';
+import { broadcastGraphicPhaseDurations, resolveGraphicInputBindings } from '~~/shared/modules/graphics';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 
@@ -164,6 +164,10 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 			bindings: graphic.bindings ?? [],
 			resolveBindings: (selections: Readonly<Record<string, number>>) =>
 				resolveGraphicInputBindings(graphic, selections, data),
+			// How long this graphic's lifecycle phases last, resolved from the placed
+			// graphic this module already had to find. Authored Screen configuration, which
+			// is exactly why the reducer is handed it rather than reaching for it.
+			durations: broadcastGraphicPhaseDurations(graphic),
 		};
 	};
 
