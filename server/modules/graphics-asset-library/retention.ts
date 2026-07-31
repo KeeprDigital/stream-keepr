@@ -39,6 +39,13 @@ export const GRAPHICS_RETENTION_STAGE_BATCH = 200;
  */
 export const GRAPHICS_CONTENT_DELETION_CLAIM_LEASE_MILLISECONDS = 60 * 60 * 1000;
 
+/** One Retired Graphic Asset. Retirement is reversible and carries no deadline. */
+export interface RetiredGraphicAsset {
+	assetId: GraphicAssetId;
+	name: string;
+	referenceCount: number;
+}
+
 export interface StagedInputExpiryCandidate {
 	operationId: GraphicsIngestionOperationId;
 	initiatedBy: string;
@@ -206,8 +213,18 @@ export interface GraphicsAssetRetentionCatalogue {
 	listRevisionRetention: (input: {
 		assetId?: GraphicAssetId;
 		limit: number;
+		/** Installation-wide, narrows to revisions actually scheduled for pruning. */
+		prunableOnly?: boolean;
 	}) => Promise<GraphicsRevisionPruningDeadline[]>;
+	/** One revision's retention policy, resolved by identity rather than by scan. */
+	findRevisionRetention: (
+		revisionId: GraphicAssetRevisionId,
+	) => Promise<GraphicsRevisionPruningDeadline | undefined>;
+	/** One Graphic Asset's name, for naming a queue subject without listing rows. */
+	findGraphicAssetName: (assetId: GraphicAssetId) => Promise<string | undefined>;
 	listTrashDeadlines: (input: { limit: number }) => Promise<GraphicsTrashDeadline[]>;
+	/** Retired Graphic Assets, oldest first. Retirement carries no deadline. */
+	listRetiredGraphicAssets: (input: { limit: number }) => Promise<RetiredGraphicAsset[]>;
 	listStagedInputDeadlines: (input: { limit: number }) => Promise<GraphicsStagedInputDeadline[]>;
 	listQuarantineDeadlines: (input: {
 		limit: number;
@@ -221,6 +238,8 @@ export interface GraphicsAssetRetentionCatalogue {
 	listGraphicsAssetEvidence: (input: {
 		limit: number;
 		categories?: readonly GraphicsAssetEvidenceCategory[];
+		/** Narrows the ledger to one opaque domain subject, newest first. */
+		subject?: { kind: GraphicsAssetEvidenceEntry['subject']['kind']; id: string };
 	}) => Promise<GraphicsAssetEvidenceEntry[]>;
 	expireGraphicsAssetEvidence: (input: { expiredBefore: string }) => Promise<number>;
 }
@@ -806,10 +825,12 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 		async listEvidence(input: {
 			limit?: number;
 			categories?: readonly GraphicsAssetEvidenceCategory[];
+			subject?: { kind: GraphicsAssetEvidenceEntry['subject']['kind']; id: string };
 		} = {}) {
 			return await catalogue.listGraphicsAssetEvidence({
 				limit: Math.min(Math.max(input.limit ?? 100, 1), 500),
 				categories: input.categories,
+				subject: input.subject,
 			});
 		},
 	};

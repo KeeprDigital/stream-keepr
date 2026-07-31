@@ -526,10 +526,23 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 				...(states.length > 0 ? [`state IN (${states.map(() => '?').join(', ')})`] : []),
 				...(kinds.length > 0 ? [`kind IN (${kinds.map(() => '?').join(', ')})`] : []),
 			];
+			/**
+			 * Newest-first is right when the question is what just went wrong. It is
+			 * exactly wrong for quarantined bytes: their deletion deadline is a fixed
+			 * offset from when they were noticed, so the newest rows are the ones
+			 * furthest from deletion and a bounded sample of them hides every object
+			 * about to be deleted. That sample is asked for by deletion deadline.
+			 */
+			const order = input.orderBy === 'quarantine-deadline'
+				? `COALESCE((
+						SELECT quarantine.delete_after FROM graphics_content_quarantine quarantine
+						WHERE quarantine.digest = graphics_discrepancies.digest
+					), 8640000000000000) ASC, detected_at DESC, id DESC`
+				: 'isolated DESC, detected_at DESC, id DESC';
 			const result = await database.prepare(`
 				SELECT ${DISCREPANCY_COLUMNS} FROM graphics_discrepancies
 				${predicates.length > 0 ? `WHERE ${predicates.join(' AND ')}` : ''}
-				ORDER BY isolated DESC, detected_at DESC, id DESC
+				ORDER BY ${order}
 				LIMIT ?
 			`).bind(...states, ...kinds, input.limit).all<DiscrepancyRow>();
 			if (!result.success)

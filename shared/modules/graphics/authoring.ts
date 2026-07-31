@@ -934,7 +934,7 @@ const GRAPHIC_ANIMATION_CHANNEL_DEFAULTS: {
  * JSON, and an `undefined` value survives as a present key in every in-memory
  * comparison the editor and its tests make even though it vanishes on the wire.
  */
-function pruneGraphicAnimation<T extends GraphicContainerAnimation>(animation: T): T | undefined {
+export function pruneGraphicAnimation<T extends GraphicContainerAnimation>(animation: T): T | undefined {
 	const next = { ...animation };
 	const hasRecipe = GRAPHIC_ANIMATION_PHASE_VALUES.some(phase => next[phase] !== undefined);
 	const stagger = next.stagger;

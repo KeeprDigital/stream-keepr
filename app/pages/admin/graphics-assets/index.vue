@@ -26,58 +26,28 @@ definePageMeta({
  * an incident, a deadline, and an operation's stage progress all survive
  * navigation, reload, and reconnect without the page remembering anything.
  */
-const POLL_INTERVAL_MILLISECONDS = 5000;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
-const administratorToken = ref('');
-const cockpit = ref<GraphicsOperationsCockpit | null>(null);
-const loadPending = ref(false);
-const loadError = ref<string | null>(null);
 const sweepPending = ref<'reconciliation' | 'retention' | null>(null);
 const sweepSummary = ref<string | null>(null);
 const sweepError = ref<string | null>(null);
-const consecutiveFailures = ref(0);
 
-/** Whether a reading is currently being shown, not whether the token is valid. */
-const hasReading = computed(() => cockpit.value !== null);
-
-function administratorHeaders() {
-	return { 'x-graphics-admin-token': administratorToken.value };
-}
-
-function describeFailure(caught: unknown, fallback: string) {
-	return caught instanceof Error ? caught.message : fallback;
-}
-
-function isAuthorizationFailure(caught: unknown) {
-	const status = (caught as { statusCode?: number; status?: number } | null)?.statusCode
-		?? (caught as { status?: number } | null)?.status;
-	return status === 401 || status === 403;
-}
-
-async function loadCockpit() {
-	loadPending.value = true;
-	loadError.value = null;
-	try {
-		cockpit.value = await $fetch<GraphicsOperationsCockpit>(
-			'/api/admin/graphics-assets/operations-cockpit',
-			{ headers: administratorHeaders() },
-		);
-		consecutiveFailures.value = 0;
-	}
-	catch (caught) {
-		consecutiveFailures.value += 1;
-		loadError.value = describeFailure(caught, 'The Operations Cockpit could not be read.');
-		// A rotated or revoked token must put the token form back rather than
-		// leaving a stale reading on screen forever. Keeping the last reading
-		// would show an administrator a library state nobody is still checking.
-		if (isAuthorizationFailure(caught))
-			cockpit.value = null;
-	}
-	finally {
-		loadPending.value = false;
-	}
-}
+const {
+	administratorToken,
+	reading: cockpit,
+	loadPending,
+	loadError,
+	hasReading,
+	administratorHeaders,
+	describeFailure,
+	load: loadCockpit,
+} = useGraphicsAdminReading<GraphicsOperationsCockpit>({
+	read: async headers => await $fetch<GraphicsOperationsCockpit>(
+		'/api/admin/graphics-assets/operations-cockpit',
+		{ headers },
+	),
+	failureMessage: 'The Operations Cockpit could not be read.',
+});
 
 /**
  * The two installation-wide actions that are valid from a cockpit. Neither can
@@ -114,41 +84,6 @@ async function runSweep(sweep: 'reconciliation' | 'retention') {
 		sweepPending.value = null;
 	}
 }
-
-let pollHandle: number | undefined;
-let ticksSinceAttempt = 0;
-
-/**
- * How many polling ticks to skip after repeated failures, doubling up to a cap.
- * A library that is down should not be asked every five seconds indefinitely,
- * and the first success resets it, so an intermittent failure costs at most one
- * slower recovery rather than a permanently slower page.
- */
-const MAXIMUM_BACKOFF_TICKS = 12;
-
-function backoffTicks() {
-	return consecutiveFailures.value === 0
-		? 0
-		: Math.min(2 ** (consecutiveFailures.value - 1), MAXIMUM_BACKOFF_TICKS);
-}
-
-onMounted(() => {
-	pollHandle = window.setInterval(() => {
-		if (!hasReading.value || loadPending.value)
-			return;
-		if (ticksSinceAttempt < backoffTicks()) {
-			ticksSinceAttempt += 1;
-			return;
-		}
-		ticksSinceAttempt = 0;
-		void loadCockpit();
-	}, POLL_INTERVAL_MILLISECONDS);
-});
-
-onBeforeUnmount(() => {
-	if (pollHandle !== undefined)
-		window.clearInterval(pollHandle);
-});
 
 const conditions = computed(() => {
 	const reading = cockpit.value;
@@ -269,6 +204,13 @@ function boundaryMarkerStyle(fraction: number) {
 <template>
 	<NuxtLayout name="default">
 		<template #actions>
+			<UButton
+				color="neutral"
+				variant="outline"
+				icon="i-lucide-list-checks"
+				to="/admin/graphics-assets/queues"
+				label="Open lifecycle queues"
+			/>
 			<UButton
 				color="neutral"
 				variant="outline"

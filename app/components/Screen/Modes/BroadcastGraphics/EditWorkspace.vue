@@ -39,6 +39,21 @@ const emit = defineEmits<{
 }>();
 
 /**
+ * The Broadcast Graphic an author can save as a Broadcast Graphic Template.
+ *
+ * Saving copies one finished design, not the Screen's whole stack, so the library
+ * offers exactly the graphic the author is looking at.
+ */
+const selectedGraphic = computed(() =>
+	props.graphics.find(graphic => graphic.id === props.selectedGraphicId) ?? null,
+);
+
+/** A placement is a new Broadcast Graphic, and the author is put straight on it. */
+function selectPlacedGraphic(graphicId: string) {
+	emit('update:selectedTarget', { type: 'graphic', graphicId });
+}
+
+/**
  * Fail closed: until a caller says this session holds the lease, the workspace is
  * an observer's. An unstated permission must never read as one that was granted.
  */
@@ -90,6 +105,20 @@ const leaseNotice = computed(() => {
 					:writable="canAuthor"
 					@update:graphics="emit('update:graphics', $event)"
 					@update:selected-target="emit('update:selectedTarget', $event)"
+				/>
+
+				<!--
+					The Broadcast Graphic Template library lives in the Edit workspace and
+					nowhere else: saving and placing designs is authoring, and the Live
+					workspace deliberately has no route to either.
+				-->
+				<GraphicsBroadcastGraphicTemplateLibrary
+					class="mt-4 block"
+					:event-id="eventId"
+					:screen-id="screen.id"
+					:selected-graphic="selectedGraphic"
+					:writable="canAuthor"
+					@placed="selectPlacedGraphic"
 				/>
 			</section>
 

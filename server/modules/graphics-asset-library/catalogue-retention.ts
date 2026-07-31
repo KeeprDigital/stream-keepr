@@ -15,6 +15,7 @@ import type {
 	PrunableRevision,
 	PurgeableTrashedAsset,
 	QuarantinedContent,
+	RetiredGraphicAsset,
 	RevisionPruningCancellation,
 	RevisionPruningSchedule,
 	StagedInputExpiryCandidate,
@@ -792,9 +793,17 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				LEFT JOIN graphic_asset_revision_retention retention
 					ON retention.revision_id = revision.id
 				${input.assetId === undefined
-					? 'WHERE retention.revision_id IS NOT NULL'
+					? `WHERE retention.revision_id IS NOT NULL${
+						input.prunableOnly
+							? ' AND retention.prune_after IS NOT NULL AND retention.frozen_at IS NULL'
+							: ''}`
 					: 'WHERE revision.asset_id = ?'}
-				ORDER BY revision.asset_id, revision.revision_number
+				${input.assetId === undefined
+					// Installation-wide, the question is which revision is pruned
+					// soonest. Per asset it is which revision came first, because
+					// that read describes one asset's history rather than a queue.
+					? 'ORDER BY retention.prune_after, revision.id'
+					: 'ORDER BY revision.asset_id, revision.revision_number'}
 				LIMIT ?
 			`).bind(
 				...(input.assetId === undefined ? [] : [input.assetId]),
@@ -803,6 +812,57 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			if (!result.success)
 				throw new Error('Graphic Asset Revision retention could not be read');
 			return result.results.map(revisionRetentionFromRow);
+		},
+		async findRevisionRetention(revisionId) {
+			const row = await database.prepare(`
+				SELECT revision.id, revision.asset_id, revision.revision_number,
+					(
+						SELECT COUNT(*) FROM graphic_asset_references reference
+						WHERE reference.revision_id = revision.id
+					) AS reference_count,
+					CASE WHEN revision.revision_number = (
+						SELECT MAX(latest.revision_number)
+						FROM graphic_asset_revisions latest
+						WHERE latest.asset_id = revision.asset_id
+					) THEN 1 ELSE 0 END AS is_latest,
+					retention.unreferenced_since, retention.prune_after,
+					retention.frozen_at, retention.frozen_remaining_milliseconds
+				FROM graphic_asset_revisions revision
+				LEFT JOIN graphic_asset_revision_retention retention
+					ON retention.revision_id = revision.id
+				WHERE revision.id = ?
+			`).bind(revisionId).first<RevisionRetentionRow>();
+			return row ? revisionRetentionFromRow(row) : undefined;
+		},
+		async findGraphicAssetName(assetId) {
+			const row = await database.prepare(
+				'SELECT name FROM graphic_assets WHERE id = ?',
+			).bind(assetId).first<{ name: string }>();
+			return row?.name;
+		},
+		async listRetiredGraphicAssets(input) {
+			const result = await database.prepare(`
+				SELECT asset.id, asset.name,
+					(
+						SELECT COUNT(*) FROM graphic_asset_references reference
+						WHERE reference.asset_id = asset.id
+					) AS reference_count
+				FROM graphic_assets asset
+				WHERE asset.lifecycle_state = 'retired'
+				ORDER BY asset.updated_at, asset.id
+				LIMIT ?
+			`).bind(input.limit).all<{
+				id: string;
+				name: string;
+				reference_count: number;
+			}>();
+			if (!result.success)
+				throw new Error('Retired Graphic Assets could not be read');
+			return result.results.map((row): RetiredGraphicAsset => ({
+				assetId: row.id as GraphicAssetId,
+				name: row.name,
+				referenceCount: row.reference_count,
+			}));
 		},
 		async listTrashDeadlines(input) {
 			const result = await database.prepare(`
@@ -949,17 +1009,30 @@ export function createD1GraphicsAssetRetentionCatalogue(
 		},
 		async listGraphicsAssetEvidence(input) {
 			const categories = input.categories ?? [];
+			// The category list stays one bound JSON array, so the subject filter
+			// below can take ordinary parameters without any list length being
+			// able to push the statement past D1's bound-parameter ceiling.
+			const conditions: string[] = [];
+			const bindings: (string | number)[] = [];
+			if (categories.length > 0) {
+				conditions.push(`category IN ${valuesFromJsonArray(`?${bindings.length + 1}`)}`);
+				bindings.push(boundJsonArray(categories));
+			}
+			if (input.subject) {
+				conditions.push(
+					`subject_kind = ?${bindings.length + 1} AND subject_id = ?${bindings.length + 2}`,
+				);
+				bindings.push(input.subject.kind, input.subject.id);
+			}
 			const result = await database.prepare(`
 				SELECT id, recorded_at, category, actor, subject_kind, subject_id,
 					outcome, reason, correlation_id, detail, expires_at
 				FROM graphics_asset_evidence
-				${categories.length > 0
-					? `WHERE category IN ${valuesFromJsonArray('?1')}`
-					: ''}
+				${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
 				ORDER BY recorded_at DESC, id DESC
-				LIMIT ${categories.length > 0 ? '?2' : '?1'}
+				LIMIT ?${bindings.length + 1}
 			`).bind(
-				...(categories.length > 0 ? [boundJsonArray(categories)] : []),
+				...bindings,
 				input.limit,
 			).all<EvidenceRow>();
 			if (!result.success)

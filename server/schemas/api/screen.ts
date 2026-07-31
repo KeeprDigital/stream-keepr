@@ -1286,7 +1286,7 @@ function graphicItemIds(items: readonly { id: string; type: string; children?: r
 	]);
 }
 
-const broadcastGraphicConfigSchema = z.object({
+export const broadcastGraphicConfigSchema = z.object({
 	id: z.string().min(1).max(100),
 	name: z.string().min(1).max(100),
 	// Named caps: these are reached before the mode-configuration byte limit, so
