@@ -129,65 +129,6 @@ export function broadcastGraphicTemplateService() {
 		)),
 	];
 
-	/**
-	 * Adopt one installed Template Package result into the library, once.
-	 *
-	 * The entry takes the Installed Graphics Template's own identity, so this is
-	 * idempotent on the primary key rather than on a separate marker: a repeated
-	 * installation request reaches adoption again over the same Installed Graphics
-	 * Template and must leave one library entry, not two.
-	 *
-	 * Skipping is a condition inside the insert rather than a read-then-write, and
-	 * the reference statements are conditional on the stamp this insert would have
-	 * made — so a skipped adoption contributes nothing at all, including no second
-	 * set of Graphic Asset References that would double the usage protecting every
-	 * revision the design pins.
-	 *
-	 * The document arrives already rewritten to exact local identities and revisions
-	 * by the installation that published it, so the references this publishes are
-	 * local from the first byte. It is an unlinked copy: the source identity and
-	 * revision are stored beside it as provenance and nothing reads them back.
-	 */
-	const adoptInstalled = async (input: SaveBroadcastGraphicTemplate & {
-		sourceTemplateIdentity: string;
-		sourceTemplateRevision: number | null;
-	}): Promise<DbBroadcastGraphicTemplate> => {
-		const referenceVersion = crypto.randomUUID();
-		const now = Date.now();
-		const client = db.$client;
-
-		await client.batch([
-			client.prepare(`
-				INSERT INTO broadcast_graphic_templates (
-					id, name, description, revision, document,
-					source_template_identity, source_template_revision,
-					graphic_asset_reference_version, created_at, updated_at
-				)
-				SELECT ?, ?, ?, 1, ?, ?, ?, ?, ?, ?
-				WHERE NOT EXISTS (
-					SELECT 1 FROM broadcast_graphic_templates WHERE id = ?
-				)
-			`).bind(
-				input.id,
-				input.name,
-				input.description,
-				JSON.stringify(input.document),
-				input.sourceTemplateIdentity,
-				input.sourceTemplateRevision,
-				referenceVersion,
-				now,
-				now,
-				input.id,
-			),
-			...referenceStatements(client, input.id, input.document, referenceVersion, now),
-		]);
-
-		const adopted = await findById(input.id);
-		if (!adopted)
-			throw new Error('Imported Broadcast Graphic Template was not stored');
-		return adopted;
-	};
-
 	const create = async (input: SaveBroadcastGraphicTemplate): Promise<DbBroadcastGraphicTemplate> => {
 		const referenceVersion = crypto.randomUUID();
 		const now = Date.now();
@@ -294,5 +235,5 @@ export function broadcastGraphicTemplateService() {
 		return results[1]?.meta.changes === 1;
 	};
 
-	return { findAll, findById, create, adoptInstalled, update, remove };
+	return { findAll, findById, create, update, remove };
 }

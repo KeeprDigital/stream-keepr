@@ -1,10 +1,7 @@
-import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
+import { findBroadcastGraphicTemplateLibraryEntry } from '~~/server/modules/broadcast-graphic-template-library';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { broadcastGraphicTemplateParamsSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
-import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGraphicTemplate';
-import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
-import { respondWithTemplatePackage } from '~~/server/utils/templatePackageExportApi';
-import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
+import { exportBroadcastGraphicTemplatePackage } from '~~/server/utils/templatePackageExportApi';
 
 /**
  * Export one Broadcast Graphic Template as a `.skgraphic` Template Package.
@@ -32,7 +29,10 @@ export default defineEventHandler(async (event) => {
 		broadcastGraphicTemplateParamsSchema.parse,
 	);
 
-	const template = await broadcastGraphicTemplateService().findById(templateId);
+	// An imported design exports as readily as an authored one. Nothing about a
+	// package depends on where its Template came from, and refusing would strand a
+	// design on the first installation that received it.
+	const template = await findBroadcastGraphicTemplateLibraryEntry(event, templateId);
 	if (!template) {
 		throw createError({
 			statusCode: 404,
@@ -41,24 +41,10 @@ export default defineEventHandler(async (event) => {
 		});
 	}
 
-	const requirements = broadcastGraphicTemplatePackageRequirements(template.document);
-	try {
-		return respondWithTemplatePackage(
-			event,
-			await graphicsAssetLibraryForEvent(event).exportTemplatePackage({
-				packageKind: 'skgraphic',
-				template: {
-					identity: template.id,
-					name: template.name,
-					revision: template.revision,
-					document: template.document,
-				},
-				assets: requirements.assets,
-				capabilities: requirements.capabilities,
-			}),
-		);
-	}
-	catch (error) {
-		rethrowGraphicsAssetApiError(error, event);
-	}
+	return await exportBroadcastGraphicTemplatePackage(event, {
+		identity: template.id,
+		name: template.name,
+		revision: template.revision,
+		document: template.document,
+	});
 });

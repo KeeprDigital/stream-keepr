@@ -50,6 +50,19 @@ const pendingDeleteId = ref<string | null>(null);
 
 /** Fail closed: an unstated permission is never permission. */
 const canAuthor = computed(() => props.writable === true);
+
+/**
+ * Whether this entry can be renamed, described, or deleted here.
+ *
+ * Two conditions, and they are separate questions: whether this session may author
+ * at all, and whether *this design* is one the library owns. A design a Template
+ * Package installed is the Graphics Asset Library's record of what it published; it
+ * is browsed, placed, and exported like any other, and changed by placing it and
+ * saving the placed copy.
+ */
+function canRevise(template: BroadcastGraphicTemplateSummary): boolean {
+	return canAuthor.value && template.authored;
+}
 const canSave = computed(() => canAuthor.value && !!props.selectedGraphic && !saving.value);
 
 function failureMessage(caught: unknown): string {
@@ -433,8 +446,14 @@ onMounted(() => {
 					<div class="flex items-start gap-2">
 						<UIcon name="i-lucide-layers" class="mt-1 size-4 shrink-0 text-muted" />
 						<div class="min-w-0 flex-1">
+							<!--
+								An imported design is read here rather than edited. It is the
+								Graphics Asset Library's own record of what a Template Package
+								installed, and this library never writes one — so offering a
+								field that cannot be saved would be a control that lies.
+							-->
 							<UInput
-								v-if="canAuthor"
+								v-if="canRevise(template)"
 								:model-value="template.name"
 								size="xs"
 								class="w-full"
@@ -447,9 +466,10 @@ onMounted(() => {
 							</p>
 							<p class="mt-0.5 truncate text-xs text-muted">
 								{{ template.itemCount }} items · {{ template.inputCount }} inputs · revision {{ template.revision }}
+								<span v-if="!template.authored" data-testid="template-imported"> · imported</span>
 							</p>
 							<UInput
-								v-if="canAuthor"
+								v-if="canRevise(template)"
 								:model-value="template.description ?? ''"
 								size="xs"
 								class="mt-1 w-full"
@@ -490,6 +510,7 @@ onMounted(() => {
 								Place
 							</UButton>
 							<UButton
+								v-if="canRevise(template)"
 								size="xs"
 								color="neutral"
 								variant="ghost"

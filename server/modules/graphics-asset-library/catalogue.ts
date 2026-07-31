@@ -1315,9 +1315,10 @@ export function createD1GraphicsAssetCatalogue(
 					statement: database.prepare(`
 						INSERT INTO installed_graphics_templates (
 							id, kind, name, revision_number, document, source_template_identity,
-							installed_by_operation_id, event_id, created_at, updated_at
+							source_template_revision, installed_by_operation_id, event_id,
+							created_at, updated_at
 						)
-						SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+						SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 						WHERE ${guard}
 					`).bind(
 						input.template.id,
@@ -1326,6 +1327,7 @@ export function createD1GraphicsAssetCatalogue(
 						INSTALLED_GRAPHICS_TEMPLATE_FIRST_REVISION,
 						JSON.stringify(input.template.document),
 						input.template.sourceTemplateIdentity,
+						input.template.sourceTemplateRevision ?? null,
 						input.operation.id,
 						input.operation.defaultEventId ?? null,
 						publishedAt,
@@ -1398,6 +1400,7 @@ export function createD1GraphicsAssetCatalogue(
 			const row = await database.prepare(`
 				SELECT template.id, template.kind, template.name, template.revision_number,
 					template.document, template.source_template_identity,
+					template.source_template_revision,
 					template.installed_by_operation_id, template.event_id, template.created_at,
 					COALESCE((
 						SELECT json_group_array(json_object(
@@ -1422,6 +1425,7 @@ export function createD1GraphicsAssetCatalogue(
 				revision_number: number;
 				document: string;
 				source_template_identity: string;
+				source_template_revision: number | null;
 				installed_by_operation_id: string;
 				event_id: number | null;
 				created_at: number;
@@ -1436,6 +1440,7 @@ export function createD1GraphicsAssetCatalogue(
 				revisionNumber: row.revision_number,
 				document: JSON.parse(row.document),
 				sourceTemplateIdentity: row.source_template_identity,
+				sourceTemplateRevision: row.source_template_revision ?? undefined,
 				installedByOperationId: row.installed_by_operation_id as GraphicsIngestionOperationId,
 				eventId: row.event_id ?? undefined,
 				references: (JSON.parse(row.template_references) as {
@@ -1451,6 +1456,38 @@ export function createD1GraphicsAssetCatalogue(
 				})),
 				installedAt: new Date(row.created_at).toISOString(),
 			};
+		},
+		async listInstalledGraphicsTemplates(kind) {
+			const { results } = await database.prepare(`
+				SELECT id, kind, name, revision_number, document, source_template_identity,
+					source_template_revision, installed_by_operation_id, event_id, created_at
+				FROM installed_graphics_templates
+				WHERE kind = ?
+				ORDER BY name, id
+			`).bind(kind).all<{
+				id: string;
+				kind: InstalledGraphicsTemplateKind;
+				name: string;
+				revision_number: number;
+				document: string;
+				source_template_identity: string;
+				source_template_revision: number | null;
+				installed_by_operation_id: string;
+				event_id: number | null;
+				created_at: number;
+			}>();
+			return results.map(row => ({
+				id: row.id as InstalledGraphicsTemplateId,
+				kind: row.kind,
+				name: row.name,
+				revisionNumber: row.revision_number,
+				document: JSON.parse(row.document),
+				sourceTemplateIdentity: row.source_template_identity,
+				sourceTemplateRevision: row.source_template_revision ?? undefined,
+				installedByOperationId: row.installed_by_operation_id as GraphicsIngestionOperationId,
+				eventId: row.event_id ?? undefined,
+				installedAt: new Date(row.created_at).toISOString(),
+			}));
 		},
 		async getIngestionOperation(operationId, initiatedBy) {
 			return await firstOperation(database, 'id = ? AND initiated_by = ?', operationId, initiatedBy);

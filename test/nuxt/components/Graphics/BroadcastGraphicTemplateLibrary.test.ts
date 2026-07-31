@@ -83,6 +83,7 @@ function summary(overrides: Partial<BroadcastGraphicTemplateSummary> = {}): Broa
 		name: 'Lower third',
 		description: null,
 		revision: 1,
+		authored: true,
 		itemCount: 4,
 		inputCount: 2,
 		createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -409,5 +410,29 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 
 		expect(wrapper.find('[data-testid="template-library-import"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="template-export"]').exists()).toBe(false);
+	});
+
+	/**
+	 * An imported design is the Graphics Asset Library's own record of what a
+	 * Template Package published, and this library reads it rather than writing it.
+	 * Offering a name field or a delete would be a control that cannot save, so the
+	 * component offers only what actually works on one: place, and export.
+	 */
+	it('offers an imported design only what can be done to it', async () => {
+		mockList.mockResolvedValue([summary({
+			id: 'installed-1',
+			authored: false,
+			provenance: { sourceTemplateIdentity: 'template-elsewhere', sourceTemplateRevision: 3 },
+		})]);
+		const wrapper = await mountLibrary();
+
+		const entry = wrapper.get('[data-template-id="installed-1"]');
+		expect(entry.text()).toContain('imported');
+		expect(entry.find('[data-testid="template-name"]').exists()).toBe(false);
+		expect(entry.find('[data-testid="template-description"]').exists()).toBe(false);
+		expect(entry.find('[data-testid="template-delete"]').exists()).toBe(false);
+		// Still a design, so it still places and still travels.
+		expect(entry.find('[data-testid="template-place"]').exists()).toBe(true);
+		expect(entry.find('[data-testid="template-export"]').exists()).toBe(true);
 	});
 });

@@ -274,28 +274,95 @@ describe('broadcast Graphic Template Packages', () => {
 			.data as BroadcastGraphicTemplateResponse;
 
 		expect(copy.id).not.toBe(sourceTemplate.id);
-		// Its own managed revision starts fresh; the source's revision is recorded
-		// beside it and is never what this entry counts from.
+		// Its own managed revision starts fresh; the source's identity and revision
+		// are recorded beside it and are never what this entry counts from.
 		expect(copy.revision).toBe(1);
-		expect(copy.origin).toEqual({
+		expect(copy.provenance).toEqual({
 			sourceTemplateIdentity: sourceTemplate.id,
 			sourceTemplateRevision: sourceTemplate.revision,
 		});
 
-		// Editing the copy is an ordinary library write. Nothing consults the source,
-		// and the source is untouched by it.
-		const renamed = await request(`${TEMPLATES_PATH}/${templateId}`, {
-			method: 'PATCH',
-			cookie: authorCookie,
-			body: { name: `Renamed import ${runId}`, revision: copy.revision },
-		});
-		expect(renamed.status).toBe(200);
-		expect((renamed.data as BroadcastGraphicTemplateResponse).revision).toBe(2);
-
+		// The source is untouched by the import, and nothing about the copy reaches it.
 		const source = (await request(`${TEMPLATES_PATH}/${sourceTemplate.id}`, { cookie: authorCookie }))
 			.data as BroadcastGraphicTemplateResponse;
 		expect(source.revision).toBe(sourceTemplate.revision);
 		expect(source.name).toBe(sourceTemplate.name);
+		expect(source.provenance).toBeUndefined();
+		expect(source.authored).toBe(true);
+	});
+
+	it('lists an imported design alongside the ones authored here', async () => {
+		const received = await receivePackage(exportedPackage);
+		const completed = await installPackage(received.id);
+		const templateId = completed.templatePackageInstallation!.templateId;
+		installedTemplateIds.push(templateId);
+
+		const listed = (await request(TEMPLATES_PATH, { cookie: authorCookie }))
+			.data as BroadcastGraphicTemplateListResponse;
+
+		// One library, one listing. Where a design came from is a property of the
+		// entry, not a reason for an author to look somewhere else for it.
+		const entry = listed.templates.find(template => template.id === templateId);
+		expect(entry).toMatchObject({ authored: false, name: sourceTemplate.name });
+		expect(entry!.itemCount).toBe(
+			listed.templates.find(template => template.id === sourceTemplate.id)!.itemCount,
+		);
+	});
+
+	/**
+	 * An imported design is the Graphics Asset Library's own record of what a
+	 * Template Package published — the very record whose Graphic Asset References
+	 * pin the revisions it needs. This library reads it and never writes it, so a
+	 * revision or a deletion here is refused rather than half-applied.
+	 *
+	 * The refusal is a `409` naming the way forward, not a `404`: the design is
+	 * visible in the library, and reporting it missing would be false about
+	 * something the author is looking straight at.
+	 */
+	it('refuses to revise or delete an imported design, and says what to do instead', async () => {
+		const received = await receivePackage(exportedPackage);
+		const completed = await installPackage(received.id);
+		const templateId = completed.templatePackageInstallation!.templateId;
+		installedTemplateIds.push(templateId);
+
+		const revised = await request(`${TEMPLATES_PATH}/${templateId}`, {
+			method: 'PATCH',
+			cookie: authorCookie,
+			body: { name: `Renamed import ${runId}`, revision: 1 },
+		});
+		expect(revised.status).toBe(409);
+		expect(revised.data.message).toContain('Place it on a Screen and save the placed copy');
+
+		const deleted = await request(`${TEMPLATES_PATH}/${templateId}`, {
+			method: 'DELETE',
+			cookie: authorCookie,
+		});
+		expect(deleted.status).toBe(409);
+
+		// And it is still there, unchanged, rather than partly acted upon.
+		const still = (await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie }))
+			.data as BroadcastGraphicTemplateResponse;
+		expect(still.name).toBe(sourceTemplate.name);
+		expect(still.revision).toBe(1);
+	});
+
+	it('exports an imported design again, so it is not stranded where it landed', async () => {
+		const received = await receivePackage(exportedPackage);
+		const completed = await installPackage(received.id);
+		const templateId = completed.templatePackageInstallation!.templateId;
+		installedTemplateIds.push(templateId);
+
+		const exported = await fetch(`${TEMPLATES_PATH}/${templateId}/template-package`, {
+			headers: { cookie: authorCookie },
+		});
+		expect(exported.status).toBe(200);
+		const parts = readTemplatePackageParts(await collectStream(exported.body!));
+
+		// The re-export names *this* installation's Template, not the one it came
+		// from: a package carries the identity of the design it contains, and an
+		// import produced a design this installation owns the identity of.
+		expect(parts.manifest.template.identity).toBe(templateId);
+		expect(parts.manifest.template.revision).toBe(1);
 	});
 
 	it('places an imported design on a Screen like any other library entry', async () => {

@@ -518,16 +518,6 @@ export const broadcastGraphicTemplates = sqliteTable('broadcast_graphic_template
 	revision: integer('revision').notNull().default(1),
 	/** The saved Broadcast Graphic composition, exactly as a Screen would carry it. */
 	document: text('document', { mode: 'json' }).$type<BroadcastGraphicConfig>().notNull(),
-	/**
-	 * Where a Template Package brought this entry in from: the exporting
-	 * installation's Template identity and the revision it was exported at.
-	 *
-	 * Provenance and nothing else. It recognises a related package on a later import;
-	 * nothing follows it, offers an update from it, or re-reads it when this entry is
-	 * revised. `null` on every entry authored here.
-	 */
-	sourceTemplateIdentity: text('source_template_identity'),
-	sourceTemplateRevision: integer('source_template_revision'),
 	graphicAssetReferenceVersion: text('graphic_asset_reference_version'),
 
 	...timestamps,

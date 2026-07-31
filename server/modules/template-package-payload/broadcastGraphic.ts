@@ -3,7 +3,6 @@ import type {
 	TemplatePackagePayload,
 	TemplatePackagePayloadIssue,
 } from '~~/shared/types/templatePackage';
-import type { AdoptInstalledGraphicsTemplate } from '.';
 import { broadcastGraphicConfigSchema } from '~~/server/schemas/api/screen';
 import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
 
@@ -67,9 +66,7 @@ function readBroadcastGraphicDocument(document: unknown):
 	return { outcome: 'rejected', issues: reported };
 }
 
-export const broadcastGraphicTemplatePackagePayload: TemplatePackagePayload & {
-	adoptInstalledTemplate: AdoptInstalledGraphicsTemplate;
-} = {
+export const broadcastGraphicTemplatePackagePayload: TemplatePackagePayload = {
 	packageKind: 'skgraphic',
 
 	readInstallableDocument(document) {
@@ -87,50 +84,21 @@ export const broadcastGraphicTemplatePackagePayload: TemplatePackagePayload & {
 			capabilities: broadcastGraphicTemplatePackageRequirements(read.document).capabilities,
 		};
 	},
-
-	/**
-	 * Puts the installed design into the Broadcast Graphic Template library, where
-	 * an author browses and places it exactly like one they authored here.
-	 *
-	 * It is a copy with no update link. The source Template identity and revision
-	 * ride along as provenance — enough to recognise a related package on a later
-	 * import, and never enough to follow: nothing re-reads them, nothing offers an
-	 * update from them, and editing the entry advances this installation's own
-	 * revision without consulting them.
-	 *
-	 * The library entry takes the Installed Graphics Template's own identity. They
-	 * are one imported artifact seen from two sides — the Graphics Asset Library's
-	 * record of what it published, and the design an author works with — and giving
-	 * them one identity is what lets an installation result be looked up in either
-	 * place without a mapping table that could go stale.
-	 *
-	 * The library store is reached through a deferred import so that reading a
-	 * document — which is pure, and is the half every preflight runs — does not drag
-	 * a database binding in behind it. Without that, this payload could only be
-	 * exercised where a database exists, and the rules it enforces are exactly the
-	 * ones worth testing without one.
-	 */
-	async adoptInstalledTemplate({ installed, sourceTemplateRevision }) {
-		const { broadcastGraphicTemplateService } = await import(
-			'~~/server/services/broadcastGraphicTemplate',
-		);
-		// Re-read rather than trust: this is the rewritten document, not the one
-		// preflight proved, so it is a different artifact and gets its own proof.
-		const read = readBroadcastGraphicDocument(installed.document);
-		if (read.outcome === 'rejected') {
-			throw new Error(
-				`Installed Broadcast Graphic Template "${installed.name}" is not a valid Broadcast Graphic: ${
-					read.issues.map(problem => problem.message).join('; ')
-				}`,
-			);
-		}
-		await broadcastGraphicTemplateService().adoptInstalled({
-			id: installed.id,
-			name: installed.name,
-			description: null,
-			document: read.document,
-			sourceTemplateIdentity: installed.sourceTemplateIdentity,
-			sourceTemplateRevision: sourceTemplateRevision ?? null,
-		});
-	},
 };
+
+/**
+ * The received document as a Broadcast Graphic, for a reader that already holds one
+ * and needs it typed rather than proved again.
+ *
+ * An Installed Graphics Template stores its document as opaque data — the Graphics
+ * Asset Library never interpreted it — so every reader of one has to say what it
+ * expects it to be. Going through the same parse means a stored document that
+ * somehow is not a Broadcast Graphic is reported as such rather than cast into one
+ * and left to fail somewhere further along.
+ */
+export function readInstalledBroadcastGraphicDocument(
+	document: unknown,
+): BroadcastGraphicConfig | undefined {
+	const read = readBroadcastGraphicDocument(document);
+	return read.outcome === 'read' ? read.document : undefined;
+}

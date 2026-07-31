@@ -37,6 +37,7 @@ import type {
 	InstalledGraphicsTemplate,
 	InstalledGraphicsTemplateId,
 	InstalledGraphicsTemplateKind,
+	InstalledGraphicsTemplateSummary,
 } from '~~/shared/types/graphicsAsset';
 import type {
 	TemplatePackageAssetOrigin,
@@ -304,6 +305,8 @@ export interface InstallTemplatePackageCatalogueInput {
 		/** Already rewritten to exact local identities and revisions. */
 		document: unknown;
 		sourceTemplateIdentity: string;
+		/** The revision the package declared for that identity, where it declared one. */
+		sourceTemplateRevision?: number;
 	};
 	created: readonly CreatedTemplatePackageGraphicAsset[];
 	reused: readonly ReusedTemplatePackageGraphicAsset[];
@@ -467,6 +470,10 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	findInstalledGraphicsTemplate: (
 		templateId: InstalledGraphicsTemplateId,
 	) => Promise<InstalledGraphicsTemplate | undefined>;
+	/** Every Installed Graphics Template of one kind, for that kind's library browser. */
+	listInstalledGraphicsTemplates: (
+		kind: InstalledGraphicsTemplateKind,
+	) => Promise<InstalledGraphicsTemplateSummary[]>;
 	/**
 	 * What this installation already holds for one packaged Graphic Asset Origin:
 	 * the exact local revision carrying that source identity and revision, and
@@ -688,6 +695,29 @@ export interface GraphicsAssetLibrary {
 	inspectInstalledGraphicsTemplate: (input: {
 		templateId: InstalledGraphicsTemplateId;
 	}) => Promise<InstalledGraphicsTemplate>;
+	/**
+	 * One Installed Graphics Template, or nothing.
+	 *
+	 * The tolerant read beside {@link inspectInstalledGraphicsTemplate}'s strict one.
+	 * A caller resolving an identity that may belong to something else entirely is
+	 * asking a question, not asserting the Template exists, and turning that into a
+	 * thrown error it has to catch and re-interpret is how a genuine failure ends up
+	 * indistinguishable from a miss.
+	 */
+	findInstalledGraphicsTemplate: (input: {
+		templateId: string;
+	}) => Promise<InstalledGraphicsTemplate | undefined>;
+	/**
+	 * Every Installed Graphics Template of one kind.
+	 *
+	 * Read by the library that owns that artifact, so an imported design appears
+	 * alongside the ones authored here rather than in a second place an author has to
+	 * know to look. The library's own storage stays here: nothing outside reads or
+	 * writes an Installed Graphics Template row.
+	 */
+	listInstalledGraphicsTemplates: (input: {
+		kind: InstalledGraphicsTemplateKind;
+	}) => Promise<InstalledGraphicsTemplateSummary[]>;
 	cancelGraphicsIngestion: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
@@ -3139,6 +3169,7 @@ export function createGraphicsAssetLibrary(
 					name: manifest.template.name,
 					document: rewrite.document,
 					sourceTemplateIdentity: manifest.template.identity,
+					sourceTemplateRevision: manifest.template.revision,
 				},
 				created,
 				reused,
@@ -4046,6 +4077,22 @@ export function createGraphicsAssetLibrary(
 				);
 			}
 			return template;
+		},
+		async findInstalledGraphicsTemplate(input) {
+			if (input.templateId.length === 0)
+				return undefined;
+			return await catalogueRequest(
+				() => requireCatalogue().findInstalledGraphicsTemplate(
+					input.templateId as InstalledGraphicsTemplateId,
+				),
+				'Installed graphics Template state is temporarily unavailable',
+			);
+		},
+		async listInstalledGraphicsTemplates(input) {
+			return await catalogueRequest(
+				() => requireCatalogue().listInstalledGraphicsTemplates(input.kind),
+				'Installed graphics Template state is temporarily unavailable',
+			);
 		},
 		async cancelGraphicsIngestion(input) {
 			const catalogue = requireCatalogue();
