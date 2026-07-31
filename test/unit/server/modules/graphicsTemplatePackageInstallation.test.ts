@@ -21,6 +21,7 @@ import {
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { collectStream } from '../../../helpers/storedZipArchive';
+import { acceptEveryTemplateDocument } from '../../../helpers/templatePackagePayload';
 import {
 	readTemplatePackageParts,
 	writeTemplatePackage,
@@ -79,6 +80,7 @@ function createLibrary(
 		}),
 		staging,
 		canonical,
+		templatePayloads: acceptEveryTemplateDocument(),
 		now: () => new Date('2026-07-31T09:00:00.000Z'),
 		generateIdentity: () => `${label}-identity-${++nextIdentity}`,
 	});

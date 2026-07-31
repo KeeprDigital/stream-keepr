@@ -23,6 +23,7 @@ import { TEMPLATE_PACKAGE_LIMITS } from '~~/shared/types/templatePackage';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
 import { collectStream } from '../../../helpers/storedZipArchive';
+import { acceptEveryTemplateDocument } from '../../../helpers/templatePackagePayload';
 import {
 	readTemplatePackageParts,
 	writeTemplatePackage,
@@ -99,6 +100,7 @@ function createLibrary(label: string) {
 		staging,
 		canonical,
 		silentVideoPlaybackValidator: acceptEverySilentVideo(),
+		templatePayloads: acceptEveryTemplateDocument(),
 		now: () => new Date('2026-07-30T09:00:00.000Z'),
 		generateIdentity: () => `${label}-identity-${++nextIdentity}`,
 	});
@@ -1018,6 +1020,7 @@ describe('the Template Package preflight contract', () => {
 				catalogue,
 				staging: createInMemoryStagingGraphicsObjectStore(),
 				canonical,
+				templatePayloads: acceptEveryTemplateDocument(),
 				now: () => new Date(clock),
 				generateIdentity: (() => {
 					let next = 0;

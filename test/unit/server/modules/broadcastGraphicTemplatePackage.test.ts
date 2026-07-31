@@ -182,6 +182,29 @@ describe('a `.skgraphic` Template Package crossing an installation boundary', ()
 		expect(reportOf(await preflight(receiver, archive)).templateRevision).toBe(4);
 	});
 
+	/**
+	 * The artifact check is the one rule the envelope cannot enforce for itself, and
+	 * it lives entirely in an injected payload registry. Left out, it does not fail —
+	 * it ceases to exist, and every well-formed archive installs as a Template
+	 * nothing can place, with no error anywhere to say a check was skipped. So a
+	 * library with no registry refuses to receive a package at all, before it has
+	 * taken a byte it could not hold to the rule.
+	 */
+	it('refuses to receive a package at all when no Template Package payload registry is wired', async () => {
+		const unwired = createGraphicsAssetLibrary({
+			catalogue: createInMemoryGraphicsAssetCatalogue(),
+			staging: createInMemoryStagingGraphicsObjectStore(),
+			canonical: createInMemoryCanonicalGraphicsObjectStore(),
+		});
+
+		await expect(unwired.initiateTemplatePackagePreflight({
+			idempotencyKey: `preflight-unwired-${++sequence}`,
+			initiatedBy: 'package-author',
+			sourceFileName: 'lower-third.skgraphic',
+			declaredByteLength: 1024,
+		})).rejects.toThrow(/payload registry/);
+	});
+
 	it('accepts a package whose Template really is a Broadcast Graphic', async () => {
 		const { archive } = await exportedPackage();
 

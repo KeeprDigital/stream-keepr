@@ -990,10 +990,10 @@ interface GraphicsAssetLibraryDependencies {
 	 * claims. Injected rather than imported, because the library must not learn what
 	 * a Broadcast Graphic is to carry one.
 	 *
-	 * Omitted, every kind's document is carried under the envelope's own rules alone
-	 * — data-only, self-contained, every packaged asset accounted for — and nothing
-	 * further is claimed about it. That is the right default for a library test
-	 * double; the application always wires the real registry.
+	 * Optional because most of the library never receives a package at all — a
+	 * delivery path serving canonical bytes has no use for it. It is not optional
+	 * *to receiving*: `initiateTemplatePackagePreflight` refuses without it rather
+	 * than letting the artifact check quietly become a no-op.
 	 */
 	templatePayloads?: TemplatePackagePayloads;
 	now?: () => Date;
@@ -1137,6 +1137,16 @@ export function createGraphicsAssetLibrary(
 		if (!('createImmutable' in dependencies.canonical))
 			throw new GraphicsAssetLibraryError('Graphics Asset canonical byte store is unavailable', 'graphics-asset-library-unavailable');
 		return dependencies.canonical;
+	}
+
+	function requireTemplatePayloads(): TemplatePackagePayloads {
+		if (!dependencies.templatePayloads) {
+			throw new GraphicsAssetLibraryError(
+				'Template Package receipt is unavailable without a Template Package payload registry',
+				'graphics-asset-library-unavailable',
+			);
+		}
+		return dependencies.templatePayloads;
 	}
 
 	/**
@@ -2395,10 +2405,7 @@ export function createGraphicsAssetLibrary(
 		manifest: TemplatePackageManifest,
 		document: unknown,
 	): TemplatePackagePreflightIssue[] {
-		const payload = dependencies.templatePayloads?.(manifest.packageKind);
-		if (!payload)
-			return [];
-		const read = payload.readInstallableDocument(document);
+		const read = requireTemplatePayloads()(manifest.packageKind).readInstallableDocument(document);
 		if (read.outcome === 'rejected') {
 			return read.issues.map(issue => templatePackagePreflightIssue(issue.code, {
 				subject: issue.subject,
@@ -3964,6 +3971,13 @@ export function createGraphicsAssetLibrary(
 			return operation;
 		},
 		async initiateTemplatePackagePreflight(input) {
+			// Reading the artifact is the one check the envelope cannot make for itself,
+			// and preflight is the only place it happens. With no registry wired the
+			// check does not fail — it disappears, and every well-formed archive installs
+			// as a Template nothing can use. So a library asked to receive a package
+			// without one refuses before it takes a single byte, rather than accepting
+			// bytes it has no way to hold to the rule.
+			requireTemplatePayloads();
 			return await initiateGraphicsOperation({
 				...input,
 				// A package names no asset, so the operation is labelled by what the
