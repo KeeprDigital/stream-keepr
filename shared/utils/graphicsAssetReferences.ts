@@ -74,6 +74,50 @@ function appendGraphicItemAssetReferences(
 	}
 }
 
+/**
+ * Every Graphic Asset Revision one shared Graphic Item tree pins.
+ *
+ * Only a Media Graphic Item pins anything: the shared vocabulary has no font-asset
+ * concept, and the context-gated kinds read live session state rather than
+ * content. Slots are built from ids rather than list positions, so a reorder does
+ * not read as a set of changed references.
+ *
+ * A silent-video reference carries the pinned revision's own target compatibility,
+ * which the reference index checks it against, and an authored target of Chromium.
+ * That assumption is shared by both hosts on purpose: a graphics Screen Output is
+ * consumed as a browser source in Chromium-based capture, which is what makes VP9
+ * alpha usable at all, and neither host has a control that would let an author say
+ * otherwise. An output opened in another engine reports the incompatibility rather
+ * than silently showing nothing.
+ */
+function appendSharedGraphicItemReferences(
+	references: ScreenGraphicAssetReference[],
+	items: readonly GraphicItemConfig[],
+	slotPrefix: string,
+) {
+	function append(item: GraphicItemConfig | GraphicGroupChildConfig, ownerSlot: string) {
+		if (item.type !== 'media' || !item.asset)
+			return;
+		references.push({
+			reference: item.asset,
+			ownerSlot: `${ownerSlot}.asset`,
+			kind: item.mediaKind,
+			...(item.mediaKind === 'silent-video'
+				? { videoCompatibility: item.videoCompatibility, videoTarget: 'chromium' as const }
+				: {}),
+		});
+	}
+
+	for (const item of items) {
+		const slot = `${slotPrefix}.${item.id}`;
+		append(item, slot);
+		if (item.type !== 'group')
+			continue;
+		for (const child of item.children)
+			append(child, `${slot}.children.${child.id}`);
+	}
+}
+
 export function featureMatchOverlayGraphicAssetReferences(
 	config: FeatureMatchOverlayModeConfig,
 ): ScreenGraphicAssetReference[] {
@@ -95,6 +139,14 @@ export function featureMatchOverlayGraphicAssetReferences(
 			appendGraphicItemAssetReferences(references, item, `layout.items.${item.id}`);
 		}
 	}
+	// The shared item tree publishes under the same `layout.` prefix as everything
+	// else this mode owns. That prefix is load-bearing: a write scopes its reference
+	// delete to it, and a Screen Output resolves only the prefix for its Screen's
+	// current mode, so a tree publishing outside it would have its references
+	// orphaned by the next write.
+	if (config.layout.composition)
+		appendSharedGraphicItemReferences(references, config.layout.composition.items, 'layout.composition.items');
+
 	return references;
 }
 
@@ -123,29 +175,8 @@ export function broadcastGraphicsGraphicAssetReferences(
 ): ScreenGraphicAssetReference[] {
 	const references: ScreenGraphicAssetReference[] = [];
 
-	function append(item: GraphicItemConfig | GraphicGroupChildConfig, ownerSlot: string) {
-		if (item.type !== 'media' || !item.asset)
-			return;
-		references.push({
-			reference: item.asset,
-			ownerSlot: `${ownerSlot}.asset`,
-			kind: item.mediaKind,
-			...(item.mediaKind === 'silent-video'
-				? { videoCompatibility: item.videoCompatibility, videoTarget: 'chromium' as const }
-				: {}),
-		});
-	}
-
-	for (const graphic of config.graphics) {
-		for (const item of graphic.items) {
-			const slot = `graphics.${graphic.id}.items.${item.id}`;
-			append(item, slot);
-			if (item.type !== 'group')
-				continue;
-			for (const child of item.children)
-				append(child, `${slot}.children.${child.id}`);
-		}
-	}
+	for (const graphic of config.graphics)
+		appendSharedGraphicItemReferences(references, graphic.items, `graphics.${graphic.id}.items`);
 
 	return references;
 }

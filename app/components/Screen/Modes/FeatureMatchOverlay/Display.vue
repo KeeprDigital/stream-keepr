@@ -5,8 +5,10 @@ import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import { graphicAssetFontFaceFamily } from '~~/shared/featureMatchOverlayFonts';
 import { featureMatchOverlayGraphicAssetReferences, screenGraphicAssetReferenceTargetCompatibility } from '~~/shared/utils/graphicsAssetReferences';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
+import { resolveFeatureMatchOverlayCompositorRenderModel } from '~/modules/feature-match-overlay/compositorRenderModel';
 import { resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
 import { featureMatchOverlaySelectionKey, isFeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
+import { featureMatchGraphicsContext, featureMatchTokenValues } from '~/modules/feature-match-overlay/tokenValues';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
@@ -127,6 +129,39 @@ const renderModel = computed(() => resolveFeatureMatchOverlayRenderModel({
 	matchState: matchState.value,
 	maskId: frameMaskId,
 	graphicAssetContentPath: graphicAssetContentUrl,
+}));
+
+/**
+ * The Feature Match Layout's shared item tree, composed by the shared compositor.
+ *
+ * A second render model rather than a widened first one: the two describe
+ * different vocabularies, and this one is the shared compositor's own — the same
+ * model a Broadcast Graphics Screen composes, resolved through the Feature Match
+ * Overlay's host adapter. What it does not describe is the Frame and the Source
+ * Items, which stay host-owned and are drawn by this component around it.
+ *
+ * Its host state is resolved once here so every Screen Output derives the same
+ * frame from the same snapshot, which is what makes the Overlay, Fill, and Key
+ * Outputs agree at the same authoritative time.
+ */
+const hostState = computed(() => ({
+	event: event.value,
+	featureMatch: match.value,
+	matchState: matchState.value,
+	sourceMatch: sourceMatch.value,
+	round: round.value,
+	phase: phase.value,
+	displayTime: displayTime.value,
+}));
+
+const compositorRenderModel = computed(() => resolveFeatureMatchOverlayCompositorRenderModel({
+	output: resolvedOutput.value,
+	canvasWidth: canvasWidth.value,
+	canvasHeight: canvasHeight.value,
+	layout: config.value.layout,
+	tokenValues: featureMatchTokenValues(hostState.value),
+	featureMatch: featureMatchGraphicsContext(hostState.value),
+	graphicAssetContentUrl,
 }));
 
 const canvasStyle = computed(() => renderModel.value.canvasStyle);
@@ -411,6 +446,18 @@ onBeforeUnmount(() => {
 			</div>
 		</template>
 
+		<!--
+			The Feature Match Layout's shared item tree, above the Frame and the Source
+			Items because the Frame is the continuous area that sits behind and around
+			everything else. The compositor owns the whole of what is inside this
+			element; the Frame around it, and the cutouts through it, are host-owned and
+			drawn above.
+		-->
+		<GraphicsCompositorCanvas
+			class="feature-match-overlay__composition"
+			:render="compositorRenderModel"
+		/>
+
 		<div v-if="showPreviewGuides" class="guide-layer" aria-label="Feature Match Overlay editor selection layer">
 			<button
 				type="button"
@@ -503,6 +550,16 @@ onBeforeUnmount(() => {
 }
 
 .frame-layer {
+	position: absolute;
+	inset: 0;
+}
+
+/*
+ * The shared compositor fills the canvas and composes itself; it is placed here
+ * rather than sized by its own model because the canvas coordinate space belongs
+ * to the Screen, and the Frame around it is drawn in the same space.
+ */
+.feature-match-overlay__composition {
 	position: absolute;
 	inset: 0;
 }

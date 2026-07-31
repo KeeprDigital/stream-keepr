@@ -520,9 +520,40 @@ export type FeatureMatchLayoutItemConfig
 		| FeatureMatchSpecificGraphicItemConfig
 		| FeatureMatchGraphicGroupItemConfig;
 
+/**
+ * The authored arrangement a Feature Match Overlay renders.
+ *
+ * It carries three things, and they are three rather than one because the Host
+ * Contract draws the line between them:
+ *
+ * - `frame` is the Feature Match Overlay Frame: the continuous graphic area
+ *   behind and around everything else. It stays host-owned — backgrounds, media,
+ *   shader animation effects, per-side border, and glow are capability outside the
+ *   shared vocabulary, and the contract's rule is that capability outside the
+ *   contract stays with the host.
+ * - `composition` is the shared item tree, held as exactly one composition because
+ *   a Feature Match Overlay renders exactly one Feature Match Layout. It is a
+ *   `BroadcastGraphicConfig` because that is the shape the shared compositor
+ *   authors and the shared render model composes, not because a Feature Match
+ *   Layout is a Broadcast Graphic.
+ * - `items` is the legacy widget list, and also the home of Source Items.
+ *
+ * Source Items are host-owned for the same reason the Frame is: no Broadcast
+ * Graphics Screen has an external video source to place, and a Frame cutout is a
+ * Frame concern. They stay in `items` rather than moving to a list of their own,
+ * because a second list would have no reader today — the Display already renders
+ * them beneath the composed tree, and their cutouts already punch through the
+ * Frame. Giving them a home independent of the legacy list belongs with the ticket
+ * that removes that list.
+ */
 export interface FeatureMatchLayoutConfig {
 	frame: FeatureMatchLayoutFrameConfig;
 	items: FeatureMatchLayoutItemConfig[];
+	/**
+	 * The shared Graphic Item tree. Absent on a layout authored before the
+	 * compositor, which renders through the legacy model until an author adds to it.
+	 */
+	composition?: BroadcastGraphicConfig;
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {

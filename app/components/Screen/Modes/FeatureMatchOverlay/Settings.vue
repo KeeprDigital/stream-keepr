@@ -1,8 +1,12 @@
 <script setup lang="ts">
+import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { FeatureMatchOverlayPresetId } from '~~/shared/types/screenConfig';
+import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
 import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT, DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH } from '~~/shared/types/screenConfig';
+import FeatureMatchOverlayCompositorInspector from './CompositorInspector.vue';
+import FeatureMatchOverlayCompositorTree from './CompositorTree.vue';
 import FeatureMatchOverlayLayerInspector from './LayerInspector.vue';
 import FeatureMatchOverlayPreviewOutputAside from './PreviewOutputAside.vue';
 
@@ -72,19 +76,69 @@ function applyPreset() {
 	if (!confirmPresetId.value)
 		return;
 	updateConfig(applyFeatureMatchOverlayPreset(config.value, confirmPresetId.value));
-	selectedTarget.value = { type: 'canvas' };
+	clearSelection();
 	confirmPresetId.value = null;
 }
 
 function resetToPreset() {
 	updateConfig(applyFeatureMatchOverlayPreset(config.value, config.value.presetId));
-	selectedTarget.value = { type: 'canvas' };
+	clearSelection();
 }
 
 function updateCanvasDimension(field: 'width' | 'height', value: number | null | undefined) {
 	updateScreenConfig({
 		[field]: value ?? (field === 'width' ? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH : DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT),
 	});
+}
+
+/* ────────────────────────────────────────────────
+ * Shared compositor
+ * ──────────────────────────────────────────────── */
+
+/**
+ * The shared item tree's own selection, held separately from the host-owned one.
+ *
+ * Two refs rather than one union, because they address different things: the shared
+ * one names a Graphic Item inside the one composition, and the host-owned one names
+ * the Frame, a Source Item, or a legacy widget. Merging them would make every
+ * consumer of either handle both, and the two authoring surfaces are exactly what
+ * the contract ticket will separate.
+ *
+ * They are nonetheless one selection, because there is one property panel. Choosing
+ * in either surface clears the other, so exactly one of them is ever non-canvas.
+ * Without that, selecting a shared Graphic Item and then a legacy widget updates the
+ * host-owned ref while the panel keeps showing the compositor's — leaving the legacy
+ * inspector unreachable until the author happens to re-select the canvas.
+ */
+const compositorTarget = ref<GraphicsSelectionTarget>({ type: 'canvas' });
+
+function selectCompositorTarget(target: GraphicsSelectionTarget) {
+	compositorTarget.value = target;
+	if (target.type !== 'canvas')
+		selectedTarget.value = { type: 'canvas' };
+}
+
+function selectHostTarget(target: FeatureMatchOverlaySelectionTarget) {
+	selectedTarget.value = target;
+	if (target.type !== 'canvas')
+		compositorTarget.value = { type: 'canvas' };
+}
+
+/** Both surfaces return to the canvas: a preset replaces what either could name. */
+function clearSelection() {
+	selectedTarget.value = { type: 'canvas' };
+	compositorTarget.value = { type: 'canvas' };
+}
+
+/**
+ * The single write funnel for the shared item tree.
+ *
+ * It writes the whole layout rather than the composition alone, because the mode
+ * config's merge is a shallow spread: sending `{ layout: { composition } }` would
+ * replace the Frame and the legacy items with nothing.
+ */
+function updateComposition(composition: BroadcastGraphicConfig) {
+	updateConfig({ layout: { ...config.value.layout, composition } });
 }
 </script>
 
@@ -111,7 +165,12 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 							class="min-w-0 flex-1"
 							@update:model-value="confirmPresetId = $event"
 						/>
-						<UButton size="sm" variant="soft" @click="resetToPreset">
+						<UButton
+							size="sm"
+							variant="soft"
+							data-testid="reset-preset"
+							@click="resetToPreset"
+						>
 							Reset
 						</UButton>
 					</UFieldGroup>
@@ -183,15 +242,35 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 		</section>
 
 		<div class="grid min-h-[calc(100vh-18rem)] items-start gap-4 xl:grid-cols-[minmax(15rem,18rem)_minmax(0,1fr)_minmax(19rem,24rem)] 2xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)_minmax(24rem,30rem)]">
-			<section class="min-w-0 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
+			<section class="min-w-0 space-y-4 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
+				<!--
+					The Feature Match Layout's shared item tree, authored by the shared
+					compositor behind the Feature Match Overlay Host Contract.
+				-->
+				<FeatureMatchOverlayCompositorTree
+					:selected-target="compositorTarget"
+					:layout="config.layout"
+					:canvas-width="screenWidth"
+					:canvas-height="screenHeight"
+					writable
+					@update:selected-target="selectCompositorTarget"
+					@update:composition="updateComposition"
+				/>
+
+				<!--
+					The Frame, Source Items, and Frame cutouts stay host-owned, and so does
+					the legacy widget list until the contract ticket removes it. Both are
+					reached through the editor that already knows their vocabulary.
+				-->
 				<FeatureMatchOverlayLayerInspector
-					v-model:selected-target="selectedTarget"
+					:selected-target="selectedTarget"
 					variant="tree"
 					:config="config"
 					:update-config="updateConfig"
 					:screen-width="screenWidth"
 					:screen-height="screenHeight"
 					:event-id="eventId"
+					@update:selected-target="selectHostTarget"
 				/>
 			</section>
 
@@ -203,19 +282,31 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 					:selected-target="selectedTarget"
 					:publication-blocked="assetPublicationBlocked"
 					:publication-block-reason="assetPublicationBlockReason"
-					@select-target="selectedTarget = $event"
+					@select-target="selectHostTarget"
 				/>
 			</section>
 
-			<section class="min-w-0 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
+			<section class="min-w-0 space-y-4 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
+				<FeatureMatchOverlayCompositorInspector
+					v-if="compositorTarget.type !== 'canvas'"
+					:layout="config.layout"
+					:selected-target="compositorTarget"
+					:canvas-width="screenWidth"
+					:canvas-height="screenHeight"
+					:event-id="eventId"
+					writable
+					@update:composition="updateComposition"
+				/>
 				<FeatureMatchOverlayLayerInspector
-					v-model:selected-target="selectedTarget"
+					v-else
+					:selected-target="selectedTarget"
 					variant="inspector"
 					:config="config"
 					:update-config="updateConfig"
 					:screen-width="screenWidth"
 					:screen-height="screenHeight"
 					:event-id="eventId"
+					@update:selected-target="selectHostTarget"
 				/>
 			</section>
 		</div>

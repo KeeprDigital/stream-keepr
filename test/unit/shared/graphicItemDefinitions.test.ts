@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { FEATURE_MATCH_TOKEN_CATALOGUE } from '~~/shared/featureMatchTokenCatalogue';
 import {
+	authorsGraphicInputs,
+	authorsGraphicStack,
 	BROADCAST_GRAPHICS_HOST_CONTRACT,
+	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 	getGraphicItemDefinition,
 	graphicFillSummary,
 	graphicGroupChildDefinitionsForHost,
 	graphicItemDefinitionsForHost,
 	graphicItemSummary,
+	graphicsHostTokenCatalogue,
 	isGraphicItemDefinitionAvailable,
 } from '~~/shared/modules/graphics';
 
@@ -25,13 +30,100 @@ describe('graphicItemDefinitions', () => {
 	});
 
 	it('withholds a Definition whose required context the Host Contract cannot supply', () => {
-		const clockDefinition = {
-			...getGraphicItemDefinition('text'),
-			requiredContext: 'feature-match' as const,
-		};
-
-		expect(isGraphicItemDefinitionAvailable(clockDefinition, BROADCAST_GRAPHICS_HOST_CONTRACT)).toBe(false);
+		expect(isGraphicItemDefinitionAvailable(getGraphicItemDefinition('clock'), BROADCAST_GRAPHICS_HOST_CONTRACT)).toBe(false);
 		expect(isGraphicItemDefinitionAvailable(getGraphicItemDefinition('text'), BROADCAST_GRAPHICS_HOST_CONTRACT)).toBe(true);
+	});
+
+	it('offers the Feature Match host the base kinds and the three context-gated Definitions', () => {
+		// Clock, Player Life, and Game Wins are shared Definitions rather than a
+		// Feature Match hierarchy: the same compositor renders them, and only the
+		// declared context decides whether the palette offers them at all.
+		const definitions = graphicItemDefinitionsForHost(FEATURE_MATCH_OVERLAY_HOST_CONTRACT);
+
+		expect(definitions.map(definition => definition.kind))
+			.toEqual(['text', 'shape', 'media', 'group', 'clock', 'player-life', 'game-wins']);
+	});
+
+	it('offers the context-gated Definitions inside a Graphic Group too', () => {
+		// A Feature Match Layout composes a player cluster from a life total and a
+		// win indicator in one row, so the group palette gates on context exactly as
+		// the top-level palette does — it withholds only another Graphic Group.
+		const definitions = graphicGroupChildDefinitionsForHost(FEATURE_MATCH_OVERLAY_HOST_CONTRACT);
+
+		expect(definitions.map(definition => definition.kind))
+			.toEqual(['text', 'shape', 'media', 'clock', 'player-life', 'game-wins']);
+	});
+
+	it('requires the Feature Match context for the Clock, Player Life, and Game Wins Definitions', () => {
+		for (const kind of ['clock', 'player-life', 'game-wins'] as const)
+			expect(getGraphicItemDefinition(kind).requiredContext).toBe('feature-match');
+
+		// The base kinds compose from nothing a host has to supply, so they require
+		// no context and stay available to every host.
+		for (const kind of ['text', 'shape', 'media', 'group'] as const)
+			expect(getGraphicItemDefinition(kind).requiredContext).toBeUndefined();
+	});
+
+	it('creates a Clock Graphic Item that renders the session clock rather than a template', () => {
+		// A Clock reads the active Feature Match Session, so it carries typography and
+		// a Text Overflow Policy but no Graphic Text Template to author.
+		const item = getGraphicItemDefinition('clock').createDefault({
+			id: 'item-6',
+			label: 'Clock',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		});
+
+		expect(item).toMatchObject({ type: 'clock', visible: true, anchor: 'top-left', overflowPolicy: 'clip' });
+		expect(item.type === 'clock' && item.typography.textAlign).toBe('center');
+		expect(graphicItemSummary(item)).toBe('Feature Match clock');
+	});
+
+	it('creates Player Life and Game Wins Items for the first player by default', () => {
+		// The side lives on these two Definitions rather than in a token key: they
+		// render one player's live state rather than substituting a placeholder.
+		const life = getGraphicItemDefinition('player-life').createDefault({
+			id: 'item-7',
+			label: 'Life',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		});
+		const wins = getGraphicItemDefinition('game-wins').createDefault({
+			id: 'item-8',
+			label: 'Wins',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		});
+
+		expect(life).toMatchObject({ type: 'player-life', playerSide: 'player1', lifeAnimation: 'glow' });
+		expect(wins).toMatchObject({
+			type: 'game-wins',
+			playerSide: 'player1',
+			displayMode: 'boxes',
+			boxOrientation: 'horizontal',
+		});
+		expect(graphicItemSummary(life)).toBe('Player 1 life');
+		expect(graphicItemSummary(wins)).toBe('Player 1 wins • boxes');
+		expect(graphicItemSummary({ ...wins, playerSide: 'player2', displayMode: 'number' }))
+			.toBe('Player 2 wins • number');
+	});
+
+	it('gives a Game Wins box the canonical Shape Geometry rather than a bespoke radius', () => {
+		// The legacy widget carried its own border width and corner radius. A box is
+		// an ordinary painted surface, so it uses the Shape Geometry and Graphic
+		// Surface Style vocabulary every other kind already speaks.
+		const wins = getGraphicItemDefinition('game-wins').createDefault({
+			id: 'item-9',
+			label: 'Wins',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		});
+		if (wins.type !== 'game-wins')
+			throw new Error('expected a Game Wins Graphic Item');
+
+		expect(wins.boxGeometry.leftSlant).toBe(0);
+		expect(wins.boxGeometry.topLeft).toEqual({ treatment: 'rounded', size: 4 });
+		expect(wins.wonBoxSurfaceStyle.fill).toEqual({ type: 'solid', color: '#22c55e' });
 	});
 
 	it('creates a Text Graphic Item with base typography and a Text Overflow Policy', () => {
@@ -112,8 +204,43 @@ describe('graphicItemDefinitions', () => {
 
 	it('carries only the contract fields the compositor reads', () => {
 		// An unread field invites false confidence that a later host's needs are
-		// already provided for. Each one joins when it has a real consumer.
-		expect(Object.keys(BROADCAST_GRAPHICS_HOST_CONTRACT).sort()).toEqual(['contextKinds', 'hostId']);
+		// already provided for. Each one joins when it has a real consumer:
+		// `contextKinds` gates the palette, `composition` decides whether a stack is
+		// authored, and `textValues` decides where placeholder values come from and
+		// therefore whether Graphic Inputs are declared. Instant-apply write
+		// semantics is deliberately not among them — both hosts already write
+		// instantly, so a field for it would have no reader.
+		const fields = ['composition', 'contextKinds', 'hostId', 'textValues'];
+
+		expect(Object.keys(BROADCAST_GRAPHICS_HOST_CONTRACT).sort()).toEqual(fields);
+		expect(Object.keys(FEATURE_MATCH_OVERLAY_HOST_CONTRACT).sort()).toEqual(fields);
+	});
+
+	it('offers the Feature Match host the Event and Feature Match contexts', () => {
+		// The three context-gated Definitions require the Feature Match context, and
+		// the token catalogue reads current Event Data as well as a Feature Match
+		// Session, so a Feature Match Overlay declares both.
+		expect(FEATURE_MATCH_OVERLAY_HOST_CONTRACT.contextKinds).toEqual(['event', 'feature-match']);
+	});
+
+	it('authors a stack for Broadcast Graphics and one composition for Feature Match Overlay', () => {
+		// A Broadcast Graphics Screen composes an ordered stack of Broadcast
+		// Graphics; a Feature Match Overlay renders exactly one Feature Match Layout
+		// for exactly one Feature Match Slot, so it offers no stack to author.
+		expect(authorsGraphicStack(BROADCAST_GRAPHICS_HOST_CONTRACT)).toBe(true);
+		expect(authorsGraphicStack(FEATURE_MATCH_OVERLAY_HOST_CONTRACT)).toBe(false);
+	});
+
+	it('declares Graphic Inputs for Broadcast Graphics and binds host tokens for Feature Match Overlay', () => {
+		// The two are exclusive by construction rather than by a rule something has
+		// to check: one field carries the catalogue, so a host cannot bind tokens
+		// without one or declare Graphic Inputs while binding them.
+		expect(authorsGraphicInputs(BROADCAST_GRAPHICS_HOST_CONTRACT)).toBe(true);
+		expect(graphicsHostTokenCatalogue(BROADCAST_GRAPHICS_HOST_CONTRACT)).toEqual([]);
+
+		expect(authorsGraphicInputs(FEATURE_MATCH_OVERLAY_HOST_CONTRACT)).toBe(false);
+		expect(graphicsHostTokenCatalogue(FEATURE_MATCH_OVERLAY_HOST_CONTRACT))
+			.toBe(FEATURE_MATCH_TOKEN_CATALOGUE);
 	});
 
 	it('creates a Graphic Group arranging no children yet', () => {

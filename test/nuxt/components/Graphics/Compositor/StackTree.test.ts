@@ -1,9 +1,14 @@
+import type { GraphicsHostContract } from '~~/shared/modules/graphics';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
-import { BROADCAST_GRAPHICS_HOST_CONTRACT, squareShapeGeometry } from '~~/shared/modules/graphics';
+import {
+	BROADCAST_GRAPHICS_HOST_CONTRACT,
+	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+	squareShapeGeometry,
+} from '~~/shared/modules/graphics';
 
 enableAutoUnmount(afterEach);
 
@@ -31,6 +36,7 @@ async function mountComponent(options: {
 	selectedGraphicId?: string | null;
 	selectedTarget?: GraphicsSelectionTarget;
 	writable?: boolean;
+	contract?: GraphicsHostContract;
 }) {
 	const componentPath = '../../../../../app/components/Graphics/Compositor/StackTree.vue';
 	const { default: StackTree } = await import(componentPath);
@@ -40,7 +46,7 @@ async function mountComponent(options: {
 			graphics: options.graphics,
 			selectedTarget: options.selectedTarget ?? { type: 'canvas' },
 			selectedGraphicId: options.selectedGraphicId ?? null,
-			contract: BROADCAST_GRAPHICS_HOST_CONTRACT,
+			contract: options.contract ?? BROADCAST_GRAPHICS_HOST_CONTRACT,
 			canvasWidth: 1920,
 			canvasHeight: 1080,
 			writable: options.writable ?? true,
@@ -349,5 +355,47 @@ describe('graphicsCompositorStackTree', () => {
 		expect(wrapper.find('[aria-label="Move Shape 1 forward"]').exists()).toBe(false);
 		expect(wrapper.find('[aria-label="Delete Shape 1"]').exists()).toBe(false);
 		expect(wrapper.emitted('update:graphics')).toBeUndefined();
+	});
+
+	it('offers no stack to a host that composes one composition', async () => {
+		const wrapper = await mountComponent({
+			graphics: [{ id: 'layout', name: 'Feature Match Layout', items: [] }],
+			selectedGraphicId: 'layout',
+			contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+		});
+
+		expect(wrapper.find('[data-testid="graphic-stack-section"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="add-broadcast-graphic"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="broadcast-graphic-node"]').exists()).toBe(false);
+	});
+
+	it('still authors the Graphic Layer Order of a host that composes one composition', async () => {
+		// Withholding the stack must not withhold the tree: the whole point of
+		// embedding the compositor is to author this composition's items.
+		const wrapper = await mountComponent({
+			graphics: [{ id: 'layout', name: 'Feature Match Layout', items: [] }],
+			selectedGraphicId: 'layout',
+			contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+		});
+
+		expect(wrapper.find('[data-testid="graphic-item-palette"]').exists()).toBe(true);
+
+		const palette = wrapper.get('[data-testid="graphic-item-palette"]');
+		await palette.setValue('text');
+
+		expect(emittedGraphics(wrapper)[0]!.items).toHaveLength(1);
+		expect(emittedTarget(wrapper)).toMatchObject({ type: 'item', graphicId: 'layout' });
+	});
+
+	it('keeps the stack for a Broadcast Graphics Screen carrying exactly one graphic', async () => {
+		// The stack is the host's declaration, not a count. A Screen with one
+		// Broadcast Graphic must not silently lose its ability to add a second.
+		const wrapper = await mountComponent({
+			graphics: [{ id: 'a', name: 'A', items: [] }],
+			selectedGraphicId: 'a',
+		});
+
+		expect(wrapper.find('[data-testid="graphic-stack-section"]').exists()).toBe(true);
+		expect(wrapper.find('[data-testid="add-broadcast-graphic"]').exists()).toBe(true);
 	});
 });

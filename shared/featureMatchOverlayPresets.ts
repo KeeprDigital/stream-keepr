@@ -258,11 +258,29 @@ function getFeatureMatchOverlayPreset(id: FeatureMatchOverlayPresetId): FeatureM
 	return FEATURE_MATCH_OVERLAY_PRESETS.find(preset => preset.id === id) ?? FEATURE_MATCH_OVERLAY_PRESETS[0]!;
 }
 
+/**
+ * A Feature Match Overlay Preset initialises a Feature Match Layout.
+ *
+ * It initialises the Frame and the legacy widget list, which is all a preset
+ * carries. The shared item tree is deliberately carried across: no preset ships
+ * one, so spreading the preset wholesale would delete every Graphic Item an author
+ * had built on the compositor — and "Reset" is one unconfirmed click beside the
+ * preset select. Preserving it is not the same as creating one: a layout with no
+ * shared tree still has none afterwards, so applying a preset changes nothing it
+ * does not own.
+ *
+ * The contract ticket recreates the presets on the shared foundation, at which
+ * point a preset owns the tree and this carry-over goes with the legacy list.
+ */
 export function applyFeatureMatchOverlayPreset(current: FeatureMatchOverlayModeConfig, presetId: FeatureMatchOverlayPresetId): FeatureMatchOverlayModeConfig {
 	const preset = clone(getFeatureMatchOverlayPreset(presetId).config) as Omit<FeatureMatchOverlayModeConfig, 'featureMatchId'>;
 	return {
 		...preset,
 		featureMatchId: current.featureMatchId,
 		presetId,
+		layout: {
+			...preset.layout,
+			...(current.layout.composition ? { composition: clone(current.layout.composition) } : {}),
+		},
 	};
 }

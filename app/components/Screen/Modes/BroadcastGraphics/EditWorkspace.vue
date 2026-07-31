@@ -138,6 +138,7 @@ const leaseNotice = computed(() => {
 				<GraphicsCompositorInspector
 					:graphics="graphics"
 					:selected-target="selectedTarget"
+					:contract="BROADCAST_GRAPHICS_HOST_CONTRACT"
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
 					:event-id="eventId"
