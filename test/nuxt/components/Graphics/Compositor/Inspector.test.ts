@@ -14,6 +14,7 @@ import {
 	BROADCAST_GRAPHICS_HOST_CONTRACT,
 	DEFAULT_GRAPHIC_TYPOGRAPHY,
 	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+	getGraphicItemDefinition,
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
 import { MAX_GRAPHIC_TEXT_LENGTH } from '~~/shared/types/graphics';
@@ -751,6 +752,69 @@ describe('graphicsCompositorInspector', () => {
 		await nextTick();
 
 		expect(wrapper.emitted('update:graphics')).toBeUndefined();
+	});
+
+	describe('context-gated Graphic Items', () => {
+		function contextItem(kind: 'clock' | 'player-life' | 'game-wins'): GraphicItemConfig {
+			return getGraphicItemDefinition(kind).createDefault({
+				id: kind,
+				label: kind,
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			});
+		}
+
+		it('chooses the Player a Player Life reads', async () => {
+			// Without this, a Player Life is permanently player1 and a two-player overlay
+			// cannot be built at all — both sides would render the same total.
+			const wrapper = await mountComponent({
+				graphics: stack([contextItem('player-life')]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'player-life' },
+				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+			});
+
+			selectField(wrapper, 'graphic-item-player-side')?.vm.$emit('update:modelValue', 'player2');
+			await nextTick();
+
+			expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ type: 'player-life', playerSide: 'player2' });
+		});
+
+		it('chooses the Player a Game Wins indicator reads', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([contextItem('game-wins')]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'game-wins' },
+				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+			});
+
+			selectField(wrapper, 'graphic-item-player-side')?.vm.$emit('update:modelValue', 'player2');
+			await nextTick();
+
+			expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ type: 'game-wins', playerSide: 'player2' });
+		});
+
+		it('offers no Player for a Clock, which belongs to the Match rather than a side', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([contextItem('clock')]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'clock' },
+				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+			});
+
+			expect(selectField(wrapper, 'graphic-item-player-side')).toBeUndefined();
+		});
+
+		it('never writes a Player through a read-only session', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([contextItem('player-life')]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'player-life' },
+				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+				writable: false,
+			});
+
+			selectField(wrapper, 'graphic-item-player-side')?.vm.$emit('update:modelValue', 'player2');
+			await nextTick();
+
+			expect(wrapper.emitted('update:graphics')).toBeUndefined();
+		});
 	});
 
 	describe('host-supplied placeholder values', () => {

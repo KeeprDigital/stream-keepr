@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { GraphicsHostContract, ShapeGeometryPresetId } from '~~/shared/modules/graphics';
+import type { PlayerSide } from '~~/shared/types/enums';
 import type { GraphicFocalPosition, MediaGraphicItemFit } from '~~/shared/types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
@@ -230,6 +231,30 @@ const selectedMediaItem = computed<MediaGraphicItemConfig | null>(() =>
 const selectedGroup = computed<GraphicGroupItemConfig | null>(() =>
 	selectedItem.value?.type === 'group' ? selectedItem.value : null,
 );
+/**
+ * The Player a context-gated Graphic Item reads.
+ *
+ * The one control these kinds cannot do without: a Player Life fixed to `player1`
+ * makes a two-player overlay unbuildable, because both sides would show the same
+ * total. The rest of their authoring surface — typography, the win-box geometry and
+ * its two Graphic Surface Styles, the life-change animation — is still only
+ * reachable through the legacy editor, which stays in place for exactly that reason
+ * until the contract ticket recreates the presets.
+ */
+const selectedPlayerSide = computed<PlayerSide | null>(() => {
+	const item = selectedItem.value;
+	return item?.type === 'player-life' || item?.type === 'game-wins' ? item.playerSide : null;
+});
+
+const PLAYER_SIDE_OPTIONS = [
+	{ label: 'Player 1', value: 'player1' },
+	{ label: 'Player 2', value: 'player2' },
+] satisfies Array<{ label: string; value: PlayerSide }>;
+
+function updatePlayerSide(playerSide: PlayerSide) {
+	applyToSelectedGraphic((graphic, itemId) => patchGraphicItem(graphic, itemId, { playerSide }));
+}
+
 /**
  * The Shape Geometry the geometry controls edit.
  *
@@ -1017,6 +1042,23 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 				</UFormField>
 			</div>
 		</template>
+
+		<!--
+			The Player a Player Life or Game Wins Item reads. Its own control rather
+			than part of the shared geometry block, because it is the only property of
+			these kinds that decides *whose* live state renders.
+		-->
+		<UFormField v-if="selectedPlayerSide" label="Player" size="sm">
+			<USelect
+				:model-value="selectedPlayerSide"
+				:items="PLAYER_SIDE_OPTIONS"
+				value-key="value"
+				class="w-full"
+				size="sm"
+				data-testid="graphic-item-player-side"
+				@update:model-value="updatePlayerSide($event as PlayerSide)"
+			/>
+		</UFormField>
 
 		<template v-if="selectedTextItem">
 			<UFormField label="Text" size="sm">

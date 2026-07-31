@@ -1429,11 +1429,11 @@ export const broadcastGraphicsModeConfigSchema = z.object({
  * Match Layout speaks both vocabularies until the contract ticket removes the
  * older one.
  *
- * `composition` and `sourceItems` are optional so a layout authored before the
- * compositor still validates. Both are bounded on their own arrays for the same
- * reason every Broadcast Graphics cap is: the mode-configuration patch schema
- * rebuilds each mode from its field schemas, so an object-level refinement would
- * never reach the write path the editor uses.
+ * `composition` is optional so a layout authored before the compositor still
+ * validates. Its caps live on its own arrays for the same reason every Broadcast
+ * Graphics cap does: the mode-configuration patch schema rebuilds each mode from
+ * its field schemas, so an object-level refinement would never reach the write
+ * path the editor uses.
  */
 export const featureMatchOverlayModeConfigSchema = z.object({
 	featureMatchId: z.number().int().positive().nullable(),
