@@ -2389,6 +2389,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "operation_version": {
+          "name": "operation_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",

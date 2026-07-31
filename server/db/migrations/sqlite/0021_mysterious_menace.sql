@@ -7,6 +7,7 @@ CREATE TABLE `graphic_style_sets` (
 	`draft` text NOT NULL,
 	`published` text,
 	`published_at` integer,
+	`operation_version` text,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL
 );

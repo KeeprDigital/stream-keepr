@@ -583,6 +583,23 @@ export const graphicStyleSets = sqliteTable('graphic_style_sets', {
 	/** The entries at `revision`. Null until the first publish. */
 	published: text('published', { mode: 'json' }).$type<GraphicStyleSetEntry[] | null>(),
 	publishedAt: integer('published_at', { mode: 'timestamp_ms' }),
+	/**
+	 * The token one library-wide operation stamps here so every other statement in the
+	 * same batch can depend on it.
+	 *
+	 * Deleting an entry and deleting a Style Set both rewrite this row *and* every
+	 * template the change reaches, and have to do all of it or none of it. A batch of
+	 * statements each carrying its own precondition cannot promise that: a conditional
+	 * `UPDATE` that matches no row is not an error, so a batch whose first statement
+	 * found its row and whose second did not still commits the first. So the operation
+	 * puts every precondition — this row's draft revision and each template's revision
+	 * — on one statement, which stamps a fresh value here, and gives every later
+	 * statement an `EXISTS` guard on that stamp. A failed precondition writes no stamp,
+	 * and every statement behind it becomes a no-op.
+	 *
+	 * The same technique, for the same reason, as `screens.graphic_asset_reference_version`.
+	 */
+	operationVersion: text('operation_version'),
 
 	...timestamps,
 }, table => [
