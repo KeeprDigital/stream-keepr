@@ -145,7 +145,24 @@ watch(
 </script>
 
 <template>
+	<!--
+		A cross-transitioning Graphic Item is a positioning box holding both renderings,
+		the arriving one in front of the one it replaces. Both fill this box, so the pair
+		occupies exactly this item's place in Graphic Layer Order rather than a layer of
+		its own — which is what stops an opaque item below covering the old rendering.
+	-->
 	<div
+		v-if="render.crossTransition"
+		class="graphics-compositor-item"
+		:data-graphic-item-cross-transition="render.id"
+		:style="render.style"
+	>
+		<Item :render="render.crossTransition.outgoing" aria-hidden="true" />
+		<Item :render="render.crossTransition.incoming" />
+	</div>
+
+	<div
+		v-else
 		ref="bounds"
 		class="graphics-compositor-item"
 		:data-graphic-item-kind="render.kind"

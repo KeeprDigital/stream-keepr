@@ -31,19 +31,41 @@ const hasGuideLayer = computed(() =>
 		:class="`graphics-compositor-canvas--${render.output}`"
 		:style="render.canvasStyle"
 	>
-		<div
-			v-for="graphic in render.graphics"
-			:key="graphic.id"
-			class="graphics-compositor-canvas__graphic"
-			:data-broadcast-graphic="graphic.id"
-			:style="graphic.style"
-		>
-			<GraphicsCompositorItem
-				v-for="item in graphic.items"
-				:key="item.id"
-				:render="item"
-			/>
-		</div>
+		<template v-for="graphic in render.graphics" :key="graphic.id">
+			<!--
+				A *whole-graphic* update recipe moves the composed frame, so the frame being
+				replaced is drawn as its own layer beneath the one arriving — which is what a
+				cross-dissolve is, and the only case where two canvas-wide copies are right.
+				A per-item cross-transition never comes through here: it pairs the two
+				renderings inside the crossing item's own box, where Graphic Layer Order
+				still composes.
+			-->
+			<div
+				v-if="graphic.outgoing"
+				class="graphics-compositor-canvas__graphic"
+				:data-broadcast-graphic-outgoing="graphic.id"
+				:style="graphic.outgoing.style"
+				aria-hidden="true"
+			>
+				<GraphicsCompositorItem
+					v-for="item in graphic.outgoing.items"
+					:key="item.id"
+					:render="item"
+				/>
+			</div>
+
+			<div
+				class="graphics-compositor-canvas__graphic"
+				:data-broadcast-graphic="graphic.id"
+				:style="graphic.style"
+			>
+				<GraphicsCompositorItem
+					v-for="item in graphic.items"
+					:key="item.id"
+					:render="item"
+				/>
+			</div>
+		</template>
 
 		<div v-if="hasGuideLayer" class="guide-layer" aria-label="Graphics compositor guide layer">
 			<button

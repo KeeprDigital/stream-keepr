@@ -10,6 +10,8 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import {
+	broadcastGraphicPhaseProjection,
+	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
 	createInitialBroadcastGraphicsLiveState,
 	graphicInputTraces,
@@ -25,6 +27,9 @@ const mockTake = vi.fn();
 const mockOut = vi.fn();
 const mockPendingGraphicIds = ref<string[]>([]);
 const mockError = ref<string | null>(null);
+/** The authoritative clock the real store derives from a server offset. */
+const mockServerNow = ref(1_700_000_000_000);
+const mockSessions = ref(new Map<number, { id: number; sequence: number }>());
 const mockRecoveryFault = ref<BroadcastGraphicsRecoveryFault | null>(null);
 const mockResetLiveState = vi.fn();
 
@@ -60,11 +65,36 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	get error() {
 		return mockError.value;
 	},
+	get sessions() {
+		return mockSessions.value;
+	},
+	serverNow: () => mockServerNow.value,
 	isPending: (_screenId: number, graphicId: string) => mockPendingGraphicIds.value.includes(graphicId),
-	playoutState: (_screenId: number, graphicId: string) =>
-		broadcastGraphicPlayoutState(mockLiveState.value, graphicId),
-	onAirGraphicIds: (_screenId: number, graphics: readonly { id: string }[]) =>
-		onAirBroadcastGraphicIds(mockLiveState.value, graphics),
+	playoutState: (
+		_screenId: number,
+		graphicId: string,
+		graphic?: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
+		now?: number,
+	) => broadcastGraphicPlayoutState(
+		mockLiveState.value,
+		graphicId,
+		graphic ? broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value) : undefined,
+	),
+	onAirGraphicIds: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) =>
+		onAirBroadcastGraphicIds(
+			mockLiveState.value,
+			graphics,
+			graphic => broadcastGraphicPhaseTiming(graphic as BroadcastGraphicConfig, now ?? mockServerNow.value),
+		),
+	animationProjection: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) =>
+		Object.fromEntries(graphics.flatMap((graphic) => {
+			const projection = broadcastGraphicPhaseProjection(
+				mockLiveState.value,
+				graphic.id,
+				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value),
+			);
+			return projection ? [[graphic.id, projection]] : [];
+		})),
 	inputTraces: (_screenId: number, graphic: BroadcastGraphicConfig) =>
 		graphicInputTraces(mockLiveState.value, graphic.id, graphic),
 	sourceSelections: (_screenId: number, graphicId: string) =>

@@ -327,6 +327,12 @@ export function broadcastGraphicsStateService() {
 					// phase this command begins. It is read here, at acceptance, rather than
 					// sent by a client: every output projects animation from this instant, so
 					// it has to come from the one place that decides the authoritative order.
+					//
+					// The addressed graphic's phase durations travel with it, because two of
+					// the reducer's decisions are about a schedule rather than a target — was
+					// the phase this intent interrupts still running, and when is a coalesced
+					// update due — and both have to be settled once, here, rather than by
+					// each output against its own clock.
 					{ ...context, acceptedAt: Date.now() },
 				);
 			}

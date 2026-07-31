@@ -286,6 +286,25 @@ export function broadcastGraphicPhaseDurationMs(
 	return latest;
 }
 
+/**
+ * How long each of one Broadcast Graphic's finite lifecycle phases lasts.
+ *
+ * The one derivation of a graphic's schedule from its authored recipes, so the
+ * server that stamps an authoritative effective start time and every output that
+ * projects from it are reading the same arithmetic. On-screen is omitted rather than
+ * reported as zero: it is not a finite phase, and a caller that needs to know whether
+ * cycling was authored should ask `broadcastGraphicHasPhaseAnimation`.
+ */
+export function broadcastGraphicPhaseDurations(
+	graphic: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
+): Record<'enter' | 'update' | 'exit', number> {
+	return {
+		enter: broadcastGraphicPhaseDurationMs(graphic, 'enter'),
+		update: broadcastGraphicPhaseDurationMs(graphic, 'update'),
+		exit: broadcastGraphicPhaseDurationMs(graphic, 'exit'),
+	};
+}
+
 /** Whether a Broadcast Graphic has any recipe authored for one lifecycle phase. */
 export function broadcastGraphicHasPhaseAnimation(
 	graphic: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
@@ -507,7 +526,7 @@ export function graphicAnimationOwners(
  * finished all resolve to the same empty projection rather than to three
  * different ones.
  */
-export interface GraphicAnimationValues {
+export interface GraphicAnimationOwnerValues {
 	/** Multiplier on the owner's resting opacity. Graphic and item fades multiply. */
 	opacity?: number;
 	/** Offset from the owner's resting position, in canvas pixels. */
@@ -519,6 +538,37 @@ export interface GraphicAnimationValues {
 	/** The wipe: the edge it travels from, and the fraction visible from that edge. */
 	reveal?: { edge: GraphicRevealEdge; visible: number };
 }
+
+/**
+ * What one Graphic Animation Recipe does to its owner, plus — during an update —
+ * where the rendering it is replacing sits while it goes.
+ *
+ * The shape had to widen rather than gain a sibling. An update recipe
+ * cross-transitions two renderings concurrently: old content leaving in the slide's
+ * direction while new content enters from the opposite side, or one reveal boundary
+ * travelling with new content behind it and old content ahead. A single excursion
+ * scalar says where *a* rendering is, so two renderings need two of them, and they
+ * are not independent — they are the same recipe read from both ends, which is why
+ * they belong in one value rather than in two projections a caller has to keep in
+ * step.
+ *
+ * `outgoing` is present for exactly the update phase and nothing else. Present, not
+ * necessarily populated: a recipe with no channels enabled yields an empty one, because
+ * the phase still has two renderings in play even when neither is being moved. So its
+ * presence answers "is this an update?", never "is there motion?" — a caller wanting the
+ * latter has to look at the values, which is why every reader treats an absent or empty
+ * half as the Graphic Resting State rather than testing for the key.
+ */
+export interface GraphicAnimationValues extends GraphicAnimationOwnerValues {
+	outgoing?: GraphicAnimationOwnerValues;
+}
+
+const OPPOSITE_REVEAL_EDGE: Readonly<Record<GraphicRevealEdge, GraphicRevealEdge>> = {
+	left: 'right',
+	right: 'left',
+	top: 'bottom',
+	bottom: 'top',
+};
 
 export interface GraphicAnimationProjectionInput {
 	recipe: GraphicAnimationRecipe | GraphicOnScreenAnimationRecipe | undefined;
@@ -650,23 +700,68 @@ export function graphicAnimationExcursion(input: GraphicAnimationProjectionInput
 	);
 
 	// Enter and update both travel *from* the excursion to rest, so they share this
-	// branch. That makes update the incoming half of a cross-transition and nothing
-	// more, which is a deliberate partial implementation:
-	//
-	// CONTEXT.md requires an update to cross-transition the old and new renderings
-	// concurrently — old content leaving in the slide's direction while new content
-	// enters from the opposite side, one reveal boundary travelling with new content
-	// behind it and old ahead. None of that is expressible here, because
-	// `GraphicAnimationValues` is one excursion scalar per owner: it describes where a
-	// single rendering is, not two renderings passing each other. There is also no
-	// old-versus-new content to cross-fade until Graphic Inputs supply values that
-	// change under a graphic that is already on air.
-	//
-	// So whoever implements the outgoing half has to *widen* this projection rather
-	// than only wire it up — most likely two projected states per owner, or an
-	// explicit outgoing/incoming pair — and that is a change to this module's shape,
-	// not an addition beside it.
+	// branch: this is the *incoming* rendering's excursion in both cases. The outgoing
+	// half of an update is the same eased progress read from the other end, and
+	// `resolveGraphicAnimationValues` is where the two are turned into one value —
+	// there is nothing here for a caller to combine, and nothing that can be projected
+	// out of step with its counterpart.
 	return input.phase === 'exit' ? eased : 1 - eased;
+}
+
+/**
+ * One owner's channels, applied at one excursion.
+ *
+ * `direction` and `flipReveal` are what make the two halves of a cross-transition the
+ * same recipe rather than two recipes. The old rendering leaves in the authored
+ * direction and the new one arrives from the opposite side while travelling the same
+ * way, so the incoming half is the authored offset negated; a reveal's boundary is one
+ * boundary, so the two halves read it from opposite edges.
+ */
+function ownerValues(
+	recipe: GraphicAnimationRecipe | GraphicOnScreenAnimationRecipe,
+	input: GraphicAnimationProjectionInput,
+	excursion: number,
+	direction: 1 | -1,
+	flipReveal: boolean,
+): GraphicAnimationOwnerValues {
+	const values: GraphicAnimationOwnerValues = {};
+
+	if (recipe.fade) {
+		// The resting end of a fade is full opacity; the excursion end is the
+		// authored reduction. Composition with other fades is multiplicative, which
+		// nesting gives for free.
+		const from = Math.max(0, Math.min(1, recipe.fade.opacity));
+		values.opacity = 1 + ((from - 1) * excursion);
+	}
+
+	if (recipe.slide) {
+		const step = resolveGraphicSlideDirection(recipe.slide.direction);
+		const distance = recipe.slide.distanceMode === 'clear-parent'
+			? graphicClearParentDistance(input.rect, input.parent, recipe.slide.direction)
+			: Math.max(0, recipe.slide.distance);
+		// `+ 0` because negating a zero offset produces -0, which reads back out as
+		// "-0px" in a transform and makes two identical projections compare unequal.
+		values.translate = {
+			x: (step.x * distance * excursion * direction) + 0,
+			y: (step.y * distance * excursion * direction) + 0,
+		};
+	}
+
+	if (recipe.scale) {
+		const origin = resolveGraphicAnimationOrigin(recipe.scale.origin);
+		const factor = Math.max(0, recipe.scale.factor);
+		values.scale = 1 + ((factor - 1) * excursion);
+		values.scaleOrigin = { x: origin.x, y: origin.y };
+	}
+
+	if (recipe.reveal) {
+		values.reveal = {
+			edge: flipReveal ? OPPOSITE_REVEAL_EDGE[recipe.reveal.edge] : recipe.reveal.edge,
+			visible: 1 - excursion,
+		};
+	}
+
+	return values;
 }
 
 /**
@@ -684,6 +779,17 @@ export function resolveGraphicAnimationValues(input: GraphicAnimationProjectionI
 		return {};
 
 	const excursion = graphicAnimationExcursion(input);
+
+	// An update is the one phase with two renderings in play, so it is the one phase
+	// whose settled end is not the end of the story: the incoming rendering reaches its
+	// Graphic Resting State exactly as the outgoing one finishes leaving, and dropping
+	// the outgoing half there would make the old rendering reappear at rest for the
+	// final frame instead of being gone.
+	if (input.phase === 'update') {
+		const outgoing = ownerValues(recipe, input, 1 - excursion, 1, true);
+		return { ...ownerValues(recipe, input, excursion, -1, false), outgoing };
+	}
+
 	// A settled phase is indistinguishable from no animation at all. That is the
 	// property recovery rests on: a Broadcast Graphic whose effective start time is
 	// already past its phase duration projects the *same empty values* as one that
@@ -692,46 +798,34 @@ export function resolveGraphicAnimationValues(input: GraphicAnimationProjectionI
 	if (excursion === 0)
 		return {};
 
-	const values: GraphicAnimationValues = {};
-
-	if (recipe.fade) {
-		// The resting end of a fade is full opacity; the excursion end is the
-		// authored reduction. Composition with other fades is multiplicative, which
-		// nesting gives for free.
-		const from = Math.max(0, Math.min(1, recipe.fade.opacity));
-		values.opacity = 1 + ((from - 1) * excursion);
-	}
-
-	if (recipe.slide) {
-		const step = resolveGraphicSlideDirection(recipe.slide.direction);
-		const distance = recipe.slide.distanceMode === 'clear-parent'
-			? graphicClearParentDistance(input.rect, input.parent, recipe.slide.direction)
-			: Math.max(0, recipe.slide.distance);
-		values.translate = {
-			x: step.x * distance * excursion,
-			y: step.y * distance * excursion,
-		};
-	}
-
-	if (recipe.scale) {
-		const origin = resolveGraphicAnimationOrigin(recipe.scale.origin);
-		const factor = Math.max(0, recipe.scale.factor);
-		values.scale = 1 + ((factor - 1) * excursion);
-		values.scaleOrigin = { x: origin.x, y: origin.y };
-	}
-
-	if (recipe.reveal)
-		values.reveal = { edge: recipe.reveal.edge, visible: 1 - excursion };
-
-	return values;
+	return ownerValues(recipe, input, excursion, 1, false);
 }
 
-/** Whether a projection leaves its owner exactly at its Graphic Resting State. */
-export function isGraphicRestingProjection(values: GraphicAnimationValues): boolean {
-	return values.opacity === undefined
-		&& values.translate === undefined
-		&& values.scale === undefined
-		&& values.reveal === undefined;
+/**
+ * Whether a projection leaves its owner exactly at its Graphic Resting State.
+ *
+ * Asked of the owner's own rendering only. An update phase's outgoing rendering is a
+ * second rendering rather than a second opinion about this one, and it is settled or not
+ * on its own terms.
+ *
+ * Judged by value rather than by absence, because for one phase the two differ. Enter,
+ * exit, and on-screen return nothing at all once settled, so absence alone would do. An
+ * update cannot: it has to keep projecting both halves for as long as the phase runs —
+ * dropping the outgoing half at the moment this owner's own recipe finished would put
+ * the rendering being replaced back on screen at full strength for the rest of the
+ * phase. So a settled update reports `opacity: 1` and a zero offset rather than nothing,
+ * and those describe an owner at rest as surely as an empty projection does.
+ */
+export function isGraphicRestingProjection(values: GraphicAnimationOwnerValues): boolean {
+	// Exact equality on every channel, including the reveal. A back easing overshoots in
+	// the middle of its travel but `graphicAnimationEasedProgress` snaps both ends, so a
+	// settled owner has an excursion of exactly zero and every channel lands on exactly
+	// its resting value. Tolerating a range on one channel and not the others would have
+	// been an asymmetry with no cause behind it.
+	return (values.opacity === undefined || values.opacity === 1)
+		&& (values.translate === undefined || (values.translate.x === 0 && values.translate.y === 0))
+		&& (values.scale === undefined || values.scale === 1)
+		&& (values.reveal === undefined || values.reveal.visible === 1);
 }
 
 /* ────────────────────────────────────────────────
