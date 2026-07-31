@@ -613,6 +613,7 @@ export function inspectReceivedApplicationCapabilities(
 	manifest: TemplatePackageManifest,
 ): TemplatePackagePreflightIssue[] {
 	const { issues } = inspectTemplatePackageCapabilities(
+		manifest.packageKind,
 		manifest.applicationCapabilities.map(declaration => ({
 			slot: declaration.requiredBy[0] ?? declaration.identity,
 			capability: declaration.capability as TemplatePackageCapabilityKind,

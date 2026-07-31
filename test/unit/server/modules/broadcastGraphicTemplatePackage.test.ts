@@ -14,6 +14,7 @@ import {
 } from '~~/server/modules/graphics-asset-library/in-memory-object-store';
 import { createBoundedByteStream } from '~~/server/modules/graphics-asset-library/object-store';
 import { templatePackagePayloads } from '~~/server/modules/template-package-payload';
+import { getGraphicItemDefinition } from '~~/shared/modules/graphics/itemDefinitions';
 import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
 import { maximalBroadcastGraphicDocument } from '../../../helpers/broadcastGraphicDocument';
 import { collectStream } from '../../../helpers/storedZipArchive';
@@ -136,6 +137,32 @@ function reportOf(operation: { templatePackagePreflight?: TemplatePackagePreflig
 	return operation.templatePackagePreflight;
 }
 
+/**
+ * Runs `work` with one Graphic Item Definition standing at a configuration version
+ * this installation does not otherwise implement.
+ *
+ * Every kind is at version 1 today, so an export that states the version as a
+ * literal is indistinguishable from one that reads it — until the day somebody
+ * bumps a kind, by which point the packages are already in the wild. Moving the
+ * shared Definition is the only way to tell the two apart now, and it is the same
+ * object the export path reads, so nothing about the seam is simulated.
+ */
+async function withGraphicItemDefinitionAt<T>(
+	kind: 'media',
+	configurationVersion: number,
+	work: () => Promise<T>,
+): Promise<T> {
+	const definition = getGraphicItemDefinition(kind);
+	const implemented = definition.configurationVersion;
+	definition.configurationVersion = configurationVersion;
+	try {
+		return await work();
+	}
+	finally {
+		definition.configurationVersion = implemented;
+	}
+}
+
 /** A sender's design and the package it produced, ready to be rewritten. */
 async function exportedPackage() {
 	const sender = createLibrary(`sender-${++sequence}`);
@@ -205,6 +232,34 @@ describe('a `.skgraphic` Template Package crossing an installation boundary', ()
 		);
 
 		const report = reportOf(await preflight(createLibrary('receiver'), writeTemplatePackage(parts)));
+
+		expect(report.outcome).toBe('rejected');
+		expect(report.issues.some(issue => issue.code === 'unsupported-application-capability')).toBe(true);
+	});
+
+	/**
+	 * The other half of that refusal, on the sending side. The version a manifest
+	 * declares has to be the one the shared Graphic Item Definition states, because
+	 * the export path writes the document at whatever version this installation
+	 * implements. A literal in the export path would make the pin inert exactly when
+	 * it starts to matter: an installation that had advanced `media` would emit a
+	 * version-2 configuration under a version-1 declaration, and a version-1 receiver
+	 * would accept it and install a Graphic Item it cannot read as authored.
+	 */
+	it('declares each Graphic Item Definition at the configuration version this installation implements', async () => {
+		const { archive } = await withGraphicItemDefinitionAt('media', 2, exportedPackage);
+		const declarations = readTemplatePackageParts(archive).manifest.applicationCapabilities;
+		const declarationFor = (identity: string) =>
+			declarations.find(declaration => declaration.identity === identity)?.configurationVersion;
+
+		expect(declarationFor('media')).toBe(2);
+		// Per Definition, not one number for the package: the kinds that did not move
+		// still declare the version they are actually at.
+		expect(declarationFor('text')).toBe(1);
+
+		// And a receiver back at the version it implements refuses the package, which
+		// is the protection the declaration exists to give.
+		const report = reportOf(await preflight(createLibrary('receiver'), archive));
 
 		expect(report.outcome).toBe('rejected');
 		expect(report.issues.some(issue => issue.code === 'unsupported-application-capability')).toBe(true);

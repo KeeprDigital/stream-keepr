@@ -5079,7 +5079,7 @@ export function createGraphicsAssetLibrary(
 
 			const document = inspectTemplateDocument(input.template.document);
 			const requirements = groupTemplatePackageRequirements(input.assets);
-			const capabilities = inspectTemplatePackageCapabilities(input.capabilities ?? []);
+			const capabilities = inspectTemplatePackageCapabilities(input.packageKind, input.capabilities ?? []);
 			const issues: TemplatePackageExportIssue[] = [
 				...document.issues,
 				...undeclaredReferenceIssues(document.references, input.assets),
