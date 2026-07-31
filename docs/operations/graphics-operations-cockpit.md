@@ -43,7 +43,7 @@ backlog. Concretely:
 - Recent outcomes read one bounded window of the Evidence ledger.
 
 The cost of a reading is therefore constant in the size of the library. The one
-query that binds a list binds a fixed one — the eleven Evidence categories the
+query that binds a list binds a fixed one — the thirteen Evidence categories the
 outcome groups map — and the one query that returns more than a handful of rows
 returns a fixed 200-row window. Neither grows with the catalogue, so neither
 approaches the D1 bound-parameter ceiling that
