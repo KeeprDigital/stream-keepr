@@ -1,6 +1,14 @@
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { processStaticFont } from '~~/server/modules/graphics-asset-library/font';
+
+// Specimen thumbnails are hundreds of kilobytes, so deep-equalling them
+// element by element dominates these tests. Compare their digests instead:
+// identical bytes, one comparison.
+function digestOf(bytes: Uint8Array) {
+	return createHash('sha256').update(bytes).digest('hex');
+}
 
 describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 	it.each([
@@ -33,10 +41,11 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 		expect(processed.thumbnail.slice(0, 8)).toEqual(
 			Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10),
 		);
-		await expect(processStaticFont(bytes, {
+		const reprocessed = await processStaticFont(bytes, {
 			sourceFileName: path,
 			declaredMime: mime,
-		})).resolves.toMatchObject({ thumbnail: processed.thumbnail });
+		});
+		expect(digestOf(reprocessed.thumbnail)).toBe(digestOf(processed.thumbnail));
 	});
 
 	it.each([
@@ -131,7 +140,7 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 			new Uint8Array(await readFile('node_modules/mana-font/docs/fonts/beleren.otf')),
 			{ sourceFileName: 'beleren.otf', declaredMime: 'font/otf' },
 		);
-		expect(mplantin.thumbnail).not.toEqual(beleren.thumbnail);
+		expect(digestOf(mplantin.thumbnail)).not.toBe(digestOf(beleren.thumbnail));
 		expect(mplantin.report.facts.browserChallenge.codePoints.length).toBeGreaterThan(0);
 	});
 });
