@@ -220,8 +220,8 @@ function neonGlow(size: number, opacity: number) {
 }
 
 /** The lit white line every neon panel is edged with. */
-function neonRuleStyle(): GraphicSurfaceStyle {
-	return surfaceStyle(solidFill(NEON_LINE), { glow: neonGlow(8, 0.8) });
+function neonRuleStyle(glow = neonGlow(8, 0.8)): GraphicSurfaceStyle {
+	return surfaceStyle(solidFill(NEON_LINE), { glow });
 }
 
 function neonSourceFraming(overrides: Partial<FeatureMatchSourceFramingStyle> = {}): FeatureMatchSourceFramingStyle {
@@ -245,6 +245,13 @@ function neonSourceFraming(overrides: Partial<FeatureMatchSourceFramingStyle> = 
  * Surface Style has one uniform outline, so each lit edge becomes its own thin
  * Shape Graphic Item from the rule preset — the settled replacement for per-side
  * border flags, and the composition this preset exists to demonstrate.
+ *
+ * The glow follows the border. Legacy glow was emitted only for the sides that
+ * actually had a border, so a partially bordered panel was lit on those edges
+ * alone; the shared glow is a drop-shadow over the whole painted alpha and would
+ * light the unlit edges too. So `litGlow` puts the panel's glow on its edge
+ * rules, and the bed carries a glow only when every side was bordered — which is
+ * exactly the case a uniform outline states directly and `litEdges` is empty.
  */
 function neonPanel(
 	panel: {
@@ -256,6 +263,7 @@ function neonPanel(
 		height: number;
 		surfaceStyle: GraphicSurfaceStyle;
 		litEdges: FeatureMatchLayoutEdge[];
+		litGlow?: ReturnType<typeof neonGlow>;
 		children?: Parameters<typeof groupItem>[0]['children'];
 	},
 ) {
@@ -276,7 +284,7 @@ function neonPanel(
 				edge,
 				bounds,
 				thickness: NEON_LINE_WIDTH,
-				surfaceStyle: neonRuleStyle(),
+				surfaceStyle: neonRuleStyle(panel.litGlow),
 			})),
 		],
 	});
@@ -386,8 +394,9 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 						y: 508,
 						width: 296,
 						height: 104,
-						surfaceStyle: surfaceStyle(gradientFill(180, [fillStop('#0a0010', 0, 0.76), fillStop('#4e0043', 1, 0.58)]), { glow: neonGlow(7, 0.78) }),
+						surfaceStyle: surfaceStyle(gradientFill(180, [fillStop('#0a0010', 0, 0.76), fillStop('#4e0043', 1, 0.58)])),
 						litEdges: ['top', 'right', 'bottom'],
+						litGlow: neonGlow(7, 0.78),
 					}),
 					neonPanel({
 						id: 'left-branding',
@@ -396,8 +405,9 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 						y: 612,
 						width: 296,
 						height: 252,
-						surfaceStyle: surfaceStyle(gradientFill(180, [fillStop('#510049', 0, 0.72), fillStop('#090012', 1, 0.82)]), { glow: neonGlow(7, 0.78) }),
+						surfaceStyle: surfaceStyle(gradientFill(180, [fillStop('#510049', 0, 0.72), fillStop('#090012', 1, 0.82)])),
 						litEdges: ['right', 'bottom'],
+						litGlow: neonGlow(7, 0.78),
 						children: [
 							mediaItem({ id: 'left-branding-image', label: 'Left Branding Image', x: 40, y: 28, width: 216, height: 112, visible: false }),
 							textItem({ id: 'left-event-name', label: 'Event Name', x: 24, y: 152, width: 248, height: 56, text: '{eventName}', typography: neonBrandingTypography(), overflowPolicy: 'shrink', minFontSize: 18 }),
@@ -410,8 +420,9 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 						y: 864,
 						width: 296,
 						height: 208,
-						surfaceStyle: surfaceStyle(gradientFill(180, [fillStop('#090012', 0, 0.82), fillStop('#510049', 1, 0.62)]), { glow: neonGlow(7, 0.78) }),
+						surfaceStyle: surfaceStyle(gradientFill(180, [fillStop('#090012', 0, 0.82), fillStop('#510049', 1, 0.62)])),
 						litEdges: ['right', 'bottom'],
+						litGlow: neonGlow(7, 0.78),
 					}),
 					neonPanel({
 						id: 'right-branding',
@@ -420,8 +431,9 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 						y: 508,
 						width: 296,
 						height: 356,
-						surfaceStyle: surfaceStyle(gradientFill(180, [fillStop('#090012', 0, 0.82), fillStop('#51006e', 1, 0.72)]), { glow: neonGlow(7, 0.78) }),
+						surfaceStyle: surfaceStyle(gradientFill(180, [fillStop('#090012', 0, 0.82), fillStop('#51006e', 1, 0.72)])),
 						litEdges: ['top', 'left', 'bottom'],
+						litGlow: neonGlow(7, 0.78),
 						children: [
 							mediaItem({ id: 'right-branding-image', label: 'Right Branding Image', x: 42, y: 52, width: 212, height: 158, visible: false }),
 							textItem({ id: 'right-event-name', label: 'Event Name', x: 24, y: 232, width: 248, height: 56, text: '{eventName}', typography: neonBrandingTypography(), overflowPolicy: 'shrink', minFontSize: 18 }),
@@ -434,8 +446,9 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 						y: 864,
 						width: 296,
 						height: 208,
-						surfaceStyle: surfaceStyle(gradientFill(180, [fillStop('#51006e', 0, 0.62), fillStop('#090012', 1, 0.86)]), { glow: neonGlow(7, 0.78) }),
+						surfaceStyle: surfaceStyle(gradientFill(180, [fillStop('#51006e', 0, 0.62), fillStop('#090012', 1, 0.86)])),
 						litEdges: ['left', 'bottom'],
+						litGlow: neonGlow(7, 0.78),
 					}),
 					neonPanel({
 						id: 'top-player-bar',
@@ -452,8 +465,9 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 							fillStop('#07000e', 0.5, 0.92),
 							fillStop('#480074', 0.7, 0.86),
 							fillStop('#7f22f6', 1, 0.96),
-						]), { glow: neonGlow(8, 0.85) }),
+						])),
 						litEdges: ['top', 'bottom'],
+						litGlow: neonGlow(8, 0.85),
 						children: neonPlayerBarChildren(),
 					}),
 					neonPanel({
@@ -463,7 +477,9 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 						y: 28,
 						width: 216,
 						height: 116,
-						// Bordered on all four sides, so one uniform outline says it.
+						// Bordered on all four sides, so one uniform outline says it — and
+						// the only panel whose legacy glow lit the whole silhouette, so it
+						// is the only one that keeps a glow on the bed.
 						surfaceStyle: surfaceStyle(solidFill('#050008'), { fillOpacity: 0.72, outline: { color: NEON_LINE, width: NEON_LINE_WIDTH }, glow: neonGlow(10, 0.9) }),
 						litEdges: [],
 						children: [
