@@ -538,10 +538,17 @@ describe('broadcast Graphic Template library', () => {
 		const before = await authoredStack(otherEventId, otherScreenId);
 		const placed = structuredClone(before[0]!);
 
-		// Editing the placed copy changes nothing about the template.
+		// Editing the placed copy changes nothing about the template. The Graphic Source
+		// Selections and Graphic Input Bindings are edited here rather than only asserted
+		// structurally, because "independently editable" is the acceptance criterion and
+		// a copy that merely holds its own objects in memory has not shown it: this goes
+		// through the Screen's mode-config write path, so what is re-read below is what
+		// the database stored.
 		placed.name = 'Renamed on the Screen';
 		placed.items = placed.items.slice(0, 1);
 		placed.inputs = [{ ...(placed.inputs![0] as any), default: 'Local value' }];
+		placed.sources = [{ key: 'player', label: 'Featured player', kind: 'player' }];
+		placed.bindings = [{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.pronouns' }];
 		expect((await patchStack(otherEventId, otherScreenId, [placed, before[1]!])).status).toBe(200);
 
 		const template = await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie });
@@ -550,6 +557,17 @@ describe('broadcast Graphic Template library', () => {
 		expect(document.name).toBe('Lower third');
 		expect(document.items).toHaveLength(3);
 		expect(document.inputs![0]!.default).toBe('Reid Duke');
+		// The template kept the source and binding it was authored with.
+		expect(document.sources).toEqual([{ key: 'player', label: 'Player', kind: 'player' }]);
+		expect(document.bindings)
+			.toEqual([{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.name' }]);
+
+		// And the copy's own edits survived the round trip rather than being silently
+		// dropped by a write path that does not carry them.
+		const edited = (await authoredStack(otherEventId, otherScreenId))[0]!;
+		expect(edited.sources).toEqual([{ key: 'player', label: 'Featured player', kind: 'player' }]);
+		expect(edited.bindings)
+			.toEqual([{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.pronouns' }]);
 
 		// Revising the template changes nothing about the copies already placed.
 		const revised = await request(`${TEMPLATES_PATH}/${templateId}`, {
