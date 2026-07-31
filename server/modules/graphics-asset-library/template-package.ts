@@ -12,12 +12,13 @@ import type {
 	TemplatePackageManifest,
 	TemplatePackageTotals,
 } from '~~/shared/types/templatePackage';
-import { FEATURE_MATCH_OVERLAY_FONT_IDS } from '~~/shared/featureMatchOverlayFonts';
+import { supportedFeatureMatchLayoutVocabularyVersion } from '~~/shared/featureMatchLayoutVocabulary';
 import {
 	FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION,
 	FEATURE_MATCH_SOURCE_ITEM_DEFINITION_ID,
 } from '~~/shared/featureMatchSourceItems';
 import { getGraphicItemDefinition, GRAPHIC_ITEM_KINDS } from '~~/shared/modules/graphics/itemDefinitions';
+import { GRAPHIC_FONT_IDS } from '~~/shared/modules/graphics/typography';
 import {
 	TEMPLATE_PACKAGE_ARTIFACTS,
 	TEMPLATE_PACKAGE_LIMITS,
@@ -275,6 +276,48 @@ function supportedGraphicItemDefinitionVersion(
 }
 
 /**
+ * What version this installation implements one declared capability at, if any.
+ *
+ * Every capability kind is resolved here, and every one of them is asked the same
+ * two questions: is this identity one we own, and at which version. The routing by
+ * package kind is not uniform, and the difference is the point:
+ *
+ * - **Graphic Item Definitions** route by kind, because Source Item is a
+ *   Definition only a Feature Match Layout may place.
+ * - **Host vocabularies** route by kind for a stronger reason: Source Roles, Frame
+ *   animation effects, and Feature Match tokens exist only inside a Feature Match
+ *   Layout. A Broadcast Graphic declares its own Graphic Inputs in its document and
+ *   has no host vocabulary at all, so a `.skgraphic` naming one of these terms is a
+ *   package no exporter here could have written.
+ * - **Application fonts** deliberately do *not* route by kind. There is one
+ *   application font registry and both hosts share it — `GRAPHIC_FONT_IDS` is that
+ *   registry — so routing would invent a divergence that does not exist and would
+ *   have to be maintained as if it did. This check previously named the Feature
+ *   Match constant for both kinds, which read as an oversight precisely because the
+ *   name suggested a split the value did not have; naming the shared registry says
+ *   what is actually true.
+ */
+function supportedCapabilityVersion(
+	packageKind: TemplatePackageKind,
+	requirement: TemplatePackageCapabilityRequirement,
+): number | undefined {
+	switch (requirement.capability) {
+		case 'application-font':
+			return (GRAPHIC_FONT_IDS as readonly string[]).includes(requirement.identity) ? 1 : undefined;
+		case 'host-vocabulary':
+			return CAPABILITY_VOCABULARY[packageKind] === 'feature-match'
+				? supportedFeatureMatchLayoutVocabularyVersion(requirement.identity)
+				: undefined;
+		case 'graphic-item-definition':
+			return supportedGraphicItemDefinitionVersion(packageKind, requirement.identity);
+		default: {
+			const unreachable: never = requirement.capability;
+			return unreachable;
+		}
+	}
+}
+
+/**
  * Application-owned capabilities travel as declarations. An identity this
  * installation does not own, or a configuration version newer than it
  * implements, blocks export rather than shipping a package that cannot install.
@@ -289,9 +332,7 @@ export function inspectTemplatePackageCapabilities(
 	const issues: TemplatePackageExportIssue[] = [];
 	const declarations = new Map<string, TemplatePackageCapabilityDeclaration & { requiredBy: string[] }>();
 	for (const requirement of requirements) {
-		const supportedVersion = requirement.capability === 'application-font'
-			? ((FEATURE_MATCH_OVERLAY_FONT_IDS as readonly string[]).includes(requirement.identity) ? 1 : undefined)
-			: supportedGraphicItemDefinitionVersion(packageKind, requirement.identity);
+		const supportedVersion = supportedCapabilityVersion(packageKind, requirement);
 		if (
 			supportedVersion === undefined
 			|| (requirement.configurationVersion !== undefined && requirement.configurationVersion > supportedVersion)

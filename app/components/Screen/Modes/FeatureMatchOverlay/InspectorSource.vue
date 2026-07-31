@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig, FeatureMatchSourceRole } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import type { FeatureMatchOverlayAnchorValue } from '~/utils/featureMatchOverlayGeometry';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
@@ -30,6 +30,12 @@ const editor = useFeatureMatchOverlayConfigEditor({
 });
 
 const anchorValue = computed<FeatureMatchOverlayAnchorValue>(() => props.item.anchor ?? 'top-left');
+
+const SOURCE_ROLE_OPTIONS = [
+	{ label: 'Main', value: 'main' },
+	{ label: 'Player 1', value: 'player1' },
+	{ label: 'Player 2', value: 'player2' },
+] satisfies Array<{ label: string; value: FeatureMatchSourceRole }>;
 
 function removeSelf() {
 	editor.removeSource(props.item.id);
@@ -95,12 +101,21 @@ function removeSelf() {
 					:model-value="item.frameCutout"
 					@update:model-value="editor.updateSource(item.id, { frameCutout: $event })"
 				/>
-				<UFormField label="Video source">
-					<UInput
+				<!--
+					A Source Role, not a camera. It says what this area frames, which is
+					the one thing about a Source Item that still means something on
+					another installation — so it is chosen from the vocabulary rather
+					than typed as local shorthand.
+				-->
+				<UFormField label="Source role">
+					<USelect
 						:model-value="item.sourceRole"
+						:items="SOURCE_ROLE_OPTIONS"
+						value-key="value"
 						size="sm"
 						class="w-full"
-						@update:model-value="editor.updateSource(item.id, { sourceRole: String($event || '') })"
+						aria-label="Source role"
+						@update:model-value="editor.updateSource(item.id, { sourceRole: $event })"
 					/>
 				</UFormField>
 			</div>
