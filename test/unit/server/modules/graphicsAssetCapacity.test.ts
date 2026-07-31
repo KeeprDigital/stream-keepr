@@ -271,6 +271,52 @@ describe('the Graphics Asset Library Capacity', () => {
 		))).resolves.toEqual({ outcome: 'missing' });
 	});
 
+	it('never answers a lost publication claim with exhausted capacity', async () => {
+		const catalogue = createInMemoryGraphicsAssetCatalogue();
+		let claimLost = false;
+		const library = createGraphicsAssetLibrary({
+			// A lost claim is a race between two attempts at one operation, so it
+			// cannot be staged from outside. The reservation is where the catalogue
+			// detects it, which is where it is handed to the library here.
+			catalogue: new Proxy(catalogue, {
+				get(target, property, receiver) {
+					if (property === 'reserveGraphicAssetPublication' && claimLost)
+						return async () => ({ outcome: 'lost-claim' as const });
+					return Reflect.get(target, property, receiver);
+				},
+			}),
+			staging: createInMemoryStagingGraphicsObjectStore(),
+			canonical: createInMemoryCanonicalGraphicsObjectStore(),
+		});
+		const operation = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'lost-publication-claim',
+			initiatedBy: 'graphics-author-1',
+			name: 'Lost publication claim',
+			browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+		claimLost = true;
+
+		const answered = await library.uploadGraphicAsset({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			bytes: createBoundedByteStream(transparentPixelPng, {
+				byteLength: transparentPixelPng.byteLength,
+				maximumByteLength: transparentPixelPng.byteLength,
+			}),
+		});
+
+		// The library holds nothing and its quota is untouched, so capacity was
+		// never the condition: an author sent to free space would find nothing to
+		// free. What comes back is the operation as it actually stands.
+		expect(answered.failure).toBeUndefined();
+		expect(answered.canonicalCapacityOutcome).toBeUndefined();
+		expect(answered.stage).toBe('generating-derivatives');
+		await expect(library.getCapacity()).resolves.toMatchObject({
+			canonical: { usedBytes: 0, reservedBytes: 0 },
+		});
+	});
+
 	it('publishes proven no-growth content at the full Canonical Graphics Quota', async () => {
 		const library = createGraphicsAssetLibrary({
 			catalogue: createInMemoryGraphicsAssetCatalogue(),

@@ -922,16 +922,28 @@ export function createD1GraphicsAssetCatalogue(
 			).run();
 			if (!result.success)
 				throw new Error('Graphics canonical reservation failed');
+			const operation = await firstOperation(
+				database,
+				'id = ? AND initiated_by = ?',
+				input.operation.id,
+				input.operation.initiatedBy,
+			);
 			if (result.meta.changes === 1) {
-				const operation = await firstOperation(
-					database,
-					'id = ? AND initiated_by = ?',
-					input.operation.id,
-					input.operation.initiatedBy,
-				);
 				if (!operation)
 					throw new Error('Graphics canonical reservation was not durable');
 				return { outcome: 'reserved' as const, operation };
+			}
+			// The statement is conditional on both the operation's claim and the
+			// capacity, so a miss has two very different causes. Telling an author
+			// their library is full when another attempt took the operation from under
+			// this one sends them to free space that was never the problem, so the two
+			// are distinguished before either is reported.
+			if (
+				!operation
+				|| operation.stage !== 'generating-derivatives'
+				|| operation.updatedAt !== input.operation.updatedAt
+			) {
+				return { outcome: 'lost-claim' as const };
 			}
 			const capacity = await this.getCapacity();
 			const availableBytes = capacity.canonical.availableBytes + ownReservedBytes;
@@ -1834,22 +1846,62 @@ export function createD1GraphicsAssetCatalogue(
 				}),
 			]);
 			const publishedAt = new Date(input.publishedAt).getTime();
+
+			/**
+			 * What it means for this replacement to have happened at all.
+			 *
+			 * The statements that write a revision, its derivative, and the pruning
+			 * deadline of the revision it supersedes each carry their own condition,
+			 * because a replacement whose bytes match the current revision is a
+			 * legitimate no-op rather than a failure. This is the condition underneath
+			 * all of them: the operation still holds its claim on this target, and the
+			 * target is still an asset a revision may be published for.
+			 */
+			const guard = `
+				EXISTS (
+					SELECT 1 FROM graphics_ingestion_operations
+					WHERE id = ? AND initiated_by = ? AND stage = 'publishing'
+						AND updated_at = ? AND target_asset_id = ?
+				)
+				AND EXISTS (
+					SELECT 1 FROM graphic_assets
+					WHERE id = ? AND lifecycle_state = 'active'
+				)
+			`;
+			const guardBindings = [
+				input.operation.id,
+				input.operation.initiatedBy,
+				new Date(input.operation.updatedAt).getTime(),
+				input.targetAssetId,
+				input.targetAssetId,
+			];
+
 			const results = await database.batch([
 				database.prepare(`
 					INSERT OR IGNORE INTO graphic_asset_contents (
 						digest, byte_length, canonical_mime, availability, created_at
-					) VALUES (?, ?, ?, 'available', ?)
+					)
+					SELECT ?, ?, ?, 'available', ?
+					WHERE ${guard}
 				`).bind(
 					input.sourceDigest,
 					input.report.facts.byteLength,
 					input.report.facts.canonicalMime,
 					publishedAt,
+					...guardBindings,
 				),
 				database.prepare(`
 					INSERT OR IGNORE INTO graphic_asset_contents (
 						digest, byte_length, canonical_mime, availability, created_at
-					) VALUES (?, ?, 'image/png', 'available', ?)
-				`).bind(input.thumbnailDigest, input.thumbnailByteLength, publishedAt),
+					)
+					SELECT ?, ?, 'image/png', 'available', ?
+					WHERE ${guard}
+				`).bind(
+					input.thumbnailDigest,
+					input.thumbnailByteLength,
+					publishedAt,
+					...guardBindings,
+				),
 				database.prepare(`
 					INSERT INTO graphic_asset_revisions (
 						id, asset_id, revision_number, content_digest,
@@ -1945,13 +1997,21 @@ export function createD1GraphicsAssetCatalogue(
 					input.targetAssetId,
 					input.revisionId,
 				),
-				releaseContentQuarantineStatement(database, [
-					input.sourceDigest,
-					input.thumbnailDigest,
-				]),
+				// Both of these reclaim state only a replacement that actually happened
+				// has the right to reclaim, so both carry the guard. A failed publication
+				// that cleared its own write candidates would hand its unreachable bytes to
+				// the generic sweep instead of the candidate machinery built to collect
+				// them, and one that released a quarantine would restart a seven-day clock
+				// on content still unreachable.
+				releaseContentQuarantineStatement(
+					database,
+					[input.sourceDigest, input.thumbnailDigest],
+					{ guard, bindings: guardBindings },
+				),
 				database.prepare(`
-					DELETE FROM graphics_canonical_write_candidates WHERE operation_id = ?
-				`).bind(input.operation.id),
+					DELETE FROM graphics_canonical_write_candidates
+					WHERE operation_id = ? AND ${guard}
+				`).bind(input.operation.id, ...guardBindings),
 				database.prepare(`
 					UPDATE graphics_ingestion_operations
 					SET stage = 'completed',
@@ -1983,13 +2043,7 @@ export function createD1GraphicsAssetCatalogue(
 						staging_used_byte_length = 0,
 						canonical_reserved_byte_length = 0,
 						updated_at = ?
-					WHERE id = ? AND initiated_by = ?
-						AND stage = 'publishing' AND updated_at = ?
-						AND target_asset_id = ?
-						AND EXISTS (
-							SELECT 1 FROM graphic_assets
-							WHERE id = ? AND lifecycle_state = 'active'
-						)
+					WHERE id = ? AND ${guard}
 				`).bind(
 					input.revisionId,
 					input.targetAssetId,
@@ -1997,10 +2051,7 @@ export function createD1GraphicsAssetCatalogue(
 					input.targetAssetId,
 					publishedAt,
 					input.operation.id,
-					input.operation.initiatedBy,
-					new Date(input.operation.updatedAt).getTime(),
-					input.targetAssetId,
-					input.targetAssetId,
+					...guardBindings,
 				),
 			]);
 			if (
@@ -2044,62 +2095,99 @@ export function createD1GraphicsAssetCatalogue(
 				},
 				updatedAt: input.publishedAt,
 			};
+
+			/**
+			 * The one condition every statement in this batch commits against.
+			 *
+			 * D1 runs a batch as one transaction, but a statement whose own condition
+			 * is false simply writes nothing rather than aborting the rest, so sharing
+			 * one condition is what makes the publication all-or-nothing: either every
+			 * statement sees it hold, or none does.
+			 *
+			 * It covers the operation's claim, the tombstone of a purged identity the
+			 * generated one could collide with, and — for an author who asked to reuse
+			 * matching content — whether another attempt has already made an active
+			 * asset out of these bytes. The asset this batch is creating is excluded
+			 * from that last check, because every statement after the insert would
+			 * otherwise read the publication in progress as the duplicate to refuse.
+			 */
+			const guard = `
+				EXISTS (
+					SELECT 1 FROM graphics_ingestion_operations
+					WHERE id = ? AND initiated_by = ? AND stage = 'publishing'
+						AND updated_at = ?
+				)
+				AND NOT EXISTS (
+					SELECT 1 FROM graphic_asset_tombstones WHERE asset_id = ?
+				)
+				AND (
+					? = 'create-separate'
+					OR NOT EXISTS (
+						SELECT 1
+						FROM graphic_assets existing_asset
+						JOIN graphic_asset_revisions existing_revision
+							ON existing_revision.asset_id = existing_asset.id
+						WHERE existing_asset.id <> ?
+							AND existing_asset.lifecycle_state = 'active'
+							AND existing_revision.content_digest = ?
+					)
+				)
+			`;
+			const guardBindings = [
+				input.operation.id,
+				input.operation.initiatedBy,
+				new Date(input.operation.updatedAt).getTime(),
+				input.assetId,
+				input.operation.duplicateContentPolicy,
+				input.assetId,
+				input.sourceDigest,
+			];
+
 			const statements = [
 				database.prepare(`
 					INSERT OR IGNORE INTO graphic_asset_contents (
 						digest, byte_length, canonical_mime, availability, created_at
-					) VALUES (?, ?, ?, 'available', ?)
+					)
+					SELECT ?, ?, ?, 'available', ?
+					WHERE ${guard}
 				`).bind(
 					input.sourceDigest,
 					input.report.facts.byteLength,
 					input.report.facts.canonicalMime,
 					new Date(input.publishedAt).getTime(),
+					...guardBindings,
 				),
 				database.prepare(`
 					INSERT OR IGNORE INTO graphic_asset_contents (
 						digest, byte_length, canonical_mime, availability, created_at
-					) VALUES (?, ?, 'image/png', 'available', ?)
-				`).bind(input.thumbnailDigest, input.thumbnailByteLength, new Date(input.publishedAt).getTime()),
+					)
+					SELECT ?, ?, 'image/png', 'available', ?
+					WHERE ${guard}
+				`).bind(
+					input.thumbnailDigest,
+					input.thumbnailByteLength,
+					new Date(input.publishedAt).getTime(),
+					...guardBindings,
+				),
 				database.prepare(`
 					INSERT INTO graphic_assets (id, name, kind, lifecycle_state, created_at, updated_at)
 					SELECT ?, ?, ?, 'active', ?, ?
-					WHERE EXISTS (
-						SELECT 1 FROM graphics_ingestion_operations
-						WHERE id = ? AND initiated_by = ? AND stage = 'publishing'
-							AND updated_at = ?
-					)
-						AND NOT EXISTS (
-							SELECT 1 FROM graphic_asset_tombstones WHERE asset_id = ?
-						)
-						AND (
-							? = 'create-separate'
-							OR NOT EXISTS (
-								SELECT 1
-								FROM graphic_assets existing_asset
-								JOIN graphic_asset_revisions existing_revision
-									ON existing_revision.asset_id = existing_asset.id
-								WHERE existing_asset.lifecycle_state = 'active'
-									AND existing_revision.content_digest = ?
-							)
-						)
+					WHERE ${guard}
 				`).bind(
 					input.assetId,
 					input.operation.name,
 					input.report.facts.kind,
 					new Date(input.publishedAt).getTime(),
 					new Date(input.publishedAt).getTime(),
-					input.operation.id,
-					input.operation.initiatedBy,
-					new Date(input.operation.updatedAt).getTime(),
-					input.assetId,
-					input.operation.duplicateContentPolicy,
-					input.sourceDigest,
+					...guardBindings,
 				),
 				database.prepare(`
 					INSERT INTO graphic_asset_revisions (
 						id, asset_id, revision_number, content_digest,
 						compatibility_profile, technical_facts, created_at
-					) VALUES (?, ?, 1, ?, ?, ?, ?)
+					)
+					SELECT ?, ?, 1, ?, ?, ?, ?
+					WHERE ${guard}
 				`).bind(
 					input.revisionId,
 					input.assetId,
@@ -2107,11 +2195,14 @@ export function createD1GraphicsAssetCatalogue(
 					input.report.compatibilityProfile,
 					JSON.stringify(input.report.facts),
 					new Date(input.publishedAt).getTime(),
+					...guardBindings,
 				),
 				database.prepare(`
 					INSERT INTO graphics_derivatives (
 						id, source_revision_id, kind, content_digest, created_at
-					) VALUES (?, ?, ?, ?, ?)
+					)
+					SELECT ?, ?, ?, ?, ?
+					WHERE ${guard}
 				`).bind(
 					input.derivativeId,
 					input.revisionId,
@@ -2122,29 +2213,50 @@ export function createD1GraphicsAssetCatalogue(
 							: 'thumbnail',
 					input.thumbnailDigest,
 					new Date(input.publishedAt).getTime(),
+					...guardBindings,
 				),
 				...(input.operation.defaultEventId === undefined
 					? []
 					: [database.prepare(`
 							INSERT INTO graphic_asset_event_associations (asset_id, event_id, created_at)
-							VALUES (?, ?, ?)
+							SELECT ?, ?, ?
+							WHERE ${guard}
 						`).bind(
 							input.assetId,
 							input.operation.defaultEventId,
 							new Date(input.publishedAt).getTime(),
+							...guardBindings,
 						)]),
-				releaseContentQuarantineStatement(database, [
-					input.sourceDigest,
-					input.thumbnailDigest,
-				]),
+				// Both of these reclaim state only a publication that actually happened
+				// has the right to reclaim, so both carry the guard. A failed publication
+				// that cleared its own write candidates would hand its unreachable bytes to
+				// the generic sweep instead of the candidate machinery built to collect
+				// them, and one that released a quarantine would restart a seven-day clock
+				// on content still unreachable.
+				releaseContentQuarantineStatement(
+					database,
+					[input.sourceDigest, input.thumbnailDigest],
+					{ guard, bindings: guardBindings },
+				),
 				database.prepare(`
-					DELETE FROM graphics_canonical_write_candidates WHERE operation_id = ?
-				`).bind(input.operation.id),
-				updateOperationStatement(database, completed, input.operation.updatedAt),
+					DELETE FROM graphics_canonical_write_candidates
+					WHERE operation_id = ? AND ${guard}
+				`).bind(input.operation.id, ...guardBindings),
+				updateOperationStatement(
+					database,
+					completed,
+					input.operation.updatedAt,
+					`AND ${guard}`,
+					guardBindings,
+				),
 			] as [D1PreparedStatement, ...D1PreparedStatement[]];
 			const results = await database.batch(statements);
 			if (results.some(result => !result.success))
 				throw new Error('Graphic Asset publication transaction failed');
+			// The terminal transition is last, so its count is the one that answers
+			// whether the guard held at all. Losing it means nothing committed.
+			if (results.at(-1)?.meta.changes !== 1)
+				throw new Error('Graphic Asset publication lost its claim before publishing');
 			return completed;
 		},
 		async listGraphicAssets(search, lifecycleStates) {
