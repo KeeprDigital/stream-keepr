@@ -449,5 +449,12 @@ describe('template Package preflight through the API boundary', () => {
 		});
 
 		expect(response.status).toBe(400);
+		// Which envelope refused them, in words: a reader told only that some byte
+		// length was too large goes looking at the Graphic Asset transfer limits,
+		// which describe a different envelope entirely.
+		const failure = await response.json() as { message?: string };
+		expect(failure.message).toContain(
+			`Template Package must not exceed ${TEMPLATE_PACKAGE_LIMITS.maximumArchiveByteLength} bytes`,
+		);
 	});
 });
