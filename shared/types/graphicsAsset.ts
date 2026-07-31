@@ -14,6 +14,10 @@ import type {
 } from '../utils/graphicsAssetReconciliation';
 import type { GRAPHICS_RETENTION_EVIDENCE_CATEGORIES } from '../utils/graphicsAssetRetention';
 import type {
+	GraphicsOperationalQueueId,
+	GraphicsQueueAction,
+} from '../utils/graphicsOperationalQueues';
+import type {
 	GraphicsIngestionAttentionState,
 	GraphicsRecentOutcomeGroup,
 	GraphicsStorageHealthAlertCode,
@@ -1140,3 +1144,118 @@ export type GraphicsOperationsCockpit
 		condition: GraphicsLibraryConditionSummary;
 		alerts: GraphicsStorageHealthAlertSummary;
 	};
+
+/**
+ * What one queue item or inspection is about: an opaque domain identity and the
+ * kind of thing it identifies. Never a bucket, object key, digest, or filename.
+ */
+export interface GraphicsQueueSubject {
+	kind: GraphicsAssetEvidenceSubjectKind;
+	id: string;
+}
+
+/**
+ * One piece of work in an operational queue.
+ *
+ * An item names the domain identity it is about and the exact instant its state
+ * changes if nobody acts. It carries only what triage needs; the inspector is
+ * where the complete evidence for one item is read.
+ */
+export interface GraphicsOperationalQueueItem {
+	/**
+	 * Stable across readings, so a selected item survives navigation, reload,
+	 * and the next poll rather than being identified by its position in a list.
+	 */
+	key: string;
+	queue: GraphicsOperationalQueueId;
+	subject: GraphicsQueueSubject;
+	/** What an administrator recognises this item by. */
+	title: string;
+	/** The exact instant this item's state changes if nobody acts. */
+	deadline?: string;
+	/** Pinned usage across every revision, where the subject can carry any. */
+	referenceCount?: number;
+	/** Only the actions valid in this item's current state. */
+	actions: GraphicsQueueAction[];
+}
+
+/** One operational queue: what is wrong, how much of it, and the nearest deadline. */
+export interface GraphicsOperationalQueue {
+	id: GraphicsOperationalQueueId;
+	severity: GraphicsStorageHealthAlertSeverity;
+	/** The complete count, taken as an aggregate rather than by expanding rows. */
+	totalCount: number;
+	/** The soonest deadline anything in this queue is holding. */
+	nextDeadline?: string;
+	/** A bounded sample of the queue, nearest deadline first. */
+	items: GraphicsOperationalQueueItem[];
+}
+
+/**
+ * Every operational queue in one risk-ordered reading.
+ *
+ * Every queue is always present, so an empty one reads as empty rather than as
+ * missing, and the queues arrive in the order an administrator should work
+ * them: most severe first, then by deadline proximity.
+ */
+export interface GraphicsOperationalQueuesOverview {
+	checkedAt: string;
+	/** Restated here so a queue reader never has to infer which side decides what. */
+	authority: GraphicsReconciliationOverview['authority'];
+	queues: GraphicsOperationalQueue[];
+}
+
+/**
+ * The subject-specific evidence behind one queue item.
+ *
+ * Each variant carries what its own kind of subject can actually prove. A
+ * discrepancy distinguishes what the catalogue expects from what the byte store
+ * reported; a Graphic Asset carries its lifecycle, its per-revision retention,
+ * and its pinned usage; an operation carries its exact stage facts.
+ */
+export type GraphicsQueueInspectionDetail
+	= | {
+		kind: 'graphics-discrepancy';
+		discrepancy: GraphicsDiscrepancy;
+	}
+	| {
+		kind: 'graphic-asset';
+		lifecycle: GraphicAssetLifecycle;
+		revisions: GraphicsRevisionPruningDeadline[];
+		usage: GraphicAssetUsage[];
+	}
+	| {
+		kind: 'graphic-asset-revision';
+		assetId: GraphicAssetId;
+		revisionNumber: number;
+		retention: GraphicAssetRevisionRetention;
+		usage: GraphicAssetUsage[];
+	}
+	| {
+		kind: 'graphics-ingestion-operation';
+		operation: GraphicsIngestionAttentionItem;
+	};
+
+/**
+ * Everything the persistent inspector shows for one selected queue item.
+ *
+ * It is composed on every read from durable state, so an inspection survives
+ * navigation and reload and can never show a subject a stale list still
+ * believes in.
+ */
+export interface GraphicsQueueInspection {
+	key: string;
+	queue: GraphicsOperationalQueueId;
+	severity: GraphicsStorageHealthAlertSeverity;
+	subject: GraphicsQueueSubject;
+	title: string;
+	/** Restated per inspection, so the evidence below is never read as one voice. */
+	authority: GraphicsReconciliationOverview['authority'];
+	deadline?: string;
+	referenceCount: number;
+	/** Only the actions valid in this subject's current state. */
+	actions: GraphicsQueueAction[];
+	detail: GraphicsQueueInspectionDetail;
+	/** The Evidence ledger filtered to exactly this subject, newest first. */
+	evidence: GraphicsAssetEvidenceEntry[];
+}

@@ -385,6 +385,19 @@ A persistent alert is backed by a record only an administrator action or a byte-
 What an unfinished Graphics Ingestion Operation needs right now: its staged input has expired, it is retryable, it is awaiting its author's confirmation, or it is actively working.
 Expiry is decided before stage, because an operation whose staged input passed its guarantee needs a new operation whichever stage it paused in; a terminal operation has no attention state at all.
 
+**Operational Queue**:
+One risk-ordered list of Graphics Asset Library work grouped by what is wrong with it rather than by the provider objects underneath, holding its complete size as a count and a bounded sample ordered by deadline proximity.
+There is one queue per operational state — Critical Integrity Incident, Unavailable Graphic Asset Content, missing Graphics Derivative, retryable ingestion, expired staged input, Trashed Graphic Asset, superseded Graphic Asset Revision, quarantined object, and Retired Graphic Asset — and they stay distinct because the valid action differs in every one.
+_Avoid_: work list, task list, incident bucket.
+
+**Queue Inspector**:
+The persistent administrator-facing detail surface for one selected Operational Queue item, showing its domain identity, current state, exact deadline, affected pinned usage, the catalogue's expectations beside the byte evidence, the Evidence Ledger filtered to that subject, and only the actions valid in that state.
+Its selection lives in the address rather than in the surface, so it survives navigation and reload, and every reading is composed afresh so it can never describe a subject in a state that subject has already left.
+
+**Queue Action Outcome**:
+The one vocabulary every Operational Queue action reports in: completed, already-in-state, reference-blocked, retryable-unavailable, or integrity-conflict.
+Every action is idempotent, so a second run reports already-in-state rather than a second success or a bare failure; already-in-state means the subject was already how the action asks for it, never that the action ran and fixed nothing.
+
 **Text Graphic Item**:
 A Graphic Item that renders literal text or a Graphic Text Template.
 
@@ -708,6 +721,15 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - A **Storage Health Alert** is derived from durable state on every reading, so a persistent one reappears after navigation and reload until its subject is resolved
 - The **Operations Cockpit** counts every lifecycle group by aggregate rather than by expanding rows, so one reading costs the same against any size of backlog
 - The **Operations Cockpit** offers only actions that cannot shorten a recovery guarantee, and still answers whether the library is safe when the catalogue cannot answer
+- An **Operational Queue** is named for the operational state of its work rather than for a provider object, and the queues are ordered most severe first and then by deadline proximity within each
+- Retired, Trashed, superseded, unavailable, missing, quarantined, retryable, and expired work stay in separate **Operational Queues**, because the actions valid in each differ
+- A **Queue Inspector** offers only the actions valid in its subject's current state, and the library re-proves that validity before writing anything
+- **Exact-Byte Repair** is offered only for Unavailable Graphic Asset Content and **Derivative Regeneration** only for a missing Graphics Derivative; a quarantined object exposes its recheck deadline and evidence and offers no action that writes
+- Every **Operational Queue** action reports one **Queue Action Outcome**, and running the same action twice reports already-in-state
+- A recheck that leaves a **Graphics Discrepancy** open reports retryable-unavailable rather than already-in-state, because nothing has been put right
+- Each **Operational Queue** samples independently and by deadline proximity, so no queue's backlog can leave another queue's work unlisted and unactionable
+- A **Queue Inspector** resolves its subject by identity rather than from a queue's bounded sample, so a subject past the end of a sample still inspects
+- An **Early Purge** from a **Queue Inspector** requires an explicit typed confirmation as well as the fresh all-revision reference proof the library takes regardless
 - Every **Graphic Asset Revision** passes **Graphic Asset Validation** under one **Graphic Asset Compatibility Profile** before it becomes referenceable
 - The initial `still-image-v1` **Graphic Asset Compatibility Profile** accepts exact single-frame PNG, JPEG, or WebP source bytes up to 25 MiB, 8,192 pixels per axis, and 16,777,216 decoded pixels only when bounded parser evidence and a complete decode agree on an 8-bit SDR sRGB image with normal orientation
 - `still-image-v1` rejects declaration conflicts, animation, embedded colour or orientation profiles, malformed structure, partial decode, and out-of-profile facts, and generates a separate deterministic transparent 8-bit sRGB PNG thumbnail fitted within 640 × 360 without cropping or upscaling
