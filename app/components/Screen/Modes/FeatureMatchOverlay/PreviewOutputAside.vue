@@ -1,19 +1,44 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
+import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT, DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH } from '~~/shared/types/screenConfig';
+import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import { isFeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
+import {
+	GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE,
+	isGraphicsPreviewSelectMessage,
+} from '~/modules/graphics/previewMessages';
+
+/**
+ * The Feature Match Overlay editor preview: output selection, zoom, item guides,
+ * and advisory action-safe and title-safe guides.
+ *
+ * Two selections travel through it, because the page has two authoring surfaces.
+ * The host-owned one names the Frame, a Source Item, or a legacy widget; the
+ * shared one names a Graphic Item inside the one composition. Each is pushed into
+ * the frame and reported back in its own vocabulary, and the editor keeps at most
+ * one of them non-canvas.
+ *
+ * Guides are asked for on the preview's own URL, so a live Screen Output — which
+ * never carries the preview flag — can never draw one.
+ */
 
 const props = defineProps<{
 	eventId: number;
 	screen: Screen;
 	config: FeatureMatchOverlayModeConfig;
 	selectedTarget: FeatureMatchOverlaySelectionTarget;
+	/** The shared item tree's selection, in the compositor's own vocabulary. */
+	compositorTarget: GraphicsSelectionTarget;
 	publicationBlocked?: boolean;
 	publicationBlockReason?: string;
 }>();
 
-const emit = defineEmits<{ selectTarget: [target: FeatureMatchOverlaySelectionTarget] }>();
+const emit = defineEmits<{
+	selectTarget: [target: FeatureMatchOverlaySelectionTarget];
+	selectCompositorTarget: [target: GraphicsSelectionTarget];
+}>();
 
 const OUTPUT_OPTIONS = [
 	{ label: 'Overlay', value: 'overlay', icon: 'i-lucide-layers' },
@@ -34,14 +59,20 @@ const { copyToClipboard } = useCopyToClipboard();
 const requestUrl = useRequestURL();
 const previewOutput = ref<FeatureMatchOverlayOutput>('overlay');
 const previewGuides = ref(true);
+const previewSafeAreas = ref(false);
 const previewZoom = ref<PreviewZoom>('fit');
 const previewFrame = ref<HTMLIFrameElement | null>(null);
 
 const outputBaseUrl = computed(() => import.meta.client ? window.location.origin : requestUrl.origin);
-const previewUrl = computed(() => {
-	const guides = previewGuides.value ? '&guides=1' : '';
-	return `/event/${props.eventId}/screen/${props.screen.slug}?output=${previewOutput.value}&fit=1&preview=1${guides}`;
-});
+const previewUrl = computed(() => screenOutputPath({
+	eventId: props.eventId,
+	screenSlug: props.screen.slug,
+	output: previewOutput.value,
+	fitToViewport: true,
+	preview: true,
+	itemGuides: previewGuides.value,
+	safeAreaGuides: previewSafeAreas.value,
+}));
 const screenWidth = computed(() => props.screen.screenConfig?.width ?? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH);
 const screenHeight = computed(() => props.screen.screenConfig?.height ?? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT);
 const previewAspectStyle = computed(() => ({
@@ -55,7 +86,11 @@ const previewAspectStyle = computed(() => ({
 }));
 
 function outputUrl(output: FeatureMatchOverlayOutput) {
-	return `${outputBaseUrl.value}/event/${props.eventId}/screen/${props.screen.slug}?output=${output}`;
+	return `${outputBaseUrl.value}${screenOutputPath({
+		eventId: props.eventId,
+		screenSlug: props.screen.slug,
+		output,
+	})}`;
 }
 
 function syncSelectedTargetToPreview() {
@@ -80,9 +115,20 @@ function syncConfigToPreview() {
 	}, window.location.origin);
 }
 
+function syncCompositorTargetToPreview() {
+	if (!import.meta.client || !previewFrame.value?.contentWindow)
+		return;
+
+	previewFrame.value.contentWindow.postMessage({
+		type: GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE,
+		target: { ...props.compositorTarget },
+	}, window.location.origin);
+}
+
 function syncPreviewState() {
 	syncConfigToPreview();
 	syncSelectedTargetToPreview();
+	syncCompositorTargetToPreview();
 }
 
 function handlePreviewSelection(message: MessageEvent) {
@@ -100,23 +146,42 @@ function handlePreviewSelection(message: MessageEvent) {
 	emit('selectTarget', message.data.target);
 }
 
+function handleCompositorPreviewSelection(message: MessageEvent) {
+	if (!isGraphicsPreviewSelectMessage(message, {
+		origin: window.location.origin,
+		source: previewFrame.value?.contentWindow ?? null,
+	})) {
+		return;
+	}
+
+	emit('selectCompositorTarget', message.data.target);
+}
+
 onMounted(() => {
 	window.addEventListener('message', handlePreviewSelection);
+	window.addEventListener('message', handleCompositorPreviewSelection);
 });
 
 onBeforeUnmount(() => {
 	window.removeEventListener('message', handlePreviewSelection);
+	window.removeEventListener('message', handleCompositorPreviewSelection);
 });
 
 watch(() => props.selectedTarget, () => {
 	syncSelectedTargetToPreview();
 }, { deep: true });
 
+watch(() => props.compositorTarget, () => {
+	syncCompositorTargetToPreview();
+}, { deep: true });
+
 watch(() => props.config, () => {
 	syncConfigToPreview();
 }, { deep: true });
 
-watch(previewGuides, () => {
+// Either switch changes the preview URL, which reloads the frame; the working
+// state has to be pushed into the new document once it exists.
+watch([previewGuides, previewSafeAreas], () => {
 	void nextTick(syncPreviewState);
 });
 
@@ -144,8 +209,11 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 		<ScreenSettingsCard title="Preview" :default-open="true">
 			<template #actions="{ open }">
 				<div v-if="open" class="flex flex-wrap items-center gap-3">
-					<UFormField label="Guides" size="xs" class="flex items-center gap-2">
-						<USwitch v-model="previewGuides" size="sm" />
+					<UFormField label="Item guides" size="xs" class="flex items-center gap-2">
+						<USwitch v-model="previewGuides" size="sm" data-testid="preview-item-guides" />
+					</UFormField>
+					<UFormField label="Safe areas" size="xs" class="flex items-center gap-2">
+						<USwitch v-model="previewSafeAreas" size="sm" data-testid="preview-safe-area-guides" />
 					</UFormField>
 					<UFieldGroup size="sm">
 						<UButton

@@ -2,7 +2,7 @@ import type {
 	GraphicAsset,
 	GraphicAssetPurgeOutcome,
 	GraphicAssetRetentionView,
-	GraphicsAssetEvidenceEntry,
+	GraphicsAssetEvidencePage,
 	GraphicsIngestionOperation,
 	GraphicsRetentionOverview,
 	GraphicsRetentionSweepResult,
@@ -12,6 +12,10 @@ import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
+import {
+	GRAPHICS_EVIDENCE_CATEGORY_GROUP_VALUES,
+	GRAPHICS_EVIDENCE_CATEGORY_GROUPS,
+} from '../../shared/utils/graphicsAssetEvidence';
 import { GRAPHICS_RETENTION_GUARANTEES } from '../../shared/utils/graphicsAssetRetention';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
@@ -264,11 +268,11 @@ describe('the Graphics Asset Library retention API', () => {
 		});
 		expect(restored.status).toBe(404);
 
-		const evidence = await $fetch<GraphicsAssetEvidenceEntry[]>(
+		const evidence = await $fetch<GraphicsAssetEvidencePage>(
 			'/api/admin/graphics-assets/evidence',
 			{ headers: administratorHeaders, query: { category: 'graphic-asset-purged' } },
 		);
-		expect(evidence).toEqual(expect.arrayContaining([
+		expect(evidence.entries).toEqual(expect.arrayContaining([
 			expect.objectContaining({
 				category: 'graphic-asset-purged',
 				subject: { kind: 'graphic-asset', id: assetId },
@@ -276,8 +280,133 @@ describe('the Graphics Asset Library retention API', () => {
 				reason: 'early-purge',
 			}),
 		]));
-		expect(JSON.stringify(evidence)).not.toContain('logo.png');
-		expect(JSON.stringify(evidence)).not.toContain('sha256/');
+	});
+
+	it('reads the ledger by group, actor, correlation, and cursor', async () => {
+		const page = await $fetch<GraphicsAssetEvidencePage>(
+			'/api/admin/graphics-assets/evidence',
+			{ headers: administratorHeaders, query: { group: 'lifecycle', limit: 1 } },
+		);
+		expect(page.entries).toHaveLength(1);
+		const entry = page.entries[0]!;
+		// A group names a set of categories, so the entry it found is one of them
+		// rather than whatever happened to be newest.
+		expect(GRAPHICS_EVIDENCE_CATEGORY_GROUPS.lifecycle as readonly string[])
+			.toContain(entry.category);
+		expect(page.newer).toBeNull();
+		expect(page.older).toEqual({ recordedAt: entry.recordedAt, id: entry.id });
+
+		// Turning one page and coming back lands on the entry it started from,
+		// which an offset that shifted under a concurrent sweep would not.
+		const older = await $fetch<GraphicsAssetEvidencePage>(
+			'/api/admin/graphics-assets/evidence',
+			{
+				headers: administratorHeaders,
+				query: {
+					group: 'lifecycle',
+					limit: 1,
+					cursorRecordedAt: page.older!.recordedAt,
+					cursorId: page.older!.id,
+				},
+			},
+		);
+		expect(older.entries[0]!.id).not.toBe(entry.id);
+		const back = await $fetch<GraphicsAssetEvidencePage>(
+			'/api/admin/graphics-assets/evidence',
+			{
+				headers: administratorHeaders,
+				query: {
+					group: 'lifecycle',
+					limit: 1,
+					direction: 'newer',
+					cursorRecordedAt: older.newer!.recordedAt,
+					cursorId: older.newer!.id,
+				},
+			},
+		);
+		expect(back.entries[0]!.id).toBe(entry.id);
+
+		await expect($fetch<GraphicsAssetEvidencePage>(
+			'/api/admin/graphics-assets/evidence',
+			{ headers: administratorHeaders, query: { actor: entry.actor, limit: 5 } },
+		)).resolves.toMatchObject({
+			entries: expect.arrayContaining([
+				expect.objectContaining({ actor: entry.actor }),
+			]),
+		});
+		const correlated = await $fetch<GraphicsAssetEvidencePage>(
+			'/api/admin/graphics-assets/evidence',
+			{
+				headers: administratorHeaders,
+				query: { correlationId: entry.correlationId, limit: 50 },
+			},
+		);
+		expect(correlated.entries.length).toBeGreaterThan(0);
+		for (const correlatedEntry of correlated.entries)
+			expect(correlatedEntry.correlationId).toBe(entry.correlationId);
+
+		// Half a subject filter and half a cursor are both refused, because each
+		// would answer a different question from the one that was asked.
+		expect((await fetch(
+			'/api/admin/graphics-assets/evidence?subjectKind=graphic-asset',
+			{ headers: administratorHeaders },
+		)).status).toBe(400);
+		expect((await fetch(
+			'/api/admin/graphics-assets/evidence?cursorId=entry',
+			{ headers: administratorHeaders },
+		)).status).toBe(400);
+		expect((await fetch(
+			'/api/admin/graphics-assets/evidence?group=not-a-group',
+			{ headers: administratorHeaders },
+		)).status).toBe(400);
+	});
+
+	it('never stores or displays anything the ledger promised to keep out', async () => {
+		// Read the ledger this suite has already written. The cases above retire,
+		// Trash, restore, replace, and purge, so several category groups are
+		// present without this test adding churn of its own to a database every
+		// integration suite shares.
+		//
+		// Quarantine and ingestion expiry are absent on purpose: both need days
+		// to elapse, which only the controlled-clock module tests can offer.
+		const page = await $fetch<GraphicsAssetEvidencePage>(
+			'/api/admin/graphics-assets/evidence',
+			{ headers: administratorHeaders, query: { limit: 500 } },
+		);
+		expect(page.entries.length).toBeGreaterThan(0);
+		const covered = new Set(page.entries.flatMap(entry =>
+			GRAPHICS_EVIDENCE_CATEGORY_GROUP_VALUES.filter(group =>
+				(GRAPHICS_EVIDENCE_CATEGORY_GROUPS[group] as readonly string[])
+					.includes(entry.category))));
+		for (const group of ['lifecycle', 'pruning', 'purge', 'restoration'] as const)
+			expect([...covered], `no Evidence from the ${group} group`).toContain(group);
+
+		const serialised = JSON.stringify(page);
+		// Source filenames, raw object keys and canonical prefixes, digests, and
+		// delivery or signed URLs. Subjects are opaque domain identities, so none
+		// of these has any reason to appear even inside a detail payload.
+		for (const forbidden of [
+			'logo.png',
+			'.png',
+			'sha256/',
+			'graphics/',
+			'staging/',
+			'http://',
+			'https://',
+			'X-Amz-Signature',
+			'x-graphics-admin-token',
+		])
+			expect(serialised, `leaked ${forbidden}`).not.toContain(forbidden);
+
+		// A digest is 64 hex characters; nothing in the ledger may look like one.
+		expect(serialised).not.toMatch(/[0-9a-f]{64}/);
+		// Nor may anything report bytes that were deleted as recoverable content.
+		for (const entry of page.entries) {
+			expect(Object.keys(entry.detail)).not.toContain('digest');
+			expect(Object.keys(entry.detail)).not.toContain('objectKey');
+			expect(Object.keys(entry.detail)).not.toContain('fileName');
+			expect(Object.keys(entry.detail)).not.toContain('url');
+		}
 	});
 
 	it('retains a referenced superseded revision with no deadline and never purges it', async () => {

@@ -24,6 +24,9 @@ export const GRAPHICS_RETENTION_GUARANTEES = {
 /** The policy actor recorded against every automated retention decision. */
 export const GRAPHICS_RETENTION_ACTOR = 'graphics-retention-policy';
 
+/** Why a Graphic Asset was purged: its recovery window elapsed, or it was confirmed early. */
+export const GRAPHIC_ASSET_PURGE_REASONS = ['trash-window-elapsed', 'early-purge'] as const;
+
 export const GRAPHICS_RETENTION_EVIDENCE_CATEGORIES = [
 	'staged-input-expired',
 	'revision-pruning-scheduled',
@@ -31,6 +34,9 @@ export const GRAPHICS_RETENTION_EVIDENCE_CATEGORIES = [
 	'revision-pruning-frozen',
 	'revision-pruning-resumed',
 	'revision-pruned',
+	'graphic-asset-retired',
+	'graphic-asset-trashed',
+	'graphic-asset-restored',
 	'graphic-asset-purged',
 	'graphic-asset-purge-blocked',
 	'content-quarantined',

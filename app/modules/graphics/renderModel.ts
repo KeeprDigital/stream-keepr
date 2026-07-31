@@ -150,6 +150,12 @@ export const KEY_MEDIA_ALPHA_TO_WHITE = 'brightness(0) invert(1)';
 export const GRAPHICS_ACTION_SAFE_INSET = 0.05;
 export const GRAPHICS_TITLE_SAFE_INSET = 0.1;
 
+/**
+ * Whether a composition is its Screen Output's own canvas, or one layer inside a
+ * canvas its host already paints. Documented in full on the input field below.
+ */
+export type GraphicsCanvasRole = 'screen-output' | 'layer';
+
 export interface GraphicsCompositionRenderModelInput {
 	output: ScreenOutput;
 	canvasWidth: number;
@@ -236,8 +242,14 @@ export interface GraphicsCompositionRenderModelInput {
 	 *
 	 * It defaults to `screen-output` so the failure mode of forgetting it is a
 	 * visible backdrop rather than an invisible composition.
+	 *
+	 * The same division decides the guide layer. Guides are drawn over the whole
+	 * canvas and are what an author clicks to select, so whoever paints the canvas
+	 * draws them: a `layer` host has its own guides for its own host-owned items,
+	 * and two guide layers stacked over one canvas would leave whichever landed
+	 * underneath unclickable.
 	 */
-	canvasRole?: 'screen-output' | 'layer';
+	canvasRole?: GraphicsCanvasRole;
 	/** Editor-only selection and item guides. */
 	itemGuides?: boolean;
 	/** Editor-only advisory action-safe and title-safe guides. */
@@ -502,6 +514,11 @@ export interface GraphicsItemGuide {
 
 export interface GraphicsCompositionRenderModel {
 	output: ScreenOutput;
+	/**
+	 * Echoed from the input so the canvas component knows whether it owns the
+	 * backdrop, the positioning, and the guide layer, or whether its host does.
+	 */
+	canvasRole: GraphicsCanvasRole;
 	canvasStyle: CSSProperties;
 	graphics: BroadcastGraphicRenderDescriptor[];
 	safeAreaGuides: GraphicsSafeAreaGuide[];
@@ -1821,6 +1838,7 @@ export function resolveGraphicsCompositionRenderModel(
 
 	return {
 		output: input.output,
+		canvasRole: isLayer ? 'layer' : 'screen-output',
 		canvasStyle: {
 			width: '100%',
 			height: '100%',

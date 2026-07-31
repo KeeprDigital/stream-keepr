@@ -1,6 +1,7 @@
 import type { GraphicFocalPosition } from '../../types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
+	GameWinsGraphicItemConfig,
 	GraphicAnimationPhase,
 	GraphicAnimationRecipe,
 	GraphicAnimationStagger,
@@ -27,17 +28,19 @@ import type {
 	GraphicSurfaceStyle,
 	GraphicTypography,
 	MediaGraphicItemConfig,
+	PlayerLifeGraphicItemConfig,
 	ShapeCorner,
 	ShapeCornerKey,
 	ShapeGeometry,
 	TextGraphicItemConfig,
+	TextOverflowPolicy,
 } from '../../types/graphics';
 import type { GraphicAssetReference } from '../../types/graphicsAsset';
 import type { ShapeGeometryPresetId } from './shapeGeometry';
 import { GRAPHIC_ANIMATION_PHASE_VALUES, GRAPHIC_INPUT_KEY_PATTERN, MAX_GRAPHIC_INPUT_KEY_LENGTH } from '../../types/graphics';
 import { createDefaultGraphicAnimationRecipe, getGraphicAnimationPreset } from './animation';
 import { createDefaultGraphicInputDeclaration } from './inputs';
-import { createDefaultGraphicSurfaceStyle, getGraphicItemDefinition, graphicItemKindLabel } from './itemDefinitions';
+import { createDefaultGraphicSurfaceStyle, getGraphicItemDefinition, GRAPHIC_GROUP_CHILD_KINDS, graphicItemKindLabel } from './itemDefinitions';
 import { getShapeGeometryPreset, squareShapeGeometry } from './shapeGeometry';
 
 /**
@@ -490,12 +493,48 @@ function patchGraphicItemGroup<K extends GraphicItemKind>(
 
 /**
  * The kinds that own a Shape Geometry: a Shape Graphic Item and a Graphic Group
- * draw one, and a Media Graphic Item clips to one.
+ * draw one, a Media Graphic Item clips to one, and a Game Wins Graphic Item
+ * shapes its win boxes with one.
  */
-const GEOMETRY_KINDS = ['shape', 'group', 'media'] as const;
+const GEOMETRY_KINDS = ['shape', 'group', 'media', 'game-wins'] as const;
 
-/** The kinds that may carry a Graphic Surface Style. A Media Graphic Item paints an asset, not a surface. */
-const SURFACE_KINDS = ['text', 'shape', 'group'] as const;
+/**
+ * Where one Graphic Item keeps a Graphic Surface Style.
+ *
+ * Most kinds have exactly one, optional, and named `surfaceStyle`. A Game Wins
+ * Graphic Item has three: its own, and the two that paint a win box before and
+ * after the Player wins it — an unwon box and a won one are the whole point of
+ * the indicator, so both are ordinary authored surfaces rather than one style
+ * with a hardcoded variant.
+ */
+export type GraphicSurfaceStyleSlot = 'surfaceStyle' | 'boxSurfaceStyle' | 'wonBoxSurfaceStyle';
+
+/**
+ * The kinds each slot exists on. A Media Graphic Item paints an asset rather
+ * than a surface and so carries none; the two box slots belong to Game Wins
+ * alone.
+ */
+const SURFACE_SLOT_KINDS: Record<GraphicSurfaceStyleSlot, readonly GraphicItemKind[]> = {
+	surfaceStyle: ['text', 'shape', 'group', 'clock', 'player-life', 'game-wins'],
+	boxSurfaceStyle: ['game-wins'],
+	wonBoxSurfaceStyle: ['game-wins'],
+};
+
+/** The kinds whose own Graphic Surface Style is optional, so it can be cleared. */
+const SURFACE_KINDS = SURFACE_SLOT_KINDS.surfaceStyle;
+
+/**
+ * The kinds that carry typography. The three context-gated Definitions render a
+ * live string rather than an authored one, but they render it as text.
+ */
+const TYPOGRAPHY_KINDS = ['text', 'clock', 'player-life', 'game-wins'] as const;
+
+/**
+ * The kinds bounded by a Text Overflow Policy: the ones whose rendered string can
+ * exceed its authored bounds. A Game Wins Item is absent because its `number`
+ * display mode renders a win count, which cannot.
+ */
+const TEXT_OVERFLOW_KINDS = ['text', 'clock', 'player-life'] as const;
 
 type GeometryOwner = Extract<GraphicItemConfig, { type: typeof GEOMETRY_KINDS[number] }>;
 
@@ -510,12 +549,32 @@ type GeometryOwner = Extract<GraphicItemConfig, { type: typeof GEOMETRY_KINDS[nu
  * side effect of nudging a corner. `setMediaClipGeometry` is the one control that
  * decides whether a media item clips at all.
  */
-function ownedShapeGeometry(
-	item: GeometryOwner,
-): { field: 'geometry' | 'clipGeometry'; geometry: ShapeGeometry } | null {
+interface OwnedShapeGeometry {
+	field: 'geometry' | 'clipGeometry' | 'boxGeometry';
+	geometry: ShapeGeometry;
+	/**
+	 * The bounds the geometry is drawn inside, and where a preset that proposes a
+	 * height writes it. Usually the item's own rectangle — but a Game Wins Item's
+	 * geometry shapes one win box, so a preset sized against the whole indicator
+	 * would be sized against the wrong thing.
+	 */
+	bounds: { width: number; height: number };
+	heightField: 'height' | 'boxHeight';
+}
+
+function ownedShapeGeometry(item: GeometryOwner): OwnedShapeGeometry | null {
+	const own = { bounds: { width: item.width, height: item.height }, heightField: 'height' } as const;
 	if (item.type === 'media')
-		return item.clipGeometry ? { field: 'clipGeometry', geometry: item.clipGeometry } : null;
-	return { field: 'geometry', geometry: item.geometry };
+		return item.clipGeometry ? { field: 'clipGeometry', geometry: item.clipGeometry, ...own } : null;
+	if (item.type === 'game-wins') {
+		return {
+			field: 'boxGeometry',
+			geometry: item.boxGeometry,
+			bounds: { width: item.boxWidth, height: item.boxHeight },
+			heightField: 'boxHeight',
+		};
+	}
+	return { field: 'geometry', geometry: item.geometry, ...own };
 }
 
 /** Merge into a Shape Geometry, preserving every other field. */
@@ -561,10 +620,10 @@ export function applyShapeGeometryPreset(
 		const owned = ownedShapeGeometry(item);
 		if (!owned)
 			return {};
-		const result = getShapeGeometryPreset(presetId).apply({ width: item.width, height: item.height });
+		const result = getShapeGeometryPreset(presetId).apply(owned.bounds);
 		return result.height === undefined
 			? { [owned.field]: result.geometry }
-			: { [owned.field]: result.geometry, height: result.height };
+			: { [owned.field]: result.geometry, [owned.heightField]: result.height };
 	});
 }
 
@@ -650,6 +709,36 @@ export function clearMediaGraphicItemAsset(
 	}));
 }
 
+/** The Graphic Surface Style one item currently holds in one slot, if it has one. */
+function surfaceStyleAt(
+	item: GraphicItemConfig,
+	slot: GraphicSurfaceStyleSlot,
+): GraphicSurfaceStyle | undefined {
+	if (slot === 'surfaceStyle')
+		return 'surfaceStyle' in item ? item.surfaceStyle : undefined;
+	return item.type === 'game-wins' ? item[slot] : undefined;
+}
+
+/**
+ * Merge into one slot's Graphic Surface Style, whatever the edit.
+ *
+ * Every helper below is the same three steps — resolve the slot on a kind that
+ * has it, read what is there or start from the shared default, write the result
+ * back into that same slot — and only the middle step differs. Stating the other
+ * two once is what keeps an edit aimed at a win box from writing to the item's
+ * own surface, in all nine of them rather than in eight.
+ */
+function patchSurfaceStyleSlot(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	slot: GraphicSurfaceStyleSlot,
+	merge: (style: GraphicSurfaceStyle) => GraphicSurfaceStyle,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, SURFACE_SLOT_KINDS[slot], item => ({
+		[slot]: merge(surfaceStyleAt(item, slot) ?? createDefaultGraphicSurfaceStyle()),
+	}));
+}
+
 /**
  * Merge into a Graphic Surface Style, preserving every other field. An item that
  * carries none yet — a Text Graphic Item, or a child inheriting its Graphic
@@ -659,10 +748,9 @@ export function patchGraphicSurfaceStyle(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
 	patch: Partial<GraphicSurfaceStyle>,
+	slot: GraphicSurfaceStyleSlot = 'surfaceStyle',
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, SURFACE_KINDS, item => ({
-		surfaceStyle: { ...(item.surfaceStyle ?? createDefaultGraphicSurfaceStyle()), ...patch },
-	}));
+	return patchSurfaceStyleSlot(graphic, itemId, slot, style => ({ ...style, ...patch }));
 }
 
 /**
@@ -701,11 +789,11 @@ export function setGraphicFillKind(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
 	kind: GraphicFillKind,
+	slot: GraphicSurfaceStyleSlot = 'surfaceStyle',
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, SURFACE_KINDS, (item) => {
-		const style = item.surfaceStyle ?? createDefaultGraphicSurfaceStyle();
+	return patchSurfaceStyleSlot(graphic, itemId, slot, (style) => {
 		if (style.fill.type === kind)
-			return { surfaceStyle: style };
+			return style;
 
 		const colour = currentFillColour(style.fill);
 		const fill: GraphicFill = kind === 'solid'
@@ -719,7 +807,7 @@ export function setGraphicFillKind(
 					],
 				};
 
-		return { surfaceStyle: { ...style, fill } };
+		return { ...style, fill };
 	});
 }
 
@@ -728,13 +816,10 @@ export function patchGraphicSolidFill(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
 	color: string,
+	slot: GraphicSurfaceStyleSlot = 'surfaceStyle',
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, SURFACE_KINDS, (item) => {
-		const style = item.surfaceStyle ?? createDefaultGraphicSurfaceStyle();
-		if (style.fill.type !== 'solid')
-			return { surfaceStyle: style };
-		return { surfaceStyle: { ...style, fill: { type: 'solid', color } } };
-	});
+	return patchSurfaceStyleSlot(graphic, itemId, slot, style =>
+		style.fill.type === 'solid' ? { ...style, fill: { type: 'solid', color } } : style);
 }
 
 /** Merge into a linear-gradient Graphic Fill's angle. */
@@ -742,13 +827,10 @@ export function patchGraphicGradientAngle(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
 	angle: number,
+	slot: GraphicSurfaceStyleSlot = 'surfaceStyle',
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, SURFACE_KINDS, (item) => {
-		const style = item.surfaceStyle ?? createDefaultGraphicSurfaceStyle();
-		if (style.fill.type !== 'linear-gradient')
-			return { surfaceStyle: style };
-		return { surfaceStyle: { ...style, fill: { ...style.fill, angle } } };
-	});
+	return patchSurfaceStyleSlot(graphic, itemId, slot, style =>
+		style.fill.type === 'linear-gradient' ? { ...style, fill: { ...style.fill, angle } } : style);
 }
 
 /** Merge into one colour stop of a linear-gradient Graphic Fill. */
@@ -757,15 +839,15 @@ export function patchGraphicGradientStop(
 	itemId: string,
 	index: number,
 	patch: Partial<GraphicFillStop>,
+	slot: GraphicSurfaceStyleSlot = 'surfaceStyle',
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, SURFACE_KINDS, (item) => {
-		const style = item.surfaceStyle ?? createDefaultGraphicSurfaceStyle();
+	return patchSurfaceStyleSlot(graphic, itemId, slot, (style) => {
 		if (style.fill.type !== 'linear-gradient')
-			return { surfaceStyle: style };
+			return style;
 		const stops = style.fill.stops.map((stop, position) =>
 			position === index ? { ...stop, ...patch } : stop,
 		);
-		return { surfaceStyle: { ...style, fill: { ...style.fill, stops } } };
+		return { ...style, fill: { ...style.fill, stops } };
 	});
 }
 
@@ -777,11 +859,11 @@ export function changeGraphicGradientStopCount(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
 	delta: 1 | -1,
+	slot: GraphicSurfaceStyleSlot = 'surfaceStyle',
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, SURFACE_KINDS, (item) => {
-		const style = item.surfaceStyle ?? createDefaultGraphicSurfaceStyle();
+	return patchSurfaceStyleSlot(graphic, itemId, slot, (style) => {
 		if (style.fill.type !== 'linear-gradient')
-			return { surfaceStyle: style };
+			return style;
 
 		const stops = [...style.fill.stops];
 		if (delta === 1 && stops.length < 4) {
@@ -792,7 +874,7 @@ export function changeGraphicGradientStopCount(
 			stops.pop();
 		}
 
-		return { surfaceStyle: { ...style, fill: { ...style.fill, stops } } };
+		return { ...style, fill: { ...style.fill, stops } };
 	});
 }
 
@@ -801,18 +883,14 @@ export function patchGraphicOutline(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
 	patch: Partial<GraphicOutline> | null,
+	slot: GraphicSurfaceStyleSlot = 'surfaceStyle',
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, SURFACE_KINDS, (item) => {
-		const style = item.surfaceStyle ?? createDefaultGraphicSurfaceStyle();
-		return {
-			surfaceStyle: {
-				...style,
-				outline: patch === null
-					? undefined
-					: { color: '#ffffff', width: 2, ...style.outline, ...patch },
-			},
-		};
-	});
+	return patchSurfaceStyleSlot(graphic, itemId, slot, style => ({
+		...style,
+		outline: patch === null
+			? undefined
+			: { color: '#ffffff', width: 2, ...style.outline, ...patch },
+	}));
 }
 
 /** Merge into a Graphic Surface Style's glow, or remove it. */
@@ -820,18 +898,14 @@ export function patchGraphicGlow(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
 	patch: Partial<GraphicGlow> | null,
+	slot: GraphicSurfaceStyleSlot = 'surfaceStyle',
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, SURFACE_KINDS, (item) => {
-		const style = item.surfaceStyle ?? createDefaultGraphicSurfaceStyle();
-		return {
-			surfaceStyle: {
-				...style,
-				glow: patch === null
-					? undefined
-					: { color: '#00d9ff', size: 24, opacity: 0.8, ...style.glow, ...patch },
-			},
-		};
-	});
+	return patchSurfaceStyleSlot(graphic, itemId, slot, style => ({
+		...style,
+		glow: patch === null
+			? undefined
+			: { color: '#00d9ff', size: 24, opacity: 0.8, ...style.glow, ...patch },
+	}));
 }
 
 /** Replace top-level properties of a Text Graphic Item, with its own type checked. */
@@ -843,15 +917,119 @@ export function patchTextGraphicItem(
 	return patchGraphicItemGroup(graphic, itemId, ['text'], () => patch);
 }
 
-/** Merge into a Text Graphic Item's base typography, preserving every other field. */
+/**
+ * Merge into an item's base typography, preserving every other field.
+ *
+ * Not only a Text Graphic Item's: a Clock, a Player Life, and a Game Wins Item
+ * rendering its win count all paint text, and they read the string from the live
+ * Feature Match Session rather than from an author. Where the string comes from
+ * has no bearing on how it is set.
+ */
 export function patchGraphicTypography(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
 	patch: Partial<GraphicTypography>,
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, ['text'], item => ({
+	return patchGraphicItemGroup(graphic, itemId, TYPOGRAPHY_KINDS, item => ({
 		typography: { ...item.typography, ...patch },
 	}));
+}
+
+/**
+ * Set the Text Overflow Policy, and the minimum font size a `shrink` policy
+ * shrinks to, on any item whose rendered text can exceed its authored bounds.
+ *
+ * Text does not render with visible overflow beyond its authored bounds, and a
+ * live string can be longer than the author ever saw — which is exactly why a
+ * Clock and a Player Life need this as much as a Text Graphic Item does.
+ */
+export function patchGraphicTextOverflow(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	patch: { overflowPolicy?: TextOverflowPolicy; minFontSize?: number },
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, TEXT_OVERFLOW_KINDS, () => patch);
+}
+
+/** Replace top-level properties of a Player Life Graphic Item, with its own type checked. */
+export function patchPlayerLifeGraphicItem(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	patch: Partial<Omit<PlayerLifeGraphicItemConfig, 'type' | 'id'>>,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['player-life'], () => patch);
+}
+
+/** Replace top-level properties of a Game Wins Graphic Item, with its own type checked. */
+export function patchGameWinsGraphicItem(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	patch: Partial<Omit<GameWinsGraphicItemConfig, 'type' | 'id'>>,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['game-wins'], () => patch);
+}
+
+/* ────────────────────────────────────────────────
+ * Graphic Surface Style edits
+ * ──────────────────────────────────────────────── */
+
+/**
+ * One edit to one Graphic Surface Style, as a value.
+ *
+ * The property controls for a surface are the same wherever a surface appears,
+ * but *which* surface they edit is not: a Game Wins Item has three, and every
+ * one of them takes the same nine edits. Naming the edit rather than the nine
+ * mutators is what lets one set of controls address any of them, and keeps the
+ * slot the caller's decision rather than the control's.
+ */
+export type GraphicSurfaceStyleEdit
+	= | { kind: 'present'; present: boolean }
+		| { kind: 'fill-kind'; fillKind: GraphicFillKind }
+		| { kind: 'solid-fill'; color: string }
+		| { kind: 'gradient-angle'; angle: number }
+		| { kind: 'gradient-stop'; index: number; patch: Partial<GraphicFillStop> }
+		| { kind: 'stop-count'; delta: 1 | -1 }
+		| { kind: 'fill-opacity'; fillOpacity: number }
+		| { kind: 'outline'; patch: Partial<GraphicOutline> | null }
+		| { kind: 'glow'; patch: Partial<GraphicGlow> | null };
+
+/**
+ * Apply one Graphic Surface Style edit to one slot of one Graphic Item.
+ *
+ * Clearing a surface is only meaningful where the slot is optional: a Game Wins
+ * Item's win boxes always paint one, so `present: false` aimed at either of them
+ * would author a shape the wire schema refuses, and is ignored.
+ */
+export function applyGraphicSurfaceStyleEdit(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	slot: GraphicSurfaceStyleSlot,
+	edit: GraphicSurfaceStyleEdit,
+): BroadcastGraphicConfig {
+	switch (edit.kind) {
+		case 'present':
+			if (slot !== 'surfaceStyle')
+				return graphic;
+			return edit.present
+				? patchGraphicSurfaceStyle(graphic, itemId, {})
+				: clearGraphicSurfaceStyle(graphic, itemId);
+		case 'fill-kind':
+			return setGraphicFillKind(graphic, itemId, edit.fillKind, slot);
+		case 'solid-fill':
+			return patchGraphicSolidFill(graphic, itemId, edit.color, slot);
+		case 'gradient-angle':
+			return patchGraphicGradientAngle(graphic, itemId, edit.angle, slot);
+		case 'gradient-stop':
+			return patchGraphicGradientStop(graphic, itemId, edit.index, edit.patch, slot);
+		case 'stop-count':
+			return changeGraphicGradientStopCount(graphic, itemId, edit.delta, slot);
+		case 'fill-opacity':
+			return patchGraphicSurfaceStyle(graphic, itemId, { fillOpacity: edit.fillOpacity }, slot);
+		case 'outline':
+			return patchGraphicOutline(graphic, itemId, edit.patch, slot);
+		case 'glow':
+			return patchGraphicGlow(graphic, itemId, edit.patch, slot);
+	}
 }
 
 /** Replace top-level properties of a Graphic Group, with its own type checked. */
@@ -877,7 +1055,7 @@ export function patchGraphicGroupChildSizing(
 	if (!findGraphicItem(graphic, itemId)?.group)
 		return graphic;
 
-	return patchGraphicItemGroup(graphic, itemId, ['text', 'shape', 'media'], item => ({
+	return patchGraphicItemGroup(graphic, itemId, GRAPHIC_GROUP_CHILD_KINDS, item => ({
 		sizing: { mode: 'fixed', size: item.width, weight: 1, ...item.sizing, ...patch },
 	}));
 }

@@ -1,3 +1,4 @@
+import type { GraphicAssetPurgeReason } from '~~/shared/types/graphicsAsset';
 import { sql } from 'drizzle-orm';
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import {
@@ -27,6 +28,13 @@ export const GRAPHIC_ASSET_CONTENT_AVAILABILITY_VALUES = ['available', 'unavaila
 export const GRAPHICS_DERIVATIVE_KIND_VALUES = ['thumbnail', 'video-poster', 'font-specimen'] as const;
 export const GRAPHICS_INGESTION_SOURCE_VALUES = ['local-upload', 'remote-copy', 'replacement', 'template-package'] as const;
 export const GRAPHICS_DUPLICATE_CONTENT_POLICY_VALUES = ['reuse', 'create-separate'] as const;
+/**
+ * Written out rather than aliased to the shared `GRAPHIC_ASSET_PURGE_REASONS`.
+ * Sourcing a column enum from another module makes the inferred table types
+ * depend on it, and that dependency propagates through the schema barrel far
+ * enough to collapse unrelated inference elsewhere. The type assertion below is
+ * what keeps the two lists honest instead.
+ */
 export const GRAPHIC_ASSET_PURGE_REASON_VALUES = ['trash-window-elapsed', 'early-purge'] as const;
 export const GRAPHICS_CONTENT_QUARANTINE_ORIGIN_VALUES = [
 	'orphaned-content',
@@ -481,11 +489,24 @@ export const graphicsAssetEvidence = sqliteTable('graphics_asset_evidence', {
 	reason: text('reason').notNull(),
 	correlationId: text('correlation_id').notNull(),
 	detail: text('detail', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
-	expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+	/**
+	 * Null until the subject records a terminal cleanup. The one-year window is
+	 * anchored on that cleanup rather than on when the entry was written, so an
+	 * entry about a live subject has no expiry to hold yet.
+	 */
+	expiresAt: integer('expires_at', { mode: 'timestamp_ms' }),
 }, table => [
 	index('graphics_asset_evidence_recorded_idx').on(table.recordedAt),
 	index('graphics_asset_evidence_expires_idx').on(table.expiresAt),
 	index('graphics_asset_evidence_subject_idx').on(table.subjectKind, table.subjectId),
+	// The ledger is always read chronologically under a filter, so each filter
+	// an administrator can apply leads with its own column and carries the
+	// ordering key after it. Without these, a category or actor question scans
+	// the whole ledger and sorts it — the one read here that grows without
+	// bound.
+	index('graphics_asset_evidence_category_idx').on(table.category, table.recordedAt),
+	index('graphics_asset_evidence_actor_idx').on(table.actor, table.recordedAt),
+	index('graphics_asset_evidence_correlation_idx').on(table.correlationId, table.recordedAt),
 ]);
 
 export type DbGraphicAsset = typeof graphicAssets.$inferSelect;
@@ -504,6 +525,13 @@ export type DbGraphicsIngestionOperation = typeof graphicsIngestionOperations.$i
 export type DbGraphicsIngestionOperationInsert = typeof graphicsIngestionOperations.$inferInsert;
 export type DbGraphicsCanonicalWriteCandidate = typeof graphicsCanonicalWriteCandidates.$inferSelect;
 export type DbGraphicAssetRevisionRetention = typeof graphicAssetRevisionRetention.$inferSelect;
+/** The stored purge reasons and the domain's are the same list, in both directions. */
+type PurgeReasonsAgree = [
+	Exclude<GraphicAssetPurgeReason, typeof GRAPHIC_ASSET_PURGE_REASON_VALUES[number]>,
+	Exclude<typeof GRAPHIC_ASSET_PURGE_REASON_VALUES[number], GraphicAssetPurgeReason>,
+] extends [never, never] ? true : never;
+export const GRAPHIC_ASSET_PURGE_REASONS_AGREE: PurgeReasonsAgree = true;
+
 export type DbGraphicAssetTombstone = typeof graphicAssetTombstones.$inferSelect;
 export type DbGraphicsContentQuarantine = typeof graphicsContentQuarantine.$inferSelect;
 export type DbGraphicsDiscrepancy = typeof graphicsDiscrepancies.$inferSelect;
