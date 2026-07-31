@@ -76,13 +76,13 @@ function applyPreset() {
 	if (!confirmPresetId.value)
 		return;
 	updateConfig(applyFeatureMatchOverlayPreset(config.value, confirmPresetId.value));
-	selectedTarget.value = { type: 'canvas' };
+	clearSelection();
 	confirmPresetId.value = null;
 }
 
 function resetToPreset() {
 	updateConfig(applyFeatureMatchOverlayPreset(config.value, config.value.presetId));
-	selectedTarget.value = { type: 'canvas' };
+	clearSelection();
 }
 
 function updateCanvasDimension(field: 'width' | 'height', value: number | null | undefined) {
@@ -98,13 +98,37 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 /**
  * The shared item tree's own selection, held separately from the host-owned one.
  *
- * Two selections rather than one union, because they address different things: the
- * shared one names a Graphic Item inside the one composition, and the host-owned
- * one names the Frame, a Source Item, or a legacy widget. Merging them would make
- * every consumer of either handle both, and the two authoring surfaces are exactly
- * what the contract ticket will separate.
+ * Two refs rather than one union, because they address different things: the shared
+ * one names a Graphic Item inside the one composition, and the host-owned one names
+ * the Frame, a Source Item, or a legacy widget. Merging them would make every
+ * consumer of either handle both, and the two authoring surfaces are exactly what
+ * the contract ticket will separate.
+ *
+ * They are nonetheless one selection, because there is one property panel. Choosing
+ * in either surface clears the other, so exactly one of them is ever non-canvas.
+ * Without that, selecting a shared Graphic Item and then a legacy widget updates the
+ * host-owned ref while the panel keeps showing the compositor's — leaving the legacy
+ * inspector unreachable until the author happens to re-select the canvas.
  */
 const compositorTarget = ref<GraphicsSelectionTarget>({ type: 'canvas' });
+
+function selectCompositorTarget(target: GraphicsSelectionTarget) {
+	compositorTarget.value = target;
+	if (target.type !== 'canvas')
+		selectedTarget.value = { type: 'canvas' };
+}
+
+function selectHostTarget(target: FeatureMatchOverlaySelectionTarget) {
+	selectedTarget.value = target;
+	if (target.type !== 'canvas')
+		compositorTarget.value = { type: 'canvas' };
+}
+
+/** Both surfaces return to the canvas: a preset replaces what either could name. */
+function clearSelection() {
+	selectedTarget.value = { type: 'canvas' };
+	compositorTarget.value = { type: 'canvas' };
+}
 
 /**
  * The single write funnel for the shared item tree.
@@ -141,7 +165,12 @@ function updateComposition(composition: BroadcastGraphicConfig) {
 							class="min-w-0 flex-1"
 							@update:model-value="confirmPresetId = $event"
 						/>
-						<UButton size="sm" variant="soft" @click="resetToPreset">
+						<UButton
+							size="sm"
+							variant="soft"
+							data-testid="reset-preset"
+							@click="resetToPreset"
+						>
 							Reset
 						</UButton>
 					</UFieldGroup>
@@ -219,11 +248,12 @@ function updateComposition(composition: BroadcastGraphicConfig) {
 					compositor behind the Feature Match Overlay Host Contract.
 				-->
 				<FeatureMatchOverlayCompositorTree
-					v-model:selected-target="compositorTarget"
+					:selected-target="compositorTarget"
 					:layout="config.layout"
 					:canvas-width="screenWidth"
 					:canvas-height="screenHeight"
 					writable
+					@update:selected-target="selectCompositorTarget"
 					@update:composition="updateComposition"
 				/>
 
@@ -233,13 +263,14 @@ function updateComposition(composition: BroadcastGraphicConfig) {
 					reached through the editor that already knows their vocabulary.
 				-->
 				<FeatureMatchOverlayLayerInspector
-					v-model:selected-target="selectedTarget"
+					:selected-target="selectedTarget"
 					variant="tree"
 					:config="config"
 					:update-config="updateConfig"
 					:screen-width="screenWidth"
 					:screen-height="screenHeight"
 					:event-id="eventId"
+					@update:selected-target="selectHostTarget"
 				/>
 			</section>
 
@@ -251,7 +282,7 @@ function updateComposition(composition: BroadcastGraphicConfig) {
 					:selected-target="selectedTarget"
 					:publication-blocked="assetPublicationBlocked"
 					:publication-block-reason="assetPublicationBlockReason"
-					@select-target="selectedTarget = $event"
+					@select-target="selectHostTarget"
 				/>
 			</section>
 
@@ -268,13 +299,14 @@ function updateComposition(composition: BroadcastGraphicConfig) {
 				/>
 				<FeatureMatchOverlayLayerInspector
 					v-else
-					v-model:selected-target="selectedTarget"
+					:selected-target="selectedTarget"
 					variant="inspector"
 					:config="config"
 					:update-config="updateConfig"
 					:screen-width="screenWidth"
 					:screen-height="screenHeight"
 					:event-id="eventId"
+					@update:selected-target="selectHostTarget"
 				/>
 			</section>
 		</div>
