@@ -36,7 +36,7 @@ mockNuxtImport('useMatchRepository', () => () => mockMatchRepository);
  */
 function layoutNamed(sourceItemId: string): FeatureMatchOverlayModeConfig {
 	const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-	config.layout.items = [{ ...config.layout.items[0]!, id: sourceItemId }];
+	config.layout.sources = [{ ...config.layout.sources[0]!, id: sourceItemId }];
 	return config;
 }
 
@@ -97,12 +97,12 @@ describe('useFeatureMatchOverlayModeData', () => {
 			previewGuides: ref(false),
 		});
 		await flushPromises();
-		expect(data().config.value.layout.items[0]?.id).toBe('saved-source');
+		expect(data().config.value.layout.sources[0]?.id).toBe('saved-source');
 
 		pushPreviewConfig(layoutNamed('working-source'));
 		await nextTick();
 
-		expect(data().config.value.layout.items[0]?.id).toBe('working-source');
+		expect(data().config.value.layout.sources[0]?.id).toBe('working-source');
 		wrapper.unmount();
 	});
 
@@ -118,7 +118,7 @@ describe('useFeatureMatchOverlayModeData', () => {
 		pushPreviewConfig(layoutNamed('working-source'));
 		await nextTick();
 
-		expect(data().config.value.layout.items[0]?.id).toBe('saved-source');
+		expect(data().config.value.layout.sources[0]?.id).toBe('saved-source');
 		wrapper.unmount();
 	});
 });

@@ -1,18 +1,15 @@
 import type {
-	FeatureMatchGraphicGroupChildConfig,
-	FeatureMatchGraphicGroupGraphicItemDefinitionConfig,
-	FeatureMatchGraphicGroupItemConfig,
 	FeatureMatchLayoutFrameConfig,
-	FeatureMatchLayoutItemConfig,
-	FeatureMatchOverlayBoxStyle,
 	FeatureMatchOverlayModeConfig,
+	FeatureMatchSourceFramingStyle,
+	FeatureMatchSourceItemConfig,
 } from '~~/shared/types/screenConfig';
-import type { FeatureMatchGraphicGroupChildKind, FeatureMatchOverlayGeometryField, FeatureMatchOverlayLayerKind } from '~/modules/feature-match-overlay/layout';
+import type { FeatureMatchOverlayGeometryField } from '~/modules/feature-match-overlay/layout';
 import type { FeatureMatchOverlayGeometryUnit } from '~/utils/featureMatchOverlayGeometry';
 import * as layoutWriter from '~/modules/feature-match-overlay/layout';
 import { parseGeometryInput } from '~/utils/featureMatchOverlayGeometry';
 
-export type { FeatureMatchOverlayGeometryField, FeatureMatchOverlayLayerKind };
+export type { FeatureMatchOverlayGeometryField };
 export type FeatureMatchOverlayConfigUpdater = (partial: Partial<FeatureMatchOverlayModeConfig>) => void;
 
 interface FeatureMatchOverlayConfigEditorOptions {
@@ -23,11 +20,13 @@ interface FeatureMatchOverlayConfigEditorOptions {
 }
 
 /**
- * Vue binding for the Feature Match Layout writer: each verb applies the
- * pure, id-addressed layout mutation and submits the whole updated layout
- * through `updateConfig` — the single write path for layout state. A
- * mutation that could not apply (unknown id, wrong item kind) submits
- * nothing.
+ * Vue binding for the host-owned Feature Match Layout writer: each verb applies
+ * the pure, id-addressed mutation and submits the whole updated layout through
+ * `updateConfig` — the single write path for the Frame and the Source Items. A
+ * mutation that could not apply (unknown id) submits nothing.
+ *
+ * The shared item tree is written through the compositor's own authoring module,
+ * not through here.
  */
 export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayConfigEditorOptions) {
 	const { config, updateConfig, screenWidth, screenHeight } = options;
@@ -57,98 +56,38 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		submit(layoutWriter.patchFrame(layout(), updates));
 	}
 
-	function updateItem(id: string, updates: Partial<FeatureMatchLayoutItemConfig>) {
-		submit(layoutWriter.patchItem(layout(), id, updates));
+	function updateSource(id: string, updates: Partial<FeatureMatchSourceItemConfig>) {
+		submit(layoutWriter.patchSource(layout(), id, updates));
 	}
 
-	function updateItemSurfaceStyle(id: string, updates: Partial<FeatureMatchOverlayBoxStyle>) {
-		submit(layoutWriter.patchItemSurfaceStyle(layout(), id, updates));
+	function updateSourceFramingStyle(id: string, updates: Partial<FeatureMatchSourceFramingStyle>) {
+		submit(layoutWriter.patchSourceFramingStyle(layout(), id, updates));
 	}
 
-	function addItem(item: FeatureMatchLayoutItemConfig) {
-		submit(layoutWriter.addItem(layout(), item));
+	function removeSource(id: string) {
+		submit(layoutWriter.removeSource(layout(), id));
 	}
 
-	function removeItem(id: string) {
-		submit(layoutWriter.removeItem(layout(), id));
+	/** Anchored geometry edit: parse the input, then resize/move around the Source Item's anchor. */
+	function updateSourceRectFromAnchor(id: string, field: FeatureMatchOverlayGeometryField, value: string | number, unit: FeatureMatchOverlayGeometryUnit) {
+		submit(layoutWriter.patchSourceRectFromAnchor(layout(), id, field, geometryValue(value, field, unit)));
 	}
 
-	function updateGroup(id: string, updates: Partial<FeatureMatchGraphicGroupItemConfig>) {
-		submit(layoutWriter.patchGroup(layout(), id, updates));
+	function moveSourceOrder(id: string, direction: -1 | 1) {
+		submit(layoutWriter.moveSourceOrder(layout(), id, direction));
 	}
 
-	function updateGroupDefaultChildSurfaceStyle(id: string, updates: Partial<FeatureMatchOverlayBoxStyle>) {
-		submit(layoutWriter.patchGroupDefaultChildSurfaceStyle(layout(), id, updates));
+	function sendSourceToBack(id: string) {
+		submit(layoutWriter.sendSourceToBack(layout(), id));
 	}
 
-	function updateGroupChild(groupId: string, childId: string, updates: Partial<FeatureMatchGraphicGroupChildConfig>) {
-		submit(layoutWriter.patchGroupChild(layout(), groupId, childId, updates));
+	function bringSourceToFront(id: string) {
+		submit(layoutWriter.bringSourceToFront(layout(), id));
 	}
 
-	function updateGroupChildGraphicItem(groupId: string, childId: string, updates: Partial<FeatureMatchGraphicGroupGraphicItemDefinitionConfig>) {
-		submit(layoutWriter.patchGroupChildGraphicItem(layout(), groupId, childId, updates));
-	}
-
-	function updateGroupChildSurfaceStyle(groupId: string, childId: string, updates: Partial<FeatureMatchOverlayBoxStyle>) {
-		submit(layoutWriter.patchGroupChildSurfaceStyle(layout(), groupId, childId, updates));
-	}
-
-	function addGroupChild(groupId: string, child: FeatureMatchGraphicGroupChildConfig) {
-		submit(layoutWriter.addGroupChild(layout(), groupId, child));
-	}
-
-	function removeGroupChild(groupId: string, childId: string) {
-		submit(layoutWriter.removeGroupChild(layout(), groupId, childId));
-	}
-
-	/** Anchored geometry edit: parse the input, then resize/move around the item's anchor. */
-	function updateItemRectFromAnchor(id: string, field: FeatureMatchOverlayGeometryField, value: string | number, unit: FeatureMatchOverlayGeometryUnit) {
-		submit(layoutWriter.patchItemRectFromAnchor(layout(), id, field, geometryValue(value, field, unit)));
-	}
-
-	/** Anchored geometry edit for a canvas-positioned Graphic Group child. */
-	function updateGroupChildRectFromAnchor(groupId: string, childId: string, field: FeatureMatchOverlayGeometryField, value: string | number, unit: FeatureMatchOverlayGeometryUnit) {
-		submit(layoutWriter.patchGroupChildRectFromAnchor(layout(), groupId, childId, field, geometryValue(value, field, unit)));
-	}
-
-	function convertGroupArrangement(id: string, mode: 'row' | 'column' | 'canvas') {
-		submit(layoutWriter.convertGroupArrangement(layout(), id, mode));
-	}
-
-	function moveItemOrder(id: string, direction: -1 | 1) {
-		submit(layoutWriter.moveItemOrder(layout(), id, direction));
-	}
-
-	function sendItemToBack(id: string) {
-		submit(layoutWriter.sendItemToBack(layout(), id));
-	}
-
-	function bringItemToFront(id: string) {
-		submit(layoutWriter.bringItemToFront(layout(), id));
-	}
-
-	function moveGroupChildOrder(groupId: string, childId: string, direction: -1 | 1) {
-		submit(layoutWriter.moveGroupChildOrder(layout(), groupId, childId, direction));
-	}
-
-	function sendGroupChildToBack(groupId: string, childId: string) {
-		submit(layoutWriter.sendGroupChildToBack(layout(), groupId, childId));
-	}
-
-	function bringGroupChildToFront(groupId: string, childId: string) {
-		submit(layoutWriter.bringGroupChildToFront(layout(), groupId, childId));
-	}
-
-	/** Create a new Layout Item of the given kind. Returns the new item's id. */
-	function createLayoutItem(kind: FeatureMatchOverlayLayerKind): string {
-		const { layout: next, id } = layoutWriter.createLayoutItem(layout(), kind);
-		submit(next);
-		return id;
-	}
-
-	/** Create a new child in a Graphic Group, matching its arrangement mode. Returns the child id, or null when the item is not a group. */
-	function createGroupChild(groupId: string, type: FeatureMatchGraphicGroupChildKind): string | null {
-		const { layout: next, id } = layoutWriter.createGroupChild(layout(), groupId, type);
+	/** Create a new Source Item. Returns the new item's id. */
+	function createSourceItem(): string {
+		const { layout: next, id } = layoutWriter.createSourceItem(layout());
 		submit(next);
 		return id;
 	}
@@ -157,27 +96,13 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		updateLayout,
 		geometryValue,
 		patchFrame,
-		updateItem,
-		updateItemSurfaceStyle,
-		addItem,
-		removeItem,
-		updateGroup,
-		updateGroupDefaultChildSurfaceStyle,
-		updateGroupChild,
-		updateGroupChildGraphicItem,
-		updateGroupChildSurfaceStyle,
-		addGroupChild,
-		removeGroupChild,
-		updateItemRectFromAnchor,
-		updateGroupChildRectFromAnchor,
-		convertGroupArrangement,
-		moveItemOrder,
-		sendItemToBack,
-		bringItemToFront,
-		moveGroupChildOrder,
-		sendGroupChildToBack,
-		bringGroupChildToFront,
-		createLayoutItem,
-		createGroupChild,
+		updateSource,
+		updateSourceFramingStyle,
+		removeSource,
+		updateSourceRectFromAnchor,
+		moveSourceOrder,
+		sendSourceToBack,
+		bringSourceToFront,
+		createSourceItem,
 	};
 }

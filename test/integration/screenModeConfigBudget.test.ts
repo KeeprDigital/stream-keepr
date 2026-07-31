@@ -127,17 +127,46 @@ function fatGraphicsStack(totalItems: number, graphics: number, totalInputs = 0)
 	});
 }
 
+/** One Text Graphic Item at its own field bounds: a 1,000-character template. */
+function fatTextGraphicItem(id: string) {
+	return {
+		id,
+		type: 'text' as const,
+		label: 'L'.repeat(100),
+		visible: true,
+		anchor: 'top-left' as const,
+		x: 0,
+		y: 0,
+		width: 100,
+		height: 100,
+		text: 'T'.repeat(1000),
+		typography: {
+			fontId: 'inter' as const,
+			fontSize: 32,
+			fontWeight: 700,
+			fontStyle: 'normal' as const,
+			textTransform: 'none' as const,
+			letterSpacing: 0,
+			lineHeight: 1.15,
+			textAlign: 'left' as const,
+			color: '#ffffff',
+		},
+		overflowPolicy: 'ellipsis' as const,
+		minFontSize: 16,
+	};
+}
+
 /**
- * A ~129 KiB Feature Match Overlay layout: 100 items, each legal on its own, each
- * carrying a 1,000-character gradient its own field bound allows.
+ * An oversized Feature Match Layout: a composition at its Graphic Item cap, each
+ * item legal on its own and each carrying a 1,000-character Graphic Text Template
+ * its own field bound allows, with one Graphic Group at its own child cap.
  */
 function fatOverlayLayout() {
 	const gradient = 'G'.repeat(1000);
 	return {
 		frame: { backgroundColor: '#000000', opacity: 1, gradient },
-		items: Array.from({ length: 100 }, (_, index) => ({
-			id: `overlay-${index}`,
-			type: 'source' as const,
+		sources: [{
+			id: 'overlay-source',
 			label: 'L'.repeat(100),
 			visible: true,
 			sourceRole: 'main' as const,
@@ -146,27 +175,40 @@ function fatOverlayLayout() {
 			y: 0,
 			width: 100,
 			height: 100,
-			surfaceStyle: {
-				backgroundColor: '#000000',
-				backgroundOpacity: 0,
-				backgroundGradient: gradient,
-				borderVisible: true,
-				borderTopVisible: true,
-				borderRightVisible: true,
-				borderBottomVisible: true,
-				borderLeftVisible: true,
-				borderColor: '#0077a3',
-				borderWidth: 4,
-				borderRadius: 8,
-				borderRadiusTopLeft: 8,
-				borderRadiusTopRight: 8,
-				borderRadiusBottomRight: 8,
-				borderRadiusBottomLeft: 8,
-				padding: 12,
-				textColor: '#ffffff',
-				fontSize: 32,
-			},
-		})),
+		}],
+		composition: {
+			id: 'feature-match-layout',
+			name: 'Feature Match Layout',
+			items: [
+				...Array.from({ length: 99 }, (_, index) => fatTextGraphicItem(`overlay-${index}`)),
+				{
+					id: 'overlay-group',
+					type: 'group' as const,
+					label: 'L'.repeat(100),
+					visible: true,
+					anchor: 'top-left' as const,
+					x: 0,
+					y: 0,
+					width: 1920,
+					height: 200,
+					arrangement: 'canvas' as const,
+					padding: 0,
+					gap: 0,
+					align: 'stretch' as const,
+					justify: 'start' as const,
+					clip: true,
+					geometry: {
+						topLeft: { treatment: 'square' as const, size: 0 },
+						topRight: { treatment: 'square' as const, size: 0 },
+						bottomRight: { treatment: 'square' as const, size: 0 },
+						bottomLeft: { treatment: 'square' as const, size: 0 },
+						leftSlant: 0,
+						rightSlant: 0,
+					},
+					children: Array.from({ length: 50 }, (_, index) => fatTextGraphicItem(`overlay-child-${index}`)),
+				},
+			],
+		},
 	};
 }
 

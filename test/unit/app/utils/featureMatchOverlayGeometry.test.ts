@@ -108,7 +108,7 @@ describe('broadcast layout geometry utilities', () => {
 			y: 50,
 			width: 320,
 			height: 180,
-			surfaceStyle: {
+			framingStyle: {
 				backgroundColor: '#000000',
 				backgroundOpacity: 0,
 				borderVisible: true,
@@ -143,7 +143,7 @@ describe('broadcast layout geometry utilities', () => {
 			y: 50,
 			width: 320,
 			height: 180,
-			surfaceStyle: {
+			framingStyle: {
 				backgroundColor: '#000000',
 				backgroundOpacity: 0,
 				borderVisible: true,
@@ -180,7 +180,7 @@ describe('broadcast layout geometry utilities', () => {
 			y: 20,
 			width: 100,
 			height: 80,
-			surfaceStyle: {
+			framingStyle: {
 				backgroundColor: '#000000',
 				backgroundOpacity: 0,
 				borderVisible: false,

@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import {
 	createFeatureMatchLayoutComposition,
 	FEATURE_MATCH_LAYOUT_COMPOSITION_ID,
-	featureMatchLayoutComposition,
 	featureMatchLayoutStack,
 } from '~~/shared/featureMatchLayoutComposition';
 import { getGraphicItemDefinition } from '~~/shared/modules/graphics';
@@ -30,12 +29,11 @@ function layout(items: GraphicItemConfig[]): Pick<FeatureMatchLayoutConfig, 'com
 }
 
 describe('featureMatchLayoutComposition', () => {
-	it('reads a layout authored before the compositor as an empty composition', () => {
-		// One shape for every consumer: an author adding the first Graphic Item is not
-		// doing something structurally different from adding the second.
-		const composition = featureMatchLayoutComposition({ composition: undefined });
-
-		expect(composition).toEqual({
+	it('creates an empty composition with the one stable id and name', () => {
+		// A Feature Match Layout always has a composition — the legacy widget list it
+		// used to live beside is gone — so an empty one is what a layout with no
+		// Graphic Items yet carries.
+		expect(createFeatureMatchLayoutComposition()).toEqual({
 			id: FEATURE_MATCH_LAYOUT_COMPOSITION_ID,
 			name: 'Feature Match Layout',
 			items: [],
@@ -108,7 +106,7 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 		for (const output of ['overlay', 'fill', 'key'] as const) {
 			const model = resolveFeatureMatchOverlayCompositorRenderModel({
 				output,
-				layout: { composition: undefined },
+				layout: layout([]),
 				...CANVAS,
 			});
 
@@ -123,7 +121,7 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 		// here would override the scoped rule that places it.
 		const model = resolveFeatureMatchOverlayCompositorRenderModel({
 			output: 'overlay',
-			layout: { composition: undefined },
+			layout: layout([]),
 			...CANVAS,
 		});
 
@@ -136,7 +134,7 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 		// one canvas would leave whichever landed underneath unclickable.
 		const model = resolveFeatureMatchOverlayCompositorRenderModel({
 			output: 'overlay',
-			layout: { composition: undefined },
+			layout: layout([]),
 			...CANVAS,
 		});
 

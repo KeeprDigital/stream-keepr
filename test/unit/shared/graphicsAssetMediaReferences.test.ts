@@ -10,35 +10,32 @@ import {
 } from '~~/shared/utils/graphicsAssetReferences';
 
 describe('media Graphic Item exact references', () => {
-	it('carries the declared Screen output target into authoritative reference validation', () => {
+	it('carries the pinned revision target into authoritative reference validation', () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.items = [{
-			id: 'alpha-ident',
-			type: 'media',
-			label: 'Alpha ident',
-			visible: true,
-			x: 0,
-			y: 0,
-			width: 640,
-			height: 360,
-			asset: {
-				assetId: 'video-asset' as never,
-				revisionId: 'video-revision-2' as never,
-			},
-			mediaKind: 'silent-video',
-			fit: 'contain',
-			opacity: 1,
-			borderRadius: 0,
-			videoCompatibility: 'chromium-transparency',
-			videoTarget: 'chromium',
-		}];
+		config.layout.composition = {
+			...createFeatureMatchLayoutComposition(),
+			items: [{
+				...getGraphicItemDefinition('media').createDefault({
+					id: 'alpha-ident',
+					label: 'Alpha ident',
+					canvasWidth: 1920,
+					canvasHeight: 1080,
+				}),
+				mediaKind: 'silent-video',
+				asset: {
+					assetId: 'video-asset' as never,
+					revisionId: 'video-revision-2' as never,
+				},
+				videoCompatibility: 'chromium-transparency',
+			} as GraphicItemConfig],
+		};
 
 		expect(featureMatchOverlayGraphicAssetReferences(config)).toEqual([{
 			reference: {
 				assetId: 'video-asset',
 				revisionId: 'video-revision-2',
 			},
-			ownerSlot: 'layout.items.alpha-ident.asset',
+			ownerSlot: 'layout.composition.items.alpha-ident.asset',
 			kind: 'silent-video',
 			videoCompatibility: 'chromium-transparency',
 			videoTarget: 'chromium',
@@ -100,35 +97,36 @@ describe('media Graphic Item exact references', () => {
 
 	it('indexes an exact silent-video revision from a Graphic Group child', () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		const group = config.layout.items.find(item => item.type === 'graphic-group');
-		if (group?.type !== 'graphic-group')
+		const group = config.layout.composition.items.find(item => item.type === 'group');
+		if (group?.type !== 'group')
 			throw new Error('Expected a Graphic Group fixture');
-		group.children = [{
-			id: 'group-ident',
-			type: 'media',
-			label: 'Group ident',
-			visible: true,
-			layout: { mode: 'canvas', x: 0, y: 0, width: 320, height: 180 },
-			asset: {
-				assetId: 'group-video-asset' as never,
-				revisionId: 'group-video-revision-7' as never,
-			},
-			mediaKind: 'silent-video',
-			fit: 'cover',
-			focalPosition: { horizontal: 0.5, vertical: 0.5 },
-			opacity: 1,
-			loop: true,
-			playbackRate: 1,
-			videoCompatibility: 'chromium-transparency',
-			videoTarget: 'chromium',
-		}];
+		config.layout.composition = {
+			...config.layout.composition,
+			items: [{
+				...group,
+				children: [{
+					...getGraphicItemDefinition('media').createDefault({
+						id: 'group-ident',
+						label: 'Group ident',
+						canvasWidth: 1920,
+						canvasHeight: 1080,
+					}),
+					mediaKind: 'silent-video',
+					asset: {
+						assetId: 'group-video-asset' as never,
+						revisionId: 'group-video-revision-7' as never,
+					},
+					videoCompatibility: 'chromium-transparency',
+				} as GraphicItemConfig],
+			} as GraphicItemConfig],
+		};
 
 		expect(featureMatchOverlayGraphicAssetReferences(config)).toEqual([{
 			reference: {
 				assetId: 'group-video-asset',
 				revisionId: 'group-video-revision-7',
 			},
-			ownerSlot: `layout.items.${group.id}.children.group-ident.asset`,
+			ownerSlot: `layout.composition.items.${group.id}.children.group-ident.asset`,
 			kind: 'silent-video',
 			videoCompatibility: 'chromium-transparency',
 			videoTarget: 'chromium',

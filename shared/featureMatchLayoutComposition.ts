@@ -39,24 +39,9 @@ export function createFeatureMatchLayoutComposition(): BroadcastGraphicConfig {
 	};
 }
 
-/**
- * The layout's shared item tree, or an empty one.
- *
- * A layout authored before the compositor carries no composition at all. Reading
- * it as empty rather than as absent means every consumer — the authoring tree, the
- * Inspector, the render model, asset discovery — handles one shape, and an author
- * who adds the first item is not doing something structurally different from
- * adding the second.
- */
-export function featureMatchLayoutComposition(
-	layout: Pick<FeatureMatchLayoutConfig, 'composition'>,
-): BroadcastGraphicConfig {
-	return layout.composition ?? createFeatureMatchLayoutComposition();
-}
-
 /** The shared item tree as the stack of one the compositor takes. */
 export function featureMatchLayoutStack(
 	layout: Pick<FeatureMatchLayoutConfig, 'composition'>,
 ): BroadcastGraphicConfig[] {
-	return [featureMatchLayoutComposition(layout)];
+	return [layout.composition];
 }

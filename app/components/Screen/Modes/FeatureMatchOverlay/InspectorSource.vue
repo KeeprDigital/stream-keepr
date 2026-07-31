@@ -5,10 +5,10 @@ import type { FeatureMatchOverlayAnchorValue } from '~/utils/featureMatchOverlay
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import { appearanceSummary, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
 import { anchorFeatureMatchOverlayRect } from '~/utils/featureMatchOverlayGeometry';
-import FeatureMatchOverlayBoxStyleFields from './BoxStyleFields.vue';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
 import FeatureMatchOverlayGeometryFields from './GeometryFields.vue';
 import FeatureMatchOverlayOrderSection from './OrderSection.vue';
+import FeatureMatchOverlaySourceFramingStyleFields from './SourceFramingStyleFields.vue';
 
 const props = defineProps<{
 	config: FeatureMatchOverlayModeConfig;
@@ -32,7 +32,7 @@ const editor = useFeatureMatchOverlayConfigEditor({
 const anchorValue = computed<FeatureMatchOverlayAnchorValue>(() => props.item.anchor ?? 'top-left');
 
 function removeSelf() {
-	editor.removeItem(props.item.id);
+	editor.removeSource(props.item.id);
 	emit('removed');
 }
 </script>
@@ -51,20 +51,20 @@ function removeSelf() {
 						:model-value="item.label"
 						size="sm"
 						class="w-full"
-						@update:model-value="editor.updateItem(item.id, { label: String($event) })"
+						@update:model-value="editor.updateSource(item.id, { label: String($event) })"
 					/>
 				</UFormField>
 				<ScreenSettingsToggle
 					label="Visible"
 					:model-value="item.visible"
-					@update:model-value="editor.updateItem(item.id, { visible: $event })"
+					@update:model-value="editor.updateSource(item.id, { visible: $event })"
 				/>
 				<UButton
 					color="error"
 					variant="soft"
 					icon="i-lucide-trash-2"
-					aria-label="Remove layer"
-					title="Remove layer"
+					aria-label="Remove Source Item"
+					title="Remove Source Item"
 					@click="removeSelf"
 				/>
 			</div>
@@ -80,8 +80,8 @@ function removeSelf() {
 				:screen-width="screenWidth"
 				:screen-height="screenHeight"
 				:anchor-value="anchorValue"
-				@update-anchor="value => editor.updateItem(item.id, { anchor: value as FeatureMatchOverlayAnchorValue })"
-				@update="(field, value, unit) => editor.updateItemRectFromAnchor(item.id, field, value, unit)"
+				@update-anchor="value => editor.updateSource(item.id, { anchor: value as FeatureMatchOverlayAnchorValue })"
+				@update="(field, value, unit) => editor.updateSourceRectFromAnchor(item.id, field, value, unit)"
 			/>
 		</FeatureMatchOverlayControlSection>
 
@@ -93,14 +93,14 @@ function removeSelf() {
 				<ScreenSettingsToggle
 					label="Cut hole in canvas/frame"
 					:model-value="item.frameCutout"
-					@update:model-value="editor.updateItem(item.id, { frameCutout: $event })"
+					@update:model-value="editor.updateSource(item.id, { frameCutout: $event })"
 				/>
 				<UFormField label="Video source">
 					<UInput
 						:model-value="item.sourceRole"
 						size="sm"
 						class="w-full"
-						@update:model-value="editor.updateItem(item.id, { sourceRole: String($event || '') })"
+						@update:model-value="editor.updateSource(item.id, { sourceRole: String($event || '') })"
 					/>
 				</UFormField>
 			</div>
@@ -108,21 +108,18 @@ function removeSelf() {
 
 		<FeatureMatchOverlayControlSection
 			title="Appearance"
-			:summary="appearanceSummary(item.surfaceStyle)"
+			:summary="appearanceSummary(item.framingStyle)"
 		>
-			<FeatureMatchOverlayBoxStyleFields
-				:box-style="item.surfaceStyle"
-				include-border
-				include-padding
-				include-overflow
-				@update="updates => editor.updateItemSurfaceStyle(item.id, updates)"
+			<FeatureMatchOverlaySourceFramingStyleFields
+				:framing-style="item.framingStyle"
+				@update="updates => editor.updateSourceFramingStyle(item.id, updates)"
 			/>
 		</FeatureMatchOverlayControlSection>
 
 		<FeatureMatchOverlayOrderSection
-			@send-to-back="editor.sendItemToBack(item.id)"
-			@move="delta => editor.moveItemOrder(item.id, delta)"
-			@bring-to-front="editor.bringItemToFront(item.id)"
+			@send-to-back="editor.sendSourceToBack(item.id)"
+			@move="delta => editor.moveSourceOrder(item.id, delta)"
+			@bring-to-front="editor.bringSourceToFront(item.id)"
 		/>
 	</div>
 </template>

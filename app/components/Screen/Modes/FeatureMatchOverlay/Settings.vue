@@ -100,15 +100,15 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
  *
  * Two refs rather than one union, because they address different things: the shared
  * one names a Graphic Item inside the one composition, and the host-owned one names
- * the Frame, a Source Item, or a legacy widget. Merging them would make every
- * consumer of either handle both, and the two authoring surfaces are exactly what
- * the contract ticket will separate.
+ * the Frame or a Source Item. Merging them would make every consumer of either
+ * handle both, and the two authoring surfaces stay separate because their
+ * vocabularies are.
  *
  * They are nonetheless one selection, because there is one property panel. Choosing
  * in either surface clears the other, so exactly one of them is ever non-canvas.
- * Without that, selecting a shared Graphic Item and then a legacy widget updates the
- * host-owned ref while the panel keeps showing the compositor's — leaving the legacy
- * inspector unreachable until the author happens to re-select the canvas.
+ * Without that, selecting a shared Graphic Item and then a Source Item updates the
+ * host-owned ref while the panel keeps showing the compositor's — leaving the
+ * host-owned inspector unreachable until the author happens to re-select the canvas.
  */
 const compositorTarget = ref<GraphicsSelectionTarget>({ type: 'canvas' });
 
@@ -258,9 +258,8 @@ function updateComposition(composition: BroadcastGraphicConfig) {
 				/>
 
 				<!--
-					The Frame, Source Items, and Frame cutouts stay host-owned, and so does
-					the legacy widget list until the contract ticket removes it. Both are
-					reached through the editor that already knows their vocabulary.
+					The Frame, the Source Items, and the Frame cutouts stay host-owned, and
+					are reached through the editor that knows their vocabulary.
 				-->
 				<FeatureMatchOverlayLayerInspector
 					:selected-target="selectedTarget"

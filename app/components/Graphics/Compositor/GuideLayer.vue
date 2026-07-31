@@ -18,7 +18,7 @@ import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
  * canvas, so its compositor canvas draws this. A Feature Match Overlay paints the
  * canvas itself and mounts the composition as one layer inside it, so *it* draws
  * this and passes its own host-owned guides — the Frame's Source Items and the
- * legacy widgets — through the slot.
+ * Source Items — through the slot.
  *
  * Two stacked guide layers would not work: each covers the whole canvas, so
  * whichever landed underneath would be unclickable, and each would contribute a

@@ -1,4 +1,4 @@
-import type { FeatureMatchLayoutItemConfig, FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import { useFeatureMatchOverlayConfigEditor } from '~~/app/composables/screen/useFeatureMatchOverlayConfigEditor';
@@ -10,24 +10,24 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
 // through updateConfig, no-ops submit nothing, and geometry input parsing
 // uses the screen dimensions.
 
-function graphicItemItem(overrides: Partial<Extract<FeatureMatchLayoutItemConfig, { type: 'graphic-item' }>> = {}): FeatureMatchLayoutItemConfig {
+function sourceItem(overrides: Partial<FeatureMatchSourceItemConfig> = {}): FeatureMatchSourceItemConfig {
 	return {
-		id: 'w1',
-		type: 'graphic-item',
-		label: 'Graphic Item',
+		id: 's1',
+		label: 'Source',
 		visible: true,
 		x: 100,
 		y: 50,
 		width: 100,
 		height: 40,
-		graphicItem: { type: 'clock' },
+		sourceRole: 'main',
+		frameCutout: true,
 		...overrides,
 	};
 }
 
-function createEditor(items: FeatureMatchLayoutItemConfig[]) {
+function createEditor(sources: FeatureMatchSourceItemConfig[]) {
 	const base = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-	const config = ref<FeatureMatchOverlayModeConfig>({ ...base, layout: { ...base.layout, items } });
+	const config = ref<FeatureMatchOverlayModeConfig>({ ...base, layout: { ...base.layout, sources } });
 	const updateConfig = vi.fn((partial: Partial<FeatureMatchOverlayModeConfig>) => {
 		config.value = { ...config.value, ...partial };
 	});
@@ -41,22 +41,22 @@ function createEditor(items: FeatureMatchLayoutItemConfig[]) {
 }
 
 describe('useFeatureMatchOverlayConfigEditor', () => {
-	it('submits the whole updated layout for an id-addressed item patch', () => {
-		const { config, updateConfig, editor } = createEditor([graphicItemItem()]);
+	it('submits the whole updated layout for an id-addressed Source Item patch', () => {
+		const { config, updateConfig, editor } = createEditor([sourceItem()]);
 
-		editor.updateItem('w1', { label: 'Renamed' });
+		editor.updateSource('s1', { label: 'Renamed' });
 
 		expect(updateConfig).toHaveBeenCalledOnce();
 		expect(updateConfig.mock.calls[0]![0]).toEqual({ layout: config.value.layout });
-		expect(config.value.layout.items[0]!.label).toBe('Renamed');
+		expect(config.value.layout.sources[0]!.label).toBe('Renamed');
 	});
 
 	it('submits nothing when the mutation cannot apply', () => {
-		const { updateConfig, editor } = createEditor([graphicItemItem()]);
+		const { updateConfig, editor } = createEditor([sourceItem()]);
 
-		editor.updateItem('missing', { label: 'x' });
-		editor.updateGroup('w1', { label: 'x' });
-		editor.convertGroupArrangement('w1', 'canvas');
+		editor.updateSource('missing', { label: 'x' });
+		editor.updateSourceFramingStyle('missing', { borderWidth: 2 });
+		editor.removeSource('missing');
 
 		expect(updateConfig).not.toHaveBeenCalled();
 	});
@@ -71,19 +71,19 @@ describe('useFeatureMatchOverlayConfigEditor', () => {
 	});
 
 	it('parses percentage geometry input against the screen dimensions', () => {
-		const { config, editor } = createEditor([graphicItemItem()]);
+		const { config, editor } = createEditor([sourceItem()]);
 
-		editor.updateItemRectFromAnchor('w1', 'width', '50', '%');
+		editor.updateSourceRectFromAnchor('s1', 'width', '50', '%');
 
-		expect(config.value.layout.items[0]!.width).toBe(960);
+		expect(config.value.layout.sources[0]!.width).toBe(960);
 	});
 
-	it('createLayoutItem submits and returns the new id', () => {
+	it('createSourceItem submits and returns the new id', () => {
 		const { config, editor } = createEditor([]);
 
-		const id = editor.createLayoutItem('source');
+		const id = editor.createSourceItem();
 
-		expect(config.value.layout.items[0]!.id).toBe(id);
-		expect(config.value.layout.items[0]!.type).toBe('source');
+		expect(config.value.layout.sources[0]!.id).toBe(id);
+		expect(config.value.layout.sources[0]!.frameCutout).toBe(true);
 	});
 });

@@ -169,7 +169,8 @@ describe('default config constants', () => {
 		const displayDefaults = getDisplayDefaultsForMode('feature-match-overlay');
 
 		expect('layout' in displayDefaults).toBe(true);
-		expect(displayDefaults.layout?.items.length).toBeGreaterThan(0);
+		expect(displayDefaults.layout?.sources.length).toBeGreaterThan(0);
+		expect(displayDefaults.layout?.composition.items.length).toBeGreaterThan(0);
 	});
 
 	it('default standings config defaults to all view mode', () => {

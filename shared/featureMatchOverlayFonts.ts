@@ -1,5 +1,4 @@
 import type { GraphicAssetReference } from './types/graphicsAsset';
-import type { FeatureMatchOverlayFontSelection } from './types/screenConfig';
 
 export const FEATURE_MATCH_OVERLAY_FONT_IDS = [
 	'saira-condensed',
@@ -84,14 +83,4 @@ export function getFeatureMatchOverlayFontDefinition(value: string | null | unde
 export function graphicAssetFontFaceFamily(reference: GraphicAssetReference) {
 	const identity = `${reference.assetId}-${reference.revisionId}`.replace(/[^\w-]/g, '_');
 	return `stream-keepr-graphic-asset-${identity}`;
-}
-
-export function resolveFeatureMatchOverlayFontSelection(
-	selection: FeatureMatchOverlayFontSelection | undefined,
-) {
-	if (!selection)
-		return undefined;
-	if (selection.kind === 'application')
-		return getFeatureMatchOverlayFontDefinition(selection.fontId)?.cssFamily;
-	return `"${graphicAssetFontFaceFamily(selection.reference)}"`;
 }

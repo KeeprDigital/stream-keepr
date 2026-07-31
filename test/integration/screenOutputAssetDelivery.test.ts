@@ -4,6 +4,7 @@ import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { getGraphicItemDefinition } from '../../shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { screenOutputAssetCapabilityCookieName } from '../../shared/utils/graphicsAssetReferences';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
@@ -89,21 +90,18 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		revisionId = operation.result!.revisionId;
 
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		const group = config.layout.items.find(item => item.type === 'graphic-group');
-		if (group?.type !== 'graphic-group')
+		const group = config.layout.composition.items.find(item => item.type === 'group');
+		if (group?.type !== 'group')
 			throw new Error('Expected a Graphic Group fixture');
 		group.children.push({
-			id: 'range-delivered-group-media',
-			type: 'media',
-			label: 'Range-delivered group media',
-			visible: true,
-			layout: { mode: 'canvas', x: 0, y: 0, width: 160, height: 90 },
+			...getGraphicItemDefinition('media').createDefault({
+				id: 'range-delivered-group-media',
+				label: 'Range-delivered group media',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			}),
 			asset: { assetId, revisionId },
-			mediaKind: 'image',
-			fit: 'contain',
-			focalPosition: { horizontal: 0.5, vertical: 0.5 },
-			opacity: 1,
-		});
+		} as never);
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
 			{ method: 'PATCH', body: { layout: config.layout } },
@@ -245,26 +243,20 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		`);
 
 		const restricted = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		restricted.layout.items.push({
-			id: 'restricted-video',
-			type: 'media',
-			label: 'Restricted VP9 alpha',
-			visible: true,
-			x: 0,
-			y: 0,
-			width: 640,
-			height: 360,
-			asset: { assetId, revisionId },
+		restricted.layout.composition.items.push({
+			...getGraphicItemDefinition('media').createDefault({
+				id: 'restricted-video',
+				label: 'Restricted VP9 alpha',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			}),
 			mediaKind: 'silent-video',
-			fit: 'contain',
-			focalPosition: { horizontal: 0.5, vertical: 0.5 },
-			opacity: 1,
-			loop: true,
-			playbackRate: 1,
-			videoCompatibility: 'chromium-transparency',
-			videoTarget: 'safari',
-		});
+			asset: { assetId, revisionId },
+		} as never);
 
+		// A silent-video reference will not index at all unless it carries the
+		// pinned revision's own target compatibility, so publishing without it is
+		// refused rather than silently losing the reference.
 		const publication = await fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
 			{
@@ -276,11 +268,11 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		expect(publication.status).toBe(409);
 
 		const persisted = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
-		expect(persisted.modeConfigs['feature-match-overlay'].layout.items).not.toContainEqual(
+		expect(persisted.modeConfigs['feature-match-overlay'].layout.composition.items).not.toContainEqual(
 			expect.objectContaining({ id: 'restricted-video' }),
 		);
 
-		restricted.layout.items.at(-1)!.videoTarget = 'chromium';
+		(restricted.layout.composition.items.at(-1) as { videoCompatibility?: string }).videoCompatibility = 'chromium-transparency';
 		const chromiumPublication = await fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
 			{

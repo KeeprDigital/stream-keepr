@@ -4,16 +4,14 @@ import { screenParamsSchema } from '~~/server/schemas/api/screen';
 import { screenService } from '~~/server/services/screen';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 import { respondWithTemplatePackage } from '~~/server/utils/templatePackageExportApi';
-import { normalizeFeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import { featureMatchLayoutTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
 
 /**
  * Exports one Feature Match Layout Template as a `.sklayout` Template Package.
  *
- * This workflow owns its payload — the Screen's reusable layout, migrated the
- * same way every other read boundary migrates it — and its own asset discovery.
- * Collecting and embedding the exact revisions is the Graphics Asset Library's
- * one export contract, shared with the `.skgraphic` workflow.
+ * This workflow owns its payload — the Screen's reusable layout — and its own
+ * asset discovery. Collecting and embedding the exact revisions is the Graphics
+ * Asset Library's one export contract, shared with the `.skgraphic` workflow.
  */
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);
@@ -36,8 +34,7 @@ export default defineEventHandler(async (event) => {
 		});
 	}
 
-	const config = normalizeFeatureMatchOverlayModeConfig(stored);
-	const requirements = featureMatchLayoutTemplatePackageRequirements(config);
+	const requirements = featureMatchLayoutTemplatePackageRequirements(stored);
 	try {
 		return respondWithTemplatePackage(
 			event,
@@ -48,7 +45,7 @@ export default defineEventHandler(async (event) => {
 					name: screen.name,
 					// A Template carries the reusable layout, never the Screen's
 					// current Feature Match assignment or live state.
-					document: config.layout,
+					document: stored.layout,
 				},
 				assets: requirements.assets,
 				capabilities: requirements.capabilities,

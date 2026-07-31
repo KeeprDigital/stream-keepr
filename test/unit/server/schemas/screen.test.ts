@@ -13,6 +13,7 @@ import {
 	standingsModeConfigSchema,
 	updateScreenSchema,
 } from '~~/server/schemas/api/screen';
+import { FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 
@@ -280,258 +281,104 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
-	it('accepts exact Graphic Asset References for frame and Media fields and rejects raw image URLs', () => {
+	it('accepts every built-in Feature Match Overlay Preset', () => {
+		for (const preset of FEATURE_MATCH_OVERLAY_PRESETS) {
+			const result = featureMatchOverlayModeConfigSchema.safeParse({
+				featureMatchId: null,
+				...preset.config,
+			});
+
+			expect(result.success, `${preset.id}: ${result.success ? '' : JSON.stringify(result.error.issues)}`).toBe(true);
+		}
+	});
+
+	it('rejects the legacy widget list, which no longer exists', () => {
+		const legacy = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		legacy.layout.items = [{
+			id: 'legacy-widget',
+			type: 'widget',
+			label: 'Legacy',
+			visible: true,
+			x: 0,
+			y: 0,
+			width: 100,
+			height: 40,
+			widget: { type: 'text', template: '{name}' },
+		}];
+
+		expect(featureMatchOverlayModeConfigSchema.safeParse(legacy).success).toBe(false);
+	});
+
+	it('rejects a numeric z-index on a Source Item, because list order is the Graphic Layer Order', () => {
+		const legacy = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		legacy.layout.sources[0].zIndex = 4;
+
+		expect(featureMatchOverlayModeConfigSchema.safeParse(legacy).success).toBe(false);
+	});
+
+	it('accepts an exact Graphic Asset Reference for the Frame background and rejects a raw URL', () => {
 		const referenced = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		referenced.layout.frame.backgroundImage = {
-			assetId: 'asset-frame',
-			revisionId: 'revision-frame-3',
+			assetId: 'asset-frame' as never,
+			revisionId: 'revision-frame-3' as never,
 		};
-		referenced.layout.items.push({
-			id: 'sponsor-logo',
-			type: 'media',
-			label: 'Sponsor logo',
-			visible: true,
-			x: 10,
-			y: 10,
-			width: 200,
-			height: 100,
-			mediaKind: 'image',
-			asset: {
-				assetId: 'asset-logo',
-				revisionId: 'revision-logo-7',
-			},
-			fit: 'contain',
-			focalPosition: { horizontal: 0.5, vertical: 0.5 },
-			opacity: 1,
-		});
-		referenced.layout.items.push({
-			id: 'motion-ident',
-			type: 'media',
-			label: 'Motion ident',
-			visible: true,
-			x: 10,
-			y: 120,
-			width: 200,
-			height: 100,
-			asset: {
-				assetId: 'asset-video',
-				revisionId: 'revision-video-2',
-			},
-			mediaKind: 'silent-video',
-			fit: 'contain',
-			focalPosition: { horizontal: 0.25, vertical: 0.75 },
-			opacity: 1,
-			clipGeometry: {
-				topLeft: { kind: 'rounded', size: 8 },
-				topRight: { kind: 'cut', size: 12 },
-				bottomRight: { kind: 'square' },
-				bottomLeft: { kind: 'square' },
-				rightEdgeSlant: 16,
-			},
-			loop: true,
-			playbackRate: 1,
-			videoCompatibility: 'chromium-transparency',
-			videoTarget: 'chromium',
-		});
 
 		expect(featureMatchOverlayModeConfigSchema.safeParse(referenced).success).toBe(true);
-		const legacy = featureMatchOverlayModeConfigSchema.safeParse({
-			...referenced,
-			layout: {
-				...referenced.layout,
-				items: referenced.layout.items.map(item => ({ ...item, zIndex: 1 })),
-			},
-		});
-		expect(legacy.success).toBe(true);
-		if (legacy.success) {
-			expect(legacy.data.layout.items.every(item => !('zIndex' in item))).toBe(true);
-			const media = legacy.data.layout.items.find(item => item.id === 'motion-ident');
-			expect(media).toMatchObject({
-				focalPosition: { horizontal: 0.25, vertical: 0.75 },
-			});
-		}
 		expect(featureMatchOverlayModeConfigSchema.safeParse({
 			...referenced,
 			layout: {
 				...referenced.layout,
-				items: referenced.layout.items.map(item =>
-					item.id === 'motion-ident'
-						? {
-								...item,
-								focalPosition: undefined,
-								clipGeometry: undefined,
-								borderRadius: 10,
-								surfaceStyle: { backgroundColor: '#fff' },
-							}
-						: item),
-			},
-		}).success).toBe(false);
-		expect(featureMatchOverlayModeConfigSchema.safeParse({
-			...referenced,
-			layout: {
-				...referenced.layout,
-				frame: {
-					...referenced.layout.frame,
-					backgroundImageUrl: 'https://example.com/frame.png',
-				},
-			},
-		}).success).toBe(false);
-		expect(featureMatchOverlayModeConfigSchema.safeParse({
-			...referenced,
-			layout: {
-				...referenced.layout,
-				items: [{
-					...referenced.layout.items.at(-1),
-					type: 'media',
-					mediaKind: 'image',
-					url: 'https://example.com/logo.png',
-					fit: 'contain',
-					focalPosition: { horizontal: 0.5, vertical: 0.5 },
-					opacity: 1,
-				}],
+				frame: { ...referenced.layout.frame, backgroundImageUrl: 'https://example.com/frame.png' },
 			},
 		}).success).toBe(false);
 	});
 
-	it('accepts a silent-video Media Graphic Item as a Graphic Group child', () => {
+	it('requires the shared item tree rather than treating it as optional', () => {
+		const withoutComposition = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		delete withoutComposition.layout.composition;
+
+		expect(featureMatchOverlayModeConfigSchema.safeParse(withoutComposition).success).toBe(false);
+	});
+
+	it('rejects Graphic Inputs on a Feature Match Layout composition, which binds host tokens instead', () => {
+		const declaring = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		declaring.layout.composition.inputs = [{
+			type: 'text',
+			key: 'headline',
+			label: 'Headline',
+			required: false,
+			updatePolicy: 'staged',
+			default: '',
+			maxLength: 40,
+		}];
+
+		expect(featureMatchOverlayModeConfigSchema.safeParse(declaring).success).toBe(false);
+	});
+
+	it('keeps the host-owned Source Item Definition version and rejects a future one', () => {
+		const future = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		future.layout.sources[0].configurationVersion = 2;
+
+		expect(featureMatchOverlayModeConfigSchema.safeParse(future).success).toBe(false);
+	});
+
+	it('accepts per-side border visibility on a Source Item, which the host layer kept', () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		const group = config.layout.items.find(item => item.type === 'graphic-group');
-		expect(group?.type).toBe('graphic-group');
-		if (group?.type !== 'graphic-group')
-			return;
-		group.children = [{
-			id: 'sponsor-loop',
-			type: 'media',
-			label: 'Sponsor loop',
-			visible: true,
-			layout: { mode: 'canvas', x: 12, y: 8, width: 240, height: 120 },
-			asset: {
-				assetId: 'asset-sponsor-video',
-				revisionId: 'revision-sponsor-video-4',
-			},
-			mediaKind: 'silent-video',
-			fit: 'cover',
-			focalPosition: { horizontal: 0.25, vertical: 0.8 },
-			opacity: 0.7,
-			clipGeometry: {
-				topLeft: { kind: 'rounded', size: 8 },
-				topRight: { kind: 'cut', size: 12 },
-				bottomRight: { kind: 'square' },
-				bottomLeft: { kind: 'square' },
-				leftEdgeSlant: 6,
-			},
-			loop: false,
-			playbackRate: 1.5,
-			videoCompatibility: 'chromium-transparency',
-			videoTarget: 'chromium',
-		} as never];
+		config.layout.sources[0]!.framingStyle = {
+			borderVisible: true,
+			borderColor: '#ffffff',
+			borderWidth: 3,
+			borderLeftVisible: false,
+		};
 
-		const result = featureMatchOverlayModeConfigSchema.safeParse(config);
-
-		expect(result.success).toBe(true);
-		if (result.success) {
-			const parsedGroup = result.data.layout.items.find(item => item.id === group.id);
-			expect(parsedGroup?.type === 'graphic-group' ? parsedGroup.children[0] : undefined)
-				.toMatchObject({
-					type: 'media',
-					asset: {
-						assetId: 'asset-sponsor-video',
-						revisionId: 'revision-sponsor-video-4',
-					},
-					mediaKind: 'silent-video',
-					focalPosition: { horizontal: 0.25, vertical: 0.8 },
-					opacity: 0.7,
-					loop: false,
-					playbackRate: 1.5,
-					videoCompatibility: 'chromium-transparency',
-					videoTarget: 'chromium',
-				});
-		}
+		expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(true);
 	});
 
-	it('preserves legacy stored group-child graphicItem configs while adding the content discriminator', () => {
-		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		const group = config.layout.items.find(item => item.type === 'graphic-group');
-		if (group?.type !== 'graphic-group')
-			throw new Error('Expected a Graphic Group fixture');
-		const child = group.children[0]!;
-		const expectedGraphicItem = structuredClone(child.type === 'graphic-item' ? child.graphicItem : undefined);
-		delete (child as unknown as Record<string, unknown>).type;
+	it('rejects widget-era typography on a Source Item surface style', () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		config.layout.sources[0].framingStyle = { fontSize: 24, textColor: '#ffffff' };
 
-		const result = featureMatchOverlayModeConfigSchema.safeParse(config);
-
-		expect(result.success).toBe(true);
-		if (result.success) {
-			const parsedGroup = result.data.layout.items.find(item => item.id === group.id);
-			const parsedChild = parsedGroup?.type === 'graphic-group' ? parsedGroup.children[0] : undefined;
-			expect(parsedChild).toMatchObject({
-				type: 'graphic-item',
-				graphicItem: expectedGraphicItem,
-			});
-		}
-	});
-
-	it.each(['source', 'graphic-group'] as const)(
-		'rejects a %s Item as a Graphic Group child',
-		(type) => {
-			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-			const group = config.layout.items.find(item => item.type === 'graphic-group');
-			if (group?.type !== 'graphic-group')
-				throw new Error('Expected a Graphic Group fixture');
-			group.children = [{
-				id: 'invalid-child',
-				type,
-				label: 'Invalid child',
-				visible: true,
-				layout: { mode: 'canvas', x: 0, y: 0, width: 100, height: 100 },
-			} as never];
-
-			expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(false);
-		},
-	);
-
-	it('accepts application font capabilities and exact font revisions but rejects arbitrary font selectors', () => {
-		const exactFont = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		exactFont.layout.items[0]!.surfaceStyle = {
-			font: {
-				kind: 'asset',
-				reference: {
-					assetId: 'font-asset',
-					revisionId: 'font-revision-4',
-				},
-			},
-		};
-		expect(featureMatchOverlayModeConfigSchema.safeParse(exactFont).success).toBe(true);
-
-		exactFont.layout.items[0]!.surfaceStyle!.font = {
-			kind: 'application',
-			fontId: 'inter',
-		};
-		expect(featureMatchOverlayModeConfigSchema.safeParse(exactFont).success).toBe(true);
-		expect(featureMatchOverlayModeConfigSchema.safeParse({
-			...exactFont,
-			layout: {
-				...exactFont.layout,
-				items: [{
-					...exactFont.layout.items[0],
-					surfaceStyle: {
-						font: { kind: 'css', family: 'Comic Sans MS' },
-					},
-				}],
-			},
-		}).success).toBe(false);
-		expect(featureMatchOverlayModeConfigSchema.safeParse({
-			...exactFont,
-			layout: {
-				...exactFont.layout,
-				items: [{
-					...exactFont.layout.items[0],
-					surfaceStyle: {
-						fontFamily: 'Comic Sans MS',
-					},
-				}],
-			},
-		}).success).toBe(false);
+		expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(false);
 	});
 
 	it('accepts frame video background playback settings', () => {
@@ -587,182 +434,20 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		}
 	});
 
-	it('accepts Feature Match Overlay gradient and glow style settings', () => {
-		const result = featureMatchOverlayModeConfigSchema.safeParse({
-			...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
-			presetId: 'neon-feature-match',
-			layout: {
-				...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout,
-				frame: {
-					...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.frame,
-					gradient: 'linear-gradient(90deg, rgba(192,0,96,.4), rgba(111,0,255,.4))',
-					glowColor: '#ffffff',
-					glowSize: 12,
-					glowOpacity: 0.75,
-				},
-				items: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.items.map((item) => {
-					if (item.id !== 'top-bar')
-						return item;
-					return {
-						...item,
-						surfaceStyle: {
-							...(item.surfaceStyle ?? {}),
-							backgroundGradient: 'linear-gradient(90deg, #c00060, #6f00ff)',
-							glowColor: '#ffffff',
-							glowSize: 8,
-							glowOpacity: 0.8,
-						},
-						defaultChildSurfaceStyle: item.type === 'graphic-group'
-							? {
-									...(item.defaultChildSurfaceStyle ?? {}),
-									textColor: '#ffffff',
-									fontSize: 30,
-								}
-							: undefined,
-					};
-				}),
-			},
-		});
+	it('accepts persisted anchor selections on a Source Item', () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		config.layout.sources[0]!.anchor = 'center';
+
+		const result = featureMatchOverlayModeConfigSchema.safeParse(config);
 
 		expect(result.success).toBe(true);
-	});
-
-	it('accepts Feature Match Overlay game wins display settings', () => {
-		const result = featureMatchOverlayModeConfigSchema.safeParse({
-			...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
-			layout: {
-				...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout,
-				items: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.items.map((item) => {
-					if (item.id !== 'player1-game-wins' || item.type !== 'graphic-item' || item.graphicItem.type !== 'game-wins')
-						return item;
-					return {
-						...item,
-						graphicItem: {
-							...item.graphicItem,
-							displayMode: 'number',
-							boxOrientation: 'vertical',
-							boxGap: 9,
-							boxBorderWidth: 4,
-						},
-					};
-				}),
-			},
-		});
-
-		expect(result.success).toBe(true);
-		if (result.success) {
-			const winsGraphicItem = result.data.layout.items.find(item => item.id === 'player1-game-wins');
-			expect(winsGraphicItem?.type === 'graphic-item' && winsGraphicItem.graphicItem.type === 'game-wins' ? winsGraphicItem.graphicItem : null).toMatchObject({
-				displayMode: 'number',
-				boxOrientation: 'vertical',
-				boxGap: 9,
-				boxBorderWidth: 4,
-			});
-		}
-	});
-
-	it('persists current Definition versions while parsing legacy layouts', () => {
-		const legacy = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
-		const source = legacy.layout.items.find((item: Record<string, unknown>) => item.type === 'source');
-		const group = legacy.layout.items.find((item: Record<string, unknown>) => item.type === 'graphic-group');
-		expect(source).toBeDefined();
-		expect(group).toBeDefined();
-		delete source.configurationVersion;
-		delete group.configurationVersion;
-		delete group.children[0].graphicItem.configurationVersion;
-
-		const result = featureMatchOverlayModeConfigSchema.safeParse(legacy);
-
-		expect(result.success).toBe(true);
-		if (result.success) {
-			const migratedSource = result.data.layout.items.find(item => item.type === 'source');
-			const migratedGroup = result.data.layout.items.find(item => item.type === 'graphic-group');
-			expect(migratedSource?.type === 'source' ? migratedSource.configurationVersion : null).toBe(1);
-			expect(migratedGroup?.type === 'graphic-group' ? migratedGroup.configurationVersion : null).toBe(1);
-			expect(migratedGroup?.type === 'graphic-group' && migratedGroup.children[0]?.type === 'graphic-item'
-				? migratedGroup.children[0].graphicItem.configurationVersion
-				: null).toBe(1);
-		}
-	});
-
-	it('rejects unsupported future Definition versions without partially accepting the layout', () => {
-		const future = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
-		const source = future.layout.items.find((item: Record<string, unknown>) => item.type === 'source');
-		const group = future.layout.items.find((item: Record<string, unknown>) => item.type === 'graphic-group');
-		expect(source).toBeDefined();
-		expect(group).toBeDefined();
-		source.configurationVersion = 2;
-
-		expect(featureMatchOverlayModeConfigSchema.safeParse(future).success).toBe(false);
-	});
-
-	it('accepts Feature Match Overlay text spacer settings', () => {
-		const result = featureMatchOverlayModeConfigSchema.safeParse({
-			...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
-			layout: {
-				...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout,
-				items: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.items.map((item) => {
-					if (item.id !== 'top-bar' || item.type !== 'graphic-group')
-						return item;
-					return {
-						...item,
-						children: item.children.map(child => child.id === 'top-deck' && child.graphicItem.type === 'text'
-							? {
-									...child,
-									graphicItem: {
-										...child.graphicItem,
-										template: '{deckColors}{spacer}{deck}',
-										spacerWidth: 48,
-									},
-								}
-							: child),
-					};
-				}),
-			},
-		});
-
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts persisted Feature Match Overlay anchor selections', () => {
-		const result = featureMatchOverlayModeConfigSchema.safeParse({
-			...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
-			layout: {
-				...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout,
-				items: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.items.map((item) => {
-					if (item.id === 'main-source') {
-						return {
-							...item,
-							anchor: 'center',
-						};
-					}
-
-					if (item.id === 'top-bar' && item.type === 'graphic-group') {
-						return {
-							...item,
-							children: item.children.map(child => child.id === 'top-name-record' && child.layout.mode === 'canvas'
-								? { ...child, layout: { ...child.layout, anchor: 'bottom-right' } }
-								: child),
-						};
-					}
-
-					return item;
-				}),
-			},
-		});
-
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.layout.items.find(item => item.id === 'main-source')?.anchor).toBe('center');
-			const topBar = result.data.layout.items.find(item => item.id === 'top-bar');
-			const child = topBar?.type === 'graphic-group' ? topBar.children.find(item => item.id === 'top-name-record') : undefined;
-			expect(child?.layout).toMatchObject({ mode: 'canvas', anchor: 'bottom-right' });
-		}
+		if (result.success)
+			expect(result.data.layout.sources[0]!.anchor).toBe('center');
 	});
 
 	it('accepts partial top-level Feature Match Overlay patches but validates nested values', () => {
 		expect(modeConfigPatchSchemaMap['feature-match-overlay'].safeParse({ featureMatchId: null }).success).toBe(true);
-		expect(modeConfigPatchSchemaMap['feature-match-overlay'].safeParse({ layout: { items: [] } }).success).toBe(false);
+		expect(modeConfigPatchSchemaMap['feature-match-overlay'].safeParse({ layout: { sources: [] } }).success).toBe(false);
 	});
 });
 

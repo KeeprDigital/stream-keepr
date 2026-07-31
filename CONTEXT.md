@@ -99,7 +99,7 @@ It also owns the Screen host contract: whether the mode renders as an overlay or
 Generic Screen configuration UI policy, such as container controls, dimension defaults, reset defaults, and output options, belongs with the Screen Mode Definition rather than the Screen configuration page.
 
 **Feature Match Overlay**:
-A Screen Mode that renders a production-ready Feature Match Layout for a Feature Match Slot, including external video source areas, widgets, frame graphics, and fill/key outputs.
+A Screen Mode that renders a production-ready Feature Match Layout for a Feature Match Slot, including external video source areas, Graphic Items, frame graphics, and fill/key outputs.
 _Avoid_: Generic overlay editor
 
 **Broadcast Graphics Screen**:
@@ -435,7 +435,6 @@ Rectangle, rule, slanted-edge, and corner-cut presets are authoring shortcuts th
 **Graphic Group**:
 A structural Graphic Item that arranges direct context-available Graphic Items as a row, column, or canvas and may coordinate their clipping or animation.
 Graphic Groups are not nested in the initial Shared Graphics Foundation vocabulary.
-Source Items remain top-level and cannot be children of a Graphic Group.
 Row and column children use fixed main-axis sizing or weighted fill, and a Graphic Group may provide applicable local style defaults that each direct child can override.
 
 **Graphic Surface Style**:
@@ -497,7 +496,8 @@ _Avoid_: Layer when referring to mutual-exclusion behaviour
 The per-Graphic Channel rule for replacing its selected Broadcast Graphic: Overlap starts the outgoing exit and incoming enter together, while Out then in waits for the outgoing exit to complete before starting the incoming enter.
 
 **Feature Match Layout**:
-The authored arrangement rendered by a Feature Match Overlay, including the Frame and ordered Graphic Items from the Shared Graphics Foundation.
+The authored arrangement rendered by a Feature Match Overlay: the Frame, its Source Items, and one composition of ordered Graphic Items from the Shared Graphics Foundation.
+The Frame and the Source Items are host-owned and each keeps its own list; the composition holds every Graphic Item.
 It is portable by design so it can later be saved as a Layout Template.
 _Avoid_: Overlay config
 
@@ -511,9 +511,9 @@ Feature Match Layouts use the shared Graphic Item hierarchy rather than a separa
 _Avoid_: Region
 
 **Source Item**:
-A Feature Match-specific Graphic Item intended for an external video source, with optional Frame cutout behavior and source framing style.
-Source Items are top-level only.
-_Avoid_: Source Region, camera box
+A host-owned Feature Match Overlay element that places an external video source, with optional Frame cutout behavior and source framing style.
+A Source Item is not a Graphic Item and is not interpreted by a Graphic Item Definition: it is host capability the Shared Graphics Foundation does not express, so it lives in the Feature Match Layout's own Source Item list rather than in the composition.
+_Avoid_: Source Region, camera box, Source Graphic Item
 
 **Widget Item**:
 _Legacy implementation term._ Use the specific Graphic Item kind.
@@ -608,7 +608,7 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - A **Broadcast Graphic** contains one or more **Graphic Items**
 - Every **Graphic Item** is interpreted by one application-owned **Graphic Item Definition**
 - The shared base **Graphic Item** kinds are **Text Graphic Item**, **Media Graphic Item**, **Shape Graphic Item**, and **Graphic Group**
-- A **Graphic Group** may contain any context-available **Graphic Item** except another **Graphic Group** or a **Source Item**
+- A **Graphic Group** may contain any context-available **Graphic Item** except another **Graphic Group**
 - A **Graphic Group** does not contain another **Graphic Group** in the initial Broadcast Graphics vocabulary
 - A **Shape Graphic Item** renders one **Shape Geometry**
 - A **Media Graphic Item** or **Graphic Group** may use a **Shape Geometry** as its clipping boundary
@@ -824,7 +824,7 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - A **Broadcast Graphic** and a **Feature Match Layout** use the **Shared Graphics Foundation**
 - A **Feature Match Layout** contains one or more **Graphic Items**
 - A **Source Item** may cut through the **Feature Match Overlay Frame**
-- **Source Item** is a Feature Match Overlay-specific **Graphic Item Definition**
+- A **Source Item** is host-owned rather than a **Graphic Item**, and is held in the **Feature Match Layout**'s own Source Item list rather than in its composition
 - **Clock Graphic Item**, **Player Life Graphic Item**, and **Game Wins Graphic Item** are shared **Graphic Item Definitions** that require Feature Match context
 - A **Feature Match Overlay Preset** initializes a **Feature Match Layout**
 - A **Feature Match Layout Template** stores a reusable **Feature Match Layout**

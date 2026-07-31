@@ -1,4 +1,3 @@
-import type { FeatureMatchGraphicItemType } from '~~/shared/featureMatchGraphicItemDefinitions';
 import type { GraphicItemKind } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
@@ -13,11 +12,11 @@ import type {
 	TemplatePackageManifest,
 	TemplatePackageTotals,
 } from '~~/shared/types/templatePackage';
-import {
-	FEATURE_MATCH_GRAPHIC_ITEM_TYPES,
-	featureMatchGraphicItemDefinition,
-} from '~~/shared/featureMatchGraphicItemDefinitions';
 import { FEATURE_MATCH_OVERLAY_FONT_IDS } from '~~/shared/featureMatchOverlayFonts';
+import {
+	FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION,
+	FEATURE_MATCH_SOURCE_ITEM_DEFINITION_ID,
+} from '~~/shared/featureMatchSourceItems';
 import { getGraphicItemDefinition, GRAPHIC_ITEM_KINDS } from '~~/shared/modules/graphics/itemDefinitions';
 import {
 	TEMPLATE_PACKAGE_ARTIFACTS,
@@ -240,11 +239,18 @@ export function inspectTemplateDocument(document: unknown): TemplateDocumentInsp
 /**
  * The Graphic Item vocabulary a package kind's capability identities are named in.
  *
- * The two vocabularies are separate tables that both spell `text` and `media`, and
- * each advances its own configuration version, so an identity on its own cannot say
- * which version it means. The package kind that declared it can, and stating it
- * here means a new package kind has to name its vocabulary rather than inherit
- * whichever table happens to be consulted first.
+ * It was introduced to keep two rival tables apart: a Feature Match Layout and a
+ * Broadcast Graphic each had their own Graphic Item registry, both spelled `text`
+ * and `media`, and each advanced its own configuration version, so an identity on
+ * its own could not say which version it meant.
+ *
+ * That is no longer why it exists. Feature Match Overlay now speaks the Shared
+ * Graphics Foundation vocabulary, so there is one table of Graphic Item
+ * Definitions and one configuration version per kind. What remains is narrower and
+ * still real: **Source Item is the one Definition the shared vocabulary does not
+ * own, and only a Feature Match Layout can place one.** Naming the vocabulary per
+ * package kind is what refuses a `.skgraphic` that declares a Source Item, rather
+ * than accepting whichever table happens to be consulted first.
  */
 const CAPABILITY_VOCABULARY: Record<TemplatePackageKind, 'graphics-foundation' | 'feature-match'> = {
 	skgraphic: 'graphics-foundation',
@@ -255,9 +261,9 @@ function supportedGraphicItemDefinitionVersion(
 	packageKind: TemplatePackageKind,
 	identity: string,
 ): number | undefined {
-	if (CAPABILITY_VOCABULARY[packageKind] === 'feature-match') {
-		return (FEATURE_MATCH_GRAPHIC_ITEM_TYPES as readonly string[]).includes(identity)
-			? featureMatchGraphicItemDefinition(identity as FeatureMatchGraphicItemType).configurationVersion
+	if (identity === FEATURE_MATCH_SOURCE_ITEM_DEFINITION_ID) {
+		return CAPABILITY_VOCABULARY[packageKind] === 'feature-match'
+			? FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION
 			: undefined;
 	}
 	// The shared Graphics Foundation kinds state their own configuration version on

@@ -1,61 +1,38 @@
-import type {
-	FeatureMatchGraphicGroupChildConfig,
-	FeatureMatchGraphicGroupItemConfig,
-	FeatureMatchLayoutConfig,
-	FeatureMatchMediaGraphicItemConfig,
-	FeatureMatchSourceItemConfig,
-	FeatureMatchSpecificGraphicItemConfig,
-} from '~~/shared/types/screenConfig';
-import { featureMatchLayoutItemDefinition } from '~~/shared/featureMatchGraphicItemDefinitions';
+import type { FeatureMatchLayoutConfig, FeatureMatchSourceItemConfig } from '~~/shared/types/screenConfig';
 
-/** Selection target shared by the Feature Match Overlay editor surfaces. */
+/**
+ * The host-owned Feature Match Overlay selection: the canvas — which is the
+ * Frame — or one Source Item.
+ *
+ * It names two things because the host owns two. The shared item tree has its own
+ * selection in the shared compositor's vocabulary, held separately by the editor
+ * and the preview, because the two surfaces name things in different vocabularies.
+ */
 export type FeatureMatchOverlaySelectionTarget
 	=	| { type: 'canvas' }
-		| { type: 'layer'; itemId: string }
-		| { type: 'graphic-item'; itemId: string; childId: string };
+		| { type: 'source'; itemId: string };
 
 /** A selection target resolved against a Feature Match Layout. */
 export type FeatureMatchOverlaySelection
 	=	| { kind: 'canvas' }
 		| { kind: 'source'; item: FeatureMatchSourceItemConfig }
-		| { kind: 'media'; item: FeatureMatchMediaGraphicItemConfig }
-		| { kind: 'graphic-item'; item: FeatureMatchSpecificGraphicItemConfig }
-		| { kind: 'graphic-group'; item: FeatureMatchGraphicGroupItemConfig }
-		| { kind: 'child'; group: FeatureMatchGraphicGroupItemConfig; child: FeatureMatchGraphicGroupChildConfig }
 		| { kind: 'missing' };
 
-/** Resolve a selection target to the layout entities it points at, or `missing`. */
-export function resolveFeatureMatchOverlaySelection(layout: FeatureMatchLayoutConfig, target: FeatureMatchOverlaySelectionTarget): FeatureMatchOverlaySelection {
+/** Resolve a selection target to the layout entity it points at, or `missing`. */
+export function resolveFeatureMatchOverlaySelection(
+	layout: FeatureMatchLayoutConfig,
+	target: FeatureMatchOverlaySelectionTarget,
+): FeatureMatchOverlaySelection {
 	if (target.type === 'canvas')
 		return { kind: 'canvas' };
 
-	const item = layout.items.find(candidate => candidate.id === target.itemId);
-	if (!item)
-		return { kind: 'missing' };
-
-	if (target.type === 'graphic-item') {
-		if (item.type !== 'graphic-group')
-			return { kind: 'missing' };
-		const child = item.children.find(candidate => candidate.id === target.childId);
-		return child ? { kind: 'child', group: item, child } : { kind: 'missing' };
-	}
-
-	const selectionByDefinitionKind = {
-		'source': () => ({ kind: 'source' as const, item: item as FeatureMatchSourceItemConfig }),
-		'media': () => ({ kind: 'media' as const, item: item as FeatureMatchMediaGraphicItemConfig }),
-		'graphic-item': () => ({ kind: 'graphic-item' as const, item: item as FeatureMatchSpecificGraphicItemConfig }),
-		'graphic-group': () => ({ kind: 'graphic-group' as const, item: item as FeatureMatchGraphicGroupItemConfig }),
-	};
-	return selectionByDefinitionKind[featureMatchLayoutItemDefinition(item).layoutKind]();
+	const item = layout.sources.find(candidate => candidate.id === target.itemId);
+	return item ? { kind: 'source', item } : { kind: 'missing' };
 }
 
 /** Stable identity key for a selection target (tree nodes, comparisons). */
 export function featureMatchOverlaySelectionKey(target: FeatureMatchOverlaySelectionTarget): string {
-	if (target.type === 'canvas')
-		return 'canvas';
-	if (target.type === 'graphic-item')
-		return `graphicItem:${target.itemId}:${target.childId}`;
-	return `layer:${target.itemId}`;
+	return target.type === 'canvas' ? 'canvas' : `source:${target.itemId}`;
 }
 
 /** Runtime guard for selection targets crossing a postMessage boundary. */
@@ -65,9 +42,5 @@ export function isFeatureMatchOverlaySelectionTarget(value: unknown): value is F
 	const target = value as Record<string, unknown>;
 	if (target.type === 'canvas')
 		return true;
-	if (target.type === 'layer')
-		return typeof target.itemId === 'string';
-	if (target.type === 'graphic-item')
-		return typeof target.itemId === 'string' && typeof target.childId === 'string';
-	return false;
+	return target.type === 'source' && typeof target.itemId === 'string';
 }
