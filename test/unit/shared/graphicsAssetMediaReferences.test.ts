@@ -1,4 +1,7 @@
+import type { GraphicItemConfig } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
+import { createFeatureMatchLayoutComposition } from '~~/shared/featureMatchLayoutComposition';
+import { getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import {
 	featureMatchOverlayGraphicAssetReferences,
@@ -36,6 +39,59 @@ describe('media Graphic Item exact references', () => {
 				revisionId: 'video-revision-2',
 			},
 			ownerSlot: 'layout.items.alpha-ident.asset',
+			kind: 'silent-video',
+			videoCompatibility: 'chromium-transparency',
+			videoTarget: 'chromium',
+		}]);
+	});
+
+	it('publishes the shared item tree under the Feature Match Overlay"s own slot prefix', () => {
+		// The `layout.` prefix is load-bearing: a write scopes its reference delete to
+		// it, and a Screen Output resolves only the prefix for its Screen's current
+		// mode. A shared tree publishing outside it would have its references orphaned
+		// by the next write.
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		const media = {
+			...getGraphicItemDefinition('media').createDefault({
+				id: 'sponsor',
+				label: 'Sponsor',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			}),
+			asset: { assetId: 'image-asset' as never, revisionId: 'image-revision-1' as never },
+		} as GraphicItemConfig;
+		config.layout.items = [];
+		config.layout.composition = { ...createFeatureMatchLayoutComposition(), items: [media] };
+
+		expect(featureMatchOverlayGraphicAssetReferences(config)).toEqual([{
+			reference: { assetId: 'image-asset', revisionId: 'image-revision-1' },
+			ownerSlot: 'layout.composition.items.sponsor.asset',
+			kind: 'image',
+		}]);
+	});
+
+	it('carries a shared silent-video reference"s pinned compatibility and assumed target', () => {
+		// The Chromium assumption is shared by both hosts on purpose: a graphics Screen
+		// Output is consumed as a browser source in Chromium-based capture, and neither
+		// host offers a control that would let an author say otherwise.
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		const video = {
+			...getGraphicItemDefinition('media').createDefault({
+				id: 'ident',
+				label: 'Ident',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			}),
+			mediaKind: 'silent-video',
+			asset: { assetId: 'video-asset' as never, revisionId: 'video-revision-9' as never },
+			videoCompatibility: 'chromium-transparency',
+		} as GraphicItemConfig;
+		config.layout.items = [];
+		config.layout.composition = { ...createFeatureMatchLayoutComposition(), items: [video] };
+
+		expect(featureMatchOverlayGraphicAssetReferences(config)).toEqual([{
+			reference: { assetId: 'video-asset', revisionId: 'video-revision-9' },
+			ownerSlot: 'layout.composition.items.ident.asset',
 			kind: 'silent-video',
 			videoCompatibility: 'chromium-transparency',
 			videoTarget: 'chromium',

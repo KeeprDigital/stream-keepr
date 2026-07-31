@@ -3,6 +3,8 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, ref } from 'vue';
+import { createFeatureMatchLayoutComposition } from '~~/shared/featureMatchLayoutComposition';
+import { getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 
 const mockConfig = ref<FeatureMatchOverlayModeConfig>(structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG));
@@ -103,6 +105,101 @@ function groupLayerConfig(): FeatureMatchOverlayModeConfig {
 }
 
 describe('featureMatchOverlayDisplay', () => {
+	describe('the host-owned layer around the shared item tree', () => {
+		it('draws the Frame and the Source Items beneath the composed tree', async () => {
+			// The Frame is the continuous area that sits behind and around everything
+			// else, and a Source Item shows an external video feed through it. Both are
+			// host-owned, so both are drawn by this component rather than composed by
+			// the shared compositor — and both come first in document order.
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.composition = {
+				...createFeatureMatchLayoutComposition(),
+				items: [getGraphicItemDefinition('clock').createDefault({
+					id: 'clock',
+					label: 'Clock',
+					canvasWidth: 1920,
+					canvasHeight: 1080,
+				})],
+			};
+			mockConfig.value = config;
+
+			const wrapper = await mountComponent();
+			const html = wrapper.html();
+			const frame = html.indexOf('frame-layer');
+			const source = html.indexOf('data-graphic-item-id');
+			const composition = html.indexOf('feature-match-overlay__composition');
+
+			expect(frame).toBeGreaterThanOrEqual(0);
+			expect(source).toBeGreaterThan(frame);
+			expect(composition).toBeGreaterThan(source);
+		});
+
+		it('never covers the host-owned layer with a backdrop of its own', async () => {
+			// The composed tree is mounted above the Frame, the Source Items, and the
+			// legacy widgets. A Fill or Key Output's black backdrop painted here would
+			// cover all of them — an operator switching an existing overlay to Fill would
+			// get solid black on air. Checked in every output, because the Overlay
+			// Output's transparent backdrop hides the mistake.
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.composition = {
+				...createFeatureMatchLayoutComposition(),
+				items: [getGraphicItemDefinition('clock').createDefault({
+					id: 'clock',
+					label: 'Clock',
+					canvasWidth: 1920,
+					canvasHeight: 1080,
+				})],
+			};
+
+			for (const output of ['overlay', 'fill', 'key'] as const) {
+				mockConfig.value = config;
+				mockOutputMode.value = output;
+
+				const wrapper = await mountComponent();
+				const style = wrapper.get('.feature-match-overlay__composition').attributes('style') ?? '';
+
+				expect(style).not.toContain('#000000');
+				expect(style).not.toContain('rgb(0, 0, 0)');
+				// The host places the layer, so the model must not position it either.
+				expect(style).not.toContain('position: relative');
+				// It is still the tree that renders, in every output.
+				expect(wrapper.get('[data-graphic-item-kind="clock"]').text()).toBe('12:34');
+			}
+		});
+
+		it('punches a Source Item cutout through the Frame rather than through the tree', async () => {
+			// The cutout is a mask on the Frame's own layers. The composed tree is a
+			// sibling above it and is never masked, so a Graphic Item over a Source Item
+			// still paints.
+			mockConfig.value = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.find('mask').exists()).toBe(true);
+			expect(wrapper.get('.feature-match-overlay__composition').attributes('mask')).toBeUndefined();
+		});
+
+		it('renders the shared item tree even when the layout has no legacy items', async () => {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.composition = {
+				...createFeatureMatchLayoutComposition(),
+				items: [getGraphicItemDefinition('clock').createDefault({
+					id: 'clock',
+					label: 'Clock',
+					canvasWidth: 1920,
+					canvasHeight: 1080,
+				})],
+			};
+			mockConfig.value = config;
+
+			const wrapper = await mountComponent();
+
+			// The clock string comes from the host, so the composed item renders it
+			// without any Graphic Text Template having been authored.
+			expect(wrapper.get('[data-graphic-item-kind="clock"]').text()).toBe('12:34');
+		});
+	});
+
 	beforeEach(() => {
 		mockConfig.value = groupLayerConfig();
 		mockOutputMode.value = 'overlay';

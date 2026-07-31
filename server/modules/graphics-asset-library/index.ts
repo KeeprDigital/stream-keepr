@@ -380,6 +380,8 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 	}) => Promise<
 		| { outcome: 'reserved'; operation: GraphicsIngestionOperation }
 		| { outcome: 'blocked'; capacity: GraphicsCapacityExhaustedDetails }
+		/** Another attempt took the operation; this one has nothing left to reserve for. */
+		| { outcome: 'lost-claim' }
 	>;
 	updateCapacityLimits: (
 		input: GraphicsAssetCapacityLimits & { updatedAt: string },
@@ -3571,6 +3573,15 @@ export function createGraphicsAssetLibrary(
 				thumbnailByteLength: thumbnail.byteLength,
 				reservedAt: changedOperation(operation, {}).updatedAt,
 			});
+			if (reservation.outcome === 'lost-claim') {
+				// Another attempt owns this operation now, and whatever it decided is the
+				// authoritative answer — so it is read rather than guessed at, and never
+				// reported as a capacity problem the author would go off and try to solve.
+				return await catalogueRequest(
+					() => catalogue.getIngestionOperation(operation.id, operation.initiatedBy),
+					'Graphics ingestion state is temporarily unavailable',
+				) ?? operation;
+			}
 			if (reservation.outcome === 'blocked') {
 				operation = {
 					...operation,

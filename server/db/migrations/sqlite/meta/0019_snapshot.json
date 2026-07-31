@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "29f65201-7424-4d5f-8847-e252cb135187",
+  "id": "41aab9e5-c7f7-4133-89a8-9d5e8f4ad2b7",
   "prevId": "3bfd0fe4-8c18-4ab0-a16c-f47c1a728d1c",
   "tables": {
     "archetype_cards": {
@@ -173,6 +173,83 @@
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "broadcast_graphic_templates": {
+      "name": "broadcast_graphic_templates",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "document": {
+          "name": "document",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "graphic_asset_reference_version": {
+          "name": "graphic_asset_reference_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "broadcast_graphic_templates_name_idx": {
+          "name": "broadcast_graphic_templates_name_idx",
+          "columns": [
+            "name"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -2307,7 +2384,7 @@
           "name": "expires_at",
           "type": "integer",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         }
       },
@@ -2331,30 +2408,6 @@
           "columns": [
             "subject_kind",
             "subject_id"
-          ],
-          "isUnique": false
-        },
-        "graphics_asset_evidence_category_idx": {
-          "name": "graphics_asset_evidence_category_idx",
-          "columns": [
-            "category",
-            "recorded_at"
-          ],
-          "isUnique": false
-        },
-        "graphics_asset_evidence_actor_idx": {
-          "name": "graphics_asset_evidence_actor_idx",
-          "columns": [
-            "actor",
-            "recorded_at"
-          ],
-          "isUnique": false
-        },
-        "graphics_asset_evidence_correlation_idx": {
-          "name": "graphics_asset_evidence_correlation_idx",
-          "columns": [
-            "correlation_id",
-            "recorded_at"
           ],
           "isUnique": false
         }

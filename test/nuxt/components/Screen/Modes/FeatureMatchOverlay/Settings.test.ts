@@ -65,6 +65,21 @@ const LayerInspectorStub = defineComponent({
 	template: '<div data-testid="layer-inspector" :data-selected="JSON.stringify(selectedTarget)" />',
 });
 
+const CompositorTreeStub = defineComponent({
+	props: {
+		selectedTarget: { type: Object, required: true },
+	},
+	emits: ['update:selectedTarget'],
+	template: '<div data-testid="compositor-tree" :data-selected="JSON.stringify(selectedTarget)" />',
+});
+
+const CompositorInspectorStub = defineComponent({
+	props: {
+		selectedTarget: { type: Object, required: true },
+	},
+	template: '<div data-testid="compositor-inspector" :data-selected="JSON.stringify(selectedTarget)" />',
+});
+
 const PreviewOutputAsideStub = defineComponent({
 	props: {
 		config: { type: Object, required: true },
@@ -119,6 +134,8 @@ async function mountComponent(screen: Partial<Screen> = {}) {
 			stubs: {
 				ScreenSettingsCard: ScreenSettingsCardStub,
 				FeatureMatchOverlayLayerInspector: LayerInspectorStub,
+				FeatureMatchOverlayCompositorTree: CompositorTreeStub,
+				FeatureMatchOverlayCompositorInspector: CompositorInspectorStub,
 				FeatureMatchOverlayPreviewOutputAside: PreviewOutputAsideStub,
 				UFormField: UFormFieldStub,
 				USelect: true,
@@ -134,6 +151,10 @@ async function mountComponent(screen: Partial<Screen> = {}) {
 
 function selectedTarget(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
 	return JSON.parse(wrapper.get('[data-testid="layer-inspector"]').attributes('data-selected') ?? '{}');
+}
+
+function compositorTarget(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+	return JSON.parse(wrapper.get('[data-testid="compositor-tree"]').attributes('data-selected') ?? '{}');
 }
 
 function previewSelectedTarget(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
@@ -223,6 +244,54 @@ describe('featureMatchOverlaySettings', () => {
 		expect(mockConfig.value.layout.frame.backgroundImage).toEqual({
 			assetId: 'temporarily-unavailable-asset',
 			revisionId: 'pinned-revision',
+		});
+	});
+
+	describe('two authoring surfaces, one selection', () => {
+		it('clears the host-owned selection when a shared Graphic Item is chosen', async () => {
+			// There is one property panel. Leaving both selections live meant the panel
+			// kept showing the compositor's while the host-owned ref moved underneath it.
+			const wrapper = await mountComponent();
+
+			wrapper.getComponent(LayerInspectorStub).vm.$emit('update:selectedTarget', { type: 'frame' });
+			await nextTick();
+			expect(selectedTarget(wrapper)).toEqual({ type: 'frame' });
+
+			wrapper.getComponent(CompositorTreeStub).vm.$emit('update:selectedTarget', { type: 'item', graphicId: 'feature-match-layout', itemId: 'clock' });
+			await nextTick();
+
+			expect(compositorTarget(wrapper)).toMatchObject({ type: 'item', itemId: 'clock' });
+			expect(selectedTarget(wrapper)).toEqual({ type: 'canvas' });
+		});
+
+		it('returns to the legacy inspector when a host-owned target is chosen', async () => {
+			// The regression this pins: selecting a shared item and then a legacy widget
+			// left the legacy inspector unreachable until the author re-selected canvas.
+			const wrapper = await mountComponent();
+
+			wrapper.getComponent(CompositorTreeStub).vm.$emit('update:selectedTarget', { type: 'item', graphicId: 'feature-match-layout', itemId: 'clock' });
+			await nextTick();
+			expect(wrapper.find('[data-testid="compositor-inspector"]').exists()).toBe(true);
+
+			wrapper.getComponent(LayerInspectorStub).vm.$emit('update:selectedTarget', { type: 'frame' });
+			await nextTick();
+
+			expect(compositorTarget(wrapper)).toEqual({ type: 'canvas' });
+			expect(wrapper.find('[data-testid="compositor-inspector"]').exists()).toBe(false);
+			expect(selectedTarget(wrapper)).toEqual({ type: 'frame' });
+		});
+
+		it('returns both surfaces to the canvas when a preset is reset', async () => {
+			const wrapper = await mountComponent();
+
+			wrapper.getComponent(CompositorTreeStub).vm.$emit('update:selectedTarget', { type: 'item', graphicId: 'feature-match-layout', itemId: 'clock' });
+			await nextTick();
+
+			await wrapper.get('[data-testid="reset-preset"]').trigger('click');
+			await nextTick();
+
+			expect(compositorTarget(wrapper)).toEqual({ type: 'canvas' });
+			expect(selectedTarget(wrapper)).toEqual({ type: 'canvas' });
 		});
 	});
 });

@@ -1,11 +1,15 @@
 import type { CSSProperties } from 'vue';
 import type {
 	BroadcastGraphicConfig,
+	ClockGraphicItemConfig,
+	GameWinsGraphicItemConfig,
 	GraphicGroupChildConfig,
 	GraphicGroupItemConfig,
 	GraphicInputDeclaration,
+	GraphicItemConfig,
 	GraphicSurfaceStyle,
 	MediaGraphicItemConfig,
+	PlayerLifeGraphicItemConfig,
 	ShapeGraphicItemConfig,
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
@@ -13,10 +17,13 @@ import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicItemRenderDescriptor,
 	GraphicMediaRenderDescriptor,
+	GraphicsFeatureMatchContext,
 	GraphicSurfaceRenderDescriptor,
 } from '~/modules/graphics/renderModel';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
+import { featureMatchTokenDeclarations } from '~~/shared/featureMatchTokenCatalogue';
+import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition, squareShapeGeometry } from '~~/shared/modules/graphics';
+import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
 import { resolveGraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 
 function surfaceStyle(overrides: Partial<GraphicSurfaceStyle> = {}): GraphicSurfaceStyle {
@@ -120,6 +127,35 @@ function group(
 
 function graphic(id: string, items: BroadcastGraphicConfig['items']): BroadcastGraphicConfig {
 	return { id, name: id, items };
+}
+
+/**
+ * The context-gated kinds, built from their own Graphic Item Definitions rather
+ * than from a literal: a default that drifts from the Definition would let these
+ * tests pass against a shape no author can actually create.
+ */
+function contextGated<K extends 'clock' | 'player-life' | 'game-wins'>(
+	kind: K,
+	id: string,
+	overrides: Partial<Extract<GraphicItemConfig, { type: K }>> = {},
+): Extract<GraphicItemConfig, { type: K }> {
+	const item = getGraphicItemDefinition(kind).createDefault({
+		id,
+		label: id,
+		canvasWidth: 1920,
+		canvasHeight: 1080,
+	});
+	return { ...item, ...overrides } as Extract<GraphicItemConfig, { type: K }>;
+}
+
+function clock(id: string, overrides: Partial<ClockGraphicItemConfig> = {}) {
+	return contextGated('clock', id, overrides);
+}
+function playerLife(id: string, overrides: Partial<PlayerLifeGraphicItemConfig> = {}) {
+	return contextGated('player-life', id, overrides);
+}
+function gameWins(id: string, overrides: Partial<GameWinsGraphicItemConfig> = {}) {
+	return contextGated('game-wins', id, overrides);
 }
 
 /**
@@ -445,6 +481,38 @@ describe('graphicsCompositionRenderModel', () => {
 			expect(model.graphics).toEqual([]);
 			expect(model.canvasStyle.background).toBe(background);
 		}
+	});
+
+	it('paints the Screen Output backdrop for a root composition and never for a nested one', () => {
+		// The backdrop belongs to whichever element is the canvas root, and the two
+		// hosts differ. A Broadcast Graphics Screen mounts this model's canvas as its
+		// whole Display, so this is the only thing making its Fill and Key Outputs
+		// black — removing it outright would fix the nested host by breaking the root
+		// one. A Feature Match Overlay paints its own canvas and mounts this above the
+		// Frame, so a backdrop here would cover the entire host-owned layer.
+		//
+		// Pinned together in one place because the two are one decision: a change that
+		// satisfies either host alone is the bug this guards against.
+		for (const output of ['overlay', 'fill', 'key'] as const) {
+			const root = resolveGraphicsCompositionRenderModel({ output, graphics: [], ...CANVAS });
+			const nested = resolveGraphicsCompositionRenderModel({
+				output,
+				graphics: [],
+				canvasRole: 'layer',
+				...CANVAS,
+			});
+
+			expect(root.canvasStyle.background).toBe(screenOutputCanvasBackground(output));
+			expect(root.canvasStyle.position).toBe('relative');
+
+			expect(nested.canvasStyle.background).toBe('transparent');
+			expect(nested.canvasStyle.position).toBeUndefined();
+		}
+
+		// The default is the root role, so forgetting to declare it shows a backdrop
+		// rather than silently hiding a Screen Output's own.
+		expect(resolveGraphicsCompositionRenderModel({ output: 'key', graphics: [], ...CANVAS }).canvasStyle.background)
+			.toBe('#000000');
 	});
 
 	it('composites concurrent Broadcast Graphics in authored Screen stack order regardless of selection order', () => {
@@ -792,6 +860,186 @@ describe('graphicsCompositionRenderModel', () => {
 			expect(model.graphics[0]?.items.map(item => item.id)).toEqual(['behind', 'cluster', 'in-front']);
 			expect(model.graphics[0]?.items[1]?.children?.map(child => child.id)).toEqual(['name', 'rule']);
 			expect(model.graphics[0]?.items[1]?.kind).toBe('group');
+		});
+	});
+
+	describe('host-supplied placeholder declarations', () => {
+		it('resolves a Graphic Text Template against the host catalogue when the host supplies one', () => {
+			// A Feature Match Overlay declares no Graphic Inputs. Its tokens are ordinary
+			// text declarations whose values the host resolves, so the shared Graphic Text
+			// Template mechanism renders them with nothing special added to it.
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('layout', [text('name', { text: '{player1Name} vs {player2Name}' })])],
+				textDeclarations: featureMatchTokenDeclarations(),
+				inputValues: { layout: { player1Name: 'Alice', player2Name: 'Bo' } },
+				...CANVAS,
+			});
+
+			expect(model.graphics[0]!.items[0]!.text).toBe('Alice vs Bo');
+		});
+
+		it('renders a placeholder no host token names as empty rather than as its own literal', () => {
+			// `{name}` is the legacy per-side token. The catalogue moved the side into the
+			// key, so nothing declares it and nothing resolves it.
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('layout', [text('name', { text: 'Hi {name}' })])],
+				textDeclarations: featureMatchTokenDeclarations(),
+				inputValues: { layout: { name: 'Alice' } },
+				...CANVAS,
+			});
+
+			expect(model.graphics[0]!.items[0]!.text).toBe('Hi ');
+		});
+
+		it('ignores a composition"s own Graphic Inputs while the host supplies declarations', () => {
+			// The host supplies all of them or none: a Feature Match Overlay's vocabulary
+			// is its catalogue, not its catalogue plus whatever a stored graphic declares.
+			//
+			// The discriminator has to be the *default*, not a value. An explicit
+			// `inputValues` entry resolves the same under either declaration list, so a
+			// test that supplied one would assert nothing about which list was consulted
+			// — it would pass just as happily if the smuggled declaration had won.
+			// Withholding the value makes `substituteAuthoredDefaults` reach for a
+			// default, and the two lists disagree about what it is.
+			const declared: GraphicInputDeclaration = {
+				type: 'text',
+				key: 'player1Name',
+				label: 'Smuggled',
+				required: false,
+				updatePolicy: 'live',
+				default: 'Wrong',
+				maxLength: 40,
+			};
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [{
+					...graphic('layout', [text('name', { text: '{player1Name}' })]),
+					inputs: [declared],
+				}],
+				textDeclarations: featureMatchTokenDeclarations(),
+				substituteAuthoredDefaults: true,
+				...CANVAS,
+			});
+
+			// A host token carries no authored default, so the catalogue renders empty.
+			// `'Wrong'` here would mean the composition's own declaration had won.
+			expect(model.graphics[0]!.items[0]!.text).toBe('');
+		});
+
+		it('still resolves a host token"s supplied value', () => {
+			// The companion to the above: withholding the value proves which declaration
+			// list wins, and this proves the values still arrive through it.
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('layout', [text('name', { text: '{player1Name}' })])],
+				textDeclarations: featureMatchTokenDeclarations(),
+				inputValues: { layout: { player1Name: 'Alice' } },
+				...CANVAS,
+			});
+
+			expect(model.graphics[0]!.items[0]!.text).toBe('Alice');
+		});
+	});
+
+	describe('context-gated Graphic Items', () => {
+		const FEATURE_MATCH: GraphicsFeatureMatchContext = {
+			clockDisplayTime: '12:34',
+			player1: { lifeTotal: 17, gameWins: 1 },
+			player2: { lifeTotal: null, gameWins: 0 },
+			bestOf: 3,
+		};
+
+		function contextItem(item: BroadcastGraphicConfig['items'][number], featureMatch = FEATURE_MATCH) {
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('layout', [item])],
+				featureMatch,
+				...CANVAS,
+			});
+			return model.graphics[0]!.items[0]!;
+		}
+
+		it('renders the Feature Match Session clock the host resolved', () => {
+			const rendered = contextItem(clock('clock-1'));
+
+			expect(rendered.kind).toBe('clock');
+			expect(rendered.text).toBe('12:34');
+			// It paints through the same typography path a Text Graphic Item does, so a
+			// Clock is styled with the shared vocabulary rather than its own.
+			expect(rendered.textStyle?.fontSize).toBe('64px');
+		});
+
+		it('renders one Player life total and leaves an absent one empty', () => {
+			// An absent total is the session not holding one yet. Rendering it as `0`
+			// would put a wrong number on program that looks exactly like a right one.
+			expect(contextItem(playerLife('life-1')).text).toBe('17');
+			expect(contextItem(playerLife('life-2', { playerSide: 'player2' })).text).toBe('');
+		});
+
+		it('carries the life-change animation the author set, in the output"s own colour space', () => {
+			const rendered = contextItem(playerLife('life-1', {
+				lifeAnimation: 'glow',
+				lifeAnimationDurationMs: 500,
+				lifeAnimationAccentColor: '#ff0000',
+			}));
+
+			expect(rendered.lifeChange).toEqual({ animation: 'glow', durationMs: 500, accentColor: '#ff0000' });
+		});
+
+		it('draws one win box per game needed to win the Match, filling those already won', () => {
+			// The count comes from the Match rather than from configuration, so a
+			// best-of-five grows the indicator without the layout being re-authored.
+			const bestOfThree = contextItem(gameWins('wins-1'));
+			expect(bestOfThree.winBoxes?.map(box => box.won)).toEqual([true, false]);
+
+			const bestOfFive = contextItem(gameWins('wins-1'), { ...FEATURE_MATCH, bestOf: 5 });
+			expect(bestOfFive.winBoxes?.map(box => box.won)).toEqual([true, false, false]);
+		});
+
+		it('paints a won box and an unwon box with their own Graphic Surface Styles', () => {
+			const rendered = contextItem(gameWins('wins-1'));
+			const [won, pending] = rendered.winBoxes!;
+
+			expect(won!.surface.fill.color).toBe('#22c55e');
+			// The unwon box is an outline: its fill is fully transparent rather than absent,
+			// so both boxes paint the same path and differ only in what fills it.
+			expect(pending!.surface.fill.opacity).toBe(0);
+			expect(pending!.surface.outline?.width).toBe(2);
+		});
+
+		it('renders a win count as text in the number display mode', () => {
+			const rendered = contextItem(gameWins('wins-1', { displayMode: 'number' }));
+
+			expect(rendered.text).toBe('1');
+			expect(rendered.winBoxes).toBeUndefined();
+		});
+
+		it('renders an empty state when no host supplied the Feature Match context', () => {
+			// A Broadcast Graphics Screen cannot offer these kinds at all, so nothing on
+			// one can reach this. It still resolves rather than throwing, because a
+			// Feature Match Overlay whose Slot holds no Match is an ordinary state.
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('layout', [clock('c'), playerLife('l'), gameWins('w')])],
+				...CANVAS,
+			});
+			const [renderedClock, renderedLife, renderedWins] = model.graphics[0]!.items;
+
+			expect(renderedClock!.text).toBe('');
+			expect(renderedLife!.text).toBe('');
+			expect(renderedWins!.winBoxes?.map(box => box.won)).toEqual([false, false]);
+		});
+
+		it('renders the context-gated kinds inside a Graphic Group too', () => {
+			const rendered = contextItem(group('cluster', [
+				playerLife('life-1'),
+				gameWins('wins-1'),
+			]));
+
+			expect(rendered.children?.map(child => child.kind)).toEqual(['player-life', 'game-wins']);
+			expect(rendered.children?.[0]!.text).toBe('17');
 		});
 	});
 
