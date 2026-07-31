@@ -31,7 +31,7 @@ import { roundedShapeGeometry, squareShapeGeometry } from './modules/graphics/sh
  * preset back through them.
  */
 
-export interface FeatureMatchLayoutItemIdentity {
+export interface FeatureMatchLayoutItemPlacement {
 	id: string;
 	label: string;
 	x: number;
@@ -41,7 +41,7 @@ export interface FeatureMatchLayoutItemIdentity {
 	visible?: boolean;
 }
 
-function identity(item: FeatureMatchLayoutItemIdentity) {
+function placed(item: FeatureMatchLayoutItemPlacement) {
 	return {
 		id: item.id,
 		label: item.label,
@@ -85,7 +85,7 @@ export function typography(overrides: Partial<GraphicTypography> = {}): GraphicT
 }
 
 export function textItem(
-	item: FeatureMatchLayoutItemIdentity & {
+	item: FeatureMatchLayoutItemPlacement & {
 		text: string;
 		typography: GraphicTypography;
 		overflowPolicy?: TextGraphicItemConfig['overflowPolicy'];
@@ -95,7 +95,7 @@ export function textItem(
 ): TextGraphicItemConfig {
 	return {
 		type: 'text',
-		...identity(item),
+		...placed(item),
 		text: item.text,
 		typography: item.typography,
 		overflowPolicy: item.overflowPolicy ?? 'ellipsis',
@@ -105,21 +105,21 @@ export function textItem(
 }
 
 export function shapeItem(
-	item: FeatureMatchLayoutItemIdentity & {
+	item: FeatureMatchLayoutItemPlacement & {
 		surfaceStyle: GraphicSurfaceStyle;
 		geometry?: ShapeGraphicItemConfig['geometry'];
 	},
 ): ShapeGraphicItemConfig {
 	return {
 		type: 'shape',
-		...identity(item),
+		...placed(item),
 		geometry: item.geometry ?? squareShapeGeometry(),
 		surfaceStyle: item.surfaceStyle,
 	};
 }
 
 export function mediaItem(
-	item: FeatureMatchLayoutItemIdentity & {
+	item: FeatureMatchLayoutItemPlacement & {
 		mediaKind?: MediaGraphicItemConfig['mediaKind'];
 		fit?: MediaGraphicItemConfig['fit'];
 		opacity?: number;
@@ -127,7 +127,7 @@ export function mediaItem(
 ): MediaGraphicItemConfig {
 	return {
 		type: 'media',
-		...identity(item),
+		...placed(item),
 		mediaKind: item.mediaKind ?? 'image',
 		fit: item.fit ?? 'contain',
 		focalPosition: { horizontal: 0.5, vertical: 0.5 },
@@ -138,14 +138,14 @@ export function mediaItem(
 }
 
 export function clockItem(
-	item: FeatureMatchLayoutItemIdentity & {
+	item: FeatureMatchLayoutItemPlacement & {
 		typography: GraphicTypography;
 		surfaceStyle?: GraphicSurfaceStyle;
 	},
 ): ClockGraphicItemConfig {
 	return {
 		type: 'clock',
-		...identity(item),
+		...placed(item),
 		typography: item.typography,
 		overflowPolicy: 'clip',
 		minFontSize: 16,
@@ -154,7 +154,7 @@ export function clockItem(
 }
 
 export function playerLifeItem(
-	item: FeatureMatchLayoutItemIdentity & {
+	item: FeatureMatchLayoutItemPlacement & {
 		playerSide: PlayerSide;
 		typography: GraphicTypography;
 		surfaceStyle?: GraphicSurfaceStyle;
@@ -163,7 +163,7 @@ export function playerLifeItem(
 ): PlayerLifeGraphicItemConfig {
 	return {
 		type: 'player-life',
-		...identity(item),
+		...placed(item),
 		playerSide: item.playerSide,
 		typography: item.typography,
 		overflowPolicy: 'clip',
@@ -176,7 +176,7 @@ export function playerLifeItem(
 }
 
 export function gameWinsItem(
-	item: FeatureMatchLayoutItemIdentity & {
+	item: FeatureMatchLayoutItemPlacement & {
 		playerSide: PlayerSide;
 		boxWidth: number;
 		boxHeight: number;
@@ -190,7 +190,7 @@ export function gameWinsItem(
 	const outline = { width: item.outlineWidth, color: item.outlineColor };
 	return {
 		type: 'game-wins',
-		...identity(item),
+		...placed(item),
 		playerSide: item.playerSide,
 		displayMode: 'boxes',
 		boxOrientation: 'horizontal',
@@ -205,7 +205,7 @@ export function gameWinsItem(
 }
 
 export function groupItem(
-	item: FeatureMatchLayoutItemIdentity & {
+	item: FeatureMatchLayoutItemPlacement & {
 		children: GraphicGroupChildConfig[];
 		surfaceStyle?: GraphicSurfaceStyle;
 		clip?: boolean;
@@ -213,7 +213,7 @@ export function groupItem(
 ): GraphicGroupItemConfig {
 	return {
 		type: 'group',
-		...identity(item),
+		...placed(item),
 		arrangement: 'canvas',
 		padding: 0,
 		gap: 0,

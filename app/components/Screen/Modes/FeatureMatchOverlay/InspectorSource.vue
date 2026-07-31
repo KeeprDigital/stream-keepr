@@ -8,7 +8,7 @@ import { anchorFeatureMatchOverlayRect } from '~/utils/featureMatchOverlayGeomet
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
 import FeatureMatchOverlayGeometryFields from './GeometryFields.vue';
 import FeatureMatchOverlayOrderSection from './OrderSection.vue';
-import FeatureMatchOverlaySourceSurfaceStyleFields from './SourceSurfaceStyleFields.vue';
+import FeatureMatchOverlaySourceFramingStyleFields from './SourceFramingStyleFields.vue';
 
 const props = defineProps<{
 	config: FeatureMatchOverlayModeConfig;
@@ -108,11 +108,11 @@ function removeSelf() {
 
 		<FeatureMatchOverlayControlSection
 			title="Appearance"
-			:summary="appearanceSummary(item.surfaceStyle)"
+			:summary="appearanceSummary(item.framingStyle)"
 		>
-			<FeatureMatchOverlaySourceSurfaceStyleFields
-				:surface-style="item.surfaceStyle"
-				@update="updates => editor.updateSourceSurfaceStyle(item.id, updates)"
+			<FeatureMatchOverlaySourceFramingStyleFields
+				:framing-style="item.framingStyle"
+				@update="updates => editor.updateSourceFramingStyle(item.id, updates)"
 			/>
 		</FeatureMatchOverlayControlSection>
 

@@ -1,4 +1,4 @@
-import type { FeatureMatchSourceItemConfig, FeatureMatchSourceSurfaceStyle } from '~~/shared/types/screenConfig';
+import type { FeatureMatchSourceFramingStyle, FeatureMatchSourceItemConfig } from '~~/shared/types/screenConfig';
 import { featureMatchSourceItemSummary } from '~~/shared/featureMatchSourceItems';
 
 /**
@@ -15,7 +15,7 @@ export function sourceSummary(item: FeatureMatchSourceItemConfig) {
 	return `${rectSummary(item)} • ${featureMatchSourceItemSummary(item)}`;
 }
 
-export function appearanceSummary(style?: FeatureMatchSourceSurfaceStyle) {
+export function appearanceSummary(style?: FeatureMatchSourceFramingStyle) {
 	const parts = [];
 	if (style?.backgroundOpacity)
 		parts.push('background');

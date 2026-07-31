@@ -39,13 +39,6 @@ export function createFeatureMatchLayoutComposition(): BroadcastGraphicConfig {
 	};
 }
 
-/** The layout's shared item tree. */
-export function featureMatchLayoutComposition(
-	layout: Pick<FeatureMatchLayoutConfig, 'composition'>,
-): BroadcastGraphicConfig {
-	return layout.composition;
-}
-
 /** The shared item tree as the stack of one the compositor takes. */
 export function featureMatchLayoutStack(
 	layout: Pick<FeatureMatchLayoutConfig, 'composition'>,

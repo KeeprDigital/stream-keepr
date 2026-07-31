@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { FeatureMatchSourceSurfaceStyle } from '~~/shared/types/screenConfig';
+import type { FeatureMatchSourceFramingStyle } from '~~/shared/types/screenConfig';
+import FeatureMatchOverlayBorderRadiusControl from './BorderRadiusControl.vue';
 import FeatureMatchOverlayBorderSidesControl from './BorderSidesControl.vue';
 
 /**
@@ -12,15 +13,15 @@ import FeatureMatchOverlayBorderSidesControl from './BorderSidesControl.vue';
  * that is what this edits.
  */
 
-const props = defineProps<{ surfaceStyle?: FeatureMatchSourceSurfaceStyle }>();
+const props = defineProps<{ framingStyle?: FeatureMatchSourceFramingStyle }>();
 
 const emit = defineEmits<{
-	update: [updates: Partial<FeatureMatchSourceSurfaceStyle>];
+	update: [updates: Partial<FeatureMatchSourceFramingStyle>];
 }>();
 
-const style = computed(() => props.surfaceStyle ?? {});
+const style = computed(() => props.framingStyle ?? {});
 
-function update(updates: Partial<FeatureMatchSourceSurfaceStyle>) {
+function update(updates: Partial<FeatureMatchSourceFramingStyle>) {
 	emit('update', updates);
 }
 </script>
@@ -84,15 +85,14 @@ function update(updates: Partial<FeatureMatchSourceSurfaceStyle>) {
 			@update="(side, value) => update({ [side]: value })"
 		/>
 
-		<UFormField label="Corner radius">
-			<UInputNumber
-				:model-value="style.borderRadius ?? 0"
-				:min="0"
-				size="sm"
-				class="w-full"
-				@update:model-value="update({ borderRadius: $event ?? 0 })"
-			/>
-		</UFormField>
+		<FeatureMatchOverlayBorderRadiusControl
+			:border-radius="style.borderRadius"
+			:border-radius-top-left="style.borderRadiusTopLeft"
+			:border-radius-top-right="style.borderRadiusTopRight"
+			:border-radius-bottom-right="style.borderRadiusBottomRight"
+			:border-radius-bottom-left="style.borderRadiusBottomLeft"
+			@update="(field, value) => update({ [field]: value })"
+		/>
 
 		<div class="grid gap-3 md:grid-cols-3">
 			<UFormField label="Glow colour">

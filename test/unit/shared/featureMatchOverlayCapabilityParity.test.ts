@@ -116,7 +116,7 @@ describe('feature Match Overlay capability parity', () => {
 		}
 	});
 
-	it('row: widget-group becomes a Graphic Group carrying its arrangement and child style default', () => {
+	it('row: widget-group becomes a Graphic Group carrying its arrangement and clipping', () => {
 		const groups = everyPresetItem().filter(item => item.type === 'group');
 
 		expect(groups.length).toBeGreaterThan(0);

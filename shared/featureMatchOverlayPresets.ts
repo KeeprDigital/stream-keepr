@@ -1,5 +1,12 @@
-import type { GraphicItemConfig, GraphicSurfaceStyle } from './types/graphics';
-import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayPresetId, FeatureMatchSourceItemConfig } from './types/screenConfig';
+import type { FeatureMatchLayoutEdge } from './featureMatchLayoutItems';
+import type { PlayerSide } from './types/enums';
+import type { GraphicItemConfig, GraphicSurfaceStyle, GraphicTypography } from './types/graphics';
+import type {
+	FeatureMatchOverlayModeConfig,
+	FeatureMatchOverlayPresetId,
+	FeatureMatchSourceFramingStyle,
+	FeatureMatchSourceItemConfig,
+} from './types/screenConfig';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID, FEATURE_MATCH_LAYOUT_COMPOSITION_NAME } from './featureMatchLayoutComposition';
 import {
 	clockItem,
@@ -10,12 +17,14 @@ import {
 	groupItem,
 	mediaItem,
 	playerLifeItem,
+	shapeItem,
 	solidFill,
 	surfaceStyle,
 	textItem,
 	typography,
 } from './featureMatchLayoutItems';
-import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from './types/screenConfig';
+import { roundedShapeGeometry } from './modules/graphics/shapeGeometry';
+import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from './screenGraphicsDefaults';
 
 /**
  * The built-in Feature Match Overlay Presets, recreated on the Shared Graphics
@@ -24,20 +33,17 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from './types/screenConfig';
  * A preset initialises a whole Feature Match Layout: the host-owned Frame and
  * Source Items, and the shared Graphic Item tree. Nothing is carried over from a
  * legacy widget list, because there is none — the database is wiped before ship
- * and the capability-parity checklist replaces migration.
+ * and `docs/feature-match-overlay-capability-parity.md` replaces migration.
  *
- * These three are the checklist's evidence. Between them they exercise every row
- * of it: host tokens in Graphic Text Templates, context-gated Clock, Player Life
- * and Game Wins Definitions, Media Graphic Items, Graphic Groups with a canvas
- * arrangement and a local style default, Graphic Layer Order as list order,
- * per-corner Shape Geometry, gradient and solid Graphic Fills with outline and
- * glow, Text Overflow Policies, and — for the per-side borders the shared Graphic
- * Surface Style deliberately dropped — composed rule-preset Shape Graphic Items.
+ * These three are that checklist's evidence, and `left-stacked-player-cams` is
+ * also the default Feature Match Overlay configuration. Between them they
+ * exercise host tokens in Graphic Text Templates, the context-gated Clock, Player
+ * Life and Game Wins Definitions, Media Graphic Items, canvas Graphic Groups,
+ * Graphic Layer Order as list order, per-corner Shape Geometry, gradient and solid
+ * Graphic Fills with outline and glow, Text Overflow Policies, and — for the
+ * per-side borders the shared Graphic Surface Style deliberately dropped —
+ * composed rule-preset Shape Graphic Items.
  */
-
-function clone<T>(value: T): T {
-	return JSON.parse(JSON.stringify(value)) as T;
-}
 
 export interface FeatureMatchOverlayPreset {
 	id: FeatureMatchOverlayPresetId;
@@ -48,22 +54,152 @@ export interface FeatureMatchOverlayPreset {
 }
 
 /* ────────────────────────────────────────────────
+ * Table with Left Stacked Player Cams
+ * ──────────────────────────────────────────────── */
+
+/** The teal framing every Source Item of the default preset is cut into. */
+function tealSourceFraming(): FeatureMatchSourceFramingStyle {
+	return {
+		backgroundColor: '#000000',
+		backgroundOpacity: 0,
+		borderVisible: true,
+		borderColor: '#0077a3',
+		borderWidth: 4,
+		borderRadius: 8,
+	};
+}
+
+/** A Player Bar's own text: white, heavy, and clipped to the bar with an ellipsis. */
+function playerBarTypography(overrides: Partial<GraphicTypography> = {}): GraphicTypography {
+	return typography({ fontSize: 30, fontWeight: 800, ...overrides });
+}
+
+/**
+ * A rounded pill behind a Player Life total.
+ *
+ * Two Graphic Items rather than one, because a Graphic Surface Style carries no
+ * Shape Geometry: corners belong to a Shape Graphic Item, so a rounded bed is
+ * composed behind the Item that reads the life total. This is the same
+ * composition the dropped per-side borders use, applied to corners.
+ */
+function playerLifePill(side: PlayerSide, prefix: string, rect: { x: number; y: number; width: number; height: number }) {
+	return [
+		shapeItem({
+			id: `${prefix}-life-bed`,
+			label: 'Life Total Bed',
+			...rect,
+			geometry: roundedShapeGeometry(8),
+			surfaceStyle: surfaceStyle(solidFill('#333333'), { outline: { color: '#0077a3', width: 4 } }),
+		}),
+		playerLifeItem({
+			id: `${prefix}-life`,
+			label: 'Life Total',
+			...rect,
+			playerSide: side,
+			typography: typography({ fontSize: 42, fontWeight: 800, textAlign: 'center' }),
+		}),
+	];
+}
+
+function leftStackedPlayerCamsConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureMatchId'> {
+	return {
+		presetId: 'left-stacked-player-cams',
+		layout: {
+			frame: {
+				backgroundColor: '#111111',
+				opacity: 0.92,
+				backgroundImageFit: 'cover',
+				mediaBackground: { ...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG },
+				animation: { ...DEFAULT_FRAME_ANIMATION },
+				borderVisible: true,
+				borderColor: '#0077a3',
+				borderWidth: 4,
+			},
+			sources: [
+				{ id: 'main-source', label: 'Main Match Source', visible: true, sourceRole: 'main', frameCutout: true, x: 400, y: 90, width: 1500, height: 900, framingStyle: tealSourceFraming() },
+				{ id: 'player1-source', label: 'Player 1 Source', visible: true, sourceRole: 'player1', frameCutout: true, x: 24, y: 16, width: 340, height: 250, framingStyle: tealSourceFraming() },
+				{ id: 'player2-source', label: 'Player 2 Source', visible: true, sourceRole: 'player2', frameCutout: true, x: 24, y: 800, width: 340, height: 250, framingStyle: tealSourceFraming() },
+			],
+			composition: {
+				id: FEATURE_MATCH_LAYOUT_COMPOSITION_ID,
+				name: FEATURE_MATCH_LAYOUT_COMPOSITION_NAME,
+				items: [
+					groupItem({
+						id: 'top-bar',
+						label: 'Top Player Bar',
+						x: 400,
+						y: 8,
+						width: 1500,
+						height: 74,
+						children: [
+							textItem({ id: 'top-name-record', label: 'Name and Record', x: 0, y: 0, width: 300, height: 74, text: '{player1Name}\n{player1Record}', typography: playerBarTypography() }),
+							...playerLifePill('player1', 'top', { x: 700, y: 4, width: 96, height: 66 }),
+							textItem({ id: 'top-deck', label: 'Deck', x: 820, y: 0, width: 500, height: 74, text: '{player1DeckColors} {player1Deck}', typography: playerBarTypography() }),
+							clockItem({ id: 'top-clock', label: 'Clock', x: 1360, y: 0, width: 140, height: 74, typography: playerBarTypography({ fontSize: 28, fontWeight: 500, textAlign: 'right' }) }),
+						],
+					}),
+					groupItem({
+						id: 'bottom-bar',
+						label: 'Bottom Player Bar',
+						x: 400,
+						y: 1000,
+						width: 1500,
+						height: 74,
+						children: [
+							textItem({ id: 'bottom-name-record', label: 'Name and Record', x: 0, y: 0, width: 300, height: 74, text: '{player2Name}\n{player2Record}', typography: playerBarTypography() }),
+							...playerLifePill('player2', 'bottom', { x: 700, y: 4, width: 96, height: 66 }),
+							textItem({ id: 'bottom-deck', label: 'Deck', x: 820, y: 0, width: 500, height: 74, text: '{player2DeckColors} {player2Deck}', typography: playerBarTypography() }),
+							textItem({ id: 'bottom-details', label: 'Match Details', x: 1320, y: 0, width: 180, height: 74, text: '{stage}\n{format}', typography: playerBarTypography({ fontSize: 28, fontWeight: 700, textAlign: 'right' }) }),
+						],
+					}),
+					gameWinsItem({ id: 'player1-game-wins', label: 'Player 1 Game Wins', x: 24, y: 278, width: 340, height: 28, playerSide: 'player1', boxWidth: 22, boxHeight: 22, boxGap: 6, boxRadius: 11, outlineWidth: 2, outlineColor: '#ffffff', wonColor: '#22c55e' }),
+					gameWinsItem({ id: 'player2-game-wins', label: 'Player 2 Game Wins', x: 24, y: 760, width: 340, height: 28, playerSide: 'player2', boxWidth: 22, boxHeight: 22, boxGap: 6, boxRadius: 11, outlineWidth: 2, outlineColor: '#ffffff', wonColor: '#22c55e' }),
+					groupItem({
+						id: 'branding',
+						label: 'Event Branding',
+						x: 60,
+						y: 360,
+						width: 280,
+						height: 280,
+						children: [
+							textItem({ id: 'branding-text', label: 'Event Name', x: 0, y: 0, width: 280, height: 80, text: '{eventName}', typography: typography({ fontSize: 24, fontWeight: 700, textAlign: 'center' }) }),
+							mediaItem({ id: 'branding-image-1', label: 'Image 1', x: 0, y: 96, width: 132, height: 132 }),
+							mediaItem({ id: 'branding-image-2', label: 'Image 2', x: 148, y: 96, width: 132, height: 132 }),
+						],
+					}),
+				],
+			},
+		},
+	};
+}
+
+/**
+ * The default Feature Match Overlay configuration, which is the
+ * `left-stacked-player-cams` preset with no Feature Match Slot selected.
+ */
+export const DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG: FeatureMatchOverlayModeConfig = {
+	featureMatchId: null,
+	...leftStackedPlayerCamsConfig(),
+};
+
+/* ────────────────────────────────────────────────
  * Full Table
  * ──────────────────────────────────────────────── */
 
 function fullTableConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureMatchId'> {
-	const base = clone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+	const base = leftStackedPlayerCamsConfig();
 	const sources: FeatureMatchSourceItemConfig[] = base.layout.sources
 		.filter(source => source.id === 'main-source')
 		.map(source => ({ ...source, label: 'Main Match Source', x: 24, y: 90, width: 1872, height: 900 }));
-	const items = base.layout.composition.items.flatMap((item): GraphicItemConfig[] => {
+	// The stacked player cameras are gone, so the Player Bars stretch the full
+	// width and the branding block moves down beside them. Everything else,
+	// including the Game Wins indicators, keeps its place.
+	const items = base.layout.composition.items.map((item): GraphicItemConfig => {
 		if (item.id === 'top-bar' || item.id === 'bottom-bar')
-			return [{ ...item, x: 24, width: 1872 }];
+			return { ...item, x: 24, width: 1872 };
 		if (item.id === 'branding')
-			return [{ ...item, x: 60, y: 1000, width: 500, height: 74 }];
-		// The stacked player cameras are gone, so the Game Wins indicators pinned
-		// beneath them are too: this preset reads game wins from the Player Bars.
-		return item.type === 'game-wins' ? [] : [item];
+			return { ...item, x: 60, y: 1000, width: 500, height: 74 };
+		return item;
 	});
 
 	return {
@@ -88,8 +224,22 @@ function neonRuleStyle(): GraphicSurfaceStyle {
 	return surfaceStyle(solidFill(NEON_LINE), { glow: neonGlow(8, 0.8) });
 }
 
+function neonSourceFraming(overrides: Partial<FeatureMatchSourceFramingStyle> = {}): FeatureMatchSourceFramingStyle {
+	return {
+		backgroundOpacity: 0,
+		borderVisible: true,
+		borderColor: NEON_LINE,
+		borderWidth: NEON_LINE_WIDTH,
+		borderRadius: 0,
+		glowColor: NEON_LINE,
+		glowSize: 7,
+		glowOpacity: 0.75,
+		...overrides,
+	};
+}
+
 /**
- * A neon panel: a gradient bed, plus one Shape Graphic Item per lit edge.
+ * A neon panel: a bed, plus one Shape Graphic Item per lit edge.
  *
  * The legacy preset asked for a border on some sides and not others. A Graphic
  * Surface Style has one uniform outline, so each lit edge becomes its own thin
@@ -104,8 +254,8 @@ function neonPanel(
 		y: number;
 		width: number;
 		height: number;
-		fill: GraphicSurfaceStyle;
-		edges: Array<'top' | 'right' | 'bottom' | 'left'>;
+		surfaceStyle: GraphicSurfaceStyle;
+		litEdges: FeatureMatchLayoutEdge[];
 		children?: Parameters<typeof groupItem>[0]['children'];
 	},
 ) {
@@ -117,10 +267,10 @@ function neonPanel(
 		y: panel.y,
 		width: panel.width,
 		height: panel.height,
-		surfaceStyle: panel.fill,
+		surfaceStyle: panel.surfaceStyle,
 		children: [
 			...(panel.children ?? []),
-			...panel.edges.map(edge => edgeRuleItem({
+			...panel.litEdges.map(edge => edgeRuleItem({
 				id: `${panel.id}-${edge}-rule`,
 				label: `${panel.label} ${edge} rule`,
 				edge,
@@ -132,7 +282,7 @@ function neonPanel(
 	});
 }
 
-function neonBrandingTypography() {
+function neonBrandingTypography(): GraphicTypography {
 	return typography({ fontSize: 28, fontWeight: 900, textAlign: 'center', lineHeight: 1.05, textTransform: 'uppercase' });
 }
 
@@ -174,18 +324,6 @@ function neonPlayerBarChildren() {
 }
 
 function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureMatchId'> {
-	const sourceStyle = (overrides: Partial<FeatureMatchSourceItemConfig['surfaceStyle']> = {}) => ({
-		backgroundOpacity: 0,
-		borderVisible: true,
-		borderColor: NEON_LINE,
-		borderWidth: NEON_LINE_WIDTH,
-		borderRadius: 0,
-		glowColor: NEON_LINE,
-		glowSize: 7,
-		glowOpacity: 0.75,
-		...overrides,
-	});
-
 	return {
 		presetId: 'neon-feature-match',
 		layout: {
@@ -194,8 +332,11 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 				opacity: 1,
 				backgroundImageFit: 'cover',
 				gradient: 'linear-gradient(180deg, rgba(10,0,16,0.2) 0%, rgba(122,0,122,0.28) 48%, rgba(4,0,10,0.5) 100%)',
-				mediaBackground: { enabled: true, type: 'video', url: '', fit: 'cover', opacity: 1, playbackRate: 1, loop: true },
+				mediaBackground: { ...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG, enabled: true },
+				// Spread over the shared defaults rather than stated alone, so an author
+				// who switches the effect finds every other shader parameter already set.
 				animation: {
+					...DEFAULT_FRAME_ANIMATION,
 					enabled: true,
 					effect: 'net',
 					opacity: 0.34,
@@ -208,8 +349,6 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 					showDots: false,
 					showLines: true,
 					speed: 0.35,
-					mouseDriftEnabled: true,
-					mouseDriftMode: 'orbit',
 					mouseDriftSeconds: 22,
 					mouseDriftRadius: 0.22,
 				},
@@ -221,9 +360,9 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 				glowOpacity: 0.85,
 			},
 			sources: [
-				{ id: 'main-source', label: 'Main Table Source', visible: true, sourceRole: 'main', frameCutout: true, x: 296, y: 164, width: 1328, height: 908, surfaceStyle: sourceStyle({ borderWidth: 4, glowSize: 8, glowOpacity: 0.8 }) },
-				{ id: 'player1-source', label: 'Left Player Camera', visible: true, sourceRole: 'player1', frameCutout: true, x: 0, y: 208, width: 296, height: 300, surfaceStyle: sourceStyle({ borderLeftVisible: false }) },
-				{ id: 'player2-source', label: 'Right Player Camera', visible: true, sourceRole: 'player2', frameCutout: true, x: 1624, y: 208, width: 296, height: 300, surfaceStyle: sourceStyle({ borderRightVisible: false }) },
+				{ id: 'main-source', label: 'Main Table Source', visible: true, sourceRole: 'main', frameCutout: true, x: 296, y: 164, width: 1328, height: 908, framingStyle: neonSourceFraming({ borderWidth: 4, glowSize: 8, glowOpacity: 0.8 }) },
+				{ id: 'player1-source', label: 'Left Player Camera', visible: true, sourceRole: 'player1', frameCutout: true, x: 0, y: 208, width: 296, height: 300, framingStyle: neonSourceFraming({ borderLeftVisible: false }) },
+				{ id: 'player2-source', label: 'Right Player Camera', visible: true, sourceRole: 'player2', frameCutout: true, x: 1624, y: 208, width: 296, height: 300, framingStyle: neonSourceFraming({ borderRightVisible: false }) },
 			],
 			composition: {
 				id: FEATURE_MATCH_LAYOUT_COMPOSITION_ID,
@@ -247,8 +386,8 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 						y: 508,
 						width: 296,
 						height: 104,
-						fill: surfaceStyle(gradientFill(180, [fillStop('#0a0010', 0, 0.76), fillStop('#4e0043', 1, 0.58)]), { glow: neonGlow(7, 0.78) }),
-						edges: ['top', 'right', 'bottom'],
+						surfaceStyle: surfaceStyle(gradientFill(180, [fillStop('#0a0010', 0, 0.76), fillStop('#4e0043', 1, 0.58)]), { glow: neonGlow(7, 0.78) }),
+						litEdges: ['top', 'right', 'bottom'],
 					}),
 					neonPanel({
 						id: 'left-branding',
@@ -257,8 +396,8 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 						y: 612,
 						width: 296,
 						height: 252,
-						fill: surfaceStyle(gradientFill(180, [fillStop('#510049', 0, 0.72), fillStop('#090012', 1, 0.82)]), { glow: neonGlow(7, 0.78) }),
-						edges: ['right', 'bottom'],
+						surfaceStyle: surfaceStyle(gradientFill(180, [fillStop('#510049', 0, 0.72), fillStop('#090012', 1, 0.82)]), { glow: neonGlow(7, 0.78) }),
+						litEdges: ['right', 'bottom'],
 						children: [
 							mediaItem({ id: 'left-branding-image', label: 'Left Branding Image', x: 40, y: 28, width: 216, height: 112, visible: false }),
 							textItem({ id: 'left-event-name', label: 'Event Name', x: 24, y: 152, width: 248, height: 56, text: '{eventName}', typography: neonBrandingTypography(), overflowPolicy: 'shrink', minFontSize: 18 }),
@@ -271,8 +410,8 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 						y: 864,
 						width: 296,
 						height: 208,
-						fill: surfaceStyle(gradientFill(180, [fillStop('#090012', 0, 0.82), fillStop('#510049', 1, 0.62)]), { glow: neonGlow(7, 0.78) }),
-						edges: ['right', 'bottom'],
+						surfaceStyle: surfaceStyle(gradientFill(180, [fillStop('#090012', 0, 0.82), fillStop('#510049', 1, 0.62)]), { glow: neonGlow(7, 0.78) }),
+						litEdges: ['right', 'bottom'],
 					}),
 					neonPanel({
 						id: 'right-branding',
@@ -281,8 +420,8 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 						y: 508,
 						width: 296,
 						height: 356,
-						fill: surfaceStyle(gradientFill(180, [fillStop('#090012', 0, 0.82), fillStop('#51006e', 1, 0.72)]), { glow: neonGlow(7, 0.78) }),
-						edges: ['top', 'left', 'bottom'],
+						surfaceStyle: surfaceStyle(gradientFill(180, [fillStop('#090012', 0, 0.82), fillStop('#51006e', 1, 0.72)]), { glow: neonGlow(7, 0.78) }),
+						litEdges: ['top', 'left', 'bottom'],
 						children: [
 							mediaItem({ id: 'right-branding-image', label: 'Right Branding Image', x: 42, y: 52, width: 212, height: 158, visible: false }),
 							textItem({ id: 'right-event-name', label: 'Event Name', x: 24, y: 232, width: 248, height: 56, text: '{eventName}', typography: neonBrandingTypography(), overflowPolicy: 'shrink', minFontSize: 18 }),
@@ -295,8 +434,8 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 						y: 864,
 						width: 296,
 						height: 208,
-						fill: surfaceStyle(gradientFill(180, [fillStop('#51006e', 0, 0.62), fillStop('#090012', 1, 0.86)]), { glow: neonGlow(7, 0.78) }),
-						edges: ['left', 'bottom'],
+						surfaceStyle: surfaceStyle(gradientFill(180, [fillStop('#51006e', 0, 0.62), fillStop('#090012', 1, 0.86)]), { glow: neonGlow(7, 0.78) }),
+						litEdges: ['left', 'bottom'],
 					}),
 					neonPanel({
 						id: 'top-player-bar',
@@ -308,13 +447,13 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 						// The legacy gradient carried five CSS colour stops. A Graphic Fill
 						// takes two to four, which is the settled bound of the shared
 						// vocabulary, so the recreation keeps the four that carry the look.
-						fill: surfaceStyle(gradientFill(90, [
+						surfaceStyle: surfaceStyle(gradientFill(90, [
 							fillStop('#b80054', 0, 0.96),
 							fillStop('#07000e', 0.5, 0.92),
 							fillStop('#480074', 0.7, 0.86),
 							fillStop('#7f22f6', 1, 0.96),
 						]), { glow: neonGlow(8, 0.85) }),
-						edges: ['top', 'bottom'],
+						litEdges: ['top', 'bottom'],
 						children: neonPlayerBarChildren(),
 					}),
 					neonPanel({
@@ -324,8 +463,9 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 						y: 28,
 						width: 216,
 						height: 116,
-						fill: surfaceStyle(solidFill('#050008'), { fillOpacity: 0.72, outline: { color: NEON_LINE, width: NEON_LINE_WIDTH }, glow: neonGlow(10, 0.9) }),
-						edges: [],
+						// Bordered on all four sides, so one uniform outline says it.
+						surfaceStyle: surfaceStyle(solidFill('#050008'), { fillOpacity: 0.72, outline: { color: NEON_LINE, width: NEON_LINE_WIDTH }, glow: neonGlow(10, 0.9) }),
+						litEdges: [],
 						children: [
 							textItem({ id: 'round-label', label: 'Round', x: 12, y: 20, width: 192, height: 34, text: '{round}', typography: typography({ fontSize: 26, fontWeight: 900, textAlign: 'center', lineHeight: 1, textTransform: 'uppercase' }), overflowPolicy: 'clip' }),
 							clockItem({ id: 'match-clock', label: 'Clock', x: 12, y: 62, width: 192, height: 38, typography: typography({ fontSize: 32, fontWeight: 400, textAlign: 'center', lineHeight: 1 }) }),
@@ -350,7 +490,7 @@ export const FEATURE_MATCH_OVERLAY_PRESETS: FeatureMatchOverlayPreset[] = [
 		label: 'Table with Left Stacked Player Cams',
 		description: 'Main table source with two stacked player source items in a left rail.',
 		aspectRatio: 16 / 9,
-		config: (({ featureMatchId: _featureMatchId, ...config }) => clone(config))(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG),
+		config: leftStackedPlayerCamsConfig(),
 	},
 	{
 		id: 'neon-feature-match',
@@ -369,14 +509,14 @@ function getFeatureMatchOverlayPreset(id: FeatureMatchOverlayPresetId): FeatureM
  * A Feature Match Overlay Preset initialises a Feature Match Layout.
  *
  * The whole layout: the Frame, the host-owned Source Items, and the shared item
- * tree. Nothing is carried across any more — a preset now owns every part of the
+ * tree. Nothing is carried across any more — a preset owns every part of the
  * layout, so applying one replaces the design and nothing else. Only the selected
  * Feature Match Slot survives, because it says what the Screen is pointing at
  * rather than what it looks like.
  */
 export function applyFeatureMatchOverlayPreset(current: FeatureMatchOverlayModeConfig, presetId: FeatureMatchOverlayPresetId): FeatureMatchOverlayModeConfig {
 	return {
-		...clone(getFeatureMatchOverlayPreset(presetId).config),
+		...structuredClone(getFeatureMatchOverlayPreset(presetId).config),
 		featureMatchId: current.featureMatchId,
 		presetId,
 	};

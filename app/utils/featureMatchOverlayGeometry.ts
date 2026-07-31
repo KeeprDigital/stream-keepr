@@ -1,4 +1,4 @@
-import type { FeatureMatchOverlayRect, FeatureMatchSourceItemConfig, FeatureMatchSourceSurfaceStyle } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayBorderSides, FeatureMatchOverlayRect, FeatureMatchSourceFramingStyle, FeatureMatchSourceItemConfig } from '~~/shared/types/screenConfig';
 
 export type FeatureMatchOverlayGeometryUnit = 'px' | '%' | 'center';
 export type { FeatureMatchOverlayAnchorValue } from '~~/shared/types/screenConfig';
@@ -155,12 +155,27 @@ function pixelValue(value: number | undefined, fallback = 0): number {
 	return Number.isFinite(numeric) ? Math.max(0, numeric) : Math.max(0, fallback);
 }
 
-function borderSideEnabled(style: FeatureMatchSourceSurfaceStyle, side: 'Top' | 'Right' | 'Bottom' | 'Left'): boolean {
-	return style[`border${side}Visible` as keyof FeatureMatchSourceSurfaceStyle] !== false;
+export type FeatureMatchOverlayBorderSide = 'Top' | 'Right' | 'Bottom' | 'Left';
+
+export const FEATURE_MATCH_OVERLAY_BORDER_SIDES: readonly FeatureMatchOverlayBorderSide[] = ['Top', 'Right', 'Bottom', 'Left'];
+
+/**
+ * Per-side border visibility, which the Frame and its Source Items keep.
+ *
+ * The shared Graphic Surface Style dropped per-side borders in favour of composed
+ * rule-preset Shape Graphic Items. This is the host layer, whose Frame draws four
+ * independent edges around the whole canvas and whose Source Items are framed
+ * against them, and the Host Contract leaves host capability with the host.
+ */
+export function featureMatchOverlayBorderSideEnabled(
+	style: FeatureMatchOverlayBorderSides,
+	side: FeatureMatchOverlayBorderSide,
+): boolean {
+	return style[`border${side}Visible` as keyof FeatureMatchOverlayBorderSides] ?? true;
 }
 
-function borderSideInset(style: FeatureMatchSourceSurfaceStyle, side: 'Top' | 'Right' | 'Bottom' | 'Left', borderWidth: number): number {
-	return style.borderVisible && borderSideEnabled(style, side) ? borderWidth : 0;
+function borderSideInset(style: FeatureMatchSourceFramingStyle, side: FeatureMatchOverlayBorderSide, borderWidth: number): number {
+	return style.borderVisible && featureMatchOverlayBorderSideEnabled(style, side) ? borderWidth : 0;
 }
 
 function fitFeatureMatchOverlayInsets(startInset: number, endInset: number, total: number): [number, number] {
@@ -222,28 +237,28 @@ export function normalizeFeatureMatchOverlayRadiiForRect(radii: FeatureMatchOver
 	return mapRadii(safeRadii, value => value * scale);
 }
 
-export function featureMatchOverlaySourceCutoutRect(region: FeatureMatchSourceItemConfig): FeatureMatchOverlayRoundedRect {
-	const style: FeatureMatchSourceSurfaceStyle = region.surfaceStyle ?? {};
+export function featureMatchOverlaySourceCutoutRect(item: FeatureMatchSourceItemConfig): FeatureMatchOverlayRoundedRect {
+	const style: FeatureMatchSourceFramingStyle = item.framingStyle ?? {};
 	const borderWidth = style.borderVisible ? pixelValue(style.borderWidth) : 0;
-	const regionWidth = pixelValue(region.width);
-	const regionHeight = pixelValue(region.height);
+	const itemWidth = pixelValue(item.width);
+	const itemHeight = pixelValue(item.height);
 	const [leftInset, rightInset] = fitFeatureMatchOverlayInsets(
 		borderSideInset(style, 'Left', borderWidth),
 		borderSideInset(style, 'Right', borderWidth),
-		regionWidth,
+		itemWidth,
 	);
 	const [topInset, bottomInset] = fitFeatureMatchOverlayInsets(
 		borderSideInset(style, 'Top', borderWidth),
 		borderSideInset(style, 'Bottom', borderWidth),
-		regionHeight,
+		itemHeight,
 	);
-	const width = Math.max(0, regionWidth - leftInset - rightInset);
-	const height = Math.max(0, regionHeight - topInset - bottomInset);
+	const width = Math.max(0, itemWidth - leftInset - rightInset);
+	const height = Math.max(0, itemHeight - topInset - bottomInset);
 	const outerRadii = resolveFeatureMatchOverlayCornerRadii(style);
 
 	return {
-		x: region.x + leftInset,
-		y: region.y + topInset,
+		x: item.x + leftInset,
+		y: item.y + topInset,
 		width,
 		height,
 		radii: normalizeFeatureMatchOverlayRadiiForRect(

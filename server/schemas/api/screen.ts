@@ -390,7 +390,7 @@ const featureMatchOverlayBorderSidesSchema = z.object({
  * rule-preset Shape Graphic Items, and carries its own corner treatment in Shape
  * Geometry.
  */
-const featureMatchSourceSurfaceStyleSchema = featureMatchOverlayBorderSidesSchema.extend({
+const featureMatchSourceFramingStyleSchema = featureMatchOverlayBorderSidesSchema.extend({
 	backgroundColor: optionalCssColorSchema,
 	backgroundOpacity: opacitySchema.optional(),
 	borderVisible: z.boolean().optional(),
@@ -470,7 +470,7 @@ const featureMatchSourceItemConfigSchema = featureMatchOverlayRectSchema.extend(
 	configurationVersion: z.literal(FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION).optional(),
 	sourceRole: z.string().min(1).max(100).optional(),
 	frameCutout: z.boolean(),
-	surfaceStyle: featureMatchSourceSurfaceStyleSchema.optional(),
+	framingStyle: featureMatchSourceFramingStyleSchema.optional(),
 }).strict() satisfies z.ZodType<FeatureMatchSourceItemConfig>;
 
 /* ────────────────────────────────────────────────

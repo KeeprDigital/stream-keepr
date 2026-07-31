@@ -1,8 +1,8 @@
 import type {
 	FeatureMatchLayoutConfig,
 	FeatureMatchLayoutFrameConfig,
+	FeatureMatchSourceFramingStyle,
 	FeatureMatchSourceItemConfig,
-	FeatureMatchSourceSurfaceStyle,
 } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayAnchorValue } from '~/utils/featureMatchOverlayGeometry';
 import { createFeatureMatchSourceItem } from '~~/shared/featureMatchSourceItems';
@@ -58,8 +58,8 @@ export function patchSource(layout: FeatureMatchLayoutConfig, id: string, update
 	return mapSource(layout, id, item => ({ ...item, ...updates }));
 }
 
-export function patchSourceSurfaceStyle(layout: FeatureMatchLayoutConfig, id: string, updates: Partial<FeatureMatchSourceSurfaceStyle>): FeatureMatchLayoutConfig {
-	return mapSource(layout, id, item => ({ ...item, surfaceStyle: { ...(item.surfaceStyle ?? {}), ...updates } }));
+export function patchSourceFramingStyle(layout: FeatureMatchLayoutConfig, id: string, updates: Partial<FeatureMatchSourceFramingStyle>): FeatureMatchLayoutConfig {
+	return mapSource(layout, id, item => ({ ...item, framingStyle: { ...(item.framingStyle ?? {}), ...updates } }));
 }
 
 export function removeSource(layout: FeatureMatchLayoutConfig, id: string): FeatureMatchLayoutConfig {

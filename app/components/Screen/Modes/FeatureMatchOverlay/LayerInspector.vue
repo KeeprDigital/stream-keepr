@@ -173,7 +173,7 @@ const selectedInspectorHeader = computed(() => {
 					<button
 						v-for="item in config.layout.sources"
 						:key="item.id"
-						:ref="element => setTreeNodeRef(`source:${item.id}`, element)"
+						:ref="element => setTreeNodeRef(featureMatchOverlaySelectionKey({ type: 'source', itemId: item.id }), element)"
 						type="button"
 						class="flex w-full items-start gap-3 rounded-lg border p-3 text-left transition"
 						:class="selectedTarget.type === 'source' && selectedTarget.itemId === item.id ? 'border-primary bg-primary/10' : 'border-default/70 bg-muted/20 hover:bg-muted/40'"

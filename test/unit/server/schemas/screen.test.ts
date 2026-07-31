@@ -364,7 +364,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 
 	it('accepts per-side border visibility on a Source Item, which the host layer kept', () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.sources[0]!.surfaceStyle = {
+		config.layout.sources[0]!.framingStyle = {
 			borderVisible: true,
 			borderColor: '#ffffff',
 			borderWidth: 3,
@@ -376,7 +376,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 
 	it('rejects widget-era typography on a Source Item surface style', () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
-		config.layout.sources[0].surfaceStyle = { fontSize: 24, textColor: '#ffffff' };
+		config.layout.sources[0].framingStyle = { fontSize: 24, textColor: '#ffffff' };
 
 		expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(false);
 	});

@@ -95,10 +95,10 @@ async function mountComponent(overrides: Partial<{
 				FeatureMatchOverlayFrameStyleCard: defineComponent({ template: '<div data-testid="frame-style-card" />' }),
 				FeatureMatchOverlayGeometryFields: GeometryFieldsStub,
 				FeatureMatchOverlayOrderSection: OrderSectionStub,
-				FeatureMatchOverlaySourceSurfaceStyleFields: defineComponent({
-					props: { surfaceStyle: { type: Object, required: false } },
+				FeatureMatchOverlaySourceFramingStyleFields: defineComponent({
+					props: { framingStyle: { type: Object, required: false } },
 					emits: ['update'],
-					template: '<button type="button" data-testid="source-surface-style" :data-surface-style="JSON.stringify(surfaceStyle)" @click="$emit(\'update\', { borderWidth: 6 })" />',
+					template: '<button type="button" data-testid="source-framing-style" :data-framing-style="JSON.stringify(framingStyle)" @click="$emit(\'update\', { borderWidth: 6 })" />',
 				}),
 				UFormField: UFormFieldStub,
 				UInput: UInputStub,
@@ -165,10 +165,10 @@ describe('featureMatchOverlayLayerInspector', () => {
 			selectedTarget: { type: 'source', itemId: 'main-source' },
 		});
 
-		await wrapper.find('[data-testid="source-surface-style"]').trigger('click');
+		await wrapper.find('[data-testid="source-framing-style"]').trigger('click');
 
 		const patch = updateConfig.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig>;
-		expect(patch.layout?.sources.find(source => source.id === 'main-source')?.surfaceStyle)
+		expect(patch.layout?.sources.find(source => source.id === 'main-source')?.framingStyle)
 			.toMatchObject({ borderWidth: 6 });
 	});
 

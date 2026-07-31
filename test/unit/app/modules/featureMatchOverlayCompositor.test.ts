@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import {
 	createFeatureMatchLayoutComposition,
 	FEATURE_MATCH_LAYOUT_COMPOSITION_ID,
-	featureMatchLayoutComposition,
 	featureMatchLayoutStack,
 } from '~~/shared/featureMatchLayoutComposition';
 import { getGraphicItemDefinition } from '~~/shared/modules/graphics';
@@ -39,7 +38,6 @@ describe('featureMatchLayoutComposition', () => {
 			name: 'Feature Match Layout',
 			items: [],
 		});
-		expect(featureMatchLayoutComposition(layout([]))).toEqual(createFeatureMatchLayoutComposition());
 	});
 
 	it('passes the one composition to the compositor as a stack of one', () => {

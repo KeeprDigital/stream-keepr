@@ -1,12 +1,20 @@
 import type { CSSProperties } from 'vue';
 import type {
+	FeatureMatchOverlayBorderSides,
 	FeatureMatchOverlayModeConfig,
 	FeatureMatchOverlayOutput,
 	FeatureMatchOverlayRect,
+	FeatureMatchSourceFramingStyle,
 	FeatureMatchSourceItemConfig,
-	FeatureMatchSourceSurfaceStyle,
 } from '~~/shared/types/screenConfig';
-import { featureMatchOverlayBorderRadiusCss, featureMatchOverlaySourceCutoutRect, roundedRectPath } from '~/utils/featureMatchOverlayGeometry';
+import type { FeatureMatchOverlayBorderSide } from '~/utils/featureMatchOverlayGeometry';
+import {
+	FEATURE_MATCH_OVERLAY_BORDER_SIDES,
+	featureMatchOverlayBorderRadiusCss,
+	featureMatchOverlayBorderSideEnabled,
+	featureMatchOverlaySourceCutoutRect,
+	roundedRectPath,
+} from '~/utils/featureMatchOverlayGeometry';
 
 /**
  * The host-owned half of a Feature Match Overlay's rendering: the Frame and the
@@ -19,7 +27,7 @@ import { featureMatchOverlayBorderRadiusCss, featureMatchOverlaySourceCutoutRect
  * through it.
  */
 
-export type FeatureMatchOverlayBorderSide = 'Top' | 'Right' | 'Bottom' | 'Left';
+export type { FeatureMatchOverlayBorderSide };
 
 export interface FeatureMatchOverlayRenderModelInput {
 	config: FeatureMatchOverlayModeConfig;
@@ -48,29 +56,11 @@ export interface FeatureMatchOverlayRenderModel {
 	sourceCutouts: Array<{ id: string; path: string }>;
 	frame: FeatureMatchOverlayFrameRenderModel;
 	rectStyle: (rect: FeatureMatchOverlayRect) => CSSProperties;
-	borderSideEnabled: (
-		style: { borderTopVisible?: boolean; borderRightVisible?: boolean; borderBottomVisible?: boolean; borderLeftVisible?: boolean },
-		side: FeatureMatchOverlayBorderSide,
-	) => boolean;
+	borderSideEnabled: (style: FeatureMatchOverlayBorderSides, side: FeatureMatchOverlayBorderSide) => boolean;
 }
 
 function rectStyle(rect: FeatureMatchOverlayRect): CSSProperties {
 	return { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` };
-}
-
-/**
- * Per-side border visibility, which the Frame and Source Items keep.
- *
- * The shared Graphic Surface Style dropped per-side borders in favour of composed
- * rule-preset Shape Graphic Items. This is the host layer, whose Frame draws four
- * independent edges around the whole canvas and whose Source Items are framed
- * against them, and the Host Contract leaves host capability with the host.
- */
-function borderSideEnabled(
-	style: { borderTopVisible?: boolean; borderRightVisible?: boolean; borderBottomVisible?: boolean; borderLeftVisible?: boolean },
-	side: FeatureMatchOverlayBorderSide,
-) {
-	return style[`border${side}Visible` as keyof typeof style] ?? true;
 }
 
 function colorWithOpacity(output: FeatureMatchOverlayOutput, color: string | undefined, opacity: number | undefined) {
@@ -94,7 +84,7 @@ function colorWithOpacity(output: FeatureMatchOverlayOutput, color: string | und
 	return `rgba(${Number.parseInt(r!, 16)}, ${Number.parseInt(g!, 16)}, ${Number.parseInt(b!, 16)}, ${alpha})`;
 }
 
-function cssBackgroundStyle(output: FeatureMatchOverlayOutput, style: FeatureMatchSourceSurfaceStyle | undefined) {
+function cssBackgroundStyle(output: FeatureMatchOverlayOutput, style: FeatureMatchSourceFramingStyle | undefined) {
 	const opacity = style?.backgroundOpacity ?? 0;
 	const color = style?.backgroundColor?.trim();
 	const hasBaseColor = Boolean(color && !/^transparent$/i.test(color));
@@ -107,20 +97,18 @@ function cssBackgroundStyle(output: FeatureMatchOverlayOutput, style: FeatureMat
 	return colorWithOpacity(output, color, opacity);
 }
 
-const BORDER_SIDES: FeatureMatchOverlayBorderSide[] = ['Top', 'Right', 'Bottom', 'Left'];
-
-function cssGlowShadow(output: FeatureMatchOverlayOutput, style: FeatureMatchSourceSurfaceStyle | undefined) {
+function cssGlowShadow(output: FeatureMatchOverlayOutput, style: FeatureMatchSourceFramingStyle | undefined) {
 	const size = Math.max(0, style?.glowSize ?? 0);
 	if (output === 'key' || size <= 0 || !style?.borderVisible)
 		return undefined;
 
-	const visibleSides = BORDER_SIDES.filter(side => borderSideEnabled(style, side));
+	const visibleSides = FEATURE_MATCH_OVERLAY_BORDER_SIDES.filter(side => featureMatchOverlayBorderSideEnabled(style, side));
 	if (visibleSides.length === 0)
 		return undefined;
 
 	const color = colorWithOpacity(output, style.glowColor ?? style.borderColor ?? '#ffffff', style.glowOpacity ?? 0.75);
 	const insetSize = Math.max(1, Math.round(size / 2));
-	if (visibleSides.length === BORDER_SIDES.length)
+	if (visibleSides.length === FEATURE_MATCH_OVERLAY_BORDER_SIDES.length)
 		return `0 0 ${size}px ${color}, inset 0 0 ${insetSize}px ${color}`;
 
 	const sideShadows: Record<FeatureMatchOverlayBorderSide, string> = {
@@ -133,7 +121,7 @@ function cssGlowShadow(output: FeatureMatchOverlayOutput, style: FeatureMatchSou
 	return visibleSides.map(side => sideShadows[side]).join(', ');
 }
 
-function cssBorderStyle(output: FeatureMatchOverlayOutput, style: FeatureMatchSourceSurfaceStyle | undefined) {
+function cssBorderStyle(output: FeatureMatchOverlayOutput, style: FeatureMatchSourceFramingStyle | undefined) {
 	if (!style) {
 		return { border: 'none', borderTop: 'none', borderRight: 'none', borderBottom: 'none', borderLeft: 'none' };
 	}
@@ -141,10 +129,10 @@ function cssBorderStyle(output: FeatureMatchOverlayOutput, style: FeatureMatchSo
 	const border = style.borderVisible ? `${style.borderWidth ?? 1}px solid ${output === 'key' ? '#fff' : (style.borderColor ?? '#fff')}` : 'none';
 	return {
 		border: 'none',
-		borderTop: borderSideEnabled(style, 'Top') ? border : 'none',
-		borderRight: borderSideEnabled(style, 'Right') ? border : 'none',
-		borderBottom: borderSideEnabled(style, 'Bottom') ? border : 'none',
-		borderLeft: borderSideEnabled(style, 'Left') ? border : 'none',
+		borderTop: featureMatchOverlayBorderSideEnabled(style, 'Top') ? border : 'none',
+		borderRight: featureMatchOverlayBorderSideEnabled(style, 'Right') ? border : 'none',
+		borderBottom: featureMatchOverlayBorderSideEnabled(style, 'Bottom') ? border : 'none',
+		borderLeft: featureMatchOverlayBorderSideEnabled(style, 'Left') ? border : 'none',
 	};
 }
 
@@ -169,10 +157,10 @@ function sourceItemStyle(output: FeatureMatchOverlayOutput, item: FeatureMatchSo
 		...rectStyle(item),
 		position: 'absolute',
 		boxSizing: 'border-box',
-		background: cssBackgroundStyle(output, item.surfaceStyle),
-		...cssBorderStyle(output, item.surfaceStyle),
-		borderRadius: featureMatchOverlayBorderRadiusCss(item.surfaceStyle ?? {}),
-		boxShadow: cssGlowShadow(output, item.surfaceStyle),
+		background: cssBackgroundStyle(output, item.framingStyle),
+		...cssBorderStyle(output, item.framingStyle),
+		borderRadius: featureMatchOverlayBorderRadiusCss(item.framingStyle ?? {}),
+		boxShadow: cssGlowShadow(output, item.framingStyle),
 		overflow: 'hidden',
 		pointerEvents: 'none',
 	};
@@ -213,6 +201,6 @@ export function resolveFeatureMatchOverlayRenderModel(
 			opacity: config.layout.frame.opacity,
 		},
 		rectStyle,
-		borderSideEnabled,
+		borderSideEnabled: featureMatchOverlayBorderSideEnabled,
 	};
 }

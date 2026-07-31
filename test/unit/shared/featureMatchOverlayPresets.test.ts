@@ -58,7 +58,7 @@ describe('feature match overlay presets', () => {
 		]))).toEqual({
 			'full-table': {
 				sources: ['main-source'],
-				items: ['top-bar', 'bottom-bar', 'branding'],
+				items: ['top-bar', 'bottom-bar', 'player1-game-wins', 'player2-game-wins', 'branding'],
 			},
 			'left-stacked-player-cams': {
 				sources: ['main-source', 'player1-source', 'player2-source'],

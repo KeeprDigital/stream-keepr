@@ -55,7 +55,7 @@ describe('useFeatureMatchOverlayConfigEditor', () => {
 		const { updateConfig, editor } = createEditor([sourceItem()]);
 
 		editor.updateSource('missing', { label: 'x' });
-		editor.updateSourceSurfaceStyle('missing', { borderWidth: 2 });
+		editor.updateSourceFramingStyle('missing', { borderWidth: 2 });
 		editor.removeSource('missing');
 
 		expect(updateConfig).not.toHaveBeenCalled();

@@ -1,23 +1,17 @@
 import type { CardAnimationSpeed, DeckCardSize, DeckViewMode, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardLayout, StandingsColumnKey, StandingsViewMode, VerticalAlign } from './enums';
 import type { BroadcastGraphicConfig } from './graphics';
 import type { GraphicAssetReference } from './graphicsAsset';
-import {
-	FEATURE_MATCH_LAYOUT_COMPOSITION_ID,
-	FEATURE_MATCH_LAYOUT_COMPOSITION_NAME,
-} from '../featureMatchLayoutComposition';
-import {
-	clockItem,
-	gameWinsItem,
-	groupItem,
-	mediaItem,
-	playerLifeItem,
-	shapeItem,
-	solidFill,
-	surfaceStyle,
-	textItem,
-	typography,
-} from '../featureMatchLayoutItems';
-import { roundedShapeGeometry } from '../modules/graphics/shapeGeometry';
+import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
+import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '../screenGraphicsDefaults';
+
+/**
+ * A Screen's media background and a Feature Match Overlay Frame's animation take
+ * their starting values from their own module, so the Feature Match Overlay
+ * Presets can build a Frame without importing this one back. They are re-exported
+ * here because this is where every other mode default lives.
+ */
+export { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG };
+export { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG };
 
 // ─── Screen-level config (applies to all modes) ───────────────────────
 export interface ScreenConfig {
@@ -253,7 +247,7 @@ export interface FeatureMatchOverlayBorderSides {
  * It carries no typography, padding, or overflow. Those belonged to the legacy
  * widget model, and a Source Item paints a bordered hole rather than text.
  */
-export interface FeatureMatchSourceSurfaceStyle extends FeatureMatchOverlayBorderSides {
+export interface FeatureMatchSourceFramingStyle extends FeatureMatchOverlayBorderSides {
 	backgroundColor?: string;
 	backgroundOpacity?: number;
 	borderVisible?: boolean;
@@ -356,7 +350,7 @@ export interface FeatureMatchSourceItemConfig extends FeatureMatchOverlayRect {
 	configurationVersion?: number;
 	sourceRole?: FeatureMatchSourceRole;
 	frameCutout: boolean;
-	surfaceStyle?: FeatureMatchSourceSurfaceStyle;
+	framingStyle?: FeatureMatchSourceFramingStyle;
 }
 
 /**
@@ -454,16 +448,6 @@ export interface MetagameModeConfig {
 export type ScreenModeConfig = DeckModeConfig | CardModeConfig | IdleModeConfig | StandingsModeConfig | TopCutModeConfig | FeatureMatchModeConfig | FeatureMatchOverlayModeConfig | BroadcastGraphicsModeConfig | MetagameModeConfig | PlayerHistoryModeConfig;
 
 // Default configs for each mode
-export const DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG: ScreenMediaBackgroundConfig = {
-	enabled: false,
-	type: 'video',
-	url: '',
-	fit: 'cover',
-	opacity: 1,
-	playbackRate: 1,
-	loop: true,
-};
-
 export interface IdleModeConfig {
 	mediaBackground?: ScreenMediaBackgroundConfig;
 }
@@ -589,151 +573,6 @@ export const DEFAULT_PLAYER_HISTORY_CONFIG: PlayerHistoryModeConfig = {
 	rowsPerPage: 8,
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
-};
-
-export const DEFAULT_FRAME_ANIMATION: FeatureMatchOverlayFrameAnimationConfig = {
-	enabled: false,
-	effect: 'fog',
-	opacity: 0.45,
-	highlightColor: '#f59e0b',
-	midtoneColor: '#7c3aed',
-	lowlightColor: '#06b6d4',
-	baseColor: '#111111',
-	blurFactor: 0.55,
-	speed: 0.6,
-	zoom: 1,
-	color: '#7c3aed',
-	color2: '#06b6d4',
-	backgroundColor: '#111111',
-	shininess: 30,
-	waveHeight: 20,
-	waveSpeed: 1,
-	points: 10,
-	maxDistance: 22,
-	spacing: 16,
-	showDots: true,
-	size: 3,
-	showLines: true,
-	mouseDriftEnabled: true,
-	mouseDriftMode: 'orbit',
-	mouseDriftSeconds: 18,
-	mouseDriftRadius: 0.28,
-};
-
-/** The Player Life pill's typography, identical on both sides of a Player Bar. */
-function playerBarLifeTypography() {
-	return typography({ fontSize: 42, fontWeight: 800, textAlign: 'center' });
-}
-
-/** A Player Bar's own text: white, heavy, and clipped to the bar with an ellipsis. */
-function playerBarTypography(overrides: Parameters<typeof typography>[0] = {}) {
-	return typography({ fontSize: 30, fontWeight: 800, ...overrides });
-}
-
-/**
- * A rounded pill behind a Player Life total.
- *
- * Two Graphic Items rather than one, because a Graphic Surface Style carries no
- * Shape Geometry: corners belong to a Shape Graphic Item, so a rounded bed is
- * composed behind the Item that reads the life total. This is the same
- * composition the dropped per-side borders use, applied to corners.
- */
-function playerLifePill(side: PlayerSide, prefix: string, rect: { x: number; y: number; width: number; height: number }) {
-	return [
-		shapeItem({
-			id: `${prefix}-life-bed`,
-			label: 'Life Total Bed',
-			...rect,
-			geometry: roundedShapeGeometry(8),
-			surfaceStyle: surfaceStyle(solidFill('#333333'), { outline: { color: '#0077a3', width: 4 } }),
-		}),
-		playerLifeItem({
-			id: `${prefix}-life`,
-			label: 'Life Total',
-			...rect,
-			playerSide: side,
-			typography: playerBarLifeTypography(),
-		}),
-	];
-}
-
-/**
- * The default Feature Match Layout, which is also the `left-stacked-player-cams`
- * Feature Match Overlay Preset.
- *
- * The Frame and the Source Items are host-owned; everything else is an authored
- * composition in the Shared Graphics Foundation vocabulary, which is what the
- * capability-parity checklist verifies.
- */
-export const DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG: FeatureMatchOverlayModeConfig = {
-	featureMatchId: null,
-	presetId: 'left-stacked-player-cams',
-	layout: {
-		frame: {
-			backgroundColor: '#111111',
-			opacity: 0.92,
-			backgroundImageFit: 'cover',
-			mediaBackground: { ...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG },
-			animation: { ...DEFAULT_FRAME_ANIMATION },
-			borderVisible: true,
-			borderColor: '#0077a3',
-			borderWidth: 4,
-		},
-		sources: [
-			{ id: 'main-source', label: 'Main Match Source', visible: true, sourceRole: 'main', frameCutout: true, x: 400, y: 90, width: 1500, height: 900, surfaceStyle: { backgroundColor: '#000000', backgroundOpacity: 0, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8 } },
-			{ id: 'player1-source', label: 'Player 1 Source', visible: true, sourceRole: 'player1', frameCutout: true, x: 24, y: 16, width: 340, height: 250, surfaceStyle: { backgroundColor: '#000000', backgroundOpacity: 0, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8 } },
-			{ id: 'player2-source', label: 'Player 2 Source', visible: true, sourceRole: 'player2', frameCutout: true, x: 24, y: 800, width: 340, height: 250, surfaceStyle: { backgroundColor: '#000000', backgroundOpacity: 0, borderVisible: true, borderColor: '#0077a3', borderWidth: 4, borderRadius: 8 } },
-		],
-		composition: {
-			id: FEATURE_MATCH_LAYOUT_COMPOSITION_ID,
-			name: FEATURE_MATCH_LAYOUT_COMPOSITION_NAME,
-			items: [
-				groupItem({
-					id: 'top-bar',
-					label: 'Top Player Bar',
-					x: 400,
-					y: 8,
-					width: 1500,
-					height: 74,
-					children: [
-						textItem({ id: 'top-name-record', label: 'Name and Record', x: 0, y: 0, width: 300, height: 74, text: '{player1Name}\n{player1Record}', typography: playerBarTypography() }),
-						...playerLifePill('player1', 'top', { x: 700, y: 4, width: 96, height: 66 }),
-						textItem({ id: 'top-deck', label: 'Deck', x: 820, y: 0, width: 500, height: 74, text: '{player1DeckColors} {player1Deck}', typography: playerBarTypography() }),
-						clockItem({ id: 'top-clock', label: 'Clock', x: 1360, y: 0, width: 140, height: 74, typography: playerBarTypography({ fontSize: 28, fontWeight: 500, textAlign: 'right' }) }),
-					],
-				}),
-				groupItem({
-					id: 'bottom-bar',
-					label: 'Bottom Player Bar',
-					x: 400,
-					y: 1000,
-					width: 1500,
-					height: 74,
-					children: [
-						textItem({ id: 'bottom-name-record', label: 'Name and Record', x: 0, y: 0, width: 300, height: 74, text: '{player2Name}\n{player2Record}', typography: playerBarTypography() }),
-						...playerLifePill('player2', 'bottom', { x: 700, y: 4, width: 96, height: 66 }),
-						textItem({ id: 'bottom-deck', label: 'Deck', x: 820, y: 0, width: 500, height: 74, text: '{player2DeckColors} {player2Deck}', typography: playerBarTypography() }),
-						textItem({ id: 'bottom-details', label: 'Match Details', x: 1320, y: 0, width: 180, height: 74, text: '{stage}\n{format}', typography: playerBarTypography({ fontSize: 28, fontWeight: 700, textAlign: 'right' }) }),
-					],
-				}),
-				gameWinsItem({ id: 'player1-game-wins', label: 'Player 1 Game Wins', x: 24, y: 278, width: 340, height: 28, playerSide: 'player1', boxWidth: 22, boxHeight: 22, boxGap: 6, boxRadius: 11, outlineWidth: 2, outlineColor: '#ffffff', wonColor: '#22c55e' }),
-				gameWinsItem({ id: 'player2-game-wins', label: 'Player 2 Game Wins', x: 24, y: 760, width: 340, height: 28, playerSide: 'player2', boxWidth: 22, boxHeight: 22, boxGap: 6, boxRadius: 11, outlineWidth: 2, outlineColor: '#ffffff', wonColor: '#22c55e' }),
-				groupItem({
-					id: 'branding',
-					label: 'Event Branding',
-					x: 60,
-					y: 360,
-					width: 280,
-					height: 280,
-					children: [
-						textItem({ id: 'branding-text', label: 'Event Name', x: 0, y: 0, width: 280, height: 80, text: '{eventName}', typography: typography({ fontSize: 24, fontWeight: 700, textAlign: 'center' }) }),
-						mediaItem({ id: 'branding-image-1', label: 'Image 1', x: 0, y: 96, width: 132, height: 132 }),
-						mediaItem({ id: 'branding-image-2', label: 'Image 2', x: 148, y: 96, width: 132, height: 132 }),
-					],
-				}),
-			],
-		},
-	},
 };
 
 export const DEFAULT_BROADCAST_GRAPHICS_CONFIG: BroadcastGraphicsModeConfig = {

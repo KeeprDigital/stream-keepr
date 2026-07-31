@@ -1,8 +1,8 @@
 import type {
 	FeatureMatchLayoutFrameConfig,
 	FeatureMatchOverlayModeConfig,
+	FeatureMatchSourceFramingStyle,
 	FeatureMatchSourceItemConfig,
-	FeatureMatchSourceSurfaceStyle,
 } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayGeometryField } from '~/modules/feature-match-overlay/layout';
 import type { FeatureMatchOverlayGeometryUnit } from '~/utils/featureMatchOverlayGeometry';
@@ -60,8 +60,8 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		submit(layoutWriter.patchSource(layout(), id, updates));
 	}
 
-	function updateSourceSurfaceStyle(id: string, updates: Partial<FeatureMatchSourceSurfaceStyle>) {
-		submit(layoutWriter.patchSourceSurfaceStyle(layout(), id, updates));
+	function updateSourceFramingStyle(id: string, updates: Partial<FeatureMatchSourceFramingStyle>) {
+		submit(layoutWriter.patchSourceFramingStyle(layout(), id, updates));
 	}
 
 	function removeSource(id: string) {
@@ -97,7 +97,7 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		geometryValue,
 		patchFrame,
 		updateSource,
-		updateSourceSurfaceStyle,
+		updateSourceFramingStyle,
 		removeSource,
 		updateSourceRectFromAnchor,
 		moveSourceOrder,

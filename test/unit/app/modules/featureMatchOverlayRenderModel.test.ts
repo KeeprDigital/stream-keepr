@@ -75,7 +75,7 @@ describe('feature match overlay host render model', () => {
 	it('keeps per-side border visibility, which the host layer did not drop', () => {
 		const model = resolveFeatureMatchOverlayRenderModel({
 			config: configWith([source({
-				surfaceStyle: { borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderLeftVisible: false },
+				framingStyle: { borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderLeftVisible: false },
 			})]),
 			output: 'overlay',
 		});
@@ -88,7 +88,7 @@ describe('feature match overlay host render model', () => {
 
 	it('paints the Key Output in white and the Fill Output over black', () => {
 		const key = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([source({ surfaceStyle: { borderVisible: true, borderColor: '#0077a3', borderWidth: 4 } })]),
+			config: configWith([source({ framingStyle: { borderVisible: true, borderColor: '#0077a3', borderWidth: 4 } })]),
 			output: 'key',
 		});
 		const fill = resolveFeatureMatchOverlayRenderModel({ config: configWith([]), output: 'fill' });

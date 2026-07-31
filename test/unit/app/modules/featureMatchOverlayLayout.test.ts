@@ -6,8 +6,8 @@ import {
 	moveSourceOrder,
 	patchFrame,
 	patchSource,
+	patchSourceFramingStyle,
 	patchSourceRectFromAnchor,
-	patchSourceSurfaceStyle,
 	removeSource,
 	sendSourceToBack,
 } from '~~/app/modules/feature-match-overlay/layout';
@@ -62,18 +62,18 @@ describe('feature match layout writer', () => {
 	});
 
 	it('merges a Source Item surface style rather than replacing it', () => {
-		const layout = layoutOf([source({ surfaceStyle: { borderVisible: true, borderColor: '#ffffff' } })]);
+		const layout = layoutOf([source({ framingStyle: { borderVisible: true, borderColor: '#ffffff' } })]);
 
-		const next = patchSourceSurfaceStyle(layout, 's1', { borderWidth: 6 });
+		const next = patchSourceFramingStyle(layout, 's1', { borderWidth: 6 });
 
-		expect(next.sources[0]!.surfaceStyle).toEqual({ borderVisible: true, borderColor: '#ffffff', borderWidth: 6 });
+		expect(next.sources[0]!.framingStyle).toEqual({ borderVisible: true, borderColor: '#ffffff', borderWidth: 6 });
 	});
 
 	it('returns the same layout when an id names nothing', () => {
 		const layout = layoutOf([source()]);
 
 		expect(patchSource(layout, 'missing', { label: 'x' })).toBe(layout);
-		expect(patchSourceSurfaceStyle(layout, 'missing', { borderWidth: 1 })).toBe(layout);
+		expect(patchSourceFramingStyle(layout, 'missing', { borderWidth: 1 })).toBe(layout);
 		expect(patchSourceRectFromAnchor(layout, 'missing', 'width', 10)).toBe(layout);
 		expect(removeSource(layout, 'missing')).toBe(layout);
 		expect(moveSourceOrder(layout, 'missing', 1)).toBe(layout);
