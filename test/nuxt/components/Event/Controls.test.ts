@@ -175,7 +175,7 @@ describe('event controls', () => {
 		expect(commentatorField(wrapper, 2).props('items')).toEqual(['Briony', 'Caspar']);
 	});
 
-	it('waits for the event to load before offering any controls', async () => {
+	it('offers no controls until the event loads, then fills both forms from it', async () => {
 		mockEventStore.event = null;
 		const wrapper = await mountComponent();
 		await flushPromises();
@@ -187,6 +187,8 @@ describe('event controls', () => {
 
 		expect(wrapper.findAll('form')).toHaveLength(2);
 		expect(holdingTextField(wrapper).props('modelValue')).toBe('Coverage resumes shortly.');
+		expect(commentatorField(wrapper, 1).props('modelValue')).toBe('Alice');
+		expect(commentatorField(wrapper, 2).props('modelValue')).toBe('Briony');
 	});
 
 	it('saves an edited holding text, trimmed', async () => {
