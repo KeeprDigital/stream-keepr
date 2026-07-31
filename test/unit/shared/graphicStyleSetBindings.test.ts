@@ -1,4 +1,12 @@
-import type { BroadcastGraphicConfig, GraphicItemConfig, TextGraphicItemConfig } from '~~/shared/types/graphics';
+import type { ResolvedGraphicStyleMediaTreatment } from '~~/shared/modules/graphic-style-sets';
+import type {
+	BroadcastGraphicConfig,
+	GraphicAnimationRecipe,
+	GraphicItemConfig,
+	GraphicOnScreenAnimationRecipe,
+	GraphicSurfaceStyle,
+	TextGraphicItemConfig,
+} from '~~/shared/types/graphics';
 import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
 import { describe, expect, it } from 'vitest';
 import {
@@ -126,12 +134,46 @@ describe('gRAPHIC_STYLE_SLOT_OWNED_KEYS', () => {
 	 * deviation in it would be reverted by the next applied update with nothing
 	 * rejected. So each list is pinned against a maximal value of its property group,
 	 * built from the vocabulary rather than restated.
+	 *
+	 * "Maximal" is what `Required<…>` buys: a field added to any of these groups —
+	 * optional or not — fails to typecheck here until it is written down, and writing
+	 * it down is what makes this assertion notice it. A hand-restated list of key
+	 * literals would simply stay green, which is the drift this test exists to catch.
 	 */
 	it('names exactly the keys of the property group each slot inherits', () => {
-		const surfaceKeys = ['fill', 'fillOpacity', 'outline', 'glow'];
+		const surface: Required<GraphicSurfaceStyle> = {
+			fill: { type: 'solid', color: '#101014' },
+			fillOpacity: 0.9,
+			outline: { color: '#ffffff', width: 2 },
+			glow: { color: '#ff0044', size: 8, opacity: 0.5 },
+		};
+		const media: Required<ResolvedGraphicStyleMediaTreatment> = {
+			fit: 'cover',
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 1,
+			clipGeometry: squareShapeGeometry(),
+			playbackRate: 1,
+			loop: true,
+		};
+		const recipe: Required<GraphicAnimationRecipe> = {
+			duration: 320,
+			easing: 'ease-out',
+			delay: 0,
+			fade: { opacity: 0 },
+			slide: { direction: 'north', distanceMode: 'fixed', distance: 40 },
+			scale: { factor: 0.9, origin: 'center' },
+			reveal: { edge: 'south' },
+		};
+		const onScreenRecipe: Required<GraphicOnScreenAnimationRecipe> = {
+			...recipe,
+			pause: 1000,
+			repeat: 'indefinite',
+		};
+
+		const surfaceKeys = Object.keys(surface);
 		const geometryKeys = Object.keys(squareShapeGeometry());
-		const mediaKeys = ['fit', 'focalPosition', 'opacity', 'clipGeometry', 'playbackRate', 'loop'];
-		const recipeKeys = ['duration', 'easing', 'delay', 'fade', 'slide', 'scale', 'reveal'];
+		const mediaKeys = Object.keys(media);
+		const recipeKeys = Object.keys(recipe);
 
 		// Typography less the one key that stays item-specific.
 		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.typography].sort())
@@ -147,7 +189,7 @@ describe('gRAPHIC_STYLE_SLOT_OWNED_KEYS', () => {
 			expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS[phase]].sort()).toEqual([...recipeKeys].sort());
 		// Only the on-screen phase cycles, so only it owns the repetition defaults.
 		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS['animation.on-screen']].sort())
-			.toEqual([...recipeKeys, 'pause', 'repeat'].sort());
+			.toEqual(Object.keys(onScreenRecipe).sort());
 		// A Graphic Fill is a discriminated union, so it has no partial to deviate in.
 		expect(GRAPHIC_STYLE_SLOT_OWNED_KEYS['surfaceStyle.fill']).toEqual([]);
 	});
