@@ -231,10 +231,11 @@ export type GraphicsRecentOutcomeGroup = typeof GRAPHICS_RECENT_OUTCOME_GROUPS[n
  * count with non-events.
  *
  * The categories deliberately left out are the routine retention decisions —
- * pruning scheduled, cancelled, frozen, resumed, or carried out; purge and
- * blocked purge; staged-input expiry; ordinary content deletion. Those are the
- * lifecycle working as designed rather than outcomes of an incident, and the
- * Evidence ledger remains the place to read them.
+ * pruning scheduled, cancelled, frozen, resumed, or carried out; retirement,
+ * Trash, and restoration; purge and blocked purge; staged-input expiry;
+ * ordinary content deletion. Those are the lifecycle working as designed rather
+ * than outcomes of an incident, and the Evidence ledger remains the place to
+ * read them.
  */
 const OUTCOME_GROUPS: Partial<Record<GraphicsAssetEvidenceCategory, GraphicsRecentOutcomeGroup>> = {
 	'content-unavailable-detected': 'unavailable-content',

@@ -12,6 +12,7 @@ import type {
 	GraphicsStorageHealthAlertSeverity,
 } from '~~/shared/utils/graphicsOperationsCockpit';
 import { formatByteCount } from '~~/shared/utils/formatByteCount';
+import { formatInstant } from '~~/shared/utils/formatInstant';
 import {
 	GRAPHICS_INGESTION_ATTENTION_STATES,
 	GRAPHICS_RECENT_OUTCOME_GROUPS,
@@ -177,10 +178,6 @@ const OUTCOME_GROUP_LABELS: Record<GraphicsRecentOutcomeGroup, string> = {
 	'rejected-repair': 'Rejected repairs',
 };
 
-function formatInstant(instant: string | undefined) {
-	return instant ? new Date(instant).toLocaleString() : 'None';
-}
-
 function formatGuarantee(milliseconds: number) {
 	return `${Math.round(milliseconds / MILLISECONDS_PER_DAY)} days`;
 }
@@ -210,6 +207,13 @@ function boundaryMarkerStyle(fraction: number) {
 				icon="i-lucide-list-checks"
 				to="/admin/graphics-assets/queues"
 				label="Open lifecycle queues"
+			/>
+			<UButton
+				color="neutral"
+				variant="outline"
+				icon="i-lucide-scroll-text"
+				to="/admin/graphics-assets/evidence"
+				label="Open Evidence ledger"
 			/>
 			<UButton
 				color="neutral"
