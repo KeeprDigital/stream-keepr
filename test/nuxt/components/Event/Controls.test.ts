@@ -167,7 +167,7 @@ describe('event controls', () => {
 		expect(commentatorField(wrapper, 2).props('modelValue')).toBeUndefined();
 	});
 
-	it('offers the event talents alphabetically, minus the one already on the other microphone', async () => {
+	it('offers the event talents alphabetically, minus the one already in the other position', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
@@ -241,11 +241,21 @@ describe('event controls', () => {
 		expect(mockEventStore.updateEvent).toHaveBeenCalledWith({ commentator2TalentId: null });
 	});
 
-	it('asks for no change at all when an untouched form is saved', async () => {
+	it('sends an empty patch when the untouched commentator form is saved', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
 		await formFor(wrapper, 'commentator1Name').trigger('submit');
+		await flushPromises();
+
+		expect(mockEventStore.updateEvent).toHaveBeenCalledWith({});
+	});
+
+	it('sends an empty patch when the untouched holding text form is saved', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await formFor(wrapper, 'holdingText').trigger('submit');
 		await flushPromises();
 
 		expect(mockEventStore.updateEvent).toHaveBeenCalledWith({});
@@ -270,7 +280,7 @@ describe('event controls', () => {
 		});
 	});
 
-	it('creates a new talent and puts them on the microphone that asked for them', async () => {
+	it('creates a new talent and puts them in the position that asked for them', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
@@ -280,6 +290,21 @@ describe('event controls', () => {
 		expect(mockEventStore.addTalent).toHaveBeenCalledWith({ name: 'Dana' });
 		expect(commentatorField(wrapper, 2).props('modelValue')).toBe('Dana');
 		expect(commentatorField(wrapper, 1).props('modelValue')).toBe('Alice');
+	});
+
+	// The store appends the created Talent to the Event, but until that lands the
+	// name in the form resolves to no id at all — the save must not invent one.
+	it('assigns nobody when a just-created commentator has not reached the event yet', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		commentatorField(wrapper, 1).vm.$emit('create', 'Dana');
+		await flushPromises();
+		await formFor(wrapper, 'commentator1Name').trigger('submit');
+		await flushPromises();
+
+		expect(commentatorField(wrapper, 1).props('modelValue')).toBe('Dana');
+		expect(mockEventStore.updateEvent).toHaveBeenCalledWith({ commentator1TalentId: null });
 	});
 
 	it('ignores a blank name offered as a new commentator', async () => {
@@ -340,7 +365,7 @@ describe('event controls', () => {
 		expect(commentatorField(wrapper, 1).props('modelValue')).toBe('Caspar');
 	});
 
-	it('marks only the form being saved as busy while its request is in flight', async () => {
+	it('marks the holding text form busy, and only it, while its request is in flight', async () => {
 		const save = deferred();
 		mockEventStore.updateEvent.mockReturnValue(save.promise);
 		const wrapper = await mountComponent();
@@ -359,7 +384,26 @@ describe('event controls', () => {
 		expect(saveButton(wrapper, 'holdingText').attributes('data-loading')).toBe('false');
 	});
 
-	it('offers a save only once the form has changed, and takes it back on reset', async () => {
+	it('marks the commentator form busy, and only it, while its request is in flight', async () => {
+		const save = deferred();
+		mockEventStore.updateEvent.mockReturnValue(save.promise);
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await commentatorField(wrapper, 1).setValue('Caspar');
+		await formFor(wrapper, 'commentator1Name').trigger('submit');
+		await wrapper.vm.$nextTick();
+
+		expect(saveButton(wrapper, 'commentator1Name').attributes('data-loading')).toBe('true');
+		expect(saveButton(wrapper, 'holdingText').attributes('data-loading')).toBe('false');
+
+		save.resolve(loadedEvent());
+		await flushPromises();
+
+		expect(saveButton(wrapper, 'commentator1Name').attributes('data-loading')).toBe('false');
+	});
+
+	it('offers a holding text save only once that form has changed, and takes it back on reset', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
@@ -372,6 +416,22 @@ describe('event controls', () => {
 
 		expect(holdingTextField(wrapper).props('modelValue')).toBe('Coverage resumes shortly.');
 		expect(saveButton(wrapper, 'holdingText').attributes('disabled')).toBeDefined();
+		expect(mockEventStore.updateEvent).not.toHaveBeenCalled();
+	});
+
+	it('offers a commentator save only once that form has changed, and takes it back on reset', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(saveButton(wrapper, 'commentator1Name').attributes('disabled')).toBeDefined();
+
+		await commentatorField(wrapper, 1).setValue('Caspar');
+		expect(saveButton(wrapper, 'commentator1Name').attributes('disabled')).toBeUndefined();
+
+		await resetButton(wrapper, 'commentator1Name').trigger('click');
+
+		expect(commentatorField(wrapper, 1).props('modelValue')).toBe('Alice');
+		expect(saveButton(wrapper, 'commentator1Name').attributes('disabled')).toBeDefined();
 		expect(mockEventStore.updateEvent).not.toHaveBeenCalled();
 	});
 });
