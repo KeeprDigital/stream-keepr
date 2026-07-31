@@ -244,6 +244,12 @@ describe('template Package preflight through the API boundary', () => {
 	 * Graphic Asset transfer may carry: a package holding one still image already
 	 * outgrows the still-image ceiling, and a package holding media outgrows it
 	 * many times over.
+	 *
+	 * It drives the resumable route itself, so what it pins is the server side:
+	 * that transfer, staging and preflight carry every byte of such an archive.
+	 * That the importer reaches for that route rather than a single request is a
+	 * separate statement, made in
+	 * `test/nuxt/composables/repositories/templatePackageImport.test.ts`.
 	 */
 	it('receives a package larger than a single Graphic Asset transfer may carry', async () => {
 		const parts = readTemplatePackageParts(exportedPackage);
