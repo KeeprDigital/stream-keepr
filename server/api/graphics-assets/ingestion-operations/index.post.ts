@@ -57,7 +57,13 @@ const templatePackageSchema = z.object({
 	source: z.literal('template-package'),
 	sourceFileName: z.string().trim().min(1).max(255).optional(),
 	defaultEventId: z.number().int().positive().optional(),
-	declaredByteLength: z.number().int().positive().max(TEMPLATE_PACKAGE_LIMITS.maximumArchiveByteLength),
+	// Named, because a refused package is refused for being a package: a reader
+	// told only that some byte length was too large goes looking at the Graphic
+	// Asset transfer limits, which describe a different envelope entirely.
+	declaredByteLength: z.number().int().positive().max(
+		TEMPLATE_PACKAGE_LIMITS.maximumArchiveByteLength,
+		`Template Package must not exceed ${TEMPLATE_PACKAGE_LIMITS.maximumArchiveByteLength} bytes`,
+	),
 }).strict();
 
 /**
