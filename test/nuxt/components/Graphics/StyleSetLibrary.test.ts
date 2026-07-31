@@ -396,7 +396,50 @@ describe('graphicsStyleSetLibrary', () => {
 			{ resolution: 'preserve-identity' },
 		);
 		expect(wrapper.find('[data-testid="style-set-import-report"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="style-set-import-notice"]').exists()).toBe(false);
 		expect(wrapper.emitted('published')).toHaveLength(1);
+	});
+
+	it('tells the author what a package that asked nothing still had to say', async () => {
+		// An exact identity, revision, and content match under a different name. There is
+		// no decision to make and nothing was written, so the import is never paused — but
+		// the two libraries disagreeing about the name is the one thing it was going to
+		// tell the author, and a report they never see tells them nothing.
+		const alreadyInstalled = preflightReport({
+			disposition: 'already-installed',
+			outcome: 'ready',
+			installedRevision: 3,
+			installedDraftRevision: 9,
+			issues: [{
+				code: 'graphic-style-set-name-differs',
+				severity: 'warning',
+				message: 'The package calls this Graphic Style Set “Season look”; this library records it as “Show style”',
+				remediation: 'This library keeps the name it already records; the packaged name is not applied. Rename it here if the two libraries should agree.',
+			}],
+		});
+		mockInspectPackage.mockResolvedValue(alreadyInstalled);
+		mockInstallPackage.mockResolvedValue({
+			report: alreadyInstalled,
+			styleSet: response(),
+			affectedTemplates: [],
+		});
+
+		const wrapper = await mountLibrary();
+		await choosePackage(wrapper);
+
+		expect(mockInstallPackage).toHaveBeenCalledWith(
+			expect.any(File),
+			{ resolution: 'preserve-identity' },
+		);
+		const notice = wrapper.get('[data-testid="style-set-import-notice"]');
+		expect(notice.text()).toContain('already installed');
+		expect(notice.text()).toContain('this library records it as “Show style”');
+		expect(notice.text()).toContain('the packaged name is not applied');
+		// Nothing is waiting on the author, so there is nothing here to confirm.
+		expect(wrapper.find('[data-testid="style-set-import-confirm"]').exists()).toBe(false);
+
+		await notice.get('[data-testid="style-set-import-notice-dismiss"]').trigger('click');
+		expect(wrapper.find('[data-testid="style-set-import-notice"]').exists()).toBe(false);
 	});
 
 	it('pauses on a proposal that would publish over an installed Style Set, and installs only once confirmed', async () => {

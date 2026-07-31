@@ -346,6 +346,17 @@ const pendingImport = ref<{
 	report: GraphicStyleSetPackagePreflightReport;
 } | null>(null);
 
+/**
+ * What an install that asked nothing still had to say.
+ *
+ * A report is `ready` when confirming it would change nothing — an exact identity,
+ * revision, and content match is told rather than asked. That report can still carry
+ * findings, and the one that matters is a Style Set installed here under a different
+ * name: telling the author their two libraries disagree is the entire reason that
+ * import was worth performing, and it would otherwise be the one thing they never saw.
+ */
+const importNotice = ref<GraphicStyleSetPackagePreflightReport | null>(null);
+
 const importIssues = computed(() => pendingImport.value?.report.issues ?? []);
 const importRejected = computed(() => pendingImport.value?.report.outcome === 'rejected');
 const importAwaitingConfirmation = computed(() =>
@@ -380,6 +391,7 @@ async function receivePackage(file: File, resolution: GraphicStyleSetPackageReso
 		return;
 	importing.value = true;
 	pendingImport.value = null;
+	importNotice.value = null;
 	try {
 		const report = await repository.inspectPackage(file, resolution);
 		error.value = null;
@@ -388,7 +400,11 @@ async function receivePackage(file: File, resolution: GraphicStyleSetPackageReso
 			pendingImport.value = { file, resolution, report };
 			return;
 		}
-		await repository.installPackage(file, { resolution });
+		const installation = await repository.installPackage(file, { resolution });
+		// Nothing was asked, so nothing is waiting on the author — but a ready report
+		// with findings is still a report they are entitled to read.
+		if (installation.report.issues.length > 0)
+			importNotice.value = installation.report;
 		emit('published');
 		await refresh();
 	}
@@ -601,6 +617,43 @@ onMounted(() => {
 						{{ importAwaitingConfirmation ? 'Cancel' : 'Dismiss' }}
 					</UButton>
 				</div>
+			</div>
+
+			<!--
+				What an import that asked nothing still had to say. There is no decision here
+				and nothing to undo, so it is stated afterwards rather than as a prompt — but
+				it is stated: an author whose library records this Style Set under a different
+				name learns it here or not at all.
+			-->
+			<div
+				v-if="importNotice"
+				class="rounded-md border border-default/70 bg-elevated/40 p-2"
+				data-testid="style-set-import-notice"
+			>
+				<p class="text-xs font-medium">
+					{{ importNotice.disposition === 'already-installed'
+						? 'This Graphic Style Set Package was already installed'
+						: 'This Graphic Style Set Package was installed' }}
+				</p>
+				<ul class="mt-1 space-y-1">
+					<li
+						v-for="(issue, index) in importNotice.issues"
+						:key="`${issue.code}-${index}`"
+						class="text-xs text-muted"
+					>
+						{{ issue.message }}<span v-if="issue.remediation"> — {{ issue.remediation }}</span>
+					</li>
+				</ul>
+				<UButton
+					class="mt-2"
+					size="xs"
+					color="neutral"
+					variant="ghost"
+					data-testid="style-set-import-notice-dismiss"
+					@click="importNotice = null"
+				>
+					Dismiss
+				</UButton>
 			</div>
 
 			<UIEmptyState

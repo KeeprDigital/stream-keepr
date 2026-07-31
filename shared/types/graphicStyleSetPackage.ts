@@ -331,7 +331,11 @@ export const GRAPHIC_STYLE_SET_PACKAGE_REMEDIATION = {
 	'graphic-style-set-revision-superseded': 'This installation already holds a newer revision of this Graphic Style Set. Export the newer one instead, or install this package as an independent copy.',
 	'graphic-style-set-identity-unpublished': 'A Graphic Style Set with this identity exists here and has never been published, so there is no revision for this package to relate to. Publish or delete it first, or install this package as an independent copy.',
 	'package-schema-migrated': 'The package was migrated to the current schema while it was read. Review the proposed result and confirm to continue.',
-	'graphic-style-set-name-differs': 'Confirm to keep the installed name; the packaged name is not applied.',
+	// Deliberately not phrased as a confirmation. This warning is raised on every
+	// relation the two libraries can have, including an exact match, which is stated
+	// rather than asked — so guidance that told an author to confirm would be advice for
+	// a decision they are not always offered.
+	'graphic-style-set-name-differs': 'This library keeps the name it already records; the packaged name is not applied. Rename it here if the two libraries should agree.',
 	'graphic-style-set-revision-updated': 'Every linked template is offered the change as an available style update to review; none of them is rewritten by this install.',
 	'graphic-style-set-template-affected': 'Review this template and apply the style update to it, or leave it on the revision it is reconciled to.',
 	'graphic-style-set-installed-as-copy': 'Nothing links to the copy until a template selects entries from it.',
