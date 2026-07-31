@@ -247,6 +247,8 @@ function usageSelect() {
 				-- that. Every owner kind that has a name says it.
 				WHEN asset_reference.owner_kind = 'installed-graphics-template'
 					THEN installed_template.name
+				WHEN asset_reference.owner_kind = 'broadcast-graphic-template'
+					THEN broadcast_graphic_template.name
 				ELSE NULL
 			END AS owner_name
 		FROM graphic_asset_references asset_reference
@@ -257,6 +259,9 @@ function usageSelect() {
 		LEFT JOIN installed_graphics_templates installed_template
 			ON asset_reference.owner_kind = 'installed-graphics-template'
 			AND installed_template.id = asset_reference.owner_id
+		LEFT JOIN broadcast_graphic_templates broadcast_graphic_template
+			ON asset_reference.owner_kind = 'broadcast-graphic-template'
+			AND broadcast_graphic_template.id = asset_reference.owner_id
 		WHERE asset_reference.asset_id = ?
 		ORDER BY asset_reference.owner_kind, asset_reference.owner_id,
 			asset_reference.owner_slot, asset_reference.id
