@@ -84,11 +84,12 @@ const PreviewOutputAsideStub = defineComponent({
 	props: {
 		config: { type: Object, required: true },
 		selectedTarget: { type: Object, required: true },
+		compositorTarget: { type: Object, required: true },
 		publicationBlocked: { type: Boolean, required: false },
 		publicationBlockReason: { type: String, required: false },
 	},
-	emits: ['selectTarget'],
-	template: '<button data-testid="preview-output-aside" :data-selected="JSON.stringify(selectedTarget)" :data-config="JSON.stringify(config)" :data-publication-blocked="String(publicationBlocked)" :title="publicationBlockReason" @click="$emit(\'selectTarget\', { type: \'graphic-item\', itemId: \'top-bar\', childId: \'top-name-record\' })" />',
+	emits: ['selectTarget', 'selectCompositorTarget'],
+	template: '<button data-testid="preview-output-aside" :data-selected="JSON.stringify(selectedTarget)" :data-compositor-selected="JSON.stringify(compositorTarget)" :data-config="JSON.stringify(config)" :data-publication-blocked="String(publicationBlocked)" :title="publicationBlockReason" @click="$emit(\'selectTarget\', { type: \'graphic-item\', itemId: \'top-bar\', childId: \'top-name-record\' })" />',
 });
 
 const UFormFieldStub = defineComponent({
@@ -279,6 +280,36 @@ describe('featureMatchOverlaySettings', () => {
 			expect(compositorTarget(wrapper)).toEqual({ type: 'canvas' });
 			expect(wrapper.find('[data-testid="compositor-inspector"]').exists()).toBe(false);
 			expect(selectedTarget(wrapper)).toEqual({ type: 'frame' });
+		});
+
+		it('selects a shared Graphic Item clicked in the preview, and clears the host-owned one', async () => {
+			// Parity with the legacy widgets on the same page: a shared Graphic Item
+			// clicked in the preview reaches the same property panel choosing it in the
+			// tree does, and the two authoring surfaces stay one selection.
+			const wrapper = await mountComponent();
+			wrapper.getComponent(LayerInspectorStub).vm.$emit('update:selectedTarget', { type: 'frame' });
+			await nextTick();
+
+			wrapper.getComponent(PreviewOutputAsideStub).vm.$emit('selectCompositorTarget', {
+				type: 'item',
+				graphicId: 'feature-match-layout',
+				itemId: 'clock',
+			});
+			await nextTick();
+
+			expect(compositorTarget(wrapper)).toMatchObject({ type: 'item', itemId: 'clock' });
+			expect(selectedTarget(wrapper)).toEqual({ type: 'canvas' });
+			expect(wrapper.find('[data-testid="compositor-inspector"]').exists()).toBe(true);
+		});
+
+		it('pushes the shared selection into the preview so it can mark what is under authoring', async () => {
+			const wrapper = await mountComponent();
+
+			wrapper.getComponent(CompositorTreeStub).vm.$emit('update:selectedTarget', { type: 'item', graphicId: 'feature-match-layout', itemId: 'clock' });
+			await nextTick();
+
+			expect(JSON.parse(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-compositor-selected') ?? 'null'))
+				.toMatchObject({ type: 'item', itemId: 'clock' });
 		});
 
 		it('returns both surfaces to the canvas when a preset is reset', async () => {

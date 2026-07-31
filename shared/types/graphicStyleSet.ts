@@ -235,11 +235,16 @@ export type GraphicStyleSetEntry = {
  * there is no validation refusing the combination, because "a brand surface but
  * this one gradient" is an ordinary thing to want.
  *
- * A Graphic Item may own more than one Graphic Surface Style, and each gets its own
- * slot rather than sharing one. A Game Wins Graphic Item has three — its own
- * surface, an unwon box, and a won box — and the whole point of the won box is that
- * it looks *different*, so a vocabulary that could only say "this item's surface"
- * could never express the one distinction that item exists to draw.
+ * A Graphic Item may own more than one Graphic Surface Style or Shape Geometry, and
+ * each location gets its own slot rather than sharing one. A Game Wins Graphic Item
+ * has three surfaces — its own, an unwon box, and a won box — and the whole point of
+ * the won box is that it looks *different*, so a vocabulary that could only say
+ * "this item's surface" could never express the one distinction that item exists to
+ * draw. Its `boxGeometry` shapes a win box rather than the whole indicator, for the
+ * same reason a Media Graphic Item's clipping geometry is not its bounds.
+ *
+ * The three surface slots are the ones `GraphicSurfaceStyleSlot` names, and that type
+ * is derived from this one so the two can never disagree about them.
  */
 export const GRAPHIC_STYLE_SLOT_VALUES = [
 	'typography',
@@ -250,6 +255,7 @@ export const GRAPHIC_STYLE_SLOT_VALUES = [
 	'wonBoxSurfaceStyle',
 	'geometry',
 	'clipGeometry',
+	'boxGeometry',
 	'media',
 	'animation.enter',
 	'animation.on-screen',
@@ -300,6 +306,7 @@ export interface GraphicStyleOverridesBySlot {
 	'wonBoxSurfaceStyle': Partial<GraphicSurfaceStyle>;
 	'geometry': Partial<ShapeGeometry>;
 	'clipGeometry': Partial<ShapeGeometry>;
+	'boxGeometry': Partial<ShapeGeometry>;
 	'media': Partial<GraphicStyleMediaProperties>;
 	'animation.enter': Partial<GraphicStyleAnimationProperties>;
 	'animation.on-screen': Partial<GraphicStyleAnimationProperties>;

@@ -295,7 +295,9 @@ describe('the Graphics Asset Library operational queues API', () => {
 			body: { confirmation: 'purge-now' },
 		});
 
-		const entries = await $fetch<{ subject: { kind: string; id: string } }[]>(
+		const { entries } = await $fetch<{
+			entries: { subject: { kind: string; id: string } }[];
+		}>(
 			'/api/admin/graphics-assets/evidence',
 			{
 				headers: administratorHeaders,

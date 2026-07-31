@@ -7,12 +7,13 @@ import {
 	detachGraphicStyleRefs,
 	GRAPHIC_STYLE_SLOT_OWNED_KEYS,
 	graphicStyleChangeKey,
+	graphicStyleOwnerSupportsSlot,
 	graphicStyleSetEntryIdsInDocument,
 	graphicStyleUpdateChanges,
 	replaceGraphicStyleRefs,
 	resolveGraphicStyleSet,
 } from '~~/shared/modules/graphic-style-sets';
-import { squareShapeGeometry } from '~~/shared/modules/graphics';
+import { GRAPHIC_SURFACE_STYLE_SLOT_KINDS, squareShapeGeometry } from '~~/shared/modules/graphics';
 import { GRAPHIC_STYLE_SLOT_VALUES } from '~~/shared/types/graphicStyleSet';
 
 /**
@@ -139,7 +140,8 @@ describe('gRAPHIC_STYLE_SLOT_OWNED_KEYS', () => {
 		for (const slot of ['defaultChildSurfaceStyle', 'boxSurfaceStyle', 'wonBoxSurfaceStyle'] as const)
 			expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot]].sort()).toEqual([...surfaceKeys].sort());
 		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.geometry].sort()).toEqual([...geometryKeys].sort());
-		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.clipGeometry].sort()).toEqual([...geometryKeys].sort());
+		for (const slot of ['clipGeometry', 'boxGeometry'] as const)
+			expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot]].sort()).toEqual([...geometryKeys].sort());
 		expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS.media].sort()).toEqual([...mediaKeys].sort());
 		for (const phase of ['animation.enter', 'animation.update', 'animation.exit'] as const)
 			expect([...GRAPHIC_STYLE_SLOT_OWNED_KEYS[phase]].sort()).toEqual([...recipeKeys].sort());
@@ -148,6 +150,33 @@ describe('gRAPHIC_STYLE_SLOT_OWNED_KEYS', () => {
 			.toEqual([...recipeKeys, 'pause', 'repeat'].sort());
 		// A Graphic Fill is a discriminated union, so it has no partial to deviate in.
 		expect(GRAPHIC_STYLE_SLOT_OWNED_KEYS['surfaceStyle.fill']).toEqual([]);
+	});
+
+	/**
+	 * The Graphic Surface Style slots are shared with the authoring module that edits
+	 * those same surfaces, and each side would happily hold its own opinion about
+	 * which Graphic Item kinds own them. If they drifted, a picker would be offered
+	 * for a surface the item does not have and would then write nothing — visible
+	 * only as a control that does not work. So the inheriting side is asserted to
+	 * agree with the editing side, which is the one that owns the fact.
+	 */
+	it('agrees with the authoring module about which kinds own each Graphic Surface Style', () => {
+		const kinds = [
+			'text',
+			'shape',
+			'media',
+			'group',
+			'clock',
+			'player-life',
+			'game-wins',
+		] as const;
+
+		for (const slot of ['surfaceStyle', 'boxSurfaceStyle', 'wonBoxSurfaceStyle'] as const) {
+			for (const kind of kinds) {
+				expect(graphicStyleOwnerSupportsSlot({ type: kind } as GraphicItemConfig, slot))
+					.toBe(GRAPHIC_SURFACE_STYLE_SLOT_KINDS[slot].includes(kind));
+			}
+		}
 	});
 
 	it('gives every slot in the vocabulary a list', () => {
@@ -339,7 +368,10 @@ describe('applyGraphicStyleSet', () => {
 			boxSurfaceStyle: { ...surface },
 			wonBoxSurfaceStyle: { ...surface },
 			typography: { ...TYPOGRAPHY },
-			styleRefs: { wonBoxSurfaceStyle: { entryId: 'panel' } },
+			styleRefs: {
+				wonBoxSurfaceStyle: { entryId: 'panel' },
+				boxGeometry: { entryId: 'cut-corner' },
+			},
 		};
 
 		const applied = applyGraphicStyleSet(graphic([gameWins]), resolveGraphicStyleSet(styleSet()));
@@ -357,6 +389,8 @@ describe('applyGraphicStyleSet', () => {
 		});
 		expect(item.boxSurfaceStyle).toEqual(surface);
 		expect(item.surfaceStyle).toBeUndefined();
+		// And its win-box geometry, which shapes one box rather than the indicator.
+		expect(item.boxGeometry).toMatchObject({ topRight: { treatment: 'cut', size: 24 } });
 	});
 
 	it('ignores a reference in a slot the Graphic Item cannot hold', () => {

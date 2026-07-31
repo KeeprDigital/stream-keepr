@@ -44,6 +44,7 @@ const SLOT_LABELS: Record<string, string> = {
 	'wonBoxSurfaceStyle': 'Won game win box',
 	'geometry': 'Shape Geometry',
 	'clipGeometry': 'Clipping geometry',
+	'boxGeometry': 'Win box geometry',
 	'media': 'Media treatment',
 	'animation.enter': 'Enter animation',
 	'animation.on-screen': 'On-screen animation',

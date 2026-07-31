@@ -1008,6 +1008,7 @@ const graphicItemStyleRefsSchema = z.object({
 	'wonBoxSurfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
 	'geometry': graphicStyleRefSchema(graphicShapeGeometrySchema.partial()).optional(),
 	'clipGeometry': graphicStyleRefSchema(graphicShapeGeometrySchema.partial()).optional(),
+	'boxGeometry': graphicStyleRefSchema(graphicShapeGeometrySchema.partial()).optional(),
 	'media': graphicStyleRefSchema(graphicMediaTreatmentPropertiesSchema.partial()).optional(),
 	...graphicAnimationStyleRefShape,
 }).strict();

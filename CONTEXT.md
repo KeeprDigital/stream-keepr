@@ -366,7 +366,24 @@ It must reproduce the exact bytes the catalogue already recorded; anything else 
 
 **Evidence Ledger**:
 The chronological administrator-facing record of automated Graphics Asset Library lifecycle and reconciliation decisions, retained for one year after the cleanup it explains.
-It identifies subjects by opaque domain identity and never carries object keys, content digests, filenames, capability secrets, or deleted bytes.
+It identifies subjects by opaque domain identity and never carries object keys, content digests, filenames, delivery or signed URLs, capability secrets, or deleted bytes.
+Each entry records the actor or automated policy, the transition either side of the change where the subject has named states, the checked reference count, bytes reserved or freed, the quota state observed, the deadline the decision established or acted on, the opaque operation and correlation identities, the outcome, and a stable reason.
+
+**Evidence Terminal Cleanup**:
+The recorded event that says one Evidence Ledger subject will never be heard from again — a Graphic Asset purge, a Revision Pruning, a Graphic Asset Content deletion, a staged input expiry, or a settled Graphics Discrepancy.
+It is the anchor for the one-year window: an entry has no expiry at all until its subject records one, so Evidence about a live subject is never destroyed by its own age, and Evidence written before a purge outlives that purge by the full year rather than expiring before the event it was written to explain.
+
+**Evidence Sealing**:
+The Graphics Retention Sweep stage that stamps the one-year expiry onto every unsealed Evidence Ledger entry whose subject has since recorded an Evidence Terminal Cleanup, anchored on the last such cleanup.
+Sealing and expiry write no Evidence of their own, because entries about the ledger's own housekeeping would outlive the entries they explain and the next sweep would then have those to explain in turn.
+
+**Evidence Category Group**:
+The operational vocabulary the Evidence Ledger is filtered by — ingestion, lifecycle, pruning, purge, quarantine, reconciliation, repair, regeneration, and restoration — each naming a set of Evidence categories.
+Groups overlap deliberately, because a restoration from Content Quarantine is both a restoration and a quarantine outcome and someone tracing either one needs to see it.
+
+**Evidence Ledger Position**:
+One place in the chronological Evidence Ledger, named by the recorded instant and the identity of the entry that shared it.
+The ledger only grows, so it is paged by position rather than by offset: an offset would re-read everything already skipped and would shift under a sweep writing entries while the pages are being turned, and comparing the instant without the identity would repeat or lose entries recorded in the same millisecond.
 
 **Operations Cockpit**:
 The administrator-only surface that answers, in one reading, whether the Graphics Asset Library is safe and what currently needs attention.
@@ -703,6 +720,11 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - **Graphic Asset Content** stays reachable while any retained **Graphic Asset Revision** or **Graphics Derivative** points at it, and enters **Content Quarantine** only once that final reachability disappears
 - A **Graphics Derivative** is reclaimed with its source **Graphic Asset Revision** and never keeps that revision's **Graphic Asset Content** reachable on its own
 - Every automated **Graphics Retention Sweep** decision and every **Early Purge** records one entry in the **Evidence Ledger**
+- Every **Graphic Asset** lifecycle transition records, on a best-effort basis, one **Evidence Ledger** entry naming the actor, the states either side, and the recovery deadline Trash established; the transition itself is already durable and never fails for want of Evidence
+- The **Graphic Asset Revision** retention deadline is established at supersession and recorded there, not when a sweep first observes it
+- **Evidence Ledger** entries are retained until their subject's **Evidence Terminal Cleanup** and for one year after it, never expiring on their own age
+- A **Graphic Asset Tombstone** explains later provenance and audit observations, outlives the **Evidence Ledger** entries about its purge, and satisfies no **Graphic Asset Reference**
+- High-volume delivery observations stay in logs, traces, and aggregate metrics: a disagreement a reader observes opens one **Graphics Discrepancy** and records one **Evidence Ledger** entry however many times it is read
 - A Template Package import maps its packaged asset identity and revision to a local **Graphic Asset** identity and revision
 - **Graphic Asset Origin** records that mapping on the exact imported local revision without making the packaged identity a local identity or live link
 - A later locally created **Graphic Asset Revision** never inherits **Graphic Asset Origin** from an earlier imported revision

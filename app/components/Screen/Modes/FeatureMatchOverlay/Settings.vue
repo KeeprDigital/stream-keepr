@@ -280,9 +280,11 @@ function updateComposition(composition: BroadcastGraphicConfig) {
 					:screen="screen"
 					:config="config"
 					:selected-target="selectedTarget"
+					:compositor-target="compositorTarget"
 					:publication-blocked="assetPublicationBlocked"
 					:publication-block-reason="assetPublicationBlockReason"
 					@select-target="selectHostTarget"
+					@select-compositor-target="selectCompositorTarget"
 				/>
 			</section>
 

@@ -13,6 +13,7 @@ import type {
 } from '~~/shared/utils/graphicsOperationalQueues';
 import type { GraphicsStorageHealthAlertSeverity } from '~~/shared/utils/graphicsOperationsCockpit';
 import { formatByteCount } from '~~/shared/utils/formatByteCount';
+import { formatInstant } from '~~/shared/utils/formatInstant';
 import {
 	graphicsDiscrepancyQueueOutcome,
 	graphicsPurgeQueueOutcome,
@@ -200,10 +201,6 @@ function outcomeColor(outcome: GraphicsQueueActionOutcome) {
 	return outcome === 'completed'
 		? 'success'
 		: outcome === 'already-in-state' ? 'neutral' : 'error';
-}
-
-function formatInstant(instant: string | undefined) {
-	return instant ? new Date(instant).toLocaleString() : 'None';
 }
 
 function isSelected(item: GraphicsOperationalQueueItem) {

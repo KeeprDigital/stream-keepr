@@ -103,6 +103,7 @@ export const GRAPHIC_STYLE_SLOT_OWNED_KEYS: Record<GraphicStyleSlot, readonly st
 	'wonBoxSurfaceStyle': ['fill', 'fillOpacity', 'outline', 'glow'],
 	'geometry': ['topLeft', 'topRight', 'bottomRight', 'bottomLeft', 'leftSlant', 'rightSlant'],
 	'clipGeometry': ['topLeft', 'topRight', 'bottomRight', 'bottomLeft', 'leftSlant', 'rightSlant'],
+	'boxGeometry': ['topLeft', 'topRight', 'bottomRight', 'bottomLeft', 'leftSlant', 'rightSlant'],
 	'media': ['fit', 'focalPosition', 'opacity', 'clipGeometry', 'playbackRate', 'loop'],
 	'animation.enter': ['duration', 'easing', 'delay', 'fade', 'slide', 'scale', 'reveal'],
 	'animation.on-screen': ['duration', 'easing', 'delay', 'fade', 'slide', 'scale', 'reveal', 'pause', 'repeat'],

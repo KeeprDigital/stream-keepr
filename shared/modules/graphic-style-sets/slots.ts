@@ -9,6 +9,7 @@ import type {
 	GraphicStyleSlot,
 } from '../../types/graphicStyleSet';
 import type { ResolvedGraphicStyleValue } from './entries';
+import { GRAPHIC_SURFACE_STYLE_SLOT_KINDS } from '../graphics/authoring';
 import { createDefaultGraphicSurfaceStyle } from '../graphics/itemDefinitions';
 
 /**
@@ -46,6 +47,7 @@ export const GRAPHIC_STYLE_SLOT_KINDS: Record<GraphicStyleSlot, GraphicStyleEntr
 	'wonBoxSurfaceStyle': 'surface-style',
 	'geometry': 'shape-geometry',
 	'clipGeometry': 'shape-geometry',
+	'boxGeometry': 'shape-geometry',
 	'media': 'media-treatment',
 	'animation.enter': 'animation-recipe',
 	'animation.on-screen': 'animation-recipe',
@@ -71,6 +73,7 @@ export const GRAPHIC_STYLE_SLOT_APPLICATION_ORDER: readonly GraphicStyleSlot[] =
 	'boxSurfaceStyle',
 	'wonBoxSurfaceStyle',
 	'geometry',
+	'boxGeometry',
 	'media',
 	'clipGeometry',
 	'animation.enter',
@@ -107,9 +110,6 @@ function ownerKind(owner: GraphicStyleOwnerNode): GraphicItemConfig['type'] | nu
 	return 'type' in owner ? owner.type : null;
 }
 
-/** The Graphic Item kinds that carry a Graphic Surface Style of their own. */
-const SURFACE_KINDS: readonly GraphicItemConfig['type'][] = ['text', 'shape', 'group', 'clock', 'player-life', 'game-wins'];
-
 /** The Graphic Item kinds that carry base typography. */
 const TYPOGRAPHY_KINDS: readonly GraphicItemConfig['type'][] = ['text', 'clock', 'player-life', 'game-wins'];
 
@@ -129,16 +129,21 @@ export function graphicStyleOwnerSupportsSlot(owner: GraphicStyleOwnerNode, slot
 	switch (slot) {
 		case 'typography':
 			return kind !== null && TYPOGRAPHY_KINDS.includes(kind);
+		// Which kinds own which surface is stated once, by the authoring module that
+		// edits them. A second table here could drift into offering a style reference
+		// for a surface the item does not have.
 		case 'surfaceStyle':
 		case 'surfaceStyle.fill':
-			return kind !== null && SURFACE_KINDS.includes(kind);
-		case 'defaultChildSurfaceStyle':
-			return kind === 'group';
+			return kind !== null && GRAPHIC_SURFACE_STYLE_SLOT_KINDS.surfaceStyle.includes(kind);
 		case 'boxSurfaceStyle':
 		case 'wonBoxSurfaceStyle':
-			return kind === 'game-wins';
+			return kind !== null && GRAPHIC_SURFACE_STYLE_SLOT_KINDS[slot].includes(kind);
+		case 'defaultChildSurfaceStyle':
+			return kind === 'group';
 		case 'geometry':
 			return kind === 'shape' || kind === 'group';
+		case 'boxGeometry':
+			return kind === 'game-wins';
 		case 'clipGeometry':
 		case 'media':
 			return kind === 'media';
@@ -183,6 +188,8 @@ export function readGraphicStyleSlot(
 			return item.type === 'shape' || item.type === 'group' ? item.geometry : undefined;
 		case 'clipGeometry':
 			return item.type === 'media' ? item.clipGeometry : undefined;
+		case 'boxGeometry':
+			return item.type === 'game-wins' ? item.boxGeometry : undefined;
 		case 'media':
 			return item.type === 'media'
 				? {
@@ -247,6 +254,8 @@ export function writeGraphicStyleSlot<T extends GraphicStyleOwnerNode>(
 			return { ...item, geometry: value } as unknown as T;
 		case 'clipGeometry':
 			return { ...item, clipGeometry: value } as unknown as T;
+		case 'boxGeometry':
+			return { ...item, boxGeometry: value } as unknown as T;
 		case 'media': {
 			// Written key by key rather than spread, because an absent clipping geometry
 			// has to *remove* the one the item is carrying. A spread of an object that
