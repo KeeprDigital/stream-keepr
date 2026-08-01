@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import type { BroadcastGraphicTemplateSummary } from '~~/shared/types/broadcastGraphicTemplate';
 import type { GraphicStyleUpdateChange, GraphicStyleUpdateDecision, GraphicStyleUpdateReview } from '~~/shared/types/graphicStyleSet';
-import { graphicStyleChangedKeys, graphicStyleChangeKey } from '~~/shared/modules/graphic-style-sets';
+import {
+	GRAPHIC_STYLE_SLOT_OWNED_KEYS,
+	graphicStyleChangedKeys,
+	graphicStyleChangeKey,
+} from '~~/shared/modules/graphic-style-sets';
 
 /**
  * The reviewed Graphic Style Set update for one Broadcast Graphic Template.
@@ -128,6 +132,24 @@ function reviewedProperties(change: GraphicStyleUpdateChange): ReviewedProperty[
 	}));
 }
 
+/**
+ * What answering this row with "Keep mine" actually commits the author to.
+ *
+ * Said per row because it is not the same commitment on every row. A slot that owns
+ * keys records the values above as local overrides and leaves the rest of its property
+ * group inheriting — the narrowing #162 asked for, stated where the author decides. A
+ * slot that owns none has no partial to deviate in, so keeping it cannot record an
+ * override at all: `applyGraphicStyleSet` drops the reference and the property goes
+ * local outright. One blanket sentence describing the first would be false about the
+ * second, which is the whole reason this is computed rather than written once.
+ */
+function keepEffect(change: GraphicStyleUpdateChange): string {
+	return GRAPHIC_STYLE_SLOT_OWNED_KEYS[change.slot].length === 0
+		? `Keeping this makes it a local value and stops it following “${change.entryName}” at all.`
+		: `Keeping pins the values above as your own, so they stop following “${change.entryName}”. `
+			+ 'Everything else in this group carries on inheriting.';
+}
+
 function decisionFor(itemId: string | null, slot: string): GraphicStyleUpdateDecision {
 	return decisions.value[graphicStyleChangeKey(itemId, slot as never)] ?? 'inherit';
 }
@@ -219,8 +241,6 @@ watch(() => [props.template.id, props.template.revision], () => void refresh(), 
 			<p class="text-xs text-muted">
 				Applying creates one new revision of this template. Local overrides are kept.
 				Broadcast Graphics already placed from it are not affected.
-				Keeping a value records it as a local override, so it stops following this Style Set
-				— on this republish and on every later one.
 			</p>
 
 			<div
@@ -257,6 +277,15 @@ watch(() => [props.template.id, props.template.revision], () => void refresh(), 
 						</dd>
 					</div>
 				</dl>
+
+				<!--
+					And what the answer that is not the default would cost. Stated per row,
+					because keeping a slot that owns no keys drops the reference rather than
+					recording an override.
+				-->
+				<p class="mt-1 text-xs text-muted" data-testid="style-update-keep-effect">
+					{{ keepEffect(change) }}
+				</p>
 
 				<div class="mt-1 flex gap-1.5">
 					<UButton

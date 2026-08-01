@@ -146,7 +146,7 @@ async function place(templateId: string) {
 				:state="packageImport"
 			/>
 
-			<GraphicsLibraryError
+			<GraphicsReusableLibraryError
 				title="Layout template action failed"
 				:message="error"
 				test-id="layout-template-error"

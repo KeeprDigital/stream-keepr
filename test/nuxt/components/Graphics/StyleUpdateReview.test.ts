@@ -209,16 +209,63 @@ describe('graphicsStyleUpdateReview', () => {
 	});
 
 	/**
-	 * The second-order cost the author is entitled to know about before answering:
-	 * keeping a value records it as a local override, which stops the Style Set reaching
-	 * that property on this republish and on every later one.
+	 * A property arriving where there was none, and one that is not a scalar.
+	 *
+	 * An absent value says so rather than rendering as an empty string, because a blank
+	 * either side of the arrow reads as "unchanged" — the opposite of what it means. A
+	 * media treatment's clipping is the case that produces it: a preset that names a
+	 * Shape Geometry adds one where the item had nothing.
 	 */
-	it('says what keeping a value commits the author to', async () => {
+	it('says when a property is not set, and shows a value that is not a scalar whole', async () => {
+		mockReviewTemplateUpdate.mockResolvedValue(review({
+			changes: [{
+				ownerItemId: 'bug',
+				ownerLabel: 'Sponsor bug',
+				slot: 'media',
+				entryId: 'framed',
+				entryName: 'Framed media',
+				current: { opacity: 1 },
+				next: { opacity: 1, clipGeometry: { topLeft: { treatment: 'cut', size: 24 } } },
+			}],
+		}));
+
 		const wrapper = await mountReview();
 		await expand(wrapper);
 
-		expect(wrapper.get('[data-testid="style-update-changes"]').text().replace(/\s+/g, ' '))
-			.toContain('Keeping a value records it as a local override, so it stops following this Style Set');
+		expect(movedProperties(wrapper)).toEqual([{
+			key: 'clipGeometry',
+			current: 'not set',
+			next: '{"topLeft":{"treatment":"cut","size":24}}',
+		}]);
+	});
+
+	/**
+	 * The second-order cost the author is entitled to know about before answering, said
+	 * per row because it is not the same commitment on every row.
+	 *
+	 * A slot that owns keys records the values as local overrides and leaves the rest of
+	 * the property group inheriting. A slot that owns none — a Graphic Fill is a
+	 * discriminated union with no partial to deviate in — cannot record an override at
+	 * all, so keeping it drops the reference and the property goes local outright. One
+	 * blanket sentence describing the first would be false about the second.
+	 */
+	it('says what keeping commits the author to, per row', async () => {
+		const wrapper = await mountReview();
+		await expand(wrapper);
+
+		const effects = wrapper.findAll('[data-testid="style-update-keep-effect"]')
+			.map(node => node.text().replace(/\s+/g, ' '));
+
+		// The Graphic Fill row: keeping lets go of the reference entirely.
+		expect(effects[0]).toBe(
+			'Keeping this makes it a local value and stops it following “Accent fill” at all.',
+		);
+		// The animation row: only the values above are pinned, and the rest of the group
+		// carries on inheriting — which is the whole point of not pinning the group.
+		expect(effects[1]).toBe(
+			'Keeping pins the values above as your own, so they stop following “Rise”. '
+			+ 'Everything else in this group carries on inheriting.',
+		);
 	});
 
 	it('shows every row starting on inherit, which is what applying without touching one does', async () => {

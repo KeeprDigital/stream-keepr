@@ -312,6 +312,32 @@ export function graphicStyleChangeKey(itemId: string | null, slot: GraphicStyleS
 }
 
 /**
+ * The overrides already recorded on a slot that the owner's stored value still holds.
+ *
+ * An override is a claim about a property — "this one is mine" — and the stored value
+ * is what the owner actually renders. Where the two agree the claim still describes
+ * something real and survives. Where they disagree the claim is stale: it names a value
+ * this owner is not holding, so honouring it would move the property rather than keep
+ * it, and it is dropped. That is what lets an owner whose stored value has gone back to
+ * matching its entry end up pinning nothing at all rather than pinning a whole property
+ * group on the strength of provenance the document itself contradicts.
+ */
+function heldGraphicStyleOverrides(
+	overrides: unknown,
+	slot: GraphicStyleSlot,
+	current: unknown,
+): Record<string, unknown> {
+	const recorded = (overrides ?? {}) as Record<string, unknown>;
+	const currentRecord = (current ?? {}) as Record<string, unknown>;
+	const held: Record<string, unknown> = {};
+	for (const key of GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot]) {
+		if (recorded[key] !== undefined && sameGraphicStyleValue(recorded[key], currentRecord[key]))
+			held[key] = recorded[key];
+	}
+	return held;
+}
+
+/**
  * Rebuild every inherited property group of one composition from a resolved Graphic
  * Style Set.
  *
@@ -356,14 +382,13 @@ export function applyGraphicStyleSet(
 
 			if (decisions[graphicStyleChangeKey(itemId, slot)] === 'keep-as-override') {
 				// Preserving the previously resolved property means recording it as the
-				// author's own: the reference stays, the property does not move now or on
-				// any later republish, and what is recorded is exactly where this owner
-				// deviates from the entry — the keys the author had already pinned, plus
-				// the ones this update was about to move.
+				// author's own: the reference stays and the property does not move, now or
+				// on any later republish.
 				//
-				// Not the whole property group. An author answering one row is answering
+				// What that records is "what in this slot is mine", which is two things and
+				// not the whole property group. An author answering one row is answering
 				// about the values on it, and pinning the seven typography keys the Style
-				// Set and the author already agree on would freeze this slot against every
+				// Set and the author already agree on would freeze the slot against every
 				// future republish — a commitment far larger than the one they were asked
 				// to make (#162).
 				//
@@ -372,21 +397,24 @@ export function applyGraphicStyleSet(
 				// reference entirely. The value is already stored inline and does not move;
 				// only the provenance does. Recording an empty override instead would leave
 				// the reference in place and the change offered again on every later
-				// review, which is the one answer this decision must not produce. The same
-				// reasoning is why a deviation set that comes back empty falls back to the
-				// whole group: a composition whose stored value disagrees with its own
-				// recorded override has no narrower answer that settles this row.
+				// review, which is the one answer this decision must not produce.
 				if (GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot].length === 0) {
 					delete (nextRefs as Record<string, unknown>)[slot];
 					continue;
 				}
 				(nextRefs as Record<string, unknown>)[slot] = {
 					entryId: ref.entryId,
-					overrides: captureGraphicStyleOverrides(resolution, slot, ref.entryId, current)
-						?? pick(
-							current as Record<string, unknown> | undefined,
-							GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot],
-						),
+					overrides: {
+						// The pins the author already had and this owner still holds. They are
+						// not always deviations: a republished preset that lands on the value
+						// an author pinned agrees with it, and reading "mine" as "differs from
+						// the preset" alone would drop the pin — so the next republish moving
+						// that preset away would take the property with it.
+						...heldGraphicStyleOverrides(ref.overrides, slot, current),
+						// And where this owner deviates from the entry, which is every key the
+						// update was about to move.
+						...captureGraphicStyleOverrides(resolution, slot, ref.entryId, current),
+					},
 				};
 				continue;
 			}

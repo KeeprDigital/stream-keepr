@@ -466,7 +466,7 @@ function unlink() {
 				used across designs that travel independently.
 			</p>
 
-			<GraphicsLibraryError
+			<GraphicsReusableLibraryError
 				title="Graphic Style Set action failed"
 				:message="error"
 				test-id="style-set-error"

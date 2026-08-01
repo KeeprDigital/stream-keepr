@@ -11,11 +11,15 @@ import type { GraphicsTemplatePackageImport } from '~/composables/useGraphicsTem
  * which is why they can share this and why the eight-way wiring it holds only had to be
  * written once.
  *
- * The kind is a `TemplatePackageKind` rather than any importable artifact, so a Graphic
- * Style Set Package cannot arrive here. Its first import *preserves* the packaged
- * identity and revision, and this path yields an unlinked copy — the distinction the
- * separation of `useGraphicsTemplateLibrary` and `useReusableLibraryReading` exists to
- * keep, stated once more where a `kind` prop could otherwise have quietly crossed it.
+ * The kind is a `TemplatePackageKind` rather than any kind a reusable library can be
+ * handed, so `kind="skstyle"` here is a type error. That is a labelling guard and only
+ * that: what actually keeps a Graphic Style Set Package's preserve-identity import off
+ * this path is the repository interface — `GraphicsTemplateLibraryRepository` requires
+ * `receivePackage` and `confirmPackage`, which the Style Set repository does not have,
+ * so `useGraphicsTemplateLibrary` cannot be instantiated over it at all. This prop only
+ * stops a Template library mislabelling its own import button; nothing prevents a
+ * caller reaching past this component to `GraphicsPackageImport` directly, which is how
+ * `StyleSetLibrary.vue` legitimately uses it.
  */
 defineProps<{
 	/** Which Template Package this library receives. */

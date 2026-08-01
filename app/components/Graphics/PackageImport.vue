@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { GraphicsPackageArtifactKind } from '~/utils/graphicsPackageArtifacts';
-import { GRAPHICS_PACKAGE_ARTIFACTS } from '~/utils/graphicsPackageArtifacts';
+import type { ReusableLibraryImportKind } from '~/utils/reusableLibraryImports';
+import { REUSABLE_LIBRARY_IMPORTS } from '~/utils/reusableLibraryImports';
 
 /**
  * The package-import surface a graphics library offers: the picker that receives one,
@@ -27,7 +27,7 @@ interface PackageImportIssue {
 
 const props = defineProps<{
 	/** The portable artifact this library receives. */
-	kind: GraphicsPackageArtifactKind;
+	kind: ReusableLibraryImportKind;
 	/** This library's prefix for its import test ids. */
 	testId: string;
 	/** Whether this session may author. An observer is offered no import at all. */
@@ -50,7 +50,7 @@ const emit = defineEmits<{
 	dismiss: [];
 }>();
 
-const artifact = computed(() => GRAPHICS_PACKAGE_ARTIFACTS[props.kind]);
+const artifact = computed(() => REUSABLE_LIBRARY_IMPORTS[props.kind]);
 
 const importFileInput = useTemplateRef<HTMLInputElement>('importFileInput');
 
