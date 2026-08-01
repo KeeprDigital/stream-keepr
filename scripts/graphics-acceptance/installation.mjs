@@ -13,7 +13,9 @@ import { Buffer } from 'node:buffer';
 import { createHash, randomUUID } from 'node:crypto';
 import process from 'node:process';
 import { crc32 } from 'node:zlib';
-import { featureMatchLayoutReferencing } from './domain-defaults.mjs';
+import { AcceptanceFailure, deliveryRouteLabel } from './evidence.mjs';
+import { featureMatchLayoutReferencing } from './repository-bridge.mjs';
+import { acceptanceRoutes } from './routes.mjs';
 
 const DEFAULT_LOCAL_ORIGIN = 'http://127.0.0.1:8787';
 
@@ -27,8 +29,11 @@ export function acceptanceOrigin({ deployed }) {
 		return (process.env.STREAM_KEEPR_LOCAL_ACCEPTANCE_URL ?? DEFAULT_LOCAL_ORIGIN).replace(/\/$/, '');
 	const baseUrl = process.env.STREAM_KEEPR_BROWSER_ACCEPTANCE_URL
 		?? process.env.STREAM_KEEPR_DEPLOY_HEALTH_URL;
-	if (!baseUrl)
-		throw new Error('Set STREAM_KEEPR_BROWSER_ACCEPTANCE_URL to the deployed staging base URL.');
+	if (!baseUrl) {
+		throw new AcceptanceFailure('harness-precondition-unmet', {
+			reason: 'STREAM_KEEPR_BROWSER_ACCEPTANCE_URL is unset',
+		});
+	}
 	return baseUrl.replace(/\/$/, '');
 }
 
@@ -82,8 +87,11 @@ export async function openInstallation(origin) {
 	const authorCookie = bootstrap.headers.getSetCookie()
 		.map(value => value.split(';', 1)[0])
 		.find(value => value.includes('='));
-	if (!authorCookie)
-		throw new Error('The installation did not issue a graphics author session.');
+	if (!authorCookie) {
+		throw new AcceptanceFailure('harness-precondition-unmet', {
+			reason: 'no graphics author session issued',
+		});
+	}
 
 	/**
 	 * @param {string} path
@@ -109,9 +117,13 @@ export async function openInstallation(origin) {
 	async function json(path, init = {}) {
 		const observation = await request(path, init);
 		if (observation.status >= 400) {
-			throw new Error(
-				`${init.method ?? 'GET'} ${path.replace(/\/\d+/g, '/:id')} answered ${observation.status}`,
-			);
+			// The path carries the asset, revision, and operation identities the
+			// evidence gate exists to withhold, so only its route label travels.
+			throw new AcceptanceFailure('harness-precondition-unmet', {
+				route: deliveryRouteLabel(path),
+				method: init.method ?? 'GET',
+				actual: observation.status,
+			});
 		}
 		return observation.bytes.byteLength === 0 ? undefined : JSON.parse(observation.text());
 	}
@@ -127,7 +139,7 @@ export async function openInstallation(origin) {
 export async function provisionScreenOutputScenario(session, { label }) {
 	const marker = randomUUID();
 	const content = distinctPixelPng(marker);
-	const event = await session.json('/api/events', {
+	const event = await session.json(acceptanceRoutes.events(), {
 		method: 'POST',
 		author: true,
 		body: {
@@ -136,17 +148,14 @@ export async function provisionScreenOutputScenario(session, { label }) {
 			featureMatchOrientation: 'horizontal',
 		},
 	});
-	const screen = await session.json(`/api/events/${event.id}/screens`, {
+	const slug = `acceptance-overlay-${marker.slice(0, 8)}`;
+	const screen = await session.json(acceptanceRoutes.screens(event.id), {
 		method: 'POST',
 		author: true,
-		body: {
-			name: 'Acceptance Overlay',
-			slug: `acceptance-overlay-${marker.slice(0, 8)}`,
-			currentMode: 'feature-match-overlay',
-		},
+		body: { name: 'Acceptance Overlay', slug, currentMode: 'feature-match-overlay' },
 	});
 
-	const initiated = await session.json('/api/graphics-assets/ingestion-operations', {
+	const initiated = await session.json(acceptanceRoutes.ingestionOperations(), {
 		method: 'POST',
 		author: true,
 		body: {
@@ -163,7 +172,7 @@ export async function provisionScreenOutputScenario(session, { label }) {
 		},
 	});
 	const operation = await session.json(
-		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
+		acceptanceRoutes.ingestionContent(initiated.id),
 		{ method: 'PUT', author: true, body: content },
 	);
 	const { assetId, revisionId } = operation.result;
@@ -171,7 +180,7 @@ export async function provisionScreenOutputScenario(session, { label }) {
 	// A capability only authorizes what the Screen Output actually references,
 	// so the reference has to exist before the capability is worth anything.
 	await session.json(
-		`/api/events/${event.id}/screens/${screen.id}/config/feature-match-overlay`,
+		acceptanceRoutes.screenModeConfig(event.id, screen.id, 'feature-match-overlay'),
 		{
 			method: 'PATCH',
 			author: true,
@@ -181,7 +190,7 @@ export async function provisionScreenOutputScenario(session, { label }) {
 
 	async function mintCapability(method) {
 		const minted = await session.json(
-			`/api/events/${event.id}/screens/${screen.id}/asset-capability`,
+			acceptanceRoutes.screenAssetCapability(event.id, screen.id),
 			{ method, author: true },
 		);
 		return minted.assetCapability;
@@ -190,6 +199,7 @@ export async function provisionScreenOutputScenario(session, { label }) {
 	return {
 		eventId: event.id,
 		screenId: screen.id,
+		screenSlug: slug,
 		assetId,
 		revisionId,
 		content,
@@ -197,14 +207,82 @@ export async function provisionScreenOutputScenario(session, { label }) {
 		capability: await mintCapability('GET'),
 		rotateCapability: () => mintCapability('POST'),
 		capabilityContentPath: () =>
-			`/api/screen-output/screens/${screen.id}/assets/${assetId}/revisions/${revisionId}/content`,
-		editorContentPath: () => `/api/graphics-assets/${assetId}/revisions/${revisionId}/content`,
+			acceptanceRoutes.capabilityContent(screen.id, assetId, revisionId),
+		editorContentPath: () => acceptanceRoutes.editorContent(assetId, revisionId),
 		async dispose() {
 			try {
-				await session.request(`/api/events/${event.id}`, { method: 'DELETE', author: true });
+				await session.request(acceptanceRoutes.event(event.id), { method: 'DELETE', author: true });
 			}
 			catch {
 				// A left-behind acceptance Event is noise, never a failure of the gate.
+			}
+		},
+	};
+}
+
+/**
+ * Stage one font Graphic Asset and stop where the product stops: awaiting the
+ * browser's answer to a server-selected glyph challenge.
+ *
+ * The bundled application fonts are explicitly outside the library, so a gate
+ * that only loaded those would never send a font through Worker delivery at
+ * all. Publishing one here is what lets the browser gate read a real staged
+ * source, answer the real challenge, and then load the published revision back
+ * through the delivery route.
+ */
+export async function stageFontIngestion(session, { bytes, declaredMime, sourceFileName }) {
+	const marker = randomUUID();
+	const initiated = await session.json(acceptanceRoutes.ingestionOperations(), {
+		method: 'POST',
+		author: true,
+		body: {
+			idempotencyKey: `staging-acceptance-font-${marker}`,
+			name: `Staging acceptance face ${marker.slice(0, 8)}`,
+			sourceFileName,
+			declaredMime,
+			declaredByteLength: bytes.byteLength,
+		},
+	});
+	const staged = await session.json(acceptanceRoutes.ingestionContent(initiated.id), {
+		method: 'PUT',
+		author: true,
+		headers: { 'content-type': declaredMime },
+		body: bytes,
+	});
+	if (staged.stage !== 'awaiting-confirmation' || staged.report?.facts?.kind !== 'font') {
+		throw new AcceptanceFailure('harness-precondition-unmet', {
+			route: deliveryRouteLabel(acceptanceRoutes.ingestionContent(initiated.id)),
+			reason: 'no font challenge was issued',
+		});
+	}
+	return {
+		operationId: initiated.id,
+		challenge: staged.report.facts.browserChallenge,
+		/** Whatever the operation ended up publishing, if it published at all. */
+		async publishedAssetId() {
+			try {
+				const settled = await session.json(
+					acceptanceRoutes.ingestionOperation(initiated.id),
+					{ author: true },
+				);
+				return settled?.result?.assetId;
+			}
+			catch {
+				return undefined;
+			}
+		},
+		async dispose(assetId) {
+			if (!assetId)
+				return;
+			try {
+				await session.request(acceptanceRoutes.assetLifecycleActions(assetId), {
+					method: 'POST',
+					author: true,
+					body: { action: 'trash' },
+				});
+			}
+			catch {
+				// A left-behind acceptance face is noise, never a failure of the gate.
 			}
 		},
 	};

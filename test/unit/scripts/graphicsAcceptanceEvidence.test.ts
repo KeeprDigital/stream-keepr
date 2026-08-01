@@ -79,6 +79,22 @@ describe('graphics staging acceptance evidence', () => {
 	it('labels a route it was not written for without echoing its identifiers', () => {
 		expect(deliveryRouteLabel('https://stream.example.workers.dev/api/graphics-assets/gaa-1/thumbnail'))
 			.toBe('/api/graphics-assets/:assetId/thumbnail');
+		expect(deliveryRouteLabel('/api/graphics-assets/installed-templates/tpl-77'))
+			.toBe('/api/graphics-assets/installed-templates/:templateId');
+		expect(deliveryRouteLabel('/event/12/screen/acceptance-overlay-9f2c'))
+			.toBe('/event/:eventId/screen/:screenSlug');
+	});
+
+	it('withholds a segment it does not recognise rather than guessing it is a route word', () => {
+		expect(deliveryRouteLabel('/api/some-future-collection/0d5f5d2e-4a11-4d4f-9a2a-6b2f1c3d4e5f'))
+			.toBe('/api/:id/:id');
+	});
+
+	it('refuses a raw request path even when it is handed one as detail', () => {
+		expect(() => evidence().report([{
+			code: 'harness-precondition-unmet',
+			detail: { route: '/api/graphics-assets/0d5f5d2e4a114d4f9a2a/revisions/gar-9/content' },
+		}])).toThrow('delivery-v1 evidence-opaque-token-leak field=route');
 	});
 
 	it('publishes every code it will ever print', () => {

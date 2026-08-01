@@ -39,12 +39,15 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	'cors-allow-credentials-exposed',
 	'cors-preflight-permitted',
 	'csp-directive-permissive',
+	'csp-directive-unexpected',
+	'csp-directive-missing',
 	'private-storage-publicly-addressable',
 	// Settled failure outcomes.
 	'outcome-not-retryable-unavailable',
 	'outcome-retry-after-missing',
 	'outcome-retry-after-invalid',
 	'outcome-retry-after-present',
+	'outcome-not-missing-identity',
 	'outcome-not-integrity-failure',
 	'outcome-not-denied',
 	'outcome-detail-disclosed',
@@ -65,9 +68,28 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	'package-interrupted-result-exposed',
 	// Harness plumbing.
 	'harness-precondition-unmet',
+	'harness-installation-unreachable',
 ]);
 
 const FAILURE_CODES = new Set(ACCEPTANCE_FAILURE_CODES);
+
+/**
+ * A failure raised where it is discovered rather than where it is printed.
+ *
+ * Anything a harness throws reaches a terminal, so nothing may throw a raw
+ * message built from a request path or a response body: those carry asset
+ * identities, operation identities, and occasionally a capability. Raising
+ * this instead keeps the stable code and its already-reduced detail together
+ * until the formatter has checked them.
+ */
+export class AcceptanceFailure extends Error {
+	constructor(code, detail = {}) {
+		super(code);
+		this.name = 'AcceptanceFailure';
+		this.code = code;
+		this.detail = detail;
+	}
+}
 
 const MAX_DETAIL_LENGTH = 120;
 const URL_PATTERN = /[a-z][a-z0-9+.-]*:\/\//i;
@@ -85,26 +107,81 @@ const OPAQUE_TOKEN_PATTERN = /\w{16,}/;
  * half of the evidence; the origin, asset identity, and revision identity are
  * the half that must not travel.
  */
+/**
+ * Every path segment that is part of a route rather than part of an identity.
+ *
+ * The list is a whitelist on purpose. A denylist of identity shapes would have
+ * to keep pace with every identifier the library mints, and the failure mode of
+ * guessing wrong is printing the identity — so an unrecognised segment is
+ * treated as an identity and withheld.
+ */
+const ROUTE_WORDS = new Set([
+	'api',
+	'_acceptance',
+	'events',
+	'event',
+	'screens',
+	'screen',
+	'screen-output',
+	'config',
+	'feature-match-overlay',
+	'broadcast-graphics',
+	'asset-capability',
+	'asset-capability-session',
+	'template-packages',
+	'feature-match-layout',
+	'assets',
+	'revisions',
+	'content',
+	'graphics-assets',
+	'graphics-templates',
+	'lifecycle-actions',
+	'installed-templates',
+	'ingestion-operations',
+	'staged-source',
+	'font-browser-evidence',
+	'browser-evidence',
+	'remote-copy',
+	'template-package-confirmation',
+	'template-package-installation',
+	'retry',
+	'thumbnail',
+	'usage',
+	'retention',
+	'capacity',
+	'status',
+	'multipart',
+	'parts',
+	'replacement-operations',
+	'admin',
+	'graphics-style-sets',
+	'packages',
+]);
+
+/**
+ * Reduce any delivery URL to the route it exercised. The route is the useful
+ * half of the evidence; the origin, asset identity, and revision identity are
+ * the half that must not travel.
+ */
 export function deliveryRouteLabel(value) {
 	const pathname = URL_PATTERN.test(value) ? new URL(value).pathname : value;
 	const segments = pathname.split('/').filter(Boolean);
-	// Collections whose own children are route words rather than identities.
-	const collectionWords = new Set(['capacity', 'installed-templates', 'ingestion-operations']);
 	const labelled = segments.map((segment, index) => {
-		const previous = segments[index - 1];
-		if (previous === 'screens')
-			return ':screenId';
-		if (previous === 'assets')
-			return ':assetId';
-		if (previous === 'revisions')
-			return ':revisionId';
-		if (previous === 'ingestion-operations')
-			return ':operationId';
-		if (previous === 'events')
-			return ':eventId';
-		if (previous === 'graphics-assets')
-			return collectionWords.has(segment) ? segment : ':assetId';
-		return segment;
+		if (ROUTE_WORDS.has(segment))
+			return segment;
+		// Name the identity after whatever collection it belongs to, so the label
+		// still says which route ran.
+		return {
+			'screens': ':screenId',
+			'assets': ':assetId',
+			'revisions': ':revisionId',
+			'ingestion-operations': ':operationId',
+			'events': ':eventId',
+			'event': ':eventId',
+			'graphics-assets': ':assetId',
+			'installed-templates': ':templateId',
+			'screen': ':screenSlug',
+		}[segments[index - 1]] ?? ':id';
 	});
 	return `/${labelled.join('/')}`;
 }
