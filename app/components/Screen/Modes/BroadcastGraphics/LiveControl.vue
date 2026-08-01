@@ -288,7 +288,6 @@ watch(() => props.graphic.id, () => {
 });
 
 /**
-
  * Relevant Realtime Event Session changes re-resolve the bindings, and a live On-air
  * Update Policy input has to reach air without anybody pressing anything.
  *
@@ -297,6 +296,14 @@ watch(() => props.graphic.id, () => {
  * graphic with at least one live-policy bound input, because that is the only case
  * where an acceptance would change what program shows — a staged input already reads
  * as pending, which is exactly what it should.
+ *
+ * It is not what makes the rule true. The authoritative side re-resolves for itself
+ * when Event Data changes, which is what covers a graphic the operator has not
+ * selected and a Screen with no Live Control open at all; this watcher only ever
+ * covers the one graphic on screen here. It stays because a Live Control that has
+ * seen a bound value move should say so on its own clock rather than after a round
+ * trip, and because the command converges: applying it twice accepts the same
+ * resolved value twice.
  */
 const hasLiveBoundInput = computed(() => traces.value.some(trace =>
 	trace.binding !== undefined && trace.declaration.updatePolicy === 'live',
