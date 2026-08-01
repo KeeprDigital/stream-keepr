@@ -1,14 +1,16 @@
 /**
- * The shared domain defaults an acceptance run needs to build a real Screen
- * Output.
+ * The one place an acceptance harness crosses into the repository's
+ * TypeScript.
  *
  * A Screen Output only authorizes the Graphic Asset Revisions its published
  * layout references, so provisioning one means publishing a complete Feature
- * Match Layout. Copying that layout into the harness would create a second
- * definition that silently rots, so the harness loads the installation's own
- * default instead. Node strips the types; the hook below only teaches it the
- * extensionless relative specifiers and `~~/` root alias that the rest of the
- * repository is built with.
+ * Match Layout, and proving publication atomicity means rewriting a real
+ * exported Template Package. Copying either into the harness would create a
+ * second definition that silently rots, so the harness loads the
+ * installation's own default layout and the package fixture writer the
+ * Template Package tests already use. Node strips the types; the hook below
+ * only teaches it the extensionless relative specifiers and `~~/` root alias
+ * that the rest of the repository is built with.
  */
 
 import { existsSync } from 'node:fs';
@@ -36,6 +38,11 @@ registerHooks({
 
 const { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } = await import(
 	new URL('shared/featureMatchOverlayPresets.ts', repositoryRoot).href,
+);
+
+/** The same stored-ZIP reader and writer the Template Package tests rewrite packages with. */
+export const { readTemplatePackageParts, writeTemplatePackage } = await import(
+	new URL('test/helpers/templatePackageArchive.ts', repositoryRoot).href,
 );
 
 /** A complete, publishable Feature Match Layout with one pinned reference. */
