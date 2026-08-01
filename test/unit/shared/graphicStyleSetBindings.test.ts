@@ -18,6 +18,7 @@ import {
 	graphicStyleOwnerSupportsSlot,
 	graphicStyleSetEntryIdsInDocument,
 	graphicStyleUpdateChanges,
+	recaptureGraphicStyleOverrides,
 	replaceGraphicStyleRefs,
 	resolveGraphicStyleSet,
 } from '~~/shared/modules/graphic-style-sets';
@@ -689,6 +690,101 @@ describe('captureGraphicStyleOverrides', () => {
 		};
 
 		expect(captureGraphicStyleOverrides(resolution, 'typography', 'heading', matching)).toBeUndefined();
+	});
+});
+
+describe('recaptureGraphicStyleOverrides', () => {
+	const withAccentFill = [...styleSet(), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' })];
+
+	/** One composition whose Graphic Fill is inherited from `accent-fill`. */
+	function boundFill(): BroadcastGraphicConfig {
+		return applyGraphicStyleSet(
+			graphic([textItem({
+				surfaceStyle: { fill: { type: 'solid', color: '#000000' }, fillOpacity: 1 },
+				styleRefs: { 'surfaceStyle.fill': { entryId: 'accent-fill' } },
+			})]),
+			resolveGraphicStyleSet(withAccentFill),
+		);
+	}
+
+	/** The fill control writing a value, which is all a property control ever does. */
+	function paintFill(composition: BroadcastGraphicConfig, color: string): BroadcastGraphicConfig {
+		return {
+			...composition,
+			items: composition.items.map((item) => {
+				if (item.id !== 'headline' || item.type !== 'text')
+					return item;
+				return {
+					...item,
+					surfaceStyle: { ...item.surfaceStyle!, fill: { type: 'solid' as const, color } },
+				};
+			}),
+		};
+	}
+
+	it('turns an edit to an inherited typography property into an explicit override', () => {
+		const resolution = resolveGraphicStyleSet(styleSet());
+		const composition = applyGraphicStyleSet(
+			graphic([textItem({ styleRefs: { typography: { entryId: 'heading' } } })]),
+			resolution,
+		);
+		const edited = {
+			...composition,
+			items: composition.items.map(item => item.type === 'text'
+				? { ...item, typography: { ...item.typography, fontSize: 30 } }
+				: item),
+		};
+
+		const recaptured = recaptureGraphicStyleOverrides(edited, resolution);
+
+		expect(headlineOf(recaptured).styleRefs?.typography)
+			.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+	});
+
+	it('lets go of a Graphic Fill reference the author has painted over', () => {
+		const resolution = resolveGraphicStyleSet(withAccentFill);
+		const edited = paintFill(boundFill(), '#00ff88');
+
+		const recaptured = recaptureGraphicStyleOverrides(edited, resolution);
+
+		// A Graphic Fill is a discriminated union with no partial to record a deviation
+		// in, so deviating from the preset is unbinding it — the same answer "Keep mine"
+		// gives during review. The value is already inline, so only the provenance moves.
+		expect(headlineOf(recaptured).surfaceStyle?.fill).toEqual({ type: 'solid', color: '#00ff88' });
+		expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toBeUndefined();
+		// And the badge stops reporting an update the author has already acted on. A
+		// reference kept here would offer this same change on every later review, with no
+		// answer that ever settles it.
+		expect(graphicStyleUpdateChanges(recaptured, resolution)).toEqual([]);
+	});
+
+	it('keeps a Graphic Fill reference the author has left where the preset put it', () => {
+		const resolution = resolveGraphicStyleSet(withAccentFill);
+
+		const recaptured = recaptureGraphicStyleOverrides(boundFill(), resolution);
+
+		expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toEqual({ entryId: 'accent-fill' });
+	});
+
+	it('keeps a Graphic Fill reference the author has edited back to the preset\'s own value', () => {
+		const resolution = resolveGraphicStyleSet(withAccentFill);
+		const wandered = paintFill(boundFill(), '#00ff88');
+
+		const recaptured = recaptureGraphicStyleOverrides(paintFill(wandered, '#ff0044'), resolution);
+
+		// Nothing about it deviates, so nothing about it is theirs — exactly as an edited
+		// and restored font size leaves no override pinning it.
+		expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toEqual({ entryId: 'accent-fill' });
+	});
+
+	it('keeps a Graphic Fill reference the Style Set can no longer honour', () => {
+		const edited = paintFill(boundFill(), '#00ff88');
+
+		// A Style Set that failed to load resolves nothing, and must not be the reason a
+		// linked composition quietly goes local.
+		const recaptured = recaptureGraphicStyleOverrides(edited, resolveGraphicStyleSet([]));
+
+		expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toEqual({ entryId: 'accent-fill' });
 	});
 });
 

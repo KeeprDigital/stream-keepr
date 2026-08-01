@@ -15,6 +15,8 @@ import {
 	applyGraphicStyleSet,
 	captureGraphicStyleOverrides,
 	GRAPHIC_STYLE_SLOT_OWNED_KEYS,
+	resolveGraphicStyleSlotValue,
+	sameGraphicStyleValue,
 } from './apply';
 import { GRAPHIC_STYLE_SLOT_KINDS, graphicStyleOwnerSupportsSlot, readGraphicStyleSlot } from './slots';
 
@@ -194,6 +196,13 @@ export function unbindGraphicStyleRef(
  * override is by definition where the author's value and the preset's disagree, and
  * both sides of that comparison are in front of it. An author who edits a value and
  * puts it back is left with no override rather than one pinning it.
+ *
+ * A slot with no owned keys has nowhere to record a deviation, so an author who edits
+ * one has unbound it — the same answer review's "keep as an override" gives for the
+ * same reason. That is not a weaker outcome than an override: the value is already
+ * stored inline and does not move, only the provenance does. Keeping the reference
+ * would leave the composition reporting an available update that no later apply could
+ * ever settle, which is a badge that misreports rather than a design that is protected.
  */
 export function recaptureGraphicStyleOverrides(
 	graphic: BroadcastGraphicConfig,
@@ -208,17 +217,24 @@ export function recaptureGraphicStyleOverrides(
 			const ref = owner.styleRefs[slot];
 			if (!ref)
 				continue;
-			if (GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot].length === 0
-				|| !graphicStyleOwnerSupportsSlot(owner as never, slot)) {
+			if (!graphicStyleOwnerSupportsSlot(owner as never, slot)) {
 				(next as Record<string, unknown>)[slot] = { entryId: ref.entryId };
 				continue;
 			}
-			const overrides = captureGraphicStyleOverrides(
-				resolution,
-				slot,
-				ref.entryId,
-				readGraphicStyleSlot(owner as never, slot),
-			);
+			const current = readGraphicStyleSlot(owner as never, slot);
+
+			if (GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot].length === 0) {
+				const inherited = resolveGraphicStyleSlotValue(resolution, slot, ref.entryId, current, undefined);
+				// A reference the resolution cannot honour is left exactly as it is, for the
+				// reason applying leaves one: a Style Set that failed to load must not be what
+				// turns a linked composition local.
+				if (inherited !== null && !sameGraphicStyleValue(current, inherited))
+					continue;
+				(next as Record<string, unknown>)[slot] = { entryId: ref.entryId };
+				continue;
+			}
+
+			const overrides = captureGraphicStyleOverrides(resolution, slot, ref.entryId, current);
 			(next as Record<string, unknown>)[slot] = overrides
 				? { entryId: ref.entryId, overrides }
 				: { entryId: ref.entryId };
