@@ -56,3 +56,32 @@ export function featureMatchLayoutReferencing({ assetId, revisionId }) {
 export function featureMatchLayoutWithoutReferences() {
 	return structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG).layout;
 }
+
+const { getGraphicItemDefinition } = await import(
+	new URL('shared/modules/graphics/index.ts', repositoryRoot).href,
+);
+
+/**
+ * A layout that pins a VP9-alpha silent video, declared for the only target
+ * that may play it.
+ *
+ * A silent-video reference will not index at all unless it carries the pinned
+ * revision's own target compatibility, so this is the shape a Screen Output
+ * has to be in before its capability-session bootstrap has any reason to
+ * refuse a Safari user agent.
+ */
+export function featureMatchLayoutWithRestrictedVideo({ assetId, revisionId }) {
+	const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+	config.layout.composition.items.push({
+		...getGraphicItemDefinition('media').createDefault({
+			id: 'acceptance-restricted-video',
+			label: 'Acceptance VP9 alpha',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		}),
+		mediaKind: 'silent-video',
+		asset: { assetId, revisionId },
+		videoCompatibility: 'chromium-transparency',
+	});
+	return config.layout;
+}

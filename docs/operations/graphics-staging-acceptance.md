@@ -24,7 +24,7 @@ you must hold onto while running this:
   injected. Do not run them while anything is on air.
 
 Headless Chromium stands in for an OBS Screen Output. Safari is needed only to
-prove that VP9 alpha is refused there.
+prove that a Screen Output pinning VP9 alpha refuses it a capability session.
 
 ## Before you start
 
@@ -68,7 +68,7 @@ assets on top of a broken delivery path produces evidence about the wrong thing.
 | 3   | `pnpm test:browser:still-images:deployed`      | PNG, JPEG, and WebP decode in an OBS-like output.                                                 |
 | 4   | `pnpm test:browser:silent-video:deployed`      | H.264 MP4 and VP9 WebM play and seek; VP9 alpha keeps its transparency on Chromium.               |
 | 5   | `pnpm test:browser:fonts:deployed`             | A font Graphic Asset Revision is delivered by the Worker, loads, and renders its own glyphs.      |
-| 6   | `pnpm test:browser:safari-vp9-alpha:deployed`  | Safari refuses VP9 alpha rather than flattening it.                                               |
+| 6   | `pnpm test:browser:safari-vp9-alpha:deployed`  | A Screen Output pinning VP9 alpha refuses Safari a capability session.                            |
 | 7   | `pnpm test:delivery:graphics:package:deployed` | Template Package publication is atomic and its retry is idempotent.                               |
 | 8   | The fault-injection procedures below           | Unavailable content, integrity failure, D1 outage, and R2 outage with an authorized cache.        |
 
@@ -244,20 +244,54 @@ never as a pass. A deployed run refuses to defer at all unless you pass
 path, open the printed page in Safari and record what it says; anything other
 than `passed` is a gate failure.
 
-The page distinguishes three things, because only one of them is a pass. An
-explicit decode error is Safari refusing the content, which is the restriction
-working. Playback with transparency prints `safari-vp9-alpha-not-blocked` and
-means the restriction is stale. Playback with the transparency flattened away
-prints `safari-vp9-alpha-substituted` and is worse — a wrong-looking graphic
-reaching air while every capability check still says yes. Silence, where the
-browser neither decoded nor refused within the time allowed, prints
-`browser-acceptance-timed-out`: nothing was observed, so nothing is claimed.
+### What this step proves, and why it changed
 
-The complementary product-level restriction — that the capability-session
-bootstrap answers `409 vp9-alpha-chromium-required` to a Safari user agent when
-a Screen Output pins VP9-alpha video — is proven by
-`test/integration/screenOutputAssetDelivery.test.ts`, which can fabricate the
-technical facts a real VP9-alpha ingestion would need the validator to produce.
+This gate was first written expecting Safari to refuse VP9 alpha, so that the
+restriction would enforce itself. The deployed run disproved that: **Safari
+26.5 decodes VP9 alpha and flattens the alpha channel away.** It plays, and
+plays wrongly — which for a graphic going to air is worse than not playing.
+
+The enforceable half is therefore the **product boundary**, and that is what
+this step now asserts. Deployed mode:
+
+1. Ingests the VP9-alpha fixture as a real silent-video Graphic Asset through
+   the deployed validator, and checks the report came back restricted to
+   `chromium-transparency`.
+2. Publishes a Screen Output whose Feature Match Layout pins that revision.
+3. Drives Safari to that Screen Output's page, where it mints a capability
+   through its own author session and calls the capability-session bootstrap.
+4. Requires `409` with `data.code = vp9-alpha-chromium-required`. Anything else
+   prints `safari-vp9-alpha-not-blocked` and is a gate failure — it means a
+   browser that cannot show the content correctly was admitted.
+5. Tears the Screen Output and its Event down.
+
+Nothing secret travels in the URL: the page is given only the Event and Screen
+identities and mints the capability itself.
+
+### The browser fact, recorded rather than judged
+
+The raw playback observation is kept, because it is the evidence for why the
+boundary has to exist at all. It is reported in the pass line as
+`browserFact=…` and is **not** a verdict:
+
+| Observation             | Meaning                                                                                                                                                                                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `substituted`           | Expected on current Safari. Decoded, transparency flattened.                                                                                                                                                                                       |
+| `refused`               | Expected on older Safari. An explicit decode error, or no picture.                                                                                                                                                                                 |
+| `transparency-rendered` | Remarkable. This Safari really can show VP9 alpha, so the restriction's premise may be stale. Reported as `safari-vp9-alpha-transparency-rendered` for a human to weigh — it argues for relaxing the product block, not for failing this contract. |
+| `undetermined`          | The browser neither decoded nor refused in the time allowed. Nothing observed, nothing claimed.                                                                                                                                                    |
+
+### Local mode
+
+Local runs observe the browser fact only and report
+`boundary=not-exercised`. A restricted Screen Output cannot exist locally: the
+video has to pass the silent-video validator, and the local Worker has no
+service binding to reach it. The boundary is a deployed-only proof.
+
+`test/integration/screenOutputAssetDelivery.test.ts` covers the same refusal at
+the integration seam by fabricating the technical facts a real ingestion would
+need the validator to produce; the deployed step is what proves it end to end
+with a real video and a real Safari.
 
 ## Fonts
 
@@ -303,13 +337,13 @@ never rename one.
 
 ## Where each acceptance criterion is proven
 
-| #50 acceptance criterion                                                                                                                                 | Proven by                                                                                                                                                                                                                                                      |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Full and byte-range delivery, conditional requests, strong ETags, cache miss/hit, authorization on every public request, revocation despite cached bytes | Step 2. Cache warmth is deployed-only (`--require-cache-hit`); every other assertion runs locally too.                                                                                                                                                         |
-| CORS and CSP permit only the settled same-origin and output behaviour without making private canonical storage public                                    | Step 2, on both delivery routes and on the Screen Output document — `cors-allow-origin-exposed`, `cors-allow-credentials-exposed`, `cors-preflight-permitted`, `csp-directive-unexpected`, `csp-directive-permissive`, `private-storage-publicly-addressable`. |
-| PNG, JPEG, and WebP pass real browser decoding                                                                                                           | Step 3.                                                                                                                                                                                                                                                        |
-| H.264 MP4 and VP9 WebM play and seek; VP9 alpha proven on Chromium and blocked on Safari                                                                 | Steps 4 and 6.                                                                                                                                                                                                                                                 |
-| Supported fonts complete loading and representative glyph rendering before the output reports ready                                                      | Step 5, on a font Graphic Asset Revision delivered by the Worker. The OTF face is covered by the local `pnpm test:browser:fonts`, which uses the same Chromium build.                                                                                          |
-| Unavailable content, D1 outage, R2 outage with authorized cache, integrity failure, and capability denial produce the settled observable outcomes        | Capability denial and an unreachable revision: step 2, which also asserts the two are indistinguishable. All four outages, integrity failure included: step 8.                                                                                                 |
-| Package publication and retry never expose partial assets or duplicate a committed result                                                                | Step 7.                                                                                                                                                                                                                                                        |
-| The gate reports actionable stable failure evidence without logging secrets, filenames, object keys, or full delivery URLs                               | Enforced in the output path itself and covered by `test/unit/scripts/graphicsAcceptanceEvidence.test.ts`.                                                                                                                                                      |
+| #50 acceptance criterion                                                                                                                                 | Proven by                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Full and byte-range delivery, conditional requests, strong ETags, cache miss/hit, authorization on every public request, revocation despite cached bytes | Step 2. Cache warmth is deployed-only (`--require-cache-hit`); every other assertion runs locally too.                                                                                                                                                                                                                                      |
+| CORS and CSP permit only the settled same-origin and output behaviour without making private canonical storage public                                    | Step 2, on both delivery routes and on the Screen Output document — `cors-allow-origin-exposed`, `cors-allow-credentials-exposed`, `cors-preflight-permitted`, `csp-directive-unexpected`, `csp-directive-permissive`, `private-storage-publicly-addressable`.                                                                              |
+| PNG, JPEG, and WebP pass real browser decoding                                                                                                           | Step 3.                                                                                                                                                                                                                                                                                                                                     |
+| H.264 MP4 and VP9 WebM play and seek; VP9 alpha proven on Chromium and blocked on Safari                                                                 | Step 4 for Chromium playback. Step 6 for the Safari block, which is enforced at the product boundary rather than by the browser: Safari 26.5 decodes VP9 alpha and flattens it, so a Screen Output pinning restricted video refuses Safari a capability session instead. The browser's own behaviour is recorded as evidence, not asserted. |
+| Supported fonts complete loading and representative glyph rendering before the output reports ready                                                      | Step 5, on a font Graphic Asset Revision delivered by the Worker. The OTF face is covered by the local `pnpm test:browser:fonts`, which uses the same Chromium build.                                                                                                                                                                       |
+| Unavailable content, D1 outage, R2 outage with authorized cache, integrity failure, and capability denial produce the settled observable outcomes        | Capability denial and an unreachable revision: step 2, which also asserts the two are indistinguishable. All four outages, integrity failure included: step 8.                                                                                                                                                                              |
+| Package publication and retry never expose partial assets or duplicate a committed result                                                                | Step 7.                                                                                                                                                                                                                                                                                                                                     |
+| The gate reports actionable stable failure evidence without logging secrets, filenames, object keys, or full delivery URLs                               | Enforced in the output path itself and covered by `test/unit/scripts/graphicsAcceptanceEvidence.test.ts`.                                                                                                                                                                                                                                   |
