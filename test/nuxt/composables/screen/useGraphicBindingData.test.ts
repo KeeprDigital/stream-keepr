@@ -40,19 +40,26 @@ const LOADED_SESSION = {
 };
 
 const mockEventStore = { event: { id: 1, name: 'Regional', game: 'mtg', talents: [] } };
-const mockFeatureMatchStore = {
-	featureMatches: [{
-		id: 5,
-		matchId: 40,
-		tableNumber: 3,
-		roundName: 'Round 5',
-		formatName: null,
-		bestOf: 3,
-		player1Data: { name: 'Stale Name' },
-		player2Data: null,
-		activeSessionId: 90,
-		activeSession: LOADED_SESSION,
-	}],
+const SLOT_ROW = {
+	id: 5,
+	matchId: 40,
+	tableNumber: 3,
+	roundName: 'Round 5' as string | null,
+	formatName: null,
+	bestOf: 3,
+	player1Data: { name: 'Stale Name' } as { name: string } | null,
+	player2Data: null,
+	activeSessionId: 90 as number | null,
+	activeSession: LOADED_SESSION as typeof LOADED_SESSION | null,
+};
+const mockFeatureMatchStore = { featureMatches: [SLOT_ROW] as (typeof SLOT_ROW)[] };
+const mockPlayerStore = { players: [] as { id: number; name?: string | null }[] };
+const mockMatchStore = {
+	matches: [] as {
+		id: number;
+		player1Data?: { name?: string | null } | null;
+		player2Data?: { name?: string | null } | null;
+	}[],
 };
 const mockFeatureMatchStateStore = {
 	featureMatchStates: new Map<number, FeatureMatchState>(),
@@ -61,8 +68,8 @@ const mockFeatureMatchStateStore = {
 };
 
 mockNuxtImport('useEventStore', () => () => mockEventStore);
-mockNuxtImport('usePlayerStore', () => () => ({ players: [] }));
-mockNuxtImport('useMatchStore', () => () => ({ matches: [] }));
+mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
+mockNuxtImport('useMatchStore', () => () => mockMatchStore);
 mockNuxtImport('usePhaseStore', () => () => ({ phases: [] }));
 mockNuxtImport('useRoundStore', () => () => ({ rounds: [] }));
 mockNuxtImport('useArchetypeStore', () => () => ({ archetypes: [] }));
@@ -85,6 +92,9 @@ describe('useGraphicBindingData', () => {
 		mockFeatureMatchStateStore.featureMatchStates = new Map();
 		mockFeatureMatchStateStore.featureMatchSessions = new Map();
 		mockFeatureMatchStateStore.sessionIdBySlotId = new Map();
+		mockFeatureMatchStore.featureMatches = [SLOT_ROW];
+		mockPlayerStore.players = [];
+		mockMatchStore.matches = [];
 	});
 
 	it('reads a Feature Match Slot\'s live scalars from the realtime state store', () => {
@@ -152,5 +162,45 @@ describe('useGraphicBindingData', () => {
 
 		expect(selectionOptions('event')).toEqual([]);
 		expect(selectionOptions('feature-match-slot')).toEqual([{ label: 'Slot 5 — Round 5', value: 5 }]);
+	});
+
+	/**
+	 * A picker option an operator can still tell apart when the entity has no name to
+	 * show. Every one of these falls back to the entity's own id rather than to a blank
+	 * row, because an unlabelled picker entry is one an operator cannot choose
+	 * deliberately.
+	 */
+	it('names a Match by its two players, and by its id when it has neither', () => {
+		mockMatchStore.matches = [
+			{ id: 40, player1Data: { name: 'Ava R.' }, player2Data: { name: 'Bo K.' } },
+			{ id: 41, player1Data: null, player2Data: null },
+		];
+
+		expect(useGraphicBindingData().selectionOptions('match')).toEqual([
+			{ label: 'Ava R. vs Bo K.', value: 40 },
+			{ label: 'Match 41', value: 41 },
+		]);
+	});
+
+	it('names a Match by the one side it has, rather than pairing it with nothing', () => {
+		mockMatchStore.matches = [{ id: 42, player1Data: { name: 'Ava R.' }, player2Data: null }];
+
+		expect(useGraphicBindingData().selectionOptions('match')).toEqual([{ label: 'Ava R.', value: 42 }]);
+	});
+
+	it('names a Feature Match Slot by its id when no Round has been promoted into it', () => {
+		mockFeatureMatchStore.featureMatches = [{ ...SLOT_ROW, id: 6, roundName: null }];
+
+		expect(useGraphicBindingData().selectionOptions('feature-match-slot'))
+			.toEqual([{ label: 'Slot 6', value: 6 }]);
+	});
+
+	it('names a Player by their id when Event Data carries no name for them', () => {
+		mockPlayerStore.players = [{ id: 3, name: 'Ava R.' }, { id: 4, name: null }];
+
+		expect(useGraphicBindingData().selectionOptions('player')).toEqual([
+			{ label: 'Ava R.', value: 3 },
+			{ label: 'Player 4', value: 4 },
+		]);
 	});
 });
