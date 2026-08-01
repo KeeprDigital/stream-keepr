@@ -332,6 +332,21 @@ describe('authoring Graphic Input Bindings', () => {
 		expect(selects(wrapper, 'graphic-binding-field')).toHaveLength(0);
 	});
 
+	it('says so when a binding reads a Graphic Source Selection nothing declares', async () => {
+		const wrapper = await mountComponent({
+			graphics: graphic({
+				inputs: [textInput('name')],
+				sources: [PLAYER],
+				// Authorable only by writing the mode configuration directly: removing a
+				// Graphic Source Selection here takes the bindings reading it with it.
+				bindings: [{ inputKey: 'name', sourceKey: 'departed', fieldId: 'player.name' }],
+			}),
+		});
+
+		expect(wrapper.get('[data-testid="graphic-binding-unavailable"]').text())
+			.toBe('This reads departed, which this Broadcast Graphic no longer declares.');
+	});
+
 	it('binds one Graphic Input to one field of one Graphic Source Selection', async () => {
 		const wrapper = await mountComponent({ graphics: bindable });
 

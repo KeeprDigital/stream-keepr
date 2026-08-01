@@ -283,7 +283,14 @@ function bindingFieldGroups(input: GraphicInputDeclaration) {
  * input or choosing another selection.
  */
 function unbindableReason(input: GraphicInputDeclaration): string | null {
+	const binding = bindingFor(input.key);
 	const source = sources.value.find(entry => entry.key === boundSourceKey(input.key));
+
+	// A binding whose Graphic Source Selection is gone resolves nothing and says
+	// nothing, because removing a selection here takes its bindings with it. One
+	// written straight to the mode configuration can still arrive in this state.
+	if (binding && !source)
+		return `This reads ${binding.sourceKey}, which this Broadcast Graphic no longer declares.`;
 	if (!source || bindingFieldGroups(input).length > 0)
 		return null;
 
