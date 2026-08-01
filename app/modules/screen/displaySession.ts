@@ -73,21 +73,32 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	 * Editor-only guides require the preview flag as well as their own, so an
 	 * ordinary Screen Output URL draws none.
 	 *
-	 * That is a structural barrier rather than a convention, because the preview flag
-	 * is not a decoration a live output could wear — it selects a rendering that
-	 * cannot be a live one. A preview never starts the Screen realtime session
-	 * (below), so it never joins its Screen's channel, never receives a take, and
-	 * never catches up to the authoritative phase; it resolves Graphic Asset content
-	 * through the author-session library path rather than the Screen Output Asset
-	 * Capability, so without an author session it shows no media at all; and its
-	 * Overlay Output draws a checkerboard where the transparency belongs.
+	 * ## What holds, and why guide visibility is left as it is (issue #134)
 	 *
-	 * So a deliberately constructed `preview=1&guides=1` URL pointed at a broadcast
-	 * source does not produce a live Screen Output with guides over it. It produces
-	 * an editor preview, missing the show, and the guides are the least visible thing
-	 * wrong with it. Gating guides on something a URL cannot carry — a handshake with
-	 * the embedding editor, say — would add a race on every preview load to remove a
-	 * risk that already fails louder than the guides ever could (issue #134).
+	 * The guide flags carry no authority of their own: neither draws anything without
+	 * `preview`. And `screenOutputPath` sets `preview` only when an embedder asks for
+	 * it, which the copyable broadcast URLs and the PNG capture URL never do. So no
+	 * Screen Output URL this application hands an operator can render a guide, and
+	 * that is the property the glossary states.
+	 *
+	 * ## What does not hold, so nobody rebuilds an argument on it
+	 *
+	 * The preview flag is *not* proof that an output is not live. It suppresses the
+	 * Screen realtime session (below) — no takes, no playout, no presence — and for a
+	 * Broadcast Graphics Screen that is most of what live means. A Feature Match
+	 * Overlay degrades far less: the Event realtime session is started by a plugin
+	 * this flag does not suppress, so Feature Match updates still arrive; the sample
+	 * dataset is skipped whenever a Slot is assigned, so the data is real; the
+	 * transparent-preview backdrop is drawn only for the Overlay Output, so `fill` and
+	 * `key` composite normally; and asset resolution only degrades a layout that
+	 * references Graphic Assets. A hand-built `preview=1&guides=1&output=fill` URL on
+	 * such a Screen renders close to a live output with guides over it, and fails
+	 * nothing loudly.
+	 *
+	 * That residual is accepted rather than closed. Reaching it means constructing by
+	 * hand a URL the application never produces, and closing it means gating guides on
+	 * something a URL cannot carry — a handshake with the embedding editor — which
+	 * buys a race on every preview load, on a surface an author is clicking.
 	 */
 	const previewGuides = computed(() => isPreview.value && route.query.guides === '1');
 	const previewSafeAreas = computed(() => isPreview.value && route.query.safe === '1');

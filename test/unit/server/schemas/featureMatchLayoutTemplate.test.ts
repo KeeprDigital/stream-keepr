@@ -34,8 +34,15 @@ describe('revising a Feature Match Layout Template', () => {
 	/**
 	 * An omissible precondition is an inert one: a caller with no revision to state
 	 * has not read the template it is revising.
+	 *
+	 * Two fields rather than one, so this is about the missing revision and nothing
+	 * else. A one-field body is refused by the rule above whether `revision` is
+	 * required or not, which would make this pass under a schema that had stopped
+	 * requiring it — the only place that rule is checked, since the integration suite
+	 * sends a *stale* revision rather than an absent one.
 	 */
 	it('refuses a patch that changes something without stating the revision it read', () => {
-		expect(updateFeatureMatchLayoutTemplateSchema.safeParse({ name: 'Renamed' }).success).toBe(false);
+		expect(updateFeatureMatchLayoutTemplateSchema.safeParse({ name: 'Renamed', description: null }).success)
+			.toBe(false);
 	});
 });

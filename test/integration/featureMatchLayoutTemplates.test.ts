@@ -56,13 +56,14 @@ describe('feature Match Layout Template library', () => {
 	let savedLayout: FeatureMatchLayoutConfig;
 
 	/**
-	 * An Event with a Feature Match Overlay Screen that has a Feature Match Slot
-	 * genuinely assigned to it.
+	 * An Event, a Feature Match Overlay Screen, and a Feature Match Slot to assign to
+	 * it. The assignment itself happens in `beforeAll`, alongside the layout each
+	 * Screen is seeded with.
 	 *
 	 * The Slot is what makes "a layout carries no Event identity" a claim that can
 	 * fail. A Screen whose `featureMatchId` is `null` throughout satisfies every
-	 * assertion about the absence of one for free, so the fixture assigns a real
-	 * Slot on both Screens before anything is saved or placed.
+	 * assertion about the absence of one for free, so both Screens get a real Slot
+	 * before anything is saved or placed.
 	 */
 	async function createEventWithOverlayScreen(name: string, slug: string) {
 		const event = await $fetch('/api/events', {
@@ -195,7 +196,14 @@ describe('feature Match Layout Template library', () => {
 	 * The source Screen carries a real Slot assignment while this is saved, so a save
 	 * that copied the Screen's whole Feature Match Overlay configuration instead of
 	 * its layout would put a Slot identity from one Event into an installation-wide
-	 * library — and fail here, on the identity itself rather than on the field name.
+	 * library — and fail here.
+	 *
+	 * Two assertions, because they catch different things. The field-name check names
+	 * the leak an author would recognise and is the one that reads as the rule. It
+	 * proves only that nothing is called `featureMatchId`, though, so a Slot travelling
+	 * under some other key would walk past it; equality against the layout the Screen
+	 * holds is what closes that, since a document with anything extra on it is not
+	 * equal to one without.
 	 */
 	it('carries no Feature Match Slot assignment into the library', async () => {
 		const assigned = await storedOverlayConfig(sourceEventId, sourceScreenId);
@@ -203,9 +211,9 @@ describe('feature Match Layout Template library', () => {
 
 		const entry = await request(`${LIBRARY_PATH}/${templateId}`);
 		expect(entry.status).toBe(200);
-		expect(JSON.stringify((entry.data as FeatureMatchLayoutTemplateResponse).document))
-			.not
-			.toContain('featureMatchId');
+		const document = (entry.data as FeatureMatchLayoutTemplateResponse).document;
+		expect(JSON.stringify(document)).not.toContain('featureMatchId');
+		expect(document).toEqual(savedLayout);
 	});
 
 	it('lists the saved template in the installation-scoped library', async () => {

@@ -52,12 +52,11 @@ export interface ScreenOutputPathOptions {
 	 * Mark this as an embedded editor preview.
 	 *
 	 * Editor-only guides and the Feature Match Sample Dataset are available only to a
-	 * preview, so a Screen Output URL that omits this can never show either. What
-	 * makes that a barrier rather than a convention is that this flag does not
-	 * decorate a live output — it selects a rendering that cannot be one: no realtime
-	 * session, Graphic Asset content resolved through the author session rather than
-	 * the Screen Output Asset Capability, and a checkerboard behind the Overlay
-	 * Output. See `displaySession.ts` for the decision and its cost (issue #134).
+	 * preview, so a Screen Output URL that omits this can never show either — and the
+	 * copyable broadcast URLs and the PNG capture URL never ask for it. What that does
+	 * and does not guarantee is worked out over the guide flags in
+	 * `app/modules/screen/displaySession.ts`, which is the one place it is written
+	 * down (issue #134).
 	 */
 	preview?: boolean;
 	itemGuides?: boolean;

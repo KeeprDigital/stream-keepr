@@ -35,13 +35,18 @@ describe('the canonical Feature Match sample dataset', () => {
 	 * differ only by the edit — which holds only while the dataset is fixed data
 	 * rather than anything derived from the installation, the clock, or an Event.
 	 *
-	 * Pinned by writing the whole dataset out a second time, which is the only shape
-	 * of assertion that can fail for a value computed at module load. Every value is
-	 * here rather than a representative few, because what is fixed is the dataset
-	 * and not one sample of it: a single token quietly derived from `Date.now()` or
-	 * from whatever the installation holds is exactly the defect, and a spot check
-	 * would pass over it. The duplication is the price of "canonical" — changing a
-	 * sample value is a two-file edit, deliberately.
+	 * Pinned by writing the whole dataset out a second time. Every value is here
+	 * rather than a representative few, because what is fixed is the dataset and not
+	 * one sample of it: a single token quietly derived from `Date.now()` or from
+	 * whatever the installation holds is exactly the defect, and a spot check would
+	 * pass over it. The duplication is the price of "canonical" — changing a sample
+	 * value is a two-file edit, deliberately.
+	 *
+	 * What this cannot do is pin the derivation rather than the value. A token
+	 * computed from something that happens to equal the literal today — a year
+	 * arithmetic that currently lands on the right number — passes here and starts
+	 * failing on its own schedule. That is a limit of asserting values at all, not
+	 * one this assertion could be rewritten out of.
 	 */
 	it('is fixed data rather than anything sampled from the installation', () => {
 		expect(FEATURE_MATCH_SAMPLE_TOKEN_VALUES).toEqual({
