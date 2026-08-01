@@ -929,6 +929,49 @@ describe('media Graphic Input values on air', () => {
 		await expect(usageOf(backdrop)).resolves.toEqual([]);
 	});
 
+	it('stops resolving once a generic Screen write undeclares the Graphic Input', async () => {
+		// The generic write refuses to *change* an authored Graphic Asset Reference, so
+		// the mode-configuration endpoint is the only way to move one. Undeclaring a
+		// media Graphic Input whose default is null changes no authored reference at
+		// all, though — it slips through that guard while still changing what the Live
+		// Session publishes, so this route needs the same reconciliation.
+		const screenId = await createScreen('media-input-generic-write');
+		const backdrop = await ingestImage(eventId, `media-input-generic-${runId}`, pngWithTextChunks(67));
+		await declare(screenId, [mediaInput('backdrop')]);
+		const capability = await capabilityFor(screenId);
+		const session = await liveSession(screenId);
+
+		await command(screenId, session.id, {
+			commandId: `media-input-generic-set-${runId}`,
+			type: 'Set Input',
+			payload: { graphicId: 'promo', inputKey: 'backdrop', value: backdrop },
+		});
+		await command(screenId, session.id, {
+			commandId: `media-input-generic-take-${runId}`,
+			type: 'Take',
+			payload: { graphicId: 'promo' },
+		});
+		await expect(outputStatus(screenId, capability, backdrop)).resolves.toBe(200);
+
+		// The Screen stays in Broadcast Graphics mode, so its epoch is untouched and
+		// nothing ends it. Only the declaration goes.
+		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
+		await $fetch(`/api/events/${eventId}/screens/${screenId}`, {
+			method: 'PATCH',
+			body: {
+				stateVersion: screen.stateVersion,
+				modeConfigs: {
+					'broadcast-graphics': {
+						graphics: [{ id: 'promo', name: 'Promo', items: [], inputs: [] }],
+					},
+				},
+			},
+		});
+
+		await expect(outputStatus(screenId, capability, backdrop)).resolves.toBe(404);
+		await expect(usageOf(backdrop)).resolves.toEqual([]);
+	});
+
 	it('stops publishing when the Screen leaves Broadcast Graphics mode', async () => {
 		// Ending the epoch is the other place the "stops being published when it leaves
 		// air" rule is enforced, and the mode scope in the authorizer hides an uncleared

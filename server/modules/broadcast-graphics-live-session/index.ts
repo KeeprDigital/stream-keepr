@@ -317,14 +317,24 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	 * against retirement and purge by a reference nothing declares. So the authority
 	 * that changed the declarations is the one that reconciles them.
 	 *
-	 * ## Why it retries once
+	 * ## Why it retries once, and what a retry does not promise
 	 *
 	 * The write is guarded on the Live Session sequence it was derived from, so a
 	 * command committing in the gap between reading the session and writing makes this
 	 * apply nothing at all — which is precisely the outcome being fixed. Re-reading and
-	 * repeating once closes that, and is bounded: the second pass derives from both the
-	 * newest state and the new configuration, and the racing command's own
-	 * reconciliation converges on the same set.
+	 * repeating once closes that, and is bounded rather than unbounded because a
+	 * reconciliation that kept chasing a busy show could livelock against it.
+	 *
+	 * Bounded means "usually enough", not "always". Two consecutive lost races exhaust
+	 * both passes having applied nothing, and the convergence argument does not cover
+	 * it: the racing command reconciles from its own state, but only writes when the
+	 * accepted media set moved, so a Take on a text-only graphic deletes nothing on this
+	 * one's behalf. The undeclared reference then survives until the next media-moving
+	 * acceptance, epoch end, or reset — the pre-fix behaviour, in a case that now needs
+	 * two lost races rather than happening on every undeclare.
+	 *
+	 * That residual is acceptable; being unable to see it is not. Exhausting both passes
+	 * is the one outcome where this demonstrably did not take, so it says so.
 	 */
 	const republishLiveSessionReferences = async (input: {
 		eventId: number;
@@ -360,6 +370,14 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 				if (settled?.sequence === session.sequence)
 					return;
 			}
+
+			// Both passes lost the race, so neither applied. What the Screen no longer
+			// declares is still published, and stays published until the next acceptance
+			// that moves the media set, an epoch ending, or a reset.
+			console.error(JSON.stringify({
+				message: 'broadcast_graphics_live_reference_republish_incomplete',
+				screenId: input.screenId,
+			}));
 		}
 		catch {
 			console.error(JSON.stringify({
