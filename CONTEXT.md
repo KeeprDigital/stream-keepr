@@ -79,7 +79,10 @@ A ticket for one unit of supersedable async work, checked for staleness after ea
 _Avoid_: request id, generation.
 
 **Field Ownership**:
-The set of fields one optimistic action may write, derived from the change the action predicts. Result merges and rollbacks write only owned fields; remote updates never overwrite fields another action currently owns.
+The set of fields one action may write, derived from the change the action predicts. The term is load-bearing on both sides of the wire and governs a different thing on each.
+Client-side it is a scope rule: one optimistic action owns the fields its predicted change writes, result merges and rollbacks write only owned fields, and remote updates never overwrite fields another action currently owns.
+Server-side it is an acceptance rule, carried as a Field Ownership claim: a Set Input or Set Override states the value it believes it replaces, and the authoritative side compares that claim against the effective value Live Control showed its operator — an override first, then a resolving Graphic Input Binding, then the working value resolved against the declared default. A claim that still describes what its operator saw is applied; one another operator has overtaken is refused, so the loser is shown what landed rather than silently erasing a colleague's correction. A command carrying no claim is making none and is applied unconditionally.
+The claim is checked inside the reduction rather than before it, so a command that is re-reduced onto a newer state has its claim re-checked against the state that won.
 _Avoid_: owns array, field mask, declared ownership.
 
 **Sequenced Live State**:
@@ -108,6 +111,12 @@ A Screen in Broadcast Graphics mode whose output composes an ordered stack of co
 **Broadcast Graphics Live Session**:
 The continuous playout epoch of a Broadcast Graphics Screen. It survives reloads, disconnections, and restarts, but ends when the Screen changes away from Broadcast Graphics mode or its live state is explicitly reset.
 Commands from an ended Broadcast Graphics Live Session can never affect a later one.
+
+**Broadcast Graphics Recovery Fault**:
+Why the durable live state behind a Broadcast Graphics Live Session snapshot could not be trusted, when it could not: it is missing, it is corrupt — present but not the shape of live state — or it is incompatible, the right shape holding a value of a type this build cannot interpret, which is what state written under a different vocabulary looks like from here. It carries the detail of what could not be read so an operator can report it.
+It is derived from the stored state on every read rather than recorded, and while it stands the state every reader acts on is replaced by one with nothing on air and no accepted values, so no output renders half an unreadable session. The first command the session accepts clears it, because every reduction starts from that replacement and the write that commits the command replaces the state nobody could read; in practice that command is the explicit Take that puts the show back on air.
+A stale animation start time is not a fault. Graphic Animation projections are monotone in the current instant and saturate at the **Graphic Resting State**, so a start time from before a restart has already passed its phase duration and settles there without anything detecting or clearing it. Only a non-numeric start time is incompatible, because it leaves every phase comparison false and nothing to settle at.
+_Avoid_: corrupt state flag, live state validation error.
 
 **Broadcast Graphic**:
 An authored visual composition that an operator shows, hides, and controls as one unit on a Broadcast Graphics Screen.
@@ -187,6 +196,12 @@ An Event-specific, type-compatible mapping from a Graphic Input to one broadcast
 
 **Graphic Input Override**:
 An operator-supplied typed value that takes precedence over a Graphic Input Binding without replacing it. It persists across hide/show cycles until cleared, while the binding continues resolving underneath it.
+
+**Graphic Input Status**:
+What Live Control reports about one Graphic Input's value: manual, bound, overridden, pending, unavailable, superseded, or stale.
+Manual has no Graphic Input Binding and shows what an operator typed or the declared default. Bound has one resolving it that program already agrees with. Overridden has a Graphic Input Override masking a binding that keeps resolving underneath. Pending means the value that would go on air differs from the one that is. Unavailable means there is nothing that could go on air — an unresolved binding, or a value violating its declared type or constraints. Superseded means this operator's last edit lost a field-scoped race and the field has been refreshed to the value that won. Stale means on air and holding a last accepted value its Graphic Input Binding no longer provides, which is program having outlived its source rather than a value to fix; it needs a binding, so an operator's own unusable edit or override is unavailable instead, and it is reported for any bound input rather than only a required one.
+One Graphic Input can be in several of these positions at the same instant, so the reported status is the first that applies in order of urgency: superseded, stale, unavailable, overridden, pending, bound, manual. Superseded outranks even stale because "look again, someone beat you" is the one an operator can act on immediately.
+_Avoid_: stale-input-edit or another command rejection code when naming a value's status — a rejection is a different vocabulary and describes the command's fate rather than the value's.
 
 **Live Control**:
 The operator-facing controls generated for a placed Broadcast Graphic from its Graphic Source Selections and Graphic Inputs. It selects declared sources, edits values and overrides, stages updates, and controls playout without authoring bindings, custom controls, queries, or expressions.
