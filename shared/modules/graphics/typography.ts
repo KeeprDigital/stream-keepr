@@ -1,5 +1,5 @@
-import type { GraphicAssetReference } from '../../types/graphicsAsset';
 import type { GraphicFontSelection } from '../../types/graphics';
+import type { GraphicAssetReference } from '../../types/graphicsAsset';
 
 /**
  * The one application font registry every graphics host shares, and how a

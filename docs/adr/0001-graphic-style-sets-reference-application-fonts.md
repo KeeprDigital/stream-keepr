@@ -14,7 +14,7 @@ That gap was filed as #143 with two ways to close it:
 1. Widen the Style Set's font so it can reference a font Graphic Asset Revision, and let `.skstyle` embed those bytes.
 2. Narrow `CONTEXT.md` to application fonts only.
 
-Route (1) was blocked on #141, because until then *no* graphics artifact could reference a library font. #141 has now closed that: a Graphic Item's typography and its Graphic Placeholder Styles take a Graphic Font Selection, either arm, in both graphics hosts. So the choice is live rather than blocked, and this decision is the one #143 asked for.
+Route (1) was blocked on #141, because until then _no_ graphics artifact could reference a library font. #141 has now closed that: a Graphic Item's typography and its Graphic Placeholder Styles take a Graphic Font Selection, either arm, in both graphics hosts. So the choice is live rather than blocked, and this decision is the one #143 asked for.
 
 ## Decision
 
@@ -28,9 +28,9 @@ The reason is not "route (1) was too much work". It is that a Graphic Style Set 
 
 A `.skstyle` package is deliberately data-only, with no staging, no quota reservation, and no asset revalidation — `server/modules/graphic-style-set-package/preflight.ts` says so in as many words, and gives the reason: "A Graphic Style Set carries none of that — it is two JSON files bounded by the number of entries a Style Set may hold — so there is nothing to resume and nothing to reserve." Preflight is a pure read of the received bytes, and installation re-runs it over the same bytes.
 
-Embedding font bytes would take all of that back. A packaged Graphic Asset Revision has to be staged durably, charged against the Graphics Staging Allowance, revalidated under the receiver's own Graphic Asset Compatibility Profile, and given a Graphic Asset Origin; a *font* additionally needs browser-load evidence before this installation will accept it. That is the Template Package asset pipeline in full, and reproducing it inside the Style Set module would mean two implementations of one contract — the thing the Graphics Asset Library's "one export contract" was factored to prevent.
+Embedding font bytes would take all of that back. A packaged Graphic Asset Revision has to be staged durably, charged against the Graphics Staging Allowance, revalidated under the receiver's own Graphic Asset Compatibility Profile, and given a Graphic Asset Origin; a _font_ additionally needs browser-load evidence before this installation will accept it. That is the Template Package asset pipeline in full, and reproducing it inside the Style Set module would mean two implementations of one contract — the thing the Graphics Asset Library's "one export contract" was factored to prevent.
 
-Set against that, what route (1) actually buys is small. A Style Set exists to keep a visual language coherent across independently portable templates; the font *asset* that a template needs still travels with that template, in a Template Package that already embeds it. What a Style Set would add is the ability to say "and this font is part of the house style" — real, but not worth making the lightest package kind in the system carry the heaviest machinery.
+Set against that, what route (1) actually buys is small. A Style Set exists to keep a visual language coherent across independently portable templates; the font _asset_ that a template needs still travels with that template, in a Template Package that already embeds it. What a Style Set would add is the ability to say "and this font is part of the house style" — real, but not worth making the lightest package kind in the system carry the heaviest machinery.
 
 The narrower type is also honest about a rule the glossary already states: "It may reference only assets available in the same reusable-library scope." A Style Set that named a library font would be publishable on the installation that authored it and unpublishable everywhere it travelled, which is the failure mode #76 built the refusal to make loud.
 
