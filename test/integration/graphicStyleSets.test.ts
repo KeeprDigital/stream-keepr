@@ -247,6 +247,29 @@ describe('graphic Style Sets', () => {
 		expect(anonymous.status).toBe(401);
 	});
 
+	it('refuses an over-sized initial draft before it is buffered whole', async () => {
+		// Creating a Style Set accepts the same unbounded draft array editing one does, so
+		// it is bounded by the same number. Under the general mutation ceiling and over
+		// this route's own, which is the gap this asserts is closed.
+		const filler = 'x'.repeat(900);
+		const oversized = Array.from({ length: 700 }, (_, index) => ({
+			id: `bulk-${index}-${runId}`,
+			kind: 'palette',
+			name: filler,
+			schemaVersion: 1,
+			value: { color: '#ffffff' },
+		}));
+
+		const refused = await request(STYLE_SETS, {
+			method: 'POST',
+			cookie: authorCookie,
+			body: { name: `Oversized ${runId}`, draft: oversized },
+		});
+
+		expect(refused.status).toBe(413);
+		expect(JSON.stringify(refused.data)).toContain('Graphic Style Set must not exceed');
+	});
+
 	it('accumulates edits in a working draft that no template can see', async () => {
 		// Deliberately broken: the typography preset names a palette entry that is not
 		// there yet. A draft is edited into existence in pieces, so this must be storable.
