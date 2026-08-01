@@ -1,11 +1,15 @@
 import type { DbScreen } from '~~/server/db/schema';
-import type { GraphicAssetReferencingScreenMode } from '~~/shared/utils/graphicsAssetReferences';
+import type {
+	GraphicAssetReferencingScreenMode,
+	ScreenGraphicAssetReference,
+} from '~~/shared/utils/graphicsAssetReferences';
 import { and, eq } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { screens } from '~~/server/db/schema';
 import { StateConflictError } from '~~/server/utils/errors';
 import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
+	BROADCAST_GRAPHICS_LIVE_SESSION_SLOT_PREFIX,
 	graphicAssetReferenceSlotPrefix,
 	sameGraphicAssetReference,
 	screenGraphicAssetReferenceTargetCompatibility,
@@ -243,4 +247,129 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 		throw new StateConflictError('Screen', input.id);
 	}
 	return await findScreen(input.id, input.eventId);
+}
+
+/**
+ * The Broadcast Graphics Live Session's own owner-slot namespace, as a `LIKE`
+ * pattern. Held here so the delete that scopes to it and the prefix the slots are
+ * built from can never drift apart.
+ */
+const LIVE_SESSION_SLOT_PATTERN = `${BROADCAST_GRAPHICS_LIVE_SESSION_SLOT_PREFIX}%`;
+
+/**
+ * Bring a Screen's Broadcast Graphics Live Session reference index in line with the
+ * media Graphic Input values its Live Session has accepted.
+ *
+ * ## Why this exists at all
+ *
+ * A Screen Output Asset Capability derived from `modeConfigs` alone cannot resolve a
+ * media value an operator chose at runtime: it is not in authored configuration. So
+ * the Screen publishes from two places, and this is the write for the second one.
+ * It is scoped to its own owner-slot namespace, disjoint from the authored write's,
+ * because both clear and rewrite their whole namespace and either sharing one would
+ * silently delete the other's rows.
+ *
+ * ## Why it is guarded on the sequence it was derived from
+ *
+ * Accepted values change on every acceptance, so unlike the authored index this one
+ * is rewritten constantly and concurrently. Every statement is conditioned on the
+ * Live Session still standing at the sequence the reference set was derived from, so
+ * a reconciliation whose state has already been superseded applies nothing at all
+ * rather than reinstating an older set of references over a newer one. The command
+ * that superseded it reconciles from its own committed state, so the index converges
+ * on the latest acceptance rather than on whichever write happened to land last.
+ *
+ * An ended epoch is not reconciled either: the guard requires an active session, and
+ * ending one clears the namespace outright.
+ *
+ * ## Retirement
+ *
+ * A revision already published at the same owner slot keeps resolving even once its
+ * Graphic Asset is retired, exactly as an authored reference does — a retired asset
+ * takes no *new* references, and an operator who chose one before it was retired is
+ * still showing it.
+ */
+export async function updateBroadcastGraphicsLiveSessionGraphicAssetReferences(input: {
+	screenId: number;
+	eventId: number;
+	sessionId: number;
+	/** The Live Session sequence `references` was derived from. */
+	sequence: number;
+	references: readonly ScreenGraphicAssetReference[];
+	/** What the same derivation produced before this acceptance, for the retirement rule. */
+	previousReferences?: readonly ScreenGraphicAssetReference[];
+}): Promise<{ expected: number; indexed: number }> {
+	const previousBySlot = new Map(
+		(input.previousReferences ?? []).map(item => [item.ownerSlot, item.reference] as const),
+	);
+	const now = Date.now();
+	const client = db.$client;
+	const sessionGuard = `
+		AND EXISTS (
+			SELECT 1 FROM broadcast_graphics_live_sessions
+			WHERE id = ? AND screen_id = ? AND sequence = ? AND status = 'active'
+		)
+	`;
+	const sessionGuardBindings = [input.sessionId, input.screenId, input.sequence] as const;
+
+	const results = await client.batch([
+		client.prepare(`
+			DELETE FROM graphic_asset_references
+			WHERE owner_kind = 'screen' AND owner_id = ?
+				AND owner_slot LIKE ?
+				${sessionGuard}
+		`).bind(String(input.screenId), LIVE_SESSION_SLOT_PATTERN, ...sessionGuardBindings),
+		...input.references.map(item => client.prepare(`
+			INSERT INTO graphic_asset_references (
+				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
+				event_id, created_at, updated_at
+			)
+			SELECT ?, ?, ?, 'screen', ?, ?, ?, ?, ?
+			FROM graphic_asset_revisions revision
+			JOIN graphic_assets asset ON asset.id = revision.asset_id
+				WHERE revision.id = ? AND revision.asset_id = ?
+					${GRAPHIC_ASSET_REFERENCE_SQL_PREDICATE}
+					${sessionGuard}
+		`).bind(
+			crypto.randomUUID(),
+			item.reference.assetId,
+			item.reference.revisionId,
+			String(input.screenId),
+			item.ownerSlot,
+			input.eventId,
+			now,
+			now,
+			item.reference.revisionId,
+			item.reference.assetId,
+			...graphicAssetReferencePredicateBindings({
+				allowRetired: sameGraphicAssetReference(previousBySlot.get(item.ownerSlot), item.reference),
+				kind: item.kind,
+				videoCompatibility: item.videoCompatibility,
+				videoTarget: item.videoTarget,
+			}),
+			...sessionGuardBindings,
+		)),
+	]);
+
+	return {
+		expected: input.references.length,
+		indexed: results.slice(1).reduce((total, result) => total + (result.meta.changes ?? 0), 0),
+	};
+}
+
+/**
+ * Drop everything a Screen's Broadcast Graphics Live Session published.
+ *
+ * An epoch that has ended has no accepted values, so it publishes nothing. Leaving
+ * its rows behind would keep a revision resolvable through a Screen Output long
+ * after the show that chose it, and a Screen switched away and back would find media
+ * on air that the new epoch never accepted.
+ */
+export async function clearBroadcastGraphicsLiveSessionGraphicAssetReferences(
+	screenId: number,
+): Promise<void> {
+	await db.$client.prepare(`
+		DELETE FROM graphic_asset_references
+		WHERE owner_kind = 'screen' AND owner_id = ? AND owner_slot LIKE ?
+	`).bind(String(screenId), LIVE_SESSION_SLOT_PATTERN).run();
 }

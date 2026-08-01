@@ -566,13 +566,31 @@ export interface ColorGraphicInputDeclaration extends GraphicInputDeclarationBas
 }
 
 /**
+ * One media Graphic Input value: an exact Graphic Asset Revision, plus the facts
+ * about that revision which nothing downstream can go and ask for.
+ *
+ * A Media Graphic Item stores `videoCompatibility` beside its own reference for
+ * exactly this reason — no pure render model can interrogate the Graphics Asset
+ * Library, and the reference index compares the fact against the pinned revision's
+ * own, so a value that carries none loses the write's precondition rather than
+ * failing it. A media value is chosen the same way whether an author sets it as a
+ * default or an operator picks it live, so it carries the same facts either way,
+ * recorded at the moment of selection.
+ *
+ * The fact is absent for an image, which has no target compatibility to check.
+ */
+export interface MediaGraphicInputValue extends GraphicAssetReference {
+	videoCompatibility?: 'all-supported' | 'chromium-transparency';
+}
+
+/**
  * A media Graphic Input names a Graphics Asset Library revision rather than a
  * URL, exactly as an authored asset reference does. Which Graphic Items can
  * render one is the Media Graphic Item's business, not this declaration's.
  */
 export interface MediaGraphicInputDeclaration extends GraphicInputDeclarationBase {
 	type: 'media';
-	default: GraphicAssetReference | null;
+	default: MediaGraphicInputValue | null;
 	mediaKind: GraphicMediaKind;
 }
 
@@ -592,7 +610,7 @@ export type GraphicInputDeclaration
  * substituted, which means Live Control can show the operator exactly what they
  * entered and why it cannot go on air.
  */
-export type GraphicInputValue = string | number | boolean | GraphicAssetReference | null;
+export type GraphicInputValue = string | number | boolean | MediaGraphicInputValue | null;
 
 /**
  * The media a Media Graphic Item can render, and therefore what a media Graphic
