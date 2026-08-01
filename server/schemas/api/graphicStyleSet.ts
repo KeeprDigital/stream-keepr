@@ -50,6 +50,18 @@ import {
  * Publish is what proves it whole.
  */
 
+/**
+ * What a Graphic Style Set write may weigh, by the two shapes the library has.
+ *
+ * A draft is the only unbounded thing any of these routes accepts — up to two hundred
+ * entries, written whole on every edit — so it carries the same number wherever it
+ * arrives, on the create that seeds one and on the edit that replaces one. Everything
+ * else is a precondition and a mode: a body far below the general mutation ceiling,
+ * refused by weight before a schema is asked to read it.
+ */
+export const GRAPHIC_STYLE_SET_DRAFT_BODY_BYTES = 512 * 1024;
+export const GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES = 4 * 1024;
+
 const finiteNumberSchema = z.number().finite();
 const opacitySchema = finiteNumberSchema.min(0).max(1);
 const nonNegativePixelSchema = finiteNumberSchema.nonnegative().max(10000);

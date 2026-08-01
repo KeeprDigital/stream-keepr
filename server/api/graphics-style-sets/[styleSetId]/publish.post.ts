@@ -2,6 +2,7 @@ import { mapGraphicStyleSetToResponse } from '~~/server/mappers/graphicStyleSet'
 import { planGraphicStyleSetPublish } from '~~/server/modules/graphic-style-set';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import {
+	GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
 	graphicStyleSetParamsSchema,
 	publishGraphicStyleSetSchema,
 } from '~~/server/schemas/api/graphicStyleSet';
@@ -28,10 +29,12 @@ import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);
 	const { styleSetId } = await getValidatedRouterParams(event, graphicStyleSetParamsSchema.parse);
-	// The draft being published is already stored; this body is the revision it was
-	// reviewed at and nothing more.
 	const body = publishGraphicStyleSetSchema.parse(
-		await readJsonPayloadLimited(event, 4 * 1024, 'Graphic Style Set publish request'),
+		await readJsonPayloadLimited(
+			event,
+			GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
+			'Graphic Style Set publish request',
+		),
 	);
 
 	const service = graphicStyleSetService();

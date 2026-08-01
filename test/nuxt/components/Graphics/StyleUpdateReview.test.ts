@@ -160,6 +160,18 @@ describe('graphicsStyleUpdateReview', () => {
 		expect(wrapper.findAll('[data-testid="style-update-keep"]')).toHaveLength(2);
 	});
 
+	it('shows every row starting on inherit, which is what applying without touching one does', async () => {
+		const wrapper = await mountReview();
+		await expand(wrapper);
+
+		// The highlighted button is the only place an author reads what a row will do, so
+		// it has to be the answer an untouched row actually sends.
+		for (const button of wrapper.findAll('[data-testid="style-update-inherit"]'))
+			expect(button.attributes('data-variant')).toBe('subtle');
+		for (const button of wrapper.findAll('[data-testid="style-update-keep"]'))
+			expect(button.attributes('data-variant')).toBe('ghost');
+	});
+
 	it('writes nothing to the template until the author applies', async () => {
 		const wrapper = await mountReview();
 		await expand(wrapper);

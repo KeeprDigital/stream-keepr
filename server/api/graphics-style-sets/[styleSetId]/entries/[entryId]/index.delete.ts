@@ -3,6 +3,7 @@ import { planGraphicStyleEntryDeletion } from '~~/server/modules/graphic-style-s
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import {
 	deleteGraphicStyleSetEntrySchema,
+	GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
 	graphicStyleSetEntryParamsSchema,
 } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
@@ -35,10 +36,12 @@ export default defineEventHandler(async (event) => {
 		event,
 		graphicStyleSetEntryParamsSchema.parse,
 	);
-	// A mode, a replacement id, and a precondition. Nothing this route accepts is a
-	// document, so it is bounded far below the general mutation ceiling.
 	const body = deleteGraphicStyleSetEntrySchema.parse(
-		await readJsonPayloadLimited(event, 4 * 1024, 'Graphic Style Set entry deletion request'),
+		await readJsonPayloadLimited(
+			event,
+			GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
+			'Graphic Style Set entry deletion request',
+		),
 	);
 
 	const service = graphicStyleSetService();

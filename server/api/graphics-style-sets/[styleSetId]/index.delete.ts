@@ -2,6 +2,7 @@ import { planGraphicStyleSetDeletion } from '~~/server/modules/graphic-style-set
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import {
 	deleteGraphicStyleSetSchema,
+	GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
 	graphicStyleSetParamsSchema,
 } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
@@ -25,11 +26,12 @@ import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);
 	const { styleSetId } = await getValidatedRouterParams(event, graphicStyleSetParamsSchema.parse);
-	// A precondition and nothing else, so it is bounded far below the general mutation
-	// ceiling: this route accepts no document, and a body that arrives carrying one is
-	// refused before it is buffered.
 	const body = deleteGraphicStyleSetSchema.parse(
-		await readJsonPayloadLimited(event, 4 * 1024, 'Graphic Style Set deletion request'),
+		await readJsonPayloadLimited(
+			event,
+			GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
+			'Graphic Style Set deletion request',
+		),
 	);
 
 	const service = graphicStyleSetService();
