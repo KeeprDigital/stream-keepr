@@ -93,7 +93,7 @@ export function sameGraphicStyleValue(left: unknown, right: unknown): boolean {
  * typography is inherited.
  */
 export const GRAPHIC_STYLE_SLOT_OWNED_KEYS: Record<GraphicStyleSlot, readonly string[]> = {
-	'typography': ['fontId', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'letterSpacing', 'lineHeight', 'color'],
+	'typography': ['font', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'letterSpacing', 'lineHeight', 'color'],
 	'surfaceStyle': ['fill', 'fillOpacity', 'outline', 'glow'],
 	// A Graphic Fill is a discriminated union with no meaningful partial, so this slot
 	// takes no overrides at all: deviating from a Graphic Fill preset is unbinding it.
@@ -484,6 +484,28 @@ export function captureGraphicStyleOverrides(
 			overrides[key] = currentRecord[key];
 	}
 	return Object.keys(overrides).length === 0 ? undefined : overrides;
+}
+
+/**
+ * Whether what an owner holds in one slot has moved away from the entry it follows.
+ *
+ * The question {@link captureGraphicStyleOverrides} answers key by key, asked of the
+ * property group as a whole — which is the only form it has for a slot that owns no
+ * keys, where a Graphic Fill is a discriminated union with no partial to deviate in.
+ *
+ * A reference the resolution cannot honour deviates from nothing: there is no preset
+ * in front of it to disagree with, so the comparison has no answer and the safe one
+ * is "unchanged". That keeps a Style Set which failed to load from being the reason a
+ * composition is treated as having gone local.
+ */
+export function graphicStyleSlotDeviates(
+	resolution: GraphicStyleSetResolution,
+	slot: GraphicStyleSlot,
+	entryId: string,
+	current: unknown,
+): boolean {
+	const inherited = resolveGraphicStyleSlotValue(resolution, slot, entryId, current, undefined);
+	return inherited !== null && !sameGraphicStyleValue(current, inherited);
 }
 
 /**

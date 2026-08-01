@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
 import { createFeatureMatchLayoutComposition, FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES } from '~~/shared/featureMatchSampleDataset';
-import { getGraphicItemDefinition } from '~~/shared/modules/graphics';
+import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 
 const mockConfig = ref<FeatureMatchOverlayModeConfig>(structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG));
@@ -400,6 +400,150 @@ describe('featureMatchOverlayDisplay', () => {
 
 			expect(wrapper.get('.feature-match-overlay').attributes('data-export-ready')).toBe('false');
 			expect(wrapper.find('[data-video-compatibility-blocked="vp9-alpha-chromium-required"]').exists()).toBe(true);
+		});
+	});
+
+	/**
+	 * The Feature Match Overlay's half of the library-font claim (#141).
+	 *
+	 * The capability-parity contract says #141 closed the font gap "for both hosts
+	 * at once", and the mechanism really is shared — one discovery walk, one
+	 * `useGraphicAssetFontFaces`. But a claim about two hosts that only one host
+	 * proves is a claim resting on the wiring nobody checked, and this host is the
+	 * one that *lost* the capability in the rewrite. So it is proved here too, in
+	 * this host's own vocabulary: this Display owns its canvas element and its
+	 * `data-export-ready`, which the shared compositor knows nothing about.
+	 */
+	describe('library fonts', () => {
+		function layoutWithLibraryFont(): FeatureMatchOverlayModeConfig {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			const nameplate = getGraphicItemDefinition('text').createDefault({
+				id: 'nameplate',
+				label: 'Nameplate',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			});
+			config.layout.composition = {
+				...createFeatureMatchLayoutComposition(),
+				items: [{
+					...nameplate,
+					typography: {
+						...DEFAULT_GRAPHIC_TYPOGRAPHY,
+						font: {
+							kind: 'asset',
+							reference: { assetId: 'font-asset', revisionId: 'font-revision-2' },
+						},
+					},
+				}] as never,
+			};
+			return config;
+		}
+
+		beforeEach(() => {
+			mockConfig.value = layoutWithLibraryFont();
+			Object.defineProperty(document, 'fonts', {
+				configurable: true,
+				value: {
+					add: vi.fn(),
+					delete: vi.fn(),
+					load: vi.fn().mockResolvedValue([]),
+					check: vi.fn().mockReturnValue(true),
+					ready: Promise.resolve(),
+				},
+			});
+		});
+
+		it('paints text in the FontFace family the pinned revision resolves to', async () => {
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {}
+				async load() { return this; }
+			});
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.get('[data-graphic-item-kind="text"] p').attributes('style'))
+				.toContain('font-family: stream-keepr-graphic-asset-font-asset-font-revision-2;');
+		});
+
+		it('loads the revision from its exact content URL and hides the output until it is ready', async () => {
+			let finishLoad!: () => void;
+			const loaded = new Promise<void>((resolve) => {
+				finishLoad = resolve;
+			});
+			const sources: string[] = [];
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {
+					sources.push(source);
+				}
+
+				async load() {
+					await loaded;
+					return this;
+				}
+			});
+
+			const wrapper = await mountComponent();
+			const overlay = wrapper.get('.feature-match-overlay');
+			expect(overlay.attributes('data-font-ready')).toBe('false');
+			expect(overlay.attributes('data-export-ready')).toBe('false');
+			expect((overlay.element as HTMLElement).style.visibility).toBe('hidden');
+			expect(sources).toEqual(['url("/private-assets/font-asset/font-revision-2")']);
+
+			finishLoad();
+			await vi.waitFor(() => {
+				expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('true');
+			});
+			expect(wrapper.get('.feature-match-overlay').attributes('data-export-ready')).toBe('true');
+			expect((wrapper.get('.feature-match-overlay').element as HTMLElement).style.visibility).toBe('');
+		});
+
+		it('waits for private content URLs to resolve before loading anything', async () => {
+			// A live output's URLs are not known until the capability session is
+			// exchanged. Loading before then would ask for a URL that is still the empty
+			// string, which is a failure rather than a wait.
+			mockContentUrlsSettled.value = false;
+			const load = vi.fn().mockResolvedValue(undefined);
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {}
+				load = load;
+			});
+
+			const wrapper = await mountComponent();
+			expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('false');
+			expect(load).not.toHaveBeenCalled();
+
+			mockContentUrlsSettled.value = true;
+			await vi.waitFor(() => {
+				expect(load).toHaveBeenCalled();
+				expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('true');
+			});
+		});
+
+		it('reports a font that cannot load rather than painting a fallback', async () => {
+			// The failure is distinguishable from still-loading, and it withholds
+			// export-readiness: an output that will never paint the authored typeface is
+			// not a frame anyone should capture. It is never a fallback face — a Missing
+			// Graphic Asset Reference is an integrity failure, and quietly painting
+			// something else would hide it exactly when it matters.
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {}
+				async load(): Promise<never> {
+					throw new Error('font revision content is unavailable');
+				}
+			});
+
+			const wrapper = await mountComponent();
+
+			await vi.waitFor(() => {
+				expect(wrapper.get('.feature-match-overlay').attributes('data-font-error')).toBe('true');
+			});
+			const overlay = wrapper.get('.feature-match-overlay');
+			expect(overlay.attributes('data-font-ready')).toBe('false');
+			expect(overlay.attributes('data-export-ready')).toBe('false');
+			expect((overlay.element as HTMLElement).style.visibility).toBe('hidden');
+			// Every face this attempt added is taken back off the document, so a retry
+			// does not accumulate a second registration of the same family.
+			expect(document.fonts.delete as ReturnType<typeof vi.fn>).toHaveBeenCalled();
 		});
 	});
 });

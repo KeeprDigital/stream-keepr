@@ -3,10 +3,12 @@ import { planGraphicStyleEntryDeletion } from '~~/server/modules/graphic-style-s
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import {
 	deleteGraphicStyleSetEntrySchema,
+	GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
 	graphicStyleSetEntryParamsSchema,
 } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
 import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSetConflict';
+import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
 /**
  * Delete one Graphic Style Set entry, and deal with every reference to it in the
@@ -34,7 +36,13 @@ export default defineEventHandler(async (event) => {
 		event,
 		graphicStyleSetEntryParamsSchema.parse,
 	);
-	const body = deleteGraphicStyleSetEntrySchema.parse(await readBody(event));
+	const body = deleteGraphicStyleSetEntrySchema.parse(
+		await readJsonPayloadLimited(
+			event,
+			GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
+			'Graphic Style Set entry deletion request',
+		),
+	);
 
 	const service = graphicStyleSetService();
 	const styleSet = await service.findById(styleSetId);

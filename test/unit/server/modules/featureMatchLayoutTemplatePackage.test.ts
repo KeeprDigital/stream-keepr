@@ -162,13 +162,14 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 	});
 
 	/**
-	 * The Frame, the Source Items, and the composition arrive exactly as they left,
-	 * except for the two Graphic Asset References the envelope is defined to rewrite.
-	 * A maximal document is what makes this a real guarantee rather than a spot check:
+	 * The Frame, the Source Items, and the composition arrive exactly as they left —
+	 * the whole document, Graphic Asset References included, because the rewrite
+	 * happens on the way in at install rather than on the way out at export. A
+	 * maximal document is what makes this a real guarantee rather than a spot check:
 	 * every optional field of the vocabulary is present, so a field the transfer drops
 	 * fails here rather than months later on a design nobody can re-import.
 	 */
-	it('carries the whole layout across, rewriting only its Graphic Asset References', async () => {
+	it('carries the whole layout across unchanged', async () => {
 		const { document, archive } = await exportedPackage();
 		const travelled = readTemplatePackageParts(archive).template as FeatureMatchLayoutConfig;
 
@@ -426,7 +427,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		const graphic = maximalBroadcastGraphicDocument({ asset });
 		const layout = maximalFeatureMatchLayoutDocument({ frameAsset: asset, itemAsset: asset });
 		const unknownFont = {
-			slot: 'typography.fontId',
+			slot: 'typography.font',
 			capability: 'application-font' as const,
 			identity: 'a-font-no-installation-ships',
 		};

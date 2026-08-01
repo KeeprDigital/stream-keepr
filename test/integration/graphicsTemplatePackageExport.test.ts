@@ -233,7 +233,7 @@ describe('template Package export through the API boundary', () => {
 							overflowPolicy: 'ellipsis',
 							minFontSize: 24,
 							typography: {
-								fontId: 'inter',
+								font: { kind: 'application', fontId: 'inter' },
 								fontSize: 64,
 								fontWeight: 700,
 								fontStyle: 'normal',

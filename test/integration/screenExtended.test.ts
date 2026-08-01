@@ -179,7 +179,7 @@ describe('screens extended API', () => {
 			rightSlant: 0,
 		};
 		const typography = {
-			fontId: 'inter',
+			font: { kind: 'application', fontId: 'inter' },
 			fontSize: 64,
 			fontWeight: 700,
 			fontStyle: 'normal',
@@ -350,7 +350,7 @@ describe('screens extended API', () => {
 		// The only path the editors write through, and the one an object-level
 		// refinement would silently never reach.
 		const typography = {
-			fontId: 'inter',
+			font: { kind: 'application', fontId: 'inter' },
 			fontSize: 48,
 			fontWeight: 700,
 			fontStyle: 'normal',

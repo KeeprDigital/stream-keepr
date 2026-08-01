@@ -117,22 +117,20 @@ export function graphicStyleSetService() {
 			return undefined;
 
 		const client = db.$client;
-		const [updated] = await client.batch([
-			client.prepare(`
-				UPDATE graphic_style_sets
-				SET name = ?, description = ?, draft = ?, draft_revision = draft_revision + 1, updated_at = ?
-				WHERE id = ? AND draft_revision = ?
-			`).bind(
-				patch.name ?? existing.name,
-				patch.description === undefined ? existing.description : patch.description,
-				JSON.stringify(patch.draft ?? existing.draft),
-				Date.now(),
-				id,
-				patch.draftRevision,
-			),
-		]);
+		const updated = await client.prepare(`
+			UPDATE graphic_style_sets
+			SET name = ?, description = ?, draft = ?, draft_revision = draft_revision + 1, updated_at = ?
+			WHERE id = ? AND draft_revision = ?
+		`).bind(
+			patch.name ?? existing.name,
+			patch.description === undefined ? existing.description : patch.description,
+			JSON.stringify(patch.draft ?? existing.draft),
+			Date.now(),
+			id,
+			patch.draftRevision,
+		).run();
 
-		if (updated?.meta.changes !== 1) {
+		if (updated.meta.changes !== 1) {
 			const current = await findById(id);
 			if (!current)
 				return undefined;
@@ -157,19 +155,17 @@ export function graphicStyleSetService() {
 
 		const client = db.$client;
 		const now = Date.now();
-		const [updated] = await client.batch([
-			client.prepare(`
-				UPDATE graphic_style_sets
-				SET published = draft,
-					revision = revision + 1,
-					draft_revision = draft_revision + 1,
-					published_at = ?,
-					updated_at = ?
-				WHERE id = ? AND draft_revision = ?
-			`).bind(now, now, id, draftRevision),
-		]);
+		const updated = await client.prepare(`
+			UPDATE graphic_style_sets
+			SET published = draft,
+				revision = revision + 1,
+				draft_revision = draft_revision + 1,
+				published_at = ?,
+				updated_at = ?
+			WHERE id = ? AND draft_revision = ?
+		`).bind(now, now, id, draftRevision).run();
 
-		if (updated?.meta.changes !== 1) {
+		if (updated.meta.changes !== 1) {
 			const current = await findById(id);
 			if (!current)
 				return undefined;
@@ -214,27 +210,25 @@ export function graphicStyleSetService() {
 		const entries = JSON.stringify(input.entries);
 		// `WHERE NOT EXISTS` rather than `INSERT OR IGNORE`, which would swallow every
 		// other constraint this row has as silently as it swallows a taken identity.
-		const [inserted] = await client.batch([
-			client.prepare(`
-				INSERT INTO graphic_style_sets
-					(id, name, description, revision, draft_revision, draft, published, published_at, created_at, updated_at)
-				SELECT ?, ?, ?, ?, 1, ?, ?, ?, ?, ?
-				WHERE NOT EXISTS (SELECT 1 FROM graphic_style_sets WHERE id = ?)
-			`).bind(
-				input.id,
-				input.name,
-				input.description,
-				input.revision,
-				entries,
-				entries,
-				now,
-				now,
-				now,
-				input.id,
-			),
-		]);
+		const inserted = await client.prepare(`
+			INSERT INTO graphic_style_sets
+				(id, name, description, revision, draft_revision, draft, published, published_at, created_at, updated_at)
+			SELECT ?, ?, ?, ?, 1, ?, ?, ?, ?, ?
+			WHERE NOT EXISTS (SELECT 1 FROM graphic_style_sets WHERE id = ?)
+		`).bind(
+			input.id,
+			input.name,
+			input.description,
+			input.revision,
+			entries,
+			entries,
+			now,
+			now,
+			now,
+			input.id,
+		).run();
 
-		if (inserted?.meta.changes !== 1)
+		if (inserted.meta.changes !== 1)
 			return undefined;
 
 		const created = await findById(input.id);
@@ -267,31 +261,29 @@ export function graphicStyleSetService() {
 	}): Promise<DbGraphicStyleSet | undefined> => {
 		const client = db.$client;
 		const now = Date.now();
-		const [updated] = await client.batch([
-			client.prepare(`
-				UPDATE graphic_style_sets
-				SET draft = ?,
-					published = ?,
-					revision = ?,
-					draft_revision = draft_revision + 1,
-					published_at = ?,
-					updated_at = ?
-				WHERE id = ? AND revision = ? AND draft_revision = ?
-			`).bind(
-				JSON.stringify(input.entries),
-				JSON.stringify(input.entries),
-				input.revision,
-				now,
-				now,
-				input.id,
-				input.expectedRevision,
-				input.expectedDraftRevision,
-			),
-		]);
+		const updated = await client.prepare(`
+			UPDATE graphic_style_sets
+			SET draft = ?,
+				published = ?,
+				revision = ?,
+				draft_revision = draft_revision + 1,
+				published_at = ?,
+				updated_at = ?
+			WHERE id = ? AND revision = ? AND draft_revision = ?
+		`).bind(
+			JSON.stringify(input.entries),
+			JSON.stringify(input.entries),
+			input.revision,
+			now,
+			now,
+			input.id,
+			input.expectedRevision,
+			input.expectedDraftRevision,
+		).run();
 
 		// A write that matched nothing wrote nothing. The Style Set moved under the
 		// report, so the caller reports a conflict rather than retrying blind.
-		if (updated?.meta.changes !== 1)
+		if (updated.meta.changes !== 1)
 			return undefined;
 
 		return await findById(input.id);

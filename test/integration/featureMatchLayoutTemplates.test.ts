@@ -46,13 +46,25 @@ async function request(
 describe('feature Match Layout Template library', () => {
 	let sourceEventId: number;
 	let sourceScreenId: number;
+	let sourceSlotId: number;
 	let otherEventId: number;
 	let otherScreenId: number;
+	let otherSlotId: number;
 	let authorCookie: string;
 	let templateId: string;
 	/** The layout the source Screen was authored with, as saved into the library. */
 	let savedLayout: FeatureMatchLayoutConfig;
 
+	/**
+	 * An Event, a Feature Match Overlay Screen, and a Feature Match Slot to assign to
+	 * it. The assignment itself happens in `beforeAll`, alongside the layout each
+	 * Screen is seeded with.
+	 *
+	 * The Slot is what makes "a layout carries no Event identity" a claim that can
+	 * fail. A Screen whose `featureMatchId` is `null` throughout satisfies every
+	 * assertion about the absence of one for free, so both Screens get a real Slot
+	 * before anything is saved or placed.
+	 */
 	async function createEventWithOverlayScreen(name: string, slug: string) {
 		const event = await $fetch('/api/events', {
 			method: 'POST',
@@ -62,7 +74,11 @@ describe('feature Match Layout Template library', () => {
 			method: 'POST',
 			body: { name, slug, currentMode: 'feature-match-overlay' },
 		});
-		return { eventId: event.id as number, screenId: screen.id };
+		const slot = await $fetch<{ id: number }>(`/api/events/${event.id}/feature-match-slots`, {
+			method: 'POST',
+			body: { bestOf: 3 },
+		});
+		return { eventId: event.id as number, screenId: screen.id, slotId: slot.id };
 	}
 
 	async function storedLayout(eventId: number, screenId: number): Promise<FeatureMatchLayoutConfig> {
@@ -97,9 +113,11 @@ describe('feature Match Layout Template library', () => {
 		const source = await createEventWithOverlayScreen(`Layout Source Event ${runId}`, `layout-source-${runId}`);
 		sourceEventId = source.eventId;
 		sourceScreenId = source.screenId;
+		sourceSlotId = source.slotId;
 		const other = await createEventWithOverlayScreen(`Layout Target Event ${runId}`, `layout-target-${runId}`);
 		otherEventId = other.eventId;
 		otherScreenId = other.screenId;
+		otherSlotId = other.slotId;
 
 		// A layout distinguishable from the target Screen's default in every part an
 		// author would recognise: the Frame, the Source Items, and the composition.
@@ -119,17 +137,18 @@ describe('feature Match Layout Template library', () => {
 		}];
 		const patched = await request(
 			`/api/events/${sourceEventId}/screens/${sourceScreenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: authored, featureMatchId: null } },
+			{ method: 'PATCH', body: { layout: authored, featureMatchId: sourceSlotId } },
 		);
 		expect(patched.status).toBe(200);
 		savedLayout = await storedLayout(sourceEventId, sourceScreenId);
 
-		// The target Screen starts from the untouched default, so "placing replaced the
-		// layout" is a comparison against a layout that really is stored rather than
-		// against the absence of one.
+		// The target Screen starts from the untouched default and its own assigned
+		// Slot, so "placing replaced the layout" is a comparison against a layout that
+		// really is stored rather than against the absence of one, and "the Screen's
+		// own state survives" is a comparison against state that really is there.
 		const seeded = await request(
 			`/api/events/${otherEventId}/screens/${otherScreenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout } },
+			{ method: 'PATCH', body: { layout: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout, featureMatchId: otherSlotId } },
 		);
 		expect(seeded.status).toBe(200);
 	});
@@ -173,19 +192,28 @@ describe('feature Match Layout Template library', () => {
 	 * A Feature Match Slot is Screen state, not layout. It is the identity that would
 	 * make a saved layout belong to one Event, and there is nowhere in the stored
 	 * document for it to be.
+	 *
+	 * The source Screen carries a real Slot assignment while this is saved, so a save
+	 * that copied the Screen's whole Feature Match Overlay configuration instead of
+	 * its layout would put a Slot identity from one Event into an installation-wide
+	 * library — and fail here.
+	 *
+	 * Two assertions, because they catch different things. The field-name check names
+	 * the leak an author would recognise and is the one that reads as the rule. It
+	 * proves only that nothing is called `featureMatchId`, though, so a Slot travelling
+	 * under some other key would walk past it; equality against the layout the Screen
+	 * holds is what closes that, since a document with anything extra on it is not
+	 * equal to one without.
 	 */
 	it('carries no Feature Match Slot assignment into the library', async () => {
-		const withSlot = await request(
-			`/api/events/${sourceEventId}/screens/${sourceScreenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { featureMatchId: null } },
-		);
-		expect(withSlot.status).toBe(200);
+		const assigned = await storedOverlayConfig(sourceEventId, sourceScreenId);
+		expect(assigned.featureMatchId).toBe(sourceSlotId);
 
 		const entry = await request(`${LIBRARY_PATH}/${templateId}`);
 		expect(entry.status).toBe(200);
-		expect(JSON.stringify((entry.data as FeatureMatchLayoutTemplateResponse).document))
-			.not
-			.toContain('featureMatchId');
+		const document = (entry.data as FeatureMatchLayoutTemplateResponse).document;
+		expect(JSON.stringify(document)).not.toContain('featureMatchId');
+		expect(document).toEqual(savedLayout);
 	});
 
 	it('lists the saved template in the installation-scoped library', async () => {
@@ -212,8 +240,10 @@ describe('feature Match Layout Template library', () => {
 		const after = await storedOverlayConfig(otherEventId, otherScreenId);
 		expect(after.layout).toEqual(savedLayout);
 		// The Screen's own state survives: a placement writes the layout and nothing
-		// else the Screen owns.
-		expect(after.featureMatchId).toEqual(before.featureMatchId);
+		// else the Screen owns. The Slot assignment is the state worth naming, because
+		// it is the one a placement carrying a whole configuration would overwrite.
+		expect(before.featureMatchId).toBe(otherSlotId);
+		expect(after.featureMatchId).toBe(otherSlotId);
 		expect(after.presetId).toEqual(before.presetId);
 	});
 

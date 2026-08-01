@@ -2,11 +2,13 @@ import { mapGraphicStyleSetToResponse } from '~~/server/mappers/graphicStyleSet'
 import { planGraphicStyleSetPublish } from '~~/server/modules/graphic-style-set';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import {
+	GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
 	graphicStyleSetParamsSchema,
 	publishGraphicStyleSetSchema,
 } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
 import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSetConflict';
+import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
 /**
  * Publish one Graphic Style Set's working draft as a new revision.
@@ -27,7 +29,13 @@ import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSe
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);
 	const { styleSetId } = await getValidatedRouterParams(event, graphicStyleSetParamsSchema.parse);
-	const body = publishGraphicStyleSetSchema.parse(await readBody(event));
+	const body = publishGraphicStyleSetSchema.parse(
+		await readJsonPayloadLimited(
+			event,
+			GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
+			'Graphic Style Set publish request',
+		),
+	);
 
 	const service = graphicStyleSetService();
 	const styleSet = await service.findById(styleSetId);

@@ -1,10 +1,13 @@
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { Screen } from '~/types';
+import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, h } from 'vue';
 
 enableAutoUnmount(afterEach);
+
+mockNuxtImport('useEventStore', () => () => ({ event: { id: 7, name: 'Regional', game: 'mtg' } }));
 
 /**
  * Where the Broadcast Graphic Template library is allowed to appear.
@@ -21,7 +24,17 @@ const slate: BroadcastGraphicConfig = { id: 'slate', name: 'Slate', items: [] };
 
 const StackTreeStub = defineComponent({ template: '<div data-testid="stack-tree" />' });
 const PreviewStub = defineComponent({ template: '<div data-testid="preview" />' });
-const InspectorStub = defineComponent({ template: '<div data-testid="inspector" />' });
+/** Stands in for the inspector, reporting the Event facts the workspace hands it. */
+const InspectorStub = defineComponent({
+	props: { eventId: { type: Number, required: true }, game: { type: String, default: '' } },
+	setup(props) {
+		return () => h('div', {
+			'data-testid': 'inspector',
+			'data-event-id': String(props.eventId),
+			'data-game': props.game,
+		});
+	},
+});
 const UIconStub = defineComponent({ template: '<i />' });
 const UButtonStub = defineComponent({
 	props: { disabled: { type: Boolean, default: false } },
@@ -139,5 +152,17 @@ describe('broadcastGraphicsEditWorkspace', () => {
 		const panel = wrapper.get('[data-testid="graphic-channels-panel"]');
 		expect(panel.attributes('data-channels')).toBe('1');
 		expect(panel.attributes('data-writable')).toBe('false');
+	});
+
+	/**
+	 * The inspector authors Graphic Input Bindings against a curated field catalog
+	 * that separates common fields from ones specific to this Event's game, so the
+	 * workspace has to tell it which game — otherwise an author would be offered a
+	 * field this Event can never resolve.
+	 */
+	it('tells the inspector which game this Event is played in', async () => {
+		const wrapper = await mountWorkspace();
+
+		expect(wrapper.get('[data-testid="inspector"]').attributes('data-game')).toBe('mtg');
 	});
 });

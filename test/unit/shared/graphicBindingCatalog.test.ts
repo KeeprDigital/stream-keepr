@@ -1,6 +1,7 @@
 import type { GraphicBindingDataSet } from '~~/shared/modules/graphics';
 import { describe, expect, it } from 'vitest';
 import {
+	bindableGraphicBindingFields,
 	GRAPHIC_BINDING_CATALOG,
 	graphicBindingField,
 	graphicBindingFields,
@@ -118,5 +119,37 @@ describe('graphic Input Binding field catalog', () => {
 			.toBe('Azorius Control');
 		expect(resolveGraphicBindingField('player', 'player.archetypeName', { name: 'Ava', archetypeId: 99 }, data))
 			.toBeUndefined();
+	});
+});
+
+/**
+ * What an authoring surface may offer one Graphic Input, which is the catalog's two
+ * rules asked as one question: the type this input can hold, and this Event's game.
+ */
+describe('the fields one Graphic Input may bind to', () => {
+	it('offers only fields of the Graphic Input\'s own type', () => {
+		const text = bindableGraphicBindingFields('player', 'text', 'mtg');
+		const number = bindableGraphicBindingFields('player', 'number', 'mtg');
+
+		expect(text.common.map(field => field.id)).toContain('player.record');
+		expect(text.common.map(field => field.id)).not.toContain('player.wins');
+		expect(number.common.map(field => field.id)).toContain('player.wins');
+		expect(number.common.map(field => field.id)).not.toContain('player.record');
+	});
+
+	it('presents this Event\'s game-specific fields apart from the common ones', () => {
+		const mtg = bindableGraphicBindingFields('player', 'text', 'mtg');
+
+		expect(mtg.common.map(field => field.id)).toContain('player.name');
+		expect(mtg.common.every(field => field.game === undefined)).toBe(true);
+		expect(mtg.gameSpecific.map(field => field.id)).toEqual(['player.deckName', 'player.deckColors']);
+		expect(bindableGraphicBindingFields('player', 'text', 'op').gameSpecific.map(field => field.id))
+			.toEqual(['player.leader']);
+	});
+
+	it('offers nothing at all where the kind has no field of that type', () => {
+		// A Talent has a name and nothing else, so a number Graphic Input has nothing to
+		// bind to and the surface has a reason to state rather than an empty picker.
+		expect(bindableGraphicBindingFields('talent', 'number', 'mtg')).toEqual({ common: [], gameSpecific: [] });
 	});
 });

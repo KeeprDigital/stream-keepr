@@ -102,7 +102,7 @@ const lowerThird: BroadcastGraphicConfig = {
 			height: 60,
 			text: 'Now playing',
 			typography: {
-				fontId: 'inter',
+				font: { kind: 'application', fontId: 'inter' },
 				fontSize: 64,
 				fontWeight: 800,
 				fontStyle: 'normal',

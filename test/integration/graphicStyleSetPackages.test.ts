@@ -41,7 +41,7 @@ function draft(fontSize = 64): GraphicStyleSetEntry[] {
 			name: 'Heading',
 			schemaVersion: 1,
 			value: {
-				fontId: 'inter',
+				font: { kind: 'application', fontId: 'inter' },
 				fontSize,
 				fontWeight: 800,
 				fontStyle: 'normal',

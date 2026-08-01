@@ -1,6 +1,6 @@
 import type { DbGraphicStyleSet } from '~~/server/db/schema';
 import type { GraphicStyleSetPackageInstallPorts } from '~~/server/modules/graphic-style-set-package';
-import type { GraphicFontId } from '~~/shared/types/graphics';
+import type { GraphicApplicationFontId } from '~~/shared/types/graphics';
 import type { AffectedGraphicsTemplate, GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -39,14 +39,14 @@ const BRAND: GraphicStyleSetEntry = {
 	value: { color: '#ff0044' },
 };
 
-function heading(fontSize = 64, fontId: GraphicFontId = 'inter'): GraphicStyleSetEntry {
+function heading(fontSize = 64, fontId: GraphicApplicationFontId = 'inter'): GraphicStyleSetEntry {
 	return {
 		id: 'heading',
 		kind: 'typography',
 		name: 'Heading',
 		schemaVersion: 1,
 		value: {
-			fontId,
+			font: { kind: 'application', fontId },
 			fontSize,
 			fontWeight: 800,
 			fontStyle: 'normal',
@@ -482,12 +482,12 @@ describe('receiving a `.skstyle` package on another installation', () => {
 
 	it('refuses a package needing a font this installation does not have, installing nothing', async () => {
 		const unsupported = await rebuiltArchive(sent, (documents) => {
-			documents.snapshot.entries[1].value.fontId = 'a-font-from-somewhere-else';
+			documents.snapshot.entries[1].value.font.fontId = 'a-font-from-somewhere-else';
 			documents.manifest.applicationCapabilities = [{
 				capability: 'application-font',
 				identity: 'a-font-from-somewhere-else',
 				configurationVersion: 1,
-				requiredBy: ['entries.heading.fontId'],
+				requiredBy: ['entries.heading.font.fontId'],
 			}];
 		});
 		const receiver = library();

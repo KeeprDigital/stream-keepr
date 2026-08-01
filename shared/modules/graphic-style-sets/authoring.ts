@@ -15,6 +15,7 @@ import {
 	applyGraphicStyleSet,
 	captureGraphicStyleOverrides,
 	GRAPHIC_STYLE_SLOT_OWNED_KEYS,
+	graphicStyleSlotDeviates,
 } from './apply';
 import { GRAPHIC_STYLE_SLOT_KINDS, graphicStyleOwnerSupportsSlot, readGraphicStyleSlot } from './slots';
 
@@ -55,7 +56,7 @@ export function createGraphicStyleEntry(options: {
 						...base,
 						kind: 'typography',
 						value: {
-							fontId: 'inter',
+							font: { kind: 'application', fontId: 'inter' },
 							fontSize: 48,
 							fontWeight: 700,
 							fontStyle: 'normal',
@@ -189,16 +190,41 @@ export function unbindGraphicStyleRef(
  * inherited — and running this after an edit records exactly which owned keys no
  * longer match the preset.
  *
- * It is a *diff against the Style Set the editor is holding*, which is the one the
- * composition's values were produced from. That is what makes it correct: an
+ * It is a diff against the Style Set revision the composition was *reconciled to*,
+ * which is the one its values were produced from. That is what makes it correct: an
  * override is by definition where the author's value and the preset's disagree, and
  * both sides of that comparison are in front of it. An author who edits a value and
  * puts it back is left with no override rather than one pinning it.
+ *
+ * A slot with no owned keys has nowhere to record a deviation, so an author who edits
+ * one has unbound it — the same answer review's "keep as an override" gives for the
+ * same reason. That is not a weaker outcome than an override: the value is already
+ * stored inline and does not move, only the provenance does. Keeping the reference
+ * would leave the composition reporting an available update that no later apply could
+ * ever settle, which is a badge that misreports rather than a design that is protected.
+ *
+ * ## Why the revisions have to agree first
+ *
+ * The editor holds the Style Set's *published* entries, so between a republish and
+ * the author reviewing it, it is holding entries this composition was never
+ * reconciled to. Every difference derivable from them is then the Style Set's own
+ * change wearing the author's name. Recording one — as an override, or by letting go
+ * of a reference — settles a pending update that nobody reviewed, which is the single
+ * thing story 20 exists to prevent. So while the two disagree this is the identity:
+ * the author's edited values are already stored inline and stay exactly where they
+ * are, and review is where they are shown that their edit and the Style Set's differ.
+ * Deviations start being recorded again the moment an applied update brings the
+ * composition back onto the published revision.
  */
 export function recaptureGraphicStyleOverrides(
 	graphic: BroadcastGraphicConfig,
 	resolution: GraphicStyleSetResolution,
+	/** The published revision `resolution` was built from. */
+	publishedRevision: number,
 ): BroadcastGraphicConfig {
+	if (graphic.styleSet?.revision !== publishedRevision)
+		return graphic;
+
 	function recaptured<T extends { styleRefs?: GraphicStyleRefs }>(owner: T): T {
 		if (!owner.styleRefs)
 			return owner;
@@ -208,17 +234,23 @@ export function recaptureGraphicStyleOverrides(
 			const ref = owner.styleRefs[slot];
 			if (!ref)
 				continue;
-			if (GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot].length === 0
-				|| !graphicStyleOwnerSupportsSlot(owner as never, slot)) {
+			if (!graphicStyleOwnerSupportsSlot(owner as never, slot)) {
 				(next as Record<string, unknown>)[slot] = { entryId: ref.entryId };
 				continue;
 			}
-			const overrides = captureGraphicStyleOverrides(
-				resolution,
-				slot,
-				ref.entryId,
-				readGraphicStyleSlot(owner as never, slot),
-			);
+			const current = readGraphicStyleSlot(owner as never, slot);
+
+			if (GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot].length === 0) {
+				// Deviating from the preset is what lets go of the reference. The author's
+				// deviation is the only thing that can, which is why the revisions must
+				// already agree for this to be reached at all.
+				if (graphicStyleSlotDeviates(resolution, slot, ref.entryId, current))
+					continue;
+				(next as Record<string, unknown>)[slot] = { entryId: ref.entryId };
+				continue;
+			}
+
+			const overrides = captureGraphicStyleOverrides(resolution, slot, ref.entryId, current);
 			(next as Record<string, unknown>)[slot] = overrides
 				? { entryId: ref.entryId, overrides }
 				: { entryId: ref.entryId };

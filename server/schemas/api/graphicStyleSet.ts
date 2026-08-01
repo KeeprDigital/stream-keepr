@@ -50,6 +50,18 @@ import {
  * Publish is what proves it whole.
  */
 
+/**
+ * What a Graphic Style Set write may weigh, by the two shapes the library has.
+ *
+ * A draft is the only unbounded thing any of these routes accepts — up to two hundred
+ * entries, written whole on every edit — so it carries the same number wherever it
+ * arrives, on the create that seeds one and on the edit that replaces one. Everything
+ * else is a precondition and a mode: a body far below the general mutation ceiling,
+ * refused by weight before a schema is asked to read it.
+ */
+export const GRAPHIC_STYLE_SET_DRAFT_BODY_BYTES = 512 * 1024;
+export const GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES = 4 * 1024;
+
 const finiteNumberSchema = z.number().finite();
 const opacitySchema = finiteNumberSchema.min(0).max(1);
 const nonNegativePixelSchema = finiteNumberSchema.nonnegative().max(10000);
@@ -65,8 +77,18 @@ const entryNameSchema = z.string().trim().min(1).max(MAX_GRAPHIC_STYLE_SET_ENTRY
 
 const paletteValueSchema = z.object({ color: cssColorSchema }).strict();
 
+/**
+ * The application arm alone. A Graphic Item's typography takes a library font as
+ * well; a Graphic Style Set does not, because a `.skstyle` carries no asset bytes
+ * for one to resolve against on the far side of a transfer. This schema is where
+ * that decision is enforced rather than merely documented — see
+ * `docs/adr/0001-graphic-style-sets-reference-application-fonts.md`.
+ */
 const typographyValueSchema = z.object({
-	fontId: z.enum(GRAPHIC_FONT_IDS),
+	font: z.object({
+		kind: z.literal('application'),
+		fontId: z.enum(GRAPHIC_FONT_IDS),
+	}).strict(),
 	fontSize: finiteNumberSchema.positive().max(600),
 	fontWeight: finiteNumberSchema.int().min(1).max(1000),
 	fontStyle: z.enum(GRAPHIC_FONT_STYLE_VALUES),
@@ -247,6 +269,19 @@ export const updateGraphicStyleSetSchema = z.object({
 
 export const publishGraphicStyleSetSchema = z.object({
 	/** The draft revision the author reviewed, so a concurrent edit is not published blind. */
+	draftRevision: z.number().int().nonnegative(),
+}).strict();
+
+/**
+ * Deleting a whole Graphic Style Set.
+ *
+ * The draft revision alone, because there is no mode to choose between: replacing one
+ * Style Set with another would mean matching entries across two independently authored
+ * sets, so detaching every linked template is the only thing this can mean. It is still
+ * a precondition rather than a formality — the deletion rewrites every one of those
+ * templates, and a draft edit in between is somebody else's work.
+ */
+export const deleteGraphicStyleSetSchema = z.object({
 	draftRevision: z.number().int().nonnegative(),
 }).strict();
 
