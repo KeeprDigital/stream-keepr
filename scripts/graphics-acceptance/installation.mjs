@@ -18,7 +18,7 @@ import {
 	featureMatchLayoutReferencing,
 	featureMatchLayoutWithRestrictedVideo,
 } from './repository-bridge.mjs';
-import { acceptanceRoutes } from './routes.mjs';
+import { acceptanceRoutes, screenOutputRepresentation } from './routes.mjs';
 
 const DEFAULT_LOCAL_ORIGIN = 'http://127.0.0.1:8787';
 
@@ -200,18 +200,17 @@ export async function provisionScreenOutputScenario(session, { label }) {
 	}
 
 	return {
-		eventId: event.id,
-		screenId: screen.id,
-		screenSlug: slug,
-		assetId,
-		revisionId,
-		content,
-		contentType: 'image/png',
+		...screenOutputRepresentation({
+			eventId: event.id,
+			screenId: screen.id,
+			screenSlug: slug,
+			assetId,
+			revisionId,
+			content,
+			contentType: 'image/png',
+		}),
 		capability: await mintCapability('GET'),
 		rotateCapability: () => mintCapability('POST'),
-		capabilityContentPath: () =>
-			acceptanceRoutes.capabilityContent(screen.id, assetId, revisionId),
-		editorContentPath: () => acceptanceRoutes.editorContent(assetId, revisionId),
 		async dispose() {
 			try {
 				await session.request(acceptanceRoutes.event(event.id), { method: 'DELETE', author: true });
