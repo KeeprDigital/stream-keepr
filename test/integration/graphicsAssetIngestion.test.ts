@@ -10,9 +10,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 
-const authorHeaders: Record<string, string> = {
-	'x-graphics-author-id': 'integration-graphics-author',
-};
+/** Filled with the graphics author session cookie, the only author identity. */
+const authorHeaders: Record<string, string> = {};
 const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 	'base64',

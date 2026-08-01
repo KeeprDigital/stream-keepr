@@ -42,10 +42,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 	let authorHeaders: Record<string, string>;
 
 	beforeAll(async () => {
-		authorHeaders = {
-			cookie: await createGraphicsAuthorSessionCookie(),
-		};
-		authorHeaders['x-graphics-author-id'] = 'replacement-integration-author';
+		authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
 		const event = await $fetch('/api/events', {
 			method: 'POST',
 			body: {
@@ -165,6 +162,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 			`/api/graphics-assets/${originalReference.assetId}`,
 			{
 				method: 'PATCH',
+				headers: authorHeaders,
 				body: { name: 'Renamed integration logo', eventIds: [] },
 			},
 		);

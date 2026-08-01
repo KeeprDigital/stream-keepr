@@ -56,10 +56,7 @@ describe('the Graphics Asset Library operational queues API', () => {
 	let authorHeaders: Record<string, string>;
 
 	beforeAll(async () => {
-		authorHeaders = {
-			'cookie': await createGraphicsAuthorSessionCookie(),
-			'x-graphics-author-id': 'queues-integration-author',
-		};
+		authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
 	});
 
 	async function ingest(name: string, idempotencyKey: string, bytes: Uint8Array) {

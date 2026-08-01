@@ -67,6 +67,7 @@ describe('template Package export through the API boundary', () => {
 		screenId = screen.id;
 		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
+			headers: { cookie: graphicsAuthorCookie },
 			body: {
 				idempotencyKey: 'template-package-export-logo',
 				name: 'Packaged sponsor logo',
@@ -82,7 +83,7 @@ describe('template Package export through the API boundary', () => {
 		});
 		const response = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-			{ method: 'PUT', body: packagePixelPng },
+			{ method: 'PUT', headers: { cookie: graphicsAuthorCookie }, body: packagePixelPng },
 		);
 		operation = await response.json() as GraphicsIngestionOperation;
 	});

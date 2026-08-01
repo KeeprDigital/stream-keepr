@@ -2,7 +2,7 @@ import { requireGraphicsAdministrator } from '~~/server/modules/graphics-adminis
 import { graphicsDiscrepancyId } from '~~/server/modules/graphics-asset-library';
 import { createBoundedByteStream } from '~~/server/modules/graphics-asset-library/object-store';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { graphicsAuthorIdentity, rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
+import { graphicsAdministratorActor, rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 import { getBoundedRequestBodyStream } from '~~/server/utils/payloadLimits';
 import { MAX_SILENT_VIDEO_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 
@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
 		}
 		return await library.repairUnavailableGraphicAssetContent({
 			discrepancyId,
-			actor: graphicsAuthorIdentity(event),
+			actor: await graphicsAdministratorActor(event),
 			bytes: createBoundedByteStream(body, {
 				byteLength: discrepancy.expected.byteLength,
 				maximumByteLength: MAX_SILENT_VIDEO_INGESTION_BYTES,

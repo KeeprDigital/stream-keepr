@@ -2,10 +2,21 @@ import type { H3Event } from 'h3';
 import { GraphicsAssetLibraryError } from '~~/server/modules/graphics-asset-library';
 import { graphicsCapacityErrorDescriptor } from '~~/server/modules/graphics-asset-library/errors';
 import { GraphicsObjectInputError } from '~~/server/modules/graphics-asset-library/object-store';
+import { optionalGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 
-export function graphicsAuthorIdentity(event: H3Event): string {
-	const identity = getRequestHeader(event, 'x-graphics-author-id')?.trim();
-	return identity || 'local-graphics-author';
+/**
+ * Who the Evidence Ledger records for a Graphics Administrator's action.
+ *
+ * Administrator authority comes from the installation's shared admin token,
+ * which names nobody. When the same caller also carries a graphics author
+ * session — an operator working the cockpit in a browser always does — that
+ * session is the only identity available and is recorded. Otherwise the ledger
+ * says an administrator acted and declines to invent a name for them, which is
+ * the honest entry: the previous client-supplied header let any holder of the
+ * admin token write any name it liked into the installation's audit trail.
+ */
+export async function graphicsAdministratorActor(event: H3Event): Promise<string> {
+	return await optionalGraphicsAuthorSession(event) ?? 'graphics-administrator';
 }
 
 export function rethrowGraphicsAssetApiError(error: unknown, event?: H3Event): never {

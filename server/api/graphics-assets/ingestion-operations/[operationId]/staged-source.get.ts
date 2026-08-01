@@ -1,10 +1,7 @@
 import { graphicsIngestionOperationId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
-import {
-	graphicsAuthorIdentity,
-	rethrowGraphicsAssetApiError,
-} from '~~/server/utils/graphicsAssetApi';
+import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
  * Provisional staged bytes for an operation paused awaiting browser
@@ -13,11 +10,11 @@ import {
  * evidence. The bytes stay private, uncacheable, and scoped to one operation.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	const initiatedBy = await requireGraphicsAuthorSession(event);
 	try {
 		const staged = await graphicsAssetLibraryForEvent(event).resolveStagedGraphicAssetSource({
 			operationId: graphicsIngestionOperationId(getRouterParam(event, 'operationId') ?? ''),
-			initiatedBy: graphicsAuthorIdentity(event),
+			initiatedBy,
 		});
 		if (staged.outcome === 'missing') {
 			throw createError({

@@ -34,10 +34,7 @@ describe('the Graphics Asset Library reconciliation API', () => {
 	let authorHeaders: Record<string, string>;
 
 	beforeAll(async () => {
-		authorHeaders = {
-			'cookie': await createGraphicsAuthorSessionCookie(),
-			'x-graphics-author-id': 'reconciliation-integration-author',
-		};
+		authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
 	});
 
 	async function ingest(name: string, idempotencyKey: string) {

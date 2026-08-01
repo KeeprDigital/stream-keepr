@@ -11,16 +11,32 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 
-const lifecyclePixelPng = Uint8Array.from(Buffer.from(
+const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 	'base64',
 ));
 const emptyTextChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85);
-const lifecycleReplacementPng = Uint8Array.of(
-	...lifecyclePixelPng.slice(0, -12),
-	...emptyTextChunk,
-	...lifecyclePixelPng.slice(-12),
-);
+
+/**
+ * This suite's own content, padded with chunk counts no other suite uses.
+ *
+ * The bare single-pixel PNG was `graphicsAssetIngestion.test.ts`'s to publish —
+ * it asserts its ingestion *published* rather than reused — and this suite's
+ * `create-separate` policy does not keep its bytes to itself: it creates a
+ * second Graphic Asset over the same canonical content, which the other suite's
+ * default reuse policy then finds. One chunk was `graphicsAssetReferences`'
+ * digest for the same reason.
+ */
+function pngWithTextChunks(count: number) {
+	return Uint8Array.from(Buffer.concat([
+		basePixelPng.slice(0, -12),
+		...Array.from({ length: count }).fill(emptyTextChunk) as Uint8Array[],
+		basePixelPng.slice(-12),
+	]));
+}
+
+const lifecyclePixelPng = pngWithTextChunks(90);
+const lifecycleReplacementPng = pngWithTextChunks(91);
 
 function decodeEvidence(bytes = lifecyclePixelPng) {
 	return {
@@ -37,10 +53,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 	let authorHeaders: Record<string, string>;
 
 	beforeAll(async () => {
-		authorHeaders = {
-			'cookie': await createGraphicsAuthorSessionCookie(),
-			'x-graphics-author-id': 'lifecycle-integration-author',
-		};
+		authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
 		const event = await $fetch('/api/events', {
 			method: 'POST',
 			body: {
@@ -93,7 +106,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 	async function lifecycleAction(assetId: string, action: GraphicAssetLifecycleAction) {
 		return await $fetch<GraphicAssetLifecycleActionOutcome>(
 			`/api/graphics-assets/${assetId}/lifecycle-actions`,
-			{ method: 'POST', body: { action } },
+			{ method: 'POST', headers: authorHeaders, body: { action } },
 		);
 	}
 
@@ -137,6 +150,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 		const replacement = await replace(reference.assetId, 'lifecycle-retire-replacement');
 		await $fetch(`/api/graphics-assets/${reference.assetId}`, {
 			method: 'PATCH',
+			headers: authorHeaders,
 			body: {
 				name: 'Renamed retirable lifecycle logo',
 				eventIds: [eventId],
@@ -347,28 +361,23 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 			{ method: 'PATCH', body: { layout: config.layout } },
 		)));
 
+		// Both references, in whichever order they landed: the two Screens were
+		// written concurrently just above, so pinning the order of the summary
+		// would be asserting which of two racing writes committed first rather
+		// than that the summary is complete.
 		const blocked = await lifecycleAction(reference.assetId, 'trash');
-		expect(blocked).toEqual({
-			outcome: 'in-use',
-			usage: [
-				expect.objectContaining({
-					reference,
-					owner: expect.objectContaining({
-						kind: 'screen',
-						id: String(secondScreen.id),
-						eventId,
-					}),
+		expect(blocked.outcome).toBe('in-use');
+		expect(blocked.usage).toHaveLength(2);
+		expect(blocked.usage).toEqual(expect.arrayContaining(
+			[secondScreen.id, thirdScreen.id].map(id => expect.objectContaining({
+				reference,
+				owner: expect.objectContaining({
+					kind: 'screen',
+					id: String(id),
+					eventId,
 				}),
-				expect.objectContaining({
-					reference,
-					owner: expect.objectContaining({
-						kind: 'screen',
-						id: String(thirdScreen.id),
-						eventId,
-					}),
-				}),
-			],
-		});
+			})),
+		));
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
 			query: { search: 'Referenced lifecycle logo' },
 		})).resolves.toEqual([

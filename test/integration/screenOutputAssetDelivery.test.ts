@@ -10,10 +10,26 @@ import { screenOutputAssetCapabilityCookieName } from '../../shared/utils/graphi
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 import { executeIntegrationD1 } from './integrationD1';
 
-const pixelPng = Uint8Array.from(Buffer.from(
+const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 	'base64',
 ));
+const emptyTextChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85);
+
+/**
+ * This suite's own content, padded with a chunk count no other suite uses.
+ *
+ * Every other graphics suite already owns a distinct digest; this one ingested
+ * the bare single-pixel PNG, which `graphicsAssetIngestion.test.ts` also ingests
+ * under the default reuse policy while asserting it *published*. Whichever ran
+ * first published and the other reused, so that assertion was decided by file
+ * order rather than by the library.
+ */
+const pixelPng = Uint8Array.from(Buffer.concat([
+	basePixelPng.slice(0, -12),
+	...Array.from({ length: 80 }).fill(emptyTextChunk) as Uint8Array[],
+	basePixelPng.slice(-12),
+]));
 
 describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 	let eventId: number;
@@ -67,6 +83,7 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 			'/api/graphics-assets/ingestion-operations',
 			{
 				method: 'POST',
+				headers: { cookie: graphicsAuthorCookie },
 				body: {
 					idempotencyKey: 'screen-output-capability-pixel',
 					name: 'Screen Output capability pixel',
@@ -83,7 +100,7 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		);
 		const upload = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-			{ method: 'PUT', body: pixelPng },
+			{ method: 'PUT', headers: { cookie: graphicsAuthorCookie }, body: pixelPng },
 		);
 		const operation = await upload.json() as GraphicsIngestionOperation;
 		assetId = operation.result!.assetId;

@@ -1,9 +1,7 @@
 import { z } from 'zod';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import {
-	graphicsAuthorIdentity,
-	rethrowGraphicsAssetApiError,
-} from '~~/server/utils/graphicsAssetApi';
+import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 import { TEMPLATE_PACKAGE_LIMITS } from '~~/shared/types/templatePackage';
 import { MAX_SILENT_VIDEO_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 
@@ -87,11 +85,17 @@ const initiationSchema = z.preprocess(
 	]),
 );
 
+/**
+ * The initiating author is the authenticated graphics author session and nothing
+ * else. Every later route on the operation resolves the same way, so the identity
+ * an operation is created under is exactly the identity that can work it: an
+ * operation UUID is a name, not a right.
+ */
 export default defineEventHandler(async (event) => {
+	const initiatedBy = await requireGraphicsAuthorSession(event);
 	try {
 		const body = await readValidatedBody(event, initiationSchema.parse);
 		const library = graphicsAssetLibraryForEvent(event);
-		const initiatedBy = graphicsAuthorIdentity(event);
 		const operation = await (async () => {
 			switch (body.source) {
 				case 'template-package': {

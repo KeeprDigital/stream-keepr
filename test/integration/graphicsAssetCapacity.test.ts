@@ -2,13 +2,22 @@ import type { GraphicsAssetLibraryCapacity, GraphicsIngestionOperation } from '~
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 
 describe('the Graphics Asset Library Capacity API', () => {
 	const administratorHeaders = {
 		'x-graphics-admin-token': INTEGRATION_GRAPHICS_ADMIN_TOKEN,
 	};
+	// Each test that used to label itself with a distinct author identity now
+	// holds a distinct graphics author session, which is the only identity the
+	// ingestion routes accept.
+	let authorCookie: string;
+
+	beforeAll(async () => {
+		authorCookie = await createGraphicsAuthorSessionCookie();
+	});
 	const transparentPixelPng = Uint8Array.from(Buffer.from(
 		'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 		'base64',
@@ -88,7 +97,7 @@ describe('the Graphics Asset Library Capacity API', () => {
 				method: 'POST',
 				headers: {
 					'content-type': 'application/json',
-					'x-graphics-author-id': 'capacity-integration-author',
+					'cookie': authorCookie,
 				},
 				body: JSON.stringify({
 					idempotencyKey: `capacity-blocked-${crypto.randomUUID()}`,
@@ -123,7 +132,7 @@ describe('the Graphics Asset Library Capacity API', () => {
 
 	it('allows a proven no-growth publication through D1 at the full Canonical Graphics Quota', async () => {
 		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity');
-		const authorHeaders = { 'x-graphics-author-id': 'capacity-no-growth-author' };
+		const authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
 		const noGrowthBytes = pngWithTextChunks(10);
 		const upload = async (idempotencyKey: string) => {
 			const operation = await $fetch<GraphicsIngestionOperation>(
@@ -187,7 +196,7 @@ describe('the Graphics Asset Library Capacity API', () => {
 
 	it('allows only one of two competing D1 publications through the hard limit', async () => {
 		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity');
-		const authorHeaders = { 'x-graphics-author-id': 'capacity-concurrency-author' };
+		const authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
 		const initiate = async (idempotencyKey: string, bytes: Uint8Array) =>
 			await $fetch<GraphicsIngestionOperation>(
 				'/api/graphics-assets/ingestion-operations',

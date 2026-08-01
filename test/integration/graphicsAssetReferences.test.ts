@@ -49,6 +49,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		screenId = screen.id;
 		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
+			headers: { cookie: graphicsAuthorCookie },
 			body: {
 				idempotencyKey: 'reference-event-logo',
 				name: 'Reference Event logo',
@@ -64,7 +65,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		});
 		const response = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-			{ method: 'PUT', body: referencePixelPng },
+			{ method: 'PUT', headers: { cookie: graphicsAuthorCookie }, body: referencePixelPng },
 		);
 		operation = await response.json() as GraphicsIngestionOperation;
 	});
