@@ -8,6 +8,15 @@
  * been checked — not merely trusted — to be free of secrets, capability
  * tokens, source filenames, object keys, and full delivery URLs. A leak is
  * itself a failure, reported with the field that carried it and nothing else.
+ *
+ * "Evidence" here is not the Evidence Ledger. The ledger is a durable,
+ * administrator-facing record of the library's own lifecycle and
+ * reconciliation decisions, held in the catalogue for a year after the cleanup
+ * it explains. This is transient output from a test harness, written to a
+ * terminal and owned by nobody. What they share is one rule — neither may
+ * carry object keys, content digests, filenames, delivery URLs, or capability
+ * secrets — and that is the whole of the resemblance, so everything exported
+ * here is prefixed `Acceptance` to keep the two apart at the call site.
  */
 
 /** Every code a harness may print. Codes are contract; add, never rename. */

@@ -35,6 +35,9 @@ function unexpectedFailure(error) {
 }
 
 /**
+ * Whatever `run` returns is merged into the pass line, so a harness can say
+ * what it covered without printing anything itself.
+ *
  * @param {{
  *   harness: string,
  *   secrets?: readonly string[],
@@ -42,6 +45,7 @@ function unexpectedFailure(error) {
  *     evidence: ReturnType<typeof createAcceptanceEvidence>,
  *     record: (failures: { code: string, detail?: object }[]) => void,
  *     note: (failure: { code: string, detail?: object }) => void,
+ *     defer: (detail: object, instructions?: string) => void,
  *     checks: () => number,
  *   }) => Promise<object | void>,
  * }} options
