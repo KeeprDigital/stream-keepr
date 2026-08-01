@@ -61,26 +61,38 @@ and are the fast way to find a break before spending a deploy on it.
 Run these in order. Stop at the first failure: a later harness provisioning
 assets on top of a broken delivery path produces evidence about the wrong thing.
 
-| #   | Command                                        | Proves                                                                                              |
-| --- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| 1   | `pnpm test:validator:silent-video:deployed`    | The deployed validator Container answers.                                                           |
-| 2   | `pnpm test:delivery:graphics:deployed`         | Delivery semantics, authorization, revocation, origin exposure, and the settled failure outcomes.   |
-| 3   | `pnpm test:browser:still-images:deployed`      | PNG, JPEG, and WebP decode in an OBS-like output.                                                   |
-| 4   | `pnpm test:browser:silent-video:deployed`      | H.264 MP4 and VP9 WebM play and seek; VP9 alpha keeps its transparency on Chromium.                 |
-| 5   | `pnpm test:browser:fonts:deployed`             | Supported faces finish loading and render their own glyphs; a silently substituted face is refused. |
-| 6   | `pnpm test:browser:safari-vp9-alpha:deployed`  | Safari refuses VP9 alpha rather than flattening it.                                                 |
-| 7   | `pnpm test:delivery:graphics:package:deployed` | Template Package publication is atomic and its retry is idempotent.                                 |
-| 8   | The fault-injection procedures below           | Unavailable content, D1 outage, and R2 outage with an authorized cache.                             |
+| #   | Command                                        | Proves                                                                                            |
+| --- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 1   | `pnpm test:validator:silent-video:deployed`    | The deployed validator Container answers.                                                         |
+| 2   | `pnpm test:delivery:graphics:deployed`         | Delivery semantics, authorization, revocation, origin exposure, and the settled failure outcomes. |
+| 3   | `pnpm test:browser:still-images:deployed`      | PNG, JPEG, and WebP decode in an OBS-like output.                                                 |
+| 4   | `pnpm test:browser:silent-video:deployed`      | H.264 MP4 and VP9 WebM play and seek; VP9 alpha keeps its transparency on Chromium.               |
+| 5   | `pnpm test:browser:fonts:deployed`             | A font Graphic Asset Revision is delivered by the Worker, loads, and renders its own glyphs.      |
+| 6   | `pnpm test:browser:safari-vp9-alpha:deployed`  | Safari refuses VP9 alpha rather than flattening it.                                               |
+| 7   | `pnpm test:delivery:graphics:package:deployed` | Template Package publication is atomic and its retry is idempotent.                               |
+| 8   | The fault-injection procedures below           | Unavailable content, integrity failure, D1 outage, and R2 outage with an authorized cache.        |
 
 Every harness prints one line on success and a block of stable failure codes on
-failure. The codes are the contract; the prose beside them is not.
+failure. The codes are the contract; the prose beside them is not. A run that
+proved nothing — because a driver it needed was unavailable — prints
+`acceptance deferred` and is never to be read as a pass.
 
 ### Step 2 in detail
 
 `test:delivery:graphics:deployed` provisions one Event, one Screen Output, and
 one still-image Graphic Asset, publishes a Feature Match Layout that pins the
 revision, and then exercises both public entry points — the Screen Output
-capability route and the authenticated editor route.
+capability route and the authenticated editor route — plus the Screen Output
+document itself, which is where a Content Security Policy would govern what an
+unattended output may load.
+
+The installation declares no policy today. That absence is what the gate
+asserts, in both directions: a policy appearing where none is settled prints
+`csp-directive-unexpected`, and a policy that widens where output content may
+come from prints `csp-directive-permissive`. If a restrictive policy is
+introduced later, flip the expectation in `checkContentSecurityPolicy` to
+`settled: 'restrictive'` and its absence becomes the failure instead. There is
+no configuration in which this check has no opinion.
 
 Two options change what it enforces:
 
@@ -116,6 +128,31 @@ Proves that content the catalogue knows about but cannot read is a retryable
    `outcome-retry-after-invalid`.
 5. Restore by re-uploading the object, or accept the reconciliation discrepancy
    the library will raise and repair it through the reconciliation queue.
+
+### Integrity failure
+
+Proves the outcome that is easy to confuse with the one above, and is not the
+same thing. Content the store still holds, but whose bytes contradict the size,
+media type, or digest the catalogue recorded, is **never served** — and because
+a contradiction can be repaired, it reads as a retryable `503` rather than as a
+missing revision. Delivery and reconciliation share one definition of
+agreement, so anything reconciliation would isolate as a critical integrity
+incident cannot still reach air.
+
+1. `pnpm test:delivery:graphics:deployed --arm ~/.sk-armed.json`
+2. Read `assetId` and `revisionId` from the armed scenario file. Overwrite that
+   revision's canonical object with **different bytes of a different length** —
+   any small file will do. The object exists and the store answers; what has
+   changed is that it no longer matches its record.
+3. `pnpm test:delivery:graphics:deployed --fault content-integrity-disagreement --scenario ~/.sk-armed.json`
+4. Expected: both the capability route and the editor route answer `503` with
+   `Retry-After`, and neither returns a body. A `200` prints
+   `outcome-not-integrity-failure` and means contradicting bytes reached a
+   caller, which is the failure this step exists to catch. A `404` prints
+   `outcome-not-retryable-unavailable` and means a repairable disagreement was
+   reported as a permanent absence.
+5. Restore the object, or repair it through the reconciliation queue — which is
+   where the incident this step created will now be waiting.
 
 ### D1 outage
 
@@ -163,11 +200,43 @@ never as a pass. A deployed run refuses to defer at all unless you pass
 path, open the printed page in Safari and record what it says; anything other
 than `passed` is a gate failure.
 
+The page distinguishes three things, because only one of them is a pass. An
+explicit decode error is Safari refusing the content, which is the restriction
+working. Playback with transparency prints `safari-vp9-alpha-not-blocked` and
+means the restriction is stale. Playback with the transparency flattened away
+prints `safari-vp9-alpha-substituted` and is worse — a wrong-looking graphic
+reaching air while every capability check still says yes. Silence, where the
+browser neither decoded nor refused within the time allowed, prints
+`browser-acceptance-timed-out`: nothing was observed, so nothing is claimed.
+
 The complementary product-level restriction — that the capability-session
 bootstrap answers `409 vp9-alpha-chromium-required` to a Safari user agent when
 a Screen Output pins VP9-alpha video — is proven by
 `test/integration/screenOutputAssetDelivery.test.ts`, which can fabricate the
 technical facts a real VP9-alpha ingestion would need the validator to produce.
+
+## Fonts
+
+`test:browser:fonts:deployed` proves the fact only a running installation can:
+that a **font Graphic Asset Revision** travels from the object store, through
+the Worker, into a browser, and renders. The bundled application fonts are
+explicitly outside the Graphics Asset Library, so a gate that only loaded those
+would prove nothing about it.
+
+The run stages a real font ingestion, and the page then does exactly what an
+author's browser does — reads the staged source, answers the server's own glyph
+challenge with genuine rendered-pixel proofs, and publishes the revision. It
+then loads that published revision back through the delivery route that will
+serve it on air. The face is trashed on the way out, pass or fail.
+
+`pnpm test:browser:fonts` without `--library` skips all of that and proves only
+the browser facts — that Chromium loads WOFF2, WOFF, TTF, and OTF and renders
+their glyphs, and that a face which would silently fall back is refused. That
+mode needs no installation, which is why it runs in the ordinary suite, and it
+is where the OTF face is covered: the installation ships no OTF, and vendoring
+a proprietary typeface solely to be downloaded by a test would republish it for
+no gain. Use `pnpm test:browser:fonts:library` to run the library face against
+a local `pnpm preview`.
 
 ## What the evidence may say
 
@@ -190,13 +259,13 @@ never rename one.
 
 ## Where each acceptance criterion is proven
 
-| #50 acceptance criterion                                                                                                                                 | Proven by                                                                                                                                                               |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Full and byte-range delivery, conditional requests, strong ETags, cache miss/hit, authorization on every public request, revocation despite cached bytes | Step 2. Cache warmth is deployed-only (`--require-cache-hit`); every other assertion runs locally too.                                                                  |
-| CORS and CSP permit only the settled same-origin and output behaviour without making private canonical storage public                                    | Step 2 — `cors-allow-origin-exposed`, `cors-allow-credentials-exposed`, `cors-preflight-permitted`, `csp-directive-permissive`, `private-storage-publicly-addressable`. |
-| PNG, JPEG, and WebP pass real browser decoding                                                                                                           | Step 3.                                                                                                                                                                 |
-| H.264 MP4 and VP9 WebM play and seek; VP9 alpha proven on Chromium and blocked on Safari                                                                 | Steps 4 and 6.                                                                                                                                                          |
-| Supported fonts complete loading and representative glyph rendering before the output reports ready                                                      | Step 5. The deployed run covers the TTF, WOFF, and WOFF2 faces the installation serves; the OTF face is covered by the local run, which uses the same Chromium build.   |
-| Unavailable content, D1 outage, R2 outage with authorized cache, integrity failure, and capability denial produce the settled observable outcomes        | Integrity failure and capability denial: step 2. The three outages: step 8.                                                                                             |
-| Package publication and retry never expose partial assets or duplicate a committed result                                                                | Step 7.                                                                                                                                                                 |
-| The gate reports actionable stable failure evidence without logging secrets, filenames, object keys, or full delivery URLs                               | Enforced in the output path itself and covered by `test/unit/scripts/graphicsAcceptanceEvidence.test.ts`.                                                               |
+| #50 acceptance criterion                                                                                                                                 | Proven by                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Full and byte-range delivery, conditional requests, strong ETags, cache miss/hit, authorization on every public request, revocation despite cached bytes | Step 2. Cache warmth is deployed-only (`--require-cache-hit`); every other assertion runs locally too.                                                                                                                                                         |
+| CORS and CSP permit only the settled same-origin and output behaviour without making private canonical storage public                                    | Step 2, on both delivery routes and on the Screen Output document — `cors-allow-origin-exposed`, `cors-allow-credentials-exposed`, `cors-preflight-permitted`, `csp-directive-unexpected`, `csp-directive-permissive`, `private-storage-publicly-addressable`. |
+| PNG, JPEG, and WebP pass real browser decoding                                                                                                           | Step 3.                                                                                                                                                                                                                                                        |
+| H.264 MP4 and VP9 WebM play and seek; VP9 alpha proven on Chromium and blocked on Safari                                                                 | Steps 4 and 6.                                                                                                                                                                                                                                                 |
+| Supported fonts complete loading and representative glyph rendering before the output reports ready                                                      | Step 5, on a font Graphic Asset Revision delivered by the Worker. The OTF face is covered by the local `pnpm test:browser:fonts`, which uses the same Chromium build.                                                                                          |
+| Unavailable content, D1 outage, R2 outage with authorized cache, integrity failure, and capability denial produce the settled observable outcomes        | Capability denial and an unreachable revision: step 2, which also asserts the two are indistinguishable. All four outages, integrity failure included: step 8.                                                                                                 |
+| Package publication and retry never expose partial assets or duplicate a committed result                                                                | Step 7.                                                                                                                                                                                                                                                        |
+| The gate reports actionable stable failure evidence without logging secrets, filenames, object keys, or full delivery URLs                               | Enforced in the output path itself and covered by `test/unit/scripts/graphicsAcceptanceEvidence.test.ts`.                                                                                                                                                      |

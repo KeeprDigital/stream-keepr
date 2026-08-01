@@ -33,6 +33,7 @@
 		"test:browser:still-images": "node scripts/run-still-image-browser-acceptance.mjs",
 		"test:browser:still-images:deployed": "node scripts/run-still-image-browser-acceptance.mjs --deployed",
 		"test:browser:fonts": "node scripts/run-font-browser-acceptance.mjs",
+		"test:browser:fonts:library": "node scripts/run-font-browser-acceptance.mjs --library",
 		"test:browser:fonts:deployed": "node scripts/run-font-browser-acceptance.mjs --deployed",
 		"test:browser:silent-video": "node scripts/run-silent-video-browser-acceptance.mjs",
 		"test:browser:silent-video:deployed": "node scripts/run-silent-video-browser-acceptance.mjs --deployed",

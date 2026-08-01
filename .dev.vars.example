@@ -1,15 +1,14 @@
 # Worker bindings for `pnpm preview` and the local acceptance harnesses.
-# Wrangler reads this file as `.dev.vars`; the runtime config in nuxt.config.ts
-# maps each NUXT_-prefixed name onto its `runtimeConfig` key.
 #
-# These are local-only values. Nothing here reaches a deployed installation,
-# which takes its secrets from Wrangler instead.
+# Wrangler reads this file as `.dev.vars`, where `nuxt dev` and the integration
+# suite read `.env`. The names and their meanings are the same, so see
+# `.env.example` for what each one is; this file exists only because Wrangler
+# will not read that one.
+#
+# One of them is load-bearing for a local acceptance run:
+# NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY. Without it, capability minting and
+# Screen Output delivery answer 503, and `pnpm test:delivery:graphics` never
+# reaches anything to assert.
 
-# 32-byte base64 HMAC key used to derive revocable Screen Output asset
-# capabilities. Without it, capability minting and delivery answer 503 and the
-# local delivery acceptance harness cannot run.
-# Generate the key with: openssl rand -base64 32
 NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY=""
-
-# Graphics Administrator capability used for protected graphics operations.
 NUXT_GRAPHICS_ADMIN_TOKEN=""
