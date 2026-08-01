@@ -109,6 +109,16 @@ export type GraphicAssetReferenceStatus
 		outcome: 'available';
 		lifecycleState: 'active' | 'retired' | 'trashed';
 		kind: 'image' | 'silent-video' | 'font';
+		/**
+		 * The pinned revision's own target compatibility, for a silent video.
+		 *
+		 * Reported here because whatever records a Graphic Asset Reference has to
+		 * record this fact alongside it: the reference index checks a silent-video
+		 * reference against the revision's own, and nothing downstream of the
+		 * reference — no render model, no Live Session — can go and ask the library
+		 * for it. Absent for an image or a font, which have none.
+		 */
+		targetCompatibility?: 'all-supported' | 'chromium-transparency';
 	}
 	| { outcome: 'missing' }
 	| { outcome: 'unavailable'; retryable: true };

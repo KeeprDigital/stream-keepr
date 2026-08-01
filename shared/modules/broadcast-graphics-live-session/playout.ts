@@ -891,9 +891,11 @@ function nextPlayout(
 	// renderings cut mid-crossing, with the rendering an exit had just discarded arriving
 	// on program in its place.
 	//
-	// An Out is the one intent this is not the last word for: it carries a schedule that
-	// may never have begun, so `exitCarryingInterruptedPhases` decides afterwards which
-	// of these an exit actually has something to run underneath.
+	// An Out is the one intent this is not the last word for, and only about the update:
+	// it may carry a transition that never began, so `exitCarryingInterruptedPhases`
+	// decides afterwards whether an exit has one to run underneath. Cycling needs no such
+	// adjudication — an origin in the future simply projects the Graphic Resting State —
+	// so that path refreshes it and never strips it.
 	const concurrent = {
 		...(current.cyclingStartedAt === undefined ? {} : { cyclingStartedAt: current.cyclingStartedAt }),
 		...(current.updateStartedAt === undefined ? {} : { updateStartedAt: current.updateStartedAt }),

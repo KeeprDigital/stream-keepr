@@ -849,6 +849,34 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		expect(state.playout.slate!.updateStartedAt).toBe(T0 + 2000);
 	});
 
+	it('resumes the update the exit discarded, once a Take makes the graphic on air again', () => {
+		// Emergent rather than designed, and correct: exit discarded the pending rendering
+		// because the graphic was leaving, and a Take says it never left. Its accepted
+		// values are the ones that rendering was queued in front of, so program has to
+		// reach them — and reaching them through the authored update recipe is what the
+		// recipe is for. Pinned because nothing else states it, and because the alternative
+		// it must not become is the accepted set snapping in with no animation.
+		let state = settledOnAir('first');
+		state = edit(state, 'second', T0 + 2000);
+		state = accept(state, T0 + 2000);
+		state = edit(state, 'third', T0 + 2100);
+		state = accept(state, T0 + 2100);
+		state = out(state, 'slate', false, T0 + 2200);
+		state = apply(state, { type: 'Take', payload: { graphicId: 'slate', cut: false } }, T0 + 2300);
+
+		// The transition the exit kept finishes first, on the schedule it always had.
+		expect(rendered(state, T0 + 2300)).toEqual({
+			current: { headline: 'second' },
+			outgoing: { headline: 'first' },
+		});
+		// Then the one it had discarded, because the graphic is on air again.
+		expect(rendered(state, T0 + 2500)).toEqual({
+			current: { headline: 'third' },
+			outgoing: { headline: 'second' },
+		});
+		expect(rendered(state, T0 + 2900)).toEqual({ current: { headline: 'third' } });
+	});
+
 	it('holds the discarded rendering only until the graphic leaves', () => {
 		// While it is leaving, program keeps what the interrupted update was travelling
 		// towards rather than snapping to the accepted set — that snap would be the

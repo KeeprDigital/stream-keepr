@@ -17,6 +17,11 @@ import type { Ref } from 'vue';
  * What it deliberately does not own is importing. The three libraries receive different
  * portable artifacts and an import means a different thing in each, so the import path
  * stays with the library that has the semantics.
+ *
+ * The first read is owned here too. All three surfaces are browsers of a library and
+ * every one of them opened with the same `onMounted(() => void refresh())`; a library
+ * that read nothing until something asked would be a surface showing an empty list it
+ * has no evidence for.
  */
 export interface ReusableLibraryReading<Entry> extends ReusableLibraryFailures {
 	/** The library as it was last read. */
@@ -81,6 +86,10 @@ export function useReusableLibraryReading<Entry>(options: {
 			loading.value = false;
 		}
 	}
+
+	onMounted(() => {
+		void refresh();
+	});
 
 	return { entries, loading, error, failureMessage, refresh };
 }

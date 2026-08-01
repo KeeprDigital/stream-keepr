@@ -296,6 +296,13 @@ export function setGraphicInputChoiceOptions(
 /**
  * Merge into one `{inputKey}` placeholder's Graphic Placeholder Style, or remove
  * it so the placeholder renders in the item's base typography again.
+ *
+ * A patched key whose value is `undefined` removes that property rather than
+ * storing it as nothing: a Graphic Placeholder Style is the properties an author
+ * actually changed, so an unchosen font, size, or colour is an absent one. A style
+ * left with no properties at all is removed for the same reason — an empty object
+ * is a difference a stored document can see, and it says nothing the absence of the
+ * key does not already say.
  */
 export function patchGraphicPlaceholderStyle(
 	graphic: BroadcastGraphicConfig,
@@ -307,10 +314,18 @@ export function patchGraphicPlaceholderStyle(
 		if (patch === null)
 			return stripPlaceholderStyle(item, inputKey);
 
+		const merged = { ...item.placeholderStyles?.[inputKey], ...patch } as Record<string, unknown>;
+		for (const key of Object.keys(merged)) {
+			if (merged[key] === undefined)
+				delete merged[key];
+		}
+		if (Object.keys(merged).length === 0)
+			return stripPlaceholderStyle(item, inputKey);
+
 		return {
 			placeholderStyles: {
 				...item.placeholderStyles,
-				[inputKey]: { ...item.placeholderStyles?.[inputKey], ...patch },
+				[inputKey]: merged as GraphicPlaceholderStyle,
 			},
 		};
 	});
