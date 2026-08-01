@@ -12,6 +12,10 @@ import {
 	setGraphicInputBinding,
 	setGraphicSourceDerivation,
 } from '~~/shared/modules/graphics';
+import {
+	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
+	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
+} from '~~/shared/types/graphics';
 
 /**
  * Authoring Graphic Source Selections and Graphic Input Bindings.
@@ -131,6 +135,56 @@ describe('graphic Source Selection authoring', () => {
 		expect(bindingsOf(graphics)).toEqual([{ inputKey: 'table', sourceKey: 'match', fieldId: 'match.tableNumber' }]);
 	});
 
+	/**
+	 * The caps are the write path's, restated where an author meets them.
+	 *
+	 * A ninth Graphic Source Selection on one Broadcast Graphic, or a forty-first
+	 * across the Screen, is a config the schema refuses — so the operation declines to
+	 * produce one rather than leaving an author holding a Screen they cannot save.
+	 */
+	it('declares no more Graphic Source Selections than one Broadcast Graphic may hold', () => {
+		const full = Array.from(
+			{ length: MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC },
+			(_, index) => ({ key: `source-${index}`, label: `Source ${index}`, kind: 'player' as const }),
+		);
+		const graphics = stack({ sources: full });
+
+		expect(addGraphicSourceSelection(graphics, 'lower-third', 'player')).toEqual(graphics);
+		expect(broadcastGraphicsModeConfigSchema.safeParse({ graphics }).success).toBe(true);
+	});
+
+	it('declares no more across the Screen than the whole-Screen budget allows', () => {
+		// The per-graphic cap is reached first on one graphic, so the Screen-wide one is
+		// only reachable across several — which is exactly how an author reaches it.
+		const perGraphic = MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC;
+		const graphics = Array.from(
+			{ length: MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN / perGraphic },
+			(_, index) => ({
+				id: `graphic-${index}`,
+				name: `Graphic ${index}`,
+				items: [],
+				sources: Array.from({ length: perGraphic }, (_, entry) => ({
+					key: `s${index}x${entry}`,
+					label: `Source ${index}-${entry}`,
+					kind: 'player' as const,
+				})),
+			}),
+		);
+		const roomy = [...graphics, { id: 'spare', name: 'Spare', items: [] }];
+
+		expect(addGraphicSourceSelection(roomy, 'spare', 'player')).toEqual(roomy);
+	});
+
+	it('refuses a blank label, which is a Broadcast Graphic the write path rejects', () => {
+		const graphics = stack({ sources: [PLAYER] });
+
+		expect(patchGraphicSourceSelection(graphics, 'lower-third', 'player', { label: '' })).toEqual(graphics);
+		expect(patchGraphicSourceSelection(graphics, 'lower-third', 'player', { label: '   ' })).toEqual(graphics);
+		expect(broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: stack({ sources: [{ ...PLAYER, label: '' }] }),
+		}).success).toBe(false);
+	});
+
 	it('leaves another Broadcast Graphic in the stack alone', () => {
 		const graphics = addGraphicSourceSelection(
 			[...stack(), { id: 'slate', name: 'Slate', items: [] }],
@@ -169,6 +223,43 @@ describe('deriving one Graphic Source Selection from another', () => {
 		expect(graphicSourceDerivationOptions(sources, 'match')).toEqual([
 			{ sourceKey: 'slot', relation: 'match' },
 		]);
+	});
+
+	/**
+	 * The two guards below are stated against hand-written declarations rather than
+	 * ones these operations produced, because neither is reachable through the current
+	 * relation vocabulary: the relation table is acyclic and no relationship yields the
+	 * kind it starts from. That is the same standing the resolution cycle guard and the
+	 * schema's own `graphicSourceDerivationsAcyclic` have, and both are kept for the
+	 * same reason — a future relationship that closes a cycle must meet a rule that is
+	 * already written down. Stating them here is what makes each guard's removal
+	 * visible instead of silent.
+	 */
+	it('never offers a Graphic Source Selection whose chain already reaches this one', () => {
+		const sources = [
+			{ key: 'p', label: 'Player', kind: 'player' as const },
+			// `m` claims to follow `p`, which no relationship yields and these operations
+			// would refuse to write. It is the shape a `from` cycle takes.
+			{ key: 'm', label: 'Match', kind: 'match' as const, from: { sourceKey: 'p', relation: 'player1' as const } },
+		];
+
+		// A Match yields a Player, so nothing but the cycle guard stops `m` being offered
+		// back to `p` — leaving the two following each other.
+		expect(graphicSourceDerivationOptions(sources, 'p')).toEqual([]);
+		expect(canDeriveGraphicSource(sources, 'p', { sourceKey: 'm', relation: 'player1' })).toBe(false);
+	});
+
+	it('never offers a Graphic Source Selection to derive from its own key', () => {
+		// One key on two declarations is the only shape in which a self-derivation is
+		// representable at all, since no relationship yields the kind it starts from.
+		// The schema refuses the duplicate key as well; this is the other half.
+		const sources = [
+			{ key: 'x', label: 'Featured Player', kind: 'player' as const },
+			{ key: 'x', label: 'Featured Match', kind: 'match' as const },
+		];
+
+		expect(graphicSourceDerivationOptions(sources, 'x')).toEqual([]);
+		expect(canDeriveGraphicSource(sources, 'x', { sourceKey: 'x', relation: 'player1' })).toBe(false);
 	});
 
 	/**

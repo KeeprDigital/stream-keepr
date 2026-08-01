@@ -76,6 +76,8 @@ import {
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
 	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_SLIDE_DISTANCE_PX,
+	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
+	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 	MAX_GRAPHIC_TEXT_LENGTH,
 	MAX_PLAYER_LIFE_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_ANIMATION_DURATION_MS,
@@ -641,7 +643,6 @@ const graphicContainerAnimationSchema = z.object({
 export const MAX_GRAPHIC_PLACEHOLDER_STYLES_PER_TEXT_ITEM = 4;
 
 export const MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC = 24;
-export const MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC = 8;
 
 /**
  * The whole-Screen Graphic Input, Graphic Input Binding, and Graphic Source
@@ -652,7 +653,19 @@ export const MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC = 8;
  * 1,274 bytes against a Graphic Item's 2,682.
  */
 export const MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN = 60;
-export const MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN = 40;
+
+/**
+ * The two Graphic Source Selection budgets are declared in `shared/types/graphics`
+ * and re-exported here, so this file still reads as the whole set of the wire's
+ * bounds. They moved because an authoring surface has to stop before producing a
+ * config this schema would refuse, and a client bundle cannot import this module.
+ * The byte-budget reasoning above is what chose all of these numbers, including those
+ * two.
+ */
+export {
+	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
+	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
+};
 
 const graphicInputKeySchema = z.string()
 	.min(1)

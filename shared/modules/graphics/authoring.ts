@@ -43,7 +43,13 @@ import type {
 import type { GraphicAssetReference } from '../../types/graphicsAsset';
 import type { GraphicStyleSlot } from '../../types/graphicStyleSet';
 import type { ShapeGeometryPresetId } from './shapeGeometry';
-import { GRAPHIC_ANIMATION_PHASE_VALUES, GRAPHIC_INPUT_KEY_PATTERN, MAX_GRAPHIC_INPUT_KEY_LENGTH } from '../../types/graphics';
+import {
+	GRAPHIC_ANIMATION_PHASE_VALUES,
+	GRAPHIC_INPUT_KEY_PATTERN,
+	MAX_GRAPHIC_INPUT_KEY_LENGTH,
+	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
+	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
+} from '../../types/graphics';
 import { createDefaultGraphicAnimationRecipe, getGraphicAnimationPreset } from './animation';
 import { isGraphicBindingFieldCompatible } from './bindingCatalog';
 import { canDeriveGraphicSource } from './bindingResolution';
@@ -308,18 +314,43 @@ export function patchGraphicPlaceholderStyle(
  * ──────────────────────────────────────────────── */
 
 /**
+ * Whether this Screen's stack has room for one more Graphic Source Selection.
+ *
+ * Both budgets at once, because an author meets whichever they reach first: eight on
+ * one Broadcast Graphic, and forty across the whole Broadcast Graphics Screen.
+ */
+export function canAddGraphicSourceSelection(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+): boolean {
+	const graphic = graphics.find(entry => entry.id === graphicId);
+	if (!graphic)
+		return false;
+
+	const acrossScreen = graphics.reduce((count, entry) => count + (entry.sources?.length ?? 0), 0);
+	return (graphic.sources?.length ?? 0) < MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC
+		&& acrossScreen < MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN;
+}
+
+/**
  * Declare one Graphic Source Selection of a chosen kind.
  *
  * The kind is chosen once and never edited afterwards, exactly as a Graphic Input's
  * type is: the kind decides which catalog fields the bindings reading it may name,
  * so changing it in place would silently strand every binding that already reads it.
  * An author who wants another kind declares another selection.
+ *
+ * Declares nothing once either budget is spent: the surface disables its own control
+ * there, and this is the same refusal stated where no caller can pass it.
  */
 export function addGraphicSourceSelection(
 	graphics: readonly BroadcastGraphicConfig[],
 	graphicId: string,
 	kind: GraphicSourceSelectionKind,
 ): BroadcastGraphicConfig[] {
+	if (!canAddGraphicSourceSelection(graphics, graphicId))
+		return [...graphics];
+
 	return graphics.map((graphic) => {
 		if (graphic.id !== graphicId)
 			return graphic;
@@ -344,6 +375,10 @@ export function addGraphicSourceSelection(
  * Only the label: the key is what every Graphic Input Binding, every derived
  * selection's `from`, and every operator selection in a running Live Session names,
  * and the kind is fixed for the reason stated above.
+ *
+ * A blank label is refused rather than stored. The write path requires one character,
+ * and an author who clears the field is mid-rename rather than asking for a nameless
+ * selection — so the previous name stands until they type another.
  */
 export function patchGraphicSourceSelection(
 	graphics: readonly BroadcastGraphicConfig[],
@@ -351,6 +386,9 @@ export function patchGraphicSourceSelection(
 	key: string,
 	patch: Partial<Pick<GraphicSourceSelectionDeclaration, 'label'>>,
 ): BroadcastGraphicConfig[] {
+	if (patch.label !== undefined && patch.label.trim() === '')
+		return [...graphics];
+
 	return graphics.map(graphic => graphic.id === graphicId
 		? {
 				...graphic,
