@@ -36,11 +36,13 @@ const emptyTextChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0
  * Integration suites share one database and identical bytes deduplicate into one
  * Graphic Asset by design, so the bare single-pixel PNG would publish under
  * whichever suite reached the library first — and this suite's lifecycle subject
- * would carry somebody else's name and somebody else's lifecycle.
+ * would carry somebody else's name and somebody else's lifecycle. `70` because
+ * every count up to 64 is already spoken for; a count another suite retires,
+ * Trashes, or purges takes this suite's canonical bytes with it.
  */
 const transparentPixelPng = Uint8Array.from(Buffer.concat([
 	basePixelPng.slice(0, -12),
-	...Array.from({ length: 60 }).fill(emptyTextChunk) as Uint8Array[],
+	...Array.from({ length: 70 }).fill(emptyTextChunk) as Uint8Array[],
 	basePixelPng.slice(-12),
 ]));
 

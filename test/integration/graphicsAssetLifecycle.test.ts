@@ -11,16 +11,32 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 
-const lifecyclePixelPng = Uint8Array.from(Buffer.from(
+const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 	'base64',
 ));
 const emptyTextChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85);
-const lifecycleReplacementPng = Uint8Array.of(
-	...lifecyclePixelPng.slice(0, -12),
-	...emptyTextChunk,
-	...lifecyclePixelPng.slice(-12),
-);
+
+/**
+ * This suite's own content, padded with chunk counts no other suite uses.
+ *
+ * The bare single-pixel PNG was `graphicsAssetIngestion.test.ts`'s to publish —
+ * it asserts its ingestion *published* rather than reused — and this suite's
+ * `create-separate` policy does not keep its bytes to itself: it creates a
+ * second Graphic Asset over the same canonical content, which the other suite's
+ * default reuse policy then finds. One chunk was `graphicsAssetReferences`'
+ * digest for the same reason.
+ */
+function pngWithTextChunks(count: number) {
+	return Uint8Array.from(Buffer.concat([
+		basePixelPng.slice(0, -12),
+		...Array.from({ length: count }).fill(emptyTextChunk) as Uint8Array[],
+		basePixelPng.slice(-12),
+	]));
+}
+
+const lifecyclePixelPng = pngWithTextChunks(90);
+const lifecycleReplacementPng = pngWithTextChunks(91);
 
 function decodeEvidence(bytes = lifecyclePixelPng) {
 	return {
