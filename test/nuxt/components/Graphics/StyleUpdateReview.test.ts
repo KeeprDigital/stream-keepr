@@ -246,14 +246,27 @@ describe('graphicsStyleUpdateReview', () => {
 		expect(wrapper.emitted('applied')).toBeUndefined();
 	});
 
-	it('re-reads the review when the template is revised under it', async () => {
+	it('re-reads the review when the template is revised under it, and forgets what was decided about the old one', async () => {
 		const wrapper = await mountReview();
+		await expand(wrapper);
+		await wrapper.findAll('[data-testid="style-update-keep"]')[0]!.trigger('click');
 		expect(mockReviewTemplateUpdate).toHaveBeenCalledTimes(1);
 
 		await wrapper.setProps({ template: template({ revision: 5 }) });
 		await flushPromises();
 
 		expect(mockReviewTemplateUpdate).toHaveBeenCalledTimes(2);
+
+		await wrapper.get('[data-testid="style-update-apply"]').trigger('click');
+		await flushPromises();
+
+		// The decision was about a template that has since moved, and the changes it was
+		// made against are not the ones on screen now.
+		expect(mockApplyTemplateUpdate).toHaveBeenCalledWith('template-1', {
+			revision: 5,
+			styleSetRevision: 7,
+			decisions: {},
+		});
 	});
 
 	it('lets an observer read the whole review and decide none of it', async () => {
