@@ -681,7 +681,17 @@ function addInput() {
 	applyToGraphicInputs((graphics, graphicId) => addGraphicInput(graphics, graphicId, newInputType.value));
 }
 
+/**
+ * Merge into one Graphic Input declaration, ignoring a blank label.
+ *
+ * The write path requires a label of at least one character, so clearing the field
+ * writes nothing at all and the previous name stands until another is typed. The
+ * operation refuses one too; this is the half that keeps a cleared field from writing
+ * the Screen's mode configuration unchanged.
+ */
 function updateInput(key: string, patch: Partial<Omit<GraphicInputDeclaration, 'key' | 'type'>>) {
+	if (patch.label !== undefined && patch.label.trim() === '')
+		return;
 	applyToGraphicInputs((graphics, graphicId) => patchGraphicInput(graphics, graphicId, key, patch));
 }
 

@@ -215,6 +215,10 @@ export function addGraphicInput(
  * The key is not patchable: a declaration's own type decides which other
  * properties it has, and both are what a placeholder, a binding, and every
  * accepted value already name.
+ *
+ * A blank label is refused rather than stored, exactly as it is for a Graphic Source
+ * Selection: the write path requires one character, and the label is what an operator
+ * reads beside this input's field in Live Control.
  */
 export function patchGraphicInput(
 	graphics: readonly BroadcastGraphicConfig[],
@@ -222,6 +226,9 @@ export function patchGraphicInput(
 	key: string,
 	patch: Partial<Omit<GraphicInputDeclaration, 'key' | 'type'>>,
 ): BroadcastGraphicConfig[] {
+	if (patch.label !== undefined && patch.label.trim() === '')
+		return [...graphics];
+
 	return graphics.map(graphic => graphic.id === graphicId
 		? {
 				...graphic,

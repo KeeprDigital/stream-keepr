@@ -957,6 +957,23 @@ describe('graphicsCompositorInspector', () => {
 		expect(emittedGraphics(wrapper, 1)[0]!.inputs![0]).toMatchObject({ key: 'name', updatePolicy: 'live' });
 	});
 
+	it('writes nothing when an author clears a Graphic Input’s label', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]).map(graphic => ({ ...graphic, inputs: [textInput('name')] })),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		wrapper.findAllComponents(UInputStub)
+			.find(input => input.attributes('data-testid') === 'graphic-input-label')
+			?.vm
+			.$emit('update:modelValue', '');
+		await nextTick();
+
+		// A nameless Graphic Input is one the write path refuses, so a cleared field
+		// leaves the Screen's mode configuration alone rather than writing it unchanged.
+		expect(wrapper.emitted('update:graphics')).toBeUndefined();
+	});
+
 	it('shows the stable key a Graphic Text Template would name, and offers no way to edit it', async () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({ ...graphic, inputs: [textInput('name')] })),
