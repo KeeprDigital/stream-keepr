@@ -34,6 +34,9 @@ const emptyTextChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0
  * suite uses keeps this suite's content digests to itself — without it, whether
  * a suite that ingests the bare pixel publishes or reuses depends on which file
  * ran first.
+ *
+ * This suite owns 50, 51 and 100-107. The counts every suite has claimed are
+ * listed in `helpers.ts`; claim a free range there before adding a fixture.
  */
 function pngWithTextChunks(count: number) {
 	return Uint8Array.from(Buffer.concat([
@@ -791,8 +794,8 @@ describe('media Graphic Input values on air', () => {
 			},
 		});
 		eventId = event.id;
-		first = await ingestImage(eventId, `media-input-first-${runId}`, pngWithTextChunks(60));
-		second = await ingestImage(eventId, `media-input-second-${runId}`, pngWithTextChunks(61));
+		first = await ingestImage(eventId, `media-input-first-${runId}`, pngWithTextChunks(100), graphicsAuthorCookie);
+		second = await ingestImage(eventId, `media-input-second-${runId}`, pngWithTextChunks(101), graphicsAuthorCookie);
 	});
 
 	afterAll(async () => {
@@ -876,7 +879,7 @@ describe('media Graphic Input values on air', () => {
 		// the rest of the show, with the output still fetching a value nothing declares
 		// and the asset still pinned against retirement.
 		const screenId = await createScreen('media-input-undeclared');
-		const backdrop = await ingestImage(eventId, `media-input-undeclared-${runId}`, pngWithTextChunks(64));
+		const backdrop = await ingestImage(eventId, `media-input-undeclared-${runId}`, pngWithTextChunks(104), graphicsAuthorCookie);
 		await declare(screenId, [mediaInput('backdrop')]);
 		const capability = await capabilityFor(screenId);
 		const session = await liveSession(screenId);
@@ -902,7 +905,7 @@ describe('media Graphic Input values on air', () => {
 
 	it('stops resolving once the authored write removes the whole Broadcast Graphic', async () => {
 		const screenId = await createScreen('media-input-unplaced');
-		const backdrop = await ingestImage(eventId, `media-input-unplaced-${runId}`, pngWithTextChunks(65));
+		const backdrop = await ingestImage(eventId, `media-input-unplaced-${runId}`, pngWithTextChunks(105), graphicsAuthorCookie);
 		await declare(screenId, [mediaInput('backdrop')]);
 		const capability = await capabilityFor(screenId);
 		const session = await liveSession(screenId);
@@ -940,7 +943,7 @@ describe('media Graphic Input values on air', () => {
 		// all, though — it slips through that guard while still changing what the Live
 		// Session publishes, so this route needs the same reconciliation.
 		const screenId = await createScreen('media-input-generic-write');
-		const backdrop = await ingestImage(eventId, `media-input-generic-${runId}`, pngWithTextChunks(67));
+		const backdrop = await ingestImage(eventId, `media-input-generic-${runId}`, pngWithTextChunks(107), graphicsAuthorCookie);
 		await declare(screenId, [mediaInput('backdrop')]);
 		const capability = await capabilityFor(screenId);
 		const session = await liveSession(screenId);
@@ -982,7 +985,7 @@ describe('media Graphic Input values on air', () => {
 		// namespace rather than fixing it: the usage row is what says whether the epoch's
 		// references actually went.
 		const screenId = await createScreen('media-input-mode-change');
-		const backdrop = await ingestImage(eventId, `media-input-mode-change-${runId}`, pngWithTextChunks(66));
+		const backdrop = await ingestImage(eventId, `media-input-mode-change-${runId}`, pngWithTextChunks(106), graphicsAuthorCookie);
 		await declare(screenId, [mediaInput('backdrop')]);
 		const session = await liveSession(screenId);
 
@@ -1036,7 +1039,7 @@ describe('media Graphic Input values on air', () => {
 		// reference against the pinned revision's own, so a value carrying none loses
 		// the write's precondition silently instead of failing it.
 		const screenId = await createScreen('media-input-vp9');
-		const restricted = await ingestImage(eventId, `media-input-vp9-${runId}`, pngWithTextChunks(62));
+		const restricted = await ingestImage(eventId, `media-input-vp9-${runId}`, pngWithTextChunks(102), graphicsAuthorCookie);
 		await executeIntegrationD1(`
 			UPDATE graphic_assets
 			SET kind = 'silent-video'
@@ -1089,7 +1092,7 @@ describe('media Graphic Input values on air', () => {
 
 	it('publishes an authored media Graphic Input default, and refuses one with no compatibility facts', async () => {
 		const screenId = await createScreen('media-input-default');
-		const restricted = await ingestImage(eventId, `media-input-default-vp9-${runId}`, pngWithTextChunks(63));
+		const restricted = await ingestImage(eventId, `media-input-default-vp9-${runId}`, pngWithTextChunks(103), graphicsAuthorCookie);
 		await executeIntegrationD1(`
 			UPDATE graphic_assets
 			SET kind = 'silent-video'

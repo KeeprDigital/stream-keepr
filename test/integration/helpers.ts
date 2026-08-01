@@ -10,6 +10,37 @@ export const INTEGRATION_GRAPHICS_ADMIN_TOKEN = 'integration-graphics-admin-toke
 export const INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
 /**
+ * Which suite owns which Graphic Asset Content padding counts. **Claim a free
+ * range here before adding a fixture.**
+ *
+ * Every integration suite runs against one database, and identical bytes
+ * deduplicate into one Graphic Asset Content by design. Two suites padding the
+ * single-pixel PNG with the same chunk count therefore share canonical content,
+ * and `duplicateContentPolicy: 'create-separate'` does not avoid it — that makes
+ * a second Graphic Asset over the *same* content. The consequences are real and
+ * have been observed: a suite asserting its ingestion *published* rather than
+ * *reused* starts depending on which file ran first, and a suite that retires,
+ * Trashes or purges its asset takes the other suite's bytes with it.
+ *
+ *   1        graphicsAssetReferences
+ *   10, 20-22 graphicsAssetCapacity
+ *   30-32    graphicsAssetRetention
+ *   40       graphicsAssetReconciliation
+ *   50, 51   broadcastGraphicsMedia — pinned media fixtures
+ *   60-64    graphicsOperationalQueues — retired, Trashed and purged assets
+ *   70       graphicsIngestionAuthorisation
+ *   80       screenOutputAssetDelivery
+ *   90, 91   graphicsAssetLifecycle
+ *   100-107  broadcastGraphicsMedia — Graphic Input media fixtures
+ *
+ * `graphicsAssetIngestion` deliberately owns the *unpadded* pixel, because it is
+ * the suite that asserts a first ingestion publishes. Suites that pad by keyword
+ * instead of by count — broadcastGraphicTemplates, broadcastGraphicTemplatePackages,
+ * and the graphicsTemplatePackage export, preflight and installation suites — are
+ * distinct by construction and need no entry.
+ */
+
+/**
  * Shared setup options for all integration tests.
  * - dev: true — avoids cloudflare_module build
  * - STREAM_KEEPR_INTEGRATION tells nuxt.config.ts to use isolated Wrangler D1 state
