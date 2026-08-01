@@ -1,6 +1,9 @@
 import { mapGraphicStyleSetToResponse } from '~~/server/mappers/graphicStyleSet';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
-import { createGraphicStyleSetSchema } from '~~/server/schemas/api/graphicStyleSet';
+import {
+	createGraphicStyleSetSchema,
+	GRAPHIC_STYLE_SET_DRAFT_BODY_BYTES,
+} from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 import { randomUuid } from '~~/shared/utils/uuid';
@@ -19,10 +22,8 @@ import { randomUuid } from '~~/shared/utils/uuid';
  */
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);
-	// An initial draft is the same unbounded shape a draft edit carries, so it is
-	// bounded by the same number the edit route bounds it by.
 	const body = createGraphicStyleSetSchema.parse(
-		await readJsonPayloadLimited(event, 512 * 1024, 'Graphic Style Set'),
+		await readJsonPayloadLimited(event, GRAPHIC_STYLE_SET_DRAFT_BODY_BYTES, 'Graphic Style Set'),
 	);
 
 	const styleSet = await graphicStyleSetService().create({
