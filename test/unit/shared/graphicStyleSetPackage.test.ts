@@ -1,5 +1,5 @@
 import type { InstalledGraphicStyleSetFacts } from '~~/shared/modules/graphic-style-sets';
-import type { GraphicFontId } from '~~/shared/types/graphics';
+import type { GraphicApplicationFontId } from '~~/shared/types/graphics';
 import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
 import { describe, expect, it } from 'vitest';
 import {
@@ -34,14 +34,14 @@ const BRAND: GraphicStyleSetEntry = {
 	value: { color: '#ff0044' },
 };
 
-function heading(fontId: GraphicFontId = 'inter', fontSize = 64): GraphicStyleSetEntry {
+function heading(fontId: GraphicApplicationFontId = 'inter', fontSize = 64): GraphicStyleSetEntry {
 	return {
 		id: 'heading',
 		kind: 'typography',
 		name: 'Heading',
 		schemaVersion: 1,
 		value: {
-			fontId,
+			font: { kind: 'application', fontId },
 			fontSize,
 			fontWeight: 800,
 			fontStyle: 'normal',
@@ -121,7 +121,7 @@ describe('the application fonts a Graphic Style Set Package declares', () => {
 			capability: 'application-font',
 			identity: 'inter',
 			configurationVersion: 1,
-			requiredBy: ['entries.caption.fontId', 'entries.heading.fontId'],
+			requiredBy: ['entries.caption.font.fontId', 'entries.heading.font.fontId'],
 		}]);
 	});
 

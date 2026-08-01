@@ -137,8 +137,8 @@ Its Shape Geometry presets contain only per-corner square, rounded, or cut treat
 Bounds, position, size, Graphic Anchor Point, and Graphic Rotation remain item-specific.
 Each Graphic Animation Recipe preset contains one bounded fade, slide, scale, and reveal combination with duration, easing, optional delay, and on-screen-only repetition defaults.
 Templates assign presets to lifecycle phases and retain item selection, staggering, and cross-item choreography locally.
-It may reference application fonts or font assets from the Graphics Asset Library, but it never owns or duplicates asset files.
-It may reference only assets available in the same reusable-library scope.
+Its typography presets reference application fonts only, because a Graphic Style Set Package carries no asset files; a Graphic Item's own typography may instead reference a font asset from the Graphics Asset Library.
+It never owns or duplicates asset files, and may reference only assets available in the same reusable-library scope.
 Media treatment presets define presentation without selecting an image or video; each graphics template selects its actual media from the Graphics Asset Library.
 Each Graphic Style Set has a stable identity and managed revision; each entry has a stable identity, kind, and schema version.
 Renaming a Graphic Style Set or entry preserves its identity, while an entry's kind cannot change in place.
@@ -161,7 +161,8 @@ Export resolves every used entry into a self-contained template snapshot while r
 Importing a Broadcast Graphic Template or Feature Match Layout Template never requires, creates, or modifies a Graphic Style Set; it may explicitly relink the template to an installed Style Set with matching identity and structurally compatible entries after showing the resulting differences.
 
 **Graphic Style Set Package**:
-A single-Style-Set portable artifact, using a separate `.skstyle` archive, that transfers one Graphic Style Set and its required font assets without containing a Broadcast Graphic Template or Feature Match Layout Template.
+A single-Style-Set portable artifact, using a separate `.skstyle` archive, that transfers one Graphic Style Set without containing a Broadcast Graphic Template or Feature Match Layout Template.
+It declares the application fonts its typography presets require rather than carrying asset files, and a receiver missing one refuses the package.
 It uses the Template Package principles of data-only contents, strict validation, stable identity and revision provenance, conflict-safe installation, and atomic import.
 The first import preserves the packaged Style Set identity and revision; an exact identity, revision, and content hash is already installed.
 A newer related revision may explicitly update the installed Style Set through its ordinary publish and affected-template review flow, while an older revision never silently downgrades it.
@@ -201,6 +202,11 @@ _Avoid_: Expression when referring to placeholder substitution
 **Graphic Placeholder Style**:
 An optional typography-only override for one `{inputKey}` placeholder in a Text Graphic Item.
 Literal text uses the Text Graphic Item's base typography, and placeholder styles do not add rich-text ranges, markup, fills, outlines, or other surface styling.
+
+**Graphic Font Selection**:
+Which font a Graphic Item's typography or Graphic Placeholder Style paints with: one application font that ships with Stream Keepr, or one exact font Graphic Asset Revision from the Graphics Asset Library.
+The library choice is an ordinary Graphic Asset Reference, so a Screen Output resolves it through its Screen Output Asset Capability and a Template Package embeds it; an application choice is declared rather than carried.
+_Avoid_: Font family, font stack
 
 **Text Overflow Policy**:
 The bounded behaviour when a Text Graphic Item's rendered text exceeds its authored bounds: clip, ellipsis, or shrink to an author-set minimum font size and then ellipsis.

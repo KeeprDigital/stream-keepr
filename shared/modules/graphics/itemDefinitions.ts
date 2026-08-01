@@ -7,6 +7,7 @@ import type {
 	GraphicTypography,
 } from '../../types/graphics';
 import type { GraphicsContextKind, GraphicsHostContract } from './hostContract';
+import { applicationGraphicFont } from '../../types/graphics';
 import { roundedShapeGeometry, shapeGeometrySummary, squareShapeGeometry } from './shapeGeometry';
 
 /**
@@ -56,7 +57,7 @@ export interface GraphicItemDefinition {
 }
 
 export const DEFAULT_GRAPHIC_TYPOGRAPHY: GraphicTypography = {
-	fontId: 'inter',
+	font: applicationGraphicFont('inter'),
 	fontSize: 64,
 	fontWeight: 700,
 	fontStyle: 'normal',

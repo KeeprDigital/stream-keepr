@@ -616,6 +616,129 @@ describe('broadcastGraphicsDisplay', () => {
 		});
 	});
 
+	/**
+	 * A Broadcast Graphics Screen Output paints a Graphics Asset Library font (#141).
+	 * It never could before, and the Feature Match Overlay lost the capability when it
+	 * moved onto the shared compositor, so this is the shared vocabulary's own font
+	 * loading rather than one host's - `useGraphicAssetFontFaces`, mounted by both.
+	 */
+	describe('library fonts', () => {
+		const fontReference = { assetId: 'font-asset' as never, revisionId: 'font-revision-2' as never };
+
+		function withLibraryFont(): BroadcastGraphicConfig {
+			return {
+				id: 'lower-third',
+				name: 'Lower Third',
+				items: [{
+					type: 'text',
+					id: 'name-line',
+					label: 'Name line',
+					visible: true,
+					anchor: 'top-left',
+					x: 0,
+					y: 0,
+					width: 600,
+					height: 120,
+					text: 'Player One',
+					typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, font: { kind: 'asset', reference: fontReference } },
+					overflowPolicy: 'ellipsis',
+					minFontSize: 24,
+				}],
+			};
+		}
+
+		beforeEach(() => {
+			Object.defineProperty(document, 'fonts', {
+				configurable: true,
+				value: {
+					add: vi.fn(),
+					delete: vi.fn(),
+					load: vi.fn().mockResolvedValue([]),
+					check: vi.fn().mockReturnValue(true),
+					ready: Promise.resolve(),
+				},
+			});
+		});
+
+		it('paints text in the FontFace family the pinned revision resolves to', async () => {
+			mockIsPreview.value = true;
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {}
+				async load() { return this; }
+			});
+
+			const wrapper = await mountComponent();
+			await pushPreviewState([withLibraryFont()]);
+
+			// The family is derived from the exact revision, so two revisions of one font
+			// are two families and a pinned reference always paints the bytes it pinned.
+			// It is authored quoted and serialises unquoted, because it is a valid CSS
+			// ident either way.
+			expect(wrapper.get('[data-graphic-item-kind="text"] p').attributes('style'))
+				.toContain('font-family: stream-keepr-graphic-asset-font-asset-font-revision-2;');
+		});
+
+		it('hides the canvas until every exact font revision is ready', async () => {
+			// A FontFace that has not loaded paints in a fallback family, so an output
+			// shown while loading flashes the wrong typeface on air and reflows when the
+			// real one arrives. Blank is the lesser failure, and it is legible.
+			mockAssetCapability.value = 'capability-token';
+			mockScreen.value = screenWithStack([withLibraryFont()]);
+			let finishLoad!: () => void;
+			const loaded = new Promise<void>((resolve) => {
+				finishLoad = resolve;
+			});
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {}
+				async load() {
+					await loaded;
+					return this;
+				}
+			});
+
+			const wrapper = await mountComponent();
+			await flushPromises();
+			await nextTick();
+
+			const canvas = wrapper.get('.graphics-compositor-canvas');
+			expect(canvas.attributes('data-font-ready')).toBe('false');
+			expect((canvas.element as HTMLElement).style.visibility).toBe('hidden');
+
+			finishLoad();
+			await vi.waitFor(() => {
+				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
+			});
+			expect((wrapper.get('.graphics-compositor-canvas').element as HTMLElement).style.visibility).toBe('');
+			expect(document.fonts.add as ReturnType<typeof vi.fn>).toHaveBeenCalled();
+		});
+
+		it('loads the revision through the Screen Output Asset Capability, not the library', async () => {
+			// A font is content like any other, so a live output reaches it by exactly the
+			// route its images take and by no other.
+			mockAssetCapability.value = 'capability-token';
+			mockScreen.value = screenWithStack([withLibraryFont()]);
+			const sources: string[] = [];
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {
+					sources.push(source);
+				}
+
+				async load() { return this; }
+			});
+
+			await mountComponent();
+			await flushPromises();
+			await nextTick();
+
+			await vi.waitFor(() => {
+				expect(sources).toEqual([
+					'url("/api/screen-output/screens/1/assets/font-asset/revisions/font-revision-2/content")',
+				]);
+			});
+			expect(capabilitySessionRequests).toEqual(['/api/screen-output/screens/1/asset-capability-session']);
+		});
+	});
+
 	it('composes a Graphic Group and its children in one stacking context', async () => {
 		mockIsPreview.value = true;
 		const grouped: BroadcastGraphicConfig = {

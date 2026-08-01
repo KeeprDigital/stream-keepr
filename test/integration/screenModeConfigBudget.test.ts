@@ -40,7 +40,7 @@ function fatGraphicItem(id: string) {
 		height: 9999.5,
 		text: 'T'.repeat(1000),
 		typography: {
-			fontId: 'inter' as const,
+			font: { kind: 'application', fontId: 'inter' } as const,
 			fontSize: 599.5,
 			fontWeight: 900,
 			fontStyle: 'italic' as const,
@@ -70,7 +70,7 @@ function fatGraphicItem(id: string) {
 			Array.from({ length: 4 }, (_, index) => [
 				`placeholder${index}`,
 				{
-					fontId: 'inter' as const,
+					font: { kind: 'application', fontId: 'inter' } as const,
 					fontSize: 599.5,
 					fontWeight: 900,
 					fontStyle: 'italic' as const,
@@ -141,7 +141,7 @@ function fatTextGraphicItem(id: string) {
 		height: 100,
 		text: 'T'.repeat(1000),
 		typography: {
-			fontId: 'inter' as const,
+			font: { kind: 'application', fontId: 'inter' } as const,
 			fontSize: 32,
 			fontWeight: 700,
 			fontStyle: 'normal' as const,

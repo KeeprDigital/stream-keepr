@@ -38,8 +38,23 @@ const videoCompatibilityBlocked = computed(() =>
 		reference.kind === 'silent-video'
 		&& screenGraphicAssetReferenceTargetCompatibility(reference, videoTarget.value).outcome === 'blocked',
 	));
-const { contentUrl: graphicAssetContentUrl } = useScreenGraphicAssetContentUrls(
+const {
+	contentUrl: graphicAssetContentUrl,
+	contentUrlsSettled,
+} = useScreenGraphicAssetContentUrls(
 	graphicAssetReferences,
+);
+const fontAssetReferences = computed(() =>
+	indexedGraphicAssetReferences.value.filter(item => item.kind === 'font').map(item => item.reference),
+);
+
+// Typography naming a library font paints in the family this registers, so the
+// output stays hidden until every one of them is loaded rather than flashing a
+// fallback typeface on air.
+const { fontsReady, fontsFailed } = useGraphicAssetFontFaces(
+	fontAssetReferences,
+	graphicAssetContentUrl,
+	contentUrlsSettled,
 );
 const { displayTime } = useClockDisplay(() => matchState.value?.clock ?? null);
 const selectedPreviewTarget = ref<FeatureMatchOverlaySelectionTarget>({ type: 'canvas' });
@@ -209,8 +224,10 @@ onBeforeUnmount(() => {
 	<div
 		class="feature-match-overlay"
 		:class="`feature-match-overlay--${resolvedOutput}`"
-		:style="canvasStyle"
-		:data-export-ready="(!loading && !error && !videoCompatibilityBlocked).toString()"
+		:style="{ ...canvasStyle, visibility: fontsReady ? undefined : 'hidden' }"
+		:data-export-ready="(!loading && !error && !videoCompatibilityBlocked && fontsReady && !fontsFailed).toString()"
+		:data-font-ready="fontsReady.toString()"
+		:data-font-error="fontsFailed.toString()"
 	>
 		<svg
 			class="frame-layer"

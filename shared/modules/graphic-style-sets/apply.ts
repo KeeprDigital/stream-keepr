@@ -93,7 +93,7 @@ export function sameGraphicStyleValue(left: unknown, right: unknown): boolean {
  * typography is inherited.
  */
 export const GRAPHIC_STYLE_SLOT_OWNED_KEYS: Record<GraphicStyleSlot, readonly string[]> = {
-	'typography': ['fontId', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'letterSpacing', 'lineHeight', 'color'],
+	'typography': ['font', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'letterSpacing', 'lineHeight', 'color'],
 	'surfaceStyle': ['fill', 'fillOpacity', 'outline', 'glow'],
 	// A Graphic Fill is a discriminated union with no meaningful partial, so this slot
 	// takes no overrides at all: deviating from a Graphic Fill preset is unbinding it.

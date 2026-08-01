@@ -35,13 +35,24 @@ const canvasHeight = computed(() => screen?.value?.screenConfig?.height ?? canva
  * edit that pins nothing new does not re-resolve — which is what keeps an on-air
  * video from being torn down and restarted mid-air.
  */
+const indexedGraphicAssetReferences = computed(() =>
+	broadcastGraphicsGraphicAssetReferences({ graphics: [...graphics.value] }),
+);
 const graphicAssetReferences = computed(() =>
-	broadcastGraphicsGraphicAssetReferences({ graphics: [...graphics.value] }).map(item => item.reference),
+	indexedGraphicAssetReferences.value.map(item => item.reference),
+);
+const fontAssetReferences = computed(() =>
+	indexedGraphicAssetReferences.value.filter(item => item.kind === 'font').map(item => item.reference),
 );
 
 // A live output resolves content only through its Screen Output Asset Capability;
 // an editor preview resolves it as an author. Neither path can browse the library.
-const { contentUrl } = useScreenGraphicAssetContentUrls(graphicAssetReferences);
+const { contentUrl, contentUrlsSettled } = useScreenGraphicAssetContentUrls(graphicAssetReferences);
+
+// Typography naming a library font paints in the family this registers, so the
+// canvas stays hidden until every one of them is loaded rather than flashing a
+// fallback typeface on air.
+const { fontsReady } = useGraphicAssetFontFaces(fontAssetReferences, contentUrl, contentUrlsSettled);
 
 const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	output: resolvedOutput.value,
@@ -66,6 +77,8 @@ const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	<GraphicsCompositorCanvas
 		class="broadcast-graphics"
 		:class="`broadcast-graphics--${renderModel.output}`"
+		:style="{ visibility: fontsReady ? undefined : 'hidden' }"
+		:data-font-ready="fontsReady.toString()"
 		:render="renderModel"
 		@select="publishSelection"
 	/>

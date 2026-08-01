@@ -197,7 +197,7 @@ export function createDefaultGraphicInputDeclaration(
 
 /** The typography properties a Graphic Placeholder Style may override. */
 export const GRAPHIC_PLACEHOLDER_STYLE_KEYS = [
-	'fontId',
+	'font',
 	'fontSize',
 	'fontWeight',
 	'fontStyle',

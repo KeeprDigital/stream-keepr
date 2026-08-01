@@ -798,7 +798,7 @@ export function graphicTextStyle(
 		margin: 0,
 		width: '100%',
 		color: paintColour(output, typography.color),
-		fontFamily: resolveGraphicFontFamily(typography.fontId),
+		fontFamily: resolveGraphicFontFamily(typography.font),
 		fontSize: `${fontSize}px`,
 		fontWeight: typography.fontWeight,
 		fontStyle: typography.fontStyle,
@@ -956,8 +956,8 @@ function placeholderStyle(
 		return undefined;
 
 	const resolved: CSSProperties = {};
-	if (style.fontId !== undefined)
-		resolved.fontFamily = resolveGraphicFontFamily(style.fontId);
+	if (style.font !== undefined)
+		resolved.fontFamily = resolveGraphicFontFamily(style.font);
 	if (style.fontSize !== undefined)
 		resolved.fontSize = `${style.fontSize}px`;
 	if (style.fontWeight !== undefined)
