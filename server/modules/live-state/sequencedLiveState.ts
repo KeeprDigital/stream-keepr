@@ -51,6 +51,13 @@ export interface SequencedLiveStatePort<TRef, TAggregate, TCommand extends Seque
 	 * Feature-specific admission: lifecycle status, ownership, and base-sequence
 	 * policy. Throws to reject the command before anything is written.
 	 *
+	 * Runs once per commit attempt: before the first, and again against the
+	 * reloaded aggregate before the merge retry. So it must be safe to call more
+	 * than once for one command — it decides admissibility against the state it is
+	 * handed and accumulates nothing of its own. In exchange, an admission rule may
+	 * depend on state that changes between the two attempts without having to be
+	 * mirrored into `casGuard` or hidden inside `reduce` to stay enforced.
+	 *
 	 * It sees the sequenced aggregate and nothing else — `TAggregate` is exactly
 	 * the row `projection` returns, so it cannot be widened into a composite.
 	 * Admission that needs a second entity belongs in the feature's own module,
@@ -233,6 +240,12 @@ export function createSequencedLiveState<TRef, TAggregate, TCommand extends Sequ
 			const latest = await port.load(ref);
 			if (!latest || port.sequenceOf(latest) === port.sequenceOf(aggregate))
 				throw error;
+
+			// Admission is asked again, against the state this attempt will actually
+			// commit onto. Asking only once would enforce a state-dependent rule on the
+			// first attempt alone, and a command could commit against a state its own
+			// admission rejects — silently, because nothing else re-checks it.
+			port.admit(latest, command);
 
 			result = await commitOnce(ref, latest, command);
 		}

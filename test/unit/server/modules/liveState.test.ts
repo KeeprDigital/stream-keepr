@@ -298,6 +298,49 @@ describe('sequenced live state', () => {
 			await expect(liveState.execute(REF, add('cmd-1', 5))).rejects.toMatchObject({ statusCode: 409 });
 			expect(mockDb.batch).toHaveBeenCalledOnce();
 		});
+
+		it('re-runs admission against the newer aggregate before the merge retry', async () => {
+			const port = createPort({
+				load: vi.fn()
+					.mockResolvedValueOnce(counter({ sequence: 3, total: 10 }))
+					.mockResolvedValueOnce(counter({ sequence: 4, total: 100 })),
+			});
+			stageSuccessfulCommit(port);
+			mockDb.batch.mockResolvedValueOnce([[], [], []]);
+			const liveState = createSequencedLiveState(port);
+
+			await liveState.execute(REF, add('cmd-1', 5));
+
+			// Admission decides against the state the command is about to be reduced
+			// onto, so the retry is judged against the aggregate that won.
+			expect(port.admit).toHaveBeenCalledTimes(2);
+			expect(vi.mocked(port.admit).mock.calls[1]![0]).toMatchObject({ sequence: 4, total: 100 });
+		});
+
+		it('rejects a merge retry the newer aggregate no longer admits', async () => {
+			const port = createPort({
+				load: vi.fn()
+					.mockResolvedValueOnce(counter({ sequence: 3, total: 10 }))
+					.mockResolvedValueOnce(counter({ sequence: 4, total: 100 })),
+				// A state-dependent admission rule the compare-and-swap guard cannot
+				// express: the counter closes once it reaches its cap. Enforcing it only
+				// on the first attempt would let the retry commit onto a state its own
+				// admission rejects.
+				admit: vi.fn((aggregate) => {
+					if (aggregate.total >= 100)
+						throw createError({ statusCode: 409, message: 'Counter is closed' });
+				}),
+			});
+			stageLostRace();
+			const liveState = createSequencedLiveState(port);
+
+			await expect(liveState.execute(REF, add('cmd-1', 5))).rejects.toMatchObject({
+				statusCode: 409,
+				message: 'Counter is closed',
+			});
+			// The retry never reached the store.
+			expect(mockDb.batch).toHaveBeenCalledOnce();
+		});
 	});
 
 	describe('post-commit publication', () => {
