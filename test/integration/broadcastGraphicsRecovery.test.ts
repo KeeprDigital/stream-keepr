@@ -13,6 +13,7 @@ import {
 	setScreenMode,
 } from './broadcastGraphicsPlayoutHelpers';
 import { $fetchRaw } from './helpers';
+import { executeIntegrationD1 } from './integrationD1';
 
 /**
  * Recovery and multi-operator hardening, proven through the authoritative surface.
@@ -22,6 +23,21 @@ import { $fetchRaw } from './helpers';
  * Each is asserted as command in → snapshot out, because that is the only surface
  * two operators and every output share.
  */
+/**
+ * Damage one Live Session's durable state the way only something outside the command
+ * path can.
+ *
+ * `playout` is written as a JSON array where the shape requires an object, which is
+ * the shape a different build or a partial write leaves behind. It is done in SQL
+ * precisely because no API can produce it: the point of a recovery fault is that the
+ * product itself never writes one.
+ */
+async function corruptLiveState(sessionId: number): Promise<void> {
+	await executeIntegrationD1(
+		`UPDATE broadcast_graphics_live_sessions SET current_state = '{"playout":[],"inputs":{}}' WHERE id = ${sessionId};`,
+	);
+}
+
 async function resetLiveState(eventId: number, screenId: number): Promise<BroadcastGraphicsLiveSessionResponse> {
 	return await $fetch<BroadcastGraphicsLiveSessionResponse>(
 		`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/live-session/reset`,
@@ -373,6 +389,39 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 
 			expect(taken.session.recoveryFault).toBeNull();
 			expect((await harness.reload()).recoveryFault).toBeNull();
+		});
+
+		it('reports a recovery fault for durable state damaged outside the command path', async () => {
+			const harness = await createGraphicsHarness(eventId, 'hardening-corrupt-read', [
+				integrationBroadcastGraphicWithInputs('a', [integrationTextInput('name')]),
+			]);
+
+			await corruptLiveState(harness.session().id);
+			const faulted = await harness.reload();
+
+			// Nothing is on air and the operator is told why, rather than program showing
+			// whichever half of the damaged state happened to parse.
+			expect(faulted.recoveryFault).not.toBeNull();
+			expect(faulted.currentState).toEqual({ playout: {}, inputs: {}, sources: {} });
+		});
+
+		it('clears that fault on the first accepted command, whatever kind it is', async () => {
+			const harness = await createGraphicsHarness(eventId, 'hardening-corrupt-cleared', [
+				integrationBroadcastGraphicWithInputs('a', [integrationTextInput('name')]),
+			]);
+
+			await corruptLiveState(harness.session().id);
+			expect((await harness.reload()).recoveryFault).not.toBeNull();
+
+			// A Set Input, deliberately: not a playout action and not a Take. Every command
+			// reduces from the recovered state and writes that reduction back, so whichever
+			// one is accepted first replaces the state nobody could read. An operator who
+			// types before they take is not left staring at a fault that has already gone.
+			const edited = await setBroadcastGraphicInput(harness, 'a', 'name', 'Ava Reed');
+
+			expect(edited.session.recoveryFault).toBeNull();
+			expect((await harness.reload()).recoveryFault).toBeNull();
+			expect(edited.currentState.inputs.a!.working).toEqual({ name: 'Ava Reed' });
 		});
 
 		it('answers a reloading client with the same authoritative state, however many times it asks', async () => {

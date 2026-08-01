@@ -7,6 +7,12 @@ const mockFeatureMatchService = {
 	findByEventId: vi.fn(),
 };
 
+const mockRefreshBindings = vi.fn();
+
+vi.mock('~~/server/modules/broadcast-graphics-live-session', () => ({
+	refreshBroadcastGraphicsBindings: mockRefreshBindings,
+}));
+
 vi.mock('~~/server/utils/ably', () => ({
 	publishMessage: mockPublishMessage,
 	publishMessageStrict: mockPublishMessageStrict,
@@ -698,5 +704,85 @@ describe('event Data publication module', () => {
 				{ featureMatchId: 5, sortOrder: 0 },
 			],
 		}, 'origin-1');
+	});
+
+	/**
+	 * Which publications wake a Broadcast Graphic up.
+	 *
+	 * The settled rule is that relevant Realtime Event Session changes re-resolve
+	 * affected Graphic Input Bindings, and this module is where the server decides one
+	 * has happened. Without this, the trigger could be deleted from every publication
+	 * and the only thing that would notice is a lower third on air holding a stale name.
+	 */
+	describe('re-resolving Broadcast Graphic bindings', () => {
+		it('catches Broadcast Graphics up on Event Data a binding may read', async () => {
+			const publication = eventDataPublicationModule();
+
+			await publication.roundUpdated({
+				eventId: 1,
+				entity: createRound({ name: 'Round 4' }) as any,
+				originConnectionId: 'origin-1',
+			});
+
+			expect(mockRefreshBindings).toHaveBeenCalledWith(1);
+		});
+
+		it('never tells the re-resolution which connection changed the Event Data', async () => {
+			const publication = eventDataPublicationModule();
+
+			await publication.roundUpdated({
+				eventId: 1,
+				entity: createRound({ name: 'Round 4' }) as any,
+				originConnectionId: 'origin-1',
+			});
+
+			// The message announcing the Round carries the origin, because the browser that
+			// made that edit already applied it and must not echo it back to itself. The
+			// re-resolution is a different change, which nobody issued and no client
+			// predicted — so an origin here would make the one browser that caused it the
+			// only client never told its graphics moved, leaving its Live Control behind
+			// until some later command forced a reload.
+			expect(mockPublishMessage).toHaveBeenCalledWith(1, 'round:updated', expect.anything(), 'origin-1');
+			expect(mockRefreshBindings).not.toHaveBeenCalledWith(expect.objectContaining({ originConnectionId: 'origin-1' }));
+			expect(mockRefreshBindings.mock.calls).toEqual([[1]]);
+		});
+
+		it('catches them up on a Melee Sync, which reports a count rather than each entity', async () => {
+			const publication = eventDataPublicationModule();
+
+			await publication.meleePlayersSynced({ eventId: 1, playerCount: 120 });
+
+			expect(mockRefreshBindings).toHaveBeenCalledWith(1);
+		});
+
+		it('catches them up once for a whole run of Feature Match Slots, not once each', async () => {
+			mockFeatureMatchService.findByEventId.mockResolvedValue([
+				createFeatureMatch({ id: 4 }),
+				createFeatureMatch({ id: 5 }),
+				createFeatureMatch({ id: 6 }),
+			]);
+			const publication = eventDataPublicationModule();
+
+			const published = await publication.featureMatchSlotsUpdated({ eventId: 1, slotIds: [4, 5, 6] });
+
+			// Every Slot is announced, because each message names one Slot. Re-resolution is
+			// per Event, so fifty Slots moving in one operation is one Event Data change as
+			// far as a Graphic Input Binding is concerned — sweeping per Slot would repeat
+			// the whole Event's work fifty times inside one request.
+			expect(published).toHaveLength(3);
+			expect(mockRefreshBindings.mock.calls).toEqual([[1]]);
+		});
+
+		it('leaves them alone for a change no Graphic Input Binding can read', async () => {
+			const publication = eventDataPublicationModule();
+
+			// A Screen and a Player List are Event-scoped, but no Graphic Source Selection
+			// names either, so re-resolving on them would be work that can never change a
+			// value — on every Screen in the Event, every time one is saved.
+			await publication.screenUpdated({ eventId: 1, entity: createScreen() as any });
+			await publication.playerListUpdated({ eventId: 1, entity: createPlayerList() as any });
+
+			expect(mockRefreshBindings).not.toHaveBeenCalled();
+		});
 	});
 });

@@ -30,7 +30,9 @@ export interface BroadcastGraphicsLiveSessionResponse {
 	currentState: BroadcastGraphicsLiveState;
 	/**
 	 * Why the durable live state behind this snapshot could not be trusted, when it
-	 * could not. Present until an explicit playout action writes a state that can be.
+	 * could not. Present until the first accepted command of any type writes a state
+	 * that can be — every command reduces from the recovered state, so none of them
+	 * carries the damage forward.
 	 */
 	recoveryFault: BroadcastGraphicsRecoveryFault | null;
 	sequence: number;

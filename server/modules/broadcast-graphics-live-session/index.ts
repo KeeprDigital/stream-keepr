@@ -20,10 +20,13 @@ import { publishMessage } from '~~/server/utils/ably';
 import {
 	broadcastGraphicChannelContexts,
 	broadcastGraphicSourceSelections,
+	broadcastGraphicsResolveBindingsDue,
+	recoveredBroadcastGraphicsLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { broadcastGraphicPhaseDurations, resolveGraphicInputBindings } from '~~/shared/modules/graphics';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
+import { randomCommandId } from '~~/shared/utils/uuid';
 
 interface ApplyCommandParams {
 	eventId: number;
@@ -311,10 +314,163 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		);
 	};
 
+	/**
+	 * Whether any Graphic Input this Broadcast Graphic binds is applied immediately.
+	 *
+	 * The authored half of the question, answered before any Event Data is loaded.
+	 * A graphic with no live-policy bound input cannot be changed by re-resolution
+	 * whatever Event Data does, so it never costs a query.
+	 */
+	function hasLiveBoundInput(graphic: BroadcastGraphicConfig): boolean {
+		return (graphic.bindings ?? []).some(binding => (graphic.inputs ?? []).some(
+			declaration => declaration.key === binding.inputKey && declaration.updatePolicy === 'live',
+		));
+	}
+
+	/**
+	 * Re-resolve the live-policy Graphic Input Bindings of every Broadcast Graphic on
+	 * program in this Event, for Event Data that has just changed.
+	 *
+	 * ## Why the authoritative side does this at all
+	 *
+	 * "Relevant Realtime Event Session changes re-resolve affected Graphic Input
+	 * Bindings" is a rule about the show, not about anybody's browser. A live On-air
+	 * Update Policy exists precisely for the hands-free case — a lower third that
+	 * renames itself while the operator is looking at a different graphic, or at none —
+	 * so re-resolution cannot be woken by a Live Control watching one selected graphic.
+	 * It has to happen where the acceptance happens, which is here: an on-air Broadcast
+	 * Graphic on a Screen nobody has open, with every client disconnected, still says
+	 * the new name.
+	 *
+	 * ## What it deliberately does not do
+	 *
+	 * It issues the ordinary `Resolve Bindings` command, so every rule that command
+	 * already obeys is obeyed here without being restated: a staged input stays pending,
+	 * an override is not overwritten, an unavailable binding does not fall back to the
+	 * template default, and `acceptedRevision` is left alone so another operator's
+	 * staged Update Graphic is not invalidated by a Player being renamed.
+	 *
+	 * ## Why it is filtered twice before it writes
+	 *
+	 * Event Data changes constantly and almost none of it reaches a Broadcast Graphic.
+	 * The authored filter above costs nothing; the reduction is then computed against
+	 * loaded Event Data and only committed when it would actually change what program
+	 * shows, because a command that changes nothing still advances the authoritative
+	 * sequence that every Live Control and Screen Output reloads against.
+	 *
+	 * Which Event Data moved is deliberately not part of the filter. A binding may reach
+	 * an entity through a fixed relationship from another, so a change that looks
+	 * irrelevant to one graphic's declared kinds may not be — and the failure of guessing
+	 * wrong is a stale name on program, which is the thing this exists to prevent. The
+	 * value comparison is the honest filter, and it is exact.
+	 *
+	 * ## Why it takes no originating connection
+	 *
+	 * The Event Data write that woke this has an origin, and the message announcing *that*
+	 * change carries it so the browser which already applied it optimistically does not
+	 * echo it back to itself. This command is not that change. Nobody issued it, no client
+	 * predicted it, and the client whose operator renamed the Player is exactly as
+	 * uninformed about the re-resolution as every other client — so forwarding the origin
+	 * would make the one browser that caused the change the only one never told its
+	 * graphics moved, leaving its Live Control behind until some later command produced a
+	 * sequence gap and forced a reload. Taking no parameter at all is what makes that
+	 * unforwardable rather than merely unforwarded.
+	 *
+	 * ## Why one Broadcast Graphic's failure is not the Event's
+	 *
+	 * Each graphic is attempted on its own. An epoch that ended under the sweep, a Screen
+	 * whose Event Data cannot be loaded, or any other single failure would otherwise throw
+	 * out of the whole function and be swallowed by the caller — and every *other* Screen
+	 * in the Event would silently miss this Event Data change. A change that reaches some
+	 * graphics is strictly better than one that reaches none, and the sweep is best-effort
+	 * on the way out regardless.
+	 */
+	const refreshLiveBindings = async ({ eventId }: { eventId: number }): Promise<void> => {
+		const sessions = await state.findActiveSessionsByEvent(eventId);
+		if (sessions.length === 0)
+			return;
+
+		const screensById = new Map((await screens.findByEventId(eventId)).map(screen => [screen.id, screen]));
+
+		for (const session of sessions) {
+			const screen = screensById.get(session.screenId);
+			if (!screen || screen.currentMode !== 'broadcast-graphics')
+				continue;
+
+			for (const graphic of authoredStack(screen).graphics) {
+				if (!hasLiveBoundInput(graphic))
+					continue;
+
+				try {
+					const command: BroadcastGraphicsCommand = {
+						commandId: randomCommandId('resolve-bindings'),
+						type: 'Resolve Bindings',
+						payload: { graphicId: graphic.id },
+					};
+					// Judged against the epoch as it was read, which this sweep deliberately
+					// does not re-read between graphics. A Resolve Bindings writes only the
+					// Broadcast Graphic it names, so an acceptance for an earlier graphic
+					// cannot change the answer for this one.
+					//
+					// Nothing here is what stops a write into an epoch that has since ended,
+					// and nothing here needs to be. The sequenced live-state module loads the
+					// aggregate itself and admits the command against it — this feature's
+					// admission rejects a session that is not active — and it re-admits
+					// against the reloaded aggregate on a merge retry, so neither attempt can
+					// commit into an ended epoch. Beneath both, the compare-and-swap guard and
+					// the projection's own WHERE require `status = 'active'`, so a write that
+					// raced an epoch ending returns no row and fails rather than landing. A
+					// staleness check out here could only ever be a fourth guard, checked
+					// before the write and therefore able to go stale in the gap the other
+					// three close.
+					const context = await reductionContextFor(eventId, screen, graphic, session.currentState, command);
+					const due = broadcastGraphicsResolveBindingsDue(
+						recoveredBroadcastGraphicsLiveState(session.currentState),
+						graphic.id,
+						{ ...context, acceptedAt: Date.now() },
+					);
+					if (!due)
+						continue;
+
+					await state.applyCommand(session.id, eventId, command, context, undefined, { publish: true });
+				}
+				catch {
+					console.error(JSON.stringify({
+						message: 'broadcast_graphics_binding_refresh_failed',
+						eventId,
+						screenId: screen.id,
+						graphicId: graphic.id,
+					}));
+				}
+			}
+		}
+	};
+
 	return {
 		loadSession,
 		applyCommand,
+		refreshLiveBindings,
 		resetLiveState,
 		endSessionsForScreen,
 	};
+}
+
+/**
+ * Offer every Broadcast Graphic in one Event the chance to catch up with Event Data
+ * that has just changed, and never let that failing break the change itself.
+ *
+ * The one entry point every trigger uses, so the swallow-and-log policy is stated
+ * once and by the module that owns the work rather than copied into each caller. It
+ * is best-effort in exactly the way realtime delivery already is: the Event Data
+ * write has committed and its own notification has gone out, so a Broadcast Graphic
+ * that fails to catch up must not turn a successful write into an apparent failure
+ * that invites a retry of the write.
+ */
+export async function refreshBroadcastGraphicsBindings(eventId: number): Promise<void> {
+	try {
+		await broadcastGraphicsLiveSessionModule().refreshLiveBindings({ eventId });
+	}
+	catch {
+		console.error(JSON.stringify({ message: 'broadcast_graphics_binding_refresh_failed', eventId }));
+	}
 }

@@ -392,3 +392,130 @@ describe('broadcast graphics Event Data binding API', () => {
 		expect(res.status).toBe(400);
 	});
 });
+
+/**
+ * Re-resolution with nobody watching.
+ *
+ * The live On-air Update Policy exists for the hands-free case: a lower third that
+ * updates itself while the operator is looking at a different graphic, or at no
+ * graphic at all. Every command here is an ordinary Event Data write — a Player
+ * being renamed — and nothing addresses the Live Session, so what these prove is
+ * that the authoritative side re-resolves for itself rather than because a browser
+ * happened to be pointed at the right graphic.
+ */
+describe('broadcast graphics re-resolution driven by Event Data', () => {
+	let eventId: number;
+
+	async function createPlayer(name: string): Promise<number> {
+		const player = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+			method: 'POST',
+			body: { name, wins: 1, losses: 0, draws: 0 },
+		});
+		return player.id;
+	}
+
+	async function rename(playerId: number, name: string): Promise<void> {
+		await $fetch(`/api/events/${eventId}/players/${playerId}`, { method: 'PATCH', body: { name } });
+	}
+
+	/** One placed Broadcast Graphic whose name is bound to its own Player selection. */
+	function boundGraphic(id: string, inputs: GraphicInputDeclaration[]) {
+		return integrationBroadcastGraphicWithBindings(
+			id,
+			inputs,
+			[PLAYER_SOURCE],
+			[{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+		);
+	}
+
+	beforeAll(async () => {
+		const event = await $fetch<{ id: number }>('/api/events', {
+			method: 'POST',
+			body: { name: 'Integration Graphic Re-resolve Event', game: 'mtg', featureMatchOrientation: 'horizontal' },
+		});
+		eventId = event.id;
+	});
+
+	afterAll(async () => {
+		try {
+			await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+		}
+		catch {}
+	});
+
+	it('re-resolves every on-air live-policy graphic, not one an operator has selected', async () => {
+		const first = await createPlayer('Nia Fontaine');
+		const second = await createPlayer('Theo Vasquez');
+		const harness = await createGraphicsHarness(eventId, 're-resolve-many', [
+			boundGraphic('lead', [LIVE_NAME]),
+			boundGraphic('second', [LIVE_NAME]),
+		]);
+
+		await selectBroadcastGraphicSource(harness, 'lead', 'player', first);
+		await selectBroadcastGraphicSource(harness, 'second', 'player', second);
+		await harness.send({ commandId: playoutCommandId('rr-take-lead'), type: 'Take', payload: { graphicId: 'lead' } });
+		await harness.send({ commandId: playoutCommandId('rr-take-second'), type: 'Take', payload: { graphicId: 'second' } });
+
+		await rename(first, 'Nia Fontaine-Cole');
+		await rename(second, 'Theo Vasquez Jr');
+
+		// No Live Control is open on this Screen, no client is connected to it, and no
+		// command has addressed either graphic. Both lower thirds still say the new names.
+		const reloaded = await harness.reload();
+
+		expect(reloaded.currentState.inputs.lead!.accepted).toEqual({ name: 'Nia Fontaine-Cole' });
+		expect(reloaded.currentState.inputs.second!.accepted).toEqual({ name: 'Theo Vasquez Jr' });
+	});
+
+	it('leaves a staged Graphic Input pending rather than putting it on air', async () => {
+		const playerId = await createPlayer('Odile Brandt');
+		const harness = await createGraphicsHarness(eventId, 're-resolve-staged', [boundGraphic('lead', [NAME])]);
+
+		await selectBroadcastGraphicSource(harness, 'lead', 'player', playerId);
+		await harness.send({ commandId: playoutCommandId('rr-take-staged'), type: 'Take', payload: { graphicId: 'lead' } });
+
+		await rename(playerId, 'Odile Brandt-Reyes');
+		const reloaded = await harness.reload();
+
+		// A staged On-air Update Policy means an operator confirms it, and re-resolution
+		// is not that confirmation.
+		expect(reloaded.currentState.inputs.lead!.accepted).toEqual({ name: 'Odile Brandt' });
+	});
+
+	it('never overwrites a Graphic Input Override with a re-resolved value', async () => {
+		const playerId = await createPlayer('Priya Raghunathan');
+		const harness = await createGraphicsHarness(eventId, 're-resolve-override', [boundGraphic('lead', [LIVE_NAME])]);
+
+		await selectBroadcastGraphicSource(harness, 'lead', 'player', playerId);
+		await harness.send({ commandId: playoutCommandId('rr-take-override'), type: 'Take', payload: { graphicId: 'lead' } });
+		await setBroadcastGraphicOverride(harness, 'lead', 'name', 'Priya R.');
+
+		await rename(playerId, 'Priya Raghunathan-Singh');
+		const reloaded = await harness.reload();
+
+		// The binding kept resolving underneath; the operator's correction is what is on
+		// air until they clear it.
+		expect(reloaded.currentState.inputs.lead!.accepted).toEqual({ name: 'Priya R.' });
+	});
+
+	it('changes nothing about a Broadcast Graphic that is off air', async () => {
+		const playerId = await createPlayer('Wendell Achebe');
+		const harness = await createGraphicsHarness(eventId, 're-resolve-off', [boundGraphic('lead', [LIVE_NAME])]);
+
+		await selectBroadcastGraphicSource(harness, 'lead', 'player', playerId);
+
+		await rename(playerId, 'Wendell Achebe-Stone');
+		const reloaded = await harness.reload();
+
+		// Nothing has been accepted, because nothing is on program to accept into. The
+		// graphic's next Take composes its values afresh from the current Event Data.
+		expect(reloaded.currentState.inputs.lead?.accepted ?? {}).toEqual({});
+
+		const taken = await harness.send({
+			commandId: playoutCommandId('rr-take-off'),
+			type: 'Take',
+			payload: { graphicId: 'lead' },
+		});
+		expect(taken.currentState.inputs.lead!.accepted).toEqual({ name: 'Wendell Achebe-Stone' });
+	});
+});

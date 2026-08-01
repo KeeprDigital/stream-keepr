@@ -10,7 +10,14 @@ import { createInitialBroadcastGraphicsLiveState } from './playout';
  * something written by another process — possibly a different build, possibly a
  * partial write. The settled rule is that missing, corrupt, or incompatible
  * durable live state renders every Broadcast Graphic transparent on every output
- * and shows Live Control a recovery fault that only an explicit Take clears.
+ * and shows Live Control a recovery fault that the first accepted command of any
+ * type clears.
+ *
+ * Any type, because the fault is derived from the stored state on every read rather
+ * than recorded: reduction starts from the recovered state and the projection writes
+ * that reduction back, so whichever command is accepted first replaces the state
+ * nobody could read with one anybody can. A Take is simply the command an operator
+ * reaches for, not a requirement.
  *
  * ## Why it recovers to nothing rather than to what it could read
  *
