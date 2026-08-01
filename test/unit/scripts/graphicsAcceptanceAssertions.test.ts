@@ -229,4 +229,11 @@ describe('graphics staging delivery assertions', () => {
 		expect(codes(checkCapabilityDenial(observed(403, {}), { route, body: '' })))
 			.toEqual(['outcome-not-denied']);
 	});
+
+	it('lets the authenticated editor route refuse with its own settled status', () => {
+		expect(checkCapabilityDenial(observed(401, {}), { route, body: '', expectedStatus: 401 }))
+			.toEqual([]);
+		expect(codes(checkCapabilityDenial(observed(404, {}), { route, body: '', expectedStatus: 401 })))
+			.toEqual(['outcome-not-denied']);
+	});
 });

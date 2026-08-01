@@ -286,12 +286,12 @@ export function checkNonRetryableIntegrity(observation, { route }) {
  * A denied capability is answered exactly like an absent one, and says nothing
  * about whether the revision exists or where its bytes live.
  */
-export function checkCapabilityDenial(observation, { route, body }) {
+export function checkCapabilityDenial(observation, { route, body, expectedStatus = 404 }) {
 	const failures = [];
-	if (observation.status !== 404) {
+	if (observation.status !== expectedStatus) {
 		failures.push(failure('outcome-not-denied', {
 			route,
-			expected: 404,
+			expected: expectedStatus,
 			actual: observation.status,
 		}));
 	}

@@ -34,6 +34,8 @@
 		"test:browser:still-images:deployed": "node scripts/run-still-image-browser-acceptance.mjs --deployed",
 		"test:browser:silent-video": "node scripts/run-silent-video-browser-acceptance.mjs",
 		"test:browser:silent-video:deployed": "node scripts/run-silent-video-browser-acceptance.mjs --deployed",
+		"test:delivery:graphics": "node scripts/run-graphics-delivery-acceptance.mjs",
+		"test:delivery:graphics:deployed": "node scripts/run-graphics-delivery-acceptance.mjs --deployed",
 		"test:validator:silent-video": "node scripts/run-silent-video-validator-acceptance.mjs",
 		"test:validator:silent-video:deployed": "node scripts/run-silent-video-validator-acceptance.mjs --deployed",
 		"test:e2e": "pnpm test:integration:run",
