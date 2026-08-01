@@ -179,13 +179,19 @@ function chooseDerivation(key: string, value: string) {
 	));
 }
 
-/** What one Graphic Source Selection resolves from, in the author's terms. */
+/**
+ * What one Graphic Source Selection resolves from, in the author's terms.
+ *
+ * Whether it generates a picker is asked of the same predicate Live Control
+ * generates its pickers from, rather than restated here — otherwise this panel could
+ * promise an operator a control that never appears.
+ */
 function sourceNote(source: GraphicSourceSelectionDeclaration): string {
-	if (source.kind === 'event')
-		return 'Resolves the Event this Screen belongs to.';
+	if (isOperatorSelectedGraphicSource(source))
+		return 'Generates one picker in Live Control.';
 	if (source.from)
 		return `Follows ${sourceLabel(source.from.sourceKey)} — no picker of its own.`;
-	return 'Generates one picker in Live Control.';
+	return 'Resolves the Event this Screen belongs to.';
 }
 
 /* ────────────────────────────────────────────────
