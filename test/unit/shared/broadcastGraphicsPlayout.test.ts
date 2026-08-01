@@ -5,7 +5,7 @@ import {
 	acceptedGraphicInputValues,
 	applyBroadcastGraphicsCommand,
 	broadcastGraphicInputsState,
-	broadcastGraphicPhaseProjection,
+	broadcastGraphicPhaseProjections,
 	broadcastGraphicPlayoutState,
 	broadcastGraphicRenderedInputs,
 	createInitialBroadcastGraphicsLiveState,
@@ -223,7 +223,7 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		// Read four hours late, with nothing having cleared or validated anything.
 		const hoursLater = T0 + (4 * 60 * 60 * 1000);
 		expect(broadcastGraphicPlayoutState(reversed, 'slate', at(hoursLater))).toBe('off');
-		expect(broadcastGraphicPhaseProjection(reversed, 'slate', at(hoursLater))).toBeNull();
+		expect(broadcastGraphicPhaseProjections(reversed, 'slate', at(hoursLater))).toEqual([]);
 	});
 
 	it('adds an update phase start only while an update animation is still owed', () => {
@@ -285,7 +285,7 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		const recovered: BroadcastGraphicsLiveState = JSON.parse(JSON.stringify(state));
 		const hoursLater = T0 + (4 * 60 * 60 * 1000);
 		expect(broadcastGraphicPlayoutState(recovered, 'slate', at(hoursLater))).toBe('on-air');
-		expect(broadcastGraphicPhaseProjection(recovered, 'slate', at(hoursLater))).toBeNull();
+		expect(broadcastGraphicPhaseProjections(recovered, 'slate', at(hoursLater))).toEqual([]);
 		expect(broadcastGraphicRenderedInputs(recovered, 'slate', [declaration], at(hoursLater)))
 			.toEqual({ current: { headline: 'next' } });
 	});
@@ -321,7 +321,7 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		const hoursLater = T0 + (4 * 60 * 60 * 1000);
 
 		expect(broadcastGraphicPlayoutState(persisted, 'slate', at(hoursLater))).toBe('on-air');
-		expect(broadcastGraphicPhaseProjection(persisted, 'slate', at(hoursLater))).toBeNull();
+		expect(broadcastGraphicPhaseProjections(persisted, 'slate', at(hoursLater))).toEqual([]);
 	});
 
 	it('catches a late-loading output up to the current phase instead of restarting it', () => {
@@ -329,9 +329,9 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 
 		// An output that opens 400ms into a one-second enter joins 400ms in, and one
 		// that opens after it joins settled. Neither starts from zero.
-		expect(broadcastGraphicPhaseProjection(taken, 'slate', at(T0 + 400)))
-			.toEqual({ phase: 'enter', elapsed: 400 });
-		expect(broadcastGraphicPhaseProjection(taken, 'slate', at(T0 + 1500))).toBeNull();
+		expect(broadcastGraphicPhaseProjections(taken, 'slate', at(T0 + 400)))
+			.toEqual([{ phase: 'enter', elapsed: 400 }]);
+		expect(broadcastGraphicPhaseProjections(taken, 'slate', at(T0 + 1500))).toEqual([]);
 	});
 
 	it('never lets a duplicated Take restart an entrance already on program', () => {
@@ -345,16 +345,16 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		// record untouched is what keeps the effective start time from being refreshed.
 		expect(duplicate.playout.slate).toBe(first.playout.slate);
 		expect(duplicate.playout.slate!.effectiveStartedAt).toBe(T0);
-		expect(broadcastGraphicPhaseProjection(duplicate, 'slate', at(T0 + 600)))
-			.toEqual({ phase: 'enter', elapsed: 600 });
+		expect(broadcastGraphicPhaseProjections(duplicate, 'slate', at(T0 + 600)))
+			.toEqual([{ phase: 'enter', elapsed: 600 }]);
 	});
 
 	it('starts a new phase when the intent actually changes', () => {
 		const taken = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 		const outed = out(taken, 'slate', false, T0 + 5000);
 
-		expect(broadcastGraphicPhaseProjection(outed, 'slate', at(T0 + 5200)))
-			.toEqual({ phase: 'exit', elapsed: 200 });
+		expect(broadcastGraphicPhaseProjections(outed, 'slate', at(T0 + 5200)))
+			.toEqual([{ phase: 'exit', elapsed: 200 }]);
 	});
 
 	it('never replays an entrance when a plain Take follows a Cut Take', () => {
@@ -367,7 +367,7 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 
 		expect(plain.playout.slate).toBe(cut.playout.slate);
 		expect(broadcastGraphicPlayoutState(plain, 'slate', at(T0 + 5000))).toBe('on-air');
-		expect(broadcastGraphicPhaseProjection(plain, 'slate', at(T0 + 5000))).toBeNull();
+		expect(broadcastGraphicPhaseProjections(plain, 'slate', at(T0 + 5000))).toEqual([]);
 	});
 
 	it('never replays an exit when a plain Out follows a Cut Out', () => {
@@ -409,7 +409,7 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		const recut = take(taken, 'slate', true, T0 + 200);
 
 		expect(broadcastGraphicPlayoutState(recut, 'slate', at(T0 + 300))).toBe('on-air');
-		expect(broadcastGraphicPhaseProjection(recut, 'slate', at(T0 + 300))).toBeNull();
+		expect(broadcastGraphicPhaseProjections(recut, 'slate', at(T0 + 300))).toEqual([]);
 	});
 });
 
@@ -450,7 +450,7 @@ describe('deriving a lifecycle phase from the authoritative effective start time
 		const cut = take(createInitialBroadcastGraphicsLiveState(), 'slate', true);
 
 		expect(broadcastGraphicPlayoutState(cut, 'slate', at(T0))).toBe('on-air');
-		expect(broadcastGraphicPhaseProjection(cut, 'slate', at(T0))).toBeNull();
+		expect(broadcastGraphicPhaseProjections(cut, 'slate', at(T0))).toEqual([]);
 	});
 
 	it('keeps an exiting Broadcast Graphic on program until its exit completes', () => {
@@ -476,7 +476,7 @@ describe('deriving a lifecycle phase from the authoritative effective start time
 		// time slightly ahead of the reader's own clock.
 		const taken = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0 + 40);
 
-		expect(broadcastGraphicPhaseProjection(taken, 'slate', at(T0))).toEqual({ phase: 'enter', elapsed: 0 });
+		expect(broadcastGraphicPhaseProjections(taken, 'slate', at(T0))).toEqual([{ phase: 'enter', elapsed: 0 }]);
 	});
 });
 
@@ -507,7 +507,7 @@ describe('the clock an output does not own', () => {
 		const taken = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 
 		expect(broadcastGraphicPlayoutState(taken, 'slate', at(T0 - 30_000))).toBe('on-air');
-		expect(broadcastGraphicPhaseProjection(taken, 'slate', at(T0 - 30_000))).toBeNull();
+		expect(broadcastGraphicPhaseProjections(taken, 'slate', at(T0 - 30_000))).toEqual([]);
 	});
 
 	it('projects nothing at all for a reader with no instant it trusts', () => {
@@ -520,7 +520,7 @@ describe('the clock an output does not own', () => {
 		let state = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 		state = out(state, 'slate', false, T0 + 300);
 
-		expect(broadcastGraphicPhaseProjection(state, 'slate')).toBeNull();
+		expect(broadcastGraphicPhaseProjections(state, 'slate')).toEqual([]);
 		expect(broadcastGraphicPlayoutState(state, 'slate')).toBe('off');
 		expect(onAirBroadcastGraphicIds(state, [graphic('slate')])).toEqual([]);
 	});
@@ -542,15 +542,15 @@ describe('reversing an interruption from the currently rendered state', () => {
 
 		// 300ms into a one-second entrance, so the reversal starts from 300ms of enter
 		// and unwinds it to zero over the next 300ms: the same recipe, played backwards.
-		expect(broadcastGraphicPhaseProjection(reversed, 'slate', at(T0 + 300)))
-			.toEqual({ phase: 'enter', elapsed: 300 });
-		expect(broadcastGraphicPhaseProjection(reversed, 'slate', at(T0 + 400)))
-			.toEqual({ phase: 'enter', elapsed: 200 });
+		expect(broadcastGraphicPhaseProjections(reversed, 'slate', at(T0 + 300)))
+			.toEqual([{ phase: 'enter', elapsed: 300 }]);
+		expect(broadcastGraphicPhaseProjections(reversed, 'slate', at(T0 + 400)))
+			.toEqual([{ phase: 'enter', elapsed: 200 }]);
 		expect(broadcastGraphicPlayoutState(reversed, 'slate', at(T0 + 400))).toBe('exiting');
 
 		// And it is off the moment the reversal lands, not a frame later.
 		expect(broadcastGraphicPlayoutState(reversed, 'slate', at(T0 + 600))).toBe('off');
-		expect(broadcastGraphicPhaseProjection(reversed, 'slate', at(T0 + 600))).toBeNull();
+		expect(broadcastGraphicPhaseProjections(reversed, 'slate', at(T0 + 600))).toEqual([]);
 	});
 
 	it('reverses an exit when Take interrupts it', () => {
@@ -560,11 +560,11 @@ describe('reversing an interruption from the currently rendered state', () => {
 
 		// 200ms into a half-second exit: the exit unwinds over 200ms and the graphic is
 		// back at its Graphic Resting State, on air, without playing an entrance.
-		expect(broadcastGraphicPhaseProjection(reversed, 'slate', at(T0 + 5200)))
-			.toEqual({ phase: 'exit', elapsed: 200 });
+		expect(broadcastGraphicPhaseProjections(reversed, 'slate', at(T0 + 5200)))
+			.toEqual([{ phase: 'exit', elapsed: 200 }]);
 		expect(broadcastGraphicPlayoutState(reversed, 'slate', at(T0 + 5300))).toBe('entering');
 		expect(broadcastGraphicPlayoutState(reversed, 'slate', at(T0 + 5400))).toBe('on-air');
-		expect(broadcastGraphicPhaseProjection(reversed, 'slate', at(T0 + 5400))).toBeNull();
+		expect(broadcastGraphicPhaseProjections(reversed, 'slate', at(T0 + 5400))).toEqual([]);
 	});
 
 	it('resumes the interrupted phase forwards when the operator changes their mind twice', () => {
@@ -573,11 +573,11 @@ describe('reversing an interruption from the currently rendered state', () => {
 		// 100ms into unwinding, so 300ms of the entrance is still rendered.
 		const resumed = take(reversing, 'slate', false, T0 + 500);
 
-		expect(broadcastGraphicPhaseProjection(resumed, 'slate', at(T0 + 500)))
-			.toEqual({ phase: 'enter', elapsed: 300 });
+		expect(broadcastGraphicPhaseProjections(resumed, 'slate', at(T0 + 500)))
+			.toEqual([{ phase: 'enter', elapsed: 300 }]);
 		// It runs on from there rather than restarting: 300ms rendered plus 200ms more.
-		expect(broadcastGraphicPhaseProjection(resumed, 'slate', at(T0 + 700)))
-			.toEqual({ phase: 'enter', elapsed: 500 });
+		expect(broadcastGraphicPhaseProjections(resumed, 'slate', at(T0 + 700)))
+			.toEqual([{ phase: 'enter', elapsed: 500 }]);
 		expect(broadcastGraphicPlayoutState(resumed, 'slate', at(T0 + 1200))).toBe('on-air');
 	});
 
@@ -586,8 +586,8 @@ describe('reversing an interruption from the currently rendered state', () => {
 		const outed = out(taken, 'slate', false, T0 + 5000);
 
 		expect(outed.playout.slate).toEqual({ onAir: false, effectiveStartedAt: T0 + 5000, cut: false });
-		expect(broadcastGraphicPhaseProjection(outed, 'slate', at(T0 + 5100)))
-			.toEqual({ phase: 'exit', elapsed: 100 });
+		expect(broadcastGraphicPhaseProjections(outed, 'slate', at(T0 + 5100)))
+			.toEqual([{ phase: 'exit', elapsed: 100 }]);
 	});
 
 	it('does not reverse a Cut phase, because a Cut phase was never in flight', () => {
@@ -595,8 +595,8 @@ describe('reversing an interruption from the currently rendered state', () => {
 		const outed = out(cut, 'slate', false, T0 + 100);
 
 		expect(outed.playout.slate!.reversalCompletesAt).toBeUndefined();
-		expect(broadcastGraphicPhaseProjection(outed, 'slate', at(T0 + 200)))
-			.toEqual({ phase: 'exit', elapsed: 100 });
+		expect(broadcastGraphicPhaseProjections(outed, 'slate', at(T0 + 200)))
+			.toEqual([{ phase: 'exit', elapsed: 100 }]);
 	});
 
 	it('lets Cut Out settle a reversal that is still unwinding', () => {
@@ -685,8 +685,8 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 2000))).toBe('updating');
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 2399))).toBe('updating');
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 2400))).toBe('on-air');
-		expect(broadcastGraphicPhaseProjection(state, 'slate', at(T0 + 2100)))
-			.toEqual({ phase: 'update', elapsed: 100 });
+		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 2100)))
+			.toEqual([{ phase: 'update', elapsed: 100 }]);
 	});
 
 	it('cross-transitions the old and the new rendering, and only during the update', () => {
@@ -766,28 +766,124 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		expect(broadcastGraphicInputsState(state, 'slate').acceptedRevision).toBe(3);
 	});
 
-	it('discards a pending visual update on exit while keeping its accepted values', () => {
-		// Exit drops the *whole* chain, running transition included, and that is a wider
-		// reading than CONTEXT.md:556 requires — it discards the *pending* update, so a
-		// transition already in flight could in principle finish underneath the exit
-		// recipe. The reason it does not is not a missing persisted field: keeping
-		// `updateStartedAt` across an Out costs nothing durable. It is that finishing it
-		// would need two phases projected for one graphic at the same instant — an update
-		// and an exit, composed — and both `broadcastGraphicPhaseProjection` and the
-		// compositor answer with exactly one phase per Broadcast Graphic. Widening that to a
-		// set of concurrent phases is the change, and it is the same change the on-screen
-		// half of interruption reversal needs, so both wait for whoever makes it. Tracked on
-		// #110, where the hard part is recorded: two reveals cannot compose in one
-		// `maskImage`, so concurrency is a representation question rather than a lift.
+	it('lets the transition still crossing finish beneath the exit, keeping its accepted values', () => {
+		// CONTEXT.md:556 discards the *pending* visual update, which leaves the transition
+		// already travelling free to finish underneath the exit recipe — and finishing it
+		// means an update phase and an exit phase are in play for one Broadcast Graphic at
+		// the same instant. That is what `broadcastGraphicPhaseProjections` answering with a
+		// set is for: the update keeps its own schedule and the exit runs over it, so the
+		// content the transition is halfway through crossing is not cut on its way out.
 		let state = settledOnAir('first');
 		state = edit(state, 'second', T0 + 2000);
 		state = accept(state, T0 + 2000);
 		state = out(state, 'slate', false, T0 + 2100);
 
-		expect(state.playout.slate!.updateStartedAt).toBeUndefined();
+		// The schedule is the one the acceptance wrote, untouched: the Out did not restart
+		// the transition, and did not move it.
+		expect(state.playout.slate!.updateStartedAt).toBe(T0 + 2000);
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 2200))).toBe('exiting');
+		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 2200))).toEqual([
+			{ phase: 'update', elapsed: 200 },
+			{ phase: 'exit', elapsed: 100 },
+		]);
+		expect(rendered(state, T0 + 2200)).toEqual({
+			current: { headline: 'second' },
+			outgoing: { headline: 'first' },
+		});
+
+		// The update completes on its own schedule while the exit carries on.
+		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 2450)))
+			.toEqual([{ phase: 'exit', elapsed: 350 }]);
+		expect(rendered(state, T0 + 2450)).toEqual({ current: { headline: 'second' } });
 		expect(acceptedGraphicInputValues(state, 'slate', [HEADLINE])).toEqual({ headline: 'second' });
-		expect(rendered(state, T0 + 2200)).toEqual({ current: { headline: 'second' } });
+	});
+
+	it('discards the rendering pending behind the transition it lets finish', () => {
+		// The half of CONTEXT.md:557 that survives the change. One transition is travelling
+		// and one rendering is queued behind it; exit keeps the first and drops the second,
+		// so program sees the crossing it was already showing complete and nothing new
+		// arrive on a graphic that is leaving.
+		let state = settledOnAir('first');
+		state = edit(state, 'second', T0 + 2000);
+		state = accept(state, T0 + 2000);
+		state = edit(state, 'third', T0 + 2100);
+		state = accept(state, T0 + 2100);
+		state = out(state, 'slate', false, T0 + 2200);
+
+		// The running transition is still 'first' to 'second', not retargeted to the values
+		// accepted behind it.
+		expect(rendered(state, T0 + 2300)).toEqual({
+			current: { headline: 'second' },
+			outgoing: { headline: 'first' },
+		});
+		// And nothing hands over to the pending rendering when it completes.
+		expect(rendered(state, T0 + 2500)).toEqual({ current: { headline: 'second' } });
+		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 2500)))
+			.toEqual([{ phase: 'exit', elapsed: 300 }]);
+		// Interrupting an update never rolls back what it accepted.
+		expect(acceptedGraphicInputValues(state, 'slate', [HEADLINE])).toEqual({ headline: 'third' });
+	});
+
+	it('discards an update that had not begun, because there is no transition to finish', () => {
+		// An acceptance during an entrance is deferred to the entrance's completion, so an
+		// Out before that completion interrupts nothing: there is no pair being crossed,
+		// and carrying the schedule would start a transition on a graphic already leaving.
+		let state = taken();
+		state = edit(state, 'second', T0 + 100);
+		state = accept(state, T0 + 100);
+		state = out(state, 'slate', false, T0 + 300);
+
+		expect(state.playout.slate!.updateStartedAt).toBeUndefined();
+		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 400)))
+			.toEqual([{ phase: 'enter', elapsed: 200 }]);
+		expect(rendered(state, T0 + 1200)).toEqual({ current: { headline: 'second' } });
+	});
+
+	it('carries nothing out of a Cut Out, because nothing renders an animation that was skipped', () => {
+		let state = settledOnAir('first');
+		state = edit(state, 'second', T0 + 2000);
+		state = accept(state, T0 + 2000);
+		state = out(state, 'slate', true, T0 + 2100);
+
+		expect(state.playout.slate!.updateStartedAt).toBeUndefined();
+		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 2100))).toEqual([]);
+		expect(rendered(state, T0 + 2100)).toEqual({ current: { headline: 'second' } });
+	});
+
+	it('settles both concurrent phases after a restart, without replaying either', () => {
+		let state = settledOnAir('first');
+		state = edit(state, 'second', T0 + 2000);
+		state = accept(state, T0 + 2000);
+		state = out(state, 'slate', false, T0 + 2100);
+
+		const recovered: BroadcastGraphicsLiveState = JSON.parse(JSON.stringify(state));
+		const hoursLater = T0 + (4 * 60 * 60 * 1000);
+
+		expect(broadcastGraphicPlayoutState(recovered, 'slate', at(hoursLater))).toBe('off');
+		expect(broadcastGraphicPhaseProjections(recovered, 'slate', at(hoursLater))).toEqual([]);
+		expect(onAirBroadcastGraphicIds(recovered, [graphic('slate')], at(hoursLater))).toEqual([]);
+	});
+
+	it('never carries a stale pending rendering into a later update', () => {
+		// The chain's fields outlive the chain — nothing clears them when a transition
+		// simply completes — so a later acceptance that schedules no pending rendering has
+		// to say so rather than leave the previous one standing. Without that, the next
+		// update would cross towards a rendering from the update before it.
+		let state = settledOnAir('first');
+		state = edit(state, 'second', T0 + 2000);
+		state = accept(state, T0 + 2000);
+		state = edit(state, 'third', T0 + 2100);
+		state = accept(state, T0 + 2100);
+
+		// Both transitions are long over before this one is accepted.
+		state = edit(state, 'fourth', T0 + 5000);
+		state = accept(state, T0 + 5000);
+
+		expect(rendered(state, T0 + 5200)).toEqual({
+			current: { headline: 'fourth' },
+			outgoing: { headline: 'third' },
+		});
+		expect(rendered(state, T0 + 5400)).toEqual({ current: { headline: 'fourth' } });
 	});
 
 	it('shows a Cut Update immediately, without an update phase', () => {
@@ -807,8 +903,8 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 
 		// The entrance carries on from where it was, on its original schedule.
 		expect(state.playout.slate!.effectiveStartedAt).toBe(T0);
-		expect(broadcastGraphicPhaseProjection(state, 'slate', at(T0 + 400)))
-			.toEqual({ phase: 'enter', elapsed: 400 });
+		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 400)))
+			.toEqual([{ phase: 'enter', elapsed: 400 }]);
 		// The new rendering is showing already, and nothing is left pending for it.
 		expect(rendered(state, T0 + 400)).toEqual({ current: { headline: 'second' } });
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 1100))).toBe('on-air');
@@ -902,7 +998,7 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		const hoursLater = T0 + (4 * 60 * 60 * 1000);
 
 		expect(broadcastGraphicPlayoutState(recovered, 'slate', at(hoursLater))).toBe('on-air');
-		expect(broadcastGraphicPhaseProjection(recovered, 'slate', at(hoursLater))).toBeNull();
+		expect(broadcastGraphicPhaseProjections(recovered, 'slate', at(hoursLater))).toEqual([]);
 		expect(rendered(recovered, hoursLater)).toEqual({ current: { headline: 'second' } });
 	});
 });
@@ -915,23 +1011,145 @@ describe('on-screen cycling on air', () => {
 	it('begins cycling when the entrance completes, and never stops the graphic being on air', () => {
 		const state = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 
-		expect(broadcastGraphicPhaseProjection(state, 'slate', atCycling(T0 + 500)))
-			.toEqual({ phase: 'enter', elapsed: 500 });
-		expect(broadcastGraphicPhaseProjection(state, 'slate', atCycling(T0 + 1600)))
-			.toEqual({ phase: 'on-screen', elapsed: 600 });
+		expect(broadcastGraphicPhaseProjections(state, 'slate', atCycling(T0 + 500)))
+			.toEqual([{ phase: 'enter', elapsed: 500 }]);
+		expect(broadcastGraphicPhaseProjections(state, 'slate', atCycling(T0 + 1600)))
+			.toEqual([{ phase: 'on-screen', elapsed: 600 }]);
 		expect(broadcastGraphicPlayoutState(state, 'slate', atCycling(T0 + 1600))).toBe('on-air');
 	});
 
 	it('begins cycling at once when the entrance was Cut', () => {
 		const state = take(createInitialBroadcastGraphicsLiveState(), 'slate', true, T0);
 
-		expect(broadcastGraphicPhaseProjection(state, 'slate', atCycling(T0 + 200)))
-			.toEqual({ phase: 'on-screen', elapsed: 200 });
+		expect(broadcastGraphicPhaseProjections(state, 'slate', atCycling(T0 + 200)))
+			.toEqual([{ phase: 'on-screen', elapsed: 200 }]);
 	});
 
 	it('projects nothing for a graphic that authored no on-screen recipe', () => {
 		const state = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 
-		expect(broadcastGraphicPhaseProjection(state, 'slate', at(T0 + 1600))).toBeNull();
+		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 1600))).toEqual([]);
+	});
+
+	/** An Out from a Broadcast Graphic whose author enabled on-screen cycling. */
+	function outCycling(state: BroadcastGraphicsLiveState, acceptedAt: number, cut = false) {
+		return applyBroadcastGraphicsCommand(
+			state,
+			{ type: 'Out', payload: { graphicId: 'slate', cut } },
+			{ inputs: [], durations: TIMING, onScreen: true, acceptedAt },
+		);
+	}
+
+	it('continues from the excursion that was rendered when exit interrupts cycling', () => {
+		// The snap this removes: a graphic caught mid-cycle used to have its exit start
+		// from the Graphic Resting State, so whatever excursion was on screen vanished in
+		// one frame. Cycling and the exit are now both in play, in the order they compose —
+		// the cycle moves the rendering and the exit moves the result — so the first frame
+		// of the exit is exactly the frame that was already there.
+		const taken = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
+		const state = outCycling(taken, T0 + 2500);
+
+		// 1500ms into cycling, which began when the one-second entrance settled.
+		expect(broadcastGraphicPhaseProjections(state, 'slate', atCycling(T0 + 2500))).toEqual([
+			{ phase: 'on-screen', elapsed: 1500 },
+			{ phase: 'exit', elapsed: 0 },
+		]);
+		expect(broadcastGraphicPhaseProjections(state, 'slate', atCycling(T0 + 2600))).toEqual([
+			{ phase: 'on-screen', elapsed: 1600 },
+			{ phase: 'exit', elapsed: 100 },
+		]);
+		expect(broadcastGraphicPlayoutState(state, 'slate', atCycling(T0 + 2600))).toBe('exiting');
+	});
+
+	it('stops projecting cycling when the exit it was running under completes', () => {
+		const taken = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
+		const state = outCycling(taken, T0 + 2500);
+
+		// The graphic left the frame when its exit completed, so there is nothing left for
+		// a cycle to be rendered onto — and a reader four hours late agrees, with nothing
+		// having cleared the origin it is reading.
+		expect(broadcastGraphicPhaseProjections(state, 'slate', atCycling(T0 + 3000))).toEqual([]);
+		expect(broadcastGraphicPhaseProjections(state, 'slate', atCycling(T0 + (4 * 60 * 60 * 1000))))
+			.toEqual([]);
+		expect(onAirBroadcastGraphicIds(state, [graphic('slate')], atCycling(T0 + 3000))).toEqual([]);
+	});
+
+	it('keeps cycling running when a Take reverses the exit it was running under', () => {
+		// Take during exit reverses smoothly from the currently rendered state, and the
+		// rendered state includes the excursion. Dropping the cycle's origin here would put
+		// that channel back at the Graphic Resting State in the same frame the enter/exit
+		// channel was made smooth.
+		const taken = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
+		const exiting = outCycling(taken, T0 + 2500);
+		const state = take(exiting, 'slate', false, T0 + 2600);
+
+		expect(broadcastGraphicPhaseProjections(state, 'slate', atCycling(T0 + 2600))).toEqual([
+			{ phase: 'on-screen', elapsed: 1600 },
+			{ phase: 'exit', elapsed: 100 },
+		]);
+		// And it runs on from the same origin once the reversal lands, rather than
+		// restarting the cycle from its beginning.
+		expect(broadcastGraphicPhaseProjections(state, 'slate', atCycling(T0 + 2800)))
+			.toEqual([{ phase: 'on-screen', elapsed: 1800 }]);
+	});
+
+	it('grows the durable record only for a graphic that was actually cycling', () => {
+		// The same discipline the reversal and update fields keep: an Out that interrupted
+		// nothing stores exactly what an Out has always stored. A graphic still entering
+		// has not begun cycling, and a graphic whose author enabled no on-screen recipe has
+		// nothing to cycle.
+		const taken = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
+
+		expect(Object.keys(outCycling(taken, T0 + 300).playout.slate!).toSorted())
+			.toEqual(['cut', 'effectiveStartedAt', 'onAir', 'reversalCompletesAt']);
+		expect(Object.keys(out(taken, 'slate', false, T0 + 2500).playout.slate!).toSorted())
+			.toEqual(['cut', 'effectiveStartedAt', 'onAir']);
+		expect(Object.keys(outCycling(taken, T0 + 2500).playout.slate!).toSorted())
+			.toEqual(['cut', 'cyclingStartedAt', 'effectiveStartedAt', 'onAir']);
+	});
+});
+
+describe('the bound on how many lifecycle phases are in play at once', () => {
+	it('projects at most one content phase and one enter/exit phase', () => {
+		// Two, never three, and the pairing is structural rather than incidental: an
+		// acceptance during an entrance is deferred past it and cycling begins only once
+		// the entrance settles, so no content phase overlaps an enter; an update interrupts
+		// cycling and cycling restarts after it, so the two content phases exclude each
+		// other. Exit is the only phase that overlaps anything, which is what lets the
+		// compositor commit to one enclosing element rather than an unbounded nest.
+		const declaration: GraphicInputDeclaration = {
+			key: 'headline',
+			label: 'Headline',
+			required: false,
+			updatePolicy: 'staged',
+			type: 'text',
+			default: '',
+			maxLength: 80,
+		};
+		const context = { inputs: [declaration], durations: TIMING, onScreen: true };
+		const apply = (
+			state: BroadcastGraphicsLiveState,
+			command: Parameters<typeof applyBroadcastGraphicsCommand>[1],
+			acceptedAt: number,
+		) => applyBroadcastGraphicsCommand(state, command, { ...context, acceptedAt });
+
+		let state = apply(createInitialBroadcastGraphicsLiveState(), { type: 'Take', payload: { graphicId: 'slate' } }, T0);
+		state = apply(state, { type: 'Set Input', payload: { graphicId: 'slate', inputKey: 'headline', value: 'next' } }, T0 + 2000);
+		state = apply(state, { type: 'Update Graphic', payload: { graphicId: 'slate', basedOnAcceptedRevision: 1 } }, T0 + 2000);
+		state = apply(state, { type: 'Out', payload: { graphicId: 'slate' } }, T0 + 2100);
+
+		// The whole lifecycle of that graphic, sampled every 50ms across every phase it can
+		// reach, on a Screen that authored all four.
+		for (let now = T0 - 500; now <= T0 + 4000; now += 50) {
+			const projected = broadcastGraphicPhaseProjections(state, 'slate', { now, durations: TIMING, onScreen: true });
+			expect(projected.length).toBeLessThanOrEqual(2);
+			expect(projected.filter(entry => entry.phase === 'update' || entry.phase === 'on-screen').length)
+				.toBeLessThanOrEqual(1);
+			expect(projected.filter(entry => entry.phase === 'enter' || entry.phase === 'exit').length)
+				.toBeLessThanOrEqual(1);
+			// The content phase composes innermost, so it is always stated first.
+			if (projected.length === 2)
+				expect(['update', 'on-screen']).toContain(projected[0]!.phase);
+		}
 	});
 });

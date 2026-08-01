@@ -23,7 +23,11 @@ import {
 	broadcastGraphicsResolveBindingsDue,
 	recoveredBroadcastGraphicsLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
-import { broadcastGraphicPhaseDurations, resolveGraphicInputBindings } from '~~/shared/modules/graphics';
+import {
+	broadcastGraphicHasPhaseAnimation,
+	broadcastGraphicPhaseDurations,
+	resolveGraphicInputBindings,
+} from '~~/shared/modules/graphics';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 import { randomCommandId } from '~~/shared/utils/uuid';
@@ -178,6 +182,10 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 			// graphic this module already had to find. Authored Screen configuration, which
 			// is exactly why the reducer is handed it rather than reaching for it.
 			durations: broadcastGraphicPhaseDurations(graphic),
+			// Whether this graphic cycles at all, which decides whether an Out has a cycling
+			// origin worth carrying out of the record it replaces. Authored Screen
+			// configuration again, and read here for the same reason the durations are.
+			onScreen: broadcastGraphicHasPhaseAnimation(graphic, 'on-screen'),
 			// The Graphic Channel this graphic runs in, and every other Broadcast Graphic
 			// the Screen places in it. A Take is the one command whose effect reaches past
 			// the graphic it names — it replaces whichever member the channel holds — so

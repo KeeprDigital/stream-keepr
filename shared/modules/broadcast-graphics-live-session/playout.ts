@@ -175,6 +175,26 @@ export interface BroadcastGraphicPlayout {
 	 * single instant and none of them has to work out the coalescing for itself.
 	 */
 	updateStartedAt?: number;
+	/**
+	 * When this Broadcast Graphic's on-screen cycling began, present only on an intent
+	 * that interrupted cycling already in progress.
+	 *
+	 * Cycling's origin is ordinarily derived rather than stored — it is the instant the
+	 * entrance settled, or the instant the last update completed — and this exists
+	 * because an Out is the one intent that destroys the instant it is derived from.
+	 * The record an exit writes says when the *exit* began, so a reader of it can no
+	 * longer tell where in its excursion a graphic caught mid-cycle was, and an exit
+	 * composed over a cycling recipe it cannot locate starts from the Graphic Resting
+	 * State — which is the snap this field removes.
+	 *
+	 * It keeps the property every other field here keeps. It is an origin rather than a
+	 * frozen excursion, so it is read forwards: a reader four hours late computes an
+	 * enormous elapsed time, and cycling neither accumulates nor drifts, so an
+	 * indefinite recipe is simply somewhere in a cycle and a finite one has long since
+	 * stopped at rest. Nothing validates or clears it, and nothing can resume a phase
+	 * from it, because it names no phase.
+	 */
+	cyclingStartedAt?: number;
 }
 
 /**
@@ -383,6 +403,18 @@ export interface BroadcastGraphicsReductionContext {
 	 * no composition in hand should get.
 	 */
 	durations?: BroadcastGraphicPhaseDurations;
+	/**
+	 * Whether the addressed Broadcast Graphic authored any on-screen Graphic Animation
+	 * Recipe.
+	 *
+	 * A flag rather than a duration, for the reason `BroadcastGraphicPhaseTiming` states:
+	 * an on-screen recipe has no phase length by design. Acceptance needs it for exactly
+	 * one decision — an Out has to carry cycling's origin out of the record it is about
+	 * to overwrite, and only a graphic that actually cycles has one worth keeping. A
+	 * caller that omits it says this graphic does not cycle, which leaves the durable
+	 * record at the shape it had before cycling existed.
+	 */
+	onScreen?: boolean;
 	/**
 	 * The Graphic Channel the addressed Broadcast Graphic belongs to, if it belongs
 	 * to one.
@@ -679,6 +711,17 @@ interface BroadcastGraphicUpdateFlight {
  * rendering pending behind it, and once nothing is left it returns null — so a chain
  * read long after it was written reports no update rather than an ancient one, with
  * nothing to detect and nothing to clear.
+ *
+ * ## Why an off-air graphic's chain never hands over
+ *
+ * Exit discards any pending visual update while leaving the transition already
+ * travelling to finish underneath it, and this is where the first half of that is
+ * enforced. It is enforced by refusing the hand-over rather than by erasing the
+ * pending rendering, because the two are the same value read from different ends: the
+ * rendering pending behind a transition *is* that transition's target, so erasing it
+ * would retarget the transition still in flight to the accepted set and cut the
+ * content it is halfway through crossing. Refusing to hand over discards exactly the
+ * transition that had not begun, which is exactly what "pending" names.
  */
 function rollUpdateChain(
 	playout: BroadcastGraphicPlayout | undefined,
@@ -705,9 +748,10 @@ function rollUpdateChain(
 	let from = inputs.updateFrom ?? {};
 	let pending = inputs.pendingUpdateFrom;
 
-	// At most one hand-over, because at most one rendering is ever pending.
+	// At most one hand-over, because at most one rendering is ever pending — and none at
+	// all once the graphic is leaving, which is how exit discards the pending rendering.
 	if (now >= startedAt + updateMs) {
-		if (pending === undefined)
+		if (pending === undefined || !playout.onAir)
 			return null;
 		startedAt += updateMs;
 		from = pending;
@@ -719,6 +763,26 @@ function rollUpdateChain(
 	return { startedAt, from, to: pending ?? inputs.accepted, pending: pending !== undefined };
 }
 
+/**
+ * The rendering a Broadcast Graphic holds once every transition it is going to run has
+ * run.
+ *
+ * The accepted set, except on a graphic that is leaving with a pending visual update
+ * discarded. There, the transition that finished underneath the exit was travelling
+ * towards the rendering the accepted values were queued *behind*, so falling back to
+ * the accepted set as it completed would be the discarded update happening after all —
+ * without even an animation to make it look deliberate. The accepted values are not
+ * lost by holding it: they are exactly what this graphic's next Take enters with.
+ */
+function settledRendering(
+	playout: BroadcastGraphicPlayout,
+	inputs: BroadcastGraphicInputsState,
+): GraphicInputValues {
+	return !playout.onAir && playout.updateStartedAt !== undefined && inputs.pendingUpdateFrom !== undefined
+		? inputs.pendingUpdateFrom
+		: inputs.accepted;
+}
+
 /** When the whole update chain is scheduled to have finished, or null when there is none. */
 function updateChainEndsAt(
 	playout: BroadcastGraphicPlayout,
@@ -727,7 +791,10 @@ function updateChainEndsAt(
 ): number | null {
 	if (playout.updateStartedAt === undefined || updateMs <= 0)
 		return null;
-	return playout.updateStartedAt + (updateMs * (inputs.pendingUpdateFrom === undefined ? 1 : 2));
+	// One transition rather than two once the graphic is leaving, for the same reason
+	// `rollUpdateChain` stops handing over: the pending one is what exit discarded.
+	const pending = inputs.pendingUpdateFrom !== undefined && playout.onAir;
+	return playout.updateStartedAt + (updateMs * (pending ? 2 : 1));
 }
 
 /**
@@ -807,10 +874,18 @@ function nextPlayout(
 	if (!flight || flight.elapsed <= 0)
 		return settled;
 
-	if (flight.phase === (intent.onAir ? 'enter' : 'exit'))
-		return { ...settled, effectiveStartedAt: acceptedAt - flight.elapsed };
+	// An intent that takes over a phase in flight takes over a graphic that never left
+	// program, so whatever its on-screen recipe was doing it is still doing. Dropping
+	// the origin here would put the cycling channel back at the Graphic Resting State
+	// at the very instant the enter/exit channel was made smooth.
+	const cycling = current.cyclingStartedAt === undefined
+		? {}
+		: { cyclingStartedAt: current.cyclingStartedAt };
 
-	return { ...settled, effectiveStartedAt: acceptedAt, reversalCompletesAt: acceptedAt + flight.elapsed };
+	if (flight.phase === (intent.onAir ? 'enter' : 'exit'))
+		return { ...settled, ...cycling, effectiveStartedAt: acceptedAt - flight.elapsed };
+
+	return { ...settled, ...cycling, effectiveStartedAt: acceptedAt, reversalCompletesAt: acceptedAt + flight.elapsed };
 }
 
 /**
@@ -826,6 +901,7 @@ function withoutUpdatePhase(playout: BroadcastGraphicPlayout): BroadcastGraphicP
 		effectiveStartedAt: playout.effectiveStartedAt,
 		cut: playout.cut,
 		...(playout.reversalCompletesAt === undefined ? {} : { reversalCompletesAt: playout.reversalCompletesAt }),
+		...(playout.cyclingStartedAt === undefined ? {} : { cyclingStartedAt: playout.cyclingStartedAt }),
 	};
 }
 
@@ -1122,6 +1198,73 @@ function reduceTake(
 }
 
 /**
+ * The phases an exit takes over from the intent it replaced, and the chain those
+ * phases are read from.
+ *
+ * Exit interrupts an active enter, update, or on-screen Graphic Animation Recipe and
+ * continues smoothly from the currently rendered state. The enter case is the
+ * reversal `nextPlayout` already writes; the other two are here, and they are carried
+ * rather than reversed because neither is travelling towards the state the exit is
+ * leaving from — an update crosses a pair of renderings and a cycling excursion
+ * returns to rest on its own, so both simply keep going underneath the exit.
+ *
+ * What is carried is decided once, here, for the same reason every other schedule is:
+ * whether the update had actually begun and where cycling had reached are questions
+ * about the authoritative order, and an output answering either for itself would
+ * answer it against its own clock.
+ *
+ * Only an exit that is actually running carries anything. A Cut Out reaches its
+ * target immediately and a cancelled waiting Take never reached program, so in both
+ * there is no exit for a phase to run underneath — the graphic is simply gone, and a
+ * carried schedule would be a record of an animation nothing renders.
+ */
+function exitCarryingInterruptedPhases(
+	exit: BroadcastGraphicPlayout,
+	current: BroadcastGraphicPlayout,
+	inputs: NormalizedBroadcastGraphicInputsState,
+	context: BroadcastGraphicsReductionContext,
+): { playout: BroadcastGraphicPlayout; inputs: NormalizedBroadcastGraphicInputsState | null } {
+	const { acceptedAt, durations } = context;
+	if (!current.onAir || !enterExitFlight(exit, { now: acceptedAt, durations }))
+		return { playout: exit, inputs: null };
+
+	let playout = exit;
+	let carried: NormalizedBroadcastGraphicInputsState | null = null;
+
+	// The transition in flight, normalised to itself: an acceptance may already have
+	// handed over once, so the chain is rewritten as the one transition that is actually
+	// travelling. Its target stays whatever it was travelling towards — the accepted set
+	// when nothing was pending, and the pending rendering when something was, which is
+	// the rendering that stays on program while the graphic leaves.
+	const flight = rollUpdateChain(
+		current,
+		inputs,
+		durationOf(durations, 'update'),
+		acceptedAt,
+		durationOf(durations, 'enter'),
+	);
+	if (flight && acceptedAt >= flight.startedAt) {
+		const { pendingUpdateFrom: _discarded, ...rest } = inputs;
+		playout = { ...playout, updateStartedAt: flight.startedAt };
+		carried = {
+			...rest,
+			updateFrom: flight.from,
+			...(flight.pending ? { pendingUpdateFrom: flight.to } : {}),
+		};
+	}
+
+	// Where cycling had reached, kept as the origin it was measured from rather than as
+	// the excursion it had reached, so a reader still projects it forwards.
+	if (context.onScreen === true) {
+		const from = cyclesFrom(current, inputs, durations);
+		if (acceptedAt >= from)
+			playout = { ...playout, cyclingStartedAt: from };
+	}
+
+	return { playout, inputs: carried };
+}
+
+/**
  * Out: state that this Broadcast Graphic is no longer the operator's desired on-air
  * intent.
  *
@@ -1144,16 +1287,29 @@ function reduceOut(
 ): BroadcastGraphicsLiveState {
 	const { acceptedAt, channel } = context;
 	const current = state.playout[payload.graphicId];
-	const next = channelHoldsWaiting(state.playout, payload.graphicId, channel, acceptedAt)
+	const started = channelHoldsWaiting(state.playout, payload.graphicId, channel, acceptedAt)
 		? cutOff(acceptedAt)
 		: nextPlayout(current, { onAir: false, cut: payload.cut === true }, acceptedAt, context.durations);
 
-	if (next === current)
+	if (started === current)
 		return state;
 
-	let playout = { ...state.playout, [payload.graphicId]: next };
+	const carried = current
+		? exitCarryingInterruptedPhases(
+				started,
+				current,
+				broadcastGraphicInputsState(state, payload.graphicId),
+				context,
+			)
+		: { playout: started, inputs: null };
+	const next = carried.playout;
+	const withCarriedInputs = carried.inputs
+		? withInputs(state, payload.graphicId, carried.inputs)
+		: state;
+
+	let playout = { ...withCarriedInputs.playout, [payload.graphicId]: next };
 	if (channel?.handoff !== 'out-then-in')
-		return { ...state, playout };
+		return { ...withCarriedInputs, playout };
 
 	// Out on the graphic a channel member is being held behind moves that member's enter
 	// with it. Out then in begins the incoming enter at the outgoing exit's authoritative
@@ -1177,7 +1333,7 @@ function reduceOut(
 		};
 	}
 
-	return { ...state, playout };
+	return { ...withCarriedInputs, playout };
 }
 
 /**
@@ -1269,9 +1425,15 @@ function reduceUpdateGraphic(
 				pendingUpdateFrom: undefined,
 			};
 
+	// Rebuilt without the previous chain's pending rendering rather than spread over it.
+	// Nothing clears these fields when a transition merely completes, so a spread would
+	// leave a rendering from an earlier update standing behind this one — and the chain
+	// would hand over to content nobody accepted.
+	const { pendingUpdateFrom: _spent, ...withoutPending } = inputs;
+
 	return {
 		...withInputs(state, payload.graphicId, {
-			...inputs,
+			...withoutPending,
 			accepted,
 			acceptedRevision,
 			updateFrom: scheduled.updateFrom,
@@ -1721,21 +1883,70 @@ export function broadcastGraphicPlayoutState(
 	return update && timing.now >= update.startedAt ? 'updating' : 'on-air';
 }
 
+/** One lifecycle phase a Broadcast Graphic is in, and how long it has been there. */
+export interface BroadcastGraphicPhaseProjection {
+	phase: GraphicAnimationPhase;
+	/** Milliseconds since this phase's authoritative effective start time. */
+	elapsed: number;
+}
+
 /**
- * The lifecycle phase and elapsed time one Broadcast Graphic's Screen Output
- * should render, or null while it is settled at its Graphic Resting State or off.
+ * When this Broadcast Graphic's on-screen cycling began, for a graphic that has
+ * reached it.
+ *
+ * Cycling starts once the entrance is settled, and restarts from its beginning after
+ * an update — which is what taking the later of the two says. A graphic that carried
+ * its cycling origin across an Out uses that instead, because its own settle instant
+ * is the completion of the exit it is now running rather than the entrance cycling
+ * actually began after.
+ */
+function cyclesFrom(
+	playout: BroadcastGraphicPlayout,
+	inputs: BroadcastGraphicInputsState,
+	durations: BroadcastGraphicPhaseDurations | undefined,
+): number {
+	return Math.max(
+		playout.cyclingStartedAt ?? phaseSettlesAt(playout, durations),
+		updateChainEndsAt(playout, inputs, durationOf(durations, 'update')) ?? Number.NEGATIVE_INFINITY,
+	);
+}
+
+/**
+ * The lifecycle phases and elapsed times one Broadcast Graphic's Screen Output should
+ * render, in the order they compose: innermost first.
  *
  * This is the seam a Screen Output and the Program monitor project animation
- * through: one phase and one elapsed time, both derived, so a late-loading or
- * reconnected output catches up to the current authoritative phase instead of
- * replaying it from the beginning.
+ * through — every phase derived, so a late-loading or reconnected output catches up
+ * to the current authoritative phase instead of replaying it from the beginning.
  *
- * On-screen cycling is projected here too, and it is the one phase whose elapsed
- * time grows without bound: it begins when the entrance completes — or when the last
- * update completes, because an update interrupts cycling and cycling then restarts
- * from its beginning — and never gates the Graphic Playout State.
+ * ## Why a set rather than one phase
+ *
+ * An interruption has to continue from the state that was actually rendered, and for
+ * two of the three phases exit can interrupt, the rendered state is not a position on
+ * the enter/exit axis at all. An update is a cross-transition between a pair of
+ * renderings; on-screen cycling is an excursion away from the Graphic Resting State.
+ * Answering with one phase forces a choice between them, and every choice snaps: the
+ * exit either discards the transition still travelling or starts from a resting state
+ * the graphic is not at.
+ *
+ * So at most two phases are ever in play, and the pairing is not arbitrary. The first
+ * is what moves the *rendering* — an update crossing its pair, or a cycling excursion
+ * — and the second is what moves the *result*, the enter/exit axis the graphic's
+ * lifecycle actually travels. They compose in that order, which is why the order is
+ * part of the answer rather than incidental to it: a caller nests the second around
+ * the first.
+ *
+ * The pairing is also why the set is bounded at two rather than merely usually small.
+ * An update accepted during an entrance is deferred past it and cycling begins only
+ * once the entrance settles, so no content phase ever overlaps an enter; an update
+ * interrupts cycling and cycling restarts after it, so the two content phases exclude
+ * each other. Exit is the only phase that overlaps anything.
+ *
+ * An empty answer is a Broadcast Graphic settled at its Graphic Resting State, off, or
+ * held waiting by its Graphic Channel — the three cases that compose nothing and
+ * animate nothing.
  */
-export function broadcastGraphicPhaseProjection(
+export function broadcastGraphicPhaseProjections(
 	state: BroadcastGraphicsLiveState,
 	graphicId: string,
 	/**
@@ -1745,37 +1956,45 @@ export function broadcastGraphicPhaseProjection(
 	 * one thing it must not do.
 	 */
 	timing?: BroadcastGraphicPhaseTiming,
-): { phase: GraphicAnimationPhase; elapsed: number } | null {
+): BroadcastGraphicPhaseProjection[] {
 	const playout = state.playout[graphicId];
 	if (!playout || !timing)
-		return null;
+		return [];
 
 	// A Broadcast Graphic its Graphic Channel is holding has not entered, so there is no
 	// phase to project and nothing composes it into the frame to project one onto.
 	if (channelHoldsWaiting(state.playout, graphicId, timing.channel, timing.now))
-		return null;
+		return [];
 
 	const flight = enterExitFlight(playout, timing);
-	if (flight)
-		return flight;
+	// Off and settled: the graphic left the frame when its exit completed, so there is
+	// nothing left for a content phase to be rendered onto.
+	if (!playout.onAir && !flight)
+		return [];
 
-	if (!playout.onAir)
-		return null;
-
+	const projections: BroadcastGraphicPhaseProjection[] = [];
 	const inputs = broadcastGraphicInputsState(state, graphicId);
-	const updateMs = durationOf(timing.durations, 'update');
-	const update = rollUpdateChain(playout, inputs, updateMs, timing.now, durationOf(timing.durations, 'enter'));
-	if (update && timing.now >= update.startedAt)
-		return { phase: 'update', elapsed: timing.now - update.startedAt };
-
-	if (!timing.onScreen)
-		return null;
-
-	const cyclesFrom = Math.max(
-		phaseSettlesAt(playout, timing.durations),
-		updateChainEndsAt(playout, inputs, updateMs) ?? Number.NEGATIVE_INFINITY,
+	const update = rollUpdateChain(
+		playout,
+		inputs,
+		durationOf(timing.durations, 'update'),
+		timing.now,
+		durationOf(timing.durations, 'enter'),
 	);
-	return timing.now >= cyclesFrom ? { phase: 'on-screen', elapsed: timing.now - cyclesFrom } : null;
+
+	if (update && timing.now >= update.startedAt) {
+		projections.push({ phase: 'update', elapsed: timing.now - update.startedAt });
+	}
+	else if (timing.onScreen) {
+		const from = cyclesFrom(playout, inputs, timing.durations);
+		if (timing.now >= from)
+			projections.push({ phase: 'on-screen', elapsed: timing.now - from });
+	}
+
+	if (flight)
+		projections.push(flight);
+
+	return projections;
 }
 
 /**
@@ -1800,12 +2019,18 @@ export function broadcastGraphicRenderedInputs(
 	timing?: BroadcastGraphicPhaseTiming,
 ): { current: GraphicInputValues; outgoing?: GraphicInputValues } {
 	const inputs = broadcastGraphicInputsState(state, graphicId);
-	const settled = { current: resolveGraphicInputValues(inputs.accepted, declarations) };
+	const playout = state.playout[graphicId];
+	const settled = {
+		current: resolveGraphicInputValues(
+			playout ? settledRendering(playout, inputs) : inputs.accepted,
+			declarations,
+		),
+	};
 	if (!timing)
 		return settled;
 
 	const update = rollUpdateChain(
-		state.playout[graphicId],
+		playout,
 		inputs,
 		durationOf(timing.durations, 'update'),
 		timing.now,

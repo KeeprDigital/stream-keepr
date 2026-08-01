@@ -751,9 +751,9 @@ describe('the authoritative clock a Screen Output projects on', () => {
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 		const projection = store.animationProjection(SCREEN_ID, [graphic('slate', FADE_IN)]);
 
-		expect(projection.slate?.phase).toBe('enter');
-		expect(projection.slate?.elapsed).toBeGreaterThanOrEqual(400);
-		expect(projection.slate?.elapsed).toBeLessThan(1000);
+		expect(projection.slate?.[0]?.phase).toBe('enter');
+		expect(projection.slate?.[0]?.elapsed).toBeGreaterThanOrEqual(400);
+		expect(projection.slate?.[0]?.elapsed).toBeLessThan(1000);
 	});
 
 	it('keeps an Out Broadcast Graphic on program for exactly its exit, on that same clock', async () => {

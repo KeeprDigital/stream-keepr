@@ -6,6 +6,7 @@ import type {
 	GameWinsGraphicItemConfig,
 	GraphicAnchorPoint,
 	GraphicAnimationPhase,
+	GraphicContainerAnimation,
 	GraphicGroupChildConfig,
 	GraphicGroupItemConfig,
 	GraphicInputDeclaration,
@@ -168,12 +169,19 @@ export interface GraphicsCompositionRenderModelInput {
 	 */
 	visibleGraphicIds?: readonly string[];
 	/**
-	 * Which lifecycle phase each Broadcast Graphic is in, and how long it has been
-	 * there. A Broadcast Graphic absent from this map — or an omitted map — renders
-	 * at its Graphic Resting State, which is what an unanimated Screen, a settled
-	 * on-air graphic, and a recovered session all resolve to.
+	 * Which lifecycle phases each Broadcast Graphic is in, and how long it has been in
+	 * each, in the order they compose: innermost first. A Broadcast Graphic absent from
+	 * this map — or an omitted map, or an empty list — renders at its Graphic Resting
+	 * State, which is what an unanimated Screen, a settled on-air graphic, and a
+	 * recovered session all resolve to.
+	 *
+	 * A list rather than one phase because a Broadcast Graphic may be in more than one
+	 * lifecycle phase at one instant: an exit interrupting an update or on-screen
+	 * cycling has to continue from the state that was actually rendered, so the
+	 * interrupted phase and the exit are both in play and this model composes them
+	 * rather than choosing between them.
 	 */
-	animation?: Readonly<Record<string, GraphicsAnimationProjection>>;
+	animation?: Readonly<Record<string, readonly GraphicsAnimationProjection[]>>;
 	/**
 	 * The accepted on-air Graphic Input values a Graphic Text Template renders,
 	 * keyed by Broadcast Graphic id.
@@ -445,6 +453,16 @@ export interface GraphicItemRenderDescriptor {
 		outgoing: GraphicItemRenderDescriptor;
 		incoming: GraphicItemRenderDescriptor;
 	};
+	/**
+	 * This Graphic Item, drawn inside this descriptor's box.
+	 *
+	 * Present only when concurrent lifecycle phases each contribute a reveal: CSS allows
+	 * one mask per element, so the second wipe needs an element of its own. When it is
+	 * present this descriptor paints nothing — it is the item's box carrying one wipe,
+	 * and the enclosed descriptor fills it with everything else, Shape Geometry clipping
+	 * included.
+	 */
+	enclosed?: GraphicItemRenderDescriptor;
 }
 
 /**
@@ -491,6 +509,21 @@ export interface BroadcastGraphicRenderDescriptor {
 	items: GraphicItemRenderDescriptor[];
 	/** Present only while an update phase has an old rendering still on screen. */
 	outgoing?: BroadcastGraphicOutgoingRenderDescriptor;
+	/**
+	 * The element every rendering of this Broadcast Graphic sits inside, present only
+	 * when one element cannot carry the whole of its composed motion.
+	 *
+	 * Two things put it there, and both are concurrency. A whole-graphic update draws
+	 * two frames, and a phase running over that update — an exit — moves both of them
+	 * together: applied to each frame separately it would composite differently, because
+	 * two half-opaque copies of one graphic are not the same picture as one half-opaque
+	 * copy of the pair. And a second wipe needs a second element, because CSS allows one
+	 * mask per element.
+	 *
+	 * When it is absent, `style` is the whole of the graphic's motion, which is what a
+	 * Broadcast Graphic in one lifecycle phase always resolves to.
+	 */
+	enclosingStyle?: CSSProperties;
 }
 
 export type GraphicsSafeAreaGuideId = 'action-safe' | 'title-safe';
@@ -712,6 +745,19 @@ function revealMask(values: GraphicAnimationOwnerValues): string | undefined {
 }
 
 /**
+ * Every wipe one owner's concurrent lifecycle phases ask for, in the order they were
+ * projected.
+ *
+ * More than one is the case CSS cannot express on a single element: `mask-image`
+ * accepts a list, but intersecting the layers needs `mask-composite`, which is not
+ * uniformly available to the browsers these outputs are captured in. So the answer is
+ * a list and the caller nests — see `enclosingMotionStyle`.
+ */
+function revealMasks(motion: readonly GraphicAnimationOwnerValues[]): string[] {
+	return motion.map(revealMask).filter((mask): mask is string => mask !== undefined);
+}
+
+/**
  * One owner's sampled motion, as the smallest set of style properties that
  * expresses it.
  *
@@ -723,23 +769,63 @@ function revealMask(values: GraphicAnimationOwnerValues): string | undefined {
  *
  * Nothing is emitted for an owner at its Graphic Resting State, so an unanimated
  * composition produces exactly the styles it produced before animation existed.
+ *
+ * ## Composing concurrent lifecycle phases
+ *
+ * A Broadcast Graphic may be in more than one lifecycle phase at one instant, so this
+ * takes the phases' projections innermost-first and composes them rather than
+ * selecting one. Each channel composes the way the channel itself means:
+ *
+ * - **Fades multiply.** `opacity` is one number, and an element at `a` inside a
+ *   parent at `b` contributes `a * b` — so multiplying here is the same arithmetic
+ *   nesting would produce, which is what the glossary already says whole-graphic and
+ *   item fades do.
+ * - **Slides add.** Both are canvas-space offsets applied outside the rotation, so
+ *   one `translate` of their sum is exactly the two applied in either order.
+ * - **Scales nest.** Each is written as its own `translate(shift) scale(s)` pair
+ *   rather than folded into a single factor, because two scales about *different*
+ *   Graphic Animation Origins are a scale plus a translation and degenerate when the
+ *   factors cancel. Written in reverse order, because a CSS transform list applies
+ *   right to left: the phase that moves the result has to be written before the phase
+ *   that moves the rendering, and the outer scale then scales the inner shift exactly
+ *   as nesting would.
+ * - **Reveals cannot.** One element carries one mask, so only the first is emitted
+ *   here and the rest are the caller's to nest.
+ *
+ * Every one of those is still `opacity`, `transform`, and `mask-image` — the three
+ * properties the Key Output's alpha matte survives, because each scales or moves alpha
+ * without painting anything. Composition adds no fourth.
  */
 function motionStyle(
-	values: GraphicAnimationOwnerValues,
+	motion: readonly GraphicAnimationOwnerValues[],
 	size: { width: number; height: number },
 	rotation: number,
 	anchor: GraphicAnchorPoint | undefined,
 ): CSSProperties {
 	const parts: string[] = [];
-	const translate = values.translate;
+	let translateX = 0;
+	let translateY = 0;
+	let opacity: number | undefined;
 
-	if (translate && (translate.x !== 0 || translate.y !== 0))
-		parts.push(`translate(${motionValue(translate.x)}px, ${motionValue(translate.y)}px)`);
+	for (const values of motion) {
+		if (values.translate) {
+			translateX += values.translate.x;
+			translateY += values.translate.y;
+		}
+		if (values.opacity !== undefined)
+			opacity = (opacity ?? 1) * values.opacity;
+	}
+
+	if (translateX !== 0 || translateY !== 0)
+		parts.push(`translate(${motionValue(translateX)}px, ${motionValue(translateY)}px)`);
 
 	if (rotation !== 0)
 		parts.push(`rotate(${rotation}deg)`);
 
-	if (values.scale !== undefined) {
+	for (let index = motion.length - 1; index >= 0; index -= 1) {
+		const values = motion[index]!;
+		if (values.scale === undefined)
+			continue;
 		const scale = values.scale;
 		const origin = values.scaleOrigin ?? resolveGraphicAnimationOrigin(undefined);
 		const anchorPoint = resolveGraphicAnchorPoint(anchor);
@@ -750,16 +836,51 @@ function motionStyle(
 		parts.push(`scale(${motionValue(scale)})`);
 	}
 
-	const mask = revealMask(values);
+	const mask = revealMasks(motion)[0];
 
 	return {
 		...(parts.length === 0 ? {} : { transform: parts.join(' '), transformOrigin: transformOrigin(anchor) }),
-		...(values.opacity === undefined ? {} : { opacity: motionValue(values.opacity) }),
+		...(opacity === undefined ? {} : { opacity: motionValue(opacity) }),
 		...(mask === undefined ? {} : { maskImage: mask }),
 	};
 }
 
-const RESTING: GraphicAnimationOwnerValues = {};
+/**
+ * What the element enclosing this owner has to carry, or nothing when one element is
+ * enough.
+ *
+ * Two things spill out of a single element, and both are concurrency. Motion that
+ * belongs to *every* rendering an owner draws — the exit running over an update's
+ * pair — cannot sit on either rendering, because opacity applied to each half
+ * separately composites differently from opacity applied to the pair. And a second
+ * reveal cannot sit anywhere at all, because CSS allows one mask per element.
+ *
+ * A mask rather than a second `clip-path`, for the reason the single-phase reveal is
+ * already a mask: a Graphic Group spends its clip on Shape Geometry clipping, and CSS
+ * allows one clip path per element. Nesting masks intersects them by multiplying
+ * alpha, which keeps the Key Output's matte exactly as a single mask does — nothing
+ * new is painted, so nothing new can be the wrong colour.
+ */
+function enclosingMotionStyle(
+	enclosing: readonly GraphicAnimationOwnerValues[],
+	enclosed: readonly GraphicAnimationOwnerValues[],
+	size: { width: number; height: number },
+	anchor: GraphicAnchorPoint | undefined,
+): CSSProperties | undefined {
+	// The Graphic Rotation is authored positioning rather than animation, and the
+	// enclosed element already applies it, so the enclosure never repeats it.
+	const style = motionStyle(enclosing, size, 0, anchor);
+	// The second wipe, and only the second: a third would need a third element, and is
+	// unreachable while at most two lifecycle phases are ever in play at one instant.
+	// `broadcastGraphicPhaseProjections` is where that bound is stated and tested.
+	const overflowing = revealMasks(enclosed)[1];
+	if (overflowing !== undefined)
+		style.maskImage = overflowing;
+
+	return Object.keys(style).length === 0 ? undefined : style;
+}
+
+const RESTING: readonly GraphicAnimationOwnerValues[] = [];
 
 /**
  * How many whole lines of text fit inside authored bounds. An `ellipsis` or
@@ -842,7 +963,7 @@ const GROUP_JUSTIFICATION: Record<GraphicGroupItemConfig['justify'], string> = {
 function canvasPlacement(
 	item: GraphicItemConfig,
 	offset: { x: number; y: number },
-	motion: GraphicAnimationOwnerValues,
+	motion: readonly GraphicAnimationOwnerValues[],
 ): CSSProperties {
 	return {
 		...rectStyle({ ...item, x: item.x + offset.x, y: item.y + offset.y }),
@@ -860,7 +981,7 @@ function canvasPlacement(
 function stackedPlacement(
 	group: GraphicGroupItemConfig,
 	child: GraphicGroupChildConfig,
-	motion: GraphicAnimationOwnerValues,
+	motion: readonly GraphicAnimationOwnerValues[],
 ): CSSProperties {
 	const isRow = group.arrangement === 'row';
 	const mainExtent = isRow ? child.width : child.height;
@@ -1339,7 +1460,7 @@ function crossTransitionBox(placement: CSSProperties): CSSProperties {
 
 /** Where one half of a cross-transition sits: filling the shared box, under its own motion. */
 function crossTransitionHalf(
-	motion: GraphicAnimationOwnerValues,
+	motion: readonly GraphicAnimationOwnerValues[],
 	size: { width: number; height: number },
 	rotation: number,
 	anchor: GraphicAnchorPoint | undefined,
@@ -1349,6 +1470,45 @@ function crossTransitionHalf(
 		inset: '0',
 		boxSizing: 'border-box',
 		...motionStyle(motion, size, rotation, anchor),
+	};
+}
+
+/**
+ * One Graphic Item, wrapped in an enclosing element when its composed motion asks for
+ * more masking than one element can carry.
+ *
+ * Two concurrent lifecycle phases may each contribute a reveal — an on-screen wipe
+ * still cycling while an exit wipe runs over it — and CSS allows one `mask-image` per
+ * element. The second wipe therefore gets an element of its own: the enclosure takes
+ * the item's box so the gradient still resolves across the bounds the reveal was
+ * authored across, and the item fills that box carrying everything else.
+ *
+ * It is a mask on a second element rather than a `clip-path`, for the same reason the
+ * first wipe is a mask: a Graphic Group already spends its clip on Shape Geometry
+ * clipping, and that clipping stays exactly where it was — on the item, inside the
+ * enclosure. Nesting masks multiplies alpha, so the Key Output's matte accumulates
+ * exactly as it does under one mask, and nothing new is painted.
+ *
+ * The wrapper appears only when it is needed. One phase, or two phases where at most
+ * one wipes, produce precisely the descriptor they produced before concurrency existed.
+ */
+function enclosedItemDescriptor(
+	motion: readonly GraphicAnimationOwnerValues[],
+	owner: GraphicItemConfig | GraphicGroupChildConfig,
+	rotation: number,
+	placementOf: (motion: readonly GraphicAnimationOwnerValues[]) => CSSProperties,
+	paint: (placement: CSSProperties) => GraphicItemRenderDescriptor,
+): GraphicItemRenderDescriptor {
+	const enclosingStyle = enclosingMotionStyle(RESTING, motion, owner, owner.anchor);
+	if (!enclosingStyle)
+		return paint(placementOf(motion));
+
+	return {
+		id: owner.id,
+		label: owner.label,
+		kind: owner.type,
+		style: { ...crossTransitionBox(placementOf(RESTING)), ...enclosingStyle },
+		enclosed: paint(crossTransitionHalf(motion, owner, rotation, owner.anchor)),
 	};
 }
 
@@ -1368,14 +1528,28 @@ function itemDescriptor(
 	inputs: GraphicItemContentContext,
 	context: GraphicsItemAnimationContext,
 ): GraphicItemRenderDescriptor {
-	const motion = context.motionOf(item, context.staggerOffset, context.parent);
-	const placement = canvasPlacement(item, { x: 0, y: 0 }, motion);
+	const motion = context.motionOf(item, context.staggerOffsets, context.parent);
+	const rotation = item.rotation ?? 0;
 
-	if (!context.crossing?.(item.id))
-		return paintedItemDescriptor(output, graphicId, item, resolveContentUrl, inputs, context, placement);
+	if (!context.crossing?.(item.id)) {
+		return enclosedItemDescriptor(
+			motion,
+			item,
+			rotation,
+			values => canvasPlacement(item, { x: 0, y: 0 }, values),
+			placement => paintedItemDescriptor(output, graphicId, item, resolveContentUrl, inputs, context, placement),
+		);
+	}
 
-	const half = (values: GraphicAnimationOwnerValues) =>
-		crossTransitionHalf(values, item, item.rotation ?? 0, item.anchor);
+	// The pair carries the update; whatever else is in play moves the pair, so it goes on
+	// the box both renderings sit inside rather than on either of them. The box takes no
+	// rotation: the Graphic Rotation is authored positioning and each half applies it.
+	const placement = {
+		...crossTransitionBox(canvasPlacement(item, { x: 0, y: 0 }, RESTING)),
+		...motionStyle(enclosingMotion(context.phases, motion), item, 0, item.anchor),
+	};
+	const half = (values: readonly GraphicAnimationOwnerValues[]) =>
+		crossTransitionHalf(crossingMotion(context.phases, values), item, rotation, item.anchor);
 
 	/**
 	 * The context each half hands to its own children.
@@ -1395,8 +1569,8 @@ function itemDescriptor(
 	 * arriving rendering's schedule.
 	 */
 	const halfContext = (motionOf: GraphicsItemAnimationContext['motionOf']): GraphicsItemAnimationContext => ({
-		phase: context.phase,
-		staggerOffset: context.staggerOffset,
+		phases: context.phases,
+		staggerOffsets: context.staggerOffsets,
 		parent: context.parent,
 		motionOf,
 	});
@@ -1405,7 +1579,7 @@ function itemDescriptor(
 		id: item.id,
 		label: item.label,
 		kind: item.type,
-		style: crossTransitionBox(placement),
+		style: placement,
 		crossTransition: {
 			outgoing: paintedItemDescriptor(
 				output,
@@ -1414,7 +1588,7 @@ function itemDescriptor(
 				resolveContentUrl,
 				context.outgoing!.inputs,
 				halfContext(context.outgoing!.motionOf),
-				half(context.outgoing!.motionOf(item, context.staggerOffset, context.parent)),
+				half(context.outgoing!.motionOf(item, context.staggerOffsets, context.parent)),
 			),
 			incoming: paintedItemDescriptor(
 				output,
@@ -1508,27 +1682,40 @@ function groupChildDescriptor(
 	// group itself received: both are measured from the one shared phase start. A
 	// `clear-parent` slide clears the group, not the canvas, because the group is the
 	// child's parent.
-	const staggerOffset = context.staggerOffset + graphicAnimationStaggerOffset(
-		group.animation?.stagger?.[context.phase],
+	const staggerOffsets = staggerOffsetsFor(
+		context.phases,
+		group.animation,
 		group.children.map(entry => entry.id),
 		child.id,
+		context.staggerOffsets,
 	);
-	const motion = context.motionOf(child, staggerOffset, group);
-	const placement = group.arrangement === 'canvas'
-		? canvasPlacement(child, { x: Math.max(0, group.padding), y: Math.max(0, group.padding) }, motion)
-		: stackedPlacement(group, child, motion);
-
-	if (!context.crossing?.(child.id))
-		return childDescriptor(output, graphicId, group, child, resolveContentUrl, inputs, placement);
-
+	const motion = context.motionOf(child, staggerOffsets, group);
 	const rotation = group.arrangement === 'canvas' ? child.rotation ?? 0 : 0;
-	const half = (values: GraphicAnimationOwnerValues) => crossTransitionHalf(values, child, rotation, child.anchor);
+	const placementOf = (values: readonly GraphicAnimationOwnerValues[]) => group.arrangement === 'canvas'
+		? canvasPlacement(child, { x: Math.max(0, group.padding), y: Math.max(0, group.padding) }, values)
+		: stackedPlacement(group, child, values);
+
+	if (!context.crossing?.(child.id)) {
+		return enclosedItemDescriptor(
+			motion,
+			child,
+			rotation,
+			placementOf,
+			placement => childDescriptor(output, graphicId, group, child, resolveContentUrl, inputs, placement),
+		);
+	}
+
+	const half = (values: readonly GraphicAnimationOwnerValues[]) =>
+		crossTransitionHalf(crossingMotion(context.phases, values), child, rotation, child.anchor);
 
 	return {
 		id: child.id,
 		label: child.label,
 		kind: child.type,
-		style: crossTransitionBox(placement),
+		style: {
+			...crossTransitionBox(placementOf(RESTING)),
+			...motionStyle(enclosingMotion(context.phases, motion), child, 0, child.anchor),
+		},
 		crossTransition: {
 			outgoing: childDescriptor(
 				output,
@@ -1537,11 +1724,60 @@ function groupChildDescriptor(
 				child,
 				resolveContentUrl,
 				context.outgoing!.inputs,
-				half(context.outgoing!.motionOf(child, staggerOffset, group)),
+				half(context.outgoing!.motionOf(child, staggerOffsets, group)),
 			),
 			incoming: childDescriptor(output, graphicId, group, child, resolveContentUrl, inputs, half(motion)),
 		},
 	};
+}
+
+/** The ordered offset one owner's container added to its delay, per lifecycle phase. */
+type GraphicStaggerOffsets = Partial<Record<GraphicAnimationPhase, number>>;
+
+/**
+ * One container's stagger for every phase in play, added to whatever offset the
+ * container itself received.
+ *
+ * A stagger is authored per phase, so concurrent phases can order the same children
+ * differently — or one of them not at all — and each phase's recipe still measures its
+ * own delay from its own shared phase start.
+ */
+function staggerOffsetsFor(
+	phases: readonly GraphicAnimationPhase[],
+	animation: GraphicContainerAnimation | undefined,
+	directItemIds: readonly string[],
+	itemId: string,
+	inherited: GraphicStaggerOffsets = {},
+): GraphicStaggerOffsets {
+	const offsets: GraphicStaggerOffsets = {};
+	for (const phase of phases) {
+		offsets[phase] = (inherited[phase] ?? 0)
+			+ graphicAnimationStaggerOffset(animation?.stagger?.[phase], directItemIds, itemId);
+	}
+	return offsets;
+}
+
+/**
+ * The motion of every phase except the update, which a cross-transitioning owner's
+ * pair of renderings carries instead.
+ *
+ * This is the split that lets an exit run over an update rather than beside it: the
+ * update moves each rendering separately, and everything else moves the pair, so
+ * everything else belongs on the element the pair sits inside.
+ */
+function enclosingMotion(
+	phases: readonly GraphicAnimationPhase[],
+	motion: readonly GraphicAnimationOwnerValues[],
+): GraphicAnimationOwnerValues[] {
+	return motion.filter((_, index) => phases[index] !== 'update');
+}
+
+/** The update phase's own motion, which each half of a cross-transition carries. */
+function crossingMotion(
+	phases: readonly GraphicAnimationPhase[],
+	motion: readonly GraphicAnimationOwnerValues[],
+): GraphicAnimationOwnerValues[] {
+	return motion.filter((_, index) => phases[index] === 'update');
 }
 
 /**
@@ -1552,16 +1788,29 @@ function groupChildDescriptor(
  * and the parent bounds differ between them.
  */
 interface GraphicsItemAnimationContext {
-	phase: GraphicAnimationPhase;
-	/** The offset this item's own container added to its delay. */
-	staggerOffset: number;
+	/**
+	 * The lifecycle phases in play, in the order they compose: innermost first.
+	 *
+	 * Every motion array in this context is aligned to it, so a caller that has to
+	 * separate an update from the phase running over it can do so by index rather than
+	 * by asking each owner again.
+	 */
+	phases: readonly GraphicAnimationPhase[];
+	/**
+	 * The offset this item's own container added to its delay, per phase in play.
+	 *
+	 * Per phase because a stagger is authored per phase: a group may stagger its
+	 * children on the way in and not on the way out, so one offset cannot describe two
+	 * concurrent phases.
+	 */
+	staggerOffsets: GraphicStaggerOffsets;
 	/** The bounds a `clear-parent` slide has to leave. */
 	parent: { width: number; height: number };
 	motionOf: (
 		owner: GraphicItemConfig | GraphicGroupChildConfig,
-		staggerOffset: number,
+		staggerOffsets: GraphicStaggerOffsets,
 		parent: { width: number; height: number },
-	) => GraphicAnimationOwnerValues;
+	) => readonly GraphicAnimationOwnerValues[];
 	/**
 	 * Whether this owner draws both renderings of an update, overlaid in its own box.
 	 *
@@ -1587,7 +1836,7 @@ interface GraphicsItemAnimationContext {
  */
 function graphicAnimationContext(
 	graphic: BroadcastGraphicConfig,
-	projection: GraphicsAnimationProjection | undefined,
+	projections: readonly GraphicsAnimationProjection[],
 	canvas: { width: number; height: number },
 	/** Which rendering this context animates: the one arriving, or the one leaving. */
 	half: 'incoming' | 'outgoing' = 'incoming',
@@ -1601,36 +1850,40 @@ function graphicAnimationContext(
 	 */
 	crossTransition?: GraphicsUpdateCrossTransition | null,
 ): {
-	graphicMotion: GraphicAnimationOwnerValues;
+	graphicMotion: readonly GraphicAnimationOwnerValues[];
 	motionOf: GraphicsItemAnimationContext['motionOf'];
 	itemContext: (item: GraphicItemConfig) => GraphicsItemAnimationContext;
 } {
-	if (!projection) {
+	if (projections.length === 0) {
 		const resting: GraphicsItemAnimationContext = {
-			phase: 'enter',
-			staggerOffset: 0,
+			phases: [],
+			staggerOffsets: {},
 			parent: canvas,
 			motionOf: () => RESTING,
 		};
 		return { graphicMotion: RESTING, motionOf: () => RESTING, itemContext: () => resting };
 	}
 
-	const { phase, elapsed } = projection;
+	const phases = projections.map(projection => projection.phase);
 	const topLevelIds = graphic.items.map(item => item.id);
-	const graphicStagger = graphic.animation?.stagger?.[phase];
 
 	// The two halves of a cross-transition are one projection read from both ends, so
 	// selecting a half is all this does — it never projects the outgoing rendering
 	// separately, and the two can therefore never fall out of step.
+	//
+	// Only an update has a second half, so every other concurrent phase resolves to the
+	// Graphic Resting State on the outgoing rendering. That is right rather than lossy:
+	// a phase running over an update moves both renderings together, so it belongs on
+	// the element enclosing the pair and would be applied twice if it were also here.
 	const halfOf = (values: GraphicAnimationValues): GraphicAnimationOwnerValues =>
-		half === 'outgoing' ? values.outgoing ?? RESTING : values;
+		half === 'outgoing' ? values.outgoing ?? {} : values;
 
 	/**
 	 * An update recipe runs only where that owner's own rendered content changed. Outside
 	 * an update phase there is nothing to gate: enter, exit, and on-screen are about the
 	 * graphic's lifecycle rather than about its content.
 	 */
-	const animates = (ownerId: string | null): boolean => {
+	const animates = (ownerId: string | null, phase: GraphicAnimationPhase): boolean => {
 		if (phase !== 'update')
 			return true;
 		if (!crossTransition)
@@ -1643,20 +1896,20 @@ function graphicAnimationContext(
 		return ownerId === null ? crossTransition.wholeGraphic : crossTransition.crossing.has(ownerId);
 	};
 
-	const motionOf: GraphicsItemAnimationContext['motionOf'] = (owner, staggerOffset, parent) =>
-		animates(owner.id)
+	const motionOf: GraphicsItemAnimationContext['motionOf'] = (owner, staggerOffsets, parent) =>
+		projections.map(({ phase, elapsed }) => animates(owner.id, phase)
 			? halfOf(resolveGraphicAnimationValues({
 					recipe: owner.animation?.[phase],
 					phase,
 					elapsed,
-					staggerOffset,
+					staggerOffset: staggerOffsets[phase] ?? 0,
 					rect: owner,
 					parent,
 				}))
-			: RESTING;
+			: {});
 
 	return {
-		graphicMotion: animates(null)
+		graphicMotion: projections.map(({ phase, elapsed }) => animates(null, phase)
 			? halfOf(resolveGraphicAnimationValues({
 					recipe: graphic.animation?.[phase],
 					phase,
@@ -1666,11 +1919,11 @@ function graphicAnimationContext(
 					rect: { x: 0, y: 0, ...canvas },
 					parent: canvas,
 				}))
-			: RESTING,
+			: {}),
 		motionOf,
 		itemContext: item => ({
-			phase,
-			staggerOffset: graphicAnimationStaggerOffset(graphicStagger, topLevelIds, item.id),
+			phases,
+			staggerOffsets: staggerOffsetsFor(phases, graphic.animation, topLevelIds, item.id),
 			parent: canvas,
 			motionOf,
 		}),
@@ -1863,12 +2116,15 @@ export function resolveGraphicsCompositionRenderModel(
 				featureMatch: input.featureMatch,
 			};
 			const canvas = { width: input.canvasWidth, height: input.canvasHeight };
-			const projection = input.animation?.[graphic.id];
+			const projections = input.animation?.[graphic.id] ?? [];
+			const phases = projections.map(projection => projection.phase);
 
 			// The rendering being replaced exists only inside an update phase, and only when
 			// the Live Session supplied it. Anything else — an editor preview, a settled
-			// graphic, an entrance — has one rendering and nothing to cross.
-			const outgoingValues = projection?.phase === 'update'
+			// graphic, an entrance — has one rendering and nothing to cross. An exit running
+			// concurrently does not change that: the update is still crossing underneath it,
+			// which is the whole point of projecting both.
+			const outgoingValues = phases.includes('update')
 				? input.outgoingInputValues?.[graphic.id]
 				: undefined;
 			const outgoingInputs: GraphicItemContentContext = {
@@ -1891,15 +2147,28 @@ export function resolveGraphicsCompositionRenderModel(
 
 			const { graphicMotion, itemContext } = graphicAnimationContext(
 				graphic,
-				projection,
+				projections,
 				canvas,
 				'incoming',
 				crossTransition,
 			);
 			const outgoingHalf = crossTransition
-				? graphicAnimationContext(graphic, projection, canvas, 'outgoing', crossTransition)
+				? graphicAnimationContext(graphic, projections, canvas, 'outgoing', crossTransition)
 				: null;
-			const style = motionStyle(graphicMotion, canvas, 0, 'top-left');
+
+			// Two whole frames means the graphic's own motion splits: what moves each frame
+			// stays on that frame, and what moves both of them together goes on the element
+			// they sit inside. With one frame there is nothing to split and the graphic's
+			// element carries all of it, exactly as it did before concurrency existed.
+			const wholeGraphicPair = crossTransition?.wholeGraphic === true && outgoingHalf !== null;
+			const ownMotion = wholeGraphicPair ? crossingMotion(phases, graphicMotion) : graphicMotion;
+			const style = motionStyle(ownMotion, canvas, 0, 'top-left');
+			const enclosingStyle = enclosingMotionStyle(
+				wholeGraphicPair ? enclosingMotion(phases, graphicMotion) : RESTING,
+				ownMotion,
+				canvas,
+				'top-left',
+			);
 
 			const buildItems = (
 				values: GraphicItemContentContext,
@@ -1925,8 +2194,13 @@ export function resolveGraphicsCompositionRenderModel(
 			// A per-item cross-transition pairs inside each crossing item's box instead, so
 			// the two mechanisms never both apply to one graphic.
 			let outgoing: BroadcastGraphicOutgoingRenderDescriptor | undefined;
-			if (crossTransition?.wholeGraphic && outgoingHalf) {
-				const outgoingStyle = motionStyle(outgoingHalf.graphicMotion, canvas, 0, 'top-left');
+			if (wholeGraphicPair && outgoingHalf) {
+				const outgoingStyle = motionStyle(
+					crossingMotion(phases, outgoingHalf.graphicMotion),
+					canvas,
+					0,
+					'top-left',
+				);
 				outgoing = {
 					...(Object.keys(outgoingStyle).length === 0 ? {} : { style: outgoingStyle }),
 					items: buildItems(outgoingInputs, outgoingHalf.itemContext, undefined),
@@ -1939,6 +2213,7 @@ export function resolveGraphicsCompositionRenderModel(
 				// Omitted entirely at rest, so an unanimated Broadcast Graphic keeps the
 				// descriptor it had before animation existed.
 				...(Object.keys(style).length === 0 ? {} : { style }),
+				...(enclosingStyle === undefined ? {} : { enclosingStyle }),
 				items: buildItems(
 					inputs,
 					itemContext,

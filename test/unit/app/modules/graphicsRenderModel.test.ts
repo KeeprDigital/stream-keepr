@@ -460,14 +460,29 @@ function itemPaints(item: GraphicItemRenderDescriptor, prefix = ''): KeyPaint[] 
 					...itemPaints(item.crossTransition.incoming, `${path}~incoming>`),
 				]
 			: []),
+		// Concurrent lifecycle phases wipe on two elements, because CSS allows one mask
+		// per element. The enclosing one is a painting surface like any other, so a
+		// composition that ever put a colour there has to fail the same check.
+		...(item.enclosed ? itemPaints(item.enclosed, `${path}~enclosed>`) : []),
 	];
 }
 
-/** Every colour one composed Broadcast Graphic paints, its own wrapper included. */
-function graphicPaints(graphic: { id: string; style?: CSSProperties; items: GraphicItemRenderDescriptor[] }): KeyPaint[] {
+/** Every colour one composed Broadcast Graphic paints, its own wrappers included. */
+function graphicPaints(graphic: {
+	id: string;
+	style?: CSSProperties;
+	enclosingStyle?: CSSProperties;
+	items: GraphicItemRenderDescriptor[];
+	outgoing?: { style?: CSSProperties; items: GraphicItemRenderDescriptor[] };
+}): KeyPaint[] {
 	return [
+		...(graphic.enclosingStyle ? stylePaints(graphic.enclosingStyle, `${graphic.id}.enclosingStyle`) : []),
 		...(graphic.style ? stylePaints(graphic.style, `${graphic.id}.style`) : []),
 		...graphic.items.flatMap(item => itemPaints(item, `${graphic.id}>`)),
+		// The frame an update is leaving is a second painted subtree under the same
+		// enclosure, so it is walked for the same reason the pair inside an item is.
+		...(graphic.outgoing?.style ? stylePaints(graphic.outgoing.style, `${graphic.id}.outgoing.style`) : []),
+		...(graphic.outgoing?.items ?? []).flatMap(item => itemPaints(item, `${graphic.id}~outgoing>`)),
 	];
 }
 
@@ -1806,8 +1821,22 @@ describe('graphicsCompositionRenderModel', () => {
 describe('graphicsCompositionRenderModel Graphic Animation', () => {
 	const LINEAR = { duration: 400, easing: 'linear' as const, delay: 0 };
 
-	function model(graphics: BroadcastGraphicConfig[], animation?: Record<string, { phase: 'enter' | 'on-screen' | 'update' | 'exit'; elapsed: number }>, output: 'overlay' | 'fill' | 'key' = 'overlay') {
-		return resolveGraphicsCompositionRenderModel({ output, graphics, animation, ...CANVAS });
+	/**
+	 * One projection or a set of concurrent ones. Every test written before a Broadcast
+	 * Graphic could be in two lifecycle phases at once states one phase, and states it
+	 * the same way it always did.
+	 */
+	interface Projected { phase: 'enter' | 'on-screen' | 'update' | 'exit'; elapsed: number }
+
+	function model(graphics: BroadcastGraphicConfig[], animation?: Record<string, Projected | Projected[]>, output: 'overlay' | 'fill' | 'key' = 'overlay') {
+		return resolveGraphicsCompositionRenderModel({
+			output,
+			graphics,
+			animation: animation && Object.fromEntries(
+				Object.entries(animation).map(([id, projected]) => [id, Array.isArray(projected) ? projected : [projected]]),
+			),
+			...CANVAS,
+		});
 	}
 
 	describe('an update phase draws both renderings', () => {
@@ -1831,7 +1860,7 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			return resolveGraphicsCompositionRenderModel({
 				output,
 				graphics,
-				animation: { a: { phase: 'update', elapsed } },
+				animation: { a: [{ phase: 'update', elapsed }] },
 				inputValues: { a: { headline: 'AFTER' } },
 				outgoingInputValues: { a: { headline: 'BEFORE' } },
 				...CANVAS,
@@ -1863,7 +1892,7 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			const at = (phase: 'enter' | 'on-screen' | 'update' | 'exit') => resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
 				graphics: [headlineGraphic(items)],
-				animation: { a: { phase, elapsed: 200 } },
+				animation: { a: [{ phase, elapsed: 200 }] },
 				inputValues: { a: { headline: 'AFTER' } },
 				outgoingInputValues: { a: { headline: 'BEFORE' } },
 				...CANVAS,
@@ -1903,7 +1932,7 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 					[text('headline', { text: '{headline}' })],
 					{ update: CROSS_FADE },
 				)],
-				animation: { a: { phase: 'update', elapsed: 200 } },
+				animation: { a: [{ phase: 'update', elapsed: 200 }] },
 				inputValues: { a: { headline: 'SAME' } },
 				outgoingInputValues: { a: { headline: 'SAME' } },
 				...CANVAS,
@@ -2022,7 +2051,7 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 						{ ...HEADLINE, key: 'two' },
 					],
 				}],
-				animation: { a: { phase: 'update', elapsed: 200 } },
+				animation: { a: [{ phase: 'update', elapsed: 200 }] },
 				// A space would satisfy a test that only moved a character across the boundary,
 				// because "ab"+"c" and "a"+"bc" differ once anything separates them. These
 				// children contain the space themselves, so only a separator the content cannot
@@ -2389,6 +2418,218 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 
 		expect(motion('fill')).toEqual(motion('overlay'));
 		expect(motion('key')).toEqual(motion('overlay'));
+	});
+
+	describe('concurrent lifecycle phases compose', () => {
+		const FADE = (opacity: number) => ({ ...LINEAR, fade: { opacity } });
+		const SLIDE = (distance: number) => ({
+			...LINEAR,
+			slide: { direction: 'east' as const, distanceMode: 'fixed' as const, distance },
+		});
+		const WIPE = (edge: 'left' | 'top') => ({ ...LINEAR, reveal: { edge } });
+
+		/** An on-screen recipe still cycling underneath an exit that interrupted it. */
+		const CYCLING_UNDER_EXIT = [
+			{ phase: 'on-screen' as const, elapsed: 100 },
+			{ phase: 'exit' as const, elapsed: 200 },
+		];
+
+		it('multiplies two fades, so the composed opacity is what nesting would give', () => {
+			const graphics = [graphic('a', [shape('bar', {
+				animation: { 'on-screen': { ...LINEAR, pause: 0, repeat: 1, fade: { opacity: 0.5 } }, 'exit': FADE(0) },
+			})])];
+
+			const item = model(graphics, { a: CYCLING_UNDER_EXIT }).graphics[0]?.items[0];
+
+			// The cycle is 100ms into a 400ms out-and-back, so it is half way to its 0.5
+			// excursion: 0.75. The exit is 200ms into 400ms, so it is at 0.5. One element,
+			// one opacity, and the product is what two nested elements would composite to.
+			expect(item?.style.opacity).toBe(0.375);
+		});
+
+		it('adds two slides into one offset', () => {
+			const graphics = [graphic('a', [shape('bar', {
+				animation: { 'on-screen': { ...LINEAR, pause: 0, repeat: 1, ...SLIDE(40) }, 'exit': SLIDE(100) },
+			})])];
+
+			const item = model(graphics, { a: CYCLING_UNDER_EXIT }).graphics[0]?.items[0];
+
+			// A cycle eases each leg of its own out-and-back, so 100ms into a 400ms cycle it
+			// is at half its 40px excursion; the exit is at half of its 100px.
+			expect(item?.style.transform).toBe('translate(70px, 0px)');
+		});
+
+		it('nests two scales, writing the phase that moves the result first', () => {
+			const graphics = [graphic('a', [shape('bar', {
+				anchor: 'top-left',
+				animation: {
+					'on-screen': { ...LINEAR, pause: 0, repeat: 1, scale: { factor: 2, origin: 'top-left' } },
+					'exit': { ...LINEAR, scale: { factor: 0.5, origin: 'center' } },
+				},
+			})])];
+
+			const item = model(graphics, { a: CYCLING_UNDER_EXIT }).graphics[0]?.items[0];
+
+			// A CSS transform list applies right to left, so the exit — the phase moving the
+			// *result* — is written first and the cycle's scale is applied inside it. Written
+			// the other way round, the outer scale would not scale the inner shift, which is
+			// exactly the difference between nesting and not.
+			expect(item?.style.transform).toBe('translate(37.5px, 12.5px) scale(0.75) scale(1.5)');
+		});
+
+		it('wipes concurrent reveals on two elements, keeping Shape Geometry clipping and adding no clip', () => {
+			// Two wipes cannot share one element: CSS allows one `mask-image` per element,
+			// and intersecting a list needs `mask-composite`, which these outputs cannot rely
+			// on. A second element is the answer, and it must be a *mask* on that element
+			// rather than a clip — a Graphic Group already spends its clip on Shape Geometry
+			// clipping, and CSS allows one clip path per element too.
+			const clipped = group('cluster', [text('name')], {
+				clip: true,
+				geometry: { ...squareShapeGeometry(), topRight: { treatment: 'cut', size: 24 } },
+				animation: { 'on-screen': { ...LINEAR, pause: 0, repeat: 1, reveal: { edge: 'top' } }, 'exit': WIPE('left') },
+			});
+
+			const item = model([graphic('a', [clipped])], { a: CYCLING_UNDER_EXIT }).graphics[0]?.items[0];
+
+			// The enclosure is the item's own box, so the gradient still resolves across the
+			// bounds the reveal was authored across.
+			expect(item?.style.maskImage).toBe('linear-gradient(to right, #ffffff 0 50%, #ffffff00 50%)');
+			expect(item?.style.width).toBe('600px');
+			expect(item?.style.clipPath).toBeUndefined();
+
+			const enclosed = item?.enclosed;
+			expect(enclosed?.style.maskImage).toBe('linear-gradient(to bottom, #ffffff 0 50%, #ffffff00 50%)');
+			// The group's Shape Geometry clip is untouched, on the element that had it.
+			expect(String(enclosed?.style.clipPath)).toContain('path(');
+			expect(enclosed?.style.inset).toBe('0');
+		});
+
+		it('needs no second element when at most one concurrent phase wipes', () => {
+			const graphics = [graphic('a', [shape('bar', {
+				animation: { 'on-screen': { ...LINEAR, pause: 0, repeat: 1, fade: { opacity: 0.5 } }, 'exit': WIPE('left') },
+			})])];
+
+			const item = model(graphics, { a: CYCLING_UNDER_EXIT }).graphics[0]?.items[0];
+
+			expect(item?.enclosed).toBeUndefined();
+			expect(item?.style.maskImage).toBe('linear-gradient(to right, #ffffff 0 50%, #ffffff00 50%)');
+		});
+
+		it('keeps the descriptor a single lifecycle phase always produced', () => {
+			const graphics = [graphic('a', [shape('bar', { animation: { exit: FADE(0) } })])];
+
+			expect(model(graphics, { a: [{ phase: 'exit', elapsed: 200 }] }).graphics[0])
+				.toEqual(model(graphics, { a: { phase: 'exit', elapsed: 200 } }).graphics[0]);
+			expect(model(graphics, { a: { phase: 'exit', elapsed: 200 } }).graphics[0]?.enclosingStyle)
+				.toBeUndefined();
+		});
+
+		describe('an exit running over an update', () => {
+			const HEADLINE: GraphicInputDeclaration = {
+				key: 'headline',
+				label: 'Headline',
+				required: false,
+				updatePolicy: 'staged',
+				type: 'text',
+				default: '',
+				maxLength: 80,
+			};
+			const UPDATING_UNDER_EXIT = [
+				{ phase: 'update' as const, elapsed: 200 },
+				{ phase: 'exit' as const, elapsed: 200 },
+			];
+
+			function crossing(items: BroadcastGraphicConfig['items'], animation?: BroadcastGraphicConfig['animation']) {
+				return resolveGraphicsCompositionRenderModel({
+					output: 'overlay',
+					graphics: [{ ...graphic('a', items), inputs: [HEADLINE], animation }],
+					animation: { a: UPDATING_UNDER_EXIT },
+					inputValues: { a: { headline: 'AFTER' } },
+					outgoingInputValues: { a: { headline: 'BEFORE' } },
+					...CANVAS,
+				}).graphics[0]!;
+			}
+
+			it('puts the exit on the box holding a crossing item and the update on each half', () => {
+				// The exit moves both renderings together, so it cannot sit on either of them:
+				// two half-opaque copies of one item are not the same picture as one half-opaque
+				// copy of the pair.
+				const composed = crossing([text('headline', {
+					text: '{headline}',
+					animation: { update: FADE(0), exit: FADE(0) },
+				})]);
+				const item = composed.items[0]!;
+
+				expect(item.style.opacity).toBe(0.5);
+				expect(item.crossTransition?.incoming.style.opacity).toBe(0.5);
+				expect(item.crossTransition?.outgoing.style.opacity).toBe(0.5);
+			});
+
+			it('encloses both frames of a whole-graphic update in the phase that moves them together', () => {
+				const composed = crossing(
+					[text('headline', { text: '{headline}' })],
+					{ update: FADE(0), exit: FADE(0) },
+				);
+
+				// The enclosure carries the exit; each frame carries its own half of the update.
+				expect(composed.enclosingStyle?.opacity).toBe(0.5);
+				expect(composed.style?.opacity).toBe(0.5);
+				expect(composed.outgoing?.style?.opacity).toBe(0.5);
+			});
+
+			it('leaves the enclosure absent when an update runs with nothing over it', () => {
+				const composed = resolveGraphicsCompositionRenderModel({
+					output: 'overlay',
+					graphics: [{
+						...graphic('a', [text('headline', { text: '{headline}' })]),
+						inputs: [HEADLINE],
+						animation: { update: FADE(0) },
+					}],
+					animation: { a: [{ phase: 'update', elapsed: 200 }] },
+					inputValues: { a: { headline: 'AFTER' } },
+					outgoingInputValues: { a: { headline: 'BEFORE' } },
+					...CANVAS,
+				}).graphics[0]!;
+
+				expect(composed.enclosingStyle).toBeUndefined();
+				expect(composed.style?.opacity).toBe(0.5);
+			});
+
+			it('keeps the Key Output matte over both phases at once', () => {
+				const composed = resolveGraphicsCompositionRenderModel({
+					output: 'key',
+					graphics: [{
+						...graphic('a', [
+							text('headline', {
+								text: '{headline}',
+								surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }),
+								animation: { update: { ...FADE(0), reveal: { edge: 'left' } }, exit: { ...FADE(0.2), reveal: { edge: 'top' } } },
+							}),
+						]),
+						inputs: [HEADLINE],
+						animation: { update: FADE(0), exit: { ...FADE(0), scale: { factor: 0.4, origin: 'center' } } },
+					}],
+					animation: { a: UPDATING_UNDER_EXIT },
+					inputValues: { a: { headline: 'AFTER' } },
+					outgoingInputValues: { a: { headline: 'BEFORE' } },
+					...CANVAS,
+				}).graphics[0]!;
+
+				expect(() => graphicPaints(composed)).not.toThrow();
+			});
+		});
+
+		it('keeps the Key Output matte over two wipes on two elements', () => {
+			const graphics = [graphic('a', [group('cluster', [text('name', { surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }) })], {
+				clip: true,
+				surfaceStyle: surfaceStyle(),
+				animation: { 'on-screen': { ...LINEAR, pause: 0, repeat: 1, reveal: { edge: 'top' } }, 'exit': WIPE('left') },
+			})])];
+
+			const composed = model(graphics, { a: CYCLING_UNDER_EXIT }, 'key').graphics[0]!;
+
+			expect(() => graphicPaints(composed)).not.toThrow();
+		});
 	});
 
 	it('is deterministic: one elapsed time always produces one frame', () => {
