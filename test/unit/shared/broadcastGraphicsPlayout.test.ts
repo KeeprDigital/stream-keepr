@@ -824,6 +824,47 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		expect(acceptedGraphicInputValues(state, 'slate', [HEADLINE])).toEqual({ headline: 'third' });
 	});
 
+	it('keeps the transition still crossing when a Take reverses the exit it was running under', () => {
+		// Take during exit reverses smoothly from the currently rendered state, and the
+		// rendered state is a pair of renderings half way through crossing. Dropping the
+		// transition here would cut that crossing and put the rendering the exit had just
+		// discarded on program with no animation at all — the same snap this ticket exists
+		// to remove, arriving through the one path that can reach it.
+		let state = settledOnAir('first');
+		state = edit(state, 'second', T0 + 2000);
+		state = accept(state, T0 + 2000);
+		state = out(state, 'slate', false, T0 + 2100);
+		state = apply(state, { type: 'Take', payload: { graphicId: 'slate', cut: false } }, T0 + 2200);
+
+		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 2200))).toEqual([
+			{ phase: 'update', elapsed: 200 },
+			{ phase: 'exit', elapsed: 100 },
+		]);
+		expect(rendered(state, T0 + 2200)).toEqual({
+			current: { headline: 'second' },
+			outgoing: { headline: 'first' },
+		});
+		// The transition keeps its own schedule across the take-over, exactly as the
+		// cycling origin does.
+		expect(state.playout.slate!.updateStartedAt).toBe(T0 + 2000);
+	});
+
+	it('holds the discarded rendering only until the graphic leaves', () => {
+		// While it is leaving, program keeps what the interrupted update was travelling
+		// towards rather than snapping to the accepted set — that snap would be the
+		// discarded update happening after all. Once it has left there is nothing on
+		// program to hold, and the accepted set is what its next Take enters with.
+		let state = settledOnAir('first');
+		state = edit(state, 'second', T0 + 2000);
+		state = accept(state, T0 + 2000);
+		state = edit(state, 'third', T0 + 2100);
+		state = accept(state, T0 + 2100);
+		state = out(state, 'slate', false, T0 + 2200);
+
+		expect(rendered(state, T0 + 2500)).toEqual({ current: { headline: 'second' } });
+		expect(rendered(state, T0 + 2700)).toEqual({ current: { headline: 'third' } });
+	});
+
 	it('discards an update that had not begun, because there is no transition to finish', () => {
 		// An acceptance during an entrance is deferred to the entrance's completion, so an
 		// Out before that completion interrupts nothing: there is no pair being crossed,

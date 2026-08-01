@@ -767,18 +767,27 @@ function rollUpdateChain(
  * The rendering a Broadcast Graphic holds once every transition it is going to run has
  * run.
  *
- * The accepted set, except on a graphic that is leaving with a pending visual update
- * discarded. There, the transition that finished underneath the exit was travelling
- * towards the rendering the accepted values were queued *behind*, so falling back to
- * the accepted set as it completed would be the discarded update happening after all —
- * without even an animation to make it look deliberate. The accepted values are not
- * lost by holding it: they are exactly what this graphic's next Take enters with.
+ * The accepted set, except on a graphic that is *still leaving* with a pending visual
+ * update discarded. There, the transition that finished underneath the exit was
+ * travelling towards the rendering the accepted values were queued *behind*, so falling
+ * back to the accepted set as it completed would be the discarded update happening after
+ * all — without even an animation to make it look deliberate.
+ *
+ * It is held only until the graphic leaves, and the exit still being in flight is what
+ * says so. Once the exit has completed there is nothing on program to hold: the graphic
+ * is absent from every output, and the accepted set is exactly what its next Take enters
+ * with. Holding past that point would leave a reader reporting a rendering nobody can
+ * see and nobody accepted, for as long as the graphic stayed off.
  */
 function settledRendering(
 	playout: BroadcastGraphicPlayout,
 	inputs: BroadcastGraphicInputsState,
+	timing: BroadcastGraphicPhaseTiming,
 ): GraphicInputValues {
-	return !playout.onAir && playout.updateStartedAt !== undefined && inputs.pendingUpdateFrom !== undefined
+	return !playout.onAir
+		&& playout.updateStartedAt !== undefined
+		&& inputs.pendingUpdateFrom !== undefined
+		&& enterExitFlight(playout, timing) !== null
 		? inputs.pendingUpdateFrom
 		: inputs.accepted;
 }
@@ -875,17 +884,25 @@ function nextPlayout(
 		return settled;
 
 	// An intent that takes over a phase in flight takes over a graphic that never left
-	// program, so whatever its on-screen recipe was doing it is still doing. Dropping
-	// the origin here would put the cycling channel back at the Graphic Resting State
-	// at the very instant the enter/exit channel was made smooth.
-	const cycling = current.cyclingStartedAt === undefined
-		? {}
-		: { cyclingStartedAt: current.cyclingStartedAt };
+	// program, so whatever else that graphic was doing it is still doing. Both concurrent
+	// phases are carried, and for one reason: dropping either would put its channel back
+	// at the Graphic Resting State at the very instant the enter/exit channel was made
+	// smooth. For cycling that is an excursion vanishing; for an update it is a pair of
+	// renderings cut mid-crossing, with the rendering an exit had just discarded arriving
+	// on program in its place.
+	//
+	// An Out is the one intent this is not the last word for: it carries a schedule that
+	// may never have begun, so `exitCarryingInterruptedPhases` decides afterwards which
+	// of these an exit actually has something to run underneath.
+	const concurrent = {
+		...(current.cyclingStartedAt === undefined ? {} : { cyclingStartedAt: current.cyclingStartedAt }),
+		...(current.updateStartedAt === undefined ? {} : { updateStartedAt: current.updateStartedAt }),
+	};
 
 	if (flight.phase === (intent.onAir ? 'enter' : 'exit'))
-		return { ...settled, ...cycling, effectiveStartedAt: acceptedAt - flight.elapsed };
+		return { ...settled, ...concurrent, effectiveStartedAt: acceptedAt - flight.elapsed };
 
-	return { ...settled, ...cycling, effectiveStartedAt: acceptedAt, reversalCompletesAt: acceptedAt + flight.elapsed };
+	return { ...settled, ...concurrent, effectiveStartedAt: acceptedAt, reversalCompletesAt: acceptedAt + flight.elapsed };
 }
 
 /**
@@ -1225,10 +1242,16 @@ function exitCarryingInterruptedPhases(
 	context: BroadcastGraphicsReductionContext,
 ): { playout: BroadcastGraphicPlayout; inputs: NormalizedBroadcastGraphicInputsState | null } {
 	const { acceptedAt, durations } = context;
+	// Authoritative about the update either way, which is why it starts by taking it off
+	// rather than by adding it on: `nextPlayout` carries a schedule through every
+	// take-over, and an exit is entitled to only the transition that had actually begun.
+	// An acceptance still deferred behind an entrance is the case that separates them,
+	// and it is exactly what "discards any pending visual update" names.
+	const exiting = withoutUpdatePhase(exit);
 	if (!current.onAir || !enterExitFlight(exit, { now: acceptedAt, durations }))
-		return { playout: exit, inputs: null };
+		return { playout: exiting, inputs: null };
 
-	let playout = exit;
+	let playout = exiting;
 	let carried: NormalizedBroadcastGraphicInputsState | null = null;
 
 	// The transition in flight, normalised to itself: an acceptance may already have
@@ -2022,7 +2045,7 @@ export function broadcastGraphicRenderedInputs(
 	const playout = state.playout[graphicId];
 	const settled = {
 		current: resolveGraphicInputValues(
-			playout ? settledRendering(playout, inputs) : inputs.accepted,
+			playout && timing ? settledRendering(playout, inputs, timing) : inputs.accepted,
 			declarations,
 		),
 	};
