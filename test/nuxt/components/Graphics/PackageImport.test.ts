@@ -28,8 +28,7 @@ async function mountImport(props: Record<string, unknown> = {}) {
 
 	return mount(PackageImport, {
 		props: {
-			packageNoun: 'Template Package',
-			accept: '.skgraphic',
+			kind: 'skgraphic',
 			testId: 'library-import',
 			writable: true,
 			...props,
@@ -48,13 +47,27 @@ async function chooseFile(wrapper: Awaited<ReturnType<typeof mountImport>>, name
 }
 
 describe('graphicsPackageImport', () => {
-	it('names the artifact it receives rather than calling everything a package', async () => {
-		const wrapper = await mountImport({ packageNoun: 'Graphic Style Set Package' });
+	/**
+	 * The noun and the accepted extension are two facts about one artifact kind, so the
+	 * component is told the kind and derives both. Told separately they were free text
+	 * either side of a prop boundary, and this test itself used to mount a "Graphic Style
+	 * Set Package" that accepted `.skgraphic` — a pairing no exporter can produce (#156).
+	 */
+	it('names the artifact it receives and accepts exactly what that artifact travels as', async () => {
+		const styleSet = await mountImport({ kind: 'skstyle' });
 
-		expect(wrapper.get('[data-testid="library-import"]').text())
+		expect(styleSet.get('[data-testid="library-import"]').text())
 			.toBe('Import a Graphic Style Set Package');
-		expect(wrapper.get<HTMLInputElement>('[data-testid="library-import-input"]')
-			.attributes('accept')).toBe('.skgraphic');
+		expect(styleSet.get<HTMLInputElement>('[data-testid="library-import-input"]')
+			.attributes('accept')).toBe('.skstyle');
+
+		// Both Template Package kinds share the noun and differ in extension, which is why
+		// the pairing is a table rather than one derived string.
+		const layout = await mountImport({ kind: 'sklayout' });
+
+		expect(layout.get('[data-testid="library-import"]').text()).toBe('Import a Template Package');
+		expect(layout.get<HTMLInputElement>('[data-testid="library-import-input"]')
+			.attributes('accept')).toBe('.sklayout');
 	});
 
 	/**

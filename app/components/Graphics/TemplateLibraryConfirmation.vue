@@ -7,6 +7,16 @@
  * itself stays with the library, because what an author most needs to know before
  * answering is specific to the artifact — that placed copies survive a deletion, or
  * exactly what a replacement keeps.
+ *
+ * ## Two callers, by design
+ *
+ * The Graphic Style Set library's own delete prompt is not this shape, which was
+ * examined and settled rather than left to drift (#156). Deleting a referenced Style
+ * Set entry is not a yes/no: it "offers one atomic operation to replace its references
+ * with another entry of the same kind or detach them", so its prompt carries two
+ * destructive answers and a picker to choose the replacement between them. This shape
+ * is one destructive answer plus cancel; widening it to fit would leave it contributing
+ * a bordered box and a Cancel button.
  */
 defineProps<{
 	/** Whether this is a destructive removal or a destructive replacement. */

@@ -117,6 +117,15 @@ async function expand(wrapper: Awaited<ReturnType<typeof mountReview>>) {
 	await flushPromises();
 }
 
+/** Every property the expanded review says would move, in the order it says them. */
+function movedProperties(wrapper: Awaited<ReturnType<typeof mountReview>>) {
+	return wrapper.findAll('[data-testid="style-update-value"]').map(row => ({
+		key: row.get('dt').text(),
+		current: row.get('[data-testid="style-update-value-current"]').text(),
+		next: row.get('[data-testid="style-update-value-next"]').text(),
+	}));
+}
+
 describe('graphicsStyleUpdateReview', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -158,6 +167,105 @@ describe('graphicsStyleUpdateReview', () => {
 		// The two answers, on each row.
 		expect(wrapper.findAll('[data-testid="style-update-inherit"]')).toHaveLength(2);
 		expect(wrapper.findAll('[data-testid="style-update-keep"]')).toHaveLength(2);
+	});
+
+	/**
+	 * A row shows what the answer costs (#162).
+	 *
+	 * `recaptureGraphicStyleOverrides` is the identity while a composition is behind the
+	 * Style Set's published revision, so a genuine author edit made in that window
+	 * records no override and lives inline. Inheriting discards it. Without the values
+	 * on the row an author cannot tell a row holding their own work from a pure Style
+	 * Set change, so the default answer is one they cannot have made informed.
+	 */
+	it('shows what each property would move from and to, so the default answer is an informed one', async () => {
+		const wrapper = await mountReview();
+		await expand(wrapper);
+
+		expect(movedProperties(wrapper)).toEqual([
+			{ key: 'color', current: '#ff0044', next: '#00ff88' },
+			{ key: 'duration', current: '320', next: '500' },
+		]);
+	});
+
+	/** A property both sides already agree on is not part of the answer, so it is not shown. */
+	it('shows only the properties that would actually move', async () => {
+		mockReviewTemplateUpdate.mockResolvedValue(review({
+			changes: [{
+				ownerItemId: 'headline',
+				ownerLabel: 'Headline',
+				slot: 'typography',
+				entryId: 'heading',
+				entryName: 'Show heading',
+				current: { fontSize: 30, fontWeight: 800, color: '#ffffff' },
+				next: { fontSize: 99, fontWeight: 800, color: '#ffffff' },
+			}],
+		}));
+
+		const wrapper = await mountReview();
+		await expand(wrapper);
+
+		expect(movedProperties(wrapper)).toEqual([{ key: 'fontSize', current: '30', next: '99' }]);
+	});
+
+	/**
+	 * A property arriving where there was none, and one that is not a scalar.
+	 *
+	 * An absent value says so rather than rendering as an empty string, because a blank
+	 * either side of the arrow reads as "unchanged" — the opposite of what it means. A
+	 * media treatment's clipping is the case that produces it: a preset that names a
+	 * Shape Geometry adds one where the item had nothing.
+	 */
+	it('says when a property is not set, and shows a value that is not a scalar whole', async () => {
+		mockReviewTemplateUpdate.mockResolvedValue(review({
+			changes: [{
+				ownerItemId: 'bug',
+				ownerLabel: 'Sponsor bug',
+				slot: 'media',
+				entryId: 'framed',
+				entryName: 'Framed media',
+				current: { opacity: 1 },
+				next: { opacity: 1, clipGeometry: { topLeft: { treatment: 'cut', size: 24 } } },
+			}],
+		}));
+
+		const wrapper = await mountReview();
+		await expand(wrapper);
+
+		expect(movedProperties(wrapper)).toEqual([{
+			key: 'clipGeometry',
+			current: 'not set',
+			next: '{"topLeft":{"treatment":"cut","size":24}}',
+		}]);
+	});
+
+	/**
+	 * The second-order cost the author is entitled to know about before answering, said
+	 * per row because it is not the same commitment on every row.
+	 *
+	 * A slot that owns keys records the values as local overrides and leaves the rest of
+	 * the property group inheriting. A slot that owns none — a Graphic Fill is a
+	 * discriminated union with no partial to deviate in — cannot record an override at
+	 * all, so keeping it drops the reference and the property goes local outright. One
+	 * blanket sentence describing the first would be false about the second.
+	 */
+	it('says what keeping commits the author to, per row', async () => {
+		const wrapper = await mountReview();
+		await expand(wrapper);
+
+		const effects = wrapper.findAll('[data-testid="style-update-keep-effect"]')
+			.map(node => node.text().replace(/\s+/g, ' '));
+
+		// The Graphic Fill row: keeping lets go of the reference entirely.
+		expect(effects[0]).toBe(
+			'Keeping this makes it a local value and stops it following “Accent fill” at all.',
+		);
+		// The animation row: only the values above are pinned, and the rest of the group
+		// carries on inheriting — which is the whole point of not pinning the group.
+		expect(effects[1]).toBe(
+			'Keeping pins the values above as your own, so they stop following “Rise”. '
+			+ 'Everything else in this group carries on inheriting.',
+		);
 	});
 
 	it('shows every row starting on inherit, which is what applying without touching one does', async () => {

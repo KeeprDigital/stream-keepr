@@ -14,6 +14,7 @@ import {
 	captureGraphicStyleOverrides,
 	detachGraphicStyleRefs,
 	GRAPHIC_STYLE_SLOT_OWNED_KEYS,
+	graphicStyleChangedKeys,
 	graphicStyleChangeKey,
 	graphicStyleOwnerSupportsSlot,
 	graphicStyleSetEntryIdsInDocument,
@@ -88,6 +89,26 @@ function styleSet(brandColor = '#ff0044', headingSize = 64): GraphicStyleSetEntr
 			slide: { direction: 'north', distanceMode: 'fixed', distance: 40 },
 		}),
 	];
+}
+
+/**
+ * A typography that already matches what the `heading` entry resolves to.
+ *
+ * `TYPOGRAPHY` above deliberately disagrees with the preset in most keys, which is
+ * what most of these tests want. A test about *which* keys an author deviates in
+ * needs the opposite starting point: an item in step with its entry, so a single
+ * edited value is the only deviation there is.
+ */
+function inheritedTypography(brandColor = '#ff0044', headingSize = 64) {
+	return {
+		...TYPOGRAPHY,
+		fontSize: headingSize,
+		fontWeight: 800,
+		textTransform: 'uppercase' as const,
+		letterSpacing: 2,
+		lineHeight: 1,
+		color: brandColor,
+	};
 }
 
 function textItem(overrides: Partial<TextGraphicItemConfig> = {}): TextGraphicItemConfig {
@@ -488,6 +509,137 @@ describe('applyGraphicStyleSet', () => {
 		expect(headlineOf(applied).styleRefs?.typography?.overrides)
 			.toMatchObject({ fontSize: 64, color: '#ff0044' });
 		expect(headlineOf(applied).styleRefs?.typography?.entryId).toBe('heading');
+	});
+
+	/**
+	 * What "Keep mine" pins (#162).
+	 *
+	 * The answer is about one property group, but the author's work inside it is
+	 * usually one key. Recording the whole group would freeze every key the Style Set
+	 * and the author already agree on against every future republish — which is a
+	 * bigger commitment than the author made, and one this surface never asked them
+	 * about.
+	 */
+	it('pins only the keys the author deviates in, not the whole property group', () => {
+		// Behind the published revision, an author's own edit records no override — so
+		// what they wrote lives inline and nothing but this decision preserves it.
+		const composition = graphic([textItem({
+			typography: { ...inheritedTypography(), fontSize: 30 },
+			styleRefs: { typography: { entryId: 'heading' } },
+		})]);
+
+		const applied = applyGraphicStyleSet(
+			composition,
+			resolveGraphicStyleSet(styleSet('#ff0044', 99)),
+			{ decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' } },
+		);
+
+		// The one key the author wrote, and only it. Everything else keeps inheriting, so
+		// the next republish still reaches this slot.
+		expect(headlineOf(applied).styleRefs?.typography?.overrides).toEqual({ fontSize: 30 });
+	});
+
+	it('keeps an override the author already had when a different key moves', () => {
+		const composition = graphic([textItem({
+			typography: { ...inheritedTypography(), fontSize: 30 },
+			styleRefs: { typography: { entryId: 'heading', overrides: { fontSize: 30 } } },
+		})]);
+
+		// The palette moves the typography preset's colour; the size the author already
+		// pinned does not move at all.
+		const applied = applyGraphicStyleSet(
+			composition,
+			resolveGraphicStyleSet(styleSet('#00ff88')),
+			{ decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' } },
+		);
+
+		// Both are the author's: one they had pinned, one they are pinning now. Narrowing
+		// to "the keys that moved" alone would have dropped the first.
+		expect(headlineOf(applied).styleRefs?.typography?.overrides)
+			.toEqual({ fontSize: 30, color: '#ff0044' });
+	});
+
+	/** A slot the author has kept offers nothing further, which is what settles it. */
+	it('leaves no update outstanding on a slot the author kept', () => {
+		const republished = styleSet('#ff0044', 99);
+		const composition = graphic([textItem({
+			typography: { ...inheritedTypography(), fontSize: 30 },
+			styleRefs: { typography: { entryId: 'heading' } },
+		})]);
+
+		const applied = applyGraphicStyleSet(
+			composition,
+			resolveGraphicStyleSet(republished),
+			{ decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' } },
+		);
+
+		expect(graphicStyleUpdateChanges(applied, resolveGraphicStyleSet(republished))).toEqual([]);
+	});
+
+	/**
+	 * An override the author had already pinned survives even when the republished
+	 * preset happens to land on the same value.
+	 *
+	 * "Where this owner deviates from the entry" is not the whole answer to "what is
+	 * mine". A pin whose value the new preset coincidentally agrees with is no longer a
+	 * deviation, but it is still the author's explicit statement that this property is
+	 * theirs — and dropping it means the next republish that moves the preset away takes
+	 * the property with it. Story 20's "with my local property overrides preserved"
+	 * is exactly what that would break.
+	 */
+	it('keeps a pin the republished preset happens to agree with', () => {
+		const composition = graphic([textItem({
+			typography: { ...inheritedTypography(), fontSize: 30 },
+			styleRefs: { typography: { entryId: 'heading', overrides: { fontSize: 30 } } },
+		})]);
+
+		// The republished preset moves the colour and lands on the author's own size.
+		const applied = applyGraphicStyleSet(
+			composition,
+			resolveGraphicStyleSet(styleSet('#00ff88', 30)),
+			{ decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' } },
+		);
+
+		expect(headlineOf(applied).styleRefs?.typography?.overrides)
+			.toEqual({ fontSize: 30, color: '#ff0044' });
+	});
+
+	/**
+	 * A stored value that agrees with the preset while its own recorded override does
+	 * not pins nothing at all.
+	 *
+	 * The override is stale — it describes a value this owner is not holding — so there
+	 * is nothing of the author's in this slot to keep. Recording the whole property
+	 * group would freeze eight keys on the strength of provenance the document itself
+	 * contradicts. An empty override settles the row just as well, because what the
+	 * entry resolves to is already what is stored.
+	 */
+	it('pins nothing when a slot holds the preset and only a stale override disagrees', () => {
+		const composition = graphic([textItem({
+			typography: inheritedTypography(),
+			styleRefs: { typography: { entryId: 'heading', overrides: { fontSize: 999 } } },
+		})]);
+
+		const applied = applyGraphicStyleSet(
+			composition,
+			resolveGraphicStyleSet(styleSet()),
+			{ decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' } },
+		);
+
+		expect(headlineOf(applied).styleRefs?.typography?.overrides).toEqual({});
+		// And the row is settled rather than offered again on every later review.
+		expect(graphicStyleUpdateChanges(applied, resolveGraphicStyleSet(styleSet()))).toEqual([]);
+	});
+
+	it('names the keys of a change an author is deciding about', () => {
+		expect(graphicStyleChangedKeys(
+			{ fontSize: 30, color: '#ffffff', letterSpacing: 2 },
+			{ fontSize: 99, color: '#ffffff', letterSpacing: 4 },
+		)).toEqual(['fontSize', 'letterSpacing']);
+
+		// A property group that arrives where there was none is every key it carries.
+		expect(graphicStyleChangedKeys(null, { fit: 'cover', opacity: 1 }))
+			.toEqual(['fit', 'opacity']);
 	});
 
 	it('keeps a Graphic Fill slot\'s value by letting go of the reference', () => {

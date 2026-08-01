@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import type { GraphicsHostContract, GraphicSurfaceStyleEdit, GraphicSurfaceStyleSlot, ShapeGeometryPresetId } from '~~/shared/modules/graphics';
+import type {
+	GraphicApplicationFontId,
+	GraphicsHostContract,
+	GraphicSurfaceStyleEdit,
+	GraphicSurfaceStyleSlot,
+	ShapeGeometryPresetId,
+} from '~~/shared/modules/graphics';
 import type { Game, PlayerSide } from '~~/shared/types/enums';
 import type { GraphicFocalPosition, MediaGraphicItemFit } from '~~/shared/types/graphicItem';
 import type {
@@ -809,6 +815,84 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 		patchGraphicPlaceholderStyle(graphic, itemId, inputKey, patch),
 	);
 }
+
+/**
+ * The three answers a Graphic Placeholder Style's Graphic Font Selection has.
+ *
+ * One more than the base typography's, because a placeholder's font is optional:
+ * "same as base" is a real answer here rather than the absence of one, and it is what
+ * every placeholder starts on.
+ */
+type PlaceholderFontSource = 'base' | 'application' | 'asset';
+
+const PLACEHOLDER_FONT_SOURCE_OPTIONS = [
+	{ label: 'Same as base', value: 'base' },
+	{ label: 'Application font', value: 'application' },
+	{ label: 'Library font', value: 'asset' },
+];
+
+/**
+ * Which arm each placeholder's author is editing, when its stored style cannot say.
+ *
+ * The same override as the base typography control above, kept per `{inputKey}`
+ * because the panel offers one of these per placeholder. It holds the one state the
+ * stored value cannot express — "Library font" chosen with no revision pinned yet —
+ * and writing the asset arm at that moment would store a font that is nothing, which
+ * is what `graphicFontSelectionSchema` refuses on the way in. Cleared whenever the
+ * selection moves, so a control never describes the previous item's placeholders.
+ */
+const placeholderFontSourceOverrides = ref<Record<string, PlaceholderFontSource>>({});
+
+watch(selection, () => {
+	placeholderFontSourceOverrides.value = {};
+});
+
+function placeholderFontSource(inputKey: string): PlaceholderFontSource {
+	return placeholderFontSourceOverrides.value[inputKey]
+		?? placeholderStyleFor(inputKey).font?.kind
+		?? 'base';
+}
+
+function placeholderApplicationFontId(inputKey: string): GraphicApplicationFontId | undefined {
+	const font = placeholderStyleFor(inputKey).font;
+	return font?.kind === 'application' ? font.fontId : undefined;
+}
+
+function placeholderFontAsset(inputKey: string): GraphicAssetReference | undefined {
+	const font = placeholderStyleFor(inputKey).font;
+	return font?.kind === 'asset' ? font.reference : undefined;
+}
+
+function updatePlaceholderFontSource(inputKey: string, source: PlaceholderFontSource) {
+	placeholderFontSourceOverrides.value = { ...placeholderFontSourceOverrides.value, [inputKey]: source };
+	const current = placeholderStyleFor(inputKey).font;
+	if (source === 'base' && current)
+		updatePlaceholderStyle(inputKey, { font: undefined });
+	else if (source === 'application' && current?.kind !== 'application')
+		updatePlaceholderStyle(inputKey, { font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID) });
+}
+
+/** Pin one exact font Graphic Asset Revision for one placeholder. */
+function selectPlaceholderFontAsset(
+	inputKey: string,
+	_asset: GraphicAsset,
+	reference: GraphicAssetReference,
+) {
+	updatePlaceholderStyle(inputKey, { font: { kind: 'asset', reference } });
+}
+
+/**
+ * Unpinning a library font leaves the placeholder on the item's base typography.
+ *
+ * The base control falls back to an application font because a `GraphicTypography`
+ * must name one; a placeholder need not, so the honest answer here is to remove the
+ * property rather than invent a font the author never chose. The arm stays selected,
+ * so the picker is still there to pin another.
+ */
+function clearPlaceholderFontAsset(inputKey: string) {
+	placeholderFontSourceOverrides.value = { ...placeholderFontSourceOverrides.value, [inputKey]: 'asset' };
+	updatePlaceholderStyle(inputKey, { font: undefined });
+}
 </script>
 
 <template>
@@ -1606,6 +1690,56 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 						Use base
 					</UButton>
 				</div>
+				<!--
+					A placeholder's own Graphic Font Selection. Either arm, exactly as the
+					base typography above — the library arm pins a revision, so it reaches
+					this Screen's reference index and its Screen Output Asset Capability
+					through the same walk. "Same as base" is the third answer a placeholder
+					has and the base typography does not.
+				-->
+				<UFormField label="Font" size="xs">
+					<USelect
+						:model-value="placeholderFontSource(inputKey)"
+						:items="PLACEHOLDER_FONT_SOURCE_OPTIONS"
+						value-key="value"
+						size="sm"
+						class="w-full"
+						data-testid="graphic-placeholder-style-font-source"
+						@update:model-value="updatePlaceholderFontSource(inputKey, $event as PlaceholderFontSource)"
+					/>
+				</UFormField>
+
+				<UFormField
+					v-if="placeholderFontSource(inputKey) === 'application'"
+					label="Application font"
+					size="xs"
+				>
+					<USelect
+						:model-value="placeholderApplicationFontId(inputKey)"
+						:items="GRAPHIC_FONT_OPTIONS"
+						value-key="value"
+						size="sm"
+						class="w-full"
+						data-testid="graphic-placeholder-style-font"
+						@update:model-value="updatePlaceholderStyle(inputKey, { font: applicationGraphicFont($event as never) })"
+					/>
+				</UFormField>
+
+				<UFormField
+					v-else-if="placeholderFontSource(inputKey) === 'asset'"
+					label="Library font"
+					size="xs"
+				>
+					<GraphicsAssetFocusPicker
+						:model-value="placeholderFontAsset(inputKey)"
+						:event-id="eventId"
+						:field-label="`Placeholder ${placeholderToken(inputKey)}`"
+						asset-kind="font"
+						@update:model-value="$event ? undefined : clearPlaceholderFontAsset(inputKey)"
+						@select="(asset, reference) => selectPlaceholderFontAsset(inputKey, asset, reference)"
+					/>
+				</UFormField>
+
 				<div class="grid grid-cols-2 gap-2">
 					<UFormField label="Size" size="xs">
 						<UInputNumber

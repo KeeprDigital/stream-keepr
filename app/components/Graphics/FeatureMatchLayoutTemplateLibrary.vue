@@ -39,6 +39,7 @@ const emit = defineEmits<{ placed: [] }>();
 
 const repository = useFeatureMatchLayoutTemplateRepository();
 const screenStore = useScreenStore();
+const placementVersion = useScreenPlacementVersion(() => props.screenId);
 
 /** Fail closed: an unstated permission is never permission. */
 const canAuthor = computed(() => props.writable === true);
@@ -62,14 +63,7 @@ const {
 	askToRemove,
 	cancelRemove,
 	remove,
-	importing,
-	pendingImport,
-	importIssues,
-	importRejected,
-	importAwaitingConfirmation,
-	importPackage,
-	confirmImport,
-	dismissImport,
+	packageImport,
 } = library;
 
 const saving = ref(false);
@@ -114,11 +108,7 @@ async function place(templateId: string) {
 			eventId: props.eventId,
 			screenId: props.screenId,
 			templateId,
-			// A placement is a read-modify-write of the Screen, so it states the version
-			// it was built against. A Screen missing from the store falls back to 0, which
-			// is a real version rather than a skip: it is what a Screen that has never been
-			// written carries, so it matches one of those and is refused by every other.
-			stateVersion: screenStore.screens.find(screen => screen.id === props.screenId)?.stateVersion ?? 0,
+			stateVersion: placementVersion.value,
 		});
 		pendingPlaceId.value = null;
 		// The Screen was written on the server, and this client's own realtime echo is
@@ -127,10 +117,6 @@ async function place(templateId: string) {
 		emit('placed');
 	});
 }
-
-onMounted(() => {
-	void refresh();
-});
 </script>
 
 <template>
@@ -153,34 +139,17 @@ onMounted(() => {
 				Save this layout as a template
 			</UButton>
 
-			<!--
-				A Template Package installs as an Installed Graphics Template: an independent
-				local copy with this installation's own identity and revision, keeping the
-				packaged Template's identity as provenance only.
-			-->
-			<GraphicsPackageImport
-				package-noun="Template Package"
-				accept=".sklayout"
+			<GraphicsTemplateLibraryImport
+				kind="sklayout"
 				test-id="layout-template-import"
 				:writable="canAuthor"
-				:busy="importing"
-				:reported="!!pendingImport"
-				:issues="importIssues"
-				:rejected="importRejected"
-				:awaiting-confirmation="importAwaitingConfirmation"
-				@file="importPackage"
-				@confirm="confirmImport"
-				@dismiss="dismissImport"
+				:state="packageImport"
 			/>
 
-			<UAlert
-				v-if="error"
-				color="error"
-				variant="soft"
-				icon="i-lucide-triangle-alert"
+			<GraphicsReusableLibraryError
 				title="Layout template action failed"
-				:description="error"
-				data-testid="layout-template-error"
+				:message="error"
+				test-id="layout-template-error"
 			/>
 
 			<UIEmptyState

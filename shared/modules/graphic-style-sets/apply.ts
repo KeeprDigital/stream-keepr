@@ -312,6 +312,32 @@ export function graphicStyleChangeKey(itemId: string | null, slot: GraphicStyleS
 }
 
 /**
+ * The overrides already recorded on a slot that the owner's stored value still holds.
+ *
+ * An override is a claim about a property — "this one is mine" — and the stored value
+ * is what the owner actually renders. Where the two agree the claim still describes
+ * something real and survives. Where they disagree the claim is stale: it names a value
+ * this owner is not holding, so honouring it would move the property rather than keep
+ * it, and it is dropped. That is what lets an owner whose stored value has gone back to
+ * matching its entry end up pinning nothing at all rather than pinning a whole property
+ * group on the strength of provenance the document itself contradicts.
+ */
+function heldGraphicStyleOverrides(
+	overrides: unknown,
+	slot: GraphicStyleSlot,
+	current: unknown,
+): Record<string, unknown> {
+	const recorded = (overrides ?? {}) as Record<string, unknown>;
+	const currentRecord = (current ?? {}) as Record<string, unknown>;
+	const held: Record<string, unknown> = {};
+	for (const key of GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot]) {
+		if (recorded[key] !== undefined && sameGraphicStyleValue(recorded[key], currentRecord[key]))
+			held[key] = recorded[key];
+	}
+	return held;
+}
+
+/**
  * Rebuild every inherited property group of one composition from a resolved Graphic
  * Style Set.
  *
@@ -356,8 +382,15 @@ export function applyGraphicStyleSet(
 
 			if (decisions[graphicStyleChangeKey(itemId, slot)] === 'keep-as-override') {
 				// Preserving the previously resolved property means recording it as the
-				// author's own: the reference stays, every owned key becomes a deviation,
-				// and the property does not move now or on any later republish.
+				// author's own: the reference stays and the property does not move, now or
+				// on any later republish.
+				//
+				// What that records is "what in this slot is mine", which is two things and
+				// not the whole property group. An author answering one row is answering
+				// about the values on it, and pinning the seven typography keys the Style
+				// Set and the author already agree on would freeze the slot against every
+				// future republish — a commitment far larger than the one they were asked
+				// to make (#162).
 				//
 				// A slot with no owned keys has no partial to deviate in — a Graphic Fill
 				// is a discriminated union — so keeping its value means letting go of the
@@ -371,10 +404,17 @@ export function applyGraphicStyleSet(
 				}
 				(nextRefs as Record<string, unknown>)[slot] = {
 					entryId: ref.entryId,
-					overrides: pick(
-						current as Record<string, unknown> | undefined,
-						GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot],
-					),
+					overrides: {
+						// The pins the author already had and this owner still holds. They are
+						// not always deviations: a republished preset that lands on the value
+						// an author pinned agrees with it, and reading "mine" as "differs from
+						// the preset" alone would drop the pin — so the next republish moving
+						// that preset away would take the property with it.
+						...heldGraphicStyleOverrides(ref.overrides, slot, current),
+						// And where this owner deviates from the entry, which is every key the
+						// update was about to move.
+						...captureGraphicStyleOverrides(resolution, slot, ref.entryId, current),
+					},
 				};
 				continue;
 			}
@@ -447,6 +487,25 @@ export function graphicStyleUpdateChanges(
 	}
 
 	return changes;
+}
+
+/**
+ * The keys of one reviewable change that actually move.
+ *
+ * A change is offered per property group, but only some of the group's keys are in
+ * it — the rest are values the Style Set and this composition already agree on, and
+ * showing them would bury the ones an author is deciding about. This is what a review
+ * row states value by value, so the default answer is an informed one rather than a
+ * guess about whether a row contains the author's own work (#162).
+ *
+ * A property group arriving where there was none is every key it carries, which is
+ * the honest reading of "nothing became this".
+ */
+export function graphicStyleChangedKeys(current: unknown, next: unknown): string[] {
+	const currentRecord = (current ?? {}) as Record<string, unknown>;
+	const nextRecord = (next ?? {}) as Record<string, unknown>;
+	return [...new Set([...Object.keys(currentRecord), ...Object.keys(nextRecord)])]
+		.filter(key => !sameGraphicStyleValue(currentRecord[key], nextRecord[key]));
 }
 
 /* ────────────────────────────────────────────────

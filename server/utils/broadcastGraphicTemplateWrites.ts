@@ -17,6 +17,21 @@ import { findBroadcastGraphicTemplateLibraryEntry } from '~~/server/modules/broa
  *
  * Returns normally when the identity names nothing at all, leaving the caller to
  * report its own `404`.
+ *
+ * ## Why this and its Feature Match Layout twin stay two functions
+ *
+ * Examined and settled rather than left to drift (#156). The pair is near-identical in
+ * shape, but the whole body that differs is the wording an author reads — "save the
+ * placed copy" against "save the placed layout" — and an integration test asserts it.
+ * A parameterised version would take the finder, the artifact noun and that clause,
+ * making it about as long as one original while hiding the message behind a parameter.
+ *
+ * The same holds one layer down. `broadcastGraphicTemplate` and
+ * `featureMatchLayoutTemplate` are structurally alike, but what repeats is raw D1 SQL
+ * with the table name interpolated; sharing it means a table-name-parameterised SQL
+ * builder — injection-shaped, and hardest to read exactly where correctness matters —
+ * plus a Style-Set-link denormalisation only the Broadcast Graphic Template side has
+ * columns for, and two conflict errors callers catch by class.
  */
 export async function refuseInstalledBroadcastGraphicTemplateWrite(
 	event: H3Event,
