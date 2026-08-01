@@ -393,6 +393,24 @@ describe('useScreenStore config and realtime', () => {
 				expect(store.screens[0]!.name).toBe('Second');
 			});
 
+			it('does not cache a reload that resolves after the store was reset', async () => {
+				// Leaving the Event supersedes the write flights; a reload in flight has to
+				// be superseded with them, or an answer for the Event just left lands in a
+				// store that has been cleared and puts a Screen back that nobody asked for.
+				store.screens = [createMockScreen({ id: 10, name: 'Old' })];
+				let release: (screen: unknown) => void = () => {};
+				mockRepo.getById.mockReturnValue(new Promise((resolve) => {
+					release = resolve;
+				}));
+
+				const inFlight = ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
+				store.$reset();
+				release(createMockScreen({ id: 10, name: 'New' }));
+				await inFlight;
+
+				expect(store.screens).toHaveLength(0);
+			});
+
 			it('leaves the cached Screen alone when the reload fails', async () => {
 				store.screens = [createMockScreen({ id: 10, name: 'Old' })];
 				mockRepo.getById.mockRejectedValue(new Error('offline'));

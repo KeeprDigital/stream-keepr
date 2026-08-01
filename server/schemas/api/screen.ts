@@ -1220,134 +1220,50 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
 export const MAX_GRAPHIC_CHANNELS_PER_SCREEN = 25;
 
 /**
- * The whole-Screen Graphic Item budget.
+ * The whole-Screen Graphic Item budget, counting Graphic Group children.
  *
- * The per-graphic and per-Screen caps bound each list independently, but their
- * product does not come close to fitting `MAX_MODE_CONFIGS_BYTES`. Without a total
- * cap, 50 Broadcast Graphics x 100 Graphic Groups x 50 children is 255,000 Graphic
- * Items against a 512 KiB budget shared by every Screen Mode. This cap binds the
- * product. Graphic Group children count towards it — they are Graphic Items and
- * they cost bytes.
+ * It binds a product the per-list caps leave unbounded: 50 Broadcast Graphics x 100
+ * Graphic Items x 50 Graphic Group children is 255,000 Graphic Items against a
+ * 512 KiB budget shared by every Screen Mode.
  *
- * ## What this number is, and what it is not
+ * **300 is `MAX_BROADCAST_GRAPHICS_PER_SCREEN` x the six Graphic Items of the
+ * richest reconstruction in `docs/prototypes/broadcast-graphics-fidelity.md`** —
+ * every Broadcast Graphic the Screen admits, authored at the richest shape the
+ * acceptance evidence contains. A realistic Screen at this cap measures 248,734
+ * bytes, 47% of the shared budget.
  *
- * It is what a show needs. It is *not* the largest number whose worst case fits the
- * byte budget, and that distinction is the whole of #99.
+ * `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES` is what the
+ * caps together admit, composed from every construct the schema accepts. It is
+ * about seven times the budget and **that is a settled decision, not an oversight**:
+ * the worst case is allowed not to fit, because the byte total is enforced on the
+ * editors' write path (#85) and realtime no longer publishes mode configurations
+ * (#95). The measurement is pinned in two arrangements in
+ * `broadcastGraphicsModeConfig.test.ts`, so "which worst case" stays a checked
+ * choice rather than an assumption.
  *
- * 200 is every Broadcast Graphic the Screen admits — `MAX_BROADCAST_GRAPHICS_PER_SCREEN`
- * — authored at four Graphic Items each: a bed, a rule, and two text items, the
- * minimum shape of a lower third. Read the other way it is 25 graphics at the eight
- * items of the richest shape in the fidelity prototype, which is the acceptance
- * evidence the spec designates. Both readings land on the same number, and it is
- * checked rather than asserted: a realistic Screen filled to this cap measures
- * 164,779 bytes — 31% of the shared budget, leaving the other nine Screen Modes
- * room (`broadcastGraphicsModeConfig.test.ts` pins it from both sides).
+ * The reasoning, the arithmetic that shows no narrowing reaches a fitting worst
+ * case, what is given up, and what a later ticket should do instead of re-deriving
+ * this number are all in **`docs/adr/0002-broadcast-graphics-item-cap.md`**. Read
+ * that before moving this constant.
  *
- * It coincides with the 200 this cap carried before Graphic Inputs landed. That is
- * a coincidence and not a restoration: #65 chose 200 with no measurement behind it,
- * and this is derived from two caps this file already owns and one shape the spec
- * already designates.
+ * Two notes that belong beside the code rather than in the record:
  *
- * ## Why the worst case is allowed not to fit
+ * - Media Graphic Items contribute nothing to the worst case. A maximal animated
+ *   Media Graphic Item is 1,906 bytes against 3,704 for a maximal animated Text
+ *   Graphic Item, so the worst case is built from text and a cheaper kind cannot
+ *   raise it.
+ * - For any package whose graphics declare Live Control it is not this cap that
+ *   binds first but `MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN`: at two
+ *   Graphic Inputs per graphic, 60 covers 30 of the 50 Broadcast Graphics. Move
+ *   that number before this one.
  *
- * `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES` is the most
- * expensive Screen every cap together admits, composed from every construct the
- * schema accepts. It is roughly five times the whole budget, and lowering this cap
- * cannot bring it under: the worst case costs about 11.4 KiB per Graphic Item on
- * top of about 276 KiB that no item cap touches, so it would first fit at **21**
- * Graphic Items — fewer than the ~32-item fidelity prototype the spec designates as
- * acceptance evidence. A rule whose fixed point breaks the spec is the wrong rule,
- * which is why #99 was filed after three tickets had each cut this constant
- * correctly and in isolation, with no floor in sight.
- *
- * Two things make accepting the overshoot sound rather than a deferral, and both
- * are now true:
- *
- * - The whole-`modeConfigs` byte total is enforced on the editors' write path, so
- *   an oversized configuration is refused at authoring time rather than written and
- *   truncated later (#85).
- * - Realtime no longer publishes mode configurations. `screen:updated` names the
- *   Screen and clients reload the authority, so a storable configuration is always
- *   a notifiable one (#95). That closes the defect that made *reducing* this cap
- *   the only safe direction, because a larger cap used to buy storable
- *   configuration that could not reach a client.
- *
- * What is lost is the *named cap binds first* property, and only for configurations
- * nobody authors: an author who filled every cap at once — 200 Graphic Items each
- * with a 1,000-character template, four maximal Graphic Placeholder Styles, every
- * animation channel on all four phases, a maximal Graphic Style Set reference in
- * every slot, alongside 60 maximal choice Graphic Inputs — reads a byte count rather
- * than a limit name. Realistic authoring at this cap is a third of the budget, so no
- * operator meets that boundary.
- *
- * Stated plainly rather than left to be discovered: raising this cap moved one
- * non-pathological shape across the line too. A Screen filled to the cap where
- * **every** Graphic Item carries a 1,000-character Graphic Text Template is about
- * 623 KiB and is refused by the byte total; at 110 it was about 380 KiB and was not.
- * That shape is 200,000 characters of template on one Screen, which is why it is
- * accepted as a cost rather than treated as the thing to size the cap by —
- * `modeConfigPatchResult.test.ts` measures it, so the trade stays visible.
- *
- * ## What the pathological axes are, and which two were narrowed
- *
- * The worst case is dominated by axes an item cap cannot govern, which is why #99
- * narrowed the two that were unbounded relative to their own meaning rather than
- * cutting authoring capacity again:
- *
- * - A **Graphic Animation Stagger** could name 100 ids regardless of how many items
- *   its container held. It now names no more than the container's own direct items
- *   (`graphicStaggerNamesASubset`), which costs authoring nothing — a stagger orders
- *   a subset — and removes about 2 MB from the worst case. Stale ids stay legal;
- *   only the count is bounded.
- * - A **Graphic Item id** was capped at 100 characters where every id this
- *   application writes is a 36-character uuid. It is now
- *   `MAX_GRAPHIC_ITEM_ID_LENGTH`, and the same bound applies to the ids a stagger
- *   names, which is where most of a stagger's cost sat.
- *
- * A **Feature Match Layout** was the third: its Graphic Item cap bounded only the
- * top-level list, so one layout could carry 100 groups of 50 children — 5,100
- * Graphic Items — into this same shared budget. It now carries the same total the
- * other host of the same compositor does. See `MAX_GRAPHIC_ITEMS_PER_FEATURE_MATCH_LAYOUT`.
- *
- * The largest remaining axis is deliberately untouched: a maximal Graphic Style Set
- * reference in every slot of every Graphic Item is more than half the cost of an
- * item. Narrowing it means changing what a Style Set link may override, which is a
- * question about Graphic Style Sets rather than about a byte budget, and answering
- * it here would be the very practice — one ticket repricing a shared vocabulary from
- * its own arithmetic — that this cap exists to have ended.
- *
- * ## Which limit binds first in practice
- *
- * For a realistic large graphics package it is not this cap but
- * `MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN`: 25 graphics declaring four
- * Graphic Inputs each is 100 against a budget of 60, reached long before 200 Graphic
- * Items are placed. Anyone finding a package too small to author should move that
- * number before this one, and should re-measure the worst case when they do.
- *
- * ## What each vocabulary contributes
- *
- * Recorded so the next addition extends one measurement instead of re-deriving it.
- * Per maximal Text Graphic Item, against this schema's own maxima: base item and
- * styles ~2,015 bytes; Graphic Placeholder Styles +~700; Graphic Animation on all
- * four phases +1,039; a Graphic Font Selection naming a maximal font Graphic Asset
- * Revision +1,250 across its typography and four placeholder styles; and a maximal
- * Graphic Style Set reference in every slot +~6,100 — larger than everything else on
- * the item combined. Per Broadcast Graphic shell: animation and stagger, the Graphic
- * Inputs, bindings and Graphic Source Selections it declares, a `channelId`, a
- * Graphic Style Set link, and its own container references.
- *
- * Media Graphic Items contribute nothing to the worst case. A maximal animated Media
- * Graphic Item is 1,906 bytes against 3,704 for a maximal animated Text Graphic
- * Item, so the worst case is built from text and adding a cheaper kind cannot raise
- * it.
- *
- * This comment states no cross-mode headroom figure. The budget is shared with every
+ * No cross-mode headroom figure is stated here. The budget is shared with every
  * other Screen Mode, so what remains is a property of the whole `modeConfigs` map
  * rather than of this cap — reconstructing it per ticket is how two tickets came to
  * quote different baselines for the same pre-existing Graphic Item.
  */
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 200;
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 2_567_981;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 300;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 3_713_156;
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
 	return items.reduce(

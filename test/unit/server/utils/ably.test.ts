@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MAX_REALTIME_MESSAGE_BYTES } from '~~/shared/types/messages';
 
 const mockPublish = vi.fn();
 const mockGetChannel = vi.fn(() => ({ publish: mockPublish }));
@@ -111,6 +112,86 @@ describe('publishMessage', () => {
 		await expect(
 			publishMessageStrict(1, 'melee:playersSynced', { playerCount: 2 }, 'conn-123'),
 		).rejects.toThrow('Ably server API key is not configured');
+	});
+});
+
+// ──────────────── the oversized-message diagnostic ────────────────
+
+/**
+ * The diagnostic #95 was premised on.
+ *
+ * A message larger than the provider accepts is refused on publication, and this
+ * API logs `realtime_publish_failed` and carries on — correct for best-effort
+ * delivery, and useless for diagnosis, because it never says the size was why.
+ * That is how a Screen large enough to break its own notification went unnoticed.
+ *
+ * These pin that it reports, what it reports, and — the part that matters — that it
+ * does *not* refuse: the write it announces has already committed, and the account's
+ * real ceiling may be above the documented floor this compares against.
+ */
+describe('oversized realtime messages', () => {
+	function oversizedPayload() {
+		// One field over the documented floor, so the assertion is about the threshold
+		// rather than about any particular message type's shape.
+		return { eventId: 1, reason: 'x'.repeat(MAX_REALTIME_MESSAGE_BYTES) } as never;
+	}
+
+	function loggedMessages(spy: ReturnType<typeof vi.spyOn>) {
+		return spy.mock.calls.map(([entry]) => JSON.parse(entry as string));
+	}
+
+	beforeEach(() => {
+		vi.resetModules();
+		MockAblyRest.reset();
+		mockGetChannel.mockClear();
+		mockPublish.mockClear();
+		mockPublish.mockResolvedValue(undefined);
+		vi.mocked(useRuntimeConfig).mockReturnValue({ ablyApiKey: 'test-key' } as any);
+	});
+
+	it('reports the size and the limit, and still publishes', async () => {
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { publishMessage } = await import('~~/server/utils/ably');
+
+		await publishMessage(1, 'event:deleted', oversizedPayload(), 'conn-123');
+
+		expect(loggedMessages(errorSpy)).toEqual([{
+			message: 'realtime_publish_oversized',
+			eventId: 1,
+			messageType: 'event:deleted',
+			bytes: expect.any(Number),
+			limit: MAX_REALTIME_MESSAGE_BYTES,
+		}]);
+		expect(loggedMessages(errorSpy)[0].bytes).toBeGreaterThan(MAX_REALTIME_MESSAGE_BYTES);
+		// Reported, not refused: the write has committed and this is a documented
+		// floor rather than this account's confirmed ceiling.
+		expect(mockPublish).toHaveBeenCalledOnce();
+		errorSpy.mockRestore();
+	});
+
+	it('says nothing about a message inside the limit', async () => {
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { publishMessage } = await import('~~/server/utils/ably');
+
+		await publishMessage(1, 'event:deleted', { eventId: 1 }, 'conn-123');
+
+		expect(errorSpy).not.toHaveBeenCalled();
+		expect(mockPublish).toHaveBeenCalledOnce();
+		errorSpy.mockRestore();
+	});
+
+	it('reports on the strict publication path too, which is where a sync failure surfaces', async () => {
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { publishMessageStrict } = await import('~~/server/utils/ably');
+
+		await publishMessageStrict(1, 'melee:dataReset', oversizedPayload(), 'conn-123');
+
+		expect(loggedMessages(errorSpy)[0]).toMatchObject({
+			message: 'realtime_publish_oversized',
+			messageType: 'melee:dataReset',
+		});
+		expect(mockPublish).toHaveBeenCalledOnce();
+		errorSpy.mockRestore();
 	});
 });
 

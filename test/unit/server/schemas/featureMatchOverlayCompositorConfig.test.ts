@@ -121,9 +121,10 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 	it('counts Graphic Group children against the Feature Match Layout item cap', () => {
 		// The cap was on the top-level list alone, so a layout could carry 100
 		// top-level items each holding 50 Graphic Group children — 5,100 Graphic
-		// Items — against 110 for a whole Broadcast Graphics Screen, stopped only by
-		// the opaque byte total. One composition, one bound, whichever host it
-		// belongs to. See #99.
+		// Items in one composition, stopped only by the opaque byte total, while a
+		// Broadcast Graphic composing the same vocabulary was held to a named one.
+		// One composition, one bound, whichever host it belongs to. See #99 and
+		// `docs/adr/0002-broadcast-graphics-item-cap.md`.
 		const groupsOf = (groups: number, children: number) => configWith(
 			Array.from({ length: groups }, (_, index) => ({
 				...getGraphicItemDefinition('group').createDefault({

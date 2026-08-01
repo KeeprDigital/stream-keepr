@@ -171,7 +171,7 @@ function fatOverlayLayout() {
 /**
  * A Broadcast Graphics stack that is large, legal, and *storable on its own*.
  *
- * A fraction of the Graphic Item cap rather than all of it, derived from the cap so
+ * Two fifths of the Graphic Item cap rather than all of it, derived from the cap so
  * it tracks a change to it. The full cap no longer fits the shared budget when every
  * Graphic Item carries a maximal Graphic Text Template — #99 set the cap from what a
  * show needs and accepted that the heaviest shapes are refused by the byte total —
@@ -184,7 +184,7 @@ function fatOverlayLayout() {
  * below rather than trusted, so a vocabulary change that broke either fails here
  * instead of quietly leaving this test with nothing to prove.
  */
-const STORABLE_STACK_FRACTION = 0.6;
+const STORABLE_STACK_FRACTION = 0.4;
 
 function storableStack() {
 	return graphicsStack(
