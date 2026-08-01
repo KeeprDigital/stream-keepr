@@ -4,18 +4,16 @@ import {
 } from '~~/server/modules/graphics-asset-library';
 import { createBoundedByteStream } from '~~/server/modules/graphics-asset-library/object-store';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import {
-	graphicsAuthorIdentity,
-	rethrowGraphicsAssetApiError,
-} from '~~/server/utils/graphicsAssetApi';
+import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 import { getBoundedRequestBodyStream } from '~~/server/utils/payloadLimits';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 
 export default defineEventHandler(async (event) => {
+	const initiatedBy = await requireGraphicsAuthorSession(event);
 	try {
 		const library = graphicsAssetLibraryForEvent(event);
 		const operationId = graphicsIngestionOperationId(getRouterParam(event, 'operationId') ?? '');
-		const initiatedBy = graphicsAuthorIdentity(event);
 		const operation = await library.getIngestionOperation({ operationId, initiatedBy });
 		const partNumber = Number(getRouterParam(event, 'partNumber'));
 		const byteLength = graphicsMultipartPartByteLength(

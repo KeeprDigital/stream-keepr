@@ -7,12 +7,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { MAX_STILL_IMAGE_INGESTION_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 
-const authorHeaders: Record<string, string> = {
-	'x-graphics-author-id': 'integration-remote-copy-author',
-};
-const otherAuthorHeaders: Record<string, string> = {
-	'x-graphics-author-id': 'integration-remote-copy-intruder',
-};
+/**
+ * Two real graphics author sessions. The identity is the session and nothing
+ * else, so an intruder is simply a second session — there is no header to
+ * borrow, and no way to be treated as the author who initiated the copy.
+ */
+const authorHeaders: Record<string, string> = {};
+const otherAuthorHeaders: Record<string, string> = {};
 
 async function initiateRemoteCopy(idempotencyKey: string, name: string) {
 	return await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
@@ -46,9 +47,9 @@ async function copyRemoteSource(operationId: string, sourceUrl: string) {
 
 describe('the approved remote HTTPS copy API', () => {
 	beforeAll(async () => {
-		const cookie = await createGraphicsAuthorSessionCookie();
-		authorHeaders.cookie = cookie;
-		otherAuthorHeaders.cookie = cookie;
+		authorHeaders.cookie = await createGraphicsAuthorSessionCookie();
+		otherAuthorHeaders.cookie = await createGraphicsAuthorSessionCookie();
+		expect(otherAuthorHeaders.cookie).not.toBe(authorHeaders.cookie);
 	});
 
 	it('initiates a durable remote copy bounded by the still-image limit and reconnects to it', async () => {
@@ -186,12 +187,12 @@ describe('the approved remote HTTPS copy API', () => {
 		expect(response.status).toBe(409);
 	});
 
-	// Scoping is by the graphics author identity the caller supplies, which is the
-	// installation-wide model for every Graphics Ingestion Operation route. That
-	// identity is not authenticated today, so this proves the scoping mechanism,
-	// not resistance to a caller that claims another author's identity. Making
-	// the session the authoritative author identity is tracked separately.
-	it('scopes a remote copy operation to the graphics author identity that initiated it', async () => {
+	// Scoping is by the authenticated graphics author session, which is the
+	// installation-wide model for every Graphics Ingestion Operation route. A
+	// second author holding a real session of their own is therefore the exact
+	// adversary this must resist, and knowing the operation's UUID buys them
+	// nothing.
+	it('scopes a remote copy operation to the graphics author session that initiated it', async () => {
 		const initiated = await initiateRemoteCopy(
 			'integration-remote-copy-isolation',
 			'Private remote copy',
@@ -213,12 +214,15 @@ describe('the approved remote HTTPS copy API', () => {
 		);
 		expect(foreignStagedSource.status).toBe(404);
 
-		// Unlike every other operation route, staged provisional bytes also
-		// require an authenticated graphics author session.
 		const sessionless = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/staged-source`,
-			{ headers: { 'x-graphics-author-id': authorHeaders['x-graphics-author-id']! } },
 		);
 		expect(sessionless.status).toBe(401);
+
+		// The initiating session still owns it: refusing everyone is not scoping.
+		await expect($fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}`,
+			{ headers: authorHeaders },
+		)).resolves.toMatchObject({ id: initiated.id });
 	});
 });

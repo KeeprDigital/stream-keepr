@@ -112,21 +112,36 @@ file. An approved remote copy has no client-side bytes, so after server-side
 validation the operation pauses at `awaiting-confirmation`. The workspace reads
 the exact staged bytes from
 `GET /api/graphics-assets/ingestion-operations/:id/staged-source` — private,
-`no-store`, gated on an authenticated graphics-author session, scoped to the
-supplied graphics author identity, and readable only while that operation is
+`no-store`, gated on an authenticated graphics author session, scoped to the
+session that initiated the operation, and readable only while that operation is
 awaiting confirmation — produces the evidence, and submits it to
 `POST /api/graphics-assets/ingestion-operations/:id/browser-evidence`.
 
-This is the only Graphics Ingestion Operation route that requires a session at
-all. Note the limit of that scoping: the graphics author identity is the
-client-supplied `x-graphics-author-id` header across the whole library, and it
-is not authenticated. A caller that claims another author's identity is
-therefore treated as that author here exactly as it already is on every other
-operation route. Provisional staged bytes are a new class of data behind that
-pre-existing model, so making the session the authoritative author identity is
-worth doing installation-wide; it cannot be done in this route alone, because
-the session's `authorId` is an unrelated random UUID that no operation is keyed
-by.
+## Who a Graphics Ingestion Operation belongs to
+
+The authenticated graphics author session is the author identity, on this route
+and on every other. An operation records the session that initiated it as its
+`initiatedBy`, every route resolves the asking author the same way, and the
+library matches the two before it will answer at all — so an operation's UUID is
+a name, not a right, and a second author who learns one is told the operation
+does not exist. The same holds for an idempotency key: keys are unique per
+author, so reusing another author's key opens a new operation of one's own
+rather than reconnecting to theirs.
+
+There is no longer any client-supplied author header. The former
+`x-graphics-author-id` was unauthenticated and is gone from the whole library;
+nothing on the wire names an author except the session cookie.
+
+Two consequences worth stating plainly. A graphics author session lasts eight
+hours, so an operation outlives the session that created it and becomes
+unreachable when that session expires — retention still reclaims its staged
+input on the ordinary schedule, but its author cannot resume it. And an
+operation is owned by one session rather than by a person: the same author in a
+second browser is a second author here.
+
+`docs/operations/graphics-operations-cockpit.md` describes the administrator
+surface, which is gated by the installation's admin token instead and is
+unaffected by any of this.
 
 ## Platform limitation: DNS rebinding
 

@@ -12,7 +12,10 @@ import {
 	readTemplatePackageParts,
 	writeTemplatePackage,
 } from '../helpers/templatePackageArchive';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import {
+	createGraphicsAuthorSessionCookie,
+	suiteGraphicsAuthorSessionCookie,
+} from './graphicsAuthorSession';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -75,6 +78,7 @@ async function receivePackage(archive: Uint8Array, options: { fileName?: string 
 		'/api/graphics-assets/ingestion-operations',
 		{
 			method: 'POST',
+			headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
 			body: {
 				idempotencyKey: `template-package-preflight-${++preflightSequence}`,
 				source: 'template-package',
@@ -85,7 +89,11 @@ async function receivePackage(archive: Uint8Array, options: { fileName?: string 
 	);
 	const response = await fetch(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-		{ method: 'PUT', body: archive },
+		{
+			method: 'PUT',
+			headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+			body: archive,
+		},
 	);
 	expect(response.status).toBe(200);
 	return await response.json() as GraphicsIngestionOperation;
@@ -100,6 +108,7 @@ async function receivePackageInParts(archive: Uint8Array, options: { fileName?: 
 		'/api/graphics-assets/ingestion-operations',
 		{
 			method: 'POST',
+			headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
 			body: {
 				idempotencyKey: `template-package-preflight-${++preflightSequence}`,
 				source: 'template-package',
@@ -108,9 +117,10 @@ async function receivePackageInParts(archive: Uint8Array, options: { fileName?: 
 			},
 		},
 	);
+	const authorHeaders = { cookie: await suiteGraphicsAuthorSessionCookie() };
 	const started = await $fetch<GraphicsIngestionOperation>(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart`,
-		{ method: 'POST' },
+		{ method: 'POST', headers: authorHeaders },
 	);
 	const transfer = started.transfer!;
 	for (let partNumber = 1; partNumber <= transfer.partCount; partNumber += 1) {
@@ -119,6 +129,7 @@ async function receivePackageInParts(archive: Uint8Array, options: { fileName?: 
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/parts/${partNumber}`,
 			{
 				method: 'PUT',
+				headers: authorHeaders,
 				body: archive.slice(offset, Math.min(archive.byteLength, offset + transfer.partByteLength)),
 			},
 		);
@@ -126,7 +137,7 @@ async function receivePackageInParts(archive: Uint8Array, options: { fileName?: 
 	}
 	return await $fetch<GraphicsIngestionOperation>(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/complete`,
-		{ method: 'POST' },
+		{ method: 'POST', headers: authorHeaders },
 	);
 }
 
@@ -135,8 +146,11 @@ describe('template Package preflight through the API boundary', () => {
 	let screenId: number;
 	let reference: { assetId: string; revisionId: string };
 	let exportedPackage: Uint8Array;
+	/** Every ingestion route resolves the author from the session, so one suite-wide author owns every operation here. */
+	let authorHeaders: Record<string, string>;
 
 	beforeAll(async () => {
+		authorHeaders = { cookie: await suiteGraphicsAuthorSessionCookie() };
 		const graphicsAuthorCookie = await createGraphicsAuthorSessionCookie();
 		const created = await $fetch('/api/events', {
 			method: 'POST',
@@ -161,6 +175,7 @@ describe('template Package preflight through the API boundary', () => {
 			'/api/graphics-assets/ingestion-operations',
 			{
 				method: 'POST',
+				headers: authorHeaders,
 				body: {
 					idempotencyKey: 'template-package-preflight-source',
 					name: 'Preflight sponsor logo',
@@ -177,7 +192,7 @@ describe('template Package preflight through the API boundary', () => {
 		);
 		const uploaded = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-			{ method: 'PUT', body: packagePixelPng },
+			{ method: 'PUT', headers: authorHeaders, body: packagePixelPng },
 		);
 		const operation = await uploaded.json() as GraphicsIngestionOperation;
 		reference = {
@@ -233,6 +248,7 @@ describe('template Package preflight through the API boundary', () => {
 		// The immutable report survives a reconnect on the durable operation.
 		const reread = await $fetch<GraphicsIngestionOperation>(
 			`/api/graphics-assets/ingestion-operations/${operation.id}`,
+			{ headers: authorHeaders },
 		);
 		expect(reread.templatePackagePreflight?.fingerprint).toBe(report.fingerprint);
 		expect(reread.stage).toBe('awaiting-installation');
@@ -346,18 +362,19 @@ describe('template Package preflight through the API boundary', () => {
 			`/api/graphics-assets/ingestion-operations/${operation.id}/template-package-confirmation`,
 			{
 				method: 'POST',
-				headers: { 'content-type': 'application/json' },
+				headers: { ...authorHeaders, 'content-type': 'application/json' },
 				body: JSON.stringify({ fingerprint: 'a'.repeat(64) }),
 			},
 		);
 		expect(wrongFingerprint.status).toBe(400);
 		await expect($fetch<GraphicsIngestionOperation>(
 			`/api/graphics-assets/ingestion-operations/${operation.id}`,
+			{ headers: authorHeaders },
 		)).resolves.toMatchObject({ stage: 'awaiting-confirmation' });
 
 		const confirmed = await $fetch<GraphicsIngestionOperation>(
 			`/api/graphics-assets/ingestion-operations/${operation.id}/template-package-confirmation`,
-			{ method: 'POST', body: { fingerprint: report.fingerprint } },
+			{ method: 'POST', headers: authorHeaders, body: { fingerprint: report.fingerprint } },
 		);
 		expect(confirmed.stage).toBe('awaiting-installation');
 
@@ -394,7 +411,7 @@ describe('template Package preflight through the API boundary', () => {
 		// A permanent input failure is not retryable into existence.
 		const retried = await fetch(
 			`/api/graphics-assets/ingestion-operations/${operation.id}/retry`,
-			{ method: 'POST' },
+			{ method: 'POST', headers: authorHeaders },
 		);
 		expect(retried.status).toBe(409);
 	});
@@ -421,11 +438,11 @@ describe('template Package preflight through the API boundary', () => {
 
 		const cancelled = await $fetch<GraphicsIngestionOperation>(
 			`/api/graphics-assets/ingestion-operations/${operation.id}`,
-			{ method: 'DELETE' },
+			{ method: 'DELETE', headers: authorHeaders },
 		);
 		const again = await $fetch<GraphicsIngestionOperation>(
 			`/api/graphics-assets/ingestion-operations/${operation.id}`,
-			{ method: 'DELETE' },
+			{ method: 'DELETE', headers: authorHeaders },
 		);
 
 		expect(cancelled.stage).toBe('cancelled');
@@ -434,7 +451,7 @@ describe('template Package preflight through the API boundary', () => {
 			`/api/graphics-assets/ingestion-operations/${operation.id}/template-package-confirmation`,
 			{
 				method: 'POST',
-				headers: { 'content-type': 'application/json' },
+				headers: { ...authorHeaders, 'content-type': 'application/json' },
 				body: JSON.stringify({
 					fingerprint: operation.templatePackagePreflight!.fingerprint,
 				}),
@@ -446,7 +463,7 @@ describe('template Package preflight through the API boundary', () => {
 	it('refuses to initiate a package beyond the received archive limit', async () => {
 		const response = await fetch('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
-			headers: { 'content-type': 'application/json' },
+			headers: { ...authorHeaders, 'content-type': 'application/json' },
 			body: JSON.stringify({
 				idempotencyKey: 'template-package-preflight-oversized',
 				source: 'template-package',

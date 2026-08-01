@@ -1,10 +1,8 @@
 import { z } from 'zod';
 import { graphicsIngestionOperationId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import {
-	graphicsAuthorIdentity,
-	rethrowGraphicsAssetApiError,
-} from '~~/server/utils/graphicsAssetApi';
+import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
  * The approved remote source URL is supplied per attempt and never persisted:
@@ -16,11 +14,12 @@ const remoteCopySchema = z.object({
 }).strict();
 
 export default defineEventHandler(async (event) => {
+	const initiatedBy = await requireGraphicsAuthorSession(event);
 	try {
 		const { sourceUrl } = await readValidatedBody(event, remoteCopySchema.parse);
 		return await graphicsAssetLibraryForEvent(event).copyRemoteGraphicAssetSource({
 			operationId: graphicsIngestionOperationId(getRouterParam(event, 'operationId') ?? ''),
-			initiatedBy: graphicsAuthorIdentity(event),
+			initiatedBy,
 			sourceUrl,
 		});
 	}

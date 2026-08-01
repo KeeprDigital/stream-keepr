@@ -67,6 +67,7 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 			'/api/graphics-assets/ingestion-operations',
 			{
 				method: 'POST',
+				headers: { cookie: graphicsAuthorCookie },
 				body: {
 					idempotencyKey: 'screen-output-capability-pixel',
 					name: 'Screen Output capability pixel',
@@ -83,7 +84,7 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		);
 		const upload = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-			{ method: 'PUT', body: pixelPng },
+			{ method: 'PUT', headers: { cookie: graphicsAuthorCookie }, body: pixelPng },
 		);
 		const operation = await upload.json() as GraphicsIngestionOperation;
 		assetId = operation.result!.assetId;

@@ -17,7 +17,10 @@ import {
 	readTemplatePackageParts,
 	writeTemplatePackage,
 } from '../helpers/templatePackageArchive';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import {
+	createGraphicsAuthorSessionCookie,
+	suiteGraphicsAuthorSessionCookie,
+} from './graphicsAuthorSession';
 
 /**
  * A Broadcast Graphic Template travelling as a `.skgraphic` Template Package,
@@ -86,6 +89,7 @@ async function receivePackage(archive: Uint8Array) {
 		'/api/graphics-assets/ingestion-operations',
 		{
 			method: 'POST',
+			headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
 			body: {
 				idempotencyKey: `skgraphic-package-${runId}-${++packageSequence}`,
 				source: 'template-package',
@@ -96,7 +100,11 @@ async function receivePackage(archive: Uint8Array) {
 	);
 	const response = await fetch(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-		{ method: 'PUT', body: archive },
+		{
+			method: 'PUT',
+			headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+			body: archive,
+		},
 	);
 	expect(response.status).toBe(200);
 	return await response.json() as GraphicsIngestionOperation;
@@ -105,7 +113,7 @@ async function receivePackage(archive: Uint8Array) {
 async function installPackage(operationId: string) {
 	return await $fetch<GraphicsIngestionOperation>(
 		`/api/graphics-assets/ingestion-operations/${operationId}/template-package-installation`,
-		{ method: 'POST' },
+		{ method: 'POST', headers: { cookie: await suiteGraphicsAuthorSessionCookie() } },
 	);
 }
 
@@ -143,6 +151,7 @@ describe('broadcast Graphic Template Packages', () => {
 			'/api/graphics-assets/ingestion-operations',
 			{
 				method: 'POST',
+				headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
 				body: {
 					idempotencyKey: `skgraphic-package-source-${runId}`,
 					name: 'Package round trip backdrop',
@@ -160,7 +169,11 @@ describe('broadcast Graphic Template Packages', () => {
 		);
 		const uploaded = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-			{ method: 'PUT', body: pixelPng },
+			{
+				method: 'PUT',
+				headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+				body: pixelPng,
+			},
 		);
 		const operation = await uploaded.json() as GraphicsIngestionOperation;
 		asset = {

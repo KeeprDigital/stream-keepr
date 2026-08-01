@@ -37,10 +37,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 	let authorHeaders: Record<string, string>;
 
 	beforeAll(async () => {
-		authorHeaders = {
-			'cookie': await createGraphicsAuthorSessionCookie(),
-			'x-graphics-author-id': 'lifecycle-integration-author',
-		};
+		authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
 		const event = await $fetch('/api/events', {
 			method: 'POST',
 			body: {
@@ -93,7 +90,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 	async function lifecycleAction(assetId: string, action: GraphicAssetLifecycleAction) {
 		return await $fetch<GraphicAssetLifecycleActionOutcome>(
 			`/api/graphics-assets/${assetId}/lifecycle-actions`,
-			{ method: 'POST', body: { action } },
+			{ method: 'POST', headers: authorHeaders, body: { action } },
 		);
 	}
 

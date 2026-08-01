@@ -59,10 +59,7 @@ describe('the Graphics Asset Library retention API', () => {
 	let authorHeaders: Record<string, string>;
 
 	beforeAll(async () => {
-		authorHeaders = {
-			'cookie': await createGraphicsAuthorSessionCookie(),
-			'x-graphics-author-id': 'retention-integration-author',
-		};
+		authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
 	});
 
 	async function ingest(name: string, idempotencyKey: string, bytes = retentionPixelPng) {

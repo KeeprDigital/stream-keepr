@@ -193,9 +193,14 @@ async function request(
  * ordinary ingestion that matches existing content reuses that asset by design —
  * which would mean sharing its lifecycle with a suite that retires it.
  */
-async function ingestImage(eventId: number, name: string): Promise<{ assetId: string; revisionId: string }> {
+async function ingestImage(
+	eventId: number,
+	name: string,
+	cookie: string,
+): Promise<{ assetId: string; revisionId: string }> {
 	const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 		method: 'POST',
+		headers: { cookie },
 		body: {
 			idempotencyKey: `${name}-${runId}`,
 			name,
@@ -212,7 +217,7 @@ async function ingestImage(eventId: number, name: string): Promise<{ assetId: st
 	});
 	const response = await fetch(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-		{ method: 'PUT', body: pixelPng },
+		{ method: 'PUT', headers: { cookie }, body: pixelPng },
 	);
 	const operation = await response.json() as GraphicsIngestionOperation;
 	return { assetId: operation.result!.assetId, revisionId: operation.result!.revisionId };
@@ -296,7 +301,7 @@ describe('broadcast Graphic Template library', () => {
 		otherEventId = other.eventId;
 		otherScreenId = other.screenId;
 
-		asset = await ingestImage(sourceEventId, 'template-library-bug');
+		asset = await ingestImage(sourceEventId, 'template-library-bug', authorCookie);
 
 		// One authored Broadcast Graphic with everything a template has to carry: a
 		// Graphic Group with children, a pinned Media Graphic Item, typed Graphic
@@ -504,7 +509,7 @@ describe('broadcast Graphic Template library', () => {
 
 		// Still not a library-browsing hole: an asset this Screen publishes nothing of
 		// stays invisible to its outputs.
-		const unreferenced = await ingestImage(otherEventId, 'template-library-unplaced');
+		const unreferenced = await ingestImage(otherEventId, 'template-library-unplaced', authorCookie);
 		const refused = await fetch(
 			`/api/screen-output/screens/${otherScreenId}/assets/${unreferenced.assetId}/revisions/${unreferenced.revisionId}/content`,
 			{ headers: { authorization: `Bearer ${assetCapability}` } },
@@ -806,7 +811,7 @@ describe('broadcast Graphic Template library', () => {
 	});
 
 	it('refuses to place a template whose Graphic Asset has been retired, naming the template Graphic Item', async () => {
-		const retiredAsset = await ingestImage(sourceEventId, 'template-library-retired');
+		const retiredAsset = await ingestImage(sourceEventId, 'template-library-retired', authorCookie);
 		const sourceScreen = await $fetch<ScreenResponse>(`/api/events/${sourceEventId}/screens`, {
 			method: 'POST',
 			body: { name: 'Retiring', slug: 'template-retiring-screen', currentMode: 'broadcast-graphics' },
@@ -829,6 +834,7 @@ describe('broadcast Graphic Template library', () => {
 
 		await $fetch(`/api/graphics-assets/${retiredAsset.assetId}/lifecycle-actions`, {
 			method: 'POST',
+			headers: { cookie: authorCookie },
 			body: { action: 'retire' },
 		});
 

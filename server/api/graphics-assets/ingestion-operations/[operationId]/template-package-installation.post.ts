@@ -1,9 +1,7 @@
 import { graphicsIngestionOperationId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import {
-	graphicsAuthorIdentity,
-	rethrowGraphicsAssetApiError,
-} from '~~/server/utils/graphicsAssetApi';
+import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
  * Installs one confirmed Template Package.
@@ -14,10 +12,11 @@ import {
  * client that lost a response asks again rather than installing a second copy.
  */
 export default defineEventHandler(async (event) => {
+	const initiatedBy = await requireGraphicsAuthorSession(event);
 	try {
 		return await graphicsAssetLibraryForEvent(event).installTemplatePackage({
 			operationId: graphicsIngestionOperationId(getRouterParam(event, 'operationId') ?? ''),
-			initiatedBy: graphicsAuthorIdentity(event),
+			initiatedBy,
 		});
 	}
 	catch (error) {

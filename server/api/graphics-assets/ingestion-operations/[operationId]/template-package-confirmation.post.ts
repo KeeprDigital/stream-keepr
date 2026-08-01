@@ -1,10 +1,8 @@
 import { z } from 'zod';
 import { graphicsIngestionOperationId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import {
-	graphicsAuthorIdentity,
-	rethrowGraphicsAssetApiError,
-} from '~~/server/utils/graphicsAssetApi';
+import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
  * The fingerprint is required rather than optional: confirming without naming
@@ -16,11 +14,12 @@ const confirmationSchema = z.object({
 }).strict();
 
 export default defineEventHandler(async (event) => {
+	const initiatedBy = await requireGraphicsAuthorSession(event);
 	try {
 		const { fingerprint } = await readValidatedBody(event, confirmationSchema.parse);
 		return await graphicsAssetLibraryForEvent(event).confirmTemplatePackagePreflight({
 			operationId: graphicsIngestionOperationId(getRouterParam(event, 'operationId') ?? ''),
-			initiatedBy: graphicsAuthorIdentity(event),
+			initiatedBy,
 			fingerprint,
 		});
 	}

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { requireGraphicsAdministrator } from '~~/server/modules/graphics-administrator';
 import { graphicAssetId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { graphicsAuthorIdentity, rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
+import { graphicsAdministratorActor, rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 const purgeSchema = z.object({
 	confirmation: z.literal('purge-now'),
@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
 		const { confirmation } = await readValidatedBody(event, purgeSchema.parse);
 		return await graphicsAssetLibraryForEvent(event).purgeTrashedGraphicAsset({
 			assetId: graphicAssetId(getRouterParam(event, 'assetId') ?? ''),
-			actor: graphicsAuthorIdentity(event),
+			actor: await graphicsAdministratorActor(event),
 			confirmation,
 		});
 	}

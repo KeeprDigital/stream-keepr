@@ -109,9 +109,11 @@ async function ingestImage(
 	eventId: number,
 	name: string,
 	bytes: Uint8Array,
+	cookie: string,
 ): Promise<Reference> {
 	const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 		method: 'POST',
+		headers: { cookie },
 		body: {
 			idempotencyKey: `${name}-${runId}`,
 			name,
@@ -128,7 +130,7 @@ async function ingestImage(
 	});
 	const response = await fetch(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-		{ method: 'PUT', body: bytes },
+		{ method: 'PUT', headers: { cookie }, body: bytes },
 	);
 	const operation = await response.json() as GraphicsIngestionOperation;
 	return { assetId: operation.result!.assetId, revisionId: operation.result!.revisionId };
@@ -189,10 +191,11 @@ function textItem(id: string, font: unknown, overrides: Record<string, unknown> 
  * however each side asks for them; distinct bytes are what actually keep this
  * suite's Graphic Asset lifecycle to itself.
  */
-async function ingestFont(eventId: number, name: string): Promise<Reference> {
+async function ingestFont(eventId: number, name: string, cookie: string): Promise<Reference> {
 	const bytes = new Uint8Array(await readFile('public/fonts/mana.woff'));
 	const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 		method: 'POST',
+		headers: { cookie },
 		body: {
 			idempotencyKey: `${name}-${runId}`,
 			name,
@@ -205,7 +208,7 @@ async function ingestFont(eventId: number, name: string): Promise<Reference> {
 	});
 	const response = await fetch(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-		{ method: 'PUT', headers: { 'content-type': 'font/woff' }, body: bytes },
+		{ method: 'PUT', headers: { cookie, 'content-type': 'font/woff' }, body: bytes },
 	);
 	const awaitingEvidence = await response.json() as GraphicsIngestionOperation;
 	if (awaitingEvidence.report?.outcome !== 'accepted' || awaitingEvidence.report.facts.kind !== 'font')
@@ -215,6 +218,7 @@ async function ingestFont(eventId: number, name: string): Promise<Reference> {
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/font-browser-evidence`,
 		{
 			method: 'POST',
+			headers: { cookie },
 			body: {
 				outcome: 'font-loaded',
 				sourceDigest: createHash('sha256').update(bytes).digest('hex'),
@@ -272,8 +276,8 @@ describe('broadcast Graphics Media Graphic Items', () => {
 			},
 		});
 		screenId = screen.id;
-		logo = await ingestImage(eventId, 'broadcast-graphics-media-logo', pixelPng);
-		badge = await ingestImage(eventId, 'broadcast-graphics-media-badge', taggedPng);
+		logo = await ingestImage(eventId, 'broadcast-graphics-media-logo', pixelPng, graphicsAuthorCookie);
+		badge = await ingestImage(eventId, 'broadcast-graphics-media-badge', taggedPng, graphicsAuthorCookie);
 	});
 
 	afterAll(async () => {
@@ -349,7 +353,7 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		// A separate Graphic Asset identity over identical content: in the library but
 		// not published by this Screen, which is exactly the case the capability must
 		// refuse.
-		const unreferenced = await ingestImage(eventId, 'broadcast-graphics-media-unreferenced', pixelPng);
+		const unreferenced = await ingestImage(eventId, 'broadcast-graphics-media-unreferenced', pixelPng, graphicsAuthorCookie);
 
 		function outputContent(reference: Reference) {
 			return fetch(
@@ -514,7 +518,7 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		// command, or a direct API call all arrive here. A reference that cannot resolve
 		// invalidates the graphic that owns it, so Take is refused — while Out stays
 		// available, because it needs none of the asset's bytes.
-		const takeable = await ingestImage(eventId, 'broadcast-graphics-media-takeable', taggedPng);
+		const takeable = await ingestImage(eventId, 'broadcast-graphics-media-takeable', taggedPng, graphicsAuthorCookie);
 		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
 			method: 'POST',
 			body: { name: 'Playout Gate', slug: 'playout-gate', currentMode: 'broadcast-graphics' },
@@ -635,7 +639,7 @@ describe('broadcast Graphics Media Graphic Items', () => {
 	 * mechanism with, rather than in a font-shaped suite of its own.
 	 */
 	it('indexes a typography font revision and resolves it through the capability', async () => {
-		const font = await ingestFont(eventId, `broadcast-graphics-typography-font-${runId}`);
+		const font = await ingestFont(eventId, `broadcast-graphics-typography-font-${runId}`, graphicsAuthorCookie);
 
 		const updated = await $fetch<ScreenResponse>(configPath(), {
 			method: 'PATCH',

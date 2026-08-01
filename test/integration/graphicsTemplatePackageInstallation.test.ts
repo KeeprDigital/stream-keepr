@@ -15,7 +15,10 @@ import {
 	readTemplatePackageParts,
 	writeTemplatePackage,
 } from '../helpers/templatePackageArchive';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import {
+	createGraphicsAuthorSessionCookie,
+	suiteGraphicsAuthorSessionCookie,
+} from './graphicsAuthorSession';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -51,6 +54,7 @@ async function receivePackage(archive: Uint8Array) {
 		'/api/graphics-assets/ingestion-operations',
 		{
 			method: 'POST',
+			headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
 			body: {
 				idempotencyKey: `template-package-installation-${++installationSequence}`,
 				source: 'template-package',
@@ -61,7 +65,11 @@ async function receivePackage(archive: Uint8Array) {
 	);
 	const response = await fetch(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-		{ method: 'PUT', body: archive },
+		{
+			method: 'PUT',
+			headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+			body: archive,
+		},
 	);
 	expect(response.status).toBe(200);
 	return await response.json() as GraphicsIngestionOperation;
@@ -70,7 +78,7 @@ async function receivePackage(archive: Uint8Array) {
 async function installPackage(operationId: string) {
 	return await $fetch<GraphicsIngestionOperation>(
 		`/api/graphics-assets/ingestion-operations/${operationId}/template-package-installation`,
-		{ method: 'POST' },
+		{ method: 'POST', headers: { cookie: await suiteGraphicsAuthorSessionCookie() } },
 	);
 }
 
@@ -78,11 +86,14 @@ describe('template Package installation through the API boundary', () => {
 	let eventId: number;
 	let screenId: number;
 	let graphicsAuthorCookie: string;
+	/** Every ingestion route resolves the author from the session, so one suite-wide author owns every operation here. */
+	let authorHeaders: Record<string, string>;
 	let reference: { assetId: string; revisionId: string };
 	let exportedPackage: Uint8Array;
 
 	beforeAll(async () => {
 		graphicsAuthorCookie = await createGraphicsAuthorSessionCookie();
+		authorHeaders = { cookie: await suiteGraphicsAuthorSessionCookie() };
 		const created = await $fetch('/api/events', {
 			method: 'POST',
 			body: {
@@ -106,6 +117,7 @@ describe('template Package installation through the API boundary', () => {
 			'/api/graphics-assets/ingestion-operations',
 			{
 				method: 'POST',
+				headers: authorHeaders,
 				body: {
 					idempotencyKey: 'template-package-installation-source',
 					name: 'Installation sponsor logo',
@@ -122,7 +134,7 @@ describe('template Package installation through the API boundary', () => {
 		);
 		const uploaded = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-			{ method: 'PUT', body: packagePixelPng },
+			{ method: 'PUT', headers: authorHeaders, body: packagePixelPng },
 		);
 		const operation = await uploaded.json() as GraphicsIngestionOperation;
 		reference = {
@@ -186,6 +198,7 @@ describe('template Package installation through the API boundary', () => {
 			`/api/graphics-assets/ingestion-operations/${received.id}/template-package-confirmation`,
 			{
 				method: 'POST',
+				headers: authorHeaders,
 				body: { fingerprint: received.templatePackagePreflight!.fingerprint },
 			},
 		);
@@ -306,7 +319,7 @@ describe('template Package installation through the API boundary', () => {
 
 		const cancelled = await $fetch<GraphicsIngestionOperation>(
 			`/api/graphics-assets/ingestion-operations/${received.id}`,
-			{ method: 'DELETE' },
+			{ method: 'DELETE', headers: authorHeaders },
 		);
 		expect(cancelled.stage).toBe('cancelled');
 
@@ -342,7 +355,7 @@ describe('template Package installation through the API boundary', () => {
 
 		const refused = await fetch(
 			`/api/graphics-assets/ingestion-operations/${received.id}/template-package-installation`,
-			{ method: 'POST' },
+			{ method: 'POST', headers: authorHeaders },
 		);
 		expect(refused.status).toBe(409);
 		expect(await $fetch<GraphicAsset[]>('/api/graphics-assets')).toHaveLength(before.length);
@@ -352,6 +365,7 @@ describe('template Package installation through the API boundary', () => {
 			`/api/graphics-assets/ingestion-operations/${received.id}/template-package-confirmation`,
 			{
 				method: 'POST',
+				headers: authorHeaders,
 				body: { fingerprint: received.templatePackagePreflight!.fingerprint },
 			},
 		);
