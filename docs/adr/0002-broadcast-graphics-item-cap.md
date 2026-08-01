@@ -25,12 +25,12 @@ Measured against the schema itself, at four cap values:
 
 | Graphic Item cap | worst case (bytes) |
 | ---------------- | ------------------ |
-| 51               | 865,662            |
-| 102              | 1,448,938          |
-| 204              | 2,615,490          |
-| 300              | 3,713,156          |
+| 51               | 865,762            |
+| 102              | 1,449,138          |
+| 204              | 2,615,890          |
+| 300              | 3,713,744          |
 
-That is **11,435 bytes per Graphic Item on 282,568 bytes of fixed cost** — the 50 Broadcast Graphic shells with their inputs, bindings, Graphic Source Selections, channel membership, Graphic Style Set links and container references, none of which any item cap touches.
+That is **11,437 bytes per Graphic Item on 282,564 bytes of fixed cost** — the 50 Broadcast Graphic shells with their inputs, bindings, Graphic Source Selections, channel membership, Graphic Style Set links and container references, none of which any item cap touches.
 
 ## Decision
 
@@ -57,15 +57,15 @@ Checked rather than asserted: a realistic Screen filled to this cap measures **2
 
 Because it is unreachable at any cap a show needs, and not by a small margin.
 
-The worst case first fits 524,288 bytes at **21** Graphic Items — measured, not extrapolated: 521,232 at 21 and 532,713 at 22. An earlier draft of this decision argued that 21 was below the acceptance set and therefore that the rule's fixed point broke the spec. **That argument was wrong** — the acceptance set is 19 Graphic Items, so 21 clears it — and it is recorded here because it was the sole stated reason for the decision and it did not survive being checked.
+The worst case first fits 524,288 bytes at **21** Graphic Items — measured, not extrapolated: 521,272 at 21 and 532,755 at 22. An earlier draft of this decision argued that 21 was below the acceptance set and therefore that the rule's fixed point broke the spec. **That argument was wrong** — the acceptance set is 19 Graphic Items, so 21 clears it — and it is recorded here because it was the sole stated reason for the decision and it did not survive being checked.
 
 The correct objection is about volume, not expressiveness. The fidelity prototype is evidence that a constrained compositor can _reproduce_ four representative graphics; it is not evidence of how many a show runs. A cap of 21 would leave a Screen that may carry 50 Broadcast Graphics unable to give most of them a single item, making `MAX_BROADCAST_GRAPHICS_PER_SCREEN` unreachable, and the spec's problem statement asks for lower thirds for commentators _and_ players, full-screen slates and persistent brand bugs concurrently on one output.
 
 ### Why narrowing the remaining axes cannot close it either
 
-Requirement (b) of #99 is to constrain the pathological axes until the worst case fits. Three were narrowed (below). The largest remaining is a maximal Graphic Style Set reference in every slot of every Graphic Item, about 6,100 bytes — more than half of an item's 11,435.
+Requirement (b) of #99 is to constrain the pathological axes until the worst case fits. Three were narrowed (below). The largest remaining is a maximal Graphic Style Set reference in every slot of every Graphic Item, about 6,100 bytes — more than half of an item's 11,437.
 
-Removing it entirely would still not be enough, and the arithmetic is short. At a cap of 300 the whole budget left for items after the fixed shell cost is 524,288 − 282,568 = 241,720, which is **806 bytes per Graphic Item**. `MAX_GRAPHIC_TEXT_LENGTH` is 1,000, so at this cap a maximal Graphic Text Template alone exceeds the per-item budget before an id, a label, a position or a typography is counted.
+Removing it entirely would still not be enough, and the arithmetic is short. At a cap of 300 the whole budget left for items after the fixed shell cost is 524,288 − 282,564 = 241,724, which is **806 bytes per Graphic Item**. `MAX_GRAPHIC_TEXT_LENGTH` is 1,000, so at this cap a maximal Graphic Text Template alone exceeds the per-item budget before an id, a label, a position or a typography is counted.
 
 At the old cap of 110 the per-item budget is 2,197 bytes against roughly 5,300 for a maximal Text Graphic Item with its Style Set references stripped out — so it does not fit there either, but the text template is not what makes the difference at that cap. Getting under 2,197 would mean cutting Graphic Font Selections and Graphic Placeholder Styles as well, which are three separate spec-level questions rather than one.
 
@@ -92,7 +92,7 @@ None costs realistic authoring anything, and each was unbounded relative to its 
 
 ## Consequences
 
-- The one measurement lives in `broadcastGraphicsModeConfig.test.ts` and is pinned with `toBe`, in two arrangements: Graphic Groups holding children (3,713,156, the worst) and the same budget flat (3,710,776). Both are asserted, so "which worst case" stays a checked choice — a single-shape fixture reported the cheaper one and looked comfortable twice before.
+- The one measurement lives in `broadcastGraphicsModeConfig.test.ts` and is pinned with `toBe`, in two arrangements: Graphic Groups holding children (3,713,744, the worst) and the same budget flat (3,711,076). Both are asserted, so "which worst case" stays a checked choice — a single-shape fixture reported the cheaper one and looked comfortable twice before.
 - A ticket that adds to the vocabulary extends that builder and moves a visible constant. If it also wants to move the cap, it re-derives it here rather than in its own docblock.
 - **`MAX_GRAPHIC_ITEM_ID_LENGTH` is an import constraint, deliberately.** A Broadcast Graphic Template Package's document is proved against the same schema the Screen write path uses, so a package whose Graphic Item ids exceed 64 characters is refused on install. That is accepted rather than worked around: one bound on both paths is what keeps "a document that installs is a document the write path accepts" true, and every copy path — placing a template, installing a package — mints fresh uuids anyway. #99 flagged that this window closes once Template Packages carry ids authored elsewhere; it is closed knowingly, and the database is wiped before ship, so no stored document predates it.
 - `MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN` (60) now binds well before this cap for any package whose graphics declare Live Control: at two inputs per graphic only 30 of the 50 Broadcast Graphics can carry any. Anyone finding a package too small to author should move that number before this one, and re-measure the worst case when they do.

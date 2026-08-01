@@ -526,7 +526,7 @@ function worstCaseScreen(arrangement: 'flat' | 'grouped') {
 }
 
 /** The same budget laid out flat, measured so the choice of shape stays checked. */
-const WORST_CASE_FLAT_BYTES = 3_710_776;
+const WORST_CASE_FLAT_BYTES = 3_711_076;
 
 /** A realistic Screen filled to the Graphic Item cap. See ADR-0002. */
 const REALISTIC_SCREEN_AT_CAP_BYTES = 248_734;
