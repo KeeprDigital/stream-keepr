@@ -40,6 +40,7 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	'delivery-vary-incomplete',
 	'delivery-cache-parity-broken',
 	'delivery-cache-state-unreported',
+	'delivery-cache-not-observable',
 	'delivery-cache-never-hit',
 	'delivery-authorization-skipped',
 	'delivery-revocation-ineffective',

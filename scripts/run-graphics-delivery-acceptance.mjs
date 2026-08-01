@@ -33,8 +33,10 @@
 
 import process from 'node:process';
 import {
+	armedRepresentation,
 	readArmedScenario,
 	releaseArmedScenario,
+	restoreArmedRepresentation,
 	writeArmedScenario,
 } from './graphics-acceptance/armed-scenario.mjs';
 import {
@@ -58,7 +60,6 @@ import { AcceptanceFailure, deliveryRouteLabel } from './graphics-acceptance/evi
 import { runAcceptanceHarness } from './graphics-acceptance/harness.mjs';
 import {
 	acceptanceOrigin,
-	digestOf,
 	openInstallation,
 	provisionScreenOutputScenario,
 } from './graphics-acceptance/installation.mjs';
@@ -421,31 +422,28 @@ await runAcceptanceHarness({
 				// warmed, so locally this would assert an invariant the environment
 				// cannot host.
 				const warmed = await readBothRoutes(warm);
+				// The editor route shares no cache with the capability route, so the
+				// warmed representation reports the outage there in every
+				// environment. This is the clause the runbook promises.
+				record(checkRetryableUnavailable(warmed.editor, { route: warmed.editorRoute }));
 				if (deployed) {
 					record(checkFullRead(warmed.capability, capabilityExpectations(warm, warmed.route)));
 					record(checkNoStorageAddressing(warmed.capability.headers, { route: warmed.route }));
 				}
 				else {
-					note({ code: 'delivery-cache-state-unreported', detail: { route: warmed.route } });
+					// Distinct from `delivery-cache-state-unreported`, which means the
+					// edge did not report warmth. This means there is no edge cache
+					// here to report anything, so the assertion was never attempted.
+					note({ code: 'delivery-cache-not-observable', detail: { route: warmed.route } });
 				}
 			}
 		}
 
 		if (fault) {
 			const armed = await readArmedScenario(scenarioPath);
-			const restore = (representation) => {
-				evidence.addSecret(representation.capability);
-				return {
-					...representation,
-					content: Uint8Array.from(representation.content),
-					capabilityContentPath: () => acceptanceRoutes.capabilityContent(
-						representation.screenId,
-						representation.assetId,
-						representation.revisionId,
-					),
-					editorContentPath: () =>
-						acceptanceRoutes.editorContent(representation.assetId, representation.revisionId),
-				};
+			const restore = (stored) => {
+				evidence.addSecret(stored.capability);
+				return restoreArmedRepresentation(stored);
 			};
 
 			let faultPassed = false;
@@ -501,20 +499,10 @@ await runAcceptanceHarness({
 				headers: capabilityHeaders(warm.capability),
 			});
 
-			const armed = representation => ({
-				eventId: representation.eventId,
-				screenId: representation.screenId,
-				assetId: representation.assetId,
-				revisionId: representation.revisionId,
-				capability: representation.capability,
-				contentType: representation.contentType,
-				// The object key is `sha256/<digest>`, so recording the digest is
-				// what makes the runbook's delete step something an operator can
-				// actually carry out.
-				contentDigest: digestOf(representation.content),
-				content: [...representation.content],
+			await writeArmedScenario(armPath, {
+				warm: armedRepresentation(warm),
+				cold: armedRepresentation(cold),
 			});
-			await writeArmedScenario(armPath, { warm: armed(warm), cold: armed(cold) });
 			record([]);
 			return { mode: deployed ? 'armed-deployed' : 'armed-local' };
 		}

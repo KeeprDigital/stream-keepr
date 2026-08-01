@@ -135,17 +135,28 @@ async function serveLocally() {
 	});
 }
 
-function manualInstructions(url, reason) {
+/**
+ * What a person should do when the driver could not run.
+ *
+ * The page address is given without a Screen Output to try, deliberately. The
+ * origin is the one the operator configured, so printing it discloses nothing
+ * they did not supply — but an `?event=&screen=` pair is installation-derived
+ * identity, which this gate prints nowhere else and will not start printing
+ * here. A manual run therefore records the browser fact alone. That is not a
+ * loss: the harness no longer provisions a Screen Output it has no driver to
+ * point at, so there would be nothing for those identities to name.
+ */
+function manualInstructions(origin, reason) {
 	return [
 		`${HARNESS} manual check required: Safari automation is not available.`,
 		reason ? `safaridriver said: ${reason}` : undefined,
 		'Enable it once with: sudo safaridriver --enable',
 		'and tick Develop > Allow Remote Automation in Safari.',
-		`Otherwise open this page in Safari and read its verdict: ${url}`,
-		'Expected: the page reports passed, meaning the Screen Output refused this',
-		'browser a capability session. A reported safari-vp9-alpha-not-blocked is a',
-		'gate failure. Whatever the page records as its browser fact — substituted,',
-		'refused — is an observation, not a verdict.',
+		`Otherwise open ${origin}${ACCEPTANCE_PATH} in Safari and read its verdict.`,
+		'That records the browser fact alone — expect "substituted" on current',
+		'Safari. It does not exercise the product boundary, which is the part that',
+		'matters: only an automated run against a deployed installation can publish',
+		'a Screen Output pinning restricted video and confirm the refusal.',
 	].filter(Boolean).join('\n');
 }
 
@@ -156,6 +167,26 @@ await runAcceptanceHarness({
 		let scenario;
 		try {
 			const origin = deployed ? acceptanceOrigin({ deployed }) : local.origin;
+
+			// The driver is settled before anything is provisioned. A Screen Output
+			// nobody can drive a browser at is one more restricted asset in a real
+			// installation, published for no reason and torn down before a person
+			// could look at it.
+			const driver = await startSafariDriver();
+			if (!driver.available) {
+				// A deployed gate that quietly downgrades to "someone should look at
+				// this" is not a gate, so the fallback is opt-in there.
+				if (!allowManual) {
+					record([{ code: 'browser-driver-unavailable', detail: { driver: 'safaridriver' } }]);
+					process.stderr.write(`${manualInstructions(origin, driver.detail)}\n`);
+					return { path: 'safaridriver', mode: deployed ? 'deployed' : 'local' };
+				}
+				defer(
+					{ path: 'manual-check-required', mode: deployed ? 'deployed' : 'local' },
+					manualInstructions(origin, driver.detail),
+				);
+				return {};
+			}
 
 			// Only a deployed installation can hold a restricted Screen Output: the
 			// video has to pass the silent-video validator, and the local Worker has
@@ -177,30 +208,25 @@ await runAcceptanceHarness({
 				url = `${origin}${ACCEPTANCE_PATH}?event=${scenario.eventId}&screen=${scenario.screenId}`;
 			}
 
-			const driver = await startSafariDriver();
-			let verdict = { outcome: 'unavailable', detail: driver.detail };
-			if (driver.available) {
-				try {
-					// The page mints its own capability through the author session an
-					// ordinary page load issues, so nothing secret travels in the URL.
-					verdict = await observeSafariVerdict(url, { sessionUrl: `${origin}/` });
-				}
-				finally {
-					driver.stop();
-				}
+			let verdict;
+			try {
+				// The page mints its own capability through the author session an
+				// ordinary page load issues, so nothing secret travels in the URL.
+				verdict = await observeSafariVerdict(url, { sessionUrl: `${origin}/` });
+			}
+			finally {
+				driver.stop();
 			}
 
 			if (verdict.outcome === 'unavailable') {
-				// A deployed gate that quietly downgrades to "someone should look at
-				// this" is not a gate, so the fallback is opt-in there.
 				if (!allowManual) {
 					record([{ code: 'browser-driver-unavailable', detail: { driver: 'safaridriver' } }]);
-					process.stderr.write(`${manualInstructions(url, verdict.detail)}\n`);
+					process.stderr.write(`${manualInstructions(origin, verdict.detail)}\n`);
 					return { path: 'safaridriver', mode: deployed ? 'deployed' : 'local' };
 				}
 				defer(
 					{ path: 'manual-check-required', mode: deployed ? 'deployed' : 'local' },
-					manualInstructions(url, verdict.detail),
+					manualInstructions(origin, verdict.detail),
 				);
 				return {};
 			}
@@ -209,17 +235,31 @@ await runAcceptanceHarness({
 				? []
 				: [{ code: verdictFailureCode(verdict), detail: { driver: 'safaridriver' } }]);
 
+			const boundary = verdict.dataset?.boundary ?? 'not-exercised';
+			// The boundary is the whole reason for a deployed run, so reaching the
+			// end without having exercised it is a failure rather than a footnote.
+			// A page that fell through to its browser-fact-only branch would
+			// otherwise report a pass having asserted nothing that matters.
+			if (deployed) {
+				record(boundary === 'exercised'
+					? []
+					: [{
+							code: 'harness-precondition-unmet',
+							detail: { reason: 'the product boundary was not exercised' },
+						}]);
+			}
+
 			// A Safari that preserved the transparency would mean the premise of the
 			// restriction had changed. That is not a defect in the current contract
 			// — the boundary still held — but it is the one browser fact worth a
 			// human deciding whether the restriction should be relaxed.
-			if (verdict.dataset?.browserfact === 'transparency-rendered')
+			if (verdict.dataset?.browserFact === 'transparency-rendered')
 				note({ code: 'safari-vp9-alpha-transparency-rendered', detail: { driver: 'safaridriver' } });
 
 			return {
 				path: 'safaridriver',
-				boundary: verdict.dataset?.boundary ?? 'not-exercised',
-				browserFact: verdict.dataset?.browserfact ?? 'unobserved',
+				boundary,
+				browserFact: verdict.dataset?.browserFact ?? 'unobserved',
 				mode: deployed ? 'deployed' : 'local',
 			};
 		}

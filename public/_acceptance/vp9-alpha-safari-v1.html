@@ -4,7 +4,7 @@
 		<meta charset="utf-8">
 		<title>vp9-alpha-safari-v1 browser acceptance</title>
 	</head>
-	<body data-result="running" data-code="" data-browserfact="" data-boundary="not-exercised">
+	<body data-result="running" data-code="" data-browser-fact="" data-boundary="not-exercised">
 		<pre id="result">Checking how this browser treats VP9 alpha…</pre>
 		<script type="module">
 			// VP9 alpha is restricted to Chromium-class Screen Outputs. The
@@ -92,6 +92,12 @@
 			/**
 			 * The enforced guarantee: this Screen Output pins VP9-alpha video, so
 			 * the capability-session bootstrap must refuse this browser outright.
+			 *
+			 * These two routes are spelled out rather than taken from
+			 * `scripts/graphics-acceptance/routes.mjs`, which is where every other
+			 * acceptance route lives. A static asset served to a browser cannot
+			 * import that module, so the duplication is deliberate and this is the
+			 * marker asking whoever changes those routes to change them here too.
 			 */
 			async function observeProductBoundary() {
 				const minted = await fetch(
@@ -128,7 +134,7 @@
 
 			try {
 				const browserFact = await observeBrowserFact();
-				document.body.dataset.browserfact = browserFact;
+				document.body.dataset.browserFact = browserFact;
 
 				let failure;
 				if (eventId && screenId) {
