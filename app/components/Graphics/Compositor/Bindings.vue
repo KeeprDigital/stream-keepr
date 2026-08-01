@@ -86,6 +86,13 @@ const selectedGraphic = computed<BroadcastGraphicConfig | null>(() =>
 const sources = computed<GraphicSourceSelectionDeclaration[]>(() => selectedGraphic.value?.sources ?? []);
 const inputs = computed<GraphicInputDeclaration[]>(() => selectedGraphic.value?.inputs ?? []);
 
+/**
+ * The Graphic Inputs a binding control is offered for: none until something is
+ * declared to bind them to, because a binding names a Graphic Source Selection and
+ * there would be nothing to name.
+ */
+const bindableInputs = computed(() => sources.value.length > 0 ? inputs.value : []);
+
 const SOURCE_KIND_OPTIONS = GRAPHIC_SOURCE_SELECTION_KIND_VALUES.map(kind => ({
 	label: GRAPHIC_SOURCE_SELECTION_KIND_LABELS[kind],
 	value: kind,
@@ -377,8 +384,7 @@ function unbindableReason(input: GraphicInputDeclaration): string | null {
 			</p>
 
 			<div
-				v-for="input in inputs"
-				v-else
+				v-for="input in bindableInputs"
 				:key="input.key"
 				class="space-y-2 rounded-lg border border-default/70 p-2"
 				:data-graphic-input-binding="input.key"

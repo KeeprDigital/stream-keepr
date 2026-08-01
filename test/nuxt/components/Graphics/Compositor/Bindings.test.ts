@@ -423,7 +423,7 @@ describe('an observing session', () => {
 			writable: false,
 		});
 
-		expect(wrapper.get('[data-graphic-source-selection="player"]').exists()).toBe(true);
+		expect(wrapper.find('[data-graphic-source-selection="player"]').exists()).toBe(true);
 		buttons(wrapper, 'graphic-source-add')[0]?.vm.$emit('click');
 		buttons(wrapper, 'graphic-source-delete')[0]?.vm.$emit('click');
 		buttons(wrapper, 'graphic-binding-clear')[0]?.vm.$emit('click');
