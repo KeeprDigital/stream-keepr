@@ -247,27 +247,18 @@ describe('graphic Style Sets', () => {
 		expect(anonymous.status).toBe(401);
 	});
 
-	it('refuses an over-sized initial draft before it is buffered whole', async () => {
-		// Creating a Style Set accepts the same unbounded draft array editing one does, so
-		// it is bounded by the same number. Under the general mutation ceiling and over
-		// this route's own, which is the gap this asserts is closed.
-		const filler = 'x'.repeat(900);
-		const oversized = Array.from({ length: 700 }, (_, index) => ({
-			id: `bulk-${index}-${runId}`,
-			kind: 'palette',
-			name: filler,
-			schemaVersion: 1,
-			value: { color: '#ffffff' },
-		}));
-
-		const refused = await request(STYLE_SETS, {
+	it('refuses a publish whose body is bigger than the precondition it carries', async () => {
+		// Publishing names the draft revision the author reviewed and nothing else, so it
+		// is bounded far below the general mutation ceiling — and bounded by *bytes*,
+		// before the schema that would refuse this shape ever sees it.
+		const refused = await request(`${STYLE_SETS}/${styleSetId}/publish`, {
 			method: 'POST',
 			cookie: authorCookie,
-			body: { name: `Oversized ${runId}`, draft: oversized },
+			body: { draftRevision: 1, padding: 'x'.repeat(5000) },
 		});
 
 		expect(refused.status).toBe(413);
-		expect(JSON.stringify(refused.data)).toContain('Graphic Style Set must not exceed');
+		expect(JSON.stringify(refused.data)).toContain('Graphic Style Set publish request must not exceed');
 	});
 
 	it('accumulates edits in a working draft that no template can see', async () => {
