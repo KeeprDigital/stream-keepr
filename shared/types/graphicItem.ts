@@ -1,10 +1,9 @@
 import type { GraphicMediaKind } from './graphics';
-import type { GraphicAssetReference } from './graphicsAsset';
 
 /**
  * The media kinds, named once for the whole vocabulary in `./graphics`. Aliased
- * here because Feature Match Overlay's presentation contract below reads under
- * this name, and one set of kinds must not be declared twice.
+ * here because Feature Match Overlay's presentation contract reads under this
+ * name, and one set of kinds must not be declared twice.
  */
 export type MediaGraphicItemKind = GraphicMediaKind;
 
@@ -19,52 +18,19 @@ export interface GraphicFocalPosition {
 }
 
 /**
- * The Shape Geometry a Media Graphic Item clips to.
+ * Media clipping is not declared here. A Media Graphic Item clips with the Shared
+ * Graphics Foundation's `ShapeGeometry` in `./graphics`, which is the only encoding
+ * of the Shape Geometry glossary term.
  *
- * Deliberately scoped rather than named for the shared vocabulary: the Shared
- * Graphics Foundation's `ShapeGeometry` lives in `shared/types/graphics.ts` and
- * encodes the same concept differently — a flat corner treatment, and a signed
- * edge slant that can inset either vertex rather than only the top. Both were
- * exported as `ShapeGeometry`, which left the auto-import layer silently choosing
- * one. Converging them changes a persisted shape and belongs with the work that
- * puts Feature Match Overlay on the shared vocabulary; see issue #89.
+ * This file once carried a second one — `MediaClipShapeGeometry`, a tagged-union
+ * corner treatment with an optional unsigned edge inset — for Feature Match
+ * Overlay's own media presentation contract. That contract is gone: a Feature Match
+ * Layout's composition is an ordinary shared Graphic Item tree, so both hosts clip
+ * with the canonical encoding and the fork encoded nothing that was still stored.
+ * It is removed rather than migrated because the signed slant it converged onto is
+ * strictly more expressive: positive insets an edge's top vertex, negative its
+ * bottom, and the fork could only ever inset the top. See issue #89.
+ *
+ * `test/unit/shared/graphicsShapeGeometryEncoding.test.ts` holds that line
+ * structurally, because a fork is exactly what a name check does not catch.
  */
-export type MediaClipShapeGeometryCorner
-	= | { kind: 'square' }
-		| { kind: 'rounded'; size: number }
-		| { kind: 'cut'; size: number };
-
-export interface MediaClipShapeGeometry {
-	topLeft: MediaClipShapeGeometryCorner;
-	topRight: MediaClipShapeGeometryCorner;
-	bottomRight: MediaClipShapeGeometryCorner;
-	bottomLeft: MediaClipShapeGeometryCorner;
-	leftEdgeSlant?: number;
-	rightEdgeSlant?: number;
-}
-
-/**
- * Feature Match Overlay's media presentation contract, which its host-specific
- * geometry, identity, and compatibility placement facts extend.
- *
- * Deliberately not named for the shared vocabulary. The Shared Graphics
- * Foundation's own `MediaGraphicItemConfig` lives in `shared/types/graphics.ts`
- * and clips with the canonical `ShapeGeometry`, while this one clips with the
- * `MediaClipShapeGeometry` fork below. Both files are auto-imported, so two
- * exports of one name would leave the auto-import layer silently choosing — the
- * exact bug issue #89 records for `ShapeGeometry`. Converging the two encodings
- * belongs with Feature Match Overlay's adoption of the shared vocabulary (#78).
- *
- * The kind, fitting, and focal-position vocabulary above is genuinely shared and
- * has one home here; only the clipping encoding differs.
- */
-export interface FeatureMatchMediaPresentationConfig {
-	asset?: GraphicAssetReference;
-	mediaKind: MediaGraphicItemKind;
-	fit: MediaGraphicItemFit;
-	focalPosition: GraphicFocalPosition;
-	opacity: number;
-	clipGeometry?: MediaClipShapeGeometry;
-	loop?: boolean;
-	playbackRate?: number;
-}
