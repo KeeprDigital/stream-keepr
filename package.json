@@ -22,7 +22,7 @@
 		"db:migrate:local:built": "wrangler d1 migrations apply DB --local --config .output/server/wrangler.json --persist-to .wrangler/state/built-worker",
 		"db:migrations:list:remote": "wrangler d1 migrations list DB --remote --config .output/server/wrangler.json",
 		"db:migrate:remote": "wrangler d1 migrations apply DB --remote --config .output/server/wrangler.json",
-		"test": "pnpm test:unit:run && pnpm test:nuxt:run && pnpm test:integration:run && pnpm test:browser:still-images && pnpm test:browser:silent-video",
+		"test": "pnpm test:unit:run && pnpm test:nuxt:run && pnpm test:integration:run && pnpm test:browser:still-images && pnpm test:browser:silent-video && pnpm test:browser:fonts",
 		"test:watch": "vitest",
 		"test:unit": "vitest",
 		"test:unit:run": "vitest run",
