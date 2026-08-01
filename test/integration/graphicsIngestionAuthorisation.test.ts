@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 
 /**
@@ -177,6 +177,16 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 	let fontBytes: Uint8Array;
 	let sessionlessProbeOperationId: string;
 	let assetId: string;
+	let eventId: number;
+
+	/** The Events the lifecycle subject is currently associated with. */
+	async function assetEventIds() {
+		const assets = await $fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: { cookie: authorCookie },
+			query: { search: 'Authorisation lifecycle subject' },
+		});
+		return assets.find(asset => asset.id === assetId)?.eventIds;
+	}
 	/**
 	 * One operation per scoping case.
 	 *
@@ -186,7 +196,12 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 	 */
 	const scopingProbes = new Map<string, string>();
 
-	async function initiateStillImageAs(cookie: string, idempotencyKey: string, name: string) {
+	async function initiateStillImageAs(
+		cookie: string,
+		idempotencyKey: string,
+		name: string,
+		defaultEventId?: number,
+	) {
 		return await $fetch<GraphicsIngestionOperation>(
 			'/api/graphics-assets/ingestion-operations',
 			{
@@ -197,6 +212,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 					name,
 					duplicateContentPolicy: 'create-separate',
 					declaredByteLength: transparentPixelPng.byteLength,
+					...defaultEventId === undefined ? {} : { defaultEventId },
 					browserDecodeEvidence: {
 						outcome: 'decoded',
 						sourceDigest: digest,
@@ -272,12 +288,23 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			scopingProbes.set(route.label, initiated.id);
 		}
 
-		// One published asset, so the lifecycle route has a real subject to refuse
-		// to act on rather than a missing one.
+		// One published asset, so the lifecycle and metadata routes have a real
+		// subject to refuse to act on rather than a missing one. It carries an Event
+		// association because the metadata route's sharpest edge is detaching one.
+		const event = await $fetch<{ id: number }>('/api/events', {
+			method: 'POST',
+			body: {
+				name: 'Graphics Authorisation Event',
+				game: 'mtg',
+				featureMatchOrientation: 'horizontal',
+			},
+		});
+		eventId = event.id;
 		const publishable = await initiateStillImageAs(
 			authorCookie,
 			'authorisation-lifecycle-subject',
 			'Authorisation lifecycle subject',
+			eventId,
 		);
 		const published = await uploadAs(
 			authorCookie,
@@ -287,6 +314,14 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 		);
 		expect(published.stage).toBe('completed');
 		assetId = published.result!.assetId;
+		await expect(assetEventIds()).resolves.toEqual([eventId]);
+	});
+
+	afterAll(async () => {
+		try {
+			await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+		}
+		catch {}
 	});
 
 	describe('a caller carrying no graphics author session', () => {
@@ -321,6 +356,39 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 				}),
 			});
 			expect(response.status).toBe(401);
+		});
+
+		it('is refused a Graphic Asset metadata rewrite', async () => {
+			const response = await fetch(`/api/graphics-assets/${assetId}`, {
+				method: 'PATCH',
+				headers: { ...RETIRED_AUTHOR_HEADER, 'content-type': 'application/json' },
+				body: JSON.stringify({
+					name: 'Renamed by nobody',
+					eventIds: [eventId],
+				}),
+			});
+			expect(response.status).toBe(401);
+		});
+
+		/**
+		 * The sharpest form of the same route: the update replaces the Event
+		 * association set outright rather than merging into it, and the schema puts
+		 * no floor under the array. An empty one is therefore a valid request that
+		 * detaches the asset from every Event it belongs to — and unlike the
+		 * lifecycle actions, this route records nothing in the Evidence Ledger, so
+		 * there would be no attribution for it either.
+		 */
+		it('is refused the detachment of every Event association', async () => {
+			const response = await fetch(`/api/graphics-assets/${assetId}`, {
+				method: 'PATCH',
+				headers: { ...RETIRED_AUTHOR_HEADER, 'content-type': 'application/json' },
+				body: JSON.stringify({
+					name: 'Authorisation lifecycle subject',
+					eventIds: [],
+				}),
+			});
+			expect(response.status).toBe(401);
+			await expect(assetEventIds()).resolves.toEqual([eventId]);
 		});
 
 		// The defect #116 names: retiring and Trashing were reachable by anyone who

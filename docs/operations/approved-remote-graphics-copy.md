@@ -140,8 +140,21 @@ operation is owned by one session rather than by a person: the same author in a
 second browser is a second author here.
 
 `docs/operations/graphics-operations-cockpit.md` describes the administrator
-surface, which is gated by the installation's admin token instead and is
-unaffected by any of this.
+surface, which is gated by the installation's admin token instead. That gate is
+unchanged. What the Evidence Ledger records for an administrator's action did
+change: the actor was a client-supplied header, so any holder of the admin token
+could write any name into the ledger, and it is now the asking graphics author
+session where there is one and a plain `graphics-administrator` where there is
+not.
+
+## Still unauthenticated
+
+Guarding ingestion and lifecycle did not gate the library's read surface.
+`GET /api/graphics-assets`, `capacity`, `thumbnail`, `usage` and `retention`
+still answer an unauthenticated caller, so the installation's asset names,
+thumbnails, usage and capacity remain enumerable without a session. Tracked as
+#172; gating the listing route also needs the Library Workspace's server-side
+render to forward its cookie, which is what makes it more than a guard.
 
 ## Platform limitation: DNS rebinding
 

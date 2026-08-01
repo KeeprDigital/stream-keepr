@@ -37,7 +37,9 @@ const completedOperation: GraphicsIngestionOperation = {
 	id: 'operation-1' as never,
 	idempotencyKey: 'upload-1',
 	source: 'local-upload',
-	initiatedBy: 'local-graphics-author',
+	// A graphics author session id, which is what an operation records now that
+	// the session is the author identity.
+	initiatedBy: 'f2b1c4d6-9a83-4e17-8b5c-2d7e6a091f34',
 	name: 'Scoreboard logo',
 	defaultEventId: 7,
 	duplicateContentPolicy: 'reuse',
