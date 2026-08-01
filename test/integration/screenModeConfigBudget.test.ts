@@ -22,6 +22,20 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
 
 /**
+ * How many maximal Graphic Items the accumulating stack carries.
+ *
+ * It has to be storable on its own — the second write is the one that must be
+ * refused — while still leaving the pair over the total. That is three fifths of
+ * `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN`; the whole cap no longer fits
+ * alone when every Graphic Item carries a maximal Graphic Text Template, which #99
+ * accepted when it set the cap from what a show needs rather than from a byte
+ * figure. A literal for the same reason the limit above is one, with the derivation
+ * held in `test/unit/server/schemas/modeConfigPatchResult.test.ts`, which can import
+ * the cap and would fail if the two came apart.
+ */
+const STORABLE_STACK_ITEMS = 120;
+
+/**
  * The most expensive Graphic Item the current vocabulary accepts: a maximal Graphic
  * Text Template, a four-stop gradient, an outline, a glow, and the four Graphic
  * Placeholder Styles a Text Graphic Item may define.
@@ -179,8 +193,14 @@ function fatOverlayLayout() {
 		composition: {
 			id: 'feature-match-layout',
 			name: 'Feature Match Layout',
+			// 49 top-level items plus a Graphic Group of 50 children is 100 Graphic
+			// Items counting the group itself, which is what a Feature Match Layout may
+			// carry in total since #99 — its cap used to bound only the top-level list,
+			// so this fixture used to hold 150. It is built to the cap deliberately: the
+			// property under test is the byte total, and a fixture the *named* cap
+			// refuses would report which limit it hit and never reach the byte one.
 			items: [
-				...Array.from({ length: 99 }, (_, index) => fatTextGraphicItem(`overlay-${index}`)),
+				...Array.from({ length: 49 }, (_, index) => fatTextGraphicItem(`overlay-${index}`)),
 				{
 					id: 'overlay-group',
 					type: 'group' as const,
@@ -255,7 +275,7 @@ describe('mode configuration byte total', () => {
 		// The full-config path has always enforced this. It is asserted here so the
 		// PATCH-path test below is a statement about parity rather than about bytes.
 		const modeConfigs = {
-			'broadcast-graphics': { graphics: fatGraphicsStack(110, 50, 60) },
+			'broadcast-graphics': { graphics: fatGraphicsStack(STORABLE_STACK_ITEMS, 50, 60) },
 			'feature-match-overlay': { featureMatchId: null, presetId: 'full-table', layout: fatOverlayLayout() },
 		};
 
@@ -277,7 +297,7 @@ describe('mode configuration byte total', () => {
 
 		const first = await patchConfig(
 			`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`,
-			{ graphics: fatGraphicsStack(110, 50, 60) },
+			{ graphics: fatGraphicsStack(STORABLE_STACK_ITEMS, 50, 60) },
 		);
 		expect(first.ok).toBe(true);
 

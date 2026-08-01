@@ -618,21 +618,44 @@ const graphicOnScreenAnimationRecipeSchema = z.object({
 }).strict();
 
 /**
+ * The bound on a Graphic Item's identity, and on every id that names one.
+ *
+ * Every id this application writes is a 36-character uuid: the compositor mints
+ * one per item, and every path that copies a document — placing a Broadcast
+ * Graphic Template, installing a Template Package — mints fresh ones rather than
+ * carrying the source's. 64 leaves that comfortable headroom and nothing else.
+ *
+ * It was 100, which nothing wrote and which the worst case paid for on every item
+ * and, four times per container, on every id a Graphic Animation Stagger names.
+ * That is most of what a stagger costs (#99).
+ *
+ * It is an import constraint as much as a write one, and deliberately the same
+ * one: a Template Package's document is proved against these schemas, so a
+ * document that installs is a document the Screen write path accepts.
+ */
+export const MAX_GRAPHIC_ITEM_ID_LENGTH = 64;
+
+/**
  * A stagger names a subset of one container's direct Graphic Items, so it can
  * never name more ids than one Broadcast Graphic may hold Graphic Items. The cap
  * is stated here rather than reused from `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC`
  * because these schemas are built before that constant is initialised.
  *
- * Ids are not checked against the container's actual children: an author who
- * deletes a staggered item must not have their next write refused, so a stale id
- * is ignored at projection time instead.
+ * The tighter bound — no more ids than the container itself holds items — is a
+ * property of the container rather than of this list, so it lives on each
+ * container below (`graphicStaggerNamesASubset`). This one remains as the field's
+ * own ceiling.
+ *
+ * Ids are still not checked against the container's actual children: a stale id is
+ * ignored at projection time instead, so a document that names a since-deleted item
+ * is read rather than refused. Only the *count* is bounded.
  */
 const MAX_GRAPHIC_ANIMATION_STAGGER_ITEMS = 100;
 
 const graphicAnimationStaggerSchema = z.object({
 	order: z.enum(GRAPHIC_ANIMATION_STAGGER_ORDER_VALUES),
 	step: finiteNumberSchema.nonnegative().max(MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS),
-	itemIds: z.array(z.string().min(1).max(100)).max(MAX_GRAPHIC_ANIMATION_STAGGER_ITEMS),
+	itemIds: z.array(z.string().min(1).max(MAX_GRAPHIC_ITEM_ID_LENGTH)).max(MAX_GRAPHIC_ANIMATION_STAGGER_ITEMS),
 }).strict();
 
 /**
@@ -647,6 +670,42 @@ const graphicAnimationShape = {
 };
 
 const graphicAnimationSchema = z.object(graphicAnimationShape).strict();
+
+/**
+ * A stagger orders the container's own items, so it cannot name more of them than
+ * the container has.
+ *
+ * Stated as a rule about the container because only the container knows its item
+ * count; the field's own `.max()` cannot see it. That gap was worth closing on its
+ * own terms — a list of 100 ids on a graphic holding one item orders nothing — and
+ * it is also the single largest contributor to what the caps admit in bytes: four
+ * phases of 100 ids each is about 26 KiB per container at the current id length,
+ * on every one of the 50 Broadcast Graphic shells a Screen may hold, and no Graphic
+ * Item cap can reach any of it. See #99.
+ *
+ * Stale ids stay legal: the count is bounded, membership is not, so a stagger that
+ * names a since-deleted item is still read rather than refused.
+ *
+ * What makes the count safe to bound is that deleting a Graphic Item already
+ * removes it from its container's staggered subsets — `deleteGraphicItem` in
+ * `shared/modules/graphics/authoring.ts` does it, and copying a document into a
+ * Broadcast Graphic Template does the same — so no authoring operation can leave a
+ * container naming more items than it holds. A document that does was built by
+ * hand, and refusing it is the correct answer rather than a regression of the
+ * deletion tolerance.
+ */
+const GRAPHIC_STAGGER_SUBSET_MESSAGE
+	= 'A Graphic Animation Stagger must not name more Graphic Items than its container holds';
+
+function graphicStaggerNamesASubset(
+	container: { animation?: { stagger?: Record<string, { itemIds: readonly string[] } | undefined> } },
+	itemCount: number,
+): boolean {
+	const stagger = container.animation?.stagger;
+	if (!stagger)
+		return true;
+	return Object.values(stagger).every(phase => (phase?.itemIds.length ?? 0) <= itemCount);
+}
 
 /** Only a container — a Broadcast Graphic or a Graphic Group — staggers direct items. */
 const graphicContainerAnimationSchema = z.object({
@@ -936,11 +995,17 @@ const graphicContainerStyleRefsSchema = z.object(graphicAnimationStyleRefShape).
 /** At most one Graphic Style Set per composition, stated by this being one object. */
 const graphicStyleSetLinkSchema = z.object({
 	styleSetId: graphicStyleSetIdSchema,
+	// The only field the worst-case measurement cannot populate at a maximum,
+	// because it has none: a revision counts publications and nothing bounds how
+	// many a Style Set may have. Its contribution to the byte budget is therefore
+	// the width of a number rather than a cap, which is why it is left unbounded
+	// rather than given an arbitrary ceiling — but it is worth knowing it is the
+	// one hole in `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES`.
 	revision: z.number().int().nonnegative(),
 }).strict();
 
 const graphicItemBaseShape = {
-	id: z.string().min(1).max(100),
+	id: z.string().min(1).max(MAX_GRAPHIC_ITEM_ID_LENGTH),
 	label: z.string().min(1).max(100),
 	visible: z.boolean(),
 	anchor: graphicAnchorPointSchema,
@@ -1134,7 +1199,12 @@ const graphicGroupItemConfigSchema = z.object({
 		MAX_GRAPHIC_GROUP_CHILDREN,
 		`A Graphic Group must not contain more than ${MAX_GRAPHIC_GROUP_CHILDREN} Graphic Items`,
 	),
-}).strict();
+}).strict().refine(
+	// Its children, not the whole Broadcast Graphic's items: a group orders what it
+	// contains, and the graphic orders its top-level items, of which the group is one.
+	group => graphicStaggerNamesASubset(group, group.children.length),
+	GRAPHIC_STAGGER_SUBSET_MESSAGE,
+);
 
 const graphicItemConfigSchema = z.discriminatedUnion('type', [
 	textGraphicItemConfigSchema,
@@ -1147,6 +1217,19 @@ const graphicItemConfigSchema = z.discriminatedUnion('type', [
 ]);
 
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC = 100;
+
+/**
+ * The same bound, named for the other host that composes the same Graphic Items.
+ *
+ * A Feature Match Layout and a Broadcast Graphic are both one composition of the
+ * shared vocabulary, so they get one number; it is spelled twice so an operator
+ * reads a limit in their own vocabulary rather than one named after the other
+ * Screen Mode. They are deliberately tied rather than merely equal — a render-cost
+ * ceiling that differs between two hosts of the same compositor is the per-ticket
+ * divergence #99 exists to end.
+ */
+export const MAX_GRAPHIC_ITEMS_PER_FEATURE_MATCH_LAYOUT = MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC;
+
 export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
 
 /**
@@ -1161,157 +1244,54 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
 export const MAX_GRAPHIC_CHANNELS_PER_SCREEN = 25;
 
 /**
- * The whole-Screen Graphic Item budget.
+ * The whole-Screen Graphic Item budget, counting Graphic Group children.
  *
- * The per-graphic and per-Screen caps bound each list independently, but their
- * product does not come close to fitting `MAX_MODE_CONFIGS_BYTES`. Measured
- * against this schema's own maxima, the most expensive Graphic Item a Graphic
- * Group can hold serializes to 2,004 bytes (a 1,000-character Text Graphic Item
- * with a four-stop gradient, an outline, a glow, rotation, and main-axis sizing),
- * a Graphic Group shell to 1,510, and a Broadcast Graphic shell to 166. Without
- * a total cap, 50 Broadcast Graphics x 100 Graphic Groups x 50 children is
- * 255,000 Graphic Items and about 485 MiB against a 512 KiB budget shared by
- * every Screen Mode.
+ * It binds a product the per-list caps leave unbounded: 50 Broadcast Graphics x 100
+ * Graphic Items x 50 Graphic Group children is 255,000 Graphic Items against a
+ * 512 KiB budget shared by every Screen Mode.
  *
- * This cap binds the product. It came down from 200 when Graphic Inputs arrived,
- * because they add two costs to the same budget: a Text Graphic Item may now carry
- * Graphic Placeholder Styles, which takes the most expensive Graphic Item from
- * 2,004 bytes to 2,682 (2,727 as a Graphic Group child), and each Broadcast
- * Graphic declares Graphic Inputs, bindings, and Graphic Source Selections of its
- * own. Measured against this schema's own maxima, the worst authored Screen every
- * cap together still admits is 110 maximal Graphic Items at about 2,700 bytes
- * each, 60 maximal choice Graphic Inputs at about 1,300, 60 Graphic Input
- * Bindings, 40 Graphic Source Selections, and 50 Broadcast Graphic shells:
- * `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES` measured
- * against the schema itself.
+ * **300 is `MAX_BROADCAST_GRAPHICS_PER_SCREEN` x the six Graphic Items of the
+ * richest reconstruction in `docs/prototypes/broadcast-graphics-fidelity.md`** —
+ * every Broadcast Graphic the Screen admits, authored at the richest shape the
+ * acceptance evidence contains. A realistic Screen at this cap measures 248,734
+ * bytes, 47% of the shared budget.
  *
- * **That figure no longer fits the budget.** It was 79% when Graphic Inputs set
- * this cap; Graphic Animation has taken it to 596,673 bytes against a 524,288
- * limit — 113.8%. So the named caps no longer bind before the byte total in the
- * worst case, and an author who filled every cap at once would read a byte count
- * rather than the limit they reached. See the animation section below.
+ * `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES` is what the
+ * caps together admit: every construct the schema accepts, each populated at its
+ * own maximum, with the one exception named beside the fixture — a Graphic Style
+ * Set link's `revision` has no upper bound to populate. The claim is qualified
+ * rather than absolute on purpose; four rounds of correction here came of an
+ * absolute one. It is
+ * about seven times the budget and **that is a settled decision, not an oversight**:
+ * the worst case is allowed not to fit, because the byte total is enforced on the
+ * editors' write path (#85) and realtime no longer publishes mode configurations
+ * (#95). The measurement is pinned in two arrangements in
+ * `broadcastGraphicsModeConfig.test.ts`, so "which worst case" stays a checked
+ * choice rather than an assumption.
  *
- * Media Graphic Items do not contribute to it. A maximal animated Media Graphic
- * Item measures 1,906 bytes against 3,704 for a maximal animated Text Graphic
- * Item, so the worst case is built from text, and adding a cheaper item kind
- * cannot move it — which is why this figure did not change when they landed.
+ * The reasoning, the arithmetic that shows no narrowing reaches a fitting worst
+ * case, what is given up, and what a later ticket should do instead of re-deriving
+ * this number are all in **`docs/adr/0002-broadcast-graphics-item-cap.md`**. Read
+ * that before moving this constant.
  *
- * Event Data binding moved that figure twice, in opposite directions, and left it
- * slightly lower: a Graphic Input Binding's `fieldId` must now name a field the
- * binding catalog actually defines, so the worst one is the longest real field name
- * rather than 100 arbitrary characters, while a derived Graphic Source Selection
- * gained a `from` naming a sibling key. Net effect is 1,525 bytes less than the
- * animation-inclusive measurement it merged with — 596,673 became 595,148. The cap
- * itself is unchanged: it is not this ticket's to set, and the number above the cap
- * is a measurement of what the caps admit rather than a budget anyone chose.
+ * Two notes that belong beside the code rather than in the record:
  *
- * It is deliberately a named cap so an operator reads which limit they reached
- * rather than a byte count. Graphic Group children count towards it — they are
- * Graphic Items and they cost bytes.
+ * - Media Graphic Items contribute nothing to the worst case. A maximal animated
+ *   Media Graphic Item is 1,906 bytes against 3,704 for a maximal animated Text
+ *   Graphic Item, so the worst case is built from text and a cheaper kind cannot
+ *   raise it.
+ * - For any package whose graphics declare Live Control it is not this cap that
+ *   binds first but `MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN`: at two
+ *   Graphic Inputs per graphic, 60 covers 30 of the 50 Broadcast Graphics. Move
+ *   that number before this one.
  *
- * ## That 79% is a bound, not a forecast
- *
- * Read without its construction the figure suggests the budget is nearly full. It
- * is not. It describes a Screen where all 110 Graphic Items are simultaneously
- * Text Graphic Items carrying a 1,000-character template, a 100-character label,
- * four maximal Graphic Placeholder Styles, a four-stop gradient, an outline and a
- * glow, alongside 60 maximal choice Graphic Inputs — a configuration nobody will
- * author. Realistic authoring measures around 119 KiB, roughly 23% of the budget.
- * The number proves the caps cannot be combined into an oversized write; it does
- * not predict what a Screen will hold.
- *
- * ## Which limit binds first
- *
- * For a realistic large graphics package it is not this cap but
- * `MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN`: fifteen lower thirds at four
- * Graphic Inputs each is exactly 60. Anyone finding a package too small to author
- * should move that number before this one.
- *
- * ## Why it is 110 and not more
- *
- * Two open defects gate raising it, and neither is about storage arithmetic:
- *
- * - The whole-`modeConfigs` byte total was an object-level refinement discarded
- *   when the per-mode patch schema is rebuilt from its field schemas, so it was not
- *   enforced on the path the editors write through. That is fixed: the merged
- *   configuration a patch would produce is now validated before it is written, so
- *   the total refuses an oversized write wherever it comes from, and per-field caps
- *   no longer have to carry weight they were never meant to.
- * - Realtime still publishes whole live state and whole mode configs, so a larger
- *   cap would buy storable configuration that cannot be notified — capacity with
- *   no way to reach a client.
- *
- * With both fixed, this cap can be generous, because the worst case is then
- * allowed not to fit: an author who approaches the total gets told which limit
- * they reached and removes something, and every other author never sees it.
- * Until then, reducing is the only direction that does not make the second defect
- * worse. 110 is about fifteen lower thirds plus a slate and a bug, comfortably
- * more than the fidelity prototype's acceptance evidence requires.
- *
- *
- * ## What Graphic Animation adds
- *
- * Every Broadcast Graphic and every Graphic Item may own one Graphic Animation
- * Recipe per lifecycle phase, which is the largest single addition to this
- * arithmetic so far. Measured against this schema's own maxima: animating all four
- * phases with a fade, slide, scale, and reveal channel each costs a Graphic Item
- * 1,039 bytes, and a Broadcast Graphic shell 2,115 — a shell pays more because it
- * also carries a four-phase stagger naming its direct items, and an id costs 102
- * bytes per appearance at the 100-character cap. Across 110 Graphic Items and 50
- * Broadcast Graphic shells that is the whole 183,432-byte rise from 413,241.
- *
- * The cap is deliberately left where Graphic Inputs set it, even though the worst
- * case now exceeds the budget. Animation's cost is recorded rather than used to
- * re-derive a number, because two tickets already cut this same constant
- * independently — each measuring correctly and each blind to the other — and
- * re-deriving it a third time from one vocabulary's own arithmetic would repeat
- * exactly that mistake. A test asserts the overshoot rather than hiding it.
- *
- * Two things make asserting it the right response rather than a deferral. The
- * whole-`modeConfigs` byte total is now enforced on the editors' write path, so the
- * overshoot is refused legibly instead of being written and truncated later; and the
- * shape it would be refused in — an author filling all 110 Graphic Items with
- * maximal templates, four Placeholder Styles, every animation channel on all four
- * phases, plus 60 maximal Graphic Inputs — is not one anyone will author. Realistic
- * authoring is a fraction of the budget. What is lost is the *named cap binds
- * first* property, and restoring it is a cap decision that one owned measurement
- * should make.
- * This comment deliberately states no cross-mode headroom figure. The budget is
- * shared with every other Screen Mode, so what remains is a property of the whole
- * `modeConfigs` map rather than of this cap, and reconstructing it per ticket is
- * how two tickets came to quote different baselines for the same pre-existing
- * Graphic Item. One owned measurement of the merged worst case reports it instead;
- * the figures above describe only this mode's own contribution to it.
- *
- * ## What Graphic Channels add
- *
- * 11,863 bytes, taking 595,148 to 607,011. Membership costs on both sides: 25 maximal
- * channel declarations at about 244 bytes each, and a 100-character `channelId` on
- * every one of the 50 Broadcast Graphic shells. It is by some distance the cheapest
- * capability measured here, and it does not change the conclusion above — the worst
- * case already exceeded the budget, the total is enforced on the write path, and the
- * cap decision remains #99's.
- *
- * ## What a Graphic Font Selection adds
- *
- * 137,500 bytes, taking 607,011 to 744,511. Typography now names either an
- * application font or one exact font Graphic Asset Revision (#141), and the
- * library arm is what the worst case is built from: a maximal-length identity and
- * revision spell one font in 266 bytes where a bare application id spelled it in
- * 16, on every typography and every one of the four Graphic Placeholder Styles a
- * Text Graphic Item may carry — 1,250 bytes per item across all 110.
- *
- * That is a worst case in the strict sense and not a forecast of authored
- * documents: Graphics Asset Library identities are nothing like 100 characters in
- * practice, and the realistic configuration measured in
- * `modeConfigPatchResult.test.ts` moved by 5%, not by a third. It changes no
- * conclusion above — the worst case already exceeded the budget before this, the
- * total is enforced on the write path, and the cap decision remains #99's — but it
- * is measured here rather than assumed away, because a worst case that quietly
- * stopped being the worst case is exactly what this figure exists to prevent.
+ * No cross-mode headroom figure is stated here. The budget is shared with every
+ * other Screen Mode, so what remains is a property of the whole `modeConfigs` map
+ * rather than of this cap — reconstructing it per ticket is how two tickets came to
+ * quote different baselines for the same pre-existing Graphic Item.
  */
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 110;
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 744_511;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 300;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 3_713_744;
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
 	return items.reduce(
@@ -1405,7 +1385,11 @@ export const broadcastGraphicConfigSchema = z.object({
 	animation: graphicContainerAnimationSchema.optional(),
 	styleSet: graphicStyleSetLinkSchema.optional(),
 	styleRefs: graphicContainerStyleRefsSchema.optional(),
-}).strict();
+}).strict().refine(
+	// Top-level items only: a Graphic Group's children are staggered by the group.
+	graphic => graphicStaggerNamesASubset(graphic, graphic.items.length),
+	GRAPHIC_STAGGER_SUBSET_MESSAGE,
+);
 
 /**
  * A Feature Match Layout's shared item tree.
@@ -1422,15 +1406,26 @@ const featureMatchLayoutCompositionSchema = z.object({
 	name: z.string().min(1).max(100),
 	items: z.array(graphicItemConfigSchema)
 		.max(
-			MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
-			`A Feature Match Layout must not contain more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC} Graphic Items`,
+			MAX_GRAPHIC_ITEMS_PER_FEATURE_MATCH_LAYOUT,
+			`A Feature Match Layout must not contain more than ${MAX_GRAPHIC_ITEMS_PER_FEATURE_MATCH_LAYOUT} Graphic Items`,
+		)
+		// Counting Graphic Group children, exactly as a Broadcast Graphics Screen's
+		// total does. Without it the cap above bounded only the top-level list, so 100
+		// groups of 50 children was 5,100 Graphic Items in one layout — refused, if at
+		// all, by the byte total rather than by a limit anyone could read.
+		.refine(
+			items => countGraphicItems(items) <= MAX_GRAPHIC_ITEMS_PER_FEATURE_MATCH_LAYOUT,
+			`A Feature Match Layout must not contain more than ${MAX_GRAPHIC_ITEMS_PER_FEATURE_MATCH_LAYOUT} Graphic Items in total`,
 		)
 		.refine(
 			items => new Set(graphicItemIds(items)).size === graphicItemIds(items).length,
 			'Graphic Item ids must be unique within one Feature Match Layout',
 		),
 	animation: graphicContainerAnimationSchema.optional(),
-}).strict();
+}).strict().refine(
+	composition => graphicStaggerNamesASubset(composition, composition.items.length),
+	GRAPHIC_STAGGER_SUBSET_MESSAGE,
+);
 
 /**
  * How many external video source areas one Feature Match Layout may frame.

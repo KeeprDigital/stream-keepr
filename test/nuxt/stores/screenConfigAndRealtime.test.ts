@@ -271,63 +271,154 @@ describe('useScreenStore config and realtime', () => {
 	// ── Realtime Handlers ──
 
 	describe('realtime handlers', () => {
+		/*
+		 * A Screen change arrives as a notification naming the Screen, never as the
+		 * Screen — its mode configuration is far larger than one realtime message may
+		 * carry (#95). So every assertion below is about *catching up from the API*,
+		 * which is what these handlers now do.
+		 */
 		describe('screen:created', () => {
-			it('adds screen from remote message', () => {
+			it('loads the announced Screen from the API', async () => {
 				store.screens = [];
-				const screen = createMockScreen({ id: 10, name: 'Remote' });
+				store.currentEventId = 1;
+				mockRepo.getById.mockResolvedValue(createMockScreen({ id: 10, name: 'Remote' }));
 
-				ablyCallbacks.screen!['screen:created']!({ screen });
+				await ablyCallbacks.screen!['screen:created']!({ eventId: 1, screenId: 10 });
 
+				expect(mockRepo.getById).toHaveBeenCalledWith(1, 10);
 				expect(store.screens).toHaveLength(1);
 				expect(store.screens[0]!.name).toBe('Remote');
 			});
 
-			it('skips duplicate screens', () => {
-				const screen = createMockScreen({ id: 10 });
-				store.screens = [screen];
+			it('caches the loaded Screen once, so an already-known Screen is not duplicated', async () => {
+				store.screens = [createMockScreen({ id: 10 })];
+				store.currentEventId = 1;
+				mockRepo.getById.mockResolvedValue(createMockScreen({ id: 10, name: 'Remote' }));
 
-				ablyCallbacks.screen!['screen:created']!({ screen });
+				await ablyCallbacks.screen!['screen:created']!({ eventId: 1, screenId: 10 });
 
 				expect(store.screens).toHaveLength(1);
 			});
 
-			it('skips when isSelfOrigin returns true', () => {
+			it('skips when isSelfOrigin returns true', async () => {
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 				store.screens = [];
+				store.currentEventId = 1;
 
-				ablyCallbacks.screen!['screen:created']!({ screen: createMockScreen({ id: 10 }) });
+				await ablyCallbacks.screen!['screen:created']!({ eventId: 1, screenId: 10 });
 
+				expect(mockRepo.getById).not.toHaveBeenCalled();
 				expect(store.screens).toHaveLength(0);
+			});
+
+			it('does not load a Screen for a client that holds no Screen collection', async () => {
+				// A Screen Output loads one Screen by slug and never sets `currentEventId`.
+				// It has no list to add to, so a Screen created mid-show is not its work.
+				store.screens = [];
+				store.currentEventId = null;
+
+				await ablyCallbacks.screen!['screen:created']!({ eventId: 1, screenId: 10 });
+
+				expect(mockRepo.getById).not.toHaveBeenCalled();
 			});
 		});
 
 		describe('screen:updated', () => {
-			it('updates existing screen from remote message', () => {
+			it('reloads the announced Screen from the API', async () => {
 				store.screens = [createMockScreen({ id: 10, name: 'Old' })];
+				mockRepo.getById.mockResolvedValue(createMockScreen({ id: 10, name: 'New' }));
 
-				ablyCallbacks.screen!['screen:updated']!({ screen: createMockScreen({ id: 10, name: 'New' }) });
+				await ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
 
+				expect(mockRepo.getById).toHaveBeenCalledWith(1, 10);
 				expect(store.screens[0]!.name).toBe('New');
 			});
 
-			it('also updates activeScreen if matching', () => {
+			it('also updates activeScreen if matching', async () => {
 				const screen = createMockScreen({ id: 10, name: 'Old' });
 				store.screens = [screen];
 				store.activeScreen = screen;
+				mockRepo.getById.mockResolvedValue(createMockScreen({ id: 10, name: 'New' }));
 
-				const updated = createMockScreen({ id: 10, name: 'New' });
-				ablyCallbacks.screen!['screen:updated']!({ screen: updated });
+				await ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
 
 				expect(store.activeScreen!.name).toBe('New');
 			});
 
-			it('skips when isSelfOrigin returns true', () => {
+			it('catches up a Screen Output, which holds its Screen without holding the collection', async () => {
+				const screen = createMockScreen({ id: 10, name: 'Old' });
+				store.activeScreen = screen;
+				store.currentEventId = null;
+				mockRepo.getById.mockResolvedValue(createMockScreen({ id: 10, name: 'New' }));
+
+				await ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
+
+				expect(store.activeScreen!.name).toBe('New');
+			});
+
+			it('ignores a Screen this client neither holds nor collects', async () => {
+				store.screens = [createMockScreen({ id: 10 })];
+				store.currentEventId = null;
+
+				await ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 99 });
+
+				expect(mockRepo.getById).not.toHaveBeenCalled();
+			});
+
+			it('skips when isSelfOrigin returns true', async () => {
 				store.screens = [createMockScreen({ id: 10, name: 'Old' })];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
-				ablyCallbacks.screen!['screen:updated']!({ screen: createMockScreen({ id: 10, name: 'New' }) });
+				await ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
+
+				expect(mockRepo.getById).not.toHaveBeenCalled();
+				expect(store.screens[0]!.name).toBe('Old');
+			});
+
+			it('keeps the latest answer when two changes are announced in quick succession', async () => {
+				// Two loads for one Screen race; the earlier answer must not land last.
+				store.screens = [createMockScreen({ id: 10, name: 'Old' })];
+				let releaseFirst: (screen: unknown) => void = () => {};
+				mockRepo.getById
+					.mockReturnValueOnce(new Promise((resolve) => {
+						releaseFirst = resolve;
+					}))
+					.mockResolvedValueOnce(createMockScreen({ id: 10, name: 'Second' }));
+
+				const first = ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
+				await ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
+				releaseFirst(createMockScreen({ id: 10, name: 'First' }));
+				await first;
+
+				expect(store.screens[0]!.name).toBe('Second');
+			});
+
+			it('does not cache a reload that resolves after the store was reset', async () => {
+				// Leaving the Event supersedes the write flights; a reload in flight has to
+				// be superseded with them, or an answer for the Event just left lands in a
+				// store that has been cleared and puts a Screen back that nobody asked for.
+				store.screens = [createMockScreen({ id: 10, name: 'Old' })];
+				let release: (screen: unknown) => void = () => {};
+				mockRepo.getById.mockReturnValue(new Promise((resolve) => {
+					release = resolve;
+				}));
+
+				const inFlight = ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
+				store.$reset();
+				release(createMockScreen({ id: 10, name: 'New' }));
+				await inFlight;
+
+				expect(store.screens).toHaveLength(0);
+			});
+
+			it('leaves the cached Screen alone when the reload fails', async () => {
+				store.screens = [createMockScreen({ id: 10, name: 'Old' })];
+				mockRepo.getById.mockRejectedValue(new Error('offline'));
+
+				await ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
 
 				expect(store.screens[0]!.name).toBe('Old');
+				expect(store.error).toBeNull();
 			});
 		});
 

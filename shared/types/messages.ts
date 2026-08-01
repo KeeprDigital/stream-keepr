@@ -4,7 +4,6 @@ import type {
 	PhaseResponse,
 	PlayerResponse,
 	RoundResponse,
-	ScreenResponse,
 	TalentResponse,
 } from '../api';
 import type {
@@ -57,6 +56,23 @@ export interface BaseMessage {
 	timestamp: number;
 	originConnectionId?: string;
 }
+
+/**
+ * The most bytes one published realtime message may carry.
+ *
+ * Ably enforces a maximum size per published message and the figure is a property
+ * of the account's package: its published limits table gives **64 KiB** for Free
+ * and Standard and 256 KiB for Pro and Enterprise
+ * (https://ably.com/docs/pricing/limits). Nothing in this repository records which
+ * package this deployment is on — the only Ably configuration it holds is an API
+ * key — so this is the documented floor rather than a figure anyone confirmed.
+ *
+ * Designing against the larger number would make every bound here true only while
+ * the account stays on a paid package, which is not a property any code can check.
+ * A message that exceeds this is logged rather than refused: the write it announces
+ * has already committed, and realtime delivery is best-effort by design.
+ */
+export const MAX_REALTIME_MESSAGE_BYTES = 64 * 1024;
 
 export interface MessageDefinitions {
 	'event:updated': {
@@ -283,13 +299,24 @@ export interface MessageDefinitions {
 		screenId: number;
 	};
 
-	// Screen management
+	/*
+	 * Screen management.
+	 *
+	 * A Screen change is announced, never shipped. The Screen entity carries
+	 * `modeConfigs`, which storage bounds at 512 KiB — several times
+	 * `MAX_REALTIME_MESSAGE_BYTES` — so a notification carrying it stopped being
+	 * deliverable at exactly the authored sizes that matter, and stopped silently,
+	 * because publication logs and swallows. Naming the Screen and letting each
+	 * client reload the authoritative Screen from the API takes the size ceiling off
+	 * the realtime path entirely, which is the rule the spec already settled:
+	 * realtime is notification, snapshots are authority. See #95.
+	 */
 	'screen:created': {
-		screen: ScreenResponse;
+		screenId: number;
 	};
 
 	'screen:updated': {
-		screen: ScreenResponse;
+		screenId: number;
 	};
 
 	'screen:deleted': {
