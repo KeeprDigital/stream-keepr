@@ -6,7 +6,7 @@ import type {
 } from '~~/shared/types/graphics';
 import { graphicChannelHandoffPolicy } from '~~/shared/modules/graphics';
 import { GRAPHIC_CHANNEL_HANDOFF_POLICY_VALUES } from '~~/shared/types/graphics';
-import { randomCommandId } from '~~/shared/utils/uuid';
+import { randomUuid } from '~~/shared/utils/uuid';
 
 /**
  * Authoring for a Broadcast Graphics Screen's Graphic Channels.
@@ -80,7 +80,10 @@ function addChannel() {
 	write({
 		channels: [
 			...props.channels,
-			{ id: randomCommandId('channel'), name: `Channel ${props.channels.length + 1}` },
+			// A durable authored id, like every other graphics id an author creates. A
+			// command id would embed a wall clock and a counter that only correlate a live
+			// -session command with its retry, which a Screen's stored configuration is not.
+			{ id: randomUuid(), name: `Channel ${props.channels.length + 1}` },
 		],
 	});
 }
