@@ -284,7 +284,9 @@ function worstCaseItem(id: string) {
 		text: 'T'.repeat(MAX_GRAPHIC_TEXT_LENGTH),
 		typography: WORST_TYPOGRAPHY,
 		overflowPolicy: 'shrink' as const,
-		minFontSize: 24.5,
+		// Its own maximum rather than a plausible one: the schema bounds it at 600 and
+		// does not tie it to `fontSize`, so a worst case takes the longest legal value.
+		minFontSize: 599.5,
 		surfaceStyle: WORST_SURFACE_STYLE,
 		animation: WORST_ANIMATION,
 		styleRefs: WORST_ITEM_STYLE_REFS,
@@ -382,7 +384,9 @@ function jsonBytes(value: unknown) {
 function worstCaseGroup(id: string, childIds: string[]) {
 	const children = childIds.map(childId => ({
 		...worstCaseItem(childId),
-		sizing: { mode: 'fill' as const, size: 9999.5, weight: 99.5 },
+		// `fixed` rather than `fill`: the two are interchangeable here and it is the
+		// longer of the two enum members.
+		sizing: { mode: 'fixed' as const, size: 9999.5, weight: 99.5 },
 	}));
 	return {
 		type: 'group' as const,
@@ -465,6 +469,8 @@ function worstCaseScreen(arrangement: 'flat' | 'grouped') {
 		bindings: [] as ReturnType<typeof worstCaseBinding>[],
 		sources: [] as ReturnType<typeof worstCaseSource>[],
 		animation: undefined as ReturnType<typeof worstContainerAnimation> | undefined,
+		// The one field in this fixture with no schema maximum to populate — see the
+		// named exception on the test below.
 		styleSet: { styleSetId: 's'.repeat(100), revision: 999999 },
 		styleRefs: WORST_CONTAINER_STYLE_REFS,
 		channelId: undefined as string | undefined,
@@ -839,16 +845,23 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 	});
 
 	it('measures the worst Broadcast Graphics Screen every cap together admits', () => {
-		// The one owned measurement of what the caps admit, composed from every
-		// construct the schema accepts rather than from any one ticket's arithmetic.
+		// The one owned measurement of what the caps admit, rather than any one
+		// ticket's arithmetic. It carries every construct the schema accepts, each
+		// populated at its own maximum, **with one named exception**:
+		//
+		// - `styleSet.revision` is `int().nonnegative()` with no upper bound, so there
+		//   is no longest legal value to write. The builder uses a six-digit revision.
+		//
+		// The exception is named rather than the claim being made absolute, because an
+		// absolute claim is what has been wrong four times here. A construct the schema
+		// admits and this builder omits produces a number that looks measured and is
+		// not: that hid animated shells until #69 asked why an unchanged figure had not
+		// moved, hid the whole `styleRefs` block until #99 asked the same question of
+		// the rest, and hid the Graphic Group — the seventh member of
+		// `graphicItemConfigSchema` — until #99's review asked it a third time.
 		//
 		// Which arrangement is the worst one is measured rather than assumed — see the
-		// flat contrast below. A construct the schema admits and this builder omits
-		// produces a number that looks measured and is not: that failure hid animated
-		// shells until #69 asked why an unchanged figure had not moved, hid the whole
-		// `styleRefs` block until #99 asked the same question of the rest, and hid the
-		// Graphic Group — the seventh member of `graphicItemConfigSchema` — until #99's
-		// review asked it a third time.
+		// flat contrast below.
 		const config = worstCaseScreen('grouped');
 		const bytes = jsonBytes(config);
 

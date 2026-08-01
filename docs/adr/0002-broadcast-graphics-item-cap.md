@@ -15,7 +15,11 @@ Issue #99 was filed to make the decision once, from one composed measurement, an
 
 ### What the composed measurement says
 
-The worst case is now built from every construct `broadcastGraphicsModeConfigSchema` admits — all seven members of the Graphic Item union including Graphic Groups and their `sizing`-bearing children, maximal-length ids, Graphic Style Set references in every slot, animation and staggers on items, groups and Broadcast Graphic shells, and every Graphic Input, binding, Graphic Source Selection and Graphic Channel slot filled. Reaching that took four separate corrections, each found by asking why a figure had not moved; the last was the Graphic Group, absent from a builder whose own comment claimed it spanned everything the schema accepts.
+The worst case is built from every construct `broadcastGraphicsModeConfigSchema` admits, each populated at its own maximum — all seven members of the Graphic Item union including Graphic Groups and their `sizing`-bearing children, maximal-length ids, Graphic Style Set references in every slot, animation and staggers on items, groups and Broadcast Graphic shells, and every Graphic Input, binding, Graphic Source Selection and Graphic Channel slot filled.
+
+**With one exception, named rather than glossed:** a Graphic Style Set link's `revision` is `int().nonnegative()` with no upper bound, so there is no longest legal value to write and the fixture uses a six-digit one. It is the only field in the worst case whose schema states no maximum, which is itself worth knowing in a byte-budgeted document.
+
+That qualification is deliberate. Reaching this figure took four separate corrections, each found by asking why a number had not moved — animated shells, the whole `styleRefs` block, maximal-length ids, and finally the Graphic Group, absent from a builder whose own comment claimed it spanned everything the schema accepts. An unqualified claim is what made each of those a surprise rather than a known gap, so this one states its exception instead.
 
 Measured against the schema itself, at four cap values:
 
@@ -61,9 +65,11 @@ The correct objection is about volume, not expressiveness. The fidelity prototyp
 
 Requirement (b) of #99 is to constrain the pathological axes until the worst case fits. Three were narrowed (below). The largest remaining is a maximal Graphic Style Set reference in every slot of every Graphic Item, about 6,100 bytes — more than half of an item's 11,435.
 
-Removing it entirely would still not be enough, and the arithmetic is short. At a cap of 300 the whole budget left for items after the fixed shell cost is 524,288 − 282,568 = 241,720, which is **806 bytes per Graphic Item**. `MAX_GRAPHIC_TEXT_LENGTH` is 1,000, so a maximal Graphic Text Template alone exceeds that budget before an id, a label, a position or a typography is counted. The same holds at the old cap of 110, where the per-item budget is 2,197 bytes against roughly 5,300 for a maximal Text Graphic Item with its Style Set references stripped out.
+Removing it entirely would still not be enough, and the arithmetic is short. At a cap of 300 the whole budget left for items after the fixed shell cost is 524,288 − 282,568 = 241,720, which is **806 bytes per Graphic Item**. `MAX_GRAPHIC_TEXT_LENGTH` is 1,000, so at this cap a maximal Graphic Text Template alone exceeds the per-item budget before an id, a label, a position or a typography is counted.
 
-So the fixed point is not reachable by narrowing anything short of the spec's own text vocabulary. Saying so with the arithmetic is more useful than narrowing an axis and still overshooting.
+At the old cap of 110 the per-item budget is 2,197 bytes against roughly 5,300 for a maximal Text Graphic Item with its Style Set references stripped out — so it does not fit there either, but the text template is not what makes the difference at that cap. Getting under 2,197 would mean cutting Graphic Font Selections and Graphic Placeholder Styles as well, which are three separate spec-level questions rather than one.
+
+So the fixed point is not reachable by narrowing anything short of the vocabulary the spec settles — at this cap, specifically the Graphic Text Template. Saying so with the arithmetic is more useful than narrowing an axis and still overshooting.
 
 ### What makes accepting the overshoot sound
 

@@ -977,6 +977,12 @@ const graphicContainerStyleRefsSchema = z.object(graphicAnimationStyleRefShape).
 /** At most one Graphic Style Set per composition, stated by this being one object. */
 const graphicStyleSetLinkSchema = z.object({
 	styleSetId: graphicStyleSetIdSchema,
+	// The only field the worst-case measurement cannot populate at a maximum,
+	// because it has none: a revision counts publications and nothing bounds how
+	// many a Style Set may have. Its contribution to the byte budget is therefore
+	// the width of a number rather than a cap, which is why it is left unbounded
+	// rather than given an arbitrary ceiling — but it is worth knowing it is the
+	// one hole in `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES`.
 	revision: z.number().int().nonnegative(),
 }).strict();
 
@@ -1233,7 +1239,11 @@ export const MAX_GRAPHIC_CHANNELS_PER_SCREEN = 25;
  * bytes, 47% of the shared budget.
  *
  * `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES` is what the
- * caps together admit, composed from every construct the schema accepts. It is
+ * caps together admit: every construct the schema accepts, each populated at its
+ * own maximum, with the one exception named beside the fixture — a Graphic Style
+ * Set link's `revision` has no upper bound to populate. The claim is qualified
+ * rather than absolute on purpose; four rounds of correction here came of an
+ * absolute one. It is
  * about seven times the budget and **that is a settled decision, not an oversight**:
  * the worst case is allowed not to fit, because the byte total is enforced on the
  * editors' write path (#85) and realtime no longer publishes mode configurations
