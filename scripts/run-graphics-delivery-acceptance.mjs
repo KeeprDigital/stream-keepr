@@ -349,9 +349,9 @@ await runAcceptanceHarness({
 				// Bytes that disagree with their recorded facts are refused rather
 				// than served, and the refusal invites a repair rather than
 				// declaring the revision gone.
-				record(checkIntegrityDisagreement(read, { route, bytes: scenario.content }));
+				record(checkIntegrityDisagreement(read, { route }));
 				const editorRead = await session.request(scenario.editorContentPath(), { author: true });
-				record(checkIntegrityDisagreement(editorRead, { route: editorRoute, bytes: scenario.content }));
+				record(checkIntegrityDisagreement(editorRead, { route: editorRoute }));
 			}
 
 			if (fault === 'd1-outage') {

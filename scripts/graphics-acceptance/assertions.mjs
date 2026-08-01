@@ -320,16 +320,17 @@ export function checkMissingIdentity(observation, { route }) {
  * incident cannot still reach air — and because the disagreement may be
  * repaired, the caller is told to retry rather than told it is gone.
  */
-export function checkIntegrityDisagreement(observation, { route, bytes }) {
+export function checkIntegrityDisagreement(observation, { route }) {
 	const failures = [...checkRetryableUnavailable(observation, { route })];
-	if (observation.status === 200) {
+	// Any successful status carrying a body is the failure worth naming
+	// separately from "did not answer 503": it means bytes the library had
+	// already decided not to trust reached a caller. A ranged read would answer
+	// 206 rather than 200, so the check is on success-with-content, not on 200.
+	if (observation.status < 400 && observation.bytes.byteLength > 0) {
 		failures.push(failure('outcome-not-integrity-failure', {
 			route,
 			reason: 'contradicting bytes were served',
 		}));
-	}
-	else if (bytes !== undefined && observation.bytes.byteLength > 0 && observation.status < 400) {
-		failures.push(failure('outcome-not-integrity-failure', { route, reason: 'a body was returned' }));
 	}
 	return failures;
 }

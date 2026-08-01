@@ -56,7 +56,12 @@
 					report('', 'This browser refused VP9 alpha outright, which is the restriction working.');
 				}
 				else if (video.videoWidth === 0) {
-					// It reported data but no picture, so nothing of it can reach air.
+					// Weaker evidence than a refusal, and knowingly counted as one:
+					// the browser accepted the container and then produced no picture.
+					// Nothing can reach air from a zero-dimension video, so the
+					// restriction does hold — but a browser that later began decoding
+					// these frames would arrive here rather than be caught. If that
+					// ever looks likely, this deserves its own outcome.
 					report('', 'This browser loaded VP9 alpha but produced no picture from it.');
 				}
 				else {
