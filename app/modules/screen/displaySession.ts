@@ -69,10 +69,26 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	const shouldDownload = computed(() => route.query.download === '1');
 	const fitToViewport = computed(() => route.query.fit === '1');
 	const isPreview = computed(() => route.query.preview === '1');
-	// Editor-only guides require the preview flag as well as their own, so an
-	// ordinary Screen Output URL draws none. This is a URL convention rather than
-	// a structural barrier: a URL carrying both flags draws guides wherever it is
-	// opened.
+	/*
+	 * Editor-only guides require the preview flag as well as their own, so an
+	 * ordinary Screen Output URL draws none.
+	 *
+	 * That is a structural barrier rather than a convention, because the preview flag
+	 * is not a decoration a live output could wear — it selects a rendering that
+	 * cannot be a live one. A preview never starts the Screen realtime session
+	 * (below), so it never joins its Screen's channel, never receives a take, and
+	 * never catches up to the authoritative phase; it resolves Graphic Asset content
+	 * through the author-session library path rather than the Screen Output Asset
+	 * Capability, so without an author session it shows no media at all; and its
+	 * Overlay Output draws a checkerboard where the transparency belongs.
+	 *
+	 * So a deliberately constructed `preview=1&guides=1` URL pointed at a broadcast
+	 * source does not produce a live Screen Output with guides over it. It produces
+	 * an editor preview, missing the show, and the guides are the least visible thing
+	 * wrong with it. Gating guides on something a URL cannot carry — a handshake with
+	 * the embedding editor, say — would add a race on every preview load to remove a
+	 * risk that already fails louder than the guides ever could (issue #134).
+	 */
 	const previewGuides = computed(() => isPreview.value && route.query.guides === '1');
 	const previewSafeAreas = computed(() => isPreview.value && route.query.safe === '1');
 	const assetCapability = computed(() => screenOutputAssetCapability(route.hash ?? ''));

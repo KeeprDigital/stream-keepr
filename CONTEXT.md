@@ -721,6 +721,7 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - **Broadcast Graphics Screen** and **Feature Match Overlay** previews share output selection, zoom, item selection, item guides, and safe-area controls
 - Graphics Screen previews provide advisory action-safe guides at a five-percent inset and title-safe guides at a ten-percent inset
 - Preview guides never appear in live **Screen Outputs** or captures and do not clip or constrain authored **Graphic Items**
+- An embedded editor preview is a distinct rendering rather than a flag on a live one — it joins no realtime session and resolves no **Screen Output Asset Capability** — and that is what keeps preview guides and the **Feature Match Sample Dataset** off live **Screen Outputs**
 - A **Broadcast Graphic Template** initializes a copy of a **Broadcast Graphic** on a **Broadcast Graphics Screen**
 - A **Graphic Asset** belongs to the installation-wide **Graphics Asset Library** and is never owned by an **Event**
 - A **Graphic Asset** has one stable library identity distinct from the identity of its **Graphic Asset Content**

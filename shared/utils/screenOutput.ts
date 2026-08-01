@@ -49,10 +49,15 @@ export interface ScreenOutputPathOptions {
 	/** Scale the canvas to fit the embedding viewport. */
 	fitToViewport?: boolean;
 	/**
-	 * Mark this as an embedded editor preview. Editor-only guides are available
-	 * only to a preview, so a Screen Output URL that omits this can never draw
-	 * them — but note this is an opt-in carried on the URL, not a structural
-	 * barrier: a URL with these flags renders guides wherever it is opened.
+	 * Mark this as an embedded editor preview.
+	 *
+	 * Editor-only guides and the Feature Match Sample Dataset are available only to a
+	 * preview, so a Screen Output URL that omits this can never show either. What
+	 * makes that a barrier rather than a convention is that this flag does not
+	 * decorate a live output — it selects a rendering that cannot be one: no realtime
+	 * session, Graphic Asset content resolved through the author session rather than
+	 * the Screen Output Asset Capability, and a checkerboard behind the Overlay
+	 * Output. See `displaySession.ts` for the decision and its cost (issue #134).
 	 */
 	preview?: boolean;
 	itemGuides?: boolean;
