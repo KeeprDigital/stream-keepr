@@ -225,9 +225,10 @@ export function recaptureGraphicStyleOverrides(
 
 			if (GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot].length === 0) {
 				const inherited = resolveGraphicStyleSlotValue(resolution, slot, ref.entryId, current, undefined);
-				// A reference the resolution cannot honour is left exactly as it is, for the
-				// reason applying leaves one: a Style Set that failed to load must not be what
-				// turns a linked composition local.
+				// Deviating from the preset is what lets go of the reference — and a
+				// reference the resolution cannot honour deviates from nothing, so it stays
+				// exactly as it is. A Style Set that failed to load must not be the thing
+				// that turns a linked composition local, which is what applying also says.
 				if (inherited !== null && !sameGraphicStyleValue(current, inherited))
 					continue;
 				(next as Record<string, unknown>)[slot] = { entryId: ref.entryId };
