@@ -20,10 +20,13 @@ import { publishMessage } from '~~/server/utils/ably';
 import {
 	broadcastGraphicChannelContexts,
 	broadcastGraphicSourceSelections,
+	broadcastGraphicsResolveBindingsDue,
+	recoveredBroadcastGraphicsLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { broadcastGraphicPhaseDurations, resolveGraphicInputBindings } from '~~/shared/modules/graphics';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
+import { randomCommandId } from '~~/shared/utils/uuid';
 
 interface ApplyCommandParams {
 	eventId: number;
@@ -311,9 +314,120 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		);
 	};
 
+	/**
+	 * Whether any Graphic Input this Broadcast Graphic binds is applied immediately.
+	 *
+	 * The authored half of the question, answered before any Event Data is loaded.
+	 * A graphic with no live-policy bound input cannot be changed by re-resolution
+	 * whatever Event Data does, so it never costs a query.
+	 */
+	function hasLiveBoundInput(graphic: BroadcastGraphicConfig): boolean {
+		return (graphic.bindings ?? []).some(binding => (graphic.inputs ?? []).some(
+			declaration => declaration.key === binding.inputKey && declaration.updatePolicy === 'live',
+		));
+	}
+
+	/**
+	 * Re-resolve the live-policy Graphic Input Bindings of every Broadcast Graphic on
+	 * program in this Event, for Event Data that has just changed.
+	 *
+	 * ## Why the authoritative side does this at all
+	 *
+	 * "Relevant Realtime Event Session changes re-resolve affected Graphic Input
+	 * Bindings" is a rule about the show, not about anybody's browser. A live On-air
+	 * Update Policy exists precisely for the hands-free case — a lower third that
+	 * renames itself while the operator is looking at a different graphic, or at none —
+	 * so re-resolution cannot be woken by a Live Control watching one selected graphic.
+	 * It has to happen where the acceptance happens, which is here: an on-air Broadcast
+	 * Graphic on a Screen nobody has open, with every client disconnected, still says
+	 * the new name.
+	 *
+	 * ## What it deliberately does not do
+	 *
+	 * It issues the ordinary `Resolve Bindings` command, so every rule that command
+	 * already obeys is obeyed here without being restated: a staged input stays pending,
+	 * an override is not overwritten, an unavailable binding does not fall back to the
+	 * template default, and `acceptedRevision` is left alone so another operator's
+	 * staged Update Graphic is not invalidated by a Player being renamed.
+	 *
+	 * ## Why it is filtered twice before it writes
+	 *
+	 * Event Data changes constantly and almost none of it reaches a Broadcast Graphic.
+	 * The authored filter above costs nothing; the reduction is then computed against
+	 * loaded Event Data and only committed when it would actually change what program
+	 * shows, because a command that changes nothing still advances the authoritative
+	 * sequence that every Live Control and Screen Output reloads against.
+	 *
+	 * Which Event Data moved is deliberately not part of the filter. A binding may reach
+	 * an entity through a fixed relationship from another, so a change that looks
+	 * irrelevant to one graphic's declared kinds may not be — and the failure of guessing
+	 * wrong is a stale name on program, which is the thing this exists to prevent. The
+	 * value comparison is the honest filter, and it is exact.
+	 */
+	const refreshLiveBindings = async ({
+		eventId,
+		originConnectionId,
+	}: {
+		eventId: number;
+		originConnectionId?: string;
+	}): Promise<void> => {
+		const sessions = await state.findActiveSessionsByEvent(eventId);
+		if (sessions.length === 0)
+			return;
+
+		const screensById = new Map((await screens.findByEventId(eventId)).map(screen => [screen.id, screen]));
+
+		for (const session of sessions) {
+			const screen = screensById.get(session.screenId);
+			if (!screen || screen.currentMode !== 'broadcast-graphics')
+				continue;
+
+			// The epoch each graphic is judged against. Re-read only after one of them has
+			// actually written, because that acceptance is the only thing here that moves it.
+			let current = session;
+
+			for (const graphic of authoredStack(screen).graphics) {
+				if (!hasLiveBoundInput(graphic))
+					continue;
+
+				const command: BroadcastGraphicsCommand = {
+					commandId: randomCommandId('resolve-bindings'),
+					type: 'Resolve Bindings',
+					payload: { graphicId: graphic.id },
+				};
+				const context = await reductionContextFor(eventId, screen, graphic, current.currentState, command);
+				const due = broadcastGraphicsResolveBindingsDue(
+					recoveredBroadcastGraphicsLiveState(current.currentState),
+					graphic.id,
+					{ ...context, acceptedAt: Date.now() },
+				);
+				if (!due)
+					continue;
+
+				await state.applyCommand(
+					session.id,
+					eventId,
+					command,
+					context,
+					originConnectionId,
+					{ publish: true },
+				);
+
+				// An epoch this sweep no longer sees as active has been reset or replaced
+				// under it, and a command from the one it was reading can never affect the
+				// successor — so it stops rather than judging the rest against a dead one.
+				const reloaded = await state.findSessionById(session.id, eventId);
+				if (!reloaded || reloaded.status !== 'active')
+					break;
+				current = reloaded;
+			}
+		}
+	};
+
 	return {
 		loadSession,
 		applyCommand,
+		refreshLiveBindings,
 		resetLiveState,
 		endSessionsForScreen,
 	};

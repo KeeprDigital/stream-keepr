@@ -1478,6 +1478,46 @@ function reduceResolveBindings(
 }
 
 /**
+ * Whether re-resolving this Broadcast Graphic's Graphic Input Bindings now would
+ * change what its program outputs show.
+ *
+ * The question the authoritative side asks itself when Event Data moves. Event Data
+ * changes constantly and almost none of it reaches any Broadcast Graphic, so asking
+ * this before issuing a Resolve Bindings is what keeps a Player being renamed from
+ * advancing the authoritative sequence of every Screen in the Event — which every
+ * Live Control and Screen Output would then reload against for no change at all.
+ *
+ * It is exactly the reduction `Resolve Bindings` performs, compared by value rather
+ * than by identity: `acceptLivePolicyValues` rebuilds the accepted map whenever any
+ * live-policy input has an available value, whether or not that value moved, so
+ * identity would answer "due" every time and the guard would guard nothing.
+ *
+ * A false answer is a promise that the command would be a no-op, not that nothing is
+ * bound: a staged input is never due, because re-resolution is not the confirmation
+ * its On-air Update Policy asks for, and a graphic that is off or waiting is never
+ * due, because there is nothing on program to accept into.
+ */
+export function broadcastGraphicsResolveBindingsDue(
+	state: BroadcastGraphicsLiveState,
+	graphicId: string,
+	context: BroadcastGraphicsReductionContext,
+): boolean {
+	const normalized: BroadcastGraphicsLiveState = {
+		playout: state.playout ?? {},
+		inputs: state.inputs ?? {},
+		sources: state.sources ?? {},
+	};
+	const inputs = broadcastGraphicInputsState(normalized, graphicId);
+
+	return !sameGraphicInputValues(inputs.accepted, acceptLivePolicyValues(
+		inputs,
+		context,
+		boundValuesFor(normalized, graphicId, context),
+		isOnProgram(normalized, graphicId, context),
+	));
+}
+
+/**
  * Reduce one accepted command onto the Live Session's state.
  *
  * Playout intents are assignments, which is what makes them idempotent by

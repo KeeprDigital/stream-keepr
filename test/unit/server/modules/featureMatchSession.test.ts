@@ -7,6 +7,12 @@ const mockCreateSessionForSlot = vi.fn();
 const mockApplyCommand = vi.fn();
 const mockPublishMessage = vi.fn();
 
+const mockRefreshLiveBindings = vi.fn();
+
+vi.mock('~~/server/modules/broadcast-graphics-live-session', () => ({
+	broadcastGraphicsLiveSessionModule: () => ({ refreshLiveBindings: mockRefreshLiveBindings }),
+}));
+
 vi.mock('~~/server/services/featureMatchState', () => ({
 	featureMatchStateService: () => ({
 		createSessionForSlot: mockCreateSessionForSlot,
@@ -96,5 +102,9 @@ describe('feature Match Session server module', () => {
 		// seam only asks for it.
 		expect(mockApplyCommand).toHaveBeenCalledWith(10, 1, command, 'origin-1', { publish: true });
 		expect(mockPublishMessage).not.toHaveBeenCalled();
+		// A Graphic Input Binding may read a Feature Match Slot's live state, and this is
+		// the one such change that never passes through Event Data publication — so a
+		// Broadcast Graphic bound to a life total is caught up from here or not at all.
+		expect(mockRefreshLiveBindings).toHaveBeenCalledWith({ eventId: 1, originConnectionId: 'origin-1' });
 	});
 });

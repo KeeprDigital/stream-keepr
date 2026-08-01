@@ -1,5 +1,6 @@
 import type { FeatureMatchSessionCommand, FeatureMatchSessionCommandResult } from '~~/shared/types/featureMatchSession';
 import { mapFeatureMatchSessionToResponse } from '~~/server/mappers/featureMatch';
+import { broadcastGraphicsLiveSessionModule } from '~~/server/modules/broadcast-graphics-live-session';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
 import { publishMessage } from '~~/server/utils/ably';
 
@@ -14,6 +15,30 @@ import { publishMessage } from '~~/server/utils/ably';
  */
 export function featureMatchSessionModule() {
 	const stateService = featureMatchStateService();
+
+	/**
+	 * Catch up any Broadcast Graphic bound to this Feature Match Slot's live state.
+	 *
+	 * A Graphic Input Binding may read discrete live scalar state from a Feature Match
+	 * Slot — a life total, a game-wins line — so a Feature Match Session command moves
+	 * what a bound Graphic Input resolves exactly as an Event Data write does. It is
+	 * the only such change that does not pass through Event Data publication, so it
+	 * asks for the same re-resolution here.
+	 *
+	 * Best-effort, for the same reason it is there: the session command has committed,
+	 * and a Broadcast Graphic that fails to catch up must not report the command failed.
+	 */
+	async function refreshBoundBroadcastGraphics(
+		eventId: number,
+		originConnectionId?: string,
+	): Promise<void> {
+		try {
+			await broadcastGraphicsLiveSessionModule().refreshLiveBindings({ eventId, originConnectionId });
+		}
+		catch {
+			console.error(JSON.stringify({ message: 'broadcast_graphics_binding_refresh_failed', eventId }));
+		}
+	}
 
 	async function createSessionForSlot(
 		slotId: number,
@@ -33,6 +58,7 @@ export function featureMatchSessionModule() {
 			sourceSnapshot: response.sourceSnapshot,
 			currentState: response.currentState,
 		}, originConnectionId);
+		await refreshBoundBroadcastGraphics(eventId, originConnectionId);
 
 		return response;
 	}
@@ -43,7 +69,9 @@ export function featureMatchSessionModule() {
 		command: FeatureMatchSessionCommand,
 		originConnectionId?: string,
 	): Promise<FeatureMatchSessionCommandResult> {
-		return await stateService.applyCommand(sessionId, eventId, command, originConnectionId, { publish: true });
+		const result = await stateService.applyCommand(sessionId, eventId, command, originConnectionId, { publish: true });
+		await refreshBoundBroadcastGraphics(eventId, originConnectionId);
+		return result;
 	}
 
 	return {

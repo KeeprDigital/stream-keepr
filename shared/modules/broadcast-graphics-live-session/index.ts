@@ -57,6 +57,7 @@ export {
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
 	broadcastGraphicRenderedInputs,
+	broadcastGraphicsResolveBindingsDue,
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,
 } from './playout';

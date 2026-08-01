@@ -11,6 +11,7 @@ import {
 	broadcastGraphicInputsState,
 	BroadcastGraphicsCommandRejection,
 	broadcastGraphicSourceSelections,
+	broadcastGraphicsResolveBindingsDue,
 	createInitialBroadcastGraphicsLiveState,
 	graphicInputTraces,
 } from '~~/shared/modules/broadcast-graphics-live-session';
@@ -358,6 +359,85 @@ describe('re-resolving after an Event Data change', () => {
 		state = reduce(state, { type: 'Resolve Bindings', payload: { graphicId: GRAPHIC } }, renamed());
 
 		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({ name: 'Ava "Riptide" Reed' });
+	});
+
+	/**
+	 * Whether the authoritative side has anything to re-resolve.
+	 *
+	 * Event Data changes constantly and almost none of it reaches a Broadcast Graphic,
+	 * so this is what stands between a Player being renamed and every Screen in the
+	 * Event advancing its authoritative sequence for a command that changes nothing.
+	 * Each case below is one an Event Data change actually lands in.
+	 */
+	describe('whether a re-resolve is due at all', () => {
+		function due(state: BroadcastGraphicsLiveState, ctx: BroadcastGraphicsReductionContext) {
+			return broadcastGraphicsResolveBindingsDue(state, GRAPHIC, ctx);
+		}
+
+		it('is due when a live-policy bound value has moved under an on-air graphic', () => {
+			const live = context({ inputs: [LIVE_NAME] });
+			const state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live), live);
+
+			expect(due(state, renamed())).toBe(true);
+		});
+
+		it('is not due when the same Event Data resolves the same value', () => {
+			const live = context({ inputs: [LIVE_NAME] });
+			const state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live), live);
+
+			// The value on air already is the value the binding resolves. Answering "due"
+			// here would make every unrelated Event Data change write a command, which is
+			// the whole cost this question exists to avoid.
+			expect(due(state, live)).toBe(false);
+		});
+
+		it('is not due for a staged Graphic Input, however far its bound value has moved', () => {
+			let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1));
+			state = selectPlayer(state, 2);
+
+			expect(due(state, renamed([NAME]))).toBe(false);
+		});
+
+		it('is not due while the Broadcast Graphic is off air', () => {
+			const live = context({ inputs: [LIVE_NAME] });
+			const off = selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live);
+
+			expect(due(off, renamed())).toBe(false);
+		});
+
+		it('is not due while a Graphic Input Override masks the binding', () => {
+			const live = context({ inputs: [LIVE_NAME] });
+			let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live), live);
+			state = setOverride(state, 'Ava "Riptide" Reed', live);
+
+			expect(due(state, renamed())).toBe(false);
+		});
+
+		it('is not due when the binding has stopped resolving, because program holds what it has', () => {
+			const live = context({ inputs: [LIVE_NAME] });
+			const state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live), live);
+			const deleted = context({ inputs: [LIVE_NAME], resolveBindings: () => ({}) });
+
+			// A deleted Player does not blank a lower third: an unavailable value is passed
+			// over rather than accepted, so there is nothing to write.
+			expect(due(state, deleted)).toBe(false);
+		});
+
+		it('answers what applying the command would actually do, in every case', () => {
+			const live = context({ inputs: [LIVE_NAME] });
+			const on = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live), live);
+			const off = selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live);
+
+			for (const [state, ctx] of [[on, renamed()], [on, live], [off, renamed()]] as const) {
+				const before = broadcastGraphicInputsState(state, GRAPHIC).accepted;
+				const after = broadcastGraphicInputsState(
+					reduce(state, { type: 'Resolve Bindings', payload: { graphicId: GRAPHIC } }, ctx),
+					GRAPHIC,
+				).accepted;
+
+				expect(due(state, ctx)).toBe(JSON.stringify(before) !== JSON.stringify(after));
+			}
+		});
 	});
 });
 

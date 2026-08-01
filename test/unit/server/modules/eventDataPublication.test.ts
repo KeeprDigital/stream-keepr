@@ -7,6 +7,12 @@ const mockFeatureMatchService = {
 	findByEventId: vi.fn(),
 };
 
+const mockRefreshLiveBindings = vi.fn();
+
+vi.mock('~~/server/modules/broadcast-graphics-live-session', () => ({
+	broadcastGraphicsLiveSessionModule: () => ({ refreshLiveBindings: mockRefreshLiveBindings }),
+}));
+
 vi.mock('~~/server/utils/ably', () => ({
 	publishMessage: mockPublishMessage,
 	publishMessageStrict: mockPublishMessageStrict,
@@ -698,5 +704,49 @@ describe('event Data publication module', () => {
 				{ featureMatchId: 5, sortOrder: 0 },
 			],
 		}, 'origin-1');
+	});
+
+	/**
+	 * Which publications wake a Broadcast Graphic up.
+	 *
+	 * The settled rule is that relevant Realtime Event Session changes re-resolve
+	 * affected Graphic Input Bindings, and this module is where the server decides one
+	 * has happened. Without this, the trigger could be deleted from every publication
+	 * and the only thing that would notice is a lower third on air holding a stale name.
+	 */
+	describe('re-resolving Broadcast Graphic bindings', () => {
+		it('catches Broadcast Graphics up on Event Data a binding may read', async () => {
+			const publication = eventDataPublicationModule();
+
+			await publication.roundUpdated({
+				eventId: 1,
+				entity: createRound({ name: 'Round 4' }) as any,
+				originConnectionId: 'origin-1',
+			});
+
+			// The origin travels with it, so the browser that made the edit does not echo
+			// its own re-resolution back to itself.
+			expect(mockRefreshLiveBindings).toHaveBeenCalledWith({ eventId: 1, originConnectionId: 'origin-1' });
+		});
+
+		it('catches them up on a Melee Sync, which reports a count rather than each entity', async () => {
+			const publication = eventDataPublicationModule();
+
+			await publication.meleePlayersSynced({ eventId: 1, playerCount: 120 });
+
+			expect(mockRefreshLiveBindings).toHaveBeenCalledWith({ eventId: 1, originConnectionId: undefined });
+		});
+
+		it('leaves them alone for a change no Graphic Input Binding can read', async () => {
+			const publication = eventDataPublicationModule();
+
+			// A Screen and a Player List are Event-scoped, but no Graphic Source Selection
+			// names either, so re-resolving on them would be work that can never change a
+			// value — on every Screen in the Event, every time one is saved.
+			await publication.screenUpdated({ eventId: 1, entity: createScreen() as any });
+			await publication.playerListUpdated({ eventId: 1, entity: createPlayerList() as any });
+
+			expect(mockRefreshLiveBindings).not.toHaveBeenCalled();
+		});
 	});
 });

@@ -75,6 +75,26 @@ export function broadcastGraphicsStateService() {
 	};
 
 	/**
+	 * Every playout epoch currently running anywhere in one Event.
+	 *
+	 * The set an Event Data change has to be offered to. It is asked by Event rather
+	 * than by Screen because that is the scope the change itself has: a renamed Player
+	 * may be bound by a Broadcast Graphic on any Screen, and the one thing the
+	 * authoritative side must not do is decide which Screens matter by asking whichever
+	 * of them happens to have a browser pointed at it.
+	 */
+	const findActiveSessionsByEvent = async (
+		eventId: number,
+	): Promise<DbBroadcastGraphicsLiveSession[]> => {
+		return await db.query.broadcastGraphicsLiveSessions.findMany({
+			where: and(
+				eq(broadcastGraphicsLiveSessions.eventId, eventId),
+				eq(broadcastGraphicsLiveSessions.status, 'active'),
+			),
+		});
+	};
+
+	/**
 	 * The epoch a Screen ended most recently, whose prepared work the next one
 	 * inherits.
 	 *
@@ -412,6 +432,7 @@ export function broadcastGraphicsStateService() {
 
 	return {
 		findSessionById,
+		findActiveSessionsByEvent,
 		ensureActiveSession,
 		endSessionsForScreen,
 		resetSessionForScreen,
