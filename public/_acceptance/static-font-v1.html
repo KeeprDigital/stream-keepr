@@ -9,12 +9,18 @@
 		<script type="module">
 			// A Screen Output must not report itself ready while a template's
 			// typography is still the browser's fallback, so this page proves two
-			// things about every face the installation serves: that it finishes
-			// loading, and that what finally renders is that face rather than
-			// something that merely looks like text. The pixel comparison is the
-			// only honest test of the second — a face that failed to apply still
-			// produces a perfectly good-looking glyph.
-			const manifest = await (await fetch('static-font-v1.json', { cache: 'no-store' })).json();
+			// things about every face it is given: that it finishes loading, and
+			// that what finally renders is that face rather than something that
+			// merely looks like text. The pixel comparison is the only honest test
+			// of the second — a face that failed to apply still produces a
+			// perfectly good-looking glyph.
+			//
+			// With `?operation=` it also runs the real thing: a font Graphic Asset
+			// staged by the harness is fetched back through the installation's own
+			// routes, answered with genuine glyph proofs, published, and then
+			// loaded again from the delivery route that will serve it on air.
+			const parameters = new URLSearchParams(location.search);
+			const operationId = parameters.get('operation');
 
 			async function digest(bytes) {
 				return Array.from(
@@ -41,15 +47,18 @@
 			}
 
 			/**
-			 * @returns {Promise<{ outcome: 'rendered' | 'load-failed' | 'not-applied' }>}
+			 * Load one face and prove every requested glyph renders from it.
+			 *
+			 * @returns {Promise<{
+			 *   outcome: 'rendered' | 'load-failed' | 'not-applied',
+			 *   reason?: string,
+			 *   sourceDigest?: string,
+			 *   glyphProofs?: object[],
+			 * }>}
 			 */
-			async function loadAndRender(face) {
-				const response = await fetch(face.url, { cache: 'no-store' });
-				if (!response.ok)
-					return { outcome: 'load-failed' };
-				const bytes = await response.arrayBuffer();
-				const family = `sk-acceptance-${await digest(bytes)}`;
-				const glyph = String.fromCodePoint(face.codePoint);
+			async function verifyFace(bytes, codePoints) {
+				const sourceDigest = await digest(bytes);
+				const family = `sk-acceptance-${sourceDigest}`;
 
 				let fontFace;
 				try {
@@ -59,44 +68,68 @@
 				catch {
 					// A face the browser's font sanitiser refuses never loads, however
 					// well-formed the server-side compatibility profile found it.
-					return { outcome: 'load-failed', reason: 'the browser refused the face' };
+					return { outcome: 'load-failed', reason: 'the browser refused the face', sourceDigest };
 				}
 				// Readiness has to mean something. `document.fonts.check()` answers
 				// true for a family nobody has heard of, so the face's own status is
 				// the only signal separating "loaded" from "about to fall back".
 				if (fontFace.status !== 'loaded')
-					return { outcome: 'load-failed', reason: 'the face resolved without loading' };
+					return { outcome: 'load-failed', reason: 'the face resolved without loading', sourceDigest };
+
 				document.fonts.add(fontFace);
 				try {
-					await document.fonts.load(`64px "${family}"`, glyph);
-					await document.fonts.ready;
-					if (document.fonts.status !== 'loaded') {
-						return {
-							outcome: 'load-failed',
-							reason: 'the document reported ready while a face was still loading',
-						};
-					}
-
 					const context = renderContext();
-					const [exactWithSans, exactWithMono, sansFallback, monoFallback] = await Promise.all([
-						pixelDigest(context, `"${family}", sans-serif`, glyph),
-						pixelDigest(context, `"${family}", monospace`, glyph),
-						pixelDigest(context, 'sans-serif', glyph),
-						pixelDigest(context, 'monospace', glyph),
-					]);
-					// The two fallbacks must differ, or the probe cannot tell a
-					// rendered face from a substituted one at all.
-					if (sansFallback === monoFallback)
-						return { outcome: 'not-applied', reason: 'fallbacks are indistinguishable' };
-					if (exactWithSans !== exactWithMono)
-						return { outcome: 'not-applied', reason: 'the face depends on its fallback stack' };
-					if (exactWithSans === sansFallback || exactWithSans === monoFallback)
-						return { outcome: 'not-applied', reason: 'the fallback rendered instead of the face' };
-					return { outcome: 'rendered' };
+					const glyphProofs = [];
+					for (const codePoint of codePoints) {
+						const glyph = String.fromCodePoint(codePoint);
+						await document.fonts.load(`64px "${family}"`, glyph);
+						await document.fonts.ready;
+						if (document.fonts.status !== 'loaded') {
+							return {
+								outcome: 'load-failed',
+								reason: 'the document reported ready while a face was still loading',
+								sourceDigest,
+							};
+						}
+						const [
+							exactWithSansDigest,
+							exactWithMonoDigest,
+							sansFallbackDigest,
+							monoFallbackDigest,
+						] = await Promise.all([
+							pixelDigest(context, `"${family}", sans-serif`, glyph),
+							pixelDigest(context, `"${family}", monospace`, glyph),
+							pixelDigest(context, 'sans-serif', glyph),
+							pixelDigest(context, 'monospace', glyph),
+						]);
+						// The two fallbacks must differ, or the probe cannot tell a
+						// rendered face from a substituted one at all.
+						if (sansFallbackDigest === monoFallbackDigest)
+							return { outcome: 'not-applied', reason: 'fallbacks are indistinguishable', sourceDigest };
+						if (exactWithSansDigest !== exactWithMonoDigest)
+							return { outcome: 'not-applied', reason: 'the face depends on its fallback stack', sourceDigest };
+						if (exactWithSansDigest === sansFallbackDigest || exactWithSansDigest === monoFallbackDigest)
+							return { outcome: 'not-applied', reason: 'the fallback rendered instead of the face', sourceDigest };
+						glyphProofs.push({
+							codePoint,
+							exactWithSansDigest,
+							exactWithMonoDigest,
+							sansFallbackDigest,
+							monoFallbackDigest,
+						});
+					}
+					return { outcome: 'rendered', sourceDigest, glyphProofs };
 				}
 				finally {
 					document.fonts.delete(fontFace);
 				}
+			}
+
+			async function verifyUrl(url, codePoints) {
+				const response = await fetch(url, { cache: 'no-store' });
+				if (!response.ok)
+					return { outcome: 'load-failed', reason: `the face answered ${response.status}` };
+				return await verifyFace(await response.arrayBuffer(), codePoints);
 			}
 
 			function report(code, message) {
@@ -105,36 +138,106 @@
 				document.querySelector('#result').textContent = message;
 			}
 
+			/**
+			 * The library face: staged bytes in, published revision out, both
+			 * fetched through the installation rather than from the page's own
+			 * assets.
+			 */
+			async function runLibraryFace() {
+				const operationRoute = `/api/graphics-assets/ingestion-operations/${operationId}`;
+				const staged = await (await fetch(operationRoute, { cache: 'no-store' })).json();
+				const challenge = staged?.report?.facts?.browserChallenge;
+				if (!challenge)
+					return { code: 'font-load-incomplete', message: 'The staged face offered no glyph challenge.' };
+
+				const source = await fetch(`${operationRoute}/staged-source`, { cache: 'no-store' });
+				if (!source.ok)
+					return { code: 'font-load-incomplete', message: `Staged source answered ${source.status}.` };
+				const verified = await verifyFace(await source.arrayBuffer(), challenge.codePoints);
+				if (verified.outcome !== 'rendered') {
+					return {
+						code: verified.outcome === 'load-failed' ? 'font-load-incomplete' : 'font-glyph-not-rendered',
+						message: `Library face: ${verified.reason}.`,
+					};
+				}
+
+				const confirmed = await fetch(`${operationRoute}/font-browser-evidence`, {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({
+						outcome: 'font-loaded',
+						sourceDigest: verified.sourceDigest,
+						challengeDigest: challenge.digest,
+						glyphProofs: verified.glyphProofs,
+					}),
+				});
+				if (!confirmed.ok)
+					return { code: 'font-glyph-not-rendered', message: `Font evidence answered ${confirmed.status}.` };
+				const published = await confirmed.json();
+				if (published.stage !== 'completed' || !published.result) {
+					return {
+						code: 'font-load-incomplete',
+						message: `The face did not publish; it reported ${published.stage}.`,
+					};
+				}
+
+				// Now the part no bundled asset can prove: the published revision,
+				// read back through the delivery route that serves it on air.
+				const { assetId, revisionId } = published.result;
+				document.body.dataset.assetId = assetId;
+				const delivered = await verifyUrl(
+					`/api/graphics-assets/${assetId}/revisions/${revisionId}/content`,
+					challenge.codePoints.slice(0, 1),
+				);
+				if (delivered.outcome !== 'rendered') {
+					return {
+						code: delivered.outcome === 'load-failed' ? 'font-load-incomplete' : 'font-glyph-not-rendered',
+						message: `Delivered face: ${delivered.reason}.`,
+					};
+				}
+				return undefined;
+			}
+
 			try {
+				const manifest = await (await fetch('static-font-v1.json', { cache: 'no-store' })).json();
+				let failed;
+
 				for (const face of manifest.faces) {
-					const { outcome, reason } = await loadAndRender(face);
+					const { outcome, reason } = await verifyUrl(face.url, [face.codePoint]);
 					if (outcome === 'load-failed') {
-						report('font-load-incomplete', `${face.format}: ${reason}.`);
+						failed = { code: 'font-load-incomplete', message: `${face.format}: ${reason}.` };
 						break;
 					}
 					if (outcome === 'not-applied') {
-						report('font-glyph-not-rendered', `${face.format}: ${reason}.`);
+						failed = { code: 'font-glyph-not-rendered', message: `${face.format}: ${reason}.` };
 						break;
 					}
 				}
 
 				// A face asked for a glyph it does not contain must be caught, not
 				// quietly answered by whatever the browser reaches for instead.
-				if (document.body.dataset.result === 'running') {
-					const probe = await loadAndRender(manifest.fallbackProbe);
+				if (!failed) {
+					const probe = await verifyUrl(manifest.fallbackProbe.url, [manifest.fallbackProbe.codePoint]);
 					if (probe.outcome === 'rendered') {
-						report(
-							'font-silent-fallback-accepted',
-							'A face that silently fell back was accepted as rendered.',
-						);
+						failed = {
+							code: 'font-silent-fallback-accepted',
+							message: 'A face that silently fell back was accepted as rendered.',
+						};
 					}
-					else {
-						report(
-							'',
-							`${manifest.faces.map(face => face.format).join(', ')} loaded and rendered; `
-							+ 'a silently substituted face was refused.',
-						);
-					}
+				}
+
+				if (!failed && operationId)
+					failed = await runLibraryFace();
+
+				if (failed)
+					report(failed.code, failed.message);
+				else {
+					report(
+						'',
+						`${manifest.faces.map(face => face.format).join(', ')} loaded and rendered; `
+						+ 'a silently substituted face was refused'
+						+ (operationId ? '; a library face published and re-loaded from delivery.' : '.'),
+					);
 				}
 			}
 			catch (error) {

@@ -1,31 +1,52 @@
 /**
  * Static font browser acceptance for unattended Screen Outputs.
  *
- * Proves in a real browser that every static font face the installation
- * serves finishes loading and then actually renders its own glyphs, and that
- * a face which would silently fall back is refused rather than accepted.
+ * Proves in a real browser that a static font face finishes loading and then
+ * actually renders its own glyphs, and that a face which would silently fall
+ * back is refused rather than accepted.
  *
- * Local mode serves the page and every face from loopback, which is where the
- * OTF face lives: the installation ships TTF, WOFF, and WOFF2 in its public
- * assets, and vendoring a fourth font solely to be downloaded by a test would
- * republish a typeface for no gain. Deployed mode runs the same page against
- * the installation's own assets, over its own delivery path.
+ * Two different things are being proved, and they need different setups:
  *
- * Usage: node scripts/run-font-browser-acceptance.mjs [--deployed]
+ * - The browser facts — that Chromium loads WOFF2, WOFF, TTF, and OTF and
+ *   renders their glyphs — need no installation, so they run from loopback and
+ *   belong in the ordinary test suite. The OTF face lives there: the
+ *   installation ships no OTF, and vendoring a proprietary typeface solely to
+ *   be downloaded by a test would republish it for no gain.
+ * - The library fact — that a font Graphic Asset Revision travels from the
+ *   object store through the Worker into a browser and renders — needs a
+ *   running installation, because the bundled application fonts are explicitly
+ *   outside the Graphics Asset Library and prove nothing about it. `--library`
+ *   stages a real font ingestion, lets the page answer the server's own glyph
+ *   challenge, and then loads the published revision back through the delivery
+ *   route that will serve it on air.
+ *
+ * Usage: node scripts/run-font-browser-acceptance.mjs [--library] [--deployed]
  */
 
 import { readFile } from 'node:fs/promises';
 import process from 'node:process';
-import { observeChromiumVerdict, serveAcceptanceRoutes } from './graphics-acceptance/chromium.mjs';
-import { createAcceptanceEvidence } from './graphics-acceptance/evidence.mjs';
-import { acceptanceOrigin } from './graphics-acceptance/installation.mjs';
+import {
+	observeChromiumVerdict,
+	serveAcceptanceRoutes,
+	verdictFailureCode,
+} from './graphics-acceptance/chromium.mjs';
+import { runAcceptanceHarness } from './graphics-acceptance/harness.mjs';
+import {
+	acceptanceOrigin,
+	openInstallation,
+	stageFontIngestion,
+} from './graphics-acceptance/installation.mjs';
 
 const HARNESS = 'static-font-v1';
 const ACCEPTANCE_PATH = '/_acceptance/static-font-v1.html';
 const MANIFEST_PATH = '/_acceptance/static-font-v1.json';
+/** Chromium loads this face, and the static-font-v1 profile accepts it. */
+const LIBRARY_FACE = 'public/fonts/mana.woff2';
 
 const deployed = process.argv.includes('--deployed');
-const evidence = createAcceptanceEvidence({ harness: HARNESS });
+// A deployed run always has an installation in front of it, so there would be
+// no reason to visit it and skip the one fact only it can prove.
+const library = deployed || process.argv.includes('--library');
 
 const fromRepository = path => new URL(`../${path}`, import.meta.url);
 
@@ -58,33 +79,53 @@ async function serveLocally() {
 	});
 }
 
-const local = deployed ? undefined : await serveLocally();
-try {
-	const origin = deployed ? acceptanceOrigin({ deployed }) : local.origin;
-	const verdict = await observeChromiumVerdict({ url: `${origin}${ACCEPTANCE_PATH}` });
+await runAcceptanceHarness({
+	harness: HARNESS,
+	async run({ record }) {
+		// The library face has to be reached from the installation's own origin:
+		// its routes are same-origin and cookie-authorized, so a page served from
+		// loopback could not read them at all.
+		const local = library ? undefined : await serveLocally();
+		let staged;
+		try {
+			let url;
+			let sessionUrl;
+			if (library) {
+				const origin = acceptanceOrigin({ deployed });
+				const session = await openInstallation(origin);
+				staged = await stageFontIngestion(session, {
+					bytes: new Uint8Array(await readFile(fromRepository(LIBRARY_FACE))),
+					declaredMime: 'font/woff2',
+					sourceFileName: 'acceptance-face.woff2',
+				});
+				url = `${origin}${ACCEPTANCE_PATH}?operation=${staged.operationId}`;
+				// A graphics author session is issued on an ordinary page load, and
+				// the library routes need one. Static assets do not pass through the
+				// middleware that issues it, so the browser visits the application
+				// first, exactly as an operator's browser would.
+				sessionUrl = `${origin}/`;
+			}
+			else {
+				url = `${local.origin}${ACCEPTANCE_PATH}`;
+			}
 
-	if (verdict.outcome === 'unavailable') {
-		throw new Error(`${HARNESS} acceptance failed:\n${evidence.report([
-			{ code: 'browser-driver-unavailable', detail: { driver: 'chromium' } },
-		])}`);
-	}
-	if (verdict.outcome === 'timed-out') {
-		throw new Error(`${HARNESS} acceptance failed:\n${evidence.report([
-			{ code: 'browser-acceptance-timed-out', detail: { page: 'static-font-v1' } },
-		])}`);
-	}
-	if (verdict.outcome === 'failed') {
-		// The page names the stable code; the harness refuses to invent one for
-		// a page that reported something the registry does not contain.
-		throw new Error(`${HARNESS} acceptance failed:\n${evidence.report([
-			{ code: verdict.code || 'browser-acceptance-failed', detail: { page: 'static-font-v1' } },
-		])}`);
-	}
-	process.stdout.write(`${evidence.passed({
-		faces: deployed ? 3 : 4,
-		mode: deployed ? 'deployed' : 'local',
-	})}\n`);
-}
-finally {
-	await local?.close();
-}
+			const verdict = await observeChromiumVerdict({ url, sessionUrl });
+			record(verdict.outcome === 'passed'
+				? []
+				: [{ code: verdictFailureCode(verdict), detail: { page: HARNESS } }]);
+
+			return {
+				faces: library ? 5 : 4,
+				library: library ? 'published' : 'not-exercised',
+				mode: deployed ? 'deployed' : 'local',
+			};
+		}
+		finally {
+			// The published face is a real asset in a real installation, so it is
+			// trashed whether the run passed or failed.
+			if (staged)
+				await staged.dispose(await staged.publishedAssetId());
+			await local?.close();
+		}
+	},
+});

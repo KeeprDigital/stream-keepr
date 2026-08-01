@@ -20,8 +20,8 @@
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import process from 'node:process';
-import { serveAcceptanceRoutes } from './graphics-acceptance/chromium.mjs';
-import { createAcceptanceEvidence } from './graphics-acceptance/evidence.mjs';
+import { serveAcceptanceRoutes, verdictFailureCode } from './graphics-acceptance/chromium.mjs';
+import { runAcceptanceHarness } from './graphics-acceptance/harness.mjs';
 import { acceptanceOrigin } from './graphics-acceptance/installation.mjs';
 
 const HARNESS = 'vp9-alpha-safari-v1';
@@ -29,10 +29,7 @@ const ACCEPTANCE_PATH = '/_acceptance/vp9-alpha-safari-v1.html';
 const DRIVER_PORT = Number(process.env.STREAM_KEEPR_SAFARIDRIVER_PORT ?? 7055);
 
 const deployed = process.argv.includes('--deployed');
-// A deployed gate that quietly downgrades to "someone should look at this" is
-// not a gate, so the fallback is opt-in there.
 const allowManual = process.argv.includes('--allow-manual') || !deployed;
-const evidence = createAcceptanceEvidence({ harness: HARNESS });
 
 async function startSafariDriver() {
 	const child = spawn('safaridriver', ['-p', String(DRIVER_PORT)], {
@@ -120,55 +117,47 @@ function manualInstructions(url, reason) {
 	].filter(Boolean).join('\n');
 }
 
-function fallBackToManualCheck(url, reason) {
-	if (!allowManual) {
-		throw new Error(`${HARNESS} acceptance failed:\n${evidence.report([
-			{ code: 'browser-driver-unavailable', detail: { driver: 'safaridriver' } },
-		])}\n${manualInstructions(url, reason)}`);
-	}
-	process.stdout.write(`${manualInstructions(url, reason)}\n`);
-	process.stdout.write(`${evidence.deferred({
-		path: 'manual-check-required',
-		mode: deployed ? 'deployed' : 'local',
-	})}\n`);
-}
-
-const local = deployed ? undefined : await serveLocally();
-try {
-	const origin = deployed ? acceptanceOrigin({ deployed }) : local.origin;
-	const url = `${origin}${ACCEPTANCE_PATH}`;
-	const driver = await startSafariDriver();
-
-	if (!driver.available) {
-		fallBackToManualCheck(url, driver.detail);
-	}
-	else {
-		let verdict;
+await runAcceptanceHarness({
+	harness: HARNESS,
+	async run({ record, defer }) {
+		const local = deployed ? undefined : await serveLocally();
 		try {
-			verdict = await observeSafariVerdict(url);
+			const origin = deployed ? acceptanceOrigin({ deployed }) : local.origin;
+			const url = `${origin}${ACCEPTANCE_PATH}`;
+			const driver = await startSafariDriver();
+
+			let verdict = { outcome: 'unavailable', detail: driver.detail };
+			if (driver.available) {
+				try {
+					verdict = await observeSafariVerdict(url);
+				}
+				finally {
+					driver.stop();
+				}
+			}
+
+			if (verdict.outcome === 'unavailable') {
+				// A deployed gate that quietly downgrades to "someone should look at
+				// this" is not a gate, so the fallback is opt-in there.
+				if (!allowManual) {
+					record([{ code: 'browser-driver-unavailable', detail: { driver: 'safaridriver' } }]);
+					process.stderr.write(`${manualInstructions(url, verdict.detail)}\n`);
+					return { path: 'safaridriver', mode: deployed ? 'deployed' : 'local' };
+				}
+				defer(
+					{ path: 'manual-check-required', mode: deployed ? 'deployed' : 'local' },
+					manualInstructions(url, verdict.detail),
+				);
+				return {};
+			}
+
+			record(verdict.outcome === 'passed'
+				? []
+				: [{ code: verdictFailureCode(verdict), detail: { driver: 'safaridriver' } }]);
+			return { path: 'safaridriver', mode: deployed ? 'deployed' : 'local' };
 		}
 		finally {
-			driver.stop();
+			await local?.close();
 		}
-		if (verdict.outcome === 'unavailable') {
-			fallBackToManualCheck(url, verdict.detail);
-		}
-		else if (verdict.outcome !== 'passed') {
-			throw new Error(`${HARNESS} acceptance failed:\n${evidence.report([{
-				code: verdict.outcome === 'timed-out'
-					? 'browser-acceptance-timed-out'
-					: verdict.code || 'browser-acceptance-failed',
-				detail: { driver: 'safaridriver' },
-			}])}`);
-		}
-		else {
-			process.stdout.write(`${evidence.passed({
-				path: 'safaridriver',
-				mode: deployed ? 'deployed' : 'local',
-			})}\n`);
-		}
-	}
-}
-finally {
-	await local?.close();
-}
+	},
+});

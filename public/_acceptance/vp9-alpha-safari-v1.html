@@ -36,14 +36,28 @@
 			document.body.appendChild(video);
 			try {
 				video.src = url;
-				const decoded = await new Promise((resolve) => {
-					video.addEventListener('loadeddata', () => resolve(true), { once: true });
-					video.addEventListener('error', () => resolve(false), { once: true });
-					setTimeout(() => resolve(false), 8000);
+				// "Did not decode" is not the same as "refused". A browser that
+				// never got round to answering has told us nothing, and a gate that
+				// counted silence as a refusal would keep passing long after the
+				// restriction stopped being true.
+				const signal = await new Promise((resolve) => {
+					video.addEventListener('loadeddata', () => resolve('decoded'), { once: true });
+					video.addEventListener('error', () => resolve('refused'), { once: true });
+					setTimeout(() => resolve('silent'), 8000);
 				});
 
-				if (!decoded || video.videoWidth === 0) {
+				if (signal === 'silent') {
+					report(
+						'browser-acceptance-timed-out',
+						'This browser neither decoded nor refused VP9 alpha within the time allowed.',
+					);
+				}
+				else if (signal === 'refused') {
 					report('', 'This browser refused VP9 alpha outright, which is the restriction working.');
+				}
+				else if (video.videoWidth === 0) {
+					// It reported data but no picture, so nothing of it can reach air.
+					report('', 'This browser loaded VP9 alpha but produced no picture from it.');
 				}
 				else {
 					// It decoded. The only remaining question is whether what it

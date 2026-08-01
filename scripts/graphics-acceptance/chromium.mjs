@@ -17,6 +17,22 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
 
+/**
+ * Translate a page's verdict into the stable code a harness prints.
+ *
+ * A page names its own failure; the harness refuses to invent one for a page
+ * that said nothing, and never lets "the driver never ran" or "the page never
+ * decided" wear a code suggesting the content itself was examined and found
+ * wanting.
+ */
+export function verdictFailureCode(verdict) {
+	if (verdict.outcome === 'unavailable')
+		return 'browser-driver-unavailable';
+	if (verdict.outcome === 'timed-out')
+		return 'browser-acceptance-timed-out';
+	return verdict.code || 'browser-acceptance-failed';
+}
+
 export function chromiumCandidates() {
 	return [
 		process.env.CHROME_BIN,
@@ -201,15 +217,14 @@ export async function observeChromiumVerdict({
 				while (Date.now() < deadline) {
 					const evaluated = await page.command('Runtime.evaluate', {
 						expression: `JSON.stringify({
-							result: document.body?.dataset.result,
-							code: document.body?.dataset.code,
+							dataset: { ...(document.body?.dataset ?? {}) },
 							detail: document.querySelector('#result')?.textContent,
 						})`,
 						returnByValue: true,
 					});
-					const { result, code, detail } = JSON.parse(evaluated.result?.value ?? '{}');
-					if (result === 'passed' || result === 'failed')
-						return { outcome: result, code, detail };
+					const { dataset = {}, detail } = JSON.parse(evaluated.result?.value ?? '{}');
+					if (dataset.result === 'passed' || dataset.result === 'failed')
+						return { outcome: dataset.result, code: dataset.code, detail, dataset };
 					await new Promise(resolve => setTimeout(resolve, 100));
 				}
 				return { outcome: 'timed-out' };
