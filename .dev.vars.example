@@ -1,0 +1,14 @@
+# Worker bindings for `pnpm preview` and the local acceptance harnesses.
+#
+# Wrangler reads this file as `.dev.vars`, where `nuxt dev` and the integration
+# suite read `.env`. The names and their meanings are the same, so see
+# `.env.example` for what each one is; this file exists only because Wrangler
+# will not read that one.
+#
+# One of them is load-bearing for a local acceptance run:
+# NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY. Without it, capability minting and
+# Screen Output delivery answer 503, and `pnpm test:delivery:graphics` never
+# reaches anything to assert.
+
+NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY=""
+NUXT_GRAPHICS_ADMIN_TOKEN=""

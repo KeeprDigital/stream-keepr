@@ -1,0 +1,8 @@
+{
+	"faces": [
+		{ "format": "ttf", "url": "/fonts/mana.ttf", "codePoint": 48 },
+		{ "format": "woff", "url": "/fonts/mplantin.woff", "codePoint": 48 },
+		{ "format": "woff2", "url": "/fonts/mana.woff2", "codePoint": 48 }
+	],
+	"fallbackProbe": { "format": "woff2", "url": "/fonts/mana.woff2", "codePoint": 81 }
+}
