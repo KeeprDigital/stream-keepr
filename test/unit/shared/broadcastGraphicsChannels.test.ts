@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	applyBroadcastGraphicsCommand,
 	broadcastGraphicChannelContexts,
+	broadcastGraphicInputsState,
 	broadcastGraphicPhaseProjection,
 	broadcastGraphicPlayoutState,
 	createInitialBroadcastGraphicsLiveState,
@@ -293,6 +294,36 @@ describe('the Out then in Graphic Channel Handoff Policy', () => {
 	});
 });
 
+describe('editing a Graphic Channel Handoff Policy under a running handoff', () => {
+	const stack = [graphic('alpha', 'thirds'), graphic('bravo', 'thirds')];
+
+	it('leaves an incoming graphic that has already begun entering on program', () => {
+		// The handoff started under Overlap, so bravo's entrance began at once and is
+		// 200ms in, visible on program beside alpha's exit.
+		let state = take(createInitialBroadcastGraphicsLiveState(), 'alpha', { channel: LOWER_THIRDS });
+		state = take(state, 'bravo', { at: T0 + 5000, channel: LOWER_THIRDS });
+
+		// The author switches the channel to Out then in mid-handoff. Waiting means a
+		// graphic that has not started, so a graphic already rendering cannot become one:
+		// pulling it off program would be the one case where an authoring edit removes a
+		// Broadcast Graphic that is already on air.
+		expect(stateOf(state, 'bravo', T0 + 5200, QUEUED_THIRDS)).toBe('entering');
+		expect(broadcastGraphicPhaseProjection(state, 'bravo', at(T0 + 5200, QUEUED_THIRDS)))
+			.toEqual({ phase: 'enter', elapsed: 200 });
+		expect(onAir(state, stack, T0 + 5200, QUEUED_THIRDS)).toEqual(['alpha', 'bravo']);
+	});
+
+	it('still holds a graphic whose enter the handoff genuinely deferred', () => {
+		let state = take(createInitialBroadcastGraphicsLiveState(), 'alpha', { channel: QUEUED_THIRDS });
+		state = take(state, 'bravo', { at: T0 + 5000, channel: QUEUED_THIRDS });
+
+		// The same reading with the policy left alone: bravo's own enter has not begun,
+		// so the channel is still holding it.
+		expect(stateOf(state, 'bravo', T0 + 5200, QUEUED_THIRDS)).toBe('waiting');
+		expect(onAir(state, stack, T0 + 5200, QUEUED_THIRDS)).toEqual(['alpha']);
+	});
+});
+
 describe('cancelling and cutting a Graphic Channel handoff', () => {
 	const stack = [graphic('alpha', 'thirds'), graphic('bravo', 'thirds'), graphic('charlie', 'thirds')];
 
@@ -460,5 +491,54 @@ describe('what an operator may do to a waiting Broadcast Graphic', () => {
 			{ type: 'Update Graphic', payload: { graphicId: 'bravo', basedOnAcceptedRevision: 1 } },
 			{ inputs: [], durations: TIMING, acceptedAt: T0 + 5600, channel: QUEUED_THIRDS },
 		)).not.toThrow();
+	});
+
+	/**
+	 * A live On-air Update Policy input, and the reduction context that carries it.
+	 *
+	 * The same declaration a lower third's name would carry: bound to nothing, so its
+	 * working value is what an edit changes and what an acceptance would take.
+	 */
+	const LIVE_NAME = {
+		type: 'text',
+		key: 'name',
+		label: 'Name',
+		required: false,
+		updatePolicy: 'live',
+		default: '',
+		maxLength: 40,
+	} as const;
+
+	function liveContext(at: number) {
+		return { inputs: [LIVE_NAME], durations: TIMING, acceptedAt: at, channel: QUEUED_THIRDS };
+	}
+
+	it('leaves a live-policy Graphic Input edit staged, exactly as Update Graphic is refused', () => {
+		const state = waitingChannel();
+
+		const edited = applyBroadcastGraphicsCommand(
+			state,
+			{ type: 'Set Input', payload: { graphicId: 'bravo', inputKey: 'name', value: 'CHANGED' } },
+			liveContext(T0 + 5200),
+		);
+
+		// A waiting Broadcast Graphic is absent from every output, so nothing an operator
+		// types can reach air through it. It enters with the values its Take accepted —
+		// which is the very rule Update Graphic is refused on — and the edit changes the
+		// working value it will next be taken with.
+		expect(broadcastGraphicInputsState(edited, 'bravo').accepted).toEqual({});
+		expect(broadcastGraphicInputsState(edited, 'bravo').working).toEqual({ name: 'CHANGED' });
+	});
+
+	it('applies that same edit the moment the graphic has entered', () => {
+		const state = waitingChannel();
+
+		const edited = applyBroadcastGraphicsCommand(
+			state,
+			{ type: 'Set Input', payload: { graphicId: 'bravo', inputKey: 'name', value: 'CHANGED' } },
+			liveContext(T0 + 5600),
+		);
+
+		expect(broadcastGraphicInputsState(edited, 'bravo').accepted).toEqual({ name: 'CHANGED' });
 	});
 });

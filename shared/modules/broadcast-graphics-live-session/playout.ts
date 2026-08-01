@@ -556,6 +556,24 @@ function cutOff(acceptedAt: number): BroadcastGraphicPlayout {
  * for the whole of the overlap by design — reading occupancy alone would hold every
  * Overlap handoff's incoming graphic off program, which is the opposite of what
  * Overlap means.
+ *
+ * ## Why the graphic's own enter is asked about as well
+ *
+ * Occupancy alone is a fact about the channel's *other* members, and the Graphic
+ * Channel Handoff Policy is authored Screen configuration an author may change under a
+ * running show. An author switching a channel to Out then in while a handoff is running
+ * would otherwise make an incoming graphic that began entering under Overlap — and is
+ * visibly on program — read as waiting, which is absent from every output: the one way
+ * this module can pull a Broadcast Graphic off program that is already on it.
+ *
+ * So waiting also requires that this graphic's own enter has not begun. That is exactly
+ * what the handoff wrote when it deferred one: the incoming effective start time is the
+ * outgoing exit's authoritative scheduled completion, so an enter still ahead of `now`
+ * is the durable record of having been deferred, and one at or behind it is a graphic
+ * that started. It is an additional requirement rather than a replacement, so the
+ * bounded occupancy test above still decides every reading a skewed clock could get
+ * wrong: a reader that concludes the channel is clear lets the graphic in whatever it
+ * makes of the start time.
  */
 function channelHoldsWaiting(
 	playout: Readonly<Record<string, BroadcastGraphicPlayout>>,
@@ -563,10 +581,40 @@ function channelHoldsWaiting(
 	channel: BroadcastGraphicChannelContext | undefined,
 	now: number,
 ): boolean {
-	if (playout[graphicId]?.onAir !== true || channel?.handoff !== 'out-then-in')
+	const own = playout[graphicId];
+	if (own?.onAir !== true || channel?.handoff !== 'out-then-in')
+		return false;
+
+	if (now >= own.effectiveStartedAt)
 		return false;
 
 	return channelClearsAt(playout, graphicId, channel, now) > now;
+}
+
+/**
+ * Whether one Broadcast Graphic is on a program output at `now`.
+ *
+ * The operator's latest accepted intent puts it on air, and its Graphic Channel is not
+ * holding it waiting — which is absent from overlay, fill, and key alike. Both halves
+ * are needed because a waiting graphic's intent *is* on air: waiting is how a Take that
+ * has been accepted but not yet reached program is expressed.
+ *
+ * This is the one test every acceptance asks, so that the doors an operator's values can
+ * reach air through all agree. Update Graphic is refused on a graphic that is off,
+ * waiting, or exiting, on the stated grounds that it enters with the values its Take
+ * accepted; a live On-air Update Policy accepting through Set Input, Set Override, Select
+ * Source, or Resolve Bindings while the same graphic waits would put those values on air
+ * through a different door, and the graphic would enter with something no Take accepted.
+ * Editing while off, waiting, or exiting changes the working values the next Take
+ * accepts, and this is what holds that to one rule rather than to two.
+ */
+function isOnProgram(
+	state: BroadcastGraphicsLiveState,
+	graphicId: string,
+	context: BroadcastGraphicsReductionContext,
+): boolean {
+	return state.playout[graphicId]?.onAir === true
+		&& !channelHoldsWaiting(state.playout, graphicId, context.channel, context.acceptedAt);
 }
 
 /**
@@ -824,7 +872,12 @@ function boundValuesFor(
 
 /**
  * Accept one Graphic Input's effective value now, if its On-air Update Policy says
- * so and the graphic is on air.
+ * so and the graphic is on a program output.
+ *
+ * On program rather than merely on air, because a Broadcast Graphic its Graphic Channel
+ * is holding is selected but absent from every output: accepting into it would put
+ * values on air through a door Update Graphic already refuses, and the graphic would
+ * enter with something no Take accepted.
  *
  * A live acceptance deliberately leaves `acceptedRevision` alone. It accepts its
  * own fields and nothing else, so counting it would make ordinary live edits
@@ -843,10 +896,11 @@ function acceptLivePolicyValues(
 	inputs: NormalizedBroadcastGraphicInputsState,
 	context: BroadcastGraphicsReductionContext,
 	bound: Readonly<Record<string, GraphicInputValue>>,
-	onAir: boolean,
+	/** Whether the graphic is on a program output, which a waiting one is not. */
+	onProgram: boolean,
 	keys?: readonly string[],
 ): Record<string, GraphicInputValue> {
-	if (!onAir)
+	if (!onProgram)
 		return inputs.accepted;
 
 	let accepted = inputs.accepted;
@@ -1156,11 +1210,9 @@ function reduceUpdateGraphic(
 	// A graphic its Graphic Channel is still holding is selected but absent from every
 	// output, so there is no rendering for an update to transition and nothing an
 	// operator would see accept. It enters with the values its Take accepted, which is
-	// the same rule that makes editing an off graphic change its next Take's values.
-	if (
-		!playout?.onAir
-		|| channelHoldsWaiting(state.playout, payload.graphicId, context.channel, context.acceptedAt)
-	) {
+	// the same rule that makes editing an off graphic change its next Take's values —
+	// and the same test every live acceptance asks, so the two doors agree.
+	if (!playout || !isOnProgram(state, payload.graphicId, context)) {
 		throw new BroadcastGraphicsCommandRejection(
 			'update-unavailable',
 			'Update Graphic is available only while a Broadcast Graphic is entering, on air, or updating',
@@ -1279,7 +1331,7 @@ function reduceSetInput(
 		edited,
 		context,
 		boundValuesFor(state, payload.graphicId, context),
-		state.playout[payload.graphicId]?.onAir === true,
+		isOnProgram(state, payload.graphicId, context),
 		[payload.inputKey],
 	));
 }
@@ -1344,7 +1396,7 @@ function reduceSetOverride(
 		edited,
 		context,
 		boundValuesFor(state, payload.graphicId, context),
-		state.playout[payload.graphicId]?.onAir === true,
+		isOnProgram(state, payload.graphicId, context),
 		[payload.inputKey],
 	));
 }
@@ -1391,7 +1443,7 @@ function reduceSelectSource(
 					inputs,
 					context,
 					bound,
-					state.playout[payload.graphicId]?.onAir === true,
+					isOnProgram(state, payload.graphicId, context),
 				),
 			},
 		},
@@ -1420,7 +1472,7 @@ function reduceResolveBindings(
 			inputs,
 			context,
 			boundValuesFor(state, payload.graphicId, context),
-			state.playout[payload.graphicId]?.onAir === true,
+			isOnProgram(state, payload.graphicId, context),
 		),
 	});
 }
