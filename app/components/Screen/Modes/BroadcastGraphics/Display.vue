@@ -41,9 +41,6 @@ const indexedGraphicAssetReferences = computed(() =>
 const graphicAssetReferences = computed(() =>
 	indexedGraphicAssetReferences.value.map(item => item.reference),
 );
-const fontAssetReferences = computed(() =>
-	indexedGraphicAssetReferences.value.filter(item => item.kind === 'font').map(item => item.reference),
-);
 
 // A live output resolves content only through its Screen Output Asset Capability;
 // an editor preview resolves it as an author. Neither path can browse the library.
@@ -52,7 +49,11 @@ const { contentUrl, contentUrlsSettled } = useScreenGraphicAssetContentUrls(grap
 // Typography naming a library font paints in the family this registers, so the
 // canvas stays hidden until every one of them is loaded rather than flashing a
 // fallback typeface on air.
-const { fontsReady } = useGraphicAssetFontFaces(fontAssetReferences, contentUrl, contentUrlsSettled);
+const { fontsReady, fontsFailed } = useGraphicAssetFontFaces(
+	indexedGraphicAssetReferences,
+	contentUrl,
+	contentUrlsSettled,
+);
 
 const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	output: resolvedOutput.value,
@@ -79,6 +80,7 @@ const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 		:class="`broadcast-graphics--${renderModel.output}`"
 		:style="{ visibility: fontsReady ? undefined : 'hidden' }"
 		:data-font-ready="fontsReady.toString()"
+		:data-font-error="fontsFailed.toString()"
 		:render="renderModel"
 		@select="publishSelection"
 	/>

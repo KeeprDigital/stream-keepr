@@ -737,6 +737,32 @@ describe('broadcastGraphicsDisplay', () => {
 			});
 			expect(capabilitySessionRequests).toEqual(['/api/screen-output/screens/1/asset-capability-session']);
 		});
+
+		it('reports a font that cannot load rather than leaving the canvas silently blank', async () => {
+			// Hiding is the right response to a font that has not loaded yet, but a
+			// failure hidden the same way a load-in-progress is hidden is a permanently
+			// blank output with nothing to read off it. `data-font-error` is what tells
+			// the two apart.
+			mockAssetCapability.value = 'capability-token';
+			mockScreen.value = screenWithStack([withLibraryFont()]);
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {}
+				async load(): Promise<never> {
+					throw new Error('font revision content is unavailable');
+				}
+			});
+
+			const wrapper = await mountComponent();
+			await flushPromises();
+			await nextTick();
+
+			await vi.waitFor(() => {
+				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-error')).toBe('true');
+			});
+			const canvas = wrapper.get('.graphics-compositor-canvas');
+			expect(canvas.attributes('data-font-ready')).toBe('false');
+			expect((canvas.element as HTMLElement).style.visibility).toBe('hidden');
+		});
 	});
 
 	it('composes a Graphic Group and its children in one stacking context', async () => {

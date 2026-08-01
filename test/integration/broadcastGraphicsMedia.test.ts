@@ -177,9 +177,20 @@ function textItem(id: string, font: unknown, overrides: Record<string, unknown> 
  * digests are the shape the endpoint asks for: each representative code point
  * renders the same in the exact font paired with either fallback, and differently
  * from each fallback alone.
+ *
+ * ## Why not `mplantin.woff`
+ *
+ * Because `graphicsAssetIngestion.test.ts` already ingests those exact bytes, with
+ * the default `reuse` duplicate policy, and then finds its asset again by name.
+ * `create-separate` here does not make this suite's asset private — it makes it a
+ * _second_ asset holding content the other suite's ingestion may then reuse
+ * instead of creating its own, whichever of the two reaches the library first.
+ * Integration suites share one database, so identical bytes are shared state
+ * however each side asks for them; distinct bytes are what actually keep this
+ * suite's Graphic Asset lifecycle to itself.
  */
 async function ingestFont(eventId: number, name: string): Promise<Reference> {
-	const bytes = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
+	const bytes = new Uint8Array(await readFile('public/fonts/mana.woff'));
 	const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 		method: 'POST',
 		body: {
@@ -187,7 +198,7 @@ async function ingestFont(eventId: number, name: string): Promise<Reference> {
 			name,
 			defaultEventId: eventId,
 			duplicateContentPolicy: 'create-separate',
-			sourceFileName: 'mplantin.woff',
+			sourceFileName: 'mana.woff',
 			declaredMime: 'font/woff',
 			declaredByteLength: bytes.byteLength,
 		},

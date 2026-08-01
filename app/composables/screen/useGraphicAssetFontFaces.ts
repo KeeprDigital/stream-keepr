@@ -1,5 +1,6 @@
 import type { MaybeRefOrGetter } from 'vue';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
+import type { ScreenGraphicAssetReference } from '~~/shared/utils/graphicsAssetReferences';
 import { graphicAssetFontFaceFamily } from '~~/shared/modules/graphics/typography';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
@@ -24,9 +25,14 @@ import { createGuardedSequence } from '~/utils/guardedSequence';
  * A revision whose bytes cannot be resolved is reported rather than substituted.
  * A Missing Graphic Asset Reference is an integrity failure, and quietly painting
  * some other font would hide it at exactly the moment it matters.
+ *
+ * It takes a host's whole indexed reference list and picks the fonts out itself.
+ * Both Displays otherwise wrote the same filter beside the same comment, and a
+ * filter each host maintains separately is a filter one of them can come to
+ * disagree with `graphicsAssetReferences` about.
  */
 export function useGraphicAssetFontFaces(
-	references: MaybeRefOrGetter<readonly GraphicAssetReference[]>,
+	references: MaybeRefOrGetter<readonly ScreenGraphicAssetReference[]>,
 	contentUrl: (reference: GraphicAssetReference) => string,
 	contentUrlsSettled: MaybeRefOrGetter<boolean>,
 ) {
@@ -47,10 +53,12 @@ export function useGraphicAssetFontFaces(
 	 */
 	const sources = computed(() => {
 		const settled = toValue(contentUrlsSettled);
-		const byFamily = new Map(toValue(references).map((reference) => {
-			const family = graphicAssetFontFaceFamily(reference);
-			return [family, { family, url: contentUrl(reference) }] as const;
-		}));
+		const byFamily = new Map(toValue(references)
+			.filter(item => item.kind === 'font')
+			.map(({ reference }) => {
+				const family = graphicAssetFontFaceFamily(reference);
+				return [family, { family, url: contentUrl(reference) }] as const;
+			}));
 		return { settled, sources: [...byFamily.values()] };
 	});
 

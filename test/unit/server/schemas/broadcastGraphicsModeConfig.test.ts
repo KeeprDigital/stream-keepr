@@ -155,8 +155,8 @@ const WORST_SURFACE_STYLE = {
  * The most expensive Graphic Font Selection the schema accepts.
  *
  * The library arm, at its maximal identity and revision lengths. An application
- * font is 46 bytes and this is 265, so a worst case built from application fonts
- * would understate what the caps admit by 219 bytes on every typography and every
+ * font is 46 bytes and this is 266, so a worst case built from application fonts
+ * would understate what the caps admit by 220 bytes on every typography and every
  * Graphic Placeholder Style — which is exactly the kind of quiet understatement
  * measuring is supposed to prevent.
  */
@@ -701,7 +701,7 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		//
 		// It used to fit the byte total as well as being smaller, at 425,322 against
 		// 524,288. It no longer does: a Graphic Font Selection naming a maximal-length
-		// font Graphic Asset Revision (#141) is 265 bytes where a bare application id
+		// font Graphic Asset Revision (#141) is 266 bytes where a bare application id
 		// was 16, on every typography and every one of four Graphic Placeholder Styles.
 		// The named cap binding first was already lost to Graphic Animation on the
 		// shape above; this is the same conclusion reaching the cheaper shape, and the

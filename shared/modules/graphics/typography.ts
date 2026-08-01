@@ -28,6 +28,17 @@ export const GRAPHIC_FONT_IDS = [
 
 export type GraphicApplicationFontId = typeof GRAPHIC_FONT_IDS[number];
 
+/**
+ * The application font a newly authored Graphic Item gets, and the one an author
+ * returns to when they unpin a library font.
+ *
+ * Named rather than positional. `GRAPHIC_FONT_IDS[0]` is Saira Condensed, a
+ * display face, and "first in the registry" is not a statement about what a body
+ * of text should default to — so the two sites that reached for the index landed
+ * an author somewhere the item defaults never would have.
+ */
+export const DEFAULT_GRAPHIC_FONT_ID: GraphicApplicationFontId = 'inter';
+
 export interface GraphicFontDefinition {
 	id: GraphicApplicationFontId;
 	label: string;

@@ -44,10 +44,10 @@ import {
 	applyShapeGeometryPreset,
 	authorsGraphicInputs,
 	clearMediaGraphicItemAsset,
+	DEFAULT_GRAPHIC_FONT_ID,
 	deleteGraphicInput,
 	displayGraphicGeometryValue,
 	GRAPHIC_ANCHOR_POINTS,
-	GRAPHIC_FONT_IDS,
 	GRAPHIC_FONT_OPTIONS,
 	graphicItemIcon,
 	graphicItemKindLabel,
@@ -508,21 +508,22 @@ function updateTypography(patch: Partial<GraphicTypography>) {
 	applyToSelectedGraphic((graphic, itemId) => patchGraphicTypography(graphic, itemId, patch));
 }
 
-/**
- * Which arm of the Graphic Font Selection the author is editing.
- *
- * An override rather than a second source of truth: the stored selection decides,
- * and this only holds the case the stored value cannot express — an author who has
- * chosen "Library font" but not yet pinned a revision. Writing the asset arm at
- * that moment would store a typography whose font is nothing, so the item keeps
- * the application font it has until the picker pins one. Cleared whenever the
- * selection moves, so the control never describes the previous item's font.
- */
+/** The two arms of a Graphic Font Selection, as an author picks between them. */
 const FONT_SOURCE_OPTIONS = [
 	{ label: 'Application font', value: 'application' },
 	{ label: 'Library font', value: 'asset' },
 ];
 
+/**
+ * Which arm the author is editing, when the stored selection cannot say.
+ *
+ * An override rather than a second source of truth: the stored selection decides,
+ * and this only holds the one case it cannot express — an author who has chosen
+ * "Library font" but not yet pinned a revision. Writing the asset arm at that
+ * moment would store a typography whose font is nothing, so the item keeps the
+ * application font it has until the picker pins one. Cleared whenever the
+ * selection moves, so the control never describes the previous item's font.
+ */
 const fontSourceOverride = ref<'application' | 'asset'>();
 const selectedFont = computed(() => selectedTypography.value?.font);
 const fontSource = computed(() => fontSourceOverride.value ?? selectedFont.value?.kind ?? 'application');
@@ -537,7 +538,7 @@ watch(selection, () => {
 function updateFontSource(source: 'application' | 'asset') {
 	fontSourceOverride.value = source;
 	if (source === 'application' && selectedFont.value?.kind === 'asset')
-		updateTypography({ font: applicationGraphicFont(GRAPHIC_FONT_IDS[0]) });
+		updateTypography({ font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID) });
 }
 
 /** Pin one exact font Graphic Asset Revision, as a Media Graphic Item pins content. */
@@ -547,7 +548,7 @@ function selectFontAsset(_asset: GraphicAsset, reference: GraphicAssetReference)
 
 /** Unpinning a library font leaves the item on an application font rather than none. */
 function clearFontAsset() {
-	updateTypography({ font: applicationGraphicFont(GRAPHIC_FONT_IDS[0]) });
+	updateTypography({ font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID) });
 }
 
 function updateGeometry(patch: Partial<ShapeGeometry>) {

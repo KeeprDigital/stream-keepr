@@ -9,6 +9,7 @@ import type {
 import type { GraphicsContextKind, GraphicsHostContract } from './hostContract';
 import { applicationGraphicFont } from '../../types/graphics';
 import { roundedShapeGeometry, shapeGeometrySummary, squareShapeGeometry } from './shapeGeometry';
+import { DEFAULT_GRAPHIC_FONT_ID } from './typography';
 
 /**
  * Graphic Item Definitions: the application-owned contract for each Graphic
@@ -57,7 +58,7 @@ export interface GraphicItemDefinition {
 }
 
 export const DEFAULT_GRAPHIC_TYPOGRAPHY: GraphicTypography = {
-	font: applicationGraphicFont('inter'),
+	font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID),
 	fontSize: 64,
 	fontWeight: 700,
 	fontStyle: 'normal',

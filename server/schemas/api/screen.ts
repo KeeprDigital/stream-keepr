@@ -1266,7 +1266,7 @@ export const MAX_GRAPHIC_CHANNELS_PER_SCREEN = 25;
  * 137,500 bytes, taking 607,011 to 744,511. Typography now names either an
  * application font or one exact font Graphic Asset Revision (#141), and the
  * library arm is what the worst case is built from: a maximal-length identity and
- * revision spell one font in 265 bytes where a bare application id spelled it in
+ * revision spell one font in 266 bytes where a bare application id spelled it in
  * 16, on every typography and every one of the four Graphic Placeholder Styles a
  * Text Graphic Item may carry — 1,250 bytes per item across all 110.
  *

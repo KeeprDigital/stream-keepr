@@ -138,7 +138,7 @@ Bounds, position, size, Graphic Anchor Point, and Graphic Rotation remain item-s
 Each Graphic Animation Recipe preset contains one bounded fade, slide, scale, and reveal combination with duration, easing, optional delay, and on-screen-only repetition defaults.
 Templates assign presets to lifecycle phases and retain item selection, staggering, and cross-item choreography locally.
 Its typography presets reference application fonts only, because a Graphic Style Set Package carries no asset files; a Graphic Item's own typography may instead reference a font asset from the Graphics Asset Library.
-It never owns or duplicates asset files, and may reference only assets available in the same reusable-library scope.
+It references no Graphics Asset Library content at all, and never owns or duplicates asset files.
 Media treatment presets define presentation without selecting an image or video; each graphics template selects its actual media from the Graphics Asset Library.
 Each Graphic Style Set has a stable identity and managed revision; each entry has a stable identity, kind, and schema version.
 Renaming a Graphic Style Set or entry preserves its identity, while an entry's kind cannot change in place.

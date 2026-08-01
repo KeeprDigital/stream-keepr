@@ -44,15 +44,12 @@ const {
 } = useScreenGraphicAssetContentUrls(
 	graphicAssetReferences,
 );
-const fontAssetReferences = computed(() =>
-	indexedGraphicAssetReferences.value.filter(item => item.kind === 'font').map(item => item.reference),
-);
 
 // Typography naming a library font paints in the family this registers, so the
 // output stays hidden until every one of them is loaded rather than flashing a
 // fallback typeface on air.
 const { fontsReady, fontsFailed } = useGraphicAssetFontFaces(
-	fontAssetReferences,
+	indexedGraphicAssetReferences,
 	graphicAssetContentUrl,
 	contentUrlsSettled,
 );
