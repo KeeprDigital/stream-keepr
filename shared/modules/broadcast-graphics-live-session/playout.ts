@@ -607,6 +607,17 @@ function channelHoldsWaiting(
  * through a different door, and the graphic would enter with something no Take accepted.
  * Editing while off, waiting, or exiting changes the working values the next Take
  * accepts, and this is what holds that to one rule rather than to two.
+ *
+ * ## The staleness this deliberately accepts
+ *
+ * A Broadcast Graphic waiting through an Out then in handoff is therefore never
+ * re-resolved, and nothing re-fires when its enter finally begins: it enters with the
+ * values its Take accepted and holds them until the next Event Data change moves them.
+ * The window is one exit duration, and it is the price of the rule above. Re-resolving
+ * a waiting graphic instead would mean an Event Data change silently altering what a
+ * Take already committed to, with no operator action anywhere — which is the surprise
+ * that door was closed to prevent, and a worse one than a name that is a second old
+ * when it enters.
  */
 function isOnProgram(
 	state: BroadcastGraphicsLiveState,

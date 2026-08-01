@@ -100,6 +100,14 @@ function mockState(): BroadcastGraphicsLiveState {
  * caller hands it, and this stands in for that derivation exactly — because waiting is
  * only reachable through a channel, so a stand-in that dropped the channels would let
  * the Screen Output compose a waiting graphic with no test noticing.
+ *
+ * What this pins is the composition site: drop `channels` from the call that decides
+ * which Broadcast Graphics compose and the waiting one appears on program. The other
+ * two sites that pass channels feed the animation projection, and dropping them is not
+ * observable here — a waiting graphic is excluded from the composition before any
+ * projection for it is read, so the projection is computed and then ignored. The harm
+ * the review named is closed by this test; the remaining two are wasted work rather
+ * than a wrong frame, and pinning them would mean asserting on an unread value.
  */
 function timingFor(
 	graphic: BroadcastGraphicConfig,

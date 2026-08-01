@@ -829,7 +829,8 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - A **Graphic Input Override** masks its **Graphic Input** binding until cleared, after which the current bound value resumes
 - Each **Graphic Input** has an **On-air Update Policy** of staged or live
 - A newly declared **Graphic Input** defaults to the staged **On-air Update Policy**
-- A live **On-air Update Policy** applies immediately only while its **Broadcast Graphic** is on a program output, so a waiting one enters with the values its Take accepted exactly as Update Graphic's refusal says it does
+- A live **On-air Update Policy** applies immediately only while its **Broadcast Graphic** is on a program output
+- A waiting **Broadcast Graphic** enters with the values its Take accepted, however long its **Graphic Channel** holds it
 - Update Graphic atomically accepts every pending staged **Graphic Input** value for one **Broadcast Graphic**
 - A **Text Graphic Item** may render a **Graphic Text Template** using current **Graphic Input** values
 - A **Text Graphic Item** may define one **Graphic Placeholder Style** for each referenced **Graphic Input**

@@ -322,6 +322,18 @@ describe('editing a Graphic Channel Handoff Policy under a running handoff', () 
 		expect(stateOf(state, 'bravo', T0 + 5200, QUEUED_THIRDS)).toBe('waiting');
 		expect(onAir(state, stack, T0 + 5200, QUEUED_THIRDS)).toEqual(['alpha']);
 	});
+
+	it('treats the instant an enter began as begun, not as one instant short of it', () => {
+		let state = take(createInitialBroadcastGraphicsLiveState(), 'alpha', { channel: LOWER_THIRDS });
+		state = take(state, 'bravo', { at: T0 + 5000, channel: LOWER_THIRDS });
+
+		// Read at exactly the instant bravo's entrance started, with the policy flipped.
+		// The outgoing exit is at its own first frame, so the channel *is* still occupied
+		// — which is what makes this the reading that separates "has begun" from "has
+		// progressed". A graphic is on program from the first frame of its entrance.
+		expect(stateOf(state, 'bravo', T0 + 5000, QUEUED_THIRDS)).toBe('entering');
+		expect(onAir(state, stack, T0 + 5000, QUEUED_THIRDS)).toEqual(['alpha', 'bravo']);
+	});
 });
 
 describe('cancelling and cutting a Graphic Channel handoff', () => {
