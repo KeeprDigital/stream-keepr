@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { BroadcastGraphicTemplateSummary } from '~~/shared/types/broadcastGraphicTemplate';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
-import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 
 /**
  * The Broadcast Graphic Template library, as an author browses and manages it.
@@ -21,6 +20,10 @@ import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
  * placed Broadcast Graphic is validated, capped, indexed, and published exactly as a
  * hand-authored one — and the Screen is then reloaded authoritatively rather than
  * patched from a guess.
+ *
+ * Browsing, revising, deleting, and receiving a Template Package are the same in this
+ * library and in the Feature Match Layout Template library, because a Template Package
+ * means the same thing in both, so they share `useGraphicsTemplateLibrary`.
  */
 const props = defineProps<{
 	eventId: number;
@@ -40,59 +43,40 @@ const emit = defineEmits<{ placed: [graphicId: string] }>();
 const repository = useBroadcastGraphicTemplateRepository();
 const screenStore = useScreenStore();
 
-const templates = ref<BroadcastGraphicTemplateSummary[]>([]);
-const loading = ref(false);
-const busyTemplateId = ref<string | null>(null);
-const saving = ref(false);
-const error = ref<string | null>(null);
-/** The template whose deletion is awaiting confirmation, if any. */
-const pendingDeleteId = ref<string | null>(null);
-
 /** Fail closed: an unstated permission is never permission. */
 const canAuthor = computed(() => props.writable === true);
 
-/**
- * Whether this entry can be renamed, described, or deleted here.
- *
- * Two conditions, and they are separate questions: whether this session may author
- * at all, and whether *this design* is one the library owns. A design a Template
- * Package installed is the Graphics Asset Library's record of what it published; it
- * is browsed, placed, and exported like any other, and changed by placing it and
- * saving the placed copy.
- */
-function canRevise(template: BroadcastGraphicTemplateSummary): boolean {
-	return canAuthor.value && template.authored;
-}
+const library = useGraphicsTemplateLibrary<BroadcastGraphicTemplateSummary>({
+	repository,
+	canAuthor,
+	unavailable: 'The Broadcast Graphic Template library is unavailable',
+});
+const {
+	entries: templates,
+	loading,
+	error,
+	failureMessage,
+	refresh,
+	busyTemplateId,
+	pendingDeleteId,
+	canRevise,
+	attempt,
+	revise,
+	askToRemove,
+	cancelRemove,
+	remove,
+	importing,
+	pendingImport,
+	importIssues,
+	importRejected,
+	importAwaitingConfirmation,
+	importPackage,
+	confirmImport,
+	dismissImport,
+} = library;
+
+const saving = ref(false);
 const canSave = computed(() => canAuthor.value && !!props.selectedGraphic && !saving.value);
-
-function failureMessage(caught: unknown): string {
-	const data = (caught as { data?: { message?: string } })?.data;
-	if (typeof data?.message === 'string' && data.message.length > 0)
-		return data.message;
-	return caught instanceof Error ? caught.message : 'The Broadcast Graphic Template library is unavailable';
-}
-
-/**
- * Re-read the library.
- *
- * `keepError` exists for the one case that matters: a refused write re-reads the
- * library so the author is looking at what actually exists, and a successful re-read
- * must not then erase the message explaining why their write was refused.
- */
-async function refresh(keepError = false) {
-	loading.value = true;
-	try {
-		templates.value = await repository.list();
-		if (!keepError)
-			error.value = null;
-	}
-	catch (caught) {
-		error.value = failureMessage(caught);
-	}
-	finally {
-		loading.value = false;
-	}
-}
 
 /** Save the selected Broadcast Graphic as a new template at revision 1. */
 async function save() {
@@ -123,10 +107,7 @@ async function save() {
  * the author just placed; nothing about the copy points at the template afterwards.
  */
 async function place(templateId: string) {
-	if (!canAuthor.value)
-		return;
-	busyTemplateId.value = templateId;
-	try {
+	await attempt(templateId, async () => {
 		const placed = await repository.place({
 			eventId: props.eventId,
 			screenId: props.screenId,
@@ -140,186 +121,11 @@ async function place(templateId: string) {
 			// carries, so it matches one of those and is refused by every other Screen.
 			stateVersion: screenStore.screens.find(screen => screen.id === props.screenId)?.stateVersion ?? 0,
 		});
-		error.value = null;
 		// The Screen was written on the server, and this client's own realtime echo is
 		// suppressed, so the authoritative Screen is reloaded here.
 		await screenStore.getScreenById(props.eventId, props.screenId);
 		emit('placed', placed.graphic.id);
-	}
-	catch (caught) {
-		error.value = failureMessage(caught);
-	}
-	finally {
-		busyTemplateId.value = null;
-	}
-}
-
-/**
- * Revise one library entry's own fields.
- *
- * The stored revision travels with the write, so two authors who both had the
- * library open cannot silently overwrite one another: the second is told the template
- * has moved on and the list is re-read.
- */
-async function revise(
-	template: BroadcastGraphicTemplateSummary,
-	patch: { name?: string; description?: string | null },
-) {
-	if (!canAuthor.value)
-		return;
-	busyTemplateId.value = template.id;
-	try {
-		await repository.update(template.id, { ...patch, revision: template.revision });
-		error.value = null;
-		await refresh();
-	}
-	catch (caught) {
-		error.value = failureMessage(caught);
-		await refresh(true);
-	}
-	finally {
-		busyTemplateId.value = null;
-	}
-}
-
-async function rename(template: BroadcastGraphicTemplateSummary, name: string) {
-	const next = name.trim();
-	if (next.length === 0 || next === template.name)
-		return;
-	await revise(template, { name: next });
-}
-
-/** An emptied description clears it rather than storing an empty string. */
-async function describe(template: BroadcastGraphicTemplateSummary, description: string) {
-	const next = description.trim();
-	if (next === (template.description ?? ''))
-		return;
-	await revise(template, { description: next.length === 0 ? null : next });
-}
-
-/**
- * Deleting a template is irreversible and there is no undo, so the first click asks
- * and the second one does it. Copies already placed from the design are unaffected —
- * which is worth saying in the prompt, because it is the thing an author about to
- * delete a design most needs to know.
- */
-function askToRemove(templateId: string) {
-	if (!canAuthor.value)
-		return;
-	pendingDeleteId.value = pendingDeleteId.value === templateId ? null : templateId;
-}
-
-function cancelRemove() {
-	pendingDeleteId.value = null;
-}
-
-async function remove(templateId: string) {
-	if (!canAuthor.value)
-		return;
-	busyTemplateId.value = templateId;
-	try {
-		await repository.remove(templateId);
-		error.value = null;
-		pendingDeleteId.value = null;
-		await refresh();
-	}
-	catch (caught) {
-		error.value = failureMessage(caught);
-	}
-	finally {
-		busyTemplateId.value = null;
-	}
-}
-
-/* ────────────────────────────────────────────────
- * Template Packages
- * ──────────────────────────────────────────────── */
-
-/**
- * Importing a package is deliberately not a one-click action.
- *
- * Preflight can reach three conclusions and each needs a different thing from the
- * author: a rejection is terminal and explains itself, a clean proposal installs
- * straight away, and a proposal carrying warnings pauses exactly once for a
- * confirmation bound to that exact report. Collapsing the last case into an
- * automatic install would silently accept, on the author's behalf, decisions like
- * "this content already exists here under a different name" — which are precisely
- * the ones a Template Package Preflight Report exists to put in front of them.
- */
-const importing = ref(false);
-const pendingImport = ref<GraphicsIngestionOperation | null>(null);
-
-const importFileInput = useTemplateRef<HTMLInputElement>('importFileInput');
-
-/** The issues an author is being asked to accept, or the reasons a package was refused. */
-const importIssues = computed(() => pendingImport.value?.templatePackagePreflight?.issues ?? []);
-const importRejected = computed(() =>
-	pendingImport.value?.templatePackagePreflight?.outcome === 'rejected',
-);
-const importAwaitingConfirmation = computed(() =>
-	pendingImport.value?.stage === 'awaiting-confirmation',
-);
-
-function dismissImport() {
-	pendingImport.value = null;
-}
-
-/** Finish an operation that has nothing left to ask, and show what it produced. */
-async function installReceivedPackage(operationId: string) {
-	const installed = await repository.installPackage(operationId);
-	pendingImport.value = installed.stage === 'completed' ? null : installed;
-	await refresh();
-}
-
-async function importPackage(file: File) {
-	if (!canAuthor.value)
-		return;
-	importing.value = true;
-	pendingImport.value = null;
-	try {
-		const received = await repository.receivePackage(file);
-		error.value = null;
-		if (received.stage === 'awaiting-installation') {
-			await installReceivedPackage(received.id);
-			return;
-		}
-		// Rejected, or paused for the one confirmation it is entitled to ask for.
-		pendingImport.value = received;
-	}
-	catch (caught) {
-		error.value = failureMessage(caught);
-	}
-	finally {
-		importing.value = false;
-	}
-}
-
-async function confirmImport() {
-	const operation = pendingImport.value;
-	const fingerprint = operation?.templatePackagePreflight?.fingerprint;
-	if (!canAuthor.value || !operation || !fingerprint)
-		return;
-	importing.value = true;
-	try {
-		await repository.confirmPackage(operation.id, fingerprint);
-		await installReceivedPackage(operation.id);
-		error.value = null;
-	}
-	catch (caught) {
-		error.value = failureMessage(caught);
-	}
-	finally {
-		importing.value = false;
-	}
-}
-
-function onImportFileChosen(event: Event) {
-	const input = event.target as HTMLInputElement;
-	const file = input.files?.[0];
-	// Cleared straight away so choosing the same file twice still fires a change.
-	input.value = '';
-	if (file)
-		void importPackage(file);
+	});
 }
 
 onMounted(() => {
@@ -348,76 +154,24 @@ onMounted(() => {
 			</UButton>
 
 			<!--
-				Importing a design from elsewhere. The file picker is hidden behind an
-				ordinary button so the control reads like the library's other actions
-				rather than like a form.
+				A Template Package installs as an Installed Graphics Template: an independent
+				local copy with this installation's own identity and revision, keeping the
+				packaged Template's identity as provenance only.
 			-->
-			<div v-if="canAuthor">
-				<input
-					ref="importFileInput"
-					type="file"
-					accept=".skgraphic"
-					class="hidden"
-					data-testid="template-library-import-input"
-					@change="onImportFileChosen"
-				>
-				<UButton
-					size="xs"
-					variant="soft"
-					icon="i-lucide-package-open"
-					:loading="importing"
-					:disabled="importing"
-					data-testid="template-library-import"
-					@click="importFileInput?.click()"
-				>
-					Import a Template Package
-				</UButton>
-			</div>
-
-			<!--
-				What preflight concluded. A rejection is terminal and lists every reason
-				at once; a pause lists what the author is being asked to accept before
-				anything is installed.
-			-->
-			<div
-				v-if="pendingImport"
-				class="rounded-md border p-2"
-				:class="importRejected ? 'border-error/40 bg-error/10' : 'border-warning/40 bg-warning/10'"
-				data-testid="template-library-import-report"
-			>
-				<p class="text-xs font-medium">
-					{{ importRejected
-						? 'This Template Package cannot be installed'
-						: 'Review before installing this Template Package' }}
-				</p>
-				<ul class="mt-1 space-y-1">
-					<li v-for="(issue, index) in importIssues" :key="`${issue.code}-${index}`" class="text-xs text-muted">
-						{{ issue.message }}<span v-if="issue.remediation"> — {{ issue.remediation }}</span>
-					</li>
-				</ul>
-				<div class="mt-2 flex gap-1.5">
-					<UButton
-						v-if="importAwaitingConfirmation"
-						size="xs"
-						variant="subtle"
-						:loading="importing"
-						:disabled="importing"
-						data-testid="template-library-import-confirm"
-						@click="confirmImport"
-					>
-						Install
-					</UButton>
-					<UButton
-						size="xs"
-						color="neutral"
-						variant="ghost"
-						data-testid="template-library-import-dismiss"
-						@click="dismissImport"
-					>
-						{{ importAwaitingConfirmation ? 'Cancel' : 'Dismiss' }}
-					</UButton>
-				</div>
-			</div>
+			<GraphicsLibraryPackageImport
+				package-noun="Template Package"
+				accept=".skgraphic"
+				test-id="template-library-import"
+				:writable="canAuthor"
+				:busy="importing"
+				:reported="!!pendingImport"
+				:issues="importIssues"
+				:rejected="importRejected"
+				:awaiting-confirmation="importAwaitingConfirmation"
+				@file="importPackage"
+				@confirm="confirmImport"
+				@dismiss="dismissImport"
+			/>
 
 			<UAlert
 				v-if="error"
@@ -437,102 +191,77 @@ onMounted(() => {
 			/>
 
 			<div v-else class="space-y-1.5">
-				<div
+				<GraphicsLibraryEntry
 					v-for="template in templates"
 					:key="template.id"
-					class="rounded-lg border border-default/70 bg-muted/20 p-2"
-					:data-template-id="template.id"
+					:template-id="template.id"
+					:name="template.name"
+					:description="template.description"
+					:revision="template.revision"
+					:authored="template.authored"
+					icon="i-lucide-layers"
+					test-id="template"
+					:revisable="canRevise(template)"
+					:writable="canAuthor"
+					@rename="revise(template, { name: $event })"
+					@describe="revise(template, { description: $event })"
 				>
-					<div class="flex items-start gap-2">
-						<UIcon name="i-lucide-layers" class="mt-1 size-4 shrink-0 text-muted" />
-						<div class="min-w-0 flex-1">
-							<!--
-								An imported design is read here rather than edited. It is the
-								Graphics Asset Library's own record of what a Template Package
-								installed, and this library never writes one — so offering a
-								field that cannot be saved would be a control that lies.
-							-->
-							<UInput
-								v-if="canRevise(template)"
-								:model-value="template.name"
-								size="xs"
-								class="w-full"
-								aria-label="Template name"
-								data-testid="template-name"
-								@change="rename(template, ($event.target as HTMLInputElement).value)"
-							/>
-							<p v-else class="truncate text-sm font-medium">
-								{{ template.name }}
-							</p>
-							<p class="mt-0.5 truncate text-xs text-muted">
-								{{ template.itemCount }} items · {{ template.inputCount }} inputs · revision {{ template.revision }}
-								<span v-if="!template.authored" data-testid="template-imported"> · imported</span>
-							</p>
-							<UInput
-								v-if="canRevise(template)"
-								:model-value="template.description ?? ''"
-								size="xs"
-								class="mt-1 w-full"
-								placeholder="Description"
-								aria-label="Template description"
-								data-testid="template-description"
-								@change="describe(template, ($event.target as HTMLInputElement).value)"
-							/>
-							<p v-else-if="template.description" class="mt-0.5 truncate text-xs text-muted">
-								{{ template.description }}
-							</p>
+					<template #meta>
+						{{ template.itemCount }} items · {{ template.inputCount }} inputs
+					</template>
 
-							<!--
-								A Graphic Style Set change reaches this template as an offer, never as a
-								write. The badge says whether one is waiting; applying it is an explicit
-								reviewed act that creates one new template revision.
-							-->
-							<GraphicsStyleUpdateReview
-								:template="template"
-								:writable="canAuthor"
-								@applied="refresh()"
-							/>
-						</div>
-						<div v-if="canAuthor" class="flex shrink-0 gap-1">
-							<!--
-								A plain download, because a Template Package is a file an author
-								keeps rather than a response this component has any use for.
-							-->
-							<UButton
-								size="xs"
-								color="neutral"
-								variant="ghost"
-								icon="i-lucide-package"
-								:to="repository.packageUrl(template.id)"
-								external
-								download
-								:aria-label="`Export ${template.name}`"
-								data-testid="template-export"
-							/>
-							<UButton
-								size="xs"
-								variant="subtle"
-								icon="i-lucide-plus"
-								:disabled="busyTemplateId === template.id"
-								:aria-label="`Place ${template.name}`"
-								data-testid="template-place"
-								@click="place(template.id)"
-							>
-								Place
-							</UButton>
-							<UButton
-								v-if="canRevise(template)"
-								size="xs"
-								color="neutral"
-								variant="ghost"
-								icon="i-lucide-trash-2"
-								:disabled="busyTemplateId === template.id"
-								:aria-label="`Delete ${template.name}`"
-								data-testid="template-delete"
-								@click="askToRemove(template.id)"
-							/>
-						</div>
-					</div>
+					<template #detail>
+						<!--
+							A Graphic Style Set change reaches this template as an offer, never as a
+							write. The badge says whether one is waiting; applying it is an explicit
+							reviewed act that creates one new template revision.
+						-->
+						<GraphicsStyleUpdateReview
+							:template="template"
+							:writable="canAuthor"
+							@applied="refresh()"
+						/>
+					</template>
+
+					<template #actions>
+						<!--
+							A plain download, because a Template Package is a file an author
+							keeps rather than a response this component has any use for.
+						-->
+						<UButton
+							size="xs"
+							color="neutral"
+							variant="ghost"
+							icon="i-lucide-package"
+							:to="repository.packageUrl(template.id)"
+							external
+							download
+							:aria-label="`Export ${template.name}`"
+							data-testid="template-export"
+						/>
+						<UButton
+							size="xs"
+							variant="subtle"
+							icon="i-lucide-plus"
+							:disabled="busyTemplateId === template.id"
+							:aria-label="`Place ${template.name}`"
+							data-testid="template-place"
+							@click="place(template.id)"
+						>
+							Place
+						</UButton>
+						<UButton
+							v-if="canRevise(template)"
+							size="xs"
+							color="neutral"
+							variant="ghost"
+							icon="i-lucide-trash-2"
+							:disabled="busyTemplateId === template.id"
+							:aria-label="`Delete ${template.name}`"
+							data-testid="template-delete"
+							@click="askToRemove(template.id)"
+						/>
+					</template>
 
 					<!--
 						Deleting a design cannot be undone, so the first click asks. The prompt
@@ -540,38 +269,19 @@ onMounted(() => {
 						Broadcast Graphics already placed from it are independent copies and
 						survive.
 					-->
-					<div
+					<GraphicsLibraryConfirmation
 						v-if="canAuthor && pendingDeleteId === template.id"
-						class="mt-2 rounded-md border border-error/40 bg-error/10 p-2"
-						data-testid="template-delete-confirm"
+						tone="error"
+						test-id="template-delete"
+						confirm-label="Delete"
+						:busy="busyTemplateId === template.id"
+						@confirm="remove(template.id)"
+						@cancel="cancelRemove"
 					>
-						<p class="text-xs">
-							Delete “{{ template.name }}” from the library? This cannot be undone.
-							Broadcast Graphics already placed from it are not affected.
-						</p>
-						<div class="mt-2 flex gap-1.5">
-							<UButton
-								size="xs"
-								color="error"
-								variant="subtle"
-								:disabled="busyTemplateId === template.id"
-								data-testid="template-delete-confirmed"
-								@click="remove(template.id)"
-							>
-								Delete
-							</UButton>
-							<UButton
-								size="xs"
-								color="neutral"
-								variant="ghost"
-								data-testid="template-delete-cancelled"
-								@click="cancelRemove"
-							>
-								Cancel
-							</UButton>
-						</div>
-					</div>
-				</div>
+						Delete “{{ template.name }}” from the library? This cannot be undone.
+						Broadcast Graphics already placed from it are not affected.
+					</GraphicsLibraryConfirmation>
+				</GraphicsLibraryEntry>
 			</div>
 		</div>
 	</ScreenSettingsCard>

@@ -38,6 +38,18 @@ import { randomUuid } from '~~/shared/utils/uuid';
  * referenced afterwards, one property control at a time, in the inspector. There is
  * deliberately no "apply this style to everything" here, because a bulk mapping is
  * the workflow the glossary rules out.
+ *
+ * ## Why this does not import the way the Template libraries do
+ *
+ * A Graphic Style Set Package is deliberately **not** a Template Package, so this
+ * library builds on the neutral `useGraphicsLibrary` and keeps its own import path
+ * rather than sharing `useGraphicsTemplateLibrary` with the two Template libraries.
+ * Installing a Template Package yields an unlinked copy; the first import of a Graphic
+ * Style Set Package *preserves* the packaged identity and revision, so a later related
+ * revision can be recognised and offered as an ordinary update instead of accumulating
+ * duplicates. An independent copy with a new identity exists here too, but as the
+ * fallback an author explicitly asks for when a package conflicts with what is already
+ * installed — never as what an import quietly does.
  */
 const props = defineProps<{
 	/** The Broadcast Graphic an author can link, when the workspace has one selected. */
@@ -54,12 +66,28 @@ const emit = defineEmits<{
 
 const repository = useGraphicStyleSetRepository();
 
-const styleSets = ref<GraphicStyleSetSummary[]>([]);
-const open = ref<GraphicStyleSetResponse | null>(null);
-const loading = ref(false);
-const busy = ref(false);
-const error = ref<string | null>(null);
 const issues = ref<GraphicStyleSetPublishIssue[]>([]);
+
+const {
+	entries: styleSets,
+	loading,
+	error,
+	failureMessage,
+	refresh,
+} = useGraphicsLibrary<GraphicStyleSetSummary>({
+	read: () => repository.list(),
+	unavailable: 'The Graphic Style Set library is unavailable',
+	// A draft this library cannot publish is refused with every reason at once, and they
+	// travel beside the message rather than in it.
+	inspectFailure: (caught) => {
+		const data = (caught as { data?: { data?: { issues?: GraphicStyleSetPublishIssue[] } } })?.data;
+		if (data?.data?.issues)
+			issues.value = data.data.issues;
+	},
+});
+
+const open = ref<GraphicStyleSetResponse | null>(null);
+const busy = ref(false);
 const affected = ref<AffectedGraphicsTemplate[] | null>(null);
 const newName = ref('');
 const newEntryKind = ref<GraphicStyleEntryKind>('palette');
@@ -90,37 +118,6 @@ const replacementOptions = computed(() => {
 		.filter(entry => entry.kind === subject.kind && entry.id !== subject.id)
 		.map(entry => ({ label: entry.name, value: entry.id }));
 });
-
-function failureMessage(caught: unknown): string {
-	const data = (caught as { data?: { message?: string; data?: { issues?: GraphicStyleSetPublishIssue[] } } })?.data;
-	if (data?.data?.issues)
-		issues.value = data.data.issues;
-	if (typeof data?.message === 'string' && data.message.length > 0)
-		return data.message;
-	return caught instanceof Error ? caught.message : 'The Graphic Style Set library is unavailable';
-}
-
-/**
- * Re-read the library.
- *
- * `keepError` exists for the one case that matters: a refused write re-reads the
- * library so the author is looking at what actually exists, and a successful re-read
- * must not then erase the message explaining why their write was refused.
- */
-async function refresh(keepError = false) {
-	loading.value = true;
-	try {
-		styleSets.value = await repository.list();
-		if (!keepError)
-			error.value = null;
-	}
-	catch (caught) {
-		error.value = failureMessage(caught);
-	}
-	finally {
-		loading.value = false;
-	}
-}
 
 async function reopenStyleSet(styleSetId: string, keepError = true) {
 	busy.value = true;
@@ -331,7 +328,6 @@ function link(styleSet: GraphicStyleSetSummary) {
  * Graphic Style Set Packages
  * ──────────────────────────────────────────────── */
 
-const importFileInput = useTemplateRef<HTMLInputElement>('importFileInput');
 const importing = ref(false);
 /**
  * The received package and what preflight concluded about it.
@@ -453,15 +449,6 @@ function importAsCopy() {
 		void receivePackage(pending.file, 'independent-copy');
 }
 
-function onImportFileChosen(event: Event) {
-	const input = event.target as HTMLInputElement;
-	const file = input.files?.[0];
-	// Cleared straight away so choosing the same file twice still fires a change.
-	input.value = '';
-	if (file)
-		void receivePackage(file, 'preserve-identity');
-}
-
 /** Unlinking keeps every value the Style Set produced and drops only the provenance. */
 function unlink() {
 	const graphic = props.selectedGraphic;
@@ -526,75 +513,47 @@ onMounted(() => {
 			</div>
 
 			<!--
-				Receiving a style from elsewhere. The file picker is hidden behind an
-				ordinary button so the control reads like the library's other actions
-				rather than like a form.
+				Receiving a style from elsewhere. The chosen archive is asked for as
+				`preserve-identity` — the packaged Style Set identity and revision are kept
+				rather than an unlinked copy being made, which is what separates this from
+				installing a Template Package. An independent copy is offered below, and only
+				once a package has been refused for conflicting with what is already here.
 			-->
-			<div v-if="canAuthor">
-				<input
-					ref="importFileInput"
-					type="file"
-					accept=".skstyle"
-					class="hidden"
-					data-testid="style-set-import-input"
-					@change="onImportFileChosen"
-				>
-				<UButton
-					size="xs"
-					variant="soft"
-					icon="i-lucide-package-open"
-					:loading="importing"
-					:disabled="importing"
-					data-testid="style-set-import"
-					@click="importFileInput?.click()"
-				>
-					Import a Graphic Style Set Package
-				</UButton>
-			</div>
-
-			<!--
-				What preflight concluded. A rejection is terminal and lists every reason at
-				once; a pause lists what the author is being asked to accept before anything
-				is installed. A package refused only because of how it relates to what is
-				already here can still be taken as an independent copy.
-			-->
-			<div
-				v-if="pendingImport"
-				class="rounded-md border p-2"
-				:class="importRejected ? 'border-error/40 bg-error/10' : 'border-warning/40 bg-warning/10'"
-				data-testid="style-set-import-report"
+			<GraphicsLibraryPackageImport
+				package-noun="Graphic Style Set Package"
+				accept=".skstyle"
+				test-id="style-set-import"
+				:writable="canAuthor"
+				:busy="importing"
+				:reported="!!pendingImport"
+				:issues="importIssues"
+				:rejected="importRejected"
+				:awaiting-confirmation="importAwaitingConfirmation"
+				@file="receivePackage($event, 'preserve-identity')"
+				@confirm="confirmImport"
+				@dismiss="dismissImport"
 			>
-				<p class="text-xs font-medium">
-					{{ importRejected
-						? 'This Graphic Style Set Package cannot be installed'
-						: 'Review before installing this Graphic Style Set Package' }}
-				</p>
-				<ul class="mt-1 space-y-1">
-					<li v-for="(issue, index) in importIssues" :key="`${issue.code}-${index}`" class="text-xs text-muted">
-						{{ issue.message }}<span v-if="issue.remediation"> — {{ issue.remediation }}</span>
-					</li>
-				</ul>
-				<ul v-if="pendingImport.report.publishIssues.length > 0" class="mt-1 space-y-0.5">
-					<li
-						v-for="issue in pendingImport.report.publishIssues"
-						:key="`${issue.code}-${issue.entryId}`"
-						class="text-xs text-muted"
+				<template #detail>
+					<ul
+						v-if="pendingImport && pendingImport.report.publishIssues.length > 0"
+						class="mt-1 space-y-0.5"
 					>
-						{{ issue.message }}
-					</li>
-				</ul>
-				<div class="mt-2 flex flex-wrap gap-1.5">
-					<UButton
-						v-if="importAwaitingConfirmation"
-						size="xs"
-						variant="subtle"
-						:loading="importing"
-						:disabled="importing"
-						data-testid="style-set-import-confirm"
-						@click="confirmImport"
-					>
-						Install
-					</UButton>
+						<li
+							v-for="issue in pendingImport.report.publishIssues"
+							:key="`${issue.code}-${issue.entryId}`"
+							class="text-xs text-muted"
+						>
+							{{ issue.message }}
+						</li>
+					</ul>
+				</template>
+
+				<template #actions>
+					<!--
+						A package refused only because of how it relates to what is already here
+						can still be taken as an independent copy, with a new identity nothing
+						links to yet.
+					-->
 					<UButton
 						v-if="importResolvableAsCopy"
 						size="xs"
@@ -607,17 +566,8 @@ onMounted(() => {
 					>
 						Install as an independent copy
 					</UButton>
-					<UButton
-						size="xs"
-						color="neutral"
-						variant="ghost"
-						data-testid="style-set-import-dismiss"
-						@click="dismissImport"
-					>
-						{{ importAwaitingConfirmation ? 'Cancel' : 'Dismiss' }}
-					</UButton>
-				</div>
-			</div>
+				</template>
+			</GraphicsLibraryPackageImport>
 
 			<!--
 				What an import that asked nothing still had to say. There is no decision here
