@@ -695,6 +695,17 @@ describe('captureGraphicStyleOverrides', () => {
 
 describe('recaptureGraphicStyleOverrides', () => {
 	const withAccentFill = [...styleSet(), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' })];
+	/**
+	 * The revision every composition here is linked at, and the one the editor is
+	 * holding while the two agree.
+	 */
+	const LINKED = 1;
+	/**
+	 * The same Style Set after a publish this composition has *not* been reconciled to.
+	 * `brand` moved, so both the typography preset's colour and the Graphic Fill do.
+	 */
+	const republished = [...styleSet('#00ff88'), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' })];
+	const AHEAD = LINKED + 1;
 
 	/** One composition whose Graphic Fill is inherited from `accent-fill`. */
 	function boundFill(): BroadcastGraphicConfig {
@@ -705,6 +716,30 @@ describe('recaptureGraphicStyleOverrides', () => {
 			})]),
 			resolveGraphicStyleSet(withAccentFill),
 		);
+	}
+
+	/** One composition inheriting both a typography preset and a Graphic Fill. */
+	function boundBoth(): BroadcastGraphicConfig {
+		return applyGraphicStyleSet(
+			graphic([textItem({
+				surfaceStyle: { fill: { type: 'solid', color: '#000000' }, fillOpacity: 1 },
+				styleRefs: {
+					'typography': { entryId: 'heading' },
+					'surfaceStyle.fill': { entryId: 'accent-fill' },
+				},
+			})]),
+			resolveGraphicStyleSet(withAccentFill),
+		);
+	}
+
+	/** A property control writing a size, which is what makes a recapture run. */
+	function editFontSize(composition: BroadcastGraphicConfig, fontSize: number): BroadcastGraphicConfig {
+		return {
+			...composition,
+			items: composition.items.map(item => item.type === 'text'
+				? { ...item, typography: { ...item.typography, fontSize } }
+				: item),
+		};
 	}
 
 	/** The fill control writing a value, which is all a property control ever does. */
@@ -728,14 +763,8 @@ describe('recaptureGraphicStyleOverrides', () => {
 			graphic([textItem({ styleRefs: { typography: { entryId: 'heading' } } })]),
 			resolution,
 		);
-		const edited = {
-			...composition,
-			items: composition.items.map(item => item.type === 'text'
-				? { ...item, typography: { ...item.typography, fontSize: 30 } }
-				: item),
-		};
 
-		const recaptured = recaptureGraphicStyleOverrides(edited, resolution);
+		const recaptured = recaptureGraphicStyleOverrides(editFontSize(composition, 30), resolution, LINKED);
 
 		expect(headlineOf(recaptured).styleRefs?.typography)
 			.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
@@ -745,7 +774,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 		const resolution = resolveGraphicStyleSet(withAccentFill);
 		const edited = paintFill(boundFill(), '#00ff88');
 
-		const recaptured = recaptureGraphicStyleOverrides(edited, resolution);
+		const recaptured = recaptureGraphicStyleOverrides(edited, resolution, LINKED);
 
 		// A Graphic Fill is a discriminated union with no partial to record a deviation
 		// in, so deviating from the preset is unbinding it — the same answer "Keep mine"
@@ -761,7 +790,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 	it('keeps a Graphic Fill reference the author has left where the preset put it', () => {
 		const resolution = resolveGraphicStyleSet(withAccentFill);
 
-		const recaptured = recaptureGraphicStyleOverrides(boundFill(), resolution);
+		const recaptured = recaptureGraphicStyleOverrides(boundFill(), resolution, LINKED);
 
 		expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toEqual({ entryId: 'accent-fill' });
 	});
@@ -770,7 +799,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 		const resolution = resolveGraphicStyleSet(withAccentFill);
 		const wandered = paintFill(boundFill(), '#00ff88');
 
-		const recaptured = recaptureGraphicStyleOverrides(paintFill(wandered, '#ff0044'), resolution);
+		const recaptured = recaptureGraphicStyleOverrides(paintFill(wandered, '#ff0044'), resolution, LINKED);
 
 		// Nothing about it deviates, so nothing about it is theirs — exactly as an edited
 		// and restored font size leaves no override pinning it.
@@ -779,17 +808,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 
 	it('still offers a republished Graphic Fill to an author who never touched theirs', () => {
 		const resolution = resolveGraphicStyleSet(withAccentFill);
-		const bound = boundFill();
 		// An edit somewhere else on the same item, which is what runs a recapture.
-		const edited = {
-			...bound,
-			items: bound.items.map(item => item.type === 'text'
-				? { ...item, typography: { ...item.typography, fontSize: 30 } }
-				: item),
-		};
+		const edited = editFontSize(boundFill(), 30);
 
-		const recaptured = recaptureGraphicStyleOverrides(edited, resolution);
-		const republished = [...styleSet('#00ff88'), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' })];
+		const recaptured = recaptureGraphicStyleOverrides(edited, resolution, LINKED);
 		const changes = graphicStyleUpdateChanges(recaptured, resolveGraphicStyleSet(republished));
 
 		// The reference survived an unrelated edit, so the Style Set can still reach it —
@@ -804,9 +826,72 @@ describe('recaptureGraphicStyleOverrides', () => {
 
 		// A Style Set that failed to load resolves nothing, and must not be the reason a
 		// linked composition quietly goes local.
-		const recaptured = recaptureGraphicStyleOverrides(edited, resolveGraphicStyleSet([]));
+		const recaptured = recaptureGraphicStyleOverrides(edited, resolveGraphicStyleSet([]), LINKED);
 
 		expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toEqual({ entryId: 'accent-fill' });
+	});
+
+	/**
+	 * The editor holds the *published* Style Set, so after a republish it is holding
+	 * entries this composition has not been reconciled to. Every deviation it could
+	 * derive from them is then the Style Set's own change wearing the author's name,
+	 * and recording one — as an override, or by letting go of a reference — resolves a
+	 * pending update without anybody reviewing it. That is the one thing story 20
+	 * forbids, so nothing is derived at all until the two agree again.
+	 */
+	describe('while the composition is behind the published Style Set', () => {
+		it('leaves a Graphic Fill reference the author never touched, so its update stays reviewable', () => {
+			const behind = editFontSize(boundBoth(), 30);
+
+			const recaptured = recaptureGraphicStyleOverrides(behind, resolveGraphicStyleSet(republished), AHEAD);
+
+			expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toEqual({ entryId: 'accent-fill' });
+			// Severing the reference here would destroy the offer *and* the link, so no
+			// later republish would ever reach this slot again either.
+			expect(graphicStyleUpdateChanges(recaptured, resolveGraphicStyleSet(republished)).map(change => change.slot))
+				.toContain('surfaceStyle.fill');
+		});
+
+		it('records no override on a typography preset the author never touched, so its update stays reviewable', () => {
+			// The author's edit is to the fill; the typography they are inheriting is
+			// untouched, and the only reason it differs from the preset is the republish.
+			const behind = paintFill(boundBoth(), '#123456');
+
+			const recaptured = recaptureGraphicStyleOverrides(behind, resolveGraphicStyleSet(republished), AHEAD);
+
+			expect(headlineOf(recaptured).styleRefs?.typography).toEqual({ entryId: 'heading' });
+			expect(graphicStyleUpdateChanges(recaptured, resolveGraphicStyleSet(republished)).map(change => change.slot))
+				.toContain('typography');
+		});
+
+		it('leaves the values the author has just written exactly where they are', () => {
+			const behind = paintFill(editFontSize(boundBoth(), 30), '#123456');
+
+			const recaptured = recaptureGraphicStyleOverrides(behind, resolveGraphicStyleSet(republished), AHEAD);
+
+			// Deferring the provenance is not refusing the edit: the composition stores its
+			// values inline, and review is where the author is shown that their edit and the
+			// Style Set's disagree.
+			expect(headlineOf(recaptured).typography.fontSize).toBe(30);
+			expect(headlineOf(recaptured).surfaceStyle?.fill).toEqual({ type: 'solid', color: '#123456' });
+		});
+
+		it('resumes recording deviations once the composition is reconciled to it', () => {
+			const reconciled = applyGraphicStyleSet(
+				boundBoth(),
+				resolveGraphicStyleSet(republished),
+				{ revision: AHEAD },
+			);
+
+			const recaptured = recaptureGraphicStyleOverrides(
+				editFontSize(reconciled, 30),
+				resolveGraphicStyleSet(republished),
+				AHEAD,
+			);
+
+			expect(headlineOf(recaptured).styleRefs?.typography)
+				.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+		});
 	});
 });
 

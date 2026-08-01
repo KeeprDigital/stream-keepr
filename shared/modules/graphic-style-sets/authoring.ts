@@ -15,8 +15,7 @@ import {
 	applyGraphicStyleSet,
 	captureGraphicStyleOverrides,
 	GRAPHIC_STYLE_SLOT_OWNED_KEYS,
-	resolveGraphicStyleSlotValue,
-	sameGraphicStyleValue,
+	graphicStyleSlotDeviates,
 } from './apply';
 import { GRAPHIC_STYLE_SLOT_KINDS, graphicStyleOwnerSupportsSlot, readGraphicStyleSlot } from './slots';
 
@@ -191,8 +190,8 @@ export function unbindGraphicStyleRef(
  * inherited — and running this after an edit records exactly which owned keys no
  * longer match the preset.
  *
- * It is a *diff against the Style Set the editor is holding*, which is the one the
- * composition's values were produced from. That is what makes it correct: an
+ * It is a diff against the Style Set revision the composition was *reconciled to*,
+ * which is the one its values were produced from. That is what makes it correct: an
  * override is by definition where the author's value and the preset's disagree, and
  * both sides of that comparison are in front of it. An author who edits a value and
  * puts it back is left with no override rather than one pinning it.
@@ -203,11 +202,29 @@ export function unbindGraphicStyleRef(
  * stored inline and does not move, only the provenance does. Keeping the reference
  * would leave the composition reporting an available update that no later apply could
  * ever settle, which is a badge that misreports rather than a design that is protected.
+ *
+ * ## Why the revisions have to agree first
+ *
+ * The editor holds the Style Set's *published* entries, so between a republish and
+ * the author reviewing it, it is holding entries this composition was never
+ * reconciled to. Every difference derivable from them is then the Style Set's own
+ * change wearing the author's name. Recording one — as an override, or by letting go
+ * of a reference — settles a pending update that nobody reviewed, which is the single
+ * thing story 20 exists to prevent. So while the two disagree this is the identity:
+ * the author's edited values are already stored inline and stay exactly where they
+ * are, and review is where they are shown that their edit and the Style Set's differ.
+ * Deviations start being recorded again the moment an applied update brings the
+ * composition back onto the published revision.
  */
 export function recaptureGraphicStyleOverrides(
 	graphic: BroadcastGraphicConfig,
 	resolution: GraphicStyleSetResolution,
+	/** The published revision `resolution` was built from. */
+	publishedRevision: number,
 ): BroadcastGraphicConfig {
+	if (graphic.styleSet?.revision !== publishedRevision)
+		return graphic;
+
 	function recaptured<T extends { styleRefs?: GraphicStyleRefs }>(owner: T): T {
 		if (!owner.styleRefs)
 			return owner;
@@ -224,12 +241,10 @@ export function recaptureGraphicStyleOverrides(
 			const current = readGraphicStyleSlot(owner as never, slot);
 
 			if (GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot].length === 0) {
-				const inherited = resolveGraphicStyleSlotValue(resolution, slot, ref.entryId, current, undefined);
-				// Deviating from the preset is what lets go of the reference — and a
-				// reference the resolution cannot honour deviates from nothing, so it stays
-				// exactly as it is. A Style Set that failed to load must not be the thing
-				// that turns a linked composition local, which is what applying also says.
-				if (inherited !== null && !sameGraphicStyleValue(current, inherited))
+				// Deviating from the preset is what lets go of the reference. The author's
+				// deviation is the only thing that can, which is why the revisions must
+				// already agree for this to be reached at all.
+				if (graphicStyleSlotDeviates(resolution, slot, ref.entryId, current))
 					continue;
 				(next as Record<string, unknown>)[slot] = { entryId: ref.entryId };
 				continue;
