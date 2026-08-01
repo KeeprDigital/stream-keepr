@@ -803,11 +803,11 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 			expect(withItems([mediaItem('logo', { playbackRate: 4 })]).success).toBe(true);
 		});
 
-		it('clips with the canonical Shape Geometry, and rejects the media-clip encoding', () => {
-			// The canonical Shape Geometry states a flat treatment and size per corner
-			// and a signed slant per edge. The Feature Match Overlay media fork encodes
-			// a corner as a tagged union and a slant as an optional unsigned inset, and
-			// must not be accepted here.
+		it('clips with the canonical Shape Geometry, and rejects the discarded media-clip encoding', () => {
+			// Shape Geometry states a flat treatment and size per corner and a signed
+			// slant per edge. The media-clip fork that #89 discarded encoded a corner as
+			// a tagged union and a slant as an optional unsigned inset. Its declaration
+			// is gone, so this is what keeps its wire shape from creeping back.
 			expect(withItems([mediaItem('logo', { clipGeometry: GEOMETRY })]).success).toBe(true);
 			expect(withItems([mediaItem('logo', { clipGeometry: undefined })]).success).toBe(true);
 			expect(withItems([mediaItem('logo', {

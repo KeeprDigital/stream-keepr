@@ -5110,6 +5110,9 @@ export function createGraphicsAssetLibrary(
 				outcome: 'available',
 				lifecycleState: content.lifecycleState,
 				kind: content.kind,
+				...(content.facts.kind === 'silent-video'
+					? { targetCompatibility: content.facts.targetCompatibility }
+					: {}),
 			};
 		},
 		async inspectGraphicAssetRevisionContent(input) {

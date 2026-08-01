@@ -146,11 +146,12 @@ const GraphicsAssetFocusPickerStub = defineComponent({
 	props: {
 		modelValue: { type: Object, required: false },
 		eventId: { type: Number, required: false },
+		fieldLabel: { type: String, required: false },
 		assetKind: { type: [String, Array], required: false },
 		videoTarget: { type: String, required: false },
 	},
 	emits: ['update:modelValue', 'select'],
-	template: '<div data-testid="media-asset-picker" :data-video-target="videoTarget" :data-asset-id="modelValue?.assetId" />',
+	template: '<div data-testid="media-asset-picker" :data-field-label="fieldLabel" :data-video-target="videoTarget" :data-asset-id="modelValue?.assetId" />',
 });
 
 async function mountComponent(options: {
@@ -1025,6 +1026,304 @@ describe('graphicsCompositorInspector', () => {
 
 		const cleared = itemOf(emittedGraphics(wrapper, 1));
 		expect(cleared?.type === 'text' ? cleared.placeholderStyles : undefined).toBeUndefined();
+	});
+
+	/**
+	 * A Text Graphic Item's base Graphic Font Selection.
+	 *
+	 * The control #141 shipped, which had no component test of its own — the placeholder
+	 * one below is modelled on it, so the model is worth pinning before anything leans on
+	 * it further.
+	 */
+	describe('a base typography font', () => {
+		function typographyFontPicker(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+			return wrapper.findAllComponents({ name: 'GraphicsAssetFocusPicker' })
+				.find(picker => picker.attributes('data-field-label') === 'Typography');
+		}
+
+		function typographyOf(graphics: BroadcastGraphicConfig[]) {
+			const item = itemOf(graphics);
+			return item?.type === 'text' ? item.typography : undefined;
+		}
+
+		/** The asset arm needs an exact revision, so nothing is written until one is pinned. */
+		it('writes no library font until the picker has pinned a revision', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([textItem]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			selectField(wrapper, 'typography-font-source')?.vm.$emit('update:modelValue', 'asset');
+			await nextTick();
+
+			expect(wrapper.emitted('update:graphics')).toBeUndefined();
+			expect(typographyFontPicker(wrapper)?.exists()).toBe(true);
+		});
+
+		it('pins one exact font Graphic Asset Revision on the item', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([textItem]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			selectField(wrapper, 'typography-font-source')?.vm.$emit('update:modelValue', 'asset');
+			await nextTick();
+			typographyFontPicker(wrapper)?.vm.$emit(
+				'select',
+				{ id: 'font-1', kind: 'font' },
+				{ assetId: 'font-1', revisionId: 'font-revision-2' },
+			);
+			await nextTick();
+
+			expect(typographyOf(emittedGraphics(wrapper, 0))?.font)
+				.toEqual({ kind: 'asset', reference: { assetId: 'font-1', revisionId: 'font-revision-2' } });
+		});
+
+		/**
+		 * A `GraphicTypography` must name a font, so leaving the library arm cannot leave
+		 * the item on none. It lands on the application default rather than on whichever
+		 * font happens to be first in the registry.
+		 */
+		it('returns to an application font rather than to none', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([{
+					...textItem,
+					typography: {
+						...DEFAULT_GRAPHIC_TYPOGRAPHY,
+						font: { kind: 'asset', reference: { assetId: 'font-1', revisionId: 'font-revision-2' } },
+					},
+				} as GraphicItemConfig]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			expect(typographyFontPicker(wrapper)?.attributes('data-asset-id')).toBe('font-1');
+
+			selectField(wrapper, 'typography-font-source')?.vm.$emit('update:modelValue', 'application');
+			await nextTick();
+
+			expect(typographyOf(emittedGraphics(wrapper, 0))?.font)
+				.toEqual({ kind: 'application', fontId: 'inter' });
+		});
+	});
+
+	/**
+	 * A Graphic Placeholder Style's own Graphic Font Selection (#161).
+	 *
+	 * Every other layer already carried one — the type, the wire schema, the reference
+	 * walk, the Screen Output Asset Capability, the render model, and a Template Package
+	 * — while the panel offered size, weight and colour, so the only way to author one
+	 * was to write the Screen mode configuration directly.
+	 *
+	 * The placeholder arm has a third state the base typography does not: a font is
+	 * optional here, so "same as base" is a real answer rather than the absence of one.
+	 */
+	describe('a Graphic Placeholder Style font', () => {
+		function placeholderTextGraphic(
+			placeholderStyles?: Record<string, Record<string, unknown>>,
+		): BroadcastGraphicConfig[] {
+			return [{
+				id: 'lower-third',
+				name: 'Lower Third',
+				inputs: [textInput('name')],
+				items: [{ ...textItem, text: '{name}', ...(placeholderStyles ? { placeholderStyles } : {}) } as GraphicItemConfig],
+			}];
+		}
+
+		function placeholderFontPicker(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+			return wrapper.findAllComponents({ name: 'GraphicsAssetFocusPicker' })
+				.find(picker => picker.attributes('data-field-label') === 'Placeholder {name}');
+		}
+
+		function placeholderStylesOf(graphics: BroadcastGraphicConfig[]) {
+			const item = itemOf(graphics);
+			return item?.type === 'text' ? item.placeholderStyles : undefined;
+		}
+
+		it('chooses an application font for one placeholder', async () => {
+			const wrapper = await mountComponent({
+				graphics: placeholderTextGraphic({ name: { fontWeight: 300 } }),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			selectField(wrapper, 'graphic-placeholder-style-font-source')
+				?.vm
+				.$emit('update:modelValue', 'application');
+			await nextTick();
+			selectField(wrapper, 'graphic-placeholder-style-font')
+				?.vm
+				.$emit('update:modelValue', 'saira-condensed');
+			await nextTick();
+
+			expect(placeholderStylesOf(emittedGraphics(wrapper, 1)))
+				.toEqual({ name: { fontWeight: 300, font: { kind: 'application', fontId: 'saira-condensed' } } });
+		});
+
+		/**
+		 * The control refuses what the write path refuses, per #119. The asset arm of a
+		 * Graphic Font Selection requires an exact Graphic Asset Revision, so choosing
+		 * "Library font" before one is pinned would write a font that is nothing — which
+		 * `graphicFontSelectionSchema` rejects. The placeholder keeps the base typography
+		 * until the picker pins a revision.
+		 */
+		it('writes no library font until the picker has pinned a revision', async () => {
+			const wrapper = await mountComponent({
+				graphics: placeholderTextGraphic(),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			selectField(wrapper, 'graphic-placeholder-style-font-source')
+				?.vm
+				.$emit('update:modelValue', 'asset');
+			await nextTick();
+
+			expect(wrapper.emitted('update:graphics')).toBeUndefined();
+			expect(placeholderFontPicker(wrapper)?.exists()).toBe(true);
+		});
+
+		it('pins one exact font Graphic Asset Revision on one placeholder', async () => {
+			const wrapper = await mountComponent({
+				graphics: placeholderTextGraphic(),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			selectField(wrapper, 'graphic-placeholder-style-font-source')
+				?.vm
+				.$emit('update:modelValue', 'asset');
+			await nextTick();
+			placeholderFontPicker(wrapper)?.vm.$emit(
+				'select',
+				{ id: 'font-1', kind: 'font' },
+				{ assetId: 'font-1', revisionId: 'font-revision-2' },
+			);
+			await nextTick();
+
+			expect(placeholderStylesOf(emittedGraphics(wrapper, 0))).toEqual({
+				name: { font: { kind: 'asset', reference: { assetId: 'font-1', revisionId: 'font-revision-2' } } },
+			});
+		});
+
+		/**
+		 * Returning to the base typography removes the key rather than storing a font of
+		 * nothing. A Graphic Placeholder Style is the keys an author actually changed, so
+		 * an unchosen font is an absent one.
+		 */
+		it('returns one placeholder to the item’s base font', async () => {
+			const wrapper = await mountComponent({
+				graphics: placeholderTextGraphic({
+					name: {
+						fontWeight: 300,
+						font: { kind: 'asset', reference: { assetId: 'font-1', revisionId: 'font-revision-2' } },
+					},
+				}),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			// The stored style already says which arm it is on, so the picker is offered
+			// without the author having to choose the arm first.
+			expect(placeholderFontPicker(wrapper)?.attributes('data-asset-id')).toBe('font-1');
+
+			selectField(wrapper, 'graphic-placeholder-style-font-source')
+				?.vm
+				.$emit('update:modelValue', 'base');
+			await nextTick();
+
+			expect(placeholderStylesOf(emittedGraphics(wrapper, 0))).toEqual({ name: { fontWeight: 300 } });
+		});
+
+		/** A placeholder that has chosen no font of its own says so, and offers no picker. */
+		it('starts every placeholder on the item’s base font', async () => {
+			const wrapper = await mountComponent({
+				graphics: placeholderTextGraphic({ name: { fontWeight: 300 } }),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			expect(selectField(wrapper, 'graphic-placeholder-style-font-source')?.props('modelValue'))
+				.toBe('base');
+			expect(selectField(wrapper, 'graphic-placeholder-style-font')).toBeUndefined();
+			expect(placeholderFontPicker(wrapper)).toBeUndefined();
+		});
+
+		/**
+		 * Unpinning a library font leaves the placeholder on the base typography rather
+		 * than on a font the author never chose — the base typography control has to fall
+		 * back to an application font because a `GraphicTypography` must name one, and a
+		 * placeholder need not. The arm stays selected, so the picker is still there to pin
+		 * another revision.
+		 */
+		it('unpins a library font without inventing one in its place', async () => {
+			const wrapper = await mountComponent({
+				graphics: placeholderTextGraphic({
+					name: {
+						fontWeight: 300,
+						font: { kind: 'asset', reference: { assetId: 'font-1', revisionId: 'font-revision-2' } },
+					},
+				}),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			placeholderFontPicker(wrapper)?.vm.$emit('update:modelValue', undefined);
+			await nextTick();
+
+			expect(placeholderStylesOf(emittedGraphics(wrapper, 0))).toEqual({ name: { fontWeight: 300 } });
+			expect(selectField(wrapper, 'graphic-placeholder-style-font-source')?.props('modelValue'))
+				.toBe('asset');
+		});
+
+		/**
+		 * The arm an author has chosen but not yet stored belongs to the placeholder they
+		 * chose it on. Carrying it across a selection would leave the control describing
+		 * the previous item's placeholders — offering a library font picker on a
+		 * placeholder whose stored style says nothing of the kind.
+		 */
+		it('forgets an unstored arm when the selection moves', async () => {
+			const second = {
+				...textItem,
+				id: 'subhead',
+				label: 'Text 2',
+				text: '{name}',
+			} as GraphicItemConfig;
+			const wrapper = await mountComponent({
+				graphics: [{
+					id: 'lower-third',
+					name: 'Lower Third',
+					inputs: [textInput('name')],
+					items: [{ ...textItem, text: '{name}' } as GraphicItemConfig, second],
+				}],
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			selectField(wrapper, 'graphic-placeholder-style-font-source')
+				?.vm
+				.$emit('update:modelValue', 'asset');
+			await nextTick();
+			expect(placeholderFontPicker(wrapper)?.exists()).toBe(true);
+
+			await wrapper.setProps({
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'subhead' },
+			});
+			await nextTick();
+
+			expect(selectField(wrapper, 'graphic-placeholder-style-font-source')?.props('modelValue'))
+				.toBe('base');
+			expect(placeholderFontPicker(wrapper)).toBeUndefined();
+		});
+
+		/** An emptied Graphic Placeholder Style is the absence of one, not an empty one. */
+		it('drops a Graphic Placeholder Style whose last property it removes', async () => {
+			const wrapper = await mountComponent({
+				graphics: placeholderTextGraphic({
+					name: { font: { kind: 'application', fontId: 'inter' } },
+				}),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			selectField(wrapper, 'graphic-placeholder-style-font-source')
+				?.vm
+				.$emit('update:modelValue', 'base');
+			await nextTick();
+
+			expect(placeholderStylesOf(emittedGraphics(wrapper, 0))).toBeUndefined();
+		});
 	});
 
 	/**

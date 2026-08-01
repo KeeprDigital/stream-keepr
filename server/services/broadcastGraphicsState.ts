@@ -432,6 +432,7 @@ export function broadcastGraphicsStateService() {
 
 	return {
 		findSessionById,
+		findActiveSessionByScreen,
 		findActiveSessionsByEvent,
 		ensureActiveSession,
 		endSessionsForScreen,

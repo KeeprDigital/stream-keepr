@@ -35,37 +35,54 @@ const ownsGuideLayer = computed(() => props.render.canvasRole === 'screen-output
 	>
 		<template v-for="graphic in render.graphics" :key="graphic.id">
 			<!--
-				A *whole-graphic* update recipe moves the composed frame, so the frame being
-				replaced is drawn as its own layer beneath the one arriving — which is what a
-				cross-dissolve is, and the only case where two canvas-wide copies are right.
-				A per-item cross-transition never comes through here: it pairs the two
-				renderings inside the crossing item's own box, where Graphic Layer Order
-				still composes.
+				A Broadcast Graphic in two lifecycle phases at once needs two elements: the
+				phase that moves what it draws sits on the frame below, and the phase that
+				moves the *result* — an exit running over an update, or a second wipe that
+				cannot share the frame's one mask — sits on this enclosure.
+
+				It is drawn whether or not it carries anything, because it is free: it is
+				`position: absolute; inset: 0` over a graphic that already fills the canvas,
+				so an unstyled one composites identically to not being there. Making it
+				conditional would mean two copies of the frames below for one class attribute.
 			-->
 			<div
-				v-if="graphic.outgoing"
 				class="graphics-compositor-canvas__graphic"
-				:data-broadcast-graphic-outgoing="graphic.id"
-				:style="graphic.outgoing.style"
-				aria-hidden="true"
+				:data-broadcast-graphic-enclosure="graphic.id"
+				:style="graphic.enclosingStyle"
 			>
-				<GraphicsCompositorItem
-					v-for="item in graphic.outgoing.items"
-					:key="item.id"
-					:render="item"
-				/>
-			</div>
+				<!--
+					A *whole-graphic* update recipe moves the composed frame, so the frame being
+					replaced is drawn as its own layer beneath the one arriving — which is what a
+					cross-dissolve is, and the only case where two canvas-wide copies are right.
+					A per-item cross-transition never comes through here: it pairs the two
+					renderings inside the crossing item's own box, where Graphic Layer Order
+					still composes.
+				-->
+				<div
+					v-if="graphic.outgoing"
+					class="graphics-compositor-canvas__graphic"
+					:data-broadcast-graphic-outgoing="graphic.id"
+					:style="graphic.outgoing.style"
+					aria-hidden="true"
+				>
+					<GraphicsCompositorItem
+						v-for="item in graphic.outgoing.items"
+						:key="item.id"
+						:render="item"
+					/>
+				</div>
 
-			<div
-				class="graphics-compositor-canvas__graphic"
-				:data-broadcast-graphic="graphic.id"
-				:style="graphic.style"
-			>
-				<GraphicsCompositorItem
-					v-for="item in graphic.items"
-					:key="item.id"
-					:render="item"
-				/>
+				<div
+					class="graphics-compositor-canvas__graphic"
+					:data-broadcast-graphic="graphic.id"
+					:style="graphic.style"
+				>
+					<GraphicsCompositorItem
+						v-for="item in graphic.items"
+						:key="item.id"
+						:render="item"
+					/>
+				</div>
 			</div>
 		</template>
 

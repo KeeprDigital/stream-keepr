@@ -1,7 +1,7 @@
 import type { ScreenOutputAssetAuthorizationInput } from '.';
 import {
-	GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES,
 	GRAPHIC_ASSET_REFERENCING_SCREEN_MODES,
+	screenOutputResolvableSlotPrefixes,
 } from '~~/shared/utils/graphicsAssetReferences';
 
 /**
@@ -16,14 +16,21 @@ import {
  * its index holds every mode's references at once, and matching the mode alone
  * would let a Feature Match Overlay output resolve a Broadcast Graphics reference.
  *
- * Pairing each mode with its own owner-slot namespace is what states both at once.
+ * Pairing each mode with its own owner-slot namespaces is what states both at once.
+ * Broadcast Graphics has two — authored configuration and its Broadcast Graphics
+ * Live Session's accepted media Graphic Input values — because both are on air, and
+ * a media value chosen live is otherwise a graphic whose media the output cannot
+ * fetch.
  */
-const MODE_SLOT_SCOPE = GRAPHIC_ASSET_REFERENCING_SCREEN_MODES
+const MODE_SLOT_SCOPES = GRAPHIC_ASSET_REFERENCING_SCREEN_MODES.flatMap(mode =>
+	screenOutputResolvableSlotPrefixes(mode).map(prefix => [mode, `${prefix}%`] as const),
+);
+
+const MODE_SLOT_SCOPE = MODE_SLOT_SCOPES
 	.map(() => '(screen.current_mode = ? AND reference.owner_slot LIKE ?)')
 	.join(' OR ');
 
-const MODE_SLOT_SCOPE_BINDINGS = GRAPHIC_ASSET_REFERENCING_SCREEN_MODES
-	.flatMap(mode => [mode, `${GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES[mode]}%`]);
+const MODE_SLOT_SCOPE_BINDINGS = MODE_SLOT_SCOPES.flatMap(scope => [...scope]);
 
 export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
 	return {

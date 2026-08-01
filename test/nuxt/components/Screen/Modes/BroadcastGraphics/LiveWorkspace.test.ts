@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import {
 	broadcastGraphicChannelContexts,
-	broadcastGraphicPhaseProjection,
+	broadcastGraphicPhaseProjections,
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
 	createInitialBroadcastGraphicsLiveState,
@@ -112,12 +112,14 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	) => {
 		const contexts = channels?.length ? broadcastGraphicChannelContexts({ graphics, channels }) : {};
 		return Object.fromEntries(graphics.flatMap((graphic) => {
-			const projection = broadcastGraphicPhaseProjection(
+			const projection = broadcastGraphicPhaseProjections(
 				mockLiveState.value,
 				graphic.id,
 				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value, contexts[graphic.id]),
 			);
-			return projection ? [[graphic.id, projection]] : [];
+			// Empty means settled, and the real store leaves a settled graphic out of the
+			// map entirely so "is anything moving?" stays one question about the map's size.
+			return projection.length > 0 ? [[graphic.id, projection]] : [];
 		}));
 	},
 	inputTraces: (_screenId: number, graphic: BroadcastGraphicConfig) =>
