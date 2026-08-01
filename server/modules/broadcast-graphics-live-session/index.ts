@@ -407,10 +407,22 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 						type: 'Resolve Bindings',
 						payload: { graphicId: graphic.id },
 					};
-					// Judged against the epoch as it was read. A Resolve Bindings writes only
-					// the Broadcast Graphic it names, so an acceptance for an earlier graphic
-					// cannot change the answer for this one — and `applyCommand` loads the
-					// current aggregate for itself before it reduces.
+					// Judged against the epoch as it was read, which this sweep deliberately
+					// does not re-read between graphics. A Resolve Bindings writes only the
+					// Broadcast Graphic it names, so an acceptance for an earlier graphic
+					// cannot change the answer for this one.
+					//
+					// Nothing here is what stops a write into an epoch that has since ended,
+					// and nothing here needs to be. The sequenced live-state module loads the
+					// aggregate itself and admits the command against it — this feature's
+					// admission rejects a session that is not active — and it re-admits
+					// against the reloaded aggregate on a merge retry, so neither attempt can
+					// commit into an ended epoch. Beneath both, the compare-and-swap guard and
+					// the projection's own WHERE require `status = 'active'`, so a write that
+					// raced an epoch ending returns no row and fails rather than landing. A
+					// staleness check out here could only ever be a fourth guard, checked
+					// before the write and therefore able to go stale in the gap the other
+					// three close.
 					const context = await reductionContextFor(eventId, screen, graphic, session.currentState, command);
 					const due = broadcastGraphicsResolveBindingsDue(
 						recoveredBroadcastGraphicsLiveState(session.currentState),
