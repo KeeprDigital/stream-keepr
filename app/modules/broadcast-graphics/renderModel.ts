@@ -18,11 +18,16 @@ export interface BroadcastGraphicsRenderModelInput {
 	 */
 	onAirGraphicIds?: readonly string[];
 	/**
-	 * Which lifecycle phase each Broadcast Graphic is in, and how long it has been
-	 * there. An omitted map composes every graphic at its Graphic Resting State,
-	 * which is what a settled Screen and a recovered Live Session both resolve to.
+	 * Which lifecycle phases each Broadcast Graphic is in, and how long it has been in
+	 * each, innermost first. An omitted map composes every graphic at its Graphic
+	 * Resting State, which is what a settled Screen and a recovered Live Session both
+	 * resolve to.
+	 *
+	 * More than one phase per graphic, because an exit interrupting an update or
+	 * on-screen cycling continues from the state that was rendered rather than from the
+	 * Graphic Resting State — so both phases are in play and the compositor composes them.
 	 */
-	animation?: Readonly<Record<string, GraphicsAnimationProjection>>;
+	animation?: Readonly<Record<string, readonly GraphicsAnimationProjection[]>>;
 	/**
 	 * The accepted on-air Graphic Input values a Graphic Text Template renders,
 	 * keyed by Broadcast Graphic id. A Graphic Input with no value here renders

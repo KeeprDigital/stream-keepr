@@ -75,7 +75,7 @@ export function integrationBroadcastGraphicWithInputs(
  * project resolves no `~~` alias, so only type imports cross this boundary.
  */
 export function integrationGraphicAnimation(
-	durations: { enter?: number; update?: number; exit?: number },
+	durations: { enter?: number; update?: number; exit?: number; onScreen?: number },
 ): NonNullable<BroadcastGraphicConfig['animation']> {
 	const recipe = (duration: number) => ({
 		duration,
@@ -88,6 +88,12 @@ export function integrationGraphicAnimation(
 		...(durations.enter === undefined ? {} : { enter: recipe(durations.enter) }),
 		...(durations.update === undefined ? {} : { update: recipe(durations.update) }),
 		...(durations.exit === undefined ? {} : { exit: recipe(durations.exit) }),
+		// An on-screen recipe cycles rather than travelling once, so it carries a pause and
+		// a repetition the finite phases have no use for. Indefinite, because that is the
+		// case an exit has to be able to interrupt at any point in the excursion.
+		...(durations.onScreen === undefined
+			? {}
+			: { 'on-screen': { ...recipe(durations.onScreen), pause: 0, repeat: 'indefinite' as const } }),
 	};
 }
 

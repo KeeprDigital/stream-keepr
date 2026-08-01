@@ -202,13 +202,28 @@ watch(
 
 <template>
 	<!--
+		A Graphic Item whose concurrent lifecycle phases each wipe is drawn inside one
+		extra element, because CSS allows one mask per element. This one is the item's
+		own box carrying the second wipe; the item fills it and carries everything else,
+		including whatever Shape Geometry clipping it already had.
+	-->
+	<div
+		v-if="render.enclosed"
+		class="graphics-compositor-item"
+		:data-graphic-item-enclosure="render.id"
+		:style="render.style"
+	>
+		<Item :render="render.enclosed" />
+	</div>
+
+	<!--
 		A cross-transitioning Graphic Item is a positioning box holding both renderings,
 		the arriving one in front of the one it replaces. Both fill this box, so the pair
 		occupies exactly this item's place in Graphic Layer Order rather than a layer of
 		its own — which is what stops an opaque item below covering the old rendering.
 	-->
 	<div
-		v-if="render.crossTransition"
+		v-else-if="render.crossTransition"
 		class="graphics-compositor-item"
 		:data-graphic-item-cross-transition="render.id"
 		:style="render.style"

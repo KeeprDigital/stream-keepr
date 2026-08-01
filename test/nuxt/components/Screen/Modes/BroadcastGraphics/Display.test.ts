@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
 import {
 	broadcastGraphicChannelContexts,
-	broadcastGraphicPhaseProjection,
+	broadcastGraphicPhaseProjections,
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
 	broadcastGraphicRenderedInputs,
@@ -16,6 +16,7 @@ import {
 	onAirBroadcastGraphicIds,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
+import { GRAPHIC_ANIMATION_REPEAT_INDEFINITE } from '~~/shared/types/graphics';
 import { GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
 
 enableAutoUnmount(afterEach);
@@ -145,12 +146,14 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 		channels?: readonly GraphicChannelConfig[],
 	) =>
 		Object.fromEntries(graphics.flatMap((graphic) => {
-			const projection = broadcastGraphicPhaseProjection(
+			const projection = broadcastGraphicPhaseProjections(
 				mockState(),
 				graphic.id,
 				timingFor(graphic, now, channels),
 			);
-			return projection ? [[graphic.id, projection]] : [];
+			// Empty means settled, and the real store leaves a settled graphic out of the
+			// map entirely so "is anything moving?" stays one question about the map's size.
+			return projection.length > 0 ? [[graphic.id, projection]] : [];
 		})),
 	renderedInputValues: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) => {
 		const current: Record<string, Record<string, unknown>> = {};
@@ -863,6 +866,123 @@ describe('broadcastGraphicsDisplay', () => {
 
 		expect(wrapper.text()).toContain('Live: Ava Reed');
 		expect(wrapper.text()).not.toContain('Half typed');
+	});
+
+	describe('a Broadcast Graphic in two lifecycle phases at once', () => {
+		const CROSS_FADE = { duration: 400, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } };
+
+		/** Exiting for 200ms of 400ms, with an update that began at the same instant. */
+		function exitingMidUpdate() {
+			mockPlayout.value = {
+				templated: {
+					onAir: false,
+					effectiveStartedAt: mockServerNow.value - 200,
+					cut: false,
+					updateStartedAt: mockServerNow.value - 200,
+				},
+			};
+			mockAcceptedInputs.value = {
+				playout: {},
+				inputs: {
+					templated: {
+						working: {},
+						accepted: { name: 'Ava Reed' },
+						acceptedRevision: 2,
+						updateFrom: { name: 'Bo Lin' },
+					},
+				},
+			};
+		}
+
+		it('draws the crossing pair beneath the exit rather than cutting to the new rendering', async () => {
+			mockScreen.value = screenWithStack([{
+				...templated,
+				items: templated.items.map(item => ({ ...item, animation: { update: CROSS_FADE } })),
+				animation: { exit: CROSS_FADE },
+			}]);
+			exitingMidUpdate();
+
+			const wrapper = await mountComponent();
+
+			// Both renderings are still on screen, crossing, while the graphic leaves.
+			const pair = wrapper.get('[data-graphic-item-cross-transition]');
+			expect(pair.text()).toContain('Ava Reed');
+			expect(pair.text()).toContain('Bo Lin');
+			// And the exit is running over them: half way through a 400ms fade.
+			expect(wrapper.get('[data-broadcast-graphic="templated"]').attributes('style'))
+				.toContain('opacity: 0.5');
+		});
+
+		it('encloses both frames of a whole-graphic update in the exit running over them', async () => {
+			mockScreen.value = screenWithStack([{
+				...templated,
+				animation: { update: CROSS_FADE, exit: CROSS_FADE },
+			}]);
+			exitingMidUpdate();
+
+			const wrapper = await mountComponent();
+
+			// One element for the exit, holding both frames of the cross-dissolve — rather
+			// than the exit applied to each frame, which composites differently where the
+			// two overlap.
+			const enclosure = wrapper.get('[data-broadcast-graphic-enclosure="templated"]');
+			expect(enclosure.attributes('style')).toContain('opacity: 0.5');
+			expect(enclosure.find('[data-broadcast-graphic-outgoing="templated"]').exists()).toBe(true);
+			expect(enclosure.find('[data-broadcast-graphic="templated"]').exists()).toBe(true);
+			expect(enclosure.get('[data-broadcast-graphic-outgoing="templated"]').text()).toContain('Bo Lin');
+			expect(enclosure.get('[data-broadcast-graphic="templated"]').text()).toContain('Ava Reed');
+		});
+
+		it('wipes two concurrent reveals on two elements, adding no clip to either', async () => {
+			// CSS allows one mask per element and one clip path per element, and a Graphic
+			// Group already spends its clip on Shape Geometry clipping. So a second wipe gets
+			// an element of its own and stays a mask — which is also what keeps the Key
+			// Output's alpha matte intact, because nesting masks multiplies alpha rather than
+			// painting anything.
+			mockScreen.value = screenWithStack([{
+				...lowerThird,
+				items: [{
+					...bar,
+					animation: {
+						'on-screen': {
+							duration: 800,
+							easing: 'linear',
+							delay: 0,
+							pause: 0,
+							repeat: GRAPHIC_ANIMATION_REPEAT_INDEFINITE,
+							reveal: { edge: 'top' },
+						},
+						'exit': { duration: 400, easing: 'linear', delay: 0, reveal: { edge: 'left' } },
+					},
+				}],
+			}]);
+			mockPlayout.value = {
+				'lower-third': {
+					onAir: false,
+					effectiveStartedAt: mockServerNow.value - 200,
+					cut: false,
+					cyclingStartedAt: mockServerNow.value - 100,
+				},
+			};
+
+			const wrapper = await mountComponent();
+
+			const enclosure = wrapper.get('[data-graphic-item-enclosure="bar"]');
+			const item = enclosure.get('[data-graphic-item-kind="shape"]');
+
+			// Two elements, one wipe each. The gradients themselves are pinned in the
+			// render-model test rather than here: this environment's CSS object model drops
+			// `mask-image` outright, so a DOM assertion on it would pass against a
+			// composition that emitted no mask at all.
+			expect(item.attributes('data-graphic-item-kind')).toBe('shape');
+			// The enclosure is the item's own box, so both gradients resolve across the
+			// bounds the reveals were authored across.
+			expect(enclosure.attributes('style')).toContain('width: 900px');
+			// Neither element spends a clip on the wipe, so Shape Geometry clipping is free
+			// to stay exactly where an author put it.
+			expect(enclosure.attributes('style')).not.toContain('clip-path');
+			expect(item.attributes('style')).not.toContain('clip-path');
+		});
 	});
 });
 

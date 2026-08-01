@@ -210,11 +210,14 @@ export function useBroadcastGraphicsModeData() {
 		return broadcastGraphicAnimationTimeline(graphic, phases);
 	});
 
-	const animationProjection = computed<Record<string, GraphicsAnimationProjection>>(() => {
+	const animationProjection = computed<Record<string, GraphicsAnimationProjection[]>>(() => {
 		const plan = previewPlan.value;
 		if (plan) {
+			// A Graphic Animation Preview steps one phase at a time, so it never produces the
+			// concurrent pair live playout can — but it answers in the same shape, because the
+			// compositor has one way of being told what to draw.
 			const position = graphicAnimationTimelineAt(previewTimeline.value, previewElapsed.value);
-			return position ? { [plan.graphicId]: position } : {};
+			return position ? { [plan.graphicId]: [position] } : {};
 		}
 
 		const screenId = screen.value?.id;

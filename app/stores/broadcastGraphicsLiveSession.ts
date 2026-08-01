@@ -1,6 +1,7 @@
 import type {
 	BroadcastGraphicChannelContext,
 	BroadcastGraphicInputsState,
+	BroadcastGraphicPhaseProjection,
 	BroadcastGraphicPhaseTiming,
 	BroadcastGraphicsLiveState,
 	BroadcastGraphicsRecoveryFault,
@@ -15,7 +16,6 @@ import type {
 } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type {
 	BroadcastGraphicConfig,
-	GraphicAnimationPhase,
 	GraphicChannelConfig,
 	GraphicInputValue,
 	GraphicPlayoutState,
@@ -26,7 +26,7 @@ import {
 	BROADCAST_GRAPHICS_REJECTION_CODES,
 	broadcastGraphicChannelContexts,
 	broadcastGraphicInputsState,
-	broadcastGraphicPhaseProjection,
+	broadcastGraphicPhaseProjections,
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
 	broadcastGraphicRenderedInputs,
@@ -275,30 +275,37 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	}
 
 	/**
-	 * The lifecycle phase and elapsed time each on-air Broadcast Graphic renders.
+	 * The lifecycle phases and elapsed times each on-air Broadcast Graphic renders.
 	 *
 	 * Keyed by Broadcast Graphic id, in exactly the shape the compositor takes, so every
 	 * output and the Program monitor resolve one frame from one authoritative instant.
+	 *
+	 * More than one phase per graphic, because an exit interrupting an update or
+	 * on-screen cycling has to continue from the state that was rendered rather than
+	 * from the Graphic Resting State — so the interrupted phase and the exit are both in
+	 * play, in the order they compose.
 	 */
 	function animationProjection(
 		screenId: number,
 		graphics: readonly BroadcastGraphicConfig[],
 		now?: number,
 		channels?: readonly GraphicChannelConfig[],
-	): Record<string, { phase: GraphicAnimationPhase; elapsed: number }> {
+	): Record<string, BroadcastGraphicPhaseProjection[]> {
 		const state = liveState(screenId);
 		const instant = now ?? serverNow();
 		const contexts = channelContexts(graphics, channels);
-		const projections: Record<string, { phase: GraphicAnimationPhase; elapsed: number }> = {};
+		const projections: Record<string, BroadcastGraphicPhaseProjection[]> = {};
 
 		for (const graphic of graphics) {
-			const projection = broadcastGraphicPhaseProjection(
+			const projected = broadcastGraphicPhaseProjections(
 				state,
 				graphic.id,
 				timingFor(graphic, instant, contexts[graphic.id]),
 			);
-			if (projection)
-				projections[graphic.id] = projection;
+			// A settled Broadcast Graphic is left out of the map entirely rather than given an
+			// empty entry, so "is anything moving?" stays one question about the map's size.
+			if (projected.length > 0)
+				projections[graphic.id] = projected;
 		}
 
 		return projections;

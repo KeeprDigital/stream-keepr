@@ -694,8 +694,13 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - An on-screen **Graphic Animation Recipe** may run once, a fixed number of times, or until exit is requested, with an optional pause between cycles
 - An update interrupts an active on-screen **Graphic Animation Recipe**, after which on-screen cycling restarts from its beginning
 - Exit interrupts an active enter, update, or on-screen **Graphic Animation Recipe** and continues smoothly from the currently rendered state
+- A **Broadcast Graphic** may be in more than one lifecycle phase at one authoritative instant, and every **Screen Output** and **Live Control** projects the same set
+- At most one update or on-screen **Graphic Animation Recipe** runs alongside at most one enter or exit phase
+- An exit composes over the update or on-screen **Graphic Animation Recipe** it interrupted rather than replacing it
+- Concurrent fades multiply, concurrent slides add, concurrent scales apply in turn, and concurrent reveals show only what both reveal
 - Interrupting an update animation does not roll back its accepted **Graphic Input** values
 - Exit discards any pending visual update without discarding its accepted **Graphic Input** values
+- A **Broadcast Graphic** leaving with a pending visual update discarded keeps the rendering the interrupted update was travelling towards until it leaves
 - A **Broadcast Graphic** may belong to one **Graphic Channel**
 - A **Graphic Channel** has one **Graphic Channel Handoff Policy** and defaults to Overlap
 - Taking a **Broadcast Graphic** replaces the on-air **Broadcast Graphic** in the same **Graphic Channel**
