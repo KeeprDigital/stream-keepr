@@ -28,10 +28,10 @@ const mockImportedResolver = { resolveBatch: vi.fn() };
 const mockMtgCardService = { batchUpsert: vi.fn() };
 const mockPersistPlayerDeckLists = vi.fn();
 
-const mockRefreshLiveBindings = vi.fn();
+const mockRefreshBindings = vi.fn();
 
 vi.mock('~~/server/modules/broadcast-graphics-live-session', () => ({
-	broadcastGraphicsLiveSessionModule: () => ({ refreshLiveBindings: mockRefreshLiveBindings }),
+	refreshBroadcastGraphicsBindings: mockRefreshBindings,
 }));
 
 vi.mock('~~/server/services/meleeIntegration', () => ({

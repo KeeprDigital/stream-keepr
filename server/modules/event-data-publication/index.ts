@@ -12,7 +12,7 @@ import { mapPlayerListToResponse } from '~~/server/mappers/playerList';
 import { mapRoundToResponse } from '~~/server/mappers/round';
 import { mapScreenToResponse } from '~~/server/mappers/screen';
 import { mapTalentToResponse } from '~~/server/mappers/talent';
-import { broadcastGraphicsLiveSessionModule } from '~~/server/modules/broadcast-graphics-live-session';
+import { refreshBroadcastGraphicsBindings } from '~~/server/modules/broadcast-graphics-live-session';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { publishMessage, publishMessageStrict } from '~~/server/utils/ably';
 
@@ -120,20 +120,25 @@ async function publishEventDataChange<T extends MessageType>(
 	payload: MessagePayload<T> extends undefined ? never : MessagePayload<T>,
 	originConnectionId?: string,
 ): Promise<void> {
-	await publishMessage(eventId, messageType, payload, originConnectionId);
-	await refreshBroadcastGraphicsBindings(eventId, originConnectionId);
+	await publishEventDataMessage(eventId, messageType, payload, originConnectionId);
+	await refreshBroadcastGraphicsBindings(eventId);
 }
 
-async function refreshBroadcastGraphicsBindings(
+/**
+ * The announcement half on its own, for a caller publishing a run of related changes.
+ *
+ * The re-resolution is per Event rather than per message, so a caller that publishes
+ * several in one operation catches its Broadcast Graphics up once at the end instead
+ * of once per message — the same work, done once. Every caller that publishes exactly
+ * one change uses `publishEventDataChange` and never sees this.
+ */
+async function publishEventDataMessage<T extends MessageType>(
 	eventId: number,
+	messageType: T,
+	payload: MessagePayload<T> extends undefined ? never : MessagePayload<T>,
 	originConnectionId?: string,
 ): Promise<void> {
-	try {
-		await broadcastGraphicsLiveSessionModule().refreshLiveBindings({ eventId, originConnectionId });
-	}
-	catch {
-		console.error(JSON.stringify({ message: 'broadcast_graphics_binding_refresh_failed', eventId }));
-	}
+	await publishMessage(eventId, messageType, payload, originConnectionId);
 }
 
 async function publishSyncMessage<T extends MessageType>(
@@ -151,7 +156,7 @@ async function publishSyncMessage<T extends MessageType>(
 
 	// A Melee Sync reports what it changed as a count rather than per entity, so this is
 	// the only notice a Broadcast Graphic bound to a synced Player or Round ever gets.
-	await refreshBroadcastGraphicsBindings(eventId, originConnectionId);
+	await refreshBroadcastGraphicsBindings(eventId);
 }
 
 function mapArchetypeKeyCard(card: ArchetypeKeyCard) {
@@ -369,9 +374,20 @@ export function eventDataPublicationModule() {
 
 		for (const slotId of slotIds) {
 			const slot = slotsById.get(slotId);
-			if (slot)
-				published.push(await featureMatchSlotUpdated({ eventId, entity: slot, originConnectionId }));
+			if (!slot)
+				continue;
+			const featureMatch = mapFeatureMatchToResponse(slot);
+			// Announced one by one, because each message names one Slot.
+			await publishEventDataMessage(eventId, 'featureMatch:updated', { featureMatch }, originConnectionId);
+			published.push(featureMatch);
 		}
+
+		// Caught up once, because re-resolution is per Event and not per Slot. Fifty Slots
+		// moving in one operation is one Event Data change as far as a Graphic Input
+		// Binding is concerned, and sweeping per Slot would repeat the whole Event's work
+		// fifty times inside one request.
+		if (published.length > 0)
+			await refreshBroadcastGraphicsBindings(eventId);
 
 		return published;
 	}

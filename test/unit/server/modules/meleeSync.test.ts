@@ -53,10 +53,10 @@ const mockSyncMatchesFromMelee = vi.fn();
 
 class MockDeckCompanionValidationError extends Error {}
 
-const mockRefreshLiveBindings = vi.fn();
+const mockRefreshBindings = vi.fn();
 
 vi.mock('~~/server/modules/broadcast-graphics-live-session', () => ({
-	broadcastGraphicsLiveSessionModule: () => ({ refreshLiveBindings: mockRefreshLiveBindings }),
+	refreshBroadcastGraphicsBindings: mockRefreshBindings,
 }));
 
 vi.mock('~~/server/services/event', () => ({

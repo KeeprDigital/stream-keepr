@@ -363,14 +363,29 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	 * irrelevant to one graphic's declared kinds may not be — and the failure of guessing
 	 * wrong is a stale name on program, which is the thing this exists to prevent. The
 	 * value comparison is the honest filter, and it is exact.
+	 *
+	 * ## Why it takes no originating connection
+	 *
+	 * The Event Data write that woke this has an origin, and the message announcing *that*
+	 * change carries it so the browser which already applied it optimistically does not
+	 * echo it back to itself. This command is not that change. Nobody issued it, no client
+	 * predicted it, and the client whose operator renamed the Player is exactly as
+	 * uninformed about the re-resolution as every other client — so forwarding the origin
+	 * would make the one browser that caused the change the only one never told its
+	 * graphics moved, leaving its Live Control behind until some later command produced a
+	 * sequence gap and forced a reload. Taking no parameter at all is what makes that
+	 * unforwardable rather than merely unforwarded.
+	 *
+	 * ## Why one Broadcast Graphic's failure is not the Event's
+	 *
+	 * Each graphic is attempted on its own. An epoch that ended under the sweep, a Screen
+	 * whose Event Data cannot be loaded, or any other single failure would otherwise throw
+	 * out of the whole function and be swallowed by the caller — and every *other* Screen
+	 * in the Event would silently miss this Event Data change. A change that reaches some
+	 * graphics is strictly better than one that reaches none, and the sweep is best-effort
+	 * on the way out regardless.
 	 */
-	const refreshLiveBindings = async ({
-		eventId,
-		originConnectionId,
-	}: {
-		eventId: number;
-		originConnectionId?: string;
-	}): Promise<void> => {
+	const refreshLiveBindings = async ({ eventId }: { eventId: number }): Promise<void> => {
 		const sessions = await state.findActiveSessionsByEvent(eventId);
 		if (sessions.length === 0)
 			return;
@@ -382,44 +397,39 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 			if (!screen || screen.currentMode !== 'broadcast-graphics')
 				continue;
 
-			// The epoch each graphic is judged against. Re-read only after one of them has
-			// actually written, because that acceptance is the only thing here that moves it.
-			let current = session;
-
 			for (const graphic of authoredStack(screen).graphics) {
 				if (!hasLiveBoundInput(graphic))
 					continue;
 
-				const command: BroadcastGraphicsCommand = {
-					commandId: randomCommandId('resolve-bindings'),
-					type: 'Resolve Bindings',
-					payload: { graphicId: graphic.id },
-				};
-				const context = await reductionContextFor(eventId, screen, graphic, current.currentState, command);
-				const due = broadcastGraphicsResolveBindingsDue(
-					recoveredBroadcastGraphicsLiveState(current.currentState),
-					graphic.id,
-					{ ...context, acceptedAt: Date.now() },
-				);
-				if (!due)
-					continue;
+				try {
+					const command: BroadcastGraphicsCommand = {
+						commandId: randomCommandId('resolve-bindings'),
+						type: 'Resolve Bindings',
+						payload: { graphicId: graphic.id },
+					};
+					// Judged against the epoch as it was read. A Resolve Bindings writes only
+					// the Broadcast Graphic it names, so an acceptance for an earlier graphic
+					// cannot change the answer for this one — and `applyCommand` loads the
+					// current aggregate for itself before it reduces.
+					const context = await reductionContextFor(eventId, screen, graphic, session.currentState, command);
+					const due = broadcastGraphicsResolveBindingsDue(
+						recoveredBroadcastGraphicsLiveState(session.currentState),
+						graphic.id,
+						{ ...context, acceptedAt: Date.now() },
+					);
+					if (!due)
+						continue;
 
-				await state.applyCommand(
-					session.id,
-					eventId,
-					command,
-					context,
-					originConnectionId,
-					{ publish: true },
-				);
-
-				// An epoch this sweep no longer sees as active has been reset or replaced
-				// under it, and a command from the one it was reading can never affect the
-				// successor — so it stops rather than judging the rest against a dead one.
-				const reloaded = await state.findSessionById(session.id, eventId);
-				if (!reloaded || reloaded.status !== 'active')
-					break;
-				current = reloaded;
+					await state.applyCommand(session.id, eventId, command, context, undefined, { publish: true });
+				}
+				catch {
+					console.error(JSON.stringify({
+						message: 'broadcast_graphics_binding_refresh_failed',
+						eventId,
+						screenId: screen.id,
+						graphicId: graphic.id,
+					}));
+				}
 			}
 		}
 	};
@@ -431,4 +441,24 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		resetLiveState,
 		endSessionsForScreen,
 	};
+}
+
+/**
+ * Offer every Broadcast Graphic in one Event the chance to catch up with Event Data
+ * that has just changed, and never let that failing break the change itself.
+ *
+ * The one entry point every trigger uses, so the swallow-and-log policy is stated
+ * once and by the module that owns the work rather than copied into each caller. It
+ * is best-effort in exactly the way realtime delivery already is: the Event Data
+ * write has committed and its own notification has gone out, so a Broadcast Graphic
+ * that fails to catch up must not turn a successful write into an apparent failure
+ * that invites a retry of the write.
+ */
+export async function refreshBroadcastGraphicsBindings(eventId: number): Promise<void> {
+	try {
+		await broadcastGraphicsLiveSessionModule().refreshLiveBindings({ eventId });
+	}
+	catch {
+		console.error(JSON.stringify({ message: 'broadcast_graphics_binding_refresh_failed', eventId }));
+	}
 }
