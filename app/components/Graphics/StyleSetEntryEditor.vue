@@ -97,13 +97,13 @@ function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 		<template v-else-if="entry.kind === 'typography'">
 			<UFormField label="Font" size="xs">
 				<USelect
-					:model-value="entry.value.fontId"
+					:model-value="entry.value.font.fontId"
 					:items="GRAPHIC_FONT_OPTIONS"
 					value-key="value"
 					size="xs"
 					class="w-full"
 					:disabled="disabled"
-					@update:model-value="patch({ fontId: $event })"
+					@update:model-value="patch({ font: { kind: 'application', fontId: $event } })"
 				/>
 			</UFormField>
 			<div class="grid grid-cols-2 gap-2">

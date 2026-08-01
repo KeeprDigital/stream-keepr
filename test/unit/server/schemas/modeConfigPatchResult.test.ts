@@ -38,7 +38,7 @@ function fatGraphicItem(id: string) {
 		height: 9999.5,
 		text: 'T'.repeat(1000),
 		typography: {
-			fontId: 'inter' as const,
+			font: { kind: 'application', fontId: 'inter' } as const,
 			fontSize: 599.5,
 			fontWeight: 900,
 			fontStyle: 'italic' as const,
@@ -68,7 +68,7 @@ function fatGraphicItem(id: string) {
 			Array.from({ length: 4 }, (_, index) => [
 				`placeholder${index}`,
 				{
-					fontId: 'inter' as const,
+					font: { kind: 'application', fontId: 'inter' } as const,
 					fontSize: 599.5,
 					fontWeight: 900,
 					fontStyle: 'italic' as const,
@@ -181,14 +181,19 @@ describe('parseModeConfigPatchResult', () => {
 		// Both halves measured, so it stays visible that neither alone is the problem.
 		//
 		// Worth knowing if this fails: with both modes built to their named caps, the
-		// largest reachable two-mode configuration is 528,346 bytes against a 524,288
-		// limit — it clears the total by 0.8%. The caps and the budget are now almost
-		// exactly tuned to each other, so a vocabulary change that made either half
-		// cheaper would drop the pathological case *under* the limit and leave nothing
-		// for this test to catch. It fails here rather than passing vacuously, which is
-		// the whole point of measuring instead of asserting a round envelope.
-		expect(bytes(stored)).toBeGreaterThan(356_000);
-		expect(bytes(stored)).toBeLessThan(366_000);
+		// largest reachable two-mode configuration is 544,846 bytes against a 524,288
+		// limit — it clears the total by 3.9%. A vocabulary change that made either
+		// half cheaper could drop the pathological case *under* the limit and leave
+		// nothing for this test to catch. It fails here rather than passing vacuously,
+		// which is the whole point of measuring instead of asserting a round envelope.
+		//
+		// It cleared by 0.8% until a Graphic Font Selection replaced a bare `fontId`
+		// (#141). Naming a Graphics Asset Library font takes a tagged union, and its
+		// application arm spells the same choice at 46 bytes instead of 16 — 30 bytes
+		// on every typography and every Graphic Placeholder Style, 150 on a maximal
+		// Text Graphic Item carrying four of them.
+		expect(bytes(stored)).toBeGreaterThan(373_000);
+		expect(bytes(stored)).toBeLessThan(383_000);
 		expect(bytes({ layout })).toBeGreaterThan(165_000);
 		expect(bytes({ layout })).toBeLessThan(170_000);
 		expect(bytes(stored) + bytes({ layout })).toBeGreaterThan(MAX_MODE_CONFIGS_BYTES);
@@ -237,8 +242,8 @@ describe('parseModeConfigPatchResult', () => {
 		// assertion here is exactly what let two tickets each believe they had
 		// measured the shared budget: anything under a generous ceiling passed, so a
 		// vocabulary that grew the per-item cost never showed up.
-		expect(bytes(merged)).toBeGreaterThan(58_000);
-		expect(bytes(merged)).toBeLessThan(62_000);
+		expect(bytes(merged)).toBeGreaterThan(61_000);
+		expect(bytes(merged)).toBeLessThan(65_000);
 		expect(merged['broadcast-graphics']).toBeDefined();
 		// Other modes are carried through untouched.
 		expect(merged.metagame).toEqual(getDefaultConfigForMode('metagame'));

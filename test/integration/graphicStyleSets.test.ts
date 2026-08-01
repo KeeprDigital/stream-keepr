@@ -45,7 +45,7 @@ function soundDraft(brandColor = '#ff0044', headingSize = 64) {
 			name: 'Heading',
 			schemaVersion: 1,
 			value: {
-				fontId: 'inter',
+				font: { kind: 'application', fontId: 'inter' },
 				fontSize: headingSize,
 				fontWeight: 800,
 				fontStyle: 'normal',
@@ -75,7 +75,7 @@ function soundDraft(brandColor = '#ff0044', headingSize = 64) {
 /** The typography a heading-bound Text Graphic Item renders under `soundDraft()`. */
 function headingTypography(color = '#ff0044', fontSize = 64) {
 	return {
-		fontId: 'inter',
+		font: { kind: 'application', fontId: 'inter' },
 		fontSize,
 		fontWeight: 800,
 		fontStyle: 'normal' as const,
@@ -611,7 +611,7 @@ describe('graphic Style Sets', () => {
 				name: 'Alternative heading',
 				schemaVersion: 1,
 				value: {
-					fontId: 'inter',
+					font: { kind: 'application', fontId: 'inter' },
 					fontSize: 40,
 					fontWeight: 400,
 					fontStyle: 'normal',

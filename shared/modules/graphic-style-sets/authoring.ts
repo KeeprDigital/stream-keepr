@@ -56,7 +56,7 @@ export function createGraphicStyleEntry(options: {
 						...base,
 						kind: 'typography',
 						value: {
-							fontId: 'inter',
+							font: { kind: 'application', fontId: 'inter' },
 							fontSize: 48,
 							fontWeight: 700,
 							fontStyle: 'normal',

@@ -1,4 +1,4 @@
-import type { GraphicGroupChildConfig, GraphicItemConfig } from '../types/graphics';
+import type { GraphicFontSelection, GraphicGroupChildConfig, GraphicItemConfig } from '../types/graphics';
 import type { GraphicAssetReference } from '../types/graphicsAsset';
 import type {
 	BroadcastGraphicsModeConfig,
@@ -38,12 +38,46 @@ export function sameGraphicAssetReference(
 }
 
 /**
+ * Every font Graphic Asset Revision one Graphic Item's typography pins.
+ *
+ * Two places name a font on one item, and both are collected: the item's base
+ * typography, and each Graphic Placeholder Style that overrides it for one
+ * `{inputKey}`. The placeholder's key is in its own slot rather than folded into
+ * the item's, so a Missing Graphic Asset Reference points at the run an author has
+ * to go and repair.
+ *
+ * Asked structurally rather than by kind. Four Graphic Item kinds carry typography
+ * today — Text, Clock, Player Life, and Game Wins — and a fifth that carried it
+ * without appearing in a hand-written list would paint a library font its Screen
+ * Output was never given a capability for, which is a blank line on air rather
+ * than an error anyone sees.
+ */
+function appendGraphicFontReferences(
+	references: ScreenGraphicAssetReference[],
+	item: GraphicItemConfig | GraphicGroupChildConfig,
+	ownerSlot: string,
+) {
+	function append(font: GraphicFontSelection | undefined, slot: string) {
+		if (font?.kind !== 'asset')
+			return;
+		references.push({ reference: font.reference, ownerSlot: slot, kind: 'font' });
+	}
+
+	if ('typography' in item)
+		append(item.typography.font, `${ownerSlot}.typography.font`);
+	if (!('placeholderStyles' in item))
+		return;
+	for (const [key, style] of Object.entries(item.placeholderStyles ?? {}))
+		append(style.font, `${ownerSlot}.placeholderStyles.${key}.font`);
+}
+
+/**
  * Every Graphic Asset Revision one shared Graphic Item tree pins.
  *
- * Only a Media Graphic Item pins anything: the shared vocabulary has no font-asset
- * concept, and the context-gated kinds read live session state rather than
- * content. Slots are built from ids rather than list positions, so a reorder does
- * not read as a set of changed references.
+ * Two sources: a Media Graphic Item's content, and a font Graphic Asset Revision
+ * named by any item's typography or Graphic Placeholder Style. Slots are built
+ * from ids rather than list positions, so a reorder does not read as a set of
+ * changed references.
  *
  * A silent-video reference carries the pinned revision's own target compatibility,
  * which the reference index checks it against, and an authored target of Chromium.
@@ -52,6 +86,10 @@ export function sameGraphicAssetReference(
  * alpha usable at all, and neither host has a control that would let an author say
  * otherwise. An output opened in another engine reports the incompatibility rather
  * than silently showing nothing.
+ *
+ * A font reference carries no video facts, because a font has no target
+ * compatibility to check and nothing in the delivery path treats it differently
+ * from any other pinned revision.
  */
 function appendSharedGraphicItemReferences(
 	references: ScreenGraphicAssetReference[],
@@ -59,6 +97,7 @@ function appendSharedGraphicItemReferences(
 	slotPrefix: string,
 ) {
 	function append(item: GraphicItemConfig | GraphicGroupChildConfig, ownerSlot: string) {
+		appendGraphicFontReferences(references, item, ownerSlot);
 		if (item.type !== 'media' || !item.asset)
 			return;
 		references.push({
@@ -85,9 +124,10 @@ function appendSharedGraphicItemReferences(
  * Every Graphic Asset Revision one Feature Match Layout pins.
  *
  * Two sources, and only two: the Frame's background image, which is host-owned
- * capability outside the shared vocabulary, and the Media Graphic Items of the
- * shared item tree. Source Items pin nothing — they frame an external video
- * source rather than carrying content.
+ * capability outside the shared vocabulary, and the shared item tree — its Media
+ * Graphic Items' content and its typography's library fonts. Source Items pin
+ * nothing: they frame an external video source rather than carrying content, and
+ * their framing style is host-owned and carries no typography at all.
  *
  * Discovery takes the layout rather than the Screen configuration around it,
  * because a layout is what pins assets and a layout is what travels: a Feature

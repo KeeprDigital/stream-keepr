@@ -76,6 +76,8 @@ import {
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
 	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_SLIDE_DISTANCE_PX,
+	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
+	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 	MAX_GRAPHIC_TEXT_LENGTH,
 	MAX_PLAYER_LIFE_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_ANIMATION_DURATION_MS,
@@ -486,8 +488,25 @@ const featureMatchSourceItemConfigSchema = featureMatchOverlayRectSchema.extend(
 const graphicAnchorPointSchema = z.enum(GRAPHIC_ANCHOR_POINT_VALUES);
 const graphicRotationSchema = finiteNumberSchema.min(-360).max(360);
 
+/**
+ * A Graphic Font Selection: an application font that ships with Stream Keepr, or
+ * one exact font Graphic Asset Revision. Strict on both arms, so a document
+ * carrying an application id *and* a reference is refused rather than resolved by
+ * whichever branch happens to match first.
+ */
+const graphicFontSelectionSchema = z.discriminatedUnion('kind', [
+	z.object({
+		kind: z.literal('application'),
+		fontId: z.enum(GRAPHIC_FONT_IDS),
+	}).strict(),
+	z.object({
+		kind: z.literal('asset'),
+		reference: graphicAssetReferenceSchema,
+	}).strict(),
+]);
+
 const graphicTypographySchema = z.object({
-	fontId: z.enum(GRAPHIC_FONT_IDS),
+	font: graphicFontSelectionSchema,
 	fontSize: finiteNumberSchema.positive().max(600),
 	fontWeight: finiteNumberSchema.int().min(1).max(1000),
 	fontStyle: z.enum(GRAPHIC_FONT_STYLE_VALUES),
@@ -641,7 +660,6 @@ const graphicContainerAnimationSchema = z.object({
 export const MAX_GRAPHIC_PLACEHOLDER_STYLES_PER_TEXT_ITEM = 4;
 
 export const MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC = 24;
-export const MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC = 8;
 
 /**
  * The whole-Screen Graphic Input, Graphic Input Binding, and Graphic Source
@@ -652,7 +670,19 @@ export const MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC = 8;
  * 1,274 bytes against a Graphic Item's 2,682.
  */
 export const MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN = 60;
-export const MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN = 40;
+
+/**
+ * The two Graphic Source Selection budgets are declared in `shared/types/graphics`
+ * and re-exported here, so this file still reads as the whole set of the wire's
+ * bounds. They moved because an authoring surface has to stop before producing a
+ * config this schema would refuse, and a client bundle cannot import this module.
+ * The byte-budget reasoning above is what chose all of these numbers, including those
+ * two.
+ */
+export {
+	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
+	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
+};
 
 const graphicInputKeySchema = z.string()
 	.min(1)
@@ -912,7 +942,7 @@ const graphicItemBaseShape = {
  * rather than one run inside it.
  */
 const graphicPlaceholderStyleSchema = z.object({
-	fontId: z.enum(GRAPHIC_FONT_IDS).optional(),
+	font: graphicFontSelectionSchema.optional(),
 	fontSize: finiteNumberSchema.positive().max(600).optional(),
 	fontWeight: z.number().int().min(100).max(900).optional(),
 	fontStyle: z.enum(GRAPHIC_FONT_STYLE_VALUES).optional(),
@@ -1243,9 +1273,27 @@ export const MAX_GRAPHIC_CHANNELS_PER_SCREEN = 25;
  * capability measured here, and it does not change the conclusion above — the worst
  * case already exceeded the budget, the total is enforced on the write path, and the
  * cap decision remains #99's.
+ *
+ * ## What a Graphic Font Selection adds
+ *
+ * 137,500 bytes, taking 607,011 to 744,511. Typography now names either an
+ * application font or one exact font Graphic Asset Revision (#141), and the
+ * library arm is what the worst case is built from: a maximal-length identity and
+ * revision spell one font in 266 bytes where a bare application id spelled it in
+ * 16, on every typography and every one of the four Graphic Placeholder Styles a
+ * Text Graphic Item may carry — 1,250 bytes per item across all 110.
+ *
+ * That is a worst case in the strict sense and not a forecast of authored
+ * documents: Graphics Asset Library identities are nothing like 100 characters in
+ * practice, and the realistic configuration measured in
+ * `modeConfigPatchResult.test.ts` moved by 5%, not by a third. It changes no
+ * conclusion above — the worst case already exceeded the budget before this, the
+ * total is enforced on the write path, and the cap decision remains #99's — but it
+ * is measured here rather than assumed away, because a worst case that quietly
+ * stopped being the worst case is exactly what this figure exists to prevent.
  */
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 110;
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 607_011;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 744_511;
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
 	return items.reduce(

@@ -69,10 +69,37 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	const shouldDownload = computed(() => route.query.download === '1');
 	const fitToViewport = computed(() => route.query.fit === '1');
 	const isPreview = computed(() => route.query.preview === '1');
-	// Editor-only guides require the preview flag as well as their own, so an
-	// ordinary Screen Output URL draws none. This is a URL convention rather than
-	// a structural barrier: a URL carrying both flags draws guides wherever it is
-	// opened.
+	/*
+	 * Editor-only guides require the preview flag as well as their own, so an
+	 * ordinary Screen Output URL draws none.
+	 *
+	 * ## What holds, and why guide visibility is left as it is (issue #134)
+	 *
+	 * The guide flags carry no authority of their own: neither draws anything without
+	 * `preview`. And `screenOutputPath` sets `preview` only when an embedder asks for
+	 * it, which the copyable broadcast URLs and the PNG capture URL never do. So no
+	 * Screen Output URL this application hands an operator can render a guide, and
+	 * that is the property the glossary states.
+	 *
+	 * ## What does not hold, so nobody rebuilds an argument on it
+	 *
+	 * The preview flag is *not* proof that an output is not live. It suppresses the
+	 * Screen realtime session (below) — no takes, no playout, no presence — and for a
+	 * Broadcast Graphics Screen that is most of what live means. A Feature Match
+	 * Overlay degrades far less: the Event realtime session is started by a plugin
+	 * this flag does not suppress, so Feature Match updates still arrive; the sample
+	 * dataset is skipped whenever a Slot is assigned, so the data is real; the
+	 * transparent-preview backdrop is drawn only for the Overlay Output, so `fill` and
+	 * `key` composite normally; and asset resolution only degrades a layout that
+	 * references Graphic Assets. A hand-built `preview=1&guides=1&output=fill` URL on
+	 * such a Screen renders close to a live output with guides over it, and fails
+	 * nothing loudly.
+	 *
+	 * That residual is accepted rather than closed. Reaching it means constructing by
+	 * hand a URL the application never produces, and closing it means gating guides on
+	 * something a URL cannot carry — a handshake with the embedding editor — which
+	 * buys a race on every preview load, on a surface an author is clicking.
+	 */
 	const previewGuides = computed(() => isPreview.value && route.query.guides === '1');
 	const previewSafeAreas = computed(() => isPreview.value && route.query.safe === '1');
 	const assetCapability = computed(() => screenOutputAssetCapability(route.hash ?? ''));

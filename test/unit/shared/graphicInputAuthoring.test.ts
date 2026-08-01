@@ -22,7 +22,7 @@ function textItem(overrides: Partial<TextGraphicItemConfig> = {}): TextGraphicIt
 		height: 120,
 		text: '{name} — {title}',
 		typography: {
-			fontId: 'inter',
+			font: { kind: 'application', fontId: 'inter' },
 			fontSize: 48,
 			fontWeight: 700,
 			fontStyle: 'normal',
@@ -76,6 +76,23 @@ describe('graphicInputAuthoring', () => {
 
 		expect(patched[0]!.inputs![0]).toMatchObject({ key: 'input-1', label: 'Presenter name', required: true, updatePolicy: 'live' });
 		expect(patched[0]!.inputs![1]).toMatchObject({ key: 'input-2', type: 'toggle' });
+	});
+
+	/**
+	 * A Graphic Input's label is what an operator reads beside its field in Live
+	 * Control, and the write path requires at least one character of it. An author
+	 * clearing the field is mid-rename rather than asking for a nameless input, so the
+	 * previous name stands.
+	 */
+	it('refuses a blank label, which is a Graphic Input the write path rejects', () => {
+		const graphics = addGraphicInput(stack(), 'lower-third', 'text');
+
+		expect(patchGraphicInput(graphics, 'lower-third', 'input-1', { label: '' })).toEqual(graphics);
+		expect(patchGraphicInput(graphics, 'lower-third', 'input-1', { label: '   ' })).toEqual(graphics);
+		// The other properties of the same patch are not lost to the refusal: a caller
+		// that sends a blank label sends nothing else worth keeping either.
+		expect(patchGraphicInput(graphics, 'lower-third', 'input-1', { label: 'Presenter' })[0]!.inputs![0])
+			.toMatchObject({ label: 'Presenter' });
 	});
 
 	it('replaces a choice Graphic Input’s options and ignores other kinds', () => {

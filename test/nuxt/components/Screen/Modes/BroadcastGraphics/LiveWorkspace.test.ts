@@ -252,6 +252,37 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		expect(wrapper.text()).not.toContain('Template');
 	});
 
+	/**
+	 * Authoring a Graphic Source Selection or a Graphic Input Binding is the same kind
+	 * of structural change as a template action, and belongs to the same side of the
+	 * split: Live Control selects declared sources and edits values, and can never
+	 * author a binding, a query, or an expression.
+	 */
+	it('offers no Graphic Source Selection or Graphic Input Binding authoring', async () => {
+		const wrapper = await mountComponent([
+			{
+				...slate,
+				inputs: [{
+					type: 'text',
+					key: 'name',
+					label: 'Name',
+					required: false,
+					updatePolicy: 'staged',
+					default: '',
+					maxLength: 200,
+				}],
+				sources: [{ key: 'player', label: 'Player', kind: 'player' }],
+				bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+			},
+		], 'slate');
+
+		expect(wrapper.find('[data-testid="graphic-event-data-bindings"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="graphic-source-add"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="graphic-source-delete"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="graphic-binding-source"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="graphic-binding-field"]').exists()).toBe(false);
+	});
+
 	it('loads the authoritative playout snapshot for the Screen', async () => {
 		await mountComponent();
 

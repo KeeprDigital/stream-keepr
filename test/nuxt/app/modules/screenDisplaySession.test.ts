@@ -182,6 +182,39 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.session.screenContext.isPreview?.value).toBe(true);
 	});
 
+	/**
+	 * Preview guides never appear in live Screen Outputs. This is the step of that
+	 * guarantee the URL owns: the guide flags carry no authority of their own, so a
+	 * Screen Output URL that asks for guides without asking to be a preview gets
+	 * none. Downstream is already pinned — the render model builds guide arrays only
+	 * when these flags are set, and the guide layer draws exclusively from those
+	 * arrays — so this closes the chain from query string to drawn guide.
+	 *
+	 * The Screen Output this hands back is a live one, and that is the point: it is
+	 * asked for as such here so the case cannot quietly become a preview.
+	 */
+	it('draws no guides for guides=1 and safe=1 without preview=1', async () => {
+		const harness = createHarness({ query: { guides: '1', safe: '1' } });
+		await flushPromises();
+
+		expect(harness.session.screenContext.isPreview?.value).toBe(false);
+		expect(harness.session.screenContext.previewGuides?.value).toBe(false);
+		expect(harness.session.screenContext.previewSafeAreas?.value).toBe(false);
+		expect(harness.realtimeSession.start).toHaveBeenCalledWith(42, 7);
+	});
+
+	/**
+	 * The other side, so the refusal above is the preview flag being load-bearing
+	 * rather than the flags never being read at all.
+	 */
+	it('draws the guides an embedded preview asks for', async () => {
+		const harness = createHarness({ query: { preview: '1', guides: '1', safe: '1' } });
+		await flushPromises();
+
+		expect(harness.session.screenContext.previewGuides?.value).toBe(true);
+		expect(harness.session.screenContext.previewSafeAreas?.value).toBe(true);
+	});
+
 	it('reads the opaque asset capability only from the URL fragment', async () => {
 		const route = createRoute(
 			{ assetCapability: 'query-secret-must-be-ignored' },

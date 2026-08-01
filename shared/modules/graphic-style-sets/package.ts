@@ -99,9 +99,9 @@ export function graphicStyleSetPackageCapabilities(
 	for (const entry of entries) {
 		if (entry.kind !== 'typography')
 			continue;
-		const requiredBy = byFont.get(entry.value.fontId) ?? [];
-		requiredBy.push(`entries.${entry.id}.fontId`);
-		byFont.set(entry.value.fontId, requiredBy);
+		const requiredBy = byFont.get(entry.value.font.fontId) ?? [];
+		requiredBy.push(`entries.${entry.id}.font.fontId`);
+		byFont.set(entry.value.font.fontId, requiredBy);
 	}
 	return [...byFont]
 		.map(([identity, requiredBy]) => ({

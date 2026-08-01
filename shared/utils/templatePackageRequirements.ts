@@ -40,9 +40,17 @@ export interface TemplatePackageRequirements {
 }
 
 /**
- * Application fonts travel as identifiers. Every graphics vocabulary spells an
- * application font the same way — a `fontId` beside its selection — so one walk
- * finds them wherever a style, token style map, or placeholder style sits.
+ * Application fonts travel as identifiers rather than as bytes, because they ship
+ * with Stream Keepr — so a package *declares* one and a receiver missing it
+ * refuses. Every graphics vocabulary spells the choice the same way, as a Graphic
+ * Font Selection under `font`, so one walk finds them wherever a typography or a
+ * Graphic Placeholder Style sits.
+ *
+ * The library arm is deliberately not declared here. A font Graphic Asset
+ * Revision is content the package carries, and it is discovered by the same
+ * `graphicsAssetReferences` walk a Media Graphic Item's content is — one
+ * discovery for one kind of dependency, so a font is never declared as a
+ * capability *and* embedded as an asset, or as neither.
  */
 function appendApplicationFontCapabilities(
 	capabilities: TemplatePackageCapabilityRequirement[],
@@ -58,16 +66,25 @@ function appendApplicationFontCapabilities(
 	}
 	for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
 		const nestedPath = path ? `${path}.${key}` : key;
-		if (key === 'fontId' && typeof nested === 'string' && nested.length > 0) {
+		if (key === 'font' && isApplicationFontSelection(nested)) {
 			capabilities.push({
 				slot: nestedPath,
 				capability: 'application-font',
-				identity: nested,
+				identity: nested.fontId,
 			});
 			continue;
 		}
 		appendApplicationFontCapabilities(capabilities, nested, nestedPath, depth + 1);
 	}
+}
+
+function isApplicationFontSelection(value: unknown): value is { kind: 'application'; fontId: string } {
+	if (typeof value !== 'object' || value === null)
+		return false;
+	const selection = value as { kind?: unknown; fontId?: unknown };
+	return selection.kind === 'application'
+		&& typeof selection.fontId === 'string'
+		&& selection.fontId.length > 0;
 }
 
 function appendBroadcastGraphicItemCapabilities(

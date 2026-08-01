@@ -47,7 +47,7 @@ function entry<T extends GraphicStyleSetEntry['kind']>(
 }
 
 const TYPOGRAPHY = {
-	fontId: 'inter' as const,
+	font: { kind: 'application', fontId: 'inter' } as const,
 	fontSize: 48,
 	fontWeight: 700,
 	fontStyle: 'normal' as const,
@@ -63,7 +63,7 @@ function styleSet(brandColor = '#ff0044', headingSize = 64): GraphicStyleSetEntr
 		entry('palette', 'brand', { color: brandColor }),
 		entry('palette', 'ink', { color: '#101014' }),
 		entry('typography', 'heading', {
-			fontId: 'inter',
+			font: { kind: 'application', fontId: 'inter' },
 			fontSize: headingSize,
 			fontWeight: 800,
 			fontStyle: 'normal',
@@ -235,7 +235,7 @@ describe('applyGraphicStyleSet', () => {
 		const applied = applyGraphicStyleSet(composition, resolveGraphicStyleSet(styleSet()));
 
 		expect(headlineOf(applied).typography).toEqual({
-			fontId: 'inter',
+			font: { kind: 'application', fontId: 'inter' },
 			fontSize: 64,
 			fontWeight: 800,
 			fontStyle: 'normal',

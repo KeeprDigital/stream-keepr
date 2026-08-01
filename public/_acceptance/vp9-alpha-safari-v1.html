@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>vp9-alpha-safari-v1 browser acceptance</title>
+	</head>
+	<body data-result="running" data-code="">
+		<pre id="result">Checking how this browser treats VP9 alpha…</pre>
+		<script type="module">
+			// VP9 alpha is restricted to Chromium-class Screen Outputs. The
+			// restriction is only worth anything if the excluded browser refuses
+			// the content outright: a browser that quietly drops the alpha channel
+			// or swaps in some other rendering would put a wrong-looking graphic on
+			// air while every capability check still said yes.
+			const vp9AlphaWebm = 'GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAJXEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggEpTbuMU6uEHFO7a1OsggJB7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjIuMTIuMTAyV0GNTGF2ZjYyLjEyLjEwMkSJiECPQAAAAAAAFlSua8yuAQAAAAAAAEPXgQFzxYhfhVpZqI8eM5yBACK1nIN1bmSIgQCGhVZfVlA5g4EBI+ODhB3NZQDglLCBELqBEJqBAlPAgQFVsIRVuYEBElTDZ0CAc3OgY8CAZ8iaRaOHRU5DT0RFUkSHjUxhdmY2Mi4xMi4xMDJzc9pjwItjxYhfhVpZqI8eM2fIpUWjh0VOQ09ERVJEh5hMYXZjNjIuMjguMTAyIGxpYnZweC12cDlnyKFFo4hEVVJBVElPTkSHkzAwOjAwOjAxLjAwMDAwMDAwMAAfQ7Z1QIzngQCg06GrgQAAAIJJg0IAAPAA9gA4JBwYSgAAMGAAABC///cdr////1/f////8irAAHWho6ah7oEBpZyCSYNCAADwAPYAOCQcGEoAADBgAAAQv//6ocAAoLKhk4EB9ACGAECSnABQAAADIAAAQkB1oZamlO6BAaWPhgBAkpwAUAAAAyAAAEJA+4L+DBxTu2uRu4+zgQC3iveBAfGCAa/wgQM=';
+
+			function report(code, message) {
+				document.body.dataset.code = code;
+				document.body.dataset.result = code === '' ? 'passed' : 'failed';
+				document.querySelector('#result').textContent = message;
+			}
+
+			function blobUrl(base64, mime) {
+				const binary = atob(base64);
+				return URL.createObjectURL(new Blob(
+					[Uint8Array.from(binary, character => character.charCodeAt(0))],
+					{ type: mime },
+				));
+			}
+
+			const url = blobUrl(vp9AlphaWebm, 'video/webm');
+			const video = document.createElement('video');
+			video.muted = true;
+			video.playsInline = true;
+			video.preload = 'auto';
+			document.body.appendChild(video);
+			try {
+				video.src = url;
+				// "Did not decode" is not the same as "refused". A browser that
+				// never got round to answering has told us nothing, and a gate that
+				// counted silence as a refusal would keep passing long after the
+				// restriction stopped being true.
+				const signal = await new Promise((resolve) => {
+					video.addEventListener('loadeddata', () => resolve('decoded'), { once: true });
+					video.addEventListener('error', () => resolve('refused'), { once: true });
+					setTimeout(() => resolve('silent'), 8000);
+				});
+
+				if (signal === 'silent') {
+					report(
+						'browser-acceptance-timed-out',
+						'This browser neither decoded nor refused VP9 alpha within the time allowed.',
+					);
+				}
+				else if (signal === 'refused') {
+					report('', 'This browser refused VP9 alpha outright, which is the restriction working.');
+				}
+				else if (video.videoWidth === 0) {
+					// Weaker evidence than a refusal, and knowingly counted as one:
+					// the browser accepted the container and then produced no picture.
+					// Nothing can reach air from a zero-dimension video, so the
+					// restriction does hold — but a browser that later began decoding
+					// these frames would arrive here rather than be caught. If that
+					// ever looks likely, this deserves its own outcome.
+					report('', 'This browser loaded VP9 alpha but produced no picture from it.');
+				}
+				else {
+					// It decoded. The only remaining question is whether what it
+					// produced is the real thing or a flattened stand-in.
+					const canvas = document.createElement('canvas');
+					canvas.width = video.videoWidth;
+					canvas.height = video.videoHeight;
+					const context = canvas.getContext('2d', { alpha: true, willReadFrequently: true });
+					context.clearRect(0, 0, canvas.width, canvas.height);
+					context.drawImage(video, 0, 0);
+					const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+					const transparent = [...pixels].some((value, index) => index % 4 === 3 && value < 255);
+					if (transparent) {
+						report(
+							'safari-vp9-alpha-not-blocked',
+							'This browser played VP9 alpha with transparency, so the restriction is stale.',
+						);
+					}
+					else {
+						report(
+							'safari-vp9-alpha-substituted',
+							'This browser played VP9 alpha with the transparency flattened away.',
+						);
+					}
+				}
+			}
+			catch (error) {
+				report('browser-acceptance-failed', error instanceof Error ? error.message : String(error));
+			}
+			finally {
+				video.remove();
+				URL.revokeObjectURL(url);
+			}
+		</script>
+	</body>
+</html>

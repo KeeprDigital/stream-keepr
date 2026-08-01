@@ -115,7 +115,7 @@ export function maximalFeatureMatchLayoutDocument(
 	name.text = '{player1Name} · {player1Record} {player1name}';
 	name.placeholderStyles = {
 		player1Name: {
-			fontId: 'inter',
+			font: { kind: 'application', fontId: 'inter' },
 			fontSize: 72,
 			fontWeight: 900,
 			fontStyle: 'italic',
@@ -123,7 +123,7 @@ export function maximalFeatureMatchLayoutDocument(
 			letterSpacing: 2,
 			color: '#ffcc00',
 		},
-		player1Deck: { fontId: 'saira-condensed', fontSize: 32 },
+		player1Deck: { font: { kind: 'application', fontId: 'saira-condensed' }, fontSize: 32 },
 	};
 	name.surfaceStyle = maximalSurfaceStyle();
 	name.rotation = -2;

@@ -49,10 +49,14 @@ export interface ScreenOutputPathOptions {
 	/** Scale the canvas to fit the embedding viewport. */
 	fitToViewport?: boolean;
 	/**
-	 * Mark this as an embedded editor preview. Editor-only guides are available
-	 * only to a preview, so a Screen Output URL that omits this can never draw
-	 * them — but note this is an opt-in carried on the URL, not a structural
-	 * barrier: a URL with these flags renders guides wherever it is opened.
+	 * Mark this as an embedded editor preview.
+	 *
+	 * Editor-only guides and the Feature Match Sample Dataset are available only to a
+	 * preview, so a Screen Output URL that omits this can never show either — and the
+	 * copyable broadcast URLs and the PNG capture URL never ask for it. What that does
+	 * and does not guarantee is worked out over the guide flags in
+	 * `app/modules/screen/displaySession.ts`, which is the one place it is written
+	 * down (issue #134).
 	 */
 	preview?: boolean;
 	itemGuides?: boolean;
