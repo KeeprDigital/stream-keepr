@@ -7,6 +7,7 @@ import {
 } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
 import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSetConflict';
+import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
 /**
  * Delete one Graphic Style Set entry, and deal with every reference to it in the
@@ -34,7 +35,11 @@ export default defineEventHandler(async (event) => {
 		event,
 		graphicStyleSetEntryParamsSchema.parse,
 	);
-	const body = deleteGraphicStyleSetEntrySchema.parse(await readBody(event));
+	// A mode, a replacement id, and a precondition. Nothing this route accepts is a
+	// document, so it is bounded far below the general mutation ceiling.
+	const body = deleteGraphicStyleSetEntrySchema.parse(
+		await readJsonPayloadLimited(event, 4 * 1024, 'Graphic Style Set entry deletion request'),
+	);
 
 	const service = graphicStyleSetService();
 	const styleSet = await service.findById(styleSetId);

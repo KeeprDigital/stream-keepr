@@ -251,6 +251,19 @@ export const publishGraphicStyleSetSchema = z.object({
 }).strict();
 
 /**
+ * Deleting a whole Graphic Style Set.
+ *
+ * The draft revision alone, because there is no mode to choose between: replacing one
+ * Style Set with another would mean matching entries across two independently authored
+ * sets, so detaching every linked template is the only thing this can mean. It is still
+ * a precondition rather than a formality — the deletion rewrites every one of those
+ * templates, and a draft edit in between is somebody else's work.
+ */
+export const deleteGraphicStyleSetSchema = z.object({
+	draftRevision: z.number().int().nonnegative(),
+}).strict();
+
+/**
  * Deleting one entry, and what happens to everything that references it.
  *
  * The mode is required and unguessable: replacing and detaching produce different

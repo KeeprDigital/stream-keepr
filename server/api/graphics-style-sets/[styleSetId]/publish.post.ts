@@ -7,6 +7,7 @@ import {
 } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
 import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSetConflict';
+import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
 /**
  * Publish one Graphic Style Set's working draft as a new revision.
@@ -27,7 +28,11 @@ import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSe
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);
 	const { styleSetId } = await getValidatedRouterParams(event, graphicStyleSetParamsSchema.parse);
-	const body = publishGraphicStyleSetSchema.parse(await readBody(event));
+	// The draft being published is already stored; this body is the revision it was
+	// reviewed at and nothing more.
+	const body = publishGraphicStyleSetSchema.parse(
+		await readJsonPayloadLimited(event, 4 * 1024, 'Graphic Style Set publish request'),
+	);
 
 	const service = graphicStyleSetService();
 	const styleSet = await service.findById(styleSetId);
