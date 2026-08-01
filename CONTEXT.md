@@ -831,7 +831,7 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - A **Screen Output** may resolve only the **Graphic Assets** referenced by its **Screen** and cannot discover other library contents
 - A **Screen Output Asset Capability** is checked against the Screen's currently published exact **Graphic Asset Revisions** on every resolution request
 - A **Broadcast Graphics Screen** publishes the exact **Graphic Asset Revisions** its authored configuration pins and the media **Graphic Input** values its **Broadcast Graphics Live Session** has accepted, and a value the Live Session no longer accepts stops being published in the same moment it leaves air
-- A media **Graphic Input** value records the pinned **Graphic Asset Revision**'s own video target compatibility at the moment it is selected, whether it is authored as a default or chosen live
+- A media **Graphic Input** value carries the pinned **Graphic Asset Revision**'s own video target compatibility, stated with the value when it is authored as a default and recorded by the authoritative side when it is chosen live, and a value that states none is refused rather than published
 - A **Broadcast Graphic Template** declares zero or more **Graphic Inputs**
 - Copying a **Broadcast Graphic Template** into a **Broadcast Graphics Screen** copies each **Graphic Input** default as the placed graphic's initial manual value
 - Copying a **Broadcast Graphic Template** also creates independently editable **Graphic Source Selections** and **Graphic Input Bindings** on the placed **Broadcast Graphic**

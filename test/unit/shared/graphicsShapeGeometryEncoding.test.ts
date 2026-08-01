@@ -4,19 +4,27 @@ import * as ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Shape Geometry is one `CONTEXT.md` glossary term, so the shared vocabulary
- * declares it exactly once.
+ * Shape Geometry is one `CONTEXT.md` glossary term, so the codebase declares it
+ * exactly once.
  *
  * Asserted structurally rather than by name, because a fork is exactly the thing a
  * name does not catch: `MediaClipShapeGeometry` was a second encoding of the same
  * concept wearing a different identifier — a tagged-union corner and an unsigned
  * optional edge inset — and nothing failed to compile while both existed. What
  * identifies a Shape Geometry declaration is its shape: the four corner keys plus
- * an edge slant. Anything under `shared/` declaring that combination is claiming to
- * be Shape Geometry, whatever it is called.
+ * an edge slant. Anything declaring that combination is claiming to be Shape
+ * Geometry, whatever it is called.
+ *
+ * `app/` and `server/` are scanned as well as `shared/`. The fork this replaced had
+ * its renderer in `app/`, and a host-specific encoding is likeliest to appear beside
+ * the host that wants it rather than in the shared vocabulary it is diverging from.
+ *
+ * What it cannot see, so that nobody reads more into a pass than is there: a slant
+ * spelled without the word "slant", a declaration nested inside a namespace or
+ * function, an intersection or mapped type, and a runtime schema rather than a type.
  */
 
-const SHARED_ROOT = resolve(process.cwd(), 'shared');
+const SCANNED_ROOTS = ['shared', 'app', 'server'].map(root => resolve(process.cwd(), root));
 const CORNER_KEYS = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft'];
 
 function sourceFiles(directory: string): string[] {
@@ -45,7 +53,7 @@ function isShapeGeometryEncoding(names: string[]): boolean {
 function shapeGeometryDeclarations(): string[] {
 	const found: string[] = [];
 
-	for (const filename of sourceFiles(SHARED_ROOT)) {
+	for (const filename of SCANNED_ROOTS.flatMap(sourceFiles)) {
 		const sourceFile = ts.createSourceFile(
 			filename,
 			readFileSync(filename, 'utf8'),
@@ -74,7 +82,7 @@ function shapeGeometryDeclarations(): string[] {
 }
 
 describe('shape Geometry encoding', () => {
-	it('is declared exactly once across the shared vocabulary', () => {
+	it('is declared exactly once across the codebase', () => {
 		expect(shapeGeometryDeclarations()).toEqual(['shared/types/graphics.ts:ShapeGeometry']);
 	});
 });

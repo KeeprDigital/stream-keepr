@@ -9,7 +9,6 @@ import type {
 import type {
 	BroadcastGraphicConfig,
 	GraphicInputDeclaration,
-	MediaGraphicInputValue,
 } from '~~/shared/types/graphics';
 import type { BroadcastGraphicsModeConfig } from '~~/shared/types/screenConfig';
 import type { ScreenGraphicAssetReference } from '~~/shared/utils/graphicsAssetReferences';
@@ -36,6 +35,7 @@ import {
 import {
 	broadcastGraphicPhaseDurations,
 	findGraphicInputDeclaration,
+	isMediaGraphicInputValue,
 	resolveGraphicInputBindings,
 } from '~~/shared/modules/graphics';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
@@ -128,10 +128,15 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	 * is not a failure either: its pinned revisions keep resolving by design.
 	 *
 	 * The references are the graphic's own *and* the media Graphic Input values its
-	 * Live Session has accepted for it. A value an operator chose live is content the
-	 * graphic renders exactly as an authored one is, so it invalidates the graphic on
-	 * the same terms — the alternative is taking a graphic whose only unfetchable
-	 * asset is the one an operator picked seconds earlier.
+	 * Live Session has already accepted for it. A value an operator chose live is
+	 * content the graphic renders exactly as an authored one is, so it invalidates the
+	 * graphic on the same terms.
+	 *
+	 * The staged values this Take is about to accept are deliberately not re-checked.
+	 * Each was proved resolvable when it was selected, so the only case this misses is
+	 * a revision retired or purged between selection and Take — and asking again would
+	 * mean composing the acceptance here, which needs the Graphic Input Bindings
+	 * resolved against Event Data that only reduction has.
 	 */
 	const requireResolvableGraphicAssets = async (
 		references: readonly ScreenGraphicAssetReference[],
@@ -165,20 +170,6 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	};
 
 	/**
-	 * Whether a Graphic Input value names a Graphics Asset Library revision at all.
-	 *
-	 * Asked of the value rather than assumed from the declaration: a Graphic Input
-	 * stores what the operator sent even when it violates its declared type, and
-	 * reporting that as unavailable is Live Control's job rather than this route's.
-	 */
-	function isMediaValue(value: unknown): value is MediaGraphicInputValue {
-		return typeof value === 'object'
-			&& value !== null
-			&& typeof (value as MediaGraphicInputValue).assetId === 'string'
-			&& typeof (value as MediaGraphicInputValue).revisionId === 'string';
-	}
-
-	/**
 	 * Record the pinned revision's own facts on a media Graphic Input value, at the
 	 * moment the operator selects it.
 	 *
@@ -203,7 +194,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		if (command.type !== 'Set Input' && command.type !== 'Set Override')
 			return command;
 		const value = command.payload.value;
-		if (!isMediaValue(value))
+		if (!isMediaGraphicInputValue(value))
 			return command;
 		const declaration: GraphicInputDeclaration | undefined = findGraphicInputDeclaration(
 			graphic.inputs ?? [],
@@ -305,6 +296,75 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 				message: 'broadcast_graphics_live_reference_index_failed',
 				screenId: screen.id,
 				sessionId: result.sessionId,
+			}));
+		}
+	};
+
+	/**
+	 * Re-derive what the Live Session publishes after an authored write.
+	 *
+	 * The other half of following acceptance, and the one acceptance cannot do for
+	 * itself. What the Live Session publishes is its accepted values read *through the
+	 * Screen's current declarations*, so an authored write that stops declaring a media
+	 * Graphic Input — or stops placing the Broadcast Graphic that declares it — changes
+	 * what is published without any acceptance happening at all. The command path
+	 * cannot notice: it derives before and after from the one configuration it can see,
+	 * which is the new one, so both sides agree and it correctly does nothing.
+	 *
+	 * Left to the next acceptance that happens to move the media set, the row would
+	 * outlive its declaration for as long as the show lasts — a Screen Output still
+	 * fetching content the Screen no longer publishes, and an asset still pinned
+	 * against retirement and purge by a reference nothing declares. So the authority
+	 * that changed the declarations is the one that reconciles them.
+	 *
+	 * ## Why it retries once
+	 *
+	 * The write is guarded on the Live Session sequence it was derived from, so a
+	 * command committing in the gap between reading the session and writing makes this
+	 * apply nothing at all — which is precisely the outcome being fixed. Re-reading and
+	 * repeating once closes that, and is bounded: the second pass derives from both the
+	 * newest state and the new configuration, and the racing command's own
+	 * reconciliation converges on the same set.
+	 */
+	const republishLiveSessionReferences = async (input: {
+		eventId: number;
+		screenId: number;
+		/** The stack as it was before this write, for the retirement rule. */
+		previousStack?: BroadcastGraphicsModeConfig;
+	}): Promise<void> => {
+		try {
+			for (let attempt = 0; attempt < 2; attempt += 1) {
+				const session = await state.findActiveSessionByScreen(input.screenId, input.eventId);
+				if (!session) {
+					// No epoch, nothing accepted, nothing published.
+					await clearBroadcastGraphicsLiveSessionGraphicAssetReferences(input.screenId);
+					return;
+				}
+				const screen = await screens.findById(input.screenId, input.eventId);
+				if (!screen)
+					return;
+
+				const stack = authoredStack(screen);
+				await updateBroadcastGraphicsLiveSessionGraphicAssetReferences({
+					screenId: input.screenId,
+					eventId: input.eventId,
+					sessionId: session.id,
+					sequence: session.sequence,
+					references: broadcastGraphicsLiveSessionGraphicAssetReferences(stack, session.currentState),
+					previousReferences: input.previousStack
+						? broadcastGraphicsLiveSessionGraphicAssetReferences(input.previousStack, session.currentState)
+						: undefined,
+				});
+
+				const settled = await state.findActiveSessionByScreen(input.screenId, input.eventId);
+				if (settled?.sequence === session.sequence)
+					return;
+			}
+		}
+		catch {
+			console.error(JSON.stringify({
+				message: 'broadcast_graphics_live_reference_republish_failed',
+				screenId: input.screenId,
 			}));
 		}
 	};
@@ -650,6 +710,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		loadSession,
 		applyCommand,
 		refreshLiveBindings,
+		republishLiveSessionReferences,
 		resetLiveState,
 		endSessionsForScreen,
 	};

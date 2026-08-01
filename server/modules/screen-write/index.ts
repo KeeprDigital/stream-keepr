@@ -188,6 +188,17 @@ export function screenWriteModule(dependencies: {
 				originConnectionId,
 			});
 		}
+		else if (data.modeConfigs !== undefined && updatedScreen.currentMode === 'broadcast-graphics') {
+			// A generic write may not change the authored Graphic Asset References — that
+			// is refused above — but it may still stop declaring a media Graphic Input
+			// whose default is null, which changes what the Live Session publishes without
+			// changing a single authored reference.
+			await broadcastGraphicsLiveSessionModule().republishLiveSessionReferences({
+				eventId,
+				screenId,
+				previousStack: existingScreen.modeConfigs?.['broadcast-graphics'],
+			});
+		}
 
 		return await publication.screenUpdated({
 			eventId,
@@ -313,6 +324,19 @@ export function screenWriteModule(dependencies: {
 			throw createError({
 				statusCode: 404,
 				message: 'Screen not found',
+			});
+		}
+
+		// What a Broadcast Graphics Live Session publishes is its accepted media values
+		// read through the Screen's *current* declarations, so this write can change it
+		// without any acceptance happening. Undeclaring a media Graphic Input, or
+		// unplacing the Broadcast Graphic that declares it, has to remove its published
+		// references here — nothing on the acceptance path can see that it happened.
+		if (mode === 'broadcast-graphics') {
+			await broadcastGraphicsLiveSessionModule().republishLiveSessionReferences({
+				eventId,
+				screenId,
+				previousStack: existing.modeConfigs?.['broadcast-graphics'],
 			});
 		}
 

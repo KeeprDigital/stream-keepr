@@ -1,4 +1,3 @@
-import type { GraphicInputValue, MediaGraphicInputValue } from '../../types/graphics';
 import type { BroadcastGraphicsModeConfig } from '../../types/screenConfig';
 import type { ScreenGraphicAssetReference } from '../../utils/graphicsAssetReferences';
 import type { BroadcastGraphicsLiveState } from './playout';
@@ -6,6 +5,7 @@ import {
 	BROADCAST_GRAPHICS_LIVE_SESSION_SLOT_PREFIX,
 	mediaScreenGraphicAssetReference,
 } from '../../utils/graphicsAssetReferences';
+import { isMediaGraphicInputValue } from '../graphics';
 import { broadcastGraphicInputsState } from './inputs';
 
 /**
@@ -60,18 +60,4 @@ export function broadcastGraphicsLiveSessionGraphicAssetReferences(
 	}
 
 	return references;
-}
-
-/**
- * Whether an accepted value is a media value at all.
- *
- * Asked of the stored value rather than assumed from the declaration: a Graphic Input
- * stores what the operator entered even when it violates its declared type, so a
- * media input may legitimately be holding something that is not a reference.
- */
-function isMediaGraphicInputValue(value: GraphicInputValue | undefined): value is MediaGraphicInputValue {
-	return typeof value === 'object'
-		&& value !== null
-		&& typeof value.assetId === 'string'
-		&& typeof value.revisionId === 'string';
 }

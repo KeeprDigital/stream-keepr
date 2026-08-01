@@ -865,6 +865,101 @@ describe('media Graphic Input values on air', () => {
 		await expect(usageOf(second)).resolves.toEqual([]);
 	});
 
+	it('stops resolving once the authored write removes the Graphic Input declaration', async () => {
+		// A Screen publishes what it declares, and an authored write is one of the two
+		// authorities that decides what that is. Left to the Live Session alone this
+		// self-heals only on the next acceptance that moves the media set — which can be
+		// the rest of the show, with the output still fetching a value nothing declares
+		// and the asset still pinned against retirement.
+		const screenId = await createScreen('media-input-undeclared');
+		const backdrop = await ingestImage(eventId, `media-input-undeclared-${runId}`, pngWithTextChunks(64));
+		await declare(screenId, [mediaInput('backdrop')]);
+		const capability = await capabilityFor(screenId);
+		const session = await liveSession(screenId);
+
+		await command(screenId, session.id, {
+			commandId: `media-input-undeclared-set-${runId}`,
+			type: 'Set Input',
+			payload: { graphicId: 'promo', inputKey: 'backdrop', value: backdrop },
+		});
+		await command(screenId, session.id, {
+			commandId: `media-input-undeclared-take-${runId}`,
+			type: 'Take',
+			payload: { graphicId: 'promo' },
+		});
+		await expect(outputStatus(screenId, capability, backdrop)).resolves.toBe(200);
+
+		// The declaration goes; nothing else about the Live Session changes.
+		await declare(screenId, []);
+
+		await expect(outputStatus(screenId, capability, backdrop)).resolves.toBe(404);
+		await expect(usageOf(backdrop)).resolves.toEqual([]);
+	});
+
+	it('stops resolving once the authored write removes the whole Broadcast Graphic', async () => {
+		const screenId = await createScreen('media-input-unplaced');
+		const backdrop = await ingestImage(eventId, `media-input-unplaced-${runId}`, pngWithTextChunks(65));
+		await declare(screenId, [mediaInput('backdrop')]);
+		const capability = await capabilityFor(screenId);
+		const session = await liveSession(screenId);
+
+		await command(screenId, session.id, {
+			commandId: `media-input-unplaced-set-${runId}`,
+			type: 'Set Input',
+			payload: { graphicId: 'promo', inputKey: 'backdrop', value: backdrop },
+		});
+		await command(screenId, session.id, {
+			commandId: `media-input-unplaced-take-${runId}`,
+			type: 'Take',
+			payload: { graphicId: 'promo' },
+		});
+		await expect(outputStatus(screenId, capability, backdrop)).resolves.toBe(200);
+
+		// The Screen no longer places the graphic at all.
+		await $fetch<ScreenResponse>(
+			`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`,
+			{
+				method: 'PATCH',
+				body: { graphics: [] },
+				headers: { cookie: graphicsAuthorCookie },
+			},
+		);
+
+		await expect(outputStatus(screenId, capability, backdrop)).resolves.toBe(404);
+		await expect(usageOf(backdrop)).resolves.toEqual([]);
+	});
+
+	it('stops publishing when the Screen leaves Broadcast Graphics mode', async () => {
+		// Ending the epoch is the other place the "stops being published when it leaves
+		// air" rule is enforced, and the mode scope in the authorizer hides an uncleared
+		// namespace rather than fixing it: the usage row is what says whether the epoch's
+		// references actually went.
+		const screenId = await createScreen('media-input-mode-change');
+		const backdrop = await ingestImage(eventId, `media-input-mode-change-${runId}`, pngWithTextChunks(66));
+		await declare(screenId, [mediaInput('backdrop')]);
+		const session = await liveSession(screenId);
+
+		await command(screenId, session.id, {
+			commandId: `media-input-mode-set-${runId}`,
+			type: 'Set Input',
+			payload: { graphicId: 'promo', inputKey: 'backdrop', value: backdrop },
+		});
+		await command(screenId, session.id, {
+			commandId: `media-input-mode-take-${runId}`,
+			type: 'Take',
+			payload: { graphicId: 'promo' },
+		});
+		await expect(usageOf(backdrop)).resolves.toHaveLength(1);
+
+		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
+		await $fetch(`/api/events/${eventId}/screens/${screenId}`, {
+			method: 'PATCH',
+			body: { currentMode: 'idle', stateVersion: screen.stateVersion },
+		});
+
+		await expect(usageOf(backdrop)).resolves.toEqual([]);
+	});
+
 	it('refuses a runtime selection naming a revision that does not resolve', async () => {
 		// Creating a Graphic Asset Reference requires its exact revision to resolve, and
 		// a media Graphic Input value is one. Refused at selection rather than stored and
