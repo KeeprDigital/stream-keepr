@@ -667,21 +667,18 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		});
 	}
 
-	/**
-	 * Tell the server that Event Data this Broadcast Graphic's bindings read has moved.
+	/*
+	 * There is deliberately no `resolveBindings` action here.
 	 *
-	 * It carries no value: the server re-resolves the bindings itself, so what reaches
-	 * air is a fact about Event Data rather than this client's reading of it. Whether
-	 * anything reaches air is each input's On-air Update Policy — a live one applies
-	 * now, a staged one waits for Update Graphic.
+	 * Resolve Bindings says "the Event Data a binding reads has moved", and the
+	 * authoritative side observes that directly — it is the side the Event Data was
+	 * written to. A client action would only be able to speak for the one Broadcast
+	 * Graphic whose Live Control happened to be open, which is the scoping the
+	 * server-side sweep exists to replace, and it would carry no "would this change
+	 * anything" guard, so it would advance the authoritative sequence on every
+	 * relevant change for nothing. The command itself remains part of the API and is
+	 * exercised through it.
 	 */
-	function resolveBindings(eventId: number, screenId: number, graphicId: string) {
-		return deliverCommand(eventId, screenId, graphicId, {
-			commandId: randomCommandId('Resolve Bindings'),
-			type: 'Resolve Bindings',
-			payload: { graphicId },
-		});
-	}
 
 	/**
 	 * Accept this Broadcast Graphic's complete staged Graphic Input set.
@@ -774,7 +771,6 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		setInput,
 		setOverride,
 		selectSource,
-		resolveBindings,
 		updateGraphic,
 		resetLiveState,
 		applyRemoteCommand,

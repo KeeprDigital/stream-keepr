@@ -287,35 +287,24 @@ watch(() => props.graphic.id, () => {
 	drafts.value = {};
 });
 
-/**
- * Relevant Realtime Event Session changes re-resolve the bindings, and a live On-air
- * Update Policy input has to reach air without anybody pressing anything.
+/*
+ * Live Control issues no Resolve Bindings of its own.
  *
- * Only the acceptance is asked for: the server re-resolves from Event Data itself, so
- * this says the facts moved rather than what they moved to. Restricted to an on-air
- * graphic with at least one live-policy bound input, because that is the only case
- * where an acceptance would change what program shows — a staged input already reads
- * as pending, which is exactly what it should.
+ * "Relevant Realtime Event Session changes re-resolve affected Graphic Input
+ * Bindings" is answered by the authoritative side, which re-resolves whenever Event
+ * Data changes. A watcher here could only ever cover the one graphic this component
+ * is showing, which is the scoping that made an on-air lower third hold a stale name
+ * whenever the operator was looking at a different graphic.
  *
- * It is not what makes the rule true. The authoritative side re-resolves for itself
- * when Event Data changes, which is what covers a graphic the operator has not
- * selected and a Screen with no Live Control open at all; this watcher only ever
- * covers the one graphic on screen here. It stays because a Live Control that has
- * seen a bound value move should say so on its own clock rather than after a round
- * trip, and because the command converges: applying it twice accepts the same
- * resolved value twice.
+ * It is deliberately not kept as a second opinion either. The bound value an operator
+ * reads is computed in this component from Event Data the Realtime Event Session has
+ * already delivered, so nothing here waits on a round trip; what the command changes
+ * is the *accepted* value, which needs the server whichever side asks for it. And the
+ * command path has no "would this change anything" guard — that guard lives in the
+ * sweep — so a watcher would send a second, always-redundant command after every
+ * relevant change, advancing the authoritative sequence that every Live Control and
+ * Screen Output on this Screen then reloads against.
  */
-const hasLiveBoundInput = computed(() => traces.value.some(trace =>
-	trace.binding !== undefined && trace.declaration.updatePolicy === 'live',
-));
-
-watch(boundValues, (next, previous) => {
-	if (!isOnAir.value || !hasLiveBoundInput.value || props.disconnected)
-		return;
-	if (JSON.stringify(next) === JSON.stringify(previous))
-		return;
-	void sessionStore.resolveBindings(props.eventId, props.screen.id, props.graphic.id);
-});
 
 /**
  * A refused edit gives its field back to the authoritative value.

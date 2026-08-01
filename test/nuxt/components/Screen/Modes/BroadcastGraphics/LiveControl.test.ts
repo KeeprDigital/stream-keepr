@@ -19,7 +19,6 @@ const mockSetInput = vi.fn();
 const mockSetOverride = vi.fn();
 const mockSelectSource = vi.fn();
 const mockUpdateGraphic = vi.fn();
-const mockResolveBindings = vi.fn();
 /** The Event Data Live Control resolves its bound values and picker options from. */
 const mockBindingData = ref<GraphicBindingDataSet>(createEmptyGraphicBindingDataSet());
 /** The Graphic Inputs whose last edit from this session lost a field-scoped conflict. */
@@ -30,7 +29,6 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	setOverride: mockSetOverride,
 	selectSource: mockSelectSource,
 	updateGraphic: mockUpdateGraphic,
-	resolveBindings: mockResolveBindings,
 	sourceSelections: (_screenId: number, graphicId: string) =>
 		mockLiveState.value.sources?.[graphicId] ?? {},
 	inputTraces: (
@@ -301,7 +299,7 @@ describe('broadcastGraphicsLiveControl', () => {
 		expect(mockSetInput).not.toHaveBeenCalled();
 	});
 
-	it('asks the server to re-resolve when Event Data behind a live-policy binding moves', async () => {
+	it('shows the moved bound value without issuing a command for it', async () => {
 		mockLiveState.value = {
 			playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
 			inputs: {},
@@ -313,12 +311,10 @@ describe('broadcastGraphicsLiveControl', () => {
 			players: { 1: { name: 'Ava Reed' } },
 		};
 
-		await mountComponent(graphic([{ ...NAME, updatePolicy: 'live' }], {
+		const wrapper = await mountComponent(graphic([{ ...NAME, updatePolicy: 'live' }], {
 			sources: [{ key: 'player', label: 'Player', kind: 'player' }],
 			bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
 		}), 'on-air');
-
-		expect(mockResolveBindings).not.toHaveBeenCalled();
 
 		// The Realtime Event Session moved the Player under the running show.
 		mockBindingData.value = {
@@ -327,8 +323,18 @@ describe('broadcastGraphicsLiveControl', () => {
 		};
 		await flushPromises();
 
-		// It asks for an acceptance rather than sending a value: the server re-resolves.
-		expect(mockResolveBindings).toHaveBeenCalledWith(7, 3, 'lower-third');
+		// The latest bound value is resolved in this component from Event Data the session
+		// already delivered, so it is on screen without waiting for anything.
+		expect(wrapper.get('[data-graphic-input="name"]')
+			.get('[data-testid="live-control-bound"]').text()).toBe('Ava Reed-Marsh');
+
+		// And Live Control asks for nothing. Re-resolution is the authoritative side's,
+		// because a watcher here could only ever speak for the one graphic on screen —
+		// the scoping that left a second on-air lower third holding a stale name.
+		expect(mockSetInput).not.toHaveBeenCalled();
+		expect(mockSetOverride).not.toHaveBeenCalled();
+		expect(mockUpdateGraphic).not.toHaveBeenCalled();
+		expect(mockSelectSource).not.toHaveBeenCalled();
 	});
 
 	it('leaves a staged binding to show as pending rather than accepting it', async () => {
@@ -343,7 +349,7 @@ describe('broadcastGraphicsLiveControl', () => {
 			players: { 1: { name: 'Ava Reed' } },
 		};
 
-		await mountComponent(graphic([NAME], {
+		const wrapper = await mountComponent(graphic([NAME], {
 			sources: [{ key: 'player', label: 'Player', kind: 'player' }],
 			bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
 		}), 'on-air');
@@ -354,7 +360,16 @@ describe('broadcastGraphicsLiveControl', () => {
 		};
 		await flushPromises();
 
-		expect(mockResolveBindings).not.toHaveBeenCalled();
+		const field = wrapper.get('[data-graphic-input="name"]');
+
+		// A staged On-air Update Policy means an operator confirms the change. The moved
+		// value is shown as the latest bound value and reported pending, while what
+		// program committed to is untouched — and an acceptance is offered rather than
+		// taken.
+		expect(field.get('[data-testid="live-control-bound"]').text()).toBe('Ava Reed-Marsh');
+		expect(field.get('[data-testid="live-control-status"]').text()).toBe('Pending');
+		expect(field.get('[data-testid="live-control-accepted"]').text()).toBe('Unnamed');
+		expect(mockUpdateGraphic).not.toHaveBeenCalled();
 	});
 
 	it('shows an override masking its binding, and clears it back to the bound value', async () => {
