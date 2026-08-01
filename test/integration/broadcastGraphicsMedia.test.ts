@@ -693,3 +693,299 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		})).rejects.toMatchObject({ statusCode: 409 });
 	});
 });
+
+/**
+ * A media Graphic Input's value, through the same path (#96).
+ *
+ * The failure this suite proves closed reaches air: a media value an operator picks
+ * at runtime lives in the Broadcast Graphics Live Session rather than in authored
+ * configuration, so a Screen Output Asset Capability derived from `modeConfigs`
+ * alone cannot fetch it — the graphic goes on air and its media does not. The
+ * negative half is the part that matters, and it is asserted here twice: a staged
+ * value nothing has accepted must not resolve, and a revision a later acceptance
+ * replaced must stop resolving.
+ */
+describe('media Graphic Input values on air', () => {
+	let eventId: number;
+	let graphicsAuthorCookie: string;
+	let first: Reference;
+	let second: Reference;
+
+	/** A media Graphic Input, staged and optional unless stated otherwise. */
+	function mediaInput(key: string, overrides: Record<string, unknown> = {}) {
+		return {
+			type: 'media' as const,
+			key,
+			label: key,
+			required: false,
+			updatePolicy: 'staged' as const,
+			mediaKind: 'image' as const,
+			default: null,
+			...overrides,
+		};
+	}
+
+	async function createScreen(slug: string): Promise<number> {
+		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: slug, slug, currentMode: 'broadcast-graphics' },
+		});
+		return screen.id;
+	}
+
+	async function declare(screenId: number, inputs: unknown[], graphicId = 'promo') {
+		return await $fetch<ScreenResponse>(
+			`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`,
+			{
+				method: 'PATCH',
+				body: { graphics: [{ id: graphicId, name: 'Promo', items: [], inputs }] },
+				headers: { cookie: graphicsAuthorCookie },
+			},
+		);
+	}
+
+	async function capabilityFor(screenId: number): Promise<string> {
+		const { assetCapability } = await $fetch<{ assetCapability: string }>(
+			`/api/events/${eventId}/screens/${screenId}/asset-capability`,
+			{ headers: { cookie: graphicsAuthorCookie } },
+		);
+		return assetCapability;
+	}
+
+	function outputStatus(screenId: number, capability: string, reference: Reference) {
+		return fetch(
+			`/api/screen-output/screens/${screenId}/assets/${reference.assetId}/revisions/${reference.revisionId}/content`,
+			{ headers: { authorization: `Bearer ${capability}` } },
+		).then(response => response.status);
+	}
+
+	async function liveSession(screenId: number) {
+		return await $fetch<{ id: number; currentState: { inputs: Record<string, { accepted: Record<string, unknown>; acceptedRevision: number }> } }>(
+			`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/live-session`,
+		);
+	}
+
+	function command(screenId: number, sessionId: number, body: Record<string, unknown>) {
+		return $fetch<{ currentState: { inputs: Record<string, { accepted: Record<string, unknown>; acceptedRevision: number }> } }>(
+			`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/live-sessions/${sessionId}/commands`,
+			{ method: 'POST', body },
+		);
+	}
+
+	async function usageOf(reference: Reference): Promise<GraphicAssetUsage[]> {
+		return await $fetch<GraphicAssetUsage[]>(`/api/graphics-assets/${reference.assetId}/usage`);
+	}
+
+	beforeAll(async () => {
+		graphicsAuthorCookie = await createGraphicsAuthorSessionCookie();
+		const event = await $fetch<{ id: number }>('/api/events', {
+			method: 'POST',
+			body: {
+				name: 'Media Graphic Input Event',
+				game: 'mtg',
+				featureMatchOrientation: 'horizontal',
+			},
+		});
+		eventId = event.id;
+		first = await ingestImage(eventId, `media-input-first-${runId}`, pngWithTextChunks(60));
+		second = await ingestImage(eventId, `media-input-second-${runId}`, pngWithTextChunks(61));
+	});
+
+	afterAll(async () => {
+		try {
+			await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+		}
+		catch {}
+	});
+
+	it('resolves a runtime-chosen revision only while the Live Session accepts it', async () => {
+		const screenId = await createScreen('media-input-runtime');
+		await declare(screenId, [mediaInput('backdrop')]);
+		const capability = await capabilityFor(screenId);
+		const session = await liveSession(screenId);
+
+		// Staged, not accepted. Live Control shows it; program does not, so the output
+		// has no right to its bytes — this is the hole the capability exists to close.
+		await command(screenId, session.id, {
+			commandId: `media-input-stage-${runId}`,
+			type: 'Set Input',
+			payload: { graphicId: 'promo', inputKey: 'backdrop', value: first },
+		});
+		await expect(outputStatus(screenId, capability, first)).resolves.toBe(404);
+
+		// A Take accepts the staged set, which is when it goes on air — and when the
+		// output may fetch it.
+		await command(screenId, session.id, {
+			commandId: `media-input-take-${runId}`,
+			type: 'Take',
+			payload: { graphicId: 'promo' },
+		});
+		await expect(outputStatus(screenId, capability, first)).resolves.toBe(200);
+		await expect(usageOf(first)).resolves.toEqual([
+			expect.objectContaining({
+				reference: first,
+				owner: expect.objectContaining({
+					kind: 'screen',
+					id: String(screenId),
+					slot: 'liveSession.promo.inputs.backdrop',
+					eventId,
+				}),
+			}),
+		]);
+
+		// A second choice, staged: the accepted one is still what program shows, so it
+		// is still the only one the output may fetch.
+		const staged = await command(screenId, session.id, {
+			commandId: `media-input-restage-${runId}`,
+			type: 'Set Input',
+			payload: { graphicId: 'promo', inputKey: 'backdrop', value: second },
+		});
+		await expect(outputStatus(screenId, capability, second)).resolves.toBe(404);
+		await expect(outputStatus(screenId, capability, first)).resolves.toBe(200);
+
+		// Accepting it swaps both at once. The revision that left the accepted set stops
+		// being resolvable in the same moment it stops being on air.
+		await command(screenId, session.id, {
+			commandId: `media-input-update-${runId}`,
+			type: 'Update Graphic',
+			payload: {
+				graphicId: 'promo',
+				basedOnAcceptedRevision: staged.currentState.inputs.promo!.acceptedRevision,
+			},
+		});
+		await expect(outputStatus(screenId, capability, second)).resolves.toBe(200);
+		await expect(outputStatus(screenId, capability, first)).resolves.toBe(404);
+		await expect(usageOf(first)).resolves.toEqual([]);
+
+		// An epoch that has ended accepted nothing, so it publishes nothing.
+		await $fetch(`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/live-session/reset`, {
+			method: 'POST',
+		});
+		await expect(outputStatus(screenId, capability, second)).resolves.toBe(404);
+		await expect(usageOf(second)).resolves.toEqual([]);
+	});
+
+	it('refuses a runtime selection naming a revision that does not resolve', async () => {
+		// Creating a Graphic Asset Reference requires its exact revision to resolve, and
+		// a media Graphic Input value is one. Refused at selection rather than stored and
+		// shown as unavailable: there is no fact to record about a revision that is not
+		// there, and an unrecorded fact is what loses the write's precondition later.
+		const screenId = await createScreen('media-input-missing');
+		await declare(screenId, [mediaInput('backdrop')]);
+		const session = await liveSession(screenId);
+
+		await expect(command(screenId, session.id, {
+			commandId: `media-input-missing-${runId}`,
+			type: 'Set Input',
+			payload: {
+				graphicId: 'promo',
+				inputKey: 'backdrop',
+				value: { assetId: 'no-such-asset', revisionId: 'no-such-revision' },
+			},
+		})).rejects.toMatchObject({ statusCode: 409 });
+
+		const after = await liveSession(screenId);
+		expect(after.currentState.inputs.promo).toBeUndefined();
+	});
+
+	it('records the pinned revision’s target compatibility on a value chosen at runtime', async () => {
+		// The fact travels with the value because nothing downstream can go and ask the
+		// library for it — and because the reference index compares a silent-video
+		// reference against the pinned revision's own, so a value carrying none loses
+		// the write's precondition silently instead of failing it.
+		const screenId = await createScreen('media-input-vp9');
+		const restricted = await ingestImage(eventId, `media-input-vp9-${runId}`, pngWithTextChunks(62));
+		await executeIntegrationD1(`
+			UPDATE graphic_assets
+			SET kind = 'silent-video'
+			WHERE id = '${restricted.assetId}';
+			UPDATE graphic_asset_revisions
+			SET technical_facts = json_set(
+				technical_facts,
+				'$.kind', 'silent-video',
+				'$.targetCompatibility', 'chromium-transparency'
+			)
+			WHERE id = '${restricted.revisionId}';
+		`);
+
+		await declare(screenId, [mediaInput('sting', { mediaKind: 'silent-video' })]);
+		const capability = await capabilityFor(screenId);
+		const session = await liveSession(screenId);
+
+		// The client sends an exact revision and no facts at all; the authoritative side
+		// is what records them, so a client cannot assert a compatibility it does not have.
+		await command(screenId, session.id, {
+			commandId: `media-input-vp9-set-${runId}`,
+			type: 'Set Input',
+			payload: { graphicId: 'promo', inputKey: 'sting', value: restricted },
+		});
+		const taken = await command(screenId, session.id, {
+			commandId: `media-input-vp9-take-${runId}`,
+			type: 'Take',
+			payload: { graphicId: 'promo' },
+		});
+
+		expect(taken.currentState.inputs.promo!.accepted.sting).toEqual({
+			...restricted,
+			videoCompatibility: 'chromium-transparency',
+		});
+		await expect(outputStatus(screenId, capability, restricted)).resolves.toBe(200);
+
+		// And the fact is load-bearing where it matters: an output that cannot play VP9
+		// alpha is told so, rather than opening a session and showing nothing on air.
+		function bootstrap(userAgent: string) {
+			return fetch(`/api/screen-output/screens/${screenId}/asset-capability-session`, {
+				method: 'POST',
+				headers: { 'authorization': `Bearer ${capability}`, 'user-agent': userAgent },
+			}).then(response => response.status);
+		}
+		await expect(bootstrap('Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/605.1.15 Version/18.5 Safari/605.1.15'))
+			.resolves
+			.toBe(409);
+		await expect(bootstrap('Mozilla/5.0 Chrome/138.0.0.0 Safari/537.36')).resolves.toBe(204);
+	});
+
+	it('publishes an authored media Graphic Input default, and refuses one with no compatibility facts', async () => {
+		const screenId = await createScreen('media-input-default');
+		const restricted = await ingestImage(eventId, `media-input-default-vp9-${runId}`, pngWithTextChunks(63));
+		await executeIntegrationD1(`
+			UPDATE graphic_assets
+			SET kind = 'silent-video'
+			WHERE id = '${restricted.assetId}';
+			UPDATE graphic_asset_revisions
+			SET technical_facts = json_set(
+				technical_facts,
+				'$.kind', 'silent-video',
+				'$.targetCompatibility', 'chromium-transparency'
+			)
+			WHERE id = '${restricted.revisionId}';
+		`);
+
+		// Without the recorded fact the reference-index predicate has nothing to compare,
+		// so the write is refused rather than committing a configuration whose media the
+		// Screen's outputs would never be able to fetch.
+		await expect(declare(screenId, [mediaInput('sting', {
+			mediaKind: 'silent-video',
+			default: restricted,
+		})])).rejects.toMatchObject({ statusCode: 409 });
+
+		await declare(screenId, [mediaInput('sting', {
+			mediaKind: 'silent-video',
+			default: { ...restricted, videoCompatibility: 'chromium-transparency' },
+		})]);
+
+		const capability = await capabilityFor(screenId);
+		await expect(outputStatus(screenId, capability, restricted)).resolves.toBe(200);
+		await expect(usageOf(restricted)).resolves.toEqual([
+			expect.objectContaining({
+				reference: restricted,
+				owner: expect.objectContaining({
+					kind: 'screen',
+					id: String(screenId),
+					slot: 'graphics.promo.inputs.sting.default',
+					eventId,
+				}),
+			}),
+		]);
+	});
+});

@@ -215,6 +215,20 @@ const graphicAssetReferenceSchema = z.object({
 	revisionId: z.string().min(1).max(100).transform(graphicAssetRevisionId),
 }).strict();
 
+/**
+ * One media Graphic Input value on the wire: an exact revision, plus the facts about
+ * that revision the reference index and the render model cannot go and ask for.
+ *
+ * The same shape wherever the choice is made — an authored default here, an operator's
+ * runtime selection in the Broadcast Graphics Live Session — because it is the same
+ * choice, recorded at the moment it is made.
+ */
+const mediaGraphicInputValueSchema = z.object({
+	assetId: z.string().min(1).max(100).transform(graphicAssetId),
+	revisionId: z.string().min(1).max(100).transform(graphicAssetRevisionId),
+	videoCompatibility: z.enum(MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES).optional(),
+}).strict();
+
 const screenMediaBackgroundConfigSchema = z.object({
 	enabled: z.boolean(),
 	type: z.literal('video'),
@@ -738,8 +752,12 @@ const graphicInputDeclarationSchema = z.discriminatedUnion('type', [
 		...graphicInputDeclarationBaseShape,
 		type: z.literal('media'),
 		// A media Graphic Input's default is a pinned Graphics Asset Library
-		// revision, exactly as an authored asset reference is.
-		default: graphicAssetReferenceSchema.nullable(),
+		// revision, exactly as an authored asset reference is — and it carries the
+		// same recorded target compatibility a Media Graphic Item's does, because
+		// the Graphic Asset Reference index checks a silent-video reference against
+		// the pinned revision's own and a value with no such fact loses that
+		// precondition rather than failing it.
+		default: mediaGraphicInputValueSchema.nullable(),
 		mediaKind: z.enum(GRAPHIC_MEDIA_KIND_VALUES),
 	}).strict(),
 ]);

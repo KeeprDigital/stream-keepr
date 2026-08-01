@@ -6,26 +6,43 @@ import type {
 	BroadcastGraphicsCommandResult,
 	BroadcastGraphicsLiveSessionResponse,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type {
+	BroadcastGraphicConfig,
+	GraphicInputDeclaration,
+	MediaGraphicInputValue,
+} from '~~/shared/types/graphics';
 import type { BroadcastGraphicsModeConfig } from '~~/shared/types/screenConfig';
+import type { ScreenGraphicAssetReference } from '~~/shared/utils/graphicsAssetReferences';
 import { mapBroadcastGraphicsLiveSessionToResponse } from '~~/server/mappers/broadcastGraphicsLiveSession';
 import {
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
+import {
+	clearBroadcastGraphicsLiveSessionGraphicAssetReferences,
+	updateBroadcastGraphicsLiveSessionGraphicAssetReferences,
+} from '~~/server/modules/screen-graphic-asset-references';
 import { broadcastGraphicsStateService } from '~~/server/services/broadcastGraphicsState';
 import { graphicBindingDataService } from '~~/server/services/graphicBindingData';
 import { screenService } from '~~/server/services/screen';
 import { publishMessage } from '~~/server/utils/ably';
 import {
 	broadcastGraphicChannelContexts,
+	broadcastGraphicsLiveSessionGraphicAssetReferences,
 	broadcastGraphicSourceSelections,
 	broadcastGraphicsResolveBindingsDue,
 	recoveredBroadcastGraphicsLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
-import { broadcastGraphicPhaseDurations, resolveGraphicInputBindings } from '~~/shared/modules/graphics';
+import {
+	broadcastGraphicPhaseDurations,
+	findGraphicInputDeclaration,
+	resolveGraphicInputBindings,
+} from '~~/shared/modules/graphics';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
-import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
+import {
+	broadcastGraphicsGraphicAssetReferences,
+	sameScreenGraphicAssetReferences,
+} from '~~/shared/utils/graphicsAssetReferences';
 import { randomCommandId } from '~~/shared/utils/uuid';
 
 interface ApplyCommandParams {
@@ -109,9 +126,16 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	 * Only Take is gated. Out needs none of the asset's bytes, and blocking it would
 	 * trap on air the very graphic an operator most needs to remove. A retired asset
 	 * is not a failure either: its pinned revisions keep resolving by design.
+	 *
+	 * The references are the graphic's own *and* the media Graphic Input values its
+	 * Live Session has accepted for it. A value an operator chose live is content the
+	 * graphic renders exactly as an authored one is, so it invalidates the graphic on
+	 * the same terms — the alternative is taking a graphic whose only unfetchable
+	 * asset is the one an operator picked seconds earlier.
 	 */
-	const requireResolvableGraphicAssets = async (graphic: BroadcastGraphicConfig): Promise<void> => {
-		const references = broadcastGraphicsGraphicAssetReferences({ graphics: [graphic] });
+	const requireResolvableGraphicAssets = async (
+		references: readonly ScreenGraphicAssetReference[],
+	): Promise<void> => {
 		if (references.length === 0)
 			return;
 
@@ -137,6 +161,151 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 					? `Graphic Asset Reference at ${item.ownerSlot} is missing, so this Broadcast Graphic cannot be taken on air`
 					: `Graphic Asset Content at ${item.ownerSlot} is temporarily unavailable, so this Broadcast Graphic cannot be taken on air`,
 			});
+		}
+	};
+
+	/**
+	 * Whether a Graphic Input value names a Graphics Asset Library revision at all.
+	 *
+	 * Asked of the value rather than assumed from the declaration: a Graphic Input
+	 * stores what the operator sent even when it violates its declared type, and
+	 * reporting that as unavailable is Live Control's job rather than this route's.
+	 */
+	function isMediaValue(value: unknown): value is MediaGraphicInputValue {
+		return typeof value === 'object'
+			&& value !== null
+			&& typeof (value as MediaGraphicInputValue).assetId === 'string'
+			&& typeof (value as MediaGraphicInputValue).revisionId === 'string';
+	}
+
+	/**
+	 * Record the pinned revision's own facts on a media Graphic Input value, at the
+	 * moment the operator selects it.
+	 *
+	 * This is the authoritative half of #96. A media value is `{assetId, revisionId}`
+	 * on the wire and carries no target compatibility, but the reference index checks
+	 * a silent-video reference against the pinned revision's own — and a value with no
+	 * such fact loses that precondition silently rather than failing it, so the media
+	 * simply never becomes resolvable and the graphic reaches air without it. Nothing
+	 * downstream of the value can go and ask the library, so the fact is stamped on
+	 * here, by the authority, and travels with the value from then on.
+	 *
+	 * Recorded rather than trusted: the wire shape carries no facts precisely so a
+	 * client cannot assert one. Selecting a revision that does not resolve is refused
+	 * outright, because creating a Graphic Asset Reference requires its exact revision
+	 * to resolve — a value naming a revision that is not there is a Missing Graphic
+	 * Asset Reference rather than a value an operator can be shown and correct.
+	 */
+	const recordMediaSelectionFacts = async (
+		graphic: BroadcastGraphicConfig,
+		command: BroadcastGraphicsCommand,
+	): Promise<BroadcastGraphicsCommand> => {
+		if (command.type !== 'Set Input' && command.type !== 'Set Override')
+			return command;
+		const value = command.payload.value;
+		if (!isMediaValue(value))
+			return command;
+		const declaration: GraphicInputDeclaration | undefined = findGraphicInputDeclaration(
+			graphic.inputs ?? [],
+			command.payload.inputKey,
+		);
+		if (declaration?.type !== 'media')
+			return command;
+
+		if (!dependencies.graphicsAssets) {
+			throw createError({
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'Graphics Asset Library is unavailable',
+			});
+		}
+
+		const status = await dependencies.graphicsAssets.inspectGraphicAssetRevision({
+			assetId: graphicAssetId(value.assetId),
+			revisionId: graphicAssetRevisionId(value.revisionId),
+		});
+		if (status.outcome !== 'available') {
+			throw createError({
+				statusCode: 409,
+				statusMessage: 'Conflict',
+				message: status.outcome === 'missing'
+					? `Graphic Asset Reference for Graphic Input ${command.payload.inputKey} is missing`
+					: `Graphic Asset Content for Graphic Input ${command.payload.inputKey} is temporarily unavailable`,
+			});
+		}
+
+		return {
+			...command,
+			payload: {
+				...command.payload,
+				value: {
+					assetId: value.assetId,
+					revisionId: value.revisionId,
+					...(status.targetCompatibility === undefined
+						? {}
+						: { videoCompatibility: status.targetCompatibility }),
+				},
+			},
+		};
+	};
+
+	/**
+	 * Bring the Screen's Live Session reference index in line with what it has just
+	 * accepted, so a Screen Output can resolve a runtime-chosen media value — and
+	 * stops being able to the moment that value is no longer accepted.
+	 *
+	 * Skipped outright when the accepted media values did not move, which is almost
+	 * every command: capability derivation used to change only when authored
+	 * configuration did, and this keeps the cost of following acceptance instead
+	 * proportional to the acceptances that actually change what is published.
+	 *
+	 * Best-effort on the way out, and deliberately after the commit. The command has
+	 * been accepted and its notification has gone out, so a failure here must not turn
+	 * an applied command into an apparent failure that invites a retry. The write is
+	 * guarded on the sequence it was derived from, so the next acceptance reconciles
+	 * from a state that supersedes this one rather than compounding the gap.
+	 */
+	const reconcileLiveSessionReferences = async (
+		screen: DbScreen,
+		result: BroadcastGraphicsCommandResult,
+		before: BroadcastGraphicsLiveState,
+	): Promise<void> => {
+		try {
+			const stack = authoredStack(screen);
+			const references = broadcastGraphicsLiveSessionGraphicAssetReferences(stack, result.currentState);
+			const previous = broadcastGraphicsLiveSessionGraphicAssetReferences(stack, before);
+			if (sameScreenGraphicAssetReferences(previous, references))
+				return;
+
+			const outcome = await updateBroadcastGraphicsLiveSessionGraphicAssetReferences({
+				screenId: screen.id,
+				eventId: result.session.eventId,
+				sessionId: result.sessionId,
+				sequence: result.sequence,
+				references,
+				previousReferences: previous,
+			});
+			if (outcome.indexed === outcome.expected)
+				return;
+			// Every accepted value was proved resolvable when it was selected, so a
+			// reference that will not index now lost a race with the library — the
+			// revision was retired, replaced, or purged in between. The graphic keeps
+			// what it accepted; its output cannot fetch this one, which is worth saying
+			// out loud rather than leaving to be discovered on air.
+			console.error(JSON.stringify({
+				message: 'broadcast_graphics_live_reference_index_incomplete',
+				screenId: screen.id,
+				sessionId: result.sessionId,
+				expected: outcome.expected,
+				indexed: outcome.indexed,
+			}));
+		}
+		catch {
+			console.error(JSON.stringify({
+				message: 'broadcast_graphics_live_reference_index_failed',
+				screenId: screen.id,
+				sessionId: result.sessionId,
+			}));
 		}
 	};
 
@@ -248,6 +417,10 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		options: { notify?: boolean; originConnectionId?: string } = {},
 	): Promise<void> => {
 		const ended = await state.endSessionsForScreen(screenId, eventId);
+		// An ended epoch has accepted nothing, so it publishes nothing. Its references
+		// go with it: a Screen switched away and back would otherwise find media on its
+		// outputs that the new epoch never accepted.
+		await clearBroadcastGraphicsLiveSessionGraphicAssetReferences(screenId);
 		if (options.notify)
 			await publishEpochEnded(eventId, screenId, ended?.id ?? null, options.originConnectionId);
 	};
@@ -272,6 +445,9 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	}): Promise<BroadcastGraphicsLiveSessionResponse> => {
 		await requireBroadcastGraphicsScreen(eventId, screenId);
 		const { ended, opened } = await state.resetSessionForScreen(screenId, eventId);
+		// A reset carries nothing forward, so the new epoch publishes nothing until it
+		// accepts something of its own.
+		await clearBroadcastGraphicsLiveSessionGraphicAssetReferences(screenId);
 		await publishEpochEnded(eventId, screenId, ended?.id ?? null, originConnectionId);
 		return mapBroadcastGraphicsLiveSessionToResponse(opened);
 	};
@@ -293,9 +469,6 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 			});
 		}
 
-		if (command.type === 'Take')
-			await requireResolvableGraphicAssets(graphic);
-
 		const session = await state.findSessionById(sessionId, eventId);
 		if (!session || session.screenId !== screenId) {
 			throw createError({
@@ -304,14 +477,30 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 			});
 		}
 
-		return await state.applyCommand(
+		if (command.type === 'Take') {
+			await requireResolvableGraphicAssets([
+				...broadcastGraphicsGraphicAssetReferences({ graphics: [graphic] }),
+				...broadcastGraphicsLiveSessionGraphicAssetReferences(
+					{ graphics: [graphic] },
+					session.currentState,
+				),
+			]);
+		}
+
+		const admitted = await recordMediaSelectionFacts(graphic, command);
+
+		const result = await state.applyCommand(
 			sessionId,
 			eventId,
-			command,
-			await reductionContextFor(eventId, screen, graphic, session.currentState, command),
+			admitted,
+			await reductionContextFor(eventId, screen, graphic, session.currentState, admitted),
 			originConnectionId,
 			{ publish: true },
 		);
+
+		await reconcileLiveSessionReferences(screen, result, session.currentState);
+
+		return result;
 	};
 
 	/**
@@ -432,7 +621,18 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 					if (!due)
 						continue;
 
-					await state.applyCommand(session.id, eventId, command, context, undefined, { publish: true });
+					const result = await state.applyCommand(
+						session.id,
+						eventId,
+						command,
+						context,
+						undefined,
+						{ publish: true },
+					);
+					// Re-resolution is an acceptance like any other, so what it accepts is
+					// published like any other. It skips itself when the media values did not
+					// move, which for a binding sweep is every time but the exceptional one.
+					await reconcileLiveSessionReferences(screen, result, session.currentState);
 				}
 				catch {
 					console.error(JSON.stringify({
