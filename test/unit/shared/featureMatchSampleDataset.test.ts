@@ -34,13 +34,61 @@ describe('the canonical Feature Match sample dataset', () => {
 	 * must see the same preview, and the same layout before and after an edit must
 	 * differ only by the edit — which holds only while the dataset is fixed data
 	 * rather than anything derived from the installation, the clock, or an Event.
+	 *
+	 * Pinned by writing the whole dataset out a second time, which is the only shape
+	 * of assertion that can fail for a value computed at module load. Every value is
+	 * here rather than a representative few, because the property is that the
+	 * *dataset* is fixed: one token quietly derived from `Date.now()` or from
+	 * whatever the installation holds is exactly the defect, and a spot check would
+	 * pass over it. The duplication is the price of "canonical" — changing a sample
+	 * value is a two-file edit, deliberately.
 	 */
 	it('is fixed data rather than anything sampled from the installation', () => {
-		expect(FEATURE_MATCH_SAMPLE_TOKEN_VALUES).toEqual({ ...FEATURE_MATCH_SAMPLE_TOKEN_VALUES });
-		expect(FEATURE_MATCH_SAMPLE_CONTEXT.clockDisplayTime).toBe('12:34');
+		expect(FEATURE_MATCH_SAMPLE_TOKEN_VALUES).toEqual({
+			player1Name: 'Alexandra Whitfield-Moreau',
+			player1Record: '5-1-1',
+			player1Deck: 'Boros Convoke',
+			player1DeckColors: 'RW',
+			player1Pronouns: 'she/her',
+			player1Lgs: 'Northgate Games',
+			player2Name: 'Kenji Sato',
+			player2Record: '6-1',
+			player2Deck: 'Dimir Midrange',
+			player2DeckColors: 'UB',
+			player2Pronouns: 'he/him',
+			player2Lgs: 'The Battered Sleeve',
+			round: 'Round 8',
+			stage: 'Quarterfinals',
+			table: 'Table 1',
+			format: 'Standard',
+			eventName: 'Sample Regional Championship',
+		});
+		expect(FEATURE_MATCH_SAMPLE_CONTEXT).toEqual({
+			clockDisplayTime: '12:34',
+			player1: { lifeTotal: 17, gameWins: 1 },
+			player2: { lifeTotal: 4, gameWins: 1 },
+			bestOf: 3,
+		});
+	});
+
+	/**
+	 * Values chosen to be awkward in the ways real ones are. A dataset of `Player 1`
+	 * and `0-0` would make every layout look like it fits, which is worse than no
+	 * preview at all because it is confidently wrong.
+	 *
+	 * Stated as relations rather than as the literals the test above pins, because
+	 * these are the reasons those literals were chosen: an author replacing the
+	 * sample names has to keep the awkwardness, not the exact strings.
+	 */
+	it('samples values awkward in the ways real ones are', () => {
+		expect(String(FEATURE_MATCH_SAMPLE_TOKEN_VALUES.player1Name).length).toBeGreaterThan(20);
+		expect(String(FEATURE_MATCH_SAMPLE_TOKEN_VALUES.player1Name).length)
+			.toBeGreaterThan(String(FEATURE_MATCH_SAMPLE_TOKEN_VALUES.player2Name).length);
+		// A record with a draw in it, which is the longer of the two shapes a record
+		// takes.
+		expect(String(FEATURE_MATCH_SAMPLE_TOKEN_VALUES.player1Record).split('-')).toHaveLength(3);
 		// A game-wins state partway through the Match, so a win-box indicator draws
 		// filled and unfilled boxes rather than a row of empties.
-		expect(FEATURE_MATCH_SAMPLE_CONTEXT.bestOf).toBe(3);
 		expect(FEATURE_MATCH_SAMPLE_CONTEXT.player1.gameWins).toBeGreaterThan(0);
 		expect(FEATURE_MATCH_SAMPLE_CONTEXT.player1.gameWins + FEATURE_MATCH_SAMPLE_CONTEXT.player2.gameWins)
 			.toBeLessThan(FEATURE_MATCH_SAMPLE_CONTEXT.bestOf);
@@ -49,19 +97,5 @@ describe('the canonical Feature Match sample dataset', () => {
 		expect(FEATURE_MATCH_SAMPLE_CONTEXT.player1.lifeTotal)
 			.not
 			.toBe(FEATURE_MATCH_SAMPLE_CONTEXT.player2.lifeTotal);
-	});
-
-	/**
-	 * Values chosen to be awkward in the ways real ones are. A dataset of `Player 1`
-	 * and `0-0` would make every layout look like it fits, which is worse than no
-	 * preview at all because it is confidently wrong.
-	 */
-	it('samples values long enough to expose a layout that does not fit', () => {
-		expect(String(FEATURE_MATCH_SAMPLE_TOKEN_VALUES.player1Name).length).toBeGreaterThan(20);
-		expect(String(FEATURE_MATCH_SAMPLE_TOKEN_VALUES.player1Name).length)
-			.toBeGreaterThan(String(FEATURE_MATCH_SAMPLE_TOKEN_VALUES.player2Name).length);
-		// A record with a draw in it, which is the longer of the two shapes a record
-		// takes.
-		expect(FEATURE_MATCH_SAMPLE_TOKEN_VALUES.player1Record).toBe('5-1-1');
 	});
 });
