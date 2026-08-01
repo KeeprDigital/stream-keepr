@@ -47,6 +47,7 @@ function unexpectedFailure(error) {
  *     note: (failure: { code: string, detail?: object }) => void,
  *     defer: (detail: object, instructions?: string) => void,
  *     checks: () => number,
+ *     failed: () => boolean,
  *   }) => Promise<object | void>,
  * }} options
  */
@@ -74,6 +75,13 @@ export async function runAcceptanceHarness({ harness, secrets = [], run }) {
 		defer(detail, instructions) {
 			deferral = { detail, instructions };
 		},
+		/**
+		 * Whether anything has been recorded against the run so far. A harness
+		 * that has to tidy up differently depending on the verdict — keeping a
+		 * restore path a failed run still needs, say — asks here rather than
+		 * guessing from its own last statement.
+		 */
+		failed: () => failures.length > 0,
 		checks: () => checks,
 	};
 
