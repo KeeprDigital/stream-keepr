@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>static-font-v1 browser acceptance</title>
+	</head>
+	<body data-result="running" data-code="">
+		<pre id="result">Loading representative static font faces…</pre>
+		<script type="module">
+			// A Screen Output must not report itself ready while a template's
+			// typography is still the browser's fallback, so this page proves two
+			// things about every face the installation serves: that it finishes
+			// loading, and that what finally renders is that face rather than
+			// something that merely looks like text. The pixel comparison is the
+			// only honest test of the second — a face that failed to apply still
+			// produces a perfectly good-looking glyph.
+			const manifest = await (await fetch('static-font-v1.json', { cache: 'no-store' })).json();
+
+			async function digest(bytes) {
+				return Array.from(
+					new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
+					byte => byte.toString(16).padStart(2, '0'),
+				).join('');
+			}
+
+			function renderContext() {
+				const canvas = document.createElement('canvas');
+				canvas.width = 128;
+				canvas.height = 96;
+				return canvas.getContext('2d', { willReadFrequently: true });
+			}
+
+			async function pixelDigest(context, fontFamily, text) {
+				context.clearRect(0, 0, context.canvas.width, context.canvas.height);
+				context.font = `64px ${fontFamily}`;
+				context.textBaseline = 'alphabetic';
+				context.fillText(text, 12, 72);
+				return await digest(
+					context.getImageData(0, 0, context.canvas.width, context.canvas.height).data,
+				);
+			}
+
+			/**
+			 * @returns {Promise<{ outcome: 'rendered' | 'load-failed' | 'not-applied' }>}
+			 */
+			async function loadAndRender(face) {
+				const response = await fetch(face.url, { cache: 'no-store' });
+				if (!response.ok)
+					return { outcome: 'load-failed' };
+				const bytes = await response.arrayBuffer();
+				const family = `sk-acceptance-${await digest(bytes)}`;
+				const glyph = String.fromCodePoint(face.codePoint);
+
+				let fontFace;
+				try {
+					fontFace = new FontFace(family, bytes);
+					await fontFace.load();
+				}
+				catch {
+					// A face the browser's font sanitiser refuses never loads, however
+					// well-formed the server-side compatibility profile found it.
+					return { outcome: 'load-failed', reason: 'the browser refused the face' };
+				}
+				// Readiness has to mean something. `document.fonts.check()` answers
+				// true for a family nobody has heard of, so the face's own status is
+				// the only signal separating "loaded" from "about to fall back".
+				if (fontFace.status !== 'loaded')
+					return { outcome: 'load-failed', reason: 'the face resolved without loading' };
+				document.fonts.add(fontFace);
+				try {
+					await document.fonts.load(`64px "${family}"`, glyph);
+					await document.fonts.ready;
+					if (document.fonts.status !== 'loaded') {
+						return {
+							outcome: 'load-failed',
+							reason: 'the document reported ready while a face was still loading',
+						};
+					}
+
+					const context = renderContext();
+					const [exactWithSans, exactWithMono, sansFallback, monoFallback] = await Promise.all([
+						pixelDigest(context, `"${family}", sans-serif`, glyph),
+						pixelDigest(context, `"${family}", monospace`, glyph),
+						pixelDigest(context, 'sans-serif', glyph),
+						pixelDigest(context, 'monospace', glyph),
+					]);
+					// The two fallbacks must differ, or the probe cannot tell a
+					// rendered face from a substituted one at all.
+					if (sansFallback === monoFallback)
+						return { outcome: 'not-applied', reason: 'fallbacks are indistinguishable' };
+					if (exactWithSans !== exactWithMono)
+						return { outcome: 'not-applied', reason: 'the face depends on its fallback stack' };
+					if (exactWithSans === sansFallback || exactWithSans === monoFallback)
+						return { outcome: 'not-applied', reason: 'the fallback rendered instead of the face' };
+					return { outcome: 'rendered' };
+				}
+				finally {
+					document.fonts.delete(fontFace);
+				}
+			}
+
+			function report(code, message) {
+				document.body.dataset.code = code;
+				document.body.dataset.result = code === '' ? 'passed' : 'failed';
+				document.querySelector('#result').textContent = message;
+			}
+
+			try {
+				for (const face of manifest.faces) {
+					const { outcome, reason } = await loadAndRender(face);
+					if (outcome === 'load-failed') {
+						report('font-load-incomplete', `${face.format}: ${reason}.`);
+						break;
+					}
+					if (outcome === 'not-applied') {
+						report('font-glyph-not-rendered', `${face.format}: ${reason}.`);
+						break;
+					}
+				}
+
+				// A face asked for a glyph it does not contain must be caught, not
+				// quietly answered by whatever the browser reaches for instead.
+				if (document.body.dataset.result === 'running') {
+					const probe = await loadAndRender(manifest.fallbackProbe);
+					if (probe.outcome === 'rendered') {
+						report(
+							'font-silent-fallback-accepted',
+							'A face that silently fell back was accepted as rendered.',
+						);
+					}
+					else {
+						report(
+							'',
+							`${manifest.faces.map(face => face.format).join(', ')} loaded and rendered; `
+							+ 'a silently substituted face was refused.',
+						);
+					}
+				}
+			}
+			catch (error) {
+				report('browser-acceptance-failed', error instanceof Error ? error.message : String(error));
+			}
+		</script>
+	</body>
+</html>
