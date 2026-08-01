@@ -98,8 +98,14 @@ async function apply() {
 	}
 	catch (caught) {
 		const data = (caught as { data?: { message?: string } })?.data;
-		error.value = data?.message ?? (caught instanceof Error ? caught.message : 'The style update could not be applied');
+		const refused = data?.message
+			?? (caught instanceof Error ? caught.message : 'The style update could not be applied');
+		// Re-read first, because a refusal is usually the Style Set having been
+		// republished or the template revised — so what the author is looking at is out
+		// of date too. The refusal is stated *after* that read, which clears the error it
+		// succeeds at, rather than before it and silently wiped.
 		await refresh();
+		error.value = refused;
 	}
 	finally {
 		busy.value = false;
