@@ -150,6 +150,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 		const replacement = await replace(reference.assetId, 'lifecycle-retire-replacement');
 		await $fetch(`/api/graphics-assets/${reference.assetId}`, {
 			method: 'PATCH',
+			headers: authorHeaders,
 			body: {
 				name: 'Renamed retirable lifecycle logo',
 				eventIds: [eventId],

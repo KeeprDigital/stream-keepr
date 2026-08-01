@@ -162,6 +162,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 			`/api/graphics-assets/${originalReference.assetId}`,
 			{
 				method: 'PATCH',
+				headers: authorHeaders,
 				body: { name: 'Renamed integration logo', eventIds: [] },
 			},
 		);

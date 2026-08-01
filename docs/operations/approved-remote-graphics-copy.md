@@ -153,8 +153,9 @@ Guarding ingestion and lifecycle did not gate the library's read surface.
 `GET /api/graphics-assets`, `capacity`, `thumbnail`, `usage` and `retention`
 still answer an unauthenticated caller, so the installation's asset names,
 thumbnails, usage and capacity remain enumerable without a session. Tracked as
-#172; gating the listing route also needs the Library Workspace's server-side
-render to forward its cookie, which is what makes it more than a guard.
+issue #172; gating the listing route also needs the Library Workspace's
+server-side render to forward its cookie, which is what makes it more than a
+guard.
 
 ## Platform limitation: DNS rebinding
 
