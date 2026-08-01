@@ -66,6 +66,16 @@ const selectedGraphic = computed(() =>
  */
 const styleSetAuthoring = useGraphicStyleSetAuthoring(selectedGraphic);
 
+/**
+ * The game of the Event this Screen belongs to.
+ *
+ * The inspector needs it to author Graphic Input Bindings: the field catalog
+ * separates stable common fields from ones specific to the current Event's game, and
+ * an author must never be offered a field this Event cannot resolve.
+ */
+const eventStore = useEventStore();
+const game = computed(() => eventStore.event?.game);
+
 /** One edited Broadcast Graphic back into the Screen's stack. */
 function replaceSelectedGraphic(graphic: BroadcastGraphicConfig) {
 	emit('update:graphics', props.graphics.map(entry => entry.id === graphic.id ? graphic : entry));
@@ -192,6 +202,7 @@ const leaseNotice = computed(() => {
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
 					:event-id="eventId"
+					:game="game"
 					:writable="canAuthor"
 					:style-set="styleSetAuthoring.context.value ?? undefined"
 					@update:graphics="emit('update:graphics', $event)"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { GraphicsHostContract, GraphicSurfaceStyleEdit, GraphicSurfaceStyleSlot, ShapeGeometryPresetId } from '~~/shared/modules/graphics';
-import type { PlayerSide } from '~~/shared/types/enums';
+import type { Game, PlayerSide } from '~~/shared/types/enums';
 import type { GraphicFocalPosition, MediaGraphicItemFit } from '~~/shared/types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
@@ -103,6 +103,7 @@ import {
 } from '~~/shared/types/graphics';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 import GraphicsCompositorAnimation from './Animation.vue';
+import GraphicsCompositorBindings from './Bindings.vue';
 
 /**
  * Property controls for the current selection: the Broadcast Graphic, or one
@@ -131,6 +132,12 @@ const props = defineProps<{
 	contract: GraphicsHostContract;
 	/** The Event whose Graphic Asset associations organise the asset picker's discovery. */
 	eventId: number;
+	/**
+	 * The game of that Event, which decides which game-specific Graphic Input Binding
+	 * catalog fields exist. Absent where the host has no Event context to read one
+	 * from, and the catalog's lenient case covers it.
+	 */
+	game?: Game;
 	/**
 	 * The published Graphic Style Set this composition is linked to, when it is
 	 * linked to one.
@@ -674,7 +681,17 @@ function addInput() {
 	applyToGraphicInputs((graphics, graphicId) => addGraphicInput(graphics, graphicId, newInputType.value));
 }
 
+/**
+ * Merge into one Graphic Input declaration, ignoring a blank label.
+ *
+ * The write path requires a label of at least one character, so clearing the field
+ * writes nothing at all and the previous name stands until another is typed. The
+ * operation refuses one too; this is the half that keeps a cleared field from writing
+ * the Screen's mode configuration unchanged.
+ */
 function updateInput(key: string, patch: Partial<Omit<GraphicInputDeclaration, 'key' | 'type'>>) {
+	if (patch.label !== undefined && patch.label.trim() === '')
+		return;
 	applyToGraphicInputs((graphics, graphicId) => patchGraphicInput(graphics, graphicId, key, patch));
 }
 
@@ -926,6 +943,20 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 					/>
 				</UFormField>
 			</div>
+
+			<!--
+				The Event Data half of the same panel: which Event Data this Broadcast
+				Graphic points at, and which of its Graphic Inputs read a field of it.
+				Offered wherever Graphic Inputs are, because a Graphic Input Binding maps
+				one of them to one field and a host with no Graphic Inputs has none to map.
+			-->
+			<GraphicsCompositorBindings
+				:graphics="graphics"
+				:selected-target="selectedTarget"
+				:game="game"
+				:writable="writable"
+				@update:graphics="emit('update:graphics', $event)"
+			/>
 		</template>
 
 		<template v-if="selectedItem">

@@ -471,6 +471,18 @@ export const MAX_GRAPHIC_INPUT_LABEL_LENGTH = 60;
 export const MAX_GRAPHIC_INPUT_CHOICE_OPTIONS = 12;
 export const MAX_GRAPHIC_INPUT_CHOICE_LENGTH = 40;
 
+/**
+ * How many Graphic Source Selections one Broadcast Graphic may declare, and how many
+ * one Broadcast Graphics Screen may hold in total.
+ *
+ * Here rather than with the write path's other bounds because both sides need them:
+ * the schema refuses a config that exceeds either, and the authoring surface has to
+ * stop before producing one. The reasoning that chose the numbers — the per-Screen
+ * byte budget these two protect — stays with the schema that enforces them.
+ */
+export const MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC = 8;
+export const MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN = 40;
+
 /** One selectable option of a choice Graphic Input. */
 export interface GraphicInputChoiceOption {
 	/** The stored value. Stable, so renaming the label never invalidates a value. */

@@ -522,6 +522,18 @@ export const GRAPHIC_BINDING_CATALOG: GraphicBindingCatalog = {
 	'archetype': ARCHETYPE_FIELDS,
 };
 
+/** What an author reads when choosing what one Graphic Source Selection selects. */
+export const GRAPHIC_SOURCE_SELECTION_KIND_LABELS: Record<GraphicSourceSelectionKind, string> = {
+	'event': 'Current Event',
+	'player': 'Player',
+	'talent': 'Talent',
+	'phase': 'Phase',
+	'round': 'Round',
+	'match': 'Match',
+	'feature-match-slot': 'Feature Match Slot',
+	'archetype': 'Archetype',
+};
+
 /**
  * The fields one Graphic Source Selection kind offers, on this Event's game.
  *
@@ -567,6 +579,32 @@ export function isGraphicBindingFieldCompatible(
 	if (field.game !== undefined && game !== undefined && field.game !== game)
 		return false;
 	return field.type === inputType;
+}
+
+/**
+ * The fields one Graphic Input may bind to, split the way an author reads them.
+ *
+ * Two filters at once, because an author choosing a field is asking one question:
+ * type compatibility, which the catalog decides rather than conversion, and this
+ * Event's game. The split is the catalog's own rule made visible — a Magic deck name
+ * and a One Piece leader are separate fields on purpose, so an author has to see
+ * which of the two they are choosing.
+ *
+ * Passing no game keeps every game's fields in `gameSpecific`, which is the lenient
+ * no-Event-context case `graphicBindingFields` already documents.
+ */
+export function bindableGraphicBindingFields(
+	kind: GraphicSourceSelectionKind,
+	inputType: GraphicInputDeclaration['type'],
+	game?: Game,
+): { common: GraphicBindingField<unknown>[]; gameSpecific: GraphicBindingField<unknown>[] } {
+	const fields = (graphicBindingFields(kind, game) as readonly GraphicBindingField<unknown>[])
+		.filter(field => field.type === inputType);
+
+	return {
+		common: fields.filter(field => field.game === undefined),
+		gameSpecific: fields.filter(field => field.game !== undefined),
+	};
 }
 
 /** Every field id the catalog defines, across every Graphic Source Selection kind. */
