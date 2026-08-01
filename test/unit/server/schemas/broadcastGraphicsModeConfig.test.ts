@@ -6,6 +6,7 @@ import {
 	MAX_GRAPHIC_GROUP_CHILDREN,
 	MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC,
 	MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN,
+	MAX_GRAPHIC_ITEM_ID_LENGTH,
 	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
 	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN,
 	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES,
@@ -33,6 +34,7 @@ import {
 	MIN_GRAPHIC_ANIMATION_DURATION_MS,
 } from '~~/shared/types/graphics';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { randomUuid } from '~~/shared/utils/uuid';
 
 const SQUARE = { treatment: 'square' as const, size: 0 };
 const GEOMETRY = {
@@ -165,6 +167,93 @@ const WORST_FONT = {
 	reference: { assetId: 'a'.repeat(100), revisionId: 'r'.repeat(100) },
 };
 
+const WORST_TYPOGRAPHY = {
+	font: WORST_FONT,
+	fontSize: 599.5,
+	fontWeight: 900,
+	fontStyle: 'italic' as const,
+	textTransform: 'uppercase' as const,
+	letterSpacing: -19.5,
+	lineHeight: 1.15,
+	textAlign: 'center' as const,
+	color: '#0077a3',
+};
+
+/** A Graphic Style Set entry identity, at its own maximum. */
+const WORST_STYLE_ENTRY_ID = 'e'.repeat(100);
+
+/**
+ * Every Graphic Style Set slot a Graphic Item may reference, each with the largest
+ * override its own property group admits.
+ *
+ * The whole block was absent from this fixture until #99, which is the same class of
+ * omission #69 found in the unanimated shells: a construct the schema admits, missing
+ * from the measurement, so the number looked measured and was not. It is the single
+ * most expensive thing one Graphic Item can carry — larger than the item's own
+ * properties — because an override is a partial of the property group it deviates
+ * from, and a maximal one restates that whole group beside a 100-character entry id.
+ *
+ * The slots are not gated by item kind: `graphicItemStyleRefsSchema` is one strict
+ * object of optional slots shared by every kind, so a Text Graphic Item may carry a
+ * `boxSurfaceStyle` reference it will never apply. The worst case populates what the
+ * schema accepts rather than what a renderer reads.
+ */
+const WORST_ITEM_STYLE_REFS = {
+	'typography': {
+		entryId: WORST_STYLE_ENTRY_ID,
+		// `textAlign` is omitted from the typography override slot: it lays out the
+		// whole block rather than one run, so the schema refuses the key.
+		overrides: {
+			font: WORST_FONT,
+			fontSize: 599.5,
+			fontWeight: 900,
+			fontStyle: 'italic' as const,
+			textTransform: 'uppercase' as const,
+			letterSpacing: -19.5,
+			lineHeight: 1.15,
+			color: '#0077a3',
+		},
+	},
+	'surfaceStyle': { entryId: WORST_STYLE_ENTRY_ID, overrides: WORST_SURFACE_STYLE },
+	// A Graphic Fill is a discriminated union, so it has no meaningful partial and
+	// this slot takes no overrides at all.
+	'surfaceStyle.fill': { entryId: WORST_STYLE_ENTRY_ID },
+	'defaultChildSurfaceStyle': { entryId: WORST_STYLE_ENTRY_ID, overrides: WORST_SURFACE_STYLE },
+	'boxSurfaceStyle': { entryId: WORST_STYLE_ENTRY_ID, overrides: WORST_SURFACE_STYLE },
+	'wonBoxSurfaceStyle': { entryId: WORST_STYLE_ENTRY_ID, overrides: WORST_SURFACE_STYLE },
+	'geometry': { entryId: WORST_STYLE_ENTRY_ID, overrides: WORST_GEOMETRY },
+	'clipGeometry': { entryId: WORST_STYLE_ENTRY_ID, overrides: WORST_GEOMETRY },
+	'boxGeometry': { entryId: WORST_STYLE_ENTRY_ID, overrides: WORST_GEOMETRY },
+	'media': {
+		entryId: WORST_STYLE_ENTRY_ID,
+		overrides: {
+			fit: 'cover' as const,
+			focalPosition: { horizontal: 0.5, vertical: 0.5 },
+			opacity: 0.85,
+			clipGeometry: WORST_GEOMETRY,
+			playbackRate: 3.75,
+			loop: true,
+		},
+	},
+	'animation.enter': { entryId: WORST_STYLE_ENTRY_ID, overrides: WORST_RECIPE },
+	'animation.on-screen': { entryId: WORST_STYLE_ENTRY_ID, overrides: { ...WORST_RECIPE, pause: 59999.5, repeat: 100 } },
+	'animation.update': { entryId: WORST_STYLE_ENTRY_ID, overrides: WORST_RECIPE },
+	'animation.exit': { entryId: WORST_STYLE_ENTRY_ID, overrides: WORST_RECIPE },
+};
+
+/** A container references whole-composition motion and nothing else. */
+const WORST_CONTAINER_STYLE_REFS = {
+	'animation.enter': WORST_ITEM_STYLE_REFS['animation.enter'],
+	'animation.on-screen': WORST_ITEM_STYLE_REFS['animation.on-screen'],
+	'animation.update': WORST_ITEM_STYLE_REFS['animation.update'],
+	'animation.exit': WORST_ITEM_STYLE_REFS['animation.exit'],
+};
+
+/** A Graphic Item id at the length the schema admits, which is what a stagger names. */
+function worstCaseItemId(index: number) {
+	return `i${index}`.padEnd(MAX_GRAPHIC_ITEM_ID_LENGTH, 'i');
+}
+
 /** The most expensive Graphic Item the schema accepts, used for the byte budget. */
 function worstCaseItem(id: string) {
 	return {
@@ -193,21 +282,14 @@ function worstCaseItem(id: string) {
 		width: 9999.5,
 		height: 9999.5,
 		text: 'T'.repeat(MAX_GRAPHIC_TEXT_LENGTH),
-		typography: {
-			font: WORST_FONT,
-			fontSize: 599.5,
-			fontWeight: 900,
-			fontStyle: 'italic' as const,
-			textTransform: 'uppercase' as const,
-			letterSpacing: -19.5,
-			lineHeight: 1.15,
-			textAlign: 'center' as const,
-			color: '#0077a3',
-		},
+		typography: WORST_TYPOGRAPHY,
 		overflowPolicy: 'shrink' as const,
-		minFontSize: 24.5,
+		// Its own maximum rather than a plausible one: the schema bounds it at 600 and
+		// does not tie it to `fontSize`, so a worst case takes the longest legal value.
+		minFontSize: 599.5,
 		surfaceStyle: WORST_SURFACE_STYLE,
 		animation: WORST_ANIMATION,
+		styleRefs: WORST_ITEM_STYLE_REFS,
 	};
 }
 
@@ -284,6 +366,307 @@ function textInput(key: string) {
 
 function messages(result: { error?: { issues: Array<{ message: string }> } }) {
 	return result.error?.issues.map(issue => issue.message) ?? [];
+}
+
+function jsonBytes(value: unknown) {
+	return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
+
+/**
+ * The most expensive Graphic Group the schema accepts, holding maximal children.
+ *
+ * A Graphic Group is the seventh member of `graphicItemConfigSchema` and it was
+ * absent from the worst case until #99's review: it carries a Shape Geometry, two
+ * Graphic Surface Styles, six layout properties, and a *container* animation whose
+ * stagger names its own children — and its children may each carry a `sizing` block
+ * that no top-level Graphic Item can.
+ */
+function worstCaseGroup(id: string, childIds: string[]) {
+	const children = childIds.map(childId => ({
+		...worstCaseItem(childId),
+		// `fixed` rather than `fill`: the two are interchangeable here and it is the
+		// longer of the two enum members.
+		sizing: { mode: 'fixed' as const, size: 9999.5, weight: 99.5 },
+	}));
+	return {
+		type: 'group' as const,
+		id,
+		label: 'L'.repeat(100),
+		visible: true,
+		anchor: 'bottom-right' as const,
+		rotation: -359.99,
+		x: -9999.5,
+		y: -9999.5,
+		width: 9999.5,
+		height: 9999.5,
+		arrangement: 'column' as const,
+		padding: 9999.5,
+		gap: 9999.5,
+		align: 'stretch' as const,
+		justify: 'space-between' as const,
+		clip: true,
+		geometry: WORST_GEOMETRY,
+		surfaceStyle: WORST_SURFACE_STYLE,
+		defaultChildSurfaceStyle: WORST_SURFACE_STYLE,
+		animation: worstContainerAnimation(childIds),
+		styleRefs: WORST_ITEM_STYLE_REFS,
+		children,
+	};
+}
+
+/**
+ * The Graphic Item budget spent one way or the other, as a list of top-level items.
+ *
+ * `grouped` spends it on the fewest Graphic Groups that can hold it — a group and
+ * its children are one shared allowance, so fewer groups means more children, and a
+ * child costs more than the group shell it needs. `flat` spends it entirely on
+ * top-level Graphic Items. Which is dearer is measured rather than assumed.
+ */
+function worstCaseItems(total: number, arrangement: 'flat' | 'grouped') {
+	if (arrangement === 'flat')
+		return Array.from({ length: total }, (_, index) => worstCaseItem(worstCaseItemId(index)));
+
+	const groupCount = Math.ceil(total / (MAX_GRAPHIC_GROUP_CHILDREN + 1));
+	const items: Array<ReturnType<typeof worstCaseItem> | ReturnType<typeof worstCaseGroup>> = [];
+	let placed = 0;
+	for (let group = 0; group < groupCount; group += 1) {
+		// One slot for the group itself, and the rest shared out among its children.
+		const share = Math.floor((total - placed) / (groupCount - group)) - 1;
+		const childIds = Array.from({ length: share }, (_, child) => worstCaseItemId(placed + 1 + child));
+		items.push(worstCaseGroup(worstCaseItemId(placed), childIds));
+		placed += share + 1;
+	}
+	expect(placed).toBe(total);
+	return items;
+}
+
+function countScreenGraphicItems(config: { graphics: Array<{ items: Array<{ type: string; children?: unknown[] }> }> }) {
+	return config.graphics.reduce(
+		(total, graphic) => total + graphic.items.reduce(
+			(count, item) => count + 1 + (item.type === 'group' ? (item.children?.length ?? 0) : 0),
+			0,
+		),
+		0,
+	);
+}
+
+/**
+ * The worst Broadcast Graphics Screen every cap together admits.
+ *
+ * Every Graphic Item slot filled with a maximal Text Graphic Item carrying maximal
+ * Graphic Placeholder Styles and a maximal Graphic Style Set reference in every
+ * slot; maximal-length ids, because a stagger names them; every Graphic Input slot
+ * filled with a maximal choice input; and every binding, Graphic Source Selection,
+ * Graphic Channel, Graphic Style Set link and animated Broadcast Graphic shell
+ * present.
+ */
+function worstCaseScreen(arrangement: 'flat' | 'grouped') {
+	const graphics = Array.from({ length: MAX_BROADCAST_GRAPHICS_PER_SCREEN }, (_, index) => ({
+		id: `g${index}`.padEnd(MAX_GRAPHIC_ITEM_ID_LENGTH, 'g'),
+		name: 'N'.repeat(100),
+		items: [] as ReturnType<typeof worstCaseItems>,
+		inputs: [] as ReturnType<typeof worstCaseChoiceInput>[],
+		bindings: [] as ReturnType<typeof worstCaseBinding>[],
+		sources: [] as ReturnType<typeof worstCaseSource>[],
+		animation: undefined as ReturnType<typeof worstContainerAnimation> | undefined,
+		// The one field in this fixture with no schema maximum to populate — see the
+		// named exception on the test below.
+		styleSet: { styleSetId: 's'.repeat(100), revision: 999999 },
+		styleRefs: WORST_CONTAINER_STYLE_REFS,
+		channelId: undefined as string | undefined,
+	}));
+
+	function fill<T>(items: T[], perGraphic: number, add: (graphic: typeof graphics[number], item: T) => void) {
+		let index = 0;
+		for (const graphic of graphics) {
+			for (let taken = 0; taken < perGraphic && index < items.length; taken += 1, index += 1)
+				add(graphic, items[index]!);
+		}
+		expect(index).toBe(items.length);
+	}
+
+	fill(
+		worstCaseItems(MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN, arrangement),
+		MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
+		(graphic, item) => graphic.items.push(item),
+	);
+	fill(
+		Array.from({ length: MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN }, (_, index) => index),
+		MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC,
+		(graphic, index) => {
+			graphic.inputs.push(worstCaseChoiceInput(`k${index}`));
+			graphic.bindings.push(worstCaseBinding(`k${index}`));
+		},
+	);
+	fill(
+		Array.from({ length: MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN }, (_, index) => index),
+		MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
+		(graphic, index) => graphic.sources.push(worstCaseSource(`s${index}`, graphic.sources.length > 0)),
+	);
+
+	// A Broadcast Graphic owns whole-graphic motion as well as its items' own, and
+	// staggers its direct items per phase. Leaving the shells unanimated would
+	// understate the worst case by the most expensive thing a shell can carry.
+	for (const graphic of graphics)
+		graphic.animation = worstContainerAnimation(graphic.items.map(item => item.id));
+
+	// Every Graphic Channel slot filled, and every Broadcast Graphic in one. Channel
+	// membership costs on both sides — the declaration and the id each graphic joins
+	// it by — so leaving either out would understate what the caps together admit.
+	const channels = Array.from({ length: MAX_GRAPHIC_CHANNELS_PER_SCREEN }, (_, index) => ({
+		id: `${'c'.repeat(98)}${String(index).padStart(2, '0')}`,
+		name: 'N'.repeat(100),
+		handoff: 'out-then-in' as const,
+	}));
+	graphics.forEach((graphic, index) => {
+		graphic.channelId = channels[index % channels.length]!.id;
+	});
+
+	return { graphics, channels };
+}
+
+/** The same budget laid out flat, measured so the choice of shape stays checked. */
+const WORST_CASE_FLAT_BYTES = 3_711_076;
+
+/** A realistic Screen filled to the Graphic Item cap. See ADR-0002. */
+const REALISTIC_SCREEN_AT_CAP_BYTES = 248_734;
+
+/**
+ * The shared `modeConfigs` budget, restated here because the schema keeps it
+ * private. It is one number for all ten Screen Modes, which is what makes the
+ * Broadcast Graphics contribution below a share rather than a total.
+ */
+const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
+
+/**
+ * A Broadcast Graphic as the fidelity prototype describes one, rather than as the
+ * caps admit one.
+ *
+ * Six Graphic Items, counted from the reconstruction inventory in
+ * `docs/prototypes/broadcast-graphics-fidelity.md`: the split angular lower third
+ * is "two shape beds, two accent rules, two text items", which is the richest of
+ * the four and the shape the Graphic Item cap is derived from. The others are a
+ * full-width lower third of about six, a four-item slate, and a two-to-three item
+ * bug — nineteen Graphic Items across the whole acceptance set.
+ *
+ * With uuid ids, an application font, one enter and one exit recipe, and — on as
+ * many graphics as `MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN` allows — two
+ * Graphic Inputs with a bound Graphic Source Selection.
+ */
+const REALISTIC_ITEMS_PER_GRAPHIC = 6;
+const REALISTIC_INPUTS_PER_GRAPHIC = 2;
+
+function realisticId(graphic: number, item: number) {
+	return `3f2a9c1e-7b4d-4e2a-9f10-${String(graphic).padStart(6, '0')}${String(item).padStart(6, '0')}`;
+}
+
+function realisticText(id: string) {
+	return {
+		type: 'text' as const,
+		id,
+		label: 'Commentator name',
+		visible: true,
+		anchor: 'top-left' as const,
+		x: 120,
+		y: 880,
+		width: 640,
+		height: 72,
+		text: '{name}',
+		typography: {
+			font: { kind: 'application' as const, fontId: 'inter' as const },
+			fontSize: 48,
+			fontWeight: 700,
+			fontStyle: 'normal' as const,
+			textTransform: 'uppercase' as const,
+			letterSpacing: 0.5,
+			lineHeight: 1.15,
+			textAlign: 'left' as const,
+			color: '#ffffff',
+		},
+		overflowPolicy: 'shrink' as const,
+		minFontSize: 24,
+		animation: {
+			enter: { duration: 400, easing: 'ease-out' as const, delay: 120, fade: { opacity: 0 }, slide: { direction: 'west' as const, distanceMode: 'fixed' as const, distance: 60 } },
+			exit: { duration: 300, easing: 'ease-in' as const, delay: 0, fade: { opacity: 0 } },
+		},
+	};
+}
+
+function realisticShape(id: string) {
+	return {
+		type: 'shape' as const,
+		id,
+		label: 'Bed',
+		visible: true,
+		anchor: 'top-left' as const,
+		x: 100,
+		y: 860,
+		width: 900,
+		height: 120,
+		geometry: {
+			topLeft: { treatment: 'square' as const, size: 0 },
+			topRight: { treatment: 'cut' as const, size: 24 },
+			bottomRight: { treatment: 'square' as const, size: 0 },
+			bottomLeft: { treatment: 'square' as const, size: 0 },
+			leftSlant: 0,
+			rightSlant: 18,
+		},
+		surfaceStyle: {
+			fill: {
+				type: 'linear-gradient' as const,
+				angle: 90,
+				stops: [
+					{ color: '#0b1e2d', position: 0, opacity: 1 },
+					{ color: '#123c5a', position: 1, opacity: 1 },
+				],
+			},
+			fillOpacity: 1,
+		},
+		animation: {
+			enter: { duration: 500, easing: 'ease-out' as const, delay: 0, reveal: { edge: 'left' as const } },
+			exit: { duration: 400, easing: 'ease-in' as const, delay: 0, reveal: { edge: 'left' as const } },
+		},
+	};
+}
+
+function realisticStack(totalItems: number, perGraphic = REALISTIC_ITEMS_PER_GRAPHIC) {
+	let remaining = totalItems;
+	// Graphic Inputs run out before Graphic Items do, and by design: a whole Screen
+	// declares 60, so at two per graphic only the first thirty carry Live Control.
+	// The rest are slates, bugs and brand furniture, which declare none.
+	let remainingInputs = MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN;
+
+	return Array.from({ length: Math.ceil(totalItems / perGraphic) }, (_, index) => {
+		const take = Math.min(perGraphic, remaining);
+		remaining -= take;
+		const items = Array.from({ length: take }, (_, item) => (
+			item % 3 === 0 ? realisticText(realisticId(index, item)) : realisticShape(realisticId(index, item))
+		));
+		const withInputs = remainingInputs >= REALISTIC_INPUTS_PER_GRAPHIC;
+		if (withInputs)
+			remainingInputs -= REALISTIC_INPUTS_PER_GRAPHIC;
+
+		return {
+			id: realisticId(index, 999),
+			name: `Lower third ${index}`,
+			items,
+			...(withInputs
+				? {
+						inputs: [
+							{ type: 'text' as const, key: 'name', label: 'Name', required: true, updatePolicy: 'staged' as const, default: '', maxLength: 60 },
+							{ type: 'text' as const, key: 'role', label: 'Role', required: false, updatePolicy: 'staged' as const, default: '', maxLength: 60 },
+						],
+						sources: [{ key: 'player', label: 'Player', kind: 'player' as const }],
+						bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+					}
+				: {}),
+			animation: {
+				enter: { duration: 500, easing: 'ease-out' as const, delay: 0, fade: { opacity: 0 } },
+				exit: { duration: 400, easing: 'ease-in' as const, delay: 0, fade: { opacity: 0 } },
+				stagger: { enter: { order: 'list' as const, step: 80, itemIds: items.map(item => item.id) } },
+			},
+		};
+	});
 }
 
 describe('broadcastGraphicsModeConfigSchema', () => {
@@ -461,106 +844,91 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		}).success).toBe(false);
 	});
 
-	it('keeps a worst-case authored Screen inside the mode-configuration byte limit', () => {
-		// The named caps have to bind before the byte limit, or an operator reads an
-		// opaque byte count instead of the limit they reached. This is the most
-		// expensive Screen every cap together still admits: every Graphic Item slot
-		// filled with a maximal Text Graphic Item carrying maximal Graphic Placeholder
-		// Styles, every Graphic Input slot filled with a maximal choice input, and
-		// every binding, Graphic Source Selection, and Broadcast Graphic shell present.
-		const graphics = Array.from({ length: MAX_BROADCAST_GRAPHICS_PER_SCREEN }, (_, index) => ({
-			id: `graphic-${index}`,
-			name: 'N'.repeat(100),
-			items: [] as ReturnType<typeof worstCaseItem>[],
-			inputs: [] as ReturnType<typeof worstCaseChoiceInput>[],
-			bindings: [] as ReturnType<typeof worstCaseBinding>[],
-			sources: [] as ReturnType<typeof worstCaseSource>[],
-			animation: undefined as ReturnType<typeof worstContainerAnimation> | undefined,
-		}));
-
-		function fill(total: number, perGraphic: number, add: (graphic: typeof graphics[number], index: number) => void) {
-			let remaining = total;
-			for (const graphic of graphics) {
-				for (let index = 0; index < perGraphic && remaining > 0; index += 1, remaining -= 1)
-					add(graphic, total - remaining);
-			}
-			expect(remaining).toBe(0);
-		}
-
-		fill(
-			MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN,
-			MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
-			(graphic, index) => graphic.items.push(worstCaseItem(`item-${index}`)),
-		);
-		fill(
-			MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN,
-			MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC,
-			(graphic, index) => {
-				graphic.inputs.push(worstCaseChoiceInput(`k${index}`));
-				graphic.bindings.push(worstCaseBinding(`k${index}`));
-			},
-		);
-		fill(
-			MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
-			MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
-			(graphic, index) => graphic.sources.push(
-				worstCaseSource(`s${index}`, graphic.sources.length > 0),
-			),
-		);
-
-		// A Broadcast Graphic owns whole-graphic motion as well as its items' own, and
-		// staggers those items per phase. Leaving the shells unanimated would understate
-		// the worst case by the most expensive thing a shell can carry.
-		for (const graphic of graphics)
-			graphic.animation = worstContainerAnimation(graphic.items.map(item => item.id));
-
-		// Every Graphic Channel slot filled, and every Broadcast Graphic in one. Channel
-		// membership costs on both sides — the declaration and the id each graphic joins
-		// it by — so leaving either out would understate what the caps together admit.
-		const channels = Array.from({ length: MAX_GRAPHIC_CHANNELS_PER_SCREEN }, (_, index) => ({
-			id: `${'c'.repeat(98)}${String(index).padStart(2, '0')}`,
-			name: 'N'.repeat(100),
-			handoff: 'out-then-in' as const,
-		}));
-		graphics.forEach((graphic, index) => {
-			(graphic as { channelId?: string }).channelId = channels[index % channels.length]!.id;
-		});
-
-		const config = { graphics, channels };
-		const bytes = new TextEncoder().encode(JSON.stringify(config)).byteLength;
+	it('measures the worst Broadcast Graphics Screen every cap together admits', () => {
+		// The one owned measurement of what the caps admit, rather than any one
+		// ticket's arithmetic. It carries every construct the schema accepts, each
+		// populated at its own maximum, **with one named exception**:
+		//
+		// - `styleSet.revision` is `int().nonnegative()` with no upper bound, so there
+		//   is no longest legal value to write. The builder uses a six-digit revision.
+		//
+		// The exception is named rather than the claim being made absolute, because an
+		// absolute claim is what has been wrong four times here. A construct the schema
+		// admits and this builder omits produces a number that looks measured and is
+		// not: that hid animated shells until #69 asked why an unchanged figure had not
+		// moved, hid the whole `styleRefs` block until #99 asked the same question of
+		// the rest, and hid the Graphic Group — the seventh member of
+		// `graphicItemConfigSchema` — until #99's review asked it a third time.
+		//
+		// Which arrangement is the worst one is measured rather than assumed — see the
+		// flat contrast below.
+		const config = worstCaseScreen('grouped');
+		const bytes = jsonBytes(config);
 
 		// Every named cap admits it — that is what makes it the worst case the caps
 		// allow rather than an arbitrary large Screen.
 		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(true);
 
-		// The figure the caps are justified by, so the schema's own arithmetic is
-		// checked rather than described. Lowering a cap without measuring, or raising
-		// one, has to move this number.
+		// The one figure, pinned exactly, so the schema's own arithmetic is checked
+		// rather than described. Moving any cap, or adding to the vocabulary, has to
+		// move this number deliberately.
 		expect(bytes).toBe(MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES);
 
-		// And the mode-configuration byte total refuses it.
-		//
-		// This is a change of kind, not of degree. Before Graphic Animation the worst
-		// case the caps allow *fitted* the budget, which is what let the named caps
-		// bind first and an operator read which limit they reached. Animation adds
-		// 1,039 bytes to every Graphic Item and 2,115 to every Broadcast Graphic
-		// shell, taking the worst case from 413,241 to 596,673 against a 524,288
-		// limit — so an author who somehow filled every cap at once now reads a byte
-		// count instead.
-		//
-		// Media Graphic Items do not contribute to this. A maximal animated Media
-		// Graphic Item is 1,906 bytes against 3,704 for a maximal animated Text
-		// Graphic Item, so the worst case is built from text and adding a cheaper item
-		// kind cannot move it.
-		//
-		// It is asserted rather than fixed here because the fix is a cap, and this
-		// ticket does not own the cap: two tickets already cut it independently, each
-		// measuring correctly and each blind to the other. #99 owns the merged
-		// measurement and decides whether to lower a cap or accept that the worst case
-		// need not fit — the latter being sound now that the total is actually enforced
-		// on the editors' write path.
+		// And the mode-configuration byte total refuses it. That the worst case is
+		// allowed not to fit is a decision with its own record: `docs/adr/0002-broadcast-graphics-item-cap.md`.
 		expect(modeConfigsMapSchema.safeParse({ 'broadcast-graphics': config }).success).toBe(false);
-		expect(bytes).toBeGreaterThan(512 * 1024);
+		expect(bytes).toBeGreaterThan(MAX_MODE_CONFIGS_BYTES);
+	});
+
+	it('measures more with Graphic Groups than with the same items laid out flat', () => {
+		// The contrast that makes "which worst case" a checked choice rather than an
+		// assumption, and it is checked between two *equally rich* Screens: the same
+		// 50 maximal Broadcast Graphic shells, the same Graphic Inputs, bindings,
+		// Graphic Source Selections, Graphic Channels, Graphic Style Set link and
+		// container references, differing only in whether the Graphic Item budget is
+		// spent on flat top-level items or on Graphic Groups holding children.
+		//
+		// The earlier version of this comparison put a rich flat Screen against an
+		// impoverished grouped one — grouped shells carried no inputs, bindings,
+		// sources, channels or style references — and concluded that grouping was
+		// cheaper. It is not: a Graphic Group child may carry a `sizing` block that a
+		// top-level Graphic Item cannot, and the group shell carries a Shape Geometry,
+		// two Graphic Surface Styles and a container animation of its own. Gathering
+		// items into groups buys back some of the Broadcast Graphic's own stagger,
+		// because the shell then staggers a handful of groups instead of every item,
+		// and the children still cost more than that saves.
+		const grouped = worstCaseScreen('grouped');
+		const flat = worstCaseScreen('flat');
+
+		expect(broadcastGraphicsModeConfigSchema.safeParse(flat).success).toBe(true);
+		expect(countScreenGraphicItems(grouped)).toBe(MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN);
+		expect(countScreenGraphicItems(flat)).toBe(MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN);
+
+		expect(jsonBytes(flat)).toBe(WORST_CASE_FLAT_BYTES);
+		expect(jsonBytes(flat)).toBeLessThan(jsonBytes(grouped));
+		// Both shapes exceed the budget, so the choice between them changes the pinned
+		// figure and not the conclusion.
+		expect(jsonBytes(flat)).toBeGreaterThan(MAX_MODE_CONFIGS_BYTES);
+	});
+
+	it('pins a realistic Screen at the Graphic Item cap, which is what the cap is set from', () => {
+		// The cap is derived from what a show needs — 50 Broadcast Graphics at the six
+		// Graphic Items of the richest reconstruction in the fidelity prototype — and
+		// this is the check that the derivation is affordable rather than the
+		// derivation itself. See `docs/adr/0002-broadcast-graphics-item-cap.md`.
+		//
+		// Pinned exactly rather than bracketed: a window wide enough to be comfortable
+		// is a window wide enough for a vocabulary change to move the figure without
+		// anyone noticing, which is the habit this ticket exists to end.
+		const config = { graphics: realisticStack(MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN) };
+		const bytes = jsonBytes(config);
+
+		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(true);
+		expect(bytes).toBe(REALISTIC_SCREEN_AT_CAP_BYTES);
+		// Under half the shared budget, so the other nine Screen Modes still have room
+		// on the same Screen. If this ratio stops holding, the cap is the thing to
+		// re-derive rather than this assertion the thing to relax.
+		expect(bytes / MAX_MODE_CONFIGS_BYTES).toBeLessThan(0.5);
 	});
 
 	it('names the whole-Screen Graphic Input cap rather than reporting a byte count', () => {
@@ -645,69 +1013,6 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		expect(broadcastGraphicsModeConfigSchema.safeParse(
 			withStyles(MAX_GRAPHIC_PLACEHOLDER_STYLES_PER_TEXT_ITEM + 1),
 		).success).toBe(false);
-	});
-
-	it('costs no more with a Graphic Group holding the same animated Graphic Items', () => {
-		// The other shape the cap has to survive: fewer Broadcast Graphics, each
-		// spending its items on a Graphic Group and animated children. It measures
-		// smaller than the maximal-shell case above, which is why that one is the
-		// figure the cap is justified by.
-		const perGroup = 4;
-		const graphics = Array.from(
-			{ length: MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN / (perGroup + 1) },
-			(_, index) => {
-				const children = Array.from({ length: perGroup }, (_, item) => worstCaseItem(`item-${index}-${item}`));
-				return {
-					id: `graphic-${index}`,
-					name: 'N'.repeat(100),
-					items: [{
-						type: 'group' as const,
-						id: `group-${index}`,
-						label: 'L'.repeat(100),
-						visible: true,
-						anchor: 'bottom-right' as const,
-						rotation: -359.99,
-						x: -9999.5,
-						y: -9999.5,
-						width: 9999.5,
-						height: 9999.5,
-						arrangement: 'column' as const,
-						padding: 9999.5,
-						gap: 9999.5,
-						align: 'stretch' as const,
-						justify: 'space-between' as const,
-						clip: true,
-						geometry: WORST_GEOMETRY,
-						surfaceStyle: WORST_SURFACE_STYLE,
-						defaultChildSurfaceStyle: WORST_SURFACE_STYLE,
-						animation: worstContainerAnimation(children.map(child => child.id)),
-						children,
-					}],
-					animation: worstContainerAnimation([`group-${index}`]),
-				};
-			},
-		);
-
-		const config = { graphics };
-		const bytes = new TextEncoder().encode(JSON.stringify(config)).byteLength;
-
-		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(true);
-		// Measured, and smaller: gathering the same animated Graphic Items into Graphic
-		// Groups is cheaper than spreading them across maximal Broadcast Graphic
-		// shells, because a shell carries its own animation, stagger, Graphic Inputs,
-		// and Graphic Source Selections. That contrast is why "which worst case" has to
-		// be a measured choice rather than an assumption — the maximal-shell shape
-		// above is the one that binds.
-		//
-		// It used to fit the byte total as well as being smaller, at 425,322 against
-		// 524,288. It no longer does: a Graphic Font Selection naming a maximal-length
-		// font Graphic Asset Revision (#141) is 266 bytes where a bare application id
-		// was 16, on every typography and every one of four Graphic Placeholder Styles.
-		// The named cap binding first was already lost to Graphic Animation on the
-		// shape above; this is the same conclusion reaching the cheaper shape, and the
-		// cap decision is still #99's rather than this measurement's.
-		expect(modeConfigsMapSchema.safeParse({ 'broadcast-graphics': config }).success).toBe(false);
-		expect(bytes).toBe(535_322);
 	});
 
 	it('applies the whole-Screen Graphic Item cap on the patch path the editor writes through', () => {
@@ -1018,6 +1323,42 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		}).success).toBe(true);
 	});
 
+	it('bounds a Graphic Item id to the identity length this application writes', () => {
+		// Every id the editor generates is a 36-character uuid, and every path that
+		// copies a document — placing a Broadcast Graphic Template, installing a
+		// Template Package — mints fresh ones. The bound was 100, which nothing wrote
+		// and which the worst case paid for on every id and every stagger entry.
+		//
+		// It is an import constraint as well as a write one, deliberately: a Template
+		// Package's document is proved against this same schema, so a document that
+		// installs is one the Screen write path accepts, and the two cannot come apart.
+		const withId = (length: number) => broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [{ id: 'a', name: 'A', items: [shapeItem('i'.repeat(length))] }],
+		}).success;
+
+		expect(MAX_GRAPHIC_ITEM_ID_LENGTH).toBe(64);
+		expect(MAX_GRAPHIC_ITEM_ID_LENGTH).toBeGreaterThan(randomUuid().length);
+		expect(withId(MAX_GRAPHIC_ITEM_ID_LENGTH)).toBe(true);
+		expect(withId(MAX_GRAPHIC_ITEM_ID_LENGTH + 1)).toBe(false);
+	});
+
+	it('bounds a staggered id to the same length, because it names a Graphic Item', () => {
+		// A stagger entry that could be longer than any id it can name would be a
+		// bound on nothing — and it is the entry, not the item, that the worst case
+		// pays for four times per container.
+		const withStaggeredId = (length: number) => broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [{
+				id: 'a',
+				name: 'A',
+				items: [shapeItem('bar')],
+				animation: { stagger: { enter: { order: 'list', step: 100, itemIds: ['s'.repeat(length)] } } },
+			}],
+		}).success;
+
+		expect(withStaggeredId(MAX_GRAPHIC_ITEM_ID_LENGTH)).toBe(true);
+		expect(withStaggeredId(MAX_GRAPHIC_ITEM_ID_LENGTH + 1)).toBe(false);
+	});
+
 	it('rejects main-axis sizing on a top-level Graphic Item, which no group sizes', () => {
 		const result = broadcastGraphicsModeConfigSchema.safeParse({
 			graphics: [{
@@ -1192,6 +1533,98 @@ describe('graphic Animation bounds', () => {
 		expect(withGraphicAnimation({
 			stagger: { enter: { order: 'list', step: 100, itemIds: ['deleted'] } },
 		}).success).toBe(true);
+	});
+
+	it('bounds a stagger to the number of Graphic Items its container holds', () => {
+		// A stagger names a *subset* of one container's direct Graphic Items, so a
+		// list longer than the container's own item count names no subset of
+		// anything. Until this bound existed the length was capped at 100
+		// independently of the container, which let a Broadcast Graphic holding one
+		// item carry four staggers of 100 ids each — about 41 KiB per container, on
+		// every one of the 50 shells a Screen may hold. That is the largest single
+		// contributor to the worst case and no Graphic Item cap can reach it. See #99.
+		const staggerOf = (items: number, ids: number) => broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [{
+				id: 'a',
+				name: 'A',
+				items: Array.from({ length: items }, (_, index) => shapeItem(`bar-${index}`)),
+				animation: {
+					stagger: {
+						enter: {
+							order: 'list' as const,
+							step: 100,
+							itemIds: Array.from({ length: ids }, (_, index) => `bar-${index}`),
+						},
+					},
+				},
+			}],
+		});
+
+		expect(staggerOf(3, 3).success).toBe(true);
+		expect(staggerOf(3, 2).success).toBe(true);
+		expect(staggerOf(3, 4).success).toBe(false);
+		expect(messages(staggerOf(3, 4))).toContain(
+			'A Graphic Animation Stagger must not name more Graphic Items than its container holds',
+		);
+	});
+
+	it('counts a Graphic Group\'s own children rather than the whole graphic', () => {
+		// A group staggers its children; the Broadcast Graphic staggers its top-level
+		// items, of which the group is one. Bounding either by the other's count would
+		// refuse an ordinary composition.
+		const groupWith = (children: number, ids: number) => broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [{
+				id: 'a',
+				name: 'A',
+				items: [{
+					type: 'group' as const,
+					id: 'cluster',
+					label: 'Cluster',
+					visible: true,
+					anchor: 'top-left' as const,
+					x: 0,
+					y: 0,
+					width: 100,
+					height: 100,
+					arrangement: 'row' as const,
+					padding: 0,
+					gap: 0,
+					align: 'stretch' as const,
+					justify: 'start' as const,
+					clip: false,
+					geometry: GEOMETRY,
+					children: Array.from({ length: children }, (_, index) => shapeItem(`child-${index}`)),
+					animation: {
+						stagger: {
+							exit: {
+								order: 'list' as const,
+								step: 100,
+								itemIds: Array.from({ length: ids }, (_, index) => `child-${index}`),
+							},
+						},
+					},
+				}],
+				animation: { stagger: { exit: { order: 'list' as const, step: 100, itemIds: ['cluster'] } } },
+			}],
+		});
+
+		expect(groupWith(4, 4).success).toBe(true);
+		expect(groupWith(4, 5).success).toBe(false);
+	});
+
+	it('bounds a stagger on the patch path the editor writes through', () => {
+		// The bound lives on the Broadcast Graphic, which is a field of the mode
+		// config rather than the mode config itself, so the patch rebuild keeps it.
+		const patch = modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({
+			graphics: [{
+				id: 'a',
+				name: 'A',
+				items: [shapeItem('bar')],
+				animation: { stagger: { enter: { order: 'list', step: 100, itemIds: ['bar', 'gone'] } } },
+			}],
+		});
+
+		expect(patch.success).toBe(false);
 	});
 
 	it('applies every animation bound on the patch path the editor writes through', () => {

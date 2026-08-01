@@ -1,6 +1,9 @@
 import type { GraphicItemConfig } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
-import { featureMatchOverlayModeConfigSchema } from '~~/server/schemas/api/screen';
+import {
+	featureMatchOverlayModeConfigSchema,
+	MAX_GRAPHIC_ITEMS_PER_FEATURE_MATCH_LAYOUT,
+} from '~~/server/schemas/api/screen';
 import { createFeatureMatchLayoutComposition } from '~~/shared/featureMatchLayoutComposition';
 import { getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
@@ -113,5 +116,62 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		]));
 
 		expect(parsed.success).toBe(true);
+	});
+
+	it('counts Graphic Group children against the Feature Match Layout item cap', () => {
+		// The cap was on the top-level list alone, so a layout could carry 100
+		// top-level items each holding 50 Graphic Group children — 5,100 Graphic
+		// Items in one composition, stopped only by the opaque byte total, while a
+		// Broadcast Graphic composing the same vocabulary was held to a named one.
+		// One composition, one bound, whichever host it belongs to. See #99 and
+		// `docs/adr/0002-broadcast-graphics-item-cap.md`.
+		const groupsOf = (groups: number, children: number) => configWith(
+			Array.from({ length: groups }, (_, index) => ({
+				...getGraphicItemDefinition('group').createDefault({
+					id: `cluster-${index}`,
+					label: `Cluster ${index}`,
+					canvasWidth: 1920,
+					canvasHeight: 1080,
+				}),
+				children: Array.from({ length: children }, (_, child) => item('text', `t-${index}-${child}`)),
+			}) as GraphicItemConfig),
+		);
+
+		// 20 groups of 4 children is 100 Graphic Items counting the groups themselves.
+		expect(featureMatchOverlayModeConfigSchema.safeParse(groupsOf(20, 4)).success).toBe(true);
+		expect(featureMatchOverlayModeConfigSchema.safeParse(groupsOf(21, 4)).success).toBe(false);
+		const over = featureMatchOverlayModeConfigSchema.safeParse(groupsOf(21, 4));
+		expect(over.error?.issues.map(issue => issue.message)).toContain(
+			`A Feature Match Layout must not contain more than ${MAX_GRAPHIC_ITEMS_PER_FEATURE_MATCH_LAYOUT} Graphic Items in total`,
+		);
+	});
+
+	it('bounds a Feature Match Layout stagger to the items the composition holds', () => {
+		// The same rule the Broadcast Graphics containers carry, on the same shared
+		// vocabulary: a stagger orders a subset of its container's own items.
+		const staggered = (ids: number) => {
+			const config = configWith([item('text', 'name')]);
+			return featureMatchOverlayModeConfigSchema.safeParse({
+				...config,
+				layout: {
+					...config.layout,
+					composition: {
+						...config.layout.composition,
+						animation: {
+							stagger: {
+								enter: {
+									order: 'list',
+									step: 100,
+									itemIds: Array.from({ length: ids }, (_, index) => `name-${index}`),
+								},
+							},
+						},
+					},
+				},
+			});
+		};
+
+		expect(staggered(1).success).toBe(true);
+		expect(staggered(2).success).toBe(false);
 	});
 });

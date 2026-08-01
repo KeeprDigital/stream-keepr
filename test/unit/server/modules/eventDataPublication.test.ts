@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MAX_REALTIME_MESSAGE_BYTES } from '~~/shared/types/messages';
+
+/** The storage ceiling a Screen's `modeConfigs` is bounded by, from the Screen schema. */
+const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
 
 const mockPublishMessage = vi.fn();
 const mockPublishMessageStrict = vi.fn();
@@ -604,10 +608,10 @@ describe('event Data publication module', () => {
 			match: expect.objectContaining({ id: 7, tableNumber: 12 }),
 		}, 'origin-1');
 		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'screen:created', {
-			screen: expect.objectContaining({ id: 9, name: 'Main Screen' }),
+			screenId: 9,
 		}, 'origin-1');
 		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'screen:updated', {
-			screen: expect.objectContaining({ id: 8, name: 'Main Screen', stateVersion: 3 }),
+			screenId: 8,
 		}, 'origin-1');
 		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'match:deleted', {
 			matchId: 7,
@@ -714,6 +718,66 @@ describe('event Data publication module', () => {
 	 * has happened. Without this, the trigger could be deleted from every publication
 	 * and the only thing that would notice is a lower third on air holding a stale name.
 	 */
+	describe('a Screen change is announced rather than shipped', () => {
+		/**
+		 * A Screen's `modeConfigs` is bounded by `MAX_MODE_CONFIGS_BYTES` (512 KiB),
+		 * and a realtime message is bounded by far less — 64 KiB on the packages
+		 * Ably documents that figure for. Publishing the mapped entity therefore
+		 * failed on exactly the largest authored Screens, and failed silently,
+		 * because `publishMessage` logs `realtime_publish_failed` and swallows. See #95.
+		 */
+		function screenAtTheStorageCeiling() {
+			return createScreen({
+				modeConfigs: {
+					'broadcast-graphics': {
+						graphics: [{
+							id: 'lower-third',
+							name: 'Lower third',
+							items: [{ id: 'bed', text: 'T'.repeat(MAX_MODE_CONFIGS_BYTES - 200) }],
+						}],
+					},
+				},
+			});
+		}
+
+		it('names the Screen instead of carrying it, so the notification fits the realtime message limit', async () => {
+			const publication = eventDataPublicationModule();
+			const entity = screenAtTheStorageCeiling();
+
+			await publication.screenUpdated({ eventId: 1, entity: entity as any });
+
+			// Size first, then shape: a regression here puts half a megabyte of
+			// fixture in the diff, and the byte count says what went wrong on its own.
+			const [, , payload] = mockPublishMessage.mock.calls.at(-1)!;
+			expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength)
+				.toBeLessThan(MAX_REALTIME_MESSAGE_BYTES);
+			expect(payload).toEqual({ screenId: 8 });
+		});
+
+		it('announces a created Screen the same way, because a create carries a whole mode configuration too', async () => {
+			const publication = eventDataPublicationModule();
+			const entity = screenAtTheStorageCeiling();
+
+			await publication.screenCreated({ eventId: 1, entity: entity as any });
+
+			const [, , payload] = mockPublishMessage.mock.calls.at(-1)!;
+			expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength)
+				.toBeLessThan(MAX_REALTIME_MESSAGE_BYTES);
+			expect(payload).toEqual({ screenId: 8 });
+		});
+
+		it('still returns the whole Screen to its HTTP caller, which is not size-bound', async () => {
+			// The write's own response is the authority a client reloads from, so the
+			// notification getting smaller must not make the API answer smaller.
+			const publication = eventDataPublicationModule();
+			const entity = screenAtTheStorageCeiling();
+
+			const screen = await publication.screenUpdated({ eventId: 1, entity: entity as any });
+
+			expect(screen.modeConfigs).toEqual(entity.modeConfigs);
+		});
+	});
+
 	describe('re-resolving Broadcast Graphic bindings', () => {
 		it('catches Broadcast Graphics up on Event Data a binding may read', async () => {
 			const publication = eventDataPublicationModule();

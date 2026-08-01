@@ -339,14 +339,58 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		);
 	}
 
-	function applyRemoteCreated(data: MessageData<'screen:created'>) {
-		const exists = state.screens.value.some(s => s.id === data.screen.id);
-		if (!exists)
-			state.screens.value.push(data.screen);
+	/**
+	 * Load the announced Screen from the API and cache it.
+	 *
+	 * `screen:created` and `screen:updated` name a Screen rather than carrying one,
+	 * so the authority is the API. Reloads are sequenced per Screen: two changes in
+	 * quick succession start two loads, and without the flight the earlier answer
+	 * could land last and cache a Screen that is already stale.
+	 *
+	 * Best effort, like the notification that triggered it. A Screen deleted between
+	 * the announcement and the load simply has nothing to cache, and a failed load
+	 * leaves the previous state rather than surfacing an error the operator did not
+	 * cause — the next change, or a navigation, reloads it.
+	 */
+	const remoteScreenLoads = createKeyedGuardedSequence();
+
+	async function reloadAnnouncedScreen(eventId: number, screenId: number) {
+		const flight = remoteScreenLoads.begin(`screen:${screenId}`);
+		try {
+			const screen = await screenRepo.getById(eventId, screenId);
+			if (flight.stale || !screen)
+				return;
+			cacheScreen(screen);
+		}
+		catch {
+			// Best effort: a notification is not a write, and failing to catch up on
+			// one must not put an error in front of an operator who did nothing.
+		}
 	}
 
-	function applyRemoteUpdated(data: MessageData<'screen:updated'>) {
-		cacheScreen(data.screen);
+	/** Whether this client holds the Screen, and so has something to catch up. */
+	function holdsScreen(screenId: number) {
+		return state.activeScreen.value?.id === screenId
+			|| state.screens.value.some(screen => screen.id === screenId);
+	}
+
+	/**
+	 * A created Screen is only loaded by a client that holds the Event's Screen
+	 * collection — `currentEventId` is set by the list and the configuration page and
+	 * deliberately not by a Screen Output, which loads one Screen by slug. An output
+	 * has no list to add to, so fetching every Screen an operator creates mid-show
+	 * would be work it can never use.
+	 */
+	async function applyRemoteCreated(data: MessageData<'screen:created'>) {
+		if (state.currentEventId.value !== data.eventId)
+			return;
+		await reloadAnnouncedScreen(data.eventId, data.screenId);
+	}
+
+	async function applyRemoteUpdated(data: MessageData<'screen:updated'>) {
+		if (!holdsScreen(data.screenId) && state.currentEventId.value !== data.eventId)
+			return;
+		await reloadAnnouncedScreen(data.eventId, data.screenId);
 	}
 
 	function applyRemoteDeleted(data: MessageData<'screen:deleted'>) {
@@ -422,6 +466,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		pendingModeConfigWrites.clear();
 		pendingScreenConfigWrites.clear();
 		writeFlights.supersedeAll();
+		remoteScreenLoads.supersedeAll();
 		unsubscribeFromAllPresence();
 		state.screens.value = [];
 		state.activeScreen.value = null;

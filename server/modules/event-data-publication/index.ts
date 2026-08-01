@@ -344,15 +344,30 @@ export function eventDataPublicationModule() {
 		return featureMatches;
 	}
 
+	/*
+	 * A Screen change is announced by name; the Screen itself travels over the API.
+	 *
+	 * The mapped entity carries `modeConfigs`, which storage bounds at 512 KiB while
+	 * one realtime message is bounded by `MAX_REALTIME_MESSAGE_BYTES` — so shipping
+	 * it made the notification undeliverable at exactly the authored sizes worth
+	 * having, and undeliverable silently, because `publishMessage` logs and swallows.
+	 * The write still succeeded, so the author saw their change saved while every
+	 * other operator's editor quietly went stale.
+	 *
+	 * Both still return the mapped Screen: it is the write's own HTTP response, which
+	 * has no per-message ceiling, and it is the authority a notified client reloads.
+	 * See #95, and #60's settled rule that realtime is notification and snapshots are
+	 * authority.
+	 */
 	async function screenCreated({ eventId, entity, originConnectionId }: EntityPublicationInput<DbScreen>) {
 		const screen = mapScreenToResponse(entity);
-		await publishMessage(eventId, 'screen:created', { screen }, originConnectionId);
+		await publishMessage(eventId, 'screen:created', { screenId: screen.id }, originConnectionId);
 		return screen;
 	}
 
 	async function screenUpdated({ eventId, entity, originConnectionId }: EntityPublicationInput<DbScreen>) {
 		const screen = mapScreenToResponse(entity);
-		await publishMessage(eventId, 'screen:updated', { screen }, originConnectionId);
+		await publishMessage(eventId, 'screen:updated', { screenId: screen.id }, originConnectionId);
 		return screen;
 	}
 

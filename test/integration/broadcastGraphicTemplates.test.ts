@@ -551,6 +551,14 @@ describe('broadcast Graphic Template library', () => {
 		// the database stored.
 		placed.name = 'Renamed on the Screen';
 		placed.items = placed.items.slice(0, 1);
+		// Deleting an item takes it out of the container's staggered subsets, which is
+		// what `deleteGraphicItem` does and what the write path now requires: a stagger
+		// names no more items than its container holds. Truncating the list without it
+		// builds a document no authoring operation produces.
+		placed.animation = {
+			...placed.animation,
+			stagger: undefined,
+		} as typeof placed.animation;
 		placed.inputs = [{ ...(placed.inputs![0] as any), default: 'Local value' }];
 		placed.sources = [{ key: 'player', label: 'Featured player', kind: 'player' }];
 		placed.bindings = [{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.pronouns' }];
@@ -580,7 +588,10 @@ describe('broadcast Graphic Template library', () => {
 			cookie: authorCookie,
 			body: {
 				name: 'Lower third v2',
-				document: { ...document, items: document.items.slice(0, 1) },
+				// Truncating the item list drops the staggered subset with it, the way
+				// `deleteGraphicItem` does: a stagger names no more items than its
+				// container holds.
+				document: { ...document, items: document.items.slice(0, 1), animation: { ...document.animation, stagger: undefined } },
 				revision: await templateRevision(templateId),
 			},
 		});
