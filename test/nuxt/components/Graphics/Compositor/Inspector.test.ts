@@ -1010,6 +1010,34 @@ describe('graphicsCompositorInspector', () => {
 		expect(cleared?.type === 'text' ? cleared.placeholderStyles : undefined).toBeUndefined();
 	});
 
+	/**
+	 * Where the Event Data authoring surface is allowed to appear.
+	 *
+	 * With the Broadcast Graphic itself selected, beside the Graphic Inputs its
+	 * bindings map — and nowhere a host supplies its own placeholder values, because a
+	 * Graphic Input Binding maps a declared Graphic Input to a field and that host
+	 * declares none.
+	 */
+	it('authors Graphic Source Selections beside the Graphic Inputs they feed', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]).map(graphic => ({ ...graphic, inputs: [textInput('name')] })),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		expect(wrapper.find('[data-testid="graphic-event-data-bindings"]').exists()).toBe(true);
+		expect(wrapper.find('[data-testid="graphic-source-add"]').exists()).toBe(true);
+	});
+
+	it('withholds them from a host that binds host tokens', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+			contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+		});
+
+		expect(wrapper.find('[data-testid="graphic-event-data-bindings"]').exists()).toBe(false);
+	});
+
 	it('refuses a read-only observer’s Graphic Input declaration', async () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]),
