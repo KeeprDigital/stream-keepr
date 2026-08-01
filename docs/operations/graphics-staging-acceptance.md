@@ -110,24 +110,58 @@ is: arm a scenario, break one thing, run the matching fault mode, put it back.
 
 The armed scenario file is also where you read the identities you need to break
 something: the harness itself never prints an asset or revision identity, by
-design. The file contains a live capability token, so write it somewhere only
-you can read; the harness deletes it when the fault run finishes.
+design. It contains live capability tokens, so write it somewhere only you can
+read.
+
+**A failed fault run keeps the file, and keeps its Events.** That is deliberate:
+once you have deleted or overwritten a canonical object, the `content` array in
+that file is the only copy of what was there, and the Events are what address
+it. A run that passed has nothing left to restore, so it deletes both. When a
+run keeps them it says so, and names the path.
+
+### Which fault owns which cache state
+
+Arming provisions **two** Screen Outputs, each with its own asset, because the
+faults disagree about what a cache should be holding:
+
+| Representation | Read through the capability route while arming?                   | Addressed by                                                                                   |
+| -------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `warm`         | Yes, once — so a deployed edge cache holds its immutable response | `r2-outage-authorized-cache` expects it to keep serving                                        |
+| `cold`         | Never                                                             | `content-unavailable`, `content-integrity-disagreement` expect it to report a retryable outage |
+
+This matters because the two are mutually exclusive on one representation. A
+warmed capability route serves its cached immutable bytes straight through a
+storage outage — authorization still ran, and the bytes are still digest-true —
+so pointing `content-unavailable` at a warmed representation asks production to
+fail in exactly the way `r2-outage-authorized-cache` asks it to succeed. The
+first version of this runbook did that, and the deployed run correctly reported
+`outcome-not-retryable-unavailable expected=503 actual=200`. Production was
+right; the procedure was wrong.
+
+`d1-outage` addresses both, because a catalogue that cannot answer must fail
+closed on every representation regardless of cache state.
 
 ### Unavailable Graphic Asset Content
 
 Proves that content the catalogue knows about but cannot read is a retryable
-`503` carrying `Retry-After`, not a missing identity.
+`503` carrying `Retry-After`, not a missing identity — and that one missing
+object takes down one revision and nothing else.
 
 1. `pnpm test:delivery:graphics:deployed --arm ~/.sk-armed.json`
-2. Read `assetId` and `revisionId` from the armed scenario file, and delete that
-   revision's object from the **canonical** R2 bucket. The catalogue row stays;
-   only the bytes go.
+2. Read `cold.contentDigest` from the armed scenario file and delete
+   `sha256/<that digest>` from the **canonical** bucket
+   (`stream-graphics-asset-canonical`). The catalogue row stays; only the bytes
+   go. Delete the **cold** representation's object, not the warm one — see the
+   table above for why.
 3. `pnpm test:delivery:graphics:deployed --fault content-unavailable --scenario ~/.sk-armed.json`
-4. Expected: the harness passes. A failure prints
+4. Expected: the cold representation answers `503` with `Retry-After` on both
+   the capability and editor routes, and the warm representation still serves
+   its own bytes untouched. A failure prints
    `outcome-not-retryable-unavailable`, `outcome-retry-after-missing`, or
    `outcome-retry-after-invalid`.
-5. Restore by re-uploading the object, or accept the reconciliation discrepancy
-   the library will raise and repair it through the reconciliation queue.
+5. Restore by re-uploading the object from the `cold.content` array in the
+   armed scenario file, or accept the reconciliation discrepancy the library
+   will raise and repair it through the reconciliation queue.
 
 ### Integrity failure
 
@@ -140,10 +174,12 @@ agreement, so anything reconciliation would isolate as a critical integrity
 incident cannot still reach air.
 
 1. `pnpm test:delivery:graphics:deployed --arm ~/.sk-armed.json`
-2. Read `assetId` and `revisionId` from the armed scenario file. Overwrite that
-   revision's canonical object with **different bytes of a different length** —
-   any small file will do. The object exists and the store answers; what has
-   changed is that it no longer matches its record.
+2. Read `cold.contentDigest` from the armed scenario file and overwrite
+   `sha256/<that digest>` in the canonical bucket with **different bytes of a
+   different length** — any small file will do. The object exists and the store
+   answers; what has changed is that it no longer matches its record. The cold
+   representation again, for the same reason as above: a warmed capability
+   route would serve its cached copy and never reach the store at all.
 3. `pnpm test:delivery:graphics:deployed --fault content-integrity-disagreement --scenario ~/.sk-armed.json`
 4. Expected: both the capability route and the editor route answer `503` with
    `Retry-After`, and neither returns a body. A `200` prints
@@ -163,10 +199,12 @@ never serves bytes it could not authorize.
 2. Remove the `DB` binding from the deployed Worker, or point it at a database
    id that does not exist, and deploy that configuration.
 3. `pnpm test:delivery:graphics:deployed --fault d1-outage --scenario ~/.sk-armed.json`
-4. Expected: the capability content route, the editor content route, and the
-   capability-session bootstrap all answer `503` with `Retry-After`. A `200`
-   here means authorization was skipped, which is the most serious failure this
-   gate can find.
+4. Expected: **both** representations answer `503` with `Retry-After` on both
+   content routes, as does the capability-session bootstrap. The warm one is
+   included on purpose: authorization runs before any cache is consulted, so a
+   warmed representation must fail closed here even though it would keep
+   serving through the storage outage below. A `200` means authorization was
+   skipped, which is the most serious failure this gate can find.
 5. Restore the binding and redeploy.
 
 ### R2 outage with an authorized cache
@@ -175,16 +213,22 @@ Proves that a warmed representation keeps serving from the authorized cache
 while a cold one reports a retryable outage — and that the cache never becomes
 a way around authorization.
 
-1. `pnpm test:delivery:graphics:deployed --arm ~/.sk-armed.json`. Arming warms
-   the cache with one authorized read; this step is what makes the fault run
-   meaningful, so do not skip it.
+1. `pnpm test:delivery:graphics:deployed --arm ~/.sk-armed.json`. Arming reads
+   the warm representation once through its capability route; that read is what
+   puts it in the edge cache, so do not skip it.
 2. Remove the `GRAPHICS_ASSET_CANONICAL` binding from the deployed Worker and
    deploy that configuration.
 3. `pnpm test:delivery:graphics:deployed --fault r2-outage-authorized-cache --scenario ~/.sk-armed.json`
-4. Expected: the warmed capability read still returns the exact bytes, and the
-   editor route — which does not share that cache — returns `503` with
-   `Retry-After`.
+4. Expected: the warm capability read still returns its exact bytes, while the
+   cold representation returns `503` with `Retry-After` on both routes — as
+   does the warm one's editor route, which shares no cache with the capability
+   route.
 5. Restore the binding and redeploy.
+
+Run this one **deployed**. Local mode has no edge cache to have warmed, so the
+harness asserts only the cold-path outages there and reports
+`delivery-cache-state-unreported` for the warm read rather than asserting an
+invariant the environment cannot host.
 
 ## Safari
 
