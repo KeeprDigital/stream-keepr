@@ -89,7 +89,9 @@ const TYPOGRAPHY: GraphicStyleSetEntry = {
 	name: 'Heading',
 	schemaVersion: 1,
 	value: {
-		fontId: 'inter',
+		// An application font, never a Graphics Asset Library one: a preset travels in a
+		// `.skstyle` with no asset envelope, so it takes only the arm that needs no bytes.
+		font: { kind: 'application', fontId: 'inter' },
 		fontSize: 64,
 		fontWeight: 800,
 		fontStyle: 'normal',
