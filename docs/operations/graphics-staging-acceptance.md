@@ -227,8 +227,10 @@ a way around authorization.
 
 Run this one **deployed**. Local mode has no edge cache to have warmed, so the
 harness asserts only the cold-path outages there and reports
-`delivery-cache-state-unreported` for the warm read rather than asserting an
-invariant the environment cannot host.
+`delivery-cache-not-observable` for the warm read rather than asserting an
+invariant the environment cannot host. That is a different fact from
+`delivery-cache-state-unreported`, which step 2 uses when an edge cache exists
+but did not report itself warm.
 
 ## Safari
 
@@ -240,9 +242,19 @@ in Safari.
 Where automation is unavailable the harness prints the observation to make by
 hand and reports the run as `acceptance deferred path=manual-check-required` —
 never as a pass. A deployed run refuses to defer at all unless you pass
-`--allow-manual`, so a gate cannot quietly skip it. If you take the manual
-path, open the printed page in Safari and record what it says; anything other
-than `passed` is a gate failure.
+`--allow-manual`, so a gate cannot quietly skip it.
+
+**The manual path does not exercise the product boundary, and cannot.** It
+records the browser fact alone: open the printed page in Safari and note what
+it reports, which on current Safari will be `substituted`. There is no Screen
+Output to try, because the harness settles its driver before provisioning
+anything — publishing a Screen Output that pins restricted video and then
+driving no browser at it would leave a real asset in a real installation for
+nobody to look at.
+
+A deferred run therefore leaves this step's guarantee unproven. The `409` is
+proven only by an automated run against a deployed installation, and until one
+has passed, step 6 is outstanding whatever the manual observation said.
 
 ### What this step proves, and why it changed
 
