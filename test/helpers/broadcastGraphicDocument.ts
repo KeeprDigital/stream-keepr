@@ -153,7 +153,7 @@ export function maximalBroadcastGraphicDocument(
 	// Every key a Graphic Placeholder Style may carry, not a representative few.
 	headline.placeholderStyles = {
 		headline: {
-			fontId: 'inter',
+			font: { kind: 'application', fontId: 'inter' },
 			fontSize: 72,
 			fontWeight: 900,
 			fontStyle: 'italic',

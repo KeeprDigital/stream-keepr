@@ -258,7 +258,7 @@ export function resolveGraphicStyleSet(
 				return { kind: 'animation-recipe', value: resolveAnimationRecipe(entry.value) };
 
 			case 'typography': {
-				if (!(GRAPHIC_FONT_IDS as readonly string[]).includes(entry.value.fontId)) {
+				if (!(GRAPHIC_FONT_IDS as readonly string[]).includes(entry.value.font.fontId)) {
 					issues.push(issue(
 						'entry-font-unavailable',
 						entry,

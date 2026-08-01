@@ -30,7 +30,7 @@ const brand = entry('palette', 'brand', { color: '#ff0044' });
 const ink = entry('palette', 'ink', { color: '#101014' });
 
 const heading = entry('typography', 'heading', {
-	fontId: 'inter',
+	font: { kind: 'application', fontId: 'inter' },
 	fontSize: 48,
 	fontWeight: 700,
 	fontStyle: 'normal',
@@ -91,7 +91,7 @@ describe('resolveGraphicStyleSet', () => {
 		expect(resolution.resolved.get('heading')).toEqual({
 			kind: 'typography',
 			value: {
-				fontId: 'inter',
+				font: { kind: 'application', fontId: 'inter' },
 				fontSize: 48,
 				fontWeight: 700,
 				fontStyle: 'normal',
@@ -282,7 +282,7 @@ describe('resolveGraphicStyleSet', () => {
 	it('refuses a typography preset naming a font this installation does not have', () => {
 		const resolution = resolveGraphicStyleSet([
 			brand,
-			{ ...heading, value: { ...heading.value, fontId: 'not-a-font' } } as GraphicStyleSetEntry,
+			{ ...heading, value: { ...heading.value, font: { kind: 'application', fontId: 'not-a-font' } } } as GraphicStyleSetEntry,
 		]);
 
 		expect(resolution.issues).toEqual([expect.objectContaining({

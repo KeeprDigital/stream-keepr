@@ -22,7 +22,7 @@ function textItem(overrides: Partial<TextGraphicItemConfig> = {}): TextGraphicIt
 		height: 120,
 		text: '{name} — {title}',
 		typography: {
-			fontId: 'inter',
+			font: { kind: 'application', fontId: 'inter' },
 			fontSize: 48,
 			fontWeight: 700,
 			fontStyle: 'normal',

@@ -65,8 +65,18 @@ const entryNameSchema = z.string().trim().min(1).max(MAX_GRAPHIC_STYLE_SET_ENTRY
 
 const paletteValueSchema = z.object({ color: cssColorSchema }).strict();
 
+/**
+ * The application arm alone. A Graphic Item's typography takes a library font as
+ * well; a Graphic Style Set does not, because a `.skstyle` carries no asset bytes
+ * for one to resolve against on the far side of a transfer. This schema is where
+ * that decision is enforced rather than merely documented — see
+ * `docs/adr/0001-graphic-style-sets-reference-application-fonts.md`.
+ */
 const typographyValueSchema = z.object({
-	fontId: z.enum(GRAPHIC_FONT_IDS),
+	font: z.object({
+		kind: z.literal('application'),
+		fontId: z.enum(GRAPHIC_FONT_IDS),
+	}).strict(),
 	fontSize: finiteNumberSchema.positive().max(600),
 	fontWeight: finiteNumberSchema.int().min(1).max(1000),
 	fontStyle: z.enum(GRAPHIC_FONT_STYLE_VALUES),

@@ -427,7 +427,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		const graphic = maximalBroadcastGraphicDocument({ asset });
 		const layout = maximalFeatureMatchLayoutDocument({ frameAsset: asset, itemAsset: asset });
 		const unknownFont = {
-			slot: 'typography.fontId',
+			slot: 'typography.font',
 			capability: 'application-font' as const,
 			identity: 'a-font-no-installation-ships',
 		};

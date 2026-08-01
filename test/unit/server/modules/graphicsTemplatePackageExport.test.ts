@@ -371,16 +371,16 @@ describe('the Template Package export contract', () => {
 				name: 'Application typography',
 				document: {
 					items: [
-						{ type: 'text', typography: { fontId: 'inter' } },
-						{ type: 'text', typography: { fontId: 'inter' } },
+						{ type: 'text', typography: { font: { kind: 'application', fontId: 'inter' } } },
+						{ type: 'text', typography: { font: { kind: 'application', fontId: 'inter' } } },
 					],
 					logo,
 				},
 			},
 			assets: [{ slot: 'logo', reference: logo }],
 			capabilities: [
-				{ slot: 'items[0].typography.fontId', capability: 'application-font', identity: 'inter' },
-				{ slot: 'items[1].typography.fontId', capability: 'application-font', identity: 'inter' },
+				{ slot: 'items[0].typography.font', capability: 'application-font', identity: 'inter' },
+				{ slot: 'items[1].typography.font', capability: 'application-font', identity: 'inter' },
 				{
 					slot: 'items[0].type',
 					capability: 'graphic-item-definition',
@@ -401,7 +401,7 @@ describe('the Template Package export contract', () => {
 				capability: 'application-font',
 				identity: 'inter',
 				configurationVersion: 1,
-				requiredBy: ['items[0].typography.fontId', 'items[1].typography.fontId'],
+				requiredBy: ['items[0].typography.font', 'items[1].typography.font'],
 			},
 			{
 				capability: 'graphic-item-definition',
@@ -423,7 +423,7 @@ describe('the Template Package export contract', () => {
 			template: { identity: 'template-6', name: 'Unknown capability', document: {} },
 			assets: [],
 			capabilities: [
-				{ slot: 'items[0].typography.fontId', capability: 'application-font', identity: 'not-a-bundled-font' },
+				{ slot: 'items[0].typography.font', capability: 'application-font', identity: 'not-a-bundled-font' },
 				{
 					slot: 'items[1].type',
 					capability: 'graphic-item-definition',
@@ -437,7 +437,7 @@ describe('the Template Package export contract', () => {
 		if (result.outcome !== 'rejected')
 			return;
 		expect(result.report.issues.map(issue => [issue.code, issue.slot])).toEqual([
-			['unsupported-application-capability', 'items[0].typography.fontId'],
+			['unsupported-application-capability', 'items[0].typography.font'],
 			['unsupported-application-capability', 'items[1].type'],
 		]);
 	});

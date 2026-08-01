@@ -44,6 +44,7 @@ import {
 	applyShapeGeometryPreset,
 	authorsGraphicInputs,
 	clearMediaGraphicItemAsset,
+	DEFAULT_GRAPHIC_FONT_ID,
 	deleteGraphicInput,
 	displayGraphicGeometryValue,
 	GRAPHIC_ANCHOR_POINTS,
@@ -80,6 +81,7 @@ import {
 } from '~~/shared/modules/graphics';
 import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
+	applicationGraphicFont,
 	GAME_WINS_BOX_ORIENTATION_VALUES,
 	GAME_WINS_DISPLAY_MODE_VALUES,
 	GRAPHIC_FONT_STYLE_VALUES,
@@ -511,6 +513,49 @@ function applyToSelectedGraphic(
 
 function updateTypography(patch: Partial<GraphicTypography>) {
 	applyToSelectedGraphic((graphic, itemId) => patchGraphicTypography(graphic, itemId, patch));
+}
+
+/** The two arms of a Graphic Font Selection, as an author picks between them. */
+const FONT_SOURCE_OPTIONS = [
+	{ label: 'Application font', value: 'application' },
+	{ label: 'Library font', value: 'asset' },
+];
+
+/**
+ * Which arm the author is editing, when the stored selection cannot say.
+ *
+ * An override rather than a second source of truth: the stored selection decides,
+ * and this only holds the one case it cannot express — an author who has chosen
+ * "Library font" but not yet pinned a revision. Writing the asset arm at that
+ * moment would store a typography whose font is nothing, so the item keeps the
+ * application font it has until the picker pins one. Cleared whenever the
+ * selection moves, so the control never describes the previous item's font.
+ */
+const fontSourceOverride = ref<'application' | 'asset'>();
+const selectedFont = computed(() => selectedTypography.value?.font);
+const fontSource = computed(() => fontSourceOverride.value ?? selectedFont.value?.kind ?? 'application');
+const selectedFontAsset = computed(() =>
+	selectedFont.value?.kind === 'asset' ? selectedFont.value.reference : undefined,
+);
+
+watch(selection, () => {
+	fontSourceOverride.value = undefined;
+});
+
+function updateFontSource(source: 'application' | 'asset') {
+	fontSourceOverride.value = source;
+	if (source === 'application' && selectedFont.value?.kind === 'asset')
+		updateTypography({ font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID) });
+}
+
+/** Pin one exact font Graphic Asset Revision, as a Media Graphic Item pins content. */
+function selectFontAsset(_asset: GraphicAsset, reference: GraphicAssetReference) {
+	updateTypography({ font: { kind: 'asset', reference } });
+}
+
+/** Unpinning a library font leaves the item on an application font rather than none. */
+function clearFontAsset() {
+	updateTypography({ font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID) });
 }
 
 function updateGeometry(patch: Partial<ShapeGeometry>) {
@@ -1383,13 +1428,42 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 				@unbind="unbindStyleRef('typography')"
 			/>
 
-			<UFormField label="Font" size="sm">
+			<!--
+				A font is either one that ships with Stream Keepr or one exact font
+				Graphic Asset Revision from the Graphics Asset Library. The library arm
+				pins a revision exactly as a Media Graphic Item does, which is what puts
+				it in this Screen's reference index and so inside its Screen Output Asset
+				Capability.
+			-->
+			<UFormField label="Font source" size="sm">
 				<USelect
-					:model-value="selectedTypography.fontId"
+					:model-value="fontSource"
+					:items="FONT_SOURCE_OPTIONS"
+					value-key="value"
+					class="w-full"
+					data-testid="typography-font-source"
+					@update:model-value="updateFontSource($event as 'application' | 'asset')"
+				/>
+			</UFormField>
+
+			<UFormField v-if="fontSource === 'application'" label="Font" size="sm">
+				<USelect
+					:model-value="selectedFont?.kind === 'application' ? selectedFont.fontId : undefined"
 					:items="GRAPHIC_FONT_OPTIONS"
 					value-key="value"
 					class="w-full"
-					@update:model-value="updateTypography({ fontId: $event as never })"
+					@update:model-value="updateTypography({ font: applicationGraphicFont($event as never) })"
+				/>
+			</UFormField>
+
+			<UFormField v-else label="Library font" size="sm">
+				<GraphicsAssetFocusPicker
+					:model-value="selectedFontAsset"
+					:event-id="eventId"
+					field-label="Typography"
+					asset-kind="font"
+					@update:model-value="$event ? undefined : clearFontAsset()"
+					@select="selectFontAsset"
 				/>
 			</UFormField>
 

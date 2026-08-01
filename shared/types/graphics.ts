@@ -1,4 +1,4 @@
-import type { FeatureMatchOverlayFontId } from '../featureMatchOverlayFonts';
+import type { GraphicApplicationFontId } from '../modules/graphics/typography';
 import type { PlayerSide } from './enums';
 import type { GraphicFocalPosition, MediaGraphicItemFit } from './graphicItem';
 import type { GraphicAssetReference } from './graphicsAsset';
@@ -80,8 +80,37 @@ export const GRAPHIC_GEOMETRY_UNIT_VALUES = ['px', 'percent', 'grid'] as const;
 
 export type GraphicGeometryUnit = typeof GRAPHIC_GEOMETRY_UNIT_VALUES[number];
 
-/** The application font registry shared by every graphics host. */
-export type GraphicFontId = FeatureMatchOverlayFontId;
+/**
+ * Which font a Graphic Item's typography paints with: one of the application
+ * fonts that ship with Stream Keepr, or one exact font Graphic Asset Revision
+ * from the Graphics Asset Library.
+ *
+ * A discriminated union rather than two fields, because the two are alternatives
+ * rather than a value and an override: a selection that named both would leave
+ * the renderer to invent a precedence, and a selection that named neither would
+ * leave it to invent a font. The library arm pins an exact revision like every
+ * other Graphic Asset Reference does, so a Screen's reference index, its Screen
+ * Output Asset Capability, and a Template Package all reach it through the one
+ * discovery walk rather than through a font-shaped exception.
+ */
+export type GraphicFontSelection
+	= | { kind: 'application'; fontId: GraphicApplicationFontId }
+		| { kind: 'asset'; reference: GraphicAssetReference };
+
+/**
+ * A Graphic Font Selection narrowed to the application arm.
+ *
+ * It exists because one consumer genuinely cannot take the other arm: a Graphic
+ * Style Set travels as a `.skstyle` package with no asset envelope, so a Style Set
+ * that named a library font would be a Style Set that could not be transferred.
+ * See `docs/adr/0001-graphic-style-sets-reference-application-fonts.md`.
+ */
+export type GraphicApplicationFontSelection = Extract<GraphicFontSelection, { kind: 'application' }>;
+
+/** An application font selection, which is what a newly authored item gets. */
+export function applicationGraphicFont(fontId: GraphicApplicationFontId): GraphicApplicationFontSelection {
+	return { kind: 'application', fontId };
+}
 
 export const GRAPHIC_TEXT_TRANSFORM_VALUES = ['none', 'uppercase', 'lowercase', 'capitalize'] as const;
 export type GraphicTextTransform = typeof GRAPHIC_TEXT_TRANSFORM_VALUES[number];
@@ -102,7 +131,7 @@ export interface GraphicRect {
 
 /** A Text Graphic Item's base typography. */
 export interface GraphicTypography {
-	fontId: GraphicFontId;
+	font: GraphicFontSelection;
 	fontSize: number;
 	fontWeight: number;
 	fontStyle: GraphicFontStyle;
@@ -658,7 +687,7 @@ export interface GraphicInputBinding {
  */
 export type GraphicPlaceholderStyle = Partial<Pick<
 	GraphicTypography,
-	'fontId' | 'fontSize' | 'fontWeight' | 'fontStyle' | 'textTransform' | 'letterSpacing' | 'color'
+	'font' | 'fontSize' | 'fontWeight' | 'fontStyle' | 'textTransform' | 'letterSpacing' | 'color'
 >>;
 
 /* ────────────────────────────────────────────────

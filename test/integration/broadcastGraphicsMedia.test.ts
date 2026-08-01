@@ -6,6 +6,7 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
 import { createHash, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
@@ -131,6 +132,104 @@ async function ingestImage(
 	);
 	const operation = await response.json() as GraphicsIngestionOperation;
 	return { assetId: operation.result!.assetId, revisionId: operation.result!.revisionId };
+}
+
+/**
+ * A Text Graphic Item whose typography names one Graphic Font Selection.
+ *
+ * Complete and current for the same reason `mediaItem` is: a stale item shape is
+ * refused at 400, which would read as an unrelated failure.
+ */
+function textItem(id: string, font: unknown, overrides: Record<string, unknown> = {}) {
+	return {
+		type: 'text' as const,
+		id,
+		label: id,
+		visible: true,
+		anchor: 'top-left' as const,
+		x: 0,
+		y: 0,
+		width: 600,
+		height: 120,
+		text: 'Player One',
+		typography: {
+			font,
+			fontSize: 64,
+			fontWeight: 700,
+			fontStyle: 'normal' as const,
+			textTransform: 'none' as const,
+			letterSpacing: 0,
+			lineHeight: 1.15,
+			textAlign: 'left' as const,
+			color: '#ffffff',
+		},
+		overflowPolicy: 'ellipsis' as const,
+		minFontSize: 24,
+		...overrides,
+	};
+}
+
+/**
+ * One font Graphic Asset of this test's own.
+ *
+ * A font clears validation only on browser-load evidence, so ingesting one is a
+ * two-step exchange rather than the single content PUT an image takes. The glyph
+ * digests are the shape the endpoint asks for: each representative code point
+ * renders the same in the exact font paired with either fallback, and differently
+ * from each fallback alone.
+ *
+ * ## Why not `mplantin.woff`
+ *
+ * Because `graphicsAssetIngestion.test.ts` already ingests those exact bytes, with
+ * the default `reuse` duplicate policy, and then finds its asset again by name.
+ * `create-separate` here does not make this suite's asset private — it makes it a
+ * _second_ asset holding content the other suite's ingestion may then reuse
+ * instead of creating its own, whichever of the two reaches the library first.
+ * Integration suites share one database, so identical bytes are shared state
+ * however each side asks for them; distinct bytes are what actually keep this
+ * suite's Graphic Asset lifecycle to itself.
+ */
+async function ingestFont(eventId: number, name: string): Promise<Reference> {
+	const bytes = new Uint8Array(await readFile('public/fonts/mana.woff'));
+	const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
+		method: 'POST',
+		body: {
+			idempotencyKey: `${name}-${runId}`,
+			name,
+			defaultEventId: eventId,
+			duplicateContentPolicy: 'create-separate',
+			sourceFileName: 'mana.woff',
+			declaredMime: 'font/woff',
+			declaredByteLength: bytes.byteLength,
+		},
+	});
+	const response = await fetch(
+		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
+		{ method: 'PUT', headers: { 'content-type': 'font/woff' }, body: bytes },
+	);
+	const awaitingEvidence = await response.json() as GraphicsIngestionOperation;
+	if (awaitingEvidence.report?.outcome !== 'accepted' || awaitingEvidence.report.facts.kind !== 'font')
+		throw new Error('Expected a server-selected font challenge');
+	const exact = '1'.repeat(64);
+	const completed = await $fetch<GraphicsIngestionOperation>(
+		`/api/graphics-assets/ingestion-operations/${initiated.id}/font-browser-evidence`,
+		{
+			method: 'POST',
+			body: {
+				outcome: 'font-loaded',
+				sourceDigest: createHash('sha256').update(bytes).digest('hex'),
+				challengeDigest: awaitingEvidence.report.facts.browserChallenge.digest,
+				glyphProofs: awaitingEvidence.report.facts.browserChallenge.codePoints.map(codePoint => ({
+					codePoint,
+					exactWithSansDigest: exact,
+					exactWithMonoDigest: exact,
+					sansFallbackDigest: '2'.repeat(64),
+					monoFallbackDigest: '3'.repeat(64),
+				})),
+			},
+		},
+	);
+	return { assetId: completed.result!.assetId, revisionId: completed.result!.revisionId };
 }
 
 describe('broadcast Graphics Media Graphic Items', () => {
@@ -523,5 +622,74 @@ describe('broadcast Graphics Media Graphic Items', () => {
 			},
 			headers: { cookie: graphicsAuthorCookie },
 		})).rejects.toMatchObject({ statusCode: 400 });
+	});
+
+	/**
+	 * A font is content like any other (#141).
+	 *
+	 * The point of this suite is the whole path an author takes, and the whole point
+	 * of making a library font an ordinary Graphic Asset Reference is that the path
+	 * is the *same* one — indexed by the same walk, named by an owner slot the same
+	 * way, and reachable through the same Screen Output Asset Capability and no other
+	 * route. So it is proved here beside the Media Graphic Item it now shares a
+	 * mechanism with, rather than in a font-shaped suite of its own.
+	 */
+	it('indexes a typography font revision and resolves it through the capability', async () => {
+		const font = await ingestFont(eventId, `broadcast-graphics-typography-font-${runId}`);
+
+		const updated = await $fetch<ScreenResponse>(configPath(), {
+			method: 'PATCH',
+			body: {
+				graphics: [{
+					id: 'name-plate',
+					name: 'Name Plate',
+					items: [textItem('player-name', { kind: 'asset', reference: font })],
+				}],
+			},
+			headers: { cookie: graphicsAuthorCookie },
+		});
+
+		const saved = updated.modeConfigs!['broadcast-graphics']!.graphics[0]!.items[0]!;
+		expect(saved.type === 'text' && saved.typography.font).toEqual({ kind: 'asset', reference: font });
+		await expect(usageOf(font)).resolves.toEqual([
+			expect.objectContaining({
+				reference: font,
+				owner: expect.objectContaining({
+					kind: 'screen',
+					id: String(screenId),
+					slot: 'graphics.name-plate.items.player-name.typography.font',
+					eventId,
+				}),
+			}),
+		]);
+
+		const { assetCapability } = await $fetch<{ assetCapability: string }>(
+			`/api/events/${eventId}/screens/${screenId}/asset-capability`,
+			{ headers: { cookie: graphicsAuthorCookie } },
+		);
+		const content = await fetch(
+			`/api/screen-output/screens/${screenId}/assets/${font.assetId}/revisions/${font.revisionId}/content`,
+			{ headers: { authorization: `Bearer ${assetCapability}` } },
+		);
+
+		expect(content.status).toBe(200);
+		expect(content.headers.get('content-type')).toBe('font/woff');
+	});
+
+	it('rejects typography naming a revision that is not a font', async () => {
+		// The write checks a newly chosen revision's kind against the kind the slot
+		// discovered, so an image cannot be pinned where a font belongs — the same
+		// check that stops a silent video landing in an image slot.
+		await expect($fetch(configPath(), {
+			method: 'PATCH',
+			body: {
+				graphics: [{
+					id: 'name-plate',
+					name: 'Name Plate',
+					items: [textItem('player-name', { kind: 'asset', reference: logo })],
+				}],
+			},
+			headers: { cookie: graphicsAuthorCookie },
+		})).rejects.toMatchObject({ statusCode: 409 });
 	});
 });

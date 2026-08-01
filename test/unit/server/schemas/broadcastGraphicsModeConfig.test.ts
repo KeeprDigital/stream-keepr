@@ -151,6 +151,20 @@ const WORST_SURFACE_STYLE = {
 	glow: { color: '#00d9ff', size: 48.5, opacity: 0.75 },
 };
 
+/**
+ * The most expensive Graphic Font Selection the schema accepts.
+ *
+ * The library arm, at its maximal identity and revision lengths. An application
+ * font is 46 bytes and this is 266, so a worst case built from application fonts
+ * would understate what the caps admit by 220 bytes on every typography and every
+ * Graphic Placeholder Style — which is exactly the kind of quiet understatement
+ * measuring is supposed to prevent.
+ */
+const WORST_FONT = {
+	kind: 'asset' as const,
+	reference: { assetId: 'a'.repeat(100), revisionId: 'r'.repeat(100) },
+};
+
 /** The most expensive Graphic Item the schema accepts, used for the byte budget. */
 function worstCaseItem(id: string) {
 	return {
@@ -158,7 +172,7 @@ function worstCaseItem(id: string) {
 			Array.from({ length: MAX_GRAPHIC_PLACEHOLDER_STYLES_PER_TEXT_ITEM }, (_, index) => [
 				`k${index}`.padEnd(MAX_GRAPHIC_INPUT_KEY_LENGTH, 'k'),
 				{
-					fontId: 'inter' as const,
+					font: WORST_FONT,
 					fontSize: 599.5,
 					fontWeight: 900,
 					fontStyle: 'italic' as const,
@@ -180,7 +194,7 @@ function worstCaseItem(id: string) {
 		height: 9999.5,
 		text: 'T'.repeat(MAX_GRAPHIC_TEXT_LENGTH),
 		typography: {
-			fontId: 'inter' as const,
+			font: WORST_FONT,
 			fontSize: 599.5,
 			fontWeight: 900,
 			fontStyle: 'italic' as const,
@@ -678,14 +692,22 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		const bytes = new TextEncoder().encode(JSON.stringify(config)).byteLength;
 
 		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(true);
-		// Measured, and it still fits: gathering the same animated Graphic Items into
-		// Graphic Groups is cheaper than spreading them across maximal Broadcast
-		// Graphic shells, because a shell carries its own animation, stagger, Graphic
-		// Inputs, and Graphic Source Selections. That contrast is why "which worst
-		// case" has to be a measured choice rather than an assumption — the maximal-
-		// shell shape above is the one that binds.
-		expect(modeConfigsMapSchema.safeParse({ 'broadcast-graphics': config }).success).toBe(true);
-		expect(bytes).toBe(425_322);
+		// Measured, and smaller: gathering the same animated Graphic Items into Graphic
+		// Groups is cheaper than spreading them across maximal Broadcast Graphic
+		// shells, because a shell carries its own animation, stagger, Graphic Inputs,
+		// and Graphic Source Selections. That contrast is why "which worst case" has to
+		// be a measured choice rather than an assumption — the maximal-shell shape
+		// above is the one that binds.
+		//
+		// It used to fit the byte total as well as being smaller, at 425,322 against
+		// 524,288. It no longer does: a Graphic Font Selection naming a maximal-length
+		// font Graphic Asset Revision (#141) is 266 bytes where a bare application id
+		// was 16, on every typography and every one of four Graphic Placeholder Styles.
+		// The named cap binding first was already lost to Graphic Animation on the
+		// shape above; this is the same conclusion reaching the cheaper shape, and the
+		// cap decision is still #99's rather than this measurement's.
+		expect(modeConfigsMapSchema.safeParse({ 'broadcast-graphics': config }).success).toBe(false);
+		expect(bytes).toBe(535_322);
 	});
 
 	it('applies the whole-Screen Graphic Item cap on the patch path the editor writes through', () => {
@@ -935,7 +957,7 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 					height: 10,
 					text: 'T'.repeat(length),
 					typography: {
-						fontId: 'inter',
+						font: { kind: 'application', fontId: 'inter' },
 						fontSize: 64,
 						fontWeight: 700,
 						fontStyle: 'normal',
