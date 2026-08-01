@@ -326,7 +326,7 @@ describe('screens extended API', () => {
 		// Over the whole-Screen cap without exceeding the per-graphic one. The cap's
 		// own value is asserted as a literal because the integration project shares no
 		// value imports with the schema module.
-		const graphics = Array.from({ length: 6 }, (_, graphic) => ({
+		const graphics = Array.from({ length: 11 }, (_, graphic) => ({
 			id: `graphic-${graphic}`,
 			name: `Graphic ${graphic}`,
 			items: Array.from({ length: 20 }, (_, index) => item(`item-${graphic}-${index}`)),
@@ -343,7 +343,7 @@ describe('screens extended API', () => {
 
 		expect(failure?.data?.statusCode).toBe(400);
 		expect(failure?.data?.message)
-			.toContain('A Broadcast Graphics Screen must not carry more than 110 Graphic Items in total');
+			.toContain('A Broadcast Graphics Screen must not carry more than 200 Graphic Items in total');
 	});
 
 	it('round-trips declared Graphic Inputs and Graphic Placeholder Styles through the editor patch path', async () => {

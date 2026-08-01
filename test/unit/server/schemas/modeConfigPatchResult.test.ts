@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
+	MAX_BROADCAST_GRAPHICS_PER_SCREEN,
+	MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN,
+	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN,
 	modeConfigPatchSchemaMap,
 	modeConfigSchemaMap,
 	modeConfigSchemasWithObjectLevelChecks,
@@ -165,6 +168,32 @@ function fatOverlayLayout() {
 	};
 }
 
+/**
+ * A Broadcast Graphics stack that is large, legal, and *storable on its own*.
+ *
+ * A fraction of the Graphic Item cap rather than all of it, derived from the cap so
+ * it tracks a change to it. The full cap no longer fits the shared budget when every
+ * Graphic Item carries a maximal Graphic Text Template — #99 set the cap from what a
+ * show needs and accepted that the heaviest shapes are refused by the byte total —
+ * and this fixture has to be a configuration that could really be *stored*, because
+ * the property under test is that a further patch is judged against the merged
+ * result rather than against its own fragment.
+ *
+ * The fraction has to satisfy two things at once: the stack fits alone, and the
+ * stack plus a maximal Feature Match Overlay layout does not. Both are asserted
+ * below rather than trusted, so a vocabulary change that broke either fails here
+ * instead of quietly leaving this test with nothing to prove.
+ */
+const STORABLE_STACK_FRACTION = 0.6;
+
+function storableStack() {
+	return graphicsStack(
+		Math.round(MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN * STORABLE_STACK_FRACTION),
+		MAX_BROADCAST_GRAPHICS_PER_SCREEN,
+		MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN,
+	);
+}
+
 function bytes(value: unknown): number {
 	return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }
@@ -173,27 +202,21 @@ describe('parseModeConfigPatchResult', () => {
 	it('refuses a patch whose merged result exceeds the mode configuration byte total', () => {
 		// Neither write is unreasonable on its own; the accumulated configuration is
 		// what breaches the limit, which is why only the merged result can catch it.
-		const stored = { 'broadcast-graphics': { graphics: graphicsStack(110, 50, 60) } };
+		const stored = { 'broadcast-graphics': { graphics: storableStack() } };
 		const layout = fatOverlayLayout();
 
 		// Both halves measured, so it stays visible that neither alone is the problem
 		// and that the fixtures still straddle the limit if a vocabulary grows.
-		// Both halves measured, so it stays visible that neither alone is the problem.
 		//
-		// Worth knowing if this fails: with both modes built to their named caps, the
-		// largest reachable two-mode configuration is 544,846 bytes against a 524,288
-		// limit — it clears the total by 3.9%. A vocabulary change that made either
-		// half cheaper could drop the pathological case *under* the limit and leave
-		// nothing for this test to catch. It fails here rather than passing vacuously,
-		// which is the whole point of measuring instead of asserting a round envelope.
-		//
-		// It cleared by 0.8% until a Graphic Font Selection replaced a bare `fontId`
-		// (#141). Naming a Graphics Asset Library font takes a tagged union, and its
-		// application arm spells the same choice at 46 bytes instead of 16 — 30 bytes
-		// on every typography and every Graphic Placeholder Style, 150 on a maximal
-		// Text Graphic Item carrying four of them.
-		expect(bytes(stored)).toBeGreaterThan(373_000);
-		expect(bytes(stored)).toBeLessThan(383_000);
+		// Worth knowing if this fails: the two halves together clear the total by
+		// about 9%. A vocabulary change that made either half cheaper could drop the
+		// pair *under* the limit and leave nothing for this test to catch. It fails
+		// here rather than passing vacuously, which is the whole point of measuring
+		// instead of asserting a round envelope. Both halves being under the limit
+		// individually is the property, not an accident of the numbers.
+		expect(bytes(stored)).toBeLessThan(MAX_MODE_CONFIGS_BYTES);
+		expect(bytes(stored)).toBeGreaterThan(400_000);
+		expect(bytes(stored)).toBeLessThan(410_000);
 		expect(bytes({ layout })).toBeGreaterThan(165_000);
 		expect(bytes({ layout })).toBeLessThan(170_000);
 		expect(bytes(stored) + bytes({ layout })).toBeGreaterThan(MAX_MODE_CONFIGS_BYTES);
@@ -203,7 +226,7 @@ describe('parseModeConfigPatchResult', () => {
 	});
 
 	it('names the limit, so an operator reads what they reached', () => {
-		const stored = { 'broadcast-graphics': { graphics: graphicsStack(110, 50, 60) } };
+		const stored = { 'broadcast-graphics': { graphics: storableStack() } };
 
 		expect(() => parseModeConfigPatchResult(stored, 'feature-match-overlay', { layout: fatOverlayLayout() }))
 			.toThrow(new RegExp(`must not exceed ${MAX_MODE_CONFIGS_BYTES} bytes`));
@@ -214,7 +237,7 @@ describe('parseModeConfigPatchResult', () => {
 		// one payload, both paths, same answer. Before #85 was fixed the second of
 		// these accepted what the first refused.
 		const oversized = {
-			'broadcast-graphics': { graphics: graphicsStack(110, 50, 60) },
+			'broadcast-graphics': { graphics: storableStack() },
 			'feature-match-overlay': {
 				featureMatchId: null,
 				presetId: 'full-table' as const,
