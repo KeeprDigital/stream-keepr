@@ -121,9 +121,14 @@ export function checkConditionalRead(observation, { route, etag }) {
 
 /** One requested window of an immutable representation. */
 export function checkRangeRead(observation, { route, start, end, byteLength, bytes }) {
-	const failures = [...checkStatus(observation, 206, route)];
-	if (observation.status !== 206)
-		failures[0] = failure('delivery-range-status-unexpected', { route, expected: 206, actual: observation.status });
+	const failures = [];
+	if (observation.status !== 206) {
+		failures.push(failure('delivery-range-status-unexpected', {
+			route,
+			expected: 206,
+			actual: observation.status,
+		}));
+	}
 	const expectedRange = `bytes ${start}-${end}/${byteLength}`;
 	if (observation.headers.get('content-range') !== expectedRange) {
 		failures.push(failure('delivery-content-range-unexpected', {
@@ -208,25 +213,43 @@ export function checkOriginExposure(headers, { route }) {
 }
 
 /**
- * The output document may declare no policy — same-origin delivery is enforced
- * by the capability, not by a policy header — but a declared policy must not
- * widen where output content may come from.
+ * Content Security Policy, against what is actually settled today.
+ *
+ * The installation declares no policy anywhere: same-origin delivery is
+ * enforced by the capability, and the output document inherits the
+ * installation's own origin. So "absent" is the settled state and this check
+ * says so out loud — a policy that appears is a change to settled behaviour
+ * and gets reported, and a policy that appears *and* widens where output
+ * content may come from is reported as the more serious of the two.
+ *
+ * Passing `settled: 'restrictive'` inverts it for the day a policy is
+ * introduced: absence then becomes the failure. There is deliberately no mode
+ * in which this function returns no opinion.
+ *
+ * @param {Headers} headers
+ * @param {{ route: string, settled: 'absent' | 'restrictive' }} expectation
  */
-export function checkContentSecurityPolicy(headers, { route }) {
+export function checkContentSecurityPolicy(headers, { route, settled }) {
 	const policy = headers.get('content-security-policy');
-	if (!policy)
-		return [];
+	if (!policy) {
+		return settled === 'absent'
+			? []
+			: [failure('csp-directive-missing', { route })];
+	}
 	const permissive = policy
 		.split(';')
 		.map(directive => directive.trim())
 		.filter(directive => /^(?:default|script|media|img|font|connect|frame)-src\b/.test(directive))
 		.filter(directive => /(?:^|\s)\*(?:$|\s)/.test(directive) || /\shttps?:(?:$|\s)/.test(directive));
-	return permissive.length === 0
-		? []
-		: [failure('csp-directive-permissive', {
-				route,
-				actual: permissive[0].split(/\s+/)[0],
-			})];
+	if (permissive.length > 0) {
+		return [failure('csp-directive-permissive', {
+			route,
+			actual: permissive[0].split(/\s+/)[0],
+		})];
+	}
+	return settled === 'absent'
+		? [failure('csp-directive-unexpected', { route })]
+		: [];
 }
 
 /**
@@ -267,11 +290,19 @@ export function checkRetryableUnavailable(observation, { route }) {
 	return failures;
 }
 
-/** A missing identity or revision is settled: retrying cannot help. */
-export function checkNonRetryableIntegrity(observation, { route }) {
+/**
+ * A revision the caller may not reach — because it does not exist, or because
+ * this Screen Output never referenced it — is settled: retrying cannot help.
+ *
+ * This is deliberately not the integrity outcome. Canonical bytes that
+ * contradict their recorded facts read as *unavailable*, because the library
+ * refuses to serve content that disagrees with what it recorded and a
+ * disagreement may yet be repaired. See `checkIntegrityDisagreement`.
+ */
+export function checkMissingIdentity(observation, { route }) {
 	const failures = [];
 	if (observation.status !== 404) {
-		failures.push(failure('outcome-not-integrity-failure', {
+		failures.push(failure('outcome-not-missing-identity', {
 			route,
 			expected: 404,
 			actual: observation.status,
@@ -280,6 +311,61 @@ export function checkNonRetryableIntegrity(observation, { route }) {
 	if (observation.headers.get('retry-after') !== null)
 		failures.push(failure('outcome-retry-after-present', { route }));
 	return failures;
+}
+
+/**
+ * Canonical bytes that disagree with their recorded size, media type, or
+ * digest are never served. Delivery and reconciliation share one definition of
+ * agreement, so content reconciliation has isolated as a critical integrity
+ * incident cannot still reach air — and because the disagreement may be
+ * repaired, the caller is told to retry rather than told it is gone.
+ */
+export function checkIntegrityDisagreement(observation, { route, bytes }) {
+	const failures = [...checkRetryableUnavailable(observation, { route })];
+	if (observation.status === 200) {
+		failures.push(failure('outcome-not-integrity-failure', {
+			route,
+			reason: 'contradicting bytes were served',
+		}));
+	}
+	else if (bytes !== undefined && observation.bytes.byteLength > 0 && observation.status < 400) {
+		failures.push(failure('outcome-not-integrity-failure', { route, reason: 'a body was returned' }));
+	}
+	return failures;
+}
+
+/**
+ * On the Screen Output capability route a denied capability and an unreachable
+ * revision are answered identically on purpose: telling them apart would let
+ * an unauthorized caller enumerate what a Screen Output holds. Asserting the
+ * two are indistinguishable is asserting that non-disclosure, so a future
+ * change that starts distinguishing them fails here rather than passing
+ * quietly.
+ */
+export function checkDenialIndistinguishableFromMissing(denied, missing, { route }) {
+	if (denied.status !== missing.status || denied.headers.get('retry-after') !== missing.headers.get('retry-after')) {
+		return [failure('outcome-detail-disclosed', {
+			route,
+			expected: missing.status,
+			actual: denied.status,
+		})];
+	}
+	// The error envelope echoes the request URL the caller already sent, so the
+	// two bodies differ in length for a reason that discloses nothing. What may
+	// not differ is what they say happened.
+	if (statedReason(denied) !== statedReason(missing))
+		return [failure('outcome-detail-disclosed', { route, reason: 'refusals read differently' })];
+	return [];
+}
+
+function statedReason(observation) {
+	const text = observation.text?.() ?? '';
+	try {
+		return JSON.parse(text).message ?? '';
+	}
+	catch {
+		return text;
+	}
 }
 
 /**

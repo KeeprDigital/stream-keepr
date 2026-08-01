@@ -5,8 +5,10 @@ import {
 	checkCapabilityDenial,
 	checkConditionalRead,
 	checkContentSecurityPolicy,
+	checkDenialIndistinguishableFromMissing,
 	checkFullRead,
-	checkNonRetryableIntegrity,
+	checkIntegrityDisagreement,
+	checkMissingIdentity,
 	checkNoStorageAddressing,
 	checkOriginExposure,
 	checkRangeRead,
@@ -177,15 +179,29 @@ describe('graphics staging delivery assertions', () => {
 		))).toEqual(['cors-allow-credentials-exposed']);
 	});
 
-	it('accepts an absent policy but rejects one that widens the output origin', () => {
-		expect(checkContentSecurityPolicy(new Headers(), { route })).toEqual([]);
-		expect(checkContentSecurityPolicy(
+	it('holds the settled absence of a policy to be the thing it checks', () => {
+		expect(checkContentSecurityPolicy(new Headers(), { route, settled: 'absent' })).toEqual([]);
+		// A policy appearing where none is settled is a change, not a bonus.
+		expect(codes(checkContentSecurityPolicy(
 			new Headers({ 'content-security-policy': 'default-src \'self\' data: blob:' }),
-			{ route },
-		)).toEqual([]);
+			{ route, settled: 'absent' },
+		))).toEqual(['csp-directive-unexpected']);
 		expect(codes(checkContentSecurityPolicy(
 			new Headers({ 'content-security-policy': 'default-src *' }),
-			{ route },
+			{ route, settled: 'absent' },
+		))).toEqual(['csp-directive-permissive']);
+	});
+
+	it('reports an absent policy as the failure once one is settled', () => {
+		expect(codes(checkContentSecurityPolicy(new Headers(), { route, settled: 'restrictive' })))
+			.toEqual(['csp-directive-missing']);
+		expect(checkContentSecurityPolicy(
+			new Headers({ 'content-security-policy': 'default-src \'self\' data: blob:' }),
+			{ route, settled: 'restrictive' },
+		)).toEqual([]);
+		expect(codes(checkContentSecurityPolicy(
+			new Headers({ 'content-security-policy': 'media-src https:' }),
+			{ route, settled: 'restrictive' },
 		))).toEqual(['csp-directive-permissive']);
 	});
 
@@ -212,9 +228,43 @@ describe('graphics staging delivery assertions', () => {
 	});
 
 	it('requires a missing identity or revision to refuse a retry', () => {
-		expect(checkNonRetryableIntegrity(observed(404, {}), { route })).toEqual([]);
-		expect(codes(checkNonRetryableIntegrity(observed(503, { 'retry-after': '5' }), { route })))
-			.toEqual(['outcome-not-integrity-failure', 'outcome-retry-after-present']);
+		expect(checkMissingIdentity(observed(404, {}), { route })).toEqual([]);
+		expect(codes(checkMissingIdentity(observed(503, { 'retry-after': '5' }), { route })))
+			.toEqual(['outcome-not-missing-identity', 'outcome-retry-after-present']);
+	});
+
+	it('requires contradicting canonical bytes to read as retryably unavailable, never as gone', () => {
+		expect(checkIntegrityDisagreement(observed(503, { 'retry-after': '5' }), { route })).toEqual([]);
+		// The library refuses to serve content that disagrees with its record.
+		expect(codes(checkIntegrityDisagreement(observed(200, {}, bytes), { route })))
+			.toEqual(['outcome-not-retryable-unavailable', 'outcome-retry-after-missing', 'outcome-not-integrity-failure']);
+		// A disagreement is repairable, so answering "gone" would be wrong too.
+		expect(codes(checkIntegrityDisagreement(observed(404, {}), { route })))
+			.toEqual(['outcome-not-retryable-unavailable', 'outcome-retry-after-missing']);
+	});
+
+	it('requires denial and an unreachable revision to be told apart by nobody', () => {
+		const refusal = (message: string, url: string) => ({
+			...observed(404, {}),
+			text: () => JSON.stringify({ statusCode: 404, message, url }),
+		});
+		// Two refusals whose envelopes echo the caller's own differing URLs are
+		// still the same refusal.
+		expect(checkDenialIndistinguishableFromMissing(
+			refusal('Graphic Asset Revision is not available to this Screen Output', '/a/very/long/denied/path'),
+			refusal('Graphic Asset Revision is not available to this Screen Output', '/short'),
+			{ route },
+		)).toEqual([]);
+		expect(codes(checkDenialIndistinguishableFromMissing(
+			refusal('Not authorized for this Screen Output', '/x'),
+			refusal('Graphic Asset Revision does not exist', '/x'),
+			{ route },
+		))).toEqual(['outcome-detail-disclosed']);
+		expect(codes(checkDenialIndistinguishableFromMissing(
+			observed(403, {}),
+			observed(404, {}),
+			{ route },
+		))).toEqual(['outcome-detail-disclosed']);
 	});
 
 	it('requires a denied capability to disclose nothing about the asset', () => {
