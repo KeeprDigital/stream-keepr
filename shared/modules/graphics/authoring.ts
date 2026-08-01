@@ -1,3 +1,4 @@
+import type { Game } from '../../types/enums';
 import type { GraphicFocalPosition } from '../../types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
@@ -14,6 +15,7 @@ import type {
 	GraphicGroupChildConfig,
 	GraphicGroupChildSizing,
 	GraphicGroupItemConfig,
+	GraphicInputBinding,
 	GraphicInputChoiceOption,
 	GraphicInputDeclaration,
 	GraphicInputType,
@@ -25,6 +27,9 @@ import type {
 	GraphicRevealChannel,
 	GraphicScaleChannel,
 	GraphicSlideChannel,
+	GraphicSourceDerivation,
+	GraphicSourceSelectionDeclaration,
+	GraphicSourceSelectionKind,
 	GraphicSurfaceStyle,
 	GraphicTypography,
 	MediaGraphicItemConfig,
@@ -40,6 +45,8 @@ import type { GraphicStyleSlot } from '../../types/graphicStyleSet';
 import type { ShapeGeometryPresetId } from './shapeGeometry';
 import { GRAPHIC_ANIMATION_PHASE_VALUES, GRAPHIC_INPUT_KEY_PATTERN, MAX_GRAPHIC_INPUT_KEY_LENGTH } from '../../types/graphics';
 import { createDefaultGraphicAnimationRecipe, getGraphicAnimationPreset } from './animation';
+import { isGraphicBindingFieldCompatible } from './bindingCatalog';
+import { canDeriveGraphicSource } from './bindingResolution';
 import { createDefaultGraphicInputDeclaration } from './inputs';
 import { createDefaultGraphicSurfaceStyle, getGraphicItemDefinition, GRAPHIC_GROUP_CHILD_KINDS, graphicItemKindLabel } from './itemDefinitions';
 import { getShapeGeometryPreset, squareShapeGeometry } from './shapeGeometry';
@@ -294,6 +301,183 @@ export function patchGraphicPlaceholderStyle(
 			},
 		};
 	});
+}
+
+/* ────────────────────────────────────────────────
+ * Graphic Source Selections and Graphic Input Bindings
+ * ──────────────────────────────────────────────── */
+
+/**
+ * Declare one Graphic Source Selection of a chosen kind.
+ *
+ * The kind is chosen once and never edited afterwards, exactly as a Graphic Input's
+ * type is: the kind decides which catalog fields the bindings reading it may name,
+ * so changing it in place would silently strand every binding that already reads it.
+ * An author who wants another kind declares another selection.
+ */
+export function addGraphicSourceSelection(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	kind: GraphicSourceSelectionKind,
+): BroadcastGraphicConfig[] {
+	return graphics.map((graphic) => {
+		if (graphic.id !== graphicId)
+			return graphic;
+
+		const sources = graphic.sources ?? [];
+		const label = nextSequentialName('Source', sources.map(source => source.label));
+
+		return {
+			...graphic,
+			sources: [...sources, {
+				key: graphicInputKeyFromLabel(label, sources.map(source => source.key)),
+				label,
+				kind,
+			}],
+		};
+	});
+}
+
+/**
+ * Rename one Graphic Source Selection.
+ *
+ * Only the label: the key is what every Graphic Input Binding, every derived
+ * selection's `from`, and every operator selection in a running Live Session names,
+ * and the kind is fixed for the reason stated above.
+ */
+export function patchGraphicSourceSelection(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	key: string,
+	patch: Partial<Pick<GraphicSourceSelectionDeclaration, 'label'>>,
+): BroadcastGraphicConfig[] {
+	return graphics.map(graphic => graphic.id === graphicId
+		? {
+				...graphic,
+				sources: (graphic.sources ?? []).map(source =>
+					source.key === key ? { ...source, ...patch } : source,
+				),
+			}
+		: graphic);
+}
+
+/**
+ * Derive one Graphic Source Selection from another, or return it to an operator pick.
+ *
+ * A derivation the relation table does not yield, or one that would close a cycle,
+ * is refused rather than stored: the write path refuses exactly those, so storing one
+ * would leave an author holding a Broadcast Graphic they cannot save.
+ */
+export function setGraphicSourceDerivation(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	key: string,
+	from: GraphicSourceDerivation | undefined,
+): BroadcastGraphicConfig[] {
+	return graphics.map((graphic) => {
+		if (graphic.id !== graphicId)
+			return graphic;
+
+		const sources = graphic.sources ?? [];
+		if (from !== undefined && !canDeriveGraphicSource(sources, key, from))
+			return graphic;
+
+		return {
+			...graphic,
+			sources: sources.map((source) => {
+				if (source.key !== key)
+					return source;
+				if (from === undefined) {
+					const { from: _cleared, ...rest } = source;
+					return rest;
+				}
+				return { ...source, from };
+			}),
+		};
+	});
+}
+
+/**
+ * Stop declaring one Graphic Source Selection, and drop what depended on it.
+ *
+ * Everything derived from it goes too, transitively, along with every Graphic Input
+ * Binding that read any of them. A derived selection whose parent no longer exists is
+ * one of the cross-field rules the write path refuses, so leaving one behind would
+ * turn a deletion into a Broadcast Graphic that cannot be saved.
+ */
+export function deleteGraphicSourceSelection(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	key: string,
+): BroadcastGraphicConfig[] {
+	return graphics.map((graphic) => {
+		if (graphic.id !== graphicId)
+			return graphic;
+
+		const sources = graphic.sources ?? [];
+		const removed = new Set<string>([key]);
+		let reached = true;
+		while (reached) {
+			reached = false;
+			for (const source of sources) {
+				if (source.from && removed.has(source.from.sourceKey) && !removed.has(source.key)) {
+					removed.add(source.key);
+					reached = true;
+				}
+			}
+		}
+
+		return {
+			...graphic,
+			sources: sources.filter(source => !removed.has(source.key)),
+			bindings: graphic.bindings?.filter(binding => !removed.has(binding.sourceKey)),
+		};
+	});
+}
+
+/**
+ * Bind one Graphic Input to one field of one Graphic Source Selection.
+ *
+ * Replaces whatever that Graphic Input was bound to, because it may have at most one
+ * Graphic Input Binding. The binding is refused unless both ends are declared and the
+ * field is one the selection's kind offers, this Event's game has, and the Graphic
+ * Input's type can hold — which is every reason resolution would otherwise drop it,
+ * checked while the author can still choose something else.
+ */
+export function setGraphicInputBinding(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	binding: GraphicInputBinding,
+	game?: Game,
+): BroadcastGraphicConfig[] {
+	return graphics.map((graphic) => {
+		if (graphic.id !== graphicId)
+			return graphic;
+
+		const input = (graphic.inputs ?? []).find(entry => entry.key === binding.inputKey);
+		const source = (graphic.sources ?? []).find(entry => entry.key === binding.sourceKey);
+		if (!input || !source || !isGraphicBindingFieldCompatible(source.kind, binding.fieldId, input.type, game))
+			return graphic;
+
+		const bindings = graphic.bindings ?? [];
+		return {
+			...graphic,
+			bindings: bindings.some(entry => entry.inputKey === binding.inputKey)
+				? bindings.map(entry => entry.inputKey === binding.inputKey ? binding : entry)
+				: [...bindings, binding],
+		};
+	});
+}
+
+/** Stop binding one Graphic Input, leaving it a manually entered value again. */
+export function deleteGraphicInputBinding(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	inputKey: string,
+): BroadcastGraphicConfig[] {
+	return graphics.map(graphic => graphic.id === graphicId
+		? { ...graphic, bindings: (graphic.bindings ?? []).filter(binding => binding.inputKey !== inputKey) }
+		: graphic);
 }
 
 /* ────────────────────────────────────────────────

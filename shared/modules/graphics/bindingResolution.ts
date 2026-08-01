@@ -3,6 +3,7 @@ import type {
 	GraphicInputBinding,
 	GraphicInputDeclaration,
 	GraphicInputValue,
+	GraphicSourceDerivation,
 	GraphicSourceRelation,
 	GraphicSourceSelectionDeclaration,
 	GraphicSourceSelectionKind,
@@ -79,6 +80,18 @@ export function graphicSourceRelations(kind: GraphicSourceSelectionKind): Graphi
 	return Object.keys(RELATION_RESULT_KIND[kind] ?? {}) as GraphicSourceRelation[];
 }
 
+/** What an author reads when choosing a fixed relationship to follow. */
+export const GRAPHIC_SOURCE_RELATION_LABELS: Record<GraphicSourceRelation, string> = {
+	player1: 'Player 1',
+	player2: 'Player 2',
+	match: 'Match',
+	round: 'Round',
+	phase: 'Phase',
+	archetype: 'Archetype',
+	commentator1: 'Commentator 1',
+	commentator2: 'Commentator 2',
+};
+
 /** The kind one relationship from this kind resolves, if the relationship exists. */
 export function graphicSourceRelationKind(
 	kind: GraphicSourceSelectionKind,
@@ -98,6 +111,66 @@ export function isOperatorSelectedGraphicSource(
 	declaration: GraphicSourceSelectionDeclaration,
 ): boolean {
 	return declaration.kind !== 'event' && declaration.from === undefined;
+}
+
+/** Whether one Graphic Source Selection's `from` chain reaches another. */
+function derivesFrom(
+	sources: readonly GraphicSourceSelectionDeclaration[],
+	key: string,
+	ancestorKey: string,
+): boolean {
+	const byKey = new Map(sources.map(source => [source.key, source]));
+	const seen = new Set<string>([key]);
+	let current = byKey.get(key)?.from?.sourceKey;
+
+	while (current !== undefined) {
+		if (current === ancestorKey)
+			return true;
+		// An already-authored cycle stops the walk rather than spinning in it: this
+		// function answers a question about a broken declaration as readily as a sound one.
+		if (seen.has(current))
+			return false;
+		seen.add(current);
+		current = byKey.get(current)?.from?.sourceKey;
+	}
+
+	return false;
+}
+
+/**
+ * The derivations one Graphic Source Selection may actually be given.
+ *
+ * Every rule the write path checks a `from` against, offered as a list instead: the
+ * parent is a declared sibling, the relationship is one that parent's kind offers,
+ * it yields this selection's own declared kind, and it does not close a cycle. An
+ * author choosing from this list cannot author a derivation the server refuses, and
+ * a selection whose kind nothing reaches simply has no derivation to choose.
+ */
+export function graphicSourceDerivationOptions(
+	sources: readonly GraphicSourceSelectionDeclaration[],
+	key: string,
+): GraphicSourceDerivation[] {
+	const declaration = sources.find(source => source.key === key);
+	if (!declaration)
+		return [];
+
+	return sources.flatMap(parent =>
+		parent.key === key || derivesFrom(sources, parent.key, key)
+			? []
+			: graphicSourceRelations(parent.kind)
+					.filter(relation => graphicSourceRelationKind(parent.kind, relation) === declaration.kind)
+					.map(relation => ({ sourceKey: parent.key, relation })),
+	);
+}
+
+/** Whether one derivation is among the ones this Graphic Source Selection may be given. */
+export function canDeriveGraphicSource(
+	sources: readonly GraphicSourceSelectionDeclaration[],
+	key: string,
+	from: GraphicSourceDerivation,
+): boolean {
+	return graphicSourceDerivationOptions(sources, key)
+		.some(option => option.sourceKey === from.sourceKey && option.relation === from.relation);
 }
 
 /** A Player as one side of a Match's production snapshot. */
