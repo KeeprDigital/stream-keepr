@@ -1,7 +1,11 @@
 import { mapGraphicStyleSetToResponse } from '~~/server/mappers/graphicStyleSet';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
-import { createGraphicStyleSetSchema } from '~~/server/schemas/api/graphicStyleSet';
+import {
+	createGraphicStyleSetSchema,
+	GRAPHIC_STYLE_SET_DRAFT_BODY_BYTES,
+} from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
+import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 import { randomUuid } from '~~/shared/utils/uuid';
 
 /**
@@ -18,7 +22,9 @@ import { randomUuid } from '~~/shared/utils/uuid';
  */
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);
-	const body = createGraphicStyleSetSchema.parse(await readBody(event));
+	const body = createGraphicStyleSetSchema.parse(
+		await readJsonPayloadLimited(event, GRAPHIC_STYLE_SET_DRAFT_BODY_BYTES, 'Graphic Style Set'),
+	);
 
 	const styleSet = await graphicStyleSetService().create({
 		id: randomUuid(),

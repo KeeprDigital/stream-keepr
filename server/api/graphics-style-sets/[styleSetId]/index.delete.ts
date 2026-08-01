@@ -1,12 +1,12 @@
-import { z } from 'zod';
 import { planGraphicStyleSetDeletion } from '~~/server/modules/graphic-style-set';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
-import { graphicStyleSetParamsSchema } from '~~/server/schemas/api/graphicStyleSet';
+import {
+	deleteGraphicStyleSetSchema,
+	GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
+	graphicStyleSetParamsSchema,
+} from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
-
-const deleteGraphicStyleSetSchema = z.object({
-	draftRevision: z.number().int().nonnegative(),
-}).strict();
+import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
 /**
  * Delete one Graphic Style Set, detaching every template linked to it.
@@ -26,7 +26,13 @@ const deleteGraphicStyleSetSchema = z.object({
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);
 	const { styleSetId } = await getValidatedRouterParams(event, graphicStyleSetParamsSchema.parse);
-	const body = deleteGraphicStyleSetSchema.parse(await readBody(event));
+	const body = deleteGraphicStyleSetSchema.parse(
+		await readJsonPayloadLimited(
+			event,
+			GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
+			'Graphic Style Set deletion request',
+		),
+	);
 
 	const service = graphicStyleSetService();
 	const styleSet = await service.findById(styleSetId);

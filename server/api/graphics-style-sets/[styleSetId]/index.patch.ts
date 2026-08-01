@@ -1,6 +1,7 @@
 import { mapGraphicStyleSetToResponse } from '~~/server/mappers/graphicStyleSet';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import {
+	GRAPHIC_STYLE_SET_DRAFT_BODY_BYTES,
 	graphicStyleSetParamsSchema,
 	updateGraphicStyleSetSchema,
 } from '~~/server/schemas/api/graphicStyleSet';
@@ -24,7 +25,7 @@ export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);
 	const { styleSetId } = await getValidatedRouterParams(event, graphicStyleSetParamsSchema.parse);
 	const body = updateGraphicStyleSetSchema.parse(
-		await readJsonPayloadLimited(event, 512 * 1024, 'Graphic Style Set'),
+		await readJsonPayloadLimited(event, GRAPHIC_STYLE_SET_DRAFT_BODY_BYTES, 'Graphic Style Set'),
 	);
 
 	try {

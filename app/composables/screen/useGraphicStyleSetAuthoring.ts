@@ -17,6 +17,14 @@ export interface GraphicStyleAuthoringContext {
 	name: string;
 	entries: GraphicStyleSetEntry[];
 	resolution: GraphicStyleSetResolution;
+	/**
+	 * The published revision `entries` and `resolution` are the contents of.
+	 *
+	 * Carried because a composition still linked at an earlier revision is looking at
+	 * entries it was never reconciled to, and an editor that could not tell would read
+	 * the Style Set's own pending change as the author's deviation.
+	 */
+	publishedRevision: number;
 }
 
 /**
@@ -75,6 +83,7 @@ export function useGraphicStyleSetAuthoring(
 						name: styleSet.name,
 						entries: styleSet.published,
 						resolution: resolveGraphicStyleSet(styleSet.published),
+						publishedRevision: styleSet.revision,
 					}
 				: null;
 			error.value = null;

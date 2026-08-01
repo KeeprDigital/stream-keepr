@@ -245,7 +245,9 @@ function apply(
  */
 function withRecapturedStyleOverrides(graphic: BroadcastGraphicConfig): BroadcastGraphicConfig {
 	const context = props.styleSet;
-	return context ? recaptureGraphicStyleOverrides(graphic, context.resolution) : graphic;
+	return context
+		? recaptureGraphicStyleOverrides(graphic, context.resolution, context.publishedRevision)
+		: graphic;
 }
 
 function setPhaseEnabled(phase: GraphicAnimationPhase, enabled: boolean) {

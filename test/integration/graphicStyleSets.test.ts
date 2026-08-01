@@ -247,6 +247,48 @@ describe('graphic Style Sets', () => {
 		expect(anonymous.status).toBe(401);
 	});
 
+	it('refuses an over-sized initial draft on create, as editing one is refused', async () => {
+		// Creating a Style Set accepts the same unbounded draft array editing one does, so
+		// it is bounded by the same number. Sized to land in the gap that bound exists to
+		// cover: over this route's own limit, and under the general mutation ceiling that
+		// would otherwise be the only thing stopping it.
+		const filler = 'x'.repeat(900);
+		const oversized = Array.from({ length: 640 }, (_, index) => ({
+			id: `bulk-${index}-${runId}`,
+			kind: 'palette',
+			name: filler,
+			schemaVersion: 1,
+			value: { color: '#ffffff' },
+		}));
+		// Asserted rather than assumed: a body over the general ceiling is refused by the
+		// middleware before this route is reached, which would prove nothing about it.
+		expect(JSON.stringify(oversized).length).toBeGreaterThan(512 * 1024);
+		expect(JSON.stringify(oversized).length).toBeLessThan(1024 * 1024);
+
+		const refused = await request(STYLE_SETS, {
+			method: 'POST',
+			cookie: authorCookie,
+			body: { name: `Oversized ${runId}`, draft: oversized },
+		});
+
+		expect(refused.status).toBe(413);
+		expect(JSON.stringify(refused.data)).toContain('Graphic Style Set must not exceed');
+	});
+
+	it('refuses a publish whose body is bigger than the precondition it carries', async () => {
+		// Publishing names the draft revision the author reviewed and nothing else, so it
+		// is bounded far below the general mutation ceiling — and bounded by *bytes*,
+		// before the schema that would refuse this shape ever sees it.
+		const refused = await request(`${STYLE_SETS}/${styleSetId}/publish`, {
+			method: 'POST',
+			cookie: authorCookie,
+			body: { draftRevision: 1, padding: 'x'.repeat(5000) },
+		});
+
+		expect(refused.status).toBe(413);
+		expect(JSON.stringify(refused.data)).toContain('Graphic Style Set publish request must not exceed');
+	});
+
 	it('accumulates edits in a working draft that no template can see', async () => {
 		// Deliberately broken: the typography preset names a palette entry that is not
 		// there yet. A draft is edited into existence in pieces, so this must be storable.
