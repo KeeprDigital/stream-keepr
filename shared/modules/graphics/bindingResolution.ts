@@ -80,7 +80,14 @@ export function graphicSourceRelations(kind: GraphicSourceSelectionKind): Graphi
 	return Object.keys(RELATION_RESULT_KIND[kind] ?? {}) as GraphicSourceRelation[];
 }
 
-/** What an author reads when choosing a fixed relationship to follow. */
+/**
+ * What an author reads when choosing a fixed relationship to follow.
+ *
+ * The two Event relationships are stored as `commentator1` and `commentator2` and
+ * read as Talent, which is the glossary's term for an Event's broadcast presenter or
+ * commentator — and the kind they resolve. The stored names are the wire's and stay
+ * as they are; an author reads the domain's.
+ */
 export const GRAPHIC_SOURCE_RELATION_LABELS: Record<GraphicSourceRelation, string> = {
 	player1: 'Player 1',
 	player2: 'Player 2',
@@ -88,8 +95,8 @@ export const GRAPHIC_SOURCE_RELATION_LABELS: Record<GraphicSourceRelation, strin
 	round: 'Round',
 	phase: 'Phase',
 	archetype: 'Archetype',
-	commentator1: 'Commentator 1',
-	commentator2: 'Commentator 2',
+	commentator1: 'Talent 1',
+	commentator2: 'Talent 2',
 };
 
 /** The kind one relationship from this kind resolves, if the relationship exists. */
