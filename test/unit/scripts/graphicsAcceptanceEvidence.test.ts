@@ -91,4 +91,9 @@ describe('graphics staging acceptance evidence', () => {
 		expect(evidence().passed({ checks: 24, mode: 'local' }))
 			.toBe('delivery-v1 acceptance passed checks=24 mode=local');
 	});
+
+	it('never calls an unobserved check a pass', () => {
+		expect(evidence().deferred({ path: 'manual-check-required' }))
+			.toBe('delivery-v1 acceptance deferred path=manual-check-required');
+	});
 });

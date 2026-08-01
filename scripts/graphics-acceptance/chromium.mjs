@@ -139,11 +139,19 @@ async function launch(candidate, extraArgs) {
 	return {
 		endpoint,
 		async dispose() {
+			// A signal to the launcher does not reliably reach the browser it
+			// spawned, and an acceptance run that leaves orphan browsers behind
+			// makes the next run flaky. Ask it to close over its own protocol
+			// first, and keep the signal only as a backstop.
+			const exited = new Promise(resolve => child.once('exit', resolve));
+			await connect(endpoint)
+				.then(browser => browser.command('Browser.close'))
+				.catch(() => undefined);
+			await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 5000))]);
+			child.kill('SIGTERM');
+			await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 2000))]);
 			// Chromium keeps writing its profile until it is gone, so removing the
 			// directory before it exits races with its own shutdown.
-			const exited = new Promise(resolve => child.once('exit', resolve));
-			child.kill('SIGTERM');
-			await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 5000))]);
 			await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 				.catch(() => undefined);
 		},
@@ -157,7 +165,8 @@ async function launch(candidate, extraArgs) {
  *   outcome: 'passed' | 'failed' | 'timed-out' | 'unavailable',
  *   code?: string,
  *   detail?: string,
- * }>}
+ * }>} The page's verdict, the stable code it named, and its own description of
+ * what it observed.
  */
 export async function observeChromiumVerdict({
 	url,

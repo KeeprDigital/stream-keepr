@@ -159,5 +159,9 @@ export function createAcceptanceEvidence({ harness, secrets = [] }) {
 		passed(detail) {
 			return line('acceptance passed', detail);
 		},
+		/** Nothing was disproved and nothing was proved: a human still owes an observation. */
+		deferred(detail) {
+			return line('acceptance deferred', detail);
+		},
 	};
 }
