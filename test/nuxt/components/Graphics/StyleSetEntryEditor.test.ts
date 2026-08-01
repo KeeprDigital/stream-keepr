@@ -282,10 +282,10 @@ describe('graphicsStyleSetEntryEditor', () => {
 	it('gives an observer every preset to read and none to write', async () => {
 		const wrapper = await mountEditor(TYPOGRAPHY, { writable: false });
 
-		expect(wrapper.get('[data-testid="style-entry-value-typography"]').exists()).toBe(true);
-		const controls = wrapper.findAll<HTMLInputElement | HTMLSelectElement>('input, select');
+		expect(wrapper.find('[data-testid="style-entry-value-typography"]').exists()).toBe(true);
+		const controls = wrapper.findAll('input, select');
 		expect(controls.length).toBeGreaterThan(0);
 		for (const control of controls)
-			expect(control.element.disabled).toBe(true);
+			expect((control.element as HTMLInputElement | HTMLSelectElement).disabled).toBe(true);
 	});
 });
