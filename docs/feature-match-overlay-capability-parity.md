@@ -10,19 +10,19 @@ Per-side borders are deliberately dropped rather than carried forward. A Graphic
 
 ## The mapping
 
-| Legacy construct                                                                   | Shared foundation equivalent                                                                    | Status                          |
-| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------- |
-| `widget` text with `{token}` template + per-token styles                           | Text Graphic Item with Graphic Text Template, host token binding catalogue, per-segment styling | Closed                          |
-| `widget` image                                                                     | Media Graphic Item + Graphics Asset Library reference                                           | Closed                          |
-| clock / player-life / game-wins widgets                                            | Shared context-gated Graphic Item Definitions                                                   | Closed                          |
-| `widget-group` (row/column/canvas, gap, align, fixed/fill sizing, child overrides) | Graphic Group (carried forward per the settled vocabulary)                                      | Closed                          |
-| Numeric `zIndex`                                                                   | Ordered back-to-front sibling lists                                                             | Closed                          |
-| Per-side border flags                                                              | **Dropped from Surface Style** — compose with a thin Shape Graphic Item ("rule" preset)         | Closed                          |
-| Per-corner radii                                                                   | Shape Geometry per-corner treatment                                                             | Closed                          |
+| Legacy construct                                                                   | Shared foundation equivalent                                                                    | Status                               |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `widget` text with `{token}` template + per-token styles                           | Text Graphic Item with Graphic Text Template, host token binding catalogue, per-segment styling | Closed                               |
+| `widget` image                                                                     | Media Graphic Item + Graphics Asset Library reference                                           | Closed                               |
+| clock / player-life / game-wins widgets                                            | Shared context-gated Graphic Item Definitions                                                   | Closed                               |
+| `widget-group` (row/column/canvas, gap, align, fixed/fill sizing, child overrides) | Graphic Group (carried forward per the settled vocabulary)                                      | Closed                               |
+| Numeric `zIndex`                                                                   | Ordered back-to-front sibling lists                                                             | Closed                               |
+| Per-side border flags                                                              | **Dropped from Surface Style** — compose with a thin Shape Graphic Item ("rule" preset)         | Closed                               |
+| Per-corner radii                                                                   | Shape Geometry per-corner treatment                                                             | Closed                               |
 | Box style (fill, gradient, opacity, glow, typography)                              | Graphic Surface Style + Text Graphic Item typography                                            | Closed (the last gap closed by #141) |
-| Text overflow clip/ellipsis/shrink/visible                                         | Text Overflow Policy                                                                            | Closed                          |
-| Frame, cutouts, source roles                                                       | Feature Match Overlay host layer (unchanged, host-specific)                                     | Closed                          |
-| Built-in presets replacing whole layout                                            | Recreated as built-in Feature Match Layouts on the shared schema                                | Closed                          |
+| Text overflow clip/ellipsis/shrink/visible                                         | Text Overflow Policy                                                                            | Closed                               |
+| Frame, cutouts, source roles                                                       | Feature Match Overlay host layer (unchanged, host-specific)                                     | Closed                               |
+| Built-in presets replacing whole layout                                            | Recreated as built-in Feature Match Layouts on the shared schema                                | Closed                               |
 
 ## How each row landed
 

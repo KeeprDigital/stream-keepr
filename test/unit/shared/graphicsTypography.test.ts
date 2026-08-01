@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+	getGraphicFontDefinition,
 	GRAPHIC_FONT_IDS,
 	GRAPHIC_FONTS,
-	getGraphicFontDefinition,
 	graphicAssetFontFaceFamily,
 	resolveGraphicFontFamily,
 } from '~~/shared/modules/graphics/typography';
