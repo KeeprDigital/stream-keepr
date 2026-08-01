@@ -37,11 +37,11 @@ describe('the canonical Feature Match sample dataset', () => {
 	 *
 	 * Pinned by writing the whole dataset out a second time, which is the only shape
 	 * of assertion that can fail for a value computed at module load. Every value is
-	 * here rather than a representative few, because the property is that the
-	 * *dataset* is fixed: one token quietly derived from `Date.now()` or from
-	 * whatever the installation holds is exactly the defect, and a spot check would
-	 * pass over it. The duplication is the price of "canonical" — changing a sample
-	 * value is a two-file edit, deliberately.
+	 * here rather than a representative few, because what is fixed is the dataset
+	 * and not one sample of it: a single token quietly derived from `Date.now()` or
+	 * from whatever the installation holds is exactly the defect, and a spot check
+	 * would pass over it. The duplication is the price of "canonical" — changing a
+	 * sample value is a two-file edit, deliberately.
 	 */
 	it('is fixed data rather than anything sampled from the installation', () => {
 		expect(FEATURE_MATCH_SAMPLE_TOKEN_VALUES).toEqual({
