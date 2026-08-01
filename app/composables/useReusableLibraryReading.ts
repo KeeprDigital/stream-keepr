@@ -1,19 +1,24 @@
 import type { Ref } from 'vue';
 
 /**
- * One reading of an installation-scoped graphics library.
+ * One reading of a library in the reusable-library scope.
  *
- * Three surfaces browse a shared library — the Broadcast Graphic Template library, the
- * Feature Match Layout Template library, and the Graphic Style Set library — and each
- * does the same three things around whatever else it offers: it re-reads the library, it
- * turns a refused write into something an author can read, and it holds that message
- * until the author has seen it.
+ * Three surfaces browse a library in that scope — the Broadcast Graphic Template
+ * library, the Feature Match Layout Template library, and the Graphic Style Set library
+ * — and each does the same three things around whatever else it offers: it re-reads the
+ * library, it turns a refused write into something an author can read, and it holds that
+ * message until the author has seen it.
+ *
+ * Deliberately not named for the Graphics Asset Library, which is a different thing: that
+ * one owns the image, silent video, and font bytes these libraries' artifacts reference,
+ * and is what `useGraphicsAdminReading` and `useGraphicsIngestionTransfer` next door
+ * speak to. This one reads a list of authoring artifacts and knows nothing about assets.
  *
  * What it deliberately does not own is importing. The three libraries receive different
  * portable artifacts and an import means a different thing in each, so the import path
  * stays with the library that has the semantics.
  */
-export interface GraphicsLibrary<Entry> extends GraphicsLibraryFailures {
+export interface ReusableLibraryReading<Entry> extends ReusableLibraryFailures {
 	/** The library as it was last read. */
 	entries: Ref<Entry[]>;
 	loading: Ref<boolean>;
@@ -23,14 +28,14 @@ export interface GraphicsLibrary<Entry> extends GraphicsLibraryFailures {
  * The part of a library a collaborator needs to report through: the message an author
  * is looking at, how a caught value becomes one, and how to go back to the server.
  */
-export interface GraphicsLibraryFailures {
+export interface ReusableLibraryFailures {
 	/** The one message an author is looking at, or none. */
 	error: Ref<string | null>;
 	failureMessage: (caught: unknown) => string;
 	refresh: (keepError?: boolean) => Promise<void>;
 }
 
-export function useGraphicsLibrary<Entry>(options: {
+export function useReusableLibraryReading<Entry>(options: {
 	/** Re-read the whole library. */
 	read: () => Promise<Entry[]>;
 	/** What to say when the failure carries no message of its own. */
@@ -42,7 +47,7 @@ export function useGraphicsLibrary<Entry>(options: {
 	 * once, and losing them would leave the author only "cannot be published".
 	 */
 	inspectFailure?: (caught: unknown) => void;
-}): GraphicsLibrary<Entry> {
+}): ReusableLibraryReading<Entry> {
 	const entries = ref<Entry[]>([]) as Ref<Entry[]>;
 	const loading = ref(false);
 	const error = ref<string | null>(null);

@@ -18,7 +18,7 @@ import type { TemplatePackagePreflightIssue } from '~~/shared/types/templatePack
  * here. Its first import *preserves* the packaged Style Set identity and revision rather
  * than yielding an unlinked copy, and an independent copy is the fallback an author
  * explicitly asks for rather than the ordinary outcome (`CONTEXT.md`, "Graphic Style Set
- * Package"). `StyleSetLibrary.vue` therefore builds on `useGraphicsLibrary` and keeps its
+ * Package"). `StyleSetLibrary.vue` therefore builds on `useReusableLibraryReading` and keeps its
  * own import path, where that choice is stated once and read at the call site. Folding
  * the two into a shared "install" path would quietly recreate the bug the separation
  * exists to prevent.
@@ -35,7 +35,7 @@ import type { TemplatePackagePreflightIssue } from '~~/shared/types/templatePack
  */
 
 /** What every graphics Template library entry carries, whichever kind it holds. */
-export interface GraphicsTemplateLibraryEntry {
+export interface GraphicsTemplateSummary {
 	id: string;
 	name: string;
 	description: string | null;
@@ -61,15 +61,15 @@ export interface GraphicsTemplateLibraryRepository<Entry> {
 	installPackage: (operationId: string) => Promise<GraphicsIngestionOperation>;
 }
 
-export interface GraphicsTemplateLibrary<Entry> extends GraphicsLibrary<Entry> {
+export interface GraphicsTemplateLibrary<Entry> extends ReusableLibraryReading<Entry> {
 	/** The entry a write is currently in flight against, if any. */
 	busyTemplateId: Ref<string | null>;
 	/** The entry whose deletion is awaiting confirmation, if any. */
 	pendingDeleteId: Ref<string | null>;
-	canRevise: (template: GraphicsTemplateLibraryEntry) => boolean;
+	canRevise: (template: GraphicsTemplateSummary) => boolean;
 	attempt: (templateId: string, work: () => Promise<void>) => Promise<void>;
 	revise: (
-		template: GraphicsTemplateLibraryEntry,
+		template: GraphicsTemplateSummary,
 		patch: { name?: string; description?: string | null },
 	) => Promise<void>;
 	askToRemove: (templateId: string) => void;
@@ -87,7 +87,7 @@ export interface GraphicsTemplateLibrary<Entry> extends GraphicsLibrary<Entry> {
 	dismissImport: () => void;
 }
 
-export function useGraphicsTemplateLibrary<Entry extends GraphicsTemplateLibraryEntry>(options: {
+export function useGraphicsTemplateLibrary<Entry extends GraphicsTemplateSummary>(options: {
 	repository: GraphicsTemplateLibraryRepository<Entry>;
 	/** Whether this session may author. Fail closed: an unstated permission is never permission. */
 	canAuthor: MaybeRefOrGetter<boolean>;
@@ -95,7 +95,7 @@ export function useGraphicsTemplateLibrary<Entry extends GraphicsTemplateLibrary
 	unavailable: string;
 }): GraphicsTemplateLibrary<Entry> {
 	const { repository } = options;
-	const library = useGraphicsLibrary<Entry>({
+	const library = useReusableLibraryReading<Entry>({
 		read: () => repository.list(),
 		unavailable: options.unavailable,
 	});
@@ -114,7 +114,7 @@ export function useGraphicsTemplateLibrary<Entry extends GraphicsTemplateLibrary
 	 * installed is browsed, placed, and exported like any other, and changed by placing it
 	 * and saving the placed copy.
 	 */
-	function canRevise(template: GraphicsTemplateLibraryEntry): boolean {
+	function canRevise(template: GraphicsTemplateSummary): boolean {
 		return authorises() && template.authored;
 	}
 
@@ -146,7 +146,7 @@ export function useGraphicsTemplateLibrary<Entry extends GraphicsTemplateLibrary
 	 * moved on and the list is re-read.
 	 */
 	async function revise(
-		template: GraphicsTemplateLibraryEntry,
+		template: GraphicsTemplateSummary,
 		patch: { name?: string; description?: string | null },
 	): Promise<void> {
 		if (!authorises())

@@ -42,7 +42,7 @@ import { randomUuid } from '~~/shared/utils/uuid';
  * ## Why this does not import the way the Template libraries do
  *
  * A Graphic Style Set Package is deliberately **not** a Template Package, so this
- * library builds on the neutral `useGraphicsLibrary` and keeps its own import path
+ * library builds on the neutral `useReusableLibraryReading` and keeps its own import path
  * rather than sharing `useGraphicsTemplateLibrary` with the two Template libraries.
  * Installing a Template Package yields an unlinked copy; the first import of a Graphic
  * Style Set Package *preserves* the packaged identity and revision, so a later related
@@ -74,7 +74,7 @@ const {
 	error,
 	failureMessage,
 	refresh,
-} = useGraphicsLibrary<GraphicStyleSetSummary>({
+} = useReusableLibraryReading<GraphicStyleSetSummary>({
 	read: () => repository.list(),
 	unavailable: 'The Graphic Style Set library is unavailable',
 	// A draft this library cannot publish is refused with every reason at once, and they
@@ -519,7 +519,7 @@ onMounted(() => {
 				installing a Template Package. An independent copy is offered below, and only
 				once a package has been refused for conflicting with what is already here.
 			-->
-			<GraphicsLibraryPackageImport
+			<GraphicsPackageImport
 				package-noun="Graphic Style Set Package"
 				accept=".skstyle"
 				test-id="style-set-import"
@@ -567,7 +567,7 @@ onMounted(() => {
 						Install as an independent copy
 					</UButton>
 				</template>
-			</GraphicsLibraryPackageImport>
+			</GraphicsPackageImport>
 
 			<!--
 				What an import that asked nothing still had to say. There is no decision here

@@ -158,7 +158,7 @@ onMounted(() => {
 				local copy with this installation's own identity and revision, keeping the
 				packaged Template's identity as provenance only.
 			-->
-			<GraphicsLibraryPackageImport
+			<GraphicsPackageImport
 				package-noun="Template Package"
 				accept=".skgraphic"
 				test-id="template-library-import"
@@ -191,7 +191,7 @@ onMounted(() => {
 			/>
 
 			<div v-else class="space-y-1.5">
-				<GraphicsLibraryEntry
+				<GraphicsTemplateLibraryEntry
 					v-for="template in templates"
 					:key="template.id"
 					:template-id="template.id"
@@ -269,7 +269,7 @@ onMounted(() => {
 						Broadcast Graphics already placed from it are independent copies and
 						survive.
 					-->
-					<GraphicsLibraryConfirmation
+					<GraphicsTemplateLibraryConfirmation
 						v-if="canAuthor && pendingDeleteId === template.id"
 						tone="error"
 						test-id="template-delete"
@@ -280,8 +280,8 @@ onMounted(() => {
 					>
 						Delete “{{ template.name }}” from the library? This cannot be undone.
 						Broadcast Graphics already placed from it are not affected.
-					</GraphicsLibraryConfirmation>
-				</GraphicsLibraryEntry>
+					</GraphicsTemplateLibraryConfirmation>
+				</GraphicsTemplateLibraryEntry>
 			</div>
 		</div>
 	</ScreenSettingsCard>

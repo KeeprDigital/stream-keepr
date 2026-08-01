@@ -158,7 +158,7 @@ onMounted(() => {
 				local copy with this installation's own identity and revision, keeping the
 				packaged Template's identity as provenance only.
 			-->
-			<GraphicsLibraryPackageImport
+			<GraphicsPackageImport
 				package-noun="Template Package"
 				accept=".sklayout"
 				test-id="layout-template-import"
@@ -191,7 +191,7 @@ onMounted(() => {
 			/>
 
 			<div v-else class="space-y-1.5">
-				<GraphicsLibraryEntry
+				<GraphicsTemplateLibraryEntry
 					v-for="template in templates"
 					:key="template.id"
 					:template-id="template.id"
@@ -258,7 +258,7 @@ onMounted(() => {
 						Placing is destructive to the Screen's current layout and cannot be
 						undone, so the first click asks and says exactly what survives.
 					-->
-					<GraphicsLibraryConfirmation
+					<GraphicsTemplateLibraryConfirmation
 						v-if="canAuthor && pendingPlaceId === template.id"
 						tone="warning"
 						test-id="layout-template-place"
@@ -270,14 +270,14 @@ onMounted(() => {
 						Replace this Screen's Feature Match Layout with “{{ template.name }}”?
 						The Frame, Source Items, and every Graphic Item are replaced. The
 						Screen's Feature Match Slot and canvas size are kept.
-					</GraphicsLibraryConfirmation>
+					</GraphicsTemplateLibraryConfirmation>
 
 					<!--
 						Deleting a layout cannot be undone, so the first click asks. The prompt
 						says the thing an author most needs to know before answering: layouts
 						already placed from it are independent copies and survive.
 					-->
-					<GraphicsLibraryConfirmation
+					<GraphicsTemplateLibraryConfirmation
 						v-if="canAuthor && pendingDeleteId === template.id"
 						tone="error"
 						test-id="layout-template-delete"
@@ -288,8 +288,8 @@ onMounted(() => {
 					>
 						Delete “{{ template.name }}” from the library? This cannot be undone.
 						Layouts already placed from it are not affected.
-					</GraphicsLibraryConfirmation>
-				</GraphicsLibraryEntry>
+					</GraphicsTemplateLibraryConfirmation>
+				</GraphicsTemplateLibraryEntry>
 			</div>
 		</div>
 	</ScreenSettingsCard>

@@ -23,10 +23,10 @@ const UButtonStub = defineComponent({
 });
 
 async function mountImport(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../app/components/Graphics/LibraryPackageImport.vue';
-	const { default: LibraryPackageImport } = await import(componentPath);
+	const componentPath = '../../../../app/components/Graphics/PackageImport.vue';
+	const { default: PackageImport } = await import(componentPath);
 
-	return mount(LibraryPackageImport, {
+	return mount(PackageImport, {
 		props: {
 			packageNoun: 'Template Package',
 			accept: '.skgraphic',
@@ -47,7 +47,7 @@ async function chooseFile(wrapper: Awaited<ReturnType<typeof mountImport>>, name
 	return file;
 }
 
-describe('graphicsLibraryPackageImport', () => {
+describe('graphicsPackageImport', () => {
 	it('names the artifact it receives rather than calling everything a package', async () => {
 		const wrapper = await mountImport({ packageNoun: 'Graphic Style Set Package' });
 
