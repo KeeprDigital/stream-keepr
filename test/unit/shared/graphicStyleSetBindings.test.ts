@@ -777,6 +777,28 @@ describe('recaptureGraphicStyleOverrides', () => {
 		expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toEqual({ entryId: 'accent-fill' });
 	});
 
+	it('still offers a republished Graphic Fill to an author who never touched theirs', () => {
+		const resolution = resolveGraphicStyleSet(withAccentFill);
+		const bound = boundFill();
+		// An edit somewhere else on the same item, which is what runs a recapture.
+		const edited = {
+			...bound,
+			items: bound.items.map(item => item.type === 'text'
+				? { ...item, typography: { ...item.typography, fontSize: 30 } }
+				: item),
+		};
+
+		const recaptured = recaptureGraphicStyleOverrides(edited, resolution);
+		const republished = [...styleSet('#00ff88'), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' })];
+		const changes = graphicStyleUpdateChanges(recaptured, resolveGraphicStyleSet(republished));
+
+		// The reference survived an unrelated edit, so the Style Set can still reach it —
+		// and reaching it is still an offer to review rather than a mutation.
+		expect(changes).toHaveLength(1);
+		expect(changes[0]).toMatchObject({ slot: 'surfaceStyle.fill', entryId: 'accent-fill' });
+		expect(changes[0]!.next).toEqual({ type: 'solid', color: '#00ff88' });
+	});
+
 	it('keeps a Graphic Fill reference the Style Set can no longer honour', () => {
 		const edited = paintFill(boundFill(), '#00ff88');
 
