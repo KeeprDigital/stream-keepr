@@ -1,5 +1,5 @@
 import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
-import type { BroadcastGraphicConfig, MediaGraphicItemConfig, ShapeGraphicItemConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicChannelConfig, MediaGraphicItemConfig, ShapeGraphicItemConfig } from '~~/shared/types/graphics';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
@@ -7,6 +7,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
 import {
+	broadcastGraphicChannelContexts,
 	broadcastGraphicPhaseProjection,
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
@@ -92,6 +93,25 @@ function mockState(): BroadcastGraphicsLiveState {
 	};
 }
 
+/**
+ * The timing one Broadcast Graphic is read against, including its Graphic Channel.
+ *
+ * The store derives the channel contexts from the authored stack and the channels its
+ * caller hands it, and this stands in for that derivation exactly — because waiting is
+ * only reachable through a channel, so a stand-in that dropped the channels would let
+ * the Screen Output compose a waiting graphic with no test noticing.
+ */
+function timingFor(
+	graphic: BroadcastGraphicConfig,
+	now?: number,
+	channels?: readonly GraphicChannelConfig[],
+) {
+	const contexts = channels?.length
+		? broadcastGraphicChannelContexts({ graphics: mockScreen.value?.modeConfigs?.['broadcast-graphics']?.graphics ?? [], channels })
+		: {};
+	return broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value, contexts[graphic.id]);
+}
+
 mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	// Every selector delegates to the real shared module rather than reimplementing it,
 	// so these tests cannot pass on behaviour the Screen Output does not actually use.
@@ -99,18 +119,28 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 		return new Map([[mockScreen.value?.id ?? 0, { id: 55, sequence: mockSessionSequence.value }]]);
 	},
 	serverNow: () => mockServerNow.value,
-	onAirGraphicIds: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) =>
+	onAirGraphicIds: (
+		_screenId: number,
+		graphics: readonly BroadcastGraphicConfig[],
+		now?: number,
+		channels?: readonly GraphicChannelConfig[],
+	) =>
 		onAirBroadcastGraphicIds(
 			mockState(),
 			graphics,
-			graphic => broadcastGraphicPhaseTiming(graphic as BroadcastGraphicConfig, now ?? mockServerNow.value),
+			graphic => timingFor(graphic as BroadcastGraphicConfig, now, channels),
 		),
-	animationProjection: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) =>
+	animationProjection: (
+		_screenId: number,
+		graphics: readonly BroadcastGraphicConfig[],
+		now?: number,
+		channels?: readonly GraphicChannelConfig[],
+	) =>
 		Object.fromEntries(graphics.flatMap((graphic) => {
 			const projection = broadcastGraphicPhaseProjection(
 				mockState(),
 				graphic.id,
-				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value),
+				timingFor(graphic, now, channels),
 			);
 			return projection ? [[graphic.id, projection]] : [];
 		})),
@@ -179,12 +209,14 @@ const templated: BroadcastGraphicConfig = {
 	}],
 };
 
-function screenWithStack(graphics: BroadcastGraphicConfig[] = []): Screen {
+function screenWithStack(graphics: BroadcastGraphicConfig[] = [], channels?: GraphicChannelConfig[]): Screen {
 	return {
 		id: 1,
 		slug: 'main',
 		screenConfig: { width: 1920, height: 1080 },
-		modeConfigs: graphics.length ? { 'broadcast-graphics': { graphics } } : {},
+		modeConfigs: graphics.length
+			? { 'broadcast-graphics': { graphics, ...(channels ? { channels } : {}) } }
+			: {},
 	} as Screen;
 }
 
@@ -895,6 +927,47 @@ describe('live playout animation in a Screen Output', () => {
 		expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(true);
 		expect(itemStyle(wrapper)).toContain('opacity: 0.125');
 		expect(itemStyle(wrapper)).toContain('translate(0px, 105px)');
+	});
+
+	describe('a Graphic Channel the Screen Output is composed against', () => {
+		const CHANNEL: GraphicChannelConfig = { id: 'thirds', name: 'Lower thirds', handoff: 'out-then-in' };
+		const outgoing: BroadcastGraphicConfig = { ...ANIMATED, channelId: 'thirds' };
+		const incoming: BroadcastGraphicConfig = { ...ANIMATED, id: 'bug', name: 'Bug', channelId: 'thirds' };
+
+		/**
+		 * An Out then in handoff one second in: the outgoing exit has another second to
+		 * run, and the incoming enter is scheduled at its completion.
+		 */
+		function midHandoff() {
+			mockScreen.value = screenWithStack([outgoing, incoming], [CHANNEL]);
+			mockPlayout.value = {
+				'lower-third': { onAir: false, effectiveStartedAt: T0 - 1000, cut: false },
+				'bug': { onAir: true, effectiveStartedAt: T0 + 1000, cut: false },
+			};
+		}
+
+		it('keeps a waiting Broadcast Graphic out of the composed frame', async () => {
+			midHandoff();
+
+			const wrapper = await mountComponent();
+
+			// Waiting is absent from overlay, fill, and key alike, and it is reachable only
+			// through the Screen's Graphic Channels — so this is also what proves the output
+			// actually passes them. Composed without them, the incoming graphic's deferred
+			// start reads as an entrance and it appears on program early.
+			expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(true);
+			expect(wrapper.find('[data-broadcast-graphic="bug"]').exists()).toBe(false);
+		});
+
+		it('composes it the instant the outgoing exit completes', async () => {
+			midHandoff();
+			mockServerNow.value = T0 + 1000;
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(false);
+			expect(wrapper.find('[data-broadcast-graphic="bug"]').exists()).toBe(true);
+		});
 	});
 
 	it('draws both renderings while an update cross-transitions, and only then', async () => {
