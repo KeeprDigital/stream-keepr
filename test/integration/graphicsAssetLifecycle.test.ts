@@ -360,28 +360,23 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 			{ method: 'PATCH', body: { layout: config.layout } },
 		)));
 
+		// Both references, in whichever order they landed: the two Screens were
+		// written concurrently just above, so pinning the order of the summary
+		// would be asserting which of two racing writes committed first rather
+		// than that the summary is complete.
 		const blocked = await lifecycleAction(reference.assetId, 'trash');
-		expect(blocked).toEqual({
-			outcome: 'in-use',
-			usage: [
-				expect.objectContaining({
-					reference,
-					owner: expect.objectContaining({
-						kind: 'screen',
-						id: String(secondScreen.id),
-						eventId,
-					}),
+		expect(blocked.outcome).toBe('in-use');
+		expect(blocked.usage).toHaveLength(2);
+		expect(blocked.usage).toEqual(expect.arrayContaining(
+			[secondScreen.id, thirdScreen.id].map(id => expect.objectContaining({
+				reference,
+				owner: expect.objectContaining({
+					kind: 'screen',
+					id: String(id),
+					eventId,
 				}),
-				expect.objectContaining({
-					reference,
-					owner: expect.objectContaining({
-						kind: 'screen',
-						id: String(thirdScreen.id),
-						eventId,
-					}),
-				}),
-			],
-		});
+			})),
+		));
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
 			query: { search: 'Referenced lifecycle logo' },
 		})).resolves.toEqual([
