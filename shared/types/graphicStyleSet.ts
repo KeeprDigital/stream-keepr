@@ -504,6 +504,12 @@ export interface GraphicStyleUpdateReview {
  * "leave this slot alone": an author cannot end up with inherited references spread
  * across a mixture of Style Set revisions, so every slot is decided together and the
  * whole template moves to the published revision in one new template revision.
+ *
+ * What `keep-as-override` records is where the owner deviates from the entry — the
+ * keys the author had already pinned, plus the ones this update was about to move —
+ * rather than the slot's whole property group. An author answering one row is
+ * answering about the values shown on it, and pinning the keys both sides already
+ * agree on would freeze the slot against every future republish (#162).
  */
 export const GRAPHIC_STYLE_UPDATE_DECISION_VALUES = ['inherit', 'keep-as-override'] as const;
 

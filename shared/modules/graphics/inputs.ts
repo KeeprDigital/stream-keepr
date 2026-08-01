@@ -3,6 +3,7 @@ import type {
 	GraphicInputValue,
 	GraphicPlaceholderStyle,
 	GraphicTypography,
+	MediaGraphicInputValue,
 } from '../../types/graphics';
 import {
 	DEFAULT_ON_AIR_UPDATE_POLICY,
@@ -44,8 +45,15 @@ const HEX_COLOUR_VALUE = /^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i;
  * A pinned Graphic Asset Reference, structurally. Whether the revision resolves
  * is a Missing or Unavailable Graphic Asset Content question the library answers,
  * not a constraint on the value.
+ *
+ * Asked of the stored value rather than assumed from the declaration, because a
+ * Graphic Input stores what the operator entered even when it violates its declared
+ * type. One predicate for every caller on purpose: the same answer decides whether a
+ * media value may go on air and whether it is published to the Screen Output, and a
+ * value those two disagreed about would be one an output could fetch but no graphic
+ * could show.
  */
-function isGraphicAssetReferenceShape(value: unknown): boolean {
+export function isMediaGraphicInputValue(value: unknown): value is MediaGraphicInputValue {
 	if (typeof value !== 'object' || value === null)
 		return false;
 	const candidate = value as { assetId?: unknown; revisionId?: unknown };
@@ -104,7 +112,7 @@ export function graphicInputAvailability(
 			return HEX_COLOUR_VALUE.test(value) ? AVAILABLE : unavailable('Not a hex colour');
 		}
 		case 'media':
-			return isGraphicAssetReferenceShape(value)
+			return isMediaGraphicInputValue(value)
 				? AVAILABLE
 				: unavailable('Expected a Graphics Asset Library revision');
 	}

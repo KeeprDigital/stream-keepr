@@ -5,6 +5,7 @@
  * client speak. Sequencing, receipts, and persistence belong to the shared
  * sequenced live-state module and the Screen's session service, never here.
  */
+export { broadcastGraphicsLiveSessionGraphicAssetReferences } from './assetReferences';
 export type {
 	BroadcastGraphicInputsState,
 	GraphicInputStatus,
@@ -35,6 +36,7 @@ export type {
 	BroadcastGraphicChannelContext,
 	BroadcastGraphicChannelMember,
 	BroadcastGraphicPhaseDurations,
+	BroadcastGraphicPhaseProjection,
 	BroadcastGraphicPhaseTiming,
 	BroadcastGraphicPlayout,
 	BroadcastGraphicsCommandInput,
@@ -53,7 +55,7 @@ export {
 	applyBroadcastGraphicsCommand,
 	BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES,
 	broadcastGraphicChannelContexts,
-	broadcastGraphicPhaseProjection,
+	broadcastGraphicPhaseProjections,
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
 	broadcastGraphicRenderedInputs,

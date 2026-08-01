@@ -508,7 +508,11 @@ describe('broadcast graphics live playout animation', () => {
 		expect(cut.currentState.inputs.a!.accepted).toEqual({ name: 'Swapped', title: '' });
 	});
 
-	it('discards a pending visual update on Out while keeping its accepted values', async () => {
+	it('finishes the update still crossing beneath the exit, discarding only the pending rendering', async () => {
+		// The glossary discards the *pending* visual update, which leaves the transition
+		// already travelling free to finish underneath the exit recipe. Both phases are
+		// therefore in play for one Broadcast Graphic at one authoritative instant, and the
+		// snapshot every output reloads has to say so.
 		const harness = await createGraphicsHarness(eventId, 'playout-exit-discards', [
 			integrationBroadcastGraphicWithInputs(
 				'a',
@@ -523,19 +527,72 @@ describe('broadcast graphics live playout animation', () => {
 			payload: { graphicId: 'a' },
 		});
 		await setBroadcastGraphicInput(harness, 'a', 'name', 'Accepted');
-		await harness.send({
+		const crossing = await harness.send({
 			commandId: playoutCommandId('discard-update'),
 			type: 'Update Graphic',
 			payload: { graphicId: 'a', basedOnAcceptedRevision: 1 },
 		});
+		// A second acceptance, queued behind the transition now running.
+		await setBroadcastGraphicInput(harness, 'a', 'title', 'Pending');
+		await harness.send({
+			commandId: playoutCommandId('discard-update-2'),
+			type: 'Update Graphic',
+			payload: { graphicId: 'a', basedOnAcceptedRevision: 2 },
+		});
+
 		const outed = await harness.send({
 			commandId: playoutCommandId('discard-out'),
 			type: 'Out',
 			payload: { graphicId: 'a' },
 		});
 
-		expect(outed.currentState.playout.a!.updateStartedAt).toBeUndefined();
-		expect(outed.currentState.inputs.a!.accepted).toEqual({ name: 'Accepted', title: '' });
+		// The running transition keeps the schedule it was given and the rendering it was
+		// travelling towards, so nothing it is halfway through crossing is cut.
+		expect(outed.currentState.playout.a!.updateStartedAt)
+			.toBe(crossing.currentState.playout.a!.updateStartedAt);
+		expect(outed.currentState.inputs.a!.updateFrom).toEqual({ name: '', title: '' });
+		expect(outed.currentState.inputs.a!.pendingUpdateFrom).toEqual({ name: 'Accepted', title: '' });
+		// And every accepted Graphic Input value survives, including the one whose
+		// rendering the exit discarded: it is what this graphic's next Take enters with.
+		expect(outed.currentState.inputs.a!.accepted).toEqual({ name: 'Accepted', title: 'Pending' });
+	});
+
+	it('carries where on-screen cycling had reached into the exit that interrupted it', async () => {
+		// Exit interrupts an active on-screen recipe and continues smoothly from the state
+		// that was rendered. The record an exit writes says when the *exit* began, so the
+		// instant cycling's origin was derived from is gone — and an exit composed over a
+		// cycle it cannot locate starts from the Graphic Resting State, which is the snap.
+		// The origin is therefore carried, and it is carried in the snapshot every output
+		// and Live Control reloads, so they cannot disagree about where the cycle is.
+		const harness = await createGraphicsHarness(eventId, 'playout-exit-cycling', [
+			integrationBroadcastGraphicWithInputs(
+				'a',
+				[integrationTextInput('name')],
+				integrationGraphicAnimation({ onScreen: 5000, exit: 5000 }),
+			),
+		]);
+
+		const taken = await harness.send({
+			commandId: playoutCommandId('cycling-take'),
+			type: 'Take',
+			payload: { graphicId: 'a' },
+		});
+		const outed = await harness.send({
+			commandId: playoutCommandId('cycling-out'),
+			type: 'Out',
+			payload: { graphicId: 'a' },
+		});
+
+		// No enter recipe, so cycling began the instant the Take settled — and that is the
+		// instant the exit now carries.
+		expect(outed.currentState.playout.a!.cyclingStartedAt)
+			.toBe(taken.currentState.playout.a!.effectiveStartedAt);
+		expect(outed.currentState.playout.a!.onAir).toBe(false);
+
+		// Every reader reloads the same origin rather than deriving one of its own.
+		const reloaded = await harness.reload();
+		expect(reloaded.currentState.playout.a!.cyclingStartedAt)
+			.toBe(outed.currentState.playout.a!.cyclingStartedAt);
 	});
 
 	it('answers a reload with the same schedule, so a reconnecting output catches up', async () => {

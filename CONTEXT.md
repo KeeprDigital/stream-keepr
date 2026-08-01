@@ -694,8 +694,13 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - An on-screen **Graphic Animation Recipe** may run once, a fixed number of times, or until exit is requested, with an optional pause between cycles
 - An update interrupts an active on-screen **Graphic Animation Recipe**, after which on-screen cycling restarts from its beginning
 - Exit interrupts an active enter, update, or on-screen **Graphic Animation Recipe** and continues smoothly from the currently rendered state
+- A **Broadcast Graphic** may be in more than one lifecycle phase at one authoritative instant, and every **Screen Output** and **Live Control** projects the same set
+- At most one update or on-screen **Graphic Animation Recipe** runs alongside at most one enter or exit phase
+- An exit composes over the update or on-screen **Graphic Animation Recipe** it interrupted rather than replacing it
+- Concurrent fades multiply, concurrent slides add, concurrent scales apply in turn, and concurrent reveals show only what both reveal
 - Interrupting an update animation does not roll back its accepted **Graphic Input** values
 - Exit discards any pending visual update without discarding its accepted **Graphic Input** values
+- A **Broadcast Graphic** leaving with a pending visual update discarded keeps the rendering the interrupted update was travelling towards until it leaves
 - A **Broadcast Graphic** may belong to one **Graphic Channel**
 - A **Graphic Channel** has one **Graphic Channel Handoff Policy** and defaults to Overlap
 - Taking a **Broadcast Graphic** replaces the on-air **Broadcast Graphic** in the same **Graphic Channel**
@@ -830,6 +835,8 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - Graphics artifacts reference a **Graphic Asset** by its stable library identity rather than by filename, URL, object key, or content hash
 - A **Screen Output** may resolve only the **Graphic Assets** referenced by its **Screen** and cannot discover other library contents
 - A **Screen Output Asset Capability** is checked against the Screen's currently published exact **Graphic Asset Revisions** on every resolution request
+- A **Broadcast Graphics Screen** publishes the exact **Graphic Asset Revisions** its authored configuration pins and the media **Graphic Input** values its **Broadcast Graphics Live Session** has accepted, and a value the Live Session no longer accepts stops being published in the same moment it leaves air
+- A media **Graphic Input** value carries the pinned **Graphic Asset Revision**'s own video target compatibility, stated with the value when it is authored as a default and recorded by the authoritative side when it is chosen live, and a value that states none is refused rather than published
 - A **Broadcast Graphic Template** declares zero or more **Graphic Inputs**
 - Copying a **Broadcast Graphic Template** into a **Broadcast Graphics Screen** copies each **Graphic Input** default as the placed graphic's initial manual value
 - Copying a **Broadcast Graphic Template** also creates independently editable **Graphic Source Selections** and **Graphic Input Bindings** on the placed **Broadcast Graphic**

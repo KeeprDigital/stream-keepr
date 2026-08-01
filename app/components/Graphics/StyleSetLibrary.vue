@@ -456,10 +456,6 @@ function unlink() {
 		return;
 	emit('update:graphic', detachGraphicStyleRefs(graphic, null));
 }
-
-onMounted(() => {
-	void refresh();
-});
 </script>
 
 <template>
@@ -470,14 +466,10 @@ onMounted(() => {
 				used across designs that travel independently.
 			</p>
 
-			<UAlert
-				v-if="error"
-				color="error"
-				variant="soft"
-				icon="i-lucide-triangle-alert"
+			<GraphicsReusableLibraryError
 				title="Graphic Style Set action failed"
-				:description="error"
-				data-testid="style-set-error"
+				:message="error"
+				test-id="style-set-error"
 			/>
 
 			<div v-if="issues.length > 0" class="rounded-md border border-error/40 bg-error/10 p-2" data-testid="style-set-publish-issues">
@@ -520,8 +512,7 @@ onMounted(() => {
 				once a package has been refused for conflicting with what is already here.
 			-->
 			<GraphicsPackageImport
-				package-noun="Graphic Style Set Package"
-				accept=".skstyle"
+				kind="skstyle"
 				test-id="style-set-import"
 				:writable="canAuthor"
 				:busy="importing"

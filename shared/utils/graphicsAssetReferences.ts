@@ -1,4 +1,10 @@
-import type { GraphicFontSelection, GraphicGroupChildConfig, GraphicItemConfig } from '../types/graphics';
+import type {
+	GraphicFontSelection,
+	GraphicGroupChildConfig,
+	GraphicInputDeclaration,
+	GraphicItemConfig,
+	MediaGraphicInputValue,
+} from '../types/graphics';
 import type { GraphicAssetReference } from '../types/graphicsAsset';
 import type {
 	BroadcastGraphicsModeConfig,
@@ -27,6 +33,36 @@ export function screenGraphicAssetReferenceTargetCompatibility(
 		reference.videoTarget,
 		actualTarget,
 	);
+}
+
+/**
+ * One media Graphic Asset Reference, wherever the choice was made.
+ *
+ * A Media Graphic Item's content, a media Graphic Input's authored default, and a
+ * value an operator picks live are the same kind of thing indexed the same way, so
+ * the facts that travel with them are assembled once here rather than three times.
+ *
+ * A silent-video reference carries the pinned revision's own target compatibility,
+ * which the reference index checks it against, and an authored target of Chromium.
+ * That assumption is shared by both hosts on purpose: a graphics Screen Output is
+ * consumed as a browser source in Chromium-based capture, which is what makes VP9
+ * alpha usable at all, and neither host has a control that would let an author say
+ * otherwise. An image carries neither fact, because it has no target compatibility
+ * to check.
+ */
+export function mediaScreenGraphicAssetReference(
+	value: MediaGraphicInputValue,
+	kind: 'image' | 'silent-video',
+	ownerSlot: string,
+): ScreenGraphicAssetReference {
+	return {
+		reference: { assetId: value.assetId, revisionId: value.revisionId },
+		ownerSlot,
+		kind,
+		...(kind === 'silent-video'
+			? { videoCompatibility: value.videoCompatibility, videoTarget: 'chromium' as const }
+			: {}),
+	};
 }
 
 export function sameGraphicAssetReference(
@@ -100,14 +136,11 @@ function appendSharedGraphicItemReferences(
 		appendGraphicFontReferences(references, item, ownerSlot);
 		if (item.type !== 'media' || !item.asset)
 			return;
-		references.push({
-			reference: item.asset,
-			ownerSlot: `${ownerSlot}.asset`,
-			kind: item.mediaKind,
-			...(item.mediaKind === 'silent-video'
-				? { videoCompatibility: item.videoCompatibility, videoTarget: 'chromium' as const }
-				: {}),
-		});
+		references.push(mediaScreenGraphicAssetReference(
+			{ ...item.asset, videoCompatibility: item.videoCompatibility },
+			item.mediaKind,
+			`${ownerSlot}.asset`,
+		));
 	}
 
 	for (const item of items) {
@@ -117,6 +150,36 @@ function appendSharedGraphicItemReferences(
 			continue;
 		for (const child of item.children)
 			append(child, `${slot}.children.${child.id}`);
+	}
+}
+
+/**
+ * Every Graphic Asset Revision one Broadcast Graphic's declared Graphic Inputs pin.
+ *
+ * Only a media Graphic Input can pin one, and only through its authored default: the
+ * default travels with the configuration, so it is discovered here exactly as a
+ * Media Graphic Item's content is. A value an operator picks at runtime is not
+ * authored configuration at all and is published from the Broadcast Graphics Live
+ * Session instead.
+ *
+ * Without this, an asset reached only through an input default is unindexed on every
+ * path — invisible to the Screen Output Asset Capability, so the live output cannot
+ * fetch it, and invisible as usage, so nothing stops it being retired or purged out
+ * from under the graphic that depends on it.
+ */
+function appendGraphicInputReferences(
+	references: ScreenGraphicAssetReference[],
+	inputs: readonly GraphicInputDeclaration[] | undefined,
+	slotPrefix: string,
+) {
+	for (const declaration of inputs ?? []) {
+		if (declaration.type !== 'media' || !declaration.default)
+			continue;
+		references.push(mediaScreenGraphicAssetReference(
+			declaration.default,
+			declaration.mediaKind,
+			`${slotPrefix}.${declaration.key}.default`,
+		));
 	}
 }
 
@@ -150,6 +213,7 @@ export function featureMatchLayoutGraphicAssetReferences(
 		});
 	}
 	appendSharedGraphicItemReferences(references, layout.composition.items, 'layout.composition.items');
+	appendGraphicInputReferences(references, layout.composition.inputs, 'layout.composition.inputs');
 
 	return references;
 }
@@ -186,8 +250,10 @@ export function broadcastGraphicsGraphicAssetReferences(
 ): ScreenGraphicAssetReference[] {
 	const references: ScreenGraphicAssetReference[] = [];
 
-	for (const graphic of config.graphics)
+	for (const graphic of config.graphics) {
 		appendSharedGraphicItemReferences(references, graphic.items, `graphics.${graphic.id}.items`);
+		appendGraphicInputReferences(references, graphic.inputs, `graphics.${graphic.id}.inputs`);
+	}
 
 	return references;
 }
@@ -230,6 +296,34 @@ export const GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES = {
 
 export function graphicAssetReferenceSlotPrefix(mode: GraphicAssetReferencingScreenMode): string {
 	return GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES[mode];
+}
+
+/**
+ * The owner-slot namespace a Broadcast Graphics Live Session's accepted media
+ * Graphic Input values write into.
+ *
+ * Deliberately outside `graphics.`, which is authored configuration's. The two are
+ * written by different authorities on different occasions — a configuration write
+ * clears and rewrites its whole namespace, and acceptance clears and rewrites this
+ * one — so sharing a prefix would mean each write silently deleting the other's
+ * rows, leaving media the Screen is still publishing unresolvable to its outputs.
+ */
+export const BROADCAST_GRAPHICS_LIVE_SESSION_SLOT_PREFIX = 'liveSession.';
+
+/**
+ * Every owner-slot namespace a Screen Output in one mode may resolve.
+ *
+ * A Screen Output resolves exactly what its Screen currently publishes, and for
+ * Broadcast Graphics that is published from two places: the authored stack, and the
+ * Live Session's accepted media Graphic Input values. Both are on air, so both are
+ * resolvable — while a Screen switched away from the mode resolves neither.
+ */
+export function screenOutputResolvableSlotPrefixes(
+	mode: GraphicAssetReferencingScreenMode,
+): readonly string[] {
+	return mode === 'broadcast-graphics'
+		? [GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES[mode], BROADCAST_GRAPHICS_LIVE_SESSION_SLOT_PREFIX]
+		: [GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES[mode]];
 }
 
 export interface GraphicAssetReferencingScreenModeConfigs {
