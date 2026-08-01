@@ -40,6 +40,7 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	'delivery-vary-incomplete',
 	'delivery-cache-parity-broken',
 	'delivery-cache-state-unreported',
+	'delivery-cache-not-observable',
 	'delivery-cache-never-hit',
 	'delivery-authorization-skipped',
 	'delivery-revocation-ineffective',
@@ -68,8 +69,12 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	'browser-driver-unavailable',
 	'browser-acceptance-failed',
 	'browser-acceptance-timed-out',
+	// The product boundary let a restricted Screen Output through to a browser
+	// that cannot show it correctly. What the browser would then have done is a
+	// recorded fact rather than a code, because none of its answers is a defect
+	// in this contract.
 	'safari-vp9-alpha-not-blocked',
-	'safari-vp9-alpha-substituted',
+	'safari-vp9-alpha-transparency-rendered',
 	// Template Package publication.
 	'package-partial-assets-visible',
 	'package-duplicate-commit',

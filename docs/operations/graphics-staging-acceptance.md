@@ -24,7 +24,7 @@ you must hold onto while running this:
   injected. Do not run them while anything is on air.
 
 Headless Chromium stands in for an OBS Screen Output. Safari is needed only to
-prove that VP9 alpha is refused there.
+prove that a Screen Output pinning VP9 alpha refuses it a capability session.
 
 ## Before you start
 
@@ -68,7 +68,7 @@ assets on top of a broken delivery path produces evidence about the wrong thing.
 | 3   | `pnpm test:browser:still-images:deployed`      | PNG, JPEG, and WebP decode in an OBS-like output.                                                 |
 | 4   | `pnpm test:browser:silent-video:deployed`      | H.264 MP4 and VP9 WebM play and seek; VP9 alpha keeps its transparency on Chromium.               |
 | 5   | `pnpm test:browser:fonts:deployed`             | A font Graphic Asset Revision is delivered by the Worker, loads, and renders its own glyphs.      |
-| 6   | `pnpm test:browser:safari-vp9-alpha:deployed`  | Safari refuses VP9 alpha rather than flattening it.                                               |
+| 6   | `pnpm test:browser:safari-vp9-alpha:deployed`  | A Screen Output pinning VP9 alpha refuses Safari a capability session.                            |
 | 7   | `pnpm test:delivery:graphics:package:deployed` | Template Package publication is atomic and its retry is idempotent.                               |
 | 8   | The fault-injection procedures below           | Unavailable content, integrity failure, D1 outage, and R2 outage with an authorized cache.        |
 
@@ -110,24 +110,58 @@ is: arm a scenario, break one thing, run the matching fault mode, put it back.
 
 The armed scenario file is also where you read the identities you need to break
 something: the harness itself never prints an asset or revision identity, by
-design. The file contains a live capability token, so write it somewhere only
-you can read; the harness deletes it when the fault run finishes.
+design. It contains live capability tokens, so write it somewhere only you can
+read.
+
+**A failed fault run keeps the file, and keeps its Events.** That is deliberate:
+once you have deleted or overwritten a canonical object, the `content` array in
+that file is the only copy of what was there, and the Events are what address
+it. A run that passed has nothing left to restore, so it deletes both. When a
+run keeps them it says so, and names the path.
+
+### Which fault owns which cache state
+
+Arming provisions **two** Screen Outputs, each with its own asset, because the
+faults disagree about what a cache should be holding:
+
+| Representation | Read through the capability route while arming?                   | Addressed by                                                                                   |
+| -------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `warm`         | Yes, once — so a deployed edge cache holds its immutable response | `r2-outage-authorized-cache` expects it to keep serving                                        |
+| `cold`         | Never                                                             | `content-unavailable`, `content-integrity-disagreement` expect it to report a retryable outage |
+
+This matters because the two are mutually exclusive on one representation. A
+warmed capability route serves its cached immutable bytes straight through a
+storage outage — authorization still ran, and the bytes are still digest-true —
+so pointing `content-unavailable` at a warmed representation asks production to
+fail in exactly the way `r2-outage-authorized-cache` asks it to succeed. The
+first version of this runbook did that, and the deployed run correctly reported
+`outcome-not-retryable-unavailable expected=503 actual=200`. Production was
+right; the procedure was wrong.
+
+`d1-outage` addresses both, because a catalogue that cannot answer must fail
+closed on every representation regardless of cache state.
 
 ### Unavailable Graphic Asset Content
 
 Proves that content the catalogue knows about but cannot read is a retryable
-`503` carrying `Retry-After`, not a missing identity.
+`503` carrying `Retry-After`, not a missing identity — and that one missing
+object takes down one revision and nothing else.
 
 1. `pnpm test:delivery:graphics:deployed --arm ~/.sk-armed.json`
-2. Read `assetId` and `revisionId` from the armed scenario file, and delete that
-   revision's object from the **canonical** R2 bucket. The catalogue row stays;
-   only the bytes go.
+2. Read `cold.contentDigest` from the armed scenario file and delete
+   `sha256/<that digest>` from the **canonical** bucket
+   (`stream-graphics-asset-canonical`). The catalogue row stays; only the bytes
+   go. Delete the **cold** representation's object, not the warm one — see the
+   table above for why.
 3. `pnpm test:delivery:graphics:deployed --fault content-unavailable --scenario ~/.sk-armed.json`
-4. Expected: the harness passes. A failure prints
+4. Expected: the cold representation answers `503` with `Retry-After` on both
+   the capability and editor routes, and the warm representation still serves
+   its own bytes untouched. A failure prints
    `outcome-not-retryable-unavailable`, `outcome-retry-after-missing`, or
    `outcome-retry-after-invalid`.
-5. Restore by re-uploading the object, or accept the reconciliation discrepancy
-   the library will raise and repair it through the reconciliation queue.
+5. Restore by re-uploading the object from the `cold.content` array in the
+   armed scenario file, or accept the reconciliation discrepancy the library
+   will raise and repair it through the reconciliation queue.
 
 ### Integrity failure
 
@@ -140,10 +174,12 @@ agreement, so anything reconciliation would isolate as a critical integrity
 incident cannot still reach air.
 
 1. `pnpm test:delivery:graphics:deployed --arm ~/.sk-armed.json`
-2. Read `assetId` and `revisionId` from the armed scenario file. Overwrite that
-   revision's canonical object with **different bytes of a different length** —
-   any small file will do. The object exists and the store answers; what has
-   changed is that it no longer matches its record.
+2. Read `cold.contentDigest` from the armed scenario file and overwrite
+   `sha256/<that digest>` in the canonical bucket with **different bytes of a
+   different length** — any small file will do. The object exists and the store
+   answers; what has changed is that it no longer matches its record. The cold
+   representation again, for the same reason as above: a warmed capability
+   route would serve its cached copy and never reach the store at all.
 3. `pnpm test:delivery:graphics:deployed --fault content-integrity-disagreement --scenario ~/.sk-armed.json`
 4. Expected: both the capability route and the editor route answer `503` with
    `Retry-After`, and neither returns a body. A `200` prints
@@ -163,10 +199,12 @@ never serves bytes it could not authorize.
 2. Remove the `DB` binding from the deployed Worker, or point it at a database
    id that does not exist, and deploy that configuration.
 3. `pnpm test:delivery:graphics:deployed --fault d1-outage --scenario ~/.sk-armed.json`
-4. Expected: the capability content route, the editor content route, and the
-   capability-session bootstrap all answer `503` with `Retry-After`. A `200`
-   here means authorization was skipped, which is the most serious failure this
-   gate can find.
+4. Expected: **both** representations answer `503` with `Retry-After` on both
+   content routes, as does the capability-session bootstrap. The warm one is
+   included on purpose: authorization runs before any cache is consulted, so a
+   warmed representation must fail closed here even though it would keep
+   serving through the storage outage below. A `200` means authorization was
+   skipped, which is the most serious failure this gate can find.
 5. Restore the binding and redeploy.
 
 ### R2 outage with an authorized cache
@@ -175,16 +213,24 @@ Proves that a warmed representation keeps serving from the authorized cache
 while a cold one reports a retryable outage — and that the cache never becomes
 a way around authorization.
 
-1. `pnpm test:delivery:graphics:deployed --arm ~/.sk-armed.json`. Arming warms
-   the cache with one authorized read; this step is what makes the fault run
-   meaningful, so do not skip it.
+1. `pnpm test:delivery:graphics:deployed --arm ~/.sk-armed.json`. Arming reads
+   the warm representation once through its capability route; that read is what
+   puts it in the edge cache, so do not skip it.
 2. Remove the `GRAPHICS_ASSET_CANONICAL` binding from the deployed Worker and
    deploy that configuration.
 3. `pnpm test:delivery:graphics:deployed --fault r2-outage-authorized-cache --scenario ~/.sk-armed.json`
-4. Expected: the warmed capability read still returns the exact bytes, and the
-   editor route — which does not share that cache — returns `503` with
-   `Retry-After`.
+4. Expected: the warm capability read still returns its exact bytes, while the
+   cold representation returns `503` with `Retry-After` on both routes — as
+   does the warm one's editor route, which shares no cache with the capability
+   route.
 5. Restore the binding and redeploy.
+
+Run this one **deployed**. Local mode has no edge cache to have warmed, so the
+harness asserts only the cold-path outages there and reports
+`delivery-cache-not-observable` for the warm read rather than asserting an
+invariant the environment cannot host. That is a different fact from
+`delivery-cache-state-unreported`, which step 2 uses when an edge cache exists
+but did not report itself warm.
 
 ## Safari
 
@@ -196,24 +242,68 @@ in Safari.
 Where automation is unavailable the harness prints the observation to make by
 hand and reports the run as `acceptance deferred path=manual-check-required` —
 never as a pass. A deployed run refuses to defer at all unless you pass
-`--allow-manual`, so a gate cannot quietly skip it. If you take the manual
-path, open the printed page in Safari and record what it says; anything other
-than `passed` is a gate failure.
+`--allow-manual`, so a gate cannot quietly skip it.
 
-The page distinguishes three things, because only one of them is a pass. An
-explicit decode error is Safari refusing the content, which is the restriction
-working. Playback with transparency prints `safari-vp9-alpha-not-blocked` and
-means the restriction is stale. Playback with the transparency flattened away
-prints `safari-vp9-alpha-substituted` and is worse — a wrong-looking graphic
-reaching air while every capability check still says yes. Silence, where the
-browser neither decoded nor refused within the time allowed, prints
-`browser-acceptance-timed-out`: nothing was observed, so nothing is claimed.
+**The manual path does not exercise the product boundary, and cannot.** It
+records the browser fact alone: open the printed page in Safari and note what
+it reports, which on current Safari will be `substituted`. There is no Screen
+Output to try, because the harness settles its driver before provisioning
+anything — publishing a Screen Output that pins restricted video and then
+driving no browser at it would leave a real asset in a real installation for
+nobody to look at.
 
-The complementary product-level restriction — that the capability-session
-bootstrap answers `409 vp9-alpha-chromium-required` to a Safari user agent when
-a Screen Output pins VP9-alpha video — is proven by
-`test/integration/screenOutputAssetDelivery.test.ts`, which can fabricate the
-technical facts a real VP9-alpha ingestion would need the validator to produce.
+A deferred run therefore leaves this step's guarantee unproven. The `409` is
+proven only by an automated run against a deployed installation, and until one
+has passed, step 6 is outstanding whatever the manual observation said.
+
+### What this step proves, and why it changed
+
+This gate was first written expecting Safari to refuse VP9 alpha, so that the
+restriction would enforce itself. The deployed run disproved that: **Safari
+26.5 decodes VP9 alpha and flattens the alpha channel away.** It plays, and
+plays wrongly — which for a graphic going to air is worse than not playing.
+
+The enforceable half is therefore the **product boundary**, and that is what
+this step now asserts. Deployed mode:
+
+1. Ingests the VP9-alpha fixture as a real silent-video Graphic Asset through
+   the deployed validator, and checks the report came back restricted to
+   `chromium-transparency`.
+2. Publishes a Screen Output whose Feature Match Layout pins that revision.
+3. Drives Safari to that Screen Output's page, where it mints a capability
+   through its own author session and calls the capability-session bootstrap.
+4. Requires `409` with `data.code = vp9-alpha-chromium-required`. Anything else
+   prints `safari-vp9-alpha-not-blocked` and is a gate failure — it means a
+   browser that cannot show the content correctly was admitted.
+5. Tears the Screen Output and its Event down.
+
+Nothing secret travels in the URL: the page is given only the Event and Screen
+identities and mints the capability itself.
+
+### The browser fact, recorded rather than judged
+
+The raw playback observation is kept, because it is the evidence for why the
+boundary has to exist at all. It is reported in the pass line as
+`browserFact=…` and is **not** a verdict:
+
+| Observation             | Meaning                                                                                                                                                                                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `substituted`           | Expected on current Safari. Decoded, transparency flattened.                                                                                                                                                                                       |
+| `refused`               | Expected on older Safari. An explicit decode error, or no picture.                                                                                                                                                                                 |
+| `transparency-rendered` | Remarkable. This Safari really can show VP9 alpha, so the restriction's premise may be stale. Reported as `safari-vp9-alpha-transparency-rendered` for a human to weigh — it argues for relaxing the product block, not for failing this contract. |
+| `undetermined`          | The browser neither decoded nor refused in the time allowed. Nothing observed, nothing claimed.                                                                                                                                                    |
+
+### Local mode
+
+Local runs observe the browser fact only and report
+`boundary=not-exercised`. A restricted Screen Output cannot exist locally: the
+video has to pass the silent-video validator, and the local Worker has no
+service binding to reach it. The boundary is a deployed-only proof.
+
+`test/integration/screenOutputAssetDelivery.test.ts` covers the same refusal at
+the integration seam by fabricating the technical facts a real ingestion would
+need the validator to produce; the deployed step is what proves it end to end
+with a real video and a real Safari.
 
 ## Fonts
 
@@ -259,13 +349,13 @@ never rename one.
 
 ## Where each acceptance criterion is proven
 
-| #50 acceptance criterion                                                                                                                                 | Proven by                                                                                                                                                                                                                                                      |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Full and byte-range delivery, conditional requests, strong ETags, cache miss/hit, authorization on every public request, revocation despite cached bytes | Step 2. Cache warmth is deployed-only (`--require-cache-hit`); every other assertion runs locally too.                                                                                                                                                         |
-| CORS and CSP permit only the settled same-origin and output behaviour without making private canonical storage public                                    | Step 2, on both delivery routes and on the Screen Output document — `cors-allow-origin-exposed`, `cors-allow-credentials-exposed`, `cors-preflight-permitted`, `csp-directive-unexpected`, `csp-directive-permissive`, `private-storage-publicly-addressable`. |
-| PNG, JPEG, and WebP pass real browser decoding                                                                                                           | Step 3.                                                                                                                                                                                                                                                        |
-| H.264 MP4 and VP9 WebM play and seek; VP9 alpha proven on Chromium and blocked on Safari                                                                 | Steps 4 and 6.                                                                                                                                                                                                                                                 |
-| Supported fonts complete loading and representative glyph rendering before the output reports ready                                                      | Step 5, on a font Graphic Asset Revision delivered by the Worker. The OTF face is covered by the local `pnpm test:browser:fonts`, which uses the same Chromium build.                                                                                          |
-| Unavailable content, D1 outage, R2 outage with authorized cache, integrity failure, and capability denial produce the settled observable outcomes        | Capability denial and an unreachable revision: step 2, which also asserts the two are indistinguishable. All four outages, integrity failure included: step 8.                                                                                                 |
-| Package publication and retry never expose partial assets or duplicate a committed result                                                                | Step 7.                                                                                                                                                                                                                                                        |
-| The gate reports actionable stable failure evidence without logging secrets, filenames, object keys, or full delivery URLs                               | Enforced in the output path itself and covered by `test/unit/scripts/graphicsAcceptanceEvidence.test.ts`.                                                                                                                                                      |
+| #50 acceptance criterion                                                                                                                                 | Proven by                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Full and byte-range delivery, conditional requests, strong ETags, cache miss/hit, authorization on every public request, revocation despite cached bytes | Step 2. Cache warmth is deployed-only (`--require-cache-hit`); every other assertion runs locally too.                                                                                                                                                                                                                                      |
+| CORS and CSP permit only the settled same-origin and output behaviour without making private canonical storage public                                    | Step 2, on both delivery routes and on the Screen Output document — `cors-allow-origin-exposed`, `cors-allow-credentials-exposed`, `cors-preflight-permitted`, `csp-directive-unexpected`, `csp-directive-permissive`, `private-storage-publicly-addressable`.                                                                              |
+| PNG, JPEG, and WebP pass real browser decoding                                                                                                           | Step 3.                                                                                                                                                                                                                                                                                                                                     |
+| H.264 MP4 and VP9 WebM play and seek; VP9 alpha proven on Chromium and blocked on Safari                                                                 | Step 4 for Chromium playback. Step 6 for the Safari block, which is enforced at the product boundary rather than by the browser: Safari 26.5 decodes VP9 alpha and flattens it, so a Screen Output pinning restricted video refuses Safari a capability session instead. The browser's own behaviour is recorded as evidence, not asserted. |
+| Supported fonts complete loading and representative glyph rendering before the output reports ready                                                      | Step 5, on a font Graphic Asset Revision delivered by the Worker. The OTF face is covered by the local `pnpm test:browser:fonts`, which uses the same Chromium build.                                                                                                                                                                       |
+| Unavailable content, D1 outage, R2 outage with authorized cache, integrity failure, and capability denial produce the settled observable outcomes        | Capability denial and an unreachable revision: step 2, which also asserts the two are indistinguishable. All four outages, integrity failure included: step 8.                                                                                                                                                                              |
+| Package publication and retry never expose partial assets or duplicate a committed result                                                                | Step 7.                                                                                                                                                                                                                                                                                                                                     |
+| The gate reports actionable stable failure evidence without logging secrets, filenames, object keys, or full delivery URLs                               | Enforced in the output path itself and covered by `test/unit/scripts/graphicsAcceptanceEvidence.test.ts`.                                                                                                                                                                                                                                   |

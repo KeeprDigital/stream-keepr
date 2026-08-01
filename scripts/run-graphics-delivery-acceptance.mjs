@@ -16,13 +16,29 @@
  *                                                     [--fault <name> --scenario <file>]
  *
  * The fault modes assert what an injected outage must look like from outside;
- * they do not inject it. `--arm` provisions and warms a scenario, the operator
- * injects the outage, and `--fault` resumes against the same identities. See
+ * they do not inject it. `--arm` provisions the scenario, the operator injects
+ * the outage, and `--fault` resumes against the same identities. See
  * docs/operations/graphics-staging-acceptance.md.
+ *
+ * Arming provisions **two** Screen Outputs, because the faults disagree about
+ * what a cache should be holding and a single representation cannot satisfy
+ * both. The warm one is read once through the capability route, so a deployed
+ * edge cache holds its immutable response; the cold one is never read there at
+ * all. `r2-outage-authorized-cache` then asserts the warm representation keeps
+ * serving through a storage outage, and `content-unavailable` asserts the cold
+ * one reports a retryable outage — which the warm one provably cannot do,
+ * because serving it from an authorized cache is the settled correct
+ * behaviour rather than a defect.
  */
 
-import { readFile, rm, writeFile } from 'node:fs/promises';
 import process from 'node:process';
+import {
+	armedRepresentation,
+	readArmedScenario,
+	releaseArmedScenario,
+	restoreArmedRepresentation,
+	writeArmedScenario,
+} from './graphics-acceptance/armed-scenario.mjs';
 import {
 	checkCacheParity,
 	checkCacheWarmed,
@@ -98,7 +114,7 @@ function editorExpectations(scenario, route) {
 
 await runAcceptanceHarness({
 	harness: HARNESS,
-	async run({ evidence, record, note, checks }) {
+	async run({ evidence, record, note, checks, failed }) {
 		if (fault && !FAULTS.has(fault))
 			throw new AcceptanceFailure('harness-precondition-unmet', { reason: 'unknown fault' });
 		if (fault && !scenarioPath)
@@ -333,90 +349,160 @@ await runAcceptanceHarness({
 			record(checkMissingIdentity(missing, { route }));
 		}
 
-		async function runFault(scenario) {
-			const path = scenario.capabilityContentPath();
-			const route = deliveryRouteLabel(path);
-			const editorRoute = deliveryRouteLabel(scenario.editorContentPath());
-			const read = await session.request(path, { headers: capabilityHeaders(scenario.capability) });
+		/** Read one armed representation through both of its public routes. */
+		async function readBothRoutes(representation) {
+			return {
+				route: deliveryRouteLabel(representation.capabilityContentPath()),
+				editorRoute: deliveryRouteLabel(representation.editorContentPath()),
+				capability: await session.request(representation.capabilityContentPath(), {
+					headers: capabilityHeaders(representation.capability),
+				}),
+				editor: await session.request(representation.editorContentPath(), { author: true }),
+			};
+		}
 
-			if (fault === 'content-unavailable' || fault === 'd1-outage') {
-				record(checkRetryableUnavailable(read, { route }));
-				const editorRead = await session.request(scenario.editorContentPath(), { author: true });
-				record(checkRetryableUnavailable(editorRead, { route: editorRoute }));
+		async function runFault({ warm, cold }) {
+			if (fault === 'content-unavailable') {
+				// Addressed at the cold representation on purpose. A warmed one
+				// cannot report this outage and should not: its immutable response
+				// is already held by an authorized cache, and serving it through a
+				// storage outage is the behaviour `r2-outage-authorized-cache`
+				// exists to confirm.
+				const observed = await readBothRoutes(cold);
+				record(checkRetryableUnavailable(observed.capability, { route: observed.route }));
+				record(checkRetryableUnavailable(observed.editor, { route: observed.editorRoute }));
+
+				// One missing object takes down one revision and nothing else.
+				const unaffected = await readBothRoutes(warm);
+				record(checkFullRead(
+					unaffected.capability,
+					capabilityExpectations(warm, unaffected.route),
+				));
 			}
 
 			if (fault === 'content-integrity-disagreement') {
 				// Bytes that disagree with their recorded facts are refused rather
 				// than served, and the refusal invites a repair rather than
-				// declaring the revision gone.
-				record(checkIntegrityDisagreement(read, { route }));
-				const editorRead = await session.request(scenario.editorContentPath(), { author: true });
-				record(checkIntegrityDisagreement(editorRead, { route: editorRoute }));
+				// declaring the revision gone. Addressed at the cold representation
+				// for the same reason as above.
+				const observed = await readBothRoutes(cold);
+				record(checkIntegrityDisagreement(observed.capability, { route: observed.route }));
+				record(checkIntegrityDisagreement(observed.editor, { route: observed.editorRoute }));
 			}
 
 			if (fault === 'd1-outage') {
+				// A catalogue that cannot answer fails closed everywhere, warm or
+				// cold: authorization runs before any cache is consulted, so there
+				// is no representation this outage should let through.
+				for (const representation of [cold, warm]) {
+					const observed = await readBothRoutes(representation);
+					record(checkRetryableUnavailable(observed.capability, { route: observed.route }));
+					record(checkRetryableUnavailable(observed.editor, { route: observed.editorRoute }));
+				}
 				const bootstrap = await session.request(
-					acceptanceRoutes.capabilitySession(scenario.screenId),
-					{ method: 'POST', headers: capabilityHeaders(scenario.capability) },
+					acceptanceRoutes.capabilitySession(cold.screenId),
+					{ method: 'POST', headers: capabilityHeaders(cold.capability) },
 				);
 				record(checkRetryableUnavailable(bootstrap, {
-					route: deliveryRouteLabel(acceptanceRoutes.capabilitySession(scenario.screenId)),
+					route: deliveryRouteLabel(acceptanceRoutes.capabilitySession(cold.screenId)),
 				}));
 			}
 
 			if (fault === 'r2-outage-authorized-cache') {
-				// The warmed representation still serves, byte for byte, because
-				// the authorized cache holds it and authorization never went to R2.
-				record(checkFullRead(read, capabilityExpectations(scenario, route)));
-				record(checkNoStorageAddressing(read.headers, { route }));
 				// A read the cache never held has nowhere to come from, and says so
-				// as a retryable outage rather than as a missing identity.
-				const cold = await session.request(scenario.editorContentPath(), { author: true });
-				record(checkRetryableUnavailable(cold, { route: editorRoute }));
+				// as a retryable outage rather than as a missing identity. True in
+				// every environment, so it is asserted in every environment.
+				const observed = await readBothRoutes(cold);
+				record(checkRetryableUnavailable(observed.capability, { route: observed.route }));
+				record(checkRetryableUnavailable(observed.editor, { route: observed.editorRoute }));
+
+				// The warmed representation still serves, byte for byte, because the
+				// authorized cache holds it and authorization never went to R2.
+				// Deployed-only: `wrangler dev --local` has no edge cache to have
+				// warmed, so locally this would assert an invariant the environment
+				// cannot host.
+				const warmed = await readBothRoutes(warm);
+				// The editor route shares no cache with the capability route, so the
+				// warmed representation reports the outage there in every
+				// environment. This is the clause the runbook promises.
+				record(checkRetryableUnavailable(warmed.editor, { route: warmed.editorRoute }));
+				if (deployed) {
+					record(checkFullRead(warmed.capability, capabilityExpectations(warm, warmed.route)));
+					record(checkNoStorageAddressing(warmed.capability.headers, { route: warmed.route }));
+				}
+				else {
+					// Distinct from `delivery-cache-state-unreported`, which means the
+					// edge did not report warmth. This means there is no edge cache
+					// here to report anything, so the assertion was never attempted.
+					note({ code: 'delivery-cache-not-observable', detail: { route: warmed.route } });
+				}
 			}
 		}
 
 		if (fault) {
-			const armed = JSON.parse(await readFile(scenarioPath, 'utf8'));
-			evidence.addSecret(armed.capability);
-			const scenario = {
-				...armed,
-				content: Uint8Array.from(armed.content),
-				capabilityContentPath: () =>
-					acceptanceRoutes.capabilityContent(armed.screenId, armed.assetId, armed.revisionId),
-				editorContentPath: () => acceptanceRoutes.editorContent(armed.assetId, armed.revisionId),
+			const armed = await readArmedScenario(scenarioPath);
+			const restore = (stored) => {
+				evidence.addSecret(stored.capability);
+				return restoreArmedRepresentation(stored);
 			};
+
+			let faultPassed = false;
 			try {
-				await runFault(scenario);
+				await runFault({ warm: restore(armed.warm), cold: restore(armed.cold) });
+				faultPassed = !failed();
 			}
 			finally {
-				await session.request(acceptanceRoutes.event(armed.eventId), {
-					method: 'DELETE',
-					author: true,
-				}).catch(() => undefined);
-				await rm(scenarioPath, { force: true });
+				// A failed run keeps everything it would need to be run again: the
+				// scenario file holds the only copy of the bytes the operator has
+				// just deleted, and the Events hold the identities that address
+				// them. Tearing either down would leave the restore step in the
+				// runbook impossible to follow.
+				if (faultPassed) {
+					for (const eventId of new Set([armed.warm.eventId, armed.cold.eventId])) {
+						await session.request(acceptanceRoutes.event(eventId), {
+							method: 'DELETE',
+							author: true,
+						}).catch(() => undefined);
+					}
+				}
+				const { kept } = await releaseArmedScenario(scenarioPath, { passed: faultPassed });
+				if (kept) {
+					// Printed outside the evidence formatter deliberately. This is a
+					// path the operator typed on their own command line, not anything
+					// derived from the installation, and withholding it would break
+					// the restore path this file exists to protect.
+					process.stderr.write(
+						`${HARNESS} kept the armed scenario at ${scenarioPath} so the injected fault can be `
+						+ 'restored and re-run; its acceptance Events were left in place for the same reason. '
+						+ 'Delete both once you are done.\n',
+					);
+				}
 			}
 			return { checks: checks(), mode: `fault:${fault}` };
 		}
 
 		if (armPath) {
-			const scenario = await provisionScreenOutputScenario(session, {
-				label: 'Delivery Fault Injection',
+			// Two representations, because the faults disagree about what a cache
+			// should be holding. See this file's header.
+			const warm = await provisionScreenOutputScenario(session, {
+				label: 'Delivery Fault Injection Warm',
 			});
-			evidence.addSecret(scenario.capability);
-			// Warm whatever cache exists before the operator breaks the store.
-			await session.request(scenario.capabilityContentPath(), {
-				headers: capabilityHeaders(scenario.capability),
+			const cold = await provisionScreenOutputScenario(session, {
+				label: 'Delivery Fault Injection Cold',
 			});
-			await writeFile(armPath, JSON.stringify({
-				eventId: scenario.eventId,
-				screenId: scenario.screenId,
-				assetId: scenario.assetId,
-				revisionId: scenario.revisionId,
-				capability: scenario.capability,
-				contentType: scenario.contentType,
-				content: [...scenario.content],
-			}), { mode: 0o600 });
+			evidence.addSecret(warm.capability);
+			evidence.addSecret(cold.capability);
+
+			// Warm whatever cache exists before the operator breaks the store, and
+			// leave the cold one untouched on the capability route.
+			await session.request(warm.capabilityContentPath(), {
+				headers: capabilityHeaders(warm.capability),
+			});
+
+			await writeArmedScenario(armPath, {
+				warm: armedRepresentation(warm),
+				cold: armedRepresentation(cold),
+			});
 			record([]);
 			return { mode: deployed ? 'armed-deployed' : 'armed-local' };
 		}
