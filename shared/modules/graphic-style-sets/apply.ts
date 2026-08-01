@@ -356,25 +356,37 @@ export function applyGraphicStyleSet(
 
 			if (decisions[graphicStyleChangeKey(itemId, slot)] === 'keep-as-override') {
 				// Preserving the previously resolved property means recording it as the
-				// author's own: the reference stays, every owned key becomes a deviation,
-				// and the property does not move now or on any later republish.
+				// author's own: the reference stays, the property does not move now or on
+				// any later republish, and what is recorded is exactly where this owner
+				// deviates from the entry — the keys the author had already pinned, plus
+				// the ones this update was about to move.
+				//
+				// Not the whole property group. An author answering one row is answering
+				// about the values on it, and pinning the seven typography keys the Style
+				// Set and the author already agree on would freeze this slot against every
+				// future republish — a commitment far larger than the one they were asked
+				// to make (#162).
 				//
 				// A slot with no owned keys has no partial to deviate in — a Graphic Fill
 				// is a discriminated union — so keeping its value means letting go of the
 				// reference entirely. The value is already stored inline and does not move;
 				// only the provenance does. Recording an empty override instead would leave
 				// the reference in place and the change offered again on every later
-				// review, which is the one answer this decision must not produce.
+				// review, which is the one answer this decision must not produce. The same
+				// reasoning is why a deviation set that comes back empty falls back to the
+				// whole group: a composition whose stored value disagrees with its own
+				// recorded override has no narrower answer that settles this row.
 				if (GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot].length === 0) {
 					delete (nextRefs as Record<string, unknown>)[slot];
 					continue;
 				}
 				(nextRefs as Record<string, unknown>)[slot] = {
 					entryId: ref.entryId,
-					overrides: pick(
-						current as Record<string, unknown> | undefined,
-						GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot],
-					),
+					overrides: captureGraphicStyleOverrides(resolution, slot, ref.entryId, current)
+						?? pick(
+							current as Record<string, unknown> | undefined,
+							GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot],
+						),
 				};
 				continue;
 			}
@@ -447,6 +459,25 @@ export function graphicStyleUpdateChanges(
 	}
 
 	return changes;
+}
+
+/**
+ * The keys of one reviewable change that actually move.
+ *
+ * A change is offered per property group, but only some of the group's keys are in
+ * it — the rest are values the Style Set and this composition already agree on, and
+ * showing them would bury the ones an author is deciding about. This is what a review
+ * row states value by value, so the default answer is an informed one rather than a
+ * guess about whether a row contains the author's own work (#162).
+ *
+ * A property group arriving where there was none is every key it carries, which is
+ * the honest reading of "nothing became this".
+ */
+export function graphicStyleChangedKeys(current: unknown, next: unknown): string[] {
+	const currentRecord = (current ?? {}) as Record<string, unknown>;
+	const nextRecord = (next ?? {}) as Record<string, unknown>;
+	return [...new Set([...Object.keys(currentRecord), ...Object.keys(nextRecord)])]
+		.filter(key => !sameGraphicStyleValue(currentRecord[key], nextRecord[key]));
 }
 
 /* ────────────────────────────────────────────────

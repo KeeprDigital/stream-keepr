@@ -117,6 +117,15 @@ async function expand(wrapper: Awaited<ReturnType<typeof mountReview>>) {
 	await flushPromises();
 }
 
+/** Every property the expanded review says would move, in the order it says them. */
+function movedProperties(wrapper: Awaited<ReturnType<typeof mountReview>>) {
+	return wrapper.findAll('[data-testid="style-update-value"]').map(row => ({
+		key: row.get('dt').text(),
+		current: row.get('[data-testid="style-update-value-current"]').text(),
+		next: row.get('[data-testid="style-update-value-next"]').text(),
+	}));
+}
+
 describe('graphicsStyleUpdateReview', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -158,6 +167,58 @@ describe('graphicsStyleUpdateReview', () => {
 		// The two answers, on each row.
 		expect(wrapper.findAll('[data-testid="style-update-inherit"]')).toHaveLength(2);
 		expect(wrapper.findAll('[data-testid="style-update-keep"]')).toHaveLength(2);
+	});
+
+	/**
+	 * A row shows what the answer costs (#162).
+	 *
+	 * `recaptureGraphicStyleOverrides` is the identity while a composition is behind the
+	 * Style Set's published revision, so a genuine author edit made in that window
+	 * records no override and lives inline. Inheriting discards it. Without the values
+	 * on the row an author cannot tell a row holding their own work from a pure Style
+	 * Set change, so the default answer is one they cannot have made informed.
+	 */
+	it('shows what each property would move from and to, so the default answer is an informed one', async () => {
+		const wrapper = await mountReview();
+		await expand(wrapper);
+
+		expect(movedProperties(wrapper)).toEqual([
+			{ key: 'color', current: '#ff0044', next: '#00ff88' },
+			{ key: 'duration', current: '320', next: '500' },
+		]);
+	});
+
+	/** A property both sides already agree on is not part of the answer, so it is not shown. */
+	it('shows only the properties that would actually move', async () => {
+		mockReviewTemplateUpdate.mockResolvedValue(review({
+			changes: [{
+				ownerItemId: 'headline',
+				ownerLabel: 'Headline',
+				slot: 'typography',
+				entryId: 'heading',
+				entryName: 'Show heading',
+				current: { fontSize: 30, fontWeight: 800, color: '#ffffff' },
+				next: { fontSize: 99, fontWeight: 800, color: '#ffffff' },
+			}],
+		}));
+
+		const wrapper = await mountReview();
+		await expand(wrapper);
+
+		expect(movedProperties(wrapper)).toEqual([{ key: 'fontSize', current: '30', next: '99' }]);
+	});
+
+	/**
+	 * The second-order cost the author is entitled to know about before answering:
+	 * keeping a value records it as a local override, which stops the Style Set reaching
+	 * that property on this republish and on every later one.
+	 */
+	it('says what keeping a value commits the author to', async () => {
+		const wrapper = await mountReview();
+		await expand(wrapper);
+
+		expect(wrapper.get('[data-testid="style-update-changes"]').text().replace(/\s+/g, ' '))
+			.toContain('Keeping a value records it as a local override, so it stops following this Style Set');
 	});
 
 	it('shows every row starting on inherit, which is what applying without touching one does', async () => {
