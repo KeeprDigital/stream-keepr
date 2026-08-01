@@ -42,6 +42,7 @@ const emit = defineEmits<{ placed: [graphicId: string] }>();
 
 const repository = useBroadcastGraphicTemplateRepository();
 const screenStore = useScreenStore();
+const placementVersion = useScreenPlacementVersion(() => props.screenId);
 
 /** Fail closed: an unstated permission is never permission. */
 const canAuthor = computed(() => props.writable === true);
@@ -65,14 +66,7 @@ const {
 	askToRemove,
 	cancelRemove,
 	remove,
-	importing,
-	pendingImport,
-	importIssues,
-	importRejected,
-	importAwaitingConfirmation,
-	importPackage,
-	confirmImport,
-	dismissImport,
+	packageImport,
 } = library;
 
 const saving = ref(false);
@@ -112,14 +106,7 @@ async function place(templateId: string) {
 			eventId: props.eventId,
 			screenId: props.screenId,
 			templateId,
-			// A placement is a read-modify-write of the Screen's whole stack, so it states
-			// the version it was built against. Without one the server has nothing to
-			// compare and the write would silently discard whatever another author did to
-			// the stack in the meantime — the same guard every other write from this editor
-			// carries. A Screen missing from the store falls back to 0, which is a real
-			// version rather than a skip: it is what a Screen that has never been written
-			// carries, so it matches one of those and is refused by every other Screen.
-			stateVersion: screenStore.screens.find(screen => screen.id === props.screenId)?.stateVersion ?? 0,
+			stateVersion: placementVersion.value,
 		});
 		// The Screen was written on the server, and this client's own realtime echo is
 		// suppressed, so the authoritative Screen is reloaded here.
@@ -127,10 +114,6 @@ async function place(templateId: string) {
 		emit('placed', placed.graphic.id);
 	});
 }
-
-onMounted(() => {
-	void refresh();
-});
 </script>
 
 <template>
@@ -153,34 +136,17 @@ onMounted(() => {
 				Save {{ selectedGraphic ? selectedGraphic.name : 'Broadcast Graphic' }} as a template
 			</UButton>
 
-			<!--
-				A Template Package installs as an Installed Graphics Template: an independent
-				local copy with this installation's own identity and revision, keeping the
-				packaged Template's identity as provenance only.
-			-->
-			<GraphicsPackageImport
-				package-noun="Template Package"
-				accept=".skgraphic"
+			<GraphicsTemplateLibraryImport
+				kind="skgraphic"
 				test-id="template-library-import"
 				:writable="canAuthor"
-				:busy="importing"
-				:reported="!!pendingImport"
-				:issues="importIssues"
-				:rejected="importRejected"
-				:awaiting-confirmation="importAwaitingConfirmation"
-				@file="importPackage"
-				@confirm="confirmImport"
-				@dismiss="dismissImport"
+				:state="packageImport"
 			/>
 
-			<UAlert
-				v-if="error"
-				color="error"
-				variant="soft"
-				icon="i-lucide-triangle-alert"
+			<GraphicsLibraryError
 				title="Template library action failed"
-				:description="error"
-				data-testid="template-library-error"
+				:message="error"
+				test-id="template-library-error"
 			/>
 
 			<UIEmptyState

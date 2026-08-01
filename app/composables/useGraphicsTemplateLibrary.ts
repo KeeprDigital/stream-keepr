@@ -1,4 +1,4 @@
-import type { ComputedRef, MaybeRefOrGetter, Ref } from 'vue';
+import type { MaybeRefOrGetter, Ref } from 'vue';
 import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import type { TemplatePackagePreflightIssue } from '~~/shared/types/templatePackage';
 
@@ -61,6 +61,33 @@ export interface GraphicsTemplateLibraryRepository<Entry> {
 	installPackage: (operationId: string) => Promise<GraphicsIngestionOperation>;
 }
 
+/**
+ * Receiving a Template Package, as the surface that shows one reads it.
+ *
+ * One noun rather than the eight members it was: every one of them exists to be wired
+ * into `<GraphicsPackageImport>`, and both Template libraries wired all eight
+ * identically and verbatim. Its keys are that component's own prop and event names, so
+ * `GraphicsTemplateLibraryImport` states the wiring once.
+ *
+ * Reactive rather than an object of refs, so a surface reads `state.busy` rather than
+ * `state.busy.value` — the same unwrapping a composable's own top-level bindings get.
+ */
+export interface GraphicsTemplatePackageImport {
+	/** Whether a package is currently being received, confirmed, or installed. */
+	busy: boolean;
+	/** Whether a preflight report is waiting to be read. */
+	reported: boolean;
+	/** The issues an author is being asked to accept, or the reasons a package was refused. */
+	issues: readonly TemplatePackagePreflightIssue[];
+	/** Whether the report is terminal, so there is nothing to accept. */
+	rejected: boolean;
+	/** Whether the report is paused on the one confirmation it may ask for. */
+	awaitingConfirmation: boolean;
+	receive: (file: File) => Promise<void>;
+	confirm: () => Promise<void>;
+	dismiss: () => void;
+}
+
 export interface GraphicsTemplateLibrary<Entry> extends ReusableLibraryReading<Entry> {
 	/** The entry a write is currently in flight against, if any. */
 	busyTemplateId: Ref<string | null>;
@@ -75,16 +102,7 @@ export interface GraphicsTemplateLibrary<Entry> extends ReusableLibraryReading<E
 	askToRemove: (templateId: string) => void;
 	cancelRemove: () => void;
 	remove: (templateId: string) => Promise<void>;
-	importing: Ref<boolean>;
-	/** The received package and what preflight concluded about it, while one is waiting. */
-	pendingImport: Ref<GraphicsIngestionOperation | null>;
-	/** The issues an author is being asked to accept, or the reasons a package was refused. */
-	importIssues: ComputedRef<readonly TemplatePackagePreflightIssue[]>;
-	importRejected: ComputedRef<boolean>;
-	importAwaitingConfirmation: ComputedRef<boolean>;
-	importPackage: (file: File) => Promise<void>;
-	confirmImport: () => Promise<void>;
-	dismissImport: () => void;
+	packageImport: GraphicsTemplatePackageImport;
 }
 
 export function useGraphicsTemplateLibrary<Entry extends GraphicsTemplateSummary>(options: {
@@ -278,13 +296,15 @@ export function useGraphicsTemplateLibrary<Entry extends GraphicsTemplateSummary
 		askToRemove,
 		cancelRemove,
 		remove,
-		importing,
-		pendingImport,
-		importIssues,
-		importRejected,
-		importAwaitingConfirmation,
-		importPackage,
-		confirmImport,
-		dismissImport,
+		packageImport: reactive({
+			busy: importing,
+			reported: computed(() => pendingImport.value !== null),
+			issues: importIssues,
+			rejected: importRejected,
+			awaitingConfirmation: importAwaitingConfirmation,
+			receive: importPackage,
+			confirm: confirmImport,
+			dismiss: dismissImport,
+		}),
 	};
 }

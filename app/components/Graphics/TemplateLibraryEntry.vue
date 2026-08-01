@@ -10,6 +10,19 @@
  *
  * What each library counts, what each entry can have done to it, and what a two-click
  * action says before it happens all stay with the library, through the slots.
+ *
+ * ## Two callers, by design
+ *
+ * The Graphic Style Set library lists entries of its own and does not use this, which
+ * was examined and settled rather than left to drift (#156). The rule this component
+ * exists to carry is `authored` — an entry a Template Package installed offers no
+ * writable fields — and a Graphic Style Set has no such distinction to carry: a Graphic
+ * Style Set Package's first import *preserves* the packaged identity rather than
+ * producing an installed copy, so there is no installed-versus-authored split in that
+ * library at all. Its card is also structurally different: no rename, no description,
+ * no per-entry delete, and publish and link badges this has no place for. Adopting it
+ * would mean three new props to accommodate one caller the shared rule does not apply
+ * to.
  */
 const props = defineProps<{
 	templateId: string;

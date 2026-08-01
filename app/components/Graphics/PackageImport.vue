@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import type { GraphicsPackageArtifactKind } from '~/utils/graphicsPackageArtifacts';
+import { GRAPHICS_PACKAGE_ARTIFACTS } from '~/utils/graphicsPackageArtifacts';
+
 /**
  * The package-import surface a graphics library offers: the picker that receives one,
  * and what preflight concluded about it.
@@ -9,6 +12,10 @@
  * packaged identity and revision — so the chosen file is handed straight back to the
  * library that owns those semantics rather than acted on here. Every library states its
  * own import at its own call site; only the chrome around it is shared.
+ *
+ * The artifact is named once, as a kind. What it is called and what the picker accepts
+ * are two facts about that one kind, and a caller that stated them separately could
+ * pair a noun with an extension no exporter of that artifact emits.
  */
 
 /** As much of a preflight issue as presenting one needs. */
@@ -18,11 +25,9 @@ interface PackageImportIssue {
 	remediation?: string;
 }
 
-defineProps<{
-	/** The portable artifact this library receives, named as an author reads it. */
-	packageNoun: string;
-	/** The archive extension the picker accepts, such as `.skgraphic`. */
-	accept: string;
+const props = defineProps<{
+	/** The portable artifact this library receives. */
+	kind: GraphicsPackageArtifactKind;
 	/** This library's prefix for its import test ids. */
 	testId: string;
 	/** Whether this session may author. An observer is offered no import at all. */
@@ -44,6 +49,8 @@ const emit = defineEmits<{
 	confirm: [];
 	dismiss: [];
 }>();
+
+const artifact = computed(() => GRAPHICS_PACKAGE_ARTIFACTS[props.kind]);
 
 const importFileInput = useTemplateRef<HTMLInputElement>('importFileInput');
 
@@ -67,7 +74,7 @@ function onImportFileChosen(event: Event) {
 		<input
 			ref="importFileInput"
 			type="file"
-			:accept="accept"
+			:accept="artifact.accept"
 			class="hidden"
 			:data-testid="`${testId}-input`"
 			@change="onImportFileChosen"
@@ -81,7 +88,7 @@ function onImportFileChosen(event: Event) {
 			:data-testid="testId"
 			@click="importFileInput?.click()"
 		>
-			Import a {{ packageNoun }}
+			Import a {{ artifact.noun }}
 		</UButton>
 	</div>
 
@@ -98,8 +105,8 @@ function onImportFileChosen(event: Event) {
 	>
 		<p class="text-xs font-medium">
 			{{ rejected
-				? `This ${packageNoun} cannot be installed`
-				: `Review before installing this ${packageNoun}` }}
+				? `This ${artifact.noun} cannot be installed`
+				: `Review before installing this ${artifact.noun}` }}
 		</p>
 		<ul class="mt-1 space-y-1">
 			<li v-for="(issue, index) in issues" :key="`${issue.code}-${index}`" class="text-xs text-muted">
