@@ -1046,3 +1046,210 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(wrapper.text()).toContain('Published');
 	});
 });
+
+/**
+ * **Assert on the element under test, not on `wrapper.text()`.**
+ *
+ * `wrapper.text()` proves *something on the page* says it, which is not the same
+ * claim and is weaker than it looks here. `UAlert` is stubbed by a passthrough
+ * that renders slots only, so any alert passing its message as `:description`
+ * renders nothing at all — and an assertion naming that alert passes anyway, off
+ * whichever other element happens to carry the same words. This suite shipped
+ * exactly that: two cases named for the remote-copy alert passed off the
+ * top-level lapsed banner, and replacing the remote-copy message with a literal
+ * left all twenty-four green.
+ *
+ * So every alert below carries a `data-testid` and every assertion reads it. The
+ * rule generalises past the stub: an assertion that cannot fail when the thing it
+ * names is deleted is not testing that thing.
+ *
+ * What the Workspace says about who an upload belongs to, and what it says when
+ * that owner stops existing.
+ *
+ * A Graphics Ingestion Operation is owned by one graphics author session and by
+ * nothing more durable, so a session that lapses takes its operations with it —
+ * reloading mints a new session and a new author, and the old operations are not
+ * that author's. ADR-0003 records why that ownership is kept, and both halves of
+ * the cost are asserted here: the Workspace states the rule *before* an upload
+ * starts, and names the lapse rather than the status code when it happens.
+ */
+describe('the Library Workspace when its graphics author session decides ownership', () => {
+	beforeEach(() => {
+		mockApiFetch.mockReset();
+		mockBrowserDecode.mockReset();
+		mockBrowserDecode.mockResolvedValue({
+			outcome: 'decoded',
+			sourceDigest: '58a79b9921ff2dc8485bf82af9974e6e5f589000884ff9a1d3c5a82488032d05',
+			width: 1,
+			height: 1,
+		});
+		mockCapacityRefresh.mockReset();
+		mockRefresh.mockReset();
+		mockTransferFetch.mockReset();
+		vi.stubGlobal('fetch', mockTransferFetch);
+		localStorage.clear();
+	});
+
+	function lapsedSession() {
+		return Object.assign(new Error('An authenticated graphics author session is required'), {
+			statusCode: 401,
+		});
+	}
+
+	it('says who an upload will belong to before one is started', async () => {
+		const wrapper = await mountPage();
+
+		expect(wrapper.text()).toContain('An upload belongs to this browser session');
+		expect(wrapper.text()).toContain('eight hours from your last request');
+		expect(wrapper.text()).toContain('cannot be resumed');
+	});
+
+	it('names a lapsed session rather than a status code when an upload is refused', async () => {
+		const wrapper = await mountPage();
+		const file = new File([jpegPixel], 'new-scoreboard.jpg', { type: 'image/jpeg' });
+		mockApiFetch.mockRejectedValue(lapsedSession());
+
+		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
+		await flushPromises();
+		await wrapper.get('[data-testid="upload-image"]').trigger('click');
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="upload-error"]').text())
+			.toContain('Your graphics author session has lapsed');
+		expect(wrapper.find('[data-testid="reload-graphics-author-session"]').exists()).toBe(true);
+		expect(wrapper.text()).not.toContain('401');
+	});
+
+	/**
+	 * The other half of naming a lapse: not naming one.
+	 *
+	 * A `404` from an ingestion route is per-session ownership working — a live
+	 * session asking about an operation that is not its own. Announcing a lapse for
+	 * it would tell an author their session had ended when they are still holding
+	 * it, and send them to reload for nothing.
+	 */
+	it('does not announce a lapse for an operation that is simply not this author\'s', async () => {
+		const wrapper = await mountPage();
+		const file = new File([jpegPixel], 'new-scoreboard.jpg', { type: 'image/jpeg' });
+		mockApiFetch.mockRejectedValue(Object.assign(
+			new Error('Graphics Ingestion Operation does not exist'),
+			{ statusCode: 404 },
+		));
+
+		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
+		await flushPromises();
+		await wrapper.get('[data-testid="upload-image"]').trigger('click');
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="upload-error"]').text())
+			.toContain('Graphics Ingestion Operation does not exist');
+		expect(wrapper.text()).not.toContain('Your graphics author session has lapsed');
+		expect(wrapper.find('[data-testid="reload-graphics-author-session"]').exists()).toBe(false);
+	});
+
+	it('names a lapsed session when a resumable part is refused mid-transfer', async () => {
+		const wrapper = await mountPage();
+		const bytes = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 1);
+		const file = new File([bytes], 'large-scoreboard.png', { type: 'image/png' });
+		const created: GraphicsIngestionOperation = {
+			...completedOperation,
+			name: 'large-scoreboard.png',
+			sourceFileName: 'large-scoreboard.png',
+			declaredMime: 'image/png',
+			declaredByteLength: bytes.byteLength,
+			transferredByteLength: 0,
+			stage: 'created',
+			report: undefined,
+			result: undefined,
+		};
+		const started: GraphicsIngestionOperation = {
+			...created,
+			stage: 'transferring',
+			transfer: {
+				method: 'multipart',
+				partByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+				maximumConcurrentParts: 1,
+				maximumPartAttempts: 3,
+				partCount: 2,
+				cleanupPending: false,
+				completedParts: [],
+			},
+		};
+		mockApiFetch.mockImplementation((path: string) =>
+			Promise.resolve(path.endsWith('/multipart') ? started : created),
+		);
+		mockTransferFetch.mockResolvedValue(new Response('', { status: 401 }));
+
+		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
+		await flushPromises();
+		await wrapper.get('[data-testid="upload-image"]').trigger('click');
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="upload-error"]').text())
+			.toContain('Your graphics author session has lapsed');
+		// A part the library refused for want of an author is not a part worth
+		// sending again, so the transfer stops instead of exhausting its attempts.
+		expect(mockTransferFetch).toHaveBeenCalledOnce();
+	});
+
+	it('names a lapsed session when an approved remote copy is refused', async () => {
+		const wrapper = await mountPage();
+		mockApiFetch.mockRejectedValue(lapsedSession());
+
+		await wrapper.get('[data-testid="remote-source-url"]')
+			.setValue('https://cdn.example.com/scoreboard.png');
+		await wrapper.get('[data-testid="remote-source-name"]')
+			.setValue('Remote scoreboard logo');
+		await wrapper.get('[data-testid="copy-remote-source"]').trigger('click');
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="remote-copy-error"]').text())
+			.toContain('Your graphics author session has lapsed');
+	});
+
+	/**
+	 * ADR-0003's named residual case, at the exact moment it happens.
+	 *
+	 * An operation paused overnight is reconnected from a durable pointer in
+	 * `localStorage` on the next visit. Until now that restore swallowed its own
+	 * failure and deleted the pointer, so the one moment the decision costs an
+	 * author something was the one moment they were told nothing at all — the
+	 * workspace simply came up empty, as though there had never been an upload.
+	 */
+	it('says an operation could not be reconnected instead of dropping it in silence', async () => {
+		localStorage.setItem('graphics-asset-ingestion-operation', 'operation-from-last-night');
+		mockApiFetch.mockRejectedValue(Object.assign(
+			new Error('Graphics Ingestion Operation does not exist'),
+			{ statusCode: 404 },
+		));
+		const wrapper = await mountPage();
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="upload-error"]').text())
+			.toContain('could not be reconnected');
+		// The pointer is still dropped — it names something unreachable — but the
+		// author learns that rather than inferring it from an empty workspace.
+		expect(localStorage.getItem('graphics-asset-ingestion-operation')).toBeNull();
+	});
+
+	it('names a lapsed session when the staged bytes of a remote copy cannot be read', async () => {
+		const awaitingConfirmation: GraphicsIngestionOperation = {
+			...completedOperation,
+			id: 'operation-reconnected' as never,
+			source: 'remote-copy',
+			stage: 'awaiting-confirmation',
+			result: undefined,
+		};
+		localStorage.setItem('graphics-asset-ingestion-operation', awaitingConfirmation.id);
+		mockApiFetch.mockResolvedValue(awaitingConfirmation);
+		mockTransferFetch.mockResolvedValue(new Response('', { status: 401 }));
+		const wrapper = await mountPage();
+		await flushPromises();
+
+		await wrapper.get('[data-testid="confirm-staged-source"]').trigger('click');
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="remote-copy-error"]').text())
+			.toContain('Your graphics author session has lapsed');
+	});
+});

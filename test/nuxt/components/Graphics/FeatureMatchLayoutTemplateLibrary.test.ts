@@ -49,7 +49,7 @@ const UIEmptyStateStub = defineComponent({
 });
 const UAlertStub = defineComponent({
 	props: { title: { type: String, required: false }, description: { type: String, required: false } },
-	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span></div>',
+	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span><slot /></div>',
 });
 const UIconStub = defineComponent({ template: '<i />' });
 const UButtonStub = defineComponent({
@@ -243,6 +243,41 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 	 * that exact report. Installing it automatically would accept, on the author's
 	 * behalf, the decisions the report exists to put in front of them.
 	 */
+	/**
+	 * The third of the three reusable libraries, asserted here rather than assumed
+	 * from the other two: they share `useReusableLibraryReading`, and a shared seam
+	 * is worth proving at each surface that depends on it, because what breaks is
+	 * usually one surface's wiring rather than the seam.
+	 */
+	it('names a lapsed graphics author session when an import is refused', async () => {
+		mockReceivePackage.mockRejectedValue(
+			Object.assign(new Error('An authenticated graphics author session is required'), {
+				statusCode: 401,
+			}),
+		);
+		const wrapper = await mountLibrary();
+
+		await chooseImportFile(wrapper);
+
+		expect(wrapper.get('[data-testid="layout-template-error"]').text())
+			.toContain('Your graphics author session has lapsed');
+		expect(wrapper.find('[data-testid="reusable-library-reload"]').exists()).toBe(true);
+	});
+
+	it('leaves an ordinary refusal saying what it said', async () => {
+		mockReceivePackage.mockRejectedValue({
+			data: { message: 'The Template Package is not a readable archive' },
+		});
+		const wrapper = await mountLibrary();
+
+		await chooseImportFile(wrapper);
+
+		const reported = wrapper.get('[data-testid="layout-template-error"]');
+		expect(reported.text()).toContain('not a readable archive');
+		expect(reported.text()).not.toContain('lapsed');
+		expect(wrapper.find('[data-testid="reusable-library-reload"]').exists()).toBe(false);
+	});
+
 	it('pauses on a package that needs confirming, and installs only when confirmed', async () => {
 		mockReceivePackage.mockResolvedValue(receivedPackage('awaiting-confirmation', {
 			outcome: 'requires-confirmation',

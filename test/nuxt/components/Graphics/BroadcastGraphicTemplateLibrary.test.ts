@@ -50,7 +50,7 @@ const UIEmptyStateStub = defineComponent({
 });
 const UAlertStub = defineComponent({
 	props: { title: { type: String, required: false }, description: { type: String, required: false } },
-	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span></div>',
+	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span><slot /></div>',
 });
 const UBadgeStub = defineComponent({ template: '<span><slot /></span>' });
 const UIconStub = defineComponent({ template: '<i />' });
@@ -328,6 +328,48 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 
 		expect(wrapper.get('[data-testid="template-export"]').attributes('to'))
 			.toBe('/api/graphics-templates/broadcast-graphics/template-1/template-package');
+	});
+
+	/**
+	 * A Template Package import is a Graphics Ingestion Operation like any other, so
+	 * it is refused the same way when the graphics author session behind it has
+	 * lapsed — and it is the import that pauses for a confirmation, which makes this
+	 * the surface most likely to still be open when a session runs out. It must name
+	 * the lapse rather than repeat the server's sentence about a session it cannot
+	 * explain, and offer the one action that helps.
+	 */
+	it('names a lapsed graphics author session when an import is refused', async () => {
+		mockReceivePackage.mockRejectedValue(
+			Object.assign(new Error('An authenticated graphics author session is required'), {
+				statusCode: 401,
+			}),
+		);
+		const wrapper = await mountLibrary();
+
+		await chooseImportFile(wrapper);
+
+		const reported = wrapper.get('[data-testid="template-library-error"]');
+		expect(reported.text()).toContain('Your graphics author session has lapsed');
+		expect(wrapper.find('[data-testid="reusable-library-reload"]').exists()).toBe(true);
+	});
+
+	/**
+	 * The other half of the same rule. A refusal that is not a lapse must keep its own
+	 * message: announcing a lapse for every failure would be the same defect with a
+	 * friendlier sentence.
+	 */
+	it('leaves an ordinary refusal saying what it said', async () => {
+		mockReceivePackage.mockRejectedValue({
+			data: { message: 'The Template Package is not a readable archive' },
+		});
+		const wrapper = await mountLibrary();
+
+		await chooseImportFile(wrapper);
+
+		const reported = wrapper.get('[data-testid="template-library-error"]');
+		expect(reported.text()).toContain('not a readable archive');
+		expect(reported.text()).not.toContain('lapsed');
+		expect(wrapper.find('[data-testid="reusable-library-reload"]').exists()).toBe(false);
 	});
 
 	it('installs a clean Template Package without asking anything', async () => {

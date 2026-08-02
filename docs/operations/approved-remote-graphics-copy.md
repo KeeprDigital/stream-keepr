@@ -132,12 +132,26 @@ There is no longer any client-supplied author header. The former
 `x-graphics-author-id` was unauthenticated and is gone from the whole library;
 nothing on the wire names an author except the session cookie.
 
-Two consequences worth stating plainly. A graphics author session lasts eight
-hours, so an operation outlives the session that created it and becomes
-unreachable when that session expires — retention still reclaims its staged
-input on the ordinary schedule, but its author cannot resume it. And an
-operation is owned by one session rather than by a person: the same author in a
-second browser is a second author here.
+Two consequences worth stating plainly, and one of them has changed.
+
+A graphics author session lasts eight hours **from its last request**, not from
+the moment it was minted. Every request that presents a live session carries it
+forward a further eight hours — the KV entry and the cookie together, and no
+more often than once a minute, because Workers KV rate-limits writes to a single
+key. A transfer in progress is a stream of requests, so it holds its own session
+open and cannot be expired out from under itself. What still lapses is a session
+nobody is using: an operation paused at `awaiting-confirmation` with the browser
+closed overnight is unreachable in the morning, because it belongs to a session
+that has ended. Retention still reclaims its staged input on the ordinary
+schedule, but its author cannot resume it.
+
+And an operation is owned by one session rather than by a person: the same author
+in a second browser is a second author here. That is deliberate, and there is
+nothing more durable to own it — the installation has no accounts, so nobody logs
+in to become a graphics author. [ADR-0003](../adr/0003-graphics-ingestion-operation-ownership.md)
+records the decision, what it costs, and what would have to exist before it could
+be reversed. The Library Workspace states it before an upload begins, and names a
+lapsed session rather than a bare `401` if one happens.
 
 `docs/operations/graphics-operations-cockpit.md` describes the administrator
 surface, which is gated by the installation's admin token instead. That gate is
