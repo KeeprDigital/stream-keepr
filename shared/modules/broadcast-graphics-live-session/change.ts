@@ -50,15 +50,18 @@ import type { BroadcastGraphicPlayout, BroadcastGraphicsLiveState } from './play
  * second description with its own removal rules over a shape the reducer is free to
  * grow. That case falls back to a snapshot reload instead, and where the boundary
  * sits is measured rather than assumed: see
- * `test/unit/server/broadcastGraphicsCommandApplied.test.ts`.
+ * `test/unit/server/mappers/broadcastGraphicsCommandApplied.test.ts`.
  */
 
 /**
  * The entries of one live-state map that changed, by Broadcast Graphic id.
  *
- * `null` is a removal: no entry in any of these maps is ever null, so the sentinel
- * cannot be confused for a value, and "set what you are given, remove what is null"
- * is the whole of applying a change.
+ * `null` is a removal. No entry in any of these maps is ever null — recovery refuses
+ * a durable live state in which one is — so the sentinel cannot be confused for a
+ * value, and "set what you are given, remove what is null" is the whole of applying a
+ * change. `broadcastGraphicsLiveStateChange` checks rather than assumes it, because
+ * the rule is enforced a module away and was once enforced for only two of the three
+ * maps described here.
  */
 export type BroadcastGraphicsLiveStateEntries<TEntry> = Record<string, TEntry | null>;
 
@@ -128,6 +131,14 @@ export function broadcastGraphicsLiveStateChange(
 		const entries: BroadcastGraphicsLiveStateEntries<unknown> = {};
 
 		for (const graphicId of new Set([...Object.keys(from), ...Object.keys(to)])) {
+			// The no-null rule this description depends on is enforced by recovery, one
+			// module away, and it was once enforced for two of these three maps — which
+			// made a null Graphic Source Selection record indistinguishable from an
+			// absent one and left a peer permanently behind with nothing to notice it
+			// by. Refusing to describe a state that breaks the promise costs a reload;
+			// reading the null as a removal costs a divergence nothing heals.
+			if (to[graphicId] === null)
+				return null;
 			if (same(from[graphicId], to[graphicId]))
 				continue;
 			entries[graphicId] = to[graphicId] === undefined ? null : to[graphicId];

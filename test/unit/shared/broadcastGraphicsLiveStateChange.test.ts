@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
 	applyBroadcastGraphicsCommand,
 	broadcastGraphicsLiveStateChange,
+	broadcastGraphicsRecoveryFault,
 	changedBroadcastGraphicsLiveState,
 	createInitialBroadcastGraphicsLiveState,
+	recoveredBroadcastGraphicsLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 
 /**
@@ -140,5 +142,60 @@ describe('broadcastGraphicsLiveStateChange', () => {
 		const after = { ...createInitialBroadcastGraphicsLiveState(), epoch: 'later' } as never;
 
 		expect(broadcastGraphicsLiveStateChange(before, after)).toBeNull();
+	});
+});
+
+/**
+ * The one thing a change is not allowed to do: leave a peer holding a live state
+ * the server does not have, with nothing to notice it by.
+ *
+ * `null` means removal, which is sound only while no entry of any described map can
+ * itself be null — and that is a claim about what recovery admits, not about what
+ * this module does. Recovery judged `playout` and `inputs` and read `sources`
+ * without judging it, so a null Graphic Source Selection record reached both sides
+ * of the comparison and became invisible: absent and null serialize alike, so the
+ * difference was reported as no difference at all, and no later command healed it.
+ */
+describe('a live state carrying an entry that is null', () => {
+	function converged(before: unknown, after: unknown): boolean {
+		const from = recoveredBroadcastGraphicsLiveState(before);
+		const to = recoveredBroadcastGraphicsLiveState(after);
+		const change = broadcastGraphicsLiveStateChange(from, to);
+		if (change === null)
+			return true;
+		return JSON.stringify(changedBroadcastGraphicsLiveState(from, change)) === JSON.stringify(to);
+	}
+
+	it('is refused by recovery rather than read as a Graphic Source Selection record', () => {
+		expect(broadcastGraphicsRecoveryFault({
+			playout: {},
+			inputs: {},
+			sources: { slate: null },
+		})?.reason).toBe('corrupt');
+	});
+
+	it('converges when a null Graphic Source Selection record stops being there', () => {
+		expect(converged(
+			{ playout: {}, inputs: {}, sources: { slate: null } },
+			{ playout: {}, inputs: {}, sources: {} },
+		)).toBe(true);
+	});
+
+	it('converges when a null Graphic Source Selection record appears', () => {
+		expect(converged(
+			{ playout: {}, inputs: {}, sources: {} },
+			{ playout: {}, inputs: {}, sources: { slate: null } },
+		)).toBe(true);
+	});
+
+	it('describes nothing rather than a removal when handed an entry it was promised could not exist', () => {
+		// Recovery is what enforces the no-null rule, and this module is the one that
+		// depends on it. Answering "I cannot describe this" costs a reload; reading the
+		// null as a removal would cost a divergence nothing heals, which is the defect
+		// this pair of tests exists to keep fixed if another map is ever described.
+		expect(broadcastGraphicsLiveStateChange(
+			{ playout: {}, inputs: {}, sources: {} },
+			{ playout: {}, inputs: {}, sources: { slate: null } } as never,
+		)).toBeNull();
 	});
 });

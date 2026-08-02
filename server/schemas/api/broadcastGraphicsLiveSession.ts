@@ -29,8 +29,10 @@ const graphicIdSchema = z.string().min(1).max(100);
  * Its margin over the authored cap is 200 rather than 1,000, because the margin buys
  * nothing beyond being non-zero — an over-long value is refused acceptance at any
  * length — while it is paid twice per Graphic Input in every durable live state and
- * every notification that describes one. Doubling the authored cap cost 60 KB of
- * worst-case live state for no property the smaller margin does not have. See #168.
+ * every notification that describes one. Doubling the authored cap cost 96,000 bytes
+ * of worst-case live state, the Screen's sixty Graphic Inputs times the eight hundred
+ * spare bytes in each of their two operator-written value maps, for no property the
+ * smaller margin does not have. See #168.
  */
 export const MAX_GRAPHIC_INPUT_VALUE_LENGTH = 1200;
 
