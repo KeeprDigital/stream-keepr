@@ -406,6 +406,24 @@ describe('graphicsStyleSetLibrary', () => {
 		expect(wrapper.find('[data-testid="reusable-library-reload"]').exists()).toBe(true);
 	});
 
+	/**
+	 * A seam that announced a lapse for every refusal would be the same defect with
+	 * friendlier wording, so the negative is asserted on each surface too.
+	 */
+	it('leaves an ordinary refusal saying what it said', async () => {
+		mockInspectPackage.mockRejectedValue({
+			data: { message: 'The Graphic Style Set Package is not a readable archive' },
+		});
+		const wrapper = await mountLibrary();
+
+		await choosePackage(wrapper);
+
+		const reported = wrapper.get('[data-testid="style-set-error"]');
+		expect(reported.text()).toContain('not a readable archive');
+		expect(reported.text()).not.toContain('lapsed');
+		expect(wrapper.find('[data-testid="reusable-library-reload"]').exists()).toBe(false);
+	});
+
 	it('installs a package that has nothing for its author to weigh, without asking', async () => {
 		const wrapper = await mountLibrary();
 

@@ -1182,6 +1182,7 @@ onMounted(async () => {
 					color="error"
 					variant="soft"
 					icon="i-lucide-circle-x"
+					data-testid="upload-error"
 				>
 					<p class="font-medium">
 						Upload failed
@@ -1253,9 +1254,15 @@ onMounted(async () => {
 						color="error"
 						variant="soft"
 						icon="i-lucide-circle-x"
-						title="Approved remote copy failed"
-						:description="remoteCopyError"
-					/>
+						data-testid="remote-copy-error"
+					>
+						<p class="font-medium">
+							Approved remote copy failed
+						</p>
+						<p class="mt-1 text-sm">
+							{{ remoteCopyError }}
+						</p>
+					</UAlert>
 				</div>
 
 				<div v-if="currentOperation" class="mt-4 rounded-lg border border-default bg-elevated/25 p-4">
@@ -1396,9 +1403,15 @@ onMounted(async () => {
 				color="error"
 				variant="soft"
 				icon="i-lucide-triangle-alert"
-				title="Library could not be loaded"
-				:description="error.message"
-			/>
+				data-testid="library-load-error"
+			>
+				<p class="font-medium">
+					Library could not be loaded
+				</p>
+				<p class="mt-1 text-sm">
+					{{ error.message }}
+				</p>
+			</UAlert>
 
 			<div v-if="assets.length > 0" class="grid gap-4 lg:grid-cols-2">
 				<UCard v-for="asset in assets" :key="asset.id">

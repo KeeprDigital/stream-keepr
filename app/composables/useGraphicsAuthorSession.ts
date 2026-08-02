@@ -50,6 +50,16 @@ export function graphicsAuthorSessionLapsed(caught: unknown): boolean {
 	return failureStatus(caught) === 401;
 }
 
+/**
+ * `lapsed` is per-caller, not a shared singleton.
+ *
+ * Each call mints its own `ref`, so one surface noticing a lapse does not light
+ * up another. That is deliberate: a surface reports the refusals *it* provoked,
+ * and a library nobody has touched should not grow an alert about somebody
+ * else's failed upload. The session it describes is of course shared — it is one
+ * cookie — so anything wanting a page-wide announcement needs shared state
+ * rather than a second call to this.
+ */
 export function useGraphicsAuthorSession() {
 	const lapsed = ref(false);
 

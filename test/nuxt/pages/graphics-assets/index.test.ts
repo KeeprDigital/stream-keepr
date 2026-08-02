@@ -1048,6 +1048,21 @@ describe('the Graphics Asset Library Workspace', () => {
 });
 
 /**
+ * **Assert on the element under test, not on `wrapper.text()`.**
+ *
+ * `wrapper.text()` proves *something on the page* says it, which is not the same
+ * claim and is weaker than it looks here. `UAlert` is stubbed by a passthrough
+ * that renders slots only, so any alert passing its message as `:description`
+ * renders nothing at all — and an assertion naming that alert passes anyway, off
+ * whichever other element happens to carry the same words. This suite shipped
+ * exactly that: two cases named for the remote-copy alert passed off the
+ * top-level lapsed banner, and replacing the remote-copy message with a literal
+ * left all twenty-four green.
+ *
+ * So every alert below carries a `data-testid` and every assertion reads it. The
+ * rule generalises past the stub: an assertion that cannot fail when the thing it
+ * names is deleted is not testing that thing.
+ *
  * What the Workspace says about who an upload belongs to, and what it says when
  * that owner stops existing.
  *
@@ -1099,8 +1114,9 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		await wrapper.get('[data-testid="upload-image"]').trigger('click');
 		await flushPromises();
 
-		expect(wrapper.text()).toContain('Your graphics author session has lapsed');
-		expect(wrapper.text()).toContain('Reload the page to start a new session');
+		expect(wrapper.get('[data-testid="upload-error"]').text())
+			.toContain('Your graphics author session has lapsed');
+		expect(wrapper.find('[data-testid="reload-graphics-author-session"]').exists()).toBe(true);
 		expect(wrapper.text()).not.toContain('401');
 	});
 
@@ -1125,6 +1141,8 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		await wrapper.get('[data-testid="upload-image"]').trigger('click');
 		await flushPromises();
 
+		expect(wrapper.get('[data-testid="upload-error"]').text())
+			.toContain('Graphics Ingestion Operation does not exist');
 		expect(wrapper.text()).not.toContain('Your graphics author session has lapsed');
 		expect(wrapper.find('[data-testid="reload-graphics-author-session"]').exists()).toBe(false);
 	});
@@ -1167,7 +1185,8 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		await wrapper.get('[data-testid="upload-image"]').trigger('click');
 		await flushPromises();
 
-		expect(wrapper.text()).toContain('Your graphics author session has lapsed');
+		expect(wrapper.get('[data-testid="upload-error"]').text())
+			.toContain('Your graphics author session has lapsed');
 		// A part the library refused for want of an author is not a part worth
 		// sending again, so the transfer stops instead of exhausting its attempts.
 		expect(mockTransferFetch).toHaveBeenCalledOnce();
@@ -1184,7 +1203,8 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		await wrapper.get('[data-testid="copy-remote-source"]').trigger('click');
 		await flushPromises();
 
-		expect(wrapper.text()).toContain('Your graphics author session has lapsed');
+		expect(wrapper.get('[data-testid="remote-copy-error"]').text())
+			.toContain('Your graphics author session has lapsed');
 	});
 
 	/**
@@ -1205,7 +1225,8 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		const wrapper = await mountPage();
 		await flushPromises();
 
-		expect(wrapper.text()).toContain('could not be reconnected');
+		expect(wrapper.get('[data-testid="upload-error"]').text())
+			.toContain('could not be reconnected');
 		// The pointer is still dropped — it names something unreachable — but the
 		// author learns that rather than inferring it from an empty workspace.
 		expect(localStorage.getItem('graphics-asset-ingestion-operation')).toBeNull();
@@ -1228,6 +1249,7 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		await wrapper.get('[data-testid="confirm-staged-source"]').trigger('click');
 		await flushPromises();
 
-		expect(wrapper.text()).toContain('Your graphics author session has lapsed');
+		expect(wrapper.get('[data-testid="remote-copy-error"]').text())
+			.toContain('Your graphics author session has lapsed');
 	});
 });
