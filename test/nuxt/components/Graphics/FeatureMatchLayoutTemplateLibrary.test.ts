@@ -49,7 +49,7 @@ const UIEmptyStateStub = defineComponent({
 });
 const UAlertStub = defineComponent({
 	props: { title: { type: String, required: false }, description: { type: String, required: false } },
-	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span></div>',
+	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span><slot /></div>',
 });
 const UIconStub = defineComponent({ template: '<i />' });
 const UButtonStub = defineComponent({

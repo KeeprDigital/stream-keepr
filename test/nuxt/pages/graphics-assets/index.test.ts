@@ -1104,6 +1104,31 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		expect(wrapper.text()).not.toContain('401');
 	});
 
+	/**
+	 * The other half of naming a lapse: not naming one.
+	 *
+	 * A `404` from an ingestion route is per-session ownership working — a live
+	 * session asking about an operation that is not its own. Announcing a lapse for
+	 * it would tell an author their session had ended when they are still holding
+	 * it, and send them to reload for nothing.
+	 */
+	it('does not announce a lapse for an operation that is simply not this author\'s', async () => {
+		const wrapper = await mountPage();
+		const file = new File([jpegPixel], 'new-scoreboard.jpg', { type: 'image/jpeg' });
+		mockApiFetch.mockRejectedValue(Object.assign(
+			new Error('Graphics Ingestion Operation does not exist'),
+			{ statusCode: 404 },
+		));
+
+		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
+		await flushPromises();
+		await wrapper.get('[data-testid="upload-image"]').trigger('click');
+		await flushPromises();
+
+		expect(wrapper.text()).not.toContain('Your graphics author session has lapsed');
+		expect(wrapper.find('[data-testid="reload-graphics-author-session"]').exists()).toBe(false);
+	});
+
 	it('names a lapsed session when a resumable part is refused mid-transfer', async () => {
 		const wrapper = await mountPage();
 		const bytes = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 1);
@@ -1160,6 +1185,30 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		await flushPromises();
 
 		expect(wrapper.text()).toContain('Your graphics author session has lapsed');
+	});
+
+	/**
+	 * ADR-0003's named residual case, at the exact moment it happens.
+	 *
+	 * An operation paused overnight is reconnected from a durable pointer in
+	 * `localStorage` on the next visit. Until now that restore swallowed its own
+	 * failure and deleted the pointer, so the one moment the decision costs an
+	 * author something was the one moment they were told nothing at all — the
+	 * workspace simply came up empty, as though there had never been an upload.
+	 */
+	it('says an operation could not be reconnected instead of dropping it in silence', async () => {
+		localStorage.setItem('graphics-asset-ingestion-operation', 'operation-from-last-night');
+		mockApiFetch.mockRejectedValue(Object.assign(
+			new Error('Graphics Ingestion Operation does not exist'),
+			{ statusCode: 404 },
+		));
+		const wrapper = await mountPage();
+		await flushPromises();
+
+		expect(wrapper.text()).toContain('could not be reconnected');
+		// The pointer is still dropped — it names something unreachable — but the
+		// author learns that rather than inferring it from an empty workspace.
+		expect(localStorage.getItem('graphics-asset-ingestion-operation')).toBeNull();
 	});
 
 	it('names a lapsed session when the staged bytes of a remote copy cannot be read', async () => {

@@ -72,6 +72,7 @@ const {
 	entries: styleSets,
 	loading,
 	error,
+	lapsed,
 	failureMessage,
 	refresh,
 } = useReusableLibraryReading<GraphicStyleSetSummary>({
@@ -469,6 +470,7 @@ function unlink() {
 			<GraphicsReusableLibraryError
 				title="Graphic Style Set action failed"
 				:message="error"
+				:lapsed="lapsed"
 				test-id="style-set-error"
 			/>
 

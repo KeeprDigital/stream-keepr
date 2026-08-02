@@ -457,9 +457,18 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 	 * What per-session ownership costs, at the moment it costs the most.
 	 *
 	 * This is #176's scenario played out through the real routes: a resumable
-	 * transfer half sent, and the session it was sent under gone. The browser is
-	 * left holding a cookie nothing answers to, which is exactly the state an
-	 * expired session leaves — the KV entry is reclaimed, the cookie is not.
+	 * transfer half sent, and the session it was sent under gone.
+	 *
+	 * **What these cases cover, and what they do not.** They pin the *decision* —
+	 * that ownership is per-session and what that costs — not the sliding lifetime
+	 * this branch added; they pass identically against a session module with the
+	 * sliding removed, because nothing here advances a clock. Sliding is proved in
+	 * `test/unit/server/modules/graphicsAuthorSession.test.ts`, where the clock is
+	 * controlled directly; what that leaves uncovered is wiring rather than logic,
+	 * since `h3` and `hub:kv` are both substituted there. A Worker's clock cannot be
+	 * advanced from here, and the only wire-observable trace of a slide — a
+	 * refreshed `Set-Cookie` — appears only once a session is over a minute stale,
+	 * which a session minted seconds ago in `beforeAll` never is.
 	 *
 	 * Three separate facts follow, and only the first two are losses:
 	 *
@@ -474,8 +483,14 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 	describe('a graphics author session that lapses mid-transfer', () => {
 		/**
 		 * A cookie of the shape the browser keeps and the library has forgotten.
-		 * Cookie and KV entry expire independently, so this is the ordinary state
-		 * after eight idle hours rather than a contrived one.
+		 *
+		 * A token that was never minted, not one that has expired — the two are not
+		 * the same event, and the honest claim is narrower than "this is what expiry
+		 * looks like". What makes it a faithful proxy is that both reach the library
+		 * the same way: `readSession` looks the token up, gets nothing back, and
+		 * refuses. An expired session arrives there because KV dropped its entry;
+		 * this one because there was never an entry to drop. From the route's side
+		 * they are indistinguishable, which is what these cases are about.
 		 */
 		const lapsedCookie
 			= 'stream_keepr_graphics_author_session=a7f1c0d2-lapsed-session-token-no-longer-stored';

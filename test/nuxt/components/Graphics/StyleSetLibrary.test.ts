@@ -53,7 +53,7 @@ const UIEmptyStateStub = defineComponent({
 });
 const UAlertStub = defineComponent({
 	props: { title: { type: String, required: false }, description: { type: String, required: false } },
-	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span></div>',
+	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span><slot /></div>',
 });
 const UBadgeStub = defineComponent({ template: '<span><slot /></span>' });
 const UIconStub = defineComponent({ template: '<i />' });
@@ -383,6 +383,27 @@ describe('graphicsStyleSetLibrary', () => {
 		// A Style Set that has never been published has no snapshot to freeze.
 		const unpublished = wrapper.get('[data-style-set-id="unpublished-style"]');
 		expect(unpublished.find('[data-testid="style-set-export"]').exists()).toBe(false);
+	});
+
+	/**
+	 * The third library in the reusable-library scope, reporting through the same
+	 * shared reading. Its package routes are its own rather than the Graphics Asset
+	 * Library's ingestion routes, and they require the same graphics author session,
+	 * so a lapse has to read the same here as it does everywhere else.
+	 */
+	it('names a lapsed graphics author session when a package is refused', async () => {
+		mockInspectPackage.mockRejectedValue(
+			Object.assign(new Error('An authenticated graphics author session is required'), {
+				statusCode: 401,
+			}),
+		);
+		const wrapper = await mountLibrary();
+
+		await choosePackage(wrapper);
+
+		expect(wrapper.get('[data-testid="style-set-error"]').text())
+			.toContain('Your graphics author session has lapsed');
+		expect(wrapper.find('[data-testid="reusable-library-reload"]').exists()).toBe(true);
 	});
 
 	it('installs a package that has nothing for its author to weigh, without asking', async () => {

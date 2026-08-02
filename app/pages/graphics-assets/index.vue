@@ -957,8 +957,20 @@ onMounted(async () => {
 			}
 			return;
 		}
-		catch {
+		catch (caught) {
+			// The pointer names something unreachable either way, so it goes. What must
+			// not go with it is the news: this is the exact moment per-session ownership
+			// costs an author something (ADR-0003), and swallowing it left the workspace
+			// looking as though there had never been an upload at all.
 			localStorage.removeItem(operationStorageKey);
+			uploadError.value = authorSession.describeFailure(
+				caught,
+				'The Graphic Asset upload from your last visit could not be reconnected.',
+			);
+			if (!authorSession.lapsed.value) {
+				uploadError.value
+					= `The Graphic Asset upload from your last visit could not be reconnected — ${uploadError.value}`;
+			}
 		}
 	}
 
@@ -1170,9 +1182,14 @@ onMounted(async () => {
 					color="error"
 					variant="soft"
 					icon="i-lucide-circle-x"
-					title="Upload failed"
-					:description="uploadError"
-				/>
+				>
+					<p class="font-medium">
+						Upload failed
+					</p>
+					<p class="mt-1 text-sm">
+						{{ uploadError }}
+					</p>
+				</UAlert>
 
 				<div class="mt-6 border-t border-default pt-4">
 					<h3 class="font-semibold text-highlighted">

@@ -20,8 +20,19 @@ defineProps<{
 	title: string;
 	/** The refusal an author is looking at, or none — which renders nothing at all. */
 	message: string | null;
+	/**
+	 * Whether that refusal was the graphics author session ending, which is the one
+	 * refusal carrying an action rather than only an explanation. Reloading is the
+	 * only thing that helps and it is not obvious, so it is offered rather than
+	 * described.
+	 */
+	lapsed?: boolean;
 	testId: string;
 }>();
+
+// Reloading holds no state of its own, so taking it from a fresh reading of the
+// session is the same action the Library Workspace's own button performs.
+const { reload } = useGraphicsAuthorSession();
 </script>
 
 <template>
@@ -33,5 +44,14 @@ defineProps<{
 		:title="title"
 		:description="message"
 		:data-testid="testId"
-	/>
+	>
+		<UButton
+			v-if="lapsed"
+			class="mt-3"
+			data-testid="reusable-library-reload"
+			icon="i-lucide-rotate-ccw"
+			label="Reload and start a new session"
+			@click="reload"
+		/>
+	</UAlert>
 </template>

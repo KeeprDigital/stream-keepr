@@ -154,6 +154,37 @@ describe('a graphics author session that is still being used', () => {
 
 		await expect(requireGraphicsAuthorSession(event)).resolves.toBe(AUTHOR_ID);
 	});
+
+	/**
+	 * The cookie is the browser's copy of a fact the library owns, so it may never
+	 * be written first. A cookie promising eight hours against a KV entry that was
+	 * never extended is a session the browser keeps presenting and the library has
+	 * already forgotten — the author would be logged out at the old expiry while
+	 * still holding a cookie that says otherwise, which is the divergence the
+	 * ordering exists to prevent.
+	 */
+	it('does not tell the browser it lasts longer than the library believes', async () => {
+		mockKv.get.mockResolvedValue(storedSession(7 * 60 * 60));
+		mockKv.set.mockRejectedValue(new Error('KV is unavailable'));
+
+		await requireGraphicsAuthorSession(event);
+
+		expect(mockSetCookie).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * What the grace is allowed to cost, pinned as a number rather than left to a
+	 * constant nobody reads. Raising it silently degrades the guarantee: at an hour
+	 * the promise quietly becomes "seven to eight hours from your last request",
+	 * and every other test in this file would still pass.
+	 */
+	it('is carried forward by a request one grace-width after the last write', async () => {
+		mockKv.get.mockResolvedValue(storedSession(REFRESH_AFTER_SECONDS + 1));
+
+		await requireGraphicsAuthorSession(event);
+
+		expect(mockKv.set).toHaveBeenCalledOnce();
+	});
 });
 
 describe('a graphics author session that has lapsed', () => {

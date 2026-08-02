@@ -76,14 +76,21 @@ This is the shape #176 calls the real fix, and it is refused for a specific
 reason rather than for its size: **there is nothing for an operation to belong
 to.** "Survive re-authentication" presumes an authentication to survive, and the
 product has none. Any surrogate durable enough to outlive a session — a
-long-lived second cookie, a device identifier — is a session with a longer name
-and a longer lifetime, and it would inherit exactly the failure being fixed while
-adding a second identity space to keep consistent with the first.
+long-lived second cookie, a device identifier — is a session with a longer name,
+and it adds a second identity space to keep consistent with the first.
 
-It would also widen a read boundary that #37 deliberately narrowed. An
-operation's provisional staged bytes are readable by its author through
-`GET .../staged-source`. Ownership is what bounds that, so a durable identity is
-also a durable grant to read unpublished bytes.
+**It would genuinely help, and saying otherwise would be too convenient.** A
+device-scoped identity _would_ close the residual case below: an operation
+paused overnight would still be its author's in the morning. What it would not
+close is a cleared cookie, a different machine, or the second browser — so it
+buys a longer window rather than durable ownership, while presenting itself as
+the latter.
+
+The argument that actually carries is the read boundary #37 deliberately
+narrowed. An operation's provisional staged bytes are readable by its author
+through `GET .../staged-source`. Ownership is what bounds that, so a longer-lived
+identity is a longer-lived grant to read unpublished bytes — and one that
+outlives the browser session an author thinks they closed.
 
 The honest form of this shape is an authentication ticket that introduces a
 person to the product, at which point this ADR is reopened and ownership moves
@@ -110,10 +117,20 @@ browser expires on schedule while a working one does not.
 the session if the stored expiry is more than a minute stale. This is not only a
 cost decision. Workers KV rate-limits writes to a **single key** to roughly one
 per second, and a resumable transfer sends parts concurrently — so a session
-rewritten on literally every request would be rewritten several times a second
-under exactly the load this ADR exists to protect. The grace makes the effective
-idle window "eight hours, give or take a minute", which is the same guarantee at
-a write rate the platform will accept.
+rewritten on literally every request would be rewritten many times a second
+under exactly the load this ADR exists to protect. The grace takes that from one
+write per request to at most one per sender per minute; a hundred-part transfer
+stops costing a hundred writes.
+
+**It does not serialise those senders, and stating otherwise would overclaim
+it.** The refresh decision is made from the `expiresAt` the request has just
+read, so concurrent senders can read the same stale value and all write in the
+same instant — a burst of up to the concurrent-part limit, once a minute, of
+which the platform may reject all but one. That is safe rather than merely rare:
+every one of those writes sets the same value, so whichever lands extends the
+session by the same amount, and a rejected one is swallowed. What the grace
+guarantees is the bound on frequency, not the absence of a burst. The effective
+idle window is eight hours, give or take a minute.
 
 A failed rewrite is swallowed rather than raised. The caller holds a session that
 is live at that instant; refusing the request would turn a lost extension into a
@@ -123,10 +140,14 @@ lost request.
 
 - **The remaining gap is stated, not closed.** A session still lapses after eight
   idle hours, and the case that reaches it is an operation paused at
-  `awaiting-confirmation` — where an approved remote copy waits for its author —
-  with the browser closed overnight. That operation is unreachable in the
-  morning, and its staged input is reclaimed on the ordinary retention schedule.
-  This is the cost per-session ownership is being kept at.
+  `awaiting-confirmation` — where an approved remote copy waits for its author,
+  and where a Template Package import waits for its confirmation — with the
+  browser closed overnight. That operation is unreachable in the morning, and its
+  staged input is reclaimed on the ordinary retention schedule. This is the cost
+  per-session ownership is being kept at. The workspace now _says so_ at that
+  moment too: reconnecting from the durable pointer used to swallow its own
+  failure, so the one moment this decision costs an author something was the one
+  moment they were told nothing.
 - **The Workspace says so before an upload starts.** The notice is
   `GRAPHICS_AUTHOR_SESSION_OWNERSHIP_NOTICE` in
   `app/composables/useGraphicsAuthorSession.ts`, rendered in the "Add one asset"
@@ -134,6 +155,13 @@ lost request.
   a status code. Every catch on that surface routes through one function, because
   the surface previously had no `401` branch at all and scattering the check is
   how that happens again.
+- **All four author-facing surfaces name a lapse, not just the Workspace.** The
+  Broadcast Graphic Template, Feature Match Layout Template and Graphic Style Set
+  libraries report every refusal through `useReusableLibraryReading`, so the
+  check lives there rather than at the nine call sites that reach an ingestion or
+  package route. Their imports are the paused-confirmation case above, which
+  makes them the surfaces most likely to meet a lapse and the last place it
+  should read as a raw status.
 - **A refused part is not retried.** A `401` mid-transfer means the author is
   gone, not that the transport failed, so the client stops rather than spending
   its remaining attempts on a request that cannot succeed.

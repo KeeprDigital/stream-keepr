@@ -27,10 +27,18 @@ const GRAPHICS_AUTHOR_SESSION_TTL_SECONDS = 8 * 60 * 60;
  *
  * Not only a cost decision. Workers KV rate-limits writes to a **single key** to
  * roughly one per second, and a resumable transfer sends its parts concurrently
- * — so a session rewritten on literally every request would be rewritten several
+ * — so a session rewritten on literally every request would be rewritten many
  * times a second under exactly the load an idle lifetime exists to protect. The
- * grace makes the effective idle window "the TTL, give or take a minute", which
- * is the same guarantee at a write rate the platform will accept.
+ * grace takes that from one write per request to at most one per sender per
+ * minute: a hundred-part transfer stops costing a hundred writes.
+ *
+ * It does not serialise those senders, and is not trying to. The decision below
+ * is made from the `expiresAt` each sender has just read, so concurrent senders
+ * can read the same stale value and all write at once — a burst of up to the
+ * concurrent-part limit, once a minute. That is safe rather than merely rare:
+ * the write is idempotent in effect, whichever one lands extends the session by
+ * the same amount, and a rejected one is swallowed below. The guarantee this
+ * buys is "the TTL, give or take a minute".
  */
 const GRAPHICS_AUTHOR_SESSION_REFRESH_AFTER_SECONDS = 60;
 
