@@ -5,7 +5,7 @@ import type {
 } from '../types/messages';
 import Ably from 'ably';
 import { eventRealtimeChannel, screenRealtimeChannel } from '~~/shared/utils/realtimeChannels';
-import { createMessage, MAX_REALTIME_MESSAGE_BYTES, screenCommandMessageTypes } from '../types/messages';
+import { createMessage, MAX_REALTIME_MESSAGE_BYTES, realtimeMessageBytes, screenCommandMessageTypes } from '../types/messages';
 
 let ablyClient: Ably.Rest | null = null;
 
@@ -43,8 +43,13 @@ export function getOriginConnectionId(event: H3Event): string | undefined {
  * compares against, so refusing here would invent a failure the provider might not
  * have had.
  */
-function reportOversizedMessage(eventId: number, messageType: MessageType, messageData: unknown): void {
-	const bytes = new TextEncoder().encode(JSON.stringify(messageData)).byteLength;
+function reportOversizedMessage<T extends MessageType>(
+	eventId: number,
+	messageType: T,
+	payload?: MessagePayload<T>,
+	originConnectionId?: string,
+): void {
+	const bytes = realtimeMessageBytes(eventId, messageType, payload, originConnectionId);
 	if (bytes <= MAX_REALTIME_MESSAGE_BYTES)
 		return;
 
@@ -84,7 +89,7 @@ export async function publishMessage<T extends MessageType>(
 		const client = getAblyClient();
 		const channel = client.channels.get(eventRealtimeChannel(eventId));
 		const messageData = createMessage(eventId, messageType, payload, originConnectionId);
-		reportOversizedMessage(eventId, messageType, messageData);
+		reportOversizedMessage(eventId, messageType, payload, originConnectionId);
 		await channel.publish(messageType, messageData);
 	}
 	catch {
@@ -113,7 +118,7 @@ export async function publishMessageStrict<T extends MessageType>(
 	const client = getAblyClient();
 	const channel = client.channels.get(eventRealtimeChannel(eventId));
 	const messageData = createMessage(eventId, messageType, payload, originConnectionId);
-	reportOversizedMessage(eventId, messageType, messageData);
+	reportOversizedMessage(eventId, messageType, payload, originConnectionId);
 
 	await channel.publish(messageType, messageData);
 }

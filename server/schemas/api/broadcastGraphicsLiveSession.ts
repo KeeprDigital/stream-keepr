@@ -20,13 +20,19 @@ const graphicIdSchema = z.string().min(1).max(100);
 /**
  * The ceiling on one Graphic Input value on the wire.
  *
- * Deliberately larger than the longest value any text Graphic Input may declare:
- * a value that exceeds its declaration's own bound has to be storable so Live
- * Control can show it as unavailable, which is what "unavailable rather than
- * truncated" means in practice. This is only the bound that keeps a command from
- * being unboundedly large.
+ * Deliberately larger than the longest value any text Graphic Input may declare
+ * (`MAX_GRAPHIC_TEXT_LENGTH`, 1,000): a value that exceeds its declaration's own
+ * bound has to be storable so Live Control can show it as unavailable, which is what
+ * "unavailable rather than truncated" means in practice. This is only the bound that
+ * keeps a command from being unboundedly large.
+ *
+ * Its margin over the authored cap is 200 rather than 1,000, because the margin buys
+ * nothing beyond being non-zero — an over-long value is refused acceptance at any
+ * length — while it is paid twice per Graphic Input in every durable live state and
+ * every notification that describes one. Doubling the authored cap cost 60 KB of
+ * worst-case live state for no property the smaller margin does not have. See #168.
  */
-export const MAX_GRAPHIC_INPUT_VALUE_LENGTH = 2000;
+export const MAX_GRAPHIC_INPUT_VALUE_LENGTH = 1200;
 
 /**
  * One Graphic Input value, in whichever shape its declared type takes. The wire

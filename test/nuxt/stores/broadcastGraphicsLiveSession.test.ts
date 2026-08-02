@@ -93,7 +93,7 @@ function notification(
 		sessionId: 55,
 		sequence: 2,
 		commandType: 'Take',
-		currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+		change: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } },
 		...overrides,
 	} as MessageData<'broadcastGraphicsLiveSession:commandApplied'>;
 }
@@ -313,7 +313,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 		await store.applyRemoteCommand(notification({
 			sequence: 2,
-			currentState: { playout: { slate: { onAir: false, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			change: { playout: { slate: { onAir: false, effectiveStartedAt: 0, cut: false } } },
 		}));
 
 		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
@@ -345,6 +345,51 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 		expect(mockRepository.getSession).toHaveBeenCalledWith(EVENT_ID, SCREEN_ID);
 		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('off');
+	});
+
+	it('reloads when a notification carries no change it could apply', async () => {
+		// The difference was too large to deliver, so the notification says only that the
+		// order advanced. Applying nothing and advancing the sequence would leave this
+		// client silently behind the show; the snapshot is what it falls back to, exactly
+		// as it does for a sequence gap.
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		vi.clearAllMocks();
+		mockRepository.getSession.mockResolvedValue(session({
+			sequence: 2,
+			currentState: { playout: { bug: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+		}));
+
+		await store.applyRemoteCommand(notification({ change: undefined }));
+
+		expect(mockRepository.getSession).toHaveBeenCalledWith(EVENT_ID, SCREEN_ID);
+		expect(store.playoutState(SCREEN_ID, 'bug')).toBe('on-air');
+	});
+
+	it('removes a Broadcast Graphic a change says the committed state no longer holds', async () => {
+		mockRepository.getSession.mockResolvedValue(session({
+			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+		}));
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		vi.clearAllMocks();
+
+		await store.applyRemoteCommand(notification({ change: { playout: { slate: null } } }));
+
+		expect(mockRepository.getSession).not.toHaveBeenCalled();
+		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('off');
+	});
+
+	it('advances its sequence on a change that turned out to be empty', async () => {
+		// An accepted command that left live state as it was still advanced the
+		// authoritative order, and a client that ignored it would treat the next
+		// notification as a gap and fetch a snapshot it did not need.
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		vi.clearAllMocks();
+
+		await store.applyRemoteCommand(notification({ change: {} }));
+		await store.applyRemoteCommand(notification({ sequence: 3 }));
+
+		expect(mockRepository.getSession).not.toHaveBeenCalled();
+		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
 	});
 
 	it('reloads when a notification arrives for a Screen it has never loaded', async () => {

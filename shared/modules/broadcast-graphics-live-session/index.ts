@@ -7,6 +7,14 @@
  */
 export { broadcastGraphicsLiveSessionGraphicAssetReferences } from './assetReferences';
 export type {
+	BroadcastGraphicsLiveStateChange,
+	BroadcastGraphicsLiveStateEntries,
+} from './change';
+export {
+	broadcastGraphicsLiveStateChange,
+	changedBroadcastGraphicsLiveState,
+} from './change';
+export type {
 	BroadcastGraphicInputsState,
 	GraphicInputStatus,
 	GraphicInputTrace,

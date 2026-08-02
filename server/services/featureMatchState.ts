@@ -409,7 +409,7 @@ export function featureMatchStateService() {
 			session: mapFeatureMatchSessionToResponse(session),
 		}),
 
-		publish: async (result, originConnectionId) => {
+		publish: async (result, { originConnectionId }) => {
 			await publishMessage(result.sourceSnapshot.eventId, 'featureMatchSession:eventApplied', toEventAppliedPayload(result), originConnectionId);
 		},
 	});

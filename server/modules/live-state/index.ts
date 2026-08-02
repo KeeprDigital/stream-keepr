@@ -18,5 +18,6 @@ export type {
 	SequencedLiveStateExecuteOptions,
 	SequencedLiveStatePort,
 	SequencedLiveStateProjectionInput,
+	SequencedLiveStatePublication,
 } from './sequencedLiveState';
 export { createSequencedLiveState } from './sequencedLiveState';

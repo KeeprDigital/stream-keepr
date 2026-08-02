@@ -4,13 +4,15 @@ import type { SequencedLiveStateExecuteOptions } from '~~/server/modules/live-st
 import type { BroadcastGraphicsLiveState, BroadcastGraphicsReductionContext } from '~~/shared/modules/broadcast-graphics-live-session';
 import type {
 	BroadcastGraphicsCommand,
-	BroadcastGraphicsCommandAppliedPayload,
 	BroadcastGraphicsCommandResult,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { broadcastGraphicsLiveSessions } from '~~/server/db/schema';
-import { mapBroadcastGraphicsCommandResult } from '~~/server/mappers/broadcastGraphicsLiveSession';
+import {
+	broadcastGraphicsCommandAppliedPayload,
+	mapBroadcastGraphicsCommandResult,
+} from '~~/server/mappers/broadcastGraphicsLiveSession';
 import { createSequencedLiveState, forgetAggregateReceipts } from '~~/server/modules/live-state';
 import { publishMessage } from '~~/server/utils/ably';
 import {
@@ -254,18 +256,6 @@ export function broadcastGraphicsStateService() {
 		throw new Error('Failed to open broadcast graphics live session');
 	};
 
-	function toCommandAppliedPayload(
-		result: BroadcastGraphicsCommandResult,
-	): BroadcastGraphicsCommandAppliedPayload {
-		return {
-			screenId: result.screenId,
-			sessionId: result.sessionId,
-			sequence: result.sequence,
-			commandType: result.commandType,
-			currentState: result.currentState,
-		};
-	}
-
 	/**
 	 * The Broadcast Graphics half of the shared sequenced live-state module: what
 	 * its commands mean and how its projection is stored. Sequencing, receipts,
@@ -400,11 +390,25 @@ export function broadcastGraphicsStateService() {
 			commandType as BroadcastGraphicsCommandResult['commandType'],
 		),
 
-		publish: async (result, originConnectionId) => {
+		/**
+		 * The notification announces what the command *changed*, measured against the
+		 * live state it was reduced onto.
+		 *
+		 * Reading the previous state through the module rather than remembering it here
+		 * is what keeps the two halves honest: the merge retry reduces onto a reloaded
+		 * aggregate and a recognised replay onto nothing at all, and a difference
+		 * measured from the wrong one would leave every peer holding a state the server
+		 * does not have — silently, since nothing downstream re-checks it.
+		 */
+		publish: async (result, { originConnectionId, previous }) => {
 			await publishMessage(
 				result.session.eventId,
 				'broadcastGraphicsLiveSession:commandApplied',
-				toCommandAppliedPayload(result),
+				broadcastGraphicsCommandAppliedPayload(
+					result,
+					previous && recoveredBroadcastGraphicsLiveState(previous.currentState),
+					originConnectionId,
+				),
 				originConnectionId,
 			);
 		},

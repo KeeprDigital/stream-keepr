@@ -98,7 +98,24 @@ export interface SequencedLiveStatePort<TRef, TAggregate, TCommand extends Seque
 	projection: (input: SequencedLiveStateProjectionInput<TAggregate, TReduction>) => BatchItem<'sqlite'>;
 	toResult: (aggregate: TAggregate, commandType: string) => TResult;
 	/** Post-commit realtime notification. */
-	publish?: (result: TResult, originConnectionId?: string) => Promise<void>;
+	publish?: (result: TResult, publication: SequencedLiveStatePublication<TAggregate>) => Promise<void>;
+}
+
+/** What a post-commit notification knows beyond the result it is announcing. */
+export interface SequencedLiveStatePublication<TAggregate> {
+	/** Realtime connection that issued the command, for origin echo suppression. */
+	originConnectionId?: string;
+	/**
+	 * The aggregate the command was reduced onto, for a notification that announces
+	 * the *difference* a command made rather than the state it produced.
+	 *
+	 * Absent when there is no such aggregate: a recognised replay is answered with
+	 * whatever the aggregate looks like now, which may be many commands newer than the
+	 * one being replayed, so nothing here is the state that command was reduced onto.
+	 * A publisher that cannot describe a difference says so and lets its peers reload,
+	 * which every live-state client already knows how to do.
+	 */
+	previous?: TAggregate;
 }
 
 /**
@@ -153,14 +170,26 @@ export function createSequencedLiveState<TRef, TAggregate, TCommand extends Sequ
 	}
 
 	/**
-	 * Write the reduction and its receipt as one indivisible batch.
+	 * Write the reduction and its receipt as one indivisible batch, and answer with
+	 * the aggregate the result was actually computed from.
 	 *
 	 * Assembling the batch here rather than handing statements to the feature is
 	 * what makes the atomicity an enforced invariant instead of a documented one:
 	 * a receipt can never be committed without its projection, nor survive a lost
 	 * compare-and-swap race.
+	 *
+	 * The two halves of the answer are reported together because they can come apart.
+	 * A concurrent writer that committed this very command ID turns the attempt into a
+	 * replay, and the result is then whatever the aggregate looks like now rather than
+	 * the reduction of the one that was loaded — so there is no aggregate to name, and
+	 * a notification measuring a difference from the loaded one would be measuring
+	 * across commands it knows nothing about.
 	 */
-	async function commitOnce(ref: TRef, aggregate: TAggregate, command: TCommand): Promise<TResult> {
+	async function commitOnce(
+		ref: TRef,
+		aggregate: TAggregate,
+		command: TCommand,
+	): Promise<{ result: TResult; previous?: TAggregate }> {
 		const nextSequence = port.sequenceOf(aggregate) + 1;
 		const reduction = port.reduce(aggregate, command);
 		const receipt: CommandReceipt = {
@@ -189,7 +218,7 @@ export function createSequencedLiveState<TRef, TAggregate, TCommand extends Sequ
 			if (!committed)
 				throw new StateConflictError(port.aggregateLabel, port.aggregateIdOf(ref));
 
-			return port.toResult(committed, command.type);
+			return { result: port.toResult(committed, command.type), previous: aggregate };
 		}
 		catch (error) {
 			// A concurrent writer may have committed this very command ID between the
@@ -200,7 +229,7 @@ export function createSequencedLiveState<TRef, TAggregate, TCommand extends Sequ
 				rejectMismatchedReplay(raced, command);
 				const replayed = await currentSnapshot(ref, raced.commandType);
 				if (replayed)
-					return replayed;
+					return { result: replayed };
 			}
 			throw error;
 		}
@@ -217,7 +246,10 @@ export function createSequencedLiveState<TRef, TAggregate, TCommand extends Sequ
 			const replayed = await currentSnapshot(ref, receipt.commandType);
 			if (!replayed)
 				notFound();
-			return await announce(replayed, options);
+			// Deliberately announced without a `previous`: the snapshot answering this
+			// replay may be newer than the command being replayed, so there is no state
+			// it was reduced onto for a difference to be measured from.
+			return await announce(replayed, options, undefined);
 		}
 
 		const aggregate = await port.load(ref);
@@ -226,9 +258,9 @@ export function createSequencedLiveState<TRef, TAggregate, TCommand extends Sequ
 
 		port.admit(aggregate, command);
 
-		let result: TResult;
+		let committed: { result: TResult; previous?: TAggregate };
 		try {
-			result = await commitOnce(ref, aggregate, command);
+			committed = await commitOnce(ref, aggregate, command);
 		}
 		catch (error) {
 			if (!port.isMergeable(command))
@@ -247,15 +279,22 @@ export function createSequencedLiveState<TRef, TAggregate, TCommand extends Sequ
 			// admission rejects — silently, because nothing else re-checks it.
 			port.admit(latest, command);
 
-			result = await commitOnce(ref, latest, command);
+			// The merge retry reduces onto the reloaded aggregate, so that — not the one
+			// this attempt started from — is what a notification's difference is measured
+			// against.
+			committed = await commitOnce(ref, latest, command);
 		}
 
-		return await announce(result, options);
+		return await announce(committed.result, options, committed.previous);
 	}
 
-	async function announce(result: TResult, options: SequencedLiveStateExecuteOptions): Promise<TResult> {
+	async function announce(
+		result: TResult,
+		options: SequencedLiveStateExecuteOptions,
+		previous: TAggregate | undefined,
+	): Promise<TResult> {
 		if (options.publish && port.publish)
-			await port.publish(result, options.originConnectionId);
+			await port.publish(result, { originConnectionId: options.originConnectionId, previous });
 		return result;
 	}
 

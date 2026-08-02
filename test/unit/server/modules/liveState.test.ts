@@ -351,7 +351,89 @@ describe('sequenced live state', () => {
 
 			await liveState.execute(REF, set('cmd-1', 1), { publish: true, originConnectionId: 'origin-1' });
 
-			expect(port.publish).toHaveBeenCalledWith(expect.objectContaining({ sequence: 4 }), 'origin-1');
+			expect(port.publish).toHaveBeenCalledWith(
+				expect.objectContaining({ sequence: 4 }),
+				expect.objectContaining({ originConnectionId: 'origin-1' }),
+			);
+		});
+
+		it('tells the notification which aggregate the command was reduced onto', async () => {
+			// A notification that announces the difference a command made needs the state
+			// it was measured from, and only this module knows which one that was.
+			const port = createPort();
+			stageSuccessfulCommit(port);
+			const liveState = createSequencedLiveState(port);
+
+			await liveState.execute(REF, set('cmd-1', 1), { publish: true });
+
+			expect(port.publish).toHaveBeenCalledWith(
+				expect.anything(),
+				expect.objectContaining({ previous: counter({ sequence: 3, total: 10 }) }),
+			);
+		});
+
+		it('names the aggregate a merge retry re-reduced onto, not the one that lost', async () => {
+			// The first attempt's aggregate is not the state the committed reduction was
+			// computed from, so a difference measured against it would leave every peer
+			// holding a state the store does not have.
+			const port = createPort({
+				load: vi.fn()
+					.mockResolvedValueOnce(counter({ sequence: 3, total: 10 }))
+					.mockResolvedValueOnce(counter({ sequence: 4, total: 100 })),
+			});
+			mockDb.batch
+				.mockResolvedValueOnce([[], [], []])
+				.mockImplementation(async () => {
+					const [input] = vi.mocked(port.projection).mock.calls.at(-1)!;
+					return [[], [], [{ ...input.reduction, sequence: input.nextSequence }]];
+				});
+			const liveState = createSequencedLiveState(port);
+
+			await liveState.execute(REF, add('cmd-1', 5), { publish: true });
+
+			expect(port.publish).toHaveBeenCalledWith(
+				expect.anything(),
+				expect.objectContaining({ previous: counter({ sequence: 4, total: 100 }) }),
+			);
+		});
+
+		it('names no aggregate when a concurrent writer turned the command into a replay', async () => {
+			// The unique receipt index turned the race into a failure, and the answer is
+			// whatever the aggregate looks like now — which may be several commands past
+			// the one this attempt loaded. A difference measured from that stale load
+			// would omit an entry changed and changed back in between, and a peer sitting
+			// between the two would apply it and keep the value the store no longer has.
+			const port = createPort({ load: vi.fn(async () => counter({ sequence: 9, total: 42 })) });
+			mockDb.batch.mockImplementation(async () => {
+				mockDb.query.liveStateCommandReceipts.findFirst.mockResolvedValue({
+					commandType: 'Set',
+					contentKey: commandContentKey('Set', { amount: 42 }),
+				});
+				throw new Error('UNIQUE constraint failed');
+			});
+			const liveState = createSequencedLiveState(port);
+
+			await liveState.execute(REF, set('cmd-1', 42), { publish: true });
+
+			expect(port.publish).toHaveBeenCalledWith(
+				expect.anything(),
+				expect.objectContaining({ previous: undefined }),
+			);
+		});
+
+		it('names no aggregate at all when it is answering a recognised replay', async () => {
+			// The snapshot answering a replay may be many commands newer than the command
+			// being replayed, so nothing here is the state it was reduced onto.
+			mockDb.query.liveStateCommandReceipts.findFirst.mockResolvedValue({
+				commandType: 'Add',
+				contentKey: commandContentKey('Add', { amount: 5 }),
+			});
+			const port = createPort();
+			const liveState = createSequencedLiveState(port);
+
+			await liveState.execute(REF, add('cmd-1', 5), { publish: true });
+
+			expect(port.publish).toHaveBeenCalledWith(expect.anything(), { previous: undefined, originConnectionId: undefined });
 		});
 
 		it('stays silent for writes that accompany their own notification', async () => {
