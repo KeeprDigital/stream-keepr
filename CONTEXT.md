@@ -86,7 +86,8 @@ The claim is checked inside the reduction rather than before it, so a command th
 _Avoid_: owns array, field mask, declared ownership.
 
 **Sequenced Live State**:
-The server-side module owning the invariant "one authoritative order of accepted commands per live aggregate." Loads an aggregate and executes a command; owns monotonic sequencing, compare-and-swap protection, Command Receipts, and post-commit publication. Domain reducers and merge policies stay with the feature that uses it.
+The server-side module owning the invariant "one authoritative order of accepted commands per live aggregate." Loads an aggregate and executes a command; owns monotonic sequencing, compare-and-swap protection, Command Receipts, and the decision to announce a committed command. Domain reducers, merge policies, and what a notification says stay with the feature that uses it.
+It tells the announcement which aggregate the command was reduced onto, because only this module knows: a merge retry re-reduces onto a reloaded aggregate, and a command recognised as a repeat is answered with a snapshot that may be newer than the command being repeated, so for that one there is no such aggregate to name.
 _Avoid_: event store, event sourcing, command bus, write-ahead log.
 
 **Command Receipt**:
@@ -111,6 +112,11 @@ A Screen in Broadcast Graphics mode whose output composes an ordered stack of co
 **Broadcast Graphics Live Session**:
 The continuous playout epoch of a Broadcast Graphics Screen. It survives reloads, disconnections, and restarts, but ends when the Screen changes away from Broadcast Graphics mode or its live state is explicitly reset.
 Commands from an ended Broadcast Graphics Live Session can never affect a later one.
+
+**Broadcast Graphics Live State Change**:
+What one accepted command changed about a **Broadcast Graphics Live Session**'s live state, named per **Broadcast Graphic** for each of the maps live state is keyed by, and carried by the realtime notification instead of the live state itself.
+A peer holding the sequence immediately before applies it and lands on exactly the state the authoritative side committed; a peer that is offered none reloads the authoritative snapshot, which is what it already does for a sequence gap. It is offered none when the change is too large to deliver, when the command was a recognised repeat, and when live state holds something a change cannot describe — so the notification is bounded whatever the show's size, and the settled rule that realtime is notification and snapshots are authority is kept without a reload between an operator pressing Take and program showing it.
+_Avoid_: patch, delta, diff, partial state, incremental update.
 
 **Broadcast Graphics Recovery Fault**:
 Why the durable live state behind a Broadcast Graphics Live Session snapshot could not be trusted, when it could not: it is missing, it is corrupt — present but not the shape of live state — or it is incompatible, the right shape holding a value of a type this build cannot interpret, which is what state written under a different vocabulary looks like from here. It carries the detail of what could not be read so an operator can report it.

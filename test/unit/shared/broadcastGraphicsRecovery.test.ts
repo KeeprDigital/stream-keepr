@@ -145,6 +145,21 @@ describe('broadcastGraphicsRecovery', () => {
 				playout: { slate: { onAir: true, effectiveStartedAt: 'soon', cut: false } },
 				inputs: {},
 			}],
+			// A Graphic Source Selection stores an entity id and nothing else — clearing
+			// one deletes its key rather than storing an empty value — so anything that is
+			// not a number came from a vocabulary this build cannot read. Left unjudged it
+			// would not fail loudly: the selection would resolve no entity, and every
+			// Graphic Input Binding reading it would go quietly unavailable on air.
+			['a Graphic Source Selection that does not name an entity', {
+				playout: {},
+				inputs: {},
+				sources: { slate: { player: 'ava' } },
+			}],
+			['a Graphic Source Selection that is empty rather than absent', {
+				playout: {},
+				inputs: {},
+				sources: { slate: { player: null } },
+			}],
 		])('reports %s as incompatible', (_label, raw) => {
 			expect(broadcastGraphicsRecoveryFault(raw)?.reason).toBe('incompatible');
 		});

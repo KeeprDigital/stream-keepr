@@ -113,6 +113,41 @@ function inputsFault(inputs: unknown): BroadcastGraphicsRecoveryFault | null {
 }
 
 /**
+ * The third map, judged for the same reason as the other two.
+ *
+ * `sources` is a field this module *reads* — it normalises it on the way out — so
+ * leaving it unjudged was not the deliberate tolerance of unknown fields above but a
+ * gap. A record here is a Broadcast Graphic's Graphic Source Selections, and every
+ * stored selection is an entity id: clearing one deletes its key rather than storing
+ * an empty value, so a selection that is not a number is a value written under a
+ * vocabulary this build cannot interpret.
+ *
+ * Unjudged, a null record read as no selections at all — every binding through it
+ * silently unavailable on a live show — which is precisely the salvaged-half-a-state
+ * answer the module refuses everywhere else. It also broke a promise another module
+ * makes on this one's behalf: `BroadcastGraphicsLiveStateChange` uses `null` to mean
+ * "this entry is gone", which is sound only while no entry can itself be null. See
+ * #168.
+ */
+function sourcesFault(sources: unknown): BroadcastGraphicsRecoveryFault | null {
+	if (sources === undefined || sources === null)
+		return null;
+	if (!isRecord(sources))
+		return fault('corrupt', 'the Graphic Source Selection map is not a set of Broadcast Graphic records');
+
+	for (const [graphicId, record] of Object.entries(sources)) {
+		if (!isRecord(record))
+			return fault('corrupt', `the Graphic Source Selection record for ${graphicId} is not a record`);
+		for (const [sourceKey, selection] of Object.entries(record)) {
+			if (!Number.isFinite(selection))
+				return fault('incompatible', `the ${sourceKey} Graphic Source Selection for ${graphicId} does not name an entity`);
+		}
+	}
+
+	return null;
+}
+
+/**
  * Judge one durable live state, or report why it cannot be trusted.
  *
  * Answering `null` is the claim that every field this build reads is present in a
@@ -124,7 +159,7 @@ export function broadcastGraphicsRecoveryFault(raw: unknown): BroadcastGraphicsR
 	if (!isRecord(raw))
 		return fault('corrupt', 'the durable live state is not a live state record');
 
-	return playoutFault(raw.playout) ?? inputsFault(raw.inputs);
+	return playoutFault(raw.playout) ?? inputsFault(raw.inputs) ?? sourcesFault(raw.sources);
 }
 
 /**
