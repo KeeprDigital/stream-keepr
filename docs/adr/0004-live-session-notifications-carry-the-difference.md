@@ -1,4 +1,4 @@
-# ADR-0003: A Broadcast Graphics Live Session notification carries the difference, not the state and not only a name
+# ADR-0004: A Broadcast Graphics Live Session notification carries the difference, not the state and not only a name
 
 - **Status**: Accepted
 - **Date**: 2026-08-02
