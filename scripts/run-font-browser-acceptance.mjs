@@ -37,6 +37,10 @@ import {
 	serveAcceptanceRoutes,
 	verdictFailureCode,
 } from './graphics-acceptance/chromium.mjs';
+import {
+	macintoshCmapLanguage,
+	withCmapLanguages,
+} from './graphics-acceptance/font-cmap-variants.mjs';
 import { runAcceptanceHarness } from './graphics-acceptance/harness.mjs';
 import {
 	acceptanceOrigin,
@@ -58,33 +62,24 @@ const library = deployed || process.argv.includes('--library');
 const fromRepository = path => new URL(`../${path}`, import.meta.url);
 
 /**
- * `public/fonts/mplantin.ttf` with every cmap subtable's language restated by
- * platform, and the table checksum fixed up so the bytes stay self-consistent.
+ * `public/fonts/mplantin.ttf` with its cmap subtable languages restated.
+ *
+ * The restating itself lives in `graphics-acceptance/font-cmap-variants.mjs`,
+ * shared with the `static-font-v1` unit tests so both sides build byte-identical
+ * faces from one implementation. That identity is the whole point of the pairing:
+ * the profile accepts these exact bytes server-side and this run loads them in a
+ * browser, and two copies of the builder would let those drift apart without
+ * anything failing (#153).
  *
  * Built here rather than committed for the same reason the OTF face is not
  * vendored: it exists only to be loaded by this run, and a synthetic font in
  * `public/` would be a shipped asset nothing serves.
  */
 async function cmapLanguageVariant(languageForPlatform) {
-	const bytes = new Uint8Array(await readFile(fromRepository('public/fonts/mplantin.ttf')));
-	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-	let entry;
-	for (let index = 0; index < view.getUint16(4); index++) {
-		const candidate = 12 + index * 16;
-		if (String.fromCharCode(...bytes.subarray(candidate, candidate + 4)) === 'cmap')
-			entry = candidate;
-	}
-	const cmap = view.getUint32(entry + 8);
-	const length = view.getUint32(entry + 12);
-	for (let index = 0; index < view.getUint16(cmap + 2); index++) {
-		const record = cmap + 4 + index * 8;
-		view.setUint16(cmap + view.getUint32(record + 4) + 4, languageForPlatform(view.getUint16(record)));
-	}
-	let sum = 0;
-	for (let offset = 0; offset < Math.ceil(length / 4) * 4; offset += 4)
-		sum = (sum + view.getUint32(cmap + offset)) >>> 0;
-	view.setUint32(entry + 4, sum);
-	return bytes;
+	return withCmapLanguages(
+		new Uint8Array(await readFile(fromRepository('public/fonts/mplantin.ttf'))),
+		languageForPlatform,
+	);
 }
 
 /**
@@ -127,7 +122,7 @@ async function serveLocally() {
 		'/_acceptance/fonts/otf-face': () =>
 			file('node_modules/mana-font/docs/fonts/beleren.otf', 'font/otf'),
 		'/_acceptance/fonts/mac-cmap-language-face': async () => ({
-			body: await cmapLanguageVariant(platform => (platform === 1 ? 1 : 0)),
+			body: await cmapLanguageVariant(macintoshCmapLanguage),
 			type: 'font/ttf',
 		}),
 	});

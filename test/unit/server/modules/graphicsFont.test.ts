@@ -2,6 +2,10 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { processStaticFont } from '~~/server/modules/graphics-asset-library/font';
+import {
+	macintoshCmapLanguage,
+	withCmapLanguages,
+} from '../../../../scripts/graphics-acceptance/font-cmap-variants.mjs';
 
 // Specimen thumbnails are hundreds of kilobytes, so deep-equalling them
 // element by element dominates these tests. Compare their digests instead:
@@ -131,39 +135,6 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 		});
 	});
 
-	/**
-	 * Restate every cmap subtable's language by platform, and fix up the checksum.
-	 *
-	 * The checksum matters: the profile validates the SFNT directory before anything
-	 * reads a table, so an unrestated edit is refused as `font-checksum-invalid` and
-	 * proves nothing about the cmap rule.
-	 */
-	function withCmapLanguages(source: Uint8Array, languageForPlatform: (platform: number) => number) {
-		const bytes = Uint8Array.from(source);
-		const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-		const tableCount = view.getUint16(4);
-		let entry: number | undefined;
-		for (let index = 0; index < tableCount; index++) {
-			const candidate = 12 + index * 16;
-			if (new TextDecoder().decode(bytes.subarray(candidate, candidate + 4)) === 'cmap')
-				entry = candidate;
-		}
-		if (entry === undefined)
-			throw new Error('Expected a cmap table');
-		const cmap = view.getUint32(entry + 8);
-		const length = view.getUint32(entry + 12);
-		const subtableCount = view.getUint16(cmap + 2);
-		for (let index = 0; index < subtableCount; index++) {
-			const record = cmap + 4 + index * 8;
-			view.setUint16(cmap + view.getUint32(record + 4) + 4, languageForPlatform(view.getUint16(record)));
-		}
-		let sum = 0;
-		for (let offset = 0; offset < Math.ceil(length / 4) * 4; offset += 4)
-			sum = (sum + view.getUint32(cmap + offset)) >>> 0;
-		view.setUint32(entry + 4, sum);
-		return bytes;
-	}
-
 	async function processTtf(bytes: Uint8Array) {
 		return await processStaticFont(bytes, {
 			sourceFileName: 'mplantin.ttf',
@@ -220,9 +191,7 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 	it('accepts a Macintosh-platform cmap language, which OpenType defines there', async () => {
 		const source = new Uint8Array(await readFile('public/fonts/mplantin.ttf'));
 
-		const accepted = await processTtf(
-			withCmapLanguages(source, platform => (platform === 1 ? 1 : 0)),
-		);
+		const accepted = await processTtf(withCmapLanguages(source, macintoshCmapLanguage));
 
 		expect(accepted.report).toMatchObject({ outcome: 'accepted', issues: [] });
 	});

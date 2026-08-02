@@ -325,14 +325,29 @@ challenge with genuine rendered-pixel proofs, and publishes the revision. It
 then loads that published revision back through the delivery route that will
 serve it on air. The face is trashed on the way out, pass or fail.
 
-`pnpm test:browser:fonts` without `--library` skips all of that and proves only
-the browser facts — that Chromium loads WOFF2, WOFF, TTF, and OTF and renders
-their glyphs, and that a face which would silently fall back is refused. That
-mode needs no installation, which is why it runs in the ordinary suite, and it
-is where the OTF face is covered: the installation ships no OTF, and vendoring
-a proprietary typeface solely to be downloaded by a test would republish it for
-no gain. Use `pnpm test:browser:fonts:library` to run the library face against
-a local `pnpm preview`.
+`pnpm test:browser:fonts` without `--library` skips all of that and proves the
+browser facts alone. Four of them:
+
+- Chromium loads WOFF2, WOFF, TTF, and OTF and renders their glyphs.
+- A face that would silently fall back is refused rather than accepted
+  (`font-silent-fallback-accepted`).
+- Every face the `static-font-v1` profile rejects is refused by the browser too.
+  The manifest's `refusedFaces` names them, and one loading here is
+  `font-refused-face-loaded` — a server-side check and a browser disagreeing
+  about the same bytes.
+- Every face the profile deliberately **permits** despite a superficially
+  similar defect really does load and render. The run builds one for itself:
+  `public/fonts/mplantin.ttf` with only its Macintosh-platform cmap language
+  left non-zero, which OpenType defines there. It is served as an ordinary face,
+  so a profile rule that widened back into refusing it fails here (#153).
+
+That mode needs no installation, which is why it runs in the ordinary suite, and
+it is where the OTF face is covered: the installation ships no OTF, and
+vendoring a proprietary typeface solely to be downloaded by a test would
+republish it for no gain. The Macintosh-language face is built at run time for
+the same reason — a synthetic font in `public/` would be a shipped asset nothing
+serves. Use `pnpm test:browser:fonts:library` to run the library face against a
+local `pnpm preview`.
 
 ## What the evidence may say
 
