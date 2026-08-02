@@ -69,8 +69,7 @@ export function useGraphicsAdminReading<Reading>(options: {
 	}
 
 	function statusOf(caught: unknown) {
-		return (caught as { statusCode?: number; status?: number } | null)?.statusCode
-			?? (caught as { status?: number } | null)?.status;
+		return failureStatus(caught);
 	}
 
 	function isAuthorizationFailure(caught: unknown) {

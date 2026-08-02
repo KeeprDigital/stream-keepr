@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { GRAPHICS_MULTIPART_PART_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 
 /**
@@ -449,6 +450,154 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			);
 			expect(response.status).toBe(200);
 			expect(new Uint8Array(await response.arrayBuffer())).toEqual(fontBytes);
+		});
+	});
+
+	/**
+	 * What per-session ownership costs, at the moment it costs the most.
+	 *
+	 * This is #176's scenario played out through the real routes: a resumable
+	 * transfer half sent, and the session it was sent under gone.
+	 *
+	 * **What these cases cover, and what they do not.** They pin the *decision* —
+	 * that ownership is per-session and what that costs — not the sliding lifetime
+	 * this branch added; they pass identically against a session module with the
+	 * sliding removed, because nothing here advances a clock. Sliding is proved in
+	 * `test/unit/server/modules/graphicsAuthorSession.test.ts`, where the clock is
+	 * controlled directly; what that leaves uncovered is wiring rather than logic,
+	 * since `h3` and `hub:kv` are both substituted there. A Worker's clock cannot be
+	 * advanced from here, and the only wire-observable trace of a slide — a
+	 * refreshed `Set-Cookie` — appears only once a session is over a minute stale,
+	 * which a session minted seconds ago in `beforeAll` never is.
+	 *
+	 * Three separate facts follow, and only the first two are losses:
+	 *
+	 * - the transfer stops with `401`, not with a partial success;
+	 * - reloading does not recover it, because a new session is a new author and
+	 *   the operation belongs to the old one, so it is a `404` to the person who
+	 *   started it. ADR-0003 records why that is kept;
+	 * - the durable checkpoint itself is untouched. Nothing about the transfer was
+	 *   lost except who was allowed to continue it, which is what makes an idle
+	 *   session lifetime a sufficient answer rather than a partial one.
+	 */
+	describe('a graphics author session that lapses mid-transfer', () => {
+		/**
+		 * A cookie of the shape the browser keeps and the library has forgotten.
+		 *
+		 * A token that was never minted, not one that has expired — the two are not
+		 * the same event, and the honest claim is narrower than "this is what expiry
+		 * looks like". What makes it a faithful proxy is that both reach the library
+		 * the same way: `readSession` looks the token up, gets nothing back, and
+		 * refuses. An expired session arrives there because KV dropped its entry;
+		 * this one because there was never an entry to drop. From the route's side
+		 * they are indistinguishable, which is what these cases are about.
+		 */
+		const lapsedCookie
+			= 'stream_keepr_graphics_author_session=a7f1c0d2-lapsed-session-token-no-longer-stored';
+
+		const bytes = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 1);
+		let interruptedId: string;
+
+		beforeAll(async () => {
+			const initiated = await $fetch<GraphicsIngestionOperation>(
+				'/api/graphics-assets/ingestion-operations',
+				{
+					method: 'POST',
+					headers: { cookie: authorCookie },
+					body: {
+						idempotencyKey: 'authorisation-lapsed-session-transfer',
+						name: 'Authorisation lapsed session transfer',
+						declaredMime: 'image/png',
+						declaredByteLength: bytes.byteLength,
+					},
+				},
+			);
+			interruptedId = initiated.id;
+			const started = await $fetch<GraphicsIngestionOperation>(
+				`/api/graphics-assets/ingestion-operations/${interruptedId}/multipart`,
+				{ method: 'POST', headers: { cookie: authorCookie } },
+			);
+			expect(started.transfer?.partCount).toBe(2);
+			const firstPart = await fetch(
+				`/api/graphics-assets/ingestion-operations/${interruptedId}/multipart/parts/1`,
+				{
+					method: 'PUT',
+					headers: { 'cookie': authorCookie, 'content-type': 'application/octet-stream' },
+					body: bytes.subarray(0, GRAPHICS_MULTIPART_PART_BYTES),
+				},
+			);
+			expect(firstPart.status).toBe(200);
+		});
+
+		it('refuses the next part rather than accepting it from nobody', async () => {
+			const response = await fetch(
+				`/api/graphics-assets/ingestion-operations/${interruptedId}/multipart/parts/2`,
+				{
+					method: 'PUT',
+					headers: { 'cookie': lapsedCookie, 'content-type': 'application/octet-stream' },
+					body: bytes.subarray(GRAPHICS_MULTIPART_PART_BYTES),
+				},
+			);
+			expect(response.status).toBe(401);
+		});
+
+		it('is not recovered by the reload that mints a new session', async () => {
+			const reloadedCookie = await createGraphicsAuthorSessionCookie();
+			expect(reloadedCookie).not.toBe(authorCookie);
+
+			const response = await fetch(
+				`/api/graphics-assets/ingestion-operations/${interruptedId}`,
+				{ headers: { cookie: reloadedCookie } },
+			);
+			expect(response.status).toBe(404);
+		});
+
+		it('loses nothing but the identity allowed to continue it', async () => {
+			await expect($fetch<GraphicsIngestionOperation>(
+				`/api/graphics-assets/ingestion-operations/${interruptedId}`,
+				{ headers: { cookie: authorCookie } },
+			)).resolves.toMatchObject({
+				stage: 'transferring',
+				transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+				transfer: {
+					completedParts: [{
+						partNumber: 1,
+						partIdentity: `${interruptedId}:1`,
+						byteLength: GRAPHICS_MULTIPART_PART_BYTES,
+					}],
+				},
+			});
+		});
+
+		/**
+		 * The session that started it can still finish it, from the verified part
+		 * rather than from the beginning. The bytes are zero-filled, so the library
+		 * rejects them on their merits — which is the point: the transfer completed
+		 * and the operation reached a terminal stage of its own, releasing its
+		 * staged reservation instead of leaving 16 MiB parked in the Graphics
+		 * Staging Allowance for this suite's neighbours.
+		 */
+		it('is resumed to a terminal outcome by the session that started it', async () => {
+			const finalPart = await fetch(
+				`/api/graphics-assets/ingestion-operations/${interruptedId}/multipart/parts/2`,
+				{
+					method: 'PUT',
+					headers: { 'cookie': authorCookie, 'content-type': 'application/octet-stream' },
+					body: bytes.subarray(GRAPHICS_MULTIPART_PART_BYTES),
+				},
+			);
+			expect(finalPart.status).toBe(200);
+
+			const completion = await fetch(
+				`/api/graphics-assets/ingestion-operations/${interruptedId}/multipart/complete`,
+				{ method: 'POST', headers: { cookie: authorCookie } },
+			);
+			expect(completion.status).toBe(200);
+			expect(await completion.json()).toMatchObject({
+				stage: 'failed',
+				transferredByteLength: bytes.byteLength,
+				report: { outcome: 'rejected' },
+			});
 		});
 	});
 });

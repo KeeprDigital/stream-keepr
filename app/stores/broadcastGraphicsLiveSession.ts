@@ -31,6 +31,7 @@ import {
 	broadcastGraphicPlayoutState,
 	broadcastGraphicRenderedInputs,
 	broadcastGraphicSourceSelections,
+	changedBroadcastGraphicsLiveState,
 	createInitialBroadcastGraphicsLiveState,
 	graphicInputTraces,
 	onAirBroadcastGraphicIds,
@@ -47,6 +48,12 @@ import { randomCommandId } from '~~/shared/utils/uuid';
  * authoritative snapshot rather than guessing what it missed. That is what makes
  * a reconnecting Live Control and a reconnecting Screen Output converge on the
  * same state.
+ *
+ * A notification carries the difference one command made, not the live state it
+ * produced, so applying one is a merge into what this client already holds. There
+ * are therefore two ways to fall behind rather than one — a sequence this client
+ * did not see, and a notification that carries no difference to apply — and both
+ * resolve the same way, by reloading.
  */
 export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphicsLiveSession', () => {
 	const repository = useBroadcastGraphicsLiveSessionRepository();
@@ -719,9 +726,9 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		}
 
 		// While a recovery fault is held, no notification may be applied in place.
-		// The fault is a property of the durable state, and a notification carries
-		// only the state — so patching incrementally would advance the sequence while
-		// leaving the fault asserted forever. That is the worst possible reading for
+		// The fault is a property of the durable state and no notification carries it,
+		// so patching incrementally would advance the sequence while leaving the fault
+		// asserted forever. That is the worst possible reading for
 		// an operator: the colleague's Take has recovered the session and put graphics
 		// on air, and this client would still be showing "nothing is on air, take
 		// something" over a live show. The snapshot carries both facts together, so
@@ -740,10 +747,21 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			return;
 		}
 
+		// A notification that carries no change is not one to ignore: the order did
+		// advance, and this client cannot say to what. That happens when the difference
+		// was too large to deliver and when a recognised retry was answered with a
+		// snapshot newer than the command it replayed. Either way the snapshot is the
+		// only thing that can say what the show looks like now — the same answer a
+		// sequence gap already gets.
+		if (!data.change) {
+			await loadSession(data.eventId, data.screenId);
+			return;
+		}
+
 		cacheSession({
 			...known,
 			sequence: data.sequence,
-			currentState: data.currentState,
+			currentState: changedBroadcastGraphicsLiveState(known.currentState, data.change),
 			updatedAt: new Date(data.timestamp),
 		});
 	}

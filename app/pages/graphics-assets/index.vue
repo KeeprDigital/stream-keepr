@@ -28,6 +28,7 @@ definePageMeta({
 });
 
 const eventStore = useEventStore();
+const authorSession = useGraphicsAuthorSession();
 const search = ref('');
 const lifecycleState = ref<GraphicAssetLifecycleState>('active');
 const lifecycleViews: {
@@ -379,9 +380,10 @@ async function runLifecycleAction(
 		await refresh();
 	}
 	catch (caught) {
-		lifecycleErrorByAssetId[asset.id] = caught instanceof Error
-			? caught.message
-			: 'Graphic Asset lifecycle action failed.';
+		lifecycleErrorByAssetId[asset.id] = authorSession.describeFailure(
+			caught,
+			'Graphic Asset lifecycle action failed.',
+		);
 	}
 	finally {
 		lifecyclePendingAssetId.value = null;
@@ -422,9 +424,10 @@ async function saveMetadata(asset: GraphicAsset) {
 		await refresh();
 	}
 	catch (caught) {
-		metadataError.value = caught instanceof Error
-			? caught.message
-			: 'Graphic Asset metadata could not be updated.';
+		metadataError.value = authorSession.describeFailure(
+			caught,
+			'Graphic Asset metadata could not be updated.',
+		);
 	}
 	finally {
 		metadataPending.value = false;
@@ -532,9 +535,10 @@ async function replaceAsset(asset: GraphicAsset) {
 		}
 	}
 	catch (caught) {
-		replacementError.value = caught instanceof Error
-			? caught.message
-			: 'Graphic Asset replacement failed.';
+		replacementError.value = authorSession.describeFailure(
+			caught,
+			'Graphic Asset replacement failed.',
+		);
 	}
 	finally {
 		replacementPending.value = false;
@@ -581,9 +585,21 @@ function operationMatchesSelectedFile(
 		&& (!operation.declaredMime || !file.type || operation.declaredMime === file.type);
 }
 
+/**
+ * The status travels with the failure, not only in its sentence.
+ *
+ * These branches are hand-rolled `fetch` rather than `$fetch`, so nothing
+ * attaches a status for them. Without one a refused request is a string that
+ * reads like every other string, and the surface cannot tell a lapsed graphics
+ * author session from a byte store that was briefly unavailable.
+ */
 async function operationFromResponse(response: Response, action: string) {
-	if (!response.ok)
-		throw new Error(`${action} failed with status ${response.status}`);
+	if (!response.ok) {
+		throw Object.assign(
+			new Error(`${action} failed with status ${response.status}`),
+			{ status: response.status },
+		);
+	}
 	return await response.json() as GraphicsIngestionOperation;
 }
 
@@ -634,7 +650,10 @@ async function transferMultipartGraphicAsset(
 					break;
 				}
 				catch (caught) {
-					if (attempt === transfer.maximumPartAttempts)
+					// A part refused for want of an author will be refused again by
+					// every remaining attempt, and the operation it belongs to is
+					// already unreachable. Stop rather than spend the attempts.
+					if (graphicsAuthorSessionLapsed(caught) || attempt === transfer.maximumPartAttempts)
 						throw caught;
 				}
 			}
@@ -704,7 +723,7 @@ async function uploadGraphicAsset() {
 		await refreshAfterTerminalOperation();
 	}
 	catch (caught) {
-		uploadError.value = caught instanceof Error ? caught.message : 'Graphic Asset upload failed.';
+		uploadError.value = authorSession.describeFailure(caught, 'Graphic Asset upload failed.');
 	}
 	finally {
 		uploadPending.value = false;
@@ -727,8 +746,11 @@ async function confirmStagedGraphicAssetSource(operation: GraphicsIngestionOpera
 		`/api/graphics-assets/ingestion-operations/${operation.id}/staged-source`,
 	);
 	if (!response.ok) {
-		throw new Error(
-			`The staged Graphic Asset source could not be read for confirmation (status ${response.status}).`,
+		throw Object.assign(
+			new Error(
+				`The staged Graphic Asset source could not be read for confirmation (status ${response.status}).`,
+			),
+			{ status: response.status },
 		);
 	}
 	const staged = await response.blob();
@@ -794,9 +816,10 @@ async function copyRemoteGraphicAssetSource() {
 		await refreshAfterTerminalOperation();
 	}
 	catch (caught) {
-		remoteCopyError.value = caught instanceof Error
-			? caught.message
-			: 'The approved remote Graphic Asset copy failed.';
+		remoteCopyError.value = authorSession.describeFailure(
+			caught,
+			'The approved remote Graphic Asset copy failed.',
+		);
 	}
 	finally {
 		remoteCopyPending.value = false;
@@ -814,9 +837,10 @@ async function confirmStagedSource() {
 		await refreshAfterTerminalOperation();
 	}
 	catch (caught) {
-		remoteCopyError.value = caught instanceof Error
-			? caught.message
-			: 'The staged Graphic Asset source could not be confirmed.';
+		remoteCopyError.value = authorSession.describeFailure(
+			caught,
+			'The staged Graphic Asset source could not be confirmed.',
+		);
 	}
 	finally {
 		remoteCopyPending.value = false;
@@ -864,7 +888,7 @@ async function retryOperation() {
 		await refreshAfterTerminalOperation();
 	}
 	catch (caught) {
-		uploadError.value = caught instanceof Error ? caught.message : 'Graphic Asset retry failed.';
+		uploadError.value = authorSession.describeFailure(caught, 'Graphic Asset retry failed.');
 	}
 	finally {
 		uploadPending.value = false;
@@ -892,7 +916,7 @@ async function cancelOperation() {
 		await refreshCapacity();
 	}
 	catch (caught) {
-		uploadError.value = caught instanceof Error ? caught.message : 'Cancellation failed.';
+		uploadError.value = authorSession.describeFailure(caught, 'Cancellation failed.');
 	}
 	finally {
 		uploadPending.value = false;
@@ -933,8 +957,20 @@ onMounted(async () => {
 			}
 			return;
 		}
-		catch {
+		catch (caught) {
+			// The pointer names something unreachable either way, so it goes. What must
+			// not go with it is the news: this is the exact moment per-session ownership
+			// costs an author something (ADR-0003), and swallowing it left the workspace
+			// looking as though there had never been an upload at all.
 			localStorage.removeItem(operationStorageKey);
+			uploadError.value = authorSession.describeFailure(
+				caught,
+				'The Graphic Asset upload from your last visit could not be reconnected.',
+			);
+			if (!authorSession.lapsed.value) {
+				uploadError.value
+					= `The Graphic Asset upload from your last visit could not be reconnected — ${uploadError.value}`;
+			}
 		}
 	}
 
@@ -1038,6 +1074,27 @@ onMounted(async () => {
 				<p>Storage capacity could not be loaded — {{ capacityError.message }}</p>
 			</UAlert>
 
+			<UAlert
+				v-if="authorSession.lapsed.value"
+				color="error"
+				variant="soft"
+				icon="i-lucide-user-x"
+			>
+				<p class="font-medium">
+					{{ authorSession.lapsedNotice.title }}
+				</p>
+				<p class="mt-1 text-sm">
+					{{ authorSession.lapsedNotice.body }}
+				</p>
+				<UButton
+					class="mt-3"
+					data-testid="reload-graphics-author-session"
+					icon="i-lucide-rotate-ccw"
+					label="Reload and start a new session"
+					@click="authorSession.reload"
+				/>
+			</UAlert>
+
 			<UCard>
 				<template #header>
 					<div>
@@ -1049,6 +1106,20 @@ onMounted(async () => {
 						</p>
 					</div>
 				</template>
+
+				<UAlert
+					class="mb-4"
+					color="neutral"
+					variant="soft"
+					icon="i-lucide-id-card"
+				>
+					<p class="font-medium">
+						{{ authorSession.ownershipNotice.title }}
+					</p>
+					<p class="mt-1 text-sm">
+						{{ authorSession.ownershipNotice.body }}
+					</p>
+				</UAlert>
 
 				<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(16rem,0.7fr)]">
 					<UFormField
@@ -1111,9 +1182,15 @@ onMounted(async () => {
 					color="error"
 					variant="soft"
 					icon="i-lucide-circle-x"
-					title="Upload failed"
-					:description="uploadError"
-				/>
+					data-testid="upload-error"
+				>
+					<p class="font-medium">
+						Upload failed
+					</p>
+					<p class="mt-1 text-sm">
+						{{ uploadError }}
+					</p>
+				</UAlert>
 
 				<div class="mt-6 border-t border-default pt-4">
 					<h3 class="font-semibold text-highlighted">
@@ -1177,9 +1254,15 @@ onMounted(async () => {
 						color="error"
 						variant="soft"
 						icon="i-lucide-circle-x"
-						title="Approved remote copy failed"
-						:description="remoteCopyError"
-					/>
+						data-testid="remote-copy-error"
+					>
+						<p class="font-medium">
+							Approved remote copy failed
+						</p>
+						<p class="mt-1 text-sm">
+							{{ remoteCopyError }}
+						</p>
+					</UAlert>
 				</div>
 
 				<div v-if="currentOperation" class="mt-4 rounded-lg border border-default bg-elevated/25 p-4">
@@ -1320,9 +1403,15 @@ onMounted(async () => {
 				color="error"
 				variant="soft"
 				icon="i-lucide-triangle-alert"
-				title="Library could not be loaded"
-				:description="error.message"
-			/>
+				data-testid="library-load-error"
+			>
+				<p class="font-medium">
+					Library could not be loaded
+				</p>
+				<p class="mt-1 text-sm">
+					{{ error.message }}
+				</p>
+			</UAlert>
 
 			<div v-if="assets.length > 0" class="grid gap-4 lg:grid-cols-2">
 				<UCard v-for="asset in assets" :key="asset.id">

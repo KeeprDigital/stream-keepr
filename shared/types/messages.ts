@@ -74,6 +74,25 @@ export interface BaseMessage {
  */
 export const MAX_REALTIME_MESSAGE_BYTES = 64 * 1024;
 
+/**
+ * How many bytes one message costs on the wire, envelope included.
+ *
+ * Measured rather than estimated, and measured over the *complete* message rather
+ * than the payload, because a publisher deciding whether its notification will fit
+ * has to account for the same `eventId`, `timestamp`, and origin connection id the
+ * transport will send with it.
+ */
+export function realtimeMessageBytes<T extends MessageType>(
+	eventId: number,
+	messageType: T,
+	payload?: MessagePayload<T>,
+	originConnectionId?: string,
+): number {
+	return new TextEncoder()
+		.encode(JSON.stringify(createMessage(eventId, messageType, payload, originConnectionId)))
+		.byteLength;
+}
+
 export interface MessageDefinitions {
 	'event:updated': {
 		event: Partial<EventPayload> & Pick<EventPayload, 'id'>;
@@ -183,6 +202,14 @@ export interface MessageDefinitions {
 	 * A Broadcast Graphics playout action was accepted. A notification, never
 	 * authority: a client that has fallen behind the authoritative sequence
 	 * reloads the snapshot instead of trusting this payload.
+	 *
+	 * It carries the difference the command made rather than the live state it
+	 * produced. Live state changes on every accepted command and grows with the show,
+	 * so publishing it made the largest shows the ones whose notifications silently
+	 * stopped arriving — and a client reloading on every command instead would put a
+	 * snapshot fetch between an operator pressing Take and program showing it. A
+	 * difference too large to deliver is dropped, and a peer given none reloads. See
+	 * #168.
 	 */
 	'broadcastGraphicsLiveSession:commandApplied': BroadcastGraphicsCommandAppliedPayload;
 

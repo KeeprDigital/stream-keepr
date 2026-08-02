@@ -2,6 +2,7 @@ import type {
 	BroadcastGraphicsCommandInput,
 	BroadcastGraphicsCommandType,
 	BroadcastGraphicsLiveState,
+	BroadcastGraphicsLiveStateChange,
 	BroadcastGraphicsRecoveryFault,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 
@@ -56,16 +57,39 @@ export interface BroadcastGraphicsLiveSessionResponse {
  */
 export type BroadcastGraphicsCommand = BroadcastGraphicsCommandInput & { commandId: string };
 
-/** The realtime notification that the authoritative order has advanced. */
+/**
+ * The realtime notification that the authoritative order has advanced.
+ *
+ * It names the epoch and the sequence, and carries the difference the command made
+ * — never the live state itself. Live state grows with the show and changes on every
+ * accepted command, so publishing it made the largest shows the ones whose
+ * notifications silently stopped being deliverable; see #168 and
+ * `BroadcastGraphicsLiveStateChange`.
+ */
 export interface BroadcastGraphicsCommandAppliedPayload {
 	screenId: number;
 	sessionId: number;
 	sequence: number;
 	commandType: BroadcastGraphicsCommandType;
-	currentState: BroadcastGraphicsLiveState;
+	/**
+	 * What the command changed, for a peer holding the sequence before this one.
+	 *
+	 * Absent means "this notification cannot tell you" — the difference was too large
+	 * to deliver, the command was a recognised replay answered with a snapshot newer
+	 * than itself, or live state holds something a change cannot describe. A peer given
+	 * no change reloads the authoritative snapshot, which is what it already does for
+	 * a sequence gap.
+	 */
+	change?: BroadcastGraphicsLiveStateChange;
 }
 
-export interface BroadcastGraphicsCommandResult extends BroadcastGraphicsCommandAppliedPayload {
+/** One accepted command's answer to the operator who issued it. */
+export interface BroadcastGraphicsCommandResult {
+	screenId: number;
+	sessionId: number;
+	sequence: number;
+	commandType: BroadcastGraphicsCommandType;
+	currentState: BroadcastGraphicsLiveState;
 	session: BroadcastGraphicsLiveSessionResponse;
 }
 
