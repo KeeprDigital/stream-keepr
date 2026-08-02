@@ -46,6 +46,17 @@ export default defineEventHandler(async (event) => {
 			message: 'Graphic Asset Revision is not available to this Screen Output',
 		});
 	}
+	// Named apart from a 404 on purpose: this Screen does publish the revision, and
+	// the browser asking for it cannot play it. The output shows its own diagnostic
+	// in the item's place, and the code here is the same one it prints (#98).
+	if (result.outcome === 'incompatible') {
+		throw createError({
+			statusCode: 409,
+			statusMessage: 'Conflict',
+			message: 'This Graphic Asset Revision is VP9 alpha video that requires Chromium transparency playback.',
+			data: { code: result.code },
+		});
+	}
 	if (result.outcome === 'unavailable') {
 		setResponseHeader(event, 'retry-after', 5);
 		throw createError({

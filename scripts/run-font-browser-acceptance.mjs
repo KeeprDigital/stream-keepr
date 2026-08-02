@@ -5,6 +5,13 @@
  * actually renders its own glyphs, and that a face which would silently fall
  * back is refused rather than accepted.
  *
+ * It also proves the converse, which nothing else can: every face the
+ * `static-font-v1` profile rejects for a sanitiser-level defect is refused by
+ * this browser too. A unit test can only show the server-side check fires on the
+ * bytes it was written for; whether those bytes are genuinely unloadable is a
+ * fact about the browser, so `refusedFaces` in the manifest is checked here
+ * (#153).
+ *
  * Two different things are being proved, and they need different setups:
  *
  * - The browser facts — that Chromium loads WOFF2, WOFF, TTF, and OTF and
@@ -30,6 +37,10 @@ import {
 	serveAcceptanceRoutes,
 	verdictFailureCode,
 } from './graphics-acceptance/chromium.mjs';
+import {
+	macintoshCmapLanguage,
+	withCmapLanguages,
+} from './graphics-acceptance/font-cmap-variants.mjs';
 import { runAcceptanceHarness } from './graphics-acceptance/harness.mjs';
 import {
 	acceptanceOrigin,
@@ -51,8 +62,38 @@ const library = deployed || process.argv.includes('--library');
 const fromRepository = path => new URL(`../${path}`, import.meta.url);
 
 /**
- * The local manifest is the committed one plus the OTF face, so a local run
- * covers the whole static-font-v1 compatibility profile.
+ * `public/fonts/mplantin.ttf` with its cmap subtable languages restated.
+ *
+ * The restating itself lives in `graphics-acceptance/font-cmap-variants.mjs`,
+ * shared with the `static-font-v1` unit tests so both sides build byte-identical
+ * faces from one implementation. That identity is the whole point of the pairing:
+ * the profile accepts these exact bytes server-side and this run loads them in a
+ * browser, and two copies of the builder would let those drift apart without
+ * anything failing (#153).
+ *
+ * Built here rather than committed for the same reason the OTF face is not
+ * vendored: it exists only to be loaded by this run, and a synthetic font in
+ * `public/` would be a shipped asset nothing serves.
+ */
+async function cmapLanguageVariant(languageForPlatform) {
+	return withCmapLanguages(
+		new Uint8Array(await readFile(fromRepository('public/fonts/mplantin.ttf'))),
+		languageForPlatform,
+	);
+}
+
+/**
+ * The local manifest is the committed one plus two faces a local run can build
+ * for itself, so a local run covers the whole static-font-v1 compatibility
+ * profile and both sides of its cmap-language rule.
+ *
+ * The Macintosh-language face is the one that matters. The profile permits a
+ * non-zero `language` on that platform, because OpenType defines it there as the
+ * Mac language ID plus one — and the bundled face is refused by a rule with or
+ * without that exemption, so nothing committed can tell the two apart. This face
+ * can: it is exactly the bundled one with its Microsoft subtable's language
+ * zeroed, and requiring it to load *and render* is what stops the rule quietly
+ * widening back into a false positive (#153).
  */
 async function localManifest() {
 	const committed = JSON.parse(await readFile(fromRepository(`public${MANIFEST_PATH}`), 'utf8'));
@@ -61,6 +102,7 @@ async function localManifest() {
 		faces: [
 			...committed.faces,
 			{ format: 'otf', url: '/_acceptance/fonts/otf-face', codePoint: 48 },
+			{ format: 'ttf', url: '/_acceptance/fonts/mac-cmap-language-face', codePoint: 48 },
 		],
 	};
 }
@@ -73,9 +115,16 @@ async function serveLocally() {
 		[MANIFEST_PATH]: async () => ({ body: JSON.stringify(manifest), type: 'application/json' }),
 		'/fonts/mana.ttf': () => file('public/fonts/mana.ttf', 'font/ttf'),
 		'/fonts/mplantin.woff': () => file('public/fonts/mplantin.woff', 'font/woff'),
+		// Served to be refused: the profile rejects these bytes, and this run is what
+		// proves the browser does too (#153).
+		'/fonts/mplantin.ttf': () => file('public/fonts/mplantin.ttf', 'font/ttf'),
 		'/fonts/mana.woff2': () => file('public/fonts/mana.woff2', 'font/woff2'),
 		'/_acceptance/fonts/otf-face': () =>
 			file('node_modules/mana-font/docs/fonts/beleren.otf', 'font/otf'),
+		'/_acceptance/fonts/mac-cmap-language-face': async () => ({
+			body: await cmapLanguageVariant(macintoshCmapLanguage),
+			type: 'font/ttf',
+		}),
 	});
 }
 
@@ -115,7 +164,8 @@ await runAcceptanceHarness({
 				: [{ code: verdictFailureCode(verdict), detail: { page: HARNESS } }]);
 
 			return {
-				faces: library ? 5 : 4,
+				faces: library ? 6 : 5,
+				refusedFaces: 1,
 				library: library ? 'published' : 'not-exercised',
 				mode: deployed ? 'deployed' : 'local',
 			};

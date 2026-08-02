@@ -24,7 +24,7 @@ you must hold onto while running this:
   injected. Do not run them while anything is on air.
 
 Headless Chromium stands in for an OBS Screen Output. Safari is needed only to
-prove that a Screen Output pinning VP9 alpha refuses it a capability session.
+prove that a Screen Output pinning VP9 alpha refuses it that revision's bytes.
 
 ## Before you start
 
@@ -68,7 +68,7 @@ assets on top of a broken delivery path produces evidence about the wrong thing.
 | 3   | `pnpm test:browser:still-images:deployed`      | PNG, JPEG, and WebP decode in an OBS-like output.                                                 |
 | 4   | `pnpm test:browser:silent-video:deployed`      | H.264 MP4 and VP9 WebM play and seek; VP9 alpha keeps its transparency on Chromium.               |
 | 5   | `pnpm test:browser:fonts:deployed`             | A font Graphic Asset Revision is delivered by the Worker, loads, and renders its own glyphs.      |
-| 6   | `pnpm test:browser:safari-vp9-alpha:deployed`  | A Screen Output pinning VP9 alpha refuses Safari a capability session.                            |
+| 6   | `pnpm test:browser:safari-vp9-alpha:deployed`  | A Screen Output pinning VP9 alpha refuses Safari that revision, while its session still opens.    |
 | 7   | `pnpm test:delivery:graphics:package:deployed` | Template Package publication is atomic and its retry is idempotent.                               |
 | 8   | The fault-injection procedures below           | Unavailable content, integrity failure, D1 outage, and R2 outage with an authorized cache.        |
 
@@ -271,14 +271,20 @@ this step now asserts. Deployed mode:
    `chromium-transparency`.
 2. Publishes a Screen Output whose Feature Match Layout pins that revision.
 3. Drives Safari to that Screen Output's page, where it mints a capability
-   through its own author session and calls the capability-session bootstrap.
-4. Requires `409` with `data.code = vp9-alpha-chromium-required`. Anything else
-   prints `safari-vp9-alpha-not-blocked` and is a gate failure — it means a
-   browser that cannot show the content correctly was admitted.
+   through its own author session, opens a capability session, and then asks
+   for the restricted revision's own content route.
+4. Requires the session to open with `204` and the revision to answer `409`
+   with `data.code = vp9-alpha-chromium-required`. Anything else on the
+   revision prints `safari-vp9-alpha-not-blocked` and is a gate failure — it
+   means a browser that cannot show the content correctly was handed the bytes.
+   A session that refuses instead prints `restricted-video-session-refused`,
+   which is a gate failure of its own rather than an unready environment:
+   refusing it costs the output every asset the Screen publishes rather than
+   the one clip Safari would show wrongly, which is the defect #98 closed.
 5. Tears the Screen Output and its Event down.
 
-Nothing secret travels in the URL: the page is given only the Event and Screen
-identities and mints the capability itself.
+Nothing secret travels in the URL: the page is given the Event, Screen, and
+exact revision identities, and mints the capability itself.
 
 ### The browser fact, recorded rather than judged
 
@@ -319,14 +325,29 @@ challenge with genuine rendered-pixel proofs, and publishes the revision. It
 then loads that published revision back through the delivery route that will
 serve it on air. The face is trashed on the way out, pass or fail.
 
-`pnpm test:browser:fonts` without `--library` skips all of that and proves only
-the browser facts — that Chromium loads WOFF2, WOFF, TTF, and OTF and renders
-their glyphs, and that a face which would silently fall back is refused. That
-mode needs no installation, which is why it runs in the ordinary suite, and it
-is where the OTF face is covered: the installation ships no OTF, and vendoring
-a proprietary typeface solely to be downloaded by a test would republish it for
-no gain. Use `pnpm test:browser:fonts:library` to run the library face against
-a local `pnpm preview`.
+`pnpm test:browser:fonts` without `--library` skips all of that and proves the
+browser facts alone. Four of them:
+
+- Chromium loads WOFF2, WOFF, TTF, and OTF and renders their glyphs.
+- A face that would silently fall back is refused rather than accepted
+  (`font-silent-fallback-accepted`).
+- Every face the `static-font-v1` profile rejects is refused by the browser too.
+  The manifest's `refusedFaces` names them, and one loading here is
+  `font-refused-face-loaded` — a server-side check and a browser disagreeing
+  about the same bytes.
+- Every face the profile deliberately **permits** despite a superficially
+  similar defect really does load and render. The run builds one for itself:
+  `public/fonts/mplantin.ttf` with only its Macintosh-platform cmap language
+  left non-zero, which OpenType defines there. It is served as an ordinary face,
+  so a profile rule that widened back into refusing it fails here (#153).
+
+That mode needs no installation, which is why it runs in the ordinary suite, and
+it is where the OTF face is covered: the installation ships no OTF, and
+vendoring a proprietary typeface solely to be downloaded by a test would
+republish it for no gain. The Macintosh-language face is built at run time for
+the same reason — a synthetic font in `public/` would be a shipped asset nothing
+serves. Use `pnpm test:browser:fonts:library` to run the library face against a
+local `pnpm preview`.
 
 ## What the evidence may say
 
@@ -349,13 +370,13 @@ never rename one.
 
 ## Where each acceptance criterion is proven
 
-| #50 acceptance criterion                                                                                                                                 | Proven by                                                                                                                                                                                                                                                                                                                                   |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Full and byte-range delivery, conditional requests, strong ETags, cache miss/hit, authorization on every public request, revocation despite cached bytes | Step 2. Cache warmth is deployed-only (`--require-cache-hit`); every other assertion runs locally too.                                                                                                                                                                                                                                      |
-| CORS and CSP permit only the settled same-origin and output behaviour without making private canonical storage public                                    | Step 2, on both delivery routes and on the Screen Output document — `cors-allow-origin-exposed`, `cors-allow-credentials-exposed`, `cors-preflight-permitted`, `csp-directive-unexpected`, `csp-directive-permissive`, `private-storage-publicly-addressable`.                                                                              |
-| PNG, JPEG, and WebP pass real browser decoding                                                                                                           | Step 3.                                                                                                                                                                                                                                                                                                                                     |
-| H.264 MP4 and VP9 WebM play and seek; VP9 alpha proven on Chromium and blocked on Safari                                                                 | Step 4 for Chromium playback. Step 6 for the Safari block, which is enforced at the product boundary rather than by the browser: Safari 26.5 decodes VP9 alpha and flattens it, so a Screen Output pinning restricted video refuses Safari a capability session instead. The browser's own behaviour is recorded as evidence, not asserted. |
-| Supported fonts complete loading and representative glyph rendering before the output reports ready                                                      | Step 5, on a font Graphic Asset Revision delivered by the Worker. The OTF face is covered by the local `pnpm test:browser:fonts`, which uses the same Chromium build.                                                                                                                                                                       |
-| Unavailable content, D1 outage, R2 outage with authorized cache, integrity failure, and capability denial produce the settled observable outcomes        | Capability denial and an unreachable revision: step 2, which also asserts the two are indistinguishable. All four outages, integrity failure included: step 8.                                                                                                                                                                              |
-| Package publication and retry never expose partial assets or duplicate a committed result                                                                | Step 7.                                                                                                                                                                                                                                                                                                                                     |
-| The gate reports actionable stable failure evidence without logging secrets, filenames, object keys, or full delivery URLs                               | Enforced in the output path itself and covered by `test/unit/scripts/graphicsAcceptanceEvidence.test.ts`.                                                                                                                                                                                                                                   |
+| #50 acceptance criterion                                                                                                                                 | Proven by                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Full and byte-range delivery, conditional requests, strong ETags, cache miss/hit, authorization on every public request, revocation despite cached bytes | Step 2. Cache warmth is deployed-only (`--require-cache-hit`); every other assertion runs locally too.                                                                                                                                                                                                                                                                                                                                                                            |
+| CORS and CSP permit only the settled same-origin and output behaviour without making private canonical storage public                                    | Step 2, on both delivery routes and on the Screen Output document — `cors-allow-origin-exposed`, `cors-allow-credentials-exposed`, `cors-preflight-permitted`, `csp-directive-unexpected`, `csp-directive-permissive`, `private-storage-publicly-addressable`.                                                                                                                                                                                                                    |
+| PNG, JPEG, and WebP pass real browser decoding                                                                                                           | Step 3.                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| H.264 MP4 and VP9 WebM play and seek; VP9 alpha proven on Chromium and blocked on Safari                                                                 | Step 4 for Chromium playback. Step 6 for the Safari block, which is enforced at the product boundary rather than by the browser: Safari 26.5 decodes VP9 alpha and flattens it, so a Screen Output refuses Safari that revision's bytes instead. The refusal is per resolution request — the capability session still opens, because refusing it cost the output every other asset the Screen publishes (#98). The browser's own behaviour is recorded as evidence, not asserted. |
+| Supported fonts complete loading and representative glyph rendering before the output reports ready                                                      | Step 5, on a font Graphic Asset Revision delivered by the Worker. The OTF face is covered by the local `pnpm test:browser:fonts`, which uses the same Chromium build. That local run also proves both sides of the `static-font-v1` cmap-language rule: `refusedFaces` must be refused by the browser (`font-refused-face-loaded`), and the Macintosh-language face it builds must load and render (#153).                                                                        |
+| Unavailable content, D1 outage, R2 outage with authorized cache, integrity failure, and capability denial produce the settled observable outcomes        | Capability denial and an unreachable revision: step 2, which also asserts the two are indistinguishable. All four outages, integrity failure included: step 8.                                                                                                                                                                                                                                                                                                                    |
+| Package publication and retry never expose partial assets or duplicate a committed result                                                                | Step 7.                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| The gate reports actionable stable failure evidence without logging secrets, filenames, object keys, or full delivery URLs                               | Enforced in the output path itself and covered by `test/unit/scripts/graphicsAcceptanceEvidence.test.ts`.                                                                                                                                                                                                                                                                                                                                                                         |

@@ -240,7 +240,7 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		expect(authorized.status).toBe(200);
 	});
 
-	it('uses live Screen PATCH and User-Agent bootstrap as authoritative restricted-video playout gates', async () => {
+	it('uses live Screen PATCH and per-revision User-Agent checks as authoritative restricted-video playout gates', async () => {
 		const baseline = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
@@ -300,49 +300,54 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		);
 		expect(chromiumPublication.status).toBe(200);
 
-		const safariBootstrap = await fetch(
-			`/api/screen-output/screens/${screenId}/asset-capability-session`,
-			{
-				method: 'POST',
-				headers: {
-					...Object.fromEntries(authorizedHeaders()),
-					'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/605.1.15 Version/18.5 Safari/605.1.15',
+		const SAFARI = 'Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/605.1.15 Version/18.5 Safari/605.1.15';
+		const IOS_CHROMIUM = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 CriOS/138.0 Mobile/15E148 Safari/604.1';
+		const CHROMIUM = 'Mozilla/5.0 Chrome/138.0.0.0 Safari/537.36';
+
+		function bootstrap(userAgent: string) {
+			return fetch(
+				`/api/screen-output/screens/${screenId}/asset-capability-session`,
+				{
+					method: 'POST',
+					headers: { ...Object.fromEntries(authorizedHeaders()), 'user-agent': userAgent },
 				},
-			},
-		);
-		expect(safariBootstrap.status).toBe(409);
-		expect(safariBootstrap.headers.get('set-cookie')).toBeNull();
-		await expect(safariBootstrap.json()).resolves.toMatchObject({
-			data: { code: 'vp9-alpha-chromium-required' },
+			);
+		}
+
+		// Every engine opens a session, whatever the Screen publishes. Refusing it was
+		// what left a non-Chromium output with no resolvable content URL for anything
+		// at all, so a clip nobody could play took the whole output's media with it —
+		// and left the per-item diagnostic unreachable, because its `src` was empty
+		// too (#98).
+		for (const userAgent of [SAFARI, IOS_CHROMIUM, CHROMIUM]) {
+			const session = await bootstrap(userAgent);
+			expect(session.status).toBe(204);
+			expect(session.headers.get('set-cookie')).toContain(
+				screenOutputAssetCapabilityCookieName(screenId),
+			);
+		}
+
+		// The refusal now names one revision, to the engine that cannot decode it.
+		for (const userAgent of [SAFARI, IOS_CHROMIUM]) {
+			const refused = await fetch(contentPath(), {
+				headers: authorizedHeaders({ 'user-agent': userAgent }),
+			});
+			expect(refused.status).toBe(409);
+			await expect(refused.json()).resolves.toMatchObject({
+				data: { code: 'vp9-alpha-chromium-required' },
+			});
+		}
+
+		// A caller naming no engine cannot be proven to be Chromium, so it is refused
+		// too. Strictly a narrowing versus the session gate this replaced, which
+		// refused an absent user agent along with everything else non-Chromium.
+		const anonymous = await fetch(contentPath(), { headers: authorizedHeaders() });
+		expect(anonymous.status).toBe(409);
+
+		const played = await fetch(contentPath(), {
+			headers: authorizedHeaders({ 'user-agent': CHROMIUM }),
 		});
-
-		const iosChromiumBootstrap = await fetch(
-			`/api/screen-output/screens/${screenId}/asset-capability-session`,
-			{
-				method: 'POST',
-				headers: {
-					...Object.fromEntries(authorizedHeaders()),
-					'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 CriOS/138.0 Mobile/15E148 Safari/604.1',
-				},
-			},
-		);
-		expect(iosChromiumBootstrap.status).toBe(409);
-		expect(iosChromiumBootstrap.headers.get('set-cookie')).toBeNull();
-
-		const chromiumBootstrap = await fetch(
-			`/api/screen-output/screens/${screenId}/asset-capability-session`,
-			{
-				method: 'POST',
-				headers: {
-					...Object.fromEntries(authorizedHeaders()),
-					'user-agent': 'Mozilla/5.0 Chrome/138.0.0.0 Safari/537.36',
-				},
-			},
-		);
-		expect(chromiumBootstrap.status).toBe(204);
-		expect(chromiumBootstrap.headers.get('set-cookie')).toContain(
-			screenOutputAssetCapabilityCookieName(screenId),
-		);
+		expect(played.status).toBe(200);
 	});
 
 	it('deleting the Screen revokes its current capability', async () => {

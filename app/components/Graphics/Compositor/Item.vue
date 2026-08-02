@@ -42,24 +42,36 @@ const actualVideoTarget = useGraphicsVideoTarget();
 
 /**
  * A VP9-alpha silent video only plays in Chromium, so elsewhere the element is
- * withheld and a marked placeholder takes its place.
+ * withheld and a diagnostic placeholder takes its place.
  *
- * The marker is a data attribute with no visible text: readable by a test or by a
- * developer inspecting the DOM, not by anyone looking at the output. Where it can
- * be seen is worth stating precisely, because the two cases differ.
+ * The decision splits across two owners, because neither knows the other's half.
+ * Whether *this browser* can play the clip is a runtime fact, asked for here. What
+ * the placeholder may then paint comes from the render model as
+ * `incompatibilityNotice`, because only the model knows which Screen Output it is
+ * building: the Key Output renders composed opacity as an alpha matte, so legible
+ * text there would key the message onto program. The model withholds the notice
+ * for that output and the placeholder stays empty, exactly as it did everywhere
+ * before #98.
  *
- * On a live Screen Output it is unreachable. The capability session is refused
- * outright when the Screen publishes a chromium-transparency revision to a
- * non-Chromium target, so no content URL resolves, every `src` is empty, and the
- * branch below never renders — the output loses all of its media, not just the
- * video it cannot play.
+ * The marker attribute is unconditional either way, so a test or a developer
+ * inspecting the DOM reads the same thing in every output.
  *
- * In an editor preview it does render, because a preview resolves content as an
- * author rather than through a capability. That includes the Key preview, which is
- * why giving this real text is not a local change: visible text carries colour, and
- * colour in the Key Output breaks the alpha matte, so the decision has to come from
- * the render model that knows the output. Reporting either case to a person is
- * tracked on #98.
+ * This is reachable on a live Screen Output. Before #98 it was not: the capability
+ * session was refused outright when a Screen published a chromium-transparency
+ * revision to a non-Chromium target, so no content URL resolved, every `src` was
+ * empty, and the output lost all of its media rather than this one clip. The
+ * refusal is now per resolution request, so every other reference still resolves
+ * and this branch renders where the clip would have been.
+ *
+ * The refusal and this diagnostic are two independent decisions over one rule,
+ * not cause and effect. The server reads the revision's recorded
+ * `technical_facts.targetCompatibility`; this reads the `videoCompatibility` the
+ * Media Graphic Item's configuration carries. The write path is what keeps them
+ * equal — a silent-video reference that states no compatibility, or states one the
+ * pinned revision contradicts, is refused publication — so they agree on every
+ * Screen the system will accept. Nothing detects a disagreement if one ever
+ * arises, and in that case an output would be refused the bytes and say nothing,
+ * which is the blank rectangle #98 exists to remove.
  */
 const videoBlocked = computed(() => media.value?.videoCompatibility === 'chromium-transparency'
 	&& actualVideoTarget.value !== 'chromium');
@@ -380,7 +392,8 @@ watch(
 			<span
 				v-else-if="media.mediaKind === 'silent-video'"
 				data-video-compatibility-blocked="vp9-alpha-chromium-required"
-			/>
+				:style="media.incompatibilityNotice?.style"
+			>{{ media.incompatibilityNotice?.text }}</span>
 			<!--
 				Empty alt, deliberately. A Media Graphic Item is decorative — it carries
 				no meaning a caption would convey — and a broken image draws its alt text

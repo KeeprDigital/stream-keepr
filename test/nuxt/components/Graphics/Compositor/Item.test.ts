@@ -1,5 +1,8 @@
 import type { PlayerLifeAnimation } from '~~/shared/types/graphics';
-import type { GraphicItemRenderDescriptor } from '~/modules/graphics/renderModel';
+import type {
+	GraphicItemRenderDescriptor,
+	GraphicMediaIncompatibilityNoticeDescriptor,
+} from '~/modules/graphics/renderModel';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { nextTick } from 'vue';
@@ -98,5 +101,60 @@ describe('graphicsCompositorItem player life', () => {
 
 		expect(lifeParagraph(wrapper)).toBe(before);
 		expect(lifeClasses(wrapper).join(' ')).not.toContain('graphics-compositor-item--life');
+	});
+});
+
+/**
+ * What an output shows for a silent video its browser cannot play (#98).
+ *
+ * These mount under the test runtime's own user agent, which is not Chromium —
+ * exactly the case the diagnostic exists for. Nothing here stubs the target: the
+ * component asks its runtime, and that is the fact being exercised.
+ */
+describe('graphicsCompositorItem blocked silent video', () => {
+	function videoDescriptor(
+		notice?: GraphicMediaIncompatibilityNoticeDescriptor,
+	): GraphicItemRenderDescriptor {
+		return {
+			id: 'sting',
+			label: 'Sting',
+			kind: 'media',
+			style: { position: 'absolute', width: '480px', height: '270px' },
+			media: {
+				mediaKind: 'silent-video',
+				src: '/api/screen-output/screens/9/assets/asset-1/revisions/revision-7/content',
+				style: { display: 'block' },
+				loop: true,
+				playbackRate: 1,
+				videoCompatibility: 'chromium-transparency',
+				incompatibilityNotice: notice,
+			},
+		};
+	}
+
+	const notice = {
+		code: 'vp9-alpha-chromium-required',
+		text: 'Video needs Chromium (vp9-alpha-chromium-required)',
+		style: { backgroundColor: 'rgba(0, 0, 0, 0.78)', color: '#ffffff' },
+	} as const;
+
+	it('reads as words rather than as a blank rectangle', async () => {
+		const wrapper = await mountItem(videoDescriptor(notice));
+
+		expect(wrapper.find('video').exists()).toBe(false);
+		const blocked = wrapper.get('[data-video-compatibility-blocked="vp9-alpha-chromium-required"]');
+		expect(blocked.text()).toBe('Video needs Chromium (vp9-alpha-chromium-required)');
+		expect(blocked.attributes('style')).toContain('background-color');
+	});
+
+	it('paints nothing into the Key Output, which offers no notice to paint', async () => {
+		// The Key Output renders composed opacity as the alpha matte, so a legible
+		// notice there would key the message onto program.
+		const wrapper = await mountItem(videoDescriptor(undefined));
+
+		expect(wrapper.find('video').exists()).toBe(false);
+		const blocked = wrapper.get('[data-video-compatibility-blocked="vp9-alpha-chromium-required"]');
+		expect(blocked.text()).toBe('');
+		expect(blocked.attributes('style')).toBeUndefined();
 	});
 });

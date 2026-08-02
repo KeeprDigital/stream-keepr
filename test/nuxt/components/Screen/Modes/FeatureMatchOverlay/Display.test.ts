@@ -393,13 +393,27 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(wrapper.get('.feature-match-overlay').attributes('data-export-ready')).toBe('true');
 		});
 
-		it('marks restricted video output not ready outside a proven Chromium target', async () => {
+		it('marks restricted video output not ready outside a proven Chromium target, and says why on the output', async () => {
+			// The content URL resolves — this Screen's capability session is no longer
+			// refused Screen-wide for pinning one alpha clip (#98) — so the item reaches
+			// its blocked branch rather than rendering an empty box for a missing `src`.
 			mockConfig.value = videoComposition('chromium-transparency');
 
 			const wrapper = await mountComponent();
 
 			expect(wrapper.get('.feature-match-overlay').attributes('data-export-ready')).toBe('false');
-			expect(wrapper.find('[data-video-compatibility-blocked="vp9-alpha-chromium-required"]').exists()).toBe(true);
+			const blocked = wrapper.get('[data-video-compatibility-blocked="vp9-alpha-chromium-required"]');
+			expect(blocked.text()).toContain('Chromium');
+			expect(blocked.text()).toContain('vp9-alpha-chromium-required');
+		});
+
+		it('keeps the reason out of the Key Output, whose colour is the alpha matte', async () => {
+			mockConfig.value = videoComposition('chromium-transparency');
+			mockOutputMode.value = 'key';
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.get('[data-video-compatibility-blocked="vp9-alpha-chromium-required"]').text()).toBe('');
 		});
 	});
 

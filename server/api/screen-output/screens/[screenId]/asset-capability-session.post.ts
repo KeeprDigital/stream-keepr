@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { createD1ScreenOutputAssetAuthorizer } from '~~/server/modules/screen-output-assets/authorizer';
 import { screenOutputAssetCapabilityDigest } from '~~/server/modules/screen-output-assets/capability';
 import { bearerScreenOutputCapability } from '~~/server/utils/screenOutputCapabilityAuthorization';
-import { graphicsVideoTargetForUserAgent } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import {
 	screenOutputAssetCapabilityCookieName,
 	screenOutputAssetCapabilityCookiePath,
@@ -23,17 +22,11 @@ export default defineEventHandler(async (event) => {
 		});
 	}
 	const { screenId } = await getValidatedRouterParams(event, paramsSchema.parse);
-	let authorization:
-		| { outcome: 'authorized' }
-		| { outcome: 'missing' }
-		| { outcome: 'incompatible'; code: 'vp9-alpha-chromium-required' };
+	let authorization: { outcome: 'authorized' } | { outcome: 'missing' };
 	try {
 		authorization = await createD1ScreenOutputAssetAuthorizer(db.$client).authorizeCapability({
 			screenId,
 			capabilityDigest: await screenOutputAssetCapabilityDigest(capability),
-			actualVideoTarget: graphicsVideoTargetForUserAgent(
-				getRequestHeader(event, 'user-agent') ?? '',
-			),
 		});
 	}
 	catch {
@@ -51,14 +44,9 @@ export default defineEventHandler(async (event) => {
 			message: 'Screen Output asset capability is unavailable',
 		});
 	}
-	if (authorization.outcome === 'incompatible') {
-		throw createError({
-			statusCode: 409,
-			statusMessage: 'Conflict',
-			message: 'This Screen Output contains VP9 alpha video that requires Chromium transparency playback.',
-			data: { code: authorization.code },
-		});
-	}
+	// A session is opened for every engine, whatever the Screen publishes. Playback
+	// compatibility is answered per resolution request, so a clip this browser
+	// cannot play costs the output that clip and nothing else (#98).
 	setCookie(event, screenOutputAssetCapabilityCookieName(screenId), capability, {
 		httpOnly: true,
 		path: screenOutputAssetCapabilityCookiePath(screenId),

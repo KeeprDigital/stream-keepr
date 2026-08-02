@@ -78,10 +78,54 @@ describe('screen Output exact Graphic Asset Revision delivery', () => {
 			capabilityDigest: expect.stringMatching(/^[\da-f]{64}$/),
 			assetId: 'asset-1',
 			revisionId: 'revision-1',
+			actualVideoTarget: 'other',
 		});
 		expect(match).not.toHaveBeenCalled();
 		expect(inspect).not.toHaveBeenCalled();
 		expect(resolve).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * Playback compatibility is decided per resolution request, not per session (#98).
+	 *
+	 * The engine that will actually decode the bytes is the one asking for them, so
+	 * the request carries the fact. Refusing here costs the output exactly the clip
+	 * it cannot play; refusing the session cost it every asset the Screen publishes.
+	 */
+	it('asks whether the requesting engine can play these exact bytes, and refuses only those', async () => {
+		authorize.mockResolvedValue({
+			outcome: 'incompatible',
+			code: 'vp9-alpha-chromium-required',
+		});
+
+		await expect(delivery().deliver({
+			...request,
+			headers: new Headers({ 'user-agent': 'Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 Version/18.5 Safari/605.1.15' }),
+		})).resolves.toEqual({
+			outcome: 'incompatible',
+			code: 'vp9-alpha-chromium-required',
+		});
+
+		expect(authorize).toHaveBeenCalledWith(expect.objectContaining({
+			actualVideoTarget: 'safari',
+		}));
+		// Nothing is fetched, cached, or served for a revision this engine was
+		// refused, and the refusal never reaches the byte store.
+		expect(match).not.toHaveBeenCalled();
+		expect(inspect).not.toHaveBeenCalled();
+		expect(resolve).not.toHaveBeenCalled();
+	});
+
+	it('delivers the same restricted revision to the engine that can play it', async () => {
+		const result = await delivery().deliver({
+			...request,
+			headers: new Headers({ 'user-agent': 'Mozilla/5.0 Chrome/138.0.0.0 Safari/537.36' }),
+		});
+
+		expect(result.outcome).toBe('delivered');
+		expect(authorize).toHaveBeenCalledWith(expect.objectContaining({
+			actualVideoTarget: 'chromium',
+		}));
 	});
 
 	it('fails closed with a retryable outcome when authorization storage is unavailable', async () => {

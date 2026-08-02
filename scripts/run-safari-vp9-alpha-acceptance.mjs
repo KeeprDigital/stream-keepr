@@ -9,10 +9,12 @@
  * graphic going to air than not playing at all.
  *
  * So what this harness proves is the product boundary, which is the half that
- * is enforceable: a Screen Output pinning restricted video refuses to hand a
- * Safari user agent a capability session at all. Deployed mode publishes such
- * a Screen Output, drives Safari at it, and requires the settled
- * `409 vp9-alpha-chromium-required` refusal.
+ * is enforceable: a Screen Output never hands a Safari user agent the bytes of
+ * a restricted revision. Deployed mode publishes such a Screen Output, drives
+ * Safari at it, and requires the settled `409 vp9-alpha-chromium-required`
+ * refusal on the revision's own delivery route — while the capability session
+ * itself opens, because refusing that cost the output every other asset the
+ * Screen publishes rather than the one clip Safari would show wrongly (#98).
  *
  * What Safari does with the raw video is still observed, and still worth
  * having — it is the evidence for why the boundary must exist — but it is
@@ -205,7 +207,14 @@ await runAcceptanceHarness({
 					label: 'Safari VP9 Alpha Boundary',
 					webm: Uint8Array.from(Buffer.from(webmBase64, 'base64')),
 				});
-				url = `${origin}${ACCEPTANCE_PATH}?event=${scenario.eventId}&screen=${scenario.screenId}`;
+				// The exact revision travels with the Screen Output, because the
+				// refusal being proved is per resolution request rather than per
+				// capability session (#98) and the page has to ask for those bytes
+				// by name.
+				url = `${origin}${ACCEPTANCE_PATH}`
+					+ `?event=${scenario.eventId}&screen=${scenario.screenId}`
+					+ `&asset=${encodeURIComponent(scenario.assetId)}`
+					+ `&revision=${encodeURIComponent(scenario.revisionId)}`;
 			}
 
 			let verdict;

@@ -333,6 +333,7 @@ export interface GraphicAssetValidationIssue {
 		| 'font-metrics-invalid'
 		| 'font-glyphs-invalid'
 		| 'font-unicode-cmap-required'
+		| 'font-cmap-language-invalid'
 		| 'font-name-invalid'
 		| 'browser-font-load-failed'
 		| 'browser-font-render-failed'
