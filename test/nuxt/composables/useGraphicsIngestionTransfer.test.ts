@@ -130,4 +130,39 @@ describe('useGraphicsIngestionTransfer', () => {
 		// A transfer that never finished sending must not be completed.
 		expect(requests()).not.toContain(`POST ${ingestion}/operation-1/multipart/complete`);
 	});
+
+	/**
+	 * A part refused for want of an author is not a lost part. The graphics author
+	 * session that owns this operation has lapsed, every remaining attempt will be
+	 * refused for the same reason, and the operation itself is already unreachable
+	 * — so the transfer stops, and says what happened rather than repeating the
+	 * status code its caller cannot act on.
+	 */
+	it('stops rather than retrying when the graphics author session has lapsed', async () => {
+		mockFetch.mockImplementation(async (path: string) => {
+			if (path.endsWith('/multipart'))
+				return operation({ transfer: transferFacts(2) });
+			if (path.endsWith('/multipart/parts/2'))
+				throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
+			return operation();
+		});
+
+		await expect(useGraphicsIngestionTransfer().transfer(
+			operation(),
+			sourceOfByteLength(GRAPHICS_MULTIPART_PART_BYTES + 1),
+		)).rejects.toThrow('Your graphics author session has lapsed');
+
+		expect(requests().filter(request => request.endsWith('/multipart/parts/2')))
+			.toHaveLength(1);
+		expect(requests()).not.toContain(`POST ${ingestion}/operation-1/multipart/complete`);
+	});
+
+	it('says the same thing when a source that fits one request is refused', async () => {
+		mockFetch.mockRejectedValue(Object.assign(new Error('Unauthorized'), { statusCode: 401 }));
+
+		await expect(useGraphicsIngestionTransfer().transfer(
+			operation(),
+			sourceOfByteLength(GRAPHICS_MULTIPART_PART_BYTES),
+		)).rejects.toThrow('Your graphics author session has lapsed');
+	});
 });
