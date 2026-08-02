@@ -1,5 +1,4 @@
 import type { H3Event } from 'h3';
-import { db } from 'hub:db';
 import {
 	createGraphicsAssetLibrary,
 	graphicAssetId,
@@ -7,6 +6,7 @@ import {
 } from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import { createR2CanonicalGraphicsObjectStore } from '~~/server/modules/graphics-asset-library/r2-object-store';
+import { graphicsCatalogueClient } from '~~/server/modules/graphics-asset-library/runtime';
 import { screenService } from '~~/server/services/screen';
 import { createScreenOutputAssetDelivery } from '.';
 import { createD1ScreenOutputAssetAuthorizer } from './authorizer';
@@ -46,7 +46,7 @@ export async function screenOutputAssetDeliveryForEvent(event: H3Event) {
 	const bindings = event.context.cloudflare?.env;
 	const canonical = bindings?.GRAPHICS_ASSET_CANONICAL;
 	const library = createGraphicsAssetLibrary({
-		catalogue: createD1GraphicsAssetCatalogue(db.$client),
+		catalogue: createD1GraphicsAssetCatalogue(graphicsCatalogueClient()),
 		staging: {
 			async checkHealth() {
 				return { outcome: 'healthy' as const };
@@ -72,7 +72,7 @@ export async function screenOutputAssetDeliveryForEvent(event: H3Event) {
 	const executionContext = event.context.cloudflare?.context;
 	return createScreenOutputAssetDelivery({
 		signingKey: signingKey(event),
-		authorize: createD1ScreenOutputAssetAuthorizer(db.$client).authorize,
+		authorize: createD1ScreenOutputAssetAuthorizer(graphicsCatalogueClient()).authorize,
 		inspect: async ({ assetId, revisionId }) => await library.inspectGraphicAssetRevisionContent({
 			assetId: graphicAssetId(assetId),
 			revisionId: graphicAssetRevisionId(revisionId),
