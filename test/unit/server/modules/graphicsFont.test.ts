@@ -219,9 +219,18 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 		expect(accepted.report).toMatchObject({ outcome: 'accepted', issues: [] });
 	});
 
-	it('reads the parsed cmap, so a WOFF2 is covered by the same rule', async () => {
-		// A WOFF2's cmap lives inside a Brotli stream nothing in the validator
-		// decodes, so a rule reading source bytes could not see it at all.
+	/**
+	 * Named for what it establishes, which is less than "WOFF2 is covered".
+	 *
+	 * It asserts two things: a clean WOFF2 is accepted, and a mutated *TTF* is
+	 * rejected. It does not fire the rule on WOFF2 bytes — a WOFF2's cmap is inside
+	 * a Brotli stream nothing here decodes, so there is no cheap way to mutate one
+	 * in a test. What carries the container-independence claim is that the rule
+	 * reads the parsed cmap rather than the source bytes, plus the sweep over 30+
+	 * WOFF2 faces that established the parser exposes subtable languages for every
+	 * container alike.
+	 */
+	it('reads the parsed cmap rather than the source bytes', async () => {
 		const accepted = await processStaticFont(
 			new Uint8Array(await readFile('public/fonts/mana.woff2')),
 			{ sourceFileName: 'mana.woff2', declaredMime: 'font/woff2' },
