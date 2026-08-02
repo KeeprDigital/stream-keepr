@@ -1,4 +1,4 @@
-# ADR-0003: `static-font-v1`'s server-side checks are a floor; the browser is the gate
+# ADR-0005: `static-font-v1`'s server-side checks are a floor; the browser is the gate
 
 - **Status**: Accepted
 - **Date**: 2026-08-02

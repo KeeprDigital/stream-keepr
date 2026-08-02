@@ -475,7 +475,9 @@ const CMAP_MACINTOSH_PLATFORM = 1;
  * that acceptance needs `FontFace.load()` and representative glyph rendering from
  * a real browser, and that requirement is what covers everything a sanitiser
  * rejects that is not written out here; see `reportWithBrowserDecodeEvidence`,
- * which will not publish a font without it.
+ * which will not publish a font without it. Why the gate sits there rather than in
+ * more rules like this one is recorded in
+ * `docs/adr/0005-static-font-v1-server-checks-are-a-floor-and-the-browser-is-the-gate.md`.
  */
 function validateCmapSubtables(font: ParsedFont) {
 	for (const subtable of font.cmap?.tables ?? []) {
