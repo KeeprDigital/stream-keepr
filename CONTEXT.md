@@ -835,6 +835,8 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - Graphics artifacts reference a **Graphic Asset** by its stable library identity rather than by filename, URL, object key, or content hash
 - A **Screen Output** may resolve only the **Graphic Assets** referenced by its **Screen** and cannot discover other library contents
 - A **Screen Output Asset Capability** is checked against the Screen's currently published exact **Graphic Asset Revisions** on every resolution request
+- Playback compatibility is answered per resolution request against the requested revision's own recorded facts, never by refusing the capability session, so a revision one **Screen Output**'s browser cannot play costs it that revision and none of the Screen's other assets
+- A **Screen Output** that is refused a revision on playback compatibility says so in the refused item's place, except in the **Key Output**, whose colour is the alpha matte
 - A **Broadcast Graphics Screen** publishes the exact **Graphic Asset Revisions** its authored configuration pins and the media **Graphic Input** values its **Broadcast Graphics Live Session** has accepted, and a value the Live Session no longer accepts stops being published in the same moment it leaves air
 - A media **Graphic Input** value carries the pinned **Graphic Asset Revision**'s own video target compatibility, stated with the value when it is authored as a default and recorded by the authoritative side when it is chosen live, and a value that states none is refused rather than published
 - A **Broadcast Graphic Template** declares zero or more **Graphic Inputs**

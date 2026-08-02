@@ -43,6 +43,13 @@ type ParsedFont = Exclude<ReturnType<typeof createFont>, { isCollection: true }>
 			origChecksum?: number;
 		}>;
 	};
+	cmap?: {
+		tables?: Array<{
+			platformID?: number;
+			encodingID?: number;
+			table?: { version?: number; language?: number };
+		}>;
+	};
 	glyphForCodePoint: (codePoint: number) => ParsedGlyph;
 };
 
@@ -436,6 +443,40 @@ function validateTables(font: ParsedFont) {
 		validationError('font-svg-not-supported', 'SVG glyph tables are not supported.');
 }
 
+/**
+ * Every cmap subtable's language must be zero.
+ *
+ * A rule this narrow earns its place because a browser's font sanitiser enforces
+ * it as a hard failure of the whole table, and the profile had no other way to see
+ * it. Chromium refuses `public/fonts/mplantin.ttf` outright — "Languages should be
+ * 0 (1)", then "cmap: Failed to parse table", surfacing to script as `SyntaxError:
+ * Invalid font data in ArrayBuffer` — while every check above it passed, because
+ * none of them looked inside a subtable and the parser reads the coverage out of
+ * one regardless (#153).
+ *
+ * The parsed cmap is read rather than the source bytes so the rule holds for all
+ * four accepted containers at once: a WOFF2's cmap is inside a compressed stream
+ * that nothing here decodes.
+ *
+ * It closes one defect, not the class. `static-font-v1` states in its own contract
+ * that acceptance needs `FontFace.load()` and representative glyph rendering from
+ * a real browser, and that requirement is what covers everything a sanitiser
+ * rejects that is not written out here; see `reportWithBrowserDecodeEvidence`,
+ * which will not publish a font without it.
+ */
+function validateCmapSubtables(font: ParsedFont) {
+	for (const subtable of font.cmap?.tables ?? []) {
+		// Formats carrying no language field (14, the variation-sequence subtable)
+		// report none, and there is nothing to check.
+		if (typeof subtable.table?.language === 'number' && subtable.table.language !== 0) {
+			validationError(
+				'font-cmap-language-invalid',
+				`Font cmap subtable (${subtable.platformID}, ${subtable.encodingID}) declares language ${subtable.table.language} rather than 0.`,
+			);
+		}
+	}
+}
+
 interface Point {
 	x: number;
 	y: number;
@@ -627,6 +668,7 @@ export async function processStaticFont(
 		validationError('font-collection-not-supported', 'Font collections are not supported.');
 	const font = parsed as ParsedFont;
 	validateTables(font);
+	validateCmapSubtables(font);
 	const expanded = expandedByteLength(format, bytes, font, preflightExpandedByteLength);
 	let coverage: number[];
 	try {

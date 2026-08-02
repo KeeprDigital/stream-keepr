@@ -226,6 +226,22 @@
 					}
 				}
 
+				// The other direction, and the only place it can be proved: bytes the
+				// static-font-v1 profile refuses server-side must be bytes this browser
+				// refuses too. A unit test asserting the profile's own check would prove
+				// the check; only a browser proves the property the check stands for.
+				for (const face of manifest.refusedFaces ?? []) {
+					if (failed)
+						break;
+					const refused = await verifyUrl(face.url, [48]);
+					if (refused.outcome === 'rendered') {
+						failed = {
+							code: 'font-refused-face-loaded',
+							message: `${face.format}: a face the profile rejects loaded and rendered here.`,
+						};
+					}
+				}
+
 				if (!failed && operationId)
 					failed = await runLibraryFace();
 
@@ -235,7 +251,8 @@
 					report(
 						'',
 						`${manifest.faces.map(face => face.format).join(', ')} loaded and rendered; `
-						+ 'a silently substituted face was refused'
+						+ 'a silently substituted face was refused; '
+						+ `${(manifest.refusedFaces ?? []).length} profile-rejected face(s) refused by the browser`
 						+ (operationId ? '; a library face published and re-loaded from delivery.' : '.'),
 					);
 				}

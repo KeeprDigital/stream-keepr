@@ -125,13 +125,13 @@ describe('static font ingestion through the Graphics Asset Library public module
 	});
 
 	it('fails closed when FontFace loading or representative rendering was not proven', async () => {
-		const source = new Uint8Array(await readFile('public/fonts/mplantin.ttf'));
+		const source = new Uint8Array(await readFile('public/fonts/mana.ttf'));
 		const assets = library();
 		const operation = await assets.initiateGraphicsIngestion({
 			idempotencyKey: 'fontface-rejected',
 			initiatedBy: 'graphics-author-1',
 			name: 'Rejected face',
-			sourceFileName: 'mplantin.ttf',
+			sourceFileName: 'mana.ttf',
 			declaredMime: 'font/ttf',
 			declaredByteLength: source.byteLength,
 		});
@@ -168,13 +168,13 @@ describe('static font ingestion through the Graphics Asset Library public module
 	});
 
 	it('rejects fallback-dependent glyph proof even when the source digest and challenge match', async () => {
-		const source = new Uint8Array(await readFile('public/fonts/mplantin.ttf'));
+		const source = new Uint8Array(await readFile('public/fonts/mana.ttf'));
 		const assets = library();
 		const initiated = await assets.initiateGraphicsIngestion({
 			idempotencyKey: 'fallback-dependent',
 			initiatedBy: 'graphics-author-1',
 			name: 'Fallback dependent',
-			sourceFileName: 'mplantin.ttf',
+			sourceFileName: 'mana.ttf',
 			declaredMime: 'font/ttf',
 			declaredByteLength: source.byteLength,
 		});
@@ -231,7 +231,7 @@ describe('static font ingestion through the Graphics Asset Library public module
 
 	it('replaces font Graphic Asset Content with an immutable exact Graphic Asset Revision', async () => {
 		const originalSource = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
-		const replacementSource = new Uint8Array(await readFile('public/fonts/mplantin.ttf'));
+		const replacementSource = new Uint8Array(await readFile('public/fonts/mana.ttf'));
 		const assets = library();
 		const initiated = await assets.initiateGraphicsIngestion({
 			idempotencyKey: 'replaceable-font-original',
@@ -260,7 +260,7 @@ describe('static font ingestion through the Graphics Asset Library public module
 			assetId: original.result!.assetId,
 			idempotencyKey: 'replaceable-font-ttf',
 			initiatedBy: 'graphics-author-1',
-			sourceFileName: 'mplantin.ttf',
+			sourceFileName: 'mana.ttf',
 			declaredMime: 'font/ttf',
 			declaredByteLength: replacementSource.byteLength,
 		});

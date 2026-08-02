@@ -1150,6 +1150,7 @@ describe('graphicsCompositionRenderModel', () => {
 			// Nothing in the descriptor expresses where playback should start, because
 			// nothing needs to: the element is created when the graphic enters.
 			expect(Object.keys(model.graphics[0]!.items[0]!.media!).sort()).toEqual([
+				'incompatibilityNotice',
 				'loop',
 				'mediaKind',
 				'playbackRate',
@@ -1157,6 +1158,44 @@ describe('graphicsCompositionRenderModel', () => {
 				'style',
 				'videoCompatibility',
 			]);
+		});
+
+		/**
+		 * The diagnostic an output shows instead of a blank rectangle (#98).
+		 *
+		 * Whether the browser can play the clip is a client fact the component asks
+		 * its own runtime for. Whether the reason may be *painted* is not: the Key
+		 * Output is an alpha matte, so a legible notice there would punch the
+		 * diagnostic straight into the key. Only the render model knows which output
+		 * it is building, so the model is what withholds it.
+		 */
+		function noticeFor(output: 'overlay' | 'fill' | 'key', videoCompatibility: 'all-supported' | 'chromium-transparency') {
+			return resolveGraphicsCompositionRenderModel({
+				output,
+				graphics: [graphic('a', [media('sting', { mediaKind: 'silent-video', videoCompatibility })])],
+				graphicAssetContentUrl: contentUrl,
+				...CANVAS,
+			}).graphics[0]?.items[0]?.media?.incompatibilityNotice;
+		}
+
+		it('offers a legible reason for a clip this output cannot play, in every output that carries colour', () => {
+			for (const output of ['overlay', 'fill'] as const) {
+				const notice = noticeFor(output, 'chromium-transparency');
+				expect(notice?.code).toBe('vp9-alpha-chromium-required');
+				// Rendered words, not a bare marker: the point of #98 is that an
+				// operator looking at the output can tell what went wrong.
+				expect(notice?.text).toMatch(/chromium/i);
+				expect(notice?.style.color).toBeTruthy();
+				expect(notice?.style.backgroundColor).toBeTruthy();
+			}
+		});
+
+		it('offers no reason to paint in the Key Output, whose colour is the alpha matte', () => {
+			expect(noticeFor('key', 'chromium-transparency')).toBeUndefined();
+		});
+
+		it('offers no reason for a clip every target can play', () => {
+			expect(noticeFor('overlay', 'all-supported')).toBeUndefined();
 		});
 
 		it('clips to an optional Shape Geometry, and to its own rectangle without one', () => {

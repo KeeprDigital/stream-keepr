@@ -359,6 +359,28 @@ export interface GraphicMediaRenderDescriptor {
 	 * VP9-alpha video it cannot play rather than showing a blank rectangle.
 	 */
 	videoCompatibility?: 'all-supported' | 'chromium-transparency';
+	/**
+	 * What this output may paint in place of a clip it cannot play.
+	 *
+	 * Present only where painting is safe. Whether the browser actually can play
+	 * the clip is a client fact — the user agent's own engine — that no pure model
+	 * can know, so the component asks its runtime for that. What the component
+	 * cannot know is which Screen Output it is inside, and that decides whether a
+	 * legible notice is a diagnostic or a defect: the Key Output renders composed
+	 * opacity as an alpha matte, so text there would punch the message into the key
+	 * and put it on program through the downstream mixer. So the model withholds
+	 * the notice for the Key Output and offers it for every output that carries
+	 * colour.
+	 */
+	incompatibilityNotice?: GraphicMediaIncompatibilityNoticeDescriptor;
+}
+
+/** The rendered reason an output shows instead of a clip it cannot play. */
+export interface GraphicMediaIncompatibilityNoticeDescriptor {
+	/** The same stable code the Screen Output asset routes refuse the revision with. */
+	code: 'vp9-alpha-chromium-required';
+	text: string;
+	style: CSSProperties;
 }
 
 /** One Player's live Feature Match Session state, as the context-gated kinds read it. */
@@ -1323,6 +1345,51 @@ function stackedChildClipSize(
 }
 
 /**
+ * The reason a clip this output cannot play shows, when showing it is safe.
+ *
+ * The words carry the stable code as well as plain language, because the two
+ * readers differ: an operator reads "needs Chromium" and switches capture, and
+ * whoever they report it to searches for `vp9-alpha-chromium-required` and finds
+ * the same code on the refusal the Screen Output asset route answers with.
+ *
+ * It is painted opaquely over the item's whole box rather than as bare text,
+ * because the box it replaces may be over anything.
+ */
+function mediaIncompatibilityNotice(
+	output: ScreenOutput,
+	item: MediaGraphicItemConfig,
+): GraphicMediaIncompatibilityNoticeDescriptor | undefined {
+	if (
+		output === 'key'
+		|| item.mediaKind !== 'silent-video'
+		|| item.videoCompatibility !== 'chromium-transparency'
+	) {
+		return undefined;
+	}
+	return {
+		code: 'vp9-alpha-chromium-required',
+		text: 'Video needs Chromium (vp9-alpha-chromium-required)',
+		style: {
+			position: 'absolute',
+			inset: 0,
+			display: 'flex',
+			alignItems: 'center',
+			justifyContent: 'center',
+			padding: '8px',
+			boxSizing: 'border-box',
+			backgroundColor: 'rgba(0, 0, 0, 0.78)',
+			color: '#ffffff',
+			fontFamily: 'system-ui, sans-serif',
+			fontSize: '16px',
+			lineHeight: 1.25,
+			textAlign: 'center',
+			overflow: 'hidden',
+			overflowWrap: 'anywhere',
+		},
+	};
+}
+
+/**
  * One Media Graphic Item's element paint.
  *
  * Focal position is where `objectPosition` puts the asset inside the box, which
@@ -1350,6 +1417,7 @@ function mediaDescriptor(
 		loop: item.loop,
 		playbackRate: item.playbackRate,
 		videoCompatibility: item.videoCompatibility,
+		incompatibilityNotice: mediaIncompatibilityNotice(output, item),
 	};
 }
 

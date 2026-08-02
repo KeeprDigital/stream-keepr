@@ -65,6 +65,9 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	'font-load-incomplete',
 	'font-glyph-not-rendered',
 	'font-silent-fallback-accepted',
+	// A face the static-font-v1 profile rejects loaded here anyway, so the
+	// server-side check and the browser disagree about the same bytes.
+	'font-refused-face-loaded',
 	'font-ready-before-load',
 	'browser-driver-unavailable',
 	'browser-acceptance-failed',

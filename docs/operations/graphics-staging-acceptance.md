@@ -271,14 +271,19 @@ this step now asserts. Deployed mode:
    `chromium-transparency`.
 2. Publishes a Screen Output whose Feature Match Layout pins that revision.
 3. Drives Safari to that Screen Output's page, where it mints a capability
-   through its own author session and calls the capability-session bootstrap.
-4. Requires `409` with `data.code = vp9-alpha-chromium-required`. Anything else
-   prints `safari-vp9-alpha-not-blocked` and is a gate failure — it means a
-   browser that cannot show the content correctly was admitted.
+   through its own author session, opens a capability session, and then asks
+   for the restricted revision's own content route.
+4. Requires the session to open with `204` and the revision to answer `409`
+   with `data.code = vp9-alpha-chromium-required`. Anything else on the
+   revision prints `safari-vp9-alpha-not-blocked` and is a gate failure — it
+   means a browser that cannot show the content correctly was handed the bytes.
+   A session that refuses instead prints `harness-precondition-unmet`: refusing
+   it costs the output every asset the Screen publishes rather than the one
+   clip Safari would show wrongly, which is the defect #98 closed.
 5. Tears the Screen Output and its Event down.
 
-Nothing secret travels in the URL: the page is given only the Event and Screen
-identities and mints the capability itself.
+Nothing secret travels in the URL: the page is given the Event, Screen, and
+exact revision identities, and mints the capability itself.
 
 ### The browser fact, recorded rather than judged
 

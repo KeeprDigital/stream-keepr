@@ -34,52 +34,58 @@ const MODE_SLOT_SCOPE_BINDINGS = MODE_SLOT_SCOPES.flatMap(scope => [...scope]);
 
 export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
 	return {
+		/**
+		 * Whether this capability may open a session at all.
+		 *
+		 * Deliberately says nothing about playback compatibility. It used to: a single
+		 * `EXISTS` over the Screen's references refused the whole session when any one
+		 * of them pinned a chromium-transparency revision and the requesting engine was
+		 * not Chromium. That answered the wrong question at the wrong grain — the
+		 * output then resolved no content URL for *anything*, so one clip nobody could
+		 * play cost the operator every image, video, and font the Screen publishes, and
+		 * the per-item diagnostic meant to explain it could never render because its
+		 * `src` was empty too (#98).
+		 *
+		 * Compatibility is now decided per resolution request, in `authorize` below,
+		 * against the exact revision being asked for.
+		 */
 		async authorizeCapability(input: {
 			screenId: number;
 			capabilityDigest: string;
-			actualVideoTarget?: 'chromium' | 'safari' | 'other';
 		}) {
-			// Scoped to the current mode too: a VP9-alpha video referenced by some
-			// other mode's stored configuration is not on this output, so it must not
-			// decide whether this output's capability session is refused.
 			const row = await database.prepare(`
-				SELECT EXISTS (
-					SELECT 1
-					FROM graphic_asset_references reference
-					JOIN graphic_asset_revisions revision
-						ON revision.id = reference.revision_id
-						AND revision.asset_id = reference.asset_id
-					WHERE reference.owner_kind = 'screen'
-						AND reference.owner_id = CAST(screen.id AS TEXT)
-						AND (${MODE_SLOT_SCOPE})
-						AND json_extract(
-							revision.technical_facts,
-							'$.targetCompatibility'
-						) = 'chromium-transparency'
-				) AS restricted
+				SELECT screen.id AS id
 				FROM screens screen
 				WHERE screen.id = ?
 					AND screen.asset_capability_digest = ?
 				LIMIT 1
 			`).bind(
-				...MODE_SLOT_SCOPE_BINDINGS,
 				input.screenId,
 				input.capabilityDigest,
-			).first<{ restricted: number }>();
-			if (!row)
-				return { outcome: 'missing' as const };
-			if (row.restricted === 1 && input.actualVideoTarget !== 'chromium') {
-				return {
-					outcome: 'incompatible' as const,
-					code: 'vp9-alpha-chromium-required' as const,
-				};
-			}
-			return { outcome: 'authorized' as const };
+			).first<{ id: number }>();
+			return row
+				? { outcome: 'authorized' as const }
+				: { outcome: 'missing' as const };
 		},
 
+		/**
+		 * Whether this Screen Output may resolve one exact Graphic Asset Revision now.
+		 *
+		 * The revision's own recorded technical facts decide compatibility, never the
+		 * authored `videoTarget`: what an author declared is a write-time enabling
+		 * choice, while what is being answered here is whether the engine on the other
+		 * end of *this* request can decode these bytes.
+		 *
+		 * Refused separately from `missing`, because the two are different facts about
+		 * different things and the operator's next action differs. Missing means this
+		 * Screen does not publish the revision; incompatible means it does, and this
+		 * browser cannot play it.
+		 */
 		async authorize(input: ScreenOutputAssetAuthorizationInput) {
 			const row = await database.prepare(`
-				SELECT revision.content_digest AS contentIdentity
+				SELECT
+					revision.content_digest AS contentIdentity,
+					json_extract(revision.technical_facts, '$.targetCompatibility') AS targetCompatibility
 				FROM screens screen
 				JOIN graphic_asset_references reference
 					ON reference.owner_kind = 'screen'
@@ -99,13 +105,22 @@ export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
 				input.capabilityDigest,
 				input.assetId,
 				input.revisionId,
-			).first<{ contentIdentity: string }>();
-			return row
-				? {
-						outcome: 'authorized' as const,
-						contentIdentity: row.contentIdentity,
-					}
-				: { outcome: 'missing' as const };
+			).first<{ contentIdentity: string; targetCompatibility: string | null }>();
+			if (!row)
+				return { outcome: 'missing' as const };
+			if (
+				row.targetCompatibility === 'chromium-transparency'
+				&& input.actualVideoTarget !== 'chromium'
+			) {
+				return {
+					outcome: 'incompatible' as const,
+					code: 'vp9-alpha-chromium-required' as const,
+				};
+			}
+			return {
+				outcome: 'authorized' as const,
+				contentIdentity: row.contentIdentity,
+			};
 		},
 	};
 }

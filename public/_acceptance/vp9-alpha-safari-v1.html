@@ -14,15 +14,22 @@
 			// than not playing at all.
 			//
 			// So the guarantee cannot rest on a browser refusing anything. What is
-			// enforceable is the product boundary: a Screen Output that pins
-			// restricted video refuses to hand a Safari user agent a capability
-			// session at all. That refusal is what this page asserts when it is
-			// given a Screen Output to try (`?event=&screen=`). The raw playback
-			// observation is kept as the evidence for *why* the boundary has to
-			// exist, and is recorded rather than judged.
+			// enforceable is the product boundary: a Screen Output never hands this
+			// browser the bytes of a revision it would play wrongly. That refusal is
+			// what this page asserts when it is given a Screen Output and the exact
+			// restricted revision to try (`?event=&screen=&asset=&revision=`). The raw
+			// playback observation is kept as the evidence for *why* the boundary has
+			// to exist, and is recorded rather than judged.
+			//
+			// The refusal is per resolution request, not per session (#98). A session
+			// refused Screen-wide cost the output every asset the Screen published and
+			// left an operator with a black canvas and no reason for it, so the session
+			// now opens for every browser and the restricted revision alone is refused.
 			const parameters = new URLSearchParams(location.search);
 			const eventId = parameters.get('event');
 			const screenId = parameters.get('screen');
+			const assetId = parameters.get('asset');
+			const revisionId = parameters.get('revision');
 
 			function report(code, message) {
 				document.body.dataset.code = code;
@@ -90,8 +97,9 @@
 			}
 
 			/**
-			 * The enforced guarantee: this Screen Output pins VP9-alpha video, so
-			 * the capability-session bootstrap must refuse this browser outright.
+			 * The enforced guarantee: this Screen Output pins VP9-alpha video, so it
+			 * must refuse this browser those exact bytes — while still opening the
+			 * session every other asset on the Screen is resolved through.
 			 *
 			 * These two routes are spelled out rather than taken from
 			 * `scripts/graphics-acceptance/routes.mjs`, which is where every other
@@ -112,17 +120,30 @@
 				}
 				const { assetCapability } = await minted.json();
 
+				// The session opens: losing it would cost this output every asset the
+				// Screen publishes, not the one clip this browser cannot show.
 				const bootstrap = await fetch(
 					`/api/screen-output/screens/${screenId}/asset-capability-session`,
 					{ method: 'POST', headers: { authorization: `Bearer ${assetCapability}` } },
 				);
-				if (bootstrap.status !== 409) {
+				if (bootstrap.status !== 204) {
 					return {
-						code: 'safari-vp9-alpha-not-blocked',
-						detail: `The capability session answered ${bootstrap.status} rather than refusing.`,
+						code: 'harness-precondition-unmet',
+						detail: `The capability session answered ${bootstrap.status} rather than opening.`,
 					};
 				}
-				const body = await bootstrap.json().catch(() => ({}));
+
+				const content = await fetch(
+					`/api/screen-output/screens/${screenId}/assets/${assetId}/revisions/${revisionId}/content`,
+					{ cache: 'no-store', headers: { authorization: `Bearer ${assetCapability}` } },
+				);
+				if (content.status !== 409) {
+					return {
+						code: 'safari-vp9-alpha-not-blocked',
+						detail: `The restricted revision answered ${content.status} rather than refusing.`,
+					};
+				}
+				const body = await content.json().catch(() => ({}));
 				if (body?.data?.code !== 'vp9-alpha-chromium-required') {
 					return {
 						code: 'safari-vp9-alpha-not-blocked',
@@ -137,18 +158,18 @@
 				document.body.dataset.browserFact = browserFact;
 
 				let failure;
-				if (eventId && screenId) {
+				if (eventId && screenId && assetId && revisionId) {
 					document.body.dataset.boundary = 'exercised';
 					failure = await observeProductBoundary();
 				}
 
 				if (failure)
 					report(failure.code, failure.detail);
-				else if (eventId && screenId) {
+				else if (document.body.dataset.boundary === 'exercised') {
 					report(
 						'',
-						'The Screen Output refused this browser a capability session; '
-						+ `left to itself the browser would have ${browserFact} the video.`,
+						'The Screen Output opened a session and refused this browser the '
+						+ `restricted revision; left to itself the browser would have ${browserFact} the video.`,
 					);
 				}
 				else {

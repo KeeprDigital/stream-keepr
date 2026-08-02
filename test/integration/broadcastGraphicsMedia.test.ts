@@ -759,10 +759,26 @@ describe('media Graphic Input values on air', () => {
 		return assetCapability;
 	}
 
-	function outputStatus(screenId: number, capability: string, reference: Reference) {
+	const SAFARI_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/605.1.15 Version/18.5 Safari/605.1.15';
+	const CHROMIUM_USER_AGENT = 'Mozilla/5.0 Chrome/138.0.0.0 Safari/537.36';
+
+	/**
+	 * A request as one Screen Output browser, whose engine decides what it may play.
+	 *
+	 * The user agent is stated wherever a restricted revision is involved rather than
+	 * defaulted, because playback compatibility is now answered per resolution
+	 * request: a caller that names no engine cannot be proven to be Chromium and is
+	 * refused a chromium-transparency revision, which is the behaviour under test.
+	 */
+	function outputStatus(screenId: number, capability: string, reference: Reference, userAgent?: string) {
 		return fetch(
 			`/api/screen-output/screens/${screenId}/assets/${reference.assetId}/revisions/${reference.revisionId}/content`,
-			{ headers: { authorization: `Bearer ${capability}` } },
+			{
+				headers: {
+					authorization: `Bearer ${capability}`,
+					...(userAgent ? { 'user-agent': userAgent } : {}),
+				},
+			},
 		).then(response => response.status);
 	}
 
@@ -1053,7 +1069,10 @@ describe('media Graphic Input values on air', () => {
 			WHERE id = '${restricted.revisionId}';
 		`);
 
-		await declare(screenId, [mediaInput('sting', { mediaKind: 'silent-video' })]);
+		await declare(screenId, [
+			mediaInput('sting', { mediaKind: 'silent-video' }),
+			mediaInput('backdrop'),
+		]);
 		const capability = await capabilityFor(screenId);
 		const session = await liveSession(screenId);
 
@@ -1063,6 +1082,11 @@ describe('media Graphic Input values on air', () => {
 			commandId: `media-input-vp9-set-${runId}`,
 			type: 'Set Input',
 			payload: { graphicId: 'promo', inputKey: 'sting', value: restricted },
+		});
+		await command(screenId, session.id, {
+			commandId: `media-input-vp9-set-backdrop-${runId}`,
+			type: 'Set Input',
+			payload: { graphicId: 'promo', inputKey: 'backdrop', value: first },
 		});
 		const taken = await command(screenId, session.id, {
 			commandId: `media-input-vp9-take-${runId}`,
@@ -1074,20 +1098,37 @@ describe('media Graphic Input values on air', () => {
 			...restricted,
 			videoCompatibility: 'chromium-transparency',
 		});
-		await expect(outputStatus(screenId, capability, restricted)).resolves.toBe(200);
+		await expect(outputStatus(screenId, capability, restricted, CHROMIUM_USER_AGENT)).resolves.toBe(200);
 
-		// And the fact is load-bearing where it matters: an output that cannot play VP9
-		// alpha is told so, rather than opening a session and showing nothing on air.
+		/**
+		 * What an incompatible revision costs the output (#98).
+		 *
+		 * It used to cost everything: the capability session itself was refused, so a
+		 * Safari output resolved no content URL for any reference on the Screen and
+		 * went to black rather than losing the one clip it could not play. The session
+		 * now opens for every engine, and only the exact restricted revision is
+		 * refused — with the code the output prints in the clip's place.
+		 */
 		function bootstrap(userAgent: string) {
 			return fetch(`/api/screen-output/screens/${screenId}/asset-capability-session`, {
 				method: 'POST',
 				headers: { 'authorization': `Bearer ${capability}`, 'user-agent': userAgent },
 			}).then(response => response.status);
 		}
-		await expect(bootstrap('Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/605.1.15 Version/18.5 Safari/605.1.15'))
-			.resolves
-			.toBe(409);
-		await expect(bootstrap('Mozilla/5.0 Chrome/138.0.0.0 Safari/537.36')).resolves.toBe(204);
+		await expect(bootstrap(SAFARI_USER_AGENT)).resolves.toBe(204);
+		await expect(bootstrap(CHROMIUM_USER_AGENT)).resolves.toBe(204);
+
+		// The image the same graphic pins keeps playing out on the engine that lost
+		// everything before.
+		await expect(outputStatus(screenId, capability, first, SAFARI_USER_AGENT)).resolves.toBe(200);
+		const refused = await fetch(
+			`/api/screen-output/screens/${screenId}/assets/${restricted.assetId}/revisions/${restricted.revisionId}/content`,
+			{ headers: { 'authorization': `Bearer ${capability}`, 'user-agent': SAFARI_USER_AGENT } },
+		);
+		expect(refused.status).toBe(409);
+		await expect(refused.json()).resolves.toMatchObject({
+			data: { code: 'vp9-alpha-chromium-required' },
+		});
 	});
 
 	it('publishes an authored media Graphic Input default, and refuses one with no compatibility facts', async () => {
@@ -1120,7 +1161,7 @@ describe('media Graphic Input values on air', () => {
 		})]);
 
 		const capability = await capabilityFor(screenId);
-		await expect(outputStatus(screenId, capability, restricted)).resolves.toBe(200);
+		await expect(outputStatus(screenId, capability, restricted, CHROMIUM_USER_AGENT)).resolves.toBe(200);
 		await expect(usageOf(restricted)).resolves.toEqual([
 			expect.objectContaining({
 				reference: restricted,

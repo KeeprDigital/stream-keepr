@@ -5,6 +5,13 @@
  * actually renders its own glyphs, and that a face which would silently fall
  * back is refused rather than accepted.
  *
+ * It also proves the converse, which nothing else can: every face the
+ * `static-font-v1` profile rejects for a sanitiser-level defect is refused by
+ * this browser too. A unit test can only show the server-side check fires on the
+ * bytes it was written for; whether those bytes are genuinely unloadable is a
+ * fact about the browser, so `refusedFaces` in the manifest is checked here
+ * (#153).
+ *
  * Two different things are being proved, and they need different setups:
  *
  * - The browser facts — that Chromium loads WOFF2, WOFF, TTF, and OTF and
@@ -73,6 +80,9 @@ async function serveLocally() {
 		[MANIFEST_PATH]: async () => ({ body: JSON.stringify(manifest), type: 'application/json' }),
 		'/fonts/mana.ttf': () => file('public/fonts/mana.ttf', 'font/ttf'),
 		'/fonts/mplantin.woff': () => file('public/fonts/mplantin.woff', 'font/woff'),
+		// Served to be refused: the profile rejects these bytes, and this run is what
+		// proves the browser does too (#153).
+		'/fonts/mplantin.ttf': () => file('public/fonts/mplantin.ttf', 'font/ttf'),
 		'/fonts/mana.woff2': () => file('public/fonts/mana.woff2', 'font/woff2'),
 		'/_acceptance/fonts/otf-face': () =>
 			file('node_modules/mana-font/docs/fonts/beleren.otf', 'font/otf'),
@@ -116,6 +126,7 @@ await runAcceptanceHarness({
 
 			return {
 				faces: library ? 5 : 4,
+				refusedFaces: 1,
 				library: library ? 'published' : 'not-exercised',
 				mode: deployed ? 'deployed' : 'local',
 			};

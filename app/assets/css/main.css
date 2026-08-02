@@ -1,14 +1,23 @@
 @import 'tailwindcss' theme(static);
 @import '@nuxt/ui';
 
+/*
+ * MPlantin ships as WOFF only, deliberately.
+ *
+ * `mplantin.ttf` was listed here as a truetype fallback and cannot load in any
+ * browser: both of its cmap subtables declare language 1, which a font sanitiser
+ * refuses the whole table for (#153). No browser reached it — WOFF is listed first
+ * and universally supported — so the fallback was never a fallback, only a face
+ * that would have silently substituted Georgia had anything ever taken it. The
+ * file stays in the repository as the fixture proving the compatibility profile
+ * now rejects those bytes.
+ */
 @font-face {
 	font-display: swap;
 	font-family: 'MPlantin';
 	font-style: normal;
 	font-weight: 400;
-	src:
-		url('/fonts/mplantin.woff') format('woff'),
-		url('/fonts/mplantin.ttf') format('truetype');
+	src: url('/fonts/mplantin.woff') format('woff');
 }
 
 :root {

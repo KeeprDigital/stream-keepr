@@ -4,5 +4,8 @@
 		{ "format": "woff", "url": "/fonts/mplantin.woff", "codePoint": 48 },
 		{ "format": "woff2", "url": "/fonts/mana.woff2", "codePoint": 48 }
 	],
-	"fallbackProbe": { "format": "woff2", "url": "/fonts/mana.woff2", "codePoint": 81 }
+	"fallbackProbe": { "format": "woff2", "url": "/fonts/mana.woff2", "codePoint": 81 },
+	"refusedFaces": [
+		{ "format": "ttf", "url": "/fonts/mplantin.ttf", "reason": "cmap subtables declare language 1" }
+	]
 }
