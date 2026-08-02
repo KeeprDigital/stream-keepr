@@ -19,9 +19,24 @@ const ingestion = '/api/graphics-assets/ingestion-operations';
  *
  * Resuming is free here because the started transfer states which parts the
  * library already holds, so only the outstanding ones are sent.
+ *
+ * One failure is not like the others and is translated rather than passed on: a
+ * refusal for want of a graphics author session. Every ingestion route resolves
+ * the author from that session, so its lapse makes the operation unreachable to
+ * whoever started it, and no amount of resuming brings it back. Callers get a
+ * sentence saying that instead of a status code they cannot act on.
  */
 export function useGraphicsIngestionTransfer() {
 	const apiHeaders = useApiHeaders();
+
+	function refuseWithoutSession(caught: unknown): never {
+		if (!graphicsAuthorSessionLapsed(caught))
+			throw caught;
+		throw Object.assign(
+			new Error(GRAPHICS_AUTHOR_SESSION_LAPSED_MESSAGE),
+			{ statusCode: 401 },
+		);
+	}
 
 	const transferInOneRequest = async (
 		operation: GraphicsIngestionOperation,
@@ -70,8 +85,10 @@ export function useGraphicsIngestionTransfer() {
 					}
 					catch (caught) {
 						// The library holds a part only once it has verified it, so a
-						// re-sent part is the same part rather than a second one.
-						if (attempt === transfer.maximumPartAttempts)
+						// re-sent part is the same part rather than a second one. A part
+						// refused for want of an author is the exception: every remaining
+						// attempt would be refused identically.
+						if (graphicsAuthorSessionLapsed(caught) || attempt === transfer.maximumPartAttempts)
 							throw caught;
 					}
 				}
@@ -95,9 +112,14 @@ export function useGraphicsIngestionTransfer() {
 		operation: GraphicsIngestionOperation,
 		source: Blob,
 	): Promise<GraphicsIngestionOperation> => {
-		return source.size > GRAPHICS_MULTIPART_PART_BYTES
-			? await transferInParts(operation, source)
-			: await transferInOneRequest(operation, source);
+		try {
+			return source.size > GRAPHICS_MULTIPART_PART_BYTES
+				? await transferInParts(operation, source)
+				: await transferInOneRequest(operation, source);
+		}
+		catch (caught) {
+			refuseWithoutSession(caught);
+		}
 	};
 
 	return { transfer };
