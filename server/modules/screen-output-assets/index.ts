@@ -1,3 +1,4 @@
+import type { GraphicsVideoTarget } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import {
 	ifNoneMatchMatches,
 	rangePermitted,
@@ -22,7 +23,7 @@ interface ScreenOutputAssetAuthorizationInput {
 	 * can play and a dozen every engine can, and refusing the session for the first
 	 * loses the output all twelve (#98).
 	 */
-	actualVideoTarget: 'chromium' | 'safari' | 'other';
+	actualVideoTarget: GraphicsVideoTarget;
 }
 
 type ScreenOutputAssetAuthorization

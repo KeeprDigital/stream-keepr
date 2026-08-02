@@ -21,7 +21,20 @@ cmap: Failed to parse table
 
 and, to script, `FontFace.load()` rejecting with `SyntaxError: Invalid font data in ArrayBuffer`.
 
-Both of the file's cmap subtables — `(1, 0)` format 0 and `(3, 1)` format 4 — declare `language` 1. A font sanitiser treats that as a hard failure of the whole cmap and therefore of the font. (`rangeShift` is wrong too, but a sanitiser corrects that and warns.) Nothing in the profile looked inside a cmap subtable, and `fontkitten` reads the coverage out of one regardless, so the defect was invisible to every check above.
+Both of the file's cmap subtables — `(1, 0)` format 0 and `(3, 1)` format 4 — declare `language` 1, but **only one of them is the defect**, and the three lines above are three different severities. `rangeShift` and `language id should be zero` are warnings the sanitiser continues past, correcting the first. `Languages should be 0 (1)` is the failure, and it is raised for the Microsoft-platform subtable: on the Macintosh platform OpenType _defines_ a format 0/4/6 subtable's `language` as the Mac language ID plus one, so a non-zero value there is correct rather than malformed.
+
+Reading those lines as one rule is a mistake that costs real fonts, so the platform split was settled by experiment rather than by reading. Each subtable of the bundled face was restated independently, the cmap checksum fixed up, and all four combinations driven through real Chromium:
+
+| variant       | `(1, 0)` fmt 0 | `(3, 1)` fmt 4 | `FontFace.load()`     |
+| ------------- | -------------- | -------------- | --------------------- |
+| original      | 1              | 1              | refused               |
+| ms-lang-only  | 0              | 1              | refused               |
+| mac-lang-only | 1              | 0              | loaded, glyphs render |
+| both-zero     | 0              | 0              | loaded, glyphs render |
+
+`both-zero` loading also settles `rangeShift`: it is still wrong in that variant, and the face loads regardless, so the profile has no reason to enforce it.
+
+Nothing in the profile looked inside a cmap subtable, and `fontkitten` reads the coverage out of one regardless, so the defect was invisible to every check above.
 
 The browser acceptance gate in #50 found this and worked around it by pointing its TTF fixture at `/fonts/mana.ttf`. The discrepancy itself was left open as #153.
 
@@ -29,7 +42,9 @@ The browser acceptance gate in #50 found this and worked around it by pointing i
 
 Two things, and the second is the load-bearing one.
 
-**1. The specific check is added.** `static-font-v1` now rejects any cmap subtable declaring a non-zero language, with the stable code `font-cmap-language-invalid`. It reads the _parsed_ cmap rather than the source bytes, so it holds for TTF, OTF, WOFF, and WOFF2 alike — a WOFF2's cmap lives inside a Brotli stream nothing in the validator decodes.
+**1. The specific check is added, with the platform exemption.** `static-font-v1` now rejects a cmap subtable declaring a non-zero language on any platform **other than Macintosh**, with the stable code `font-cmap-language-invalid`. It reads the _parsed_ cmap rather than the source bytes, so it holds for TTF, OTF, WOFF, and WOFF2 alike — a WOFF2's cmap lives inside a Brotli stream nothing in the validator decodes.
+
+The exemption is load-bearing and cannot be checked against the bundled font, which a rule with or without it rejects. So the accepted case is pinned twice: a unit test builds the `mac-lang-only` variant and requires acceptance, and the browser acceptance harness serves that same variant as a face that must **load and render**. Losing the exemption fails both.
 
 **2. The server-side checks are a floor, not the gate.** `static-font-v1` acceptance continues to require real browser evidence — `FontFace.load()` plus representative glyph rendering against server-selected code points, bound to the source digest and the challenge digest — and that requirement is what covers this defect class. `reportWithBrowserDecodeEvidence` refuses to publish a font without it.
 
@@ -47,5 +62,6 @@ So why add `font-cmap-language-invalid` at all, if the browser gate already refu
 
 - `public/fonts/mplantin.ttf` is no longer a valid fixture anywhere. Every unit fixture that treated it as an accepted TTF now uses `public/fonts/mana.ttf`, which the browser harness proves loads and renders; one new test pins that MPlantin's TTF is refused with `font-cmap-language-invalid`.
 - The file stays in the repository as exactly that negative fixture, and is removed from the `MPlantin` `@font-face` in `app/assets/css/main.css`. It was listed there as a `truetype` fallback behind the WOFF, so no browser ever reached it — but as a fallback it could only ever have produced the silent substitution #28 forbids. MPlantin renders from `mplantin.woff` today, before and after this change.
-- The static-font browser acceptance harness now proves both directions. `refusedFaces` in `public/_acceptance/static-font-v1.json` lists faces the profile rejects, and the run fails with `font-refused-face-loaded` if the browser loads one. A unit test can only show that a server-side check fires on the bytes it was written for; whether those bytes are genuinely unloadable is a fact about the browser.
+- The static-font browser acceptance harness now proves both directions. `refusedFaces` in `public/_acceptance/static-font-v1.json` lists faces the profile rejects, and the run fails with `font-refused-face-loaded` if the browser loads one; the `mac-lang-only` variant is served as an ordinary face that must load and render, so a rule that widened back would fail there. A unit test can only show that a server-side check fires on the bytes it was written for; whether those bytes are genuinely unloadable — or genuinely fine — is a fact about the browser.
+- A cmap rule of this kind must be settled against a browser before it ships. The first version of this check was written from the sanitiser's log alone, read every line of it as one severity, and rejected fonts that load and render. The four-variant sweep above is the cheap experiment that would have caught it, and is the standard for the next rule.
 - The bundled `mplantin.eot` and `mplantin.svg` (and `mana.eot`, `mana.svg`) remain unreferenced by anything. Out of scope here and not investigated.

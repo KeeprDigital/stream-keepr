@@ -443,16 +443,29 @@ function validateTables(font: ParsedFont) {
 		validationError('font-svg-not-supported', 'SVG glyph tables are not supported.');
 }
 
+/** Macintosh, the one cmap platform on which a non-zero language is defined. */
+const CMAP_MACINTOSH_PLATFORM = 1;
+
 /**
- * Every cmap subtable's language must be zero.
+ * A cmap subtable outside the Macintosh platform must declare language zero.
  *
  * A rule this narrow earns its place because a browser's font sanitiser enforces
  * it as a hard failure of the whole table, and the profile had no other way to see
- * it. Chromium refuses `public/fonts/mplantin.ttf` outright — "Languages should be
- * 0 (1)", then "cmap: Failed to parse table", surfacing to script as `SyntaxError:
- * Invalid font data in ArrayBuffer` — while every check above it passed, because
- * none of them looked inside a subtable and the parser reads the coverage out of
- * one regardless (#153).
+ * it. Chromium refuses `public/fonts/mplantin.ttf` outright — "cmap: Languages
+ * should be 0 (1)", then "cmap: Failed to parse table", surfacing to script as
+ * `SyntaxError: Invalid font data in ArrayBuffer` — while every check above it
+ * passed, because none of them looked inside a subtable and the parser reads the
+ * coverage out of one regardless (#153).
+ *
+ * The platform exemption is the whole of the rule, not a softening of it. On the
+ * Macintosh platform OpenType *defines* a format 0/4/6 subtable's `language` as
+ * the Mac language ID plus one, so a non-zero value there is correct, and the
+ * sanitiser says so in a different voice: "cmap: language id should be zero: 1" is
+ * a warning it continues past. Reading both lines as one rule refuses fonts that
+ * load and render — proven by restating each subtable of the bundled face
+ * independently and driving all four combinations through real Chromium, where a
+ * Macintosh-only language loads and renders its glyphs. See the table in
+ * `test/unit/server/modules/graphicsFont.test.ts`.
  *
  * The parsed cmap is read rather than the source bytes so the rule holds for all
  * four accepted containers at once: a WOFF2's cmap is inside a compressed stream
@@ -468,7 +481,11 @@ function validateCmapSubtables(font: ParsedFont) {
 	for (const subtable of font.cmap?.tables ?? []) {
 		// Formats carrying no language field (14, the variation-sequence subtable)
 		// report none, and there is nothing to check.
-		if (typeof subtable.table?.language === 'number' && subtable.table.language !== 0) {
+		if (
+			subtable.platformID !== CMAP_MACINTOSH_PLATFORM
+			&& typeof subtable.table?.language === 'number'
+			&& subtable.table.language !== 0
+		) {
 			validationError(
 				'font-cmap-language-invalid',
 				`Font cmap subtable (${subtable.platformID}, ${subtable.encodingID}) declares language ${subtable.table.language} rather than 0.`,

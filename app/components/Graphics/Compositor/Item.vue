@@ -62,6 +62,16 @@ const actualVideoTarget = useGraphicsVideoTarget();
  * empty, and the output lost all of its media rather than this one clip. The
  * refusal is now per resolution request, so every other reference still resolves
  * and this branch renders where the clip would have been.
+ *
+ * The refusal and this diagnostic are two independent decisions over one rule,
+ * not cause and effect. The server reads the revision's recorded
+ * `technical_facts.targetCompatibility`; this reads the `videoCompatibility` the
+ * Media Graphic Item's configuration carries. The write path is what keeps them
+ * equal — a silent-video reference that states no compatibility, or states one the
+ * pinned revision contradicts, is refused publication — so they agree on every
+ * Screen the system will accept. Nothing detects a disagreement if one ever
+ * arises, and in that case an output would be refused the bytes and say nothing,
+ * which is the blank rectangle #98 exists to remove.
  */
 const videoBlocked = computed(() => media.value?.videoCompatibility === 'chromium-transparency'
 	&& actualVideoTarget.value !== 'chromium');

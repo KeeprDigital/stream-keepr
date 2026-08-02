@@ -128,7 +128,7 @@
 				);
 				if (bootstrap.status !== 204) {
 					return {
-						code: 'harness-precondition-unmet',
+						code: 'restricted-video-session-refused',
 						detail: `The capability session answered ${bootstrap.status} rather than opening.`,
 					};
 				}

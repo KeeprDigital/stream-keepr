@@ -338,6 +338,12 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 			});
 		}
 
+		// A caller naming no engine cannot be proven to be Chromium, so it is refused
+		// too. Strictly a narrowing versus the session gate this replaced, which
+		// refused an absent user agent along with everything else non-Chromium.
+		const anonymous = await fetch(contentPath(), { headers: authorizedHeaders() });
+		expect(anonymous.status).toBe(409);
+
 		const played = await fetch(contentPath(), {
 			headers: authorizedHeaders({ 'user-agent': CHROMIUM }),
 		});

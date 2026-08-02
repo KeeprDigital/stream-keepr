@@ -68,6 +68,12 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	// A face the static-font-v1 profile rejects loaded here anyway, so the
 	// server-side check and the browser disagree about the same bytes.
 	'font-refused-face-loaded',
+	// A Screen Output publishing a restricted revision refused the whole
+	// capability session rather than that revision. Named apart from a
+	// precondition failure because it is not an unready environment: it is the
+	// #98 regression itself, and it costs the output every other asset the
+	// Screen publishes.
+	'restricted-video-session-refused',
 	'font-ready-before-load',
 	'browser-driver-unavailable',
 	'browser-acceptance-failed',

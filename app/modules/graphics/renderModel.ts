@@ -1354,6 +1354,12 @@ function stackedChildClipSize(
  *
  * It is painted opaquely over the item's whole box rather than as bare text,
  * because the box it replaces may be over anything.
+ *
+ * It carries the item's own opacity, exactly as the media element does. Without
+ * that, an item authored transparent — or at zero — would paint a solid black box
+ * on air where it previously painted nothing at all, which is a worse defect than
+ * the blank rectangle this notice exists to replace. At zero the notice disappears
+ * with the item, and nothing is lost: an invisible item has no clip to report.
  */
 function mediaIncompatibilityNotice(
 	output: ScreenOutput,
@@ -1385,6 +1391,7 @@ function mediaIncompatibilityNotice(
 			textAlign: 'center',
 			overflow: 'hidden',
 			overflowWrap: 'anywhere',
+			opacity: clampOpacity(item.opacity),
 		},
 	};
 }

@@ -58,8 +58,47 @@ const library = deployed || process.argv.includes('--library');
 const fromRepository = path => new URL(`../${path}`, import.meta.url);
 
 /**
- * The local manifest is the committed one plus the OTF face, so a local run
- * covers the whole static-font-v1 compatibility profile.
+ * `public/fonts/mplantin.ttf` with every cmap subtable's language restated by
+ * platform, and the table checksum fixed up so the bytes stay self-consistent.
+ *
+ * Built here rather than committed for the same reason the OTF face is not
+ * vendored: it exists only to be loaded by this run, and a synthetic font in
+ * `public/` would be a shipped asset nothing serves.
+ */
+async function cmapLanguageVariant(languageForPlatform) {
+	const bytes = new Uint8Array(await readFile(fromRepository('public/fonts/mplantin.ttf')));
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	let entry;
+	for (let index = 0; index < view.getUint16(4); index++) {
+		const candidate = 12 + index * 16;
+		if (String.fromCharCode(...bytes.subarray(candidate, candidate + 4)) === 'cmap')
+			entry = candidate;
+	}
+	const cmap = view.getUint32(entry + 8);
+	const length = view.getUint32(entry + 12);
+	for (let index = 0; index < view.getUint16(cmap + 2); index++) {
+		const record = cmap + 4 + index * 8;
+		view.setUint16(cmap + view.getUint32(record + 4) + 4, languageForPlatform(view.getUint16(record)));
+	}
+	let sum = 0;
+	for (let offset = 0; offset < Math.ceil(length / 4) * 4; offset += 4)
+		sum = (sum + view.getUint32(cmap + offset)) >>> 0;
+	view.setUint32(entry + 4, sum);
+	return bytes;
+}
+
+/**
+ * The local manifest is the committed one plus two faces a local run can build
+ * for itself, so a local run covers the whole static-font-v1 compatibility
+ * profile and both sides of its cmap-language rule.
+ *
+ * The Macintosh-language face is the one that matters. The profile permits a
+ * non-zero `language` on that platform, because OpenType defines it there as the
+ * Mac language ID plus one — and the bundled face is refused by a rule with or
+ * without that exemption, so nothing committed can tell the two apart. This face
+ * can: it is exactly the bundled one with its Microsoft subtable's language
+ * zeroed, and requiring it to load *and render* is what stops the rule quietly
+ * widening back into a false positive (#153).
  */
 async function localManifest() {
 	const committed = JSON.parse(await readFile(fromRepository(`public${MANIFEST_PATH}`), 'utf8'));
@@ -68,6 +107,7 @@ async function localManifest() {
 		faces: [
 			...committed.faces,
 			{ format: 'otf', url: '/_acceptance/fonts/otf-face', codePoint: 48 },
+			{ format: 'ttf', url: '/_acceptance/fonts/mac-cmap-language-face', codePoint: 48 },
 		],
 	};
 }
@@ -86,6 +126,10 @@ async function serveLocally() {
 		'/fonts/mana.woff2': () => file('public/fonts/mana.woff2', 'font/woff2'),
 		'/_acceptance/fonts/otf-face': () =>
 			file('node_modules/mana-font/docs/fonts/beleren.otf', 'font/otf'),
+		'/_acceptance/fonts/mac-cmap-language-face': async () => ({
+			body: await cmapLanguageVariant(platform => (platform === 1 ? 1 : 0)),
+			type: 'font/ttf',
+		}),
 	});
 }
 
@@ -125,7 +169,7 @@ await runAcceptanceHarness({
 				: [{ code: verdictFailureCode(verdict), detail: { page: HARNESS } }]);
 
 			return {
-				faces: library ? 5 : 4,
+				faces: library ? 6 : 5,
 				refusedFaces: 1,
 				library: library ? 'published' : 'not-exercised',
 				mode: deployed ? 'deployed' : 'local',

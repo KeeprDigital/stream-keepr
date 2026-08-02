@@ -132,61 +132,139 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 	});
 
 	/**
+	 * Restate every cmap subtable's language by platform, and fix up the checksum.
+	 *
+	 * The checksum matters: the profile validates the SFNT directory before anything
+	 * reads a table, so an unrestated edit is refused as `font-checksum-invalid` and
+	 * proves nothing about the cmap rule.
+	 */
+	function withCmapLanguages(source: Uint8Array, languageForPlatform: (platform: number) => number) {
+		const bytes = Uint8Array.from(source);
+		const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+		const tableCount = view.getUint16(4);
+		let entry: number | undefined;
+		for (let index = 0; index < tableCount; index++) {
+			const candidate = 12 + index * 16;
+			if (new TextDecoder().decode(bytes.subarray(candidate, candidate + 4)) === 'cmap')
+				entry = candidate;
+		}
+		if (entry === undefined)
+			throw new Error('Expected a cmap table');
+		const cmap = view.getUint32(entry + 8);
+		const length = view.getUint32(entry + 12);
+		const subtableCount = view.getUint16(cmap + 2);
+		for (let index = 0; index < subtableCount; index++) {
+			const record = cmap + 4 + index * 8;
+			view.setUint16(cmap + view.getUint32(record + 4) + 4, languageForPlatform(view.getUint16(record)));
+		}
+		let sum = 0;
+		for (let offset = 0; offset < Math.ceil(length / 4) * 4; offset += 4)
+			sum = (sum + view.getUint32(cmap + offset)) >>> 0;
+		view.setUint32(entry + 4, sum);
+		return bytes;
+	}
+
+	async function processTtf(bytes: Uint8Array) {
+		return await processStaticFont(bytes, {
+			sourceFileName: 'mplantin.ttf',
+			declaredMime: 'font/ttf',
+		});
+	}
+
+	/**
 	 * The bundled MPlantin TTF, which no browser will load (#153).
 	 *
-	 * Both of its cmap subtables declare language 1. Chromium's font sanitiser
-	 * refuses the whole table for it — "Languages should be 0 (1)", then "cmap:
-	 * Failed to parse table" — and `FontFace.load()` throws `SyntaxError: Invalid
-	 * font data in ArrayBuffer`. Every server-side check the profile ran passed,
-	 * because none of them looked inside a cmap subtable, and `fontkitten` reads
-	 * the coverage out of it perfectly happily.
+	 * Its Microsoft-platform `(3, 1)` cmap subtable declares language 1, which a font
+	 * sanitiser fails the whole table for — "Languages should be 0 (1)", then "cmap:
+	 * Failed to parse table" — surfacing to script as `SyntaxError: Invalid font data
+	 * in ArrayBuffer`. Every server-side check the profile ran passed, because none of
+	 * them looked inside a cmap subtable, and `fontkitten` reads the coverage out of
+	 * one perfectly happily.
 	 *
 	 * This face was the profile's *valid* TTF fixture until #153. Treating bytes no
 	 * browser can load as the reference for "accepted" is the exact failure #28
 	 * names: a font that would silently fall back, accepted.
 	 */
-	it('rejects the bundled MPlantin TTF, whose cmap subtables no browser will parse', async () => {
+	it('rejects the bundled MPlantin TTF, whose Microsoft cmap subtable no browser will parse', async () => {
 		const bytes = new Uint8Array(await readFile('public/fonts/mplantin.ttf'));
 
-		await expect(processStaticFont(bytes, {
-			sourceFileName: 'mplantin.ttf',
-			declaredMime: 'font/ttf',
-		})).rejects.toMatchObject({
+		await expect(processTtf(bytes)).rejects.toMatchObject({
 			issue: { code: 'font-cmap-language-invalid' },
 		});
 	});
 
-	it('rejects a non-zero cmap subtable language in every container format', async () => {
-		// The check reads the parsed cmap rather than the source bytes, so a WOFF2
-		// whose cmap is inside a Brotli stream is covered by the same rule.
-		const bytes = new Uint8Array(await readFile('public/fonts/mana.woff2'));
-		const accepted = await processStaticFont(bytes, {
-			sourceFileName: 'mana.woff2',
-			declaredMime: 'font/woff2',
+	/**
+	 * The platform split, which is the whole of this rule.
+	 *
+	 * On the Macintosh platform OpenType *defines* a format 0/4/6 subtable's
+	 * `language` as the Mac language ID plus one, so a non-zero value is legal there
+	 * and a sanitiser only warns: "cmap: language id should be zero: 1". Only the
+	 * Microsoft-platform line, "cmap: Languages should be 0 (1)", is fatal. Reading
+	 * both lines as one rule refused fonts that load and render perfectly well.
+	 *
+	 * Driven through real Chromium from `public/fonts/mplantin.ttf`, restating only
+	 * the named subtable's language and fixing the checksum:
+	 *
+	 * | variant       | (1, 0) fmt 0 | (3, 1) fmt 4 | `FontFace.load()`      |
+	 * | ------------- | ------------ | ------------ | ---------------------- |
+	 * | original      | 1            | 1            | refused                |
+	 * | ms-lang-only  | 0            | 1            | refused                |
+	 * | mac-lang-only | 1            | 0            | loaded, glyphs render  |
+	 * | both-zero     | 0            | 0            | loaded, glyphs render  |
+	 *
+	 * The bundled face is rejected by both the broad rule and this one, so it cannot
+	 * tell them apart on its own — which is why the accepted case is pinned here, and
+	 * why `mac-lang-only` is also a face the browser acceptance harness loads and
+	 * renders for real.
+	 */
+	it('accepts a Macintosh-platform cmap language, which OpenType defines there', async () => {
+		const source = new Uint8Array(await readFile('public/fonts/mplantin.ttf'));
+
+		const accepted = await processTtf(
+			withCmapLanguages(source, platform => (platform === 1 ? 1 : 0)),
+		);
+
+		expect(accepted.report).toMatchObject({ outcome: 'accepted', issues: [] });
+	});
+
+	it('rejects a Microsoft-platform cmap language even when every other subtable is zero', async () => {
+		const source = new Uint8Array(await readFile('public/fonts/mplantin.ttf'));
+
+		await expect(processTtf(
+			withCmapLanguages(source, platform => (platform === 3 ? 1 : 0)),
+		)).rejects.toMatchObject({
+			issue: { code: 'font-cmap-language-invalid' },
 		});
+	});
+
+	it('accepts the same face once every cmap language is zero', async () => {
+		// Guards the helper as much as the rule: if restating the languages did not
+		// really change what the profile reads, the rejections above would prove
+		// nothing. It also settles the other complaint the sanitiser logs about this
+		// file — a wrong `rangeShift`, which it corrects and warns about rather than
+		// refusing, and which the profile therefore has no reason to enforce.
+		const source = new Uint8Array(await readFile('public/fonts/mplantin.ttf'));
+
+		const accepted = await processTtf(withCmapLanguages(source, () => 0));
+
+		expect(accepted.report).toMatchObject({ outcome: 'accepted', issues: [] });
+	});
+
+	it('reads the parsed cmap, so a WOFF2 is covered by the same rule', async () => {
+		// A WOFF2's cmap lives inside a Brotli stream nothing in the validator
+		// decodes, so a rule reading source bytes could not see it at all.
+		const accepted = await processStaticFont(
+			new Uint8Array(await readFile('public/fonts/mana.woff2')),
+			{ sourceFileName: 'mana.woff2', declaredMime: 'font/woff2' },
+		);
 		expect(accepted.report.outcome).toBe('accepted');
 
-		const ttf = new Uint8Array(await readFile('public/fonts/mana.ttf'));
-		const view = new DataView(ttf.buffer, ttf.byteOffset, ttf.byteLength);
-		const tableCount = view.getUint16(4);
-		let cmapEntry: number | undefined;
-		for (let index = 0; index < tableCount; index++) {
-			const entry = 12 + index * 16;
-			if (new TextDecoder().decode(ttf.subarray(entry, entry + 4)) === 'cmap')
-				cmapEntry = entry;
-		}
-		if (cmapEntry === undefined)
-			throw new Error('Expected a cmap table');
-		const cmapOffset = view.getUint32(cmapEntry + 8);
-		const cmapLength = view.getUint32(cmapEntry + 12);
-		// Every subtable of this face shares one offset, so one write states them all.
-		view.setUint16(cmapOffset + view.getUint32(cmapOffset + 8) + 4, 1);
-		// Restated so the profile's own table checksum still agrees; otherwise the
-		// directory refuses the edit before anything reads the cmap.
-		let sum = 0;
-		for (let index = 0; index < Math.ceil(cmapLength / 4) * 4; index += 4)
-			sum = (sum + view.getUint32(cmapOffset + index)) >>> 0;
-		view.setUint32(cmapEntry + 4, sum);
+		// Every subtable of the TTF build of this face shares one offset, so one
+		// write states them all — including its Microsoft-platform one.
+		const ttf = withCmapLanguages(
+			new Uint8Array(await readFile('public/fonts/mana.ttf')),
+			() => 1,
+		);
 
 		await expect(processStaticFont(ttf, {
 			sourceFileName: 'mana.ttf',
