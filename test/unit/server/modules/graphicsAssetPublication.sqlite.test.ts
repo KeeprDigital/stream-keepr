@@ -118,6 +118,26 @@ async function arrangeReclaimableState(
 	}
 }
 
+/** An asset already in the library, as the arm about to reuse it sees it. */
+async function publishedAsset(catalogue: Catalogue, key: string, assetId: GraphicAssetId) {
+	const operation = await claimedOperation(catalogue, key);
+	await catalogue.publishGraphicAsset({
+		operation,
+		report: acceptedReport(SOURCE_DIGEST),
+		assetId,
+		revisionId: graphicAssetRevisionId(`${assetId}-revision`),
+		derivativeId: graphicsDerivativeId(`${assetId}-derivative`),
+		sourceDigest: SOURCE_DIGEST,
+		thumbnailDigest: THUMBNAIL_DIGEST,
+		thumbnailByteLength: 90,
+		publishedAt: new Date(3_000).toISOString(),
+	});
+	const current = await catalogue.findCurrentGraphicAsset(assetId);
+	if (!current)
+		throw new Error(`Test setup failed to publish ${assetId}`);
+	return current;
+}
+
 async function countOf(table: string) {
 	const result = await harness.client.execute(`SELECT COUNT(*) AS total FROM ${table}`);
 	return Number(result.rows[0]?.total);
@@ -204,6 +224,45 @@ describe('an ordinary ingestion publication that holds its claim', () => {
 		expect(await countOf('graphics_content_quarantine')).toBe(0);
 		expect(await countOf('graphics_canonical_write_candidates')).toBe(0);
 	});
+
+	it('spends the write candidates of a reuse that holds its claim', async () => {
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
+		const reused = await publishedAsset(catalogue, 'upload-before-reuse', 'reused-asset');
+		const operation = await claimedOperation(catalogue, 'reuse-held-claim', {
+			duplicateContentPolicy: 'reuse',
+		});
+		await arrangeReclaimableState(catalogue, operation, [SOURCE_DIGEST, THUMBNAIL_DIGEST]);
+
+		const completed = await catalogue.reuseGraphicAsset({
+			operation,
+			reusable: reused,
+			publishedAt: new Date(4_000).toISOString(),
+		});
+
+		expect(completed.stage).toBe('completed');
+		expect(completed.result?.outcome).toBe('reused');
+		expect(await countOf('graphics_canonical_write_candidates')).toBe(0);
+	});
+
+	it('spends the write candidates of a replacement no-op that holds its claim', async () => {
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
+		const target = graphicAssetId('noop-target');
+		const current = await publishedAsset(catalogue, 'upload-before-noop', target);
+		const operation = await claimedOperation(catalogue, 'noop-held-claim', {
+			targetAssetId: target,
+		});
+		await arrangeReclaimableState(catalogue, operation, [SOURCE_DIGEST, THUMBNAIL_DIGEST]);
+
+		const completed = await catalogue.completeGraphicAssetReplacementNoop({
+			operation,
+			current,
+			completedAt: new Date(4_000).toISOString(),
+		});
+
+		expect(completed.stage).toBe('completed');
+		expect(completed.result?.outcome).toBe('replacement-noop');
+		expect(await countOf('graphics_canonical_write_candidates')).toBe(0);
+	});
 });
 
 describe('an ordinary ingestion publication that lost its claim', () => {
@@ -278,6 +337,55 @@ describe('an ordinary ingestion publication that lost its claim', () => {
 		// The asset keeps the one revision it had, so nothing released those
 		// bytes back into reach.
 		expect(await countOf('graphic_asset_revisions')).toBe(1);
+	});
+
+	/**
+	 * The one arm that could answer a lost claim with success. Its terminal
+	 * transition matches nothing, which is not an error, so without a row-count
+	 * check the batch commits and the re-read finds the stage the winning attempt
+	 * left behind — completed — and reports it as this attempt's own.
+	 */
+	it('does not report a reuse it lost the claim to as its own success', async () => {
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
+		const reused = await publishedAsset(catalogue, 'upload-before-lost-reuse', 'reused-asset');
+		const operation = await claimedOperation(catalogue, 'reuse-lost-claim', {
+			duplicateContentPolicy: 'reuse',
+		});
+		await arrangeReclaimableState(catalogue, operation, [SOURCE_DIGEST, THUMBNAIL_DIGEST]);
+
+		// The attempt that won the race completes the operation first.
+		await catalogue.updateIngestionOperation(
+			{ ...operation, stage: 'completed', updatedAt: new Date(5_000).toISOString() },
+			operation.updatedAt,
+		);
+
+		await catalogue.reuseGraphicAsset({
+			operation,
+			reusable: reused,
+			publishedAt: new Date(6_000).toISOString(),
+		}).catch(() => {});
+
+		// The candidates stand for canonical bytes this attempt wrote, and only the
+		// attempt that actually published has the right to spend them.
+		expect(await countOf('graphics_canonical_write_candidates')).toBe(2);
+	});
+
+	it('reclaims no write candidates when a replacement no-op loses its claim', async () => {
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
+		const target = graphicAssetId('noop-lost-claim-target');
+		const current = await publishedAsset(catalogue, 'upload-before-lost-noop', target);
+		const operation = await claimedOperation(catalogue, 'noop-lost-claim', {
+			targetAssetId: target,
+		});
+		await arrangeReclaimableState(catalogue, operation, [SOURCE_DIGEST, THUMBNAIL_DIGEST]);
+
+		await expect(catalogue.completeGraphicAssetReplacementNoop({
+			operation: { ...operation, updatedAt: new Date(9_000).toISOString() },
+			current,
+			completedAt: new Date(4_000).toISOString(),
+		})).rejects.toThrow(/lost its claim/i);
+
+		expect(await countOf('graphics_canonical_write_candidates')).toBe(2);
 	});
 });
 
