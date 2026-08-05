@@ -163,13 +163,13 @@ not.
 
 ## Reading the library
 
-The read surface is gated too, as of issue #172. Six routes require a graphics
-author session and answer `401` without one: `GET /api/graphics-assets`,
+The read surface is gated too, as of issue #172. Six routes require a Graphics
+Author Session and answer `401` without one: `GET /api/graphics-assets`,
 `capacity`, an asset's `thumbnail`, `usage` and `retention`, and a Graphic Asset
-Revision's `status`. The last was not in #172's list — its sibling
-`revisions/:id/content` was gated with the ingestion routes and the status route
-beside it was missed, so a revision's bytes needed a session while the facts
-describing them did not.
+Revision's `status`. The last was not in #172's list: #55 created it and its
+sibling `revisions/:id/content` in one commit and guarded only that one, so a
+revision's bytes needed a session while the facts describing them did not, and
+nothing touched the file again until #172.
 
 Before that, guarding ingestion and lifecycle had left the library **writable
 only by an authenticated author and readable by anybody who could reach the
@@ -181,22 +181,21 @@ rather than only the asset that was asked about.
 library.** The gate is authentication, not authorisation, and it is thinner than
 its name suggests.
 
-A graphics author session is minted on _any_ non-`/api/` HTML `GET`, at cookie
-path `/`, by `server/middleware/graphics-author-session.ts`. There is no login
-and no role: the installation has no accounts. So any browser that has loaded
-any page of this application — an operator's Screen page as much as the Library
-Workspace — carries a session and is admitted, and the guarded routes discard
-the author id they resolve rather than checking it against anything. What these
-routes now refuse is a caller that has never loaded a page: a bare `curl`, a
-scanner, a script with no cookie jar. **They do not partition the library
-between people.** That is consistent with the library being deliberately
-installation-wide — `CONTEXT.md` has graphics authors discovering and
-referencing every Graphic Asset — but it means the gate raises the cost of
+`CONTEXT.md` defines the **Graphics Author Session** and is the authority on what
+it is; what matters operationally here is what that makes the read gate mean.
+Because a session is anonymous and self-issued on any HTML page navigation, any
+browser that has loaded any page of this application — an operator's Screen page
+as much as the Library Workspace — carries one and is admitted, and the guarded
+routes discard the author id they resolve rather than checking it against
+anything. What these routes now refuse is a caller that has never loaded a page:
+a bare `curl`, a scanner, a script with no cookie jar. **They do not partition
+the library between people.** That is consistent with the library being
+deliberately installation-wide, but it means the gate raises the cost of
 enumeration rather than preventing it for anyone determined.
 
-The eight-hour idle lifetime above now applies to reads as well. A surface left
-open overnight answers `401` on its next read and recovers by reloading, which
-mints a new session.
+The session's eight-hour idle lifetime now bounds reads as well as writes. A
+surface left open overnight answers `401` on its next read and recovers by
+reloading, which mints a new session.
 
 ### No server-side render is involved
 

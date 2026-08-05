@@ -8,9 +8,11 @@ import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-
 /**
  * The facts describing one Graphic Asset Revision, without its bytes.
  *
- * Guarded alongside its sibling `content.get`, which #90 guarded and this was
- * left behind by: the same revision's bytes required a session while the facts
- * describing them required none.
+ * #55 created this route and its sibling `content.get` in one commit and
+ * guarded only that one, so a revision's bytes required a graphics author
+ * session while the facts describing them required none. Nothing touched this
+ * file between then and #172, which is why the gap outlived the ingestion work
+ * that never went near it.
  */
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);

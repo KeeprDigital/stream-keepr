@@ -105,9 +105,9 @@ const readRoutes: ReadRoute[] = [
 		path: ({ assetId }) => `/api/graphics-assets/${assetId}/retention`,
 	},
 	{
-		// Not one of the five #172 lists. Its sibling `content.get` was guarded by
-		// #90 and this was left behind, so the same revision's bytes were
-		// authenticated while the facts describing them were not.
+		// Not one of the five #172 lists. #55 created this route and its sibling
+		// `content.get` together and guarded only that one, so the same revision's
+		// bytes were authenticated while the facts describing them were not.
 		label: 'inspecting a Graphic Asset Revision\'s delivery status',
 		path: ({ assetId, revisionId }) =>
 			`/api/graphics-assets/${assetId}/revisions/${revisionId}/status`,
