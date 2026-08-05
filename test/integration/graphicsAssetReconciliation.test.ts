@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
@@ -43,10 +44,9 @@ describe('the Graphics Asset Library reconciliation API', () => {
 			{
 				method: 'POST',
 				headers: authorHeaders,
-				body: {
+				body: graphicsIngestionRequest({
 					idempotencyKey,
 					name,
-					duplicateContentPolicy: 'create-separate',
 					sourceFileName: 'logo.png',
 					declaredMime: 'image/png',
 					browserDecodeEvidence: {
@@ -56,7 +56,7 @@ describe('the Graphics Asset Library reconciliation API', () => {
 						height: 1,
 					},
 					declaredByteLength: reconciliationPixelPng.byteLength,
-				},
+				}),
 			},
 		);
 		return await fetch(

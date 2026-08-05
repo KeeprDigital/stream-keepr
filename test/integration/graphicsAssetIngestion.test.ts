@@ -9,6 +9,7 @@ import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 
 /** Filled with the graphics author session cookie, the only author identity. */
 const authorHeaders: Record<string, string> = {};
@@ -176,13 +177,13 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 	});
 
 	it('reconnects to a durable operation, streams source bytes, and discovers the atomic result', async () => {
-		const initiationBody = {
+		const initiationBody = graphicsIngestionRequest({
 			idempotencyKey: 'integration-scoreboard-logo',
 			name: 'Integration scoreboard logo',
 			defaultEventId: eventId,
 			browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 			declaredByteLength: transparentPixelPng.byteLength,
-		};
+		});
 		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: authorHeaders,
@@ -281,13 +282,17 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		const duplicate = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: authorHeaders,
-			body: {
+			body: graphicsIngestionRequest({
 				idempotencyKey: 'integration-duplicate-scoreboard-logo',
 				name: 'Duplicate upload name',
 				defaultEventId: eventId,
+				// The one ingestion in the integration suites that asks for reuse,
+				// because reuse is what it is asserting. Every other initiation takes
+				// `graphicsIngestionRequest`'s `create-separate` default.
+				duplicateContentPolicy: 'reuse',
 				browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 				declaredByteLength: transparentPixelPng.byteLength,
-			},
+			}),
 		});
 		const duplicateResponse = await fetch(
 			`/api/graphics-assets/ingestion-operations/${duplicate.id}/content`,
@@ -313,13 +318,16 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		const separate = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: authorHeaders,
-			body: {
+			body: graphicsIngestionRequest({
 				idempotencyKey: 'integration-separate-scoreboard-logo',
 				name: 'Separate scoreboard logo',
+				// Stated rather than defaulted: this is the assertion that
+				// `create-separate` publishes a second identity over shared content,
+				// so it must not be reading the helper's default back to itself.
 				duplicateContentPolicy: 'create-separate',
 				browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 				declaredByteLength: transparentPixelPng.byteLength,
-			},
+			}),
 		});
 		const separateResponse = await fetch(
 			`/api/graphics-assets/ingestion-operations/${separate.id}/content`,
@@ -339,13 +347,13 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: authorHeaders,
-			body: {
+			body: graphicsIngestionRequest({
 				idempotencyKey: 'integration-resumable-large-image',
 				name: 'Interrupted large image',
 				declaredMime: 'image/png',
 				browserDecodeEvidence: rejectedBrowserDecodeEvidence(bytes),
 				declaredByteLength: bytes.byteLength,
-			},
+			}),
 		});
 
 		const started = await $fetch<GraphicsIngestionOperation>(
@@ -429,11 +437,11 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: authorHeaders,
-			body: {
+			body: graphicsIngestionRequest({
 				idempotencyKey: 'integration-cancelled-multipart-image',
 				name: 'Cancelled multipart image',
 				declaredByteLength: GRAPHICS_MULTIPART_PART_BYTES + 1,
-			},
+			}),
 		});
 		await $fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart`,
@@ -465,11 +473,11 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		const cancelled = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: authorHeaders,
-			body: {
+			body: graphicsIngestionRequest({
 				idempotencyKey: 'integration-cancelled-logo',
 				name: 'Cancelled integration logo',
 				declaredByteLength: transparentPixelPng.byteLength,
-			},
+			}),
 		});
 		const cancellation = await $fetch<GraphicsIngestionOperation>(
 			`/api/graphics-assets/ingestion-operations/${cancelled.id}`,
@@ -484,12 +492,12 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		const invalid = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: authorHeaders,
-			body: {
+			body: graphicsIngestionRequest({
 				idempotencyKey: 'integration-invalid-logo',
 				name: 'Invalid integration logo',
 				browserDecodeEvidence: rejectedBrowserDecodeEvidence(invalidBytes),
 				declaredByteLength: invalidBytes.byteLength,
-			},
+			}),
 		});
 		const response = await fetch(
 			`/api/graphics-assets/ingestion-operations/${invalid.id}/content`,
@@ -521,12 +529,12 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		const operation = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: authorHeaders,
-			body: {
+			body: graphicsIngestionRequest({
 				idempotencyKey: 'integration-conflicting-png-mime',
 				name: 'Conflicting MIME',
 				browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 				declaredByteLength: transparentPixelPng.byteLength,
-			},
+			}),
 		});
 		const response = await fetch(
 			`/api/graphics-assets/ingestion-operations/${operation.id}/content`,
@@ -552,14 +560,14 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		const operation = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: authorHeaders,
-			body: {
+			body: graphicsIngestionRequest({
 				idempotencyKey: 'integration-conflicting-unsupported-mime',
 				name: 'Unsupported MIME declaration',
 				sourceFileName: 'declared.png',
 				declaredMime: 'image/gif',
 				browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
 				declaredByteLength: transparentPixelPng.byteLength,
-			},
+			}),
 		});
 		const response = await fetch(
 			`/api/graphics-assets/ingestion-operations/${operation.id}/content`,
@@ -641,14 +649,14 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: authorHeaders,
-			body: {
+			body: graphicsIngestionRequest({
 				idempotencyKey: `integration-profile-rejection-${label}`,
 				name: `Rejected ${label}`,
 				sourceFileName: fileName,
 				declaredMime: mime,
 				browserDecodeEvidence: rejectedBrowserDecodeEvidence(bytes),
 				declaredByteLength: bytes.byteLength,
-			},
+			}),
 		});
 		const response = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
@@ -699,14 +707,14 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: authorHeaders,
-			body: {
+			body: graphicsIngestionRequest({
 				idempotencyKey: `integration-${format}-image`,
 				name: `Integration ${label} image`,
 				sourceFileName: fileName,
 				declaredMime: mime,
 				browserDecodeEvidence: browserDecodeEvidence(bytes),
 				declaredByteLength: bytes.byteLength,
-			},
+			}),
 		});
 		const response = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
@@ -763,13 +771,13 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: authorHeaders,
-			body: {
+			body: graphicsIngestionRequest({
 				idempotencyKey: 'integration-mplantin-font',
 				name: 'Integration MPlantin',
 				sourceFileName: 'mplantin.woff',
 				declaredMime: 'font/woff',
 				declaredByteLength: bytes.byteLength,
-			},
+			}),
 		});
 		const response = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,

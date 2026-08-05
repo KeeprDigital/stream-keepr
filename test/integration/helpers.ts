@@ -33,6 +33,9 @@ export const INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY = 'AAAAAAAAAAAAAAA
  *   90, 91   graphicsAssetLifecycle
  *   100-107  broadcastGraphicsMedia — Graphic Input media fixtures
  *
+ * This registry keeps suites off each other's *content*. Keeping them off each
+ * other's *Graphic Assets* is `graphicsIngestionRequest`'s job — see that file.
+ *
  * `graphicsAssetIngestion` deliberately owns the *unpadded* pixel, because it is
  * the suite that asserts a first ingestion publishes. Suites that pad by keyword
  * instead of by count — broadcastGraphicTemplates, broadcastGraphicTemplatePackages,

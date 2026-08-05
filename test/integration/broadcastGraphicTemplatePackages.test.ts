@@ -21,6 +21,7 @@ import {
 	createGraphicsAuthorSessionCookie,
 	suiteGraphicsAuthorSessionCookie,
 } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 
 /**
  * A Broadcast Graphic Template travelling as a `.skgraphic` Template Package,
@@ -152,11 +153,10 @@ describe('broadcast Graphic Template Packages', () => {
 			{
 				method: 'POST',
 				headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
-				body: {
+				body: graphicsIngestionRequest({
 					idempotencyKey: `skgraphic-package-source-${runId}`,
 					name: 'Package round trip backdrop',
 					defaultEventId: eventId,
-					duplicateContentPolicy: 'create-separate',
 					browserDecodeEvidence: {
 						outcome: 'decoded',
 						sourceDigest: createHash('sha256').update(pixelPng).digest('hex'),
@@ -164,7 +164,7 @@ describe('broadcast Graphic Template Packages', () => {
 						height: 1,
 					},
 					declaredByteLength: pixelPng.byteLength,
-				},
+				}),
 			},
 		);
 		const uploaded = await fetch(

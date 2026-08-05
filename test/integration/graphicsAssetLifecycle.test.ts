@@ -10,6 +10,7 @@ import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -87,14 +88,13 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 			{
 				method: 'POST',
 				headers: authorHeaders,
-				body: {
+				body: graphicsIngestionRequest({
 					idempotencyKey,
 					name,
 					defaultEventId: eventId,
-					duplicateContentPolicy: 'create-separate',
 					browserDecodeEvidence: decodeEvidence(),
 					declaredByteLength: lifecyclePixelPng.byteLength,
-				},
+				}),
 			},
 		);
 		return await fetch(

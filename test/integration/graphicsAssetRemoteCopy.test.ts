@@ -6,6 +6,7 @@ import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { MAX_STILL_IMAGE_INGESTION_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 
 /**
  * Two real graphics author sessions. The identity is the session and nothing
@@ -19,12 +20,12 @@ async function initiateRemoteCopy(idempotencyKey: string, name: string) {
 	return await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 		method: 'POST',
 		headers: authorHeaders,
-		body: {
+		body: graphicsIngestionRequest({
 			idempotencyKey,
 			name,
 			source: 'remote-copy',
 			sourceFileName: 'remote-scoreboard.png',
-		},
+		}),
 	});
 }
 
@@ -80,12 +81,12 @@ describe('the approved remote HTTPS copy API', () => {
 		const response = await fetch('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: { ...authorHeaders, 'content-type': 'application/json' },
-			body: JSON.stringify({
+			body: JSON.stringify(graphicsIngestionRequest({
 				idempotencyKey: 'integration-remote-copy-declared-length',
 				name: 'Invalid remote copy',
 				source: 'remote-copy',
 				declaredByteLength: 128,
-			}),
+			})),
 		});
 		expect(response.status).toBe(400);
 	});

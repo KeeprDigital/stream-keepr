@@ -11,6 +11,7 @@ import { crc32 } from 'node:zlib';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';
 
 /**
@@ -201,11 +202,10 @@ async function ingestImage(
 	const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 		method: 'POST',
 		headers: { cookie },
-		body: {
+		body: graphicsIngestionRequest({
 			idempotencyKey: `${name}-${runId}`,
 			name,
 			defaultEventId: eventId,
-			duplicateContentPolicy: 'create-separate',
 			browserDecodeEvidence: {
 				outcome: 'decoded',
 				sourceDigest: createHash('sha256').update(pixelPng).digest('hex'),
@@ -213,7 +213,7 @@ async function ingestImage(
 				height: 1,
 			},
 			declaredByteLength: pixelPng.byteLength,
-		},
+		}),
 	});
 	const response = await fetch(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,

@@ -19,6 +19,7 @@ import {
 	createGraphicsAuthorSessionCookie,
 	suiteGraphicsAuthorSessionCookie,
 } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -125,7 +126,7 @@ describe('template Package installation through the API boundary', () => {
 			{
 				method: 'POST',
 				headers: authorHeaders,
-				body: {
+				body: graphicsIngestionRequest({
 					idempotencyKey: 'template-package-installation-source',
 					name: 'Installation sponsor logo',
 					defaultEventId: eventId,
@@ -136,7 +137,7 @@ describe('template Package installation through the API boundary', () => {
 						height: 1,
 					},
 					declaredByteLength: packagePixelPng.byteLength,
-				},
+				}),
 			},
 		);
 		const uploaded = await fetch(

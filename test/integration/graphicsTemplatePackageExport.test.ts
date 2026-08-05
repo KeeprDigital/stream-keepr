@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { collectStream, readStoredZipArchive } from '../helpers/storedZipArchive';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
@@ -68,7 +69,7 @@ describe('template Package export through the API boundary', () => {
 		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: { cookie: graphicsAuthorCookie },
-			body: {
+			body: graphicsIngestionRequest({
 				idempotencyKey: 'template-package-export-logo',
 				name: 'Packaged sponsor logo',
 				defaultEventId: eventId,
@@ -79,7 +80,7 @@ describe('template Package export through the API boundary', () => {
 					height: 1,
 				},
 				declaredByteLength: packagePixelPng.byteLength,
-			},
+			}),
 		});
 		const response = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,

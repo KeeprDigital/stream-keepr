@@ -8,6 +8,7 @@ import { getGraphicItemDefinition } from '../../shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { screenOutputAssetCapabilityCookieName } from '../../shared/utils/graphicsAssetReferences';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
@@ -84,7 +85,7 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 			{
 				method: 'POST',
 				headers: { cookie: graphicsAuthorCookie },
-				body: {
+				body: graphicsIngestionRequest({
 					idempotencyKey: 'screen-output-capability-pixel',
 					name: 'Screen Output capability pixel',
 					defaultEventId: eventId,
@@ -95,7 +96,7 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 						height: 1,
 					},
 					declaredByteLength: pixelPng.byteLength,
-				},
+				}),
 			},
 		);
 		const upload = await fetch(
