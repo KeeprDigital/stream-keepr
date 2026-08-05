@@ -3,6 +3,7 @@ import type {
 	BroadcastGraphicsCommand,
 	BroadcastGraphicsLiveSessionResponse,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
+import type { BroadcastGraphicsModeConfig } from '~~/shared/types/screenConfig';
 import type { MessageData } from '~/types/realtime';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { drizzle } from 'drizzle-orm/d1';
@@ -10,7 +11,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import * as schema from '~~/server/db/schema';
 import { broadcastGraphicInputsState } from '~~/shared/modules/broadcast-graphics-live-session';
+import { createCommandIdSequence, seedBroadcastGraphicsScreen } from '~~/test/helpers/broadcastGraphicsScreen';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+import { useRealtimeMessageGate } from '~/composables/core/useRealtimeMessageGate';
+import { createBroadcastGraphicsRealtimeHandlers } from '~/modules/realtime-event-session/broadcastGraphicsHandlers';
 
 /**
  * `broadcastGraphicsLiveSession:commandApplied`, from the command route to the store
@@ -40,6 +44,23 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
  * under test is precisely whether what the server hands the transport is what the
  * store can apply. What the fake records is handed to the store exactly as it was
  * captured, through JSON, because that is what the transport does to it.
+ *
+ * On the client side it is handed in through the same edge production uses — the
+ * Realtime Event Session's own handler map, built with the real message gate — rather
+ * than to `applyRemoteCommand` directly (#207). That hop is one line of code and was
+ * the only part of this path nothing exercised: everything either side of it was
+ * pinned and the handoff itself was not. It is also where a client's own commands are
+ * dropped, which is the second test below.
+ *
+ * ## Why it lives under `test/nuxt/stores/`
+ *
+ * It drives a real server half, which no other file here does, and `stores/` does not
+ * say that. It is filed by what it drives: the store is the thing under test and the
+ * server is its counterparty, the same way `screenConfigAndRealtime.test.ts` is filed
+ * by the store it drives rather than by the realtime edge it comes in through. It has
+ * to run under the Nuxt environment for the store and its auto-imports to exist at
+ * all, so `test/unit/` is not open to it, and a directory of its own would name a
+ * category with one member in it.
  *
  * The proof that the notification alone carried the client is the reload count. The
  * store answers a change it cannot use by fetching the authoritative snapshot, and
@@ -171,8 +192,10 @@ const HEADLINE = 'headline';
 const TICKER = 'ticker';
 /** The connection Live Control issued these commands from, as its requests carry one. */
 const ORIGIN_CONNECTION_ID = 'live-control-connection';
+/** The connection this client holds — another operator's browser, not the issuer's. */
+const PEER_CONNECTION_ID = 'peer-connection';
 
-const STACK = {
+const STACK: BroadcastGraphicsModeConfig = {
 	graphics: [{
 		id: GRAPHIC_ID,
 		name: 'Lower third',
@@ -187,7 +210,47 @@ const STACK = {
 let eventId: number;
 let screenId: number;
 let sessionId: number;
-let commandCount = 0;
+const nextCommandId = createCommandIdSequence();
+
+/**
+ * The client edge, assembled exactly as `useEventRealtimeSession` assembles it: the
+ * domain's handler map, over the real message gate, for a given connection.
+ *
+ * Taking a connection id is what lets a test be either the peer watching the show or
+ * the client that issued the command — which is the whole of what the gate decides.
+ */
+function realtimeHandlersFor(connectionId: string) {
+	const { accept } = useRealtimeMessageGate(ref(connectionId));
+	return createBroadcastGraphicsRealtimeHandlers({ accept });
+}
+
+/**
+ * A published notification, delivered the way the transport delivers one.
+ *
+ * `accept` answers nothing and awaits nothing — it starts the store's work and returns
+ * — so the wait is for the merge to land. A handler that threw would leave that wait to
+ * time out rather than surfacing, and a rejected one would only reach `console.warn`,
+ * so both are asserted silent here.
+ */
+async function deliver(
+	notification: MessageData<'broadcastGraphicsLiveSession:commandApplied'>,
+): Promise<void> {
+	const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+	try {
+		realtimeHandlersFor(PEER_CONNECTION_ID)['broadcastGraphicsLiveSession:commandApplied'](
+			notification,
+			undefined,
+		);
+		await vi.waitFor(() => {
+			expect(useBroadcastGraphicsLiveSessionStore().sessions.get(notification.screenId)?.sequence)
+				.toBe(notification.sequence);
+		});
+		expect(warn).not.toHaveBeenCalled();
+	}
+	finally {
+		warn.mockRestore();
+	}
+}
 
 /** The authoritative snapshot, in the shape a client reads it: through JSON. */
 async function snapshot(): Promise<BroadcastGraphicsLiveSessionResponse> {
@@ -205,13 +268,12 @@ async function issue(
 	type: BroadcastGraphicsCommand['type'],
 	payload: Record<string, unknown>,
 ): Promise<MessageData<'broadcastGraphicsLiveSession:commandApplied'>> {
-	commandCount += 1;
 	published.length = 0;
 
 	await commandRoute({
 		context: {
 			params: { id: String(eventId), screenId: String(screenId), sessionId: String(sessionId) },
-			body: { commandId: `command-${commandCount}`, type, payload },
+			body: { commandId: nextCommandId(), type, payload },
 			headers: { 'x-realtime-connection-id': ORIGIN_CONNECTION_ID },
 		},
 	} as unknown as H3Event);
@@ -228,23 +290,10 @@ beforeAll(async () => {
 	// by replacing `useRuntimeConfig`, which the Nuxt test app itself needs.
 	(useRuntimeConfig() as unknown as { ablyApiKey: string }).ablyApiKey = 'test.key:secret';
 
-	const [event] = await db.insert(schema.events).values({
-		name: 'Protocol',
-		game: 'mtg',
-		featureMatchOrientation: 'horizontal',
-	} as never).returning();
-	eventId = event!.id;
-
-	const [screen] = await db.insert(schema.screens).values({
-		eventId,
-		name: 'Program',
-		slug: 'program',
-		currentMode: 'broadcast-graphics',
-		modeConfigs: { 'broadcast-graphics': STACK },
-		assetCapabilitySeed: 'seed',
-		assetCapabilityDigest: 'digest',
-	} as never).returning();
-	screenId = screen!.id;
+	({ eventId, screenId } = await seedBroadcastGraphicsScreen(db, {
+		stack: STACK,
+		eventName: 'Protocol',
+	}));
 
 	sessionId = (await broadcastGraphicsLiveSessionModule().loadSession(eventId, screenId)).id;
 });
@@ -265,7 +314,7 @@ describe('what a Broadcast Graphics Live Session publishes and what its store me
 		/** One command, applied from the wire, checked against the authority. */
 		const step = async (type: BroadcastGraphicsCommand['type'], payload: Record<string, unknown>) => {
 			const notification = await issue(type, payload);
-			await store.applyRemoteCommand(notification);
+			await deliver(notification);
 
 			const authoritative = await snapshot();
 			const held = store.sessions.get(screenId);
@@ -295,6 +344,39 @@ describe('what a Broadcast Graphics Live Session publishes and what its store me
 		// Nothing the server published left this client unable to continue, so it never
 		// went back to the authority. Without this the assertions above would pass on a
 		// protocol whose two halves disagree about every message.
+		expect(repository.getSession).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not apply the notification back to the client that issued the command', async () => {
+		// The other half of the same edge. Every peer on the channel receives this
+		// notification, including Live Control, whose own request already moved its
+		// store — so applying it there would merge one command's difference twice. The
+		// notification carries the issuing connection precisely so the gate can drop it,
+		// and the only thing that consults that is the wrapper this handler map is built
+		// with.
+		const store = useBroadcastGraphicsLiveSessionStore();
+		store.$reset();
+		repository.getSession.mockImplementation(async () => await snapshot());
+		await store.loadSession(eventId, screenId);
+
+		const before = store.sessions.get(screenId)!.sequence;
+		const notification = await issue('Set Input', {
+			graphicId: GRAPHIC_ID,
+			inputKey: TICKER,
+			value: 'Table 2',
+		});
+		expect(notification.sequence).toBeGreaterThan(before);
+
+		realtimeHandlersFor(ORIGIN_CONNECTION_ID)['broadcastGraphicsLiveSession:commandApplied'](
+			notification,
+			undefined,
+		);
+		// A macrotask, so anything the handler had started would have run by now.
+		await new Promise(resolve => setTimeout(resolve, 0));
+
+		expect(store.sessions.get(screenId)?.sequence).toBe(before);
+		// Dropped rather than deferred: a drop that reloaded instead would hide itself
+		// behind the authoritative snapshot and land on the same state.
 		expect(repository.getSession).toHaveBeenCalledTimes(1);
 	});
 });

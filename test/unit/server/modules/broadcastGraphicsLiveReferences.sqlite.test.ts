@@ -14,6 +14,7 @@ import {
 	graphicAssetRevisions,
 	graphicAssets,
 } from '~~/server/db/schema/graphicsAsset';
+import { createCommandIdSequence, seedBroadcastGraphicsScreen } from '~~/test/helpers/broadcastGraphicsScreen';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
@@ -171,11 +172,10 @@ const SLATE: BroadcastGraphicConfig = {
 
 const STACK: BroadcastGraphicsModeConfig = { graphics: [SLATE] };
 
-let commandCount = 0;
+const nextCommandId = createCommandIdSequence();
 
 function command(type: BroadcastGraphicsCommand['type'], payload: Record<string, unknown>): BroadcastGraphicsCommand {
-	commandCount += 1;
-	return { commandId: `command-${commandCount}`, type, payload } as BroadcastGraphicsCommand;
+	return { commandId: nextCommandId(), type, payload } as BroadcastGraphicsCommand;
 }
 
 interface LiveSession {
@@ -194,29 +194,19 @@ interface LiveSession {
  * set to a different place and the assertions are about which set survived.
  */
 async function liveSession(): Promise<LiveSession> {
-	const [event] = await db.insert(schema.events).values({
-		name: `Live session ${commandCount}`,
-		game: 'mtg',
-		featureMatchOrientation: 'horizontal',
-	} as never).returning();
-	const [screen] = await db.insert(schema.screens).values({
-		eventId: event!.id,
-		name: 'Program',
-		slug: `program-${event!.id}`,
-		currentMode: 'broadcast-graphics',
-		modeConfigs: { 'broadcast-graphics': STACK },
-		assetCapabilitySeed: `seed-${event!.id}`,
-		assetCapabilityDigest: `digest-${event!.id}`,
-	} as never).returning();
+	const { eventId, screenId, assetCapabilityDigest } = await seedBroadcastGraphicsScreen(db, {
+		stack: STACK,
+		eventName: 'Live session',
+	});
 
 	const module = broadcastGraphicsLiveSessionModule({ graphicsAssets: graphicsAssetLibrary });
-	const session = await module.loadSession(event!.id, screen!.id);
+	const session = await module.loadSession(eventId, screenId);
 	const authorizer = createD1ScreenOutputAssetAuthorizer(harness.database);
 
 	const apply = async (issued: BroadcastGraphicsCommand) => {
 		await module.applyCommand({
-			eventId: event!.id,
-			screenId: screen!.id,
+			eventId,
+			screenId,
 			sessionId: session.id,
 			command: issued,
 		});
@@ -226,11 +216,11 @@ async function liveSession(): Promise<LiveSession> {
 		take: () => apply(command('Take', { graphicId: SLATE.id, cut: true })),
 		out: () => apply(command('Out', { graphicId: SLATE.id, cut: true })),
 		setInput: (key, value) => apply(command('Set Input', { graphicId: SLATE.id, inputKey: key, value })),
-		republish: () => module.republishLiveSessionReferences({ eventId: event!.id, screenId: screen!.id }),
+		republish: () => module.republishLiveSessionReferences({ eventId, screenId }),
 		canResolve: async (revisionId) => {
 			const outcome = await authorizer.authorize({
-				screenId: screen!.id,
-				capabilityDigest: screen!.assetCapabilityDigest,
+				screenId,
+				capabilityDigest: assetCapabilityDigest,
 				assetId: ASSET_ID,
 				revisionId,
 				actualVideoTarget: 'chromium',

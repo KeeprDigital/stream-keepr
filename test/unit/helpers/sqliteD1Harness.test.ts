@@ -30,7 +30,12 @@ beforeAll(async () => {
 	harness = await createSqliteD1Harness();
 	await harness.client.execute('CREATE TABLE left_table (id INTEGER, name TEXT)');
 	await harness.client.execute('CREATE TABLE right_table (id INTEGER, name TEXT)');
+	// Two rows on the left, so every assertion below is about a set of rows rather than
+	// a single one: a `raw()` that answered only the first would otherwise satisfy both
+	// tests. Ordered explicitly wherever they are read, so neither test rests on the
+	// order a scan happens to return.
 	await harness.client.execute(`INSERT INTO left_table VALUES (1, 'alpha')`);
+	await harness.client.execute(`INSERT INTO left_table VALUES (2, 'bravo')`);
 	await harness.client.execute(`INSERT INTO right_table VALUES (99, 'beta')`);
 });
 
@@ -38,25 +43,47 @@ afterAll(async () => await harness.close());
 
 describe('the libSQL D1 harness', () => {
 	it('answers raw() by column position, so a join keeps both tables’ values apart', async () => {
-		// Four columns, two distinct names. By name this reads [1, 'alpha', 1, 'alpha'];
-		// D1 answers [1, 'alpha', 99, 'beta'], and so must this.
+		// Four columns, two distinct names. By name the first row reads
+		// [1, 'alpha', 1, 'alpha']; D1 answers [1, 'alpha', 99, 'beta'], and so must this.
+		// Two rows of it, so a `raw()` that answered only the first is caught here too.
 		const rows = await harness.database.prepare(`
 			SELECT left_table.id, left_table.name, right_table.id, right_table.name
 			FROM left_table JOIN right_table
+			ORDER BY left_table.id
 		`).raw<unknown[]>();
 
-		expect(rows).toEqual([[1, 'alpha', 99, 'beta']]);
+		expect(rows).toEqual([
+			[1, 'alpha', 99, 'beta'],
+			[2, 'bravo', 99, 'beta'],
+		]);
 	});
 
-	it('keeps every column of a wide row, including the ones holding null', async () => {
-		// `?? null` is how an absent value is normalised, and reading positionally is
-		// what stops that normalisation from also shortening the row: a name-keyed
-		// rebuild drops nothing visible here, but a length taken from the row rather
-		// than from `columns` would.
-		const rows = await harness.database.prepare(
-			'SELECT id, NULL AS missing, name FROM left_table',
-		).raw<unknown[]>();
+	it('keeps every column of a wide row, including the ones holding null, zero and the empty string', async () => {
+		// Four traps, each catching a different plausible rewrite of `raw()`. The
+		// repeated names catch a name-keyed rebuild, which reads `1` for both `id`
+		// columns and `''` for both `name` columns. The distinct-name count catches a
+		// length taken from `Object.keys(row)` rather than from `columns` — three keys
+		// for five columns, so each row is truncated. The zero and the empty string
+		// catch a normalisation written `||` instead of `??`, which answers null for
+		// both. And the second row catches a `raw()` that answers one array rather than
+		// one per row.
+		//
+		// Two mutations this deliberately does *not* claim, because neither is
+		// detectable and an earlier version of this comment claimed one of them. A
+		// length taken from `row.length` is identical to one taken from `columns`:
+		// libSQL sets `row.length` to the full column count even where names repeat.
+		// And dropping `?? null` altogether changes nothing either, because libSQL
+		// already answers `null` for SQL NULL — the coalesce only ever guards an index
+		// the driver does not produce. Both were run against this test; both stayed
+		// green (#211).
+		const rows = await harness.database.prepare(`
+			SELECT id, NULL AS missing, 0 AS id, '' AS name, name FROM left_table
+			ORDER BY left_table.id
+		`).raw<unknown[]>();
 
-		expect(rows).toEqual([[1, null, 'alpha']]);
+		expect(rows).toEqual([
+			[1, null, 0, '', 'alpha'],
+			[2, null, 0, '', 'bravo'],
+		]);
 	});
 });
