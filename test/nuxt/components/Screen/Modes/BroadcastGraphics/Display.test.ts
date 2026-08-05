@@ -668,7 +668,9 @@ describe('broadcastGraphicsDisplay', () => {
 	describe('library fonts', () => {
 		const fontReference = { assetId: 'font-asset' as never, revisionId: 'font-revision-2' as never };
 
-		function withLibraryFont(): BroadcastGraphicConfig {
+		function withLibraryFont(
+			{ revisionId = 'font-revision-2', text = 'Player One' }: { revisionId?: string; text?: string } = {},
+		): BroadcastGraphicConfig {
 			return {
 				id: 'lower-third',
 				name: 'Lower Third',
@@ -682,8 +684,11 @@ describe('broadcastGraphicsDisplay', () => {
 					y: 0,
 					width: 600,
 					height: 120,
-					text: 'Player One',
-					typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, font: { kind: 'asset', reference: fontReference } },
+					text,
+					typography: {
+						...DEFAULT_GRAPHIC_TYPOGRAPHY,
+						font: { kind: 'asset', reference: { ...fontReference, revisionId: revisionId as never } },
+					},
 					overflowPolicy: 'ellipsis',
 					minFontSize: 24,
 				}],
@@ -805,6 +810,107 @@ describe('broadcastGraphicsDisplay', () => {
 			const canvas = wrapper.get('.graphics-compositor-canvas');
 			expect(canvas.attributes('data-font-ready')).toBe('false');
 			expect((canvas.element as HTMLElement).style.visibility).toBe('hidden');
+		});
+
+		/**
+		 * A stack change is the ordinary case here, not the exception: every Take,
+		 * every Update Graphic, every authoring edit rebuilds it. If each one restarted
+		 * the font load, a Screen Output would blank itself on air every time playout
+		 * touched it — which is the visible blank the hiding exists to prevent (#160).
+		 */
+		it('keeps a settled canvas visible when a stack change pins no different font', async () => {
+			mockAssetCapability.value = 'capability-token';
+			mockScreen.value = screenWithStack([withLibraryFont()]);
+			mockOnAirGraphicIds.value = ['lower-third'];
+			const registered: string[] = [];
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {
+					registered.push(family);
+				}
+
+				async load() { return this; }
+			});
+
+			const wrapper = await mountComponent();
+			await flushPromises();
+			await nextTick();
+			await vi.waitFor(() => {
+				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
+			});
+			const settled = [...registered];
+			expect(settled).toEqual(['stream-keepr-graphic-asset-font-asset-font-revision-2']);
+
+			// The same font, different rendered text: an Update Graphic-shaped change.
+			mockScreen.value = screenWithStack([withLibraryFont({ text: 'Player Two' })]);
+			await nextTick();
+
+			const canvas = wrapper.get('.graphics-compositor-canvas');
+			// The change really landed, so this is not a test that changed nothing.
+			expect(wrapper.get('[data-graphic-item-kind="text"] p').text()).toBe('Player Two');
+			// Read at the moment the change renders, which is when the blank would be on air.
+			expect(canvas.attributes('data-font-ready')).toBe('true');
+			expect((canvas.element as HTMLElement).style.visibility).toBe('');
+
+			await flushPromises();
+			await nextTick();
+
+			expect(registered).toEqual(settled);
+			expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
+		});
+
+		/**
+		 * The other half of the same rule: a change that really does change which faces
+		 * the canvas paints has to load them, and has to hide until they are ready. A
+		 * fix that simply stopped reloading would satisfy the test above and put a
+		 * fallback typeface on program here.
+		 *
+		 * Read through the authoring preview, which is where an author actually swaps a
+		 * library font, and which is the path that proves the required faces are what
+		 * this turns on. A live stack change also restarts content-URL resolution, and a
+		 * canvas that reloaded only because of *that* would look identical from here.
+		 */
+		it('loads the new face and hides again when an authored font change pins a different revision', async () => {
+			mockIsPreview.value = true;
+			const registered: string[] = [];
+			let hold = Promise.resolve();
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {
+					registered.push(family);
+				}
+
+				async load() {
+					await hold;
+					return this;
+				}
+			});
+
+			const wrapper = await mountComponent();
+			await pushPreviewState([withLibraryFont()]);
+			await vi.waitFor(() => {
+				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
+			});
+
+			let release!: () => void;
+			hold = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			await pushPreviewState([withLibraryFont({ revisionId: 'font-revision-3' })]);
+
+			const canvas = wrapper.get('.graphics-compositor-canvas');
+			expect(canvas.attributes('data-font-ready')).toBe('false');
+			expect((canvas.element as HTMLElement).style.visibility).toBe('hidden');
+
+			release();
+			await vi.waitFor(() => {
+				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
+			});
+			expect(registered).toEqual([
+				'stream-keepr-graphic-asset-font-asset-font-revision-2',
+				'stream-keepr-graphic-asset-font-asset-font-revision-3',
+			]);
+			expect((wrapper.get('.graphics-compositor-canvas').element as HTMLElement).style.visibility).toBe('');
+			expect(wrapper.get('[data-graphic-item-kind="text"] p').attributes('style'))
+				.toContain('font-family: stream-keepr-graphic-asset-font-asset-font-revision-3;');
 		});
 	});
 

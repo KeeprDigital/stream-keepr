@@ -52,17 +52,40 @@ export function useGraphicAssetFontFaces(
 	 * the second copy in `document.fonts` after the first is discarded.
 	 */
 	const sources = computed(() => {
-		const settled = toValue(contentUrlsSettled);
 		const byFamily = new Map(toValue(references)
 			.filter(item => item.kind === 'font')
 			.map(({ reference }) => {
 				const family = graphicAssetFontFaceFamily(reference);
 				return [family, { family, url: contentUrl(reference) }] as const;
 			}));
-		return { settled, sources: [...byFamily.values()] };
+		return [...byFamily.values()];
 	});
 
-	watch(sources, async ({ settled, sources: pending }) => {
+	/**
+	 * What a reload actually depends on, as one comparable value.
+	 *
+	 * Deliberately a string rather than the sources themselves. A host rebuilds its
+	 * whole indexed reference list on any configuration change — an operator
+	 * recolouring a Frame, a Take or an Update Graphic that changes the stack — so a
+	 * watch keyed on a fresh object fires for edits that name no font at all. A reload
+	 * discards every registered face and puts `fontsReady` back to false, which blanks
+	 * a settled Screen Output: precisely the failure the hiding above exists to
+	 * prevent. Hiding is the right answer for a font that has not loaded yet and the
+	 * wrong one for a font that loaded a minute ago and has not changed, so this has to
+	 * fire only when the answer would really differ.
+	 */
+	const loadKey = computed(() => [
+		toValue(contentUrlsSettled) ? 'settled' : 'unsettled',
+		// Sorted, over one entry per family: which faces are required is a set, so
+		// reordering a stack is not a change. The URL is part of the key because the
+		// same family resolved through a different Screen Output Asset Capability is
+		// different bytes to fetch.
+		...sources.value.map(({ family, url }) => `${family}\0${url}`).sort(),
+	].join(''));
+
+	watch(loadKey, async () => {
+		const settled = toValue(contentUrlsSettled);
+		const pending = sources.value;
 		const flight = loads.begin();
 		fontsReady.value = pending.length === 0;
 		fontsFailed.value = false;

@@ -1,12 +1,20 @@
 import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
 import { createFeatureMatchLayoutComposition, FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES } from '~~/shared/featureMatchSampleDataset';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+
+/**
+ * Every Display a test mounts stays live otherwise, watching the same module-level
+ * mocks. A test that edits configuration mid-flight is then observing every Display
+ * the file has ever mounted rather than its own — which for the font tests means
+ * counting one output's face registrations across two dozen of them.
+ */
+enableAutoUnmount(afterEach);
 
 const mockConfig = ref<FeatureMatchOverlayModeConfig>(structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG));
 const mockOutputMode = ref<FeatureMatchOverlayOutput>('overlay');
@@ -429,7 +437,9 @@ describe('featureMatchOverlayDisplay', () => {
 	 * `data-export-ready`, which the shared compositor knows nothing about.
 	 */
 	describe('library fonts', () => {
-		function layoutWithLibraryFont(): FeatureMatchOverlayModeConfig {
+		function layoutWithLibraryFont(
+			{ revisionId = 'font-revision-2', backgroundColor }: { revisionId?: string; backgroundColor?: string } = {},
+		): FeatureMatchOverlayModeConfig {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			const nameplate = getGraphicItemDefinition('text').createDefault({
 				id: 'nameplate',
@@ -445,11 +455,13 @@ describe('featureMatchOverlayDisplay', () => {
 						...DEFAULT_GRAPHIC_TYPOGRAPHY,
 						font: {
 							kind: 'asset',
-							reference: { assetId: 'font-asset', revisionId: 'font-revision-2' },
+							reference: { assetId: 'font-asset', revisionId },
 						},
 					},
 				}] as never,
 			};
+			if (backgroundColor)
+				config.layout.frame.backgroundColor = backgroundColor;
 			return config;
 		}
 
@@ -558,6 +570,97 @@ describe('featureMatchOverlayDisplay', () => {
 			// Every face this attempt added is taken back off the document, so a retry
 			// does not accumulate a second registration of the same family.
 			expect(document.fonts.delete as ReturnType<typeof vi.fn>).toHaveBeenCalled();
+		});
+
+		/**
+		 * Hiding says "this font has not loaded yet", and it is only worth reading if
+		 * that is the only thing it ever says. An operator editing the Frame's colour on
+		 * a live overlay is editing something no font depends on, and blanking the
+		 * canvas while a face that settled a minute ago re-registers is the visible
+		 * blank the hiding exists to prevent (#160).
+		 */
+		it('keeps a settled output visible when a config edit names no different font', async () => {
+			const registered: string[] = [];
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {
+					registered.push(family);
+				}
+
+				async load() { return this; }
+			});
+
+			const wrapper = await mountComponent();
+			await vi.waitFor(() => {
+				expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('true');
+			});
+			const settled = [...registered];
+			expect(settled).toEqual(['stream-keepr-graphic-asset-font-asset-font-revision-2']);
+
+			mockConfig.value = layoutWithLibraryFont({ backgroundColor: '#123456' });
+			await nextTick();
+
+			const overlay = wrapper.get('.feature-match-overlay');
+			// The edit really landed, so this is not a test that changed nothing.
+			expect(wrapper.get('.frame-layer > rect').attributes('fill')).toBe('#123456');
+			// Read at the moment the edit renders, which is when the blank would be on air.
+			expect(overlay.attributes('data-font-ready')).toBe('true');
+			expect(overlay.attributes('data-export-ready')).toBe('true');
+			expect((overlay.element as HTMLElement).style.visibility).toBe('');
+
+			await flushPromises();
+			await nextTick();
+
+			expect(registered).toEqual(settled);
+			expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('true');
+		});
+
+		/**
+		 * The other half of the same rule: an edit that really does change which faces
+		 * the output paints has to load them, and has to hide until they are ready. A
+		 * fix that simply stopped reloading would satisfy the test above and put a
+		 * fallback typeface on air here.
+		 */
+		it('loads the new face and hides again when a config edit pins a different revision', async () => {
+			const registered: string[] = [];
+			let hold = Promise.resolve();
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {
+					registered.push(family);
+				}
+
+				async load() {
+					await hold;
+					return this;
+				}
+			});
+
+			const wrapper = await mountComponent();
+			await vi.waitFor(() => {
+				expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('true');
+			});
+
+			let release!: () => void;
+			hold = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			mockConfig.value = layoutWithLibraryFont({ revisionId: 'font-revision-3' });
+			await nextTick();
+
+			const hidden = wrapper.get('.feature-match-overlay');
+			expect(hidden.attributes('data-font-ready')).toBe('false');
+			expect((hidden.element as HTMLElement).style.visibility).toBe('hidden');
+
+			release();
+			await vi.waitFor(() => {
+				expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('true');
+			});
+			expect(registered).toEqual([
+				'stream-keepr-graphic-asset-font-asset-font-revision-2',
+				'stream-keepr-graphic-asset-font-asset-font-revision-3',
+			]);
+			expect((wrapper.get('.feature-match-overlay').element as HTMLElement).style.visibility).toBe('');
+			expect(wrapper.get('[data-graphic-item-kind="text"] p').attributes('style'))
+				.toContain('font-family: stream-keepr-graphic-asset-font-asset-font-revision-3;');
 		});
 	});
 });
