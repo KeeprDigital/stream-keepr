@@ -1,11 +1,16 @@
 import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { GraphicBindingDataSet } from '~~/shared/modules/graphics';
-import type { BroadcastGraphicConfig, GraphicInputDeclaration, GraphicPlayoutState } from '~~/shared/types/graphics';
+import type {
+	BroadcastGraphicConfig,
+	GraphicInputDeclaration,
+	GraphicPlayoutState,
+	MediaGraphicInputValue,
+} from '~~/shared/types/graphics';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, ref } from 'vue';
+import { computed, defineComponent, h, ref } from 'vue';
 import {
 	createInitialBroadcastGraphicsLiveState,
 	graphicInputTraces,
@@ -23,6 +28,10 @@ const mockUpdateGraphic = vi.fn();
 const mockBindingData = ref<GraphicBindingDataSet>(createEmptyGraphicBindingDataSet());
 /** The Graphic Inputs whose last edit from this session lost a field-scoped conflict. */
 const mockSupersededInputKeys = ref<string[]>([]);
+/** The engines of the Screen Outputs currently open on this Screen. */
+const mockOpenOutputTargets = ref<string[]>([]);
+/** The Graphics Asset Library's answer about one exact revision. */
+const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
 
 mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	setInput: mockSetInput,
@@ -46,6 +55,10 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 		},
 	),
 }));
+
+mockNuxtImport('useScreenOutputVideoTargets', () => () => computed(() => mockOpenOutputTargets.value));
+
+mockNuxtImport('$fetch', () => mockApiFetch);
 
 mockNuxtImport('useGraphicBindingData', () => () => ({
 	dataSet: computed(() => mockBindingData.value),
@@ -97,6 +110,46 @@ const USelectStub = defineComponent({
 	template: '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="item.value" :value="item.value">{{ item.label }}</option></select>',
 });
 
+/** The revision already staged, and the one the stubbed picker returns. */
+const PINNED = {
+	assetId: 'asset-badge',
+	revisionId: 'revision-badge-1',
+} as unknown as MediaGraphicInputValue;
+const CHOSEN = {
+	assetId: 'asset-badge',
+	revisionId: 'revision-badge-2',
+} as unknown as MediaGraphicInputValue;
+
+/**
+ * The Graphics Asset Library picker, stubbed at the seam Live Control uses it
+ * through: it is handed the kinds it may offer and the engines open now, and it
+ * hands back one exact Graphic Asset Revision.
+ */
+const GraphicsAssetFocusPickerStub = defineComponent({
+	name: 'GraphicsAssetFocusPicker',
+	props: {
+		modelValue: { type: Object, default: undefined },
+		eventId: { type: Number, required: true },
+		fieldLabel: { type: String, required: true },
+		assetKind: { type: [String, Array], default: 'image' },
+		videoTarget: { type: String, default: 'other' },
+		openOutputTargets: { type: Array, default: () => [] },
+		disabled: { type: Boolean, default: false },
+	},
+	emits: ['update:modelValue', 'select'],
+	setup(props, { emit }) {
+		return () => h('button', {
+			type: 'button',
+			disabled: props.disabled,
+			onClick: () => emit(
+				'select',
+				{ id: CHOSEN.assetId, kind: 'image', revisionId: CHOSEN.revisionId },
+				{ ...CHOSEN },
+			),
+		}, 'Choose Graphic Asset');
+	},
+});
+
 const NAME: GraphicInputDeclaration = {
 	type: 'text',
 	key: 'name',
@@ -115,6 +168,16 @@ const TITLE: GraphicInputDeclaration = {
 	updatePolicy: 'staged',
 	default: '',
 	maxLength: 20,
+};
+
+const BADGE: GraphicInputDeclaration = {
+	type: 'media',
+	key: 'badge',
+	label: 'Badge',
+	required: false,
+	updatePolicy: 'staged',
+	default: null,
+	mediaKind: 'image',
 };
 
 function graphic(inputs: GraphicInputDeclaration[], overrides: Partial<BroadcastGraphicConfig> = {}): BroadcastGraphicConfig {
@@ -149,6 +212,7 @@ async function mountComponent(
 				UInputNumber: UInputNumberStub,
 				USwitch: USwitchStub,
 				USelect: USelectStub,
+				GraphicsAssetFocusPicker: GraphicsAssetFocusPickerStub,
 			},
 		},
 	});
@@ -162,6 +226,9 @@ describe('broadcastGraphicsLiveControl', () => {
 		mockLiveState.value = createInitialBroadcastGraphicsLiveState();
 		mockBindingData.value = createEmptyGraphicBindingDataSet();
 		mockSupersededInputKeys.value = [];
+		mockOpenOutputTargets.value = [];
+		mockApiFetch.mockReset();
+		mockApiFetch.mockResolvedValue({ outcome: 'available', lifecycleState: 'active', kind: 'image' });
 	});
 
 	/**
@@ -505,6 +572,184 @@ describe('broadcastGraphicsLiveControl', () => {
 
 		expect(wrapper.find('[data-testid="live-control-take-blocked"]').exists()).toBe(false);
 	});
+	/**
+	 * A media Graphic Input is declarable and resolvable on air, and until now the
+	 * only way to give one a value was to POST a Set Input command by hand (#178).
+	 */
+	describe('choosing a value for a media Graphic Input', () => {
+		it('offers the Graphics Asset Library, restricted to the kind the Graphic Input declares', async () => {
+			const wrapper = await mountComponent(graphic([
+				BADGE,
+				{ ...BADGE, key: 'sting', label: 'Sting', mediaKind: 'silent-video' },
+			]));
+
+			expect(wrapper.find('[data-testid="live-control-media-badge"]').exists()).toBe(true);
+			const pickers = wrapper.findAllComponents(GraphicsAssetFocusPickerStub);
+			expect(pickers.map(picker => picker.props('assetKind'))).toEqual(['image', 'silent-video']);
+		});
+
+		it('writes the chosen revision as this Graphic Input’s value, with the value it was chosen away from', async () => {
+			mockLiveState.value = {
+				playout: {},
+				inputs: {
+					'lower-third': {
+						working: { badge: PINNED },
+						accepted: {},
+						acceptedRevision: 0,
+					},
+				},
+			};
+
+			const wrapper = await mountComponent(graphic([BADGE]));
+			await wrapper.get('[data-testid="live-control-media-badge"]').trigger('click');
+			await flushPromises();
+
+			// The reference alone: the pinned revision's own compatibility facts are the
+			// authoritative side's to record, rebuilt from the library at acceptance.
+			expect(mockSetInput).toHaveBeenCalledWith(
+				7,
+				3,
+				'lower-third',
+				'badge',
+				{ assetId: 'asset-badge', revisionId: 'revision-badge-2' },
+				PINNED,
+			);
+		});
+
+		it('shows the chosen revision as staged, leaving what is on air alone until Update Graphic', async () => {
+			mockLiveState.value = {
+				playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
+				inputs: {
+					'lower-third': {
+						working: { badge: CHOSEN },
+						accepted: { badge: PINNED },
+						acceptedRevision: 1,
+					},
+				},
+			};
+
+			const wrapper = await mountComponent(graphic([BADGE]), 'on-air');
+			const field = wrapper.get('[data-graphic-input="badge"]');
+
+			expect(field.get('[data-testid="live-control-working"]').text()).toBe('asset-badge@revision-badge-2');
+			expect(field.get('[data-testid="live-control-accepted"]').text()).toBe('asset-badge@revision-badge-1');
+			expect(field.get('[data-testid="live-control-status"]').text()).toBe('Pending');
+			expect(wrapper.get('[data-testid="live-control-update"]').attributes('disabled')).toBeUndefined();
+		});
+
+		/**
+		 * `recordMediaSelectionFacts` rebuilds the value from the library and refuses a
+		 * revision that does not resolve with a 409. An operator must not be able to
+		 * reach that refusal by choosing from the picker, so the surface asks the same
+		 * question of the same library before it writes anything.
+		 */
+		it('writes nothing and names the reason when the chosen revision no longer resolves', async () => {
+			mockApiFetch.mockResolvedValue({ outcome: 'missing' });
+			const wrapper = await mountComponent(graphic([BADGE]));
+
+			await wrapper.get('[data-testid="live-control-media-badge"]').trigger('click');
+			await flushPromises();
+
+			expect(mockSetInput).not.toHaveBeenCalled();
+			expect(wrapper.get('[data-testid="live-control-media-refused-badge"]').text())
+				.toContain('Missing Graphic Asset Reference');
+		});
+
+		it('writes nothing while the revision’s content is only temporarily unavailable', async () => {
+			mockApiFetch.mockResolvedValue({ outcome: 'unavailable', retryable: true });
+			const wrapper = await mountComponent(graphic([BADGE]));
+
+			await wrapper.get('[data-testid="live-control-media-badge"]').trigger('click');
+			await flushPromises();
+
+			expect(mockSetInput).not.toHaveBeenCalled();
+			expect(wrapper.get('[data-testid="live-control-media-refused-badge"]').text())
+				.toContain('Unavailable Graphic Asset Content');
+		});
+
+		it('stops naming a refusal once a revision that resolves is chosen', async () => {
+			mockApiFetch.mockResolvedValue({ outcome: 'missing' });
+			const wrapper = await mountComponent(graphic([BADGE]));
+			await wrapper.get('[data-testid="live-control-media-badge"]').trigger('click');
+			await flushPromises();
+			expect(wrapper.find('[data-testid="live-control-media-refused-badge"]').exists()).toBe(true);
+
+			mockApiFetch.mockResolvedValue({ outcome: 'available', lifecycleState: 'active', kind: 'image' });
+			await wrapper.get('[data-testid="live-control-media-badge"]').trigger('click');
+			await flushPromises();
+
+			expect(wrapper.find('[data-testid="live-control-media-refused-badge"]').exists()).toBe(false);
+			expect(mockSetInput).toHaveBeenCalledTimes(1);
+		});
+
+		/**
+		 * Compatibility is a fact of the revision rather than a choice, and what it
+		 * costs depends on which engines are watching: the picker states it against the
+		 * outputs open now rather than letting an operator discover it on air (#98).
+		 */
+		it('tells the picker which engines the Screen Outputs currently open use', async () => {
+			mockOpenOutputTargets.value = ['chromium', 'safari'];
+
+			const wrapper = await mountComponent(graphic([BADGE]));
+
+			expect(wrapper.getComponent(GraphicsAssetFocusPickerStub).props('openOutputTargets'))
+				.toEqual(['chromium', 'safari']);
+			// The authored target a Broadcast Graphics reference is indexed with, so a
+			// VP9-alpha clip is offered here exactly as it is to an author.
+			expect(wrapper.getComponent(GraphicsAssetFocusPickerStub).props('videoTarget')).toBe('chromium');
+		});
+
+		it('clears a media value without asking the library about anything', async () => {
+			mockLiveState.value = {
+				playout: {},
+				inputs: {
+					'lower-third': {
+						working: { badge: PINNED },
+						accepted: {},
+						acceptedRevision: 0,
+					},
+				},
+			};
+
+			const wrapper = await mountComponent(graphic([BADGE]));
+			await wrapper.get('[data-testid="live-control-clear-badge"]').trigger('click');
+			await flushPromises();
+
+			expect(mockSetInput).toHaveBeenCalledWith(
+				7,
+				3,
+				'lower-third',
+				'badge',
+				null,
+				PINNED,
+			);
+			expect(mockApiFetch).not.toHaveBeenCalled();
+		});
+
+		it('carries no refusal across to the next Broadcast Graphic an operator selects', async () => {
+			mockApiFetch.mockResolvedValue({ outcome: 'missing' });
+			const wrapper = await mountComponent(graphic([BADGE]));
+			await wrapper.get('[data-testid="live-control-media-badge"]').trigger('click');
+			await flushPromises();
+			expect(wrapper.find('[data-testid="live-control-media-refused-badge"]').exists()).toBe(true);
+
+			await wrapper.setProps({
+				graphic: { ...graphic([BADGE]), id: 'sting', name: 'Sting' },
+			});
+			await flushPromises();
+
+			// The library refused a revision this other graphic never named.
+			expect(wrapper.find('[data-testid="live-control-media-refused-badge"]').exists()).toBe(false);
+		});
+
+		it('withholds the picker while this browser is disconnected', async () => {
+			const wrapper = await mountComponent(graphic([BADGE]), 'off', true);
+
+			expect(wrapper.get('[data-testid="live-control-media-badge"]').attributes('disabled')).toBeDefined();
+			expect(wrapper.get('[data-testid="live-control-clear-badge"]').attributes('disabled')).toBeDefined();
+		});
+	});
+
 	describe('a Graphic Input whose edit lost a field-scoped conflict', () => {
 		it('is reported as refreshed rather than as the operator’s own accepted edit', async () => {
 			mockLiveState.value = {

@@ -257,6 +257,75 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		});
 	});
 
+	/**
+	 * Compatibility is a fact of the revision, not a choice, so it is stated before
+	 * the choice rather than discovered on air. It never refuses the revision: post-#98
+	 * a clip one open output cannot play costs that output that clip and nothing else,
+	 * and the Chromium program output is usually the one the operator is choosing for.
+	 */
+	it('names the open outputs that cannot play a revision without refusing it', async () => {
+		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
+		const wrapper = mount(FocusPicker, {
+			props: {
+				eventId: 7,
+				fieldLabel: 'Badge',
+				assetKind: ['silent-video'],
+				videoTarget: 'chromium',
+				openOutputTargets: ['chromium', 'safari'],
+			},
+			global: {
+				stubs: {
+					UModal: passthroughStub,
+					UButton: buttonStub,
+					UInput: passthroughStub,
+					UBadge: passthroughStub,
+					UAlert: passthroughStub,
+					UIcon: passthroughStub,
+				},
+			},
+		});
+
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		const warning = wrapper.get('[data-testid="open-output-incompatible-asset-alpha-video"]');
+		expect(warning.text()).toContain('Safari');
+		const select = wrapper.get('[data-testid="select-asset-alpha-video"]');
+		expect(select.attributes('disabled')).toBeUndefined();
+
+		await select.trigger('click');
+		expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toEqual({
+			assetId: 'asset-alpha-video',
+			revisionId: 'revision-alpha-video-1',
+		});
+	});
+
+	it('says nothing about playback when every open output can play the revision', async () => {
+		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
+		const wrapper = mount(FocusPicker, {
+			props: {
+				eventId: 7,
+				fieldLabel: 'Badge',
+				assetKind: ['silent-video'],
+				videoTarget: 'chromium',
+				openOutputTargets: ['chromium'],
+			},
+			global: {
+				stubs: {
+					UModal: passthroughStub,
+					UButton: buttonStub,
+					UInput: passthroughStub,
+					UBadge: passthroughStub,
+					UAlert: passthroughStub,
+					UIcon: passthroughStub,
+				},
+			},
+		});
+
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		expect(wrapper.find('[data-testid="open-output-incompatible-asset-alpha-video"]').exists()).toBe(false);
+	});
+
 	it('refreshes its exact-revision status when unavailable content is retried', async () => {
 		mockApiFetch.mockResolvedValue({ outcome: 'unavailable', retryable: true });
 		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
