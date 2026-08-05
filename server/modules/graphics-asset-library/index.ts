@@ -405,6 +405,18 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		state: GraphicsAssetMultipartState;
 		updatedAt: string;
 	}) => Promise<boolean>;
+	/**
+	 * Records the multipart upload an approved remote copy is holding, or clears
+	 * it with `null` once that upload is provably released. A remote copy moves
+	 * its bytes server-side, so the checkpoint carries the uploadId alone: it
+	 * exists only so expiry and cancellation can abort an upload whose own
+	 * request died before it could.
+	 */
+	checkpointRemoteCopyMultipartUpload: (input: {
+		operationId: GraphicsIngestionOperationId;
+		initiatedBy: string;
+		uploadId: GraphicsMultipartUploadIdentity | null;
+	}) => Promise<void>;
 	recordGraphicAssetMultipartCleanupComplete: (
 		operationId: GraphicsIngestionOperationId,
 		initiatedBy: string,
@@ -2219,6 +2231,15 @@ export function createGraphicsAssetLibrary(
 		body: ReadableStream<Uint8Array>;
 		maximumByteLength: number;
 		declaredByteLength?: number;
+		/**
+		 * Told which multipart upload this copy holds, and told `null` once that
+		 * upload is provably released. An upload outlives the request that opened
+		 * it, so the caller's record of it has to be durable before the first part
+		 * is sent and may only be dropped once there is nothing left to abort.
+		 */
+		onMultipartCheckpoint?: (
+			uploadId: GraphicsMultipartUploadIdentity | null,
+		) => Promise<void>;
 	}): Promise<StageRemoteSourceOutcome> {
 		const metadata = {
 			contentType: 'application/octet-stream',
@@ -2275,8 +2296,13 @@ export function createGraphicsAssetLibrary(
 
 		async function abort() {
 			await reader.cancel().catch(() => undefined);
-			if (upload)
-				await input.staging.abortMultipart(upload);
+			if (!upload)
+				return;
+			const aborted = await input.staging.abortMultipart(upload);
+			// An abort that did not land leaves the upload for a later sweep, which
+			// can only find it while the caller's checkpoint still names it.
+			if (aborted.outcome === 'aborted')
+				await input.onMultipartCheckpoint?.(null);
 		}
 
 		try {
@@ -2303,6 +2329,7 @@ export function createGraphicsAssetLibrary(
 							return { outcome: 'unavailable' };
 						}
 						upload = started.upload;
+						await input.onMultipartCheckpoint?.(upload.uploadId);
 					}
 					const uploaded = await input.staging.uploadPart({
 						upload,
@@ -2360,6 +2387,7 @@ export function createGraphicsAssetLibrary(
 		const completed = await input.staging.completeMultipart({ upload, parts });
 		if (completed.outcome === 'unavailable')
 			return { outcome: 'unavailable' };
+		await input.onMultipartCheckpoint?.(null);
 		// The source declared no length to contradict, so a store that assembles a
 		// different total is a staging integrity failure, not a remote rejection.
 		return completed.object.byteLength === totalByteLength
@@ -4718,6 +4746,38 @@ export function createGraphicsAssetLibrary(
 				);
 			}
 
+			const stagingIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
+			// An earlier attempt may have died holding a multipart upload. Its
+			// checkpoint is the only record of that upload, and this attempt would
+			// overwrite the checkpoint with one of its own, so the old upload is
+			// reclaimed before a new one can be taken. An abort that does not land
+			// keeps its checkpoint and stops the attempt: starting a second upload
+			// here is what would make the first unreclaimable.
+			const stranded = await catalogueRequest(
+				() => catalogue.getGraphicAssetMultipartState(operation!.id, operation!.initiatedBy),
+				'Approved remote Graphic Asset copy checkpoint is temporarily unavailable',
+			);
+			if (stranded?.uploadId) {
+				const aborted = await staging.abortMultipart({
+					identity: stagingIdentity,
+					uploadId: stranded.uploadId,
+				});
+				if (aborted.outcome !== 'aborted') {
+					throw new GraphicsAssetLibraryError(
+						'A previous approved remote Graphic Asset copy attempt is still holding staging capacity',
+						'graphics-asset-library-unavailable',
+					);
+				}
+				await catalogueRequest(
+					() => catalogue.checkpointRemoteCopyMultipartUpload({
+						operationId: operation!.id,
+						initiatedBy: operation!.initiatedBy,
+						uploadId: null,
+					}),
+					'Approved remote Graphic Asset copy checkpoint could not be recorded',
+				);
+			}
+
 			const sourceKind = graphicAssetSourceKind(operation);
 			const policy = GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind];
 			const opened = await remoteSource.open({
@@ -4757,7 +4817,6 @@ export function createGraphicsAssetLibrary(
 				),
 				'Approved remote Graphic Asset copy could not be started',
 			);
-			const stagingIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
 			const staged = await stageRemoteSource({
 				staging,
 				identity: stagingIdentity,
@@ -4765,6 +4824,14 @@ export function createGraphicsAssetLibrary(
 				body: opened.body,
 				maximumByteLength: policy.maximumByteLength,
 				declaredByteLength: opened.byteLength,
+				onMultipartCheckpoint: uploadId => catalogueRequest(
+					() => catalogue.checkpointRemoteCopyMultipartUpload({
+						operationId: operation!.id,
+						initiatedBy: operation!.initiatedBy,
+						uploadId,
+					}),
+					'Approved remote Graphic Asset copy checkpoint could not be recorded',
+				),
 			});
 			if (staged.outcome !== 'staged') {
 				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
