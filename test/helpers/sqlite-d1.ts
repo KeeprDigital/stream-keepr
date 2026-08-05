@@ -2,16 +2,20 @@
  * A `D1Database`-shaped adapter over a local libSQL file database, plus the
  * repository's real Drizzle migrations.
  *
- * The Graphics Asset Library keeps its transactional reachability proofs,
- * conditional transitions, and batch atomicity in SQL, and the Broadcast Graphics
- * Live Session keeps its reference-index sequence guard there too — so a test of
- * either needs genuine SQLite semantics rather than a hand-written double. This
- * helper gives them the same statement, batch, and cascade behaviour the deployed
- * D1 catalogue relies on.
+ * Anything whose correctness is in the SQL needs genuine SQLite semantics rather than
+ * a hand-written double: the Graphics Asset Library's transactional reachability
+ * proofs, conditional transitions and batch atomicity, and the Broadcast Graphics
+ * Live Session's reference-index sequence guard. This helper gives them the same
+ * statement, batch, and cascade behaviour the deployed D1 catalogue relies on.
  *
- * It is consumed from the unit suite and from the Nuxt suite, which is why the
- * migration directory is resolved defensively below: only one of the two gives this
- * module a `file:` URL.
+ * It is not scoped to any one module or suite. Module tests under the unit suite
+ * consume it, and so does a Nuxt **store** test that drives a real server half — which
+ * is also why the migration directory is resolved defensively below: only one of the
+ * two environments gives this module a `file:` URL.
+ *
+ * `raw()` is the one part of it no consumer can check for itself, and it is pinned by
+ * `test/unit/helpers/sqliteD1Harness.test.ts` — which also records, mutation by
+ * mutation, which parts of it are pinned and which are undetectable (#211).
  *
  * What it is *not* is a substitute for D1 itself. Two known differences are handled
  * elsewhere rather than here: D1's hundred-bound-parameter ceiling, which libSQL

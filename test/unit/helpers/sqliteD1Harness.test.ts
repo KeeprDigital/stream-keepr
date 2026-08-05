@@ -48,15 +48,27 @@ describe('the libSQL D1 harness', () => {
 		expect(rows).toEqual([[1, 'alpha', 99, 'beta']]);
 	});
 
-	it('keeps every column of a wide row, including the ones holding null', async () => {
-		// `?? null` is how an absent value is normalised, and reading positionally is
-		// what stops that normalisation from also shortening the row: a name-keyed
-		// rebuild drops nothing visible here, but a length taken from the row rather
-		// than from `columns` would.
-		const rows = await harness.database.prepare(
-			'SELECT id, NULL AS missing, name FROM left_table',
-		).raw<unknown[]>();
+	it('keeps every column of a wide row, including the ones holding null, zero and the empty string', async () => {
+		// Three traps in one row, each catching a different plausible rewrite of `raw()`.
+		// The repeated names catch a name-keyed rebuild, which reads `1` for both `id`
+		// columns and `''` for both `name` columns. The distinct-name count catches a
+		// length taken from `Object.keys(row)` rather than from `columns` — three keys
+		// for five columns, so the row is truncated. And the zero and the empty string
+		// catch a normalisation written `||` instead of `??`, which answers null for
+		// both.
+		//
+		// Two mutations this deliberately does *not* claim, because neither is
+		// detectable and an earlier version of this comment claimed one of them. A
+		// length taken from `row.length` is identical to one taken from `columns`:
+		// libSQL sets `row.length` to the full column count even where names repeat.
+		// And dropping `?? null` altogether changes nothing either, because libSQL
+		// already answers `null` for SQL NULL — the coalesce only ever guards an index
+		// the driver does not produce. Both were run against this test; both stayed
+		// green (#211).
+		const rows = await harness.database.prepare(`
+			SELECT id, NULL AS missing, 0 AS id, '' AS name, name FROM left_table
+		`).raw<unknown[]>();
 
-		expect(rows).toEqual([[1, null, 'alpha']]);
+		expect(rows).toEqual([[1, null, 0, '', 'alpha']]);
 	});
 });
