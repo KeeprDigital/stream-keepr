@@ -135,6 +135,12 @@ Each library Template has a stable identity and an automatically managed revisio
 The exclusive, session-scoped right to edit one graphics authoring artifact: a Screen's complete graphics Edit workspace or one reusable graphics Template.
 Other sessions may observe accepted authoring changes but cannot modify the leased artifact.
 
+**Graphics Author Session**:
+The anonymous, self-issued identity that makes a browser a graphics author: minted on any HTML page navigation, carried as an httpOnly cookie, lasting eight hours from its last request.
+It is the only author identity in the Graphics Asset Library: every author-facing route requires it, a Graphics Ingestion Operation records it as the initiator, idempotency keys are unique within it, and the Evidence Ledger names it as actor.
+It belongs to one browser session rather than a person — the same author in a second browser is a second author — because the installation has no accounts and nothing more durable exists to own an operation (ADR-0003).
+_Avoid_: Graphics Authoring Lease — a lease is an exclusive edit right on one authoring artifact and describes what a session may currently edit, not who the session is; a session may hold leases, an identity is not a lease.
+
 **Graphic Style Set**:
 A named reusable authoring resource in the shared scope of the graphics template libraries that maintains a cohesive visual and motion language across independently portable Broadcast Graphic Templates and Feature Match Layout Templates.
 Events consume Graphic Style Sets through either template kind but do not own them.
@@ -811,6 +817,8 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - A **Graphics Ingestion Operation** exposes reconnectable stage progress, one complete compatibility report, cancellation before publication, and retry from durable checkpoints
 - Staged bytes, provisional **Graphic Assets**, and provisional graphics Templates are visible only through the initiating operation and never appear in their libraries
 - Approved remote ingestion copies exact bytes once from a public HTTPS source and never creates a hotlink, synchronization link, or authenticated remote dependency
+- A **Graphics Ingestion Operation** is owned by the **Graphics Author Session** that initiated it; its UUID is a name, not a right, and another session that learns one is told the operation does not exist
+- A **Graphics Ingestion Operation** whose owning **Graphics Author Session** has lapsed is unreachable; retention reclaims its staged input on the ordinary schedule (ADR-0003)
 - An ordinary ingestion that exactly matches existing **Graphic Asset Content** defaults to reusing its **Graphic Asset** without overwriting library metadata, while allowing an explicit separate asset identity
 - A Template Package reuses a local **Graphic Asset Revision** only for an exact source identity, source revision, and content-digest match
 - A related packaged source revision or unrelated matching digest creates a separate local **Graphic Asset** while reusing identical **Graphic Asset Content**

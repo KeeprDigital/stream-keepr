@@ -248,6 +248,12 @@ describe('graphicsStyleUpdateReview', () => {
 	 * discriminated union with no partial to deviate in — cannot record an override at
 	 * all, so keeping it drops the reference and the property goes local outright. One
 	 * blanket sentence describing the first would be false about the second.
+	 *
+	 * The owned-key sentence says "that you have not already pinned" because keeping
+	 * records the author's prior pins beside the values on the row (#167). A row shows
+	 * only the keys that move, so an author holding an earlier pin on a key this row
+	 * does not name would otherwise be told that key carries on inheriting when it does
+	 * not.
 	 */
 	it('says what keeping commits the author to, per row', async () => {
 		const wrapper = await mountReview();
@@ -264,7 +270,7 @@ describe('graphicsStyleUpdateReview', () => {
 		// carries on inheriting — which is the whole point of not pinning the group.
 		expect(effects[1]).toBe(
 			'Keeping pins the values above as your own, so they stop following “Rise”. '
-			+ 'Everything else in this group carries on inheriting.',
+			+ 'Everything else in this group that you have not already pinned carries on inheriting.',
 		);
 	});
 

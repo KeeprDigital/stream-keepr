@@ -142,12 +142,18 @@ function reviewedProperties(change: GraphicStyleUpdateChange): ReviewedProperty[
  * override at all: `applyGraphicStyleSet` drops the reference and the property goes
  * local outright. One blanket sentence describing the first would be false about the
  * second, which is the whole reason this is computed rather than written once.
+ *
+ * "That you have not already pinned" is not a hedge. Keeping records the author's
+ * prior overrides beside the values on the row, and a row states only the keys that
+ * move — so an author who pinned a font size earlier and is now answering a row about
+ * a colour keeps both. Without the clause this would promise that the size carries on
+ * inheriting, which it does not (#167).
  */
 function keepEffect(change: GraphicStyleUpdateChange): string {
 	return GRAPHIC_STYLE_SLOT_OWNED_KEYS[change.slot].length === 0
 		? `Keeping this makes it a local value and stops it following “${change.entryName}” at all.`
 		: `Keeping pins the values above as your own, so they stop following “${change.entryName}”. `
-			+ 'Everything else in this group carries on inheriting.';
+			+ 'Everything else in this group that you have not already pinned carries on inheriting.';
 }
 
 function decisionFor(itemId: string | null, slot: string): GraphicStyleUpdateDecision {
