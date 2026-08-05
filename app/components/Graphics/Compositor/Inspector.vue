@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type {
-	GraphicApplicationFontId,
 	GraphicsHostContract,
 	GraphicSurfaceStyleEdit,
 	GraphicSurfaceStyleSlot,
@@ -54,7 +53,6 @@ import {
 	deleteGraphicInput,
 	displayGraphicGeometryValue,
 	GRAPHIC_ANCHOR_POINTS,
-	GRAPHIC_FONT_OPTIONS,
 	graphicItemIcon,
 	graphicItemKindLabel,
 	graphicItemSummary,
@@ -523,12 +521,6 @@ function updateTypography(patch: Partial<GraphicTypography>) {
 	applyToSelectedGraphic((graphic, itemId) => patchGraphicTypography(graphic, itemId, patch));
 }
 
-/** The two arms of a Graphic Font Selection, as an author picks between them. */
-const FONT_SOURCE_OPTIONS = [
-	{ label: 'Application font', value: 'application' },
-	{ label: 'Library font', value: 'asset' },
-];
-
 /**
  * Which arm the author is editing, when the stored selection cannot say.
  *
@@ -542,9 +534,6 @@ const FONT_SOURCE_OPTIONS = [
 const fontSourceOverride = ref<'application' | 'asset'>();
 const selectedFont = computed(() => selectedTypography.value?.font);
 const fontSource = computed(() => fontSourceOverride.value ?? selectedFont.value?.kind ?? 'application');
-const selectedFontAsset = computed(() =>
-	selectedFont.value?.kind === 'asset' ? selectedFont.value.reference : undefined,
-);
 
 watch(selection, () => {
 	fontSourceOverride.value = undefined;
@@ -825,12 +814,6 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
  */
 type PlaceholderFontSource = 'base' | 'application' | 'asset';
 
-const PLACEHOLDER_FONT_SOURCE_OPTIONS = [
-	{ label: 'Same as base', value: 'base' },
-	{ label: 'Application font', value: 'application' },
-	{ label: 'Library font', value: 'asset' },
-];
-
 /**
  * Which arm each placeholder's author is editing, when its stored style cannot say.
  *
@@ -851,16 +834,6 @@ function placeholderFontSource(inputKey: string): PlaceholderFontSource {
 	return placeholderFontSourceOverrides.value[inputKey]
 		?? placeholderStyleFor(inputKey).font?.kind
 		?? 'base';
-}
-
-function placeholderApplicationFontId(inputKey: string): GraphicApplicationFontId | undefined {
-	const font = placeholderStyleFor(inputKey).font;
-	return font?.kind === 'application' ? font.fontId : undefined;
-}
-
-function placeholderFontAsset(inputKey: string): GraphicAssetReference | undefined {
-	const font = placeholderStyleFor(inputKey).font;
-	return font?.kind === 'asset' ? font.reference : undefined;
 }
 
 function updatePlaceholderFontSource(inputKey: string, source: PlaceholderFontSource) {
@@ -1516,42 +1489,22 @@ function clearPlaceholderFontAsset(inputKey: string) {
 
 			<!--
 				A font is either one that ships with Stream Keepr or one exact font
-				Graphic Asset Revision from the Graphics Asset Library. The library arm
-				pins a revision exactly as a Media Graphic Item does, which is what puts
-				it in this Screen's reference index and so inside its Screen Output Asset
-				Capability.
+				Graphic Asset Revision from the Graphics Asset Library. The same control
+				a Graphic Placeholder Style below offers, less its third answer: a
+				`GraphicTypography` must name a font, so "same as base" is not one here.
 			-->
-			<UFormField label="Font source" size="sm">
-				<USelect
-					:model-value="fontSource"
-					:items="FONT_SOURCE_OPTIONS"
-					value-key="value"
-					class="w-full"
-					data-testid="typography-font-source"
-					@update:model-value="updateFontSource($event as 'application' | 'asset')"
-				/>
-			</UFormField>
-
-			<UFormField v-if="fontSource === 'application'" label="Font" size="sm">
-				<USelect
-					:model-value="selectedFont?.kind === 'application' ? selectedFont.fontId : undefined"
-					:items="GRAPHIC_FONT_OPTIONS"
-					value-key="value"
-					class="w-full"
-					@update:model-value="updateTypography({ font: applicationGraphicFont($event as never) })"
-				/>
-			</UFormField>
-
-			<UFormField v-else label="Library font" size="sm">
-				<GraphicsAssetFocusPicker
-					:model-value="selectedFontAsset"
-					:event-id="eventId"
-					field-label="Typography"
-					asset-kind="font"
-					@update:model-value="$event ? undefined : clearFontAsset()"
-					@select="selectFontAsset"
-				/>
-			</UFormField>
+			<GraphicsCompositorFontSelectionField
+				:source="fontSource"
+				:font="selectedFont"
+				:event-id="eventId"
+				field-label="Typography"
+				size="sm"
+				test-id-prefix="typography"
+				@update:source="updateFontSource($event as 'application' | 'asset')"
+				@application="updateTypography({ font: applicationGraphicFont($event) })"
+				@select="selectFontAsset"
+				@clear="clearFontAsset"
+			/>
 
 			<div class="grid grid-cols-2 gap-2">
 				<UFormField label="Size" size="sm">
@@ -1691,54 +1644,25 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					</UButton>
 				</div>
 				<!--
-					A placeholder's own Graphic Font Selection. Either arm, exactly as the
-					base typography above — the library arm pins a revision, so it reaches
-					this Screen's reference index and its Screen Output Asset Capability
-					through the same walk. "Same as base" is the third answer a placeholder
-					has and the base typography does not.
+					A placeholder's own Graphic Font Selection. The same control as the base
+					typography above, with the one answer a placeholder has and it does not:
+					a font is optional here, so "same as base" is a real answer. What the two
+					do with an unpinned library arm differs, which is why the answer arrives
+					here rather than being settled inside the control.
 				-->
-				<UFormField label="Font" size="xs">
-					<USelect
-						:model-value="placeholderFontSource(inputKey)"
-						:items="PLACEHOLDER_FONT_SOURCE_OPTIONS"
-						value-key="value"
-						size="sm"
-						class="w-full"
-						data-testid="graphic-placeholder-style-font-source"
-						@update:model-value="updatePlaceholderFontSource(inputKey, $event as PlaceholderFontSource)"
-					/>
-				</UFormField>
-
-				<UFormField
-					v-if="placeholderFontSource(inputKey) === 'application'"
-					label="Application font"
+				<GraphicsCompositorFontSelectionField
+					:source="placeholderFontSource(inputKey)"
+					:font="placeholderStyleFor(inputKey).font"
+					optional
+					:event-id="eventId"
+					:field-label="`Placeholder ${placeholderToken(inputKey)}`"
 					size="xs"
-				>
-					<USelect
-						:model-value="placeholderApplicationFontId(inputKey)"
-						:items="GRAPHIC_FONT_OPTIONS"
-						value-key="value"
-						size="sm"
-						class="w-full"
-						data-testid="graphic-placeholder-style-font"
-						@update:model-value="updatePlaceholderStyle(inputKey, { font: applicationGraphicFont($event as never) })"
-					/>
-				</UFormField>
-
-				<UFormField
-					v-else-if="placeholderFontSource(inputKey) === 'asset'"
-					label="Library font"
-					size="xs"
-				>
-					<GraphicsAssetFocusPicker
-						:model-value="placeholderFontAsset(inputKey)"
-						:event-id="eventId"
-						:field-label="`Placeholder ${placeholderToken(inputKey)}`"
-						asset-kind="font"
-						@update:model-value="$event ? undefined : clearPlaceholderFontAsset(inputKey)"
-						@select="(asset, reference) => selectPlaceholderFontAsset(inputKey, asset, reference)"
-					/>
-				</UFormField>
+					test-id-prefix="graphic-placeholder-style"
+					@update:source="updatePlaceholderFontSource(inputKey, $event as PlaceholderFontSource)"
+					@application="updatePlaceholderStyle(inputKey, { font: applicationGraphicFont($event) })"
+					@select="(asset, reference) => selectPlaceholderFontAsset(inputKey, asset, reference)"
+					@clear="clearPlaceholderFontAsset(inputKey)"
+				/>
 
 				<div class="grid grid-cols-2 gap-2">
 					<UFormField label="Size" size="xs">

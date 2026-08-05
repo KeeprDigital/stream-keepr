@@ -101,9 +101,15 @@ function stack(items: GraphicItemConfig[]): BroadcastGraphicConfig[] {
 	return [{ id: 'lower-third', name: 'Lower Third', items }];
 }
 
+/**
+ * Stands in for `UFormField`. The label is reflected onto the element as well as
+ * rendered, so a test can ask which control a label belongs to rather than searching
+ * the panel's text for it — "Font" is a substring of both "Font source" and "Font
+ * size", and a control is only correctly labelled if the label is on that control.
+ */
 const SlotOnlyStub = defineComponent({
 	props: { label: { type: String, required: false } },
-	template: '<div><span>{{ label }}</span><slot /></div>',
+	template: '<div :data-label="label"><span>{{ label }}</span><slot /></div>',
 });
 
 const USelectStub = defineComponent({
@@ -1046,6 +1052,33 @@ describe('graphicsCompositorInspector', () => {
 			return item?.type === 'text' ? item.typography : undefined;
 		}
 
+		/**
+		 * Two answers, not three (#167).
+		 *
+		 * The base typography and a Graphic Placeholder Style share one control, and the
+		 * only thing that separates them is whether naming no font is an answer. A
+		 * `GraphicTypography` must name one, so offering "Same as base" here would offer an
+		 * answer the panel cannot render: choosing it puts the control on an arm that shows
+		 * neither the application select nor the library picker, and the author is left
+		 * with no font control at all until they reselect the item. So the answers each
+		 * side offers are asserted rather than left to the flag.
+		 */
+		it('offers only the two answers a Text Graphic Item’s own typography has', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([textItem]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			expect(selectField(wrapper, 'typography-font-source')?.props('items')).toEqual([
+				{ label: 'Application font', value: 'application' },
+				{ label: 'Library font', value: 'asset' },
+			]);
+			// With no third answer the control is the source, and its application arm is
+			// simply the font — the labelling a placeholder cannot use.
+			expect(wrapper.find('[data-label="Font source"] [data-testid="typography-font-source"]').exists()).toBe(true);
+			expect(wrapper.find('[data-label="Font"] [data-testid="typography-font"]').exists()).toBe(true);
+		});
+
 		/** The asset arm needs an exact revision, so nothing is written until one is pinned. */
 		it('writes no library font until the picker has pinned a revision', async () => {
 			const wrapper = await mountComponent({
@@ -1058,6 +1091,26 @@ describe('graphicsCompositorInspector', () => {
 
 			expect(wrapper.emitted('update:graphics')).toBeUndefined();
 			expect(typographyFontPicker(wrapper)?.exists()).toBe(true);
+		});
+
+		/**
+		 * The application arm writes what the author picked.
+		 *
+		 * The placeholder twin has had this since #161; the base control never did, and
+		 * until the shared control gave its select a test id there was nothing to address
+		 * it by.
+		 */
+		it('chooses an application font for the item', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([textItem]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			selectField(wrapper, 'typography-font')?.vm.$emit('update:modelValue', 'saira-condensed');
+			await nextTick();
+
+			expect(typographyOf(emittedGraphics(wrapper, 0))?.font)
+				.toEqual({ kind: 'application', fontId: 'saira-condensed' });
 		});
 
 		it('pins one exact font Graphic Asset Revision on the item', async () => {
@@ -1104,6 +1157,32 @@ describe('graphicsCompositorInspector', () => {
 			expect(typographyOf(emittedGraphics(wrapper, 0))?.font)
 				.toEqual({ kind: 'application', fontId: 'inter' });
 		});
+
+		/**
+		 * The same fallback, reached from the picker rather than from the arm.
+		 *
+		 * Unpinning through the picker is the other way out of the library arm, and it is
+		 * where the two controls' policies differ: a placeholder loses the key, while a
+		 * `GraphicTypography` must still name a font.
+		 */
+		it('returns to an application font when the picker unpins the revision', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([{
+					...textItem,
+					typography: {
+						...DEFAULT_GRAPHIC_TYPOGRAPHY,
+						font: { kind: 'asset', reference: { assetId: 'font-1', revisionId: 'font-revision-2' } },
+					},
+				} as GraphicItemConfig]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			typographyFontPicker(wrapper)?.vm.$emit('update:modelValue', undefined);
+			await nextTick();
+
+			expect(typographyOf(emittedGraphics(wrapper, 0))?.font)
+				.toEqual({ kind: 'application', fontId: 'inter' });
+		});
 	});
 
 	/**
@@ -1138,6 +1217,39 @@ describe('graphicsCompositorInspector', () => {
 			const item = itemOf(graphics);
 			return item?.type === 'text' ? item.placeholderStyles : undefined;
 		}
+
+		/**
+		 * Three answers, not two (#167).
+		 *
+		 * The counterpart of the base typography's assertion above. These two are the same
+		 * control now, and "same as base" is the entire difference between the call sites —
+		 * so if it stopped being offered here, a placeholder could never be returned to the
+		 * item's base font, and nothing else in this file would notice.
+		 */
+		it('offers a placeholder the third answer its optional font has', async () => {
+			const wrapper = await mountComponent({
+				graphics: placeholderTextGraphic({ name: { fontWeight: 300 } }),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			expect(selectField(wrapper, 'graphic-placeholder-style-font-source')?.props('items')).toEqual([
+				{ label: 'Same as base', value: 'base' },
+				{ label: 'Application font', value: 'application' },
+				{ label: 'Library font', value: 'asset' },
+			]);
+			// And with a third answer the control itself is the font, so its application arm
+			// has to name itself to be told apart from "Same as base".
+			expect(wrapper.find('[data-label="Font"] [data-testid="graphic-placeholder-style-font-source"]').exists())
+				.toBe(true);
+
+			selectField(wrapper, 'graphic-placeholder-style-font-source')
+				?.vm
+				.$emit('update:modelValue', 'application');
+			await nextTick();
+
+			expect(wrapper.find('[data-label="Application font"] [data-testid="graphic-placeholder-style-font"]').exists())
+				.toBe(true);
+		});
 
 		it('chooses an application font for one placeholder', async () => {
 			const wrapper = await mountComponent({
