@@ -43,9 +43,16 @@ mockNuxtImport('useClockDisplay', () => () => ({
 	displayTime: computed(() => '12:34'),
 }));
 
+/** Which pinned revisions this output's resolver has been told it will be refused. */
+const mockRefusedRevisions = ref<string[]>([]);
+
 mockNuxtImport('useScreenGraphicAssetContentUrls', () => () => ({
 	contentUrl: (reference: { assetId: string; revisionId: string }) =>
 		`/private-assets/${reference.assetId}/${reference.revisionId}`,
+	contentRefusal: (reference: { revisionId: string }) =>
+		mockRefusedRevisions.value.includes(reference.revisionId)
+			? 'vp9-alpha-chromium-required'
+			: undefined,
 	contentUrlsSettled: mockContentUrlsSettled,
 }));
 
@@ -277,6 +284,7 @@ describe('featureMatchOverlayDisplay', () => {
 		mockError.value = null;
 		mockContentUrlsSettled.value = true;
 		mockUsesSampleDataset.value = false;
+		mockRefusedRevisions.value = [];
 	});
 
 	/**
@@ -414,6 +422,22 @@ describe('featureMatchOverlayDisplay', () => {
 			const wrapper = await mountComponent();
 
 			expect(wrapper.get('[data-video-compatibility-blocked="vp9-alpha-chromium-required"]').text()).toBe('');
+		});
+
+		it('says why for a clip the authoritative side refuses whatever the item recorded', async () => {
+			// This host's own wiring of the reconciled compatibility (#184). The
+			// mechanism is the shared compositor's, but a Feature Match Overlay passes
+			// its resolver down itself, and a pass-through nobody checks is a
+			// pass-through that can go missing — which here is silent, because the
+			// blank rectangle it leaves is what the item drew before anyway.
+			mockConfig.value = videoComposition('all-supported');
+			mockRefusedRevisions.value = ['video-revision-1'];
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.find('video').exists()).toBe(false);
+			expect(wrapper.get('[data-video-compatibility-blocked="vp9-alpha-chromium-required"]').text())
+				.toContain('vp9-alpha-chromium-required');
 		});
 	});
 
