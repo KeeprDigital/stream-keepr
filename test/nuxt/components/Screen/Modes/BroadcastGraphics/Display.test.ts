@@ -965,9 +965,8 @@ describe('broadcastGraphicsDisplay', () => {
 		 * What recovering from a failed load now costs. Before #160 the watch woke for
 		 * every configuration edit, so any edit at all cleared `fontsFailed` and tried
 		 * again — an accident of the over-firing this issue removed, not a designed
-		 * retry. What remains is narrower and is pinned here: a change to the required
-		 * faces, or a re-run of content-URL resolution, still retries. A purely cosmetic
-		 * edit no longer does.
+		 * retry. What remains is narrower, and both sides of the line are pinned: this
+		 * test for what still retries, the next for what deliberately no longer does.
 		 */
 		it('retries a font that failed to load when content-URL resolution runs again', async () => {
 			mockAssetCapability.value = 'capability-token';
@@ -999,6 +998,54 @@ describe('broadcastGraphicsDisplay', () => {
 			const canvas = wrapper.get('.graphics-compositor-canvas');
 			expect(canvas.attributes('data-font-error')).toBe('false');
 			expect((canvas.element as HTMLElement).style.visibility).toBe('');
+		});
+
+		/**
+		 * The other side of that line, and the only behaviour `loadKey` is the sole cause
+		 * of. Every other thing the key does is also done by the body's comparison
+		 * against the faces actually registered, so deleting the key changes nothing an
+		 * output paints — except here, where waking for an edit that names no asset is
+		 * exactly what would clear `fontsFailed` and try again.
+		 *
+		 * Read against a load that *would* now succeed: nothing changes, so nothing was
+		 * attempted. Without this the key reads as dead weight, and deleting it would
+		 * silently restore a retry on every cosmetic edit with the suite still green.
+		 */
+		it('does not retry a failed font load for a stack change that names no asset', async () => {
+			mockAssetCapability.value = 'capability-token';
+			mockScreen.value = screenWithStack([withLibraryFont()]);
+			mockOnAirGraphicIds.value = ['lower-third'];
+			let failLoads = true;
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {}
+				async load() {
+					if (failLoads)
+						throw new Error('font revision content is unavailable');
+					return this;
+				}
+			});
+
+			const wrapper = await mountComponent();
+			await flushPromises();
+			await nextTick();
+			await vi.waitFor(() => {
+				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-error')).toBe('true');
+			});
+
+			failLoads = false;
+			// Same pinned revision, different rendered text: the Update Graphic-shaped
+			// change, which leaves the Screen's asset reference set exactly where it was.
+			mockScreen.value = screenWithStack([withLibraryFont({ text: 'Player Two' })]);
+			await nextTick();
+			await flushPromises();
+			await nextTick();
+
+			// The change really landed, so this is not a test that changed nothing.
+			expect(wrapper.get('[data-graphic-item-kind="text"] p').text()).toBe('Player Two');
+			const canvas = wrapper.get('.graphics-compositor-canvas');
+			expect(canvas.attributes('data-font-error')).toBe('true');
+			expect(canvas.attributes('data-font-ready')).toBe('false');
+			expect((canvas.element as HTMLElement).style.visibility).toBe('hidden');
 		});
 
 		/**
