@@ -18,8 +18,26 @@ export interface RealtimeConnectionState {
 }
 
 export type RealtimePresenceData = object;
-export type RealtimePresenceMessage = unknown;
-export type RealtimePresenceCallback = (members: RealtimePresenceMessage[]) => void;
+
+/**
+ * One member of a presence set, as this application reads one.
+ *
+ * Only `data` is declared: it is the only part any consumer reads, and the rest of a
+ * presence message belongs to whichever transport delivered it. Carrying the payload's
+ * own shape here is what keeps it out of every consumer — untyped, each one cast, and
+ * a cast is a claim nobody checks.
+ *
+ * The payload is partial because it is the member's own claim about itself, made when
+ * it entered and carried over the wire. A member that entered with an older shape, or
+ * with an optional field it had nothing to put in, is a member with fields missing —
+ * so a reader has to look, and the type is what makes it.
+ */
+export interface RealtimePresenceMessage<Data extends RealtimePresenceData = RealtimePresenceData> {
+	data?: Partial<Data>;
+}
+
+export type RealtimePresenceCallback<Data extends RealtimePresenceData = RealtimePresenceData>
+	= (members: RealtimePresenceMessage<Data>[]) => void;
 
 export interface RealtimeTransport {
 	readonly connectionId?: string;
@@ -36,5 +54,15 @@ export interface RealtimeTransport {
 	) => () => void;
 	enterPresence: (channel: string, data: RealtimePresenceData) => Promise<void>;
 	leavePresence: (channel: string) => Promise<void>;
-	watchPresence: (channel: string, callback: RealtimePresenceCallback) => () => void;
+	/**
+	 * Watch one channel's presence set.
+	 *
+	 * The payload shape is the caller's to name, because only the caller knows what
+	 * enters the channel it is watching. The transport asserts it once, where the wire
+	 * really is untyped, rather than leaving every reader to.
+	 */
+	watchPresence: <Data extends RealtimePresenceData>(
+		channel: string,
+		callback: RealtimePresenceCallback<Data>,
+	) => () => void;
 }

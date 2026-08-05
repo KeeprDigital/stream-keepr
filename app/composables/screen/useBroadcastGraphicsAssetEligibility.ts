@@ -1,11 +1,9 @@
 import type { MaybeRefOrGetter } from 'vue';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
-import type { GraphicAssetReference, GraphicAssetReferenceStatus } from '~~/shared/types/graphicsAsset';
+import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import { flattenGraphicItems } from '~~/shared/modules/graphics';
-import {
-	broadcastGraphicsGraphicAssetReferences,
-	graphicAssetRevisionStatusPath,
-} from '~~/shared/utils/graphicsAssetReferences';
+import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
+import { graphicAssetReferenceStatusOrUnavailable } from '~/utils/graphicAssetReferenceStatus';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
 /**
@@ -106,8 +104,7 @@ export function useBroadcastGraphicsAssetEligibility(
 			const statuses = new Map(await Promise.all(
 				Array.from(unique, async ([key, reference]) => [
 					key,
-					await $fetch<GraphicAssetReferenceStatus>(graphicAssetRevisionStatusPath(reference))
-						.catch((): GraphicAssetReferenceStatus => ({ outcome: 'unavailable', retryable: true })),
+					await graphicAssetReferenceStatusOrUnavailable(reference),
 				] as const),
 			));
 			if (flight.stale)

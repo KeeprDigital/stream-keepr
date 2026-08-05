@@ -580,6 +580,99 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		});
 	});
 
+	/**
+	 * The refusal an operator can act on, and the one that used to arrive anonymous.
+	 *
+	 * `recordMediaSelectionFacts` refuses a revision that no longer resolves, and the
+	 * residual race puts that refusal in front of an operator who has just clicked a
+	 * revision the picker said was there. Without a code it is a bare 409 — which is
+	 * what an ended epoch looks like — so the store reloaded the session and sent the
+	 * refused command a second time, then reported a generic failure (#203).
+	 */
+	describe('a media selection the authoritative side refuses', () => {
+		function refusal(code: 'missing-asset-reference' | 'unavailable-asset-content') {
+			return {
+				statusCode: 409,
+				message: 'Graphic Asset Reference for Graphic Input badge is missing',
+				data: { code, inputKeys: ['badge'] },
+			};
+		}
+
+		it('is delivered once and never restated against a reloaded epoch', async () => {
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+			mockRepository.sendCommand.mockRejectedValue(refusal('missing-asset-reference'));
+
+			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'badge', { assetId: 'a', revisionId: 'r' } as never, null);
+
+			expect(mockRepository.sendCommand).toHaveBeenCalledOnce();
+			expect(mockRepository.getSession).not.toHaveBeenCalled();
+		});
+
+		it('reaches the field with its code intact, so the reason can be named', async () => {
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			mockRepository.sendCommand.mockRejectedValue(refusal('missing-asset-reference'));
+
+			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'badge', { assetId: 'a', revisionId: 'r' } as never, null);
+
+			expect(store.inputRefusal(SCREEN_ID, 'slate', 'badge')).toBe('missing-asset-reference');
+			// Against the one field it is about, and no other.
+			expect(store.inputRefusal(SCREEN_ID, 'slate', 'name')).toBeUndefined();
+			expect(store.inputRefusal(SCREEN_ID, 'bug', 'badge')).toBeUndefined();
+		});
+
+		it('keeps content that is only temporarily unavailable apart from a missing reference', async () => {
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			mockRepository.sendCommand.mockRejectedValue(refusal('unavailable-asset-content'));
+
+			await store.setOverride(EVENT_ID, SCREEN_ID, 'slate', 'badge', { assetId: 'a', revisionId: 'r' } as never, null);
+
+			expect(store.inputRefusal(SCREEN_ID, 'slate', 'badge')).toBe('unavailable-asset-content');
+		});
+
+		it('forgets the refusal when the operator chooses for that field again', async () => {
+			// Cleared before the new attempt rather than after it: a refusal left standing
+			// while a fresh value is in flight reads as the answer to the new choice.
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			mockRepository.sendCommand.mockRejectedValueOnce(refusal('missing-asset-reference'));
+			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'badge', { assetId: 'a', revisionId: 'r' } as never, null);
+			mockRepository.sendCommand.mockResolvedValue({
+				screenId: SCREEN_ID,
+				sessionId: 55,
+				sequence: 4,
+				commandType: 'Set Input',
+				currentState: { playout: {}, inputs: {} },
+				session: session({ sequence: 4 }),
+			});
+
+			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'badge', { assetId: 'a', revisionId: 'r2' } as never, null);
+
+			expect(store.inputRefusal(SCREEN_ID, 'slate', 'badge')).toBeUndefined();
+		});
+
+		it('still reloads and restates a conflict that carries no code at all', async () => {
+			// The branch the coded refusal was being mistaken for, which must keep
+			// working: an epoch this client no longer shares is exactly a bare 409.
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+			mockRepository.getSession.mockResolvedValue(session({ id: 56 }));
+			mockRepository.sendCommand.mockRejectedValueOnce({ statusCode: 409, message: 'Conflict' });
+			mockRepository.sendCommand.mockResolvedValue({
+				screenId: SCREEN_ID,
+				sessionId: 56,
+				sequence: 2,
+				commandType: 'Set Input',
+				currentState: { playout: {}, inputs: {} },
+				session: session({ id: 56, sequence: 2 }),
+			});
+
+			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'badge', { assetId: 'a', revisionId: 'r' } as never, null);
+
+			expect(mockRepository.sendCommand).toHaveBeenCalledTimes(2);
+			expect(store.inputRefusal(SCREEN_ID, 'slate', 'badge')).toBeUndefined();
+		});
+	});
+
 	describe('a domain refusal that is not about the epoch', () => {
 		it('is not restated against a reloaded epoch', async () => {
 			await store.loadSession(EVENT_ID, SCREEN_ID);

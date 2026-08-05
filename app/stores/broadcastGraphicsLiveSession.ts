@@ -91,6 +91,21 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * where their edit is the one that won — would be exactly backwards.
 	 */
 	const supersededInputs = ref<Set<string>>(new Set());
+	/**
+	 * Why each Graphic Input's last edit from this session was refused, when the refusal
+	 * was about the value rather than about the show.
+	 *
+	 * Held per field rather than in `error` because that is where the operator is
+	 * looking and what they can act on: a revision that has gone is a fact about the one
+	 * thing they just chose, and a banner over the whole Screen names neither the field
+	 * nor the choice. Local to this session for the same reason the superseded markers
+	 * are — it records what this operator's last attempt did, not the state of the show.
+	 *
+	 * It records whatever code the refusal carried, including one the superseded marker
+	 * also covers: this is the record of what happened to the edit, not a second policy
+	 * about which refusals matter. Deciding that is the reading surface's job.
+	 */
+	const refusedInputs = ref<Map<string, BroadcastGraphicsRejectionCode>>(new Map());
 
 	function playoutKey(screenId: number, graphicId: string): string {
 		return `${screenId}:${graphicId}`;
@@ -103,16 +118,47 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	/**
 	 * Forget this Screen's refused-edit markers, and only this Screen's.
 	 *
-	 * A marker says "your last edit to this field was superseded", which stops being
-	 * true once the epoch holding the winning value is gone. That is a fact about one
-	 * Screen: an operator working two Screens must not have one Screen's reset wipe
-	 * what the other is telling them.
+	 * A marker says "your last edit to this field was superseded" or "was refused for
+	 * this reason", and both stop being true once the epoch they were made against is
+	 * gone. That is a fact about one Screen: an operator working two Screens must not
+	 * have one Screen's reset wipe what the other is telling them.
 	 */
-	function forgetSupersededInputs(screenId: number) {
+	function forgetRefusedInputs(screenId: number) {
 		for (const key of [...supersededInputs.value]) {
 			if (key.startsWith(`${screenId}:`))
 				supersededInputs.value.delete(key);
 		}
+		for (const key of [...refusedInputs.value.keys()]) {
+			if (key.startsWith(`${screenId}:`))
+				refusedInputs.value.delete(key);
+		}
+	}
+
+	/**
+	 * Why this operator's last edit to one Graphic Input was refused, if it was.
+	 *
+	 * The answer a surface needs to say something better than "the action failed": a
+	 * Missing Graphic Asset Reference and Unavailable Graphic Asset Content prescribe
+	 * opposite next moves, and only the code tells them apart.
+	 */
+	function inputRefusal(
+		screenId: number,
+		graphicId: string,
+		inputKey: string,
+	): BroadcastGraphicsRejectionCode | undefined {
+		return refusedInputs.value.get(inputKeyOf(screenId, graphicId, inputKey));
+	}
+
+	/**
+	 * Forget one field's refusal, because the operator is trying that field again.
+	 *
+	 * Cleared before the attempt rather than after it: a refusal left standing while a
+	 * new value is in flight describes the previous attempt, and the operator would be
+	 * reading it as the answer to the one they just made.
+	 */
+	function forgetInputRefusal(screenId: number, graphicId: string, inputKey: string) {
+		supersededInputs.value.delete(inputKeyOf(screenId, graphicId, inputKey));
+		refusedInputs.value.delete(inputKeyOf(screenId, graphicId, inputKey));
 	}
 
 	/**
@@ -514,7 +560,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			async () => {
 				const session = await repository.resetSession(eventId, screenId);
 				cacheSession(session);
-				forgetSupersededInputs(screenId);
+				forgetRefusedInputs(screenId);
 				return session;
 			},
 			{ loadingRef: loading, errorRef: error },
@@ -538,7 +584,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		// Graphics mode, which is one of the ways an epoch ends — keeping it cached
 		// would leave every output rendering a show that is over.
 		sessions.value.delete(data.screenId);
-		forgetSupersededInputs(data.screenId);
+		forgetRefusedInputs(data.screenId);
 		await loadSession(data.eventId, data.screenId);
 	}
 
@@ -585,7 +631,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		 */
 		basedOnValue: GraphicInputValue,
 	) {
-		supersededInputs.value.delete(inputKeyOf(screenId, graphicId, inputKey));
+		forgetInputRefusal(screenId, graphicId, inputKey);
 
 		return deliverCommand(
 			eventId,
@@ -597,6 +643,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 				payload: { graphicId, inputKey, value, basedOn: { value: basedOnValue } },
 			},
 			async (code) => {
+				refusedInputs.value.set(inputKeyOf(screenId, graphicId, inputKey), code);
 				if (code !== 'stale-input-edit')
 					return;
 
@@ -631,7 +678,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		 */
 		basedOnValue?: GraphicInputValue,
 	) {
-		supersededInputs.value.delete(inputKeyOf(screenId, graphicId, inputKey));
+		forgetInputRefusal(screenId, graphicId, inputKey);
 
 		return deliverCommand(
 			eventId,
@@ -648,6 +695,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 				},
 			},
 			async (code) => {
+				refusedInputs.value.set(inputKeyOf(screenId, graphicId, inputKey), code);
 				if (code !== 'stale-input-edit')
 					return;
 
@@ -770,6 +818,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		sessions.value.clear();
 		pending.value.clear();
 		supersededInputs.value.clear();
+		refusedInputs.value.clear();
 		loading.value = false;
 		error.value = null;
 	}
@@ -785,6 +834,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		animationProjection,
 		renderedInputValues,
 		isPending,
+		inputRefusal,
 		inputsState,
 		inputTraces,
 		sourceSelections,

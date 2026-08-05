@@ -6,7 +6,7 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import type { GraphicsVideoTarget } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import { graphicAssetTargetCompatibility } from '~~/shared/utils/graphicAssetTargetCompatibility';
-import { graphicAssetRevisionStatusPath } from '~~/shared/utils/graphicsAssetReferences';
+import { graphicAssetReferenceStatusOrUnavailable } from '~/utils/graphicAssetReferenceStatus';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
 const props = withDefaults(defineProps<{
@@ -20,14 +20,12 @@ const props = withDefaults(defineProps<{
 	 */
 	videoTarget?: GraphicsVideoTarget;
 	/**
-	 * The engines of the Screen Outputs currently open, when the host knows them.
+	 * The Open Screen Output Engines, when the host knows them.
 	 *
-	 * Reports rather than gates, and is a different question from `videoTarget`:
-	 * that one is the write-time enabling choice, this one is what the revision will
-	 * cost the outputs watching right now. A revision one open output cannot play
-	 * costs that output that revision and nothing else (#98), and the operator may
-	 * well be choosing for the Chromium program output — so it is stated before the
-	 * choice and never taken instead of it.
+	 * Reports rather than gates, which is what keeps it apart from `videoTarget`: a
+	 * revision one open output cannot play costs that output that revision and nothing
+	 * else (#98), and the operator may well be choosing for the Chromium program
+	 * output. Stated before the choice, never taken instead of it.
 	 */
 	openOutputTargets?: GraphicsVideoTarget[];
 	/** Withhold every affordance, without hiding what is already pinned. */
@@ -94,6 +92,26 @@ const VIDEO_TARGET_LABELS: Record<GraphicsVideoTarget, string> = {
 	other: 'a non-Chromium engine',
 };
 
+/**
+ * Why this revision cannot be pinned here, in the terms of what actually refused it.
+ *
+ * Two different refusals wear the same `blocked` outcome. One is about this host's
+ * target: a VP9-alpha clip is Chromium-only, so pinning it against any other target
+ * would write a reference that target could never resolve. The other is about the
+ * revision itself — a transparent clip whose facts do not confirm Chromium playback is
+ * one no engine is known to play, and it is refused for the Chromium target too.
+ *
+ * Asking the gate about the Chromium target is what separates them, rather than
+ * restating its conditions here: Chromium is the only target that can accept a
+ * transparent clip, so a revision blocked even for it is blocked everywhere. Naming a
+ * target for that one would send the operator to change a setting that cannot help.
+ */
+function blockedReason(asset: GraphicAsset): string {
+	return graphicAssetTargetCompatibility(asset.facts, 'chromium').outcome === 'blocked'
+		? 'Blocked · no engine plays this revision'
+		: `Blocked for ${VIDEO_TARGET_LABELS[props.videoTarget]} target`;
+}
+
 /** The engines open right now that cannot play this exact revision. */
 function blockedOpenOutputs(asset: GraphicAsset): string[] {
 	return props.openOutputTargets
@@ -110,17 +128,9 @@ watch(() => ({
 		referenceStatus.value = undefined;
 		return;
 	}
-	try {
-		const status = await $fetch<GraphicAssetReferenceStatus>(
-			graphicAssetRevisionStatusPath(reference),
-		);
-		if (flight.current)
-			referenceStatus.value = status;
-	}
-	catch {
-		if (flight.current)
-			referenceStatus.value = { outcome: 'unavailable', retryable: true };
-	}
+	const status = await graphicAssetReferenceStatusOrUnavailable(reference);
+	if (flight.current)
+		referenceStatus.value = status;
 }, { immediate: true });
 
 function selectAsset(asset: GraphicAsset) {
@@ -330,7 +340,7 @@ function selectAsset(asset: GraphicAsset) {
 								:disabled="assetCompatibility(asset).outcome === 'blocked'"
 								@click="selectAsset(asset)"
 							>
-								{{ assetCompatibility(asset).outcome === 'blocked' ? 'Blocked for Safari target' : `Select revision ${asset.revisionNumber}` }}
+								{{ assetCompatibility(asset).outcome === 'blocked' ? blockedReason(asset) : `Select revision ${asset.revisionNumber}` }}
 							</UButton>
 						</article>
 						<p v-if="visibleAssets.length === 0" class="text-sm text-muted sm:col-span-2 lg:col-span-3">

@@ -384,7 +384,10 @@ export default defineNuxtPlugin({
 			}
 		}
 
-		function watchPresence(channelName: string, callback: RealtimePresenceCallback): Unsubscribe {
+		function watchPresence<Data extends RealtimePresenceData>(
+			channelName: string,
+			callback: RealtimePresenceCallback<Data>,
+		): Unsubscribe {
 			const channel = getChannel(channelName);
 			const key = `presence:${++presenceSubscriptionId}:${channelName}`;
 			let active = true;
@@ -395,7 +398,11 @@ export default defineNuxtPlugin({
 					if (!active)
 						return;
 
-					callback(members as RealtimePresenceMessage[]);
+					// The one place the presence payload is asserted rather than checked:
+					// the wire carries whatever a member entered with, and this is the
+					// boundary it arrives at. Declared partial, so every reader still has
+					// to look before it reads a field.
+					callback(members as RealtimePresenceMessage<Data>[]);
 				}
 				catch (err) {
 					console.warn(`Failed to refresh presence for ${channelName}:`, err);

@@ -1,10 +1,9 @@
 import type { MaybeRefOrGetter } from 'vue';
 import type { GraphicsVideoTarget } from '~~/shared/utils/graphicAssetTargetCompatibility';
-import type { ScreenPresenceData } from '~/types/screen';
 import { graphicsVideoTargetForUserAgent } from '~~/shared/utils/graphicAssetTargetCompatibility';
 
 /**
- * The browser engines the Screen Outputs currently open on one Screen are running.
+ * The Open Screen Output Engines of one Screen.
  *
  * Playback compatibility is decided per resolution request against the engine on the
  * other end of it (#98), so what a Graphic Asset Revision costs is a fact about the
@@ -37,7 +36,7 @@ export function useScreenOutputVideoTargets(
 		const members = screenStore.screenPresence.get(toValue(screenId))?.members ?? [];
 		const targets = new Set<GraphicsVideoTarget>();
 		for (const member of members) {
-			const userAgent = (member as { data?: Partial<ScreenPresenceData> } | null)?.data?.userAgent;
+			const userAgent = member.data?.userAgent;
 			if (typeof userAgent === 'string' && userAgent !== '')
 				targets.add(graphicsVideoTargetForUserAgent(userAgent));
 		}

@@ -30,6 +30,10 @@ import {
  * Graphic Input with no available value are all refusals about the current state
  * of the show, so they are conflicts. Naming a Graphic Input the Broadcast Graphic
  * does not declare addresses something that is not there.
+ *
+ * A revision that does not resolve is a conflict too rather than a not-found: the
+ * command addresses a Graphic Input that exists, and what has gone is the content it
+ * named — which is a fact about the state of the library, and may be temporary.
  */
 const REJECTION_STATUS: Record<BroadcastGraphicsCommandRejection['code'], number> = {
 	'stale-input-acceptance': 409,
@@ -39,7 +43,27 @@ const REJECTION_STATUS: Record<BroadcastGraphicsCommandRejection['code'], number
 	'unknown-input': 404,
 	'unknown-source': 404,
 	'override-unbound': 409,
+	'missing-asset-reference': 409,
+	'unavailable-asset-content': 409,
 };
+
+/**
+ * One domain refusal as the error its transport carries.
+ *
+ * The single place a refusal becomes an HTTP failure, because the code is the part a
+ * client acts on: without it a 409 is indistinguishable from the epoch conflict this
+ * client's store reloads and restates on (#203). Refusals raised outside the reducer —
+ * admission the module performs before reduction ever sees the command — reach the
+ * wire through here rather than building their own error, so there is one answer to
+ * "what does a refused command look like".
+ */
+export function broadcastGraphicsRejectionError(rejection: BroadcastGraphicsCommandRejection) {
+	return createError({
+		statusCode: REJECTION_STATUS[rejection.code],
+		message: rejection.message,
+		data: { code: rejection.code, inputKeys: rejection.inputKeys },
+	});
+}
 
 /** Namespaces Broadcast Graphics Live Session receipts in the shared receipt store. */
 export const BROADCAST_GRAPHICS_LIVE_SESSION_AGGREGATE_KIND = 'broadcastGraphicsLiveSession';
@@ -347,13 +371,8 @@ export function broadcastGraphicsStateService() {
 				);
 			}
 			catch (error) {
-				if (error instanceof BroadcastGraphicsCommandRejection) {
-					throw createError({
-						statusCode: REJECTION_STATUS[error.code],
-						message: error.message,
-						data: { code: error.code, inputKeys: error.inputKeys },
-					});
-				}
+				if (error instanceof BroadcastGraphicsCommandRejection)
+					throw broadcastGraphicsRejectionError(error);
 				throw error;
 			}
 		},

@@ -28,6 +28,8 @@ const mockUpdateGraphic = vi.fn();
 const mockBindingData = ref<GraphicBindingDataSet>(createEmptyGraphicBindingDataSet());
 /** The Graphic Inputs whose last edit from this session lost a field-scoped conflict. */
 const mockSupersededInputKeys = ref<string[]>([]);
+/** Why the last edit to one Graphic Input was refused, as the store holds it. */
+const mockInputRefusals = ref<Record<string, string>>({});
 /** The engines of the Screen Outputs currently open on this Screen. */
 const mockOpenOutputTargets = ref<string[]>([]);
 /** The Graphics Asset Library's answer about one exact revision. */
@@ -38,6 +40,8 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	setOverride: mockSetOverride,
 	selectSource: mockSelectSource,
 	updateGraphic: mockUpdateGraphic,
+	inputRefusal: (_screenId: number, _graphicId: string, inputKey: string) =>
+		mockInputRefusals.value[inputKey],
 	sourceSelections: (_screenId: number, graphicId: string) =>
 		mockLiveState.value.sources?.[graphicId] ?? {},
 	inputTraces: (
@@ -227,6 +231,7 @@ describe('broadcastGraphicsLiveControl', () => {
 		mockLiveState.value = createInitialBroadcastGraphicsLiveState();
 		mockBindingData.value = createEmptyGraphicBindingDataSet();
 		mockSupersededInputKeys.value = [];
+		mockInputRefusals.value = {};
 		mockOpenOutputTargets.value = [];
 		mockApiFetch.mockReset();
 		mockApiFetch.mockResolvedValue({ outcome: 'available', lifecycleState: 'active', kind: 'image' });
@@ -686,6 +691,52 @@ describe('broadcastGraphicsLiveControl', () => {
 			expect(mockSetInput).not.toHaveBeenCalled();
 			expect(wrapper.get('[data-testid="live-control-media-refused-badge"]').text())
 				.toContain('Unavailable Graphic Asset Content');
+		});
+
+		/**
+		 * The residual race: the picker asked the library, was told the revision was
+		 * there, and it had gone by the time the command landed. The operator gets the
+		 * same words at the same field as when the picker catches it — rather than a
+		 * banner saying only that a playout action failed (#203).
+		 */
+		it('names the authority’s refusal at the field when the revision goes between the check and the write', async () => {
+			// Once, so the refusal this test installs cannot outlive it: `clearAllMocks`
+			// clears calls but leaves an implementation standing.
+			mockSetInput.mockImplementationOnce(() => {
+				mockInputRefusals.value = { badge: 'missing-asset-reference' };
+			});
+			const wrapper = await mountComponent(graphic([BADGE]));
+
+			await wrapper.get('[data-testid="live-control-media-badge"]').trigger('click');
+			await flushPromises();
+
+			expect(mockSetInput).toHaveBeenCalledOnce();
+			expect(wrapper.get('[data-testid="live-control-media-refused-badge"]').text())
+				.toContain('Missing Graphic Asset Reference');
+		});
+
+		it('names content that is only temporarily unavailable as retryable, not as gone', async () => {
+			mockInputRefusals.value = { badge: 'unavailable-asset-content' };
+
+			const wrapper = await mountComponent(graphic([BADGE]));
+
+			const refusal = wrapper.get('[data-testid="live-control-media-refused-badge"]').text();
+			expect(refusal).toContain('Unavailable Graphic Asset Content');
+			expect(refusal).toContain('Try again');
+		});
+
+		/**
+		 * The rest of the rejection vocabulary is about the show rather than about the
+		 * revision, and each code is already reported where it belongs — a superseded
+		 * field refreshes itself, a Take that cannot proceed says which input is
+		 * missing. Repeating one beside the picker would name the wrong thing.
+		 */
+		it('says nothing beside the picker about a refusal that is not about the revision', async () => {
+			mockInputRefusals.value = { badge: 'stale-input-edit' };
+
+			const wrapper = await mountComponent(graphic([BADGE]));
+
+			expect(wrapper.find('[data-testid="live-control-media-refused-badge"]').exists()).toBe(false);
 		});
 
 		it('stops naming a refusal once a revision that resolves is chosen', async () => {
