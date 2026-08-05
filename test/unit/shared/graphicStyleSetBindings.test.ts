@@ -916,7 +916,12 @@ describe('recaptureGraphicStyleOverrides', () => {
 			resolution,
 		);
 
-		const recaptured = recaptureGraphicStyleOverrides(editFontSize(composition, 30), resolution, LINKED);
+		const recaptured = recaptureGraphicStyleOverrides(
+			editFontSize(composition, 30),
+			resolution,
+			LINKED,
+			composition,
+		);
 
 		expect(headlineOf(recaptured).styleRefs?.typography)
 			.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
@@ -924,9 +929,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 
 	it('lets go of a Graphic Fill reference the author has painted over', () => {
 		const resolution = resolveGraphicStyleSet(withAccentFill);
-		const edited = paintFill(boundFill(), '#00ff88');
+		const composition = boundFill();
+		const edited = paintFill(composition, '#00ff88');
 
-		const recaptured = recaptureGraphicStyleOverrides(edited, resolution, LINKED);
+		const recaptured = recaptureGraphicStyleOverrides(edited, resolution, LINKED, composition);
 
 		// A Graphic Fill is a discriminated union with no partial to record a deviation
 		// in, so deviating from the preset is unbinding it — the same answer "Keep mine"
@@ -941,8 +947,9 @@ describe('recaptureGraphicStyleOverrides', () => {
 
 	it('keeps a Graphic Fill reference the author has left where the preset put it', () => {
 		const resolution = resolveGraphicStyleSet(withAccentFill);
+		const composition = boundFill();
 
-		const recaptured = recaptureGraphicStyleOverrides(boundFill(), resolution, LINKED);
+		const recaptured = recaptureGraphicStyleOverrides(composition, resolution, LINKED, composition);
 
 		expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toEqual({ entryId: 'accent-fill' });
 	});
@@ -951,7 +958,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 		const resolution = resolveGraphicStyleSet(withAccentFill);
 		const wandered = paintFill(boundFill(), '#00ff88');
 
-		const recaptured = recaptureGraphicStyleOverrides(paintFill(wandered, '#ff0044'), resolution, LINKED);
+		const recaptured = recaptureGraphicStyleOverrides(paintFill(wandered, '#ff0044'), resolution, LINKED, wandered);
 
 		// Nothing about it deviates, so nothing about it is theirs — exactly as an edited
 		// and restored font size leaves no override pinning it.
@@ -961,9 +968,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 	it('still offers a republished Graphic Fill to an author who never touched theirs', () => {
 		const resolution = resolveGraphicStyleSet(withAccentFill);
 		// An edit somewhere else on the same item, which is what runs a recapture.
-		const edited = editFontSize(boundFill(), 30);
+		const composition = boundFill();
+		const edited = editFontSize(composition, 30);
 
-		const recaptured = recaptureGraphicStyleOverrides(edited, resolution, LINKED);
+		const recaptured = recaptureGraphicStyleOverrides(edited, resolution, LINKED, composition);
 		const changes = graphicStyleUpdateChanges(recaptured, resolveGraphicStyleSet(republished));
 
 		// The reference survived an unrelated edit, so the Style Set can still reach it —
@@ -1004,7 +1012,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 			},
 		})]);
 
-		const recaptured = recaptureGraphicStyleOverrides(editFontSize(overPinned, 30), resolution, LINKED);
+		const recaptured = recaptureGraphicStyleOverrides(editFontSize(overPinned, 30), resolution, LINKED, overPinned);
 
 		expect(headlineOf(recaptured).styleRefs?.typography)
 			.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
@@ -1015,11 +1023,12 @@ describe('recaptureGraphicStyleOverrides', () => {
 	});
 
 	it('keeps a Graphic Fill reference the Style Set can no longer honour', () => {
-		const edited = paintFill(boundFill(), '#00ff88');
+		const composition = boundFill();
+		const edited = paintFill(composition, '#00ff88');
 
 		// A Style Set that failed to load resolves nothing, and must not be the reason a
 		// linked composition quietly goes local.
-		const recaptured = recaptureGraphicStyleOverrides(edited, resolveGraphicStyleSet([]), LINKED);
+		const recaptured = recaptureGraphicStyleOverrides(edited, resolveGraphicStyleSet([]), LINKED, composition);
 
 		expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toEqual({ entryId: 'accent-fill' });
 	});
@@ -1034,9 +1043,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 	 */
 	describe('while the composition is behind the published Style Set', () => {
 		it('leaves a Graphic Fill reference the author never touched, so its update stays reviewable', () => {
-			const behind = editFontSize(boundBoth(), 30);
+			const stored = boundBoth();
+			const behind = editFontSize(stored, 30);
 
-			const recaptured = recaptureGraphicStyleOverrides(behind, resolveGraphicStyleSet(republished), AHEAD);
+			const recaptured = recaptureGraphicStyleOverrides(behind, resolveGraphicStyleSet(republished), AHEAD, stored);
 
 			expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toEqual({ entryId: 'accent-fill' });
 			// Severing the reference here would destroy the offer *and* the link, so no
@@ -1048,9 +1058,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 		it('records no override on a typography preset the author never touched, so its update stays reviewable', () => {
 			// The author's edit is to the fill; the typography they are inheriting is
 			// untouched, and the only reason it differs from the preset is the republish.
-			const behind = paintFill(boundBoth(), '#123456');
+			const stored = boundBoth();
+			const behind = paintFill(stored, '#123456');
 
-			const recaptured = recaptureGraphicStyleOverrides(behind, resolveGraphicStyleSet(republished), AHEAD);
+			const recaptured = recaptureGraphicStyleOverrides(behind, resolveGraphicStyleSet(republished), AHEAD, stored);
 
 			expect(headlineOf(recaptured).styleRefs?.typography).toEqual({ entryId: 'heading' });
 			expect(graphicStyleUpdateChanges(recaptured, resolveGraphicStyleSet(republished)).map(change => change.slot))
@@ -1058,9 +1069,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 		});
 
 		it('leaves the values the author has just written exactly where they are', () => {
-			const behind = paintFill(editFontSize(boundBoth(), 30), '#123456');
+			const stored = boundBoth();
+			const behind = paintFill(editFontSize(stored, 30), '#123456');
 
-			const recaptured = recaptureGraphicStyleOverrides(behind, resolveGraphicStyleSet(republished), AHEAD);
+			const recaptured = recaptureGraphicStyleOverrides(behind, resolveGraphicStyleSet(republished), AHEAD, stored);
 
 			// Deferring the provenance is not refusing the edit: the composition stores its
 			// values inline, and review is where the author is shown that their edit and the
@@ -1080,10 +1092,112 @@ describe('recaptureGraphicStyleOverrides', () => {
 				editFontSize(reconciled, 30),
 				resolveGraphicStyleSet(republished),
 				AHEAD,
+				reconciled,
 			);
 
 			expect(headlineOf(recaptured).styleRefs?.typography)
 				.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+		});
+	});
+
+	/**
+	 * A composition whose recorded revision lags a Style Set its values already agree
+	 * with — what a publish that changed only entries this composition never references
+	 * leaves behind, since such a publish offers nothing to review and so never moves
+	 * the number (#198).
+	 *
+	 * The revision comparison above is a proxy for the question that actually matters:
+	 * is there a pending Style Set change here that recording a deviation would absorb?
+	 * Here there is none — slot by slot, what the composition holds is what the
+	 * published entries resolve to — so every deviation derivable from them is the
+	 * author's, and the guard has nothing to protect.
+	 */
+	describe('while the composition is stranded on an old revision it is already in step with', () => {
+		const PUBLISHED = 3;
+
+		/** In step with `styleSet()`'s `heading`, and recorded three revisions behind it. */
+		function stranded(): BroadcastGraphicConfig {
+			return graphic([textItem({
+				typography: inheritedTypography(),
+				styleRefs: { typography: { entryId: 'heading' } },
+			})]);
+		}
+
+		it('records the author\'s edit as an explicit override', () => {
+			const composition = stranded();
+
+			const recaptured = recaptureGraphicStyleOverrides(
+				editFontSize(composition, 30),
+				resolveGraphicStyleSet(styleSet()),
+				PUBLISHED,
+				composition,
+			);
+
+			expect(headlineOf(recaptured).styleRefs?.typography)
+				.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+		});
+
+		/**
+		 * The whole defect, end to end: the edit is made while stranded, and the review
+		 * that finally reaches this slot is taken with the answer the panel defaults to.
+		 */
+		it('keeps that edit through the next republish, applied with every row\'s default answer', () => {
+			const composition = stranded();
+			const edited = recaptureGraphicStyleOverrides(
+				editFontSize(composition, 30),
+				resolveGraphicStyleSet(styleSet()),
+				PUBLISHED,
+				composition,
+			);
+
+			// Revision 4 moves the colour `heading` resolves through, which is what finally
+			// produces a review row for this slot.
+			const next = resolveGraphicStyleSet(styleSet('#00ff88'));
+			const changes = graphicStyleUpdateChanges(edited, next);
+			expect(changes.map(change => change.slot)).toEqual(['typography']);
+			// And the row is about the colour alone. The size is recorded as the author's,
+			// so it is not something they are being asked to decide about.
+			expect(graphicStyleChangedKeys(changes[0]!.current, changes[0]!.next)).toEqual(['color']);
+
+			// No decisions at all, which is exactly what accepting every row's default does.
+			const applied = applyGraphicStyleSet(edited, next, { revision: 4 });
+
+			expect(headlineOf(applied).typography.fontSize).toBe(30);
+			expect(headlineOf(applied).typography.color).toBe('#00ff88');
+		});
+
+		/**
+		 * Being in step is decided per slot, not per composition. A stranded composition
+		 * can hold both a slot with nothing pending and a slot the Style Set is waiting to
+		 * change, and each gets the answer its own evidence supports.
+		 */
+		it('still leaves a slot the Style Set has a pending change in', () => {
+			// `accent-fill` moved off `brand` and onto `ink`, which reaches the fill and
+			// nothing else: `heading` still resolves to exactly what the item holds.
+			const fillMoved = [...styleSet(), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'ink' })];
+			const composition = graphic([textItem({
+				typography: inheritedTypography(),
+				surfaceStyle: { fill: { type: 'solid', color: '#ff0044' }, fillOpacity: 1 },
+				styleRefs: {
+					'typography': { entryId: 'heading' },
+					'surfaceStyle.fill': { entryId: 'accent-fill' },
+				},
+			})]);
+
+			const recaptured = recaptureGraphicStyleOverrides(
+				editFontSize(composition, 30),
+				resolveGraphicStyleSet(fillMoved),
+				PUBLISHED,
+				composition,
+			);
+
+			expect(headlineOf(recaptured).styleRefs?.typography)
+				.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+			// The fill's pending change is untouched and still reviewable — severing the
+			// reference here would settle an update nobody reviewed.
+			expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toEqual({ entryId: 'accent-fill' });
+			expect(graphicStyleUpdateChanges(recaptured, resolveGraphicStyleSet(fillMoved)).map(change => change.slot))
+				.toEqual(['surfaceStyle.fill']);
 		});
 	});
 });

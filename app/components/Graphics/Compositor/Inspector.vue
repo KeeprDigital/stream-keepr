@@ -418,11 +418,16 @@ function displayedSize(axis: 'width' | 'height') {
  *
  * With no Style Set loaded it is the identity, so an unlinked composition is
  * untouched.
+ *
+ * The composition as `props.graphics` still holds it is what says which slots had a
+ * pending Style Set change before this edit — the edited copy cannot, since the edit
+ * itself is a difference from the entry (#198).
  */
 function withRecapturedStyleOverrides(graphic: BroadcastGraphicConfig): BroadcastGraphicConfig {
 	const context = props.styleSet;
-	return context
-		? recaptureGraphicStyleOverrides(graphic, context.resolution, context.publishedRevision)
+	const stored = props.graphics.find(candidate => candidate.id === graphic.id);
+	return context && stored
+		? recaptureGraphicStyleOverrides(graphic, context.resolution, context.publishedRevision, stored)
 		: graphic;
 }
 

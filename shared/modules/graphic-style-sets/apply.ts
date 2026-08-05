@@ -524,6 +524,45 @@ export function graphicStyleUpdateChanges(
 }
 
 /**
+ * Whether one owner's slot already holds exactly what the published entries resolve
+ * it to.
+ *
+ * The per-slot form of "no update is available here". {@link graphicStyleUpdateChanges}
+ * is this same question asked of every slot in a composition, and the two agree by
+ * construction because they resolve through the same call with the same arguments.
+ *
+ * It is asked of a *stored* composition rather than of a revision number, for the
+ * reason the module header gives: a composition holds its resolved values inline, so
+ * whether it is in step with a Style Set is answerable from the document alone. A
+ * recorded revision that lags one the values already agree with is a number out of
+ * date, not a pending change (#198).
+ *
+ * A slot this owner does not support, and one the resolution cannot honour, are both
+ * false — not because they are known to differ but because there is nothing to
+ * compare them against. Every caller is asking for permission to derive something
+ * from the published entries, and no evidence must not grant it.
+ */
+export function graphicStyleSlotInStep(
+	resolution: GraphicStyleSetResolution,
+	slot: GraphicStyleSlot,
+	ref: GraphicStyleRef,
+	node: GraphicStyleOwnerNode,
+): boolean {
+	if (!graphicStyleOwnerSupportsSlot(node, slot))
+		return false;
+
+	const current = readGraphicStyleSlot(node, slot);
+	const next = resolveGraphicStyleSlotValue(
+		resolution,
+		slot,
+		ref.entryId,
+		current,
+		ref.overrides as Record<string, unknown> | undefined,
+	);
+	return next !== null && sameGraphicStyleValue(current, next);
+}
+
+/**
  * The keys of one reviewable change that actually move.
  *
  * A change is offered per property group, but only some of the group's keys are in

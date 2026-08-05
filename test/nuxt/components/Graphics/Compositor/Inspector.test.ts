@@ -5,11 +5,14 @@ import type {
 	GraphicInputDeclaration,
 	GraphicItemConfig,
 } from '~~/shared/types/graphics';
+import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
+import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { FEATURE_MATCH_TOKEN_CATALOGUE } from '~~/shared/featureMatchTokenCatalogue';
+import { applyGraphicStyleSet, resolveGraphicStyleSet } from '~~/shared/modules/graphic-style-sets';
 import {
 	BROADCAST_GRAPHICS_HOST_CONTRACT,
 	DEFAULT_GRAPHIC_TYPOGRAPHY,
@@ -165,6 +168,8 @@ async function mountComponent(options: {
 	selectedTarget: GraphicsSelectionTarget;
 	writable?: boolean;
 	contract?: GraphicsHostContract;
+	/** The published Graphic Style Set this composition authors against, if any. */
+	styleSet?: GraphicStyleAuthoringContext;
 }) {
 	const componentPath = '../../../../../app/components/Graphics/Compositor/Inspector.vue';
 	const { default: Inspector } = await import(componentPath);
@@ -178,6 +183,7 @@ async function mountComponent(options: {
 			canvasHeight: 1080,
 			eventId: 7,
 			writable: options.writable ?? true,
+			styleSet: options.styleSet,
 		},
 		global: {
 			stubs: {
@@ -1672,5 +1678,109 @@ describe('graphicsCompositorInspector', () => {
 			expect(wrapper.find('[data-testid="game-wins-box-shape-fill"]').exists()).toBe(false);
 			expect(numberField(wrapper, 'Font size')).toBeUndefined();
 		});
+	});
+});
+
+/**
+ * The seam a property edit becomes an explicit property-level override at.
+ *
+ * The controls above write values and know nothing about provenance, so the panel
+ * re-derives each reference's overrides from what the composition now holds. What that
+ * derivation is allowed to read is the whole question: a difference it finds on a slot
+ * the Style Set has a pending change in is the Style Set's own change wearing the
+ * author's name, while one on a slot already in step is the author's and nothing else's.
+ *
+ * Both directions are asserted here because the panel is what tells them apart. It
+ * passes the composition as `props.graphics` still holds it, and passing the *edited*
+ * copy instead would collapse the two cases into one — every edit would look like a
+ * pending change, which is exactly the state #198 was filed about.
+ */
+describe('recording a Graphic Style Set override from a property edit', () => {
+	function entries(letterSpacing = 2): GraphicStyleSetEntry[] {
+		return [
+			{ id: 'brand', kind: 'palette', name: 'Brand', schemaVersion: 1, value: { color: '#ff0044' } },
+			{
+				id: 'heading',
+				kind: 'typography',
+				name: 'Show heading',
+				schemaVersion: 1,
+				value: {
+					font: { kind: 'application', fontId: 'inter' },
+					fontSize: 64,
+					fontWeight: 800,
+					fontStyle: 'normal',
+					textTransform: 'uppercase',
+					letterSpacing,
+					lineHeight: 1,
+					colorEntryId: 'brand',
+				},
+			},
+		];
+	}
+
+	const PUBLISHED = 3;
+
+	function context(published: GraphicStyleSetEntry[]): GraphicStyleAuthoringContext {
+		return {
+			id: 'show-style',
+			name: 'Show style',
+			entries: published,
+			resolution: resolveGraphicStyleSet(published),
+			publishedRevision: PUBLISHED,
+		};
+	}
+
+	/**
+	 * A composition holding exactly what `entries()` resolves to, and recorded two
+	 * revisions behind the published one — what a publish that changed only entries this
+	 * composition never references leaves behind, since it offers nothing to review and
+	 * so never moves the number.
+	 */
+	function stranded(): BroadcastGraphicConfig[] {
+		return [applyGraphicStyleSet(
+			{
+				id: 'lower-third',
+				name: 'Lower Third',
+				styleSet: { styleSetId: 'show-style', revision: 1 },
+				items: [{ ...textItem, styleRefs: { typography: { entryId: 'heading' } } }],
+			},
+			resolveGraphicStyleSet(entries()),
+		)];
+	}
+
+	const SELECTED: GraphicsSelectionTarget = { type: 'item', graphicId: 'lower-third', itemId: 'name' };
+
+	it('records the edit as an override while the template is stranded on an older revision', async () => {
+		const wrapper = await mountComponent({
+			graphics: stranded(),
+			selectedTarget: SELECTED,
+			styleSet: context(entries()),
+		});
+
+		numberField(wrapper, 'Font size')?.vm.$emit('update:modelValue', 30);
+		await nextTick();
+
+		expect(itemOf(emittedGraphics(wrapper, 0))?.styleRefs?.typography)
+			.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+	});
+
+	it('records nothing on a slot the Style Set has a pending change in', async () => {
+		const wrapper = await mountComponent({
+			graphics: stranded(),
+			selectedTarget: SELECTED,
+			// `heading`'s letter spacing has moved, so this slot is carrying a republished
+			// change nobody has reviewed. Recording anything derived from it here would
+			// settle that update without the author ever seeing it.
+			styleSet: context(entries(8)),
+		});
+
+		numberField(wrapper, 'Font size')?.vm.$emit('update:modelValue', 30);
+		await nextTick();
+
+		const item = itemOf(emittedGraphics(wrapper, 0));
+		expect(item?.styleRefs?.typography).toEqual({ entryId: 'heading' });
+		// Deferring the provenance is not refusing the edit: the value is stored inline
+		// and review is where the author is shown that theirs and the Style Set's differ.
+		expect(item?.type === 'text' && item.typography.fontSize).toBe(30);
 	});
 });

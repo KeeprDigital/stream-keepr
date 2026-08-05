@@ -242,11 +242,16 @@ function apply(
  * inherited is a deviation by definition. Deriving it here is what makes it the
  * explicit property-level override the glossary requires — without it, the author's
  * change would be silently reverted by the next applied Style Set update.
+ *
+ * The composition as `props.graphics` still holds it is what says which slots had a
+ * pending Style Set change before this edit — the edited copy cannot, since the edit
+ * itself is a difference from the entry (#198).
  */
 function withRecapturedStyleOverrides(graphic: BroadcastGraphicConfig): BroadcastGraphicConfig {
 	const context = props.styleSet;
-	return context
-		? recaptureGraphicStyleOverrides(graphic, context.resolution, context.publishedRevision)
+	const stored = props.graphics.find(candidate => candidate.id === graphic.id);
+	return context && stored
+		? recaptureGraphicStyleOverrides(graphic, context.resolution, context.publishedRevision, stored)
 		: graphic;
 }
 
