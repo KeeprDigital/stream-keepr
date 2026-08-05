@@ -180,15 +180,65 @@ could write any name into the ledger, and it is now the asking graphics author
 session where there is one and a plain `graphics-administrator` where there is
 not.
 
-## Still unauthenticated
+## Reading the library
 
-Guarding ingestion and lifecycle did not gate the library's read surface.
-`GET /api/graphics-assets`, `capacity`, `thumbnail`, `usage` and `retention`
-still answer an unauthenticated caller, so the installation's asset names,
-thumbnails, usage and capacity remain enumerable without a session. Tracked as
-issue #172; gating the listing route also needs the Library Workspace's
-server-side render to forward its cookie, which is what makes it more than a
-guard.
+The read surface is gated too, as of issue #172. Six routes require a Graphics
+Author Session and answer `401` without one: `GET /api/graphics-assets`,
+`capacity`, an asset's `thumbnail`, `usage` and `retention`, and a Graphic Asset
+Revision's `status`. The last was not in #172's list: #55 created it and its
+sibling `revisions/:id/content` in one commit and guarded only that one, so a
+revision's bytes needed a session while the facts describing them did not, and
+nothing touched the file again until #172.
+
+Before that, guarding ingestion and lifecycle had left the library **writable
+only by an authenticated author and readable by anybody who could reach the
+API** — an asymmetry nobody chose. `usage` was the sharpest of the five, because
+it names Screens and Events by id and so describes the shape of the installation
+rather than only the asset that was asked about.
+
+**Read the next paragraph before concluding anything about who can see the
+library.** The gate is authentication, not authorisation, and it is thinner than
+its name suggests.
+
+`CONTEXT.md` defines the **Graphics Author Session** and is the authority on what
+it is; what matters operationally here is what that makes the read gate mean.
+Because a session is anonymous and self-issued on any HTML page navigation, any
+browser that has loaded any page of this application — an operator's Screen page
+as much as the Library Workspace — carries one and is admitted, and the guarded
+routes discard the author id they resolve rather than checking it against
+anything. What these routes now refuse is a caller that has not made that page
+request — a bare `curl`, a scanner, a script with no cookie jar. Because the
+session is self-issued, that is a low bar rather than a barrier: one request
+carrying `Accept: text/html` is enough, against any path, including one that
+does not exist, because the middleware runs before routing. A scanner that
+keeps its cookies clears it. **They do not partition the library between
+people.** That is consistent with the library being deliberately
+installation-wide, but it means the gate raises the cost of enumeration rather
+than preventing it for anyone determined.
+
+The session's eight-hour idle lifetime now bounds reads as well as writes. A
+surface left open overnight answers `401` on its next read and recovers by
+reloading, which mints a new session.
+
+### No server-side render is involved
+
+Issue #172 anticipated that gating the listing would also need the Library
+Workspace's server-side render to forward its cookie. **It does not arise.**
+`nuxt.config.ts` sets `ssr: false` with no per-route override, so the Workspace's
+`useFetch` never runs on the server; the browser holds the `httpOnly`,
+`sameSite=strict` cookie and sends it itself. The same is true of the asset
+picker and of the `<img>` thumbnails. Nothing forwards a cookie server-side, and
+a future change that introduces SSR would have to revisit this.
+
+### What is still unauthenticated
+
+Two administrator reads: `GET /api/admin/graphics-assets/capacity` and
+`GET /api/admin/graphics-assets/health`. Both carry an in-code note deferring
+authorization until auth exists, and there is no `/api/admin/**` middleware. The
+capacity one returns the same payload as the now-gated
+`GET /api/graphics-assets/capacity`, so the installation's storage occupancy is
+still readable without a session by that route. The administrator _mutations_
+are gated by the admin token and are unaffected.
 
 ## Platform limitation: DNS rebinding
 

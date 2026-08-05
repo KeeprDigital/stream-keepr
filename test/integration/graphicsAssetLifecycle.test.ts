@@ -180,9 +180,11 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 			},
 		});
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'Renamed retirable lifecycle logo' },
 		})).resolves.toEqual([]);
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'Renamed retirable lifecycle logo', lifecycleStates: 'retired' },
 		})).resolves.toEqual([
 			expect.objectContaining({
@@ -243,6 +245,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 			},
 		});
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'Renamed retirable lifecycle logo' },
 		})).resolves.toEqual([
 			expect.objectContaining({
@@ -287,9 +290,11 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 		).toBe(30 * 24 * 60 * 60 * 1000);
 
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'Recoverable lifecycle logo' },
 		})).resolves.toEqual([]);
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'Recoverable lifecycle logo', lifecycleStates: 'trashed' },
 		})).resolves.toEqual([
 			expect.objectContaining({
@@ -318,6 +323,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 			},
 		});
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'Recoverable lifecycle logo' },
 		})).resolves.toEqual([]);
 
@@ -379,6 +385,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 			})),
 		));
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'Referenced lifecycle logo' },
 		})).resolves.toEqual([
 			expect.objectContaining({
@@ -413,6 +420,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 			lifecycleAction(reference.assetId, 'trash'),
 		]);
 		const [asset] = await $fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: {
 				search: 'Racing lifecycle logo',
 				lifecycleStates: 'active,trashed',
@@ -420,6 +428,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 		});
 		const usage = await $fetch(
 			`/api/graphics-assets/${reference.assetId}/usage`,
+			{ headers: authorHeaders },
 		);
 
 		if (asset!.lifecycle.state === 'trashed') {

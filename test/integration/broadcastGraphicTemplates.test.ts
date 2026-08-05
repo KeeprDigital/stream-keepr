@@ -527,6 +527,7 @@ describe('broadcast Graphic Template library', () => {
 	it('names the Broadcast Graphic Template that pins an asset in its usage', async () => {
 		const usage = await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${asset.assetId}/usage`,
+			{ headers: { cookie: authorCookie } },
 		);
 
 		expect(usage).toContainEqual(expect.objectContaining({

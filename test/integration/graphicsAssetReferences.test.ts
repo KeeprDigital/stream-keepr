@@ -114,6 +114,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 
 		const usage = await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${reference.assetId}/usage`,
+			{ headers: { cookie: graphicsAuthorCookie } },
 		);
 		// Usage is reported in owner-slot order, so the composed tree precedes the
 		// Frame it is drawn over.
@@ -171,6 +172,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		});
 		await expect($fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${operation.result!.assetId}/usage`,
+			{ headers: { cookie: graphicsAuthorCookie } },
 		)).resolves.toHaveLength(3);
 	});
 
@@ -191,6 +193,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 
 		await expect($fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${operation.result!.assetId}/usage`,
+			{ headers: { cookie: graphicsAuthorCookie } },
 		)).resolves.toHaveLength(3);
 		const resolution = await fetch(
 			`/api/graphics-assets/${operation.result!.assetId}/revisions/${operation.result!.revisionId}/content`,
@@ -203,6 +206,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		await $fetch(`/api/events/${eventId}/screens/${screenId}`, { method: 'DELETE' });
 		await expect($fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${operation.result!.assetId}/usage`,
+			{ headers: { cookie: graphicsAuthorCookie } },
 		)).resolves.toEqual([]);
 	});
 });

@@ -196,6 +196,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		expect(reconnected).toEqual(initiated);
 
 		const undiscoverable = await $fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'integration scoreboard' },
 		});
 		expect(undiscoverable).toEqual([]);
@@ -235,6 +236,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		expect(operation).toEqual(completed);
 
 		const assets = await $fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'scoreboard' },
 		});
 		expect(assets).toEqual([
@@ -245,7 +247,10 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			}),
 		]);
 
-		const thumbnail = await fetch(`/api/graphics-assets/${completed.result!.assetId}/thumbnail`);
+		const thumbnail = await fetch(
+			`/api/graphics-assets/${completed.result!.assetId}/thumbnail`,
+			{ headers: authorHeaders },
+		);
 		expect(thumbnail.status).toBe(200);
 		expect(thumbnail.headers.get('content-type')).toBe('image/png');
 		expect(Array.from(new Uint8Array(await thumbnail.arrayBuffer()).slice(0, 8)))
@@ -295,6 +300,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			revisionId: completed.result!.revisionId,
 		});
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'scoreboard' },
 		})).resolves.toEqual([
 			expect.objectContaining({
@@ -323,6 +329,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		expect(separatelyPublished.result).toMatchObject({ outcome: 'published' });
 		expect(separatelyPublished.result?.assetId).not.toBe(completed.result?.assetId);
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'scoreboard' },
 		})).resolves.toHaveLength(2);
 	});
@@ -449,6 +456,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		});
 		expect(cancelledAgain).toEqual(cancelled);
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'cancelled multipart image' },
 		})).resolves.toEqual([]);
 	});
@@ -661,6 +669,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			failure: { code: 'validation-failed', retryable: false },
 		});
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: `Rejected ${label}` },
 		})).resolves.toEqual([]);
 	});
@@ -739,7 +748,10 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		expect(pinnedContent.headers.get('content-type')).toBe(mime);
 		expect(new Uint8Array(await pinnedContent.arrayBuffer())).toEqual(bytes);
 
-		const thumbnail = await fetch(`/api/graphics-assets/${completed.result!.assetId}/thumbnail`);
+		const thumbnail = await fetch(
+			`/api/graphics-assets/${completed.result!.assetId}/thumbnail`,
+			{ headers: authorHeaders },
+		);
 		expect(thumbnail.status).toBe(200);
 		expect(thumbnail.headers.get('content-type')).toBe('image/png');
 		expect(Array.from(new Uint8Array(await thumbnail.arrayBuffer()).slice(0, 8)))

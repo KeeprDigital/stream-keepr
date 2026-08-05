@@ -141,6 +141,13 @@ async function receivePackageInParts(archive: Uint8Array, options: { fileName?: 
 	);
 }
 
+/** The library listing, read under this suite's graphics author session (#172). */
+async function libraryAssets(): Promise<GraphicAsset[]> {
+	return await $fetch<GraphicAsset[]>('/api/graphics-assets', {
+		headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+	});
+}
+
 describe('template Package preflight through the API boundary', () => {
 	let eventId: number;
 	let screenId: number;
@@ -222,7 +229,7 @@ describe('template Package preflight through the API boundary', () => {
 	});
 
 	it('maps a package back to its exact origins and publishes nothing', async () => {
-		const before = await $fetch<GraphicAsset[]>('/api/graphics-assets');
+		const before = await libraryAssets();
 
 		const operation = await receivePackage(exportedPackage);
 
@@ -242,7 +249,7 @@ describe('template Package preflight through the API boundary', () => {
 		expect(report.observed.archiveByteLength).toBe(exportedPackage.byteLength);
 
 		// Preflight proposes; it never installs. The library is untouched.
-		const after = await $fetch<GraphicAsset[]>('/api/graphics-assets');
+		const after = await libraryAssets();
 		expect(after.map(asset => asset.id).sort()).toEqual(before.map(asset => asset.id).sort());
 
 		// The immutable report survives a reconnect on the durable operation.
@@ -379,7 +386,7 @@ describe('template Package preflight through the API boundary', () => {
 		expect(confirmed.stage).toBe('awaiting-installation');
 
 		// Confirmation readies the operation; it still installs nothing.
-		const assets = await $fetch<GraphicAsset[]>('/api/graphics-assets');
+		const assets = await libraryAssets();
 		expect(assets.some(asset => asset.name === packaged.name && asset.id !== reference.assetId))
 			.toBe(false);
 	});
