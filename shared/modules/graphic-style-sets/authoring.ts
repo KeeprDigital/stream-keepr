@@ -6,6 +6,7 @@ import type {
 	GraphicStyleSlot,
 } from '../../types/graphicStyleSet';
 import type { GraphicStyleSetResolution } from './entries';
+import type { GraphicStyleOwnerNode } from './slots';
 import {
 	GRAPHIC_STYLE_ENTRY_SCHEMA_VERSION,
 	GRAPHIC_STYLE_SLOT_VALUES,
@@ -16,6 +17,7 @@ import {
 	captureGraphicStyleOverrides,
 	GRAPHIC_STYLE_SLOT_OWNED_KEYS,
 	graphicStyleSlotDeviates,
+	graphicStyleSlotInStep,
 } from './apply';
 import { GRAPHIC_STYLE_SLOT_KINDS, graphicStyleOwnerSupportsSlot, readGraphicStyleSlot } from './slots';
 
@@ -203,29 +205,62 @@ export function unbindGraphicStyleRef(
  * would leave the composition reporting an available update that no later apply could
  * ever settle, which is a badge that misreports rather than a design that is protected.
  *
- * ## Why the revisions have to agree first
+ * ## What a slot has to be clear of before a deviation is derived from it
  *
  * The editor holds the Style Set's *published* entries, so between a republish and
- * the author reviewing it, it is holding entries this composition was never
- * reconciled to. Every difference derivable from them is then the Style Set's own
- * change wearing the author's name. Recording one — as an override, or by letting go
- * of a reference — settles a pending update that nobody reviewed, which is the single
- * thing story 20 exists to prevent. So while the two disagree this is the identity:
- * the author's edited values are already stored inline and stay exactly where they
- * are, and review is where they are shown that their edit and the Style Set's differ.
- * Deviations start being recorded again the moment an applied update brings the
- * composition back onto the published revision.
+ * the author reviewing it, it is holding entries this composition may never have been
+ * reconciled to. Where that is so, a difference derivable from them is the Style Set's
+ * own pending change wearing the author's name. Recording one — as an override, or by
+ * letting go of a reference — settles a pending update that nobody reviewed, which is
+ * the single thing story 20 exists to prevent.
+ *
+ * The test for that is per slot and is made against `stored`, the composition as it
+ * was before this edit: a slot whose stored value is already what the published
+ * entries resolve it to has no pending change to absorb, so a deviation appearing in
+ * it now is the author's and nothing else's. A slot that is *not* in step is left
+ * exactly as recorded, and review is where the author is shown that their edit and
+ * the Style Set's differ.
+ *
+ * A matching revision skips the test, which is the ordinary case and the cheap one.
+ * What it is no longer allowed to be is the *only* way through, because a publish that
+ * changes entries a composition never references offers it nothing to review and so
+ * never moves its number. Reading that lagging number as a pending change stranded the
+ * template: it recorded no overrides at all, and the next republish that did reach one
+ * of its slots destroyed the author's inline work under the review row's default
+ * answer (#198).
  */
 export function recaptureGraphicStyleOverrides(
 	graphic: BroadcastGraphicConfig,
 	resolution: GraphicStyleSetResolution,
 	/** The published revision `resolution` was built from. */
 	publishedRevision: number,
+	/**
+	 * The composition as stored before the edit being recaptured.
+	 *
+	 * It is what says whether a slot had a pending Style Set change in it, which
+	 * `graphic` can no longer answer: the author's own edit has just moved one of these
+	 * slots away from the entry it follows, and that is precisely the difference this
+	 * is here to record.
+	 */
+	stored: BroadcastGraphicConfig,
 ): BroadcastGraphicConfig {
-	if (graphic.styleSet?.revision !== publishedRevision)
-		return graphic;
+	const reconciled = graphic.styleSet?.revision === publishedRevision;
+	const storedOwners = reconciled ? null : styleRefOwnerNodes(stored);
 
-	function recaptured<T extends { styleRefs?: GraphicStyleRefs }>(owner: T): T {
+	/** Whether this slot's deviations can be read as the author's own. */
+	function derivable(itemId: string | null, slot: GraphicStyleSlot): boolean {
+		if (reconciled)
+			return true;
+		const before = storedOwners!.get(itemId);
+		if (!before)
+			return false;
+		// A Broadcast Graphic holds a narrower slot family than a Graphic Item does, and
+		// this asks the same question of both — as every traversal over owners here does.
+		const ref = (before.styleRefs as GraphicStyleRefs | undefined)?.[slot];
+		return ref !== undefined && graphicStyleSlotInStep(resolution, slot, ref, before);
+	}
+
+	function recaptured<T extends { styleRefs?: GraphicStyleRefs }>(owner: T, itemId: string | null): T {
 		if (!owner.styleRefs)
 			return owner;
 
@@ -234,6 +269,12 @@ export function recaptureGraphicStyleOverrides(
 			const ref = owner.styleRefs[slot];
 			if (!ref)
 				continue;
+			if (!derivable(itemId, slot)) {
+				// Kept exactly as recorded, overrides and all. Nothing here is decided, and
+				// the value the author just wrote stays inline where it is.
+				(next as Record<string, unknown>)[slot] = ref;
+				continue;
+			}
 			if (!graphicStyleOwnerSupportsSlot(owner as never, slot)) {
 				(next as Record<string, unknown>)[slot] = { entryId: ref.entryId };
 				continue;
@@ -259,12 +300,29 @@ export function recaptureGraphicStyleOverrides(
 	}
 
 	return {
-		...recaptured(graphic as BroadcastGraphicConfig & { styleRefs?: GraphicStyleRefs }),
+		...recaptured(graphic as BroadcastGraphicConfig & { styleRefs?: GraphicStyleRefs }, null),
 		items: graphic.items.map((item) => {
-			const updated = recaptured(item);
+			const updated = recaptured(item, item.id);
 			if (updated.type !== 'group')
 				return updated;
-			return { ...updated, children: updated.children.map(child => recaptured(child)) };
+			return { ...updated, children: updated.children.map(child => recaptured(child, child.id)) };
 		}),
 	};
+}
+
+/**
+ * Every node of one composition that can carry Graphic Style Set references, keyed the
+ * way a reviewable change is: the Broadcast Graphic itself under null, each Graphic
+ * Item and group child under its own id.
+ */
+function styleRefOwnerNodes(graphic: BroadcastGraphicConfig): Map<string | null, GraphicStyleOwnerNode> {
+	const owners = new Map<string | null, GraphicStyleOwnerNode>([[null, graphic]]);
+	for (const item of graphic.items) {
+		owners.set(item.id, item);
+		if (item.type === 'group') {
+			for (const child of item.children)
+				owners.set(child.id, child);
+		}
+	}
+	return owners;
 }

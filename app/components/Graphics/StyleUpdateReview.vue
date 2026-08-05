@@ -24,12 +24,16 @@ import {
  * ## Why every row states its values
  *
  * A row's default answer is inherit, and inheriting is not always the harmless one.
- * `recaptureGraphicStyleOverrides` is the identity while a composition is behind the
- * Style Set's published revision — correctly, because every difference derivable from
- * the resolution in that window is the Style Set's own pending change rather than the
- * author's deviation — so an author edit made between a republish and its review
+ * `recaptureGraphicStyleOverrides` is the identity on a slot that is not in step with
+ * the published entries — correctly, because a difference derivable from the
+ * resolution there is the Style Set's own pending change rather than the author's
+ * deviation — so an author edit made to such a slot between a republish and its review
  * records no override and lives inline. Applying with the default discards it, while
  * the identical edit made in step would have been preserved.
+ *
+ * Those slots are exactly the ones this panel lists, which is what makes the values
+ * below the whole of the defence: #198 narrowed the unrecorded window to the rows an
+ * author is looking at, and the paragraph above says so rather than promising more.
  *
  * Without the values, the two rows are indistinguishable: owner, slot and entry name
  * are the same whether the row holds the author's own work or nothing but the Style
@@ -244,9 +248,15 @@ watch(() => [props.template.id, props.template.revision], () => void refresh(), 
 			class="mt-2 rounded-md border border-default/60 p-2"
 			data-testid="style-update-changes"
 		>
+			<!--
+				What this promises has to be true of every row it is shown above, so it names
+				the one edit it cannot keep rather than claiming to keep everything (#198).
+			-->
 			<p class="text-xs text-muted">
-				Applying creates one new revision of this template. Local overrides are kept.
-				Broadcast Graphics already placed from it are not affected.
+				Applying creates one new revision of this template. Your recorded overrides are kept.
+				An edit you made to one of the properties below <em>since this Style Set was
+					republished</em> is not one of them, so check the values on each row before
+				inheriting it. Broadcast Graphics already placed from it are not affected.
 			</p>
 
 			<div

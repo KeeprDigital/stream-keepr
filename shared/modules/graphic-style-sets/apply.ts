@@ -328,33 +328,16 @@ export function graphicStyleChangeKey(itemId: string | null, slot: GraphicStyleS
  * one that does — correctly, because each of those keys genuinely is a recorded
  * override the stored value honours. So a document written by the old behaviour keeps
  * its eight-key typography pin, and the over-pinning #162 was filed about outlives the
- * fix to it. Nothing reconciles that, deliberately (#167):
+ * fix to it. Nothing reconciles that, deliberately: an over-broad pin and a deliberate
+ * whole-group pin are the same eight keys in storage, and the one signal that could
+ * separate them is the reading {@link applyGraphicStyleSet} below explains is wrong.
+ * What narrows such a pin is the author's next edit to the slot, through
+ * `recaptureGraphicStyleOverrides`.
  *
- * - **The document does not record what a migration would need to know.** An
- *   over-broad pin and a deliberate whole-group pin are the same eight keys in storage.
- *   The only signal that could separate them is "this override agrees with what the
- *   entry resolves to" — and the comment in {@link applyGraphicStyleSet} below says why
- *   that reading is wrong: a pin the republished preset happens to land on is still the
- *   author's, and dropping it would let the next republish take the property away. A
- *   migration on that signal would destroy exactly the pins the narrowed rule exists to
- *   preserve, and losing an author's real override is a worse failure than keeping one
- *   they did not mean to make.
- * - **An author's next edit already narrows it, and no later "Keep mine" could.** A
- *   fully pinned slot resolves to what the owner already holds, so it never produces a
- *   review row again — there is no later "Keep mine" on it to narrow anything, and one
- *   would preserve the pin anyway by coming back through here. What narrows it is
- *   `recaptureGraphicStyleOverrides`, which re-derives each slot's overrides from what
- *   the composition deviates in and discards the recorded set. Its revision guard is
- *   already satisfied because the same call that writes an over-broad pin also moves the
- *   composition onto the published revision: `applyGraphicStyleSet` records a revision
- *   only when its caller passes one, and the only caller that acts on decisions —
- *   `server/api/graphics-templates/broadcast-graphics/[templateId]/style-update.post.ts`,
- *   applying a reviewed update — passes both together. (`bindGraphicStyleRef` passes
- *   neither, so it cannot write one of these pins in the first place.) The first
- *   property edit after that collapses the eight keys to the author's real deviation.
- * - **No such document reaches production.** Spec #60 settles that the database is wiped
- *   before ship and names data migration as out of scope, so the population a migration
- *   would serve is empty by construction.
+ * The decision, the two alternatives rejected with it, and why no population needs it
+ * are in `docs/adr/0006-over-broad-graphic-style-set-override-pins-are-not-migrated.md`
+ * (#167, recorded under #199). Nothing here may acquire a notion of *when* an override
+ * was written — that is the discredited heuristic wearing a different name.
  */
 function heldGraphicStyleOverrides(
 	overrides: unknown,
@@ -521,6 +504,45 @@ export function graphicStyleUpdateChanges(
 	}
 
 	return changes;
+}
+
+/**
+ * Whether one owner's slot already holds exactly what the published entries resolve
+ * it to.
+ *
+ * The per-slot form of "no update is available here". {@link graphicStyleUpdateChanges}
+ * is this same question asked of every slot in a composition, and the two agree by
+ * construction because they resolve through the same call with the same arguments.
+ *
+ * It is asked of a *stored* composition rather than of a revision number, for the
+ * reason the module header gives: a composition holds its resolved values inline, so
+ * whether it is in step with a Style Set is answerable from the document alone. A
+ * recorded revision that lags one the values already agree with is a number out of
+ * date, not a pending change (#198).
+ *
+ * A slot this owner does not support, and one the resolution cannot honour, are both
+ * false — not because they are known to differ but because there is nothing to
+ * compare them against. Every caller is asking for permission to derive something
+ * from the published entries, and no evidence must not grant it.
+ */
+export function graphicStyleSlotInStep(
+	resolution: GraphicStyleSetResolution,
+	slot: GraphicStyleSlot,
+	ref: GraphicStyleRef,
+	node: GraphicStyleOwnerNode,
+): boolean {
+	if (!graphicStyleOwnerSupportsSlot(node, slot))
+		return false;
+
+	const current = readGraphicStyleSlot(node, slot);
+	const next = resolveGraphicStyleSlotValue(
+		resolution,
+		slot,
+		ref.entryId,
+		current,
+		ref.overrides as Record<string, unknown> | undefined,
+	);
+	return next !== null && sameGraphicStyleValue(current, next);
 }
 
 /**

@@ -13,6 +13,8 @@ import type {
 	GameWinsDisplayMode,
 	GameWinsGraphicItemConfig,
 	GraphicAnchorPoint,
+	GraphicFontSelection,
+	GraphicFontSource,
 	GraphicGeometryUnit,
 	GraphicGroupChildSizing,
 	GraphicGroupItemConfig,
@@ -418,11 +420,16 @@ function displayedSize(axis: 'width' | 'height') {
  *
  * With no Style Set loaded it is the identity, so an unlinked composition is
  * untouched.
+ *
+ * The composition as `props.graphics` still holds it is what says which slots had a
+ * pending Style Set change before this edit — the edited copy cannot, since the edit
+ * itself is a difference from the entry (#198).
  */
 function withRecapturedStyleOverrides(graphic: BroadcastGraphicConfig): BroadcastGraphicConfig {
 	const context = props.styleSet;
-	return context
-		? recaptureGraphicStyleOverrides(graphic, context.resolution, context.publishedRevision)
+	const stored = props.graphics.find(candidate => candidate.id === graphic.id);
+	return context && stored
+		? recaptureGraphicStyleOverrides(graphic, context.resolution, context.publishedRevision, stored)
 		: graphic;
 }
 
@@ -531,15 +538,28 @@ function updateTypography(patch: Partial<GraphicTypography>) {
  * application font it has until the picker pins one. Cleared whenever the
  * selection moves, so the control never describes the previous item's font.
  */
-const fontSourceOverride = ref<'application' | 'asset'>();
+const fontSourceOverride = ref<GraphicFontSelection['kind']>();
 const selectedFont = computed(() => selectedTypography.value?.font);
-const fontSource = computed(() => fontSourceOverride.value ?? selectedFont.value?.kind ?? 'application');
+const fontSource = computed<GraphicFontSource>(() =>
+	fontSourceOverride.value ?? selectedFont.value?.kind ?? 'application');
 
 watch(selection, () => {
 	fontSourceOverride.value = undefined;
 });
 
-function updateFontSource(source: 'application' | 'asset') {
+/**
+ * The arm the base typography's font control moved to.
+ *
+ * It takes the control's whole union rather than the two arms this panel renders, so
+ * "same as base" has to be named here rather than cast away. A `GraphicTypography`
+ * must name a font, so the answer is not offered (`optional` is absent below) and is
+ * refused if it ever arrives — reaching either branch with it would leave the panel
+ * showing no font control at all. Letting the compiler ask the question is the point:
+ * a cast made this the one invariant of the shared control nothing checked (#199).
+ */
+function updateFontSource(source: GraphicFontSource) {
+	if (source === 'base')
+		return;
 	fontSourceOverride.value = source;
 	if (source === 'application' && selectedFont.value?.kind === 'asset')
 		updateTypography({ font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID) });
@@ -806,15 +826,6 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 }
 
 /**
- * The three answers a Graphic Placeholder Style's Graphic Font Selection has.
- *
- * One more than the base typography's, because a placeholder's font is optional:
- * "same as base" is a real answer here rather than the absence of one, and it is what
- * every placeholder starts on.
- */
-type PlaceholderFontSource = 'base' | 'application' | 'asset';
-
-/**
  * Which arm each placeholder's author is editing, when its stored style cannot say.
  *
  * The same override as the base typography control above, kept per `{inputKey}`
@@ -823,20 +834,24 @@ type PlaceholderFontSource = 'base' | 'application' | 'asset';
  * and writing the asset arm at that moment would store a font that is nothing, which
  * is what `graphicFontSelectionSchema` refuses on the way in. Cleared whenever the
  * selection moves, so a control never describes the previous item's placeholders.
+ *
+ * Unlike the base typography's, this one honours all three of `GraphicFontSource`'s
+ * answers: a placeholder's font is optional, so "same as base" is a real answer here
+ * rather than the absence of one, and it is what every placeholder starts on.
  */
-const placeholderFontSourceOverrides = ref<Record<string, PlaceholderFontSource>>({});
+const placeholderFontSourceOverrides = ref<Record<string, GraphicFontSource>>({});
 
 watch(selection, () => {
 	placeholderFontSourceOverrides.value = {};
 });
 
-function placeholderFontSource(inputKey: string): PlaceholderFontSource {
+function placeholderFontSource(inputKey: string): GraphicFontSource {
 	return placeholderFontSourceOverrides.value[inputKey]
 		?? placeholderStyleFor(inputKey).font?.kind
 		?? 'base';
 }
 
-function updatePlaceholderFontSource(inputKey: string, source: PlaceholderFontSource) {
+function updatePlaceholderFontSource(inputKey: string, source: GraphicFontSource) {
 	placeholderFontSourceOverrides.value = { ...placeholderFontSourceOverrides.value, [inputKey]: source };
 	const current = placeholderStyleFor(inputKey).font;
 	if (source === 'base' && current)
@@ -1500,7 +1515,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				field-label="Typography"
 				size="sm"
 				test-id-prefix="typography"
-				@update:source="updateFontSource($event as 'application' | 'asset')"
+				@update:source="updateFontSource"
 				@application="updateTypography({ font: applicationGraphicFont($event) })"
 				@select="selectFontAsset"
 				@clear="clearFontAsset"
@@ -1658,7 +1673,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					:field-label="`Placeholder ${placeholderToken(inputKey)}`"
 					size="xs"
 					test-id-prefix="graphic-placeholder-style"
-					@update:source="updatePlaceholderFontSource(inputKey, $event as PlaceholderFontSource)"
+					@update:source="source => updatePlaceholderFontSource(inputKey, source)"
 					@application="updatePlaceholderStyle(inputKey, { font: applicationGraphicFont($event) })"
 					@select="(asset, reference) => selectPlaceholderFontAsset(inputKey, asset, reference)"
 					@clear="clearPlaceholderFontAsset(inputKey)"

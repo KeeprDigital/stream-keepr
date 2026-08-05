@@ -107,6 +107,23 @@ export type GraphicFontSelection
  */
 export type GraphicApplicationFontSelection = Extract<GraphicFontSelection, { kind: 'application' }>;
 
+/**
+ * Which arm a font control is on, which is one answer wider than the selection it
+ * writes.
+ *
+ * "Same as base" names no font at all, so it is a state the control holds and a
+ * `GraphicFontSelection` cannot express — a Graphic Placeholder Style's font is
+ * optional, and inheriting the item's base typography is a real third answer there.
+ * A Text Graphic Item's own typography must name a font, so its control is never
+ * offered this arm and its handler has to refuse it.
+ *
+ * Stated once so the compiler is what checks that, rather than a cast at each place
+ * the two vocabularies meet. A cast there would hide precisely the case worth
+ * checking: a panel handed `'base'` that matches neither of its branches renders no
+ * font control at all (#199).
+ */
+export type GraphicFontSource = 'base' | GraphicFontSelection['kind'];
+
 /** An application font selection, which is what a newly authored item gets. */
 export function applicationGraphicFont(fontId: GraphicApplicationFontId): GraphicApplicationFontSelection {
 	return { kind: 'application', fontId };

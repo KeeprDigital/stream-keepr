@@ -172,11 +172,11 @@ describe('graphicsStyleUpdateReview', () => {
 	/**
 	 * A row shows what the answer costs (#162).
 	 *
-	 * `recaptureGraphicStyleOverrides` is the identity while a composition is behind the
-	 * Style Set's published revision, so a genuine author edit made in that window
-	 * records no override and lives inline. Inheriting discards it. Without the values
-	 * on the row an author cannot tell a row holding their own work from a pure Style
-	 * Set change, so the default answer is one they cannot have made informed.
+	 * `recaptureGraphicStyleOverrides` is the identity on a slot that is not in step with
+	 * the published entries, so a genuine author edit made to one between a republish and
+	 * its review records no override and lives inline. Inheriting discards it. Without the
+	 * values on the row an author cannot tell a row holding their own work from a pure
+	 * Style Set change, so the default answer is one they cannot have made informed.
 	 */
 	it('shows what each property would move from and to, so the default answer is an informed one', async () => {
 		const wrapper = await mountReview();
