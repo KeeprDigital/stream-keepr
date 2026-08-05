@@ -21,20 +21,41 @@ import { graphicsIngestionRequest } from '~~/test/integration/graphicsIngestionR
  * does. Written for #197, which was filed because the invariant had been passed
  * along in PR prose through #141/#159 and #160/#192 without anything enforcing it.
  *
- * The scan is deliberately narrow. It flags only initiations whose policy the
- * library actually honours — `local-upload` (the implicit source) and
- * `remote-copy`. `replacement` and `template-package` initiations pin
- * `create-separate` inside the library, so demanding a policy on those would be
- * demanding a field the server throws away.
+ * One source is exempt, and only one. `initiateTemplatePackagePreflight` pins
+ * `create-separate` at `server/modules/graphics-asset-library/index.ts:4018`
+ * whatever the request said, so demanding a policy on a `template-package`
+ * initiation would be demanding a field the server discards. Every other source
+ * on this endpoint — `local-upload` and `remote-copy` — is read from the request
+ * (index.ts:3968 and :3987).
+ *
+ * Note that an omitted source and an explicit `source: 'local-upload'` are the
+ * same request: `index.post.ts:72` preprocesses the missing case into the
+ * explicit one before the discriminated union sees the body. The first version
+ * of this scan honoured only `undefined` and `'remote-copy'`, which exempted the
+ * explicit spelling of the default source and let it take the server's `reuse`
+ * — the exact hole this file exists to close. The review of #224 caught it.
+ *
+ * So the exemption is written as a denylist rather than an allowlist, and that
+ * is the point rather than a detail. An allowlist of honoured sources fails open:
+ * a fourth source added to the endpoint later is silently exempt, and the bug
+ * above recurs in a form nobody is looking for. A denylist fails loud — a new
+ * source is flagged until somebody decides it belongs here.
  */
 
 const INITIATION_PATH = '/api/graphics-assets/ingestion-operations';
 const REQUEST_HELPER = 'graphicsIngestionRequest';
+const HELPER_MODULE = './graphicsIngestionRequest';
 const integrationDirectory = fileURLToPath(new URL('../../integration', import.meta.url));
+
+/** The source the endpoint fills in when a body names none (index.post.ts:72). */
+const IMPLICIT_SOURCE = 'local-upload';
+
+/** Sources the library pins for itself, ignoring whatever the request asked for. */
+const SOURCES_THE_LIBRARY_PINS = new Set(['template-package']);
 
 /** Sources whose `duplicateContentPolicy` the library reads from the request. */
 function policyIsHonoured(source: string | undefined) {
-	return source === undefined || source === 'remote-copy';
+	return !SOURCES_THE_LIBRARY_PINS.has(source ?? IMPLICIT_SOURCE);
 }
 
 interface Initiation {
@@ -52,16 +73,22 @@ function propertyNamed(literal: ts.ObjectLiteralExpression, name: string) {
 	return undefined;
 }
 
+/**
+ * Backticks count. A no-substitution template literal is the same string to the
+ * server and one keystroke away from the quoted form, so a scan that recognised
+ * only `ts.isStringLiteral` would miss the path, the method and the source.
+ */
 function stringValue(expression: ts.Expression | undefined) {
-	return expression && ts.isStringLiteral(expression) ? expression.text : undefined;
+	return expression && ts.isStringLiteralLike(expression) ? expression.text : undefined;
 }
 
 /**
- * The object literal a body expression eventually is, seen through the three
- * shapes the suites use: a literal, `JSON.stringify(literal)`, and a `const`
- * declared earlier in the same file and posted twice.
+ * What an expression eventually is, seen through the shapes the suites use: a
+ * literal, `JSON.stringify(literal)`, and a `const` declared elsewhere in the
+ * same file. Used for the request path as well as the body — a path held in a
+ * `const` is the same initiation as a path written inline.
  */
-function resolveBody(expression: ts.Expression, declarations: Map<string, ts.Expression>) {
+function resolveThroughDeclarations(expression: ts.Expression, declarations: Map<string, ts.Expression>) {
 	let current = expression;
 	for (let hop = 0; hop < 4; hop += 1) {
 		if (ts.isCallExpression(current) && current.expression.getText() === 'JSON.stringify' && current.arguments[0])
@@ -85,25 +112,62 @@ function declarationsIn(source: ts.SourceFile) {
 	return declarations;
 }
 
+/**
+ * Whether the name `graphicsIngestionRequest` in this file is the imported
+ * helper rather than something local wearing its name. Matching on the name
+ * alone would let a file declare its own pass-through function and satisfy the
+ * scan while taking the server's default.
+ */
+function bindsTheRealHelper(source: ts.SourceFile) {
+	let imported = false;
+	let shadowed = false;
+
+	const visit = (node: ts.Node) => {
+		if (ts.isImportDeclaration(node) && stringValue(node.moduleSpecifier as ts.Expression) === HELPER_MODULE) {
+			const bindings = node.importClause?.namedBindings;
+			if (bindings && ts.isNamedImports(bindings)) {
+				for (const element of bindings.elements) {
+					if (element.name.text === REQUEST_HELPER)
+						imported = true;
+				}
+			}
+		}
+		const declaresTheName
+			= (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name?.text === REQUEST_HELPER;
+		const bindsTheName
+			= ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === REQUEST_HELPER;
+		if (declaresTheName || bindsTheName)
+			shadowed = true;
+		ts.forEachChild(node, visit);
+	};
+	visit(source);
+	return imported && !shadowed;
+}
+
 function initiationsIn(file: string): Initiation[] {
-	const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
+	return initiationsInSource(file, readFileSync(file, 'utf8'));
+}
+
+function initiationsInSource(file: string, text: string): Initiation[] {
+	const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
 	const declarations = declarationsIn(source);
+	const helperIsTheRealOne = bindsTheRealHelper(source);
 	const found: Initiation[] = [];
 
 	const visit = (node: ts.Node) => {
 		if (ts.isCallExpression(node)) {
 			const [path, options] = node.arguments;
 			const initiatesAnOperation = path
-				&& ts.isStringLiteral(path)
-				&& path.text === INITIATION_PATH
+				&& stringValue(resolveThroughDeclarations(path, declarations)) === INITIATION_PATH
 				&& options
 				&& ts.isObjectLiteralExpression(options)
 				&& stringValue(propertyNamed(options, 'method')) === 'POST';
 
 			if (initiatesAnOperation) {
 				const body = propertyNamed(options as ts.ObjectLiteralExpression, 'body');
-				const resolved = body && resolveBody(body, declarations);
-				const viaHelper = !!resolved
+				const resolved = body && resolveThroughDeclarations(body, declarations);
+				const viaHelper = helperIsTheRealOne
+					&& !!resolved
 					&& ts.isCallExpression(resolved)
 					&& resolved.expression.getText() === REQUEST_HELPER;
 				const literal = viaHelper
@@ -125,8 +189,13 @@ function initiationsIn(file: string): Initiation[] {
 	return found;
 }
 
+/**
+ * Recursive, because `vitest.integration.config.ts` collects
+ * `test/integration/**\/*.test.ts` — a suite in a subdirectory runs like any
+ * other, and a scan that only read the top level would never see it.
+ */
 function everyIntegrationInitiation() {
-	return readdirSync(integrationDirectory)
+	return readdirSync(integrationDirectory, { recursive: true, encoding: 'utf8' })
 		.filter(name => name.endsWith('.ts'))
 		.sort()
 		.flatMap(name => initiationsIn(join(integrationDirectory, name)));
@@ -168,5 +237,77 @@ describe('every integration suite that initiates an ingestion', () => {
 		// defaults to `create-separate`, and takes `duplicateContentPolicy: 'reuse'`
 		// if reuse is what the test is actually about.
 		expect(unguarded).toEqual([]);
+	});
+});
+
+/**
+ * The shapes the scan has to recognise, pinned one at a time.
+ *
+ * Every case below was green against the first version of this scan — the review
+ * of #224 found them by writing each shape into `test/integration/` and watching
+ * the guard stay quiet. They are pinned here rather than as probe files because
+ * the scan's input is source text, so the honest test hands it source text.
+ */
+describe('the scan', () => {
+	const unguarded = (text: string) =>
+		initiationsInSource('probe.test.ts', text).filter(one => policyIsHonoured(one.source) && !one.viaHelper);
+
+	const importsHelper = `import { graphicsIngestionRequest } from './graphicsIngestionRequest';\n`;
+
+	function initiation(body: string, path = `'${INITIATION_PATH}'`) {
+		return `${importsHelper}await $fetch(${path}, { method: 'POST', body: ${body} });`;
+	}
+
+	it('flags a body that names local-upload explicitly and says nothing about the policy', () => {
+		// The case that shipped broken. An omitted source and an explicit
+		// `local-upload` are the same request — `index.post.ts:72` fills the first
+		// in as the second — but the original predicate honoured only the omitted
+		// spelling, so this passed the guard and took the server's `reuse`.
+		expect(unguarded(initiation(`{ idempotencyKey: 'k', source: 'local-upload' }`))).toHaveLength(1);
+	});
+
+	it('flags a body that names no source at all', () => {
+		expect(unguarded(initiation(`{ idempotencyKey: 'k' }`))).toHaveLength(1);
+	});
+
+	it('flags a remote copy that says nothing about the policy', () => {
+		expect(unguarded(initiation(`{ idempotencyKey: 'k', source: 'remote-copy' }`))).toHaveLength(1);
+	});
+
+	it('exempts a template package, whose policy the library pins for itself', () => {
+		expect(unguarded(initiation(`{ idempotencyKey: 'k', source: 'template-package' }`))).toEqual([]);
+	});
+
+	it('flags a source it has never heard of, rather than exempting it', () => {
+		// The denylist earning its keep: a fourth source added to the endpoint is
+		// flagged until somebody decides it belongs, instead of silently escaping.
+		expect(unguarded(initiation(`{ idempotencyKey: 'k', source: 'something-new' }`))).toHaveLength(1);
+	});
+
+	it('accepts a body that went through the helper', () => {
+		expect(unguarded(initiation(`graphicsIngestionRequest({ idempotencyKey: 'k' })`))).toEqual([]);
+	});
+
+	it('recognises the path written as a template literal', () => {
+		expect(unguarded(initiation(`{ idempotencyKey: 'k' }`, `\`${INITIATION_PATH}\``))).toHaveLength(1);
+	});
+
+	it('recognises the path held in a const', () => {
+		const text = `${importsHelper}const path = '${INITIATION_PATH}';\n`
+			+ `await $fetch(path, { method: 'POST', body: { idempotencyKey: 'k' } });`;
+		expect(unguarded(text)).toHaveLength(1);
+	});
+
+	it('does not accept a local function wearing the helper\'s name', () => {
+		const text = `function ${REQUEST_HELPER}<T>(body: T) { return body; }\n`
+			+ `await $fetch('${INITIATION_PATH}', { method: 'POST', body: ${REQUEST_HELPER}({ idempotencyKey: 'k' }) });`;
+		expect(unguarded(text)).toHaveLength(1);
+	});
+
+	it('reads a suite in a subdirectory, because the suite glob does', () => {
+		// `vitest.integration.config.ts` collects `test/integration/**`, so a suite
+		// one directory down runs like any other.
+		expect(readdirSync(integrationDirectory, { recursive: true, encoding: 'utf8' }))
+			.toContain(join('fixtures', 'drain-request-body.ts'));
 	});
 });

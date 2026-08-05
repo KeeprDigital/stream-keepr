@@ -23,9 +23,16 @@ import type { GraphicsDuplicateContentPolicy } from '~~/shared/types/graphicsAss
  * is what makes it one: it reads every integration source and fails when an
  * initiation whose policy the server honours does not come through here.
  *
- * Only `local-upload` and `remote-copy` initiations need this. The library pins
- * `create-separate` itself for `replacement` and `template-package` sources, so a
- * policy stated on those would be a field the server discards.
+ * This endpoint takes three sources — `local-upload`, `remote-copy` and
+ * `template-package` (`index.post.ts:81`). The first two read the policy from the
+ * request; `template-package` pins `create-separate` inside the library
+ * (`index.ts:4018`) whatever the request said, so a policy stated on one of those
+ * would be a field the server discards. Replacements do not appear here at all —
+ * they go through `graphics-assets/[assetId]/replacement-operations.post.ts`.
+ *
+ * A body that names no source *is* a `local-upload`: `index.post.ts:72`
+ * preprocesses the missing case into the explicit one before the union sees it.
+ * The two spellings are one request, and both need this.
  */
 export function graphicsIngestionRequest<T extends object>(
 	body: T,
