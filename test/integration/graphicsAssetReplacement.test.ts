@@ -130,6 +130,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 
 		await expect($fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${originalReference.assetId}/usage`,
+			{ headers: authorHeaders },
 		)).resolves.toEqual([
 			expect.objectContaining({
 				reference: originalReference,
@@ -150,6 +151,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 		expect(new Uint8Array(await oldContent.arrayBuffer())).toEqual(pngPixel);
 
 		const [latest] = await $fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'Replaceable integration logo' },
 		});
 		expect(latest).toMatchObject({
@@ -174,6 +176,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 		});
 		await expect($fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${originalReference.assetId}/usage`,
+			{ headers: authorHeaders },
 		)).resolves.toEqual([
 			expect.objectContaining({ reference: originalReference }),
 		]);
@@ -188,6 +191,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 		);
 		await expect($fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${originalReference.assetId}/usage`,
+			{ headers: authorHeaders },
 		)).resolves.toEqual([
 			expect.objectContaining({
 				reference: config.layout.frame.backgroundImage,
@@ -231,6 +235,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 			concurrentReplacements.map(operation => operation.result?.revisionId),
 		).size).toBe(1);
 		const [concurrentLatest] = await $fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'Renamed integration logo' },
 		});
 		expect(concurrentLatest).toMatchObject({
@@ -240,6 +245,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 		});
 		await expect($fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${originalReference.assetId}/usage`,
+			{ headers: authorHeaders },
 		)).resolves.toEqual([
 			expect.objectContaining({
 				reference: config.layout.frame.backgroundImage,

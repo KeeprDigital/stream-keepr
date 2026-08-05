@@ -82,6 +82,13 @@ async function installPackage(operationId: string) {
 	);
 }
 
+/** The library listing, read under this suite's graphics author session (#172). */
+async function libraryAssets(): Promise<GraphicAsset[]> {
+	return await $fetch<GraphicAsset[]>('/api/graphics-assets', {
+		headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+	});
+}
+
 describe('template Package installation through the API boundary', () => {
 	let eventId: number;
 	let screenId: number;
@@ -164,7 +171,7 @@ describe('template Package installation through the API boundary', () => {
 	});
 
 	it('publishes the Template and every mapping it needs in one visible step', async () => {
-		const before = await $fetch<GraphicAsset[]>('/api/graphics-assets');
+		const before = await libraryAssets();
 		// A packaged identity this installation has never seen, so it must create
 		// one, alongside the exact origin it exported itself.
 		const parts = readTemplatePackageParts(exportedPackage);
@@ -205,7 +212,7 @@ describe('template Package installation through the API boundary', () => {
 		expect(confirmed.stage).toBe('awaiting-installation');
 		// Nothing exists yet, which is the state installation has to move away
 		// from atomically.
-		const during = await $fetch<GraphicAsset[]>('/api/graphics-assets');
+		const during = await libraryAssets();
 		expect(during).toHaveLength(before.length);
 
 		const completed = await installPackage(received.id);
@@ -235,7 +242,7 @@ describe('template Package installation through the API boundary', () => {
 			.not
 			.toContain('a-source-revision-never-seen-here');
 
-		const after = await $fetch<GraphicAsset[]>('/api/graphics-assets');
+		const after = await libraryAssets();
 		expect(after).toHaveLength(before.length + 1);
 		expect(after.some(asset => asset.id === installed.assetId)).toBe(true);
 
@@ -247,6 +254,7 @@ describe('template Package installation through the API boundary', () => {
 		expect(content.status).toBe(200);
 		const usage = await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${installed.assetId}/usage`,
+			{ headers: { cookie: await suiteGraphicsAuthorSessionCookie() } },
 		);
 		expect(usage).toEqual([expect.objectContaining({
 			owner: expect.objectContaining({ kind: 'installed-graphics-template' }),
@@ -256,11 +264,11 @@ describe('template Package installation through the API boundary', () => {
 		// than publishing a second copy.
 		const repeated = await installPackage(received.id);
 		expect(repeated.templatePackageInstallation).toEqual(installation);
-		expect(await $fetch<GraphicAsset[]>('/api/graphics-assets')).toHaveLength(after.length);
+		expect(await libraryAssets()).toHaveLength(after.length);
 	});
 
 	it('reuses an exact origin without touching the asset it reuses', async () => {
-		const existing = await $fetch<GraphicAsset[]>('/api/graphics-assets');
+		const existing = await libraryAssets();
 		const before = existing.find(asset => asset.id === reference.assetId)!;
 
 		const received = await receivePackage(exportedPackage);
@@ -277,7 +285,7 @@ describe('template Package installation through the API boundary', () => {
 		})]);
 
 		// The reused asset kept its own name, revisions, and facts.
-		const after = await $fetch<GraphicAsset[]>('/api/graphics-assets');
+		const after = await libraryAssets();
 		const reused = after.find(asset => asset.id === reference.assetId)!;
 		expect(reused.name).toBe(before.name);
 		expect(reused.revisions).toEqual(before.revisions);
@@ -297,6 +305,7 @@ describe('template Package installation through the API boundary', () => {
 		// before retiring or trashing anything.
 		const usage = await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${reference.assetId}/usage`,
+			{ headers: { cookie: await suiteGraphicsAuthorSessionCookie() } },
 		);
 		expect(usage).toContainEqual(expect.objectContaining({
 			owner: expect.objectContaining({
@@ -313,7 +322,7 @@ describe('template Package installation through the API boundary', () => {
 	});
 
 	it('leaves nothing discoverable when a package is cancelled before installation', async () => {
-		const before = await $fetch<GraphicAsset[]>('/api/graphics-assets');
+		const before = await libraryAssets();
 		const received = await receivePackage(exportedPackage);
 		expect(received.stage).toBe('awaiting-installation');
 
@@ -328,7 +337,7 @@ describe('template Package installation through the API boundary', () => {
 		const attempted = await installPackage(received.id);
 		expect(attempted.stage).toBe('cancelled');
 		expect(attempted.templatePackageInstallation).toBeUndefined();
-		expect(await $fetch<GraphicAsset[]>('/api/graphics-assets')).toHaveLength(before.length);
+		expect(await libraryAssets()).toHaveLength(before.length);
 	});
 
 	it('refuses to install a proposal whose warnings nobody accepted', async () => {
@@ -351,14 +360,14 @@ describe('template Package installation through the API boundary', () => {
 
 		const received = await receivePackage(writeTemplatePackage(parts));
 		expect(received.stage).toBe('awaiting-confirmation');
-		const before = await $fetch<GraphicAsset[]>('/api/graphics-assets');
+		const before = await libraryAssets();
 
 		const refused = await fetch(
 			`/api/graphics-assets/ingestion-operations/${received.id}/template-package-installation`,
 			{ method: 'POST', headers: authorHeaders },
 		);
 		expect(refused.status).toBe(409);
-		expect(await $fetch<GraphicAsset[]>('/api/graphics-assets')).toHaveLength(before.length);
+		expect(await libraryAssets()).toHaveLength(before.length);
 
 		// Accepting the exact report is what makes it installable.
 		const confirmed = await $fetch<GraphicsIngestionOperation>(
@@ -376,7 +385,7 @@ describe('template Package installation through the API boundary', () => {
 			outcome: 'created',
 			basis: 'related-origin-revision',
 		});
-		expect(await $fetch<GraphicAsset[]>('/api/graphics-assets'))
+		expect(await libraryAssets())
 			.toHaveLength(before.length + 1);
 	});
 });

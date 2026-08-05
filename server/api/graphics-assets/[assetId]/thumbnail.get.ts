@@ -1,7 +1,9 @@
 import { graphicAssetId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
+import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 
 export default defineEventHandler(async (event) => {
+	await requireGraphicsAuthorSession(event);
 	const result = await graphicsAssetLibraryForEvent(event).resolveGraphicAssetThumbnail({
 		assetId: graphicAssetId(getRouterParam(event, 'assetId') ?? ''),
 	});
