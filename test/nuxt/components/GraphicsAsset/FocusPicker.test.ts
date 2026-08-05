@@ -118,6 +118,48 @@ const assets = ref<GraphicAsset[]>([
 		},
 		operation: {} as never,
 	},
+	/**
+	 * A transparent clip no engine is confirmed to play: its validation never
+	 * established Chromium transparency playback, so the hard gate refuses it for every
+	 * target including Chromium.
+	 */
+	{
+		id: 'asset-unplayable-video' as never,
+		name: 'Unverified alpha ident',
+		kind: 'silent-video',
+		revisionId: 'revision-unplayable-video-1' as never,
+		revisionNumber: 1,
+		revisions: [{
+			id: 'revision-unplayable-video-1' as never,
+			revisionNumber: 1,
+			facts: {} as never,
+		}],
+		lifecycle: { state: 'active' },
+		eventIds: [7],
+		facts: {
+			kind: 'silent-video',
+			format: 'webm',
+			codec: 'vp9',
+			canonicalMime: 'video/webm',
+			byteLength: 2048,
+			sha256: 'unplayable-digest',
+			width: 640,
+			height: 360,
+			durationSeconds: 1,
+			frameRate: 30,
+			frameCount: 30,
+			bitDepth: 8,
+			colorSpace: 'sdr',
+			chromaSubsampling: '4:2:0',
+			hasAlpha: true,
+			fastStart: null,
+			seekable: true,
+			posterTimeSeconds: 0.1,
+			targetCompatibility: 'chromium-transparency',
+			browserPlayable: true,
+		},
+		operation: {} as never,
+	},
 ]);
 const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
 
@@ -255,6 +297,76 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 			assetId: 'asset-alpha-video',
 			revisionId: 'revision-alpha-video-1',
 		});
+	});
+
+	/**
+	 * The refusal has to name what refused it. The hard gate fires for a transparent
+	 * clip whose facts do not confirm Chromium playback — a clip no engine is known to
+	 * play — and it fires whatever target the host writes with. Live Control passes
+	 * `chromium`, so calling that a Safari problem sends an operator mid-show to change
+	 * a setting that is already right and cannot help (#204).
+	 */
+	it('does not blame the target for a revision no engine is confirmed to play', async () => {
+		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
+		const wrapper = mount(FocusPicker, {
+			props: {
+				eventId: 7,
+				fieldLabel: 'Badge',
+				assetKind: ['silent-video'],
+				videoTarget: 'chromium',
+			},
+			global: {
+				stubs: {
+					UModal: passthroughStub,
+					UButton: buttonStub,
+					UInput: passthroughStub,
+					UBadge: passthroughStub,
+					UAlert: passthroughStub,
+					UIcon: passthroughStub,
+				},
+			},
+		});
+
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		const refused = wrapper.get('[data-testid="select-asset-unplayable-video"]');
+		expect(refused.attributes('disabled')).toBeDefined();
+		expect(refused.text()).not.toContain('Safari');
+		expect(refused.text()).toContain('no engine plays this revision');
+	});
+
+	it('names the target when the target is what refuses the revision', async () => {
+		// The same clip the Chromium target accepts, refused for Safari: here the
+		// target really is the reason, and saying so is what tells the operator that
+		// pinning it for the Chromium program output would work.
+		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
+		const wrapper = mount(FocusPicker, {
+			props: {
+				eventId: 7,
+				fieldLabel: 'Badge',
+				assetKind: ['silent-video'],
+				videoTarget: 'safari',
+			},
+			global: {
+				stubs: {
+					UModal: passthroughStub,
+					UButton: buttonStub,
+					UInput: passthroughStub,
+					UBadge: passthroughStub,
+					UAlert: passthroughStub,
+					UIcon: passthroughStub,
+				},
+			},
+		});
+
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		expect(wrapper.get('[data-testid="select-asset-alpha-video"]').text())
+			.toContain('Blocked for Safari target');
+		// And the clip nothing can play still says so, rather than being folded into
+		// the target's refusal because this host happens to write for Safari.
+		expect(wrapper.get('[data-testid="select-asset-unplayable-video"]').text())
+			.toContain('no engine plays this revision');
 	});
 
 	/**

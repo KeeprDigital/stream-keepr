@@ -584,6 +584,11 @@ _Avoid_: Export mode when referring to live Screen rendering.
 An opaque, long-lived, explicitly revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions currently published by its Screen.
 It never permits Graphics Asset Library discovery, and removing a revision from the published Screen immediately removes that revision from the capability.
 
+**Open Screen Output Engines**:
+The browser engines the Screen Outputs currently watching one Screen are running, as reported by those outputs themselves.
+They state what a Graphic Asset Revision would cost the outputs watching right now and never decide what may be pinned: an output that reports no engine contributes nothing, and an output that has crashed lingers until its connection times out, so the set over-reports what is watching rather than under-reporting it.
+_Avoid_: Video target — the write-time compatibility choice a host builds its Graphic Asset References with, which is a property of the artifact being authored rather than a fact about who is watching; the two are routinely different, and a surface may act on both at once.
+
 **Overlay Output**:
 A Screen Output that renders the final composed colour and opacity over transparency.
 
@@ -851,6 +856,7 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - A **Screen Output Asset Capability** is checked against the Screen's currently published exact **Graphic Asset Revisions** on every resolution request
 - Playback compatibility is answered per resolution request against the requested revision's own recorded facts, never by refusing the capability session, so a revision one **Screen Output**'s browser cannot play costs it that revision and none of the Screen's other assets
 - A **Screen Output** that cannot play a pinned silent video reports the reason in that item's place rather than leaving a blank rectangle, except in the **Key Output**, whose colour is the alpha matte
+- The **Open Screen Output Engines** of a **Screen** are what its **Screen Outputs** report of themselves, and a control surface states what a **Graphic Asset Revision** costs them before an operator chooses it rather than leaving the cost to be discovered on air
 - A **Broadcast Graphics Screen** publishes the exact **Graphic Asset Revisions** its authored configuration pins and the media **Graphic Input** values its **Broadcast Graphics Live Session** has accepted, and a value the Live Session no longer accepts stops being published in the same moment it leaves air
 - A media **Graphic Input** value carries the pinned **Graphic Asset Revision**'s own video target compatibility, stated with the value when it is authored as a default and recorded by the authoritative side when it is chosen live, and a value that states none is refused rather than published
 - A **Broadcast Graphic Template** declares zero or more **Graphic Inputs**

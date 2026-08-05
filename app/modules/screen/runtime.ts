@@ -8,6 +8,7 @@ import type {
 	UpdateScreenInput,
 } from '~/types';
 import type { MessageData, RealtimePresenceMessage } from '~/types/realtime';
+import type { ScreenPresenceData } from '~/types/screen';
 import type { Flight } from '~/utils/guardedSequence';
 import { toRaw } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
@@ -18,9 +19,16 @@ import { createKeyedQueue } from '~/utils/keyedQueue';
 
 type ExecuteAction = ReturnType<typeof useAsyncAction>['executeAction'];
 
+/**
+ * Who is present on one Screen's channel.
+ *
+ * Only a Screen Output enters a Screen's presence — a control surface watches without
+ * joining — so every member here is an output, and the payload each carries is the one
+ * a Screen Output enters with.
+ */
 export interface ScreenPresenceInfo {
 	count: number;
-	members: RealtimePresenceMessage[];
+	members: RealtimePresenceMessage<ScreenPresenceData>[];
 }
 
 interface ScreenRuntimeState {
@@ -412,7 +420,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 			const channel = screenRealtimeChannel(state.currentEventId.value, screenId);
 			const unsubscribe = realtime.watchPresence(
 				channel,
-				(members: RealtimePresenceMessage[]) => {
+				(members: RealtimePresenceMessage<ScreenPresenceData>[]) => {
 					const newMap = new Map(state.screenPresence.value);
 					newMap.set(screenId, {
 						count: members.length,

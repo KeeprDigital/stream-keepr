@@ -1,10 +1,7 @@
 import type { MaybeRefOrGetter } from 'vue';
-import type { GraphicAssetReferenceStatus } from '~~/shared/types/graphicsAsset';
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
-import {
-	featureMatchOverlayGraphicAssetReferences,
-	graphicAssetRevisionStatusPath,
-} from '~~/shared/utils/graphicsAssetReferences';
+import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
+import { graphicAssetReferenceStatusOrUnavailable } from '~/utils/graphicAssetReferenceStatus';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
 export type GraphicAssetPublicationEligibility
@@ -38,12 +35,7 @@ export function useGraphicAssetPublicationEligibility(
 			eligibility.value = { outcome: 'checking' };
 			const statuses = await Promise.all(references.map(async item => ({
 				ownerSlot: item.ownerSlot,
-				status: await $fetch<GraphicAssetReferenceStatus>(
-					graphicAssetRevisionStatusPath(item.reference),
-				).catch((): GraphicAssetReferenceStatus => ({
-					outcome: 'unavailable',
-					retryable: true,
-				})),
+				status: await graphicAssetReferenceStatusOrUnavailable(item.reference),
 			})));
 			if (flight.stale)
 				return;

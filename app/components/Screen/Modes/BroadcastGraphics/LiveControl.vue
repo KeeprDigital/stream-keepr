@@ -20,11 +20,11 @@ import {
 	isOperatorSelectedGraphicSource,
 	resolveGraphicInputBindings,
 } from '~~/shared/modules/graphics';
-import { graphicAssetRevisionStatusPath } from '~~/shared/utils/graphicsAssetReferences';
 import {
 	GRAPHICS_AUTHOR_SESSION_LAPSED_MESSAGE,
 	graphicsAuthorSessionLapsed,
 } from '~/composables/useGraphicsAuthorSession';
+import { graphicAssetReferenceStatus } from '~/utils/graphicAssetReferenceStatus';
 import { createKeyedGuardedSequence } from '~/utils/guardedSequence';
 
 /**
@@ -337,7 +337,7 @@ async function selectMedia(key: string, reference: GraphicAssetReference) {
 	const flight = mediaSelectionFlights.begin(mediaSelectionKey(key));
 	let status: GraphicAssetReferenceStatus;
 	try {
-		status = await $fetch<GraphicAssetReferenceStatus>(graphicAssetRevisionStatusPath(reference));
+		status = await graphicAssetReferenceStatus(reference);
 	}
 	catch (caught) {
 		if (flight.stale)
