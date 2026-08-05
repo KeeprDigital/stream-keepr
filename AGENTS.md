@@ -11,3 +11,7 @@ Use the five default triage labels: `needs-triage`, `needs-info`, `ready-for-age
 ### Domain docs
 
 This repo uses a single-context domain layout. See `docs/agents/domain.md`.
+
+### Parallel rounds
+
+Several tickets are often worked at once, one git worktree each, through implement → fresh-context review → remediation → verification → merge. See `docs/agents/parallel-rounds.md` — it carries the hazards that only exist when worktrees run concurrently, and what a review and an implementation each owe.
