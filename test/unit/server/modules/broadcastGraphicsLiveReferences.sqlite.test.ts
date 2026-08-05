@@ -130,7 +130,7 @@ function clip(revisionId: string): MediaGraphicInputValue {
  * the module under test: `Set Input` records the pinned revision's own facts on a
  * media value at the moment of selection, and that is the authority it asks.
  */
-const graphicsAssets = {
+const graphicsAssetLibrary = {
 	async inspectGraphicAssetRevision(input: { assetId: string; revisionId: string }): Promise<GraphicAssetReferenceStatus> {
 		return input.assetId === ASSET_ID && (REVISIONS as readonly string[]).includes(input.revisionId)
 			? { outcome: 'available', lifecycleState: 'active', kind: 'image' }
@@ -209,7 +209,7 @@ async function liveSession(): Promise<LiveSession> {
 		assetCapabilityDigest: `digest-${event!.id}`,
 	} as never).returning();
 
-	const module = broadcastGraphicsLiveSessionModule({ graphicsAssets });
+	const module = broadcastGraphicsLiveSessionModule({ graphicsAssets: graphicsAssetLibrary });
 	const session = await module.loadSession(event!.id, screen!.id);
 	const authorizer = createD1ScreenOutputAssetAuthorizer(harness.database);
 
