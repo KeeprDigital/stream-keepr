@@ -4746,6 +4746,38 @@ export function createGraphicsAssetLibrary(
 				);
 			}
 
+			const stagingIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
+			// An earlier attempt may have died holding a multipart upload. Its
+			// checkpoint is the only record of that upload, and this attempt would
+			// overwrite the checkpoint with one of its own, so the old upload is
+			// reclaimed before a new one can be taken. An abort that does not land
+			// keeps its checkpoint and stops the attempt: starting a second upload
+			// here is what would make the first unreclaimable.
+			const stranded = await catalogueRequest(
+				() => catalogue.getGraphicAssetMultipartState(operation!.id, operation!.initiatedBy),
+				'Approved remote Graphic Asset copy checkpoint is temporarily unavailable',
+			);
+			if (stranded?.uploadId) {
+				const aborted = await staging.abortMultipart({
+					identity: stagingIdentity,
+					uploadId: stranded.uploadId,
+				});
+				if (aborted.outcome !== 'aborted') {
+					throw new GraphicsAssetLibraryError(
+						'A previous approved remote Graphic Asset copy attempt is still holding staging capacity',
+						'graphics-asset-library-unavailable',
+					);
+				}
+				await catalogueRequest(
+					() => catalogue.checkpointRemoteCopyMultipartUpload({
+						operationId: operation!.id,
+						initiatedBy: operation!.initiatedBy,
+						uploadId: null,
+					}),
+					'Approved remote Graphic Asset copy checkpoint could not be recorded',
+				);
+			}
+
 			const sourceKind = graphicAssetSourceKind(operation);
 			const policy = GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind];
 			const opened = await remoteSource.open({
@@ -4785,7 +4817,6 @@ export function createGraphicsAssetLibrary(
 				),
 				'Approved remote Graphic Asset copy could not be started',
 			);
-			const stagingIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
 			const staged = await stageRemoteSource({
 				staging,
 				identity: stagingIdentity,

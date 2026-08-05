@@ -104,10 +104,25 @@ even while it holds one.
 The checkpoint is cleared as soon as there is nothing left to abort: when the
 upload completes, when the request's own abort succeeds, and again when the copy
 records its durably staged source. An abort that did not land deliberately leaves
-the checkpoint in place. Whatever survives is reclaimed by the paths that already
+the checkpoint in place. What survives is reclaimed by the paths that already
 read `multipart_state` — staged-input expiry through `releaseStagedObjects`, and
 cancellation through the multipart cleanup path — with no remote-specific
 knowledge and no bucket lifecycle rule.
+
+An operation has one checkpoint, so a retry must not take a second upload while
+the first is still recorded — the retry would overwrite the only record of it.
+Each attempt therefore reclaims what it finds: it aborts any checkpointed upload
+before opening the remote source, and refuses to start, leaving that checkpoint
+intact, if the abort does not land. Copying is then unavailable until the upload
+can be aborted or the 24-hour sweep expires the operation, which is the trade the
+client-driven transfer already makes when it cannot resume its own checkpointed
+upload. Deleting `ingestion/<operation>/source` does not substitute for the
+abort: a multipart upload is independent of the object key it will become.
+
+**Residual gap.** An upload goes unreferenced only if the catalogue write that
+would record it fails _and_ the abort that follows also fails — the catalogue and
+the object store unavailable within one attempt. Nothing then names those parts,
+and the staging bucket has no lifecycle rule that would bound them.
 
 ## Browser confirmation
 
