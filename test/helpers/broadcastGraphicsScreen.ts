@@ -31,8 +31,13 @@ export interface SeedBroadcastGraphicsScreenOptions {
 }
 
 /**
- * Every per-Event value is derived from the Event's own id, so repeated calls against
- * one database seed distinct Screens rather than colliding on `slug`.
+ * The derivation from the Event's own id is what lets one database hold several of
+ * these, and the column it exists for is `assetCapabilityDigest`:
+ * `screens_asset_capability_digest_idx` is unique over that column **alone**, so two
+ * Screens carrying one digest collide however many Events they belong to. `slug` is
+ * derived for legibility rather than for uniqueness — `screens_slug_idx` is composite
+ * over (`event_id`, `slug`) and every call here inserts a fresh Event, so a constant
+ * slug would be accepted. Both directions were run before this was written down.
  */
 export async function seedBroadcastGraphicsScreen(
 	db: DrizzleD1Database<typeof schema>,

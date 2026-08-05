@@ -14,8 +14,9 @@
  * two environments gives this module a `file:` URL.
  *
  * `raw()` is the one part of it no consumer can check for itself, and it is pinned by
- * `test/unit/helpers/sqliteD1Harness.test.ts` — which also records, mutation by
- * mutation, which parts of it are pinned and which are undetectable (#211).
+ * `test/unit/helpers/sqliteD1Harness.test.ts` — which records, for each mutation it was
+ * written against, whether the pin detects it (#211). That is a record of the mutations
+ * considered, not a claim that no other mutation escapes.
  *
  * What it is *not* is a substitute for D1 itself. Two known differences are handled
  * elsewhere rather than here: D1's hundred-bound-parameter ceiling, which libSQL
