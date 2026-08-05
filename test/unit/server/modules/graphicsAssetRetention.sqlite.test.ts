@@ -1,4 +1,8 @@
 import type {
+	GraphicsMultipartUploadIdentity,
+	InMemoryGraphicsStagingObjectStore,
+} from '~~/server/modules/graphics-asset-library/object-store';
+import type {
 	GraphicAssetId,
 	GraphicAssetRevisionId,
 	GraphicsIngestionOperation,
@@ -17,6 +21,8 @@ import {
 	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
+import { createGraphicsRemoteSourceFetcher } from '~~/server/modules/graphics-asset-library/remote-source';
+import { GRAPHICS_MULTIPART_PART_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GRAPHICS_EVIDENCE_CATEGORY_GROUPS } from '~~/shared/utils/graphicsAssetEvidence';
 import { evidenceOf } from '~~/test/helpers/graphicsEvidence';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
@@ -673,6 +679,67 @@ describe('scheduled Graphics Asset Library retention', () => {
 			await expect(context.staging.readMetadata(
 				graphicsObjectIdentity(`ingestion/${abandoned.id}/source`),
 			)).resolves.toMatchObject({ outcome: 'missing' });
+		});
+
+		it('aborts a remote copy multipart upload its own request could not release', async () => {
+			const oversized = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 4096);
+			oversized.set(pixelPng, 0);
+			const delegate = createInMemoryStagingGraphicsObjectStore();
+			let uploadId: GraphicsMultipartUploadIdentity | undefined;
+			const staging: InMemoryGraphicsStagingObjectStore = {
+				...delegate,
+				async beginMultipart(input) {
+					const started = await delegate.beginMultipart(input);
+					if (started.outcome === 'started')
+						uploadId = started.upload.uploadId;
+					return started;
+				},
+			};
+			const context = createRetentionLibrary({
+				staging,
+				remoteSource: createGraphicsRemoteSourceFetcher({
+					resolver: {
+						async resolve() {
+							return { outcome: 'resolved', addresses: ['93.184.216.34'] };
+						},
+					},
+					// No declared length, so the copy discovers it while reading and
+					// takes the resumable multipart path.
+					async fetch() {
+						return new Response(oversized, { status: 200 });
+					},
+				}),
+			});
+			const stranded = await context.library.initiateRemoteGraphicAssetCopy({
+				idempotencyKey: 'stranded-remote-copy-upload',
+				initiatedBy: 'retention-author',
+				name: 'Interrupted remote source',
+				sourceFileName: 'logo.png',
+			});
+			const identity = graphicsObjectIdentity(`ingestion/${stranded.id}/source`);
+
+			// The part fails and the request's own abort cannot land either, which
+			// is what a worker death leaves behind.
+			staging.injectTransientFailure('multipart-upload-part');
+			staging.injectTransientFailure('multipart-abort');
+			await context.library.copyRemoteGraphicAssetSource({
+				operationId: stranded.id,
+				initiatedBy: stranded.initiatedBy,
+				sourceUrl: 'https://cdn.example.test/scoreboard.png',
+			});
+			await expect(
+				staging.resumeMultipart(identity, uploadId!),
+			).resolves.toMatchObject({ outcome: 'resumed' });
+
+			context.advance(DAY + HOUR);
+			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
+				expiredIncompleteTransfers: 1,
+				expiredCompletedInput: 0,
+			});
+
+			await expect(
+				staging.resumeMultipart(identity, uploadId!),
+			).resolves.toMatchObject({ outcome: 'unavailable' });
 		});
 	});
 

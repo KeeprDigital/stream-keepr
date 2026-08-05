@@ -1,12 +1,20 @@
 import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
 import { createFeatureMatchLayoutComposition, FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES } from '~~/shared/featureMatchSampleDataset';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+
+/**
+ * Every Display a test mounts stays live otherwise, watching the same module-level
+ * mocks. A test that edits configuration mid-flight is then observing every Display
+ * the file has ever mounted rather than its own — which for the font tests means
+ * counting one output's face registrations across two dozen of them.
+ */
+enableAutoUnmount(afterEach);
 
 const mockConfig = ref<FeatureMatchOverlayModeConfig>(structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG));
 const mockOutputMode = ref<FeatureMatchOverlayOutput>('overlay');
@@ -16,6 +24,17 @@ const mockScreen = ref({ screenConfig: { width: 1920, height: 1080 } });
 const mockLoading = ref(false);
 const mockError = ref<string | null>(null);
 const mockContentUrlsSettled = ref(true);
+/**
+ * Whether the stubbed content-URL map is currently cleared.
+ *
+ * The real `useScreenGraphicAssetContentUrls` clears its whole map and goes unsettled
+ * whenever the Screen's asset reference set changes — for any asset kind — and every
+ * URL reads as the empty string until the capability session comes back. This stub
+ * resolves synchronously instead, which is what keeps the tests around it about
+ * typography rather than about capability plumbing, so a test that needs that window
+ * drives it from here.
+ */
+const mockContentUrlsCleared = ref(false);
 
 mockNuxtImport('useScreenContext', () => () => ({
 	outputMode: mockOutputMode,
@@ -48,7 +67,7 @@ const mockRefusedRevisions = ref<string[]>([]);
 
 mockNuxtImport('useScreenGraphicAssetContentUrls', () => () => ({
 	contentUrl: (reference: { assetId: string; revisionId: string }) =>
-		`/private-assets/${reference.assetId}/${reference.revisionId}`,
+		mockContentUrlsCleared.value ? '' : `/private-assets/${reference.assetId}/${reference.revisionId}`,
 	contentRefusal: (reference: { revisionId: string }) =>
 		mockRefusedRevisions.value.includes(reference.revisionId)
 			? 'vp9-alpha-chromium-required'
@@ -283,6 +302,7 @@ describe('featureMatchOverlayDisplay', () => {
 		mockLoading.value = false;
 		mockError.value = null;
 		mockContentUrlsSettled.value = true;
+		mockContentUrlsCleared.value = false;
 		mockUsesSampleDataset.value = false;
 		mockRefusedRevisions.value = [];
 	});
@@ -453,7 +473,43 @@ describe('featureMatchOverlayDisplay', () => {
 	 * `data-export-ready`, which the shared compositor knows nothing about.
 	 */
 	describe('library fonts', () => {
-		function layoutWithLibraryFont(): FeatureMatchOverlayModeConfig {
+		/**
+		 * A `FontFace` stub that records every family registered, with a gate a test can
+		 * close so it can read the output while a load is in flight.
+		 */
+		function stubRecordingFontFace() {
+			const registered: string[] = [];
+			let hold = Promise.resolve();
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {
+					registered.push(family);
+				}
+
+				async load() {
+					await hold;
+					return this;
+				}
+			});
+			return {
+				registered,
+				/** Holds every load started from now until the returned release is called. */
+				gate() {
+					let release!: () => void;
+					hold = new Promise<void>((resolve) => {
+						release = resolve;
+					});
+					return () => release();
+				},
+			};
+		}
+
+		function layoutWithLibraryFont(
+			{ revisionId = 'font-revision-2', backgroundColor, backgroundImage }: {
+				revisionId?: string;
+				backgroundColor?: string;
+				backgroundImage?: { assetId: string; revisionId: string };
+			} = {},
+		): FeatureMatchOverlayModeConfig {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			const nameplate = getGraphicItemDefinition('text').createDefault({
 				id: 'nameplate',
@@ -469,11 +525,15 @@ describe('featureMatchOverlayDisplay', () => {
 						...DEFAULT_GRAPHIC_TYPOGRAPHY,
 						font: {
 							kind: 'asset',
-							reference: { assetId: 'font-asset', revisionId: 'font-revision-2' },
+							reference: { assetId: 'font-asset', revisionId },
 						},
 					},
 				}] as never,
 			};
+			if (backgroundColor !== undefined)
+				config.layout.frame.backgroundColor = backgroundColor;
+			if (backgroundImage)
+				config.layout.frame.backgroundImage = backgroundImage as never;
 			return config;
 		}
 
@@ -582,6 +642,127 @@ describe('featureMatchOverlayDisplay', () => {
 			// Every face this attempt added is taken back off the document, so a retry
 			// does not accumulate a second registration of the same family.
 			expect(document.fonts.delete as ReturnType<typeof vi.fn>).toHaveBeenCalled();
+		});
+
+		/**
+		 * Hiding says "this font has not loaded yet", and it is only worth reading if
+		 * that is the only thing it ever says. An operator editing the Frame's colour on
+		 * a live overlay is editing something no font depends on, and blanking the
+		 * canvas while a face that settled a minute ago re-registers is the visible
+		 * blank the hiding exists to prevent (#160).
+		 */
+		it('keeps a settled output visible when a config edit names no different font', async () => {
+			const { registered } = stubRecordingFontFace();
+
+			const wrapper = await mountComponent();
+			await vi.waitFor(() => {
+				expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('true');
+			});
+			const settled = [...registered];
+			expect(settled).toEqual(['stream-keepr-graphic-asset-font-asset-font-revision-2']);
+
+			mockConfig.value = layoutWithLibraryFont({ backgroundColor: '#123456' });
+			await nextTick();
+
+			const overlay = wrapper.get('.feature-match-overlay');
+			// The edit really landed, so this is not a test that changed nothing.
+			expect(wrapper.get('.frame-layer > rect').attributes('fill')).toBe('#123456');
+			// Read at the moment the edit renders, which is when the blank would be on air.
+			expect(overlay.attributes('data-font-ready')).toBe('true');
+			expect(overlay.attributes('data-export-ready')).toBe('true');
+			expect((overlay.element as HTMLElement).style.visibility).toBe('');
+
+			await flushPromises();
+			await nextTick();
+
+			expect(registered).toEqual(settled);
+			expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('true');
+		});
+
+		/**
+		 * The other half of the same rule: an edit that really does change which faces
+		 * the output paints has to load them, and has to hide until they are ready. A
+		 * fix that simply stopped reloading would satisfy the test above and put a
+		 * fallback typeface on air here.
+		 */
+		it('loads the new face and hides again when a config edit pins a different revision', async () => {
+			const { registered, gate } = stubRecordingFontFace();
+
+			const wrapper = await mountComponent();
+			await vi.waitFor(() => {
+				expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('true');
+			});
+
+			const release = gate();
+			mockConfig.value = layoutWithLibraryFont({ revisionId: 'font-revision-3' });
+			await nextTick();
+
+			const hidden = wrapper.get('.feature-match-overlay');
+			expect(hidden.attributes('data-font-ready')).toBe('false');
+			expect((hidden.element as HTMLElement).style.visibility).toBe('hidden');
+
+			release();
+			await vi.waitFor(() => {
+				expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('true');
+			});
+			expect(registered).toEqual([
+				'stream-keepr-graphic-asset-font-asset-font-revision-2',
+				'stream-keepr-graphic-asset-font-asset-font-revision-3',
+			]);
+			expect((wrapper.get('.feature-match-overlay').element as HTMLElement).style.visibility).toBe('');
+			expect(wrapper.get('[data-graphic-item-kind="text"] p').attributes('style'))
+				.toContain('font-family: stream-keepr-graphic-asset-font-asset-font-revision-3;');
+		});
+
+		/**
+		 * This host's exposure to the same window (#160). An operator adding a Frame
+		 * background image changes the Screen's asset reference set without touching a
+		 * font reference, and the real `useScreenGraphicAssetContentUrls` responds by
+		 * clearing its whole URL map and going unsettled until the capability session
+		 * comes back. Every font URL reads empty for that round trip, and an output that
+		 * took the blank URLs for a changed requirement would discard its faces and hide
+		 * a settled overlay for the duration.
+		 *
+		 * The window is driven here rather than produced, because this suite stubs that
+		 * resolution — the same stub that keeps its siblings about typography. That the
+		 * window is real, and that the two legs arrive in this order, is proved against
+		 * the unstubbed composable in the Broadcast Graphics suite; what this proves is
+		 * that this host sits through it.
+		 */
+		it('keeps a settled output visible across the window an added Frame image opens', async () => {
+			const { registered } = stubRecordingFontFace();
+
+			const wrapper = await mountComponent();
+			await vi.waitFor(() => {
+				expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('true');
+			});
+			const settled = [...registered];
+			expect(settled).toEqual(['stream-keepr-graphic-asset-font-asset-font-revision-2']);
+
+			mockConfig.value = layoutWithLibraryFont({
+				backgroundImage: { assetId: 'image-asset', revisionId: 'image-revision-1' },
+			});
+			mockContentUrlsCleared.value = true;
+			mockContentUrlsSettled.value = false;
+			await nextTick();
+
+			const overlay = wrapper.get('.feature-match-overlay');
+			// Read mid-window, which is when the blank would be on air.
+			expect(overlay.attributes('data-font-ready')).toBe('true');
+			expect((overlay.element as HTMLElement).style.visibility).toBe('');
+
+			mockContentUrlsCleared.value = false;
+			mockContentUrlsSettled.value = true;
+			await nextTick();
+			await flushPromises();
+			await nextTick();
+
+			// The image really landed, so this is not a test that changed nothing.
+			expect(wrapper.get('.frame-layer image').html())
+				.toContain('/private-assets/image-asset/image-revision-1');
+			expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('true');
+			expect((wrapper.get('.feature-match-overlay').element as HTMLElement).style.visibility).toBe('');
+			expect(registered).toEqual(settled);
 		});
 	});
 });

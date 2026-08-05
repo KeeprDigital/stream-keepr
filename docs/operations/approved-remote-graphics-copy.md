@@ -94,16 +94,35 @@ Staged-object cleanup needs no remote-specific knowledge: the copy writes only
 `ingestion/<operation>/source`, already part of the set that cancellation,
 terminal failure, and staged-input expiry all reclaim.
 
-**Known gap.** The unknown-length path starts an R2 multipart upload without
-recording its `uploadId` durably, unlike the client-driven transfer which
-checkpoints it. Every in-request failure aborts that upload, but if the Worker
-dies between the first part and completion, the parts survive with no recorded
-`uploadId`, so `releaseStagedObjects` cannot abort them and the staging bucket
-has no lifecycle rule that would. Reaching it needs an unknown-length source
-larger than 16 MiB and a hard process death mid-copy. Closing it properly means
-checkpointing the `uploadId` and clearing that state on success, which changes
-durable multipart state shared with the client transfer path; a bucket lifecycle
-rule aborting incomplete multipart uploads would also bound it.
+**Multipart checkpoint.** The unknown-length path can start a multipart upload
+that outlives the request holding it, so the `uploadId` is written durably before
+the first part is sent. The checkpoint reuses the operation's `multipart_state`
+column and carries the `uploadId` alone — a remote copy has no client parts to
+record — which is why a remote-copy operation never reports client-transfer facts
+even while it holds one.
+
+The checkpoint is cleared as soon as there is nothing left to abort: when the
+upload completes, when the request's own abort succeeds, and again when the copy
+records its durably staged source. An abort that did not land deliberately leaves
+the checkpoint in place. What survives is reclaimed by the paths that already
+read `multipart_state` — staged-input expiry through `releaseStagedObjects`, and
+cancellation through the multipart cleanup path — with no remote-specific
+knowledge and no bucket lifecycle rule.
+
+An operation has one checkpoint, so a retry must not take a second upload while
+the first is still recorded — the retry would overwrite the only record of it.
+Each attempt therefore reclaims what it finds: it aborts any checkpointed upload
+before opening the remote source, and refuses to start, leaving that checkpoint
+intact, if the abort does not land. Copying is then unavailable until the upload
+can be aborted or the 24-hour sweep expires the operation, which is the trade the
+client-driven transfer already makes when it cannot resume its own checkpointed
+upload. Deleting `ingestion/<operation>/source` does not substitute for the
+abort: a multipart upload is independent of the object key it will become.
+
+**Residual gap.** An upload goes unreferenced only if the catalogue write that
+would record it fails _and_ the abort that follows also fails — the catalogue and
+the object store unavailable within one attempt. Nothing then names those parts,
+and the staging bucket has no lifecycle rule that would bound them.
 
 ## Browser confirmation
 
@@ -161,15 +180,65 @@ could write any name into the ledger, and it is now the asking graphics author
 session where there is one and a plain `graphics-administrator` where there is
 not.
 
-## Still unauthenticated
+## Reading the library
 
-Guarding ingestion and lifecycle did not gate the library's read surface.
-`GET /api/graphics-assets`, `capacity`, `thumbnail`, `usage` and `retention`
-still answer an unauthenticated caller, so the installation's asset names,
-thumbnails, usage and capacity remain enumerable without a session. Tracked as
-issue #172; gating the listing route also needs the Library Workspace's
-server-side render to forward its cookie, which is what makes it more than a
-guard.
+The read surface is gated too, as of issue #172. Six routes require a Graphics
+Author Session and answer `401` without one: `GET /api/graphics-assets`,
+`capacity`, an asset's `thumbnail`, `usage` and `retention`, and a Graphic Asset
+Revision's `status`. The last was not in #172's list: #55 created it and its
+sibling `revisions/:id/content` in one commit and guarded only that one, so a
+revision's bytes needed a session while the facts describing them did not, and
+nothing touched the file again until #172.
+
+Before that, guarding ingestion and lifecycle had left the library **writable
+only by an authenticated author and readable by anybody who could reach the
+API** — an asymmetry nobody chose. `usage` was the sharpest of the five, because
+it names Screens and Events by id and so describes the shape of the installation
+rather than only the asset that was asked about.
+
+**Read the next paragraph before concluding anything about who can see the
+library.** The gate is authentication, not authorisation, and it is thinner than
+its name suggests.
+
+`CONTEXT.md` defines the **Graphics Author Session** and is the authority on what
+it is; what matters operationally here is what that makes the read gate mean.
+Because a session is anonymous and self-issued on any HTML page navigation, any
+browser that has loaded any page of this application — an operator's Screen page
+as much as the Library Workspace — carries one and is admitted, and the guarded
+routes discard the author id they resolve rather than checking it against
+anything. What these routes now refuse is a caller that has not made that page
+request — a bare `curl`, a scanner, a script with no cookie jar. Because the
+session is self-issued, that is a low bar rather than a barrier: one request
+carrying `Accept: text/html` is enough, against any path, including one that
+does not exist, because the middleware runs before routing. A scanner that
+keeps its cookies clears it. **They do not partition the library between
+people.** That is consistent with the library being deliberately
+installation-wide, but it means the gate raises the cost of enumeration rather
+than preventing it for anyone determined.
+
+The session's eight-hour idle lifetime now bounds reads as well as writes. A
+surface left open overnight answers `401` on its next read and recovers by
+reloading, which mints a new session.
+
+### No server-side render is involved
+
+Issue #172 anticipated that gating the listing would also need the Library
+Workspace's server-side render to forward its cookie. **It does not arise.**
+`nuxt.config.ts` sets `ssr: false` with no per-route override, so the Workspace's
+`useFetch` never runs on the server; the browser holds the `httpOnly`,
+`sameSite=strict` cookie and sends it itself. The same is true of the asset
+picker and of the `<img>` thumbnails. Nothing forwards a cookie server-side, and
+a future change that introduces SSR would have to revisit this.
+
+### What is still unauthenticated
+
+Two administrator reads: `GET /api/admin/graphics-assets/capacity` and
+`GET /api/admin/graphics-assets/health`. Both carry an in-code note deferring
+authorization until auth exists, and there is no `/api/admin/**` middleware. The
+capacity one returns the same payload as the now-gated
+`GET /api/graphics-assets/capacity`, so the installation's storage occupancy is
+still readable without a session by that route. The administrator _mutations_
+are gated by the admin token and are unaffected.
 
 ## Platform limitation: DNS rebinding
 

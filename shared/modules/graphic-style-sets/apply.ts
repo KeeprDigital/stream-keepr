@@ -321,6 +321,40 @@ export function graphicStyleChangeKey(itemId: string | null, slot: GraphicStyleS
  * it, and it is dropped. That is what lets an owner whose stored value has gone back to
  * matching its entry end up pinning nothing at all rather than pinning a whole property
  * group on the strength of provenance the document itself contradicts.
+ *
+ * ## Why an over-broad pin from before #162 is not migrated
+ *
+ * "Keep mine" used to record the whole property group, and this preserves every key of
+ * one that does — correctly, because each of those keys genuinely is a recorded
+ * override the stored value honours. So a document written by the old behaviour keeps
+ * its eight-key typography pin, and the over-pinning #162 was filed about outlives the
+ * fix to it. Nothing reconciles that, deliberately (#167):
+ *
+ * - **The document does not record what a migration would need to know.** An
+ *   over-broad pin and a deliberate whole-group pin are the same eight keys in storage.
+ *   The only signal that could separate them is "this override agrees with what the
+ *   entry resolves to" — and the comment in {@link applyGraphicStyleSet} below says why
+ *   that reading is wrong: a pin the republished preset happens to land on is still the
+ *   author's, and dropping it would let the next republish take the property away. A
+ *   migration on that signal would destroy exactly the pins the narrowed rule exists to
+ *   preserve, and losing an author's real override is a worse failure than keeping one
+ *   they did not mean to make.
+ * - **An author's next edit already narrows it, and no later "Keep mine" could.** A
+ *   fully pinned slot resolves to what the owner already holds, so it never produces a
+ *   review row again — there is no later "Keep mine" on it to narrow anything, and one
+ *   would preserve the pin anyway by coming back through here. What narrows it is
+ *   `recaptureGraphicStyleOverrides`, which re-derives each slot's overrides from what
+ *   the composition deviates in and discards the recorded set. Its revision guard is
+ *   already satisfied because the same call that writes an over-broad pin also moves the
+ *   composition onto the published revision: `applyGraphicStyleSet` records a revision
+ *   only when its caller passes one, and the only caller that acts on decisions —
+ *   `server/api/graphics-templates/broadcast-graphics/[templateId]/style-update.post.ts`,
+ *   applying a reviewed update — passes both together. (`bindGraphicStyleRef` passes
+ *   neither, so it cannot write one of these pins in the first place.) The first
+ *   property edit after that collapses the eight keys to the author's real deviation.
+ * - **No such document reaches production.** Spec #60 settles that the database is wiped
+ *   before ship and names data migration as out of scope, so the population a migration
+ *   would serve is empty by construction.
  */
 function heldGraphicStyleOverrides(
 	overrides: unknown,

@@ -256,7 +256,10 @@ describe('broadcast Graphics Media Graphic Items', () => {
 	}
 
 	async function usageOf(reference: Reference): Promise<GraphicAssetUsage[]> {
-		return await $fetch<GraphicAssetUsage[]>(`/api/graphics-assets/${reference.assetId}/usage`);
+		return await $fetch<GraphicAssetUsage[]>(
+			`/api/graphics-assets/${reference.assetId}/usage`,
+			{ headers: { cookie: graphicsAuthorCookie } },
+		);
 	}
 
 	beforeAll(async () => {
@@ -796,7 +799,10 @@ describe('media Graphic Input values on air', () => {
 	}
 
 	async function usageOf(reference: Reference): Promise<GraphicAssetUsage[]> {
-		return await $fetch<GraphicAssetUsage[]>(`/api/graphics-assets/${reference.assetId}/usage`);
+		return await $fetch<GraphicAssetUsage[]>(
+			`/api/graphics-assets/${reference.assetId}/usage`,
+			{ headers: { cookie: graphicsAuthorCookie } },
+		);
 	}
 
 	beforeAll(async () => {

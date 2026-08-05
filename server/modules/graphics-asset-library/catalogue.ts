@@ -149,7 +149,10 @@ function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 		createdAt: new Date(row.created_at).toISOString(),
 		updatedAt: new Date(row.updated_at).toISOString(),
 	};
-	if (!multipart)
+	// A remote copy's multipart state is a server-side abort checkpoint, not a
+	// client transfer: it holds an uploadId and no parts, so reporting it as one
+	// would advertise a part count no client is ever asked to send.
+	if (!multipart || row.source === 'remote-copy')
 		return operation;
 	return {
 		...operation,
@@ -806,6 +809,9 @@ export function createD1GraphicsAssetCatalogue(
 					transferred_byte_length = ?,
 					staging_used_byte_length = ?,
 					staging_reserved_byte_length = ?,
+					-- Durably staged bytes mean every multipart upload this copy ever
+					-- held is finished, so no abort checkpoint can still be owed.
+					multipart_state = NULL,
 					transfer_completed_at = COALESCE(transfer_completed_at, ?)
 				WHERE id = ? AND initiated_by = ?
 					AND source = 'remote-copy'
@@ -1531,6 +1537,31 @@ export function createD1GraphicsAssetCatalogue(
 			).run();
 			return result.success && result.meta.changes === 1;
 		},
+		async checkpointRemoteCopyMultipartUpload(input) {
+			// A remote copy has no client parts to record, so the checkpoint carries
+			// the uploadId alone. Taking one is confined to a running copy; clearing
+			// one stays legal from any stage, because by then the upload it named is
+			// already completed or aborted.
+			const state: GraphicsAssetMultipartState | null = input.uploadId
+				? { version: 1, uploadId: input.uploadId, cleanupPending: false, parts: [] }
+				: null;
+			const result = await database.prepare(`
+				UPDATE graphics_ingestion_operations
+				SET multipart_state = ?
+				WHERE id = ? AND initiated_by = ?
+					AND source = 'remote-copy'
+					AND (? IS NULL OR stage IN ('created', 'transferring'))
+			`).bind(
+				state && JSON.stringify(state),
+				input.operationId,
+				input.initiatedBy,
+				input.uploadId ?? null,
+			).run();
+			// An unwritten checkpoint would strand the upload it was meant to name,
+			// so the copy must not continue past a failed write.
+			if (!result.success)
+				throw new Error('Remote Graphic Asset copy multipart checkpoint could not be recorded');
+		},
 		async getTemplatePackagePreflight(operationId, initiatedBy) {
 			const row = await database.prepare(`
 				SELECT package_preflight
@@ -1795,45 +1826,53 @@ export function createD1GraphicsAssetCatalogue(
 				},
 				updatedAt: input.publishedAt,
 			};
+
+			// Everything this batch writes may only be written by the attempt that
+			// still holds the publishing claim. A guard that flips false takes the
+			// terminal transition down with it and trips the row-count check, so a
+			// lost claim can never spend another attempt's write candidates or
+			// report the winner's completion as its own.
+			const guard = `EXISTS (
+				SELECT 1 FROM graphics_ingestion_operations
+				WHERE id = ? AND initiated_by = ? AND stage = 'publishing' AND updated_at = ?
+			)`;
+			const guardBindings = [
+				input.operation.id,
+				input.operation.initiatedBy,
+				new Date(input.operation.updatedAt).getTime(),
+			];
 			const updateOperation = updateOperationStatement(
 				database,
 				completed,
 				input.operation.updatedAt,
+				`AND ${guard}`,
+				guardBindings,
 			);
 			const clearWriteCandidates = database.prepare(`
-				DELETE FROM graphics_canonical_write_candidates WHERE operation_id = ?
-			`).bind(input.operation.id);
+				DELETE FROM graphics_canonical_write_candidates
+				WHERE operation_id = ? AND ${guard}
+			`).bind(input.operation.id, ...guardBindings);
 			const statements: [D1PreparedStatement, ...D1PreparedStatement[]]
 				= input.operation.defaultEventId === undefined
 					? [clearWriteCandidates, updateOperation]
 					: [database.prepare(`
 							INSERT OR IGNORE INTO graphic_asset_event_associations (asset_id, event_id, created_at)
 							SELECT ?, ?, ?
-							WHERE EXISTS (
-								SELECT 1 FROM graphics_ingestion_operations
-								WHERE id = ? AND initiated_by = ? AND stage = 'publishing'
-									AND updated_at = ?
-							)
+							WHERE ${guard}
 						`).bind(
 							input.reusable.assetId,
 							input.operation.defaultEventId,
 							new Date(input.publishedAt).getTime(),
-							input.operation.id,
-							input.operation.initiatedBy,
-							new Date(input.operation.updatedAt).getTime(),
+							...guardBindings,
 						), clearWriteCandidates, updateOperation];
 			const results = await database.batch(statements);
 			if (results.some(result => !result.success))
 				throw new Error('Graphic Asset reuse transaction failed');
-			const authoritative = await firstOperation(
-				database,
-				'id = ? AND initiated_by = ?',
-				input.operation.id,
-				input.operation.initiatedBy,
-			);
-			if (!authoritative || authoritative.stage !== 'completed')
-				throw new Error('Graphic Asset reuse was not durable');
-			return authoritative;
+			// The terminal transition is last, so its count answers whether the
+			// guard held at all. Losing it means nothing committed.
+			if (results.at(-1)?.meta.changes !== 1)
+				throw new Error('Graphic Asset reuse lost its claim before completing');
+			return completed;
 		},
 		async completeGraphicAssetReplacementNoop(input) {
 			const completed = completedGraphicAssetReplacementOperation({
@@ -1843,41 +1882,48 @@ export function createD1GraphicsAssetCatalogue(
 				revisionId: input.current.revisionId,
 				completedAt: input.completedAt,
 			});
+
+			// Same shape as reuseGraphicAsset's guard, with the target-state check
+			// folded in: the DELETE and the terminal transition must see the exact
+			// same condition, or one could commit a no-op the other refuses.
+			const guard = `EXISTS (
+				SELECT 1 FROM graphics_ingestion_operations
+				WHERE id = ? AND initiated_by = ? AND stage = 'publishing' AND updated_at = ?
+			) AND EXISTS (
+				SELECT 1
+				FROM graphic_assets target
+				JOIN graphic_asset_revisions current_revision ON current_revision.asset_id = target.id
+				WHERE target.id = ? AND target.lifecycle_state = 'active'
+					AND current_revision.revision_number = (
+						SELECT MAX(latest.revision_number) FROM graphic_asset_revisions latest
+						WHERE latest.asset_id = target.id)
+					AND current_revision.content_digest = ?
+			)`;
+			const guardBindings = [
+				input.operation.id,
+				input.operation.initiatedBy,
+				new Date(input.operation.updatedAt).getTime(),
+				input.current.assetId,
+				input.current.sourceDigest,
+			];
 			const results = await database.batch([
 				database.prepare(`
-					DELETE FROM graphics_canonical_write_candidates WHERE operation_id = ?
-				`).bind(input.operation.id),
+					DELETE FROM graphics_canonical_write_candidates
+					WHERE operation_id = ? AND ${guard}
+				`).bind(input.operation.id, ...guardBindings),
 				updateOperationStatement(
 					database,
 					completed,
 					input.operation.updatedAt,
-					`AND EXISTS (
-						SELECT 1
-						FROM graphic_assets target
-						JOIN graphic_asset_revisions current_revision
-							ON current_revision.asset_id = target.id
-						WHERE target.id = ? AND target.lifecycle_state = 'active'
-							AND current_revision.revision_number = (
-								SELECT MAX(latest.revision_number)
-								FROM graphic_asset_revisions latest
-								WHERE latest.asset_id = target.id
-							)
-							AND current_revision.content_digest = ?
-					)`,
-					[input.current.assetId, input.current.sourceDigest],
+					`AND ${guard}`,
+					guardBindings,
 				),
 			]);
-			if (results.some(result => !result.success) || results[1]?.meta.changes !== 1)
+			if (results.some(result => !result.success))
 				throw new Error('Graphic Asset replacement no-op transaction failed');
-			const authoritative = await firstOperation(
-				database,
-				'id = ? AND initiated_by = ?',
-				input.operation.id,
-				input.operation.initiatedBy,
-			);
-			if (!authoritative)
-				throw new Error('Graphic Asset replacement no-op was not durable');
-			return authoritative;
+			if (results.at(-1)?.meta.changes !== 1)
+				throw new Error('Graphic Asset replacement no-op lost its claim before completing');
+			return completed;
 		},
 		async publishGraphicAssetReplacement(input) {
 			await Promise.all([

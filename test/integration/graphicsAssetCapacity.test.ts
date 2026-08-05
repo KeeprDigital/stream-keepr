@@ -36,7 +36,9 @@ describe('the Graphics Asset Library Capacity API', () => {
 	});
 
 	it('exposes author-readable capacity while changes remain on the administrator surface', async () => {
-		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity');
+		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
+			headers: { cookie: authorCookie },
+		});
 		const updatedLimits = {
 			canonicalLimitBytes: original.canonical.limitBytes + 1024,
 			stagingLimitBytes: original.staging.limitBytes + 1024,
@@ -65,7 +67,9 @@ describe('the Graphics Asset Library Capacity API', () => {
 				staging: { limitBytes: updatedLimits.stagingLimitBytes },
 			});
 			await expect(
-				$fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity'),
+				$fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
+					headers: { cookie: authorCookie },
+				}),
 			).resolves.toEqual(updated);
 		}
 		finally {
@@ -81,7 +85,9 @@ describe('the Graphics Asset Library Capacity API', () => {
 	});
 
 	it('returns structured insufficient-storage details when staging admission is full', async () => {
-		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity');
+		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
+			headers: { cookie: authorCookie },
+		});
 		const occupiedStagingBytes = original.staging.usedBytes + original.staging.reservedBytes;
 
 		try {
@@ -131,7 +137,9 @@ describe('the Graphics Asset Library Capacity API', () => {
 	});
 
 	it('allows a proven no-growth publication through D1 at the full Canonical Graphics Quota', async () => {
-		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity');
+		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
+			headers: { cookie: authorCookie },
+		});
 		const authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
 		const noGrowthBytes = pngWithTextChunks(10);
 		const upload = async (idempotencyKey: string) => {
@@ -161,6 +169,7 @@ describe('the Graphics Asset Library Capacity API', () => {
 			await upload(`capacity-foundation-${crypto.randomUUID()}`);
 			const occupied = await $fetch<GraphicsAssetLibraryCapacity>(
 				'/api/graphics-assets/capacity',
+				{ headers: authorHeaders },
 			);
 			await $fetch('/api/admin/graphics-assets/capacity', {
 				method: 'PUT',
@@ -195,7 +204,9 @@ describe('the Graphics Asset Library Capacity API', () => {
 	});
 
 	it('allows only one of two competing D1 publications through the hard limit', async () => {
-		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity');
+		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
+			headers: { cookie: authorCookie },
+		});
 		const authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
 		const initiate = async (idempotencyKey: string, bytes: Uint8Array) =>
 			await $fetch<GraphicsIngestionOperation>(
@@ -230,6 +241,7 @@ describe('the Graphics Asset Library Capacity API', () => {
 			await upload(foundation, foundationBytes);
 			const before = await $fetch<GraphicsAssetLibraryCapacity>(
 				'/api/graphics-assets/capacity',
+				{ headers: authorHeaders },
 			);
 			const firstBytes = pngWithTextChunks(21);
 			const secondBytes = pngWithTextChunks(22);
@@ -259,6 +271,7 @@ describe('the Graphics Asset Library Capacity API', () => {
 			)).toHaveLength(1);
 			const after = await $fetch<GraphicsAssetLibraryCapacity>(
 				'/api/graphics-assets/capacity',
+				{ headers: authorHeaders },
 			);
 			expect(after.canonical.usedBytes).toBeLessThanOrEqual(hardLimit);
 			expect(after.canonical.reservedBytes).toBe(0);

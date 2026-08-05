@@ -71,6 +71,7 @@ describe('the approved remote HTTPS copy API', () => {
 		expect(reconnected).toEqual(initiated);
 
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'Integration remote copy' },
 		})).resolves.toEqual([]);
 	});
@@ -143,6 +144,7 @@ describe('the approved remote HTTPS copy API', () => {
 		expect(JSON.stringify(operation)).not.toContain('secret');
 
 		await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
 			query: { search: 'Rejected remote copy' },
 		})).resolves.toEqual([]);
 	});

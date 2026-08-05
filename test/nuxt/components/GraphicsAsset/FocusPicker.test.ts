@@ -257,6 +257,117 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		});
 	});
 
+	/**
+	 * Compatibility is a fact of the revision, not a choice, so it is stated before
+	 * the choice rather than discovered on air. It never refuses the revision: post-#98
+	 * a clip one open output cannot play costs that output that clip and nothing else,
+	 * and the Chromium program output is usually the one the operator is choosing for.
+	 */
+	it('names the open outputs that cannot play a revision without refusing it', async () => {
+		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
+		const wrapper = mount(FocusPicker, {
+			props: {
+				eventId: 7,
+				fieldLabel: 'Badge',
+				assetKind: ['silent-video'],
+				videoTarget: 'chromium',
+				openOutputTargets: ['chromium', 'safari'],
+			},
+			global: {
+				stubs: {
+					UModal: passthroughStub,
+					UButton: buttonStub,
+					UInput: passthroughStub,
+					UBadge: passthroughStub,
+					UAlert: passthroughStub,
+					UIcon: passthroughStub,
+				},
+			},
+		});
+
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		const warning = wrapper.get('[data-testid="open-output-incompatible-asset-alpha-video"]');
+		expect(warning.text()).toContain('Safari');
+		const select = wrapper.get('[data-testid="select-asset-alpha-video"]');
+		expect(select.attributes('disabled')).toBeUndefined();
+
+		await select.trigger('click');
+		expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toEqual({
+			assetId: 'asset-alpha-video',
+			revisionId: 'revision-alpha-video-1',
+		});
+	});
+
+	it('says nothing about playback when every open output can play the revision', async () => {
+		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
+		const wrapper = mount(FocusPicker, {
+			props: {
+				eventId: 7,
+				fieldLabel: 'Badge',
+				assetKind: ['silent-video'],
+				videoTarget: 'chromium',
+				openOutputTargets: ['chromium'],
+			},
+			global: {
+				stubs: {
+					UModal: passthroughStub,
+					UButton: buttonStub,
+					UInput: passthroughStub,
+					UBadge: passthroughStub,
+					UAlert: passthroughStub,
+					UIcon: passthroughStub,
+				},
+			},
+		});
+
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		expect(wrapper.find('[data-testid="open-output-incompatible-asset-alpha-video"]').exists()).toBe(false);
+	});
+
+	/**
+	 * A host that shows and clears the pinned reference itself still wants the
+	 * picker's report on it. Withholding the Clear is what lets it have both without
+	 * offering the operator two of them.
+	 */
+	it('withholds its own Clear for a host that owns one, while still reporting the pinned revision', async () => {
+		mockApiFetch.mockResolvedValue({ outcome: 'missing' });
+		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
+		const wrapper = mount(FocusPicker, {
+			props: {
+				modelValue: {
+					assetId: 'missing-asset' as GraphicAssetId,
+					revisionId: 'missing-revision' as GraphicAssetRevisionId,
+				},
+				eventId: 7,
+				fieldLabel: 'Badge',
+				clearable: false,
+			},
+			global: {
+				stubs: {
+					UModal: passthroughStub,
+					UButton: buttonStub,
+					UInput: passthroughStub,
+					UBadge: passthroughStub,
+					UAlert: defineComponent({
+						props: ['title', 'description'],
+						template: '<div>{{ title }} {{ description }}</div>',
+					}),
+					UIcon: passthroughStub,
+				},
+			},
+		});
+		await flushPromises();
+
+		expect(wrapper.find('[data-testid="clear-graphic-asset"]').exists()).toBe(false);
+		expect(wrapper.text()).toContain('Missing Graphic Asset Reference');
+
+		// The default is still to offer it, for the hosts that have no Clear of their own.
+		await wrapper.setProps({ clearable: true });
+		expect(wrapper.find('[data-testid="clear-graphic-asset"]').exists()).toBe(true);
+	});
+
 	it('refreshes its exact-revision status when unavailable content is retried', async () => {
 		mockApiFetch.mockResolvedValue({ outcome: 'unavailable', retryable: true });
 		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
