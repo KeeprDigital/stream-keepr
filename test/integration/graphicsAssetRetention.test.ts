@@ -18,6 +18,7 @@ import {
 } from '../../shared/utils/graphicsAssetEvidence';
 import { GRAPHICS_RETENTION_GUARANTEES } from '../../shared/utils/graphicsAssetRetention';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
@@ -68,15 +69,14 @@ describe('the Graphics Asset Library retention API', () => {
 			{
 				method: 'POST',
 				headers: authorHeaders,
-				body: {
+				body: graphicsIngestionRequest({
 					idempotencyKey,
 					name,
-					duplicateContentPolicy: 'create-separate',
 					sourceFileName: 'logo.png',
 					declaredMime: 'image/png',
 					browserDecodeEvidence: decodeEvidence(bytes),
 					declaredByteLength: bytes.byteLength,
-				},
+				}),
 			},
 		);
 		return await fetch(

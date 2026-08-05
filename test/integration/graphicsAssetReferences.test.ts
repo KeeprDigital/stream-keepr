@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { getGraphicItemDefinition } from '../../shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
@@ -50,7 +51,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: { cookie: graphicsAuthorCookie },
-			body: {
+			body: graphicsIngestionRequest({
 				idempotencyKey: 'reference-event-logo',
 				name: 'Reference Event logo',
 				defaultEventId: eventId,
@@ -61,7 +62,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 					height: 1,
 				},
 				declaredByteLength: referencePixelPng.byteLength,
-			},
+			}),
 		});
 		const response = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,

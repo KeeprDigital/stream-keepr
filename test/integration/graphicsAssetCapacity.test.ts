@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 
 describe('the Graphics Asset Library Capacity API', () => {
@@ -123,11 +124,11 @@ describe('the Graphics Asset Library Capacity API', () => {
 					'content-type': 'application/json',
 					'cookie': authorCookie,
 				},
-				body: JSON.stringify({
+				body: JSON.stringify(graphicsIngestionRequest({
 					idempotencyKey: `capacity-blocked-${crypto.randomUUID()}`,
 					name: 'Blocked staging operation',
 					declaredByteLength: 68,
-				}),
+				})),
 			});
 
 			expect(response.status).toBe(507);
@@ -166,13 +167,12 @@ describe('the Graphics Asset Library Capacity API', () => {
 				{
 					method: 'POST',
 					headers: authorHeaders,
-					body: {
+					body: graphicsIngestionRequest({
 						idempotencyKey,
 						name: idempotencyKey,
-						duplicateContentPolicy: 'create-separate',
 						browserDecodeEvidence: browserDecodeEvidence(noGrowthBytes),
 						declaredByteLength: noGrowthBytes.byteLength,
-					},
+					}),
 				},
 			);
 			const response = await fetch(
@@ -232,13 +232,12 @@ describe('the Graphics Asset Library Capacity API', () => {
 				{
 					method: 'POST',
 					headers: authorHeaders,
-					body: {
+					body: graphicsIngestionRequest({
 						idempotencyKey,
 						name: idempotencyKey,
-						duplicateContentPolicy: 'create-separate',
 						browserDecodeEvidence: browserDecodeEvidence(bytes),
 						declaredByteLength: bytes.byteLength,
-					},
+					}),
 				},
 			);
 		const upload = async (operation: GraphicsIngestionOperation, bytes: Uint8Array) => {

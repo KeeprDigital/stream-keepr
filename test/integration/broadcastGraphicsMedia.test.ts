@@ -11,6 +11,7 @@ import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';
 
 /**
@@ -117,11 +118,10 @@ async function ingestImage(
 	const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 		method: 'POST',
 		headers: { cookie },
-		body: {
+		body: graphicsIngestionRequest({
 			idempotencyKey: `${name}-${runId}`,
 			name,
 			defaultEventId: eventId,
-			duplicateContentPolicy: 'create-separate',
 			browserDecodeEvidence: {
 				outcome: 'decoded',
 				sourceDigest: createHash('sha256').update(bytes).digest('hex'),
@@ -129,7 +129,7 @@ async function ingestImage(
 				height: 1,
 			},
 			declaredByteLength: bytes.byteLength,
-		},
+		}),
 	});
 	const response = await fetch(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
@@ -199,15 +199,14 @@ async function ingestFont(eventId: number, name: string, cookie: string): Promis
 	const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 		method: 'POST',
 		headers: { cookie },
-		body: {
+		body: graphicsIngestionRequest({
 			idempotencyKey: `${name}-${runId}`,
 			name,
 			defaultEventId: eventId,
-			duplicateContentPolicy: 'create-separate',
 			sourceFileName: 'mana.woff',
 			declaredMime: 'font/woff',
 			declaredByteLength: bytes.byteLength,
-		},
+		}),
 	});
 	const response = await fetch(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,

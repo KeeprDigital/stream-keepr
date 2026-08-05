@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 
 /**
  * Who may *read* the Graphics Asset Library, proved through the real routes.
@@ -144,11 +145,10 @@ describe('the Graphics Asset Library read surface', () => {
 			{
 				method: 'POST',
 				headers: { cookie: publishingAuthorCookie },
-				body: {
+				body: graphicsIngestionRequest({
 					idempotencyKey: 'read-authorisation-subject',
 					name: SUBJECT_NAME,
 					defaultEventId: eventId,
-					duplicateContentPolicy: 'create-separate',
 					declaredByteLength: readSubjectPng.byteLength,
 					browserDecodeEvidence: {
 						outcome: 'decoded',
@@ -156,7 +156,7 @@ describe('the Graphics Asset Library read surface', () => {
 						width: 1,
 						height: 1,
 					},
-				},
+				}),
 			},
 		);
 		const published = await $fetch<GraphicsIngestionOperation>(

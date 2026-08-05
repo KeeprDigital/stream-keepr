@@ -12,6 +12,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { GRAPHICS_OPERATIONAL_QUEUES } from '../../shared/utils/graphicsOperationalQueues';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
@@ -65,15 +66,14 @@ describe('the Graphics Asset Library operational queues API', () => {
 			{
 				method: 'POST',
 				headers: authorHeaders,
-				body: {
+				body: graphicsIngestionRequest({
 					idempotencyKey,
 					name,
-					duplicateContentPolicy: 'create-separate',
 					sourceFileName: 'logo.png',
 					declaredMime: 'image/png',
 					browserDecodeEvidence: decodeEvidence(bytes),
 					declaredByteLength: bytes.byteLength,
-				},
+				}),
 			},
 		);
 		return await fetch(

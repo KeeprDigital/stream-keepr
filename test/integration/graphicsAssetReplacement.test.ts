@@ -9,6 +9,7 @@ import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -76,14 +77,13 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 			{
 				method: 'POST',
 				headers: authorHeaders,
-				body: {
+				body: graphicsIngestionRequest({
 					idempotencyKey: 'replacement-integration-original',
 					name: 'Replaceable integration logo',
 					defaultEventId: eventId,
-					duplicateContentPolicy: 'create-separate',
 					browserDecodeEvidence: decodeEvidence(pngPixel),
 					declaredByteLength: pngPixel.byteLength,
-				},
+				}),
 			},
 		);
 		const original = await fetch(

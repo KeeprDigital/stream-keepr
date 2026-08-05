@@ -6,6 +6,7 @@ import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 
 /**
  * Who a Graphics Ingestion Operation belongs to, proved through the real routes.
@@ -208,10 +209,9 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			{
 				method: 'POST',
 				headers: { cookie, ...RETIRED_AUTHOR_HEADER },
-				body: {
+				body: graphicsIngestionRequest({
 					idempotencyKey,
 					name,
-					duplicateContentPolicy: 'create-separate',
 					declaredByteLength: transparentPixelPng.byteLength,
 					...defaultEventId === undefined ? {} : { defaultEventId },
 					browserDecodeEvidence: {
@@ -220,7 +220,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 						width: 1,
 						height: 1,
 					},
-				},
+				}),
 			},
 		);
 	}
@@ -231,13 +231,13 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			{
 				method: 'POST',
 				headers: { cookie, ...RETIRED_AUTHOR_HEADER },
-				body: {
+				body: graphicsIngestionRequest({
 					idempotencyKey,
 					name,
 					sourceFileName: 'mplantin.woff',
 					declaredMime: 'font/woff',
 					declaredByteLength: fontBytes.byteLength,
-				},
+				}),
 			},
 		);
 	}
@@ -338,11 +338,11 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			const response = await fetch('/api/graphics-assets/ingestion-operations', {
 				method: 'POST',
 				headers: { ...RETIRED_AUTHOR_HEADER, 'content-type': 'application/json' },
-				body: JSON.stringify({
+				body: JSON.stringify(graphicsIngestionRequest({
 					idempotencyKey: 'authorisation-sessionless-initiation',
 					name: 'Sessionless initiation',
 					declaredByteLength: transparentPixelPng.byteLength,
-				}),
+				})),
 			});
 			expect(response.status).toBe(401);
 		});
@@ -504,12 +504,12 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 				{
 					method: 'POST',
 					headers: { cookie: authorCookie },
-					body: {
+					body: graphicsIngestionRequest({
 						idempotencyKey: 'authorisation-lapsed-session-transfer',
 						name: 'Authorisation lapsed session transfer',
 						declaredMime: 'image/png',
 						declaredByteLength: bytes.byteLength,
-					},
+					}),
 				},
 			);
 			interruptedId = initiated.id;
