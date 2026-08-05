@@ -1449,6 +1449,14 @@ function mediaIncompatibilityNotice(
  * wins. Reconciling here rather than in the component is what keeps the answer in
  * one place: the notice and the withheld element are then two readings of one
  * value instead of two independent decisions over one rule (#184).
+ *
+ * The refusal can itself be stale, in the opposite direction. It is a snapshot the
+ * Screen Output took when it opened its capability session, so facts corrected
+ * since then make this withhold an element the server would now serve. Preferring
+ * it anyway is deliberate: a notice naming a real refusal code is legible and
+ * self-correcting on the next session, while trusting the configuration is what
+ * produced a silent blank rectangle. See `useScreenGraphicAssetContentUrls` for
+ * why the client does not watch a revision's facts for changes.
  */
 function mediaDescriptor(
 	output: ScreenOutput,

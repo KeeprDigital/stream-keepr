@@ -50,6 +50,17 @@ export function useScreenGraphicAssetContentUrls(
 	 * facts — this only stops the client having to guess that decision from a value
 	 * copied into a Media Graphic Item's configuration, which the revision's facts
 	 * can outlive (#184).
+	 *
+	 * It is a snapshot taken when the session opened, and it can go stale in the
+	 * other direction. `resolutionKey` re-resolves on the *set* of pinned revisions,
+	 * and a revision id does not change when its technical facts do — so facts
+	 * corrected after this instant leave the output reporting a clip the server
+	 * would now serve. That direction did not exist before the forecast did, and it
+	 * is the safer of the two: a legible notice naming a real refusal code rather
+	 * than a blank rectangle, and it clears the next time this output opens a
+	 * session. Widening the key to notice a revision's facts would mean re-resolving
+	 * every URL when they change, which tears down and restarts every on-air video —
+	 * a worse cost than the one it would avoid.
 	 */
 	const contentRefusals = shallowRef(new Map<string, ScreenOutputAssetRefusalCode>());
 	const contentUrlsSettled = ref(false);
