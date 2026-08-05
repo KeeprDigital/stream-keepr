@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
@@ -44,7 +44,8 @@ import { graphicsIngestionRequest } from '~~/test/integration/graphicsIngestionR
 
 const INITIATION_PATH = '/api/graphics-assets/ingestion-operations';
 const REQUEST_HELPER = 'graphicsIngestionRequest';
-const HELPER_MODULE = './graphicsIngestionRequest';
+/** Matched against the import specifier's basename, so any relative depth resolves. */
+const HELPER_MODULE = 'graphicsIngestionRequest';
 const integrationDirectory = fileURLToPath(new URL('../../integration', import.meta.url));
 
 /** The source the endpoint fills in when a body names none (index.post.ts:72). */
@@ -117,13 +118,22 @@ function declarationsIn(source: ts.SourceFile) {
  * helper rather than something local wearing its name. Matching on the name
  * alone would let a file declare its own pass-through function and satisfy the
  * scan while taking the server's default.
+ *
+ * The module is matched by basename, not by the whole specifier. A suite one
+ * directory down reaches the same file as `'../graphicsIngestionRequest'`, and
+ * comparing the literal `'./graphicsIngestionRequest'` reported it as unguarded
+ * — a false positive on correct code, which is the worse direction for this
+ * guard to fail in: the fix it appears to ask for is to stop using the helper.
  */
 function bindsTheRealHelper(source: ts.SourceFile) {
 	let imported = false;
 	let shadowed = false;
 
 	const visit = (node: ts.Node) => {
-		if (ts.isImportDeclaration(node) && stringValue(node.moduleSpecifier as ts.Expression) === HELPER_MODULE) {
+		const specifier = ts.isImportDeclaration(node)
+			? stringValue(node.moduleSpecifier as ts.Expression)
+			: undefined;
+		if (ts.isImportDeclaration(node) && specifier && basename(specifier) === HELPER_MODULE) {
 			const bindings = node.importClause?.namedBindings;
 			if (bindings && ts.isNamedImports(bindings)) {
 				for (const element of bindings.elements) {
@@ -230,9 +240,11 @@ describe('every integration suite that initiates an ingestion', () => {
 	});
 
 	it('states its duplicate-content policy by going through graphicsIngestionRequest', () => {
+		// Reported relative to test/integration, so two suites of the same name in
+		// different directories name themselves apart.
 		const unguarded = everyIntegrationInitiation()
 			.filter(one => policyIsHonoured(one.source) && !one.viaHelper)
-			.map(one => `${one.file.slice(one.file.lastIndexOf('/') + 1)}:${one.line}`);
+			.map(one => `${relative(integrationDirectory, one.file)}:${one.line}`);
 
 		// These initiations take the API's `reuse` default. Any of them that shares
 		// bytes with another suite is handed that suite's Graphic Asset instead of
@@ -299,6 +311,18 @@ describe('the scan', () => {
 		const text = `${importsHelper}const path = '${INITIATION_PATH}';\n`
 			+ `await $fetch(path, { method: 'POST', body: { idempotencyKey: 'k' } });`;
 		expect(unguarded(text)).toHaveLength(1);
+	});
+
+	it('accepts a subdirectory suite reaching the helper by a relative path', () => {
+		// A suite at `test/integration/<dir>/` imports the helper as
+		// `'../graphicsIngestionRequest'`. Matching the specifier literally against
+		// `'./graphicsIngestionRequest'` reported such a suite as unguarded — a
+		// false positive on correct code, and the worse direction for a guard to
+		// fail in, since the fix a reader would reach for is to stop using the
+		// helper. Found by the verifier of #224.
+		const text = `import { ${REQUEST_HELPER} } from '../graphicsIngestionRequest';\n`
+			+ `await $fetch('${INITIATION_PATH}', { method: 'POST', body: ${REQUEST_HELPER}({ idempotencyKey: 'k' }) });`;
+		expect(unguarded(text)).toEqual([]);
 	});
 
 	it('does not accept a local function wearing the helper\'s name', () => {
