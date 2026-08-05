@@ -339,12 +339,19 @@ export function graphicStyleChangeKey(itemId: string | null, slot: GraphicStyleS
  *   migration on that signal would destroy exactly the pins the narrowed rule exists to
  *   preserve, and losing an author's real override is a worse failure than keeping one
  *   they did not mean to make.
- * - **An author's next edit already narrows it.** Not their next "Keep mine" — that
- *   comes back through here and preserves the pin. `recaptureGraphicStyleOverrides`
- *   re-derives each slot's overrides from what the composition deviates in and discards
- *   the recorded set, and `applyGraphicStyleSet` leaves the composition on the published
- *   revision, so that function's guard is already satisfied when the pin is written. The
- *   first property edit after it collapses the eight keys to the author's real deviation.
+ * - **An author's next edit already narrows it, and no later "Keep mine" could.** A
+ *   fully pinned slot resolves to what the owner already holds, so it never produces a
+ *   review row again — there is no later "Keep mine" on it to narrow anything, and one
+ *   would preserve the pin anyway by coming back through here. What narrows it is
+ *   `recaptureGraphicStyleOverrides`, which re-derives each slot's overrides from what
+ *   the composition deviates in and discards the recorded set. Its revision guard is
+ *   already satisfied because the same call that writes an over-broad pin also moves the
+ *   composition onto the published revision: `applyGraphicStyleSet` records a revision
+ *   only when its caller passes one, and the only caller that acts on decisions —
+ *   `server/api/graphics-templates/broadcast-graphics/[templateId]/style-update.post.ts`,
+ *   applying a reviewed update — passes both together. (`bindGraphicStyleRef` passes
+ *   neither, so it cannot write one of these pins in the first place.) The first
+ *   property edit after that collapses the eight keys to the author's real deviation.
  * - **No such document reaches production.** Spec #60 settles that the database is wiped
  *   before ship and names data migration as out of scope, so the population a migration
  *   would serve is empty by construction.
