@@ -273,14 +273,19 @@ this step now asserts. Deployed mode:
 3. Drives Safari to that Screen Output's page, where it mints a capability
    through its own author session, opens a capability session, and then asks
    for the restricted revision's own content route.
-4. Requires the session to open with `204` and the revision to answer `409`
-   with `data.code = vp9-alpha-chromium-required`. Anything else on the
-   revision prints `safari-vp9-alpha-not-blocked` and is a gate failure — it
-   means a browser that cannot show the content correctly was handed the bytes.
+4. Requires the session to open with `200`, to name that revision in its
+   `unplayableRevisions` forecast, and the revision itself to answer `409` with
+   `data.code = vp9-alpha-chromium-required`. Anything else on the revision
+   prints `safari-vp9-alpha-not-blocked` and is a gate failure — it means a
+   browser that cannot show the content correctly was handed the bytes.
    A session that refuses instead prints `restricted-video-session-refused`,
    which is a gate failure of its own rather than an unready environment:
    refusing it costs the output every asset the Screen publishes rather than
    the one clip Safari would show wrongly, which is the defect #98 closed.
+   A session that opens without naming the revision prints
+   `restricted-video-refusal-unforecast`: the refusal then arrives at an output
+   that drew a `<video>` for it, which is the same blank rectangle reached by a
+   different route (#184).
 5. Tears the Screen Output and its Event down.
 
 Nothing secret travels in the URL: the page is given the Event, Screen, and
