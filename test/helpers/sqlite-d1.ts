@@ -12,21 +12,39 @@
 import type { Client, InStatement, ResultSet } from '@libsql/client';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@libsql/client';
 
-const migrationsDirectory = fileURLToPath(
-	new URL('../../server/db/migrations/sqlite', import.meta.url),
-);
+/**
+ * Resolved from this file where that is possible, and from the repository root
+ * where it is not: Vitest's Nuxt environment does not give this module a `file:`
+ * URL, and every Vitest run has the repository root as its working directory.
+ */
+function resolveMigrationsDirectory(): string {
+	try {
+		return fileURLToPath(new URL('../../server/db/migrations/sqlite', import.meta.url));
+	}
+	catch {
+		return resolve(process.cwd(), 'server/db/migrations/sqlite');
+	}
+}
+
+const migrationsDirectory = resolveMigrationsDirectory();
 
 interface PreparedStatement {
 	sql: string;
 	args: unknown[];
 }
 
+/**
+ * Cast whole rather than by field: `@libsql/client` resolves to a different entry
+ * point under the app project's conditions than under the server's, and only one of
+ * the two `InStatement` unions has an indexable `args`.
+ */
 function toStatement(prepared: PreparedStatement): InStatement {
-	return { sql: prepared.sql, args: prepared.args as InStatement['args'] };
+	return { sql: prepared.sql, args: prepared.args } as InStatement;
 }
 
 function plainRows<T>(result: ResultSet): T[] {
@@ -76,7 +94,14 @@ function createPreparedStatement(client: Client, sql: string, args: unknown[]) {
 		},
 		async raw<T>() {
 			const result = await client.execute(toStatement({ sql, args }));
-			return result.rows.map(row => [...row]) as T[];
+			// Column order, not row-object iteration order: a libSQL row is a plain
+			// object rather than an iterable, and D1's own `raw` answers positionally.
+			// Drizzle's D1 driver reads every select through here, so getting this
+			// wrong makes the ORM unusable against this harness rather than merely
+			// reordering a column.
+			return result.rows.map(
+				row => result.columns.map(column => row[column] ?? null),
+			) as T[];
 		},
 	};
 	return statement;
