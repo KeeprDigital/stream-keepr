@@ -170,6 +170,27 @@ export async function optionalGraphicsAuthorSession(event: H3Event): Promise<str
 	}
 }
 
+/**
+ * Refuses a caller carrying no Graphics Author Session.
+ *
+ * **This is attribution, not authentication, and that is a decision rather than an
+ * oversight.** A session is anonymous and self-issued: the middleware mints one on
+ * any non-`/api/` HTML `GET`, so a caller willing to request a page — any page,
+ * including one that does not exist — is admitted afterwards. What this refuses is
+ * a caller that never made that request: a bare `curl`, a scanner, a script with no
+ * cookie jar. It raises the cost of reaching these routes; it does not prevent it
+ * for anyone determined.
+ *
+ * The application has no authentication yet **by design**, and app-level
+ * authentication is planned. Every guard resting on this call — #90's ingestion and
+ * lifecycle routes, #116's lifecycle actions, #172's library reads — is therefore
+ * the structural seam a real credential strengthens when that lands, rather than a
+ * boundary anyone believes is holding today. Resolved on #205; the identity itself
+ * is defined in `CONTEXT.md` and its ownership rules in ADR-0003.
+ *
+ * So: do not read a guarded route as protected, and do not remove a guard on the
+ * grounds that it protects nothing. Both readings have been reached before.
+ */
 export async function requireGraphicsAuthorSession(event: H3Event): Promise<string> {
 	try {
 		const session = await readSession(event);
