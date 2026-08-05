@@ -187,11 +187,15 @@ Because a session is anonymous and self-issued on any HTML page navigation, any
 browser that has loaded any page of this application — an operator's Screen page
 as much as the Library Workspace — carries one and is admitted, and the guarded
 routes discard the author id they resolve rather than checking it against
-anything. What these routes now refuse is a caller that has never loaded a page:
-a bare `curl`, a scanner, a script with no cookie jar. **They do not partition
-the library between people.** That is consistent with the library being
-deliberately installation-wide, but it means the gate raises the cost of
-enumeration rather than preventing it for anyone determined.
+anything. What these routes now refuse is a caller that has not made that page
+request — a bare `curl`, a scanner, a script with no cookie jar. Because the
+session is self-issued, that is a low bar rather than a barrier: one request
+carrying `Accept: text/html` is enough, against any path, including one that
+does not exist, because the middleware runs before routing. A scanner that
+keeps its cookies clears it. **They do not partition the library between
+people.** That is consistent with the library being deliberately
+installation-wide, but it means the gate raises the cost of enumeration rather
+than preventing it for anyone determined.
 
 The session's eight-hour idle lifetime now bounds reads as well as writes. A
 surface left open overnight answers `401` on its next read and recovers by
