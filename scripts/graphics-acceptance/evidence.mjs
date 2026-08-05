@@ -74,6 +74,12 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	// #98 regression itself, and it costs the output every other asset the
 	// Screen publishes.
 	'restricted-video-session-refused',
+	// The session opened and said nothing about the revision it was about to
+	// refuse. Named apart from the refusal itself because both halves have to
+	// hold: a refusal nobody forecast leaves the output rendering a `<video>` for
+	// bytes it never gets, which is the blank rectangle #98 removed arriving by a
+	// different route (#184).
+	'restricted-video-refusal-unforecast',
 	'font-ready-before-load',
 	'browser-driver-unavailable',
 	'browser-acceptance-failed',
