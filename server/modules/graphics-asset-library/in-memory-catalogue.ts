@@ -109,7 +109,10 @@ export function createInMemoryGraphicsAssetCatalogue(
 			? structuredClone(preflight.report)
 			: undefined;
 		const multipart = multipartStates.get(operation.id);
-		if (!multipart)
+		// A remote copy's multipart state is a server-side abort checkpoint, not a
+		// client transfer: it holds an uploadId and no parts, so reporting it as one
+		// would advertise a part count no client is ever asked to send.
+		if (!multipart || operation.source === 'remote-copy')
 			return clone;
 		return {
 			...clone,
@@ -297,6 +300,10 @@ export function createInMemoryGraphicsAssetCatalogue(
 			) {
 				throw new Error('Remote Graphic Asset copy progress could not be recorded');
 			}
+			// Durably staged bytes mean every multipart upload this copy ever held is
+			// finished, so no abort checkpoint can still be owed.
+			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
+			multipartStates.delete(operation.id);
 			operations.set(operation.id, cloneOperation({
 				...operation,
 				declaredByteLength: observedByteLength,
@@ -400,6 +407,33 @@ export function createInMemoryGraphicsAssetCatalogue(
 				updatedAt: input.updatedAt,
 			});
 			return true;
+		},
+		async checkpointRemoteCopyMultipartUpload(input) {
+			const operation = operations.get(input.operationId);
+			if (
+				!operation
+				|| operation.initiatedBy !== input.initiatedBy
+				|| operation.source !== 'remote-copy'
+			) {
+				return;
+			}
+			// A remote copy has no client parts to record, so the checkpoint carries
+			// the uploadId alone. Taking one is confined to a running copy; clearing
+			// one stays legal from any stage, because by then the upload it named is
+			// already completed or aborted.
+			if (!input.uploadId) {
+				// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
+				multipartStates.delete(input.operationId);
+				return;
+			}
+			if (operation.stage !== 'created' && operation.stage !== 'transferring')
+				return;
+			multipartStates.set(input.operationId, {
+				version: 1,
+				uploadId: input.uploadId,
+				cleanupPending: false,
+				parts: [],
+			});
 		},
 		async getTemplatePackagePreflight(operationId, initiatedBy) {
 			const operation = operations.get(operationId);

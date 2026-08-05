@@ -94,16 +94,20 @@ Staged-object cleanup needs no remote-specific knowledge: the copy writes only
 `ingestion/<operation>/source`, already part of the set that cancellation,
 terminal failure, and staged-input expiry all reclaim.
 
-**Known gap.** The unknown-length path starts an R2 multipart upload without
-recording its `uploadId` durably, unlike the client-driven transfer which
-checkpoints it. Every in-request failure aborts that upload, but if the Worker
-dies between the first part and completion, the parts survive with no recorded
-`uploadId`, so `releaseStagedObjects` cannot abort them and the staging bucket
-has no lifecycle rule that would. Reaching it needs an unknown-length source
-larger than 16 MiB and a hard process death mid-copy. Closing it properly means
-checkpointing the `uploadId` and clearing that state on success, which changes
-durable multipart state shared with the client transfer path; a bucket lifecycle
-rule aborting incomplete multipart uploads would also bound it.
+**Multipart checkpoint.** The unknown-length path can start a multipart upload
+that outlives the request holding it, so the `uploadId` is written durably before
+the first part is sent. The checkpoint reuses the operation's `multipart_state`
+column and carries the `uploadId` alone — a remote copy has no client parts to
+record — which is why a remote-copy operation never reports client-transfer facts
+even while it holds one.
+
+The checkpoint is cleared as soon as there is nothing left to abort: when the
+upload completes, when the request's own abort succeeds, and again when the copy
+records its durably staged source. An abort that did not land deliberately leaves
+the checkpoint in place. Whatever survives is reclaimed by the paths that already
+read `multipart_state` — staged-input expiry through `releaseStagedObjects`, and
+cancellation through the multipart cleanup path — with no remote-specific
+knowledge and no bucket lifecycle rule.
 
 ## Browser confirmation
 

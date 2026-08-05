@@ -1,3 +1,7 @@
+import type {
+	GraphicsMultipartUploadIdentity,
+	InMemoryGraphicsStagingObjectStore,
+} from '~~/server/modules/graphics-asset-library/object-store';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
@@ -100,8 +104,12 @@ function createRemoteHost(options: {
 	return { fetcher, requests, resolved };
 }
 
-function createLibrary(options: Parameters<typeof createRemoteHost>[0] = {}) {
-	const staging = createInMemoryStagingGraphicsObjectStore();
+function createLibrary(
+	options: Parameters<typeof createRemoteHost>[0] & {
+		staging?: InMemoryGraphicsStagingObjectStore;
+	} = {},
+) {
+	const staging = options.staging ?? createInMemoryStagingGraphicsObjectStore();
 	const canonical = createInMemoryCanonicalGraphicsObjectStore();
 	const catalogue = createInMemoryGraphicsAssetCatalogue();
 	const remote = createRemoteHost(options);
@@ -115,6 +123,58 @@ function createLibrary(options: Parameters<typeof createRemoteHost>[0] = {}) {
 		now: () => new Date('2026-07-30T04:00:00.000Z'),
 	});
 	return { library, staging, canonical, catalogue, remote };
+}
+
+/**
+ * A source that outgrows one multipart part, so the resumable path is taken.
+ * Shared because every test only reads it and a part is 16 MiB.
+ */
+const oversizedRemoteSource = (() => {
+	const bytes = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 4096);
+	bytes.set(transparentPixelPng, 0);
+	return bytes;
+})();
+
+/**
+ * A remote copy whose multipart upload outlives the request that started it:
+ * the first part fails and the request's own abort cannot land either, which is
+ * what a worker death leaves behind for a later sweep to reclaim.
+ */
+async function strandRemoteCopyMultipartUpload(idempotencyKey: string) {
+	const delegate = createInMemoryStagingGraphicsObjectStore();
+	let uploadId: GraphicsMultipartUploadIdentity | undefined;
+	const staging: InMemoryGraphicsStagingObjectStore = {
+		...delegate,
+		async beginMultipart(input) {
+			const started = await delegate.beginMultipart(input);
+			if (started.outcome === 'started')
+				uploadId = started.upload.uploadId;
+			return started;
+		},
+	};
+	const { library, catalogue } = createLibrary({
+		staging,
+		hops: {
+			'https://cdn.example.test/scoreboard.png': {
+				body: oversizedRemoteSource,
+				contentLength: null,
+			},
+		},
+	});
+	const operation = await library.initiateRemoteGraphicAssetCopy({
+		idempotencyKey,
+		initiatedBy: 'graphics-author-1',
+		name: 'Interrupted remote source',
+		sourceFileName: 'scoreboard.png',
+	});
+	staging.injectTransientFailure('multipart-upload-part');
+	staging.injectTransientFailure('multipart-abort');
+	const failed = await library.copyRemoteGraphicAssetSource({
+		operationId: operation.id,
+		initiatedBy: operation.initiatedBy,
+		sourceUrl: 'https://cdn.example.test/scoreboard.png',
+	});
+	return { library, catalogue, staging, operation, failed, uploadId };
 }
 
 describe('approved remote HTTPS copy through the Graphics Asset Library public module', () => {
@@ -710,12 +770,10 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	it('stages an undeclared remote source larger than one multipart part', async () => {
 		// Bytes beyond one 16 MiB part force the resumable multipart path, so the
 		// whole source reaches staging without ever being held in memory at once.
-		const oversized = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 4096);
-		oversized.set(transparentPixelPng, 0);
 		const { library } = createLibrary({
 			hops: {
 				'https://cdn.example.test/scoreboard.png': {
-					body: oversized,
+					body: oversizedRemoteSource,
 					contentLength: null,
 				},
 			},
@@ -737,14 +795,81 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		// merits by the compatibility profile, not by the remote-source guard.
 		expect(failed).toMatchObject({
 			stage: 'failed',
-			declaredByteLength: oversized.byteLength,
-			transferredByteLength: oversized.byteLength,
+			declaredByteLength: oversizedRemoteSource.byteLength,
+			transferredByteLength: oversizedRemoteSource.byteLength,
 			failure: { code: 'validation-failed', retryable: false },
 		});
 		expect(
 			failed.report?.outcome === 'rejected'
 			&& failed.report.issues.every(issue => !issue.code.startsWith('remote-source-')),
 		).toBe(true);
+	});
+
+	it('clears the multipart checkpoint once the remote copy stages its source', async () => {
+		const { library, catalogue } = createLibrary({
+			hops: {
+				'https://cdn.example.test/scoreboard.png': {
+					body: oversizedRemoteSource,
+					contentLength: null,
+				},
+			},
+		});
+		const operation = await library.initiateRemoteGraphicAssetCopy({
+			idempotencyKey: 'remote-checkpoint-cleared',
+			initiatedBy: 'graphics-author-1',
+			name: 'Large remote source',
+			sourceFileName: 'scoreboard.png',
+		});
+
+		await library.copyRemoteGraphicAssetSource({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			sourceUrl: 'https://cdn.example.test/scoreboard.png',
+		});
+
+		// The upload the checkpoint named is completed, so nothing is left to abort.
+		await expect(catalogue.getGraphicAssetMultipartState(
+			operation.id,
+			operation.initiatedBy,
+		)).resolves.toBeUndefined();
+		const authoritative = await library.getIngestionOperation({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+		});
+		expect(authoritative.transfer).toBeUndefined();
+	});
+
+	it('leaves an abortable checkpoint when a copy dies with its upload unreleased', async () => {
+		const stranded = await strandRemoteCopyMultipartUpload('remote-checkpoint-stranded');
+
+		expect(stranded.failed).toMatchObject({
+			stage: 'failed',
+			failure: { code: 'staging-unavailable', retryable: true },
+		});
+		const state = await stranded.catalogue.getGraphicAssetMultipartState(
+			stranded.operation.id,
+			stranded.operation.initiatedBy,
+		);
+		expect(state?.uploadId).toBe(stranded.uploadId);
+		// A remote copy has no client-supplied parts to resume from; the checkpoint
+		// carries the uploadId alone.
+		expect(state?.parts).toEqual([]);
+		await expect(stranded.staging.resumeMultipart(
+			graphicsObjectIdentity(`ingestion/${stranded.operation.id}/source`),
+			stranded.uploadId!,
+		)).resolves.toMatchObject({ outcome: 'resumed' });
+	});
+
+	it('reports no client-transfer facts for a remote copy holding a checkpoint', async () => {
+		const stranded = await strandRemoteCopyMultipartUpload('remote-checkpoint-no-transfer');
+
+		const authoritative = await stranded.library.getIngestionOperation({
+			operationId: stranded.operation.id,
+			initiatedBy: stranded.operation.initiatedBy,
+		});
+		// The checkpoint names an upload; it never claims parts were verified.
+		expect(authoritative.transfer).toBeUndefined();
+		expect(authoritative.transferredByteLength).toBe(0);
 	});
 
 	it('treats the remote content type as an untrusted hint and trusts observed bytes', async () => {

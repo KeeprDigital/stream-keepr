@@ -149,7 +149,10 @@ function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
 		createdAt: new Date(row.created_at).toISOString(),
 		updatedAt: new Date(row.updated_at).toISOString(),
 	};
-	if (!multipart)
+	// A remote copy's multipart state is a server-side abort checkpoint, not a
+	// client transfer: it holds an uploadId and no parts, so reporting it as one
+	// would advertise a part count no client is ever asked to send.
+	if (!multipart || row.source === 'remote-copy')
 		return operation;
 	return {
 		...operation,
@@ -806,6 +809,9 @@ export function createD1GraphicsAssetCatalogue(
 					transferred_byte_length = ?,
 					staging_used_byte_length = ?,
 					staging_reserved_byte_length = ?,
+					-- Durably staged bytes mean every multipart upload this copy ever
+					-- held is finished, so no abort checkpoint can still be owed.
+					multipart_state = NULL,
 					transfer_completed_at = COALESCE(transfer_completed_at, ?)
 				WHERE id = ? AND initiated_by = ?
 					AND source = 'remote-copy'
@@ -1530,6 +1536,31 @@ export function createD1GraphicsAssetCatalogue(
 				input.expectedVersion,
 			).run();
 			return result.success && result.meta.changes === 1;
+		},
+		async checkpointRemoteCopyMultipartUpload(input) {
+			// A remote copy has no client parts to record, so the checkpoint carries
+			// the uploadId alone. Taking one is confined to a running copy; clearing
+			// one stays legal from any stage, because by then the upload it named is
+			// already completed or aborted.
+			const state: GraphicsAssetMultipartState | null = input.uploadId
+				? { version: 1, uploadId: input.uploadId, cleanupPending: false, parts: [] }
+				: null;
+			const result = await database.prepare(`
+				UPDATE graphics_ingestion_operations
+				SET multipart_state = ?
+				WHERE id = ? AND initiated_by = ?
+					AND source = 'remote-copy'
+					AND (? IS NULL OR stage IN ('created', 'transferring'))
+			`).bind(
+				state && JSON.stringify(state),
+				input.operationId,
+				input.initiatedBy,
+				input.uploadId ?? null,
+			).run();
+			// An unwritten checkpoint would strand the upload it was meant to name,
+			// so the copy must not continue past a failed write.
+			if (!result.success)
+				throw new Error('Remote Graphic Asset copy multipart checkpoint could not be recorded');
 		},
 		async getTemplatePackagePreflight(operationId, initiatedBy) {
 			const row = await database.prepare(`
