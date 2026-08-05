@@ -130,8 +130,22 @@ function clip(revisionId: string): MediaGraphicInputValue {
  * the module under test: `Set Input` records the pinned revision's own facts on a
  * media value at the moment of selection, and that is the authority it asks.
  */
+/** A revision that exists but whose bytes the library cannot currently reach. */
+const UNREACHABLE_REVISION = 'revision-unreachable';
+
+/**
+ * Revisions whose content has stopped being reachable since it was accepted.
+ *
+ * Emptied between tests. It exists so a scenario can reach the refusal on the playout
+ * path, which is about a value the show is already carrying rather than one being
+ * chosen — there is no way to select an already-accepted revision a second time.
+ */
+const graphicsAssetLibraryOutage = new Set<string>();
+
 const graphicsAssetLibrary = {
 	async inspectGraphicAssetRevision(input: { assetId: string; revisionId: string }): Promise<GraphicAssetReferenceStatus> {
+		if (input.revisionId === UNREACHABLE_REVISION || graphicsAssetLibraryOutage.has(input.revisionId))
+			return { outcome: 'unavailable', retryable: true };
 		return input.assetId === ASSET_ID && (REVISIONS as readonly string[]).includes(input.revisionId)
 			? { outcome: 'available', lifecycleState: 'active', kind: 'image' }
 			: { outcome: 'missing' };
@@ -274,6 +288,7 @@ beforeAll(async () => {
 beforeEach(() => {
 	beforeReferenceWrite = undefined;
 	interleaving = false;
+	graphicsAssetLibraryOutage.clear();
 	vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -322,6 +337,59 @@ describe('a Broadcast Graphics Live Session reconcile whose sequence moved under
 		await live.setInput(CLIP_A, clip(REVISIONS[1]));
 
 		expect(await resolvable(live)).toEqual([]);
+	});
+});
+
+/**
+ * The other way a media selection reaches the index: it does not.
+ *
+ * A revision that stops resolving between the picker's question and the operator's
+ * click is refused here, at the authority, and nothing is published for it. What the
+ * refusal *says* is load-bearing rather than cosmetic: it travels as a bare 409 unless
+ * it carries a code, and a bare 409 is exactly what an ended epoch looks like — so the
+ * client reloads the session and restates the very command that was just refused,
+ * then reports "playout action failed" (#203).
+ */
+describe('a media selection the Graphics Asset Library refuses', () => {
+	it('names a revision that does not exist as a Missing Graphic Asset Reference', async () => {
+		const live = await liveSession();
+		await live.take();
+
+		await expect(live.setInput(CLIP_A, clip('no-such-revision'))).rejects.toMatchObject({
+			statusCode: 409,
+			data: { code: 'missing-asset-reference', inputKeys: [CLIP_A] },
+		});
+
+		// Refused outright: the value is not accepted, so the index publishes nothing
+		// for it and no Screen Output can fetch it.
+		expect(await resolvable(live)).toEqual([]);
+	});
+
+	it('distinguishes content that is only temporarily out of reach', async () => {
+		// The two prescribe opposite next moves — choose something else, or retry the
+		// same thing — so one code for both would tell the operator the wrong one half
+		// the time.
+		const live = await liveSession();
+		await live.take();
+
+		await expect(live.setInput(CLIP_A, clip(UNREACHABLE_REVISION))).rejects.toMatchObject({
+			statusCode: 409,
+			data: { code: 'unavailable-asset-content', inputKeys: [CLIP_A] },
+		});
+	});
+
+	it('names a Take blocked by a pinned revision that has gone, rather than refusing bare', async () => {
+		// The same defect on the playout path: an unnamed refusal here is a Take the
+		// client reloads and sends again, against a library that refuses it again.
+		const live = await liveSession();
+		await live.take();
+		await live.setInput(CLIP_A, clip(REVISIONS[0]));
+		graphicsAssetLibraryOutage.add(REVISIONS[0]);
+
+		await expect(live.take()).rejects.toMatchObject({
+			statusCode: 409,
+			data: { code: 'unavailable-asset-content' },
+		});
 	});
 });
 

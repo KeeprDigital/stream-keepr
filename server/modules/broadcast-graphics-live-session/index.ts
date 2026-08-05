@@ -21,12 +21,16 @@ import {
 	clearBroadcastGraphicsLiveSessionGraphicAssetReferences,
 	updateBroadcastGraphicsLiveSessionGraphicAssetReferences,
 } from '~~/server/modules/screen-graphic-asset-references';
-import { broadcastGraphicsStateService } from '~~/server/services/broadcastGraphicsState';
+import {
+	broadcastGraphicsRejectionError,
+	broadcastGraphicsStateService,
+} from '~~/server/services/broadcastGraphicsState';
 import { graphicBindingDataService } from '~~/server/services/graphicBindingData';
 import { screenService } from '~~/server/services/screen';
 import { publishMessage } from '~~/server/utils/ably';
 import {
 	broadcastGraphicChannelContexts,
+	BroadcastGraphicsCommandRejection,
 	broadcastGraphicsLiveSessionGraphicAssetReferences,
 	broadcastGraphicSourceSelections,
 	broadcastGraphicsResolveBindingsDue,
@@ -138,6 +142,10 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	 * a revision retired or purged between selection and Take — and asking again would
 	 * mean composing the acceptance here, which needs the Graphic Input Bindings
 	 * resolved against Event Data that only reduction has.
+	 *
+	 * Refused as a domain rejection for the same reason a refused selection is: a Take
+	 * a client cannot tell from an ended epoch is a Take it reloads and sends again,
+	 * against a library that will refuse it again (#203).
 	 */
 	const requireResolvableGraphicAssets = async (
 		references: readonly ScreenGraphicAssetReference[],
@@ -160,13 +168,15 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 			});
 			if (status.outcome === 'available')
 				continue;
-			throw createError({
-				statusCode: 409,
-				statusMessage: 'Conflict',
-				message: status.outcome === 'missing'
-					? `Graphic Asset Reference at ${item.ownerSlot} is missing, so this Broadcast Graphic cannot be taken on air`
-					: `Graphic Asset Content at ${item.ownerSlot} is temporarily unavailable, so this Broadcast Graphic cannot be taken on air`,
-			});
+			throw broadcastGraphicsRejectionError(status.outcome === 'missing'
+				? new BroadcastGraphicsCommandRejection(
+						'missing-asset-reference',
+						`Graphic Asset Reference at ${item.ownerSlot} is missing, so this Broadcast Graphic cannot be taken on air`,
+					)
+				: new BroadcastGraphicsCommandRejection(
+						'unavailable-asset-content',
+						`Graphic Asset Content at ${item.ownerSlot} is temporarily unavailable, so this Broadcast Graphic cannot be taken on air`,
+					));
 		}
 	};
 
@@ -187,6 +197,11 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	 * outright, because creating a Graphic Asset Reference requires its exact revision
 	 * to resolve — a value naming a revision that is not there is a Missing Graphic
 	 * Asset Reference rather than a value an operator can be shown and correct.
+	 *
+	 * That refusal is raised as a domain rejection so it reaches the client carrying
+	 * the code for what it is. A bare conflict is what an ended epoch looks like, and a
+	 * client that cannot tell the two apart reloads the session and restates the very
+	 * command the authority has just refused (#203).
 	 */
 	const recordMediaSelectionFacts = async (
 		graphic: BroadcastGraphicConfig,
@@ -217,13 +232,17 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 			revisionId: graphicAssetRevisionId(value.revisionId),
 		});
 		if (status.outcome !== 'available') {
-			throw createError({
-				statusCode: 409,
-				statusMessage: 'Conflict',
-				message: status.outcome === 'missing'
-					? `Graphic Asset Reference for Graphic Input ${command.payload.inputKey} is missing`
-					: `Graphic Asset Content for Graphic Input ${command.payload.inputKey} is temporarily unavailable`,
-			});
+			throw broadcastGraphicsRejectionError(status.outcome === 'missing'
+				? new BroadcastGraphicsCommandRejection(
+						'missing-asset-reference',
+						`Graphic Asset Reference for Graphic Input ${command.payload.inputKey} is missing`,
+						[command.payload.inputKey],
+					)
+				: new BroadcastGraphicsCommandRejection(
+						'unavailable-asset-content',
+						`Graphic Asset Content for Graphic Input ${command.payload.inputKey} is temporarily unavailable`,
+						[command.payload.inputKey],
+					));
 		}
 
 		return {

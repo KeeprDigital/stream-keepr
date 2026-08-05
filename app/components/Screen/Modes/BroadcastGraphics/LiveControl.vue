@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import type { GraphicInputTrace } from '~~/shared/modules/broadcast-graphics-live-session';
+import type {
+	BroadcastGraphicsRejectionCode,
+	GraphicInputTrace,
+} from '~~/shared/modules/broadcast-graphics-live-session';
 import type {
 	BroadcastGraphicConfig,
 	GraphicInputValue,
@@ -55,6 +58,10 @@ import { createKeyedGuardedSequence } from '~/utils/guardedSequence';
  * rebuilds that value from the library and refuses a revision that does not resolve,
  * so the picker asks the library first and stages nothing it would refuse: an
  * operator choosing from a list should never be able to produce that refusal.
+ *
+ * The window between that question and the acceptance is real but narrow, and the
+ * refusal that comes back through it is reported in the same words at the same field,
+ * because the operator cannot tell — and should not have to — which side answered.
  *
  * ## Why the actions come and go
  *
@@ -277,6 +284,37 @@ const MEDIA_REFUSALS: Record<'missing' | 'unavailable', string> = {
 	missing: 'Missing Graphic Asset Reference — that revision no longer exists, so it was not staged.',
 	unavailable: 'Unavailable Graphic Asset Content — that revision’s bytes are temporarily unavailable, so it was not staged. Try again.',
 };
+
+/**
+ * The same two outcomes as the authority names them, when it is the authority that
+ * refused rather than the check made before sending.
+ *
+ * Only these two codes read as a media refusal. The rest of the vocabulary is about
+ * the show — a superseded field, a graphic that is off — and each is already reported
+ * where it belongs; showing one here would name the wrong thing next to the picker.
+ */
+const MEDIA_REFUSAL_CODES: Partial<Record<BroadcastGraphicsRejectionCode, string>> = {
+	'missing-asset-reference': MEDIA_REFUSALS.missing,
+	'unavailable-asset-content': MEDIA_REFUSALS.unavailable,
+};
+
+/**
+ * Why the last revision chosen for one media Graphic Input was not staged.
+ *
+ * Two sources, one refusal seen a moment apart. The picker asks the library before it
+ * writes anything, so the ordinary case never reaches the command path at all; what
+ * remains is the revision that stops resolving between that question and acceptance,
+ * which the authority refuses with a rejection code (#203). Read the same way and
+ * worded the same way, because to the operator it is the same fact about the same
+ * choice — and the alternative for the second one is a banner saying only that a
+ * playout action failed.
+ */
+function mediaRefusal(inputKey: string): string | undefined {
+	if (mediaRefusals.value[inputKey])
+		return mediaRefusals.value[inputKey];
+	const code = sessionStore.inputRefusal(props.screen.id, props.graphic.id, inputKey);
+	return code === undefined ? undefined : MEDIA_REFUSAL_CODES[code];
+}
 
 /**
  * Stage one exact Graphic Asset Revision for a media Graphic Input.
@@ -665,11 +703,11 @@ watch(
 						@select="(_asset, reference) => selectMedia(trace.declaration.key, reference)"
 					/>
 					<p
-						v-if="mediaRefusals[trace.declaration.key]"
+						v-if="mediaRefusal(trace.declaration.key)"
 						class="text-xs text-error"
 						:data-testid="`live-control-media-refused-${trace.declaration.key}`"
 					>
-						{{ mediaRefusals[trace.declaration.key] }}
+						{{ mediaRefusal(trace.declaration.key) }}
 					</p>
 				</div>
 

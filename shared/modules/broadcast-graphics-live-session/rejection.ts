@@ -37,6 +37,26 @@ export const BROADCAST_GRAPHICS_REJECTION_CODES = [
 	 * to mask, and the working value is the one way to set such an input.
 	 */
 	'override-unbound',
+	/**
+	 * The command named a Graphic Asset Revision that does not exist — a Missing
+	 * Graphic Asset Reference, reached either by selecting one or by taking a graphic
+	 * that pins one.
+	 *
+	 * A refusal about the revision rather than about the show, and the one an operator
+	 * can act on immediately: choose something else. It carries a code for the same
+	 * reason every other refusal here does — a client that cannot name it has to guess,
+	 * and the guess a bare conflict invites is that this client's epoch has ended (#203).
+	 */
+	'missing-asset-reference',
+	/**
+	 * The command named a Graphic Asset Revision that exists but whose content cannot
+	 * currently be resolved: Unavailable Graphic Asset Content.
+	 *
+	 * Deliberately a different refusal from a missing one, because the operator's next
+	 * move is different — this one comes back, and retrying the same choice is the
+	 * right thing to do.
+	 */
+	'unavailable-asset-content',
 ] as const;
 
 export type BroadcastGraphicsRejectionCode = typeof BROADCAST_GRAPHICS_REJECTION_CODES[number];
