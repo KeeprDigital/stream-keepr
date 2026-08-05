@@ -14,10 +14,38 @@ const props = withDefaults(defineProps<{
 	eventId: number;
 	fieldLabel: string;
 	assetKind?: GraphicAsset['kind'] | GraphicAsset['kind'][];
+	/**
+	 * The target this host writes its references with, which decides what may be
+	 * pinned here at all. A blocked revision is not offered.
+	 */
 	videoTarget?: GraphicsVideoTarget;
+	/**
+	 * The engines of the Screen Outputs currently open, when the host knows them.
+	 *
+	 * Reports rather than gates, and is a different question from `videoTarget`:
+	 * that one is the write-time enabling choice, this one is what the revision will
+	 * cost the outputs watching right now. A revision one open output cannot play
+	 * costs that output that revision and nothing else (#98), and the operator may
+	 * well be choosing for the Chromium program output — so it is stated before the
+	 * choice and never taken instead of it.
+	 */
+	openOutputTargets?: GraphicsVideoTarget[];
+	/** Withhold every affordance, without hiding what is already pinned. */
+	disabled?: boolean;
+	/**
+	 * Whether to offer Clear beside Choose.
+	 *
+	 * A host that shows and clears the pinned reference itself passes `false`, so it
+	 * can still hand the picker the reference — and get its Missing, Unavailable, and
+	 * retry reporting on it — without offering the operator two Clears.
+	 */
+	clearable?: boolean;
 }>(), {
 	assetKind: 'image',
 	videoTarget: 'other',
+	openOutputTargets: () => [],
+	disabled: false,
+	clearable: true,
 });
 
 const emit = defineEmits<{
@@ -57,6 +85,20 @@ const selectedAsset = computed(() => (assets.value ?? []).find(asset =>
 ));
 function assetCompatibility(asset: GraphicAsset) {
 	return graphicAssetTargetCompatibility(asset.facts, props.videoTarget);
+}
+
+/** The engines an operator would name, rather than the tokens the code matches on. */
+const VIDEO_TARGET_LABELS: Record<GraphicsVideoTarget, string> = {
+	chromium: 'Chromium',
+	safari: 'Safari',
+	other: 'a non-Chromium engine',
+};
+
+/** The engines open right now that cannot play this exact revision. */
+function blockedOpenOutputs(asset: GraphicAsset): string[] {
+	return props.openOutputTargets
+		.filter(target => graphicAssetTargetCompatibility(asset.facts, target).outcome === 'blocked')
+		.map(target => VIDEO_TARGET_LABELS[target]);
 }
 
 watch(() => ({
@@ -102,15 +144,18 @@ function selectAsset(asset: GraphicAsset) {
 				color="neutral"
 				variant="outline"
 				icon="i-lucide-images"
+				:disabled="disabled"
 				@click="open = true"
 			>
 				{{ modelValue ? 'Change Graphic Asset' : 'Choose Graphic Asset' }}
 			</UButton>
 			<UButton
-				v-if="modelValue"
+				v-if="modelValue && clearable"
+				data-testid="clear-graphic-asset"
 				color="neutral"
 				variant="ghost"
 				icon="i-lucide-x"
+				:disabled="disabled"
 				@click="emit('update:modelValue', undefined)"
 			>
 				Clear
@@ -264,6 +309,20 @@ function selectAsset(asset: GraphicAsset) {
 										This Event
 									</UBadge>
 								</div>
+								<!--
+									What this revision costs the outputs open right now, stated before
+									the choice. It never withholds the revision: the cost falls on the
+									outputs that cannot play it, and the operator may be choosing for
+									the Chromium program output.
+								-->
+								<p
+									v-if="blockedOpenOutputs(asset).length > 0"
+									class="mt-2 text-xs text-warning"
+									:data-testid="`open-output-incompatible-${asset.id}`"
+								>
+									Will not play on {{ blockedOpenOutputs(asset).join(', ') }}
+									{{ blockedOpenOutputs(asset).length === 1 ? 'output' : 'outputs' }} open now.
+								</p>
 							</div>
 							<UButton
 								:data-testid="`select-${asset.id}`"

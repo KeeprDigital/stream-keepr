@@ -3,14 +3,26 @@ import type { GraphicInputTrace } from '~~/shared/modules/broadcast-graphics-liv
 import type {
 	BroadcastGraphicConfig,
 	GraphicInputValue,
+	GraphicMediaKind,
 	GraphicPlayoutState,
 } from '~~/shared/types/graphics';
+import type {
+	GraphicAssetReference,
+	GraphicAssetReferenceStatus,
+} from '~~/shared/types/graphicsAsset';
 import type { Screen } from '~/types';
 import {
 	graphicInputTextValue,
+	isMediaGraphicInputValue,
 	isOperatorSelectedGraphicSource,
 	resolveGraphicInputBindings,
 } from '~~/shared/modules/graphics';
+import { graphicAssetRevisionStatusPath } from '~~/shared/utils/graphicsAssetReferences';
+import {
+	GRAPHICS_AUTHOR_SESSION_LAPSED_MESSAGE,
+	graphicsAuthorSessionLapsed,
+} from '~/composables/useGraphicsAuthorSession';
+import { createKeyedGuardedSequence } from '~/utils/guardedSequence';
 
 /**
  * Generated Live Control for one placed Broadcast Graphic.
@@ -35,6 +47,14 @@ import {
  * into the working value would change nothing an operator could see. The override
  * masks the binding, the bound value stays visible underneath it, and Clear resumes
  * whatever the binding resolves at that moment.
+ *
+ * ## Media is chosen, not typed
+ *
+ * A media Graphic Input's value is one exact Graphic Asset Revision, so its control
+ * is the Graphics Asset Library's own picker rather than a field. The acceptance path
+ * rebuilds that value from the library and refuses a revision that does not resolve,
+ * so the picker asks the library first and stages nothing it would refuse: an
+ * operator choosing from a list should never be able to produce that refusal.
  *
  * ## Why the actions come and go
  *
@@ -62,6 +82,12 @@ const props = defineProps<{
 
 const sessionStore = useBroadcastGraphicsLiveSessionStore();
 const { dataSet, selectionOptions } = useGraphicBindingData();
+
+/**
+ * The engines of the Screen Outputs open on this Screen right now, so a media
+ * revision's playback cost is stated in the picker rather than discovered on air.
+ */
+const openOutputTargets = useScreenOutputVideoTargets(() => props.screen.id);
 
 /** Locally typed values, committed to the working value or override on change or blur. */
 const drafts = ref<Record<string, GraphicInputValue>>({});
@@ -219,6 +245,114 @@ function selectionIdOf(value: unknown): number | null {
 	return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+/** Why the last revision an operator chose for one media Graphic Input was not written. */
+const mediaRefusals = ref<Record<string, string>>({});
+
+/**
+ * One flight per Broadcast Graphic and Graphic Input, superseded whenever this
+ * control stops speaking for the graphic that started it.
+ *
+ * Keyed by both because the key alone is not the identity of the thing being
+ * written: two Broadcast Graphics may declare the same Graphic Input key, and every
+ * write here names a graphic. An answer that outlived its graphic would stage a
+ * revision nobody chose for the graphic now on screen, carrying a Field Ownership
+ * claim describing that other graphic's value — which is applied unconditionally,
+ * because it is a claim about something the operator never saw.
+ */
+const mediaSelectionFlights = createKeyedGuardedSequence<string>();
+
+function mediaSelectionKey(inputKey: string): string {
+	return `${props.graphic.id}:${inputKey}`;
+}
+
+/**
+ * How the Graphics Asset Library's refusal of one revision reads to an operator.
+ *
+ * The same two outcomes the Missing Graphic Asset Reference and Unavailable Graphic
+ * Asset Content vocabulary names everywhere else, so the operator's next move —
+ * choose something else, or retry the same thing — is the one the words already
+ * imply.
+ */
+const MEDIA_REFUSALS: Record<'missing' | 'unavailable', string> = {
+	missing: 'Missing Graphic Asset Reference — that revision no longer exists, so it was not staged.',
+	unavailable: 'Unavailable Graphic Asset Content — that revision’s bytes are temporarily unavailable, so it was not staged. Try again.',
+};
+
+/**
+ * Stage one exact Graphic Asset Revision for a media Graphic Input.
+ *
+ * The acceptance path rebuilds the value from the Graphics Asset Library and refuses
+ * a revision that does not resolve with a 409, so this asks the library the same
+ * question first and writes nothing when the answer is no. An operator choosing from
+ * a picker should not be able to produce a refusal the picker could have foreseen —
+ * and the alternative, sending it and reporting the 409, would name a failure of the
+ * command rather than a fact about the revision.
+ *
+ * The pinned revision's compatibility facts are deliberately not sent. They are the
+ * authoritative side's to record at the moment of acceptance, from the library rather
+ * than from a browser — the same route a media Graphic Input's authored default would
+ * take, which is how #96 settled that a value carries the same facts however it was
+ * chosen. Nothing authors such a default today, so that symmetry is currently a
+ * property of the mechanism rather than of two surfaces an operator can compare.
+ */
+async function selectMedia(key: string, reference: GraphicAssetReference) {
+	const flight = mediaSelectionFlights.begin(mediaSelectionKey(key));
+	let status: GraphicAssetReferenceStatus;
+	try {
+		status = await $fetch<GraphicAssetReferenceStatus>(graphicAssetRevisionStatusPath(reference));
+	}
+	catch (caught) {
+		if (flight.stale)
+			return;
+
+		// A lapsed graphics author session is not the library saying anything about
+		// this revision, and it is the one failure retrying cannot fix. Reported in
+		// the terms the session seam already owns, rather than as bytes that will
+		// come back — the fallback is deliberately not `describeFailure`'s, whose
+		// non-lapse arm is the raw transport error.
+		refuseMedia(key, graphicsAuthorSessionLapsed(caught)
+			? GRAPHICS_AUTHOR_SESSION_LAPSED_MESSAGE
+			: MEDIA_REFUSALS.unavailable);
+		return;
+	}
+	if (flight.stale)
+		return;
+
+	if (status.outcome !== 'available') {
+		refuseMedia(key, MEDIA_REFUSALS[status.outcome]);
+		return;
+	}
+
+	const { [key]: _resolved, ...rest } = mediaRefusals.value;
+	mediaRefusals.value = rest;
+	commitNow(key, { assetId: reference.assetId, revisionId: reference.revisionId });
+}
+
+function refuseMedia(key: string, reason: string) {
+	mediaRefusals.value = { ...mediaRefusals.value, [key]: reason };
+}
+
+/** The media kind a Graphic Input declares, which is the only kind its picker offers. */
+function mediaKindOf(trace: GraphicInputTrace): GraphicMediaKind {
+	return trace.declaration.type === 'media' ? trace.declaration.mediaKind : 'image';
+}
+
+/**
+ * The revision this media Graphic Input currently holds, for the picker to report on.
+ *
+ * Given rather than withheld because the picker is what asks the library about a
+ * pinned revision — a Missing Graphic Asset Reference, Unavailable Graphic Asset
+ * Content, and the retry for it. Told nothing, it reports nothing, and a staged
+ * revision that had since gone would read as a healthy value until it went on air.
+ *
+ * Asked of the stored value rather than assumed from the declaration, because a
+ * Graphic Input holds what was written to it even when that violates its type.
+ */
+function mediaValueOf(trace: GraphicInputTrace): GraphicAssetReference | undefined {
+	const value = fieldValue(trace);
+	return isMediaGraphicInputValue(value) ? value : undefined;
+}
+
 function selectSource(sourceKey: string, selectionId: number | null) {
 	void sessionStore.selectSource(props.eventId, props.screen.id, props.graphic.id, sourceKey, selectionId);
 }
@@ -282,9 +416,23 @@ function fieldValue(trace: GraphicInputTrace): GraphicInputValue {
 }
 
 // A new selection starts from the authoritative working values rather than from
-// whatever the previously selected graphic had typed into it.
+// whatever the previously selected graphic had typed into it — and a refusal the
+// library gave about that graphic's revision says nothing about this one's.
 watch(() => props.graphic.id, () => {
 	drafts.value = {};
+	mediaRefusals.value = {};
+	mediaSelectionFlights.supersedeAll();
+});
+
+/**
+ * A control that has gone speaks for nothing.
+ *
+ * Without this, a library answer settling after teardown still runs its side effects
+ * — staging a revision onto a Broadcast Graphic nobody is looking at, from a
+ * component that no longer exists.
+ */
+onBeforeUnmount(() => {
+	mediaSelectionFlights.supersedeAll();
 });
 
 /*
@@ -480,26 +628,49 @@ watch(
 					@update:model-value="commitNow(trace.declaration.key, String($event))"
 				/>
 				<!--
-					A media Graphic Input names a pinned Graphics Asset Library revision.
-					Choosing one is the asset library's own picker, which arrives with Media
-					Graphic Items; until then Live Control shows and clears the pinned
-					reference rather than pretending to browse the library.
+					A media Graphic Input names a pinned Graphics Asset Library revision, and
+					this is where an operator chooses one. The picker offers only the media
+					kind the Graphic Input declares — the reference index matches a
+					reference's kind against the asset's, so a revision of the other kind
+					would be accepted and then never published — and it is given the engines
+					open now so a clip's playback cost is legible before the choice.
 				-->
-				<div v-else class="flex items-center gap-2">
-					<span
-						class="min-w-0 flex-1 truncate text-xs text-muted"
-						:data-testid="`live-control-field-${trace.declaration.key}`"
-					>{{ displayValue(trace, draftValue(trace)) }}</span>
-					<UButton
-						size="xs"
-						variant="ghost"
-						color="neutral"
+				<div v-else class="space-y-2">
+					<div class="flex items-center gap-2">
+						<span
+							class="min-w-0 flex-1 truncate text-xs text-muted"
+							:data-testid="`live-control-field-${trace.declaration.key}`"
+						>{{ displayValue(trace, draftValue(trace)) }}</span>
+						<UButton
+							size="xs"
+							variant="ghost"
+							color="neutral"
+							:disabled="disconnected"
+							:data-testid="`live-control-clear-${trace.declaration.key}`"
+							@click="commitNow(trace.declaration.key, null)"
+						>
+							Clear
+						</UButton>
+					</div>
+					<GraphicsAssetFocusPicker
+						:model-value="mediaValueOf(trace)"
+						:clearable="false"
+						:event-id="eventId"
+						:field-label="trace.declaration.label"
+						:asset-kind="mediaKindOf(trace)"
+						video-target="chromium"
+						:open-output-targets="openOutputTargets"
 						:disabled="disconnected"
-						:data-testid="`live-control-clear-${trace.declaration.key}`"
-						@click="commitNow(trace.declaration.key, null)"
+						:data-testid="`live-control-media-${trace.declaration.key}`"
+						@select="(_asset, reference) => selectMedia(trace.declaration.key, reference)"
+					/>
+					<p
+						v-if="mediaRefusals[trace.declaration.key]"
+						class="text-xs text-error"
+						:data-testid="`live-control-media-refused-${trace.declaration.key}`"
 					>
-						Clear
-					</UButton>
+						{{ mediaRefusals[trace.declaration.key] }}
+					</p>
 				</div>
 
 				<p
