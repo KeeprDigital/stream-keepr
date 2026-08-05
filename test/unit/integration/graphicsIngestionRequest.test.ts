@@ -194,11 +194,14 @@ function initiationsInSource(file: string, text: string): Initiation[] {
  * `test/integration/**\/*.test.ts` — a suite in a subdirectory runs like any
  * other, and a scan that only read the top level would never see it.
  */
-function everyIntegrationInitiation() {
+function integrationSourceFiles() {
 	return readdirSync(integrationDirectory, { recursive: true, encoding: 'utf8' })
 		.filter(name => name.endsWith('.ts'))
-		.sort()
-		.flatMap(name => initiationsIn(join(integrationDirectory, name)));
+		.sort();
+}
+
+function everyIntegrationInitiation() {
+	return integrationSourceFiles().flatMap(name => initiationsIn(join(integrationDirectory, name)));
 }
 
 describe('the body of a Graphics Ingestion Operation initiation', () => {
@@ -306,8 +309,10 @@ describe('the scan', () => {
 
 	it('reads a suite in a subdirectory, because the suite glob does', () => {
 		// `vitest.integration.config.ts` collects `test/integration/**`, so a suite
-		// one directory down runs like any other.
-		expect(readdirSync(integrationDirectory, { recursive: true, encoding: 'utf8' }))
-			.toContain(join('fixtures', 'drain-request-body.ts'));
+		// one directory down runs like any other. This asserts against the scan's
+		// own file list rather than against a fresh `readdirSync` — the first
+		// version of this test called the API itself and so passed happily with
+		// the scan reading only the top level.
+		expect(integrationSourceFiles()).toContain(join('fixtures', 'drain-request-body.ts'));
 	});
 });
