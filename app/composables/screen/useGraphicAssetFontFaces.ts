@@ -4,6 +4,11 @@ import type { ScreenGraphicAssetReference } from '~~/shared/utils/graphicsAssetR
 import { graphicAssetFontFaceFamily } from '~~/shared/modules/graphics/typography';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
+interface FontSource {
+	family: string;
+	url: string;
+}
+
 /**
  * Loads the exact font Graphic Asset Revisions a graphics Screen Output paints,
  * as `FontFace`s registered under the family its typography resolves to.
@@ -40,10 +45,21 @@ export function useGraphicAssetFontFaces(
 	const fontsFailed = ref(false);
 	const loads = createGuardedSequence();
 	let loadedFontFaces: FontFace[] = [];
+	/** The families and URLs `loadedFontFaces` were loaded from, as comparable values. */
+	let loadedFamilies = '';
+	let loadedSources = '';
 
 	function discard(faces: readonly FontFace[]) {
 		for (const face of faces)
 			document.fonts.delete(face);
+	}
+
+	function familyKey(entries: readonly FontSource[]) {
+		return entries.map(({ family }) => family).sort().join('\0');
+	}
+
+	function sourceKey(entries: readonly FontSource[]) {
+		return entries.map(({ family, url }) => `${family}\0${url}`).sort().join('');
 	}
 
 	/**
@@ -51,7 +67,7 @@ export function useGraphicAssetFontFaces(
 	 * pinning one revision are one `FontFace`, and registering it twice would leave
 	 * the second copy in `document.fonts` after the first is discarded.
 	 */
-	const sources = computed(() => {
+	const sources = computed<FontSource[]>(() => {
 		const byFamily = new Map(toValue(references)
 			.filter(item => item.kind === 'font')
 			.map(({ reference }) => {
@@ -62,30 +78,56 @@ export function useGraphicAssetFontFaces(
 	});
 
 	/**
-	 * What a reload actually depends on, as one comparable value.
+	 * When it is worth asking whether anything needs loading, as one comparable value.
 	 *
 	 * Deliberately a string rather than the sources themselves. A host rebuilds its
 	 * whole indexed reference list on any configuration change — an operator
 	 * recolouring a Frame, a Take or an Update Graphic that changes the stack — so a
-	 * watch keyed on a fresh object fires for edits that name no font at all. A reload
-	 * discards every registered face and puts `fontsReady` back to false, which blanks
-	 * a settled Screen Output: precisely the failure the hiding above exists to
-	 * prevent. Hiding is the right answer for a font that has not loaded yet and the
-	 * wrong one for a font that loaded a minute ago and has not changed, so this has to
-	 * fire only when the answer would really differ.
+	 * watch keyed on a fresh object wakes for edits that name no font at all. Waking
+	 * mattered because the body used to discard every registered face and put
+	 * `fontsReady` back to false unconditionally, which blanks a settled Screen Output:
+	 * precisely the failure the hiding above exists to prevent. Hiding is the right
+	 * answer for a font that has not loaded yet and the wrong one for a font that
+	 * loaded a minute ago and has not changed.
+	 *
+	 * This is a filter and not the whole answer. It cannot be, because the settled flag
+	 * it leads with is a round trip: it leaves and returns to the same value, so the key
+	 * either side of an unsettled window is identical and the change through it is real
+	 * enough to fire on. What makes the window a no-op is the body comparing against the
+	 * faces actually registered.
 	 */
-	const loadKey = computed(() => [
-		toValue(contentUrlsSettled) ? 'settled' : 'unsettled',
+	const loadKey = computed(() =>
 		// Sorted, over one entry per family: which faces are required is a set, so
 		// reordering a stack is not a change. The URL is part of the key because the
 		// same family resolved through a different Screen Output Asset Capability is
 		// different bytes to fetch.
-		...sources.value.map(({ family, url }) => `${family}\0${url}`).sort(),
-	].join(''));
+		`${toValue(contentUrlsSettled) ? 'settled' : 'unsettled'}${sourceKey(sources.value)}`);
 
 	watch(loadKey, async () => {
 		const settled = toValue(contentUrlsSettled);
 		const pending = sources.value;
+
+		/*
+		 * An unsettled window is the absence of an answer rather than a different one.
+		 * `useScreenGraphicAssetContentUrls` clears its whole URL map and goes unsettled
+		 * whenever the Screen's *asset reference set* changes — for any asset kind, not
+		 * just fonts — so a Take that brings on an image drives this composable through
+		 * one of those windows with every font reference untouched. Both legs of it have
+		 * to be sat through: the faces required are still the faces loaded, and the map
+		 * comes back holding the same URLs it was cleared of.
+		 *
+		 * Families rather than URLs on the way down, because the URLs are exactly what
+		 * is missing there; the family is derived from the pinned revision and says what
+		 * is required without needing to know where it lives yet. On the way back the
+		 * full source key is comparable again, and it is compared against what is
+		 * actually registered rather than against the previous key — which is what makes
+		 * an unchanged round trip a no-op instead of a discard and a reload.
+		 */
+		if (!settled && familyKey(pending) === loadedFamilies)
+			return;
+		if (settled && fontsReady.value && sourceKey(pending) === loadedSources)
+			return;
+
 		const flight = loads.begin();
 		fontsReady.value = pending.length === 0;
 		fontsFailed.value = false;
@@ -93,6 +135,8 @@ export function useGraphicAssetFontFaces(
 			return;
 		discard(loadedFontFaces);
 		loadedFontFaces = [];
+		loadedFamilies = '';
+		loadedSources = '';
 		if (pending.length === 0 || !settled)
 			return;
 
@@ -126,6 +170,8 @@ export function useGraphicAssetFontFaces(
 				return;
 			}
 			loadedFontFaces = faces;
+			loadedFamilies = familyKey(pending);
+			loadedSources = sourceKey(pending);
 			fontsReady.value = true;
 		}
 		catch {

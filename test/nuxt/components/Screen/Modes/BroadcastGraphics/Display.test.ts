@@ -1,5 +1,6 @@
 import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { BroadcastGraphicConfig, GraphicChannelConfig, MediaGraphicItemConfig, ShapeGraphicItemConfig } from '~~/shared/types/graphics';
+import type { GraphicAssetId, GraphicAssetRevisionId } from '~~/shared/types/graphicsAsset';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
@@ -666,7 +667,37 @@ describe('broadcastGraphicsDisplay', () => {
 	 * loading rather than one host's - `useGraphicAssetFontFaces`, mounted by both.
 	 */
 	describe('library fonts', () => {
-		const fontReference = { assetId: 'font-asset' as never, revisionId: 'font-revision-2' as never };
+		const fontAssetId = 'font-asset' as GraphicAssetId;
+
+		/**
+		 * A `FontFace` stub that records every family registered, with a gate a test can
+		 * close so it can read the canvas while a load is in flight.
+		 */
+		function stubRecordingFontFace() {
+			const registered: string[] = [];
+			let hold = Promise.resolve();
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {
+					registered.push(family);
+				}
+
+				async load() {
+					await hold;
+					return this;
+				}
+			});
+			return {
+				registered,
+				/** Holds every load started from now until the returned release is called. */
+				gate() {
+					let release!: () => void;
+					hold = new Promise<void>((resolve) => {
+						release = resolve;
+					});
+					return () => release();
+				},
+			};
+		}
 
 		function withLibraryFont(
 			{ revisionId = 'font-revision-2', text = 'Player One' }: { revisionId?: string; text?: string } = {},
@@ -687,10 +718,45 @@ describe('broadcastGraphicsDisplay', () => {
 					text,
 					typography: {
 						...DEFAULT_GRAPHIC_TYPOGRAPHY,
-						font: { kind: 'asset', reference: { ...fontReference, revisionId: revisionId as never } },
+						font: {
+							kind: 'asset',
+							reference: { assetId: fontAssetId, revisionId: revisionId as GraphicAssetRevisionId },
+						},
 					},
 					overflowPolicy: 'ellipsis',
 					minFontSize: 24,
+				}],
+			};
+		}
+
+		/**
+		 * A second Broadcast Graphic pinning an image, so joining it to the stack moves
+		 * the Screen's asset reference set without naming a font.
+		 */
+		function withImage(): BroadcastGraphicConfig {
+			return {
+				id: 'sponsor',
+				name: 'Sponsor',
+				items: [{
+					type: 'media',
+					id: 'logo',
+					label: 'Sponsor',
+					visible: true,
+					anchor: 'top-left',
+					x: 40,
+					y: 60,
+					width: 480,
+					height: 270,
+					asset: {
+						assetId: 'image-asset' as GraphicAssetId,
+						revisionId: 'image-revision-1' as GraphicAssetRevisionId,
+					},
+					mediaKind: 'image',
+					fit: 'cover',
+					focalPosition: { horizontal: 0.5, vertical: 0.5 },
+					opacity: 1,
+					playbackRate: 1,
+					loop: false,
 				}],
 			};
 		}
@@ -822,14 +888,7 @@ describe('broadcastGraphicsDisplay', () => {
 			mockAssetCapability.value = 'capability-token';
 			mockScreen.value = screenWithStack([withLibraryFont()]);
 			mockOnAirGraphicIds.value = ['lower-third'];
-			const registered: string[] = [];
-			vi.stubGlobal('FontFace', class {
-				constructor(public family: string, public source: string) {
-					registered.push(family);
-				}
-
-				async load() { return this; }
-			});
+			const { registered } = stubRecordingFontFace();
 
 			const wrapper = await mountComponent();
 			await flushPromises();
@@ -859,6 +918,90 @@ describe('broadcastGraphicsDisplay', () => {
 		});
 
 		/**
+		 * The Take the issue names, and the one stack change that does not leave the
+		 * Screen's asset reference set alone: a second Broadcast Graphic joins carrying
+		 * an image. Content-URL resolution restarts for the new revision — clearing
+		 * every URL, font URLs included, and going unsettled for the round trip — while
+		 * no font reference changed at all. A settled output must sit through that
+		 * window with its faces intact rather than blanking for the duration.
+		 */
+		it('keeps a settled canvas visible when a Take brings on an asset of another kind', async () => {
+			mockAssetCapability.value = 'capability-token';
+			mockScreen.value = screenWithStack([withLibraryFont()]);
+			mockOnAirGraphicIds.value = ['lower-third'];
+			const { registered } = stubRecordingFontFace();
+
+			const wrapper = await mountComponent();
+			await flushPromises();
+			await nextTick();
+			await vi.waitFor(() => {
+				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
+			});
+			const settled = [...registered];
+			expect(settled).toEqual(['stream-keepr-graphic-asset-font-asset-font-revision-2']);
+			expect(capabilitySessionRequests).toHaveLength(1);
+
+			mockScreen.value = screenWithStack([withLibraryFont(), withImage()]);
+			await nextTick();
+
+			const canvas = wrapper.get('.graphics-compositor-canvas');
+			// Read at the moment the Take renders, which is when the blank would be on air.
+			expect(canvas.attributes('data-font-ready')).toBe('true');
+			expect((canvas.element as HTMLElement).style.visibility).toBe('');
+
+			await flushPromises();
+			await nextTick();
+			await flushPromises();
+
+			// A second capability exchange is the proof the window really opened: the URL
+			// map was cleared and refetched around this assertion.
+			expect(capabilitySessionRequests).toHaveLength(2);
+			expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
+			expect((wrapper.get('.graphics-compositor-canvas').element as HTMLElement).style.visibility).toBe('');
+			expect(registered).toEqual(settled);
+		});
+
+		/**
+		 * What recovering from a failed load now costs. Before #160 the watch woke for
+		 * every configuration edit, so any edit at all cleared `fontsFailed` and tried
+		 * again — an accident of the over-firing this issue removed, not a designed
+		 * retry. What remains is narrower and is pinned here: a change to the required
+		 * faces, or a re-run of content-URL resolution, still retries. A purely cosmetic
+		 * edit no longer does.
+		 */
+		it('retries a font that failed to load when content-URL resolution runs again', async () => {
+			mockAssetCapability.value = 'capability-token';
+			mockScreen.value = screenWithStack([withLibraryFont()]);
+			mockOnAirGraphicIds.value = ['lower-third'];
+			let failLoads = true;
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {}
+				async load() {
+					if (failLoads)
+						throw new Error('font revision content is unavailable');
+					return this;
+				}
+			});
+
+			const wrapper = await mountComponent();
+			await flushPromises();
+			await nextTick();
+			await vi.waitFor(() => {
+				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-error')).toBe('true');
+			});
+
+			failLoads = false;
+			mockScreen.value = screenWithStack([withLibraryFont(), withImage()]);
+
+			await vi.waitFor(() => {
+				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
+			});
+			const canvas = wrapper.get('.graphics-compositor-canvas');
+			expect(canvas.attributes('data-font-error')).toBe('false');
+			expect((canvas.element as HTMLElement).style.visibility).toBe('');
+		});
+
+		/**
 		 * The other half of the same rule: a change that really does change which faces
 		 * the canvas paints has to load them, and has to hide until they are ready. A
 		 * fix that simply stopped reloading would satisfy the test above and put a
@@ -871,18 +1014,7 @@ describe('broadcastGraphicsDisplay', () => {
 		 */
 		it('loads the new face and hides again when an authored font change pins a different revision', async () => {
 			mockIsPreview.value = true;
-			const registered: string[] = [];
-			let hold = Promise.resolve();
-			vi.stubGlobal('FontFace', class {
-				constructor(public family: string, public source: string) {
-					registered.push(family);
-				}
-
-				async load() {
-					await hold;
-					return this;
-				}
-			});
+			const { registered, gate } = stubRecordingFontFace();
 
 			const wrapper = await mountComponent();
 			await pushPreviewState([withLibraryFont()]);
@@ -890,10 +1022,7 @@ describe('broadcastGraphicsDisplay', () => {
 				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
 			});
 
-			let release!: () => void;
-			hold = new Promise<void>((resolve) => {
-				release = resolve;
-			});
+			const release = gate();
 			await pushPreviewState([withLibraryFont({ revisionId: 'font-revision-3' })]);
 
 			const canvas = wrapper.get('.graphics-compositor-canvas');
