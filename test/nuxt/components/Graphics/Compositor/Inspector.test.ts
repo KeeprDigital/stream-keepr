@@ -1085,6 +1085,28 @@ describe('graphicsCompositorInspector', () => {
 			expect(wrapper.find('[data-label="Font"] [data-testid="typography-font"]').exists()).toBe(true);
 		});
 
+		/**
+		 * The answer this control is not offered, refused rather than cast away (#199).
+		 *
+		 * The shared control's source union has three arms and this panel renders two, so
+		 * "same as base" arriving here would leave the author with no font control at all —
+		 * neither arm matches it. The option list above is what stops it being chosen; this
+		 * is what stops it being honoured if it arrives anyway, and the handler taking the
+		 * whole union is what makes the compiler ask for it.
+		 */
+		it('refuses “same as base”, which its font control cannot render', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([textItem]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			selectField(wrapper, 'typography-font-source')?.vm.$emit('update:modelValue', 'base');
+			await nextTick();
+
+			expect(wrapper.emitted('update:graphics')).toBeUndefined();
+			expect(wrapper.find('[data-label="Font"] [data-testid="typography-font"]').exists()).toBe(true);
+		});
+
 		/** The asset arm needs an exact revision, so nothing is written until one is pinned. */
 		it('writes no library font until the picker has pinned a revision', async () => {
 			const wrapper = await mountComponent({

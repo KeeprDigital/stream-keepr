@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { GraphicApplicationFontId } from '~~/shared/modules/graphics';
-import type { GraphicFontSelection } from '~~/shared/types/graphics';
+import type { GraphicFontSelection, GraphicFontSource } from '~~/shared/types/graphics';
 import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import { GRAPHIC_FONT_OPTIONS } from '~~/shared/modules/graphics';
 
@@ -32,7 +32,7 @@ const props = defineProps<{
 	 * until the picker pins one, and holds it where it can also clear it when the
 	 * selection moves and this control would otherwise describe the previous item.
 	 */
-	source: 'base' | GraphicFontSelection['kind'];
+	source: GraphicFontSource;
 	/** What the owner currently stores, which is absent while the arm is unstored. */
 	font: GraphicFontSelection | undefined;
 	/**
@@ -56,7 +56,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-	'update:source': [source: 'base' | GraphicFontSelection['kind']];
+	'update:source': [source: GraphicFontSource];
 	/** The author picked an application font. */
 	'application': [fontId: GraphicApplicationFontId];
 	/** The picker pinned one exact font Graphic Asset Revision. */
@@ -65,8 +65,8 @@ const emit = defineEmits<{
 	'clear': [];
 }>();
 
-const SOURCE_OPTIONS = computed(() => [
-	...(props.optional ? [{ label: 'Same as base', value: 'base' }] : []),
+const SOURCE_OPTIONS = computed<{ label: string; value: GraphicFontSource }[]>(() => [
+	...(props.optional ? [{ label: 'Same as base', value: 'base' as const }] : []),
 	{ label: 'Application font', value: 'application' },
 	{ label: 'Library font', value: 'asset' },
 ]);
@@ -89,7 +89,7 @@ const assetReference = computed(() =>
 			size="sm"
 			class="w-full"
 			:data-testid="`${testIdPrefix}-font-source`"
-			@update:model-value="emit('update:source', $event as 'base' | GraphicFontSelection['kind'])"
+			@update:model-value="emit('update:source', $event as GraphicFontSource)"
 		/>
 	</UFormField>
 
