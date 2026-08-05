@@ -161,15 +161,62 @@ could write any name into the ledger, and it is now the asking graphics author
 session where there is one and a plain `graphics-administrator` where there is
 not.
 
-## Still unauthenticated
+## Reading the library
 
-Guarding ingestion and lifecycle did not gate the library's read surface.
-`GET /api/graphics-assets`, `capacity`, `thumbnail`, `usage` and `retention`
-still answer an unauthenticated caller, so the installation's asset names,
-thumbnails, usage and capacity remain enumerable without a session. Tracked as
-issue #172; gating the listing route also needs the Library Workspace's
-server-side render to forward its cookie, which is what makes it more than a
-guard.
+The read surface is gated too, as of issue #172. Six routes require a graphics
+author session and answer `401` without one: `GET /api/graphics-assets`,
+`capacity`, an asset's `thumbnail`, `usage` and `retention`, and a Graphic Asset
+Revision's `status`. The last was not in #172's list — its sibling
+`revisions/:id/content` was gated with the ingestion routes and the status route
+beside it was missed, so a revision's bytes needed a session while the facts
+describing them did not.
+
+Before that, guarding ingestion and lifecycle had left the library **writable
+only by an authenticated author and readable by anybody who could reach the
+API** — an asymmetry nobody chose. `usage` was the sharpest of the five, because
+it names Screens and Events by id and so describes the shape of the installation
+rather than only the asset that was asked about.
+
+**Read the next paragraph before concluding anything about who can see the
+library.** The gate is authentication, not authorisation, and it is thinner than
+its name suggests.
+
+A graphics author session is minted on _any_ non-`/api/` HTML `GET`, at cookie
+path `/`, by `server/middleware/graphics-author-session.ts`. There is no login
+and no role: the installation has no accounts. So any browser that has loaded
+any page of this application — an operator's Screen page as much as the Library
+Workspace — carries a session and is admitted, and the guarded routes discard
+the author id they resolve rather than checking it against anything. What these
+routes now refuse is a caller that has never loaded a page: a bare `curl`, a
+scanner, a script with no cookie jar. **They do not partition the library
+between people.** That is consistent with the library being deliberately
+installation-wide — `CONTEXT.md` has graphics authors discovering and
+referencing every Graphic Asset — but it means the gate raises the cost of
+enumeration rather than preventing it for anyone determined.
+
+The eight-hour idle lifetime above now applies to reads as well. A surface left
+open overnight answers `401` on its next read and recovers by reloading, which
+mints a new session.
+
+### No server-side render is involved
+
+Issue #172 anticipated that gating the listing would also need the Library
+Workspace's server-side render to forward its cookie. **It does not arise.**
+`nuxt.config.ts` sets `ssr: false` with no per-route override, so the Workspace's
+`useFetch` never runs on the server; the browser holds the `httpOnly`,
+`sameSite=strict` cookie and sends it itself. The same is true of the asset
+picker and of the `<img>` thumbnails. Nothing forwards a cookie server-side, and
+a future change that introduces SSR would have to revisit this.
+
+### What is still unauthenticated
+
+Two administrator reads: `GET /api/admin/graphics-assets/capacity` and
+`GET /api/admin/graphics-assets/health`. Both carry an in-code note deferring
+authorization until auth exists, and there is no `/api/admin/**` middleware. The
+capacity one returns the same payload as the now-gated
+`GET /api/graphics-assets/capacity`, so the installation's storage occupancy is
+still readable without a session by that route. The administrator _mutations_
+are gated by the admin token and are unaffected.
 
 ## Platform limitation: DNS rebinding
 
