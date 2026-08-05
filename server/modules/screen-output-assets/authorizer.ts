@@ -115,10 +115,21 @@ export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
 		 * Chromium is asked nothing, because there is nothing it cannot play.
 		 *
 		 * The query narrows to revisions that record a compatibility at all and then
-		 * lets the predicate judge them. That narrowing is safe whatever the predicate
-		 * becomes: a revision whose facts record no compatibility has nothing for any
-		 * version of this rule to refuse, so the filter can only ever drop rows the
-		 * predicate would have cleared.
+		 * lets the predicate judge them. **That narrowing is safe for this predicate
+		 * and not for every predicate**, so it has to be revisited by anyone changing
+		 * `revisionRefusal`. It holds today because the rule refuses only a revision
+		 * recording `chromium-transparency`, and a revision recording nothing cannot
+		 * be that. It would not hold for the richer facts-based rule in the same
+		 * file — `graphicAssetTargetCompatibility` blocks whenever a clip has alpha
+		 * and its compatibility is anything *other* than `chromium-transparency`,
+		 * which includes recording none. Adopting that rule here while keeping this
+		 * filter would drop precisely the rows it wants to refuse, and an output would
+		 * render a `<video>` for bytes it is about to be refused — the fault this
+		 * forecast exists to prevent.
+		 *
+		 * Note also that the filter is a piece of the rule expressed in SQL on one
+		 * path only: `authorize` judges every row it reads. That is the drift the
+		 * shared predicate above otherwise removes, reduced rather than eliminated.
 		 */
 		async unplayableRevisions(input: {
 			screenId: number;
