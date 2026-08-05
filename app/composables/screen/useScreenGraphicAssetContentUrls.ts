@@ -51,16 +51,24 @@ export function useScreenGraphicAssetContentUrls(
 	 * copied into a Media Graphic Item's configuration, which the revision's facts
 	 * can outlive (#184).
 	 *
-	 * It is a snapshot taken when the session opened, and it can go stale in the
-	 * other direction. `resolutionKey` re-resolves on the *set* of pinned revisions,
-	 * and a revision id does not change when its technical facts do — so facts
-	 * corrected after this instant leave the output reporting a clip the server
-	 * would now serve. That direction did not exist before the forecast did, and it
-	 * is the safer of the two: a legible notice naming a real refusal code rather
-	 * than a blank rectangle, and it clears the next time this output opens a
-	 * session. Widening the key to notice a revision's facts would mean re-resolving
-	 * every URL when they change, which tears down and restarts every on-air video —
-	 * a worse cost than the one it would avoid.
+	 * It is a snapshot taken when the session opened. `resolutionKey` re-resolves on
+	 * the *set* of pinned revisions, so it cannot notice a revision's own facts
+	 * changing — but nothing changes them: `technical_facts` is written once at
+	 * publication and never updated, so a revision's facts are immutable and this
+	 * snapshot cannot currently go stale at all.
+	 *
+	 * The bound is worth stating anyway, because it is what makes a snapshot the right
+	 * shape here rather than an accident. Were revision facts ever to become mutable,
+	 * this would report a clip the server had since started serving — the safer
+	 * direction (a legible notice naming a real refusal code, not a blank rectangle),
+	 * clearing the next time this output opens a session. Widening the key to watch a
+	 * revision's facts would mean re-resolving every URL when they change, tearing
+	 * down and restarting every on-air video: a worse cost than the fault it avoids.
+	 *
+	 * The divergence this does guard against is reachable today and has nothing to do
+	 * with staleness — `videoCompatibility` is optional on the item type and in the
+	 * API schema, so a configuration's copy can be absent or simply wrong about the
+	 * revision it pins.
 	 */
 	const contentRefusals = shallowRef(new Map<string, ScreenOutputAssetRefusalCode>());
 	const contentUrlsSettled = ref(false);

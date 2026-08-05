@@ -77,13 +77,23 @@ export default defineEventHandler(async (event) => {
 	 * before this existed, which is a per-item blank rectangle at worst rather than
 	 * a Screen with no media at all.
 	 *
-	 * The forecast is a snapshot at session open. It is not re-read when a revision's
-	 * technical facts change, and nothing in the client's resolution key notices that
-	 * they have — a revision id does not change when its facts do. So facts corrected
-	 * after this instant leave the output painting a notice for a clip the server
-	 * would now serve. That is the opposite staleness to the one #184 fixed, and the
-	 * safer of the two: a legible reason rather than a blank rectangle, cleared by
-	 * the next session the output opens.
+	 * The forecast is a snapshot at session open, and nothing re-reads it: the client's
+	 * resolution key is composed of the Screen, the capability and the references, so
+	 * it cannot notice a revision's facts changing underneath it.
+	 *
+	 * No path in this codebase changes them — `technical_facts` is written once when a
+	 * revision is published and never updated — so that staleness is not currently
+	 * reachable. It is stated because the *bound* is what makes this safe to snapshot,
+	 * not because the scenario exists: were revision facts ever to become mutable, an
+	 * output would report a clip the server would by then serve, cleared only by the
+	 * next session it opens. Reaching for that direction is the safer failure — a
+	 * legible reason rather than a blank rectangle — but it would be a new one.
+	 *
+	 * What the reconciliation actually guards is a different divergence, and one that
+	 * _is_ reachable: `videoCompatibility` is optional on the Media Graphic Item type
+	 * and in the API schema, and an authoring path can write none at all. A
+	 * configuration's copy can therefore be absent or wrong independently of the
+	 * revision it pins, which is why the authoritative answer wins over it (#184).
 	 */
 	const unplayableRevisions = await authorizer.unplayableRevisions({
 		screenId,
