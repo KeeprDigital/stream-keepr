@@ -126,10 +126,26 @@
 					`/api/screen-output/screens/${screenId}/asset-capability-session`,
 					{ method: 'POST', headers: { authorization: `Bearer ${assetCapability}` } },
 				);
-				if (bootstrap.status !== 204) {
+				if (bootstrap.status !== 200) {
 					return {
 						code: 'restricted-video-session-refused',
 						detail: `The capability session answered ${bootstrap.status} rather than opening.`,
+					};
+				}
+
+				// And it names the clip it is about to refuse, so the output reports the
+				// reason rather than drawing a blank rectangle for bytes it never gets
+				// (#184). Asserted in a real Safari because that is the engine the
+				// forecast is for: everything below proves the refusal itself, and this
+				// proves the output was told about it in time to say so.
+				const session = await bootstrap.json().catch(() => ({}));
+				const forecast = (session?.unplayableRevisions ?? []).find(
+					entry => entry?.assetId === assetId && entry?.revisionId === revisionId,
+				);
+				if (forecast?.code !== 'vp9-alpha-chromium-required') {
+					return {
+						code: 'restricted-video-refusal-unforecast',
+						detail: 'The capability session did not name the restricted revision it refuses.',
 					};
 				}
 

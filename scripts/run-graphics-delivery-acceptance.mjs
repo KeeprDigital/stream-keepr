@@ -206,7 +206,7 @@ await runAcceptanceHarness({
 				{ method: 'POST', headers: capabilityHeaders(scenario.capability) },
 			);
 			const sessionCookie = bootstrap.headers.getSetCookie().map(value => value.split(';', 1)[0])[0];
-			if (bootstrap.status !== 204 || !sessionCookie) {
+			if (bootstrap.status !== 200 || !sessionCookie) {
 				record([{
 					code: 'harness-precondition-unmet',
 					detail: { route: sessionRoute, actual: bootstrap.status },

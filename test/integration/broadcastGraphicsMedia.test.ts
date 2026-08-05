@@ -1119,10 +1119,23 @@ describe('media Graphic Input values on air', () => {
 			return fetch(`/api/screen-output/screens/${screenId}/asset-capability-session`, {
 				method: 'POST',
 				headers: { 'authorization': `Bearer ${capability}`, 'user-agent': userAgent },
-			}).then(response => response.status);
+			});
 		}
-		await expect(bootstrap(SAFARI_USER_AGENT)).resolves.toBe(204);
-		await expect(bootstrap(CHROMIUM_USER_AGENT)).resolves.toBe(204);
+		await expect(bootstrap(SAFARI_USER_AGENT).then(response => response.status)).resolves.toBe(200);
+		await expect(bootstrap(CHROMIUM_USER_AGENT).then(response => response.status)).resolves.toBe(200);
+
+		// A media Graphic Input value the Live Session accepted is published like any
+		// other reference, so the session forecasts its refusal like any other (#184).
+		await expect((await bootstrap(SAFARI_USER_AGENT)).json()).resolves.toMatchObject({
+			unplayableRevisions: [{
+				assetId: restricted.assetId,
+				revisionId: restricted.revisionId,
+				code: 'vp9-alpha-chromium-required',
+			}],
+		});
+		await expect((await bootstrap(CHROMIUM_USER_AGENT)).json()).resolves.toMatchObject({
+			unplayableRevisions: [],
+		});
 
 		// The image the same graphic pins keeps playing out on the engine that lost
 		// everything before.

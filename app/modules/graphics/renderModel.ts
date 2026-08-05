@@ -274,6 +274,35 @@ export interface GraphicsCompositionRenderModelInput {
 	 * nothing else, which is what an unresolvable reference should look like.
 	 */
 	graphicAssetContentUrl?: (reference: GraphicAssetReference) => string;
+	/**
+	 * Why this output's own resolver expects to be refused one pinned revision.
+	 *
+	 * Injected for the same reason the URL resolver is: the answer belongs to the
+	 * authoritative side rather than to any pure model. A Media Graphic Item records
+	 * its pinned revision's video target compatibility beside its reference, and
+	 * that recorded value is what the model would otherwise be believing — but it is
+	 * a copy, and a copy the revision's own technical facts can outlive. Where the
+	 * two disagree the refusal is right and the copy is stale, so this reconciles
+	 * them (#184). An absent resolver leaves the recorded value untouched, which is
+	 * what an editor preview and every non-Screen host want.
+	 */
+	graphicAssetContentRefusal?: (
+		reference: GraphicAssetReference,
+	) => GraphicMediaIncompatibilityCode | undefined;
+}
+
+/**
+ * How one output reaches the content it composes, and what it has been told it
+ * cannot reach.
+ *
+ * The pair travels together because both answer for the same pinned reference and
+ * both come from the same place — the Screen Output's own capability-backed
+ * resolver — so a composition that can resolve a URL can always ask why one was
+ * refused.
+ */
+export interface GraphicAssetContentResolution {
+	url: (reference: GraphicAssetReference) => string;
+	refusal?: (reference: GraphicAssetReference) => GraphicMediaIncompatibilityCode | undefined;
 }
 
 /** The measurement bounds a `shrink` Text Overflow Policy fits text between. */
@@ -357,6 +386,10 @@ export interface GraphicMediaRenderDescriptor {
 	/**
 	 * The pinned revision's own target compatibility, so an output can report a
 	 * VP9-alpha video it cannot play rather than showing a blank rectangle.
+	 *
+	 * Reconciled rather than copied from the item: an authoritative refusal for this
+	 * exact revision overrides a recorded value that contradicts it, so a Screen
+	 * Output never renders an element for bytes it is about to be refused (#184).
 	 */
 	videoCompatibility?: 'all-supported' | 'chromium-transparency';
 	/**
@@ -375,10 +408,12 @@ export interface GraphicMediaRenderDescriptor {
 	incompatibilityNotice?: GraphicMediaIncompatibilityNoticeDescriptor;
 }
 
+/** The same stable code the Screen Output asset routes refuse a revision with. */
+export type GraphicMediaIncompatibilityCode = 'vp9-alpha-chromium-required';
+
 /** The rendered reason an output shows instead of a clip it cannot play. */
 export interface GraphicMediaIncompatibilityNoticeDescriptor {
-	/** The same stable code the Screen Output asset routes refuse the revision with. */
-	code: 'vp9-alpha-chromium-required';
+	code: GraphicMediaIncompatibilityCode;
 	text: string;
 	style: CSSProperties;
 }
@@ -1364,11 +1399,12 @@ function stackedChildClipSize(
 function mediaIncompatibilityNotice(
 	output: ScreenOutput,
 	item: MediaGraphicItemConfig,
+	videoCompatibility: MediaGraphicItemConfig['videoCompatibility'],
 ): GraphicMediaIncompatibilityNoticeDescriptor | undefined {
 	if (
 		output === 'key'
 		|| item.mediaKind !== 'silent-video'
-		|| item.videoCompatibility !== 'chromium-transparency'
+		|| videoCompatibility !== 'chromium-transparency'
 	) {
 		return undefined;
 	}
@@ -1403,15 +1439,39 @@ function mediaIncompatibilityNotice(
  * is what decides which part of a `cover` fit survives the crop. In the Key
  * Output the element is filtered to white at its own alpha; see
  * `KEY_MEDIA_ALPHA_TO_WHITE`.
+ *
+ * The compatibility it carries is reconciled rather than copied. The item records
+ * its pinned revision's own video target compatibility, and the write path keeps
+ * that copy equal to the revision's technical facts — but only at the moment it is
+ * written, and only for configurations this system accepts. Where the output's own
+ * resolver has been told the authoritative side refuses the revision, that refusal
+ * is the revision's facts speaking and the recorded copy is stale, so the refusal
+ * wins. Reconciling here rather than in the component is what keeps the answer in
+ * one place: the notice and the withheld element are then two readings of one
+ * value instead of two independent decisions over one rule (#184).
+ *
+ * The refusal can itself be stale, in the opposite direction. It is a snapshot the
+ * Screen Output took when it opened its capability session, so facts corrected
+ * since then make this withhold an element the server would now serve. Preferring
+ * it anyway is deliberate: a notice naming a real refusal code is legible and
+ * self-correcting on the next session, while trusting the configuration is what
+ * produced a silent blank rectangle. See `useScreenGraphicAssetContentUrls` for
+ * why the client does not watch a revision's facts for changes.
  */
 function mediaDescriptor(
 	output: ScreenOutput,
 	item: MediaGraphicItemConfig,
-	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
+	assetContent: GraphicAssetContentResolution | undefined,
 ): GraphicMediaRenderDescriptor {
+	const refusal = item.asset && assetContent?.refusal
+		? assetContent.refusal(item.asset)
+		: undefined;
+	const videoCompatibility = refusal === 'vp9-alpha-chromium-required'
+		? 'chromium-transparency'
+		: item.videoCompatibility;
 	return {
 		mediaKind: item.mediaKind,
-		src: item.asset && resolveContentUrl ? resolveContentUrl(item.asset) : '',
+		src: item.asset && assetContent ? assetContent.url(item.asset) : '',
 		style: {
 			display: 'block',
 			width: '100%',
@@ -1423,8 +1483,8 @@ function mediaDescriptor(
 		},
 		loop: item.loop,
 		playbackRate: item.playbackRate,
-		videoCompatibility: item.videoCompatibility,
-		incompatibilityNotice: mediaIncompatibilityNotice(output, item),
+		videoCompatibility,
+		incompatibilityNotice: mediaIncompatibilityNotice(output, item, videoCompatibility),
 	};
 }
 
@@ -1432,7 +1492,7 @@ function mediaItemDescriptor(
 	output: ScreenOutput,
 	item: MediaGraphicItemConfig,
 	placement: CSSProperties,
-	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
+	assetContent: GraphicAssetContentResolution | undefined,
 	clipSize: ShapeGeometrySize | undefined,
 ): GraphicItemRenderDescriptor {
 	return {
@@ -1440,7 +1500,7 @@ function mediaItemDescriptor(
 		label: item.label,
 		kind: 'media',
 		style: { ...placement, ...mediaClip(item, clipSize) },
-		media: mediaDescriptor(output, item, resolveContentUrl),
+		media: mediaDescriptor(output, item, assetContent),
 	};
 }
 
@@ -1475,7 +1535,7 @@ function childDescriptor(
 	graphicId: string,
 	group: GraphicGroupItemConfig,
 	child: GraphicGroupChildConfig,
-	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
+	assetContent: GraphicAssetContentResolution | undefined,
 	inputs: GraphicItemContentContext,
 	placement: CSSProperties,
 ): GraphicItemRenderDescriptor {
@@ -1485,7 +1545,7 @@ function childDescriptor(
 	// its Graphic Group's local style default either: there is nothing on it for
 	// that default to fill in.
 	if (child.type === 'media')
-		return mediaItemDescriptor(output, child, placement, resolveContentUrl, stackedChildClipSize(group, child));
+		return mediaItemDescriptor(output, child, placement, assetContent, stackedChildClipSize(group, child));
 
 	const surfaceStyle = resolveChildSurfaceStyle(group, child);
 
@@ -1599,7 +1659,7 @@ function itemDescriptor(
 	output: ScreenOutput,
 	graphicId: string,
 	item: GraphicItemConfig,
-	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
+	assetContent: GraphicAssetContentResolution | undefined,
 	inputs: GraphicItemContentContext,
 	context: GraphicsItemAnimationContext,
 ): GraphicItemRenderDescriptor {
@@ -1612,7 +1672,7 @@ function itemDescriptor(
 			item,
 			rotation,
 			values => canvasPlacement(item, { x: 0, y: 0 }, values),
-			placement => paintedItemDescriptor(output, graphicId, item, resolveContentUrl, inputs, context, placement),
+			placement => paintedItemDescriptor(output, graphicId, item, assetContent, inputs, context, placement),
 		);
 	}
 
@@ -1660,7 +1720,7 @@ function itemDescriptor(
 				output,
 				graphicId,
 				item,
-				resolveContentUrl,
+				assetContent,
 				context.outgoing!.inputs,
 				halfContext(context.outgoing!.motionOf),
 				half(context.outgoing!.motionOf(item, context.staggerOffsets, context.parent)),
@@ -1669,7 +1729,7 @@ function itemDescriptor(
 				output,
 				graphicId,
 				item,
-				resolveContentUrl,
+				assetContent,
 				inputs,
 				halfContext(context.motionOf),
 				half(motion),
@@ -1682,7 +1742,7 @@ function paintedItemDescriptor(
 	output: ScreenOutput,
 	graphicId: string,
 	item: GraphicItemConfig,
-	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
+	assetContent: GraphicAssetContentResolution | undefined,
 	inputs: GraphicItemContentContext,
 	context: GraphicsItemAnimationContext,
 	placement: CSSProperties,
@@ -1694,7 +1754,7 @@ function paintedItemDescriptor(
 
 	// A top-level Graphic Item always occupies its authored rectangle.
 	if (item.type === 'media')
-		return mediaItemDescriptor(output, item, placement, resolveContentUrl, item);
+		return mediaItemDescriptor(output, item, placement, assetContent, item);
 
 	if (item.type === 'shape') {
 		return {
@@ -1733,7 +1793,7 @@ function paintedItemDescriptor(
 		surface: surfaceDescriptor(output, scope, item, item.geometry, item.surfaceStyle),
 		children: item.children
 			.filter(child => child.visible)
-			.map(child => groupChildDescriptor(output, graphicId, item, child, resolveContentUrl, inputs, context)),
+			.map(child => groupChildDescriptor(output, graphicId, item, child, assetContent, inputs, context)),
 	};
 }
 
@@ -1749,7 +1809,7 @@ function groupChildDescriptor(
 	graphicId: string,
 	group: GraphicGroupItemConfig,
 	child: GraphicGroupChildConfig,
-	resolveContentUrl: ((reference: GraphicAssetReference) => string) | undefined,
+	assetContent: GraphicAssetContentResolution | undefined,
 	inputs: GraphicItemContentContext,
 	context: GraphicsItemAnimationContext,
 ): GraphicItemRenderDescriptor {
@@ -1776,7 +1836,7 @@ function groupChildDescriptor(
 			child,
 			rotation,
 			placementOf,
-			placement => childDescriptor(output, graphicId, group, child, resolveContentUrl, inputs, placement),
+			placement => childDescriptor(output, graphicId, group, child, assetContent, inputs, placement),
 		);
 	}
 
@@ -1797,11 +1857,11 @@ function groupChildDescriptor(
 				graphicId,
 				group,
 				child,
-				resolveContentUrl,
+				assetContent,
 				context.outgoing!.inputs,
 				half(context.outgoing!.motionOf(child, staggerOffsets, group)),
 			),
-			incoming: childDescriptor(output, graphicId, group, child, resolveContentUrl, inputs, half(motion)),
+			incoming: childDescriptor(output, graphicId, group, child, assetContent, inputs, half(motion)),
 		},
 	};
 }
@@ -2164,6 +2224,12 @@ export function resolveGraphicsCompositionRenderModel(
 
 	const isLayer = input.canvasRole === 'layer';
 
+	// One value for both halves of "what can this output load, and what has it been
+	// told it cannot", assembled once so every Media Graphic Item reads the same pair.
+	const assetContent: GraphicAssetContentResolution | undefined = input.graphicAssetContentUrl
+		? { url: input.graphicAssetContentUrl, refusal: input.graphicAssetContentRefusal }
+		: undefined;
+
 	return {
 		output: input.output,
 		canvasRole: isLayer ? 'layer' : 'screen-output',
@@ -2255,7 +2321,7 @@ export function resolveGraphicsCompositionRenderModel(
 					input.output,
 					graphic.id,
 					item,
-					input.graphicAssetContentUrl,
+					assetContent,
 					values,
 					{
 						...context(item),

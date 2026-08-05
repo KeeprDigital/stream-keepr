@@ -40,6 +40,7 @@ const videoCompatibilityBlocked = computed(() =>
 	));
 const {
 	contentUrl: graphicAssetContentUrl,
+	contentRefusal: graphicAssetContentRefusal,
 	contentUrlsSettled,
 } = useScreenGraphicAssetContentUrls(
 	graphicAssetReferences,
@@ -111,6 +112,10 @@ const compositorRenderModel = computed(() => resolveFeatureMatchOverlayComposito
 	safeAreaGuides: showSafeAreaGuides.value,
 	selectedTarget: selectedCompositorTarget.value,
 	graphicAssetContentUrl,
+	// The same resolver's other half: what it has been told this output will be
+	// refused, so a clip whose recorded compatibility disagrees with its revision's
+	// facts reports the reason rather than drawing a blank rectangle (#184).
+	graphicAssetContentRefusal,
 }));
 
 const canvasStyle = computed(() => renderModel.value.canvasStyle);
