@@ -321,6 +321,33 @@ export function graphicStyleChangeKey(itemId: string | null, slot: GraphicStyleS
  * it, and it is dropped. That is what lets an owner whose stored value has gone back to
  * matching its entry end up pinning nothing at all rather than pinning a whole property
  * group on the strength of provenance the document itself contradicts.
+ *
+ * ## Why an over-broad pin from before #162 is not migrated
+ *
+ * "Keep mine" used to record the whole property group, and this preserves every key of
+ * one that does — correctly, because each of those keys genuinely is a recorded
+ * override the stored value honours. So a document written by the old behaviour keeps
+ * its eight-key typography pin, and the over-pinning #162 was filed about outlives the
+ * fix to it. Nothing reconciles that, deliberately (#167):
+ *
+ * - **The document does not record what a migration would need to know.** An
+ *   over-broad pin and a deliberate whole-group pin are the same eight keys in storage.
+ *   The only signal that could separate them is "this override agrees with what the
+ *   entry resolves to" — and the comment in {@link applyGraphicStyleSet} below says why
+ *   that reading is wrong: a pin the republished preset happens to land on is still the
+ *   author's, and dropping it would let the next republish take the property away. A
+ *   migration on that signal would destroy exactly the pins the narrowed rule exists to
+ *   preserve, and losing an author's real override is a worse failure than keeping one
+ *   they did not mean to make.
+ * - **An author's next edit already narrows it.** Not their next "Keep mine" — that
+ *   comes back through here and preserves the pin. `recaptureGraphicStyleOverrides`
+ *   re-derives each slot's overrides from what the composition deviates in and discards
+ *   the recorded set, and `applyGraphicStyleSet` leaves the composition on the published
+ *   revision, so that function's guard is already satisfied when the pin is written. The
+ *   first property edit after it collapses the eight keys to the author's real deviation.
+ * - **No such document reaches production.** Spec #60 settles that the database is wiped
+ *   before ship and names data migration as out of scope, so the population a migration
+ *   would serve is empty by construction.
  */
 function heldGraphicStyleOverrides(
 	overrides: unknown,

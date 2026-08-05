@@ -973,6 +973,47 @@ describe('recaptureGraphicStyleOverrides', () => {
 		expect(changes[0]!.next).toEqual({ type: 'solid', color: '#00ff88' });
 	});
 
+	/**
+	 * What reconciles an over-broad pin written before "Keep mine" was narrowed (#167).
+	 *
+	 * A composition written by the pre-#162 behaviour carries the whole property group
+	 * as its override, and `applyGraphicStyleSet` will preserve it forever: every one of
+	 * those keys genuinely is a recorded override the stored value honours, so
+	 * `heldGraphicStyleOverrides` is right to keep it and a later "Keep mine" narrows
+	 * nothing. This is what does — recapture re-derives each slot's overrides from what
+	 * the composition deviates in and discards the recorded set entirely, so the first
+	 * property edit after the fix collapses an eight-key pin to the author's real
+	 * deviation. It is why the over-pinning needs no migration to reach.
+	 */
+	it('narrows an over-broad pin down to what the composition actually deviates in', () => {
+		const resolution = resolveGraphicStyleSet(styleSet());
+		const inStep = inheritedTypography();
+		// What the pre-#162 "Keep mine" recorded: the whole property group, every key of
+		// it agreeing with the preset the composition is in step with.
+		const overPinned = graphic([textItem({
+			typography: inStep,
+			styleRefs: {
+				typography: {
+					entryId: 'heading',
+					overrides: Object.fromEntries(
+						GRAPHIC_STYLE_SLOT_OWNED_KEYS.typography.map(key =>
+							[key, inStep[key as keyof typeof inStep]],
+						),
+					),
+				},
+			},
+		})]);
+
+		const recaptured = recaptureGraphicStyleOverrides(editFontSize(overPinned, 30), resolution, LINKED);
+
+		expect(headlineOf(recaptured).styleRefs?.typography)
+			.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+		// And the seven keys that stopped being pinned are reachable again, which is the
+		// whole point of narrowing them.
+		expect(graphicStyleUpdateChanges(recaptured, resolveGraphicStyleSet(styleSet('#00ff88'))).map(change => change.slot))
+			.toEqual(['typography']);
+	});
+
 	it('keeps a Graphic Fill reference the Style Set can no longer honour', () => {
 		const edited = paintFill(boundFill(), '#00ff88');
 
