@@ -43,7 +43,8 @@ describe('asking the Graphics Asset Library about one exact revision', () => {
 		mockApiFetch.mockRejectedValue(new Error('Network error'));
 
 		await expect(graphicAssetReferenceStatusOrUnavailable(REFERENCE))
-			.resolves.toEqual({ outcome: 'unavailable', retryable: true });
+			.resolves
+			.toEqual({ outcome: 'unavailable', retryable: true });
 	});
 
 	it('lets the failure through when the caller can tell why it failed', async () => {
@@ -59,6 +60,7 @@ describe('asking the Graphics Asset Library about one exact revision', () => {
 		mockApiFetch.mockResolvedValue({ outcome: 'missing' });
 
 		await expect(graphicAssetReferenceStatusOrUnavailable(REFERENCE))
-			.resolves.toEqual({ outcome: 'missing' });
+			.resolves
+			.toEqual({ outcome: 'missing' });
 	});
 });
