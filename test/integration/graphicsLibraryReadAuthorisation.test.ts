@@ -208,6 +208,59 @@ describe('the Graphics Asset Library read surface', () => {
 	});
 
 	/**
+	 * What the guard actually admits, which is wider than its name suggests.
+	 *
+	 * Worth pinning because #178 mounts the Library's own picker on Live
+	 * Control, an operator surface rather than an authoring one, and the
+	 * obvious reading of "requires a graphics author session" is that an
+	 * operator would be refused.
+	 *
+	 * They are not, and nothing here is special-cased to make that true. There
+	 * is no login and no role in this codebase: `server/middleware/
+	 * graphics-author-session.ts` mints a session on *any* non-`/api/` HTML
+	 * `GET`, at cookie path `/`. A browser that has only ever opened an
+	 * operator's Screen page therefore carries one exactly as an author's
+	 * browser does, and `requireGraphicsAuthorSession` — which checks only that
+	 * a session exists, and whose `authorId` these routes discard — admits it.
+	 *
+	 * So the guard this suite proves is "some browser has loaded this
+	 * application", not "this caller is an author". That is the honest reading
+	 * of what #90 built and what #172 extends to the read surface, and it is
+	 * what makes the two branches compatible. Whether an operator *should*
+	 * carry an authoring identity is a design question this suite does not
+	 * answer and must not prejudge.
+	 */
+	describe('a browser that has only ever loaded an operator surface', () => {
+		it('carries a session that reads the library', async () => {
+			const operatorPage = await fetch(`/event/${eventId}/screens`, {
+				headers: { accept: 'text/html' },
+			});
+			expect(operatorPage.status).toBe(200);
+			const cookie = operatorPage.headers.get('set-cookie')?.split(';', 1)[0];
+			expect(cookie).toMatch(/^stream_keepr_graphics_author_session=/);
+
+			// The two routes #178's picker reaches: the listing behind
+			// `GraphicsAssetFocusPicker`, and the revision status it resolves a
+			// selection against.
+			await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+				headers: { cookie: cookie! },
+				query: { search: SUBJECT_NAME },
+			})).resolves.toMatchObject([{ id: subject.assetId }]);
+			const revisionStatus = await fetch(
+				`/api/graphics-assets/${subject.assetId}/revisions/${subject.revisionId}/status`,
+				{ headers: { cookie: cookie! } },
+			);
+			expect(revisionStatus.status).toBe(200);
+			// And the thumbnail the picker renders one of per asset.
+			const thumbnail = await fetch(
+				`/api/graphics-assets/${subject.assetId}/thumbnail`,
+				{ headers: { cookie: cookie! } },
+			);
+			expect(thumbnail.status).toBe(200);
+		});
+	});
+
+	/**
 	 * The path the browser walks, in place of the SSR forwarding the ticket
 	 * anticipated. A deep link to the Workspace — not a visit to `/` first — is
 	 * what has to mint the session, because that is what an author who
