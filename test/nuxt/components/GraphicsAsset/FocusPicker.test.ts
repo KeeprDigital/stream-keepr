@@ -326,6 +326,48 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		expect(wrapper.find('[data-testid="open-output-incompatible-asset-alpha-video"]').exists()).toBe(false);
 	});
 
+	/**
+	 * A host that shows and clears the pinned reference itself still wants the
+	 * picker's report on it. Withholding the Clear is what lets it have both without
+	 * offering the operator two of them.
+	 */
+	it('withholds its own Clear for a host that owns one, while still reporting the pinned revision', async () => {
+		mockApiFetch.mockResolvedValue({ outcome: 'missing' });
+		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
+		const wrapper = mount(FocusPicker, {
+			props: {
+				modelValue: {
+					assetId: 'missing-asset' as GraphicAssetId,
+					revisionId: 'missing-revision' as GraphicAssetRevisionId,
+				},
+				eventId: 7,
+				fieldLabel: 'Badge',
+				clearable: false,
+			},
+			global: {
+				stubs: {
+					UModal: passthroughStub,
+					UButton: buttonStub,
+					UInput: passthroughStub,
+					UBadge: passthroughStub,
+					UAlert: defineComponent({
+						props: ['title', 'description'],
+						template: '<div>{{ title }} {{ description }}</div>',
+					}),
+					UIcon: passthroughStub,
+				},
+			},
+		});
+		await flushPromises();
+
+		expect(wrapper.find('[data-testid="clear-graphic-asset"]').exists()).toBe(false);
+		expect(wrapper.text()).toContain('Missing Graphic Asset Reference');
+
+		// The default is still to offer it, for the hosts that have no Clear of their own.
+		await wrapper.setProps({ clearable: true });
+		expect(wrapper.find('[data-testid="clear-graphic-asset"]').exists()).toBe(true);
+	});
+
 	it('refreshes its exact-revision status when unavailable content is retried', async () => {
 		mockApiFetch.mockResolvedValue({ outcome: 'unavailable', retryable: true });
 		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');

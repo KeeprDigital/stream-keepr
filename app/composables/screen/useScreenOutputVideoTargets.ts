@@ -18,6 +18,15 @@ import { graphicsVideoTargetForUserAgent } from '~~/shared/utils/graphicAssetTar
  * An output reporting no user agent contributes nothing. Guessing an engine for it
  * would put a compatibility claim in front of an operator that no connected browser
  * stands behind, and the honest answer to "what is open" is the outputs that said.
+ *
+ * ## It lags a crash, and lags it in the safe direction
+ *
+ * Presence is left cleanly when an output navigates away, but an output that crashes
+ * or loses its network lingers for the transport's connection-state timeout — so this
+ * can name an engine that stopped watching a minute or two ago. That direction is the
+ * survivable one: it over-reports what is watching, so a warning outlives its output
+ * rather than an output going unwarned about. The reverse would let a clip reach an
+ * engine nobody said was there, which is the discovery-on-air this exists to prevent.
  */
 export function useScreenOutputVideoTargets(
 	screenId: MaybeRefOrGetter<number>,

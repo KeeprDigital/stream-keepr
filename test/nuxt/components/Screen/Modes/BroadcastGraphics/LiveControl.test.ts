@@ -135,6 +135,7 @@ const GraphicsAssetFocusPickerStub = defineComponent({
 		videoTarget: { type: String, default: 'other' },
 		openOutputTargets: { type: Array, default: () => [] },
 		disabled: { type: Boolean, default: false },
+		clearable: { type: Boolean, default: true },
 	},
 	emits: ['update:modelValue', 'select'],
 	setup(props, { emit }) {
@@ -655,6 +656,26 @@ describe('broadcastGraphicsLiveControl', () => {
 				.toContain('Missing Graphic Asset Reference');
 		});
 
+		/**
+		 * A lapsed graphics author session is not the library saying anything about the
+		 * revision, and it is the one failure retrying cannot fix. Calling it
+		 * temporarily unavailable content would state the wrong fact and prescribe the
+		 * one action that provably cannot work.
+		 */
+		it('names a lapsed graphics author session rather than blaming the revision’s bytes', async () => {
+			mockApiFetch.mockRejectedValue(Object.assign(new Error('Unauthorized'), { statusCode: 401 }));
+			const wrapper = await mountComponent(graphic([BADGE]));
+
+			await wrapper.get('[data-testid="live-control-media-badge"]').trigger('click');
+			await flushPromises();
+
+			const refusal = wrapper.get('[data-testid="live-control-media-refused-badge"]').text();
+			expect(refusal).toContain('graphics author session has lapsed');
+			expect(refusal).toContain('Reload the page');
+			expect(refusal).not.toMatch(/temporarily unavailable|Try again/);
+			expect(mockSetInput).not.toHaveBeenCalled();
+		});
+
 		it('writes nothing while the revision’s content is only temporarily unavailable', async () => {
 			mockApiFetch.mockResolvedValue({ outcome: 'unavailable', retryable: true });
 			const wrapper = await mountComponent(graphic([BADGE]));
@@ -699,7 +720,35 @@ describe('broadcastGraphicsLiveControl', () => {
 			expect(wrapper.getComponent(GraphicsAssetFocusPickerStub).props('videoTarget')).toBe('chromium');
 		});
 
-		it('clears a media value without asking the library about anything', async () => {
+		/**
+		 * The picker reports on the revision it is given — Missing Graphic Asset
+		 * Reference, Unavailable Graphic Asset Content, and the retry for it. Told
+		 * nothing, it reports nothing, and a staged revision that has since gone would
+		 * sit there reading as a healthy value until the operator took it on air.
+		 */
+		it('tells the picker which revision is staged, so its status is reported', async () => {
+			mockLiveState.value = {
+				playout: {},
+				inputs: {
+					'lower-third': { working: { badge: PINNED }, accepted: {}, acceptedRevision: 0 },
+				},
+			};
+
+			const wrapper = await mountComponent(graphic([BADGE]));
+
+			expect(wrapper.getComponent(GraphicsAssetFocusPickerStub).props('modelValue')).toEqual(PINNED);
+			// Live Control shows and clears the staged value itself, so the picker is
+			// asked not to offer a second Clear beside it.
+			expect(wrapper.getComponent(GraphicsAssetFocusPickerStub).props('clearable')).toBe(false);
+		});
+
+		it('tells the picker nothing is staged once the value is cleared', async () => {
+			const wrapper = await mountComponent(graphic([BADGE]));
+
+			expect(wrapper.getComponent(GraphicsAssetFocusPickerStub).props('modelValue')).toBeUndefined();
+		});
+
+		it('clears a media value without asking the library to approve it', async () => {
 			mockLiveState.value = {
 				playout: {},
 				inputs: {
@@ -724,6 +773,46 @@ describe('broadcastGraphicsLiveControl', () => {
 				PINNED,
 			);
 			expect(mockApiFetch).not.toHaveBeenCalled();
+		});
+
+		/**
+		 * The window the library's answer arrives in is the window an operator moves
+		 * on in. Every write here names a graphic, so an answer that outlives the
+		 * graphic it was asked for would stage a revision nobody chose for the graphic
+		 * it lands on — and its Field Ownership claim would describe that other
+		 * graphic's value, which is the unconditional overwrite the claim exists to
+		 * prevent.
+		 */
+		it('writes nothing when the operator moves to another Broadcast Graphic while the library is still answering', async () => {
+			let answer!: (status: unknown) => void;
+			mockApiFetch.mockReturnValueOnce(new Promise((resolve) => {
+				answer = resolve;
+			}));
+			const wrapper = await mountComponent(graphic([BADGE]));
+
+			await wrapper.get('[data-testid="live-control-media-badge"]').trigger('click');
+			// The next Broadcast Graphic declares the same Graphic Input key, so a write
+			// that escaped would land on it rather than fail to find a field.
+			await wrapper.setProps({ graphic: { ...graphic([BADGE]), id: 'sting', name: 'Sting' } });
+			answer({ outcome: 'available', lifecycleState: 'active', kind: 'image' });
+			await flushPromises();
+
+			expect(mockSetInput).not.toHaveBeenCalled();
+		});
+
+		it('writes nothing when Live Control is torn down while the library is still answering', async () => {
+			let answer!: (status: unknown) => void;
+			mockApiFetch.mockReturnValueOnce(new Promise((resolve) => {
+				answer = resolve;
+			}));
+			const wrapper = await mountComponent(graphic([BADGE]));
+
+			await wrapper.get('[data-testid="live-control-media-badge"]').trigger('click');
+			wrapper.unmount();
+			answer({ outcome: 'available', lifecycleState: 'active', kind: 'image' });
+			await flushPromises();
+
+			expect(mockSetInput).not.toHaveBeenCalled();
 		});
 
 		it('carries no refusal across to the next Broadcast Graphic an operator selects', async () => {

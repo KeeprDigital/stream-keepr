@@ -13,10 +13,15 @@ import type {
 import type { Screen } from '~/types';
 import {
 	graphicInputTextValue,
+	isMediaGraphicInputValue,
 	isOperatorSelectedGraphicSource,
 	resolveGraphicInputBindings,
 } from '~~/shared/modules/graphics';
 import { graphicAssetRevisionStatusPath } from '~~/shared/utils/graphicsAssetReferences';
+import {
+	GRAPHICS_AUTHOR_SESSION_LAPSED_MESSAGE,
+	graphicsAuthorSessionLapsed,
+} from '~/composables/useGraphicsAuthorSession';
 import { createKeyedGuardedSequence } from '~/utils/guardedSequence';
 
 /**
@@ -242,7 +247,23 @@ function selectionIdOf(value: unknown): number | null {
 
 /** Why the last revision an operator chose for one media Graphic Input was not written. */
 const mediaRefusals = ref<Record<string, string>>({});
+
+/**
+ * One flight per Broadcast Graphic and Graphic Input, superseded whenever this
+ * control stops speaking for the graphic that started it.
+ *
+ * Keyed by both because the key alone is not the identity of the thing being
+ * written: two Broadcast Graphics may declare the same Graphic Input key, and every
+ * write here names a graphic. An answer that outlived its graphic would stage a
+ * revision nobody chose for the graphic now on screen, carrying a Field Ownership
+ * claim describing that other graphic's value — which is applied unconditionally,
+ * because it is a claim about something the operator never saw.
+ */
 const mediaSelectionFlights = createKeyedGuardedSequence<string>();
+
+function mediaSelectionKey(inputKey: string): string {
+	return `${props.graphic.id}:${inputKey}`;
+}
 
 /**
  * How the Graphics Asset Library's refusal of one revision reads to an operator.
@@ -269,23 +290,36 @@ const MEDIA_REFUSALS: Record<'missing' | 'unavailable', string> = {
  *
  * The pinned revision's compatibility facts are deliberately not sent. They are the
  * authoritative side's to record at the moment of acceptance, from the library rather
- * than from a browser, which is what makes an authored default and a live choice
- * carry the same facts by the same route (#96).
+ * than from a browser — the same route a media Graphic Input's authored default would
+ * take, which is how #96 settled that a value carries the same facts however it was
+ * chosen. Nothing authors such a default today, so that symmetry is currently a
+ * property of the mechanism rather than of two surfaces an operator can compare.
  */
 async function selectMedia(key: string, reference: GraphicAssetReference) {
-	const flight = mediaSelectionFlights.begin(key);
+	const flight = mediaSelectionFlights.begin(mediaSelectionKey(key));
 	let status: GraphicAssetReferenceStatus;
 	try {
 		status = await $fetch<GraphicAssetReferenceStatus>(graphicAssetRevisionStatusPath(reference));
 	}
-	catch {
-		status = { outcome: 'unavailable', retryable: true };
+	catch (caught) {
+		if (flight.stale)
+			return;
+
+		// A lapsed graphics author session is not the library saying anything about
+		// this revision, and it is the one failure retrying cannot fix. Reported in
+		// the terms the session seam already owns, rather than as bytes that will
+		// come back — the fallback is deliberately not `describeFailure`'s, whose
+		// non-lapse arm is the raw transport error.
+		refuseMedia(key, graphicsAuthorSessionLapsed(caught)
+			? GRAPHICS_AUTHOR_SESSION_LAPSED_MESSAGE
+			: MEDIA_REFUSALS.unavailable);
+		return;
 	}
 	if (flight.stale)
 		return;
 
 	if (status.outcome !== 'available') {
-		mediaRefusals.value = { ...mediaRefusals.value, [key]: MEDIA_REFUSALS[status.outcome] };
+		refuseMedia(key, MEDIA_REFUSALS[status.outcome]);
 		return;
 	}
 
@@ -294,9 +328,29 @@ async function selectMedia(key: string, reference: GraphicAssetReference) {
 	commitNow(key, { assetId: reference.assetId, revisionId: reference.revisionId });
 }
 
+function refuseMedia(key: string, reason: string) {
+	mediaRefusals.value = { ...mediaRefusals.value, [key]: reason };
+}
+
 /** The media kind a Graphic Input declares, which is the only kind its picker offers. */
 function mediaKindOf(trace: GraphicInputTrace): GraphicMediaKind {
 	return trace.declaration.type === 'media' ? trace.declaration.mediaKind : 'image';
+}
+
+/**
+ * The revision this media Graphic Input currently holds, for the picker to report on.
+ *
+ * Given rather than withheld because the picker is what asks the library about a
+ * pinned revision — a Missing Graphic Asset Reference, Unavailable Graphic Asset
+ * Content, and the retry for it. Told nothing, it reports nothing, and a staged
+ * revision that had since gone would read as a healthy value until it went on air.
+ *
+ * Asked of the stored value rather than assumed from the declaration, because a
+ * Graphic Input holds what was written to it even when that violates its type.
+ */
+function mediaValueOf(trace: GraphicInputTrace): GraphicAssetReference | undefined {
+	const value = fieldValue(trace);
+	return isMediaGraphicInputValue(value) ? value : undefined;
 }
 
 function selectSource(sourceKey: string, selectionId: number | null) {
@@ -367,6 +421,18 @@ function fieldValue(trace: GraphicInputTrace): GraphicInputValue {
 watch(() => props.graphic.id, () => {
 	drafts.value = {};
 	mediaRefusals.value = {};
+	mediaSelectionFlights.supersedeAll();
+});
+
+/**
+ * A control that has gone speaks for nothing.
+ *
+ * Without this, a library answer settling after teardown still runs its side effects
+ * — staging a revision onto a Broadcast Graphic nobody is looking at, from a
+ * component that no longer exists.
+ */
+onBeforeUnmount(() => {
+	mediaSelectionFlights.supersedeAll();
 });
 
 /*
@@ -587,6 +653,8 @@ watch(
 						</UButton>
 					</div>
 					<GraphicsAssetFocusPicker
+						:model-value="mediaValueOf(trace)"
+						:clearable="false"
 						:event-id="eventId"
 						:field-label="trace.declaration.label"
 						:asset-kind="mediaKindOf(trace)"

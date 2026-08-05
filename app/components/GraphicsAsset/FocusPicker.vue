@@ -32,11 +32,20 @@ const props = withDefaults(defineProps<{
 	openOutputTargets?: GraphicsVideoTarget[];
 	/** Withhold every affordance, without hiding what is already pinned. */
 	disabled?: boolean;
+	/**
+	 * Whether to offer Clear beside Choose.
+	 *
+	 * A host that shows and clears the pinned reference itself passes `false`, so it
+	 * can still hand the picker the reference — and get its Missing, Unavailable, and
+	 * retry reporting on it — without offering the operator two Clears.
+	 */
+	clearable?: boolean;
 }>(), {
 	assetKind: 'image',
 	videoTarget: 'other',
 	openOutputTargets: () => [],
 	disabled: false,
+	clearable: true,
 });
 
 const emit = defineEmits<{
@@ -141,7 +150,8 @@ function selectAsset(asset: GraphicAsset) {
 				{{ modelValue ? 'Change Graphic Asset' : 'Choose Graphic Asset' }}
 			</UButton>
 			<UButton
-				v-if="modelValue"
+				v-if="modelValue && clearable"
+				data-testid="clear-graphic-asset"
 				color="neutral"
 				variant="ghost"
 				icon="i-lucide-x"
