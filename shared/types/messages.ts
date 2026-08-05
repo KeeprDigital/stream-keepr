@@ -63,9 +63,12 @@ export interface BaseMessage {
  * Ably enforces a maximum size per published message and the figure is a property
  * of the account's package: its published limits table gives **64 KiB** for Free
  * and Standard and 256 KiB for Pro and Enterprise
- * (https://ably.com/docs/pricing/limits). Nothing in this repository records which
- * package this deployment is on — the only Ably configuration it holds is an API
- * key — so this is the documented floor rather than a figure anyone confirmed.
+ * (https://ably.com/docs/pricing/limits).
+ *
+ * **This deployment's account is on the Free package** — confirmed by its owner on
+ * 2026-08-05, recorded here because the repository holds only an API key and cannot
+ * observe the package itself. So 64 KiB is this account's actual ceiling and not
+ * merely the documented floor, and every bound measured against it is exact.
  *
  * Designing against the larger number would make every bound here true only while
  * the account stays on a paid package, which is not a property any code can check.
