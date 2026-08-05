@@ -3,30 +3,64 @@
  * repository's real Drizzle migrations.
  *
  * The Graphics Asset Library keeps its transactional reachability proofs,
- * conditional transitions, and batch atomicity in SQL, so module tests need
- * genuine SQLite semantics rather than a hand-written catalogue double. This
- * helper gives module-level tests the same statement, batch, and cascade
- * behaviour the deployed D1 catalogue relies on.
+ * conditional transitions, and batch atomicity in SQL, and the Broadcast Graphics
+ * Live Session keeps its reference-index sequence guard there too — so a test of
+ * either needs genuine SQLite semantics rather than a hand-written double. This
+ * helper gives them the same statement, batch, and cascade behaviour the deployed
+ * D1 catalogue relies on.
+ *
+ * It is consumed from the unit suite and from the Nuxt suite, which is why the
+ * migration directory is resolved defensively below: only one of the two gives this
+ * module a `file:` URL.
+ *
+ * What it is *not* is a substitute for D1 itself. Two known differences are handled
+ * elsewhere rather than here: D1's hundred-bound-parameter ceiling, which libSQL
+ * does not enforce and `miniflare-d1.ts` exists to test against, and anything about
+ * D1's storage or replication. `raw()` below is the seam where the two are most
+ * easily confused, and it carries its own note.
  */
 
 import type { Client, InStatement, ResultSet } from '@libsql/client';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@libsql/client';
 
-const migrationsDirectory = fileURLToPath(
-	new URL('../../server/db/migrations/sqlite', import.meta.url),
-);
+/**
+ * Resolved from this file where that is possible, and from the repository root
+ * where it is not: Vitest's Nuxt environment does not give this module a `file:`
+ * URL, and every Vitest run has the repository root as its working directory.
+ */
+function resolveMigrationsDirectory(): string {
+	try {
+		return fileURLToPath(new URL('../../server/db/migrations/sqlite', import.meta.url));
+	}
+	catch (failure) {
+		// Only the one condition this fallback exists for. Anything else here is a
+		// real breakage, and swallowing it into a path guess would turn a broken
+		// harness into a confusing "no migrations found" much further along.
+		if ((failure as NodeJS.ErrnoException)?.code !== 'ERR_INVALID_URL_SCHEME')
+			throw failure;
+		return resolve(process.cwd(), 'server/db/migrations/sqlite');
+	}
+}
+
+const migrationsDirectory = resolveMigrationsDirectory();
 
 interface PreparedStatement {
 	sql: string;
 	args: unknown[];
 }
 
+/**
+ * Cast whole rather than by field: `@libsql/client` resolves to a different entry
+ * point under the app project's conditions than under the server's, and only one of
+ * the two `InStatement` unions has an indexable `args`.
+ */
 function toStatement(prepared: PreparedStatement): InStatement {
-	return { sql: prepared.sql, args: prepared.args as InStatement['args'] };
+	return { sql: prepared.sql, args: prepared.args } as InStatement;
 }
 
 function plainRows<T>(result: ResultSet): T[] {
@@ -76,7 +110,16 @@ function createPreparedStatement(client: Client, sql: string, args: unknown[]) {
 		},
 		async raw<T>() {
 			const result = await client.execute(toStatement({ sql, args }));
-			return result.rows.map(row => [...row]) as T[];
+			// By position, which is what D1's own `raw` answers and what Drizzle's D1
+			// driver reads — it routes every `select()` and `.returning()` through here.
+			// A libSQL row is not iterable, so it cannot simply be spread; it exposes a
+			// numeric index for every column but registers a *name* only for the first
+			// column bearing it. Rebuilding by name therefore collapses `a.id, b.id` to
+			// the left table's value on both — silently, and on most joins in this
+			// schema, since `id`, `created_at` and `updated_at` are near-universal.
+			return result.rows.map(
+				row => Array.from({ length: result.columns.length }, (_, index) => row[index] ?? null),
+			) as T[];
 		},
 	};
 	return statement;
