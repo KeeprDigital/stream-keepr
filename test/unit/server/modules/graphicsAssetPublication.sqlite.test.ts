@@ -227,7 +227,7 @@ describe('an ordinary ingestion publication that holds its claim', () => {
 
 	it('spends the write candidates of a reuse that holds its claim', async () => {
 		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
-		const reused = await publishedAsset(catalogue, 'upload-before-reuse', 'reused-asset');
+		const reused = await publishedAsset(catalogue, 'upload-before-reuse', graphicAssetId('reused-asset'));
 		const operation = await claimedOperation(catalogue, 'reuse-held-claim', {
 			duplicateContentPolicy: 'reuse',
 		});
@@ -347,7 +347,7 @@ describe('an ordinary ingestion publication that lost its claim', () => {
 	 */
 	it('does not report a reuse it lost the claim to as its own success', async () => {
 		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
-		const reused = await publishedAsset(catalogue, 'upload-before-lost-reuse', 'reused-asset');
+		const reused = await publishedAsset(catalogue, 'upload-before-lost-reuse', graphicAssetId('reused-asset'));
 		const operation = await claimedOperation(catalogue, 'reuse-lost-claim', {
 			duplicateContentPolicy: 'reuse',
 		});
@@ -359,11 +359,11 @@ describe('an ordinary ingestion publication that lost its claim', () => {
 			operation.updatedAt,
 		);
 
-		await catalogue.reuseGraphicAsset({
+		await expect(catalogue.reuseGraphicAsset({
 			operation,
 			reusable: reused,
 			publishedAt: new Date(6_000).toISOString(),
-		}).catch(() => {});
+		})).rejects.toThrow(/lost its claim/i);
 
 		// The candidates stand for canonical bytes this attempt wrote, and only the
 		// attempt that actually published has the right to spend them.
