@@ -10,11 +10,48 @@ function referenceKey(reference: GraphicAssetReference): string {
 	return `${reference.assetId}\0${reference.revisionId}`;
 }
 
+/** The refusal codes a Screen Output asset resolution request can answer with. */
+type ScreenOutputAssetRefusalCode = 'vp9-alpha-chromium-required';
+
+/**
+ * The refusals the capability session forecast for this browser, keyed exactly as
+ * the URLs are.
+ *
+ * Read defensively rather than parsed against a schema: this is advisory, and an
+ * output that cannot read it must still resolve every URL it was going to resolve.
+ * A refusal it fails to learn about costs the item its notice; a session it
+ * refuses to open costs the whole output its media.
+ */
+function unplayableRevisions(body: unknown): Map<string, ScreenOutputAssetRefusalCode> {
+	const listed = (body as { unplayableRevisions?: unknown } | null)?.unplayableRevisions;
+	if (!Array.isArray(listed))
+		return new Map();
+	const refusals = new Map<string, ScreenOutputAssetRefusalCode>();
+	for (const entry of listed as Array<Partial<GraphicAssetReference> & { code?: unknown }>) {
+		if (entry?.assetId && entry.revisionId && entry.code === 'vp9-alpha-chromium-required')
+			refusals.set(referenceKey(entry as GraphicAssetReference), entry.code);
+	}
+	return refusals;
+}
+
 export function useScreenGraphicAssetContentUrls(
 	references: MaybeRefOrGetter<readonly GraphicAssetReference[]>,
 ) {
 	const { assetCapability, isPreview, screen } = useScreenContext();
 	const contentUrls = shallowRef(new Map<string, string>());
+	/**
+	 * Which of those URLs the authoritative side has already said it will refuse
+	 * this browser, and why.
+	 *
+	 * The session is what answers it, because the session is the one exchange this
+	 * output already makes and the answer depends on the same two things it carries:
+	 * which revisions the Screen publishes, and which engine is asking. Compatibility
+	 * is still *decided* per resolution request against the requested revision's own
+	 * facts — this only stops the client having to guess that decision from a value
+	 * copied into a Media Graphic Item's configuration, which the revision's facts
+	 * can outlive (#184).
+	 */
+	const contentRefusals = shallowRef(new Map<string, ScreenOutputAssetRefusalCode>());
 	const contentUrlsSettled = ref(false);
 	const loads = createGuardedSequence();
 
@@ -49,6 +86,7 @@ export function useScreenGraphicAssetContentUrls(
 			const flight = loads.begin();
 			contentUrlsSettled.value = false;
 			contentUrls.value = new Map();
+			contentRefusals.value = new Map();
 			if (preview || !screenId) {
 				contentUrlsSettled.value = true;
 				return;
@@ -73,6 +111,10 @@ export function useScreenGraphicAssetContentUrls(
 				contentUrlsSettled.value = true;
 				return;
 			}
+			const forecast = unplayableRevisions(await response.json().catch(() => undefined));
+			if (flight.stale)
+				return;
+			contentRefusals.value = forecast;
 			contentUrls.value = new Map(Array.from(uniqueReferences, ([key, reference]) => [
 				key,
 				screenOutputGraphicAssetRevisionContentPath(screenId, reference),
@@ -92,5 +134,19 @@ export function useScreenGraphicAssetContentUrls(
 		return contentUrls.value.get(referenceKey(reference)) ?? '';
 	}
 
-	return { contentUrl, contentUrlsSettled: readonly(contentUrlsSettled) };
+	/**
+	 * Why this output expects to be refused one exact revision, if it does.
+	 *
+	 * An editor preview resolves content as an author rather than through a
+	 * capability, so it is never forecast a refusal and never reports one.
+	 */
+	function contentRefusal(
+		reference: GraphicAssetReference,
+	): ScreenOutputAssetRefusalCode | undefined {
+		if (isPreview?.value === true)
+			return undefined;
+		return contentRefusals.value.get(referenceKey(reference));
+	}
+
+	return { contentUrl, contentRefusal, contentUrlsSettled: readonly(contentUrlsSettled) };
 }

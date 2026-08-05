@@ -1211,6 +1211,61 @@ describe('graphicsCompositionRenderModel', () => {
 			expect(noticeFor('overlay', 'all-supported')).toBeUndefined();
 		});
 
+		/**
+		 * A recorded compatibility the authoritative side disagrees with (#184).
+		 *
+		 * The item says every target can play its clip; the Screen Output's own
+		 * resolver, which asked the authoritative side, says this one is refused. The
+		 * refusal wins, because it is the revision's own recorded facts answering
+		 * rather than a value copied into a configuration that has since gone stale —
+		 * and because believing the configuration is what left the output drawing a
+		 * `<video>` for bytes it was about to be refused.
+		 */
+		function divergentMedia(output: 'overlay' | 'fill' | 'key') {
+			return resolveGraphicsCompositionRenderModel({
+				output,
+				graphics: [graphic('a', [media('sting', {
+					mediaKind: 'silent-video',
+					videoCompatibility: 'all-supported',
+				})])],
+				graphicAssetContentUrl: contentUrl,
+				graphicAssetContentRefusal: () => 'vp9-alpha-chromium-required' as const,
+				...CANVAS,
+			}).graphics[0]?.items[0]?.media;
+		}
+
+		it('takes the authoritative refusal over a recorded compatibility that contradicts it', () => {
+			const descriptor = divergentMedia('overlay');
+
+			expect(descriptor?.incompatibilityNotice?.code).toBe('vp9-alpha-chromium-required');
+			// The component withholds the element on this value, so reconciling it is what
+			// stops the output rendering a clip the authoritative side will not deliver.
+			expect(descriptor?.videoCompatibility).toBe('chromium-transparency');
+		});
+
+		it('still withholds the reason from the Key Output when the refusal is what found it', () => {
+			const descriptor = divergentMedia('key');
+
+			expect(descriptor?.incompatibilityNotice).toBeUndefined();
+			expect(descriptor?.videoCompatibility).toBe('chromium-transparency');
+		});
+
+		it('leaves a clip the authoritative side names no objection to exactly as authored', () => {
+			const descriptor = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('a', [media('sting', {
+					mediaKind: 'silent-video',
+					videoCompatibility: 'all-supported',
+				})])],
+				graphicAssetContentUrl: contentUrl,
+				graphicAssetContentRefusal: () => undefined,
+				...CANVAS,
+			}).graphics[0]?.items[0]?.media;
+
+			expect(descriptor?.incompatibilityNotice).toBeUndefined();
+			expect(descriptor?.videoCompatibility).toBe('all-supported');
+		});
+
 		it('fades the reason with the item, so a transparent item never paints a solid box', () => {
 			// The notice is a sibling of the media element, not a child, so it does not
 			// inherit the element's opacity — an item authored transparent would paint an

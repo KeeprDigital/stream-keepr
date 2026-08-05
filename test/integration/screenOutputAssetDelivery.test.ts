@@ -169,9 +169,11 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 			`/api/screen-output/screens/${screenId}/asset-capability-session`,
 			{ method: 'POST', headers: authorizedHeaders() },
 		);
-		expect(session.status).toBe(204);
+		expect(session.status).toBe(200);
 		expect(session.headers.get('cache-control')).toBe('private, no-store');
-		expect(await session.text()).toBe('');
+		// Nothing this Screen publishes is unplayable here, and the session says so
+		// rather than staying silent about a question the output has to ask (#184).
+		await expect(session.json()).resolves.toEqual({ unplayableRevisions: [] });
 		const setCookie = session.headers.get('set-cookie');
 		expect(setCookie).toContain(
 			`${screenOutputAssetCapabilityCookieName(screenId)}=${capability}`,
@@ -321,11 +323,24 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		// too (#98).
 		for (const userAgent of [SAFARI, IOS_CHROMIUM, CHROMIUM]) {
 			const session = await bootstrap(userAgent);
-			expect(session.status).toBe(204);
+			expect(session.status).toBe(200);
 			expect(session.headers.get('set-cookie')).toContain(
 				screenOutputAssetCapabilityCookieName(screenId),
 			);
 		}
+
+		// The session also forecasts which of the Screen's published revisions it will
+		// refuse this engine, naming them with the same code the content route answers
+		// with. It is what stops an output rendering a `<video>` for bytes it is about
+		// to be refused — a blank rectangle with nothing to read off it (#184).
+		for (const userAgent of [SAFARI, IOS_CHROMIUM]) {
+			await expect((await bootstrap(userAgent)).json()).resolves.toMatchObject({
+				unplayableRevisions: [{ assetId, revisionId, code: 'vp9-alpha-chromium-required' }],
+			});
+		}
+		await expect((await bootstrap(CHROMIUM)).json()).resolves.toMatchObject({
+			unplayableRevisions: [],
+		});
 
 		// The refusal now names one revision, to the engine that cannot decode it.
 		for (const userAgent of [SAFARI, IOS_CHROMIUM]) {

@@ -1,3 +1,4 @@
+import type { GraphicsVideoTarget } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import type { ScreenOutputAssetAuthorizationInput } from '.';
 import {
 	GRAPHIC_ASSET_REFERENCING_SCREEN_MODES,
@@ -66,6 +67,57 @@ export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
 			return row
 				? { outcome: 'authorized' as const }
 				: { outcome: 'missing' as const };
+		},
+
+		/**
+		 * Which of the Screen's published revisions this engine will be refused.
+		 *
+		 * A forecast, not a gate. `authorizeCapability` above still says nothing about
+		 * playback compatibility and the session still opens for every engine, because
+		 * the fault #98 closed was a Screen-wide *refusal* — one clip nobody could play
+		 * costing an output every other asset it publishes. Naming the same clips
+		 * without refusing anything costs nothing and closes the opposite fault: an
+		 * output that renders a `<video>` for bytes it is about to be refused, because
+		 * the only thing it had to go on was the compatibility copied into a Media
+		 * Graphic Item's configuration — a copy the revision's own technical facts can
+		 * outlive (#184).
+		 *
+		 * Read from those facts rather than from any authored value, exactly as
+		 * `authorize` reads them, so the forecast and the refusal cannot disagree.
+		 * Chromium is asked nothing, because there is nothing it cannot play.
+		 */
+		async unplayableRevisions(input: {
+			screenId: number;
+			capabilityDigest: string;
+			actualVideoTarget: GraphicsVideoTarget;
+		}) {
+			if (input.actualVideoTarget === 'chromium')
+				return [];
+			const rows = await database.prepare(`
+				SELECT DISTINCT
+					reference.asset_id AS assetId,
+					reference.revision_id AS revisionId
+				FROM screens screen
+				JOIN graphic_asset_references reference
+					ON reference.owner_kind = 'screen'
+					AND reference.owner_id = CAST(screen.id AS TEXT)
+				JOIN graphic_asset_revisions revision
+					ON revision.id = reference.revision_id
+					AND revision.asset_id = reference.asset_id
+				WHERE screen.id = ?
+					AND (${MODE_SLOT_SCOPE})
+					AND screen.asset_capability_digest = ?
+					AND json_extract(revision.technical_facts, '$.targetCompatibility') = 'chromium-transparency'
+			`).bind(
+				input.screenId,
+				...MODE_SLOT_SCOPE_BINDINGS,
+				input.capabilityDigest,
+			).all<{ assetId: string; revisionId: string }>();
+			return (rows.results ?? []).map(row => ({
+				assetId: row.assetId,
+				revisionId: row.revisionId,
+				code: 'vp9-alpha-chromium-required' as const,
+			}));
 		},
 
 		/**
