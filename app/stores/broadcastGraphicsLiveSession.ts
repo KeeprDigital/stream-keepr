@@ -450,36 +450,61 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		refusal.value = null;
 		pending.value.add(pendingKey);
 
+		async function deliverTo(sessionId: number): Promise<BroadcastGraphicsLiveSessionResponse> {
+			return cacheCommandResult(await repository.sendCommand(eventId, screenId, sessionId, command));
+		}
+
+		/**
+		 * Read one delivery's failure for the domain refusal it carries, and turn it
+		 * into the refusal to raise.
+		 *
+		 * A domain refusal is the server saying this command is wrong about the show —
+		 * a stale acceptance, an overtaken field, a required value that is missing.
+		 * Restating it would only be refused again, and for a field-scoped conflict
+		 * that second delivery would arrive after the refresh and race it. So these are
+		 * handled and surfaced, never retried.
+		 *
+		 * Written once and asked of *both* deliveries. A restatement is a delivery of
+		 * the same command against a newer epoch, so it can be refused for every reason
+		 * the first can — and the refusal it meets is the one the operator is owed.
+		 * Reading only the first left a restatement's refusal reported as its transport
+		 * line under "Playout action failed", and skipped the handler that marks a
+		 * superseded field and refreshes it (#230).
+		 */
+		async function refusalRaisedBy(
+			failure: unknown,
+		): Promise<BroadcastGraphicsCommandRejection | undefined> {
+			const refused = broadcastGraphicsCommandRefusal(failure);
+			if (!refused)
+				return undefined;
+
+			await onRejection?.(refused.code);
+
+			// Recorded after the handler, because a handler may reload the session and a
+			// reload clears this — the record has to outlive the recovery it triggers, or
+			// the operator is told a Take failed and never why.
+			refusal.value = refused;
+
+			// Raised as the refusal it is rather than as the transport failure that
+			// carried it. What reaches `error` is whatever `Error.message` says, and on a
+			// `$fetch` failure that is `[POST] "…": 409 Conflict` — a status line in place
+			// of the sentence naming the Graphic Asset Reference the operator has to
+			// repair (#230).
+			return new BroadcastGraphicsCommandRejection(refused.code, refused.message);
+		}
+
 		try {
 			return await executeAction(
 				async () => {
 					const session = sessions.value.get(screenId) ?? await repository.getSession(eventId, screenId);
 
 					try {
-						return cacheCommandResult(await repository.sendCommand(eventId, screenId, session.id, command));
+						return await deliverTo(session.id);
 					}
 					catch (failure) {
-						// A domain refusal is the server saying this command is wrong about the
-						// show — a stale acceptance, an overtaken field, a required value that
-						// is missing. Restating it would only be refused again, and for a
-						// field-scoped conflict that second delivery would arrive after the
-						// refresh and race it. So these are handled and surfaced, never retried.
-						const refused = broadcastGraphicsCommandRefusal(failure);
-						if (refused) {
-							await onRejection?.(refused.code);
-
-							// Recorded after the handler, because a handler may reload the session
-							// and a reload clears this — the record has to outlive the recovery it
-							// triggers, or the operator is told a Take failed and never why.
-							refusal.value = refused;
-
-							// Re-raised as the refusal it is rather than as the transport failure
-							// that carried it. What reaches `error` is whatever `Error.message`
-							// says, and on a `$fetch` failure that is `[POST] "…": 409 Conflict` —
-							// a status line in place of the sentence naming the Graphic Asset
-							// Reference the operator has to repair (#230).
-							throw new BroadcastGraphicsCommandRejection(refused.code, refused.message);
-						}
+						const refused = await refusalRaisedBy(failure);
+						if (refused)
+							throw refused;
 
 						// A bare conflict is what an epoch this client no longer shares looks
 						// like: the Screen may have left and re-entered Broadcast Graphics
@@ -492,9 +517,13 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 
 						const current = await repository.getSession(eventId, screenId);
 						cacheSession(current);
-						return cacheCommandResult(
-							await repository.sendCommand(eventId, screenId, current.id, command),
-						);
+
+						try {
+							return await deliverTo(current.id);
+						}
+						catch (restated) {
+							throw (await refusalRaisedBy(restated)) ?? restated;
+						}
 					}
 				},
 				{ errorRef: error },

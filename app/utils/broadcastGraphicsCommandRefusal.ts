@@ -16,6 +16,34 @@ export interface BroadcastGraphicsCommandRefusal {
 }
 
 /**
+ * Which of the two Graphic Asset failures a refusal names, when it names one.
+ *
+ * The one decision every surface reporting a refused command has to make, and it was
+ * being made twice: Live Control kept its own map from code to picker prose, and the
+ * Live workspace another from code to banner title, so a third Graphic Asset code
+ * would have had to be added to both. The words each surface uses differ on purpose —
+ * "was not staged" next to a picker, "cannot be taken on air" over a stack — but
+ * which refusals are about an asset at all, and which way round they go, is one fact.
+ *
+ * Everything else in the vocabulary is about the show — a superseded field, a graphic
+ * that is off — and is reported in its own terms. Naming one of those as a Graphic
+ * Asset failure would prescribe repairing a reference that is doing nothing wrong.
+ *
+ * Note this maps a *rejection code*, which only the two command surfaces ever see. A
+ * surface that asks the library directly — the pickers, the eligibility composables —
+ * reads a `GraphicAssetReferenceStatus` outcome instead and never passes through here.
+ */
+export function graphicAssetRefusalOutcome(
+	code: BroadcastGraphicsRejectionCode,
+): 'missing' | 'unavailable' | undefined {
+	if (code === 'missing-asset-reference')
+		return 'missing';
+	if (code === 'unavailable-asset-content')
+		return 'unavailable';
+	return undefined;
+}
+
+/**
  * Read a failed command's transport failure as the domain refusal it carries, if it
  * carries one.
  *

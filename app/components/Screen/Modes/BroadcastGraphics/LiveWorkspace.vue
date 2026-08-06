@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { BroadcastGraphicsRejectionCode } from '~~/shared/modules/broadcast-graphics-live-session';
 import type {
 	BroadcastGraphicConfig,
 	GraphicChannelConfig,
@@ -112,14 +111,14 @@ const ASSET_REFUSAL_TITLES = {
 	unavailable: 'Unavailable Graphic Asset Content',
 } as const;
 
-const ASSET_REFUSAL_CODES: Partial<Record<BroadcastGraphicsRejectionCode, {
+const ASSET_REFUSAL_ALERTS: Record<'missing' | 'unavailable', {
 	title: string;
 	color: 'error' | 'warning';
-}>> = {
+}> = {
 	// Repair or replace it; retrying is the one thing that provably cannot work.
-	'missing-asset-reference': { title: ASSET_REFUSAL_TITLES.missing, color: 'error' },
+	missing: { title: ASSET_REFUSAL_TITLES.missing, color: 'error' },
 	// The bytes come back, so this one is worth trying again.
-	'unavailable-asset-content': { title: ASSET_REFUSAL_TITLES.unavailable, color: 'warning' },
+	unavailable: { title: ASSET_REFUSAL_TITLES.unavailable, color: 'warning' },
 };
 
 /**
@@ -137,14 +136,20 @@ const ASSET_REFUSAL_CODES: Partial<Record<BroadcastGraphicsRejectionCode, {
  * required Graphic Input with no value — is still the authority answering rather
  * than a fault, and its own sentence already names the thing. It is titled as a
  * refusal without being given a third set of words for a fault it is not.
+ *
+ * A field-scoped refusal is reported here as well as against its own field. That is
+ * deliberate: Live Control renders only for the selected Broadcast Graphic, so an
+ * operator who has selected nothing — or another graphic — would otherwise watch a
+ * media selection fail in silence. The field keeps the better report, naming the
+ * choice; this one exists so there is always some report.
  */
 const playoutFailure = computed(() => {
 	if (!sessionStore.error)
 		return null;
 
-	const asset = sessionStore.refusal ? ASSET_REFUSAL_CODES[sessionStore.refusal.code] : undefined;
-	if (asset)
-		return { ...asset, icon: 'i-lucide-image-off', description: sessionStore.error };
+	const outcome = sessionStore.refusal ? graphicAssetRefusalOutcome(sessionStore.refusal.code) : undefined;
+	if (outcome)
+		return { ...ASSET_REFUSAL_ALERTS[outcome], icon: 'i-lucide-image-off', description: sessionStore.error };
 	if (sessionStore.refusal) {
 		return {
 			title: 'Playout action refused',

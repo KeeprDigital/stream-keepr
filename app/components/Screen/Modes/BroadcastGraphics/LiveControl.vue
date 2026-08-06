@@ -1,8 +1,5 @@
 <script setup lang="ts">
-import type {
-	BroadcastGraphicsRejectionCode,
-	GraphicInputTrace,
-} from '~~/shared/modules/broadcast-graphics-live-session';
+import type { GraphicInputTrace } from '~~/shared/modules/broadcast-graphics-live-session';
 import type {
 	BroadcastGraphicConfig,
 	GraphicInputValue,
@@ -286,19 +283,6 @@ const MEDIA_REFUSALS: Record<'missing' | 'unavailable', string> = {
 };
 
 /**
- * The same two outcomes as the authority names them, when it is the authority that
- * refused rather than the check made before sending.
- *
- * Only these two codes read as a media refusal. The rest of the vocabulary is about
- * the show — a superseded field, a graphic that is off — and each is already reported
- * where it belongs; showing one here would name the wrong thing next to the picker.
- */
-const MEDIA_REFUSAL_CODES: Partial<Record<BroadcastGraphicsRejectionCode, string>> = {
-	'missing-asset-reference': MEDIA_REFUSALS.missing,
-	'unavailable-asset-content': MEDIA_REFUSALS.unavailable,
-};
-
-/**
  * Why the last revision chosen for one media Graphic Input was not staged.
  *
  * Two sources, one refusal seen a moment apart. The picker asks the library before it
@@ -306,14 +290,21 @@ const MEDIA_REFUSAL_CODES: Partial<Record<BroadcastGraphicsRejectionCode, string
  * remains is the revision that stops resolving between that question and acceptance,
  * which the authority refuses with a rejection code (#203). Read the same way and
  * worded the same way, because to the operator it is the same fact about the same
- * choice — and the alternative for the second one is a banner saying only that a
- * playout action failed.
+ * choice — and the alternative for the second one is a banner naming the graphic
+ * rather than the field the operator was working in.
+ *
+ * Only a refusal about a Graphic Asset reads as a media refusal. The rest of the
+ * vocabulary is about the show — a superseded field, a graphic that is off — and each
+ * is already reported where it belongs; showing one here would name the wrong thing
+ * next to the picker. Which refusals those are is asked of the shared classifier, so
+ * this surface and the Live workspace's banner cannot come to disagree about it.
  */
 function mediaRefusal(inputKey: string): string | undefined {
 	if (mediaRefusals.value[inputKey])
 		return mediaRefusals.value[inputKey];
 	const code = sessionStore.inputRefusal(props.screen.id, props.graphic.id, inputKey);
-	return code === undefined ? undefined : MEDIA_REFUSAL_CODES[code];
+	const outcome = code === undefined ? undefined : graphicAssetRefusalOutcome(code);
+	return outcome === undefined ? undefined : MEDIA_REFUSALS[outcome];
 }
 
 /**

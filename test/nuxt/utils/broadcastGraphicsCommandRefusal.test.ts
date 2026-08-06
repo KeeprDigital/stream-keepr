@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { broadcastGraphicsCommandRefusal } from '~~/app/utils/broadcastGraphicsCommandRefusal';
+import {
+	broadcastGraphicsCommandRefusal,
+	graphicAssetRefusalOutcome,
+} from '~~/app/utils/broadcastGraphicsCommandRefusal';
 
 const MISSING_MESSAGE
 	= 'Graphic Asset Reference at graphics.promo.items.sting.asset is missing, '
@@ -74,6 +77,22 @@ describe('the domain refusal a failed Broadcast Graphics command carries', () =>
 		expect(broadcastGraphicsCommandRefusal(
 			transportFailure(refusalBody('vp9-alpha-chromium-required', 'Not playable on this target')),
 		)).toBeUndefined();
+	});
+
+	it('classifies the two Graphic Asset refusals once, for every surface that reports one', () => {
+		// Live Control's picker prose and the Live workspace's banner title are worded
+		// differently on purpose, but *which* refusals are about an asset is one fact.
+		// It was two, so a third asset code would have had to be added to both.
+		expect(graphicAssetRefusalOutcome('missing-asset-reference')).toBe('missing');
+		expect(graphicAssetRefusalOutcome('unavailable-asset-content')).toBe('unavailable');
+	});
+
+	it('classifies a refusal about the show as no Graphic Asset failure at all', () => {
+		// Naming one of these as an asset failure would tell an operator to repair a
+		// reference that is doing nothing wrong.
+		expect(graphicAssetRefusalOutcome('stale-input-edit')).toBeUndefined();
+		expect(graphicAssetRefusalOutcome('required-input-unavailable')).toBeUndefined();
+		expect(graphicAssetRefusalOutcome('update-unavailable')).toBeUndefined();
 	});
 
 	it('keeps the code when the sentence is missing, rather than losing both', () => {

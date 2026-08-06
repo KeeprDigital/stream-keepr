@@ -410,6 +410,20 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		expect(wrapper.get('[data-testid="playout-error"]').text()).toContain('Unavailable Graphic Asset Content');
 	});
 
+	it('still reports a field-scoped refusal, which Live Control may not be on screen to show', async () => {
+		// Deliberate double report. Live Control renders only for the selected Broadcast
+		// Graphic, so an operator who has selected nothing — or another graphic — would
+		// watch a media selection fail in silence. The field keeps the better report,
+		// naming the choice; this one exists so there is always some report.
+		mockError.value = 'Graphic Asset Reference for Graphic Input badge is missing';
+		mockRefusal.value = { code: 'missing-asset-reference', message: mockError.value };
+
+		const wrapper = await mountComponent([lowerThird, slate], null);
+
+		expect(wrapper.find('[data-testid="live-control"]').exists()).toBe(false);
+		expect(wrapper.get('[data-testid="playout-error"]').text()).toContain('Missing Graphic Asset Reference');
+	});
+
 	it('reports a refusal about the show as a refusal rather than as a fault', async () => {
 		// A required Graphic Input with no value is the authority answering, and its own
 		// sentence already names the thing. It is not given the Graphic Asset words for a

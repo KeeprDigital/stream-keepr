@@ -570,6 +570,33 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			expect(store.inputsState(SCREEN_ID, 'slate').working.name).toBe('Ben Cole');
 		});
 
+		it('refreshes the field when it is the restatement that loses the conflict', async () => {
+			// An ended epoch reloads and sends again, and the field can be overtaken
+			// between the two. The recovery this refusal exists to trigger — mark the
+			// field, take the authoritative value — has to run wherever the refusal
+			// arrives, or an operator whose Take crossed an epoch change keeps their own
+			// overwritten value on screen with nothing saying so.
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+			mockRepository.sendCommand
+				.mockRejectedValueOnce({ statusCode: 409, message: 'Broadcast graphics live session has ended' })
+				.mockRejectedValueOnce(refusal());
+			mockRepository.getSession.mockResolvedValue(session({
+				id: 56,
+				sequence: 3,
+				currentState: {
+					playout: {},
+					inputs: { slate: { working: { name: 'Ben Cole' }, accepted: {}, acceptedRevision: 0 } },
+				},
+			}));
+
+			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
+
+			expect(mockRepository.sendCommand).toHaveBeenCalledTimes(2);
+			expect(store.inputsState(SCREEN_ID, 'slate').working.name).toBe('Ben Cole');
+			expect(store.inputTraces(SCREEN_ID, graphic)[0]!.status).toBe('superseded');
+		});
+
 		it('marks that Graphic Input superseded, and only that one', async () => {
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			mockRepository.sendCommand.mockRejectedValue(refusal());
@@ -786,6 +813,33 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 			expect(store.refusal?.code).toBe('stale-input-edit');
 			expect(store.error).toMatch(/already changed Name/);
+		});
+
+		it('reads the refusal a restatement is met with, not only the first delivery', async () => {
+			// The reload puts this client back on the current epoch and the command goes
+			// again — and that second delivery can be refused for every reason the first
+			// can. An ended epoch followed by a staged set a colleague has already
+			// superseded is the ordinary pairing. Reading only the first delivery left
+			// this one reported as its own transport line under "Playout action failed",
+			// which is the whole of what #230 is about, on the path #230 did not reach.
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+			mockRepository.sendCommand
+				.mockRejectedValueOnce({ statusCode: 409, message: 'Broadcast graphics live session has ended' })
+				.mockRejectedValueOnce(refusedCommandFailure(
+					'stale-input-acceptance',
+					'Another operator has already accepted a newer Graphic Input set for this Broadcast Graphic',
+				));
+			mockRepository.getSession.mockResolvedValue(session({ id: 56 }));
+
+			await store.updateGraphic(EVENT_ID, SCREEN_ID, 'slate');
+
+			expect(mockRepository.sendCommand).toHaveBeenCalledTimes(2);
+			expect(store.error).toBe(
+				'Another operator has already accepted a newer Graphic Input set for this Broadcast Graphic',
+			);
+			expect(store.error).not.toMatch(/live session has ended/);
+			expect(store.refusal?.code).toBe('stale-input-acceptance');
 		});
 
 		it('stops naming a refusal once the failure being reported is not one', async () => {
