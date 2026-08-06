@@ -1,5 +1,9 @@
 engineStrict: true
 verifyDepsBeforeRun: error
+minimumReleaseAgeExclude:
+  - '@antfu/eslint-config@9.2.0'
+  - miniflare@4.20260721.0
+  - wrangler@4.113.0
 shamefullyHoist: true
 shellEmulator: true
 
@@ -16,7 +20,3 @@ allowBuilds:
   unrs-resolver: true
   vue-demi: true
   workerd: true
-minimumReleaseAgeExclude:
-  - '@antfu/eslint-config@9.2.0'
-  - miniflare@4.20260721.0
-  - wrangler@4.113.0
