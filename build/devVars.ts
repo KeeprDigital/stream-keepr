@@ -32,8 +32,32 @@ export const LOCALLY_REQUIRED_NUXT_NAMES = [
 	'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY',
 ] as const;
 
+export type LocallyRequiredNuxtName = typeof LOCALLY_REQUIRED_NUXT_NAMES[number];
+
 /** Deliberately optional, and named here so the partition above is legible. */
 export const LOCALLY_OPTIONAL_NUXT_NAMES = ['NUXT_ABLY_API_KEY'] as const;
+
+/**
+ * What stops working per name, in the words its own refusal uses.
+ *
+ * One entry per required name, so the notice can name the surfaces belonging to the
+ * names that are *actually* missing. Naming all of them unconditionally is the cell-H
+ * defect #130's verification found: a checkout that filled in
+ * `NUXT_GRAPHICS_ADMIN_TOKEN` and not the signing key — the ordinary result of
+ * working through `.env.example` one name at a time, since the signing key needs an
+ * `openssl` command — was told Graphics Administrator operations answer 503 when they
+ * demonstrably do not. `requireGraphicsAdministrator` refuses only on an empty token
+ * and otherwise falls through to its 403 branch.
+ *
+ * The strings are the refusals' own, so a reader can match notice to response:
+ * "Graphics Administrator access is not configured" and "…so Screen Output asset
+ * capabilities are unavailable". `satisfies` makes a new required name a type error
+ * here rather than a name whose surface the notice silently omits.
+ */
+export const LOCAL_NUXT_NAME_SURFACES = {
+	NUXT_GRAPHICS_ADMIN_TOKEN: 'Graphics Administrator operations',
+	NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: 'Screen Output asset capabilities',
+} as const satisfies Record<LocallyRequiredNuxtName, string>;
 
 /**
  * Which required names the environment cannot supply, after adoption has had its go.
@@ -43,7 +67,7 @@ export const LOCALLY_OPTIONAL_NUXT_NAMES = ['NUXT_ABLY_API_KEY'] as const;
  * empty string — and because the likeliest way to hold a populated `.env` full of
  * blanks is `cp .env.example .env`, which is advice this very notice gives.
  */
-export function missingLocalNuxtNames(env: Record<string, string | undefined>): string[] {
+export function missingLocalNuxtNames(env: Record<string, string | undefined>): LocallyRequiredNuxtName[] {
 	return LOCALLY_REQUIRED_NUXT_NAMES.filter(name => (env[name] ?? '').trim().length === 0);
 }
 
@@ -74,14 +98,23 @@ export function missingLocalNuxtNames(env: Record<string, string | undefined>): 
  * names — that is exactly what a worktree opened to read the UI wants — so failing
  * the boot would trade an obscure 503 for an obstruction.
  */
-export function devVarsAbsentNotice(missing: readonly string[]): string {
-	return `Nothing in this checkout sets ${missing.join(' or ')}, so ${missing.length === 1 ? 'it keeps its' : 'they keep their'} `
-		+ 'empty default: Graphics Administrator operations and Screen Output asset capabilities answer 503, and each '
-		+ 'says so on its own without naming a common cause. A fresh git worktree is the usual way to arrive here — '
-		+ '.env and .dev.vars are both gitignored, so a new checkout inherits neither from the one it was branched '
-		+ 'from, and a copied .env.example carries the names with empty values. Fix: copy .env and .dev.vars in from '
-		+ 'the checkout you branched from, or fill in .env.example and .dev.vars.example. '
-		+ 'See docs/agents/parallel-rounds.md.';
+export function devVarsAbsentNotice(missing: readonly LocallyRequiredNuxtName[]): string {
+	const names = missing.length === 1
+		? `${missing[0]}, so it keeps its empty default`
+		: `${missing.join(' or ')}, so they keep their empty default`;
+
+	// Only the surfaces belonging to the names that are missing, and only the
+	// "each says so on its own" clause when there is more than one to say it.
+	const surfaces = missing.map(name => LOCAL_NUXT_NAME_SURFACES[name]);
+	const consequence = surfaces.length === 1
+		? `${surfaces[0]} answer 503 without naming this as the cause`
+		: `${surfaces.join(' and ')} answer 503, and each says so on its own without naming a common cause`;
+
+	return `Nothing in this checkout sets ${names}: ${consequence}. `
+		+ 'A fresh git worktree is the usual way to arrive here — .env and .dev.vars are both gitignored, so a new '
+		+ 'checkout inherits neither from the one it was branched from, and a copied .env.example carries the names '
+		+ 'with empty values. Fix: copy .env and .dev.vars in from the checkout you branched from, or fill in '
+		+ '.env.example and .dev.vars.example. See docs/agents/parallel-rounds.md.';
 }
 
 /**
@@ -198,7 +231,7 @@ export interface DevVarsDecision extends DevVarAdoption {
 	 * A fact about the environment rather than about the file, so it is populated
 	 * even for a refusal — what a refusal decides is whether anyone may *say* it.
 	 */
-	missing: string[];
+	missing: LocallyRequiredNuxtName[];
 }
 
 /**

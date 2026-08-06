@@ -7,6 +7,7 @@ import {
 	adoptsDevVars,
 	devVarsAbsentNotice,
 	devVarsLogLine,
+	LOCAL_NUXT_NAME_SURFACES,
 	LOCALLY_OPTIONAL_NUXT_NAMES,
 	LOCALLY_REQUIRED_NUXT_NAMES,
 	missingLocalNuxtNames,
@@ -176,6 +177,15 @@ describe('which names a local checkout has to be given', () => {
 		expect(assigned).toEqual([...LOCALLY_REQUIRED_NUXT_NAMES, ...LOCALLY_OPTIONAL_NUXT_NAMES].sort());
 	});
 
+	it('gives every required name a surface, in that surface\'s own words', () => {
+		// `satisfies` already makes a missing entry a type error; this pins the other
+		// half, that each string is the one the refusal actually uses, so a reader can
+		// match the notice to the 503 they are looking at.
+		expect(Object.keys(LOCAL_NUXT_NAME_SURFACES).sort()).toEqual([...LOCALLY_REQUIRED_NUXT_NAMES].sort());
+		expect(LOCAL_NUXT_NAME_SURFACES.NUXT_GRAPHICS_ADMIN_TOKEN).toBe('Graphics Administrator operations');
+		expect(LOCAL_NUXT_NAME_SURFACES.NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY).toBe('Screen Output asset capabilities');
+	});
+
 	it('leaves the Ably key deliberately optional, because #223 already owns it', () => {
 		// An empty Ably key is the expected state of a checkout that never claimed to
 		// have realtime. Requiring it here would warn every such checkout about a
@@ -259,7 +269,17 @@ describe('what a dev server says about its local configuration', () => {
 		expect(build).toBeUndefined();
 	});
 
-	it('names only the one that is missing when only one is', () => {
+	/**
+	 * Cell H: `.env` supplies the admin token and not the signing key.
+	 *
+	 * The residual #130's verification found. Naming the missing *name* correctly is
+	 * not enough — the causal clause named both surfaces unconditionally, so this
+	 * developer was told Graphics Administrator operations answer 503 while they
+	 * demonstrably worked. It is the most ordinary way to arrive anywhere near here:
+	 * filling in `.env.example` one name at a time, with the signing key left for
+	 * last because it needs an `openssl` command to generate.
+	 */
+	it('names only the one that is missing when only one is, and only its surface', () => {
 		const env = configuredEnv();
 		delete env.NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY;
 
@@ -268,9 +288,27 @@ describe('what a dev server says about its local configuration', () => {
 		expect(line?.level).toBe('warn');
 		expect(line?.message).toContain('NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY');
 		expect(line?.message).not.toContain('NUXT_GRAPHICS_ADMIN_TOKEN');
+		expect(line?.message).toContain('Screen Output asset capabilities');
+		// The mirror assertion, and the whole of cell H: the surface that still works
+		// must not be named. `requireGraphicsAdministrator` refuses only on an empty
+		// token and otherwise falls through to its 403 branch.
+		expect(line?.message).not.toContain('Graphics Administrator');
 		// Singular, because a notice that says "they keep their empty default" about
 		// one name reads as though a second thing is wrong that the reader cannot find.
 		expect(line?.message).toContain('it keeps its');
+		// And no "each says so on its own", which needs more than one to be true.
+		expect(line?.message).not.toContain('each says so');
+	});
+
+	/** Cell H's mirror, so neither surface is named unconditionally in either direction. */
+	it('names only the admin surface when only the admin token is missing', () => {
+		const env = configuredEnv();
+		delete env.NUXT_GRAPHICS_ADMIN_TOKEN;
+
+		const line = devVarsLogLine(adoptDevVarsInto({ dev: true, env, read: () => null }));
+
+		expect(line?.message).toContain('Graphics Administrator operations');
+		expect(line?.message).not.toContain('Screen Output asset capabilities');
 	});
 });
 
