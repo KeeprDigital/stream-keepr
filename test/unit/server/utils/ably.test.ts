@@ -543,6 +543,13 @@ describe('publishScreenCommand', () => {
 			// missing setting is not the provider refusing anything. Wrapping it here
 			// would file a deployment that was never finished under 'the realtime
 			// service said no'.
+			//
+			// The classification is what is pinned; the wording is not. This message
+			// is undecided — the adjacent finding on #264 is that it should become a
+			// `ServiceConfigurationError` naming the setting, which would rephrase it
+			// — so an exact compare here would make that fix read as a regression.
+			// `not configured` is the part any version of it has to keep, and it still
+			// tells this failure apart from a publish refusal or an SDK TypeError.
 			vi.mocked(useRuntimeConfig).mockReturnValue({ ablyApiKey: '' } as any);
 			const { publishScreenCommand } = await import('~~/server/utils/ably');
 			const { RealtimePublishError } = await import('~~/server/utils/realtimePublishFailure');
@@ -550,7 +557,7 @@ describe('publishScreenCommand', () => {
 			const failure = await publishScreenCommand(1, 10, 'identify').then(() => null, error => error);
 
 			expect(failure).not.toBeInstanceOf(RealtimePublishError);
-			expect(failure.message).toBe('Ably server API key is not configured');
+			expect(failure.message).toContain('not configured');
 		});
 	});
 });

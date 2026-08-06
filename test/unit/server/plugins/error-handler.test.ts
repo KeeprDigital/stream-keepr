@@ -65,6 +65,17 @@ describe('error-handler mapping logic', () => {
 				.toMatchObject({ errorCode: null });
 		});
 
+		it('reports an absent unhandled flag as handled, and a set one as unhandled', () => {
+			// The field decides how a reader triages the line: `unhandled` is Nitro's
+			// mark for an error nothing classified, and the mapper clears it for every
+			// failure it recognises. So `false` has to mean "something owned this" and
+			// not "the property was missing" — an absent flag defaulting the other way
+			// would report every classified failure as an unexplained crash.
+			expect(errorLogFields(failed({}), '/api/events/1')).toMatchObject({ unhandled: false });
+			expect(errorLogFields(failed({ unhandled: false }), '/api/events/1')).toMatchObject({ unhandled: false });
+			expect(errorLogFields(failed({ unhandled: true }), '/api/events/1')).toMatchObject({ unhandled: true });
+		});
+
 		it('falls back to the error\'s own name, and to no code at all, without a cause', () => {
 			expect(errorLogFields(failed({ name: 'TypeError', statusCode: 500, unhandled: true }), undefined)).toEqual({
 				message: 'api_request_failed',
