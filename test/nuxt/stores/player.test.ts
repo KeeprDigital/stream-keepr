@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockPlayer } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 // ── Mock Dependencies ──
 
@@ -27,9 +28,14 @@ mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string,
 });
 
 mockNuxtImport('useRealtime', () => () => mockAbly);
-mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: vi.fn(async (fn: any) => fn()),
-}));
+
+/*
+ * `useAsyncAction` is deliberately not mocked, for the reason #245's suite gives: it is
+ * the seam every action here reports through, and the hand-written copy that used to
+ * stand in for it never caught anything — so `error` was never written and no test here
+ * could say what an operator is shown. The real composable is auto-imported, does no I/O
+ * and starts no timers (#241, #263).
+ */
 
 describe('usePlayerStore', () => {
 	let store: ReturnType<typeof usePlayerStore>;
@@ -156,6 +162,36 @@ describe('usePlayerStore', () => {
 			await store.removePlayer(1, 1);
 
 			expect(store.dataVersion).toBe(before + 1);
+		});
+	});
+
+	// ── Failure reporting ──
+
+	describe('failure reporting', () => {
+		it('reports the sentence the server wrote about a refused update, and rolls the row back', async () => {
+			const player = createMockPlayer({ id: 1, name: 'Alice' });
+			store.players = [player];
+			mockRepo.update.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'Another Player in this Event already has that Melee username' },
+			}));
+
+			await store.updatePlayer(1, 1, { name: 'Alice Updated' });
+
+			expect(store.error).toBe('Another Player in this Event already has that Melee username');
+			expect(store.players[0]!.name).toBe('Alice');
+		});
+
+		it('reports the sentence a refused single-player read carries', async () => {
+			mockRepo.getById.mockRejectedValue(transportFailure({
+				status: 404,
+				body: { message: 'That Player is not in this Event' },
+				request: `[GET] "/api/events/1/players/9"`,
+			}));
+
+			await store.getPlayerById(1, 9);
+
+			expect(store.error).toBe('That Player is not in this Event');
 		});
 	});
 

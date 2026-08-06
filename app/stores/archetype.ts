@@ -14,7 +14,7 @@ export const useArchetypeStore = defineStore('archetype', () => {
 		includeHeaders: true,
 		responseKey: 'archetypes',
 	});
-	const { executeAction } = useAsyncAction();
+	const { executeReporting } = useReportingAction();
 	const apiHeaders = useApiHeaders();
 
 	const lifecycle = useEventDataLifecycle<Archetype, CreateArchetypeInput, UpdateArchetypeInput>({
@@ -58,9 +58,13 @@ export const useArchetypeStore = defineStore('archetype', () => {
 	/**
 	 * Set key cards for an archetype by card name.
 	 * Names are resolved to IDs server-side via the cards catalog.
+	 *
+	 * Reported *and* re-raised, because the modal that saves key cards shows the raised
+	 * error's own message as its title — so a card name the catalogue does not know has
+	 * to arrive as the sentence saying so rather than as a status line (#262).
 	 */
 	async function setKeyCards(eventId: number, archetypeId: number, cardNames: string[]) {
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const result = await $fetch<{ keyCards: Array<{ id: number; name: string; game: string; scryfallId: string | null; cardType: string | null; colors: string | null; cmc: number | null; manaCost: string | null }> }>(
 					`/api/events/${eventId}/archetypes/${archetypeId}/cards`,

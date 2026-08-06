@@ -51,7 +51,19 @@ export function useEventDataLifecycle<
 	const hasFetched = ref(false);
 	const isLoaded = computed(() => hasFetched.value);
 
-	const { executeAction, optimisticUpdate, optimisticDelete } = useStoreHelpers();
+	const { optimisticUpdate, optimisticDelete } = useStoreHelpers();
+	/**
+	 * Every action here reports the sentence the server wrote about a refusal, where it
+	 * wrote one — an Event whose Rounds have started, a Player List a Feature Match still
+	 * references, a name already taken. Those are facts about the show, and an operator
+	 * meeting `[DELETE] "…": 409 Conflict` instead has been told only that something went
+	 * wrong (#262).
+	 *
+	 * Held at this seam rather than in each store because every Event-scoped collection
+	 * mutates through it, and the alternative is seven stores wrapping their own
+	 * repositories to say the same thing.
+	 */
+	const { executeReporting } = useReportingAction();
 	let loadGeneration = 0;
 
 	async function loadFrom(eventId: number, loader: (eventId: number) => Promise<T[]>) {
@@ -61,7 +73,10 @@ export function useEventDataLifecycle<
 		error.value = null;
 
 		try {
-			const data = await loader(eventId);
+			// A load reports through its own catch below rather than through
+			// `executeReporting`, so the sentence has to be raised into the failure here
+			// for that catch to find it.
+			const data = await withFailureSentence(() => loader(eventId));
 			if (generation !== loadGeneration || currentEventId.value !== eventId)
 				return null;
 
@@ -87,7 +102,7 @@ export function useEventDataLifecycle<
 	}
 
 	async function create(eventId: number, input: TCreate) {
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const created = await options.repository.create(eventId, input);
 				items.value.push(created);
@@ -103,7 +118,7 @@ export function useEventDataLifecycle<
 			items,
 			id,
 			updates,
-			apiCall: () => options.repository.update(eventId, id, updates),
+			apiCall: () => withFailureSentence(() => options.repository.update(eventId, id, updates)),
 			errorRef: error,
 			entityLabel: options.entityLabel,
 			onSuccess: options.onMutation,
@@ -114,7 +129,7 @@ export function useEventDataLifecycle<
 		return optimisticDelete({
 			items,
 			id,
-			apiCall: () => options.repository.remove(eventId, id),
+			apiCall: () => withFailureSentence(() => options.repository.remove(eventId, id)),
 			errorRef: error,
 			entityLabel: options.entityLabel,
 			onSuccess: options.onMutation,

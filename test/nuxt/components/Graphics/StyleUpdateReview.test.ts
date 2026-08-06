@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 /**
  * The reviewed Graphic Style Set update, as the author of one template meets it.
@@ -355,9 +356,11 @@ describe('graphicsStyleUpdateReview', () => {
 	});
 
 	it('re-reads the review when applying it fails, rather than leaving a stale one on screen', async () => {
-		mockApplyTemplateUpdate.mockRejectedValue({
-			data: { message: 'This Graphic Style Set has been republished since this review was read' },
-		});
+		mockApplyTemplateUpdate.mockRejectedValue(transportFailure({
+			status: 409,
+			body: { message: 'This Graphic Style Set has been republished since this review was read' },
+			request: `[POST] "/api/graphics-templates/broadcast-graphics/template-1/style-update"`,
+		}));
 
 		const wrapper = await mountReview();
 		await expand(wrapper);
@@ -370,6 +373,31 @@ describe('graphicsStyleUpdateReview', () => {
 		// against what the template and Style Set are now at.
 		expect(mockReviewTemplateUpdate).toHaveBeenCalledTimes(2);
 		expect(wrapper.emitted('applied')).toBeUndefined();
+	});
+
+	/**
+	 * The 5xx half of what this surface says about a failed apply.
+	 *
+	 * An unmapped 5xx has its body message rewritten to 'Internal Server Error' on the way
+	 * out of this server, so reading one back would tell the author the Style Set update
+	 * was refused for a reason — in the authority's voice — when nothing refused it and
+	 * the words are a placeholder (#262).
+	 */
+	it('does not read a sanitized 5xx body back to the author as though it were a refusal', async () => {
+		mockApplyTemplateUpdate.mockRejectedValue(transportFailure({
+			status: 500,
+			body: { message: 'Internal Server Error' },
+			request: `[POST] "/api/graphics-templates/broadcast-graphics/template-1/style-update"`,
+		}));
+
+		const wrapper = await mountReview();
+		await expand(wrapper);
+		await wrapper.get('[data-testid="style-update-apply"]').trigger('click');
+		await flushPromises();
+
+		const reported = wrapper.get('[data-testid="style-update-error"]').text();
+		expect(reported).toContain('500 Internal Server Error');
+		expect(reported).toContain('[POST]');
 	});
 
 	it('re-reads the review when the template is revised under it, and forgets what was decided about the old one', async () => {

@@ -76,15 +76,20 @@ export function useReusableLibraryReading<Entry>(options: {
 	 * author as the server's sentence about a session they cannot see unless it is
 	 * named here. An import is also the surface most likely to be open when a
 	 * session runs out, because it is the one that pauses for a confirmation.
+	 *
+	 * The refusal's own sentence is read through `failureSentence`, which is where the
+	 * judgement about *which* failures wrote one lives. This used to read `data.message`
+	 * unguarded, and a 5xx body on this server carries 'Internal Server Error' — a
+	 * placeholder `mapPublicNitroError` writes over whatever actually failed — so an
+	 * author was shown machinery in the authority's voice (#262). A 4xx sentence reads
+	 * exactly as it did.
 	 */
 	function failureMessage(caught: unknown): string {
 		options.inspectFailure?.(caught);
 		if (graphicsAuthorSessionLapsed(caught))
 			return authorSession.describeFailure(caught, options.unavailable);
-		const data = (caught as { data?: { message?: string } })?.data;
-		if (typeof data?.message === 'string' && data.message.length > 0)
-			return data.message;
-		return caught instanceof Error ? caught.message : options.unavailable;
+		return failureSentence(caught)
+			?? (caught instanceof Error ? caught.message : options.unavailable);
 	}
 
 	/**

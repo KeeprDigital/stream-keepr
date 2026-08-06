@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 enableAutoUnmount(afterEach);
 
@@ -274,9 +275,11 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 	});
 
 	it('re-reads the library when a revision is refused as stale', async () => {
-		mockUpdate.mockRejectedValue({
-			data: { message: 'Broadcast Graphic Template has been revised by another session (now revision 4)' },
-		});
+		mockUpdate.mockRejectedValue(transportFailure({
+			status: 409,
+			body: { message: 'Broadcast Graphic Template has been revised by another session (now revision 4)' },
+			request: `[PATCH] "/api/graphics-templates/broadcast-graphics/template-1"`,
+		}));
 		const wrapper = await mountLibrary();
 
 		const input = wrapper.get('[data-testid="template-name"]');
@@ -293,6 +296,29 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 		expect(mockList).toHaveBeenCalledTimes(2);
 	});
 
+	/**
+	 * The 5xx half of what a library says about a failure.
+	 *
+	 * This server rewrites an unmapped 5xx body message to 'Internal Server Error' on the
+	 * way out, so quoting one back would put a placeholder in front of an author dressed
+	 * as the authority's own words. The transport line at least reads as machinery (#262).
+	 */
+	it('does not read a sanitized 5xx body back to the author as though it were a refusal', async () => {
+		mockUpdate.mockRejectedValue(transportFailure({
+			status: 500,
+			body: { message: 'Internal Server Error' },
+			request: `[PATCH] "/api/graphics-templates/broadcast-graphics/template-1"`,
+		}));
+		const wrapper = await mountLibrary();
+
+		await wrapper.get('[data-testid="template-name"]').setValue('Renamed into a server fault');
+		await flushPromises();
+
+		const reported = wrapper.get('[data-testid="template-library-error"]').text();
+		expect(reported).toContain('500 Internal Server Error');
+		expect(reported).toContain('[PATCH]');
+	});
+
 	it('browses read-only without offering any authoring action', async () => {
 		const wrapper = await mountLibrary({ writable: false });
 
@@ -305,7 +331,10 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 	});
 
 	it('reports a refused placement instead of leaving the author guessing', async () => {
-		mockPlace.mockRejectedValue({ data: { message: 'Another session holds the Graphics Authoring Lease' } });
+		mockPlace.mockRejectedValue(transportFailure({
+			status: 409,
+			body: { message: 'Another session holds the Graphics Authoring Lease' },
+		}));
 		const wrapper = await mountLibrary();
 
 		await wrapper.get('[data-testid="template-place"]').trigger('click');
@@ -339,11 +368,15 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 	 * explain, and offer the one action that helps.
 	 */
 	it('names a lapsed graphics author session when an import is refused', async () => {
-		mockReceivePackage.mockRejectedValue(
-			Object.assign(new Error('An authenticated graphics author session is required'), {
-				statusCode: 401,
-			}),
-		);
+		// A real lapse arrives as a 401 whose *body* carries the server's sentence, which is
+		// what makes the ordering here load-bearing: the session is recognised before the
+		// sentence is read, so the author gets the lapse and its reload rather than prose
+		// about a session they cannot see (#262).
+		mockReceivePackage.mockRejectedValue(transportFailure({
+			status: 401,
+			body: { message: 'An authenticated graphics author session is required' },
+			request: `[POST] "/api/graphics-ingestion/operations"`,
+		}));
 		const wrapper = await mountLibrary();
 
 		await chooseImportFile(wrapper);
@@ -359,9 +392,10 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 	 * friendlier sentence.
 	 */
 	it('leaves an ordinary refusal saying what it said', async () => {
-		mockReceivePackage.mockRejectedValue({
-			data: { message: 'The Template Package is not a readable archive' },
-		});
+		mockReceivePackage.mockRejectedValue(transportFailure({
+			status: 422,
+			body: { message: 'The Template Package is not a readable archive' },
+		}));
 		const wrapper = await mountLibrary();
 
 		await chooseImportFile(wrapper);

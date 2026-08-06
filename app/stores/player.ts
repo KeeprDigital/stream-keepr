@@ -13,7 +13,7 @@ export const usePlayerStore = defineStore('player', () => {
 		eventScoped: true,
 		includeHeaders: true,
 	});
-	const { executeAction } = useAsyncAction();
+	const { executeReporting } = useReportingAction();
 
 	const itemLoading = ref(false);
 
@@ -53,7 +53,7 @@ export const usePlayerStore = defineStore('player', () => {
 	const removePlayer = lifecycle.remove;
 
 	async function getPlayerById(eventId: number, playerId: number) {
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const playerData = await playerRepo.getById(eventId, playerId);
 				if (!playerData) {

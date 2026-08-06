@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockEvent, createMockTalent } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 // ── Mock Dependencies ──
 
@@ -48,23 +49,19 @@ mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string,
 	ablyCallbacks[storeName] = callbacks;
 });
 
-// Supports onError rollback for tests that verify error recovery
-const mockExecuteAction = vi.fn(async (fn: any, opts?: any) => {
-	try {
-		return await fn();
-	}
-	catch (err) {
-		opts?.onError?.();
-		throw err;
-	}
-});
-
 mockNuxtImport('useEventRepository', () => () => mockEventRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
 mockNuxtImport('useFeatureMatchAssignmentStore', () => () => mockFeatureMatchAssignmentStore);
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
-mockNuxtImport('useAsyncAction', () => () => ({ executeAction: mockExecuteAction }));
+/*
+ * `useAsyncAction` is deliberately not mocked, for the reason #245's suite gives: it is
+ * the seam every action here reports through, and the hand-written copy that stood in for
+ * it re-raised what it caught where the real composable resolves to `null` — so no test
+ * here could say what an operator is shown. The real composable is auto-imported, does no
+ * I/O and starts no timers, and it calls the same `onError` rollback the copy existed to
+ * support (#241, #263).
+ */
 
 // Helper: EventResponse shape (DbEvent + talents + meleeConfigured)
 function createEventResponse(overrides?: Record<string, any>) {
@@ -196,6 +193,53 @@ describe('useEventStore', () => {
 
 			expect(store.event).toBeNull();
 			expect(store.eventsList).toHaveLength(0);
+		});
+	});
+
+	// ── Failure reporting ──
+
+	describe('failure reporting', () => {
+		it('reports the sentence a refused update carries, and rolls the Event back', async () => {
+			const original = createEventResponse({ id: 1, name: 'Original' });
+			store.event = original;
+			store.eventsList = [original];
+			mockEventRepo.update.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'Rounds have started, so the Event format can no longer change' },
+			}));
+
+			await store.updateEvent({ name: 'Updated' });
+
+			expect(store.error).toBe('Rounds have started, so the Event format can no longer change');
+			expect(store.event!.name).toBe('Original');
+		});
+
+		it('reports the sentence a refused load carries, and still re-raises the failure itself', async () => {
+			const refused = transportFailure({
+				status: 403,
+				body: { message: 'This Event belongs to another installation' },
+				request: `[GET] "/api/events/1"`,
+			});
+			mockEventRepo.getById.mockRejectedValue(refused);
+
+			// The load reports and re-raises, and what it re-raises is deliberately the
+			// failure it caught rather than the sentence wrapped in a fresh `Error`. Not
+			// because a caller reads the status — none does — but because the store has no
+			// business narrowing a failure it is handing on rather than handling.
+			await expect(store.loadEvent(1)).rejects.toBe(refused);
+			expect(store.error).toBe('This Event belongs to another installation');
+		});
+
+		it('reports the transport line for a 5xx load, whose body message the server sanitized', async () => {
+			mockEventRepo.list.mockRejectedValue(transportFailure({
+				status: 500,
+				body: { message: 'Internal Server Error' },
+				request: `[GET] "/api/events"`,
+			}));
+
+			await expect(store.loadEventsList()).rejects.toThrow();
+
+			expect(store.error).toBe('[GET] "/api/events": 500 Internal Server Error');
 		});
 	});
 

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 // ── Mock Dependencies ──
 
@@ -176,6 +177,33 @@ describe('useFeatureMatchStateStore', () => {
 
 			expect(loadingDuringFetch).toBe(true);
 			expect(store.loading).toBe(false);
+		});
+	});
+
+	describe('failure reporting', () => {
+		it('reports the sentence a refused load carries', async () => {
+			mockRepo.ensureSession.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'That Feature Match slot is not assigned to a match yet' },
+				request: `[POST] "/api/events/1/feature-matches/42/session"`,
+			}));
+
+			await store.loadState(EVENT_ID, MATCH_ID);
+
+			expect(store.error).toBe('That Feature Match slot is not assigned to a match yet');
+		});
+
+		it('reports the sentence a refused optimistic action carries, and rolls the prediction back', async () => {
+			const state = seedState({ currentGame: 1 });
+			mockRepo.updateState.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'This Feature Match has already been reset' },
+			}));
+
+			await store.updateState(EVENT_ID, MATCH_ID, { currentGame: 2 });
+
+			expect(store.error).toBe('This Feature Match has already been reset');
+			expect(store.featureMatchStates.get(MATCH_ID)!.currentGame).toBe(state.currentGame);
 		});
 	});
 

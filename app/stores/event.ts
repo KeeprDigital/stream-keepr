@@ -16,7 +16,7 @@ export const useEventStore = defineStore('event', () => {
 		eventScoped: true,
 		includeHeaders: true,
 	});
-	const { executeAction } = useAsyncAction();
+	const { executeReporting } = useReportingAction();
 
 	const event = ref<Event | null>(null);
 	const eventsList = ref<Event[]>([]);
@@ -39,8 +39,24 @@ export const useEventStore = defineStore('event', () => {
 		loading.value = activeLoads.size > 0;
 	}
 
+	/**
+	 * What a failed load says to whoever is looking at the page.
+	 *
+	 * The sentence the server wrote about the refusal where it wrote one — an Event that
+	 * belongs to another installation says so, and `[GET] "/api/events/1": 403 Forbidden`
+	 * does not (#262).
+	 *
+	 * Read here rather than raised into the failure, unlike every other action in this
+	 * store, because both loads re-raise what they caught — and what a caller does with a
+	 * failure this store did not report is not this store's business. No caller branches
+	 * on the status today; the point is that replacing the failure with a fresh `Error`
+	 * carrying a message and nothing else would narrow, at a seam nobody asked to be
+	 * narrowed, what every future catch here is allowed to see. Reporting and re-raising
+	 * are different jobs, and only the first one is about words.
+	 */
 	function loadErrorMessage(caughtError: unknown) {
-		return caughtError instanceof Error ? caughtError.message : 'An error occurred';
+		return failureSentence(caughtError)
+			?? (caughtError instanceof Error ? caughtError.message : 'An error occurred');
 	}
 
 	const isLoaded = computed(() => event.value !== null);
@@ -150,7 +166,7 @@ export const useEventStore = defineStore('event', () => {
 	}
 
 	async function createEvent(input: CreateEventInput) {
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const createdEvent = await eventRepo.create(input);
 
@@ -179,7 +195,7 @@ export const useEventStore = defineStore('event', () => {
 		};
 		event.value = optimisticEvent;
 
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const updatedEvent = await eventRepo.update(original.id, updates);
 
@@ -220,7 +236,7 @@ export const useEventStore = defineStore('event', () => {
 
 		const eventId = event.value.id;
 
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const createdTalent = await talentRepo.create(eventId, input);
 
@@ -261,7 +277,7 @@ export const useEventStore = defineStore('event', () => {
 
 		const eventId = event.value.id;
 
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const updatedTalentData = await talentRepo.update(eventId, talentId, updates);
 
@@ -306,7 +322,7 @@ export const useEventStore = defineStore('event', () => {
 
 		const eventId = event.value.id;
 
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const result = await talentRepo.remove(eventId, talentId);
 				if (!result.success) {
@@ -361,7 +377,7 @@ export const useEventStore = defineStore('event', () => {
 	}
 
 	async function deleteEvent(id: number) {
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const result = await eventRepo.remove(id);
 				if (!result.success) {
