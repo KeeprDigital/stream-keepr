@@ -2,6 +2,7 @@ import type { BroadcastGraphicsLiveSessionResponse } from '~~/shared/types/broad
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { MessageData } from '~/types/realtime';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { FetchError } from 'ofetch';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 
@@ -15,31 +16,15 @@ vi.mock('~/composables/repositories/useBroadcastGraphicsLiveSessionRepository', 
 	useBroadcastGraphicsLiveSessionRepository: () => mockRepository,
 }));
 
-// Mirrors the real composable: failures land in the caller's error ref rather
-// than propagating, so the store's own error handling is what these tests see.
-mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: vi.fn(async (
-		action: () => Promise<unknown>,
-		options?: { loadingRef?: { value: boolean }; errorRef?: { value: string | null } },
-	) => {
-		if (options?.loadingRef)
-			options.loadingRef.value = true;
-		if (options?.errorRef)
-			options.errorRef.value = null;
-		try {
-			return await action();
-		}
-		catch (e: unknown) {
-			if (options?.errorRef)
-				options.errorRef.value = e instanceof Error ? e.message : (e as { message?: string })?.message ?? 'An error occurred';
-			return null;
-		}
-		finally {
-			if (options?.loadingRef)
-				options.loadingRef.value = false;
-		}
-	}),
-}));
+/*
+ * `useAsyncAction` is deliberately not mocked. It is the seam every action here
+ * reports through, and a hand-written copy of it is a thing that can drift from what
+ * it copies. This one had: it fell back to a rejected value's own `message` property
+ * for a non-`Error`, where the real composable yields 'An error occurred', so tests
+ * rejecting with plain objects asserted error prose the real composable never
+ * produces (#241). The real composable is auto-imported, does no I/O and starts no
+ * timers, so there is no cost to running it — and nothing left to drift.
+ */
 
 /**
  * The installation-wide server clock, stubbed so a test can put this browser a known
@@ -98,6 +83,52 @@ function notification(
 	} as MessageData<'broadcastGraphicsLiveSession:commandApplied'>;
 }
 
+const COMMANDS_PATH = '/api/…/commands';
+const SNAPSHOT_REQUEST = `[GET] "/api/…/live-session"`;
+
+/**
+ * One failed request as the repository actually rejects it.
+ *
+ * Every call the store makes goes through `$fetch`, so every failure it meets is a
+ * `FetchError`: an `Error` whose own `message` is the transport's status line, with
+ * the status on `statusCode` and the parsed response body on `data`. A plain object
+ * is none of those things, and the difference is not cosmetic — the real
+ * `useAsyncAction` reports a non-`Error` as 'An error occurred', so a suite that
+ * rejects with plain objects can assert error prose no operator will ever be shown
+ * (#241).
+ *
+ * `statusText` is the runtime's own reason phrase and nothing asserts its exact
+ * wording; what the tests below read from it is that the message an uncoded failure
+ * surfaces is the transport's line rather than the sentence in the body.
+ */
+function transportFailure(
+	status: number,
+	statusText: string,
+	/** The parsed response body, as `$fetch` hangs it off `error.data`. */
+	body?: unknown,
+	request = `[POST] "${COMMANDS_PATH}"`,
+): FetchError {
+	return Object.assign(new FetchError(`${request}: ${status} ${statusText}`), {
+		status,
+		statusCode: status,
+		statusText,
+		statusMessage: statusText,
+		data: body,
+	});
+}
+
+/**
+ * A conflict carrying no domain refusal: what an epoch this client no longer shares
+ * looks like, and the branch that reloads and restates once.
+ *
+ * The sentence the server wrote is in the body, where an uncoded failure leaves it —
+ * only a recognised refusal is read out of the body, so what the operator is shown
+ * for one of these is the status line.
+ */
+function bareConflict(message: string) {
+	return transportFailure(409, 'Conflict', { statusCode: 409, statusMessage: 'Conflict', message });
+}
+
 /**
  * One refused command as the client actually meets it.
  *
@@ -115,16 +146,12 @@ function notification(
  * back off a real HTTP response.
  */
 function refusedCommandFailure(code: string, message: string, inputKeys: string[] = []) {
-	return {
+	return transportFailure(409, 'Conflict', {
 		statusCode: 409,
-		message: `[POST] "/api/…/commands": 409 Conflict`,
-		data: {
-			statusCode: 409,
-			statusMessage: 'Conflict',
-			message,
-			data: { code, inputKeys },
-		},
-	};
+		statusMessage: 'Conflict',
+		message,
+		data: { code, inputKeys },
+	});
 }
 
 describe('broadcastGraphicsLiveSessionStore', () => {
@@ -217,7 +244,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 		vi.clearAllMocks();
 		mockRepository.sendCommand
-			.mockRejectedValueOnce({ statusCode: 409, message: 'Broadcast graphics live session has ended' })
+			.mockRejectedValueOnce(bareConflict('Broadcast graphics live session has ended'))
 			.mockResolvedValueOnce({
 				screenId: SCREEN_ID,
 				sessionId: 56,
@@ -246,7 +273,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		// The Screen left and re-entered Broadcast Graphics mode out of band, so the
 		// epoch this client holds is gone.
 		mockRepository.sendCommand
-			.mockRejectedValueOnce({ statusCode: 409, message: 'Broadcast graphics live session has ended' })
+			.mockRejectedValueOnce(bareConflict('Broadcast graphics live session has ended'))
 			.mockResolvedValueOnce({
 				screenId: SCREEN_ID,
 				sessionId: 56,
@@ -268,26 +295,31 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 	it('surfaces the failure when the retry against the current epoch also fails', async () => {
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 		vi.clearAllMocks();
-		mockRepository.sendCommand.mockRejectedValue({ statusCode: 409, message: 'Screen is not in Broadcast Graphics mode' });
+		mockRepository.sendCommand.mockRejectedValue(bareConflict('Screen is not in Broadcast Graphics mode'));
 		mockRepository.getSession.mockResolvedValue(session({ id: 56 }));
 
 		await store.take(EVENT_ID, SCREEN_ID, 'slate');
 
 		expect(mockRepository.sendCommand).toHaveBeenCalledTimes(2);
-		expect(store.error).toMatch(/Broadcast Graphics mode/);
+		// The status line, not the sentence in the body: a conflict carrying no
+		// rejection code is never read out of its body, so this is what an operator
+		// actually gets here. Recorded as an adjacent gap on #241, not fixed on it.
+		expect(store.error).toBe(`[POST] "${COMMANDS_PATH}": 409 Conflict`);
 		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('off');
 	});
 
 	it('does not retry a failure that is not a conflict', async () => {
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 		vi.clearAllMocks();
-		mockRepository.sendCommand.mockRejectedValue({ statusCode: 500, message: 'Internal Server Error' });
+		mockRepository.sendCommand.mockRejectedValue(
+			transportFailure(500, 'Internal Server Error', { statusCode: 500, message: 'Internal Server Error' }),
+		);
 
 		await store.take(EVENT_ID, SCREEN_ID, 'slate');
 
 		expect(mockRepository.sendCommand).toHaveBeenCalledOnce();
 		expect(mockRepository.getSession).not.toHaveBeenCalled();
-		expect(store.error).toBe('Internal Server Error');
+		expect(store.error).toBe(`[POST] "${COMMANDS_PATH}": 500 Internal Server Error`);
 	});
 
 	it('reports a Broadcast Graphic as pending only while its own action is in flight', async () => {
@@ -318,7 +350,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 	it('clears the pending marker even when the action fails', async () => {
 		await store.loadSession(EVENT_ID, SCREEN_ID);
-		mockRepository.sendCommand.mockRejectedValue({ statusCode: 500, message: 'boom' });
+		mockRepository.sendCommand.mockRejectedValue(transportFailure(500, 'Internal Server Error'));
 
 		await store.take(EVENT_ID, SCREEN_ID, 'slate');
 
@@ -496,7 +528,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 		vi.clearAllMocks();
 		mockRepository.sendCommand
-			.mockRejectedValueOnce({ statusCode: 409, message: 'Broadcast graphics live session has ended' })
+			.mockRejectedValueOnce(bareConflict('Broadcast graphics live session has ended'))
 			.mockResolvedValueOnce({
 				screenId: SCREEN_ID,
 				sessionId: 56,
@@ -579,7 +611,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			vi.clearAllMocks();
 			mockRepository.sendCommand
-				.mockRejectedValueOnce({ statusCode: 409, message: 'Broadcast graphics live session has ended' })
+				.mockRejectedValueOnce(bareConflict('Broadcast graphics live session has ended'))
 				.mockRejectedValueOnce(refusal());
 			mockRepository.getSession.mockResolvedValue(session({
 				id: 56,
@@ -712,7 +744,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			vi.clearAllMocks();
 			mockRepository.getSession.mockResolvedValue(session({ id: 56 }));
-			mockRepository.sendCommand.mockRejectedValueOnce({ statusCode: 409, message: 'Conflict' });
+			mockRepository.sendCommand.mockRejectedValueOnce(bareConflict('Conflict'));
 			mockRepository.sendCommand.mockResolvedValue({
 				screenId: SCREEN_ID,
 				sessionId: 56,
@@ -825,7 +857,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			vi.clearAllMocks();
 			mockRepository.sendCommand
-				.mockRejectedValueOnce({ statusCode: 409, message: 'Broadcast graphics live session has ended' })
+				.mockRejectedValueOnce(bareConflict('Broadcast graphics live session has ended'))
 				.mockRejectedValueOnce(refusedCommandFailure(
 					'stale-input-acceptance',
 					'Another operator has already accepted a newer Graphic Input set for this Broadcast Graphic',
@@ -838,7 +870,11 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			expect(store.error).toBe(
 				'Another operator has already accepted a newer Graphic Input set for this Broadcast Graphic',
 			);
-			expect(store.error).not.toMatch(/live session has ended/);
+			// What a restatement's unread refusal actually surfaced: its own status
+			// line. The failures here are `FetchError`s, so neither of the two domain
+			// sentences is ever an `Error.message` — this is the reading that would
+			// come back if the second delivery stopped being read for a refusal.
+			expect(store.error).not.toMatch(/409 Conflict/);
 			expect(store.refusal?.code).toBe('stale-input-acceptance');
 		});
 
@@ -942,7 +978,12 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 			}));
 			await store.loadSession(EVENT_ID, SCREEN_ID);
-			mockRepository.getSession.mockRejectedValue({ statusCode: 409, message: 'Screen is not in Broadcast Graphics mode' });
+			mockRepository.getSession.mockRejectedValue(transportFailure(
+				409,
+				'Conflict',
+				{ statusCode: 409, message: 'Screen is not in Broadcast Graphics mode' },
+				SNAPSHOT_REQUEST,
+			));
 
 			await store.applyEpochEnded({ eventId: EVENT_ID, timestamp: 1_000, screenId: SCREEN_ID, sessionId: 55 } as never);
 
