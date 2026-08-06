@@ -100,3 +100,24 @@ export function adoptDevVars(source: string, env: Record<string, string | undefi
 	}
 	return { adopted, retained };
 }
+
+export interface DevVarsSource {
+	dev: boolean;
+	env: Record<string, string | undefined>;
+	/** The `.dev.vars` body, or null where there is none to read. */
+	read: () => string | null;
+}
+
+/**
+ * The whole decision — whether to read `.dev.vars` at all, and what to take from
+ * it — so the Nuxt module around it is an adapter with nothing left to get
+ * wrong. A refusal never calls `read`: not opening the file is the point of the
+ * refusal, and passing `read` in is what lets a caller prove it was not opened.
+ */
+export function adoptDevVarsInto(source: DevVarsSource): DevVarAdoption {
+	if (!adoptsDevVars(source))
+		return { adopted: [], retained: [] };
+
+	const body = source.read();
+	return body === null ? { adopted: [], retained: [] } : adoptDevVars(body, source.env);
+}

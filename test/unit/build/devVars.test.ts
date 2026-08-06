@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adoptDevVars, adoptsDevVars, parseDevVars } from '~~/build/devVars';
+import { adoptDevVars, adoptDevVarsInto, adoptsDevVars, parseDevVars } from '~~/build/devVars';
 
 describe('which processes adopt `.dev.vars` at all', () => {
 	it('adopts in an ordinary dev server, which is the whole point', () => {
@@ -30,6 +30,67 @@ describe('which processes adopt `.dev.vars` at all', () => {
 		// set to anything else silently lose the fix this module exists to deliver.
 		expect(adoptsDevVars({ dev: true, env: { STREAM_KEEPR_INTEGRATION: 'false' } })).toBe(true);
 		expect(adoptsDevVars({ dev: true, env: { STREAM_KEEPR_INTEGRATION: '' } })).toBe(true);
+	});
+});
+
+/**
+ * The whole decision, not only the predicate. The Nuxt module is an adapter
+ * around this and cannot be reached by the unit suite, so a refusal that lived
+ * only at the module's own call site would be a refusal nothing checks.
+ */
+describe('the decision the Nuxt module delegates', () => {
+	const BODY = 'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY=key\n';
+
+	it('adopts what it reads in an ordinary dev server', () => {
+		const env: Record<string, string | undefined> = {};
+
+		const adoption = adoptDevVarsInto({ dev: true, env, read: () => BODY });
+
+		expect(adoption.adopted).toEqual(['NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY']);
+		expect(env.NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY).toBe('key');
+	});
+
+	it('never opens the file under the integration suite', () => {
+		// Not reading it is the refusal. A version that read the file and then
+		// discarded what it found would still have `.dev.vars` in its hands, one
+		// edit away from the leak this exists to prevent.
+		const env: Record<string, string | undefined> = { STREAM_KEEPR_INTEGRATION: 'true' };
+		let reads = 0;
+
+		const adoption = adoptDevVarsInto({
+			dev: true,
+			env,
+			read: () => {
+				reads += 1;
+				return BODY;
+			},
+		});
+
+		expect(reads).toBe(0);
+		expect(adoption).toEqual({ adopted: [], retained: [] });
+		expect('NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY' in env).toBe(false);
+	});
+
+	it('never opens the file in a build', () => {
+		let reads = 0;
+
+		adoptDevVarsInto({
+			dev: false,
+			env: {},
+			read: () => {
+				reads += 1;
+				return BODY;
+			},
+		});
+
+		expect(reads).toBe(0);
+	});
+
+	it('is content with a project that has no `.dev.vars` at all', () => {
+		const env: Record<string, string | undefined> = {};
+
+		expect(adoptDevVarsInto({ dev: true, env, read: () => null }))
+			.toEqual({ adopted: [], retained: [] });
 	});
 });
 
