@@ -303,7 +303,8 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		expect(mockRepository.sendCommand).toHaveBeenCalledTimes(2);
 		// The status line, not the sentence in the body: a conflict carrying no
 		// rejection code is never read out of its body, so this is what an operator
-		// actually gets here. Recorded as an adjacent gap on #241, not fixed on it.
+		// actually gets here. Pinned as the gap tracked by #245 — a fix there will
+		// fail this assertion deliberately.
 		expect(store.error).toBe(`[POST] "${COMMANDS_PATH}": 409 Conflict`);
 		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('off');
 	});
