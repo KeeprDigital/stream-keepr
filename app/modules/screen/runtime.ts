@@ -410,6 +410,11 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * where caching the fetched Screen would have let it proceed. Restoring that
 	 * fallback belongs with the aside, not before it.
 	 *
+	 * The debt is those two loaders' and stays that size now that the slug loader
+	 * gates on this comparison too (#261): it empties `activeScreen` before its GET,
+	 * so its refusals can only ever answer from `screens`, which is populated by
+	 * definition when one happens.
+	 *
 	 * That disjointness is about the two holders, and says nothing about `screens`
 	 * holding one id twice. Nothing this client does builds that state any more —
 	 * `createScreen` was the last door that pushed without checking, and it now
