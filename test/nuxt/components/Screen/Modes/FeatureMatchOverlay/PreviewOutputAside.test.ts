@@ -153,6 +153,27 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 			expect(mockToastAdd).toHaveBeenCalledWith(
 				expect.objectContaining({ title: 'Download unavailable', color: 'error' }),
 			);
+			expect(mockToastAdd.mock.calls.at(-1)![0].description).toContain('Asset access');
+			vi.unstubAllGlobals();
+		});
+
+		/**
+		 * A capture runs in a tab, so a pop-up blocker stops it outright — and the
+		 * download was announced a moment earlier, leaving the operator watching for a
+		 * file that is not coming. Reported as an asset access refusal until #258, which
+		 * asks them to retry a capture their browser will refuse identically.
+		 */
+		it('names the browser, not asset access, when the capture tab is blocked', async () => {
+			vi.stubGlobal('open', vi.fn(() => null));
+			const wrapper = await mountComponent();
+
+			await wrapper.get('[data-testid="download-output-fill"]').trigger('click');
+			await flushPromises();
+
+			const reported = mockToastAdd.mock.calls.at(-1)![0];
+			expect(reported.title).toBe('Download unavailable');
+			expect(reported.description).toContain('pop-up');
+			expect(reported.description).not.toContain('Asset access');
 			vi.unstubAllGlobals();
 		});
 	});
