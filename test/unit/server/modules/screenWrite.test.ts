@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ServiceWiringError } from '~~/server/utils/errors';
+import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 
@@ -49,13 +51,38 @@ vi.mock('~~/server/modules/broadcast-graphics-live-session', () => ({
 	broadcastGraphicsLiveSessionModule: () => mockBroadcastGraphicsLiveSessions,
 }));
 
-vi.stubGlobal('createError', (input: { statusCode: number; message?: string; statusMessage?: string }) => {
-	const error = new Error(input.message ?? input.statusMessage) as Error & { statusCode: number };
+// `cause` is carried because it is what survives the 5xx sanitizer: a stub that
+// drops it would let a masked failure pass these tests. See #243.
+vi.stubGlobal('createError', (input: { statusCode: number; message?: string; statusMessage?: string; cause?: unknown }) => {
+	const error = new Error(input.message ?? input.statusMessage, { cause: input.cause }) as Error & {
+		statusCode: number;
+		statusMessage?: string;
+	};
 	error.statusCode = input.statusCode;
+	error.statusMessage = input.statusMessage;
 	return error;
 });
 
 const { screenWriteModule } = await import('~~/server/modules/screen-write');
+
+/**
+ * What an operator actually receives: the module's error after the Nitro error
+ * plugin has mapped it.
+ *
+ * Asserting the thrown error on its own would pass even with the cause dropped,
+ * because the rewrite to 'Internal Server Error' happens in the mapper and
+ * nowhere else — which is the entirety of #243.
+ */
+async function publicErrorFor(operation: Promise<unknown>) {
+	const thrown = await operation.then(
+		() => null,
+		(error: unknown) => error as Error & { statusCode: number; statusMessage?: string },
+	);
+	if (!thrown)
+		throw new Error('expected the operation to reject, and it resolved');
+	mapPublicNitroError(thrown);
+	return thrown;
+}
 
 describe('screenWriteModule', () => {
 	beforeEach(() => {
@@ -100,6 +127,21 @@ describe('screenWriteModule', () => {
 			})).rejects.toMatchObject({
 				statusCode: 400,
 				message: expect.stringContaining('Screen Mode configuration endpoint'),
+			});
+			expect(mockScreenService.create).not.toHaveBeenCalled();
+		});
+
+		it('names the dependency it was not given rather than answering a bare 503', async () => {
+			const failure = await publicErrorFor(screenWriteModule().createScreen({
+				eventId: 1,
+				input: { name: 'Main', slug: 'main' } as never,
+			}));
+
+			expect(failure.cause).toBeInstanceOf(ServiceWiringError);
+			expect(failure).toMatchObject({
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: expect.stringContaining('Screen Output asset capabilities'),
 			});
 			expect(mockScreenService.create).not.toHaveBeenCalled();
 		});
@@ -455,6 +497,29 @@ describe('screenWriteModule', () => {
 				message: expect.stringContaining('layout.frame.backgroundImage'),
 			});
 
+			expect(mockScreenService.updateModeConfig).not.toHaveBeenCalled();
+		});
+
+		it('names the missing Graphics Asset Library rather than answering a bare 503', async () => {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.frame.backgroundImage = {
+				assetId: 'asset-1',
+				revisionId: 'revision-1',
+			};
+
+			const failure = await publicErrorFor(screenWriteModule().updateModeConfig({
+				eventId: 1,
+				screenId: 7,
+				mode: 'feature-match-overlay',
+				config: { layout: config.layout },
+			}));
+
+			expect(failure.cause).toBeInstanceOf(ServiceWiringError);
+			expect(failure).toMatchObject({
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: expect.stringContaining('Graphics Asset Library'),
+			});
 			expect(mockScreenService.updateModeConfig).not.toHaveBeenCalled();
 		});
 

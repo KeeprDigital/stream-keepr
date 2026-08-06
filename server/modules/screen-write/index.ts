@@ -12,6 +12,7 @@ import {
 import { parseModeConfigPatchResult } from '~~/server/schemas/api/screen';
 import { cardService } from '~~/server/services/card';
 import { screenService } from '~~/server/services/screen';
+import { ServiceWiringError } from '~~/server/utils/errors';
 import {
 	validateScreenModeConfigReferences,
 	validateScreenModeConfigsReferences,
@@ -65,6 +66,27 @@ const MODE_CONFIG_ENDPOINT_REQUIRED
 	= 'Graphic Asset References must be changed through the Screen Mode configuration endpoint';
 
 /**
+ * A dependency this module was never handed is a wiring fault, not a
+ * configuration one, so it carries `ServiceWiringError` rather than #233's
+ * `ServiceConfigurationError` — but it carries a cause for the same reason.
+ * `mapPublicNitroError` rewrites every unrecognised 5xx to 'Internal Server
+ * Error', and the operator who receives that for a misassembled build has
+ * nothing to report and no setting to change. See #243.
+ *
+ * No route reaches this today; every construction site supplies what the
+ * operation it calls needs. It is the branch a future one would fall into.
+ */
+function missingDependency(dependency: string) {
+	const cause = new ServiceWiringError('The Screen write module', dependency);
+	return createError({
+		statusCode: cause.statusCode,
+		statusMessage: 'Service Unavailable',
+		message: cause.message,
+		cause,
+	});
+}
+
+/**
  * A generic Screen write indexes nothing, so it may not introduce a reference.
  *
  * Only the per-mode configuration endpoint writes a configuration and its
@@ -115,13 +137,8 @@ export function screenWriteModule(dependencies: {
 	async function createScreen({ eventId, input, originConnectionId }: CreateScreenParams): Promise<ScreenResponse> {
 		await validateScreenModeConfigsReferences(eventId, input.modeConfigs);
 		rejectUnindexedGraphicAssetReferencesOnCreate(input.modeConfigs);
-		if (!dependencies.screenOutputAssetCapabilities) {
-			throw createError({
-				statusCode: 503,
-				statusMessage: 'Service Unavailable',
-				message: 'Screen Output asset capabilities are unavailable',
-			});
-		}
+		if (!dependencies.screenOutputAssetCapabilities)
+			throw missingDependency('Screen Output asset capabilities');
 
 		const slugExists = await screens.slugExists(eventId, input.slug);
 		if (slugExists) {
@@ -293,13 +310,8 @@ export function screenWriteModule(dependencies: {
 				if (sameGraphicAssetReference(current, item.reference)) {
 					continue;
 				}
-				if (!dependencies.graphicsAssets) {
-					throw createError({
-						statusCode: 503,
-						statusMessage: 'Service Unavailable',
-						message: 'Graphics Asset Library is unavailable',
-					});
-				}
+				if (!dependencies.graphicsAssets)
+					throw missingDependency('the Graphics Asset Library');
 				const status = await dependencies.graphicsAssets.inspectGraphicAssetRevision({
 					assetId: graphicAssetId(item.reference.assetId),
 					revisionId: graphicAssetRevisionId(item.reference.revisionId),
