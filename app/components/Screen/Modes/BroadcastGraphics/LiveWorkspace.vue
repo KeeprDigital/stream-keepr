@@ -7,6 +7,7 @@ import type {
 } from '~~/shared/types/graphics';
 import type { Screen } from '~/types';
 import { graphicChannelGroups, graphicChannelHandoffPolicy } from '~~/shared/modules/graphics';
+import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import { LazyUIConfirmActionModal } from '#components';
 
@@ -68,11 +69,24 @@ const { assetCapability } = useScreenOutputAssetCapability(
 	() => props.screen.id,
 );
 
+/**
+ * The Screen Outputs watching right now that cannot resolve this Screen's media,
+ * and whether this Screen has any media for them to lose.
+ *
+ * Both halves are needed before this is worth an operator's attention: an output
+ * with no capability watching a Screen that publishes nothing but Shapes and Text
+ * is showing program exactly, and warning about it would train an operator to
+ * ignore the one warning that matters.
+ */
+const outputsWithoutAssetAccess = useScreenOutputAssetAccess(() => props.screen.id);
+const publishesMedia = computed(() =>
+	broadcastGraphicsGraphicAssetReferences({ graphics: [...props.graphics] }).length > 0,
+);
+
 const programUrl = computed(() => screenOutputPath({
 	eventId: props.eventId,
 	screenSlug: props.screen.slug,
 	output: 'overlay',
-	fitToViewport: true,
 	assetCapability: assetCapability.value,
 }));
 const programAspectStyle = computed(() => ({
@@ -287,6 +301,24 @@ async function resetLiveState() {
 <template>
 	<div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,24rem)]">
 		<ScreenSettingsCard title="Program" :default-open="true">
+			<!--
+				This monitor is not the only output, and it is the one output that always
+				has its capability. An output that arrived without one is showing this
+				composition with every image and video missing, which looks like nothing
+				at all from here (#231).
+			-->
+			<UAlert
+				v-if="publishesMedia && outputsWithoutAssetAccess > 0"
+				class="mb-2"
+				data-testid="outputs-without-asset-access"
+				color="warning"
+				variant="soft"
+				icon="i-lucide-image-off"
+				:title="outputsWithoutAssetAccess === 1
+					? 'One Screen Output cannot resolve this Screen\'s media'
+					: `${outputsWithoutAssetAccess} Screen Outputs cannot resolve this Screen's media`"
+				description="It is rendering everything except images and video. Re-open it from this Screen's copy or open control, which is what puts asset access in the URL."
+			/>
 			<div class="transparent-checkerboard-backdrop overflow-hidden rounded-md">
 				<div class="relative mx-auto w-full" :style="programAspectStyle">
 					<iframe

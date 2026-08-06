@@ -68,7 +68,6 @@ const previewUrl = computed(() => screenOutputPath({
 	eventId: props.eventId,
 	screenSlug: props.screen.slug,
 	output: previewOutput.value,
-	fitToViewport: true,
 	preview: true,
 	itemGuides: previewGuides.value,
 	safeAreaGuides: previewSafeAreas.value,

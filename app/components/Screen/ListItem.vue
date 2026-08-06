@@ -18,6 +18,7 @@ const emit = defineEmits<{
 }>();
 
 const { copyToClipboard } = useCopyToClipboard();
+const { screenOutputAccessUrl, openScreenOutput } = useScreenOutputAccessUrl();
 
 const screenUrl = computed(() => {
 	const baseUrl = window.location.origin;
@@ -28,20 +29,16 @@ const modeLabel = computed(() => getScreenModeLabel(props.screen.currentMode));
 const modeIcon = computed(() => getScreenModeIcon(props.screen.currentMode));
 const displayType = computed(() => getScreenModeDisplayType(props.screen.currentMode));
 
-async function screenAccessUrl(): Promise<string> {
-	try {
-		const { assetCapability } = await $fetch<{ assetCapability: string }>(
-			`/api/events/${props.eventId}/screens/${props.screen.id}/asset-capability`,
-		);
-		return `${screenUrl.value}#asset-capability=${encodeURIComponent(assetCapability)}`;
-	}
-	catch {
-		return '';
-	}
+function accessUrlOptions() {
+	return {
+		eventId: props.eventId,
+		screenId: props.screen.id,
+		screenSlug: props.screen.slug,
+	};
 }
 
 async function copyUrl() {
-	await copyToClipboard(await screenAccessUrl(), {
+	await copyToClipboard(await screenOutputAccessUrl(accessUrlOptions()), {
 		successTitle: 'URL Copied',
 		successDescription: 'Screen URL copied to clipboard',
 		errorDescription: 'Failed to copy screen URL to clipboard.',
@@ -49,15 +46,7 @@ async function copyUrl() {
 }
 
 function openInNewTab() {
-	const outputWindow = window.open('', '_blank');
-	if (outputWindow)
-		outputWindow.opener = null;
-	void screenAccessUrl().then((url) => {
-		if (url && outputWindow)
-			outputWindow.location.href = url;
-		else
-			outputWindow?.close();
-	});
+	void openScreenOutput(accessUrlOptions());
 }
 
 const modeItems: DropdownMenuItem[][] = [

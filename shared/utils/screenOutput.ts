@@ -46,8 +46,6 @@ export interface ScreenOutputPathOptions {
 	screenSlug: string;
 	/** Omitted renders the Overlay Output. */
 	output?: ScreenOutput;
-	/** Scale the canvas to fit the embedding viewport. */
-	fitToViewport?: boolean;
 	/**
 	 * Mark this as an embedded editor preview.
 	 *
@@ -79,11 +77,14 @@ export interface ScreenOutputPathOptions {
  * preview flags, and any asset capability. Built here so every embedder agrees on
  * the query — and so an embedder cannot forget the capability its output needs to
  * show media.
+ *
+ * Deliberately carries no scaling flag. Uniform viewport-fit scaling is registered
+ * by the Screen Mode Definition and applies to every output of a mode that
+ * registers it; it was a URL option only for as long as it took someone to open an
+ * output the editor had not built the URL for (#232).
  */
 export function screenOutputPath(options: ScreenOutputPathOptions): string {
 	const query = new URLSearchParams({ output: options.output ?? 'overlay' });
-	if (options.fitToViewport)
-		query.set('fit', '1');
 	if (options.preview)
 		query.set('preview', '1');
 	if (options.itemGuides)

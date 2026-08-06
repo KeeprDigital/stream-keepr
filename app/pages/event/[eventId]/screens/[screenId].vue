@@ -15,6 +15,7 @@ const route = useRoute();
 const eventStore = useEventStore();
 const screenStore = useScreenStore();
 const { copyToClipboard } = useCopyToClipboard();
+const { screenOutputAccessUrl, openScreenOutput } = useScreenOutputAccessUrl();
 const { runRequest } = useRequestFeedback();
 
 const event = computed(() => eventStore.event);
@@ -22,10 +23,8 @@ const eventId = computed(() => event.value?.id ?? 0);
 const screenId = computed(() => Number(route.params.screenId));
 
 const screen = ref<Screen | null>(null);
-const assetCapability = ref<string | null>(null);
 const loading = ref(true);
 const isUpdating = ref(false);
-const capabilityLoads = createGuardedSequence();
 
 const screenModeConfigurationPolicy = computed(() => {
 	const mode = screen.value?.currentMode;
@@ -84,15 +83,29 @@ function confirmResetAll() {
 	showResetConfirm.value = false;
 }
 
+/**
+ * This Screen's address, shown so an operator can read where its outputs live.
+ *
+ * Deliberately not the URL the controls beside it hand out: that one carries this
+ * Screen Output Asset Capability, which is a secret and does not belong on a page
+ * anyone can be standing behind. Copy and open produce it; reading this one off the
+ * screen and typing it produces an output with no media (#231).
+ */
 const screenUrl = computed(() => {
 	if (!screen.value)
 		return '';
 	const baseUrl = window.location.origin;
 	return `${baseUrl}/event/${eventId.value}/screen/${screen.value.slug}`;
 });
-const screenAccessUrl = computed(() => assetCapability.value
-	? `${screenUrl.value}#asset-capability=${encodeURIComponent(assetCapability.value)}`
-	: screenUrl.value);
+
+function accessUrlOptions(output?: FeatureMatchOverlayOutput) {
+	return {
+		eventId: eventId.value,
+		screenId: screen.value!.id,
+		screenSlug: screen.value!.slug,
+		output,
+	};
+}
 
 const modeOptions = getScreenModeSelectOptions();
 
@@ -120,25 +133,9 @@ async function loadScreen(id: number) {
 				screen.value = data;
 				// Subscribe to presence after screen loads
 				screenStore.subscribeToScreenPresence(id);
-				void loadAssetCapability(id);
 			},
 		},
 	);
-}
-
-async function loadAssetCapability(id: number) {
-	const flight = capabilityLoads.begin();
-	try {
-		const result = await $fetch<{ assetCapability: string }>(
-			`/api/events/${eventId.value}/screens/${id}/asset-capability`,
-		);
-		if (flight.current)
-			assetCapability.value = result.assetCapability;
-	}
-	catch {
-		if (flight.current)
-			assetCapability.value = null;
-	}
 }
 
 watch(screenId, (newId, oldId) => {
@@ -146,13 +143,11 @@ watch(screenId, (newId, oldId) => {
 		screenStore.unsubscribeFromScreenPresence(oldId);
 	if (newId) {
 		screen.value = null;
-		assetCapability.value = null;
 		void loadScreen(newId);
 	}
 }, { immediate: true });
 
 onBeforeUnmount(() => {
-	capabilityLoads.supersede();
 	if (screenId.value) {
 		screenStore.unsubscribeFromScreenPresence(screenId.value);
 	}
@@ -191,7 +186,9 @@ async function setMode(mode: ScreenMode) {
 }
 
 async function copyUrl() {
-	await copyToClipboard(screenAccessUrl, {
+	if (!screen.value)
+		return;
+	await copyToClipboard(await screenOutputAccessUrl(accessUrlOptions()), {
 		successTitle: 'URL Copied',
 		successDescription: 'Screen URL copied to clipboard',
 		errorDescription: 'Failed to copy screen URL to clipboard.',
@@ -218,8 +215,7 @@ async function rotateAssetCapability() {
 				description: 'Screen Output asset access could not be rotated.',
 				color: 'error',
 			},
-			onSuccess: (result) => {
-				assetCapability.value = result.assetCapability;
+			onSuccess: () => {
 				showCapabilityRotationConfirm.value = false;
 			},
 		},
@@ -234,22 +230,16 @@ function updateScreenDimension(field: 'width' | 'height', value: number | null |
 	updateScreenConfig({ [field]: value ?? screenDimensionFallback(field) });
 }
 
-function screenOutputUrl(output: FeatureMatchOverlayOutput) {
-	if (!screen.value)
-		return '';
-	const baseUrl = window.location.origin;
-	const capabilityFragment = assetCapability.value
-		? `#asset-capability=${encodeURIComponent(assetCapability.value)}`
-		: '';
-	return `${baseUrl}/event/${eventId.value}/screen/${screen.value.slug}?output=${output}${capabilityFragment}`;
-}
-
 function openInNewTab() {
-	window.open(screenAccessUrl.value, '_blank', 'noopener,noreferrer');
+	if (!screen.value)
+		return;
+	void openScreenOutput(accessUrlOptions());
 }
 
 function openOutputInNewTab(output: FeatureMatchOverlayOutput) {
-	window.open(screenOutputUrl(output), '_blank', 'noopener,noreferrer');
+	if (!screen.value)
+		return;
+	void openScreenOutput(accessUrlOptions(output));
 }
 
 const openOutputItems = computed(() => [
