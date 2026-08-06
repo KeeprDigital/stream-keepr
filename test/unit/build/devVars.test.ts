@@ -168,14 +168,18 @@ describe('announcing a checkout with no local configuration', () => {
 		expect(DEV_VARS_ABSENT_NOTICE).toContain('Screen Output asset capabilities');
 	});
 
-	it('points at a document that carries the worktree setup step', () => {
-		// Read rather than asserted, because a pointer to a section that has been
-		// renamed away is worse than no pointer: it costs the reader the trip.
+	it('points at a document that carries the copy step it promises', () => {
+		// Read rather than asserted, because a pointer to a step that has been edited
+		// away is worse than no pointer: it costs the reader the trip and they arrive
+		// at a hazard list with no instruction in it.
+		//
+		// The command itself rather than a mention of the filenames. The document
+		// names both files a dozen times over — a check for that is satisfied by prose
+		// about the problem, which is exactly what the reader already has.
 		const doc = readFileSync(fileURLToPath(new URL('../../../docs/agents/parallel-rounds.md', import.meta.url)), 'utf8');
 
 		expect(DEV_VARS_ABSENT_NOTICE).toContain('docs/agents/parallel-rounds.md');
-		expect(doc).toMatch(/\.env(?!\.example)/);
-		expect(doc).toMatch(/\.dev\.vars(?!\.example)/);
+		expect(doc).toContain('cp .env .dev.vars');
 	});
 });
 
