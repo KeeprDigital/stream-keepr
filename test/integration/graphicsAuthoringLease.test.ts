@@ -4,6 +4,7 @@ import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCommandHarness } from './featureMatchSessionHelpers';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { integrationRealtimeConfigured } from './helpers';
 
 interface LeaseState {
 	artifact: { kind: string; id: string };
@@ -177,7 +178,11 @@ describe('graphics Authoring Leases', () => {
 		expect(renewed.data.lease.heldSince).toBe(before.data.lease.heldSince);
 	});
 
-	it('never restricts live operation while the Edit workspace is leased', async () => {
+	// Split from the command-session case below because a Screen command *is* a
+	// realtime publish — the route has nothing else to do — so it can only answer 200
+	// where a real Ably key is. The lease claim itself does not depend on Ably, and
+	// the half that does not is left unguarded so it still runs without the secret.
+	it.skipIf(!integrationRealtimeConfigured)('never restricts a Screen command while the Edit workspace is leased', async () => {
 		// The lease holder is session A; every live action below is another operator.
 		const command = await request(`/api/events/${eventId}/screens/${screenId}/command`, {
 			method: 'POST',
@@ -191,7 +196,9 @@ describe('graphics Authoring Leases', () => {
 			body: { command: 'refresh' },
 		});
 		expect(anonymousCommand.status).toBe(200);
+	});
 
+	it('never restricts a live command session while the Edit workspace is leased', async () => {
 		// Multi-operator live operation keeps running under its own field-scoped
 		// conflict rules rather than under the lease.
 		const harness = await createCommandHarness(eventId);

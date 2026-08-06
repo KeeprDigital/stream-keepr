@@ -1,5 +1,5 @@
 import { createTest, exposeContextToEnv, fetch } from '@nuxt/test-utils/e2e';
-import { integrationSetupOptions } from './helpers';
+import { INTEGRATION_REALTIME_SKIP_NOTICE, integrationRealtimeConfigured, integrationSetupOptions } from './helpers';
 import { prepareIntegrationD1 } from './integrationD1';
 import { resetIntegrationWranglerState } from './state';
 import './disable-fs-watch.mjs';
@@ -15,6 +15,11 @@ async function assertIntegrationServerReady() {
 }
 
 export async function setup() {
+	// Say this once, before anything runs, so a reader meets the reason for the
+	// skipped tests rather than having to work back to it from a bare skip mark.
+	if (!integrationRealtimeConfigured)
+		console.warn(INTEGRATION_REALTIME_SKIP_NOTICE);
+
 	await resetIntegrationWranglerState();
 	await prepareIntegrationD1();
 
