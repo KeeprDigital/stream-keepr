@@ -301,11 +301,15 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		await store.take(EVENT_ID, SCREEN_ID, 'slate');
 
 		expect(mockRepository.sendCommand).toHaveBeenCalledTimes(2);
-		// The status line, not the sentence in the body: a conflict carrying no
-		// rejection code is never read out of its body, so this is what an operator
-		// actually gets here. Pinned as the gap tracked by #245 — a fix there will
-		// fail this assertion deliberately.
-		expect(store.error).toBe(`[POST] "${COMMANDS_PATH}": 409 Conflict`);
+		// The sentence the authority wrote, not the transport's status line. This
+		// assertion used to read `[POST] "…": 409 Conflict`, pinned as the gap #245
+		// tracked; #245 closed it, so the pin is updated rather than removed — what
+		// it now holds is that the sentence survives both deliveries.
+		expect(store.error).toBe('Screen is not in Broadcast Graphics mode');
+		expect(store.error).not.toMatch(/409 Conflict/);
+		// And still not a refusal: nothing here named one, so no surface may
+		// prescribe a next move as though something had (#230).
+		expect(store.refusal).toBeNull();
 		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('off');
 	});
 
@@ -784,6 +788,158 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 	});
 
 	/**
+	 * A failure the authority explained without coding.
+	 *
+	 * Most of what the server refuses carries no rejection code at all — a Screen
+	 * that has left Broadcast Graphics mode, an epoch that has ended — and it says so
+	 * in the response body's `message`, exactly where a coded refusal says it. Only
+	 * the coded ones were being read, so everything else reached the operator as
+	 * `[POST] "…": 409 Conflict` under "Playout action failed" (#245).
+	 *
+	 * Gaining a sentence is deliberately not the same as being recognised as a
+	 * refusal. `refusal` stays null throughout this block: the sentence is prose to
+	 * show, a refusal is a code a surface acts on, and only a code in the vocabulary
+	 * is one (#230).
+	 */
+	describe('a failure the authority explained but did not code', () => {
+		const NOT_IN_MODE = 'Screen is not in Broadcast Graphics mode';
+		const EPOCH_ENDED = 'Broadcast graphics live session has ended';
+
+		it('reports the snapshot route’s sentence rather than its status line', async () => {
+			mockRepository.getSession.mockRejectedValue(transportFailure(
+				409,
+				'Conflict',
+				{ statusCode: 409, statusMessage: 'Conflict', message: NOT_IN_MODE },
+				SNAPSHOT_REQUEST,
+			));
+
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+
+			expect(store.error).toBe(NOT_IN_MODE);
+			expect(store.refusal).toBeNull();
+		});
+
+		it('reports the ended epoch in the words the authority used', async () => {
+			// Both deliveries meet it: the reload is what an ended epoch is supposed to
+			// resolve, and when it does not, the sentence is the whole of what the
+			// operator has to go on.
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+			mockRepository.getSession.mockResolvedValue(session({ id: 56 }));
+			mockRepository.sendCommand.mockRejectedValue(bareConflict(EPOCH_ENDED));
+
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+			expect(store.error).toBe(EPOCH_ENDED);
+			expect(store.refusal).toBeNull();
+		});
+
+		it('reports a refused reset in the words the authority used', async () => {
+			mockRepository.resetSession.mockRejectedValue(transportFailure(
+				409,
+				'Conflict',
+				{ statusCode: 409, statusMessage: 'Conflict', message: NOT_IN_MODE },
+				`[POST] "/api/…/live-session/reset"`,
+			));
+
+			await store.resetLiveState(EVENT_ID, SCREEN_ID);
+
+			expect(store.error).toBe(NOT_IN_MODE);
+		});
+
+		it('reads the sentence off a code outside the vocabulary without recognising a refusal', async () => {
+			// The two halves pulled apart. A code this client does not know is not a
+			// refusal — no surface may prescribe a next move for it — but the sentence
+			// beside it is still the authority explaining itself, and an unknown code
+			// leaves the failure a bare conflict, so the reload-and-restate branch runs
+			// exactly as it did.
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+			mockRepository.getSession.mockResolvedValue(session({ id: 56 }));
+			mockRepository.sendCommand.mockRejectedValue(refusedCommandFailure(
+				'graphic-channel-occupied',
+				'Another Broadcast Graphic holds this Graphic Channel',
+			));
+
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+			expect(store.error).toBe('Another Broadcast Graphic holds this Graphic Channel');
+			expect(store.refusal).toBeNull();
+			expect(mockRepository.sendCommand).toHaveBeenCalledTimes(2);
+		});
+
+		it('keeps the status line where the body carries no sentence to read', async () => {
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+			mockRepository.getSession.mockResolvedValue(session({ id: 56 }));
+			mockRepository.sendCommand.mockRejectedValue(
+				transportFailure(409, 'Conflict', { statusCode: 409, statusMessage: 'Conflict' }),
+			);
+
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+			expect(store.error).toBe(`[POST] "${COMMANDS_PATH}": 409 Conflict`);
+		});
+
+		it('keeps the status line where the sentence is empty', async () => {
+			// An empty string is not prose an operator can act on, and putting one in
+			// `error` would read as the action having failed for no stated reason.
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+			mockRepository.getSession.mockResolvedValue(session({ id: 56 }));
+			mockRepository.sendCommand.mockRejectedValue(bareConflict(''));
+
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+			expect(store.error).toBe(`[POST] "${COMMANDS_PATH}": 409 Conflict`);
+		});
+
+		it('keeps the status line for a server fault, whose body message is not the authority speaking', async () => {
+			// Deliberate, and the boundary the whole read is drawn at. A 4xx is the
+			// authority answering *this request*; a 5xx is the server failing, and this
+			// server rewrites those on the way out — `mapPublicNitroError` replaces any
+			// unmapped 5xx message with 'Internal Server Error', and Nitro writes 'Server
+			// Error' for anything unhandled. Reading a 5xx body back would dress a
+			// placeholder as the authority's own words, which is worse than a status
+			// line: a status line at least reads as machinery. The fixture below is the
+			// dangerous shape — a 5xx whose message looks like prose — because the two
+			// families whose prose does survive sanitizing (a missing setting, an unwired
+			// component) name a deployment fault rather than a fact about the show, and
+			// have their own surfaces (#233, #243).
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+			mockRepository.sendCommand.mockRejectedValue(transportFailure(
+				503,
+				'Service Unavailable',
+				{
+					statusCode: 503,
+					statusMessage: 'Service Unavailable',
+					message: 'Graphics writer was not given a Screen repository',
+				},
+			));
+
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+			expect(store.error).toBe(`[POST] "${COMMANDS_PATH}": 503 Service Unavailable`);
+		});
+
+		it('keeps its own message for a failure that never reached the server', async () => {
+			// No status means no server answer, so whatever a `data` property happens to
+			// hold was not written by the authority and must not be quoted as though it
+			// were. The transport's own words are the honest report of a request that
+			// did not arrive.
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			mockRepository.sendCommand.mockRejectedValue(
+				Object.assign(new Error('Failed to fetch'), { data: { message: 'a body from nowhere' } }),
+			);
+
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+			expect(store.error).toBe('Failed to fetch');
+		});
+	});
+
+	/**
 	 * A Take refused because a pinned Graphic Asset Revision has gone.
 	 *
 	 * The pre-check before the button makes this the residual race and the second
@@ -896,6 +1052,52 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 			expect(store.refusal).toBeNull();
 			expect(store.error).toBe('Failed to fetch');
+		});
+
+		/**
+		 * "Cleared wherever `error` is cleared" — held to, at each of the four places
+		 * that clear it.
+		 *
+		 * `deliverCommand`'s clear was the only guarded one; the other three were the
+		 * store's docstring making a promise nothing checked, and a refusal outliving
+		 * the failure it described is the exact pairing the docstring exists to
+		 * forbid — a Missing Graphic Asset Reference heading a sentence about
+		 * something else entirely (#249).
+		 */
+		describe('every clear the docstring promises', () => {
+			/** Leave the store reporting one refusal, so a clear has something to forget. */
+			async function refuseOneTake() {
+				mockRepository.sendCommand.mockRejectedValueOnce(
+					refusedCommandFailure('missing-asset-reference', MISSING_MESSAGE),
+				);
+				await store.take(EVENT_ID, SCREEN_ID, 'slate');
+				expect(store.refusal?.code).toBe('missing-asset-reference');
+			}
+
+			it('forgets it when a fresh snapshot is loaded', async () => {
+				await refuseOneTake();
+
+				await store.loadSession(EVENT_ID, SCREEN_ID);
+
+				expect(store.refusal).toBeNull();
+			});
+
+			it('forgets it when this Screen’s live state is reset', async () => {
+				await refuseOneTake();
+				mockRepository.resetSession.mockResolvedValue(session({ id: 57, sequence: 1 }));
+
+				await store.resetLiveState(EVENT_ID, SCREEN_ID);
+
+				expect(store.refusal).toBeNull();
+			});
+
+			it('forgets it when the store itself is reset', async () => {
+				await refuseOneTake();
+
+				store.$reset();
+
+				expect(store.refusal).toBeNull();
+			});
 		});
 	});
 
