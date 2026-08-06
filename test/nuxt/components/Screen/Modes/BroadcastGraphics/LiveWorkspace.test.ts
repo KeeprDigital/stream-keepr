@@ -461,15 +461,28 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	 * opens renders every graphic except its media, silently (#231).
 	 */
 	describe('handing out the real Overlay Output', () => {
+		/**
+		 * The capability is rotated between mount and the click, and the copied URL has to
+		 * carry the new one.
+		 *
+		 * Asserting only that some capability appears would pass against a value cached
+		 * when the workspace mounted, and that is the failure rather than an academic one:
+		 * the Screen settings page has a rotate control, so a workspace left open across a
+		 * rotation would hand out a URL whose capability is already dead — which loads,
+		 * renders, and silently omits every image, video and library font (#231). The
+		 * Program monitor above keeps the capability it mounted with; only the hand-out is
+		 * obliged to be current.
+		 */
 		it('copies a URL carrying asset access, obtained at the moment of the hand-out', async () => {
 			const wrapper = await mountComponent();
+			mockCapabilityResponse.value = 'rotated-capability';
 
 			await wrapper.get('[data-testid="copy-screen-output-url"]').trigger('click');
 			await flushPromises();
 
 			expect(mockApiFetch).toHaveBeenCalledWith('/api/events/7/screens/3/asset-capability');
 			expect(mockCopyToClipboard).toHaveBeenCalledWith(
-				`${window.location.origin}/event/7/screen/main?output=overlay#asset-capability=program-capability`,
+				`${window.location.origin}/event/7/screen/main?output=overlay#asset-capability=rotated-capability`,
 				expect.anything(),
 			);
 		});
@@ -489,10 +502,12 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 			expect(mockCopyToClipboard).toHaveBeenCalledWith('', expect.anything());
 		});
 
+		/** Rotated between mount and the click here too, for the same reason. */
 		it('opens the output in a tab it points only once asset access is in hand', async () => {
 			const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
 			vi.stubGlobal('open', vi.fn(() => outputWindow));
 			const wrapper = await mountComponent();
+			mockCapabilityResponse.value = 'rotated-capability';
 
 			await wrapper.get('[data-testid="open-screen-output"]').trigger('click');
 			await flushPromises();
@@ -500,7 +515,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 			expect(window.open).toHaveBeenCalledWith('', '_blank');
 			expect(outputWindow.opener).toBeNull();
 			expect(outputWindow.location.href).toBe(
-				`${window.location.origin}/event/7/screen/main?output=overlay#asset-capability=program-capability`,
+				`${window.location.origin}/event/7/screen/main?output=overlay#asset-capability=rotated-capability`,
 			);
 			expect(outputWindow.close).not.toHaveBeenCalled();
 			vi.unstubAllGlobals();
