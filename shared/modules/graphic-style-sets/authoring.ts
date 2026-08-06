@@ -14,7 +14,7 @@ import {
 import { squareShapeGeometry } from '../graphics/shapeGeometry';
 import {
 	applyGraphicStyleSet,
-	captureGraphicStyleOverrides,
+	authoredGraphicStyleOverrides,
 	GRAPHIC_STYLE_SLOT_OWNED_KEYS,
 	graphicStyleSlotDeviates,
 	graphicStyleSlotInStep,
@@ -192,11 +192,20 @@ export function unbindGraphicStyleRef(
  * inherited — and running this after an edit records exactly which owned keys no
  * longer match the preset.
  *
- * It is a diff against the Style Set revision the composition was *reconciled to*,
- * which is the one its values were produced from. That is what makes it correct: an
- * override is by definition where the author's value and the preset's disagree, and
- * both sides of that comparison are in front of it. An author who edits a value and
- * puts it back is left with no override rather than one pinning it.
+ * What one slot ends up recording is what {@link authoredGraphicStyleOverrides} names,
+ * so an ordinary edit and review's "Keep mine" leave the identical record: the pins
+ * already recorded that this composition still holds, plus every owned key that now
+ * deviates from the preset. It is deliberately not the deviation alone. Deriving the
+ * whole record that way discarded any pin the Style Set had since caught up with — the
+ * author's value and the preset's agreed, so nothing looked like a deviation — and the
+ * next republish moving that preset away then took the property (#229).
+ *
+ * The derived half is a diff against the Style Set revision the composition
+ * was *reconciled to*, which is the one its values were produced from. That is what
+ * makes it correct: an override is by definition where the author's value and the
+ * preset's disagree, and both sides of that comparison are in front of it. An author
+ * who edits a value and puts it back is left with no override rather than one pinning
+ * it.
  *
  * A slot with no owned keys has nowhere to record a deviation, so an author who edits
  * one has unbound it — the same answer review's "keep as an override" gives for the
@@ -291,8 +300,8 @@ export function recaptureGraphicStyleOverrides(
 				continue;
 			}
 
-			const overrides = captureGraphicStyleOverrides(resolution, slot, ref.entryId, current);
-			(next as Record<string, unknown>)[slot] = overrides
+			const overrides = authoredGraphicStyleOverrides(resolution, slot, ref.entryId, ref.overrides, current);
+			(next as Record<string, unknown>)[slot] = Object.keys(overrides).length > 0
 				? { entryId: ref.entryId, overrides }
 				: { entryId: ref.entryId };
 		}

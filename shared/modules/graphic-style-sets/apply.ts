@@ -331,13 +331,16 @@ export function graphicStyleChangeKey(itemId: string | null, slot: GraphicStyleS
  * fix to it. Nothing reconciles that, deliberately: an over-broad pin and a deliberate
  * whole-group pin are the same eight keys in storage, and the one signal that could
  * separate them is the reading {@link applyGraphicStyleSet} below explains is wrong.
- * What narrows such a pin is the author's next edit to the slot, through
- * `recaptureGraphicStyleOverrides`.
+ * Nothing narrows one either, since #229 — an ordinary edit used to, and what it
+ * actually narrowed was any pin the entry had caught up with, the author's included.
+ * What clears one is unbinding the slot and binding it again, which starts over with no
+ * overrides at all. Editing a pinned property does not: it re-pins it at the new value.
  *
  * The decision, the two alternatives rejected with it, and why no population needs it
  * are in `docs/adr/0006-over-broad-graphic-style-set-override-pins-are-not-migrated.md`
- * (#167, recorded under #199). Nothing here may acquire a notion of *when* an override
- * was written — that is the discredited heuristic wearing a different name.
+ * (#167, recorded under #199, amended under #229). Nothing here may acquire a notion
+ * of *when* an override was written — that is the discredited heuristic wearing a
+ * different name.
  */
 function heldGraphicStyleOverrides(
 	overrides: unknown,
@@ -352,6 +355,46 @@ function heldGraphicStyleOverrides(
 			held[key] = recorded[key];
 	}
 	return held;
+}
+
+/**
+ * What one slot records as the author's own, given what it already recorded and what
+ * the owner now holds: the pins the stored value still honours, plus every owned key
+ * that now deviates from the entry.
+ *
+ * Both paths that rewrite an override record go through here, and that is the point of
+ * it existing. Review's "Keep mine" and an ordinary property edit are asking the same
+ * question of the same two facts — what is recorded, and what this owner holds — and
+ * answering it differently is how a pin was lost. `recaptureGraphicStyleOverrides`
+ * used to derive the whole record from the deviation alone, so a pin the republished
+ * preset had *coincidentally* landed on was no longer a deviation and stopped being
+ * recorded; the next republish moving that preset away then took the property, which
+ * is exactly the failure {@link heldGraphicStyleOverrides} exists to prevent on the
+ * apply path (#229).
+ *
+ * So a pin is released by the author moving the property, never by the Style Set
+ * arriving at it. An edit away from a pinned value replaces the pin with the deviation
+ * it created, and an edit that lands back on what the entry resolves to leaves nothing
+ * recorded at all — which is the same escape it has always had, and the only one.
+ *
+ * An entry the resolution cannot honour contributes no deviations, because there is no
+ * preset in front of it to disagree with. What is already recorded survives, for the
+ * reason a Style Set that failed to load must not be why a composition quietly goes
+ * local.
+ */
+export function authoredGraphicStyleOverrides(
+	resolution: GraphicStyleSetResolution,
+	slot: GraphicStyleSlot,
+	entryId: string,
+	/** What this reference already records as the author's. */
+	recorded: unknown,
+	/** What the owner holds in this slot now. */
+	current: unknown,
+): Record<string, unknown> {
+	return {
+		...heldGraphicStyleOverrides(recorded, slot, current),
+		...captureGraphicStyleOverrides(resolution, slot, entryId, current),
+	};
 }
 
 /**
@@ -421,17 +464,10 @@ export function applyGraphicStyleSet(
 				}
 				(nextRefs as Record<string, unknown>)[slot] = {
 					entryId: ref.entryId,
-					overrides: {
-						// The pins the author already had and this owner still holds. They are
-						// not always deviations: a republished preset that lands on the value
-						// an author pinned agrees with it, and reading "mine" as "differs from
-						// the preset" alone would drop the pin — so the next republish moving
-						// that preset away would take the property with it.
-						...heldGraphicStyleOverrides(ref.overrides, slot, current),
-						// And where this owner deviates from the entry, which is every key the
-						// update was about to move.
-						...captureGraphicStyleOverrides(resolution, slot, ref.entryId, current),
-					},
+					// The pins the author already had and this owner still holds, plus every
+					// key the update was about to move. The same record an ordinary edit to
+					// this slot would leave, by the same call (#229).
+					overrides: authoredGraphicStyleOverrides(resolution, slot, ref.entryId, ref.overrides, current),
 				};
 				continue;
 			}
