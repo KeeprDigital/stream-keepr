@@ -41,10 +41,14 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		error.statusMessage = 'Service Unavailable';
 		error.message = cause.message;
 		hasMappedPublicServerMessage = true;
-		// Deliberately not marked operational. Every other branch here clears
-		// `unhandled` because it has classified a failure that a correctly built
-		// server still meets — an outage, a conflict, a bad request. This one is a
-		// bug in the server itself, so Nitro's fallback logger keeps its stack.
+		// Clearing `unhandled` below is what lets that message reach the caller at
+		// all. Nitro's handler runs after this hook and builds the response body as
+		// `message: (unhandled || fatal) ? 'Server Error' : error.message`, so an
+		// error that arrives unhandled is masked there no matter what is written
+		// here. A wiring fault can genuinely arrive that way: h3 marks any
+		// non-H3Error unhandled, and a bare `throw new ServiceWiringError(...)` is
+		// one.
+		mappedOperationalError = true;
 	}
 	else if (graphicsCapacityError) {
 		error.statusCode = graphicsCapacityError.statusCode;

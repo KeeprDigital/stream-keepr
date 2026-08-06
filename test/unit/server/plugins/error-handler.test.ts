@@ -85,20 +85,30 @@ describe('error-handler mapping logic', () => {
 			});
 		});
 
-		it('stays unhandled, unlike the operational failures around it', () => {
-			// The other branches clear `unhandled` because they classify failures
-			// that are expected in a correctly built server. A wiring fault is a
-			// bug, so Nitro's fallback logger keeps its stack.
+		it('clears unhandled, without which Nitro masks the message regardless', () => {
+			// Nitro's own handler builds the response body as
+			// `message: (unhandled || fatal) ? 'Server Error' : error.message`, and it
+			// runs after this hook. So leaving `unhandled` set would reinstate exactly
+			// the masking #243 removed — whatever is written above would never reach
+			// the caller.
+			//
+			// A wiring fault can genuinely arrive unhandled: h3 marks any non-H3Error
+			// that way, and a bare `throw new ServiceWiringError(...)` is one.
 			const error = {
-				statusCode: 503,
-				message: 'wiring',
+				statusCode: 500,
+				message: 'Something went wrong',
 				cause: new ServiceWiringError('The Screen write module', 'the Graphics Asset Library'),
 				unhandled: true,
 			};
 
 			mapPublicNitroError(error);
 
-			expect(error.unhandled).toBe(true);
+			expect(error).toMatchObject({
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: expect.stringContaining('was constructed without the Graphics Asset Library'),
+				unhandled: false,
+			});
 		});
 	});
 
