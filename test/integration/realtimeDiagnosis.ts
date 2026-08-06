@@ -36,8 +36,10 @@
  */
 
 /**
- * Named in both notices, in `.env.example` and in `.dev.vars.example`.
- * Keep the four in step.
+ * Named in both notices, in `.env.example`, in `.dev.vars.example`, and in
+ * `build/devVars.ts` as the name #130's local-configuration notice deliberately
+ * does not require. Keep the five in step — the last of them is pinned against
+ * `.dev.vars.example` by `test/unit/build/devVars.test.ts`, the rest are not.
  */
 export const INTEGRATION_ABLY_API_KEY_ENV = 'NUXT_ABLY_API_KEY';
 

@@ -1,4 +1,4 @@
-# ADR-0002: The Broadcast Graphics Graphic Item cap is set from what a show needs, and the worst case is allowed not to fit
+# ADR-0007: The Broadcast Graphics Graphic Item cap is set from what a show needs, and the worst case is allowed not to fit
 
 - **Status**: Accepted
 - **Date**: 2026-08-01
