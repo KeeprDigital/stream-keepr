@@ -1,12 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import { mapTimestamps } from '~~/server/utils/mapTimestamps';
 
 /**
- * `mapTimestamps` is declared `<T extends WithTimestamps>(entity: T): T`, so a
- * caller that hands it a `createdAt: string` is told it gets a `string` back
- * even though the function returns a `Date`. The signature understates what the
- * function does; this checks the runtime type rather than asserting it, so the
- * test still fails if the conversion ever stops happening.
+ * The declared return type now says `Date` (#256), but a type is a claim and this
+ * is the check: it reads the runtime type rather than asserting on it, so the test
+ * still fails if the conversion ever stops happening while the signature keeps
+ * promising it. The type-level block at the bottom guards the other direction.
  */
 function convertedToDate(value: Date | string): Date {
 	if (!(value instanceof Date))
@@ -82,5 +81,47 @@ describe('mapTimestamps', () => {
 		expect(result.updatedAt).toBeInstanceOf(Date);
 		expect(convertedToDate(result.createdAt).toISOString()).toBe('2024-01-01T00:00:00.000Z');
 		expect(convertedToDate(result.updatedAt).toISOString()).toBe('2024-12-31T23:59:59.000Z');
+	});
+});
+
+/**
+ * These assert nothing at run time — they are checked by `pnpm typecheck:test`,
+ * which covers this tree (#255). They exist because the defect #256 fixed was
+ * invisible to every runtime test in this file: the conversion worked and the
+ * signature described it wrongly, and only a reader ever noticed.
+ */
+describe('mapTimestamps return type', () => {
+	it('reports a string timestamp as the Date it becomes', () => {
+		const result = mapTimestamps({ createdAt: '2024-06-15T10:30:00.000Z', updatedAt: '2024-06-16T14:00:00.000Z' });
+
+		expectTypeOf(result).toEqualTypeOf<{ createdAt: Date; updatedAt: Date }>();
+	});
+
+	it('keeps a nullable timestamp nullable and leaves non-timestamp keys alone', () => {
+		const result = mapTimestamps({
+			createdAt: new Date(),
+			updatedAt: new Date(),
+			lastSeenAt: null as string | null,
+			name: 'a name',
+		});
+
+		expectTypeOf(result.lastSeenAt).toEqualTypeOf<Date | null>();
+		expectTypeOf(result.name).toEqualTypeOf<string>();
+	});
+
+	it('leaves an At key alone when it holds something the body never rewrites', () => {
+		const result = mapTimestamps({ createdAt: new Date(), updatedAt: new Date(), reversalCompletesAt: 250 });
+
+		expectTypeOf(result.reversalCompletesAt).toEqualTypeOf<number>();
+	});
+
+	it('keeps an optional timestamp optional', () => {
+		const result = mapTimestamps({ createdAt: new Date(), updatedAt: new Date() } as {
+			createdAt: Date;
+			updatedAt: Date;
+			resolvedAt?: string;
+		});
+
+		expectTypeOf(result).toEqualTypeOf<{ createdAt: Date; updatedAt: Date; resolvedAt?: Date }>();
 	});
 });
