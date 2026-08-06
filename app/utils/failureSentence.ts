@@ -46,3 +46,34 @@ export function failureSentence(caught: unknown): string | undefined {
 	const message = (caught as { data?: { message?: unknown } } | null)?.data?.message;
 	return typeof message === 'string' && message.length > 0 ? message : undefined;
 }
+
+/**
+ * Run one action, re-raising a failure that wrote a sentence as an `Error` whose own
+ * message is that sentence.
+ *
+ * The re-raise is what makes the sentence travel. Every reporting seam in this
+ * application — `useAsyncAction`, the Event Data lifecycle's own load catch, a
+ * component's `catch` — ends up reading `Error.message`, and on a `$fetch` failure that
+ * is the transport's line: `[POST] "…": 409 Conflict`. A sentence living in the response
+ * body therefore reaches a reader only by becoming the message of the error carrying it
+ * (#245, #262).
+ *
+ * The original failure is kept as the `cause`, so its status and body survive for anyone
+ * downstream who wants them. They do not survive on the raised error itself, which is
+ * deliberate: this is the boundary where a failure stops being a transport event and
+ * becomes something to say, and a caller that needs to *branch* on a status should read
+ * it before this rather than after. A failure that wrote no sentence is re-raised
+ * untouched, so nothing that already handles one is disturbed.
+ *
+ * Gaining a sentence is not being recognised as a refusal — a code a surface acts on is
+ * a separate question, asked elsewhere and unaffected here (#230).
+ */
+export async function withFailureSentence<T>(action: () => Promise<T>): Promise<T> {
+	try {
+		return await action();
+	}
+	catch (failure) {
+		const sentence = failureSentence(failure);
+		throw sentence === undefined ? failure : new Error(sentence, { cause: failure });
+	}
+}

@@ -1,4 +1,4 @@
-interface AsyncActionOptions {
+export interface AsyncActionOptions {
 	loadingRef?: Ref<boolean>;
 	errorRef?: Ref<string | null>;
 	onError?: (error: unknown) => void;
