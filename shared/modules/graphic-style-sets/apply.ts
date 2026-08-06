@@ -333,6 +333,8 @@ export function graphicStyleChangeKey(itemId: string | null, slot: GraphicStyleS
  * separate them is the reading {@link applyGraphicStyleSet} below explains is wrong.
  * Nothing narrows one either, since #229 — an ordinary edit used to, and what it
  * actually narrowed was any pin the entry had caught up with, the author's included.
+ * What clears one is unbinding the slot and binding it again, which starts over with no
+ * overrides at all. Editing a pinned property does not: it re-pins it at the new value.
  *
  * The decision, the two alternatives rejected with it, and why no population needs it
  * are in `docs/adr/0006-over-broad-graphic-style-set-override-pins-are-not-migrated.md`

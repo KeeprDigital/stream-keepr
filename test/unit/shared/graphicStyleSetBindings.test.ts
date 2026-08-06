@@ -11,6 +11,7 @@ import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
 import { describe, expect, it } from 'vitest';
 import {
 	applyGraphicStyleSet,
+	bindGraphicStyleRef,
 	captureGraphicStyleOverrides,
 	detachGraphicStyleRefs,
 	GRAPHIC_STYLE_SLOT_OWNED_KEYS,
@@ -22,6 +23,7 @@ import {
 	recaptureGraphicStyleOverrides,
 	replaceGraphicStyleRefs,
 	resolveGraphicStyleSet,
+	unbindGraphicStyleRef,
 } from '~~/shared/modules/graphic-style-sets';
 import { GRAPHIC_SURFACE_STYLE_SLOT_KINDS, squareShapeGeometry } from '~~/shared/modules/graphics';
 import { GRAPHIC_STYLE_SLOT_VALUES } from '~~/shared/types/graphicStyleSet';
@@ -1009,11 +1011,13 @@ describe('recaptureGraphicStyleOverrides', () => {
 	 * this pin from a deliberate one the Style Set had caught up with. They are the same
 	 * keys in storage, which is the reading ADR-0006 already rejects for a migration.
 	 *
-	 * So an over-broad pin now survives an edit, narrowed only where the author moved a
-	 * property themselves. The population that could be carrying one is empty by
-	 * construction (#60), and losing a real override is the worse failure of the two.
+	 * So an over-broad pin survives an edit at full width. The key the author moves is not
+	 * an exception: the recorded claim on it goes stale and the deviation the edit created
+	 * replaces it, which is a re-pin at the new value rather than a release. The population
+	 * that could be carrying one is empty by construction (#60), and losing a real override
+	 * is the worse failure of the two.
 	 */
-	it('keeps an over-broad pin except in the key the author moves', () => {
+	it('keeps all eight keys of an over-broad pin, re-pinning the one the author moves', () => {
 		const resolution = resolveGraphicStyleSet(styleSet());
 		const inStep = inheritedTypography();
 		// What the pre-#162 "Keep mine" recorded: the whole property group, every key of
@@ -1030,9 +1034,75 @@ describe('recaptureGraphicStyleOverrides', () => {
 
 		expect(headlineOf(recaptured).styleRefs?.typography)
 			.toEqual({ entryId: 'heading', overrides: { ...wholeGroup, fontSize: 30 } });
-		// And the seven keys the author never touched go on inheriting nothing, which is
+		// Still eight keys wide, so every one of them goes on inheriting nothing. That is
 		// the cost ADR-0006's Consequences names rather than the narrowing it used to.
+		expect(Object.keys(headlineOf(recaptured).styleRefs!.typography!.overrides!)).toHaveLength(8);
 		expect(graphicStyleUpdateChanges(recaptured, resolveGraphicStyleSet(styleSet('#00ff88')))).toEqual([]);
+	});
+
+	/**
+	 * The one thing that takes a key off a pin, and the reason it is not much of an escape.
+	 *
+	 * A recorded override survives while the stored value honours it, so the author releases
+	 * one by landing the property exactly on what the entry resolves to — not by moving it,
+	 * which re-pins it at wherever they moved it to. And a fully pinned slot produces no
+	 * review row, so the value they would have to land on is never shown to them. What
+	 * clears a pin in practice is unbinding the slot and binding it again, below.
+	 */
+	it('releases one key of an over-broad pin when the author lands it back on the entry\'s value', () => {
+		const resolution = resolveGraphicStyleSet(styleSet());
+		const inStep = inheritedTypography();
+		const wholeGroup = Object.fromEntries(
+			GRAPHIC_STYLE_SLOT_OWNED_KEYS.typography.map(key => [key, inStep[key as keyof typeof inStep]]),
+		);
+		const overPinned = graphic([textItem({
+			typography: inStep,
+			styleRefs: { typography: { entryId: 'heading', overrides: wholeGroup } },
+		})]);
+
+		const moved = recaptureGraphicStyleOverrides(editFontSize(overPinned, 30), resolution, LINKED, overPinned);
+		// Back onto the entry's own size, which is what `styleSet()` resolves `heading` to.
+		const landed = recaptureGraphicStyleOverrides(editFontSize(moved, 64), resolution, LINKED, moved);
+
+		const { fontSize: _released, ...stillPinned } = wholeGroup;
+		expect(headlineOf(landed).styleRefs?.typography).toEqual({ entryId: 'heading', overrides: stillPinned });
+		// And no review row ever offered that 64, because a fully pinned slot resolves to
+		// what the owner already holds — so nothing on screen names the value to land on.
+		expect(graphicStyleUpdateChanges(overPinned, resolveGraphicStyleSet(styleSet('#ff0044', 99)))).toEqual([]);
+	});
+
+	/**
+	 * The reset ADR-0006 names, and the only one that clears a whole pin.
+	 *
+	 * Unbinding keeps the values and drops the provenance; binding again starts with no
+	 * overrides at all, because the author has just said "this comes from there". Both are
+	 * offered next to the slot's picker, so this is a thing an author can actually do.
+	 */
+	it('clears an over-broad pin when the slot is unbound and bound again', () => {
+		const inStep = inheritedTypography();
+		const overPinned = graphic([textItem({
+			typography: inStep,
+			styleRefs: {
+				typography: {
+					entryId: 'heading',
+					overrides: Object.fromEntries(
+						GRAPHIC_STYLE_SLOT_OWNED_KEYS.typography.map(key => [key, inStep[key as keyof typeof inStep]]),
+					),
+				},
+			},
+		})]);
+		const republished = resolveGraphicStyleSet(styleSet('#ff0044', 99));
+
+		const rebound = bindGraphicStyleRef(
+			unbindGraphicStyleRef(overPinned, 'headline', 'typography'),
+			'headline',
+			'typography',
+			'heading',
+			republished,
+		);
+
+		expect(headlineOf(rebound).styleRefs?.typography).toEqual({ entryId: 'heading' });
+		expect(headlineOf(rebound).typography.fontSize).toBe(99);
 	});
 
 	/**
