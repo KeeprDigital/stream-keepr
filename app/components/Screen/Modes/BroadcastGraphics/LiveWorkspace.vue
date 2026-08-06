@@ -97,6 +97,75 @@ const {
 	retry: retryAssetContent,
 } = useBroadcastGraphicsAssetEligibility(() => props.graphics);
 
+/**
+ * The two Graphic Asset failures, named once for both surfaces that report them.
+ *
+ * The check made before Take is sent and the authority's own refusal are the same
+ * fact about the same Graphic Asset Reference, seen a moment apart — the second is
+ * what the first misses in the residual race. Reading as two different failures
+ * would make the rarer one, which is the one that reaches an operator mid-show,
+ * the one they have never seen the words for.
+ */
+const ASSET_REFUSAL_TITLES = {
+	missing: 'Missing Graphic Asset Reference',
+	unavailable: 'Unavailable Graphic Asset Content',
+} as const;
+
+const ASSET_REFUSAL_ALERTS: Record<'missing' | 'unavailable', {
+	title: string;
+	color: 'error' | 'warning';
+}> = {
+	// Repair or replace it; retrying is the one thing that provably cannot work.
+	missing: { title: ASSET_REFUSAL_TITLES.missing, color: 'error' },
+	// The bytes come back, so this one is worth trying again.
+	unavailable: { title: ASSET_REFUSAL_TITLES.unavailable, color: 'warning' },
+};
+
+/**
+ * How this Screen's last unsuccessful playout action reads to an operator.
+ *
+ * A refusal is not a failure of the action, and titling it as one told the operator
+ * the wrong thing twice over: "Playout action failed" over a transport status line
+ * says only that something went wrong, while the authority had written a sentence
+ * naming the very Graphic Asset Reference that has to be repaired (#230). So a
+ * refusal is titled by what it is, and carries the sentence the authority wrote;
+ * what keeps "failed" is what genuinely failed — a request this client could not
+ * complete, whose message is all anyone has.
+ *
+ * A refusal outside the Graphic Asset vocabulary — a superseded acceptance, a
+ * required Graphic Input with no value — is still the authority answering rather
+ * than a fault, and its own sentence already names the thing. It is titled as a
+ * refusal without being given a third set of words for a fault it is not.
+ *
+ * A field-scoped refusal is reported here as well as against its own field. That is
+ * deliberate: Live Control renders only for the selected Broadcast Graphic, so an
+ * operator who has selected nothing — or another graphic — would otherwise watch a
+ * media selection fail in silence. The field keeps the better report, naming the
+ * choice; this one exists so there is always some report.
+ */
+const playoutFailure = computed(() => {
+	if (!sessionStore.error)
+		return null;
+
+	const outcome = sessionStore.refusal ? graphicAssetRefusalOutcome(sessionStore.refusal.code) : undefined;
+	if (outcome)
+		return { ...ASSET_REFUSAL_ALERTS[outcome], icon: 'i-lucide-image-off', description: sessionStore.error };
+	if (sessionStore.refusal) {
+		return {
+			title: 'Playout action refused',
+			color: 'warning' as const,
+			icon: 'i-lucide-triangle-alert',
+			description: sessionStore.error,
+		};
+	}
+	return {
+		title: 'Playout action failed',
+		color: 'error' as const,
+		icon: 'i-lucide-triangle-alert',
+		description: sessionStore.error,
+	};
+});
+
 /*
  * Live Control projects the same lifecycle phase from the same authoritative effective
  * start times as every Screen Output, on the same authoritative clock, so an operator
@@ -344,16 +413,17 @@ async function resetLiveState() {
 
 				<!--
 					A rejected playout action must never be invisible: the operator has to
-					know that what they asked for is not what program is showing.
+					know that what they asked for is not what program is showing — and,
+					when the authority said why, what it said.
 				-->
 				<UAlert
-					v-if="sessionStore.error"
+					v-if="playoutFailure"
 					data-testid="playout-error"
-					color="error"
+					:color="playoutFailure.color"
 					variant="soft"
-					icon="i-lucide-triangle-alert"
-					title="Playout action failed"
-					:description="sessionStore.error"
+					:icon="playoutFailure.icon"
+					:title="playoutFailure.title"
+					:description="playoutFailure.description"
 				/>
 
 				<UButton
@@ -450,7 +520,7 @@ async function resetLiveState() {
 							:color="entry.assetRetryable ? 'warning' : 'error'"
 							variant="soft"
 							icon="i-lucide-image-off"
-							:title="entry.assetRetryable ? 'Unavailable Graphic Asset Content' : 'Missing Graphic Asset Reference'"
+							:title="entry.assetRetryable ? ASSET_REFUSAL_TITLES.unavailable : ASSET_REFUSAL_TITLES.missing"
 							:description="entry.assetBlockedReason"
 						/>
 						<UButton

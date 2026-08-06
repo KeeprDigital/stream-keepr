@@ -2,6 +2,7 @@ import type {
 	BroadcastGraphicChannelContext,
 	BroadcastGraphicsLiveState,
 	BroadcastGraphicsRecoveryFault,
+	BroadcastGraphicsRejectionCode,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/types/graphics';
 import type { GraphicAssetReferenceStatus } from '~~/shared/types/graphicsAsset';
@@ -29,6 +30,8 @@ const mockTake = vi.fn();
 const mockOut = vi.fn();
 const mockPendingGraphicIds = ref<string[]>([]);
 const mockError = ref<string | null>(null);
+/** The domain refusal `error` is reporting, when what it is reporting is one. */
+const mockRefusal = ref<{ code: BroadcastGraphicsRejectionCode; message: string } | null>(null);
 /** The authoritative clock the real store derives from a server offset. */
 const mockServerNow = ref(1_700_000_000_000);
 const mockSessions = ref(new Map<number, { id: number; sequence: number }>());
@@ -66,6 +69,9 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	out: mockOut,
 	get error() {
 		return mockError.value;
+	},
+	get refusal() {
+		return mockRefusal.value;
 	},
 	get sessions() {
 		return mockSessions.value;
@@ -225,6 +231,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		mockLiveState.value = createInitialBroadcastGraphicsLiveState();
 		mockPendingGraphicIds.value = [];
 		mockError.value = null;
+		mockRefusal.value = null;
 		mockRecoveryFault.value = null;
 		mockConnectionState.value = 'connected';
 		mockConfirmResult.value = true;
@@ -369,6 +376,67 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.get('[data-testid="playout-error"]').text()).toContain('live session has ended');
+		// Nothing refused it, so it is what it says: an action this client could not
+		// complete.
+		expect(wrapper.get('[data-testid="playout-error"]').text()).toContain('Playout action failed');
+	});
+
+	it('names a Take the authority refused for what it is, in the words the stack already uses', async () => {
+		// The pre-check blocks this before the button in the ordinary case, so what gets
+		// here is the residual race and the second operator on stale data — the moment an
+		// operator has nothing else to go on. "Playout action failed" said neither what
+		// was wrong nor what to do about it (#230).
+		mockError.value = 'Graphic Asset Reference at graphics.promo.items.sting.asset is missing, '
+			+ 'so this Broadcast Graphic cannot be taken on air';
+		mockRefusal.value = { code: 'missing-asset-reference', message: mockError.value };
+
+		const wrapper = await mountComponent();
+
+		const alert = wrapper.get('[data-testid="playout-error"]');
+		expect(alert.text()).toContain('Missing Graphic Asset Reference');
+		expect(alert.text()).toContain('graphics.promo.items.sting.asset');
+		expect(alert.text()).not.toContain('Playout action failed');
+	});
+
+	it('separates content that is only temporarily unavailable from a reference that has gone', async () => {
+		// Repair or replace it, versus retry: the two refusals prescribe opposite moves,
+		// and the title is what tells an operator which one they are looking at.
+		mockError.value = 'Graphic Asset Content at graphics.promo.items.sting.asset is temporarily '
+			+ 'unavailable, so this Broadcast Graphic cannot be taken on air';
+		mockRefusal.value = { code: 'unavailable-asset-content', message: mockError.value };
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.get('[data-testid="playout-error"]').text()).toContain('Unavailable Graphic Asset Content');
+	});
+
+	it('still reports a field-scoped refusal, which Live Control may not be on screen to show', async () => {
+		// Deliberate double report. Live Control renders only for the selected Broadcast
+		// Graphic, so an operator who has selected nothing — or another graphic — would
+		// watch a media selection fail in silence. The field keeps the better report,
+		// naming the choice; this one exists so there is always some report.
+		mockError.value = 'Graphic Asset Reference for Graphic Input badge is missing';
+		mockRefusal.value = { code: 'missing-asset-reference', message: mockError.value };
+
+		const wrapper = await mountComponent([lowerThird, slate], null);
+
+		expect(wrapper.find('[data-testid="live-control"]').exists()).toBe(false);
+		expect(wrapper.get('[data-testid="playout-error"]').text()).toContain('Missing Graphic Asset Reference');
+	});
+
+	it('reports a refusal about the show as a refusal rather than as a fault', async () => {
+		// A required Graphic Input with no value is the authority answering, and its own
+		// sentence already names the thing. It is not given the Graphic Asset words for a
+		// failure that has nothing to do with an asset.
+		mockError.value = 'Title must have a value before this Broadcast Graphic can go on air';
+		mockRefusal.value = { code: 'required-input-unavailable', message: mockError.value };
+
+		const wrapper = await mountComponent();
+
+		const alert = wrapper.get('[data-testid="playout-error"]');
+		expect(alert.text()).toContain('Playout action refused');
+		expect(alert.text()).toContain('must have a value');
+		expect(alert.text()).not.toContain('Graphic Asset');
 	});
 
 	it('shows no error banner while playout is healthy', async () => {
