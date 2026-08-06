@@ -109,25 +109,11 @@ vi.mock('~/composables/repositories/useBroadcastGraphicsLiveSessionRepository', 
 	useBroadcastGraphicsLiveSessionRepository: () => repository,
 }));
 
-// Mirrors the real composable, exactly as the store's own tests do: failures land in
-// the caller's error ref rather than propagating.
-mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: vi.fn(async (
-		action: () => Promise<unknown>,
-		options?: { loadingRef?: { value: boolean }; errorRef?: { value: string | null } },
-	) => {
-		if (options?.errorRef)
-			options.errorRef.value = null;
-		try {
-			return await action();
-		}
-		catch (failure: unknown) {
-			if (options?.errorRef)
-				options.errorRef.value = failure instanceof Error ? failure.message : 'An error occurred';
-			return null;
-		}
-	}),
-}));
+/*
+ * `useAsyncAction` is deliberately not mocked, as in the store's own tests: it is
+ * auto-imported and does nothing a test needs to stand in for, and a hand-written
+ * copy of a seam is a thing that can drift from what it copies (#241).
+ */
 
 // The installation-wide clock. Nothing in the merge path reads it; the store asks for
 // it while it is being set up, so it is answered here rather than left to a real sync.

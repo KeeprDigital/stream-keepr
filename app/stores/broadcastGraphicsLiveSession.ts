@@ -190,10 +190,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	}
 
 	function isConflict(failure: unknown): boolean {
-		if (typeof failure !== 'object' || failure === null)
-			return false;
-		const status = 'statusCode' in failure ? failure.statusCode : ('status' in failure ? failure.status : undefined);
-		return status === 409;
+		return failureStatus(failure) === 409;
 	}
 
 	function liveState(screenId: number): BroadcastGraphicsLiveState {
