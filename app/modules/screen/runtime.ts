@@ -134,11 +134,33 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		};
 	}
 
+	/**
+	 * Create a Screen, and hold the server's answer the way every other write's is held.
+	 *
+	 * The answer used to be pushed unconditionally, which made `screens` able to hold
+	 * one id twice — a state #251's review constructed through the public store API,
+	 * and the one in which the version comparison and the revision a refusal answers
+	 * with could name different entries. `cacheScreen` is the discipline that keeps an
+	 * id to one entry (#261).
+	 *
+	 * Which revision survives a collision is the same question `cachedRevision` already
+	 * answers everywhere else, so it is answered by the same comparison rather than by
+	 * a rule of this function's own: a create's answer is refused exactly when a load's
+	 * would be, and no door into `screens` can move a Screen's `stateVersion` backwards.
+	 * Equal is not older, as everywhere the comparison is used.
+	 *
+	 * It returns what the server created either way. A loader hands its answer to a
+	 * caller that mirrors it into its own view of the cache, so a refusal there must
+	 * answer with the revision kept; this caller asked for a Screen to be made and
+	 * navigates to it, and handing back an unrelated entry that happens to share an id
+	 * would answer a question nobody asked.
+	 */
 	async function createScreen(eventId: number, input: CreateScreenInput) {
 		return state.executeAction(
 			async () => {
 				const createdScreen = await screenRepo.create(eventId, input);
-				state.screens.value.push(createdScreen);
+				if (!isSupersededByCache(createdScreen))
+					cacheScreen(createdScreen);
 				return createdScreen;
 			},
 			{ errorRef: state.error },
@@ -389,9 +411,13 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * fallback belongs with the aside, not before it.
 	 *
 	 * That disjointness is about the two holders, and says nothing about `screens`
-	 * holding one id twice — which it can, because `createScreen` pushes its answer
-	 * without checking (a known defect, ticketed separately). So this returns the
-	 * Screen rather than its version, and every consumer selects through it: #251's
+	 * holding one id twice. Nothing this client does builds that state any more —
+	 * `createScreen` was the last door that pushed without checking, and it now
+	 * enters through `cacheScreen` like every other write (#261) — but the reduction
+	 * is over every matching entry regardless, because a list response is not this
+	 * client's to guarantee, and because one selection that cannot disagree with
+	 * itself is worth more than an argument about reachability. So this returns the
+	 * Screen rather than its version, and every consumer selects through it: the
 	 * loaders answer a refusal with exactly the revision the comparison refused
 	 * against. Selecting twice is what went wrong — a `find` beside this `max`
 	 * answered a refusal with an arbitrary entry, older than both the cache's
@@ -418,9 +444,10 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 *
 	 * Nothing in that is particular to an announcement: a GET the operator asked
 	 * for — a page load, a route change, a refresh — races a save the same way, so
-	 * the `screens` loaders in the store gate on this too (#251). What it still
-	 * cannot see is an *unsettled* edit, which has no server revision yet and is
-	 * masked by the editing field rather than by this comparison.
+	 * all three loaders in the store gate on this too (#251, #261), and so does a
+	 * create's answer (#261). What it still cannot see is an *unsettled* edit, which
+	 * has no server revision yet and is masked by the editing field rather than by
+	 * this comparison.
 	 *
 	 * `stateVersion` is the ordering authority: the server bumps it once per Screen
 	 * write, and it only ever reaches the cache from a write's own answer, never

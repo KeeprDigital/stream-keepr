@@ -55,8 +55,8 @@ export const useScreenStore = defineStore('screen', () => {
 	 * would undo an edit already back on screen. `isSupersededByCache` is the
 	 * comparison #236 built for the announce path, reused here rather than copied.
 	 *
-	 * A refusal answers with the revision the cache kept, because both loaders hand
-	 * their answer to a caller that mirrors it into its own state — returning the
+	 * A refusal answers with the revision the cache kept, because all three loaders
+	 * hand their answer to a caller that mirrors it into its own state — returning the
 	 * refused payload would put it in front of the operator anyway. That revision
 	 * comes from `cachedRevision`, the same selection `isSupersededByCache` compared
 	 * against, so the two cannot name different entries when the cache holds one id
@@ -98,6 +98,23 @@ export const useScreenStore = defineStore('screen', () => {
 		}
 	}
 
+	/**
+	 * Load the Screen an output was opened on, and keep the newer of it and the cache.
+	 *
+	 * The comparison is the other two loaders' (#251), and reaches this one for the
+	 * reason it reached them: a GET issued before a save commits can be served after
+	 * it settles. What made this loader the last version-blind one is that the single
+	 * route reaching it is the Screen Output, whose client issues no writes — so the
+	 * race had nothing to race against. That is a fact about today's routing, not about
+	 * this loader, and the Feature Match Overlay preview aside is the change that ends
+	 * it (see `cachedRevision`).
+	 *
+	 * `activeScreen` is emptied before the GET, deliberately: while a slug is loading
+	 * this client holds no active Screen, and showing the previous one under the new
+	 * slug would be worse than showing nothing. So the holder the comparison reads here
+	 * is `screens` — which is where a writing client's save lands anyway, since every
+	 * write path refuses a Screen it does not hold there.
+	 */
 	async function loadScreenBySlug(eventId: number, slug: string) {
 		const flight = activeScreenLoads.begin();
 		const token = beginLoad();
@@ -108,8 +125,9 @@ export const useScreenStore = defineStore('screen', () => {
 				throw new Error('Screen not found');
 			if (flight.stale)
 				return null;
-			activeScreen.value = screen;
-			return screen;
+			const kept = keptRevision(screen);
+			activeScreen.value = kept;
+			return kept;
 		}
 		catch (caughtError) {
 			if (flight.current)
