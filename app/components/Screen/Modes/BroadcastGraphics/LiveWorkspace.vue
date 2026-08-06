@@ -60,6 +60,18 @@ const emit = defineEmits<{ select: [graphicId: string] }>();
 const sessionStore = useBroadcastGraphicsLiveSessionStore();
 
 /**
+ * The one authoritative instant everything below is projected at.
+ *
+ * Declared here, ahead of the clock that advances it, because it is read further up
+ * this file than that clock is defined: what is on program, which values are showing,
+ * and whether any of them are media are all answers to the same question — "at
+ * *when*?" — and reading two of them at two instants is how a workspace disagrees with
+ * the output it is watching. The clock itself sits below, beside the projection it
+ * drives.
+ */
+const now = ref(sessionStore.serverNow());
+
+/**
  * The Program monitor is the authoritative Overlay Output itself, so it resolves
  * media exactly as a capture browser does — through a Screen Output Asset
  * Capability. Without one it would show every graphic except its media, which is
@@ -276,8 +288,10 @@ const playoutFailure = computed(() => {
  * The clock advances while anything is in flight and stops when everything is settled,
  * because a settled phase cannot change and an operator's browser has better things to
  * do sixty times a second.
+ *
+ * The instant it advances, `now`, is declared at the top of this file — it is read
+ * above here as well as below.
  */
-const now = ref(sessionStore.serverNow());
 let frame: number | null = null;
 
 function stopClock() {
