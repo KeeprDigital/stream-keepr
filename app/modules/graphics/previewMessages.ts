@@ -8,8 +8,10 @@ import { isGraphicsSelectionTarget } from './selection';
  * preview exchange. The preview is a real Screen Output frame, so the editor
  * pushes the working composition into it and the frame reports selections back.
  *
- * Both guards demand the expected origin and window, so a frame the editor did
- * not embed — and any cross-origin sender — is ignored.
+ * Every guard here demands the expected origin and window, so a frame the editor
+ * did not embed — and any cross-origin sender — is ignored. That check is
+ * `isFromExpectedSender`, exported so the hosts with their own preview messages
+ * share it rather than reimplementing it.
  */
 
 export const GRAPHICS_PREVIEW_STATE_MESSAGE = 'graphics-compositor:preview-state';
@@ -132,18 +134,35 @@ export function readGraphicsPreviewAnimationPlan(value: unknown): GraphicsPrevie
 	};
 }
 
-interface MessageEnvelope {
+export interface MessageEnvelope {
 	origin: string;
 	source: unknown;
 	data: unknown;
 }
 
-interface ExpectedSender {
+export interface ExpectedSender {
 	origin: string;
 	source: unknown;
 }
 
-function isFromExpectedSender(message: MessageEnvelope, expected: ExpectedSender): boolean {
+/**
+ * Whether a `postMessage` arrival came from the one window this surface is
+ * entitled to hear from, carrying something to read.
+ *
+ * Exported because it is the whole of the sender check for every preview
+ * transport, not only the compositor's own: a Feature Match Overlay pushes a
+ * host-owned configuration and two selections over the same channel, and those
+ * guards are built from this rather than from copies of it (#252). Duplicated
+ * security logic drifts, and the copy that drifts looser is the one nothing
+ * notices.
+ *
+ * Demanding that `expected.source` exists is not redundant with comparing it.
+ * A `MessageEvent` carries a null source unless a window sent it, and a preview
+ * frame that is gone — or not yet embedded — leaves the expected source null or
+ * undefined; comparing the two then matches, admitting a message from nobody at
+ * exactly the moment there is nobody entitled to send one.
+ */
+export function isFromExpectedSender(message: MessageEnvelope, expected: ExpectedSender): boolean {
 	return message.origin === expected.origin
 		&& message.source === expected.source
 		&& expected.source !== null
