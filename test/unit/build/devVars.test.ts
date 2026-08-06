@@ -141,8 +141,13 @@ describe('announcing a checkout with no local configuration', () => {
 		// `.env` as well as `.dev.vars`: a worktree is missing both, and a notice that
 		// named only the file it happened to look for would send the reader back for
 		// the other one after the next 503.
-		expect(DEV_VARS_ABSENT_NOTICE).toContain('.dev.vars');
-		expect(DEV_VARS_ABSENT_NOTICE).toContain('.env');
+		//
+		// The lookaheads are load-bearing. `toContain('.env')` is satisfied by
+		// `.env.example`, which is the one file that is *not* an answer — both examples
+		// ship their names with empty values — so the first version of this assertion
+		// passed against a notice that had stopped naming `.env` at all.
+		expect(DEV_VARS_ABSENT_NOTICE).toMatch(/\.env(?!\.example)/);
+		expect(DEV_VARS_ABSENT_NOTICE).toMatch(/\.dev\.vars(?!\.example)/);
 		expect(DEV_VARS_ABSENT_NOTICE).toContain('.env.example');
 		expect(DEV_VARS_ABSENT_NOTICE).toContain('.dev.vars.example');
 	});
@@ -169,8 +174,8 @@ describe('announcing a checkout with no local configuration', () => {
 		const doc = readFileSync(fileURLToPath(new URL('../../../docs/agents/parallel-rounds.md', import.meta.url)), 'utf8');
 
 		expect(DEV_VARS_ABSENT_NOTICE).toContain('docs/agents/parallel-rounds.md');
-		expect(doc).toContain('.dev.vars');
-		expect(doc).toContain('.env');
+		expect(doc).toMatch(/\.env(?!\.example)/);
+		expect(doc).toMatch(/\.dev\.vars(?!\.example)/);
 	});
 });
 
