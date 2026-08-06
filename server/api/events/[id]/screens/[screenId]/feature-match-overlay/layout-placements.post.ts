@@ -75,13 +75,12 @@ export default defineEventHandler(async (event) => {
 	const layout = structuredClone(template.document);
 
 	try {
-		const updated = await screenWriteModule({
-			graphicsAssets: graphicsAssetLibraryForEvent(event),
-		}).updateModeConfig({
+		const updated = await screenWriteModule().updateModeConfig({
 			eventId,
 			screenId,
 			mode: 'feature-match-overlay',
 			config: { layout },
+			graphicsAssets: () => graphicsAssetLibraryForEvent(event),
 			stateVersion: body.stateVersion,
 			originConnectionId: getOriginConnectionId(event),
 		});

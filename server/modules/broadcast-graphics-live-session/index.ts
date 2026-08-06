@@ -28,6 +28,7 @@ import {
 import { graphicBindingDataService } from '~~/server/services/graphicBindingData';
 import { screenService } from '~~/server/services/screen';
 import { publishMessage } from '~~/server/utils/ably';
+import { ServiceWiringError } from '~~/server/utils/errors';
 import {
 	broadcastGraphicChannelContexts,
 	BroadcastGraphicsCommandRejection,
@@ -56,6 +57,36 @@ interface ApplyCommandParams {
 	sessionId: number;
 	command: BroadcastGraphicsCommand;
 	originConnectionId?: string;
+}
+
+/**
+ * A playout path asked the Graphics Asset Library, and this module was never
+ * handed one.
+ *
+ * A wiring fault rather than a configuration one — nothing is missing from the
+ * environment and no setting will fix it — so it carries `ServiceWiringError`,
+ * which `mapPublicNitroError` passes through with `unhandled` cleared. Without
+ * the cause the sanitizer rewrites it to a bare 'Internal Server Error', leaving
+ * the operator of a misassembled build nothing to report. See #246, which is
+ * #243's defect in this module.
+ *
+ * No route reaches it today: both call sites sit under `applyCommand`, whose only
+ * route supplies the library, and the two entry points a dependency-less Screen
+ * write calls — `endSessionsForScreen` and `republishLiveSessionReferences` —
+ * never touch the dependency. It is the branch a future construction site would
+ * fall into.
+ */
+function missingGraphicsAssetLibrary() {
+	const cause = new ServiceWiringError(
+		'The Broadcast Graphics Live Session module',
+		'the Graphics Asset Library',
+	);
+	return createError({
+		statusCode: cause.statusCode,
+		statusMessage: 'Service Unavailable',
+		message: cause.message,
+		cause,
+	});
 }
 
 /**
@@ -153,13 +184,8 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		if (references.length === 0)
 			return;
 
-		if (!dependencies.graphicsAssets) {
-			throw createError({
-				statusCode: 503,
-				statusMessage: 'Service Unavailable',
-				message: 'Graphics Asset Library is unavailable',
-			});
-		}
+		if (!dependencies.graphicsAssets)
+			throw missingGraphicsAssetLibrary();
 
 		for (const item of references) {
 			const status = await dependencies.graphicsAssets.inspectGraphicAssetRevision({
@@ -219,13 +245,8 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		if (declaration?.type !== 'media')
 			return command;
 
-		if (!dependencies.graphicsAssets) {
-			throw createError({
-				statusCode: 503,
-				statusMessage: 'Service Unavailable',
-				message: 'Graphics Asset Library is unavailable',
-			});
-		}
+		if (!dependencies.graphicsAssets)
+			throw missingGraphicsAssetLibrary();
 
 		const status = await dependencies.graphicsAssets.inspectGraphicAssetRevision({
 			assetId: graphicAssetId(value.assetId),

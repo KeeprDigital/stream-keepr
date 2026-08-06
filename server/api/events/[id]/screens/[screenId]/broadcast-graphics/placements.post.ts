@@ -69,12 +69,11 @@ export default defineEventHandler(async (event) => {
 	);
 
 	try {
-		const updated = await screenWriteModule({
-			graphicsAssets: graphicsAssetLibraryForEvent(event),
-		}).updateModeConfig({
+		const updated = await screenWriteModule().updateModeConfig({
 			eventId,
 			screenId,
 			mode: 'broadcast-graphics',
+			graphicsAssets: () => graphicsAssetLibraryForEvent(event),
 			// The copy joins the front of the Graphic Layer Order, where a newly authored
 			// Broadcast Graphic also lands.
 			config: { graphics: [...existing, graphic] },

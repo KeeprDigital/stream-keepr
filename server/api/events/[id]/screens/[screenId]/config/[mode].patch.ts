@@ -27,14 +27,15 @@ export default defineEventHandler(async (event) => {
 	const { stateVersion, ...rawConfig } = versionedPatchSchema.parse(rawBody);
 	const body = schema.parse(rawConfig);
 
-	return await screenWriteModule({
-		graphicsAssets: graphicsAssetLibraryForEvent(event),
-	}).updateModeConfig({
+	return await screenWriteModule().updateModeConfig({
 		eventId,
 		screenId,
 		mode,
 		config: body,
 		stateVersion,
 		originConnectionId: getOriginConnectionId(event),
+		// A thunk: this route serves all ten Screen Modes, and only a write that
+		// changes a Graphic Asset Reference asks the library anything.
+		graphicsAssets: () => graphicsAssetLibraryForEvent(event),
 	});
 });
