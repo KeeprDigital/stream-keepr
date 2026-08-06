@@ -10,6 +10,7 @@ import { crc32 } from 'node:zlib';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
+import { testGraphicAssetId, testGraphicAssetRevisionId } from '../helpers/graphicsAssetIdentities';
 import { collectStream } from '../helpers/storedZipArchive';
 import {
 	readTemplatePackageParts,
@@ -27,7 +28,7 @@ const basePixelPng = Uint8Array.from(Buffer.from(
 ));
 
 /** Appends a valid ancillary text chunk so this suite owns a distinct digest. */
-function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array {
+function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array<ArrayBuffer> {
 	const payload = Buffer.concat([Buffer.from('tEXt'), Buffer.from(`${keyword}\0`)]);
 	const length = Buffer.alloc(4);
 	length.writeUInt32BE(payload.byteLength - 4, 0);
@@ -50,7 +51,7 @@ function digestOf(bytes: Uint8Array) {
 
 let installationSequence = 0;
 
-async function receivePackage(archive: Uint8Array) {
+async function receivePackage(archive: Uint8Array<ArrayBuffer>) {
 	const initiated = await $fetch<GraphicsIngestionOperation>(
 		'/api/graphics-assets/ingestion-operations',
 		{
@@ -97,7 +98,7 @@ describe('template Package installation through the API boundary', () => {
 	/** Every ingestion route resolves the author from the session, so one suite-wide author owns every operation here. */
 	let authorHeaders: Record<string, string>;
 	let reference: { assetId: string; revisionId: string };
-	let exportedPackage: Uint8Array;
+	let exportedPackage: Uint8Array<ArrayBuffer>;
 
 	beforeAll(async () => {
 		graphicsAuthorCookie = await createGraphicsAuthorSessionCookie();
@@ -183,8 +184,8 @@ describe('template Package installation through the API boundary', () => {
 			name: 'Imported sponsor logo',
 			origin: {
 				...packaged.origin,
-				sourceAssetId: 'a-source-asset-never-seen-here',
-				sourceRevisionId: 'a-source-revision-never-seen-here',
+				sourceAssetId: testGraphicAssetId('a-source-asset-never-seen-here'),
+				sourceRevisionId: testGraphicAssetRevisionId('a-source-revision-never-seen-here'),
 			},
 		}];
 		parts.template = {
@@ -346,7 +347,7 @@ describe('template Package installation through the API boundary', () => {
 		const packaged = parts.manifest.packagedAssets[0]!;
 		parts.manifest.packagedAssets = [{
 			...packaged,
-			origin: { ...packaged.origin, sourceRevisionId: 'another-unseen-revision' },
+			origin: { ...packaged.origin, sourceRevisionId: testGraphicAssetRevisionId('another-unseen-revision') },
 		}];
 		parts.template = {
 			...(parts.template as Record<string, unknown>),

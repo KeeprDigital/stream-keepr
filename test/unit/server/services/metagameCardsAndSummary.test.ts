@@ -176,12 +176,12 @@ describe('metagameService cards and summary', () => {
 			expect(result.entries).toHaveLength(1);
 			expect(result.totalDecks).toBe(2);
 			const entry = result.entries[0];
-			expect(entry.name).toBe('Lightning Bolt');
-			expect(entry.inclusionRate).toBe(100);
-			expect(entry.avgCopies).toBe(4);
-			expect(entry.mainboardCount).toBe(8);
-			expect(entry.sideboardCount).toBe(0);
-			expect(entry.deckCount).toBe(2);
+			expect(entry!.name).toBe('Lightning Bolt');
+			expect(entry!.inclusionRate).toBe(100);
+			expect(entry!.avgCopies).toBe(4);
+			expect(entry!.mainboardCount).toBe(8);
+			expect(entry!.sideboardCount).toBe(0);
+			expect(entry!.deckCount).toBe(2);
 		});
 
 		it('sortBy=\'avgCopies\' orders correctly', async () => {
@@ -194,7 +194,7 @@ describe('metagameService cards and summary', () => {
 
 			const result = await metagameService().getCardBreakdown(1, 'all', 'avgCopies');
 
-			expect(result.entries[0].name).toBe('Bolt');
+			expect(result!.entries[0]!.name).toBe('Bolt');
 		});
 
 		it('limit=1 slices to 1 entry', async () => {
@@ -354,7 +354,7 @@ describe('metagameService cards and summary', () => {
 				sourceCardCount: 3,
 				scryfallId: 'token-a',
 			});
-			expect(result.entries[0].sourceCards.map(card => card.name)).toEqual([
+			expect(result!.entries[0]!.sourceCards.map(card => card.name)).toEqual([
 				'Fable of the Mirror-Breaker',
 				'Reflection Spell',
 				'Surveyor Saga',
@@ -480,7 +480,7 @@ describe('metagameService cards and summary', () => {
 
 			const result = await metagameService().getArchetypeDetail(1, 1, 'all');
 
-			expect(result!.players[0].deckName).toBe('My Deck');
+			expect(result!.players[0]!.deckName).toBe('My Deck');
 		});
 
 		it('players deckName is null when not provided', async () => {
@@ -497,7 +497,7 @@ describe('metagameService cards and summary', () => {
 
 			const result = await metagameService().getArchetypeDetail(1, 1, 'all');
 
-			expect(result!.players[0].deckName).toBeNull();
+			expect(result!.players[0]!.deckName).toBeNull();
 		});
 	});
 });

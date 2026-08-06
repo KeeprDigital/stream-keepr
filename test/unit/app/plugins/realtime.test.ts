@@ -155,7 +155,11 @@ describe('realtime plugin', () => {
 	});
 
 	it('waits for an event before requesting the initial token, then scopes it to the first room', async () => {
-		vi.mocked($fetch).mockResolvedValueOnce({ token: 'token-request' });
+		// Typed against the plain signature rather than the route table: matching a
+		// resolved value against `$fetch`'s route-conditional return type exhausts
+		// the type comparison depth limit.
+		vi.mocked($fetch as unknown as (path: string) => Promise<unknown>)
+			.mockResolvedValueOnce({ token: 'token-request' });
 		const realtime = await createTransport();
 		const callback = vi.fn();
 

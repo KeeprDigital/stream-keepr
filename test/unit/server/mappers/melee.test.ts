@@ -76,7 +76,7 @@ describe('parseDeckListRecords', () => {
 		];
 		const result = parseDeckListRecords(records);
 
-		expect(result[0].compartment).toBe('sideboard');
+		expect(result[0]!.compartment).toBe('sideboard');
 	});
 
 	it('excludes companion records from normal deck cards', () => {
@@ -97,7 +97,7 @@ describe('parseDeckListRecords', () => {
 		];
 		const result = parseDeckListRecords(records);
 
-		expect(result[0].compartment).toBe('mainboard');
+		expect(result[0]!.compartment).toBe('mainboard');
 	});
 
 	it('sets scryfallId to null for all cards', () => {
@@ -106,7 +106,7 @@ describe('parseDeckListRecords', () => {
 		];
 		const result = parseDeckListRecords(records);
 
-		expect(result[0].scryfallId).toBeNull();
+		expect(result[0]!.scryfallId).toBeNull();
 	});
 
 	it('sorts cards by type then name', () => {
@@ -168,7 +168,7 @@ describe('parseDeckListRecords', () => {
 		];
 		const result = parseDeckListRecords(records);
 
-		expect(result[0].setCode).toBeNull();
+		expect(result[0]!.setCode).toBeNull();
 	});
 });
 

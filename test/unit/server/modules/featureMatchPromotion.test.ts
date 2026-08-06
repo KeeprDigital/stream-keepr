@@ -165,7 +165,7 @@ describe('feature Match Slot Promotion server module', () => {
 		// Reverse-sync and the Assignment re-read happen only after the batch commits.
 		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers).toHaveBeenCalledWith(1, [101, 102]);
 		expect(mockBatch.mock.invocationCallOrder[0]).toBeLessThan(
-			mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers.mock.invocationCallOrder[0],
+			mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers.mock.invocationCallOrder[0]!,
 		);
 		expect(mockFeatureMatchAssignmentService.findByRoundAndSlot).toHaveBeenCalledWith(1, 3, 2);
 

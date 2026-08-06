@@ -279,9 +279,9 @@ function setSpsRbspBits(bytes: Uint8Array, bitOffset: number, bitCount: number, 
 		const byteOffset = physicalOffsets[Math.floor(targetBit / 8)]!;
 		const mask = 1 << (7 - (targetBit % 8));
 		if ((value >>> (bitCount - index - 1)) & 1)
-			bytes[byteOffset] |= mask;
+			bytes[byteOffset] = bytes[byteOffset]! | mask;
 		else
-			bytes[byteOffset] &= ~mask;
+			bytes[byteOffset] = bytes[byteOffset]! & ~mask;
 	}
 }
 

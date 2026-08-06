@@ -1,3 +1,4 @@
+import type { SilentVideoPlaybackValidator } from '~~/server/modules/graphics-asset-library/silent-video-playback-validator';
 import type { GraphicAssetReference, GraphicAssetRevisionId } from '~~/shared/types/graphicsAsset';
 import type { TemplatePackageManifest } from '~~/shared/types/templatePackage';
 import { Buffer } from 'node:buffer';
@@ -52,20 +53,9 @@ const vp9Webm = Uint8Array.from(Buffer.from(
  * ingestion suites drive it. Export never touches it; it exists only so a real
  * silent-video revision can be published and then required by a Template.
  */
-function acceptEverySilentVideo() {
+function acceptEverySilentVideo(): SilentVideoPlaybackValidator {
 	return {
-		validate: async (input: {
-			operationId: string;
-			idempotencyKey: string;
-			sourceDigest: string;
-			factsDigest: string;
-			inspectedFacts: {
-				width: number;
-				height: number;
-				durationSeconds: number;
-				posterTimeSeconds: number;
-			};
-		}) => ({
+		validate: async input => ({
 			outcome: 'accepted' as const,
 			operationId: input.operationId,
 			idempotencyKey: input.idempotencyKey,

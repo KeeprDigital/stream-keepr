@@ -26,7 +26,7 @@ describe('the Graphics Asset Library Capacity API', () => {
 	const textChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85);
 	const pngWithTextChunks = (count: number) => Uint8Array.from(Buffer.concat([
 		transparentPixelPng.slice(0, -12),
-		...Array.from({ length: count }).fill(textChunk),
+		...Array.from<Uint8Array>({ length: count }).fill(textChunk),
 		transparentPixelPng.slice(-12),
 	]));
 	const browserDecodeEvidence = (bytes: Uint8Array) => ({
@@ -240,7 +240,7 @@ describe('the Graphics Asset Library Capacity API', () => {
 					}),
 				},
 			);
-		const upload = async (operation: GraphicsIngestionOperation, bytes: Uint8Array) => {
+		const upload = async (operation: GraphicsIngestionOperation, bytes: Uint8Array<ArrayBuffer>) => {
 			const response = await fetch(
 				`/api/graphics-assets/ingestion-operations/${operation.id}/content`,
 				{ method: 'PUT', headers: authorHeaders, body: bytes },

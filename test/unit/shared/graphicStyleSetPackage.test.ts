@@ -1,5 +1,5 @@
 import type { InstalledGraphicStyleSetFacts } from '~~/shared/modules/graphic-style-sets';
-import type { GraphicApplicationFontId } from '~~/shared/types/graphics';
+import type { GraphicApplicationFontId } from '~~/shared/modules/graphics/typography';
 import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
 import { describe, expect, it } from 'vitest';
 import {

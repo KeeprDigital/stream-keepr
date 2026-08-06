@@ -57,7 +57,6 @@ describe('media Graphic Item exact references', () => {
 			}),
 			asset: { assetId: 'image-asset' as never, revisionId: 'image-revision-1' as never },
 		} as GraphicItemConfig;
-		config.layout.items = [];
 		config.layout.composition = { ...createFeatureMatchLayoutComposition(), items: [media] };
 
 		expect(featureMatchOverlayGraphicAssetReferences(config)).toEqual([{
@@ -83,7 +82,6 @@ describe('media Graphic Item exact references', () => {
 			asset: { assetId: 'video-asset' as never, revisionId: 'video-revision-9' as never },
 			videoCompatibility: 'chromium-transparency',
 		} as GraphicItemConfig;
-		config.layout.items = [];
 		config.layout.composition = { ...createFeatureMatchLayoutComposition(), items: [video] };
 
 		expect(featureMatchOverlayGraphicAssetReferences(config)).toEqual([{

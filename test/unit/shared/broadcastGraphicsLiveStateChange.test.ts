@@ -26,7 +26,8 @@ const NAME: GraphicInputDeclaration = {
 	type: 'text',
 	required: false,
 	maxLength: 1000,
-	onAirUpdatePolicy: 'staged',
+	updatePolicy: 'staged',
+	default: '',
 };
 
 function context(acceptedAt = 1_000) {

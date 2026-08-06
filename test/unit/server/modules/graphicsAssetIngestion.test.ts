@@ -1,3 +1,4 @@
+import type { GraphicAssetValidationReport } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
@@ -37,6 +38,14 @@ const vp9Webm = Uint8Array.from(Buffer.from(
 	'GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAIMEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggElTbuMU6uEHFO7a1OsggH27AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjIuMTIuMTAyV0GNTGF2ZjYyLjEyLjEwMkSJiECPQAAAAAAAFlSua8iuAQAAAAAAAD/XgQFzxYhkRqj8GKbqBJyBACK1nIN1bmSIgQCGhVZfVlA5g4EBI+ODhB3NZQDgkLCBELqBEJqBAlWwhFW5gQESVMNnQIBzc6BjwIBnyJpFo4dFTkNPREVSRIeNTGF2ZjYyLjEyLjEwMnNz2mPAi2PFiGRGqPwYpuoEZ8ilRaOHRU5DT0RFUkSHmExhdmM2Mi4yOC4xMDIgbGlidnB4LXZwOWfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAB9DtnXG54EAo6yBAACAgkmDQgAA8AD2ADgkHBhCAAAwcAAASqf/+5CBv///CAg////7iYcAAKOTgQH0AIYAQJKcAElAAAMgAABCQBxTu2uRu4+zgQC3iveBAfGCAavwgQM=',
 	'base64',
 ));
+
+// Only an accepted validation report carries facts, so a reading of them has
+// to say which outcome it expected rather than assume one.
+function acceptedReport(report: GraphicAssetValidationReport | undefined) {
+	if (report?.outcome !== 'accepted')
+		throw new Error(`expected an accepted validation report, got ${report?.outcome ?? 'none'}`);
+	return report;
+}
 
 function sourceDigest(bytes: Uint8Array) {
 	return createHash('sha256').update(bytes).digest('hex');
@@ -401,7 +410,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		})).resolves.toEqual({ outcome: 'missing' });
 
 		canonical.markUnavailable(
-			graphicsObjectIdentity(`sha256/${completed.report!.facts.sha256}`),
+			graphicsObjectIdentity(`sha256/${acceptedReport(completed.report).facts.sha256}`),
 		);
 		await expect(library.resolveGraphicAssetRevision(reference)).resolves.toEqual({
 			outcome: 'unavailable',
@@ -443,7 +452,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		});
 
 		expect(read).toHaveBeenCalledWith(
-			graphicsObjectIdentity(`sha256/${completed.report!.facts.sha256}`),
+			graphicsObjectIdentity(`sha256/${acceptedReport(completed.report).facts.sha256}`),
 			{ offset: 24, length: 8 },
 		);
 		expect(resolved).toMatchObject({
@@ -528,7 +537,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 				revisionId: completed.result?.revisionId,
 				revisionNumber: 1,
 				eventIds: [7],
-				facts: completed.report?.facts,
+				facts: acceptedReport(completed.report).facts,
 				operation: completed,
 			}),
 		]);

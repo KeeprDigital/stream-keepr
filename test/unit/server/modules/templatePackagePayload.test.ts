@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { templatePackagePayloads } from '~~/server/modules/template-package-payload';
 import { GRAPHIC_ITEM_KINDS } from '~~/shared/modules/graphics/itemDefinitions';
 import { TEMPLATE_PACKAGE_KINDS } from '~~/shared/types/templatePackage';
+import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { maximalBroadcastGraphicDocument } from '../../../helpers/broadcastGraphicDocument';
 
-const asset = { assetId: 'asset-1', revisionId: 'revision-1' };
+const asset = testGraphicAssetReference('asset-1', 'revision-1');
 
 function skgraphic() {
 	return templatePackagePayloads('skgraphic');
@@ -97,7 +98,7 @@ describe('the `.skgraphic` payload', () => {
 		const document = maximalBroadcastGraphicDocument({ asset }) as BroadcastGraphicConfig & {
 			items: { type: string }[];
 		};
-		document.items[0]!.type = 'particle-emitter';
+		(document.items[0] as { type: string }).type = 'particle-emitter';
 
 		expect(rejectionCodes(document)).toEqual(['invalid-template-document']);
 	});

@@ -11,6 +11,7 @@ import {
 	broadcastGraphicTemplateDocument,
 	placeBroadcastGraphicTemplate,
 } from '~~/shared/modules/graphics';
+import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 
 const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
 
@@ -140,7 +141,7 @@ describe('placeBroadcastGraphicTemplate', () => {
 		const document = composed();
 		const media = addGraphicItem(document, { kind: 'media', id: 'brand', ...CANVAS }).graphic;
 		const item = media.items.find(entry => entry.id === 'brand') as MediaGraphicItemConfig;
-		item.asset = { assetId: 'asset-1', revisionId: 'revision-1' };
+		item.asset = testGraphicAssetReference('asset-1', 'revision-1');
 		item.videoCompatibility = 'chromium-transparency';
 		const template = { id: 'template-1', name: 'Lower third', document: media };
 

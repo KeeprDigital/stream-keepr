@@ -19,7 +19,7 @@ const basePixelPng = Uint8Array.from(Buffer.from(
 	'base64',
 ));
 /** Appends a valid ancillary text chunk so this suite owns a distinct digest. */
-function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array {
+function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array<ArrayBuffer> {
 	const payload = Buffer.concat([Buffer.from('tEXt'), Buffer.from(`${keyword}\0`)]);
 	const length = Buffer.alloc(4);
 	length.writeUInt32BE(payload.byteLength - 4, 0);
@@ -250,7 +250,7 @@ describe('template Package export through the API boundary', () => {
 				},
 			},
 		);
-		expect(authored.modeConfigs['broadcast-graphics'].graphics).toHaveLength(1);
+		expect(authored!.modeConfigs!['broadcast-graphics']!.graphics).toHaveLength(1);
 
 		const response = await fetch(
 			`/api/events/${eventId}/screens/${graphicsScreen.id}/template-packages/broadcast-graphic/lower-third`,

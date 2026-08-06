@@ -380,7 +380,7 @@ describe('oversized realtime messages', () => {
 	}
 
 	function loggedMessages(spy: ReturnType<typeof vi.spyOn>) {
-		return spy.mock.calls.map(([entry]) => JSON.parse(entry as string));
+		return spy.mock.calls.map(([entry]: unknown[]) => JSON.parse(entry as string));
 	}
 
 	beforeEach(() => {

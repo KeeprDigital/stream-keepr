@@ -53,7 +53,7 @@ describe('events API', () => {
 
 		const found = data.events.find((e: { id: number }) => e.id === eventId);
 		expect(found).toBeDefined();
-		expect(found.name).toBe('Integration Seed Event');
+		expect(found!.name).toBe('Integration Seed Event');
 	});
 
 	it('gets a single event by ID', async () => {

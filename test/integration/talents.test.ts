@@ -44,7 +44,7 @@ describe('talents API', () => {
 
 		const found = data.talents.find((t: { id: number }) => t.id === talentId);
 		expect(found).toBeDefined();
-		expect(found.name).toBe('John Caster');
+		expect(found!.name).toBe('John Caster');
 	});
 
 	it('updates a talent name', async () => {

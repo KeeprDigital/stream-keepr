@@ -1,6 +1,6 @@
 import type { DbGraphicStyleSet } from '~~/server/db/schema';
 import type { GraphicStyleSetPackageInstallPorts } from '~~/server/modules/graphic-style-set-package';
-import type { GraphicApplicationFontId } from '~~/shared/types/graphics';
+import type { GraphicApplicationFontId } from '~~/shared/modules/graphics/typography';
 import type { AffectedGraphicsTemplate, GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {

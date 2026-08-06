@@ -36,7 +36,7 @@ function sourceDigest(bytes: Uint8Array) {
 interface RemoteHop {
 	status?: number;
 	location?: string;
-	body?: Uint8Array;
+	body?: Uint8Array<ArrayBuffer>;
 	/** `null` omits the header entirely. */
 	contentLength?: string | null;
 	contentType?: string;
@@ -51,7 +51,7 @@ function createRemoteHost(options: {
 	addresses?: Record<string, string[]>;
 	unresolvable?: string[];
 	resolverUnavailable?: string[];
-	body?: Uint8Array;
+	body?: Uint8Array<ArrayBuffer>;
 }) {
 	const requests: { url: string; headers: Record<string, string> }[] = [];
 	const resolved: string[] = [];

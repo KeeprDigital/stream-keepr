@@ -134,7 +134,7 @@ export function readStoredZipArchive(bytes: Uint8Array): StoredZipArchive {
 	};
 }
 
-export async function collectStream(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
+export async function collectStream(stream: ReadableStream<Uint8Array>): Promise<Uint8Array<ArrayBuffer>> {
 	const chunks: Uint8Array[] = [];
 	let byteLength = 0;
 	const reader = stream.getReader();

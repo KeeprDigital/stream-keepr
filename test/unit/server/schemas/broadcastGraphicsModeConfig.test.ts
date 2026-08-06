@@ -979,7 +979,7 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 			graphics: [{
 				...graphic('lower-third'),
 				inputs: [textInput('name')],
-				sources: [worstCaseSource('player')],
+				sources: [worstCaseSource('player', false)],
 				bindings: [worstCaseBinding('name'), worstCaseBinding('name')],
 			}],
 		});

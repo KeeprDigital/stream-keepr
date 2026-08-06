@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { stubH3Event } from '~~/test/helpers/h3Event';
 
 const {
 	mockAuthorizeCapability,
@@ -47,9 +48,9 @@ vi.stubGlobal('createError', (input: { statusCode: number; message: string }) =>
 const SAFARI = 'Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/605.1.15 Version/18.5 Safari/605.1.15';
 
 function sessionRequest(userAgent = SAFARI) {
-	return {
+	return stubH3Event({
 		headers: { 'authorization': 'Bearer opaque_capability', 'user-agent': userAgent },
-	};
+	});
 }
 
 async function handler() {

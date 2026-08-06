@@ -93,7 +93,7 @@ describe('playerUpdateModule', () => {
 
 		expect(mockRequireArchetypeInEvent).toHaveBeenCalledWith(1, input.archetypeId);
 		expect(mockRequireArchetypeInEvent.mock.invocationCallOrder[0])
-			.toBeLessThan(mockPlayerService.update.mock.invocationCallOrder[0]);
+			.toBeLessThan(mockPlayerService.update.mock.invocationCallOrder[0]!);
 	});
 
 	it('returns 404 when playerService.update returns null', async () => {
@@ -136,9 +136,9 @@ describe('playerUpdateModule', () => {
 			originConnectionId: 'origin-1',
 		});
 		expect(mockPublication.playerUpdated.mock.invocationCallOrder[0])
-			.toBeLessThan(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers.mock.invocationCallOrder[0]);
+			.toBeLessThan(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers.mock.invocationCallOrder[0]!);
 		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers.mock.invocationCallOrder[0])
-			.toBeLessThan(mockPublication.featureMatchSlotsUpdated.mock.invocationCallOrder[0]);
+			.toBeLessThan(mockPublication.featureMatchSlotsUpdated.mock.invocationCallOrder[0]!);
 		expect(response).toEqual({
 			id: 5,
 			eventId: 1,
@@ -192,7 +192,7 @@ describe('playerUpdateModule', () => {
 
 		expect(mockRequireArchetypeInEvent).toHaveBeenCalledWith(1, input.archetypeId);
 		expect(mockRequireArchetypeInEvent.mock.invocationCallOrder[0])
-			.toBeLessThan(mockPlayerService.create.mock.invocationCallOrder[0]);
+			.toBeLessThan(mockPlayerService.create.mock.invocationCallOrder[0]!);
 		expect(mockPlayerService.create).toHaveBeenCalledWith(1, input);
 		expect(mockPublication.playerCreated).toHaveBeenCalledWith({
 			eventId: 1,

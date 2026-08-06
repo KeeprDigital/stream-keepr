@@ -55,7 +55,7 @@ describe('roundWriteModule', () => {
 
 		expect(mockRequirePhaseInEvent).toHaveBeenCalledWith(1, 2);
 		expect(mockRequirePhaseInEvent.mock.invocationCallOrder[0])
-			.toBeLessThan(mockRoundService.create.mock.invocationCallOrder[0]);
+			.toBeLessThan(mockRoundService.create.mock.invocationCallOrder[0]!);
 		expect(mockRoundService.create).toHaveBeenCalledWith(1, input);
 		expect(mockPublication.roundCreated).toHaveBeenCalledWith({
 			eventId: 1,

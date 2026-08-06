@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { stubH3Event } from '~~/test/helpers/h3Event';
 
 const mockGetValidatedRouterParams = vi.fn();
 const mockReadValidatedBody = vi.fn();
@@ -83,9 +84,9 @@ describe('patch /api/events/[id]/archetypes/[archetypeId]/cards', () => {
 	});
 
 	it('publishes key-card changes after persistence', async () => {
-		const handler = (await import('../../../../../../../../../server/api/events/[id]/archetypes/[archetypeId]/cards.patch.ts')).default;
+		const handler = (await import('~~/server/api/events/[id]/archetypes/[archetypeId]/cards.patch.ts')).default;
 
-		await expect(handler({})).resolves.toEqual({ keyCards: [] });
+		await expect(handler(stubH3Event())).resolves.toEqual({ keyCards: [] });
 
 		expect(mockFindArchetypeById).toHaveBeenCalledWith(11, 1);
 		expect(mockSetKeyCards).toHaveBeenCalledWith(11, []);

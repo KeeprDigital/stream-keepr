@@ -186,7 +186,7 @@ describe('gRAPHIC_STYLE_SLOT_OWNED_KEYS', () => {
 			fade: { opacity: 0 },
 			slide: { direction: 'north', distanceMode: 'fixed', distance: 40 },
 			scale: { factor: 0.9, origin: 'center' },
-			reveal: { edge: 'south' },
+			reveal: { edge: 'bottom' },
 		};
 		const onScreenRecipe: Required<GraphicOnScreenAnimationRecipe> = {
 			...recipe,

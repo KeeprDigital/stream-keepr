@@ -4,7 +4,7 @@ import type {
 	BroadcastGraphicTemplateResponse,
 } from '~~/shared/types/broadcastGraphicTemplate';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
-import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
+import type { GraphicAssetReference, GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
 import { createHash, randomUUID } from 'node:crypto';
 import { crc32 } from 'node:zlib';
@@ -45,7 +45,7 @@ const basePixelPng = Uint8Array.from(Buffer.from(
 ));
 
 /** Appends a valid ancillary text chunk so this suite owns a distinct digest. */
-function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array {
+function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array<ArrayBuffer> {
 	const payload = Buffer.concat([Buffer.from('tEXt'), Buffer.from(`${keyword}\0`)]);
 	const length = Buffer.alloc(4);
 	length.writeUInt32BE(payload.byteLength - 4, 0);
@@ -85,7 +85,7 @@ async function request(
 	return { status: response.status, data: text ? JSON.parse(text) : null };
 }
 
-async function receivePackage(archive: Uint8Array) {
+async function receivePackage(archive: Uint8Array<ArrayBuffer>) {
 	const initiated = await $fetch<GraphicsIngestionOperation>(
 		'/api/graphics-assets/ingestion-operations',
 		{
@@ -122,9 +122,9 @@ describe('broadcast Graphic Template Packages', () => {
 	let eventId: number;
 	let screenId: number;
 	let authorCookie: string;
-	let asset: { assetId: string; revisionId: string };
+	let asset: GraphicAssetReference;
 	let sourceTemplate: BroadcastGraphicTemplateResponse;
-	let exportedPackage: Uint8Array;
+	let exportedPackage: Uint8Array<ArrayBuffer>;
 	const installedTemplateIds: string[] = [];
 
 	beforeAll(async () => {

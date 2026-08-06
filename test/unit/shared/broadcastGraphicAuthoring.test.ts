@@ -1,4 +1,4 @@
-import type { BroadcastGraphicConfig, GraphicGroupItemConfig, MediaGraphicItemConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicGroupChildConfig, GraphicGroupItemConfig, GraphicItemConfig, MediaGraphicItemConfig } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import {
 	addGraphicGroupChild,
@@ -55,6 +55,14 @@ function group(built: BroadcastGraphicConfig): GraphicGroupItemConfig {
 	const item = built.items.find(entry => entry.id === 'cluster');
 	if (item?.type !== 'group')
 		throw new Error('expected a Graphic Group');
+	return item;
+}
+
+// A Media Graphic Item is the one kind with no Graphic Surface Style, so a
+// reading of `surfaceStyle` has to say which kind it expected to be looking at.
+function surfaced(item: GraphicItemConfig | GraphicGroupChildConfig | undefined) {
+	if (!item || item.type === 'media')
+		throw new Error('expected a Graphic Item carrying a Graphic Surface Style');
 	return item;
 }
 
@@ -218,7 +226,7 @@ describe('broadcastGraphicAuthoring', () => {
 				{ opacity: 0.4 },
 			);
 
-			expect(patched.items[0]?.surfaceStyle?.fill).toMatchObject({
+			expect(surfaced(patched.items[0]).surfaceStyle?.fill).toMatchObject({
 				angle: 135,
 				stops: [
 					{ color: '#0077a3', position: 0, opacity: 1 },
@@ -242,10 +250,11 @@ describe('broadcastGraphicAuthoring', () => {
 			for (let index = 0; index < 5; index += 1)
 				shrunk = changeGraphicGradientStopCount(shrunk, 'bar', -1);
 
-			expect(grown.items[0]?.surfaceStyle?.fill.type === 'linear-gradient'
-				&& grown.items[0]?.surfaceStyle?.fill.stops).toHaveLength(4);
-			expect(shrunk.items[0]?.surfaceStyle?.fill.type === 'linear-gradient'
-				&& shrunk.items[0]?.surfaceStyle?.fill.stops).toHaveLength(2);
+			const grownFill = surfaced(grown.items[0]).surfaceStyle?.fill;
+			const shrunkFill = surfaced(shrunk.items[0]).surfaceStyle?.fill;
+
+			expect(grownFill?.type === 'linear-gradient' && grownFill.stops).toHaveLength(4);
+			expect(shrunkFill?.type === 'linear-gradient' && shrunkFill.stops).toHaveLength(2);
 		});
 
 		it('adds and removes an outline and a glow without touching the fill', () => {
@@ -258,14 +267,14 @@ describe('broadcastGraphicAuthoring', () => {
 			);
 			const stripped = patchGraphicGlow(patchGraphicOutline(styled, 'bar', null), 'bar', null);
 
-			expect(styled.items[0]?.surfaceStyle).toMatchObject({
+			expect(surfaced(styled.items[0]).surfaceStyle).toMatchObject({
 				fill: { type: 'solid', color: '#0077a3' },
 				outline: { color: '#ffffff', width: 6 },
 				glow: { color: '#ff51c7', size: 24, opacity: 0.8 },
 			});
-			expect(stripped.items[0]?.surfaceStyle?.outline).toBeUndefined();
-			expect(stripped.items[0]?.surfaceStyle?.glow).toBeUndefined();
-			expect(stripped.items[0]?.surfaceStyle?.fill).toEqual({ type: 'solid', color: '#0077a3' });
+			expect(surfaced(stripped.items[0]).surfaceStyle?.outline).toBeUndefined();
+			expect(surfaced(stripped.items[0]).surfaceStyle?.glow).toBeUndefined();
+			expect(surfaced(stripped.items[0]).surfaceStyle?.fill).toEqual({ type: 'solid', color: '#0077a3' });
 		});
 
 		it('gives a Text Graphic Item a Graphic Surface Style, and takes it away again', () => {
@@ -274,12 +283,12 @@ describe('broadcastGraphicAuthoring', () => {
 			const styled = patchGraphicSurfaceStyle(built, 'name', { fillOpacity: 0.75 });
 			const cleared = clearGraphicSurfaceStyle(styled, 'name');
 
-			expect(built.items[0]?.surfaceStyle).toBeUndefined();
-			expect(styled.items[0]?.surfaceStyle).toEqual({
+			expect(surfaced(built.items[0]).surfaceStyle).toBeUndefined();
+			expect(surfaced(styled.items[0]).surfaceStyle).toEqual({
 				fill: { type: 'solid', color: '#0077a3' },
 				fillOpacity: 0.75,
 			});
-			expect(cleared.items[0]?.surfaceStyle).toBeUndefined();
+			expect(surfaced(cleared.items[0]).surfaceStyle).toBeUndefined();
 		});
 	});
 
@@ -403,8 +412,8 @@ describe('broadcastGraphicAuthoring', () => {
 			const removed = patchGraphicGroupDefaultChildSurfaceStyle(built, 'cluster', null);
 
 			expect(group(built).defaultChildSurfaceStyle).toMatchObject({ fillOpacity: 0.3 });
-			expect(group(inheriting).children[0]?.surfaceStyle).toBeUndefined();
-			expect(group(overriding).children[0]?.surfaceStyle).toMatchObject({ fillOpacity: 1 });
+			expect(surfaced(group(inheriting).children[0]).surfaceStyle).toBeUndefined();
+			expect(surfaced(group(overriding).children[0]).surfaceStyle).toMatchObject({ fillOpacity: 1 });
 			expect(group(removed).defaultChildSurfaceStyle).toBeUndefined();
 		});
 

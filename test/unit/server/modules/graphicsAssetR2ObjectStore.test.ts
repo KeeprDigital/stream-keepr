@@ -37,7 +37,7 @@ describe('the R2 Graphic Asset object-store adapter', () => {
 		const existing = r2Object(identity);
 		const put = vi.fn().mockResolvedValue(null);
 		const head = vi.fn().mockResolvedValue(existing);
-		const bucket = { put, head } as R2Bucket;
+		const bucket = { put, head } as unknown as R2Bucket;
 		const store = createR2CanonicalGraphicsObjectStore(bucket);
 
 		const outcome = await store.createImmutable({

@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { TEMPLATE_PACKAGE_LIMITS, templatePackageContentEntry } from '../../shared/types/templatePackage';
 import { MAX_STILL_IMAGE_INGESTION_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
+import { testGraphicAssetRevisionId } from '../helpers/graphicsAssetIdentities';
 import { collectStream } from '../helpers/storedZipArchive';
 import {
 	readTemplatePackageParts,
@@ -24,7 +25,7 @@ const basePixelPng = Uint8Array.from(Buffer.from(
 ));
 
 /** Appends a valid ancillary text chunk so this suite owns a distinct digest. */
-function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array {
+function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array<ArrayBuffer> {
 	const payload = Buffer.concat([Buffer.from('tEXt'), Buffer.from(`${keyword}\0`)]);
 	const length = Buffer.alloc(4);
 	length.writeUInt32BE(payload.byteLength - 4, 0);
@@ -48,7 +49,7 @@ const packagePixelPng = pngWithTextChunk(basePixelPng, 'sk-template-package-pref
  * transfer may carry while the one asset inside it stays within the still-image
  * limit — which is the shape of every real package carrying media.
  */
-function pngPaddedTo(byteLength: number, keyword: string): Uint8Array {
+function pngPaddedTo(byteLength: number, keyword: string): Uint8Array<ArrayBuffer> {
 	const heading = Buffer.from(`tEXt${keyword}\0`);
 	const payload = Buffer.concat([
 		heading,
@@ -74,7 +75,7 @@ function digestOf(bytes: Uint8Array) {
 let preflightSequence = 0;
 
 /** Runs one package through the raw transfer route and returns the operation. */
-async function receivePackage(archive: Uint8Array, options: { fileName?: string } = {}) {
+async function receivePackage(archive: Uint8Array<ArrayBuffer>, options: { fileName?: string } = {}) {
 	const initiated = await $fetch<GraphicsIngestionOperation>(
 		'/api/graphics-assets/ingestion-operations',
 		{
@@ -153,7 +154,7 @@ describe('template Package preflight through the API boundary', () => {
 	let eventId: number;
 	let screenId: number;
 	let reference: { assetId: string; revisionId: string };
-	let exportedPackage: Uint8Array;
+	let exportedPackage: Uint8Array<ArrayBuffer>;
 	/** Every ingestion route resolves the author from the session, so one suite-wide author owns every operation here. */
 	let authorHeaders: Record<string, string>;
 
@@ -343,7 +344,7 @@ describe('template Package preflight through the API boundary', () => {
 		// Graphic Asset, and something the author is asked about.
 		parts.manifest.packagedAssets = [{
 			...packaged,
-			origin: { ...packaged.origin, sourceRevisionId: 'a-revision-never-seen-here' },
+			origin: { ...packaged.origin, sourceRevisionId: testGraphicAssetRevisionId('a-revision-never-seen-here') },
 		}];
 		parts.template = {
 			...(parts.template as Record<string, unknown>),
@@ -429,7 +430,7 @@ describe('template Package preflight through the API boundary', () => {
 		const packaged = parts.manifest.packagedAssets[0]!;
 		parts.manifest.packagedAssets = [{
 			...packaged,
-			origin: { ...packaged.origin, sourceRevisionId: 'another-unseen-revision' },
+			origin: { ...packaged.origin, sourceRevisionId: testGraphicAssetRevisionId('another-unseen-revision') },
 		}];
 		parts.template = {
 			...(parts.template as Record<string, unknown>),

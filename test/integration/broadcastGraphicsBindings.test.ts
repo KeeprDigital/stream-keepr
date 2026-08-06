@@ -1,5 +1,5 @@
 import type { BroadcastGraphicsCommand } from '~~/shared/types/broadcastGraphicsLiveSession';
-import type { GraphicInputDeclaration } from '~~/shared/types/graphics';
+import type { GraphicInputDeclaration, GraphicSourceSelectionDeclaration } from '~~/shared/types/graphics';
 import { $fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -36,7 +36,7 @@ const RECORD_BINDING = { inputKey: 'title', sourceKey: 'player', fieldId: 'playe
 
 function graphicWith(
 	inputs: GraphicInputDeclaration[],
-	sources = [PLAYER_SOURCE],
+	sources: GraphicSourceSelectionDeclaration[] = [PLAYER_SOURCE],
 	bindings = [NAME_BINDING],
 ) {
 	return [integrationBroadcastGraphicWithBindings(GRAPHIC, inputs, sources, bindings)];

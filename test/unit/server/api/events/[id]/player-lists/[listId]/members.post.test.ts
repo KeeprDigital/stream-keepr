@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { stubH3Event } from '~~/test/helpers/h3Event';
 
 const mockGetValidatedRouterParams = vi.fn();
 const mockReadValidatedBody = vi.fn();
@@ -43,9 +44,9 @@ describe('post /api/events/[id]/player-lists/[listId]/members', () => {
 	});
 
 	it('publishes member change after persistence', async () => {
-		const handler = (await import('../../../../../../../../../server/api/events/[id]/player-lists/[listId]/members.post.ts')).default;
+		const handler = (await import('~~/server/api/events/[id]/player-lists/[listId]/members.post.ts')).default;
 
-		await expect(handler({})).resolves.toEqual({ added: 2, memberCount: 4 });
+		await expect(handler(stubH3Event())).resolves.toEqual({ added: 2, memberCount: 4 });
 
 		expect(mockAddMembers).toHaveBeenCalledWith(10, 1, [101, 102]);
 		expect(mockGetMemberCount).toHaveBeenCalledWith(10, 1);

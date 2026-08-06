@@ -70,7 +70,7 @@ describe('phases API', () => {
 
 		const found = data.phases.find((p: { id: number }) => p.id === phaseId);
 		expect(found).toBeDefined();
-		expect(found.name).toBe('Swiss');
+		expect(found!.name).toBe('Swiss');
 	});
 
 	it('gets a single phase by ID', async () => {

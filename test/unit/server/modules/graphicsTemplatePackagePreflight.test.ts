@@ -1,3 +1,4 @@
+import type { SilentVideoPlaybackValidator } from '~~/server/modules/graphics-asset-library/silent-video-playback-validator';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
 	TemplatePackagePreflightIssueCode,
@@ -22,6 +23,7 @@ import {
 import { TEMPLATE_PACKAGE_LIMITS } from '~~/shared/types/templatePackage';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
+import { testGraphicAssetRevisionId } from '~~/test/helpers/graphicsAssetIdentities';
 import { collectStream } from '../../../helpers/storedZipArchive';
 import {
 	readTemplatePackageParts,
@@ -56,20 +58,9 @@ function digestOf(bytes: Uint8Array) {
  * suites drive it. Preflight uses it to prove a packaged silent video the same
  * way an uploaded one is proven.
  */
-function acceptEverySilentVideo() {
+function acceptEverySilentVideo(): SilentVideoPlaybackValidator {
 	return {
-		validate: async (input: {
-			operationId: string;
-			idempotencyKey: string;
-			sourceDigest: string;
-			factsDigest: string;
-			inspectedFacts: {
-				width: number;
-				height: number;
-				durationSeconds: number;
-				posterTimeSeconds: number;
-			};
-		}) => ({
+		validate: async input => ({
 			outcome: 'accepted' as const,
 			operationId: input.operationId,
 			idempotencyKey: input.idempotencyKey,
@@ -633,7 +624,7 @@ describe('the Template Package preflight contract', () => {
 				(_unused, index) => ({
 					...template,
 					packagedId: `packaged-asset-${index}`,
-					origin: { ...template.origin, sourceRevisionId: `revision-${index}` },
+					origin: { ...template.origin, sourceRevisionId: testGraphicAssetRevisionId(`revision-${index}`) },
 				}),
 			);
 
@@ -827,7 +818,7 @@ describe('the Template Package preflight contract', () => {
 			const packaged = parts.manifest.packagedAssets[0]!;
 			parts.manifest.packagedAssets = [{
 				...packaged,
-				origin: { ...packaged.origin, sourceRevisionId: 'a-revision-never-seen-here' },
+				origin: { ...packaged.origin, sourceRevisionId: testGraphicAssetRevisionId('a-revision-never-seen-here') },
 			}];
 			parts.template = { backdrop: {
 				assetId: packaged.origin.sourceAssetId,

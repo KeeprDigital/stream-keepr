@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { stubH3Event } from '~~/test/helpers/h3Event';
 
 const mockGetValidatedRouterParams = vi.fn();
 const mockReadValidatedBody = vi.fn();
@@ -30,7 +31,7 @@ describe('post /api/events/[id]/screens/[screenId]/command', () => {
 	it('publishes a command to an existing screen', async () => {
 		const handler = (await import('../../../../../../../../server/api/events/[id]/screens/[screenId]/command.post.ts')).default;
 
-		await expect(handler({})).resolves.toEqual({ ok: true });
+		await expect(handler(stubH3Event())).resolves.toEqual({ ok: true });
 
 		expect(mockFindById).toHaveBeenCalledWith(10, 1);
 		expect(mockPublishScreenCommand).toHaveBeenCalledWith(1, 10, 'refresh');

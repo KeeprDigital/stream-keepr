@@ -58,7 +58,7 @@ describe('player lists API', () => {
 
 		const found = data.playerLists.find((l: { id: number }) => l.id === listId);
 		expect(found).toBeDefined();
-		expect(found.name).toBe('Top 8 List');
+		expect(found!.name).toBe('Top 8 List');
 		expect(found).toHaveProperty('memberCount');
 	});
 

@@ -2,8 +2,8 @@ import type {
 	GraphicAssetId,
 	GraphicAssetRevisionId,
 	GraphicsIngestionOperation,
-	GraphicsOperationalQueueId,
 } from '~~/shared/types/graphicsAsset';
+import type { GraphicsOperationalQueueId } from '~~/shared/utils/graphicsOperationalQueues';
 import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
@@ -189,10 +189,10 @@ async function removeReference(referenceId: string) {
 	});
 }
 
-function queueOf(
-	overview: { queues: readonly { id: GraphicsOperationalQueueId }[] },
+function queueOf<Queue extends { id: GraphicsOperationalQueueId }>(
+	overview: { queues: readonly Queue[] },
 	id: GraphicsOperationalQueueId,
-) {
+): Queue {
 	const queue = overview.queues.find(candidate => candidate.id === id);
 	if (!queue)
 		throw new Error(`No ${id} queue in the reading`);

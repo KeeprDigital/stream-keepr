@@ -52,10 +52,10 @@ describe('misc API endpoints', () => {
 
 		const found = data.standings.find((s: { playerId: number }) => s.playerId === player.id);
 		expect(found).toBeDefined();
-		expect(found.name).toBe('Standings Player');
-		expect(found.wins).toBe(2);
-		expect(found.losses).toBe(1);
-		expect(found.position).toBe(1);
+		expect(found!.name).toBe('Standings Player');
+		expect(found!.wins).toBe(2);
+		expect(found!.losses).toBe(1);
+		expect(found!.position).toBe(1);
 
 		// Cleanup
 		await $fetch(`/api/events/${eventId}/players/${player.id}`, { method: 'DELETE' });

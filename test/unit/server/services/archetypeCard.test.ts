@@ -74,8 +74,8 @@ describe('archetypeCardService', () => {
 			const result = await archetypeCardService().getKeyCards(1);
 
 			expect(result).toEqual(rows);
-			expect(result[0].sortOrder).toBe(0);
-			expect(result[1].sortOrder).toBe(1);
+			expect(result[0]!.sortOrder).toBe(0);
+			expect(result[1]!.sortOrder).toBe(1);
 		});
 
 		it('returns empty array when no rows', async () => {
@@ -117,8 +117,8 @@ describe('archetypeCardService', () => {
 
 			expect(result.get(10)).toHaveLength(2);
 			expect(result.get(20)).toHaveLength(1);
-			expect(result.get(10)![0].name).toBe('Lightning Bolt');
-			expect(result.get(20)![0].name).toBe('Counterspell');
+			expect(result!.get(10)![0]!.name).toBe('Lightning Bolt');
+			expect(result!.get(20)![0]!.name).toBe('Counterspell');
 		});
 	});
 });

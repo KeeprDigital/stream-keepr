@@ -3,7 +3,7 @@ import type {
 	BroadcastGraphicsLiveState,
 	BroadcastGraphicsReductionContext,
 } from '~~/shared/modules/broadcast-graphics-live-session';
-import type { GraphicInputValue } from '~~/shared/types/graphics';
+import type { GraphicInputDeclaration, GraphicInputValue } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import {
 	acceptedGraphicInputValues,
@@ -65,7 +65,7 @@ function context(
 		// A fixed acceptance instant: none of these tests is about animation timing, but
 		// the reducer needs one to stamp the phase it begins.
 		acceptedAt: 1_700_000_000_000,
-		resolveBindings: (selections) => {
+		resolveBindings: (selections): Record<string, GraphicInputValue> => {
 			const name = PLAYERS[selections.player ?? -1];
 			return name === undefined ? {} : { name };
 		},
@@ -304,10 +304,10 @@ describe('bound Graphic Inputs on air', () => {
 
 describe('re-resolving after an Event Data change', () => {
 	/** The same Player, renamed under a running show. */
-	function renamed(inputs = [LIVE_NAME]) {
+	function renamed(inputs: readonly GraphicInputDeclaration[] = [LIVE_NAME]) {
 		return context({
 			inputs,
-			resolveBindings: selections => (selections.player === 1 ? { name: 'Ava Reed-Marsh' } : {}),
+			resolveBindings: (selections): Record<string, GraphicInputValue> => (selections.player === 1 ? { name: 'Ava Reed-Marsh' } : {}),
 		});
 	}
 

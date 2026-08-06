@@ -101,7 +101,7 @@ describe('matches API', () => {
 
 		const found = data.matches.find((m: { id: number }) => m.id === matchId);
 		expect(found).toBeDefined();
-		expect(found.roundId).toBe(roundId);
+		expect(found!.roundId).toBe(roundId);
 	});
 
 	it('lists matches filtered by roundId', async () => {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { stubH3Event } from '~~/test/helpers/h3Event';
 
 const mockGetValidatedRouterParams = vi.fn();
 const mockReadValidatedBody = vi.fn();
@@ -38,8 +39,8 @@ describe('patch /api/events/[id]/players/[playerId]', () => {
 	});
 
 	it('parses params and body, then delegates Player update workflow', async () => {
-		const handler = (await import('../../../../../../../../../server/api/events/[id]/players/[playerId]/index.patch.ts')).default;
-		const event = {};
+		const handler = (await import('~~/server/api/events/[id]/players/[playerId]/index.patch.ts')).default;
+		const event = stubH3Event();
 
 		await expect(handler(event)).resolves.toEqual({ id: 5, eventId: 1, name: 'Updated Player' });
 

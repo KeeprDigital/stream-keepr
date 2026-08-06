@@ -53,7 +53,7 @@ describe('screens API', () => {
 
 		const found = data.screens.find((s: { id: number }) => s.id === screenId);
 		expect(found).toBeDefined();
-		expect(found.name).toBe('Main Overlay');
+		expect(found!.name).toBe('Main Overlay');
 	});
 
 	it('gets a screen by slug', async () => {

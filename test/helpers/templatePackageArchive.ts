@@ -57,11 +57,11 @@ export interface TestArchiveOptions {
 	declaredEntryCount?: number;
 }
 
-function encodeName(name: string): Uint8Array {
+function encodeName(name: string): Uint8Array<ArrayBuffer> {
 	return new TextEncoder().encode(name);
 }
 
-function concat(chunks: readonly Uint8Array[]): Uint8Array {
+function concat(chunks: readonly Uint8Array[]): Uint8Array<ArrayBuffer> {
 	const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
 	const bytes = new Uint8Array(total);
 	let offset = 0;
@@ -75,7 +75,7 @@ function concat(chunks: readonly Uint8Array[]): Uint8Array {
 export function writeTestArchive(
 	entries: readonly TestArchiveEntry[],
 	options: TestArchiveOptions = {},
-): Uint8Array {
+): Uint8Array<ArrayBuffer> {
 	const body: Uint8Array[] = [];
 	const directory: Uint8Array[] = [];
 	let offset = 0;
@@ -176,7 +176,7 @@ export function readTemplatePackageParts(archive: Uint8Array): TemplatePackagePa
 	};
 }
 
-function encodeJson(value: unknown): Uint8Array {
+function encodeJson(value: unknown): Uint8Array<ArrayBuffer> {
 	return new TextEncoder().encode(JSON.stringify(value, null, '\t'));
 }
 
@@ -188,7 +188,7 @@ function encodeJson(value: unknown): Uint8Array {
 export function writeTemplatePackage(
 	parts: TemplatePackageParts,
 	options: TestArchiveOptions & { extraEntries?: TestArchiveEntry[] } = {},
-): Uint8Array {
+): Uint8Array<ArrayBuffer> {
 	const templateBytes = encodeJson(parts.template);
 	const contentByteLength = parts.contents
 		.reduce((total, content) => total + content.bytes.byteLength, 0);

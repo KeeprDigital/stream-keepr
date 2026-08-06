@@ -7,6 +7,7 @@ import * as schema from '~~/server/db/schema';
 import { ServiceWiringError } from '~~/server/utils/errors';
 import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 import { createCommandIdSequence, seedBroadcastGraphicsScreen } from '~~/test/helpers/broadcastGraphicsScreen';
+import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
@@ -70,7 +71,7 @@ const CLIP_INPUT: GraphicInputDeclaration = {
 	type: 'media',
 	required: false,
 	updatePolicy: 'live',
-	default: { assetId: ASSET_ID, revisionId: REVISION_ID },
+	default: testGraphicAssetReference(ASSET_ID, REVISION_ID),
 	mediaKind: 'image',
 };
 
@@ -99,7 +100,9 @@ async function unwiredLiveSession() {
 			eventId,
 			screenId,
 			sessionId: session.id,
-			command: { commandId: nextCommandId(), type, payload } as BroadcastGraphicsCommand,
+			// The payload shape belongs to each command variant; a test that names the
+			// variant by its `type` supplies the matching payload itself.
+			command: { commandId: nextCommandId(), type, payload } as unknown as BroadcastGraphicsCommand,
 		});
 }
 

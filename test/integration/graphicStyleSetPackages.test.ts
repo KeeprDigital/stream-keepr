@@ -80,8 +80,8 @@ describe('graphic Style Set Packages', () => {
 	let authorCookie: string;
 	let styleSetId: string;
 	/** The archive exported at revision one, kept so later imports can offer it back. */
-	let revisionOnePackage: Uint8Array;
-	let revisionTwoPackage: Uint8Array;
+	let revisionOnePackage: Uint8Array<ArrayBuffer>;
+	let revisionTwoPackage: Uint8Array<ArrayBuffer>;
 
 	async function styleSet(id = styleSetId): Promise<GraphicStyleSetResponse> {
 		const current = await request(`${STYLE_SETS}/${id}`, { cookie: authorCookie });
@@ -112,7 +112,7 @@ describe('graphic Style Set Packages', () => {
 
 	async function sendPackage(
 		path: string,
-		archive: Uint8Array,
+		archive: Uint8Array<ArrayBuffer>,
 	): Promise<{ status: number; data: any }> {
 		const response = await fetch(path, {
 			method: 'POST',

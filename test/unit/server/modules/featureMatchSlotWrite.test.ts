@@ -62,7 +62,7 @@ describe('featureMatchSlotWriteModule', () => {
 
 			expect(mockValidateFeatureMatchReferences).toHaveBeenCalledWith(1, input);
 			expect(mockValidateFeatureMatchReferences.mock.invocationCallOrder[0])
-				.toBeLessThan(mockFeatureMatchService.create.mock.invocationCallOrder[0]);
+				.toBeLessThan(mockFeatureMatchService.create.mock.invocationCallOrder[0]!);
 			expect(mockFeatureMatchService.create).toHaveBeenCalledWith(1, input);
 			expect(mockPublication.featureMatchSlotCreated).toHaveBeenCalledWith({
 				eventId: 1,
@@ -130,7 +130,7 @@ describe('featureMatchSlotWriteModule', () => {
 
 			expect(mockValidateFeatureMatchReferences).toHaveBeenCalledWith(1, input);
 			expect(mockValidateFeatureMatchReferences.mock.invocationCallOrder[0])
-				.toBeLessThan(mockFeatureMatchService.update.mock.invocationCallOrder[0]);
+				.toBeLessThan(mockFeatureMatchService.update.mock.invocationCallOrder[0]!);
 			expect(mockFeatureMatchService.update).toHaveBeenCalledWith(7, 1, input);
 			expect(mockPublication.featureMatchSlotUpdated).toHaveBeenCalledWith({
 				eventId: 1,

@@ -186,8 +186,8 @@ describe('metagameService', () => {
 
 			const result = await metagameService().getArchetypeBreakdown(1, 'all', 'count');
 
-			expect(result.entries[0].name).toBe('Mono Red');
-			expect(result.entries[1].name).toBe('Azorius Control');
+			expect(result!.entries[0]!.name).toBe('Mono Red');
+			expect(result!.entries[1]!.name).toBe('Azorius Control');
 		});
 
 		it('sortBy=\'winRate\' → entries ordered by winRate descending (nulls last)', async () => {
@@ -205,8 +205,8 @@ describe('metagameService', () => {
 			const result = await metagameService().getArchetypeBreakdown(1, 'all', 'winRate');
 
 			// Azorius: 9/10 = 90%, Mono Red: 1/10 = 10%
-			expect(result.entries[0].name).toBe('Azorius Control');
-			expect(result.entries[1].name).toBe('Mono Red');
+			expect(result!.entries[0]!.name).toBe('Azorius Control');
+			expect(result!.entries[1]!.name).toBe('Mono Red');
 		});
 
 		it('uses archetype name as a stable tie-breaker when meta share ties', async () => {

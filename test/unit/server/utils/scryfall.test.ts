@@ -1,3 +1,4 @@
+import type { ScryfallCardData } from '~~/server/utils/scryfall';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	batchLookupScryfallIds,
@@ -61,19 +62,37 @@ function createScryfallErrorResponse(status: number, body: string) {
 
 // ──────────────── getCardDataFromMap ────────────────
 
+function cardData(overrides: Partial<ScryfallCardData> = {}): ScryfallCardData {
+	return {
+		name: 'Lightning Bolt',
+		setCode: 'm21',
+		id: 'abc',
+		oracleId: null,
+		manaCost: '{R}',
+		cmc: 1,
+		colors: 'R',
+		typeLine: 'Instant',
+		deckCounterTypes: [],
+		deckTokens: [],
+		...overrides,
+	};
+}
+
 describe('getCardDataFromMap', () => {
 	it('returns card data matching name+set key', () => {
-		const map = new Map<string, { id: string; manaCost: string | null }>();
-		map.set('lightning bolt|m21', { id: 'abc', manaCost: '{R}' });
+		const map = new Map<string, ScryfallCardData>();
+		const bolt = cardData();
+		map.set('lightning bolt|m21', bolt);
 		const result = getCardDataFromMap(map, 'Lightning Bolt', 'm21');
-		expect(result).toEqual({ id: 'abc', manaCost: '{R}' });
+		expect(result).toEqual(bolt);
 	});
 
 	it('uses name-only lookup when setCode is null', () => {
-		const map = new Map<string, { id: string; manaCost: string | null }>();
-		map.set('shock', { id: 'def', manaCost: '{R}' });
+		const map = new Map<string, ScryfallCardData>();
+		const shock = cardData({ name: 'Shock', id: 'def' });
+		map.set('shock', shock);
 		const result = getCardDataFromMap(map, 'Shock', null);
-		expect(result).toEqual({ id: 'def', manaCost: '{R}' });
+		expect(result).toEqual(shock);
 	});
 });
 
