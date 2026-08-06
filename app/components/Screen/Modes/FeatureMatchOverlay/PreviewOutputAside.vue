@@ -56,6 +56,7 @@ type PreviewZoom = typeof PREVIEW_ZOOM_OPTIONS[number]['value'];
 
 const toast = useToast();
 const { copyToClipboard } = useCopyToClipboard();
+const { screenOutputAccessUrl, openScreenOutput } = useScreenOutputAccessUrl();
 const requestUrl = useRequestURL();
 const previewOutput = ref<FeatureMatchOverlayOutput>('overlay');
 const previewGuides = ref(true);
@@ -84,12 +85,30 @@ const previewAspectStyle = computed(() => ({
 			}),
 }));
 
+/**
+ * The output's address, shown so an operator can read where it lives.
+ *
+ * Deliberately without this Screen's Screen Output Asset Capability, which is a
+ * secret and does not belong in a field on a page anyone can be standing behind.
+ * The copy and download controls beside it obtain one and carry it; this is the
+ * address, not the hand-out (#231).
+ */
 function outputUrl(output: FeatureMatchOverlayOutput) {
 	return `${outputBaseUrl.value}${screenOutputPath({
 		eventId: props.eventId,
 		screenSlug: props.screen.slug,
 		output,
 	})}`;
+}
+
+function accessUrlOptions(output: FeatureMatchOverlayOutput, download = false) {
+	return {
+		eventId: props.eventId,
+		screenId: props.screen.id,
+		screenSlug: props.screen.slug,
+		output,
+		download,
+	};
 }
 
 function syncSelectedTargetToPreview() {
@@ -187,7 +206,7 @@ watch([previewGuides, previewSafeAreas], () => {
 async function copyOutputUrl(output: FeatureMatchOverlayOutput) {
 	if (props.publicationBlocked)
 		return;
-	await copyToClipboard(outputUrl(output), {
+	await copyToClipboard(await screenOutputAccessUrl(accessUrlOptions(output)), {
 		successTitle: 'URL copied',
 		successDescription: `${output.toUpperCase()} output URL copied.`,
 		errorDescription: `Failed to copy ${output.toUpperCase()} output URL to clipboard.`,
@@ -197,9 +216,17 @@ async function copyOutputUrl(output: FeatureMatchOverlayOutput) {
 async function downloadOutput(output: FeatureMatchOverlayOutput) {
 	if (props.publicationBlocked)
 		return;
-	const url = `/event/${props.eventId}/screen/${props.screen.slug}?output=${output}&download=1`;
 	toast.add({ title: 'Preparing download', description: `${output.toUpperCase()} PNG will download from a temporary output tab.`, color: 'info' });
-	window.open(url, '_blank', 'noopener,noreferrer');
+	// A capture browser that cannot resolve this Screen's assets produces a PNG that
+	// looks finished and is missing every image, video and library font in it, so a
+	// capture that cannot carry a capability is refused rather than exported (#231).
+	if (!await openScreenOutput(accessUrlOptions(output, true))) {
+		toast.add({
+			title: 'Download unavailable',
+			description: `Asset access for this Screen could not be obtained, so the ${output.toUpperCase()} PNG would have been missing its media.`,
+			color: 'error',
+		});
+	}
 }
 </script>
 

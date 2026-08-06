@@ -294,7 +294,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 			const wrapper = await mountComponent([branded]);
 
 			expect(wrapper.get('[data-testid="outputs-without-asset-access"]').text())
-				.toContain('One Screen Output cannot resolve this Screen\'s media');
+				.toContain('One Screen Output cannot resolve this Screen\'s assets');
 		});
 
 		/**
@@ -496,14 +496,55 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		expect(src).toContain(`#asset-capability=${encodeURIComponent('program-capability')}`);
 	});
 
-	it('leaves the capability out of the monitor URL until one is issued', async () => {
-		// Never a placeholder or a guess: an absent capability resolves no media, which
-		// is the property the capability exists to guarantee.
+	/**
+	 * The monitor is never pointed at a URL without a capability — not even for the
+	 * moment before the capability arrives.
+	 *
+	 * The capability is fetched asynchronously and starts null, so an iframe bound
+	 * straight to the URL navigates on the first render and stays where it navigated:
+	 * a real Screen Output rendering this composition without its media, which is not
+	 * what program looks like. It would also join this Screen's presence reporting
+	 * `absent`, raising the warning above against the operator's own monitor (#231).
+	 */
+	it('points the monitor nowhere until the capability has been answered for', async () => {
+		let release!: () => void;
+		const pending = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		mockApiFetch.mockImplementation(async (path: string) => {
+			if (String(path).endsWith('/asset-capability')) {
+				await pending;
+				return { assetCapability: 'program-capability' };
+			}
+			return mockReferenceStatus.value;
+		});
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-testid="program-monitor"]').exists()).toBe(false);
+		// Not the failure state either: the answer is simply not in yet.
+		expect(wrapper.find('[data-testid="program-monitor-unavailable"]').exists()).toBe(false);
+
+		release();
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="program-monitor"]').attributes('src'))
+			.toContain(`#asset-capability=${encodeURIComponent('program-capability')}`);
+	});
+
+	/**
+	 * And never at all when the answer is no. A capability that failed to load never
+	 * retries, so a monitor pointed at a bare URL then is bare for the life of the
+	 * page — permanently showing a composition this Screen is not putting on air.
+	 */
+	it('shows no monitor, and says why, when asset access cannot be obtained', async () => {
 		mockCapabilityResponse.value = null;
 
 		const wrapper = await mountComponent();
 
-		expect(wrapper.get('[data-testid="program-monitor"]').attributes('src')).not.toContain('asset-capability');
+		expect(wrapper.find('[data-testid="program-monitor"]').exists()).toBe(false);
+		expect(wrapper.get('[data-testid="program-monitor-unavailable"]').text())
+			.toContain('Program monitor unavailable');
 	});
 
 	describe('graphic asset references', () => {

@@ -75,6 +75,25 @@ describe('useScreenOutputAccessUrl', () => {
 		vi.unstubAllGlobals();
 	});
 
+	/**
+	 * A PNG capture is a hand-out too, and the quietest one: the file arrives, looks
+	 * like a rendered output, and is missing every asset the Screen publishes.
+	 */
+	it('carries the capability into a PNG capture, and answers whether it opened one', async () => {
+		const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+		vi.stubGlobal('open', vi.fn(() => outputWindow));
+		const { screenOutputAccessUrl, openScreenOutput } = useScreenOutputAccessUrl();
+
+		expect(await screenOutputAccessUrl({ ...screen, output: 'fill', download: true })).toBe(
+			`${window.location.origin}/event/7/screen/main?output=fill&download=1#asset-capability=${capability}`,
+		);
+		expect(await openScreenOutput({ ...screen, download: true })).toBe(true);
+
+		mockApiFetch.mockRejectedValue(new Error('unavailable'));
+		expect(await openScreenOutput({ ...screen, download: true })).toBe(false);
+		vi.unstubAllGlobals();
+	});
+
 	it('closes the tab it opened rather than leaving an output that cannot resolve media', async () => {
 		mockApiFetch.mockRejectedValue(new Error('unavailable'));
 		const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };

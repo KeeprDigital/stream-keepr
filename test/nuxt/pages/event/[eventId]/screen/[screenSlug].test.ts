@@ -40,14 +40,13 @@ vi.mock('~/stores/screen', async () => {
 });
 
 /**
- * The Event already loaded, which is what an output that has navigated here has.
+ * The Event already loaded, which is the state an output that navigated here is in.
  *
- * `event.id` has to match the route's, because the global Event middleware treats a
- * mismatch as an Event switch and resets every event-scoped Pinia store — and
- * `resetAllEventStores` throws on the setup-syntax ones in development. That is a
- * real defect, unrelated to this route and recorded rather than worked around here;
- * what this mock does is put the page in the state it is in when it is reached
- * normally, which is with its Event already loaded.
+ * `event.id` has to match the route's or there is no route left to test: the global
+ * Event middleware treats a mismatch as an Event switch, tries to load the Event
+ * itself, and redirects to `/` when it still has none — taking the page out from
+ * under the test. Supplying the loaded Event is what a real navigation to this URL
+ * has already done by the time the output page renders.
  */
 vi.mock('~/stores/event', () => ({
 	useEventStore: () => ({ eventId: 42, event: { id: 42 }, loadEvent: async () => {} }),

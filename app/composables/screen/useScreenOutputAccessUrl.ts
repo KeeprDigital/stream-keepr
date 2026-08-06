@@ -7,6 +7,14 @@ interface ScreenOutputAccessUrlOptions {
 	screenSlug: string;
 	/** Omitted hands out the Overlay Output, which is what a Screen's own URL means. */
 	output?: ScreenOutput;
+	/**
+	 * Capture the output as a PNG from a temporary tab.
+	 *
+	 * A capture is a hand-out like any other, and one whose loss is even quieter: the
+	 * PNG arrives, looks like a rendered output, and is missing every image, video and
+	 * library font the Screen publishes.
+	 */
+	download?: boolean;
 }
 
 /**
@@ -38,6 +46,7 @@ export function useScreenOutputAccessUrl() {
 				eventId: options.eventId,
 				screenSlug: options.screenSlug,
 				output: options.output,
+				download: options.download,
 				assetCapability,
 			})}`;
 		}
@@ -50,16 +59,22 @@ export function useScreenOutputAccessUrl() {
 	 * Opens the tab first and points it afterwards, because the fetch above lands in
 	 * a later task than the click that started it and a popup blocker refuses a
 	 * window opened there.
+	 *
+	 * Answers whether it pointed the tab anywhere, so a caller that promised the
+	 * operator something — a download, most of all — can say that it is not coming
+	 * rather than leaving them watching for it.
 	 */
-	async function openScreenOutput(options: ScreenOutputAccessUrlOptions): Promise<void> {
+	async function openScreenOutput(options: ScreenOutputAccessUrlOptions): Promise<boolean> {
 		const outputWindow = window.open('', '_blank');
 		if (outputWindow)
 			outputWindow.opener = null;
 		const url = await screenOutputAccessUrl(options);
-		if (url && outputWindow)
+		if (url && outputWindow) {
 			outputWindow.location.href = url;
-		else
-			outputWindow?.close();
+			return true;
+		}
+		outputWindow?.close();
+		return false;
 	}
 
 	return { screenOutputAccessUrl, openScreenOutput };

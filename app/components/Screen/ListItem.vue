@@ -20,6 +20,14 @@ const emit = defineEmits<{
 const { copyToClipboard } = useCopyToClipboard();
 const { screenOutputAccessUrl, openScreenOutput } = useScreenOutputAccessUrl();
 
+/**
+ * This Screen's address, shown so an operator can read where its outputs live.
+ *
+ * Deliberately not the URL the controls beside it hand out: that one carries this
+ * Screen's Screen Output Asset Capability, which is a secret and does not belong on
+ * a page anyone can be standing behind. Copy and open produce it; reading this one
+ * off the screen and typing it produces an output with no media (#231).
+ */
 const screenUrl = computed(() => {
 	const baseUrl = window.location.origin;
 	return `${baseUrl}/event/${props.eventId}/screen/${props.screen.slug}`;

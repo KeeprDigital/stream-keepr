@@ -63,20 +63,45 @@ const sessionStore = useBroadcastGraphicsLiveSessionStore();
  * media exactly as a capture browser does — through a Screen Output Asset
  * Capability. Without one it would show every graphic except its media, which is
  * the one thing a monitor must not do quietly.
+ *
+ * So it is never pointed anywhere until the capability has been answered for, and
+ * never pointed at all if the answer was no. The capability is fetched
+ * asynchronously and starts null, so an iframe bound straight to the URL navigates
+ * on the first render, before the fetch lands — and a navigation is not re-run when
+ * a later value arrives. That monitor would show a media-less composition while
+ * program has media, which is worse than showing no monitor: it is a wrong answer to
+ * the question the monitor exists to answer. It would also be a full Screen Output,
+ * joining this Screen's presence and reporting `absent` — raising the warning below
+ * against the operator's own monitor, with advice that cannot fix it (#231).
  */
-const { assetCapability } = useScreenOutputAssetCapability(
+const { assetCapability, assetCapabilitySettled } = useScreenOutputAssetCapability(
 	() => props.eventId,
 	() => props.screen.id,
 );
 
 /**
- * The Screen Outputs watching right now that cannot resolve this Screen's media,
- * and whether this Screen has any media for them to lose.
+ * The Screen Outputs watching right now that cannot resolve this Screen's assets,
+ * and whether this Screen publishes any for them to lose.
  *
  * Both halves are needed before this is worth an operator's attention: an output
  * with no capability watching a Screen that publishes nothing but Shapes and Text
  * is showing program exactly, and warning about it would train an operator to
  * ignore the one warning that matters.
+ *
+ * Assets rather than media, in the warning's words as well as here: a Graphic
+ * Typography naming a library font is an ordinary Graphic Asset Reference resolved
+ * through the same capability (#141), so a Screen with no images at all can still
+ * lose its typeface, and this predicate counts that correctly.
+ *
+ * **It reads only the authored stack, so it under-warns and never over-warns.** A
+ * Broadcast Graphics Screen also publishes the media Graphic Input values its Live
+ * Session has accepted (#96, #178), and those are not counted here — there is no
+ * client-side helper that extracts them, and the indexing that does lives on the
+ * authoritative side. So a Screen whose only assets were chosen live warns about
+ * nothing while its outputs do lose them. That direction is the survivable one: a
+ * missed warning leaves the operator where they were before this existed, where a
+ * false one spends the credibility of every later warning. Widening it means a
+ * shared extractor over accepted input values, which is worth doing on its own.
  */
 const outputsWithoutAssetAccess = useScreenOutputAssetAccess(() => props.screen.id);
 const publishesMedia = computed(() =>
@@ -302,10 +327,10 @@ async function resetLiveState() {
 	<div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,24rem)]">
 		<ScreenSettingsCard title="Program" :default-open="true">
 			<!--
-				This monitor is not the only output, and it is the one output that always
-				has its capability. An output that arrived without one is showing this
-				composition with every image and video missing, which looks like nothing
-				at all from here (#231).
+				This monitor is not the only output, and it is the one output guaranteed
+				to hold its capability. An output that arrived without one is showing this
+				composition with its media missing, which looks like nothing at all from
+				here (#231).
 			-->
 			<UAlert
 				v-if="publishesMedia && outputsWithoutAssetAccess > 0"
@@ -315,13 +340,28 @@ async function resetLiveState() {
 				variant="soft"
 				icon="i-lucide-image-off"
 				:title="outputsWithoutAssetAccess === 1
-					? 'One Screen Output cannot resolve this Screen\'s media'
-					: `${outputsWithoutAssetAccess} Screen Outputs cannot resolve this Screen's media`"
-				description="It is rendering everything except images and video. Re-open it from this Screen's copy or open control, which is what puts asset access in the URL."
+					? 'One Screen Output cannot resolve this Screen\'s assets'
+					: `${outputsWithoutAssetAccess} Screen Outputs cannot resolve this Screen's assets`"
+				description="It is rendering everything except images, video and library fonts. Re-open it from this Screen's copy or open control, which is what puts asset access in the URL."
 			/>
-			<div class="transparent-checkerboard-backdrop overflow-hidden rounded-md">
+			<!--
+				Asset access could not be obtained, so there is no monitor to show. Stated
+				rather than left blank, and deliberately not replaced by a monitor without
+				it: one of those shows a composition this Screen is not putting on air.
+			-->
+			<UAlert
+				v-if="assetCapabilitySettled && !assetCapability"
+				data-testid="program-monitor-unavailable"
+				color="warning"
+				variant="soft"
+				icon="i-lucide-monitor-off"
+				title="Program monitor unavailable"
+				description="Asset access for this Screen could not be obtained, so the monitor would render this composition without its media. Playout below is unaffected; reload to try again."
+			/>
+			<div v-else class="transparent-checkerboard-backdrop overflow-hidden rounded-md">
 				<div class="relative mx-auto w-full" :style="programAspectStyle">
 					<iframe
+						v-if="assetCapability"
 						:src="programUrl"
 						class="absolute inset-0 size-full border-0"
 						title="Broadcast Graphics program monitor"
