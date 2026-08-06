@@ -3,7 +3,43 @@ interface WithTimestamps {
 	updatedAt: Date | string;
 }
 
-export function mapTimestamps<T extends WithTimestamps>(entity: T): T {
+/**
+ * What the rewrite does to one value.
+ *
+ * The body only rewrites a key that holds a `Date` or a `string`, so a `*At` key
+ * holding anything else comes back exactly as it went in. Saying that here, rather
+ * than flattening every `*At` key to `Date`, is what keeps `lastSeenAt: Date | null`
+ * nullable and stops a `reversalCompletesAt: number` being described as a date it
+ * never becomes.
+ */
+type ConvertedTimestamp<V> = [Extract<V, Date | string>] extends [never]
+	? V
+	: Date | Exclude<V, Date | string>;
+
+/**
+ * The return type of `mapTimestamps`: every `*At` key that could hold a timestamp
+ * holds a `Date`.
+ *
+ * The key test is the template literal rather than the two names in
+ * `WithTimestamps`, because the body's test is `key.endsWith('At')` — it converts
+ * `lastSeenAt` and `meleeSyncLeaseExpiresAt` too, and a type naming only
+ * `createdAt`/`updatedAt` would be a smaller lie rather than none. The mapping is
+ * over `keyof T` so it stays homomorphic: an optional `resolvedAt?: string` comes
+ * back optional, not `Date | undefined` and required.
+ *
+ * Across all nineteen production call sites the `*At` values come from Drizzle
+ * columns, where every one is `mode: 'timestamp_ms'` and therefore already `Date`.
+ * The object carrying them varies — some hand over the row itself, some a rest of
+ * it, and four build a literal out of its columns — but the values do not, so for
+ * every one of them the mapped type resolves to the input type and nothing
+ * downstream moves. The type only starts saying something new when a caller hands
+ * over a `string`, which is exactly the case the old `T -> T` got wrong. See #256.
+ */
+export type MappedTimestamps<T> = {
+	[K in keyof T]: K extends `${string}At` ? ConvertedTimestamp<T[K]> : T[K];
+};
+
+export function mapTimestamps<T extends WithTimestamps>(entity: T): MappedTimestamps<T> {
 	const result = { ...entity } as Record<string, unknown>;
 
 	for (const [key, value] of Object.entries(entity as Record<string, unknown>)) {
@@ -12,5 +48,5 @@ export function mapTimestamps<T extends WithTimestamps>(entity: T): T {
 		}
 	}
 
-	return result as T;
+	return result as MappedTimestamps<T>;
 }
