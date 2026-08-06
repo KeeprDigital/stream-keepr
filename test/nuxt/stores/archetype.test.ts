@@ -218,6 +218,36 @@ describe('useArchetypeStore', () => {
 			expect(store.error).toBe('No card named “Counterspel” exists in the catalogue');
 		});
 
+		it('reports the sentence a refused list load carries', async () => {
+			mockRepo.list.mockRejectedValue(transportFailure({
+				status: 403,
+				body: { message: 'This Event is closed to everyone but its owner' },
+				request: `[GET] "/api/events/1/archetypes"`,
+			}));
+
+			await store.loadByEventId(1);
+
+			// A load reports through the lifecycle's own catch rather than through
+			// `executeReporting`, which is a second seam and needs the sentence raised
+			// into the failure to find it.
+			expect(store.error).toBe('This Event is closed to everyone but its owner');
+		});
+
+		it('reports the sentence a refused delete carries, and puts the row back', async () => {
+			const archetype = createMockUiArchetype({ id: 1, name: 'Azorius Control' });
+			store.archetypes = [archetype];
+			mockRepo.remove.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'Player Decks are still assigned to this Archetype' },
+				request: `[DELETE] "/api/events/1/archetypes/1"`,
+			}));
+
+			await store.removeArchetype(1, 1);
+
+			expect(store.error).toBe('Player Decks are still assigned to this Archetype');
+			expect(store.archetypes).toHaveLength(1);
+		});
+
 		it('reports the transport line for a 5xx, whose body message the server sanitized', async () => {
 			mockRepo.create.mockRejectedValue(transportFailure({
 				status: 500,
