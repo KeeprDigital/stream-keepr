@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { getChain, mockD1Client, mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
 import { createMockScreen } from '~~/test/helpers/fixtures';
+import { testGraphicAssetId, testGraphicAssetRevisionId } from '~~/test/helpers/graphicsAssetIdentities';
 
 vi.mock('hub:db', () => ({ db: mockDb }));
 vi.mock('~~/server/db/schema', () => ({
@@ -170,8 +171,8 @@ describe('screenService', () => {
 		it('guards the Screen update with every exact Graphic Asset Reference precondition', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
-				assetId: 'asset-1',
-				revisionId: 'revision-1',
+				assetId: testGraphicAssetId('asset-1'),
+				revisionId: testGraphicAssetRevisionId('revision-1'),
 			};
 			const screen = createMockScreen({
 				currentMode: 'feature-match-overlay',

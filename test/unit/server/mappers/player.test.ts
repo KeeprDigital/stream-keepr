@@ -75,7 +75,6 @@ describe('player mapper', () => {
 				draws: null,
 				position: null,
 				points: null,
-				deckList: null,
 				lgs: null,
 				gameData: null,
 			});
@@ -88,7 +87,6 @@ describe('player mapper', () => {
 			expect(result.draws).toBeNull();
 			expect(result.position).toBeNull();
 			expect(result.points).toBeNull();
-			expect(result.deckList).toBeNull();
 			expect(result.lgs).toBeNull();
 			expect(result.gameData).toBeNull();
 		});

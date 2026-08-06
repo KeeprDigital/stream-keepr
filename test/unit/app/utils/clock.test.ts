@@ -23,8 +23,8 @@ describe('cLOCK_DECREMENT_OPTIONS', () => {
 
 	it('is ordered from largest to smallest decrement', () => {
 		const deltas = CLOCK_DECREMENT_OPTIONS.map((o: { deltaMs: number }) => o.deltaMs);
-		expect(deltas[0]).toBeLessThan(deltas[1]);
-		expect(deltas[1]).toBeLessThan(deltas[2]);
+		expect(deltas[0]).toBeLessThan(deltas[1]!);
+		expect(deltas[1]).toBeLessThan(deltas[2]!);
 	});
 
 	it('contains -5m, -1m, -10s with correct millisecond values', () => {
@@ -56,8 +56,8 @@ describe('cLOCK_INCREMENT_OPTIONS', () => {
 
 	it('is ordered from smallest to largest increment', () => {
 		const deltas = CLOCK_INCREMENT_OPTIONS.map((o: { deltaMs: number }) => o.deltaMs);
-		expect(deltas[0]).toBeLessThan(deltas[1]);
-		expect(deltas[1]).toBeLessThan(deltas[2]);
+		expect(deltas[0]).toBeLessThan(deltas[1]!);
+		expect(deltas[1]).toBeLessThan(deltas[2]!);
 	});
 
 	it('contains +10s, +1m, +5m with correct millisecond values', () => {

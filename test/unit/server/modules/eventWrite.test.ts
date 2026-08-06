@@ -71,7 +71,7 @@ describe('eventWriteModule', () => {
 			expect(mockRequireTalentInEvent).toHaveBeenCalledWith(1, 3);
 			expect(mockRequireTalentInEvent).toHaveBeenCalledWith(1, 4);
 			expect(mockRequireTalentInEvent.mock.invocationCallOrder[0])
-				.toBeLessThan(mockEventService.update.mock.invocationCallOrder[0]);
+				.toBeLessThan(mockEventService.update.mock.invocationCallOrder[0]!);
 		});
 
 		it('returns 404 when the event does not exist', async () => {
@@ -125,7 +125,7 @@ describe('eventWriteModule', () => {
 			await eventWriteModule().deleteEvent({ eventId: 1 });
 
 			expect(mockScreenService.findIdsByEventId.mock.invocationCallOrder[0])
-				.toBeLessThan(mockEventService.remove.mock.invocationCallOrder[0]);
+				.toBeLessThan(mockEventService.remove.mock.invocationCallOrder[0]!);
 		});
 
 		it('returns 404 without cleanup when the event does not exist', async () => {
@@ -145,7 +145,7 @@ describe('eventWriteModule', () => {
 			expect(mockCardService.cleanupDeletedScreenCard).toHaveBeenNthCalledWith(1, 1, 10);
 			expect(mockCardService.cleanupDeletedScreenCard).toHaveBeenNthCalledWith(2, 1, 11);
 			expect(mockEventService.remove.mock.invocationCallOrder[0])
-				.toBeLessThan(mockCardService.cleanupDeletedScreenCard.mock.invocationCallOrder[0]);
+				.toBeLessThan(mockCardService.cleanupDeletedScreenCard.mock.invocationCallOrder[0]!);
 			expect(mockPublication.eventDeleted).toHaveBeenCalledWith({
 				eventId: 1,
 				originConnectionId: 'origin-1',

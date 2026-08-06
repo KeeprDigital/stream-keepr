@@ -100,7 +100,6 @@ describe('broadcast layout geometry utilities', () => {
 	it('insets cutout geometry to the inner edge of a visible source border', () => {
 		const cutout = featureMatchOverlaySourceCutoutRect({
 			id: 'main-source',
-			type: 'source',
 			label: 'Main',
 			visible: true,
 			frameCutout: true,
@@ -135,7 +134,6 @@ describe('broadcast layout geometry utilities', () => {
 	it('does not reserve cutout space for hidden source border sides', () => {
 		const cutout = featureMatchOverlaySourceCutoutRect({
 			id: 'side-source',
-			type: 'source',
 			label: 'Side',
 			visible: true,
 			frameCutout: true,
@@ -172,7 +170,6 @@ describe('broadcast layout geometry utilities', () => {
 	it('cuts the full source rect when the source border is hidden', () => {
 		const cutout = featureMatchOverlaySourceCutoutRect({
 			id: 'player1-source',
-			type: 'source',
 			label: 'Player',
 			visible: true,
 			frameCutout: true,

@@ -58,9 +58,9 @@ describe('matchWriteModule', () => {
 		expect(mockRequireRoundInEvent).toHaveBeenCalledWith(1, 3);
 		expect(mockRequirePlayersInEvent).toHaveBeenCalledWith(1, [10, 11]);
 		expect(mockRequireRoundInEvent.mock.invocationCallOrder[0])
-			.toBeLessThan(mockRequirePlayersInEvent.mock.invocationCallOrder[0]);
+			.toBeLessThan(mockRequirePlayersInEvent.mock.invocationCallOrder[0]!);
 		expect(mockRequirePlayersInEvent.mock.invocationCallOrder[0])
-			.toBeLessThan(mockMatchService.create.mock.invocationCallOrder[0]);
+			.toBeLessThan(mockMatchService.create.mock.invocationCallOrder[0]!);
 		expect(mockMatchService.create).toHaveBeenCalledWith(1, input);
 		expect(mockPublication.matchCreated).toHaveBeenCalledWith({
 			eventId: 1,

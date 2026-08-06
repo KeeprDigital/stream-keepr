@@ -112,7 +112,7 @@ function mediaItem(id: string, overrides: Record<string, unknown> = {}) {
 async function ingestImage(
 	eventId: number,
 	name: string,
-	bytes: Uint8Array,
+	bytes: Uint8Array<ArrayBuffer>,
 	cookie: string,
 ): Promise<Reference> {
 	const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {

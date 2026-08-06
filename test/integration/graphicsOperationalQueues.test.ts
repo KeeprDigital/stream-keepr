@@ -60,7 +60,7 @@ describe('the Graphics Asset Library operational queues API', () => {
 		authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
 	});
 
-	async function ingest(name: string, idempotencyKey: string, bytes: Uint8Array) {
+	async function ingest(name: string, idempotencyKey: string, bytes: Uint8Array<ArrayBuffer>) {
 		const initiated = await $fetch<GraphicsIngestionOperation>(
 			'/api/graphics-assets/ingestion-operations',
 			{

@@ -14,28 +14,33 @@ import { vi } from 'vitest';
 // ──────────────── Chainable builder stubs ────────────────
 // Each method returns `chain` so .select().from().where() etc. all work.
 
-function createChainableQuery() {
-	const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+// Named as a literal union rather than `Record<string, …>` so that a chain
+// method the builder does not stub is a type error at the call site instead of
+// an `undefined` that only shows up as a runtime failure.
+const CHAIN_METHODS = [
+	'from',
+	'where',
+	'set',
+	'values',
+	'returning',
+	'orderBy',
+	'limit',
+	'offset',
+	'innerJoin',
+	'leftJoin',
+	'onConflictDoUpdate',
+	'onConflictDoNothing',
+	'select',
+	'groupBy',
+	'having',
+] as const;
 
-	const methods = [
-		'from',
-		'where',
-		'set',
-		'values',
-		'returning',
-		'orderBy',
-		'limit',
-		'offset',
-		'innerJoin',
-		'leftJoin',
-		'onConflictDoUpdate',
-		'onConflictDoNothing',
-		'select',
-		'groupBy',
-		'having',
-	];
+type ChainableQuery = Record<typeof CHAIN_METHODS[number], ReturnType<typeof vi.fn>>;
 
-	for (const method of methods) {
+function createChainableQuery(): ChainableQuery {
+	const chain = {} as ChainableQuery;
+
+	for (const method of CHAIN_METHODS) {
 		chain[method] = vi.fn().mockReturnValue(chain);
 	}
 

@@ -204,8 +204,8 @@ describe('meleeRoundSnapshotService', () => {
 			roundId: 10,
 			matches: [],
 			standings: [
-				{ playerId: 4 },
-				{ playerId: 4 },
+				{ playerId: 4, wins: 1, losses: 0, draws: 0, position: 1, points: 3 },
+				{ playerId: 4, wins: 0, losses: 1, draws: 0, position: 2, points: 0 },
 			],
 		})).rejects.toThrow('Duplicate Round standing player identity');
 

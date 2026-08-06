@@ -62,7 +62,7 @@ interface AuthorisedRoute {
 	method: string;
 	path: (operationId: string) => string;
 	json?: unknown;
-	bytes?: Uint8Array;
+	bytes?: Uint8Array<ArrayBuffer>;
 	contentType?: string;
 }
 
@@ -176,7 +176,7 @@ function requestInit(route: AuthorisedRoute, headers: Record<string, string>) {
 describe('graphics author authorisation across the ingestion and lifecycle routes', () => {
 	let authorCookie: string;
 	let intruderCookie: string;
-	let fontBytes: Uint8Array;
+	let fontBytes: Uint8Array<ArrayBuffer>;
 	let sessionlessProbeOperationId: string;
 	let assetId: string;
 	let eventId: number;
@@ -245,7 +245,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 	async function uploadAs(
 		cookie: string,
 		operationId: string,
-		bytes: Uint8Array,
+		bytes: Uint8Array<ArrayBuffer>,
 		contentType: string,
 	) {
 		return await $fetch<GraphicsIngestionOperation>(

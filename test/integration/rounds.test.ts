@@ -80,7 +80,7 @@ describe('rounds API', () => {
 
 		const found = data.rounds.find((r: { id: number }) => r.id === roundId);
 		expect(found).toBeDefined();
-		expect(found.name).toBe('Round 1');
+		expect(found!.name).toBe('Round 1');
 	});
 
 	it('updates a round name', async () => {

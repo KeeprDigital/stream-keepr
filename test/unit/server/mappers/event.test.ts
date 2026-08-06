@@ -114,7 +114,7 @@ describe('event mapper', () => {
 			const result = mapEventToResponse(event);
 
 			expect(result.talents).toHaveLength(1);
-			expect(result.talents[0].name).toBe('Cedric Phillips');
+			expect(result!.talents[0]!.name).toBe('Cedric Phillips');
 		});
 
 		it('handles empty talents array', () => {

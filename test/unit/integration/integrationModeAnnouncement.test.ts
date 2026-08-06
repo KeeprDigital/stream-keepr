@@ -67,7 +67,10 @@ function setupCallOrder(source: ts.SourceFile): string[] {
 
 describe('the integration suite announcing itself to its own process', () => {
 	it('sets the flag the rest of the repo reads', () => {
-		const env: NodeJS.ProcessEnv = {};
+		// Nuxt generates a `ProcessEnv` augmentation that declares every
+		// runtimeConfig-backed variable as required, so an empty environment —
+		// which is exactly what this test is about — cannot be written literally.
+		const env = {} as NodeJS.ProcessEnv;
 
 		announceIntegrationMode(env);
 

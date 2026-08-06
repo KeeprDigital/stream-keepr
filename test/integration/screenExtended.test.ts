@@ -79,9 +79,9 @@ describe('screens extended API', () => {
 			set: 'lea',
 			layout: 'normal',
 		});
-		expect(card.imageData.front).toMatchObject({ normal: 'https://example.com/front.jpg' });
-		expect(card.imageData.back).toBeNull();
-		expect(card.savedAt).toBeTypeOf('number');
+		expect(card!.imageData.front).toMatchObject({ normal: 'https://example.com/front.jpg' });
+		expect(card!.imageData.back).toBeNull();
+		expect(card!.savedAt).toBeTypeOf('number');
 	});
 
 	it('overwrites an existing card', async () => {
@@ -98,8 +98,8 @@ describe('screens extended API', () => {
 		});
 
 		const card = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`);
-		expect(card.name).toBe('Counterspell');
-		expect(card.id).toBe('new-card-id');
+		expect(card!.name).toBe('Counterspell');
+		expect(card!.id).toBe('new-card-id');
 	});
 
 	it('clears the card from the screen', async () => {
@@ -126,7 +126,7 @@ describe('screens extended API', () => {
 
 		expect(updated.id).toBe(screenId);
 		expect(updated.modeConfigs).toBeDefined();
-		expect(updated.modeConfigs['feature-match']).toMatchObject({
+		expect(updated!.modeConfigs!['feature-match']).toMatchObject({
 			showNames: true,
 			showClock: false,
 		});
@@ -142,7 +142,7 @@ describe('screens extended API', () => {
 		});
 
 		expect(updated.modeConfigs).toBeDefined();
-		expect(updated.modeConfigs.card).toMatchObject({
+		expect(updated!.modeConfigs!.card).toMatchObject({
 			scale: 1.5,
 			animationEnabled: true,
 		});
@@ -161,7 +161,7 @@ describe('screens extended API', () => {
 			body: { animationSpeed: 'fast' },
 		});
 
-		expect(updated.modeConfigs.card).toMatchObject({
+		expect(updated!.modeConfigs!.card).toMatchObject({
 			scale: 2.0,
 			animationEnabled: true,
 			animationSpeed: 'fast',
@@ -295,10 +295,10 @@ describe('screens extended API', () => {
 			body: { graphics },
 		});
 
-		expect(updated.modeConfigs['broadcast-graphics']).toEqual({ graphics });
+		expect(updated!.modeConfigs!['broadcast-graphics']).toEqual({ graphics });
 
 		const reloaded = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
-		expect(reloaded.modeConfigs['broadcast-graphics']).toEqual({ graphics });
+		expect(reloaded!.modeConfigs!['broadcast-graphics']).toEqual({ graphics });
 	});
 
 	it('refuses a Broadcast Graphics stack over the whole-Screen Graphic Item cap', async () => {
@@ -394,7 +394,7 @@ describe('screens extended API', () => {
 			body: { graphics },
 		});
 
-		expect(updated.modeConfigs['broadcast-graphics']).toEqual({ graphics });
+		expect(updated!.modeConfigs!['broadcast-graphics']).toEqual({ graphics });
 	});
 
 	it('refuses two Graphic Inputs sharing one key on the editor patch path', async () => {
@@ -423,7 +423,7 @@ describe('screens extended API', () => {
 		})).rejects.toThrow();
 
 		const reloaded = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
-		expect(reloaded.modeConfigs['broadcast-graphics']).toEqual({ graphics });
+		expect(reloaded!.modeConfigs!['broadcast-graphics']).toEqual({ graphics });
 	});
 
 	it('rejects a Broadcast Graphic carrying an unsupported Graphic Item kind', async () => {

@@ -238,7 +238,7 @@ function bytes(value: unknown): number {
 
 interface FetchFailure { data?: { statusCode?: number; message?: string } }
 
-async function patchConfig(path: string, body: unknown) {
+async function patchConfig(path: string, body: Record<string, unknown>) {
 	return await $fetch(path, { method: 'PATCH', body }).then(
 		result => ({ ok: true as const, result }),
 		(error: FetchFailure) => ({ ok: false as const, error }),

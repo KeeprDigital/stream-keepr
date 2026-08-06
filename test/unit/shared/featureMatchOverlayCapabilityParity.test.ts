@@ -161,13 +161,15 @@ describe('feature Match Overlay capability parity', () => {
 	});
 
 	it('row: per-corner radii become Shape Geometry per-corner treatment', () => {
-		const rounded = everyPresetItem().filter(item =>
+		// A type guard rather than a plain predicate, so the loop below can read
+		// each item's geometry off the kind the filter established.
+		const rounded = everyPresetItem().filter((item): item is Extract<GraphicItemConfig, { type: 'shape' | 'game-wins' }> =>
 			(item.type === 'shape' && !isRectangularShapeGeometry(item.geometry))
 			|| (item.type === 'game-wins' && !isRectangularShapeGeometry(item.boxGeometry)));
 
 		expect(rounded.length).toBeGreaterThan(0);
 		for (const item of rounded) {
-			const geometry = item.type === 'game-wins' ? item.boxGeometry : (item as { geometry: never }).geometry;
+			const geometry = item.type === 'game-wins' ? item.boxGeometry : item.geometry;
 			expect(Object.keys(geometry).toSorted())
 				.toEqual(['bottomLeft', 'bottomRight', 'leftSlant', 'rightSlant', 'topLeft', 'topRight']);
 		}

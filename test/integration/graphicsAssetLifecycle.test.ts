@@ -362,7 +362,9 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 		});
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		config.layout.frame.backgroundImage = reference;
-		await Promise.all([secondScreen.id, thirdScreen.id].map(async id => await $fetch(
+		// The response is not read, and inferring its route-typed shape inside a
+		// `map` exhausts the type comparison depth limit.
+		await Promise.all([secondScreen.id, thirdScreen.id].map(async id => await $fetch<unknown>(
 			`/api/events/${eventId}/screens/${id}/config/feature-match-overlay`,
 			{ method: 'PATCH', body: { layout: config.layout } },
 		)));
@@ -372,7 +374,10 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 		// would be asserting which of two racing writes committed first rather
 		// than that the summary is complete.
 		const blocked = await lifecycleAction(reference.assetId, 'trash');
-		expect(blocked.outcome).toBe('in-use');
+		// A narrowing check rather than an `expect`, because only the `in-use`
+		// arm of the outcome carries the usage the assertions below read.
+		if (blocked.outcome !== 'in-use')
+			throw new Error(`expected an in-use refusal, got ${blocked.outcome}`);
 		expect(blocked.usage).toHaveLength(2);
 		expect(blocked.usage).toEqual(expect.arrayContaining(
 			[secondScreen.id, thirdScreen.id].map(id => expect.objectContaining({

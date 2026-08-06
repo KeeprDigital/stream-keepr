@@ -8,6 +8,7 @@ import {
 	graphicAssetRevisions,
 	graphicAssets,
 } from '~~/server/db/schema/graphicsAsset';
+import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { createMiniflareD1Harness } from '~~/test/helpers/miniflare-d1';
 
 /**
@@ -63,7 +64,7 @@ const OWNER_SLOT = 'liveSession.slate.inputs.clip';
 /** The reference set one accepted media Graphic Input value produces. */
 function references(revisionId: string) {
 	return [{
-		reference: { assetId: ASSET_ID, revisionId },
+		reference: testGraphicAssetReference(ASSET_ID, revisionId),
 		ownerSlot: OWNER_SLOT,
 		kind: 'image' as const,
 	}];

@@ -35,7 +35,6 @@ describe('round mapper', () => {
 				eventId: 7,
 				roundNumber: 3,
 				name: 'Quarterfinals',
-				phaseName: 'Top 8',
 			});
 			const result = mapRoundToResponse(round);
 
@@ -43,7 +42,6 @@ describe('round mapper', () => {
 			expect(result.eventId).toBe(7);
 			expect(result.roundNumber).toBe(3);
 			expect(result.name).toBe('Quarterfinals');
-			expect(result.phaseName).toBe('Top 8');
 		});
 	});
 });

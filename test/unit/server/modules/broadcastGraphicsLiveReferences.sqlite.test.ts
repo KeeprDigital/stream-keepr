@@ -15,6 +15,7 @@ import {
 	graphicAssets,
 } from '~~/server/db/schema/graphicsAsset';
 import { createCommandIdSequence, seedBroadcastGraphicsScreen } from '~~/test/helpers/broadcastGraphicsScreen';
+import { testGraphicAssetId, testGraphicAssetRevisionId } from '~~/test/helpers/graphicsAssetIdentities';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
@@ -117,11 +118,12 @@ const { createD1ScreenOutputAssetAuthorizer } = await import('~~/server/modules/
 
 const ASSET_ID = 'asset-clip';
 const REVISIONS = ['revision-one', 'revision-two', 'revision-three'] as const;
+type Revision = typeof REVISIONS[number];
 const CONTENT_DIGEST = 'd'.repeat(64);
 
 /** A media Graphic Input value, as an operator's selection stores one. */
 function clip(revisionId: string): MediaGraphicInputValue {
-	return { assetId: ASSET_ID, revisionId };
+	return { assetId: testGraphicAssetId(ASSET_ID), revisionId: testGraphicAssetRevisionId(revisionId) };
 }
 
 /**
@@ -189,7 +191,9 @@ const STACK: BroadcastGraphicsModeConfig = { graphics: [SLATE] };
 const nextCommandId = createCommandIdSequence();
 
 function command(type: BroadcastGraphicsCommand['type'], payload: Record<string, unknown>): BroadcastGraphicsCommand {
-	return { commandId: nextCommandId(), type, payload } as BroadcastGraphicsCommand;
+	// The payload shape belongs to each command variant; a test that names the
+	// variant by its `type` supplies the matching payload itself.
+	return { commandId: nextCommandId(), type, payload } as unknown as BroadcastGraphicsCommand;
 }
 
 interface LiveSession {
@@ -245,10 +249,10 @@ async function liveSession(): Promise<LiveSession> {
 }
 
 /** Every revision, in one answer, so a scenario states the whole index it left. */
-async function resolvable(live: LiveSession): Promise<string[]> {
+async function resolvable(live: LiveSession): Promise<Revision[]> {
 	const answers = await Promise.all(REVISIONS.map(async revisionId =>
 		await live.canResolve(revisionId) ? revisionId : undefined));
-	return answers.filter((revisionId): revisionId is string => revisionId !== undefined);
+	return answers.filter((revisionId): revisionId is Revision => revisionId !== undefined);
 }
 
 /** Three revisions of one Graphic Asset, which every scenario chooses between. */
@@ -419,7 +423,7 @@ describe('re-deriving what a Broadcast Graphics Live Session publishes after an 
 			// Re-armed for the second pass, so both passes lose rather than one.
 			if (races < 2)
 				beforeReferenceWrite = race;
-			await live.setInput(CLIP_A, clip(REVISIONS[races]));
+			await live.setInput(CLIP_A, clip(REVISIONS[races]!));
 		};
 
 		beforeReferenceWrite = race;

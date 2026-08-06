@@ -63,7 +63,7 @@ describe('players API', () => {
 
 		const found = data.players.find((p: { id: number }) => p.id === playerId);
 		expect(found).toBeDefined();
-		expect(found.name).toBe('Test Player One');
+		expect(found!.name).toBe('Test Player One');
 	});
 
 	it('gets a single player by ID', async () => {

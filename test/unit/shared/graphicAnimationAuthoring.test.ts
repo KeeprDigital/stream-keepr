@@ -75,6 +75,15 @@ function itemAnimation(next: BroadcastGraphicConfig, itemId: string) {
 	return findGraphicItem(next, itemId)?.item.animation;
 }
 
+// Only a container carries a stagger, so reading one has to say it expected a
+// Graphic Group rather than any Graphic Item.
+function containerAnimation(next: BroadcastGraphicConfig, itemId: string) {
+	const item = findGraphicItem(next, itemId)?.item;
+	if (item?.type !== 'group')
+		throw new Error(`expected ${itemId} to be a Graphic Group`);
+	return item.animation;
+}
+
 describe('graphic item animation authoring', () => {
 	it('gives a newly authored Graphic Item no recipes until a phase is enabled', () => {
 		const base = graphic();
@@ -173,7 +182,7 @@ describe('stagger authoring', () => {
 		next = toggleGraphicItemStaggerMember(next, 'cluster', 'enter', 'one', true);
 		next = toggleGraphicItemStaggerMember(next, 'cluster', 'enter', 'three', true);
 
-		expect(itemAnimation(next, 'cluster')?.stagger?.enter).toEqual({
+		expect(containerAnimation(next, 'cluster')?.stagger?.enter).toEqual({
 			order: 'list',
 			step: 80,
 			itemIds: ['one', 'three'],
@@ -231,7 +240,7 @@ describe('stagger authoring', () => {
 		const staggered = patchGraphicItemAnimationStagger(base, 'cluster', 'enter', { itemIds: ['one', 'two'] });
 		const deleted = deleteGraphicItem(staggered, 'two');
 
-		expect(itemAnimation(deleted, 'cluster')?.stagger?.enter?.itemIds).toEqual(['one']);
+		expect(containerAnimation(deleted, 'cluster')?.stagger?.enter?.itemIds).toEqual(['one']);
 	});
 });
 

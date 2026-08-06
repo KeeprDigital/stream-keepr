@@ -77,7 +77,7 @@ describe('feature match slots API', () => {
 		// Event creation auto-creates feature match slots; our manually created one should also be here.
 		const found = data.featureMatchSlots.find((m: { id: number }) => m.id === matchId);
 		expect(found).toBeDefined();
-		expect(found.bestOf).toBe(3);
+		expect(found!.bestOf).toBe(3);
 	});
 
 	it('updates a feature match slot bestOf', async () => {
@@ -208,13 +208,13 @@ describe('feature match slots API', () => {
 		expect(first.promotedSlot).toMatchObject({ id: slot.id, matchId: matchA.id, player1Data: { name: 'Carol' } });
 		expect(first.promotedSlot.activeSession).toMatchObject({ slotId: slot.id, status: 'active', sequence: 1 });
 		expect(first.assignment).toMatchObject({ roundId, slotId: slot.id, matchId: matchA.id });
-		const firstSessionId = first.promotedSlot.activeSession.id;
+		const firstSessionId = first!.promotedSlot!.activeSession!.id;
 
 		// The same invariants hold in durable storage, not just in the response.
 		const afterFirst = await $fetch(`/api/events/${eventId}/feature-match-slots`);
 		const storedA = afterFirst.featureMatchSlots.find((s: { id: number }) => s.id === slot.id);
 		expect(storedA).toMatchObject({ matchId: matchA.id });
-		expect(storedA.activeSession).toMatchObject({ id: firstSessionId, status: 'active', sequence: 1 });
+		expect(storedA!.activeSession).toMatchObject({ id: firstSessionId, status: 'active', sequence: 1 });
 
 		const assignmentsA = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId } });
 		const rowsForSlotA = assignmentsA.featureMatchAssignments.filter((a: { slotId: number }) => a.slotId === slot.id);
@@ -230,7 +230,7 @@ describe('feature match slots API', () => {
 		expect(second.promotedSlot).toMatchObject({ id: slot.id, matchId: matchB.id, player1Data: { name: 'Erin' } });
 		// A brand-new session replaced the previous one.
 		expect(second.promotedSlot.activeSession).toMatchObject({ slotId: slot.id, status: 'active', sequence: 1 });
-		expect(second.promotedSlot.activeSession.id).not.toBe(firstSessionId);
+		expect(second!.promotedSlot!.activeSession!.id).not.toBe(firstSessionId);
 		expect(second.assignment).toMatchObject({ roundId, slotId: slot.id, matchId: matchB.id });
 
 		// Exactly one assignment for the slot, now pointing at match B.
@@ -285,10 +285,10 @@ describe('feature match slots API', () => {
 		try {
 			const data = await $fetch(`/api/events/${event.id}/feature-match-slots`);
 			expect(data.featureMatchSlots).toHaveLength(1);
-			expect(data.featureMatchSlots[0].eventId).toBe(event.id);
-			expect(data.featureMatchSlots[0].activeSession).toBeDefined();
-			expect(data.featureMatchSlots[0].activeSession.currentState).toBeDefined();
-			expect(data.featureMatchSlots[0].activeSession.sequence).toBe(1);
+			expect(data!.featureMatchSlots[0]!.eventId).toBe(event.id);
+			expect(data!.featureMatchSlots[0]!.activeSession).toBeDefined();
+			expect(data!.featureMatchSlots[0]!.activeSession!.currentState).toBeDefined();
+			expect(data!.featureMatchSlots[0]!.activeSession!.sequence).toBe(1);
 		}
 		finally {
 			await $fetch(`/api/events/${event.id}`, { method: 'DELETE' });
@@ -302,9 +302,13 @@ describe('feature match slots API', () => {
 		});
 
 		try {
+			// A fresh binding per reading rather than one reassigned `let`: the
+			// route-typed `$fetch` result is a large conditional type, and
+			// re-checking it against a previous binding exhausts the comparison
+			// depth limit.
 			// Default: 1 feature match
-			let data = await $fetch(`/api/events/${event.id}/feature-match-slots`);
-			expect(data.featureMatchSlots).toHaveLength(1);
+			const initial = await $fetch(`/api/events/${event.id}/feature-match-slots`);
+			expect(initial.featureMatchSlots).toHaveLength(1);
 
 			// Increase to 3
 			await $fetch(`/api/events/${event.id}`, {
@@ -312,8 +316,8 @@ describe('feature match slots API', () => {
 				body: { numFeatureMatches: 3 },
 			});
 
-			data = await $fetch(`/api/events/${event.id}/feature-match-slots`);
-			expect(data.featureMatchSlots).toHaveLength(3);
+			const increased = await $fetch(`/api/events/${event.id}/feature-match-slots`);
+			expect(increased.featureMatchSlots).toHaveLength(3);
 
 			// Decrease to 2
 			await $fetch(`/api/events/${event.id}`, {
@@ -321,8 +325,8 @@ describe('feature match slots API', () => {
 				body: { numFeatureMatches: 2 },
 			});
 
-			data = await $fetch(`/api/events/${event.id}/feature-match-slots`);
-			expect(data.featureMatchSlots).toHaveLength(2);
+			const decreased = await $fetch(`/api/events/${event.id}/feature-match-slots`);
+			expect(decreased.featureMatchSlots).toHaveLength(2);
 		}
 		finally {
 			await $fetch(`/api/events/${event.id}`, { method: 'DELETE' });

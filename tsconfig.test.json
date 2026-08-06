@@ -1,0 +1,27 @@
+{
+	// The Nuxt-generated program (`.nuxt/tsconfig.json`, which the root
+	// tsconfig.json extends) includes `test/nuxt/**` and nothing else from
+	// `test/`. This second program covers the rest of the tree, so a signature
+	// change reaches the unit and integration tests that call it. See #255.
+	//
+	// `include` is stated as a tree, never as a file list: a test file added on
+	// another branch must be covered the moment it lands.
+	"extends": "./tsconfig.json",
+	"include": [
+		// The ambient declarations the inherited program gets from its own
+		// `include`. Without them the module augmentations (Nitro route rules,
+		// route meta, Cloudflare bindings) are missing and production files
+		// pulled in by a test report errors that are not real.
+		"./.nuxt/nuxt.d.ts",
+		"./*.d.ts",
+		"./app/**/*.d.ts",
+		"./server/**/*.d.ts",
+		"./shared/**/*.d.ts",
+		"./test/**/*"
+	],
+	"exclude": [
+		// Already covered by the inherited program, under the Nuxt environment
+		// those tests actually run in.
+		"./test/nuxt/**/*"
+	]
+}

@@ -1,3 +1,4 @@
+import type { SilentVideoPlaybackValidator } from '~~/server/modules/graphics-asset-library/silent-video-playback-validator';
 import type {
 	GraphicAssetId,
 	GraphicAssetRevisionId,
@@ -82,22 +83,11 @@ function boundedBytes(bytes: Uint8Array) {
  * ingestion does, so this double also proves the staged working copy is where
  * the runtime expects to find its source.
  */
-function acceptEverySilentVideo() {
+function acceptEverySilentVideo(): SilentVideoPlaybackValidator & { stagedSources: string[] } {
 	const stagedSources: string[] = [];
 	return {
 		stagedSources,
-		validate: async (input: {
-			operationId: string;
-			idempotencyKey: string;
-			sourceDigest: string;
-			factsDigest: string;
-			inspectedFacts: {
-				width: number;
-				height: number;
-				durationSeconds: number;
-				posterTimeSeconds: number;
-			};
-		}) => {
+		validate: async (input) => {
 			stagedSources.push(`ingestion/${input.operationId}/source`);
 			return {
 				outcome: 'accepted' as const,
@@ -667,7 +657,7 @@ describe('graphics asset reconciliation', () => {
 			// Same length, same media type, same recorded digest metadata — only the
 			// bytes differ. Nothing short of a full re-hash can tell.
 			const corrupted = Uint8Array.from(pixelPng);
-			corrupted[corrupted.length - 20] ^= 0xFF;
+			corrupted[corrupted.length - 20] = corrupted[corrupted.length - 20]! ^ 0xFF;
 			await context.canonical.createImmutable({
 				identity,
 				bytes: boundedBytes(corrupted),
@@ -1057,7 +1047,7 @@ describe('graphics asset reconciliation', () => {
 			// Corrupt bytes appear and deep verification isolates them, leaving two
 			// open rows on one digest: the original unavailability and the conflict.
 			const corrupted = Uint8Array.from(pixelPng);
-			corrupted[corrupted.length - 20] ^= 0xFF;
+			corrupted[corrupted.length - 20] = corrupted[corrupted.length - 20]! ^ 0xFF;
 			await context.canonical.createImmutable({
 				identity,
 				bytes: boundedBytes(corrupted),

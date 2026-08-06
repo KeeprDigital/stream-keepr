@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { stubH3Event } from '~~/test/helpers/h3Event';
 
 const mockCreateTokenRequest = vi.fn();
 const mockGetAblyClient = vi.fn(() => ({
@@ -35,7 +36,7 @@ describe('/api/realtime/token', () => {
 		mockGetValidatedQuery.mockImplementation(async (_event, parse) => parse({ eventId: '5' }));
 		const handler = (await import('../../../../../server/api/realtime/token.get.ts')).default;
 
-		await expect(handler({})).resolves.toEqual({ token: 'test-token-request' });
+		await expect(handler(stubH3Event())).resolves.toEqual({ token: 'test-token-request' });
 
 		expect(mockExists).toHaveBeenCalledWith(5);
 		expect(mockGetAblyClient).toHaveBeenCalledOnce();
@@ -52,7 +53,7 @@ describe('/api/realtime/token', () => {
 		mockGetValidatedQuery.mockImplementation(async (_event, parse) => parse({}));
 		const handler = (await import('../../../../../server/api/realtime/token.get.ts')).default;
 
-		await expect(handler({})).rejects.toThrow();
+		await expect(handler(stubH3Event())).rejects.toThrow();
 		expect(mockExists).not.toHaveBeenCalled();
 		expect(mockCreateTokenRequest).not.toHaveBeenCalled();
 	});
@@ -61,7 +62,7 @@ describe('/api/realtime/token', () => {
 		mockGetValidatedQuery.mockImplementation(async (_event, parse) => parse({ eventId: '-1' }));
 		const handler = (await import('../../../../../server/api/realtime/token.get.ts')).default;
 
-		await expect(handler({})).rejects.toThrow();
+		await expect(handler(stubH3Event())).rejects.toThrow();
 		expect(mockExists).not.toHaveBeenCalled();
 		expect(mockCreateTokenRequest).not.toHaveBeenCalled();
 	});
@@ -71,7 +72,7 @@ describe('/api/realtime/token', () => {
 		mockExists.mockResolvedValue(false);
 		const handler = (await import('../../../../../server/api/realtime/token.get.ts')).default;
 
-		await expect(handler({})).rejects.toMatchObject({ statusCode: 404 });
+		await expect(handler(stubH3Event())).rejects.toMatchObject({ statusCode: 404 });
 		expect(mockCreateTokenRequest).not.toHaveBeenCalled();
 	});
 });

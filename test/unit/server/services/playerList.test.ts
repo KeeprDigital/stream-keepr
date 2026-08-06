@@ -31,9 +31,11 @@ vi.stubGlobal('createError', (opts: any) => {
 
 const { playerListService } = await import('~~/server/services/playerList');
 
+const SELECT_CHAIN_METHODS = ['from', 'where', 'limit', 'orderBy', 'innerJoin', 'leftJoin', 'groupBy'] as const;
+
 function createSelectChain() {
-	const chain: Record<string, ReturnType<typeof vi.fn>> = {};
-	for (const method of ['from', 'where', 'limit', 'orderBy', 'innerJoin', 'leftJoin', 'groupBy']) {
+	const chain = {} as Record<typeof SELECT_CHAIN_METHODS[number], ReturnType<typeof vi.fn>>;
+	for (const method of SELECT_CHAIN_METHODS) {
 		chain[method] = vi.fn().mockReturnValue(chain);
 	}
 	chain.limit = vi.fn().mockResolvedValue([]);

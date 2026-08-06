@@ -108,10 +108,10 @@ describe('mapMeleePlayersToDb', () => {
 		];
 		const result = mapMeleePlayersToDb(players, standings);
 
-		expect(result[0].name).toBe('Ranked');
-		expect(result[0].position).toBe(1);
-		expect(result[1].name).toBe('No Ranking');
-		expect(result[1].position).toBeNull();
+		expect(result[0]!.name).toBe('Ranked');
+		expect(result[0]!.position).toBe(1);
+		expect(result[1]!.name).toBe('No Ranking');
+		expect(result[1]!.position).toBeNull();
 	});
 
 	it('converts TeamId to string for externalId', () => {
@@ -120,7 +120,7 @@ describe('mapMeleePlayersToDb', () => {
 		];
 		const result = mapMeleePlayersToDb(players, []);
 
-		expect(result[0].externalId).toBe('42');
+		expect(result[0]!.externalId).toBe('42');
 	});
 
 	it('sets externalSource to melee for all players', () => {
@@ -139,7 +139,7 @@ describe('mapMeleePlayersToDb', () => {
 		];
 		const result = mapMeleePlayersToDb(players, []);
 
-		expect(result[0].pronouns).toBeNull();
+		expect(result[0]!.pronouns).toBeNull();
 	});
 
 	it('sets deckLists to undefined when player has no decklists', () => {
@@ -148,7 +148,7 @@ describe('mapMeleePlayersToDb', () => {
 		];
 		const result = mapMeleePlayersToDb(players, []);
 
-		expect(result[0].deckLists).toBeUndefined();
+		expect(result[0]!.deckLists).toBeUndefined();
 	});
 
 	it('maps standing fields when no standing exists for player', () => {
@@ -157,11 +157,11 @@ describe('mapMeleePlayersToDb', () => {
 		];
 		const result = mapMeleePlayersToDb(players, []);
 
-		expect(result[0].wins).toBeNull();
-		expect(result[0].losses).toBeNull();
-		expect(result[0].draws).toBeNull();
-		expect(result[0].position).toBeNull();
-		expect(result[0].points).toBeNull();
+		expect(result[0]!.wins).toBeNull();
+		expect(result[0]!.losses).toBeNull();
+		expect(result[0]!.draws).toBeNull();
+		expect(result[0]!.position).toBeNull();
+		expect(result[0]!.points).toBeNull();
 	});
 });
 
@@ -197,12 +197,12 @@ describe('parseAllDecklists', () => {
 		const result = parseAllDecklists(decklists as any);
 
 		expect(result).toHaveLength(1);
-		expect(result![0].externalId).toBe('deck-42');
-		expect(result![0].formatId).toBe('42');
-		expect(result![0].name).toBe('Azorius Control');
-		expect(result![0].colors).toBe('WU');
-		expect(result![0].cards).toHaveLength(1);
-		expect(result![0].companion).toBeNull();
+		expect(result![0]!.externalId).toBe('deck-42');
+		expect(result![0]!.formatId).toBe('42');
+		expect(result![0]!.name).toBe('Azorius Control');
+		expect(result![0]!.colors).toBe('WU');
+		expect(result![0]!.cards).toHaveLength(1);
+		expect(result![0]!.companion).toBeNull();
 	});
 
 	it('parses companion records into companion metadata', () => {
@@ -234,7 +234,7 @@ describe('parseAllDecklists', () => {
 
 		const result = parseAllDecklists(decklists as any);
 
-		expect(result![0].colors).toBe('C');
+		expect(result![0]!.colors).toBe('C');
 	});
 });
 
@@ -324,11 +324,11 @@ describe('mapMeleeMatchesToDbRows', () => {
 		const result = mapMeleeMatchesToDbRows(meleeMatches as MeleeMatchParsed[], 10, 1, context);
 
 		expect(result).toHaveLength(2);
-		expect(result[0].eventId).toBe(1);
-		expect(result[0].roundId).toBe(10);
+		expect(result[0]!.eventId).toBe(1);
+		expect(result[0]!.roundId).toBe(10);
 		// Table 1 first
-		expect(result[0].externalId).toBe('match-1');
-		expect(result[1].externalId).toBe('match-2');
+		expect(result[0]!.externalId).toBe('match-1');
+		expect(result[1]!.externalId).toBe('match-2');
 	});
 
 	it('sorts byes (null table number) to the end', () => {
@@ -340,9 +340,9 @@ describe('mapMeleeMatchesToDbRows', () => {
 
 		const result = mapMeleeMatchesToDbRows(meleeMatches as MeleeMatchParsed[], 10, 1, context);
 
-		expect(result[0].externalId).toBe('match-1');
-		expect(result[1].externalId).toBe('bye');
-		expect(result[1].isBye).toBe(true);
+		expect(result[0]!.externalId).toBe('match-1');
+		expect(result[1]!.externalId).toBe('bye');
+		expect(result[1]!.isBye).toBe(true);
 	});
 
 	it('assigns sequential sortOrder', () => {
@@ -355,9 +355,9 @@ describe('mapMeleeMatchesToDbRows', () => {
 
 		const result = mapMeleeMatchesToDbRows(meleeMatches as MeleeMatchParsed[], 10, 1, context);
 
-		expect(result[0].sortOrder).toBe(0);
-		expect(result[1].sortOrder).toBe(1);
-		expect(result[2].sortOrder).toBe(2);
+		expect(result[0]!.sortOrder).toBe(0);
+		expect(result[1]!.sortOrder).toBe(1);
+		expect(result[2]!.sortOrder).toBe(2);
 	});
 
 	it('returns empty array for empty input', () => {
@@ -570,7 +570,7 @@ describe('mapMeleeMatchesToDbRows', () => {
 
 		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
 
-		expect(result.player1Data).toMatchObject({
+		expect(result!.player1Data).toMatchObject({
 			deckId: 101,
 			archetypeId: 7,
 			gameData: { type: 'mtg', deckName: 'Reviewed Control', deckColors: 'WU' },
@@ -605,7 +605,7 @@ describe('mapMeleeMatchesToDbRows', () => {
 
 		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
 
-		expect(result.player1Data).toMatchObject({
+		expect(result!.player1Data).toMatchObject({
 			deckId: 201,
 			archetypeId: null,
 			gameData: { deckName: 'First', deckColors: 'U' },
@@ -643,7 +643,7 @@ describe('mapMeleeMatchesToDbRows', () => {
 
 		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
 
-		expect(result.player1Data).toMatchObject({
+		expect(result!.player1Data).toMatchObject({
 			deckId: 301,
 			gameData: { type: 'mtg', deckName: 'Modern Deck', deckColors: 'R' },
 		});
@@ -689,7 +689,7 @@ describe('mapMeleeMatchesToDbRows', () => {
 
 		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
 
-		expect(result.player1Data).toMatchObject({
+		expect(result!.player1Data).toMatchObject({
 			deckId: 401,
 			gameData: { type: 'mtg', deckName: 'Primary Modern', deckColors: 'G' },
 		});
@@ -717,7 +717,7 @@ describe('mapMeleeMatchesToDbRows', () => {
 
 		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
 
-		expect(result.player1Data).toMatchObject({
+		expect(result!.player1Data).toMatchObject({
 			deckId: null,
 			archetypeId: null,
 			gameData: { type: 'mtg', deckName: null, deckColors: null },
@@ -761,7 +761,7 @@ describe('mapMeleeMatchesToDbRows', () => {
 			}],
 		}], 10, 1, context);
 
-		expect(result.player1Data).toMatchObject({
+		expect(result!.player1Data).toMatchObject({
 			deckId: null,
 			gameData: { type: 'mtg', deckName: null, deckColors: null },
 		});

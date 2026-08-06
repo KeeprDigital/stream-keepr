@@ -102,6 +102,9 @@ describe('graphicItemDefinitions', () => {
 			displayMode: 'boxes',
 			boxOrientation: 'horizontal',
 		});
+		if (wins.type !== 'game-wins')
+			throw new Error('expected a Game Wins Graphic Item');
+
 		expect(graphicItemSummary(life)).toBe('Player 1 life');
 		expect(graphicItemSummary(wins)).toBe('Player 1 wins • boxes');
 		expect(graphicItemSummary({ ...wins, playerSide: 'player2', displayMode: 'number' }))
@@ -294,6 +297,9 @@ describe('graphicItemDefinitions', () => {
 			canvasWidth: 1920,
 			canvasHeight: 1080,
 		});
+
+		if (text.type !== 'text')
+			throw new Error('expected a text Graphic Item');
 
 		expect(graphicItemSummary(text)).toBe('Text');
 		expect(graphicItemSummary({ ...text, text: '   ' })).toBe('Empty text');

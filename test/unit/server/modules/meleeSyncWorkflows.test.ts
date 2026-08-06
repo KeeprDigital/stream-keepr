@@ -423,7 +423,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 		const result = await createMeleeSyncWorkflows().updateFromMelee({} as any, 1, eventData);
 
 		expect(mockSyncMatchesFromMelee).toHaveBeenCalledTimes(1);
-		expect(mockSyncMatchesFromMelee.mock.calls[0][2].id).toBe(2);
+		expect(mockSyncMatchesFromMelee!.mock!.calls![0]![2].id).toBe(2);
 		expect(result.refreshedRound?.id).toBe(2);
 		expect(result.advancedRound).toBeNull();
 		expect(result.steps).toEqual(['structure', 'players', 'latest-round']);

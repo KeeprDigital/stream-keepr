@@ -69,7 +69,7 @@ describe('mtgCardService', () => {
 			]);
 
 			// db.batch called with array of length 1 (deduped)
-			expect(mockDb.batch.mock.calls[0][0]).toHaveLength(1);
+			expect(mockDb.batch.mock.calls[0]![0]).toHaveLength(1);
 		});
 
 		it('returned Map is keyed by lowercase name', async () => {

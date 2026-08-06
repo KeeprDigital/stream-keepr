@@ -1,5 +1,5 @@
 import type { ScreenResponse } from '~~/shared/api';
-import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
+import type { GraphicAssetId, GraphicAssetRevisionId, GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
@@ -35,8 +35,8 @@ const pixelPng = Uint8Array.from(Buffer.concat([
 describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 	let eventId: number;
 	let screenId: number;
-	let assetId: string;
-	let revisionId: string;
+	let assetId: GraphicAssetId;
+	let revisionId: GraphicAssetRevisionId;
 	let capability: string;
 	let graphicsAuthorCookie: string;
 
@@ -288,7 +288,7 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		expect(publication.status).toBe(409);
 
 		const persisted = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
-		expect(persisted.modeConfigs['feature-match-overlay'].layout.composition.items).not.toContainEqual(
+		expect(persisted!.modeConfigs!['feature-match-overlay']!.layout!.composition.items).not.toContainEqual(
 			expect.objectContaining({ id: 'restricted-video' }),
 		);
 

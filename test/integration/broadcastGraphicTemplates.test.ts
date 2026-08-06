@@ -38,7 +38,7 @@ const basePixelPng = Uint8Array.from(Buffer.from(
  * rather than publish, which is a real cross-suite failure in the other direction.
  * Owning a distinct digest is what makes the isolation mutual.
  */
-function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array {
+function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array<ArrayBuffer> {
 	const payload = Buffer.concat([Buffer.from('tEXt'), Buffer.from(`${keyword}\0`)]);
 	const length = Buffer.alloc(4);
 	length.writeUInt32BE(payload.byteLength - 4, 0);

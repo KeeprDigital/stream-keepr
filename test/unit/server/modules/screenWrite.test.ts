@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { graphicAssetId, graphicAssetRevisionId } from '~~/server/modules/graphics-asset-library';
 import { ServiceWiringError } from '~~/server/utils/errors';
 import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
@@ -111,8 +112,8 @@ describe('screenWriteModule', () => {
 		it('rejects Graphic Asset References through a generic Screen write that cannot index them', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
-				assetId: 'asset-1',
-				revisionId: 'revision-1',
+				assetId: graphicAssetId('asset-1'),
+				revisionId: graphicAssetRevisionId('revision-1'),
 			};
 
 			await expect(screenWriteModule({
@@ -155,7 +156,7 @@ describe('screenWriteModule', () => {
 
 			expect(mockValidateScreenModeConfigsReferences).toHaveBeenCalledWith(1, { card: {} });
 			expect(mockValidateScreenModeConfigsReferences.mock.invocationCallOrder[0])
-				.toBeLessThan(mockScreenService.slugExists.mock.invocationCallOrder[0]);
+				.toBeLessThan(mockScreenService.slugExists.mock.invocationCallOrder[0]!);
 		});
 
 		it('rejects a duplicate slug with a 400 before creating', async () => {
@@ -208,8 +209,8 @@ describe('screenWriteModule', () => {
 		it('rejects removing indexed Graphic Asset References through the generic Screen endpoint', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
-				assetId: 'asset-1',
-				revisionId: 'revision-1',
+				assetId: graphicAssetId('asset-1'),
+				revisionId: graphicAssetRevisionId('revision-1'),
 			};
 			mockScreenService.findById.mockResolvedValue(createMockScreen({
 				modeConfigs: { 'feature-match-overlay': config },
@@ -230,8 +231,8 @@ describe('screenWriteModule', () => {
 		it('allows generic Screen metadata edits that submit unchanged Graphic Asset References', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
-				assetId: 'asset-1',
-				revisionId: 'revision-1',
+				assetId: graphicAssetId('asset-1'),
+				revisionId: graphicAssetRevisionId('revision-1'),
 			};
 			mockScreenService.findById.mockResolvedValue(createMockScreen({
 				modeConfigs: { 'feature-match-overlay': config },
@@ -401,7 +402,7 @@ describe('screenWriteModule', () => {
 			const result = await screenWriteModule().deleteScreen({ eventId: 1, screenId: 7, originConnectionId: 'origin-1' });
 
 			expect(mockScreenService.remove.mock.invocationCallOrder[0])
-				.toBeLessThan(mockCardService.cleanupDeletedScreenCard.mock.invocationCallOrder[0]);
+				.toBeLessThan(mockCardService.cleanupDeletedScreenCard.mock.invocationCallOrder[0]!);
 			expect(mockCardService.cleanupDeletedScreenCard).toHaveBeenCalledWith(1, 7);
 			expect(mockPublication.screenDeleted).toHaveBeenCalledWith({
 				eventId: 1,
@@ -448,8 +449,8 @@ describe('screenWriteModule', () => {
 		it('checks newly selected Graphic Asset Revisions through the library before writing', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
-				assetId: 'asset-1',
-				revisionId: 'revision-1',
+				assetId: graphicAssetId('asset-1'),
+				revisionId: graphicAssetRevisionId('revision-1'),
 			};
 			const inspectGraphicAssetRevision = vi.fn().mockResolvedValue({
 				outcome: 'available',
@@ -467,8 +468,8 @@ describe('screenWriteModule', () => {
 			});
 
 			expect(inspectGraphicAssetRevision).toHaveBeenCalledWith({
-				assetId: 'asset-1',
-				revisionId: 'revision-1',
+				assetId: graphicAssetId('asset-1'),
+				revisionId: graphicAssetRevisionId('revision-1'),
 			});
 			expect(mockScreenService.updateModeConfig).toHaveBeenCalled();
 		});
@@ -476,8 +477,8 @@ describe('screenWriteModule', () => {
 		it('rejects a newly selected unavailable Graphic Asset Revision before writing', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
-				assetId: 'asset-1',
-				revisionId: 'revision-1',
+				assetId: graphicAssetId('asset-1'),
+				revisionId: graphicAssetRevisionId('revision-1'),
 			};
 
 			await expect(screenWriteModule({
@@ -503,8 +504,8 @@ describe('screenWriteModule', () => {
 		it('names the missing Graphics Asset Library rather than answering a bare 503', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
-				assetId: 'asset-1',
-				revisionId: 'revision-1',
+				assetId: graphicAssetId('asset-1'),
+				revisionId: graphicAssetRevisionId('revision-1'),
 			};
 
 			const failure = await publicErrorFor(screenWriteModule().updateModeConfig({
@@ -534,7 +535,7 @@ describe('screenWriteModule', () => {
 
 			expect(mockValidateScreenModeConfigReferences).toHaveBeenCalledWith(1, 'card', { featureMatchId: 5 });
 			expect(mockValidateScreenModeConfigReferences.mock.invocationCallOrder[0])
-				.toBeLessThan(mockScreenService.updateModeConfig.mock.invocationCallOrder[0]);
+				.toBeLessThan(mockScreenService.updateModeConfig.mock.invocationCallOrder[0]!);
 			expect(mockScreenService.updateModeConfig).toHaveBeenCalledWith(7, 1, 'card', { featureMatchId: 5 }, 4);
 		});
 

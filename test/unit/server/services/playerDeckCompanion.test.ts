@@ -43,18 +43,18 @@ describe('playerDeckCompanionService', () => {
 
 	it('sets a manual companion when the sideboard has a spare slot', async () => {
 		const sideboardStateChain = createSelectChain();
-		sideboardStateChain.where.mockResolvedValueOnce([{ cardId: 10, quantity: 10 }]);
+		sideboardStateChain!.where!.mockResolvedValueOnce([{ cardId: 10, quantity: 10 }]);
 
 		const existingRowChain = createSelectChain();
-		existingRowChain.limit.mockResolvedValueOnce([]);
+		existingRowChain!.limit!.mockResolvedValueOnce([]);
 
 		const companionSelectChain = createSelectChain();
-		companionSelectChain.limit.mockResolvedValueOnce([
+		companionSelectChain!.limit!.mockResolvedValueOnce([
 			{ source: 'manual', companionCardId: 99, name: 'Lutri, the Spellchaser', scryfallId: 'scryfall-lutri', oracleId: 'oracle-lutri' },
 		]);
 
 		const sideboardStateForReadChain = createSelectChain();
-		sideboardStateForReadChain.where.mockResolvedValueOnce([{ cardId: 10, quantity: 10 }]);
+		sideboardStateForReadChain!.where!.mockResolvedValueOnce([{ cardId: 10, quantity: 10 }]);
 
 		mockDb.select
 			.mockReturnValueOnce(sideboardStateChain as never)

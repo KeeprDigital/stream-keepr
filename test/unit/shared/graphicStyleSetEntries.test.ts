@@ -282,7 +282,7 @@ describe('resolveGraphicStyleSet', () => {
 	it('refuses a typography preset naming a font this installation does not have', () => {
 		const resolution = resolveGraphicStyleSet([
 			brand,
-			{ ...heading, value: { ...heading.value, font: { kind: 'application', fontId: 'not-a-font' } } } as GraphicStyleSetEntry,
+			{ ...heading, value: { ...heading.value, font: { kind: 'application', fontId: 'not-a-font' } } } as unknown as GraphicStyleSetEntry,
 		]);
 
 		expect(resolution.issues).toEqual([expect.objectContaining({

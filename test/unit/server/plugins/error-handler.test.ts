@@ -1,3 +1,4 @@
+import type { MappableNitroError } from '~~/server/utils/nitroErrorMapping';
 import { describe, expect, it } from 'vitest';
 import { safeErrorLogPath } from '~~/server/utils/errorLogPath';
 import { ServiceConfigurationError, ServiceWiringError, StateConflictError } from '~~/server/utils/errors';
@@ -18,7 +19,7 @@ describe('error-handler mapping logic', () => {
 
 	describe('stateConflictError mapping', () => {
 		it('maps to 409 Conflict', () => {
-			const error = {
+			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'Something went wrong',
 				cause: new StateConflictError('match', 42),
@@ -36,7 +37,7 @@ describe('error-handler mapping logic', () => {
 		it('keeps the setting name the message exists to carry', () => {
 			// Sanitizing this one would leave the only person who can fix it with
 			// 'Internal Server Error' for a one-line environment change — #233.
-			const error = {
+			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'Something went wrong',
 				cause: new ServiceConfigurationError('NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY', 'is not set'),
@@ -70,7 +71,7 @@ describe('error-handler mapping logic', () => {
 			// missing from the environment, the server was built wrong. Sanitizing
 			// it leaves the operator with 'Internal Server Error' and nothing to
 			// report to whoever can fix it.
-			const error = {
+			const error: MappableNitroError = {
 				statusCode: 503,
 				message: 'The Screen write module was constructed without Screen Output asset capabilities',
 				cause: new ServiceWiringError('The Screen write module', 'Screen Output asset capabilities'),
@@ -94,7 +95,7 @@ describe('error-handler mapping logic', () => {
 			//
 			// A wiring fault can genuinely arrive unhandled: h3 marks any non-H3Error
 			// that way, and a bare `throw new ServiceWiringError(...)` is one.
-			const error = {
+			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'Something went wrong',
 				cause: new ServiceWiringError('The Screen write module', 'the Graphics Asset Library'),
@@ -114,7 +115,7 @@ describe('error-handler mapping logic', () => {
 
 	describe('drizzle unique constraint mapping', () => {
 		it('maps UNIQUE constraint failed to 409', () => {
-			const error = {
+			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'Something went wrong',
 				cause: new Error('UNIQUE constraint failed: screens.slug'),
@@ -129,7 +130,7 @@ describe('error-handler mapping logic', () => {
 	describe('zodError mapping', () => {
 		it('maps ZodError to 400 Validation Error', () => {
 			const zodLikeError = { name: 'ZodError', message: 'Validation failed', issues: [] };
-			const error = {
+			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'Something went wrong',
 				cause: zodLikeError,
@@ -142,7 +143,7 @@ describe('error-handler mapping logic', () => {
 
 	describe('500 sanitization', () => {
 		it('sanitizes 500 errors with a cause', () => {
-			const error = {
+			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'Sensitive database error details',
 				cause: new Error('connection pool exhausted'),
@@ -153,7 +154,7 @@ describe('error-handler mapping logic', () => {
 		});
 
 		it('sanitizes explicit 500 errors even when they have no cause', () => {
-			const error = {
+			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'Encryption key version retired is missing',
 			};
@@ -165,7 +166,7 @@ describe('error-handler mapping logic', () => {
 
 	describe('upstream error mapping', () => {
 		it('returns a safe 503 when imported card lookup preserved existing data', () => {
-			const error = {
+			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'Scryfall batch leaked detail',
 				cause: { code: 'IMPORTED_CARD_LOOKUP_UNAVAILABLE', details: ['private upstream body'] },
@@ -180,7 +181,7 @@ describe('error-handler mapping logic', () => {
 		});
 
 		it('maps Melee timeouts to a safe 504', () => {
-			const error = {
+			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'socket detail',
 				cause: { code: 'MELEE_UPSTREAM_FAILURE', category: 'timeout' },
@@ -196,7 +197,7 @@ describe('error-handler mapping logic', () => {
 		});
 
 		it('maps Scryfall provider failures to a safe 502', () => {
-			const error = {
+			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'socket detail',
 				cause: { code: 'SCRYFALL_UPSTREAM_FAILURE', notFound: false },
@@ -212,7 +213,7 @@ describe('error-handler mapping logic', () => {
 
 	describe('priority ordering', () => {
 		it('stateConflictError takes precedence over 500 sanitization', () => {
-			const error = {
+			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'Error',
 				cause: new StateConflictError('screen', 1),
@@ -222,7 +223,7 @@ describe('error-handler mapping logic', () => {
 		});
 
 		it('uNIQUE constraint takes precedence over 500 sanitization', () => {
-			const error = {
+			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'Error',
 				cause: new Error('UNIQUE constraint failed: events.slug'),

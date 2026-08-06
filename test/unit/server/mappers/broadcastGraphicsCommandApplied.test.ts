@@ -92,7 +92,8 @@ function declarations(keys: string[]): GraphicInputDeclaration[] {
 		type: 'text',
 		required: false,
 		maxLength: MAX_GRAPHIC_TEXT_LENGTH,
-		onAirUpdatePolicy: 'staged',
+		updatePolicy: 'staged',
+		default: '',
 	}));
 }
 
@@ -277,7 +278,7 @@ function fullyFilledState(count: number, padding: readonly number[] = []) {
 	const keys = inputKeys(count);
 	const paddingKeys = inputKeys(count + padding.length).slice(count);
 	let resolved = '1'.repeat(MAX_GRAPHIC_TEXT_LENGTH);
-	const context = () => ({
+	const context = (): Omit<BroadcastGraphicsReductionContext, 'acceptedAt'> => ({
 		inputs: declarations([...keys, ...paddingKeys]),
 		sources: [{ key: keys[0]!, label: keys[0]!, kind: 'player' as const }],
 		bindings: keys.map(key => ({ inputKey: key, sourceKey: keys[0]!, fieldId: 'name' })),
@@ -328,7 +329,7 @@ function atTheCarryingBoundary() {
 			type: 'Set Input',
 			payload: { graphicId, inputKey: keys[0]!, value: 'x'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH) },
 		} as const;
-		const after = applyBroadcastGraphicsCommand(state, command, context());
+		const after = applyBroadcastGraphicsCommand(state, command, { ...context(), acceptedAt: 1_400 });
 		return payloadFor(state, after, 'Set Input').change !== undefined;
 	};
 
@@ -512,7 +513,7 @@ describe('the commandApplied notification at the largest live session the caps a
 		// guard that measured only the change, or that forgot the origin, would be
 		// wrong here and nowhere else.
 		const { state, command, context } = atTheCarryingBoundary();
-		const after = applyBroadcastGraphicsCommand(state, command, context);
+		const after = applyBroadcastGraphicsCommand(state, command, { ...context, acceptedAt: 1_400 });
 		const result = mapBroadcastGraphicsCommandResult(row(after), 'Set Input');
 		const origin = 'c'.repeat(48);
 
@@ -645,7 +646,8 @@ describe('the cost of carrying the change', () => {
 				type: 'text' as const,
 				required: false,
 				maxLength: 200,
-				onAirUpdatePolicy: 'staged' as const,
+				updatePolicy: 'staged' as const,
+				default: '',
 			})),
 			durations: { enter: 500, update: 300, exit: 500 },
 		};

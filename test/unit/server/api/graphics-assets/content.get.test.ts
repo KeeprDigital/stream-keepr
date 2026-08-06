@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { stubH3Event } from '~~/test/helpers/h3Event';
 
 const {
 	mockRequireGraphicsAuthorSession,
@@ -28,7 +29,7 @@ vi.stubGlobal('getRequestHeader', vi.fn((event: { headers?: Record<string, strin
 	event.headers?.[name]));
 
 function eventWithHeaders(headers: Record<string, string>) {
-	return { headers };
+	return stubH3Event({ headers });
 }
 vi.stubGlobal('createError', (input: {
 	statusCode: number;
@@ -53,7 +54,7 @@ describe('authenticated exact Graphic Asset Revision content delivery', () => {
 			'../../../../../server/api/graphics-assets/[assetId]/revisions/[revisionId]/content.get',
 		)).default;
 
-		await expect(handler({})).rejects.toMatchObject({ statusCode: 401 });
+		await expect(handler(stubH3Event())).rejects.toMatchObject({ statusCode: 401 });
 		expect(mockResolveGraphicAssetRevision).not.toHaveBeenCalled();
 	});
 
@@ -168,7 +169,7 @@ describe('authenticated exact Graphic Asset Revision content delivery', () => {
 			'../../../../../server/api/graphics-assets/[assetId]/revisions/[revisionId]/content.get',
 		)).default;
 
-		await expect(handler({})).rejects.toMatchObject({
+		await expect(handler(stubH3Event())).rejects.toMatchObject({
 			statusCode: 503,
 			message: 'catalogue unavailable',
 		});

@@ -36,7 +36,7 @@ describe('screen mapper', () => {
 				eventId: 4,
 				name: 'Main Stage',
 				slug: 'main-stage',
-				currentMode: 'match',
+				currentMode: 'feature-match',
 				stateVersion: 3,
 			});
 			const result = mapScreenToResponse(screen);
@@ -45,7 +45,7 @@ describe('screen mapper', () => {
 			expect(result.eventId).toBe(4);
 			expect(result.name).toBe('Main Stage');
 			expect(result.slug).toBe('main-stage');
-			expect(result.currentMode).toBe('match');
+			expect(result.currentMode).toBe('feature-match');
 			expect(result.stateVersion).toBe(3);
 		});
 
