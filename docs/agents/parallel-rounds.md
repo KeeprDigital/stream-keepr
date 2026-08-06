@@ -66,6 +66,16 @@ Round six's recurring trap, hit independently by five agents in four different c
 - A mutation that never applied reads as a survivor; a test runner missing from PATH reads as a pass. Demand a **positive success marker** (a "Test Files" line in a per-row log) and a `git diff --quiet`-style "mutation actually applied" check; re-read every _survived_ row as a diff before calling it dead.
 - The generalisation, earned twice over: apply the mutation-and-verify discipline to the **instrumentation**, not just the code. Give every before/after probe a negative control — run the check against a case where it must fail before trusting the case where it passes. One reviewer's cross-version probe bundled the same module twice, so `instanceof` failed silently and the _old_ code looked broken in a flattering direction; the guard was bundling once and asserting the class is defined exactly once.
 
+Round seven restated the family's general form — **a check whose own success criterion is looser than the reader assumes** — and added five costumes:
+
+- `eslint` exits 0 on **warnings**. An implementer reported "exit 0" twice while its own new docblock was warning; the reviewer read the output. An exit code alone never establishes a clean lint here — require zero output lines.
+- `git checkout <sha> -- <path>` updates the **index** as well as the worktree, so a later `git diff --quiet -- <path>` reads clean and a rollback looks like a no-op. The correct did-it-apply check is `git diff HEAD --quiet`.
+- A mutation that fails to **compile** reads as an especially convincing kill — every test in the file fails. That signature is a broken parse, not a killed mutant. Print the applied diff on _every_ row, not only survivors, and check each kill is the intended assertion.
+- A misinvoked runner ("No projects matched the filter") reads as a branch failure; `grep -c` on an empty input prints a reassuring 0. Read the error text, and require a non-empty sanity marker before trusting any count.
+- Nitro's typed `$fetch` produces `TS2321 Excessive stack depth` errors of which TypeScript reports only ~two per program — **each fix reveals the next**, in files unrelated to what surfaced them. A clean run after fixing one is not evidence you are done.
+
+And one rule earned by a review that overturned a "no constructible test covers it" claim: when verifying a merge commit, compare each changed file's blob hash against **both parents** — `git show --cc` suppresses hunks, and a combined-diff read missed one of a merge's own changes.
+
 ### Commit signing can wedge mid-round
 
 This repo signs commits via 1Password's `op-ssh-sign`. Six concurrent signing requests wedged the agent, after which the socket died and every `git commit` in every worktree hung, then failed fast ("failed to fill whole buffer", "Could not connect to socket"). Recovery is `open -a 1Password` and a retry — not `--no-gpg-sign`, unless the round decides so deliberately and records the unsigned range for a later re-sign. Merge commits sign the same way.
@@ -78,6 +88,12 @@ Two traps that ride along:
 ### Anchor mutations by line number, and record the table where the next round can find it
 
 Two byte-identical strings at different indentation live in one round-six file; a string-anchored mutation hit the wrong one and got reported as a control it wasn't. Anchor by line number with a substring assertion on the anchor line. And post the final mutation table as a comment on the issue at close time: #230's table was never durably recorded, and reconstructing it cost round six a branch's second acceptance criterion. Reports and verdicts likewise: send them on the teammate channel — plain text output reaches nobody, and six round-six agents had to be chased for reports they believed they had filed.
+
+Round seven added three refinements to what a recorded table owes:
+
+- **Record each row's mutation _verbatim_**, not as a description. Twice now a row's wording admitted two faithful readings whose verdicts diverged over time — #230's row 5 had a reading that #245 later made survive, and #241's X2 "dead" verdict was refuted by a fixture its runner set contained all along.
+- **"Dead" verdicts age worse than kills.** A killed row is a fact about one run; a dead row is a claim about every test in the runner set — so a survivor row must name the runner set it survived, or it cannot be re-checked.
+- **Pin only behaviour someone has decided is correct.** A pin on undecided behaviour in an unreachable state _enshrines_ the defect: the eventual fix reads as a regression. Round seven twice chose a docblock note over a pin for exactly this reason. This is the counterweight to "prefer pinning a fix with a test", and both rules are right.
 
 ### Root-invoked tooling walks the worktrees
 
