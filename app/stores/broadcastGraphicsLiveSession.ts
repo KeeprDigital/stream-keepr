@@ -1,3 +1,4 @@
+import type { Ref } from 'vue';
 import type {
 	BroadcastGraphicChannelContext,
 	BroadcastGraphicInputsState,
@@ -191,6 +192,45 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 
 	function isConflict(failure: unknown): boolean {
 		return failureStatus(failure) === 409;
+	}
+
+	/**
+	 * Run one action, reporting whatever it fails with through `error`.
+	 *
+	 * The single place this store turns a failure into words, so that every action
+	 * reports the same kind of thing: the sentence the authoritative side wrote where
+	 * there is one, and the transport's status line where there is not.
+	 *
+	 * The re-raise is what makes that reach the operator. `useAsyncAction` reports
+	 * `Error.message`, and on a `$fetch` failure that is `[POST] "…": 409 Conflict`,
+	 * so a sentence living in the response body arrives only by becoming the message
+	 * of the error carrying it. That is already how a recognised refusal gets
+	 * through — `refusalRaisedBy` re-raises one as a
+	 * `BroadcastGraphicsCommandRejection` — and this is the same move for the failures
+	 * that carry no code: a Screen that has left Broadcast Graphics mode and an epoch
+	 * that has ended both explain themselves in the body and reached the operator as a
+	 * status line under "Playout action failed" (#245).
+	 *
+	 * Gaining a sentence is deliberately not being recognised as a refusal. Nothing
+	 * here writes `refusal`, so a conflict outside the vocabulary is still no refusal
+	 * and still reads as the ended epoch it usually is (#230). The original failure is
+	 * kept as the `cause`, because the re-raise happens at the outermost boundary —
+	 * after `isConflict` and the restatement have had it — and losing the status there
+	 * would only cost a later reader.
+	 */
+	function executeReporting<T>(action: () => Promise<T>, loadingRef?: Ref<boolean>): Promise<T | null> {
+		return executeAction(
+			async () => {
+				try {
+					return await action();
+				}
+				catch (failure) {
+					const sentence = failureSentence(failure);
+					throw sentence === undefined ? failure : new Error(sentence, { cause: failure });
+				}
+			},
+			{ loadingRef, errorRef: error },
+		);
 	}
 
 	function liveState(screenId: number): BroadcastGraphicsLiveState {
@@ -414,13 +454,13 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 
 	async function loadSession(eventId: number, screenId: number): Promise<BroadcastGraphicsLiveSessionResponse | null> {
 		refusal.value = null;
-		return await executeAction(
+		return await executeReporting(
 			async () => {
 				const session = await repository.getSession(eventId, screenId);
 				cacheSession(session);
 				return session;
 			},
-			{ loadingRef: loading, errorRef: error },
+			loading,
 		);
 	}
 
@@ -491,7 +531,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		}
 
 		try {
-			return await executeAction(
+			return await executeReporting(
 				async () => {
 					const session = sessions.value.get(screenId) ?? await repository.getSession(eventId, screenId);
 
@@ -523,7 +563,6 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 						}
 					}
 				},
-				{ errorRef: error },
 			);
 		}
 		finally {
@@ -604,14 +643,14 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 */
 	async function resetLiveState(eventId: number, screenId: number) {
 		refusal.value = null;
-		return await executeAction(
+		return await executeReporting(
 			async () => {
 				const session = await repository.resetSession(eventId, screenId);
 				cacheSession(session);
 				forgetRefusedInputs(screenId);
 				return session;
 			},
-			{ loadingRef: loading, errorRef: error },
+			loading,
 		);
 	}
 

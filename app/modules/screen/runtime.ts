@@ -374,18 +374,37 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * never navigated to in-page. So no single store ever holds both.
 	 *
 	 * Embed a display session in-page, or add an in-app link to that route, and the
-	 * two sources hold different revisions at once — at which point `Math.max` is
-	 * what keeps refusing safe, since `Math.min` would let a reload downgrade
-	 * `activeScreen` to a revision the client had already moved past. The Feature
-	 * Match Overlay preview aside is the nearest thing to that change.
+	 * two sources hold different revisions at once — at which point what keeps
+	 * refusing safe is taking the *newest*, since taking the oldest would let a
+	 * reload downgrade `activeScreen` to a revision the client had already moved
+	 * past. The Feature Match Overlay preview aside is the nearest thing to that
+	 * change.
+	 *
+	 * That aside would also cost something this returns for free today. With the
+	 * holders disjoint, a refusal in #251's loaders always answers from `screens`
+	 * and leaves it populated. Break disjointness and a refusal can answer from
+	 * `activeScreen` instead, returning without putting anything in `screens` — so
+	 * the next `updateModeConfig` finds no entry and fails with "Screen not found",
+	 * where caching the fetched Screen would have let it proceed. Restoring that
+	 * fallback belongs with the aside, not before it.
+	 *
+	 * That disjointness is about the two holders, and says nothing about `screens`
+	 * holding one id twice — which it can, because `createScreen` pushes its answer
+	 * without checking (a known defect, ticketed separately). So this returns the
+	 * Screen rather than its version, and every consumer selects through it: #251's
+	 * loaders answer a refusal with exactly the revision the comparison refused
+	 * against. Selecting twice is what went wrong — a `find` beside this `max`
+	 * answered a refusal with an arbitrary entry, older than both the cache's
+	 * newest and the payload it had just refused.
 	 */
-	function cachedStateVersion(screenId: number): number | null {
+	function cachedRevision(screenId: number): Screen | null {
 		const held = state.screens.value.filter(screen => screen.id === screenId);
 		if (state.activeScreen.value?.id === screenId)
 			held.push(state.activeScreen.value);
-		if (held.length === 0)
-			return null;
-		return Math.max(...held.map(screen => screen.stateVersion));
+		return held.reduce<Screen | null>(
+			(newest, screen) => (!newest || screen.stateVersion > newest.stateVersion ? screen : newest),
+			null,
+		);
 	}
 
 	/**
@@ -397,6 +416,12 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * editing field has stopped masking the store — so re-caching the superseded
 	 * revision is an operator's edit visibly undone (#236).
 	 *
+	 * Nothing in that is particular to an announcement: a GET the operator asked
+	 * for — a page load, a route change, a refresh — races a save the same way, so
+	 * the `screens` loaders in the store gate on this too (#251). What it still
+	 * cannot see is an *unsettled* edit, which has no server revision yet and is
+	 * masked by the editing field rather than by this comparison.
+	 *
 	 * `stateVersion` is the ordering authority: the server bumps it once per Screen
 	 * write, and it only ever reaches the cache from a write's own answer, never
 	 * from an optimistic patch. So a cached version above the loaded one means the
@@ -406,8 +431,8 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * announced it.
 	 */
 	function isSupersededByCache(screen: Screen): boolean {
-		const cachedVersion = cachedStateVersion(screen.id);
-		return cachedVersion !== null && screen.stateVersion < cachedVersion;
+		const cached = cachedRevision(screen.id);
+		return cached !== null && screen.stateVersion < cached.stateVersion;
 	}
 
 	async function reloadAnnouncedScreen(eventId: number, screenId: number) {
@@ -533,6 +558,8 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 
 	return {
 		cacheScreen,
+		cachedRevision,
+		isSupersededByCache,
 		createScreen,
 		updateScreen,
 		setScreenMode,

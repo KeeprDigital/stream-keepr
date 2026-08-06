@@ -71,10 +71,15 @@ describe('error-handler mapping logic', () => {
 			// missing from the environment, the server was built wrong. Sanitizing
 			// it leaves the operator with 'Internal Server Error' and nothing to
 			// report to whoever can fix it.
+			//
+			// The component is the Broadcast Graphics Live Session module rather than
+			// #243's Screen write module, which no longer raises one: #247 made its
+			// collaborators required at the type level, so the branch is gone. #246
+			// left this module's two, which are what this mapping now serves.
 			const error: MappableNitroError = {
 				statusCode: 503,
-				message: 'The Screen write module was constructed without Screen Output asset capabilities',
-				cause: new ServiceWiringError('The Screen write module', 'Screen Output asset capabilities'),
+				message: 'The Broadcast Graphics Live Session module was constructed without the Graphics Asset Library',
+				cause: new ServiceWiringError('The Broadcast Graphics Live Session module', 'the Graphics Asset Library'),
 			};
 
 			mapPublicNitroError(error);
@@ -82,7 +87,7 @@ describe('error-handler mapping logic', () => {
 			expect(error).toMatchObject({
 				statusCode: 503,
 				statusMessage: 'Service Unavailable',
-				message: expect.stringContaining('was constructed without Screen Output asset capabilities'),
+				message: expect.stringContaining('was constructed without the Graphics Asset Library'),
 			});
 		});
 
@@ -98,7 +103,7 @@ describe('error-handler mapping logic', () => {
 			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'Something went wrong',
-				cause: new ServiceWiringError('The Screen write module', 'the Graphics Asset Library'),
+				cause: new ServiceWiringError('The Broadcast Graphics Live Session module', 'the Graphics Asset Library'),
 				unhandled: true,
 			};
 

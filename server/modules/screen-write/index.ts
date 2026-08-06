@@ -12,7 +12,6 @@ import {
 import { parseModeConfigPatchResult } from '~~/server/schemas/api/screen';
 import { cardService } from '~~/server/services/card';
 import { screenService } from '~~/server/services/screen';
-import { ServiceWiringError } from '~~/server/utils/errors';
 import {
 	validateScreenModeConfigReferences,
 	validateScreenModeConfigsReferences,
@@ -26,10 +25,37 @@ import {
 	screenModeGraphicAssetReferences,
 } from '~~/shared/utils/graphicsAssetReferences';
 
+/**
+ * A collaborator an operation needs, passed as a thunk and invoked at the point
+ * of use.
+ *
+ * Two decisions, and they are separate ones.
+ *
+ * **Required, and on the operation rather than the module.** Optional module
+ * dependencies meant a construction site could omit one and find out at runtime,
+ * which is the 503 #243 spent a ticket making legible. Requiring them makes the
+ * omission a compile error and the defensive branch unrepresentable, so it is
+ * deleted rather than decorated. They sit on the operation because that is where
+ * the requirement is true: three of this module's seven construction sites call
+ * an operation that needs neither, and a module-level requirement would make
+ * those routes name collaborators they never use. Every one of these is
+ * request-scoped — derived from the H3 event, exactly like `originConnectionId`
+ * — so it belongs to the call rather than to the module.
+ *
+ * **A thunk, because constructing one can fail or can be wasted.**
+ * `screenOutputAssetCapabilityManagerForEvent` throws when the signing key is
+ * unset (#233), and `updateModeConfig` serves all ten Screen Modes while only
+ * two of them can pin a Graphic Asset Reference. Deferring construction to the
+ * point of need is what keeps a write that never reaches the collaborator from
+ * paying for it. See #247.
+ */
+type Provides<T> = () => T;
+
 interface CreateScreenParams {
 	eventId: number;
 	input: CreateScreenInput;
 	originConnectionId?: string;
+	screenOutputAssetCapabilities: Provides<Pick<ScreenOutputAssetCapabilityManager, 'prepare'>>;
 }
 
 interface UpdateScreenParams {
@@ -60,31 +86,11 @@ interface UpdateModeConfigParams {
 	config: Record<string, unknown>;
 	stateVersion?: number;
 	originConnectionId?: string;
+	graphicsAssets: Provides<Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevision'>>;
 }
 
 const MODE_CONFIG_ENDPOINT_REQUIRED
 	= 'Graphic Asset References must be changed through the Screen Mode configuration endpoint';
-
-/**
- * A dependency this module was never handed is a wiring fault, not a
- * configuration one, so it carries `ServiceWiringError` rather than #233's
- * `ServiceConfigurationError` — but it carries a cause for the same reason.
- * `mapPublicNitroError` rewrites every unrecognised 5xx to 'Internal Server
- * Error', and the operator who receives that for a misassembled build has
- * nothing to report and no setting to change. See #243.
- *
- * No route reaches this today; every construction site supplies what the
- * operation it calls needs. It is the branch a future one would fall into.
- */
-function missingDependency(dependency: string) {
-	const cause = new ServiceWiringError('The Screen write module', dependency);
-	return createError({
-		statusCode: cause.statusCode,
-		statusMessage: 'Service Unavailable',
-		message: cause.message,
-		cause,
-	});
-}
 
 /**
  * A generic Screen write indexes nothing, so it may not introduce a reference.
@@ -127,18 +133,13 @@ function rejectChangedGraphicAssetReferencesOnGenericUpdate(
 	}
 }
 
-export function screenWriteModule(dependencies: {
-	graphicsAssets?: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevision'>;
-	screenOutputAssetCapabilities?: Pick<ScreenOutputAssetCapabilityManager, 'prepare'>;
-} = {}) {
+export function screenWriteModule() {
 	const publication = eventDataPublicationModule();
 	const screens = screenService();
 
-	async function createScreen({ eventId, input, originConnectionId }: CreateScreenParams): Promise<ScreenResponse> {
+	async function createScreen({ eventId, input, originConnectionId, screenOutputAssetCapabilities }: CreateScreenParams): Promise<ScreenResponse> {
 		await validateScreenModeConfigsReferences(eventId, input.modeConfigs);
 		rejectUnindexedGraphicAssetReferencesOnCreate(input.modeConfigs);
-		if (!dependencies.screenOutputAssetCapabilities)
-			throw missingDependency('Screen Output asset capabilities');
 
 		const slugExists = await screens.slugExists(eventId, input.slug);
 		if (slugExists) {
@@ -148,7 +149,10 @@ export function screenWriteModule(dependencies: {
 			});
 		}
 
-		const preparedCapability = await dependencies.screenOutputAssetCapabilities.prepare();
+		// Constructed here rather than by the route, so a create refused for its
+		// slug or its Graphic Asset References never reaches for a signing key it
+		// was not going to use.
+		const preparedCapability = await screenOutputAssetCapabilities().prepare();
 		const newScreen = await screens.create(
 			eventId,
 			input,
@@ -274,7 +278,7 @@ export function screenWriteModule(dependencies: {
 		});
 	}
 
-	async function updateModeConfig({ eventId, screenId, mode, config, stateVersion, originConnectionId }: UpdateModeConfigParams): Promise<ScreenResponse> {
+	async function updateModeConfig({ eventId, screenId, mode, config, stateVersion, originConnectionId, graphicsAssets }: UpdateModeConfigParams): Promise<ScreenResponse> {
 		await validateScreenModeConfigReferences(eventId, mode, config);
 
 		const existing = await screens.findById(screenId, eventId);
@@ -301,6 +305,11 @@ export function screenWriteModule(dependencies: {
 				screenModeGraphicAssetReferences(mode, existing.modeConfigs)
 					.map(item => [item.ownerSlot, item.reference] as const),
 			);
+			// Built at most once, and only once a reference this write actually
+			// changes has been found. Eight of the ten Screen Modes pin nothing at
+			// all, and a write to either of the other two that changes no reference
+			// asks the library nothing — none of them should build one.
+			let library: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevision'> | undefined;
 			// A newly chosen revision must be one an author could legitimately select
 			// right now. An unchanged one is deliberately not re-checked: a pinned
 			// revision keeps resolving after its asset is retired, so re-checking it
@@ -310,9 +319,8 @@ export function screenWriteModule(dependencies: {
 				if (sameGraphicAssetReference(current, item.reference)) {
 					continue;
 				}
-				if (!dependencies.graphicsAssets)
-					throw missingDependency('the Graphics Asset Library');
-				const status = await dependencies.graphicsAssets.inspectGraphicAssetRevision({
+				library ??= graphicsAssets();
+				const status = await library.inspectGraphicAssetRevision({
 					assetId: graphicAssetId(item.reference.assetId),
 					revisionId: graphicAssetRevisionId(item.reference.revisionId),
 				});

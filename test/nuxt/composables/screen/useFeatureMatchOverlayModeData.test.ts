@@ -123,6 +123,50 @@ describe('useFeatureMatchOverlayModeData', () => {
 	});
 
 	/**
+	 * The push carries unsaved authoring into a frame that renders it, so the frame
+	 * takes one only from the editor that embedded it. That check is the shared
+	 * `isFromExpectedSender` every other guard on this channel is built on rather
+	 * than a copy of it, because a copy is what drifts (#252).
+	 */
+	it('ignores a working configuration pushed by anyone but the embedding editor', async () => {
+		const { wrapper, data } = mountOverlay({
+			isPreview: ref(true),
+			previewGuides: ref(false),
+		});
+		await flushPromises();
+
+		// A window that did not embed this frame.
+		window.dispatchEvent(new MessageEvent('message', {
+			origin: window.location.origin,
+			source: { postMessage: vi.fn() } as unknown as MessageEventSource,
+			data: { type: 'feature-match-overlay:preview-config', config: layoutNamed('stranger-source') },
+		}));
+		// The embedding window, speaking from somewhere else.
+		window.dispatchEvent(new MessageEvent('message', {
+			origin: 'https://example.invalid',
+			source: window.parent,
+			data: { type: 'feature-match-overlay:preview-config', config: layoutNamed('cross-origin-source') },
+		}));
+		// The right sender, carrying no configuration at all.
+		window.dispatchEvent(new MessageEvent('message', {
+			origin: window.location.origin,
+			source: window.parent,
+			data: { type: 'feature-match-overlay:preview-config', config: null },
+		}));
+		await nextTick();
+
+		expect(data().config.value.layout.sources[0]?.id).toBe('saved-source');
+
+		// And the editor still gets through, so the three rejections above are the
+		// guard working rather than the listener being absent.
+		pushPreviewConfig(layoutNamed('working-source'));
+		await nextTick();
+
+		expect(data().config.value.layout.sources[0]?.id).toBe('working-source');
+		wrapper.unmount();
+	});
+
+	/**
 	 * Whether the canonical Feature Match Sample Dataset stands in for the Feature
 	 * Match this rendering does not have.
 	 *

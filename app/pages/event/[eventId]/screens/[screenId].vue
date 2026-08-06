@@ -14,6 +14,7 @@ definePageMeta({
 const route = useRoute();
 const eventStore = useEventStore();
 const screenStore = useScreenStore();
+const toast = useToast();
 const { copyToClipboard } = useCopyToClipboard();
 const { screenOutputAccessUrl, openScreenOutput } = useScreenOutputAccessUrl();
 const { runRequest } = useRequestFeedback();
@@ -188,10 +189,16 @@ async function setMode(mode: ScreenMode) {
 async function copyUrl() {
 	if (!screen.value)
 		return;
+	// An empty URL is what the composable answers with when it could not obtain a
+	// capability, and the clipboard helper reports having nothing rather than putting a
+	// media-losing URL on the operator's clipboard. Named by the reason: "failed to
+	// copy" sends an operator to the address in their own browser's bar, which is the
+	// URL this refusal exists to withhold.
 	await copyToClipboard(await screenOutputAccessUrl(accessUrlOptions()), {
 		successTitle: 'URL Copied',
 		successDescription: 'Screen URL copied to clipboard',
-		errorDescription: 'Failed to copy screen URL to clipboard.',
+		errorTitle: 'Nothing copied',
+		errorDescription: 'Asset access for this Screen could not be obtained, so the URL would have opened an output without its media. Try again.',
 	});
 }
 
@@ -230,16 +237,37 @@ function updateScreenDimension(field: 'width' | 'height', value: number | null |
 	updateScreenConfig({ [field]: value ?? screenDimensionFallback(field) });
 }
 
-function openInNewTab() {
+/**
+ * Hands out a Screen Output in a new tab, and says so when it could not.
+ *
+ * `openScreenOutput` answers whether it pointed the tab anywhere — it opens the tab on
+ * the click and closes it again unpointed when asset access could not be obtained, so
+ * an operator whose open was refused is looking at nothing having happened. Discarding
+ * that answer, which this page did until #250, leaves the refusal reading as a popup
+ * blocker rather than as the media-losing hand-out it declined to make (#231, #237).
+ *
+ * One reporter for both open controls: the default output and a Screen Mode's own
+ * outputs fail the same way, and an operator must not meet two vocabularies for it.
+ */
+async function openOutput(output?: FeatureMatchOverlayOutput) {
 	if (!screen.value)
 		return;
-	void openScreenOutput(accessUrlOptions());
+	if (await openScreenOutput(accessUrlOptions(output)))
+		return;
+
+	toast.add({
+		title: 'Output not opened',
+		description: 'Asset access for this Screen could not be obtained, so the output would have rendered without its media. Try again.',
+		color: 'error',
+	});
+}
+
+function openInNewTab() {
+	void openOutput();
 }
 
 function openOutputInNewTab(output: FeatureMatchOverlayOutput) {
-	if (!screen.value)
-		return;
-	void openScreenOutput(accessUrlOptions(output));
+	void openOutput(output);
 }
 
 const openOutputItems = computed(() => [

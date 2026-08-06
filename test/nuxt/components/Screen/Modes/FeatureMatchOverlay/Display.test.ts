@@ -280,6 +280,45 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(wrapper.get('[data-item-guide="shared-clock"]').classes()).toContain('is-selected');
 		});
 
+		/**
+		 * The host-owned selection travels on its own message beside the compositor's,
+		 * in its own vocabulary — and through the same shared sender guard, rather than
+		 * a hand-rolled copy of one beside a caller of the real thing (#252).
+		 */
+		it('marks the host-owned Source Item the editor selected, and only from the editor', async () => {
+			mockConfig.value = guidedConfig();
+			mockPreviewGuides.value = true;
+
+			const wrapper = await mountComponent();
+			const guide = () => wrapper.get('[aria-label="Select Main Match Source"]');
+			expect(guide().classes()).not.toContain('is-selected');
+
+			const target = { type: 'source', itemId: 'main-source' };
+			// A window that did not embed this frame, then the embedding one speaking
+			// from somewhere else.
+			window.dispatchEvent(new MessageEvent('message', {
+				origin: window.location.origin,
+				source: { postMessage: vi.fn() } as unknown as MessageEventSource,
+				data: { type: 'feature-match-overlay:selected-target', target },
+			}));
+			window.dispatchEvent(new MessageEvent('message', {
+				origin: 'https://example.invalid',
+				source: window.parent,
+				data: { type: 'feature-match-overlay:selected-target', target },
+			}));
+			await nextTick();
+			expect(guide().classes()).not.toContain('is-selected');
+
+			window.dispatchEvent(new MessageEvent('message', {
+				origin: window.location.origin,
+				source: window.parent,
+				data: { type: 'feature-match-overlay:selected-target', target },
+			}));
+			await nextTick();
+
+			expect(guide().classes()).toContain('is-selected');
+		});
+
 		it('draws advisory safe areas without offering anything to select', async () => {
 			// The safe-area guides are advisory: they never clip or constrain an
 			// authored Graphic Item, and with item guides switched off there is no

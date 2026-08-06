@@ -1,6 +1,7 @@
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatch, Match } from '~/types';
+import { isFromExpectedSender } from '~/modules/graphics/previewMessages';
 
 export function useFeatureMatchOverlayModeData() {
 	const { eventId, isPreview } = useScreenContext();
@@ -29,13 +30,13 @@ export function useFeatureMatchOverlayModeData() {
 	const error = displayData.error;
 
 	function isPreviewConfigMessage(message: MessageEvent): message is MessageEvent<{ type: 'feature-match-overlay:preview-config'; config: FeatureMatchOverlayModeConfig }> {
-		return message.origin === window.location.origin
-			&& message.source === window.parent
-			&& typeof message.data === 'object'
-			&& message.data !== null
-			&& message.data.type === 'feature-match-overlay:preview-config'
-			&& typeof message.data.config === 'object'
-			&& message.data.config !== null;
+		if (!isFromExpectedSender(message, { origin: window.location.origin, source: window.parent }))
+			return false;
+
+		const data = message.data as Record<string, unknown>;
+		return data.type === 'feature-match-overlay:preview-config'
+			&& typeof data.config === 'object'
+			&& data.config !== null;
 	}
 
 	function handlePreviewConfigMessage(message: MessageEvent) {
