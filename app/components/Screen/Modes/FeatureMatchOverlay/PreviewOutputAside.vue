@@ -7,6 +7,7 @@ import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import { isFeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
 import {
 	GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE,
+	isFromExpectedSender,
 	isGraphicsPreviewReadyMessage,
 	isGraphicsPreviewSelectMessage,
 } from '~/modules/graphics/previewMessages';
@@ -150,19 +151,29 @@ function syncPreviewState() {
 	syncCompositorTargetToPreview();
 }
 
+/**
+ * The host-owned selection reported back by the frame, through the same shared
+ * sender guard its two siblings below use.
+ *
+ * It hand-rolled that check until #252. The copy compared `message.source`
+ * against `previewFrame.value?.contentWindow` and nothing else, so once the
+ * frame was gone — null `contentWindow`, and a `MessageEvent` carries a null
+ * source unless a window sent it — the two matched and a selection from nobody
+ * was emitted as the frame's own.
+ */
 function handlePreviewSelection(message: MessageEvent) {
-	if (
-		message.origin !== window.location.origin
-		|| message.source !== previewFrame.value?.contentWindow
-		|| typeof message.data !== 'object'
-		|| message.data === null
-		|| message.data.type !== 'feature-match-overlay:select'
-		|| !isFeatureMatchOverlaySelectionTarget(message.data.target)
-	) {
+	if (!isFromExpectedSender(message, {
+		origin: window.location.origin,
+		source: previewFrame.value?.contentWindow ?? null,
+	})) {
 		return;
 	}
 
-	emit('selectTarget', message.data.target);
+	const data = message.data as Record<string, unknown>;
+	if (data.type !== 'feature-match-overlay:select' || !isFeatureMatchOverlaySelectionTarget(data.target))
+		return;
+
+	emit('selectTarget', data.target);
 }
 
 /**

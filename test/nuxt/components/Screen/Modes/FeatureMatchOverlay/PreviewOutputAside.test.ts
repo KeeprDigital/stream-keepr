@@ -227,6 +227,35 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 		expect(wrapper.emitted('selectCompositorTarget')).toEqual([[target]]);
 	});
 
+	/**
+	 * The case a hand-rolled `message.source === contentWindow` comparison gets
+	 * wrong. A frame that is gone leaves `contentWindow` null and a `MessageEvent`
+	 * carries a null source unless a window sent it, so comparing the two matches —
+	 * and the aside acts on a selection from nobody at exactly the moment there is
+	 * nobody entitled to send one. The shared guard requires the expected sender to
+	 * exist, which is why both selections now go through it (#252).
+	 */
+	it('accepts no selection at all once there is no frame that could have sent one', async () => {
+		const wrapper = await mountComponent();
+		const previewFrame = wrapper.get('iframe').element;
+		Object.defineProperty(previewFrame, 'contentWindow', { configurable: true, value: null });
+
+		window.dispatchEvent(new MessageEvent('message', {
+			origin: window.location.origin,
+			source: null,
+			data: { type: 'feature-match-overlay:select', target: { type: 'source', itemId: 'spoofed' } },
+		}));
+		window.dispatchEvent(new MessageEvent('message', {
+			origin: window.location.origin,
+			source: null,
+			data: { type: 'graphics-compositor:select', target: { type: 'item', graphicId: 'g', itemId: 'spoofed' } },
+		}));
+		await nextTick();
+
+		expect(wrapper.emitted('selectTarget')).toBeUndefined();
+		expect(wrapper.emitted('selectCompositorTarget')).toBeUndefined();
+	});
+
 	it('pushes both selections into the preview frame it embedded', async () => {
 		// Two authoring surfaces, two vocabularies, one preview. The frame needs both
 		// to mark what is under authoring, and neither can be expressed in the other.

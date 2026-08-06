@@ -3,6 +3,7 @@ import {
 	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
 	GRAPHICS_PREVIEW_STATE_MESSAGE,
+	isFromExpectedSender,
 	isGraphicsPreviewReadyMessage,
 	isGraphicsPreviewSelectMessage,
 	isGraphicsPreviewStateMessage,
@@ -76,6 +77,60 @@ describe('graphicsPreviewMessages', () => {
 			source: null,
 			data: { type: GRAPHICS_PREVIEW_SELECT_MESSAGE, target: { type: 'canvas' } },
 		}, { origin: 'https://keepr.test', source: null })).toBe(false);
+	});
+});
+
+/**
+ * The sender check itself, exercised directly because it is the one piece every
+ * guard on this channel shares — the compositor's own messages and the
+ * host-owned ones a Feature Match Overlay exchanges with its preview alike
+ * (#252). A copy of it that drifted looser would not announce itself, so what it
+ * accepts is pinned here rather than only through its callers.
+ */
+describe('isFromExpectedSender', () => {
+	const data = { type: 'anything' };
+
+	it('accepts the expected window speaking from the expected origin', () => {
+		expect(isFromExpectedSender(
+			{ origin: 'https://keepr.test', source: editorWindow, data },
+			expectedFromEditor,
+		)).toBe(true);
+	});
+
+	it('rejects another window, and the expected one speaking from elsewhere', () => {
+		expect(isFromExpectedSender(
+			{ origin: 'https://keepr.test', source: previewWindow, data },
+			expectedFromEditor,
+		)).toBe(false);
+		expect(isFromExpectedSender(
+			{ origin: 'https://attacker.test', source: editorWindow, data },
+			expectedFromEditor,
+		)).toBe(false);
+	});
+
+	/**
+	 * The case a hand-rolled `message.source === expected` comparison gets wrong.
+	 * A `MessageEvent` carries a null source unless a window sent it, and a frame
+	 * that is gone — or not yet embedded — leaves the expected source null or
+	 * undefined. Comparing the two then matches, and the check admits a message
+	 * from nobody at precisely the moment there is nobody entitled to send one.
+	 */
+	it('rejects a message from nobody when there is no expected sender either', () => {
+		for (const absent of [null, undefined]) {
+			expect(isFromExpectedSender(
+				{ origin: 'https://keepr.test', source: absent, data },
+				{ origin: 'https://keepr.test', source: absent },
+			)).toBe(false);
+		}
+	});
+
+	it('rejects a payload that is not an object, whoever sent it', () => {
+		for (const payload of [null, undefined, 'select', 7]) {
+			expect(isFromExpectedSender(
+				{ origin: 'https://keepr.test', source: editorWindow, data: payload },
+				expectedFromEditor,
+			)).toBe(false);
+		}
 	});
 });
 

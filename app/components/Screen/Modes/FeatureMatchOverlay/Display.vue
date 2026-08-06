@@ -15,6 +15,7 @@ import { featureMatchGraphicsContext, featureMatchTokenValues } from '~/modules/
 import {
 	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
+	isFromExpectedSender,
 	isGraphicsPreviewSelectedTargetMessage,
 } from '~/modules/graphics/previewMessages';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
@@ -197,12 +198,12 @@ function isPreviewTargetSelected(target: FeatureMatchOverlaySelectionTarget) {
 }
 
 function isPreviewTargetMessage(message: MessageEvent): message is MessageEvent<{ type: 'feature-match-overlay:selected-target'; target: FeatureMatchOverlaySelectionTarget }> {
-	return message.origin === window.location.origin
-		&& message.source === window.parent
-		&& typeof message.data === 'object'
-		&& message.data !== null
-		&& message.data.type === 'feature-match-overlay:selected-target'
-		&& isFeatureMatchOverlaySelectionTarget(message.data.target);
+	if (!isFromExpectedSender(message, { origin: window.location.origin, source: window.parent }))
+		return false;
+
+	const data = message.data as Record<string, unknown>;
+	return data.type === 'feature-match-overlay:selected-target'
+		&& isFeatureMatchOverlaySelectionTarget(data.target);
 }
 
 function handleSelectedPreviewTargetMessage(message: MessageEvent) {
