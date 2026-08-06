@@ -1027,11 +1027,14 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			expect(store.error).toBe(
 				'Another operator has already accepted a newer Graphic Input set for this Broadcast Graphic',
 			);
-			// What a restatement's unread refusal actually surfaced: its own status
-			// line. The failures here are `FetchError`s, so neither of the two domain
-			// sentences is ever an `Error.message` — this is the reading that would
-			// come back if the second delivery stopped being read for a refusal.
 			expect(store.error).not.toMatch(/409 Conflict/);
+			// The code is what holds this test up, and since #245 it is the only thing
+			// that does. A restatement whose refusal went unread would now still reach
+			// `error` with the right sentence — every refusal writes one into the body,
+			// and an uncoded failure's body is read too — so the assertions above stopped
+			// being able to tell "read as a refusal" from "read as prose". Only the
+			// vocabulary walk sets a code, and only a code lets a surface prescribe the
+			// next move rather than merely quote the authority.
 			expect(store.refusal?.code).toBe('stale-input-acceptance');
 		});
 
