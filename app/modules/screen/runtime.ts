@@ -374,11 +374,19 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * never navigated to in-page. So no single store ever holds both.
 	 *
 	 * Embed a display session in-page, or add an in-app link to that route, and the
-	 * two sources hold different revisions at once — at which point taking the
-	 * *newest* is what keeps refusing safe, since taking the oldest would let a
+	 * two sources hold different revisions at once — at which point what keeps
+	 * refusing safe is taking the *newest*, since taking the oldest would let a
 	 * reload downgrade `activeScreen` to a revision the client had already moved
 	 * past. The Feature Match Overlay preview aside is the nearest thing to that
 	 * change.
+	 *
+	 * That aside would also cost something this returns for free today. With the
+	 * holders disjoint, a refusal in #251's loaders always answers from `screens`
+	 * and leaves it populated. Break disjointness and a refusal can answer from
+	 * `activeScreen` instead, returning without putting anything in `screens` — so
+	 * the next `updateModeConfig` finds no entry and fails with "Screen not found",
+	 * where caching the fetched Screen would have let it proceed. Restoring that
+	 * fallback belongs with the aside, not before it.
 	 *
 	 * That disjointness is about the two holders, and says nothing about `screens`
 	 * holding one id twice — which it can, because `createScreen` pushes its answer
