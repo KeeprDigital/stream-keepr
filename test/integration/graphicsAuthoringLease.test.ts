@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCommandHarness } from './featureMatchSessionHelpers';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 import { integrationRealtimeConfigured } from './helpers';
-import { diagnoseRealtimePublishFailure } from './realtimeDiagnosis';
+import { diagnoseRealtimePublishFailure, SCREEN_COMMAND_ROUTE_REFUSALS } from './realtimeDiagnosis';
 
 interface LeaseState {
 	artifact: { kind: string; id: string };
@@ -195,13 +195,13 @@ describe('graphics Authoring Leases', () => {
 			body: { command: 'refresh' },
 			cookie: authorB,
 		});
-		expect(command.status, diagnoseRealtimePublishFailure(command.status, command.data)).toBe(200);
+		expect(command.status, diagnoseRealtimePublishFailure(command.status, command.data, SCREEN_COMMAND_ROUTE_REFUSALS)).toBe(200);
 
 		const anonymousCommand = await request(`/api/events/${eventId}/screens/${screenId}/command`, {
 			method: 'POST',
 			body: { command: 'refresh' },
 		});
-		expect(anonymousCommand.status, diagnoseRealtimePublishFailure(anonymousCommand.status, anonymousCommand.data)).toBe(200);
+		expect(anonymousCommand.status, diagnoseRealtimePublishFailure(anonymousCommand.status, anonymousCommand.data, SCREEN_COMMAND_ROUTE_REFUSALS)).toBe(200);
 	});
 
 	it('never restricts a live command session while the Edit workspace is leased', async () => {

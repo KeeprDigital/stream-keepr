@@ -35,15 +35,20 @@ function nitroError(statusCode: number, message: string) {
 	return { error: true, statusCode, statusMessage: 'Server Error', message };
 }
 
+/** The diagnosis as the lease suite calls it: against the Screen-command route. */
+function diagnose(status: number, body: unknown) {
+	return diagnoseRealtimePublishFailure(status, body, SCREEN_COMMAND_ROUTE_REFUSALS);
+}
+
 describe('diagnosing a rejected realtime publish', () => {
 	it('says nothing about a Screen command that succeeded', () => {
-		expect(diagnoseRealtimePublishFailure(200, { ok: true })).toBeUndefined();
+		expect(diagnose(200, { ok: true })).toBeUndefined();
 	});
 
 	it('names the variable, the cause and the fix when Ably does not know the application', () => {
 		// Ably's 40400 for a well-formed key whose app does not exist. `ErrorInfo`
 		// carries `statusCode: 404`, h3 adopts it, and the route answers 404.
-		const notice = diagnoseRealtimePublishFailure(404, nitroError(404, 'No application found'));
+		const notice = diagnose(404, nitroError(404, 'No application found'));
 
 		expect(notice).toBeDefined();
 		expect(notice).toContain(INTEGRATION_ABLY_API_KEY_ENV);
@@ -56,13 +61,13 @@ describe('diagnosing a rejected realtime publish', () => {
 	it('warns that the passing token test is not evidence the key works', () => {
 		// The half-green run is the whole reason this exists: a reader looking at a
 		// green `createTokenRequest` test will not suspect the key without being told.
-		const notice = diagnoseRealtimePublishFailure(404, nitroError(404, 'No application found'));
+		const notice = diagnose(404, nitroError(404, 'No application found'));
 
 		expect(notice).toContain('createTokenRequest signs locally');
 	});
 
 	it('carries the status and provider message it actually saw', () => {
-		const notice = diagnoseRealtimePublishFailure(404, nitroError(404, 'No application found'));
+		const notice = diagnose(404, nitroError(404, 'No application found'));
 
 		expect(notice).toContain('Observed: HTTP 404 — No application found.');
 	});
@@ -71,7 +76,20 @@ describe('diagnosing a rejected realtime publish', () => {
 		// A missing Screen is a fixture problem. Blaming the key here would send the
 		// reader to Ably's dashboard over a row that was never inserted.
 		for (const refusal of SCREEN_COMMAND_ROUTE_REFUSALS)
-			expect(diagnoseRealtimePublishFailure(404, nitroError(404, refusal))).toBeUndefined();
+			expect(diagnose(404, nitroError(404, refusal))).toBeUndefined();
+	});
+
+	it('leaves another route\'s own refusals to speak for themselves too', () => {
+		// The refusal list is the caller's argument rather than a default fixed to the
+		// Screen-command route. A second realtime-backed assertion — layout placements
+		// raises three distinct 404s — would otherwise inherit this route's list and
+		// read every one of its legitimate refusals as a fabricated key.
+		const placementRefusal = nitroError(404, 'Layout placement not found');
+
+		expect(diagnoseRealtimePublishFailure(404, placementRefusal, ['Layout placement not found'])).toBeUndefined();
+		// The same body on a route that cannot raise it is still a diagnosis, so the
+		// argument is doing the work rather than the message text happening to look safe.
+		expect(diagnose(404, placementRefusal)).toBeDefined();
 	});
 
 	it('leaves a renamed route to speak for itself', () => {
@@ -79,14 +97,14 @@ describe('diagnosing a rejected realtime publish', () => {
 		// arrives wearing the same 404 as one.
 		const unrouted = nitroError(404, 'Cannot find any route matching /api/events/1/screens/2/command.');
 
-		expect(diagnoseRealtimePublishFailure(404, unrouted)).toBeUndefined();
+		expect(diagnose(404, unrouted)).toBeUndefined();
 	});
 
 	it('diagnoses a key Ably knows and will not honour', () => {
 		// A revoked or wrong-secret key is refused at 401 rather than 404, and the
 		// reader's question — "is my key good?" — is identical.
-		expect(diagnoseRealtimePublishFailure(401, nitroError(401, 'Invalid key in request'))).toBeDefined();
-		expect(diagnoseRealtimePublishFailure(403, nitroError(403, 'Forbidden'))).toBeDefined();
+		expect(diagnose(401, nitroError(401, 'Invalid key in request'))).toBeDefined();
+		expect(diagnose(403, nitroError(403, 'Forbidden'))).toBeDefined();
 	});
 
 	it('diagnoses the sanitised body a non-dev run returns', () => {
@@ -95,18 +113,18 @@ describe('diagnosing a rejected realtime publish', () => {
 		// only for it to be suppressed.
 		const sanitised = { error: true, statusCode: 404, statusMessage: 'Server Error', message: 'Server Error' };
 
-		expect(diagnoseRealtimePublishFailure(404, sanitised)).toContain(INTEGRATION_ABLY_API_KEY_ENV);
+		expect(diagnose(404, sanitised)).toContain(INTEGRATION_ABLY_API_KEY_ENV);
 	});
 
 	it('diagnoses a refusal that arrived with no readable body', () => {
-		expect(diagnoseRealtimePublishFailure(404, null)).toContain('Observed: HTTP 404.');
+		expect(diagnose(404, null)).toContain('Observed: HTTP 404.');
 	});
 
 	it('says nothing about a server error, which is not a rejected key', () => {
 		// A 500 is the absent-key case (`getAblyClient` throws a plain Error) or the
 		// service being unwell. Neither is answered by "your key is fake".
-		expect(diagnoseRealtimePublishFailure(500, nitroError(500, 'Ably server API key is not configured'))).toBeUndefined();
-		expect(diagnoseRealtimePublishFailure(409, nitroError(409, 'Conflict'))).toBeUndefined();
+		expect(diagnose(500, nitroError(500, 'Ably server API key is not configured'))).toBeUndefined();
+		expect(diagnose(409, nitroError(409, 'Conflict'))).toBeUndefined();
 	});
 });
 

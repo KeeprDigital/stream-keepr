@@ -17,10 +17,13 @@
 # reaches anything to assert.
 #
 # NUXT_ABLY_API_KEY is the one name here that reaches a third party, so leave it
-# empty unless you have a real key. Empty, a wrangler run serves everything
-# except realtime and a Screen command answers 500, which says what is missing.
-# Filled with a placeholder, nothing says anything: only the empty string reads
-# as absent, and Ably then refuses each publish with 404 code 40400.
+# empty unless you have a real key. Neither wrong state announces itself in the
+# response: empty, a Screen command answers a bare 500, because that route has
+# nothing to do but publish and `mapPublicNitroError` sanitises the cause out of
+# any 500; filled with a placeholder, only the empty string reads as absent, so
+# the key passes for configured and Ably refuses each publish with 404 code
+# 40400. That silence is why the name is written here rather than left to be
+# discovered from a failure.
 
 NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY=""
 NUXT_GRAPHICS_ADMIN_TOKEN=""

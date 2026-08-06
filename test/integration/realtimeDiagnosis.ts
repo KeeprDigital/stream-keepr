@@ -58,6 +58,12 @@ export const INTEGRATION_REALTIME_PUBLISH_REJECTED_NOTICE
  * This list is what separates "the route said no" from "the provider said no", so it
  * has to stay exhaustive. `test/unit/integration/realtimeDiagnosis.test.ts` reads
  * `command.post.ts` and fails when the route grows a 404 this does not name.
+ *
+ * It is a caller's argument rather than a default, because it is true of one route
+ * only. A second realtime-backed assertion — layout placements raises three distinct
+ * 404s — would otherwise inherit this list and read its own legitimate refusals as a
+ * fabricated key. Making the caller name its route's refusals keeps that structural
+ * instead of documentary.
  */
 export const SCREEN_COMMAND_ROUTE_REFUSALS = ['Screen not found'];
 
@@ -93,15 +99,26 @@ function errorMessageOf(body: unknown): string | undefined {
  * The notice for a realtime-backed response that did not succeed, or `undefined` where
  * the response is the route's own answer and the bare assertion already reads true.
  *
- * Pass it as the assertion's message: it costs nothing on a pass and is the only thing
- * standing between a reader and half an hour with Ably's error codes on a failure.
+ * `routeRefusals` is every refusal the route under test raises on its own terms — for
+ * the Screen-command route, `SCREEN_COMMAND_ROUTE_REFUSALS`. It is required because a
+ * diagnosis is only as good as that list: anything in the credential-rejection band
+ * this function is not told about becomes a rejected key, so a caller that omitted its
+ * route's own 404s would get confident nonsense.
+ *
+ * Pass the result as the assertion's message: it costs nothing on a pass and is the
+ * only thing standing between a reader and half an hour with Ably's error codes on a
+ * failure.
  */
-export function diagnoseRealtimePublishFailure(status: number, body: unknown): string | undefined {
+export function diagnoseRealtimePublishFailure(
+	status: number,
+	body: unknown,
+	routeRefusals: readonly string[],
+): string | undefined {
 	if (!CREDENTIAL_REJECTION_STATUSES.has(status))
 		return undefined;
 
 	const message = errorMessageOf(body);
-	if (message !== undefined && (SCREEN_COMMAND_ROUTE_REFUSALS.includes(message) || message.startsWith(UNROUTED_MESSAGE_PREFIX)))
+	if (message !== undefined && (routeRefusals.includes(message) || message.startsWith(UNROUTED_MESSAGE_PREFIX)))
 		return undefined;
 
 	const observed = message === undefined ? `HTTP ${status}` : `HTTP ${status} — ${message}`;
