@@ -2,11 +2,16 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
+import { RealtimePublishError } from '~~/server/utils/realtimePublishFailure';
+import { providerRefusal } from '~~/test/helpers/providerRefusal';
 import {
 	diagnoseRealtimePublishFailure,
 	INTEGRATION_ABLY_API_KEY_ENV,
+	INTEGRATION_REALTIME_PUBLISH_FAILED_NOTICE,
 	INTEGRATION_REALTIME_PUBLISH_REJECTED_NOTICE,
 	INTEGRATION_REALTIME_SKIP_NOTICE,
+	REALTIME_PUBLISH_FAILED_MESSAGE,
 	SCREEN_COMMAND_ROUTE_REFUSALS,
 } from '~~/test/integration/realtimeDiagnosis';
 
@@ -120,6 +125,39 @@ describe('diagnosing a rejected realtime publish', () => {
 		expect(diagnose(404, null)).toContain('Observed: HTTP 404.');
 	});
 
+	it('diagnoses the server\'s own name for a refused publish', () => {
+		// #264: the Screen-command route no longer wears Ably's 404. A refused
+		// publish is classified as this server's 502, so the diagnosis has to
+		// recognise the classification or the round-end run gets a bare
+		// `expected 502 to be 200` — worse than the 404 it replaced.
+		const notice = diagnose(502, nitroError(502, REALTIME_PUBLISH_FAILED_MESSAGE));
+
+		expect(notice).toBeDefined();
+		expect(notice).toContain(INTEGRATION_ABLY_API_KEY_ENV);
+		expect(notice).toContain('realtime_publish_failed');
+		expect(notice).toContain('Observed: HTTP 502 — Realtime publish failed.');
+	});
+
+	it('sends the reader to the log line rather than only to the key', () => {
+		// A 502 does not distinguish a fabricated key from Ably being unwell, and
+		// the notice must not claim it does. The server log names which it was;
+		// this says so, and keeps the key hypothesis as the likely one.
+		const notice = diagnose(502, nitroError(502, REALTIME_PUBLISH_FAILED_MESSAGE));
+
+		expect(notice).toContain('errorCode');
+		expect(notice).toContain('40400');
+	});
+
+	it('says nothing about a 502 that is some other gateway failure', () => {
+		// The message is load-bearing here in the way the refusal list is at 404:
+		// Melee and Scryfall both answer 502 through the same mapper, and neither
+		// is answered by "check your Ably key".
+		expect(diagnose(502, nitroError(502, 'Melee.gg is temporarily unavailable. Try again later.'))).toBeUndefined();
+		expect(diagnose(502, nitroError(502, 'Card data provider is temporarily unavailable. Try again later.'))).toBeUndefined();
+		expect(diagnose(502, nitroError(502, 'Server Error'))).toBeUndefined();
+		expect(diagnose(502, null)).toBeUndefined();
+	});
+
 	it('says nothing about a server error, which is not a rejected key', () => {
 		// A 500 is the absent-key case (`getAblyClient` throws a plain Error) or the
 		// service being unwell. Neither is answered by "your key is fake".
@@ -139,6 +177,49 @@ describe('the realtime notices', () => {
 	it('are told apart by what they say happened', () => {
 		expect(INTEGRATION_REALTIME_SKIP_NOTICE).toContain('skipped');
 		expect(INTEGRATION_REALTIME_PUBLISH_REJECTED_NOTICE).toContain('rejected');
+		expect(INTEGRATION_REALTIME_PUBLISH_FAILED_NOTICE).toContain('refused');
+	});
+
+	it('all three name the environment variable', () => {
+		expect(INTEGRATION_REALTIME_PUBLISH_FAILED_NOTICE).toContain(INTEGRATION_ABLY_API_KEY_ENV);
+	});
+});
+
+/**
+ * The join between the server's classification and the diagnosis that reads it.
+ *
+ * The diagnosis keys on a status and a message string, and `realtimeDiagnosis`
+ * imports nothing on purpose — so the string is a literal on this side of the
+ * boundary, and a rename on the server side would silently stop it firing. This
+ * asserts the two agree by running the mapping the request actually goes through,
+ * rather than by comparing the constant with itself.
+ */
+describe('the classification the Screen-command route produces', () => {
+	/** The error as h3 hands it to the plugin: a non-H3Error arrives unhandled. */
+	function thrownFromTheRoute() {
+		return {
+			statusCode: 500,
+			message: 'Something went wrong',
+			cause: new RealtimePublishError(providerRefusal()),
+			unhandled: true,
+		};
+	}
+
+	it('is the one the diagnosis is looking for', () => {
+		const error = thrownFromTheRoute();
+
+		mapPublicNitroError(error);
+
+		expect(diagnose(error.statusCode, nitroError(error.statusCode, error.message))).toBeDefined();
+	});
+
+	it('is not the route\'s own 404, which is the whole point of the change', () => {
+		const error = thrownFromTheRoute();
+
+		mapPublicNitroError(error);
+
+		expect(error.statusCode).not.toBe(404);
+		expect(SCREEN_COMMAND_ROUTE_REFUSALS).not.toContain(error.message);
 	});
 });
 

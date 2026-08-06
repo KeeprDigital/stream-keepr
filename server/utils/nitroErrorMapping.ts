@@ -1,5 +1,6 @@
 import { graphicsCapacityErrorDescriptor } from '~~/server/modules/graphics-asset-library/errors';
 import { ServiceConfigurationError, ServiceWiringError, StateConflictError } from './errors';
+import { RealtimePublishError } from './realtimePublishFailure';
 
 export interface MappableNitroError {
 	statusCode: number;
@@ -48,6 +49,19 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		// here. A wiring fault can genuinely arrive that way: h3 marks any
 		// non-H3Error unhandled, and a bare `throw new ServiceWiringError(...)` is
 		// one.
+		mappedOperationalError = true;
+	}
+	else if (cause instanceof RealtimePublishError) {
+		// The realtime service refused a publish this request could not go on
+		// without. A Bad Gateway rather than an Internal Server Error because this
+		// server's own work succeeded, and a public message for the same reason the
+		// two branches above have one: it names which dependency failed, and the
+		// caller cannot fix what it is not told about. The provider's own account of
+		// the refusal stays in the log — see `realtimePublishFailure`.
+		error.statusCode = cause.statusCode;
+		error.statusMessage = 'Bad Gateway';
+		error.message = cause.message;
+		hasMappedPublicServerMessage = true;
 		mappedOperationalError = true;
 	}
 	else if (graphicsCapacityError) {

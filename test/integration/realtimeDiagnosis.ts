@@ -9,15 +9,25 @@
  *
  *   - the realtime token test passes, because `createTokenRequest` computes its HMAC
  *     locally and never asks Ably whether the key names a real application;
- *   - the Screen-command test fails `expected 404 to be 200`, because
- *     `publishScreenCommand` does reach Ably, which answers code 40400 — "no
- *     application found" — for a key whose application does not exist. Ably's
- *     `ErrorInfo` carries `statusCode: 404`, h3's `createError` adopts it, and the
- *     route answers 404 without ever saying whose 404 it was.
+ *   - the Screen-command test fails, because `publishScreenCommand` does reach Ably,
+ *     which answers code 40400 — "no application found" — for a key whose
+ *     application does not exist.
  *
- * That is the whole diagnosis sitting in plain sight and unspoken: a 404 on a route
- * whose own 404s are enumerable. `diagnoseRealtimePublishFailure` turns it into a
- * sentence, and the realtime assertions carry that sentence as their failure message.
+ * That is the whole diagnosis sitting in plain sight and unspoken.
+ * `diagnoseRealtimePublishFailure` turns it into a sentence, and the realtime
+ * assertions carry that sentence as their failure message.
+ *
+ * What the failure *looks* like changed under #264, and both shapes are diagnosed:
+ *
+ *   - the Screen-command route now answers **502 "Realtime publish failed"**, its own
+ *     name for a dependency refusing. That is unambiguous — no route answers it for
+ *     any reason of its own — so the message is what the diagnosis matches on, and
+ *     the server's `realtime_publish_failed` log line carries the provider's code;
+ *   - a route that still propagates the provider's `ErrorInfo` untouched answers
+ *     **404**, because h3's `createError` adopts `statusCode` from anything thrown.
+ *     That was the Screen-command route until #264 and is the harder half to read:
+ *     a 404 on a route whose own 404s are enumerable, which is why the caller has to
+ *     name its own refusals before this can tell the two apart.
  *
  * It reports rather than skips, deliberately. An absent key is a checkout that never
  * claimed to have realtime; a rejected key is a configuration that claims to and does
@@ -51,6 +61,41 @@ export const INTEGRATION_REALTIME_PUBLISH_REJECTED_NOTICE
 		+ `Fix: put a real key from your Ably app in ${INTEGRATION_ABLY_API_KEY_ENV} — .env for the test suites, `
 		+ '.dev.vars for wrangler runs, see .env.example and .dev.vars.example — or clear it to the empty string, which '
 		+ 'skips realtime coverage instead of failing it.';
+
+/**
+ * #264: the server's own name for a refused publish, and the status it wears.
+ *
+ * Duplicated deliberately from `server/utils/realtimePublishFailure.ts`, because this
+ * file imports nothing — see the note on `INTEGRATION_ABLY_API_KEY_ENV` above for the
+ * same trade. `test/unit/integration/realtimeDiagnosis.test.ts` runs a refusal through
+ * the real error mapping and asserts the result is what this matches on, so a rename
+ * on the server side fails there rather than quietly costing the notice.
+ */
+export const REALTIME_PUBLISH_FAILED_MESSAGE = 'Realtime publish failed';
+const REALTIME_PUBLISH_FAILED_STATUS = 502;
+
+/**
+ * #264: the server saying, in its own voice, that the realtime service refused it.
+ *
+ * The sibling of the notice above with better evidence behind it and less certainty
+ * in front of it. Better evidence, because the server now logs the provider's own
+ * `statusCode`/`errorCode`/`reason` beside the request — so the reader can be sent to
+ * a line that answers the question outright instead of inferring it from a status.
+ * Less certainty, because a 502 does not distinguish a key Ably will not accept from
+ * Ably being unwell, where the 404 band very nearly did. It names the likely cause
+ * and then points at the thing that knows.
+ */
+export const INTEGRATION_REALTIME_PUBLISH_FAILED_NOTICE
+	= '[integration] realtime publish refused: the server reached Ably and Ably would not accept the publish. '
+		+ `The likely cause is ${INTEGRATION_ABLY_API_KEY_ENV} holding a placeholder or fabricated value — only the empty `
+		+ 'string reads as absent here, so any well-formed string counts as configured, and Ably answers code 40400 '
+		+ '("no application found") for a key whose application does not exist. The realtime token test passing is not '
+		+ 'evidence against this — createTokenRequest signs locally and never asks the service. '
+		+ 'The server said which it was: find the `realtime_publish_failed` line in the run output and read its '
+		+ '`errorCode` and `reason` — 40400 is a key Ably does not know, 401/403 a key it will not honour, 5xx the '
+		+ `service itself. Fix for the usual case: put a real key from your Ably app in ${INTEGRATION_ABLY_API_KEY_ENV} — `
+		+ '.env for the test suites, .dev.vars for wrangler runs, see .env.example and .dev.vars.example — or clear it to '
+		+ 'the empty string, which skips realtime coverage instead of failing it.';
 
 /**
  * Every refusal the Screen-command route raises on its own terms.
@@ -114,10 +159,19 @@ export function diagnoseRealtimePublishFailure(
 	body: unknown,
 	routeRefusals: readonly string[],
 ): string | undefined {
+	const message = errorMessageOf(body);
+
+	// The named classification is matched on its message, not its status, and this
+	// is the one place the message is required rather than merely respected: 502 is
+	// also what Melee and Scryfall failures are mapped to, and "check your Ably key"
+	// is a wrong answer to either. A route answers this message for no reason of its
+	// own, so no refusal list is consulted.
+	if (status === REALTIME_PUBLISH_FAILED_STATUS && message === REALTIME_PUBLISH_FAILED_MESSAGE)
+		return `${INTEGRATION_REALTIME_PUBLISH_FAILED_NOTICE} Observed: HTTP ${status} — ${message}.`;
+
 	if (!CREDENTIAL_REJECTION_STATUSES.has(status))
 		return undefined;
 
-	const message = errorMessageOf(body);
 	if (message !== undefined && (routeRefusals.includes(message) || message.startsWith(UNROUTED_MESSAGE_PREFIX)))
 		return undefined;
 

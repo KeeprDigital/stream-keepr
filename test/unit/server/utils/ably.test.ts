@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_REALTIME_MESSAGE_BYTES } from '~~/shared/types/messages';
+import { ErrorInfoShaped } from '~~/test/helpers/providerRefusal';
+
+function loggedFields(spy: ReturnType<typeof vi.spyOn>) {
+	return JSON.parse(spy.mock.calls[0]![0] as string);
+}
 
 const mockPublish = vi.fn();
 const mockGetChannel = vi.fn(() => ({ publish: mockPublish }));
@@ -131,29 +136,6 @@ describe('publishMessage', () => {
  * part a future edit could quietly take away — that the swallow still swallows.
  */
 describe('failed realtime publishes', () => {
-	/**
-	 * The provider's error shape, from the installed SDK rather than memory:
-	 * `ErrorInfo extends Error` with `code`, `statusCode` and `message`
-	 * (node_modules/ably/ably.d.ts:4092-4104, ably 2.25.0). It does not assign
-	 * `name`, so a genuine ErrorInfo reports the inherited `'Error'` — which is
-	 * why `errorName` alone could never carry this diagnosis.
-	 */
-	class ErrorInfoShaped extends Error {
-		code: number;
-		statusCode: number;
-		href?: string;
-		detail?: Record<string, string>;
-		constructor(message: string, code: number, statusCode: number) {
-			super(message);
-			this.code = code;
-			this.statusCode = statusCode;
-		}
-	}
-
-	function loggedFields(spy: ReturnType<typeof vi.spyOn>) {
-		return JSON.parse(spy.mock.calls[0]![0] as string);
-	}
-
 	beforeEach(() => {
 		vi.resetModules();
 		MockAblyRest.reset();
@@ -275,7 +257,8 @@ describe('failed realtime publishes', () => {
 	it('bounds the reason, because the transport puts whole response bodies in it', async () => {
 		mockPublish.mockRejectedValue(new Error(`No application found ${'x'.repeat(5000)}`));
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const { MAX_PUBLISH_FAILURE_REASON_CHARS, publishMessage } = await import('~~/server/utils/ably');
+		const { publishMessage } = await import('~~/server/utils/ably');
+		const { MAX_PUBLISH_FAILURE_REASON_CHARS } = await import('~~/server/utils/realtimePublishFailure');
 
 		await publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123');
 
@@ -464,5 +447,110 @@ describe('publishScreenCommand', () => {
 				timestamp: expect.any(Number),
 			}),
 		);
+	});
+
+	/**
+	 * That a refused publish leaves here as this server's failure, not as the
+	 * provider's status wearing the route's clothes.
+	 *
+	 * The route's only work is this publish, so whatever comes out of here is the
+	 * route's answer — and h3 adopts `statusCode` from anything thrown, so an
+	 * unwrapped `ErrorInfo` made a rejected key answer 404, indistinguishable from
+	 * the route's own 'Screen not found'. #242 spent a round diagnosing that from
+	 * the client side; #264 is the server saying it.
+	 */
+	describe('when the provider refuses the publish', () => {
+		it('propagates a named server-side failure instead of the provider\'s 404', async () => {
+			mockPublish.mockRejectedValue(new ErrorInfoShaped('No application found', 40400, 404));
+			const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+			const { publishScreenCommand } = await import('~~/server/utils/ably');
+			const { REALTIME_PUBLISH_FAILED_MESSAGE, RealtimePublishError } = await import('~~/server/utils/realtimePublishFailure');
+
+			const failure = await publishScreenCommand(1, 10, 'identify').then(() => null, error => error);
+
+			expect(failure).toBeInstanceOf(RealtimePublishError);
+			expect(failure.statusCode).toBe(502);
+			expect(failure.message).toBe(REALTIME_PUBLISH_FAILED_MESSAGE);
+			errorSpy.mockRestore();
+		});
+
+		it('carries the provider\'s numeric code, which is what names the refusal', async () => {
+			// The error handler logs a cause's `code`, and 40400 is the answer to
+			// "why did this fail" — 'No application found' for a key whose app does
+			// not exist. Nothing else in the request log line can say that.
+			mockPublish.mockRejectedValue(new ErrorInfoShaped('No application found', 40400, 404));
+			const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+			const { publishScreenCommand } = await import('~~/server/utils/ably');
+
+			const failure = await publishScreenCommand(1, 10, 'identify').then(() => null, error => error);
+
+			expect(failure.code).toBe(40400);
+			errorSpy.mockRestore();
+		});
+
+		it('keeps the provider\'s own account of it in the log', async () => {
+			// The same field set the swallowing path emits (#253), for the same
+			// reason: the response is not allowed to carry the provider's text, so
+			// this line is the only place 'No application found' is ever said.
+			mockPublish.mockRejectedValue(new ErrorInfoShaped('No application found', 40400, 404));
+			const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+			const { publishScreenCommand } = await import('~~/server/utils/ably');
+
+			await publishScreenCommand(1, 10, 'identify').catch(() => {});
+
+			expect(loggedFields(errorSpy)).toEqual({
+				message: 'realtime_publish_failed',
+				eventId: 1,
+				screenId: 10,
+				messageType: 'screen:command:identify',
+				statusCode: 404,
+				errorCode: 40400,
+				errorName: 'Error',
+				reason: 'No application found',
+			});
+			errorSpy.mockRestore();
+		});
+
+		it('reports an absent provider code rather than inventing one', async () => {
+			// A throw that is not the provider's — the SDK's own TypeErrors, or a
+			// transport failure — must not acquire a code it never had.
+			mockPublish.mockRejectedValue(new TypeError('channel.publish is not a function'));
+			const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+			const { publishScreenCommand } = await import('~~/server/utils/ably');
+
+			const failure = await publishScreenCommand(1, 10, 'identify').then(() => null, error => error);
+
+			expect(failure.code).toBeNull();
+			expect(failure.statusCode).toBe(502);
+			expect(loggedFields(errorSpy)).toMatchObject({ errorName: 'TypeError', errorCode: null });
+			errorSpy.mockRestore();
+		});
+
+		it('keeps the throw it wrapped, so nothing about the failure is lost', async () => {
+			const refusal = new ErrorInfoShaped('No application found', 40400, 404);
+			mockPublish.mockRejectedValue(refusal);
+			const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+			const { publishScreenCommand } = await import('~~/server/utils/ably');
+
+			const failure = await publishScreenCommand(1, 10, 'identify').then(() => null, error => error);
+
+			expect(failure.cause).toBe(refusal);
+			errorSpy.mockRestore();
+		});
+
+		it('leaves an unconfigured key to say so as a configuration failure', async () => {
+			// `getAblyClient` throws before there is a publish to refuse, and a
+			// missing setting is not the provider refusing anything. Wrapping it here
+			// would file a deployment that was never finished under 'the realtime
+			// service said no'.
+			vi.mocked(useRuntimeConfig).mockReturnValue({ ablyApiKey: '' } as any);
+			const { publishScreenCommand } = await import('~~/server/utils/ably');
+			const { RealtimePublishError } = await import('~~/server/utils/realtimePublishFailure');
+
+			const failure = await publishScreenCommand(1, 10, 'identify').then(() => null, error => error);
+
+			expect(failure).not.toBeInstanceOf(RealtimePublishError);
+			expect(failure.message).toBe('Ably server API key is not configured');
+		});
 	});
 });

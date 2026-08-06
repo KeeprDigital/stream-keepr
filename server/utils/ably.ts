@@ -6,6 +6,7 @@ import type {
 import Ably from 'ably';
 import { eventRealtimeChannel, screenRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { createMessage, MAX_REALTIME_MESSAGE_BYTES, realtimeMessageBytes, screenCommandMessageTypes } from '../types/messages';
+import { publishFailureFields, RealtimePublishError } from './realtimePublishFailure';
 
 let ablyClient: Ably.Rest | null = null;
 
@@ -60,67 +61,6 @@ function reportOversizedMessage<T extends MessageType>(
 		bytes,
 		limit: MAX_REALTIME_MESSAGE_BYTES,
 	}));
-}
-
-/**
- * How much of a failure's own message the log will carry.
- *
- * The provider's message is usually a short phrase ("No application found"), but
- * the transport's fallback for a response it cannot decode as an Ably error is
- * `'Error response received from server: ' + status + ' body was: ' + body` — so
- * an intermediary answering with an HTML page would otherwise put the whole page
- * in a log line. Bounded rather than dropped: the phrase is the diagnosis.
- */
-export const MAX_PUBLISH_FAILURE_REASON_CHARS = 200;
-
-// The finiteness half of this guard is belt-and-braces: the transport can build
-// a code of `NaN` from an absent `x-ably-errorcode` header, and `JSON.stringify`
-// would render that as null anyway. It is here so the declared `number | null`
-// is true of the value and not merely of how this one caller serialises it.
-function finiteNumberOrNull(value: unknown): number | null {
-	return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-/**
- * What a failed publish is allowed to say about why it failed.
- *
- * The provider throws `ErrorInfo`, which carries `statusCode`, `code` and
- * `message` (ably 2.25.0, ably.d.ts) — a rejected key arrives as 404 / 40400
- * "No application found", the server-side witness of the failure #242 had to
- * diagnose from the client. #253: the log used to discard all three, so a
- * revoked or fabricated key spent an outbound request per Screen mutation and
- * said nothing about it.
- *
- * The fields are named, not copied. `ErrorInfo` also carries `href`, `detail`
- * and `cause`, which is the request metadata the previous comment here was
- * right to keep out; none of them is read. Nothing named can carry the API key:
- * it reaches the provider in an Authorization header, and the SDK's own
- * key-shaped errors ("No key specified", "Invalid key specified: the key has no
- * colon-separated secret") interpolate nothing into their message.
- *
- * Total by construction. `code` and `statusCode` are optional and nullable on
- * the SDK's `PartialErrorInfo`, and the transport can build a code of `NaN` from
- * an absent `x-ably-errorcode` header, so both are validated rather than
- * trusted; a throw that is not an Error, or one whose properties refuse to be
- * read, yields nulls. The caller is a catch block that must not itself throw —
- * a failure here would turn a deliberately swallowed publish into a 500 on a
- * route whose write has already committed.
- */
-function publishFailureFields(error: unknown) {
-	try {
-		const info = error as { statusCode?: unknown; code?: unknown; message?: unknown } | null | undefined;
-		return {
-			statusCode: finiteNumberOrNull(info?.statusCode),
-			errorCode: finiteNumberOrNull(info?.code),
-			errorName: error instanceof Error ? error.name : null,
-			reason: typeof info?.message === 'string'
-				? info.message.slice(0, MAX_PUBLISH_FAILURE_REASON_CHARS)
-				: null,
-		};
-	}
-	catch {
-		return { statusCode: null, errorCode: null, errorName: null, reason: null };
-	}
 }
 
 // Overload for messages with payload
@@ -187,6 +127,22 @@ export async function publishMessageStrict<T extends MessageType>(
 	await channel.publish(messageType, messageData);
 }
 
+/**
+ * Send a Screen a command, and say whose failure it was when it does not arrive.
+ *
+ * The one publish in this file that neither swallows nor propagates raw. Its
+ * caller has no local effect to fall back on — the command *is* the request — so
+ * a refusal has to reach the caller, and #242 recorded that contract
+ * deliberately. What it must not do is reach the caller as the provider's own
+ * error: h3 adopts `statusCode` from anything thrown, so Ably's 404 became the
+ * route's 404 and read as the Screen not existing. `RealtimePublishError` is the
+ * classification that separates the two, and the log line beside it is the only
+ * place the provider's own account of the refusal is written down.
+ *
+ * The wrap is around the publish alone. `getAblyClient` failing is a key that was
+ * never configured, which is a deployment that is not finished rather than a
+ * service that said no, and it keeps its own answer.
+ */
 export async function publishScreenCommand(
 	eventId: number,
 	screenId: number,
@@ -196,5 +152,17 @@ export async function publishScreenCommand(
 	const channel = client.channels.get(screenRealtimeChannel(eventId, screenId));
 	const messageType = screenCommandMessageTypes[command];
 
-	await channel.publish(messageType, createMessage(eventId, messageType, { screenId }));
+	try {
+		await channel.publish(messageType, createMessage(eventId, messageType, { screenId }));
+	}
+	catch (error) {
+		console.error(JSON.stringify({
+			message: 'realtime_publish_failed',
+			eventId,
+			screenId,
+			messageType,
+			...publishFailureFields(error),
+		}));
+		throw new RealtimePublishError(error);
+	}
 }
