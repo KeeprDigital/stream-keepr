@@ -381,8 +381,10 @@ function heldGraphicStyleOverrides(
  * the preset's own value is not a deviation either, so it records no pin and the next
  * republish takes the property. Accepted rather than fixed (#240) — the reasoning, and
  * the edit-time signal that would fix it at a cost this decision refuses, are in
- * ADR-0006 under "Record a pin whenever the author edits an owned key". Nothing here
- * may start inferring intent from which key an edit touched.
+ * ADR-0006 under "Record a pin whenever the author edits an owned key", which is the
+ * authority to amend if that trade is ever revisited. What it rejects is the
+ * unconditional form: recording a pin *because* an owned key was touched. An explicit
+ * authoring gesture is a different proposal and is filed as #244.
  *
  * An entry the resolution cannot honour contributes no deviations, because there is no
  * preset in front of it to disagree with. What is already recorded survives, for the
