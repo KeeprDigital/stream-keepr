@@ -461,6 +461,25 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	 * opens renders every graphic except its media, silently (#231).
 	 */
 	describe('handing out the real Overlay Output', () => {
+		/** A fresh window per `open`, so a second hand-out can be told from the first. */
+		function stubOutputWindows() {
+			const opened: Array<{ opener: unknown; location: { href: string }; close: () => void }> = [];
+			vi.stubGlobal('open', vi.fn(() => {
+				const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+				opened.push(outputWindow);
+				return outputWindow;
+			}));
+			return opened;
+		}
+
+		function capabilityRequests() {
+			return mockApiFetch.mock.calls.filter(([path]) => String(path).endsWith('/asset-capability'));
+		}
+
+		function accessUrl(capability: string) {
+			return `${window.location.origin}/event/7/screen/main?output=overlay#asset-capability=${capability}`;
+		}
+
 		/**
 		 * The capability is rotated between mount and the click, and the copied URL has to
 		 * carry the new one.
@@ -483,23 +502,85 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 			expect(mockApiFetch).toHaveBeenCalledWith('/api/events/7/screens/3/asset-capability');
 			expect(mockCopyToClipboard).toHaveBeenCalledWith(
 				`${window.location.origin}/event/7/screen/main?output=overlay#asset-capability=rotated-capability`,
-				expect.anything(),
+				expect.objectContaining({
+					successTitle: 'Output URL copied',
+					successDescription: expect.stringContaining('asset access'),
+				}),
 			);
+		});
+
+		/**
+		 * And obtained again on every later hand-out, not once and remembered.
+		 *
+		 * "At the moment of the hand-out" is only tested by a *second* hand-out: a
+		 * capability acquired on the first click and reused after is correct exactly once
+		 * and dead from then on. The pins above catch a capability cached at mount and
+		 * miss one cached on first use, which is the same defect one click later — #250's
+		 * review found exactly that gap on the settings page, where the reviewer's
+		 * cache-on-first-use mutant survived the whole suite (#258).
+		 *
+		 * The rotate control is on the Screen settings page rather than this one, so the
+		 * operator this catches is the one who rotated in another tab and came back to a
+		 * workspace that has been open across it.
+		 */
+		it('obtains asset access again for a second copy, rather than reusing the first', async () => {
+			const wrapper = await mountComponent();
+			// The Program monitor asks once on mount and keeps what it is given; the two
+			// counted below are the hand-outs, which are the only ones obliged to be current.
+			expect(capabilityRequests()).toHaveLength(1);
+
+			await wrapper.get('[data-testid="copy-screen-output-url"]').trigger('click');
+			await flushPromises();
+			mockCapabilityResponse.value = 'rotated-capability';
+			await wrapper.get('[data-testid="copy-screen-output-url"]').trigger('click');
+			await flushPromises();
+
+			expect(capabilityRequests()).toHaveLength(3);
+			// The first hand-out carried the old capability, so the second cannot pass by
+			// having been rotated all along.
+			expect(mockCopyToClipboard).toHaveBeenNthCalledWith(1, accessUrl('program-capability'), expect.anything());
+			expect(mockCopyToClipboard).toHaveBeenNthCalledWith(2, accessUrl('rotated-capability'), expect.anything());
+		});
+
+		/** The same second hand-out, for the same reason: opening twice must ask twice. */
+		it('obtains asset access again for a second open, rather than reusing the first', async () => {
+			const opened = stubOutputWindows();
+			const wrapper = await mountComponent();
+			expect(capabilityRequests()).toHaveLength(1);
+
+			await wrapper.get('[data-testid="open-screen-output"]').trigger('click');
+			await flushPromises();
+			mockCapabilityResponse.value = 'rotated-capability';
+			await wrapper.get('[data-testid="open-screen-output"]').trigger('click');
+			await flushPromises();
+
+			expect(capabilityRequests()).toHaveLength(3);
+			expect(opened).toHaveLength(2);
+			expect(opened[0]!.location.href).toBe(accessUrl('program-capability'));
+			expect(opened[1]!.location.href).toBe(accessUrl('rotated-capability'));
+			vi.unstubAllGlobals();
 		});
 
 		/**
 		 * Refused rather than degraded: the empty string is what the clipboard helper
 		 * reports as having nothing to copy, and it costs the operator a retry — where a
 		 * URL without the capability costs them their media on program and says nothing.
+		 *
+		 * The words go with it. "Copy failed" would send this operator to the address in
+		 * their own browser's bar, which is the media-losing URL the refusal exists to
+		 * withhold — so the refusal's reason is the caller's to name (#231, #250, #257).
 		 */
-		it('copies nothing at all when asset access cannot be obtained', async () => {
+		it('copies nothing at all when asset access cannot be obtained, and names why', async () => {
 			mockCapabilityResponse.value = null;
 			const wrapper = await mountComponent();
 
 			await wrapper.get('[data-testid="copy-screen-output-url"]').trigger('click');
 			await flushPromises();
 
-			expect(mockCopyToClipboard).toHaveBeenCalledWith('', expect.anything());
+			expect(mockCopyToClipboard).toHaveBeenCalledWith('', expect.objectContaining({
+				nothingToCopyTitle: 'Nothing copied',
+				nothingToCopyDescription: expect.stringContaining('Asset access for this Screen could not be obtained'),
+			}));
 		});
 
 		/** Rotated between mount and the click here too, for the same reason. */
@@ -537,6 +618,27 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 			expect(mockToastAdd).toHaveBeenCalledWith(expect.objectContaining({
 				description: expect.stringContaining('Asset access for this Screen could not be obtained'),
 			}));
+			vi.unstubAllGlobals();
+		});
+
+		/**
+		 * And the popup blocker it was being mistaken for gets its own words.
+		 *
+		 * Until #258 both failures arrived as one `false`, so a blocked tab was reported
+		 * as an asset access refusal — which tells the operator to try again, and trying
+		 * again is blocked identically. The fix an operator needs is in their browser,
+		 * and nothing on this page was going to say so.
+		 */
+		it('names the browser, not asset access, when the output window is blocked', async () => {
+			vi.stubGlobal('open', vi.fn(() => null));
+			const wrapper = await mountComponent();
+
+			await wrapper.get('[data-testid="open-screen-output"]').trigger('click');
+			await flushPromises();
+
+			const [reported] = mockToastAdd.mock.calls.at(-1) as [{ description: string }];
+			expect(reported.description).toContain('pop-up');
+			expect(reported.description).not.toContain('Asset access');
 			vi.unstubAllGlobals();
 		});
 

@@ -18,6 +18,16 @@ interface ScreenOutputAccessUrlOptions {
 }
 
 /**
+ * What became of an attempt to open a Screen Output in a tab.
+ *
+ * Three outcomes rather than a boolean because each one is a different thing for the
+ * operator to do: nothing, retry, or allow pop-ups for this site. Naming them here
+ * rather than at each caller is what stops the two hand-out surfaces drifting into
+ * two vocabularies for the same refusal.
+ */
+export type ScreenOutputOpenResult = 'opened' | 'access-refused' | 'window-blocked';
+
+/**
  * The URL an operator is handed for a Screen Output, carrying the Screen Output
  * Asset Capability that output has no other route to.
  *
@@ -60,21 +70,31 @@ export function useScreenOutputAccessUrl() {
 	 * a later task than the click that started it and a popup blocker refuses a
 	 * window opened there.
 	 *
-	 * Answers whether it pointed the tab anywhere, so a caller that promised the
+	 * Answers which of the three things happened, so a caller that promised the
 	 * operator something — a download, most of all — can say that it is not coming
-	 * rather than leaving them watching for it.
+	 * and, as importantly, what to do about it. A single boolean could not: both read it as
+	 * an asset access refusal, so a browser that blocked the tab told the operator to
+	 * retry a hand-out that would be blocked identically next time, in words this
+	 * function's own docstring already said were the wrong ones (#237, #250, #258).
+	 *
+	 * A blocked window is answered before the capability is asked for. There is
+	 * nowhere to hand one to, and the operator's next move is in their browser rather
+	 * than on this page either way.
 	 */
-	async function openScreenOutput(options: ScreenOutputAccessUrlOptions): Promise<boolean> {
+	async function openScreenOutput(options: ScreenOutputAccessUrlOptions): Promise<ScreenOutputOpenResult> {
 		const outputWindow = window.open('', '_blank');
-		if (outputWindow)
-			outputWindow.opener = null;
+		if (!outputWindow)
+			return 'window-blocked';
+
+		outputWindow.opener = null;
 		const url = await screenOutputAccessUrl(options);
-		if (url && outputWindow) {
-			outputWindow.location.href = url;
-			return true;
+		if (!url) {
+			outputWindow.close();
+			return 'access-refused';
 		}
-		outputWindow?.close();
-		return false;
+
+		outputWindow.location.href = url;
+		return 'opened';
 	}
 
 	return { screenOutputAccessUrl, openScreenOutput };

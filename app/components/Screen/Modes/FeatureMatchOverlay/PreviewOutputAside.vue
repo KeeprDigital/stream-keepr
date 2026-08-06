@@ -244,7 +244,11 @@ async function copyOutputUrl(output: FeatureMatchOverlayOutput) {
 	await copyToClipboard(await screenOutputAccessUrl(accessUrlOptions(output)), {
 		successTitle: 'URL copied',
 		successDescription: `${output.toUpperCase()} output URL copied.`,
-		errorDescription: `Failed to copy ${output.toUpperCase()} output URL to clipboard.`,
+		// The empty string means asset access was refused, not that the clipboard
+		// declined the write — and an operator told the latter reaches for the address
+		// in their browser's bar, which resolves no media at all (#231, #257).
+		nothingToCopyTitle: 'Nothing copied',
+		nothingToCopyDescription: `Asset access for this Screen could not be obtained, so the ${output.toUpperCase()} output URL would have opened an output without its media. Try again.`,
 	});
 }
 
@@ -255,10 +259,22 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 	// A capture browser that cannot resolve this Screen's assets produces a PNG that
 	// looks finished and is missing every image, video and library font in it, so a
 	// capture that cannot carry a capability is refused rather than exported (#231).
-	if (!await openScreenOutput(accessUrlOptions(output, true))) {
+	const result = await openScreenOutput(accessUrlOptions(output, true));
+	if (result === 'access-refused') {
 		toast.add({
 			title: 'Download unavailable',
 			description: `Asset access for this Screen could not be obtained, so the ${output.toUpperCase()} PNG would have been missing its media.`,
+			color: 'error',
+		});
+	}
+	// A capture runs in a tab, so a pop-up blocker stops it outright — and the download
+	// was already announced, leaving the operator watching for a file that is not
+	// coming. Blamed on asset access until #258, which asks them to retry a capture
+	// their browser will refuse identically.
+	else if (result === 'window-blocked') {
+		toast.add({
+			title: 'Download unavailable',
+			description: `This browser blocked the capture tab, so the ${output.toUpperCase()} PNG was never rendered. Allow pop-ups for this site, then download again.`,
 			color: 'error',
 		});
 	}

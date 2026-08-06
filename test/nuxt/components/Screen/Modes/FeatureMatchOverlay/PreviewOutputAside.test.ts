@@ -105,7 +105,7 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 			expect(mockApiFetch).toHaveBeenCalledWith('/api/events/1/screens/1/asset-capability');
 			expect(mockCopyToClipboard).toHaveBeenCalledWith(
 				`${window.location.origin}/event/1/screen/main?output=key#asset-capability=${capability}`,
-				expect.anything(),
+				expect.objectContaining({ successTitle: 'URL copied', successDescription: 'KEY output URL copied.' }),
 			);
 		});
 
@@ -118,7 +118,17 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 
 			// The empty string is what the clipboard helper reports as having nothing to
 			// copy; the operator retries rather than pasting a URL that loses its assets.
-			expect(mockCopyToClipboard).toHaveBeenCalledWith('', expect.anything());
+			//
+			// And the words matter as much as the empty string. This is an asset access
+			// refusal, not a clipboard that declined the write — "Failed to copy … to
+			// clipboard", which this surface said until #257, sends the operator to the
+			// address in their own browser's bar, which is the media-losing URL the
+			// refusal exists to withhold (#231, #250).
+			expect(mockCopyToClipboard).toHaveBeenCalledWith('', expect.objectContaining({
+				nothingToCopyTitle: 'Nothing copied',
+				nothingToCopyDescription: expect.stringContaining('Asset access for this Screen could not be obtained'),
+			}));
+			expect(mockCopyToClipboard.mock.calls.at(-1)![1].nothingToCopyDescription).not.toContain('Failed to copy');
 		});
 
 		/**
@@ -153,6 +163,27 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 			expect(mockToastAdd).toHaveBeenCalledWith(
 				expect.objectContaining({ title: 'Download unavailable', color: 'error' }),
 			);
+			expect(mockToastAdd.mock.calls.at(-1)![0].description).toContain('Asset access');
+			vi.unstubAllGlobals();
+		});
+
+		/**
+		 * A capture runs in a tab, so a pop-up blocker stops it outright — and the
+		 * download was announced a moment earlier, leaving the operator watching for a
+		 * file that is not coming. Reported as an asset access refusal until #258, which
+		 * asks them to retry a capture their browser will refuse identically.
+		 */
+		it('names the browser, not asset access, when the capture tab is blocked', async () => {
+			vi.stubGlobal('open', vi.fn(() => null));
+			const wrapper = await mountComponent();
+
+			await wrapper.get('[data-testid="download-output-fill"]').trigger('click');
+			await flushPromises();
+
+			const reported = mockToastAdd.mock.calls.at(-1)![0];
+			expect(reported.title).toBe('Download unavailable');
+			expect(reported.description).toContain('pop-up');
+			expect(reported.description).not.toContain('Asset access');
 			vi.unstubAllGlobals();
 		});
 	});

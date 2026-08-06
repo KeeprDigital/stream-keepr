@@ -75,6 +75,17 @@ const SlotStub = defineComponent({
 	template: '<div><slot /></div>',
 });
 
+/**
+ * The same, plus the tooltip's own words in the DOM.
+ *
+ * On this page the sentence saying what a hand-out carries lives in the tooltip
+ * rather than on the button, so a naming test has no way to read it otherwise (#266).
+ */
+const UTooltipStub = defineComponent({
+	props: { text: { type: String, default: '' } },
+	template: '<div :data-tooltip="text"><slot /></div>',
+});
+
 const UButtonStub = defineComponent({
 	name: 'UButton',
 	props: { label: { type: String, default: '' } },
@@ -150,7 +161,7 @@ async function mountPage() {
 				UCard: CardStub,
 				UBadge: true,
 				UIcon: true,
-				UTooltip: SlotStub,
+				UTooltip: UTooltipStub,
 				USelect: true,
 				UFieldGroup: SlotStub,
 				UDropdownMenu: UDropdownMenuStub,
@@ -317,13 +328,18 @@ describe('screen config page — handing out this Screen’s output', () => {
 		wrapper = await mountLoadedPage();
 		mockCapabilityResponse.value = 'rotated-capability';
 
-		await wrapper.get('[aria-label="Copy screen URL"]').trigger('click');
+		await wrapper.get('[aria-label="Copy output URL"]').trigger('click');
 		await flushPromises();
 
 		expect(mockApiFetch).toHaveBeenCalledWith('/api/events/1/screens/1/asset-capability');
+		// Named for the output rather than the Screen, matching the control that produced
+		// it and the workspace's wording for the same hand-out (#234, #266).
 		expect(mockCopyToClipboard).toHaveBeenCalledWith(
 			`${window.location.origin}/event/1/screen/screen-1?output=overlay#asset-capability=rotated-capability`,
-			expect.anything(),
+			expect.objectContaining({
+				successTitle: 'Output URL copied',
+				successDescription: expect.stringContaining('asset access'),
+			}),
 		);
 	});
 
@@ -340,10 +356,10 @@ describe('screen config page — handing out this Screen’s output', () => {
 	it('obtains asset access again for a second copy, rather than reusing the first', async () => {
 		wrapper = await mountLoadedPage();
 
-		await wrapper.get('[aria-label="Copy screen URL"]').trigger('click');
+		await wrapper.get('[aria-label="Copy output URL"]').trigger('click');
 		await flushPromises();
 		mockCapabilityResponse.value = 'rotated-capability';
-		await wrapper.get('[aria-label="Copy screen URL"]').trigger('click');
+		await wrapper.get('[aria-label="Copy output URL"]').trigger('click');
 		await flushPromises();
 
 		expect(capabilityRequests()).toHaveLength(2);
@@ -363,12 +379,12 @@ describe('screen config page — handing out this Screen’s output', () => {
 		mockCapabilityResponse.value = null;
 		wrapper = await mountLoadedPage();
 
-		await wrapper.get('[aria-label="Copy screen URL"]').trigger('click');
+		await wrapper.get('[aria-label="Copy output URL"]').trigger('click');
 		await flushPromises();
 
 		expect(mockCopyToClipboard).toHaveBeenCalledWith('', expect.objectContaining({
-			errorTitle: 'Nothing copied',
-			errorDescription: expect.stringContaining('Asset access for this Screen could not be obtained'),
+			nothingToCopyTitle: 'Nothing copied',
+			nothingToCopyDescription: expect.stringContaining('Asset access for this Screen could not be obtained'),
 		}));
 	});
 
@@ -378,7 +394,7 @@ describe('screen config page — handing out this Screen’s output', () => {
 		wrapper = await mountLoadedPage();
 		mockCapabilityResponse.value = 'rotated-capability';
 
-		await wrapper.get('[data-open-output="Open default screen"]').trigger('click');
+		await wrapper.get('[data-open-output="Open output"]').trigger('click');
 		await flushPromises();
 
 		expect(window.open).toHaveBeenCalledWith('', '_blank');
@@ -395,10 +411,10 @@ describe('screen config page — handing out this Screen’s output', () => {
 		const opened = stubOutputWindows();
 		wrapper = await mountLoadedPage();
 
-		await wrapper.get('[data-open-output="Open default screen"]').trigger('click');
+		await wrapper.get('[data-open-output="Open output"]').trigger('click');
 		await flushPromises();
 		mockCapabilityResponse.value = 'rotated-capability';
-		await wrapper.get('[data-open-output="Open default screen"]').trigger('click');
+		await wrapper.get('[data-open-output="Open output"]').trigger('click');
 		await flushPromises();
 
 		expect(capabilityRequests()).toHaveLength(2);
@@ -412,7 +428,7 @@ describe('screen config page — handing out this Screen’s output', () => {
 		const outputWindow = stubOutputWindow();
 		wrapper = await mountLoadedPage();
 
-		await wrapper.get('[data-open-output="Open default screen"]').trigger('click');
+		await wrapper.get('[data-open-output="Open output"]').trigger('click');
 		await flushPromises();
 
 		expect(outputWindow.location.href).toBe('');
@@ -422,6 +438,50 @@ describe('screen config page — handing out this Screen’s output', () => {
 		expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({
 			description: expect.stringContaining('Asset access for this Screen could not be obtained'),
 		}));
+	});
+
+	/**
+	 * A blocked pop-up is not a refused capability, and until #258 this page said it
+	 * was — in the words of the very refusal the browser never gave it a chance to
+	 * make. "Try again" is the wrong instruction for a tab the browser will block
+	 * identically next time.
+	 */
+	it('names the browser, not asset access, when the output window is blocked', async () => {
+		vi.stubGlobal('open', vi.fn(() => null));
+		wrapper = await mountLoadedPage();
+
+		await wrapper.get('[data-open-output="Open output"]').trigger('click');
+		await flushPromises();
+
+		const [reported] = mockToast.add.mock.calls.at(-1) as [{ description: string }];
+		expect(reported.description).toContain('pop-up');
+		expect(reported.description).not.toContain('Asset access');
+		// Nothing to hand a capability to, so none is minted.
+		expect(capabilityRequests()).toHaveLength(0);
+	});
+
+	/**
+	 * The #234 precedent, brought to this page (#266).
+	 *
+	 * These two controls sit beside the Screen's bare address, and that address is the
+	 * one URL on the page that resolves no media (#231). "Copy screen URL" beside it
+	 * read as a button for the text next to it, and "Open default screen" named a
+	 * Screen rather than an output. An operator choosing between them and the address
+	 * bar has to be able to see which of the three carries asset access.
+	 */
+	it('names both hand-out controls by what they hand out, and says what it carries', async () => {
+		wrapper = await mountLoadedPage();
+
+		const copy = wrapper.get('[aria-label="Copy output URL"]');
+		expect(copy.attributes('aria-label')).toBe('Copy output URL');
+		expect(wrapper.get('[data-open-output="Open output"]').text()).toBe('Open output');
+
+		// The sentence naming asset access: in the tooltip for copy, on the menu's
+		// trigger for open, which is the affordance an operator meets before the items.
+		expect(copy.element.closest('[data-tooltip]')?.getAttribute('data-tooltip'))
+			.toContain('asset access');
+		expect(wrapper.get('[data-testid="open-output-menu"]').attributes('title'))
+			.toContain('asset access');
 	});
 
 	/**

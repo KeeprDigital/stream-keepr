@@ -191,14 +191,15 @@ async function copyUrl() {
 		return;
 	// An empty URL is what the composable answers with when it could not obtain a
 	// capability, and the clipboard helper reports having nothing rather than putting a
-	// media-losing URL on the operator's clipboard. Named by the reason: "failed to
-	// copy" sends an operator to the address in their own browser's bar, which is the
-	// URL this refusal exists to withhold.
+	// media-losing URL on the operator's clipboard. The reason for having nothing is
+	// this page's to name — "copy failed" sends an operator to the address in their own
+	// browser's bar, which is the URL this refusal exists to withhold — and since #257
+	// naming it can no longer mis-name a clipboard that refused the write.
 	await copyToClipboard(await screenOutputAccessUrl(accessUrlOptions()), {
-		successTitle: 'URL Copied',
-		successDescription: 'Screen URL copied to clipboard',
-		errorTitle: 'Nothing copied',
-		errorDescription: 'Asset access for this Screen could not be obtained, so the URL would have opened an output without its media. Try again.',
+		successTitle: 'Output URL copied',
+		successDescription: 'It carries asset access, so the output resolves this Screen\'s media.',
+		nothingToCopyTitle: 'Nothing copied',
+		nothingToCopyDescription: 'Asset access for this Screen could not be obtained, so the URL would have opened an output without its media. Try again.',
 	});
 }
 
@@ -238,13 +239,17 @@ function updateScreenDimension(field: 'width' | 'height', value: number | null |
 }
 
 /**
- * Hands out a Screen Output in a new tab, and says so when it could not.
+ * Hands out a Screen Output in a new tab, and says which of the two ways it could not.
  *
- * `openScreenOutput` answers whether it pointed the tab anywhere — it opens the tab on
- * the click and closes it again unpointed when asset access could not be obtained, so
- * an operator whose open was refused is looking at nothing having happened. Discarding
- * that answer, which this page did until #250, leaves the refusal reading as a popup
- * blocker rather than as the media-losing hand-out it declined to make (#231, #237).
+ * `openScreenOutput` opens the tab on the click and closes it again unpointed when
+ * asset access could not be obtained, so an operator whose open was refused is looking
+ * at nothing having happened. Discarding that answer, which this page did until #250,
+ * left the refusal reading as a popup blocker rather than as the media-losing hand-out
+ * it declined to make (#231, #237).
+ *
+ * And then blamed asset access for the popup blocker itself, because one boolean
+ * covered both. They are opposite instructions — retry, or change a browser setting —
+ * so since #258 they are separate answers and separate sentences.
  *
  * One reporter for both open controls: the default output and a Screen Mode's own
  * outputs fail the same way, and an operator must not meet two vocabularies for it.
@@ -252,14 +257,21 @@ function updateScreenDimension(field: 'width' | 'height', value: number | null |
 async function openOutput(output?: FeatureMatchOverlayOutput) {
 	if (!screen.value)
 		return;
-	if (await openScreenOutput(accessUrlOptions(output)))
+	const result = await openScreenOutput(accessUrlOptions(output));
+	if (result === 'opened')
 		return;
 
-	toast.add({
-		title: 'Output not opened',
-		description: 'Asset access for this Screen could not be obtained, so the output would have rendered without its media. Try again.',
-		color: 'error',
-	});
+	toast.add(result === 'window-blocked'
+		? {
+				title: 'Output not opened',
+				description: 'This browser blocked the new tab. Allow pop-ups for this site, then open the output again.',
+				color: 'error',
+			}
+		: {
+				title: 'Output not opened',
+				description: 'Asset access for this Screen could not be obtained, so the output would have rendered without its media. Try again.',
+				color: 'error',
+			});
 }
 
 function openInNewTab() {
@@ -270,8 +282,17 @@ function openOutputInNewTab(output: FeatureMatchOverlayOutput) {
 	void openOutput(output);
 }
 
+/**
+ * Named for the thing handed out, not for the tab it appears in.
+ *
+ * "Open default screen" said neither what it opens nor that what it opens resolves
+ * media — a Screen is not an output, and the address printed a few pixels away is a
+ * Screen too. The Live workspace's control settled the voice in #234/#237, and this
+ * is the same hand-out (#266). The Screen Mode's own outputs sit in the group below,
+ * each named by the output it is.
+ */
 const openOutputItems = computed(() => [
-	[{ label: 'Open default screen', icon: 'i-lucide-external-link', onSelect: openInNewTab }],
+	[{ label: 'Open output', icon: 'i-lucide-external-link', onSelect: openInNewTab }],
 	...(screenModeConfigurationPolicy.value?.outputOptions.length
 		? [screenModeConfigurationPolicy.value.outputOptions.map(option => ({
 				label: option.label,
@@ -377,12 +398,18 @@ async function sendCommand(command: ScreenCommand) {
 								</div>
 								<div class="flex items-center gap-2 mt-1 text-sm text-muted">
 									<span class="truncate">{{ screenUrl }}</span>
-									<UTooltip text="Copy URL">
+									<!--
+										Named for what it hands out rather than for the text it sits
+										beside, which is the one thing it does not copy: this control
+										produces the Overlay Output's URL carrying asset access, and
+										the address above resolves no media at all (#231, #266).
+									-->
+									<UTooltip text="Copy this Screen's Overlay Output URL, with the asset access that resolves its media">
 										<UButton
 											variant="ghost"
 											size="xs"
 											icon="i-lucide-copy"
-											aria-label="Copy screen URL"
+											aria-label="Copy output URL"
 											@click="copyUrl"
 										/>
 									</UTooltip>
@@ -412,6 +439,8 @@ async function sendCommand(command: ScreenCommand) {
 										icon="i-lucide-external-link"
 										trailing-icon="i-lucide-chevron-down"
 										label="Open"
+										title="Open a Screen Output in a new tab, with the asset access that resolves its media"
+										data-testid="open-output-menu"
 									/>
 								</UDropdownMenu>
 								<UTooltip text="Refresh all clients">
