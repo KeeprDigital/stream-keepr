@@ -894,6 +894,22 @@ describe('recaptureGraphicStyleOverrides', () => {
 		};
 	}
 
+	/**
+	 * An edit to the one typography key the slot does not own.
+	 *
+	 * It still runs a recapture — every property edit does — while changing nothing the
+	 * entry has an opinion about, which is what makes it the cleanest form of "the author
+	 * touched this document" there is.
+	 */
+	function editTextAlign(composition: BroadcastGraphicConfig, textAlign: 'left' | 'center'): BroadcastGraphicConfig {
+		return {
+			...composition,
+			items: composition.items.map(item => item.id === 'headline' && item.type === 'text'
+				? { ...item, typography: { ...item.typography, textAlign } }
+				: item),
+		};
+	}
+
 	/** The fill control writing a value, which is all a property control ever does. */
 	function paintFill(composition: BroadcastGraphicConfig, color: string): BroadcastGraphicConfig {
 		return {
@@ -982,44 +998,66 @@ describe('recaptureGraphicStyleOverrides', () => {
 	});
 
 	/**
-	 * What reconciles an over-broad pin written before "Keep mine" was narrowed (#167).
+	 * What became of an over-broad pin written before "Keep mine" was narrowed (#167).
 	 *
-	 * A composition written by the pre-#162 behaviour carries the whole property group
-	 * as its override, and `applyGraphicStyleSet` will preserve it forever: every one of
-	 * those keys genuinely is a recorded override the stored value honours, so
-	 * `heldGraphicStyleOverrides` is right to keep it and a later "Keep mine" narrows
-	 * nothing. This is what does — recapture re-derives each slot's overrides from what
-	 * the composition deviates in and discards the recorded set entirely, so the first
-	 * property edit after the fix collapses an eight-key pin to the author's real
-	 * deviation. It is why the over-pinning needs no migration to reach.
+	 * A composition written by the pre-#162 behaviour carries the whole property group as
+	 * its override, and `applyGraphicStyleSet` preserves it forever: every one of those
+	 * keys genuinely is a recorded override the stored value honours, so a later "Keep
+	 * mine" narrows nothing. An ordinary edit used to be what did narrow it — recapture
+	 * re-derived each slot's overrides from what the composition deviates in and discarded
+	 * the recorded set — and that is the discard #229 removed, because it could not tell
+	 * this pin from a deliberate one the Style Set had caught up with. They are the same
+	 * keys in storage, which is the reading ADR-0006 already rejects for a migration.
+	 *
+	 * So an over-broad pin now survives an edit, narrowed only where the author moved a
+	 * property themselves. The population that could be carrying one is empty by
+	 * construction (#60), and losing a real override is the worse failure of the two.
 	 */
-	it('narrows an over-broad pin down to what the composition actually deviates in', () => {
+	it('keeps an over-broad pin except in the key the author moves', () => {
 		const resolution = resolveGraphicStyleSet(styleSet());
 		const inStep = inheritedTypography();
 		// What the pre-#162 "Keep mine" recorded: the whole property group, every key of
 		// it agreeing with the preset the composition is in step with.
+		const wholeGroup = Object.fromEntries(
+			GRAPHIC_STYLE_SLOT_OWNED_KEYS.typography.map(key => [key, inStep[key as keyof typeof inStep]]),
+		);
 		const overPinned = graphic([textItem({
 			typography: inStep,
-			styleRefs: {
-				typography: {
-					entryId: 'heading',
-					overrides: Object.fromEntries(
-						GRAPHIC_STYLE_SLOT_OWNED_KEYS.typography.map(key =>
-							[key, inStep[key as keyof typeof inStep]],
-						),
-					),
-				},
-			},
+			styleRefs: { typography: { entryId: 'heading', overrides: wholeGroup } },
 		})]);
 
 		const recaptured = recaptureGraphicStyleOverrides(editFontSize(overPinned, 30), resolution, LINKED, overPinned);
 
 		expect(headlineOf(recaptured).styleRefs?.typography)
+			.toEqual({ entryId: 'heading', overrides: { ...wholeGroup, fontSize: 30 } });
+		// And the seven keys the author never touched go on inheriting nothing, which is
+		// the cost ADR-0006's Consequences names rather than the narrowing it used to.
+		expect(graphicStyleUpdateChanges(recaptured, resolveGraphicStyleSet(styleSet('#00ff88')))).toEqual([]);
+	});
+
+	/**
+	 * Deriving nothing is not the same as deriving that nothing is the author's.
+	 *
+	 * A Style Set that failed to load resolves no entry, so there is no preset in front of
+	 * this slot to disagree with and no deviation to read off it. What is recorded is then
+	 * the only evidence there is, and it survives — the same reason a reference the
+	 * resolution cannot honour is left in place rather than dropped.
+	 */
+	it('keeps the overrides recorded on a reference the Style Set can no longer honour', () => {
+		const composition = graphic([textItem({
+			typography: { ...inheritedTypography(), fontSize: 30 },
+			styleRefs: { typography: { entryId: 'heading', overrides: { fontSize: 30 } } },
+		})]);
+
+		const recaptured = recaptureGraphicStyleOverrides(
+			editTextAlign(composition, 'center'),
+			resolveGraphicStyleSet([]),
+			LINKED,
+			composition,
+		);
+
+		expect(headlineOf(recaptured).styleRefs?.typography)
 			.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
-		// And the seven keys that stopped being pinned are reachable again, which is the
-		// whole point of narrowing them.
-		expect(graphicStyleUpdateChanges(recaptured, resolveGraphicStyleSet(styleSet('#00ff88'))).map(change => change.slot))
-			.toEqual(['typography']);
 	});
 
 	it('keeps a Graphic Fill reference the Style Set can no longer honour', () => {
@@ -1198,6 +1236,168 @@ describe('recaptureGraphicStyleOverrides', () => {
 			expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toEqual({ entryId: 'accent-fill' });
 			expect(graphicStyleUpdateChanges(recaptured, resolveGraphicStyleSet(fillMoved)).map(change => change.slot))
 				.toEqual(['surfaceStyle.fill']);
+		});
+	});
+
+	/**
+	 * A pin the Style Set has caught up with is still the author's (#229).
+	 *
+	 * An override is a claim about a property — "this one is mine" — and a republished
+	 * preset landing on the value it names does not retract the claim. Recapture used to
+	 * derive the whole record from where the composition deviates, so a pin the preset
+	 * agreed with was not a deviation and stopped being recorded; the author's next edit
+	 * anywhere in the document dropped it, and the republish after that took the property
+	 * back. `applyGraphicStyleSet` had always read the signal the other way, and these
+	 * pin the two paths reading it the same way.
+	 */
+	describe('when a republished preset lands on the value the author pinned', () => {
+		const PINNED_SIZE = 30;
+		/** The revision the coincident publish is at, which this composition lags. */
+		const COINCIDENT = LINKED + 1;
+		/** The Style Set after a publish that moved `heading`'s own size onto the pin. */
+		const coincident = resolveGraphicStyleSet(styleSet('#ff0044', PINNED_SIZE));
+
+		/** A composition carrying the author's recorded size pin, made the way one is. */
+		function pinned(): BroadcastGraphicConfig {
+			const composition = graphic([textItem({
+				typography: inheritedTypography(),
+				styleRefs: { typography: { entryId: 'heading' } },
+			})]);
+			const recorded = recaptureGraphicStyleOverrides(
+				editFontSize(composition, PINNED_SIZE),
+				resolveGraphicStyleSet(styleSet()),
+				LINKED,
+				composition,
+			);
+			expect(headlineOf(recorded).styleRefs?.typography)
+				.toEqual({ entryId: 'heading', overrides: { fontSize: PINNED_SIZE } });
+			return recorded;
+		}
+
+		it('keeps the pin through an edit to a key the entry does not even own', () => {
+			const stored = pinned();
+
+			const recaptured = recaptureGraphicStyleOverrides(
+				editTextAlign(stored, 'center'),
+				coincident,
+				COINCIDENT,
+				stored,
+			);
+
+			expect(headlineOf(recaptured).styleRefs?.typography)
+				.toEqual({ entryId: 'heading', overrides: { fontSize: PINNED_SIZE } });
+		});
+
+		it('keeps the pin once the composition is reconciled to the publish that landed on it', () => {
+			const reconciled = applyGraphicStyleSet(pinned(), coincident, { revision: COINCIDENT });
+
+			const recaptured = recaptureGraphicStyleOverrides(
+				editTextAlign(reconciled, 'center'),
+				coincident,
+				COINCIDENT,
+				reconciled,
+			);
+
+			expect(headlineOf(recaptured).styleRefs?.typography)
+				.toEqual({ entryId: 'heading', overrides: { fontSize: PINNED_SIZE } });
+		});
+
+		/**
+		 * Recapture walks every owner in the composition, so the edit that runs it need not
+		 * be to this slot, this item, or any item holding a reference at all.
+		 */
+		it('keeps the pin through an edit to another Graphic Item that references nothing', () => {
+			const stored = pinned();
+			const withSubtitle = {
+				...stored,
+				items: [...stored.items, textItem({ id: 'subtitle', label: 'Subtitle' })],
+			};
+			const elsewhere = {
+				...withSubtitle,
+				items: withSubtitle.items.map(item => item.id === 'subtitle' && item.type === 'text'
+					? { ...item, typography: { ...item.typography, fontSize: 12 } }
+					: item),
+			};
+
+			const recaptured = recaptureGraphicStyleOverrides(elsewhere, coincident, COINCIDENT, withSubtitle);
+
+			expect(headlineOf(recaptured).styleRefs?.typography)
+				.toEqual({ entryId: 'heading', overrides: { fontSize: PINNED_SIZE } });
+		});
+
+		/**
+		 * The whole defect, end to end: the pin survives the edit, so the republish that
+		 * moves the preset off it again does not take the property — and does not even ask,
+		 * because a pinned property is not one the author is deciding about.
+		 */
+		it('keeps the property when the Style Set moves it away again, applied with every row\'s default answer', () => {
+			const stored = pinned();
+			const edited = recaptureGraphicStyleOverrides(
+				editTextAlign(stored, 'center'),
+				coincident,
+				COINCIDENT,
+				stored,
+			);
+
+			const moved = resolveGraphicStyleSet(styleSet('#ff0044', 99));
+			expect(graphicStyleUpdateChanges(edited, moved)).toEqual([]);
+
+			// No decisions at all, which is exactly what accepting every row's default does.
+			const applied = applyGraphicStyleSet(edited, moved, { revision: COINCIDENT + 1 });
+
+			expect(headlineOf(applied).typography.fontSize).toBe(PINNED_SIZE);
+		});
+
+		/**
+		 * The two paths, asked about the same slot in the same state.
+		 *
+		 * This is the disagreement the ticket named as the thing to resolve: review's "Keep
+		 * mine" preserved a recorded pin the stored value still honours, and an ordinary
+		 * edit discarded it. Both now answer through one function, so a change to either
+		 * reading has to be made deliberately for both.
+		 */
+		it('records what review\'s "Keep mine" records for the same slot', () => {
+			const stored = pinned();
+
+			const throughAnEdit = recaptureGraphicStyleOverrides(
+				editTextAlign(stored, 'center'),
+				coincident,
+				COINCIDENT,
+				stored,
+			);
+			const throughReview = applyGraphicStyleSet(stored, coincident, {
+				decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' },
+				revision: COINCIDENT,
+			});
+
+			expect(headlineOf(throughAnEdit).styleRefs?.typography?.overrides)
+				.toEqual(headlineOf(throughReview).styleRefs?.typography?.overrides);
+			expect(headlineOf(throughReview).styleRefs?.typography?.overrides)
+				.toEqual({ fontSize: PINNED_SIZE });
+		});
+
+		/**
+		 * And the pin is not permanent, which is what keeps this from being the over-broad
+		 * pin problem in a new place: the author releases it by moving the property, the
+		 * only thing that ever released one.
+		 */
+		it('releases the pin when the author moves the property and puts it back', () => {
+			const stored = pinned();
+
+			// Away from the pin. The recorded value is no longer what this owner holds, so
+			// the claim is stale and the deviation the edit created replaces it.
+			const moved = recaptureGraphicStyleOverrides(editFontSize(stored, 48), coincident, COINCIDENT, stored);
+			expect(headlineOf(moved).styleRefs?.typography)
+				.toEqual({ entryId: 'heading', overrides: { fontSize: 48 } });
+
+			// And back onto what the entry resolves to, which leaves nothing recorded.
+			const released = recaptureGraphicStyleOverrides(
+				editFontSize(moved, PINNED_SIZE),
+				coincident,
+				COINCIDENT,
+				moved,
+			);
+			expect(headlineOf(released).styleRefs?.typography).toEqual({ entryId: 'heading' });
 		});
 	});
 });
