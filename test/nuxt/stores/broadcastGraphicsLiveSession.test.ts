@@ -121,9 +121,11 @@ function transportFailure(
  * A conflict carrying no domain refusal: what an epoch this client no longer shares
  * looks like, and the branch that reloads and restates once.
  *
- * The sentence the server wrote is in the body, where an uncoded failure leaves it —
- * only a recognised refusal is read out of the body, so what the operator is shown
- * for one of these is the status line.
+ * The sentence the server wrote is in the body, and since #245 that is what the
+ * operator is shown — an uncoded conflict is read for its prose exactly as a coded
+ * one is. What it is still not is a refusal: no code means no `refusal`, so nothing
+ * downstream may prescribe a next move, and the reload-and-restate branch treats it
+ * as the ended epoch it usually is. Tests below stand on both halves of that.
  */
 function bareConflict(message: string) {
 	return transportFailure(409, 'Conflict', { statusCode: 409, statusMessage: 'Conflict', message });
@@ -652,6 +654,10 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
 
 			expect(store.error).toMatch(/already changed Name/);
+			// The sentence alone stopped discriminating once uncoded bodies were read
+			// too (#245): a store that recognised no refusal at all would still put
+			// these words in `error`. The code is what says the refusal was read.
+			expect(store.refusal?.code).toBe('stale-input-edit');
 		});
 
 		it('clears the superseded marker when the operator edits that field again', async () => {

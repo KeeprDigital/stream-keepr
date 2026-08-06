@@ -22,6 +22,14 @@
  * unwired component) name a deployment fault rather than a fact about the show, and
  * are reported by the surfaces that own them (#233, #243).
  *
+ * One exception to "a 4xx is the authority": h3's own router mints a 404 before any
+ * handler runs, and its body message is machinery — 'Cannot find any route matching
+ * …'. No route this is used against can produce one, since a caller reaching a
+ * renamed route would be a build fault rather than something an operator meets; and
+ * a quoted path is in any case more diagnostic than the status line it would replace.
+ * Widening this read to a surface that can meet an unrouted request means revisiting
+ * that.
+ *
  * A failure with no status at all never reached the server, so nothing it carries
  * was written by the authority and none of it may be quoted as though it were.
  *
