@@ -7,6 +7,7 @@ import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import { isFeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
 import {
 	GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE,
+	isGraphicsPreviewReadyMessage,
 	isGraphicsPreviewSelectMessage,
 } from '~/modules/graphics/previewMessages';
 
@@ -164,6 +165,27 @@ function handlePreviewSelection(message: MessageEvent) {
 	emit('selectTarget', message.data.target);
 }
 
+/**
+ * The frame reporting that it is listening, answered with a full push.
+ *
+ * The `@load` push below happens before the frame's own app has mounted as often
+ * as after it, and a push that lost that race was dropped in silence, leaving the
+ * preview rendering the Screen's stored configuration with nothing to say it had
+ * missed anything. Answering the announcement makes the initial exchange a
+ * handshake rather than a race, and costs one duplicate push where `load` did
+ * win (#235).
+ */
+function handlePreviewReady(message: MessageEvent) {
+	if (!isGraphicsPreviewReadyMessage(message, {
+		origin: window.location.origin,
+		source: previewFrame.value?.contentWindow ?? null,
+	})) {
+		return;
+	}
+
+	syncPreviewState();
+}
+
 function handleCompositorPreviewSelection(message: MessageEvent) {
 	if (!isGraphicsPreviewSelectMessage(message, {
 		origin: window.location.origin,
@@ -178,11 +200,13 @@ function handleCompositorPreviewSelection(message: MessageEvent) {
 onMounted(() => {
 	window.addEventListener('message', handlePreviewSelection);
 	window.addEventListener('message', handleCompositorPreviewSelection);
+	window.addEventListener('message', handlePreviewReady);
 });
 
 onBeforeUnmount(() => {
 	window.removeEventListener('message', handlePreviewSelection);
 	window.removeEventListener('message', handleCompositorPreviewSelection);
+	window.removeEventListener('message', handlePreviewReady);
 });
 
 watch(() => props.selectedTarget, () => {

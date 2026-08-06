@@ -7,6 +7,7 @@ import { createFeatureMatchLayoutComposition, FEATURE_MATCH_LAYOUT_COMPOSITION_I
 import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES } from '~~/shared/featureMatchSampleDataset';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { GRAPHICS_PREVIEW_READY_MESSAGE } from '~/modules/graphics/previewMessages';
 
 /**
  * Every Display a test mounts stays live otherwise, watching the same module-level
@@ -21,6 +22,7 @@ const mockOutputMode = ref<FeatureMatchOverlayOutput>('overlay');
 const mockPreviewGuides = ref(false);
 const mockPreviewSafeAreas = ref(false);
 const mockScreen = ref({ screenConfig: { width: 1920, height: 1080 } });
+const mockIsPreview = ref(false);
 const mockLoading = ref(false);
 const mockError = ref<string | null>(null);
 const mockContentUrlsSettled = ref(true);
@@ -41,6 +43,7 @@ mockNuxtImport('useScreenContext', () => () => ({
 	previewGuides: mockPreviewGuides,
 	previewSafeAreas: mockPreviewSafeAreas,
 	screen: mockScreen,
+	isPreview: mockIsPreview,
 }));
 
 const mockUsesSampleDataset = ref(false);
@@ -305,6 +308,96 @@ describe('featureMatchOverlayDisplay', () => {
 		mockContentUrlsCleared.value = false;
 		mockUsesSampleDataset.value = false;
 		mockRefusedRevisions.value = [];
+		mockIsPreview.value = false;
+	});
+
+	/**
+	 * The editor's only other moment to push its working configuration is the
+	 * iframe's `load` event, which this client-rendered application fires before
+	 * this frame's own app has mounted as often as after it. A push that lost that
+	 * race was dropped silently and left the preview rendering the Screen's stored
+	 * configuration (#235).
+	 */
+	describe('the editor preview handshake', () => {
+		async function mountAnnouncing() {
+			const announced: unknown[] = [];
+			const parent = { postMessage: (message: unknown) => announced.push(message) };
+			const originalParent = Object.getOwnPropertyDescriptor(window, 'parent');
+			Object.defineProperty(window, 'parent', { configurable: true, value: parent });
+
+			try {
+				await mountComponent();
+			}
+			finally {
+				if (originalParent)
+					Object.defineProperty(window, 'parent', originalParent);
+			}
+
+			return announced;
+		}
+
+		it('tells the editor it is listening, as soon as it is', async () => {
+			mockIsPreview.value = true;
+
+			expect(await mountAnnouncing()).toEqual([{ type: GRAPHICS_PREVIEW_READY_MESSAGE }]);
+		});
+
+		it('announces nothing from a live Screen Output, which has no editor to answer', async () => {
+			expect(await mountAnnouncing()).toEqual([]);
+		});
+
+		it('announces nothing when it is its own parent, having nobody to tell', async () => {
+			// A preview URL opened in its own tab rather than embedded. `window.parent`
+			// is then this window, and the announcement would be to itself.
+			mockIsPreview.value = true;
+			const announced: unknown[] = [];
+			const originalPostMessage = window.postMessage;
+			window.postMessage = ((message: unknown) => announced.push(message)) as typeof window.postMessage;
+
+			try {
+				await mountComponent();
+			}
+			finally {
+				window.postMessage = originalPostMessage;
+			}
+
+			expect(announced).toEqual([]);
+		});
+
+		it('announces only once its own selection listeners are installed', async () => {
+			// The announcement is the frame's promise that a full push will land, and
+			// that push carries both selections as well as the configuration. Announcing
+			// from the mode-data composable would make the promise one hook too early.
+			mockIsPreview.value = true;
+			mockPreviewGuides.value = true;
+			const installed: string[] = [];
+			const install = window.addEventListener.bind(window);
+			const addEventListener = vi.spyOn(window, 'addEventListener')
+				.mockImplementation((...args: Parameters<Window['addEventListener']>) => {
+					if (args[0] === 'message')
+						installed.push('listener');
+					install(...args);
+				});
+			const parent = {
+				postMessage: () => installed.push('ready'),
+			};
+			const originalParent = Object.getOwnPropertyDescriptor(window, 'parent');
+			Object.defineProperty(window, 'parent', { configurable: true, value: parent });
+
+			try {
+				await mountComponent();
+			}
+			finally {
+				if (originalParent)
+					Object.defineProperty(window, 'parent', originalParent);
+				addEventListener.mockRestore();
+			}
+
+			expect(installed.at(-1)).toBe('ready');
+			// The two this component installs itself, either side of whatever the mode
+			// data installs — the point is that none of them comes after the ready.
+			expect(installed.filter(entry => entry === 'listener').length).toBeGreaterThanOrEqual(2);
+		});
 	});
 
 	/**

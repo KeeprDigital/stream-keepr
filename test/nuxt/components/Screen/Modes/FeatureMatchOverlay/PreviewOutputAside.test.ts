@@ -5,6 +5,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { GRAPHICS_PREVIEW_READY_MESSAGE } from '~/modules/graphics/previewMessages';
 
 const mockCopyToClipboard = vi.fn();
 const mockToastAdd = vi.fn();
@@ -253,6 +254,67 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 			type: 'graphics-compositor:selected-target',
 			target: { type: 'item', graphicId: 'feature-match-layout', itemId: 'wins' },
 		}, window.location.origin);
+	});
+
+	/**
+	 * The frame's `message` listeners are installed when its app mounts, and this
+	 * application renders on the client — so the iframe's `load` event, which the
+	 * push above rides, fires before that as often as after it. A push that lost
+	 * that race was dropped in silence and left the preview rendering the Screen's
+	 * stored configuration, which does not look like a missed message (#235).
+	 */
+	it('pushes again when the frame reports that it is listening', async () => {
+		const wrapper = await mountComponent();
+		const previewFrame = wrapper.get('iframe').element;
+		const postMessage = vi.fn();
+		Object.defineProperty(previewFrame, 'contentWindow', {
+			configurable: true,
+			value: { postMessage },
+		});
+
+		// No `load` at all: the frame speaks first, which is the case the handshake
+		// exists for.
+		window.dispatchEvent(new MessageEvent('message', {
+			origin: window.location.origin,
+			source: previewFrame.contentWindow,
+			data: { type: GRAPHICS_PREVIEW_READY_MESSAGE },
+		}));
+		await nextTick();
+
+		expect(postMessage.mock.calls.map(([message]) => message.type)).toEqual([
+			'feature-match-overlay:preview-config',
+			'feature-match-overlay:selected-target',
+			'graphics-compositor:selected-target',
+		]);
+	});
+
+	it('answers no ready announced by a window it did not embed', async () => {
+		const wrapper = await mountComponent();
+		const previewFrame = wrapper.get('iframe').element;
+		const postMessage = vi.fn();
+		Object.defineProperty(previewFrame, 'contentWindow', {
+			configurable: true,
+			value: { postMessage },
+		});
+
+		// A window this aside never embedded, rather than this one: the file leaves
+		// its mounted components alive, and `window` is the frame several of them
+		// were given, so announcing as `window` would be announcing to those too.
+		const stranger = { postMessage: vi.fn() } as unknown as MessageEventSource;
+
+		window.dispatchEvent(new MessageEvent('message', {
+			origin: window.location.origin,
+			source: stranger,
+			data: { type: GRAPHICS_PREVIEW_READY_MESSAGE },
+		}));
+		window.dispatchEvent(new MessageEvent('message', {
+			origin: 'https://example.invalid',
+			source: previewFrame.contentWindow,
+			data: { type: GRAPHICS_PREVIEW_READY_MESSAGE },
+		}));
+		await nextTick();
+
+		expect(postMessage).not.toHaveBeenCalled();
 	});
 
 	it('asks its own preview frame for guides, and asks for them nowhere else', async () => {

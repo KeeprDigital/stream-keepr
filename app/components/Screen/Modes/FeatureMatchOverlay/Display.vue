@@ -13,13 +13,14 @@ import { resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-o
 import { featureMatchOverlaySelectionKey, isFeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
 import { featureMatchGraphicsContext, featureMatchTokenValues } from '~/modules/feature-match-overlay/tokenValues';
 import {
+	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
 	isGraphicsPreviewSelectedTargetMessage,
 } from '~/modules/graphics/previewMessages';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
 
-const { outputMode, previewGuides, previewSafeAreas, screen } = useScreenContext();
+const { isPreview, outputMode, previewGuides, previewSafeAreas, screen } = useScreenContext();
 const resolvedOutput = computed<FeatureMatchOverlayOutput>(() => outputMode?.value ?? 'overlay');
 const showPreviewGuides = computed(() => previewGuides?.value ?? false);
 const showSafeAreaGuides = computed(() => previewSafeAreas?.value ?? false);
@@ -211,9 +212,41 @@ function handleSelectedPreviewTargetMessage(message: MessageEvent) {
 	selectedPreviewTarget.value = message.data.target;
 }
 
+/**
+ * Tell the editor that embedded this preview that it can now be spoken to.
+ *
+ * The editor's other channel is the iframe's own `load` event, and that is not
+ * the moment this frame can be pushed into: the application renders on the
+ * client, so `load` fires when the shell and its scripts have arrived, while
+ * these listeners are installed when the app mounts — afterwards, and by an
+ * amount neither side controls. A push that lost that race was dropped in
+ * silence and left the preview rendering the Screen's *stored* configuration
+ * rather than the working one (#235).
+ *
+ * It belongs here rather than in `useFeatureMatchOverlayModeData`, which is
+ * where the Broadcast Graphics side announces from, because this frame's
+ * listeners are split across the two: the composable takes the configuration
+ * push and this component takes both selections. Announcing from the composable
+ * would promise a full push one mount hook before the selections could be
+ * received.
+ *
+ * Gated on being a preview rather than on the guides switch, for the same reason
+ * the configuration override is: whether an author is looking at item guides has
+ * nothing to do with whether the frame has an editor behind it. And only when
+ * there is somebody to tell — a preview URL opened in its own tab is its own
+ * `window.parent`, and would otherwise announce itself to itself.
+ */
+function announcePreviewReady() {
+	if (!isPreview?.value || !import.meta.client || window.parent === window)
+		return;
+
+	window.parent?.postMessage({ type: GRAPHICS_PREVIEW_READY_MESSAGE }, window.location.origin);
+}
+
 onMounted(() => {
 	window.addEventListener('message', handleSelectedPreviewTargetMessage);
 	window.addEventListener('message', handleSelectedCompositorTargetMessage);
+	announcePreviewReady();
 });
 
 onBeforeUnmount(() => {
