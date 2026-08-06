@@ -16,12 +16,12 @@ Open `/prototype/broadcast-graphics-fidelity`. Use the floating arrows or `?vari
 
 ## Reconstruction inventory
 
-| Reference | Bounded Graphic Items | Recipe-shaped motion |
-| --- | --- | --- |
-| Split angular commentator lower-third | Two shape beds, two accent rules, two text items | Paired outside-edge slides; rule wipes; delayed name fades/rises; reversed exit |
-| Full-width animated commentator lower-third | One clipped animated-media bed, foreground rules/decorations, two text items, central brand item | Bed and rules reveal; brand scales; names slide; staged reverse exit |
-| Full-screen branded slate | Three image items and one text item | Central scale/fade; delayed partner marks; delayed message; coordinated exit |
-| Derived persistent brand bug | One shape bed, one brand image, optional text | Short slide/fade on take; indefinite hold; explicit take-out |
+| Reference                                   | Bounded Graphic Items                                                                            | Recipe-shaped motion                                                            |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Split angular commentator lower-third       | Two shape beds, two accent rules, two text items                                                 | Paired outside-edge slides; rule wipes; delayed name fades/rises; reversed exit |
+| Full-width animated commentator lower-third | One clipped animated-media bed, foreground rules/decorations, two text items, central brand item | Bed and rules reveal; brand scales; names slide; staged reverse exit            |
+| Full-screen branded slate                   | Three image items and one text item                                                              | Central scale/fade; delayed partner marks; delayed message; coordinated exit    |
+| Derived persistent brand bug                | One shape bed, one brand image, optional text                                                    | Short slide/fade on take; indefinite hold; explicit take-out                    |
 
 The original source fonts and media were not available to this prototype. Placeholders deliberately preserve layout hierarchy, geometry, motion character, and editable boundaries instead of pretending to prove pixel identity.
 
