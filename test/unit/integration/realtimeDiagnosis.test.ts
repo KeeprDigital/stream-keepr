@@ -133,8 +133,13 @@ describe('the variable is named where each runner looks', () => {
 	// reads for `pnpm preview` and the delivery acceptance harnesses. #242 was filed
 	// because only the first example file named the key, so a wrangler run had nothing
 	// to copy and no pointer to what was missing.
-	it.each(['.env.example', '.dev.vars.example'])('%s names it', (name) => {
-		expect(example(name)).toContain(INTEGRATION_ABLY_API_KEY_ENV);
+	//
+	// An assignment rather than a mention: both files explain the variable in prose as
+	// well, and prose is not something a reader can copy into a real one. Deleting the
+	// assignment while leaving the comment behind is exactly the regression that would
+	// otherwise pass — it did, on the first version of this test.
+	it.each(['.env.example', '.dev.vars.example'])('%s assigns it, not just mentions it', (name) => {
+		expect(example(name)).toMatch(new RegExp(`^${INTEGRATION_ABLY_API_KEY_ENV}=`, 'm'));
 	});
 });
 
