@@ -374,25 +374,29 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * never navigated to in-page. So no single store ever holds both.
 	 *
 	 * Embed a display session in-page, or add an in-app link to that route, and the
-	 * two sources hold different revisions at once — at which point `Math.max` is
-	 * what keeps refusing safe, since `Math.min` would let a reload downgrade
-	 * `activeScreen` to a revision the client had already moved past. The Feature
-	 * Match Overlay preview aside is the nearest thing to that change.
+	 * two sources hold different revisions at once — at which point taking the
+	 * *newest* is what keeps refusing safe, since taking the oldest would let a
+	 * reload downgrade `activeScreen` to a revision the client had already moved
+	 * past. The Feature Match Overlay preview aside is the nearest thing to that
+	 * change.
 	 *
-	 * The two `screens` loaders now consult this as well (#251), which gives the
-	 * disjointness a second job: it is also why a refusal there always has a
-	 * `screens` entry to answer with. Were `activeScreen` the holder that outranked
-	 * a fetched Screen, the loaders would find nothing in `screens` to keep and
-	 * would fall back to caching the fetch — no worse than before that change, but
-	 * no longer the guarantee the ticket asked for.
+	 * That disjointness is about the two holders, and says nothing about `screens`
+	 * holding one id twice — which it can, because `createScreen` pushes its answer
+	 * without checking (a known defect, ticketed separately). So this returns the
+	 * Screen rather than its version, and every consumer selects through it: #251's
+	 * loaders answer a refusal with exactly the revision the comparison refused
+	 * against. Selecting twice is what went wrong — a `find` beside this `max`
+	 * answered a refusal with an arbitrary entry, older than both the cache's
+	 * newest and the payload it had just refused.
 	 */
-	function cachedStateVersion(screenId: number): number | null {
+	function cachedRevision(screenId: number): Screen | null {
 		const held = state.screens.value.filter(screen => screen.id === screenId);
 		if (state.activeScreen.value?.id === screenId)
 			held.push(state.activeScreen.value);
-		if (held.length === 0)
-			return null;
-		return Math.max(...held.map(screen => screen.stateVersion));
+		return held.reduce<Screen | null>(
+			(newest, screen) => (!newest || screen.stateVersion > newest.stateVersion ? screen : newest),
+			null,
+		);
 	}
 
 	/**
@@ -419,8 +423,8 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * announced it.
 	 */
 	function isSupersededByCache(screen: Screen): boolean {
-		const cachedVersion = cachedStateVersion(screen.id);
-		return cachedVersion !== null && screen.stateVersion < cachedVersion;
+		const cached = cachedRevision(screen.id);
+		return cached !== null && screen.stateVersion < cached.stateVersion;
 	}
 
 	async function reloadAnnouncedScreen(eventId: number, screenId: number) {
@@ -546,6 +550,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 
 	return {
 		cacheScreen,
+		cachedRevision,
 		isSupersededByCache,
 		createScreen,
 		updateScreen,

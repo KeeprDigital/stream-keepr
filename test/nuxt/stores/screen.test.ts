@@ -1,7 +1,23 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { isReactive } from 'vue';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+
+/**
+ * Put the same Screen id in the cache more than once, through the public store API.
+ *
+ * `createScreen` pushes its answer unconditionally, so creates answering with one id
+ * leave one entry each. That is a defect in its own right (a round-end ticket), but
+ * it is also the state in which the version comparison and the revision a refusal
+ * answers with must not disagree about which entry is authoritative.
+ */
+async function seedDuplicateCacheEntries(store: ReturnType<typeof useScreenStore>, repo: { create: ReturnType<typeof vi.fn> }, versions: number[]) {
+	for (const stateVersion of versions)
+		repo.create.mockResolvedValueOnce(createMockScreen({ id: 10, name: `v${stateVersion}`, stateVersion }));
+	for (const _ of versions)
+		await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'idle' });
+}
 
 // ── Mock Dependencies ──
 
@@ -128,6 +144,18 @@ describe('useScreenStore', () => {
 			expect(store.screens.map(s => s.id)).toEqual([2, 1]);
 		});
 
+		it('keeps the newest held revision when the cache holds the Screen more than once', async () => {
+			// Same split-authority hazard as the single-Screen loader: selecting a
+			// different entry than the comparison did writes a revision older than the
+			// one the fetched list brought, which is worse than replacing wholesale.
+			await seedDuplicateCacheEntries(store, mockRepo, [1, 5, 2]);
+			mockRepo.list.mockResolvedValue([createMockScreen({ id: 10, name: 'v3', stateVersion: 3 })]);
+
+			await store.loadScreensByEventId(1);
+
+			expect(store.screens.map(s => s.stateVersion)).toEqual([5]);
+		});
+
 		it('does not let a refresh that raced a settled save overwrite it', async () => {
 			// A page load or explicit refresh issues its GET before the operator's own
 			// save commits and can be served after it settles, by which point the
@@ -242,6 +270,24 @@ describe('useScreenStore', () => {
 			// The page mirrors this answer into its own `screen` ref, so handing back the
 			// refused payload would put it on screen anyway.
 			expect(loaded!.name).toBe('Saved');
+			// And it is handed back raw, like every other Screen a cache write stores,
+			// rather than the reactive proxy a read out of `screens` gives.
+			expect(isReactive(loaded)).toBe(false);
+		});
+
+		it('answers a refusal with the newest revision held, whatever its position, when the cache holds the Screen more than once', async () => {
+			// The comparison maxes over every entry for the id; the answer must select
+			// the same one. Take the first (or the last) instead and a refusal hands back
+			// a revision older than both the cache's newest and the payload it refused —
+			// worse than the version-blind overwrite this guard replaced.
+			await seedDuplicateCacheEntries(store, mockRepo, [1, 5, 2]);
+			expect(store.screens).toHaveLength(3);
+			mockRepo.getById.mockResolvedValue(createMockScreen({ id: 10, name: 'v3', stateVersion: 3 }));
+
+			const loaded = await store.getScreenById(1, 10);
+
+			expect(loaded!.stateVersion).toBe(5);
+			expect(store.screens.map(s => s.stateVersion)).toEqual([1, 5, 2]);
 		});
 
 		it('caches an answer at the revision the cache already holds', async () => {

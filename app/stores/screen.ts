@@ -57,15 +57,17 @@ export const useScreenStore = defineStore('screen', () => {
 	 *
 	 * A refusal answers with the revision the cache kept, because both loaders hand
 	 * their answer to a caller that mirrors it into its own state — returning the
-	 * refused payload would put it in front of the operator anyway. `toRaw` keeps
-	 * that answer the same plain Screen every other cache write stores, rather than
-	 * the reactive proxy a read out of `screens` hands back.
+	 * refused payload would put it in front of the operator anyway. That revision
+	 * comes from `cachedRevision`, the same selection `isSupersededByCache` compared
+	 * against, so the two cannot name different entries when the cache holds one id
+	 * twice. `toRaw` keeps the answer the same plain Screen every other cache write
+	 * stores, rather than the reactive proxy a read out of the store hands back.
 	 */
 	function keptRevision(fetched: Screen): Screen {
 		if (!screenRuntime.isSupersededByCache(fetched))
 			return fetched;
-		const held = screens.value.find(screen => screen.id === fetched.id);
-		return held ? toRaw(held) : fetched;
+		const cached = screenRuntime.cachedRevision(fetched.id);
+		return cached ? toRaw(cached) : fetched;
 	}
 
 	async function loadScreensByEventId(eventId: number) {
