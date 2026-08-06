@@ -147,6 +147,21 @@ mockNuxtImport('useGraphicBindingData', () => () => ({
 	selectionOptions: () => [],
 }));
 
+/**
+ * What the Screen Outputs watching this Screen report about themselves.
+ *
+ * Only Screen Outputs join a Screen's presence, so every member here is one — and
+ * `assetAccess` is each one's own answer to whether it can resolve this Screen's
+ * media at all.
+ */
+const mockPresence = ref<Array<{ data?: { assetAccess?: 'granted' | 'absent' } }>>([]);
+
+mockNuxtImport('useScreenStore', () => () => ({
+	get screenPresence() {
+		return new Map([[3, { count: mockPresence.value.length, members: mockPresence.value }]]);
+	},
+}));
+
 /** What every Graphic Asset Revision status request answers with. */
 const mockReferenceStatus = ref<GraphicAssetReferenceStatus>({
 	outcome: 'available',
@@ -235,6 +250,7 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		mockRecoveryFault.value = null;
 		mockConnectionState.value = 'connected';
 		mockConfirmResult.value = true;
+		mockPresence.value = [];
 		mockReferenceStatus.value = { outcome: 'available', lifecycleState: 'active', kind: 'image' };
 		mockCapabilityResponse.value = 'program-capability';
 		mockApiFetch.mockImplementation(async (path: string) => {
@@ -244,6 +260,81 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 				return { assetCapability: mockCapabilityResponse.value };
 			}
 			return mockReferenceStatus.value;
+		});
+	});
+
+	/**
+	 * The Program monitor is one Screen Output and always has its capability, so it
+	 * cannot show an operator what a capture browser opened without one is showing:
+	 * the same composition with every image and video missing, which looks like a
+	 * composition that has no media at all (#231).
+	 *
+	 * The outputs say, and this states what they said.
+	 */
+	describe('outputs that cannot resolve this Screen’s media', () => {
+		const branded: BroadcastGraphicConfig = {
+			id: 'branded',
+			name: 'Branded slate',
+			items: [{
+				type: 'media',
+				id: 'wordmark',
+				label: 'Wordmark',
+				visible: true,
+				anchor: 'top-left',
+				x: 0,
+				y: 0,
+				width: 480,
+				height: 270,
+				asset: { assetId: 'brand-asset' as never, revisionId: 'brand-revision-2' as never },
+				mediaKind: 'image',
+				fit: 'contain',
+				focalPosition: { horizontal: 0.5, vertical: 0.5 },
+				opacity: 1,
+				playbackRate: 1,
+				loop: false,
+			}],
+		};
+
+		it('names an output that reported it cannot', async () => {
+			mockPresence.value = [{ data: { assetAccess: 'absent' } }];
+
+			const wrapper = await mountComponent([branded]);
+
+			expect(wrapper.get('[data-testid="outputs-without-asset-access"]').text())
+				.toContain('One Screen Output cannot resolve this Screen\'s assets');
+		});
+
+		/**
+		 * A Screen publishing nothing but Shapes and Text loses nothing to a missing
+		 * capability, and warning about it would teach an operator to ignore the
+		 * warning that matters.
+		 */
+		it('says nothing when the Screen publishes no media', async () => {
+			mockPresence.value = [{ data: { assetAccess: 'absent' } }];
+
+			const wrapper = await mountComponent([lowerThird]);
+
+			expect(wrapper.find('[data-testid="outputs-without-asset-access"]').exists()).toBe(false);
+		});
+
+		/**
+		 * An output that reports nothing is silent about its asset access rather than
+		 * lacking it, and a silence is not a fault to put in front of an operator.
+		 */
+		it('says nothing about an output that reported nothing', async () => {
+			mockPresence.value = [{ data: {} }, {}];
+
+			const wrapper = await mountComponent([branded]);
+
+			expect(wrapper.find('[data-testid="outputs-without-asset-access"]').exists()).toBe(false);
+		});
+
+		it('says nothing when every open output holds its capability', async () => {
+			mockPresence.value = [{ data: { assetAccess: 'granted' } }];
+
+			const wrapper = await mountComponent([branded]);
+
+			expect(wrapper.find('[data-testid="outputs-without-asset-access"]').exists()).toBe(false);
 		});
 	});
 
@@ -473,14 +564,55 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		expect(src).toContain(`#asset-capability=${encodeURIComponent('program-capability')}`);
 	});
 
-	it('leaves the capability out of the monitor URL until one is issued', async () => {
-		// Never a placeholder or a guess: an absent capability resolves no media, which
-		// is the property the capability exists to guarantee.
+	/**
+	 * The monitor is never pointed at a URL without a capability — not even for the
+	 * moment before the capability arrives.
+	 *
+	 * The capability is fetched asynchronously and starts null, so an iframe bound
+	 * straight to the URL navigates on the first render and stays where it navigated:
+	 * a real Screen Output rendering this composition without its media, which is not
+	 * what program looks like. It would also join this Screen's presence reporting
+	 * `absent`, raising the warning above against the operator's own monitor (#231).
+	 */
+	it('points the monitor nowhere until the capability has been answered for', async () => {
+		let release!: () => void;
+		const pending = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		mockApiFetch.mockImplementation(async (path: string) => {
+			if (String(path).endsWith('/asset-capability')) {
+				await pending;
+				return { assetCapability: 'program-capability' };
+			}
+			return mockReferenceStatus.value;
+		});
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-testid="program-monitor"]').exists()).toBe(false);
+		// Not the failure state either: the answer is simply not in yet.
+		expect(wrapper.find('[data-testid="program-monitor-unavailable"]').exists()).toBe(false);
+
+		release();
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="program-monitor"]').attributes('src'))
+			.toContain(`#asset-capability=${encodeURIComponent('program-capability')}`);
+	});
+
+	/**
+	 * And never at all when the answer is no. A capability that failed to load never
+	 * retries, so a monitor pointed at a bare URL then is bare for the life of the
+	 * page — permanently showing a composition this Screen is not putting on air.
+	 */
+	it('shows no monitor, and says why, when asset access cannot be obtained', async () => {
 		mockCapabilityResponse.value = null;
 
 		const wrapper = await mountComponent();
 
-		expect(wrapper.get('[data-testid="program-monitor"]').attributes('src')).not.toContain('asset-capability');
+		expect(wrapper.find('[data-testid="program-monitor"]').exists()).toBe(false);
+		expect(wrapper.get('[data-testid="program-monitor-unavailable"]').text())
+			.toContain('Program monitor unavailable');
 	});
 
 	describe('graphic asset references', () => {

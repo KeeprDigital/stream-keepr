@@ -44,7 +44,6 @@ interface ScreenModeRuntimeDefinition {
 interface ResolveScreenModeHostOptions {
 	mode: ScreenMode;
 	screenConfig: ScreenConfig;
-	fitToViewport?: boolean;
 	viewportWidth?: number;
 	viewportHeight?: number;
 	preferredDark?: boolean;
@@ -146,9 +145,25 @@ export function resolveScreenModeHost(options: ResolveScreenModeHostOptions): Re
 		padding: `${paddingY}px ${paddingX}px`,
 	};
 
-	if (host.fitToViewport && options.fitToViewport && width && height && options.viewportWidth && options.viewportHeight) {
+	/*
+	 * Uniform viewport-fit scaling, decided by the Screen Mode Definition alone.
+	 *
+	 * The mode registers whether its host scales (`fitToViewport`), and nothing else
+	 * gets a vote. It used to also require the caller to ask, and only the surfaces
+	 * that *embed* an output ever did — so the one output nobody embeds, the one on
+	 * air, rendered its canvas 1:1 and clipped everything outside the browser window.
+	 * At exactly 1920×1080 that is invisible, which is why it survived to #232.
+	 *
+	 * Letterboxed rather than anchored: the canvas is centred in whatever space is
+	 * left over on the axis that did not decide the scale. Every embedder sizes its
+	 * frame to the canvas aspect ratio, so both offsets are zero there and this only
+	 * shows on a window the canvas does not fit exactly.
+	 */
+	if (host.fitToViewport && width && height && options.viewportWidth && options.viewportHeight) {
 		const scale = Math.min(options.viewportWidth / width, options.viewportHeight / height);
-		style.transform = `scale(${scale})`;
+		const offsetX = (options.viewportWidth - width * scale) / 2;
+		const offsetY = (options.viewportHeight - height * scale) / 2;
+		style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
 		style.transformOrigin = 'top left';
 		style.margin = '0';
 	}

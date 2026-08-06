@@ -18,7 +18,16 @@ const emit = defineEmits<{
 }>();
 
 const { copyToClipboard } = useCopyToClipboard();
+const { screenOutputAccessUrl, openScreenOutput } = useScreenOutputAccessUrl();
 
+/**
+ * This Screen's address, shown so an operator can read where its outputs live.
+ *
+ * Deliberately not the URL the controls beside it hand out: that one carries this
+ * Screen's Screen Output Asset Capability, which is a secret and does not belong on
+ * a page anyone can be standing behind. Copy and open produce it; reading this one
+ * off the screen and typing it produces an output with no media (#231).
+ */
 const screenUrl = computed(() => {
 	const baseUrl = window.location.origin;
 	return `${baseUrl}/event/${props.eventId}/screen/${props.screen.slug}`;
@@ -28,20 +37,16 @@ const modeLabel = computed(() => getScreenModeLabel(props.screen.currentMode));
 const modeIcon = computed(() => getScreenModeIcon(props.screen.currentMode));
 const displayType = computed(() => getScreenModeDisplayType(props.screen.currentMode));
 
-async function screenAccessUrl(): Promise<string> {
-	try {
-		const { assetCapability } = await $fetch<{ assetCapability: string }>(
-			`/api/events/${props.eventId}/screens/${props.screen.id}/asset-capability`,
-		);
-		return `${screenUrl.value}#asset-capability=${encodeURIComponent(assetCapability)}`;
-	}
-	catch {
-		return '';
-	}
+function accessUrlOptions() {
+	return {
+		eventId: props.eventId,
+		screenId: props.screen.id,
+		screenSlug: props.screen.slug,
+	};
 }
 
 async function copyUrl() {
-	await copyToClipboard(await screenAccessUrl(), {
+	await copyToClipboard(await screenOutputAccessUrl(accessUrlOptions()), {
 		successTitle: 'URL Copied',
 		successDescription: 'Screen URL copied to clipboard',
 		errorDescription: 'Failed to copy screen URL to clipboard.',
@@ -49,15 +54,7 @@ async function copyUrl() {
 }
 
 function openInNewTab() {
-	const outputWindow = window.open('', '_blank');
-	if (outputWindow)
-		outputWindow.opener = null;
-	void screenAccessUrl().then((url) => {
-		if (url && outputWindow)
-			outputWindow.location.href = url;
-		else
-			outputWindow?.close();
-	});
+	void openScreenOutput(accessUrlOptions());
 }
 
 const modeItems: DropdownMenuItem[][] = [

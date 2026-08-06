@@ -60,13 +60,12 @@ describe('screen Output selection', () => {
 			eventId: 7,
 			screenSlug: 'main',
 			output: 'fill',
-			fitToViewport: true,
 			preview: true,
 			itemGuides: true,
 			safeAreaGuides: true,
 		});
 
-		expect(preview).toBe('/event/7/screen/main?output=fill&fit=1&preview=1&guides=1&safe=1');
+		expect(preview).toBe('/event/7/screen/main?output=fill&preview=1&guides=1&safe=1');
 		expect(screenOutputPath({ eventId: 7, screenSlug: 'main', preview: true }))
 			.toBe('/event/7/screen/main?output=overlay&preview=1');
 	});

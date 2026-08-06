@@ -4,7 +4,7 @@ import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import { usePreferredDark } from '@vueuse/core';
 import { getScreenModeDefinition, resolveScreenModeHost } from '~/modules/screen-mode';
 
-const { screen, overlayContainer, fitToViewport, isPreview, outputMode } = useScreenContext();
+const { screen, overlayContainer, isPreview, outputMode } = useScreenContext();
 const preferredDark = usePreferredDark();
 const viewportWidth = ref(0);
 const viewportHeight = ref(0);
@@ -35,7 +35,6 @@ const showTransparentPreviewBackdrop = computed(() => isPreview?.value === true 
 const host = computed(() => resolveScreenModeHost({
 	mode: currentMode.value,
 	screenConfig: screenConfig.value,
-	fitToViewport: fitToViewport?.value,
 	viewportWidth: viewportWidth.value,
 	viewportHeight: viewportHeight.value,
 	preferredDark: preferredDark.value,

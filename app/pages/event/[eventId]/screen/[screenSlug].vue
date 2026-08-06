@@ -50,6 +50,9 @@ provideScreenContext(session.screenContext);
 			<div>Display Type: {{ debugInfo.displayType }}</div>
 			<div>Mode: {{ debugInfo.mode }}</div>
 			<div>Output: {{ debugInfo.output }}</div>
+			<div :class="debugInfo.assetAccess === 'absent' ? 'text-warning' : undefined">
+				Asset access: {{ debugInfo.assetAccess }}
+			</div>
 			<div v-if="debugInfo.outputWarning" class="text-warning">
 				{{ debugInfo.outputWarning }}
 			</div>

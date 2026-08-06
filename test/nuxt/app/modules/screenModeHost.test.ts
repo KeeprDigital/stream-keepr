@@ -36,7 +36,6 @@ describe('screen mode host definition', () => {
 				horizontalAlign: 'right',
 				verticalAlign: 'bottom',
 			},
-			fitToViewport: true,
 			viewportWidth: 640,
 			viewportHeight: 360,
 		});
@@ -56,7 +55,7 @@ describe('screen mode host definition', () => {
 			background: '#101010',
 			justifyItems: 'end',
 			alignItems: 'end',
-			transform: 'scale(0.5)',
+			transform: 'translate(0px, 0px) scale(0.5)',
 			transformOrigin: 'top left',
 			margin: '0',
 		});
@@ -66,7 +65,6 @@ describe('screen mode host definition', () => {
 		const host = resolveScreenModeHost({
 			mode: 'deck',
 			screenConfig: {},
-			fitToViewport: true,
 			viewportWidth: 1920,
 			viewportHeight: 1080,
 		});
@@ -159,7 +157,6 @@ describe('screen mode host definition', () => {
 				horizontalAlign: 'left',
 				verticalAlign: 'top',
 			},
-			fitToViewport: true,
 			viewportWidth: 960,
 			viewportHeight: 540,
 		});
@@ -168,12 +165,57 @@ describe('screen mode host definition', () => {
 			width: '1920px',
 			height: '1080px',
 			padding: '0px 0px',
-			transform: 'scale(0.5)',
+			transform: 'translate(0px, 0px) scale(0.5)',
 			transformOrigin: 'top left',
 		});
 		expect(host.containerStyle).not.toHaveProperty('background');
 		expect(host.containerStyle).not.toHaveProperty('justifyItems');
 		expect(host.containerStyle).not.toHaveProperty('alignItems');
+	});
+
+	/**
+	 * The window a Screen Output is actually opened in, which is not 1920×1080.
+	 *
+	 * Scaling is the Screen Mode Definition's own registration and no caller asks for
+	 * it: the option that used to gate it was passed only by the surfaces that embed
+	 * an output, so the output on air — the one nobody embeds — rendered its canvas at
+	 * native size and clipped everything past the window edge (#232).
+	 *
+	 * The leftover space goes half to each side of the axis that did not decide the
+	 * scale, which is what makes this letterboxing rather than a corner anchor. Here
+	 * width decides (1551/1920 < 900/1080), so the canvas is centred vertically:
+	 * 1080 × 0.8078 = 872.4 high in a 900-high window leaves 13.8 above and below.
+	 */
+	it('letterboxes the canvas in a window it does not fit exactly', () => {
+		const host = resolveScreenModeHost({
+			mode: 'broadcast-graphics',
+			screenConfig: { width: 1920, height: 1080 },
+			viewportWidth: 1551,
+			viewportHeight: 900,
+		});
+
+		const scale = 1551 / 1920;
+		expect(host.containerStyle.transform).toBe(
+			`translate(0px, ${(900 - 1080 * scale) / 2}px) scale(${scale})`,
+		);
+		expect(host.containerStyle.transformOrigin).toBe('top left');
+	});
+
+	/**
+	 * A control-host mode registers no scaling, so its host is never transformed
+	 * however small the window is — the sibling half of the rule above, and the one
+	 * that proves the mode still decides rather than every host now scaling.
+	 */
+	it('never scales a mode whose host does not register viewport-fit scaling', () => {
+		const host = resolveScreenModeHost({
+			mode: 'feature-match',
+			screenConfig: { width: 1920, height: 1080 },
+			viewportWidth: 800,
+			viewportHeight: 600,
+		});
+
+		expect(host.kind).toBe('control');
+		expect(host.containerStyle).not.toHaveProperty('transform');
 	});
 
 	it('keeps generic overlay configuration policy fluid and output-free', () => {

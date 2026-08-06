@@ -67,7 +67,6 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	const outputMode = computed<ScreenOutput>(() => parsedOutput.value.output);
 	const outputWarning = computed(() => parsedOutput.value.warning);
 	const shouldDownload = computed(() => route.query.download === '1');
-	const fitToViewport = computed(() => route.query.fit === '1');
 	const isPreview = computed(() => route.query.preview === '1');
 	/*
 	 * Editor-only guides require the preview flag as well as their own, so an
@@ -120,7 +119,6 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		overlayContainer,
 		outputMode,
 		outputWarning,
-		fitToViewport,
 		isPreview,
 		previewGuides,
 		previewSafeAreas,
@@ -159,6 +157,10 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		mode: screenStore.activeScreen?.currentMode,
 		output: outputMode.value,
 		outputWarning: outputWarning.value,
+		// Named here rather than left to be inferred from an absent picture: with no
+		// capability this output renders every graphic except its media, and the two
+		// look the same from the far end of a venue (#231).
+		assetAccess: assetCapability.value ? 'granted' : 'absent',
 		uptime: uptimeSeconds.value,
 		connectionState: realtime.connectionState,
 	}));
@@ -191,6 +193,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			connectedAt,
 			userAgent: navigator.userAgent,
 			outputMode: outputMode.value,
+			assetAccess: assetCapability.value ? 'granted' : 'absent',
 		}),
 	});
 

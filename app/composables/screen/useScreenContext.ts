@@ -17,8 +17,6 @@ export interface ScreenContext {
 	outputMode?: Ref<ScreenOutput>;
 	/** Invalid output query value, shown in debug output only. */
 	outputWarning?: Ref<string | null>;
-	/** Scale fixed-size overlay output to fit the browser viewport for previews. */
-	fitToViewport?: Ref<boolean>;
 	/** True when the screen is embedded in the editor preview. */
 	isPreview?: Ref<boolean>;
 	/** Show editor-only item guides in embedded previews. */

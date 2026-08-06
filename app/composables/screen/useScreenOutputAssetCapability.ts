@@ -19,6 +19,17 @@ export function useScreenOutputAssetCapability(
 	screenId: MaybeRefOrGetter<number | undefined>,
 ) {
 	const assetCapability = ref<string | null>(null);
+	/**
+	 * Whether the answer is in yet, which a null capability cannot say by itself.
+	 *
+	 * Null means "not loaded" and "could not be loaded" at once, and an embedder has
+	 * to tell those apart before it does anything: an output URL built during the
+	 * first is a URL that will be correct in a moment, and one built during the second
+	 * never will be. An embedder that navigates on the first hands itself a Screen
+	 * Output that renders no media and can never recover, because a navigation is not
+	 * re-run when a later fetch succeeds (#231).
+	 */
+	const settled = ref(false);
 	const loads = createGuardedSequence();
 
 	watch(
@@ -26,8 +37,11 @@ export function useScreenOutputAssetCapability(
 		async ({ eventId: currentEventId, screenId: currentScreenId }) => {
 			const flight = loads.begin();
 			assetCapability.value = null;
-			if (!currentScreenId)
+			settled.value = false;
+			if (!currentScreenId) {
+				settled.value = true;
 				return;
+			}
 			try {
 				const result = await $fetch<{ assetCapability: string }>(
 					`/api/events/${currentEventId}/screens/${currentScreenId}/asset-capability`,
@@ -39,6 +53,10 @@ export function useScreenOutputAssetCapability(
 				if (flight.current)
 					assetCapability.value = null;
 			}
+			finally {
+				if (flight.current)
+					settled.value = true;
+			}
 		},
 		{ immediate: true },
 	);
@@ -47,5 +65,5 @@ export function useScreenOutputAssetCapability(
 		loads.supersede();
 	});
 
-	return { assetCapability: readonly(assetCapability) };
+	return { assetCapability: readonly(assetCapability), assetCapabilitySettled: readonly(settled) };
 }
