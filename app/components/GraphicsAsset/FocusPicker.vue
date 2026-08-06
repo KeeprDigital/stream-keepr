@@ -419,14 +419,12 @@ function selectAsset(asset: GraphicAsset) {
 							<!--
 								What the scope is holding back, where an empty grid otherwise
 								reads as the asset having been deleted.
-							-->
-							<!--
-								No verb, so there is no agreement to get backwards. 'N more
-								match(es)' cannot be written correctly for both counts: the
-								surface form 'N more X' reads X as a noun, so the arms that
-								agree with the elided subject ('1 more matches', '5 more
-								match') read as errors however they are ordered. The sentence
-								above already supplies the verb.
+
+								A bare count, with no verb and so no agreement to maintain.
+								This read 'N more match(es)', whose arms were chosen to agree
+								with a subject the sentence does not contain — giving '1 more
+								matches' and '5 more match'. The sentence above already
+								supplies the verb.
 							-->
 							<p v-if="hiddenByScope > 0" class="mt-1" data-testid="graphic-asset-scope-hint">
 								{{ hiddenByScope }} more in the whole library, outside this Event.

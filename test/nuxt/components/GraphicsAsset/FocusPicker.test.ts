@@ -384,10 +384,10 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 
 	/**
 	 * The whole sentence at both counts, because the count is the only part of it
-	 * that varies and a plural arm is the obvious thing to reach for. There is no
-	 * arm to get backwards: 'N more match(es)' cannot be written correctly for
-	 * both counts, since 'N more X' reads X as a noun while the agreeing arms
-	 * ('1 more matches', '5 more match') agree with a subject that is not there.
+	 * that varies and a plural arm is the obvious thing to reach for. This read
+	 * 'N more match(es)', whose arms agreed with a subject the sentence does not
+	 * contain — '1 more matches', '5 more match'. A bare count needs no
+	 * agreement, and leaves nothing to keep in the right order.
 	 */
 	it('says the same sentence when the Event scope is holding back exactly one', async () => {
 		const wrapper = await mountPicker({ eventId: 99, assetKind: ['font'] });
