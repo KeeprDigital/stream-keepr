@@ -4,6 +4,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
 import { fetch } from '@nuxt/test-utils/e2e';
+import { INTEGRATION_ABLY_API_KEY_ENV } from './realtimeDiagnosis';
 import { getIntegrationWranglerPersistDir, INTEGRATION_MODE_ENV, INTEGRATION_WRANGLER_PERSIST_DIR_ENV } from './state';
 
 const disableFsWatchImport = fileURLToPath(new URL('./disable-fs-watch.mjs', import.meta.url));
@@ -11,8 +12,17 @@ const nodeOptions = [process.env.NODE_OPTIONS, '--import', disableFsWatchImport]
 export const INTEGRATION_GRAPHICS_ADMIN_TOKEN = 'integration-graphics-admin-token';
 export const INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
-/** Named in the skip notice and in `.env.example`. Keep the three in step. */
-export const INTEGRATION_ABLY_API_KEY_ENV = 'NUXT_ABLY_API_KEY';
+/**
+ * The realtime notices and the diagnosis behind them live in `realtimeDiagnosis`,
+ * which imports nothing, so the unit suite can exercise them without the e2e harness.
+ * Re-exported here because this file is where the suites look for integration wiring.
+ */
+export {
+	diagnoseRealtimePublishFailure,
+	INTEGRATION_ABLY_API_KEY_ENV,
+	INTEGRATION_REALTIME_PUBLISH_REJECTED_NOTICE,
+	INTEGRATION_REALTIME_SKIP_NOTICE,
+} from './realtimeDiagnosis';
 
 /**
  * Whether this run has a real Ably key, deciding the realtime tests and the notice.
@@ -23,6 +33,10 @@ export const INTEGRATION_ABLY_API_KEY_ENV = 'NUXT_ABLY_API_KEY';
  * connect; meanwhile every publish would leave for the real service and 404, which
  * costs an outbound request on each screen mutation and fails whenever the suite
  * runs offline. Realtime coverage is worth having only where a genuine key is.
+ *
+ * Nothing here can tell a fabricated key from a real one — that answer only exists
+ * on Ably's side of a publish. `realtimeDiagnosis` is where the run says so once the
+ * publish has come back refused.
  *
  * The server needs no help getting the key — it inherits a real environment variable,
  * and loads `.env` itself otherwise. This resolves the key only to *decide*, and the
@@ -57,10 +71,6 @@ export const INTEGRATION_ABLY_API_KEY = resolveAblyApiKey();
 
 /** Whether the realtime path can be exercised against the real service this run. */
 export const integrationRealtimeConfigured = INTEGRATION_ABLY_API_KEY !== '';
-
-export const INTEGRATION_REALTIME_SKIP_NOTICE
-	= `[integration] realtime coverage skipped: ${INTEGRATION_ABLY_API_KEY_ENV} is not configured. `
-		+ 'Every other test still runs; see .env.example. This is the expected state of a checkout without the secret.';
 
 /**
  * Which suite owns which Graphic Asset Content padding counts. Claim a free

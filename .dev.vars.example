@@ -15,6 +15,13 @@
 # NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY. Without it, capability minting and
 # Screen Output delivery answer 503, and `pnpm test:delivery:graphics` never
 # reaches anything to assert.
+#
+# NUXT_ABLY_API_KEY is the one name here that reaches a third party, so leave it
+# empty unless you have a real key. Empty, a wrangler run serves everything
+# except realtime and a Screen command answers 500, which says what is missing.
+# Filled with a placeholder, nothing says anything: only the empty string reads
+# as absent, and Ably then refuses each publish with 404 code 40400.
 
 NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY=""
 NUXT_GRAPHICS_ADMIN_TOKEN=""
+NUXT_ABLY_API_KEY=""
