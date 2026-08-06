@@ -98,6 +98,35 @@ function notification(
 	} as MessageData<'broadcastGraphicsLiveSession:commandApplied'>;
 }
 
+/**
+ * One refused command as the client actually meets it.
+ *
+ * The nesting is the point. A refusal is minted as
+ * `createError({ message, data: { code } })`, the server writes that out as
+ * `{ statusCode, statusMessage, message, data }`, and `$fetch` hangs the parsed body
+ * off `error.data` — so the code the store acts on sits at `data.data.code`, one
+ * level deeper than a fixture naturally puts it, and `Error.message` is the
+ * transport's `[POST] "…": 409 Conflict` rather than the domain sentence. These
+ * tests used to assert against a flattened shape no server produces, which is how
+ * every one of them passed while the store recognised no refusal at all (#230).
+ *
+ * The wire shape is pinned at the boundary itself in
+ * `test/integration/broadcastGraphicsMedia.test.ts`, where a refused Take is read
+ * back off a real HTTP response.
+ */
+function refusedCommandFailure(code: string, message: string, inputKeys: string[] = []) {
+	return {
+		statusCode: 409,
+		message: `[POST] "/api/…/commands": 409 Conflict`,
+		data: {
+			statusCode: 409,
+			statusMessage: 'Conflict',
+			message,
+			data: { code, inputKeys },
+		},
+	};
+}
+
 describe('broadcastGraphicsLiveSessionStore', () => {
 	let store: ReturnType<typeof useBroadcastGraphicsLiveSessionStore>;
 
@@ -514,11 +543,11 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		};
 
 		function refusal() {
-			return {
-				statusCode: 409,
-				message: 'Another operator has already changed Name on this Broadcast Graphic',
-				data: { code: 'stale-input-edit', inputKeys: ['name'] },
-			};
+			return refusedCommandFailure(
+				'stale-input-edit',
+				'Another operator has already changed Name on this Broadcast Graphic',
+				['name'],
+			);
 		}
 
 		it('refreshes the field from the authoritative snapshot instead of restating the edit', async () => {
@@ -591,11 +620,11 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 	 */
 	describe('a media selection the authoritative side refuses', () => {
 		function refusal(code: 'missing-asset-reference' | 'unavailable-asset-content') {
-			return {
-				statusCode: 409,
-				message: 'Graphic Asset Reference for Graphic Input badge is missing',
-				data: { code, inputKeys: ['badge'] },
-			};
+			return refusedCommandFailure(
+				code,
+				'Graphic Asset Reference for Graphic Input badge is missing',
+				['badge'],
+			);
 		}
 
 		it('is delivered once and never restated against a reloaded epoch', async () => {
@@ -680,17 +709,102 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			// A required Graphic Input with no value is a fact about the show, not about
 			// which epoch this client holds. Reloading and re-sending would be refused
 			// again for exactly the same reason.
-			mockRepository.sendCommand.mockRejectedValue({
-				statusCode: 409,
-				message: 'Title must have a value before this Broadcast Graphic can go on air',
-				data: { code: 'required-input-unavailable', inputKeys: ['title'] },
-			});
+			mockRepository.sendCommand.mockRejectedValue(refusedCommandFailure(
+				'required-input-unavailable',
+				'Title must have a value before this Broadcast Graphic can go on air',
+				['title'],
+			));
 
 			await store.take(EVENT_ID, SCREEN_ID, 'slate');
 
 			expect(mockRepository.sendCommand).toHaveBeenCalledOnce();
 			expect(mockRepository.getSession).not.toHaveBeenCalled();
 			expect(store.error).toMatch(/must have a value/);
+		});
+	});
+
+	/**
+	 * A Take refused because a pinned Graphic Asset Revision has gone.
+	 *
+	 * The pre-check before the button makes this the residual race and the second
+	 * operator on stale data — so it is rare, and it is exactly the moment an
+	 * operator has no other way to find out what is wrong with their show. What used
+	 * to reach them was `[POST] "…": 409 Conflict` under the heading "Playout action
+	 * failed", which names neither the graphic, the slot, nor the next move (#230).
+	 */
+	describe('a Take the authoritative side refuses over a Graphic Asset Reference', () => {
+		const MISSING_MESSAGE
+			= 'Graphic Asset Reference at graphics.promo.items.sting.asset is missing, '
+				+ 'so this Broadcast Graphic cannot be taken on air';
+
+		it('reports the sentence the authority wrote, not the transport’s status line', async () => {
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+			mockRepository.sendCommand.mockRejectedValue(
+				refusedCommandFailure('missing-asset-reference', MISSING_MESSAGE),
+			);
+
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+			expect(store.error).toBe(MISSING_MESSAGE);
+			expect(store.error).not.toMatch(/409 Conflict/);
+			// Delivered once: a refusal about the library is not an ended epoch, and
+			// restating it would only be refused again.
+			expect(mockRepository.sendCommand).toHaveBeenCalledOnce();
+			expect(mockRepository.getSession).not.toHaveBeenCalled();
+		});
+
+		it('names which refusal it was, so the two opposite next moves can be told apart', async () => {
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			mockRepository.sendCommand.mockRejectedValue(
+				refusedCommandFailure('missing-asset-reference', MISSING_MESSAGE),
+			);
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+			expect(store.refusal?.code).toBe('missing-asset-reference');
+
+			mockRepository.sendCommand.mockRejectedValue(refusedCommandFailure(
+				'unavailable-asset-content',
+				'Graphic Asset Content at graphics.promo.items.sting.asset is temporarily unavailable, '
+				+ 'so this Broadcast Graphic cannot be taken on air',
+			));
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+			expect(store.refusal?.code).toBe('unavailable-asset-content');
+		});
+
+		it('carries the refusal through the reload a field-scoped refusal triggers', async () => {
+			// The handler for a superseded field reloads the session, and a reload clears
+			// what `error` is reporting. A refusal recorded before that call would be
+			// wiped by the recovery it asked for, leaving the sentence with no name.
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			mockRepository.sendCommand.mockRejectedValue(refusedCommandFailure(
+				'stale-input-edit',
+				'Another operator has already changed Name on this Broadcast Graphic',
+				['name'],
+			));
+
+			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
+
+			expect(store.refusal?.code).toBe('stale-input-edit');
+			expect(store.error).toMatch(/already changed Name/);
+		});
+
+		it('stops naming a refusal once the failure being reported is not one', async () => {
+			// The title a surface reads and the sentence it shows have to describe the
+			// same event: a stale code would head a transport failure with the words for
+			// a Graphic Asset Reference that is doing nothing wrong.
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			mockRepository.sendCommand.mockRejectedValueOnce(
+				refusedCommandFailure('missing-asset-reference', MISSING_MESSAGE),
+			);
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+			expect(store.refusal).not.toBeNull();
+
+			mockRepository.sendCommand.mockRejectedValue(new Error('Failed to fetch'));
+			mockRepository.getSession.mockRejectedValue(new Error('Failed to fetch'));
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+			expect(store.refusal).toBeNull();
+			expect(store.error).toBe('Failed to fetch');
 		});
 	});
 
@@ -812,11 +926,11 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				session({ id: screenId === SCREEN_ID ? 55 : 66, screenId }));
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			await store.loadSession(EVENT_ID, OTHER_SCREEN_ID);
-			mockRepository.sendCommand.mockRejectedValue({
-				statusCode: 409,
-				message: 'Another operator has already changed Name on this Broadcast Graphic',
-				data: { code: 'stale-input-edit', inputKeys: ['name'] },
-			});
+			mockRepository.sendCommand.mockRejectedValue(refusedCommandFailure(
+				'stale-input-edit',
+				'Another operator has already changed Name on this Broadcast Graphic',
+				['name'],
+			));
 			await store.setInput(EVENT_ID, SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
 			await store.setInput(EVENT_ID, OTHER_SCREEN_ID, 'slate', 'name', 'Ava Reed', 'Unnamed');
 			expect(store.inputTraces(SCREEN_ID, graphic)[0]!.status).toBe('superseded');

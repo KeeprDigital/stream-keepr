@@ -572,9 +572,23 @@ describe('broadcast Graphics Media Graphic Items', () => {
 			WHERE id = '${takeable.revisionId}'
 		`);
 
+		// Read as the operator's client reads it, over real HTTP. A refused Take is not
+		// a failure of the action but the authority answering, and both halves of the
+		// answer live in the response body: the code under the body's own `data`, and
+		// the sentence naming the owner slot as its `message`. Neither is on the error
+		// itself — `Error.message` here is `[POST] "…": 409 Conflict`, which is what a
+		// Live workspace used to show instead (#230). `broadcastGraphicsCommandRefusal`
+		// is written against exactly this shape, so this is where that shape is pinned.
 		await expect(command('Take', 'sound', `gate-blocked-${runId}`))
 			.rejects
-			.toMatchObject({ statusCode: 409 });
+			.toMatchObject({
+				statusCode: 409,
+				data: {
+					message: 'Graphic Asset Content at graphics.sound.items.logo.asset is temporarily '
+						+ 'unavailable, so this Broadcast Graphic cannot be taken on air',
+					data: { code: 'unavailable-asset-content' },
+				},
+			});
 		// Out is never withheld: the graphic an operator most needs to remove is the one
 		// already on air whose media has just gone missing.
 		await expect(command('Out', 'sound', `gate-out-${runId}`)).resolves.toBeTruthy();

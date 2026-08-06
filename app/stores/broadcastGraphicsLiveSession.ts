@@ -21,15 +21,16 @@ import type {
 	GraphicPlayoutState,
 } from '~~/shared/types/graphics';
 import type { MessageData } from '~/types/realtime';
+import type { BroadcastGraphicsCommandRefusal } from '~/utils/broadcastGraphicsCommandRefusal';
 import {
 	acceptedGraphicInputValues,
-	BROADCAST_GRAPHICS_REJECTION_CODES,
 	broadcastGraphicChannelContexts,
 	broadcastGraphicInputsState,
 	broadcastGraphicPhaseProjections,
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
 	broadcastGraphicRenderedInputs,
+	BroadcastGraphicsCommandRejection,
 	broadcastGraphicSourceSelections,
 	changedBroadcastGraphicsLiveState,
 	createInitialBroadcastGraphicsLiveState,
@@ -37,6 +38,7 @@ import {
 	onAirBroadcastGraphicIds,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { randomCommandId } from '~~/shared/utils/uuid';
+import { broadcastGraphicsCommandRefusal } from '~/utils/broadcastGraphicsCommandRefusal';
 
 /**
  * Client-side Broadcast Graphics playout state, per Screen.
@@ -80,6 +82,22 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	const sessions = ref<Map<number, BroadcastGraphicsLiveSessionResponse>>(new Map());
 	const loading = ref(false);
 	const error = ref<string | null>(null);
+	/**
+	 * The domain refusal `error` is currently reporting, when what it is reporting is
+	 * one.
+	 *
+	 * Held beside `error` rather than inside it because the two answer different
+	 * questions: `error` is the sentence to show, and this is what the sentence is
+	 * about — and only the code can tell a Missing Graphic Asset Reference, which no
+	 * retry resolves, from Unavailable Graphic Asset Content, which retrying is the
+	 * right answer to.
+	 *
+	 * Cleared wherever `error` is cleared, and set only in the same breath as `error`
+	 * is written, so a surface reading both can never pair the title of one failure
+	 * with the sentence of another. Every action that reports through `error` clears
+	 * this first; nothing else writes it.
+	 */
+	const refusal = ref<BroadcastGraphicsCommandRefusal | null>(null);
 	/** Playout actions awaiting their authoritative answer, keyed per Broadcast Graphic. */
 	const pending = ref<Set<string>>(new Set());
 	/**
@@ -176,16 +194,6 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			return false;
 		const status = 'statusCode' in failure ? failure.statusCode : ('status' in failure ? failure.status : undefined);
 		return status === 409;
-	}
-
-	/** The domain refusal code a rejected command carried, when it carried one. */
-	function rejectionCode(failure: unknown): BroadcastGraphicsRejectionCode | undefined {
-		if (typeof failure !== 'object' || failure === null || !('data' in failure))
-			return undefined;
-		const data = (failure as { data?: { code?: string } }).data;
-		return BROADCAST_GRAPHICS_REJECTION_CODES.includes(data?.code as BroadcastGraphicsRejectionCode)
-			? data!.code as BroadcastGraphicsRejectionCode
-			: undefined;
 	}
 
 	function liveState(screenId: number): BroadcastGraphicsLiveState {
@@ -408,6 +416,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	}
 
 	async function loadSession(eventId: number, screenId: number): Promise<BroadcastGraphicsLiveSessionResponse | null> {
+		refusal.value = null;
 		return await executeAction(
 			async () => {
 				const session = await repository.getSession(eventId, screenId);
@@ -438,6 +447,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		onRejection?: (code: BroadcastGraphicsRejectionCode) => void | Promise<void>,
 	): Promise<BroadcastGraphicsLiveSessionResponse | null> {
 		const pendingKey = playoutKey(screenId, graphicId);
+		refusal.value = null;
 		pending.value.add(pendingKey);
 
 		try {
@@ -454,10 +464,21 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 						// is missing. Restating it would only be refused again, and for a
 						// field-scoped conflict that second delivery would arrive after the
 						// refresh and race it. So these are handled and surfaced, never retried.
-						const code = rejectionCode(failure);
-						if (code) {
-							await onRejection?.(code);
-							throw failure;
+						const refused = broadcastGraphicsCommandRefusal(failure);
+						if (refused) {
+							await onRejection?.(refused.code);
+
+							// Recorded after the handler, because a handler may reload the session
+							// and a reload clears this — the record has to outlive the recovery it
+							// triggers, or the operator is told a Take failed and never why.
+							refusal.value = refused;
+
+							// Re-raised as the refusal it is rather than as the transport failure
+							// that carried it. What reaches `error` is whatever `Error.message`
+							// says, and on a `$fetch` failure that is `[POST] "…": 409 Conflict` —
+							// a status line in place of the sentence naming the Graphic Asset
+							// Reference the operator has to repair (#230).
+							throw new BroadcastGraphicsCommandRejection(refused.code, refused.message);
 						}
 
 						// A bare conflict is what an epoch this client no longer shares looks
@@ -556,6 +577,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * session was holding go with them.
 	 */
 	async function resetLiveState(eventId: number, screenId: number) {
+		refusal.value = null;
 		return await executeAction(
 			async () => {
 				const session = await repository.resetSession(eventId, screenId);
@@ -821,12 +843,14 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		refusedInputs.value.clear();
 		loading.value = false;
 		error.value = null;
+		refusal.value = null;
 	}
 
 	return {
 		sessions,
 		loading,
 		error,
+		refusal,
 		serverNow,
 		channelContexts,
 		playoutState,
