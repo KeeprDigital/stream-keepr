@@ -127,17 +127,38 @@ describe('useCopyToClipboard', () => {
 		expect(document.querySelectorAll('textarea')).toHaveLength(0);
 	});
 
-	it('does not write at all when there is no value', async () => {
+	/**
+	 * Both of the caller's words, not just its description. The title a caller names is
+	 * deliberately different from the default here: the two live Screen callers both
+	 * happen to pass "Nothing copied", so a test using their wording cannot tell an
+	 * honoured override from a hard-coded string.
+	 */
+	it('does not write at all when there is no value, and says what the caller said', async () => {
 		const { copyToClipboard } = useCopyToClipboard();
 
-		const result = await copyToClipboard('', { nothingToCopyDescription: 'Nothing available.' });
+		const result = await copyToClipboard('', {
+			nothingToCopyTitle: 'Nothing handed over',
+			nothingToCopyDescription: 'Nothing available.',
+		});
 
 		expect(result).toBe(false);
 		expect(writeText).not.toHaveBeenCalled();
 		expect(execCommand).not.toHaveBeenCalled();
 		expect(mocks.toast.add).toHaveBeenCalledWith({
-			title: 'Nothing copied',
+			title: 'Nothing handed over',
 			description: 'Nothing available.',
+			color: 'error',
+		});
+	});
+
+	it('has its own words for having nothing, for a caller that names no reason', async () => {
+		const { copyToClipboard } = useCopyToClipboard();
+
+		await copyToClipboard('');
+
+		expect(mocks.toast.add).toHaveBeenCalledWith({
+			title: 'Nothing copied',
+			description: 'There was nothing to copy.',
 			color: 'error',
 		});
 	});
