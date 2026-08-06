@@ -49,6 +49,14 @@ Name every scratch file with your issue number — `pr-196-issue172-body.md`, ne
 
 The dangerous case is not PR prose. Agents routinely save backups of production files there under names like `renderModel.orig.ts`, `composable.orig.ts`, `store.orig.ts`. **Never restore a production file from a scratchpad backup** — restore from git objects (`git checkout HEAD -- <path>`), which cannot have been written by somebody else.
 
+### Commit before you mutate
+
+`git checkout HEAD -- <path>` restores to HEAD — so run against a file carrying **uncommitted** work, it silently discards that work along with the mutation. In round five two implementers hit this the same way: each mutation-tested a remediation before committing it, restored with `git checkout HEAD --`, and reverted their own fix. One caught it because the branch tip visibly lacked the new symbols; the other because the tool surfaced the reverted contents. Mutation-test only from a committed state. The rule above ("restore from git objects") assumes the work under test is already one of those objects.
+
+### A completed run's leftovers break the next run
+
+A finished integration run can leave its `workerd` backends alive, and they break the **next** run in the same checkout with `No test files found` plus a `close timed out` — zero assertion failures, and nothing that looks like the ECONNREFUSED contention cascade. Round five hit this repeatedly, and at round end the machine carried two dozen stale backends from runs that had all reported success. Scoped `pkill -f "worktrees/<name>/.*workerd"` clears it; check for leftovers before an authoritative run. Catalogued on #123.
+
 ### Root-invoked tooling walks the worktrees
 
 `eslint .` from the repository root linted every checkout under `.claude/worktrees/` and `.worktrees/` — 28 of them — and died at a 4 GB heap (#212, fixed by ignoring both). Nobody had hit it because agents run lint _inside_ a worktree, where no nested ones exist.
