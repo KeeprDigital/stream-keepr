@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { safeErrorLogPath } from '~~/server/utils/errorLogPath';
-import { StateConflictError } from '~~/server/utils/errors';
+import { ServiceConfigurationError, StateConflictError } from '~~/server/utils/errors';
 import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 
 describe('error-handler mapping logic', () => {
@@ -29,6 +29,38 @@ describe('error-handler mapping logic', () => {
 			expect(error.statusMessage).toBe('Conflict');
 			expect(error.message).toContain('match 42 state was modified concurrently');
 			expect(error.unhandled).toBe(false);
+		});
+	});
+
+	describe('serviceConfigurationError mapping', () => {
+		it('keeps the setting name the message exists to carry', () => {
+			// Sanitizing this one would leave the only person who can fix it with
+			// 'Internal Server Error' for a one-line environment change — #233.
+			const error = {
+				statusCode: 500,
+				message: 'Something went wrong',
+				cause: new ServiceConfigurationError('NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY', 'is not set'),
+				unhandled: true,
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error).toMatchObject({
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY is not set',
+				unhandled: false,
+			});
+		});
+
+		it('survives the 5xx sanitizer that every other server error meets', () => {
+			// The sanitizer runs last and rewrites any unmapped 5xx. This asserts
+			// the mapping is reached, not merely that a 503 comes out.
+			const sanitized = { statusCode: 503, message: 'signing key missing', cause: new Error('signing key missing') };
+
+			mapPublicNitroError(sanitized);
+
+			expect(sanitized.message).toBe('Internal Server Error');
 		});
 	});
 

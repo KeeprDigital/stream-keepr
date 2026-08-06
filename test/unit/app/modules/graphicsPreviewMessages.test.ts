@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
 	GRAPHICS_PREVIEW_STATE_MESSAGE,
+	isGraphicsPreviewReadyMessage,
 	isGraphicsPreviewSelectMessage,
 	isGraphicsPreviewStateMessage,
 	readGraphicsPreviewAnimationPlan,
@@ -158,5 +160,28 @@ describe('readGraphicsPreviewAnimationPlan', () => {
 
 		expect(isGraphicsPreviewStateMessage(message, expectedFromEditor)).toBe(true);
 		expect(readGraphicsPreviewState(message.data.state as never).animation).toEqual(plan);
+	});
+
+	it('recognises a ready only from the frame the editor embedded', () => {
+		// The announcement is what the editor answers with a full push, so a window
+		// the editor did not embed must not be able to provoke one.
+		const ready = { type: GRAPHICS_PREVIEW_READY_MESSAGE };
+
+		expect(isGraphicsPreviewReadyMessage(
+			{ origin: 'https://keepr.test', source: previewWindow, data: ready },
+			expectedFromPreview,
+		)).toBe(true);
+		expect(isGraphicsPreviewReadyMessage(
+			{ origin: 'https://keepr.test', source: editorWindow, data: ready },
+			expectedFromPreview,
+		)).toBe(false);
+		expect(isGraphicsPreviewReadyMessage(
+			{ origin: 'https://elsewhere.test', source: previewWindow, data: ready },
+			expectedFromPreview,
+		)).toBe(false);
+		expect(isGraphicsPreviewReadyMessage(
+			{ origin: 'https://keepr.test', source: previewWindow, data: { type: GRAPHICS_PREVIEW_SELECT_MESSAGE } },
+			expectedFromPreview,
+		)).toBe(false);
 	});
 });

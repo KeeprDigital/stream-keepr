@@ -1,9 +1,15 @@
 # Worker bindings for `pnpm preview` and the local acceptance harnesses.
 #
-# Wrangler reads this file as `.dev.vars`, where `nuxt dev` and the integration
-# suite read `.env`. The names and their meanings are the same, so see
-# `.env.example` for what each one is; this file exists only because Wrangler
-# will not read that one.
+# Wrangler reads this file as `.dev.vars`, where the integration suite reads
+# `.env`. The names and their meanings are the same, so see `.env.example` for
+# what each one is; this file exists only because Wrangler will not read that
+# one.
+#
+# `nuxt dev` reads `.env`, and additionally adopts the NUXT_-prefixed names
+# here into its own environment (`build/devVarsModule.ts`) — otherwise they
+# would reach the proxied Cloudflare bindings and never reach runtimeConfig,
+# and screen creation would answer 503 under plain `pnpm dev` while every test
+# stayed green. A name already set in `.env` or the shell wins.
 #
 # One of them is load-bearing for a local acceptance run:
 # NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY. Without it, capability minting and

@@ -63,6 +63,11 @@ async function mountComponent(options: {
 	});
 }
 
+function itemPaletteKinds(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+	return wrapper.findAll('[data-add-graphic-item-kind]')
+		.map(button => button.attributes('data-add-graphic-item-kind'));
+}
+
 function emittedGraphics(wrapper: Awaited<ReturnType<typeof mountComponent>>, index = 0) {
 	return wrapper.emitted('update:graphics')?.[index]?.[0] as BroadcastGraphicConfig[];
 }
@@ -158,8 +163,7 @@ describe('graphicsCompositorStackTree', () => {
 			selectedGraphicId: 'a',
 		});
 
-		const palette = wrapper.getComponent({ name: 'USelect' });
-		expect((palette.props('items') as Array<{ value: string }>).map(item => item.value)).toEqual(['text', 'shape', 'media', 'group']);
+		expect(itemPaletteKinds(wrapper)).toEqual(['text', 'shape', 'media', 'group']);
 	});
 
 	it('places a Graphic Item at the front of the Graphic Layer Order and selects it', async () => {
@@ -168,7 +172,7 @@ describe('graphicsCompositorStackTree', () => {
 			selectedGraphicId: 'a',
 		});
 
-		wrapper.getComponent({ name: 'USelect' }).vm.$emit('update:modelValue', 'text');
+		await wrapper.get('[data-add-graphic-item-kind="text"]').trigger('click');
 		await nextTick();
 
 		const graphics = emittedGraphics(wrapper);
@@ -178,6 +182,41 @@ describe('graphicsCompositorStackTree', () => {
 			graphicId: 'a',
 			itemId: graphics[0]!.items[0]!.id,
 		});
+	});
+
+	/**
+	 * The split lower-third the #179 fidelity run was building needs four Shapes
+	 * in a row. Under a select, the second consecutive Shape was not a change of
+	 * value and added nothing at all — silently, with the author left alternating
+	 * kinds to work around it (#234).
+	 */
+	it('adds a second Graphic Item of the kind it just added', async () => {
+		const wrapper = await mountComponent({
+			graphics: [{ id: 'a', name: 'A', items: [] }],
+			selectedGraphicId: 'a',
+		});
+
+		await wrapper.get('[data-add-graphic-item-kind="shape"]').trigger('click');
+		await wrapper.setProps({ graphics: emittedGraphics(wrapper) });
+		await wrapper.get('[data-add-graphic-item-kind="shape"]').trigger('click');
+
+		expect(emittedGraphics(wrapper, 1).map(graphic => graphic.items.map(item => item.type)))
+			.toEqual([['shape', 'shape']]);
+	});
+
+	it('holds no chosen kind of its own for a repeat press to match', async () => {
+		// The mechanism, not just the outcome: the defect was a control with a
+		// value, so a stubbed re-selection could pass this file while the real
+		// USelect kept swallowing the second press.
+		const wrapper = await mountComponent({
+			graphics: [{ id: 'a', name: 'A', items: [] }],
+			selectedGraphicId: 'a',
+		});
+
+		const palette = wrapper.get('[data-testid="graphic-item-palette"]');
+
+		expect(palette.findAll('select')).toHaveLength(0);
+		expect(palette.findAllComponents({ name: 'USelect' })).toHaveLength(0);
 	});
 
 	it('shows no Graphic Item palette until a Broadcast Graphic is selected', async () => {
@@ -290,12 +329,11 @@ describe('graphicsCompositorStackTree', () => {
 			selectedTarget: { type: 'item', graphicId: 'a', itemId: 'cluster' },
 		});
 
-		const palettes = wrapper.findAllComponents({ name: 'USelect' });
-		const childPalette = palettes[palettes.length - 1]!;
-		expect((childPalette.props('items') as Array<{ value: string }>).map(item => item.value))
+		expect(wrapper.findAll('[data-add-graphic-group-child-kind]')
+			.map(button => button.attributes('data-add-graphic-group-child-kind')))
 			.toEqual(['text', 'shape', 'media']);
 
-		childPalette.vm.$emit('update:modelValue', 'text');
+		await wrapper.get('[data-add-graphic-group-child-kind="text"]').trigger('click');
 		await nextTick();
 
 		const graphics = emittedGraphics(wrapper);
@@ -380,8 +418,7 @@ describe('graphicsCompositorStackTree', () => {
 
 		expect(wrapper.find('[data-testid="graphic-item-palette"]').exists()).toBe(true);
 
-		const palette = wrapper.get('[data-testid="graphic-item-palette"]');
-		await palette.setValue('text');
+		await wrapper.get('[data-add-graphic-item-kind="text"]').trigger('click');
 
 		expect(emittedGraphics(wrapper)[0]!.items).toHaveLength(1);
 		expect(emittedTarget(wrapper)).toMatchObject({ type: 'item', graphicId: 'layout' });

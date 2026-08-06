@@ -9,6 +9,7 @@ import { GRAPHIC_ANIMATION_PHASE_VALUES } from '~~/shared/types/graphics';
 import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import {
 	GRAPHICS_PREVIEW_STATE_MESSAGE,
+	isGraphicsPreviewReadyMessage,
 	isGraphicsPreviewSelectMessage,
 } from '~/modules/graphics/previewMessages';
 import { graphicsSelectionGraphicId } from '~/modules/graphics/selection';
@@ -152,23 +153,31 @@ function pushPreviewState() {
 	}, window.location.origin);
 }
 
-function handlePreviewSelection(message: MessageEvent) {
-	if (!isGraphicsPreviewSelectMessage(message, {
+function handlePreviewMessage(message: MessageEvent) {
+	const expected = {
 		origin: window.location.origin,
 		source: previewFrame.value?.contentWindow ?? null,
-	})) {
+	};
+
+	// The frame reporting that it can now be spoken to. The `@load` push below
+	// happens before the frame's own app has mounted as often as after it, and a
+	// push that lost that race left the preview holding the Screen's stored stack
+	// with nothing to say it had missed anything (#234).
+	if (isGraphicsPreviewReadyMessage(message, expected)) {
+		pushPreviewState();
 		return;
 	}
 
-	emit('selectTarget', message.data.target);
+	if (isGraphicsPreviewSelectMessage(message, expected))
+		emit('selectTarget', message.data.target);
 }
 
 onMounted(() => {
-	window.addEventListener('message', handlePreviewSelection);
+	window.addEventListener('message', handlePreviewMessage);
 });
 
 onBeforeUnmount(() => {
-	window.removeEventListener('message', handlePreviewSelection);
+	window.removeEventListener('message', handlePreviewMessage);
 });
 
 watch(

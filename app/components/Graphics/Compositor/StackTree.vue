@@ -271,15 +271,32 @@ function removeItem(itemId: string) {
 				</UBadge>
 			</div>
 
+			<!--
+				One button per kind, not a select. A select holds the kind it last
+				added, so choosing that kind again is not a change and adds nothing —
+				and the split lower-third an author is building needs four Shapes in a
+				row (#234). A button has no value to hold: every press adds.
+			-->
 			<UFormField v-if="canAuthor" label="Add Graphic Item" size="sm">
-				<USelect
-					:items="itemKindOptions"
-					value-key="value"
-					placeholder="Add item..."
-					class="w-full"
+				<div
+					class="flex flex-wrap gap-1"
+					role="group"
+					aria-label="Add Graphic Item"
 					data-testid="graphic-item-palette"
-					@update:model-value="addItem($event as GraphicItemKind)"
-				/>
+				>
+					<UButton
+						v-for="option in itemKindOptions"
+						:key="option.value"
+						size="xs"
+						variant="soft"
+						color="neutral"
+						:icon="option.icon"
+						:data-add-graphic-item-kind="option.value"
+						@click="addItem(option.value)"
+					>
+						{{ option.label }}
+					</UButton>
+				</div>
 			</UFormField>
 
 			<UFormField
@@ -287,14 +304,25 @@ function removeItem(itemId: string) {
 				:label="`Add to ${selectedGroup.label}`"
 				size="sm"
 			>
-				<USelect
-					:items="groupChildKindOptions"
-					value-key="value"
-					placeholder="Add to group..."
-					class="w-full"
+				<div
+					class="flex flex-wrap gap-1"
+					role="group"
+					:aria-label="`Add to ${selectedGroup.label}`"
 					data-testid="graphic-group-child-palette"
-					@update:model-value="addChild($event as GraphicItemKind)"
-				/>
+				>
+					<UButton
+						v-for="option in groupChildKindOptions"
+						:key="option.value"
+						size="xs"
+						variant="soft"
+						color="neutral"
+						:icon="option.icon"
+						:data-add-graphic-group-child-kind="option.value"
+						@click="addChild(option.value)"
+					>
+						{{ option.label }}
+					</UButton>
+				</div>
 			</UFormField>
 
 			<div class="space-y-1.5">

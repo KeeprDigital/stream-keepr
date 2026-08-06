@@ -935,6 +935,74 @@ describe('graphicsCompositorInspector', () => {
 		});
 	});
 
+	/**
+	 * A Graphic Input is named and keyed separately, and only the key resolves.
+	 * An author who named one 'leftName' and typed `{leftName}` got a template
+	 * that looked finished and rendered a gap, with the real key visible only in
+	 * a panel belonging to a different selection (#234).
+	 */
+	describe('placeholders a Graphic Text Template names', () => {
+		function namedInput(key: string, label: string): GraphicInputDeclaration {
+			return { ...textInput(key), label };
+		}
+
+		function unresolvedNotice(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+			return wrapper.find('[data-testid="unresolved-placeholders"]');
+		}
+
+		it('names a placeholder nothing declares, and the keys that would have worked', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([{ ...textItem, text: 'Hi {leftName}' } as GraphicItemConfig])
+					.map(graphic => ({ ...graphic, inputs: [namedInput('input-1', 'leftName')] })),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			const notice = unresolvedNotice(wrapper);
+			expect(notice.text()).toContain('{leftName}');
+			expect(notice.text()).toContain('{input-1}');
+		});
+
+		it('says so plainly when the composition has declared nothing at all', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([{ ...textItem, text: 'Hi {leftName}' } as GraphicItemConfig]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			expect(unresolvedNotice(wrapper).text()).toContain('declares no Graphic Inputs yet');
+		});
+
+		it('stays silent while every placeholder resolves', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([{ ...textItem, text: 'Hi {input-1}' } as GraphicItemConfig])
+					.map(graphic => ({ ...graphic, inputs: [namedInput('input-1', 'leftName')] })),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			expect(unresolvedNotice(wrapper).exists()).toBe(false);
+		});
+
+		it('offers the declared Graphic Input keys to append, beside the names they answer to', async () => {
+			// Without this the key had no representation anywhere the author was
+			// looking while editing the text, and had to be retyped from memory.
+			const wrapper = await mountComponent({
+				graphics: stack([textItem])
+					.map(graphic => ({ ...graphic, inputs: [namedInput('input-1', 'leftName')] })),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			const offered = wrapper.findAllComponents(UButtonStub)
+				.filter(button => button.attributes('data-host-token') !== undefined);
+			expect(offered.map(button => button.attributes('data-host-token'))).toEqual(['input-1']);
+			expect(offered[0]!.text()).toContain('{input-1}');
+			expect(offered[0]!.text()).toContain('leftName');
+
+			offered[0]!.vm.$emit('click');
+			await nextTick();
+
+			expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ text: 'Commentator{input-1}' });
+		});
+	});
+
 	it('declares a typed Graphic Input on the selected Broadcast Graphic', async () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]),

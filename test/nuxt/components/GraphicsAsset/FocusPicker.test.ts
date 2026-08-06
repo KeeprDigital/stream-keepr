@@ -7,6 +7,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import { clearNuxtState } from '#app';
 
 enableAutoUnmount(afterEach);
 
@@ -160,6 +161,47 @@ const assets = ref<GraphicAsset[]>([
 		},
 		operation: {} as never,
 	},
+	/**
+	 * The library's only font, and it belongs to another Event — the one shape in
+	 * this fixture where exactly one asset is hidden by the Event scope, which is
+	 * what the hint's singular sentence needs. No other test asks for fonts, so it
+	 * changes no existing count.
+	 */
+	{
+		id: 'asset-shared-font' as never,
+		name: 'Sponsor display face',
+		kind: 'font',
+		revisionId: 'revision-shared-font-1' as never,
+		revisionNumber: 1,
+		revisions: [{
+			id: 'revision-shared-font-1' as never,
+			revisionNumber: 1,
+			facts: {} as never,
+		}],
+		lifecycle: { state: 'active' },
+		eventIds: [8],
+		facts: {
+			kind: 'font',
+			format: 'woff2',
+			canonicalMime: 'font/woff2',
+			byteLength: 4096,
+			expandedByteLength: 8192,
+			sha256: 'font-digest',
+			family: 'Sponsor Display',
+			subfamily: 'Bold',
+			postscriptName: 'SponsorDisplay-Bold',
+			weight: 700,
+			style: 'normal',
+			glyphCount: 240,
+			unicodeCodePoints: [65],
+			unitsPerEm: 1000,
+			ascent: 800,
+			descent: -200,
+			lineGap: 0,
+			browserChallenge: {} as never,
+		},
+		operation: {} as never,
+	},
 ]);
 const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
 
@@ -187,6 +229,9 @@ const buttonStub = defineComponent({
 
 describe('the contextual Graphic Asset Focus Picker', () => {
 	beforeEach(() => {
+		// The chosen scope is deliberately shared by every picker in the app, so
+		// it outlives a mounted component and would otherwise outlive a test.
+		clearNuxtState('graphic-asset-picker-scope');
 		mockApiFetch.mockReset();
 		mockApiFetch.mockResolvedValue({
 			outcome: 'available',
@@ -222,13 +267,154 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		expect(wrapper.text()).toContain('PNG compatible');
 		expect(wrapper.text()).not.toContain('Shared logo');
 
-		await wrapper.get('[data-testid="show-all-assets"]').trigger('click');
+		await wrapper.get('[data-testid="graphic-asset-scope-library"]').trigger('click');
 		expect(wrapper.text()).toContain('Shared logo');
 		await wrapper.get('[data-testid="select-asset-shared"]').trigger('click');
 
 		expect(wrapper.emitted('update:modelValue')).toEqual([[
 			{ assetId: 'asset-shared', revisionId: 'revision-shared-1' },
 		]]);
+	});
+
+	/*
+	 * Scope. An Event adopts assets by being pointed at them, so 'This Event' is
+	 * empty on every Event until the first pin — and the picker used to open
+	 * there anyway, on an empty grid, with a single button whose label named the
+	 * current scope rather than the action (#234).
+	 */
+
+	async function mountPicker(props: { eventId: number; assetKind?: GraphicAsset['kind'][] }) {
+		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
+		return mount(FocusPicker, {
+			props: { fieldLabel: 'Frame image', ...props },
+			global: {
+				stubs: {
+					UModal: passthroughStub,
+					UButton: buttonStub,
+					UInput: passthroughStub,
+					UBadge: passthroughStub,
+					UAlert: passthroughStub,
+					UIcon: passthroughStub,
+				},
+			},
+		});
+	}
+
+	/**
+	 * The hint's own sentence, without the widen button that shares its element.
+	 * Whitespace is collapsed because the template wraps the line; an exact match
+	 * on the result is what pins the wording rather than a fragment of it.
+	 */
+	function hintSentence(text: string) {
+		return text.replace('Show all assets', '').replaceAll(/\s+/g, ' ').trim();
+	}
+
+	function activeScope(wrapper: Awaited<ReturnType<typeof mountPicker>>) {
+		return wrapper.get('[data-testid="graphic-asset-scope-event"]').attributes('aria-pressed') === 'true'
+			? 'event'
+			: 'library';
+	}
+
+	it('opens on the whole library rather than on an Event that has adopted nothing', async () => {
+		const wrapper = await mountPicker({ eventId: 99 });
+
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		expect(activeScope(wrapper)).toBe('library');
+		expect(wrapper.text()).toContain('Shared logo');
+	});
+
+	it('still opens on the Event that has assets of its own', async () => {
+		const wrapper = await mountPicker({ eventId: 7 });
+
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		expect(activeScope(wrapper)).toBe('event');
+		expect(wrapper.text()).not.toContain('Shared logo');
+	});
+
+	it('states both scopes and what each holds, rather than one label doing two jobs', async () => {
+		const wrapper = await mountPicker({ eventId: 7 });
+
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		expect(wrapper.get('[data-testid="graphic-asset-scope-event"]').text()).toBe('This Event (1)');
+		expect(wrapper.get('[data-testid="graphic-asset-scope-library"]').text()).toBe('All assets (2)');
+	});
+
+	it('carries a widened scope to the next picker the author opens', async () => {
+		// Every field mounts its own picker. Resetting each one to 'This Event'
+		// made an author who had just found a shared logo look for it again.
+		const first = await mountPicker({ eventId: 7 });
+		await first.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+		await first.get('[data-testid="graphic-asset-scope-library"]').trigger('click');
+
+		const second = await mountPicker({ eventId: 7 });
+		await second.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		expect(activeScope(second)).toBe('library');
+	});
+
+	it('does not remember a widening it performed itself', async () => {
+		// Only a press is a preference. An empty Event scope is a fact about that
+		// Event, and must not decide what the next Event's picker opens on.
+		const emptyEvent = await mountPicker({ eventId: 99 });
+		await emptyEvent.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+		expect(activeScope(emptyEvent)).toBe('library');
+
+		const populatedEvent = await mountPicker({ eventId: 7 });
+		await populatedEvent.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		expect(activeScope(populatedEvent)).toBe('event');
+	});
+
+	it('names what the Event scope is holding back instead of showing a bare empty grid', async () => {
+		const wrapper = await mountPicker({ eventId: 99 });
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+		// An explicit choice, which is what stops the picker widening on its own.
+		await wrapper.get('[data-testid="graphic-asset-scope-event"]').trigger('click');
+
+		const hint = wrapper.get('[data-testid="graphic-asset-scope-hint"]');
+		expect(hintSentence(hint.text())).toBe('2 more in the whole library, outside this Event.');
+
+		await wrapper.get('[data-testid="widen-graphic-asset-scope"]').trigger('click');
+		expect(activeScope(wrapper)).toBe('library');
+		expect(wrapper.text()).toContain('Shared logo');
+	});
+
+	/**
+	 * The whole sentence at both counts, because the count is the only part of it
+	 * that varies and a plural arm is the obvious thing to reach for. This read
+	 * 'N more match(es)', whose arms agreed with a subject the sentence does not
+	 * contain — '1 more matches', '5 more match'. A bare count needs no
+	 * agreement, and leaves nothing to keep in the right order.
+	 */
+	it('says the same sentence when the Event scope is holding back exactly one', async () => {
+		const wrapper = await mountPicker({ eventId: 99, assetKind: ['font'] });
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+		await wrapper.get('[data-testid="graphic-asset-scope-event"]').trigger('click');
+
+		const hint = wrapper.get('[data-testid="graphic-asset-scope-hint"]');
+		expect(hintSentence(hint.text())).toBe('1 more in the whole library, outside this Event.');
+	});
+
+	it('says nothing about a wider library when the wider library is what is showing', async () => {
+		const wrapper = await mountPicker({ eventId: 99, assetKind: ['silent-video'] });
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+		await wrapper.get('[data-testid="graphic-asset-scope-library"]').trigger('click');
+
+		expect(wrapper.find('[data-testid="graphic-asset-scope-hint"]').exists()).toBe(false);
+	});
+
+	it('sends the Library Workspace to a new tab rather than out of the editor', async () => {
+		// It sat among the scope controls looking like a third tab, and following
+		// it abandoned whatever was being authored.
+		const wrapper = await mountPicker({ eventId: 7 });
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		const link = wrapper.get('[data-testid="open-library-workspace"]');
+		expect(link.attributes('to')).toBe('/graphics-assets');
+		expect(link.attributes('target')).toBe('_blank');
 	});
 
 	it('keeps a missing exact reference visible as a publication-blocking integrity failure', async () => {

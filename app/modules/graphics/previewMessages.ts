@@ -16,6 +16,24 @@ export const GRAPHICS_PREVIEW_STATE_MESSAGE = 'graphics-compositor:preview-state
 export const GRAPHICS_PREVIEW_SELECT_MESSAGE = 'graphics-compositor:select';
 
 /**
+ * The frame announcing that it is listening.
+ *
+ * The editor's other channel to the frame is the iframe's own `load` event, and
+ * that is not the moment the frame can be spoken to: this application renders on
+ * the client, so `load` fires when the shell and its scripts have arrived, while
+ * the frame's `message` listener is installed when its app mounts — afterwards,
+ * and by an amount nothing here controls. A push that loses that race is dropped
+ * in silence, and the frame then holds the Screen's *stored* stack rather than
+ * the working one, which looks like a preview that renders the wrong thing
+ * rather than one that missed a message (#234).
+ *
+ * So the frame speaks first. The editor answers a ready with a full push, which
+ * makes the initial exchange a handshake rather than a race, and costs one
+ * duplicate push in the case where `load` did win.
+ */
+export const GRAPHICS_PREVIEW_READY_MESSAGE = 'graphics-compositor:preview-ready';
+
+/**
  * The compositor selection, pushed on its own rather than inside a whole preview
  * state.
  *
@@ -185,6 +203,17 @@ export function isGraphicsPreviewSelectedTargetMessage(
 
 	const data = message.data as Record<string, unknown>;
 	return data.type === GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE && isGraphicsSelectionTarget(data.target);
+}
+
+/** An embedded preview reporting that its listeners are installed. */
+export function isGraphicsPreviewReadyMessage(
+	message: MessageEnvelope,
+	expected: ExpectedSender,
+): boolean {
+	if (!isFromExpectedSender(message, expected))
+		return false;
+
+	return (message.data as Record<string, unknown>).type === GRAPHICS_PREVIEW_READY_MESSAGE;
 }
 
 export function isGraphicsPreviewSelectMessage(

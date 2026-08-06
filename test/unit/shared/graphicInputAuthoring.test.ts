@@ -64,6 +64,33 @@ describe('graphicInputAuthoring', () => {
 		}]);
 	});
 
+	/**
+	 * Renaming frees the label but never the key, so counting labels alone reused
+	 * 'Input 1' and had to disambiguate its key into `input-1-2` — a shape that
+	 * appears only after a rename, that no author predicts, and that they must
+	 * then reproduce exactly in a `{placeholder}` (#234).
+	 */
+	it('does not spend a key twice when a rename frees the name that made it', () => {
+		let graphics = addGraphicInput(stack(), 'lower-third', 'text');
+		graphics = patchGraphicInput(graphics, 'lower-third', 'input-1', { label: 'leftName' });
+
+		graphics = addGraphicInput(graphics, 'lower-third', 'text');
+
+		expect(graphics[0]!.inputs!.map(input => [input.label, input.key])).toEqual([
+			['leftName', 'input-1'],
+			['Input 2', 'input-2'],
+		]);
+	});
+
+	it('keeps counting past a name an author has taken for themselves', () => {
+		let graphics = addGraphicInput(stack(), 'lower-third', 'text');
+		graphics = patchGraphicInput(graphics, 'lower-third', 'input-1', { label: 'Input 2' });
+
+		graphics = addGraphicInput(graphics, 'lower-third', 'text');
+
+		expect(graphics[0]!.inputs![1]).toMatchObject({ label: 'Input 3', key: 'input-3' });
+	});
+
 	it('merges into one declaration without disturbing the others', () => {
 		let graphics = addGraphicInput(stack(), 'lower-third', 'text');
 		graphics = addGraphicInput(graphics, 'lower-third', 'toggle');

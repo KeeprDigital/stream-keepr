@@ -8,6 +8,23 @@ export class StateConflictError extends Error {
 	}
 }
 
+/**
+ * The server is running, but something it needs was never configured.
+ *
+ * The name of the setting is the whole point of the message, so it is carried
+ * as public text: the only reader who can act on this failure is the one who
+ * has to go and set the value, and a sanitized 'Internal Server Error' sends
+ * them to the logs of a server that is behaving exactly as configured. It
+ * names a setting, never a value.
+ */
+export class ServiceConfigurationError extends Error {
+	statusCode = 503;
+	constructor(readonly setting: string, detail: string) {
+		super(`${setting} ${detail}`);
+		this.name = 'ServiceConfigurationError';
+	}
+}
+
 interface ErrorWithPublicMetadata {
 	code?: unknown;
 	statusCode?: unknown;

@@ -684,19 +684,44 @@ const authorsInputs = computed(() => authorsGraphicInputs(props.contract));
 const hostTokens = computed(() => graphicsHostTokenCatalogue(props.contract));
 
 /**
- * Every placeholder key the selected Graphic Item's template may name, whichever
- * side supplies them. One list rather than two branches at each use, because the
- * question a placeholder asks — "does anything resolve this key?" — has one answer
- * however the host answers it.
+ * Every placeholder the selected Graphic Item's template may name, whichever side
+ * supplies it. One list rather than two branches at each use, because the question
+ * a placeholder asks — "does anything resolve this key?" — has one answer however
+ * the host answers it.
+ *
+ * Carries the label as well as the key, because the whole difficulty an author has
+ * here is that the two are not the same word: an input named 'leftName' is keyed
+ * `input-1`, and a template naming the name resolves nothing (#234).
  */
-const availablePlaceholderKeys = computed<string[]>(() => {
+const availablePlaceholders = computed<Array<{ key: string; label: string }>>(() => {
 	if (!authorsInputs.value)
-		return hostTokens.value.map(token => token.key);
+		return hostTokens.value.map(token => ({ key: token.key, label: token.label }));
 
 	const current = selection.value;
 	if (current.kind !== 'graphic' && current.kind !== 'item')
 		return [];
-	return (current.graphic.inputs ?? []).map(input => input.key);
+	return (current.graphic.inputs ?? []).map(input => ({ key: input.key, label: input.label }));
+});
+
+const availablePlaceholderKeys = computed(() => availablePlaceholders.value.map(entry => entry.key));
+
+/**
+ * The `{inputKey}` placeholders of the selected Text Graphic Item that nothing
+ * resolves.
+ *
+ * These render as nothing at all — deliberately, since a Text Graphic Item must
+ * keep painting the literal text around a value it cannot show — which leaves an
+ * author who typed the input's *name* instead of its key with a template that
+ * looks finished and shows a gap. Naming them here is the only place that
+ * difference is visible before air.
+ */
+const unresolvedPlaceholders = computed<string[]>(() => {
+	const item = selectedTextItem.value;
+	if (!item)
+		return [];
+
+	const available = new Set(availablePlaceholderKeys.value);
+	return graphicTextTemplateInputKeys(item.text).filter(key => !available.has(key));
 });
 
 const INPUT_TYPE_OPTIONS = GRAPHIC_INPUT_TYPE_VALUES.map(value => ({ label: value, value }));
@@ -1461,15 +1486,18 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			</UFormField>
 
 			<!--
-				The host's token binding catalogue, offered to reference rather than to
-				author. A Feature Match Overlay's placeholder vocabulary is fixed, so the
-				useful control is one that appends a valid key to the template — the
-				editor offers exactly these keys, and an author never declares one.
+				Every placeholder this template may name, offered to reference rather
+				than to author. A Feature Match Overlay's vocabulary is its host's fixed
+				catalogue; a Broadcast Graphic's is its own declared Graphic Inputs —
+				and both are keys the author must reproduce exactly, so the useful
+				control is one that appends a valid one. The declared side used to be
+				missing entirely, which left the key visible only in the Graphic Inputs
+				panel of a *different* selection (#234).
 			-->
-			<UFormField v-if="hostTokens.length > 0" label="Tokens" size="sm">
+			<UFormField v-if="availablePlaceholders.length > 0" label="Placeholders" size="sm">
 				<div class="flex flex-wrap gap-1" data-testid="graphic-host-tokens">
 					<UButton
-						v-for="token in hostTokens"
+						v-for="token in availablePlaceholders"
 						:key="token.key"
 						size="xs"
 						variant="soft"
@@ -1480,9 +1508,34 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						@click="appendHostToken(token.key)"
 					>
 						{{ placeholderToken(token.key) }}
+						<span class="text-muted">{{ token.label }}</span>
 					</UButton>
 				</div>
 			</UFormField>
+
+			<!--
+				A placeholder nothing resolves renders as nothing, which is right for
+				the output and silent for the author. This is where the silence is
+				broken.
+			-->
+			<p
+				v-if="unresolvedPlaceholders.length > 0"
+				class="text-xs text-warning"
+				data-testid="unresolved-placeholders"
+			>
+				Nothing declares
+				{{ unresolvedPlaceholders.map(placeholderToken).join(', ') }}, so
+				{{ unresolvedPlaceholders.length === 1 ? 'it renders' : 'they render' }}
+				nothing.
+				<template v-if="availablePlaceholderKeys.length > 0">
+					This composition offers
+					{{ availablePlaceholderKeys.map(placeholderToken).join(', ') }} — a
+					Graphic Input is named and keyed separately, and a template names the key.
+				</template>
+				<template v-else>
+					This composition declares no Graphic Inputs yet.
+				</template>
+			</p>
 		</template>
 
 		<!--

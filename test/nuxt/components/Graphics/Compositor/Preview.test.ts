@@ -3,6 +3,7 @@ import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import {
+	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
 	GRAPHICS_PREVIEW_STATE_MESSAGE,
 } from '~/modules/graphics/previewMessages';
@@ -149,6 +150,59 @@ describe('graphicsCompositorPreview', () => {
 			state: { selectedTarget: { type: 'canvas' } },
 		});
 		expect((posted[0] as { state: { graphics: unknown[] } }).state.graphics).toHaveLength(1);
+	});
+
+	/**
+	 * The frame's `message` listener is installed when its app mounts, and this
+	 * application renders on the client — so the iframe's `load` event, which the
+	 * push above rides, fires before that as often as after it. A push that lost
+	 * that race was dropped in silence and left the preview composing the Screen's
+	 * persisted stack, which does not look like a missed message (#234).
+	 */
+	it('pushes again when the frame reports that it is listening', async () => {
+		const wrapper = await mountComponent();
+		const frame = wrapper.get('iframe').element;
+		const posted: unknown[] = [];
+		Object.defineProperty(frame, 'contentWindow', {
+			configurable: true,
+			value: { postMessage: (message: unknown) => posted.push(message), self: true },
+		});
+
+		// No `load` at all: the frame speaks first, which is the case the handshake
+		// exists for.
+		window.dispatchEvent(new MessageEvent('message', {
+			origin: window.location.origin,
+			source: frame.contentWindow,
+			data: { type: GRAPHICS_PREVIEW_READY_MESSAGE },
+		}));
+		await nextTick();
+
+		expect(posted).toHaveLength(1);
+		expect(posted[0]).toMatchObject({ type: GRAPHICS_PREVIEW_STATE_MESSAGE });
+	});
+
+	it('answers no ready announced by a window it did not embed', async () => {
+		const wrapper = await mountComponent();
+		const frame = wrapper.get('iframe').element;
+		const posted: unknown[] = [];
+		Object.defineProperty(frame, 'contentWindow', {
+			configurable: true,
+			value: { postMessage: (message: unknown) => posted.push(message) },
+		});
+
+		window.dispatchEvent(new MessageEvent('message', {
+			origin: window.location.origin,
+			source: window,
+			data: { type: GRAPHICS_PREVIEW_READY_MESSAGE },
+		}));
+		window.dispatchEvent(new MessageEvent('message', {
+			origin: 'https://elsewhere.test',
+			source: frame.contentWindow,
+			data: { type: GRAPHICS_PREVIEW_READY_MESSAGE },
+		}));
+		await nextTick();
+
+		expect(posted).toHaveLength(0);
 	});
 
 	it('accepts a canvas selection only from its own preview frame', async () => {

@@ -18,7 +18,7 @@ import {
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
 import { GRAPHIC_ANIMATION_REPEAT_INDEFINITE } from '~~/shared/types/graphics';
-import { GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
+import { GRAPHICS_PREVIEW_READY_MESSAGE, GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
 
 enableAutoUnmount(afterEach);
 
@@ -423,6 +423,66 @@ describe('broadcastGraphicsDisplay', () => {
 
 		expect(wrapper.find('[data-safe-area-guide]').exists()).toBe(false);
 		expect(wrapper.find('.item-guide').exists()).toBe(false);
+	});
+
+	/**
+	 * The editor's only other moment to push is the iframe's `load` event, which
+	 * this client-rendered application fires before the frame's own app has
+	 * mounted as often as after it. A push that lost that race was dropped
+	 * silently and left the preview composing the Screen's stored stack (#234).
+	 */
+	it('tells the editor it is listening, as soon as it is', async () => {
+		mockIsPreview.value = true;
+		const announced: unknown[] = [];
+		const parent = { postMessage: (message: unknown) => announced.push(message) };
+		const originalParent = Object.getOwnPropertyDescriptor(window, 'parent');
+		Object.defineProperty(window, 'parent', { configurable: true, value: parent });
+
+		try {
+			await mountComponent();
+		}
+		finally {
+			if (originalParent)
+				Object.defineProperty(window, 'parent', originalParent);
+		}
+
+		expect(announced).toEqual([{ type: GRAPHICS_PREVIEW_READY_MESSAGE }]);
+	});
+
+	it('announces nothing when it is its own parent, having nobody to tell', async () => {
+		// A preview URL opened in its own tab rather than embedded. `window.parent`
+		// is then this window, and the announcement would be to itself.
+		mockIsPreview.value = true;
+		const announced: unknown[] = [];
+		const originalPostMessage = window.postMessage;
+		window.postMessage = ((message: unknown) => announced.push(message)) as typeof window.postMessage;
+
+		try {
+			await mountComponent();
+		}
+		finally {
+			window.postMessage = originalPostMessage;
+		}
+
+		expect(announced).toEqual([]);
+	});
+
+	it('announces nothing from a live Screen Output, which has no editor to answer', async () => {
+		const announced: unknown[] = [];
+		const parent = { postMessage: (message: unknown) => announced.push(message) };
+		const originalParent = Object.getOwnPropertyDescriptor(window, 'parent');
+		Object.defineProperty(window, 'parent', { configurable: true, value: parent });
+
+		try {
+			mockScreen.value = screenWithStack([lowerThird]);
+			await mountComponent();
+		}
+		finally {
+			if (originalParent)
+				Object.defineProperty(window, 'parent', originalParent);
+		}
+
+		expect(announced).toEqual([]);
 	});
 
 	it('composes the Broadcast Graphic under authoring inside an editor preview', async () => {
