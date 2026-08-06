@@ -284,6 +284,25 @@ describe('screen config page — handing out this Screen’s output', () => {
 		return outputWindow;
 	}
 
+	/** A fresh window per `open`, so a second hand-out can be told from the first. */
+	function stubOutputWindows() {
+		const opened: Array<{ opener: unknown; location: { href: string }; close: () => void }> = [];
+		vi.stubGlobal('open', vi.fn(() => {
+			const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+			opened.push(outputWindow);
+			return outputWindow;
+		}));
+		return opened;
+	}
+
+	function capabilityRequests() {
+		return mockApiFetch.mock.calls.filter(([path]) => String(path).endsWith('/asset-capability'));
+	}
+
+	function accessUrl(capability: string, output = 'overlay') {
+		return `${window.location.origin}/event/1/screen/screen-1?output=${output}#asset-capability=${capability}`;
+	}
+
 	/**
 	 * The capability is rotated between mount and the click, and the handed-out URL has
 	 * to carry the new one.
@@ -306,6 +325,32 @@ describe('screen config page — handing out this Screen’s output', () => {
 			`${window.location.origin}/event/1/screen/screen-1?output=overlay#asset-capability=rotated-capability`,
 			expect.anything(),
 		);
+	});
+
+	/**
+	 * And obtained again on every later hand-out, not once and remembered.
+	 *
+	 * "At the moment of the hand-out" is only tested by a *second* hand-out: a capability
+	 * acquired on the first click and reused after is correct exactly once and dead from
+	 * then on. The rotate control is on this page, a few pixels from these controls, so
+	 * the operator most likely to copy twice is the one who has just rotated in between —
+	 * and the stale URL they would be handed loads, renders, and silently omits every
+	 * image, video and library font (#231).
+	 */
+	it('obtains asset access again for a second copy, rather than reusing the first', async () => {
+		wrapper = await mountLoadedPage();
+
+		await wrapper.get('[aria-label="Copy screen URL"]').trigger('click');
+		await flushPromises();
+		mockCapabilityResponse.value = 'rotated-capability';
+		await wrapper.get('[aria-label="Copy screen URL"]').trigger('click');
+		await flushPromises();
+
+		expect(capabilityRequests()).toHaveLength(2);
+		// The first hand-out carried the old capability, so the second cannot pass by
+		// having been rotated all along.
+		expect(mockCopyToClipboard).toHaveBeenNthCalledWith(1, accessUrl('settings-capability'), expect.anything());
+		expect(mockCopyToClipboard).toHaveBeenNthCalledWith(2, accessUrl('rotated-capability'), expect.anything());
 	});
 
 	/**
@@ -343,6 +388,23 @@ describe('screen config page — handing out this Screen’s output', () => {
 		);
 		expect(outputWindow.close).not.toHaveBeenCalled();
 		expect(mockToast.add).not.toHaveBeenCalled();
+	});
+
+	/** The same second hand-out, for the same reason: opening twice must ask twice. */
+	it('obtains asset access again for a second open, rather than reusing the first', async () => {
+		const opened = stubOutputWindows();
+		wrapper = await mountLoadedPage();
+
+		await wrapper.get('[data-open-output="Open default screen"]').trigger('click');
+		await flushPromises();
+		mockCapabilityResponse.value = 'rotated-capability';
+		await wrapper.get('[data-open-output="Open default screen"]').trigger('click');
+		await flushPromises();
+
+		expect(capabilityRequests()).toHaveLength(2);
+		expect(opened).toHaveLength(2);
+		expect(opened[0]!.location.href).toBe(accessUrl('settings-capability'));
+		expect(opened[1]!.location.href).toBe(accessUrl('rotated-capability'));
 	});
 
 	it('opens no output, and says why, when asset access cannot be obtained', async () => {
