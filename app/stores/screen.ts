@@ -1,4 +1,4 @@
-import type { ScreenPresenceInfo } from '~/modules/screen/runtime';
+import type { ExecuteAction, ScreenPresenceInfo } from '~/modules/screen/runtime';
 import type { Screen } from '~/types';
 import { toRaw } from 'vue';
 import { useScreenRuntime } from '~/modules/screen/runtime';
@@ -30,9 +30,51 @@ export const useScreenStore = defineStore('screen', () => {
 		loading.value = activeLoads.size > 0;
 	}
 
-	function loadErrorMessage(caughtError: unknown) {
-		return caughtError instanceof Error ? caughtError.message : 'An error occurred';
+	/**
+	 * Report a failure in the words the authority wrote about it, where it wrote any.
+	 *
+	 * Everything this store surfaces ends at an `Error.message`, and for a `$fetch`
+	 * failure that message is the transport's status line — `[GET] "…": 409 Conflict` —
+	 * which names neither what was refused nor what an operator can do about it. The
+	 * sentence about the show is in the response body, and `failureSentence` owns when
+	 * it may be quoted: a sub-500 status only, since a 5xx has had its prose replaced
+	 * with a placeholder on the way out and a failure with no status never reached the
+	 * server. #245 did this for the live-session store; this is the same adoption for
+	 * the Screen store, whose `error` is what the Screens page shows (#262).
+	 */
+	function reportedFailure(caught: unknown): unknown {
+		const sentence = failureSentence(caught);
+		return sentence === undefined ? caught : new Error(sentence, { cause: caught });
 	}
+
+	function loadErrorMessage(caughtError: unknown) {
+		const reported = reportedFailure(caughtError);
+		return reported instanceof Error ? reported.message : 'An error occurred';
+	}
+
+	/**
+	 * `executeAction`, with the substitution above applied to whatever the action threw.
+	 *
+	 * The substitution is inside the action rather than around the whole call so the
+	 * two things downstream of it stay right: `onError` rollbacks and the deferred
+	 * rejections a debounced config write answers its caller with get the same failure
+	 * the banner does, and the conflict-retry inside each action still reads the raw
+	 * `FetchError`'s status, because it is nested further in than this.
+	 *
+	 * Handed to the runtime Module as its `executeAction` so that every Screen write
+	 * reports through one seam. Two seams that must agree are two seams that can drift.
+	 */
+	const executeReporting: ExecuteAction = (action, options) => executeAction(
+		async () => {
+			try {
+				return await action();
+			}
+			catch (failure) {
+				throw reportedFailure(failure);
+			}
+		},
+		options,
+	);
 
 	// Screen presence tracking
 	const screenPresence = ref<Map<number, ScreenPresenceInfo>>(new Map());
@@ -42,7 +84,7 @@ export const useScreenStore = defineStore('screen', () => {
 		currentEventId,
 		screenPresence,
 		error,
-		executeAction,
+		executeAction: executeReporting,
 	});
 
 	const isLoaded = computed(() => hasFetched.value);
@@ -55,8 +97,8 @@ export const useScreenStore = defineStore('screen', () => {
 	 * would undo an edit already back on screen. `isSupersededByCache` is the
 	 * comparison #236 built for the announce path, reused here rather than copied.
 	 *
-	 * A refusal answers with the revision the cache kept, because both loaders hand
-	 * their answer to a caller that mirrors it into its own state — returning the
+	 * A refusal answers with the revision the cache kept, because all three loaders
+	 * hand their answer to a caller that mirrors it into its own state — returning the
 	 * refused payload would put it in front of the operator anyway. That revision
 	 * comes from `cachedRevision`, the same selection `isSupersededByCache` compared
 	 * against, so the two cannot name different entries when the cache holds one id
@@ -98,6 +140,25 @@ export const useScreenStore = defineStore('screen', () => {
 		}
 	}
 
+	/**
+	 * Load the Screen an output was opened on, and keep the newer of it and the cache.
+	 *
+	 * The comparison is the other two loaders' (#251), and reaches this one for the
+	 * reason it reached them: a GET issued before a save commits can be served after
+	 * it settles. What made this loader the last version-blind one is that the single
+	 * route reaching it is the Screen Output, whose client issues no writes — so the
+	 * race had nothing to race against. That is a fact about today's routing rather than
+	 * about this loader, and it ends the day a display session is embedded in this
+	 * document or the output route is linked to in-app — not with the Feature Match
+	 * Overlay preview aside, which has landed and embeds through an iframe (see
+	 * `cachedRevision`).
+	 *
+	 * `activeScreen` is emptied before the GET, deliberately: while a slug is loading
+	 * this client holds no active Screen, and showing the previous one under the new
+	 * slug would be worse than showing nothing. So the holder the comparison reads here
+	 * is `screens` — which is where a writing client's save lands anyway, since every
+	 * write path refuses a Screen it does not hold there.
+	 */
 	async function loadScreenBySlug(eventId: number, slug: string) {
 		const flight = activeScreenLoads.begin();
 		const token = beginLoad();
@@ -108,8 +169,9 @@ export const useScreenStore = defineStore('screen', () => {
 				throw new Error('Screen not found');
 			if (flight.stale)
 				return null;
-			activeScreen.value = screen;
-			return screen;
+			const kept = keptRevision(screen);
+			activeScreen.value = kept;
+			return kept;
 		}
 		catch (caughtError) {
 			if (flight.current)
@@ -123,7 +185,7 @@ export const useScreenStore = defineStore('screen', () => {
 
 	async function getScreenById(eventId: number, screenId: number) {
 		currentEventId.value = eventId;
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const screenData = await screenRepo.getById(eventId, screenId);
 				if (!screenData) {

@@ -5,18 +5,22 @@ import { createMockScreen } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 
 /**
- * Put the same Screen id in the cache more than once, through the public store API.
+ * Put the same Screen id in the cache more than once, by assignment.
  *
- * `createScreen` pushes its answer unconditionally, so creates answering with one id
- * leave one entry each. That is a defect in its own right (a round-end ticket), but
- * it is also the state in which the version comparison and the revision a refusal
- * answers with must not disagree about which entry is authoritative.
+ * It used to be seeded through the public store API — `createScreen` pushed its
+ * answer unconditionally, so two creates answering with one id left one entry each,
+ * and that is how #251's review first reached this state. #261 closed that door, and
+ * the pin for it is in the `createScreen` block below.
+ *
+ * The state is still worth holding tests to. `cachedRevision` is the single selection
+ * that both the version comparison and every refusal's answer read, and what makes
+ * one selection worth having is precisely that it cannot disagree with itself when an
+ * id is held twice — the split #251's review constructed. No door into `screens` will
+ * build that state any more, so a seeded cache is the only thing that can hold the
+ * property to it.
  */
-async function seedDuplicateCacheEntries(store: ReturnType<typeof useScreenStore>, repo: { create: ReturnType<typeof vi.fn> }, versions: number[]) {
-	for (const stateVersion of versions)
-		repo.create.mockResolvedValueOnce(createMockScreen({ id: 10, name: `v${stateVersion}`, stateVersion }));
-	for (const _ of versions)
-		await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'idle' });
+function seedDuplicateCacheEntries(store: ReturnType<typeof useScreenStore>, versions: number[]) {
+	store.screens = versions.map(stateVersion => createMockScreen({ id: 10, name: `v${stateVersion}`, stateVersion }));
 }
 
 // ── Mock Dependencies ──
@@ -148,7 +152,7 @@ describe('useScreenStore', () => {
 			// Same split-authority hazard as the single-Screen loader: selecting a
 			// different entry than the comparison did writes a revision older than the
 			// one the fetched list brought, which is worse than replacing wholesale.
-			await seedDuplicateCacheEntries(store, mockRepo, [1, 5, 2]);
+			seedDuplicateCacheEntries(store, [1, 5, 2]);
 			mockRepo.list.mockResolvedValue([createMockScreen({ id: 10, name: 'v3', stateVersion: 3 })]);
 
 			await store.loadScreensByEventId(1);
@@ -228,6 +232,77 @@ describe('useScreenStore', () => {
 
 			expect(store.activeScreen).toEqual(latest);
 		});
+
+		it('keeps a held revision newer than the one the slug answer brings', async () => {
+			store.screens = [createMockScreen({ id: 7, slug: 'main', name: 'Saved', stateVersion: 4 })];
+			mockRepo.getBySlug.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', name: 'Stale', stateVersion: 3 }));
+
+			const loaded = await store.loadScreenBySlug(1, 'main');
+
+			expect(store.activeScreen!.name).toBe('Saved');
+			// Same rule as the other two loaders: the answer is the revision kept, since
+			// the display session compares what it is handed against `activeScreen` and
+			// renders from there.
+			expect(loaded!.name).toBe('Saved');
+			// And handed back raw, like every other Screen a cache write stores.
+			expect(isReactive(loaded)).toBe(false);
+		});
+
+		it('takes the slug answer at the revision the cache already holds', async () => {
+			// Equal is not older: the server bumps `stateVersion` once per write, so the
+			// same revision carries the same Screen (#236, #251).
+			store.screens = [createMockScreen({ id: 7, slug: 'main', name: 'Old', stateVersion: 4 })];
+			mockRepo.getBySlug.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', name: 'Fresh', stateVersion: 4 }));
+
+			await store.loadScreenBySlug(1, 'main');
+
+			expect(store.activeScreen!.name).toBe('Fresh');
+		});
+
+		it('answers a refusal with the newest held revision when the cache holds the Screen more than once', async () => {
+			// The third loader reads the same single selection as the other two: take a
+			// different entry than the comparison did and the refusal hands back — and
+			// puts on the output — a revision older than both the cache's newest and the
+			// payload it just refused.
+			seedDuplicateCacheEntries(store, [1, 5, 2]);
+			mockRepo.getBySlug.mockResolvedValue(createMockScreen({ id: 10, name: 'v3', stateVersion: 3 }));
+
+			const loaded = await store.loadScreenBySlug(1, 'screen');
+
+			expect(loaded!.stateVersion).toBe(5);
+			expect(store.activeScreen!.stateVersion).toBe(5);
+		});
+
+		it('does not let a slug load that raced a settled save overwrite it', async () => {
+			// The interleaving item 3 of #261 is about, reached the only way it can be
+			// reached: a client that both writes and loads by slug. The loader nulls
+			// `activeScreen` before its GET, so the holder the comparison reads here is
+			// `screens` — which is exactly where a writing client's save lands, since
+			// `updateScreenConfig` refuses a Screen it does not hold there.
+			vi.useFakeTimers();
+			store.screens = [createMockScreen({ id: 5, slug: 'main', screenConfig: { width: 100 }, stateVersion: 3 })];
+
+			let serveLoad: (screen: unknown) => void = () => {};
+			mockRepo.getBySlug.mockReturnValueOnce(new Promise((resolve) => {
+				serveLoad = resolve;
+			}));
+			const load = store.loadScreenBySlug(1, 'main');
+
+			const saved = createMockScreen({ id: 5, slug: 'main', screenConfig: { width: 1920 }, stateVersion: 4 });
+			mockRepo.updateScreenConfig.mockResolvedValue(saved);
+			const save = store.updateScreenConfig(1, 5, { width: 1920 });
+			await vi.advanceTimersByTimeAsync(300);
+			await save;
+
+			// Served before that save committed, so it answers with the revision the save
+			// superseded.
+			serveLoad(createMockScreen({ id: 5, slug: 'main', screenConfig: { width: 100 }, stateVersion: 3 }));
+			const loaded = await load;
+
+			expect(store.activeScreen!.screenConfig).toEqual({ width: 1920 });
+			expect(loaded!.screenConfig).toEqual({ width: 1920 });
+			vi.useRealTimers();
+		});
 	});
 
 	describe('getScreenById', () => {
@@ -280,7 +355,7 @@ describe('useScreenStore', () => {
 			// the same one. Take the first (or the last) instead and a refusal hands back
 			// a revision older than both the cache's newest and the payload it refused —
 			// worse than the version-blind overwrite this guard replaced.
-			await seedDuplicateCacheEntries(store, mockRepo, [1, 5, 2]);
+			seedDuplicateCacheEntries(store, [1, 5, 2]);
 			expect(store.screens).toHaveLength(3);
 			mockRepo.getById.mockResolvedValue(createMockScreen({ id: 10, name: 'v3', stateVersion: 3 }));
 
@@ -346,6 +421,48 @@ describe('useScreenStore', () => {
 			const result = await store.createScreen(1, { name: 'Screen', slug: 's', currentMode: 'idle' });
 
 			expect(result).toEqual(created);
+		});
+
+		it('holds one entry when two creates answer with the same id', async () => {
+			// The push used to be unconditional, so this left two entries for id 10 —
+			// the duplicate #251's review constructed through the public store API, and
+			// the state in which the version comparison and the revision a refusal
+			// answers with could name different entries (#261).
+			mockRepo.create
+				.mockResolvedValueOnce(createMockScreen({ id: 10, name: 'first', stateVersion: 1 }))
+				.mockResolvedValueOnce(createMockScreen({ id: 10, name: 'second', stateVersion: 2 }));
+
+			await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'idle' });
+			await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'idle' });
+
+			expect(store.screens.map(s => s.id)).toEqual([10]);
+			expect(store.screens[0]!.name).toBe('second');
+		});
+
+		it('keeps the newer held revision when a create answers with an older one', async () => {
+			// Collision semantics, decided: newest wins, through the same selection every
+			// other door into `screens` uses. A create's answer is refused exactly when a
+			// load's would be, so no door can move a Screen's `stateVersion` backwards.
+			store.screens = [createMockScreen({ id: 10, name: 'Saved', stateVersion: 4 })];
+			mockRepo.create.mockResolvedValue(createMockScreen({ id: 10, name: 'Created', stateVersion: 3 }));
+
+			const created = await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'idle' });
+
+			expect(store.screens.map(s => s.name)).toEqual(['Saved']);
+			// Unlike a loader — whose caller mirrors the answer into its own view of the
+			// cache — nothing mirrors this one: the create modal names the Screen in a
+			// success toast, and otherwise reads the answer only to tell success from
+			// failure. So it is handed what the server made, not the entry sharing the id.
+			expect(created!.name).toBe('Created');
+		});
+
+		it('takes a create answering at the revision the cache already holds', async () => {
+			store.screens = [createMockScreen({ id: 10, name: 'Old', stateVersion: 4 })];
+			mockRepo.create.mockResolvedValue(createMockScreen({ id: 10, name: 'Fresh', stateVersion: 4 }));
+
+			await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'idle' });
+
+			expect(store.screens.map(s => s.name)).toEqual(['Fresh']);
 		});
 	});
 
