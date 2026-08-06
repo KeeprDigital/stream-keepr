@@ -77,6 +77,91 @@ describe('useScreenStore', () => {
 			expect(store.isLoaded).toBe(true);
 			expect(store.currentEventId).toBe(1);
 		});
+
+		it('keeps a cached Screen the fetched list serves at an older revision', async () => {
+			store.screens = [createMockScreen({ id: 1, name: 'Saved', stateVersion: 4 })];
+			mockRepo.list.mockResolvedValue([createMockScreen({ id: 1, name: 'Stale', stateVersion: 3 })]);
+
+			await store.loadScreensByEventId(1);
+
+			expect(store.screens[0]!.name).toBe('Saved');
+			expect(store.screens[0]!.stateVersion).toBe(4);
+		});
+
+		it('takes the fetched Screen when the list serves the revision the cache already holds', async () => {
+			// Equal is not older: the server bumps `stateVersion` once per write, so a
+			// list serving the same revision carries the same Screen, and refusing it
+			// would leave a reload unable to correct anything.
+			store.screens = [createMockScreen({ id: 1, name: 'Old', stateVersion: 4 })];
+			mockRepo.list.mockResolvedValue([createMockScreen({ id: 1, name: 'Fresh', stateVersion: 4 })]);
+
+			await store.loadScreensByEventId(1);
+
+			expect(store.screens[0]!.name).toBe('Fresh');
+		});
+
+		it('drops a cached Screen the fetched list no longer contains, however new the cache holds it', async () => {
+			// The list is the authority on membership. Absence carries no `stateVersion`
+			// to compare against, and a reload is how a client that missed the delete
+			// announcement finds out — keeping the cached entry would resurrect it on
+			// every subsequent load.
+			store.screens = [
+				createMockScreen({ id: 1, name: 'Deleted elsewhere', stateVersion: 9 }),
+				createMockScreen({ id: 2, name: 'Still there', stateVersion: 1 }),
+			];
+			mockRepo.list.mockResolvedValue([createMockScreen({ id: 2, name: 'Still there', stateVersion: 1 })]);
+
+			await store.loadScreensByEventId(1);
+
+			expect(store.screens.map(s => s.id)).toEqual([2]);
+		});
+
+		it('adds a Screen the fetched list brings that the cache lacks, in the order the list gives', async () => {
+			store.screens = [createMockScreen({ id: 1, stateVersion: 4 })];
+			mockRepo.list.mockResolvedValue([
+				createMockScreen({ id: 2, stateVersion: 1 }),
+				createMockScreen({ id: 1, stateVersion: 4 }),
+			]);
+
+			await store.loadScreensByEventId(1);
+
+			expect(store.screens.map(s => s.id)).toEqual([2, 1]);
+		});
+
+		it('does not let a refresh that raced a settled save overwrite it', async () => {
+			// A page load or explicit refresh issues its GET before the operator's own
+			// save commits and can be served after it settles, by which point the
+			// editing field has stopped masking the store — so caching the list's
+			// answer wholesale is an edit visibly undone (#251, #236's clobber reached
+			// through a loader instead of an announce).
+			//
+			// Every step is driven explicitly — the save's debounce by fake timers, the
+			// list's answer by its own resolver — so the ordering is the test's.
+			vi.useFakeTimers();
+			store.screens = [createMockScreen({ id: 5, screenConfig: { width: 100 }, stateVersion: 3 })];
+
+			let serveRefresh: (screens: unknown) => void = () => {};
+			mockRepo.list.mockReturnValueOnce(new Promise((resolve) => {
+				serveRefresh = resolve;
+			}));
+			const refresh = store.loadScreensByEventId(1);
+
+			const saved = createMockScreen({ id: 5, screenConfig: { width: 1920 }, stateVersion: 4 });
+			mockRepo.updateScreenConfig.mockResolvedValue(saved);
+			const save = store.updateScreenConfig(1, 5, { width: 1920 });
+			await vi.advanceTimersByTimeAsync(300);
+			await save;
+			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
+
+			// Served before that save committed, so it answers with the revision the
+			// save superseded.
+			serveRefresh([createMockScreen({ id: 5, screenConfig: { width: 100 }, stateVersion: 3 })]);
+			const loaded = await refresh;
+
+			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
+			expect(loaded![0]!.screenConfig).toEqual({ width: 1920 });
+			vi.useRealTimers();
+		});
 	});
 
 	describe('loadScreenBySlug', () => {
@@ -145,6 +230,54 @@ describe('useScreenStore', () => {
 			await store.getScreenById(42, 5);
 
 			expect(store.currentEventId).toBe(42);
+		});
+
+		it('refuses an answer older than the cached revision, and answers with the cached one', async () => {
+			store.screens = [createMockScreen({ id: 5, name: 'Saved', stateVersion: 4 })];
+			mockRepo.getById.mockResolvedValue(createMockScreen({ id: 5, name: 'Stale', stateVersion: 3 }));
+
+			const loaded = await store.getScreenById(1, 5);
+
+			expect(store.screens[0]!.name).toBe('Saved');
+			// The page mirrors this answer into its own `screen` ref, so handing back the
+			// refused payload would put it on screen anyway.
+			expect(loaded!.name).toBe('Saved');
+		});
+
+		it('caches an answer at the revision the cache already holds', async () => {
+			store.screens = [createMockScreen({ id: 5, name: 'Old', stateVersion: 4 })];
+			mockRepo.getById.mockResolvedValue(createMockScreen({ id: 5, name: 'Fresh', stateVersion: 4 }));
+
+			await store.getScreenById(1, 5);
+
+			expect(store.screens[0]!.name).toBe('Fresh');
+		});
+
+		it('does not let a load that raced a settled save overwrite it', async () => {
+			// Same interleaving as the list refresh above, reached through the single
+			// Screen load the configuration page runs on mount and on route change.
+			vi.useFakeTimers();
+			store.screens = [createMockScreen({ id: 5, screenConfig: { width: 100 }, stateVersion: 3 })];
+
+			let serveLoad: (screen: unknown) => void = () => {};
+			mockRepo.getById.mockReturnValueOnce(new Promise((resolve) => {
+				serveLoad = resolve;
+			}));
+			const load = store.getScreenById(1, 5);
+
+			const saved = createMockScreen({ id: 5, screenConfig: { width: 1920 }, stateVersion: 4 });
+			mockRepo.updateScreenConfig.mockResolvedValue(saved);
+			const save = store.updateScreenConfig(1, 5, { width: 1920 });
+			await vi.advanceTimersByTimeAsync(300);
+			await save;
+			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
+
+			serveLoad(createMockScreen({ id: 5, screenConfig: { width: 100 }, stateVersion: 3 }));
+			const loaded = await load;
+
+			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
+			expect(loaded!.screenConfig).toEqual({ width: 1920 });
+			vi.useRealTimers();
 		});
 	});
 
