@@ -28,8 +28,14 @@ interface CopyToClipboardFeedback {
  * copy and a failed one leave that seam byte-for-byte identical, so no amount of
  * reading its refs recovers the difference — and the caller toasted "URL Copied"
  * having copied nothing (#257). `isSupported` was no better: `legacy: true` forces it
- * true, so the unsupported branch it guarded could never run, and `copy()` catches
- * both of its own write paths, so neither could the throw branch.
+ * true, so the unsupported branch it guarded could never run.
+ *
+ * `copy()` guards only its Clipboard API write; `legacyCopy` is called outside that
+ * try, so a throwing `execCommand` propagated out of `copy()` — which is what the old
+ * composable's catch branch was there for, and the one copy failure it could see.
+ * Bringing the call in here brings that obligation with it, so the legacy write is
+ * wrapped rather than merely observed: escaping this function would mean an unhandled
+ * rejection and no report at all.
  *
  * The Clipboard API is tried first because it is the one that works without a user
  * gesture in the current task; the legacy path is kept because a page served over
@@ -54,10 +60,18 @@ async function writeToClipboard(text: string): Promise<boolean> {
 	textarea.style.position = 'absolute';
 	textarea.style.opacity = '0';
 	textarea.setAttribute('readonly', '');
-	document.body.appendChild(textarea);
-	textarea.select();
 	try {
+		document.body.appendChild(textarea);
+		textarea.select();
 		return document.execCommand('copy');
+	}
+	catch (error) {
+		// `execCommand` is long deprecated, so a browser that has removed it throws here
+		// rather than answering false. Logged because an exception on this path is a fact
+		// about the browser rather than about the copy, and reported as a failed write
+		// because from the operator's side that is exactly what it is.
+		console.error('Failed to copy to clipboard:', error);
+		return false;
 	}
 	finally {
 		textarea.remove();

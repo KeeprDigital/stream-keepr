@@ -116,6 +116,37 @@ describe('useCopyToClipboard', () => {
 		expect(mocks.toast.add).not.toHaveBeenCalledWith(expect.objectContaining({ color: 'success' }));
 	});
 
+	/**
+	 * A throwing `execCommand` is the one failure the pre-#257 composable could actually
+	 * see, and the rebuild nearly lost it: VueUse calls `legacyCopy` *outside* the try
+	 * that guards its Clipboard API write, so the throw propagated out of `copy()` and
+	 * into the old catch. Reading the legacy result put that call in this file, where a
+	 * `try`/`finally` with no `catch` would have let it escape `copyToClipboard`
+	 * entirely — an unhandled rejection, and the operator told nothing at all, which is
+	 * a worse silence than the wrong toast #257 was filed for.
+	 *
+	 * Reachable rather than theoretical: `execCommand` is long deprecated, and a browser
+	 * that has removed it throws `TypeError: document.execCommand is not a function`
+	 * through this exact path.
+	 */
+	it('reports a failure, rather than throwing, when the legacy write itself throws', async () => {
+		stubClipboardApi(false);
+		execCommand.mockImplementation(() => {
+			throw new TypeError('document.execCommand is not a function');
+		});
+		const { copyToClipboard } = useCopyToClipboard();
+
+		await expect(copyToClipboard('https://example.test/screen', {
+			successTitle: 'URL Copied',
+		})).resolves.toBe(false);
+
+		expect(mocks.toast.add).toHaveBeenCalledTimes(1);
+		expect(mocks.toast.add).toHaveBeenCalledWith(expect.objectContaining({
+			title: 'Copy failed',
+			color: 'error',
+		}));
+	});
+
 	it('leaves no textarea behind, whether the legacy write succeeded or failed', async () => {
 		stubClipboardApi(false);
 		const { copyToClipboard } = useCopyToClipboard();

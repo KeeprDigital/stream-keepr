@@ -332,9 +332,14 @@ describe('screen config page — handing out this Screen’s output', () => {
 		await flushPromises();
 
 		expect(mockApiFetch).toHaveBeenCalledWith('/api/events/1/screens/1/asset-capability');
+		// Named for the output rather than the Screen, matching the control that produced
+		// it and the workspace's wording for the same hand-out (#234, #266).
 		expect(mockCopyToClipboard).toHaveBeenCalledWith(
 			`${window.location.origin}/event/1/screen/screen-1?output=overlay#asset-capability=rotated-capability`,
-			expect.anything(),
+			expect.objectContaining({
+				successTitle: 'Output URL copied',
+				successDescription: expect.stringContaining('asset access'),
+			}),
 		);
 	});
 

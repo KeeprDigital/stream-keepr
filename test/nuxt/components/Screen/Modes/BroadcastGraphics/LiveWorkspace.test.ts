@@ -502,7 +502,10 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 			expect(mockApiFetch).toHaveBeenCalledWith('/api/events/7/screens/3/asset-capability');
 			expect(mockCopyToClipboard).toHaveBeenCalledWith(
 				`${window.location.origin}/event/7/screen/main?output=overlay#asset-capability=rotated-capability`,
-				expect.anything(),
+				expect.objectContaining({
+					successTitle: 'Output URL copied',
+					successDescription: expect.stringContaining('asset access'),
+				}),
 			);
 		});
 

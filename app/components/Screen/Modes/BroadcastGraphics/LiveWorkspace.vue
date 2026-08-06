@@ -264,18 +264,21 @@ const ASSET_REFUSAL_ALERTS: Record<'missing' | 'unavailable', {
  * than a fault, and its own sentence already names the thing. It is titled as a
  * refusal without being given a third set of words for a fault it is not.
  *
- * What keeps "failed" is everything with no refusal code at all, and since #245 that
- * is no longer only the client's own faults. `failureSentence` now lifts a sub-500
- * body's sentence into `error`, so "the Screen is not in Broadcast Graphics mode"
- * and "the live session has ended" arrive here as the authority's own words under a
- * title that calls them a failure. That is a real mismatch and it is left standing
- * deliberately: `error` is one string, and the store does not mark which kind it is —
- * writing `refusal` for these would undo #230's separation of *having a sentence*
- * from *being a recognised refusal*. Titling them apart therefore needs a signal
- * from the store rather than a guess about the string's shape here, and a title
- * chosen by sniffing prose would be a worse lie than the imprecise one. Until that
- * signal exists (it belongs with #262's store work), the sentence under the title
- * carries the meaning and the title is merely coarse.
+ * What keeps "failed" is everything with no refusal code at all, and nothing refused
+ * those — so "failed" is what they are: an action this client could not complete.
+ * What #245 changed is how well they say it. `failureSentence` lifts a sub-500 body's
+ * sentence into `error`, so "the Screen is not in Broadcast Graphics mode" and "the
+ * live session has ended" now explain themselves in the authority's own words where
+ * they used to arrive as a transport status line, and the title above them is the
+ * same either way. Deliberately: writing `refusal` for these to title them apart
+ * would undo #230's separation of *having a sentence* from *being a recognised
+ * refusal*, which is the distinction the whole vocabulary rests on.
+ *
+ * Whether an authority's sentence should ever carry a title of its own is a real
+ * question and not one this component can answer — `error` is a single string, and a
+ * title chosen by sniffing its shape for a status line would be a worse lie than a
+ * coarse one. That needs a signal from the store, and is tracked separately at round
+ * close rather than decided here.
  *
  * A field-scoped refusal is reported here as well as against its own field. That is
  * deliberate: Live Control renders only for the selected Broadcast Graphic, so an
