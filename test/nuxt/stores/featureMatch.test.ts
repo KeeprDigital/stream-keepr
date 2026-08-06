@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockFeatureMatch } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 // ── Mock Dependencies ──
 
@@ -23,20 +24,17 @@ mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string,
 	ablyCallbacks[storeName] = callbacks;
 });
 
-// Supports onError rollback for tests that verify error recovery
-const mockExecuteAction = vi.fn(async (fn: any, opts?: any) => {
-	try {
-		return await fn();
-	}
-	catch (err) {
-		opts?.onError?.(err);
-		throw err;
-	}
-});
-
 mockNuxtImport('useFeatureMatchRepository', () => () => mockRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
-mockNuxtImport('useAsyncAction', () => () => ({ executeAction: mockExecuteAction }));
+
+/*
+ * `useAsyncAction` is deliberately not mocked, for the reason #245's suite gives: it is
+ * the seam every action here reports through, and the hand-written copy that stood in for
+ * it re-raised what it caught where the real composable resolves to `null` — so no test
+ * here could say what an operator is shown. The real composable is auto-imported, does no
+ * I/O and starts no timers, and it calls the same `onError` rollback the copy existed to
+ * support (#241, #263).
+ */
 
 describe('useFeatureMatchStore', () => {
 	let store: ReturnType<typeof useFeatureMatchStore>;
@@ -144,6 +142,39 @@ describe('useFeatureMatchStore', () => {
 			expect(store.featureMatches[0]!.id).toBe(2);
 			expect(store.featureMatches[1]!.id).toBe(1);
 			expect(mockRepo.reorder).toHaveBeenCalledWith(1, 1, 'down');
+		});
+	});
+
+	// ── Failure reporting ──
+
+	describe('failure reporting', () => {
+		it('reports the sentence a refused reorder carries, and puts the slots back', async () => {
+			store.featureMatches = [
+				createMockFeatureMatch({ id: 1, sortOrder: 0 }),
+				createMockFeatureMatch({ id: 2, sortOrder: 1 }),
+			];
+			store.currentEventId = 1;
+			mockRepo.reorder.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'The Feature Match order changed while you were reordering it' },
+			}));
+
+			await store.reorderFeatureMatch(1, 'down');
+
+			expect(store.error).toBe('The Feature Match order changed while you were reordering it');
+			expect(store.featureMatches.map(m => m.id)).toEqual([1, 2]);
+		});
+
+		it('reports the sentence a refused single-slot read carries', async () => {
+			mockRepo.getById.mockRejectedValue(transportFailure({
+				status: 404,
+				body: { message: 'That Feature Match slot is no longer part of this Event' },
+				request: `[GET] "/api/events/1/feature-matches/9"`,
+			}));
+
+			await store.getFeatureMatchById(1, 9);
+
+			expect(store.error).toBe('That Feature Match slot is no longer part of this Event');
 		});
 	});
 

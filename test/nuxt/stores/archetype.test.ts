@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockUiArchetype } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 // ── Mock Dependencies ──
 
@@ -48,9 +49,14 @@ mockNuxtImport('useApiHeaders', () => () => mockApiHeaders);
 mockNuxtImport('useMetagameStore', () => () => mockMetagameStore);
 mockNuxtImport('usePlayerDeckStore', () => () => mockPlayerDeckStore);
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
-mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: vi.fn(async (fn: any) => fn()),
-}));
+
+/*
+ * `useAsyncAction` is deliberately not mocked, for the reason #245's suite gives: it is
+ * the seam every action here reports through, and the hand-written copy that used to
+ * stand in for it never caught anything — so `error` was never written and no test here
+ * could say what an operator is shown. The real composable is auto-imported, does no I/O
+ * and starts no timers (#241, #263).
+ */
 
 describe('useArchetypeStore', () => {
 	let store: ReturnType<typeof useArchetypeStore>;
@@ -180,6 +186,52 @@ describe('useArchetypeStore', () => {
 				headers: { 'x-realtime-connection-id': 'test-connection-id' },
 			});
 			expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
+		});
+	});
+
+	// ── Failure reporting ──
+
+	describe('failure reporting', () => {
+		it('reports the sentence the server wrote about a refused create', async () => {
+			mockRepo.create.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'An Archetype with that name already exists in this Event' },
+			}));
+
+			await store.createArchetype(1, { name: 'Azorius Control' });
+
+			expect(store.error).toBe('An Archetype with that name already exists in this Event');
+		});
+
+		it('reports the sentence a refused key-card write carries, to the caller as well as to `error`', async () => {
+			store.archetypes = [createMockUiArchetype({ id: 1 })];
+			mockFetch.mockRejectedValue(transportFailure({
+				status: 422,
+				body: { message: 'No card named “Counterspel” exists in the catalogue' },
+			}));
+
+			// `setKeyCards` reports *and* re-raises, and the modal saving key cards shows
+			// the raised message as its own title — so both have to be the sentence.
+			await expect(store.setKeyCards(1, 1, ['Counterspel']))
+				.rejects
+				.toThrow('No card named “Counterspel” exists in the catalogue');
+			expect(store.error).toBe('No card named “Counterspel” exists in the catalogue');
+		});
+
+		it('reports the transport line for a 5xx, whose body message the server sanitized', async () => {
+			mockRepo.create.mockRejectedValue(transportFailure({
+				status: 500,
+				body: { message: 'Internal Server Error' },
+				request: `[POST] "/api/events/1/archetypes"`,
+			}));
+
+			await store.createArchetype(1, { name: 'Azorius Control' });
+
+			// 'Internal Server Error' is what `mapPublicNitroError` writes over whatever the
+			// server actually failed with. Quoting it back would put a placeholder in front of
+			// an operator dressed as the authority's own words; a status line reads as
+			// machinery, which is what it is.
+			expect(store.error).toBe('[POST] "/api/events/1/archetypes": 500 Internal Server Error');
 		});
 	});
 

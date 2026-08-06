@@ -8,7 +8,7 @@ import { useEventDataLifecycle } from '~/modules/event-data/lifecycle';
 
 export const useFeatureMatchStore = defineStore('featureMatch', () => {
 	const matchRepo = useFeatureMatchRepository();
-	const { executeAction } = useStoreHelpers();
+	const { executeReporting } = useReportingAction();
 
 	const itemLoading = ref(false);
 	const lifecycle = useEventDataLifecycle<FeatureMatch, CreateFeatureMatchInput, UpdateFeatureMatchInput>({
@@ -43,7 +43,7 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 	}
 
 	async function getFeatureMatchById(eventId: number, matchId: number) {
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const matchData = await matchRepo.getById(eventId, matchId);
 				if (!matchData) {
@@ -92,7 +92,7 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		featureMatches.value[swapIndex] = temp;
 
 		const eventId = currentEventId.value;
-		return executeAction(
+		return executeReporting(
 			async () => {
 				await matchRepo.reorder(eventId, slotId, direction);
 			},

@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockEvent } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 // ── Mock Dependencies ──
 
@@ -270,6 +271,38 @@ describe('useMeleeStore', () => {
 			expect(store.lastOperation?.title).toBe('Event Synced');
 			expect(store.lastOperation?.status).toBe('success');
 			expect(store.lastOperation?.details).toContain('Structure notification could not be delivered');
+		});
+	});
+
+	describe('failure reporting', () => {
+		it('reports the sentence a refused sync carries, in `error` and in the operation banner', async () => {
+			setEvent();
+			mockEventRepo.syncMelee.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'This Event is no longer linked to a Melee.gg tournament' },
+				request: `[POST] "/api/events/1/melee/sync"`,
+			}));
+
+			await store.syncEvent();
+
+			expect(store.error).toBe('This Event is no longer linked to a Melee.gg tournament');
+			// The banner's own failure description falls through to `error`, so the sentence
+			// is what an operator reads under 'Event Sync Failed' as well.
+			expect(store.lastOperation?.description).toBe('This Event is no longer linked to a Melee.gg tournament');
+		});
+
+		it('reports the transport line for a 5xx, whose body message the server sanitized', async () => {
+			setEvent();
+			mockEventRepo.syncMelee.mockRejectedValue(transportFailure({
+				status: 502,
+				statusText: 'Bad Gateway',
+				body: { message: 'Internal Server Error' },
+				request: `[POST] "/api/events/1/melee/sync"`,
+			}));
+
+			await store.syncEvent();
+
+			expect(store.error).toBe('[POST] "/api/events/1/melee/sync": 502 Bad Gateway');
 		});
 	});
 

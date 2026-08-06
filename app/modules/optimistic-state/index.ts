@@ -68,7 +68,17 @@ interface TargetState<S> {
  * ownership claims, so `applyRemote` merges around every live edit.
  */
 export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
-	const { executeAction } = useAsyncAction();
+	/**
+	 * A refused prediction reports the sentence the server wrote about it, where it wrote
+	 * one — 'This Feature Match has already been reset' rather than
+	 * `[POST] "…": 409 Conflict` (#262).
+	 *
+	 * A rolled-back optimistic action is exactly the case where the words matter most:
+	 * the operator watched the change appear and then vanish, so the message is the only
+	 * account of why. Rollback itself is untouched — `onError` still runs, and what is
+	 * reported has never decided what is reverted.
+	 */
+	const { executeReporting } = useReportingAction();
 
 	// Live Field Ownership claims per entity id — one claim per pending batch
 	// target or in-flight action, released when the work settles.
@@ -170,7 +180,7 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 						target.release();
 				};
 
-				void queue.enqueue(key, () => executeAction(
+				void queue.enqueue(key, () => executeReporting(
 					async () => {
 						const result = await batchOptions.flush(flushEntry, controls);
 						// Only apply the server response if no newer batch has started
@@ -312,7 +322,7 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 		if (actionKey)
 			inFlightActions.add(actionKey);
 
-		const promise = executeAction(
+		const promise = executeReporting(
 			async () => {
 				const result = await apiCall();
 				for (const [id, target] of applied) {

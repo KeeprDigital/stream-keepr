@@ -14,7 +14,7 @@ import { createOptimisticState } from '~/modules/optimistic-state';
 
 export const useFeatureMatchStateStore = defineStore('featureMatchState', () => {
 	const repo = useFeatureMatchSessionClient();
-	const { executeAction } = useAsyncAction();
+	const { executeReporting } = useReportingAction();
 	const { getServerTime } = useServerTime();
 
 	// State: Map of featureMatchId -> FeatureMatchState
@@ -214,7 +214,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		if (!current)
 			return null;
 
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const state = await apiCall();
 				optimistic.applyRemote(matchId, state);
@@ -228,7 +228,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 
 	async function loadState(eventId: number, matchId: number) {
 		currentEventId.value = eventId;
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const session = await repo.ensureSession(eventId, matchId);
 				if (!session)

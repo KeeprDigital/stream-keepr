@@ -38,7 +38,7 @@ export const useMeleeStore = defineStore('melee', () => {
 	const metagameStore = useMetagameStore();
 	const { refreshMeleeStructureData } = useMeleeDataRefresh();
 	const eventRepo = useEventRepository();
-	const { executeAction } = useAsyncAction();
+	const { executeReporting } = useReportingAction();
 
 	const syncing = ref(false);
 	const syncingPlayers = ref(false);
@@ -268,7 +268,7 @@ export const useMeleeStore = defineStore('melee', () => {
 		const eventId = eventStore.eventId;
 		let projectionRefreshErrors: string[] = [];
 
-		const response = await executeAction(
+		const response = await executeReporting(
 			async () => {
 				config.steps?.start();
 				const response = await config.apiCall(eventId);
