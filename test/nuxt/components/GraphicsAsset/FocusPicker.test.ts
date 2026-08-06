@@ -7,6 +7,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import { clearNuxtState } from '#app';
 
 enableAutoUnmount(afterEach);
 
@@ -187,6 +188,9 @@ const buttonStub = defineComponent({
 
 describe('the contextual Graphic Asset Focus Picker', () => {
 	beforeEach(() => {
+		// The chosen scope is deliberately shared by every picker in the app, so
+		// it outlives a mounted component and would otherwise outlive a test.
+		clearNuxtState('graphic-asset-picker-scope');
 		mockApiFetch.mockReset();
 		mockApiFetch.mockResolvedValue({
 			outcome: 'available',
@@ -222,13 +226,130 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		expect(wrapper.text()).toContain('PNG compatible');
 		expect(wrapper.text()).not.toContain('Shared logo');
 
-		await wrapper.get('[data-testid="show-all-assets"]').trigger('click');
+		await wrapper.get('[data-testid="graphic-asset-scope-library"]').trigger('click');
 		expect(wrapper.text()).toContain('Shared logo');
 		await wrapper.get('[data-testid="select-asset-shared"]').trigger('click');
 
 		expect(wrapper.emitted('update:modelValue')).toEqual([[
 			{ assetId: 'asset-shared', revisionId: 'revision-shared-1' },
 		]]);
+	});
+
+	/*
+	 * Scope. An Event adopts assets by being pointed at them, so 'This Event' is
+	 * empty on every Event until the first pin — and the picker used to open
+	 * there anyway, on an empty grid, with a single button whose label named the
+	 * current scope rather than the action (#234).
+	 */
+
+	async function mountPicker(props: { eventId: number; assetKind?: GraphicAsset['kind'][] }) {
+		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
+		return mount(FocusPicker, {
+			props: { fieldLabel: 'Frame image', ...props },
+			global: {
+				stubs: {
+					UModal: passthroughStub,
+					UButton: buttonStub,
+					UInput: passthroughStub,
+					UBadge: passthroughStub,
+					UAlert: passthroughStub,
+					UIcon: passthroughStub,
+				},
+			},
+		});
+	}
+
+	function activeScope(wrapper: Awaited<ReturnType<typeof mountPicker>>) {
+		return wrapper.get('[data-testid="graphic-asset-scope-event"]').attributes('aria-pressed') === 'true'
+			? 'event'
+			: 'library';
+	}
+
+	it('opens on the whole library rather than on an Event that has adopted nothing', async () => {
+		const wrapper = await mountPicker({ eventId: 99 });
+
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		expect(activeScope(wrapper)).toBe('library');
+		expect(wrapper.text()).toContain('Shared logo');
+	});
+
+	it('still opens on the Event that has assets of its own', async () => {
+		const wrapper = await mountPicker({ eventId: 7 });
+
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		expect(activeScope(wrapper)).toBe('event');
+		expect(wrapper.text()).not.toContain('Shared logo');
+	});
+
+	it('states both scopes and what each holds, rather than one label doing two jobs', async () => {
+		const wrapper = await mountPicker({ eventId: 7 });
+
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		expect(wrapper.get('[data-testid="graphic-asset-scope-event"]').text()).toBe('This Event (1)');
+		expect(wrapper.get('[data-testid="graphic-asset-scope-library"]').text()).toBe('All assets (2)');
+	});
+
+	it('carries a widened scope to the next picker the author opens', async () => {
+		// Every field mounts its own picker. Resetting each one to 'This Event'
+		// made an author who had just found a shared logo look for it again.
+		const first = await mountPicker({ eventId: 7 });
+		await first.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+		await first.get('[data-testid="graphic-asset-scope-library"]').trigger('click');
+
+		const second = await mountPicker({ eventId: 7 });
+		await second.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		expect(activeScope(second)).toBe('library');
+	});
+
+	it('does not remember a widening it performed itself', async () => {
+		// Only a press is a preference. An empty Event scope is a fact about that
+		// Event, and must not decide what the next Event's picker opens on.
+		const emptyEvent = await mountPicker({ eventId: 99 });
+		await emptyEvent.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+		expect(activeScope(emptyEvent)).toBe('library');
+
+		const populatedEvent = await mountPicker({ eventId: 7 });
+		await populatedEvent.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		expect(activeScope(populatedEvent)).toBe('event');
+	});
+
+	it('names what the Event scope is holding back instead of showing a bare empty grid', async () => {
+		const wrapper = await mountPicker({ eventId: 99 });
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+		// An explicit choice, which is what stops the picker widening on its own.
+		await wrapper.get('[data-testid="graphic-asset-scope-event"]').trigger('click');
+
+		const hint = wrapper.get('[data-testid="graphic-asset-scope-hint"]');
+		expect(hint.text()).toContain('2 more');
+		expect(hint.text()).toContain('outside this Event');
+
+		await wrapper.get('[data-testid="widen-graphic-asset-scope"]').trigger('click');
+		expect(activeScope(wrapper)).toBe('library');
+		expect(wrapper.text()).toContain('Shared logo');
+	});
+
+	it('says nothing about a wider library when the wider library is what is showing', async () => {
+		const wrapper = await mountPicker({ eventId: 99, assetKind: ['silent-video'] });
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+		await wrapper.get('[data-testid="graphic-asset-scope-library"]').trigger('click');
+
+		expect(wrapper.find('[data-testid="graphic-asset-scope-hint"]').exists()).toBe(false);
+	});
+
+	it('sends the Library Workspace to a new tab rather than out of the editor', async () => {
+		// It sat among the scope controls looking like a third tab, and following
+		// it abandoned whatever was being authored.
+		const wrapper = await mountPicker({ eventId: 7 });
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+
+		const link = wrapper.get('[data-testid="open-library-workspace"]');
+		expect(link.attributes('to')).toBe('/graphics-assets');
+		expect(link.attributes('target')).toBe('_blank');
 	});
 
 	it('keeps a missing exact reference visible as a publication-blocking integrity failure', async () => {

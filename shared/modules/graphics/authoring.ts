@@ -189,6 +189,29 @@ export function graphicInputKeyFromLabel(label: string, taken: readonly string[]
 	return `${base}-${suffix}`;
 }
 
+/**
+ * The default name for the next Graphic Input, chosen so the key derived from it
+ * is free as well as the name itself.
+ *
+ * A key is generated once and never changes, while the label is freely renamed —
+ * so renaming 'Input 1' to 'leftName' frees the *name* while leaving `input-1`
+ * spent. Counting names alone then reused 'Input 1', whose key had to be
+ * disambiguated into `input-1-2`: a shape no author predicts, appearing only
+ * after a rename, and one they must then reproduce exactly in a template (#234).
+ */
+function nextGraphicInputLabel(inputs: readonly GraphicInputDeclaration[]): string {
+	const labels = new Set(inputs.map(input => input.label));
+	const keys = new Set(inputs.map(input => input.key));
+	let index = 1;
+	while (
+		labels.has(`Input ${index}`)
+		|| keys.has(graphicInputKeyFromLabel(`Input ${index}`, []))
+	) {
+		index += 1;
+	}
+	return `Input ${index}`;
+}
+
 export function addGraphicInput(
 	graphics: readonly BroadcastGraphicConfig[],
 	graphicId: string,
@@ -199,7 +222,7 @@ export function addGraphicInput(
 			return graphic;
 
 		const inputs = graphic.inputs ?? [];
-		const label = nextSequentialName('Input', inputs.map(input => input.label));
+		const label = nextGraphicInputLabel(inputs);
 		const declaration = createDefaultGraphicInputDeclaration(type, {
 			key: graphicInputKeyFromLabel(label, inputs.map(input => input.key)),
 			label,

@@ -9,6 +9,7 @@ import {
 } from '~~/shared/modules/graphics';
 import { GRAPHIC_ANIMATION_PHASE_VALUES } from '~~/shared/types/graphics';
 import {
+	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
 	isGraphicsPreviewStateMessage,
 	readGraphicsPreviewState,
@@ -310,6 +311,11 @@ export function useBroadcastGraphicsModeData() {
 
 	onMounted(() => {
 		window.addEventListener('message', handlePreviewStateMessage);
+		// Only now can a push be received, which is later than the editor's iframe
+		// `load` handler and by an amount neither side controls. Saying so is what
+		// turns that race into a handshake.
+		if (isPreview?.value && import.meta.client)
+			window.parent?.postMessage({ type: GRAPHICS_PREVIEW_READY_MESSAGE }, window.location.origin);
 	});
 
 	onBeforeUnmount(() => {

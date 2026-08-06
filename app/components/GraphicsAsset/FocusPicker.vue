@@ -5,6 +5,7 @@ import type {
 	GraphicAssetReferenceStatus,
 } from '~~/shared/types/graphicsAsset';
 import type { GraphicsVideoTarget } from '~~/shared/utils/graphicAssetTargetCompatibility';
+import type { GraphicAssetPickerScope } from '~/composables/useGraphicAssetPickerScope';
 import { graphicAssetTargetCompatibility } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import { graphicAssetReferenceStatusOrUnavailable } from '~/utils/graphicAssetReferenceStatus';
 import { createGuardedSequence } from '~/utils/guardedSequence';
@@ -53,7 +54,6 @@ const emit = defineEmits<{
 
 const open = ref(false);
 const search = ref('');
-const thisEventOnly = ref(true);
 const referenceStatus = ref<GraphicAssetReferenceStatus>();
 const referenceStatusFlights = createGuardedSequence();
 const {
@@ -72,10 +72,62 @@ const {
 const acceptedKinds = computed<GraphicAsset['kind'][]>(
 	() => Array.isArray(props.assetKind) ? props.assetKind : [props.assetKind],
 );
-const visibleAssets = computed(() => (assets.value ?? []).filter(asset =>
-	acceptedKinds.value.includes(asset.kind)
-	&& (!thisEventOnly.value || asset.eventIds.includes(props.eventId)),
+
+/* ────────────────────────────────────────────────
+ * Scope
+ * ──────────────────────────────────────────────── */
+
+const { chosen: chosenScope, choose: chooseScope } = useGraphicAssetPickerScope();
+
+/**
+ * Widened for this opening alone, because 'This Event' had nothing in it.
+ *
+ * Separate from the author's own choice so that an automatic widening is never
+ * mistaken for a preference: it lasts until the modal closes and is reconsidered
+ * on the next opening, when the Event may well have adopted something.
+ */
+const widenedForThisOpening = ref(false);
+const scope = computed<GraphicAssetPickerScope>(() =>
+	chosenScope.value ?? (widenedForThisOpening.value ? 'library' : 'event'),
+);
+
+const libraryAssets = computed(() => (assets.value ?? []).filter(asset =>
+	acceptedKinds.value.includes(asset.kind),
 ));
+const eventAssets = computed(() => libraryAssets.value.filter(asset =>
+	asset.eventIds.includes(props.eventId),
+));
+const visibleAssets = computed(() => scope.value === 'event' ? eventAssets.value : libraryAssets.value);
+
+/** How many the Event scope is holding back — the number that says 'not gone'. */
+const hiddenByScope = computed(() =>
+	scope.value === 'event' ? libraryAssets.value.length - eventAssets.value.length : 0,
+);
+
+/**
+ * Never open on an empty scope.
+ *
+ * An Event adopts assets by being pointed at them, so 'This Event' is empty on
+ * every Event until the first one is pinned — and a picker that opens there
+ * shows an empty grid with no sign that the library behind it is full.
+ *
+ * Only while the search box is empty: once an author is searching, an Event
+ * scope with no matches is an answer about the search, and moving the ground
+ * under them mid-keystroke would be worse than the empty result.
+ */
+watch(
+	[open, () => eventAssets.value.length, () => libraryAssets.value.length],
+	() => {
+		if (!open.value) {
+			widenedForThisOpening.value = false;
+			return;
+		}
+		if (chosenScope.value !== null || search.value.length > 0)
+			return;
+		if (eventAssets.value.length === 0 && libraryAssets.value.length > 0)
+			widenedForThisOpening.value = true;
+	},
+);
 const selectedAsset = computed(() => (assets.value ?? []).find(asset =>
 	acceptedKinds.value.includes(asset.kind)
 	&& asset.id === props.modelValue?.assetId
@@ -231,28 +283,47 @@ function selectAsset(asset: GraphicAsset) {
 							icon="i-lucide-search"
 							placeholder="Search Graphic Assets"
 						/>
-						<UButton
-							v-if="thisEventOnly"
-							data-testid="show-all-assets"
-							variant="soft"
-							@click="thisEventOnly = false"
-						>
-							This Event
-						</UButton>
-						<UButton
-							v-else
-							data-testid="show-event-assets"
-							color="neutral"
-							variant="outline"
-							@click="thisEventOnly = true"
-						>
-							All assets
-						</UButton>
+						<!--
+							Both scopes at once, each with what it holds. One button showing
+							the current scope was a toggle nothing announced as one, and its
+							count is what separates 'this Event has adopted nothing yet' from
+							'my asset is gone' (#234).
+						-->
+						<div class="flex gap-1" role="group" aria-label="Graphic Asset scope">
+							<UButton
+								data-testid="graphic-asset-scope-event"
+								color="neutral"
+								:variant="scope === 'event' ? 'solid' : 'outline'"
+								:aria-pressed="scope === 'event'"
+								@click="chooseScope('event')"
+							>
+								This Event ({{ eventAssets.length }})
+							</UButton>
+							<UButton
+								data-testid="graphic-asset-scope-library"
+								color="neutral"
+								:variant="scope === 'library' ? 'solid' : 'outline'"
+								:aria-pressed="scope === 'library'"
+								@click="chooseScope('library')"
+							>
+								All assets ({{ libraryAssets.length }})
+							</UButton>
+						</div>
+						<!--
+							A link out of an editor mid-edit, said out loud. It sat among the
+							scope controls looking like a third tab, and following it
+							abandoned unsaved authoring; a new tab is what an author reaching
+							for the Library while placing an item actually meant.
+						-->
 						<UButton
 							to="/graphics-assets"
+							target="_blank"
+							rel="noopener"
 							color="neutral"
-							variant="outline"
+							variant="ghost"
 							icon="i-lucide-library"
+							trailing-icon="i-lucide-external-link"
+							data-testid="open-library-workspace"
 						>
 							Library Workspace
 						</UButton>
@@ -343,9 +414,26 @@ function selectAsset(asset: GraphicAsset) {
 								{{ assetCompatibility(asset).outcome === 'blocked' ? blockedReason(asset) : `Select revision ${asset.revisionNumber}` }}
 							</UButton>
 						</article>
-						<p v-if="visibleAssets.length === 0" class="text-sm text-muted sm:col-span-2 lg:col-span-3">
-							No compatible Graphic Assets match this view.
-						</p>
+						<div v-if="visibleAssets.length === 0" class="text-sm text-muted sm:col-span-2 lg:col-span-3">
+							<p>No compatible Graphic Assets match this view.</p>
+							<!--
+								What the scope is holding back, where an empty grid otherwise
+								reads as the asset having been deleted.
+							-->
+							<p v-if="hiddenByScope > 0" class="mt-1" data-testid="graphic-asset-scope-hint">
+								{{ hiddenByScope }} more
+								{{ hiddenByScope === 1 ? 'matches' : 'match' }}
+								in the whole library, outside this Event.
+								<UButton
+									size="xs"
+									variant="link"
+									data-testid="widen-graphic-asset-scope"
+									@click="chooseScope('library')"
+								>
+									Show all assets
+								</UButton>
+							</p>
+						</div>
 					</div>
 				</div>
 			</template>
