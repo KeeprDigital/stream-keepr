@@ -179,6 +179,35 @@ describe('useScreenStore error reporting', () => {
 		vi.useRealTimers();
 	});
 
+	it('leaves the conflict retry able to recognise the conflict it retries', async () => {
+		// Where the substitution sits is load-bearing, and true by construction is not
+		// pinned: it wraps the whole action, so `withConflictRetry` — nested further in —
+		// still meets the raw FetchError and can read its 409. Substitute one level
+		// deeper and `isConflictError` sees an Error carrying no status, the refresh and
+		// the retry never run, and a write that should have settled reports a sentence
+		// instead. The existing conflict fixtures cannot see that: their failures carry
+		// no body sentence, so nothing about them changes when the substitution moves.
+		store.screens = [createMockScreen({ id: 5, name: 'Old', stateVersion: 1 })];
+		mockRepo.update
+			.mockRejectedValueOnce(explainedRefusal(
+				409,
+				'Conflict',
+				'Another operator changed this Screen',
+				`[PATCH] "/api/events/1/screens/5"`,
+			))
+			.mockResolvedValueOnce(createMockScreen({ id: 5, name: 'Renamed', stateVersion: 3 }));
+		mockRepo.getById.mockResolvedValue(createMockScreen({ id: 5, name: 'Refreshed', stateVersion: 2 }));
+
+		const updated = await store.updateScreen(1, 5, { name: 'Renamed' });
+
+		expect(mockRepo.update).toHaveBeenCalledTimes(2);
+		// And the retry went out against the revision the refresh brought, not the one
+		// the conflict was raised about.
+		expect(mockRepo.update).toHaveBeenLastCalledWith(1, 5, expect.objectContaining({ stateVersion: 2 }));
+		expect(updated!.name).toBe('Renamed');
+		expect(store.error).toBeNull();
+	});
+
 	it('keeps the status line for a server failure, whose prose is a placeholder', async () => {
 		// A 5xx body's message has been through `mapPublicNitroError`, so quoting it
 		// would put 'Internal Server Error' in front of an operator dressed as the

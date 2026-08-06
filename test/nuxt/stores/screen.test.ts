@@ -450,8 +450,9 @@ describe('useScreenStore', () => {
 
 			expect(store.screens.map(s => s.name)).toEqual(['Saved']);
 			// Unlike a loader — whose caller mirrors the answer into its own view of the
-			// cache — this caller asked for a Screen to be made and navigates to it, so
-			// it is handed what the server created, not the entry that shares the id.
+			// cache — nothing mirrors this one: the create modal names the Screen in a
+			// success toast, and otherwise reads the answer only to tell success from
+			// failure. So it is handed what the server made, not the entry sharing the id.
 			expect(created!.name).toBe('Created');
 		});
 

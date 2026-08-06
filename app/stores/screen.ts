@@ -1,9 +1,7 @@
-import type { ScreenPresenceInfo } from '~/modules/screen/runtime';
+import type { ExecuteAction, ScreenPresenceInfo } from '~/modules/screen/runtime';
 import type { Screen } from '~/types';
 import { toRaw } from 'vue';
 import { useScreenRuntime } from '~/modules/screen/runtime';
-
-type ExecuteAction = ReturnType<typeof useAsyncAction>['executeAction'];
 
 export const useScreenStore = defineStore('screen', () => {
 	const screenRepo = useScreenRepository();
@@ -149,9 +147,11 @@ export const useScreenStore = defineStore('screen', () => {
 	 * reason it reached them: a GET issued before a save commits can be served after
 	 * it settles. What made this loader the last version-blind one is that the single
 	 * route reaching it is the Screen Output, whose client issues no writes — so the
-	 * race had nothing to race against. That is a fact about today's routing, not about
-	 * this loader, and the Feature Match Overlay preview aside is the change that ends
-	 * it (see `cachedRevision`).
+	 * race had nothing to race against. That is a fact about today's routing rather than
+	 * about this loader, and it ends the day a display session is embedded in this
+	 * document or the output route is linked to in-app — not with the Feature Match
+	 * Overlay preview aside, which has landed and embeds through an iframe (see
+	 * `cachedRevision`).
 	 *
 	 * `activeScreen` is emptied before the GET, deliberately: while a slug is loading
 	 * this client holds no active Screen, and showing the previous one under the new

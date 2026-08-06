@@ -17,7 +17,8 @@ import { createCancelableDebounce } from '~/utils/cancelableDebounce';
 import { createKeyedGuardedSequence } from '~/utils/guardedSequence';
 import { createKeyedQueue } from '~/utils/keyedQueue';
 
-type ExecuteAction = ReturnType<typeof useAsyncAction>['executeAction'];
+/** The `executeAction` seam a caller hands this Module, and wraps to report through. */
+export type ExecuteAction = ReturnType<typeof useAsyncAction>['executeAction'];
 
 /**
  * Who is present on one Screen's channel.
@@ -149,11 +150,15 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * would be, and no door into `screens` can move a Screen's `stateVersion` backwards.
 	 * Equal is not older, as everywhere the comparison is used.
 	 *
-	 * It returns what the server created either way. A loader hands its answer to a
-	 * caller that mirrors it into its own view of the cache, so a refusal there must
-	 * answer with the revision kept; this caller asked for a Screen to be made and
-	 * navigates to it, and handing back an unrelated entry that happens to share an id
-	 * would answer a question nobody asked.
+	 * It returns what the server created either way, and that is the one place this
+	 * departs from the loaders. A refusal decides what this client should *hold*, and a
+	 * loader must answer with the revision it kept because its caller mirrors the answer
+	 * straight back into a view of the cache — the configuration page into its own
+	 * `screen` ref, the display session into what it renders. Nothing mirrors this one:
+	 * `Screen/CreateModal.vue` names the Screen in a success toast, otherwise reads the
+	 * answer only to tell success from failure, and the `created` event it emits has no
+	 * listener. So the question the answer belongs to is "what did the server make", and
+	 * an entry that merely shares an id is not an answer to it.
 	 */
 	async function createScreen(eventId: number, input: CreateScreenInput) {
 		return state.executeAction(
@@ -395,20 +400,25 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * always its own document: embedded in an iframe or opened in its own window,
 	 * never navigated to in-page. So no single store ever holds both.
 	 *
-	 * Embed a display session in-page, or add an in-app link to that route, and the
-	 * two sources hold different revisions at once — at which point what keeps
-	 * refusing safe is taking the *newest*, since taking the oldest would let a
-	 * reload downgrade `activeScreen` to a revision the client had already moved
-	 * past. The Feature Match Overlay preview aside is the nearest thing to that
-	 * change.
+	 * Embed a display session in-page — in this document, not in a frame — or add an
+	 * in-app link to that route, and the two sources hold different revisions at once,
+	 * at which point what keeps refusing safe is taking the *newest*: taking the oldest
+	 * would let a reload downgrade `activeScreen` to a revision the client had already
+	 * moved past.
 	 *
-	 * That aside would also cost something this returns for free today. With the
-	 * holders disjoint, a refusal in #251's loaders always answers from `screens`
-	 * and leaves it populated. Break disjointness and a refusal can answer from
-	 * `activeScreen` instead, returning without putting anything in `screens` — so
-	 * the next `updateModeConfig` finds no entry and fails with "Screen not found",
-	 * where caching the fetched Screen would have let it proceed. Restoring that
-	 * fallback belongs with the aside, not before it.
+	 * The Feature Match Overlay preview aside used to be named here as the change that
+	 * would do it. It has since landed, and it does not: it embeds the output through
+	 * an `<iframe>` (`FeatureMatchOverlay/PreviewOutputAside.vue`), which is its own
+	 * document with its own store, so the disjointness survives it. Whatever ends it
+	 * will be one of the two shapes above.
+	 *
+	 * Ending it would also cost something this returns for free today. With the holders
+	 * disjoint, a refusal in #251's loaders always answers from `screens` and leaves it
+	 * populated. Break disjointness and a refusal can answer from `activeScreen`
+	 * instead, returning without putting anything in `screens` — so the next
+	 * `updateModeConfig` finds no entry and fails with "Screen not found", where caching
+	 * the fetched Screen would have let it proceed. Restoring that fallback belongs with
+	 * whichever change ends the disjointness, not before it (#261 item 2).
 	 *
 	 * The debt is those two loaders' and stays that size now that the slug loader
 	 * gates on this comparison too (#261): it empties `activeScreen` before its GET,
