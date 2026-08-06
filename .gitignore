@@ -31,3 +31,7 @@ coverage
 .dev.vars
 .dev.vars.*
 !.dev.vars.example
+
+# Parallel-round worktrees (complete checkouts inside the repo)
+.claude/worktrees/
+.worktrees/
