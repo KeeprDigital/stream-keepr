@@ -4,7 +4,7 @@ import type {
 	BroadcastGraphicsRecoveryFault,
 	BroadcastGraphicsRejectionCode,
 } from '~~/shared/modules/broadcast-graphics-live-session';
-import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicChannelConfig, GraphicInputValue } from '~~/shared/types/graphics';
 import type { GraphicAssetReferenceStatus } from '~~/shared/types/graphicsAsset';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
@@ -16,6 +16,7 @@ import {
 	broadcastGraphicPhaseProjections,
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
+	broadcastGraphicRenderedInputs,
 	createInitialBroadcastGraphicsLiveState,
 	graphicInputTraces,
 	onAirBroadcastGraphicIds,
@@ -130,6 +131,26 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	},
 	inputTraces: (_screenId: number, graphic: BroadcastGraphicConfig) =>
 		graphicInputTraces(mockLiveState.value, graphic.id, graphic),
+	renderedInputValues: (
+		_screenId: number,
+		graphics: readonly BroadcastGraphicConfig[],
+		now?: number,
+	) => {
+		const current: Record<string, Record<string, GraphicInputValue>> = {};
+		const outgoing: Record<string, Record<string, GraphicInputValue>> = {};
+		for (const graphic of graphics) {
+			const rendered = broadcastGraphicRenderedInputs(
+				mockLiveState.value,
+				graphic.id,
+				graphic.inputs ?? [],
+				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value),
+			);
+			current[graphic.id] = rendered.current;
+			if (rendered.outgoing)
+				outgoing[graphic.id] = rendered.outgoing;
+		}
+		return { current, outgoing };
+	},
 	sourceSelections: (_screenId: number, graphicId: string) =>
 		mockLiveState.value.sources?.[graphicId] ?? {},
 	setInput: vi.fn(),
@@ -174,6 +195,13 @@ const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
 
 mockNuxtImport('$fetch', () => mockApiFetch);
 
+/** What the hand-out controls report through, and what they were handed. */
+const mockCopyToClipboard = vi.fn();
+const mockToastAdd = vi.fn();
+
+mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard: mockCopyToClipboard }));
+mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
+
 const UAlertStub = defineComponent({
 	props: { title: { type: String, required: false }, description: { type: String, required: false } },
 	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span></div>',
@@ -181,7 +209,7 @@ const UAlertStub = defineComponent({
 
 const ScreenSettingsCardStub = defineComponent({
 	props: { title: { type: String, required: false } },
-	template: '<section><h2>{{ title }}</h2><slot /></section>',
+	template: '<section><h2>{{ title }}</h2><slot name="actions" :open="true" /><slot /></section>',
 });
 
 const UIEmptyStateStub = defineComponent({
@@ -335,6 +363,197 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 			const wrapper = await mountComponent([branded]);
 
 			expect(wrapper.find('[data-testid="outputs-without-asset-access"]').exists()).toBe(false);
+		});
+
+		/**
+		 * A Broadcast Graphics Screen publishes from two places, and only one of them is
+		 * in its authored configuration. Until #238 this warning read the authored stack
+		 * alone, so a Screen whose every image was chosen live — through a media Graphic
+		 * Input its Live Session accepted (#96, #178) — warned about nothing while its
+		 * outputs lost every one of those choices.
+		 */
+		describe('media that arrives only through a live Graphic Input', () => {
+			/** Nothing authored pins an asset: the only media here is chosen at runtime. */
+			const runtimeChosen: BroadcastGraphicConfig = {
+				id: 'promo',
+				name: 'Promo',
+				items: [],
+				inputs: [{
+					type: 'media',
+					key: 'backdrop',
+					label: 'Backdrop',
+					required: false,
+					updatePolicy: 'staged',
+					mediaKind: 'image',
+					default: null,
+				}],
+			};
+
+			function accepted(value: Record<string, unknown>) {
+				return {
+					playout: {},
+					inputs: { promo: { working: {}, accepted: value, acceptedRevision: 1 } },
+				} as unknown as BroadcastGraphicsLiveState;
+			}
+
+			it('warns about an output that cannot resolve a value the operator chose live', async () => {
+				mockPresence.value = [{ data: { assetAccess: 'absent' } }];
+				mockLiveState.value = accepted({
+					backdrop: { assetId: 'chosen-asset', revisionId: 'chosen-revision-1' },
+				});
+
+				const wrapper = await mountComponent([runtimeChosen]);
+
+				expect(wrapper.get('[data-testid="outputs-without-asset-access"]').text())
+					.toContain('One Screen Output cannot resolve this Screen\'s assets');
+			});
+
+			/**
+			 * The half that keeps the widening honest. A declared media Graphic Input that
+			 * nothing has chosen a value for publishes no media at all, and warning there
+			 * would spend the credibility of every later warning on a Screen that is
+			 * showing program exactly.
+			 */
+			it('says nothing about a declared media Graphic Input with no accepted value', async () => {
+				mockPresence.value = [{ data: { assetAccess: 'absent' } }];
+				mockLiveState.value = accepted({});
+
+				const wrapper = await mountComponent([runtimeChosen]);
+
+				expect(wrapper.find('[data-testid="outputs-without-asset-access"]').exists()).toBe(false);
+			});
+
+			it('says nothing about a non-media Graphic Input, whatever its accepted value holds', async () => {
+				mockPresence.value = [{ data: { assetAccess: 'absent' } }];
+				mockLiveState.value = {
+					playout: {},
+					inputs: {
+						promo: {
+							working: {},
+							accepted: { title: { assetId: 'chosen-asset', revisionId: 'chosen-revision-1' } },
+							acceptedRevision: 1,
+						},
+					},
+				} as unknown as BroadcastGraphicsLiveState;
+
+				const wrapper = await mountComponent([{
+					...runtimeChosen,
+					inputs: [{
+						type: 'text',
+						key: 'title',
+						label: 'Title',
+						required: false,
+						updatePolicy: 'staged',
+						default: '',
+						maxLength: 40,
+					}],
+				}]);
+
+				expect(wrapper.find('[data-testid="outputs-without-asset-access"]').exists()).toBe(false);
+			});
+		});
+	});
+
+	/**
+	 * Before #237 this workspace had no way to hand out the output it is watching, so an
+	 * operator either walked to the Screen settings page or typed the address they could
+	 * see — and a hand-typed URL carries no Screen Output Asset Capability, so what it
+	 * opens renders every graphic except its media, silently (#231).
+	 */
+	describe('handing out the real Overlay Output', () => {
+		/**
+		 * The capability is rotated between mount and the click, and the copied URL has to
+		 * carry the new one.
+		 *
+		 * Asserting only that some capability appears would pass against a value cached
+		 * when the workspace mounted, and that is the failure rather than an academic one:
+		 * the Screen settings page has a rotate control, so a workspace left open across a
+		 * rotation would hand out a URL whose capability is already dead — which loads,
+		 * renders, and silently omits every image, video and library font (#231). The
+		 * Program monitor above keeps the capability it mounted with; only the hand-out is
+		 * obliged to be current.
+		 */
+		it('copies a URL carrying asset access, obtained at the moment of the hand-out', async () => {
+			const wrapper = await mountComponent();
+			mockCapabilityResponse.value = 'rotated-capability';
+
+			await wrapper.get('[data-testid="copy-screen-output-url"]').trigger('click');
+			await flushPromises();
+
+			expect(mockApiFetch).toHaveBeenCalledWith('/api/events/7/screens/3/asset-capability');
+			expect(mockCopyToClipboard).toHaveBeenCalledWith(
+				`${window.location.origin}/event/7/screen/main?output=overlay#asset-capability=rotated-capability`,
+				expect.anything(),
+			);
+		});
+
+		/**
+		 * Refused rather than degraded: the empty string is what the clipboard helper
+		 * reports as having nothing to copy, and it costs the operator a retry — where a
+		 * URL without the capability costs them their media on program and says nothing.
+		 */
+		it('copies nothing at all when asset access cannot be obtained', async () => {
+			mockCapabilityResponse.value = null;
+			const wrapper = await mountComponent();
+
+			await wrapper.get('[data-testid="copy-screen-output-url"]').trigger('click');
+			await flushPromises();
+
+			expect(mockCopyToClipboard).toHaveBeenCalledWith('', expect.anything());
+		});
+
+		/** Rotated between mount and the click here too, for the same reason. */
+		it('opens the output in a tab it points only once asset access is in hand', async () => {
+			const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+			vi.stubGlobal('open', vi.fn(() => outputWindow));
+			const wrapper = await mountComponent();
+			mockCapabilityResponse.value = 'rotated-capability';
+
+			await wrapper.get('[data-testid="open-screen-output"]').trigger('click');
+			await flushPromises();
+
+			expect(window.open).toHaveBeenCalledWith('', '_blank');
+			expect(outputWindow.opener).toBeNull();
+			expect(outputWindow.location.href).toBe(
+				`${window.location.origin}/event/7/screen/main?output=overlay#asset-capability=rotated-capability`,
+			);
+			expect(outputWindow.close).not.toHaveBeenCalled();
+			vi.unstubAllGlobals();
+		});
+
+		it('opens no output, and says why, when asset access cannot be obtained', async () => {
+			mockCapabilityResponse.value = null;
+			const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+			vi.stubGlobal('open', vi.fn(() => outputWindow));
+			const wrapper = await mountComponent();
+
+			await wrapper.get('[data-testid="open-screen-output"]').trigger('click');
+			await flushPromises();
+
+			expect(outputWindow.location.href).toBe('');
+			expect(outputWindow.close).toHaveBeenCalledOnce();
+			// The tab opened and closed again, so nothing visibly happened. Left unsaid it
+			// reads as a popup blocker rather than as the media-losing hand-out it refused.
+			expect(mockToastAdd).toHaveBeenCalledWith(expect.objectContaining({
+				description: expect.stringContaining('Asset access for this Screen could not be obtained'),
+			}));
+			vi.unstubAllGlobals();
+		});
+
+		/**
+		 * The #234 precedent: a control says what it does. An operator choosing between
+		 * these and the address in their browser's bar has to be able to see that only
+		 * these two resolve media.
+		 */
+		it('names both controls by what they hand out and what the hand-out carries', async () => {
+			const wrapper = await mountComponent();
+
+			const open = wrapper.get('[data-testid="open-screen-output"]');
+			const copy = wrapper.get('[data-testid="copy-screen-output-url"]');
+			expect(open.text()).toBe('Open output');
+			expect(copy.text()).toBe('Copy output URL');
+			expect(open.attributes('title')).toContain('asset access');
+			expect(copy.attributes('title')).toContain('asset access');
 		});
 	});
 
