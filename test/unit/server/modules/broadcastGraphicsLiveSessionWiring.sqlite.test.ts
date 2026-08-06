@@ -127,7 +127,13 @@ describe('a Broadcast Graphics Live Session assembled without the Graphics Asset
 		expect(failure).toMatchObject({
 			statusCode: 503,
 			statusMessage: 'Service Unavailable',
-			message: expect.stringContaining('the Graphics Asset Library'),
+			// Both halves. The dependency alone leaves the operator knowing what is
+			// missing but not from which component, which is half of what they have
+			// to report — and a mutation of the component name survived the suite
+			// until this asserted it.
+			message: expect.stringContaining(
+				'The Broadcast Graphics Live Session module was constructed without the Graphics Asset Library',
+			),
 		});
 	});
 
@@ -144,7 +150,13 @@ describe('a Broadcast Graphics Live Session assembled without the Graphics Asset
 		expect(failure).toMatchObject({
 			statusCode: 503,
 			statusMessage: 'Service Unavailable',
-			message: expect.stringContaining('the Graphics Asset Library'),
+			// Both halves. The dependency alone leaves the operator knowing what is
+			// missing but not from which component, which is half of what they have
+			// to report — and a mutation of the component name survived the suite
+			// until this asserted it.
+			message: expect.stringContaining(
+				'The Broadcast Graphics Live Session module was constructed without the Graphics Asset Library',
+			),
 		});
 	});
 });
