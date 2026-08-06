@@ -49,7 +49,12 @@ async function copyUrl() {
 	await copyToClipboard(await screenOutputAccessUrl(accessUrlOptions()), {
 		successTitle: 'URL Copied',
 		successDescription: 'Screen URL copied to clipboard',
-		errorDescription: 'Failed to copy screen URL to clipboard.',
+		// The empty string means asset access was refused, not that the clipboard
+		// declined the write — and "failed to copy" sends the operator to the address in
+		// their browser's bar, which is the media-losing URL the refusal withholds
+		// (#231, #257).
+		nothingToCopyTitle: 'Nothing copied',
+		nothingToCopyDescription: 'Asset access for this Screen could not be obtained, so the URL would have opened an output without its media. Try again.',
 	});
 }
 

@@ -163,23 +163,39 @@ async function copyOutputUrl() {
 	await copyToClipboard(await screenOutputAccessUrl(outputAccessUrlOptions()), {
 		successTitle: 'Output URL copied',
 		successDescription: 'It carries asset access, so the output resolves this Screen\'s media.',
-		errorTitle: 'Nothing copied',
-		errorDescription: 'Asset access for this Screen could not be obtained, so the URL would have opened an output without its media. Try again.',
+		nothingToCopyTitle: 'Nothing copied',
+		nothingToCopyDescription: 'Asset access for this Screen could not be obtained, so the URL would have opened an output without its media. Try again.',
 	});
 }
 
+/**
+ * The two ways an open fails are two different things for the operator to do, so they
+ * are said in two different sets of words.
+ *
+ * Both used to arrive as one `false` and both were reported as an asset access
+ * refusal — which asks the operator to try again, and a blocked tab is blocked again
+ * identically. What that operator needs is their browser's pop-up setting, and until
+ * #258 nothing here could tell them so.
+ */
 async function openOutput() {
-	if (await openScreenOutput(outputAccessUrlOptions()))
+	const result = await openScreenOutput(outputAccessUrlOptions());
+	if (result === 'opened')
 		return;
 
-	// The tab was opened by the click and closed again unpointed, so the operator is
-	// looking at nothing having happened. Said, rather than left to be read as a
-	// popup blocker.
-	toast.add({
-		title: 'Output not opened',
-		description: 'Asset access for this Screen could not be obtained, so the output would have rendered without its media. Try again.',
-		color: 'error',
-	});
+	// A refused open opened a tab and closed it again unpointed, so the operator is
+	// looking at nothing having happened either way. Said, rather than left to be read
+	// as whichever of the two the operator guesses at.
+	toast.add(result === 'window-blocked'
+		? {
+				title: 'Output not opened',
+				description: 'This browser blocked the new tab. Allow pop-ups for this site, then open the output again.',
+				color: 'error',
+			}
+		: {
+				title: 'Output not opened',
+				description: 'Asset access for this Screen could not be obtained, so the output would have rendered without its media. Try again.',
+				color: 'error',
+			});
 }
 
 const programUrl = computed(() => screenOutputPath({
@@ -241,14 +257,25 @@ const ASSET_REFUSAL_ALERTS: Record<'missing' | 'unavailable', {
  * the wrong thing twice over: "Playout action failed" over a transport status line
  * says only that something went wrong, while the authority had written a sentence
  * naming the very Graphic Asset Reference that has to be repaired (#230). So a
- * refusal is titled by what it is, and carries the sentence the authority wrote;
- * what keeps "failed" is what genuinely failed — a request this client could not
- * complete, whose message is all anyone has.
+ * refusal is titled by what it is, and carries the sentence the authority wrote.
  *
  * A refusal outside the Graphic Asset vocabulary — a superseded acceptance, a
  * required Graphic Input with no value — is still the authority answering rather
  * than a fault, and its own sentence already names the thing. It is titled as a
  * refusal without being given a third set of words for a fault it is not.
+ *
+ * What keeps "failed" is everything with no refusal code at all, and since #245 that
+ * is no longer only the client's own faults. `failureSentence` now lifts a sub-500
+ * body's sentence into `error`, so "the Screen is not in Broadcast Graphics mode"
+ * and "the live session has ended" arrive here as the authority's own words under a
+ * title that calls them a failure. That is a real mismatch and it is left standing
+ * deliberately: `error` is one string, and the store does not mark which kind it is —
+ * writing `refusal` for these would undo #230's separation of *having a sentence*
+ * from *being a recognised refusal*. Titling them apart therefore needs a signal
+ * from the store rather than a guess about the string's shape here, and a title
+ * chosen by sniffing prose would be a worse lie than the imprecise one. Until that
+ * signal exists (it belongs with #262's store work), the sentence under the title
+ * carries the meaning and the title is merely coarse.
  *
  * A field-scoped refusal is reported here as well as against its own field. That is
  * deliberate: Live Control renders only for the selected Broadcast Graphic, so an
