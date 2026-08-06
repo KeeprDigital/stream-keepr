@@ -322,6 +322,7 @@ describe('screen config page — handing out this Screen’s output', () => {
 		await flushPromises();
 
 		expect(mockCopyToClipboard).toHaveBeenCalledWith('', expect.objectContaining({
+			errorTitle: 'Nothing copied',
 			errorDescription: expect.stringContaining('Asset access for this Screen could not be obtained'),
 		}));
 	});
