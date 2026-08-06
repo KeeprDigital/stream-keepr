@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { safeErrorLogPath } from '~~/server/utils/errorLogPath';
-import { ServiceConfigurationError, StateConflictError } from '~~/server/utils/errors';
+import { ServiceConfigurationError, ServiceWiringError, StateConflictError } from '~~/server/utils/errors';
 import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 
 describe('error-handler mapping logic', () => {
@@ -61,6 +61,54 @@ describe('error-handler mapping logic', () => {
 			mapPublicNitroError(sanitized);
 
 			expect(sanitized.message).toBe('Internal Server Error');
+		});
+	});
+
+	describe('serviceWiringError mapping', () => {
+		it('names the collaborator a component was assembled without', () => {
+			// #243: the sibling of the above with the opposite cause — nothing is
+			// missing from the environment, the server was built wrong. Sanitizing
+			// it leaves the operator with 'Internal Server Error' and nothing to
+			// report to whoever can fix it.
+			const error = {
+				statusCode: 503,
+				message: 'The Screen write module was constructed without Screen Output asset capabilities',
+				cause: new ServiceWiringError('The Screen write module', 'Screen Output asset capabilities'),
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error).toMatchObject({
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: expect.stringContaining('was constructed without Screen Output asset capabilities'),
+			});
+		});
+
+		it('clears unhandled, without which Nitro masks the message regardless', () => {
+			// Nitro's own handler builds the response body as
+			// `message: (unhandled || fatal) ? 'Server Error' : error.message`, and it
+			// runs after this hook. So leaving `unhandled` set would reinstate exactly
+			// the masking #243 removed — whatever is written above would never reach
+			// the caller.
+			//
+			// A wiring fault can genuinely arrive unhandled: h3 marks any non-H3Error
+			// that way, and a bare `throw new ServiceWiringError(...)` is one.
+			const error = {
+				statusCode: 500,
+				message: 'Something went wrong',
+				cause: new ServiceWiringError('The Screen write module', 'the Graphics Asset Library'),
+				unhandled: true,
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error).toMatchObject({
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: expect.stringContaining('was constructed without the Graphics Asset Library'),
+				unhandled: false,
+			});
 		});
 	});
 

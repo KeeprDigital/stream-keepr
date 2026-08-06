@@ -1,5 +1,5 @@
 import { graphicsCapacityErrorDescriptor } from '~~/server/modules/graphics-asset-library/errors';
-import { ServiceConfigurationError, StateConflictError } from './errors';
+import { ServiceConfigurationError, ServiceWiringError, StateConflictError } from './errors';
 
 export interface MappableNitroError {
 	statusCode: number;
@@ -30,6 +30,24 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		error.statusMessage = 'Service Unavailable';
 		error.message = cause.message;
 		hasMappedPublicServerMessage = true;
+		mappedOperationalError = true;
+	}
+	else if (cause instanceof ServiceWiringError) {
+		// Its message survives for the same reason as the branch above: it names
+		// a component and a missing collaborator rather than describing the
+		// server's insides, and the reader is the one who has to get the build
+		// fixed. #243.
+		error.statusCode = cause.statusCode;
+		error.statusMessage = 'Service Unavailable';
+		error.message = cause.message;
+		hasMappedPublicServerMessage = true;
+		// Clearing `unhandled` below is what lets that message reach the caller at
+		// all. Nitro's handler runs after this hook and builds the response body as
+		// `message: (unhandled || fatal) ? 'Server Error' : error.message`, so an
+		// error that arrives unhandled is masked there no matter what is written
+		// here. A wiring fault can genuinely arrive that way: h3 marks any
+		// non-H3Error unhandled, and a bare `throw new ServiceWiringError(...)` is
+		// one.
 		mappedOperationalError = true;
 	}
 	else if (graphicsCapacityError) {
