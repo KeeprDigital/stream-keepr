@@ -27,11 +27,13 @@ type ConvertedTimestamp<V> = [Extract<V, Date | string>] extends [never]
  * over `keyof T` so it stays homomorphic: an optional `resolvedAt?: string` comes
  * back optional, not `Date | undefined` and required.
  *
- * Every production caller hands this rows read through Drizzle, where every `*At`
- * column is `mode: 'timestamp_ms'` and therefore already `Date` — so for them the
- * mapped type resolves to the input type and nothing downstream moves. The type
- * only starts saying something new when a caller hands over a `string`, which is
- * exactly the case the old `T -> T` got wrong. See #256.
+ * Across all nineteen production call sites the `*At` values come from Drizzle
+ * columns, where every one is `mode: 'timestamp_ms'` and therefore already `Date`.
+ * The object carrying them varies — some hand over the row itself, some a rest of
+ * it, and four build a literal out of its columns — but the values do not, so for
+ * every one of them the mapped type resolves to the input type and nothing
+ * downstream moves. The type only starts saying something new when a caller hands
+ * over a `string`, which is exactly the case the old `T -> T` got wrong. See #256.
  */
 export type MappedTimestamps<T> = {
 	[K in keyof T]: K extends `${string}At` ? ConvertedTimestamp<T[K]> : T[K];
