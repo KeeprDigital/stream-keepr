@@ -297,6 +297,10 @@ describe('screenWriteModule', () => {
 			expect(mockScreenService.slugExists).not.toHaveBeenCalled();
 		});
 
+		// The message is asserted, not just the status. `createScreen`'s refusal is
+		// byte-identical to this one and was already pinned, so a mutation here was
+		// invisible: the suite stayed green with `updateScreen` refusing in words
+		// nobody had agreed to. See #248.
 		it('rejects a duplicate slug with a 400', async () => {
 			mockScreenService.slugExists.mockResolvedValue(true);
 
@@ -304,7 +308,10 @@ describe('screenWriteModule', () => {
 				eventId: 1,
 				screenId: 7,
 				input: { stateVersion: 0, slug: 'taken' } as never,
-			})).rejects.toMatchObject({ statusCode: 400 });
+			})).rejects.toMatchObject({
+				statusCode: 400,
+				message: 'A screen with this slug already exists',
+			});
 
 			expect(mockScreenService.update).not.toHaveBeenCalled();
 		});
