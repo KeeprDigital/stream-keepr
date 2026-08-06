@@ -161,6 +161,47 @@ const assets = ref<GraphicAsset[]>([
 		},
 		operation: {} as never,
 	},
+	/**
+	 * The library's only font, and it belongs to another Event — the one shape in
+	 * this fixture where exactly one asset is hidden by the Event scope, which is
+	 * what the hint's singular sentence needs. No other test asks for fonts, so it
+	 * changes no existing count.
+	 */
+	{
+		id: 'asset-shared-font' as never,
+		name: 'Sponsor display face',
+		kind: 'font',
+		revisionId: 'revision-shared-font-1' as never,
+		revisionNumber: 1,
+		revisions: [{
+			id: 'revision-shared-font-1' as never,
+			revisionNumber: 1,
+			facts: {} as never,
+		}],
+		lifecycle: { state: 'active' },
+		eventIds: [8],
+		facts: {
+			kind: 'font',
+			format: 'woff2',
+			canonicalMime: 'font/woff2',
+			byteLength: 4096,
+			expandedByteLength: 8192,
+			sha256: 'font-digest',
+			family: 'Sponsor Display',
+			subfamily: 'Bold',
+			postscriptName: 'SponsorDisplay-Bold',
+			weight: 700,
+			style: 'normal',
+			glyphCount: 240,
+			unicodeCodePoints: [65],
+			unitsPerEm: 1000,
+			ascent: 800,
+			descent: -200,
+			lineGap: 0,
+			browserChallenge: {} as never,
+		},
+		operation: {} as never,
+	},
 ]);
 const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
 
@@ -259,6 +300,15 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		});
 	}
 
+	/**
+	 * The hint's own sentence, without the widen button that shares its element.
+	 * Whitespace is collapsed because the template wraps the line; an exact match
+	 * on the result is what pins the wording rather than a fragment of it.
+	 */
+	function hintSentence(text: string) {
+		return text.replace('Show all assets', '').replaceAll(/\s+/g, ' ').trim();
+	}
+
 	function activeScope(wrapper: Awaited<ReturnType<typeof mountPicker>>) {
 		return wrapper.get('[data-testid="graphic-asset-scope-event"]').attributes('aria-pressed') === 'true'
 			? 'event'
@@ -325,12 +375,27 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		await wrapper.get('[data-testid="graphic-asset-scope-event"]').trigger('click');
 
 		const hint = wrapper.get('[data-testid="graphic-asset-scope-hint"]');
-		expect(hint.text()).toContain('2 more');
-		expect(hint.text()).toContain('outside this Event');
+		expect(hintSentence(hint.text())).toBe('2 more in the whole library, outside this Event.');
 
 		await wrapper.get('[data-testid="widen-graphic-asset-scope"]').trigger('click');
 		expect(activeScope(wrapper)).toBe('library');
 		expect(wrapper.text()).toContain('Shared logo');
+	});
+
+	/**
+	 * The whole sentence at both counts, because the count is the only part of it
+	 * that varies and a plural arm is the obvious thing to reach for. There is no
+	 * arm to get backwards: 'N more match(es)' cannot be written correctly for
+	 * both counts, since 'N more X' reads X as a noun while the agreeing arms
+	 * ('1 more matches', '5 more match') agree with a subject that is not there.
+	 */
+	it('says the same sentence when the Event scope is holding back exactly one', async () => {
+		const wrapper = await mountPicker({ eventId: 99, assetKind: ['font'] });
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+		await wrapper.get('[data-testid="graphic-asset-scope-event"]').trigger('click');
+
+		const hint = wrapper.get('[data-testid="graphic-asset-scope-hint"]');
+		expect(hintSentence(hint.text())).toBe('1 more in the whole library, outside this Event.');
 	});
 
 	it('says nothing about a wider library when the wider library is what is showing', async () => {

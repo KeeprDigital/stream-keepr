@@ -13,6 +13,35 @@
 const NAME = /^[A-Z_]\w*$/i;
 const EXPORT_PREFIX = /^export\s+/;
 
+/**
+ * Whether this process should adopt `.dev.vars` at all.
+ *
+ * Two refusals, both structural rather than incidental.
+ *
+ * A build must not: there these names come from real secrets, and reading a
+ * local file would bake a developer's key into the worker output.
+ *
+ * The integration suite must not, even though it runs `nuxt dev`. It pins the
+ * environment it needs in `integrationSetupOptions.env` and spawns its server
+ * with those two names overriding whatever it inherits — but only those two.
+ * Every *other* `NUXT_` name in whatever `.dev.vars` the developer happens to
+ * have would be adopted here and inherited by that server with nothing
+ * overriding it, which is isolation by the coincidence of which names the suite
+ * thought to pin. That is the shape #197 and #222 were about. The suite already
+ * announces itself to `nuxt.config.ts`; this reads the same announcement.
+ *
+ * `=== 'true'` rather than "is set", because that is what `STREAM_KEEPR_INTEGRATION`
+ * means everywhere else it is read (`nuxt.config.ts`, `server/plugins/error-handler.ts`)
+ * and the suite sets exactly that. A second, looser definition of "this is the
+ * integration suite" would be its own quiet bug.
+ */
+export function adoptsDevVars(context: {
+	dev: boolean;
+	env: Record<string, string | undefined>;
+}): boolean {
+	return context.dev && context.env.STREAM_KEEPR_INTEGRATION !== 'true';
+}
+
 /** Reads a `.dev.vars` body in the dotenv shape Wrangler accepts. */
 export function parseDevVars(source: string): Map<string, string> {
 	const values = new Map<string, string>();

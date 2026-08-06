@@ -1,19 +1,19 @@
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
 import { defineNuxtModule, useLogger } from 'nuxt/kit';
-import { adoptDevVars } from './devVars';
+import { adoptDevVars, adoptsDevVars } from './devVars';
 
 /**
  * Gives `nuxt dev` the same `NUXT_` environment the deployed Worker has, by
  * adopting `.dev.vars` into `process.env` before anything reads runtimeConfig.
  *
- * Development only. In a build these names come from real secrets, and reading
- * a local file there would bake a developer's key into the output.
+ * Which processes may do that is `adoptsDevVars`' question, and is asked there
+ * so it can be exercised without booting Nuxt.
  */
 export const devVarsModule = defineNuxtModule({
 	meta: { name: 'dev-vars' },
 	setup(_options, nuxt) {
-		if (!nuxt.options.dev)
+		if (!adoptsDevVars({ dev: nuxt.options.dev, env: process.env }))
 			return;
 
 		let source: string;

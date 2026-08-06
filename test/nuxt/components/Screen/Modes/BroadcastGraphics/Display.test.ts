@@ -449,6 +449,24 @@ describe('broadcastGraphicsDisplay', () => {
 		expect(announced).toEqual([{ type: GRAPHICS_PREVIEW_READY_MESSAGE }]);
 	});
 
+	it('announces nothing when it is its own parent, having nobody to tell', async () => {
+		// A preview URL opened in its own tab rather than embedded. `window.parent`
+		// is then this window, and the announcement would be to itself.
+		mockIsPreview.value = true;
+		const announced: unknown[] = [];
+		const originalPostMessage = window.postMessage;
+		window.postMessage = ((message: unknown) => announced.push(message)) as typeof window.postMessage;
+
+		try {
+			await mountComponent();
+		}
+		finally {
+			window.postMessage = originalPostMessage;
+		}
+
+		expect(announced).toEqual([]);
+	});
+
 	it('announces nothing from a live Screen Output, which has no editor to answer', async () => {
 		const announced: unknown[] = [];
 		const parent = { postMessage: (message: unknown) => announced.push(message) };

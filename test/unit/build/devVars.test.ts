@@ -1,5 +1,37 @@
 import { describe, expect, it } from 'vitest';
-import { adoptDevVars, parseDevVars } from '~~/build/devVars';
+import { adoptDevVars, adoptsDevVars, parseDevVars } from '~~/build/devVars';
+
+describe('which processes adopt `.dev.vars` at all', () => {
+	it('adopts in an ordinary dev server, which is the whole point', () => {
+		expect(adoptsDevVars({ dev: true, env: {} })).toBe(true);
+	});
+
+	it('never adopts in a build, where these names come from real secrets', () => {
+		// Reading a local file here would bake a developer's key into the output.
+		expect(adoptsDevVars({ dev: false, env: {} })).toBe(false);
+	});
+
+	/**
+	 * The integration suite runs its own `nuxt dev`, and pins the two names it
+	 * needs in `integrationSetupOptions.env`. Those two survive because the
+	 * spawned server's environment overrides them — but only those two. Any other
+	 * `NUXT_` name in whatever `.dev.vars` a developer happens to have would be
+	 * adopted into the parent process, inherited by that server, and overridden by
+	 * nothing: isolation by the coincidence of which names the suite pinned. The
+	 * refusal has to be here, where the reading happens.
+	 */
+	it('never adopts under the integration suite, whose environment is its own', () => {
+		expect(adoptsDevVars({ dev: true, env: { STREAM_KEEPR_INTEGRATION: 'true' } })).toBe(false);
+	});
+
+	it('reads that announcement exactly as the rest of the repo reads it', () => {
+		// `nuxt.config.ts` and `server/plugins/error-handler.ts` both test for
+		// `'true'`. A looser reading here would make a developer with the variable
+		// set to anything else silently lose the fix this module exists to deliver.
+		expect(adoptsDevVars({ dev: true, env: { STREAM_KEEPR_INTEGRATION: 'false' } })).toBe(true);
+		expect(adoptsDevVars({ dev: true, env: { STREAM_KEEPR_INTEGRATION: '' } })).toBe(true);
+	});
+});
 
 describe('reading a .dev.vars body', () => {
 	it('reads plain, quoted and exported entries alike', () => {

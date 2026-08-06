@@ -278,7 +278,12 @@ function removeItem(itemId: string) {
 				row (#234). A button has no value to hold: every press adds.
 			-->
 			<UFormField v-if="canAuthor" label="Add Graphic Item" size="sm">
-				<div class="flex flex-wrap gap-1" data-testid="graphic-item-palette">
+				<div
+					class="flex flex-wrap gap-1"
+					role="group"
+					aria-label="Add Graphic Item"
+					data-testid="graphic-item-palette"
+				>
 					<UButton
 						v-for="option in itemKindOptions"
 						:key="option.value"
@@ -299,7 +304,12 @@ function removeItem(itemId: string) {
 				:label="`Add to ${selectedGroup.label}`"
 				size="sm"
 			>
-				<div class="flex flex-wrap gap-1" data-testid="graphic-group-child-palette">
+				<div
+					class="flex flex-wrap gap-1"
+					role="group"
+					:aria-label="`Add to ${selectedGroup.label}`"
+					data-testid="graphic-group-child-palette"
+				>
 					<UButton
 						v-for="option in groupChildKindOptions"
 						:key="option.value"
