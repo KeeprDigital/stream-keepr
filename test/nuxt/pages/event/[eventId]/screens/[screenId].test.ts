@@ -1,7 +1,9 @@
+import type { PropType } from 'vue';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, nextTick, reactive } from 'vue';
+import { computed, defineComponent, nextTick, reactive } from 'vue';
+import { getScreenModeConfigurationPolicy } from '~/modules/screen-mode';
 
 // The mode-settings module pulls in every mode's Display/Settings component
 // (feature-match overlay, metagame, etc.) via defineAsyncComponent. None of
@@ -42,10 +44,19 @@ const mockScreenStore = reactive({
 
 const mockToast = { add: vi.fn() };
 
+/** What the Screen Output Asset Capability endpoint issues, if anything. */
+const mockCapabilityResponse = { value: null as string | null };
+const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+
+/** What the copy control reports through, and what it was handed. */
+const mockCopyToClipboard = vi.fn();
+
 mockNuxtImport('useRoute', () => () => route);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
 mockNuxtImport('useToast', () => () => mockToast);
+mockNuxtImport('$fetch', () => mockApiFetch);
+mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard: mockCopyToClipboard }));
 
 const NuxtLayoutStub = defineComponent({
 	template: '<div><slot name="actions" /><slot /></div>',
@@ -59,6 +70,44 @@ const CardStub = defineComponent({
 	template: '<div><slot /></div>',
 });
 
+/** Renders its default slot, which the default stub does not — the hand-out controls live in one. */
+const SlotStub = defineComponent({
+	template: '<div><slot /></div>',
+});
+
+const UButtonStub = defineComponent({
+	name: 'UButton',
+	props: { label: { type: String, default: '' } },
+	emits: ['click'],
+	template: '<button type="button" @click="$emit(\'click\')">{{ label }}<slot /></button>',
+});
+
+/**
+ * The Open menu's items as buttons, since what the page decides is the item list and
+ * every hand-out reaches `openScreenOutput` through one of its `onSelect`s.
+ */
+const UDropdownMenuStub = defineComponent({
+	props: {
+		items: {
+			type: Array as PropType<Array<Array<{ label: string; onSelect: (event: Event) => void }>>>,
+			default: () => [],
+		},
+	},
+	setup(props) {
+		return { entries: computed(() => props.items.flat()) };
+	},
+	template: `<div>
+		<button
+			v-for="entry in entries"
+			:key="entry.label"
+			type="button"
+			:data-open-output="entry.label"
+			@click="entry.onSelect($event)"
+		>{{ entry.label }}</button>
+		<slot />
+	</div>`,
+});
+
 function makeScreen(id: number) {
 	return {
 		id,
@@ -67,6 +116,14 @@ function makeScreen(id: number) {
 		currentMode: 'idle',
 		screenConfig: {},
 	};
+}
+
+/**
+ * What the mode registry answers for this Screen's mode. `null` stands for a Screen
+ * whose mode declares no policy, which the registry's own return type does not admit.
+ */
+function stubModePolicy(policy: unknown) {
+	vi.mocked(getScreenModeConfigurationPolicy).mockReturnValue(policy as never);
 }
 
 /** Resolve the getScreenById(...) call for a specific screenId, in whatever order the test wants. */
@@ -89,14 +146,14 @@ async function mountPage() {
 				UContainer: UContainerStub,
 				UILoadingSpinner: true,
 				UIEmptyState: true,
-				UButton: true,
+				UButton: UButtonStub,
 				UCard: CardStub,
 				UBadge: true,
 				UIcon: true,
-				UTooltip: true,
+				UTooltip: SlotStub,
 				USelect: true,
-				UFieldGroup: true,
-				UDropdownMenu: true,
+				UFieldGroup: SlotStub,
+				UDropdownMenu: UDropdownMenuStub,
 				USeparator: true,
 				UPopover: true,
 				UAlert: true,
@@ -171,5 +228,178 @@ describe('screen config page — screenId route changes', () => {
 
 		expect(mockScreenStore.subscribeToScreenPresence).toHaveBeenCalledWith(3);
 		expect(wrapper.text()).toContain('Screen 3');
+	});
+});
+
+/**
+ * The two hand-outs of this Screen's real outputs, and what each says when it has
+ * nothing to hand out.
+ *
+ * `useScreenOutputAccessUrl` refuses rather than degrading — a URL without a Screen
+ * Output Asset Capability loads, renders, and silently omits every image, video and
+ * library font (#231) — and it answers the refusal so its caller can report it. Until
+ * #250 this page discarded that answer at both open sites, so a refused open opened a
+ * tab, closed it again, and said nothing: exactly what the Live workspace stopped
+ * doing in #237, still happening here.
+ */
+describe('screen config page — handing out this Screen’s output', () => {
+	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
+
+	beforeEach(() => {
+		pendingLoads = [];
+		route.params.screenId = '1';
+		mockScreenStore.screens = [];
+		stubModePolicy(null);
+		mockCopyToClipboard.mockClear();
+		mockToast.add.mockClear();
+		mockCapabilityResponse.value = 'settings-capability';
+		mockApiFetch.mockReset();
+		mockApiFetch.mockImplementation(async (path: string) => {
+			if (String(path).endsWith('/asset-capability')) {
+				if (!mockCapabilityResponse.value)
+					throw new Error('no capability');
+				return { assetCapability: mockCapabilityResponse.value };
+			}
+			return {};
+		});
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		wrapper?.unmount();
+		wrapper = null;
+	});
+
+	async function mountLoadedPage() {
+		const page = await mountPage();
+		await flushPromises();
+		resolveLoad(1, makeScreen(1));
+		await flushPromises();
+		return page;
+	}
+
+	function stubOutputWindow() {
+		const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+		vi.stubGlobal('open', vi.fn(() => outputWindow));
+		return outputWindow;
+	}
+
+	/**
+	 * The capability is rotated between mount and the click, and the handed-out URL has
+	 * to carry the new one.
+	 *
+	 * Asserting only that some capability appears would pass against a value cached when
+	 * the page mounted, and on this page that is the concrete failure rather than an
+	 * academic one: the rotate control is *on this page*, a few pixels from these
+	 * controls, so a URL built from a mount-time capability is dead the moment an
+	 * operator uses it (#231).
+	 */
+	it('copies a URL carrying asset access, obtained at the moment of the hand-out', async () => {
+		wrapper = await mountLoadedPage();
+		mockCapabilityResponse.value = 'rotated-capability';
+
+		await wrapper.get('[aria-label="Copy screen URL"]').trigger('click');
+		await flushPromises();
+
+		expect(mockApiFetch).toHaveBeenCalledWith('/api/events/1/screens/1/asset-capability');
+		expect(mockCopyToClipboard).toHaveBeenCalledWith(
+			`${window.location.origin}/event/1/screen/screen-1?output=overlay#asset-capability=rotated-capability`,
+			expect.anything(),
+		);
+	});
+
+	/**
+	 * The empty string is what the clipboard helper reports as having nothing to copy,
+	 * and the words it reports with have to name the reason — an operator told only
+	 * "failed to copy" reaches for the address in their browser's bar, which is the
+	 * media-losing URL this refusal exists to withhold.
+	 */
+	it('copies nothing at all when asset access cannot be obtained, and names why', async () => {
+		mockCapabilityResponse.value = null;
+		wrapper = await mountLoadedPage();
+
+		await wrapper.get('[aria-label="Copy screen URL"]').trigger('click');
+		await flushPromises();
+
+		expect(mockCopyToClipboard).toHaveBeenCalledWith('', expect.objectContaining({
+			errorDescription: expect.stringContaining('Asset access for this Screen could not be obtained'),
+		}));
+	});
+
+	/** Rotated between mount and the click here too, for the same reason. */
+	it('opens the default output in a tab it points only once asset access is in hand', async () => {
+		const outputWindow = stubOutputWindow();
+		wrapper = await mountLoadedPage();
+		mockCapabilityResponse.value = 'rotated-capability';
+
+		await wrapper.get('[data-open-output="Open default screen"]').trigger('click');
+		await flushPromises();
+
+		expect(window.open).toHaveBeenCalledWith('', '_blank');
+		expect(outputWindow.opener).toBeNull();
+		expect(outputWindow.location.href).toBe(
+			`${window.location.origin}/event/1/screen/screen-1?output=overlay#asset-capability=rotated-capability`,
+		);
+		expect(outputWindow.close).not.toHaveBeenCalled();
+		expect(mockToast.add).not.toHaveBeenCalled();
+	});
+
+	it('opens no output, and says why, when asset access cannot be obtained', async () => {
+		mockCapabilityResponse.value = null;
+		const outputWindow = stubOutputWindow();
+		wrapper = await mountLoadedPage();
+
+		await wrapper.get('[data-open-output="Open default screen"]').trigger('click');
+		await flushPromises();
+
+		expect(outputWindow.location.href).toBe('');
+		expect(outputWindow.close).toHaveBeenCalledOnce();
+		// The tab opened and closed again, so nothing visibly happened. Left unsaid it
+		// reads as a popup blocker rather than as the media-losing hand-out it refused.
+		expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({
+			description: expect.stringContaining('Asset access for this Screen could not be obtained'),
+		}));
+	});
+
+	/**
+	 * The second open site. A Screen Mode's own outputs are handed out by a different
+	 * function on the same page, and it discarded the same answer — so a mode with
+	 * output options had two silent controls, not one.
+	 */
+	describe('a Screen Mode’s own outputs', () => {
+		beforeEach(() => {
+			stubModePolicy({
+				outputOptions: [{ label: 'Open fill output', icon: 'i-lucide-square', value: 'fill' }],
+			});
+		});
+
+		it('opens the chosen output with asset access obtained at the hand-out', async () => {
+			const outputWindow = stubOutputWindow();
+			wrapper = await mountLoadedPage();
+			mockCapabilityResponse.value = 'rotated-capability';
+
+			await wrapper.get('[data-open-output="Open fill output"]').trigger('click');
+			await flushPromises();
+
+			expect(outputWindow.location.href).toBe(
+				`${window.location.origin}/event/1/screen/screen-1?output=fill#asset-capability=rotated-capability`,
+			);
+			expect(mockToast.add).not.toHaveBeenCalled();
+		});
+
+		it('opens nothing, and says why, when asset access cannot be obtained', async () => {
+			mockCapabilityResponse.value = null;
+			const outputWindow = stubOutputWindow();
+			wrapper = await mountLoadedPage();
+
+			await wrapper.get('[data-open-output="Open fill output"]').trigger('click');
+			await flushPromises();
+
+			expect(outputWindow.location.href).toBe('');
+			expect(outputWindow.close).toHaveBeenCalledOnce();
+			expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({
+				description: expect.stringContaining('Asset access for this Screen could not be obtained'),
+			}));
+		});
 	});
 });
