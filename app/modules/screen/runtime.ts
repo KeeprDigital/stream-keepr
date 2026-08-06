@@ -152,13 +152,14 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 *
 	 * It returns what the server created either way, and that is the one place this
 	 * departs from the loaders. A refusal decides what this client should *hold*, and a
-	 * loader must answer with the revision it kept because its caller mirrors the answer
-	 * straight back into a view of the cache — the configuration page into its own
-	 * `screen` ref, the display session into what it renders. Nothing mirrors this one:
-	 * `Screen/CreateModal.vue` names the Screen in a success toast, otherwise reads the
-	 * answer only to tell success from failure, and the `created` event it emits has no
-	 * listener. So the question the answer belongs to is "what did the server make", and
-	 * an entry that merely shares an id is not an answer to it.
+	 * loader must answer with the revision it kept because of what its caller does with
+	 * the answer — the configuration page mirrors it into its own `screen` ref, and the
+	 * display session checks it against the holder it renders from. Neither happens here,
+	 * and there is no third thing this answer feeds: `Screen/CreateModal.vue` names the
+	 * Screen in a success toast, otherwise reads the answer only to tell success from
+	 * failure, and the `created` event it emits has no listener. So the question the
+	 * answer belongs to is "what did the server make", and an entry that merely shares an
+	 * id is not an answer to it.
 	 */
 	async function createScreen(eventId: number, input: CreateScreenInput) {
 		return state.executeAction(
@@ -407,10 +408,10 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * moved past.
 	 *
 	 * The Feature Match Overlay preview aside used to be named here as the change that
-	 * would do it. It has since landed, and it does not: it embeds the output through
-	 * an `<iframe>` (`FeatureMatchOverlay/PreviewOutputAside.vue`), which is its own
-	 * document with its own store, so the disjointness survives it. Whatever ends it
-	 * will be one of the two shapes above.
+	 * would do it. It had already landed when that was written, and it does not: it
+	 * embeds the output through an `<iframe>` (`FeatureMatchOverlay/PreviewOutputAside.vue`),
+	 * which is its own document with its own store, so the disjointness survives it.
+	 * Whatever ends it will be one of the two shapes above.
 	 *
 	 * Ending it would also cost something this returns for free today. With the holders
 	 * disjoint, a refusal in #251's loaders always answers from `screens` and leaves it
