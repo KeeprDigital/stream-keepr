@@ -10,7 +10,9 @@ export default withNuxt(
 		// unignored, `eslint .` from the repository root lints every one of them and
 		// exhausts the heap — the parallel-round workflow in `docs/agents/` routinely
 		// creates several, so this is reached by following the repo's own docs (#212).
-		ignores: ['**/migrations', '.claude/worktrees/**', '.worktrees/**', 'AGENTS.md', 'CLAUDE.md', 'app/utils/animation-effects/*.ts', 'app/utils/animation-effects/base.ts', 'app/utils/animation-effects/shaderBase.ts', 'app/utils/animation-effects/helpers.ts'],
+		// `worker-configuration.d.ts` is emitted by `wrangler types`; anything lint
+		// changes there is overwritten by the next generation (#239).
+		ignores: ['**/migrations', '.claude/worktrees/**', '.worktrees/**', 'AGENTS.md', 'CLAUDE.md', 'worker-configuration.d.ts', 'app/utils/animation-effects/*.ts', 'app/utils/animation-effects/base.ts', 'app/utils/animation-effects/shaderBase.ts', 'app/utils/animation-effects/helpers.ts'],
 		typescript: true,
 		vue: true,
 		formatters: {
