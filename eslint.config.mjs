@@ -12,7 +12,9 @@ export default withNuxt(
 		// creates several, so this is reached by following the repo's own docs (#212).
 		// `worker-configuration.d.ts` is emitted by `wrangler types`; anything lint
 		// changes there is overwritten by the next generation (#239).
-		ignores: ['**/migrations', '.claude/worktrees/**', '.worktrees/**', 'AGENTS.md', 'CLAUDE.md', 'worker-configuration.d.ts', 'app/utils/animation-effects/*.ts', 'app/utils/animation-effects/base.ts', 'app/utils/animation-effects/shaderBase.ts', 'app/utils/animation-effects/helpers.ts'],
+		// `docs/superpowers/` is local skill output that lands untracked inside the
+		// tracked docs tree; whoever holds it otherwise gets a red root lint (#254).
+		ignores: ['**/migrations', '.claude/worktrees/**', '.worktrees/**', 'AGENTS.md', 'CLAUDE.md', 'docs/superpowers/**', 'worker-configuration.d.ts', 'app/utils/animation-effects/*.ts', 'app/utils/animation-effects/base.ts', 'app/utils/animation-effects/shaderBase.ts', 'app/utils/animation-effects/helpers.ts'],
 		typescript: true,
 		vue: true,
 		formatters: {
