@@ -1,17 +1,20 @@
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 
 const mockCopyToClipboard = vi.fn();
 const mockToastAdd = vi.fn();
+/** What the Screen Output Asset Capability endpoint issues, if anything. */
+const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
 
 mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard: mockCopyToClipboard }));
 mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
 mockNuxtImport('useRequestURL', () => () => new URL('http://localhost/'));
+mockNuxtImport('$fetch', () => mockApiFetch);
 
 const ScreenSettingsCardStub = defineComponent({
 	template: '<section><slot name="actions" :open="true" /><slot /></section>',
@@ -77,9 +80,80 @@ async function mountComponent(props: {
 	});
 }
 
+const capability = 'HG7fQ2mS4kLp9xRt0ZbNvCyE1JdWqUoA3hMi5nTgKrs';
+
 describe('featureMatchOverlayPreviewOutputAside', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockApiFetch.mockResolvedValue({ assetCapability: capability });
+	});
+
+	/**
+	 * A Feature Match Overlay resolves its media *and* its library fonts through the
+	 * Screen Output Asset Capability, so an output URL handed over without one opens
+	 * an output that renders everything except them — silently, and permanently
+	 * (#231).
+	 */
+	describe('output URLs an operator is handed', () => {
+		it('copies a URL carrying a capability obtained at that moment', async () => {
+			const wrapper = await mountComponent();
+
+			await wrapper.get('[data-testid="copy-output-key"]').trigger('click');
+			await flushPromises();
+
+			expect(mockApiFetch).toHaveBeenCalledWith('/api/events/1/screens/1/asset-capability');
+			expect(mockCopyToClipboard).toHaveBeenCalledWith(
+				`${window.location.origin}/event/1/screen/main?output=key#asset-capability=${capability}`,
+				expect.anything(),
+			);
+		});
+
+		it('copies nothing at all when the capability cannot be obtained', async () => {
+			mockApiFetch.mockRejectedValue(new Error('unavailable'));
+			const wrapper = await mountComponent();
+
+			await wrapper.get('[data-testid="copy-output-overlay"]').trigger('click');
+			await flushPromises();
+
+			// The empty string is what the clipboard helper reports as having nothing to
+			// copy; the operator retries rather than pasting a URL that loses its assets.
+			expect(mockCopyToClipboard).toHaveBeenCalledWith('', expect.anything());
+		});
+
+		/**
+		 * The quietest hand-out of all: the PNG arrives, looks like a finished output,
+		 * and is missing every asset the Screen publishes.
+		 */
+		it('points a PNG capture at a URL carrying the capability', async () => {
+			const captureWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+			vi.stubGlobal('open', vi.fn(() => captureWindow));
+			const wrapper = await mountComponent();
+
+			await wrapper.get('[data-testid="download-output-fill"]').trigger('click');
+			await flushPromises();
+
+			expect(captureWindow.location.href).toBe(
+				`${window.location.origin}/event/1/screen/main?output=fill&download=1#asset-capability=${capability}`,
+			);
+			vi.unstubAllGlobals();
+		});
+
+		it('refuses the capture, and says so, when the capability cannot be obtained', async () => {
+			mockApiFetch.mockRejectedValue(new Error('unavailable'));
+			const captureWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+			vi.stubGlobal('open', vi.fn(() => captureWindow));
+			const wrapper = await mountComponent();
+
+			await wrapper.get('[data-testid="download-output-fill"]').trigger('click');
+			await flushPromises();
+
+			expect(captureWindow.location.href).toBe('');
+			expect(captureWindow.close).toHaveBeenCalledOnce();
+			expect(mockToastAdd).toHaveBeenCalledWith(
+				expect.objectContaining({ title: 'Download unavailable', color: 'error' }),
+			);
+			vi.unstubAllGlobals();
+		});
 	});
 
 	it('accepts selections only from its own same-origin preview frame', async () => {

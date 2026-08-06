@@ -310,6 +310,7 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 											icon="i-lucide-copy"
 											:disabled="publicationBlocked"
 											:title="publicationBlockReason"
+											:data-testid="`copy-output-${output.value}`"
 											@click="copyOutputUrl(output.value)"
 										>
 											Copy
@@ -319,6 +320,7 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 											icon="i-lucide-download"
 											:disabled="publicationBlocked"
 											:title="publicationBlockReason"
+											:data-testid="`download-output-${output.value}`"
 											@click="downloadOutput(output.value)"
 										>
 											PNG
