@@ -14,29 +14,75 @@ const NAME = /^[A-Z_]\w*$/i;
 const EXPORT_PREFIX = /^export\s+/;
 
 /**
- * #130: what a dev server with no `.dev.vars` is about to do, said before it does it.
+ * The `NUXT_` names a local checkout has to be given before the surfaces that read
+ * them stop refusing, and the whole of what the #130 notice is asserting.
+ *
+ * These are `.dev.vars.example`'s assignments minus `NUXT_ABLY_API_KEY`, which is
+ * deliberately not here: it reaches a third party, an empty one is the *expected*
+ * state of a checkout that never claimed to have realtime, and #223 already owns
+ * saying so. `devVars.test.ts` pins the partition against the example file, so a
+ * fourth name added there fails until someone decides which side it belongs on.
+ *
+ * The Melee names in `.env.example` are absent for the same reason in a different
+ * key: nothing refuses without them at boot, so a notice naming them would be
+ * telling a developer to go and find a secret they do not need yet.
+ */
+export const LOCALLY_REQUIRED_NUXT_NAMES = [
+	'NUXT_GRAPHICS_ADMIN_TOKEN',
+	'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY',
+] as const;
+
+/** Deliberately optional, and named here so the partition above is legible. */
+export const LOCALLY_OPTIONAL_NUXT_NAMES = ['NUXT_ABLY_API_KEY'] as const;
+
+/**
+ * Which required names the environment cannot supply, after adoption has had its go.
+ *
+ * Blank counts as missing, because that is how the readers count it —
+ * `requireGraphicsAdministrator` trims before testing, and `signingKey` rejects the
+ * empty string — and because the likeliest way to hold a populated `.env` full of
+ * blanks is `cp .env.example .env`, which is advice this very notice gives.
+ */
+export function missingLocalNuxtNames(env: Record<string, string | undefined>): string[] {
+	return LOCALLY_REQUIRED_NUXT_NAMES.filter(name => (env[name] ?? '').trim().length === 0);
+}
+
+/**
+ * #130: what a dev server without local configuration is about to do, said before it
+ * does it.
  *
  * `.env` and `.dev.vars` are both gitignored, so a fresh `git worktree` inherits
  * neither from the checkout it was branched from. The integration suite has its own
  * answer to that — #223's skip notice for the one secret it cannot invent — but a
  * plain `pnpm dev` in the same worktree had none, and the shape of what goes wrong is
- * the reason this file exists: every runtimeConfig name keeps its empty default, and
- * the surfaces that need one answer 503 individually. `requireGraphicsAdministrator`
- * says "not configured"; `screen-output-assets/runtime.ts` names the variable. Neither
- * says the checkout has no local configuration *at all*, which is the one fact that
- * turns four unrelated-looking 503s into one copy step.
+ * the reason this file exists: the names keep their empty defaults, and the two
+ * surfaces that need them answer 503 individually. `requireGraphicsAdministrator`
+ * says "not configured"; `screen-output-assets/runtime.ts` names the variable.
+ * Neither says the checkout has no local configuration, which is the one fact that
+ * turns two unrelated-looking 503s into one copy step.
  *
- * A warning rather than a refusal. Plenty of this application runs without any of
- * these names — that is exactly what a worktree opened to read the UI wants — so
- * failing the boot would trade an obscure 503 for an obstruction.
+ * **Keyed on the names, not on the file**, which is the correction #130's review
+ * forced. Nuxt loads `.env` into `process.env` before a module's `setup` runs — that
+ * is why `adoptDevVars` never overwrites what it finds — so a checkout with a
+ * populated `.env` and no `.dev.vars` is perfectly well configured, and is exactly
+ * what a reader of #130's own `.env`-centric text would build. The first version of
+ * this notice fired on the missing file alone and told that developer their working
+ * installation answered 503. A notice that can be false where it fires is worse than
+ * no notice: it is the obscure failure this replaced, wearing a confident face.
+ *
+ * A warning rather than a refusal. Plenty of this application runs without these
+ * names — that is exactly what a worktree opened to read the UI wants — so failing
+ * the boot would trade an obscure 503 for an obstruction.
  */
-export const DEV_VARS_ABSENT_NOTICE
-	= 'No .dev.vars in this checkout, so every NUXT_ runtimeConfig name keeps its empty default: '
-		+ 'Graphics Administrator operations and Screen Output asset capabilities answer 503, and each says so '
-		+ 'on its own without naming a common cause. A fresh git worktree is the usual way to arrive here — '
-		+ '.env and .dev.vars are both gitignored, so a new checkout inherits neither from the one it was '
-		+ 'branched from. Fix: copy .env and .dev.vars in from that checkout, or start from .env.example and '
-		+ '.dev.vars.example. See docs/agents/parallel-rounds.md.';
+export function devVarsAbsentNotice(missing: readonly string[]): string {
+	return `Nothing in this checkout sets ${missing.join(' or ')}, so ${missing.length === 1 ? 'it keeps its' : 'they keep their'} `
+		+ 'empty default: Graphics Administrator operations and Screen Output asset capabilities answer 503, and each '
+		+ 'says so on its own without naming a common cause. A fresh git worktree is the usual way to arrive here — '
+		+ '.env and .dev.vars are both gitignored, so a new checkout inherits neither from the one it was branched '
+		+ 'from, and a copied .env.example carries the names with empty values. Fix: copy .env and .dev.vars in from '
+		+ 'the checkout you branched from, or fill in .env.example and .dev.vars.example. '
+		+ 'See docs/agents/parallel-rounds.md.';
+}
 
 /**
  * Whether this process should adopt `.dev.vars` at all.
@@ -146,6 +192,13 @@ export type DevVarsOutcome = 'refused' | 'absent' | 'read';
 
 export interface DevVarsDecision extends DevVarAdoption {
 	outcome: DevVarsOutcome;
+	/**
+	 * Required names the environment still cannot supply once adoption is done.
+	 *
+	 * A fact about the environment rather than about the file, so it is populated
+	 * even for a refusal — what a refusal decides is whether anyone may *say* it.
+	 */
+	missing: string[];
 }
 
 /**
@@ -156,11 +209,41 @@ export interface DevVarsDecision extends DevVarAdoption {
  */
 export function adoptDevVarsInto(source: DevVarsSource): DevVarsDecision {
 	if (!adoptsDevVars(source))
-		return { adopted: [], retained: [], outcome: 'refused' };
+		return { adopted: [], retained: [], outcome: 'refused', missing: missingLocalNuxtNames(source.env) };
 
 	const body = source.read();
 	if (body === null)
-		return { adopted: [], retained: [], outcome: 'absent' };
+		return { adopted: [], retained: [], outcome: 'absent', missing: missingLocalNuxtNames(source.env) };
 
-	return { ...adoptDevVars(body, source.env), outcome: 'read' };
+	// After adoption, so the names this run just supplied do not read as missing.
+	const adoption = adoptDevVars(body, source.env);
+	return { ...adoption, outcome: 'read', missing: missingLocalNuxtNames(source.env) };
+}
+
+/**
+ * The one line this run should log, or nothing.
+ *
+ * Here rather than in the Nuxt module because the module is meant to be an adapter
+ * with nothing left to get wrong, and #130's first version put a three-way
+ * conditional in it that no suite could reach — a surviving mutation there
+ * reintroduced the warn-the-integration-suite defect the outcome discriminator
+ * exists to prevent. A pure function of the decision can be pinned; four lines
+ * inside `defineNuxtModule` cannot.
+ *
+ * The refusal is checked first and separately from `missing`. A build and the
+ * integration suite are both short of these names in their own process — the suite
+ * pins them into the *server child's* environment, not its own — so gating on
+ * `missing` alone would warn them on every run about a file they declined to open.
+ */
+export function devVarsLogLine(decision: DevVarsDecision): { level: 'warn' | 'info'; message: string } | undefined {
+	if (decision.outcome === 'refused')
+		return undefined;
+
+	if (decision.missing.length > 0)
+		return { level: 'warn', message: devVarsAbsentNotice(decision.missing) };
+
+	if (decision.adopted.length > 0)
+		return { level: 'info', message: `Using ${decision.adopted.join(', ')} from .dev.vars` };
+
+	return undefined;
 }
