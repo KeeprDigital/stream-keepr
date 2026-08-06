@@ -3,6 +3,8 @@ import type { Screen } from '~/types';
 import { toRaw } from 'vue';
 import { useScreenRuntime } from '~/modules/screen/runtime';
 
+type ExecuteAction = ReturnType<typeof useAsyncAction>['executeAction'];
+
 export const useScreenStore = defineStore('screen', () => {
 	const screenRepo = useScreenRepository();
 	const { executeAction } = useAsyncAction();
@@ -30,9 +32,51 @@ export const useScreenStore = defineStore('screen', () => {
 		loading.value = activeLoads.size > 0;
 	}
 
-	function loadErrorMessage(caughtError: unknown) {
-		return caughtError instanceof Error ? caughtError.message : 'An error occurred';
+	/**
+	 * Report a failure in the words the authority wrote about it, where it wrote any.
+	 *
+	 * Everything this store surfaces ends at an `Error.message`, and for a `$fetch`
+	 * failure that message is the transport's status line — `[GET] "…": 409 Conflict` —
+	 * which names neither what was refused nor what an operator can do about it. The
+	 * sentence about the show is in the response body, and `failureSentence` owns when
+	 * it may be quoted: a sub-500 status only, since a 5xx has had its prose replaced
+	 * with a placeholder on the way out and a failure with no status never reached the
+	 * server. #245 did this for the live-session store; this is the same adoption for
+	 * the Screen store, whose `error` is what the Screens page shows (#262).
+	 */
+	function reportedFailure(caught: unknown): unknown {
+		const sentence = failureSentence(caught);
+		return sentence === undefined ? caught : new Error(sentence, { cause: caught });
 	}
+
+	function loadErrorMessage(caughtError: unknown) {
+		const reported = reportedFailure(caughtError);
+		return reported instanceof Error ? reported.message : 'An error occurred';
+	}
+
+	/**
+	 * `executeAction`, with the substitution above applied to whatever the action threw.
+	 *
+	 * The substitution is inside the action rather than around the whole call so the
+	 * two things downstream of it stay right: `onError` rollbacks and the deferred
+	 * rejections a debounced config write answers its caller with get the same failure
+	 * the banner does, and the conflict-retry inside each action still reads the raw
+	 * `FetchError`'s status, because it is nested further in than this.
+	 *
+	 * Handed to the runtime Module as its `executeAction` so that every Screen write
+	 * reports through one seam. Two seams that must agree are two seams that can drift.
+	 */
+	const executeReporting: ExecuteAction = (action, options) => executeAction(
+		async () => {
+			try {
+				return await action();
+			}
+			catch (failure) {
+				throw reportedFailure(failure);
+			}
+		},
+		options,
+	);
 
 	// Screen presence tracking
 	const screenPresence = ref<Map<number, ScreenPresenceInfo>>(new Map());
@@ -42,7 +86,7 @@ export const useScreenStore = defineStore('screen', () => {
 		currentEventId,
 		screenPresence,
 		error,
-		executeAction,
+		executeAction: executeReporting,
 	});
 
 	const isLoaded = computed(() => hasFetched.value);
@@ -141,7 +185,7 @@ export const useScreenStore = defineStore('screen', () => {
 
 	async function getScreenById(eventId: number, screenId: number) {
 		currentEventId.value = eventId;
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const screenData = await screenRepo.getById(eventId, screenId);
 				if (!screenData) {
