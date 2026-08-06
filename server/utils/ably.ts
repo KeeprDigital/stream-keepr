@@ -62,6 +62,67 @@ function reportOversizedMessage<T extends MessageType>(
 	}));
 }
 
+/**
+ * How much of a failure's own message the log will carry.
+ *
+ * The provider's message is usually a short phrase ("No application found"), but
+ * the transport's fallback for a response it cannot decode as an Ably error is
+ * `'Error response received from server: ' + status + ' body was: ' + body` — so
+ * an intermediary answering with an HTML page would otherwise put the whole page
+ * in a log line. Bounded rather than dropped: the phrase is the diagnosis.
+ */
+export const MAX_PUBLISH_FAILURE_REASON_CHARS = 200;
+
+// The finiteness half of this guard is belt-and-braces: the transport can build
+// a code of `NaN` from an absent `x-ably-errorcode` header, and `JSON.stringify`
+// would render that as null anyway. It is here so the declared `number | null`
+// is true of the value and not merely of how this one caller serialises it.
+function finiteNumberOrNull(value: unknown): number | null {
+	return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * What a failed publish is allowed to say about why it failed.
+ *
+ * The provider throws `ErrorInfo`, which carries `statusCode`, `code` and
+ * `message` (ably 2.25.0, ably.d.ts) — a rejected key arrives as 404 / 40400
+ * "No application found", the server-side witness of the failure #242 had to
+ * diagnose from the client. #253: the log used to discard all three, so a
+ * revoked or fabricated key spent an outbound request per Screen mutation and
+ * said nothing about it.
+ *
+ * The fields are named, not copied. `ErrorInfo` also carries `href`, `detail`
+ * and `cause`, which is the request metadata the previous comment here was
+ * right to keep out; none of them is read. Nothing named can carry the API key:
+ * it reaches the provider in an Authorization header, and the SDK's own
+ * key-shaped errors ("No key specified", "Invalid key specified: the key has no
+ * colon-separated secret") interpolate nothing into their message.
+ *
+ * Total by construction. `code` and `statusCode` are optional and nullable on
+ * the SDK's `PartialErrorInfo`, and the transport can build a code of `NaN` from
+ * an absent `x-ably-errorcode` header, so both are validated rather than
+ * trusted; a throw that is not an Error, or one whose properties refuse to be
+ * read, yields nulls. The caller is a catch block that must not itself throw —
+ * a failure here would turn a deliberately swallowed publish into a 500 on a
+ * route whose write has already committed.
+ */
+function publishFailureFields(error: unknown) {
+	try {
+		const info = error as { statusCode?: unknown; code?: unknown; message?: unknown } | null | undefined;
+		return {
+			statusCode: finiteNumberOrNull(info?.statusCode),
+			errorCode: finiteNumberOrNull(info?.code),
+			errorName: error instanceof Error ? error.name : null,
+			reason: typeof info?.message === 'string'
+				? info.message.slice(0, MAX_PUBLISH_FAILURE_REASON_CHARS)
+				: null,
+		};
+	}
+	catch {
+		return { statusCode: null, errorCode: null, errorName: null, reason: null };
+	}
+}
+
 // Overload for messages with payload
 export async function publishMessage<T extends MessageType>(
 	eventId: number,
@@ -92,13 +153,16 @@ export async function publishMessage<T extends MessageType>(
 		reportOversizedMessage(eventId, messageType, payload, originConnectionId);
 		await channel.publish(messageType, messageData);
 	}
-	catch {
-		// SDK errors can retain request metadata. Log only the bounded routing
-		// identifiers; realtime delivery is best-effort for this API.
+	catch (error) {
+		// SDK errors can retain request metadata. Log the bounded routing
+		// identifiers and the provider's own account of the refusal, and nothing
+		// else; realtime delivery is best-effort for this API, so this line is the
+		// only witness that the publish was attempted and refused.
 		console.error(JSON.stringify({
 			message: 'realtime_publish_failed',
 			eventId,
 			messageType,
+			...publishFailureFields(error),
 		}));
 	}
 }

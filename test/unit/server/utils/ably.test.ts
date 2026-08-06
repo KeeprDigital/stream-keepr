@@ -115,6 +115,249 @@ describe('publishMessage', () => {
 	});
 });
 
+// ──────────────── the failed-publish diagnosis ────────────────
+
+/**
+ * What the log says when the provider refuses a publish (#253).
+ *
+ * `publishMessage` log-and-swallows by design — the Screen command route's 200
+ * depends on nothing local (#242 item 3) — so the log line is the only witness a
+ * publish failed. It used to name the event and the message type and stop there,
+ * which is silence in the case that matters: under a rejected key every Screen
+ * mutation spends an outbound request and the log never says the key was why.
+ *
+ * These pin the enriched fields, the fallbacks for throws that are not the
+ * provider's, that nothing outside the named fields reaches the log, and — the
+ * part a future edit could quietly take away — that the swallow still swallows.
+ */
+describe('failed realtime publishes', () => {
+	/**
+	 * The provider's error shape, from the installed SDK rather than memory:
+	 * `ErrorInfo extends Error` with `code`, `statusCode` and `message`
+	 * (node_modules/ably/ably.d.ts:4092-4104, ably 2.25.0). It does not assign
+	 * `name`, so a genuine ErrorInfo reports the inherited `'Error'` — which is
+	 * why `errorName` alone could never carry this diagnosis.
+	 */
+	class ErrorInfoShaped extends Error {
+		code: number;
+		statusCode: number;
+		href?: string;
+		detail?: Record<string, string>;
+		constructor(message: string, code: number, statusCode: number) {
+			super(message);
+			this.code = code;
+			this.statusCode = statusCode;
+		}
+	}
+
+	function loggedFields(spy: ReturnType<typeof vi.spyOn>) {
+		return JSON.parse(spy.mock.calls[0]![0] as string);
+	}
+
+	beforeEach(() => {
+		vi.resetModules();
+		MockAblyRest.reset();
+		mockGetChannel.mockClear();
+		mockPublish.mockClear();
+		vi.mocked(useRuntimeConfig).mockReturnValue({ ablyApiKey: 'test-key' } as any);
+	});
+
+	it('names the provider status and code a rejected key fails with', async () => {
+		// The 40400/404 shape #242 diagnosed client-side; the server had it all along.
+		mockPublish.mockRejectedValue(new ErrorInfoShaped('No application found', 40400, 404));
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { publishMessage } = await import('~~/server/utils/ably');
+
+		await publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123');
+
+		expect(loggedFields(errorSpy)).toEqual({
+			message: 'realtime_publish_failed',
+			eventId: 7,
+			messageType: 'event:deleted',
+			statusCode: 404,
+			errorCode: 40400,
+			errorName: 'Error',
+			reason: 'No application found',
+		});
+		errorSpy.mockRestore();
+	});
+
+	it('still swallows the failure, because the route has no local effect to report', async () => {
+		mockPublish.mockRejectedValue(new ErrorInfoShaped('No application found', 40400, 404));
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { publishMessage } = await import('~~/server/utils/ably');
+
+		await expect(
+			publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123'),
+		).resolves.toBeUndefined();
+
+		expect(errorSpy).toHaveBeenCalledOnce();
+		errorSpy.mockRestore();
+	});
+
+	it('leaves the strict path free to propagate the same rejection', async () => {
+		mockPublish.mockRejectedValue(new ErrorInfoShaped('No application found', 40400, 404));
+		const { publishMessageStrict } = await import('~~/server/utils/ably');
+
+		await expect(
+			publishMessageStrict(7, 'melee:playersSynced', { playerCount: 2 }, 'conn-123'),
+		).rejects.toThrow('No application found');
+	});
+
+	it('falls back to nulls and the error name when the throw is not the provider’s', async () => {
+		mockPublish.mockRejectedValue(new TypeError('channel.publish is not a function'));
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { publishMessage } = await import('~~/server/utils/ably');
+
+		await publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123');
+
+		expect(loggedFields(errorSpy)).toEqual({
+			message: 'realtime_publish_failed',
+			eventId: 7,
+			messageType: 'event:deleted',
+			statusCode: null,
+			errorCode: null,
+			errorName: 'TypeError',
+			reason: 'channel.publish is not a function',
+		});
+		errorSpy.mockRestore();
+	});
+
+	it('says the key was missing rather than only that a publish failed', async () => {
+		// getAblyClient throws inside the same try, so the commonest deployment
+		// failure of all now arrives with its reason attached.
+		vi.mocked(useRuntimeConfig).mockReturnValue({ ablyApiKey: '' } as any);
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { publishMessage } = await import('~~/server/utils/ably');
+
+		await publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123');
+
+		expect(loggedFields(errorSpy)).toMatchObject({
+			errorName: 'Error',
+			reason: 'Ably server API key is not configured',
+		});
+		errorSpy.mockRestore();
+	});
+
+	it('reports a non-numeric provider code as absent rather than as NaN', async () => {
+		// The SDK builds `Number(headers['x-ably-errorcode'])` for a response that
+		// carries no Ably error body, so NaN is a shape that actually reaches here.
+		const uncoded = new ErrorInfoShaped('Error response received from server', Number.NaN, 502);
+		mockPublish.mockRejectedValue(uncoded);
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { publishMessage } = await import('~~/server/utils/ably');
+
+		await publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123');
+
+		expect(loggedFields(errorSpy)).toMatchObject({ statusCode: 502, errorCode: null });
+		errorSpy.mockRestore();
+	});
+
+	it('keeps the numeric diagnosis when the message is not prose', async () => {
+		// Losing the reason must not cost the status too: the fields are read
+		// independently, so a malformed message leaves 404/40400 legible.
+		const arrayMessage = new ErrorInfoShaped('', 40400, 404);
+		Object.defineProperty(arrayMessage, 'message', { value: ['No application found'] });
+		mockPublish.mockRejectedValue(arrayMessage);
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { publishMessage } = await import('~~/server/utils/ably');
+
+		await publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123');
+
+		expect(loggedFields(errorSpy)).toMatchObject({
+			statusCode: 404,
+			errorCode: 40400,
+			reason: null,
+		});
+		errorSpy.mockRestore();
+	});
+
+	it('bounds the reason, because the transport puts whole response bodies in it', async () => {
+		mockPublish.mockRejectedValue(new Error(`No application found ${'x'.repeat(5000)}`));
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { MAX_PUBLISH_FAILURE_REASON_CHARS, publishMessage } = await import('~~/server/utils/ably');
+
+		await publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123');
+
+		const { reason } = loggedFields(errorSpy);
+		expect(reason).toHaveLength(MAX_PUBLISH_FAILURE_REASON_CHARS);
+		expect(reason.startsWith('No application found')).toBe(true);
+		errorSpy.mockRestore();
+	});
+
+	it('keeps the provider’s request metadata out of the log', async () => {
+		// The fields are chosen, not copied: `href`, `detail` and `cause` are the
+		// parts of an ErrorInfo that can retain request context, and none is named.
+		const withMetadata = new ErrorInfoShaped('No application found', 40400, 404);
+		withMetadata.href = 'https://help.ably.io/error/40400';
+		withMetadata.detail = { key: 'appId.keyId:secret-that-must-not-be-logged' };
+		mockPublish.mockRejectedValue(withMetadata);
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { publishMessage } = await import('~~/server/utils/ably');
+
+		await publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123');
+
+		const line = errorSpy.mock.calls[0]![0] as string;
+		expect(line).not.toContain('secret-that-must-not-be-logged');
+		expect(line).not.toContain('help.ably.io');
+		expect(Object.keys(loggedFields(errorSpy))).toEqual([
+			'message',
+			'eventId',
+			'messageType',
+			'statusCode',
+			'errorCode',
+			'errorName',
+			'reason',
+		]);
+		errorSpy.mockRestore();
+	});
+
+	it('reports a throw that is not an Error at all without inventing fields', async () => {
+		mockPublish.mockRejectedValue('the provider rejected with a bare string');
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { publishMessage } = await import('~~/server/utils/ably');
+
+		await publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123');
+
+		expect(loggedFields(errorSpy)).toEqual({
+			message: 'realtime_publish_failed',
+			eventId: 7,
+			messageType: 'event:deleted',
+			statusCode: null,
+			errorCode: null,
+			errorName: null,
+			reason: null,
+		});
+		errorSpy.mockRestore();
+	});
+
+	it('does not let a hostile error shape turn a swallowed failure into a real one', async () => {
+		// The catch block is the last line of defence; if reading the error throws,
+		// the swallow becomes a 500 on a route whose write already committed.
+		const hostile = new Error('unreadable');
+		Object.defineProperty(hostile, 'statusCode', {
+			get() {
+				throw new Error('property access refused');
+			},
+		});
+		mockPublish.mockRejectedValue(hostile);
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { publishMessage } = await import('~~/server/utils/ably');
+
+		await expect(
+			publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123'),
+		).resolves.toBeUndefined();
+
+		expect(loggedFields(errorSpy)).toMatchObject({
+			message: 'realtime_publish_failed',
+			eventId: 7,
+			statusCode: null,
+			errorCode: null,
+		});
+		errorSpy.mockRestore();
+	});
+});
+
 // ──────────────── the oversized-message diagnostic ────────────────
 
 /**
