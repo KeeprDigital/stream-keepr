@@ -36,4 +36,17 @@ describe('post /api/events/[id]/screens/[screenId]/command', () => {
 		expect(mockFindById).toHaveBeenCalledWith(10, 1);
 		expect(mockPublishScreenCommand).toHaveBeenCalledWith(1, 10, 'refresh');
 	});
+
+	it('lets a refused publish out, because the 200 means the command was delivered', async () => {
+		// The route has no local effect to report: the publish *is* the work, so its
+		// 200 depends on the round trip and swallowing the failure would promise a
+		// delivery that never happened. #242 recorded that contract deliberately;
+		// #264 left it alone and only changed what the failure is called — which is
+		// the provider adapter's job, not this route's.
+		const refusal = new Error('Realtime publish failed');
+		mockPublishScreenCommand.mockRejectedValue(refusal);
+		const handler = (await import('../../../../../../../../server/api/events/[id]/screens/[screenId]/command.post.ts')).default;
+
+		await expect(handler(stubH3Event())).rejects.toBe(refusal);
+	});
 });

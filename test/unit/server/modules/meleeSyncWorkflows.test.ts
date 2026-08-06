@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { providerRefusal } from '~~/test/helpers/providerRefusal';
 
 const mockMelee = {
 	fetchMergedPlayers: vi.fn(),
@@ -189,6 +190,37 @@ describe('melee Sync updateFromMelee workflow', () => {
 			phases: 1,
 			rounds: 2,
 		}));
+	});
+
+	it('names the provider refusal behind a notification it could not deliver', async () => {
+		// #264, the smallest of the cluster: the warning kept only the message type,
+		// so a sync that quietly stopped notifying anybody said 'could not be
+		// delivered' and nothing about why. Under a rejected key that is once per
+		// published stage, forever, with the answer — 40400 — thrown away each time.
+		//
+		// The real extraction runs here: `publishFailureFields` deliberately lives
+		// outside the mocked `~~/server/utils/ably`, so this asserts what the log
+		// carries rather than what a stub was told to return.
+		mockRoundService.findByEventId.mockResolvedValue([]);
+		const ably = await import('~~/server/utils/ably');
+		vi.mocked(ably.publishMessageStrict).mockRejectedValueOnce(providerRefusal());
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+		const result = await createMeleeSyncWorkflows().runInitialSetup({} as any, 1, eventData, vi.fn().mockResolvedValue(undefined));
+
+		expect(JSON.parse(warnSpy.mock.calls[0]![0] as string)).toEqual({
+			message: 'melee_sync_realtime_publish_failed',
+			messageType: 'melee:structureSynced',
+			statusCode: 404,
+			errorCode: 40400,
+			errorName: 'Error',
+			reason: 'No application found',
+		});
+		// The sync still reports success with a warning: the data committed, and
+		// only the notification was lost. #264 changed the log line, not that.
+		expect(result.success).toBe(true);
+		expect(result.warnings).toContain('Data was saved, but realtime notification "melee:structureSynced" could not be delivered');
+		warnSpy.mockRestore();
 	});
 
 	it('stops an aggregate update before the next durable stage when its ownership checkpoint fails', async () => {
