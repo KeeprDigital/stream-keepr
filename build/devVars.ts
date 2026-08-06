@@ -14,6 +14,31 @@ const NAME = /^[A-Z_]\w*$/i;
 const EXPORT_PREFIX = /^export\s+/;
 
 /**
+ * #130: what a dev server with no `.dev.vars` is about to do, said before it does it.
+ *
+ * `.env` and `.dev.vars` are both gitignored, so a fresh `git worktree` inherits
+ * neither from the checkout it was branched from. The integration suite has its own
+ * answer to that — #223's skip notice for the one secret it cannot invent — but a
+ * plain `pnpm dev` in the same worktree had none, and the shape of what goes wrong is
+ * the reason this file exists: every runtimeConfig name keeps its empty default, and
+ * the surfaces that need one answer 503 individually. `requireGraphicsAdministrator`
+ * says "not configured"; `screen-output-assets/runtime.ts` names the variable. Neither
+ * says the checkout has no local configuration *at all*, which is the one fact that
+ * turns four unrelated-looking 503s into one copy step.
+ *
+ * A warning rather than a refusal. Plenty of this application runs without any of
+ * these names — that is exactly what a worktree opened to read the UI wants — so
+ * failing the boot would trade an obscure 503 for an obstruction.
+ */
+export const DEV_VARS_ABSENT_NOTICE
+	= 'No .dev.vars in this checkout, so every NUXT_ runtimeConfig name keeps its empty default: '
+		+ 'Graphics Administrator operations and Screen Output asset capabilities answer 503, and each says so '
+		+ 'on its own without naming a common cause. A fresh git worktree is the usual way to arrive here — '
+		+ '.env and .dev.vars are both gitignored, so a new checkout inherits neither from the one it was '
+		+ 'branched from. Fix: copy .env and .dev.vars in from that checkout, or start from .env.example and '
+		+ '.dev.vars.example. See docs/agents/parallel-rounds.md.';
+
+/**
  * Whether this process should adopt `.dev.vars` at all.
  *
  * Two refusals, both structural rather than incidental.
@@ -109,15 +134,33 @@ export interface DevVarsSource {
 }
 
 /**
+ * Which of the three things happened, because `adopted: []` is all three at once.
+ *
+ * A build and the integration suite adopt nothing on purpose and must stay silent;
+ * a dev server that found no file is the case #130 exists to announce. Returning the
+ * distinction is what keeps the notice out of the two runs that are behaving
+ * correctly — a caller reading only `adopted.length === 0` would warn the integration
+ * suite, on every run, about a file it deliberately refused to open.
+ */
+export type DevVarsOutcome = 'refused' | 'absent' | 'read';
+
+export interface DevVarsDecision extends DevVarAdoption {
+	outcome: DevVarsOutcome;
+}
+
+/**
  * The whole decision — whether to read `.dev.vars` at all, and what to take from
  * it — so the Nuxt module around it is an adapter with nothing left to get
  * wrong. A refusal never calls `read`: not opening the file is the point of the
  * refusal, and passing `read` in is what lets a caller prove it was not opened.
  */
-export function adoptDevVarsInto(source: DevVarsSource): DevVarAdoption {
+export function adoptDevVarsInto(source: DevVarsSource): DevVarsDecision {
 	if (!adoptsDevVars(source))
-		return { adopted: [], retained: [] };
+		return { adopted: [], retained: [], outcome: 'refused' };
 
 	const body = source.read();
-	return body === null ? { adopted: [], retained: [] } : adoptDevVars(body, source.env);
+	if (body === null)
+		return { adopted: [], retained: [], outcome: 'absent' };
+
+	return { ...adoptDevVars(body, source.env), outcome: 'read' };
 }

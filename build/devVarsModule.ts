@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
 import { defineNuxtModule, useLogger } from 'nuxt/kit';
-import { adoptDevVarsInto } from './devVars';
+import { adoptDevVarsInto, DEV_VARS_ABSENT_NOTICE } from './devVars';
 
 /**
  * Gives `nuxt dev` the same `NUXT_` environment the deployed Worker has, by
@@ -15,7 +15,7 @@ import { adoptDevVarsInto } from './devVars';
 export const devVarsModule = defineNuxtModule({
 	meta: { name: 'dev-vars' },
 	setup(_options, nuxt) {
-		const { adopted } = adoptDevVarsInto({
+		const { adopted, outcome } = adoptDevVarsInto({
 			dev: nuxt.options.dev,
 			env: process.env,
 			read: () => {
@@ -28,7 +28,10 @@ export const devVarsModule = defineNuxtModule({
 			},
 		});
 
-		if (adopted.length > 0)
-			useLogger('dev-vars').info(`Using ${adopted.join(', ')} from .dev.vars`);
+		const logger = useLogger('dev-vars');
+		if (outcome === 'absent')
+			logger.warn(DEV_VARS_ABSENT_NOTICE);
+		else if (adopted.length > 0)
+			logger.info(`Using ${adopted.join(', ')} from .dev.vars`);
 	},
 });

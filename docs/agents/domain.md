@@ -33,4 +33,4 @@ If the needed concept isn't in the glossary, either the proposed language does n
 
 If output contradicts an existing ADR, surface it explicitly rather than silently overriding:
 
-> _Contradicts ADR-0007 (example decision) — but worth reopening because…_
+> _Contradicts ADR-NNNN (example decision) — but worth reopening because…_

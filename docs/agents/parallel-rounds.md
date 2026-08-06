@@ -10,11 +10,32 @@ One worktree per ticket group, under `.claude/worktrees/issue-<n>`, branched fro
 
 The review is _fresh-context_ on purpose: a reviewer that watched the implementation inherits its blind spots. The verification afterwards is by the **same** reviewer, because the question there is narrow — "is the thing I found closed?" — and a second fresh context would have to rediscover the finding before it could judge the fix.
 
+A new worktree is not a working checkout until it has been given the two gitignored files git could not bring it — see "A fresh worktree has no local configuration" below. Do that at creation time; the failures it prevents do not look like configuration.
+
 Group tickets by **file locality**, not by theme. Two tickets that touch the same file belong on one branch even if they are unrelated; two tickets on the same subject belong on separate branches if they touch different files. Conflicts cost more than context switching.
 
 Expect most branches to come back FIX FIRST. Across four rounds it has been the large majority, and in the fourth it was all six. That is the process working, not the implementers failing — every blocker in round four was a real defect, none was style.
 
 ## Hazards that only exist in parallel
+
+### A fresh worktree has no local configuration
+
+`.env` and `.dev.vars` are both gitignored, so `git worktree add` brings neither. Copy them in as the first thing you do:
+
+```sh
+cp .env .dev.vars .claude/worktrees/issue-NNN/
+```
+
+`.env` is what the test suites and `nuxt dev` read; `.dev.vars` is what Wrangler reads for `pnpm preview` and the delivery acceptance harnesses, and what `nuxt dev` adopts its `NUXT_`-prefixed names from (`build/devVarsModule.ts`). Neither has an example file that is a substitute — `.env.example` and `.dev.vars.example` ship their names with empty values.
+
+What makes this a hazard rather than a chore is that the omission does not present as one. #130 catalogues the case: without `NUXT_ABLY_API_KEY` two named integration tests used to fail, and **two** agents in one round concluded from that they were pre-existing failures on `main`. The second went further and reproduced them at the merge-base in a worktree it created for the purpose, which is textbook control-group method and was worthless here — every fresh worktree has the identical missing file, so reproducing in another one confirms nothing. A more careful control produced a _more confident_ wrong answer.
+
+Two mechanisms now say so out loud, and both are worth knowing about because each covers only its own half:
+
+- The integration suite skips the two realtime tests and announces the reason once before anything runs (#223), and diagnoses a key Ably rejects rather than letting it read as a lease bug (#242). A run with no key is green with two skips and a notice, not two failures.
+- A `nuxt dev` that finds no `.dev.vars` warns once, naming both files and the copy step (#130). Without it, `pnpm dev` in a worktree answers 503 from Graphics Administrator operations and Screen Output asset capabilities separately, each with a message about itself and none about the common cause.
+
+Neither covers `pnpm preview` or the delivery harnesses, which read `.dev.vars` through Wrangler and get no notice from either. Copy the files.
 
 ### Killing sibling processes
 
@@ -48,6 +69,13 @@ Every agent in a round is given the **same** scratchpad path. It is not per-agen
 Name every scratch file with your issue number — `pr-196-issue172-body.md`, never `pr.md` or `body.md` — and read a file back before passing it to `--body-file`. A collision between two _similar_ documents will not announce itself the way a completely different ticket did.
 
 The dangerous case is not PR prose. Agents routinely save backups of production files there under names like `renderModel.orig.ts`, `composable.orig.ts`, `store.orig.ts`. **Never restore a production file from a scratchpad backup** — restore from git objects (`git checkout HEAD -- <path>`), which cannot have been written by somebody else.
+
+### ADR numbers are allocated by a read-then-write race
+
+`docs/adr/` numbers come from a directory listing, which is correct when it is read and stale by the time it merges. A filename collision is not a merge conflict, so nothing flags it at any point: one round-three merge commit briefly held two `0003-` files side by side with git perfectly happy, and the round that produced #181 left two ADRs numbered 0002 for a fortnight.
+
+- **Take the number at merge time, not at authoring time**, from `origin/main` at the moment of the rename. Being told the next number in advance is the same read-then-write mistake wearing a different hat.
+- **Cite the ADR at its final number.** The convention here is that code docblocks cite decision records by path, so the citations are what make a late rename expensive — #181's rename touched five of them. Write the citation once the number is settled rather than writing and rewriting it.
 
 ### Commit before you mutate
 

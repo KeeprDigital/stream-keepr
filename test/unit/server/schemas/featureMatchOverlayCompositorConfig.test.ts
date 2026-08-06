@@ -124,7 +124,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		// Items in one composition, stopped only by the opaque byte total, while a
 		// Broadcast Graphic composing the same vocabulary was held to a named one.
 		// One composition, one bound, whichever host it belongs to. See #99 and
-		// `docs/adr/0002-broadcast-graphics-item-cap.md`.
+		// `docs/adr/0007-broadcast-graphics-item-cap.md`.
 		const groupsOf = (groups: number, children: number) => configWith(
 			Array.from({ length: groups }, (_, index) => ({
 				...getGraphicItemDefinition('group').createDefault({
