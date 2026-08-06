@@ -104,6 +104,15 @@ Round seven restated the family's general form — **a check whose own success c
 
 And one rule earned by a review that overturned a "no constructible test covers it" claim: when verifying a merge commit, compare each changed file's blob hash against **both parents** — `git show --cc` suppresses hunks, and a combined-diff read missed one of a merge's own changes.
 
+Round eight's additions to the same family:
+
+- **A name-filtered run's success criterion is narrower than the conclusion it invites.** A forward control validated under `-t 'one test'` passed and was true of its row — but the full suite showed the prospective fix breaking three tests, two of them pre-existing pins the filter excluded. Plan fixes against the unfiltered number.
+- **Matching hashes of nothing read as a clean comparison.** Three emit files produced three identical sha256s — of the empty string, because the tool had rejected its arguments and written nothing. Require non-empty bytes and a positive content marker before comparing hashes.
+- **Prose arithmetic diverges from correct enumerations sitting directly beneath it.** Three separate reports this round carried right per-item lists under wrong totals (fifteen-for-nineteen, three-for-four, a briefing's stale suite count). Total your own enumeration before publishing it, and count call sites, not files.
+- **A softened assertion needs the forward control too.** `toBe` → `toContain` was proved in both directions: the reworded throw still fails it, and the prospective fix — applied for real — passes it. "Fails when wrong, survives when improved" is the executable form of the anti-pin rule.
+- **After remediating a defect class, mutate the new code for the same class.** The catch added to fix a silent failure was itself mutated to lie (`return false` → `return true`) and died. That is the one way a fix can reproduce its defect one layer down, and it costs one row.
+- **A defect that is a sentence wants probes that read sentences.** Cell-probing a notice's prose in every reachable configuration found two falsehoods that assertion-shaped tests were structurally blind to — and the counter-hazard is real too: tuning wording per enumerated cell over-fits to the cells you happened to think of.
+
 ### Commit signing can wedge mid-round
 
 This repo signs commits via 1Password's `op-ssh-sign`. Six concurrent signing requests wedged the agent, after which the socket died and every `git commit` in every worktree hung, then failed fast ("failed to fill whole buffer", "Could not connect to socket"). Recovery is `open -a 1Password` and a retry — not `--no-gpg-sign`, unless the round decides so deliberately and records the unsigned range for a later re-sign. Merge commits sign the same way.
