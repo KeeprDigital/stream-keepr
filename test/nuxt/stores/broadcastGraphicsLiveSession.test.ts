@@ -1044,6 +1044,22 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			expect(store.refusal?.code).toBe('stale-input-acceptance');
 		});
 
+		it('speaks for a refusal whose sentence went missing, rather than falling back to the status line', async () => {
+			// The one case where being recognised as a refusal still changes what the
+			// operator reads, now that uncoded bodies are read for prose too. A refusal
+			// with no readable sentence keeps its code and is given standing words;
+			// raising the underlying failure instead would find an empty body message,
+			// decline it, and put `[POST] "…": 409 Conflict` in front of an operator
+			// whose command the authority had in fact answered.
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			mockRepository.sendCommand.mockRejectedValue(refusedCommandFailure('missing-asset-reference', ''));
+
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+			expect(store.error).toBe('The authoritative side refused this playout action');
+			expect(store.refusal?.code).toBe('missing-asset-reference');
+		});
+
 		it('stops naming a refusal once the failure being reported is not one', async () => {
 			// The title a surface reads and the sentence it shows have to describe the
 			// same event: a stale code would head a transport failure with the words for
