@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCommandHarness } from './featureMatchSessionHelpers';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 import { integrationRealtimeConfigured } from './helpers';
+import { diagnoseRealtimePublishFailure, SCREEN_COMMAND_ROUTE_REFUSALS } from './realtimeDiagnosis';
 
 interface LeaseState {
 	artifact: { kind: string; id: string };
@@ -183,19 +184,24 @@ describe('graphics Authoring Leases', () => {
 	// where a real Ably key is. The lease claim itself does not depend on Ably, and
 	// the half that does not is left unguarded so it still runs without the secret.
 	it.skipIf(!integrationRealtimeConfigured)('never restricts a Screen command while the Edit workspace is leased', async () => {
+		// The two assertions below carry a diagnosis rather than a bare status compare,
+		// because this is the one place in the suite where a configured-but-rejected
+		// Ably key surfaces: the route's only work is the publish, so Ably's 404 becomes
+		// the route's 404 and reads as a lease regression. See `realtimeDiagnosis`.
+
 		// The lease holder is session A; every live action below is another operator.
 		const command = await request(`/api/events/${eventId}/screens/${screenId}/command`, {
 			method: 'POST',
 			body: { command: 'refresh' },
 			cookie: authorB,
 		});
-		expect(command.status).toBe(200);
+		expect(command.status, diagnoseRealtimePublishFailure(command.status, command.data, SCREEN_COMMAND_ROUTE_REFUSALS)).toBe(200);
 
 		const anonymousCommand = await request(`/api/events/${eventId}/screens/${screenId}/command`, {
 			method: 'POST',
 			body: { command: 'refresh' },
 		});
-		expect(anonymousCommand.status).toBe(200);
+		expect(anonymousCommand.status, diagnoseRealtimePublishFailure(anonymousCommand.status, anonymousCommand.data, SCREEN_COMMAND_ROUTE_REFUSALS)).toBe(200);
 	});
 
 	it('never restricts a live command session while the Edit workspace is leased', async () => {
