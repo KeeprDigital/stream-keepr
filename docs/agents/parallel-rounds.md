@@ -57,6 +57,28 @@ The dangerous case is not PR prose. Agents routinely save backups of production 
 
 A finished integration run can leave its `workerd` backends alive, and they break the **next** run in the same checkout with `No test files found` plus a `close timed out` — zero assertion failures, and nothing that looks like the ECONNREFUSED contention cascade. Round five hit this repeatedly, and at round end the machine carried two dozen stale backends from runs that had all reported success. Scoped `pkill -f "worktrees/<name>/.*workerd"` clears it; check for leftovers before an authoritative run. Catalogued on #123.
 
+### A filtered result cannot distinguish "ran fine" from "never ran"
+
+Round six's recurring trap, hit independently by five agents in four different costumes:
+
+- A pipeline's exit status is the **last** command's. `pnpm lint 2>&1 | tail` reports tail's success; `git commit ... ; git log` reports git log's. Two agents published "exit 0" claims that were never true — and both times the wrong reading was the reassuring one. Isolate exit codes on their own line, or redirect to a file and check `$?` directly.
+- In zsh, `local path=...` silently clobbers `PATH` (`$path` is tied to it) — git and grep vanish mid-run, restores stop happening, and an empty-vs-empty comparison prints "restore: OK". Never name a shell variable `path`. Relatedly, zsh does **not** word-split unquoted expansions: `git checkout b044587 -- $F` with `F="a b c d"` passes one four-file pathspec, fails, and the next check measures the unmodified tip — which reads as "baseline is clean". After any setup step whose purpose is to change the tree, assert the tree changed before trusting what runs next.
+- A mutation that never applied reads as a survivor; a test runner missing from PATH reads as a pass. Demand a **positive success marker** (a "Test Files" line in a per-row log) and a `git diff --quiet`-style "mutation actually applied" check; re-read every _survived_ row as a diff before calling it dead.
+- The generalisation, earned twice over: apply the mutation-and-verify discipline to the **instrumentation**, not just the code. Give every before/after probe a negative control — run the check against a case where it must fail before trusting the case where it passes. One reviewer's cross-version probe bundled the same module twice, so `instanceof` failed silently and the _old_ code looked broken in a flattering direction; the guard was bundling once and asserting the class is defined exactly once.
+
+### Commit signing can wedge mid-round
+
+This repo signs commits via 1Password's `op-ssh-sign`. Six concurrent signing requests wedged the agent, after which the socket died and every `git commit` in every worktree hung, then failed fast ("failed to fill whole buffer", "Could not connect to socket"). Recovery is `open -a 1Password` and a retry — not `--no-gpg-sign`, unless the round decides so deliberately and records the unsigned range for a later re-sign. Merge commits sign the same way.
+
+Two traps that ride along:
+
+- **`%G?` cannot answer the signing question here.** With `gpg.ssh.allowedSignersFile` unset, `%G?` prints `N` — meaning _cannot verify_ — for genuinely signed commits, and prints its own explanatory error directly above the output. **Four** round-six agents independently read that `N` as "history was never signed". The only reliable check is `git cat-file commit <sha> | grep -c gpgsig`.
+- A `git commit` killed mid-hang leaves the work **staged but uncommitted** — precisely the state where the "commit before you mutate" trap destroys it. Verify `git log` before retrying, and verify a committed state before any mutation row.
+
+### Anchor mutations by line number, and record the table where the next round can find it
+
+Two byte-identical strings at different indentation live in one round-six file; a string-anchored mutation hit the wrong one and got reported as a control it wasn't. Anchor by line number with a substring assertion on the anchor line. And post the final mutation table as a comment on the issue at close time: #230's table was never durably recorded, and reconstructing it cost round six a branch's second acceptance criterion. Reports and verdicts likewise: send them on the teammate channel — plain text output reaches nobody, and six round-six agents had to be chased for reports they believed they had filed.
+
 ### Root-invoked tooling walks the worktrees
 
 `eslint .` from the repository root linted every checkout under `.claude/worktrees/` and `.worktrees/` — 28 of them — and died at a 4 GB heap (#212, fixed by ignoring both). Nobody had hit it because agents run lint _inside_ a worktree, where no nested ones exist.
