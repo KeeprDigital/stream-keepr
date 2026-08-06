@@ -105,6 +105,23 @@ describe('broadcast Graphics Live Session Graphic Asset References', () => {
 		)).toEqual([]);
 	});
 
+	/**
+	 * The declared kind is not a guarantee about the stored value. A value that
+	 * violates its declaration is stored rather than coerced, so a media Graphic Input
+	 * can be holding a string an earlier declaration left behind — and publishing it
+	 * would put a reference built out of `undefined` ids into the Screen's index.
+	 */
+	it('publishes nothing for a media Graphic Input holding something that is not a media value', () => {
+		expect(broadcastGraphicsLiveSessionGraphicAssetReferences(
+			config([mediaInput('backdrop')]),
+			state({
+				working: {},
+				accepted: { backdrop: 'a value an earlier declaration left behind' },
+				acceptedRevision: 1,
+			}),
+		)).toEqual([]);
+	});
+
 	it('publishes nothing for a non-media Graphic Input, whatever its accepted value looks like', () => {
 		expect(broadcastGraphicsLiveSessionGraphicAssetReferences(
 			config([{ type: 'text', key: 'name', label: 'Name', required: false, updatePolicy: 'staged', default: '', maxLength: 40 }]),
