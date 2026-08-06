@@ -189,8 +189,13 @@ async function apply() {
 		emit('applied');
 	}
 	catch (caught) {
-		const data = (caught as { data?: { message?: string } })?.data;
-		const refused = data?.message
+		// The refusal's own sentence where the server wrote one, which for this surface is
+		// nearly always the Style Set having been republished or the template revised. Read
+		// through `failureSentence` rather than straight off the body, because a 5xx body
+		// here says 'Internal Server Error' — the placeholder this server writes over an
+		// unmapped fault — and quoting that would tell the author their update was refused
+		// for a reason nobody wrote (#262).
+		const refused = failureSentence(caught)
 			?? (caught instanceof Error ? caught.message : 'The style update could not be applied');
 		// Re-read first, because a refusal is usually the Style Set having been
 		// republished or the template revised — so what the author is looking at is out

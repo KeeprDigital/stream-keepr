@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 enableAutoUnmount(afterEach);
 
@@ -265,9 +266,10 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 	});
 
 	it('leaves an ordinary refusal saying what it said', async () => {
-		mockReceivePackage.mockRejectedValue({
-			data: { message: 'The Template Package is not a readable archive' },
-		});
+		mockReceivePackage.mockRejectedValue(transportFailure({
+			status: 422,
+			body: { message: 'The Template Package is not a readable archive' },
+		}));
 		const wrapper = await mountLibrary();
 
 		await chooseImportFile(wrapper);

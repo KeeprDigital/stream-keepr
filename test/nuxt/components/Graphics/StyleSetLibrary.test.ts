@@ -6,6 +6,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { GRAPHIC_STYLE_SET_PACKAGE_LIMITS } from '~~/shared/types/graphicStyleSetPackage';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 /**
  * The Graphic Style Set library as an author operates it.
@@ -411,9 +412,10 @@ describe('graphicsStyleSetLibrary', () => {
 	 * friendlier wording, so the negative is asserted on each surface too.
 	 */
 	it('leaves an ordinary refusal saying what it said', async () => {
-		mockInspectPackage.mockRejectedValue({
-			data: { message: 'The Graphic Style Set Package is not a readable archive' },
-		});
+		mockInspectPackage.mockRejectedValue(transportFailure({
+			status: 422,
+			body: { message: 'The Graphic Style Set Package is not a readable archive' },
+		}));
 		const wrapper = await mountLibrary();
 
 		await choosePackage(wrapper);
