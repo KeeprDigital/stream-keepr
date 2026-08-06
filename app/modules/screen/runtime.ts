@@ -362,11 +362,43 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 */
 	const remoteScreenLoads = createKeyedGuardedSequence();
 
+	/** The newest revision of a Screen this client holds, or null if it holds none. */
+	function cachedStateVersion(screenId: number): number | null {
+		const held = state.screens.value.filter(screen => screen.id === screenId);
+		if (state.activeScreen.value?.id === screenId)
+			held.push(state.activeScreen.value);
+		if (held.length === 0)
+			return null;
+		return Math.max(...held.map(screen => screen.stateVersion));
+	}
+
+	/**
+	 * Whether this client already holds a revision newer than the one loaded.
+	 *
+	 * The flight above orders reloads against each other; it cannot see a *write*.
+	 * A GET issued for an announcement can be served before this client's own save
+	 * commits and still land after it, and by then the save has settled and the
+	 * editing field has stopped masking the store — so re-caching the superseded
+	 * revision is an operator's edit visibly undone (#236).
+	 *
+	 * `stateVersion` is the ordering authority: the server bumps it once per Screen
+	 * write, and it only ever reaches the cache from a write's own answer, never
+	 * from an optimistic patch. So a cached version above the loaded one means the
+	 * cache came from a write the server sequenced *after* the one being loaded —
+	 * which, being a merge onto it, already carries everything the load would bring.
+	 * Dropping it loses nothing, including the other operator's change that
+	 * announced it.
+	 */
+	function isSupersededByCache(screen: Screen): boolean {
+		const cachedVersion = cachedStateVersion(screen.id);
+		return cachedVersion !== null && screen.stateVersion < cachedVersion;
+	}
+
 	async function reloadAnnouncedScreen(eventId: number, screenId: number) {
 		const flight = remoteScreenLoads.begin(`screen:${screenId}`);
 		try {
 			const screen = await screenRepo.getById(eventId, screenId);
-			if (flight.stale || !screen)
+			if (flight.stale || !screen || isSupersededByCache(screen))
 				return;
 			cacheScreen(screen);
 		}
