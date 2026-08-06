@@ -362,7 +362,23 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 */
 	const remoteScreenLoads = createKeyedGuardedSequence();
 
-	/** The newest revision of a Screen this client holds, or null if it holds none. */
+	/**
+	 * The newest revision of a Screen this client holds, or null if it holds none.
+	 *
+	 * Both holders are consulted because three loaders each populate only one:
+	 * `loadScreensByEventId` and `getScreenById` write `screens`, `loadScreenBySlug`
+	 * writes `activeScreen`. What keeps them from disagreeing today is not that they
+	 * are kept in step — only `cacheScreen` does that — but that the one route
+	 * reaching `loadScreenBySlug` is the Screen Output, which is `layout: false` and
+	 * always its own document: embedded in an iframe or opened in its own window,
+	 * never navigated to in-page. So no single store ever holds both.
+	 *
+	 * Embed a display session in-page, or add an in-app link to that route, and the
+	 * two sources hold different revisions at once — at which point `Math.max` is
+	 * what keeps refusing safe, since `Math.min` would let a reload downgrade
+	 * `activeScreen` to a revision the client had already moved past. The Feature
+	 * Match Overlay preview aside is the nearest thing to that change.
+	 */
 	function cachedStateVersion(screenId: number): number | null {
 		const held = state.screens.value.filter(screen => screen.id === screenId);
 		if (state.activeScreen.value?.id === screenId)
