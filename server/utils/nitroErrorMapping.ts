@@ -1,5 +1,5 @@
 import { graphicsCapacityErrorDescriptor } from '~~/server/modules/graphics-asset-library/errors';
-import { StateConflictError } from './errors';
+import { ServiceConfigurationError, StateConflictError } from './errors';
 
 export interface MappableNitroError {
 	statusCode: number;
@@ -19,6 +19,17 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		error.statusCode = 409;
 		error.statusMessage = 'Conflict';
 		error.message = cause.message;
+		mappedOperationalError = true;
+	}
+	else if (cause instanceof ServiceConfigurationError) {
+		// The one 5xx whose message must survive sanitizing, because it names a
+		// setting rather than describing the server's insides. #233: screen
+		// creation on a fresh checkout answered a bare 'Internal Server Error'
+		// for a missing environment variable.
+		error.statusCode = cause.statusCode;
+		error.statusMessage = 'Service Unavailable';
+		error.message = cause.message;
+		hasMappedPublicServerMessage = true;
 		mappedOperationalError = true;
 	}
 	else if (graphicsCapacityError) {

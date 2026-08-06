@@ -8,29 +8,43 @@ import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset
 import { createR2CanonicalGraphicsObjectStore } from '~~/server/modules/graphics-asset-library/r2-object-store';
 import { graphicsCatalogueClient } from '~~/server/modules/graphics-asset-library/runtime';
 import { screenService } from '~~/server/services/screen';
+import { ServiceConfigurationError } from '~~/server/utils/errors';
 import { createScreenOutputAssetDelivery } from '.';
 import { createD1ScreenOutputAssetAuthorizer } from './authorizer';
 import { assertScreenOutputCapabilitySigningKey } from './capability';
 import { createScreenOutputAssetCapabilityManager } from './manager';
 
+/**
+ * The environment name, not the runtimeConfig name, because the reader of this
+ * message is the one who has to go and set something.
+ */
+const SIGNING_KEY_ENV_NAME = 'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY';
+
+function unavailable(reason: string) {
+	// Both the H3 error and its cause: the status is right on its own, and the
+	// cause is what carries the message past the 5xx sanitizer in
+	// `mapPublicNitroError`.
+	const cause = new ServiceConfigurationError(
+		SIGNING_KEY_ENV_NAME,
+		`${reason}, so Screen Output asset capabilities are unavailable`,
+	);
+	return createError({
+		statusCode: 503,
+		statusMessage: 'Service Unavailable',
+		message: cause.message,
+		cause,
+	});
+}
+
 function signingKey(event: H3Event): string {
 	const value = useRuntimeConfig(event).screenOutputCapabilitySigningKey;
-	if (typeof value !== 'string' || value.length === 0) {
-		throw createError({
-			statusCode: 503,
-			statusMessage: 'Service Unavailable',
-			message: 'Screen Output asset capabilities are unavailable',
-		});
-	}
+	if (typeof value !== 'string' || value.length === 0)
+		throw unavailable('is not set');
 	try {
 		assertScreenOutputCapabilitySigningKey(value);
 	}
 	catch {
-		throw createError({
-			statusCode: 503,
-			statusMessage: 'Service Unavailable',
-			message: 'Screen Output asset capabilities are unavailable',
-		});
+		throw unavailable('is not 32-byte base64');
 	}
 	return value;
 }
