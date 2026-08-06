@@ -223,9 +223,9 @@ describe('useEventStore', () => {
 			mockEventRepo.getById.mockRejectedValue(refused);
 
 			// The load reports and re-raises, and what it re-raises is deliberately the
-			// failure it caught rather than the sentence wrapped in a fresh `Error`: the
-			// route middleware catches this, and a caller that has to branch on a status
-			// must still be able to read one.
+			// failure it caught rather than the sentence wrapped in a fresh `Error`. Not
+			// because a caller reads the status — none does — but because the store has no
+			// business narrowing a failure it is handing on rather than handling.
 			await expect(store.loadEvent(1)).rejects.toBe(refused);
 			expect(store.error).toBe('This Event belongs to another installation');
 		});

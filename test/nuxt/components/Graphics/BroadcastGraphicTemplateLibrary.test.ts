@@ -368,11 +368,15 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 	 * explain, and offer the one action that helps.
 	 */
 	it('names a lapsed graphics author session when an import is refused', async () => {
-		mockReceivePackage.mockRejectedValue(
-			Object.assign(new Error('An authenticated graphics author session is required'), {
-				statusCode: 401,
-			}),
-		);
+		// A real lapse arrives as a 401 whose *body* carries the server's sentence, which is
+		// what makes the ordering here load-bearing: the session is recognised before the
+		// sentence is read, so the author gets the lapse and its reload rather than prose
+		// about a session they cannot see (#262).
+		mockReceivePackage.mockRejectedValue(transportFailure({
+			status: 401,
+			body: { message: 'An authenticated graphics author session is required' },
+			request: `[POST] "/api/graphics-ingestion/operations"`,
+		}));
 		const wrapper = await mountLibrary();
 
 		await chooseImportFile(wrapper);

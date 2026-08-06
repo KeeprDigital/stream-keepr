@@ -393,11 +393,15 @@ describe('graphicsStyleSetLibrary', () => {
 	 * so a lapse has to read the same here as it does everywhere else.
 	 */
 	it('names a lapsed graphics author session when a package is refused', async () => {
-		mockInspectPackage.mockRejectedValue(
-			Object.assign(new Error('An authenticated graphics author session is required'), {
-				statusCode: 401,
-			}),
-		);
+		// A real lapse arrives as a 401 whose *body* carries the server's sentence, which is
+		// what makes the ordering here load-bearing: the session is recognised before the
+		// sentence is read, so the author gets the lapse and its reload rather than prose
+		// about a session they cannot see (#262).
+		mockInspectPackage.mockRejectedValue(transportFailure({
+			status: 401,
+			body: { message: 'An authenticated graphics author session is required' },
+			request: `[POST] "/api/graphics-style-sets/package/inspect"`,
+		}));
 		const wrapper = await mountLibrary();
 
 		await choosePackage(wrapper);

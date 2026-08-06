@@ -47,10 +47,12 @@ export const useEventStore = defineStore('event', () => {
 	 * does not (#262).
 	 *
 	 * Read here rather than raised into the failure, unlike every other action in this
-	 * store, because both loads re-raise what they caught: the route middleware and the
-	 * pages catch this, and replacing the failure with a fresh `Error` carrying only a
-	 * message would take the status away from a caller that may need to branch on it.
-	 * Reporting and re-raising are different jobs, and only the first one is about words.
+	 * store, because both loads re-raise what they caught — and what a caller does with a
+	 * failure this store did not report is not this store's business. No caller branches
+	 * on the status today; the point is that replacing the failure with a fresh `Error`
+	 * carrying a message and nothing else would narrow, at a seam nobody asked to be
+	 * narrowed, what every future catch here is allowed to see. Reporting and re-raising
+	 * are different jobs, and only the first one is about words.
 	 */
 	function loadErrorMessage(caughtError: unknown) {
 		return failureSentence(caughtError)
