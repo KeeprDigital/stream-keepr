@@ -378,6 +378,13 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * what keeps refusing safe, since `Math.min` would let a reload downgrade
 	 * `activeScreen` to a revision the client had already moved past. The Feature
 	 * Match Overlay preview aside is the nearest thing to that change.
+	 *
+	 * The two `screens` loaders now consult this as well (#251), which gives the
+	 * disjointness a second job: it is also why a refusal there always has a
+	 * `screens` entry to answer with. Were `activeScreen` the holder that outranked
+	 * a fetched Screen, the loaders would find nothing in `screens` to keep and
+	 * would fall back to caching the fetch — no worse than before that change, but
+	 * no longer the guarantee the ticket asked for.
 	 */
 	function cachedStateVersion(screenId: number): number | null {
 		const held = state.screens.value.filter(screen => screen.id === screenId);
@@ -396,6 +403,12 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * commits and still land after it, and by then the save has settled and the
 	 * editing field has stopped masking the store — so re-caching the superseded
 	 * revision is an operator's edit visibly undone (#236).
+	 *
+	 * Nothing in that is particular to an announcement: a GET the operator asked
+	 * for — a page load, a route change, a refresh — races a save the same way, so
+	 * the `screens` loaders in the store gate on this too (#251). What it still
+	 * cannot see is an *unsettled* edit, which has no server revision yet and is
+	 * masked by the editing field rather than by this comparison.
 	 *
 	 * `stateVersion` is the ordering authority: the server bumps it once per Screen
 	 * write, and it only ever reaches the cache from a write's own answer, never
@@ -533,6 +546,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 
 	return {
 		cacheScreen,
+		isSupersededByCache,
 		createScreen,
 		updateScreen,
 		setScreenMode,
