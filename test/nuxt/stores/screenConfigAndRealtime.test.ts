@@ -411,6 +411,65 @@ describe('useScreenStore config and realtime', () => {
 				expect(store.screens).toHaveLength(0);
 			});
 
+			it('does not let a reload triggered by an older announce overwrite a save that already settled', async () => {
+				// The reload's flight guard orders reloads against each other and nothing
+				// else, so a GET served before this client's own save committed can still
+				// land after it. Once a save settles the editing field stops masking the
+				// store, so re-caching the superseded revision is an edit visibly undone.
+				const cached = createMockScreen({ id: 10, screenConfig: { width: 100 }, stateVersion: 3 });
+				store.screens = [cached];
+				store.activeScreen = cached;
+
+				let serveAnnouncedReload: (screen: unknown) => void = () => {};
+				mockRepo.getById.mockReturnValueOnce(new Promise((resolve) => {
+					serveAnnouncedReload = resolve;
+				}));
+				const reload = ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
+
+				const saved = createMockScreen({ id: 10, screenConfig: { width: 1920 }, stateVersion: 4 });
+				mockRepo.updateScreenConfig.mockResolvedValue(saved);
+				await store.updateScreenConfig(1, 10, { width: 1920 });
+				expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
+
+				// Served before that save committed, so it answers with the revision the
+				// save superseded.
+				serveAnnouncedReload(createMockScreen({ id: 10, screenConfig: { width: 100 }, stateVersion: 3 }));
+				await reload;
+
+				expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
+				expect(store.activeScreen!.screenConfig).toEqual({ width: 1920 });
+			});
+
+			it('keeps a save that settled through a conflict refresh when the announce that provoked it lands late', async () => {
+				// Two operators. The other one's write took the Screen to 4 and announced
+				// it; this client's own save collided with that write, refreshed, retried
+				// onto it, and settled at 5 — all while the announce's own GET was still
+				// out. That GET's answer is a revision older than what the client holds.
+				store.screens = [createMockScreen({ id: 10, screenConfig: { width: 100 }, stateVersion: 3 })];
+				const remote = createMockScreen({ id: 10, screenConfig: { width: 100, background: '#fff' }, stateVersion: 4 });
+
+				let serveAnnouncedReload: (screen: unknown) => void = () => {};
+				mockRepo.getById
+					.mockReturnValueOnce(new Promise((resolve) => {
+						serveAnnouncedReload = resolve;
+					}))
+					.mockResolvedValue(remote);
+				const reload = ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
+
+				const merged = createMockScreen({ id: 10, screenConfig: { width: 1920, background: '#fff' }, stateVersion: 5 });
+				mockRepo.updateScreenConfig
+					.mockRejectedValueOnce({ statusCode: 409 })
+					.mockResolvedValueOnce(merged);
+
+				await store.updateScreenConfig(1, 10, { width: 1920 });
+				expect(store.screens[0]!.stateVersion).toBe(5);
+
+				serveAnnouncedReload(remote);
+				await reload;
+
+				expect(store.screens[0]).toEqual(merged);
+			});
+
 			it('leaves the cached Screen alone when the reload fails', async () => {
 				store.screens = [createMockScreen({ id: 10, name: 'Old' })];
 				mockRepo.getById.mockRejectedValue(new Error('offline'));
