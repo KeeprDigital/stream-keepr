@@ -377,6 +377,13 @@ function heldGraphicStyleOverrides(
  * it created, and an edit that lands back on what the entry resolves to leaves nothing
  * recorded at all — which is the same escape it has always had, and the only one.
  *
+ * The other reading of that last act is what this cannot express: a value typed *onto*
+ * the preset's own value is not a deviation either, so it records no pin and the next
+ * republish takes the property. Accepted rather than fixed (#240) — the reasoning, and
+ * the edit-time signal that would fix it at a cost this decision refuses, are in
+ * ADR-0006 under "Record a pin whenever the author edits an owned key". Nothing here
+ * may start inferring intent from which key an edit touched.
+ *
  * An entry the resolution cannot honour contributes no deviations, because there is no
  * preset in front of it to disagree with. What is already recorded survives, for the
  * reason a Style Set that failed to load must not be why a composition quietly goes

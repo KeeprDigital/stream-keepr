@@ -1470,6 +1470,98 @@ describe('recaptureGraphicStyleOverrides', () => {
 			expect(headlineOf(released).styleRefs?.typography).toEqual({ entryId: 'heading' });
 		});
 	});
+
+	/**
+	 * A value the author types *onto* the preset's own value records nothing, and the
+	 * next republish takes the property. Accepted, not fixed (#240).
+	 *
+	 * #229 made a *recorded* pin survive the Style Set arriving at its value. This is the
+	 * other half, and it is not the same case: there was never a pin to preserve. Capture
+	 * is a diff against the entry, and a value that agrees with the entry is not a diff,
+	 * so an author who types the size the preset already resolves to leaves the document
+	 * byte-identical and the record empty.
+	 *
+	 * The intent signal a fix needs exists — the inspector's controls write
+	 * `updateTypography({ fontSize })`, which names the key — but recording a pin from it
+	 * costs more than it buys, and the direction it fails in is the wrong one. The
+	 * reasoning is in ADR-0006 under "Record a pin whenever the author edits an owned
+	 * key". These pin the two halves of it that are executable: the behaviour itself, and
+	 * the review row that is the whole of what makes it survivable.
+	 */
+	describe('when the author types the value the preset already resolves to', () => {
+		/** The size the entry itself holds, and the one the author types onto it. */
+		const TYPED_SIZE = 30;
+		/** The Style Set whose `heading` already resolves to what the author will type. */
+		const atTypedSize = resolveGraphicStyleSet(styleSet('#ff0044', TYPED_SIZE));
+		/** The same Style Set after a later publish that moves the size off it. */
+		const moved = resolveGraphicStyleSet(styleSet('#ff0044', 99));
+
+		/** A slot bound to `heading`, in step, holding the entry's own size. */
+		function inStepAtTypedSize(): BroadcastGraphicConfig {
+			return graphic([textItem({
+				typography: inheritedTypography('#ff0044', TYPED_SIZE),
+				styleRefs: { typography: { entryId: 'heading' } },
+			})]);
+		}
+
+		it('records nothing, and the next republish takes the property', () => {
+			const stored = inStepAtTypedSize();
+			const typed = editFontSize(stored, TYPED_SIZE);
+
+			// The whole of the difficulty in one assertion: the author acted, and the
+			// document cannot tell. No signal reaches recapture because none exists here.
+			expect(typed).toEqual(stored);
+
+			const recaptured = recaptureGraphicStyleOverrides(typed, atTypedSize, LINKED, stored);
+			expect(headlineOf(recaptured).styleRefs?.typography).toEqual({ entryId: 'heading' });
+
+			// So the property is inherited, and accepting every row's default moves it.
+			const applied = applyGraphicStyleSet(recaptured, moved, { revision: LINKED + 1 });
+			expect(headlineOf(applied).typography.fontSize).toBe(99);
+		});
+
+		/**
+		 * Why the paragraph above is a cost worth accepting rather than a silent loss.
+		 *
+		 * An unpinned property is one review states, value by value, before it moves it
+		 * (#162) — so the author who meant that 30 is shown `30 → 99` and can answer "Keep
+		 * mine". A *pinned* property is the silent one: it resolves to what the owner
+		 * already holds, so it produces no row and no screen ever names it again.
+		 *
+		 * That asymmetry is the reason recording a pin from a keystroke would fail in the
+		 * worse direction, and it is the thing a fix must not quietly reverse. If this
+		 * stops holding, the acceptance recorded in ADR-0006 no longer stands up.
+		 */
+		it('offers the review row that is the whole mitigation, and offers none once pinned', () => {
+			const stored = inStepAtTypedSize();
+			const unpinned = recaptureGraphicStyleOverrides(editFontSize(stored, TYPED_SIZE), atTypedSize, LINKED, stored);
+
+			const offered = graphicStyleUpdateChanges(unpinned, moved);
+			expect(offered).toHaveLength(1);
+			expect(offered[0]).toMatchObject({ slot: 'typography', entryId: 'heading' });
+			// The row names the author's own value against the one about to replace it,
+			// which is what makes the default answer an informed one (#162).
+			expect(graphicStyleChangedKeys(offered[0]!.current, offered[0]!.next)).toEqual(['fontSize']);
+			expect((offered[0]!.current as { fontSize: number }).fontSize).toBe(TYPED_SIZE);
+			expect((offered[0]!.next as { fontSize: number }).fontSize).toBe(99);
+
+			// And answering it recovers exactly what the typing failed to record.
+			const kept = applyGraphicStyleSet(unpinned, moved, {
+				decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' },
+				revision: LINKED + 1,
+			});
+			expect(headlineOf(kept).typography.fontSize).toBe(TYPED_SIZE);
+			expect(headlineOf(kept).styleRefs?.typography).toEqual({
+				entryId: 'heading',
+				overrides: { fontSize: TYPED_SIZE },
+			});
+
+			// The other side of the asymmetry: now that it is pinned, the Style Set moving
+			// again says nothing at all. A pin bought by a keystroke would be this silent
+			// from the start.
+			expect(graphicStyleUpdateChanges(kept, resolveGraphicStyleSet(styleSet('#ff0044', 12)))).toEqual([]);
+		});
+	});
 });
 
 describe('graphicStyleSetEntryIdsInDocument', () => {
