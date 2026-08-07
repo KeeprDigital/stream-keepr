@@ -60,7 +60,7 @@ import { broadcastGraphicsCommandRefusal } from '~/utils/broadcastGraphicsComman
  */
 export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphicsLiveSession', () => {
 	const repository = useBroadcastGraphicsLiveSessionRepository();
-	const { executeAction } = useAsyncAction();
+	const { executeReporting: reportingAction } = useReportingAction();
 
 	/**
 	 * The authoritative clock, shared with every other live surface in the application.
@@ -201,36 +201,20 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * reports the same kind of thing: the sentence the authoritative side wrote where
 	 * there is one, and the transport's status line where there is not.
 	 *
-	 * The re-raise is what makes that reach the operator. `useAsyncAction` reports
-	 * `Error.message`, and on a `$fetch` failure that is `[POST] "…": 409 Conflict`,
-	 * so a sentence living in the response body arrives only by becoming the message
-	 * of the error carrying it. That is already how a recognised refusal gets
-	 * through — `refusalRaisedBy` re-raises one as a
-	 * `BroadcastGraphicsCommandRejection` — and this is the same move for the failures
-	 * that carry no code: a Screen that has left Broadcast Graphics mode and an epoch
-	 * that has ended both explain themselves in the body and reached the operator as a
-	 * status line under "Playout action failed" (#245).
+	 * The sentence-reading itself is `useReportingAction`, which every reporting store
+	 * shares (#262); this store's own wrapper is the two things that are local to it —
+	 * that the ref reported through is `error`, and that a caller passes a loading ref
+	 * rather than an options object. #245 built this inline before the composable
+	 * existed, and #263 consolidated it onto the composable.
 	 *
 	 * Gaining a sentence is deliberately not being recognised as a refusal. Nothing
 	 * here writes `refusal`, so a conflict outside the vocabulary is still no refusal
-	 * and still reads as the ended epoch it usually is (#230). The original failure is
-	 * kept as the `cause`, because the re-raise happens at the outermost boundary —
-	 * after `isConflict` and the restatement have had it — and losing the status there
-	 * would only cost a later reader.
+	 * and still reads as the ended epoch it usually is (#230). The re-raise happens at
+	 * the outermost boundary — after `isConflict` and the restatement have had the
+	 * failure — so nothing downstream of it loses a status it was reading.
 	 */
 	function executeReporting<T>(action: () => Promise<T>, loadingRef?: Ref<boolean>): Promise<T | null> {
-		return executeAction(
-			async () => {
-				try {
-					return await action();
-				}
-				catch (failure) {
-					const sentence = failureSentence(failure);
-					throw sentence === undefined ? failure : new Error(sentence, { cause: failure });
-				}
-			},
-			{ loadingRef, errorRef: error },
-		);
+		return reportingAction(action, { loadingRef, errorRef: error });
 	}
 
 	function liveState(screenId: number): BroadcastGraphicsLiveState {
