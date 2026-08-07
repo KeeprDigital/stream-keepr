@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 /*
  * `useAsyncAction` is deliberately not mocked. A hand-written copy stood here under the
@@ -120,6 +121,35 @@ describe('useStoreHelpers', () => {
 			expect(items.value[1]!.name).toBe('Updated-B');
 			expect(items.value[2]!.name).toBe('C');
 		});
+
+		/*
+		 * What this helper reports is the failure's own `Error.message`, which for a
+		 * `$fetch` failure is the transport's line. Reading the authority's sentence out of
+		 * the response body is the caller's job, not this one's — the Event Data lifecycle
+		 * wraps every `apiCall` it hands here in `withFailureSentence` for exactly that
+		 * reason (#262). Pinning the raw line here is what keeps that division visible.
+		 */
+		it('rolls the prediction back and reports the failure when the API call is refused', async () => {
+			const { optimisticUpdate } = useStoreHelpers();
+			const items = createTestItems([{ id: 1, name: 'Original' }]);
+			const errorRef = ref<string | null>(null);
+
+			const result = await optimisticUpdate({
+				items,
+				id: 1,
+				updates: { name: 'Optimistic' },
+				apiCall: vi.fn().mockRejectedValue(transportFailure({
+					status: 409,
+					request: `[PATCH] "/api/items/1"`,
+				})),
+				errorRef,
+				entityLabel: 'Item',
+			});
+
+			expect(result).toBeNull();
+			expect(items.value[0]!.name).toBe('Original');
+			expect(errorRef.value).toBe('[PATCH] "/api/items/1": 409 Conflict');
+		});
 	});
 
 	describe('optimisticDelete', () => {
@@ -197,6 +227,33 @@ describe('useStoreHelpers', () => {
 			});
 
 			expect(onSuccess).toHaveBeenCalledOnce();
+		});
+
+		it('puts a refused delete back where it was, and reports the failure', async () => {
+			const { optimisticDelete } = useStoreHelpers();
+			const items = createTestItems([
+				{ id: 1, name: 'A' },
+				{ id: 2, name: 'B' },
+				{ id: 3, name: 'C' },
+			]);
+			const errorRef = ref<string | null>(null);
+
+			const result = await optimisticDelete({
+				items,
+				id: 2,
+				apiCall: vi.fn().mockRejectedValue(transportFailure({
+					status: 409,
+					request: `[DELETE] "/api/items/2"`,
+				})),
+				errorRef,
+				entityLabel: 'Item',
+			});
+
+			expect(result).toBeNull();
+			// Back at its own index, not appended — the operator's list must not reorder
+			// itself because a delete was refused.
+			expect(items.value.map(item => item.id)).toEqual([1, 2, 3]);
+			expect(errorRef.value).toBe('[DELETE] "/api/items/2": 409 Conflict');
 		});
 	});
 });
