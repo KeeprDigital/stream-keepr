@@ -1,11 +1,13 @@
-import type { RouteRefusal } from '~~/test/integration/realtimeDiagnosis';
-import { readFileSync } from 'node:fs';
+import type { ScannedRefusal } from '~~/test/helpers/routeRefusalScan';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 import { RealtimePublishError } from '~~/server/utils/realtimePublishFailure';
 import { providerRefusal } from '~~/test/helpers/providerRefusal';
+import { scanRouteRefusals, scanSourceForRefusals } from '~~/test/helpers/routeRefusalScan';
 import {
 	CREDENTIAL_REJECTION_STATUSES,
 	diagnoseRealtimePublishFailure,
@@ -32,7 +34,10 @@ import {
  * what keeps it exhaustive, because the route growing a second refusal inside the
  * credential band would otherwise silently start attracting a notice about an Ably key
  * that is perfectly fine. #268: the scan filtered on 404 while the band was
- * {401, 403, 404}, so it kept the list exhaustive over a third of the band.
+ * {401, 403, 404}, so it kept the list exhaustive over a third of the band. #277: it
+ * then read only refusals written as numeric literals in `command.post.ts`, so a status
+ * held in a `const` and a refusal raised from an imported guard were both invisible —
+ * the scan itself lives in `test/helpers/routeRefusalScan.ts` since.
  */
 
 const commandRoutePath = fileURLToPath(
@@ -269,40 +274,6 @@ describe('the variable is named where each runner looks', () => {
 	});
 });
 
-/** Every `createError({ statusCode, message })` the route raises, as a pair. */
-function routeRefusals(source: ts.SourceFile): RouteRefusal[] {
-	const refusals: RouteRefusal[] = [];
-
-	function visit(node: ts.Node) {
-		if (
-			ts.isCallExpression(node)
-			&& ts.isIdentifier(node.expression)
-			&& node.expression.text === 'createError'
-			&& node.arguments[0] !== undefined
-			&& ts.isObjectLiteralExpression(node.arguments[0])
-		) {
-			const literals = new Map<string, ts.Expression>();
-			for (const property of node.arguments[0].properties) {
-				if (ts.isPropertyAssignment(property) && ts.isIdentifier(property.name))
-					literals.set(property.name.text, property.initializer);
-			}
-
-			const statusCode = literals.get('statusCode');
-			const message = literals.get('message');
-			if (statusCode !== undefined && ts.isNumericLiteral(statusCode)) {
-				refusals.push({
-					statusCode: Number(statusCode.text),
-					message: message !== undefined && ts.isStringLiteral(message) ? message.text : '',
-				});
-			}
-		}
-		node.forEachChild(visit);
-	}
-
-	visit(source);
-	return refusals;
-}
-
 /**
  * The refusals the diagnosis could actually misread: the ones inside the band.
  *
@@ -311,41 +282,78 @@ function routeRefusals(source: ts.SourceFile): RouteRefusal[] {
  * "check your Ably key" and nothing would fail. The band is imported rather than
  * restated, so the scan cannot drift from the check it is guarding.
  */
-function inCredentialBand(refusals: readonly RouteRefusal[]): RouteRefusal[] {
-	return refusals.filter(refusal => CREDENTIAL_REJECTION_STATUSES.has(refusal.statusCode));
+function inCredentialBand(refusals: readonly ScannedRefusal[]): ScannedRefusal[] {
+	// #277: a status the scan could not read stays in. It cannot be ruled out of the
+	// band, and dropping what the scan could not read is the defect this ticket closed.
+	return refusals.filter(
+		refusal => refusal.statusCode === undefined || CREDENTIAL_REJECTION_STATUSES.has(refusal.statusCode),
+	);
 }
 
 /** The banded refusals `SCREEN_COMMAND_ROUTE_REFUSALS` does not account for. */
-function unlistedRefusals(refusals: readonly RouteRefusal[]): RouteRefusal[] {
+function unlistedRefusals(refusals: readonly ScannedRefusal[]): ScannedRefusal[] {
+	// An unreadable half is `undefined`, which equals no listed half, so a refusal the
+	// scan could not read reports as unaccounted-for rather than as excused.
 	return refusals.filter(refusal => !SCREEN_COMMAND_ROUTE_REFUSALS.some(
 		known => known.statusCode === refusal.statusCode && known.message === refusal.message,
 	));
 }
 
 describe('the Screen-command route\'s own refusals', () => {
-	const source = ts.createSourceFile(
-		commandRoutePath,
-		readFileSync(commandRoutePath, 'utf8'),
-		ts.ScriptTarget.Latest,
-		true,
-	);
-	const refusals = routeRefusals(source);
+	const scan = scanRouteRefusals(commandRoutePath);
 
 	it('are found by the scan at all', () => {
 		// A scan that stops matching passes silently, which is the failure mode this
 		// whole file exists to avoid one level up.
-		expect(refusals.length).toBeGreaterThan(0);
+		expect(scan.refusals.length).toBeGreaterThan(0);
+	});
+
+	it('are read from the route\'s imports too, not from the route file alone', () => {
+		// #277: the scan read `command.post.ts` and nothing else, so a 401/403 raised
+		// from an imported guard was invisible — which is exactly what
+		// `assertTrustedScreenCommandBoundary` becomes once ADR-0008's authentication
+		// lands and that seam starts refusing requests. A graph that had quietly
+		// collapsed back to one file would pass every other assertion here.
+		expect(scan.files).toContain('server/api/events/[id]/screens/[screenId]/command.post.ts');
+		expect(scan.files).toContain('server/utils/ably.ts');
+		expect(scan.files).toContain('server/services/screen.ts');
+	});
+
+	it('leave no first-party import unfollowed', () => {
+		// A module the scan could not reach is a hole in the exhaustiveness guarantee
+		// that nothing else reports, so it fails here rather than being a caveat in a
+		// comment. Third-party and virtual specifiers are excluded by design: a refusal
+		// from `h3` or `hub:db` is not one this repository can list or rename.
+		expect(scan.unfollowedImports).toEqual([]);
 	});
 
 	it('are every one of them recognised as the route\'s own', () => {
 		// The route growing a second refusal inside the band without this list
 		// growing with it would make that new refusal read as a fabricated Ably key.
-		const banded = inCredentialBand(refusals);
+		//
+		// WHEN THIS FAILS, READ THE SITE IT NAMES BEFORE TOUCHING THE LIST. The scan is
+		// an over-approximation — it counts a `createError` in any module the route
+		// imports, including one the route never calls. Adding such a message to
+		// `SCREEN_COMMAND_ROUTE_REFUSALS` silences the failure by teaching the diagnosis
+		// to excuse that message at that status, so a genuine Ably 403 echoing it stops
+		// being diagnosed: #268's hole, reopened. Add to the list only a refusal this
+		// route really raises. Otherwise narrow the scan.
+		//
+		// The list is also not everything the route can answer: Nitro composes
+		// middleware rather than importing it, so `server/middleware/**` is invisible
+		// here — `event-exists.ts` answers a banded 404 on this route's path and is
+		// neither scanned nor listed. Pre-existing, recorded, not closed by #277.
+		const banded = inCredentialBand(scan.refusals);
 
 		expect(banded.length).toBeGreaterThan(0);
 		expect(unlistedRefusals(banded)).toEqual([]);
 	});
 });
+
+/** A scanned refusal, for the shapes no route in this repository has grown yet. */
+function scanned(statusCode: number | undefined, message: string | undefined): ScannedRefusal {
+	return { site: 'synthetic.ts:1', statusCode, message, source: 'createError({ ... })' };
+}
 
 /**
  * What the scan holds the route to, checked against refusals the route does not
@@ -357,14 +365,14 @@ describe('the Screen-command route\'s own refusals', () => {
  */
 describe('what the scan holds the route to', () => {
 	it('catches a route-grown 403, which the diagnosis would otherwise misread', () => {
-		const locked = [{ statusCode: 403, message: 'Screen is locked' }];
+		const locked = [scanned(403, 'Screen is locked')];
 
 		expect(inCredentialBand(locked)).toEqual(locked);
 		expect(unlistedRefusals(inCredentialBand(locked))).toEqual(locked);
 	});
 
 	it('catches a route-grown 404 the list does not name, as it always did', () => {
-		const missing = [{ statusCode: 404, message: 'Event not found' }];
+		const missing = [scanned(404, 'Event not found')];
 
 		expect(unlistedRefusals(inCredentialBand(missing))).toEqual(missing);
 	});
@@ -374,14 +382,252 @@ describe('what the scan holds the route to', () => {
 		// it be listed would make the list a catalogue of the route rather than of
 		// what the diagnosis can get wrong — noise the next person would delete.
 		expect(inCredentialBand([
-			{ statusCode: 409, message: 'Screen was modified concurrently' },
-			{ statusCode: 422, message: 'Unknown command' },
+			scanned(409, 'Screen was modified concurrently'),
+			scanned(422, 'Unknown command'),
 		])).toEqual([]);
 	});
 
 	it('excuses a banded refusal only at the status the list names it at', () => {
-		expect(unlistedRefusals([{ statusCode: 404, message: 'Screen not found' }])).toEqual([]);
-		expect(unlistedRefusals([{ statusCode: 401, message: 'Screen not found' }]))
-			.toEqual([{ statusCode: 401, message: 'Screen not found' }]);
+		expect(unlistedRefusals([scanned(404, 'Screen not found')])).toEqual([]);
+		expect(unlistedRefusals([scanned(401, 'Screen not found')]))
+			.toEqual([scanned(401, 'Screen not found')]);
+	});
+
+	it('holds a refusal it could not read to the same account as one it could', () => {
+		// #277: the half that makes an unreadable refusal safe. Neither half can match a
+		// listed pair, so the entry survives both filters and the check fails naming it.
+		expect(unlistedRefusals(inCredentialBand([scanned(undefined, 'Screen not found')])))
+			.toEqual([scanned(undefined, 'Screen not found')]);
+		expect(unlistedRefusals(inCredentialBand([scanned(404, undefined)])))
+			.toEqual([scanned(404, undefined)]);
+	});
+});
+
+/**
+ * What the scan can read out of a route's source, checked against source text rather
+ * than against the route — the only way to exercise the shapes it has not grown.
+ *
+ * #277 was filed because the previous scan pushed an entry only where `statusCode` was
+ * a numeric literal. `statusCode: FORBIDDEN` was not reported unlisted; it did not exist,
+ * and the whole suite passed on a route carrying a 403 the diagnosis would have misread.
+ * The invariant that replaces the gate is the last test here: one entry per `createError`,
+ * readable or not.
+ */
+describe('what the scan can read out of a route', () => {
+	function scan(body: string): ScannedRefusal[] {
+		return scanSourceForRefusals('route.ts', body);
+	}
+
+	it('reads a refusal written as literals', () => {
+		expect(scan('createError({ statusCode: 403, message: \'Screen is locked\' });'))
+			.toEqual([expect.objectContaining({ statusCode: 403, message: 'Screen is locked' })]);
+	});
+
+	it('resolves a status held in a const, which used to be dropped entirely', () => {
+		// #277's proving case, from #268's A1: byte-for-byte the refusal R26 kills as a
+		// literal, and it survived the full runner set behind a `const`.
+		const refusals = scan('const FORBIDDEN = 403;\ncreateError({ statusCode: FORBIDDEN, message: \'Screen is locked\' });');
+
+		expect(refusals).toEqual([expect.objectContaining({ statusCode: 403, message: 'Screen is locked' })]);
+		expect(unlistedRefusals(inCredentialBand(refusals))).toEqual(refusals);
+	});
+
+	it('resolves a message held in a const, or written as a template with nothing in it', () => {
+		expect(scan('const LOCKED = \'Screen is locked\';\ncreateError({ statusCode: 403, message: LOCKED });')[0]?.message)
+			.toBe('Screen is locked');
+		expect(scan('createError({ statusCode: 403, message: `Screen is locked` });')[0]?.message)
+			.toBe('Screen is locked');
+	});
+
+	it('reports a status it cannot read rather than dropping the site', () => {
+		const refusals = scan('createError({ statusCode: statuses.forbidden, message: \'Screen is locked\' });');
+
+		expect(refusals[0]?.statusCode).toBeUndefined();
+		expect(refusals[0]?.source).toContain('statuses.forbidden');
+		expect(unlistedRefusals(inCredentialBand(refusals))).toEqual(refusals);
+	});
+
+	it('reports a message it cannot read rather than reading it as empty', () => {
+		// Pre-#277 this degraded to `''`, which failed loudly too — the safe direction,
+		// and why it was never a defect. But `''` says the route raises an empty message,
+		// where `undefined` says the scan could not read the one it raises, and the
+		// difference is the whole of what the reader needs to act.
+		// eslint-disable-next-line no-template-curly-in-string -- TypeScript source under scan, not a mis-typed template.
+		const refusals = scan('createError({ statusCode: 404, message: `Screen ${id} not found` });');
+
+		expect(refusals[0]?.message).toBeUndefined();
+		expect(unlistedRefusals(inCredentialBand(refusals))).toEqual(refusals);
+	});
+
+	it('reports a refusal whose shape is hidden, whichever way it is hidden', () => {
+		for (const hidden of [
+			'createError(refusalFor(screen));',
+			'createError({ ...base, message: \'Screen is locked\' });',
+			'createError({ statusCode, message });',
+		]) {
+			const refusals = scan(hidden);
+
+			expect(refusals, hidden).toHaveLength(1);
+			expect(refusals[0]?.statusCode, hidden).toBeUndefined();
+			expect(unlistedRefusals(inCredentialBand(refusals)), hidden).toEqual(refusals);
+		}
+	});
+
+	it('gives h3\'s own defaults to the halves a refusal does not name', () => {
+		// Absent is not unreadable: h3 answers 500 and `''`, and 500 is outside the band,
+		// so a refusal naming no status is correctly nobody's problem here. The
+		// distinction is load-bearing in one direction only — see the `status:` pin
+		// below, where defaulting a status the scan simply failed to look for is how an
+		// entry disappears.
+		expect(scan('createError({ message: \'Screen is locked\' });')[0]?.statusCode).toBe(500);
+		expect(scan('createError({ statusCode: 403 });')[0]?.message).toBe('');
+		expect(inCredentialBand(scan('createError({ message: \'Screen is locked\' });'))).toEqual([]);
+	});
+
+	it('reads every key h3 composes a status and a message from', () => {
+		// h3's `createError` reads `statusCode` and falls back to `status`
+		// (1.15.11, dist/index.mjs:91-95); the message is `message ?? statusMessage`
+		// (:71). Reading only the first of each pair made the route answer a real 403
+		// while the scan saw no status, defaulted it to 500, and dropped the entry out
+		// of the band before anything checked the listing — #277's own defect in
+		// another spelling. h3 v2 makes `status` canonical, so this widens with time.
+		expect(scan('createError({ status: 403, message: \'Screen is locked\' });')[0]?.statusCode).toBe(403);
+		expect(scan('createError({ statusCode: 404, statusMessage: \'Screen not found\' });')[0]?.message)
+			.toBe('Screen not found');
+		// `statusCode` wins where both are named, as it does in h3.
+		expect(scan('createError({ statusCode: 404, status: 403, message: \'x\' });')[0]?.statusCode).toBe(404);
+	});
+
+	it('reads a key written as a computed name, and reports one it cannot name', () => {
+		// `['statusCode']: 403` satisfied neither arm of the property reader and was
+		// skipped, leaving a call that named a status looking like one that named none.
+		// A key the scan cannot name might BE the status key, so the call is unreadable
+		// rather than a call with one property fewer.
+		expect(scan('createError({ [\'statusCode\']: 403, message: \'Screen is locked\' });')[0]?.statusCode).toBe(403);
+
+		const computed = scan('createError({ [statusKey]: 403, message: \'Screen is locked\' });');
+
+		expect(computed[0]?.statusCode).toBeUndefined();
+		expect(unlistedRefusals(inCredentialBand(computed))).toEqual(computed);
+	});
+
+	it('does not trust a name that is declared twice, or one that can be reassigned', () => {
+		// The scan parses a file, it does not bind it. Picking one of two declarations
+		// would be picking at random, and a `let` does not say what the route answers —
+		// so both report rather than resolve.
+		expect(scan('const S = 403;\nfunction other() { const S = 404; }\ncreateError({ statusCode: S, message: \'x\' });')[0]?.statusCode)
+			.toBeUndefined();
+		expect(scan('let status = 403;\ncreateError({ statusCode: status, message: \'x\' });')[0]?.statusCode)
+			.toBeUndefined();
+	});
+
+	it('records one entry per createError call it finds, readable or not', () => {
+		// The invariant that replaces the `isNumericLiteral` gate. Every other assertion
+		// here is about what an entry says; this is the one that says an entry exists.
+		//
+		// Per call it *finds*: the scan matches the callee by name, so a `createError`
+		// reached through an alias, a namespace or a variable produces no entry at all.
+		// No such call exists in this repository today.
+		const refusals = scan([
+			'createError({ statusCode: 404, message: \'Screen not found\' });',
+			'createError({ statusCode: unknownStatus, message: \'Screen is locked\' });',
+			'createError(somethingElse);',
+		].join('\n'));
+
+		expect(refusals).toHaveLength(3);
+		expect(refusals.map(refusal => refusal.site)).toEqual(['route.ts:1', 'route.ts:2', 'route.ts:3']);
+	});
+});
+
+/**
+ * How far the scan reaches, on a fixture tree rather than on the real graph.
+ *
+ * #277 widened the scan from one file to the route's first-party import graph, and each
+ * way of reaching a module is a separate line that can regress on its own. Pinning them
+ * against whatever the Screen-command route happens to import would pin this
+ * repository's structure rather than the walker — these modules exist to be reached.
+ */
+describe('the scan\'s reach through a route\'s imports', () => {
+	const fixtures: Record<string, string> = {
+		'entry.ts': [
+			'import type { Ignored } from \'./type-only\';',
+			'import { direct } from \'./direct\';',
+			'export { reexported } from \'./re-exported\';',
+			'export async function load() { return import(\'./dynamic\'); }',
+			'createError({ statusCode: 404, message: \'the entry point\' });',
+		].join('\n'),
+		'direct.ts': 'export const direct = () => createError({ statusCode: 401, message: \'a direct import\' });',
+		're-exported.ts': 'export const reexported = () => createError({ statusCode: 403, message: \'a re-export\' });',
+		'dynamic.ts': 'export const dynamic = () => createError({ statusCode: 403, message: \'a dynamic import\' });',
+		'type-only.ts': 'export interface Ignored { readonly x: number }\n'
+			+ 'const unreachable = () => createError({ statusCode: 403, message: \'a type-only import\' });',
+	};
+
+	let root: string;
+
+	beforeAll(() => {
+		root = mkdtempSync(join(tmpdir(), 'issue277-scan-'));
+		for (const [name, text] of Object.entries(fixtures))
+			writeFileSync(join(root, name), text);
+	});
+
+	afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+	it('follows a direct import, a re-export and a dynamic import', () => {
+		// A refusal is reachable through any of the three. Reading only `import` would
+		// leave two silent holes of exactly the kind this ticket closed.
+		const messages = scanRouteRefusals(join(root, 'entry.ts')).refusals.map(refusal => refusal.message);
+
+		expect(messages).toContain('the entry point');
+		expect(messages).toContain('a direct import');
+		expect(messages).toContain('a re-export');
+		expect(messages).toContain('a dynamic import');
+	});
+
+	it('does not follow a type-only import, which cannot carry a throw', () => {
+		// The one narrowing that is sound, and worth pinning because widening it would
+		// drag the schema layer's whole closure in for nothing.
+		const messages = scanRouteRefusals(join(root, 'entry.ts')).refusals.map(refusal => refusal.message);
+
+		expect(messages).not.toContain('a type-only import');
+	});
+
+	it('reports a first-party import it cannot follow, rather than reaching less in silence', () => {
+		// The guarantee is that the graph is complete. A specifier resolving to no file
+		// shrinks it with nothing saying so — #277's defect wearing the import graph.
+		const entry = join(root, 'broken.ts');
+		writeFileSync(entry, 'import { gone } from \'./not-a-module\';\n');
+
+		expect(scanRouteRefusals(entry).unfollowedImports).toEqual([expect.stringContaining('./not-a-module')]);
+	});
+
+	it('follows every path alias that reaches this repository, not only `~~/`', () => {
+		// All six aliases in `.nuxt/tsconfig.json` reach this repository's own source, so
+		// all six are first-party. An unrecognised prefix fell through to the
+		// third-party branch, which says nothing at all — so `#shared/x` would have
+		// shrunk the graph in silence while "leave no first-party import unfollowed"
+		// still passed. Nothing under `server/` or `shared/` imports through the other
+		// five today, which is why nothing caught it.
+		const entry = join(root, 'aliased.ts');
+		writeFileSync(entry, 'import { screenRealtimeChannel } from \'#shared/utils/realtimeChannels\';\n');
+
+		const scan = scanRouteRefusals(entry);
+
+		expect(scan.files).toContain('shared/utils/realtimeChannels.ts');
+		expect(scan.unfollowedImports).toEqual([]);
+	});
+
+	it('says nothing about a third-party or virtual specifier, which is not the route\'s code', () => {
+		// A refusal raised inside `h3` or `hub:db` is not one this repository can list or
+		// rename, so these are excluded by design rather than reported as holes. `#imports`
+		// is Nuxt's virtual module and belongs with them, not with the six real aliases.
+		const entry = join(root, 'third-party.ts');
+		writeFileSync(entry, [
+			'import { createError } from \'h3\';',
+			'import { db } from \'hub:db\';',
+			'import { useRuntimeConfig } from \'#imports\';',
+		].join('\n'));
+
+		expect(scanRouteRefusals(entry).unfollowedImports).toEqual([]);
 	});
 });
