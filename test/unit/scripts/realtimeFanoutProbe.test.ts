@@ -96,6 +96,12 @@ describe('the fan-out probe refuses to default its origin', () => {
 	 * function, which would keep passing if the guard were wrong and the script
 	 * did nothing when invoked. The environment is built rather than inherited so
 	 * an ambient `PROBE_ORIGIN` cannot turn this into a live measurement.
+	 *
+	 * A warning for whoever mutation-tests the refusal: this test spawns the real
+	 * script, so a mutation that restores a default origin makes it issue a real
+	 * request to that origin. #289's own table has such a row, and 127.0.0.1:8787
+	 * is the port every worktree shares — run that row only when nothing is
+	 * listening there, and check rather than assume.
 	 */
 	it('exits non-zero naming the refusal when run with no origin', () => {
 		const { PROBE_ORIGIN: _discarded, ...ambient } = process.env;
