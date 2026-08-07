@@ -147,18 +147,28 @@ async function typeCorrelation(
 		.setValue(value);
 }
 
+const LEDGER_ENDPOINT = '/api/admin/graphics-assets/evidence';
+
 /**
- * The last question put to the ledger endpoint — which only exists if a
- * question was put at all. Saying so is the whole point of the guard: a page
- * that fetched nothing used to die here as "Cannot read properties of
- * undefined", so #123's load flakes read as breakage in whichever branch
- * happened to be running rather than as a page that never got its reading.
+ * The last question put to the ledger endpoint, chosen by name rather than
+ * taken from the end of the list. The end of the list is not reliably the
+ * page's: Nuxt's global route middleware starts a clock sync that puts
+ * `/api/time` samples through this same `$fetch` mock (#123), and two of them
+ * land on every mount here. A stray arriving last would pass an emptiness
+ * check, hand back a sample's options, and return `undefined` for a query
+ * nobody asked — reproducing the opaque failure this helper exists to prevent.
+ *
+ * When the ledger was never asked at all it says so, rather than dying as
+ * "Cannot read properties of undefined" and letting #123's load flakes read as
+ * breakage in whichever branch happened to be running.
  */
 function lastQuery() {
-	const lastCall = mockApiFetch.mock.calls.at(-1);
-	if (!lastCall)
-		throw new Error('expected an api fetch call to read a query from, got none');
-	return lastCall[1].query;
+	const lastLedgerCall = mockApiFetch.mock.calls
+		.filter(call => call[0] === LEDGER_ENDPOINT)
+		.at(-1);
+	if (!lastLedgerCall)
+		throw new Error(`expected an api fetch call to ${LEDGER_ENDPOINT} to read a query from, got none`);
+	return lastLedgerCall[1].query;
 }
 
 describe('the Graphics Asset Library Evidence ledger page', () => {
