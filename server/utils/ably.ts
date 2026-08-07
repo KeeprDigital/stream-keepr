@@ -6,10 +6,25 @@ import type {
 import Ably from 'ably';
 import { eventRealtimeChannel, screenRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { createMessage, MAX_REALTIME_MESSAGE_BYTES, realtimeMessageBytes, screenCommandMessageTypes } from '../types/messages';
+import { ServiceConfigurationError } from './errors';
 import { publishFailureFields, RealtimePublishError } from './realtimePublishFailure';
+
+/** The environment name behind `runtimeConfig.ablyApiKey`, as the operator sets it. */
+const ABLY_API_KEY_SETTING = 'NUXT_ABLY_API_KEY';
 
 let ablyClient: Ably.Rest | null = null;
 
+/**
+ * The realtime client, or the name of the setting that would have produced one.
+ *
+ * A `ServiceConfigurationError` rather than a bare throw because of where this
+ * failure is read: an unset key is an unfinished deployment, and the only person
+ * who can finish it is the one holding the response. A plain `Error` matches no
+ * branch of `mapPublicNitroError`, so the 5xx sanitizer rewrote it to 'Internal
+ * Server Error' and the operator got a stack-free 500 for a one-line environment
+ * change — the exact #233 symptom, one setting over (#267). The classification is
+ * what makes the message public: it names a setting and never a value.
+ */
 export function getAblyClient(): Ably.Rest {
 	if (!ablyClient) {
 		const config = useRuntimeConfig();
@@ -17,7 +32,7 @@ export function getAblyClient(): Ably.Rest {
 		const serverApiKey = config.ablyApiKey;
 
 		if (!serverApiKey) {
-			throw new Error('Ably server API key is not configured');
+			throw new ServiceConfigurationError(ABLY_API_KEY_SETTING, 'is not configured');
 		}
 
 		ablyClient = new Ably.Rest(serverApiKey);
@@ -141,7 +156,8 @@ export async function publishMessageStrict<T extends MessageType>(
  *
  * The wrap is around the publish alone. `getAblyClient` failing is a key that was
  * never configured, which is a deployment that is not finished rather than a
- * service that said no, and it keeps its own answer.
+ * service that said no, and it keeps its own answer: a 503 naming the setting
+ * since #267, where this one said 'Internal Server Error' and nothing else.
  */
 export async function publishScreenCommand(
 	eventId: number,

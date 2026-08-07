@@ -100,11 +100,28 @@ export const INTEGRATION_REALTIME_PUBLISH_FAILED_NOTICE
 		+ 'the empty string, which skips realtime coverage instead of failing it.';
 
 /**
+ * A refusal a route raises on its own terms: the status it answers with, and the
+ * message it answers.
+ *
+ * Both halves, because the diagnosis fires on a status band and excuses on a
+ * message, and #268 found the join missing: a message excused at every status in
+ * the band means a genuine credential refusal whose body happened to echo the
+ * route's own wording would go unremarked. A route that raises 'Screen not found'
+ * at 404 has said nothing about what a 401 carrying those words would mean.
+ */
+export interface RouteRefusal {
+	readonly statusCode: number;
+	readonly message: string;
+}
+
+/**
  * Every refusal the Screen-command route raises on its own terms.
  *
  * This list is what separates "the route said no" from "the provider said no", so it
  * has to stay exhaustive. `test/unit/integration/realtimeDiagnosis.test.ts` reads
- * `command.post.ts` and fails when the route grows a 404 this does not name.
+ * `command.post.ts` and fails when the route grows a refusal inside the credential
+ * band that this does not name — the whole band since #268, where the scan filtered
+ * on 404 alone and a route-grown 403 slipped past it silently.
  *
  * It is a caller's argument rather than a default, because it is true of one route
  * only. A second realtime-backed assertion — layout placements raises three distinct
@@ -112,7 +129,9 @@ export const INTEGRATION_REALTIME_PUBLISH_FAILED_NOTICE
  * fabricated key. Making the caller name its route's refusals keeps that structural
  * instead of documentary.
  */
-export const SCREEN_COMMAND_ROUTE_REFUSALS = ['Screen not found'];
+export const SCREEN_COMMAND_ROUTE_REFUSALS: readonly RouteRefusal[] = [
+	{ statusCode: 404, message: 'Screen not found' },
+];
 
 /** Nitro's own miss, when no handler matched: a renamed route, not a rejected key. */
 const UNROUTED_MESSAGE_PREFIX = 'Cannot find any route matching';
@@ -121,8 +140,13 @@ const UNROUTED_MESSAGE_PREFIX = 'Cannot find any route matching';
  * The statuses Ably uses to refuse a key: 404/40400 for an application it does not
  * know, 401/403 for a key it knows and will not honour. A 5xx is the service being
  * unwell rather than the key being wrong, and gets no diagnosis.
+ *
+ * Exported since #268 so the scan that keeps a route's refusal list exhaustive
+ * filters on the same band this consults. Restating it there is what let the two
+ * disagree: the diagnosis answered 401 and 403, the scan demanded a listing for
+ * neither.
  */
-const CREDENTIAL_REJECTION_STATUSES = new Set([401, 403, 404]);
+export const CREDENTIAL_REJECTION_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
 
 /**
  * Nitro reports the thrown error's `message`; `statusMessage` is the fallback for a
@@ -159,7 +183,7 @@ function errorMessageOf(body: unknown): string | undefined {
 export function diagnoseRealtimePublishFailure(
 	status: number,
 	body: unknown,
-	routeRefusals: readonly string[],
+	routeRefusals: readonly RouteRefusal[],
 ): string | undefined {
 	const message = errorMessageOf(body);
 
@@ -174,7 +198,14 @@ export function diagnoseRealtimePublishFailure(
 	if (!CREDENTIAL_REJECTION_STATUSES.has(status))
 		return undefined;
 
-	if (message !== undefined && (routeRefusals.includes(message) || message.startsWith(UNROUTED_MESSAGE_PREFIX)))
+	// Matched as a pair. A route names the statuses it raises each refusal at, and a
+	// message excused at every status in the band would excuse the provider for
+	// echoing it — see `RouteRefusal`. Nitro's unrouted miss is status-agnostic
+	// because it is not the route speaking at all.
+	const isRouteRefusal = routeRefusals.some(
+		refusal => refusal.statusCode === status && refusal.message === message,
+	);
+	if (message !== undefined && (isRouteRefusal || message.startsWith(UNROUTED_MESSAGE_PREFIX)))
 		return undefined;
 
 	const observed = message === undefined ? `HTTP ${status}` : `HTTP ${status} — ${message}`;
