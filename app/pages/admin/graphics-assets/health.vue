@@ -21,6 +21,24 @@ const {
 	error: capacityError,
 	refresh: refreshCapacity,
 } = useFetch<GraphicsAssetLibraryCapacity>('/api/admin/graphics-assets/capacity');
+
+/**
+ * What a failed reading says to the administrator who opened this page.
+ *
+ * Both reads are guarded by the installation's administrator token, so the failure this
+ * page meets most often is the 403 whose body says 'Graphics Administrator authorization
+ * is required' — and rendering `error.message` showed the transport's line instead, which
+ * names the route and not the missing token. `failureSentence` owns which failures may be
+ * quoted, and since #286 that includes the 5xx families the server preserves through
+ * sanitizing, which is the other kind of answer a health page exists to relay. A
+ * genuinely sanitized 5xx still falls back to the transport's line (#271).
+ */
+const healthFailureMessage = computed(() =>
+	error.value ? failureSentence(error.value) ?? error.value.message : undefined,
+);
+const capacityFailureMessage = computed(() =>
+	capacityError.value ? failureSentence(capacityError.value) ?? capacityError.value.message : undefined,
+);
 const bytesPerGiB = 1024 * 1024 * 1024;
 const canonicalLimitGiB = ref(100);
 const stagingLimitGiB = ref(10);
@@ -133,7 +151,8 @@ async function saveCapacityLimits() {
 				variant="soft"
 				icon="i-lucide-triangle-alert"
 				title="Health check could not be loaded"
-				:description="error.message"
+				:description="healthFailureMessage"
+				data-testid="health-load-error"
 			/>
 
 			<div v-if="results.length > 0" class="grid gap-4 md:grid-cols-3">
@@ -166,8 +185,9 @@ async function saveCapacityLimits() {
 				color="error"
 				variant="soft"
 				icon="i-lucide-triangle-alert"
+				data-testid="capacity-load-error"
 			>
-				<p>Capacity could not be loaded — {{ capacityError.message }}</p>
+				<p>Capacity could not be loaded — {{ capacityFailureMessage }}</p>
 			</UAlert>
 
 			<UCard v-if="capacity">

@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive } from 'vue';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 const mockEventStore = reactive({
 	event: {
@@ -213,6 +214,39 @@ describe('configMeleeIntegration', () => {
 
 	afterEach(() => {
 		vi.useRealTimers();
+	});
+
+	/**
+	 * What the card says when its configuration read is refused.
+	 *
+	 * This banner replaces the whole form, so it has to carry standing context — and it
+	 * used to carry only that: `runRequest` wrote `getErrorMessage`'s answer into
+	 * `errorRef` and `onFailure` overwrote it with static wording one line later, so the
+	 * reason never survived (#271 recorded the dead write). One writer now composes both.
+	 */
+	it('names what failed and quotes the refusal the server wrote', async () => {
+		mockEventRepo.getMeleeConfig.mockRejectedValueOnce(transportFailure({
+			status: 403,
+			body: { message: 'This Event belongs to another installation' },
+			request: `[GET] "/api/events/1/melee/config"`,
+		}));
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(wrapper.text()).toContain('Melee configuration could not be loaded');
+		expect(wrapper.text()).toContain('This Event belongs to another installation');
+	});
+
+	it('relays a preserved 503 naming the setting that was never configured', async () => {
+		mockEventRepo.getMeleeConfig.mockRejectedValueOnce(transportFailure({
+			status: 503,
+			body: { message: 'NUXT_MELEE_CREDENTIAL_KEY is not configured' },
+			request: `[GET] "/api/events/1/melee/config"`,
+		}));
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(wrapper.text()).toContain('NUXT_MELEE_CREDENTIAL_KEY is not configured');
 	});
 
 	it('renders only the Melee integration configuration form', async () => {

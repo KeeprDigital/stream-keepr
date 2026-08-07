@@ -19,9 +19,11 @@ const emit = defineEmits<{
  * they hand on are different jobs, and the store only does the first (#262). So the failure
  * arriving here is a `$fetch` one, whose own `message` is the transport's line: rendering
  * it showed '[GET] "/api/events": 403 Forbidden' where the server had written the reason
- * (#271). `failureSentence` owns which failures may be quoted; a 5xx has had its prose
- * replaced with a placeholder on the way out and is left to say what it says as a status
- * line, which reads as machinery rather than as the authority's words (#245).
+ * (#271). `failureSentence` owns which failures may be quoted; a 5xx whose prose the
+ * server replaced with a placeholder on the way out is left to say what it says as a
+ * status line, which reads as machinery rather than as the authority's words (#245),
+ * while the 5xx families whose prose survives sanitizing are quoted like any refusal
+ * (#286).
  */
 const failureMessage = computed(() => {
 	if (!props.error)

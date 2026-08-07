@@ -113,6 +113,24 @@ const {
 	refresh: refreshCapacity,
 } = useFetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity');
 
+/**
+ * What a failed read says to the author working the Library Workspace.
+ *
+ * `useFetch` hands its `error` on as the failure the request produced, whose own
+ * `message` is the transport's line — '[GET] "/api/graphics-assets": 401 Unauthorized'
+ * where the route had written what was actually missing. `failureSentence` owns which
+ * failures may be quoted, and since #286 that includes the 5xx families whose prose the
+ * server preserves through sanitizing: an exhausted byte store and an unavailable library
+ * are both answers this page exists to relay, and both are 5xx. A genuinely sanitized 5xx
+ * still falls back to the transport's line, which reads as machinery (#271).
+ */
+const loadFailureMessage = computed(() =>
+	error.value ? failureSentence(error.value) ?? error.value.message : undefined,
+);
+const capacityFailureMessage = computed(() =>
+	capacityError.value ? failureSentence(capacityError.value) ?? capacityError.value.message : undefined,
+);
+
 watch(selectedFile, (file) => {
 	if (file && !proposedName.value.trim())
 		proposedName.value = file.name;
@@ -1070,8 +1088,9 @@ onMounted(async () => {
 				color="error"
 				variant="soft"
 				icon="i-lucide-triangle-alert"
+				data-testid="capacity-load-error"
 			>
-				<p>Storage capacity could not be loaded — {{ capacityError.message }}</p>
+				<p>Storage capacity could not be loaded — {{ capacityFailureMessage }}</p>
 			</UAlert>
 
 			<UAlert
@@ -1409,7 +1428,7 @@ onMounted(async () => {
 					Library could not be loaded
 				</p>
 				<p class="mt-1 text-sm">
-					{{ error.message }}
+					{{ loadFailureMessage }}
 				</p>
 			</UAlert>
 

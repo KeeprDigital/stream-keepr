@@ -1,7 +1,8 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 const {
 	mockApiFetch,
@@ -51,15 +52,34 @@ const capacity = ref({
 	},
 });
 
+/**
+ * The failures each read can meet, settable per test.
+ *
+ * `useFetch` hands its `error` on as the failure the request produced, and this page
+ * renders it — so a mock that could only ever be `null` left the page's only failure
+ * state uncovered (#286).
+ */
+const healthError = ref<unknown>(null);
+const capacityLoadError = ref<unknown>(null);
+
 mockNuxtImport('$fetch', () => mockApiFetch);
 mockNuxtImport('useFetch', () => (path: string) => ({
 	data: path === '/api/admin/graphics-assets/capacity' ? capacity : health,
 	status: ref('success'),
-	error: ref(null),
+	error: path === '/api/admin/graphics-assets/capacity' ? capacityLoadError : healthError,
 	refresh: path === '/api/admin/graphics-assets/capacity' ? mockCapacityRefresh : mockRefresh,
 }));
 
 const passthroughStub = defineComponent({ template: '<div><slot name="actions" /><slot /></div>' });
+/**
+ * `UAlert` says most of what it says through props rather than slots, and a stub that
+ * renders only the slot drops the reported failure entirely — which is why this page's
+ * error state read as covered while nothing could observe it (#286).
+ */
+const alertStub = defineComponent({
+	props: ['title', 'description'],
+	template: '<div>{{ title }} {{ description }}<slot /></div>',
+});
 const badgeStub = defineComponent({
 	props: ['label'],
 	template: '<span><slot />{{ label }}</span>',
@@ -88,7 +108,7 @@ async function mountPage() {
 		global: {
 			stubs: {
 				NuxtLayout: passthroughStub,
-				UAlert: passthroughStub,
+				UAlert: alertStub,
 				UButton: buttonStub,
 				UCard: passthroughStub,
 				UBadge: badgeStub,
@@ -101,6 +121,54 @@ async function mountPage() {
 }
 
 describe('the Graphics Asset Library health page', () => {
+	beforeEach(() => {
+		healthError.value = null;
+		capacityLoadError.value = null;
+	});
+
+	/**
+	 * Both reads sit behind the installation's administrator token, so the failure this
+	 * page meets most often is the 403 whose body says what is missing. It used to render
+	 * the failure's own `message`, which on a `$fetch` failure is the transport's line —
+	 * naming the route and not the token (#271, #286).
+	 */
+	it('says what the server refused the health read for, not which route it was', async () => {
+		healthError.value = transportFailure({
+			status: 403,
+			body: { message: 'Graphics Administrator authorization is required' },
+			request: `[GET] "/api/admin/graphics-assets/health"`,
+		});
+		const wrapper = await mountPage();
+
+		const alert = wrapper.get('[data-testid="health-load-error"]');
+		expect(alert.text()).toContain('Graphics Administrator authorization is required');
+		expect(alert.text()).not.toContain('403 Forbidden');
+	});
+
+	it('relays the setting a preserved 503 says was never configured', async () => {
+		capacityLoadError.value = transportFailure({
+			status: 503,
+			body: { message: 'NUXT_GRAPHICS_ADMIN_TOKEN is not configured' },
+			request: `[GET] "/api/admin/graphics-assets/capacity"`,
+		});
+		const wrapper = await mountPage();
+
+		expect(wrapper.get('[data-testid="capacity-load-error"]').text())
+			.toContain('NUXT_GRAPHICS_ADMIN_TOKEN is not configured');
+	});
+
+	it('falls back to the status line when the sanitizer got to the 5xx first', async () => {
+		healthError.value = transportFailure({
+			status: 500,
+			body: { message: 'Internal Server Error' },
+			request: `[GET] "/api/admin/graphics-assets/health"`,
+		});
+		const wrapper = await mountPage();
+
+		expect(wrapper.get('[data-testid="health-load-error"]').text())
+			.toContain('[GET] "/api/admin/graphics-assets/health": 500 Internal Server Error');
+	});
+
 	it('shows catalogue, staging, and canonical health as separate administrator results', async () => {
 		const wrapper = await mountPage();
 

@@ -37,9 +37,10 @@ export const useScreenStore = defineStore('screen', () => {
 	 * failure that message is the transport's status line — `[GET] "…": 409 Conflict` —
 	 * which names neither what was refused nor what an operator can do about it. The
 	 * sentence about the show is in the response body, and `failureSentence` owns when
-	 * it may be quoted: a sub-500 status only, since a 5xx has had its prose replaced
-	 * with a placeholder on the way out and a failure with no status never reached the
-	 * server. #245 did this for the live-session store; this is the same adoption for
+	 * it may be quoted: a sub-500 status, or a 5xx whose prose the server preserved
+	 * through sanitizing (#286), since every other 5xx carries a placeholder written
+	 * over whatever actually failed and a failure with no status never reached the
+	 * server at all. #245 did this for the live-session store; this is the same adoption for
 	 * the Screen store, whose `error` is what the Screens page shows (#262).
 	 */
 	function reportedFailure(caught: unknown): unknown {

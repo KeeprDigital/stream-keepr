@@ -7,6 +7,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 import { clearNuxtState } from '#app';
 
 enableAutoUnmount(afterEach);
@@ -205,10 +206,19 @@ const assets = ref<GraphicAsset[]>([
 ]);
 const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
 
+/**
+ * The failure the library listing can meet, settable per test.
+ *
+ * `useFetch` hands its `error` on as the failure the request produced, and the picker
+ * renders it — so a mock that could only ever be `null` left the picker's only failure
+ * state uncovered (#286).
+ */
+const listingError = ref<unknown>(null);
+
 mockNuxtImport('useFetch', () => () => ({
 	data: assets,
 	status: ref('success'),
-	error: ref(null),
+	error: listingError,
 }));
 mockNuxtImport('$fetch', () => mockApiFetch);
 // The real composable auto-starts a singleton that synchronises against
@@ -226,12 +236,21 @@ const buttonStub = defineComponent({
 	emits: ['click'],
 	template: '<button type="button" @click="$emit(\'click\')"><slot />{{ label }}</button>',
 });
+/**
+ * `UAlert` says most of what it says through props rather than slots, and a stub that
+ * renders only the slot drops the reported failure entirely.
+ */
+const alertStub = defineComponent({
+	props: ['title', 'description'],
+	template: '<div>{{ title }} {{ description }}<slot /></div>',
+});
 
 describe('the contextual Graphic Asset Focus Picker', () => {
 	beforeEach(() => {
 		// The chosen scope is deliberately shared by every picker in the app, so
 		// it outlives a mounted component and would otherwise outlive a test.
 		clearNuxtState('graphic-asset-picker-scope');
+		listingError.value = null;
 		mockApiFetch.mockReset();
 		mockApiFetch.mockResolvedValue({
 			outcome: 'available',
@@ -435,10 +454,7 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 					UButton: buttonStub,
 					UInput: passthroughStub,
 					UBadge: passthroughStub,
-					UAlert: defineComponent({
-						props: ['title', 'description'],
-						template: '<div>{{ title }} {{ description }}</div>',
-					}),
+					UAlert: alertStub,
 					UIcon: passthroughStub,
 				},
 			},
@@ -648,10 +664,7 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 					UButton: buttonStub,
 					UInput: passthroughStub,
 					UBadge: passthroughStub,
-					UAlert: defineComponent({
-						props: ['title', 'description'],
-						template: '<div>{{ title }} {{ description }}</div>',
-					}),
+					UAlert: alertStub,
 					UIcon: passthroughStub,
 				},
 			},
@@ -684,10 +697,7 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 					UButton: buttonStub,
 					UInput: passthroughStub,
 					UBadge: passthroughStub,
-					UAlert: defineComponent({
-						props: ['title', 'description'],
-						template: '<div>{{ title }} {{ description }}</div>',
-					}),
+					UAlert: alertStub,
 					UIcon: passthroughStub,
 				},
 			},
@@ -728,10 +738,7 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 					UButton: buttonStub,
 					UInput: passthroughStub,
 					UBadge: passthroughStub,
-					UAlert: defineComponent({
-						props: ['title', 'description'],
-						template: '<div>{{ title }} {{ description }}</div>',
-					}),
+					UAlert: alertStub,
 					UIcon: passthroughStub,
 				},
 			},
@@ -750,5 +757,74 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 
 		expect(wrapper.text()).toContain('Missing Graphic Asset Reference');
 		expect(wrapper.text()).not.toContain('Pinned revision first-revision');
+	});
+
+	/**
+	 * What an author is told when the library will not answer.
+	 *
+	 * The picker used to render the failure's own `message`, which on a `$fetch` failure
+	 * is the transport's line — so an author whose session had lapsed, or whose
+	 * installation had a setting missing, read the route's name and a status code. Since
+	 * #286 the read goes through `failureSentence`, which quotes a refusal and also the
+	 * 5xx families whose prose the server preserves through sanitizing.
+	 */
+	async function mountWithListingFailure() {
+		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
+		const wrapper = mount(FocusPicker, {
+			props: { modelValue: undefined, eventId: 7, fieldLabel: 'Frame image' },
+			global: {
+				stubs: {
+					UModal: passthroughStub,
+					UButton: buttonStub,
+					UInput: passthroughStub,
+					UBadge: passthroughStub,
+					UAlert: alertStub,
+					UIcon: passthroughStub,
+				},
+			},
+		});
+		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
+		return wrapper;
+	}
+
+	it('says why the library refused the listing rather than naming the route', async () => {
+		listingError.value = transportFailure({
+			status: 401,
+			statusText: 'Unauthorized',
+			body: { message: 'An authenticated graphics author session is required' },
+			request: `[GET] "/api/graphics-assets"`,
+		});
+
+		const wrapper = await mountWithListingFailure();
+
+		const alert = wrapper.get('[data-testid="library-listing-error"]');
+		expect(alert.text()).toContain('An authenticated graphics author session is required');
+		expect(alert.text()).not.toContain('401 Unauthorized');
+	});
+
+	it('relays a preserved 503 naming the setting that was never configured', async () => {
+		listingError.value = transportFailure({
+			status: 503,
+			body: { message: 'NUXT_GRAPHICS_ADMIN_TOKEN is not configured' },
+			request: `[GET] "/api/graphics-assets"`,
+		});
+
+		const wrapper = await mountWithListingFailure();
+
+		expect(wrapper.get('[data-testid="library-listing-error"]').text())
+			.toContain('NUXT_GRAPHICS_ADMIN_TOKEN is not configured');
+	});
+
+	it('falls back to the status line when the sanitizer got to the 5xx first', async () => {
+		listingError.value = transportFailure({
+			status: 500,
+			body: { message: 'Internal Server Error' },
+			request: `[GET] "/api/graphics-assets"`,
+		});
+
+		const wrapper = await mountWithListingFailure();
+
+		expect(wrapper.get('[data-testid="library-listing-error"]').text())
+			.toContain('[GET] "/api/graphics-assets": 500 Internal Server Error');
 	});
 });
