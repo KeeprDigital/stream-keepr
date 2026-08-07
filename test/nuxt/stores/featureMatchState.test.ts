@@ -44,25 +44,13 @@ vi.mock('~/modules/feature-match-session/client', () => ({
 }));
 
 mockNuxtImport('useRealtime', () => () => mockAbly);
-mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: vi.fn(async (fn: () => Promise<unknown>, opts?: any) => {
-		if (opts?.loadingRef)
-			opts.loadingRef.value = true;
-		try {
-			return await fn();
-		}
-		catch (e: any) {
-			if (opts?.errorRef)
-				opts.errorRef.value = e.message;
-			opts?.onError?.();
-			return undefined;
-		}
-		finally {
-			if (opts?.loadingRef)
-				opts.loadingRef.value = false;
-		}
-	}),
-}));
+/*
+ * `useAsyncAction` is deliberately not mocked. The hand-written copy that stood here
+ * reported `e.message` with no `instanceof Error` guard, where the real composable
+ * reports 'An error occurred' for a rejection that is not an `Error` — and it called
+ * `onError` with no argument and resolved `undefined` where the real one passes the
+ * failure and resolves `null`. A copy of a seam drifts from what it copies (#241, #263).
+ */
 mockNuxtImport('useServerTime', () => () => ({ getServerTime: mockGetServerTime }));
 
 // useDebounceFn: immediately invoke the callback
