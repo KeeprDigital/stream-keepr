@@ -208,6 +208,17 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 			};
 		}
 
+		/**
+		 * Given a budget of its own because the default five seconds is one it was
+		 * never going to fit inside. #123 records five operators seeing this test
+		 * time out — never on an unloaded machine, and above roughly load 8 in
+		 * something like 8 of 60 runs — while the work itself is genuine: a hundred
+		 * identities, their revisions, derivatives and references, against real D1.
+		 * A minute is generous against the measured cost — under two seconds on a
+		 * quiet machine, five to ten when #123's operators saw it fail — and the
+		 * margin is the point: a failure here should mean the batch broke, not that
+		 * a sibling worktree was busy.
+		 */
 		it('publishes a hundred created identities and their references at once', async () => {
 			const catalogue = createD1GraphicsAssetCatalogue(harness.database);
 			const operation = await claimedOperation(catalogue, 'install-created');
@@ -257,7 +268,7 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 				kind: 'installed-graphics-template',
 				name: 'Big package',
 			});
-		});
+		}, 60_000);
 
 		it('publishes a hundred exact-origin reuses at once', async () => {
 			const catalogue = createD1GraphicsAssetCatalogue(harness.database);
