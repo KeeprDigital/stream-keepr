@@ -152,7 +152,19 @@ interface RoundRow {
 	id: number;
 	name: string;
 	syncState: string;
-	lastSyncedAt: Date | null;
+	/**
+	 * `Date | string` because the source says one thing and the wire delivers the
+	 * other: `RoundResponse.lastSyncedAt` is declared `Date`, and every Round in
+	 * `roundStore` arrives as JSON — an HTTP list or a realtime message — so the
+	 * value here is an ISO string at runtime, always (the record at the top of
+	 * `shared/api/index.ts`). Nothing in the Round path ever constructs a Date the
+	 * way `app/stores/event.ts` and `app/stores/featureMatch.ts` do, but the
+	 * declared source type is still `Date | null`, so narrowing this to `string`
+	 * would buy a cast rather than honesty. The union is what the other readers of
+	 * these timestamps already write by hand, and what the documented `Wire<>` fix
+	 * would produce here.
+	 */
+	lastSyncedAt: Date | string | null;
 	isNext: boolean;
 }
 
