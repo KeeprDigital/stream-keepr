@@ -10,6 +10,13 @@ import { transportFailure } from '~~/test/helpers/transportFailure';
 
 interface TestItem { id: number; name: string }
 
+/**
+ * The sentence the authority wrote about a refused write, as it arrives in the response
+ * body. Named because the update rollback row below reads it twice: once for the fixture
+ * that carries it, once for the assertion that this helper does not report it.
+ */
+const REFUSAL_SENTENCE = 'This Item belongs to a Round that has already been played';
+
 function createTestItems(items: TestItem[]): Ref<TestItem[]> {
 	return ref(items.map(i => ({ ...i })));
 }
@@ -128,6 +135,12 @@ describe('useStoreHelpers', () => {
 		 * the response body is the caller's job, not this one's — the Event Data lifecycle
 		 * wraps every `apiCall` it hands here in `withFailureSentence` for exactly that
 		 * reason (#262). Pinning the raw line here is what keeps that division visible.
+		 *
+		 * The fixture below therefore carries a sentence in its body, which is what makes
+		 * that pin executable rather than vacuous. Against a 409 with no body the two
+		 * readings are indistinguishable: `withFailureSentence` re-raises a failure that
+		 * wrote nothing untouched, so moving the sentence-reading in here would change no
+		 * verdict. With the sentence present it does — proved in both directions in #288.
 		 */
 		it('rolls the prediction back and reports the failure when the API call is refused', async () => {
 			const { optimisticUpdate } = useStoreHelpers();
@@ -141,6 +154,7 @@ describe('useStoreHelpers', () => {
 				apiCall: vi.fn().mockRejectedValue(transportFailure({
 					status: 409,
 					request: `[PATCH] "/api/items/1"`,
+					body: { statusCode: 409, statusMessage: 'Conflict', message: REFUSAL_SENTENCE },
 				})),
 				errorRef,
 				entityLabel: 'Item',
@@ -149,6 +163,9 @@ describe('useStoreHelpers', () => {
 			expect(result).toBeNull();
 			expect(items.value[0]!.name).toBe('Original');
 			expect(errorRef.value).toBe('[PATCH] "/api/items/1": 409 Conflict');
+			// Stated independently of the line above, so that renaming the route in this
+			// fixture cannot quietly take the guard with it.
+			expect(errorRef.value).not.toBe(REFUSAL_SENTENCE);
 		});
 	});
 
