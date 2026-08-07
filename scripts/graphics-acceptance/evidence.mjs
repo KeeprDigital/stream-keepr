@@ -98,6 +98,11 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	// Harness plumbing.
 	'harness-precondition-unmet',
 	'harness-installation-unreachable',
+	// The checkout cannot supply a name a local run needs, found before the run
+	// opened anything. Named apart from an unmet precondition because it is the
+	// one failure with a fix the reader can carry out, and the prose above it
+	// says what that fix is (#274).
+	'harness-local-configuration-missing',
 ]);
 
 const FAILURE_CODES = new Set(ACCEPTANCE_FAILURE_CODES);

@@ -23,6 +23,7 @@ import {
 	openInstallation,
 	provisionScreenOutputScenario,
 } from './graphics-acceptance/installation.mjs';
+import { requireLocalAcceptanceConfiguration } from './graphics-acceptance/local-configuration.mjs';
 import {
 	readTemplatePackageParts,
 	writeTemplatePackage,
@@ -68,6 +69,10 @@ function repointedPackage(archive, marker) {
 await runAcceptanceHarness({
 	harness: HARNESS,
 	async run({ evidence, record }) {
+		// This harness provisions a Screen Output scenario, so it mints a
+		// capability and needs the signing key the same way delivery does (#274).
+		requireLocalAcceptanceConfiguration({ deployed });
+
 		const origin = acceptanceOrigin({ deployed });
 		const session = await openInstallation(origin);
 		evidence.addSecret(session.authorCookie);

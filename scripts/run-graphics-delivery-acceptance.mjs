@@ -63,6 +63,7 @@ import {
 	openInstallation,
 	provisionScreenOutputScenario,
 } from './graphics-acceptance/installation.mjs';
+import { requireLocalAcceptanceConfiguration } from './graphics-acceptance/local-configuration.mjs';
 import { acceptanceRoutes } from './graphics-acceptance/routes.mjs';
 
 const HARNESS = 'graphics-delivery-v1';
@@ -119,6 +120,10 @@ await runAcceptanceHarness({
 			throw new AcceptanceFailure('harness-precondition-unmet', { reason: 'unknown fault' });
 		if (fault && !scenarioPath)
 			throw new AcceptanceFailure('harness-precondition-unmet', { reason: 'no armed scenario' });
+
+		// Before the origin, because a local run without the signing key gets 503s
+		// from capability minting and never reaches an assertion (#274).
+		requireLocalAcceptanceConfiguration({ deployed });
 
 		const origin = acceptanceOrigin({ deployed });
 		const session = await openInstallation(origin);
