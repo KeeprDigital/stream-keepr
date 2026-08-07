@@ -113,11 +113,22 @@ async function mountList(props: Partial<{
 			...props,
 		},
 		global: {
-			// The real card, not a stub. A stubbed ScreenListItem would re-create exactly
-			// the blindness this suite exists to close — the screens index suite already
-			// stubs the list itself, so a second stub one layer down would leave the
-			// composition unmounted while looking covered (#279).
-			components: { ScreenListItem },
+			// The real card mounts inside the list, and nothing in this options object is
+			// what makes it: Nuxt resolves `<ScreenListItem>` in List's template to
+			// `app/components/Screen/ListItem.vue` itself (`.nuxt/components.d.ts`), so the
+			// card arrives whatever a caller registers. A `components: { ScreenListItem }`
+			// entry here is inert — registering a stub under that name loses to the same
+			// resolution.
+			//
+			// The one intervention that IS honoured is the `stubs` map below, which is also
+			// exactly how the composition got missed in the first place: the screens index
+			// suite stubs the list one layer up (#279). Adding `ScreenListItem: true` there
+			// fails 9 of these 14 tests, so the assertions on rendered names, slugs,
+			// addresses and menu items are what would catch a future stubbing rather than
+			// let it read as covered.
+			//
+			// The import at the top of the file stays regardless: `findAllComponents` matches
+			// on the component definition, and it is the same module Nuxt resolves to.
 			stubs: {
 				NuxtLink: NuxtLinkStub,
 				UCard: UCardStub,
