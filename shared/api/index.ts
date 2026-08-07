@@ -55,7 +55,11 @@
  * names — through a mapped type turning each `Date` member into `Date | string`.
  * `Date | string` rather than `string` because client state legitimately holds
  * both: the stores construct real Dates for optimistic updates and realtime
- * messages (`app/stores/event.ts`, `app/stores/featureMatch.ts`). Measured on
+ * messages — `app/stores/event.ts` stamps a locally upserted Talent, and
+ * `app/stores/featureMatchState.ts` and `app/stores/broadcastGraphicsLiveSession.ts`
+ * each build one when they cache a realtime event. (This sentence cited
+ * `app/stores/featureMatch.ts` until #285's review found that file constructs
+ * no Date at all; the pair had been adopted without reproducing it.) Measured on
  * #272 against the unfiltered typecheck, with the mapped type written to recurse
  * into nested members — `type Wire<T> = T extends Date ? Date | string : T
  * extends (infer U)[] ? Wire<U>[] : T extends object ? { [K in keyof T]:
