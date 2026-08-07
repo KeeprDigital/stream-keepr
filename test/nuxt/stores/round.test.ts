@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockRound } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 // ── Mock Dependencies ──
 
@@ -27,9 +28,13 @@ mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string,
 });
 
 mockNuxtImport('useRealtime', () => () => mockAbly);
-mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: vi.fn(async (fn: any) => fn()),
-}));
+/*
+ * `useAsyncAction` is deliberately not mocked. The copy that stood here was
+ * `async fn => fn()` — it never caught, so nothing in this suite could observe what
+ * this store does with a refused request, and the optimistic rollback in
+ * `useStoreHelpers` never ran either. Running the real composable is what lets the
+ * sentence this store reports since #262 be seen from here (#263, #241).
+ */
 
 describe('useRoundStore', () => {
 	let store: ReturnType<typeof useRoundStore>;
@@ -106,6 +111,31 @@ describe('useRoundStore', () => {
 			await store.removeRound(1, 1);
 
 			expect(store.rounds).toHaveLength(0);
+		});
+	});
+
+	// ── Failure reporting ──
+
+	describe('failure reporting', () => {
+		/*
+		 * #262 gave this store the sentence through the Event Data lifecycle seam, but no
+		 * test here could see it: the seam this suite stood in for never caught, so
+		 * neither the report nor the optimistic rollback beneath it ever ran. This is that
+		 * store's own pin (#263).
+		 */
+		it('reports the sentence a refused update carries, and rolls the prediction back', async () => {
+			const round = createMockRound({ id: 1, name: 'Round 1' });
+			store.rounds = [round];
+			mockRepo.update.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'That Round has already started' },
+				request: `[PATCH] "/api/events/1/rounds/1"`,
+			}));
+
+			await store.updateRound(1, 1, { name: 'Round One' });
+
+			expect(store.error).toBe('That Round has already started');
+			expect(store.rounds[0]!.name).toBe('Round 1');
 		});
 	});
 

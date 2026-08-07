@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockPhase } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 // ── Mock Dependencies ──
 
@@ -27,9 +28,13 @@ mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string,
 });
 
 mockNuxtImport('useRealtime', () => () => mockAbly);
-mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: vi.fn(async (fn: any) => fn()),
-}));
+/*
+ * `useAsyncAction` is deliberately not mocked. The copy that stood here was
+ * `async fn => fn()` — it never caught, so nothing in this suite could observe what
+ * this store does with a refused request, and the optimistic rollback in
+ * `useStoreHelpers` never ran either. Running the real composable is what lets the
+ * sentence this store reports since #262 be seen from here (#263, #241).
+ */
 
 describe('usePhaseStore', () => {
 	let store: ReturnType<typeof usePhaseStore>;
@@ -106,6 +111,31 @@ describe('usePhaseStore', () => {
 			await store.removePhase(1, 1);
 
 			expect(store.phases).toHaveLength(0);
+		});
+	});
+
+	// ── Failure reporting ──
+
+	describe('failure reporting', () => {
+		/*
+		 * #262 gave this store the sentence through the Event Data lifecycle seam, but no
+		 * test here could see it: the seam this suite stood in for never caught, so
+		 * neither the report nor the optimistic rollback beneath it ever ran. This is that
+		 * store's own pin (#263).
+		 */
+		it('reports the sentence a refused delete carries, and puts the phase back', async () => {
+			const phase = createMockPhase({ id: 1, name: 'Swiss' });
+			store.phases = [phase];
+			mockRepo.remove.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'That Phase still has Rounds in it' },
+				request: `[DELETE] "/api/events/1/phases/1"`,
+			}));
+
+			await store.removePhase(1, 1);
+
+			expect(store.error).toBe('That Phase still has Rounds in it');
+			expect(store.phases).toEqual([phase]);
 		});
 	});
 

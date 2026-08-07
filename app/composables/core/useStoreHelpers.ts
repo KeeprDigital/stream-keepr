@@ -99,5 +99,5 @@ export function useStoreHelpers() {
 		);
 	}
 
-	return { executeAction, optimisticUpdate, optimisticDelete };
+	return { optimisticUpdate, optimisticDelete };
 }
