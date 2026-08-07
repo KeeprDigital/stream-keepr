@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import * as ts from 'typescript';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { directChannelMessageTypes } from '~~/shared/types/messages';
+import { lastCallTo } from '~~/test/helpers/lastCallTo';
 
 type RealtimeHandlerMap = Record<string, (data: Record<string, unknown>) => void>;
 
@@ -130,8 +131,18 @@ describe('useEventRealtimeSession', () => {
 	let watchCallback: ((eventId: number | null) => void) | undefined;
 	let disposeCallback: (() => void) | undefined;
 
+	/**
+	 * The handler map the composable registered for the event room.
+	 *
+	 * Selected by room name rather than taken from the list: `onRoom` is the
+	 * subscription API for every room, and a session that also registered
+	 * elsewhere would otherwise hand these tests another room's handlers. When no
+	 * session was started the read says so by name, instead of dying as a
+	 * TypeError inside whichever test happened to call it (#280).
+	 */
 	function getHandlers(): RealtimeHandlerMap {
-		return realtime.onRoom.mock.calls[0]![1] as RealtimeHandlerMap;
+		const [, handlers] = lastCallTo(realtime.onRoom, 'event-session');
+		return handlers as RealtimeHandlerMap;
 	}
 
 	async function startSession(): Promise<RealtimeHandlerMap> {

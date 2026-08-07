@@ -6,6 +6,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
+import { lastCallTo } from '~~/test/helpers/lastCallTo';
 
 const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
 
@@ -156,19 +157,15 @@ const LEDGER_ENDPOINT = '/api/admin/graphics-assets/evidence';
  * `/api/time` samples through this same `$fetch` mock (#123), and two of them
  * land on every mount here. A stray arriving last would pass an emptiness
  * check, hand back a sample's options, and return `undefined` for a query
- * nobody asked — reproducing the opaque failure this helper exists to prevent.
+ * nobody asked.
  *
- * When the ledger was never asked at all it says so, rather than dying as
- * "Cannot read properties of undefined" and letting #123's load flakes read as
- * breakage in whichever branch happened to be running.
+ * That reading, and the named error when the ledger was never asked at all, are
+ * now `lastCallTo`'s — this site is where the selection-not-guard rule was
+ * learned (#273), and #280 generalised it.
  */
 function lastQuery() {
-	const lastLedgerCall = mockApiFetch.mock.calls
-		.filter(call => call[0] === LEDGER_ENDPOINT)
-		.at(-1);
-	if (!lastLedgerCall)
-		throw new Error(`expected an api fetch call to ${LEDGER_ENDPOINT} to read a query from, got none`);
-	return lastLedgerCall[1].query;
+	const [, options] = lastCallTo(mockApiFetch, LEDGER_ENDPOINT);
+	return options.query;
 }
 
 describe('the Graphics Asset Library Evidence ledger page', () => {
