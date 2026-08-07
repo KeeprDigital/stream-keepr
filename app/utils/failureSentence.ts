@@ -80,10 +80,13 @@ const SANITIZED_SERVER_MESSAGES: readonly string[] = ['Internal Server Error', '
  *   carrying 'Internal Server Error', because the sanitizer rewrote them, and both are
  *   refused here on exactly that evidence.
  *
- * Established by driving the real route rather than reasoned about: with the signing key
- * invalid, `GET /api/events/1/screens/1/asset-capability` answers a `FetchError` with
- * `statusCode` 503 and `data.message` naming the setting, while every other 5xx this
- * server could be provoked into arrived carrying a placeholder.
+ * Established by execution rather than reasoned about. Driving the real route with the
+ * signing key invalid — `GET /api/events/1/screens/1/asset-capability` — answers a
+ * `FetchError` with `statusCode` 503 and `data.message` naming the setting, which is the
+ * shape. The enumeration is separate: `mapPublicNitroError` was driven across all nine
+ * preserved branches and they come out at 502/503/504/507, never 500, while an unmapped
+ * 5xx keeps its own non-500 status and carries the placeholder — which is what makes the
+ * second mark load-bearing rather than belt-and-braces (#286's review).
  *
  * A `useFetch` error is that failure rebuilt by `createError`, which keeps `statusCode`
  * and `data` and does not always keep `status` — imported from `@nuxt/nitro-server/h3` in
