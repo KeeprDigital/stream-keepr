@@ -214,12 +214,16 @@ describe('useCopyToClipboard', () => {
 		const { copyToClipboard } = useCopyToClipboard();
 
 		await copyToClipboard('', refusal);
+		// Both readings below are named before they are read, so a composable that
+		// said nothing at all reports that rather than an opaque TypeError (#273).
+		expect(mocks.toast.add).toHaveBeenCalled();
 		const refused = mocks.toast.add.mock.calls[0]![0] as { title: string; description: string };
 
 		mocks.toast.add.mockClear();
 		writeText.mockRejectedValue(new Error('NotAllowedError'));
 		execCommand.mockReturnValue(false);
 		await copyToClipboard('https://example.test/screen', refusal);
+		expect(mocks.toast.add).toHaveBeenCalled();
 		const failed = mocks.toast.add.mock.calls[0]![0] as { title: string; description: string };
 
 		expect(refused.description).toBe('Asset access for this Screen could not be obtained.');

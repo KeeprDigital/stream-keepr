@@ -180,6 +180,9 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 			await wrapper.get('[data-testid="download-output-fill"]').trigger('click');
 			await flushPromises();
 
+			// Named before it is read: a run where nothing was reported should say so,
+			// not die dereferencing a call that was never made (#273).
+			expect(mockToastAdd).toHaveBeenCalled();
 			const reported = mockToastAdd.mock.calls.at(-1)![0];
 			expect(reported.title).toBe('Download unavailable');
 			expect(reported.description).toContain('pop-up');

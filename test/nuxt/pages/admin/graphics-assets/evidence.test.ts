@@ -147,8 +147,18 @@ async function typeCorrelation(
 		.setValue(value);
 }
 
+/**
+ * The last question put to the ledger endpoint — which only exists if a
+ * question was put at all. Saying so is the whole point of the guard: a page
+ * that fetched nothing used to die here as "Cannot read properties of
+ * undefined", so #123's load flakes read as breakage in whichever branch
+ * happened to be running rather than as a page that never got its reading.
+ */
 function lastQuery() {
-	return mockApiFetch.mock.calls[mockApiFetch.mock.calls.length - 1]![1].query;
+	const lastCall = mockApiFetch.mock.calls.at(-1);
+	if (!lastCall)
+		throw new Error('expected an api fetch call to read a query from, got none');
+	return lastCall[1].query;
 }
 
 describe('the Graphics Asset Library Evidence ledger page', () => {
