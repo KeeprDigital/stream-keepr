@@ -158,11 +158,12 @@ interface RoundRow {
 	 * `roundStore` arrives as JSON — an HTTP list or a realtime message — so the
 	 * value here is an ISO string at runtime, always (the record at the top of
 	 * `shared/api/index.ts`). Nothing in the Round path ever constructs a Date the
-	 * way `app/stores/event.ts` and `app/stores/featureMatch.ts` do, but the
-	 * declared source type is still `Date | null`, so narrowing this to `string`
-	 * would buy a cast rather than honesty. The union is what the other readers of
-	 * these timestamps already write by hand, and what the documented `Wire<>` fix
-	 * would produce here.
+	 * way `app/stores/event.ts` does when it stamps a locally upserted Talent, or
+	 * `app/stores/featureMatchState.ts` and `app/stores/broadcastGraphicsLiveSession.ts`
+	 * do when they cache a realtime event. But the declared source type is still
+	 * `Date | null`, so narrowing this to `string` would buy a cast rather than
+	 * honesty. The union is what the other readers of these timestamps already write
+	 * by hand, and what the documented `Wire<>` fix would produce here.
 	 */
 	lastSyncedAt: Date | string | null;
 	isNext: boolean;
