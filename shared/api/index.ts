@@ -25,11 +25,20 @@
  * `nuxt.config.ts` the question is moot anyway — the payload carries no route
  * data at all. The client view is uniformly `string`.
  *
+ * That conclusion does not rest on `ssr: false` alone. The five `useFetch` call
+ * sites under `app/` — there are no `useAsyncData` ones — all fetch
+ * graphics-asset types from `shared/types/graphicsAsset.ts`, which already
+ * declare every timestamp `string`. No interface in *this* file is ever obtained
+ * through the payload path, so turning SSR on would not introduce a second shape
+ * for these types.
+ *
  * Nitro's typed `$fetch` already knows this. `$fetch('/api/events/1')` infers
  * `createdAt: string`; it is the explicit generic — `$fetch<EventResponse>(…)`,
- * the form used at every call site under `app/` — that overrides the correct
- * inference and reintroduces `Date`. `test/nuxt/shared/apiWireTimestamps.test.ts`
- * pins both halves of that disagreement.
+ * the form used at the 101 explicit-generic call sites under `app/` — that
+ * overrides the correct inference and reintroduces `Date`. (The 9 bare
+ * `$fetch(…)` sites read no timestamp: eight discard the response body, and one
+ * fetches a realtime token.) `test/nuxt/shared/apiWireTimestamps.test.ts` pins
+ * both halves of that disagreement.
  *
  * Nothing is broken by this today, and that is a checked claim rather than an
  * assumption: no code anywhere under `app/` calls a `Date` method on one of
@@ -47,10 +56,16 @@
  * `Date | string` rather than `string` because client state legitimately holds
  * both: the stores construct real Dates for optimistic updates and realtime
  * messages (`app/stores/event.ts`, `app/stores/featureMatch.ts`). Measured on
- * #272 against the unfiltered typecheck, that costs 11 errors in `nuxt
- * typecheck` and 9 in `typecheck:test` across 8 files, and it buys no
- * behavioural change, because the type it would produce is the type all four
- * readers have already written by hand. Declaring `string` on these interfaces
+ * #272 against the unfiltered typecheck, with the mapped type written to recurse
+ * into nested members — `type Wire<T> = T extends Date ? Date | string : T
+ * extends (infer U)[] ? Wire<U>[] : T extends object ? { [K in keyof T]:
+ * Wire<T[K]> } : T`, applied to all eleven aliases and to `Archetype` — that
+ * costs 11 errors in `nuxt typecheck` and 9 in `typecheck:test` across 8 files.
+ * The depth is load-bearing to that figure: a shallow variant rewriting only
+ * each alias's own members measures roughly half (6 and 4, across 4 files).
+ * Either way it buys no behavioural change, because the type it would produce is
+ * the type all four readers have already written by hand. Declaring `string` on
+ * these interfaces
  * instead is not merely more expensive (178 and 22 errors across 31 files) but
  * wrong: it would break the ten server mappers that return them.
  *
