@@ -25,25 +25,14 @@ mockAbly.onRoom.mockImplementation(() => {});
 
 mockNuxtImport('useEventRepository', () => () => mockEventRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
-mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: vi.fn(async (fn: any, opts?: any) => {
-		if (opts?.loadingRef)
-			opts.loadingRef.value = true;
-		try {
-			return await fn();
-		}
-		catch (e: any) {
-			if (opts?.errorRef)
-				opts.errorRef.value = e.message ?? String(e);
-			opts?.onError?.();
-			return undefined;
-		}
-		finally {
-			if (opts?.loadingRef)
-				opts.loadingRef.value = false;
-		}
-	}),
-}));
+/*
+ * `useAsyncAction` is deliberately not mocked. The hand-written copy that stood here
+ * reported `e.message ?? String(e)` with no `instanceof Error` guard, where the real
+ * composable reports 'An error occurred' for a rejection that is not an `Error` — so a
+ * plain-object fixture could assert prose no operator would be shown. It also called
+ * `onError` with no argument and resolved `undefined` where the real one passes the
+ * failure and resolves `null` (#241, #263).
+ */
 
 // For melee store: useEventStore() returns a pinia store where refs are auto-unwrapped.
 // We use reactive() to mimic this behavior — properties are accessed directly (no .value).
