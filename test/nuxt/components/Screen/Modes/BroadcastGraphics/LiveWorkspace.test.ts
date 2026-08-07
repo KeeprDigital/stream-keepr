@@ -615,7 +615,11 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 			expect(outputWindow.close).toHaveBeenCalledOnce();
 			// The tab opened and closed again, so nothing visibly happened. Left unsaid it
 			// reads as a popup blocker rather than as the media-losing hand-out it refused.
-			expect(mockToastAdd).toHaveBeenCalledWith(expect.objectContaining({
+			//
+			// Exactly once, because `toHaveBeenCalledWith` asks only whether *some* call
+			// matched: a handler firing both sentences passes it, and hands the operator
+			// two contradictory instructions (#278).
+			expect(mockToastAdd).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
 				description: expect.stringContaining('Asset access for this Screen could not be obtained'),
 			}));
 			vi.unstubAllGlobals();
@@ -636,7 +640,11 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 			await wrapper.get('[data-testid="open-screen-output"]').trigger('click');
 			await flushPromises();
 
-			const [reported] = mockToastAdd.mock.calls.at(-1) as [{ description: string }];
+			// Counted before it is read. Reading the last call cannot see a spurious
+			// earlier one, and with no toast at all the destructure throws `undefined is
+			// not iterable` rather than saying what was expected (#278).
+			expect(mockToastAdd).toHaveBeenCalledOnce();
+			const [reported] = mockToastAdd.mock.calls[0] as [{ description: string }];
 			expect(reported.description).toContain('pop-up');
 			expect(reported.description).not.toContain('Asset access');
 			vi.unstubAllGlobals();
