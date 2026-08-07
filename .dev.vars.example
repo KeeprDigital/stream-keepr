@@ -1,9 +1,17 @@
 # Worker bindings for `pnpm preview` and the local acceptance harnesses.
 #
-# Wrangler reads this file as `.dev.vars`, where the integration suite reads
-# `.env`. The names and their meanings are the same, so see `.env.example` for
-# what each one is; this file exists only because Wrangler will not read that
-# one.
+# Copy this to `.dev.vars` at the repository root, where the integration suite
+# reads `.env`. The names and their meanings are the same, so see `.env.example`
+# for what each one is; this file exists only because Wrangler will not read
+# that one.
+#
+# Wrangler does not read the root copy directly, which surprised several rounds
+# of this project: it resolves `.dev.vars` against the directory of its config
+# file, and `pnpm preview` runs `--config .output/server/wrangler.json`. So
+# `pnpm preview` stages this file into `.output/server/` first
+# (`scripts/stage-preview-secrets.mjs`); before it did, a correctly copied root
+# `.dev.vars` reached the previewed Worker through nothing at all, and every
+# authored request answered 503 (#274).
 #
 # `nuxt dev` reads `.env`, and additionally adopts the NUXT_-prefixed names
 # here into its own environment (`build/devVarsModule.ts`) — otherwise they

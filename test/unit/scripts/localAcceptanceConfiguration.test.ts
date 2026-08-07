@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import {
 	LOCAL_NUXT_NAME_SURFACES,
@@ -15,6 +17,7 @@ import {
 	localConfigurationNotice,
 	missingLocalAcceptanceNames,
 	requireLocalAcceptanceConfiguration,
+	RESOLVED_PREVIEW_DEV_VARS,
 	suppliedNames,
 } from '../../../scripts/graphics-acceptance/local-configuration.mjs';
 
@@ -193,12 +196,48 @@ describe('the notice, read as prose', () => {
 			'Nothing this checkout can give a local installation sets '
 			+ 'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY, so Screen Output asset capabilities answer 503 '
 			+ 'and this run would never reach anything to assert. Nothing was proved and nothing was disproved. '
+			+ 'NUXT_GRAPHICS_ADMIN_TOKEN is not checked here and a blank one is not what stopped this: '
+			+ 'no route an acceptance run calls reads it. '
 			+ 'A fresh git worktree is the usual way to arrive here — .env and .dev.vars are both gitignored, '
 			+ 'so a new checkout inherits neither from the one it was branched from, and a copied example carries '
 			+ 'the names with empty values. Fix: copy .env and .dev.vars in from the checkout you branched from, '
-			+ 'or fill in .env.example and .dev.vars.example. A --deployed run reads neither file and is '
-			+ 'unaffected. See docs/agents/parallel-rounds.md.',
+			+ 'or fill in .env.example and .dev.vars.example — `pnpm preview` stages .dev.vars into '
+			+ '.output/server/, which is where wrangler resolves it from the config. '
+			+ 'A --deployed run reads neither file and is unaffected. See docs/agents/parallel-rounds.md.',
 		);
+	});
+
+	/**
+	 * The excluded name is named, so a reader who has just been told their run
+	 * is blocked does not go hunting for the other blank in `.dev.vars`. Read
+	 * against the partition rather than a literal, so the clause cannot outlive
+	 * the list it describes.
+	 */
+	it('says which required name it is deliberately not checking, and why', () => {
+		const notice = localConfigurationNotice([SIGNING_KEY]);
+		for (const name of LOCAL_ACCEPTANCE_UNREACHED_NUXT_NAMES)
+			expect(notice).toContain(`${name} is not checked here`);
+		expect(notice).toContain('no route an acceptance run calls reads it');
+	});
+
+	/**
+	 * The first draft of that clause was false in the plural state: it named the
+	 * admin token as a cause and then said the admin token was not checked. A
+	 * name cannot be both, so the clause covers only names that are NOT missing.
+	 */
+	it('does not excuse a name it has just blamed', () => {
+		const both = localConfigurationNotice([ADMIN_TOKEN, SIGNING_KEY]);
+		expect(both).toContain(`sets ${ADMIN_TOKEN} or`);
+		expect(both).not.toContain(`${ADMIN_TOKEN} is not checked here`);
+	});
+
+	/**
+	 * The advice has to carry the mechanism, because the copy step alone is
+	 * necessary and not sufficient — that was the whole defect (#274).
+	 */
+	it('says where the copied file actually has to end up', () => {
+		expect(localConfigurationNotice([SIGNING_KEY]))
+			.toContain('`pnpm preview` stages .dev.vars into .output/server/');
 	});
 
 	/**
@@ -244,8 +283,17 @@ describe('the notice, read as prose', () => {
 			.toContain(LOCAL_NUXT_NAME_SURFACES[ADMIN_TOKEN]);
 	});
 
-	it('names the missing name and not the one that is present', () => {
-		expect(localConfigurationNotice([SIGNING_KEY])).not.toContain(ADMIN_TOKEN);
+	/**
+	 * The name that is present may appear — the clause above exists to say it is
+	 * not the problem — but it must never appear as the CAUSE, so this reads the
+	 * causal clause on its own rather than the whole sentence.
+	 */
+	it('names the missing name and not the one that is present as the cause', () => {
+		const notice = localConfigurationNotice([SIGNING_KEY]);
+		const cause = notice.slice(0, notice.indexOf('and this run would never reach'));
+		expect(cause).toContain(SIGNING_KEY);
+		expect(cause).not.toContain(ADMIN_TOKEN);
+		expect(cause).not.toContain(LOCAL_NUXT_NAME_SURFACES[ADMIN_TOKEN]);
 	});
 
 	/**
@@ -257,6 +305,35 @@ describe('the notice, read as prose', () => {
 		expect(localConfigurationNotice([SIGNING_KEY]))
 			.toContain('copy .env and .dev.vars in from the checkout you branched from');
 		expect(localConfigurationNotice([SIGNING_KEY])).toMatch(/\.env(?!\.example)/);
+	});
+});
+
+/**
+ * The staging step is the half of #274 that makes the documentation true, and
+ * it lives in a `package.json` line nothing else would notice the loss of.
+ */
+describe('the preview command', () => {
+	const packageJson = JSON.parse(
+		readFileSync(fileURLToPath(new URL('../../../package.json', import.meta.url)), 'utf8'),
+	) as { scripts: Record<string, string> };
+
+	it('stages the secrets before it starts wrangler, not after', () => {
+		const preview = packageJson.scripts.preview!;
+		const staged = preview.indexOf('scripts/stage-preview-secrets.mjs');
+		const wrangler = preview.indexOf('wrangler dev');
+		expect(staged).toBeGreaterThan(-1);
+		expect(wrangler).toBeGreaterThan(-1);
+		expect(staged).toBeLessThan(wrangler);
+	});
+
+	/**
+	 * The staging step only matters because of where the config lives; if the
+	 * preview command stopped pointing at `.output/server`, the resolved path
+	 * this whole mechanism is built around would be the wrong one.
+	 */
+	it('still points wrangler at the config the resolved path is derived from', () => {
+		expect(packageJson.scripts.preview).toContain('--config .output/server/wrangler.json');
+		expect(RESOLVED_PREVIEW_DEV_VARS).toBe('.output/server/.dev.vars');
 	});
 });
 

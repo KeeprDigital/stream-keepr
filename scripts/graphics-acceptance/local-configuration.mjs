@@ -57,23 +57,38 @@ export const LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES = ['NUXT_SCREEN_OUTPUT_CAPABIL
 export const LOCAL_ACCEPTANCE_UNREACHED_NUXT_NAMES = ['NUXT_GRAPHICS_ADMIN_TOKEN'];
 
 /**
+ * Where a previewed Worker's secrets are actually opened from.
+ *
+ * Exported so `scripts/stage-preview-secrets.mjs` writes to the same path this
+ * file reads, by construction rather than by two authors agreeing. A staging
+ * step and a preflight that disagreed about this path would reproduce the
+ * original defect one layer up: the file staged somewhere nothing looks.
+ */
+export const RESOLVED_PREVIEW_DEV_VARS = '.output/server/.dev.vars';
+
+/**
  * Every file this checkout keeps such a name in, relative to the repository
  * root.
  *
  * The question this preflight answers is "can this checkout supply the name at
  * all", not "which file will the installation read" — because the harness
  * cannot know how the installation in front of it was started. Erring towards
- * not* firing is deliberate: a false silence costs the reader the 503s they
+ * staying quiet is deliberate: a false silence costs the reader the 503s they
  * were already getting, and a false alarm blocks a run that works.
  *
- * `.output/server/.dev.vars` is in the list for a reason that is not obvious
- * and was measured rather than assumed. Wrangler resolves `.dev.vars` relative
- * to the directory of its **config file**, and `pnpm preview` passes
- * `--config .output/server/wrangler.json`, so that — not the repository root —
- * is where a previewed Worker's secrets are looked for. Anyone who has worked
- * that out has their key in a place the other two entries would miss.
+ * All three, rather than only the one wrangler opens, and the reason is the
+ * point of the whole ticket. `.output/server/.dev.vars` is the resolved path —
+ * wrangler resolves `.dev.vars` against the directory of its config file, and
+ * `pnpm preview` passes `--config .output/server/wrangler.json` — but the
+ * repository root is where a developer puts the file, and `pnpm preview` now
+ * stages it across (`scripts/stage-preview-secrets.mjs`). Checking only the
+ * resolved path would refuse a correctly configured checkout that has not run
+ * a build yet; checking only the root would have been the falsehood #274 was
+ * filed about. Reading `.env` too because the harness may be pointed at a
+ * `nuxt dev` server through `STREAM_KEEPR_LOCAL_ACCEPTANCE_URL`, and that one
+ * reads `.env`.
  */
-export const LOCAL_CONFIGURATION_FILES = ['.env', '.dev.vars', '.output/server/.dev.vars'];
+export const LOCAL_CONFIGURATION_FILES = ['.env', '.dev.vars', RESOLVED_PREVIEW_DEV_VARS];
 
 /**
  * Which of the names an acceptance run needs the merged environment cannot
@@ -163,13 +178,32 @@ export function localConfigurationNotice(missing) {
 		? `${surfaces[0]} answer 503`
 		: `${surfaces.join(' and ')} answer 503`;
 
+	// Why the other required names are absent from this sentence, said rather
+	// than left to be rediscovered. Derived from the partition instead of
+	// spelled out, so it cannot describe a list it no longer matches, and
+	// phrased on reachability alone — the one thing membership of that list
+	// guarantees.
+	//
+	// Filtered against `missing` because the first draft was not true in every
+	// state it can reach: told that both names were missing it named the admin
+	// token as a cause and then, one sentence later, said the admin token was
+	// not checked. Unreachable today, and the prose probe that reads the plural
+	// case is exactly the reachable state where a reader would have met it.
+	const unnamed = LOCAL_ACCEPTANCE_UNREACHED_NUXT_NAMES.filter(name => !missing.includes(name));
+	const unreached = unnamed.length === 0
+		? ''
+		: `${unnamed.join(' and ')} ${unnamed.length === 1 ? 'is' : 'are'} not checked here and a blank one `
+			+ 'is not what stopped this: no route an acceptance run calls reads it. ';
+
 	return `Nothing this checkout can give a local installation sets ${names}, so ${consequence} `
-		+ 'and this run would never reach anything to assert. Nothing was proved and nothing was disproved. '
-		+ 'A fresh git worktree is the usual way to arrive here — .env and .dev.vars are both gitignored, so a new '
-		+ 'checkout inherits neither from the one it was branched from, and a copied example carries the names with '
-		+ 'empty values. Fix: copy .env and .dev.vars in from the checkout you branched from, or fill in '
-		+ '.env.example and .dev.vars.example. A --deployed run reads neither file and is unaffected. '
-		+ 'See docs/agents/parallel-rounds.md.';
+		+ `and this run would never reach anything to assert. Nothing was proved and nothing was disproved. ${
+			unreached
+		}A fresh git worktree is the usual way to arrive here — .env and .dev.vars are both gitignored, so a new `
+		+ `checkout inherits neither from the one it was branched from, and a copied example carries the names with `
+		+ `empty values. Fix: copy .env and .dev.vars in from the checkout you branched from, or fill in `
+		+ `.env.example and .dev.vars.example — \`pnpm preview\` stages .dev.vars into .output/server/, which is `
+		+ `where wrangler resolves it from the config. A --deployed run reads neither file and is unaffected. `
+		+ `See docs/agents/parallel-rounds.md.`;
 }
 
 /**

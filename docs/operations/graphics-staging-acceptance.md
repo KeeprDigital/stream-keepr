@@ -52,9 +52,22 @@ prove that a Screen Output pinning VP9 alpha refuses it that revision's bytes.
    guessing at an installation.
 
 Local (non-deployed) modes of the same harnesses run against `pnpm preview` and
-need `NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY` in `.dev.vars`; see
-`.dev.vars.example`. They prove the invariants that do not depend on Cloudflare,
-and are the fast way to find a break before spending a deploy on it.
+need `NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY` in `.dev.vars` at the
+repository root; see `.dev.vars.example`. `pnpm preview` stages that file into
+`.output/server/`, which is where Wrangler resolves it from the config. Until
+issue #274 it did not, so a checkout with a perfectly good `.dev.vars` still
+answered 503 from the first authored request. The harnesses now check it before
+opening an installation and stop with a named cause rather than 503s nobody can
+trace. They prove the invariants that do not depend on Cloudflare, and are the
+fast way to find a break before spending a deploy on it.
+
+`NUXT_GRAPHICS_ADMIN_TOKEN` is deliberately not required for any of this: no
+route these harnesses call is an admin route, so a blank one cannot stop a run.
+
+Local runs default to `http://127.0.0.1:8787`, which is a fixed port rather than
+a per-checkout one — if another worktree is previewing, that is the installation
+a local run will provision into. Set `STREAM_KEEPR_LOCAL_ACCEPTANCE_URL` when
+that matters.
 
 ## The sequence
 

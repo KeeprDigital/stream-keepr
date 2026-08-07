@@ -26,7 +26,9 @@ Expect most branches to come back FIX FIRST. Across four rounds it has been the 
 cp .env .dev.vars .claude/worktrees/issue-NNN/
 ```
 
-`.env` is what the test suites and `nuxt dev` read; `.dev.vars` is what Wrangler reads for `pnpm preview` and the delivery acceptance harnesses, and what `nuxt dev` adopts its `NUXT_`-prefixed names from (`build/devVarsModule.ts`). Neither has an example file that is a substitute — `.env.example` and `.dev.vars.example` ship their names with empty values.
+`.env` is what the test suites and `nuxt dev` read; `.dev.vars` is what `nuxt dev` adopts its `NUXT_`-prefixed names from (`build/devVarsModule.ts`) and what `pnpm preview` stages for Wrangler. Neither has an example file that is a substitute — `.env.example` and `.dev.vars.example` ship their names with empty values.
+
+The word "stages" is load-bearing and was wrong here for several rounds. Wrangler resolves `.dev.vars` against the directory of its **config file**, and `pnpm preview` passes `--config .output/server/wrangler.json` — so the file it opens is `.output/server/.dev.vars`, and the repository root's copy reached it through nothing at all. Copying `.dev.vars` into the worktree was **necessary and not sufficient**: an agent who followed this page exactly still got a previewed Worker with no environment variables and a 503 from the first authored request, with nothing anywhere naming the cause. #274 added the staging step to `pnpm preview`, so the sentence above is now true; before it, this page was confidently telling people the wrong thing.
 
 What makes this a hazard rather than a chore is that the omission does not present as one. #130 catalogues the case: without `NUXT_ABLY_API_KEY` two named integration tests used to fail, and **two** agents in one round concluded from that they were pre-existing failures on `main`. The second went further and reproduced them at the merge-base in a worktree it created for the purpose, which is textbook control-group method and was worthless here — every fresh worktree has the identical missing file, so reproducing in another one confirms nothing. A more careful control produced a _more confident_ wrong answer.
 
@@ -35,7 +37,7 @@ Two mechanisms now say so out loud, and both are worth knowing about because eac
 - The integration suite skips the two realtime tests and announces the reason once before anything runs (#223), and diagnoses a key Ably rejects rather than letting it read as a lease bug (#242). A run with no key is green with two skips and a notice, not two failures.
 - A `nuxt dev` that finds no `.dev.vars` warns once, naming both files and the copy step (#130). Without it, `pnpm dev` in a worktree answers 503 from Graphics Administrator operations and Screen Output asset capabilities separately, each with a message about itself and none about the common cause.
 
-Neither covers `pnpm preview` or the delivery harnesses, which read `.dev.vars` through Wrangler and get no notice from either. Copy the files.
+A third now covers the harnesses themselves: an acceptance harness is its own `node` process and inherits neither notice, so before it opens an installation it checks that this checkout can supply `NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY` and stops with a named cause if it cannot (#274, `scripts/graphics-acceptance/local-configuration.mjs`). Only that one name — no acceptance route is an admin route, so a blank `NUXT_GRAPHICS_ADMIN_TOKEN` cannot stop a run and is not checked. `--deployed` runs are not gated on local files at all. Copy the files.
 
 ### Killing sibling processes
 
@@ -48,6 +50,14 @@ pkill -f "worktrees/issue-NNN.*workerd"
 Do **not** scope on the worktree path alone — `pkill -f "worktrees/issue-NNN"` also matches that worktree's own `vitest` and `esbuild`, so it kills the run it was meant to protect. The `.*workerd` term is load-bearing. Note also that the pattern can match the shell whose own command line contains the literal; check what you killed.
 
 The signature of a killed backend is **a cascade of `ECONNREFUSED` / "session cookie was not issued" with zero assertion failures**. The dev server survives while its D1/KV backend dies, so the run keeps going and keeps failing, which reads as a broad breakage in whatever the branch touched. See #123, which catalogues this and five other flake causes.
+
+### A local harness run is a cross-worktree write
+
+The acceptance harnesses default to `http://127.0.0.1:8787` — a **fixed** port, not a per-worktree one. So `node scripts/run-graphics-delivery-acceptance.mjs` without `--deployed` does not talk to "your" installation; it talks to whichever worktree's `pnpm preview` happens to be listening, and these harnesses provision real Events, Screen Outputs and assets before asserting anything.
+
+In round nine an agent ran one as a no-false-alarm control, assuming nothing was up, and wrote a full acceptance scenario into a sibling lane's local D1 and R2. It passed and disposed of its Event, so nothing was left behind — but the sibling's state was mutated by another lane for a minute, and had that run failed partway the cleanup would not have happened.
+
+Same class as unscoped `pkill`: an action that looks worktree-local and is machine-global. Either check the port first (`lsof -nP -iTCP:8787 -sTCP:LISTEN`, then the owner's cwd via `lsof -a -p <pid> -d cwd`) or point the harness somewhere you started yourself with `STREAM_KEEPR_LOCAL_ACCEPTANCE_URL`.
 
 ### Reviewers mutating in a live worktree
 
