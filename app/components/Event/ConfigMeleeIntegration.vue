@@ -35,7 +35,6 @@ async function fetchConfig() {
 		() => eventRepo.getMeleeConfig(props.eventId),
 		{
 			loadingRef: fetching,
-			errorRef: fetchError,
 			success: false,
 			error: false,
 			onSuccess: (config) => {
@@ -49,8 +48,16 @@ async function fetchConfig() {
 					meleeClientSecret: '',
 				});
 			},
-			onFailure: () => {
-				fetchError.value = 'Failed to load Melee configuration';
+			// One writer for one ref. `errorRef` used to be passed here too and its value
+			// never survived — `runRequest` writes it and then awaits `onFailure`, which
+			// overwrote it with static wording one line later (#271 recorded the dead
+			// write; #286 closes it). Composing here instead keeps the standing context
+			// this card needs, since the banner replaces the whole form and a bare status
+			// line would not say what failed, while letting the reason through: since
+			// #271 that is the sentence a refusal wrote, and since #286 it is also the
+			// preserved prose of a 5xx that named a deployment fault.
+			onFailure: ({ message }) => {
+				fetchError.value = `Melee configuration could not be loaded — ${message}`;
 			},
 		},
 	);

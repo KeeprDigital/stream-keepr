@@ -79,10 +79,11 @@ export function useReusableLibraryReading<Entry>(options: {
 	 *
 	 * The refusal's own sentence is read through `failureSentence`, which is where the
 	 * judgement about *which* failures wrote one lives. This used to read `data.message`
-	 * unguarded, and a 5xx body on this server carries 'Internal Server Error' — a
-	 * placeholder `mapPublicNitroError` writes over whatever actually failed — so an
+	 * unguarded, and an unmapped 5xx body on this server carries 'Internal Server Error'
+	 * — a placeholder `mapPublicNitroError` writes over whatever actually failed — so an
 	 * author was shown machinery in the authority's voice (#262). A 4xx sentence reads
-	 * exactly as it did.
+	 * exactly as it did, and so does a 5xx whose prose the mapper preserved, which on
+	 * these routes is an exhausted byte store or a named dependency that is down (#286).
 	 */
 	function failureMessage(caught: unknown): string {
 		options.inspectFailure?.(caught);

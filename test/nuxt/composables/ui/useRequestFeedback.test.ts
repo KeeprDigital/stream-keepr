@@ -160,6 +160,43 @@ describe('useRequestFeedback', () => {
 			expect(reported).toBe('[POST] "/api/events/1/rounds": 500 Internal Server Error');
 		});
 
+		/**
+		 * The exclusion #286 made, at the seam fifty-eight call sites read. The families
+		 * `mapPublicNitroError` spares the sanitizer name a deployment fault rather than a
+		 * fact about the show, and are the only 5xx an operator can act on — so the refusal
+		 * above must not reach them. Rotating a Screen's asset access raises one for real.
+		 */
+		it('quotes a 5xx whose prose the server preserved through sanitizing', async () => {
+			const reported = await reportedMessage(transportFailure({
+				status: 503,
+				body: {
+					message: 'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY is not set, '
+						+ 'so Screen Output asset capabilities are unavailable',
+				},
+				request: `[POST] "/api/events/1/screens/1/asset-capability"`,
+			}));
+
+			expect(reported).toBe(
+				'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY is not set, '
+				+ 'so Screen Output asset capabilities are unavailable',
+			);
+		});
+
+		/**
+		 * And the other direction: a 503 is not itself evidence of a preserved message.
+		 * `requireGraphicsAuthorSession` raises one whose cause matches no mapper branch,
+		 * and it reaches a client carrying the placeholder written over it.
+		 */
+		it('still shows the transport line for a 503 the sanitizer got to', async () => {
+			const reported = await reportedMessage(transportFailure({
+				status: 503,
+				body: { message: 'Internal Server Error', statusMessage: 'Internal Server Error' },
+				request: `[GET] "/api/graphics-assets"`,
+			}));
+
+			expect(reported).toBe('[GET] "/api/graphics-assets": 503 Service Unavailable');
+		});
+
 		it('does not quote a 5xx reason phrase either', async () => {
 			const reported = await reportedMessage(transportFailure({
 				status: 503,

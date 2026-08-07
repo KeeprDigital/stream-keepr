@@ -14,6 +14,7 @@ import {
 	GRAPHICS_MULTIPART_PART_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 const {
 	mockApiFetch,
@@ -155,10 +156,20 @@ const eventStore = reactive({ eventId: 7 });
 
 mockNuxtImport('useEventStore', () => () => eventStore);
 mockNuxtImport('$fetch', () => mockApiFetch);
+/**
+ * The failures each read can meet, settable per test.
+ *
+ * `useFetch` hands its `error` on as the failure the request produced, and the Workspace
+ * renders both — so a mock that could only ever be `null` left two alerts uncovered
+ * (#286).
+ */
+const listingError = ref<unknown>(null);
+const capacityLoadError = ref<unknown>(null);
+
 mockNuxtImport('useFetch', () => (path: string) => ({
 	data: path === '/api/graphics-assets/capacity' ? capacity : assets,
 	status: ref('success'),
-	error: ref(null),
+	error: path === '/api/graphics-assets/capacity' ? capacityLoadError : listingError,
 	refresh: path === '/api/graphics-assets/capacity' ? mockCapacityRefresh : mockRefresh,
 }));
 
@@ -206,6 +217,8 @@ async function mountPage() {
 
 describe('the Graphics Asset Library Workspace', () => {
 	beforeEach(() => {
+		listingError.value = null;
+		capacityLoadError.value = null;
 		assets.value = [{
 			id: 'asset-1' as never,
 			name: 'Scoreboard logo',
@@ -1044,6 +1057,55 @@ describe('the Graphics Asset Library Workspace', () => {
 			{ method: 'POST', body: expect.objectContaining({ outcome: 'decoded' }) },
 		);
 		expect(wrapper.text()).toContain('Published');
+	});
+
+	/**
+	 * What the Workspace says when a read is refused.
+	 *
+	 * Both alerts used to render the failure's own `message`, which on a `$fetch` failure
+	 * is the transport's line — naming the route and the status code, and never the reason
+	 * the server actually gave. `failureSentence` owns which failures may be quoted, and
+	 * since #286 that includes the 5xx families whose prose the server preserves through
+	 * sanitizing: an exhausted byte store and an unavailable library are both answers this
+	 * page exists to relay, and both are 5xx.
+	 */
+	it('says why the library listing was refused rather than naming the route', async () => {
+		listingError.value = transportFailure({
+			status: 401,
+			statusText: 'Unauthorized',
+			body: { message: 'An authenticated graphics author session is required' },
+			request: `[GET] "/api/graphics-assets"`,
+		});
+		const wrapper = await mountPage();
+
+		const alert = wrapper.get('[data-testid="library-load-error"]');
+		expect(alert.text()).toContain('An authenticated graphics author session is required');
+		expect(alert.text()).not.toContain('401 Unauthorized');
+	});
+
+	it('relays an exhausted byte store, whose 507 the mapper preserved', async () => {
+		capacityLoadError.value = transportFailure({
+			status: 507,
+			statusText: 'Insufficient Storage',
+			body: { message: 'Canonical byte store capacity is exhausted' },
+			request: `[GET] "/api/graphics-assets/capacity"`,
+		});
+		const wrapper = await mountPage();
+
+		expect(wrapper.get('[data-testid="capacity-load-error"]').text())
+			.toContain('Canonical byte store capacity is exhausted');
+	});
+
+	it('falls back to the status line when the sanitizer got to the 5xx first', async () => {
+		listingError.value = transportFailure({
+			status: 503,
+			body: { message: 'Internal Server Error' },
+			request: `[GET] "/api/graphics-assets"`,
+		});
+		const wrapper = await mountPage();
+
+		expect(wrapper.get('[data-testid="library-load-error"]').text())
+			.toContain('[GET] "/api/graphics-assets": 503 Service Unavailable');
 	});
 });
 

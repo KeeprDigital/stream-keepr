@@ -1,6 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 // ── Mock Ably ──
 
@@ -152,6 +153,59 @@ describe('useMetagameStore', () => {
 
 			expect(store.summaryData).toEqual(latest);
 			expect(store.loading).toBe(false);
+		});
+
+		/**
+		 * What a refused summary says, which until #286 was nothing.
+		 *
+		 * This store swallowed the failure and wrote a static line, so a summary refused
+		 * for a nameable reason reported only that something had failed — and
+		 * `useMetagamePage` re-raises this string as the toast's title, so the static line
+		 * was the whole of what an operator read. It is now the fallback rather than the
+		 * answer, on `failureSentence`'s rule: a refusal's own sentence, or the preserved
+		 * prose of a 5xx that named a deployment fault.
+		 */
+		describe('when the summary is refused', () => {
+			beforeEach(() => {
+				// The store logs the failure it swallows; the row is about `error`, not the log.
+				vi.spyOn(console, 'error').mockImplementation(() => {});
+			});
+
+			it('reports the sentence the authority wrote about the request', async () => {
+				mockFetch.mockRejectedValue(transportFailure({
+					status: 403,
+					body: { message: 'This player list belongs to another Event' },
+					request: `[GET] "/api/events/1/metagame/summary"`,
+				}));
+
+				await store.loadSummary(1);
+
+				expect(store.error).toBe('This player list belongs to another Event');
+			});
+
+			it('reports a 5xx whose prose the server preserved through sanitizing', async () => {
+				mockFetch.mockRejectedValue(transportFailure({
+					status: 503,
+					body: { message: 'Card data provider is temporarily unavailable. Try again later.' },
+					request: `[GET] "/api/events/1/metagame/summary"`,
+				}));
+
+				await store.loadSummary(1);
+
+				expect(store.error).toBe('Card data provider is temporarily unavailable. Try again later.');
+			});
+
+			it('falls back to its own line when the sanitizer got to the 5xx first', async () => {
+				mockFetch.mockRejectedValue(transportFailure({
+					status: 500,
+					body: { message: 'Internal Server Error' },
+					request: `[GET] "/api/events/1/metagame/summary"`,
+				}));
+
+				await store.loadSummary(1);
+
+				expect(store.error).toBe('Failed to load metagame summary');
+			});
 		});
 	});
 

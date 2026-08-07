@@ -69,6 +69,22 @@ const {
 	default: () => [],
 });
 
+/**
+ * What a failed library listing says to the author who opened the picker.
+ *
+ * `useFetch` hands its `error` on as the failure the request produced, whose own
+ * `message` is the transport's line — rendering it put '[GET] "/api/graphics-assets":
+ * 403 Forbidden' where the route had written 'An authenticated graphics author session
+ * is required'. `failureSentence` owns which failures may be quoted, and since #286 that
+ * includes the 5xx families whose prose the server preserves through sanitizing: an
+ * unavailable Graphics Asset Library is exactly the answer this surface must not turn
+ * back into a status line. The transport's line stays as the fallback, because a
+ * genuinely sanitized 5xx has nothing else honest to show (#271).
+ */
+const loadFailureMessage = computed(() =>
+	error.value ? failureSentence(error.value) ?? error.value.message : undefined,
+);
+
 const acceptedKinds = computed<GraphicAsset['kind'][]>(
 	() => Array.isArray(props.assetKind) ? props.assetKind : [props.assetKind],
 );
@@ -334,7 +350,8 @@ function selectAsset(asset: GraphicAsset) {
 						color="error"
 						variant="soft"
 						title="Graphic Assets could not be loaded"
-						:description="error.message"
+						:description="loadFailureMessage"
+						data-testid="library-listing-error"
 					/>
 					<p v-else-if="status === 'pending'" class="text-sm text-muted">
 						Loading Graphic Assets…

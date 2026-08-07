@@ -62,8 +62,15 @@ export const useMetagameStore = defineStore('metagame', () => {
 				summaryData.value = data;
 		}
 		catch (e: unknown) {
+			// The sentence the authority wrote about the refusal, where it wrote one.
+			// This store used to discard the failure entirely and report a static line,
+			// so a summary refused for a nameable reason — a scope the installation may
+			// not read, a dependency that is down — said only that something failed.
+			// `useMetagamePage` re-raises this string as the toast's title, so whatever
+			// is written here is what an operator reads (#262's discipline, arriving
+			// late; #286).
 			if (generation === summaryGeneration)
-				error.value = 'Failed to load metagame summary';
+				error.value = failureSentence(e) ?? 'Failed to load metagame summary';
 			console.error(e);
 		}
 		finally {

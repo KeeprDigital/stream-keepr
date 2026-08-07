@@ -891,17 +891,21 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		});
 
 		it('keeps the status line for a server fault, whose body message is not the authority speaking', async () => {
-			// Deliberate, and the boundary the whole read is drawn at. A 4xx is the
-			// authority answering *this request*; a 5xx is the server failing, and this
-			// server rewrites those on the way out — `mapPublicNitroError` replaces any
-			// unmapped 5xx message with 'Internal Server Error', and Nitro writes 'Server
-			// Error' for anything unhandled. Reading a 5xx body back would dress a
-			// placeholder as the authority's own words, which is worse than a status
-			// line: a status line at least reads as machinery. The fixture below is the
-			// dangerous shape — a 5xx whose message looks like prose — because the two
-			// families whose prose does survive sanitizing (a missing setting, an unwired
-			// component) name a deployment fault rather than a fact about the show, and
-			// have their own surfaces (#233, #243).
+			// A 4xx is the authority answering *this request*; a 5xx is usually the server
+			// failing, and this server rewrites those on the way out — `mapPublicNitroError`
+			// replaces any 5xx message it did not deliberately map with 'Internal Server
+			// Error', and Nitro writes 'Server Error' for anything unhandled. Reading one of
+			// those back would dress a placeholder as the authority's own words, which is
+			// worse than a status line: a status line at least reads as machinery.
+			//
+			// This fixture used to be a 503 whose message read
+			// `'Graphics writer was not given a Screen repository'` — chosen as the
+			// "dangerous shape", a 5xx that looks like prose — and #286 both inverted the
+			// verdict on that shape and showed the fixture had never been faithful. A 503
+			// reaching a client with a non-placeholder message is by construction one the
+			// mapper preserved: the sanitizer overwrites every other. So the shape it was
+			// testing cannot occur, and the shape it looked like now belongs to the row
+			// below. Repaired to what an unmapped 5xx actually sends (#241's discipline).
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			vi.clearAllMocks();
 			mockRepository.sendCommand.mockRejectedValue(transportFailure({
@@ -909,7 +913,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				body: {
 					statusCode: 503,
 					statusMessage: 'Service Unavailable',
-					message: 'Graphics writer was not given a Screen repository',
+					message: 'Internal Server Error',
 				},
 				request: COMMANDS_REQUEST,
 			}));
@@ -917,6 +921,31 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			await store.take(EVENT_ID, SCREEN_ID, 'slate');
 
 			expect(store.error).toBe(`[POST] "${COMMANDS_PATH}": 503 Service Unavailable`);
+		});
+
+		it('quotes a 5xx whose prose the server preserved through sanitizing', async () => {
+			// The decided inversion, and the reason #286 had to land before any Graphics
+			// Administrator surface could be converted. Some 5xx bodies are spared the
+			// sanitizer on purpose — a missing setting (#233), an unwired component (#243),
+			// a named dependency that is down — because they describe a deployment fault
+			// rather than a fact about the show, and they are the one kind of 5xx the person
+			// reading has anything to do about. Refusing them turned the sentence naming a
+			// missing setting into '503 Service Unavailable', which is the failure mode the
+			// blanket refusal was introduced to prevent, pointed the other way.
+			const wiring = 'The Broadcast Graphics Live Session module was constructed without '
+				+ 'the Graphics Asset Library. This is a defect in how the server was assembled, '
+				+ 'not a setting that can be changed.';
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			vi.clearAllMocks();
+			mockRepository.sendCommand.mockRejectedValue(transportFailure({
+				status: 503,
+				body: { statusCode: 503, statusMessage: 'Service Unavailable', message: wiring },
+				request: COMMANDS_REQUEST,
+			}));
+
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+			expect(store.error).toBe(wiring);
 		});
 
 		it('keeps its own message for a failure that never reached the server', async () => {

@@ -191,10 +191,11 @@ async function apply() {
 	catch (caught) {
 		// The refusal's own sentence where the server wrote one, which for this surface is
 		// nearly always the Style Set having been republished or the template revised. Read
-		// through `failureSentence` rather than straight off the body, because a 5xx body
-		// here says 'Internal Server Error' — the placeholder this server writes over an
-		// unmapped fault — and quoting that would tell the author their update was refused
-		// for a reason nobody wrote (#262).
+		// through `failureSentence` rather than straight off the body, because an unmapped
+		// 5xx body here says 'Internal Server Error' — the placeholder this server writes
+		// over a fault it did not classify — and quoting that would tell the author their
+		// update was refused for a reason nobody wrote (#262). A 5xx the mapper did
+		// classify keeps its own words and is quoted like any refusal (#286).
 		const refused = failureSentence(caught)
 			?? (caught instanceof Error ? caught.message : 'The style update could not be applied');
 		// Re-read first, because a refusal is usually the Style Set having been
