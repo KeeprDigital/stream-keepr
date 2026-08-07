@@ -35,9 +35,6 @@ const mockEventStoreState = {
 
 mockNuxtImport('useCardRepository', () => () => mockCardRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
-mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: vi.fn(async (fn: any) => fn()),
-}));
 mockNuxtImport('useEventStore', () => () => mockEventStoreState);
 mockNuxtImport('useScryfallBatch', () => () => ({
 	fetchScryfallCards: vi.fn().mockResolvedValue(new Map()),
