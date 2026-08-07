@@ -1,3 +1,62 @@
+/**
+ * The API response types, and the one thing they do not say.
+ *
+ * Every `${string}At` member below is declared `Date`, and on the server that is
+ * true: the mappers genuinely produce `Date` instances (#256 made
+ * `mapTimestamps` say so). These interfaces are the mappers' return types, so
+ * `Date` is the honest declaration for the audience that builds them.
+ *
+ * It is not the honest declaration for the audience that receives them. A
+ * response leaves the server through `JSON.stringify` and arrives at the client
+ * through ofetch, which parses with `destr` and revives nothing — so client code
+ * is handed an ISO **string** at every one of these members, always. Measured
+ * against a running dev server on #272: the server held
+ * `createdAt instanceof Date === true`; the wire bytes read
+ * `"createdAt": "2026-08-07T00:44:52.000Z"`; the same route through ofetch gave
+ * `typeof createdAt === 'string'`.
+ *
+ * There is no second delivery path that behaves differently. #272 was filed on
+ * the reasoning that Nuxt's SSR payload preserves Dates through devalue, so the
+ * client would see `Date` sometimes and `string` other times. Execution refuted
+ * it in both directions: devalue does preserve a `Date` placed into the payload
+ * directly, but a value obtained by `useFetch`/`$fetch` of an internal route has
+ * already been JSON round-tripped by Nitro before the payload serializer sees
+ * it, so it enters the payload as a string. With `ssr: false` set in
+ * `nuxt.config.ts` the question is moot anyway — the payload carries no route
+ * data at all. The client view is uniformly `string`.
+ *
+ * Nitro's typed `$fetch` already knows this. `$fetch('/api/events/1')` infers
+ * `createdAt: string`; it is the explicit generic — `$fetch<EventResponse>(…)`,
+ * the form used at every call site under `app/` — that overrides the correct
+ * inference and reintroduces `Date`. `test/nuxt/shared/apiWireTimestamps.test.ts`
+ * pins both halves of that disagreement.
+ *
+ * Nothing is broken by this today, and that is a checked claim rather than an
+ * assumption: no code anywhere under `app/` calls a `Date` method on one of
+ * these members unguarded. The four places that read a timestamp value all
+ * already accept both shapes —
+ * `app/composables/data/usePlayerDeckCache.ts` (`Date | string`, branches on
+ * `typeof`), `app/utils/meleeSync.ts`, `app/components/Round/ListItem.vue`
+ * (both `Date | string`, both re-wrap with `new Date(…)`), and
+ * `app/pages/event/[eventId]/matches.vue` (re-wraps with `new Date(…)`).
+ * Everywhere else the value is passed through as an opaque cache key.
+ *
+ * The would-be fix, deliberately not taken: widen the client-side aliases in
+ * `app/types/index.ts` — which already re-export these interfaces under domain
+ * names — through a mapped type turning each `Date` member into `Date | string`.
+ * `Date | string` rather than `string` because client state legitimately holds
+ * both: the stores construct real Dates for optimistic updates and realtime
+ * messages (`app/stores/event.ts`, `app/stores/featureMatch.ts`). Measured on
+ * #272 against the unfiltered typecheck, that costs 11 errors in `nuxt
+ * typecheck` and 9 in `typecheck:test` across 8 files, and it buys no
+ * behavioural change, because the type it would produce is the type all four
+ * readers have already written by hand. Declaring `string` on these interfaces
+ * instead is not merely more expensive (178 and 22 errors across 31 files) but
+ * wrong: it would break the ten server mappers that return them.
+ *
+ * If that trade is ever re-taken, the pins named above will fail and say so.
+ */
+
 import type {
 	ClockType,
 	DeckListCompartment,

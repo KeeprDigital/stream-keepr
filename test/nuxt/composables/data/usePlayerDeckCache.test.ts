@@ -80,6 +80,30 @@ describe('usePlayerDeckCache', () => {
 		expect(mockFetch).toHaveBeenCalledTimes(2);
 	});
 
+	/**
+	 * The sibling test above passes real Dates, which is the shape the response
+	 * types promise and not the shape production delivers: a `$fetch` hands this
+	 * composable an ISO string at `updatedAt`, always. See the record at the top
+	 * of `shared/api/index.ts`. This is the pin on the `Date | string` widening
+	 * in `updatedAtKey` — narrow it back to `Date` and every other test in this
+	 * file still passes while the app throws.
+	 */
+	it('caches by a wire-shaped update timestamp the same way', async () => {
+		mockFetch.mockResolvedValue(collection());
+		const cache = usePlayerDeckCache();
+		const overTheWire = (updatedAt: Date): string =>
+			JSON.parse(JSON.stringify({ updatedAt })).updatedAt;
+		const first = overTheWire(new Date('2026-01-01'));
+		const second = overTheWire(new Date('2026-01-02'));
+		expect(typeof first).toBe('string');
+
+		await cache.fetchDeck(1, 1, first);
+		await cache.fetchDeck(1, 1, first);
+		await cache.fetchDeck(1, 1, second);
+
+		expect(mockFetch).toHaveBeenCalledTimes(2);
+	});
+
 	it('deduplicates concurrent collection requests', async () => {
 		let resolveFetch!: (value: PlayerDeckCollectionResponse) => void;
 		mockFetch.mockReturnValueOnce(new Promise<PlayerDeckCollectionResponse>((resolve) => {
