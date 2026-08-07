@@ -1,12 +1,15 @@
+import type { ComputedRef } from 'vue';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { flushPromises, mount } from '@vue/test-utils';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, reactive } from 'vue';
+import { defineComponent, h, reactive } from 'vue';
 import { createMockEvent, createMockTalent } from '~~/test/helpers/fixtures';
 
 const ALICE = createMockTalent({ id: 11, name: 'Alice' });
 const BRIONY = createMockTalent({ id: 12, name: 'Briony' });
 const CASPAR = createMockTalent({ id: 13, name: 'Caspar' });
+/** Talent names carry no uniqueness constraint, so this one can coexist with Alice. */
+const ALICE_LOWERCASE = createMockTalent({ id: 15, name: 'alice' });
 
 function loadedEvent(overrides?: Partial<ReturnType<typeof createMockEvent>>) {
 	return {
@@ -31,6 +34,14 @@ const mockToast = { add: vi.fn() };
 
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useToast', () => () => mockToast);
+
+// The page guard reaches for the overlay and the router when it installs itself.
+// What it does with them is its own composable's test; here they only have to
+// exist so a test can mount this component the way its page does.
+mockNuxtImport('useOverlay', () => () => ({
+	create: () => ({ open: () => ({ result: Promise.resolve(true) }) }),
+}));
+mockNuxtImport('onBeforeRouteLeave', () => () => {});
 
 const UFormStub = defineComponent({
 	name: 'UForm',
@@ -68,36 +79,72 @@ const USelectMenuStub = defineComponent({
 	template: '<select :value="modelValue" />',
 });
 
+// UButton takes `type` as a prop and leaves the default to ULink, which is
+// "button". Declaring it here rather than hardcoding one on the root says that
+// out loud: attribute fallthrough would deliver the footer's "submit" either
+// way, but only by accident of the root element having nothing else to say.
 const UButtonStub = defineComponent({
 	name: 'UButton',
 	props: {
 		label: { type: String, required: false },
 		disabled: { type: Boolean, required: false },
 		loading: { type: Boolean, required: false },
+		type: { type: String, required: false, default: 'button' },
 	},
 	emits: ['click'],
-	template: '<button type="button" :data-label="label" :disabled="disabled" :data-loading="loading" @click="$emit(\'click\')"><slot>{{ label }}</slot></button>',
+	template: '<button :type="type" :data-label="label" :disabled="disabled" :data-loading="loading" @click="$emit(\'click\')"><slot>{{ label }}</slot></button>',
 });
 
+const componentPath = '../../../../app/components/Event/Controls.vue';
+
+const stubs = {
+	UForm: UFormStub,
+	UCard: UCardStub,
+	UFormField: UFormFieldStub,
+	UTextarea: UTextareaStub,
+	USelectMenu: USelectMenuStub,
+	UButton: UButtonStub,
+};
+
+// A detached button has no activation behaviour, so pressing a submit button
+// only submits its form once the tree is in the document.
+const mountOptions = { attachTo: document.body, global: { stubs } };
+
+enableAutoUnmount(afterEach);
+
 async function mountComponent() {
-	const componentPath = '../../../../app/components/Event/Controls.vue';
 	const { default: Controls } = await import(componentPath);
 
-	return mount(Controls, {
-		global: {
-			stubs: {
-				UForm: UFormStub,
-				UCard: UCardStub,
-				UFormField: UFormFieldStub,
-				UTextarea: UTextareaStub,
-				USelectMenu: USelectMenuStub,
-				UButton: UButtonStub,
-			},
-		},
-	});
+	return mount(Controls, mountOptions);
 }
 
 type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
+
+/**
+ * Mounts the component inside a page that has installed the unsaved-changes
+ * guard, as `pages/event/[eventId]/index.vue` does. Mounted bare, the component
+ * injects nothing and its registration is a silent no-op, so the guard can only
+ * be observed through a parent that provides it.
+ */
+async function mountUnderPageGuard() {
+	const { default: Controls } = await import(componentPath);
+	let guard: ComputedRef<boolean> | null = null;
+
+	const Page = defineComponent({
+		name: 'PageWithGuard',
+		setup() {
+			guard = useUnsavedChanges().isDirty;
+			return () => h(Controls);
+		},
+	});
+
+	const page = mount(Page, mountOptions);
+
+	return {
+		wrapper: page.findComponent(Controls) as Wrapper,
+		pageIsDirty: () => guard!.value,
+	};
+}
 
 /** The two forms are identified by the fields they carry, not by their order. */
 function formFor(wrapper: Wrapper, field: string) {
@@ -142,6 +189,9 @@ describe('event controls', () => {
 		mockEventStore.updateEvent.mockReset().mockResolvedValue(loadedEvent());
 		mockEventStore.addTalent.mockReset().mockResolvedValue(createMockTalent({ id: 14, name: 'Dana' }));
 		mockToast.add.mockClear();
+		// Silenced, deliberately not asserted: what an operator sees of a failure is
+		// the toast, and every failure site pins that. The console call is the
+		// mechanism, and asserting it would pin the mechanism instead.
 		consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 	});
 
@@ -175,6 +225,21 @@ describe('event controls', () => {
 		expect(commentatorField(wrapper, 2).props('items')).toEqual(['Briony', 'Caspar']);
 	});
 
+	// Two talents whose names differ only in case are two rows in the database and
+	// one person to this form, which addresses talents by name.
+	it('offers neither casing of a name already taken by the other position', async () => {
+		mockEventStore.event = {
+			...loadedEvent({ commentator2TalentId: null }),
+			talents: [ALICE, ALICE_LOWERCASE, CASPAR],
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(commentatorField(wrapper, 1).props('modelValue')).toBe('Alice');
+		expect(commentatorField(wrapper, 2).props('items')).toEqual(['Caspar']);
+		expect(commentatorField(wrapper, 1).props('items')).toHaveLength(3);
+	});
+
 	it('offers no controls until the event loads, then fills both forms from it', async () => {
 		mockEventStore.event = null;
 		const wrapper = await mountComponent();
@@ -204,6 +269,30 @@ describe('event controls', () => {
 			description: 'Holding text updated',
 			color: 'success',
 		}));
+	});
+
+	it('saves the holding text when the operator presses Save', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await holdingTextField(wrapper).setValue('Back after this break.');
+		await saveButton(wrapper, 'holdingText').trigger('click');
+		await flushPromises();
+
+		expect(mockEventStore.updateEvent).toHaveBeenCalledWith({ holdingText: 'Back after this break.' });
+	});
+
+	it('submits only the form whose Save was pressed, with both offering one', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await holdingTextField(wrapper).setValue('Back after this break.');
+		await commentatorField(wrapper, 1).setValue('Caspar');
+		await saveButton(wrapper, 'commentator1Name').trigger('click');
+		await flushPromises();
+
+		expect(mockEventStore.updateEvent).toHaveBeenCalledTimes(1);
+		expect(mockEventStore.updateEvent).toHaveBeenCalledWith({ commentator1TalentId: CASPAR.id });
 	});
 
 	it('clears the holding text when the operator empties the message', async () => {
@@ -419,6 +508,28 @@ describe('event controls', () => {
 		expect(holdingTextField(wrapper).props('modelValue')).toBe('Coverage resumes shortly.');
 		expect(saveButton(wrapper, 'holdingText').attributes('disabled')).toBeDefined();
 		expect(mockEventStore.updateEvent).not.toHaveBeenCalled();
+	});
+
+	// The guard is what stops an operator navigating away from an unsaved edit. It
+	// registers through inject, so a component mounted without a page around it
+	// registers with nothing and loses this silently.
+	it('tells the page it has unsaved changes while either form is edited', async () => {
+		const { wrapper, pageIsDirty } = await mountUnderPageGuard();
+		await flushPromises();
+
+		expect(pageIsDirty()).toBe(false);
+
+		await holdingTextField(wrapper).setValue('Back after this break.');
+		expect(pageIsDirty()).toBe(true);
+
+		await resetButton(wrapper, 'holdingText').trigger('click');
+		expect(pageIsDirty()).toBe(false);
+
+		await commentatorField(wrapper, 1).setValue('Caspar');
+		expect(pageIsDirty()).toBe(true);
+
+		await resetButton(wrapper, 'commentator1Name').trigger('click');
+		expect(pageIsDirty()).toBe(false);
 	});
 
 	it('offers a commentator save only once that form has changed, and takes it back on reset', async () => {
