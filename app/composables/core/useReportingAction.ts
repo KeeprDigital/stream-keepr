@@ -13,12 +13,13 @@ import type { AsyncActionOptions } from './useAsyncAction';
  * Reporting the authority's sentence is a decision a surface makes: the Screen Output
  * showing a bare status line and the Live Control showing a refusal are not the same
  * reader, and a store adopts this by naming it (#262 adopts six, #245 the seventh).
- * And practically, four suites still stand a hand-written copy of `useAsyncAction` in for
+ * And practically, three suites still stand a hand-written copy of `useAsyncAction` in for
  * the real one, all of them returning `{ executeAction }` alone — a second method on that
  * return would be `undefined` in every one of them, while this composable calls whatever
  * `useAsyncAction` those suites provide. It was nineteen when this was written; #263
- * consolidated the rest onto the real composable, and the four that remain are the Card
- * and Screen stores' suites.
+ * consolidated the rest onto the real composable (#271 took the Card store's own suite in
+ * the same round), and the three that remain are the Card Deck Sources suite and the
+ * Screen store's two.
  */
 export function useReportingAction() {
 	const { executeAction } = useAsyncAction();
