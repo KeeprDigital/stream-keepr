@@ -1,4 +1,3 @@
-import type { Ref } from 'vue';
 import type {
 	BroadcastGraphicChannelContext,
 	BroadcastGraphicInputsState,
@@ -81,7 +80,6 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 */
 	const { getServerTime, isSynced: isClockSynced } = useServerTime();
 	const sessions = ref<Map<number, BroadcastGraphicsLiveSessionResponse>>(new Map());
-	const loading = ref(false);
 	const error = ref<string | null>(null);
 	/**
 	 * The domain refusal `error` is currently reporting, when what it is reporting is
@@ -213,8 +211,8 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * the outermost boundary — after `isConflict` and the restatement have had the
 	 * failure — so nothing downstream of it loses a status it was reading.
 	 */
-	function executeReporting<T>(action: () => Promise<T>, loadingRef?: Ref<boolean>): Promise<T | null> {
-		return reportingAction(action, { loadingRef, errorRef: error });
+	function executeReporting<T>(action: () => Promise<T>): Promise<T | null> {
+		return reportingAction(action, { errorRef: error });
 	}
 
 	function liveState(screenId: number): BroadcastGraphicsLiveState {
@@ -444,7 +442,6 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 				cacheSession(session);
 				return session;
 			},
-			loading,
 		);
 	}
 
@@ -634,7 +631,6 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 				forgetRefusedInputs(screenId);
 				return session;
 			},
-			loading,
 		);
 	}
 
@@ -890,14 +886,12 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		pending.value.clear();
 		supersededInputs.value.clear();
 		refusedInputs.value.clear();
-		loading.value = false;
 		error.value = null;
 		refusal.value = null;
 	}
 
 	return {
 		sessions,
-		loading,
 		error,
 		refusal,
 		serverNow,
