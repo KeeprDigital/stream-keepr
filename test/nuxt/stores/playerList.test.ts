@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockPlayerList } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 // ── Mock Dependencies ──
 
@@ -26,20 +27,8 @@ mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string,
 	ablyCallbacks[storeName] = callbacks;
 });
 
-// Supports onError rollback for tests that verify error recovery
-const mockExecuteAction = vi.fn(async (fn: any, opts?: any) => {
-	try {
-		return await fn();
-	}
-	catch (err) {
-		opts?.onError?.();
-		throw err;
-	}
-});
-
 mockNuxtImport('usePlayerListRepository', () => () => mockRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
-mockNuxtImport('useAsyncAction', () => () => ({ executeAction: mockExecuteAction }));
 
 function createSummary(overrides?: Record<string, any>) {
 	return { ...createMockPlayerList(overrides), memberCount: 0, ...overrides };
@@ -191,6 +180,112 @@ describe('usePlayerListStore', () => {
 			await store.reorderMembers(1, 1, [30, 20, 10]);
 
 			expect(store.membersByListId.get(1)).toEqual([30, 20, 10]);
+		});
+	});
+
+	// ── Member Mutation Failures ──
+
+	/**
+	 * What the Player List pane shows when a member mutation is refused.
+	 *
+	 * The Player List store's own lifecycle already reported the server's sentence (#262),
+	 * but its member Module did not — so adding a player to a list said
+	 * '[POST] "…": 409 Conflict' while creating the list said why. These rows also could
+	 * not exist before #271: this suite stood a hand-written `useAsyncAction` in for the
+	 * real one that re-threw every failure and never wrote `errorRef`, so nothing here had
+	 * ever observed what an operator is told (#263's map, #241's discipline).
+	 */
+	describe('member mutation failures', () => {
+		it('reports the sentence and rolls the optimistic count back when adding is refused', async () => {
+			store.lists = [createSummary({ id: 1, memberCount: 2 })];
+			store.membersByListId.set(1, [10, 20]);
+			mockRepo.addMembers.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'That player is already on another list for this round' },
+			}));
+
+			await store.addMembers(1, 1, [30]);
+
+			expect(store.error).toBe('That player is already on another list for this round');
+			expect(store.lists[0]!.memberCount).toBe(2);
+			expect(store.membersByListId.get(1)).toEqual([10, 20]);
+		});
+
+		it('reports the sentence when removing a member is refused', async () => {
+			store.lists = [createSummary({ id: 1, memberCount: 3 })];
+			store.membersByListId.set(1, [10, 20, 30]);
+			mockRepo.removeMember.mockRejectedValue(transportFailure({
+				status: 403,
+				body: { message: 'This list is locked for the current round' },
+			}));
+
+			await store.removeMember(1, 1, 10);
+
+			expect(store.error).toBe('This list is locked for the current round');
+			expect(store.lists[0]!.memberCount).toBe(3);
+			expect(store.membersByListId.get(1)).toEqual([10, 20, 30]);
+		});
+
+		it('reports the sentence when a batch removal is refused', async () => {
+			store.lists = [createSummary({ id: 1, memberCount: 3 })];
+			mockRepo.batchRemoveMembers.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'Two of those players have already been dropped' },
+			}));
+
+			await store.batchRemoveMembers(1, 1, [10, 20]);
+
+			expect(store.error).toBe('Two of those players have already been dropped');
+			expect(store.lists[0]!.memberCount).toBe(3);
+		});
+
+		it('reports the sentence and restores the order when a reorder is refused', async () => {
+			store.lists = [createSummary({ id: 1, memberCount: 3 })];
+			store.membersByListId.set(1, [10, 20, 30]);
+			mockRepo.reorderMembers.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'The list was reordered by another operator' },
+			}));
+
+			await store.reorderMembers(1, 1, [30, 20, 10]);
+
+			expect(store.error).toBe('The list was reordered by another operator');
+			expect(store.membersByListId.get(1)).toEqual([10, 20, 30]);
+		});
+
+		it('reports the sentence when loading members is refused', async () => {
+			mockRepo.getMemberIds.mockRejectedValue(transportFailure({
+				status: 404,
+				body: { message: 'That Player List has been deleted' },
+				request: `[GET] "/api/events/1/player-lists/42/members"`,
+			}));
+
+			await store.loadListMembers(1, 42);
+
+			expect(store.error).toBe('That Player List has been deleted');
+		});
+
+		it('shows the transport line rather than a 5xx body detail', async () => {
+			store.lists = [createSummary({ id: 1, memberCount: 2 })];
+			mockRepo.addMembers.mockRejectedValue(transportFailure({
+				status: 500,
+				body: { message: 'D1_ERROR: no such table: player_list_members' },
+				request: `[POST] "/api/events/1/player-lists/1/members"`,
+			}));
+
+			await store.addMembers(1, 1, [30]);
+
+			expect(store.error).not.toContain('D1_ERROR');
+			expect(store.error).toBe('[POST] "/api/events/1/player-lists/1/members": 500 Internal Server Error');
+		});
+
+		it('reports a rejection that is not an Error as the composable does', async () => {
+			store.lists = [createSummary({ id: 1, memberCount: 2 })];
+			mockRepo.addMembers.mockRejectedValue({ message: 'not an Error at all' });
+
+			await store.addMembers(1, 1, [30]);
+
+			expect(store.error).toBe('An error occurred');
 		});
 	});
 

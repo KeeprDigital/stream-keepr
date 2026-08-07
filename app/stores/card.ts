@@ -10,7 +10,7 @@ export const useCardStore = defineStore('card', () => {
 	const eventStore = useEventStore();
 	const featureMatchStore = useFeatureMatchStore();
 	const playerStore = usePlayerStore();
-	const { executeAction } = useAsyncAction();
+	const { executeReporting } = useReportingAction();
 
 	const timeout = useCountdown(0);
 	const selectionHistory = useStorage<MtgCard[]>('mtgCard-history', []);
@@ -58,7 +58,11 @@ export const useCardStore = defineStore('card', () => {
 		timeout,
 		loading,
 		error,
-		executeAction,
+		// Every Card write reports through one seam, and that seam says what the server
+		// said: a refused save is 'Another operator is showing a card on this Screen',
+		// not '[POST] "…": 409 Conflict'. Handed to the Module as its `executeAction` so
+		// the reporting decision is the store's and the Module keeps one contract (#271).
+		executeAction: executeReporting,
 	});
 	const saveActiveCard = activeCardRuntime.saveActiveCard;
 

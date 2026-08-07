@@ -69,6 +69,45 @@ export function useRequestFeedback() {
 	const toast = useToast();
 	const requests = createKeyedGuardedSequence<string | symbol>();
 
+	/**
+	 * What a failed request says to whoever asked for it.
+	 *
+	 * This is the widest reporting seam in the application — fifty-eight `runRequest` call
+	 * sites turn its answer into a toast, a banner, or a debounced write's field-level save
+	 * error — and until #271 it read the response body with no regard for what the status
+	 * meant. A sub-500 body is the authority answering *this* request and is the best thing
+	 * anyone can be shown. A 5xx body is not: `mapPublicNitroError` replaces an unmapped
+	 * 5xx message with 'Internal Server Error' on the way out, so quoting it puts a
+	 * placeholder in front of an operator dressed as the authority's own words. Refused
+	 * here, the transport's line is what is left, and a status line at least reads as
+	 * machinery (`failureSentence`, #245).
+	 *
+	 * The refusal covers the reason phrase and `data.statusMessage`/`data.error` too, not
+	 * just the field `failureSentence` reads: on a sanitized 5xx all four carry the same
+	 * placeholder, and gating one of them would only move it down a line.
+	 *
+	 * `data.message` is read *through* `failureSentence` rather than beside it, so the
+	 * question "may this body be quoted?" has one answer in this application rather than
+	 * two that must agree. What that costs is a body carried by a failure with no status,
+	 * which the util declines: unconstructible here, since nothing in this codebase builds
+	 * an error carrying `data` and every one that does is an ofetch `FetchError`, which
+	 * always has a status.
+	 *
+	 * One exclusion the refusal does NOT make, which the next person to widen a call site
+	 * needs before they widen it. Two 5xx families carry prose the server deliberately
+	 * preserves through sanitizing — a missing setting (`ServiceConfigurationError`, #233)
+	 * and an unwired component (`ServiceWiringError`, #243). They name a deployment fault
+	 * rather than a fact about the show, which is why the surfaces owning them report them
+	 * directly and why `failureSentence` never read them. One such failure does arrive
+	 * here: rotating a Screen's asset access (`screens/[screenId].vue:209` → the
+	 * asset-capability route → `server/modules/screen-output-assets/runtime.ts:27`) raises
+	 * the first family. Its prose survives today only because that call site supplies
+	 * static wording and discards this function's answer entirely. Converting that site —
+	 * or any site that can meet these families — to `error: ({ message }) => …` therefore
+	 * means excluding them from the refusal above FIRST. In that order an operator is told
+	 * which setting is missing; in the other order the sentence silently becomes a status
+	 * line, and the edit that caused it will have looked like an improvement (#271).
+	 */
 	function getErrorMessage(error: unknown, fallback = 'Unknown error'): string {
 		if (typeof error === 'string' && error.trim().length > 0)
 			return error;
@@ -76,10 +115,16 @@ export function useRequestFeedback() {
 		if (!isRecord(error))
 			return fallback;
 
+		const sentence = readString(failureSentence(error));
+		if (sentence)
+			return sentence;
+
+		if (isSanitizedFailure(error))
+			return readRecordString(error, 'message') ?? fallback;
+
 		const data = error.data;
 		if (isRecord(data)) {
-			const dataMessage = readRecordString(data, 'message')
-				?? readRecordString(data, 'statusMessage')
+			const dataMessage = readRecordString(data, 'statusMessage')
 				?? readRecordString(data, 'error');
 			if (dataMessage)
 				return dataMessage;
