@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockPlayerList } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 // ── Mock Dependencies ──
 
@@ -26,20 +27,15 @@ mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string,
 	ablyCallbacks[storeName] = callbacks;
 });
 
-// Supports onError rollback for tests that verify error recovery
-const mockExecuteAction = vi.fn(async (fn: any, opts?: any) => {
-	try {
-		return await fn();
-	}
-	catch (err) {
-		opts?.onError?.();
-		throw err;
-	}
-});
-
 mockNuxtImport('usePlayerListRepository', () => () => mockRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
-mockNuxtImport('useAsyncAction', () => () => ({ executeAction: mockExecuteAction }));
+/*
+ * `useAsyncAction` is deliberately not mocked. The shared `mockExecuteAction` that
+ * stood here ran the rollback and then re-threw unconditionally, where the real
+ * composable re-throws only when the caller asks for `throwError` — and no caller in
+ * this store does. Its callers therefore met a rejection the application never
+ * produces, and never met the reported message the application does produce (#263).
+ */
 
 function createSummary(overrides?: Record<string, any>) {
 	return { ...createMockPlayerList(overrides), memberCount: 0, ...overrides };
@@ -133,6 +129,30 @@ describe('usePlayerListStore', () => {
 
 			expect(result).toBeNull();
 			expect(store.error).toBe('Player list not found');
+		});
+	});
+
+	// ── Failure reporting ──
+
+	describe('failure reporting', () => {
+		/*
+		 * #262 gave this store the sentence through the Event Data lifecycle seam, but no
+		 * test here could see it: the copy this suite stood in for re-threw every failure,
+		 * so a refused request left `createList` by rejecting rather than by reporting —
+		 * which is not what the application does. This is that store's own pin (#263).
+		 */
+		it('reports the sentence a refused create carries rather than rejecting', async () => {
+			mockRepo.create.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'A Player List with that name already exists for this Event' },
+				request: `[POST] "/api/events/1/player-lists"`,
+			}));
+
+			const result = await store.createList(1, { name: 'New List' });
+
+			expect(result).toBeNull();
+			expect(store.error).toBe('A Player List with that name already exists for this Event');
+			expect(store.lists).toHaveLength(0);
 		});
 	});
 
