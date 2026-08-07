@@ -330,6 +330,19 @@ describe('the Screen-command route\'s own refusals', () => {
 	it('are every one of them recognised as the route\'s own', () => {
 		// The route growing a second refusal inside the band without this list
 		// growing with it would make that new refusal read as a fabricated Ably key.
+		//
+		// WHEN THIS FAILS, READ THE SITE IT NAMES BEFORE TOUCHING THE LIST. The scan is
+		// an over-approximation — it counts a `createError` in any module the route
+		// imports, including one the route never calls. Adding such a message to
+		// `SCREEN_COMMAND_ROUTE_REFUSALS` silences the failure by teaching the diagnosis
+		// to excuse that message at that status, so a genuine Ably 403 echoing it stops
+		// being diagnosed: #268's hole, reopened. Add to the list only a refusal this
+		// route really raises. Otherwise narrow the scan.
+		//
+		// The list is also not everything the route can answer: Nitro composes
+		// middleware rather than importing it, so `server/middleware/**` is invisible
+		// here — `event-exists.ts` answers a banded 404 on this route's path and is
+		// neither scanned nor listed. Pre-existing, recorded, not closed by #277.
 		const banded = inCredentialBand(scan.refusals);
 
 		expect(banded.length).toBeGreaterThan(0);
@@ -462,10 +475,40 @@ describe('what the scan can read out of a route', () => {
 
 	it('gives h3\'s own defaults to the halves a refusal does not name', () => {
 		// Absent is not unreadable: h3 answers 500 and `''`, and 500 is outside the band,
-		// so a refusal naming no status is correctly nobody's problem here.
+		// so a refusal naming no status is correctly nobody's problem here. The
+		// distinction is load-bearing in one direction only — see the `status:` pin
+		// below, where defaulting a status the scan simply failed to look for is how an
+		// entry disappears.
 		expect(scan('createError({ message: \'Screen is locked\' });')[0]?.statusCode).toBe(500);
 		expect(scan('createError({ statusCode: 403 });')[0]?.message).toBe('');
 		expect(inCredentialBand(scan('createError({ message: \'Screen is locked\' });'))).toEqual([]);
+	});
+
+	it('reads every key h3 composes a status and a message from', () => {
+		// h3's `createError` reads `statusCode` and falls back to `status`
+		// (1.15.11, dist/index.mjs:91-95); the message is `message ?? statusMessage`
+		// (:71). Reading only the first of each pair made the route answer a real 403
+		// while the scan saw no status, defaulted it to 500, and dropped the entry out
+		// of the band before anything checked the listing — #277's own defect in
+		// another spelling. h3 v2 makes `status` canonical, so this widens with time.
+		expect(scan('createError({ status: 403, message: \'Screen is locked\' });')[0]?.statusCode).toBe(403);
+		expect(scan('createError({ statusCode: 404, statusMessage: \'Screen not found\' });')[0]?.message)
+			.toBe('Screen not found');
+		// `statusCode` wins where both are named, as it does in h3.
+		expect(scan('createError({ statusCode: 404, status: 403, message: \'x\' });')[0]?.statusCode).toBe(404);
+	});
+
+	it('reads a key written as a computed name, and reports one it cannot name', () => {
+		// `['statusCode']: 403` satisfied neither arm of the property reader and was
+		// skipped, leaving a call that named a status looking like one that named none.
+		// A key the scan cannot name might BE the status key, so the call is unreadable
+		// rather than a call with one property fewer.
+		expect(scan('createError({ [\'statusCode\']: 403, message: \'Screen is locked\' });')[0]?.statusCode).toBe(403);
+
+		const computed = scan('createError({ [statusKey]: 403, message: \'Screen is locked\' });');
+
+		expect(computed[0]?.statusCode).toBeUndefined();
+		expect(unlistedRefusals(inCredentialBand(computed))).toEqual(computed);
 	});
 
 	it('does not trust a name that is declared twice, or one that can be reassigned', () => {
@@ -478,9 +521,13 @@ describe('what the scan can read out of a route', () => {
 			.toBeUndefined();
 	});
 
-	it('records one entry per createError, readable or not', () => {
+	it('records one entry per createError call it finds, readable or not', () => {
 		// The invariant that replaces the `isNumericLiteral` gate. Every other assertion
 		// here is about what an entry says; this is the one that says an entry exists.
+		//
+		// Per call it *finds*: the scan matches the callee by name, so a `createError`
+		// reached through an alias, a namespace or a variable produces no entry at all.
+		// No such call exists in this repository today.
 		const refusals = scan([
 			'createError({ statusCode: 404, message: \'Screen not found\' });',
 			'createError({ statusCode: unknownStatus, message: \'Screen is locked\' });',
@@ -554,11 +601,32 @@ describe('the scan\'s reach through a route\'s imports', () => {
 		expect(scanRouteRefusals(entry).unfollowedImports).toEqual([expect.stringContaining('./not-a-module')]);
 	});
 
+	it('follows every path alias that reaches this repository, not only `~~/`', () => {
+		// All six aliases in `.nuxt/tsconfig.json` reach this repository's own source, so
+		// all six are first-party. An unrecognised prefix fell through to the
+		// third-party branch, which says nothing at all — so `#shared/x` would have
+		// shrunk the graph in silence while "leave no first-party import unfollowed"
+		// still passed. Nothing under `server/` or `shared/` imports through the other
+		// five today, which is why nothing caught it.
+		const entry = join(root, 'aliased.ts');
+		writeFileSync(entry, 'import { screenRealtimeChannel } from \'#shared/utils/realtimeChannels\';\n');
+
+		const scan = scanRouteRefusals(entry);
+
+		expect(scan.files).toContain('shared/utils/realtimeChannels.ts');
+		expect(scan.unfollowedImports).toEqual([]);
+	});
+
 	it('says nothing about a third-party or virtual specifier, which is not the route\'s code', () => {
 		// A refusal raised inside `h3` or `hub:db` is not one this repository can list or
-		// rename, so these are excluded by design rather than reported as holes.
+		// rename, so these are excluded by design rather than reported as holes. `#imports`
+		// is Nuxt's virtual module and belongs with them, not with the six real aliases.
 		const entry = join(root, 'third-party.ts');
-		writeFileSync(entry, 'import { createError } from \'h3\';\nimport { db } from \'hub:db\';\n');
+		writeFileSync(entry, [
+			'import { createError } from \'h3\';',
+			'import { db } from \'hub:db\';',
+			'import { useRuntimeConfig } from \'#imports\';',
+		].join('\n'));
 
 		expect(scanRouteRefusals(entry).unfollowedImports).toEqual([]);
 	});

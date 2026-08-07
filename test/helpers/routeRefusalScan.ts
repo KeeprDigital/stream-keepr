@@ -53,6 +53,25 @@ export interface RouteRefusalScan {
 	readonly unfollowedImports: readonly string[];
 }
 
+/**
+ * The keys h3 composes a status from, in the order it consults them.
+ *
+ * `createError` reads `input.statusCode`, and falls back to `input.status`
+ * (h3 1.15.11, `dist/index.mjs:91-95`). Reading only the first was #277's own defect in
+ * another spelling: the route answered a real 403 while the scan saw no status at all,
+ * applied h3's default of 500, filtered it out of the band, and the entry vanished before
+ * the listing check — the one outcome this scan must never produce. h3 v2 makes `status`
+ * the canonical name, so the gap would have widened rather than stayed still.
+ */
+const H3_STATUS_KEYS = ['statusCode', 'status'] as const;
+
+/**
+ * The keys h3 composes a message from: `input.message ?? input.statusMessage`
+ * (`dist/index.mjs:71`). `statusText` is deliberately absent — it sets the H3Error's
+ * `statusMessage`, not the `message` Nitro reports and the diagnosis matches on.
+ */
+const H3_MESSAGE_KEYS = ['message', 'statusMessage'] as const;
+
 /** h3 answers a `createError` that names no status with 500. */
 const H3_DEFAULT_STATUS = 500;
 
@@ -182,34 +201,94 @@ function readRefusal(
 
 	const assigned = new Map<string, ts.Expression>();
 	for (const property of argument.properties) {
-		if (ts.isPropertyAssignment(property) && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)))
-			assigned.set(property.name.text, property.initializer);
 		// A shorthand or a method hides its value the same way a spread does.
-		else if (!ts.isPropertyAssignment(property))
+		if (!ts.isPropertyAssignment(property))
 			return unreadable;
+		const name = propertyName(property.name);
+		// A key the scan cannot name might BE the status key, so the call is unreadable
+		// rather than a call with one property fewer. `['statusCode']: 403` used to
+		// satisfy neither arm here and was dropped in silence.
+		if (name === undefined)
+			return unreadable;
+		assigned.set(name, property.initializer);
 	}
 
-	const status = assigned.get('statusCode');
-	const message = assigned.get('message');
 	return {
-		statusCode: status === undefined
-			? H3_DEFAULT_STATUS
-			: literalValue(status, constants, readNumber) as number | undefined,
-		message: message === undefined
-			? H3_DEFAULT_MESSAGE
-			: literalValue(message, constants, readString) as string | undefined,
+		statusCode: composed(assigned, H3_STATUS_KEYS, H3_DEFAULT_STATUS, constants, readNumber),
+		message: composed(assigned, H3_MESSAGE_KEYS, H3_DEFAULT_MESSAGE, constants, readString),
 	};
 }
 
+/** The key a property assigns to, where the scan can name it at all. */
+function propertyName(name: ts.PropertyName): string | undefined {
+	if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNoSubstitutionTemplateLiteral(name))
+		return name.text;
+	// `['statusCode']` is a computed name whose text is still plain to read.
+	if (ts.isComputedPropertyName(name)) {
+		const inner = unwrap(name.expression);
+		if (ts.isStringLiteral(inner) || ts.isNoSubstitutionTemplateLiteral(inner))
+			return inner.text;
+	}
+	return undefined;
+}
+
+/**
+ * One half of a refusal, composed the way h3 composes it.
+ *
+ * The distinction that matters, and that #277's first fix got wrong: **naming no key at
+ * all** is not the same as **naming a key the scan could not parse**. h3 has a real
+ * default for the first, so `undefined` there would be a false alarm on every
+ * `createError` that leaves a half out. The second must stay `undefined`, because a
+ * plausible default is how an entry disappears — 500 is outside the credential band, so
+ * a status defaulted rather than reported is a refusal the listing check never sees.
+ */
+function composed<T extends string | number>(
+	assigned: Map<string, ts.Expression>,
+	keys: readonly string[],
+	fallback: T,
+	constants: Map<string, ts.Expression | undefined>,
+	read: (expression: ts.Expression) => T | undefined,
+): T | undefined {
+	const key = keys.find(candidate => assigned.has(candidate));
+	if (key === undefined)
+		return fallback;
+	return literalValue(assigned.get(key), constants, read) as T | undefined;
+}
+
+/**
+ * This repository's path aliases, from `.nuxt/tsconfig.json` rather than from memory.
+ *
+ * All six reach this repository's own source, so all six are first-party and every one
+ * has to be followed. Reading only `~~/` was a narrower claim than "leave no first-party
+ * import unfollowed" was making: an unrecognised prefix fell through to the third-party
+ * branch, which says nothing at all, so `#shared/x` would have shrunk the graph in
+ * silence. No module under `server/` or `shared/` imports through the other five today,
+ * which is exactly why nothing caught it.
+ *
+ * `#imports`, `#build`, `#app` and `#internal/*` are intentionally absent: those are
+ * Nuxt's virtual modules, not this repository's code.
+ */
+const PATH_ALIASES: readonly (readonly [string, string])[] = [
+	['~~/', ''],
+	['@@/', ''],
+	['#shared/', 'shared'],
+	['#server/', 'server'],
+	['~/', 'app'],
+	['@/', 'app'],
+];
+
 function resolveModule(specifier: string, fromFile: string): { file: string } | { unfollowed: string } | undefined {
+	const alias = PATH_ALIASES.find(([prefix]) => specifier.startsWith(prefix));
+
 	let base: string;
-	if (specifier.startsWith('~~/'))
-		base = resolve(REPOSITORY_ROOT, specifier.slice(3));
+	if (alias !== undefined)
+		base = resolve(REPOSITORY_ROOT, alias[1], specifier.slice(alias[0].length));
 	else if (specifier.startsWith('.'))
 		base = resolve(dirname(fromFile), specifier);
 	else
-		// A bare or virtual specifier (`h3`, `ably`, `hub:db`) is not the route's own code.
-		// A refusal from a dependency is not one this repository can list or rename.
+		// A bare or virtual specifier (`h3`, `ably`, `hub:db`, `#imports`) is not the
+		// route's own code. A refusal from a dependency is not one this repository can
+		// list or rename.
 		return undefined;
 
 	for (const candidate of [`${base}.ts`, `${base}/index.ts`, base]) {
@@ -230,8 +309,23 @@ function resolveModule(specifier: string, fromFile: string): { file: string } | 
  * Screen-command route's graph is 77 files carrying exactly one `createError`, so the
  * cost today is nil.
  *
+ * **When that false alarm arrives, narrow the scan — never widen the refusal list.**
+ * Adding an uncalled module's message to `SCREEN_COMMAND_ROUTE_REFUSALS` would silence it
+ * by teaching the diagnosis to excuse that message at that status, so a genuine Ably 403
+ * whose body echoed it would go unremarked. That is precisely the hole #268 closed. The
+ * fixes that stay honest are call-reachability or excluding a subtree.
+ *
  * Value imports only. A type-only import cannot carry a throw, and following it would pull
  * in the schema layer's whole transitive closure for nothing.
+ *
+ * **Import reachability only, which is narrower than "everything the route can answer".**
+ * Nitro composes middleware around a handler rather than importing it, so
+ * `server/middleware/**` is outside every graph this builds — including
+ * `event-exists.ts`, which answers a banded 404 for any `/api/events/:id/**` path and so
+ * for this route. That gap predates #277 and is recorded rather than closed here; closing
+ * it means giving middleware its own path-matched entry points and deciding what belongs
+ * in the refusal list, which is a change to what the diagnosis excuses and wants its own
+ * review.
  */
 export function scanRouteRefusals(entryFile: string): RouteRefusalScan {
 	const refusals: ScannedRefusal[] = [];
