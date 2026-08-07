@@ -32,6 +32,8 @@ const SOURCE_DIGEST = 'a'.repeat(64);
 const THUMBNAIL_DIGEST = 'b'.repeat(64);
 const REPLACEMENT_DIGEST = 'c'.repeat(64);
 const REPLACEMENT_THUMBNAIL_DIGEST = 'd'.repeat(64);
+/** The Event a reuse runs inside, for the arm that takes its third statement. */
+const DEFAULT_EVENT_ID = 7;
 
 function acceptedReport(digest: string) {
 	return {
@@ -67,6 +69,7 @@ async function claimedOperation(
 		stage?: 'publishing' | 'generating-derivatives';
 		targetAssetId?: GraphicAssetId;
 		duplicateContentPolicy?: 'reuse' | 'create-separate';
+		defaultEventId?: number;
 	} = {},
 ) {
 	const created = await catalogue.initiateGraphicsIngestion({
@@ -78,6 +81,7 @@ async function claimedOperation(
 		sourceFileName: 'logo.png',
 		declaredMime: 'image/png',
 		targetAssetId: options.targetAssetId,
+		defaultEventId: options.defaultEventId,
 		duplicateContentPolicy: options.duplicateContentPolicy ?? 'create-separate',
 		declaredByteLength: 70,
 		transferredByteLength: 70,
@@ -242,6 +246,11 @@ describe('an ordinary ingestion publication that holds its claim', () => {
 		expect(completed.stage).toBe('completed');
 		expect(completed.result?.outcome).toBe('reused');
 		expect(await countOf('graphics_canonical_write_candidates')).toBe(0);
+		// The arm returns the answer it built rather than re-reading, so only the
+		// committed row can say the terminal transition actually landed.
+		await expect(catalogue.getIngestionOperation(operation.id, operation.initiatedBy))
+			.resolves
+			.toMatchObject({ stage: 'completed', result: { outcome: 'reused' } });
 	});
 
 	it('spends the write candidates of a replacement no-op that holds its claim', async () => {
@@ -261,6 +270,49 @@ describe('an ordinary ingestion publication that holds its claim', () => {
 
 		expect(completed.stage).toBe('completed');
 		expect(completed.result?.outcome).toBe('replacement-noop');
+		expect(await countOf('graphics_canonical_write_candidates')).toBe(0);
+		// Same reason as the reuse arm above: the return value is built, not read.
+		await expect(catalogue.getIngestionOperation(operation.id, operation.initiatedBy))
+			.resolves
+			.toMatchObject({ stage: 'completed', result: { outcome: 'replacement-noop' } });
+	});
+
+	/**
+	 * The reuse arm takes a third statement when the operation names a default
+	 * Event, and that statement carries the same guard as the other two. Without a
+	 * case that has one, the whole branch — and the guard inside it — is unrun.
+	 */
+	it('associates a reused asset with the Event its operation ran inside', async () => {
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
+		await harness.client.execute(`
+			INSERT INTO events (id, name, game, feature_match_orientation)
+			VALUES (${DEFAULT_EVENT_ID}, 'Reuse inside an Event', 'mtg', 'landscape')
+		`);
+		const reused = await publishedAsset(
+			catalogue,
+			'upload-before-event-reuse',
+			graphicAssetId('event-reused-asset'),
+		);
+		const operation = await claimedOperation(catalogue, 'reuse-inside-event', {
+			duplicateContentPolicy: 'reuse',
+			defaultEventId: DEFAULT_EVENT_ID,
+		});
+		await arrangeReclaimableState(catalogue, operation, [SOURCE_DIGEST, THUMBNAIL_DIGEST]);
+
+		const completed = await catalogue.reuseGraphicAsset({
+			operation,
+			reusable: reused,
+			publishedAt: new Date(4_000).toISOString(),
+		});
+
+		expect(completed.result?.outcome).toBe('reused');
+		const associations = await harness.client.execute(
+			'SELECT asset_id, event_id FROM graphic_asset_event_associations',
+		);
+		expect(associations.rows.map(row => ({
+			assetId: row.asset_id,
+			eventId: Number(row.event_id),
+		}))).toEqual([{ assetId: 'event-reused-asset', eventId: DEFAULT_EVENT_ID }]);
 		expect(await countOf('graphics_canonical_write_candidates')).toBe(0);
 	});
 });
@@ -379,12 +431,110 @@ describe('an ordinary ingestion publication that lost its claim', () => {
 		});
 		await arrangeReclaimableState(catalogue, operation, [SOURCE_DIGEST, THUMBNAIL_DIGEST]);
 
+		// The snapshot this attempt holds is older than the row, which is what an
+		// attempt resuming after another one moved the operation on is holding.
 		await expect(catalogue.completeGraphicAssetReplacementNoop({
 			operation: { ...operation, updatedAt: new Date(9_000).toISOString() },
 			current,
 			completedAt: new Date(4_000).toISOString(),
 		})).rejects.toThrow(/lost its claim/i);
 
+		expect(await countOf('graphics_canonical_write_candidates')).toBe(2);
+	});
+
+	/**
+	 * The stale-snapshot contrivance above falsifies the guard's `updated_at`
+	 * conjunct, and would go on passing if the stage conjunct were dropped. This
+	 * one moves the stage alone — which no ordinary transition does, since every
+	 * one of them touches `updated_at` too — so only that conjunct answers.
+	 *
+	 * The refusal is not what proves it. `updateOperationStatement` declines a
+	 * completed operation on its own condition, so the throw survives the conjunct
+	 * being dropped; it is the write-candidate count that answers, because only
+	 * the guard stops the DELETE. Trim that assertion and the conjunct is unpinned
+	 * with nothing failing to say so.
+	 */
+	it('completes no replacement no-op once the operation has left the publishing stage', async () => {
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
+		const target = graphicAssetId('noop-stage-moved-target');
+		const current = await publishedAsset(catalogue, 'upload-before-stage-moved-noop', target);
+		const operation = await claimedOperation(catalogue, 'noop-stage-moved', {
+			targetAssetId: target,
+		});
+		await arrangeReclaimableState(catalogue, operation, [SOURCE_DIGEST, THUMBNAIL_DIGEST]);
+		await harness.client.execute({
+			sql: 'UPDATE graphics_ingestion_operations SET stage = ? WHERE id = ?',
+			args: ['completed', operation.id],
+		});
+
+		await expect(catalogue.completeGraphicAssetReplacementNoop({
+			operation,
+			current,
+			completedAt: new Date(4_000).toISOString(),
+		})).rejects.toThrow(/lost its claim/i);
+
+		expect(await countOf('graphics_canonical_write_candidates')).toBe(2);
+	});
+
+	/**
+	 * The reuse arm's guard carries the same stage conjunct, and every lost-claim
+	 * case above — including the Event one below, which this branch added — is a
+	 * stale-snapshot contrivance that would go on passing without it.
+	 *
+	 * Load-bearing assertion is the write-candidate count, for the reason its no-op
+	 * twin above gives.
+	 */
+	it('reuses no asset once the operation has left the publishing stage', async () => {
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
+		const reused = await publishedAsset(
+			catalogue,
+			'upload-before-stage-moved-reuse',
+			graphicAssetId('stage-moved-reused-asset'),
+		);
+		const operation = await claimedOperation(catalogue, 'reuse-stage-moved', {
+			duplicateContentPolicy: 'reuse',
+		});
+		await arrangeReclaimableState(catalogue, operation, [SOURCE_DIGEST, THUMBNAIL_DIGEST]);
+		await harness.client.execute({
+			sql: 'UPDATE graphics_ingestion_operations SET stage = ? WHERE id = ?',
+			args: ['completed', operation.id],
+		});
+
+		await expect(catalogue.reuseGraphicAsset({
+			operation,
+			reusable: reused,
+			publishedAt: new Date(4_000).toISOString(),
+		})).rejects.toThrow(/lost its claim/i);
+
+		expect(await countOf('graphics_canonical_write_candidates')).toBe(2);
+	});
+
+	it('associates a reused asset with no Event when the reuse lost its claim', async () => {
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
+		await harness.client.execute(`
+			INSERT INTO events (id, name, game, feature_match_orientation)
+			VALUES (${DEFAULT_EVENT_ID}, 'Reuse inside an Event', 'mtg', 'landscape')
+		`);
+		const reused = await publishedAsset(
+			catalogue,
+			'upload-before-lost-event-reuse',
+			graphicAssetId('event-lost-reuse-asset'),
+		);
+		const operation = await claimedOperation(catalogue, 'reuse-inside-event-lost-claim', {
+			duplicateContentPolicy: 'reuse',
+			defaultEventId: DEFAULT_EVENT_ID,
+		});
+		await arrangeReclaimableState(catalogue, operation, [SOURCE_DIGEST, THUMBNAIL_DIGEST]);
+
+		await expect(catalogue.reuseGraphicAsset({
+			operation: { ...operation, updatedAt: new Date(9_000).toISOString() },
+			reusable: reused,
+			publishedAt: new Date(4_000).toISOString(),
+		})).rejects.toThrow(/lost its claim/i);
+
+		// The association organises discovery around a publication that happened.
+		// This one did not, so the Event learns nothing about the asset.
+		expect(await countOf('graphic_asset_event_associations')).toBe(0);
 		expect(await countOf('graphics_canonical_write_candidates')).toBe(2);
 	});
 });

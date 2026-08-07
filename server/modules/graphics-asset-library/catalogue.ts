@@ -1827,11 +1827,13 @@ export function createD1GraphicsAssetCatalogue(
 				updatedAt: input.publishedAt,
 			};
 
-			// Everything this batch writes may only be written by the attempt that
-			// still holds the publishing claim. A guard that flips false takes the
-			// terminal transition down with it and trips the row-count check, so a
-			// lost claim can never spend another attempt's write candidates or
-			// report the winner's completion as its own.
+			/**
+			 * Everything this batch writes may only be written by the attempt that
+			 * still holds the publishing claim. A guard that flips false takes the
+			 * terminal transition down with it and trips the row-count check, so a
+			 * lost claim can never spend another attempt's write candidates or
+			 * report the winner's completion as its own.
+			 */
 			const guard = `EXISTS (
 				SELECT 1 FROM graphics_ingestion_operations
 				WHERE id = ? AND initiated_by = ? AND stage = 'publishing' AND updated_at = ?
@@ -1883,9 +1885,11 @@ export function createD1GraphicsAssetCatalogue(
 				completedAt: input.completedAt,
 			});
 
-			// Same shape as reuseGraphicAsset's guard, with the target-state check
-			// folded in: the DELETE and the terminal transition must see the exact
-			// same condition, or one could commit a no-op the other refuses.
+			/**
+			 * Same shape as reuseGraphicAsset's guard, with the target-state check
+			 * folded in: the DELETE and the terminal transition must see the exact
+			 * same condition, or one could commit a no-op the other refuses.
+			 */
 			const guard = `EXISTS (
 				SELECT 1 FROM graphics_ingestion_operations
 				WHERE id = ? AND initiated_by = ? AND stage = 'publishing' AND updated_at = ?
