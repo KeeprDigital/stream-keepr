@@ -1,9 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_REALTIME_MESSAGE_BYTES } from '~~/shared/types/messages';
+import { lastCallTo } from '~~/test/helpers/lastCallTo';
 import { ErrorInfoShaped } from '~~/test/helpers/providerRefusal';
 
+/**
+ * The failure line, told apart from the other line this module writes.
+ *
+ * `console.error` is a shared subject: `ably.ts` logs `realtime_publish_oversized`
+ * from the size diagnostic as well as `realtime_publish_failed` from the catch, and
+ * both reach the same spy. Selecting by the line's own `message` means these tests
+ * read the failure they arranged even when another line lands beside it (#280).
+ */
+function isPublishFailureLine(call: unknown[]): boolean {
+	const [line] = call;
+	return typeof line === 'string' && line.includes('"message":"realtime_publish_failed"');
+}
+
+/** The failure line as it was written, for assertions about the text itself. */
+function loggedLine(spy: ReturnType<typeof vi.spyOn>): string {
+	const [line] = lastCallTo(spy, isPublishFailureLine);
+	return line as string;
+}
+
 function loggedFields(spy: ReturnType<typeof vi.spyOn>) {
-	return JSON.parse(spy.mock.calls[0]![0] as string);
+	return JSON.parse(loggedLine(spy));
 }
 
 const mockPublish = vi.fn();
@@ -290,7 +310,7 @@ describe('failed realtime publishes', () => {
 
 		await publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123');
 
-		const line = errorSpy.mock.calls[0]![0] as string;
+		const line = loggedLine(errorSpy);
 		expect(line).not.toContain('secret-that-must-not-be-logged');
 		expect(line).not.toContain('help.ably.io');
 		expect(Object.keys(loggedFields(errorSpy))).toEqual([

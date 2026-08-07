@@ -3,6 +3,7 @@ import type { SequencedLiveStatePort } from '~~/server/modules/live-state';
 import { sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
+import { lastCallTo } from '~~/test/helpers/lastCallTo';
 
 vi.mock('hub:db', () => ({ db: mockDb }));
 
@@ -81,7 +82,10 @@ function createPort(overrides: Partial<CounterPort> = {}): CounterPort {
  */
 function stageSuccessfulCommit(port: CounterPort): void {
 	mockDb.batch.mockImplementation(async () => {
-		const [input] = vi.mocked(port.projection).mock.calls.at(-1)!;
+		// Unselected because the projection mock has exactly one caller — the module
+		// under test. What it buys is the named error: read inside a callback, an
+		// empty call list used to surface as a TypeError with no subject in it (#280).
+		const [input] = lastCallTo(vi.mocked(port.projection));
 		return [[], [], [{ ...input.reduction, sequence: input.nextSequence }]];
 	});
 }
@@ -384,7 +388,7 @@ describe('sequenced live state', () => {
 			mockDb.batch
 				.mockResolvedValueOnce([[], [], []])
 				.mockImplementation(async () => {
-					const [input] = vi.mocked(port.projection).mock.calls.at(-1)!;
+					const [input] = lastCallTo(vi.mocked(port.projection));
 					return [[], [], [{ ...input.reduction, sequence: input.nextSequence }]];
 				});
 			const liveState = createSequencedLiveState(port);
