@@ -85,6 +85,13 @@ export function useRequestFeedback() {
 	 * The refusal covers the reason phrase and `data.statusMessage`/`data.error` too, not
 	 * just the field `failureSentence` reads: on a sanitized 5xx all four carry the same
 	 * placeholder, and gating one of them would only move it down a line.
+	 *
+	 * `data.message` is read *through* `failureSentence` rather than beside it, so the
+	 * question "may this body be quoted?" has one answer in this application rather than
+	 * two that must agree. What that costs is a body carried by a failure with no status,
+	 * which the util declines: unconstructible here, since nothing in this codebase builds
+	 * an error carrying `data` and every one that does is an ofetch `FetchError`, which
+	 * always has a status.
 	 */
 	function getErrorMessage(error: unknown, fallback = 'Unknown error'): string {
 		if (typeof error === 'string' && error.trim().length > 0)
@@ -102,8 +109,7 @@ export function useRequestFeedback() {
 
 		const data = error.data;
 		if (isRecord(data)) {
-			const dataMessage = readRecordString(data, 'message')
-				?? readRecordString(data, 'statusMessage')
+			const dataMessage = readRecordString(data, 'statusMessage')
 				?? readRecordString(data, 'error');
 			if (dataMessage)
 				return dataMessage;
