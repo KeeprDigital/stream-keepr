@@ -111,12 +111,19 @@ describe('publishMessage', () => {
 	});
 
 	it('preserves missing realtime configuration failures for strict publications', async () => {
+		// The strict path's contract is that the caller hears about it. What it hears
+		// is #267's classification: the setting's own name, so a Melee sync that could
+		// not announce itself says which environment variable to go and set.
 		vi.mocked(useRuntimeConfig).mockReturnValue({ ablyApiKey: '' } as any);
 		const { publishMessageStrict } = await import('~~/server/utils/ably');
+		const { ServiceConfigurationError } = await import('~~/server/utils/errors');
 
-		await expect(
-			publishMessageStrict(1, 'melee:playersSynced', { playerCount: 2 }, 'conn-123'),
-		).rejects.toThrow('Ably server API key is not configured');
+		const failure = await publishMessageStrict(1, 'melee:playersSynced', { playerCount: 2 }, 'conn-123')
+			.then(() => null, error => error);
+
+		expect(failure).toBeInstanceOf(ServiceConfigurationError);
+		expect(failure.message).toBe('NUXT_ABLY_API_KEY is not configured');
+		expect(failure.statusCode).toBe(503);
 	});
 });
 
@@ -207,7 +214,10 @@ describe('failed realtime publishes', () => {
 
 	it('says the key was missing rather than only that a publish failed', async () => {
 		// getAblyClient throws inside the same try, so the commonest deployment
-		// failure of all now arrives with its reason attached.
+		// failure of all arrives with its reason attached. Since #267 the reason
+		// names the setting and `errorName` names the classification, which is what
+		// tells this line apart from a provider refusal at a glance — the swallowing
+		// path logs both under the same `realtime_publish_failed` message.
 		vi.mocked(useRuntimeConfig).mockReturnValue({ ablyApiKey: '' } as any);
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const { publishMessage } = await import('~~/server/utils/ably');
@@ -215,8 +225,8 @@ describe('failed realtime publishes', () => {
 		await publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123');
 
 		expect(loggedFields(errorSpy)).toMatchObject({
-			errorName: 'Error',
-			reason: 'Ably server API key is not configured',
+			errorName: 'ServiceConfigurationError',
+			reason: 'NUXT_ABLY_API_KEY is not configured',
 		});
 		errorSpy.mockRestore();
 	});
@@ -537,27 +547,58 @@ describe('publishScreenCommand', () => {
 			expect(failure.cause).toBe(refusal);
 			errorSpy.mockRestore();
 		});
+	});
 
+	/**
+	 * That a key nobody ever set says so, in the one word the reader can act on.
+	 *
+	 * `getAblyClient` throws before there is a publish to refuse, and a missing
+	 * setting is not the provider refusing anything — classifying it as one would
+	 * file an unfinished deployment under 'the realtime service said no'. #267 is
+	 * the other half: the throw used to be a plain `Error`, which matches no mapper
+	 * branch, so the 5xx sanitizer rewrote it to a bare 'Internal Server Error' and
+	 * the only person who could fix it was told nothing.
+	 */
+	describe('when the key was never configured', () => {
 		it('leaves an unconfigured key to say so as a configuration failure', async () => {
-			// `getAblyClient` throws before there is a publish to refuse, and a
-			// missing setting is not the provider refusing anything. Wrapping it here
-			// would file a deployment that was never finished under 'the realtime
-			// service said no'.
-			//
-			// The classification is what is pinned; the wording is not. This message
-			// is undecided — the adjacent finding on #264 is that it should become a
-			// `ServiceConfigurationError` naming the setting, which would rephrase it
-			// — so an exact compare here would make that fix read as a regression.
-			// `not configured` is the part any version of it has to keep, and it still
-			// tells this failure apart from a publish refusal or an SDK TypeError.
+			// The classification first: not a publish refusal, and not an SDK
+			// TypeError either. `not configured` is the part every wording of this
+			// has kept, from the plain Error #264 pinned through #267's named one.
 			vi.mocked(useRuntimeConfig).mockReturnValue({ ablyApiKey: '' } as any);
 			const { publishScreenCommand } = await import('~~/server/utils/ably');
 			const { RealtimePublishError } = await import('~~/server/utils/realtimePublishFailure');
+			const { ServiceConfigurationError } = await import('~~/server/utils/errors');
 
 			const failure = await publishScreenCommand(1, 10, 'identify').then(() => null, error => error);
 
 			expect(failure).not.toBeInstanceOf(RealtimePublishError);
+			expect(failure).toBeInstanceOf(ServiceConfigurationError);
 			expect(failure.message).toContain('not configured');
+			// The setting's own name, which is the whole reason the message is
+			// allowed out of a 5xx at all (#233).
+			expect(failure.setting).toBe('NUXT_ABLY_API_KEY');
+		});
+
+		it('reaches the caller as a 503 naming the setting, not as a sanitized 500', async () => {
+			// Post-mapper, because the mapper is where this was being lost: run the
+			// real throw through the real mapping, shaped as h3 hands it over — a
+			// non-H3Error arrives `unhandled` at 500. Clearing `unhandled` is what
+			// lets the message survive Nitro's own handler afterwards.
+			vi.mocked(useRuntimeConfig).mockReturnValue({ ablyApiKey: '' } as any);
+			const { publishScreenCommand } = await import('~~/server/utils/ably');
+			const { mapPublicNitroError } = await import('~~/server/utils/nitroErrorMapping');
+
+			const cause = await publishScreenCommand(1, 10, 'identify').then(() => null, error => error);
+			const error = { statusCode: 500, message: 'Something went wrong', cause, unhandled: true };
+
+			mapPublicNitroError(error);
+
+			expect(error).toMatchObject({
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'NUXT_ABLY_API_KEY is not configured',
+				unhandled: false,
+			});
 		});
 	});
 });

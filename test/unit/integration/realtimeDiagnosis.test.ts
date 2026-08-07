@@ -1,3 +1,4 @@
+import type { RouteRefusal } from '~~/test/integration/realtimeDiagnosis';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
@@ -6,6 +7,7 @@ import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 import { RealtimePublishError } from '~~/server/utils/realtimePublishFailure';
 import { providerRefusal } from '~~/test/helpers/providerRefusal';
 import {
+	CREDENTIAL_REJECTION_STATUSES,
 	diagnoseRealtimePublishFailure,
 	INTEGRATION_ABLY_API_KEY_ENV,
 	INTEGRATION_REALTIME_PUBLISH_FAILED_NOTICE,
@@ -27,8 +29,10 @@ import {
  *
  * `SCREEN_COMMAND_ROUTE_REFUSALS` is the load-bearing list — it is the whole of what
  * separates "the route said no" from "the provider said no". The scan at the bottom is
- * what keeps it exhaustive, because the route growing a second 404 would otherwise
- * silently start attracting a notice about an Ably key that is perfectly fine.
+ * what keeps it exhaustive, because the route growing a second refusal inside the
+ * credential band would otherwise silently start attracting a notice about an Ably key
+ * that is perfectly fine. #268: the scan filtered on 404 while the band was
+ * {401, 403, 404}, so it kept the list exhaustive over a third of the band.
  */
 
 const commandRoutePath = fileURLToPath(
@@ -81,7 +85,14 @@ describe('diagnosing a rejected realtime publish', () => {
 		// A missing Screen is a fixture problem. Blaming the key here would send the
 		// reader to Ably's dashboard over a row that was never inserted.
 		for (const refusal of SCREEN_COMMAND_ROUTE_REFUSALS)
-			expect(diagnose(404, nitroError(404, refusal))).toBeUndefined();
+			expect(diagnose(refusal.statusCode, nitroError(refusal.statusCode, refusal.message))).toBeUndefined();
+	});
+
+	it('excuses a refusal only at the status the route raises it with', () => {
+		// #268: a refusal is a status and a message, not a message. Excusing the text
+		// at any status in the band would let a genuine credential refusal that
+		// happened to echo the route's own wording pass unremarked.
+		expect(diagnose(401, nitroError(401, 'Screen not found'))).toBeDefined();
 	});
 
 	it('leaves another route\'s own refusals to speak for themselves too', () => {
@@ -90,11 +101,24 @@ describe('diagnosing a rejected realtime publish', () => {
 		// raises three distinct 404s — would otherwise inherit this route's list and
 		// read every one of its legitimate refusals as a fabricated key.
 		const placementRefusal = nitroError(404, 'Layout placement not found');
+		const placementRefusals = [{ statusCode: 404, message: 'Layout placement not found' }];
 
-		expect(diagnoseRealtimePublishFailure(404, placementRefusal, ['Layout placement not found'])).toBeUndefined();
+		expect(diagnoseRealtimePublishFailure(404, placementRefusal, placementRefusals)).toBeUndefined();
 		// The same body on a route that cannot raise it is still a diagnosis, so the
 		// argument is doing the work rather than the message text happening to look safe.
 		expect(diagnose(404, placementRefusal)).toBeDefined();
+	});
+
+	it('leaves a route\'s own 403 to speak for itself, once the list names it', () => {
+		// #268: the band is {401, 403, 404}, so a route that grows a refusal of its
+		// own at 401 or 403 needs the same excusing a 404 gets — and gets it only by
+		// being named. Both directions, because a list that excused everything would
+		// pass the first half of this on its own.
+		const locked = nitroError(403, 'Screen is locked');
+
+		expect(diagnose(403, locked)).toBeDefined();
+		expect(diagnoseRealtimePublishFailure(403, locked, [{ statusCode: 403, message: 'Screen is locked' }]))
+			.toBeUndefined();
 	});
 
 	it('leaves a renamed route to speak for itself', () => {
@@ -159,9 +183,12 @@ describe('diagnosing a rejected realtime publish', () => {
 	});
 
 	it('says nothing about a server error, which is not a rejected key', () => {
-		// A 500 is the absent-key case (`getAblyClient` throws a plain Error) or the
-		// service being unwell. Neither is answered by "your key is fake".
-		expect(diagnose(500, nitroError(500, 'Ably server API key is not configured'))).toBeUndefined();
+		// A 500 is the service being unwell. Since #267 the absent-key case is a 503
+		// that names the setting outright — a better answer than this notice could
+		// give, and one the reader can act on without knowing anything about Ably.
+		// Neither is answered by "your key is fake".
+		expect(diagnose(503, nitroError(503, `${INTEGRATION_ABLY_API_KEY_ENV} is not configured`))).toBeUndefined();
+		expect(diagnose(500, nitroError(500, 'Internal Server Error'))).toBeUndefined();
 		expect(diagnose(409, nitroError(409, 'Conflict'))).toBeUndefined();
 	});
 });
@@ -219,7 +246,7 @@ describe('the classification the Screen-command route produces', () => {
 		mapPublicNitroError(error);
 
 		expect(error.statusCode).not.toBe(404);
-		expect(SCREEN_COMMAND_ROUTE_REFUSALS).not.toContain(error.message);
+		expect(SCREEN_COMMAND_ROUTE_REFUSALS.map(refusal => refusal.message)).not.toContain(error.message);
 	});
 });
 
@@ -243,8 +270,8 @@ describe('the variable is named where each runner looks', () => {
 });
 
 /** Every `createError({ statusCode, message })` the route raises, as a pair. */
-function routeRefusals(source: ts.SourceFile): { statusCode: number; message: string }[] {
-	const refusals: { statusCode: number; message: string }[] = [];
+function routeRefusals(source: ts.SourceFile): RouteRefusal[] {
+	const refusals: RouteRefusal[] = [];
 
 	function visit(node: ts.Node) {
 		if (
@@ -276,6 +303,25 @@ function routeRefusals(source: ts.SourceFile): { statusCode: number; message: st
 	return refusals;
 }
 
+/**
+ * The refusals the diagnosis could actually misread: the ones inside the band.
+ *
+ * #268: this filtered on 404 while the band was {401, 403, 404}, so a route that
+ * grew a 403 of its own gained a legitimate refusal the diagnosis would answer with
+ * "check your Ably key" and nothing would fail. The band is imported rather than
+ * restated, so the scan cannot drift from the check it is guarding.
+ */
+function inCredentialBand(refusals: readonly RouteRefusal[]): RouteRefusal[] {
+	return refusals.filter(refusal => CREDENTIAL_REJECTION_STATUSES.has(refusal.statusCode));
+}
+
+/** The banded refusals `SCREEN_COMMAND_ROUTE_REFUSALS` does not account for. */
+function unlistedRefusals(refusals: readonly RouteRefusal[]): RouteRefusal[] {
+	return refusals.filter(refusal => !SCREEN_COMMAND_ROUTE_REFUSALS.some(
+		known => known.statusCode === refusal.statusCode && known.message === refusal.message,
+	));
+}
+
 describe('the Screen-command route\'s own refusals', () => {
 	const source = ts.createSourceFile(
 		commandRoutePath,
@@ -292,11 +338,50 @@ describe('the Screen-command route\'s own refusals', () => {
 	});
 
 	it('are every one of them recognised as the route\'s own', () => {
-		// The route growing a second 404 without this list growing with it would make
-		// that new refusal read as a fabricated Ably key.
-		const notFound = refusals.filter(refusal => refusal.statusCode === 404).map(refusal => refusal.message);
+		// The route growing a second refusal inside the band without this list
+		// growing with it would make that new refusal read as a fabricated Ably key.
+		const banded = inCredentialBand(refusals);
 
-		expect(notFound.length).toBeGreaterThan(0);
-		expect(notFound.filter(message => !SCREEN_COMMAND_ROUTE_REFUSALS.includes(message))).toEqual([]);
+		expect(banded.length).toBeGreaterThan(0);
+		expect(unlistedRefusals(banded)).toEqual([]);
+	});
+});
+
+/**
+ * What the scan holds the route to, checked against refusals the route does not
+ * have yet — which is the only way to establish it would catch them.
+ *
+ * The real-file assertion above passes on a scan that filters on nothing at all and
+ * on a scan that filters everything out. These say which refusals it is supposed to
+ * demand a listing for, and — the half #268 was filed over — which it must not.
+ */
+describe('what the scan holds the route to', () => {
+	it('catches a route-grown 403, which the diagnosis would otherwise misread', () => {
+		const locked = [{ statusCode: 403, message: 'Screen is locked' }];
+
+		expect(inCredentialBand(locked)).toEqual(locked);
+		expect(unlistedRefusals(inCredentialBand(locked))).toEqual(locked);
+	});
+
+	it('catches a route-grown 404 the list does not name, as it always did', () => {
+		const missing = [{ statusCode: 404, message: 'Event not found' }];
+
+		expect(unlistedRefusals(inCredentialBand(missing))).toEqual(missing);
+	});
+
+	it('leaves a refusal outside the band alone, because no diagnosis can reach it', () => {
+		// A 409 or a 422 is never mistaken for a credential rejection, so demanding
+		// it be listed would make the list a catalogue of the route rather than of
+		// what the diagnosis can get wrong — noise the next person would delete.
+		expect(inCredentialBand([
+			{ statusCode: 409, message: 'Screen was modified concurrently' },
+			{ statusCode: 422, message: 'Unknown command' },
+		])).toEqual([]);
+	});
+
+	it('excuses a banded refusal only at the status the list names it at', () => {
+		expect(unlistedRefusals([{ statusCode: 404, message: 'Screen not found' }])).toEqual([]);
+		expect(unlistedRefusals([{ statusCode: 401, message: 'Screen not found' }]))
+			.toEqual([{ statusCode: 401, message: 'Screen not found' }]);
 	});
 });
