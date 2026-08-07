@@ -1,6 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 // ── $fetch stub (used by searchFuzzyCardName, searchCardPrints, selectMeldCardPart) ──
 
@@ -35,9 +36,6 @@ const mockEventStoreState = {
 
 mockNuxtImport('useCardRepository', () => () => mockCardRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
-mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: vi.fn(async (fn: any) => fn()),
-}));
 mockNuxtImport('useEventStore', () => () => mockEventStoreState);
 mockNuxtImport('useScryfallBatch', () => () => ({
 	fetchScryfallCards: vi.fn().mockResolvedValue(new Map()),
@@ -225,6 +223,89 @@ describe('useCardStore', () => {
 
 			expect(mockCardRepo.deleteScreenCard).toHaveBeenCalledWith(1, 5);
 			expect(store.activeCard).toBeNull();
+		});
+	});
+
+	// ── Failure Reporting ──
+
+	/**
+	 * What the Card page shows when a write is refused.
+	 *
+	 * These rows could not exist before #271. This suite stood a hand-written
+	 * `async fn => fn()` in for `useAsyncAction`, which never catches — so no test here
+	 * had ever rejected, and the store's whole failure path was unobserved rather than
+	 * merely untested (#263's map, #241's discipline). Running the real composable is what
+	 * makes them constructible; the fixtures are real `FetchError`s because that is what
+	 * `$fetch` rejects with, and a plain object would report 'An error occurred' instead.
+	 */
+	describe('failure reporting', () => {
+		it('reports the sentence the server wrote about a refused load', async () => {
+			store.activeScreenId = 5;
+			mockCardRepo.getScreenCard.mockRejectedValue(transportFailure({
+				status: 404,
+				body: { message: 'Screen is not in Card mode' },
+				request: `[GET] "/api/events/1/screens/5/card"`,
+			}));
+
+			await store.loadActiveCard();
+
+			expect(store.error).toBe('Screen is not in Card mode');
+			expect(store.loading).toBe(false);
+		});
+
+		it('reports the sentence the server wrote about a refused save', async () => {
+			store.activeScreenId = 5;
+			mockCardRepo.saveScreenCard.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'Another operator is showing a card on this Screen' },
+			}));
+
+			await store.saveActiveCard(createMockMtgCard());
+
+			expect(store.error).toBe('Another operator is showing a card on this Screen');
+		});
+
+		/**
+		 * The rollback is the reason the substitution belongs inside the action rather than
+		 * around the whole call: `onError` must still see a failure, and still put the card
+		 * an operator was looking at back on screen.
+		 */
+		it('rolls the cleared card back and still reports the sentence', async () => {
+			store.activeScreenId = 5;
+			const card = createMockMtgCard();
+			store.activeCard = card;
+			mockCardRepo.deleteScreenCard.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'The card timeout has already elapsed' },
+			}));
+
+			await store.clearActiveCard();
+
+			expect(store.error).toBe('The card timeout has already elapsed');
+			expect(store.activeCard).toEqual(card);
+		});
+
+		it('shows the transport line rather than a 5xx body detail', async () => {
+			store.activeScreenId = 5;
+			mockCardRepo.saveScreenCard.mockRejectedValue(transportFailure({
+				status: 500,
+				body: { message: 'D1_ERROR: no such table: screen_cards' },
+				request: `[PUT] "/api/events/1/screens/5/card"`,
+			}));
+
+			await store.saveActiveCard(createMockMtgCard());
+
+			expect(store.error).not.toContain('D1_ERROR');
+			expect(store.error).toBe('[PUT] "/api/events/1/screens/5/card": 500 Internal Server Error');
+		});
+
+		it('reports a rejection that is not an Error as the composable does', async () => {
+			store.activeScreenId = 5;
+			mockCardRepo.saveScreenCard.mockRejectedValue({ message: 'not an Error at all' });
+
+			await store.saveActiveCard(createMockMtgCard());
+
+			expect(store.error).toBe('An error occurred');
 		});
 	});
 

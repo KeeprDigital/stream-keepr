@@ -39,12 +39,31 @@
  * gain a sentence here and still be no refusal at all.
  */
 export function failureSentence(caught: unknown): string | undefined {
-	const status = failureStatus(caught);
-	if (status === undefined || status >= 500)
+	if (failureStatus(caught) === undefined || isSanitizedFailure(caught))
 		return undefined;
 
 	const message = (caught as { data?: { message?: unknown } } | null)?.data?.message;
 	return typeof message === 'string' && message.length > 0 ? message : undefined;
+}
+
+/**
+ * Whether the words this failure carries are the machinery's rather than the authority's.
+ *
+ * The boundary `failureSentence` reads at, named separately because one surface needs the
+ * same judgement about *other* fields. `useRequestFeedback`'s `getErrorMessage` reaches for
+ * `data.statusMessage`, `data.error` and the reason phrase as well as `data.message`, and on
+ * a sanitized 5xx every one of those says 'Internal Server Error' — so gating only the field
+ * `failureSentence` reads would move the placeholder one line down rather than refuse it
+ * (#271). Refusing them all leaves the transport's own line, which at least reads as
+ * machinery; that is #245's judgement and this is the same one.
+ *
+ * A failure carrying no status is not sanitized. It never reached the server, so nothing
+ * replaced its prose on the way out — what it may be quoted *for* is a separate question,
+ * and `failureSentence` answers that one by declining.
+ */
+export function isSanitizedFailure(caught: unknown): boolean {
+	const status = failureStatus(caught);
+	return status !== undefined && status >= 500;
 }
 
 /**

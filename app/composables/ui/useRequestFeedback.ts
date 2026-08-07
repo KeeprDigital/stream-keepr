@@ -69,12 +69,36 @@ export function useRequestFeedback() {
 	const toast = useToast();
 	const requests = createKeyedGuardedSequence<string | symbol>();
 
+	/**
+	 * What a failed request says to whoever asked for it.
+	 *
+	 * This is the widest reporting seam in the application — fifty-eight `runRequest` call
+	 * sites turn its answer into a toast, a banner, or a debounced write's field-level save
+	 * error — and until #271 it read the response body with no regard for what the status
+	 * meant. A sub-500 body is the authority answering *this* request and is the best thing
+	 * anyone can be shown. A 5xx body is not: `mapPublicNitroError` replaces an unmapped
+	 * 5xx message with 'Internal Server Error' on the way out, so quoting it puts a
+	 * placeholder in front of an operator dressed as the authority's own words. Refused
+	 * here, the transport's line is what is left, and a status line at least reads as
+	 * machinery (`failureSentence`, #245).
+	 *
+	 * The refusal covers the reason phrase and `data.statusMessage`/`data.error` too, not
+	 * just the field `failureSentence` reads: on a sanitized 5xx all four carry the same
+	 * placeholder, and gating one of them would only move it down a line.
+	 */
 	function getErrorMessage(error: unknown, fallback = 'Unknown error'): string {
 		if (typeof error === 'string' && error.trim().length > 0)
 			return error;
 
 		if (!isRecord(error))
 			return fallback;
+
+		const sentence = readString(failureSentence(error));
+		if (sentence)
+			return sentence;
+
+		if (isSanitizedFailure(error))
+			return readRecordString(error, 'message') ?? fallback;
 
 		const data = error.data;
 		if (isRecord(data)) {

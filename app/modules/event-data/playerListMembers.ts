@@ -21,7 +21,15 @@ interface PlayerListMembersState {
  * rollback, and realtime member cache invalidation for Event Data Player Lists.
  */
 export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
-	const { executeAction } = useAsyncAction();
+	/**
+	 * Every mutation here reports the sentence the server wrote about a refusal, where it
+	 * wrote one. The Event Data lifecycle already did this for the Player Lists themselves
+	 * (#262), so creating a list said why it was refused while adding a player to one said
+	 * '[POST] "…": 409 Conflict' — the same pane, two different vocabularies. The rollbacks
+	 * below are unaffected: the substitution happens inside the action, so `onError` still
+	 * sees a failure and still puts the optimistic count back (#271).
+	 */
+	const { executeReporting } = useReportingAction();
 	const membersByListId = ref<Map<number, number[]>>(new Map());
 
 	function setMemberCount(listId: number, memberCount: number) {
@@ -66,7 +74,7 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 			membersByListId.value.set(listId, [...cachedIds, ...idsToAdd]);
 		}
 
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const result = await state.repository.addMembers(eventId, listId, idsToAdd);
 				setMemberCount(listId, result.memberCount);
@@ -100,7 +108,7 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 			membersByListId.value.set(listId, cachedIds.filter(id => id !== playerId));
 		}
 
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const result = await state.repository.removeMember(eventId, listId, playerId);
 				if (!result.success) {
@@ -138,7 +146,7 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 			membersByListId.value.set(listId, cachedIds.filter(id => !removeSet.has(id)));
 		}
 
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const result = await state.repository.batchRemoveMembers(eventId, listId, playerIds);
 				setMemberCount(listId, result.memberCount);
@@ -165,7 +173,7 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 			membersByListId.value.set(listId, [...playerIds]);
 		}
 
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const result = await state.repository.reorderMembers(eventId, listId, playerIds);
 				setMemberCount(listId, result.memberCount);
@@ -183,7 +191,7 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 	}
 
 	async function loadListMembers(eventId: number, listId: number) {
-		return executeAction(
+		return executeReporting(
 			async () => {
 				const memberIds = await state.repository.getMemberIds(eventId, listId);
 				membersByListId.value.set(listId, memberIds);
