@@ -1,7 +1,9 @@
 import type { ScannedRefusal } from '~~/test/helpers/routeRefusalScan';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 import { RealtimePublishError } from '~~/server/utils/realtimePublishFailure';
 import { providerRefusal } from '~~/test/helpers/providerRefusal';
@@ -487,5 +489,77 @@ describe('what the scan can read out of a route', () => {
 
 		expect(refusals).toHaveLength(3);
 		expect(refusals.map(refusal => refusal.site)).toEqual(['route.ts:1', 'route.ts:2', 'route.ts:3']);
+	});
+});
+
+/**
+ * How far the scan reaches, on a fixture tree rather than on the real graph.
+ *
+ * #277 widened the scan from one file to the route's first-party import graph, and each
+ * way of reaching a module is a separate line that can regress on its own. Pinning them
+ * against whatever the Screen-command route happens to import would pin this
+ * repository's structure rather than the walker — these modules exist to be reached.
+ */
+describe('the scan\'s reach through a route\'s imports', () => {
+	const fixtures: Record<string, string> = {
+		'entry.ts': [
+			'import type { Ignored } from \'./type-only\';',
+			'import { direct } from \'./direct\';',
+			'export { reexported } from \'./re-exported\';',
+			'export async function load() { return import(\'./dynamic\'); }',
+			'createError({ statusCode: 404, message: \'the entry point\' });',
+		].join('\n'),
+		'direct.ts': 'export const direct = () => createError({ statusCode: 401, message: \'a direct import\' });',
+		're-exported.ts': 'export const reexported = () => createError({ statusCode: 403, message: \'a re-export\' });',
+		'dynamic.ts': 'export const dynamic = () => createError({ statusCode: 403, message: \'a dynamic import\' });',
+		'type-only.ts': 'export interface Ignored { readonly x: number }\n'
+			+ 'const unreachable = () => createError({ statusCode: 403, message: \'a type-only import\' });',
+	};
+
+	let root: string;
+
+	beforeAll(() => {
+		root = mkdtempSync(join(tmpdir(), 'issue277-scan-'));
+		for (const [name, text] of Object.entries(fixtures))
+			writeFileSync(join(root, name), text);
+	});
+
+	afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+	it('follows a direct import, a re-export and a dynamic import', () => {
+		// A refusal is reachable through any of the three. Reading only `import` would
+		// leave two silent holes of exactly the kind this ticket closed.
+		const messages = scanRouteRefusals(join(root, 'entry.ts')).refusals.map(refusal => refusal.message);
+
+		expect(messages).toContain('the entry point');
+		expect(messages).toContain('a direct import');
+		expect(messages).toContain('a re-export');
+		expect(messages).toContain('a dynamic import');
+	});
+
+	it('does not follow a type-only import, which cannot carry a throw', () => {
+		// The one narrowing that is sound, and worth pinning because widening it would
+		// drag the schema layer's whole closure in for nothing.
+		const messages = scanRouteRefusals(join(root, 'entry.ts')).refusals.map(refusal => refusal.message);
+
+		expect(messages).not.toContain('a type-only import');
+	});
+
+	it('reports a first-party import it cannot follow, rather than reaching less in silence', () => {
+		// The guarantee is that the graph is complete. A specifier resolving to no file
+		// shrinks it with nothing saying so — #277's defect wearing the import graph.
+		const entry = join(root, 'broken.ts');
+		writeFileSync(entry, 'import { gone } from \'./not-a-module\';\n');
+
+		expect(scanRouteRefusals(entry).unfollowedImports).toEqual([expect.stringContaining('./not-a-module')]);
+	});
+
+	it('says nothing about a third-party or virtual specifier, which is not the route\'s code', () => {
+		// A refusal raised inside `h3` or `hub:db` is not one this repository can list or
+		// rename, so these are excluded by design rather than reported as holes.
+		const entry = join(root, 'third-party.ts');
+		writeFileSync(entry, 'import { createError } from \'h3\';\nimport { db } from \'hub:db\';\n');
+
+		expect(scanRouteRefusals(entry).unfollowedImports).toEqual([]);
 	});
 });
