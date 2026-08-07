@@ -1,18 +1,16 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createOptimisticState } from '~/modules/optimistic-state';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
-mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: vi.fn(async (fn: any, opts?: any) => {
-		try {
-			return await fn();
-		}
-		catch (e) {
-			opts?.onError?.(e);
-			return null;
-		}
-	}),
-}));
+/*
+ * `useAsyncAction` is deliberately not mocked. The copy that stood here rolled back and
+ * resolved `null` but never wrote `errorRef` — so this module could report whatever it
+ * liked and every test here would stay green. That is exactly what happened: #262 gave
+ * a refused prediction the sentence the server wrote about it, and this suite could not
+ * see the difference. The row in 'reporting a refused prediction' is what ended that
+ * blindness (#263).
+ */
 
 async function flushPromises() {
 	await Promise.resolve();
@@ -117,6 +115,52 @@ describe('optimistic-state module', () => {
 			// The claim is gone — a later remote write owns the whole state again.
 			applyRemote(1, { life1: 19, life2: 12, clockMs: 70 });
 			expect(stateMap.value.get(1)).toEqual({ life1: 19, life2: 12, clockMs: 70 });
+		});
+	});
+
+	describe('reporting a refused prediction', () => {
+		/*
+		 * A rolled-back optimistic action is where the words matter most: the operator
+		 * watched the change appear and then vanish, so the message is the only account of
+		 * why. These two rows are the pair — the sentence the authority wrote is reported
+		 * where there is one, and the transport's line where there is not.
+		 */
+		it('reports the sentence the refusal carries, not the transport line', async () => {
+			let rejectApi!: (error: unknown) => void;
+			const { stateMap, errorRef, run } = createTestSetup();
+
+			void run('swap', 1, current => ({ ...current, life1: 15 }), () =>
+				new Promise<SlotState>((_resolve, reject) => {
+					rejectApi = reject;
+				}));
+
+			rejectApi(transportFailure({
+				status: 409,
+				body: { message: 'This Feature Match has already been reset' },
+				request: `[PATCH] "/api/events/1/feature-matches/1/state"`,
+			}));
+			await flushPromises();
+
+			expect(errorRef.value).toBe('This Feature Match has already been reset');
+			expect(stateMap.value.get(1)).toEqual({ life1: 20, life2: 20, clockMs: 100 });
+		});
+
+		it('reports the transport line for a failure that wrote no sentence', async () => {
+			let rejectApi!: (error: unknown) => void;
+			const { errorRef, run } = createTestSetup();
+
+			void run('swap', 1, current => ({ ...current, life1: 15 }), () =>
+				new Promise<SlotState>((_resolve, reject) => {
+					rejectApi = reject;
+				}));
+
+			rejectApi(transportFailure({
+				status: 503,
+				request: `[PATCH] "/api/events/1/feature-matches/1/state"`,
+			}));
+			await flushPromises();
+
+			expect(errorRef.value).toBe('[PATCH] "/api/events/1/feature-matches/1/state": 503 Service Unavailable');
 		});
 	});
 
