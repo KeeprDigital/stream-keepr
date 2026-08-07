@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockMatch } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 // ── Mock Dependencies ──
 
@@ -24,9 +25,13 @@ mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string,
 
 mockNuxtImport('useMatchRepository', () => () => mockRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
-mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: vi.fn(async (fn: any) => fn()),
-}));
+/*
+ * `useAsyncAction` is deliberately not mocked. The copy that stood here was
+ * `async fn => fn()` — it never caught, so nothing in this suite could observe what
+ * this store does with a refused request, and the optimistic rollback in
+ * `useStoreHelpers` never ran either. Running the real composable is what lets the
+ * sentence this store reports since #262 be seen from here (#263, #241).
+ */
 mockNuxtImport('useFeatureMatchStore', () => () => ({ featureMatches: [] }));
 
 describe('useMatchStore', () => {
@@ -120,6 +125,29 @@ describe('useMatchStore', () => {
 
 			await store.removeMatch(1, 1);
 
+			expect(store.matches).toHaveLength(0);
+		});
+	});
+
+	// ── Failure reporting ──
+
+	describe('failure reporting', () => {
+		/*
+		 * #262 gave this store the sentence through the Event Data lifecycle seam, but no
+		 * test here could see it: the seam this suite stood in for never caught, so a
+		 * refused request left the store by rejecting rather than by reporting. This is
+		 * that store's own pin (#263).
+		 */
+		it('reports the sentence a refused create carries rather than the transport line', async () => {
+			mockRepo.create.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'That Round has already been completed' },
+				request: `[POST] "/api/events/1/matches"`,
+			}));
+
+			await store.createMatch(1, { roundId: 1 });
+
+			expect(store.error).toBe('That Round has already been completed');
 			expect(store.matches).toHaveLength(0);
 		});
 	});
