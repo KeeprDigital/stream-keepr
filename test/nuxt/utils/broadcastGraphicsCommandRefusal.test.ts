@@ -9,13 +9,23 @@ const MISSING_MESSAGE
 		+ 'so this Broadcast Graphic cannot be taken on air';
 
 /**
- * One refused command as `$fetch` hands it to a caller.
+ * One failed command, carrying whatever body the server answered with.
  *
  * `error.data` is the parsed response body, and the body a refusal arrives in is the
  * one the server writes for `createError({ message, data })` — so the domain code and
- * the domain sentence are both inside it, and `Error.message` is the transport's.
+ * the domain sentence are both inside it, while `message` is the transport's line.
+ *
+ * A plain object rather than a real `FetchError`, and deliberately so: the function
+ * under test is pure, reads `data` and nothing else, and never goes near
+ * `useAsyncAction`. **Do not copy this shape into a store suite.** There the
+ * difference is the #241 defect — the real `useAsyncAction` reports a non-`Error`
+ * rejection as 'An error occurred', so a store suite rejecting with a plain object
+ * asserts prose no operator will ever be shown. The fixture for that is
+ * `test/helpers/transportFailure`, which returns a `FetchError`; this one was called
+ * `transportFailure` too until #288 renamed it, which is exactly the copy that name
+ * invited.
  */
-function transportFailure(body: unknown) {
+function failedCommand(body: unknown) {
 	return {
 		statusCode: 409,
 		message: `[POST] "/api/…/commands": 409 Conflict`,
@@ -42,7 +52,7 @@ function refusalBody(code: string, message: string) {
 describe('the domain refusal a failed Broadcast Graphics command carries', () => {
 	it('reads the code and the sentence the authority wrote out of the response body', () => {
 		const refusal = broadcastGraphicsCommandRefusal(
-			transportFailure(refusalBody('missing-asset-reference', MISSING_MESSAGE)),
+			failedCommand(refusalBody('missing-asset-reference', MISSING_MESSAGE)),
 		);
 
 		expect(refusal).toEqual({ code: 'missing-asset-reference', message: MISSING_MESSAGE });
@@ -52,7 +62,7 @@ describe('the domain refusal a failed Broadcast Graphics command carries', () =>
 	});
 
 	it('tells the two Graphic Asset failures apart, because their next moves are opposite', () => {
-		const unavailable = broadcastGraphicsCommandRefusal(transportFailure(refusalBody(
+		const unavailable = broadcastGraphicsCommandRefusal(failedCommand(refusalBody(
 			'unavailable-asset-content',
 			'Graphic Asset Content at graphics.promo.items.sting.asset is temporarily unavailable, '
 			+ 'so this Broadcast Graphic cannot be taken on air',
@@ -66,8 +76,8 @@ describe('the domain refusal a failed Broadcast Graphics command carries', () =>
 		// the authority saying anything about the command — treating one as a refusal
 		// would suppress the reload an ended epoch needs.
 		expect(broadcastGraphicsCommandRefusal(new Error('Failed to fetch'))).toBeUndefined();
-		expect(broadcastGraphicsCommandRefusal(transportFailure(undefined))).toBeUndefined();
-		expect(broadcastGraphicsCommandRefusal(transportFailure({ statusCode: 409 }))).toBeUndefined();
+		expect(broadcastGraphicsCommandRefusal(failedCommand(undefined))).toBeUndefined();
+		expect(broadcastGraphicsCommandRefusal(failedCommand({ statusCode: 409 }))).toBeUndefined();
 		expect(broadcastGraphicsCommandRefusal(null)).toBeUndefined();
 	});
 
@@ -75,7 +85,7 @@ describe('the domain refusal a failed Broadcast Graphics command carries', () =>
 		// The vocabulary is what a client is entitled to act on. A code it does not know
 		// is a code whose next move it cannot name, so it is left to the fallback.
 		expect(broadcastGraphicsCommandRefusal(
-			transportFailure(refusalBody('vp9-alpha-chromium-required', 'Not playable on this target')),
+			failedCommand(refusalBody('vp9-alpha-chromium-required', 'Not playable on this target')),
 		)).toBeUndefined();
 	});
 
@@ -100,7 +110,7 @@ describe('the domain refusal a failed Broadcast Graphics command carries', () =>
 		// Dropping the refusal because its prose went missing would trade a vague message
 		// for a wrong one — a refusal reported as a failure of the action.
 		const refusal = broadcastGraphicsCommandRefusal(
-			transportFailure({ statusCode: 409, data: { code: 'missing-asset-reference' } }),
+			failedCommand({ statusCode: 409, data: { code: 'missing-asset-reference' } }),
 		);
 
 		expect(refusal?.code).toBe('missing-asset-reference');
