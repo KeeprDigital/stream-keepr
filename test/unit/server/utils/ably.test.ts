@@ -580,10 +580,14 @@ describe('publishScreenCommand', () => {
 		});
 
 		it('reaches the caller as a 503 naming the setting, not as a sanitized 500', async () => {
-			// Post-mapper, because the mapper is where this was being lost: run the
-			// real throw through the real mapping, shaped as h3 hands it over — a
-			// non-H3Error arrives `unhandled` at 500. Clearing `unhandled` is what
-			// lets the message survive Nitro's own handler afterwards.
+			// Post-mapper, because the mapper is where this was being lost: the real
+			// throw, through the real mapping. Shaped harsher than h3's own hand-over
+			// — `createError` copies a truthy `statusCode`, so this error genuinely
+			// arrives at 503 already — and starting from the sanitizer's worst case
+			// proves the mapping rather than the arrival. 500 is what the *plain*
+			// Error this replaced arrived as, which is where the bare 'Internal
+			// Server Error' came from. `unhandled` is true either way, and clearing
+			// it is what lets the message survive Nitro's own handler afterwards.
 			vi.mocked(useRuntimeConfig).mockReturnValue({ ablyApiKey: '' } as any);
 			const { publishScreenCommand } = await import('~~/server/utils/ably');
 			const { mapPublicNitroError } = await import('~~/server/utils/nitroErrorMapping');
