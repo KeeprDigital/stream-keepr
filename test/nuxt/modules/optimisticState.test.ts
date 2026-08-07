@@ -1,7 +1,6 @@
-import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createOptimisticState } from '~/modules/optimistic-state';
 import { transportFailure } from '~~/test/helpers/transportFailure';
+import { createOptimisticState } from '~/modules/optimistic-state';
 
 /*
  * `useAsyncAction` is deliberately not mocked. The copy that stood here rolled back and
