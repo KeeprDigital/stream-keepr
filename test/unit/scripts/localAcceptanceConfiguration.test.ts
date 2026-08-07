@@ -16,6 +16,7 @@ import {
 	localAcceptanceConfiguration,
 	localConfigurationNotice,
 	missingLocalAcceptanceNames,
+	previewStagingPlan,
 	requireLocalAcceptanceConfiguration,
 	RESOLVED_PREVIEW_DEV_VARS,
 	suppliedNames,
@@ -334,6 +335,48 @@ describe('the preview command', () => {
 	it('still points wrangler at the config the resolved path is derived from', () => {
 		expect(packageJson.scripts.preview).toContain('--config .output/server/wrangler.json');
 		expect(RESOLVED_PREVIEW_DEV_VARS).toBe('.output/server/.dev.vars');
+	});
+});
+
+describe('staging .dev.vars for the preview', () => {
+	const source = `${SIGNING_KEY}=${A_KEY}\n`;
+
+	it('does nothing at all when there is no .dev.vars to stage', () => {
+		expect(previewStagingPlan({ source: null, existing: null }))
+			.toEqual({ stage: false, lines: [] });
+	});
+
+	it('stages quietly when nothing is there yet', () => {
+		const plan = previewStagingPlan({ source, existing: null });
+		expect(plan.stage).toBe(true);
+		expect(plan.lines).toHaveLength(1);
+		expect(plan.lines[0]).toContain(`Staged .dev.vars into ${RESOLVED_PREVIEW_DEV_VARS}`);
+	});
+
+	it('stages quietly when the staged copy already matches', () => {
+		expect(previewStagingPlan({ source, existing: source }).lines).toHaveLength(1);
+	});
+
+	/**
+	 * #189 hand-maintained this file with a name the root copy did not carry. An
+	 * unannounced overwrite would have removed it and left a preview failing for
+	 * a reason nothing on screen explained — this ticket's own defect class, one
+	 * layer up. It still overwrites; it no longer does so silently.
+	 */
+	it('says so before replacing a staged copy that differs', () => {
+		const plan = previewStagingPlan({ source, existing: `${source}NUXT_ABLY_API_KEY=live\n` });
+		expect(plan.stage).toBe(true);
+		expect(plan.lines).toHaveLength(2);
+		expect(plan.lines[0]).toContain('differs from the .dev.vars it is staged from');
+		expect(plan.lines[0]).toContain('about to be lost');
+	});
+
+	/** The warning must not become noise on the ordinary path. */
+	it('does not cry replacement when the two agree', () => {
+		for (const existing of [null, source]) {
+			for (const line of previewStagingPlan({ source, existing }).lines)
+				expect(line).not.toContain('about to be lost');
+		}
 	});
 });
 

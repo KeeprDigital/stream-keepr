@@ -207,6 +207,48 @@ export function localConfigurationNotice(missing) {
 }
 
 /**
+ * What the preview staging step should do, and what it should say while doing
+ * it.
+ *
+ * Extracted from `scripts/stage-preview-secrets.mjs` so the decision can be
+ * pinned; the script around it is left with a read, a write, and two prints.
+ *
+ * The replacement line exists because the first version of the staging step
+ * overwrote the resolved file unconditionally and silently. That is fine when
+ * it is a copy of the root file, which is the whole point — but #189 reported
+ * hand-maintaining `.output/server/.dev.vars` with a name the root copy did not
+ * have, and a silent clobber would have taken it away and left a preview
+ * failing for a reason nothing on screen explained. That is this ticket's own
+ * defect class, one layer up, so the step says when it is replacing something
+ * different rather than only when it writes.
+ *
+ * It still replaces. The root file is the source of truth — that is what the
+ * corrected documentation now promises — and a staging step that declined to
+ * stage would just be the old silence with extra steps.
+ *
+ * @param {{ source: string | null, existing: string | null }} files
+ */
+export function previewStagingPlan({ source, existing }) {
+	if (source === null)
+		return { stage: false, lines: [] };
+
+	const staged = `Staged .dev.vars into ${RESOLVED_PREVIEW_DEV_VARS}, `
+		+ 'where wrangler resolves it from the config (#274).';
+	if (existing !== null && existing !== source) {
+		return {
+			stage: true,
+			lines: [
+				`Replacing the existing ${RESOLVED_PREVIEW_DEV_VARS}, which differs from the .dev.vars it is `
+				+ 'staged from. The repository root copy is the source of truth; anything only in the staged '
+				+ 'one is about to be lost.',
+				staged,
+			],
+		};
+	}
+	return { stage: true, lines: [staged] };
+}
+
+/**
  * Read the sources from disk, relative to the repository root.
  *
  * A file that is not there is `null` rather than a throw: any of the three is

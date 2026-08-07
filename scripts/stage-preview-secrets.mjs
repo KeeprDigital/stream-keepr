@@ -38,6 +38,7 @@ import process from 'node:process';
 import {
 	localConfigurationNotice,
 	missingLocalAcceptanceNames,
+	previewStagingPlan,
 	RESOLVED_PREVIEW_DEV_VARS,
 	suppliedNames,
 } from './graphics-acceptance/local-configuration.mjs';
@@ -47,19 +48,25 @@ const SOURCE = new URL('../.dev.vars', import.meta.url);
 const RESOLVED = new URL(`../${RESOLVED_PREVIEW_DEV_VARS}`, import.meta.url);
 const RESOLVED_DIRECTORY = new URL('./', RESOLVED);
 
-let body = null;
-try {
-	body = readFileSync(SOURCE, 'utf8');
-}
-catch {
-	// Absent is the ordinary state of a fresh worktree, and the notice below is
-	// what has something useful to say about it.
+/** Absent is the ordinary state of both of these, and never an error here. */
+function read(path) {
+	try {
+		return readFileSync(path, 'utf8');
+	}
+	catch {
+		return null;
+	}
 }
 
-if (body !== null) {
+const body = read(SOURCE);
+const plan = previewStagingPlan({ source: body, existing: read(RESOLVED) });
+
+for (const line of plan.lines)
+	process.stdout.write(`${line}\n`);
+
+if (plan.stage) {
 	mkdirSync(RESOLVED_DIRECTORY, { recursive: true });
 	copyFileSync(SOURCE, RESOLVED);
-	process.stdout.write(`Staged .dev.vars into ${RESOLVED_PREVIEW_DEV_VARS}, where wrangler resolves it from the config (#274).\n`);
 }
 
 // Keyed on the name being unusable rather than on the file being absent, so a
