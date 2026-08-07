@@ -318,10 +318,26 @@ describe('the preview command', () => {
 		readFileSync(fileURLToPath(new URL('../../../package.json', import.meta.url)), 'utf8'),
 	) as { scripts: Record<string, string> };
 
-	it('stages the secrets before it starts wrangler, not after', () => {
+	/**
+	 * All three positions, because two of them are not enough. The first version
+	 * of this test pinned only staging-before-wrangler, and rev-274 ran the row it
+	 * was missing: reordering to `stage && build && migrate && wrangler` passed
+	 * every test with zero failures. It also silently restores #274's original
+	 * defect, because `nuxt build` rebuilds `.output` — a sentinel written to
+	 * `.output/server/.dev.vars` is gone afterwards — so a stage that runs first
+	 * is a stage that never happened, and the previewed Worker comes up with no
+	 * secrets again. The module docblock already stated this invariant; nothing
+	 * made it executable.
+	 */
+	it('builds, then stages the secrets, then starts wrangler', () => {
 		const preview = packageJson.scripts.preview!;
+		const built = preview.indexOf('pnpm build');
 		const staged = preview.indexOf('scripts/stage-preview-secrets.mjs');
 		const wrangler = preview.indexOf('wrangler dev');
+		expect(built).toBeGreaterThan(-1);
+		// Staging into `.output/server` is only meaningful once the build that
+		// creates — and wipes — that directory has finished.
+		expect(built).toBeLessThan(staged);
 		expect(staged).toBeGreaterThan(-1);
 		expect(wrangler).toBeGreaterThan(-1);
 		expect(staged).toBeLessThan(wrangler);

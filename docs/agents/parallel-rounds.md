@@ -78,6 +78,8 @@ Every agent in a round is given the **same** scratchpad path. It is not per-agen
 
 Name every scratch file with your issue number — `pr-196-issue172-body.md`, never `pr.md` or `body.md` — and read a file back before passing it to `--body-file`. A collision between two _similar_ documents will not announce itself the way a completely different ticket did.
 
+The issue number alone is not enough, because **one agent can collide with its own earlier run**. In round nine an implementer wrote a second mutation table over `issue274-mutation-results.txt` — correctly named for its issue — and destroyed the table a reviewer had been pointed at. A branch that takes four commits produces four different truths under one filename, and overwriting is not a conflict, so nothing flags it. Name scratch artefacts with your issue number **and the tip they describe** (`issue274-438454f-mutation-results.txt`), and keep per-row logs, which are what a rebuild reads from.
+
 The dangerous case is not PR prose. Agents routinely save backups of production files there under names like `renderModel.orig.ts`, `composable.orig.ts`, `store.orig.ts`. **Never restore a production file from a scratchpad backup** — restore from git objects (`git checkout HEAD -- <path>`), which cannot have been written by somebody else.
 
 ### ADR numbers are allocated by a read-then-write race

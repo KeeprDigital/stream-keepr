@@ -18,15 +18,25 @@
  * preview showed wrangler's own bindings table listing no environment
  * variables before the copy and both names after it.
  *
- * Staging rather than a flag. `wrangler dev --env-file` also works, but it
- * resolves relative paths against the config directory too and answers a wrong
- * path with silence — the previewed Worker just comes up unconfigured again,
- * which is the exact failure this exists to end. A copy either happens or
- * reports why it did not.
+ * Staging rather than a flag. `wrangler dev --env-file` can deliver the same
+ * value, but it resolves relative paths against the config directory too — so
+ * it needs the same `.output/server` knowledge this step has, spelled into a
+ * command line where nothing checks it. Its behaviour on a path it cannot read
+ * is not something to build on either: probing it produced a served-but-
+ * unconfigured Worker in one shape and an immediate `node: <path>: not found`
+ * exit in another, and this repository pins wrangler 4.113 while a
+ * `pnpm dlx wrangler` picks up 4.119. A step that must be reliable should not
+ * rest on a flag whose failure mode we could not pin down. A copy either
+ * happens or reports why it did not, and the repository root stays the single
+ * documented source of truth that the preflight also reads.
  *
  * Safe to leave behind: `.output` is gitignored and rebuilt by every `nuxt
- * build`, and `.dev.vars` is dev-only to Wrangler — a deploy dry run with one
- * beside the config reports `No bindings found` and emits the value nowhere.
+ * build`, and `.dev.vars` is dev-only to Wrangler. Checked against a deploy dry
+ * run with one beside the config: the value appears in none of the emitted
+ * files, and no binding is created from it — the bindings the real
+ * `.output/server/wrangler.json` declares (KV, D1, two R2 buckets, the
+ * validator service, ASSETS) are all it lists, with nothing from `.dev.vars`
+ * among them.
  *
  * Never fails the preview. Plenty of this application runs without these names,
  * and a worktree opened to look at the UI should not be stopped from previewing

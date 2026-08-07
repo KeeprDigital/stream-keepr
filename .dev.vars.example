@@ -13,6 +13,12 @@
 # `.dev.vars` reached the previewed Worker through nothing at all, and every
 # authored request answered 503 (#274).
 #
+# So edit the root copy, never the staged one. Anything added only under
+# `.output/server/` is transient — the next build rebuilds that directory and
+# the next preview restages over it, and it will work right up until it
+# silently does not. The root copy is the source of truth; the staging step
+# says so out loud when it replaces a staged file that differs.
+#
 # `nuxt dev` reads `.env`, and additionally adopts the NUXT_-prefixed names
 # here into its own environment (`build/devVarsModule.ts`) — otherwise they
 # would reach the proxied Cloudflare bindings and never reach runtimeConfig,
