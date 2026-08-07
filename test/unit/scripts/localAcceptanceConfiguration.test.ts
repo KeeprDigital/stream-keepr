@@ -85,6 +85,20 @@ describe('folding the checkout\'s sources into one answer', () => {
 		expect(missingLocalAcceptanceNames(suppliedNames([{ [SIGNING_KEY]: '   ' }]))).toEqual([SIGNING_KEY]);
 	});
 
+	/**
+	 * The assertion above does not actually reach the trim in `suppliedNames`:
+	 * `missingLocalNuxtNames` trims again downstream, so a whitespace value that
+	 * got through the fold is still counted missing and the mutation survives.
+	 * What only this case can catch is the shadowing — a `.env` holding a stray
+	 * space would otherwise occupy the name and hide the real `.dev.vars` value,
+	 * which is a false alarm on a checkout that works.
+	 */
+	it('does not let a whitespace-only earlier source shadow a real later one', () => {
+		const supplied = suppliedNames([{ [SIGNING_KEY]: '   ' }, `${SIGNING_KEY}=${A_KEY}`]);
+		expect(supplied[SIGNING_KEY]).toBe(A_KEY);
+		expect(missingLocalAcceptanceNames(supplied)).toEqual([]);
+	});
+
 	it('skips a source that is not there at all', () => {
 		expect(suppliedNames([null, undefined, `${SIGNING_KEY}=${A_KEY}`])[SIGNING_KEY]).toBe(A_KEY);
 	});
