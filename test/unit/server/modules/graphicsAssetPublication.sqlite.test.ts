@@ -447,6 +447,12 @@ describe('an ordinary ingestion publication that lost its claim', () => {
 	 * conjunct, and would go on passing if the stage conjunct were dropped. This
 	 * one moves the stage alone — which no ordinary transition does, since every
 	 * one of them touches `updated_at` too — so only that conjunct answers.
+	 *
+	 * The refusal is not what proves it. `updateOperationStatement` declines a
+	 * completed operation on its own condition, so the throw survives the conjunct
+	 * being dropped; it is the write-candidate count that answers, because only
+	 * the guard stops the DELETE. Trim that assertion and the conjunct is unpinned
+	 * with nothing failing to say so.
 	 */
 	it('completes no replacement no-op once the operation has left the publishing stage', async () => {
 		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
@@ -465,6 +471,39 @@ describe('an ordinary ingestion publication that lost its claim', () => {
 			operation,
 			current,
 			completedAt: new Date(4_000).toISOString(),
+		})).rejects.toThrow(/lost its claim/i);
+
+		expect(await countOf('graphics_canonical_write_candidates')).toBe(2);
+	});
+
+	/**
+	 * The reuse arm's guard carries the same stage conjunct, and every lost-claim
+	 * case above — including the Event one below, which this branch added — is a
+	 * stale-snapshot contrivance that would go on passing without it.
+	 *
+	 * Load-bearing assertion is the write-candidate count, for the reason its no-op
+	 * twin above gives.
+	 */
+	it('reuses no asset once the operation has left the publishing stage', async () => {
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
+		const reused = await publishedAsset(
+			catalogue,
+			'upload-before-stage-moved-reuse',
+			graphicAssetId('stage-moved-reused-asset'),
+		);
+		const operation = await claimedOperation(catalogue, 'reuse-stage-moved', {
+			duplicateContentPolicy: 'reuse',
+		});
+		await arrangeReclaimableState(catalogue, operation, [SOURCE_DIGEST, THUMBNAIL_DIGEST]);
+		await harness.client.execute({
+			sql: 'UPDATE graphics_ingestion_operations SET stage = ? WHERE id = ?',
+			args: ['completed', operation.id],
+		});
+
+		await expect(catalogue.reuseGraphicAsset({
+			operation,
+			reusable: reused,
+			publishedAt: new Date(4_000).toISOString(),
 		})).rejects.toThrow(/lost its claim/i);
 
 		expect(await countOf('graphics_canonical_write_candidates')).toBe(2);
