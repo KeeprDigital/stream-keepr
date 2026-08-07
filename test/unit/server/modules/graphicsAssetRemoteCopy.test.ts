@@ -40,6 +40,12 @@ interface RemoteHop {
 	/** `null` omits the header entirely. */
 	contentLength?: string | null;
 	contentType?: string;
+	/**
+	 * Delivers the body and then errors the stream, so the copy's own read throws
+	 * rather than any store call answering `unavailable`. A connection dropped
+	 * mid-transfer is the ordinary way that happens.
+	 */
+	failsAfterBody?: boolean;
 }
 
 /**
@@ -90,6 +96,28 @@ function createRemoteHost(options: {
 				});
 			}
 			const payload = hop.body ?? body;
+			if (hop.failsAfterBody) {
+				let delivered = false;
+				// Errored from `pull` rather than after an `enqueue`: erroring a stream
+				// discards whatever is queued, so a body enqueued and then errored in
+				// one turn never reaches the reader at all.
+				const failing = new ReadableStream<Uint8Array>({
+					pull(controller) {
+						if (delivered) {
+							controller.error(new Error('Remote source connection reset'));
+							return;
+						}
+						delivered = true;
+						controller.enqueue(payload);
+					},
+				});
+				return new Response(failing, {
+					status: hop.status ?? 200,
+					headers: hop.contentLength === null
+						? {}
+						: { 'content-length': hop.contentLength ?? String(payload.byteLength) },
+				});
+			}
 			return new Response(payload, {
 				status: hop.status ?? 200,
 				headers: {
@@ -850,6 +878,10 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			stranded.operation.id,
 			stranded.operation.initiatedBy,
 		);
+		// Both sides are optional, so without this the comparison below is satisfied
+		// by a copy that never reached a multipart upload and a checkpoint that was
+		// therefore never taken.
+		expect(stranded.uploadId).toBeDefined();
 		expect(state?.uploadId).toBe(stranded.uploadId);
 		// A remote copy has no client-supplied parts to resume from; the checkpoint
 		// carries the uploadId alone.
@@ -858,6 +890,65 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			graphicsObjectIdentity(`ingestion/${stranded.operation.id}/source`),
 			stranded.uploadId!,
 		)).resolves.toMatchObject({ outcome: 'resumed' });
+	});
+
+	/**
+	 * Staging a remote source has two deaths that converge on the same abort: a
+	 * store call answering `unavailable`, and anything that throws. Only the first
+	 * is reachable by injecting a store failure, so covering the second needs the
+	 * read itself to die — which is what a connection dropped mid-body does.
+	 */
+	it('aborts and clears the checkpoint when the remote body dies mid-transfer', async () => {
+		const delegate = createInMemoryStagingGraphicsObjectStore();
+		let uploadId: GraphicsMultipartUploadIdentity | undefined;
+		const staging: InMemoryGraphicsStagingObjectStore = {
+			...delegate,
+			async beginMultipart(input) {
+				const started = await delegate.beginMultipart(input);
+				if (started.outcome === 'started')
+					uploadId = started.upload.uploadId;
+				return started;
+			},
+		};
+		const { library, catalogue } = createLibrary({
+			staging,
+			hops: {
+				'https://cdn.example.test/scoreboard.png': {
+					body: oversizedRemoteSource,
+					contentLength: null,
+					failsAfterBody: true,
+				},
+			},
+		});
+		const operation = await library.initiateRemoteGraphicAssetCopy({
+			idempotencyKey: 'remote-body-died',
+			initiatedBy: 'graphics-author-1',
+			name: 'Interrupted remote source',
+			sourceFileName: 'scoreboard.png',
+		});
+
+		const failed = await library.copyRemoteGraphicAssetSource({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			sourceUrl: 'https://cdn.example.test/scoreboard.png',
+		});
+
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			failure: { code: 'staging-unavailable', retryable: true },
+		});
+		// A part was taken and checkpointed before the read died, so this route owes
+		// the same reclamation the structured one does: the upload is gone and the
+		// checkpoint no longer names it.
+		expect(uploadId).toBeDefined();
+		await expect(staging.resumeMultipart(
+			graphicsObjectIdentity(`ingestion/${operation.id}/source`),
+			uploadId!,
+		)).resolves.toMatchObject({ outcome: 'unavailable' });
+		await expect(catalogue.getGraphicAssetMultipartState(
+			operation.id,
+			operation.initiatedBy,
+		)).resolves.toBeUndefined();
 	});
 
 	it('reports no client-transfer facts for a remote copy holding a checkpoint', async () => {
