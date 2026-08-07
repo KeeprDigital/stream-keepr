@@ -1,8 +1,8 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { FetchError } from 'ofetch';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 /*
  * `useAsyncAction` is deliberately not mocked here, unlike in this store's other two
@@ -28,37 +28,25 @@ const mockAbly = createMockRealtime();
 mockNuxtImport('useScreenRepository', () => () => mockRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
 
-const LIST_REQUEST = `[GET] "/api/events/1/screens"`;
-
 /**
- * One failed request as the repository actually rejects it.
+ * The request line a failure below carries unless the row names another, since the list
+ * route is what most of them exercise. It is asserted on by the two rows that read a
+ * status line rather than a sentence, so it is a constant passed explicitly rather than
+ * a parameter default on the fixture.
  *
- * Every call this store makes goes through `$fetch`, so every failure it meets is a
- * `FetchError`: an `Error` whose own `message` is the transport's status line, with
- * the status on `statusCode` and the parsed response body on `data`. A plain object
- * is none of those three, and the difference is not cosmetic — `useAsyncAction`
- * reports a non-`Error` as 'An error occurred', so a suite rejecting with plain
- * objects can assert prose no operator will ever be shown (#241).
+ * The fixture itself is `test/helpers/transportFailure`, of which this suite held the
+ * third hand copy until #288 (#262 lifted it, #263 took the second).
  */
-function transportFailure(
-	status: number,
-	statusText: string,
-	/** The parsed response body, as `$fetch` hangs it off `error.data`. */
-	body?: unknown,
-	request = LIST_REQUEST,
-): FetchError {
-	return Object.assign(new FetchError(`${request}: ${status} ${statusText}`), {
-		status,
-		statusCode: status,
-		statusText,
-		statusMessage: statusText,
-		data: body,
-	});
-}
+const LIST_REQUEST = `[GET] "/api/events/1/screens"`;
 
 /** A refusal the authority explained in the response body, carrying no code. */
 function explainedRefusal(status: number, statusText: string, message: string, request = LIST_REQUEST) {
-	return transportFailure(status, statusText, { statusCode: status, statusMessage: statusText, message }, request);
+	return transportFailure({
+		status,
+		statusText,
+		body: { statusCode: status, statusMessage: statusText, message },
+		request,
+	});
 }
 
 /**
@@ -220,7 +208,11 @@ describe('useScreenStore error reporting', () => {
 	});
 
 	it('keeps the status line where the body carries no sentence to read', async () => {
-		mockRepo.list.mockRejectedValue(transportFailure(409, 'Conflict', { statusCode: 409, statusMessage: 'Conflict' }));
+		mockRepo.list.mockRejectedValue(transportFailure({
+			status: 409,
+			body: { statusCode: 409, statusMessage: 'Conflict' },
+			request: LIST_REQUEST,
+		}));
 
 		await store.loadScreensByEventId(1);
 

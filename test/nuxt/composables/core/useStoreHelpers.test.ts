@@ -10,6 +10,19 @@ import { transportFailure } from '~~/test/helpers/transportFailure';
 
 interface TestItem { id: number; name: string }
 
+/**
+ * The sentence the authority wrote about a refused write, as it arrives in the response
+ * body.
+ *
+ * Both rollback fixtures carry it, and each of those rows reads it twice: once building
+ * the failure, once asserting this helper did *not* report it. That is what makes the
+ * division of labour documented below executable rather than vacuous. Against a 409 with
+ * no body the two readings are indistinguishable — `withFailureSentence` re-raises a
+ * failure that wrote nothing untouched, so moving the sentence-reading into the helper
+ * would change no verdict at all. With the sentence present it changes both (#288).
+ */
+const REFUSAL_SENTENCE = 'This Item belongs to a Round that has already been played';
+
 function createTestItems(items: TestItem[]): Ref<TestItem[]> {
 	return ref(items.map(i => ({ ...i })));
 }
@@ -127,7 +140,9 @@ describe('useStoreHelpers', () => {
 		 * `$fetch` failure is the transport's line. Reading the authority's sentence out of
 		 * the response body is the caller's job, not this one's — the Event Data lifecycle
 		 * wraps every `apiCall` it hands here in `withFailureSentence` for exactly that
-		 * reason (#262). Pinning the raw line here is what keeps that division visible.
+		 * reason (#262). Pinning the raw line here is what keeps that division visible, and
+		 * the sentence in `REFUSAL_SENTENCE`'s fixtures is what keeps the pin honest — see
+		 * its docblock for why a body-less 409 could not.
 		 */
 		it('rolls the prediction back and reports the failure when the API call is refused', async () => {
 			const { optimisticUpdate } = useStoreHelpers();
@@ -141,6 +156,7 @@ describe('useStoreHelpers', () => {
 				apiCall: vi.fn().mockRejectedValue(transportFailure({
 					status: 409,
 					request: `[PATCH] "/api/items/1"`,
+					body: { statusCode: 409, statusMessage: 'Conflict', message: REFUSAL_SENTENCE },
 				})),
 				errorRef,
 				entityLabel: 'Item',
@@ -149,6 +165,9 @@ describe('useStoreHelpers', () => {
 			expect(result).toBeNull();
 			expect(items.value[0]!.name).toBe('Original');
 			expect(errorRef.value).toBe('[PATCH] "/api/items/1": 409 Conflict');
+			// Stated independently of the line above, so that renaming the route in this
+			// fixture cannot quietly take the guard with it.
+			expect(errorRef.value).not.toBe(REFUSAL_SENTENCE);
 		});
 	});
 
@@ -244,6 +263,7 @@ describe('useStoreHelpers', () => {
 				apiCall: vi.fn().mockRejectedValue(transportFailure({
 					status: 409,
 					request: `[DELETE] "/api/items/2"`,
+					body: { statusCode: 409, statusMessage: 'Conflict', message: REFUSAL_SENTENCE },
 				})),
 				errorRef,
 				entityLabel: 'Item',
@@ -254,6 +274,7 @@ describe('useStoreHelpers', () => {
 			// itself because a delete was refused.
 			expect(items.value.map(item => item.id)).toEqual([1, 2, 3]);
 			expect(errorRef.value).toBe('[DELETE] "/api/items/2": 409 Conflict');
+			expect(errorRef.value).not.toBe(REFUSAL_SENTENCE);
 		});
 	});
 });

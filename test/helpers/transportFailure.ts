@@ -13,9 +13,17 @@ import { FetchError } from 'ofetch';
  * The same fixture #245's Broadcast Graphics suite builds inline, lifted here because
  * six more stores now read a failure for the sentence the authority wrote (#262).
  *
- * `statusText` is the runtime's own reason phrase; nothing asserts its exact wording.
- * What the suites read from it is that a failure carrying no sentence still surfaces the
- * transport's line.
+ * `statusText` is the runtime's own reason phrase, and its exact wording *is* asserted —
+ * this clause claimed the opposite until #288 disproved it by mutation. It reaches
+ * assertions two ways: spliced into the message, where every suite pinning a transport
+ * line pins it too; and read on its own, since `useRequestFeedback`'s fallback for a
+ * refusal that wrote no prose is the reason phrase, pinned there as the bare word
+ * 'Conflict'. Editing `defaultStatusText` below therefore edits those pins — `'Conflict'`
+ * → `'Conflicted'` failed six tests across four suites when this was written.
+ *
+ * What the suites read *through* it is that a failure carrying no sentence still surfaces
+ * the transport's line rather than the body's. That is a fact about which string gets
+ * reported, not a licence to reword the phrase.
  */
 export function transportFailure(options: {
 	status: number;
