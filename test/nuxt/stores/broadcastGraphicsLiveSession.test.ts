@@ -2,9 +2,9 @@ import type { BroadcastGraphicsLiveSessionResponse } from '~~/shared/types/broad
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { MessageData } from '~/types/realtime';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { FetchError } from 'ofetch';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
+import { transportFailure } from '~~/test/helpers/transportFailure';
 
 const mockRepository = {
 	getSession: vi.fn(),
@@ -87,35 +87,11 @@ const COMMANDS_PATH = '/api/…/commands';
 const SNAPSHOT_REQUEST = `[GET] "/api/…/live-session"`;
 
 /**
- * One failed request as the repository actually rejects it.
- *
- * Every call the store makes goes through `$fetch`, so every failure it meets is a
- * `FetchError`: an `Error` whose own `message` is the transport's status line, with
- * the status on `statusCode` and the parsed response body on `data`. A plain object
- * is none of those things, and the difference is not cosmetic — the real
- * `useAsyncAction` reports a non-`Error` as 'An error occurred', so a suite that
- * rejects with plain objects can assert error prose no operator will ever be shown
- * (#241).
- *
- * `statusText` is the runtime's own reason phrase and nothing asserts its exact
- * wording; what the tests below read from it is that the message an uncoded failure
- * surfaces is the transport's line rather than the sentence in the body.
+ * The request line every command failure below carries, since that is the request the
+ * store made. The fixture itself is `test/helpers/transportFailure`, which this suite
+ * built inline first (#245) and #263 consolidated.
  */
-function transportFailure(
-	status: number,
-	statusText: string,
-	/** The parsed response body, as `$fetch` hangs it off `error.data`. */
-	body?: unknown,
-	request = `[POST] "${COMMANDS_PATH}"`,
-): FetchError {
-	return Object.assign(new FetchError(`${request}: ${status} ${statusText}`), {
-		status,
-		statusCode: status,
-		statusText,
-		statusMessage: statusText,
-		data: body,
-	});
-}
+const COMMANDS_REQUEST = `[POST] "${COMMANDS_PATH}"`;
 
 /**
  * A conflict carrying no domain refusal: what an epoch this client no longer shares
@@ -128,7 +104,11 @@ function transportFailure(
  * as the ended epoch it usually is. Tests below stand on both halves of that.
  */
 function bareConflict(message: string) {
-	return transportFailure(409, 'Conflict', { statusCode: 409, statusMessage: 'Conflict', message });
+	return transportFailure({
+		status: 409,
+		body: { statusCode: 409, statusMessage: 'Conflict', message },
+		request: COMMANDS_REQUEST,
+	});
 }
 
 /**
@@ -148,11 +128,15 @@ function bareConflict(message: string) {
  * back off a real HTTP response.
  */
 function refusedCommandFailure(code: string, message: string, inputKeys: string[] = []) {
-	return transportFailure(409, 'Conflict', {
-		statusCode: 409,
-		statusMessage: 'Conflict',
-		message,
-		data: { code, inputKeys },
+	return transportFailure({
+		status: 409,
+		body: {
+			statusCode: 409,
+			statusMessage: 'Conflict',
+			message,
+			data: { code, inputKeys },
+		},
+		request: COMMANDS_REQUEST,
 	});
 }
 
@@ -319,7 +303,11 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 		vi.clearAllMocks();
 		mockRepository.sendCommand.mockRejectedValue(
-			transportFailure(500, 'Internal Server Error', { statusCode: 500, message: 'Internal Server Error' }),
+			transportFailure({
+				status: 500,
+				body: { statusCode: 500, message: 'Internal Server Error' },
+				request: COMMANDS_REQUEST,
+			}),
 		);
 
 		await store.take(EVENT_ID, SCREEN_ID, 'slate');
@@ -357,7 +345,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 	it('clears the pending marker even when the action fails', async () => {
 		await store.loadSession(EVENT_ID, SCREEN_ID);
-		mockRepository.sendCommand.mockRejectedValue(transportFailure(500, 'Internal Server Error'));
+		mockRepository.sendCommand.mockRejectedValue(transportFailure({ status: 500, request: COMMANDS_REQUEST }));
 
 		await store.take(EVENT_ID, SCREEN_ID, 'slate');
 
@@ -812,12 +800,11 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		const EPOCH_ENDED = 'Broadcast graphics live session has ended';
 
 		it('reports the snapshot route’s sentence rather than its status line', async () => {
-			mockRepository.getSession.mockRejectedValue(transportFailure(
-				409,
-				'Conflict',
-				{ statusCode: 409, statusMessage: 'Conflict', message: NOT_IN_MODE },
-				SNAPSHOT_REQUEST,
-			));
+			mockRepository.getSession.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { statusCode: 409, statusMessage: 'Conflict', message: NOT_IN_MODE },
+				request: SNAPSHOT_REQUEST,
+			}));
 
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 
@@ -841,12 +828,11 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		});
 
 		it('reports a refused reset in the words the authority used', async () => {
-			mockRepository.resetSession.mockRejectedValue(transportFailure(
-				409,
-				'Conflict',
-				{ statusCode: 409, statusMessage: 'Conflict', message: NOT_IN_MODE },
-				`[POST] "/api/…/live-session/reset"`,
-			));
+			mockRepository.resetSession.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { statusCode: 409, statusMessage: 'Conflict', message: NOT_IN_MODE },
+				request: `[POST] "/api/…/live-session/reset"`,
+			}));
 
 			await store.resetLiveState(EVENT_ID, SCREEN_ID);
 
@@ -879,7 +865,11 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			vi.clearAllMocks();
 			mockRepository.getSession.mockResolvedValue(session({ id: 56 }));
 			mockRepository.sendCommand.mockRejectedValue(
-				transportFailure(409, 'Conflict', { statusCode: 409, statusMessage: 'Conflict' }),
+				transportFailure({
+					status: 409,
+					body: { statusCode: 409, statusMessage: 'Conflict' },
+					request: COMMANDS_REQUEST,
+				}),
 			);
 
 			await store.take(EVENT_ID, SCREEN_ID, 'slate');
@@ -914,15 +904,15 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			// have their own surfaces (#233, #243).
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			vi.clearAllMocks();
-			mockRepository.sendCommand.mockRejectedValue(transportFailure(
-				503,
-				'Service Unavailable',
-				{
+			mockRepository.sendCommand.mockRejectedValue(transportFailure({
+				status: 503,
+				body: {
 					statusCode: 503,
 					statusMessage: 'Service Unavailable',
 					message: 'Graphics writer was not given a Screen repository',
 				},
-			));
+				request: COMMANDS_REQUEST,
+			}));
 
 			await store.take(EVENT_ID, SCREEN_ID, 'slate');
 
@@ -1206,12 +1196,11 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
 			}));
 			await store.loadSession(EVENT_ID, SCREEN_ID);
-			mockRepository.getSession.mockRejectedValue(transportFailure(
-				409,
-				'Conflict',
-				{ statusCode: 409, message: 'Screen is not in Broadcast Graphics mode' },
-				SNAPSHOT_REQUEST,
-			));
+			mockRepository.getSession.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { statusCode: 409, message: 'Screen is not in Broadcast Graphics mode' },
+				request: SNAPSHOT_REQUEST,
+			}));
 
 			await store.applyEpochEnded({ eventId: EVENT_ID, timestamp: 1_000, screenId: SCREEN_ID, sessionId: 55 } as never);
 
