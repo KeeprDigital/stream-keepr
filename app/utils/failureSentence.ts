@@ -95,6 +95,12 @@ const SANITIZED_SERVER_MESSAGES: readonly string[] = ['Internal Server Error', '
  * edge or proxy answering 503 with its own JSON body would be quoted. That is a limit
  * worth stating rather than closing: such a message is still about the request, and the
  * refusal exists to keep *this* server's placeholders out of an operator's face.
+ *
+ * The sub-500 guard below is what makes this answerable on its own rather than only in
+ * the order its caller happens to ask. It is unreachable through that caller today —
+ * `isSanitizedFailure` short-circuits on `status >= 500` first — so a mutation removing
+ * it survives, and the survivor is the redundancy rather than a gap in coverage. The two
+ * bullets above are the halves that are not redundant, and both are killed.
  */
 function preservedServerSentence(caught: unknown): string | undefined {
 	const status = failureStatus(caught);
