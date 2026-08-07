@@ -1,24 +1,11 @@
-import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// useStoreHelpers delegates to useAsyncAction — use the real implementation
-// so we test the full optimistic update/rollback flow.
-async function realExecuteAction<T>(action: () => Promise<T>,	options: { errorRef?: Ref<string | null>; onError?: (e: unknown) => void } = {}): Promise<T | null> {
-	const { errorRef, onError } = options;
-	if (errorRef)
-		errorRef.value = null;
-	try {
-		return await action();
-	}
-	catch (e) {
-		if (errorRef)
-			errorRef.value = e instanceof Error ? e.message : 'An error occurred';
-		onError?.(e);
-		return null;
-	}
-}
-
-mockNuxtImport('useAsyncAction', () => () => ({ executeAction: realExecuteAction }));
+/*
+ * `useAsyncAction` is deliberately not mocked. A hand-written copy stood here under the
+ * name `realExecuteAction`, which is the whole argument against it: a copy claiming to
+ * be the real thing is a copy that can stop being it, and this suite exists to test the
+ * optimistic update and rollback flow *through* that seam (#263).
+ */
 
 interface TestItem { id: number; name: string }
 
@@ -29,13 +16,6 @@ function createTestItems(items: TestItem[]): Ref<TestItem[]> {
 describe('useStoreHelpers', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-	});
-
-	describe('executeAction', () => {
-		it('exposes executeAction from useAsyncAction', () => {
-			const { executeAction } = useStoreHelpers();
-			expect(executeAction).toBeTypeOf('function');
-		});
 	});
 
 	describe('optimisticUpdate', () => {
