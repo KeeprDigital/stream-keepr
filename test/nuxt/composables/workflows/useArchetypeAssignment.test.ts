@@ -300,6 +300,18 @@ describe('useArchetypeAssignment', () => {
 			expect(isEditMode.value).toBe(false);
 		});
 
+		// Review entries are built from a client-side `$fetch`, which JSON round-trips
+		// the response — so `reviewedAt` arrives as an ISO string, never as the `Date`
+		// PlayerDeckResponse declares (#272, #284). `makeEntry` hands back a real Date,
+		// so isReviewedPlayerDeck has never been exercised on the wire shape.
+		it('is true when reviewedAt is the ISO string the wire delivers', () => {
+			const entry = JSON.parse(JSON.stringify(makeEntry({ archetypeId: 5, deckReviewed: true })));
+			expect(typeof entry.deck.reviewedAt).toBe('string');
+			const opts = makeOptions(entry);
+			const { isEditMode } = useArchetypeAssignment(opts);
+			expect(isEditMode.value).toBe(true);
+		});
+
 		it('is false when currentEntry is null', () => {
 			const currentEntry = computed(() => null as any);
 			const eventId = computed(() => 1 as number | null);
