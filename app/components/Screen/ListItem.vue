@@ -17,6 +17,7 @@ const emit = defineEmits<{
 	sendCommand: [command: ScreenCommand];
 }>();
 
+const toast = useToast();
 const { copyToClipboard } = useCopyToClipboard();
 const { screenOutputAccessUrl, openScreenOutput } = useScreenOutputAccessUrl();
 
@@ -47,8 +48,11 @@ function accessUrlOptions() {
 
 async function copyUrl() {
 	await copyToClipboard(await screenOutputAccessUrl(accessUrlOptions()), {
-		successTitle: 'URL Copied',
-		successDescription: 'Screen URL copied to clipboard',
+		// Named for the output, not for the Screen. "Screen URL copied to clipboard" was
+		// describing the address printed a few pixels above — the one URL on this card
+		// that carries no asset access — while copying a different one (#231, #266).
+		successTitle: 'Output URL copied',
+		successDescription: 'It carries asset access, so the output resolves this Screen\'s media.',
 		// The empty string means asset access was refused, not that the clipboard
 		// declined the write — and "failed to copy" sends the operator to the address in
 		// their browser's bar, which is the media-losing URL the refusal withholds
@@ -58,8 +62,36 @@ async function copyUrl() {
 	});
 }
 
-function openInNewTab() {
-	void openScreenOutput(accessUrlOptions());
+/**
+ * Hands out this Screen's Overlay Output in a new tab, and says which of the two ways
+ * it could not.
+ *
+ * `openScreenOutput` opens the tab on the click and closes it again unpointed when
+ * asset access could not be obtained, so an operator whose open was refused is looking
+ * at nothing having happened. This card discarded that answer until #269 — the same
+ * silence the Live workspace lost in #237 and the settings page in #250, still here on
+ * the third surface.
+ *
+ * A blocked pop-up and a refused capability are opposite instructions — change a
+ * browser setting, or try again — so since #258 they arrive as different answers and
+ * are said in different words, in the wording both other surfaces already use.
+ */
+async function openOutput() {
+	const result = await openScreenOutput(accessUrlOptions());
+	if (result === 'opened')
+		return;
+
+	toast.add(result === 'window-blocked'
+		? {
+				title: 'Output not opened',
+				description: 'This browser blocked the new tab. Allow pop-ups for this site, then open the output again.',
+				color: 'error',
+			}
+		: {
+				title: 'Output not opened',
+				description: 'Asset access for this Screen could not be obtained, so the output would have rendered without its media. Try again.',
+				color: 'error',
+			});
 }
 
 const modeItems: DropdownMenuItem[][] = [
@@ -77,15 +109,23 @@ const actionItems: DropdownMenuItem[][] = [
 			icon: 'i-lucide-settings',
 			onSelect: () => navigateTo(`/event/${props.eventId}/screens/${props.screen.id}`),
 		},
+		// Named for what they hand out, and each carrying the sentence saying what that
+		// hand-out includes — the #234/#237 voice the other two surfaces adopted in #266.
+		// "Copy URL" and "Open in New Tab" named neither the output nor its asset access,
+		// and sat beside the Screen's bare address, which is the URL they do NOT produce.
+		// The sentence rides on the item rather than on the menu's trigger because that
+		// trigger opens every Screen action, not only the two hand-outs.
 		{
-			label: 'Copy URL',
+			label: 'Copy output URL',
 			icon: 'i-lucide-copy',
+			description: 'Copy this Screen\'s Overlay Output URL, with the asset access that resolves its media',
 			onSelect: copyUrl,
 		},
 		{
-			label: 'Open in New Tab',
+			label: 'Open output',
 			icon: 'i-lucide-external-link',
-			onSelect: openInNewTab,
+			description: 'Open this Screen\'s Overlay Output in a new tab, with the asset access that resolves its media',
+			onSelect: openOutput,
 		},
 	],
 	[
