@@ -1,87 +1,167 @@
 import { describe, expect, it, vi } from 'vitest';
 import { applyTalentUpdates } from '~~/app/modules/event-data/talentUpdates';
 
+function mutations() {
+	return {
+		removeTalent: vi.fn().mockResolvedValue({ success: true }),
+		addTalent: vi.fn().mockResolvedValue({ id: 99, name: 'Added' }),
+		renameTalent: vi.fn().mockImplementation((id: number, input: { name: string }) =>
+			Promise.resolve({ id, name: input.name })),
+	};
+}
+
 describe('applyTalentUpdates', () => {
 	it('stops and rejects when a mutation returns null', async () => {
-		const removeTalent = vi.fn().mockResolvedValue(null);
-		const addTalent = vi.fn().mockResolvedValue({ id: 2, name: 'Bob' });
+		const calls = mutations();
+		calls.removeTalent.mockResolvedValue(null);
 
 		await expect(applyTalentUpdates({
 			currentTalents: [{ id: 1, name: 'Alice' }],
 			requestedTalents: [{ name: 'Bob' }],
-			removeTalent,
-			addTalent,
+			...calls,
 		})).rejects.toThrow('Failed to remove Alice');
 
-		expect(addTalent).not.toHaveBeenCalled();
+		expect(calls.addTalent).not.toHaveBeenCalled();
 	});
 
-	// The requested list carries names and no ids, so two talents called "Bob" are
-	// indistinguishable in it — only how many times the name appears says whether
-	// one of them was dropped. Matching on set membership cannot see that, and a
-	// removal that leaves a namesake behind reads to the operator as a save that
-	// silently did nothing.
-	it('removes the surplus namesake when a duplicate name is dropped', async () => {
-		const removeTalent = vi.fn().mockResolvedValue({ success: true });
-		const addTalent = vi.fn();
-
-		await applyTalentUpdates({
-			currentTalents: [{ id: 1, name: 'Bob' }, { id: 2, name: 'Bob' }],
-			requestedTalents: [{ name: 'Bob' }],
-			removeTalent,
-			addTalent,
-		});
-
-		expect(removeTalent).toHaveBeenCalledTimes(1);
-		expect(removeTalent).toHaveBeenCalledWith(2);
-		expect(addTalent).not.toHaveBeenCalled();
-	});
-
-	it('keeps both namesakes when neither was dropped', async () => {
-		const removeTalent = vi.fn();
-		const addTalent = vi.fn();
-
-		await applyTalentUpdates({
-			currentTalents: [{ id: 1, name: 'Bob' }, { id: 2, name: 'Bob' }],
-			requestedTalents: [{ name: 'Bob' }, { name: 'Bob' }],
-			removeTalent,
-			addTalent,
-		});
-
-		expect(removeTalent).not.toHaveBeenCalled();
-		expect(addTalent).not.toHaveBeenCalled();
-	});
-
-	it('adds a second namesake when the operator asks for one', async () => {
-		const removeTalent = vi.fn();
-		const addTalent = vi.fn().mockResolvedValue({ id: 2, name: 'Bob' });
+	// A talent the operator renamed is the same person, and the event points at
+	// them by id. Replacing the row hands the same name a new id, and the old id
+	// is what `commentator1_talent_id` holds — an `onDelete: 'set null'` away from
+	// being cleared without a word.
+	it('renames a talent in place rather than replacing them', async () => {
+		const calls = mutations();
 
 		await applyTalentUpdates({
 			currentTalents: [{ id: 1, name: 'Bob' }],
-			requestedTalents: [{ name: 'Bob' }, { name: 'Bob' }],
-			removeTalent,
-			addTalent,
+			requestedTalents: [{ id: 1, name: 'Robert' }],
+			...calls,
 		});
 
-		expect(removeTalent).not.toHaveBeenCalled();
-		expect(addTalent).toHaveBeenCalledTimes(1);
-		expect(addTalent).toHaveBeenCalledWith({ name: 'Bob' });
+		expect(calls.renameTalent).toHaveBeenCalledTimes(1);
+		expect(calls.renameTalent).toHaveBeenCalledWith(1, { name: 'Robert' });
+		expect(calls.removeTalent).not.toHaveBeenCalled();
+		expect(calls.addTalent).not.toHaveBeenCalled();
 	});
 
-	it('leaves untouched names alone while it settles a duplicate', async () => {
-		const removeTalent = vi.fn().mockResolvedValue({ success: true });
-		const addTalent = vi.fn().mockResolvedValue({ id: 4, name: 'Dana' });
+	it('rejects when a rename fails, before it touches anything else', async () => {
+		const calls = mutations();
+		calls.renameTalent.mockResolvedValue(null);
+
+		await expect(applyTalentUpdates({
+			currentTalents: [{ id: 1, name: 'Bob' }, { id: 2, name: 'Dana' }],
+			requestedTalents: [{ id: 1, name: 'Robert' }],
+			...calls,
+		})).rejects.toThrow('Failed to rename Bob');
+
+		expect(calls.removeTalent).not.toHaveBeenCalled();
+		expect(calls.addTalent).not.toHaveBeenCalled();
+	});
+
+	// The defect this whole contract change exists for: two talents sharing a name
+	// are one row each, and only their ids tell them apart.
+	it('removes exactly the namesake the operator dropped', async () => {
+		const calls = mutations();
 
 		await applyTalentUpdates({
-			currentTalents: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }, { id: 3, name: 'Bob' }],
-			requestedTalents: [{ name: 'Alice' }, { name: 'Bob' }, { name: 'Dana' }],
-			removeTalent,
-			addTalent,
+			currentTalents: [{ id: 1, name: 'Bob' }, { id: 2, name: 'Bob' }],
+			requestedTalents: [{ id: 1, name: 'Bob' }],
+			...calls,
 		});
 
-		expect(removeTalent).toHaveBeenCalledTimes(1);
-		expect(removeTalent).toHaveBeenCalledWith(3);
-		expect(addTalent).toHaveBeenCalledTimes(1);
-		expect(addTalent).toHaveBeenCalledWith({ name: 'Dana' });
+		expect(calls.removeTalent).toHaveBeenCalledTimes(1);
+		expect(calls.removeTalent).toHaveBeenCalledWith(2);
+		expect(calls.addTalent).not.toHaveBeenCalled();
+		expect(calls.renameTalent).not.toHaveBeenCalled();
+	});
+
+	it('removes the first namesake just as readily as the second', async () => {
+		const calls = mutations();
+
+		await applyTalentUpdates({
+			currentTalents: [{ id: 1, name: 'Bob' }, { id: 2, name: 'Bob' }],
+			requestedTalents: [{ id: 2, name: 'Bob' }],
+			...calls,
+		});
+
+		expect(calls.removeTalent).toHaveBeenCalledTimes(1);
+		expect(calls.removeTalent).toHaveBeenCalledWith(1);
+	});
+
+	it('keeps both namesakes when neither was dropped', async () => {
+		const calls = mutations();
+
+		await applyTalentUpdates({
+			currentTalents: [{ id: 1, name: 'Bob' }, { id: 2, name: 'Bob' }],
+			requestedTalents: [{ id: 1, name: 'Bob' }, { id: 2, name: 'Bob' }],
+			...calls,
+		});
+
+		expect(calls.removeTalent).not.toHaveBeenCalled();
+		expect(calls.addTalent).not.toHaveBeenCalled();
+		expect(calls.renameTalent).not.toHaveBeenCalled();
+	});
+
+	it('adds an entry that carries no id, namesake or not', async () => {
+		const calls = mutations();
+
+		await applyTalentUpdates({
+			currentTalents: [{ id: 1, name: 'Bob' }],
+			requestedTalents: [{ id: 1, name: 'Bob' }, { name: 'Bob' }, { name: 'Dana' }],
+			...calls,
+		});
+
+		expect(calls.addTalent).toHaveBeenCalledTimes(2);
+		expect(calls.addTalent).toHaveBeenCalledWith({ name: 'Bob' });
+		expect(calls.addTalent).toHaveBeenCalledWith({ name: 'Dana' });
+		expect(calls.removeTalent).not.toHaveBeenCalled();
+	});
+
+	it('settles a rename, a removal and an addition in one save', async () => {
+		const calls = mutations();
+
+		await applyTalentUpdates({
+			currentTalents: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }, { id: 3, name: 'Caspar' }],
+			requestedTalents: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Robert' }, { name: 'Dana' }],
+			...calls,
+		});
+
+		expect(calls.renameTalent).toHaveBeenCalledTimes(1);
+		expect(calls.renameTalent).toHaveBeenCalledWith(2, { name: 'Robert' });
+		expect(calls.removeTalent).toHaveBeenCalledTimes(1);
+		expect(calls.removeTalent).toHaveBeenCalledWith(3);
+		expect(calls.addTalent).toHaveBeenCalledTimes(1);
+		expect(calls.addTalent).toHaveBeenCalledWith({ name: 'Dana' });
+	});
+
+	// The list the operator saved is the list they want the event to have. If a
+	// concurrent delete landed under an unsaved edit, the row is still on their
+	// screen and re-creating it is the reading that keeps what they can see.
+	it('re-creates an entry whose talent went away underneath it', async () => {
+		const calls = mutations();
+
+		await applyTalentUpdates({
+			currentTalents: [{ id: 1, name: 'Alice' }],
+			requestedTalents: [{ id: 1, name: 'Alice' }, { id: 7, name: 'Dana' }],
+			...calls,
+		});
+
+		expect(calls.addTalent).toHaveBeenCalledTimes(1);
+		expect(calls.addTalent).toHaveBeenCalledWith({ name: 'Dana' });
+		expect(calls.removeTalent).not.toHaveBeenCalled();
+		expect(calls.renameTalent).not.toHaveBeenCalled();
+	});
+
+	it('does nothing at all when nothing changed', async () => {
+		const calls = mutations();
+
+		await applyTalentUpdates({
+			currentTalents: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }],
+			requestedTalents: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }],
+			...calls,
+		});
+
+		expect(calls.removeTalent).not.toHaveBeenCalled();
+		expect(calls.addTalent).not.toHaveBeenCalled();
+		expect(calls.renameTalent).not.toHaveBeenCalled();
 	});
 });

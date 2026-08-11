@@ -3,53 +3,81 @@ interface TalentSummary {
 	name: string;
 }
 
+/**
+ * A row of the Talents card. An entry with no `id` is one the operator just added
+ * and no talent exists for yet; every other entry names the talent it came from.
+ */
+interface RequestedTalent {
+	id?: number;
+	name: string;
+}
+
 interface TalentUpdateOptions<T> {
 	currentTalents: TalentSummary[];
-	requestedTalents: Array<{ name: string }>;
+	requestedTalents: RequestedTalent[];
 	removeTalent: (talentId: number) => Promise<unknown>;
 	addTalent: (input: { name: string }) => Promise<T | null>;
+	renameTalent: (talentId: number, input: { name: string }) => Promise<unknown>;
 }
 
 /**
- * Reconciles the Talents card's list against the event's, by **count** per name
- * rather than by set membership.
+ * Reconciles the Talents card's list against the event's, **by talent id**.
  *
- * The card emits names and no ids, so two talents called "Bob" are indistinguishable
- * in what it sends and only the number of times the name appears says whether one of
- * them was dropped. Membership cannot see that: asked to keep one Bob of two, it finds
- * a requested "Bob" matching each current Bob, removes neither, adds neither, and
- * reports success — after which the card resets from an event that never changed and
- * the row the operator deleted comes back. That is the whole of how a duplicate talent
- * became unremovable through the only screen that removes talents.
+ * Everything under this function is already keyed on ids — the `event_talents`
+ * primary key, the `commentator1_talent_id` / `commentator2_talent_id` columns that
+ * point at it, and the graphics binding data that resolves commentators through
+ * `byId` at Take time. Only this card was keyed on names, and every defect it had
+ * came from that one mismatch:
  *
- * Pairing each request with one existing talent leaves the surplus behind, and the
- * surplus is what gets removed. Pairing in list order means the namesake removed is
- * the **later** one, which is the one an accidental double-create just added.
+ * - Two talents called "Bob" were indistinguishable, so dropping one matched the
+ *   other and the save removed nothing, added nothing, and reported success. The
+ *   card then reset from an unchanged event and the deleted row came back. That is
+ *   how a duplicate talent became unremovable through the only screen that removes
+ *   talents.
+ * - A rename was a remove followed by an add, so the renamed person came back with
+ *   a **new id** while the event still pointed at the old one — which the FK's
+ *   `onDelete: 'set null'` had just cleared. Rename your commentator and they left
+ *   the graphic, silently, with the save reporting success.
  *
- * Matching stays case-sensitive: "bob" and "Bob" are two rows in the database, and a
- * rename between them is a change the operator asked for, not a collision to absorb.
+ * Carrying ids through makes both questions exact rather than inferred: an entry
+ * that names an existing talent keeps them (renaming in place if the name moved),
+ * an entry with no id is new, and a talent no entry names was dropped. Namesakes
+ * need no special handling because names stopped being the identifier.
+ *
+ * Renames run first so identity survives the rest of the save, and removals run
+ * before additions so the pass that can free a name happens before the one that
+ * might reuse it.
  */
 export async function applyTalentUpdates<T>(options: TalentUpdateOptions<T>) {
-	const availableByName = new Map<string, TalentSummary[]>();
-	for (const current of options.currentTalents) {
-		const namesakes = availableByName.get(current.name);
-		if (namesakes)
-			namesakes.push(current);
-		else
-			availableByName.set(current.name, [current]);
+	const currentById = new Map(options.currentTalents.map(talent => [talent.id, talent]));
+	const keptIds = new Set<number>();
+	const talentsToAdd: RequestedTalent[] = [];
+	const talentsToRename: Array<{ current: TalentSummary; name: string }> = [];
+
+	for (const requested of options.requestedTalents) {
+		const current = requested.id === undefined ? undefined : currentById.get(requested.id);
+
+		// An id with no talent behind it is an entry whose talent went away while the
+		// operator was editing. Their list is what they asked the event to be, so the
+		// row is re-created rather than quietly dropped.
+		if (!current) {
+			talentsToAdd.push(requested);
+			continue;
+		}
+
+		keptIds.add(current.id);
+
+		if (current.name !== requested.name)
+			talentsToRename.push({ current, name: requested.name });
 	}
 
-	const talentsToAdd = options.requestedTalents.filter((requested) => {
-		const namesakes = availableByName.get(requested.name);
-		if (!namesakes?.length)
-			return true;
+	const talentsToRemove = options.currentTalents.filter(talent => !keptIds.has(talent.id));
 
-		namesakes.shift();
-		return false;
-	});
-
-	const surplus = new Set(Array.from(availableByName.values()).flat());
-	const talentsToRemove = options.currentTalents.filter(current => surplus.has(current));
+	for (const { current, name } of talentsToRename) {
+		const renamed = await options.renameTalent(current.id, { name });
+		if (!renamed)
+			throw new Error(`Failed to rename ${current.name}`);
+	}
 
 	for (const talent of talentsToRemove) {
 		const removed = await options.removeTalent(talent.id);
