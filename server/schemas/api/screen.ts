@@ -1251,10 +1251,12 @@ export const MAX_GRAPHIC_CHANNELS_PER_SCREEN = 25;
  * 512 KiB budget shared by every Screen Mode.
  *
  * **300 is `MAX_BROADCAST_GRAPHICS_PER_SCREEN` x the six Graphic Items of the
- * richest reconstruction in `docs/prototypes/broadcast-graphics-fidelity.md`** —
- * every Broadcast Graphic the Screen admits, authored at the richest shape the
- * acceptance evidence contains. A realistic Screen at this cap measures 248,734
- * bytes, 47% of the shared budget.
+ * richest reconstruction in the fidelity acceptance set** — every Broadcast
+ * Graphic the Screen admits, authored at the richest shape that evidence
+ * contains. The inventory those six are counted from is reproduced in
+ * `docs/adr/0007-broadcast-graphics-item-cap.md`; the prototype document it was
+ * originally read off is no longer in the repository. A realistic Screen at this
+ * cap measures 248,734 bytes, 47% of the shared budget.
  *
  * `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES` is what the
  * caps together admit: every construct the schema accepts, each populated at its
