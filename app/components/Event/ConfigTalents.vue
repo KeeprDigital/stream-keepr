@@ -2,13 +2,19 @@
 import type { DropdownMenuItem } from '@nuxt/ui';
 import type { Talent } from '~/types';
 
+/** A row of the card: `id` is the talent it came from, absent on one just added. */
+interface TalentRow {
+	id?: number;
+	name: string;
+}
+
 const props = defineProps<{
 	talents: Talent[];
 	loading?: boolean;
 }>();
 
 const emit = defineEmits<{
-	(e: 'submit', talents: { name: string }[]): void;
+	(e: 'submit', talents: TalentRow[]): void;
 }>();
 
 const editingTalents = ref<Set<number>>(new Set());
@@ -17,9 +23,12 @@ const editingValues = ref<Record<number, string>>({});
 // Computed to check if any talents are being edited
 const hasActiveEdits = computed(() => editingTalents.value.size > 0);
 
-// Use form reset composable
+// Each row carries the id of the talent it came from, so the save can tell one
+// namesake from another and can rename in place instead of replacing the row —
+// which would hand the same person a new id and drop their commentator seat. A
+// row the operator just added has no talent behind it yet, hence no id.
 const { formData: talentsData, isDirty, reset: resetForm } = useForm({
-	initialData: computed(() => props.talents.map(t => ({ name: t.name }))),
+	initialData: computed<TalentRow[]>(() => props.talents.map(t => ({ id: t.id, name: t.name }))),
 	onReset: () => {
 		// Clear edit states on reset
 		editingTalents.value.clear();
@@ -34,7 +43,7 @@ useRegisterDirtyState(isDirty);
 const canSave = computed(() => isDirty.value && !hasActiveEdits.value);
 
 function addTalent() {
-	const newTalent = { name: '' };
+	const newTalent: TalentRow = { name: '' };
 	talentsData.value.push(newTalent);
 
 	const newIndex = talentsData.value.length - 1;
