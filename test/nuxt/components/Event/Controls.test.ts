@@ -398,6 +398,75 @@ describe('event controls', () => {
 		expect(mockEventStore.updateEvent).toHaveBeenCalledWith({ commentator1TalentId: null });
 	});
 
+	// USelectMenu re-emits `create` for every Enter while its create item is on
+	// screen, and that item stays there for as long as the request is in flight —
+	// so a second Enter arrives before the first talent exists to filter it away.
+	// Talent names carry no uniqueness constraint, so the second call would land a
+	// second row for one person.
+	it('creates one talent when the same name is offered twice before the first lands', async () => {
+		const pending = deferred();
+		mockEventStore.addTalent.mockReturnValue(pending.promise);
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		commentatorField(wrapper, 1).vm.$emit('create', 'Dana');
+		commentatorField(wrapper, 1).vm.$emit('create', 'Dana');
+		await flushPromises();
+
+		expect(mockEventStore.addTalent).toHaveBeenCalledTimes(1);
+
+		pending.resolve(createMockTalent({ id: 14, name: 'Dana' }));
+		await flushPromises();
+
+		expect(commentatorField(wrapper, 1).props('modelValue')).toBe('Dana');
+	});
+
+	it('creates again once the first request has settled', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		commentatorField(wrapper, 1).vm.$emit('create', 'Dana');
+		await flushPromises();
+
+		mockEventStore.addTalent.mockResolvedValue(createMockTalent({ id: 16, name: 'Elias' }));
+		commentatorField(wrapper, 2).vm.$emit('create', 'Elias');
+		await flushPromises();
+
+		expect(mockEventStore.addTalent).toHaveBeenCalledTimes(2);
+		expect(commentatorField(wrapper, 2).props('modelValue')).toBe('Elias');
+	});
+
+	// The other position's name is filtered out of this one's options, so typing it
+	// here leaves nothing to match and USelectMenu offers to create it instead. The
+	// offer is the component's own exclusion talking, not a missing talent.
+	it('declines to duplicate a talent already holding the other position', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		commentatorField(wrapper, 1).vm.$emit('create', 'Briony');
+		await flushPromises();
+
+		expect(mockEventStore.addTalent).not.toHaveBeenCalled();
+		expect(commentatorField(wrapper, 1).props('modelValue')).toBe('Alice');
+		expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({
+			description: 'Briony is already assigned to the other commentator position',
+			color: 'error',
+		}));
+	});
+
+	// Whatever route produced the offer, a name the event already holds names a
+	// talent that already exists — adopt them rather than minting a namesake.
+	it('adopts an existing talent offered for creation, whatever its casing', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		commentatorField(wrapper, 1).vm.$emit('create', 'caspar');
+		await flushPromises();
+
+		expect(mockEventStore.addTalent).not.toHaveBeenCalled();
+		expect(commentatorField(wrapper, 1).props('modelValue')).toBe('Caspar');
+	});
+
 	it('ignores a blank name offered as a new commentator', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();

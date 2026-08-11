@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const eventStore = useEventStore();
 const { runRequest } = useRequestFeedback();
+const toast = useToast();
 
 const event = computed(() => eventStore.event);
 
@@ -39,6 +40,7 @@ const { formData: commentatorFormData, isDirty: isCommentatorsDirty, reset: rese
 
 const holdingTextSaving = ref(false);
 const commentatorsSaving = ref(false);
+const commentatorCreating = ref(false);
 
 useRegisterDirtyState(computed(() => isHoldingTextDirty.value || isCommentatorsDirty.value));
 
@@ -58,13 +60,58 @@ const commentator2Options = computed(() => {
 	return exclude ? talentNames.value.filter(n => n.toLowerCase() !== exclude) : talentNames.value;
 });
 
+function findTalentNamed(name: string) {
+	const wanted = name.toLowerCase();
+	return event.value?.talents.find(talent => talent.name.toLowerCase() === wanted) ?? null;
+}
+
+/**
+ * What USelectMenu's create item means, and why it cannot be taken at face value.
+ *
+ * The component offers to create whatever its **own** options do not carry, and
+ * re-emits `create` for every Enter while that offer is on screen. Neither fact is
+ * about the event's talents, and a talent name carries no uniqueness constraint, so
+ * either one alone lands a second row for one person:
+ *
+ * - The offer stays up for the whole round trip, because the talent that would
+ *   filter it away does not exist until the request lands. A second Enter inside
+ *   that window is the reported bug, and `commentatorCreating` is what closes it.
+ * - This position's options exclude the other position's commentator, so typing
+ *   that name here leaves nothing to match and the offer appears for a talent the
+ *   event already has. `findTalentNamed` is what sees through that.
+ *
+ * A duplicate created either way is not recoverable from the Talents card: the save
+ * there matches on names, so dropping one of two namesakes reads as no change at all
+ * (`modules/event-data/talentUpdates.ts`). Refusing to make one is the half of that
+ * pair that keeps the operator out of the state to begin with.
+ */
 async function handleCreateCommentator(name: string, commentatorNumber: 1 | 2) {
 	const trimmedName = name?.trim();
-	if (!trimmedName || !event.value)
+	if (!trimmedName || !event.value || commentatorCreating.value)
 		return;
+
+	const existing = findTalentNamed(trimmedName);
+	if (existing) {
+		const otherNumber = commentatorNumber === 1 ? 2 : 1;
+		const otherName = commentatorFormData.value[`commentator${otherNumber}Name`];
+
+		if (otherName?.toLowerCase() === existing.name.toLowerCase()) {
+			toast.add({
+				title: 'Error',
+				description: `${existing.name} is already assigned to the other commentator position`,
+				color: 'error',
+			});
+			return;
+		}
+
+		commentatorFormData.value[`commentator${commentatorNumber}Name`] = existing.name;
+		return;
+	}
+
 	await runRequest(
 		() => eventStore.addTalent({ name: trimmedName }),
 		{
+			loadingRef: commentatorCreating,
 			success: false,
 			error: { title: 'Error', description: 'Failed to create commentator', color: 'error' },
 			onSuccess: () => {
