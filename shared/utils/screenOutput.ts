@@ -3,6 +3,36 @@ import type { ScreenOutput } from '../types/screenConfig';
 export const SCREEN_OUTPUT_VALUES: ScreenOutput[] = ['overlay', 'fill', 'key'];
 
 /**
+ * Why a control surface embedded this Screen Output, when one did.
+ *
+ * A Screen URL without a role opens a Screen Output: it joins its Screen's presence,
+ * answers that Screen's commands, and is one of the outputs every presence-derived
+ * surface counts. A role says the opposite — that a control surface put this here for
+ * its own operator to look at — and which of the two kinds it put here.
+ *
+ * One selection rather than a pile of opt-outs, so the two kinds cannot be asked for
+ * at once. An editor preview that is also live playout is not a thing this
+ * application has, and the query cannot spell one.
+ */
+export type ScreenEmbed = 'preview' | 'monitor';
+
+export const SCREEN_EMBED_VALUES: ScreenEmbed[] = ['preview', 'monitor'];
+
+/**
+ * Resolve the embed role carried on a Screen's one stable URL, or null for the
+ * Screen Output a URL without a readable role opens.
+ *
+ * An unrecognised role is no role, which is the reading that fails safe: a mistyped
+ * URL opens something that reports itself to its Screen and is counted, rather than
+ * something that watches invisibly while every surface stating what the outputs cost
+ * is silently wrong about it.
+ */
+export function parseScreenEmbed(value: unknown): ScreenEmbed | null {
+	const raw = Array.isArray(value) ? value[0] : value;
+	return SCREEN_EMBED_VALUES.includes(raw as ScreenEmbed) ? raw as ScreenEmbed : null;
+}
+
+/**
  * Resolve the Screen Output selection carried on a Screen's one stable URL. An
  * omitted or invalid selection renders the Overlay Output.
  */
@@ -47,16 +77,22 @@ export interface ScreenOutputPathOptions {
 	/** Omitted renders the Overlay Output. */
 	output?: ScreenOutput;
 	/**
-	 * Mark this as an embedded editor preview.
+	 * Mark this as embedded by a control surface, and say as which kind.
 	 *
-	 * Editor-only guides and the Feature Match Sample Dataset are available only to a
-	 * preview, so a Screen Output URL that omits this can never show either — and the
-	 * copyable broadcast URLs and the PNG capture URL never ask for it. What that does
-	 * and does not guarantee is worked out over the guide flags in
+	 * `preview` is the editor's rendering of authored state: it composes the stack its
+	 * embedder pushes in rather than playout, resolves media as the author rather than
+	 * through a Screen Output Asset Capability, and may draw editor-only guides and
+	 * the Feature Match Sample Dataset. `monitor` is live in every one of those ways
+	 * and differs from an output in one: it is what the operator running the Screen is
+	 * looking at, so it joins no presence and answers no Screen command.
+	 *
+	 * Neither is set by the copyable broadcast URLs or the PNG capture URL, so no URL
+	 * this application hands an operator can be either. What that does and does not
+	 * guarantee is worked out over the guide flags in
 	 * `app/modules/screen/displaySession.ts`, which is the one place it is written
 	 * down (issue #134).
 	 */
-	preview?: boolean;
+	embed?: ScreenEmbed;
 	itemGuides?: boolean;
 	safeAreaGuides?: boolean;
 	/** Capture the output as a PNG from a temporary tab. */
@@ -74,9 +110,9 @@ export interface ScreenOutputPathOptions {
 
 /**
  * The one stable Screen URL for a Screen Output, with its output selection, any
- * preview flags, and any asset capability. Built here so every embedder agrees on
- * the query — and so an embedder cannot forget the capability its output needs to
- * show media.
+ * embed role and preview flags, and any asset capability. Built here so every
+ * embedder agrees on the query — and so an embedder cannot forget the capability its
+ * output needs to show media.
  *
  * Deliberately carries no scaling flag. Uniform viewport-fit scaling is registered
  * by the Screen Mode Definition and applies to every output of a mode that
@@ -85,8 +121,8 @@ export interface ScreenOutputPathOptions {
  */
 export function screenOutputPath(options: ScreenOutputPathOptions): string {
 	const query = new URLSearchParams({ output: options.output ?? 'overlay' });
-	if (options.preview)
-		query.set('preview', '1');
+	if (options.embed)
+		query.set('embed', options.embed);
 	if (options.itemGuides)
 		query.set('guides', '1');
 	if (options.safeAreaGuides)

@@ -126,7 +126,7 @@ const previewUrl = computed(() => screenOutputPath({
 	eventId: props.eventId,
 	screenSlug: props.screen.slug,
 	output: previewOutput.value,
-	preview: true,
+	embed: 'preview',
 	itemGuides: itemGuides.value,
 	safeAreaGuides: safeAreaGuides.value,
 }));

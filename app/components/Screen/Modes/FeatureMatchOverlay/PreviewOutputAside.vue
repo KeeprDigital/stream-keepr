@@ -23,7 +23,7 @@ import {
  * one of them non-canvas.
  *
  * Guides are asked for on the preview's own URL, so a live Screen Output — which
- * never carries the preview flag — can never draw one.
+ * never carries the preview embed role — can never draw one.
  */
 
 const props = defineProps<{
@@ -71,7 +71,7 @@ const previewUrl = computed(() => screenOutputPath({
 	eventId: props.eventId,
 	screenSlug: props.screen.slug,
 	output: previewOutput.value,
-	preview: true,
+	embed: 'preview',
 	itemGuides: previewGuides.value,
 	safeAreaGuides: previewSafeAreas.value,
 }));

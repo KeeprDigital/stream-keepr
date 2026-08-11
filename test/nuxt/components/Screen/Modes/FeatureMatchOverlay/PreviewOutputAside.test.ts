@@ -385,7 +385,7 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 		// URL is the same Screen without them — which is what keeps a guide off air.
 		const wrapper = await mountComponent();
 
-		expect(wrapper.get('iframe').attributes('src')).toContain('preview=1');
+		expect(wrapper.get('iframe').attributes('src')).toContain('embed=preview');
 		expect(wrapper.get('iframe').attributes('src')).toContain('guides=1');
 		expect(wrapper.get('iframe').attributes('src')).not.toContain('safe=1');
 
@@ -398,7 +398,7 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 		const outputUrls = wrapper.findAll('u-input-stub').map(input => input.attributes('modelvalue') ?? '');
 		expect(outputUrls.length).toBeGreaterThan(0);
 		for (const url of outputUrls) {
-			expect(url).not.toContain('preview=1');
+			expect(url).not.toContain('embed=preview');
 			expect(url).not.toContain('guides=1');
 			expect(url).not.toContain('safe=1');
 		}

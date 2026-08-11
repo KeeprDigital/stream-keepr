@@ -198,10 +198,26 @@ async function openOutput() {
 			});
 }
 
+/**
+ * The operator's own view of program: live in every way an output is, and not one.
+ *
+ * `embed: 'monitor'` is the whole of that distinction. It is what keeps this frame
+ * out of the Screen's presence, which the connected count, the Open Screen Output
+ * Engines, and the asset-access warning below are all read from — without it this
+ * workspace reported one client live with nothing open anywhere, and named the
+ * operator's own browser among the engines it states a Graphic Asset Revision's cost
+ * against.
+ *
+ * Deliberately not `embed: 'preview'`, which would suppress presence too and cost the
+ * monitor everything it exists for: a preview composes the stack its embedder pushes
+ * it rather than playout, and this workspace pushes none, so the monitor would sit
+ * empty however much was on air.
+ */
 const programUrl = computed(() => screenOutputPath({
 	eventId: props.eventId,
 	screenSlug: props.screen.slug,
 	output: 'overlay',
+	embed: 'monitor',
 	assetCapability: assetCapability.value,
 }));
 const programAspectStyle = computed(() => ({

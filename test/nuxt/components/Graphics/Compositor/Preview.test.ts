@@ -87,7 +87,7 @@ describe('graphicsCompositorPreview', () => {
 		const src = wrapper.get('iframe').attributes('src') ?? '';
 
 		expect(src).toContain('output=overlay');
-		expect(src).toContain('preview=1');
+		expect(src).toContain('embed=preview');
 		expect(src).toContain('guides=1');
 		expect(src).not.toContain('safe=1');
 	});

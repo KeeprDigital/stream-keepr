@@ -153,7 +153,7 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.session.loading.value).toBe(false);
 	});
 
-	it('starts realtime after a successful load when not preview', async () => {
+	it('starts realtime after a successful load when the URL carries no embed role', async () => {
 		const harness = createHarness();
 		await flushPromises();
 
@@ -174,12 +174,60 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.session.error.value).toBe('Screen not found');
 	});
 
-	it('does not start realtime when preview=1', async () => {
-		const harness = createHarness({ query: { preview: '1' } });
+	it('does not start realtime when embed=preview', async () => {
+		const harness = createHarness({ query: { embed: 'preview' } });
 		await flushPromises();
 
 		expect(harness.realtimeSession.start).not.toHaveBeenCalled();
 		expect(harness.session.screenContext.isPreview?.value).toBe(true);
+	});
+
+	/**
+	 * A Program monitor is live in every way an output is — it composes what playout
+	 * took, resolves media through the capability, and composites as program — and is
+	 * still not one of the Screen's outputs. It is the control surface an operator is
+	 * already looking at, embedded beside the controls that drive it.
+	 *
+	 * So it joins no presence and answers no Screen command. Joining would have every
+	 * presence-derived surface count the operator's own monitor as a client watching:
+	 * the Screen's connected count would read one with nothing open, and the Open
+	 * Screen Output Engines would name the operator's browser as an engine to state a
+	 * Graphic Asset Revision's cost against. Answering commands would flash Identify
+	 * on the one display an operator never needs to find.
+	 */
+	it('does not start realtime when embed=monitor, so a Program monitor is no output', async () => {
+		const harness = createHarness({ query: { embed: 'monitor' } });
+		await flushPromises();
+
+		expect(harness.realtimeSession.start).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * And is live in the ways a preview is not. The monitor's whole job is to show
+	 * what is on air, which it can only do by loading playout and resolving media as
+	 * an output does — both of which the preview reading of this URL suppresses.
+	 */
+	it('leaves a Program monitor live: not a preview, and no preview backdrop or guides', async () => {
+		const harness = createHarness({ query: { embed: 'monitor', guides: '1', safe: '1' } });
+		await flushPromises();
+
+		expect(harness.session.screenContext.isPreview?.value).toBe(false);
+		expect(harness.session.screenContext.previewGuides?.value).toBe(false);
+		expect(harness.session.screenContext.previewSafeAreas?.value).toBe(false);
+	});
+
+	/**
+	 * An unreadable role is a live Screen Output. The safe reading of a mistyped URL
+	 * is the one that reports itself: an output that joined nothing would watch
+	 * invisibly, and every surface that states what the outputs cost would be wrong
+	 * about it with nothing saying so.
+	 */
+	it('treats an unrecognised embed role as a live Screen Output', async () => {
+		const harness = createHarness({ query: { embed: 'program' } });
+		await flushPromises();
+
+		expect(harness.realtimeSession.start).toHaveBeenCalledWith(42, 7);
+		expect(harness.session.screenContext.isPreview?.value).toBe(false);
 	});
 
 	/**
@@ -193,7 +241,7 @@ describe('useScreenDisplaySession', () => {
 	 * The Screen Output this hands back is a live one, and that is the point: it is
 	 * asked for as such here so the case cannot quietly become a preview.
 	 */
-	it('draws no guides for guides=1 and safe=1 without preview=1', async () => {
+	it('draws no guides for guides=1 and safe=1 without embed=preview', async () => {
 		const harness = createHarness({ query: { guides: '1', safe: '1' } });
 		await flushPromises();
 
@@ -208,7 +256,7 @@ describe('useScreenDisplaySession', () => {
 	 * rather than the flags never being read at all.
 	 */
 	it('draws the guides an embedded preview asks for', async () => {
-		const harness = createHarness({ query: { preview: '1', guides: '1', safe: '1' } });
+		const harness = createHarness({ query: { embed: 'preview', guides: '1', safe: '1' } });
 		await flushPromises();
 
 		expect(harness.session.screenContext.previewGuides?.value).toBe(true);

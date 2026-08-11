@@ -884,8 +884,8 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('gives the Program monitor a capability, so it can resolve media at all', async () => {
-		// The monitor is a real Screen Output, not a preview: without a capability in
-		// its URL it renders every graphic except its media, silently.
+		// The monitor renders as a live output does, not as a preview: without a
+		// capability in its URL it renders every graphic except its media, silently.
 		const wrapper = await mountComponent();
 
 		const src = wrapper.get('[data-testid="program-monitor"]').attributes('src')!;
@@ -894,14 +894,40 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	/**
+	 * The monitor is the operator's own view of program, not one of the Screen's
+	 * outputs, and says so in its URL.
+	 *
+	 * Without that it joined this Screen's presence like any output, so this
+	 * workspace reported one client live with nothing open anywhere — and the Open
+	 * Screen Output Engines named the operator's own browser among the engines a
+	 * Graphic Asset Revision's cost is stated against.
+	 *
+	 * `embed=monitor` rather than `embed=preview`, because a preview composes the
+	 * stack an editor pushes it instead of loading playout, and resolves media as an
+	 * author instead of through the capability. A monitor showing either is not
+	 * showing program.
+	 */
+	it('opens the Program monitor as a monitor, so it is not counted as an output', async () => {
+		const wrapper = await mountComponent();
+
+		const src = wrapper.get('[data-testid="program-monitor"]').attributes('src')!;
+		expect(src).toContain('embed=monitor');
+		expect(src).not.toContain('embed=preview');
+	});
+
+	/**
 	 * The monitor is never pointed at a URL without a capability — not even for the
 	 * moment before the capability arrives.
 	 *
 	 * The capability is fetched asynchronously and starts null, so an iframe bound
 	 * straight to the URL navigates on the first render and stays where it navigated:
-	 * a real Screen Output rendering this composition without its media, which is not
-	 * what program looks like. It would also join this Screen's presence reporting
-	 * `absent`, raising the warning above against the operator's own monitor (#231).
+	 * a monitor rendering this composition without its media, which is not what
+	 * program looks like (#231).
+	 *
+	 * It no longer also reports `absent` into this Screen's presence and raises the
+	 * warning above against the operator's own monitor — a monitor joins no presence
+	 * at all now. That was the second reason for this gate and is now the weaker one;
+	 * the blank-media reason above is what still requires it.
 	 */
 	it('points the monitor nowhere until the capability has been answered for', async () => {
 		let release!: () => void;

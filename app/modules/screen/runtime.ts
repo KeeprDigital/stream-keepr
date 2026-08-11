@@ -26,6 +26,12 @@ export type ExecuteAction = ReturnType<typeof useAsyncAction>['executeAction'];
  * Only a Screen Output enters a Screen's presence — a control surface watches without
  * joining — so every member here is an output, and the payload each carries is the one
  * a Screen Output enters with.
+ *
+ * What makes that true is the embed role on the Screen URL, and nothing else: a
+ * control surface that embeds a live rendering of its own Screen is opening the same
+ * route an output opens, and is one until its URL says otherwise. The Broadcast
+ * Graphics Program monitor was exactly that for as long as its URL carried no role —
+ * so a workspace with no output open anywhere counted one client live, its own.
  */
 export interface ScreenPresenceInfo {
 	count: number;

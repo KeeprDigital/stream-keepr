@@ -4,7 +4,7 @@ import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { ScreenPresenceData } from '~/types/screen';
 import { useIntervalFn } from '@vueuse/core';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue';
-import { parseScreenOutput, screenOutputBackground } from '~~/shared/utils/screenOutput';
+import { parseScreenEmbed, parseScreenOutput, screenOutputBackground } from '~~/shared/utils/screenOutput';
 import { useRoute } from '#app';
 import { useRealtime } from '~/composables/core/useRealtime';
 import { useScreenRealtimeSession } from '~/composables/screen/useScreenRealtimeSession';
@@ -67,37 +67,68 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	const outputMode = computed<ScreenOutput>(() => parsedOutput.value.output);
 	const outputWarning = computed(() => parsedOutput.value.warning);
 	const shouldDownload = computed(() => route.query.download === '1');
-	const isPreview = computed(() => route.query.preview === '1');
+	/**
+	 * Which control surface, if any, embedded this rendering — and so whether it is
+	 * one of its Screen's outputs at all.
+	 *
+	 * ## Why the two roles are one selection
+	 *
+	 * A Program monitor and an editor preview overlap in exactly one thing: neither is
+	 * a Screen Output, so neither joins its Screen's presence. Everything else about
+	 * them is opposed. A preview composes the stack its embedder pushes in and
+	 * resolves media as the author; a monitor loads playout and resolves media through
+	 * the capability, because its whole job is showing what is on air and it cannot do
+	 * that on authored state or on media a real output could not fetch.
+	 *
+	 * So a monitor is not a preview with an exception, and pointing one at
+	 * `embed=preview` to borrow the presence suppression would leave it composing
+	 * nothing — `useBroadcastGraphicsModeData` withholds the Live Session from a
+	 * preview, and no editor pushes a monitor a stack. One selection keeps that
+	 * mistake unspellable.
+	 */
+	const embed = computed(() => parseScreenEmbed(route.query.embed));
+	const isPreview = computed(() => embed.value === 'preview');
 	/*
-	 * Editor-only guides require the preview flag as well as their own, so an
+	 * Editor-only guides require the preview role as well as their own flag, so an
 	 * ordinary Screen Output URL draws none.
 	 *
 	 * ## What holds, and why guide visibility is left as it is (issue #134)
 	 *
 	 * The guide flags carry no authority of their own: neither draws anything without
-	 * `preview`. And `screenOutputPath` sets `preview` only when an embedder asks for
-	 * it, which the copyable broadcast URLs and the PNG capture URL never do. So no
-	 * Screen Output URL this application hands an operator can render a guide, and
-	 * that is the property the glossary states.
+	 * `embed=preview`. And `screenOutputPath` sets an embed role only when an embedder
+	 * asks for one, which the copyable broadcast URLs and the PNG capture URL never
+	 * do. So no Screen Output URL this application hands an operator can render a
+	 * guide, and that is the property the glossary states.
 	 *
 	 * ## What does not hold, so nobody rebuilds an argument on it
 	 *
-	 * The preview flag is *not* proof that an output is not live. It suppresses the
+	 * The preview role is *not* proof that an output is not live. It suppresses the
 	 * Screen realtime session (below) — no takes, no playout, no presence — and for a
 	 * Broadcast Graphics Screen that is most of what live means. A Feature Match
 	 * Overlay degrades far less: the Event realtime session is started by a plugin
-	 * this flag does not suppress, so Feature Match updates still arrive; the sample
+	 * this role does not suppress, so Feature Match updates still arrive; the sample
 	 * dataset is skipped whenever a Slot is assigned, so the data is real; the
 	 * transparent-preview backdrop is drawn only for the Overlay Output, so `fill` and
 	 * `key` composite normally; and asset resolution only degrades a layout that
-	 * references Graphic Assets. A hand-built `preview=1&guides=1&output=fill` URL on
-	 * such a Screen renders close to a live output with guides over it, and fails
+	 * references Graphic Assets. A hand-built `embed=preview&guides=1&output=fill` URL
+	 * on such a Screen renders close to a live output with guides over it, and fails
 	 * nothing loudly.
 	 *
 	 * That residual is accepted rather than closed. Reaching it means constructing by
 	 * hand a URL the application never produces, and closing it means gating guides on
 	 * something a URL cannot carry — a handshake with the embedding editor — which
 	 * buys a race on every preview load, on a surface an author is clicking.
+	 *
+	 * ## The monitor role's own residual, which is the same shape
+	 *
+	 * A hand-built `embed=monitor` URL opened as a real output renders program
+	 * correctly and reports nothing: it is absent from its Screen's connected count,
+	 * from the Open Screen Output Engines, and from the asset-access warning. That is
+	 * a worse silence than the guides one, since those three surfaces exist precisely
+	 * to state what the outputs watching right now cost. It is accepted on the same
+	 * ground — no URL this application produces sets the role, and every surface that
+	 * hands an operator an output URL goes through `useScreenOutputAccessUrl`, which
+	 * asks for no role at all.
 	 */
 	const previewGuides = computed(() => isPreview.value && route.query.guides === '1');
 	const previewSafeAreas = computed(() => isPreview.value && route.query.safe === '1');
@@ -249,7 +280,12 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			if (!loadedScreen || screenStore.activeScreen?.id !== loadedScreen.id)
 				throw new Error('Screen not found');
 
-			if (!isPreview.value) {
+			// Only a Screen Output joins its Screen's presence and answers its Screen's
+			// commands. An embedded rendering of either kind is a control surface's own
+			// view — counting it would report the operator's own window back to them as
+			// a client watching, and an Identify meant to locate a display in a venue
+			// would flash the one screen they are already looking at.
+			if (!embed.value) {
 				await screenRealtimeSession.start(evtId, loadedScreen.id);
 			}
 			if (flight.stale)

@@ -581,6 +581,11 @@ _Avoid_: Dummy data, test data
 A live rendering variant exposed by a Screen Mode Definition, such as overlay, fill, or key.
 _Avoid_: Export mode when referring to live Screen rendering.
 
+**Program monitor**:
+A control surface's own live rendering of the Screen it drives, embedded beside the controls that drive it.
+It composes what playout has taken and resolves media through its Screen's Screen Output Asset Capability exactly as a Screen Output does, and is not one: it enters no presence and answers no Screen command, so nothing that counts or questions the outputs watching a Screen counts it.
+_Avoid_: Preview — which composes the authored state its embedder pushes in rather than playout and resolves media as the author; the two are opposed on everything except not being an output. Confidence monitor.
+
 **Screen Output Asset Capability**:
 An opaque, long-lived, explicitly revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions currently published by its Screen.
 It never permits Graphics Asset Library discovery, and removing a revision from the published Screen immediately removes that revision from the capability.
@@ -857,6 +862,8 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - A **Screen Output Asset Capability** is checked against the Screen's currently published exact **Graphic Asset Revisions** on every resolution request
 - Playback compatibility is answered per resolution request against the requested revision's own recorded facts, never by refusing the capability session, so a revision one **Screen Output**'s browser cannot play costs it that revision and none of the Screen's other assets
 - A **Screen Output** that cannot play a pinned silent video reports the reason in that item's place rather than leaving a blank rectangle, except in the **Key Output**, whose colour is the alpha matte
+- Only a **Screen Output** enters its **Screen**'s presence and answers its **Screen**'s commands; a **Program monitor** and a preview open the same Screen URL and join neither, so every count of what is watching a **Screen** counts outputs alone
+- A **Program monitor** shows what its **Screen**'s **Screen Outputs** show — the same playout at the same authoritative instant, the same media through the same **Screen Output Asset Capability** — and is never one of them
 - The **Open Screen Output Engines** of a **Screen** are what its **Screen Outputs** report of themselves, and a control surface states what a **Graphic Asset Revision** costs them before an operator chooses it rather than leaving the cost to be discovered on air
 - A **Screen Output** carries its **Screen Output Asset Capability** in the URL it is opened with, and every surface that hands an operator such a URL obtains one at that moment or hands out nothing
 - A **Screen Output** holding no capability renders every graphic its **Screen** publishes except their media, which is indistinguishable on program from a **Screen** with no media — so it reports its asset access to its **Screen** as it reports its engine, and a control surface states the loss rather than leaving it to be discovered on air

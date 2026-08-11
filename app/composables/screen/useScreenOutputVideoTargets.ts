@@ -12,7 +12,10 @@ import { graphicsVideoTargetForUserAgent } from '~~/shared/utils/graphicAssetTar
  * discovered on air.
  *
  * Only a Screen Output enters this Screen's presence — a control surface watches it
- * without joining — so every member here is an output.
+ * without joining — so every member here is an output. That rests entirely on the
+ * embed role a control surface's own live rendering carries: while the Broadcast
+ * Graphics Program monitor carried none, this named the operator's own browser among
+ * the engines a Graphic Asset Revision's cost was stated against.
  *
  * An output reporting no user agent contributes nothing. Guessing an engine for it
  * would put a compatibility claim in front of an operator that no connected browser

@@ -53,10 +53,10 @@ import { graphicsSelectionGraphicId, graphicsSelectionKey } from './selection';
  * so they cannot clip or constrain an authored Graphic Item.
  *
  * That opt-in travels on the Screen URL rather than being enforced structurally:
- * an ordinary Screen Output URL carries none of the preview flags and so draws no
- * guides, but a URL that does carry them draws guides wherever it is opened,
- * including a browser used as a program source. Treat the flags as a convention
- * for editor embedding, not a guarantee about live output.
+ * an ordinary Screen Output URL carries neither the preview embed role nor a guide
+ * flag and so draws no guides, but a URL that carries both draws guides wherever it
+ * is opened, including a browser used as a program source. Treat them as a
+ * convention for editor embedding, not a guarantee about live output.
  *
  * ## Every surface is one path, painted once
  *

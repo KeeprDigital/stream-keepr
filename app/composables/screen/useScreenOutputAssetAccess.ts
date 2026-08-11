@@ -13,7 +13,10 @@ import type { MaybeRefOrGetter } from 'vue';
  *
  * So the output says. This mirrors the Open Screen Output Engines exactly, and for
  * the same reason: what is true of the browsers watching right now is a fact only
- * they hold, and a control surface can only state it if they report it.
+ * they hold, and a control surface can only state it if they report it. It mirrors
+ * that composable's dependence on the embed role too — only a Screen Output enters
+ * this presence, and a control surface's own live rendering is one until its URL
+ * says otherwise.
  *
  * Counted rather than named because the operator's next action does not vary by
  * which output it is — re-open it from the copy or open control on this Screen,
