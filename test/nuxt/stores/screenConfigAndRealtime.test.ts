@@ -26,22 +26,20 @@ mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string,
 	ablyCallbacks[storeName] = callbacks;
 });
 
-// executeAction that supports onError rollback
-const mockExecuteAction = vi.fn(async (fn: any, opts?: any) => {
-	try {
-		return await fn();
-	}
-	catch (err) {
-		opts?.onError?.(err);
-		throw err;
-	}
-});
+/*
+ * `useAsyncAction` is deliberately not mocked, as in this store's error-reporting
+ * suite. The stand-in that used to sit here rethrew every failure; the real
+ * composable swallows one unless the call site asks for `throwError`, writes the
+ * message to `errorRef` and resolves `null`. So every failure-path row here was
+ * asserting against a contract the store does not have, and the store's own
+ * `executeReporting` wrapper — the seam all of this reports through — was never
+ * exercised at all. The sibling suites removed exactly this mock for exactly this
+ * reason (#241, #263, #271); #311 is the same removal here. The real composable is
+ * auto-imported, does no I/O and starts no timers.
+ */
 
 mockNuxtImport('useScreenRepository', () => () => mockRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
-mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: mockExecuteAction,
-}));
 mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('useToast', () => () => ({ add: vi.fn() }));
 
@@ -181,6 +179,10 @@ describe('useScreenStore config and realtime', () => {
 			await expect(store.updateScreenConfig(1, 1, { width: 1920 })).rejects.toThrow('Save failed');
 
 			expect(store.screens[0]).toEqual(screen);
+			// A debounced write answers its own caller by rejecting the deferred it
+			// handed out, and reports to the banner through `errorRef` — two separate
+			// obligations, of which the removed stand-in honoured only the first (#311).
+			expect(store.error).toBe('Save failed');
 		});
 
 		it('batches rapid screen config patches into one write', async () => {

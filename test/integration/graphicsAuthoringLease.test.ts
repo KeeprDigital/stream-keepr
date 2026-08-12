@@ -1,7 +1,7 @@
 import type { ScreenResponse } from '~~/shared/api';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { $fetch, fetch } from '@nuxt/test-utils/e2e';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createCommandHarness } from './featureMatchSessionHelpers';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 import { integrationRealtimeConfigured } from './helpers';
@@ -25,6 +25,25 @@ interface LeaseResponse {
 function graphic(id: string): BroadcastGraphicConfig {
 	return { id, name: id, items: [] };
 }
+
+function sleep(ms: number) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * How long past a lease deadline to wait before expecting the artifact free, and
+ * how many times to ask again if it is not.
+ *
+ * A full second rather than the two hundred milliseconds this suite used to
+ * allow. The margin is not covering clock skew — the wait below is derived from
+ * the server's own clock — but the scheduling delay between the deadline passing
+ * and the next request being served, which on a loaded machine running several
+ * worktrees is not small. The poll is what makes the margin a starting point
+ * rather than a bet: asking to observe a live lease does not extend it, so a
+ * repeat ask is free.
+ */
+const LEASE_LAPSE_MARGIN_MS = 1_000;
+const LEASE_LAPSE_ATTEMPTS = 5;
 
 describe('graphics Authoring Leases', () => {
 	let eventId: number;
@@ -83,6 +102,37 @@ describe('graphics Authoring Leases', () => {
 		return (screen.modeConfigs?.['broadcast-graphics']?.graphics ?? []) as BroadcastGraphicConfig[];
 	}
 
+	function releaseLease(cookie: string) {
+		return request(leasePath(), { method: 'DELETE', cookie });
+	}
+
+	/**
+	 * Wait out a lease deadline, measured against the clock that stamped it.
+	 *
+	 * `expiresAt` is the server's number and `/api/time` reads the same clock, so
+	 * the wait is derived rather than guessed — this suite used to sleep a
+	 * hard-coded 3.2 seconds against a 3-second deadline, which is a bet on a wall
+	 * clock the test process does not own. The same reference the Broadcast
+	 * Graphics playout suites already synchronise against.
+	 */
+	async function serverNow(): Promise<number> {
+		const { serverTime } = await $fetch<{ serverTime: number }>('/api/time');
+		return serverTime;
+	}
+
+	async function askOnceLeaseHasLapsed(cookie: string, expiresAt: number) {
+		const remaining = expiresAt - await serverNow();
+		if (remaining > 0)
+			await sleep(remaining + LEASE_LAPSE_MARGIN_MS);
+
+		let asked = await askForLease(cookie);
+		for (let attempt = 1; asked.data.outcome === 'observe' && attempt <= LEASE_LAPSE_ATTEMPTS; attempt++) {
+			await sleep(LEASE_LAPSE_MARGIN_MS);
+			asked = await askForLease(cookie);
+		}
+		return asked;
+	}
+
 	beforeAll(async () => {
 		authorA = await createGraphicsAuthorSessionCookie();
 		authorB = await createGraphicsAuthorSessionCookie();
@@ -107,6 +157,23 @@ describe('graphics Authoring Leases', () => {
 			},
 		});
 		screenId = screen.id;
+	});
+
+	/**
+	 * Every test starts from an unleased artifact and takes whatever lease it needs.
+	 *
+	 * This suite used to be a script: the grant in the first test was the premise of
+	 * the third, the takeover in the eleventh was the premise of the twelfth, and so
+	 * on. A name-filtered rerun then failed for reasons that had nothing to do with
+	 * the test named — and a name-filtered rerun is precisely what this repo's own
+	 * parallel-rounds procedure prescribes when something looks flaky (#311).
+	 *
+	 * A release only deletes the asking session's own row, so asking both to release
+	 * clears the artifact whichever of them was holding it.
+	 */
+	beforeEach(async () => {
+		await releaseLease(authorA);
+		await releaseLease(authorB);
 	});
 
 	afterAll(async () => {
@@ -137,6 +204,8 @@ describe('graphics Authoring Leases', () => {
 	});
 
 	it('leaves a second session observing the same Edit workspace read-only', async () => {
+		await askForLease(authorA);
+
 		const asked = await askForLease(authorB);
 
 		expect(asked.status).toBe(200);
@@ -147,6 +216,8 @@ describe('graphics Authoring Leases', () => {
 	});
 
 	it('accepts the holder\'s authoring write and refuses an observer\'s', async () => {
+		await askForLease(authorA);
+
 		const accepted = await patchStack(authorA, [graphic('holder-stack')]);
 		expect(accepted.status).toBe(200);
 
@@ -157,6 +228,7 @@ describe('graphics Authoring Leases', () => {
 	});
 
 	it('lets an observer read every accepted authoring change', async () => {
+		await askForLease(authorA);
 		await patchStack(authorA, [graphic('holder-stack'), graphic('second-graphic')]);
 
 		const screen = await request(`/api/events/${eventId}/screens/${screenId}`, { cookie: authorB });
@@ -170,7 +242,7 @@ describe('graphics Authoring Leases', () => {
 
 	it('renews the deadline for the session already holding the lease', async () => {
 		const before = await askForLease(authorA);
-		await new Promise(resolve => setTimeout(resolve, 20));
+		await sleep(20);
 		const renewed = await askForLease(authorA);
 
 		expect(renewed.data.outcome).toBe('renew');
@@ -192,6 +264,8 @@ describe('graphics Authoring Leases', () => {
 		// compare here reads as a lease regression. See `realtimeDiagnosis`.
 
 		// The lease holder is session A; every live action below is another operator.
+		await askForLease(authorA);
+
 		const command = await request(`/api/events/${eventId}/screens/${screenId}/command`, {
 			method: 'POST',
 			body: { command: 'refresh' },
@@ -209,6 +283,8 @@ describe('graphics Authoring Leases', () => {
 	it('never restricts a live command session while the Edit workspace is leased', async () => {
 		// Multi-operator live operation keeps running under its own field-scoped
 		// conflict rules rather than under the lease.
+		await askForLease(authorA);
+
 		const harness = await createCommandHarness(eventId);
 		const live = await harness.send({
 			commandId: 'lease:live-operation:1',
@@ -232,6 +308,8 @@ describe('graphics Authoring Leases', () => {
 	it('leaves every other Screen configuration field open while the canvas is leased', async () => {
 		// The lease covers the canvas, not the route. A generic Screen field is not
 		// part of any graphics Edit workspace and stays open to every operator.
+		await askForLease(authorA);
+
 		expect((await request(`/api/events/${eventId}/screens/${screenId}/screen-config`, {
 			method: 'PATCH',
 			body: { paddingX: 12 },
@@ -240,6 +318,7 @@ describe('graphics Authoring Leases', () => {
 	});
 
 	it('never leases the canvas of a Screen that is not in Broadcast Graphics mode', async () => {
+		await askForLease(authorA);
 		const other = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
 			method: 'POST',
 			body: { name: 'Idle Screen', slug: 'lease-idle-screen', currentMode: 'idle' },
@@ -255,6 +334,8 @@ describe('graphics Authoring Leases', () => {
 	});
 
 	it('hands the artifact over on an explicit takeover and demotes the previous holder', async () => {
+		await askForLease(authorA);
+
 		const takenOver = await askForLease(authorB, { takeover: true });
 
 		expect(takenOver.data.outcome).toBe('takeover');
@@ -271,7 +352,9 @@ describe('graphics Authoring Leases', () => {
 	});
 
 	it('ignores a release from a session that does not hold the lease', async () => {
-		const released = await request(leasePath(), { method: 'DELETE', cookie: authorA });
+		await askForLease(authorB);
+
+		const released = await releaseLease(authorA);
 
 		expect(released.status).toBe(200);
 		expect(released.data.lease.heldByAnotherSession).toBe(true);
@@ -279,7 +362,9 @@ describe('graphics Authoring Leases', () => {
 	});
 
 	it('frees the artifact when its holder releases the lease', async () => {
-		const released = await request(leasePath(), { method: 'DELETE', cookie: authorB });
+		await askForLease(authorB);
+
+		const released = await releaseLease(authorB);
 
 		expect(released.status).toBe(200);
 		expect(released.data.lease.writable).toBe(true);
@@ -295,14 +380,12 @@ describe('graphics Authoring Leases', () => {
 		// Session A is gone: it never heartbeats again and never releases.
 		expect((await askForLease(authorB)).data.outcome).toBe('observe');
 
-		await new Promise(resolve => setTimeout(resolve, 3_200));
-
-		const recovered = await askForLease(authorB);
+		const recovered = await askOnceLeaseHasLapsed(authorB, acquired.data.lease.expiresAt!);
 		expect(recovered.data.outcome).toBe('grant');
 		expect(recovered.data.lease.role).toBe('holder');
 		expect(recovered.data.lease.heldByAnotherSession).toBe(false);
 
-		await request(leasePath(), { method: 'DELETE', cookie: authorB });
+		await releaseLease(authorB);
 	});
 
 	it('leaves an unleased Edit workspace writable by anyone', async () => {

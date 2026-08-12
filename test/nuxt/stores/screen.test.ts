@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isReactive } from 'vue';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
+
+const UPDATE_REQUEST = `[PATCH] "/api/events/1/screens/1"`;
+const GET_BY_ID_REQUEST = `[GET] "/api/events/1/screens/10"`;
 
 /**
  * Put the same Screen id in the cache more than once, by assignment.
@@ -45,22 +49,20 @@ mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string,
 	ablyCallbacks[storeName] = callbacks;
 });
 
-// executeAction that supports onError rollback
-const mockExecuteAction = vi.fn(async (fn: any, opts?: any) => {
-	try {
-		return await fn();
-	}
-	catch (err) {
-		opts?.onError?.(err);
-		throw err;
-	}
-});
+/*
+ * `useAsyncAction` is deliberately not mocked, as in this store's error-reporting
+ * suite. The stand-in that used to sit here rethrew every failure; the real
+ * composable swallows one unless the call site asks for `throwError`, writes the
+ * message to `errorRef` and resolves `null`. So every failure-path row here was
+ * asserting against a contract the store does not have, and the store's own
+ * `executeReporting` wrapper — the seam all of this reports through — was never
+ * exercised at all. The sibling suites removed exactly this mock for exactly this
+ * reason (#241, #263, #271); #311 is the same removal here. The real composable is
+ * auto-imported, does no I/O and starts no timers.
+ */
 
 mockNuxtImport('useScreenRepository', () => () => mockRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
-mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: mockExecuteAction,
-}));
 mockNuxtImport('$fetch', () => mockFetch);
 
 describe('useScreenStore', () => {
@@ -374,6 +376,22 @@ describe('useScreenStore', () => {
 			expect(store.screens[0]!.name).toBe('Fresh');
 		});
 
+		it('answers null and reports the transport line when the authority wrote no sentence', async () => {
+			// A 5xx body is the server failing rather than answering, and its prose has
+			// been rewritten to a placeholder on the way out — so what is left to report
+			// is the status line, which at least reads as machinery.
+			mockRepo.getById.mockRejectedValue(transportFailure({
+				status: 500,
+				body: { statusCode: 500, statusMessage: 'Internal Server Error', message: 'Internal Server Error' },
+				request: GET_BY_ID_REQUEST,
+			}));
+
+			const answer = await store.getScreenById(1, 10);
+
+			expect(answer).toBeNull();
+			expect(store.error).toBe(`${GET_BY_ID_REQUEST}: 500 Internal Server Error`);
+		});
+
 		it('does not let a load that raced a settled save overwrite it', async () => {
 			// Same interleaving as the list refresh above, reached through the single
 			// Screen load the configuration page runs on mount and on route change.
@@ -501,6 +519,30 @@ describe('useScreenStore', () => {
 			await store.updateScreen(1, 1, { name: 'Updated' });
 
 			expect(mockRepo.update).toHaveBeenCalledWith(1, 1, expect.objectContaining({ stateVersion: 5 }));
+		});
+
+		/*
+		 * The three facts a refused write produces, which the removed `executeAction`
+		 * stand-in could produce none of: it rethrew, and it ignored `errorRef`
+		 * entirely. So a suite could not have told a store that reports refusals from
+		 * one that reports nothing (#311).
+		 */
+		it('answers null, rolls the optimistic edit back, and reports what the authority said', async () => {
+			const screen = createMockScreen({ id: 1, name: 'Old', stateVersion: 2 });
+			store.screens = [screen];
+			// Deliberately not a 409: that status is the conflict-refresh-and-retry
+			// path, and this row is about what a plain refusal produces.
+			mockRepo.update.mockRejectedValue(transportFailure({
+				status: 403,
+				body: { statusCode: 403, statusMessage: 'Forbidden', message: 'This Screen belongs to another Event' },
+				request: UPDATE_REQUEST,
+			}));
+
+			const answer = await store.updateScreen(1, 1, { name: 'Updated' });
+
+			expect(answer).toBeNull();
+			expect(store.screens[0]!.name).toBe('Old');
+			expect(store.error).toBe('This Screen belongs to another Event');
 		});
 	});
 
