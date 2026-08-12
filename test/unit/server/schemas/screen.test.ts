@@ -8,6 +8,7 @@ import {
 	metagameModeConfigSchema,
 	modeConfigParamsSchema,
 	modeConfigPatchSchemaMap,
+	playerHistoryModeConfigSchema,
 	screenConfigSchema,
 	screenParamsSchema,
 	standingsModeConfigSchema,
@@ -599,7 +600,7 @@ describe('metagameModeConfigSchema', () => {
 		],
 		limit: 50,
 		pageSize: 10,
-		autoPaging: false,
+		autoPageEnabled: false,
 		autoPageIntervalMs: 10000,
 		currentPage: 1,
 		showHeader: true,
@@ -610,6 +611,26 @@ describe('metagameModeConfigSchema', () => {
 	it('accepts valid metagame config with column arrays', () => {
 		const result = metagameModeConfigSchema.safeParse(validConfig);
 		expect(result.success).toBe(true);
+	});
+});
+
+// ──────────────── Page Rotation fields ────────────────
+
+describe('page rotation config fields', () => {
+	it('every paginated mode accepts an optional rotationAnchor server timestamp', () => {
+		expect(standingsModeConfigSchema.partial().safeParse({ rotationAnchor: 1_700_000_000_000 }).success).toBe(true);
+		expect(playerHistoryModeConfigSchema.partial().safeParse({ rotationAnchor: 1_700_000_000_000 }).success).toBe(true);
+		expect(metagameModeConfigSchema.partial().safeParse({ rotationAnchor: 1_700_000_000_000 }).success).toBe(true);
+	});
+
+	it('rejects a negative or fractional rotationAnchor', () => {
+		expect(standingsModeConfigSchema.partial().safeParse({ rotationAnchor: -1 }).success).toBe(false);
+		expect(standingsModeConfigSchema.partial().safeParse({ rotationAnchor: 1.5 }).success).toBe(false);
+	});
+
+	it('metagame uses the canonical autoPageEnabled name and no longer accepts autoPaging', () => {
+		expect(metagameModeConfigSchema.partial().safeParse({ autoPageEnabled: true }).success).toBe(true);
+		expect(metagameModeConfigSchema.partial().safeParse({ autoPaging: true }).success).toBe(false);
 	});
 });
 

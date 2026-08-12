@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import type { PlayerHistoryColumnConfig } from '~~/shared/types/screenConfig';
+import type { PlayerHistoryColumnConfig, PlayerHistoryModeConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import { VueDraggable } from 'vue-draggable-plus';
+import { rotationAnchorForPage } from '~~/shared/modules/page-rotation';
+import { useProjectedRotationPage } from '~/modules/screen-mode/pagination';
 
 const props = defineProps<{
 	screen: Screen;
@@ -54,9 +56,30 @@ const totalPages = computed(() =>
 	Math.max(1, Math.ceil(Math.max(estimatedRowCount.value, 1) / config.value.rowsPerPage)),
 );
 
+// The live Page Rotation projection — the same page every rendering shows.
+const { getServerTime } = useServerTime();
+const rotationPage = useProjectedRotationPage({
+	autoPageEnabled: computed(() => config.value.autoPageEnabled),
+	autoPageIntervalMs: computed(() => config.value.autoPageIntervalMs),
+	rotationAnchor: computed(() => config.value.rotationAnchor),
+	totalPages,
+});
+
 const currentPage = computed(() =>
-	Math.min(config.value.currentPage ?? 1, totalPages.value),
+	Math.min(rotationPage.value ?? config.value.currentPage ?? 1, totalPages.value),
 );
+
+// Enabling auto-page and edits that change the rotation's shape re-anchor the
+// rotation so it restarts predictably from the first page.
+function setAutoPageEnabled(enabled: boolean) {
+	updateConfig(enabled
+		? { autoPageEnabled: true, rotationAnchor: getServerTime() }
+		: { autoPageEnabled: false });
+}
+
+function updateRotationShape(patch: Partial<PlayerHistoryModeConfig>) {
+	updateConfig(config.value.autoPageEnabled ? { ...patch, rotationAnchor: getServerTime() } : patch);
+}
 
 onMounted(async () => {
 	if (props.eventId && !playerStore.isLoaded) {
@@ -86,14 +109,28 @@ watch(() => config.value.playerId, async (playerId) => {
 	}
 }, { immediate: true });
 
+// A manual selection while the rotation runs re-anchors it — the chosen page
+// becomes current everywhere and holds a full duration. With auto-page off it
+// persists the page exactly as before.
+function adminSetPage(page: number) {
+	if (config.value.autoPageEnabled) {
+		updateConfig({ rotationAnchor: rotationAnchorForPage({
+			page,
+			pageDurationMs: config.value.autoPageIntervalMs,
+			now: getServerTime(),
+		}) });
+	}
+	else {
+		updateConfig({ currentPage: page });
+	}
+}
+
 function adminNextPage() {
-	const next = currentPage.value < totalPages.value ? currentPage.value + 1 : 1;
-	updateConfig({ currentPage: next });
+	adminSetPage(currentPage.value < totalPages.value ? currentPage.value + 1 : 1);
 }
 
 function adminPrevPage() {
-	const prev = currentPage.value > 1 ? currentPage.value - 1 : totalPages.value;
-	updateConfig({ currentPage: prev });
+	adminSetPage(currentPage.value > 1 ? currentPage.value - 1 : totalPages.value);
 }
 </script>
 
@@ -178,7 +215,7 @@ function adminPrevPage() {
 					:min="1"
 					:max="100"
 					class="w-32"
-					@update:model-value="updateConfig({ rowsPerPage: Number($event), currentPage: 1 })"
+					@update:model-value="updateRotationShape({ rowsPerPage: Number($event), currentPage: 1 })"
 				/>
 			</UFormField>
 
@@ -192,7 +229,7 @@ function adminPrevPage() {
 				label="Auto-page"
 				description="Automatically cycle through match history pages."
 				:model-value="config.autoPageEnabled"
-				@update:model-value="updateConfig({ autoPageEnabled: $event })"
+				@update:model-value="setAutoPageEnabled($event === true)"
 			/>
 
 			<UFormField
@@ -206,7 +243,7 @@ function adminPrevPage() {
 					:min="3"
 					:max="60"
 					class="w-32"
-					@update:model-value="updateConfig({ autoPageIntervalMs: Number($event) * 1000 })"
+					@update:model-value="updateRotationShape({ autoPageIntervalMs: Number($event) * 1000 })"
 				/>
 			</UFormField>
 

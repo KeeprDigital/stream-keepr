@@ -606,6 +606,14 @@ _Avoid_: Beauty when naming product concepts.
 A Screen Output that renders the final composed opacity as a grayscale alpha matte.
 _Avoid_: Black-and-white export, chroma key.
 
+**Page Rotation**:
+The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time; owned by no client, computed identically by every rendering.
+_Avoid_: Auto-paging when naming the projection itself — auto-page remains the operator-facing toggle that turns the rotation on.
+
+**Rotation Anchor**:
+The server timestamp a Page Rotation counts from, written only by an operator surface — when auto-page is enabled, when an edit changes the rotation's shape, or when an operator manually selects a page mid-rotation.
+A Screen Output never writes it; a rendering that has not completed server-time sync shows the first page statically rather than projecting on an unknown clock.
+
 **Feature Match Overlay Widget**:
 A legacy name for a Graphic Item used by Feature Match Overlay.
 Clock, Player Life, and Game Wins are context-gated shared Graphic Item Definitions; text and media use the shared base Graphic Item kinds.

@@ -169,6 +169,13 @@
       "when": 1785498343622,
       "tag": "0023_lumpy_spot",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1786214400000,
+      "tag": "0024_steady_page_rotation",
+      "breakpoints": true
     }
   ]
 }

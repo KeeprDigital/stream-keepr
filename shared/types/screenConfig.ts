@@ -146,11 +146,14 @@ export interface StandingsModeConfig {
 	revealIntervalMs: number;
 	revealedCount: number;
 
-	// Pagination
+	// Pagination — currentPage is the manually selected page (auto-page off);
+	// rotationAnchor is the Page Rotation's epoch (auto-page on), written only
+	// by operator surfaces and projected against server time by every rendering.
 	rowsPerPage: number;
 	autoPageEnabled: boolean;
 	autoPageIntervalMs: number;
 	currentPage?: number;
+	rotationAnchor?: number;
 
 	// Animation
 	animateEntries: boolean;
@@ -197,6 +200,7 @@ export interface PlayerHistoryModeConfig {
 	autoPageEnabled: boolean;
 	autoPageIntervalMs: number;
 	currentPage?: number;
+	rotationAnchor?: number;
 }
 
 export type FeatureMatchOverlayPresetId = 'full-table' | 'left-stacked-player-cams' | 'neon-feature-match';
@@ -472,9 +476,10 @@ export interface MetagameModeConfig {
 
 	// Pagination
 	pageSize: number;
-	autoPaging: boolean;
+	autoPageEnabled: boolean;
 	autoPageIntervalMs: number;
 	currentPage?: number;
+	rotationAnchor?: number;
 
 	// Visibility toggles
 	showHeader: boolean;
@@ -649,7 +654,7 @@ export const DEFAULT_METAGAME_CONFIG: MetagameModeConfig = {
 	limit: 50,
 	maxTableWidth: undefined,
 	pageSize: 10,
-	autoPaging: false,
+	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
 	showHeader: true,
 	headerText: undefined,

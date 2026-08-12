@@ -44,9 +44,10 @@ const defaultConfig = {
 	],
 	limit: 50,
 	pageSize: 5,
-	autoPaging: false,
+	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
 	currentPage: 1,
+	rotationAnchor: undefined as number | undefined,
 	showHeader: true,
 	headerText: undefined,
 	animateEntries: true,
@@ -65,11 +66,22 @@ mockNuxtImport('useScreenContext', () => () => ({
 }));
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
+// Server time is the Page Rotation's clock; synced and controllable here.
+const mockIsSynced = ref(true);
+let mockServerNow = 1_000_000;
+mockNuxtImport('useServerTime', () => () => ({
+	isSynced: mockIsSynced,
+	serverTimeOffset: ref(0),
+	getServerTime: () => mockServerNow,
+}));
+
 describe('useMetagameModeData', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		Object.assign(mutableConfig, defaultConfig);
 		mockInteractive.value = false;
+		mockIsSynced.value = true;
+		mockServerNow = 1_000_000;
 		mockFetch.mockResolvedValue({ entries: [], totalPlayers: 0, scope: 'all' });
 	});
 
@@ -154,6 +166,7 @@ describe('useMetagameModeData', () => {
 	});
 
 	it('setPage calls screenStore.updateModeConfig', async () => {
+		mockInteractive.value = true;
 		const entries = Array.from({ length: 12 }, (_, i) => ({ name: `Arch${i}`, count: 1, metaShare: 1 }));
 		mockFetch.mockResolvedValue({ entries, totalPlayers: 12, scope: 'all' });
 
@@ -170,6 +183,7 @@ describe('useMetagameModeData', () => {
 	});
 
 	it('setPage clamps to valid range', async () => {
+		mockInteractive.value = true;
 		mockFetch.mockResolvedValue({
 			entries: [{ name: 'A', count: 1, metaShare: 100 }],
 			totalPlayers: 1,
@@ -190,6 +204,7 @@ describe('useMetagameModeData', () => {
 	});
 
 	it('nextPage wraps to 1 after last page', async () => {
+		mockInteractive.value = true;
 		mockFetch.mockResolvedValue({
 			entries: [{ name: 'A', count: 1, metaShare: 100 }],
 			totalPlayers: 1,
@@ -210,6 +225,7 @@ describe('useMetagameModeData', () => {
 	});
 
 	it('prevPage wraps to last page from page 1', async () => {
+		mockInteractive.value = true;
 		const entries = Array.from({ length: 12 }, (_, i) => ({ name: `Arch${i}`, count: 1, metaShare: 1 }));
 		mockFetch.mockResolvedValue({ entries, totalPlayers: 12, scope: 'all' });
 
@@ -232,7 +248,7 @@ describe('useMetagameModeData', () => {
 		beforeEach(() => vi.useFakeTimers());
 		afterEach(() => vi.useRealTimers());
 
-		it('starts auto-paging when autoPaging=true, interactive=false, totalPages>1', async () => {
+		it('a non-interactive rendering projects the rotation from server time and never writes', async () => {
 			const entries = Array.from({ length: 12 }, (_, i) => ({
 				name: `Arch${i}`,
 				count: 1,
@@ -241,23 +257,23 @@ describe('useMetagameModeData', () => {
 			mockFetch.mockResolvedValue({ entries, totalPlayers: 12, scope: 'all' });
 			mockInteractive.value = false;
 
-			const { fetchData } = useMetagameModeData();
+			const { fetchData, currentPage } = useMetagameModeData();
 			await fetchData();
 
-			// Enable auto-paging (triggers the watcher)
-			mutableConfig.autoPaging = true;
+			// Anchor now with 5s pages: page 1, flipping at each boundary.
+			mutableConfig.autoPageEnabled = true;
 			mutableConfig.autoPageIntervalMs = 5000;
+			mutableConfig.rotationAnchor = mockServerNow;
 			await nextTick();
 
-			// Advance timer by one interval — should advance to page 2
-			vi.advanceTimersByTime(5000);
+			expect(currentPage.value).toBe(1);
 
-			expect(mockScreenStore.updateModeConfig).toHaveBeenCalledWith(
-				1,
-				1,
-				'metagame',
-				{ currentPage: 2 },
-			);
+			mockServerNow += 5000;
+			vi.advanceTimersByTime(5000);
+			await nextTick();
+
+			expect(currentPage.value).toBe(2);
+			expect(mockScreenStore.updateModeConfig).not.toHaveBeenCalled();
 		});
 
 		it('fetchData fetches cards endpoint with archetype filter when viewMode=cards', async () => {

@@ -96,27 +96,37 @@ export function useStandingsModeData() {
 	});
 
 	// ── Pagination ──
-	const currentPage = computed(() => config.value.currentPage ?? 1);
 	const {
 		pageData,
 		totalPages,
+		currentPage,
 		setPage,
 		nextPage,
 		prevPage,
 	} = useScreenModePagination({
 		rows: displayRows,
 		pageSize: computed(() => config.value.rowsPerPage),
-		currentPage,
+		currentPage: computed(() => config.value.currentPage ?? 1),
 		autoPageEnabled: computed(() => config.value.autoPageEnabled),
 		autoPageIntervalMs: computed(() => config.value.autoPageIntervalMs),
-		interactive,
+		rotationAnchor: computed(() => config.value.rotationAnchor),
 		persistPage: (page) => {
-			if (screen.value) {
+			if (interactive.value && screen.value) {
 				void Promise.resolve(screenStore.updateModeConfig(
 					eventId.value!,
 					screen.value.id,
 					'standings',
 					{ currentPage: page },
+				)).catch(() => {});
+			}
+		},
+		persistRotationAnchor: (anchor) => {
+			if (interactive.value && screen.value) {
+				void Promise.resolve(screenStore.updateModeConfig(
+					eventId.value!,
+					screen.value.id,
+					'standings',
+					{ rotationAnchor: anchor },
 				)).catch(() => {});
 			}
 		},
