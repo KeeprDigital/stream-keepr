@@ -1243,6 +1243,104 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		});
 	});
 
+	/**
+	 * A snapshot load is supersedable work, and until #308 it was the one loader in
+	 * the codebase that was not treated as such.
+	 *
+	 * The load a reader issues and the answer a command comes back with are two
+	 * writes to the same cache entry, and nothing ordered them. The costly ordering
+	 * is the one where the load was issued first and answered last: an epoch-end
+	 * reload overtaken by the operator's Take wrote the pre-Take snapshot over the
+	 * Take's own result, so Live Control showed the graphic off air while it was on
+	 * program — and because this client's own command notifications are
+	 * self-origin-gated, nothing arrived afterwards to correct it.
+	 */
+	describe('a snapshot load overtaken by newer work', () => {
+		function deferredSession() {
+			let resolve!: (value: BroadcastGraphicsLiveSessionResponse) => void;
+			const promise = new Promise<BroadcastGraphicsLiveSessionResponse>((settle) => {
+				resolve = settle;
+			});
+			return { promise, resolve };
+		}
+
+		const takeResult = {
+			screenId: SCREEN_ID,
+			sessionId: 55,
+			sequence: 2,
+			commandType: 'Take',
+			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			session: session({
+				sequence: 2,
+				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			}),
+		};
+
+		it('does not overwrite the command result that answered while it was in flight', async () => {
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			const reloaded = deferredSession();
+			mockRepository.getSession.mockReturnValue(reloaded.promise);
+			const reload = store.loadSession(EVENT_ID, SCREEN_ID);
+
+			mockRepository.sendCommand.mockResolvedValue(takeResult);
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+			expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
+
+			reloaded.resolve(session({ sequence: 1 }));
+			await reload;
+
+			expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
+			expect(store.sessions.get(SCREEN_ID)?.sequence).toBe(2);
+		});
+
+		it('answers its caller with the snapshot that superseded it', async () => {
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			const reloaded = deferredSession();
+			mockRepository.getSession.mockReturnValue(reloaded.promise);
+			const reload = store.loadSession(EVENT_ID, SCREEN_ID);
+
+			mockRepository.sendCommand.mockResolvedValue(takeResult);
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+			reloaded.resolve(session({ sequence: 1 }));
+
+			// The caller mirrors this answer into its own state, so handing back the
+			// snapshot that lost the race would put it on screen anyway.
+			expect((await reload)?.sequence).toBe(2);
+		});
+
+		it('keeps the later of two overlapping loads however they resolve', async () => {
+			const first = deferredSession();
+			const second = deferredSession();
+			mockRepository.getSession.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+			const earlier = store.loadSession(EVENT_ID, SCREEN_ID);
+			const later = store.loadSession(EVENT_ID, SCREEN_ID);
+			second.resolve(session({ sequence: 3 }));
+			await later;
+			first.resolve(session({ sequence: 1 }));
+			await earlier;
+
+			expect(store.sessions.get(SCREEN_ID)?.sequence).toBe(3);
+		});
+
+		it('supersedes only the Screen the newer work was about', async () => {
+			const OTHER_SCREEN_ID = 4;
+			const other = deferredSession();
+			mockRepository.getSession.mockReturnValue(other.promise);
+			const otherLoad = store.loadSession(EVENT_ID, OTHER_SCREEN_ID);
+
+			mockRepository.getSession.mockResolvedValue(session());
+			await store.loadSession(EVENT_ID, SCREEN_ID);
+			mockRepository.sendCommand.mockResolvedValue(takeResult);
+			await store.take(EVENT_ID, SCREEN_ID, 'slate');
+
+			other.resolve(session({ id: 66, screenId: OTHER_SCREEN_ID, sequence: 7 }));
+			await otherLoad;
+
+			expect(store.sessions.get(OTHER_SCREEN_ID)?.sequence).toBe(7);
+		});
+	});
+
 	describe('superseded-edit markers', () => {
 		const graphic = {
 			id: 'slate',

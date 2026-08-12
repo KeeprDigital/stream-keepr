@@ -177,7 +177,17 @@ describe('useConfigUpdate', () => {
 		expect(config.value.color).toBe('green');
 	});
 
-	it('cancels a pending debounced save when its component scope is disposed', async () => {
+	/*
+	 * Disposal used to cancel the pending write, and this suite pinned that (#308).
+	 *
+	 * Local-first is what made it silent: the edit is applied to `localOverrides` the
+	 * moment it is made, so the operator has already been shown it as saved. Navigate
+	 * away inside the three hundred milliseconds and the write that would have made
+	 * that true never happened — the setting reverts, and nothing anywhere says so.
+	 * A disposal is the last moment the intent exists, so it is the moment to spend
+	 * it, not the moment to discard it.
+	 */
+	it('flushes a pending debounced save when its component scope is disposed', async () => {
 		const scope = effectScope();
 		const saveToStore = vi.fn().mockResolvedValue({ ok: true });
 
@@ -191,9 +201,54 @@ describe('useConfigUpdate', () => {
 			updateConfig({ color: 'green' });
 		});
 		scope.stop();
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(saveToStore).toHaveBeenCalledWith({ color: 'green' });
+	});
+
+	it('writes nothing on a disposal with no edit waiting', async () => {
+		const scope = effectScope();
+		const saveToStore = vi.fn().mockResolvedValue({ ok: true });
+
+		scope.run(() => {
+			useConfigUpdate<TestConfig>({
+				getStoreConfig: () => ({}),
+				saveToStore,
+				defaults: { color: 'red', size: 10 },
+				debounceMs: 100,
+			});
+		});
+		scope.stop();
 		await vi.advanceTimersByTimeAsync(200);
 
 		expect(saveToStore).not.toHaveBeenCalled();
+	});
+
+	it('still writes an edit made while an earlier save was in flight when disposed', async () => {
+		const scope = effectScope();
+		const first = deferred<{ ok: boolean }>();
+		const saveToStore = vi.fn()
+			.mockReturnValueOnce(first.promise)
+			.mockResolvedValue({ ok: true });
+
+		const { updateConfig } = scope.run(() => useConfigUpdate<TestConfig>({
+			getStoreConfig: () => ({}),
+			saveToStore,
+			defaults: { color: 'red', size: 10 },
+			debounceMs: 100,
+		}))!;
+
+		updateConfig({ color: 'green' });
+		await vi.advanceTimersByTimeAsync(100);
+		updateConfig({ size: 20 });
+		scope.stop();
+		first.resolve({ ok: true });
+		await vi.advanceTimersByTimeAsync(200);
+
+		// The queued edit is picked up by the in-flight save's own continuation, so
+		// disposal must not empty the queue out from under it.
+		expect(saveToStore).toHaveBeenCalledTimes(2);
+		expect(saveToStore).toHaveBeenLastCalledWith({ size: 20 });
 	});
 
 	it('filters out null values from merged config', () => {

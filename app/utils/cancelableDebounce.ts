@@ -20,6 +20,19 @@ export function createCancelableDebounce(
 		void callback();
 	}
 
+	/**
+	 * Fire only if a call is actually waiting.
+	 *
+	 * What `flush` does unconditionally, for the callers that flush on a lifecycle
+	 * event rather than on an edit — a scope disposal, an Event scope changing —
+	 * where there is usually nothing waiting and firing anyway would turn every one
+	 * of those events into a write.
+	 */
+	function flushIfPending() {
+		if (delayTimer !== null || maxWaitTimer !== null)
+			flush();
+	}
+
 	function schedule() {
 		if (delayTimer !== null)
 			clearTimeout(delayTimer);
@@ -32,6 +45,7 @@ export function createCancelableDebounce(
 	return {
 		schedule,
 		flush,
+		flushIfPending,
 		cancel: clearTimers,
 	};
 }

@@ -80,6 +80,14 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 */
 	const { getServerTime, isSynced: isClockSynced } = useServerTime();
 	const sessions = ref<Map<number, BroadcastGraphicsLiveSessionResponse>>(new Map());
+	/**
+	 * Snapshot loads in flight, one Screen at a time.
+	 *
+	 * Keyed by Screen because that is how the cache above is keyed: an operator
+	 * working two Screens has two independent orders, and superseding across them
+	 * would drop a load nothing had overtaken.
+	 */
+	const sessionLoads = createKeyedGuardedSequence<number>();
 	const error = ref<string | null>(null);
 	/**
 	 * The domain refusal `error` is currently reporting, when what it is reporting is
@@ -425,8 +433,24 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		return { current, outgoing };
 	}
 
-	function cacheSession(session: BroadcastGraphicsLiveSessionResponse) {
+	function storeSession(session: BroadcastGraphicsLiveSessionResponse) {
 		sessions.value.set(session.screenId, session);
+	}
+
+	/**
+	 * Write a snapshot this client knows to be the newest thing it holds.
+	 *
+	 * Every caller here is answering with state the server produced *after* whatever
+	 * a load in flight will answer with — a command's result, the reload a restated
+	 * command was based on, a fresh epoch, a notification merged onto what is held.
+	 * So each supersedes the Screen's pending load rather than merely racing it:
+	 * without that, the load issued first and answered last wins by arriving late,
+	 * which is exactly how an epoch-end reload came to overwrite an operator's Take
+	 * and show a graphic off air while it was on program (#308).
+	 */
+	function cacheSession(session: BroadcastGraphicsLiveSessionResponse) {
+		sessionLoads.supersede(session.screenId);
+		storeSession(session);
 	}
 
 	function cacheCommandResult(result: BroadcastGraphicsCommandResult): BroadcastGraphicsLiveSessionResponse {
@@ -434,12 +458,22 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		return result.session;
 	}
 
+	/**
+	 * Load one Screen's authoritative snapshot.
+	 *
+	 * The answer a superseded load returns is the snapshot that superseded it, not
+	 * the one it fetched: its caller mirrors the answer into its own state, so
+	 * handing back the losing snapshot would put it on screen by the other door.
+	 */
 	async function loadSession(eventId: number, screenId: number): Promise<BroadcastGraphicsLiveSessionResponse | null> {
 		refusal.value = null;
+		const flight = sessionLoads.begin(screenId);
 		return await executeReporting(
 			async () => {
 				const session = await repository.getSession(eventId, screenId);
-				cacheSession(session);
+				if (flight.stale)
+					return sessions.value.get(screenId) ?? null;
+				storeSession(session);
 				return session;
 			},
 		);
@@ -882,6 +916,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	}
 
 	function $reset() {
+		sessionLoads.supersedeAll();
 		sessions.value.clear();
 		pending.value.clear();
 		supersededInputs.value.clear();

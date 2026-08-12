@@ -1,5 +1,6 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { effectScope } from 'vue';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 
@@ -42,6 +43,7 @@ mockNuxtImport('useAsyncAction', () => () => ({
 	executeAction: mockExecuteAction,
 }));
 mockNuxtImport('$fetch', () => mockFetch);
+mockNuxtImport('useToast', () => () => ({ add: vi.fn() }));
 
 describe('useScreenStore config and realtime', () => {
 	let store: ReturnType<typeof useScreenStore>;
@@ -59,6 +61,13 @@ describe('useScreenStore config and realtime', () => {
 			'screen:updated': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteUpdated(data as any),
 			'screen:deleted': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteDeleted(data as any),
 		};
+	});
+
+	// Several tests here install fake timers and restore them on their last line, so
+	// one failing assertion used to leave them installed and time out every
+	// real-timer test after it — four failures reported for one defect.
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	// ── Loading ──
@@ -194,17 +203,30 @@ describe('useScreenStore config and realtime', () => {
 			vi.useRealTimers();
 		});
 
-		it('cancels pending writes when the store resets for another Event', async () => {
+		/*
+		 * This used to assert the opposite — that the reset cancelled the write and
+		 * rejected its caller. That is what silently reverted an operator's edit when
+		 * they left the Event inside the debounce window, since the edit was already
+		 * on screen as saved (#308). The reset now spends the write instead, and only
+		 * declines to cache its answer back into an Event this client has left.
+		 */
+		it('spends a pending write when the store resets for another Event', async () => {
 			vi.useFakeTimers();
 			const screen = createMockScreen({ id: 1, screenConfig: {}, stateVersion: 2 });
 			store.screens = [screen];
+			mockRepo.updateScreenConfig.mockResolvedValue(
+				createMockScreen({ id: 1, screenConfig: { width: 1920 }, stateVersion: 3 }),
+			);
 
 			const write = store.updateScreenConfig(1, 1, { width: 1920 });
 			store.$reset();
-			await expect(write).rejects.toThrow('Event scope changed');
 			await vi.advanceTimersByTimeAsync(1000);
+			await write;
 
-			expect(mockRepo.updateScreenConfig).not.toHaveBeenCalled();
+			// The `stateVersion` is the one the cache held at reset time, so the write
+			// must be flushed before the reset clears it.
+			expect(mockRepo.updateScreenConfig).toHaveBeenCalledWith(1, 1, { width: 1920 }, 2);
+			expect(store.screens).toEqual([]);
 			vi.useRealTimers();
 		});
 
@@ -559,6 +581,70 @@ describe('useScreenStore config and realtime', () => {
 					body: { command: 'refresh' },
 				});
 			});
+		});
+	});
+
+	/**
+	 * An operator's edit and the two debounces standing between it and the server.
+	 *
+	 * `useConfigUpdate` holds one, and the write it eventually makes lands on
+	 * `updateScreenConfig`, which holds another. So "the edit is saved" is only true
+	 * once both have fired, and anything that ends the surface — a panel closing, a
+	 * navigation — happens between them. #308 fixed the first layer, which is
+	 * useless on its own if the second one drops what the first hands it.
+	 */
+	describe('a config edit whose surface goes away inside the debounce window', () => {
+		function editScreenConfig(scope: ReturnType<typeof effectScope>) {
+			const { updateScreenConfig } = scope.run(() =>
+				useScreenConfigUpdate(1, 1, { debounceMs: 100 }),
+			)!;
+			updateScreenConfig({ background: '#fff' });
+		}
+
+		beforeEach(() => {
+			vi.useFakeTimers();
+			store.screens = [createMockScreen({ id: 1, stateVersion: 2, screenConfig: { background: '#000' } })];
+			mockRepo.updateScreenConfig.mockResolvedValue(
+				createMockScreen({ id: 1, stateVersion: 3, screenConfig: { background: '#fff' } }),
+			);
+		});
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it('reaches the server when the surface unmounts', async () => {
+			const scope = effectScope();
+			editScreenConfig(scope);
+			scope.stop();
+			await vi.advanceTimersByTimeAsync(1_000);
+
+			expect(mockRepo.updateScreenConfig).toHaveBeenCalledWith(1, 1, { background: '#fff' }, 2);
+		});
+
+		it('reaches the server when the Event scope is torn down before the surface unmounts', async () => {
+			// Leaving the Event runs the route middleware before the page unmounts, so
+			// the reset arrives while the edit is still held in the composable. The
+			// intent outlives the reset; a synthetic cancellation would revert a
+			// setting the operator was shown as saved.
+			const scope = effectScope();
+			editScreenConfig(scope);
+			resetAllEventStores();
+			scope.stop();
+			await vi.advanceTimersByTimeAsync(1_000);
+
+			expect(mockRepo.updateScreenConfig).toHaveBeenCalledWith(1, 1, { background: '#fff' }, 2);
+		});
+
+		it('reaches the server when the Event scope is torn down after the first debounce fired', async () => {
+			const scope = effectScope();
+			editScreenConfig(scope);
+			await vi.advanceTimersByTimeAsync(100);
+			store.$reset();
+			scope.stop();
+			await vi.advanceTimersByTimeAsync(1_000);
+
+			expect(mockRepo.updateScreenConfig).toHaveBeenCalledWith(1, 1, { background: '#fff' }, 2);
 		});
 	});
 
