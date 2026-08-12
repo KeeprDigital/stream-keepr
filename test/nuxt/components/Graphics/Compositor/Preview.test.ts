@@ -48,6 +48,13 @@ const USelectMenuStub = defineComponent({
 	template: '<select @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="String(item.value)" :value="item.value">{{ item.label }}</option></select>',
 });
 
+const USelectStub = defineComponent({
+	name: 'USelect',
+	props: { modelValue: { type: String, required: false }, items: { type: Array, default: () => [] } },
+	emits: ['update:modelValue'],
+	template: '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="item.value" :value="item.value">{{ item.label }}</option></select>',
+});
+
 const UButtonStub = defineComponent({
 	name: 'UButton',
 	emits: ['click'],
@@ -76,6 +83,7 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 				UFieldGroup: SlotOnlyStub,
 				UButton: UButtonStub,
 				USelectMenu: USelectMenuStub,
+				USelect: USelectStub,
 			},
 		},
 	});
@@ -131,6 +139,31 @@ describe('graphicsCompositorPreview', () => {
 		const style = wrapper.get('iframe').element.parentElement?.getAttribute('style') ?? '';
 		expect(style).toContain('width: 1920px');
 		expect(style).toContain('height: 1080px');
+	});
+
+	it('fits the preview without changing the saved canvas aspect ratio', async () => {
+		const wrapper = await mountComponent({ canvasWidth: 1080, canvasHeight: 1920 });
+		const canvas = wrapper.get('iframe').element.parentElement;
+		const style = canvas?.getAttribute('style') ?? '';
+
+		expect(style).toContain('aspect-ratio: 1080 / 1920');
+		expect(style).toContain('width: 25.875vh');
+		expect(style).toContain('max-width: 100%');
+		expect(style).not.toContain('max-height');
+		expect(canvas?.classList).toContain('transparent-checkerboard-backdrop');
+		expect(canvas?.parentElement?.classList).not.toContain('transparent-checkerboard-backdrop');
+	});
+
+	it('previews transparency or a selected solid background without changing output', async () => {
+		const wrapper = await mountComponent();
+		const canvas = wrapper.get('iframe').element.parentElement!;
+
+		expect(canvas.classList).toContain('transparent-checkerboard-backdrop');
+		await wrapper.get('[aria-label="Preview background"]').setValue('white');
+
+		expect(canvas.classList).not.toContain('transparent-checkerboard-backdrop');
+		expect(canvas.getAttribute('style')).toContain('background-color: #ffffff');
+		expect(wrapper.get('iframe').attributes('src')).toContain('output=overlay');
 	});
 
 	it('pushes the working composition into its own preview frame', async () => {

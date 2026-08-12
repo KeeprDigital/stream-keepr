@@ -50,6 +50,8 @@ async function mountComponent(props: {
 	publicationBlocked?: boolean;
 	publicationBlockReason?: string;
 	compositorTarget?: GraphicsSelectionTarget;
+	canvasWidth?: number;
+	canvasHeight?: number;
 } = {}) {
 	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/PreviewOutputAside.vue';
 	const { default: PreviewOutputAside } = await import(componentPath);
@@ -64,6 +66,8 @@ async function mountComponent(props: {
 			config: structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG),
 			selectedTarget: { type: 'canvas' },
 			compositorTarget: { type: 'canvas' },
+			canvasWidth: 1920,
+			canvasHeight: 1080,
 			...props,
 		},
 		global: {
@@ -402,6 +406,19 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 			expect(url).not.toContain('guides=1');
 			expect(url).not.toContain('safe=1');
 		}
+	});
+
+	it('fits the preview to the current canvas aspect ratio without letterboxing', async () => {
+		const wrapper = await mountComponent({ canvasWidth: 1080, canvasHeight: 1920 });
+		const canvas = wrapper.get('iframe').element.parentElement;
+		const style = canvas?.getAttribute('style') ?? '';
+
+		expect(style).toContain('aspect-ratio: 1080 / 1920');
+		expect(style).toContain('width: 25.875vh');
+		expect(style).toContain('max-width: 100%');
+		expect(style).not.toContain('max-height');
+		expect(canvas?.classList).toContain('transparent-checkerboard-backdrop');
+		expect(canvas?.parentElement?.classList).not.toContain('transparent-checkerboard-backdrop');
 	});
 
 	it('disables output URL and capture actions when Graphic Asset publication is blocked', async () => {

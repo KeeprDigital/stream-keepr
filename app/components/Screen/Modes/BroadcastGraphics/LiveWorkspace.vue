@@ -220,10 +220,41 @@ const programUrl = computed(() => screenOutputPath({
 	embed: 'monitor',
 	assetCapability: assetCapability.value,
 }));
-const programAspectStyle = computed(() => ({
-	aspectRatio: `${props.canvasWidth} / ${props.canvasHeight}`,
-	maxHeight: '46vh',
-}));
+const PROGRAM_ZOOM_OPTIONS = [
+	{ label: 'Fit', value: 'fit' },
+	{ label: '50%', value: '0.5' },
+	{ label: '100%', value: '1' },
+] as const;
+type ProgramZoom = typeof PROGRAM_ZOOM_OPTIONS[number]['value'];
+type ProgramBackground = 'transparent' | 'black' | 'white' | 'green';
+const PROGRAM_BACKGROUND_OPTIONS: Array<{ label: string; value: ProgramBackground }> = [
+	{ label: 'Transparency', value: 'transparent' },
+	{ label: 'Black', value: 'black' },
+	{ label: 'White', value: 'white' },
+	{ label: 'Green', value: 'green' },
+];
+const programZoom = ref<ProgramZoom>('fit');
+const programBackground = ref<ProgramBackground>('transparent');
+const programAspectStyle = computed(() => programZoom.value === 'fit'
+	? {
+			aspectRatio: `${props.canvasWidth} / ${props.canvasHeight}`,
+			width: `${46 * props.canvasWidth / props.canvasHeight}vh`,
+			maxWidth: '100%',
+		}
+	: {
+			width: `${props.canvasWidth * Number(programZoom.value)}px`,
+			height: `${props.canvasHeight * Number(programZoom.value)}px`,
+			maxWidth: 'none',
+		});
+const programBackgroundStyle = computed(() => {
+	if (programBackground.value === 'black')
+		return { backgroundColor: '#000000' };
+	if (programBackground.value === 'white')
+		return { backgroundColor: '#ffffff' };
+	if (programBackground.value === 'green')
+		return { backgroundColor: '#00b140' };
+	return undefined;
+});
 
 /**
  * The stack an operator reads top to bottom, front Broadcast Graphic first.
@@ -524,28 +555,50 @@ async function resetLiveState() {
 				from these until a control says what it is putting in the URL.
 			-->
 			<template #actions>
-				<UFieldGroup size="xs">
-					<UButton
-						color="neutral"
-						variant="soft"
-						icon="i-lucide-external-link"
-						title="Open this Screen's Overlay Output in a new tab, with the asset access that resolves its media"
-						data-testid="open-screen-output"
-						@click="openOutput"
-					>
-						Open output
-					</UButton>
-					<UButton
-						color="neutral"
-						variant="soft"
-						icon="i-lucide-copy"
-						title="Copy this Screen's Overlay Output URL, with the asset access that resolves its media"
-						data-testid="copy-screen-output-url"
-						@click="copyOutputUrl"
-					>
-						Copy output URL
-					</UButton>
-				</UFieldGroup>
+				<div class="flex flex-wrap items-center gap-2">
+					<UFieldGroup size="xs">
+						<UButton
+							v-for="zoom in PROGRAM_ZOOM_OPTIONS"
+							:key="zoom.value"
+							:color="programZoom === zoom.value ? 'primary' : 'neutral'"
+							:variant="programZoom === zoom.value ? 'subtle' : 'outline'"
+							:aria-label="`${zoom.label} program monitor zoom`"
+							@click="() => { programZoom = zoom.value }"
+						>
+							{{ zoom.label }}
+						</UButton>
+					</UFieldGroup>
+					<USelect
+						v-model="programBackground"
+						:items="PROGRAM_BACKGROUND_OPTIONS"
+						value-key="value"
+						size="xs"
+						class="w-32"
+						aria-label="Program monitor background"
+					/>
+					<UFieldGroup size="xs">
+						<UButton
+							color="neutral"
+							variant="soft"
+							icon="i-lucide-external-link"
+							title="Open this Screen's Overlay Output in a new tab, with the asset access that resolves its media"
+							data-testid="open-screen-output"
+							@click="openOutput"
+						>
+							Open output
+						</UButton>
+						<UButton
+							color="neutral"
+							variant="soft"
+							icon="i-lucide-copy"
+							title="Copy this Screen's Overlay Output URL, with the asset access that resolves its media"
+							data-testid="copy-screen-output-url"
+							@click="copyOutputUrl"
+						>
+							Copy output URL
+						</UButton>
+					</UFieldGroup>
+				</div>
 			</template>
 			<!--
 				This monitor is not the only output, and it is the one output guaranteed
@@ -579,8 +632,15 @@ async function resetLiveState() {
 				title="Program monitor unavailable"
 				description="Asset access for this Screen could not be obtained, so the monitor would render this composition without its media. Playout below is unaffected; reload to try again."
 			/>
-			<div v-else class="transparent-checkerboard-backdrop overflow-hidden rounded-md">
-				<div class="relative mx-auto w-full" :style="programAspectStyle">
+			<div v-else class="overflow-auto">
+				<div
+					class="relative mx-auto overflow-hidden"
+					:class="[
+						programZoom === 'fit' ? '' : 'shrink-0',
+						{ 'transparent-checkerboard-backdrop': programBackground === 'transparent' },
+					]"
+					:style="[programAspectStyle, programBackgroundStyle]"
+				>
 					<iframe
 						v-if="assetCapability"
 						:src="programUrl"

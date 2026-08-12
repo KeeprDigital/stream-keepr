@@ -59,6 +59,14 @@ const PREVIEW_ZOOM_OPTIONS = [
 
 type PreviewZoom = typeof PREVIEW_ZOOM_OPTIONS[number]['value'];
 
+type PreviewBackground = 'transparent' | 'black' | 'white' | 'green';
+const PREVIEW_BACKGROUND_OPTIONS: Array<{ label: string; value: PreviewBackground }> = [
+	{ label: 'Transparency', value: 'transparent' },
+	{ label: 'Black', value: 'black' },
+	{ label: 'White', value: 'white' },
+	{ label: 'Green', value: 'green' },
+];
+
 const ANIMATION_PHASE_OPTIONS = GRAPHIC_ANIMATION_PHASE_VALUES.map(phase => ({
 	label: GRAPHIC_ANIMATION_PHASE_LABELS[phase],
 	value: phase,
@@ -73,6 +81,7 @@ const ANIMATION_SPEED_OPTIONS = [
 
 const previewOutput = ref<ScreenOutput>('overlay');
 const previewZoom = ref<PreviewZoom>('fit');
+const previewBackground = ref<PreviewBackground>('transparent');
 const itemGuides = ref(true);
 const safeAreaGuides = ref(false);
 const previewFrame = ref<HTMLIFrameElement | null>(null);
@@ -132,12 +141,25 @@ const previewUrl = computed(() => screenOutputPath({
 }));
 
 const previewAspectStyle = computed(() => (previewZoom.value === 'fit'
-	? { aspectRatio: `${props.canvasWidth} / ${props.canvasHeight}`, maxHeight: '46vh' }
+	? {
+			aspectRatio: `${props.canvasWidth} / ${props.canvasHeight}`,
+			width: `${46 * props.canvasWidth / props.canvasHeight}vh`,
+			maxWidth: '100%',
+		}
 	: {
 			width: `${props.canvasWidth * Number(previewZoom.value)}px`,
 			height: `${props.canvasHeight * Number(previewZoom.value)}px`,
 			maxWidth: 'none',
 		}));
+const previewBackgroundStyle = computed(() => {
+	if (previewBackground.value === 'black')
+		return { backgroundColor: '#000000' };
+	if (previewBackground.value === 'white')
+		return { backgroundColor: '#ffffff' };
+	if (previewBackground.value === 'green')
+		return { backgroundColor: '#00b140' };
+	return undefined;
+});
 
 function pushPreviewState() {
 	if (!import.meta.client || !previewFrame.value?.contentWindow)
@@ -222,6 +244,14 @@ watch(
 						{{ zoom.label }}
 					</UButton>
 				</UFieldGroup>
+				<USelect
+					v-model="previewBackground"
+					:items="PREVIEW_BACKGROUND_OPTIONS"
+					value-key="value"
+					size="sm"
+					class="w-32"
+					aria-label="Preview background"
+				/>
 			</div>
 		</template>
 
@@ -298,11 +328,14 @@ watch(
 			</p>
 		</div>
 
-		<div class="transparent-checkerboard-backdrop overflow-auto rounded-md">
+		<div class="overflow-auto">
 			<div
-				class="relative mx-auto"
-				:class="previewZoom === 'fit' ? 'w-full' : 'shrink-0'"
-				:style="previewAspectStyle"
+				class="relative mx-auto overflow-hidden"
+				:class="[
+					previewZoom === 'fit' ? '' : 'shrink-0',
+					{ 'transparent-checkerboard-backdrop': previewBackground === 'transparent' },
+				]"
+				:style="[previewAspectStyle, previewBackgroundStyle]"
 			>
 				<iframe
 					ref="previewFrame"
