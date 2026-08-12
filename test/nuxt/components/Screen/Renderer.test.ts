@@ -1,7 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, nextTick, ref } from 'vue';
+import { computed, defineComponent, ref } from 'vue';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 
 const getScreenModeDefinition = vi.fn();
@@ -192,7 +192,7 @@ describe('screenRenderer', () => {
 		expect(renderer.attributes('style')).not.toContain('background: #111111;');
 	});
 
-	it('paints an editor-only checkerboard behind transparent overlay previews', async () => {
+	it('leaves an embedded preview transparent so its host controls the backdrop', async () => {
 		isPreview.value = true;
 		outputMode.value = 'overlay';
 		screen.value = createMockScreen({
@@ -204,11 +204,6 @@ describe('screenRenderer', () => {
 		}) as any;
 
 		const wrapper = await mountComponent();
-
-		expect(wrapper.get('.screen-renderer-wrapper').classes()).toContain('transparent-checkerboard-backdrop');
-
-		outputMode.value = 'fill';
-		await nextTick();
 
 		expect(wrapper.get('.screen-renderer-wrapper').classes()).not.toContain('transparent-checkerboard-backdrop');
 	});

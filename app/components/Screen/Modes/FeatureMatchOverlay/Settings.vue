@@ -297,6 +297,8 @@ function updateComposition(composition: BroadcastGraphicConfig) {
 					:config="config"
 					:selected-target="selectedTarget"
 					:compositor-target="compositorTarget"
+					:canvas-width="screenWidth"
+					:canvas-height="screenHeight"
 					:publication-blocked="assetPublicationBlocked"
 					:publication-block-reason="assetPublicationBlockReason"
 					@select-target="selectHostTarget"

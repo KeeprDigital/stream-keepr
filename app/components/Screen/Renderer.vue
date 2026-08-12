@@ -4,7 +4,7 @@ import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import { usePreferredDark } from '@vueuse/core';
 import { getScreenModeDefinition, resolveScreenModeHost } from '~/modules/screen-mode';
 
-const { screen, overlayContainer, isPreview, outputMode } = useScreenContext();
+const { screen, overlayContainer } = useScreenContext();
 const preferredDark = usePreferredDark();
 const viewportWidth = ref(0);
 const viewportHeight = ref(0);
@@ -30,8 +30,6 @@ const currentModeDefinition = computed(() => getScreenModeDefinition(currentMode
 const screenConfig = computed<ScreenConfig>(() => (screen.value?.screenConfig ?? {}) as ScreenConfig);
 
 const displayComponent = computed<Component>(() => currentModeDefinition.value.displayComponent);
-const showTransparentPreviewBackdrop = computed(() => isPreview?.value === true && outputMode?.value === 'overlay');
-
 const host = computed(() => resolveScreenModeHost({
 	mode: currentMode.value,
 	screenConfig: screenConfig.value,
@@ -48,7 +46,7 @@ function setHostContainer(el: Element | ComponentPublicInstance | null) {
 <template>
 	<div
 		class="screen-renderer-wrapper w-full h-full"
-		:class="[host.wrapperClass, { 'transparent-checkerboard-backdrop': showTransparentPreviewBackdrop }]"
+		:class="host.wrapperClass"
 		:style="host.wrapperStyle"
 	>
 		<div
