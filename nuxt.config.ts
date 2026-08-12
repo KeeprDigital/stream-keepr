@@ -2,7 +2,6 @@ import type { MutationBodyMethod } from './shared/utils/requestBodyLimits';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { devVarsModule } from './build/devVarsModule';
-import { wasmModulePlugin } from './build/wasmModulePlugin';
 import { GRAPHIC_STYLE_SET_PACKAGE_LIMITS } from './shared/types/graphicStyleSetPackage';
 import {
 	GRAPHICS_MULTIPART_PART_BYTES,
@@ -63,6 +62,16 @@ export default defineNuxtConfig({
 		features: ['LabelLayout'],
 	},
 
+	// `@nuxtjs/color-mode` declares `configKey: 'colorMode'`, so it reads these
+	// from Nuxt config and only from here — the same block in `app.config.ts` was
+	// inert, leaving the module on its own `fallback: 'light'` default (#310).
+	// `fallback` is what the pre-hydration script returns when no system
+	// preference can be read at all, which is the state this app wants dark.
+	colorMode: {
+		preference: 'system',
+		fallback: 'dark',
+	},
+
 	css: [
 		'~/assets/css/main.css',
 	],
@@ -89,8 +98,15 @@ export default defineNuxtConfig({
 
 	nitro: {
 		preset: 'cloudflare_module',
-		rollupConfig: {
-			plugins: [wasmModulePlugin('nitro-webassembly-modules')],
+		// Nitro's own Wasm support (unwasm). The `cloudflare_module` preset
+		// configures it as `{ lazy: false, esmImport: true }`, so a `.wasm?module`
+		// import becomes a real ESM import of an emitted `.wasm` asset and the
+		// runtime hands back an already-compiled `WebAssembly.Module`. A deployed
+		// Worker refuses to compile Wasm from a byte buffer ("Wasm code generation
+		// disallowed by embedder"), so nothing here may reintroduce a build plugin
+		// that inlines the codecs as base64 — that was #302.
+		experimental: {
+			wasm: true,
 		},
 		handlers: isIntegration
 			? [
