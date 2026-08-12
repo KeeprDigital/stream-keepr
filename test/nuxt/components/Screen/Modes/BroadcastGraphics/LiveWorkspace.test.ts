@@ -220,6 +220,12 @@ const UIEmptyStateStub = defineComponent({
 const UBadgeStub = defineComponent({ template: '<span><slot /></span>' });
 const UIconStub = defineComponent({ template: '<i />' });
 const UFieldGroupStub = defineComponent({ template: '<div><slot /></div>' });
+const USelectStub = defineComponent({
+	name: 'USelect',
+	props: { modelValue: { type: String, required: false }, items: { type: Array, default: () => [] } },
+	emits: ['update:modelValue'],
+	template: '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="item.value" :value="item.value">{{ item.label }}</option></select>',
+});
 const UButtonStub = defineComponent({
 	name: 'UButton',
 	props: { disabled: { type: Boolean, default: false } },
@@ -255,6 +261,7 @@ async function mountComponent(
 				UBadge: UBadgeStub,
 				UIcon: UIconStub,
 				UFieldGroup: UFieldGroupStub,
+				USelect: USelectStub,
 				UButton: UButtonStub,
 				UAlert: UAlertStub,
 			},
@@ -913,6 +920,35 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		const src = wrapper.get('[data-testid="program-monitor"]').attributes('src')!;
 		expect(src).toContain('embed=monitor');
 		expect(src).not.toContain('embed=preview');
+	});
+
+	it('fits the Program monitor to the canvas ratio and offers fixed zoom controls', async () => {
+		const wrapper = await mountComponent();
+		const monitor = wrapper.get('[data-testid="program-monitor"]');
+		const canvas = monitor.element.parentElement;
+		let style = canvas?.getAttribute('style') ?? '';
+
+		expect(style).toContain('aspect-ratio: 1920 / 1080');
+		expect(style).toContain('max-width: 100%');
+		expect(style).not.toContain('max-height');
+		expect(canvas?.classList).toContain('transparent-checkerboard-backdrop');
+		expect(canvas?.parentElement?.classList).not.toContain('transparent-checkerboard-backdrop');
+
+		await wrapper.get('[aria-label="50% program monitor zoom"]').trigger('click');
+		style = monitor.element.parentElement?.getAttribute('style') ?? '';
+		expect(style).toContain('width: 960px');
+		expect(style).toContain('height: 540px');
+	});
+
+	it('shows Program transparency or a selected solid preview background', async () => {
+		const wrapper = await mountComponent();
+		const canvas = wrapper.get('[data-testid="program-monitor"]').element.parentElement!;
+
+		expect(canvas.classList).toContain('transparent-checkerboard-backdrop');
+		await wrapper.get('[aria-label="Program monitor background"]').setValue('green');
+
+		expect(canvas.classList).not.toContain('transparent-checkerboard-backdrop');
+		expect(canvas.getAttribute('style')).toContain('background-color: #00b140');
 	});
 
 	/**

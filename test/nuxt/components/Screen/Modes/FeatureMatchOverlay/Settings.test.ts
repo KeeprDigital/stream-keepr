@@ -85,11 +85,13 @@ const PreviewOutputAsideStub = defineComponent({
 		config: { type: Object, required: true },
 		selectedTarget: { type: Object, required: true },
 		compositorTarget: { type: Object, required: true },
+		canvasWidth: { type: Number, required: true },
+		canvasHeight: { type: Number, required: true },
 		publicationBlocked: { type: Boolean, required: false },
 		publicationBlockReason: { type: String, required: false },
 	},
 	emits: ['selectTarget', 'selectCompositorTarget'],
-	template: '<button data-testid="preview-output-aside" :data-selected="JSON.stringify(selectedTarget)" :data-compositor-selected="JSON.stringify(compositorTarget)" :data-config="JSON.stringify(config)" :data-publication-blocked="String(publicationBlocked)" :title="publicationBlockReason" @click="$emit(\'selectTarget\', { type: \'graphic-item\', itemId: \'top-bar\', childId: \'top-name-record\' })" />',
+	template: '<button data-testid="preview-output-aside" :data-selected="JSON.stringify(selectedTarget)" :data-compositor-selected="JSON.stringify(compositorTarget)" :data-config="JSON.stringify(config)" :data-canvas-width="canvasWidth" :data-canvas-height="canvasHeight" :data-publication-blocked="String(publicationBlocked)" :title="publicationBlockReason" @click="$emit(\'selectTarget\', { type: \'graphic-item\', itemId: \'top-bar\', childId: \'top-name-record\' })" />',
 });
 
 const UFormFieldStub = defineComponent({
@@ -204,11 +206,14 @@ describe('featureMatchOverlaySettings', () => {
 		expect(inputs).toHaveLength(2);
 		expect(inputs[0]?.props('modelValue')).toBe(1920);
 		expect(inputs[1]?.props('modelValue')).toBe(1080);
+		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-canvas-width')).toBe('1920');
+		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-canvas-height')).toBe('1080');
 
 		await inputs[0]?.vm.$emit('update:modelValue', 1280);
 		await nextTick();
 
 		expect(mockUpdateScreenConfig).toHaveBeenCalledWith({ width: 1280 });
+		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-canvas-width')).toBe('1280');
 	});
 
 	it('visibly blocks output actions while an exact Graphic Asset Reference is missing', async () => {

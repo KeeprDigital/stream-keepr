@@ -2,7 +2,6 @@
 import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
-import { DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT, DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH } from '~~/shared/types/screenConfig';
 import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import { isFeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
 import {
@@ -33,6 +32,8 @@ const props = defineProps<{
 	selectedTarget: FeatureMatchOverlaySelectionTarget;
 	/** The shared item tree's selection, in the compositor's own vocabulary. */
 	compositorTarget: GraphicsSelectionTarget;
+	canvasWidth: number;
+	canvasHeight: number;
 	publicationBlocked?: boolean;
 	publicationBlockReason?: string;
 }>();
@@ -75,14 +76,16 @@ const previewUrl = computed(() => screenOutputPath({
 	itemGuides: previewGuides.value,
 	safeAreaGuides: previewSafeAreas.value,
 }));
-const screenWidth = computed(() => props.screen.screenConfig?.width ?? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH);
-const screenHeight = computed(() => props.screen.screenConfig?.height ?? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT);
 const previewAspectStyle = computed(() => ({
 	...(previewZoom.value === 'fit'
-		? { aspectRatio: `${screenWidth.value} / ${screenHeight.value}`, maxHeight: '46vh' }
+		? {
+				aspectRatio: `${props.canvasWidth} / ${props.canvasHeight}`,
+				width: `${46 * props.canvasWidth / props.canvasHeight}vh`,
+				maxWidth: '100%',
+			}
 		: {
-				width: `${screenWidth.value * Number(previewZoom.value)}px`,
-				height: `${screenHeight.value * Number(previewZoom.value)}px`,
+				width: `${props.canvasWidth * Number(previewZoom.value)}px`,
+				height: `${props.canvasHeight * Number(previewZoom.value)}px`,
 				maxWidth: 'none',
 			}),
 }));
@@ -384,10 +387,10 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 				</div>
 			</template>
 
-			<div class="transparent-checkerboard-backdrop overflow-auto rounded-md">
+			<div class="overflow-auto">
 				<div
-					class="relative mx-auto"
-					:class="previewZoom === 'fit' ? 'w-full' : 'shrink-0'"
+					class="transparent-checkerboard-backdrop relative mx-auto overflow-hidden"
+					:class="previewZoom === 'fit' ? '' : 'shrink-0'"
 					:style="previewAspectStyle"
 				>
 					<iframe
