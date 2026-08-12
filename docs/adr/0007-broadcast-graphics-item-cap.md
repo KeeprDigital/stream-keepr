@@ -2,6 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-08-01
+- **Amended**: 2026-08-11, the decision unchanged. The fidelity prototype document was removed from the repository, so the reconstruction inventory it supplied is carried in _Where 300 comes from_ below rather than cited. Nothing about the cap or its derivation moved; the evidence simply lives here now.
 - **Issue**: [#99](https://github.com/KeeprDigital/stream-keepr/issues/99)
 - **Depends on**: [#85](https://github.com/KeeprDigital/stream-keepr/issues/85) (the byte total is enforced on the editors' write path) and [#95](https://github.com/KeeprDigital/stream-keepr/issues/95) (realtime no longer publishes mode configurations)
 
@@ -38,7 +39,7 @@ That is **11,437 bytes per Graphic Item on 282,564 bytes of fixed cost** — the
 
 ### Where 300 comes from
 
-`MAX_BROADCAST_GRAPHICS_PER_SCREEN` is 50 — the authored stack a Screen may carry. `docs/prototypes/broadcast-graphics-fidelity.md` is the acceptance evidence the spec designates, and its reconstruction inventory is:
+`MAX_BROADCAST_GRAPHICS_PER_SCREEN` is 50 — the authored stack a Screen may carry. The fidelity prototype the spec designates as acceptance evidence is no longer in the repository, so its reconstruction inventory is reproduced here rather than cited — this table is the surviving record of it:
 
 | reconstruction                              | Graphic Items                                                 |
 | ------------------------------------------- | ------------------------------------------------------------- |

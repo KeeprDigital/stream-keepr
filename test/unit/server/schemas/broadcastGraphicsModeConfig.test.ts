@@ -539,15 +539,17 @@ const REALISTIC_SCREEN_AT_CAP_BYTES = 248_734;
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
 
 /**
- * A Broadcast Graphic as the fidelity prototype describes one, rather than as the
- * caps admit one.
+ * A Broadcast Graphic as the fidelity acceptance set describes one, rather than as
+ * the caps admit one.
  *
- * Six Graphic Items, counted from the reconstruction inventory in
- * `docs/prototypes/broadcast-graphics-fidelity.md`: the split angular lower third
+ * Six Graphic Items, counted from the reconstruction inventory reproduced in
+ * `docs/adr/0007-broadcast-graphics-item-cap.md`: the split angular lower third
  * is "two shape beds, two accent rules, two text items", which is the richest of
  * the four and the shape the Graphic Item cap is derived from. The others are a
  * full-width lower third of about six, a four-item slate, and a two-to-three item
- * bug — nineteen Graphic Items across the whole acceptance set.
+ * bug — nineteen Graphic Items across the whole acceptance set. The prototype
+ * document those were originally read off is no longer in the repository, so the
+ * ADR is the record that has to stay in step with this fixture.
  *
  * With uuid ids, an application font, one enter and one exit recipe, and — on as
  * many graphics as `MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN` allows — two

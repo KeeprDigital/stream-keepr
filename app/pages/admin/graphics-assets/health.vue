@@ -10,42 +10,65 @@ definePageMeta({
 	title: 'Graphics Asset Library health',
 });
 
-const {
-	data: health,
-	status,
-	error,
-	refresh,
-} = useFetch<GraphicsAssetLibraryHealth>('/api/admin/graphics-assets/health');
-const {
-	data: capacity,
-	error: capacityError,
-	refresh: refreshCapacity,
-} = useFetch<GraphicsAssetLibraryCapacity>('/api/admin/graphics-assets/capacity');
-
-/**
- * What a failed reading says to the administrator who opened this page.
- *
- * Both reads are guarded by the installation's administrator token, so the failure this
- * page meets most often is the 403 whose body says 'Graphics Administrator authorization
- * is required' — and rendering `error.message` showed the transport's line instead, which
- * names the route and not the missing token. `failureSentence` owns which failures may be
- * quoted, and since #286 that includes the 5xx families the server preserves through
- * sanitizing, which is the other kind of answer a health page exists to relay. A
- * genuinely sanitized 5xx still falls back to the transport's line (#271).
- */
-const healthFailureMessage = computed(() =>
-	error.value ? failureSentence(error.value) ?? error.value.message : undefined,
-);
-const capacityFailureMessage = computed(() =>
-	capacityError.value ? failureSentence(capacityError.value) ?? capacityError.value.message : undefined,
-);
 const bytesPerGiB = 1024 * 1024 * 1024;
 const canonicalLimitGiB = ref(100);
 const stagingLimitGiB = ref(10);
-const administratorToken = ref('');
+const capacity = ref<GraphicsAssetLibraryCapacity | null>(null);
+const capacityFailureMessage = ref<string | null>(null);
 const capacitySavePending = ref(false);
 const capacitySaveError = ref<string | null>(null);
 const capacitySaveSucceeded = ref(false);
+
+/**
+ * Both reads are guarded by the installation's administrator token, so neither can be
+ * taken before an administrator supplies one. Taking them bare is what made this page
+ * answer nothing but 403 once the guard reached the two routes, and holding the token
+ * the way the cockpit and the queues do is what keeps the three surfaces agreeing on
+ * what an authorization failure means.
+ */
+const {
+	administratorToken,
+	reading: health,
+	loadPending,
+	loadError: healthFailureMessage,
+	hasReading,
+	administratorHeaders,
+	describeFailure,
+	load: loadHealth,
+} = useGraphicsAdminReading<GraphicsAssetLibraryHealth>({
+	read: async headers => await $fetch<GraphicsAssetLibraryHealth>(
+		'/api/admin/graphics-assets/health',
+		{ headers },
+	),
+	failureMessage: 'The library health check could not be read.',
+	onAuthorizationLost: () => {
+		capacity.value = null;
+		capacityFailureMessage.value = null;
+	},
+	// Capacity is a second reading of the same library taken with the same token. It is
+	// kept separate rather than folded into the health read so that a capacity failure
+	// still leaves the component health an administrator came here for on screen.
+	onReading: async () => {
+		await loadCapacity();
+	},
+	// A save answers with the limits the server now holds. A poll landing while one is in
+	// flight would re-read capacity and put the limits from before it back on screen.
+	paused: () => capacitySavePending.value,
+});
+
+async function loadCapacity() {
+	capacityFailureMessage.value = null;
+	try {
+		capacity.value = await $fetch<GraphicsAssetLibraryCapacity>(
+			'/api/admin/graphics-assets/capacity',
+			{ headers: administratorHeaders() },
+		);
+	}
+	catch (caught) {
+		capacity.value = null;
+		capacityFailureMessage.value = describeFailure(caught, 'Capacity could not be read.');
+	}
+}
 
 watch(capacity, (value) => {
 	if (!value)
@@ -85,11 +108,6 @@ function healthColor(result: GraphicsAssetLibraryComponentHealth) {
 	return result.status === 'healthy' ? 'success' : 'error';
 }
 
-function refreshHealth() {
-	void refresh();
-	void refreshCapacity();
-}
-
 async function saveCapacityLimits() {
 	capacitySavePending.value = true;
 	capacitySaveError.value = null;
@@ -99,9 +117,7 @@ async function saveCapacityLimits() {
 			'/api/admin/graphics-assets/capacity',
 			{
 				method: 'PUT',
-				headers: {
-					'x-graphics-admin-token': administratorToken.value,
-				},
+				headers: administratorHeaders(),
 				body: {
 					canonicalLimitBytes: Math.round(canonicalLimitGiB.value * bytesPerGiB),
 					stagingLimitBytes: Math.round(stagingLimitGiB.value * bytesPerGiB),
@@ -111,9 +127,7 @@ async function saveCapacityLimits() {
 		capacitySaveSucceeded.value = true;
 	}
 	catch (caught) {
-		capacitySaveError.value = caught instanceof Error
-			? caught.message
-			: 'Capacity limits could not be saved.';
+		capacitySaveError.value = describeFailure(caught, 'Capacity limits could not be saved.');
 	}
 	finally {
 		capacitySavePending.value = false;
@@ -128,8 +142,9 @@ async function saveCapacityLimits() {
 				color="neutral"
 				variant="outline"
 				icon="i-lucide-refresh-cw"
-				:loading="status === 'pending'"
-				@click="refreshHealth"
+				:loading="loadPending"
+				:disabled="!hasReading"
+				@click="loadHealth"
 			>
 				Refresh
 			</UButton>
@@ -145,12 +160,47 @@ async function saveCapacityLimits() {
 				</p>
 			</div>
 
+			<UCard v-if="!hasReading">
+				<template #header>
+					<h2 class="font-semibold text-highlighted">
+						Graphics Administrator access
+					</h2>
+				</template>
+				<div class="flex flex-col gap-4">
+					<UFormField
+						label="Graphics Administrator token"
+						description="Library health is administrator-only. The token is held for this session only and never stored."
+					>
+						<UInput
+							v-model="administratorToken"
+							type="password"
+							autocomplete="current-password"
+						/>
+					</UFormField>
+					<div>
+						<UButton
+							label="Open health"
+							icon="i-lucide-activity"
+							:loading="loadPending"
+							@click="loadHealth"
+						/>
+					</div>
+					<p
+						v-if="healthFailureMessage"
+						class="text-sm text-error"
+						data-testid="health-load-error"
+					>
+						{{ healthFailureMessage }}
+					</p>
+				</div>
+			</UCard>
+
 			<UAlert
-				v-if="error"
+				v-if="hasReading && healthFailureMessage"
 				color="error"
 				variant="soft"
 				icon="i-lucide-triangle-alert"
-				title="Health check could not be loaded"
+				title="The last health check failed"
 				:description="healthFailureMessage"
 				data-testid="health-load-error"
 			/>
@@ -181,7 +231,7 @@ async function saveCapacityLimits() {
 			</div>
 
 			<UAlert
-				v-if="capacityError"
+				v-if="capacityFailureMessage"
 				color="error"
 				variant="soft"
 				icon="i-lucide-triangle-alert"
@@ -287,16 +337,6 @@ async function saveCapacityLimits() {
 								type="number"
 								:min="1"
 								step="1"
-							/>
-						</UFormField>
-						<UFormField
-							label="Graphics Administrator token"
-							description="Required to change installation-wide limits"
-						>
-							<UInput
-								v-model="administratorToken"
-								type="password"
-								autocomplete="current-password"
 							/>
 						</UFormField>
 						<UButton
