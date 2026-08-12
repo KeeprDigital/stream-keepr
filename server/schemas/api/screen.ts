@@ -343,6 +343,7 @@ export const standingsModeConfigSchema = z.object({
 	autoPageIntervalMs: z.number().int().min(3000).max(60000),
 
 	currentPage: z.number().int().min(1).optional(),
+	rotationAnchor: z.number().int().nonnegative().optional(),
 
 	animateEntries: z.boolean(),
 }).strict();
@@ -380,6 +381,7 @@ export const playerHistoryModeConfigSchema = z.object({
 	autoPageEnabled: z.boolean(),
 	autoPageIntervalMs: z.number().int().min(3000).max(60000),
 	currentPage: z.number().int().min(1).optional(),
+	rotationAnchor: z.number().int().nonnegative().optional(),
 }).strict();
 
 const featureMatchOverlayPresetIdSchema = z.enum(['full-table', 'left-stacked-player-cams', 'neon-feature-match']);
@@ -1559,9 +1561,10 @@ export const metagameModeConfigSchema = z.object({
 	limit: z.number().int().min(1).max(500),
 	maxTableWidth: z.number().int().min(1).nullable().optional(),
 	pageSize: z.number().int().min(1).max(100),
-	autoPaging: z.boolean(),
+	autoPageEnabled: z.boolean(),
 	autoPageIntervalMs: z.number().int().min(3000).max(60000),
 	currentPage: z.number().int().min(1).optional(),
+	rotationAnchor: z.number().int().nonnegative().optional(),
 	showHeader: z.boolean(),
 	headerText: z.string().max(200).optional(),
 	animateEntries: z.boolean(),

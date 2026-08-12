@@ -292,12 +292,12 @@ describe('parseModeConfigPatchResult', () => {
 
 	it('merges onto the stored configuration rather than replacing it', () => {
 		const merged = parseModeConfigPatchResult(
-			{ metagame: { topN: 5, autoPaging: true } as never },
+			{ metagame: { topN: 5, autoPageEnabled: true } as never },
 			'metagame',
 			{ topN: 12 },
 		);
 
-		expect(merged.metagame).toMatchObject({ topN: 12, autoPaging: true });
+		expect(merged.metagame).toMatchObject({ topN: 12, autoPageEnabled: true });
 	});
 
 	it('honours null as the delete-this-key sentinel, exactly as the write does', () => {

@@ -21,6 +21,7 @@ const defaultConfig = {
 	currentPage: 1,
 	autoPageEnabled: false,
 	autoPageIntervalMs: 5000,
+	rotationAnchor: undefined as number | undefined,
 	headerText: '',
 	sliceStart: 1,
 	sliceEnd: 16,
@@ -101,6 +102,15 @@ mockNuxtImport('useScreenContext', () => () => ({
 }));
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
+// Server time is the Page Rotation's clock; synced and controllable here.
+const mockIsSynced = ref(true);
+let mockServerNow = 1_000_000;
+mockNuxtImport('useServerTime', () => () => ({
+	isSynced: mockIsSynced,
+	serverTimeOffset: ref(0),
+	getServerTime: () => mockServerNow,
+}));
+
 // ──────────────── Tests ────────────────
 
 describe('useStandingsModeData pagination and formatting', () => {
@@ -115,6 +125,8 @@ describe('useStandingsModeData pagination and formatting', () => {
 		mockEventStore.event = createMockEvent();
 		mockEventId.value = 1;
 		mockInteractiveStandings.value = false;
+		mockIsSynced.value = true;
+		mockServerNow = 1_000_000;
 		mockFetch.mockReset();
 		vi.clearAllMocks();
 	});
@@ -172,6 +184,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 		});
 
 		it('setPage calls screenStore.updateModeConfig', () => {
+			mockInteractiveStandings.value = true;
 			mutableConfig.viewMode = 'all';
 			mutableConfig.rowsPerPage = 3; // 10 players / 3 = 4 pages
 			const { setPage } = useStandingsModeData();
@@ -185,6 +198,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 		});
 
 		it('setPage clamps below 1', () => {
+			mockInteractiveStandings.value = true;
 			const { setPage } = useStandingsModeData();
 			setPage(0);
 			expect(mockScreenStore.updateModeConfig).toHaveBeenCalledWith(
@@ -196,6 +210,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 		});
 
 		it('setPage clamps above totalPages', () => {
+			mockInteractiveStandings.value = true;
 			mutableConfig.viewMode = 'all';
 			mutableConfig.rowsPerPage = 5;
 			const { setPage } = useStandingsModeData();
@@ -209,6 +224,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 		});
 
 		it('nextPage wraps to page 1 after last page', () => {
+			mockInteractiveStandings.value = true;
 			mutableConfig.viewMode = 'all';
 			mutableConfig.rowsPerPage = 5;
 			mutableConfig.currentPage = 2; // last page (10 / 5 = 2)
@@ -223,6 +239,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 		});
 
 		it('prevPage wraps to last page from page 1', () => {
+			mockInteractiveStandings.value = true;
 			mutableConfig.viewMode = 'all';
 			mutableConfig.rowsPerPage = 5;
 			mutableConfig.currentPage = 1;
@@ -417,51 +434,64 @@ describe('useStandingsModeData pagination and formatting', () => {
 		});
 	});
 
-	// ── auto-page timer ──
+	// ── page rotation ──
 
-	describe('auto-page timer', () => {
+	describe('page rotation', () => {
 		beforeEach(() => vi.useFakeTimers());
 		afterEach(() => vi.useRealTimers());
 
-		it('starts timer when autoPageEnabled=true, interactive=false, totalPages>1', async () => {
-			// 10 players / rowsPerPage=3 = 4 pages
+		it('a non-interactive rendering projects the rotation from server time and never writes', async () => {
+			// 10 players / rowsPerPage=3 = 4 pages; anchor 5s ago of 5s pages → page 2.
 			mutableConfig.autoPageEnabled = true;
 			mutableConfig.autoPageIntervalMs = 5000;
 			mutableConfig.rowsPerPage = 3;
+			mutableConfig.rotationAnchor = mockServerNow - 5000;
 			mockInteractiveStandings.value = false;
 
-			useStandingsModeData();
+			const { currentPage, pageData } = useStandingsModeData();
 			await nextTick();
 
-			vi.advanceTimersByTime(5000);
+			expect(currentPage.value).toBe(2);
+			expect(pageData.value[0]!.name).toBe('Diana');
 
-			expect(mockScreenStore.updateModeConfig).toHaveBeenCalledWith(
-				expect.any(Number),
-				1,
-				'standings',
-				{ currentPage: 2 },
-			);
+			// Crossing a flip boundary advances the projection — still no writes.
+			mockServerNow += 5000;
+			vi.advanceTimersByTime(5000);
+			await nextTick();
+
+			expect(currentPage.value).toBe(3);
+			expect(mockScreenStore.updateModeConfig).not.toHaveBeenCalled();
 		});
 
-		it('timer wraps to page 1 after last page', async () => {
-			// Use 1 row per page to get many pages, start at last page
+		it('an unsynced rendering holds the first page instead of projecting on an unknown clock', async () => {
 			mutableConfig.autoPageEnabled = true;
-			mutableConfig.autoPageIntervalMs = 1000;
+			mutableConfig.autoPageIntervalMs = 5000;
 			mutableConfig.rowsPerPage = 3;
-			mutableConfig.currentPage = 4; // last page for 10 rows / 3 per page
-			mockInteractiveStandings.value = false;
+			mutableConfig.rotationAnchor = mockServerNow - 15_000;
+			mockIsSynced.value = false;
 
-			useStandingsModeData();
+			const { currentPage } = useStandingsModeData();
 			await nextTick();
 
-			vi.advanceTimersByTime(1000);
+			expect(currentPage.value).toBe(1);
+			expect(mockScreenStore.updateModeConfig).not.toHaveBeenCalled();
+		});
 
-			// Should wrap to page 1 (nextPage from last page)
+		it('manual selection while rotating re-anchors instead of writing a page number', () => {
+			mockInteractiveStandings.value = true;
+			mutableConfig.autoPageEnabled = true;
+			mutableConfig.autoPageIntervalMs = 5000;
+			mutableConfig.rowsPerPage = 3;
+			mutableConfig.rotationAnchor = mockServerNow;
+
+			const { setPage } = useStandingsModeData();
+			setPage(3);
+
 			expect(mockScreenStore.updateModeConfig).toHaveBeenCalledWith(
-				expect.any(Number),
+				1,
 				1,
 				'standings',
-				{ currentPage: 1 },
+				{ rotationAnchor: mockServerNow - 2 * 5000 },
 			);
 		});
 	});

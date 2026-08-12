@@ -70,7 +70,7 @@ const defaultConfig = {
 	],
 	limit: 50,
 	pageSize: 10,
-	autoPaging: false,
+	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
 	currentPage: 1,
 	showHeader: true,

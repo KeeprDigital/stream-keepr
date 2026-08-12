@@ -2,6 +2,7 @@
 import type { PlayerHistoryColumnConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import { VueDraggable } from 'vue-draggable-plus';
+import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 const props = defineProps<{
 	screen: Screen;
@@ -54,9 +55,14 @@ const totalPages = computed(() =>
 	Math.max(1, Math.ceil(Math.max(estimatedRowCount.value, 1) / config.value.rowsPerPage)),
 );
 
-const currentPage = computed(() =>
-	Math.min(config.value.currentPage ?? 1, totalPages.value),
-);
+// The live Page Rotation projection and the anchor writes an operator makes.
+const {
+	currentPage,
+	setAutoPageEnabled,
+	updateRotationShape,
+	adminNextPage,
+	adminPrevPage,
+} = useRotationConfigWrites({ config, totalPages, updateConfig });
 
 onMounted(async () => {
 	if (props.eventId && !playerStore.isLoaded) {
@@ -85,16 +91,6 @@ watch(() => config.value.playerId, async (playerId) => {
 		}
 	}
 }, { immediate: true });
-
-function adminNextPage() {
-	const next = currentPage.value < totalPages.value ? currentPage.value + 1 : 1;
-	updateConfig({ currentPage: next });
-}
-
-function adminPrevPage() {
-	const prev = currentPage.value > 1 ? currentPage.value - 1 : totalPages.value;
-	updateConfig({ currentPage: prev });
-}
 </script>
 
 <template>
@@ -178,7 +174,7 @@ function adminPrevPage() {
 					:min="1"
 					:max="100"
 					class="w-32"
-					@update:model-value="updateConfig({ rowsPerPage: Number($event), currentPage: 1 })"
+					@update:model-value="updateRotationShape({ rowsPerPage: Number($event), currentPage: 1 })"
 				/>
 			</UFormField>
 
@@ -192,7 +188,7 @@ function adminPrevPage() {
 				label="Auto-page"
 				description="Automatically cycle through match history pages."
 				:model-value="config.autoPageEnabled"
-				@update:model-value="updateConfig({ autoPageEnabled: $event })"
+				@update:model-value="setAutoPageEnabled($event === true)"
 			/>
 
 			<UFormField
@@ -206,7 +202,7 @@ function adminPrevPage() {
 					:min="3"
 					:max="60"
 					class="w-32"
-					@update:model-value="updateConfig({ autoPageIntervalMs: Number($event) * 1000 })"
+					@update:model-value="updateRotationShape({ autoPageIntervalMs: Number($event) * 1000 })"
 				/>
 			</UFormField>
 

@@ -36,18 +36,24 @@ export function usePlayerHistoryModeData() {
 	const isEmpty = computed(() => !loading.value && (!config.value.playerId || rows.value.length === 0));
 	const emptyMessage = computed(() => !config.value.playerId ? 'Select a player to show match history.' : 'No matches found for this player.');
 
-	const currentPage = computed(() => config.value.currentPage ?? 1);
 	const { pageData } = useScreenModePagination({
 		rows: computed(() => rows.value),
 		pageSize: computed(() => config.value.rowsPerPage),
-		currentPage,
+		currentPage: computed(() => config.value.currentPage ?? 1),
 		autoPageEnabled: computed(() => config.value.autoPageEnabled),
 		autoPageIntervalMs: computed(() => config.value.autoPageIntervalMs),
-		interactive,
+		rotationAnchor: computed(() => config.value.rotationAnchor),
 		persistPage: (page) => {
-			if (screen.value && eventId.value) {
+			if (interactive.value && screen.value && eventId.value) {
 				void Promise.resolve(
 					screenStore.updateModeConfig(eventId.value, screen.value.id, 'player-history', { currentPage: page }),
+				).catch(() => {});
+			}
+		},
+		persistRotationAnchor: (anchor) => {
+			if (interactive.value && screen.value && eventId.value) {
+				void Promise.resolve(
+					screenStore.updateModeConfig(eventId.value, screen.value.id, 'player-history', { rotationAnchor: anchor }),
 				).catch(() => {});
 			}
 		},
