@@ -105,6 +105,23 @@ describe('players API', () => {
 		expect(player.externalSource).toBeNull();
 	});
 
+	/**
+	 * Until #309 this route handed back the raw database row, so the same Player
+	 * carried Melee's provenance bookkeeping here and carried none of it from
+	 * every other player-returning route. Comparing the two answers pins the
+	 * shape itself rather than a list of field names that a later column would
+	 * silently fall outside of.
+	 */
+	it('returns the same mapped player shape as the single-player route', async () => {
+		const mapped = await $fetch(`/api/events/${eventId}/players/${playerId}`);
+		const { player } = await $fetch(`/api/events/${eventId}/players/${playerId}/match-history`);
+
+		expect(player).toEqual(mapped);
+		expect(player).not.toHaveProperty('externalStatus');
+		expect(player).not.toHaveProperty('isActive');
+		expect(player).not.toHaveProperty('lastSeenAt');
+	});
+
 	it('deletes a player', async () => {
 		// Create a throwaway player
 		const player = await $fetch(`/api/events/${eventId}/players`, {

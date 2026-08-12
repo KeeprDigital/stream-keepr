@@ -38,6 +38,13 @@ declare const installedGraphicsTemplateIdBrand: unique symbol;
 export const DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES = 100 * 1024 * 1024 * 1024;
 export const DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES = 10 * 1024 * 1024 * 1024;
 export const GRAPHIC_ASSET_LIFECYCLE_ACTIONS = ['retire', 'trash', 'restore'] as const;
+/**
+ * The shelves a Graphic Asset can sit on, as a value rather than only a type.
+ * The API's lifecycle filter is a caller-supplied string that has to be checked
+ * against them at runtime, and until #309 every place that checked wrote the
+ * three names out again.
+ */
+export const GRAPHIC_ASSET_LIFECYCLE_STATES = ['active', 'retired', 'trashed'] as const;
 
 export type GraphicAssetId = string & {
 	readonly [graphicAssetIdBrand]: 'GraphicAssetId';
@@ -80,7 +87,7 @@ export interface GraphicAssetUsage {
 	};
 }
 
-export type GraphicAssetLifecycleState = 'active' | 'retired' | 'trashed';
+export type GraphicAssetLifecycleState = typeof GRAPHIC_ASSET_LIFECYCLE_STATES[number];
 export type GraphicAssetLifecycleAction = typeof GRAPHIC_ASSET_LIFECYCLE_ACTIONS[number];
 
 export type GraphicAssetLifecycle

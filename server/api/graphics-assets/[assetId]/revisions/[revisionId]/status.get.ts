@@ -4,6 +4,7 @@ import {
 } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
  * The facts describing one Graphic Asset Revision, without its bytes.
@@ -16,8 +17,13 @@ import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-
  */
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);
-	return await graphicsAssetLibraryForEvent(event).inspectGraphicAssetRevision({
-		assetId: graphicAssetId(getRouterParam(event, 'assetId') ?? ''),
-		revisionId: graphicAssetRevisionId(getRouterParam(event, 'revisionId') ?? ''),
-	});
+	try {
+		return await graphicsAssetLibraryForEvent(event).inspectGraphicAssetRevision({
+			assetId: graphicAssetId(getRouterParam(event, 'assetId') ?? ''),
+			revisionId: graphicAssetRevisionId(getRouterParam(event, 'revisionId') ?? ''),
+		});
+	}
+	catch (error) {
+		return rethrowGraphicsAssetApiError(error, event);
+	}
 });

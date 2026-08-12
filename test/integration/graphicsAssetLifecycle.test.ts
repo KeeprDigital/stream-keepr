@@ -456,4 +456,29 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 			expect(usage).toEqual([expect.objectContaining({ reference })]);
 		}
 	});
+
+	/**
+	 * A lifecycle filter naming a shelf the library does not have is a request
+	 * nobody can answer, and until #309 the listing route cast the caller's
+	 * string straight through — the library classified the refusal correctly and
+	 * the unwrapped handler reported it as a bare 500, which tells a client to
+	 * retry a request that can never succeed.
+	 */
+	it('refuses a lifecycle filter naming a shelf that does not exist', async () => {
+		const response = await fetch(
+			'/api/graphics-assets?lifecycleStates=bogus',
+			{ headers: authorHeaders },
+		);
+
+		expect(response.status).toBe(400);
+	});
+
+	it('refuses an empty lifecycle filter rather than reading it as no filter', async () => {
+		const response = await fetch(
+			'/api/graphics-assets?lifecycleStates=',
+			{ headers: authorHeaders },
+		);
+
+		expect(response.status).toBe(400);
+	});
 });
