@@ -2,8 +2,16 @@ engineStrict: true
 verifyDepsBeforeRun: error
 minimumReleaseAgeExclude:
   - '@antfu/eslint-config@9.2.0'
-  - miniflare@4.20260721.0
-  - wrangler@4.113.0
+  - miniflare@4.20260721.0 || 5.20260804.0-alpha
+  - wrangler@4.113.0 || 4.120.1
+  - '@typescript-eslint/parser@8.67.0'
+  - '@typescript-eslint/project-service@8.67.0'
+  - '@typescript-eslint/scope-manager@8.67.0'
+  - '@typescript-eslint/tsconfig-utils@8.67.0'
+  - '@typescript-eslint/types@8.67.0'
+  - '@typescript-eslint/typescript-estree@8.67.0'
+  - '@typescript-eslint/visitor-keys@8.67.0'
+  - ably@2.27.0
 shamefullyHoist: true
 shellEmulator: true
 
@@ -11,7 +19,6 @@ shellEmulator: true
 trustPolicy: off
 patchedDependencies:
   '@scryfall/api-types@1.0.0-alpha.4': patches/@scryfall__api-types@1.0.0-alpha.4.patch
-  vite-plugin-checker@0.14.4: patches/vite-plugin-checker@0.14.4.patch
 allowBuilds:
   '@parcel/watcher': true
   '@tailwindcss/oxide': true
