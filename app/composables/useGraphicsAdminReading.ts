@@ -64,8 +64,18 @@ export function useGraphicsAdminReading<Reading>(options: {
 		return { 'x-graphics-admin-token': administratorToken.value };
 	}
 
+	/**
+	 * What a failed reading says to the administrator who was watching it.
+	 *
+	 * The sentence the server wrote comes first, because on these surfaces the failure
+	 * met most often is the 403 whose body says 'Graphics Administrator authorization is
+	 * required' — and a `$fetch` failure's own `message` is the transport's line, which
+	 * names the route and not the missing token (#271, #286). `failureSentence` owns which
+	 * bodies may be quoted; a sanitized 5xx writes none, and falls back to that line.
+	 */
 	function describeFailure(caught: unknown, fallback: string) {
-		return caught instanceof Error ? caught.message : fallback;
+		return failureSentence(caught)
+			?? (caught instanceof Error ? caught.message : fallback);
 	}
 
 	function statusOf(caught: unknown) {
