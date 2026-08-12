@@ -34,9 +34,12 @@ export function projectRotationPage(inputs: PageRotationInputs): number {
  * The Rotation Anchor an operator surface writes when a page is manually
  * selected mid-rotation: the chosen page becomes current immediately and
  * holds for one full page duration before rotation continues in order.
+ *
+ * Rounded, because the synchronized clock estimate is an RTT-averaged float
+ * while a stored anchor is an integer timestamp.
  */
 export function rotationAnchorForPage(inputs: { page: number; pageDurationMs: number; now: number }): number {
-	return inputs.now - (inputs.page - 1) * inputs.pageDurationMs;
+	return Math.round(inputs.now - (inputs.page - 1) * inputs.pageDurationMs);
 }
 
 /**

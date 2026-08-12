@@ -52,6 +52,14 @@ describe('page rotation projection', () => {
 		expect(projectRotationPage({ rotationAnchor: anchor, pageDurationMs, totalPages, now: now + 2 * pageDurationMs })).toBe(1);
 	});
 
+	it('mints integer anchors from a fractional clock estimate', () => {
+		// getServerTime() = Date.now() + an RTT-averaged float offset, but the
+		// config schema requires an integer — the anchor must round, not fail.
+		const anchor = rotationAnchorForPage({ page: 2, pageDurationMs: 10_000, now: 500_000.4375 });
+		expect(Number.isInteger(anchor)).toBe(true);
+		expect(anchor).toBe(490_000);
+	});
+
 	it('re-anchoring to page 1 behaves as a rotation restart', () => {
 		const now = 42_000;
 		const anchor = rotationAnchorForPage({ page: 1, pageDurationMs: 10_000, now });

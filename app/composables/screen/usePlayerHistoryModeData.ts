@@ -50,6 +50,13 @@ export function usePlayerHistoryModeData() {
 				).catch(() => {});
 			}
 		},
+		persistRotationAnchor: (anchor) => {
+			if (interactive.value && screen.value && eventId.value) {
+				void Promise.resolve(
+					screenStore.updateModeConfig(eventId.value, screen.value.id, 'player-history', { rotationAnchor: anchor }),
+				).catch(() => {});
+			}
+		},
 	});
 
 	async function load() {

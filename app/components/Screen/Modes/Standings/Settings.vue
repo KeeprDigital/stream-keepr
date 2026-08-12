@@ -3,8 +3,7 @@ import type { RevealOrder, StandingsViewMode } from '~~/shared/types/enums';
 import type { StandingsColumnConfig, StandingsModeConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import { VueDraggable } from 'vue-draggable-plus';
-import { rotationAnchorForPage } from '~~/shared/modules/page-rotation';
-import { useProjectedRotationPage } from '~/modules/screen-mode/pagination';
+import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 const props = defineProps<{
 	screen: Screen;
@@ -161,18 +160,14 @@ const totalPages = computed(() =>
 	Math.max(1, Math.ceil(estimatedRowCount.value / config.value.rowsPerPage)),
 );
 
-// The live Page Rotation projection — the same page every rendering shows.
-const { getServerTime } = useServerTime();
-const rotationPage = useProjectedRotationPage({
-	autoPageEnabled: computed(() => config.value.autoPageEnabled),
-	autoPageIntervalMs: computed(() => config.value.autoPageIntervalMs),
-	rotationAnchor: computed(() => config.value.rotationAnchor),
-	totalPages,
-});
-
-const currentPage = computed(() =>
-	Math.min(rotationPage.value ?? config.value.currentPage ?? 1, totalPages.value),
-);
+// The live Page Rotation projection and the anchor writes an operator makes.
+const {
+	currentPage,
+	setAutoPageEnabled,
+	updateRotationShape,
+	adminNextPage,
+	adminPrevPage,
+} = useRotationConfigWrites({ config, totalPages, updateConfig });
 
 const modeSettingsLabel = computed(() => {
 	switch (config.value.viewMode) {
@@ -188,42 +183,6 @@ const modeSettingsLabel = computed(() => {
 			return '';
 	}
 });
-
-// Enabling auto-page and edits that change the rotation's shape re-anchor the
-// rotation so it restarts predictably from the first page.
-function setAutoPageEnabled(enabled: boolean) {
-	updateConfig(enabled
-		? { autoPageEnabled: true, rotationAnchor: getServerTime() }
-		: { autoPageEnabled: false });
-}
-
-function updateRotationShape(patch: Partial<StandingsModeConfig>) {
-	updateConfig(config.value.autoPageEnabled ? { ...patch, rotationAnchor: getServerTime() } : patch);
-}
-
-// A manual selection while the rotation runs re-anchors it — the chosen page
-// becomes current everywhere and holds a full duration. With auto-page off it
-// persists the page exactly as before.
-function adminSetPage(page: number) {
-	if (config.value.autoPageEnabled) {
-		updateConfig({ rotationAnchor: rotationAnchorForPage({
-			page,
-			pageDurationMs: config.value.autoPageIntervalMs,
-			now: getServerTime(),
-		}) });
-	}
-	else {
-		updateConfig({ currentPage: page });
-	}
-}
-
-function adminNextPage() {
-	adminSetPage(currentPage.value < totalPages.value ? currentPage.value + 1 : 1);
-}
-
-function adminPrevPage() {
-	adminSetPage(currentPage.value > 1 ? currentPage.value - 1 : totalPages.value);
-}
 </script>
 
 <template>
