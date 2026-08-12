@@ -1,4 +1,5 @@
 import type { DbScreen } from '~~/server/db/schema';
+import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicAssetReferencingScreenMode,
 	ScreenGraphicAssetReference,
@@ -16,33 +17,132 @@ import {
 	screenModeGraphicAssetReferences,
 } from '~~/shared/utils/graphicsAssetReferences';
 
-const GRAPHIC_ASSET_REFERENCE_SQL_PREDICATE = `
-	AND (asset.lifecycle_state = 'active' OR ? = 1)
-	AND asset.kind = ?
-	AND (
-		? != 'silent-video'
-		OR json_extract(revision.technical_facts, '$.targetCompatibility') = ?
-	)
-	AND (
-		COALESCE(?, '') != 'chromium-transparency'
-		OR ? = 'chromium'
-	)
-`;
-
-function graphicAssetReferencePredicateBindings(input: {
+/** Everything the resolution rule below asks about one Graphic Asset Reference. */
+interface GraphicAssetReferenceFacts {
+	reference: GraphicAssetReference;
 	allowRetired: boolean;
 	kind: 'image' | 'silent-video' | 'font';
 	videoCompatibility?: 'all-supported' | 'chromium-transparency';
 	videoTarget?: 'chromium' | 'safari';
-}) {
+}
+
+/**
+ * Whether one Graphic Asset Reference resolves, as the `FROM … WHERE` tail of a
+ * statement about the revision it names: the revision exists on the asset it
+ * claims, the asset is still selectable, its kind is the one the configuration
+ * expects, and a silent video's pinned target compatibility is the one the
+ * reference was recorded against.
+ *
+ * Written against expressions rather than placeholders because the same rule is
+ * asked in two shapes. Each index insert asks it about one reference with that
+ * reference's facts bound as parameters; the configuration write asks it about
+ * every reference at once, reading their facts out of a single bound JSON array.
+ * Spelling it twice is how a retirement or compatibility rule comes to hold on the
+ * insert and not on the precondition that admits it — which would be invisible,
+ * because both statements ride in the same batch and only the precondition decides
+ * whether the configuration commits.
+ */
+function resolvedGraphicAssetRevision(fact: {
+	revisionId: string;
+	assetId: string;
+	allowRetired: string;
+	kind: string;
+	videoCompatibility: string;
+	videoTarget: string;
+}): string {
+	return `
+		FROM graphic_asset_revisions revision
+		JOIN graphic_assets asset ON asset.id = revision.asset_id
+			WHERE revision.id = ${fact.revisionId} AND revision.asset_id = ${fact.assetId}
+				AND (asset.lifecycle_state = 'active' OR ${fact.allowRetired} = 1)
+				AND asset.kind = ${fact.kind}
+				AND (
+					${fact.kind} != 'silent-video'
+					OR json_extract(revision.technical_facts, '$.targetCompatibility') = ${fact.videoCompatibility}
+				)
+				AND (
+					COALESCE(${fact.videoCompatibility}, '') != 'chromium-transparency'
+					OR ${fact.videoTarget} = 'chromium'
+				)
+	`;
+}
+
+/**
+ * The rule about one reference whose facts are bound as parameters, in the order
+ * `graphicAssetReferenceBindings` produces them.
+ *
+ * The order is stated in one place and read in the other, so a fact added to the
+ * rule cannot silently shift every later placeholder onto the wrong value.
+ */
+const BOUND_GRAPHIC_ASSET_REFERENCE_RESOLUTION = resolvedGraphicAssetRevision({
+	revisionId: '?',
+	assetId: '?',
+	allowRetired: '?',
+	kind: '?',
+	videoCompatibility: '?',
+	videoTarget: '?',
+});
+
+function graphicAssetReferenceBindings(fact: GraphicAssetReferenceFacts) {
 	return [
-		input.allowRetired ? 1 : 0,
-		input.kind,
-		input.kind,
-		input.videoCompatibility ?? null,
-		input.videoCompatibility ?? null,
-		input.videoTarget ?? null,
+		fact.reference.revisionId,
+		fact.reference.assetId,
+		fact.allowRetired ? 1 : 0,
+		fact.kind,
+		fact.kind,
+		fact.videoCompatibility ?? null,
+		fact.videoCompatibility ?? null,
+		fact.videoTarget ?? null,
 	] as const;
+}
+
+/**
+ * The same rule asked of every reference at once, out of one bound JSON array.
+ *
+ * A configuration's references are as many as the show needs — a Broadcast
+ * Graphics Screen may carry hundreds of Graphic Items, each able to pin media and
+ * a font — and D1 binds at most a hundred parameters per statement. Bound one
+ * placeholder per fact this precondition cost eight parameters per reference and
+ * failed the whole save at twelve of them, permanently, until an author removed
+ * references (#303). Read out of a single bound array it costs one parameter
+ * whatever the configuration holds, so the count decides nothing.
+ *
+ * Stated as "no required reference fails to resolve" rather than as a count, so a
+ * single unresolvable reference among hundreds still refuses the save — which is
+ * the compare-and-swap guarantee the encoding exists to keep, not to trade away.
+ *
+ * `server/modules/graphics-asset-library/catalogue-sql.ts` takes the same escape
+ * for lists of scalars and carries the reasoning at length; this one carries a
+ * list of records, so it reads fields out of each element rather than the element
+ * itself.
+ */
+const REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE = `
+	AND NOT EXISTS (
+		SELECT 1 FROM json_each(?) AS required
+		WHERE NOT EXISTS (
+			SELECT 1
+			${resolvedGraphicAssetRevision({
+				revisionId: `json_extract(required.value, '$.revisionId')`,
+				assetId: `json_extract(required.value, '$.assetId')`,
+				allowRetired: `json_extract(required.value, '$.allowRetired')`,
+				kind: `json_extract(required.value, '$.kind')`,
+				videoCompatibility: `json_extract(required.value, '$.videoCompatibility')`,
+				videoTarget: `json_extract(required.value, '$.videoTarget')`,
+			})}
+		)
+	)
+`;
+
+/** The bind value for `REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE`. */
+function boundGraphicAssetReferenceFacts(facts: readonly GraphicAssetReferenceFacts[]): string {
+	return JSON.stringify(facts.map(fact => ({
+		revisionId: fact.reference.revisionId,
+		assetId: fact.reference.assetId,
+		allowRetired: fact.allowRetired ? 1 : 0,
+		kind: fact.kind,
+		videoCompatibility: fact.videoCompatibility ?? null,
+		videoTarget: fact.videoTarget ?? null,
+	})));
 }
 
 async function findScreen(id: number, eventId: number): Promise<DbScreen | undefined> {
@@ -133,31 +233,6 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 			allowRetired: sameGraphicAssetReference(previous, item.reference),
 		};
 	});
-	const referencePreconditions = indexedReferences.map(() => `
-		AND EXISTS (
-			SELECT 1
-			FROM graphic_asset_revisions revision
-			JOIN graphic_assets asset ON asset.id = revision.asset_id
-				WHERE revision.id = ? AND revision.asset_id = ?
-					${GRAPHIC_ASSET_REFERENCE_SQL_PREDICATE}
-			)
-		`).join('');
-	const referencePreconditionBindings = indexedReferences.flatMap(({
-		reference,
-		allowRetired,
-		kind,
-		videoCompatibility,
-		videoTarget,
-	}) => [
-		reference.revisionId,
-		reference.assetId,
-		...graphicAssetReferencePredicateBindings({
-			allowRetired,
-			kind,
-			videoCompatibility,
-			videoTarget,
-		}),
-	]);
 	const client = db.$client;
 	const statements: D1PreparedStatement[] = [
 		client.prepare(`
@@ -165,7 +240,7 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 			SET mode_configs = ?, state_version = state_version + 1,
 				graphic_asset_reference_version = ?, updated_at = ?
 			WHERE id = ? AND event_id = ? AND state_version = ?
-				${referencePreconditions}
+				${REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE}
 		`).bind(
 			JSON.stringify(mergedConfigs),
 			referenceVersion,
@@ -173,7 +248,7 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 			input.id,
 			input.eventId,
 			expectedVersion,
-			...referencePreconditionBindings,
+			boundGraphicAssetReferenceFacts(indexedReferences),
 		),
 		// Scoped to this mode's own owner-slot namespace. A Screen may hold a
 		// configuration for every mode at once, so an unscoped delete would clear
@@ -195,45 +270,28 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 			input.eventId,
 			referenceVersion,
 		),
-		...indexedReferences.map(({
-			reference,
-			ownerSlot,
-			allowRetired,
-			kind,
-			videoCompatibility,
-			videoTarget,
-		}) => client.prepare(`
+		...indexedReferences.map(fact => client.prepare(`
 			INSERT INTO graphic_asset_references (
 				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
 				event_id, created_at, updated_at
 			)
 			SELECT ?, ?, ?, 'screen', ?, ?, ?, ?, ?
-			FROM graphic_asset_revisions revision
-			JOIN graphic_assets asset ON asset.id = revision.asset_id
-				WHERE revision.id = ? AND revision.asset_id = ?
-					${GRAPHIC_ASSET_REFERENCE_SQL_PREDICATE}
-					AND EXISTS (
+			${BOUND_GRAPHIC_ASSET_REFERENCE_RESOLUTION}
+				AND EXISTS (
 					SELECT 1 FROM screens
 					WHERE id = ? AND event_id = ?
 						AND graphic_asset_reference_version = ?
 				)
 		`).bind(
 			crypto.randomUUID(),
-			reference.assetId,
-			reference.revisionId,
+			fact.reference.assetId,
+			fact.reference.revisionId,
 			String(input.id),
-			ownerSlot,
+			fact.ownerSlot,
 			input.eventId,
 			now,
 			now,
-			reference.revisionId,
-			reference.assetId,
-			...graphicAssetReferencePredicateBindings({
-				allowRetired,
-				kind,
-				videoCompatibility,
-				videoTarget,
-			}),
+			...graphicAssetReferenceBindings(fact),
 			input.id,
 			input.eventId,
 			referenceVersion,
@@ -244,7 +302,16 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 		const current = await findScreen(input.id, input.eventId);
 		if (!current)
 			return undefined;
-		throw new StateConflictError('Screen', input.id);
+		// Which of the two guards refused it, told apart so the operator is not
+		// pointed at a retry that can never succeed. The version guard is the only
+		// other clause in the statement, so a version that still stands means a
+		// reference stopped resolving — a retirement or a purge under the author's
+		// read — and that is a different conflict from a concurrent Screen edit,
+		// which the client's own reload-and-restate does converge on. Both are 409;
+		// only one of them is worth restating.
+		throw current.stateVersion === expectedVersion
+			? new StateConflictError('Graphic Asset Reference', input.id)
+			: new StateConflictError('Screen', input.id);
 	}
 	return await findScreen(input.id, input.eventId);
 }
@@ -325,11 +392,8 @@ export async function updateBroadcastGraphicsLiveSessionGraphicAssetReferences(i
 				event_id, created_at, updated_at
 			)
 			SELECT ?, ?, ?, 'screen', ?, ?, ?, ?, ?
-			FROM graphic_asset_revisions revision
-			JOIN graphic_assets asset ON asset.id = revision.asset_id
-				WHERE revision.id = ? AND revision.asset_id = ?
-					${GRAPHIC_ASSET_REFERENCE_SQL_PREDICATE}
-					${sessionGuard}
+			${BOUND_GRAPHIC_ASSET_REFERENCE_RESOLUTION}
+				${sessionGuard}
 		`).bind(
 			crypto.randomUUID(),
 			item.reference.assetId,
@@ -339,9 +403,8 @@ export async function updateBroadcastGraphicsLiveSessionGraphicAssetReferences(i
 			input.eventId,
 			now,
 			now,
-			item.reference.revisionId,
-			item.reference.assetId,
-			...graphicAssetReferencePredicateBindings({
+			...graphicAssetReferenceBindings({
+				reference: item.reference,
 				allowRetired: sameGraphicAssetReference(previousBySlot.get(item.ownerSlot), item.reference),
 				kind: item.kind,
 				videoCompatibility: item.videoCompatibility,
