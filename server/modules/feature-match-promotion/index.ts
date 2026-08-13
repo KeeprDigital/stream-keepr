@@ -81,7 +81,7 @@ export function featureMatchPromotionModule() {
 		// with intermediate session CAS that cannot compose into the batch, and a
 		// failure here leaves a consistent promotion (the Session simply keeps the
 		// Match's embedded snapshot until the next player update).
-		await playerFeatureMatchSyncService().syncMatchesFromPlayers(
+		await playerFeatureMatchSyncService().syncMatchesFromPlayersAfterCommit(
 			eventId,
 			[match.player1Id, match.player2Id].filter((playerId): playerId is number => playerId != null),
 		);

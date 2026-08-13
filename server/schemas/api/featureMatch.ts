@@ -8,6 +8,7 @@ import {
 	PLAYER_SIDE_VALUES,
 	RESET_TYPE_VALUES,
 } from '~~/shared/types/enums';
+import { isMergeableFeatureMatchCommand } from '~~/shared/types/featureMatchSession';
 import { playerGameDataSchema } from './player';
 
 function blankStringToNull(value: unknown) {
@@ -383,9 +384,12 @@ export const featureMatchCommandSchema = z.discriminatedUnion('type', [
 		})
 		.strict(),
 ]).superRefine((command, context) => {
-	// Mergeable deltas can be safely retried against the latest projection.
+	// A mergeable command can be safely retried against the latest projection.
 	// Every other command must identify the exact projection it was based on.
-	if (!['AdjustLife', 'AdjustClock', 'StepTurn', 'StepOvertime'].includes(command.type)
+	// Asked of the shared merge policy rather than a second list, so the two
+	// cannot drift; the server-only command that policy also admits is absent
+	// from the union above and unreachable here.
+	if (!isMergeableFeatureMatchCommand(command.type)
 		&& command.baseSequence === undefined) {
 		context.addIssue({
 			code: 'custom',

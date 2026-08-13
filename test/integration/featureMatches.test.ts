@@ -240,6 +240,80 @@ describe('feature match slots API', () => {
 		expect(rowsForSlotB[0]).toMatchObject({ matchId: matchB.id });
 	});
 
+	it('keeps a Player rename and a concurrent operator command from cancelling each other', async () => {
+		const player = await $fetch(`/api/events/${eventId}/players`, {
+			method: 'POST',
+			body: { name: 'Ivy Original' },
+		});
+		const seatedMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: {
+				roundId,
+				tableNumber: 88,
+				player1Id: player.id,
+				player1Data: { name: 'Ivy Original' },
+				player2Data: { name: 'Jed' },
+			},
+		});
+		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
+			method: 'POST',
+			body: { bestOf: 3 },
+		});
+		const promoted = await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: seatedMatch.id },
+		});
+		const session = promoted.promotedSlot.activeSession!;
+
+		// The rename's reverse sync corrects this Session's frozen snapshot while
+		// the operator's command advances the same Session's projection. Neither
+		// claims what the other claims, so both must survive — and the rename must
+		// not be answered with a conflict for a Player row it already committed.
+		const renaming = $fetchRaw(`/api/events/${eventId}/players/${player.id}`, {
+			method: 'PATCH',
+			body: { name: 'Ivy Renamed' },
+		});
+		// Commanded continuously for as long as the rename is in flight, rather than
+		// as one simultaneous burst: the reverse sync is the last thing the rename
+		// does, so a burst fired alongside it is over before the Session is touched.
+		// Racing the rename against an already-resolved marker asks whether it has
+		// finished without waiting for it.
+		const inFlight = Symbol('rename in flight');
+		const commands: { status: number }[] = [];
+		const maxTicks = 200;
+		let renameProgress: unknown;
+		do {
+			commands.push(await $fetchRaw(
+				`/api/events/${eventId}/feature-match-sessions/${session.id}/commands`,
+				{
+					method: 'POST',
+					body: {
+						commandId: `rename-race:${session.id}:${commands.length}`,
+						type: 'AdjustLife',
+						payload: { player: 'player1', delta: -1 },
+					},
+				},
+			));
+			renameProgress = await Promise.race([renaming, Promise.resolve(inFlight)]);
+		} while (renameProgress === inFlight && commands.length < maxTicks);
+		const renamed = await renaming;
+
+		// The rename committed a Player row, so it may not be answered with a
+		// conflict whatever the Session did meanwhile.
+		expect(renamed.status).toBe(200);
+		// Some ticks lose their own race against each other and are told so; that is
+		// the operator command policy and not what this test is about. What matters
+		// is that every tick answered with success is in the projection, and the
+		// rename is in the snapshot — neither erased the other.
+		const accepted = commands.filter(command => command.status === 200).length;
+		expect(accepted).toBeGreaterThan(0);
+
+		const startingLife = session.currentState.player1.lifeTotal;
+		const refreshed = await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}`);
+		expect(refreshed.activeSession!.currentState.player1.lifeTotal).toBe(startingLife - accepted);
+		expect(refreshed.activeSession!.sourceSnapshot.player1.data!.name).toBe('Ivy Renamed');
+	});
+
 	it('clears empty player metadata to null', async () => {
 		const updated = await $fetch(`/api/events/${eventId}/feature-match-slots/${matchId}/setup`, {
 			method: 'PATCH',

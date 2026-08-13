@@ -18,6 +18,7 @@ const mockFeatureMatchStateService = {
 };
 const mockPlayerFeatureMatchSyncService = {
 	syncMatchesFromPlayers: vi.fn(),
+	syncMatchesFromPlayersAfterCommit: vi.fn(),
 };
 const mockBatch = vi.fn();
 const mockPublishMessage = vi.fn();
@@ -110,7 +111,7 @@ describe('feature Match Slot Promotion server module', () => {
 		mockFeatureMatchStateService.buildCreateSessionForSlotQueries.mockResolvedValue({ queries: ['session-q'] });
 		mockBuildUpsertAssignmentQueries.mockReturnValue(['assignment-del', 'assignment-ins']);
 		mockBatch.mockResolvedValue([]);
-		mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers.mockResolvedValue([]);
+		mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit.mockResolvedValue([]);
 	});
 
 	it('persists the promotion as one atomic batch, then reverse-syncs and publishes', async () => {
@@ -163,9 +164,9 @@ describe('feature Match Slot Promotion server module', () => {
 		]);
 
 		// Reverse-sync and the Assignment re-read happen only after the batch commits.
-		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers).toHaveBeenCalledWith(1, [101, 102]);
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).toHaveBeenCalledWith(1, [101, 102]);
 		expect(mockBatch.mock.invocationCallOrder[0]).toBeLessThan(
-			mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers.mock.invocationCallOrder[0]!,
+			mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit.mock.invocationCallOrder[0]!,
 		);
 		expect(mockFeatureMatchAssignmentService.findByRoundAndSlot).toHaveBeenCalledWith(1, 3, 2);
 
@@ -229,5 +230,27 @@ describe('feature Match Slot Promotion server module', () => {
 			statusCode: 500,
 			message: 'Failed to retrieve updated feature match slot',
 		});
+	});
+
+	function stagePromotion() {
+		mockMatchService.findById.mockResolvedValue(createMatch());
+		mockFeatureMatchService.findById
+			.mockResolvedValueOnce(createFeatureMatch({ id: 2, matchId: null }))
+			.mockResolvedValue(createFeatureMatch({ id: 2, matchId: 7 }));
+		mockBuildMatchPromotionPlan.mockResolvedValue({
+			clearedSlots: [],
+			promotedSlot: createFeatureMatch({ id: 2, matchId: 7 }),
+			queries: ['promote-q'],
+		});
+		mockFeatureMatchAssignmentService.findByRoundAndSlot.mockResolvedValue({ id: 9 });
+	}
+
+	it('reverse-syncs through the post-commit form, so a lost Session race cannot fail a committed promotion', async () => {
+		stagePromotion();
+
+		await featureMatchPromotionModule().promoteMatchToSlot({ eventId: 1, slotId: 2, matchId: 7 });
+
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).toHaveBeenCalledWith(1, [101, 102]);
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers).not.toHaveBeenCalled();
 	});
 });

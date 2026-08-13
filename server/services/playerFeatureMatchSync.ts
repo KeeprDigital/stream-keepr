@@ -5,6 +5,7 @@ import { db } from 'hub:db';
 import { archetypes, featureMatches, matches, phases, playerDecks, players, rounds } from '~~/server/db/schema';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
 import { chunkJsonRows } from '~~/server/utils/db';
+import { isStateConflictFailure } from '~~/server/utils/errors';
 import { applyMatchDeckSnapshot, selectMatchDeck } from '~~/server/utils/matchDeckSelection';
 import { randomCommandId } from '~~/shared/utils/uuid';
 
@@ -295,7 +296,41 @@ export function playerFeatureMatchSyncService() {
 		return updatedMatchIds;
 	}
 
+	/**
+	 * The reverse sync as a post-commit follow-on, for callers whose own write is
+	 * already durable.
+	 *
+	 * Such a caller cannot answer a lost Session race with a failure: its write
+	 * committed, so a `409` tells the client to retry something that already
+	 * happened, and skipping the caller's own publications leaves every peer
+	 * stale until a reload. A race is therefore logged and absorbed here, and the
+	 * caller goes on to publish. Nothing is silently dropped by doing so — the
+	 * strict form leaves the durable Slot rows at their previous snapshot when a
+	 * Session correction fails, so the same delta is still there for the next
+	 * pass to detect.
+	 *
+	 * Only races are absorbed. A fault still propagates, because a caller that
+	 * cannot write its Slot snapshots at all is not a caller that should answer
+	 * with success.
+	 */
+	async function syncMatchesFromPlayersAfterCommit(eventId: number, playerIds: number[]): Promise<number[]> {
+		try {
+			return await syncMatchesFromPlayers(eventId, playerIds);
+		}
+		catch (error) {
+			if (!isStateConflictFailure(error))
+				throw error;
+			console.error(JSON.stringify({
+				message: 'feature_match_reverse_sync_conflict',
+				eventId,
+				playerCount: new Set(playerIds).size,
+			}));
+			return [];
+		}
+	}
+
 	return {
 		syncMatchesFromPlayers,
+		syncMatchesFromPlayersAfterCommit,
 	};
 }

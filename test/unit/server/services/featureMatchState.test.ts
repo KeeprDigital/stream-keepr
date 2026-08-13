@@ -506,6 +506,72 @@ describe('feature match session state service', () => {
 		expect(getChain('insert').values).not.toHaveBeenCalled();
 	});
 
+	it('re-reduces a snapshot correction onto a session an operator advanced under it', async () => {
+		const session = createDbSession({ sequence: 3, slotId: 5 });
+		const advanced = createDbSession({
+			sequence: 4,
+			slotId: 5,
+			currentState: reduce(session.currentState, session.sourceSnapshot, 'AdjustLife', { player: 'player1', delta: -5 }).currentState,
+		});
+		const corrected = createSnapshot({
+			slotId: 5,
+			player1: { playerId: 1, data: { name: 'Renamed Alice' } },
+		});
+		const committed = createDbSession({
+			sequence: 5,
+			slotId: 5,
+			currentState: advanced.currentState,
+			sourceSnapshot: corrected,
+		});
+		mockDb.query.featureMatchSessions.findFirst
+			.mockResolvedValueOnce(session)
+			.mockResolvedValueOnce(advanced);
+		mockDb.batch
+			.mockResolvedValueOnce([undefined, []])
+			.mockResolvedValueOnce([undefined, [committed]]);
+
+		const result = await featureMatchStateService().applyCommand(10, 1, {
+			commandId: 'cmd-snapshot-merge',
+			type: 'SnapshotCorrected',
+			payload: { sourceSnapshot: corrected },
+			baseSequence: 3,
+		});
+
+		// Both survive: the operator's life tick is still in the projection the
+		// correction was re-reduced onto, and the rename reached the snapshot.
+		expect(result.sequence).toBe(5);
+		expect(result.sourceSnapshot.player1.data?.name).toBe('Renamed Alice');
+		expect(result.currentState.player1.lifeTotal).toBe(advanced.currentState.player1.lifeTotal);
+		expect(mockDb.batch).toHaveBeenCalledTimes(2);
+	});
+
+	it('applies a reverse-sync command to the session that won a concurrent open, not the one it inserted', async () => {
+		const slot = createSlot({ id: 7, activeSessionId: null });
+		const stranded = createDbSession({ id: 30, slotId: 7, sequence: 1 });
+		const winner = createDbSession({ id: 31, slotId: 7, sequence: 1 });
+		mockDb.query.featureMatches.findFirst
+			.mockResolvedValueOnce(slot)
+			.mockResolvedValueOnce(slot)
+			.mockResolvedValue({ ...slot, activeSessionId: winner.id });
+		mockDb.query.featureMatchSessions.findFirst
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValue(winner);
+		mockDb.batch
+			.mockResolvedValueOnce([[], [stranded], [], []])
+			.mockResolvedValueOnce([[], [], [createDbSession({ id: 31, slotId: 7, sequence: 2 })]]);
+
+		const createCommand = vi.fn((session: DbFeatureMatchSession) => ({
+			commandId: 'cmd-reverse-sync',
+			type: 'SnapshotCorrected' as const,
+			payload: { sourceSnapshot: createSnapshot({ slotId: 7 }) },
+			baseSequence: session.sequence,
+		}));
+		const result = await featureMatchStateService().applyCommandToActiveSession(7, 1, createCommand);
+
+		expect(createCommand).toHaveBeenCalledWith(expect.objectContaining({ id: winner.id }));
+		expect(result?.sessionId).toBe(winner.id);
+	});
+
 	describe('post-commit publication', () => {
 		function stageSuccessfulCommit(): DbFeatureMatchSession {
 			const session = createDbSession({ sequence: 3 });

@@ -325,6 +325,40 @@ describe('playerFeatureMatchSyncService', () => {
 			});
 		});
 
+		describe('as a post-commit follow-on', () => {
+			it('absorbs a lost Session race and says so, leaving the delta for the next pass', async () => {
+				const conflict = new Error('Feature match session has advanced') as Error & { statusCode: number };
+				conflict.statusCode = 409;
+				mockRefreshReads({
+					matches: [{ id: 1, eventId: 1, player1Id: 1, player2Id: null }],
+					players: [createMockPlayer({ id: 1, name: 'Renamed Player' })],
+				});
+				mockFeatureMatchStateService.applyCommandToActiveSession.mockRejectedValueOnce(conflict);
+				const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+				await expect(
+					playerFeatureMatchSyncService().syncMatchesFromPlayersAfterCommit(1, [1]),
+				).resolves.toEqual([]);
+
+				expect(logged).toHaveBeenCalledWith(expect.stringContaining('feature_match_reverse_sync_conflict'));
+				expect(mockDb.batch).not.toHaveBeenCalled();
+				logged.mockRestore();
+			});
+
+			it('still fails on a fault, which is not a race the caller may absorb', async () => {
+				mockRefreshReads({
+					matches: [{ id: 1, eventId: 1, player1Id: 1, player2Id: null }],
+					players: [createMockPlayer({ id: 1, name: 'Renamed Player' })],
+				});
+				mockFeatureMatchStateService.applyCommandToActiveSession
+					.mockRejectedValueOnce(new Error('D1_ERROR: no such table: feature_match_sessions'));
+
+				await expect(
+					playerFeatureMatchSyncService().syncMatchesFromPlayersAfterCommit(1, [1]),
+				).rejects.toThrow('no such table');
+			});
+		});
+
 		it('leaves slot snapshots retryable when active-session correction fails', async () => {
 			const readOptions = {
 				matches: [{ id: 1, eventId: 1, player1Id: 1, player2Id: null }],
