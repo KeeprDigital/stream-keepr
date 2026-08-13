@@ -128,9 +128,18 @@ export interface RouteRefusal {
  * 404s — would otherwise inherit this list and read its own legitimate refusals as a
  * fabricated key. Making the caller name its route's refusals keeps that structural
  * instead of documentary.
+ *
+ * 'Event not found' is the route's refusal as surely as 'Screen not found' is, even
+ * though the route file does not raise it: Nitro composes `server/middleware/event-exists.ts`
+ * around every `/api/events/:id/**` request, and it answers 404 for an Event that is not
+ * there. #292 made the scan see it; listing it is what stops a fixture that never
+ * inserted the Event from being answered with "check your Ably key". The narrow reading
+ * matters — 404 only. A 401 or 403 carrying those same words is nothing this route says,
+ * and stays diagnosed.
  */
 export const SCREEN_COMMAND_ROUTE_REFUSALS: readonly RouteRefusal[] = [
 	{ statusCode: 404, message: 'Screen not found' },
+	{ statusCode: 404, message: 'Event not found' },
 ];
 
 /** Nitro's own miss, when no handler matched: a renamed route, not a rejected key. */

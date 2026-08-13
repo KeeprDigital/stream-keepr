@@ -16,6 +16,12 @@ function isPublishFailureLine(call: unknown[]): boolean {
 	return typeof line === 'string' && line.includes('"message":"realtime_publish_failed"');
 }
 
+/** The size diagnostic, told apart from the failure line the same way. */
+function isOversizedLine(call: unknown[]): boolean {
+	const [line] = call;
+	return typeof line === 'string' && line.includes('"message":"realtime_publish_oversized"');
+}
+
 /** The failure line as it was written, for assertions about the text itself. */
 function loggedLine(spy: ReturnType<typeof vi.spyOn>): string {
 	const [line] = lastCallTo(spy, isPublishFailureLine);
@@ -392,8 +398,24 @@ describe('oversized realtime messages', () => {
 		return { eventId: 1, reason: 'x'.repeat(MAX_REALTIME_MESSAGE_BYTES) } as never;
 	}
 
+	/** Every line the spy recorded, parsed — for the assertion about the whole list. */
 	function loggedMessages(spy: ReturnType<typeof vi.spyOn>) {
 		return spy.mock.calls.map(([entry]: unknown[]) => JSON.parse(entry as string));
+	}
+
+	/**
+	 * The oversize line, selected by name the way `loggedFields` selects the failure one.
+	 *
+	 * #300: the reads below were `loggedMessages(spy)[0]`, which on a run that logged
+	 * nothing indexes past the end of a mapped array and dies as `TypeError: Cannot read
+	 * properties of undefined` — naming neither the spy nor the expectation, in a file
+	 * where the interesting failure is precisely "the diagnostic did not fire". That is
+	 * #273/#280's defect exactly, but written without the `!` those tickets swept for,
+	 * so the sweep could not see it. Index-after-map is the shape that hides from it.
+	 */
+	function oversizedFields(spy: ReturnType<typeof vi.spyOn>) {
+		const [line] = lastCallTo(spy, isOversizedLine);
+		return JSON.parse(line as string);
 	}
 
 	beforeEach(() => {
@@ -418,7 +440,7 @@ describe('oversized realtime messages', () => {
 			bytes: expect.any(Number),
 			limit: MAX_REALTIME_MESSAGE_BYTES,
 		}]);
-		expect(loggedMessages(errorSpy)[0].bytes).toBeGreaterThan(MAX_REALTIME_MESSAGE_BYTES);
+		expect(oversizedFields(errorSpy).bytes).toBeGreaterThan(MAX_REALTIME_MESSAGE_BYTES);
 		// Reported, not refused: the write has committed and this is a documented
 		// floor rather than this account's confirmed ceiling.
 		expect(mockPublish).toHaveBeenCalledOnce();
@@ -442,7 +464,7 @@ describe('oversized realtime messages', () => {
 
 		await publishMessageStrict(1, 'melee:dataReset', oversizedPayload(), 'conn-123');
 
-		expect(loggedMessages(errorSpy)[0]).toMatchObject({
+		expect(oversizedFields(errorSpy)).toMatchObject({
 			message: 'realtime_publish_oversized',
 			messageType: 'melee:dataReset',
 		});
