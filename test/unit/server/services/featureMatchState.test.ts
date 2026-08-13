@@ -241,6 +241,42 @@ describe('feature match session reducer', () => {
 		expect(result.sourceSnapshot.player2.data?.name).toBe('Alice');
 	});
 
+	it('keeps a swapped session swapped when a correction rebuilt from the slot arrives', () => {
+		const swapped = reduce(createInitialFeatureMatchState(), createSnapshot(), 'SwapPlayers', {});
+		// A correction is built by `buildSourceSnapshot` from the Slot row, which
+		// carries no record of the swap — so it always arrives in Slot order.
+		const rebuiltFromSlot = createSnapshot({ tableNumber: 20 });
+
+		const result = reduce(swapped.currentState, swapped.sourceSnapshot, 'SnapshotCorrected', { sourceSnapshot: rebuiltFromSlot });
+
+		// The correction's own facts land, and the sides the operator chose survive
+		// it. Taking the rebuild verbatim pairs Alice's name with Bob's life total.
+		expect(result.sourceSnapshot.tableNumber).toBe(20);
+		expect(result.sourceSnapshot.player1.data?.name).toBe('Bob');
+		expect(result.sourceSnapshot.player2.data?.name).toBe('Alice');
+		expect(result.currentState).toEqual(swapped.currentState);
+	});
+
+	it('leaves an unswapped session in slot order when a correction arrives', () => {
+		const snapshot = createSnapshot();
+		const rebuiltFromSlot = createSnapshot({ tableNumber: 20 });
+
+		const result = reduce(createInitialFeatureMatchState(), snapshot, 'SnapshotCorrected', { sourceSnapshot: rebuiltFromSlot });
+
+		expect(result.sourceSnapshot.player1.data?.name).toBe('Alice');
+		expect(result.sourceSnapshot.player2.data?.name).toBe('Bob');
+	});
+
+	it('returns a twice-swapped session to slot order across a correction', () => {
+		const once = reduce(createInitialFeatureMatchState(), createSnapshot(), 'SwapPlayers', {});
+		const twice = reduce(once.currentState, once.sourceSnapshot, 'SwapPlayers', {});
+
+		const result = reduce(twice.currentState, twice.sourceSnapshot, 'SnapshotCorrected', { sourceSnapshot: createSnapshot() });
+
+		expect(result.sourceSnapshot.player1.data?.name).toBe('Alice');
+		expect(result.sourceSnapshot.player2.data?.name).toBe('Bob');
+	});
+
 	it('replays an event stream to the same projection', () => {
 		const snapshot = createSnapshot();
 		const started = createInitialFeatureMatchState();
@@ -421,6 +457,26 @@ describe('feature match session state service', () => {
 		expect(getChain('delete').where).toHaveBeenCalledOnce();
 		expect(mockDb.batch).toHaveBeenCalledOnce();
 		expect(mockDb.batch.mock.calls[0]?.[0]).toHaveLength(4);
+	});
+
+	it('answers an open with the Session the Slot ended up owning, not the one it inserted', async () => {
+		const slot = createSlot({ id: 7, activeSessionId: null });
+		const stranded = createDbSession({ id: 30, slotId: 7, sequence: 1 });
+		const winner = createDbSession({ id: 31, slotId: 7, sequence: 1 });
+		// The Slot is read unowned, and by the time this open has committed a
+		// concurrent open has closed the row this one inserted and taken the Slot.
+		mockDb.query.featureMatches.findFirst
+			.mockResolvedValueOnce(slot)
+			.mockResolvedValue({ ...slot, activeSessionId: winner.id });
+		mockDb.query.featureMatchSessions.findFirst.mockResolvedValue(winner);
+		mockDb.batch.mockResolvedValueOnce([[], [stranded], [], []]);
+
+		const result = await featureMatchStateService().createSessionForSlot(7, 1);
+
+		// The loser adopts the winner rather than being handed a Session that was
+		// closed milliseconds after it was inserted — everything downstream of this
+		// call, the SessionStarted announcement included, names the survivor.
+		expect(result).toBe(winner);
 	});
 
 	it('rejects reuse of a command ID for a different command', async () => {

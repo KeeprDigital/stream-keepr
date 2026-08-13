@@ -206,6 +206,29 @@ describe('feature match session command API', () => {
 		expect(slot.activeSession.sequence).toBe(baseSequence + 1);
 	});
 
+	it('collapses two simultaneous Session opens onto the one Session the Slot keeps', async () => {
+		const harness = await createCommandHarness(eventId);
+		const path = `/api/events/${eventId}/feature-match-slots/${harness.slot.id}/sessions`;
+
+		const responses = await Promise.all([
+			$fetchRaw(path, { method: 'POST' }),
+			$fetchRaw(path, { method: 'POST' }),
+		]);
+
+		// Neither operator is refused: an open closes any active Session first, so
+		// the loser has nothing to retry — it adopts the winner instead.
+		expect(responses.map(response => response.status)).toEqual([200, 200]);
+
+		const slot = await $fetch<{ activeSession: { id: number; status: string } }>(
+			`/api/events/${eventId}/feature-match-slots/${harness.slot.id}`,
+		);
+		// Both callers were handed the Session the Slot actually owns. Answering
+		// either of them with the row it inserted strands one on a Session that was
+		// closed milliseconds later, and its SessionStarted announces a corpse.
+		expect(responses.map(response => response._data.id)).toEqual([slot.activeSession.id, slot.activeSession.id]);
+		expect(slot.activeSession.status).toBe('active');
+	});
+
 	it('allows mergeable commands after the session has advanced', async () => {
 		const harness = await createCommandHarness(eventId);
 		const staleBaseSequence = harness.session().sequence;

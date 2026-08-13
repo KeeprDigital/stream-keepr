@@ -289,6 +289,22 @@ export function featureMatchStateService() {
 		return { queries, sourceSnapshot, currentState };
 	};
 
+	/**
+	 * Open a Session for the Slot and answer with whichever Session is active
+	 * afterwards — not necessarily the one this call inserted.
+	 *
+	 * Two callers that both find no active Session both open one, and because
+	 * opening closes any active Session first, the second strands the first: it is
+	 * inserted and closed within milliseconds, and a caller holding it can only be
+	 * told the Session is closed, while its `SessionStarted` announces a Session
+	 * peers will project as live. Re-reading the Slot's active Session collapses
+	 * both callers onto the winner, so the loser adopts the Session the Slot
+	 * actually owns instead of announcing and commanding a corpse.
+	 *
+	 * The loser is not refused. An operator's open closes whatever was there, so a
+	 * `409` would tell them to retry something that has already happened to the
+	 * Slot; adopting the winner is what the Slot's own state says happened.
+	 */
 	const createSessionForSlot = async (
 		slotId: number,
 		eventId: number,
@@ -307,7 +323,7 @@ export function featureMatchStateService() {
 		const session = insertedRows?.[0] as DbFeatureMatchSession | undefined;
 		if (!session)
 			throw new Error('Failed to create feature match session');
-		return session;
+		return await getActiveSession(slotId, eventId) ?? session;
 	};
 
 	function toEventAppliedPayload(result: FeatureMatchSessionCommandResult): FeatureMatchSessionEventAppliedPayload {
@@ -425,27 +441,6 @@ export function featureMatchStateService() {
 	};
 
 	/**
-	 * Open a Session for the Slot and answer with whichever Session is active
-	 * afterwards — not necessarily the one this call inserted.
-	 *
-	 * Two callers that both find no active Session both open one, and because
-	 * opening closes any active Session first, the second strands the first: it
-	 * is inserted and closed within milliseconds, and a caller holding it can
-	 * only be told the Session is closed. Re-reading the Slot's active Session
-	 * collapses both callers onto the winner, so the loser's command lands on the
-	 * Session the Slot actually owns instead of failing against a corpse.
-	 */
-	const openActiveSessionForSlot = async (
-		slotId: number,
-		eventId: number,
-	): Promise<DbFeatureMatchSession | null> => {
-		const opened = await createSessionForSlot(slotId, eventId);
-		if (!opened)
-			return null;
-		return await getActiveSession(slotId, eventId) ?? opened;
-	};
-
-	/**
 	 * Reverse-sync writes onto whichever Session the Slot currently owns. These
 	 * accompany a Slot change that publishes its own notification, so they do not
 	 * announce themselves.
@@ -456,7 +451,7 @@ export function featureMatchStateService() {
 		createCommand: (session: DbFeatureMatchSession) => FeatureMatchSessionCommand,
 		originConnectionId?: string,
 	): Promise<FeatureMatchSessionCommandResult | null> => {
-		const session = await getActiveSession(slotId, eventId) ?? await openActiveSessionForSlot(slotId, eventId);
+		const session = await getActiveSession(slotId, eventId) ?? await createSessionForSlot(slotId, eventId);
 		if (!session)
 			return null;
 
