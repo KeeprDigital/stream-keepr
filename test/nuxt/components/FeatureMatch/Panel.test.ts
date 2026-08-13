@@ -152,9 +152,10 @@ async function mountComponent() {
 type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
 
 /**
- * Mounts the panel the way `pages/event/[eventId]/index.vue` does, inside a page
- * that has installed the unsaved-changes guard. See the shared harness for why
- * the registration is invisible from a bare mount.
+ * Mounts the panel the way `pages/event/[eventId]/feature-matches.vue` does —
+ * through `FeatureMatchList` — inside a page that has installed the
+ * unsaved-changes guard. See the shared harness for why the registration is
+ * invisible from a bare mount.
  */
 async function mountUnderGuard() {
 	const { default: FeatureMatchPanel } = await import(componentPath);
