@@ -49,6 +49,28 @@ pnpm db:generate  # Generate migrations from schema changes
 pnpm db:migrate   # Apply migrations
 ```
 
+### An additive NOT NULL column needs a DEFAULT
+
+SQLite refuses `ALTER TABLE ... ADD COLUMN ... NOT NULL` without a non-null
+`DEFAULT` — but **only when the table already holds rows**. A migration that
+omits the default still applies perfectly against the one database that has
+always been migrated in step, because the table happened to be empty when it
+ran, and then fails the first time the journal is replayed against a backup
+restore or a new environment seeded with data. Two migrations shipped this way
+before anyone noticed (#310), so read every generated migration before
+committing it and add the `DEFAULT` yourself; `pnpm db:generate` will not.
+
+A constant default is not always sufficient. Where the new column carries a
+unique index, every pre-existing row would take the same value and collide, so
+the migration needs a per-row backfill between the `ALTER` and the
+`CREATE UNIQUE INDEX` — `0007_serious_the_hunter.sql` is the worked example, and
+`hex(randomblob(n))` and the row's own primary key are the two ways it makes
+values that differ. Prefer repairing a migration in place to adding a corrective
+one: D1 records applied migrations **by name**, so an edit is a no-op wherever
+the original already ran, and the repair only ever changes what a replay does.
+`test/unit/server/db/migrationJournalReplay.test.ts` replays the whole journal
+against populated tables and is what catches the omission.
+
 ## Deploy
 
 NuxtHub generates the deployable configuration at

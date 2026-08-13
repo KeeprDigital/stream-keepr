@@ -1,6 +1,5 @@
 export default defineAppConfig({
 	ui: {
-		strategy: 'merge',
 		colors: {
 			primary: 'cyan',
 			neutral: 'slate',
@@ -9,9 +8,5 @@ export default defineAppConfig({
 			error: 'rose',
 			info: 'sky',
 		},
-	},
-	colorMode: {
-		preference: 'system',
-		fallback: 'dark',
 	},
 });
