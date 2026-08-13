@@ -2,6 +2,7 @@
 import type { DropdownMenuItem } from '@nuxt/ui';
 import type { Round } from '~/types';
 import { isManualOverrideRound, isMeleeManagedRound } from '~~/shared/utils/roundControl';
+import { formatSyncTimestamp } from '~/utils/meleeSync';
 
 const props = defineProps<{
 	round: Round;
@@ -15,23 +16,6 @@ const emit = defineEmits<{
 	editRound: [round: Round];
 	deleteRound: [round: Round];
 }>();
-
-function formatSyncTime(date: Date | string | null): string {
-	if (!date)
-		return '';
-	const d = new Date(date);
-	const now = new Date();
-	const diffMs = now.getTime() - d.getTime();
-	const diffMin = Math.floor(diffMs / 60000);
-	if (diffMin < 1)
-		return 'just now';
-	if (diffMin < 60)
-		return `${diffMin}m ago`;
-	const diffHr = Math.floor(diffMin / 60);
-	if (diffHr < 24)
-		return `${diffHr}h ago`;
-	return d.toLocaleDateString();
-}
 
 const menuItems = computed<DropdownMenuItem[][]>(() => {
 	const round = props.round;
@@ -81,7 +65,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
 				variant="subtle"
 				size="xs"
 			>
-				Synced {{ formatSyncTime(round.lastSyncedAt) }}
+				Synced {{ formatSyncTimestamp(round.lastSyncedAt) }}
 			</UBadge>
 		</div>
 

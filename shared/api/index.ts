@@ -42,12 +42,14 @@
  *
  * Nothing is broken by this today, and that is a checked claim rather than an
  * assumption: no code anywhere under `app/` calls a `Date` method on one of
- * these members unguarded. The four places that read a timestamp value all
+ * these members unguarded. The three places that read a timestamp value all
  * already accept both shapes —
  * `app/composables/data/usePlayerDeckCache.ts` (`Date | string`, branches on
- * `typeof`), `app/utils/meleeSync.ts`, `app/components/Round/ListItem.vue`
- * (both `Date | string`, both re-wrap with `new Date(…)`), and
- * `app/pages/event/[eventId]/matches.vue` (re-wraps with `new Date(…)`).
+ * `typeof`), `app/utils/meleeSync.ts` (`Date | string`, re-wraps with
+ * `new Date(…)`), and `app/pages/event/[eventId]/matches.vue` (re-wraps with
+ * `new Date(…)`). `app/components/Round/ListItem.vue` was a fourth until #329
+ * consolidated its own copy of that ladder into `meleeSync.ts`; it now hands the
+ * value straight there and reads nothing off it but truthiness.
  * Everywhere else the value is passed through as an opaque cache key.
  *
  * The would-be fix, deliberately not taken: widen the client-side aliases in
@@ -68,7 +70,7 @@
  * The depth is load-bearing to that figure: a shallow variant rewriting only
  * each alias's own members measures roughly half (6 and 4, across 4 files).
  * Either way it buys no behavioural change, because the type it would produce is
- * the type all four readers have already written by hand. Declaring `string` on
+ * the type all three readers have already written by hand. Declaring `string` on
  * these interfaces
  * instead is not merely more expensive (178 and 22 errors across 31 files) but
  * wrong: it would break the ten server mappers that return them.
