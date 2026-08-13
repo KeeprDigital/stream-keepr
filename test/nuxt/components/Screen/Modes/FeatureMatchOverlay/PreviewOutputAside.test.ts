@@ -106,11 +106,24 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 			await wrapper.get('[data-testid="copy-output-key"]').trigger('click');
 			await flushPromises();
 
-			expect(mockApiFetch).toHaveBeenCalledWith('/api/events/1/screens/1/asset-capability');
-			expect(mockCopyToClipboard).toHaveBeenCalledWith(
+			// Filtered rather than counted whole: `$fetch` is mocked for the module, and
+			// `useServerTime` puts its own `/api/time` probe through it while this page is
+			// mounted. The count that matters is of capability requests, and it is one —
+			// a second request obtains a capability that is then handed to nobody.
+			expect(mockApiFetch.mock.calls.filter(([url]) => String(url).includes('asset-capability')))
+				.toEqual([['/api/events/1/screens/1/asset-capability']]);
+			// Counted, not merely matched. `toHaveBeenCalledWith` asks whether *some* call
+			// looked right, so a handler that copies twice passed it while the operator was
+			// told the URL had been copied twice over. The refusal test below counts its own
+			// path; until #327 the success path beside it was the half nothing counted
+			// (#278, #295).
+			expect(mockCopyToClipboard).toHaveBeenCalledExactlyOnceWith(
 				`${window.location.origin}/event/1/screen/main?output=key#asset-capability=${capability}`,
 				expect.objectContaining({ successTitle: 'URL copied', successDescription: 'KEY output URL copied.' }),
 			);
+			// Nothing else is said: the clipboard helper owns the success sentence here, so
+			// a toast from this surface would be the operator hearing it a second time.
+			expect(mockToastAdd).not.toHaveBeenCalled();
 		});
 
 		it('copies nothing at all when the capability cannot be obtained', async () => {
@@ -144,7 +157,8 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 		 */
 		it('points a PNG capture at a URL carrying the capability', async () => {
 			const captureWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
-			vi.stubGlobal('open', vi.fn(() => captureWindow));
+			const openWindow = vi.fn(() => captureWindow);
+			vi.stubGlobal('open', openWindow);
 			const wrapper = await mountComponent();
 
 			await wrapper.get('[data-testid="download-output-fill"]').trigger('click');
@@ -153,6 +167,17 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 			expect(captureWindow.location.href).toBe(
 				`${window.location.origin}/event/1/screen/main?output=fill&download=1#asset-capability=${capability}`,
 			);
+			// One tab and one sentence. A `toBe` on the URL reads the same whether the
+			// capture was started once or twice, and both refusal tests below count their
+			// own paths while this one counted nothing — so a handler that announced the
+			// download twice, or opened a second capture tab the operator then has to
+			// close, passed here unremarked (#278, #295, #327).
+			expect(openWindow).toHaveBeenCalledOnce();
+			expect(mockToastAdd).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+				title: 'Preparing download',
+				description: expect.stringContaining('FILL PNG'),
+				color: 'info',
+			}));
 			vi.unstubAllGlobals();
 		});
 
