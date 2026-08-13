@@ -8,6 +8,21 @@ import { buildUpsertAssignmentQueries, featureMatchAssignmentService } from '~~/
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
 import { buildMatchPromotionPlan, matchService } from '~~/server/services/match';
 import { playerFeatureMatchSyncService } from '~~/server/services/playerFeatureMatchSync';
+import { StateConflictError } from '~~/server/utils/errors';
+
+/**
+ * Whether a write failed because two Feature Match Slots would have held one
+ * Match.
+ *
+ * SQLite names the columns of the index it rejected, not the index, so the
+ * match column is what identifies this violation among the several unique
+ * indexes a promotion batch writes through.
+ */
+function isDuplicateSlotMatchViolation(error: unknown): boolean {
+	const message = error instanceof Error ? error.message : '';
+	return message.includes('UNIQUE constraint failed')
+		&& message.includes('feature_match_slots.match_id');
+}
 
 interface PromoteMatchToSlotInput {
 	eventId: number;
@@ -74,14 +89,27 @@ export function featureMatchPromotionModule() {
 			...assignmentQueries,
 			...promotedSessionQueries,
 		];
-		await db.batch(batchQueries as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
+		try {
+			await db.batch(batchQueries as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
+		}
+		catch (error) {
+			// The single-Slot invariant is enforced by a unique index rather than by
+			// the plan alone, so a promotion that lost to a concurrent one arrives
+			// here as a constraint violation — and, because the batch is one
+			// transaction, with none of its own writes committed. Naming it a
+			// conflict is what turns an operator's simultaneous promotion into a
+			// `409` they can act on instead of a `500`.
+			if (!isDuplicateSlotMatchViolation(error))
+				throw error;
+			throw new StateConflictError('Feature match slot', slotId);
+		}
 
 		// Reverse-sync the promoted players' latest data into the fresh Sessions.
 		// This runs after the atomic promotion: it is a read-compute-write cycle
 		// with intermediate session CAS that cannot compose into the batch, and a
 		// failure here leaves a consistent promotion (the Session simply keeps the
 		// Match's embedded snapshot until the next player update).
-		await playerFeatureMatchSyncService().syncMatchesFromPlayers(
+		await playerFeatureMatchSyncService().syncMatchesFromPlayersAfterCommit(
 			eventId,
 			[match.player1Id, match.player2Id].filter((playerId): playerId is number => playerId != null),
 		);
@@ -107,6 +135,12 @@ export function featureMatchPromotionModule() {
 		const promotedSlot = await slots.findById(slotId, eventId);
 		if (!promotedSlot) {
 			throw createError({ statusCode: 500, message: 'Failed to retrieve updated feature match slot' });
+		}
+		if (promotedSlot.matchId !== matchId) {
+			// The batch committed, so this Slot did hold the Match; another promotion
+			// has taken it since. Answering with the Slot as it is now would report
+			// somebody else's promotion as this one's result.
+			throw new StateConflictError('Feature match slot', slotId);
 		}
 
 		const response = await eventData.featureMatchSlotUpdated({

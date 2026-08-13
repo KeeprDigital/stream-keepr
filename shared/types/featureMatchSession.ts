@@ -35,7 +35,21 @@ export const FEATURE_MATCH_SESSION_EVENT_TYPE_VALUES = [
 export type FeatureMatchSessionEventType = typeof FEATURE_MATCH_SESSION_EVENT_TYPE_VALUES[number];
 export type FeatureMatchCommandType = Exclude<FeatureMatchSessionEventType, 'SessionStarted'>;
 
+/**
+ * Commands a writer who got in first does not invalidate, so a losing one is
+ * re-reduced onto the newer Session rather than rejected.
+ *
+ * The relative intents qualify because they compose with whatever landed first.
+ * `SnapshotCorrected` qualifies for the other reason a command can: it is
+ * absolute but scoped to its own field. It replaces the frozen source snapshot
+ * and returns `currentState` untouched, so it cannot lose an operator's life
+ * tick — and an operator's command cannot lose the correction, because the
+ * retry reduces onto the state that command produced. It is server-only, minted
+ * by the reverse sync from the database rather than accepted from a client, so
+ * nothing here widens what an operator may send unsequenced.
+ */
 export const MERGEABLE_FEATURE_MATCH_COMMAND_TYPES = [
+	'SnapshotCorrected',
 	'AdjustLife',
 	'AdjustClock',
 	'StepTurn',

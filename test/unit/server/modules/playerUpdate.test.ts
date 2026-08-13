@@ -16,6 +16,7 @@ const mockPlayerDeckService = {
 };
 const mockPlayerFeatureMatchSyncService = {
 	syncMatchesFromPlayers: vi.fn(),
+	syncMatchesFromPlayersAfterCommit: vi.fn(),
 };
 const mockPublication = {
 	playerCreated: vi.fn(),
@@ -76,7 +77,7 @@ describe('playerUpdateModule', () => {
 			name: 'Updated Player',
 		});
 		mockPublication.playerDeckReviewed.mockResolvedValue({ id: 21, playerId: 5 });
-		mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers.mockImplementation(
+		mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit.mockImplementation(
 			async (_eventId: number, playerIds: number[]) => playerIds.length === 1 ? [11, 12] : [21, 22],
 		);
 	});
@@ -109,7 +110,7 @@ describe('playerUpdateModule', () => {
 		});
 
 		expect(mockPublication.playerUpdated).not.toHaveBeenCalled();
-		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers).not.toHaveBeenCalled();
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).not.toHaveBeenCalled();
 		expect(mockPublication.featureMatchSlotsUpdated).not.toHaveBeenCalled();
 	});
 
@@ -129,15 +130,15 @@ describe('playerUpdateModule', () => {
 			entity: expect.objectContaining({ id: 5, name: 'Updated Player' }),
 			originConnectionId: 'origin-1',
 		});
-		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers).toHaveBeenCalledWith(1, [5]);
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).toHaveBeenCalledWith(1, [5]);
 		expect(mockPublication.featureMatchSlotsUpdated).toHaveBeenCalledWith({
 			eventId: 1,
 			slotIds: [11, 12],
 			originConnectionId: 'origin-1',
 		});
 		expect(mockPublication.playerUpdated.mock.invocationCallOrder[0])
-			.toBeLessThan(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers.mock.invocationCallOrder[0]!);
-		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers.mock.invocationCallOrder[0])
+			.toBeLessThan(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit.mock.invocationCallOrder[0]!);
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit.mock.invocationCallOrder[0])
 			.toBeLessThan(mockPublication.featureMatchSlotsUpdated.mock.invocationCallOrder[0]!);
 		expect(response).toEqual({
 			id: 5,
@@ -153,7 +154,7 @@ describe('playerUpdateModule', () => {
 			originConnectionId: 'origin-1',
 		});
 
-		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers).toHaveBeenCalledWith(1, [5, 6]);
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).toHaveBeenCalledWith(1, [5, 6]);
 		expect(mockPublication.featureMatchSlotsUpdated).toHaveBeenCalledWith({
 			eventId: 1,
 			slotIds: [21, 22],
@@ -254,7 +255,7 @@ describe('playerUpdateModule', () => {
 			entity: expect.objectContaining({ id: 5, name: 'Reviewed Player' }),
 			originConnectionId: 'origin-1',
 		});
-		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers).toHaveBeenCalledWith(1, [5]);
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).toHaveBeenCalledWith(1, [5]);
 		expect(response).toEqual({
 			deck: { id: 21, playerId: 5 },
 			player: { id: 5, eventId: 1, name: 'Updated Player' },
@@ -302,7 +303,24 @@ describe('playerUpdateModule', () => {
 		});
 
 		expect(mockPublication.playerUpdated).not.toHaveBeenCalled();
-		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers).toHaveBeenCalledWith(1, [5]);
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).toHaveBeenCalledWith(1, [5]);
 		expect(response.player).toBeNull();
+	});
+
+	it('reverse-syncs through the post-commit form, so a lost Session race cannot fail a committed write', async () => {
+		await playerUpdateModule().updatePlayer({
+			eventId: 1,
+			playerId: 5,
+			input: { name: 'Updated Player' },
+		});
+		await playerUpdateModule().reviewPlayerDeck({
+			eventId: 1,
+			playerId: 5,
+			deckId: 21,
+			archetypeId: 3,
+		});
+
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).toHaveBeenCalledTimes(2);
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers).not.toHaveBeenCalled();
 	});
 });

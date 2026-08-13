@@ -27,6 +27,7 @@ const mockPlayerService = {
 };
 const mockPlayerFeatureMatchSyncService = {
 	syncMatchesFromPlayers: vi.fn(),
+	syncMatchesFromPlayersAfterCommit: vi.fn(),
 };
 const mockFeatureMatchService = {
 	findById: vi.fn(),
@@ -243,6 +244,7 @@ describe('melee Sync server module', () => {
 		mockPlayerService.batchUpsertByExternalId.mockResolvedValue({ players: [], created: 0, updated: 0 });
 		mockPlayerService.reconcileMeleeSnapshot.mockResolvedValue({ players: [], created: 0, updated: 0, deactivated: 0 });
 		mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers.mockResolvedValue([]);
+		mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit.mockResolvedValue([]);
 		mockFeatureMatchService.findById.mockResolvedValue(createFeatureMatch());
 		mockImportedMtgCardResolverService.resolveBatch.mockResolvedValue({ resolutions: new Map() });
 		mockMtgCardService.batchUpsert.mockResolvedValue(new Map());
@@ -432,7 +434,7 @@ describe('melee Sync server module', () => {
 			updated: 1,
 			deactivated: 0,
 		});
-		mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers.mockResolvedValue([20, 21]);
+		mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit.mockResolvedValue([20, 21]);
 
 		const result = await meleeSyncModule().syncPlayers(requestEvent, 1);
 
@@ -444,7 +446,7 @@ describe('melee Sync server module', () => {
 			playerCount: 1,
 		}, 'origin-1');
 		expect(mockPublishMessage.mock.invocationCallOrder[0]).toBeGreaterThan(
-			mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers.mock.invocationCallOrder[0]!,
+			mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit.mock.invocationCallOrder[0]!,
 		);
 		expect(result.results.matchesUpdated).toBe(2);
 	});

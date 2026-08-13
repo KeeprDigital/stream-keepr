@@ -57,7 +57,10 @@ export function playerUpdateModule() {
 		playerIds,
 		originConnectionId,
 	}: PublishPlayerSnapshotUpdatesParams) {
-		const updatedMatchIds = await playerFeatureMatchSync.syncMatchesFromPlayers(eventId, playerIds);
+		// Every caller reaches here after its Player write has committed, so the
+		// reverse sync is a follow-on and a lost Session race must not become the
+		// answer to a write that already happened.
+		const updatedMatchIds = await playerFeatureMatchSync.syncMatchesFromPlayersAfterCommit(eventId, playerIds);
 
 		await publication.featureMatchSlotsUpdated({
 			eventId,

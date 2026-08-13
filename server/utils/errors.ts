@@ -9,6 +9,23 @@ export class StateConflictError extends Error {
 }
 
 /**
+ * Whether a failure is a lost concurrency race rather than a fault.
+ *
+ * The distinction is what lets a caller absorb one: a race means somebody else
+ * got there first and the work can be retried or abandoned, while a fault means
+ * something is broken and swallowing it hides the breakage. Both arrive as
+ * exceptions from the same call, so a caller that wants to absorb only the
+ * first has to be able to tell them apart.
+ */
+export function isStateConflictFailure(error: unknown): boolean {
+	if (error instanceof StateConflictError)
+		return true;
+	return typeof error === 'object'
+		&& error !== null
+		&& (error as { statusCode?: unknown }).statusCode === 409;
+}
+
+/**
  * The server is running, but something it needs was never configured.
  *
  * The name of the setting is the whole point of the message, so it is carried

@@ -96,6 +96,15 @@ export interface MatchPromotionPlan {
  * ids rather than re-deriving the duplicate predicate, so the set of Slots the
  * batch clears is identical to the set the caller seeds Sessions for — no
  * cleared Slot can escape the batch without a fresh Session.
+ *
+ * That equality is why the clear is deliberately not guarded on the identity it
+ * read. The Session seeds are computed here, from these rows, and a batch
+ * cannot branch: a guard that spared a Slot which had moved on would still
+ * reset that Slot's Session from the cleared values, leaving a Slot that holds
+ * one Match beside a Session snapshotted from none. The invariant this plan
+ * cannot express on its own — that no second Slot holds the Match — is enforced
+ * by `feature_match_slots_match_unique_idx` instead, which aborts the whole
+ * batch rather than letting a losing promotion commit half of itself.
  */
 export async function buildMatchPromotionPlan(
 	eventId: number,

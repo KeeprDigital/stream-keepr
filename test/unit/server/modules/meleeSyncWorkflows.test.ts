@@ -23,7 +23,10 @@ const mockPhaseService = {
 };
 const mockPlayerService = { batchUpsertByExternalId: vi.fn(), reconcileMeleeSnapshot: vi.fn() };
 const mockPlayerDeckService = { reconcilePrimaryArchetype: vi.fn() };
-const mockPlayerFeatureMatchSyncService = { syncMatchesFromPlayers: vi.fn() };
+const mockPlayerFeatureMatchSyncService = {
+	syncMatchesFromPlayers: vi.fn(),
+	syncMatchesFromPlayersAfterCommit: vi.fn(),
+};
 const mockFeatureMatchService = { findById: vi.fn() };
 const mockImportedResolver = { resolveBatch: vi.fn() };
 const mockMtgCardService = { batchUpsert: vi.fn() };
@@ -162,6 +165,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 		mockPlayerService.batchUpsertByExternalId.mockResolvedValue({ players: [], created: 0, updated: 0 });
 		mockPlayerService.reconcileMeleeSnapshot.mockResolvedValue({ players: [], created: 0, updated: 0, deactivated: 0 });
 		mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers.mockResolvedValue([]);
+		mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit.mockResolvedValue([]);
 		mockImportedResolver.resolveBatch.mockResolvedValue({ resolutions: new Map() });
 		mockMtgCardService.batchUpsert.mockResolvedValue(new Map());
 		mockPersistPlayerDeckLists.mockResolvedValue({ skippedPlayers: 0, unresolvedCards: 0 });
@@ -482,5 +486,32 @@ describe('melee Sync updateFromMelee workflow', () => {
 			{ lastPlayersSyncedAt: expect.any(Date) },
 			{ lastDecklistsSyncedAt: expect.any(Date) },
 		]);
+	});
+
+	it('reverse-syncs a Player sync through the post-commit form, so a lost Session race cannot fail a committed write', async () => {
+		mockPlayerService.reconcileMeleeSnapshot.mockResolvedValue({
+			players: [{ id: 10, externalId: 'player-1' }],
+			created: 0,
+			updated: 1,
+			deactivated: 0,
+		});
+
+		await createMeleeSyncWorkflows().syncPlayers({} as any, 1, eventData);
+
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).toHaveBeenCalledWith(1, [10]);
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers).not.toHaveBeenCalled();
+	});
+
+	it('reverse-syncs a Deck List sync through the post-commit form, so a lost Session race cannot fail a committed write', async () => {
+		mockPlayerService.batchUpsertByExternalId.mockResolvedValue({
+			players: [{ id: 11, externalId: 'player-2' }],
+			created: 0,
+			updated: 1,
+		});
+
+		await createMeleeSyncWorkflows().syncDeckLists({} as any, 1, eventData);
+
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).toHaveBeenCalledWith(1, [11]);
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers).not.toHaveBeenCalled();
 	});
 });

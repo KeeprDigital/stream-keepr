@@ -164,6 +164,13 @@ describe('featureMatchCommandSchema', () => {
 			baseSequence: 1,
 			payload: { sourceSnapshot },
 		}).success).toBe(false);
+		// Unsequenced too: SnapshotCorrected is mergeable, so the sequenced form
+		// alone would leave the shape a client can actually send untested.
+		expect(featureMatchCommandSchema.safeParse({
+			commandId: 'snapshot-3',
+			type: 'SnapshotCorrected',
+			payload: { sourceSnapshot },
+		}).success).toBe(false);
 	});
 
 	it('bounds constant-time turn deltas', () => {
