@@ -423,6 +423,26 @@ describe('feature match session state service', () => {
 		expect(mockDb.batch.mock.calls[0]?.[0]).toHaveLength(4);
 	});
 
+	it('answers an open with the Session the Slot ended up owning, not the one it inserted', async () => {
+		const slot = createSlot({ id: 7, activeSessionId: null });
+		const stranded = createDbSession({ id: 30, slotId: 7, sequence: 1 });
+		const winner = createDbSession({ id: 31, slotId: 7, sequence: 1 });
+		// The Slot is read unowned, and by the time this open has committed a
+		// concurrent open has closed the row this one inserted and taken the Slot.
+		mockDb.query.featureMatches.findFirst
+			.mockResolvedValueOnce(slot)
+			.mockResolvedValue({ ...slot, activeSessionId: winner.id });
+		mockDb.query.featureMatchSessions.findFirst.mockResolvedValue(winner);
+		mockDb.batch.mockResolvedValueOnce([[], [stranded], [], []]);
+
+		const result = await featureMatchStateService().createSessionForSlot(7, 1);
+
+		// The loser adopts the winner rather than being handed a Session that was
+		// closed milliseconds after it was inserted — everything downstream of this
+		// call, the SessionStarted announcement included, names the survivor.
+		expect(result).toBe(winner);
+	});
+
 	it('rejects reuse of a command ID for a different command', async () => {
 		mockDb.query.liveStateCommandReceipts.findFirst.mockResolvedValue({
 			commandType: 'SetLife',
