@@ -4,14 +4,16 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
 import { createMockTalent } from '~~/test/helpers/fixtures';
+import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
 
 const ALICE = createMockTalent({ id: 11, name: 'Alice' });
 /** Two rows, one name: only their ids tell them apart. */
 const BOB = createMockTalent({ id: 12, name: 'Bob' });
 const BOB_AGAIN = createMockTalent({ id: 13, name: 'Bob' });
 
-// The page guard reaches for the overlay and the router when it installs itself;
-// mounted bare this component's registration is a no-op, and these only have to exist.
+// The page guard reaches for the overlay and the router when it installs itself.
+// What it does with them is its own composable's test; here they only have to
+// exist so a test can mount this card the way its page does.
 mockNuxtImport('useOverlay', () => () => ({
 	create: () => ({ open: () => ({ result: Promise.resolve(true) }) }),
 }));
@@ -71,17 +73,28 @@ const stubs = {
 
 enableAutoUnmount(afterEach);
 
-async function mountComponent(talents: ReturnType<typeof createMockTalent>[]) {
-	const { default: ConfigTalents } = await import('../../../../app/components/Event/ConfigTalents.vue');
+const componentPath = '../../../../app/components/Event/ConfigTalents.vue';
 
-	return mount(ConfigTalents, {
-		attachTo: document.body,
-		props: { talents },
-		global: { stubs },
-	});
+const mountOptions = { attachTo: document.body, global: { stubs } };
+
+async function mountComponent(talents: ReturnType<typeof createMockTalent>[]) {
+	const { default: ConfigTalents } = await import(componentPath);
+
+	return mount(ConfigTalents, { ...mountOptions, props: { talents } });
 }
 
 type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
+
+/**
+ * Mounts the card the way `pages/event/[eventId]/config/broadcast.vue` does,
+ * inside a page that has installed the unsaved-changes guard. See the shared
+ * harness for why the registration is invisible from a bare mount.
+ */
+async function mountUnderGuard(talents: ReturnType<typeof createMockTalent>[]) {
+	const { default: ConfigTalents } = await import(componentPath);
+
+	return mountUnderPageGuard<Wrapper>(ConfigTalents, { ...mountOptions, props: { talents } });
+}
 
 function rowMenus(wrapper: Wrapper) {
 	return wrapper.findAllComponents(UDropdownMenuStub);
@@ -153,6 +166,23 @@ describe('event config talents', () => {
 		await saveButton(wrapper).trigger('click');
 
 		expect(submitted(wrapper)).toEqual([{ id: ALICE.id, name: 'Alicia' }]);
+	});
+
+	// The guard is what stops an operator navigating away from an unsaved edit. It
+	// registers through inject, so a card mounted without a page around it
+	// registers with nothing and loses this silently.
+	it('tells the page it has unsaved changes while a row is added or removed', async () => {
+		const { wrapper, pageIsDirty } = await mountUnderGuard([ALICE, BOB]);
+		await flushPromises();
+
+		expect(pageIsDirty()).toBe(false);
+
+		chooseRowAction(wrapper, 1, 'Remove');
+		await flushPromises();
+		expect(pageIsDirty()).toBe(true);
+
+		await wrapper.get('[data-label="Reset"]').trigger('click');
+		expect(pageIsDirty()).toBe(false);
 	});
 
 	it('offers a newly added row with no id at all', async () => {

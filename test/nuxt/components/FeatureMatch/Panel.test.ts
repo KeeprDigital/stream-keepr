@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
 import { createMockFeatureMatch } from '~~/test/helpers/fixtures';
+import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
 
 const mockFeatureMatchStore = reactive({
 	error: null as string | null,
@@ -40,7 +41,15 @@ mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('useMatchStore', () => () => ({ matches: [] }));
 mockNuxtImport('useRoundStore', () => () => ({ getRoundById: vi.fn() }));
 mockNuxtImport('useToast', () => () => mockToast);
-mockNuxtImport('useRegisterDirtyState', () => () => undefined);
+// The page guard reaches for the overlay and the router when it installs itself.
+// What it does with them is its own composable's test; here they only have to
+// exist so a test can mount this panel the way its page does. `useRegisterDirtyState`
+// itself is deliberately not mocked: mocked away, deleting the panel's registration
+// changed nothing this file could see.
+mockNuxtImport('useOverlay', () => () => ({
+	create: () => ({ open: () => ({ result: Promise.resolve(true) }) }),
+}));
+mockNuxtImport('onBeforeRouteLeave', () => () => {});
 mockNuxtImport('useFeatureMatchDeckList', () => () => ({
 	getDeckForCurrentPhase: vi.fn((_, name, colors) => ({ name, colors })),
 	player1ForDeckList: ref(null),
@@ -109,28 +118,49 @@ const PlayerFormStub = defineComponent({
 	template: '<form :id="formId" data-testid="player-form" @submit.prevent="$emit(\'submit\')"></form>',
 });
 
+const componentPath = '../../../../app/components/FeatureMatch/' + 'Panel.vue';
+
+/** A fresh match per mount, so nothing one test edits reaches the next. */
+function mountProps() {
+	return {
+		match: createMockFeatureMatch({ id: 1, eventId: 1 }) as any,
+		matchNumber: 1,
+	};
+}
+
+const mountOptions = {
+	global: {
+		stubs: {
+			UCard: UCardStub,
+			UButton: UButtonStub,
+			UFieldGroup: { template: '<div><slot /></div>' },
+			USeparator: true,
+			UDropdownMenu: { template: '<div><slot /></div>' },
+			FeatureMatchPanelHeader: PanelHeaderStub,
+			FeatureMatchSetupPlayerForm: PlayerFormStub,
+			FeatureMatchPanelMeleeModal: { template: '<div />' },
+		},
+	},
+};
+
 async function mountComponent() {
-	const componentPath = '../../../../app/components/FeatureMatch/' + 'Panel.vue';
 	const { default: FeatureMatchPanel } = await import(componentPath);
 
-	return mount(FeatureMatchPanel, {
-		props: {
-			match: createMockFeatureMatch({ id: 1, eventId: 1 }) as any,
-			matchNumber: 1,
-		},
-		global: {
-			stubs: {
-				UCard: UCardStub,
-				UButton: UButtonStub,
-				UFieldGroup: { template: '<div><slot /></div>' },
-				USeparator: true,
-				UDropdownMenu: { template: '<div><slot /></div>' },
-				FeatureMatchPanelHeader: PanelHeaderStub,
-				FeatureMatchSetupPlayerForm: PlayerFormStub,
-				FeatureMatchPanelMeleeModal: { template: '<div />' },
-			},
-		},
-	});
+	return mount(FeatureMatchPanel, { ...mountOptions, props: mountProps() });
+}
+
+type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
+
+/**
+ * Mounts the panel the way `pages/event/[eventId]/feature-matches.vue` does —
+ * through `FeatureMatchList` — inside a page that has installed the
+ * unsaved-changes guard. See the shared harness for why the registration is
+ * invisible from a bare mount.
+ */
+async function mountUnderGuard() {
+	const { default: FeatureMatchPanel } = await import(componentPath);
+
+	return mountUnderPageGuard<Wrapper>(FeatureMatchPanel, { ...mountOptions, props: mountProps() });
 }
 
 describe('featureMatchPanel setup save', () => {
@@ -168,6 +198,27 @@ describe('featureMatchPanel setup save', () => {
 		await flushPromises();
 
 		expect(mockFeatureMatchStore.updateFeatureMatch).toHaveBeenCalledWith(1, 1, { tableNumber: 12 });
+	});
+
+	// The guard is what stops an operator navigating away from an unsaved edit. It
+	// registers through inject, so a panel mounted without a page around it
+	// registers with nothing and loses this silently — which is what this file used
+	// to arrange for itself by mocking the registration away.
+	it('tells the page it has unsaved changes while its setup edit is unsaved', async () => {
+		const updated = createMockFeatureMatch({ id: 1, tableNumber: 12 });
+		mockFeatureMatchStore.updateFeatureMatch.mockResolvedValue(updated);
+		const { wrapper, pageIsDirty } = await mountUnderGuard();
+
+		expect(pageIsDirty()).toBe(false);
+
+		await wrapper.get('[data-testid="edit-mode"]').trigger('click');
+		await wrapper.get('[data-testid="set-table"]').trigger('click');
+		expect(pageIsDirty()).toBe(true);
+
+		await wrapper.get('button[data-label="Save"]').trigger('click');
+		await flushPromises();
+
+		expect(pageIsDirty()).toBe(false);
 	});
 
 	it('associates hidden submit buttons with both player forms', async () => {

@@ -1,7 +1,8 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { flushPromises, mount } from '@vue/test-utils';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive } from 'vue';
+import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
 import { transportFailure } from '~~/test/helpers/transportFailure';
 
 const mockEventStore = reactive({
@@ -44,6 +45,10 @@ mockNuxtImport('useOverlay', () => () => mockOverlay);
 mockNuxtImport('useMeleeDataRefresh', () => () => ({
 	refreshAfterMeleeReset: mockRefreshAfterMeleeReset,
 }));
+// The page guard installs a route leave hook. What it does with it is its own
+// composable's test; here it only has to exist so a test can mount this card the
+// way its page does.
+mockNuxtImport('onBeforeRouteLeave', () => () => {});
 
 const UFormStub = defineComponent({
 	emits: ['submit'],
@@ -55,14 +60,21 @@ const UCardStub = defineComponent({
 });
 
 const UFormFieldStub = defineComponent({
-	template: '<label><slot /></label>',
+	props: { name: { type: String, required: false } },
+	template: '<label :data-field="name"><slot /></label>',
 });
 
+// UButton takes `type` as a prop and leaves the default to ULink, which is
+// "button". Declaring it here rather than hardcoding one on the root says that
+// out loud: the footer's "submit" has to reach the rendered button for pressing
+// Save to submit anything.
 const UButtonStub = defineComponent({
 	props: {
 		label: { type: String, required: false },
+		disabled: { type: Boolean, required: false },
+		type: { type: String, required: false, default: 'button' },
 	},
-	template: '<button type="button"><slot>{{ label }}</slot></button>',
+	template: '<button :type="type" :data-label="label" :disabled="disabled"><slot>{{ label }}</slot></button>',
 });
 
 const UInputStub = defineComponent({
@@ -89,28 +101,53 @@ const USwitchStub = defineComponent({
 	template: '<input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)">',
 });
 
+const componentPath = '../../../../app/components/Event/ConfigMeleeIntegration.vue';
+
+// A detached button has no activation behaviour, so pressing a submit button
+// only submits its form once the tree is in the document.
+const mountOptions = {
+	attachTo: document.body,
+	props: {
+		eventId: 1,
+	},
+	global: {
+		stubs: {
+			UForm: UFormStub,
+			UCard: UCardStub,
+			UFormField: UFormFieldStub,
+			UButton: UButtonStub,
+			UInput: UInputStub,
+			UInputNumber: UInputNumberStub,
+			USwitch: USwitchStub,
+			USeparator: true,
+			UIcon: true,
+		},
+	},
+};
+
+enableAutoUnmount(afterEach);
+
 async function mountComponent() {
-	const componentPath = '../../../../app/components/Event/ConfigMeleeIntegration.vue';
 	const { default: ConfigMeleeIntegration } = await import(componentPath);
 
-	return mount(ConfigMeleeIntegration, {
-		props: {
-			eventId: 1,
-		},
-		global: {
-			stubs: {
-				UForm: UFormStub,
-				UCard: UCardStub,
-				UFormField: UFormFieldStub,
-				UButton: UButtonStub,
-				UInput: UInputStub,
-				UInputNumber: UInputNumberStub,
-				USwitch: USwitchStub,
-				USeparator: true,
-				UIcon: true,
-			},
-		},
-	});
+	return mount(ConfigMeleeIntegration, mountOptions);
+}
+
+type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
+
+/**
+ * Mounts the card the way `pages/event/[eventId]/config/integrations.vue` does,
+ * inside a page that has installed the unsaved-changes guard. See the shared
+ * harness for why the registration is invisible from a bare mount.
+ */
+async function mountUnderGuard() {
+	const { default: ConfigMeleeIntegration } = await import(componentPath);
+
+	return mountUnderPageGuard<Wrapper>(ConfigMeleeIntegration, mountOptions);
+}
+
+function fieldInput(wrapper: Wrapper, field: string) {
+	return wrapper.get(`[data-field="${field}"]`).getComponent(UInputStub);
 }
 
 describe('configMeleeIntegration', () => {
@@ -260,5 +297,40 @@ describe('configMeleeIntegration', () => {
 		expect(wrapper.text()).not.toContain('Open Melee Sync');
 		expect(wrapper.find('.divide-y.divide-default').exists()).toBe(false);
 		expect(wrapper.findAll('section')).toHaveLength(1);
+	});
+
+	// The guard is what stops an operator navigating away from an unsaved edit. It
+	// registers through inject, so a card mounted without a page around it
+	// registers with nothing and loses this silently.
+	it('tells the page it has unsaved changes while its form is edited', async () => {
+		const { wrapper, pageIsDirty } = await mountUnderGuard();
+		await flushPromises();
+
+		expect(pageIsDirty()).toBe(false);
+
+		await fieldInput(wrapper, 'meleeEventId').setValue('67890');
+		expect(pageIsDirty()).toBe(true);
+
+		await wrapper.get('[data-label="Reset"]').trigger('click');
+		expect(pageIsDirty()).toBe(false);
+	});
+
+	// Rotating a client id resets no imported data, so it goes through without a
+	// confirmation — and Save is the only control an operator has to send it.
+	it('saves a non-destructive change when the operator presses Save', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await fieldInput(wrapper, 'meleeClientId').setValue('rotated-client-id');
+		await wrapper.get('[data-label="Save"]').trigger('click');
+		await flushPromises();
+
+		expect(mockEventRepo.updateMeleeConfig).toHaveBeenCalledWith(1, {
+			meleeEnabled: true,
+			meleeEventId: '12345',
+			meleeClientId: 'rotated-client-id',
+		});
+		expect(mockOverlay.create).not.toHaveBeenCalled();
+		expect(mockRefreshAfterMeleeReset).not.toHaveBeenCalled();
 	});
 });
