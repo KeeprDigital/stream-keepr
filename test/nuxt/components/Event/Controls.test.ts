@@ -1,9 +1,9 @@
-import type { ComputedRef } from 'vue';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, h, reactive } from 'vue';
+import { defineComponent, reactive } from 'vue';
 import { createMockEvent, createMockTalent } from '~~/test/helpers/fixtures';
+import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
 
 const ALICE = createMockTalent({ id: 11, name: 'Alice' });
 const BRIONY = createMockTalent({ id: 12, name: 'Briony' });
@@ -121,29 +121,14 @@ async function mountComponent() {
 type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
 
 /**
- * Mounts the component inside a page that has installed the unsaved-changes
- * guard, as `pages/event/[eventId]/index.vue` does. Mounted bare, the component
- * injects nothing and its registration is a silent no-op, so the guard can only
- * be observed through a parent that provides it.
+ * Mounts the component the way `pages/event/[eventId]/index.vue` does, inside a
+ * page that has installed the unsaved-changes guard. See the shared harness for
+ * why the registration is invisible from a bare mount.
  */
-async function mountUnderPageGuard() {
+async function mountUnderGuard() {
 	const { default: Controls } = await import(componentPath);
-	let guard: ComputedRef<boolean> | null = null;
 
-	const Page = defineComponent({
-		name: 'PageWithGuard',
-		setup() {
-			guard = useUnsavedChanges().isDirty;
-			return () => h(Controls);
-		},
-	});
-
-	const page = mount(Page, mountOptions);
-
-	return {
-		wrapper: page.findComponent(Controls) as Wrapper,
-		pageIsDirty: () => guard!.value,
-	};
+	return mountUnderPageGuard<Wrapper>(Controls, mountOptions);
 }
 
 /** The two forms are identified by the fields they carry, not by their order. */
@@ -583,7 +568,7 @@ describe('event controls', () => {
 	// registers through inject, so a component mounted without a page around it
 	// registers with nothing and loses this silently.
 	it('tells the page it has unsaved changes while either form is edited', async () => {
-		const { wrapper, pageIsDirty } = await mountUnderPageGuard();
+		const { wrapper, pageIsDirty } = await mountUnderGuard();
 		await flushPromises();
 
 		expect(pageIsDirty()).toBe(false);
