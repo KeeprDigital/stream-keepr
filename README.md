@@ -94,6 +94,9 @@ pnpm build
 pnpm worker:dry-run
 ```
 
+The bundle wrangler would upload lands in `.output/wrangler-dry-run/`;
+`scripts/worker-dry-run.mjs` explains why that path is passed absolute.
+
 Verify the still-image compatibility profile in an installed Chrome or Chromium:
 
 ```bash
@@ -141,7 +144,7 @@ exports `VAR` to `cmd1` only, not to anything chained after `&&`), so it does no
 reach the later `wrangler deploy` invocation in the same script.
 
 D1 records applied migrations by name. If an environment already applied an
-earlier revision of `0004_condemned_malice.sql`, the corrected data-preserving
+earlier revision of `0004_tense_otto_octavius.sql`, the corrected data-preserving
 file will not run there again; recover missing legacy deck rows from a backup or
 Time Travel before continuing.
 

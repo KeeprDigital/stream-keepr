@@ -11,7 +11,7 @@
 		"typecheck:test": "vue-tsc --noEmit -p tsconfig.test.json",
 		"generate": "nuxt generate",
 		"preview": "pnpm build && pnpm db:migrate:local:built && node scripts/stage-preview-secrets.mjs && wrangler dev --local --config .output/server/wrangler.json --persist-to .wrangler/state/built-worker",
-		"worker:dry-run": "wrangler deploy --dry-run --config .output/server/wrangler.json --outdir .output/wrangler-dry-run",
+		"worker:dry-run": "node scripts/worker-dry-run.mjs",
 		"deploy": "CLOUDFLARE_ENV=production pnpm build && pnpm worker:dry-run && pnpm db:migrate:remote && wrangler deploy --config .output/server/wrangler.json && pnpm deploy:verify",
 		"deploy:verify": "bash scripts/deploy-verify.sh",
 		"deploy:validator": "wrangler deploy --config workers/silent-video-validator/wrangler.jsonc",
