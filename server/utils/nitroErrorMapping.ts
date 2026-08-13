@@ -1,5 +1,10 @@
-import { graphicsCapacityErrorDescriptor } from '~~/server/modules/graphics-asset-library/errors';
-import { ServiceConfigurationError, ServiceWiringError, StateConflictError } from './errors';
+import { GraphicsAssetLibraryError, graphicsCapacityErrorDescriptor } from '~~/server/modules/graphics-asset-library/errors';
+import {
+	GraphicsAuthorSessionUnavailableError,
+	ServiceConfigurationError,
+	ServiceWiringError,
+	StateConflictError,
+} from './errors';
 import { RealtimePublishError } from './realtimePublishFailure';
 
 export interface MappableNitroError {
@@ -107,6 +112,37 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		error.statusCode = 502;
 		error.statusMessage = 'Bad Gateway';
 		error.message = 'Card data provider is temporarily unavailable. Try again later.';
+		hasMappedPublicServerMessage = true;
+		mappedOperationalError = true;
+	}
+	else if (
+		cause instanceof GraphicsAssetLibraryError
+		&& cause.code === 'graphics-asset-library-unavailable'
+	) {
+		// The library says which of its stores it could not reach — the catalogue,
+		// the staging byte store, the canonical one — and that is carried rather
+		// than replaced, because which store is down is the part an operator acts
+		// on and the routes raising it have no other way to say so. Sanitizing it
+		// sent them to the logs of a server whose own database may be the thing
+		// that is unreachable. #294; the same judgement as #233 and #243.
+		//
+		// Only this one code. Every other `GraphicsAssetLibraryError` is answered
+		// below 500 by `rethrowGraphicsAssetApiError`, except the two capacity
+		// codes, which the branch above already has.
+		error.statusCode = 503;
+		error.statusMessage = 'Service Unavailable';
+		error.message = cause.message;
+		hasMappedPublicServerMessage = true;
+		mappedOperationalError = true;
+	}
+	else if (cause instanceof GraphicsAuthorSessionUnavailableError) {
+		// The other half of #294, and the one that could not be fixed here alone:
+		// the throw sites used to raise a 503 whose cause was whatever the session
+		// store threw, which is nothing to discriminate on. The named error is what
+		// makes this branch possible — see `GraphicsAuthorSessionUnavailableError`.
+		error.statusCode = cause.statusCode;
+		error.statusMessage = 'Service Unavailable';
+		error.message = cause.message;
 		hasMappedPublicServerMessage = true;
 		mappedOperationalError = true;
 	}

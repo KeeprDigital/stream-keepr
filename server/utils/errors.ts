@@ -68,6 +68,32 @@ export class ServiceWiringError extends Error {
 	}
 }
 
+/**
+ * The store a Graphics Author Session lives in could not be reached.
+ *
+ * Public for the same reason as the two above, and it exists at all for a reason
+ * they do not have: the refusal it becomes is raised around whatever the store
+ * threw, and a raw KV exception carries nothing `mapPublicNitroError` can
+ * discriminate on — so before this class the sentence below was written, sent,
+ * and then overwritten with 'Internal Server Error' on the way out (#294). What
+ * the name buys is that the mapper can tell "the session store is down" from
+ * "something threw", which is the whole difference between an operator who knows
+ * to go and look at a binding and one who has been told nothing.
+ *
+ * It names the subsystem and never the store's own words: the exception that
+ * caused it is kept as `cause`, where debugging can reach it and no response
+ * carries it. The failure log does not — `errorLogFields` reads a single level
+ * of cause and takes only its `name` and `code`, so the line names this class
+ * rather than the store's refusal.
+ */
+export class GraphicsAuthorSessionUnavailableError extends Error {
+	statusCode = 503;
+	constructor(cause: unknown) {
+		super('Graphics author sessions are temporarily unavailable', { cause });
+		this.name = 'GraphicsAuthorSessionUnavailableError';
+	}
+}
+
 interface ErrorWithPublicMetadata {
 	code?: unknown;
 	statusCode?: unknown;

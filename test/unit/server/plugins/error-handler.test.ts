@@ -1,9 +1,15 @@
 import type { LoggedNitroError } from '~~/server/utils/errorLogFields';
 import type { MappableNitroError } from '~~/server/utils/nitroErrorMapping';
 import { describe, expect, it } from 'vitest';
+import { GraphicsAssetLibraryError } from '~~/server/modules/graphics-asset-library/errors';
 import { errorLogFields } from '~~/server/utils/errorLogFields';
 import { safeErrorLogPath } from '~~/server/utils/errorLogPath';
-import { ServiceConfigurationError, ServiceWiringError, StateConflictError } from '~~/server/utils/errors';
+import {
+	GraphicsAuthorSessionUnavailableError,
+	ServiceConfigurationError,
+	ServiceWiringError,
+	StateConflictError,
+} from '~~/server/utils/errors';
 import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 import { REALTIME_PUBLISH_FAILED_MESSAGE, RealtimePublishError } from '~~/server/utils/realtimePublishFailure';
 import { ErrorInfoShaped, providerRefusal } from '~~/test/helpers/providerRefusal';
@@ -354,6 +360,227 @@ describe('error-handler mapping logic', () => {
 				statusMessage: 'Bad Gateway',
 				message: 'Card data provider is temporarily unavailable. Try again later.',
 			});
+		});
+	});
+
+	describe('graphics asset library unavailability mapping', () => {
+		it('keeps the sentence naming which store the library could not reach', () => {
+			// #294: the library says which of its stores went away — the catalogue,
+			// the staging byte store, the canonical one — and the sanitizer was
+			// replacing all three with 'Internal Server Error'. That sentence is the
+			// only part of the failure an operator can act on: it says whether a
+			// binding is missing or a bucket is refusing, and the alternative is
+			// reading the logs of a server whose own database is the thing that is
+			// down. Preserved for the same reason as #233 and #243.
+			const error: MappableNitroError = {
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'Graphics Asset catalogue is unavailable',
+				cause: new GraphicsAssetLibraryError(
+					'Graphics Asset catalogue is unavailable',
+					'graphics-asset-library-unavailable',
+				),
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error).toMatchObject({
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'Graphics Asset catalogue is unavailable',
+				unhandled: false,
+			});
+		});
+
+		it('preserves the byte store\'s own wording rather than a sentence of its own', () => {
+			// Three throw sites share the one code and each names a different store,
+			// so the branch may not substitute a message of its own — it carries
+			// whichever one the library wrote.
+			const error: MappableNitroError = {
+				statusCode: 503,
+				message: 'Graphics Asset staging byte store is unavailable',
+				cause: new GraphicsAssetLibraryError(
+					'Graphics Asset staging byte store is unavailable',
+					'graphics-asset-library-unavailable',
+				),
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error.message).toBe('Graphics Asset staging byte store is unavailable');
+		});
+
+		it('discriminates on the library code rather than on the prose', () => {
+			// A bare Error carrying the same words is not the library saying so, and
+			// still meets the sanitizer.
+			const error: MappableNitroError = {
+				statusCode: 503,
+				message: 'Graphics Asset catalogue is unavailable',
+				cause: new Error('Graphics Asset catalogue is unavailable'),
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error.message).toBe('Internal Server Error');
+		});
+
+		it('leaves the library\'s other codes to the routes that already answer them', () => {
+			// `rethrowGraphicsAssetApiError` answers every other code below 500, so a
+			// 5xx carrying one is not a store that went away and gets no exemption.
+			const error: MappableNitroError = {
+				statusCode: 500,
+				message: 'Ingestion operation not found',
+				cause: new GraphicsAssetLibraryError(
+					'Ingestion operation not found',
+					'ingestion-operation-not-found',
+				),
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error.message).toBe('Internal Server Error');
+		});
+	});
+
+	describe('graphics author session store mapping', () => {
+		it('keeps the sentence a route wrote about an unreachable session store', () => {
+			// #294's other half. This one could not be discriminated in the mapper at
+			// all until the throw sites started raising a named error: their 503
+			// carried whatever `kv.get` threw as its cause, which says nothing about
+			// what failed.
+			const error: MappableNitroError = {
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'Graphics author sessions are temporarily unavailable',
+				cause: new GraphicsAuthorSessionUnavailableError(new Error('KV GET failed')),
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error).toMatchObject({
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'Graphics author sessions are temporarily unavailable',
+				unhandled: false,
+			});
+		});
+
+		it('sanitizes the raw store failure the throw sites used to hand it', () => {
+			// The shape before #294, kept as a row because it is what a throw site
+			// reverted to a bare `createError` would produce: the store's own
+			// exception as the cause, matching no branch, sanitized on the way out.
+			const error: MappableNitroError = {
+				statusCode: 503,
+				message: 'Graphics author sessions are temporarily unavailable',
+				cause: new Error('KV GET failed'),
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error.message).toBe('Internal Server Error');
+		});
+	});
+
+	/**
+	 * Every family whose prose survives the sanitizer, driven in one place.
+	 *
+	 * The client reads this list without being able to see it: `failureSentence`
+	 * quotes a 5xx body it did not recognise as a placeholder, and the two marks it
+	 * decides on — not 500, not one of the sanitizer's own sentences — are properties
+	 * of this table rather than of that function. Its docstring cites the count and
+	 * the statuses as established by driving the mapper; this is that drive, so the
+	 * claim fails here rather than drifting quietly.
+	 */
+	describe('the families whose prose survives, enumerated', () => {
+		const preserved: readonly { family: string; cause: unknown; sentence: string }[] = [
+			{
+				family: 'a setting that was never configured (#233)',
+				cause: new ServiceConfigurationError('NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY', 'is not set'),
+				sentence: 'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY is not set',
+			},
+			{
+				family: 'a component assembled without a collaborator (#243)',
+				cause: new ServiceWiringError('The Broadcast Graphics Live Session module', 'the Graphics Asset Library'),
+				sentence: new ServiceWiringError('The Broadcast Graphics Live Session module', 'the Graphics Asset Library').message,
+			},
+			{
+				family: 'a realtime publish the request could not go on without',
+				cause: new RealtimePublishError(providerRefusal()),
+				sentence: REALTIME_PUBLISH_FAILED_MESSAGE,
+			},
+			{
+				family: 'an exhausted staging byte store',
+				cause: new GraphicsAssetLibraryError('Staging byte store capacity is exhausted', 'staging-capacity-exhausted'),
+				sentence: 'Staging byte store capacity is exhausted',
+			},
+			{
+				family: 'an exhausted canonical byte store',
+				cause: new GraphicsAssetLibraryError('Canonical byte store capacity is exhausted', 'canonical-capacity-exhausted'),
+				sentence: 'Canonical byte store capacity is exhausted',
+			},
+			{
+				family: 'a card lookup that preserved the deck it could not enrich',
+				cause: { code: 'IMPORTED_CARD_LOOKUP_UNAVAILABLE' },
+				sentence: 'Card data provider is temporarily unavailable. Existing deck data was preserved; retry the sync.',
+			},
+			{
+				family: 'a Melee request that timed out',
+				cause: { code: 'MELEE_UPSTREAM_FAILURE', category: 'timeout' },
+				sentence: 'Melee.gg is temporarily unavailable. Try again later.',
+			},
+			{
+				family: 'a Melee request the provider refused',
+				cause: { code: 'MELEE_UPSTREAM_FAILURE', category: 'http' },
+				sentence: 'Melee.gg is temporarily unavailable. Try again later.',
+			},
+			{
+				family: 'a Scryfall request the provider refused',
+				cause: { code: 'SCRYFALL_UPSTREAM_FAILURE' },
+				sentence: 'Card data provider is temporarily unavailable. Try again later.',
+			},
+			{
+				family: 'a Graphics Asset Library store that could not be reached (#294)',
+				cause: new GraphicsAssetLibraryError('Graphics Asset catalogue is unavailable', 'graphics-asset-library-unavailable'),
+				sentence: 'Graphics Asset catalogue is unavailable',
+			},
+			{
+				family: 'a Graphics Author Session store in the same state (#294)',
+				cause: new GraphicsAuthorSessionUnavailableError(new Error('KV GET failed')),
+				sentence: 'Graphics author sessions are temporarily unavailable',
+			},
+		];
+
+		it.each(preserved)('says something an operator can act on for $family', ({ cause, sentence }) => {
+			const error: MappableNitroError = { statusCode: 500, message: 'Something went wrong', cause, unhandled: true };
+
+			mapPublicNitroError(error);
+
+			expect(error.message).toBe(sentence);
+			expect(error.unhandled).toBe(false);
+		});
+
+		/**
+		 * The first of the two marks the client decides on. A family raised at 500
+		 * would be quoted by nothing, because 500 is where this server says it broke
+		 * and the client refuses that status whatever the body carries.
+		 */
+		it.each(preserved)('answers away from 500 for $family', ({ cause }) => {
+			const error: MappableNitroError = { statusCode: 500, message: 'Something went wrong', cause };
+
+			mapPublicNitroError(error);
+
+			expect(error.statusCode).not.toBe(500);
+			expect([502, 503, 504, 507]).toContain(error.statusCode);
+		});
+
+		/**
+		 * The count `failureSentence`'s docstring quotes. It was nine until #294 added
+		 * the two above, and the number is load-bearing on the client's side of the
+		 * boundary: it is the enumeration behind "every preserved family comes out
+		 * non-500", which is the whole reason the status mark can be trusted.
+		 */
+		it('is eleven families wide', () => {
+			expect(preserved).toHaveLength(11);
 		});
 	});
 

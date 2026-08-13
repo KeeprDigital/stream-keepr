@@ -61,10 +61,11 @@ const SANITIZED_SERVER_MESSAGES: readonly string[] = ['Internal Server Error', '
  *
  * `mapPublicNitroError` sanitizes every 5xx on the way out **except** the families it
  * flags `hasMappedPublicServerMessage`: a missing setting (#233), an unwired component
- * (#243), a realtime publish the show could not go without, an exhausted byte store, and
- * the three upstream-unavailable codes. Those name a deployment fault or a named
- * dependency rather than a fact about the show, and the only reader who can act on one is
- * the operator this function exists to get the words to.
+ * (#243), a realtime publish the show could not go without, an exhausted byte store, a
+ * Graphics Asset Library store that cannot be reached, a Graphics Author Session store in
+ * the same state (#294), and the three upstream-unavailable codes. Those name a
+ * deployment fault or a named dependency rather than a fact about the show, and the only
+ * reader who can act on one is the operator this function exists to get the words to.
  *
  * The flag itself never leaves the server, so this reads the two marks it leaves on the
  * response instead — and both halves are load-bearing:
@@ -75,15 +76,20 @@ const SANITIZED_SERVER_MESSAGES: readonly string[] = ['Internal Server Error', '
  *   strictest reading where the server is least trustworthy, and costs nothing, because no
  *   preserved family is raised there.
  * - **Not one of the sanitizer's own sentences.** A 5xx that is *not* 500 is not thereby
- *   mapped — `requireGraphicsAuthorSession` raises a 503 whose KV cause matches no branch,
- *   and the Graphics Asset Library raises one for an unavailable store. Both reach a client
- *   carrying 'Internal Server Error', because the sanitizer rewrote them, and both are
- *   refused here on exactly that evidence.
+ *   mapped — `requireGraphicsAdministrator` raises a 503 for an unconfigured admin token,
+ *   and the Screen Output asset capability session route raises one with no cause at all.
+ *   Both reach a client carrying 'Internal Server Error', because the sanitizer rewrote
+ *   them, and both are refused here on exactly that evidence. Those two replace the pair
+ *   this bullet used to name: the Graphics Author Session store and the Graphics Asset
+ *   Library store were the clearest examples until #294, which made the server preserve
+ *   both sentences instead — so they now arrive as prose and this function quotes them,
+ *   with no change on this side. That is what #294 predicted, and the mark stayed
+ *   load-bearing because unmapped non-500 5xx did not stop existing.
  *
  * Established by execution rather than reasoned about. Driving the real route with the
  * signing key invalid — `GET /api/events/1/screens/1/asset-capability` — answers a
  * `FetchError` with `statusCode` 503 and `data.message` naming the setting, which is the
- * shape. The enumeration is separate: `mapPublicNitroError` was driven across all nine
+ * shape. The enumeration is separate: `mapPublicNitroError` was driven across all eleven
  * preserved branches and they come out at 502/503/504/507, never 500, while an unmapped
  * 5xx keeps its own non-500 status and carries the placeholder — which is what makes the
  * second mark load-bearing rather than belt-and-braces (#286's review).

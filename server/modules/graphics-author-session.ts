@@ -6,6 +6,7 @@ import {
 	setCookie,
 } from 'h3';
 import { kv } from 'hub:kv';
+import { GraphicsAuthorSessionUnavailableError } from '~~/server/utils/errors';
 
 const GRAPHICS_AUTHOR_SESSION_COOKIE = 'stream_keepr_graphics_author_session';
 
@@ -125,6 +126,30 @@ async function readSession(event: H3Event): Promise<GraphicsAuthorSession | unde
 	return session;
 }
 
+/**
+ * The refusal both entry points raise when the session store cannot be reached.
+ *
+ * The sentence is written for an operator, and reaching one is what the named
+ * cause is for: `mapPublicNitroError` rewrites any 5xx it cannot recognise to
+ * 'Internal Server Error', and a raw store exception is unrecognisable. Raising
+ * the bare `createError` here again would restore that (#294).
+ *
+ * `requireGraphicsAuthorSession` is the site a caller meets today;
+ * `ensureGraphicsAuthorSession`'s only caller is the middleware, which swallows
+ * the refusal and logs. It raises the same one anyway so that a second caller —
+ * a route minting a session directly — inherits the sentence rather than the
+ * placeholder the middleware never had to care about.
+ */
+function graphicsAuthorSessionUnavailable(cause: unknown) {
+	const failure = new GraphicsAuthorSessionUnavailableError(cause);
+	return createError({
+		statusCode: failure.statusCode,
+		statusMessage: 'Service Unavailable',
+		message: failure.message,
+		cause: failure,
+	});
+}
+
 export async function ensureGraphicsAuthorSession(event: H3Event): Promise<string> {
 	try {
 		const existing = await readSession(event);
@@ -145,12 +170,7 @@ export async function ensureGraphicsAuthorSession(event: H3Event): Promise<strin
 		return session.authorId;
 	}
 	catch (error) {
-		throw createError({
-			statusCode: 503,
-			statusMessage: 'Service Unavailable',
-			message: 'Graphics author sessions are temporarily unavailable',
-			cause: error,
-		});
+		throw graphicsAuthorSessionUnavailable(error);
 	}
 }
 
@@ -198,12 +218,7 @@ export async function requireGraphicsAuthorSession(event: H3Event): Promise<stri
 			return session.authorId;
 	}
 	catch (error) {
-		throw createError({
-			statusCode: 503,
-			statusMessage: 'Service Unavailable',
-			message: 'Graphics author sessions are temporarily unavailable',
-			cause: error,
-		});
+		throw graphicsAuthorSessionUnavailable(error);
 	}
 	throw createError({
 		statusCode: 401,
