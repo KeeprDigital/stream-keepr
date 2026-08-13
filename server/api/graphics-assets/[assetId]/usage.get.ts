@@ -1,6 +1,7 @@
 import { graphicAssetId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
  * Which Screens and Events reference one Graphic Asset.
@@ -11,7 +12,12 @@ import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-
  */
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);
-	return await graphicsAssetLibraryForEvent(event).listGraphicAssetUsage({
-		assetId: graphicAssetId(getRouterParam(event, 'assetId') ?? ''),
-	});
+	try {
+		return await graphicsAssetLibraryForEvent(event).listGraphicAssetUsage({
+			assetId: graphicAssetId(getRouterParam(event, 'assetId') ?? ''),
+		});
+	}
+	catch (error) {
+		return rethrowGraphicsAssetApiError(error, event);
+	}
 });

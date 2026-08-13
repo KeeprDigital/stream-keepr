@@ -1,5 +1,7 @@
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { graphicAssetListQuerySchema } from '~~/server/schemas/api/graphicsAsset';
+import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
  * Discovery across the whole Graphics Asset Library.
@@ -12,14 +14,17 @@ import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-
  */
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);
-	const query = getQuery(event);
-	const searchValue = query.search;
-	const search = typeof searchValue === 'string' ? searchValue.slice(0, 200) : '';
-	const lifecycleStates = typeof query.lifecycleStates === 'string'
-		? query.lifecycleStates.split(',')
-		: undefined;
-	return await graphicsAssetLibraryForEvent(event).listGraphicAssets({
-		search,
-		lifecycleStates: lifecycleStates as ('active' | 'retired' | 'trashed')[] | undefined,
-	});
+	try {
+		const { search, lifecycleStates } = await getValidatedQuery(
+			event,
+			graphicAssetListQuerySchema.parse,
+		);
+		return await graphicsAssetLibraryForEvent(event).listGraphicAssets({
+			search,
+			lifecycleStates,
+		});
+	}
+	catch (error) {
+		return rethrowGraphicsAssetApiError(error, event);
+	}
 });

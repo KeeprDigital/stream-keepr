@@ -1,6 +1,7 @@
 import { and, asc, eq, or } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { archetypes, matches, phases, players, rounds } from '~~/server/db/schema';
+import { mapPlayerToResponse } from '~~/server/mappers/player';
 import { playerParamsSchema } from '~~/server/schemas/api/player';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 
@@ -85,5 +86,5 @@ export default defineEventHandler(async (event) => {
 		};
 	});
 
-	return { player, history };
+	return { player: mapPlayerToResponse(player), history };
 });

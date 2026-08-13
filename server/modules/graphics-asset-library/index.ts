@@ -83,6 +83,7 @@ import type { SilentVideoPlaybackValidator } from './silent-video-playback-valid
 import type { ResolvedPackagedRevision } from './template-package';
 import type { TemplatePackageArchiveEntry } from './template-package-archive';
 import type { TemplatePackagePreflightState } from './template-package-preflight';
+import { GRAPHIC_ASSET_LIFECYCLE_STATES } from '~~/shared/types/graphicsAsset';
 import {
 	TEMPLATE_PACKAGE_ARTIFACTS,
 	TEMPLATE_PACKAGE_LIMITS,
@@ -5007,7 +5008,7 @@ export function createGraphicsAssetLibrary(
 			const lifecycleStates = input.lifecycleStates ?? ['active'];
 			if (
 				lifecycleStates.length === 0
-				|| lifecycleStates.some(state => !['active', 'retired', 'trashed'].includes(state))
+				|| lifecycleStates.some(state => !GRAPHIC_ASSET_LIFECYCLE_STATES.includes(state))
 			) {
 				throw new GraphicsAssetLibraryError(
 					'At least one valid Graphic Asset lifecycle state is required',
