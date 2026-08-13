@@ -63,9 +63,10 @@ const SANITIZED_SERVER_MESSAGES: readonly string[] = ['Internal Server Error', '
  * flags `hasMappedPublicServerMessage`: a missing setting (#233), an unwired component
  * (#243), a realtime publish the show could not go without, an exhausted byte store, a
  * Graphics Asset Library store that cannot be reached, a Graphics Author Session store in
- * the same state (#294), and the three upstream-unavailable codes. Those name a
- * deployment fault or a named dependency rather than a fact about the show, and the only
- * reader who can act on one is the operator this function exists to get the words to.
+ * the same state (#294), a subsystem a route classified as momentarily out of reach
+ * (#321), and the three upstream-unavailable codes. Those name a deployment fault or a
+ * named dependency rather than a fact about the show, and the only reader who can act on
+ * one is the operator this function exists to get the words to.
  *
  * The flag itself never leaves the server, so this reads the two marks it leaves on the
  * response instead — and both halves are load-bearing:
@@ -76,23 +77,34 @@ const SANITIZED_SERVER_MESSAGES: readonly string[] = ['Internal Server Error', '
  *   strictest reading where the server is least trustworthy, and costs nothing, because no
  *   preserved family is raised there.
  * - **Not one of the sanitizer's own sentences.** A 5xx that is *not* 500 is not thereby
- *   mapped — `requireGraphicsAdministrator` raises a 503 for an unconfigured admin token,
- *   and the Screen Output asset capability session route raises one with no cause at all.
- *   Both reach a client carrying 'Internal Server Error', because the sanitizer rewrote
- *   them, and both are refused here on exactly that evidence. Those two replace the pair
- *   this bullet used to name: the Graphics Author Session store and the Graphics Asset
- *   Library store were the clearest examples until #294, which made the server preserve
- *   both sentences instead — so they now arrive as prose and this function quotes them,
- *   with no change on this side. That is what #294 predicted, and the mark stayed
- *   load-bearing because unmapped non-500 5xx did not stop existing.
+ *   mapped: a route may raise one the mapper does not recognise, in which case the
+ *   sanitizer rewrites its body and this refuses it on exactly that evidence.
+ *
+ *   **No `createError` in `server/` raises one today, and that is a fact with a date on
+ *   it.** This bullet has named two pairs of live examples and outlived both. The
+ *   Graphics Author Session and Graphics Asset Library stores were the clearest until
+ *   #294 taught the server to preserve them; `requireGraphicsAdministrator`'s
+ *   unconfigured-token 503 and the Screen Output capability session's causeless one
+ *   replaced them and were closed the same way by #321, which classified the last eight
+ *   hand-rolled 5xx. That enumeration is every `createError` under `server/` whose status
+ *   is a readable non-500 5xx, so the mark is presently belt-and-braces and its rows in
+ *   `failureSentence.test.ts` are constructed rather than observed.
+ *
+ *   It stays because what produces such a body has not gone anywhere: h3 adopts
+ *   `statusCode` from anything thrown, so a dependency's own object can arrive at 503
+ *   unrecognised and be masked as 'Server Error', and the next hand-rolled `createError`
+ *   is one edit away — this class of defect has now been filed five times (#233, #243,
+ *   #246, #294, #321). Removing the mark would make that edit's placeholder quotable in
+ *   an operator's face, which is the failure this function exists to prevent and not one
+ *   worth reopening to delete a comparison.
  *
  * Established by execution rather than reasoned about. Driving the real route with the
  * signing key invalid — `GET /api/events/1/screens/1/asset-capability` — answers a
  * `FetchError` with `statusCode` 503 and `data.message` naming the setting, which is the
- * shape. The enumeration is separate: `mapPublicNitroError` was driven across all eleven
+ * shape. The enumeration is separate: `mapPublicNitroError` was driven across all twelve
  * preserved branches and they come out at 502/503/504/507, never 500, while an unmapped
- * 5xx keeps its own non-500 status and carries the placeholder — which is what makes the
- * second mark load-bearing rather than belt-and-braces (#286's review).
+ * 5xx keeps its own non-500 status and carries the placeholder (#286's review; the
+ * twelfth branch and the disappearance of the live unmapped examples are #321's).
  *
  * A `useFetch` error is that failure rebuilt by `createError`, which keeps `statusCode`
  * and `data` and does not always keep `status` — imported from `@nuxt/nitro-server/h3` in

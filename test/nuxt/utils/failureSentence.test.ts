@@ -128,11 +128,13 @@ describe('failureSentence', () => {
 		 * The two sentences that mean the server has decided to say nothing:
 		 * `mapPublicNitroError` writes the first over any 5xx it did not map, and Nitro's
 		 * own handler writes the second into the body of anything unhandled or fatal.
-		 * A 503 is not evidence of a preserved message — `requireGraphicsAdministrator`
-		 * raises one for an unconfigured admin token, and the Screen Output asset
-		 * capability session route raises one with no cause at all. Both were the
-		 * Graphics Author Session and Graphics Asset Library 503s until #294 taught the
-		 * server to preserve those two; the rows above are where they went.
+		 * A 503 is still not evidence of a preserved message, but as of #321 no route in
+		 * this server raises an unmapped one: the Graphics Administrator token refusal
+		 * and the Screen Output capability session's causeless 503 named here were the
+		 * last two, and both are classified now — as the Graphics Author Session and
+		 * Graphics Asset Library 503s named before them were, by #294. The rows below are
+		 * therefore constructed rather than observed, and they are the ones that fail if
+		 * the placeholder comparison is deleted on the grounds that nothing produces one.
 		 */
 		it('refuses the mapper placeholder even at a status the mapper also uses', () => {
 			const failure = transportFailure({

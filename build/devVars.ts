@@ -50,9 +50,13 @@ export const LOCALLY_OPTIONAL_NUXT_NAMES = ['NUXT_ABLY_API_KEY'] as const;
  * and otherwise falls through to its 403 branch.
  *
  * The strings are the refusals' own, so a reader can match notice to response:
- * "Graphics Administrator access is not configured" and "…so Screen Output asset
- * capabilities are unavailable". `satisfies` makes a new required name a type error
- * here rather than a name whose surface the notice silently omits.
+ * "…so Graphics Administrator operations are unavailable" and "…so Screen Output asset
+ * capabilities are unavailable". Both now begin with the environment name itself, because
+ * #321 gave the first one a `ServiceConfigurationError` — before that it read "Graphics
+ * Administrator access is not configured" and reached the client as 'Internal Server
+ * Error', so the notice quoted a sentence nobody could see. `satisfies` makes a new
+ * required name a type error here rather than a name whose surface the notice silently
+ * omits.
  */
 export const LOCAL_NUXT_NAME_SURFACES = {
 	NUXT_GRAPHICS_ADMIN_TOKEN: 'Graphics Administrator operations',

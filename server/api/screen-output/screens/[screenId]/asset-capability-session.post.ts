@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { graphicsCatalogueClient } from '~~/server/modules/graphics-asset-library/runtime';
 import { createD1ScreenOutputAssetAuthorizer } from '~~/server/modules/screen-output-assets/authorizer';
 import { screenOutputAssetCapabilityDigest } from '~~/server/modules/screen-output-assets/capability';
+import { TemporarilyUnavailableError } from '~~/server/utils/errors';
 import { bearerScreenOutputCapability } from '~~/server/utils/screenOutputCapabilityAuthorization';
 import { graphicsVideoTargetForUserAgent } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import {
@@ -32,12 +33,22 @@ export default defineEventHandler(async (event) => {
 	try {
 		authorization = await authorizer.authorizeCapability({ screenId, capabilityDigest });
 	}
-	catch {
+	catch (failure) {
 		setResponseHeader(event, 'retry-after', 5);
+		// The cause is what carries this sentence past the 5xx sanitizer, and the
+		// authorizer's own failure rides along inside it: an output that cannot open a
+		// session resolves no content URL for anything the Screen publishes, so
+		// 'Internal Server Error' was the whole of what an operator got for a blank
+		// Screen (#321). The store's words reach the failure log and no response.
+		const cause = new TemporarilyUnavailableError(
+			'Screen Output asset capability session is temporarily unavailable',
+			{ cause: failure },
+		);
 		throw createError({
-			statusCode: 503,
+			statusCode: cause.statusCode,
 			statusMessage: 'Service Unavailable',
-			message: 'Screen Output asset capability session is temporarily unavailable',
+			message: cause.message,
+			cause,
 		});
 	}
 	if (authorization.outcome === 'missing') {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { stubH3Event } from '~~/test/helpers/h3Event';
+import { refusalFrom } from '~~/test/helpers/publicServerFailure';
 
 const {
 	mockRequireGraphicsAuthorSession,
@@ -174,5 +175,62 @@ describe('authenticated exact Graphic Asset Revision content delivery', () => {
 			message: 'catalogue unavailable',
 		});
 		expect(mockSetResponseHeader).toHaveBeenCalledWith({}, 'retry-after', 5);
+	});
+
+	/**
+	 * #321. Both reads answered `outcome: 'unavailable'` with a causeless 503, so the
+	 * sanitizer replaced the sentence with 'Internal Server Error' — retry guidance in
+	 * the header, and a body that does not say what would be worth retrying.
+	 *
+	 * Asserted after the mapper, because that is the only place the rewrite happens: a
+	 * test that reads the thrown error passes with the fix reverted.
+	 *
+	 * Two rows rather than one because there are two resolves. A range is served by a
+	 * second call against the same store, and the ranged twin was the site most likely
+	 * to be left behind — it was in the ticket precisely because a fix could stop one
+	 * line short of it.
+	 */
+	it('says what is unavailable when the whole-body read cannot be served', async () => {
+		mockResolveGraphicAssetRevision.mockResolvedValue({ outcome: 'unavailable' });
+		const handler = (await import(
+			'../../../../../server/api/graphics-assets/[assetId]/revisions/[revisionId]/content.get',
+		)).default;
+		const event = eventWithHeaders({});
+
+		const failure = await refusalFrom(handler(event));
+
+		expect(failure).toMatchObject({
+			statusCode: 503,
+			statusMessage: 'Service Unavailable',
+			message: 'Graphic Asset Content is temporarily unavailable',
+		});
+		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
+	});
+
+	it('says what is unavailable when the ranged read cannot be served', async () => {
+		mockResolveGraphicAssetRevision
+			.mockResolvedValueOnce({
+				outcome: 'available',
+				body: new ReadableStream(),
+				byteLength: 1000,
+				contentType: 'video/webm',
+			})
+			.mockResolvedValueOnce({ outcome: 'unavailable' });
+		const handler = (await import(
+			'../../../../../server/api/graphics-assets/[assetId]/revisions/[revisionId]/content.get',
+		)).default;
+		const event = eventWithHeaders({ range: 'bytes=100-199' });
+
+		const failure = await refusalFrom(handler(event));
+
+		expect(mockResolveGraphicAssetRevision).toHaveBeenLastCalledWith(
+			expect.objectContaining({ range: { offset: 100, length: 100 } }),
+		);
+		expect(failure).toMatchObject({
+			statusCode: 503,
+			statusMessage: 'Service Unavailable',
+			message: 'Graphic Asset Content is temporarily unavailable',
+		});
+		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
 	});
 });

@@ -94,6 +94,36 @@ export class GraphicsAuthorSessionUnavailableError extends Error {
 	}
 }
 
+/**
+ * Something this request needed was out of reach, and may not be a moment from now.
+ *
+ * Public for the reason the three above are: the sentence names what stopped working
+ * and implies what to do about it — wait and ask again — where 'Internal Server Error'
+ * says only that the request failed. The response carries `retry-after` beside it,
+ * because a reader told a thing is temporary is owed a number.
+ *
+ * **One class for every subsystem, deliberately.** Its siblings each name a specific
+ * fault an operator acts on differently, so each earned a type. This one is the
+ * opposite case: seven sites across Graphic Asset content, thumbnails, staged bytes,
+ * Screen Output delivery, capability sessions and Template Package export all meant the
+ * same thing, and #321 found every one of them sanitized to a placeholder because none
+ * of them said so in a way the mapper could read. Minting a class per subsystem would
+ * have answered that seven times and left the eighth site to make the same mistake
+ * again. What varies between them is the sentence, which is the raiser's own — this
+ * class carries no wording of its own precisely so it cannot flatten theirs.
+ *
+ * It says a subsystem is unreachable and never why, so nothing a store threw travels
+ * with it. Pass the underlying failure as `cause` where there is one: it reaches the
+ * failure log's `errorName` through this class's name, and no response body.
+ */
+export class TemporarilyUnavailableError extends Error {
+	statusCode = 503;
+	constructor(message: string, options?: ErrorOptions) {
+		super(message, options);
+		this.name = 'TemporarilyUnavailableError';
+	}
+}
+
 interface ErrorWithPublicMetadata {
 	code?: unknown;
 	statusCode?: unknown;

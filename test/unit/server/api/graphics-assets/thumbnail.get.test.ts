@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { stubH3Event } from '~~/test/helpers/h3Event';
+import { refusalFrom } from '~~/test/helpers/publicServerFailure';
 
 const {
 	mockRequireGraphicsAuthorSession,
@@ -78,6 +79,27 @@ describe('graphic Asset thumbnail delivery', () => {
 
 		await expect(handler(event)).rejects.toMatchObject({ statusCode: 503 });
 		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
+	});
+
+	/**
+	 * #321. The refusal above was raised with no cause, so the sanitizer replaced its
+	 * sentence with 'Internal Server Error' and the author was left with retry guidance
+	 * in the header and nothing in the body saying what to retry or why.
+	 *
+	 * Asserted after the mapper because that is where the rewrite happens: the row above
+	 * passes with the fix reverted, and this one does not.
+	 */
+	it('still says what is unavailable after the 5xx sanitizer has been over it', async () => {
+		mockResolveGraphicAssetThumbnail.mockResolvedValue({ outcome: 'unavailable', retryable: true });
+		const handler = (await import(routePath)).default;
+
+		const failure = await refusalFrom(handler(stubH3Event()));
+
+		expect(failure).toMatchObject({
+			statusCode: 503,
+			statusMessage: 'Service Unavailable',
+			message: 'Graphic Asset thumbnail is temporarily unavailable',
+		});
 	});
 
 	it('answers a blank asset segment with 400 rather than an unclassified failure', async () => {

@@ -4,6 +4,7 @@ import {
 	ServiceConfigurationError,
 	ServiceWiringError,
 	StateConflictError,
+	TemporarilyUnavailableError,
 } from './errors';
 import { RealtimePublishError } from './realtimePublishFailure';
 
@@ -129,7 +130,29 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		// Only this one code. Every other `GraphicsAssetLibraryError` is answered
 		// below 500 by `rethrowGraphicsAssetApiError`, except the two capacity
 		// codes, which the branch above already has.
+		//
+		// Twenty-three sites in the library raise this code and every one of them
+		// publishes its sentence through here. Each writes a fixed one naming a
+		// store or an interrupted operation; none interpolates what it caught, and
+		// a site that started to would hand a provider's own words to every caller.
+		// A caught exception belongs in `cause`, which reaches the failure log and
+		// no response body. (Counted for #321: a note here used to say three.)
 		error.statusCode = 503;
+		error.statusMessage = 'Service Unavailable';
+		error.message = cause.message;
+		hasMappedPublicServerMessage = true;
+		mappedOperationalError = true;
+	}
+	else if (cause instanceof TemporarilyUnavailableError) {
+		// The shared classification, and the one branch here that is not about a
+		// particular subsystem: seven sites each wrote an operator a sentence about
+		// something momentarily out of reach — Graphic Asset content whole and
+		// ranged, thumbnails, staged bytes, Screen Output delivery, a capability
+		// session, a Template Package export — and every one of those sentences was
+		// overwritten below until #321. They differ only in what they name, so they
+		// share a class rather than earning seven, and the message carried here is
+		// the raiser's.
+		error.statusCode = cause.statusCode;
 		error.statusMessage = 'Service Unavailable';
 		error.message = cause.message;
 		hasMappedPublicServerMessage = true;

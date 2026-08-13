@@ -3,6 +3,7 @@ import type { TemplatePackageExportOutcome } from '~~/server/modules/graphics-as
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
+import { TemporarilyUnavailableError } from '~~/server/utils/errors';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 import {
 	broadcastGraphicTemplatePackageRequirements,
@@ -27,11 +28,19 @@ export function respondWithTemplatePackage(
 		const retryable = report.issues.length > 0 && report.issues.every(issue => issue.retryable);
 		if (retryable)
 			setResponseHeader(event, 'retry-after', 5);
+		// Only the retryable half is classified, because only it is a 5xx. A 409 is the
+		// author being told to correct something and is never sanitized; the 503 was,
+		// and this refusal's `data` surviving is what hid it — the report came through
+		// intact under a message that said 'Internal Server Error' (#321).
+		const cause = retryable
+			? new TemporarilyUnavailableError('The Template Package could not be exported')
+			: undefined;
 		throw createError({
 			statusCode: retryable ? 503 : 409,
 			statusMessage: retryable ? 'Service Unavailable' : 'Conflict',
 			message: 'The Template Package could not be exported',
 			data: report,
+			cause,
 		});
 	}
 
