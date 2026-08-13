@@ -70,6 +70,17 @@ describe('graphic Asset thumbnail delivery', () => {
 		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
 	});
 
+	it('answers a blank asset segment with 400 rather than an unclassified failure', async () => {
+		mockRouterParam.mockReturnValue('');
+		const handler = (await import(routePath)).default;
+
+		await expect(handler(stubH3Event())).rejects.toMatchObject({
+			statusCode: 400,
+			message: 'Graphic Asset identity cannot be empty',
+		});
+		expect(mockResolveGraphicAssetThumbnail).not.toHaveBeenCalled();
+	});
+
 	it('maps a retryable catalogue failure to 503 with retry guidance', async () => {
 		const { GraphicsAssetLibraryError } = await import('~~/server/modules/graphics-asset-library');
 		mockResolveGraphicAssetThumbnail.mockRejectedValue(new GraphicsAssetLibraryError(

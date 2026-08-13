@@ -61,6 +61,18 @@ describe('graphic Asset Revision status', () => {
 		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
 	});
 
+	it('answers a blank revision segment with 400 rather than an unclassified failure', async () => {
+		mockRouterParam.mockImplementation((_event, name: string) =>
+			name === 'assetId' ? 'asset-1' : '');
+		const handler = (await import(routePath)).default;
+
+		await expect(handler(stubH3Event())).rejects.toMatchObject({
+			statusCode: 400,
+			message: 'Graphic Asset Revision identity cannot be empty',
+		});
+		expect(mockInspectGraphicAssetRevision).not.toHaveBeenCalled();
+	});
+
 	it('inspects the revision the route names', async () => {
 		mockInspectGraphicAssetRevision.mockResolvedValue({ outcome: 'available', kind: 'still-image' });
 		const handler = (await import(routePath)).default;
