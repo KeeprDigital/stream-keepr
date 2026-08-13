@@ -1,7 +1,9 @@
+import type { Wire } from '~~/test/helpers/fixtures';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
+import { toWire } from '~~/test/helpers/fixtures';
 
 mockNuxtImport('navigateTo', () => vi.fn());
 
@@ -51,12 +53,12 @@ interface RoundProps {
  * ISO string, and has for as long as the read has been client-side (#272, #284).
  * Every fixture above takes the declaration at its word, which is why the divergence
  * had never been rendered here.
+ *
+ * `Wire` and `toWire` are the shared helpers for that question (test/helpers/fixtures.ts,
+ * #296) — this suite builds its own round rather than using `createWireMockRound`
+ * because the props it needs are the component's, not a `DbRound`'s.
  */
-type WireRound = Omit<RoundProps, 'lastSyncedAt' | 'createdAt' | 'updatedAt'> & {
-	lastSyncedAt: string | null;
-	createdAt: string;
-	updatedAt: string;
-};
+type WireRound = Wire<RoundProps>;
 
 function makeRound(overrides?: Partial<RoundProps>): RoundProps {
 	return {
@@ -77,7 +79,7 @@ function makeRound(overrides?: Partial<RoundProps>): RoundProps {
 
 /** The round the wire delivers: the fixture above, put through Nitro's JSON serialisation. */
 function makeWireRound(overrides?: Partial<RoundProps>): WireRound {
-	return JSON.parse(JSON.stringify(makeRound(overrides))) as WireRound;
+	return toWire(makeRound(overrides));
 }
 
 async function mountComponent(props: {

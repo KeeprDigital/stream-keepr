@@ -5,6 +5,18 @@
  *
  * Convention: factory names are `createMock<Entity>`. Return types match
  * the corresponding `Db*` types from server/db/schema.ts.
+ *
+ * That last sentence is the reason for the second convention below. `Db*` is the
+ * server's own row shape, with real `Date`s in it — which is what a server-side test
+ * reads and is not what a client-side one does. Anything a browser reads has been
+ * through `JSON.stringify` on the way out of Nitro and `JSON.parse` on the way in,
+ * which leaves an ISO string wherever the type still promises a `Date` (#272, #284).
+ *
+ * So: `createMock<Entity>` for a server-side row, `createWireMock<Entity>` for the
+ * same row as a client sees it. The wire siblings are derived from the `createMock*`
+ * factories rather than declared beside them, so there is one place to change when a
+ * field is added, and `toWire` is available for fixtures that are not built here.
+ * See "Wire shape" at the foot of this file.
  */
 
 import type { DbArchetype, DbEvent, DbEventTalent, DbFeatureMatch, DbMatch, DbPhase, DbPlayer, DbPlayerList, DbPlayerListMember, DbPlayerRoundStandings, DbRound, DbScreen } from '~~/server/db/schema';
@@ -339,3 +351,65 @@ export function createMockMatch(overrides?: Partial<DbMatch>): DbMatch {
 		...overrides,
 	} as DbMatch;
 }
+
+// ──────────────── Wire shape ────────────────
+
+/**
+ * The same row, typed as it arrives in a browser.
+ *
+ * Every `Date` is a string by then and nothing else changes: `JSON.stringify` writes
+ * `toJSON()` for a Date and `JSON.parse` has no way to put one back. The types on both
+ * sides go on saying `Date`, which is exactly why a fixture that hands a client-side
+ * consumer a real one can leave a live defect green — #291's `formatSyncTime` threw on
+ * the wire's string while nine tests passed on the fixture's Date.
+ */
+export type Wire<T> = {
+	[K in keyof T]: T[K] extends Date
+		? string
+		: T[K] extends Date | null
+			? string | null
+			: T[K] extends Date | null | undefined
+				? string | null | undefined
+				: T[K];
+};
+
+/**
+ * Puts any fixture through the round trip Nitro and `$fetch` perform between them.
+ *
+ * For fixtures built outside this file — a suite's own literal, a store's seeded
+ * state — where the shape question is the same one.
+ */
+export function toWire<T>(row: T): Wire<T> {
+	return JSON.parse(JSON.stringify(row)) as Wire<T>;
+}
+
+/** Derives a `createWireMock*` sibling from a `createMock*` factory, overrides and all. */
+function wireFactory<O, T>(factory: (overrides?: O) => T): (overrides?: O) => Wire<T> {
+	return overrides => toWire(factory(overrides));
+}
+
+/**
+ * The wire siblings, one per factory that carries a timestamp.
+ *
+ * Overrides are still given in the server's vocabulary — `createWireMockRound({
+ * lastSyncedAt: new Date(...) })` — because an override describes the row, and the
+ * round trip is what the factory is for. The two factories with no `Date` anywhere
+ * (`createMockFeatureMatchState`, `createMockArchetypeDetailResponse`) get no sibling:
+ * their output already survives the trip unchanged.
+ *
+ * Additive on purpose. Nothing that reads `createMock*` today changes shape, and a
+ * suite adopts the production shape one call at a time (#296, #284).
+ */
+export const createWireMockEvent = wireFactory(createMockEvent);
+export const createWireMockTalent = wireFactory(createMockTalent);
+export const createWireMockPlayer = wireFactory(createMockPlayer);
+export const createWireMockArchetype = wireFactory(createMockArchetype);
+export const createWireMockUiArchetype = wireFactory(createMockUiArchetype);
+export const createWireMockPlayerList = wireFactory(createMockPlayerList);
+export const createWireMockPlayerListMember = wireFactory(createMockPlayerListMember);
+export const createWireMockFeatureMatch = wireFactory(createMockFeatureMatch);
+export const createWireMockScreen = wireFactory(createMockScreen);
+export const createWireMockPlayerRoundStandings = wireFactory(createMockPlayerRoundStandings);
+export const createWireMockPhase = wireFactory(createMockPhase);
+export const createWireMockRound = wireFactory(createMockRound);
+export const createWireMockMatch = wireFactory(createMockMatch);
