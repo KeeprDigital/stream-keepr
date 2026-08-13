@@ -1,3 +1,4 @@
+import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbScreen } from '~~/server/db/schema';
 import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
@@ -18,7 +19,7 @@ import {
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
 import {
-	clearBroadcastGraphicsLiveSessionGraphicAssetReferences,
+	clearOrphanedBroadcastGraphicsLiveSessionGraphicAssetReferences,
 	updateBroadcastGraphicsLiveSessionGraphicAssetReferences,
 } from '~~/server/modules/screen-graphic-asset-references';
 import {
@@ -388,7 +389,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 				const session = await state.findActiveSessionByScreen(input.screenId, input.eventId);
 				if (!session) {
 					// No epoch, nothing accepted, nothing published.
-					await clearBroadcastGraphicsLiveSessionGraphicAssetReferences(input.screenId);
+					await clearOrphanedBroadcastGraphicsLiveSessionGraphicAssetReferences(input.screenId);
 					return;
 				}
 				const screen = await screens.findById(input.screenId, input.eventId);
@@ -525,27 +526,53 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	};
 
 	/**
-	 * End the Screen's epoch, announcing it when the caller wants clients to notice.
+	 * End the Screen's epoch, unannounced, on the way to deleting the Screen.
 	 *
-	 * A mode change and a reset both leave the Screen in place with live clients
-	 * watching it, so both announce. Deleting the Screen does not: those clients are
-	 * about to be told the Screen itself is gone, and pointing them at a snapshot
-	 * route that will now refuse them would surface a spurious failure on the way
-	 * out — which is why this is a caller's choice rather than something ending an
-	 * epoch always does.
+	 * The one end nobody is told about, and the only caller left that ends an epoch
+	 * without a write of its own to commit alongside. Its clients are about to be
+	 * told the Screen itself is gone, and pointing them at a snapshot route that will
+	 * now refuse them would surface a spurious failure on the way out. The two ends
+	 * that do leave the Screen in place — a mode change and a reset — announce, and
+	 * each does so after the commit it rides in.
 	 */
-	const endSessionsForScreen = async (
+	const endSessionsForScreen = async (screenId: number, eventId: number): Promise<void> => {
+		// One commit ends the epoch, discards its receipts, and unpublishes what it
+		// had accepted — an ended epoch has accepted nothing, so a Screen switched
+		// away and back must not find media on its outputs the new epoch never chose.
+		await state.endSessionsForScreen(screenId, eventId);
+	};
+
+	/**
+	 * Ending the Screen's epoch as one half of the write that causes it to end.
+	 *
+	 * A Screen leaving Broadcast Graphics mode ends its playout epoch, and the two
+	 * used to be separate writes with the end going second. A failure in between left
+	 * the mode changed and the epoch still active — and `ensureActiveSession` returns
+	 * an active session as it stands, so the Screen's next activation of the mode got
+	 * the previous show's graphics back on air, against the contract that a fresh
+	 * epoch has nothing on air. The operator's retry did not repair it either: the
+	 * committed mode change had moved the state version out from under it (#305).
+	 *
+	 * So the end is handed back as statements for the caller to commit with the mode
+	 * change, and the announcement as a thunk to run once that commit has happened —
+	 * an announcement is a claim that an epoch ended, and may not outlive a commit
+	 * that did not. Which epoch it names is read here, before the statements are
+	 * committed, because afterwards there is no active session left to identify.
+	 */
+	const endEpochOnLeavingBroadcastGraphics = async (
 		screenId: number,
 		eventId: number,
-		options: { notify?: boolean; originConnectionId?: string } = {},
-	): Promise<void> => {
-		const ended = await state.endSessionsForScreen(screenId, eventId);
-		// An ended epoch has accepted nothing, so it publishes nothing. Its references
-		// go with it: a Screen switched away and back would otherwise find media on its
-		// outputs that the new epoch never accepted.
-		await clearBroadcastGraphicsLiveSessionGraphicAssetReferences(screenId);
-		if (options.notify)
-			await publishEpochEnded(eventId, screenId, ended?.id ?? null, options.originConnectionId);
+		originConnectionId?: string,
+	): Promise<{
+		statements: [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]];
+		announceEnded: () => Promise<void>;
+	}> => {
+		const ending = await state.findActiveSessionByScreen(screenId, eventId);
+		return {
+			statements: state.endSessionStatementsOnLeavingBroadcastGraphics(screenId, eventId),
+			announceEnded: async () =>
+				await publishEpochEnded(eventId, screenId, ending?.id ?? null, originConnectionId),
+		};
 	};
 
 	/**
@@ -567,10 +594,11 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		originConnectionId?: string;
 	}): Promise<BroadcastGraphicsLiveSessionResponse> => {
 		await requireBroadcastGraphicsScreen(eventId, screenId);
+		// One commit: the old epoch ends, what it published is unpublished, and the
+		// successor opens carrying nothing forward — so the new epoch publishes
+		// nothing until it accepts something of its own, and no failure can leave the
+		// ended epoch's media on the Screen's outputs with nobody told.
 		const { ended, opened } = await state.resetSessionForScreen(screenId, eventId);
-		// A reset carries nothing forward, so the new epoch publishes nothing until it
-		// accepts something of its own.
-		await clearBroadcastGraphicsLiveSessionGraphicAssetReferences(screenId);
 		await publishEpochEnded(eventId, screenId, ended?.id ?? null, originConnectionId);
 		return mapBroadcastGraphicsLiveSessionToResponse(opened);
 	};
@@ -776,6 +804,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		republishLiveSessionReferences,
 		resetLiveState,
 		endSessionsForScreen,
+		endEpochOnLeavingBroadcastGraphics,
 	};
 }
 

@@ -188,26 +188,41 @@ export function screenWriteModule() {
 			}
 		}
 
-		const updatedScreen = await screens.update(screenId, eventId, data, stateVersion);
+		// A Broadcast Graphics Live Session is the Screen's playout epoch, so leaving
+		// the mode ends it — in the same commit as the mode change, because neither
+		// order survives on its own. Ending first meant a refused update could blank a
+		// running show; ending afterwards meant a failed end left the Screen out of the
+		// mode with its epoch still active, which the next activation resurrected with
+		// the previous show's graphics on air (#305). Committed together there is no
+		// instant between them, and the end's own condition covers the refused write.
+		const epochEnd = existingScreen.currentMode === 'broadcast-graphics'
+			&& data.currentMode !== undefined
+			&& data.currentMode !== 'broadcast-graphics'
+			? await broadcastGraphicsLiveSessionModule()
+					.endEpochOnLeavingBroadcastGraphics(screenId, eventId, originConnectionId)
+			: undefined;
+
+		const updatedScreen = await screens.update(
+			screenId,
+			eventId,
+			data,
+			stateVersion,
+			epochEnd?.statements,
+		);
 
 		if (!updatedScreen) {
 			throw createError({ statusCode: 404, message: 'Screen not found' });
 		}
 
-		// A Broadcast Graphics Live Session is the Screen's playout epoch, so
-		// leaving the mode ends it. Ending after the mode change commits means a
-		// failed update can never orphan a running show's live state.
-		//
-		// Announced, though not out of necessity: `screen:updated` already reaches
-		// every client including Screen Outputs, and an output renders by the Screen's
-		// current mode, so it stops composing graphics without being told about the
-		// epoch. The notification makes each peer drop the ended epoch's cached state
-		// deterministically rather than as a side effect of a component remount.
-		if (existingScreen.currentMode === 'broadcast-graphics' && updatedScreen.currentMode !== 'broadcast-graphics') {
-			await broadcastGraphicsLiveSessionModule().endSessionsForScreen(screenId, eventId, {
-				notify: true,
-				originConnectionId,
-			});
+		// Announced only now, because an announcement is a claim that an epoch ended
+		// and the commit that ends it has to have happened first. Not out of necessity:
+		// `screen:updated` already reaches every client including Screen Outputs, and
+		// an output renders by the Screen's current mode, so it stops composing
+		// graphics without being told about the epoch. The notification makes each peer
+		// drop the ended epoch's cached state deterministically rather than as a side
+		// effect of a component remount.
+		if (epochEnd) {
+			await epochEnd.announceEnded();
 		}
 		else if (data.modeConfigs !== undefined && updatedScreen.currentMode === 'broadcast-graphics') {
 			// A generic write may not change the authored Graphic Asset References — that
@@ -232,9 +247,13 @@ export function screenWriteModule() {
 		// End any playout epoch before the delete, and only for a Screen that has
 		// one. Ending is what discards the epoch's Command Receipts, and it has to
 		// happen while the sessions still exist: the Screen's cascade delete removes
-		// them, after which nothing identifies the receipts they left behind. That is
-		// the opposite order from `updateScreen`, which ends the epoch only after its
-		// mode change commits so a failed update cannot blank a running show.
+		// them, after which nothing identifies the receipts they left behind. This is
+		// the one end still issued as a write of its own — `updateScreen` commits its
+		// end with the mode change that causes it, which is not available here because
+		// the delete is not one statement to ride along with. A failure between the
+		// two costs nothing that matters: the epoch has ended and the Screen survives,
+		// which is a Screen in Broadcast Graphics mode whose next snapshot opens a
+		// fresh epoch — the state a delete was heading for anyway.
 		const existingScreen = await screens.findById(screenId, eventId);
 		if (existingScreen?.currentMode === 'broadcast-graphics')
 			await broadcastGraphicsLiveSessionModule().endSessionsForScreen(screenId, eventId);

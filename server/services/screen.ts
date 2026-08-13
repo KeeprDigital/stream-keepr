@@ -1,3 +1,4 @@
+import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbScreen, ScreenMode } from '~~/server/db/schema';
 import type { PersistedScreenOutputAssetCapability } from '~~/server/modules/screen-output-assets/manager';
 import type { CreateScreenInput, UpdateScreenInput } from '~~/shared/api';
@@ -92,22 +93,31 @@ export function screenService() {
 	 * Versioned write helper. Uses optimistic locking: the update only succeeds
 	 * if `stateVersion` still matches the version we read. On conflict, throws
 	 * `StateConflictError` (409).
+	 *
+	 * Always a batch, even for the write on its own, so there is one execution path
+	 * rather than two that can drift — and so a caller with a consequence that must
+	 * not be separable from the write has somewhere to put it.
 	 */
 	const versionedWrite = async (
 		id: number,
 		eventId: number,
 		data: Partial<typeof screens.$inferInsert>,
 		currentVersion: number,
+		companions: readonly BatchItem<'sqlite'>[] = [],
 	): Promise<DbScreen | undefined> => {
-		const [result] = await db
-			.update(screens)
-			.set({ ...data, stateVersion: currentVersion + 1 })
-			.where(and(
-				eq(screens.id, id),
-				eq(screens.eventId, eventId),
-				eq(screens.stateVersion, currentVersion),
-			))
-			.returning();
+		const [written] = await db.batch([
+			db
+				.update(screens)
+				.set({ ...data, stateVersion: currentVersion + 1 })
+				.where(and(
+					eq(screens.id, id),
+					eq(screens.eventId, eventId),
+					eq(screens.stateVersion, currentVersion),
+				))
+				.returning(),
+			...companions,
+		] as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
+		const [result] = written as DbScreen[];
 
 		if (result)
 			return result;
@@ -124,8 +134,23 @@ export function screenService() {
 		eventId: number,
 		data: Omit<UpdateScreenInput, 'stateVersion'>,
 		stateVersion: number,
+		/**
+		 * Statements that commit with this write or not at all.
+		 *
+		 * A Screen write can have a consequence elsewhere that a second write issued
+		 * afterwards cannot be trusted to deliver: leaving Broadcast Graphics mode ends
+		 * the Screen's playout epoch, and an end that failed once the mode change had
+		 * committed left a running epoch for the next activation to resurrect (#305).
+		 * They travel here rather than being executed by the caller, so no failure has
+		 * an instant between the two to happen in.
+		 *
+		 * Each is responsible for its own condition. A batch applies every statement it
+		 * holds whether or not the ones before it matched anything, so a companion that
+		 * must not apply when this write is refused has to say so itself.
+		 */
+		companions?: readonly BatchItem<'sqlite'>[],
 	): Promise<DbScreen | undefined> => {
-		return versionedWrite(id, eventId, data, stateVersion);
+		return versionedWrite(id, eventId, data, stateVersion, companions);
 	};
 
 	const remove = async (id: number, eventId: number): Promise<boolean> => {

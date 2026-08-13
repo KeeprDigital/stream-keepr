@@ -133,11 +133,28 @@ describe('screenService', () => {
 	describe('update', () => {
 		it('returns updated screen via versioned write', async () => {
 			const updated = createMockScreen({ name: 'Updated', stateVersion: 1 });
-			getChain('update').returning.mockResolvedValue([updated]);
+			mockDb.batch.mockResolvedValue([[updated]]);
 
 			const result = await screenService().update(1, 1, { name: 'Updated' } as any, 0);
 
 			expect(result).toEqual(updated);
+		});
+
+		it('commits the statements a caller sends with the write, after it', async () => {
+			// A consequence that must not be separable from the write — leaving
+			// Broadcast Graphics mode ends the Screen's playout epoch — rides in the
+			// same batch, behind the update whose postcondition it is guarded on.
+			const updated = createMockScreen({ name: 'Updated', stateVersion: 1 });
+			mockDb.batch.mockResolvedValue([[updated]]);
+
+			await screenService().update(1, 1, { name: 'Updated' } as any, 0, [
+				'end-epoch' as never,
+				'clear-references' as never,
+			]);
+
+			const committed = mockDb.batch.mock.calls[0]?.[0] as unknown[];
+			expect(committed).toHaveLength(3);
+			expect(committed.slice(1)).toEqual(['end-epoch', 'clear-references']);
 		});
 	});
 
@@ -209,7 +226,7 @@ describe('screenService', () => {
 			const screen = createMockScreen({ modeConfigs: { idle: { text: 'Hello' } } as any });
 			mockDb.query.screens.findFirst.mockResolvedValue(screen);
 			const updatedScreen = createMockScreen({ stateVersion: 1 });
-			getChain('update').returning.mockResolvedValue([updatedScreen]);
+			mockDb.batch.mockResolvedValue([[updatedScreen]]);
 
 			const result = await screenService().updateModeConfig(1, 1, 'idle' as any, { text: 'World' });
 
@@ -222,7 +239,7 @@ describe('screenService', () => {
 			const screen = createMockScreen({ screenConfig: { theme: 'dark' } as any });
 			mockDb.query.screens.findFirst.mockResolvedValue(screen);
 			const updatedScreen = createMockScreen({ stateVersion: 1 });
-			getChain('update').returning.mockResolvedValue([updatedScreen]);
+			mockDb.batch.mockResolvedValue([[updatedScreen]]);
 
 			const result = await screenService().updateScreenConfig(1, 1, { theme: 'light' });
 

@@ -1,12 +1,15 @@
+import type { SQL } from 'drizzle-orm';
+import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbScreen } from '~~/server/db/schema';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicAssetReferencingScreenMode,
 	ScreenGraphicAssetReference,
 } from '~~/shared/utils/graphicsAssetReferences';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, like } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { screens } from '~~/server/db/schema';
+import { graphicAssetReferences } from '~~/server/db/schema/graphicsAsset';
 import { StateConflictError } from '~~/server/utils/errors';
 import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
@@ -421,18 +424,51 @@ export async function updateBroadcastGraphicsLiveSessionGraphicAssetReferences(i
 }
 
 /**
- * Drop everything a Screen's Broadcast Graphics Live Session published.
+ * The statement dropping everything a Screen's Broadcast Graphics Live Session
+ * published.
  *
  * An epoch that has ended has no accepted values, so it publishes nothing. Leaving
  * its rows behind would keep a revision resolvable through a Screen Output long
  * after the show that chose it, and a Screen switched away and back would find media
  * on air that the new epoch never accepted.
+ *
+ * Returned rather than executed because it belongs in the same commit as the end of
+ * the epoch that published them. Run on its own after that commit — as it was — its
+ * failure left an ended epoch's media resolvable through the Screen's outputs and
+ * skipped the epoch-ended announcement that followed it, so every peer went on
+ * rendering a show that had finished. #305.
+ *
+ * `onlyIf` is for an end riding in the batch of the write that causes it: a batch
+ * applies every statement it holds whether or not the ones before it matched
+ * anything, so a clear travelling with a mode change that may be refused has to
+ * state that condition itself.
  */
-export async function clearBroadcastGraphicsLiveSessionGraphicAssetReferences(
+export function clearBroadcastGraphicsLiveSessionGraphicAssetReferencesStatement(
+	screenId: number,
+	onlyIf?: SQL,
+): BatchItem<'sqlite'> {
+	return db.delete(graphicAssetReferences).where(and(
+		eq(graphicAssetReferences.ownerKind, 'screen'),
+		eq(graphicAssetReferences.ownerId, String(screenId)),
+		like(graphicAssetReferences.ownerSlot, LIVE_SESSION_SLOT_PATTERN),
+		onlyIf,
+	));
+}
+
+/**
+ * Drop what a Screen with no running epoch is still publishing, as a write of its
+ * own.
+ *
+ * The repair rather than the end, and the distinction is why this exists alongside
+ * the statement above rather than instead of it. Ending an epoch clears what it
+ * published in the commit that ends it, because there the clear is a consequence
+ * nothing else re-derives. Here there is no epoch and no commit to join: the
+ * reconciliation found a Screen with no active session, which publishes nothing by
+ * definition, so any surviving row is debris. The write is idempotent and re-driven
+ * on every republish, so a failure converges on the next one instead of stranding.
+ */
+export async function clearOrphanedBroadcastGraphicsLiveSessionGraphicAssetReferences(
 	screenId: number,
 ): Promise<void> {
-	await db.$client.prepare(`
-		DELETE FROM graphic_asset_references
-		WHERE owner_kind = 'screen' AND owner_id = ? AND owner_slot LIKE ?
-	`).bind(String(screenId), LIVE_SESSION_SLOT_PATTERN).run();
+	await clearBroadcastGraphicsLiveSessionGraphicAssetReferencesStatement(screenId);
 }
