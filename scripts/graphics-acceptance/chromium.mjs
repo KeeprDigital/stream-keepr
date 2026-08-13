@@ -175,7 +175,61 @@ async function launch(candidate, extraArgs) {
 }
 
 /**
+ * Give the page the harness's own author session instead of one of its own.
+ *
+ * A Graphics Ingestion Operation belongs to the graphics author session that
+ * created it, and every operation route matches that identity exactly
+ * (ADR-0003). The harness stages the ingestion from Node, so the browser has to
+ * arrive as the same author or it is reading somebody else's operation and is
+ * answered `404`. Sending it to the application first to pick up a session did
+ * the opposite of what it read as: an ordinary page load *mints* a session, so
+ * the warm-up visit created the second identity it looked like it was avoiding,
+ * and the `--library` gate could not pass by construction (#276).
+ *
+ * The cookie is installed in the browser's own jar before anything is
+ * navigated, so the page is the initiator from its first request. Its
+ * attributes mirror the ones the installation issues (`httpOnly`, path `/`,
+ * `SameSite=Strict`, `Secure` over https), because a cookie the browser stores
+ * under different rules is a different cookie for the requests that matter.
+ *
+ * @param {string} url The page the cookie has to reach, which decides its scope.
+ * @param {string} authorCookie A `name=value` pair as the installation issued it.
+ */
+export function authorSessionCookie(url, authorCookie) {
+	const separator = authorCookie.indexOf('=');
+	if (separator < 1)
+		throw new Error('An author session cookie is a name=value pair.');
+	return {
+		name: authorCookie.slice(0, separator),
+		value: authorCookie.slice(separator + 1),
+		url,
+		path: '/',
+		httpOnly: true,
+		secure: new URL(url).protocol === 'https:',
+		sameSite: 'Strict',
+	};
+}
+
+async function installAuthorCookie(page, url, authorCookie) {
+	await page.command('Network.enable');
+	const { success } = await page.command('Network.setCookie', authorSessionCookie(url, authorCookie));
+	// A browser that did not take the cookie is a browser that will read the
+	// harness's own operation as somebody else's and be answered `404` — the
+	// defect this replaced, wearing the fix's clothes. Said here rather than
+	// left to surface as a font that would not load.
+	if (success === false) {
+		const refused = new Error('The acceptance browser refused the author session cookie.');
+		refused.code = 'author-session-cookie-refused';
+		throw refused;
+	}
+}
+
+/**
  * Open one page in unattended Chromium and wait for its verdict.
+ *
+ * `authorCookie` is a `name=value` pair from an installation the harness has
+ * already opened; given one, the page starts blank so the cookie is in place
+ * before the first request, and is navigated afterwards.
  *
  * @returns {Promise<{
  *   outcome: 'passed' | 'failed' | 'timed-out' | 'unavailable',
@@ -188,30 +242,24 @@ export async function observeChromiumVerdict({
 	url,
 	timeoutMs = 30_000,
 	extraArgs = [],
-	sessionUrl,
+	authorCookie,
 }) {
 	for (const candidate of chromiumCandidates()) {
 		const browser = await launch(candidate, extraArgs);
 		if (!browser)
 			continue;
 		try {
-			// Visiting the installation first lets the page reach same-origin
-			// routes as a graphics author would, exactly like an operator's browser.
-			if (sessionUrl) {
-				const warmup = await fetch(
-					`http://${new URL(browser.endpoint).host}/json/new?${encodeURIComponent(sessionUrl)}`,
-					{ method: 'PUT' },
-				).then(response => response.json());
-				const warmupSocket = await connect(warmup.webSocketDebuggerUrl);
-				await new Promise(resolve => setTimeout(resolve, 750));
-				warmupSocket.close();
-			}
+			const opened = authorCookie ? 'about:blank' : url;
 			const target = await fetch(
-				`http://${new URL(browser.endpoint).host}/json/new?${encodeURIComponent(url)}`,
+				`http://${new URL(browser.endpoint).host}/json/new?${encodeURIComponent(opened)}`,
 				{ method: 'PUT' },
 			).then(response => response.json());
 			const page = await connect(target.webSocketDebuggerUrl);
 			try {
+				if (authorCookie) {
+					await installAuthorCookie(page, url, authorCookie);
+					await page.command('Page.navigate', { url });
+				}
 				await page.command('Runtime.enable');
 				const deadline = Date.now() + timeoutMs;
 				while (Date.now() < deadline) {

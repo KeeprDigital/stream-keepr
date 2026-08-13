@@ -130,7 +130,7 @@ async function serveLocally() {
 
 await runAcceptanceHarness({
 	harness: HARNESS,
-	async run({ record }) {
+	async run({ evidence, record }) {
 		// The library face has to be reached from the installation's own origin:
 		// its routes are same-origin and cookie-authorized, so a page served from
 		// loopback could not read them at all.
@@ -138,27 +138,30 @@ await runAcceptanceHarness({
 		let staged;
 		try {
 			let url;
-			let sessionUrl;
+			let authorCookie;
 			if (library) {
 				const origin = acceptanceOrigin({ deployed });
 				const session = await openInstallation(origin);
+				// The session travels to a browser from here on, so it is registered
+				// before anything else can print it, exactly as the three sibling
+				// harnesses register theirs (#276).
+				evidence.addSecret(session.authorCookie);
 				staged = await stageFontIngestion(session, {
 					bytes: new Uint8Array(await readFile(fromRepository(LIBRARY_FACE))),
 					declaredMime: 'font/woff2',
 					sourceFileName: 'acceptance-face.woff2',
 				});
 				url = `${origin}${ACCEPTANCE_PATH}?operation=${staged.operationId}`;
-				// A graphics author session is issued on an ordinary page load, and
-				// the library routes need one. Static assets do not pass through the
-				// middleware that issues it, so the browser visits the application
-				// first, exactly as an operator's browser would.
-				sessionUrl = `${origin}/`;
+				// The operation belongs to the session that staged it and is a 404 to
+				// every other one (ADR-0003), so the browser is handed this session
+				// rather than sent to the application to mint one of its own (#276).
+				authorCookie = session.authorCookie;
 			}
 			else {
 				url = `${local.origin}${ACCEPTANCE_PATH}`;
 			}
 
-			const verdict = await observeChromiumVerdict({ url, sessionUrl });
+			const verdict = await observeChromiumVerdict({ url, authorCookie });
 			record(verdict.outcome === 'passed'
 				? []
 				: [{ code: verdictFailureCode(verdict), detail: { page: HARNESS } }]);

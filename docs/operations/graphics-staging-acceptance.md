@@ -343,6 +343,15 @@ challenge with genuine rendered-pixel proofs, and publishes the revision. It
 then loads that published revision back through the delivery route that will
 serve it on air. The face is trashed on the way out, pass or fail.
 
+The harness stages that ingestion from Node and the browser reads it back, so
+the two have to be the same graphics author: an operation belongs to the session
+that created it and is a `404` to every other one (ADR-0003). The browser is
+therefore handed the harness's own session cookie over CDP before it navigates.
+It used to be sent to the application first to pick up a session instead, which
+minted a second identity and made the gate unpassable — the symptom was
+`font-load-incomplete` with the real cause, `ingestion-operation-not-found`,
+visible only in the installation's log (#276).
+
 `pnpm test:browser:fonts` without `--library` skips all of that and proves the
 browser facts alone. Four of them:
 
