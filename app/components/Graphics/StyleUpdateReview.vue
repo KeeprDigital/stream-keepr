@@ -196,8 +196,7 @@ async function apply() {
 		// over a fault it did not classify — and quoting that would tell the author their
 		// update was refused for a reason nobody wrote (#262). A 5xx the mapper did
 		// classify keeps its own words and is quoted like any refusal (#286).
-		const refused = failureSentence(caught)
-			?? (caught instanceof Error ? caught.message : 'The style update could not be applied');
+		const refused = reportedMessage(caught, 'The style update could not be applied');
 		// Re-read first, because a refusal is usually the Style Set having been
 		// republished or the template revised — so what the author is looking at is out
 		// of date too. The refusal is stated *after* that read, which clears the error it

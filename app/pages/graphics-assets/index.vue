@@ -124,12 +124,8 @@ const {
  * are both answers this page exists to relay, and both are 5xx. A genuinely sanitized 5xx
  * still falls back to the transport's line, which reads as machinery (#271).
  */
-const loadFailureMessage = computed(() =>
-	error.value ? failureSentence(error.value) ?? error.value.message : undefined,
-);
-const capacityFailureMessage = computed(() =>
-	capacityError.value ? failureSentence(capacityError.value) ?? capacityError.value.message : undefined,
-);
+const loadFailureMessage = computed(() => reportedMessage(error.value));
+const capacityFailureMessage = computed(() => reportedMessage(capacityError.value));
 
 watch(selectedFile, (file) => {
 	if (file && !proposedName.value.trim())

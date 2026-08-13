@@ -55,8 +55,7 @@ export const useEventStore = defineStore('event', () => {
 	 * are different jobs, and only the first one is about words.
 	 */
 	function loadErrorMessage(caughtError: unknown) {
-		return failureSentence(caughtError)
-			?? (caughtError instanceof Error ? caughtError.message : 'An error occurred');
+		return reportedMessage(caughtError, 'An error occurred');
 	}
 
 	const isLoaded = computed(() => event.value !== null);

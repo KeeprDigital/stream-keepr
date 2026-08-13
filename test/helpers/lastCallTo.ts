@@ -33,9 +33,12 @@
  * one — `spy.mock.calls.map(...)` followed by `[0]` on the result. The index is
  * unchecked, the empty case is the identical `Cannot read properties of undefined`, and
  * no `!` appears anywhere in it, so it survived both #273 and #280 untouched.
- * `ably.test.ts` carried the one instance, closed under #300. A future sweep wants both
- * shapes: an indexed or `.at()` read of a mock's calls, whether or not a bang follows,
- * and whether or not a `.map()` sits in between.
+ * `ably.test.ts` carried the instance #300 closed; #330 then found three more in a
+ * **destructuring** spelling — `const [first, second] = mock.calls.map(…)`, which has
+ * no index in it either — in `broadcastGraphicsLiveSession.test.ts`. Those wanted
+ * `callsTo` rather than this function, for the reason below. A future sweep wants every
+ * shape: an indexed, `.at()`, or destructured read of a mock's calls, whether or not a
+ * bang follows, and whether or not a `.map()` sits in between.
  *
  * Filed as #280, generalising the guard #273 built for one site.
  */
@@ -79,6 +82,59 @@ export function lastCallTo<Args extends unknown[]>(
 	if (!matched)
 		throw new Error(`expected ${describeSelector(select)}, got ${describeCalls(calls)}`);
 	return matched;
+}
+
+/**
+ * The calls a test means to compare against each other, and a refusal if there are not
+ * exactly as many as it thinks.
+ *
+ * `lastCallTo` answers "which call", which is the wrong question for a test whose whole
+ * subject is the **relationship between two** calls — that a retry reuses the first
+ * attempt's command id, that two presses do not share one. Those read
+ * `const [first, second] = mock.calls.map(…)`, and the count is the thing nothing
+ * checks: on a run that recorded one call `second` is `undefined`, so
+ * `expect(first).not.toBe(second)` passes while the second command was never sent, and
+ * on a run that recorded none `expect(retried).toBe(first)` compares `undefined` to
+ * `undefined` and passes too. Both are #273/#280's defect in the direction that hides
+ * best — a vacuous pass rather than a `TypeError` — and #330 found three of them in one
+ * file.
+ *
+ * So `expected` is required and is the point of the function. A count asserted here
+ * cannot drift from the destructuring it guards, which is what happens when a
+ * `toHaveBeenCalledTimes` sits a few lines above and someone later adds a selector, an
+ * argument, or a third call.
+ *
+ * ```ts
+ * const [first, retried] = callsTo(mockRepository.sendCommand, 2).map(call => call[3]);
+ * ```
+ *
+ * The selector carries `lastCallTo`'s meaning unchanged: name the call where anything
+ * else can reach the subject, and leave it off only for a purpose-built mock the code
+ * under test is the sole caller of.
+ */
+export function callsTo<Args extends unknown[]>(
+	mock: CallRecorder<Args>,
+	expected: number,
+	select?: CallSelector<Args>,
+): Args[] {
+	const { calls } = mock.mock;
+	const matched = calls.filter(matcherFor(select));
+	if (matched.length !== expected) {
+		throw new Error(
+			`expected ${expected} ${describeExpectedCalls(select, expected)}, got ${matched.length}; recorded ${describeCalls(calls)}`,
+		);
+	}
+	return matched;
+}
+
+/** `describeSelector`'s wording for a count rather than for one call. */
+function describeExpectedCalls<Args extends unknown[]>(select: CallSelector<Args> | undefined, count: number): string {
+	const noun = count === 1 ? 'call' : 'calls';
+	if (select === undefined)
+		return noun;
+	if (typeof select === 'string')
+		return `${noun} to ${select}`;
+	return `${noun} matching ${select.name || 'the given matcher'}`;
 }
 
 function matcherFor<Args extends unknown[]>(select?: CallSelector<Args>): (call: Args) => boolean {

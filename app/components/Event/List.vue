@@ -25,11 +25,7 @@ const emit = defineEmits<{
  * while the 5xx families whose prose survives sanitizing are quoted like any refusal
  * (#286).
  */
-const failureMessage = computed(() => {
-	if (!props.error)
-		return null;
-	return failureSentence(props.error) ?? props.error.message;
-});
+const failureMessage = computed(() => reportedMessage(props.error) ?? null);
 </script>
 
 <template>

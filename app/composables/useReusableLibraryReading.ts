@@ -89,8 +89,7 @@ export function useReusableLibraryReading<Entry>(options: {
 		options.inspectFailure?.(caught);
 		if (graphicsAuthorSessionLapsed(caught))
 			return authorSession.describeFailure(caught, options.unavailable);
-		return failureSentence(caught)
-			?? (caught instanceof Error ? caught.message : options.unavailable);
+		return reportedMessage(caught, options.unavailable);
 	}
 
 	/**
