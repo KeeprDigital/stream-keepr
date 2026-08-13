@@ -39,7 +39,7 @@ The Melee-owned identity and lifecycle facts on a synced record: its external id
 _Avoid_: external fields, sync metadata.
 
 **Feature Match Slot**:
-A reusable production control lane for showing one featured Match at a time, using mutable display/control snapshot data.
+A reusable production control lane for showing one featured Match at a time, using mutable display/control snapshot data. The converse also holds: a Match occupies at most one Slot, enforced by the database.
 _Avoid_: Feature Match when referring to the reusable lane.
 
 **Feature Match Assignment**:

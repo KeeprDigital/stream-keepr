@@ -261,6 +261,32 @@ describe('feature Match Slot Promotion server module', () => {
 		expect(mockPublishMessage).not.toHaveBeenCalled();
 	});
 
+	it('refuses to report another promotion as this one, when the Slot no longer holds the Match', async () => {
+		mockMatchService.findById.mockResolvedValue(createMatch());
+		mockFeatureMatchService.findById
+			.mockResolvedValueOnce(createFeatureMatch({ id: 2, matchId: null }))
+			.mockResolvedValue(createFeatureMatch({ id: 2, matchId: 9 }));
+		mockBuildMatchPromotionPlan.mockResolvedValue({
+			clearedSlots: [],
+			promotedSlot: createFeatureMatch({ id: 2, matchId: 7 }),
+			queries: ['promote-q'],
+		});
+		mockFeatureMatchAssignmentService.findByRoundAndSlot.mockResolvedValue({ id: 9 });
+
+		await expect(featureMatchPromotionModule().promoteMatchToSlot({
+			eventId: 1,
+			slotId: 2,
+			matchId: 7,
+		})).rejects.toMatchObject({
+			statusCode: 409,
+			name: 'StateConflictError',
+		});
+
+		expect(mockPublishMessage).not.toHaveBeenCalledWith(1, 'featureMatch:updated', {
+			featureMatch: expect.objectContaining({ id: 2 }),
+		}, undefined);
+	});
+
 	it('reverse-syncs through the post-commit form, so a lost Session race cannot fail a committed promotion', async () => {
 		stagePromotion();
 

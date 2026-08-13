@@ -317,7 +317,9 @@ export function createMeleeSyncWorkflows() {
 			deactivated,
 		} = await playerSvc.reconcileMeleeSnapshot(eventId, playerSnapshot, new Date());
 		const playerIds = upsertedPlayers.map(player => player.id);
-		const updatedMatchIds = await playerFeatureMatchSyncService().syncMatchesFromPlayers(eventId, playerIds);
+		// The Player reconcile above has committed, so the reverse sync is a
+		// follow-on: a lost Session race must not fail a bulk write that landed.
+		const updatedMatchIds = await playerFeatureMatchSyncService().syncMatchesFromPlayersAfterCommit(eventId, playerIds);
 
 		if (updatedMatchIds.length > 0) {
 			await publishAfterCommit(warnings, async () => await publication.meleeFeatureMatchesSynced({
@@ -574,7 +576,9 @@ export function createMeleeSyncWorkflows() {
 		}
 
 		const playerIds = upsertedPlayers.map(p => p.id);
-		const updatedMatchIds = await playerFeatureMatchSyncService().syncMatchesFromPlayers(eventId, playerIds);
+		// The Player and deck writes above have committed, so the reverse sync is a
+		// follow-on: a lost Session race must not fail a bulk write that landed.
+		const updatedMatchIds = await playerFeatureMatchSyncService().syncMatchesFromPlayersAfterCommit(eventId, playerIds);
 		if (updatedMatchIds.length > 0) {
 			await publishAfterCommit(warnings, async () => await publication.meleeFeatureMatchesSynced({
 				eventId,
