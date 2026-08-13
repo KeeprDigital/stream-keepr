@@ -134,7 +134,27 @@ const FILENAME_PATTERN
  * long unbroken runs of token characters. Domain vocabulary is not: real
  * detail values are hyphenated words, header values, or numbers.
  */
-const OPAQUE_TOKEN_PATTERN = /\w{16,}/;
+const TOKEN_RUN_PATTERN = /\w{16,}/g;
+/**
+ * The one vocabulary whose words run together the way a token does.
+ *
+ * `_` is a word separator in SCREAMING_SNAKE_CASE, so an environment-variable
+ * name reads as one long run to a rule that only measures length —
+ * `STREAM_KEEPR_BROWSER_ACCEPTANCE_URL` is thirty-five token characters, and
+ * the harness that names it so an operator can set it died printing the stack
+ * it died in (#275). An underscore therefore breaks a run, but only where what
+ * it separates is upper-case words: a base64url capability that happens to
+ * contain one is mixed-case and stays opaque, and each separated word is
+ * measured on its own, so no digest buys itself a break by carrying an
+ * underscore.
+ */
+const CONFIGURATION_NAME_PATTERN = /^[A-Z0-9]+(?:_[A-Z0-9]+)+$/;
+
+function carriesOpaqueToken(value) {
+	return (value.match(TOKEN_RUN_PATTERN) ?? []).some(run =>
+		!CONFIGURATION_NAME_PATTERN.test(run)
+		|| run.split('_').some(word => word.length >= 16));
+}
 
 /**
  * Reduce any delivery URL to the route it exercised. The route is the useful
@@ -231,7 +251,7 @@ function leakCode(value, secrets) {
 		return 'evidence-url-leak';
 	if (FILENAME_PATTERN.test(value))
 		return 'evidence-filename-leak';
-	if (OPAQUE_TOKEN_PATTERN.test(value))
+	if (carriesOpaqueToken(value))
 		return 'evidence-opaque-token-leak';
 	return undefined;
 }

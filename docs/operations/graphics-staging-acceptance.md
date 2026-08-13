@@ -378,6 +378,14 @@ and a value that would leak is replaced by a failure of its own —
 `evidence-secret-leak`, `evidence-url-leak`, `evidence-filename-leak`, or
 `evidence-opaque-token-leak` — naming only the field that carried it.
 
+Where that happens on the run's own failure path, the failures still print:
+each one keeps its stable code with `detail=withheld` in place of the values,
+and the refusal is the last line. A refused line used to take the harness down
+instead, printing a Node stack trace whose frames disclose this checkout's
+absolute paths — the one thing the formatter exists to withhold, arriving
+through the formatter (#275). A run whose closing summary is refused fails
+rather than passes, because a leak is itself a failure.
+
 This means a failing run is safe to paste into an issue as-is. It also means
 that if you need the offending identity in order to investigate, you look it up
 in the installation from the route and the timestamp; the transcript will not

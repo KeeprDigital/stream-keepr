@@ -274,9 +274,11 @@ export function readLocalConfigurationFiles() {
  * The prose goes to stderr on its own rather than through the evidence
  * formatter, which is a deliberate exception and not an oversight. That
  * formatter exists to reduce values *observed from the installation* — object
- * keys, capability tokens, digests — and it enforces that with length and
- * opaque-token rules a `NUXT_`-prefixed name trips on sight. This sentence
- * carries no observation at all: it is assembled from a compile-time map and
+ * keys, capability tokens, digests — and it enforces that with a length rule
+ * several sentences of guidance trip on sight. (The opaque-token rule no longer
+ * refuses a `NUXT_`-prefixed name for its length alone; #275 taught it that an
+ * upper-case name is words rather than a token.) This sentence carries no
+ * observation at all: it is assembled from a compile-time map and
  * the names of files that are checked into the repository as `.example`s, so
  * there is nothing in it to withhold. The stable code that follows it is what
  * a machine reads.
