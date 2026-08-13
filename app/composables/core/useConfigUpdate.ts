@@ -1,5 +1,6 @@
 import { tryOnScopeDispose } from '@vueuse/core';
 import { createCancelableDebounce } from '~/utils/cancelableDebounce';
+import { registerPendingEditFlush } from '~/utils/eventStores';
 
 // U is the update payload type — defaults to Partial<T> but can include `null` for "delete" semantics
 interface UseConfigUpdateOptions<T, U extends Record<string, any> = Partial<T>> {
@@ -160,11 +161,31 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 		await flushPendingUpdates();
 	}
 
+	/**
+	 * Spend the pending edit rather than discard it, at whichever of the two moments
+	 * arrives first.
+	 *
+	 * Every change here is applied to `localOverrides` the moment it is made, so the
+	 * operator has already been told it is saved. A disposal that cancelled the
+	 * debounced write — which is what this used to do — made that a lie for anyone
+	 * who navigated away inside the window, and silently: the setting reverted on the
+	 * next load with nothing having reported a failure (#308).
+	 *
+	 * Disposal alone is not early enough. Leaving an Event runs the route middleware,
+	 * which resets the Event-scoped stores *before* the page unmounts — so a write
+	 * flushed on disposal reaches a store that no longer holds the Screen it names
+	 * and is refused. `registerPendingEditFlush` is the earlier moment; the disposal
+	 * covers every ending that is not a navigation, such as a panel closing.
+	 *
+	 * Nothing else is cleared. `pendingUpdates` in particular must survive, because a
+	 * disposal during an in-flight save finds `flushPendingUpdates` early-returning,
+	 * and the queue is what that save's own continuation picks up.
+	 */
+	const unregisterPendingEditFlush = registerPendingEditFlush(() => saveDebounce.flushIfPending());
+
 	tryOnScopeDispose(() => {
-		saveDebounce.cancel();
-		pendingUpdates.value = {} as U;
-		failedUpdates.value = {} as U;
-		saving.value = false;
+		unregisterPendingEditFlush();
+		saveDebounce.flushIfPending();
 	});
 
 	return { config, saving, saveError, updateConfig, retry };

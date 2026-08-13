@@ -64,6 +64,25 @@ export function useFeatureMatchModeData() {
 		{ immediate: true },
 	);
 
+	/**
+	 * Feature Match Session state missed while this client was suspended is never
+	 * delivered late, so what is on screen sits at the last command that arrived
+	 * until the next one does — which on a slow match can be minutes (#307).
+	 *
+	 * `loadState` rather than `loadFeatureMatchData`: the loader above skips the
+	 * fetch for a match whose state is already cached, which is right on a config
+	 * change and exactly wrong here, since the cached state is the stale thing being
+	 * corrected. The store's own loader always re-reads.
+	 */
+	useReconnectResync(() => {
+		const evtId = eventId.value;
+		const matchId = config.value.featureMatchId;
+		if (!evtId || !matchId)
+			return;
+
+		void featureMatchStateStore.loadState(evtId, matchId);
+	});
+
 	return {
 		config,
 		match,

@@ -1,7 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, effectScope, ref } from 'vue';
+import { computed, effectScope, nextTick, ref } from 'vue';
 import { createMockEvent, createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 
 const mockEventStore = {
@@ -25,6 +25,11 @@ const mockFeatureMatchStateStore = {
 
 const mockEventId = ref<number | null>(1);
 const mockConfig = ref({ featureMatchId: 1 as number | null });
+const mockConnectionState = ref('connected');
+
+mockNuxtImport('tryUseRealtime', () => () => ({
+	get connectionState() { return mockConnectionState.value; },
+}));
 
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
@@ -43,6 +48,7 @@ describe('useFeatureMatchModeData', () => {
 		vi.clearAllMocks();
 		mockEventId.value = 1;
 		mockConfig.value = { featureMatchId: 1 };
+		mockConnectionState.value = 'connected';
 		mockFeatureMatchStore.featureMatches = [{ id: 1, player1Data: { name: 'A' }, player2Data: { name: 'B' } }];
 		mockFeatureMatchStore.currentEventId = null;
 		mockFeatureMatchStore.isLoaded = false;
@@ -112,5 +118,49 @@ describe('useFeatureMatchModeData', () => {
 		await flushPromises();
 
 		expect(mockFeatureMatchStateStore.loadState).toHaveBeenCalledWith(1, 2);
+	});
+
+	/**
+	 * Ably drops message continuity after a couple of minutes suspended, and a
+	 * Feature Match command carries nothing that could tell a client it fell
+	 * behind — so a Screen that missed a score while away sat on the last command
+	 * that arrived until the next one did, which on a slow match is minutes (#307).
+	 */
+	describe('a connection that was suspended and came back', () => {
+		async function suspendAndResume() {
+			mockConnectionState.value = 'suspended';
+			await nextTick();
+			mockConnectionState.value = 'connected';
+			await nextTick();
+			await flushPromises();
+		}
+
+		it('re-reads Session state that the ordinary loader would have skipped', async () => {
+			createComposable();
+			await flushPromises();
+			mockFeatureMatchStateStore.loadState.mockClear();
+
+			// The precondition that makes this a real test: the ordinary loader is
+			// guarded on exactly these two facts, so a resync routed through it would
+			// fetch nothing — and the cached state is the stale thing being corrected.
+			expect(mockFeatureMatchStateStore.currentEventId).toBe(1);
+			expect(mockFeatureMatchStateStore.featureMatchStates.has(1)).toBe(true);
+
+			await suspendAndResume();
+
+			expect(mockFeatureMatchStateStore.loadState).toHaveBeenCalledWith(1, 1);
+		});
+
+		it('does not re-read while still disconnected', async () => {
+			createComposable();
+			await flushPromises();
+			mockFeatureMatchStateStore.loadState.mockClear();
+
+			mockConnectionState.value = 'suspended';
+			await nextTick();
+			await flushPromises();
+
+			expect(mockFeatureMatchStateStore.loadState).not.toHaveBeenCalled();
+		});
 	});
 });

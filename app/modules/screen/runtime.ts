@@ -585,9 +585,25 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		});
 	}
 
+	/**
+	 * Tear down everything this Module holds for the Event scope that is ending.
+	 *
+	 * The pending config writes are spent rather than discarded. Each one is an edit
+	 * the operator has already been shown as applied — that is what local-first
+	 * means — so cancelling it reverted the setting on the next load with nothing
+	 * anywhere reporting a failure (#308). They are flushed first, while
+	 * `state.screens` still holds the Screen each write reads its `stateVersion`
+	 * from, and `writeFlights` is superseded immediately afterwards so the answers
+	 * they eventually get are not cached back into an Event this client has left.
+	 * Their callers are still answered with the real outcome.
+	 */
 	function resetRuntime() {
-		modeConfigWriteDebounce.cancel();
-		screenConfigWriteDebounce.cancel();
+		modeConfigWriteDebounce.flushIfPending();
+		screenConfigWriteDebounce.flushIfPending();
+		// A queued write with no armed timer is not constructible today — every entry
+		// is inserted in the same breath as a `schedule()` — but an entry left here
+		// would leave its caller's promise waiting forever, so it is settled rather
+		// than dropped.
 		const cancellation = new Error('Screen write cancelled because its Event scope changed');
 		for (const entry of pendingModeConfigWrites.values())
 			rejectAll(entry.deferred, cancellation);

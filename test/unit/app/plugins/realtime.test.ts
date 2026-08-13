@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type MessageHandler = (message: { data: unknown }) => void;
 type PresenceHandler = () => void;
@@ -289,6 +289,119 @@ describe('realtime plugin', () => {
 
 		channels.get('screen:1:2')!.emit('screen:command:debug', { screenId: 2 });
 		expect(handler).toHaveBeenCalledOnce();
+	});
+
+	/**
+	 * One failed token mint used to kill every subscription for the event being
+	 * switched to, permanently, with a console warning as the only trace.
+	 *
+	 * The mechanism was a single line: `activeEventId` was assigned before the
+	 * authorize attempt, so after the attempt failed the event *looked* covered.
+	 * Every later subscribe took the already-covered fast path and attached on the
+	 * old event's token, which Ably denies — and a denied attach is handled by the
+	 * same permanent unsubscribe. Nothing retried, nothing told the operator, and
+	 * only a full page reload recovered (#307).
+	 */
+	describe('a token mint that fails during an event switch', () => {
+		beforeEach(() => {
+			vi.useFakeTimers();
+		});
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		/** Let the mint's retry timers and the subscribe they gate run to completion. */
+		async function settleRetries() {
+			await vi.advanceTimersByTimeAsync(30_000);
+		}
+
+		it('retries, and the new event\'s subscriptions attach and deliver', async () => {
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			const handler = vi.fn();
+			realtimeInstances[0]!.auth.authorize
+				.mockRejectedValueOnce(new Error('network blip'))
+				.mockResolvedValue(undefined);
+
+			realtime.onChannel('screen:9:1', 'screen:command:debug', handler);
+			await settleRetries();
+
+			channels.get('screen:9:1')!.emit('screen:command:debug', { screenId: 1 });
+			expect(handler).toHaveBeenCalledOnce();
+		});
+
+		it('leaves the event uncovered, so a later subscribe mints again instead of using the old token', async () => {
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+			realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
+			await settleRetries();
+			expect(channels.get('screen:9:1')?.subscribe ?? vi.fn()).not.toHaveBeenCalled();
+
+			realtimeInstances[0]!.auth.authorize.mockReset().mockResolvedValue(undefined);
+			const handler = vi.fn();
+			realtime.onChannel('screen:9:2', 'screen:command:debug', handler);
+			await settleRetries();
+
+			expect(realtimeInstances[0]!.auth.authorize).toHaveBeenCalled();
+			channels.get('screen:9:2')!.emit('screen:command:debug', { screenId: 2 });
+			expect(handler).toHaveBeenCalledOnce();
+			consoleSpy.mockRestore();
+		});
+
+		it('reports a persistent failure on the transport, and clears it once a mint lands', async () => {
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await settleRetries();
+			expect(realtime.tokenError).toBeNull();
+
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+			realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
+			await settleRetries();
+
+			// The operator has to be able to see this. A console warning is not a
+			// surface anyone running a show is looking at.
+			expect(realtime.tokenError).toBeInstanceOf(Error);
+
+			realtimeInstances[0]!.auth.authorize.mockReset().mockResolvedValue(undefined);
+			realtime.onChannel('screen:9:2', 'screen:command:debug', vi.fn());
+			await settleRetries();
+
+			expect(realtime.tokenError).toBeNull();
+			consoleSpy.mockRestore();
+		});
+
+		it('drops the fault when the operator goes back to an event this client still covers', async () => {
+			// Covered means a token for that event is in hand, so nothing is wrong with
+			// this client any more. Left standing, the fault outlives the event it was
+			// about and tells an operator their working page is broken.
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+			realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
+			await settleRetries();
+			expect(realtime.tokenError).toBeInstanceOf(Error);
+
+			const handler = vi.fn();
+			realtime.onChannel('screen:7:1', 'screen:command:debug', handler);
+			await settleRetries();
+
+			expect(realtime.tokenError).toBeNull();
+			// And it really is covered: the subscription attached without a new mint.
+			channels.get('screen:7:1')!.emit('screen:command:debug', { screenId: 1 });
+			expect(handler).toHaveBeenCalledOnce();
+			consoleSpy.mockRestore();
+		});
 	});
 
 	it('does not expose authorizeForEvent — token scope is owned by the transport', async () => {

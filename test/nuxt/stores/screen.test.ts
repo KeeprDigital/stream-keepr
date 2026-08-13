@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isReactive } from 'vue';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { transportFailure } from '~~/test/helpers/transportFailure';
+
+const UPDATE_REQUEST = `[PATCH] "/api/events/1/screens/1"`;
+const GET_BY_ID_REQUEST = `[GET] "/api/events/1/screens/10"`;
 
 /**
  * Put the same Screen id in the cache more than once, by assignment.
@@ -45,22 +49,20 @@ mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string,
 	ablyCallbacks[storeName] = callbacks;
 });
 
-// executeAction that supports onError rollback
-const mockExecuteAction = vi.fn(async (fn: any, opts?: any) => {
-	try {
-		return await fn();
-	}
-	catch (err) {
-		opts?.onError?.(err);
-		throw err;
-	}
-});
+/*
+ * `useAsyncAction` is deliberately not mocked, as in this store's error-reporting
+ * suite. The stand-in that used to sit here rethrew every failure; the real
+ * composable swallows one unless the call site asks for `throwError`, writes the
+ * message to `errorRef` and resolves `null`. So every failure-path row here was
+ * asserting against a contract the store does not have, and the store's own
+ * `executeReporting` wrapper — the seam all of this reports through — was never
+ * exercised at all. The sibling suites removed exactly this mock for exactly this
+ * reason (#241, #263, #271); #311 is the same removal here. The real composable is
+ * auto-imported, does no I/O and starts no timers.
+ */
 
 mockNuxtImport('useScreenRepository', () => () => mockRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
-mockNuxtImport('useAsyncAction', () => () => ({
-	executeAction: mockExecuteAction,
-}));
 mockNuxtImport('$fetch', () => mockFetch);
 
 describe('useScreenStore', () => {
@@ -305,6 +307,100 @@ describe('useScreenStore', () => {
 		});
 	});
 
+	/**
+	 * The non-blanking read a Screen Output takes when it comes back from a
+	 * suspended connection (#307).
+	 *
+	 * A Screen announcement carries no sequence number, so an output that missed a
+	 * mode change while away renders the old mode indefinitely and nothing arrives
+	 * late to correct it — re-reading is the only way to find out. But the output
+	 * doing the re-reading is on program, and `loadScreenBySlug` empties
+	 * `activeScreen` before its GET. Every row here is about the difference between
+	 * the two: same fetch, same version comparison, same flight, no blanking and no
+	 * throw.
+	 */
+	describe('refreshActiveScreen', () => {
+		function deferGetBySlug() {
+			let serve!: (screen: unknown) => void;
+			mockRepo.getBySlug.mockReturnValueOnce(new Promise((resolve) => {
+				serve = resolve;
+			}));
+			return (screen: unknown) => serve(screen);
+		}
+
+		it('never empties what is on program while it fetches', async () => {
+			const onProgram = createMockScreen({ id: 7, slug: 'main', name: 'On air' });
+			store.activeScreen = onProgram;
+			const serve = deferGetBySlug();
+
+			const refresh = store.refreshActiveScreen(1, 'main');
+			await Promise.resolve();
+
+			// The whole point of the second loader. A flash of nothing on program is
+			// the one failure an operator cannot recover from in time.
+			expect(store.activeScreen).toEqual(onProgram);
+
+			serve(createMockScreen({ id: 7, slug: 'main', name: 'Current mode' }));
+			await refresh;
+
+			expect(store.activeScreen!.name).toBe('Current mode');
+		});
+
+		it('is superseded by a slug change started after it', async () => {
+			// It shares `activeScreenLoads` with the switching loader, so a real
+			// navigation begun while a resync is in flight wins rather than races.
+			store.activeScreen = createMockScreen({ id: 7, slug: 'main' });
+			const serveRefresh = deferGetBySlug();
+
+			const refresh = store.refreshActiveScreen(1, 'main');
+			const switched = createMockScreen({ id: 8, slug: 'other' });
+			mockRepo.getBySlug.mockResolvedValueOnce(switched);
+			await store.loadScreenBySlug(1, 'other');
+
+			serveRefresh(createMockScreen({ id: 7, slug: 'main' }));
+
+			expect(await refresh).toBeNull();
+			expect(store.activeScreen).toEqual(switched);
+		});
+
+		it('keeps a held revision newer than the one the answer brings', async () => {
+			// The same comparison the three loaders share (#251): a GET issued before a
+			// save commits can be served after it settles.
+			store.screens = [createMockScreen({ id: 7, slug: 'main', name: 'Saved', stateVersion: 4 })];
+			store.activeScreen = createMockScreen({ id: 7, slug: 'main', name: 'Saved', stateVersion: 4 });
+			mockRepo.getBySlug.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', name: 'Stale', stateVersion: 3 }));
+
+			const refreshed = await store.refreshActiveScreen(1, 'main');
+
+			expect(store.activeScreen!.name).toBe('Saved');
+			expect(refreshed!.name).toBe('Saved');
+		});
+
+		it('holds the rendering when the Screen cannot be fetched, and reports why', async () => {
+			// `loadScreenBySlug` throws here, because a caller switching Screens has to
+			// know it failed. Nothing is waiting on a resync to decide what to render,
+			// and program keeps what it last accepted.
+			const onProgram = createMockScreen({ id: 7, slug: 'main', name: 'On air' });
+			store.activeScreen = onProgram;
+			mockRepo.getBySlug.mockRejectedValue(transportFailure({ status: 503 }));
+
+			await expect(store.refreshActiveScreen(1, 'main')).resolves.toBeNull();
+
+			expect(store.activeScreen).toEqual(onProgram);
+			expect(store.error).toContain('Service Unavailable');
+		});
+
+		it('holds the rendering when the Screen is gone', async () => {
+			const onProgram = createMockScreen({ id: 7, slug: 'main', name: 'On air' });
+			store.activeScreen = onProgram;
+			mockRepo.getBySlug.mockResolvedValue(null);
+
+			expect(await store.refreshActiveScreen(1, 'main')).toBeNull();
+
+			expect(store.activeScreen).toEqual(onProgram);
+		});
+	});
+
 	describe('getScreenById', () => {
 		it('adds screen to screens array if not present', async () => {
 			const screen = createMockScreen({ id: 5 });
@@ -372,6 +468,22 @@ describe('useScreenStore', () => {
 			await store.getScreenById(1, 5);
 
 			expect(store.screens[0]!.name).toBe('Fresh');
+		});
+
+		it('answers null and reports the transport line when the authority wrote no sentence', async () => {
+			// A 5xx body is the server failing rather than answering, and its prose has
+			// been rewritten to a placeholder on the way out — so what is left to report
+			// is the status line, which at least reads as machinery.
+			mockRepo.getById.mockRejectedValue(transportFailure({
+				status: 500,
+				body: { statusCode: 500, statusMessage: 'Internal Server Error', message: 'Internal Server Error' },
+				request: GET_BY_ID_REQUEST,
+			}));
+
+			const answer = await store.getScreenById(1, 10);
+
+			expect(answer).toBeNull();
+			expect(store.error).toBe(`${GET_BY_ID_REQUEST}: 500 Internal Server Error`);
 		});
 
 		it('does not let a load that raced a settled save overwrite it', async () => {
@@ -501,6 +613,30 @@ describe('useScreenStore', () => {
 			await store.updateScreen(1, 1, { name: 'Updated' });
 
 			expect(mockRepo.update).toHaveBeenCalledWith(1, 1, expect.objectContaining({ stateVersion: 5 }));
+		});
+
+		/*
+		 * The three facts a refused write produces, which the removed `executeAction`
+		 * stand-in could produce none of: it rethrew, and it ignored `errorRef`
+		 * entirely. So a suite could not have told a store that reports refusals from
+		 * one that reports nothing (#311).
+		 */
+		it('answers null, rolls the optimistic edit back, and reports what the authority said', async () => {
+			const screen = createMockScreen({ id: 1, name: 'Old', stateVersion: 2 });
+			store.screens = [screen];
+			// Deliberately not a 409: that status is the conflict-refresh-and-retry
+			// path, and this row is about what a plain refusal produces.
+			mockRepo.update.mockRejectedValue(transportFailure({
+				status: 403,
+				body: { statusCode: 403, statusMessage: 'Forbidden', message: 'This Screen belongs to another Event' },
+				request: UPDATE_REQUEST,
+			}));
+
+			const answer = await store.updateScreen(1, 1, { name: 'Updated' });
+
+			expect(answer).toBeNull();
+			expect(store.screens[0]!.name).toBe('Old');
+			expect(store.error).toBe('This Screen belongs to another Event');
 		});
 	});
 

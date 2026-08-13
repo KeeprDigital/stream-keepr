@@ -13,6 +13,8 @@ export interface MockRealtime {
 	isConnected: boolean;
 	connectionState: string;
 	error: null | Error;
+	/** Set only when the token for the active Event could not be minted (#307). */
+	tokenError: null | Error;
 	connectionId: string;
 
 	// Room lifecycle
@@ -35,6 +37,7 @@ export function createMockRealtime(): MockRealtime {
 		isConnected: true,
 		connectionState: 'connected',
 		error: null,
+		tokenError: null,
 		connectionId: 'test-connection-id',
 
 		// Room lifecycle

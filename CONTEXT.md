@@ -70,6 +70,10 @@ A strategic Deck classification assigned to Players and used for Metagame analys
 **Realtime Event Session**:
 The client-side subscription for Event messages.
 
+**Reconnect Resync**:
+The client-side module owning the invariant "coming back from a disconnection is itself a reason to re-read authoritative state." A realtime message is a notification and the server holds the authority, so a client that was away was told nothing and is told nothing late — no notification arrives to say it fell behind, and only announcements carrying a sequence number can reveal a gap at all. A resync re-reads, and never clears: a disconnected Screen Output holds its last accepted rendering, because a dropped websocket is not an instruction to blank the show. It exposes the disconnection rather than acting on it, so a control surface can disable its actions and say so while an output on program does neither.
+_Avoid_: reconnect handler, resubscribe hook.
+
 **Guarded Sequence**:
 The client-side module owning the invariant "discard the result of async work that newer work has superseded." Scoped or keyed; issues Flights.
 _Avoid_: generation counter, version guard, latest-wins map.
@@ -775,6 +779,9 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - Every graphics **Screen Output** projects the same authoritative playout sequence and effective animation start times
 - At the same authoritative time, the **Overlay Output**, **Fill Output**, and **Key Output** resolve the same composition and animation phase
 - A late-loading or reconnected graphics **Screen Output** catches up to the current authoritative phase rather than replaying it from the beginning
+- Every realtime-fed surface re-reads authoritative state on **Reconnect Resync**, and a reconnected **Screen Output** renders the current **Screen Mode** without waiting for the next change
+- A **Screen Output** whose realtime link is disconnected holds its last accepted rendering rather than blanking
+- A client that cannot mint a realtime token for the **Event** it is on re-attempts, and reports a persistent failure where an operator can see it
 - Application-level output alignment does not promise hardware genlock between independent browser windows or capture devices
 - **Broadcast Graphics Screen** and **Feature Match Overlay** previews share output selection, zoom, item selection, item guides, and safe-area controls
 - Graphics Screen previews provide advisory action-safe guides at a five-percent inset and title-safe guides at a ten-percent inset

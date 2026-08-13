@@ -22,6 +22,11 @@ const mockFeatureMatchStateStore = {
 const mockPhaseStore = { isLoaded: true, loadPhasesByEventId: vi.fn(), getPhaseById: vi.fn() };
 const mockRoundStore = { isLoaded: true, loadRoundsByEventId: vi.fn(), getRoundById: vi.fn() };
 const mockMatchRepository = { getById: vi.fn().mockResolvedValue(null) };
+const mockConnectionState = ref('connected');
+
+mockNuxtImport('tryUseRealtime', () => () => ({
+	get connectionState() { return mockConnectionState.value; },
+}));
 
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
@@ -85,6 +90,7 @@ describe('useFeatureMatchOverlayModeData', () => {
 		mockPhaseStore.isLoaded = true;
 		mockRoundStore.isLoaded = true;
 		mockMatchRepository.getById.mockResolvedValue(null);
+		mockConnectionState.value = 'connected';
 	});
 
 	it('renders the pushed working configuration while item guides are switched off', async () => {
@@ -213,6 +219,59 @@ describe('useFeatureMatchOverlayModeData', () => {
 
 			expect(data().config.value.featureMatchId).toBeNull();
 			expect(data().usesSampleDataset.value).toBe(false);
+			wrapper.unmount();
+		});
+	});
+
+	/**
+	 * The Overlay's half of the rule the Feature Match Screen holds: nothing
+	 * published while this client was suspended is ever delivered late, so the only
+	 * way to find out what was missed is to ask (#307).
+	 */
+	describe('a connection that was suspended and came back', () => {
+		/** A live Screen Output on a Slot whose Session state is already cached. */
+		function mountBoundOutput() {
+			const config = layoutNamed('saved-source');
+			config.featureMatchId = 11;
+			mockFeatureMatchStateStore.featureMatchStates = new Map([[11, {}]]);
+			return mountOverlay({
+				isPreview: ref(false),
+				screen: ref({ id: 42, modeConfigs: { 'feature-match-overlay': config } } as never),
+			});
+		}
+
+		async function suspendAndResume() {
+			mockConnectionState.value = 'suspended';
+			await nextTick();
+			mockConnectionState.value = 'connected';
+			await nextTick();
+			await flushPromises();
+		}
+
+		it('re-reads Session state that the ordinary loader would have skipped', async () => {
+			const { wrapper } = mountBoundOutput();
+			await flushPromises();
+
+			// The loader is guarded on the Slot's state already being cached for this
+			// Event, so it fetched nothing on mount — and that cache is the stale thing
+			// a resync exists to correct.
+			expect(mockFeatureMatchStateStore.loadState).not.toHaveBeenCalled();
+
+			await suspendAndResume();
+
+			expect(mockFeatureMatchStateStore.loadState).toHaveBeenCalledWith(7, 11);
+			wrapper.unmount();
+		});
+
+		it('does not re-read while still disconnected', async () => {
+			const { wrapper } = mountBoundOutput();
+			await flushPromises();
+
+			mockConnectionState.value = 'suspended';
+			await nextTick();
+			await flushPromises();
+
+			expect(mockFeatureMatchStateStore.loadState).not.toHaveBeenCalled();
 			wrapper.unmount();
 		});
 	});
