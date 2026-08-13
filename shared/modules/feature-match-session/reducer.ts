@@ -52,6 +52,26 @@ export function normalizeFeatureMatchSessionCommandPayload(
 	return payload;
 }
 
+/**
+ * Re-apply a Session's player orientation to a snapshot rebuilt from its Slot.
+ *
+ * A `SnapshotCorrected` payload always comes from `buildSourceSnapshot`, which
+ * reads the Slot row and so knows nothing about `SwapPlayers` — it arrives in
+ * Slot order every time. Orientation belongs to the Session, so the correction
+ * carries the Slot's facts and the Session keeps its own sides.
+ */
+function orientSourceSnapshot(snapshot: FeatureMatchSourceSnapshot, swapped: boolean): FeatureMatchSourceSnapshot {
+	if (!swapped)
+		return snapshot;
+
+	return {
+		...snapshot,
+		player1: snapshot.player2,
+		player2: snapshot.player1,
+		playersSwapped: true,
+	};
+}
+
 export function applyFeatureMatchSessionEvent(
 	currentState: FeatureMatchState,
 	sourceSnapshot: FeatureMatchSourceSnapshot,
@@ -68,7 +88,10 @@ export function applyFeatureMatchSessionEvent(
 	if (type === 'SnapshotCorrected') {
 		return {
 			currentState,
-			sourceSnapshot: payload.sourceSnapshot as FeatureMatchSourceSnapshot,
+			sourceSnapshot: orientSourceSnapshot(
+				payload.sourceSnapshot as FeatureMatchSourceSnapshot,
+				sourceSnapshot.playersSwapped ?? false,
+			),
 		};
 	}
 
@@ -349,6 +372,10 @@ export function applyFeatureMatchSessionEvent(
 				...sourceSnapshot,
 				player1: sourceSnapshot.player2,
 				player2: sourceSnapshot.player1,
+				// Recorded so a later correction rebuilt from the Slot can be put back
+				// into the sides the operator chose. Nothing on the Slot row is
+				// swap-aware, so this flag is the only place the choice survives.
+				playersSwapped: !(sourceSnapshot.playersSwapped ?? false),
 			},
 			currentState: {
 				...currentState,

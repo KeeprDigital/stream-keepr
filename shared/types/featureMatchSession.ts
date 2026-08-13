@@ -100,6 +100,21 @@ export interface FeatureMatchSourceSnapshot {
 	player1: FeatureMatchSnapshotPlayer;
 	player2: FeatureMatchSnapshotPlayer;
 	createdAt: number;
+	/**
+	 * Whether this Session presents its players in the opposite order to the Slot
+	 * it was built from, because an operator issued `SwapPlayers`.
+	 *
+	 * Which side a player sits on is Session state: the Slot keeps its own pairing
+	 * order, and `buildSourceSnapshot` reads the Slot, so every snapshot rebuilt
+	 * for a `SnapshotCorrected` arrives in Slot order. Without this the first
+	 * reverse sync after a swap silently un-swaps the frozen snapshot while the
+	 * live projection stays swapped, and the overlay pairs one player's name with
+	 * the other's life total.
+	 *
+	 * Absent on snapshots written before the flag existed and on every snapshot of
+	 * a Session nobody has swapped, both of which mean Slot order.
+	 */
+	playersSwapped?: boolean;
 }
 
 export interface FeatureMatchSessionResponse {

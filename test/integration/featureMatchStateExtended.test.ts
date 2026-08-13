@@ -240,6 +240,43 @@ describe('feature match session extended behavior', () => {
 		expect(updatedSlot.activeSession.currentState.player1.lifeTotal).toBe(9);
 	});
 
+	it('keeps swapped players swapped through a later snapshot correction', async () => {
+		const harness = await createCommandHarness(eventId, {
+			bestOf: 3,
+			player1Data: { name: 'Kim' },
+			player2Data: { name: 'Lars' },
+		});
+
+		const swapped = await harness.send({
+			commandId: commandId('swap-before-correction'),
+			type: 'SwapPlayers',
+			payload: {},
+			baseSequence: harness.session().sequence,
+		});
+		expect(swapped.sourceSnapshot.player1.data!.name).toBe('Lars');
+		const swappedLife = swapped.currentState.player1.lifeTotal;
+
+		// A setup edit that leaves the pairing alone corrects the Session's frozen
+		// snapshot from the Slot row — which never saw the swap.
+		const updatedSlot = await $fetch<{
+			activeSession: {
+				sourceSnapshot: { bestOf: number; player1: { data: { name: string } }; player2: { data: { name: string } } };
+				currentState: { player1: { lifeTotal: number } };
+			};
+		}>(
+			`/api/events/${eventId}/feature-match-slots/${harness.slot.id}/setup`,
+			{ method: 'PATCH', body: { bestOf: 5 } },
+		);
+
+		expect(updatedSlot.activeSession.sourceSnapshot.bestOf).toBe(5);
+		// The overlay reads a name from the snapshot and a life total from the live
+		// state. Rebuilding the snapshot in Slot order while the state stays swapped
+		// pairs one player's name with the other's life total.
+		expect(updatedSlot.activeSession.sourceSnapshot.player1.data.name).toBe('Lars');
+		expect(updatedSlot.activeSession.sourceSnapshot.player2.data.name).toBe('Kim');
+		expect(updatedSlot.activeSession.currentState.player1.lifeTotal).toBe(swappedLife);
+	});
+
 	it('reorders feature match slots', async () => {
 		const first = await createCommandHarness(eventId);
 		const second = await createCommandHarness(eventId);
