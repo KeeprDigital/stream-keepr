@@ -95,7 +95,13 @@ pnpm worker:dry-run
 ```
 
 The bundle wrangler would upload lands in `.output/wrangler-dry-run/`;
-`scripts/worker-dry-run.mjs` explains why that path is passed absolute.
+`scripts/worker-dry-run.mjs` explains why that path is passed absolute. The same
+command then asserts the bundle contains no `new WebAssembly.Module(` — a
+deployed Worker refuses to compile Wasm from bytes, so that pattern reaching
+production means every JPEG and WebP ingestion fails once promoted (#302).
+`pnpm deploy` runs this before promotion, not after. The guard self-tests on
+every run, and can be exercised alone with
+`node scripts/assert-no-runtime-wasm.mjs --self-test`.
 
 Verify the still-image compatibility profile in an installed Chrome or Chromium:
 
