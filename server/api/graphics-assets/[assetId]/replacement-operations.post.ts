@@ -39,6 +39,6 @@ export default defineEventHandler(async (event) => {
 		return operation;
 	}
 	catch (error) {
-		return rethrowGraphicsAssetApiError(error);
+		return rethrowGraphicsAssetApiError(error, event);
 	}
 });

@@ -15,6 +15,6 @@ export default defineEventHandler(async (event) => {
 		return await graphicsAssetLibraryForEvent(event).updateCapacityLimits(input);
 	}
 	catch (error) {
-		return rethrowGraphicsAssetApiError(error);
+		return rethrowGraphicsAssetApiError(error, event);
 	}
 });

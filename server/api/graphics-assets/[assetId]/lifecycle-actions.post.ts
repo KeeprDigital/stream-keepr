@@ -36,6 +36,6 @@ export default defineEventHandler(async (event) => {
 		return await library.restoreGraphicAsset(input);
 	}
 	catch (error) {
-		return rethrowGraphicsAssetApiError(error);
+		return rethrowGraphicsAssetApiError(error, event);
 	}
 });

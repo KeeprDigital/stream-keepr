@@ -8,6 +8,6 @@ export default defineEventHandler(async (event) => {
 		return await graphicsAssetLibraryForEvent(event).getCapacity();
 	}
 	catch (error) {
-		return rethrowGraphicsAssetApiError(error);
+		return rethrowGraphicsAssetApiError(error, event);
 	}
 });

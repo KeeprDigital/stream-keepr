@@ -61,6 +61,16 @@ describe('graphic Asset thumbnail delivery', () => {
 		expect(response.headers.get('cache-control')).toBe('private, no-store');
 	});
 
+	it('answers an asset with no recorded preview with 404, which the error wrapper leaves alone', async () => {
+		mockResolveGraphicAssetThumbnail.mockResolvedValue({ outcome: 'missing' });
+		const handler = (await import(routePath)).default;
+
+		await expect(handler(stubH3Event())).rejects.toMatchObject({
+			statusCode: 404,
+			message: 'Graphic Asset thumbnail not found',
+		});
+	});
+
 	it('answers a preview the store cannot produce with 503 and retry guidance', async () => {
 		mockResolveGraphicAssetThumbnail.mockResolvedValue({ outcome: 'unavailable', retryable: true });
 		const handler = (await import(routePath)).default;
@@ -95,5 +105,15 @@ describe('graphic Asset thumbnail delivery', () => {
 			message: 'Graphic Asset preview lookup is temporarily unavailable',
 		});
 		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
+	});
+
+	it('rejects the read before touching the library when no author session is authenticated', async () => {
+		mockRequireGraphicsAuthorSession.mockRejectedValue(
+			Object.assign(new Error('authenticated session required'), { statusCode: 401 }),
+		);
+		const handler = (await import(routePath)).default;
+
+		await expect(handler(stubH3Event())).rejects.toMatchObject({ statusCode: 401 });
+		expect(mockResolveGraphicAssetThumbnail).not.toHaveBeenCalled();
 	});
 });
