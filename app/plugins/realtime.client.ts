@@ -26,6 +26,18 @@ export default defineNuxtPlugin({
 		// instead of erroring, so the initial connection just stays pending —
 		// no failed/suspended state, no reconnect spam.
 		let activeEventId: number | null = null;
+		/**
+		 * The Event the token in hand actually covers.
+		 *
+		 * Held apart from `activeEventId`, which is only the Event the next mint will
+		 * ask for. Conflating the two is what made a single transient authorize failure
+		 * permanent: the assignment happened before the attempt, so a failed switch left
+		 * the new Event looking covered, every later subscribe took the already-covered
+		 * fast path and attached on the previous Event's token, and Ably denied each one
+		 * into the same permanent unsubscribe. Nothing short of a page reload recovered
+		 * (#307).
+		 */
+		let coveredEventId: number | null = null;
 		let eventIdReady: Promise<number> | null = null;
 		let resolveEventIdReady: ((eventId: number) => void) | null = null;
 		let pendingAuthorize: { eventId: number; promise: Promise<boolean> } | null = null;
@@ -53,23 +65,84 @@ export default defineNuxtPlugin({
 		const coverageFlights = createGuardedSequence();
 
 		/**
+		 * How long to wait before each re-attempt at minting a token.
+		 *
+		 * Short enough that the ordinary cause — a few hundred milliseconds of network
+		 * loss while an operator switches Events mid-show — is absorbed before anyone
+		 * notices, and finite because a mint that has failed for eight seconds is not a
+		 * blip and the operator needs telling rather than waiting.
+		 */
+		const AUTHORIZE_RETRY_DELAYS_MS = [250, 1_000, 3_000, 4_000];
+
+		const tokenError = ref<Error | null>(null);
+
+		function wait(ms: number) {
+			return new Promise<void>(resolve => setTimeout(resolve, ms));
+		}
+
+		/**
+		 * Mint a token covering one Event, re-attempting a failure before giving up.
+		 *
+		 * Coverage is claimed only on success, and the failure is published rather than
+		 * only logged: a token this client cannot mint means no realtime for the Event
+		 * an operator is running, and the console is not a surface anyone running a
+		 * show is looking at.
+		 */
+		async function mintTokenFor(eventId: number, flight: { readonly stale: boolean; readonly current: boolean }) {
+			for (let attempt = 0; ; attempt++) {
+				if (flight.stale)
+					return false;
+
+				try {
+					await ably.auth.authorize();
+					if (flight.stale)
+						return false;
+					coveredEventId = eventId;
+					tokenError.value = null;
+					return true;
+				}
+				catch (err) {
+					const delay = AUTHORIZE_RETRY_DELAYS_MS[attempt];
+					if (delay === undefined) {
+						console.warn('Failed to authorize realtime token for event switch:', err);
+						if (flight.current)
+							tokenError.value = err instanceof Error ? err : new Error(String(err));
+						return false;
+					}
+					await wait(delay);
+				}
+			}
+		}
+
+		/**
 		 * Ensure the token covers the given channel's Event before subscribing.
 		 * Returns `true` synchronously when already covered (so established
 		 * subscriptions stay synchronous), or a promise resolving to whether
 		 * the mint is still the latest — a superseded or failed mint resolves
 		 * `false` and the caller must not subscribe. Channels that carry no
 		 * Event (unrecognized shapes) need no scoping and pass through.
+		 *
+		 * An Event whose mint failed is deliberately not remembered as attempted: the
+		 * next subscribe mints again. That is the second thing that heals a blip, after
+		 * the retries inside one mint, and it is why a failure can no longer outlive
+		 * the condition that caused it.
 		 */
 		function ensureChannelCoverage(channelName: string): true | Promise<boolean> {
 			const eventId = realtimeChannelEventId(channelName);
 			if (eventId == null)
 				return true;
 
-			if (eventId === activeEventId) {
-				// A mint for this same event may still be in flight; wait on it
-				// instead of subscribing before the token upgrade actually lands.
-				if (pendingAuthorize?.eventId === eventId)
-					return pendingAuthorize.promise;
+			// A mint for this same Event may still be in flight; wait on it instead of
+			// subscribing before the token upgrade actually lands.
+			if (pendingAuthorize?.eventId === eventId)
+				return pendingAuthorize.promise;
+
+			if (eventId === coveredEventId) {
+				// Covered means a token for this Event is in hand, so whatever failed to
+				// mint for the Event the operator tried in between is no longer a fact
+				// about them. Without this, switching away and back leaves a fault
+				// standing on a client that is working perfectly.
+				tokenError.value = null;
 				return true;
 			}
 
@@ -84,17 +157,13 @@ export default defineNuxtPlugin({
 					resolveEventIdReady = null;
 					eventIdReady = null;
 					resolve(eventId);
-					return flight.current;
+					if (flight.stale)
+						return false;
+					coveredEventId = eventId;
+					return true;
 				}
 
-				try {
-					await ably.auth.authorize();
-				}
-				catch (err) {
-					console.warn('Failed to authorize realtime token for event switch:', err);
-					return false;
-				}
-				return flight.current;
+				return await mintTokenFor(eventId, flight);
 			})();
 
 			pendingAuthorize = { eventId, promise };
@@ -478,6 +547,7 @@ export default defineNuxtPlugin({
 					get connectionState() { return connectionState.value.connectionState; },
 					get isConnected() { return connectionState.value.isConnected; },
 					get error() { return connectionState.value.error; },
+					get tokenError() { return tokenError.value; },
 					setRoom,
 					onRoom,
 					offRoom,

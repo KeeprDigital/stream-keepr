@@ -7,6 +7,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } fro
 import { parseScreenEmbed, parseScreenOutput, screenOutputBackground } from '~~/shared/utils/screenOutput';
 import { useRoute } from '#app';
 import { useRealtime } from '~/composables/core/useRealtime';
+import { useReconnectResync } from '~/composables/core/useReconnectResync';
 import { useScreenRealtimeSession } from '~/composables/screen/useScreenRealtimeSession';
 import { getScreenModeDisplayType, isControlScreenMode } from '~/modules/screen-mode';
 import { useEventStore } from '~/stores/event';
@@ -302,6 +303,35 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			loading.value = false;
 		}
 	}
+
+	/**
+	 * Re-read authoritative Screen state after this output has been out of touch.
+	 *
+	 * A Screen announcement carries no sequence number, so unlike a Broadcast
+	 * Graphics notification it cannot tell a client it fell behind — and Ably drops
+	 * message continuity after a couple of minutes suspended. An output that missed
+	 * a mode change while away therefore renders the old mode indefinitely, on
+	 * program, with nothing anywhere reporting it (#307).
+	 *
+	 * An output already rendering takes the non-blanking read, because program must
+	 * not flash while the Screen is fetched. One showing nothing has nothing to
+	 * protect and takes the ordinary load, which is also the one that starts the
+	 * realtime session it never got.
+	 */
+	function resyncActiveScreen() {
+		const slug = screenSlug.value;
+		const evtId = resolveEventId();
+		if (!slug || !evtId)
+			return;
+
+		if (!screenStore.activeScreen) {
+			void loadActiveScreen(slug);
+			return;
+		}
+		void screenStore.refreshActiveScreen(evtId, slug);
+	}
+
+	useReconnectResync(resyncActiveScreen, realtime);
 
 	onMounted(async () => {
 		await loadActiveScreen(screenSlug.value);

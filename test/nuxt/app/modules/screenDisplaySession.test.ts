@@ -62,6 +62,16 @@ function createHarness(options: {
 			screenStore.activeScreen = screen;
 			return screen;
 		}),
+		// The non-blanking read a resync uses: it never empties `activeScreen`,
+		// because the output taking it is on program (#307).
+		refreshActiveScreen: vi.fn(async (_eventId: number, slug: string) => {
+			order.push(`refresh:${slug}`);
+			const screen = screens[slug];
+			if (!screen)
+				return null;
+			screenStore.activeScreen = screen;
+			return screen;
+		}),
 	});
 	const eventStore = reactive({
 		eventId: options.eventId ?? null,
@@ -112,6 +122,7 @@ function createHarness(options: {
 		route,
 		screenStore,
 		eventStore,
+		realtime,
 		realtimeSession,
 		realtimeCallbacks,
 		exportElementPng,
@@ -377,5 +388,63 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.session.loading.value).toBe(false);
 		expect(harness.session.error.value).toBeNull();
 		expect(harness.session.exportError.value).toBe('export failed');
+	});
+
+	/**
+	 * Ably drops message continuity after a couple of minutes suspended, and a
+	 * Screen announcement carries no sequence number — so unlike a Broadcast
+	 * Graphics notification, nothing about it can tell a client it fell behind. An
+	 * output that missed a mode change while away rendered the old mode
+	 * indefinitely, on program, with nothing reporting it (#307).
+	 */
+	describe('a connection that was suspended and came back', () => {
+		async function suspendAndResume(harness: ReturnType<typeof createHarness>) {
+			harness.realtime.connectionState = 'suspended';
+			await nextTick();
+			harness.realtime.connectionState = 'connected';
+			await nextTick();
+			await flushPromises();
+		}
+
+		it('re-reads the Screen without ever emptying what is on program', async () => {
+			const harness = createHarness();
+			await flushPromises();
+			harness.order.splice(0);
+			const onProgram = harness.screenStore.activeScreen;
+
+			await suspendAndResume(harness);
+
+			expect(harness.order).toEqual(['refresh:main']);
+			expect(harness.screenStore.loadScreenBySlug).toHaveBeenCalledTimes(1);
+			// The blanking loader is the wrong one here: a flash of nothing is the one
+			// failure an operator cannot recover from in time.
+			expect(harness.screenStore.activeScreen).toBe(onProgram);
+		});
+
+		it('does not re-read while still disconnected', async () => {
+			const harness = createHarness();
+			await flushPromises();
+			harness.order.splice(0);
+
+			harness.realtime.connectionState = 'suspended';
+			await nextTick();
+			await flushPromises();
+
+			expect(harness.order).toEqual([]);
+		});
+
+		it('takes the ordinary load when there is nothing on program to protect', async () => {
+			// Nothing is rendered, so there is no flash to avoid — and this is the
+			// load that starts the realtime session the failed one never got.
+			const harness = createHarness({ screens: {} });
+			await flushPromises();
+			expect(harness.screenStore.activeScreen).toBeNull();
+			harness.order.splice(0);
+
+			await suspendAndResume(harness);
+
+			expect(harness.order).toEqual(['load:main']);
+			expect(harness.screenStore.refreshActiveScreen).not.toHaveBeenCalled();
+		});
 	});
 });

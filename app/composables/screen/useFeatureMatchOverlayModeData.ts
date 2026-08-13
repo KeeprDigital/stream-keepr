@@ -109,5 +109,22 @@ export function useFeatureMatchOverlayModeData() {
 		{ immediate: true },
 	);
 
+	/**
+	 * The Overlay's half of the same rule the Feature Match Screen holds: nothing
+	 * arrives late after a suspended connection, so the only way to find out what
+	 * was missed is to ask (#307).
+	 *
+	 * Forced past the `has(matchId)` guard in the loader above for the same reason —
+	 * the cached state is what is stale.
+	 */
+	useReconnectResync(() => {
+		const evtId = eventId.value;
+		const matchId = config.value.featureMatchId;
+		if (!evtId || !matchId)
+			return;
+
+		void featureMatchStateStore.loadState(evtId, matchId);
+	});
+
 	return { config, match, matchState, sourceMatch, round, phase, event: computed(() => eventStore.event), usesSampleDataset, loading, error };
 }

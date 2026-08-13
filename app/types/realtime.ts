@@ -44,6 +44,19 @@ export interface RealtimeTransport {
 	readonly connectionState: RealtimeConnectionState['connectionState'];
 	readonly isConnected: boolean;
 	readonly error: Error | null;
+	/**
+	 * Why this client currently has no token for the Event it is on, when it has none.
+	 *
+	 * Separate from `error`, which is about the connection: the socket can be
+	 * perfectly connected while every channel for the active Event is unsubscribable
+	 * because its token could not be minted. That state used to exist only as a
+	 * console warning, so an operator whose Event switch lost its token saw a
+	 * healthy-looking page that had silently stopped receiving anything (#307).
+	 *
+	 * Set only after the mint's own retries are exhausted, so a network blip during
+	 * an Event switch never puts a fault in front of anyone.
+	 */
+	readonly tokenError: Error | null;
 	setRoom: (room: string | null) => void;
 	onRoom: (owner: string, handlers: Partial<RealtimeRoomHandlers>) => void;
 	offRoom: (owner: string) => void;

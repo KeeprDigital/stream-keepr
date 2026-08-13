@@ -184,6 +184,41 @@ export const useScreenStore = defineStore('screen', () => {
 		}
 	}
 
+	/**
+	 * Re-read the Screen this client is already showing, without blanking it.
+	 *
+	 * The same fetch and the same version comparison as `loadScreenBySlug`, minus
+	 * the two things that loader does because it is switching Screens: it empties
+	 * `activeScreen` first, and it raises loading state. Neither is right here.
+	 * A Screen Output resyncs after a suspended connection while it is on program —
+	 * a Screen announcement carries no sequence number, so a mode change missed
+	 * while away is never delivered late and re-reading is the only way to find out
+	 * (#307) — and blanking program to fetch what is very often the same Screen is
+	 * exactly the failure the reconnect discipline exists to avoid. There is also no
+	 * wrong-Screen risk to trade against: this asks for the slug already on screen,
+	 * where `loadScreenBySlug` is asking for a different one.
+	 *
+	 * It shares `activeScreenLoads`, so a real slug change started meanwhile
+	 * supersedes it rather than racing it, and it answers `null` rather than
+	 * throwing: nothing is waiting on this to decide what to render.
+	 */
+	async function refreshActiveScreen(eventId: number, slug: string) {
+		const flight = activeScreenLoads.begin();
+		try {
+			const screen = await screenRepo.getBySlug(eventId, slug);
+			if (!screen || flight.stale)
+				return null;
+			const kept = keptRevision(screen);
+			activeScreen.value = kept;
+			return kept;
+		}
+		catch (caughtError) {
+			if (flight.current)
+				error.value = loadErrorMessage(caughtError);
+			return null;
+		}
+	}
+
 	async function getScreenById(eventId: number, screenId: number) {
 		currentEventId.value = eventId;
 		return executeReporting(
@@ -250,6 +285,7 @@ export const useScreenStore = defineStore('screen', () => {
 		// Actions
 		loadScreensByEventId,
 		loadScreenBySlug,
+		refreshActiveScreen,
 		getScreenById,
 		createScreen,
 		updateScreen,

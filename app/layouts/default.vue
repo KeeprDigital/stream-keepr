@@ -194,6 +194,7 @@ const homeLinks = computed<NavigationMenuItem[]>(() => [{
 						class="flex-1"
 						orientation="vertical"
 					/>
+					<UIRealtimeStatus />
 					<UIServerTimeStatus />
 				</div>
 			</template>
