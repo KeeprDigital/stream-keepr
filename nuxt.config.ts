@@ -104,7 +104,8 @@ export default defineNuxtConfig({
 		// runtime hands back an already-compiled `WebAssembly.Module`. A deployed
 		// Worker refuses to compile Wasm from a byte buffer ("Wasm code generation
 		// disallowed by embedder"), so nothing here may reintroduce a build plugin
-		// that inlines the codecs as base64 — that was #302.
+		// that inlines the codecs as base64 — that was #302. `pnpm worker:dry-run`
+		// now enforces that against the built bundle (#319).
 		experimental: {
 			wasm: true,
 		},

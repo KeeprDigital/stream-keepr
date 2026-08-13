@@ -17,7 +17,9 @@ const wasmRequest = /\.wasm(?:\?.*)?$/;
  * embedder", which is what broke every deployed JPEG and WebP ingestion until
  * #302. That build uses Nitro's own Wasm support instead — see the
  * `nitro.experimental.wasm` note in `nuxt.config.ts`. Registering this plugin
- * in `nitro.rollupConfig` reintroduces the defect.
+ * in `nitro.rollupConfig` reintroduces the defect — and no longer only in this
+ * comment: `pnpm worker:dry-run` scans the bundle for the constructor call
+ * below and fails the deploy before promotion (`scripts/assert-no-runtime-wasm.mjs`, #319).
  */
 export function wasmModulePlugin(name: string): Plugin {
 	const plugin: Plugin & { enforce: 'pre' } = {
