@@ -165,14 +165,18 @@ describe('graphics staging acceptance evidence', () => {
 	});
 
 	/**
-	 * Both halves of the narrowing, because an underscore is only a word
-	 * separator in a name built of upper-case words. A base64url capability
-	 * containing one is still a capability, and a long upper-case run does not
-	 * become vocabulary by acquiring a prefix.
+	 * All three ways the narrowing could have gone too far, because an underscore
+	 * is only a word separator in a name built of upper-case words. The base64url
+	 * alphabet contains `_`, so a capability may carry one — including enough of
+	 * them to leave every part short — and a long upper-case run does not become
+	 * vocabulary by acquiring a prefix.
 	 */
 	it('still refuses a token that merely contains an underscore', () => {
 		expect(() => evidence().report([
 			{ code: 'delivery-body-mismatch', detail: { key: 'PN7yQ0hVn3wKq2_Lb8sVdT1cRj4mXaGe9uFhBzYo0Ss' } },
+		])).toThrow('delivery-v1 evidence-opaque-token-leak field=key');
+		expect(() => evidence().report([
+			{ code: 'delivery-body-mismatch', detail: { key: 'PN7yQ0hVn3wKq2_Lb8sVdT1cRj4m_XaGe9uFhBzYo0S' } },
 		])).toThrow('delivery-v1 evidence-opaque-token-leak field=key');
 		expect(() => evidence().report([
 			{ code: 'delivery-body-mismatch', detail: { key: 'REVISION_8F2B1C4D9E7A6B5C4D3E2F1A0B9C8D7E' } },
