@@ -30,6 +30,9 @@ vi.mock('h3', () => ({
 		Object.assign(new Error(input.message), input),
 	getCookie: mockGetCookie,
 	getRequestURL: () => new URL('https://stream.example/api/graphics-assets/ingestion-operations'),
+	// Nothing here calls it. The module reaches `server/utils/errors` for the error
+	// class an unreachable session store raises, and that module imports it.
+	isError: (candidate: unknown) => candidate instanceof Error,
 	setCookie: mockSetCookie,
 }));
 
@@ -38,6 +41,8 @@ const {
 	optionalGraphicsAuthorSession,
 	requireGraphicsAuthorSession,
 } = await import('~~/server/modules/graphics-author-session');
+const { GraphicsAuthorSessionUnavailableError } = await import('~~/server/utils/errors');
+const { mapPublicNitroError } = await import('~~/server/utils/nitroErrorMapping');
 
 /** Eight hours, in the seconds the cookie and the KV entry are both written in. */
 const TTL_SECONDS = 8 * 60 * 60;
@@ -184,6 +189,84 @@ describe('a graphics author session that is still being used', () => {
 		await requireGraphicsAuthorSession(event);
 
 		expect(mockKv.set).toHaveBeenCalledOnce();
+	});
+});
+
+/**
+ * What a caller is told when the store the session lives in cannot be reached.
+ *
+ * The sentence is written for an operator — it says sessions are unavailable, not
+ * that the server broke — and it only reaches one because the refusal names the
+ * failure it is. #294: both sites used to hand `mapPublicNitroError` whatever
+ * `kv.get` threw, and a raw store exception matches no branch there, so the
+ * sanitizer replaced the whole thing with 'Internal Server Error'.
+ */
+describe('a graphics author session whose store cannot be reached', () => {
+	const storeFailure = new Error('KV GET failed');
+
+	it('refuses a guarded request with a sentence the mapper keeps', async () => {
+		mockKv.get.mockRejectedValue(storeFailure);
+
+		const refusal = await requireGraphicsAuthorSession(event).catch((error: unknown) => error);
+
+		expect(refusal).toMatchObject({
+			statusCode: 503,
+			statusMessage: 'Service Unavailable',
+			message: 'Graphics author sessions are temporarily unavailable',
+		});
+		expect((refusal as { cause?: unknown }).cause).toBeInstanceOf(GraphicsAuthorSessionUnavailableError);
+	});
+
+	it('refuses the minting of a session the same way', async () => {
+		// The site the ticket did not name. A page navigation mints sessions through
+		// here, so a store that is down would otherwise answer 'Internal Server
+		// Error' on the very first request an author makes.
+		mockKv.get.mockRejectedValue(storeFailure);
+
+		const refusal = await ensureGraphicsAuthorSession(event).catch((error: unknown) => error);
+
+		expect(refusal).toMatchObject({
+			statusCode: 503,
+			message: 'Graphics author sessions are temporarily unavailable',
+		});
+		expect((refusal as { cause?: unknown }).cause).toBeInstanceOf(GraphicsAuthorSessionUnavailableError);
+	});
+
+	it('keeps the store\'s own account of the failure for the log', async () => {
+		// The response says which subsystem is unavailable and no more; the
+		// exception the store raised stays reachable behind it, which is what the
+		// error plugin logs.
+		mockKv.get.mockRejectedValue(storeFailure);
+
+		const refusal = await requireGraphicsAuthorSession(event).catch((error: unknown) => error);
+
+		expect((refusal as { cause: Error }).cause.cause).toBe(storeFailure);
+	});
+
+	it('reaches the caller with its sentence intact once the mapper has run', async () => {
+		// The two halves together: raising a named error is only worth anything if
+		// the mapper spares it, and sparing it is only reachable if the throw site
+		// raises one. Either half reverted and this row fails.
+		mockKv.get.mockRejectedValue(storeFailure);
+
+		const refusal = await requireGraphicsAuthorSession(event).catch((error: unknown) => error);
+		mapPublicNitroError(refusal as Parameters<typeof mapPublicNitroError>[0]);
+
+		expect(refusal).toMatchObject({
+			statusCode: 503,
+			statusMessage: 'Service Unavailable',
+			message: 'Graphics author sessions are temporarily unavailable',
+			unhandled: false,
+		});
+	});
+
+	it('is still no reason to refuse a request that only asked in passing', async () => {
+		// Unchanged by #294. A caller with no session-scoped right at stake gets no
+		// identity rather than a refusal, and a store that is down is one way to
+		// have no identity.
+		mockKv.get.mockRejectedValue(storeFailure);
+
+		await expect(optionalGraphicsAuthorSession(event)).resolves.toBeUndefined();
 	});
 });
 

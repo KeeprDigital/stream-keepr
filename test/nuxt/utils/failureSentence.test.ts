@@ -55,6 +55,36 @@ describe('failureSentence', () => {
 			}))).toBe('Melee.gg is temporarily unavailable. Try again later.');
 		});
 
+		/**
+		 * #294, and the reason it needed no change on this side. The rule was already
+		 * "a non-500 5xx that is not a placeholder may be quoted"; what was wrong was
+		 * upstream, where the sanitizer overwrote both of these with 'Internal Server
+		 * Error' before they ever reached a client. The server now spares them and they
+		 * arrive as prose, so this function quotes them by the rule it already had —
+		 * these rows pin that the sentences an operator can act on come through, and
+		 * they are the ones that fail if either mapper branch is removed.
+		 */
+		it('quotes the Graphics Asset Library store a 503 says it could not reach', () => {
+			expect(failureSentence(transportFailure({
+				status: 503,
+				statusText: 'Service Unavailable',
+				body: { message: 'Graphics Asset catalogue is unavailable' },
+				request: `[GET] "/api/graphics-assets"`,
+			}))).toBe('Graphics Asset catalogue is unavailable');
+		});
+
+		it('quotes a 503 saying graphics author sessions are the thing that is down', () => {
+			const failure = transportFailure({
+				status: 503,
+				statusText: 'Service Unavailable',
+				body: { message: 'Graphics author sessions are temporarily unavailable' },
+				request: `[POST] "/api/graphics-assets/ingestion-operations"`,
+			});
+
+			expect(failureSentence(failure)).toBe('Graphics author sessions are temporarily unavailable');
+			expect(isSanitizedFailure(failure)).toBe(false);
+		});
+
 		it('quotes an exhausted byte store, whose 507 is nowhere near the boundary', () => {
 			expect(failureSentence(transportFailure({
 				status: 507,
@@ -98,9 +128,11 @@ describe('failureSentence', () => {
 		 * The two sentences that mean the server has decided to say nothing:
 		 * `mapPublicNitroError` writes the first over any 5xx it did not map, and Nitro's
 		 * own handler writes the second into the body of anything unhandled or fatal.
-		 * A 503 is not evidence of a preserved message — `requireGraphicsAuthorSession`
-		 * raises one whose cause matches no branch, and so does an unavailable Graphics
-		 * Asset Library.
+		 * A 503 is not evidence of a preserved message — `requireGraphicsAdministrator`
+		 * raises one for an unconfigured admin token, and the Screen Output asset
+		 * capability session route raises one with no cause at all. Both were the
+		 * Graphics Author Session and Graphics Asset Library 503s until #294 taught the
+		 * server to preserve those two; the rows above are where they went.
 		 */
 		it('refuses the mapper placeholder even at a status the mapper also uses', () => {
 			const failure = transportFailure({
