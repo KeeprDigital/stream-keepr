@@ -198,7 +198,7 @@ export class GraphicsObjectInputError extends Error {}
 
 export function graphicsObjectIdentity(value: string): GraphicsObjectIdentity {
 	if (value.length === 0)
-		throw new Error('A graphics object identity cannot be empty');
+		throw new GraphicsObjectInputError('A graphics object identity cannot be empty');
 	return value as GraphicsObjectIdentity;
 }
 
