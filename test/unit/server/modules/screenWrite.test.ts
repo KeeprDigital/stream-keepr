@@ -40,8 +40,15 @@ const mockGraphicsAssets = {
  */
 const provideScreenOutputAssetCapabilities = vi.fn(() => mockScreenOutputAssetCapabilities);
 const provideGraphicsAssets = vi.fn(() => mockGraphicsAssets);
+/** Stands in for the statements the epoch end asks to ride with the mode change. */
+const epochEndStatements = ['end-epoch', 'forget-receipts', 'clear-references'];
+const announceEpochEnded = vi.fn();
 const mockBroadcastGraphicsLiveSessions = {
 	endSessionsForScreen: vi.fn(),
+	endEpochOnLeavingBroadcastGraphics: vi.fn(async () => ({
+		statements: epochEndStatements,
+		announceEnded: announceEpochEnded,
+	})),
 };
 
 vi.mock('~~/server/utils/routeGuards', () => ({
@@ -270,6 +277,8 @@ describe('screenWriteModule', () => {
 				1,
 				{ slug: 'renamed', modeConfigs: { card: {} } },
 				3,
+				// No epoch to end, so nothing rides with the write.
+				undefined,
 			);
 			expect(mockPublication.screenUpdated).toHaveBeenCalledWith({
 				eventId: 1,
@@ -308,7 +317,7 @@ describe('screenWriteModule', () => {
 			expect(mockScreenService.update).not.toHaveBeenCalled();
 		});
 
-		it('ends the Broadcast Graphics Live Session when the Screen leaves the mode', async () => {
+		it('ends the Broadcast Graphics Live Session in the commit that changes the mode', async () => {
 			mockScreenService.findById.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'broadcast-graphics' }));
 			mockScreenService.update.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'idle' }));
 
@@ -316,21 +325,41 @@ describe('screenWriteModule', () => {
 				eventId: 1,
 				screenId: 7,
 				input: { stateVersion: 0, currentMode: 'idle' } as never,
+				originConnectionId: 'origin-1',
 			});
 
-			// The epoch ends only once the mode change is committed, so a failed
-			// update can never orphan a running show's live state.
-			expect(mockScreenService.update.mock.invocationCallOrder[0])
-				.toBeLessThan(mockBroadcastGraphicsLiveSessions.endSessionsForScreen.mock.invocationCallOrder[0]!);
-			// Announced. Not because outputs would otherwise keep rendering the ended
-			// show — `screen:updated` already reaches them and they render by the
-			// Screen's current mode — but so that each peer drops the ended epoch's
-			// cached state deterministically rather than on a component remount.
-			expect(mockBroadcastGraphicsLiveSessions.endSessionsForScreen).toHaveBeenCalledWith(
+			// The end travels with the mode change rather than following it: neither
+			// order survives on its own, and there is no instant between them for a
+			// failure to leave a running epoch behind for the next activation (#305).
+			expect(mockBroadcastGraphicsLiveSessions.endEpochOnLeavingBroadcastGraphics)
+				.toHaveBeenCalledWith(7, 1, 'origin-1');
+			expect(mockScreenService.update).toHaveBeenCalledWith(
 				7,
 				1,
-				{ notify: true, originConnectionId: undefined },
+				{ currentMode: 'idle' },
+				0,
+				epochEndStatements,
 			);
+			// Announced only after that commit, because the announcement is a claim
+			// that an epoch ended. Not because outputs would otherwise keep rendering
+			// the ended show — `screen:updated` already reaches them and they render by
+			// the Screen's current mode — but so that each peer drops the ended epoch's
+			// cached state deterministically rather than on a component remount.
+			expect(mockScreenService.update.mock.invocationCallOrder[0])
+				.toBeLessThan(announceEpochEnded.mock.invocationCallOrder[0]!);
+		});
+
+		it('announces nothing when the commit carrying the epoch end is refused', async () => {
+			mockScreenService.findById.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'broadcast-graphics' }));
+			mockScreenService.update.mockResolvedValue(undefined);
+
+			await expect(screenWriteModule().updateScreen({
+				eventId: 1,
+				screenId: 7,
+				input: { stateVersion: 0, currentMode: 'idle' } as never,
+			})).rejects.toMatchObject({ statusCode: 404 });
+
+			expect(announceEpochEnded).not.toHaveBeenCalled();
 		});
 
 		it('leaves the Live Session running while the Screen stays in Broadcast Graphics mode', async () => {
