@@ -466,6 +466,14 @@ export function clearBroadcastGraphicsLiveSessionGraphicAssetReferencesStatement
  * reconciliation found a Screen with no active session, which publishes nothing by
  * definition, so any surviving row is debris. The write is idempotent and re-driven
  * on every republish, so a failure converges on the next one instead of stranding.
+ *
+ * Awaiting the statement is what executes it: what the builder above returns is a
+ * `BatchItem<'sqlite'>` because that is the type a caller putting it in a batch
+ * needs, and a reader who takes it at its word here sees a statement being
+ * discarded. Dropping the `await` would leave an ended show's media fetchable
+ * through the Screen's outputs and read like tidying, so it is pinned by scenario
+ * rather than left to the type — `broadcastGraphicsLiveReferences.sqlite.test.ts`,
+ * "drops what a Screen with no epoch is still publishing" (#320).
  */
 export async function clearOrphanedBroadcastGraphicsLiveSessionGraphicAssetReferences(
 	screenId: number,
