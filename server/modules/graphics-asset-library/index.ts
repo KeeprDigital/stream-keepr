@@ -1013,9 +1013,17 @@ interface GraphicsAssetLibraryDependencies {
 	generateIdentity?: () => string;
 }
 
+/**
+ * An opaque domain identity minted from an untrusted edge.
+ *
+ * The refusal is classified rather than bare, because these minters run at API
+ * boundaries where a blank path segment is a caller's malformed request, not
+ * the installation's fault: `rethrowGraphicsAssetApiError` passes an
+ * unclassified `Error` through untouched, which answered 500 (#316).
+ */
 function requiredIdentity<T extends string>(value: string, label: string): T {
 	if (value.length === 0)
-		throw new Error(`${label} cannot be empty`);
+		throw new GraphicsAssetLibraryError(`${label} cannot be empty`, 'invalid-ingestion-input');
 	return value as T;
 }
 

@@ -3,14 +3,16 @@ import { stubH3Event } from '~~/test/helpers/h3Event';
 
 const {
 	mockRequireGraphicsAuthorSession,
-	mockInspectGraphicAssetRevision,
+	mockUpdateGraphicAsset,
 	mockSetResponseHeader,
 	mockRouterParam,
+	mockReadValidatedBody,
 } = vi.hoisted(() => ({
 	mockRequireGraphicsAuthorSession: vi.fn(),
-	mockInspectGraphicAssetRevision: vi.fn(),
+	mockUpdateGraphicAsset: vi.fn(),
 	mockSetResponseHeader: vi.fn(),
 	mockRouterParam: vi.fn(),
+	mockReadValidatedBody: vi.fn(),
 }));
 
 vi.mock('~~/server/modules/graphics-author-session', () => ({
@@ -19,13 +21,14 @@ vi.mock('~~/server/modules/graphics-author-session', () => ({
 
 vi.mock('~~/server/modules/graphics-asset-library/runtime', () => ({
 	graphicsAssetLibraryForEvent: () => ({
-		inspectGraphicAssetRevision: mockInspectGraphicAssetRevision,
+		updateGraphicAsset: mockUpdateGraphicAsset,
 	}),
 }));
 
 vi.stubGlobal('defineEventHandler', vi.fn(handler => handler));
 vi.stubGlobal('getRouterParam', mockRouterParam);
 vi.stubGlobal('setResponseHeader', mockSetResponseHeader);
+vi.stubGlobal('readValidatedBody', mockReadValidatedBody);
 vi.stubGlobal('createError', (input: {
 	statusCode: number;
 	statusMessage?: string;
@@ -33,22 +36,22 @@ vi.stubGlobal('createError', (input: {
 	cause?: unknown;
 }) => Object.assign(new Error(input.message), input));
 
-const routePath = '../../../../../server/api/graphics-assets/[assetId]/revisions/[revisionId]/status.get';
+const routePath = '../../../../../../server/api/graphics-assets/[assetId]/index.patch';
 
-describe('graphic Asset Revision status', () => {
+describe('graphic Asset metadata edits', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		mockRequireGraphicsAuthorSession.mockReset().mockResolvedValue('author-1');
-		mockInspectGraphicAssetRevision.mockReset().mockResolvedValue({ outcome: 'missing' });
+		mockUpdateGraphicAsset.mockReset().mockResolvedValue({ id: 'asset-1' });
 		mockSetResponseHeader.mockReset();
-		mockRouterParam.mockReset().mockImplementation((_event, name: string) =>
-			name === 'assetId' ? 'asset-1' : 'revision-1');
+		mockRouterParam.mockReset().mockReturnValue('asset-1');
+		mockReadValidatedBody.mockReset().mockResolvedValue({ name: 'Lower third', eventIds: [] });
 	});
 
 	it('maps a retryable catalogue failure to 503 with retry guidance', async () => {
 		const { GraphicsAssetLibraryError } = await import('~~/server/modules/graphics-asset-library');
-		mockInspectGraphicAssetRevision.mockRejectedValue(new GraphicsAssetLibraryError(
-			'Graphic Asset Revision lookup is temporarily unavailable',
+		mockUpdateGraphicAsset.mockRejectedValue(new GraphicsAssetLibraryError(
+			'Graphic Asset metadata is temporarily unwritable',
 			'graphics-asset-library-unavailable',
 		));
 		const handler = (await import(routePath)).default;
@@ -56,42 +59,19 @@ describe('graphic Asset Revision status', () => {
 
 		await expect(handler(event)).rejects.toMatchObject({
 			statusCode: 503,
-			message: 'Graphic Asset Revision lookup is temporarily unavailable',
+			message: 'Graphic Asset metadata is temporarily unwritable',
 		});
 		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
 	});
 
-	it('answers a blank revision segment with 400 rather than an unclassified failure', async () => {
-		mockRouterParam.mockImplementation((_event, name: string) =>
-			name === 'assetId' ? 'asset-1' : '');
-		const handler = (await import(routePath)).default;
-
-		await expect(handler(stubH3Event())).rejects.toMatchObject({
-			statusCode: 400,
-			message: 'Graphic Asset Revision identity cannot be empty',
-		});
-		expect(mockInspectGraphicAssetRevision).not.toHaveBeenCalled();
-	});
-
-	it('inspects the revision the route names', async () => {
-		mockInspectGraphicAssetRevision.mockResolvedValue({ outcome: 'available', kind: 'still-image' });
-		const handler = (await import(routePath)).default;
-
-		await handler(stubH3Event());
-
-		expect(mockInspectGraphicAssetRevision).toHaveBeenCalledWith({
-			assetId: 'asset-1',
-			revisionId: 'revision-1',
-		});
-	});
-
-	it('rejects the read before touching the library when no author session is authenticated', async () => {
+	it('rejects the edit before reading a body when no author session is authenticated', async () => {
 		mockRequireGraphicsAuthorSession.mockRejectedValue(
 			Object.assign(new Error('authenticated session required'), { statusCode: 401 }),
 		);
 		const handler = (await import(routePath)).default;
 
 		await expect(handler(stubH3Event())).rejects.toMatchObject({ statusCode: 401 });
-		expect(mockInspectGraphicAssetRevision).not.toHaveBeenCalled();
+		expect(mockReadValidatedBody).not.toHaveBeenCalled();
+		expect(mockUpdateGraphicAsset).not.toHaveBeenCalled();
 	});
 });

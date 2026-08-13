@@ -3,6 +3,7 @@ import {
 	createGraphicsAssetLibrary,
 	graphicAssetId,
 	graphicAssetRevisionId,
+	GraphicsAssetLibraryError,
 	graphicsIngestionOperationId,
 } from '~~/server/modules/graphics-asset-library';
 
@@ -71,5 +72,12 @@ describe('the Graphics Asset Library public module', () => {
 		expect(graphicAssetRevisionId('revision-1')).toBe('revision-1');
 		expect(graphicsIngestionOperationId('operation-1')).toBe('operation-1');
 		expect(() => graphicAssetId('')).toThrow('Graphic Asset identity cannot be empty');
+	});
+
+	it('classifies a blank identity as invalid input rather than an unclassified failure', () => {
+		expect(() => graphicAssetId('')).toThrow(GraphicsAssetLibraryError);
+		for (const mint of [graphicAssetId, graphicAssetRevisionId, graphicsIngestionOperationId]) {
+			expect(() => mint('')).toThrow(expect.objectContaining({ code: 'invalid-ingestion-input' }));
+		}
 	});
 });
