@@ -326,6 +326,12 @@ export const featureMatchSlots = sqliteTable('feature_match_slots', {
 }, table => [
 	index('feature_match_slots_event_id_idx').on(table.eventId),
 	uniqueIndex('feature_match_slots_external_unique_idx').on(table.eventId, table.externalId, table.externalSource),
+	// A Match occupies at most one Slot. Promotion clears the duplicates it read
+	// before promoting, but two operators promoting one Match to two Slots at
+	// once each read no duplicate, so only the database can be the arbiter.
+	// Partial because an unoccupied Slot carries no Match and any number of them
+	// may exist at once.
+	uniqueIndex('feature_match_slots_match_unique_idx').on(table.eventId, table.matchId).where(sql`${table.matchId} is not null`),
 ]);
 
 export const featureMatchAssignments = sqliteTable('feature_match_assignments', {

@@ -245,6 +245,22 @@ describe('feature Match Slot Promotion server module', () => {
 		mockFeatureMatchAssignmentService.findByRoundAndSlot.mockResolvedValue({ id: 9 });
 	}
 
+	it('reports a lost promotion race as a conflict rather than committing it', async () => {
+		stagePromotion();
+		mockBatch.mockRejectedValue(new Error(
+			'D1_ERROR: UNIQUE constraint failed: feature_match_slots.event_id, feature_match_slots.match_id: SQLITE_CONSTRAINT',
+		));
+
+		await expect(featureMatchPromotionModule().promoteMatchToSlot({
+			eventId: 1,
+			slotId: 2,
+			matchId: 7,
+		})).rejects.toMatchObject({ statusCode: 409 });
+
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).not.toHaveBeenCalled();
+		expect(mockPublishMessage).not.toHaveBeenCalled();
+	});
+
 	it('reverse-syncs through the post-commit form, so a lost Session race cannot fail a committed promotion', async () => {
 		stagePromotion();
 

@@ -240,6 +240,43 @@ describe('feature match slots API', () => {
 		expect(rowsForSlotB[0]).toMatchObject({ matchId: matchB.id });
 	});
 
+	it('lets only one of two simultaneous promotions of one Match take it', async () => {
+		const contested = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 77, player1Data: { name: 'Gina' }, player2Data: { name: 'Hank' } },
+		});
+		const [lane1, lane2] = await Promise.all([
+			$fetch(`/api/events/${eventId}/feature-match-slots`, { method: 'POST', body: { bestOf: 3 } }),
+			$fetch(`/api/events/${eventId}/feature-match-slots`, { method: 'POST', body: { bestOf: 3 } }),
+		]);
+
+		const responses = await Promise.all([
+			$fetchRaw(`/api/events/${eventId}/feature-match-slots/${lane1.id}/promote`, {
+				method: 'POST',
+				body: { matchId: contested.id },
+			}),
+			$fetchRaw(`/api/events/${eventId}/feature-match-slots/${lane2.id}/promote`, {
+				method: 'POST',
+				body: { matchId: contested.id },
+			}),
+		]);
+
+		// Exactly one lane may win, and the loser must be told it lost rather than
+		// shown a promotion it did not get. Both answering 200 is the defect even
+		// when only one Slot ends up holding the Match, because the lane whose
+		// promotion was undone was still told it had succeeded.
+		const statuses = responses.map(response => response.status).toSorted();
+		expect(statuses).toEqual([200, 409]);
+		// Classified as this promotion losing a race, not as the generic "resource
+		// already exists" any unique index violation would otherwise produce.
+		const losing = responses.find(response => response.status === 409)!;
+		expect(losing._data.message).toContain('state was modified concurrently');
+
+		const stored = await $fetch(`/api/events/${eventId}/feature-match-slots`);
+		const holders = stored.featureMatchSlots.filter((slot: { matchId: number | null }) => slot.matchId === contested.id);
+		expect(holders).toHaveLength(1);
+	});
+
 	it('keeps a Player rename and a concurrent operator command from cancelling each other', async () => {
 		const player = await $fetch(`/api/events/${eventId}/players`, {
 			method: 'POST',
