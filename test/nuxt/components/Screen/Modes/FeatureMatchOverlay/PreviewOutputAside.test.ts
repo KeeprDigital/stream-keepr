@@ -128,6 +128,9 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 			// clipboard", which this surface said until #257, sends the operator to the
 			// address in their own browser's bar, which is the media-losing URL the
 			// refusal exists to withhold (#231, #250).
+			// Once, and the count is the half that sees a duplicate: `toHaveBeenCalledWith`
+			// and the last-call read below both pass a handler that reports twice (#278, #295).
+			expect(mockCopyToClipboard).toHaveBeenCalledOnce();
 			expect(mockCopyToClipboard).toHaveBeenCalledWith('', expect.objectContaining({
 				nothingToCopyTitle: 'Nothing copied',
 				nothingToCopyDescription: expect.stringContaining('Asset access for this Screen could not be obtained'),
@@ -164,6 +167,13 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 
 			expect(captureWindow.location.href).toBe('');
 			expect(captureWindow.close).toHaveBeenCalledOnce();
+			// Two, and only two: the 'Preparing download' announcement and this refusal.
+			// `toHaveBeenCalledWith` asks only whether *some* call matched, and the read
+			// below takes the last one — so a branch firing its own sentence twice passed
+			// both while handing the operator the same failure two or three times (#278,
+			// #295). The sibling surfaces take this as `toHaveBeenCalledExactlyOnceWith`;
+			// here the announcement legitimately precedes the failure, so the count is two.
+			expect(mockToastAdd).toHaveBeenCalledTimes(2);
 			expect(mockToastAdd).toHaveBeenCalledWith(
 				expect.objectContaining({ title: 'Download unavailable', color: 'error' }),
 			);
@@ -184,9 +194,11 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 			await wrapper.get('[data-testid="download-output-fill"]').trigger('click');
 			await flushPromises();
 
-			// Named before it is read: a run where nothing was reported should say so,
-			// not die dereferencing a call that was never made (#273).
-			expect(mockToastAdd).toHaveBeenCalled();
+			// Counted before it is read: a run where nothing was reported should say so,
+			// not die dereferencing a call that was never made (#273) — and the count is
+			// what sees a spurious *extra* report, which reading the last call cannot
+			// (#278, #295). Two: the announcement, then this one.
+			expect(mockToastAdd).toHaveBeenCalledTimes(2);
 			const reported = mockToastAdd.mock.calls.at(-1)![0];
 			expect(reported.title).toBe('Download unavailable');
 			expect(reported.description).toContain('pop-up');

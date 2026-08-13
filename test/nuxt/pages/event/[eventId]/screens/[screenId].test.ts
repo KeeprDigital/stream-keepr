@@ -533,5 +533,30 @@ describe('screen config page — handing out this Screen’s output', () => {
 				description: expect.stringContaining('Asset access for this Screen could not be obtained'),
 			}));
 		});
+
+		/**
+		 * The third answer, which this describe had no test for at all until #295 — a
+		 * success and a refusal, and nothing for the browser blocking the tab.
+		 *
+		 * One reporter serves both open controls, so it is tempting to read the
+		 * page-level blocked test as covering this. It does not: what is under test is
+		 * the *item's* `onSelect` reaching that reporter, and a mode output wired to its
+		 * own copy of the pre-#258 sentence would tell an operator to retry a tab their
+		 * browser will block identically — with the page-level test still green.
+		 */
+		it('names the browser, not asset access, when the tab for a mode output is blocked', async () => {
+			vi.stubGlobal('open', vi.fn(() => null));
+			wrapper = await mountLoadedPage();
+
+			await wrapper.get('[data-open-output="Open fill output"]').trigger('click');
+			await flushPromises();
+
+			expect(mockToast.add).toHaveBeenCalledOnce();
+			const [reported] = mockToast.add.mock.calls[0] as [{ description: string }];
+			expect(reported.description).toContain('pop-up');
+			expect(reported.description).not.toContain('Asset access');
+			// Nothing to hand a capability to, so none is minted.
+			expect(capabilityRequests()).toHaveLength(0);
+		});
 	});
 });
