@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
-import { wasmModulePlugin } from './build/wasmModulePlugin';
-import { rootAliases, unitCoverageConfig } from './vitest.shared';
+import { wasmModulePlugin } from './build/wasmModulePlugin.ts';
+import { rootAliases, unitCoverageConfig } from './vitest.shared.ts';
 
 export default defineConfig({
 	plugins: [wasmModulePlugin('test-webassembly-modules')],

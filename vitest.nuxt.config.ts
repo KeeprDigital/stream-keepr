@@ -1,5 +1,5 @@
 import { defineVitestConfig } from '@nuxt/test-utils/config';
-import { nuxtCoverageConfig } from './vitest.shared';
+import { nuxtCoverageConfig } from './vitest.shared.ts';
 
 export default defineVitestConfig({
 	test: {
