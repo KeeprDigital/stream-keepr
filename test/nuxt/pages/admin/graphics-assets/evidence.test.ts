@@ -297,6 +297,7 @@ describe('the Graphics Asset Library Evidence ledger page', () => {
 		await wrapper.findAll('button').find(button => button.text() === 'Same actor')!.trigger('click');
 		await settle();
 		expect(lastQuery()).toMatchObject({ actor: 'librarian' });
+		expect(lastQuery()).not.toHaveProperty('correlationId');
 	});
 
 	it('offers the queue inspector only where the subject still exists', async () => {
