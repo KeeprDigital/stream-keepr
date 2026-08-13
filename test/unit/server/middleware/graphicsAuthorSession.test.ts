@@ -108,14 +108,18 @@ describe('the graphics author session middleware', () => {
 		});
 	});
 
-	it('issues a session on the ordinary page request, so the swallow is not hiding a dead path', async () => {
+	it('reaches the session module on the ordinary page request, so the swallow is not hiding a dead path', async () => {
 		// The negative control for the three above: they would all pass on a middleware
-		// that had stopped calling anything at all.
+		// that had stopped calling anything at all. Counted across both entry points on
+		// purpose — pinning `ensure` specifically would fail on the require-vs-ensure
+		// switch, which is an edit that does *not* open the hole and must not read as
+		// though it did.
 		mockEnsure.mockResolvedValue('an-author-id');
+		mockRequire.mockResolvedValue('an-author-id');
 
 		await handler(pageRequest());
 
-		expect(mockEnsure).toHaveBeenCalledTimes(1);
+		expect(mockEnsure.mock.calls.length + mockRequire.mock.calls.length).toBe(1);
 		expect(console.warn).not.toHaveBeenCalled();
 	});
 
