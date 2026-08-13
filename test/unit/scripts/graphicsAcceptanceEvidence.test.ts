@@ -283,6 +283,32 @@ describe('a harness printing evidence it cannot format', () => {
 		expect(observed.exitCode).toBe(1);
 	});
 
+	/**
+	 * The fallback may not become the leak. Anything reaching it that is not the
+	 * formatter talking has an unknown message — a Node error's carries the path
+	 * it was raised from — so only a message in the formatter's own shape is
+	 * printed, and everything else is reduced to the fact that a line could not
+	 * be built.
+	 */
+	it('does not echo an error that is not the formatter refusing a field', async () => {
+		const observed = await observeHarness(() => runAcceptanceHarness({
+			harness: 'delivery-v1',
+			run: async () => ({
+				get checked() {
+					throw new Error(`ENOENT: no such file or directory, open '${REPOSITORY_ROOT}secret.txt'`);
+				},
+			}),
+		}));
+
+		expect(observed.stdout).toBe('');
+		expect(observed.stderr).toBe(
+			'delivery-v1 acceptance failed:\n'
+			+ 'delivery-v1 evidence-report-refused\n',
+		);
+		expect(observed.exitCode).toBe(1);
+		expect(observed.stderr).not.toContain(REPOSITORY_ROOT);
+	});
+
 	it('still prints an ordinary pass, and a deferral under its instructions', async () => {
 		const passed = await observeHarness(() => runAcceptanceHarness({
 			harness: 'delivery-v1',
