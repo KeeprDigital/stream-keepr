@@ -6,6 +6,7 @@ import type {
 } from '~~/shared/types/graphics';
 import type { GraphicAssetReferenceStatus } from '~~/shared/types/graphicsAsset';
 import type { BroadcastGraphicsModeConfig } from '~~/shared/types/screenConfig';
+import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
@@ -201,6 +202,17 @@ interface LiveSession {
 	out: () => Promise<void>;
 	setInput: (key: string, value: MediaGraphicInputValue | null) => Promise<void>;
 	republish: () => Promise<void>;
+	/**
+	 * The epoch ended the way only a failure ends one: the session marked ended and
+	 * the references it published left behind.
+	 *
+	 * Constructed rather than driven, for the same reason `beforeReferenceWrite` is.
+	 * Every path that ends an epoch clears the namespace in the commit that ends it
+	 * (#305), so a Screen holding orphaned rows is by definition a state no ordinary
+	 * sequence of commands reaches — and it is the only state the orphan repair
+	 * exists for.
+	 */
+	strandReferencesOfEndedEpoch: () => Promise<void>;
 	/** Whether this Screen's output may fetch this exact revision now. */
 	canResolve: (revisionId: string) => Promise<boolean>;
 }
@@ -235,6 +247,14 @@ async function liveSession(): Promise<LiveSession> {
 		out: () => apply(command('Out', { graphicId: SLATE.id, cut: true })),
 		setInput: (key, value) => apply(command('Set Input', { graphicId: SLATE.id, inputKey: key, value })),
 		republish: () => module.republishLiveSessionReferences({ eventId, screenId }),
+		strandReferencesOfEndedEpoch: async () => {
+			await db.update(schema.broadcastGraphicsLiveSessions)
+				.set({ status: 'ended' })
+				.where(and(
+					eq(schema.broadcastGraphicsLiveSessions.screenId, screenId),
+					eq(schema.broadcastGraphicsLiveSessions.status, 'active'),
+				));
+		},
 		canResolve: async (revisionId) => {
 			const outcome = await authorizer.authorize({
 				screenId,
@@ -436,5 +456,32 @@ describe('re-deriving what a Broadcast Graphics Live Session publishes after an 
 		expect(console.error).toHaveBeenCalledWith(
 			expect.stringContaining('broadcast_graphics_live_reference_republish_incomplete'),
 		);
+	});
+
+	it('drops what a Screen with no epoch is still publishing', async () => {
+		// The repair rather than the reconcile, and the branch a reconcile reaches
+		// when it finds no running epoch: a Screen with no Live Session accepts
+		// nothing and therefore publishes nothing, so every surviving row is debris
+		// from an end that did not complete.
+		//
+		// It is a scenario rather than a row count because the failure it guards
+		// against is invisible in the module's shape. The repair executes a Drizzle
+		// statement builder by awaiting it, and a builder that is awaited and one
+		// that is merely built are the same expression to a reader — so a refactor
+		// that dropped the `await` would turn this into a silent no-op, leaving an
+		// ended show's media fetchable through the Screen's outputs for as long as
+		// the Screen stays in the mode. #320.
+		const live = await liveSession();
+		await live.take();
+		await live.setInput(CLIP_A, clip(REVISIONS[0]));
+		await live.strandReferencesOfEndedEpoch();
+
+		// The control: the debris is real, and it is on air. Without this the
+		// assertion below would be satisfied by a Screen that never published.
+		expect(await resolvable(live)).toEqual([REVISIONS[0]]);
+
+		await live.republish();
+
+		expect(await resolvable(live)).toEqual([]);
 	});
 });

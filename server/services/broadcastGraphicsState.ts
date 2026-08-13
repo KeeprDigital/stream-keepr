@@ -190,6 +190,15 @@ export function broadcastGraphicsStateService() {
 					eq(broadcastGraphicsLiveSessions.status, 'active'),
 					onlyIf,
 				)),
+			// Not subject to `onlyIf`, unlike the two statements it rides between, and
+			// that asymmetry is safe because of what its own subquery selects: sessions
+			// that have *already* ended. On a refused write the update above did not end
+			// anything, so this matches only epochs some earlier end already purged the
+			// receipts of, and deletes nothing. It is stated rather than left to be
+			// re-derived because the reading that would make it a defect — a refused
+			// write forgetting a running epoch's receipts, so a stale retry replays
+			// against a show still on air — is exactly the one `onlyIf` exists to
+			// prevent everywhere else in this batch.
 			forgetAggregateReceipts({
 				aggregateKind: BROADCAST_GRAPHICS_LIVE_SESSION_AGGREGATE_KIND,
 				aggregateIds: sql`
