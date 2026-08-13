@@ -28,6 +28,15 @@
  * spy), name the call: the unselected form cannot tell a stray from a subject, which
  * is the defect this file exists to prevent.
  *
+ * **A sweep for `!` does not find every site this replaces.** #280 found its four by
+ * searching for the bang, and that search is blind to the same defect written without
+ * one — `spy.mock.calls.map(...)` followed by `[0]` on the result. The index is
+ * unchecked, the empty case is the identical `Cannot read properties of undefined`, and
+ * no `!` appears anywhere in it, so it survived both #273 and #280 untouched.
+ * `ably.test.ts` carried the one instance, closed under #300. A future sweep wants both
+ * shapes: an indexed or `.at()` read of a mock's calls, whether or not a bang follows,
+ * and whether or not a `.map()` sits in between.
+ *
  * Filed as #280, generalising the guard #273 built for one site.
  */
 
