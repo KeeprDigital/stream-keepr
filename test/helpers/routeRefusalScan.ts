@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, relative, resolve } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
@@ -26,6 +26,12 @@ import ts from 'typescript';
  * `assertTrustedScreenCommandBoundary` becomes when app-level authentication lands, since
  * ADR-0008 names these guards as the seams a credential will strengthen and a 401/403 is
  * what such a guard raises. It now walks the route's first-party import graph.
+ *
+ * #292 widened it once more, past what any import graph can reach: Nitro composes
+ * `server/middleware/**` around a handler rather than importing it, so the banded 404
+ * `event-exists.ts` answers for every `/api/events/:id/**` path was outside every graph
+ * the scan could build. Middleware are entry points of their own now, and the alias map
+ * the graph resolves through is read from `.nuxt/tsconfig.json` rather than remembered.
  */
 
 /** A `createError` site the scan found, and as much of it as the scan could read. */
@@ -255,34 +261,113 @@ function composed<T extends string | number>(
 	return literalValue(assigned.get(key), constants, read) as T | undefined;
 }
 
+/** One `paths` entry the scan will follow: what it is written as, and where it lands. */
+export interface PathAlias {
+	/** `#shared/` for a wildcard key, `#shared` for the bare form. */
+	readonly prefix: string;
+	/** The absolute directory (wildcard) or file base (bare) the prefix stands for. */
+	readonly target: string;
+	/** Whether the key was `#shared/*`, which matches by prefix, or `#shared`, exactly. */
+	readonly wildcard: boolean;
+}
+
 /**
- * This repository's path aliases, from `.nuxt/tsconfig.json` rather than from memory.
- *
- * All six reach this repository's own source, so all six are first-party and every one
- * has to be followed. Reading only `~~/` was a narrower claim than "leave no first-party
- * import unfollowed" was making: an unrecognised prefix fell through to the third-party
- * branch, which says nothing at all, so `#shared/x` would have shrunk the graph in
- * silence. No module under `server/` or `shared/` imports through the other five today,
- * which is exactly why nothing caught it.
- *
- * `#imports`, `#build`, `#app` and `#internal/*` are intentionally absent: those are
- * Nuxt's virtual modules, not this repository's code.
+ * Nuxt writes the authoritative alias map here. It is gitignored, and it does not
+ * exist until `nuxt prepare` has run — hence the loud failure rather than an empty map.
  */
-const PATH_ALIASES: readonly (readonly [string, string])[] = [
-	['~~/', ''],
-	['@@/', ''],
-	['#shared/', 'shared'],
-	['#server/', 'server'],
-	['~/', 'app'],
-	['@/', 'app'],
-];
+const NUXT_TSCONFIG = fileURLToPath(new URL('../../.nuxt/tsconfig.json', import.meta.url));
+
+/** Where Nuxt's generated virtual modules resolve to, and so what is not source. */
+const GENERATED_DIRECTORY = dirname(NUXT_TSCONFIG);
+
+/**
+ * This repository's own path aliases, read from `.nuxt/tsconfig.json` rather than
+ * remembered.
+ *
+ * #292: the list used to be six literal prefixes. Every spelling that existed was
+ * handled, so nothing was wrong — but an alias added to `nuxt.config.ts` afterwards, or
+ * either of the bare no-slash forms (`#shared`, `~~`), fell through to the third-party
+ * branch, which says nothing at all. The graph would have shrunk with nothing reporting
+ * it, which is the defect class this whole file exists to close.
+ *
+ * **The map is not liftable wholesale, and that is the point of the filter.** The 43
+ * keys Nuxt generates include this repository's roots *and* every dependency it resolves
+ * for the type-checker — `h3`, `ofetch`, `nitropack`, `consola`, `hub:kv` — plus Nuxt's
+ * own virtual modules, which resolve *inside* the repository, under `.nuxt/`. Taking the
+ * lot would have walked the scan straight into `node_modules` and undone the deliberate
+ * exclusion below: a refusal raised inside `h3` is not one this repository can list or
+ * rename, so reporting it would be noise no reader could act on.
+ *
+ * An alias is therefore first-party by where its target lands: inside the repository,
+ * outside `node_modules`, and outside the generated directory.
+ */
+export function firstPartyPathAliases(tsconfigPath: string = NUXT_TSCONFIG): readonly PathAlias[] {
+	if (!existsSync(tsconfigPath)) {
+		throw new Error(
+			`${relative(REPOSITORY_ROOT, tsconfigPath)} does not exist, so the scan has no aliases to follow `
+			+ 'and would report every first-party import as third-party. Run `pnpm nuxt prepare` (or `pnpm install`, '
+			+ 'which runs it) and try again.',
+		);
+	}
+
+	const read = ts.readConfigFile(tsconfigPath, file => readFileSync(file, 'utf8'));
+	if (read.error !== undefined)
+		throw new Error(`${relative(REPOSITORY_ROOT, tsconfigPath)} could not be parsed: ${ts.flattenDiagnosticMessageText(read.error.messageText, ' ')}`);
+
+	const config = read.config as { compilerOptions?: { paths?: Record<string, string[]> } } | undefined;
+	const paths = config?.compilerOptions?.paths ?? {};
+	const base = dirname(tsconfigPath);
+	const aliases: PathAlias[] = [];
+
+	for (const [key, targets] of Object.entries(paths)) {
+		const target = targets[0];
+		if (target === undefined)
+			continue;
+		const wildcard = key.endsWith('/*');
+		const resolved = resolve(base, target.endsWith('/*') ? target.slice(0, -2) : target);
+		if (!isFirstParty(resolved))
+			continue;
+		aliases.push({ prefix: wildcard ? `${key.slice(0, -2)}/` : key, target: resolved, wildcard });
+	}
+
+	if (aliases.length === 0) {
+		throw new Error(
+			`${relative(REPOSITORY_ROOT, tsconfigPath)} names no first-party path alias, so every import through `
+			+ 'one would be read as third-party and skipped in silence. Expected `~~/*` and friends to resolve '
+			+ 'inside the repository.',
+		);
+	}
+
+	// Longest prefix first, so a specifier is claimed by the most specific alias that
+	// can hold it rather than by whichever `paths` happened to list first.
+	return aliases.sort((left, right) => right.prefix.length - left.prefix.length);
+}
+
+/** Whether a `paths` target is this repository's own source rather than something it resolves. */
+function isFirstParty(target: string): boolean {
+	const within = relative(REPOSITORY_ROOT, target);
+	if (within.startsWith('..'))
+		return false;
+	const segments = within.split(sep);
+	return !segments.includes('node_modules') && !target.startsWith(GENERATED_DIRECTORY + sep) && target !== GENERATED_DIRECTORY;
+}
+
+let cachedAliases: readonly PathAlias[] | undefined;
+
+/** The generated map is read once per process; every scan in a run resolves against it. */
+function pathAliases(): readonly PathAlias[] {
+	cachedAliases ??= firstPartyPathAliases();
+	return cachedAliases;
+}
 
 function resolveModule(specifier: string, fromFile: string): { file: string } | { unfollowed: string } | undefined {
-	const alias = PATH_ALIASES.find(([prefix]) => specifier.startsWith(prefix));
+	const alias = pathAliases().find(candidate => (candidate.wildcard
+		? specifier.startsWith(candidate.prefix)
+		: specifier === candidate.prefix));
 
 	let base: string;
 	if (alias !== undefined)
-		base = resolve(REPOSITORY_ROOT, alias[1], specifier.slice(alias[0].length));
+		base = alias.wildcard ? resolve(alias.target, specifier.slice(alias.prefix.length)) : alias.target;
 	else if (specifier.startsWith('.'))
 		base = resolve(dirname(fromFile), specifier);
 	else
@@ -318,63 +403,146 @@ function resolveModule(specifier: string, fromFile: string): { file: string } | 
  * Value imports only. A type-only import cannot carry a throw, and following it would pull
  * in the schema layer's whole transitive closure for nothing.
  *
- * **Import reachability only, which is narrower than "everything the route can answer".**
- * Nitro composes middleware around a handler rather than importing it, so
- * `server/middleware/**` is outside every graph this builds — including
- * `event-exists.ts`, which answers a banded 404 for any `/api/events/:id/**` path and so
- * for this route. That gap predates #277 and is recorded rather than closed here; closing
- * it means giving middleware its own path-matched entry points and deciding what belongs
- * in the refusal list, which is a change to what the diagnosis excuses and wants its own
- * review.
+ * **Import reachability alone is narrower than "everything the route can answer", which
+ * is why `middlewareFiles` exists.** Nitro composes `server/middleware/**` around a
+ * handler rather than importing it, so no import graph reaches it — and
+ * `event-exists.ts` answers a banded 404 for any `/api/events/:id/**` path, this route's
+ * included. #292 gives middleware its own entry points; see `serverMiddlewareFiles`
+ * for how they are found and where a middleware's graph stops.
  */
-export function scanRouteRefusals(entryFile: string): RouteRefusalScan {
+export function scanRouteRefusals(entryFile: string, middlewareFiles: readonly string[] = []): RouteRefusalScan {
 	const refusals: ScannedRefusal[] = [];
 	const unfollowedImports: string[] = [];
 	const visited = new Set<string>();
-	const queue = [entryFile];
 
-	while (queue.length > 0) {
-		const file = queue.shift() as string;
-		if (visited.has(file))
-			continue;
-		visited.add(file);
+	function walk(entries: readonly string[], viaMiddleware: boolean) {
+		const queue = [...entries];
 
-		const label = relative(REPOSITORY_ROOT, file);
-		const text = readFileSync(file, 'utf8');
-		refusals.push(...scanSourceForRefusals(label, text));
+		while (queue.length > 0) {
+			const file = queue.shift() as string;
+			if (visited.has(file))
+				continue;
+			visited.add(file);
 
-		const source = ts.createSourceFile(label, text, ts.ScriptTarget.Latest, true);
-		function follow(node: ts.Node, specifier: ts.Expression | undefined) {
-			const site = `${label}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
-			if (specifier === undefined || !ts.isStringLiteral(specifier)) {
-				unfollowedImports.push(`${site}: ${excerpt(node)}`);
-				return;
-			}
-			const resolved = resolveModule(specifier.text, file);
-			if (resolved === undefined)
-				return;
-			if ('file' in resolved)
+			const label = relative(REPOSITORY_ROOT, file);
+			const text = readFileSync(file, 'utf8');
+			refusals.push(...scanSourceForRefusals(label, text));
+
+			const source = ts.createSourceFile(label, text, ts.ScriptTarget.Latest, true);
+			function follow(node: ts.Node, specifier: ts.Expression | undefined) {
+				const site = `${label}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
+				if (specifier === undefined || !ts.isStringLiteral(specifier)) {
+					unfollowedImports.push(`${site}: ${excerpt(node)}`);
+					return;
+				}
+				const resolved = resolveModule(specifier.text, file);
+				if (resolved === undefined)
+					return;
+				if (!('file' in resolved)) {
+					unfollowedImports.push(`${site}: ${resolved.unfollowed}`);
+					return;
+				}
+				if (viaMiddleware && isDomainLayer(resolved.file))
+					return;
 				queue.push(resolved.file);
-			else
-				unfollowedImports.push(`${site}: ${resolved.unfollowed}`);
-		}
+			}
 
-		function visit(node: ts.Node) {
-			// `export { x } from './y'` re-exports values as surely as an import brings them.
-			if (ts.isImportDeclaration(node) && node.importClause?.isTypeOnly !== true)
-				follow(node, node.moduleSpecifier);
-			else if (ts.isExportDeclaration(node) && !node.isTypeOnly && node.moduleSpecifier !== undefined)
-				follow(node, node.moduleSpecifier);
-			else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword)
-				follow(node, node.arguments[0]);
-			node.forEachChild(visit);
+			function visit(node: ts.Node) {
+				// `export { x } from './y'` re-exports values as surely as an import brings them.
+				if (ts.isImportDeclaration(node) && node.importClause?.isTypeOnly !== true)
+					follow(node, node.moduleSpecifier);
+				else if (ts.isExportDeclaration(node) && !node.isTypeOnly && node.moduleSpecifier !== undefined)
+					follow(node, node.moduleSpecifier);
+				else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword)
+					follow(node, node.arguments[0]);
+				node.forEachChild(visit);
+			}
+			visit(source);
 		}
-		visit(source);
 	}
+
+	// The route first and to a fixed point, so a module the route really imports is
+	// scanned as the route's own even where a middleware reaches it too. Walking one
+	// interleaved queue would have let the middleware narrowing below win by arriving
+	// first, which is an under-approximation and the one direction that must not happen.
+	walk([entryFile], false);
+	walk(middlewareFiles, true);
 
 	return {
 		refusals,
 		files: [...visited].map(file => relative(REPOSITORY_ROOT, file)).sort(),
 		unfollowedImports,
 	};
+}
+
+/** Where Nitro looks for the handlers it composes around every request. */
+const MIDDLEWARE_DIRECTORY = resolve(REPOSITORY_ROOT, 'server/middleware');
+
+/**
+ * The layers a middleware consults rather than refuses through — excluded from a
+ * middleware's graph, and only from a middleware's graph.
+ */
+const DOMAIN_LAYER_ROOTS = ['server/services', 'server/modules'] as const;
+
+function isDomainLayer(file: string): boolean {
+	const within = relative(REPOSITORY_ROOT, file);
+	return DOMAIN_LAYER_ROOTS.some(root => within.startsWith(`${root}${sep}`));
+}
+
+/**
+ * Every middleware Nitro will compose around a request, as entry points for the scan.
+ *
+ * The directory rather than a list of names: a hardcoded list would close #292's hole
+ * and re-open it the day someone adds a middleware, which is the hardcoded-alias defect
+ * one directory along. An empty directory is a failure rather than an empty list —
+ * scanning no middleware passes every assertion the guard makes.
+ *
+ * **All of them, not the ones that match this route's path.** Nitro runs every
+ * middleware on every request; which of them acts is a runtime decision each makes from
+ * the path and method, and reading that decision out of the source means interpreting
+ * guards like `if (event.method !== 'GET' || pathname.startsWith('/api/')) return;`.
+ * So this over-approximates, the way module reachability already does, and the cost was
+ * measured rather than assumed: across all three middleware exactly one banded refusal
+ * arrives that this route can raise, and none it cannot. **When that stops being true —
+ * a middleware growing a 401 for some other path — path-match here or exclude it here.
+ * Do not add it to the refusal list**, for the reason spelled out above.
+ *
+ * **A middleware's graph stops at the domain layer**, which is the second half of
+ * keeping that cost at nil. `DOMAIN_LAYER_ROOTS` is excluded because middleware is
+ * global: every route pays for whatever any middleware transitively imports, and
+ * `event-exists.ts` alone reaches `featureMatch.ts`'s two banded 404s and an unreadable
+ * 404 in `sequencedLiveState.ts` through `eventService()` — refusals raised by services
+ * this route never calls, which no honest reading could add to its list. Middleware
+ * consults the domain layer for a boolean and refuses on its own terms or through a
+ * refusal helper (`payloadTooLarge`), and those helpers are still followed. The residual
+ * is a middleware that genuinely refuses through a service; there is none today.
+ */
+export function serverMiddlewareFiles(directory: string = MIDDLEWARE_DIRECTORY): readonly string[] {
+	// Recursively, because Nitro's own scan of this directory is recursive: a middleware
+	// one directory down runs on every request exactly as a top-level one does, and a
+	// flat read would have skipped it in silence. Declaration files are excluded for the
+	// reason a type-only import is — they cannot carry a throw.
+	const files = existsSync(directory) ? middlewareFilesUnder(directory) : [];
+
+	if (files.length === 0) {
+		throw new Error(
+			`${relative(REPOSITORY_ROOT, directory)} holds no middleware, so the scan would read a route's `
+			+ 'imports only and miss every refusal Nitro composes around it. If middleware moved, point this at '
+			+ 'the new directory.',
+		);
+	}
+
+	return files;
+}
+
+function middlewareFilesUnder(directory: string): string[] {
+	const found: string[] = [];
+	for (const entry of readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
+		const path = resolve(directory, entry.name);
+		if (entry.isDirectory())
+			found.push(...middlewareFilesUnder(path));
+		else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts'))
+			found.push(path);
+	}
+	return found;
 }

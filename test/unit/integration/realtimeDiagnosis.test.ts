@@ -1,5 +1,5 @@
 import type { ScannedRefusal } from '~~/test/helpers/routeRefusalScan';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +7,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 import { RealtimePublishError } from '~~/server/utils/realtimePublishFailure';
 import { providerRefusal } from '~~/test/helpers/providerRefusal';
-import { scanRouteRefusals, scanSourceForRefusals } from '~~/test/helpers/routeRefusalScan';
+import {
+	firstPartyPathAliases,
+	scanRouteRefusals,
+	scanSourceForRefusals,
+	serverMiddlewareFiles,
+} from '~~/test/helpers/routeRefusalScan';
 import {
 	CREDENTIAL_REJECTION_STATUSES,
 	diagnoseRealtimePublishFailure,
@@ -300,7 +305,7 @@ function unlistedRefusals(refusals: readonly ScannedRefusal[]): ScannedRefusal[]
 }
 
 describe('the Screen-command route\'s own refusals', () => {
-	const scan = scanRouteRefusals(commandRoutePath);
+	const scan = scanRouteRefusals(commandRoutePath, serverMiddlewareFiles());
 
 	it('are found by the scan at all', () => {
 		// A scan that stops matching passes silently, which is the failure mode this
@@ -317,6 +322,42 @@ describe('the Screen-command route\'s own refusals', () => {
 		expect(scan.files).toContain('server/api/events/[id]/screens/[screenId]/command.post.ts');
 		expect(scan.files).toContain('server/utils/ably.ts');
 		expect(scan.files).toContain('server/services/screen.ts');
+	});
+
+	it('are read from the middleware Nitro composes around it, which no import graph reaches', () => {
+		// #292: Nitro composes `server/middleware/**` around a handler rather than
+		// importing it, so every graph built from the route file alone missed
+		// `event-exists.ts` — which answers 404 'Event not found' for any
+		// `/api/events/:id/**` path, this route's included. Unlisted, that legitimate
+		// refusal read as a fabricated Ably key, which is the confident nonsense the
+		// whole diagnosis exists to prevent.
+		expect(scan.files).toContain('server/middleware/event-exists.ts');
+		expect(scan.refusals).toContainEqual(
+			expect.objectContaining({ statusCode: 404, message: 'Event not found' }),
+		);
+	});
+
+	it('are read from a middleware\'s own refusal helpers, not from its body alone', () => {
+		// A middleware that refuses through an imported helper is the shape #277 closed
+		// for routes, and it exists here: `request-body-limit.ts` raises nothing itself
+		// and refuses through `payloadTooLarge`. Reading middleware bodies alone would
+		// have been the cheaper fix and would have carried #277's defect back in.
+		expect(scan.files).toContain('server/utils/payloadLimits.ts');
+	});
+
+	it('does not follow a middleware into the domain layer it only consults', () => {
+		// The one narrowing #292 added, and it is the narrowing the scan's own policy
+		// prescribes — a subtree excluded rather than the refusal list widened.
+		// Middleware is global: every one of them is composed around every request, so
+		// module reachability from a middleware drags the shared service layer into a
+		// graph that is supposed to describe *this route*. Measured before the rule was
+		// written: `event-exists.ts` reaches `featureMatch.ts`'s two banded 404s and one
+		// unreadable 404 in `sequencedLiveState.ts` through `eventService()`, none of
+		// which this route can answer, and listing them would have re-opened #268's hole
+		// wholesale. A middleware consults the domain layer for a boolean and refuses on
+		// its own terms; the routes that really call a service carry it in their own graph.
+		expect(scan.files).not.toContain('server/services/featureMatch.ts');
+		expect(scan.files).not.toContain('server/modules/graphics-author-session.ts');
 	});
 
 	it('leave no first-party import unfollowed', () => {
@@ -339,10 +380,10 @@ describe('the Screen-command route\'s own refusals', () => {
 		// being diagnosed: #268's hole, reopened. Add to the list only a refusal this
 		// route really raises. Otherwise narrow the scan.
 		//
-		// The list is also not everything the route can answer: Nitro composes
-		// middleware rather than importing it, so `server/middleware/**` is invisible
-		// here — `event-exists.ts` answers a banded 404 on this route's path and is
-		// neither scanned nor listed. Pre-existing, recorded, not closed by #277.
+		// #292 closed the last hole this comment used to record: the middleware Nitro
+		// composes around the handler is scanned now, so 'Event not found' is a listed
+		// refusal rather than an invisible one. What survives is the residual named in
+		// the narrowing test above — a middleware refusing through the domain layer.
 		const banded = inCredentialBand(scan.refusals);
 
 		expect(banded.length).toBeGreaterThan(0);
@@ -372,7 +413,10 @@ describe('what the scan holds the route to', () => {
 	});
 
 	it('catches a route-grown 404 the list does not name, as it always did', () => {
-		const missing = [scanned(404, 'Event not found')];
+		// 'Round not found' rather than 'Event not found': #292 made the latter a real
+		// listed refusal, and a fixture that collides with the list under test proves
+		// the opposite of what it was written to prove.
+		const missing = [scanned(404, 'Round not found')];
 
 		expect(unlistedRefusals(inCredentialBand(missing))).toEqual(missing);
 	});
@@ -602,12 +646,12 @@ describe('the scan\'s reach through a route\'s imports', () => {
 	});
 
 	it('follows every path alias that reaches this repository, not only `~~/`', () => {
-		// All six aliases in `.nuxt/tsconfig.json` reach this repository's own source, so
-		// all six are first-party. An unrecognised prefix fell through to the
-		// third-party branch, which says nothing at all — so `#shared/x` would have
-		// shrunk the graph in silence while "leave no first-party import unfollowed"
-		// still passed. Nothing under `server/` or `shared/` imports through the other
-		// five today, which is why nothing caught it.
+		// Every alias in `.nuxt/tsconfig.json` that reaches this repository's own source
+		// is first-party. An unrecognised prefix fell through to the third-party branch,
+		// which says nothing at all — so `#shared/x` would have shrunk the graph in
+		// silence while "leave no first-party import unfollowed" still passed. Nothing
+		// under `server/` or `shared/` imports through the other five today, which is
+		// why nothing caught it.
 		const entry = join(root, 'aliased.ts');
 		writeFileSync(entry, 'import { screenRealtimeChannel } from \'#shared/utils/realtimeChannels\';\n');
 
@@ -620,7 +664,12 @@ describe('the scan\'s reach through a route\'s imports', () => {
 	it('says nothing about a third-party or virtual specifier, which is not the route\'s code', () => {
 		// A refusal raised inside `h3` or `hub:db` is not one this repository can list or
 		// rename, so these are excluded by design rather than reported as holes. `#imports`
-		// is Nuxt's virtual module and belongs with them, not with the six real aliases.
+		// is Nuxt's virtual module and belongs with them, not with the real aliases.
+		//
+		// #292: these three are *named in the same `paths` map* the aliases are now read
+		// from, so lifting that map wholesale would have made `h3` and `hub:db`
+		// first-party and walked the scan into `node_modules`. They are excluded by
+		// where their target resolves to, not by a list of names.
 		const entry = join(root, 'third-party.ts');
 		writeFileSync(entry, [
 			'import { createError } from \'h3\';',
@@ -629,5 +678,123 @@ describe('the scan\'s reach through a route\'s imports', () => {
 		].join('\n'));
 
 		expect(scanRouteRefusals(entry).unfollowedImports).toEqual([]);
+	});
+});
+
+/**
+ * Where the aliases come from, now that they are read rather than remembered.
+ *
+ * #292: the list was hardcoded. All six spellings that existed were handled, but an
+ * alias added to `nuxt.config.ts` later — or the bare no-slash forms `#shared` and
+ * `~~` — fell through to the third-party branch, which says nothing at all, so the
+ * graph would have shrunk with nothing reporting it. The `paths` map Nuxt generates is
+ * the source of truth for what this repository's own aliases are.
+ *
+ * It is also a trap, which is why these pin both directions: the same map names `h3`,
+ * `ofetch`, `nitropack`, `hub:kv` and Nuxt's own virtual modules, so a map lifted
+ * wholesale would have destroyed the deliberate `node_modules` exclusion and sent the
+ * scan walking a dependency's refusals it can neither list nor rename.
+ */
+describe('the path aliases the scan follows', () => {
+	it('reads this repository\'s own roots out of the generated tsconfig', () => {
+		const prefixes = firstPartyPathAliases().map(alias => alias.prefix);
+
+		// The wildcard forms, which is what every import in this repository uses.
+		expect(prefixes).toEqual(expect.arrayContaining(['~~/', '@@/', '#shared/', '#server/', '~/', '@/']));
+		// The bare forms, which the hardcoded list did not have and could not follow.
+		expect(prefixes).toEqual(expect.arrayContaining(['~~', '@@', '#shared', '#server', '~', '@']));
+	});
+
+	it('excludes every alias that points outside this repository\'s own source', () => {
+		const prefixes = firstPartyPathAliases().map(alias => alias.prefix);
+
+		// Dependencies: following these is how the scan escapes into `node_modules`.
+		for (const dependency of ['h3', 'ofetch', 'nitropack', 'consola', 'hub:db', 'hub:kv', '#ui', '#app'])
+			expect(prefixes).not.toContain(dependency);
+		// Nuxt's own generated virtual modules, which are not this repository's code
+		// either — and which live under `.nuxt/`, inside the repository, so the rule
+		// cannot be "is it under the repository root" alone.
+		for (const virtual of ['#imports', '#build', '#components', '#app-manifest'])
+			expect(prefixes).not.toContain(virtual);
+	});
+
+	it('resolves an alias to a directory that exists', () => {
+		for (const alias of firstPartyPathAliases())
+			expect(existsSync(alias.target), alias.prefix).toBe(true);
+	});
+
+	it('says what to run when the generated tsconfig is not there', () => {
+		// `.nuxt/` is gitignored and written by `nuxt prepare`, so a fresh clone that has
+		// not installed has no aliases to read. An empty map would shrink every graph to
+		// the entry file and pass most of this suite in silence, which is the exact
+		// defect class the scan exists to prevent — so it fails, and it says why.
+		expect(() => firstPartyPathAliases(join(tmpdir(), 'issue292-absent', 'tsconfig.json')))
+			.toThrow(/nuxt prepare/);
+	});
+
+	it('refuses a tsconfig whose paths name none of this repository\'s roots', () => {
+		// The other way to end up with nothing: a `paths` map that parses fine and is
+		// entirely third-party. Silently returning `[]` would leave `~~/` unresolved and
+		// every first-party import reported as third-party — a graph of one file.
+		const directory = mkdtempSync(join(tmpdir(), 'issue292-aliases-'));
+		const tsconfig = join(directory, 'tsconfig.json');
+		writeFileSync(tsconfig, JSON.stringify({ compilerOptions: { paths: { h3: ['../node_modules/h3'] } } }));
+
+		try {
+			expect(() => firstPartyPathAliases(tsconfig)).toThrow(/first-party/);
+		}
+		finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+	});
+});
+
+/**
+ * The middleware entry points, enumerated rather than named.
+ *
+ * #292's second half. A hardcoded list of middleware would close today's hole and
+ * re-open it the moment someone adds a middleware — the same defect as the hardcoded
+ * aliases, one directory along. The directory is the list.
+ */
+describe('the middleware the scan is given as entry points', () => {
+	it('is every middleware on disk, so a new one is scanned without anyone remembering', () => {
+		const named = serverMiddlewareFiles().map(file => file.slice(file.lastIndexOf('/') + 1));
+
+		expect(named).toContain('event-exists.ts');
+		expect(named).toContain('graphics-author-session.ts');
+		expect(named).toContain('request-body-limit.ts');
+	});
+
+	it('reaches a middleware one directory down, because Nitro\'s own scan does', () => {
+		// Nitro globs this directory rather than listing it, so a nested middleware runs
+		// on every request exactly as a top-level one does. A flat read would have missed
+		// it and passed — the same silence the enumeration is here to remove. No nested
+		// middleware exists today, which is precisely why this is a fixture.
+		const directory = mkdtempSync(join(tmpdir(), 'issue292-nested-'));
+		mkdirSync(join(directory, 'nested'));
+		writeFileSync(join(directory, 'nested', 'deep.ts'), 'export default defineEventHandler(() => {});\n');
+		writeFileSync(join(directory, 'shallow.d.ts'), 'export declare const nothing: number;\n');
+
+		try {
+			const found = serverMiddlewareFiles(directory);
+
+			expect(found).toEqual([join(directory, 'nested', 'deep.ts')]);
+		}
+		finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+	});
+
+	it('refuses a directory holding no middleware rather than scanning none', () => {
+		// Nitro's middleware directory is a convention, not an import. If it is renamed
+		// or emptied, an empty list scans nothing and every assertion above still passes.
+		const directory = mkdtempSync(join(tmpdir(), 'issue292-middleware-'));
+
+		try {
+			expect(() => serverMiddlewareFiles(directory)).toThrow(/middleware/);
+		}
+		finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
 	});
 });
