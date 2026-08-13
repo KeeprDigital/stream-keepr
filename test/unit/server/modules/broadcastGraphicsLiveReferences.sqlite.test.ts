@@ -131,7 +131,7 @@ function clip(revisionId: string): MediaGraphicInputValue {
  * The Graphics Asset Library, answering for exactly the revisions seeded below.
  *
  * Injected rather than faked at a lower seam because it is a declared dependency of
- * the module under test: `Set Input` records the pinned revision's own facts on a
+ * the operation under test: `Set Input` records the pinned revision's own facts on a
  * media value at the moment of selection, and that is the authority it asks.
  */
 /** A revision that exists but whose bytes the library cannot currently reach. */
@@ -229,7 +229,7 @@ async function liveSession(): Promise<LiveSession> {
 		eventName: 'Live session',
 	});
 
-	const module = broadcastGraphicsLiveSessionModule({ graphicsAssets: graphicsAssetLibrary });
+	const module = broadcastGraphicsLiveSessionModule();
 	const session = await module.loadSession(eventId, screenId);
 	const authorizer = createD1ScreenOutputAssetAuthorizer(harness.database);
 
@@ -239,6 +239,7 @@ async function liveSession(): Promise<LiveSession> {
 			screenId,
 			sessionId: session.id,
 			command: issued,
+			graphicsAssets: () => graphicsAssetLibrary,
 		});
 	};
 

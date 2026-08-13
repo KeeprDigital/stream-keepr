@@ -20,15 +20,15 @@ export default defineEventHandler(async (event) => {
 	);
 	const command = await readValidatedBody(event, broadcastGraphicsCommandSchema.parse);
 
-	// The library is injected because Take is admitted against it: a Broadcast
-	// Graphic whose pinned revision no longer resolves cannot go on air.
-	return await broadcastGraphicsLiveSessionModule({
-		graphicsAssets: graphicsAssetLibraryForEvent(event),
-	}).applyCommand({
+	return await broadcastGraphicsLiveSessionModule().applyCommand({
 		eventId: id,
 		screenId,
 		sessionId,
 		command,
 		originConnectionId: getOriginConnectionId(event),
+		// The library is injected because Take is admitted against it: a Broadcast
+		// Graphic whose pinned revision no longer resolves cannot go on air. A thunk
+		// because most commands never ask it anything.
+		graphicsAssets: () => graphicsAssetLibraryForEvent(event),
 	});
 });

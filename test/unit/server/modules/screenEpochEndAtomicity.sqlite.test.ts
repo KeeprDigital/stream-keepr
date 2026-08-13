@@ -105,9 +105,9 @@ const SLATE: BroadcastGraphicConfig = {
 const STACK: BroadcastGraphicsModeConfig = { graphics: [SLATE] };
 
 /**
- * Answers for exactly the one revision seeded below. A declared dependency of the
- * module rather than a seam: `Set Input` records the pinned revision's own facts at
- * the moment of selection, and this is the authority it asks.
+ * Answers for exactly the one revision seeded below. A declared dependency of
+ * `applyCommand` rather than a seam: `Set Input` records the pinned revision's own
+ * facts at the moment of selection, and this is the authority it asks.
  */
 const graphicsAssetLibrary = {
 	async inspectGraphicAssetRevision(input: { revisionId: string }): Promise<GraphicAssetReferenceStatus> {
@@ -132,10 +132,16 @@ async function showOnAir() {
 	eventId = seeded.eventId;
 	screenId = seeded.screenId;
 
-	const module = broadcastGraphicsLiveSessionModule({ graphicsAssets: graphicsAssetLibrary });
+	const module = broadcastGraphicsLiveSessionModule();
 	const session = await module.loadSession(eventId, screenId);
 	const apply = async (issued: BroadcastGraphicsCommand) => {
-		await module.applyCommand({ eventId, screenId, sessionId: session.id, command: issued });
+		await module.applyCommand({
+			eventId,
+			screenId,
+			sessionId: session.id,
+			command: issued,
+			graphicsAssets: () => graphicsAssetLibrary,
+		});
 	};
 
 	await apply(command('Take', { graphicId: SLATE.id, cut: true }));
