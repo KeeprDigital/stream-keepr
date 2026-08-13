@@ -81,8 +81,10 @@ export class ServiceWiringError extends Error {
  * to go and look at a binding and one who has been told nothing.
  *
  * It names the subsystem and never the store's own words: the exception that
- * caused it is kept as `cause`, where the error plugin logs it and no response
- * carries it.
+ * caused it is kept as `cause`, where debugging can reach it and no response
+ * carries it. The failure log does not — `errorLogFields` reads a single level
+ * of cause and takes only its `name` and `code`, so the line names this class
+ * rather than the store's refusal.
  */
 export class GraphicsAuthorSessionUnavailableError extends Error {
 	statusCode = 503;

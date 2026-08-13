@@ -232,10 +232,11 @@ describe('a graphics author session whose store cannot be reached', () => {
 		expect((refusal as { cause?: unknown }).cause).toBeInstanceOf(GraphicsAuthorSessionUnavailableError);
 	});
 
-	it('keeps the store\'s own account of the failure for the log', async () => {
-		// The response says which subsystem is unavailable and no more; the
-		// exception the store raised stays reachable behind it, which is what the
-		// error plugin logs.
+	it('keeps the store\'s own failure reachable on the error', async () => {
+		// The response says which subsystem is unavailable and no more, and the
+		// exception the store raised stays reachable behind it for anyone
+		// debugging one. Reachable is all it is: `errorLogFields` reads a single
+		// level of cause, so this one is not in the failure log either.
 		mockKv.get.mockRejectedValue(storeFailure);
 
 		const refusal = await requireGraphicsAuthorSession(event).catch((error: unknown) => error);
