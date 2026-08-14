@@ -1,4 +1,4 @@
-import type { GraphicAsset, GraphicsIngestionOperation } from '../../shared/types/graphicsAsset';
+import type { GraphicsIngestionOperation } from '../../shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { crc32 } from 'node:zlib';
@@ -18,6 +18,7 @@ import {
 	suiteGraphicsAuthorSessionCookie,
 } from './graphicsAuthorSession';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
+import { libraryAssets } from './graphicsLibraryListing';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -141,13 +142,6 @@ async function receivePackageInParts(archive: Uint8Array, options: { fileName?: 
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/complete`,
 		{ method: 'POST', headers: authorHeaders },
 	);
-}
-
-/** The library listing, read under this suite's graphics author session (#172). */
-async function libraryAssets(): Promise<GraphicAsset[]> {
-	return await $fetch<GraphicAsset[]>('/api/graphics-assets', {
-		headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
-	});
 }
 
 describe('template Package preflight through the API boundary', () => {

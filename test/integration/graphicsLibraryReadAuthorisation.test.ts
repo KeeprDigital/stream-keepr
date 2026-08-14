@@ -61,10 +61,35 @@ const readSubjectPng = Uint8Array.from(Buffer.concat([
 
 const digest = createHash('sha256').update(readSubjectPng).digest('hex');
 
-/** The header that used to name the graphics author. It must still buy nothing. */
-const RETIRED_AUTHOR_HEADER = { 'x-graphics-author-id': 'read-authorisation-author' };
+/**
+ * An author identity the server does not honour, sent on every refused request
+ * below. The library used to read this header; it must now buy nothing, so a
+ * refusal here is about the missing session rather than about a caller that
+ * claimed no identity at all.
+ */
+const UNHONOURED_AUTHOR_ID_HEADER = { 'x-graphics-author-id': 'read-authorisation-author' };
 
 const SUBJECT_NAME = 'Read authorisation subject';
+
+/**
+ * The session a browser is handed by loading one of this application's pages.
+ *
+ * Both cases below walk it rather than minting a cookie through a helper,
+ * because the page request is the mechanism under test: `server/middleware/
+ * graphics-author-session.ts` mints on any non-`/api/` HTML `GET`, and what each
+ * case proves is that a browser which loaded *that particular page* can then
+ * read the library. Asserting the page answered and that a graphics author
+ * session came back with it is part of the walk — a page that failed, or
+ * answered with no cookie, would otherwise reach the library read as an
+ * `undefined` header and be refused for the wrong reason.
+ */
+async function sessionCookieFromPage(page: string): Promise<string> {
+	const response = await fetch(page, { headers: { accept: 'text/html' } });
+	expect(response.status).toBe(200);
+	const cookie = response.headers.get('set-cookie')?.split(';', 1)[0];
+	expect(cookie).toMatch(/^stream_keepr_graphics_author_session=/);
+	return cookie!;
+}
 
 /** What identifies the subject, once `beforeAll` has published it. */
 interface ReadSubject {
@@ -183,7 +208,7 @@ describe('the Graphics Asset Library read surface', () => {
 
 	describe('a caller carrying no graphics author session', () => {
 		it.each(readRoutes)('is refused $label', async ({ path }) => {
-			const response = await fetch(path(subject), { headers: { ...RETIRED_AUTHOR_HEADER } });
+			const response = await fetch(path(subject), { headers: { ...UNHONOURED_AUTHOR_ID_HEADER } });
 			expect(response.status).toBe(401);
 		});
 	});
@@ -232,29 +257,24 @@ describe('the Graphics Asset Library read surface', () => {
 	 */
 	describe('a browser that has only ever loaded an operator surface', () => {
 		it('carries a session that reads the library', async () => {
-			const operatorPage = await fetch(`/event/${eventId}/screens`, {
-				headers: { accept: 'text/html' },
-			});
-			expect(operatorPage.status).toBe(200);
-			const cookie = operatorPage.headers.get('set-cookie')?.split(';', 1)[0];
-			expect(cookie).toMatch(/^stream_keepr_graphics_author_session=/);
+			const cookie = await sessionCookieFromPage(`/event/${eventId}/screens`);
 
 			// The two routes #178's picker reaches: the listing behind
 			// `GraphicsAssetFocusPicker`, and the revision status it resolves a
 			// selection against.
 			await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
-				headers: { cookie: cookie! },
+				headers: { cookie },
 				query: { search: SUBJECT_NAME },
 			})).resolves.toMatchObject([{ id: subject.assetId }]);
 			const revisionStatus = await fetch(
 				`/api/graphics-assets/${subject.assetId}/revisions/${subject.revisionId}/status`,
-				{ headers: { cookie: cookie! } },
+				{ headers: { cookie } },
 			);
 			expect(revisionStatus.status).toBe(200);
 			// And the thumbnail the picker renders one of per asset.
 			const thumbnail = await fetch(
 				`/api/graphics-assets/${subject.assetId}/thumbnail`,
-				{ headers: { cookie: cookie! } },
+				{ headers: { cookie } },
 			);
 			expect(thumbnail.status).toBe(200);
 		});
@@ -268,19 +288,16 @@ describe('the Graphics Asset Library read surface', () => {
 	 */
 	describe('the Library Workspace', () => {
 		it('is served a session that reads the library populated', async () => {
-			const shell = await fetch('/graphics-assets', { headers: { accept: 'text/html' } });
-			expect(shell.status).toBe(200);
-			const cookie = shell.headers.get('set-cookie')?.split(';', 1)[0];
-			expect(cookie).toMatch(/^stream_keepr_graphics_author_session=/);
+			const cookie = await sessionCookieFromPage('/graphics-assets');
 
 			await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
-				headers: { cookie: cookie! },
+				headers: { cookie },
 				query: { search: SUBJECT_NAME },
 			})).resolves.toMatchObject([{ id: subject.assetId }]);
 			// The Workspace fetches the occupancy alongside the listing, so a guard
 			// that stranded only the second would still render a broken library.
 			await expect($fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
-				headers: { cookie: cookie! },
+				headers: { cookie },
 			})).resolves.toMatchObject({ canonical: { usedBytes: expect.any(Number) } });
 		});
 	});
