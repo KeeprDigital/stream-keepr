@@ -136,8 +136,12 @@ describe('screen Output asset capability session', () => {
 
 	it('keeps the store\'s own words out of the response and in the cause', async () => {
 		// The authorizer's exception names a binding and a provider, which is a fact
-		// about this server's insides. It travels as the cause — where the failure log
-		// reads it — and never as prose a caller is shown.
+		// about this server's insides. It is kept as the cause, where a debugger can
+		// reach it, and never becomes prose a caller is shown.
+		//
+		// Note where the assertion finds it: `cause.cause`, which is one level deeper
+		// than `errorLogFields` reads. So the failure log does not carry it either —
+		// that line names this class, not the store's refusal.
 		mockAuthorizeCapability.mockRejectedValue(new Error('D1_ERROR: network error'));
 
 		const failure = await refusalFrom((await handler())(sessionRequest()));
