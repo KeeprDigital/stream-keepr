@@ -21,11 +21,11 @@ import {
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { createGraphicsRemoteSourceFetcher } from '~~/server/modules/graphics-asset-library/remote-source';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
-import { publicServerFailure } from '~~/test/helpers/publicServerFailure';
 import {
 	GRAPHICS_MULTIPART_PART_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
+import { publicServerFailure } from '~~/test/helpers/publicServerFailure';
 
 // The API boundary imports the author session for its actor resolution, which
 // reaches `hub:kv` — a binding no unit run has. Nothing here asks it anything.

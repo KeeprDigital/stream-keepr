@@ -149,8 +149,10 @@ describe('the R2 Graphic Asset object-store adapter', () => {
 			{ code: 10001 },
 		))).resolves.toMatchObject({ outcome: 'unavailable' });
 		await expect(abortAgainst(new Error('Network connection lost.')))
-			.resolves.toMatchObject({ outcome: 'unavailable' });
+			.resolves
+			.toMatchObject({ outcome: 'unavailable' });
 		await expect(abortAgainst('not an error at all'))
-			.resolves.toMatchObject({ outcome: 'unavailable' });
+			.resolves
+			.toMatchObject({ outcome: 'unavailable' });
 	});
 });
