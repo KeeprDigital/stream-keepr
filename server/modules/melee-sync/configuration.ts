@@ -124,6 +124,18 @@ export async function updateMeleeConfiguration({ eventId, input, originConnectio
 						// gateway are the same advice to a caller. Set inside this branch rather
 						// than the enclosing `MeleeTransportError` one on purpose: the refusal
 						// below it is credentials Melee.gg rejected, which no waiting resolves.
+						//
+						// The status on the next line is not the one a caller receives.
+						// `mapPublicNitroError` fires on any cause carrying
+						// `MELEE_UPSTREAM_FAILURE` — every `MeleeTransportError` does — and
+						// recomputes the status from the same `category` this line reads, so
+						// the two spellings agree by construction and the mapper's is
+						// authoritative. Collapsing this to a bare `502` is invisible to every
+						// public-seam test (#346, row M9); only the raw-throw row in
+						// `melee-config.put.test.ts` holds the 502 half, and nothing holds the
+						// 504 half. Left unpinned deliberately: a pin at the raw throw would fix
+						// behaviour no caller can observe. The redundancy itself is recorded for
+						// a follow-up rather than resolved here.
 						setResponseHeader(requestEvent, 'retry-after', 5);
 						throw createError({
 							statusCode: error.category === 'timeout' ? 504 : 502,
