@@ -18,17 +18,28 @@ const basePixelPng = Uint8Array.from(Buffer.from(
 	'base64',
 ));
 const emptyTextChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85);
-const pngPixel = Uint8Array.of(
-	...basePixelPng.slice(0, -12),
-	...emptyTextChunk,
-	...basePixelPng.slice(-12),
-);
-const replacementPng = Uint8Array.of(
-	...basePixelPng.slice(0, -12),
-	...emptyTextChunk,
-	...emptyTextChunk,
-	...basePixelPng.slice(-12),
-);
+
+/**
+ * This suite's own content, padded with chunk counts no other suite uses —
+ * 110 and 111, claimed in the padding-count registry in `helpers.ts`.
+ *
+ * One chunk was `graphicsAssetReferences`' content, and this suite padded by one
+ * and two until #368, so its first fixture was byte-identical to that suite's
+ * (#123 found it during the replacement split). Neither suite asserts
+ * published-vs-reused, so the collision never went red — but both suites ran
+ * against one Graphic Asset Content, and either one retiring, Trashing or
+ * purging its asset takes the other's bytes with it.
+ */
+function pngWithTextChunks(count: number) {
+	return Uint8Array.from(Buffer.concat([
+		basePixelPng.slice(0, -12),
+		...Array.from({ length: count }).fill(emptyTextChunk) as Uint8Array[],
+		basePixelPng.slice(-12),
+	]));
+}
+
+const pngPixel = pngWithTextChunks(110);
+const replacementPng = pngWithTextChunks(111);
 
 function decodeEvidence(bytes: Uint8Array) {
 	return {
