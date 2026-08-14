@@ -25,8 +25,21 @@ const UIconStub = defineComponent({
 	template: '<i />',
 });
 
+/**
+ * The dropdown is where every action this row offers lives (`menuItems`,
+ * ListItem.vue:20-46), so the stub surfaces the labels it was handed rather than
+ * discarding them. Without them a test can see only the row's two icon-only
+ * controls — which is how nineteen assertions about actions came to be written
+ * against a button-text search that could never match anything (#333).
+ */
 const UDropdownMenuStub = defineComponent({
-	template: '<div data-testid="dropdown"><slot /></div>',
+	props: { items: { type: Array, required: false, default: () => [] } },
+	computed: {
+		labels(): string[] {
+			return (this.items as { label: string }[][]).flat().map(item => item.label);
+		},
+	},
+	template: '<div data-testid="dropdown"><span v-for="label in labels" :key="label" data-testid="menu-item">{{ label }}</span><slot /></div>',
 });
 
 /** Mirrors `RoundResponse` as it is *declared* — Dates and all (shared/api/index.ts). */
@@ -84,9 +97,7 @@ function makeWireRound(overrides?: Partial<RoundProps>): WireRound {
 
 async function mountComponent(props: {
 	round: RoundProps | WireRound;
-	activeRound?: RoundProps | WireRound;
 	isMeleeEvent?: boolean;
-	isNextActionableRound?: boolean;
 	eventId?: number;
 }) {
 	const { default: RoundListItem } = await import('~/components/Round/ListItem.vue');
@@ -100,9 +111,7 @@ async function mountComponent(props: {
 			// (#272). Casting here rather than widening `RoundResponse` keeps the argument
 			// where it belongs: the declaration is what is wrong, not the fixture.
 			round: props.round as RoundProps,
-			activeRound: props.activeRound as RoundProps,
 			isMeleeEvent: props.isMeleeEvent ?? false,
-			isNextActionableRound: props.isNextActionableRound ?? false,
 			eventId: props.eventId ?? 1,
 		},
 		global: {
@@ -116,146 +125,164 @@ async function mountComponent(props: {
 	});
 }
 
-function findButtonByLabel(wrapper: ReturnType<typeof mount>, label: string) {
-	return wrapper.findAll('button').find(b => b.text().includes(label));
+/** The text on every control the row renders itself — both of which are icon-only. */
+function inlineButtonText(wrapper: ReturnType<typeof mount>) {
+	return wrapper.findAll('button').map(button => button.text());
 }
+
+/** Every action the row offers, in the order its dropdown lists them. */
+function menuItemLabels(wrapper: ReturnType<typeof mount>) {
+	return wrapper.findAll('[data-testid="menu-item"]').map(item => item.text());
+}
+
+/**
+ * One row per round state this file used to mount, and the actions the row offers in
+ * each — including two Melee states it never covered, which are what stop the
+ * assertions below reading as "the menu is always the same three things".
+ *
+ * The `status` values are carried because the states are named after them, not
+ * because the component reads one: it does not, and that is itself the claim these
+ * cases make. What does change the menu is the Melee condition (`menuItems`,
+ * ListItem.vue:20-46).
+ */
+const ROUND_STATE_CASES = [
+	{
+		name: 'an active round',
+		overrides: { status: 'active' } as Partial<RoundProps>,
+		isMeleeEvent: false,
+		menu: ['Review Matches', 'Edit Round', 'Delete Round'],
+		syncedBadge: false,
+	},
+	{
+		name: 'an upcoming round',
+		overrides: { status: 'upcoming' } as Partial<RoundProps>,
+		isMeleeEvent: false,
+		menu: ['Review Matches', 'Edit Round', 'Delete Round'],
+		syncedBadge: false,
+	},
+	{
+		name: 'a completed round that has been synced',
+		overrides: { status: 'completed', lastSyncedAt: new Date('2026-01-01T10:00:00Z') } as Partial<RoundProps>,
+		isMeleeEvent: false,
+		menu: ['Review Matches', 'Edit Round', 'Delete Round'],
+		syncedBadge: true,
+	},
+	{
+		name: 'a skipped round',
+		overrides: { status: 'skipped' } as Partial<RoundProps>,
+		isMeleeEvent: false,
+		menu: ['Review Matches', 'Edit Round', 'Delete Round'],
+		syncedBadge: false,
+	},
+	{
+		name: 'an unsynced Melee round in a Melee event',
+		overrides: { externalSource: 'melee', externalId: 'ext-123', lastSyncedAt: null } as Partial<RoundProps>,
+		isMeleeEvent: true,
+		menu: ['Review Matches', 'Edit Round', 'Switch to Manual Override', 'Delete Round'],
+		syncedBadge: false,
+	},
+	{
+		name: 'a synced Melee round in a Melee event',
+		overrides: {
+			externalSource: 'melee',
+			externalId: 'ext-123',
+			lastSyncedAt: new Date('2026-01-01T10:00:00Z'),
+		} as Partial<RoundProps>,
+		isMeleeEvent: true,
+		menu: ['Review Matches', 'Edit Round', 'Re-sync Matches', 'Switch to Manual Override', 'Delete Round'],
+		syncedBadge: true,
+	},
+	{
+		name: 'a Melee round switched to manual override',
+		overrides: {
+			externalSource: 'melee',
+			externalId: 'ext-123',
+			controlMode: 'manual_override',
+			lastSyncedAt: new Date('2026-01-01T10:00:00Z'),
+		} as Partial<RoundProps>,
+		isMeleeEvent: true,
+		menu: ['Review Matches', 'Edit Round', 'Delete Round'],
+		syncedBadge: true,
+	},
+];
 
 describe('roundListItem', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 	});
 
-	describe('active round', () => {
-		it('shows no inline lifecycle buttons', async () => {
-			const round = makeRound({ status: 'active' });
-			const wrapper = await mountComponent({ round, activeRound: round });
+	/**
+	 * What this file used to assert here, and why none of it bit (#333).
+	 *
+	 * Seven `it` blocks titled after inline lifecycle buttons made nineteen
+	 * `findButtonByLabel(...)).toBeUndefined()` assertions, and every one of them was
+	 * vacuous twice over. The row's only two controls are icon-only (ListItem.vue:73-86),
+	 * so a `.text().includes('Start')` search could not match under *any* input; and the
+	 * mount set `activeRound` and `isNextActionableRound`, props the component has never
+	 * declared, so the states the titles named were not being set up either. No 'Start'
+	 * or 'Complete' label exists anywhere under `app/`.
+	 *
+	 * Restated against what the row actually renders: two controls carrying no text, and
+	 * the dropdown's own labels. A lifecycle action arriving inline or in the menu now
+	 * fails these.
+	 */
+	it.each(ROUND_STATE_CASES)(
+		'offers $name two icon-only controls and no round-lifecycle action',
+		async ({ overrides, isMeleeEvent, menu, syncedBadge }) => {
+			const wrapper = await mountComponent({ round: makeRound(overrides), isMeleeEvent });
 
-			expect(findButtonByLabel(wrapper, 'Complete')).toBeUndefined();
-			expect(findButtonByLabel(wrapper, 'Sync Matches')).toBeUndefined();
-			expect(findButtonByLabel(wrapper, 'Start')).toBeUndefined();
-		});
-	});
-
-	describe('next actionable upcoming round (unsynced melee)', () => {
-		it('shows no inline lifecycle buttons', async () => {
-			const round = makeRound({
-				externalSource: 'melee',
-				externalId: 'ext-123',
-				lastSyncedAt: null,
-			});
-			const wrapper = await mountComponent({
-				round,
-				isMeleeEvent: true,
-				isNextActionableRound: true,
-			});
-
-			expect(findButtonByLabel(wrapper, 'Sync Matches')).toBeUndefined();
-			expect(findButtonByLabel(wrapper, 'Start')).toBeUndefined();
-			expect(findButtonByLabel(wrapper, 'Complete')).toBeUndefined();
-		});
-	});
-
-	describe('next actionable upcoming round (synced/manual, no active)', () => {
-		it('shows no inline lifecycle buttons', async () => {
-			const round = makeRound({
-				lastSyncedAt: new Date('2026-01-01'),
-			});
-			const wrapper = await mountComponent({
-				round,
-				isNextActionableRound: true,
-			});
-
-			expect(findButtonByLabel(wrapper, 'Start')).toBeUndefined();
-			expect(findButtonByLabel(wrapper, 'Sync Matches')).toBeUndefined();
-			expect(findButtonByLabel(wrapper, 'Complete')).toBeUndefined();
-		});
-
-		it('hides Start when there is an active round', async () => {
-			const activeRound = makeRound({ id: 99, status: 'active' });
-			const round = makeRound({ status: 'upcoming' });
-			const wrapper = await mountComponent({
-				round,
-				activeRound,
-				isNextActionableRound: true,
-			});
-
-			expect(findButtonByLabel(wrapper, 'Start')).toBeUndefined();
-		});
-	});
-
-	describe('later upcoming round (not next actionable)', () => {
-		it('shows no inline lifecycle buttons', async () => {
-			const round = makeRound({ status: 'upcoming' });
-			const wrapper = await mountComponent({
-				round,
-				isNextActionableRound: false,
-			});
-
-			expect(findButtonByLabel(wrapper, 'Start')).toBeUndefined();
-			expect(findButtonByLabel(wrapper, 'Sync Matches')).toBeUndefined();
-			expect(findButtonByLabel(wrapper, 'Complete')).toBeUndefined();
-		});
-	});
-
-	describe('completed round', () => {
-		it('shows no inline buttons and shows synced timestamp', async () => {
-			const round = makeRound({
-				lastSyncedAt: new Date('2026-01-01T10:00:00Z'),
-			});
-			const wrapper = await mountComponent({ round });
-
-			expect(findButtonByLabel(wrapper, 'Complete')).toBeUndefined();
-			expect(findButtonByLabel(wrapper, 'Start')).toBeUndefined();
-			expect(findButtonByLabel(wrapper, 'Sync Matches')).toBeUndefined();
-			expect(wrapper.text()).toContain('Synced');
-		});
-	});
-
-	describe('skipped round', () => {
-		it('shows no inline lifecycle buttons', async () => {
-			const round = makeRound({ status: 'skipped' });
-			const wrapper = await mountComponent({ round });
-
-			expect(findButtonByLabel(wrapper, 'Complete')).toBeUndefined();
-			expect(findButtonByLabel(wrapper, 'Start')).toBeUndefined();
-			expect(findButtonByLabel(wrapper, 'Sync Matches')).toBeUndefined();
-		});
-	});
+			expect(inlineButtonText(wrapper)).toEqual(['', '']);
+			expect(menuItemLabels(wrapper)).toEqual(menu);
+			expect(wrapper.text().includes('Synced')).toBe(syncedBadge);
+		},
+	);
 
 	describe('synced timestamp', () => {
-		it('shows synced time on active rounds', async () => {
-			const round = makeRound({
-				lastSyncedAt: new Date('2026-01-01T10:00:00Z'),
-			});
-			const wrapper = await mountComponent({ round, activeRound: round });
+		/**
+		 * The `v-if` is the reason the local ladder's '' rung was never observable, and
+		 * #329 rests on that: the shared `formatSyncTimestamp` answers 'Never' where the
+		 * component's own copy answered '', and the badge renders only under
+		 * `v-if="round.lastSyncedAt"` (ListItem.vue:63), so the falsy case never reaches
+		 * the formatter. Pinned here rather than left standing as an argument — remove the
+		 * `v-if` and an unsynced round starts announcing 'Synced Never'.
+		 */
+		it('renders no badge at all until the round has been synced', async () => {
+			const wrapper = await mountComponent({ round: makeRound({ lastSyncedAt: null }) });
 
-			expect(wrapper.text()).toContain('Synced');
+			expect(wrapper.text()).not.toContain('Synced');
+			expect(wrapper.text()).not.toContain('Never');
 		});
 
-		it('shows synced time on upcoming rounds', async () => {
-			const round = makeRound({
-				lastSyncedAt: new Date('2026-01-01T10:00:00Z'),
-			});
+		/**
+		 * The one observable change #329 made. The two ladders spelled every other rung
+		 * identically; under a minute the component said 'just now' and the shared
+		 * formatter says 'Just now'. `toContain` is case-sensitive, so restoring the local
+		 * copy fails this.
+		 */
+		it('says Just now under a minute, in the shared formatter\'s casing', async () => {
+			const round = makeWireRound({ lastSyncedAt: new Date(Date.now() - 5 * 1000) });
+
 			const wrapper = await mountComponent({ round });
 
-			expect(wrapper.text()).toContain('Synced');
+			expect(wrapper.text()).toContain('Synced Just now');
 		});
 
 		/**
 		 * The same badge, on the shape production delivers — and asserting what it says
 		 * rather than that it is there.
 		 *
-		 * Two holes, one row. `formatSyncTime` had only ever been handed a real `Date`,
-		 * so `const d = date as Date` in place of `new Date(date)` survived every test in
-		 * this file; under the ISO string the wire sends it throws `d.getTime is not a
-		 * function` and the badge renders nothing at all. And the three tests above assert
-		 * only the static `Synced` label beside the interpolation, so the formatted value
-		 * itself was unasserted in any shape (#291, #284, #272).
+		 * Two holes, one row. The component's own `formatSyncTime` had only ever been
+		 * handed a real `Date`, so `const d = date as Date` in place of `new Date(date)`
+		 * survived every test in this file; under the ISO string the wire sends it threw
+		 * `d.getTime is not a function` and the badge rendered nothing at all. And the
+		 * tests above asserted only the static `Synced` label beside the interpolation, so
+		 * the formatted value itself was unasserted in any shape (#291, #284, #272).
 		 *
-		 * The hours rung on purpose: `formatSyncTime` and `formatSyncTimestamp`
-		 * (app/utils/meleeSync.ts) are the same ladder written twice and differ only at
-		 * 'just now'/'Just now' and ''/'Never', so pinning `2h ago` pins output both
-		 * copies agree on and leaves a later consolidation free to happen.
+		 * The hours rung was chosen when there were two ladders to satisfy: `formatSyncTime`
+		 * and `formatSyncTimestamp` (app/utils/meleeSync.ts) were the same ladder written
+		 * twice, and `2h ago` was output both copies agreed on — so the pin left #329's
+		 * consolidation free to happen. It has happened; the row stands as the wire-shape
+		 * guard it always was.
 		 */
 		it('formats the sync time the wire delivers, not the Date the response type promises', async () => {
 			const round = makeWireRound({ lastSyncedAt: new Date(Date.now() - 125 * 60 * 1000) });
