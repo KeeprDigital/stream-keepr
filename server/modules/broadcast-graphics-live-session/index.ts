@@ -57,10 +57,11 @@ import { randomCommandId } from '~~/shared/utils/uuid';
  *
  * The same shape screen-write's operations take, and declared here rather than
  * imported because the alias is structural — `() => T` is `() => T` whichever
- * module writes it — so sharing one declaration would buy no type safety, only a
- * dependency between two modules that have none. The two decisions behind the
- * shape are argued in full at `server/modules/screen-write/index.ts` (#247); what
- * they mean here is:
+ * module writes it — so sharing one declaration would buy no type safety, and it
+ * would cost a dependency in the wrong direction: screen-write imports this
+ * module and calls it at four sites, so importing its alias back would close a
+ * cycle between the two. The two decisions behind the shape are argued in full at
+ * `server/modules/screen-write/index.ts` (#247); what they mean here is:
  *
  * **Required, and on `applyCommand` rather than on the module.** Optional module
  * dependencies meant a construction site could omit the library and find out at

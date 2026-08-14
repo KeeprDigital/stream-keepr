@@ -149,10 +149,13 @@ describe('error-handler mapping logic', () => {
 			// it leaves the operator with 'Internal Server Error' and nothing to
 			// report to whoever can fix it.
 			//
-			// The component is the Broadcast Graphics Live Session module rather than
-			// #243's Screen write module, which no longer raises one: #247 made its
-			// collaborators required at the type level, so the branch is gone. #246
-			// left this module's two, which are what this mapping now serves.
+			// The component named is the Broadcast Graphics Live Session module, but no
+			// production code raises a ServiceWiringError any more: #247 made screen
+			// write's collaborators required at the type level and #265 did the same to
+			// this module's, so both branches #243 and #246 wrote are gone. The class
+			// and this mapping stay for the next component that needs them, which makes
+			// these tests the only thing holding the behaviour in place — and the reason
+			// they construct the cause directly rather than driving a module to throw.
 			const error: MappableNitroError = {
 				statusCode: 503,
 				message: 'The Broadcast Graphics Live Session module was constructed without the Graphics Asset Library',
