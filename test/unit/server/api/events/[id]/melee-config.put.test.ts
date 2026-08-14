@@ -65,6 +65,12 @@ vi.mock('~~/server/utils/meleeSyncState', () => ({
 
 const handler = (await import('~~/server/api/events/[id]/melee-config.put')).default;
 
+// Carries a distinguishing property on purpose: `toHaveBeenCalledWith` compares
+// deeply, so the bare `{}` the rows around it pass cannot tell the request the route
+// was answering apart from any other empty object a careless edit might hand
+// `setResponseHeader`.
+const requestEvent = { __requestEventFor: 'melee-config' } as any;
+
 describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 	beforeEach(() => {
 		mockGetValidatedRouterParams.mockReset().mockResolvedValue({ id: 1 });
@@ -243,13 +249,11 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 			'http',
 			503,
 		));
-		const event = {} as any;
-
-		const refusal = await refusalFrom(handler(event));
+		const refusal = await refusalFrom(handler(requestEvent));
 
 		expect(refusal.statusCode).toBe(502);
 		expect(refusal.message).toBe('Melee.gg is temporarily unavailable. Try again later.');
-		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
+		expect(mockSetResponseHeader).toHaveBeenCalledWith(requestEvent, 'retry-after', 5);
 	});
 
 	it('gives the same interval when the upstream timed out rather than answered', async () => {
@@ -261,13 +265,11 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 			'Melee.gg API request timed out',
 			'timeout',
 		));
-		const event = {} as any;
-
-		const refusal = await refusalFrom(handler(event));
+		const refusal = await refusalFrom(handler(requestEvent));
 
 		expect(refusal.statusCode).toBe(504);
 		expect(refusal.message).toBe('Melee.gg is temporarily unavailable. Try again later.');
-		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
+		expect(mockSetResponseHeader).toHaveBeenCalledWith(requestEvent, 'retry-after', 5);
 	});
 
 	it('does not tell a caller to wait for credentials Melee.gg refused', async () => {

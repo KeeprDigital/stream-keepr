@@ -96,7 +96,10 @@ vi.stubGlobal('setResponseHeader', mockSetResponseHeader);
 const { deckListResolutionModule } = await import('~~/server/modules/deck-list-resolution');
 
 const NOW = new Date('2026-01-01T00:00:00.000Z');
-const requestEvent = {} as H3Event;
+// Carries a distinguishing property on purpose: `toHaveBeenCalledWith` compares
+// deeply, so a bare `{}` cannot tell the request the route was answering apart from
+// any other empty object a careless edit might hand `setResponseHeader`.
+const requestEvent = { __requestEventFor: 'deck-list-resolution' } as unknown as H3Event;
 
 function createUnresolvedEntry(overrides: Partial<DbPlayerDeckUnresolvedCard> = {}): DbPlayerDeckUnresolvedCard {
 	return {
