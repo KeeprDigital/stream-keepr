@@ -119,4 +119,38 @@ describe('the R2 Graphic Asset object-store adapter', () => {
 		expect(complete).toHaveBeenCalledWith([{ partNumber: 1, etag: 'etag-1' }]);
 		expect(outcome).toMatchObject({ outcome: 'created', object: { identity } });
 	});
+
+	it('reads a gone multipart upload as reclaimed and every other refusal as an outage', async () => {
+		const identity = graphicsObjectIdentity('staging/operation/multipart');
+		async function abortAgainst(rejection: unknown) {
+			const abort = vi.fn().mockRejectedValue(rejection);
+			const store = createR2StagingGraphicsObjectStore({
+				resumeMultipartUpload: vi.fn().mockReturnValue({ uploadId: 'upload-1', abort }),
+			} as unknown as R2Bucket);
+			const outcome = await store.abortMultipart({ identity, uploadId: 'upload-1' as never });
+			expect(abort).toHaveBeenCalled();
+			return outcome;
+		}
+
+		// R2 answers `NoSuchUpload` (10024) for an upload it no longer holds, which
+		// is what a second abort of an already-reclaimed upload gets.
+		await expect(abortAgainst(Object.assign(
+			new Error('The specified multipart upload does not exist.'),
+			{ code: 10024 },
+		))).resolves.toEqual({ outcome: 'missing' });
+		// The sentence alone is enough: a proxied refusal can lose the numeric code.
+		await expect(abortAgainst(
+			new Error('The specified multipart upload does not exist.'),
+		)).resolves.toEqual({ outcome: 'missing' });
+		// Anything else is an outage. Reading these as reclaimed would clear a
+		// checkpoint whose upload is still held, which is what strands one.
+		await expect(abortAgainst(Object.assign(
+			new Error('We encountered an internal error. Please try again.'),
+			{ code: 10001 },
+		))).resolves.toMatchObject({ outcome: 'unavailable' });
+		await expect(abortAgainst(new Error('Network connection lost.')))
+			.resolves.toMatchObject({ outcome: 'unavailable' });
+		await expect(abortAgainst('not an error at all'))
+			.resolves.toMatchObject({ outcome: 'unavailable' });
+	});
 });

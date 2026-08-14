@@ -102,22 +102,34 @@ record — which is why a remote-copy operation never reports client-transfer fa
 even while it holds one.
 
 The checkpoint is cleared as soon as there is nothing left to abort: when the
-upload completes, when the request's own abort succeeds, and again when the copy
-records its durably staged source. An abort that did not land deliberately leaves
-the checkpoint in place. What survives is reclaimed by the paths that already
-read `multipart_state` — staged-input expiry through `releaseStagedObjects`, and
+upload completes, when the request's own abort succeeds, when the staging store
+says it no longer holds the upload, and again when the copy records its durably
+staged source. Only an abort that could not reach the store leaves the checkpoint
+in place. What survives is reclaimed by the paths that already read
+`multipart_state` — staged-input expiry through `releaseStagedObjects`, and
 cancellation through the multipart cleanup path — with no remote-specific
 knowledge and no bucket lifecycle rule.
 
 An operation has one checkpoint, so a retry must not take a second upload while
 the first is still recorded — the retry would overwrite the only record of it.
 Each attempt therefore reclaims what it finds: it aborts any checkpointed upload
-before opening the remote source, and refuses to start, leaving that checkpoint
-intact, if the abort does not land. Copying is then unavailable until the upload
-can be aborted or the 24-hour sweep expires the operation, which is the trade the
-client-driven transfer already makes when it cannot resume its own checkpointed
-upload. Deleting `ingestion/<operation>/source` does not substitute for the
-abort: a multipart upload is independent of the object key it will become.
+before opening the remote source, and goes on once that upload is gone, whether
+this attempt aborted it or found it already reclaimed. It refuses to start,
+leaving the checkpoint intact, only when the staging store cannot answer at all —
+the upload may still be held, and taking a second one is what would make the
+first unreclaimable. Copying is then unavailable until the store can be reached
+or the 24-hour sweep expires the operation, which is the trade the client-driven
+transfer already makes when it cannot resume its own checkpointed upload.
+Deleting `ingestion/<operation>/source` does not substitute for the abort: a
+multipart upload is independent of the object key it will become.
+
+Telling "already reclaimed" from "cannot reach the store" is the store's job, not
+this path's: `abortMultipart` answers `missing` for an upload it no longer holds
+and `unavailable` only for a store it could not read (#293). Before that
+distinction existed both answered `unavailable`, so a checkpoint whose upload had
+already been aborted — a landed abort whose checkpoint-clear write then failed —
+refused every retry with a message about staging capacity until the 24-hour
+sweep.
 
 **Residual gap.** An upload goes unreferenced only if the catalogue write that
 would record it fails _and_ the abort that follows also fails — the catalogue and

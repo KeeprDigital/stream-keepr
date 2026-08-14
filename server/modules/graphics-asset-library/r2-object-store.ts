@@ -17,6 +17,31 @@ import {
 	validateRequestedRange,
 } from './object-store';
 
+/**
+ * R2's code for an upload it no longer holds — S3's `NoSuchUpload`, which is
+ * what aborting an already-reclaimed multipart upload answers. Every other
+ * refusal stays an outage, so a store that cannot be read is never mistaken
+ * for one that has already done the work.
+ */
+const R2_NO_SUCH_UPLOAD_CODE = 10024;
+const R2_NO_SUCH_UPLOAD_MESSAGE = 'The specified multipart upload does not exist';
+
+/**
+ * The code is the discriminator; the message is checked beside it because the
+ * binding is not the only thing that can carry this refusal — a proxied error
+ * may arrive with the sentence and no numeric code — and both readings name
+ * the same fact.
+ */
+function isMissingMultipartUpload(error: unknown): boolean {
+	if (typeof error !== 'object' || error === null)
+		return false;
+	if ('code' in error && (error as { code: unknown }).code === R2_NO_SUCH_UPLOAD_CODE)
+		return true;
+	return 'message' in error
+		&& typeof (error as { message: unknown }).message === 'string'
+		&& (error as { message: string }).message.includes(R2_NO_SUCH_UPLOAD_MESSAGE);
+}
+
 function mapR2Object(object: R2Object): GraphicsObjectMetadata {
 	return {
 		identity: graphicsObjectIdentity(object.key),
@@ -280,8 +305,10 @@ export function createR2StagingGraphicsObjectStore(bucket: R2Bucket): GraphicsSt
 				await upload.abort();
 				return { outcome: 'aborted' };
 			}
-			catch {
-				return unavailableObjectStoreOutcome();
+			catch (error) {
+				return isMissingMultipartUpload(error)
+					? { outcome: 'missing' }
+					: unavailableObjectStoreOutcome();
 			}
 		},
 	};

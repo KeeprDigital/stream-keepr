@@ -242,8 +242,11 @@ function createInMemoryGraphicsObjectStoreImplementation() {
 			if (shouldFailTransiently('multipart-abort'))
 				return unavailableObjectStoreOutcome();
 			const stored = multipartUploads.get(upload.uploadId);
+			// No record under this identity means the upload is already reclaimed —
+			// completed, aborted, or swept. Answering `unavailable` here made a
+			// second abort of a gone upload indistinguishable from an outage.
 			if (!stored || stored.upload.identity !== upload.identity)
-				return unavailableObjectStoreOutcome();
+				return { outcome: 'missing' as const };
 			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
 			multipartUploads.delete(upload.uploadId);
 			return { outcome: 'aborted' as const };

@@ -275,6 +275,37 @@ describe('the Graphic Asset object-store contract', () => {
 		expect(await store.delete(identity)).toEqual({ outcome: 'missing' });
 	});
 
+	it('separates an upload that is already gone from a store that cannot answer', async () => {
+		const store = createInMemoryStagingGraphicsObjectStore();
+		const identity = graphicsObjectIdentity('staging/operation/aborted-twice');
+		const started = await store.beginMultipart({ identity });
+		if (started.outcome !== 'started')
+			throw new Error('Expected multipart upload to start');
+
+		expect(await store.abortMultipart(started.upload)).toEqual({ outcome: 'aborted' });
+		// The second abort is the one a stranded checkpoint performs on every
+		// retry. Reported as unavailable it refused forever; reported as missing
+		// the caller can clear the checkpoint that names it.
+		expect(await store.abortMultipart(started.upload)).toEqual({ outcome: 'missing' });
+		// A different identity under the same upload id is the same fact: this
+		// store does not hold the upload that was asked about.
+		expect(await store.abortMultipart({
+			identity: graphicsObjectIdentity('staging/operation/somewhere-else'),
+			uploadId: started.upload.uploadId,
+		})).toEqual({ outcome: 'missing' });
+
+		// Unavailability keeps its own answer, so the two are never conflated.
+		const live = await store.beginMultipart({ identity });
+		if (live.outcome !== 'started')
+			throw new Error('Expected the second multipart upload to start');
+		store.injectTransientFailure('multipart-abort');
+		expect(await store.abortMultipart(live.upload)).toMatchObject({
+			outcome: 'unavailable',
+			reason: { retryable: true },
+		});
+		expect(await store.abortMultipart(live.upload)).toEqual({ outcome: 'aborted' });
+	});
+
 	it('treats multipart completion as a staging write rather than an immutable create', async () => {
 		const store = createInMemoryStagingGraphicsObjectStore();
 		const identity = graphicsObjectIdentity('staging/operation/replaced-by-multipart');

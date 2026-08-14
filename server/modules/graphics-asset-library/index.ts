@@ -2317,8 +2317,10 @@ export function createGraphicsAssetLibrary(
 				return;
 			const aborted = await input.staging.abortMultipart(upload);
 			// An abort that did not land leaves the upload for a later sweep, which
-			// can only find it while the caller's checkpoint still names it.
-			if (aborted.outcome === 'aborted')
+			// can only find it while the caller's checkpoint still names it. An
+			// upload the store no longer holds needs no sweep, so its checkpoint is
+			// cleared too: only `unavailable` is a reason to keep one.
+			if (aborted.outcome !== 'unavailable')
 				await input.onMultipartCheckpoint?.(null);
 		}
 
@@ -4767,9 +4769,9 @@ export function createGraphicsAssetLibrary(
 			// An earlier attempt may have died holding a multipart upload. Its
 			// checkpoint is the only record of that upload, and this attempt would
 			// overwrite the checkpoint with one of its own, so the old upload is
-			// reclaimed before a new one can be taken. An abort that does not land
-			// keeps its checkpoint and stops the attempt: starting a second upload
-			// here is what would make the first unreclaimable.
+			// reclaimed before a new one can be taken. An abort that cannot reach the
+			// store keeps its checkpoint and stops the attempt: starting a second
+			// upload here is what would make the first unreclaimable.
 			const stranded = await catalogueRequest(
 				() => catalogue.getGraphicAssetMultipartState(operation!.id, operation!.initiatedBy),
 				'Approved remote Graphic Asset copy checkpoint is temporarily unavailable',
@@ -4779,9 +4781,13 @@ export function createGraphicsAssetLibrary(
 					identity: stagingIdentity,
 					uploadId: stranded.uploadId,
 				});
-				if (aborted.outcome !== 'aborted') {
+				// An upload the store no longer holds is already reclaimed, so the
+				// checkpoint below is cleared and this attempt goes on. Only a store
+				// that could not answer stops it: the previous upload may still be
+				// held, and starting a second one is what would strand the first.
+				if (aborted.outcome === 'unavailable') {
 					throw new GraphicsAssetLibraryError(
-						'A previous approved remote Graphic Asset copy attempt is still holding staging capacity',
+						'Graphics Asset staging byte store could not release a previous approved remote Graphic Asset copy attempt',
 						'graphics-asset-library-unavailable',
 					);
 				}

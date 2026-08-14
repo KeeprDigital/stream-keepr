@@ -1,4 +1,7 @@
-import type { InMemoryGraphicsStagingObjectStore } from '~~/server/modules/graphics-asset-library/object-store';
+import type {
+	GraphicsMultipartUpload,
+	InMemoryGraphicsStagingObjectStore,
+} from '~~/server/modules/graphics-asset-library/object-store';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
@@ -317,6 +320,48 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 			stage: 'cancelled',
 			transfer: { cleanupPending: true },
 		});
+
+		const cleaned = await library.cancelGraphicsIngestion({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+		});
+		expect(cleaned).toMatchObject({
+			stage: 'cancelled',
+			transfer: { cleanupPending: false },
+		});
+	});
+
+	it('finishes cancelled cleanup when the checkpoint names an upload the store no longer holds', async () => {
+		const delegate = createInMemoryStagingGraphicsObjectStore();
+		let upload: GraphicsMultipartUpload | undefined;
+		const staging: InMemoryGraphicsStagingObjectStore = {
+			...delegate,
+			async beginMultipart(input) {
+				const started = await delegate.beginMultipart(input);
+				if (started.outcome === 'started')
+					upload = started.upload;
+				return started;
+			},
+		};
+		const library = createLibrary(staging);
+		const operation = await initiateLargeTransfer(library, 'cleanup-upload-already-gone');
+		staging.injectTransientFailure('multipart-abort');
+
+		const pending = await library.cancelGraphicsIngestion({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+		});
+		expect(pending).toMatchObject({
+			stage: 'cancelled',
+			transfer: { cleanupPending: true },
+		});
+
+		// Reclaiming the upload out of band leaves the checkpoint naming a gone
+		// upload — what a landed abort with a failed checkpoint-clear leaves behind.
+		// Every later pass re-aborts it, so reading that as unavailable kept
+		// `cleanupPending` true until the 24h sweep.
+		expect(upload).toBeDefined();
+		await expect(staging.abortMultipart(upload!)).resolves.toEqual({ outcome: 'aborted' });
 
 		const cleaned = await library.cancelGraphicsIngestion({
 			operationId: operation.id,
