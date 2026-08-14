@@ -23,6 +23,13 @@
  * matches, and `selfTest` runs before every scan, planting a regression that
  * must be found and Emscripten's real `instanceof` line that must not be. A
  * search that cannot match is indistinguishable from a clean bundle.
+ *
+ * `selfTest` proves the pattern and never opens a file, so it says nothing
+ * about the half that was actually wrong — which files the walk reaches.
+ * `test/unit/scripts/assertNoRuntimeWasm.test.ts` plants the same regression in
+ * a real directory instead, under a `.wasm` name and a subdirectory, and holds
+ * both refusals — nothing to scan, and a directory it cannot read — in the two
+ * cases each of them has (#326).
  */
 
 import { readdirSync, readFileSync } from 'node:fs';

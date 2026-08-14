@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
 	authorSessionCookie,
 	initialTarget,
 	openAuthoredPage,
+	verdictFailureCode,
 } from '../../../scripts/graphics-acceptance/chromium.mjs';
+import { ACCEPTANCE_FAILURE_CODES } from '../../../scripts/graphics-acceptance/evidence.mjs';
 import { authoredPageRequest } from '../../../scripts/graphics-acceptance/installation.mjs';
 
 /**
@@ -171,6 +174,88 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 		expect(authoredPageRequest(session, PAGE_URL)).toEqual({
 			url: PAGE_URL,
 			authorCookie: COOKIE,
+		});
+	});
+
+	/**
+	 * `document.body.dataset.code` is written by the page, so it is untrusted
+	 * text on the way into the transcript the deployment gate publishes. The
+	 * harness resolves it against the published registry rather than forwarding
+	 * it (#340) — the docblock claimed this before the code did.
+	 */
+	describe('verdictFailureCode', () => {
+		it('prints the page\'s own word for the failure when the registry publishes it', () => {
+			expect(verdictFailureCode({ outcome: 'failed', code: 'font-glyph-not-rendered' }))
+				.toBe('font-glyph-not-rendered');
+			expect(verdictFailureCode({ outcome: 'failed', code: 'safari-vp9-alpha-not-blocked' }))
+				.toBe('safari-vp9-alpha-not-blocked');
+		});
+
+		/**
+		 * Every code the shipped pages author has to survive the lookup, or the
+		 * mapping silently flattens real evidence into the generic failure. The
+		 * pages are read here rather than listed, so a page that starts naming a
+		 * code nobody published fails this rather than degrading in a run.
+		 *
+		 * The residual, stated because it is invisible from the result: the
+		 * regex sees single-quoted literals only, so a code written with double
+		 * quotes, built as a template literal, or reached through a variable is
+		 * missed — and missed quietly, since a smaller enumeration still passes.
+		 * Two of the four pages author no code at all (`silent-video-v1` and
+		 * `still-image-v1` publish only `dataset.result`), so a mistake in the
+		 * pattern would leave a plausible-looking set rather than an empty one.
+		 * The control below is what keeps that from reading as a pass.
+		 */
+		it('publishes every code the acceptance pages actually author', () => {
+			const authored = new Set<string>();
+			for (const page of ['static-font-v1', 'vp9-alpha-safari-v1', 'silent-video-v1', 'still-image-v1']) {
+				const html = readFileSync(
+					new URL(`../../../public/_acceptance/${page}.html`, import.meta.url),
+					'utf8',
+				);
+				for (const match of html.matchAll(/\b(?:code: |report\()'([a-z0-9-]+)'/g))
+					authored.add(match[1]!);
+			}
+
+			// A positive control: an empty enumeration would pass the loop below.
+			expect(authored.has('font-glyph-not-rendered')).toBe(true);
+			expect(authored.size).toBeGreaterThan(5);
+
+			for (const code of authored)
+				expect(verdictFailureCode({ outcome: 'failed', code })).toBe(code);
+		});
+
+		/**
+		 * A page that names something the registry does not publish is a page
+		 * that failed without naming a failure this contract knows — the same
+		 * thing as a page that named nothing. It must not reach the formatter,
+		 * whose refusal path (`evidence-unknown-code`) exists for a harness that
+		 * builds a code itself, not for page text.
+		 */
+		it('refuses a code the registry does not publish, including the formatter\'s own words', () => {
+			for (const code of [
+				'totally-made-up',
+				'evidence-unknown-code',
+				'evidence-secret-leak',
+				'acceptance passed',
+				'',
+			])
+				expect(verdictFailureCode({ outcome: 'failed', code })).toBe('browser-acceptance-failed');
+
+			expect(verdictFailureCode({ outcome: 'failed' })).toBe('browser-acceptance-failed');
+			expect(ACCEPTANCE_FAILURE_CODES).toContain('browser-acceptance-failed');
+		});
+
+		/**
+		 * A page-authored code never gets to describe a run in which no page
+		 * decided anything: "the driver never ran" and "the page never decided"
+		 * keep their own codes whatever the dataset says.
+		 */
+		it('never lets a page name an outcome it was not present for', () => {
+			expect(verdictFailureCode({ outcome: 'unavailable', code: 'font-glyph-not-rendered' }))
+				.toBe('browser-driver-unavailable');
+			expect(verdictFailureCode({ outcome: 'timed-out', code: 'font-glyph-not-rendered' }))
+				.toBe('browser-acceptance-timed-out');
 		});
 	});
 });

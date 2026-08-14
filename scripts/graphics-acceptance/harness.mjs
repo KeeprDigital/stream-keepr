@@ -61,10 +61,16 @@ function refusalLine(harness, error) {
 /**
  * The failures themselves, once the formatter has refused their details.
  *
- * A code is contract and safe to print — but only one the registry publishes. A
- * browser verdict names its own code and that name is untrusted page text
- * (`chromium.mjs`), so an unpublished code is replaced by the formatter's own
- * word for it rather than echoed on the way out.
+ * A code is contract and safe to print — but only one the registry publishes,
+ * so an unpublished code is replaced by the formatter's own word for it rather
+ * than echoed on the way out.
+ *
+ * The route that used to carry one here was a browser verdict, whose code is
+ * untrusted page text; `chromium.mjs` now resolves that name against the
+ * registry before it becomes a failure (#340), so nothing page-authored reaches
+ * this line any more. The degradation stays because it is not the page it
+ * guards against: a harness that builds a code itself can still misspell one,
+ * and this is the difference between a wrong word and a stack trace (#275).
  */
 function reportFailures(evidence, harness, failures) {
 	try {

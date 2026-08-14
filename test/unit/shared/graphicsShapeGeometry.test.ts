@@ -114,4 +114,60 @@ describe('shapeGeometry', () => {
 		});
 		expect(getShapeGeometryPreset('slanted-edge').apply(SIZE).geometry.rightSlant).toBe(30);
 	});
+
+	/**
+	 * The presets override the square geometry through `Object.assign` so the
+	 * bundler cannot flatten the call into a duplicate-key literal (#324, #338).
+	 * That form is only equivalent while the override still *replaces* what the
+	 * base wrote — an argument order that lets the base win reads as a refactor
+	 * and is a behaviour change. `toEqual` rather than `toMatchObject`, because
+	 * what the looser matcher cannot see is a key left standing: it ignores
+	 * properties the expectation does not mention, so a stale key the override
+	 * failed to displace, or one it invented, passes it in silence. #324's
+	 * review made the same point with a `not.toHaveProperty` on a stale key;
+	 * comparing the whole object covers every key of it at once.
+	 */
+	it('replaces what the square geometry wrote rather than narrowing it', () => {
+		expect(getShapeGeometryPreset('slanted-edge').apply(SIZE).geometry).toEqual({
+			topLeft: { treatment: 'square', size: 0 },
+			topRight: { treatment: 'square', size: 0 },
+			bottomRight: { treatment: 'square', size: 0 },
+			bottomLeft: { treatment: 'square', size: 0 },
+			leftSlant: 0,
+			rightSlant: 30,
+		});
+		expect(getShapeGeometryPreset('corner-cut').apply(SIZE).geometry).toEqual({
+			topLeft: { treatment: 'square', size: 0 },
+			topRight: { treatment: 'cut', size: 15 },
+			bottomRight: { treatment: 'square', size: 0 },
+			bottomLeft: { treatment: 'cut', size: 15 },
+			leftSlant: 0,
+			rightSlant: 0,
+		});
+	});
+
+	/**
+	 * `Object.assign` mutates its target, which a spread did not. The target is a
+	 * fresh `squareShapeGeometry()` per call today; a later edit that hands it a
+	 * shared constant instead would have every preset writing into the rectangle
+	 * every other caller starts from. That is this fix's own failure mode, so it
+	 * gets its own row.
+	 */
+	it('leaves the square geometry every other caller starts from untouched', () => {
+		const first = getShapeGeometryPreset('slanted-edge').apply(SIZE).geometry;
+		const second = getShapeGeometryPreset('slanted-edge').apply({ width: 100, height: 10 }).geometry;
+
+		expect(squareShapeGeometry()).toEqual({
+			topLeft: { treatment: 'square', size: 0 },
+			topRight: { treatment: 'square', size: 0 },
+			bottomRight: { treatment: 'square', size: 0 },
+			bottomLeft: { treatment: 'square', size: 0 },
+			leftSlant: 0,
+			rightSlant: 0,
+		});
+		expect(first.rightSlant).toBe(30);
+		expect(second.rightSlant).toBe(6);
+		expect(first).not.toBe(second);
+		expect(first.topLeft).not.toBe(second.topLeft);
+	});
 });
