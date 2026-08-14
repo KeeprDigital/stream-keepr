@@ -139,6 +139,13 @@ export function lastCallTo<Args extends unknown[]>(
  * const [first, retried] = callsTo(mockRepository.sendCommand, 2).map(call => call[3]);
  * ```
  *
+ * The `.map` in that example is load-bearing and not decoration. The count enforced here
+ * is a run-time fact the compiler knows nothing about, so destructuring the returned list
+ * directly is an indexed read like any other under `noUncheckedIndexedAccess` — `TS18048:
+ * possibly 'undefined'`, which #342 earned by writing it the other way and which only the
+ * Nuxt typecheck program reported. Read each call's argument through `.map` (or accept the
+ * bang this file exists to remove).
+ *
  * The selector carries `lastCallTo`'s meaning unchanged: name the call where anything
  * else can reach the subject, and leave it off only for a purpose-built mock the code
  * under test is the sole caller of.

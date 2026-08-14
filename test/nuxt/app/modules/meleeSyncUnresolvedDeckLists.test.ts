@@ -174,8 +174,13 @@ describe('melee Sync unresolved Deck List module', () => {
 		// also samples the clock through (#123). A stray at position 0 hands back options
 		// with no `signal` on them, and a run that dispatched only one search would read
 		// `undefined` here instead of saying so (#273, #280, swept in #342).
-		const [olderSearch] = callsTo(mockFetch, 2, SCRYFALL_SEARCH_ENDPOINT);
-		expect(olderSearch[1].signal.aborted).toBe(true);
+		// Read through `.map` rather than destructured straight off the list, because the
+		// count `callsTo` enforces at run time is invisible to the compiler: destructuring
+		// its result is an indexed read like any other under `noUncheckedIndexedAccess`,
+		// and wants either this shape or the bang the helper exists to remove.
+		const [olderSearchSignal] = callsTo(mockFetch, 2, SCRYFALL_SEARCH_ENDPOINT)
+			.map(([, options]) => options.signal as AbortSignal);
+		expect(olderSearchSignal.aborted).toBe(true);
 
 		const newestResult = { id: 'new', name: 'Newest', set: 'new' };
 		secondSearch.resolve({ data: [newestResult] });
