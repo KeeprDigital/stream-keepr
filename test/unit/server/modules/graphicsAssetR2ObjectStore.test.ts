@@ -132,13 +132,20 @@ describe('the R2 Graphic Asset object-store adapter', () => {
 			return outcome;
 		}
 
-		// R2 answers `NoSuchUpload` (10024) for an upload it no longer holds, which
-		// is what a second abort of an already-reclaimed upload gets.
+		// The code is the discriminator and has to stand on its own, so this row
+		// carries a wording the message hedge below does not know. Sharing a
+		// sentence with those rows would let the hedge classify this one, and a
+		// broken code branch would then survive unnoticed.
 		await expect(abortAgainst(Object.assign(
-			new Error('The specified multipart upload does not exist.'),
+			new Error('R2 refused the abort.'),
 			{ code: 10024 },
 		))).resolves.toEqual({ outcome: 'missing' });
-		// The sentence alone is enough: a proxied refusal can lose the numeric code.
+		// The wording alone is enough when a proxied refusal has lost the code, and
+		// this refusal has two documented spellings: Cloudflare's Workers API
+		// wording, then the S3-style sentence the local Miniflare binding raises.
+		await expect(abortAgainst(
+			new Error('Multipart upload does not exist or was aborted. (10024)'),
+		)).resolves.toEqual({ outcome: 'missing' });
 		await expect(abortAgainst(
 			new Error('The specified multipart upload does not exist.'),
 		)).resolves.toEqual({ outcome: 'missing' });

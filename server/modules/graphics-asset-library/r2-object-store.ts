@@ -18,13 +18,27 @@ import {
 } from './object-store';
 
 /**
- * R2's code for an upload it no longer holds — S3's `NoSuchUpload`, which is
- * what aborting an already-reclaimed multipart upload answers. Every other
- * refusal stays an outage, so a store that cannot be read is never mistaken
- * for one that has already done the work.
+ * R2's code for this condition — S3's `NoSuchUpload`. What is *not* established
+ * is that `abort()` raises it for an upload that is already gone: Cloudflare
+ * documents the code against a completed upload, the Workers API reference
+ * declines to say what `abort()` does with a reclaimed one, and the local
+ * Miniflare binding chooses idempotent success instead of an error, so this
+ * branch cannot be reproduced here. It is written for the refusal R2 is
+ * documented to have; if that refusal never arrives, every other one stays an
+ * outage and this path behaves exactly as it did before #293 — which is the
+ * direction that is safe to be wrong in, because reading an unreachable store
+ * as reclaimed is what strands an upload.
  */
 const R2_NO_SUCH_UPLOAD_CODE = 10024;
-const R2_NO_SUCH_UPLOAD_MESSAGE = 'The specified multipart upload does not exist';
+
+/**
+ * Both documented spellings of that refusal: Cloudflare's Workers API wording is
+ * 'Multipart upload does not exist or was aborted.' and the S3-style sentence
+ * the local Miniflare binding raises is 'The specified multipart upload does not
+ * exist.'. Their shared substring begins after the differing first letter, which
+ * is why this constant reads as though it were truncated.
+ */
+const R2_NO_SUCH_UPLOAD_MESSAGE = 'ultipart upload does not exist';
 
 /**
  * The code is the discriminator; the message is checked beside it because the

@@ -1074,8 +1074,11 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		)).resolves.toMatchObject({ uploadId: stranded.uploadId });
 
 		// The sentence names which store is out of reach, so it must reach the
-		// caller rather than being rewritten to 'Internal Server Error'. Both hops
-		// the route makes are run here; there is no route test to run it through.
+		// caller rather than being rewritten to 'Internal Server Error'. There is no
+		// route test for remote-copy.post.ts, so its two mapping hops are run here
+		// instead — status and message only. Passing no event skips the
+		// `retry-after` header that the same helper sets from a real request, so
+		// this row says nothing about that header.
 		let routeError: unknown;
 		try {
 			rethrowGraphicsAssetApiError(thrown);
