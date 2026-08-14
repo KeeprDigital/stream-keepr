@@ -155,7 +155,7 @@ describe('useScreenStore error reporting', () => {
 			403,
 			'Forbidden',
 			'This Event has been archived',
-			`[PATCH] "/api/events/1/screens/5/config"`,
+			`[PATCH] "/api/events/1/screens/5/screen-config"`,
 		));
 
 		const write = store.updateScreenConfig(1, 5, { width: 1920 });

@@ -1252,6 +1252,92 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(alert.text()).toContain('Canonical byte store cannot hold another Graphic Asset Revision');
 		expect(alert.text()).not.toContain('507 Insufficient Storage');
 	});
+
+	/**
+	 * The two alerts that answer the author before anything has been sent.
+	 *
+	 * These are not the class above. `selectionError` and `remoteSelectionError` are
+	 * computed off what the author picked or typed, so no request exists, no
+	 * `describeFailure` runs, and there is no transport envelope for a second half to
+	 * exclude — the shape the five pins above share does not transfer, and saying so
+	 * is cheaper than a mutation row that cannot be written (#370).
+	 *
+	 * What does transfer is the rule below: an alert is asserted through its own
+	 * `data-testid`, or the assertion is not about that alert. Both of these passed
+	 * their sentence as `:title` and carried no attribute until #370, so each pin's
+	 * second half is the one earning the first: the node is conditional, and a
+	 * refusal that outlived the input it refuses would leave an author reading a
+	 * sentence about a file they had already replaced.
+	 *
+	 * The remote pin's third assertion is this pin's own extension, and is worth
+	 * naming as one rather than dressed up as a restatement.
+	 *
+	 * What this repository has decided about userinfo is that it is refused, not
+	 * that it is unprintable. `docs/operations/approved-remote-graphics-copy.md`:
+	 * "no embedded credentials — a URL carrying userinfo is rejected, and no
+	 * cookie, authorization header, reusable cloud credential, or interactive
+	 * authentication is ever supplied"; enforced by `validateDestination` in
+	 * `server/modules/graphics-asset-library/remote-source.ts`, which answers
+	 * `remote-source-credentials-present` at the initial URL and again after every
+	 * redirect. Non-display is decided somewhere else and about different parts of
+	 * the URL: `index.vue`, above `remoteSourcePath`, makes a remote source's query
+	 * parameters and fragment secrets that are never stored, displayed, or used to
+	 * name the Graphic Asset. Userinfo is neither of those parts, so this pin
+	 * extends that rule rather than quoting it — a surface that may not print the
+	 * query string has no better claim to print the password.
+	 *
+	 * That rule's "sent once with the copy request" is a fact about a copy that
+	 * happens, and is not true of credentials, which are never sent at all: the
+	 * same guard that raises this sentence holds `canCopyRemoteSource` false, which
+	 * 'refuses a plaintext or credential-bearing remote source before contacting
+	 * it' pins with `expect(mockApiFetch).not.toHaveBeenCalled()`. The alert is
+	 * therefore the only place these characters could surface, which is what makes
+	 * the assertion worth its line.
+	 *
+	 * Its sentence is also the one this file already asserts twice — at 'refuses a
+	 * plaintext or credential-bearing remote source before contacting it', through
+	 * `wrapper.html()`. A kill attributed by value alone could not tell the two
+	 * apart; deleting the `data-testid` separates them, because only the pin here
+	 * reads it.
+	 */
+	it('says why a selected source cannot be uploaded, and stops once one that can is picked', async () => {
+		const wrapper = await mountPage();
+
+		wrapper.getComponent(fileUploadStub).vm.$emit(
+			'update:modelValue',
+			new File([new Uint8Array(8)], 'match-report.pdf', { type: 'application/pdf' }),
+		);
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="selection-error"]').text())
+			.toContain('Select a PNG, JPEG, WebP, H.264 MP4, VP9 WebM, WOFF2, WOFF, TTF, or OTF source.');
+
+		wrapper.getComponent(fileUploadStub).vm.$emit(
+			'update:modelValue',
+			new File([jpegPixel], 'scoreboard.jpg', { type: 'image/jpeg' }),
+		);
+		await flushPromises();
+
+		expect(wrapper.find('[data-testid="selection-error"]').exists()).toBe(false);
+	});
+
+	it('refuses a credential-bearing remote source without repeating the credentials', async () => {
+		const wrapper = await mountPage();
+
+		await wrapper.get('[data-testid="remote-source-url"]')
+			.setValue('https://author:kestrel-passphrase@cdn.example.com/scoreboard.png');
+		await flushPromises();
+
+		const alert = wrapper.get('[data-testid="remote-selection-error"]');
+		expect(alert.text()).toContain('An approved remote source must not carry embedded credentials.');
+		expect(alert.text()).not.toContain('kestrel-passphrase');
+
+		await wrapper.get('[data-testid="remote-source-url"]')
+			.setValue('https://cdn.example.com/scoreboard.png');
+		await flushPromises();
+
+		expect(wrapper.find('[data-testid="remote-selection-error"]').exists()).toBe(false);
+	});
 });
 
 /**
