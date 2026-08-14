@@ -142,7 +142,7 @@ export async function openInstallation(origin) {
  * this session — and "the harness forgot to pass the cookie" is a defect no
  * assertion in the page can see, because the page simply becomes a different,
  * perfectly valid author (#276). Pairing the two here means the call site says
- * *open this page as this session* in one expression, rather than assembling an
+ * `open this page as this session` in one expression, rather than assembling an
  * identity from two arguments that can be separated by an edit.
  */
 export function authoredPageRequest(session, url) {

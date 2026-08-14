@@ -86,7 +86,7 @@ const PAGE_URL = 'http://127.0.0.1:8787/_acceptance/static-font-v1.html?operatio
  * Chromium does unless a test says otherwise.
  */
 function recordingPage(answers: Record<string, unknown> = {}) {
-	const commands: { method: string, params?: object }[] = [];
+	const commands: { method: string; params?: object }[] = [];
 	return {
 		commands,
 		methods: () => commands.map(({ method }) => method),
@@ -150,8 +150,9 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 	it('fails with a named cause when the browser refuses the cookie', async () => {
 		const page = recordingPage({ 'Network.setCookie': { success: false } });
 
-		await expect(openAuthoredPage(page, { url: PAGE_URL, authorCookie: COOKIE }))
-			.rejects.toMatchObject({ code: 'author-session-cookie-refused' });
+		const opening = openAuthoredPage(page, { url: PAGE_URL, authorCookie: COOKIE });
+
+		await expect(opening).rejects.toMatchObject({ code: 'author-session-cookie-refused' });
 		expect(page.methods()).not.toContain('Page.navigate');
 		expect(page.methods()).not.toContain('Runtime.enable');
 	});
