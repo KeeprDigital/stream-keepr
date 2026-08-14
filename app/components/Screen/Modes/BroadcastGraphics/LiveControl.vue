@@ -337,8 +337,9 @@ async function selectMedia(key: string, reference: GraphicAssetReference) {
 		// A lapsed graphics author session is not the library saying anything about
 		// this revision, and it is the one failure retrying cannot fix. Reported in
 		// the terms the session seam already owns, rather than as bytes that will
-		// come back — the fallback is deliberately not `describeFailure`'s, whose
-		// non-lapse arm is the raw transport error.
+		// come back — only the lapse arm of `describeFailure` is wanted here, since
+		// its other arm answers about the request and this slot wants one settled
+		// sentence about the media, whatever refused it.
 		refuseMedia(key, graphicsAuthorSessionLapsed(caught)
 			? GRAPHICS_AUTHOR_SESSION_LAPSED_MESSAGE
 			: MEDIA_REFUSALS.unavailable);

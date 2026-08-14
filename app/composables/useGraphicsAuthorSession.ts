@@ -69,13 +69,27 @@ export function useGraphicsAuthorSession() {
 	 * Every catch on this surface routes through here so that no single one can
 	 * be the branch that forgot, which is how the surface came to have no `401`
 	 * handling at all.
+	 *
+	 * The lapse is asked first and unconditionally, because a `401` from an
+	 * ingestion route does carry a sentence of its own — 'An authenticated
+	 * graphics author session is required' — and quoting it would name what was
+	 * missing while leaving out the one thing the author can do about it.
+	 *
+	 * Everything else is `reportedMessage`, which reads the sentence the route
+	 * wrote before falling back to the failure's own line. This arm was that
+	 * fallback alone, and on a `$fetch` failure the line is the transport's —
+	 * '[POST] "/api/graphics-assets/ingestion-operations": 503 Service
+	 * Unavailable' — so the prose #294, #321 and #293 worked to preserve arrived
+	 * here and was dropped (#350). `failureSentence` owns which bodies may be
+	 * quoted; a sanitized 5xx writes none and still falls back to that line, and
+	 * a failure that never reached the server keeps its own message untouched.
 	 */
 	function describeFailure(caught: unknown, fallback: string): string {
 		if (graphicsAuthorSessionLapsed(caught)) {
 			lapsed.value = true;
 			return GRAPHICS_AUTHOR_SESSION_LAPSED_MESSAGE;
 		}
-		return caught instanceof Error ? caught.message : fallback;
+		return reportedMessage(caught, fallback);
 	}
 
 	function reload() {
