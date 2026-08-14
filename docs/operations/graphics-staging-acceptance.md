@@ -343,6 +343,15 @@ challenge with genuine rendered-pixel proofs, and publishes the revision. It
 then loads that published revision back through the delivery route that will
 serve it on air. The face is trashed on the way out, pass or fail.
 
+The harness stages that ingestion from Node and the browser reads it back, so
+the two have to be the same graphics author: an operation belongs to the session
+that created it and is a `404` to every other one (ADR-0003). The browser is
+therefore handed the harness's own session cookie over CDP before it navigates.
+It used to be sent to the application first to pick up a session instead, which
+minted a second identity and made the gate unpassable — the symptom was
+`font-load-incomplete` with the real cause, `ingestion-operation-not-found`,
+visible only in the installation's log (#276).
+
 `pnpm test:browser:fonts` without `--library` skips all of that and proves the
 browser facts alone. Four of them:
 
@@ -376,7 +385,18 @@ such as
 `/api/screen-output/screens/:screenId/assets/:assetId/revisions/:revisionId/content`,
 and a value that would leak is replaced by a failure of its own —
 `evidence-secret-leak`, `evidence-url-leak`, `evidence-filename-leak`, or
-`evidence-opaque-token-leak` — naming only the field that carried it.
+`evidence-opaque-token-leak` — naming only the field that carried it. A refusal
+the formatter did not itself raise reads `evidence-report-refused`, which says
+the line could not be built and deliberately says nothing about why: an error
+from anywhere else carries a message nobody has checked.
+
+Where that happens on the run's own failure path, the failures still print:
+each one keeps its stable code with `detail=withheld` in place of the values,
+and the refusal is the last line. A refused line used to take the harness down
+instead, printing a Node stack trace whose frames disclose this checkout's
+absolute paths — the one thing the formatter exists to withhold, arriving
+through the formatter (#275). A run whose closing summary is refused fails
+rather than passes, because a leak is itself a failure.
 
 This means a failing run is safe to paste into an issue as-is. It also means
 that if you need the offending identity in order to investigate, you look it up

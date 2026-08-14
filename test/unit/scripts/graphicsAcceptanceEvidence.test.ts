@@ -1,12 +1,48 @@
-import { describe, expect, it } from 'vitest';
+import { fileURLToPath } from 'node:url';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	ACCEPTANCE_FAILURE_CODES,
 	createAcceptanceEvidence,
 	deliveryRouteLabel,
 } from '../../../scripts/graphics-acceptance/evidence.mjs';
+import { runAcceptanceHarness } from '../../../scripts/graphics-acceptance/harness.mjs';
+import { acceptanceOrigin } from '../../../scripts/graphics-acceptance/installation.mjs';
 
 function evidence(secrets: string[] = []) {
 	return createAcceptanceEvidence({ harness: 'delivery-v1', secrets });
+}
+
+/** An object key, as the storage layer writes one. Refused everywhere below. */
+const AN_OBJECT_KEY = 'canonical/8f2b1c4d9e7a6b5c4d3e2f1a0b9c8d7e';
+/** This checkout's own absolute path — the thing a printed stack trace discloses. */
+const REPOSITORY_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+
+/**
+ * Run one harness to completion and read everything it printed.
+ *
+ * `process.exitCode` is restored because a harness sets it on failure, and a
+ * suite that left it set would report its own success as an exit 1.
+ */
+async function observeHarness(invoke: () => Promise<void>) {
+	const exitCodeBefore = process.exitCode;
+	const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+	const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+	// Spying twice in one test returns the same spy with the earlier run's calls
+	// still on it, and a read of "everything printed" would then be a read of two
+	// runs at once.
+	stdout.mockClear();
+	stderr.mockClear();
+	try {
+		await invoke();
+		return {
+			exitCode: process.exitCode,
+			stdout: stdout.mock.calls.map(call => String(call[0])).join(''),
+			stderr: stderr.mock.calls.map(call => String(call[0])).join(''),
+		};
+	}
+	finally {
+		process.exitCode = exitCodeBefore;
+	}
 }
 
 describe('graphics staging acceptance evidence', () => {
@@ -111,5 +147,260 @@ describe('graphics staging acceptance evidence', () => {
 	it('never calls an unobserved check a pass', () => {
 		expect(evidence().deferred({ path: 'manual-check-required' }))
 			.toBe('delivery-v1 acceptance deferred path=manual-check-required');
+	});
+
+	/**
+	 * An environment-variable name is thirty-five word characters and was read as
+	 * an opaque token, so the one failure whose whole job is to tell an operator
+	 * which name to set could not be printed at all (#275).
+	 */
+	it('keeps an environment-variable name, which is words rather than a token', () => {
+		expect(evidence().report([{
+			code: 'harness-precondition-unmet',
+			detail: { reason: 'STREAM_KEEPR_BROWSER_ACCEPTANCE_URL is unset' },
+		}])).toBe(
+			'delivery-v1 harness-precondition-unmet '
+			+ 'reason=STREAM_KEEPR_BROWSER_ACCEPTANCE_URL is unset',
+		);
+	});
+
+	/**
+	 * All three ways the narrowing could have gone too far, because an underscore
+	 * is only a word separator in a name built of upper-case words. The base64url
+	 * alphabet contains `_`, so a capability may carry one — including enough of
+	 * them to leave every part short — and a long upper-case run does not become
+	 * vocabulary by acquiring a prefix.
+	 */
+	it('still refuses a token that merely contains an underscore', () => {
+		expect(() => evidence().report([
+			{ code: 'delivery-body-mismatch', detail: { key: 'PN7yQ0hVn3wKq2_Lb8sVdT1cRj4mXaGe9uFhBzYo0Ss' } },
+		])).toThrow('delivery-v1 evidence-opaque-token-leak field=key');
+		expect(() => evidence().report([
+			{ code: 'delivery-body-mismatch', detail: { key: 'PN7yQ0hVn3wKq2_Lb8sVdT1cRj4m_XaGe9uFhBzYo0S' } },
+		])).toThrow('delivery-v1 evidence-opaque-token-leak field=key');
+		expect(() => evidence().report([
+			{ code: 'delivery-body-mismatch', detail: { key: 'REVISION_8F2B1C4D9E7A6B5C4D3E2F1A0B9C8D7E' } },
+		])).toThrow('delivery-v1 evidence-opaque-token-leak field=key');
+	});
+});
+
+/**
+ * The reporting path is the last thing a harness does and sits outside the
+ * `try` that wraps the run, so a refusal raised there escaped as a raw Node
+ * error and printed the absolute path of every frame in its stack — the
+ * disclosure this module exists to prevent, arriving through this module
+ * (#275).
+ */
+describe('a harness printing evidence it cannot format', () => {
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	/**
+	 * The ticket's own reproduction: `pnpm test:delivery:graphics:deployed` with
+	 * no URL set. Both halves have to hold for this to pass — the reason has to
+	 * survive the opacity rule, and the reporting has to survive a reason that
+	 * does not.
+	 */
+	it('answers a --deployed run with no URL with its stable code, not a stack trace', async () => {
+		vi.stubEnv('STREAM_KEEPR_BROWSER_ACCEPTANCE_URL', undefined);
+		vi.stubEnv('STREAM_KEEPR_DEPLOY_HEALTH_URL', undefined);
+
+		const observed = await observeHarness(() => runAcceptanceHarness({
+			harness: 'graphics-delivery-v1',
+			run: async () => {
+				acceptanceOrigin({ deployed: true });
+			},
+		}));
+
+		expect(observed.stderr).toBe(
+			'graphics-delivery-v1 acceptance failed:\n'
+			+ 'graphics-delivery-v1 harness-precondition-unmet '
+			+ 'reason=STREAM_KEEPR_BROWSER_ACCEPTANCE_URL is unset\n',
+		);
+		expect(observed.stdout).toBe('');
+		expect(observed.exitCode).toBe(1);
+		expect(observed.stderr).not.toContain(REPOSITORY_ROOT);
+		expect(observed.stderr).not.toContain('.mjs');
+	});
+
+	it('degrades a refused failure to its stable codes instead of dying in the reporting', async () => {
+		const observed = await observeHarness(() => runAcceptanceHarness({
+			harness: 'delivery-v1',
+			run: async ({ record }) => {
+				record([
+					{ code: 'delivery-body-mismatch', detail: { key: AN_OBJECT_KEY } },
+					{ code: 'delivery-status-unexpected', detail: { expected: 200, actual: 503 } },
+				]);
+			},
+		}));
+
+		expect(observed.stderr).toBe(
+			'delivery-v1 acceptance failed:\n'
+			+ 'delivery-v1 delivery-body-mismatch detail=withheld\n'
+			+ 'delivery-v1 delivery-status-unexpected detail=withheld\n'
+			+ 'delivery-v1 evidence-opaque-token-leak field=key\n',
+		);
+		expect(observed.exitCode).toBe(1);
+		expect(observed.stderr).not.toContain(AN_OBJECT_KEY);
+		expect(observed.stderr).not.toContain(REPOSITORY_ROOT);
+	});
+
+	/**
+	 * A browser verdict names its own code and that name is untrusted page text
+	 * (`chromium.mjs`), so the degraded line may not echo it: the fallback for a
+	 * leak may not be a second leak.
+	 */
+	it('does not echo a code the registry never published', async () => {
+		const observed = await observeHarness(() => runAcceptanceHarness({
+			harness: 'static-font-v1',
+			run: async ({ record }) => {
+				record([{ code: 'https://attacker.example/?stolen=1', detail: { page: 'static-font-v1' } }]);
+			},
+		}));
+
+		expect(observed.stderr).toBe(
+			'static-font-v1 acceptance failed:\n'
+			+ 'static-font-v1 evidence-unknown-code detail=withheld\n'
+			+ 'static-font-v1 evidence-unknown-code\n',
+		);
+		expect(observed.exitCode).toBe(1);
+		expect(observed.stderr).not.toContain('attacker.example');
+	});
+
+	/**
+	 * A leak is itself a failure, so a run whose closing line is refused has not
+	 * been observed to pass — the summary path may not be the way a pass gets
+	 * printed for a run nobody could read the evidence of.
+	 */
+	it('does not call a run passed when its own summary is refused', async () => {
+		const observed = await observeHarness(() => runAcceptanceHarness({
+			harness: 'delivery-v1',
+			run: async () => ({ key: AN_OBJECT_KEY }),
+		}));
+
+		expect(observed.stdout).toBe('');
+		expect(observed.stderr).toBe(
+			'delivery-v1 acceptance failed:\n'
+			+ 'delivery-v1 evidence-opaque-token-leak field=key\n',
+		);
+		expect(observed.exitCode).toBe(1);
+	});
+
+	/**
+	 * The fallback may not become the leak. Anything reaching it that is not the
+	 * formatter talking has an unknown message — a Node error's carries the path
+	 * it was raised from — so only a message in the formatter's own shape is
+	 * printed, and everything else is reduced to the fact that a line could not
+	 * be built.
+	 */
+	it('does not echo an error that is not the formatter refusing a field', async () => {
+		const observed = await observeHarness(() => runAcceptanceHarness({
+			harness: 'delivery-v1',
+			run: async () => ({
+				get checked() {
+					throw new Error(`ENOENT: no such file or directory, open '${REPOSITORY_ROOT}secret.txt'`);
+				},
+			}),
+		}));
+
+		expect(observed.stdout).toBe('');
+		expect(observed.stderr).toBe(
+			'delivery-v1 acceptance failed:\n'
+			+ 'delivery-v1 evidence-report-refused\n',
+		);
+		expect(observed.exitCode).toBe(1);
+		expect(observed.stderr).not.toContain(REPOSITORY_ROOT);
+	});
+
+	/**
+	 * The half of that guard which asks whether the formatter is talking at all.
+	 * An error from anywhere else may say anything — including nothing
+	 * path-shaped — so "has no slash in it" is not what makes a message
+	 * printable, and a message that passes only that test must still be refused.
+	 */
+	it('does not echo a non-formatter error merely because it carries no path', async () => {
+		const observed = await observeHarness(() => runAcceptanceHarness({
+			harness: 'delivery-v1',
+			run: async () => ({
+				get checked() {
+					throw new Error('boom');
+				},
+			}),
+		}));
+
+		expect(observed.stderr).toBe(
+			'delivery-v1 acceptance failed:\n'
+			+ 'delivery-v1 evidence-report-refused\n',
+		);
+		expect(observed.stderr).not.toContain('boom');
+		expect(observed.exitCode).toBe(1);
+	});
+
+	/**
+	 * And the other half. A refusal's message is built from the harness name, a
+	 * leak code, and a **field name** — which is a literal chosen by whoever
+	 * wrote the detail, not a value the formatter checked. One shaped like a path
+	 * satisfies the formatter's own prefix and is exactly what must not be
+	 * printed, so being in the right shape is not sufficient either.
+	 */
+	it('does not echo a formatter-shaped message whose field name is path-shaped', async () => {
+		const observed = await observeHarness(() => runAcceptanceHarness({
+			harness: 'delivery-v1',
+			run: async () => ({ 'canonical/key': AN_OBJECT_KEY }),
+		}));
+
+		expect(observed.stderr).toBe(
+			'delivery-v1 acceptance failed:\n'
+			+ 'delivery-v1 evidence-report-refused\n',
+		);
+		expect(observed.stderr).not.toContain('canonical/key');
+		expect(observed.exitCode).toBe(1);
+	});
+
+	/**
+	 * The notes path prints through the same formatter and sits outside the run's
+	 * try exactly as the failure path does, so a note whose detail leaks could
+	 * take the harness down after every check had already passed.
+	 */
+	it('degrades a note whose detail is refused, without failing the run', async () => {
+		const observed = await observeHarness(() => runAcceptanceHarness({
+			harness: 'delivery-v1',
+			run: async ({ note }) => {
+				note({ code: 'delivery-cache-never-hit', detail: { key: AN_OBJECT_KEY } });
+			},
+		}));
+
+		expect(observed.stdout).toBe(
+			'delivery-v1 delivery-cache-never-hit detail=withheld\n'
+			+ 'delivery-v1 evidence-opaque-token-leak field=key (reported, not enforced)\n'
+			+ 'delivery-v1 acceptance passed checks=0\n',
+		);
+		expect(observed.stdout).not.toContain(AN_OBJECT_KEY);
+		expect(observed.stderr).toBe('');
+	});
+
+	it('still prints an ordinary pass, and a deferral under its instructions', async () => {
+		const passed = await observeHarness(() => runAcceptanceHarness({
+			harness: 'delivery-v1',
+			run: async ({ record }) => {
+				record([]);
+				return { mode: 'local' };
+			},
+		}));
+		expect(passed.stdout).toBe('delivery-v1 acceptance passed checks=1 mode=local\n');
+		expect(passed.stderr).toBe('');
+
+		const deferred = await observeHarness(() => runAcceptanceHarness({
+			harness: 'delivery-v1',
+			run: async ({ defer }) => {
+				defer({ path: 'manual-check-required' }, 'Observe this by hand.');
+			},
+		}));
+		expect(deferred.stdout).toBe(
+			'Observe this by hand.\n'
+			+ 'delivery-v1 acceptance deferred path=manual-check-required\n',
+		);
+		expect(deferred.stderr).toBe('');
 	});
 });

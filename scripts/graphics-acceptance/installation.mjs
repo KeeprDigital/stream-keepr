@@ -135,6 +135,21 @@ export async function openInstallation(origin) {
 }
 
 /**
+ * The browser's half of a staged run: where to go, and whose session to go as.
+ *
+ * Anything the harness stages belongs to the session that staged it and is a
+ * `404` to any other (ADR-0003), so a page opened for that work has to carry
+ * this session — and "the harness forgot to pass the cookie" is a defect no
+ * assertion in the page can see, because the page simply becomes a different,
+ * perfectly valid author (#276). Pairing the two here means the call site says
+ * `open this page as this session` in one expression, rather than assembling an
+ * identity from two arguments that can be separated by an edit.
+ */
+export function authoredPageRequest(session, url) {
+	return { url, authorCookie: session.authorCookie };
+}
+
+/**
  * Provision one Screen Output that references one pinned Graphic Asset
  * Revision, which is the smallest arrangement in which capability-bound
  * delivery is a real thing rather than a simulated one.

@@ -175,7 +175,93 @@ async function launch(candidate, extraArgs) {
 }
 
 /**
+ * Give the page the harness's own author session instead of one of its own.
+ *
+ * A Graphics Ingestion Operation belongs to the graphics author session that
+ * created it, and every operation route matches that identity exactly
+ * (ADR-0003). The harness stages the ingestion from Node, so the browser has to
+ * arrive as the same author or it is reading somebody else's operation and is
+ * answered `404`. Sending it to the application first to pick up a session did
+ * the opposite of what it read as: an ordinary page load *mints* a session, so
+ * the warm-up visit created the second identity it looked like it was avoiding,
+ * and the `--library` gate could not pass by construction (#276).
+ *
+ * The cookie is installed in the browser's own jar before anything is
+ * navigated, so the page is the initiator from its first request. Its
+ * attributes mirror the ones the installation issues (`httpOnly`, path `/`,
+ * `SameSite=Strict`, `Secure` over https), because a cookie the browser stores
+ * under different rules is a different cookie for the requests that matter.
+ *
+ * @param {string} url The page the cookie has to reach, which decides its scope.
+ * @param {string} authorCookie A `name=value` pair as the installation issued it.
+ */
+export function authorSessionCookie(url, authorCookie) {
+	const separator = authorCookie.indexOf('=');
+	if (separator < 1)
+		throw new Error('An author session cookie is a name=value pair.');
+	return {
+		name: authorCookie.slice(0, separator),
+		value: authorCookie.slice(separator + 1),
+		url,
+		path: '/',
+		httpOnly: true,
+		secure: new URL(url).protocol === 'https:',
+		sameSite: 'Strict',
+	};
+}
+
+/**
+ * Where a target is created, which is not always where it is going.
+ *
+ * A page created at its destination has already made its first request by the
+ * time anything can be installed in the jar — as nobody, which is the identity
+ * the whole fix exists to avoid. So a run carrying a session starts blank and
+ * navigates afterwards, and a run without one is created where it is going,
+ * exactly as before this ticket.
+ */
+export function initialTarget(url, authorCookie) {
+	return authorCookie ? 'about:blank' : url;
+}
+
+/**
+ * Bring one page to `url` as the author whose session this is, ready to poll.
+ *
+ * Everything between "a target exists" and "the page is at the destination and
+ * answering `Runtime.evaluate`" lives here, so the order is one reviewable
+ * sequence rather than three statements interleaved with browser plumbing: the
+ * cookie is installed, the page is navigated, and only then is the runtime
+ * enabled. `page` is anything that answers `command(method, params)`.
+ *
+ * @param {{ command: (method: string, params?: object) => Promise<any> }} page
+ * @param {{ url: string, authorCookie?: string }} destination
+ */
+export async function openAuthoredPage(page, { url, authorCookie }) {
+	if (authorCookie) {
+		await page.command('Network.enable');
+		const { success } = await page.command(
+			'Network.setCookie',
+			authorSessionCookie(url, authorCookie),
+		);
+		// A browser that did not take the cookie is a browser that will read the
+		// harness's own operation as somebody else's and be answered `404` — the
+		// defect this replaced, wearing the fix's clothes. Said here rather than
+		// left to surface as a font that would not load.
+		if (success === false) {
+			const refused = new Error('The acceptance browser refused the author session cookie.');
+			refused.code = 'author-session-cookie-refused';
+			throw refused;
+		}
+		await page.command('Page.navigate', { url });
+	}
+	await page.command('Runtime.enable');
+}
+
+/**
  * Open one page in unattended Chromium and wait for its verdict.
+ *
+ * `authorCookie` is a `name=value` pair from an installation the harness has
+ * already opened; given one, the page starts blank so the cookie is in place
+ * before the first request, and is navigated afterwards.
  *
  * @returns {Promise<{
  *   outcome: 'passed' | 'failed' | 'timed-out' | 'unavailable',
@@ -188,31 +274,21 @@ export async function observeChromiumVerdict({
 	url,
 	timeoutMs = 30_000,
 	extraArgs = [],
-	sessionUrl,
+	authorCookie,
 }) {
 	for (const candidate of chromiumCandidates()) {
 		const browser = await launch(candidate, extraArgs);
 		if (!browser)
 			continue;
 		try {
-			// Visiting the installation first lets the page reach same-origin
-			// routes as a graphics author would, exactly like an operator's browser.
-			if (sessionUrl) {
-				const warmup = await fetch(
-					`http://${new URL(browser.endpoint).host}/json/new?${encodeURIComponent(sessionUrl)}`,
-					{ method: 'PUT' },
-				).then(response => response.json());
-				const warmupSocket = await connect(warmup.webSocketDebuggerUrl);
-				await new Promise(resolve => setTimeout(resolve, 750));
-				warmupSocket.close();
-			}
+			const opened = initialTarget(url, authorCookie);
 			const target = await fetch(
-				`http://${new URL(browser.endpoint).host}/json/new?${encodeURIComponent(url)}`,
+				`http://${new URL(browser.endpoint).host}/json/new?${encodeURIComponent(opened)}`,
 				{ method: 'PUT' },
 			).then(response => response.json());
 			const page = await connect(target.webSocketDebuggerUrl);
 			try {
-				await page.command('Runtime.enable');
+				await openAuthoredPage(page, { url, authorCookie });
 				const deadline = Date.now() + timeoutMs;
 				while (Date.now() < deadline) {
 					const evaluated = await page.command('Runtime.evaluate', {
