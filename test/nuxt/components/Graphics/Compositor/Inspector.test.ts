@@ -151,6 +151,15 @@ const USwitchStub = defineComponent({
 	template: '<button type="button" @click="$emit(\'update:modelValue\', !modelValue)" />',
 });
 
+/**
+ * Stands in for the Graphic Asset picker, reflecting the reference it was handed
+ * so a test can ask what the panel pinned rather than what the library rendered.
+ *
+ * Its `media-asset-picker` testid names only the pickers the panel passes no
+ * testid of its own to — the item panel's. A host-passed `data-testid` wins the
+ * fallthrough merge outright and replaces this one, so the Graphic Inputs panel's
+ * default picker answers to `graphic-input-default` and to nothing else.
+ */
 const GraphicsAssetFocusPickerStub = defineComponent({
 	name: 'GraphicsAssetFocusPicker',
 	props: {
@@ -755,6 +764,16 @@ describe('graphicsCompositorInspector', () => {
 			expect(wrapper.get('[data-testid="media-asset-picker"]').attributes('data-video-target')).toBe('chromium');
 		});
 
+		it('hands the picker the exact revision this item pins, so it diagnoses against this item', async () => {
+			const wrapper = await mountMedia();
+
+			// Missing and Unavailable are reported against the reference the picker holds;
+			// an item that stopped handing its own over would have the picker offering a
+			// clean slate while the item goes on rendering a broken asset.
+			expect(wrapper.getComponent(GraphicsAssetFocusPickerStub).props('modelValue'))
+				.toEqual({ assetId: 'asset-1', revisionId: 'revision-1' });
+		});
+
 		it('lets a read-only observer read every media property without changing one', async () => {
 			const wrapper = await mountMedia({ mediaKind: 'silent-video' }, false);
 
@@ -1114,6 +1133,23 @@ describe('graphicsCompositorInspector', () => {
 		expect(declarationOf(wrapper)).toMatchObject({ default: null });
 	});
 
+	it('shows a choice Graphic Input with no declared default as its No default option', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]).map(graphic => ({
+				...graphic,
+				inputs: [choiceInput('side', [{ value: 'l', label: 'Left' }])],
+			})),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		// A null default is not a value the select can carry, so the panel maps it onto
+		// the No default option it offers. Without that mapping the field shows nothing
+		// selected, which reads as an option the author has not chosen yet.
+		expect(selectField(wrapper, 'graphic-input-default')?.props('items')?.[0])
+			.toEqual({ label: 'No default', value: '' });
+		expect(selectField(wrapper, 'graphic-input-default')?.props('modelValue')).toBe('');
+	});
+
 	it('drops a choice Graphic Input’s default when its author edits that option away', async () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
@@ -1172,6 +1208,22 @@ describe('graphicsCompositorInspector', () => {
 		});
 
 		expect(wrapper.getComponent(GraphicsAssetFocusPickerStub).props('assetKind')).toBe('silent-video');
+	});
+
+	it('shows a media Graphic Input’s declared default as the reference it pins', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]).map(graphic => ({
+				...graphic,
+				inputs: [mediaInput('sting', { default: { assetId: 'asset-1' as never, revisionId: 'revision-1' as never } })],
+			})),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		// The picker is what reports a Missing or Unavailable Graphic Asset Reference,
+		// and it can only report against the reference it is handed — a panel that
+		// stopped handing it over would show a pinned default as no default at all.
+		expect(wrapper.getComponent(GraphicsAssetFocusPickerStub).props('modelValue'))
+			.toEqual({ assetId: 'asset-1', revisionId: 'revision-1' });
 	});
 
 	it('pins a media Graphic Input’s default revision, with the fact the reference index checks it against', async () => {
