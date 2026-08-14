@@ -267,9 +267,13 @@ function namesCause(assigned: Map<string, ts.Expression>): boolean {
 	const cause = assigned.get(H3_CAUSE_KEY);
 	if (cause === undefined)
 		return false;
-	// `cause: undefined` is the one way to name the key and supply nothing, and it is a
-	// shape this repository really writes — `templatePackageExportApi.ts` classifies its
-	// retryable half and leaves the other one undefined in the same call.
+	// `cause: undefined` is the one way to name the key and supply nothing. No call under
+	// `server/` writes it today — this is a guard against the census being satisfiable by
+	// typing the word, not a case anyone has met. The nearest real shape is
+	// `templatePackageExportApi.ts`, which computes a cause that IS undefined on its 409
+	// branch; but it passes it as a shorthand, so the whole call is unreadable and this
+	// function never runs on it. Kept deliberately: the cheap defence is worth more than
+	// the line it costs, and the day someone writes it out this reads it correctly.
 	const value = unwrap(cause);
 	return !(ts.isIdentifier(value) && value.text === 'undefined');
 }
@@ -585,8 +589,13 @@ export function serverMiddlewareFiles(directory: string = MIDDLEWARE_DIRECTORY):
 }
 
 /**
- * Every TypeScript source file under a directory, deepest-last within each level and
- * sorted by name, as absolute paths.
+ * Every TypeScript source file under a directory, as absolute paths.
+ *
+ * Entries are visited in name order at each level, and a subdirectory is emitted whole
+ * at the point its own name sorts — so a subdirectory's files can precede a file
+ * sitting beside it. `server/modules` is the illustration: thirteen subdirectories'
+ * files come out before the top-level `graphics-administrator.ts`. No caller depends on
+ * the order; it is deterministic rather than meaningful, which is all a census needs.
  *
  * Declaration files are excluded for the reason a type-only import is followed by
  * nothing: they cannot carry a throw. Shared by `serverMiddlewareFiles`, whose

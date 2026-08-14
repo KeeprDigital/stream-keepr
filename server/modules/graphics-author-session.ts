@@ -141,13 +141,23 @@ async function readSession(event: H3Event): Promise<GraphicsAuthorSession | unde
  * a route minting a session directly — inherits the sentence rather than the
  * placeholder the middleware never had to care about.
  *
- * `retry-after` beside it because the sentence says *temporarily*, and the seven
- * sites #321 classified as retryable all set one. A caller told a thing is
- * momentary and given no number has to invent an interval, which is the half of
- * #321's finding that was left out of its scope and filed as #337. The number is
- * the same 5 seconds those sites use: it is a floor on how hard to retry, not an
- * estimate of when the store returns, and a second spelling of that floor would
- * only invite the two to drift.
+ * `retry-after` beside it because the sentence says *temporarily*, and every other
+ * refusal in this codebase that says so sets one. A caller told a thing is momentary
+ * and given no number has to invent an interval, which is the half of #321's finding
+ * that was left out of its scope and filed as #337. The number is the same 5 seconds
+ * those sites use: it is a floor on how hard to retry, not an estimate of when the
+ * store returns, and a second spelling of that floor would only invite the two to
+ * drift.
+ *
+ * **Two different sevens meet here, and #337's own text runs them together.** Seven
+ * sites set `retry-after: 5` before this one did; seven files were classified by
+ * #321 (dc58c35). They are not the same seven and neither contains the other. Six
+ * overlap. `server/utils/graphicsAssetApi.ts` sets the header and predates #321
+ * entirely — it arrived with #55 (e28208a). `server/modules/graphics-administrator.ts`
+ * was classified by #321 and deliberately sets **no** header, because an unset
+ * environment name does not resolve by waiting. So the rule this site follows is not
+ * "#321 set one everywhere" but the narrower and truer one: a refusal that calls
+ * itself temporary owes the caller an interval, and a refusal that does not, does not.
  *
  * The middleware swallows this refusal, so a page load made while the store is
  * down answers 200 carrying a `retry-after` nothing will read — `Retry-After` is

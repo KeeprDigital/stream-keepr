@@ -586,10 +586,12 @@ describe('what the scan can read out of a route', () => {
 	});
 
 	it('does not count a cause that names the key and supplies nothing', () => {
-		// A real shape here: `templatePackageExportApi.ts` classifies its retryable half
-		// and leaves the other undefined in the same call. Counting `cause: undefined`
-		// would let the `server/`-wide census be satisfied by writing the word, which is
-		// the census reduced to a spelling check.
+		// Not a shape any call under `server/` writes today, and pinned anyway: counting
+		// `cause: undefined` would let the `server/`-wide census be satisfied by writing
+		// the word, which is the census reduced to a spelling check. The nearest real
+		// case is `templatePackageExportApi.ts`, whose cause is genuinely undefined on
+		// its 409 branch — but it is passed as a shorthand, which makes that whole call
+		// unreadable before `carriesCause` is ever computed, so it proves nothing here.
 		expect(scan('createError({ statusCode: 503, message: \'x\', cause: undefined });')[0]?.carriesCause).toBe(false);
 		expect(scan('createError({ statusCode: 503, message: \'x\', cause: (undefined) });')[0]?.carriesCause).toBe(false);
 	});
@@ -604,8 +606,13 @@ describe('what the scan can read out of a route', () => {
 		// The shorthand `{ statusCode: 503, cause }` belongs here rather than with the
 		// causes above, and the reason is worth knowing before writing one: a shorthand
 		// anywhere in the literal makes the *whole* call unreadable, status included, so
-		// such a site would be out of the census's scope entirely. No `createError` under
-		// `server/` is written that way today.
+		// such a site is out of the census's scope entirely.
+		//
+		// `server/modules/screen-output-assets/runtime.ts:31` is exactly that call — a
+		// literal 503 whose status the census cannot read, solely because the cause beside
+		// it is written shorthand. It is benign, because it does name a cause; it is worth
+		// naming here because it is the census's blind spot standing in the open, and the
+		// next 503 written to that pattern would not be benign and would not be reported.
 		for (const hidden of [
 			'createError({ ...base, statusCode: 503 });',
 			'createError(refusalFor(screen));',

@@ -720,8 +720,16 @@ describe('error-handler mapping logic', () => {
 	 *
 	 * **What the readability filter costs, stated so nobody reads more into a pass.** The
 	 * scan reads syntax, so `statusCode: cause.statusCode` — the idiom #321's own fixes
-	 * landed on — has no readable status and is out of scope here; thirteen calls under
-	 * `server/` are in that position, and each is pinned by its own route's tests instead.
+	 * landed on — has no readable status and is out of scope here. Thirteen calls under
+	 * `server/` have an unreadable status, but not all for that reason: **seven** are the
+	 * property-access idiom (six spelled `cause.statusCode`, one `failure.statusCode`),
+	 * and the other **six** are unreadable for reasons of their own — two ternary statuses
+	 * (`melee-sync/configuration.ts`, `templatePackageExportApi.ts`), two shorthand
+	 * properties (`graphicsAssetApi.ts`, `routeGuards.ts`), one element access
+	 * (`broadcastGraphicsState.ts`), and `screen-output-assets/runtime.ts`, whose status
+	 * is a plain literal 503 defeated only by the shorthand `cause` beside it. The seven
+	 * are each pinned by their own route's tests; the other six are a mix, and the last of
+	 * them is this filter's blind spot in its purest form.
 	 * What is in scope is the shape the defect actually takes when it regrows: a fresh
 	 * `createError({ statusCode: 503, message: '…' })` written by someone who had not read
 	 * #321. That is what the planted-regression proof on this ticket exercised.
