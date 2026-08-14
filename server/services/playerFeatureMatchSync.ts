@@ -216,13 +216,13 @@ export function playerFeatureMatchSyncService() {
 				// held that property, so one now does — see the pin in this module's suite.
 				const updatedData = hasDeckIdentity && existingData.deckId != null && !selectedDeck
 					? Object.assign(playerToMatchData(player), {
-							// The exact historical deck is no longer in the current submitted-deck
-							// snapshot. Preserve its embedded identity instead of rebinding this
-							// match to another format/primary deck.
-							deckId: existingData.deckId,
-							archetypeId: existingData.archetypeId,
-							gameData: existingData.gameData,
-						} satisfies Partial<PlayerSlotData>)
+						// The exact historical deck is no longer in the current submitted-deck
+						// snapshot. Preserve its embedded identity instead of rebinding this
+						// match to another format/primary deck.
+						deckId: existingData.deckId,
+						archetypeId: existingData.archetypeId,
+						gameData: existingData.gameData,
+					} satisfies Partial<PlayerSlotData>)
 					: applyMatchDeckSnapshot(
 							playerToMatchData(player),
 							selectedDeck,
