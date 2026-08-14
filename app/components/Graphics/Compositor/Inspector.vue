@@ -22,6 +22,7 @@ import type {
 	GraphicInputDeclaration,
 	GraphicInputType,
 	GraphicItemConfig,
+	GraphicMediaKind,
 	GraphicPlaceholderStyle,
 	GraphicSurfaceStyle,
 	GraphicTypography,
@@ -82,6 +83,7 @@ import {
 	resizeGraphicRectFromAnchor,
 	selectMediaGraphicItemAsset,
 	setGraphicInputChoiceOptions,
+	setGraphicInputMediaKind,
 	setMediaClipGeometry,
 	SHAPE_GEOMETRY_PRESETS,
 } from '~~/shared/modules/graphics';
@@ -729,6 +731,19 @@ const UPDATE_POLICY_OPTIONS = [
 	{ label: 'Staged', value: 'staged' },
 	{ label: 'Live', value: 'live' },
 ] satisfies Array<{ label: string; value: OnAirUpdatePolicy }>;
+const MEDIA_KIND_OPTIONS = [
+	{ label: 'Image', value: 'image' },
+	{ label: 'Silent video', value: 'silent-video' },
+] satisfies Array<{ label: string; value: GraphicMediaKind }>;
+
+/**
+ * What a choice Graphic Input with no default is offered as.
+ *
+ * Outside the option space rather than beside it: an option's stored value is at
+ * least one character everywhere it is written, so nothing an author can declare
+ * collides with it.
+ */
+const NO_CHOICE_DEFAULT = '';
 
 function applyToGraphicInputs(
 	merge: (graphics: readonly BroadcastGraphicConfig[], graphicId: string) => BroadcastGraphicConfig[],
@@ -816,6 +831,51 @@ function parseChoiceOptions(key: string, value: string) {
 		.filter(option => option.value.length > 0);
 
 	updateChoiceOptions(key, options.slice(0, MAX_GRAPHIC_INPUT_CHOICE_OPTIONS));
+}
+
+/**
+ * What a choice Graphic Input's Default may be set to: one of its own options, or
+ * nothing.
+ *
+ * Offering the declared options rather than a free field is what keeps the default
+ * inside them — a default outside its options is a value the input reports
+ * unavailable, so a placed Broadcast Graphic would start on something it can never
+ * show. The other half of the same rule lives on the write path, which drops a
+ * default an edited option list stops offering.
+ */
+function choiceDefaultOptions(input: GraphicInputDeclaration) {
+	return [
+		{ label: 'No default', value: NO_CHOICE_DEFAULT },
+		...(input.type === 'choice' ? input.options : []).map(option => ({
+			label: option.label,
+			value: option.value,
+		})),
+	];
+}
+
+function updateChoiceDefault(key: string, value: string) {
+	updateInput(key, { default: value === NO_CHOICE_DEFAULT ? null : value });
+}
+
+function updateMediaKind(key: string, mediaKind: GraphicMediaKind) {
+	applyToGraphicInputs((graphics, graphicId) => setGraphicInputMediaKind(graphics, graphicId, key, mediaKind));
+}
+
+/**
+ * Pin one exact Graphic Asset Revision as a media Graphic Input's default.
+ *
+ * Recorded with the revision's own target compatibility, exactly as a Media Graphic
+ * Item's content is: the Graphic Asset Reference index checks a silent-video
+ * reference against that fact, and the authored default is indexed from the
+ * configuration the same way an item's asset is.
+ */
+function selectInputDefaultAsset(key: string, asset: GraphicAsset, reference: GraphicAssetReference) {
+	updateInput(key, {
+		default: {
+			...reference,
+			videoCompatibility: asset.facts.kind === 'silent-video' ? asset.facts.targetCompatibility : undefined,
+		},
+	});
 }
 
 /* ────────────────────────────────────────────────
@@ -1071,21 +1131,70 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					/>
 				</UFormField>
 
-				<UFormField
-					v-if="input.type === 'choice'"
-					label="Options"
-					size="xs"
-					:help="`One per line, as value=label. Up to ${MAX_GRAPHIC_INPUT_CHOICE_OPTIONS}.`"
-				>
-					<UTextarea
-						:model-value="choiceOptionsText(input)"
-						class="w-full"
-						size="sm"
-						:rows="3"
-						data-testid="graphic-input-options"
-						@update:model-value="parseChoiceOptions(input.key, String($event))"
-					/>
-				</UFormField>
+				<!--
+					Options first, then which of them a placed Broadcast Graphic starts on.
+					The Default offers the declared options and nothing else: a default
+					outside them is a value the input reports unavailable, so the graphic
+					would start on something it can never show.
+				-->
+				<template v-else-if="input.type === 'choice'">
+					<UFormField
+						label="Options"
+						size="xs"
+						:help="`One per line, as value=label. Up to ${MAX_GRAPHIC_INPUT_CHOICE_OPTIONS}.`"
+					>
+						<UTextarea
+							:model-value="choiceOptionsText(input)"
+							class="w-full"
+							size="sm"
+							:rows="3"
+							data-testid="graphic-input-options"
+							@update:model-value="parseChoiceOptions(input.key, String($event))"
+						/>
+					</UFormField>
+					<UFormField label="Default" size="xs">
+						<USelect
+							:model-value="input.default ?? NO_CHOICE_DEFAULT"
+							:items="choiceDefaultOptions(input)"
+							class="w-full"
+							size="sm"
+							data-testid="graphic-input-default"
+							@update:model-value="updateChoiceDefault(input.key, String($event))"
+						/>
+					</UFormField>
+				</template>
+
+				<!--
+					The declared kind is the whole of what a media Graphic Input constrains,
+					and it is the only kind Live Control's picker then offers — so without
+					this control a silent-video input cannot be declared at all (#336). The
+					default is optional: an author may constrain the kind and leave the
+					choice to the operator.
+				-->
+				<template v-else-if="input.type === 'media'">
+					<UFormField label="Media" size="xs">
+						<USelect
+							:model-value="input.mediaKind"
+							:items="MEDIA_KIND_OPTIONS"
+							class="w-full"
+							size="sm"
+							data-testid="graphic-input-media-kind"
+							@update:model-value="updateMediaKind(input.key, $event as GraphicMediaKind)"
+						/>
+					</UFormField>
+					<UFormField label="Default" size="xs">
+						<GraphicsAssetFocusPicker
+							:model-value="input.default ?? undefined"
+							:event-id="eventId"
+							:field-label="input.label"
+							:asset-kind="input.mediaKind"
+							video-target="chromium"
+							data-testid="graphic-input-default"
+							@update:model-value="$event ? undefined : updateInput(input.key, { default: null })"
+							@select="(asset, reference) => selectInputDefaultAsset(input.key, asset, reference)"
+						/>
+					</UFormField>
+				</template>
 			</div>
 
 			<!--

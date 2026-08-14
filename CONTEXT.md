@@ -907,6 +907,8 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - A **Graphic Input Override** masks its **Graphic Input** binding until cleared, after which the current bound value resumes
 - Each **Graphic Input** has an **On-air Update Policy** of staged or live
 - A newly declared **Graphic Input** defaults to the staged **On-air Update Policy**
+- A choice **Graphic Input**'s declared default is one of its own options or none, and an option list edited to stop offering the current default clears it rather than leaving a default the input reports unavailable
+- A media **Graphic Input** declares which media it accepts, which is both what its declared default may pin and the only kind **Live Control**'s picker offers; changing the declared kind clears a default of the other one
 - A live **On-air Update Policy** applies immediately only while its **Broadcast Graphic** is on a program output
 - A waiting **Broadcast Graphic** enters with the values its Take accepted, however long its **Graphic Channel** holds it
 - Update Graphic atomically accepts every pending staged **Graphic Input** value for one **Broadcast Graphic**
