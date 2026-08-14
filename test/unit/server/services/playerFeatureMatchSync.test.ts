@@ -279,6 +279,57 @@ describe('playerFeatureMatchSyncService', () => {
 				}),
 			}));
 		});
+
+		/**
+		 * The branch above assigns its overrides onto a `playerToMatchData` call rather
+		 * than writing them beside a spread of one, so the bundler cannot flatten the
+		 * call into an object literal carrying `archetypeId` and `gameData` twice
+		 * (#324, #338, #348, #354). `Object.assign` mutates its target where the spread
+		 * did not, and `playerToMatchData` returns a fresh literal per call today. An
+		 * edit that made it hand back one shared object instead would write each slot's
+		 * preserved deck identity onto the other slot's snapshot — the fix's own failure
+		 * mode, so it gets its own pin.
+		 *
+		 * Nothing else caught it: that aliasing edit fails only this test across the unit
+		 * files that reach the factory — `playerToMatchData` is module-private, so the set
+		 * is the five files `grep -rl playerFeatureMatchSync test/` names. The test above
+		 * carries one match source snapshot and never compares two, which is why the
+		 * aliasing never reached an assertion.
+		 */
+		it('gives each slot its own object to preserve its deck identity into', async () => {
+			const aliceHistorical = { type: 'mtg' as const, deckName: 'Alice Historical', deckColors: 'G' };
+			const bobHistorical = { type: 'mtg' as const, deckName: 'Bob Historical', deckColors: 'W' };
+			mockRefreshReads({
+				matches: [{
+					id: 1,
+					eventId: 1,
+					player1Id: 5,
+					player2Id: 6,
+					player1Data: { name: 'Alice', deckId: 99, archetypeId: 8, gameData: aliceHistorical },
+					player2Data: { name: 'Bob', deckId: 77, archetypeId: 3, gameData: bobHistorical },
+					formatExternalId: 'standard',
+				}],
+				players: [
+					createMockPlayer({ id: 5, name: 'Alice' }),
+					createMockPlayer({ id: 6, name: 'Bob' }),
+				],
+				decks: [
+					{ id: 20, playerId: 5, formatExternalId: 'standard', name: 'New Standard', colors: 'U', sortOrder: 0, isPrimary: false, archetypeId: null, reviewedAt: null },
+					{ id: 21, playerId: 6, formatExternalId: 'standard', name: 'Other Standard', colors: 'B', sortOrder: 0, isPrimary: false, archetypeId: null, reviewedAt: null },
+				],
+			});
+
+			await playerFeatureMatchSyncService().syncMatchesFromPlayers(1, [5, 6]);
+
+			// A shared factory result would leave both sides holding whichever was assigned
+			// last, so each side's own preserved identity is the discriminator.
+			const snapshot = mockFeatureMatchStateService.buildSourceSnapshot.mock.calls[0]![0];
+			expect(snapshot).toEqual(expect.objectContaining({
+				player1Data: expect.objectContaining({ name: 'Alice', deckId: 99, archetypeId: 8, gameData: aliceHistorical }),
+				player2Data: expect.objectContaining({ name: 'Bob', deckId: 77, archetypeId: 3, gameData: bobHistorical }),
+			}));
+			expect(snapshot.player1Data).not.toBe(snapshot.player2Data);
+		});
 	});
 
 	describe('syncMatchesFromPlayers', () => {

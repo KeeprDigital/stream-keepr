@@ -192,16 +192,40 @@ export function playerFeatureMatchSyncService() {
 						? null
 						: playerDeckRows.find(deck => deck.id === existingData.deckId) ?? null
 					: selectMatchDeck(playerDeckRows, { formatExternalId: match.formatExternalId }).deck;
+				// The preserved-identity branch assigns its overrides onto a fresh factory
+				// result rather than writing them beside a spread of one. `{ ...factory(), key: … }`
+				// is correct as written — the override is last, so it wins — but
+				// `playerToMatchData` returns a bare literal that writes `archetypeId` and
+				// `gameData` itself, which rolldown is free to inline into the same object
+				// literal; the emitted chunk would then carry both keys twice and warn
+				// (`duplicate-object-key`, visible only in wrangler's esbuild pass). #324 found
+				// four of that shape, and #338/#348 carried the same rewrite through the Shape
+				// Geometry presets, the live-session recovery and the Graphic Binding data set.
+				// Nothing here warns today — the motivation is that precedent plus the form, not
+				// an observed bundler defect — and keeping the factory out of the literal is what
+				// makes the form immune rather than merely currently-correct.
+				//
+				// The `satisfies` clause is doing new work rather than restoring old work, which
+				// is the same as the per-graphic literal in `carriedForwardBroadcastGraphicsLiveState`
+				// (the one built inside `Object.fromEntries(…map(…))`, not its return) and was
+				// measured rather than assumed: because `updatedData` is a conditional
+				// with no declared type, the literal below never had a contextual type, so an
+				// invented key here was reported by neither typecheck program before this
+				// rewrite. `Object.assign` takes its second argument by assignability and would
+				// let one through in silence, so the clause is what keeps the override honest.
+				//
+				// `Object.assign` also mutates its target where the spread did not, so this now
+				// depends on `playerToMatchData` handing back a fresh object per call. No test
+				// held that property, so one now does — see the pin in this module's suite.
 				const updatedData = hasDeckIdentity && existingData.deckId != null && !selectedDeck
-					? {
-							...playerToMatchData(player),
-							// The exact historical deck is no longer in the current submitted-deck
-							// snapshot. Preserve its embedded identity instead of rebinding this
-							// match to another format/primary deck.
-							deckId: existingData.deckId,
-							archetypeId: existingData.archetypeId,
-							gameData: existingData.gameData,
-						}
+					? Object.assign(playerToMatchData(player), {
+						// The exact historical deck is no longer in the current submitted-deck
+						// snapshot. Preserve its embedded identity instead of rebinding this
+						// match to another format/primary deck.
+						deckId: existingData.deckId,
+						archetypeId: existingData.archetypeId,
+						gameData: existingData.gameData,
+					} satisfies Partial<PlayerSlotData>)
 					: applyMatchDeckSnapshot(
 							playerToMatchData(player),
 							selectedDeck,
