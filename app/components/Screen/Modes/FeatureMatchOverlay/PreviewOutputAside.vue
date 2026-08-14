@@ -3,10 +3,13 @@ import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayOutput } from '~
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
 import { screenOutputPath } from '~~/shared/utils/screenOutput';
-import { isFeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
+import {
+	FEATURE_MATCH_OVERLAY_PREVIEW_CONFIG_MESSAGE,
+	FEATURE_MATCH_OVERLAY_PREVIEW_SELECTED_TARGET_MESSAGE,
+	isFeatureMatchOverlayPreviewSelectMessage,
+} from '~/modules/feature-match-overlay/previewMessages';
 import {
 	GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE,
-	isFromExpectedSender,
 	isGraphicsPreviewReadyMessage,
 	isGraphicsPreviewSelectMessage,
 } from '~/modules/graphics/previewMessages';
@@ -123,7 +126,7 @@ function syncSelectedTargetToPreview() {
 	const target = { ...props.selectedTarget };
 
 	previewFrame.value.contentWindow.postMessage({
-		type: 'feature-match-overlay:selected-target',
+		type: FEATURE_MATCH_OVERLAY_PREVIEW_SELECTED_TARGET_MESSAGE,
 		target,
 	}, window.location.origin);
 }
@@ -133,7 +136,7 @@ function syncConfigToPreview() {
 		return;
 
 	previewFrame.value.contentWindow.postMessage({
-		type: 'feature-match-overlay:preview-config',
+		type: FEATURE_MATCH_OVERLAY_PREVIEW_CONFIG_MESSAGE,
 		config: JSON.parse(JSON.stringify(props.config)),
 	}, window.location.origin);
 }
@@ -155,8 +158,9 @@ function syncPreviewState() {
 }
 
 /**
- * The host-owned selection reported back by the frame, through the same shared
- * sender guard its two siblings below use.
+ * The host-owned selection reported back by the frame, through this host's own
+ * guard — which is built on the same shared sender check its two siblings below
+ * use (#260).
  *
  * It hand-rolled that check until #252. The copy compared `message.source`
  * against `previewFrame.value?.contentWindow` and nothing else, so once the
@@ -165,18 +169,14 @@ function syncPreviewState() {
  * was emitted as the frame's own.
  */
 function handlePreviewSelection(message: MessageEvent) {
-	if (!isFromExpectedSender(message, {
+	if (!isFeatureMatchOverlayPreviewSelectMessage(message, {
 		origin: window.location.origin,
 		source: previewFrame.value?.contentWindow ?? null,
 	})) {
 		return;
 	}
 
-	const data = message.data as Record<string, unknown>;
-	if (data.type !== 'feature-match-overlay:select' || !isFeatureMatchOverlaySelectionTarget(data.target))
-		return;
-
-	emit('selectTarget', data.target);
+	emit('selectTarget', message.data.target);
 }
 
 /**

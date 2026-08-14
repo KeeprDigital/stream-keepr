@@ -10,12 +10,15 @@ import { featureMatchOverlayGraphicAssetReferences, screenGraphicAssetReferenceT
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 import { resolveFeatureMatchOverlayCompositorRenderModel } from '~/modules/feature-match-overlay/compositorRenderModel';
 import { resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
-import { featureMatchOverlaySelectionKey, isFeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
+import {
+	FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE,
+	isFeatureMatchOverlayPreviewSelectedTargetMessage,
+} from '~/modules/feature-match-overlay/previewMessages';
+import { featureMatchOverlaySelectionKey } from '~/modules/feature-match-overlay/selection';
 import { featureMatchGraphicsContext, featureMatchTokenValues } from '~/modules/feature-match-overlay/tokenValues';
 import {
 	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
-	isFromExpectedSender,
 	isGraphicsPreviewSelectedTargetMessage,
 } from '~/modules/graphics/previewMessages';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
@@ -145,7 +148,7 @@ function guideStyle(item: { x: number; y: number; width: number; height: number 
 	return renderModel.value.rectStyle(item);
 }
 
-function postPreviewMessage(type: 'feature-match-overlay:select', payload: Record<string, unknown>) {
+function postPreviewMessage(type: typeof FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE, payload: Record<string, unknown>) {
 	if (!showPreviewGuides.value || !import.meta.client)
 		return;
 
@@ -157,7 +160,7 @@ function postPreviewMessage(type: 'feature-match-overlay:select', payload: Recor
 
 function selectPreviewTarget(target: FeatureMatchOverlaySelectionTarget) {
 	selectedPreviewTarget.value = target;
-	postPreviewMessage('feature-match-overlay:select', { target });
+	postPreviewMessage(FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE, { target });
 }
 
 /**
@@ -197,18 +200,13 @@ function isPreviewTargetSelected(target: FeatureMatchOverlaySelectionTarget) {
 	return featureMatchOverlaySelectionKey(selectedPreviewTarget.value) === featureMatchOverlaySelectionKey(target);
 }
 
-function isPreviewTargetMessage(message: MessageEvent): message is MessageEvent<{ type: 'feature-match-overlay:selected-target'; target: FeatureMatchOverlaySelectionTarget }> {
-	if (!isFromExpectedSender(message, { origin: window.location.origin, source: window.parent }))
-		return false;
-
-	const data = message.data as Record<string, unknown>;
-	return data.type === 'feature-match-overlay:selected-target'
-		&& isFeatureMatchOverlaySelectionTarget(data.target);
-}
-
 function handleSelectedPreviewTargetMessage(message: MessageEvent) {
-	if (!isPreviewTargetMessage(message))
+	if (!isFeatureMatchOverlayPreviewSelectedTargetMessage(message, {
+		origin: window.location.origin,
+		source: window.parent,
+	})) {
 		return;
+	}
 
 	selectedPreviewTarget.value = message.data.target;
 }

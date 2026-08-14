@@ -284,6 +284,11 @@ describe('featureMatchOverlayDisplay', () => {
 		 * The host-owned selection travels on its own message beside the compositor's,
 		 * in its own vocabulary — and through the same shared sender guard, rather than
 		 * a hand-rolled copy of one beside a caller of the real thing (#252).
+		 *
+		 * Its type is spelled as the literal it goes on the wire as rather than as the
+		 * constant both ends now read (#260): a test written in the constant moves with
+		 * a rename and so cannot tell one from a no-op, while on the wire a rename ends
+		 * the exchange in silence.
 		 */
 		it('marks the host-owned Source Item the editor selected, and only from the editor', async () => {
 			mockConfig.value = guidedConfig();

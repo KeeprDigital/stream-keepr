@@ -70,7 +70,15 @@ function mountOverlay(context: Partial<ScreenContext>) {
 	return { wrapper, data: () => data };
 }
 
-/** The editor pushes its working Feature Match Layout into the embedded preview. */
+/**
+ * The editor pushes its working Feature Match Layout into the embedded preview.
+ *
+ * Spelled as the literal it goes on the wire as, not as
+ * `FEATURE_MATCH_OVERLAY_PREVIEW_CONFIG_MESSAGE`. Both ends now read that
+ * constant (#260), so a test written in it would move with a rename and could
+ * not tell one from a no-op — while on the wire a rename is a break, silently
+ * ending the exchange between an editor and a frame served different versions.
+ */
 function pushPreviewConfig(config: FeatureMatchOverlayModeConfig) {
 	window.dispatchEvent(new MessageEvent('message', {
 		origin: window.location.origin,
